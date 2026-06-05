@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#10110f">
     <title>Voice Room</title>
-    <link rel="stylesheet" href="/styles.css?v=20260606-15">
+    <link rel="stylesheet" href="/styles.css?v=20260606-19">
   </head>
   <body>
     <div class="app-shell">
@@ -82,6 +82,11 @@
             </div>
           </div>
 
+          <div class="screen-stage" id="screenStage" hidden>
+            <video class="screen-video" id="screenVideo" autoplay playsinline></video>
+            <div class="screen-placeholder" id="screenPlaceholder">Подключение к экрану</div>
+          </div>
+
           <div class="participants" id="participants" data-count="0" aria-live="polite"></div>
 
           <div class="empty-room" id="emptyRoom">
@@ -131,11 +136,42 @@
               </div>
             </div>
 
+            <button class="dock-button screen-button" id="screenButton" type="button" aria-pressed="false" aria-label="Показать экран">
+              <span class="dock-icon dock-icon-screen" aria-hidden="true">
+                <svg viewBox="0 0 24 24" focusable="false">
+                  <path d="M4 5a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v8a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2z"></path>
+                  <path d="M8 21h8"></path>
+                  <path d="M12 15v6"></path>
+                  <path d="M9 9l3 -3l3 3"></path>
+                  <path d="M12 6v7"></path>
+                </svg>
+              </span>
+              <span class="dock-icon dock-icon-screen-stop" aria-hidden="true">
+                <svg viewBox="0 0 24 24" focusable="false">
+                  <path d="M4 5a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v8a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2z"></path>
+                  <path d="M8 21h8"></path>
+                  <path d="M12 15v6"></path>
+                  <path d="M9 8h6v5h-6z"></path>
+                </svg>
+              </span>
+              <span class="sr-only" id="screenText">Показать экран</span>
+            </button>
+
             <button class="dock-button leave-button" id="leaveButton" type="button" aria-label="Выйти из комнаты">
               <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
                 <path d="M3 21l18 -18"></path>
                 <path d="M5.8 14.2a15.9 15.9 0 0 1 -2.8 -8.2a2 2 0 0 1 2 -2h4l2 5l-2.5 1.5l.54 .82"></path>
                 <path d="M12.2 15.2a11 11 0 0 0 1.3 .8l1.5 -2.5l5 2v4a2 2 0 0 1 -2 2a15.9 15.9 0 0 1 -8.2 -2.8"></path>
+              </svg>
+            </button>
+
+            <button class="dock-button screen-exit-button" id="screenExitButton" type="button" aria-label="Выйти из просмотра" hidden>
+              <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                <path d="M4 5a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v8a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2z"></path>
+                <path d="M8 21h8"></path>
+                <path d="M12 15v6"></path>
+                <path d="M9 8l6 6"></path>
+                <path d="M15 8l-6 6"></path>
               </svg>
             </button>
 
@@ -165,12 +201,34 @@
           <span class="avatar"></span>
         </div>
         <div class="participant-copy">
-          <h2></h2>
+          <h2>
+            <span class="participant-name"></span>
+            <span class="participant-muted-icon" aria-label="Микрофон выключен" title="Микрофон выключен">
+              <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                <path d="M3 3l18 18"></path>
+                <path d="M9 5a3 3 0 0 1 5.12 -2.12"></path>
+                <path d="M15 9.34v.66a3 3 0 0 1 -.13 .88"></path>
+                <path d="M9 9v1a3 3 0 0 0 3 3c.34 0 .67 -.06 .97 -.16"></path>
+                <path d="M5 10a7 7 0 0 0 11.95 4.95"></path>
+                <path d="M19 10a7 7 0 0 1 -.11 1.23"></path>
+                <path d="M8 21h8"></path>
+                <path d="M12 17v4"></path>
+              </svg>
+            </span>
+          </h2>
           <p></p>
+          <button class="participant-screen-action" type="button" hidden>
+            <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+              <path d="M4 5a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v8a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2z"></path>
+              <path d="M8 21h8"></path>
+              <path d="M12 15v6"></path>
+            </svg>
+            <span>Смотреть экран</span>
+          </button>
         </div>
       </article>
     </template>
 
-    <script src="/app.js?v=20260606-15" defer></script>
+    <script src="/app.js?v=20260606-25" defer></script>
   </body>
 </html>

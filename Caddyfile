@@ -6,6 +6,6 @@
     Strict-Transport-Security "max-age=31536000; includeSubDomains"
     X-Content-Type-Options "nosniff"
     Referrer-Policy "same-origin"
-    Permissions-Policy "microphone=(self), camera=(), geolocation=(), payment=()"
+    Permissions-Policy "microphone=(self), display-capture=(self), camera=(), geolocation=(), payment=()"
   }
 }

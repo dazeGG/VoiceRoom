@@ -4,6 +4,11 @@
   --paper-deep: oklch(10.5% 0.012 92);
   --panel: oklch(20% 0.017 92);
   --panel-strong: oklch(25% 0.019 92);
+  --control: oklch(23% 0.016 92);
+  --control-hover: oklch(30% 0.018 92);
+  --control-active: oklch(84% 0.012 92);
+  --control-active-hover: oklch(89% 0.01 92);
+  --control-line: oklch(41% 0.018 92);
   --ink: oklch(94% 0.012 92);
   --muted: oklch(69% 0.028 88);
   --line: oklch(35% 0.025 92);
@@ -332,10 +337,10 @@ h1 {
 }
 
 .copy-room-button:hover {
-  border-color: color-mix(in oklch, var(--green), var(--line) 32%);
+  border-color: color-mix(in oklch, var(--control-line), var(--ink) 18%);
   background: var(--panel-strong);
   color: var(--ink);
-  box-shadow: 0 0 0 3px oklch(72% 0.16 164 / 0.16);
+  box-shadow: 0 0 0 3px oklch(84% 0.012 92 / 0.1);
 }
 
 .copy-room-button svg {
@@ -379,9 +384,10 @@ h1 {
   width: fit-content;
   align-items: center;
   justify-content: center;
-  background: var(--green);
-  color: oklch(8% 0.014 92);
-  font-weight: 850;
+  border-color: var(--control-line);
+  background: var(--control);
+  color: var(--ink);
+  font-weight: 800;
   text-decoration: none;
 }
 
@@ -389,10 +395,9 @@ h1 {
 .primary-button:hover,
 .secondary-button:hover,
 .home-link-button:hover,
-.leave-button:hover,
 .sound-button:hover {
-  border-color: color-mix(in oklch, var(--green), var(--line) 34%);
-  box-shadow: 0 0 0 3px oklch(72% 0.16 164 / 0.16);
+  border-color: color-mix(in oklch, var(--control-line), var(--ink) 22%);
+  box-shadow: 0 0 0 3px oklch(84% 0.012 92 / 0.1);
 }
 
 .participants {
@@ -408,6 +413,76 @@ h1 {
   justify-content: center;
   justify-items: stretch;
   gap: var(--space-md);
+}
+
+.screen-stage {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  width: 100%;
+  min-height: 0;
+  margin-inline: auto;
+  overflow: hidden;
+  background: oklch(5% 0.01 92);
+}
+
+.screen-video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  aspect-ratio: 16 / 9;
+  border: 0;
+  border-radius: 0;
+  background: oklch(5% 0.01 92);
+  object-fit: contain;
+}
+
+.screen-placeholder {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  font-size: 0.92rem;
+  font-weight: 800;
+}
+
+.screen-placeholder[hidden] {
+  display: none;
+}
+
+body[data-screen-view="true"] {
+  overflow: hidden;
+}
+
+body[data-screen-view="true"] .app-shell {
+  height: 100dvh;
+  overflow: hidden;
+}
+
+body[data-screen-view="true"] .room-layout,
+body[data-screen-view="true"] .stage {
+  min-height: 0;
+  overflow: hidden;
+}
+
+body[data-screen-view="true"] .stage {
+  height: 100%;
+  grid-template-rows: 1fr;
+  gap: 0;
+  padding: var(--space-md) var(--space-xl) 92px;
+}
+
+body[data-screen-view="true"] .room-heading,
+body[data-screen-view="true"] .participants,
+body[data-screen-view="true"] .empty-room {
+  display: none;
+}
+
+body[data-screen-view="true"] .screen-stage {
+  height: 100%;
+  border-radius: 0;
 }
 
 .participants[data-count="0"] {
@@ -476,6 +551,10 @@ h1 {
   opacity: 0.82;
 }
 
+.participant[data-screen="true"] {
+  border-color: color-mix(in oklch, var(--blue), var(--line) 28%);
+}
+
 .voice-ring {
   display: grid;
   width: 86px;
@@ -524,6 +603,9 @@ h1 {
 }
 
 .participant h2 {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   max-width: 100%;
   margin: 0;
   overflow: hidden;
@@ -536,6 +618,36 @@ h1 {
   line-height: 1.15;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.participant-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.participant-muted-icon {
+  display: none;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  place-items: center;
+  color: oklch(93% 0.034 32);
+}
+
+.participant-muted-icon svg {
+  display: block;
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2.4;
+}
+
+.participant[data-muted="true"] .participant-muted-icon {
+  display: grid;
 }
 
 .participant p {
@@ -551,6 +663,40 @@ h1 {
   line-height: 1.1;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.participant-screen-action {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid color-mix(in oklch, var(--control-line), var(--ink) 12%);
+  border-radius: 999px;
+  padding: 0 10px;
+  background: oklch(84% 0.012 92);
+  color: oklch(9% 0.012 92);
+  font-size: 0.76rem;
+  font-weight: 850;
+  line-height: 1;
+  white-space: nowrap;
+  transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
+}
+
+.participant-screen-action:hover {
+  background: var(--control-active-hover);
+  transform: translateY(-1px);
+}
+
+.participant-screen-action svg {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2.3;
 }
 
 .empty-room {
@@ -611,7 +757,7 @@ h1 {
 }
 
 .name-status[data-state="saved"] {
-  color: color-mix(in oklch, var(--green), var(--ink) 24%);
+  color: oklch(82% 0.018 92);
 }
 
 .name-status[data-state="dirty"] {
@@ -640,9 +786,9 @@ button:focus-visible,
 
 .primary-button {
   width: 100%;
-  border-color: color-mix(in oklch, var(--green), var(--line) 38%);
-  background: var(--green);
-  color: oklch(8% 0.014 92);
+  border-color: color-mix(in oklch, var(--control-line), var(--ink) 20%);
+  background: var(--control-active);
+  color: oklch(9% 0.012 92);
   font-weight: 850;
 }
 
@@ -654,11 +800,11 @@ button:focus-visible,
 }
 
 .primary-button:hover {
-  background: color-mix(in oklch, var(--green), white 8%);
+  background: var(--control-active-hover);
 }
 
 .home-link-button:hover {
-  background: color-mix(in oklch, var(--green), white 8%);
+  background: var(--control-hover);
 }
 
 .secondary-button:hover {
@@ -706,7 +852,8 @@ button:focus-visible,
   height: 48px;
   border-radius: 50%;
   padding: 0;
-  background: oklch(23% 0.018 92);
+  background: var(--control);
+  pointer-events: auto;
 }
 
 .mic-button {
@@ -725,8 +872,8 @@ button:focus-visible,
 
 .dock-button:hover,
 .dock-menu-button:hover {
-  background: oklch(29% 0.02 92);
-  box-shadow: inset 0 0 0 1px oklch(72% 0.16 164 / 0.2);
+  background: var(--control-hover);
+  box-shadow: inset 0 0 0 1px oklch(84% 0.012 92 / 0.16);
 }
 
 .dock-button:disabled {
@@ -737,11 +884,24 @@ button:focus-visible,
 .dock-menu-button svg {
   width: 21px;
   height: 21px;
+  display: block;
   fill: none;
   stroke: currentColor;
   stroke-linecap: round;
   stroke-linejoin: round;
   stroke-width: 2.35;
+}
+
+.dock-icon {
+  display: grid;
+  place-items: center;
+}
+
+.dock-icon-mic svg,
+.dock-icon-muted svg,
+.dock-icon-screen svg,
+.dock-icon-screen-stop svg {
+  transform: translateY(-1px);
 }
 
 .mic-button[data-state="idle"],
@@ -751,20 +911,47 @@ button:focus-visible,
 
 .mic-button[data-state="live"] {
   background: transparent;
-  color: oklch(86% 0.08 164);
+  color: oklch(94% 0.012 92);
 }
 
 .mic-button[data-state="muted"] {
   background: transparent;
-  color: oklch(93% 0.034 32);
+  color: oklch(79% 0.018 92);
+}
+
+.screen-button {
+  border: 1px solid var(--control-line);
+  background: oklch(11% 0.012 92 / 0.96);
+  color: oklch(88% 0.014 92);
+  box-shadow: 0 18px 44px oklch(6% 0.02 92 / 0.4);
+}
+
+.screen-button:hover {
+  background: var(--control-hover);
+}
+
+.screen-button[data-state="live"] {
+  border-color: color-mix(in oklch, var(--control-active), var(--line) 26%);
+  background: var(--control-active);
+  color: oklch(9% 0.012 92);
+}
+
+.screen-button[data-state="live"]:hover {
+  background: var(--control-active-hover);
 }
 
 .dock-icon-muted,
-.mic-button[data-state="muted"] .dock-icon-mic {
+.dock-icon-screen-stop,
+.mic-button[data-state="muted"] .dock-icon-mic,
+.screen-button[data-state="live"] .dock-icon-screen {
   display: none;
 }
 
 .mic-button[data-state="muted"] .dock-icon-muted {
+  display: grid;
+}
+
+.screen-button[data-state="live"] .dock-icon-screen-stop {
   display: grid;
 }
 
@@ -777,6 +964,18 @@ button:focus-visible,
 .leave-button:hover {
   background: oklch(56% 0.18 31);
   box-shadow: inset 0 0 0 1px oklch(92% 0.06 31 / 0.22);
+}
+
+.screen-exit-button {
+  border: 1px solid var(--control-line);
+  background: var(--control-active);
+  color: oklch(9% 0.012 92);
+  pointer-events: auto;
+}
+
+.screen-exit-button:hover {
+  background: var(--control-active-hover);
+  box-shadow: inset 0 0 0 1px oklch(18% 0.012 92 / 0.18);
 }
 
 .device-popover {
@@ -804,13 +1003,17 @@ button:focus-visible,
 
 .sound-button {
   min-height: 48px;
-  border: 0;
+  border: 1px solid var(--control-line);
   border-radius: 999px;
   padding: 0 18px;
-  background: var(--blue);
-  color: var(--panel);
+  background: var(--control);
+  color: var(--ink);
   font-weight: 850;
   pointer-events: auto;
+}
+
+.sound-button:hover {
+  background: var(--control-hover);
 }
 
 .sr-only {
@@ -828,7 +1031,7 @@ button:focus-visible,
   bottom: var(--space-lg);
   z-index: 10;
   max-width: min(360px, calc(100vw - 32px));
-  border: 1px solid color-mix(in oklch, var(--green), var(--line) 45%);
+  border: 1px solid color-mix(in oklch, var(--control-line), var(--ink) 18%);
   border-radius: var(--radius-sm);
   padding: 12px 14px;
   background: oklch(10% 0.012 92);
@@ -938,6 +1141,10 @@ button:focus-visible,
 
   .participant {
     min-height: 148px;
+  }
+
+  body[data-screen-view="true"] .stage {
+    padding: var(--space-sm) var(--space-sm) 88px;
   }
 
   .voice-ring {

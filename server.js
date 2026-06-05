@@ -45,7 +45,7 @@ function baseHeaders() {
       "style-src 'self'"
     ].join('; '),
     'Cross-Origin-Opener-Policy': 'same-origin',
-    'Permissions-Policy': 'microphone=(self), camera=(), geolocation=(), payment=()',
+    'Permissions-Policy': 'microphone=(self), display-capture=(self), camera=(), geolocation=(), payment=()',
     'Referrer-Policy': 'same-origin',
     'X-Content-Type-Options': 'nosniff'
   };
@@ -78,6 +78,12 @@ function cleanName(value) {
   const compact = value.replace(/\s+/g, ' ').trim();
   if (!compact) return 'Guest';
   return compact.slice(0, 40);
+}
+
+function cleanStreamId(value) {
+  if (typeof value !== 'string') return '';
+  const streamId = value.trim();
+  return /^[A-Za-z0-9_.:-]{1,120}$/.test(streamId) ? streamId : '';
 }
 
 function createRoomId() {
@@ -128,7 +134,10 @@ function publicPeer(peer) {
     id: peer.id,
     joinedAt: peer.joinedAt,
     muted: peer.muted,
-    name: peer.name
+    name: peer.name,
+    screen: peer.screen,
+    screenAudio: peer.screenAudio,
+    screenStreamId: peer.screenStreamId
   };
 }
 
@@ -310,6 +319,9 @@ async function handleEvents(req, res, url) {
     joinedAt: Date.now(),
     muted: false,
     name,
+    screen: false,
+    screenAudio: false,
+    screenStreamId: '',
     res
   };
   room.peers.set(peerId, peer);
@@ -416,6 +428,15 @@ async function handleState(req, res) {
   }
   if (Object.hasOwn(body, 'muted')) {
     peer.muted = Boolean(body.muted);
+  }
+  if (Object.hasOwn(body, 'screen')) {
+    peer.screen = Boolean(body.screen);
+  }
+  if (Object.hasOwn(body, 'screenAudio')) {
+    peer.screenAudio = Boolean(body.screenAudio);
+  }
+  if (Object.hasOwn(body, 'screenStreamId')) {
+    peer.screenStreamId = cleanStreamId(body.screenStreamId);
   }
 
   broadcast(room, { type: 'peer-updated', peer: publicPeer(peer) });
