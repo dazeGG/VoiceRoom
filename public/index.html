@@ -62,12 +62,22 @@
               <p class="eyebrow">комната</p>
               <div class="room-title-line">
                 <h1 id="roomTitle">room</h1>
-                <button class="copy-code-button" id="copyCodeButton" type="button" aria-label="Скопировать код комнаты">
-                  <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
-                    <path d="M8 8m0 2a2 2 0 0 1 2 -2h8a2 2 0 0 1 2 2v8a2 2 0 0 1 -2 2h-8a2 2 0 0 1 -2 -2z"></path>
-                    <path d="M16 8v-2a2 2 0 0 0 -2 -2h-8a2 2 0 0 0 -2 2v8a2 2 0 0 0 2 2h2"></path>
-                  </svg>
-                </button>
+                <div class="room-title-actions">
+                  <button class="copy-room-button" id="copyCodeButton" type="button" aria-label="Скопировать код комнаты">
+                    <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                      <path d="M8 8m0 2a2 2 0 0 1 2 -2h8a2 2 0 0 1 2 2v8a2 2 0 0 1 -2 2h-8a2 2 0 0 1 -2 -2z"></path>
+                      <path d="M16 8v-2a2 2 0 0 0 -2 -2h-8a2 2 0 0 0 -2 2v8a2 2 0 0 0 2 2h2"></path>
+                    </svg>
+                  </button>
+
+                  <button class="copy-room-button" id="copyLinkButton" type="button" aria-label="Скопировать ссылку на комнату">
+                    <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                      <path d="M9 15l6 -6"></path>
+                      <path d="M11 6l.8 -.8a4 4 0 0 1 5.7 5.7l-1.7 1.7a4 4 0 0 1 -5.7 0"></path>
+                      <path d="M13 18l-.8 .8a4 4 0 0 1 -5.7 -5.7l1.7 -1.7a4 4 0 0 1 5.7 0"></path>
+                    </svg>
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -80,13 +90,6 @@
           </div>
 
           <div class="room-dock" aria-label="Управление голосом">
-            <div class="network-indicator" id="networkIndicator" data-state="unknown" data-tooltip="— мс" aria-label="Пинг измеряется" tabindex="0">
-              <span class="network-bar"></span>
-              <span class="network-bar"></span>
-              <span class="network-bar"></span>
-              <span class="network-tooltip" id="networkTooltip" aria-hidden="true">— мс</span>
-            </div>
-
             <div class="dock-cluster">
               <button class="dock-button mic-button" id="muteButton" type="button" aria-pressed="false" aria-label="Подключить микрофон">
                 <span class="dock-icon dock-icon-mic" aria-hidden="true">

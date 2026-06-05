@@ -4,6 +4,7 @@ const $ = (selector) => document.querySelector(selector);
 
 const elements = {
   copyCodeButton: $('#copyCodeButton'),
+  copyLinkButton: $('#copyLinkButton'),
   createRoomButton: $('#createRoomButton'),
   deviceMenuButton: $('#deviceMenuButton'),
   devicePopover: $('#devicePopover'),
@@ -13,8 +14,6 @@ const elements = {
   leaveButton: $('#leaveButton'),
   muteButton: $('#muteButton'),
   muteText: $('#muteText'),
-  networkIndicator: $('#networkIndicator'),
-  networkTooltip: $('#networkTooltip'),
   notFoundScreen: $('#notFoundScreen'),
   participants: $('#participants'),
   roomCodeInput: $('#roomCodeInput'),
@@ -41,9 +40,7 @@ const state = {
   joined: false,
   localStream: null,
   muted: false,
-  networkTimer: 0,
   peers: new Map(),
-  pingMs: null,
   peerId: createPeerId(),
   roomId: getRoomIdFromPath(),
   roomRoute: window.location.pathname.startsWith('/r/'),
@@ -66,15 +63,12 @@ function init() {
   elements.roomCodeInput.addEventListener('keydown', handleRoomCodeKeydown);
   elements.startNameInput.addEventListener('input', updateNameStatuses);
   elements.copyCodeButton.addEventListener('click', copyRoomCode);
+  elements.copyLinkButton.addEventListener('click', copyRoomLink);
   elements.muteButton.addEventListener('click', handleMicButtonClick);
   elements.deviceMenuButton.addEventListener('click', toggleDevicePopover);
   elements.leaveButton.addEventListener('click', handleLeaveButtonClick);
   elements.soundButton.addEventListener('click', unlockAudio);
   elements.deviceSelect.addEventListener('change', switchMicrophone);
-  elements.networkIndicator.addEventListener('pointerenter', showNetworkTooltip);
-  elements.networkIndicator.addEventListener('pointerleave', hideNetworkTooltip);
-  elements.networkIndicator.addEventListener('focus', showNetworkTooltip);
-  elements.networkIndicator.addEventListener('blur', hideNetworkTooltip);
   document.addEventListener('click', closeDevicePopoverOnOutside);
   document.addEventListener('keydown', closeDevicePopoverOnEscape);
   window.addEventListener('beforeunload', leaveRoom);
@@ -148,7 +142,6 @@ function showRoomScreen() {
   updateNameStatuses();
   refreshCallControls();
   refreshParticipantState();
-  startNetworkMonitor();
   autoJoinRoom();
 }
 
@@ -663,17 +656,6 @@ async function checkRoomExists(roomId) {
   return Boolean(payload.exists);
 }
 
-async function measurePing() {
-  const startedAt = performance.now();
-  try {
-    await fetchJson(`/healthz?t=${Date.now()}`);
-    state.pingMs = Math.max(1, Math.round(performance.now() - startedAt));
-  } catch (error) {
-    state.pingMs = null;
-  }
-  refreshNetworkIndicator();
-}
-
 async function postJson(url, body) {
   const response = await fetch(url, {
     body: JSON.stringify(body),
@@ -759,42 +741,6 @@ function refreshCallControls() {
   elements.muteButton.dataset.state = state.connecting ? 'connecting' : !state.joined ? 'idle' : state.muted ? 'muted' : 'live';
 }
 
-function startNetworkMonitor() {
-  if (state.networkTimer) return;
-
-  measurePing().catch(() => {});
-  state.networkTimer = window.setInterval(() => {
-    measurePing().catch(() => {});
-  }, 5000);
-}
-
-function stopNetworkMonitor() {
-  if (!state.networkTimer) return;
-  window.clearInterval(state.networkTimer);
-  state.networkTimer = 0;
-}
-
-function refreshNetworkIndicator() {
-  const ping = state.pingMs;
-  const quality = ping == null ? 'unknown' : ping < 120 ? 'good' : ping < 260 ? 'warn' : 'bad';
-  const label = ping == null ? '— мс' : `${ping} мс`;
-  const ariaLabel = ping == null ? 'Пинг недоступен' : `Пинг ${label}`;
-
-  elements.networkIndicator.dataset.state = quality;
-  elements.networkIndicator.dataset.tooltip = label;
-  elements.networkIndicator.removeAttribute('title');
-  elements.networkIndicator.setAttribute('aria-label', ariaLabel);
-  elements.networkTooltip.textContent = label;
-}
-
-function showNetworkTooltip() {
-  elements.networkIndicator.dataset.tooltipOpen = 'true';
-}
-
-function hideNetworkTooltip() {
-  delete elements.networkIndicator.dataset.tooltipOpen;
-}
-
 function leaveRoom() {
   if (!state.joined && !state.localStream && !state.connecting) return;
 
@@ -814,12 +760,9 @@ function leaveRoom() {
   state.self = null;
   stopLocalStream();
   stopMeters();
-  stopNetworkMonitor();
 
   state.muted = false;
-  state.pingMs = null;
   refreshCallControls();
-  refreshNetworkIndicator();
   closeDevicePopover();
   setStatus('idle', 'готово');
   refreshParticipantState();
@@ -870,6 +813,12 @@ async function unlockAudio() {
 async function copyRoomCode() {
   await copyText(state.roomId);
   showToast('Код комнаты скопирован');
+}
+
+async function copyRoomLink() {
+  const roomUrl = new URL(`/r/${encodeURIComponent(state.roomId)}`, window.location.origin);
+  await copyText(roomUrl.href);
+  showToast('Ссылка на комнату скопирована');
 }
 
 function getDisplayName() {
