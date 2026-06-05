@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#f4f1e8">
+    <title>Voice Room</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <a class="brand" href="/" aria-label="Новая голосовая комната">
+          <span class="brand-mark" aria-hidden="true"></span>
+          <span>Voice Room</span>
+        </a>
+        <div class="status-pill" data-state="idle" id="statusPill">
+          <span class="status-dot" aria-hidden="true"></span>
+          <span id="statusText">готово</span>
+        </div>
+      </header>
+
+      <main class="room-layout">
+        <section class="stage" aria-label="Голосовая комната">
+          <div class="room-heading">
+            <div>
+              <p class="eyebrow">комната</p>
+              <h1 id="roomTitle">room</h1>
+            </div>
+            <div class="heading-actions">
+              <button class="tool-button" id="copyLinkButton" type="button">Ссылка</button>
+              <button class="tool-button" id="newRoomButton" type="button">Новая</button>
+            </div>
+          </div>
+
+          <div class="participants" id="participants" aria-live="polite"></div>
+
+          <div class="empty-room" id="emptyRoom">
+            <span class="empty-orbit" aria-hidden="true"></span>
+            <p>Здесь пока тихо</p>
+          </div>
+        </section>
+
+        <aside class="side-panel" aria-label="Панель подключения">
+          <form class="join-panel" id="joinForm">
+            <label class="field">
+              <span>Имя</span>
+              <input id="nameInput" maxlength="40" autocomplete="name" placeholder="Например, Даша">
+            </label>
+
+            <label class="field">
+              <span>Микрофон</span>
+              <select id="deviceSelect">
+                <option value="">Системный</option>
+              </select>
+            </label>
+
+            <button class="primary-button" id="joinButton" type="submit">Подключиться</button>
+          </form>
+
+          <div class="controls" id="controls" hidden>
+            <button class="control-button" id="muteButton" type="button" aria-pressed="false">
+              <span class="control-dot" aria-hidden="true"></span>
+              <span id="muteText">Микрофон включен</span>
+            </button>
+            <button class="leave-button" id="leaveButton" type="button">Выйти</button>
+          </div>
+
+          <label class="field link-field">
+            <span>Ссылка</span>
+            <input id="roomLink" readonly>
+          </label>
+
+          <button class="sound-button" id="soundButton" type="button" hidden>Включить звук</button>
+        </aside>
+      </main>
+    </div>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <template id="participantTemplate">
+      <article class="participant" data-peer-id="">
+        <div class="voice-ring" aria-hidden="true">
+          <span class="avatar"></span>
+        </div>
+        <div class="participant-copy">
+          <h2></h2>
+          <p></p>
+        </div>
+      </article>
+    </template>
+
+    <script src="/app.js?v=20260605" defer></script>
+  </body>
+</html>

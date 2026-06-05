@@ -1,0 +1,32 @@
+# Dependencies
+node_modules/
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+
+# Logs and runtime output
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Editor and OS files
+.DS_Store
+.idea/
+.vscode/
+
+# Local scratch and generated artifacts
+work/
+outputs/
+deploy/
+
+# Docker/Caddy local state
+caddy_data/
+caddy_config/
+
+# Test and coverage output
+coverage/
+.nyc_output/
