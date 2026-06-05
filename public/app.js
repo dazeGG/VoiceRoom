@@ -15,10 +15,12 @@ const elements = {
   muteText: $('#muteText'),
   networkIndicator: $('#networkIndicator'),
   networkTooltip: $('#networkTooltip'),
+  notFoundScreen: $('#notFoundScreen'),
   participants: $('#participants'),
   roomCodeInput: $('#roomCodeInput'),
   roomScreen: $('#roomScreen'),
   roomTitle: $('#roomTitle'),
+  missingRoomCode: $('#missingRoomCode'),
   soundButton: $('#soundButton'),
   startForm: $('#startForm'),
   startNameInput: $('#startNameInput'),
@@ -44,6 +46,7 @@ const state = {
   pingMs: null,
   peerId: createPeerId(),
   roomId: getRoomIdFromPath(),
+  roomRoute: window.location.pathname.startsWith('/r/'),
   savedName: '',
   self: null
 };
@@ -76,9 +79,14 @@ function init() {
   document.addEventListener('keydown', closeDevicePopoverOnEscape);
   window.addEventListener('beforeunload', leaveRoom);
 
-  if (state.roomId) {
-    showRoomScreen();
-    refreshDevices().catch(() => {});
+  if (state.roomRoute && !state.roomId) {
+    showRoomNotFound();
+  } else if (state.roomId) {
+    showRoomRoute().catch((error) => {
+      console.error(error);
+      showRoomNotFound();
+      showToast('Не удалось проверить комнату');
+    });
   } else {
     showStartScreen();
   }
@@ -89,13 +97,6 @@ function getRoomIdFromPath() {
   return match ? match[1] : '';
 }
 
-function createRoomId() {
-  const alphabet = 'abcdefghijkmnpqrstuvwxyz23456789';
-  const bytes = new Uint8Array(10);
-  crypto.getRandomValues(bytes);
-  return Array.from(bytes, (byte) => alphabet[byte % alphabet.length]).join('');
-}
-
 function createPeerId() {
   if (crypto.randomUUID) return crypto.randomUUID();
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
@@ -104,6 +105,7 @@ function createPeerId() {
 function hideScreens() {
   elements.startScreen.hidden = true;
   elements.roomScreen.hidden = true;
+  elements.notFoundScreen.hidden = true;
 }
 
 function showStartScreen() {
@@ -115,6 +117,26 @@ function showStartScreen() {
   updateNameStatuses();
 }
 
+async function showRoomRoute() {
+  document.body.dataset.screen = 'checking';
+  hideScreens();
+  elements.statusPill.hidden = true;
+
+  const exists = await checkRoomExists(state.roomId);
+  if (!exists) {
+    showRoomNotFound();
+    return;
+  }
+
+  if (!ensureNameForRoomLink()) {
+    window.location.href = '/';
+    return;
+  }
+
+  showRoomScreen();
+  refreshDevices().catch(() => {});
+}
+
 function showRoomScreen() {
   document.body.dataset.screen = 'room';
   document.title = `${state.roomId} · Voice Room`;
@@ -123,11 +145,6 @@ function showRoomScreen() {
   elements.roomScreen.hidden = false;
   elements.statusPill.hidden = true;
 
-  if (!ensureNameForRoomLink()) {
-    window.location.href = '/';
-    return;
-  }
-
   updateNameStatuses();
   refreshCallControls();
   refreshParticipantState();
@@ -135,14 +152,42 @@ function showRoomScreen() {
   autoJoinRoom();
 }
 
+function showRoomNotFound() {
+  leaveRoom();
+  document.body.dataset.screen = 'not-found';
+  document.title = 'Комната не найдена · Voice Room';
+  elements.missingRoomCode.textContent = state.roomId || getMissingRoomLabel();
+  hideScreens();
+  elements.notFoundScreen.hidden = false;
+  elements.statusPill.hidden = true;
+}
+
+function getMissingRoomLabel() {
+  try {
+    return decodeURIComponent(window.location.pathname).replace(/^\/r\/?/, '').replace(/\/$/, '') || 'room';
+  } catch (error) {
+    return 'room';
+  }
+}
+
 function saveStartName(event) {
   event.preventDefault();
   saveNameFromInput(elements.startNameInput);
 }
 
-function createRoomFromStart() {
+async function createRoomFromStart() {
   if (!requireSavedName(elements.startNameInput)) return;
-  openRoom(createRoomId());
+
+  elements.createRoomButton.disabled = true;
+  try {
+    const room = await postJson('/rooms', {});
+    openRoom(room.roomId);
+  } catch (error) {
+    console.error(error);
+    showToast('Не удалось создать комнату');
+  } finally {
+    elements.createRoomButton.disabled = false;
+  }
 }
 
 function joinRoomByCode() {
@@ -188,6 +233,12 @@ async function joinRoom(event) {
   refreshCallControls();
 
   try {
+    const exists = await checkRoomExists(state.roomId);
+    if (!exists) {
+      showRoomNotFound();
+      return;
+    }
+
     state.iceConfig = await fetchJson('/config');
     state.localStream = await openMicrophone();
     await refreshDevices();
@@ -323,6 +374,11 @@ async function handleServerMessage(event) {
       await callPeer(peer.id);
     }
     refreshParticipantState();
+    return;
+  }
+
+  if (message.type === 'room-not-found') {
+    showRoomNotFound();
     return;
   }
 
@@ -594,6 +650,17 @@ async function fetchJson(url) {
   const response = await fetch(url, { headers: { Accept: 'application/json' } });
   if (!response.ok) throw new Error('Сервер недоступен');
   return response.json();
+}
+
+async function checkRoomExists(roomId) {
+  const response = await fetch(`/rooms/${encodeURIComponent(roomId)}`, {
+    headers: { Accept: 'application/json' }
+  });
+  if (response.status === 404) return false;
+  if (!response.ok) throw new Error('Не удалось проверить комнату');
+
+  const payload = await response.json();
+  return Boolean(payload.exists);
 }
 
 async function measurePing() {

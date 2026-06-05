@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#10110f">
     <title>Voice Room</title>
-    <link rel="stylesheet" href="/styles.css?v=20260606-14">
+    <link rel="stylesheet" href="/styles.css?v=20260606-15">
   </head>
   <body>
     <div class="app-shell">
@@ -141,6 +141,17 @@
         </section>
       </main>
 
+      <main class="not-found-layout" id="notFoundScreen" hidden aria-labelledby="notFoundTitle">
+        <section class="not-found-panel">
+          <p class="eyebrow">404</p>
+          <h1 id="notFoundTitle">Комната не найдена</h1>
+          <p class="not-found-copy">
+            Код <span id="missingRoomCode">room</span> не привязан к активной комнате. Создайте новую комнату или попросите свежий код.
+          </p>
+          <a class="home-link-button" href="/">На стартовый экран</a>
+        </section>
+      </main>
+
     </div>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
@@ -157,6 +168,6 @@
       </article>
     </template>
 
-    <script src="/app.js?v=20260606-13" defer></script>
+    <script src="/app.js?v=20260606-15" defer></script>
   </body>
 </html>

@@ -12,6 +12,7 @@ const MAX_ROOM_PEERS = Number.parseInt(process.env.MAX_ROOM_PEERS || '8', 10);
 const KEEPALIVE_MS = Number.parseInt(process.env.SSE_KEEPALIVE_MS || '15000', 10);
 const BODY_LIMIT_BYTES = Number.parseInt(process.env.BODY_LIMIT_BYTES || '65536', 10);
 const TURN_TTL_SECONDS = Number.parseInt(process.env.TURN_TTL_SECONDS || '43200', 10);
+const ROOM_IDLE_TTL_MS = Number.parseInt(process.env.ROOM_IDLE_TTL_MS || '900000', 10);
 const DEFAULT_STUN_URLS = 'stun:stun.l.google.com:19302';
 
 const rooms = new Map();
@@ -79,16 +80,45 @@ function cleanName(value) {
   return compact.slice(0, 40);
 }
 
-function getRoom(roomId) {
-  let room = rooms.get(roomId);
-  if (!room) {
-    room = {
-      id: roomId,
-      createdAt: Date.now(),
-      peers: new Map()
-    };
-    rooms.set(roomId, room);
+function createRoomId() {
+  const alphabet = 'abcdefghijkmnpqrstuvwxyz23456789';
+  const bytes = crypto.randomBytes(10);
+  return Array.from(bytes, (byte) => alphabet[byte % alphabet.length]).join('');
+}
+
+function pruneRooms(now = Date.now()) {
+  for (const [roomId, room] of rooms) {
+    if (room.peers.size === 0 && room.emptySince && now - room.emptySince > ROOM_IDLE_TTL_MS) {
+      rooms.delete(roomId);
+    }
   }
+}
+
+function createRoom() {
+  pruneRooms();
+
+  let roomId = createRoomId();
+  while (rooms.has(roomId)) {
+    roomId = createRoomId();
+  }
+
+  const now = Date.now();
+  const room = {
+    createdAt: now,
+    emptySince: now,
+    id: roomId,
+    peers: new Map(),
+    updatedAt: now
+  };
+  rooms.set(roomId, room);
+  return room;
+}
+
+function getRoom(roomId) {
+  pruneRooms();
+  const room = rooms.get(roomId);
+  if (!room) return null;
+
   room.updatedAt = Date.now();
   return room;
 }
@@ -135,7 +165,10 @@ function closePeer(roomId, peerId, res, reason = 'left') {
   }
 
   if (room.peers.size === 0) {
-    rooms.delete(roomId);
+    room.emptySince = Date.now();
+    room.updatedAt = room.emptySince;
+  } else {
+    room.updatedAt = Date.now();
   }
 }
 
@@ -222,6 +255,19 @@ async function handleEvents(req, res, url) {
   }
 
   const room = getRoom(roomId);
+  if (!room) {
+    res.writeHead(200, {
+      ...baseHeaders(),
+      'Cache-Control': 'no-cache, no-transform',
+      Connection: 'keep-alive',
+      'Content-Type': 'text/event-stream; charset=utf-8',
+      'X-Accel-Buffering': 'no'
+    });
+    res.write(`event: message\ndata: ${JSON.stringify({ type: 'room-not-found', roomId })}\n\n`);
+    res.end();
+    return;
+  }
+
   const reconnecting = room.peers.has(peerId);
 
   if (!reconnecting && room.peers.size >= MAX_ROOM_PEERS) {
@@ -267,6 +313,8 @@ async function handleEvents(req, res, url) {
     res
   };
   room.peers.set(peerId, peer);
+  room.emptySince = 0;
+  room.updatedAt = peer.joinedAt;
 
   sendEvent(peer, {
     type: 'hello',
@@ -283,6 +331,41 @@ async function handleEvents(req, res, url) {
   req.on('close', () => {
     clearInterval(keepalive);
     closePeer(roomId, peerId, res);
+  });
+}
+
+async function handleCreateRoom(req, res) {
+  await readJsonBody(req);
+  const room = createRoom();
+  sendJson(res, 201, {
+    ok: true,
+    maxRoomPeers: MAX_ROOM_PEERS,
+    roomId: room.id
+  });
+}
+
+function handleRoomStatus(res, url) {
+  const match = url.pathname.match(/^\/rooms\/([A-Za-z0-9_-]{3,48})$/);
+  const roomId = match ? normalizeRoomId(match[1]) : '';
+
+  if (!roomId) {
+    sendJson(res, 404, { ok: false, exists: false, error: 'Room not found' });
+    return;
+  }
+
+  const room = getRoom(roomId);
+  if (!room) {
+    sendJson(res, 404, { ok: false, exists: false, error: 'Room not found', roomId });
+    return;
+  }
+
+  sendJson(res, 200, {
+    ok: true,
+    createdAt: room.createdAt,
+    exists: true,
+    maxRoomPeers: MAX_ROOM_PEERS,
+    peers: room.peers.size,
+    roomId
   });
 }
 
@@ -341,7 +424,15 @@ async function handleState(req, res) {
 
 async function serveStatic(req, res, url) {
   let pathname = decodeURIComponent(url.pathname);
-  if (pathname === '/' || pathname.startsWith('/r/')) {
+  let statusCode = 200;
+
+  if (pathname === '/') {
+    pathname = '/index.html';
+  } else if (pathname.startsWith('/r/')) {
+    const match = pathname.match(/^\/r\/([A-Za-z0-9_-]{3,48})\/?$/);
+    const roomId = match ? normalizeRoomId(match[1]) : '';
+    pruneRooms();
+    statusCode = roomId && rooms.has(roomId) ? 200 : 404;
     pathname = '/index.html';
   }
 
@@ -360,7 +451,7 @@ async function serveStatic(req, res, url) {
   }
 
   const ext = path.extname(resolvedPath);
-  res.writeHead(200, {
+  res.writeHead(statusCode, {
     ...baseHeaders(),
     'Cache-Control': 'no-cache',
     'Content-Type': mimeTypes[ext] || 'application/octet-stream'
@@ -377,6 +468,7 @@ const server = http.createServer(async (req, res) => {
     const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
 
     if (req.method === 'GET' && url.pathname === '/healthz') {
+      pruneRooms();
       sendJson(res, 200, {
         ok: true,
         rooms: rooms.size,
@@ -387,6 +479,16 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === 'GET' && url.pathname === '/config') {
       sendJson(res, 200, buildIceConfig(req));
+      return;
+    }
+
+    if (req.method === 'POST' && url.pathname === '/rooms') {
+      await handleCreateRoom(req, res);
+      return;
+    }
+
+    if (req.method === 'GET' && url.pathname.startsWith('/rooms/')) {
+      handleRoomStatus(res, url);
       return;
     }
 

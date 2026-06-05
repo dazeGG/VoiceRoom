@@ -159,6 +159,12 @@ button:disabled {
   min-height: 0;
 }
 
+.not-found-layout {
+  display: grid;
+  min-height: min(760px, calc(100vh - 116px));
+  place-items: center;
+}
+
 .start-layout {
   display: grid;
   width: min(100%, 1040px);
@@ -200,6 +206,38 @@ button:disabled {
     linear-gradient(180deg, oklch(22% 0.018 92 / 0.96), oklch(17% 0.014 92 / 0.96)),
     var(--panel);
   box-shadow: var(--shadow);
+}
+
+.not-found-panel {
+  display: grid;
+  width: min(100%, 620px);
+  gap: var(--space-lg);
+  border: 1px solid color-mix(in oklch, var(--line), var(--coral) 18%);
+  border-radius: var(--radius-md);
+  padding: clamp(var(--space-xl), 5vw, 64px);
+  background:
+    radial-gradient(circle at 18% 4%, oklch(62% 0.15 31 / 0.16), transparent 38%),
+    linear-gradient(180deg, oklch(22% 0.018 92 / 0.96), oklch(14% 0.013 92 / 0.98)),
+    var(--panel);
+  box-shadow: var(--shadow);
+}
+
+.not-found-panel h1 {
+  max-width: 12ch;
+}
+
+.not-found-copy {
+  max-width: 46ch;
+  margin: 0;
+  color: var(--muted);
+  font-size: 1.06rem;
+  font-weight: 650;
+}
+
+.not-found-copy span {
+  color: var(--ink);
+  font-weight: 850;
+  overflow-wrap: anywhere;
 }
 
 .start-divider {
@@ -313,6 +351,7 @@ h1 {
 .tool-button,
 .primary-button,
 .secondary-button,
+.home-link-button,
 .leave-button,
 .sound-button {
   min-height: 44px;
@@ -328,9 +367,21 @@ h1 {
   font-weight: 750;
 }
 
+.home-link-button {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  justify-content: center;
+  background: var(--green);
+  color: oklch(8% 0.014 92);
+  font-weight: 850;
+  text-decoration: none;
+}
+
 .tool-button:hover,
 .primary-button:hover,
 .secondary-button:hover,
+.home-link-button:hover,
 .leave-button:hover,
 .sound-button:hover {
   border-color: color-mix(in oklch, var(--green), var(--line) 34%);
@@ -574,7 +625,8 @@ select {
 
 input:focus,
 select:focus,
-button:focus-visible {
+button:focus-visible,
+.home-link-button:focus-visible {
   outline: 3px solid oklch(70% 0.14 82 / 0.55);
   outline-offset: 2px;
 }
@@ -595,6 +647,10 @@ button:focus-visible {
 }
 
 .primary-button:hover {
+  background: color-mix(in oklch, var(--green), white 8%);
+}
+
+.home-link-button:hover {
   background: color-mix(in oklch, var(--green), white 8%);
 }
 
@@ -947,6 +1003,10 @@ button:focus-visible {
   }
 
   .start-panel {
+    padding: var(--space-lg);
+  }
+
+  .not-found-panel {
     padding: var(--space-lg);
   }
 
