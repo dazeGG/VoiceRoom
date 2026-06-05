@@ -3,9 +3,9 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="theme-color" content="#f4f1e8">
+    <meta name="theme-color" content="#10110f">
     <title>Voice Room</title>
-    <link rel="stylesheet" href="/styles.css">
+    <link rel="stylesheet" href="/styles.css?v=20260606-14">
   </head>
   <body>
     <div class="app-shell">
@@ -14,66 +14,133 @@
           <span class="brand-mark" aria-hidden="true"></span>
           <span>Voice Room</span>
         </a>
-        <div class="status-pill" data-state="idle" id="statusPill">
+        <div class="status-pill" data-state="idle" id="statusPill" hidden>
           <span class="status-dot" aria-hidden="true"></span>
           <span id="statusText">готово</span>
         </div>
       </header>
 
-      <main class="room-layout">
+      <main class="start-layout" id="startScreen" aria-label="Стартовый экран">
+        <section class="start-copy" aria-labelledby="startTitle">
+          <p class="eyebrow">voice room</p>
+          <h1 id="startTitle">Голосовая комната без лишних дверей</h1>
+          <p class="start-lead">Сначала сохраните имя, потом создайте комнату или зайдите к своим по коду.</p>
+        </section>
+
+        <section class="start-panel" aria-label="Создать или найти комнату">
+          <form class="name-panel" id="startForm">
+            <label class="field">
+              <span>Ваше имя</span>
+              <input id="startNameInput" maxlength="40" autocomplete="name" placeholder="Например, Даша" required>
+            </label>
+
+            <button class="secondary-button" type="submit">Сохранить имя</button>
+            <p class="name-status" id="startNameStatus">Имя не сохранено</p>
+          </form>
+
+          <div class="start-divider">
+            <span>комната</span>
+          </div>
+
+          <div class="room-actions">
+            <button class="primary-button" id="createRoomButton" type="button">Создать комнату</button>
+
+            <label class="field">
+              <span>Код комнаты</span>
+              <input id="roomCodeInput" maxlength="120" autocapitalize="off" autocomplete="off" spellcheck="false" placeholder="x7m2kq9p">
+            </label>
+
+            <button class="secondary-button" id="joinByCodeButton" type="button">Войти по коду</button>
+          </div>
+        </section>
+      </main>
+
+      <main class="room-layout" id="roomScreen" hidden>
         <section class="stage" aria-label="Голосовая комната">
           <div class="room-heading">
             <div>
               <p class="eyebrow">комната</p>
-              <h1 id="roomTitle">room</h1>
-            </div>
-            <div class="heading-actions">
-              <button class="tool-button" id="copyLinkButton" type="button">Ссылка</button>
-              <button class="tool-button" id="newRoomButton" type="button">Новая</button>
+              <div class="room-title-line">
+                <h1 id="roomTitle">room</h1>
+                <button class="copy-code-button" id="copyCodeButton" type="button" aria-label="Скопировать код комнаты">
+                  <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                    <path d="M8 8m0 2a2 2 0 0 1 2 -2h8a2 2 0 0 1 2 2v8a2 2 0 0 1 -2 2h-8a2 2 0 0 1 -2 -2z"></path>
+                    <path d="M16 8v-2a2 2 0 0 0 -2 -2h-8a2 2 0 0 0 -2 2v8a2 2 0 0 0 2 2h2"></path>
+                  </svg>
+                </button>
+              </div>
             </div>
           </div>
 
-          <div class="participants" id="participants" aria-live="polite"></div>
+          <div class="participants" id="participants" data-count="0" aria-live="polite"></div>
 
           <div class="empty-room" id="emptyRoom">
             <span class="empty-orbit" aria-hidden="true"></span>
             <p>Здесь пока тихо</p>
           </div>
-        </section>
 
-        <aside class="side-panel" aria-label="Панель подключения">
-          <form class="join-panel" id="joinForm">
-            <label class="field">
-              <span>Имя</span>
-              <input id="nameInput" maxlength="40" autocomplete="name" placeholder="Например, Даша">
-            </label>
+          <div class="room-dock" aria-label="Управление голосом">
+            <div class="network-indicator" id="networkIndicator" data-state="unknown" data-tooltip="— мс" aria-label="Пинг измеряется" tabindex="0">
+              <span class="network-bar"></span>
+              <span class="network-bar"></span>
+              <span class="network-bar"></span>
+              <span class="network-tooltip" id="networkTooltip" aria-hidden="true">— мс</span>
+            </div>
 
-            <label class="field">
-              <span>Микрофон</span>
-              <select id="deviceSelect">
-                <option value="">Системный</option>
-              </select>
-            </label>
+            <div class="dock-cluster">
+              <button class="dock-button mic-button" id="muteButton" type="button" aria-pressed="false" aria-label="Подключить микрофон">
+                <span class="dock-icon dock-icon-mic" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" focusable="false">
+                    <path d="M9 5a3 3 0 0 1 3 -3h0a3 3 0 0 1 3 3v5a3 3 0 0 1 -3 3h0a3 3 0 0 1 -3 -3z"></path>
+                    <path d="M5 10a7 7 0 0 0 14 0"></path>
+                    <path d="M8 21h8"></path>
+                    <path d="M12 17v4"></path>
+                  </svg>
+                </span>
+                <span class="dock-icon dock-icon-muted" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" focusable="false">
+                    <path d="M3 3l18 18"></path>
+                    <path d="M9 5a3 3 0 0 1 5.12 -2.12"></path>
+                    <path d="M15 9.34v.66a3 3 0 0 1 -.13 .88"></path>
+                    <path d="M9 9v1a3 3 0 0 0 3 3c.34 0 .67 -.06 .97 -.16"></path>
+                    <path d="M5 10a7 7 0 0 0 11.95 4.95"></path>
+                    <path d="M19 10a7 7 0 0 1 -.11 1.23"></path>
+                    <path d="M8 21h8"></path>
+                    <path d="M12 17v4"></path>
+                  </svg>
+                </span>
+                <span class="sr-only" id="muteText">Подключить микрофон</span>
+              </button>
 
-            <button class="primary-button" id="joinButton" type="submit">Подключиться</button>
-          </form>
+              <button class="dock-menu-button" id="deviceMenuButton" type="button" aria-expanded="false" aria-controls="devicePopover" aria-label="Выбрать микрофон">
+                <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                  <path d="M6 9l6 6l6 -6"></path>
+                </svg>
+              </button>
 
-          <div class="controls" id="controls" hidden>
-            <button class="control-button" id="muteButton" type="button" aria-pressed="false">
-              <span class="control-dot" aria-hidden="true"></span>
-              <span id="muteText">Микрофон включен</span>
+              <div class="device-popover" id="devicePopover" hidden>
+                <label class="field">
+                  <span>Микрофон</span>
+                  <select id="deviceSelect">
+                    <option value="">Системный</option>
+                  </select>
+                </label>
+              </div>
+            </div>
+
+            <button class="dock-button leave-button" id="leaveButton" type="button" aria-label="Выйти из комнаты">
+              <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                <path d="M3 21l18 -18"></path>
+                <path d="M5.8 14.2a15.9 15.9 0 0 1 -2.8 -8.2a2 2 0 0 1 2 -2h4l2 5l-2.5 1.5l.54 .82"></path>
+                <path d="M12.2 15.2a11 11 0 0 0 1.3 .8l1.5 -2.5l5 2v4a2 2 0 0 1 -2 2a15.9 15.9 0 0 1 -8.2 -2.8"></path>
+              </svg>
             </button>
-            <button class="leave-button" id="leaveButton" type="button">Выйти</button>
+
+            <button class="sound-button" id="soundButton" type="button" hidden>Включить звук</button>
           </div>
-
-          <label class="field link-field">
-            <span>Ссылка</span>
-            <input id="roomLink" readonly>
-          </label>
-
-          <button class="sound-button" id="soundButton" type="button" hidden>Включить звук</button>
-        </aside>
+        </section>
       </main>
+
     </div>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
@@ -90,6 +157,6 @@
       </article>
     </template>
 
-    <script src="/app.js?v=20260605" defer></script>
+    <script src="/app.js?v=20260606-13" defer></script>
   </body>
 </html>

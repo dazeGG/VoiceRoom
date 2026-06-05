@@ -8,7 +8,7 @@ const { URL } = require('node:url');
 
 const PORT = Number.parseInt(process.env.PORT || '3000', 10);
 const PUBLIC_DIR = path.join(__dirname, 'public');
-const MAX_ROOM_PEERS = Number.parseInt(process.env.MAX_ROOM_PEERS || '12', 10);
+const MAX_ROOM_PEERS = Number.parseInt(process.env.MAX_ROOM_PEERS || '8', 10);
 const KEEPALIVE_MS = Number.parseInt(process.env.SSE_KEEPALIVE_MS || '15000', 10);
 const BODY_LIMIT_BYTES = Number.parseInt(process.env.BODY_LIMIT_BYTES || '65536', 10);
 const TURN_TTL_SECONDS = Number.parseInt(process.env.TURN_TTL_SECONDS || '43200', 10);

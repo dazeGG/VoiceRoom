@@ -3,21 +3,27 @@
 const $ = (selector) => document.querySelector(selector);
 
 const elements = {
-  controls: $('#controls'),
-  copyLinkButton: $('#copyLinkButton'),
+  copyCodeButton: $('#copyCodeButton'),
+  createRoomButton: $('#createRoomButton'),
+  deviceMenuButton: $('#deviceMenuButton'),
+  devicePopover: $('#devicePopover'),
   deviceSelect: $('#deviceSelect'),
   emptyRoom: $('#emptyRoom'),
-  joinButton: $('#joinButton'),
-  joinForm: $('#joinForm'),
+  joinByCodeButton: $('#joinByCodeButton'),
   leaveButton: $('#leaveButton'),
   muteButton: $('#muteButton'),
   muteText: $('#muteText'),
-  nameInput: $('#nameInput'),
-  newRoomButton: $('#newRoomButton'),
+  networkIndicator: $('#networkIndicator'),
+  networkTooltip: $('#networkTooltip'),
   participants: $('#participants'),
-  roomLink: $('#roomLink'),
+  roomCodeInput: $('#roomCodeInput'),
+  roomScreen: $('#roomScreen'),
   roomTitle: $('#roomTitle'),
   soundButton: $('#soundButton'),
+  startForm: $('#startForm'),
+  startNameInput: $('#startNameInput'),
+  startNameStatus: $('#startNameStatus'),
+  startScreen: $('#startScreen'),
   statusPill: $('#statusPill'),
   statusText: $('#statusText'),
   template: $('#participantTemplate'),
@@ -26,14 +32,19 @@ const elements = {
 
 const state = {
   audioContext: null,
+  autoJoinStarted: false,
+  connecting: false,
   eventSource: null,
   iceConfig: { iceServers: [] },
   joined: false,
   localStream: null,
   muted: false,
+  networkTimer: 0,
   peers: new Map(),
+  pingMs: null,
   peerId: createPeerId(),
-  roomId: getRoomId(),
+  roomId: getRoomIdFromPath(),
+  savedName: '',
   self: null
 };
 
@@ -43,28 +54,39 @@ let meterFrame = 0;
 init();
 
 function init() {
-  elements.roomTitle.textContent = state.roomId;
-  elements.roomLink.value = window.location.href;
-  elements.nameInput.value = localStorage.getItem('voice-room:name') || '';
-  elements.joinForm.addEventListener('submit', joinRoom);
-  elements.copyLinkButton.addEventListener('click', copyLink);
-  elements.newRoomButton.addEventListener('click', openNewRoom);
-  elements.muteButton.addEventListener('click', toggleMute);
-  elements.leaveButton.addEventListener('click', leaveRoom);
+  const savedName = cleanDisplayName(localStorage.getItem('voice-room:name'));
+  state.savedName = savedName;
+  elements.startNameInput.value = savedName;
+  elements.startForm.addEventListener('submit', saveStartName);
+  elements.createRoomButton.addEventListener('click', createRoomFromStart);
+  elements.joinByCodeButton.addEventListener('click', joinRoomByCode);
+  elements.roomCodeInput.addEventListener('keydown', handleRoomCodeKeydown);
+  elements.startNameInput.addEventListener('input', updateNameStatuses);
+  elements.copyCodeButton.addEventListener('click', copyRoomCode);
+  elements.muteButton.addEventListener('click', handleMicButtonClick);
+  elements.deviceMenuButton.addEventListener('click', toggleDevicePopover);
+  elements.leaveButton.addEventListener('click', handleLeaveButtonClick);
   elements.soundButton.addEventListener('click', unlockAudio);
   elements.deviceSelect.addEventListener('change', switchMicrophone);
+  elements.networkIndicator.addEventListener('pointerenter', showNetworkTooltip);
+  elements.networkIndicator.addEventListener('pointerleave', hideNetworkTooltip);
+  elements.networkIndicator.addEventListener('focus', showNetworkTooltip);
+  elements.networkIndicator.addEventListener('blur', hideNetworkTooltip);
+  document.addEventListener('click', closeDevicePopoverOnOutside);
+  document.addEventListener('keydown', closeDevicePopoverOnEscape);
   window.addEventListener('beforeunload', leaveRoom);
-  refreshParticipantState();
-  refreshDevices().catch(() => {});
+
+  if (state.roomId) {
+    showRoomScreen();
+    refreshDevices().catch(() => {});
+  } else {
+    showStartScreen();
+  }
 }
 
-function getRoomId() {
+function getRoomIdFromPath() {
   const match = window.location.pathname.match(/^\/r\/([A-Za-z0-9_-]{3,48})\/?$/);
-  if (match) return match[1];
-
-  const roomId = createRoomId();
-  window.history.replaceState({}, '', `/r/${roomId}`);
-  return roomId;
+  return match ? match[1] : '';
 }
 
 function createRoomId() {
@@ -79,12 +101,91 @@ function createPeerId() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
 }
 
-async function joinRoom(event) {
-  event.preventDefault();
-  if (state.joined) return;
+function hideScreens() {
+  elements.startScreen.hidden = true;
+  elements.roomScreen.hidden = true;
+}
 
-  elements.joinButton.disabled = true;
+function showStartScreen() {
+  document.body.dataset.screen = 'start';
+  document.title = 'Voice Room';
+  hideScreens();
+  elements.startScreen.hidden = false;
+  elements.statusPill.hidden = true;
+  updateNameStatuses();
+}
+
+function showRoomScreen() {
+  document.body.dataset.screen = 'room';
+  document.title = `${state.roomId} · Voice Room`;
+  elements.roomTitle.textContent = state.roomId;
+  hideScreens();
+  elements.roomScreen.hidden = false;
+  elements.statusPill.hidden = true;
+
+  if (!ensureNameForRoomLink()) {
+    window.location.href = '/';
+    return;
+  }
+
+  updateNameStatuses();
+  refreshCallControls();
+  refreshParticipantState();
+  startNetworkMonitor();
+  autoJoinRoom();
+}
+
+function saveStartName(event) {
+  event.preventDefault();
+  saveNameFromInput(elements.startNameInput);
+}
+
+function createRoomFromStart() {
+  if (!requireSavedName(elements.startNameInput)) return;
+  openRoom(createRoomId());
+}
+
+function joinRoomByCode() {
+  if (!requireSavedName(elements.startNameInput)) return;
+
+  const roomId = extractRoomId(elements.roomCodeInput.value);
+  if (!roomId) {
+    showToast('Введите код комнаты');
+    elements.roomCodeInput.focus();
+    return;
+  }
+
+  openRoom(roomId);
+}
+
+function handleRoomCodeKeydown(event) {
+  if (event.key !== 'Enter') return;
+  event.preventDefault();
+  joinRoomByCode();
+}
+
+function openRoom(roomId) {
+  window.location.href = `/r/${encodeURIComponent(roomId)}`;
+}
+
+function ensureNameForRoomLink() {
+  if (state.savedName) return true;
+
+  const promptedName = cleanDisplayName(window.prompt('Как вас зовут?'));
+  if (!promptedName) return false;
+
+  persistName(promptedName);
+  return true;
+}
+
+async function joinRoom(event) {
+  event?.preventDefault();
+  if (state.joined || state.connecting) return;
+
+  state.connecting = true;
+  elements.muteButton.disabled = true;
   setStatus('connecting', 'соединение');
+  refreshCallControls();
 
   try {
     state.iceConfig = await fetchJson('/config');
@@ -92,7 +193,6 @@ async function joinRoom(event) {
     await refreshDevices();
 
     const name = getDisplayName();
-    localStorage.setItem('voice-room:name', name);
     state.self = createParticipant({
       id: state.peerId,
       isLocal: true,
@@ -101,6 +201,7 @@ async function joinRoom(event) {
       name
     });
     attachMeter(state.self, state.localStream);
+    updatePeerStatus(state.self);
 
     state.eventSource = new EventSource(
       `/events?room=${encodeURIComponent(state.roomId)}&peer=${encodeURIComponent(state.peerId)}&name=${encodeURIComponent(name)}`
@@ -111,8 +212,7 @@ async function joinRoom(event) {
     };
 
     state.joined = true;
-    elements.joinForm.hidden = true;
-    elements.controls.hidden = false;
+    refreshCallControls();
     startMeters();
   } catch (error) {
     console.error(error);
@@ -120,8 +220,25 @@ async function joinRoom(event) {
     setStatus('error', 'ошибка');
     stopLocalStream();
   } finally {
-    elements.joinButton.disabled = false;
+    state.connecting = false;
+    elements.muteButton.disabled = false;
+    refreshCallControls();
   }
+}
+
+function autoJoinRoom() {
+  if (state.autoJoinStarted) return;
+  state.autoJoinStarted = true;
+
+  window.setTimeout(() => {
+    if (!state.roomId || state.joined || state.connecting) return;
+
+    joinRoom().catch((error) => {
+      console.error(error);
+      showToast('Не удалось подключиться');
+      setStatus('error', 'ошибка');
+    });
+  }, 0);
 }
 
 async function openMicrophone() {
@@ -168,6 +285,7 @@ async function refreshDevices() {
 }
 
 async function switchMicrophone() {
+  refreshCallControls();
   if (!state.joined || !state.localStream) return;
 
   try {
@@ -198,7 +316,7 @@ async function handleServerMessage(event) {
   const message = JSON.parse(event.data);
 
   if (message.type === 'hello') {
-    setStatus('connected', 'в эфире');
+    setStatus('connected', '');
     syncPeers(message.peers.map((peer) => peer.id));
     for (const peer of message.peers) {
       createParticipant(peer);
@@ -262,7 +380,7 @@ function createParticipant(peerInfo) {
   if (peerInfo.isLocal) node.dataset.local = 'true';
   avatar.textContent = getInitials(peerInfo.name);
   title.textContent = peerInfo.isLocal ? `${peerInfo.name} · вы` : peerInfo.name;
-  status.textContent = peerInfo.muted ? 'микрофон выключен' : 'подключение';
+  setParticipantStatus({ status }, peerInfo.isLocal ? '' : 'подключение');
   node.dataset.muted = String(Boolean(peerInfo.muted));
 
   elements.participants.append(node);
@@ -478,6 +596,17 @@ async function fetchJson(url) {
   return response.json();
 }
 
+async function measurePing() {
+  const startedAt = performance.now();
+  try {
+    await fetchJson(`/healthz?t=${Date.now()}`);
+    state.pingMs = Math.max(1, Math.round(performance.now() - startedAt));
+  } catch (error) {
+    state.pingMs = null;
+  }
+  refreshNetworkIndicator();
+}
+
 async function postJson(url, body) {
   const response = await fetch(url, {
     body: JSON.stringify(body),
@@ -499,7 +628,7 @@ function toggleMute() {
   }
 
   elements.muteButton.setAttribute('aria-pressed', String(state.muted));
-  elements.muteText.textContent = state.muted ? 'Микрофон выключен' : 'Микрофон включен';
+  refreshCallControls();
   updateParticipant({
     id: state.peerId,
     muted: state.muted,
@@ -508,9 +637,101 @@ function toggleMute() {
   postState().catch(() => {});
 }
 
-function leaveRoom() {
-  if (!state.joined && !state.localStream) return;
+async function handleMicButtonClick(event) {
+  if (!state.joined) {
+    await joinRoom(event);
+    return;
+  }
 
+  toggleMute();
+}
+
+function handleLeaveButtonClick() {
+  if (state.joined || state.localStream || state.connecting) {
+    leaveRoom();
+  }
+
+  window.location.href = '/';
+}
+
+function toggleDevicePopover(event) {
+  event.stopPropagation();
+  const willOpen = elements.devicePopover.hidden;
+  elements.devicePopover.hidden = !willOpen;
+  elements.deviceMenuButton.setAttribute('aria-expanded', String(willOpen));
+  if (willOpen) refreshDevices().catch(() => {});
+}
+
+function closeDevicePopover() {
+  elements.devicePopover.hidden = true;
+  elements.deviceMenuButton.setAttribute('aria-expanded', 'false');
+}
+
+function closeDevicePopoverOnOutside(event) {
+  if (elements.devicePopover.hidden) return;
+  if (elements.devicePopover.contains(event.target) || elements.deviceMenuButton.contains(event.target)) return;
+  closeDevicePopover();
+}
+
+function closeDevicePopoverOnEscape(event) {
+  if (event.key === 'Escape') closeDevicePopover();
+}
+
+function refreshCallControls() {
+  const label = !state.joined
+    ? state.connecting
+      ? 'Подключение'
+      : 'Подключить микрофон'
+    : state.muted
+      ? 'Включить микрофон'
+      : 'Выключить микрофон';
+
+  elements.muteText.textContent = label;
+  elements.muteButton.setAttribute('aria-label', label);
+  elements.muteButton.setAttribute('aria-pressed', String(state.joined && state.muted));
+  elements.muteButton.dataset.state = state.connecting ? 'connecting' : !state.joined ? 'idle' : state.muted ? 'muted' : 'live';
+}
+
+function startNetworkMonitor() {
+  if (state.networkTimer) return;
+
+  measurePing().catch(() => {});
+  state.networkTimer = window.setInterval(() => {
+    measurePing().catch(() => {});
+  }, 5000);
+}
+
+function stopNetworkMonitor() {
+  if (!state.networkTimer) return;
+  window.clearInterval(state.networkTimer);
+  state.networkTimer = 0;
+}
+
+function refreshNetworkIndicator() {
+  const ping = state.pingMs;
+  const quality = ping == null ? 'unknown' : ping < 120 ? 'good' : ping < 260 ? 'warn' : 'bad';
+  const label = ping == null ? '— мс' : `${ping} мс`;
+  const ariaLabel = ping == null ? 'Пинг недоступен' : `Пинг ${label}`;
+
+  elements.networkIndicator.dataset.state = quality;
+  elements.networkIndicator.dataset.tooltip = label;
+  elements.networkIndicator.removeAttribute('title');
+  elements.networkIndicator.setAttribute('aria-label', ariaLabel);
+  elements.networkTooltip.textContent = label;
+}
+
+function showNetworkTooltip() {
+  elements.networkIndicator.dataset.tooltipOpen = 'true';
+}
+
+function hideNetworkTooltip() {
+  delete elements.networkIndicator.dataset.tooltipOpen;
+}
+
+function leaveRoom() {
+  if (!state.joined && !state.localStream && !state.connecting) return;
+
+  state.connecting = false;
   state.joined = false;
   state.eventSource?.close();
   state.eventSource = null;
@@ -526,12 +747,13 @@ function leaveRoom() {
   state.self = null;
   stopLocalStream();
   stopMeters();
+  stopNetworkMonitor();
 
-  elements.controls.hidden = true;
-  elements.joinForm.hidden = false;
   state.muted = false;
-  elements.muteButton.setAttribute('aria-pressed', 'false');
-  elements.muteText.textContent = 'Микрофон включен';
+  state.pingMs = null;
+  refreshCallControls();
+  refreshNetworkIndicator();
+  closeDevicePopover();
   setStatus('idle', 'готово');
   refreshParticipantState();
 }
@@ -544,24 +766,28 @@ function stopLocalStream() {
 
 function updatePeerStatus(peer) {
   if (peer.muted) {
-    peer.status.textContent = 'микрофон выключен';
+    setParticipantStatus(peer, '');
     return;
   }
 
   const stateText = peer.pc?.connectionState || peer.pc?.iceConnectionState;
-  if (!stateText || stateText === 'new') {
-    peer.status.textContent = peer.isLocal ? 'локальный звук' : 'подключение';
-  } else if (stateText === 'connected' || stateText === 'completed') {
-    peer.status.textContent = 'в эфире';
-  } else if (stateText === 'failed' || stateText === 'disconnected') {
-    peer.status.textContent = 'переподключение';
-  } else {
-    peer.status.textContent = stateText;
+  if (peer.isLocal || stateText === 'connected' || stateText === 'completed') {
+    setParticipantStatus(peer, '');
+    return;
   }
+
+  setParticipantStatus(peer, 'подключение');
+}
+
+function setParticipantStatus(peer, label) {
+  peer.status.textContent = label;
+  peer.status.hidden = !label;
 }
 
 function refreshParticipantState() {
-  elements.emptyRoom.hidden = elements.participants.children.length > 0;
+  const participantCount = elements.participants.children.length;
+  elements.participants.dataset.count = String(Math.min(participantCount, 8));
+  elements.emptyRoom.hidden = participantCount > 0;
 }
 
 async function unlockAudio() {
@@ -574,23 +800,114 @@ async function unlockAudio() {
   elements.soundButton.hidden = true;
 }
 
-async function copyLink() {
-  const link = elements.roomLink.value;
-  try {
-    await navigator.clipboard.writeText(link);
-  } catch (error) {
-    elements.roomLink.select();
-    document.execCommand('copy');
-  }
-  showToast('Ссылка скопирована');
-}
-
-function openNewRoom() {
-  window.location.href = `/r/${createRoomId()}`;
+async function copyRoomCode() {
+  await copyText(state.roomId);
+  showToast('Код комнаты скопирован');
 }
 
 function getDisplayName() {
-  return elements.nameInput.value.trim().replace(/\s+/g, ' ').slice(0, 40) || 'Гость';
+  return state.savedName || 'Гость';
+}
+
+function saveNameFromInput(input) {
+  const name = cleanDisplayName(input.value);
+  if (!name) {
+    showToast('Введите имя');
+    input.focus();
+    return '';
+  }
+
+  state.savedName = name;
+  persistName(name);
+  elements.startNameInput.value = name;
+  updateNameStatuses();
+  showToast('Имя сохранено');
+  return name;
+}
+
+function persistName(name) {
+  state.savedName = name;
+  localStorage.setItem('voice-room:name', name);
+  elements.startNameInput.value = name;
+}
+
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch (error) {
+    const temporaryInput = document.createElement('input');
+    temporaryInput.value = text;
+    document.body.append(temporaryInput);
+    temporaryInput.select();
+    document.execCommand('copy');
+    temporaryInput.remove();
+  }
+}
+
+function requireSavedName(input) {
+  const currentName = cleanDisplayName(input.value);
+
+  if (!state.savedName) {
+    showToast('Сначала сохраните имя');
+    input.focus();
+    return false;
+  }
+
+  if (currentName && currentName !== state.savedName) {
+    showToast('Сохраните новое имя');
+    input.focus();
+    return false;
+  }
+
+  if (!currentName) input.value = state.savedName;
+  updateNameStatuses();
+  return true;
+}
+
+function updateNameStatuses() {
+  renderNameStatus(elements.startNameInput, elements.startNameStatus);
+}
+
+function renderNameStatus(input, status) {
+  const currentName = cleanDisplayName(input.value);
+
+  if (state.savedName && currentName === state.savedName) {
+    status.textContent = `Сохранено: ${state.savedName}`;
+    status.dataset.state = 'saved';
+    return;
+  }
+
+  if (state.savedName && currentName && currentName !== state.savedName) {
+    status.textContent = 'Новое имя еще не сохранено';
+    status.dataset.state = 'dirty';
+    return;
+  }
+
+  status.textContent = 'Имя не сохранено';
+  status.dataset.state = 'empty';
+}
+
+function cleanDisplayName(value) {
+  return String(value || '').trim().replace(/\s+/g, ' ').slice(0, 40);
+}
+
+function extractRoomId(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+
+  try {
+    const url = new URL(raw, window.location.origin);
+    const match = url.pathname.match(/^\/r\/([A-Za-z0-9_-]{3,48})\/?$/);
+    if (match) return match[1];
+  } catch (error) {
+    // Plain room codes are handled below.
+  }
+
+  const routeMatch = raw.match(/(?:^|\/)r\/([A-Za-z0-9_-]{3,48})\/?$/);
+  if (routeMatch) return routeMatch[1];
+
+  const compact = raw.replace(/^#/, '').trim();
+  return /^[A-Za-z0-9_-]{3,48}$/.test(compact) ? compact : '';
 }
 
 function getInitials(name) {
@@ -605,6 +922,7 @@ function getInitials(name) {
 function setStatus(stateName, label) {
   elements.statusPill.dataset.state = stateName;
   elements.statusText.textContent = label;
+  elements.statusPill.hidden = stateName === 'idle' || stateName === 'connected';
 }
 
 function showToast(message) {
