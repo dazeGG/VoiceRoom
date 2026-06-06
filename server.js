@@ -23,9 +23,11 @@ const mimeTypes = {
   '.ico': 'image/x-icon',
   '.js': 'application/javascript; charset=utf-8',
   '.json': 'application/json; charset=utf-8',
+  '.mjs': 'application/javascript; charset=utf-8',
   '.png': 'image/png',
   '.svg': 'image/svg+xml; charset=utf-8',
   '.txt': 'text/plain; charset=utf-8',
+  '.wasm': 'application/wasm',
   '.webmanifest': 'application/manifest+json; charset=utf-8'
 };
 
@@ -41,7 +43,7 @@ function baseHeaders() {
       "img-src 'self' data:",
       "media-src 'self' blob:",
       "object-src 'none'",
-      "script-src 'self'",
+      "script-src 'self' 'wasm-unsafe-eval'",
       "style-src 'self'"
     ].join('; '),
     'Cross-Origin-Opener-Policy': 'same-origin',

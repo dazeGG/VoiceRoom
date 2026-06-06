@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#10110f">
     <title>Voice Room</title>
-    <link rel="stylesheet" href="/styles.css?v=20260606-19">
+    <link rel="stylesheet" href="/styles.css?v=20260606-20">
   </head>
   <body>
     <div class="app-shell">
@@ -85,6 +85,56 @@
           <div class="screen-stage" id="screenStage" hidden>
             <video class="screen-video" id="screenVideo" autoplay playsinline></video>
             <div class="screen-placeholder" id="screenPlaceholder">Подключение к экрану</div>
+            <div class="screen-view-controls" id="screenViewControls" hidden>
+              <div class="stream-volume-control">
+                <button class="screen-control-button stream-volume-button" id="streamVolumeButton" type="button" aria-label="Выключить звук стрима" aria-pressed="false">
+                  <span class="stream-volume-icon stream-volume-icon-on" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" focusable="false">
+                      <path d="M11 5l-5 4h-3v6h3l5 4z"></path>
+                      <path d="M15.5 8.5a5 5 0 0 1 0 7"></path>
+                      <path d="M18.5 5.5a9 9 0 0 1 0 13"></path>
+                    </svg>
+                  </span>
+                  <span class="stream-volume-icon stream-volume-icon-off" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" focusable="false">
+                      <path d="M11 5l-5 4h-3v6h3l5 4z"></path>
+                      <path d="M16 9l5 5"></path>
+                      <path d="M21 9l-5 5"></path>
+                    </svg>
+                  </span>
+                </button>
+                <div class="stream-volume-popover" id="streamVolumePopover">
+                  <input class="stream-volume-slider" id="streamVolumeSlider" type="range" min="0" max="100" value="100" aria-label="Громкость стрима">
+                </div>
+              </div>
+
+              <button class="screen-control-button screen-fullscreen-button" id="screenFullscreenButton" type="button" aria-label="Открыть стрим на весь экран" aria-pressed="false">
+                <span class="screen-fullscreen-icon screen-fullscreen-icon-enter" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" focusable="false">
+                    <path d="M8 3h-5v5"></path>
+                    <path d="M3 3l6 6"></path>
+                    <path d="M16 3h5v5"></path>
+                    <path d="M21 3l-6 6"></path>
+                    <path d="M8 21h-5v-5"></path>
+                    <path d="M3 21l6 -6"></path>
+                    <path d="M16 21h5v-5"></path>
+                    <path d="M21 21l-6 -6"></path>
+                  </svg>
+                </span>
+                <span class="screen-fullscreen-icon screen-fullscreen-icon-exit" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" focusable="false">
+                    <path d="M9 3v6h-6"></path>
+                    <path d="M3 9l6 -6"></path>
+                    <path d="M15 3v6h6"></path>
+                    <path d="M21 9l-6 -6"></path>
+                    <path d="M9 21v-6h-6"></path>
+                    <path d="M3 15l6 6"></path>
+                    <path d="M15 21v-6h6"></path>
+                    <path d="M21 15l-6 6"></path>
+                  </svg>
+                </span>
+              </button>
+            </div>
           </div>
 
           <div class="participants" id="participants" data-count="0" aria-live="polite"></div>
@@ -133,10 +183,18 @@
                     <option value="">Системный</option>
                   </select>
                 </label>
+                <label class="field">
+                  <span>Шумоподавление</span>
+                  <select id="noiseModeSelect">
+                    <option value="off">Выкл</option>
+                    <option value="browser">Браузерный</option>
+                    <option value="rnnoise">RNNoise</option>
+                  </select>
+                </label>
               </div>
             </div>
 
-            <button class="dock-button screen-button" id="screenButton" type="button" aria-pressed="false" aria-label="Показать экран">
+            <button class="dock-button screen-button" id="screenButton" type="button" aria-expanded="false" aria-controls="screenProfilePopover" aria-pressed="false" aria-label="Показать экран">
               <span class="dock-icon dock-icon-screen" aria-hidden="true">
                 <svg viewBox="0 0 24 24" focusable="false">
                   <path d="M4 5a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v8a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2z"></path>
@@ -156,6 +214,10 @@
               </span>
               <span class="sr-only" id="screenText">Показать экран</span>
             </button>
+            <div class="screen-profile-popover" id="screenProfilePopover" hidden>
+              <p class="screen-profile-title">Качество стрима</p>
+              <div class="screen-profile-options" id="screenProfileOptions"></div>
+            </div>
 
             <button class="dock-button leave-button" id="leaveButton" type="button" aria-label="Выйти из комнаты">
               <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
@@ -229,6 +291,6 @@
       </article>
     </template>
 
-    <script src="/app.js?v=20260606-25" defer></script>
+    <script src="/app.js?v=20260606-26" defer></script>
   </body>
 </html>

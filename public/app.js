@@ -1,6 +1,62 @@
 'use strict';
 
 const $ = (selector) => document.querySelector(selector);
+const DEFAULT_NOISE_MODE = 'browser';
+const NOTIFICATION_VOLUME_BOOST = 2.2;
+const NOISE_MODE_STORAGE_KEY = 'voice-room:noise-mode';
+const NOISE_MODES = {
+  browser: {
+    label: 'Браузерный',
+    nativeNoiseSuppression: true
+  },
+  off: {
+    label: 'Выкл',
+    nativeNoiseSuppression: false
+  },
+  rnnoise: {
+    label: 'RNNoise',
+    nativeNoiseSuppression: false
+  }
+};
+const RNNOISE_ASSET_BASE = '/rnnoise/';
+const DEFAULT_SCREEN_PROFILE_ID = 'balanced';
+const SCREEN_AUDIO_BITRATE = 192_000;
+const SCREEN_STREAM_PROFILES = {
+  balanced: {
+    contentHint: 'detail',
+    detail: '720p · 24 fps',
+    frameRate: 24,
+    height: 720,
+    id: 'balanced',
+    intent: 'Показ экрана',
+    label: 'Приемлемый',
+    videoBitrate: 2_200_000,
+    width: 1280
+  },
+  high: {
+    contentHint: 'motion',
+    detail: '1080p · 30 fps',
+    frameRate: 30,
+    height: 1080,
+    id: 'high',
+    intent: 'Совместный просмотр',
+    label: 'Высокий',
+    videoBitrate: 5_500_000,
+    width: 1920
+  },
+  low: {
+    contentHint: 'detail',
+    detail: '540p · 12 fps',
+    frameRate: 12,
+    height: 540,
+    id: 'low',
+    intent: 'Слабая сеть',
+    label: 'Минимальный',
+    videoBitrate: 800_000,
+    width: 960
+  }
+};
+const SCREEN_PROFILE_ORDER = ['balanced', 'high', 'low'];
 
 const elements = {
   copyCodeButton: $('#copyCodeButton'),
@@ -14,6 +70,7 @@ const elements = {
   leaveButton: $('#leaveButton'),
   muteButton: $('#muteButton'),
   muteText: $('#muteText'),
+  noiseModeSelect: $('#noiseModeSelect'),
   notFoundScreen: $('#notFoundScreen'),
   participants: $('#participants'),
   roomCodeInput: $('#roomCodeInput'),
@@ -22,10 +79,14 @@ const elements = {
   missingRoomCode: $('#missingRoomCode'),
   screenButton: $('#screenButton'),
   screenExitButton: $('#screenExitButton'),
+  screenFullscreenButton: $('#screenFullscreenButton'),
   screenPlaceholder: $('#screenPlaceholder'),
+  screenProfileOptions: $('#screenProfileOptions'),
+  screenProfilePopover: $('#screenProfilePopover'),
   screenStage: $('#screenStage'),
   screenText: $('#screenText'),
   screenVideo: $('#screenVideo'),
+  screenViewControls: $('#screenViewControls'),
   soundButton: $('#soundButton'),
   startForm: $('#startForm'),
   startNameInput: $('#startNameInput'),
@@ -33,6 +94,8 @@ const elements = {
   startScreen: $('#startScreen'),
   statusPill: $('#statusPill'),
   statusText: $('#statusText'),
+  streamVolumeButton: $('#streamVolumeButton'),
+  streamVolumeSlider: $('#streamVolumeSlider'),
   template: $('#participantTemplate'),
   toast: $('#toast')
 };
@@ -44,16 +107,23 @@ const state = {
   eventSource: null,
   iceConfig: { iceServers: [] },
   joined: false,
+  localRawStream: null,
   localScreenStream: null,
+  localScreenProfileId: DEFAULT_SCREEN_PROFILE_ID,
   localStream: null,
+  micProcessor: null,
   muted: false,
+  noiseMode: getStoredNoiseMode(),
   peers: new Map(),
   peerId: createPeerId(),
   roomId: getRoomIdFromPath(),
   roomRoute: window.location.pathname.startsWith('/r/'),
   savedName: '',
+  screenFullscreen: false,
+  screenMuted: false,
   screenRequesting: false,
   screenStopping: false,
+  screenVolume: 1,
   self: null,
   sharedScreenPeerId: '',
   viewedScreenPeerId: ''
@@ -61,6 +131,7 @@ const state = {
 
 let toastTimer = null;
 let meterFrame = 0;
+let rnnoiseModulePromise = null;
 
 init();
 
@@ -68,22 +139,32 @@ function init() {
   const savedName = cleanDisplayName(localStorage.getItem('voice-room:name'));
   state.savedName = savedName;
   elements.startNameInput.value = savedName;
+  elements.noiseModeSelect.value = state.noiseMode;
   elements.startForm.addEventListener('submit', saveStartName);
   elements.createRoomButton.addEventListener('click', createRoomFromStart);
   elements.joinByCodeButton.addEventListener('click', joinRoomByCode);
   elements.roomCodeInput.addEventListener('keydown', handleRoomCodeKeydown);
   elements.startNameInput.addEventListener('input', updateNameStatuses);
+  renderScreenProfileOptions();
   elements.copyCodeButton.addEventListener('click', copyRoomCode);
   elements.copyLinkButton.addEventListener('click', copyRoomLink);
   elements.muteButton.addEventListener('click', handleMicButtonClick);
   elements.screenButton.addEventListener('click', handleScreenButtonClick);
   elements.screenExitButton.addEventListener('click', () => leaveScreenView().catch((error) => console.error(error)));
+  elements.screenFullscreenButton.addEventListener('click', toggleScreenFullscreen);
+  elements.streamVolumeButton.addEventListener('click', toggleScreenMute);
+  elements.streamVolumeSlider.addEventListener('input', updateScreenVolumeFromSlider);
+  syncScreenVideoAudio();
   elements.deviceMenuButton.addEventListener('click', toggleDevicePopover);
   elements.leaveButton.addEventListener('click', handleLeaveButtonClick);
   elements.soundButton.addEventListener('click', unlockAudio);
   elements.deviceSelect.addEventListener('change', switchMicrophone);
+  elements.noiseModeSelect.addEventListener('change', switchNoiseMode);
   document.addEventListener('click', closeDevicePopoverOnOutside);
+  document.addEventListener('click', closeScreenProfileOnOutside);
   document.addEventListener('keydown', closeDevicePopoverOnEscape);
+  document.addEventListener('keydown', closeScreenProfileOnEscape);
+  document.addEventListener('fullscreenchange', updateScreenFullscreenState);
   window.addEventListener('beforeunload', leaveRoom);
 
   if (state.roomRoute && !state.roomId) {
@@ -97,6 +178,52 @@ function init() {
   } else {
     showStartScreen();
   }
+}
+
+function renderScreenProfileOptions() {
+  elements.screenProfileOptions.textContent = '';
+  for (const profileId of SCREEN_PROFILE_ORDER) {
+    const profile = getScreenProfile(profileId);
+    const button = document.createElement('button');
+    button.className = 'screen-profile-option';
+    button.type = 'button';
+    button.dataset.profile = profile.id;
+    button.setAttribute('aria-pressed', String(profile.id === state.localScreenProfileId));
+    button.innerHTML = `
+      <span class="screen-profile-copy">
+        <strong>${profile.label}</strong>
+        <span>${profile.intent}</span>
+      </span>
+      <span class="screen-profile-meta">${profile.detail}</span>
+    `;
+    button.addEventListener('click', () => {
+      closeScreenProfilePopover();
+      startScreenShare(profile.id).catch((error) => console.error(error));
+    });
+    elements.screenProfileOptions.append(button);
+  }
+}
+
+function getScreenProfile(profileId) {
+  return SCREEN_STREAM_PROFILES[profileId] || SCREEN_STREAM_PROFILES[DEFAULT_SCREEN_PROFILE_ID];
+}
+
+function getNoiseMode(mode) {
+  return Object.hasOwn(NOISE_MODES, mode) ? mode : DEFAULT_NOISE_MODE;
+}
+
+function getStoredNoiseMode() {
+  return getNoiseMode(localStorage.getItem(NOISE_MODE_STORAGE_KEY));
+}
+
+function setNoiseMode(mode) {
+  state.noiseMode = getNoiseMode(mode);
+  elements.noiseModeSelect.value = state.noiseMode;
+  localStorage.setItem(NOISE_MODE_STORAGE_KEY, state.noiseMode);
+}
+
+function getNoiseModeLabel(mode) {
+  return NOISE_MODES[getNoiseMode(mode)].label;
 }
 
 function getRoomIdFromPath() {
@@ -248,7 +375,7 @@ async function joinRoom(event) {
     }
 
     state.iceConfig = await fetchJson('/config');
-    state.localStream = await openMicrophone();
+    setLocalMicrophoneCapture(await openLocalMicrophone());
     await refreshDevices();
 
     const name = getDisplayName();
@@ -303,11 +430,12 @@ function autoJoinRoom() {
   }, 0);
 }
 
-async function openMicrophone() {
+async function openMicrophone(mode = state.noiseMode) {
   if (!navigator.mediaDevices?.getUserMedia) {
     throw new Error('Браузер не дал доступ к микрофону. Нужен HTTPS или localhost.');
   }
 
+  const noiseMode = NOISE_MODES[getNoiseMode(mode)];
   const deviceId = elements.deviceSelect.value;
   return navigator.mediaDevices.getUserMedia({
     audio: {
@@ -315,26 +443,189 @@ async function openMicrophone() {
       channelCount: 1,
       deviceId: deviceId ? { exact: deviceId } : undefined,
       echoCancellation: true,
-      noiseSuppression: true
+      noiseSuppression: noiseMode.nativeNoiseSuppression
     },
     video: false
   });
 }
 
-async function openScreenShare() {
+async function openLocalMicrophone() {
+  const mode = state.noiseMode;
+  const rawStream = await openMicrophone(mode);
+
+  if (mode !== 'rnnoise') {
+    return {
+      mode,
+      processor: null,
+      rawStream,
+      stream: rawStream
+    };
+  }
+
+  try {
+    return await createNoiseSuppressedStream(rawStream);
+  } catch (error) {
+    console.warn('RNNoise unavailable', error);
+    stopStream(rawStream);
+    setNoiseMode('browser');
+    showToast('RNNoise недоступен, включен браузерный шумодав');
+    const fallbackStream = await openMicrophone('browser');
+    return {
+      mode: 'browser',
+      processor: null,
+      rawStream: fallbackStream,
+      stream: fallbackStream
+    };
+  }
+}
+
+async function createNoiseSuppressedStream(rawStream) {
+  if (!window.AudioContext || !window.AudioWorkletNode) {
+    throw new Error('AudioWorklet недоступен');
+  }
+
+  const context = createProcessingAudioContext();
+  try {
+    const { RNNoiseNode, rnnoise_loadAssets: loadAssets } = await loadRnnoiseModule();
+    await RNNoiseNode.register(
+      context,
+      loadAssets({
+        moduleSrc: `${RNNOISE_ASSET_BASE}rnnoise.wasm`,
+        scriptSrc: `${RNNOISE_ASSET_BASE}rnnoise.worklet.js`
+      })
+    );
+
+    const source = context.createMediaStreamSource(rawStream);
+    const rnnoise = new RNNoiseNode(context);
+    const destination = context.createMediaStreamDestination();
+    source.connect(rnnoise);
+    rnnoise.connect(destination);
+    await context.resume();
+
+    const [inputTrack] = rawStream.getAudioTracks();
+    const [outputTrack] = destination.stream.getAudioTracks();
+    if (!outputTrack) {
+      throw new Error('RNNoise не вернул аудио-трек');
+    }
+    outputTrack.enabled = inputTrack?.enabled ?? true;
+    if ('contentHint' in outputTrack) outputTrack.contentHint = 'speech';
+
+    return {
+      mode: 'rnnoise',
+      processor: {
+        context,
+        destination,
+        node: rnnoise,
+        source
+      },
+      rawStream,
+      stream: destination.stream
+    };
+  } catch (error) {
+    context.close().catch(() => {});
+    throw error;
+  }
+}
+
+async function loadRnnoiseModule() {
+  rnnoiseModulePromise ||= import(`${RNNOISE_ASSET_BASE}rnnoise.mjs`);
+  return rnnoiseModulePromise;
+}
+
+function createProcessingAudioContext() {
+  try {
+    return new AudioContext({ sampleRate: 48000 });
+  } catch {
+    return new AudioContext();
+  }
+}
+
+function getLocalMicrophoneCapture() {
+  return {
+    processor: state.micProcessor,
+    rawStream: state.localRawStream,
+    stream: state.localStream
+  };
+}
+
+function setLocalMicrophoneCapture(capture) {
+  state.localStream = capture.stream;
+  state.localRawStream = capture.rawStream;
+  state.micProcessor = capture.processor;
+  setMicrophoneCaptureEnabled(capture, !state.muted);
+}
+
+function setMicrophoneCaptureEnabled(capture, enabled) {
+  const tracks = new Set([
+    ...(capture.stream?.getAudioTracks() || []),
+    ...(capture.rawStream?.getAudioTracks() || [])
+  ]);
+  for (const track of tracks) {
+    track.enabled = enabled;
+  }
+}
+
+function stopMicrophoneCapture(capture) {
+  disconnectAudioNode(capture.processor?.source);
+  disconnectAudioNode(capture.processor?.node);
+  disconnectAudioNode(capture.processor?.destination);
+  capture.processor?.context.close().catch(() => {});
+
+  const streams = new Set([capture.stream, capture.rawStream].filter(Boolean));
+  for (const stream of streams) stopStream(stream);
+}
+
+function disconnectAudioNode(node) {
+  try {
+    node?.disconnect();
+  } catch {
+    // The graph may already be partially disconnected after a failed worklet setup.
+  }
+}
+
+async function openScreenShare(profile) {
   if (!navigator.mediaDevices?.getDisplayMedia) {
     throw new Error('Браузер не поддерживает демонстрацию экрана. Нужен HTTPS или localhost.');
   }
 
-  return navigator.mediaDevices.getDisplayMedia({
+  const stream = await navigator.mediaDevices.getDisplayMedia({
     audio: {
+      autoGainControl: false,
+      echoCancellation: false,
+      noiseSuppression: false,
       suppressLocalAudioPlayback: false
     },
     selfBrowserSurface: 'exclude',
     surfaceSwitching: 'include',
-    systemAudio: 'exclude',
-    video: true
+    systemAudio: 'include',
+    video: {
+      frameRate: { ideal: profile.frameRate, max: profile.frameRate },
+      height: { ideal: profile.height, max: profile.height },
+      width: { ideal: profile.width, max: profile.width }
+    }
   });
+
+  await applyScreenCaptureProfile(stream, profile);
+  return stream;
+}
+
+async function applyScreenCaptureProfile(stream, profile) {
+  const [videoTrack] = stream.getVideoTracks();
+  if (!videoTrack) return;
+
+  if ('contentHint' in videoTrack) {
+    videoTrack.contentHint = profile.contentHint;
+  }
+
+  try {
+    await videoTrack.applyConstraints({
+      frameRate: { max: profile.frameRate },
+      height: { max: profile.height },
+      width: { max: profile.width }
+    });
+  } catch (error) {
+    console.warn('Screen capture constraints unavailable', error);
+  }
 }
 
 async function handleScreenButtonClick() {
@@ -343,19 +634,22 @@ async function handleScreenButtonClick() {
     return;
   }
 
-  await startScreenShare();
+  toggleScreenProfilePopover();
 }
 
-async function startScreenShare() {
+async function startScreenShare(profileId = state.localScreenProfileId) {
   if (!state.joined || state.connecting) {
     showToast('Сначала подключитесь к комнате');
     return;
   }
   if (state.localScreenStream) return;
 
+  const profile = getScreenProfile(profileId);
+  state.localScreenProfileId = profile.id;
+  renderScreenProfileOptions();
   elements.screenButton.disabled = true;
   try {
-    const stream = await openScreenShare();
+    const stream = await openScreenShare(profile);
     const [videoTrack] = stream.getVideoTracks();
     if (!videoTrack) {
       stopStream(stream);
@@ -364,6 +658,7 @@ async function startScreenShare() {
     }
 
     state.localScreenStream = stream;
+    state.localScreenProfileId = profile.id;
     state.screenStopping = false;
     videoTrack.addEventListener('ended', () => {
       stopScreenShare({ fromBrowser: true }).catch((error) => console.error(error));
@@ -382,7 +677,7 @@ async function startScreenShare() {
     await postState();
 
     playStreamCue('start');
-    showToast(hasScreenAudio() ? 'Демонстрация экрана со звуком запущена' : 'Экран запущен без звука');
+    showToast(hasScreenAudio() ? `Стрим запущен: ${profile.label}, звук включен` : `Стрим запущен: ${profile.label}, без звука`);
   } catch (error) {
     if (error.name !== 'NotAllowedError') console.error(error);
     if (state.localScreenStream) {
@@ -458,14 +753,21 @@ async function refreshDevices() {
   }
 }
 
-async function switchMicrophone() {
+async function switchMicrophone(options = {}) {
+  const {
+    failureMessage = 'Не удалось переключить микрофон',
+    refreshDeviceList = true,
+    successMessage = 'Микрофон переключен'
+  } = options;
   refreshCallControls();
-  if (!state.joined || !state.localStream) return;
+  if (!state.joined || !state.localStream) return false;
 
+  let nextCapture = null;
   try {
-    const nextStream = await openMicrophone();
-    const [nextTrack] = nextStream.getAudioTracks();
-    const [oldTrack] = state.localStream.getAudioTracks();
+    const previousCapture = getLocalMicrophoneCapture();
+    nextCapture = await openLocalMicrophone();
+    const [nextTrack] = nextCapture.stream.getAudioTracks();
+    if (!nextTrack) throw new Error('Браузер не отдал аудио-трек');
 
     for (const peer of state.peers.values()) {
       const sender = peer.micSender || peer.pc?.getSenders().find((item) => item.track?.kind === 'audio');
@@ -475,16 +777,32 @@ async function switchMicrophone() {
       }
     }
 
-    oldTrack?.stop();
-    state.localStream = nextStream;
-    if (state.muted && nextTrack) nextTrack.enabled = false;
+    setLocalMicrophoneCapture(nextCapture);
+    stopMicrophoneCapture(previousCapture);
     attachMeter(state.self, state.localStream);
-    await refreshDevices();
-    showToast('Микрофон переключен');
+    if (refreshDeviceList) await refreshDevices();
+    showToast(typeof successMessage === 'function' ? successMessage(nextCapture) : successMessage);
+    return true;
   } catch (error) {
     console.error(error);
-    showToast('Не удалось переключить микрофон');
+    if (nextCapture) stopMicrophoneCapture(nextCapture);
+    showToast(failureMessage);
+    return false;
   }
+}
+
+async function switchNoiseMode() {
+  const previousMode = state.noiseMode;
+  setNoiseMode(elements.noiseModeSelect.value);
+
+  if (!state.joined || !state.localStream) return;
+
+  const switched = await switchMicrophone({
+    failureMessage: 'Не удалось переключить шумодав',
+    refreshDeviceList: false,
+    successMessage: (capture) => `Шумодав: ${getNoiseModeLabel(capture.mode)}`
+  });
+  if (!switched) setNoiseMode(previousMode);
 }
 
 async function handleServerMessage(event) {
@@ -702,8 +1020,31 @@ function addLocalScreenTracks(peer) {
   const existingTracks = new Set(peer.localScreenSenders.map((sender) => sender.track).filter(Boolean));
   for (const track of state.localScreenStream.getTracks()) {
     if (existingTracks.has(track)) continue;
-    peer.localScreenSenders.push(peer.pc.addTrack(track, state.localScreenStream));
+    const sender = peer.pc.addTrack(track, state.localScreenStream);
+    peer.localScreenSenders.push(sender);
+    applyScreenSenderProfile(sender, track).catch((error) => console.warn('Screen sender profile unavailable', error));
   }
+}
+
+async function applyScreenSenderProfile(sender, track) {
+  if (!sender?.getParameters || !sender.setParameters) return;
+
+  const parameters = sender.getParameters();
+  if (!parameters.encodings?.length) return;
+
+  const [encoding] = parameters.encodings;
+  if (track.kind === 'video') {
+    const profile = getScreenProfile(state.localScreenProfileId);
+    encoding.maxBitrate = profile.videoBitrate;
+    encoding.maxFramerate = profile.frameRate;
+    encoding.scaleResolutionDownBy = 1;
+  } else if (track.kind === 'audio') {
+    encoding.maxBitrate = SCREEN_AUDIO_BITRATE;
+  } else {
+    return;
+  }
+
+  await sender.setParameters(parameters);
 }
 
 function removeLocalScreenTracks(peer) {
@@ -925,6 +1266,10 @@ function updateMeter(participant) {
   participant.node.dataset.speaking = String(visibleLevel > 0.08);
 }
 
+function getCueGain(value) {
+  return value * NOTIFICATION_VOLUME_BOOST;
+}
+
 function playPeerCue(type) {
   try {
     state.audioContext ||= new AudioContext();
@@ -947,7 +1292,7 @@ function playPeerCue(type) {
       oscillator.frequency.setValueAtTime(frequency, startedAt);
 
       gain.gain.setValueAtTime(0.0001, startedAt);
-      gain.gain.exponentialRampToValueAtTime(isJoin ? 0.052 : 0.044, startedAt + 0.018);
+      gain.gain.exponentialRampToValueAtTime(getCueGain(isJoin ? 0.052 : 0.044), startedAt + 0.018);
       gain.gain.exponentialRampToValueAtTime(0.0001, startedAt + 0.11);
 
       oscillator.connect(gain);
@@ -982,7 +1327,7 @@ function playMicCue(muted) {
     oscillator.frequency.exponentialRampToValueAtTime(muted ? 190 : 620, now + 0.2);
 
     gain.gain.setValueAtTime(0.0001, now);
-    gain.gain.exponentialRampToValueAtTime(0.038, now + 0.018);
+    gain.gain.exponentialRampToValueAtTime(getCueGain(0.038), now + 0.018);
     gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.24);
 
     oscillator.connect(gain);
@@ -1020,7 +1365,7 @@ function playStreamCue(type) {
       oscillator.frequency.setValueAtTime(frequency, startedAt);
 
       gain.gain.setValueAtTime(0.0001, startedAt);
-      gain.gain.exponentialRampToValueAtTime(0.038, startedAt + 0.012);
+      gain.gain.exponentialRampToValueAtTime(getCueGain(0.038), startedAt + 0.012);
       gain.gain.exponentialRampToValueAtTime(0.0001, startedAt + 0.09);
 
       oscillator.connect(gain);
@@ -1099,9 +1444,7 @@ async function postJson(url, body) {
 function toggleMute() {
   if (!state.localStream) return;
   state.muted = !state.muted;
-  for (const track of state.localStream.getAudioTracks()) {
-    track.enabled = !state.muted;
-  }
+  setMicrophoneCaptureEnabled(getLocalMicrophoneCapture(), !state.muted);
 
   playMicCue(state.muted);
   elements.muteButton.setAttribute('aria-pressed', String(state.muted));
@@ -1156,6 +1499,32 @@ function closeDevicePopoverOnEscape(event) {
   if (event.key === 'Escape') closeDevicePopover();
 }
 
+function toggleScreenProfilePopover() {
+  if (!state.joined || state.connecting) {
+    showToast('Сначала подключитесь к комнате');
+    return;
+  }
+  closeDevicePopover();
+  const willOpen = elements.screenProfilePopover.hidden;
+  elements.screenProfilePopover.hidden = !willOpen;
+  elements.screenButton.setAttribute('aria-expanded', String(willOpen));
+}
+
+function closeScreenProfilePopover() {
+  elements.screenProfilePopover.hidden = true;
+  elements.screenButton.setAttribute('aria-expanded', 'false');
+}
+
+function closeScreenProfileOnOutside(event) {
+  if (elements.screenProfilePopover.hidden) return;
+  if (elements.screenProfilePopover.contains(event.target) || elements.screenButton.contains(event.target)) return;
+  closeScreenProfilePopover();
+}
+
+function closeScreenProfileOnEscape(event) {
+  if (event.key === 'Escape') closeScreenProfilePopover();
+}
+
 function refreshCallControls() {
   const label = !state.joined
     ? state.connecting
@@ -1180,6 +1549,7 @@ function refreshScreenControls() {
   elements.screenButton.setAttribute('aria-label', label);
   elements.screenButton.setAttribute('aria-pressed', String(sharing));
   elements.screenButton.dataset.state = sharing ? 'live' : 'idle';
+  if (sharing || !state.joined || state.connecting) closeScreenProfilePopover();
 }
 
 async function enterScreenView(peerId) {
@@ -1270,6 +1640,7 @@ function showScreenStage({ peerId, stream }) {
   state.sharedScreenPeerId = stream ? peerId : '';
   document.body.dataset.screenView = 'true';
   elements.screenStage.hidden = false;
+  elements.screenViewControls.hidden = !stream;
   elements.leaveButton.hidden = true;
   elements.screenExitButton.hidden = false;
   elements.screenPlaceholder.hidden = Boolean(stream);
@@ -1278,6 +1649,7 @@ function showScreenStage({ peerId, stream }) {
     elements.screenVideo.srcObject = stream;
   }
   if (stream) {
+    syncScreenVideoAudio();
     playMediaElement(elements.screenVideo);
   } else {
     elements.screenVideo.pause();
@@ -1289,11 +1661,71 @@ function hideScreenStage() {
   state.sharedScreenPeerId = '';
   delete document.body.dataset.screenView;
   elements.screenStage.hidden = true;
+  elements.screenViewControls.hidden = true;
   elements.screenPlaceholder.hidden = false;
   elements.screenExitButton.hidden = true;
   elements.leaveButton.hidden = false;
   elements.screenVideo.pause();
   elements.screenVideo.srcObject = null;
+  if (document.fullscreenElement === elements.screenStage) {
+    document.exitFullscreen().catch(() => {});
+  }
+}
+
+function syncScreenVideoAudio() {
+  const muted = state.screenMuted || state.screenVolume <= 0;
+  elements.screenVideo.volume = state.screenVolume;
+  elements.screenVideo.muted = muted;
+  elements.streamVolumeSlider.value = String(Math.round(state.screenVolume * 100));
+  elements.streamVolumeButton.dataset.muted = String(muted);
+  elements.streamVolumeButton.setAttribute('aria-pressed', String(muted));
+  elements.streamVolumeButton.setAttribute('aria-label', muted ? 'Включить звук стрима' : 'Выключить звук стрима');
+}
+
+function toggleScreenMute() {
+  if (state.screenMuted || state.screenVolume <= 0) {
+    state.screenMuted = false;
+    if (state.screenVolume <= 0) state.screenVolume = 1;
+  } else {
+    state.screenMuted = true;
+  }
+  syncScreenVideoAudio();
+}
+
+function updateScreenVolumeFromSlider() {
+  const nextVolume = Number(elements.streamVolumeSlider.value) / 100;
+  state.screenVolume = Number.isFinite(nextVolume) ? Math.min(1, Math.max(0, nextVolume)) : 1;
+  state.screenMuted = state.screenVolume <= 0;
+  syncScreenVideoAudio();
+}
+
+async function toggleScreenFullscreen() {
+  if (!document.fullscreenEnabled) {
+    showToast('Полноэкранный режим недоступен');
+    return;
+  }
+
+  try {
+    if (document.fullscreenElement === elements.screenStage) {
+      await document.exitFullscreen();
+    } else {
+      await elements.screenStage.requestFullscreen();
+    }
+  } catch (error) {
+    console.error(error);
+    showToast('Не удалось переключить полноэкранный режим');
+  }
+}
+
+function updateScreenFullscreenState() {
+  const fullscreen = document.fullscreenElement === elements.screenStage;
+  state.screenFullscreen = fullscreen;
+  elements.screenFullscreenButton.dataset.fullscreen = String(fullscreen);
+  elements.screenFullscreenButton.setAttribute('aria-pressed', String(fullscreen));
+  elements.screenFullscreenButton.setAttribute(
+    'aria-label',
+    fullscreen ? 'Выйти из полноэкранного режима' : 'Открыть стрим на весь экран'
+  );
 }
 
 function leaveRoom() {
@@ -1322,14 +1754,16 @@ function leaveRoom() {
   refreshCallControls();
   refreshScreenControls();
   closeDevicePopover();
+  closeScreenProfilePopover();
   setStatus('idle', 'готово');
   refreshParticipantState();
 }
 
 function stopLocalStream() {
-  if (!state.localStream) return;
-  for (const track of state.localStream.getTracks()) track.stop();
+  stopMicrophoneCapture(getLocalMicrophoneCapture());
   state.localStream = null;
+  state.localRawStream = null;
+  state.micProcessor = null;
 }
 
 function stopStream(stream) {
@@ -1387,6 +1821,7 @@ function refreshParticipantState() {
 
 async function unlockAudio() {
   await state.audioContext?.resume();
+  await state.micProcessor?.context.resume();
   const plays = [];
   for (const peer of state.peers.values()) {
     for (const audio of peer.audioElements.values()) plays.push(audio.play());
