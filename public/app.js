@@ -19,7 +19,7 @@ const PEER_LATENCY_GOOD_MS = 150;
 const PEER_LATENCY_FAIR_MS = 300;
 const PEER_RECONNECT_COOLDOWN_MS = 5000;
 const PEER_RECONNECT_DELAY_MS = 1200;
-const LOCAL_GATE_OUTPUT_RMS_FLOOR = 0.5;
+const LOCAL_GATE_DISABLED_RMS_FLOOR = 0.5;
 const SPEAKING_STATS_INTERVAL_MS = 200;
 const REMOTE_SPEAKING_AUDIO_LEVEL_FLOOR = 0.005;
 const REMOTE_SPEAKING_SIGNAL_POWER_FLOOR = REMOTE_SPEAKING_AUDIO_LEVEL_FLOOR ** 2;
@@ -40,6 +40,7 @@ const NOISE_MODES = {
 };
 const RNNOISE_ASSET_BASE = '/rnnoise/';
 const DEFAULT_SCREEN_PROFILE_ID = 'balanced';
+const MICROPHONE_AUDIO_BITRATE = 64_000;
 const SCREEN_AUDIO_BITRATE = 192_000;
 const ROOM_PROOF_BATCH_SIZE = 64;
 const SCREEN_STREAM_PROFILES = {
@@ -1447,6 +1448,7 @@ async function switchMicrophone(options = {}) {
       if (sender && nextTrack) {
         await sender.replaceTrack(nextTrack);
         peer.micSender = sender;
+        applyMicrophoneSenderProfile(sender).catch((error) => console.warn('Microphone sender profile unavailable', error));
       }
     }
 
@@ -1847,7 +1849,10 @@ function ensurePeerConnection(peer) {
 
   for (const track of state.localStream.getTracks()) {
     const sender = pc.addTrack(track, state.localStream);
-    if (track.kind === 'audio') peer.micSender = sender;
+    if (track.kind === 'audio') {
+      peer.micSender = sender;
+      applyMicrophoneSenderProfile(sender).catch((error) => console.warn('Microphone sender profile unavailable', error));
+    }
   }
   pc.addTransceiver('video', { direction: 'recvonly' });
   if (peer.screenSubscribed) addLocalScreenTracks(peer);
@@ -1947,6 +1952,21 @@ function addLocalScreenTracks(peer) {
   }
 }
 
+async function applyMicrophoneSenderProfile(sender) {
+  await applyAudioSenderBitrate(sender, MICROPHONE_AUDIO_BITRATE);
+}
+
+async function applyAudioSenderBitrate(sender, bitrate) {
+  if (!sender?.getParameters || !sender.setParameters) return;
+
+  const parameters = sender.getParameters();
+  if (!parameters.encodings?.length) return;
+
+  const [encoding] = parameters.encodings;
+  encoding.maxBitrate = bitrate;
+  await sender.setParameters(parameters);
+}
+
 async function applyScreenSenderProfile(sender, track) {
   if (!sender?.getParameters || !sender.setParameters) return;
 
@@ -1960,7 +1980,8 @@ async function applyScreenSenderProfile(sender, track) {
     encoding.maxFramerate = profile.frameRate;
     encoding.scaleResolutionDownBy = 1;
   } else if (track.kind === 'audio') {
-    encoding.maxBitrate = SCREEN_AUDIO_BITRATE;
+    await applyAudioSenderBitrate(sender, SCREEN_AUDIO_BITRATE);
+    return;
   } else {
     return;
   }
@@ -2441,8 +2462,15 @@ function updateMeter(participant) {
   participant.node.style.setProperty('--level', visibleLevel.toFixed(3));
   if (participant.isLocal) {
     refreshMicrophoneLevelMeter(visibleLevelDb);
-    setParticipantSpeaking(participant, !participant.muted && rms > LOCAL_GATE_OUTPUT_RMS_FLOOR);
+    setParticipantSpeaking(participant, isLocalMicrophoneSpeaking(participant, levelDb, rms));
   }
+}
+
+function isLocalMicrophoneSpeaking(participant, levelDb, rms) {
+  if (participant.muted) return false;
+  if (!isGateDisabled()) return levelDb >= state.gateThresholdDb;
+
+  return rms > LOCAL_GATE_DISABLED_RMS_FLOOR;
 }
 
 function getCueGain(value) {
