@@ -3,7 +3,10 @@
 const $ = (selector) => document.querySelector(selector);
 const DEFAULT_NOISE_MODE = 'browser';
 const NOTIFICATION_VOLUME_BOOST = 3;
+const MICROPHONE_DEVICE_STORAGE_KEY = 'voice-room:microphone-device-id';
 const NOISE_MODE_STORAGE_KEY = 'voice-room:noise-mode';
+const OUTPUT_DEVICE_STORAGE_KEY = 'voice-room:output-device-id';
+const OUTPUT_MUTED_STORAGE_KEY = 'voice-room:output-muted';
 const NOISE_MODES = {
   browser: {
     label: 'Браузерный',
@@ -73,6 +76,11 @@ const elements = {
   muteText: $('#muteText'),
   noiseModeSelect: $('#noiseModeSelect'),
   notFoundScreen: $('#notFoundScreen'),
+  outputButton: $('#outputButton'),
+  outputDeviceSelect: $('#outputDeviceSelect'),
+  outputMenuButton: $('#outputMenuButton'),
+  outputPopover: $('#outputPopover'),
+  outputText: $('#outputText'),
   participants: $('#participants'),
   roomCodeInput: $('#roomCodeInput'),
   roomScreen: $('#roomScreen'),
@@ -117,9 +125,12 @@ const state = {
   localScreenProfileId: DEFAULT_SCREEN_PROFILE_ID,
   localStream: null,
   localAppAudioSuppressed: false,
+  microphoneDeviceId: localStorage.getItem(MICROPHONE_DEVICE_STORAGE_KEY) || '',
   micProcessor: null,
   muted: false,
   noiseMode: getStoredNoiseMode(),
+  outputDeviceId: localStorage.getItem(OUTPUT_DEVICE_STORAGE_KEY) || '',
+  outputMuted: localStorage.getItem(OUTPUT_MUTED_STORAGE_KEY) === 'true',
   peers: new Map(),
   peerId: createPeerId(),
   roomId: getRoomIdFromPath(),
@@ -158,6 +169,7 @@ function init() {
   elements.copyCodeButton.addEventListener('click', copyRoomCode);
   elements.copyLinkButton.addEventListener('click', copyRoomLink);
   elements.muteButton.addEventListener('click', handleMicButtonClick);
+  elements.outputButton.addEventListener('click', toggleOutputMute);
   elements.screenButton.addEventListener('click', handleScreenButtonClick);
   elements.screenExitButton.addEventListener('click', () => leaveScreenView().catch((error) => console.error(error)));
   elements.screenFullscreenButton.addEventListener('click', toggleScreenFullscreen);
@@ -167,17 +179,23 @@ function init() {
   elements.streamVolumeSlider.addEventListener('input', updateScreenVolumeFromSlider);
   syncScreenVideoAudio();
   elements.deviceMenuButton.addEventListener('click', toggleDevicePopover);
+  elements.outputMenuButton.addEventListener('click', toggleOutputPopover);
   elements.leaveButton.addEventListener('click', handleLeaveButtonClick);
   elements.soundButton.addEventListener('click', unlockAudio);
   elements.deviceSelect.addEventListener('change', switchMicrophone);
   elements.noiseModeSelect.addEventListener('change', switchNoiseMode);
+  elements.outputDeviceSelect.addEventListener('change', switchOutputDevice);
   document.addEventListener('click', closeDevicePopoverOnOutside);
+  document.addEventListener('click', closeOutputPopoverOnOutside);
   document.addEventListener('click', closeScreenProfileOnOutside);
   document.addEventListener('keydown', closeDevicePopoverOnEscape);
+  document.addEventListener('keydown', closeOutputPopoverOnEscape);
   document.addEventListener('keydown', closeScreenProfileOnEscape);
   document.addEventListener('keydown', closeScreenSourceOnEscape);
   document.addEventListener('fullscreenchange', updateScreenFullscreenState);
+  navigator.mediaDevices?.addEventListener?.('devicechange', () => refreshDevices().catch(() => {}));
   window.addEventListener('beforeunload', leaveRoom);
+  refreshOutputControls();
 
   if (state.roomRoute && !state.roomId) {
     showRoomNotFound();
@@ -236,6 +254,32 @@ function setNoiseMode(mode) {
 
 function getNoiseModeLabel(mode) {
   return NOISE_MODES[getNoiseMode(mode)].label;
+}
+
+function persistMicrophoneDeviceId(deviceId) {
+  state.microphoneDeviceId = deviceId || '';
+  if (state.microphoneDeviceId) {
+    localStorage.setItem(MICROPHONE_DEVICE_STORAGE_KEY, state.microphoneDeviceId);
+  } else {
+    localStorage.removeItem(MICROPHONE_DEVICE_STORAGE_KEY);
+  }
+}
+
+function persistOutputDeviceId(deviceId) {
+  state.outputDeviceId = deviceId || '';
+  if (state.outputDeviceId) {
+    localStorage.setItem(OUTPUT_DEVICE_STORAGE_KEY, state.outputDeviceId);
+  } else {
+    localStorage.removeItem(OUTPUT_DEVICE_STORAGE_KEY);
+  }
+}
+
+function persistOutputMuted() {
+  localStorage.setItem(OUTPUT_MUTED_STORAGE_KEY, String(state.outputMuted));
+}
+
+function supportsAudioOutputSelection() {
+  return typeof HTMLMediaElement !== 'undefined' && 'setSinkId' in HTMLMediaElement.prototype;
 }
 
 function getRoomIdFromPath() {
@@ -510,7 +554,7 @@ async function openMicrophone(mode = state.noiseMode) {
   }
 
   const noiseMode = NOISE_MODES[getNoiseMode(mode)];
-  const deviceId = elements.deviceSelect.value;
+  const deviceId = state.microphoneDeviceId || elements.deviceSelect.value;
   return navigator.mediaDevices.getUserMedia({
     audio: {
       autoGainControl: true,
@@ -1112,26 +1156,68 @@ async function stopScreenShare(options = {}) {
 async function refreshDevices() {
   if (!navigator.mediaDevices?.enumerateDevices) return;
 
-  const currentValue = elements.deviceSelect.value;
+  const activeMicrophoneId = getActiveMicrophoneDeviceId();
+  const currentMicrophoneId = state.microphoneDeviceId || elements.deviceSelect.value || activeMicrophoneId;
+  const currentOutputId = state.outputDeviceId || elements.outputDeviceSelect.value;
   const devices = await navigator.mediaDevices.enumerateDevices();
   const microphones = devices.filter((device) => device.kind === 'audioinput');
-  elements.deviceSelect.textContent = '';
+  const outputs = devices.filter((device) => device.kind === 'audiooutput');
+
+  renderDeviceOptions(elements.deviceSelect, microphones, {
+    defaultLabel: 'Системный',
+    fallbackLabel: 'Микрофон',
+    selectedId: currentMicrophoneId
+  });
+  if (currentMicrophoneId && !hasSelectValue(elements.deviceSelect, currentMicrophoneId)) {
+    persistMicrophoneDeviceId('');
+  } else if (hasSelectValue(elements.deviceSelect, currentMicrophoneId)) {
+    elements.deviceSelect.value = currentMicrophoneId;
+  }
+
+  elements.outputDeviceSelect.disabled = !supportsAudioOutputSelection();
+  renderDeviceOptions(elements.outputDeviceSelect, outputs, {
+    defaultLabel: 'Системный',
+    fallbackLabel: 'Динамик',
+    selectedId: currentOutputId
+  });
+  if (currentOutputId && !hasSelectValue(elements.outputDeviceSelect, currentOutputId)) {
+    persistOutputDeviceId('');
+  } else if (hasSelectValue(elements.outputDeviceSelect, currentOutputId)) {
+    elements.outputDeviceSelect.value = currentOutputId;
+  }
+
+  refreshOutputControls();
+}
+
+function renderDeviceOptions(select, devices, options) {
+  const { defaultLabel, fallbackLabel, selectedId } = options;
+  const renderedDeviceIds = new Set(['']);
+  select.textContent = '';
 
   const defaultOption = document.createElement('option');
   defaultOption.value = '';
-  defaultOption.textContent = 'Системный';
-  elements.deviceSelect.append(defaultOption);
+  defaultOption.textContent = defaultLabel;
+  select.append(defaultOption);
 
-  microphones.forEach((device, index) => {
+  devices.forEach((device, index) => {
+    if (!device.deviceId || renderedDeviceIds.has(device.deviceId)) return;
+    renderedDeviceIds.add(device.deviceId);
     const option = document.createElement('option');
     option.value = device.deviceId;
-    option.textContent = device.label || `Микрофон ${index + 1}`;
-    elements.deviceSelect.append(option);
+    option.textContent = device.label || `${fallbackLabel} ${index + 1}`;
+    select.append(option);
   });
 
-  if ([...elements.deviceSelect.options].some((option) => option.value === currentValue)) {
-    elements.deviceSelect.value = currentValue;
-  }
+  select.value = hasSelectValue(select, selectedId) ? selectedId : '';
+}
+
+function hasSelectValue(select, value) {
+  return [...select.options].some((option) => option.value === value);
+}
+
+function getActiveMicrophoneDeviceId() {
+  const [track] = (state.localRawStream || state.localStream)?.getAudioTracks() || [];
+  return track?.getSettings?.().deviceId || '';
 }
 
 async function switchMicrophone(options = {}) {
@@ -1140,6 +1226,8 @@ async function switchMicrophone(options = {}) {
     refreshDeviceList = true,
     successMessage = 'Микрофон переключен'
   } = options;
+  const previousDeviceId = state.microphoneDeviceId;
+  persistMicrophoneDeviceId(elements.deviceSelect.value);
   refreshCallControls();
   if (!state.joined || !state.localStream) return false;
 
@@ -1167,6 +1255,10 @@ async function switchMicrophone(options = {}) {
   } catch (error) {
     console.error(error);
     if (nextCapture) stopMicrophoneCapture(nextCapture);
+    persistMicrophoneDeviceId(previousDeviceId);
+    if (hasSelectValue(elements.deviceSelect, previousDeviceId)) {
+      elements.deviceSelect.value = previousDeviceId;
+    }
     showToast(failureMessage);
     return false;
   }
@@ -1184,6 +1276,117 @@ async function switchNoiseMode() {
     successMessage: (capture) => `Шумодав: ${getNoiseModeLabel(capture.mode)}`
   });
   if (!switched) setNoiseMode(previousMode);
+}
+
+async function switchOutputDevice() {
+  if (!supportsAudioOutputSelection()) {
+    elements.outputDeviceSelect.value = '';
+    persistOutputDeviceId('');
+    showToast('Выбор динамика недоступен в этой среде');
+    return;
+  }
+
+  const previousDeviceId = state.outputDeviceId;
+  persistOutputDeviceId(elements.outputDeviceSelect.value);
+  const synced = await syncAudioOutputDevices();
+  if (!synced) {
+    persistOutputDeviceId(previousDeviceId);
+    if (hasSelectValue(elements.outputDeviceSelect, previousDeviceId)) {
+      elements.outputDeviceSelect.value = previousDeviceId;
+    }
+    await syncAudioOutputDevices();
+    showToast('Не удалось переключить динамик');
+    return;
+  }
+
+  showToast('Динамик переключен');
+}
+
+function toggleOutputMute() {
+  state.outputMuted = !state.outputMuted;
+  persistOutputMuted();
+  refreshOutputControls();
+  syncPlaybackMuteState();
+  if (!state.outputMuted) unlockAudio().catch(() => {});
+}
+
+function refreshOutputControls() {
+  const label = state.outputMuted ? 'Включить звук' : 'Выключить звук';
+  elements.outputText.textContent = label;
+  elements.outputButton.setAttribute('aria-label', label);
+  elements.outputButton.setAttribute('aria-pressed', String(state.outputMuted));
+  elements.outputButton.dataset.state = state.outputMuted ? 'muted' : 'live';
+  elements.outputDeviceSelect.disabled = !supportsAudioOutputSelection();
+}
+
+function syncPlaybackMuteState() {
+  syncRemoteAudioPlayback();
+  syncScreenVideoAudio();
+  if (isAppPlaybackMuted()) elements.soundButton.hidden = true;
+}
+
+function syncRemoteAudioPlayback() {
+  const muted = isVoicePlaybackMuted();
+  for (const peer of state.peers.values()) {
+    for (const audio of peer.audioElements.values()) {
+      audio.muted = muted;
+      applyAudioOutputDevice(audio).catch(() => {});
+    }
+  }
+}
+
+async function syncAudioOutputDevices() {
+  if (!supportsAudioOutputSelection()) return false;
+
+  const mediaElements = [elements.screenVideo];
+  for (const peer of state.peers.values()) {
+    mediaElements.push(...peer.audioElements.values());
+  }
+
+  const results = await Promise.all(mediaElements.map((mediaElement) => applyAudioOutputDevice(mediaElement)));
+  const contextSynced = await applyAudioOutputDeviceToContext();
+  return results.every(Boolean) && contextSynced !== false;
+}
+
+async function applyAudioOutputDevice(mediaElement) {
+  if (!supportsAudioOutputSelection()) return false;
+
+  const sinkId = state.outputDeviceId || '';
+  if (mediaElement.sinkId === sinkId) return true;
+
+  try {
+    await mediaElement.setSinkId(sinkId);
+    return true;
+  } catch (error) {
+    console.warn('Audio output device unavailable', error);
+    return false;
+  }
+}
+
+async function applyAudioOutputDeviceToContext() {
+  if (!state.audioContext || typeof state.audioContext.setSinkId !== 'function') return true;
+
+  try {
+    await state.audioContext.setSinkId(state.outputDeviceId || '');
+    return true;
+  } catch (error) {
+    console.warn('Audio context output device unavailable', error);
+    return false;
+  }
+}
+
+function getSharedAudioContext() {
+  state.audioContext ||= new AudioContext();
+  applyAudioOutputDeviceToContext().catch(() => {});
+  return state.audioContext;
+}
+
+function isVoicePlaybackMuted() {
+  return state.outputMuted || isLocalAppAudioSuppressed();
+}
+
+function isAppPlaybackMuted() {
+  return state.outputMuted || isLocalAppAudioSuppressed();
 }
 
 async function handleServerMessage(event) {
@@ -1604,11 +1807,12 @@ function attachRemoteAudioTrack(peer, track) {
 
   const audio = document.createElement('audio');
   audio.autoplay = true;
-  audio.muted = isLocalAppAudioSuppressed();
+  audio.muted = isVoicePlaybackMuted();
   audio.playsInline = true;
   audio.srcObject = new MediaStream([track]);
   peer.audioElements.set(track.id, audio);
   document.body.append(audio);
+  applyAudioOutputDevice(audio).catch(() => {});
   playMediaElement(audio);
 
   track.addEventListener(
@@ -1631,9 +1835,9 @@ function removeAudioElements(peer) {
 function attachMeter(participant, stream) {
   if (!participant || !stream) return;
   try {
-    state.audioContext ||= new AudioContext();
-    const source = state.audioContext.createMediaStreamSource(stream);
-    const analyser = state.audioContext.createAnalyser();
+    const context = getSharedAudioContext();
+    const source = context.createMediaStreamSource(stream);
+    const analyser = context.createAnalyser();
     analyser.fftSize = 512;
     source.connect(analyser);
     participant.analyser = analyser;
@@ -1680,11 +1884,10 @@ function getCueGain(value) {
 }
 
 function playPeerCue(type) {
-  if (isLocalAppAudioSuppressed()) return;
+  if (isAppPlaybackMuted()) return;
 
   try {
-    state.audioContext ||= new AudioContext();
-    const context = state.audioContext;
+    const context = getSharedAudioContext();
     if (context.state !== 'running') {
       elements.soundButton.hidden = false;
       return;
@@ -1721,11 +1924,10 @@ function playPeerCue(type) {
 }
 
 function playMicCue(muted) {
-  if (isLocalAppAudioSuppressed()) return;
+  if (isAppPlaybackMuted()) return;
 
   try {
-    state.audioContext ||= new AudioContext();
-    const context = state.audioContext;
+    const context = getSharedAudioContext();
     if (context.state !== 'running') {
       elements.soundButton.hidden = false;
       return;
@@ -1757,11 +1959,10 @@ function playMicCue(muted) {
 }
 
 function playStreamCue(type) {
-  if (isLocalAppAudioSuppressed()) return;
+  if (isAppPlaybackMuted()) return;
 
   try {
-    state.audioContext ||= new AudioContext();
-    const context = state.audioContext;
+    const context = getSharedAudioContext();
     if (context.state !== 'running') {
       elements.soundButton.hidden = false;
       return;
@@ -1923,6 +2124,8 @@ async function handleLeaveButtonClick() {
 
 function toggleDevicePopover(event) {
   event.stopPropagation();
+  closeOutputPopover();
+  closeScreenProfilePopover();
   const willOpen = elements.devicePopover.hidden;
   elements.devicePopover.hidden = !willOpen;
   elements.deviceMenuButton.setAttribute('aria-expanded', String(willOpen));
@@ -1944,12 +2147,38 @@ function closeDevicePopoverOnEscape(event) {
   if (event.key === 'Escape') closeDevicePopover();
 }
 
+function toggleOutputPopover(event) {
+  event.stopPropagation();
+  closeDevicePopover();
+  closeScreenProfilePopover();
+  const willOpen = elements.outputPopover.hidden;
+  elements.outputPopover.hidden = !willOpen;
+  elements.outputMenuButton.setAttribute('aria-expanded', String(willOpen));
+  if (willOpen) refreshDevices().catch(() => {});
+}
+
+function closeOutputPopover() {
+  elements.outputPopover.hidden = true;
+  elements.outputMenuButton.setAttribute('aria-expanded', 'false');
+}
+
+function closeOutputPopoverOnOutside(event) {
+  if (elements.outputPopover.hidden) return;
+  if (elements.outputPopover.contains(event.target) || elements.outputMenuButton.contains(event.target)) return;
+  closeOutputPopover();
+}
+
+function closeOutputPopoverOnEscape(event) {
+  if (event.key === 'Escape') closeOutputPopover();
+}
+
 function toggleScreenProfilePopover() {
   if (!state.joined || state.connecting) {
     showToast('Сначала подключитесь к комнате');
     return;
   }
   closeDevicePopover();
+  closeOutputPopover();
   const willOpen = elements.screenProfilePopover.hidden;
   elements.screenProfilePopover.hidden = !willOpen;
   elements.screenButton.setAttribute('aria-expanded', String(willOpen));
@@ -2121,9 +2350,10 @@ function hideScreenStage() {
 }
 
 function syncScreenVideoAudio() {
-  const muted = state.screenMuted || state.screenVolume <= 0 || isLocalAppAudioSuppressed();
+  const muted = state.screenMuted || state.screenVolume <= 0 || isAppPlaybackMuted();
   elements.screenVideo.volume = state.screenVolume;
   elements.screenVideo.muted = muted;
+  applyAudioOutputDevice(elements.screenVideo).catch(() => {});
   elements.streamVolumeSlider.value = String(Math.round(state.screenVolume * 100));
   elements.streamVolumeButton.dataset.muted = String(muted);
   elements.streamVolumeButton.setAttribute('aria-pressed', String(muted));
@@ -2140,14 +2370,7 @@ function setLocalAppAudioSuppressed(suppressed) {
 }
 
 function syncLocalAppAudioSuppression() {
-  const suppressed = isLocalAppAudioSuppressed();
-  for (const peer of state.peers.values()) {
-    for (const audio of peer.audioElements.values()) {
-      audio.muted = suppressed;
-    }
-  }
-  syncScreenVideoAudio();
-  if (suppressed) elements.soundButton.hidden = true;
+  syncPlaybackMuteState();
 }
 
 function toggleScreenMute() {
@@ -2263,6 +2486,7 @@ function leaveRoom() {
   refreshCallControls();
   refreshScreenControls();
   closeDevicePopover();
+  closeOutputPopover();
   closeScreenProfilePopover();
   setStatus('idle', 'готово');
   refreshParticipantState();

@@ -943,7 +943,8 @@ button:focus-visible,
   pointer-events: auto;
 }
 
-.mic-button {
+.mic-button,
+.output-button {
   border-radius: 999px 0 0 999px;
   background: transparent;
 }
@@ -986,13 +987,16 @@ button:focus-visible,
 
 .dock-icon-mic svg,
 .dock-icon-muted svg,
+.dock-icon-output svg,
+.dock-icon-output-muted svg,
 .dock-icon-screen svg,
 .dock-icon-screen-stop svg {
   transform: translateY(-1px);
 }
 
 .mic-button[data-state="idle"],
-.mic-button[data-state="connecting"] {
+.mic-button[data-state="connecting"],
+.output-button[data-state="live"] {
   background: transparent;
 }
 
@@ -1002,6 +1006,11 @@ button:focus-visible,
 }
 
 .mic-button[data-state="muted"] {
+  background: transparent;
+  color: oklch(79% 0.018 92);
+}
+
+.output-button[data-state="muted"] {
   background: transparent;
   color: oklch(79% 0.018 92);
 }
@@ -1113,13 +1122,19 @@ button:focus-visible,
 }
 
 .dock-icon-muted,
+.dock-icon-output-muted,
 .dock-icon-screen-stop,
 .mic-button[data-state="muted"] .dock-icon-mic,
+.output-button[data-state="muted"] .dock-icon-output,
 .screen-button[data-state="live"] .dock-icon-screen {
   display: none;
 }
 
 .mic-button[data-state="muted"] .dock-icon-muted {
+  display: grid;
+}
+
+.output-button[data-state="muted"] .dock-icon-output-muted {
   display: grid;
 }
 

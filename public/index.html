@@ -195,6 +195,40 @@
               </div>
             </div>
 
+            <div class="dock-cluster">
+              <button class="dock-button output-button" id="outputButton" type="button" aria-pressed="false" aria-label="Выключить звук">
+                <span class="dock-icon dock-icon-output" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" focusable="false">
+                    <path d="M3 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1 -2 2h-1a2 2 0 0 1 -2 -2v-7a9 9 0 0 1 18 0v7a2 2 0 0 1 -2 2h-1a2 2 0 0 1 -2 -2v-3a2 2 0 0 1 2 -2h3"></path>
+                  </svg>
+                </span>
+                <span class="dock-icon dock-icon-output-muted" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" focusable="false">
+                    <path d="M3 3l18 18"></path>
+                    <path d="M3 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1 -.36 1.14"></path>
+                    <path d="M4.2 9.4a9 9 0 0 1 15.8 5.9v3.7a2 2 0 0 1 -.59 1.41"></path>
+                    <path d="M15.4 14.4a2 2 0 0 1 1.6 -.4h3"></path>
+                  </svg>
+                </span>
+                <span class="sr-only" id="outputText">Выключить звук</span>
+              </button>
+
+              <button class="dock-menu-button" id="outputMenuButton" type="button" aria-expanded="false" aria-controls="outputPopover" aria-label="Выбрать динамик">
+                <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                  <path d="M6 9l6 6l6 -6"></path>
+                </svg>
+              </button>
+
+              <div class="device-popover output-popover" id="outputPopover" hidden>
+                <label class="field">
+                  <span>Динамик</span>
+                  <select id="outputDeviceSelect">
+                    <option value="">Системный</option>
+                  </select>
+                </label>
+              </div>
+            </div>
+
             <button class="dock-button screen-button" id="screenButton" type="button" aria-expanded="false" aria-controls="screenProfilePopover" aria-pressed="false" aria-label="Показать экран">
               <span class="dock-icon dock-icon-screen" aria-hidden="true">
                 <svg viewBox="0 0 24 24" focusable="false">
