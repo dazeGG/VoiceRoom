@@ -644,6 +644,76 @@ body[data-screen-view="true"] .screen-stage {
   border-color: color-mix(in oklch, var(--blue), var(--line) 28%);
 }
 
+.participant-network {
+  position: absolute;
+  top: var(--space-sm);
+  right: var(--space-sm);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  z-index: 1;
+}
+
+.participant-ping,
+.participant-reconnect {
+  display: inline-grid;
+  min-height: 28px;
+  align-items: center;
+  border: 1px solid oklch(42% 0.018 92 / 0.72);
+  background: oklch(9% 0.012 92 / 0.78);
+  color: var(--muted);
+}
+
+.participant-ping {
+  grid-template-columns: 14px auto;
+  gap: 5px;
+  border-radius: 999px;
+  padding: 0 8px;
+  font-size: 0.72rem;
+  font-weight: 850;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.participant-ping[data-quality="good"] {
+  border-color: oklch(72% 0.16 164 / 0.38);
+  color: var(--green);
+}
+
+.participant-ping[data-quality="fair"] {
+  border-color: oklch(79% 0.14 82 / 0.4);
+  color: var(--amber);
+}
+
+.participant-ping[data-quality="poor"],
+.participant-ping[data-quality="lost"] {
+  border-color: oklch(67% 0.18 31 / 0.46);
+  color: var(--coral);
+}
+
+.participant-ping svg,
+.participant-reconnect svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2.4;
+}
+
+.participant-reconnect {
+  width: 28px;
+  justify-content: center;
+  border-radius: 50%;
+  padding: 0;
+}
+
+.participant-reconnect:hover {
+  background: oklch(15% 0.014 92 / 0.96);
+  color: oklch(93% 0.054 31);
+}
+
 .voice-ring {
   display: grid;
   width: 86px;

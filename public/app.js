@@ -11,6 +11,11 @@ const MICROPHONE_DEVICE_STORAGE_KEY = 'voice-room:microphone-device-id';
 const NOISE_MODE_STORAGE_KEY = 'voice-room:noise-mode';
 const OUTPUT_DEVICE_STORAGE_KEY = 'voice-room:output-device-id';
 const OUTPUT_MUTED_STORAGE_KEY = 'voice-room:output-muted';
+const PEER_LATENCY_INTERVAL_MS = 3000;
+const PEER_LATENCY_GOOD_MS = 120;
+const PEER_LATENCY_FAIR_MS = 250;
+const PEER_RECONNECT_COOLDOWN_MS = 5000;
+const PEER_RECONNECT_DELAY_MS = 1200;
 const NOISE_MODES = {
   browser: {
     label: 'Браузерный',
@@ -158,6 +163,7 @@ const state = {
 let toastTimer = null;
 let meterFrame = 0;
 let gateSwitchTimer = 0;
+let peerLatencyTimer = 0;
 let rnnoiseModulePromise = null;
 const watchedRemoteScreenTracks = new WeakSet();
 
@@ -545,6 +551,9 @@ async function joinRoom(event) {
     state.eventSource = new EventSource(
       `/events?room=${encodeURIComponent(state.roomId)}&peer=${encodeURIComponent(state.peerId)}&token=${encodeURIComponent(state.sessionToken)}&name=${encodeURIComponent(name)}`
     );
+    state.eventSource.onopen = () => {
+      if (state.joined) setStatus('connected', '');
+    };
     state.eventSource.onmessage = handleServerMessage;
     state.eventSource.onerror = () => {
       if (state.joined) setStatus('connecting', 'переподключение');
@@ -554,6 +563,7 @@ async function joinRoom(event) {
     refreshCallControls();
     refreshScreenControls();
     startMeters();
+    startPeerLatencyStats();
     playPeerCue('join');
   } catch (error) {
     console.error(error);
@@ -1553,6 +1563,11 @@ async function handleServerMessage(event) {
     return;
   }
 
+  if (message.type === 'ping') {
+    setStatus('connected', '');
+    return;
+  }
+
   if (message.type === 'room-not-found') {
     showRoomNotFound();
     return;
@@ -1609,6 +1624,10 @@ function createParticipant(peerInfo) {
   const node = fragment.querySelector('.participant');
   const avatar = fragment.querySelector('.avatar');
   const nameLabel = fragment.querySelector('.participant-name');
+  const network = fragment.querySelector('.participant-network');
+  const pingNode = fragment.querySelector('.participant-ping');
+  const pingValue = fragment.querySelector('.participant-ping-value');
+  const reconnectButton = fragment.querySelector('.participant-reconnect');
   const screenAction = fragment.querySelector('.participant-screen-action');
   const status = fragment.querySelector('p');
 
@@ -1628,15 +1647,23 @@ function createParticipant(peerInfo) {
     id: peerInfo.id,
     isLocal: Boolean(peerInfo.isLocal),
     localScreenSenders: [],
+    lastReconnectAt: 0,
     makingOffer: false,
     micSender: null,
     meterData: null,
     muted: Boolean(peerInfo.muted),
     name: peerInfo.name,
     needsRenegotiate: false,
+    network,
     node,
     pendingCandidates: [],
+    pingMs: null,
+    pingNode,
+    pingValue,
     pc: null,
+    reconnectButton,
+    reconnecting: false,
+    reconnectTimer: 0,
     screen: Boolean(peerInfo.screen),
     screenAction,
     screenAudio: Boolean(peerInfo.screenAudio),
@@ -1647,8 +1674,11 @@ function createParticipant(peerInfo) {
     stream: null
   };
 
+  network.hidden = participant.isLocal;
+  reconnectButton.addEventListener('click', () => reconnectPeer(participant, { manual: true }).catch((error) => console.error(error)));
   screenAction.addEventListener('click', () => enterScreenView(participant.id).catch((error) => console.error(error)));
   if (!participant.isLocal) state.peers.set(peerInfo.id, participant);
+  refreshPeerNetworkIndicator(participant);
   refreshScreenAction(participant);
   refreshParticipantState();
   return participant;
@@ -1688,6 +1718,7 @@ function removePeer(peerId) {
   if (!peer) return;
 
   peer.pc?.close();
+  window.clearTimeout(peer.reconnectTimer);
   removeAudioElements(peer);
   if (state.viewedScreenPeerId === peer.id) {
     closeScreenView();
@@ -1730,22 +1761,76 @@ function ensurePeerConnection(peer) {
     attachRemoteTrack(peer, event.track, stream);
   });
 
-  pc.addEventListener('connectionstatechange', () => updatePeerStatus(peer));
+  pc.addEventListener('connectionstatechange', () => handlePeerConnectionStateChange(peer));
   pc.addEventListener('signalingstatechange', () => {
     if (pc.signalingState === 'stable' && peer.needsRenegotiate) {
       peer.needsRenegotiate = false;
       renegotiatePeer(peer).catch((error) => console.error(error));
     }
   });
-  pc.addEventListener('iceconnectionstatechange', () => {
-    if (pc.iceConnectionState === 'failed') {
-      pc.restartIce();
-    }
-    updatePeerStatus(peer);
-  });
+  pc.addEventListener('iceconnectionstatechange', () => handlePeerConnectionStateChange(peer));
 
   updatePeerStatus(peer);
   return pc;
+}
+
+function handlePeerConnectionStateChange(peer) {
+  updatePeerStatus(peer);
+  refreshPeerNetworkIndicator(peer);
+
+  if (isPeerConnected(peer)) {
+    window.clearTimeout(peer.reconnectTimer);
+    peer.reconnectTimer = 0;
+    peer.reconnecting = false;
+    return;
+  }
+
+  if (isPeerDisconnected(peer)) {
+    schedulePeerReconnect(peer);
+  }
+}
+
+function schedulePeerReconnect(peer) {
+  if (!state.joined || peer.isLocal || peer.reconnectTimer) return;
+
+  const now = Date.now();
+  if (now - peer.lastReconnectAt < PEER_RECONNECT_COOLDOWN_MS) return;
+
+  peer.reconnectTimer = window.setTimeout(() => {
+    peer.reconnectTimer = 0;
+    reconnectPeer(peer, { manual: false }).catch((error) => console.error(error));
+  }, PEER_RECONNECT_DELAY_MS);
+}
+
+async function reconnectPeer(peer, options = {}) {
+  const { manual = false } = options;
+  if (!state.joined || peer.isLocal || !state.peers.has(peer.id)) return;
+
+  window.clearTimeout(peer.reconnectTimer);
+  peer.reconnectTimer = 0;
+  peer.lastReconnectAt = Date.now();
+  peer.reconnecting = true;
+  updatePeerStatus(peer);
+  refreshPeerNetworkIndicator(peer);
+
+  try {
+    if (!peer.pc || peer.pc.connectionState === 'closed') {
+      peer.pc = null;
+      await callPeer(peer.id);
+    } else {
+      peer.pc.restartIce?.();
+      await renegotiatePeer(peer);
+    }
+
+    if (manual) showToast('Переподключение запущено');
+  } catch (error) {
+    console.error(error);
+    if (manual) showToast('Не удалось переподключиться');
+  } finally {
+    peer.reconnecting = false;
+    updatePeerStatus(peer);
+    refreshPeerNetworkIndicator(peer);
+  }
 }
 
 function addLocalScreenTracks(peer) {
@@ -2010,6 +2095,59 @@ function startMeters() {
 function stopMeters() {
   if (meterFrame) cancelAnimationFrame(meterFrame);
   meterFrame = 0;
+}
+
+function startPeerLatencyStats() {
+  if (peerLatencyTimer) return;
+
+  updatePeerLatencyStats().catch((error) => console.warn('Peer latency unavailable', error));
+  peerLatencyTimer = window.setInterval(() => {
+    updatePeerLatencyStats().catch((error) => console.warn('Peer latency unavailable', error));
+  }, PEER_LATENCY_INTERVAL_MS);
+}
+
+function stopPeerLatencyStats() {
+  if (peerLatencyTimer) window.clearInterval(peerLatencyTimer);
+  peerLatencyTimer = 0;
+}
+
+async function updatePeerLatencyStats() {
+  if (!state.joined) return;
+
+  await Promise.allSettled([...state.peers.values()].map((peer) => updatePeerLatency(peer)));
+}
+
+async function updatePeerLatency(peer) {
+  if (peer.isLocal || !peer.pc || peer.pc.connectionState === 'closed') return;
+
+  const stats = await peer.pc.getStats();
+  let rttMs = null;
+
+  stats.forEach((report) => {
+    if (
+      report.type === 'candidate-pair'
+      && report.state === 'succeeded'
+      && (report.nominated || report.selected)
+      && typeof report.currentRoundTripTime === 'number'
+    ) {
+      rttMs = report.currentRoundTripTime * 1000;
+      return;
+    }
+
+    if (
+      rttMs === null
+      && report.type === 'remote-inbound-rtp'
+      && report.kind === 'audio'
+      && typeof report.roundTripTime === 'number'
+    ) {
+      rttMs = report.roundTripTime * 1000;
+    }
+  });
+
+  if (rttMs === null) return;
+
+  peer.pingMs = Math.max(0, Math.round(rttMs));
+  refreshPeerNetworkIndicator(peer);
 }
 
 function updateMeter(participant) {
@@ -2621,6 +2759,7 @@ function leaveRoom() {
   closeScreenView();
 
   for (const peer of state.peers.values()) {
+    window.clearTimeout(peer.reconnectTimer);
     peer.pc?.close();
     removeAudioElements(peer);
     peer.node.remove();
@@ -2632,6 +2771,7 @@ function leaveRoom() {
   stopLocalStream();
   stopLocalScreenStream();
   stopMeters();
+  stopPeerLatencyStats();
 
   state.muted = false;
   refreshCallControls();
@@ -2674,6 +2814,16 @@ function playMediaElement(element) {
 }
 
 function updatePeerStatus(peer) {
+  if (!peer.isLocal && isPeerDisconnected(peer)) {
+    setParticipantStatus(peer, peer.reconnecting ? 'переподключение' : 'соединение потеряно');
+    return;
+  }
+
+  if (!peer.isLocal && peer.reconnecting) {
+    setParticipantStatus(peer, 'переподключение');
+    return;
+  }
+
   if (peer.screen) {
     setParticipantStatus(peer, peer.isLocal ? 'экран в эфире' : 'показывает экран');
     return;
@@ -2691,6 +2841,44 @@ function updatePeerStatus(peer) {
   }
 
   setParticipantStatus(peer, 'подключение');
+}
+
+function refreshPeerNetworkIndicator(peer) {
+  if (!peer?.network || peer.isLocal) return;
+
+  const disconnected = isPeerDisconnected(peer);
+  const quality = disconnected ? 'lost' : getPeerLatencyQuality(peer.pingMs);
+  peer.network.hidden = false;
+  peer.pingNode.dataset.quality = quality;
+  peer.pingValue.textContent = disconnected || peer.pingMs === null ? '--' : `${peer.pingMs} мс`;
+  peer.pingNode.title = disconnected
+    ? 'Соединение потеряно'
+    : peer.pingMs === null
+      ? 'Пинг неизвестен'
+      : `Пинг ${peer.pingMs} мс`;
+  peer.reconnectButton.hidden = !disconnected;
+  peer.reconnectButton.disabled = peer.reconnecting;
+}
+
+function getPeerLatencyQuality(pingMs) {
+  if (pingMs === null || !Number.isFinite(pingMs)) return 'unknown';
+  if (pingMs <= PEER_LATENCY_GOOD_MS) return 'good';
+  if (pingMs <= PEER_LATENCY_FAIR_MS) return 'fair';
+  return 'poor';
+}
+
+function getPeerConnectionState(peer) {
+  return peer.pc?.connectionState || peer.pc?.iceConnectionState || '';
+}
+
+function isPeerConnected(peer) {
+  const stateText = getPeerConnectionState(peer);
+  return stateText === 'connected' || stateText === 'completed';
+}
+
+function isPeerDisconnected(peer) {
+  const stateText = getPeerConnectionState(peer);
+  return stateText === 'closed' || stateText === 'disconnected' || stateText === 'failed';
 }
 
 function setParticipantStatus(peer, label) {
