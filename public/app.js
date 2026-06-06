@@ -723,16 +723,22 @@ async function openElectronScreenShare(profile) {
 
   const source = await selectDesktopCaptureSource();
   let stream = null;
+  let audioCaptureError = null;
   setLocalAppAudioSuppressed(true);
   try {
     stream = await openElectronDesktopStream(source.id, profile, { audio: true, audioMode: 'loopback' });
   } catch (error) {
-    if (error.name === 'NotAllowedError' || error.name === 'AbortError') {
+    if (isCaptureCancelled(error)) {
       setLocalAppAudioSuppressed(false);
       throw error;
     }
+    audioCaptureError = error;
     console.warn('Desktop audio capture unavailable, retrying without audio', error);
-    stream = await openElectronDesktopStream(source.id, profile, { audio: false, audioMode: 'none' });
+    try {
+      stream = await openElectronDesktopStream(source.id, profile, { audio: false, audioMode: 'none' });
+    } catch (videoError) {
+      throw mergeElectronDesktopCaptureErrors(audioCaptureError, videoError);
+    }
   }
 
   await applyScreenCaptureProfile(stream, profile);
@@ -753,9 +759,51 @@ async function openElectronDesktopStream(sourceId, profile, options = {}) {
     }
   }
 
-  const lastError = errors.at(-1)?.error;
-  if (lastError) throw lastError;
+  if (errors.length) throw createElectronDesktopCaptureError(errors);
   throw new Error('Electron не поддерживает захват экрана в этой сборке.');
+}
+
+function mergeElectronDesktopCaptureErrors(...errors) {
+  const attemptDetails = errors.flatMap((error) => error?.captureAttemptDetails || [{ error, method: 'unknown' }]);
+  return createElectronDesktopCaptureError(attemptDetails);
+}
+
+function createElectronDesktopCaptureError(attemptDetails) {
+  const lastError = attemptDetails.at(-1)?.error;
+  const error = new Error(formatElectronDesktopCaptureError(attemptDetails));
+  error.name = lastError?.name || 'DesktopCaptureError';
+  error.captureAttemptDetails = attemptDetails;
+  return error;
+}
+
+function formatElectronDesktopCaptureError(attemptDetails) {
+  const platform = window.voiceRoomRuntime?.platform || 'unknown';
+  const displayMedia = navigator.mediaDevices?.getDisplayMedia ? 'yes' : 'no';
+  const userMedia = navigator.mediaDevices?.getUserMedia ? 'yes' : 'no';
+  const attempts = attemptDetails.map(formatCaptureAttemptError).join('\n');
+
+  return [
+    'Не удалось запустить демонстрацию экрана.',
+    `Среда: Electron ${platform}, getDisplayMedia=${displayMedia}, getUserMedia=${userMedia}.`,
+    'Попытки:',
+    attempts
+  ].join('\n');
+}
+
+function formatCaptureAttemptError({ error, method }) {
+  return `- ${method}: ${formatCaptureError(error)}`;
+}
+
+function formatCaptureError(error) {
+  if (!error) return 'unknown error';
+
+  const name = error.name || error.constructor?.name || 'Error';
+  const message = error.message || String(error);
+  const details = [];
+  if (error.constraint) details.push(`constraint=${error.constraint}`);
+  if (error.code) details.push(`code=${error.code}`);
+
+  return [name, message, ...details].join(': ');
 }
 
 function createElectronDesktopCaptureAttempts(sourceId, withAudio) {
@@ -982,18 +1030,25 @@ async function startScreenShare(profileId = state.localScreenProfileId) {
     playStreamCue('start');
     showToast(hasScreenAudio() ? `Стрим запущен: ${profile.label}, звук включен` : `Стрим запущен: ${profile.label}, без звука`);
   } catch (error) {
-    const cancelled = error.name === 'NotAllowedError' || error.name === 'AbortError';
+    const cancelled = isCaptureCancelled(error);
     if (!cancelled) console.error(error);
     if (state.localScreenStream) {
       await stopScreenShare({ notify: false, quiet: true }).catch((cleanupError) => console.error(cleanupError));
     } else {
       setLocalAppAudioSuppressed(false);
     }
-    showToast(cancelled ? 'Демонстрация отменена' : error.message || 'Не удалось показать экран');
+    showToast(
+      cancelled ? 'Демонстрация отменена' : error.message || 'Не удалось показать экран',
+      cancelled ? undefined : { duration: 12000, variant: 'error' }
+    );
   } finally {
     elements.screenButton.disabled = false;
     refreshScreenControls();
   }
+}
+
+function isCaptureCancelled(error) {
+  return error?.name === 'NotAllowedError' || error?.name === 'AbortError';
 }
 
 async function stopScreenShare(options = {}) {
@@ -2398,11 +2453,13 @@ function setStatus(stateName, label) {
   elements.statusPill.hidden = stateName === 'idle' || stateName === 'connected';
 }
 
-function showToast(message) {
+function showToast(message, options = {}) {
+  const { duration = 2400, variant = 'info' } = options || {};
   elements.toast.textContent = message;
+  elements.toast.dataset.variant = variant;
   elements.toast.dataset.visible = 'true';
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => {
     elements.toast.dataset.visible = 'false';
-  }, 2400);
+  }, duration);
 }

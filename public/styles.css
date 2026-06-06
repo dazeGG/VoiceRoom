@@ -1352,15 +1352,24 @@ button:focus-visible,
   background: oklch(10% 0.012 92);
   color: var(--ink);
   font-weight: 750;
+  line-height: 1.35;
   opacity: 0;
   pointer-events: none;
   transform: translateY(10px);
   transition: opacity 180ms ease, transform 180ms ease;
+  overflow-wrap: anywhere;
+  white-space: pre-line;
 }
 
 .toast[data-visible="true"] {
   opacity: 1;
   transform: translateY(0);
+}
+
+.toast[data-variant="error"] {
+  max-width: min(720px, calc(100vw - 32px));
+  border-color: color-mix(in oklch, var(--coral), var(--ink) 20%);
+  font-size: 0.86rem;
 }
 
 @keyframes blink {
