@@ -627,7 +627,6 @@ body[data-screen-view="true"] .screen-stage {
 
 .participant[data-speaking="true"] {
   border-color: color-mix(in oklch, var(--green), var(--line) 24%);
-  box-shadow: 0 0 0 1px oklch(72% 0.16 164 / 0.2), 0 14px 34px oklch(6% 0.02 92 / 0.34);
 }
 
 .participant[data-local="true"] {
@@ -676,9 +675,7 @@ body[data-screen-view="true"] .screen-stage {
 }
 
 .participant[data-speaking="true"] .avatar {
-  box-shadow:
-    0 0 0 2px var(--green),
-    0 0 calc(8px + (var(--level) * 14px)) oklch(62% 0.14 164 / 0.3);
+  box-shadow: 0 8px 18px oklch(6% 0.02 92 / 0.28);
 }
 
 .participant-copy {

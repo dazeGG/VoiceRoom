@@ -2,7 +2,7 @@
 
 const $ = (selector) => document.querySelector(selector);
 const DEFAULT_NOISE_MODE = 'browser';
-const NOTIFICATION_VOLUME_BOOST = 2.2;
+const NOTIFICATION_VOLUME_BOOST = 3;
 const NOISE_MODE_STORAGE_KEY = 'voice-room:noise-mode';
 const NOISE_MODES = {
   browser: {
