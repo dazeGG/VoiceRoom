@@ -231,6 +231,25 @@ npm start
 npm run check
 ```
 
+## Electron
+
+Electron-версия открывает публичный сайт из `VOICE_ROOM_URL` в нативном окне. Перед запуском или сборкой создайте локальный `.env`:
+
+```dotenv
+VOICE_ROOM_URL=https://voice.example.com
+```
+
+Команды:
+
+- `npm run electron` - запускает desktop-окно локально без создания релизных файлов.
+- `npm run build` - собирает macOS `.dmg` для `arm64`/`x64` и Windows portable `.exe`.
+- `npm run build:mac` - собирает только macOS `.dmg`.
+- `npm run build:win` - собирает только Windows portable `.exe`.
+- `npm run clean:dist` - чистит `dist/`, оставляя только релизные `.dmg`/`.exe`.
+
+Готовые файлы появляются в `dist/`. Папка `dist/`, `.env` и `electron/runtime-config.json` не коммитятся.
+Настройки сборки Electron лежат в `electron-builder.config.js`.
+
 ## Безопасность
 
 Комната доступна всем, у кого есть ссылка или код комнаты. Создание комнаты защищено rate limit, proof-of-work challenge и лимитом пустых комнат на IP. Сигналинг проверяет короткоживущую peer-сессию для отправки WebRTC-сигналов, обновления статуса и выдачи TURN credentials, но это не заменяет аккаунты, пароль или отдельную авторизацию комнаты.

@@ -95,32 +95,10 @@ button:disabled {
 }
 
 .brand-mark {
-  position: relative;
   width: 32px;
   height: 32px;
-  border: 2px solid oklch(9% 0.01 92);
-  border-radius: 50%;
-  background: linear-gradient(135deg, var(--amber), var(--green));
-}
-
-.brand-mark::before,
-.brand-mark::after {
-  position: absolute;
-  top: 50%;
-  width: 5px;
-  height: 12px;
-  border-radius: 999px;
-  background: oklch(9% 0.01 92);
-  content: "";
-  transform: translateY(-50%);
-}
-
-.brand-mark::before {
-  left: 9px;
-}
-
-.brand-mark::after {
-  right: 9px;
+  display: block;
+  flex: 0 0 auto;
 }
 
 .status-pill {

@@ -1,16 +1,25 @@
 {
   "name": "voice-room",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "private": true,
   "description": "Simple link-based WebRTC voice chat with dependency-free Node signaling.",
-  "main": "server.js",
+  "main": "electron/main.js",
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
-    "check": "node --check server.js && node --check public/app.js"
+    "check": "node --check server.js && node --check public/app.js && node --check electron/main.js && node --check electron/preload.js && node --check scripts/clean-dist.js && node --check scripts/create-electron-config.js && node --check electron-builder.config.js",
+    "electron": "node scripts/create-electron-config.js && electron .",
+    "build": "node scripts/create-electron-config.js && electron-builder --config electron-builder.config.js --mac --win && node scripts/clean-dist.js",
+    "build:mac": "node scripts/create-electron-config.js && electron-builder --config electron-builder.config.js --mac && node scripts/clean-dist.js",
+    "build:win": "node scripts/create-electron-config.js && electron-builder --config electron-builder.config.js --win && node scripts/clean-dist.js",
+    "clean:dist": "node scripts/clean-dist.js"
   },
   "engines": {
     "node": ">=20"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^42.3.3",
+    "electron-builder": "^26.15.0"
+  }
 }
