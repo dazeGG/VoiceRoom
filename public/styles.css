@@ -1190,6 +1190,26 @@ button:focus-visible,
   color: oklch(96% 0.008 92);
 }
 
+.gate-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 42px;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.gate-control input {
+  min-width: 0;
+  accent-color: var(--green);
+}
+
+.gate-control output {
+  color: oklch(96% 0.008 92);
+  font-size: 0.78rem;
+  font-weight: 850;
+  text-align: right;
+  white-space: nowrap;
+}
+
 .sound-button {
   min-height: 48px;
   border: 1px solid var(--control-line);

@@ -2,6 +2,10 @@
 
 const $ = (selector) => document.querySelector(selector);
 const DEFAULT_NOISE_MODE = 'browser';
+const DEFAULT_GATE_THRESHOLD = 0;
+const GATE_THRESHOLD_STORAGE_KEY = 'voice-room:gate-threshold';
+const GATE_MAX_AMPLITUDE = 0.18;
+const GATE_MIN_AMPLITUDE = 0.006;
 const NOTIFICATION_VOLUME_BOOST = 3;
 const MICROPHONE_DEVICE_STORAGE_KEY = 'voice-room:microphone-device-id';
 const NOISE_MODE_STORAGE_KEY = 'voice-room:noise-mode';
@@ -70,6 +74,8 @@ const elements = {
   devicePopover: $('#devicePopover'),
   deviceSelect: $('#deviceSelect'),
   emptyRoom: $('#emptyRoom'),
+  gateThresholdSlider: $('#gateThresholdSlider'),
+  gateThresholdValue: $('#gateThresholdValue'),
   joinByCodeButton: $('#joinByCodeButton'),
   leaveButton: $('#leaveButton'),
   muteButton: $('#muteButton'),
@@ -117,6 +123,7 @@ const state = {
   autoJoinStarted: false,
   connecting: false,
   eventSource: null,
+  gateThreshold: getStoredGateThreshold(),
   iceConfig: { iceServers: [] },
   iceRefreshTimer: 0,
   joined: false,
@@ -150,6 +157,7 @@ const state = {
 
 let toastTimer = null;
 let meterFrame = 0;
+let gateSwitchTimer = 0;
 let rnnoiseModulePromise = null;
 const watchedRemoteScreenTracks = new WeakSet();
 
@@ -160,6 +168,8 @@ function init() {
   state.savedName = savedName;
   elements.startNameInput.value = savedName;
   elements.noiseModeSelect.value = state.noiseMode;
+  elements.gateThresholdSlider.value = String(state.gateThreshold);
+  refreshGateThresholdValue();
   elements.startForm.addEventListener('submit', saveStartName);
   elements.createRoomButton.addEventListener('click', createRoomFromStart);
   elements.joinByCodeButton.addEventListener('click', joinRoomByCode);
@@ -183,6 +193,7 @@ function init() {
   elements.leaveButton.addEventListener('click', handleLeaveButtonClick);
   elements.soundButton.addEventListener('click', unlockAudio);
   elements.deviceSelect.addEventListener('change', switchMicrophone);
+  elements.gateThresholdSlider.addEventListener('input', updateGateThresholdFromSlider);
   elements.noiseModeSelect.addEventListener('change', switchNoiseMode);
   elements.outputDeviceSelect.addEventListener('change', switchOutputDevice);
   document.addEventListener('click', closeDevicePopoverOnOutside);
@@ -246,6 +257,11 @@ function getStoredNoiseMode() {
   return getNoiseMode(localStorage.getItem(NOISE_MODE_STORAGE_KEY));
 }
 
+function getStoredGateThreshold() {
+  const value = Number.parseInt(localStorage.getItem(GATE_THRESHOLD_STORAGE_KEY) || String(DEFAULT_GATE_THRESHOLD), 10);
+  return Number.isFinite(value) ? Math.min(100, Math.max(0, value)) : DEFAULT_GATE_THRESHOLD;
+}
+
 function setNoiseMode(mode) {
   state.noiseMode = getNoiseMode(mode);
   elements.noiseModeSelect.value = state.noiseMode;
@@ -254,6 +270,25 @@ function setNoiseMode(mode) {
 
 function getNoiseModeLabel(mode) {
   return NOISE_MODES[getNoiseMode(mode)].label;
+}
+
+function setGateThreshold(value) {
+  const threshold = Number.parseInt(value, 10);
+  state.gateThreshold = Number.isFinite(threshold) ? Math.min(100, Math.max(0, threshold)) : DEFAULT_GATE_THRESHOLD;
+  elements.gateThresholdSlider.value = String(state.gateThreshold);
+  localStorage.setItem(GATE_THRESHOLD_STORAGE_KEY, String(state.gateThreshold));
+  refreshGateThresholdValue();
+}
+
+function refreshGateThresholdValue() {
+  elements.gateThresholdValue.textContent = state.gateThreshold > 0 ? `${state.gateThreshold}%` : 'Выкл';
+}
+
+function getGateThresholdAmplitude() {
+  if (state.gateThreshold <= 0) return 0;
+
+  const amount = state.gateThreshold / 100;
+  return GATE_MIN_AMPLITUDE + amount * amount * (GATE_MAX_AMPLITUDE - GATE_MIN_AMPLITUDE);
 }
 
 function persistMicrophoneDeviceId(deviceId) {
@@ -572,28 +607,110 @@ async function openLocalMicrophone() {
   const rawStream = await openMicrophone(mode);
 
   if (mode !== 'rnnoise') {
-    return {
+    return applyNoiseGateToCapture({
       mode,
       processor: null,
       rawStream,
       stream: rawStream
-    };
+    });
   }
 
   try {
-    return await createNoiseSuppressedStream(rawStream);
+    return await applyNoiseGateToCapture(await createNoiseSuppressedStream(rawStream));
   } catch (error) {
     console.warn('RNNoise unavailable', error);
     stopStream(rawStream);
     setNoiseMode('browser');
     showToast('RNNoise недоступен, включен браузерный шумодав');
     const fallbackStream = await openMicrophone('browser');
-    return {
+    return applyNoiseGateToCapture({
       mode: 'browser',
       processor: null,
       rawStream: fallbackStream,
       stream: fallbackStream
+    });
+  }
+}
+
+async function applyNoiseGateToCapture(capture) {
+  if (getGateThresholdAmplitude() <= 0) return capture;
+
+  try {
+    const gated = await createNoiseGatedStream(capture.stream);
+    return {
+      ...capture,
+      processor: combineMicrophoneProcessors(capture.processor, gated.processor),
+      stream: gated.stream
     };
+  } catch (error) {
+    console.warn('Noise gate unavailable', error);
+    showToast('Гейт недоступен, микрофон работает без него');
+    return capture;
+  }
+}
+
+async function createNoiseGatedStream(inputStream) {
+  const threshold = getGateThresholdAmplitude();
+  if (threshold <= 0) {
+    return {
+      processor: null,
+      stream: inputStream
+    };
+  }
+
+  const context = createProcessingAudioContext();
+  try {
+    if (typeof context.createScriptProcessor !== 'function') {
+      throw new Error('ScriptProcessor недоступен');
+    }
+
+    const source = context.createMediaStreamSource(inputStream);
+    const gate = context.createScriptProcessor(1024, 1, 1);
+    const destination = context.createMediaStreamDestination();
+    let openness = 0;
+
+    gate.onaudioprocess = (event) => {
+      const input = event.inputBuffer.getChannelData(0);
+      const output = event.outputBuffer.getChannelData(0);
+      let sum = 0;
+
+      for (const sample of input) {
+        sum += sample * sample;
+      }
+
+      const rms = Math.sqrt(sum / input.length);
+      const target = rms >= threshold ? 1 : 0;
+      openness += (target - openness) * (target > openness ? 0.42 : 0.08);
+
+      for (let index = 0; index < input.length; index += 1) {
+        output[index] = input[index] * openness;
+      }
+    };
+
+    source.connect(gate);
+    gate.connect(destination);
+    await context.resume();
+
+    const [inputTrack] = inputStream.getAudioTracks();
+    const [outputTrack] = destination.stream.getAudioTracks();
+    if (!outputTrack) {
+      throw new Error('Гейт не вернул аудио-трек');
+    }
+    outputTrack.enabled = inputTrack?.enabled ?? true;
+    if ('contentHint' in outputTrack) outputTrack.contentHint = 'speech';
+
+    return {
+      processor: {
+        context,
+        destination,
+        node: gate,
+        source
+      },
+      stream: destination.stream
+    };
+  } catch (error) {
+    context.close().catch(() => {});
+    throw error;
   }
 }
 
@@ -684,13 +801,30 @@ function setMicrophoneCaptureEnabled(capture, enabled) {
 }
 
 function stopMicrophoneCapture(capture) {
-  disconnectAudioNode(capture.processor?.source);
-  disconnectAudioNode(capture.processor?.node);
-  disconnectAudioNode(capture.processor?.destination);
-  capture.processor?.context.close().catch(() => {});
+  const processors = getMicrophoneProcessors(capture.processor);
+  for (const processor of processors) {
+    disconnectAudioNode(processor.source);
+    disconnectAudioNode(processor.node);
+    disconnectAudioNode(processor.destination);
+    processor.context?.close().catch(() => {});
+  }
 
-  const streams = new Set([capture.stream, capture.rawStream].filter(Boolean));
+  const streams = new Set([
+    capture.stream,
+    capture.rawStream,
+    ...processors.map((processor) => processor.destination?.stream)
+  ].filter(Boolean));
   for (const stream of streams) stopStream(stream);
+}
+
+function combineMicrophoneProcessors(currentProcessor, nextProcessor) {
+  if (!currentProcessor) return nextProcessor;
+  return [...getMicrophoneProcessors(currentProcessor), nextProcessor].filter(Boolean);
+}
+
+function getMicrophoneProcessors(processor) {
+  if (!processor) return [];
+  return Array.isArray(processor) ? processor.filter(Boolean) : [processor];
 }
 
 function disconnectAudioNode(node) {
@@ -1276,6 +1410,21 @@ async function switchNoiseMode() {
     successMessage: (capture) => `Шумодав: ${getNoiseModeLabel(capture.mode)}`
   });
   if (!switched) setNoiseMode(previousMode);
+}
+
+function updateGateThresholdFromSlider() {
+  setGateThreshold(elements.gateThresholdSlider.value);
+
+  window.clearTimeout(gateSwitchTimer);
+  if (!state.joined || !state.localStream) return;
+
+  gateSwitchTimer = window.setTimeout(() => {
+    switchMicrophone({
+      failureMessage: 'Не удалось применить гейт',
+      refreshDeviceList: false,
+      successMessage: state.gateThreshold > 0 ? `Гейт: ${state.gateThreshold}%` : 'Гейт выключен'
+    }).catch((error) => console.error(error));
+  }, 280);
 }
 
 async function switchOutputDevice() {
@@ -2462,6 +2611,8 @@ function leaveRoom() {
 
   state.connecting = false;
   state.joined = false;
+  window.clearTimeout(gateSwitchTimer);
+  gateSwitchTimer = 0;
   window.clearTimeout(state.iceRefreshTimer);
   state.iceRefreshTimer = 0;
   state.eventSource?.close();
@@ -2555,7 +2706,7 @@ function refreshParticipantState() {
 
 async function unlockAudio() {
   await state.audioContext?.resume();
-  await state.micProcessor?.context.resume();
+  await Promise.allSettled(getMicrophoneProcessors(state.micProcessor).map((processor) => processor.context?.resume()));
   const plays = [];
   for (const peer of state.peers.values()) {
     for (const audio of peer.audioElements.values()) plays.push(audio.play());
