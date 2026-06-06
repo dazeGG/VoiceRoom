@@ -195,10 +195,20 @@
                 <label class="field">
                   <span>Гейт</span>
                   <div class="gate-control">
-                    <input id="gateThresholdSlider" type="range" min="0" max="100" step="1" value="0" aria-label="Порог гейта">
+                    <input id="gateThresholdSlider" type="range" min="-100" max="0" step="1" value="-100" aria-label="Порог гейта в децибелах">
                     <output id="gateThresholdValue" for="gateThresholdSlider">Выкл</output>
                   </div>
                 </label>
+                <div class="mic-level-control">
+                  <div class="mic-level-heading">
+                    <span>Уровень микрофона</span>
+                    <output id="micLevelValue">-∞ dB</output>
+                  </div>
+                  <div class="mic-level-track" id="micLevelTrack" role="meter" aria-label="Уровень микрофона" aria-valuemin="-100" aria-valuemax="0" aria-valuenow="-100">
+                    <span class="mic-level-fill" id="micLevelFill"></span>
+                    <span class="mic-gate-marker" id="micGateMarker"></span>
+                  </div>
+                </div>
               </div>
             </div>
 

@@ -2,10 +2,13 @@
 
 const $ = (selector) => document.querySelector(selector);
 const DEFAULT_NOISE_MODE = 'browser';
-const DEFAULT_GATE_THRESHOLD = 0;
-const GATE_THRESHOLD_STORAGE_KEY = 'voice-room:gate-threshold';
-const GATE_MAX_AMPLITUDE = 0.18;
-const GATE_MIN_AMPLITUDE = 0.006;
+const DEFAULT_GATE_THRESHOLD_DB = -100;
+const GATE_THRESHOLD_DB_STORAGE_KEY = 'voice-room:gate-threshold-db';
+const LEGACY_GATE_THRESHOLD_STORAGE_KEY = 'voice-room:gate-threshold';
+const GATE_THRESHOLD_MAX_DB = 0;
+const GATE_THRESHOLD_MIN_DB = -100;
+const LEGACY_GATE_MAX_AMPLITUDE = 0.18;
+const LEGACY_GATE_MIN_AMPLITUDE = 0.006;
 const NOTIFICATION_VOLUME_BOOST = 3;
 const MICROPHONE_DEVICE_STORAGE_KEY = 'voice-room:microphone-device-id';
 const NOISE_MODE_STORAGE_KEY = 'voice-room:noise-mode';
@@ -83,6 +86,10 @@ const elements = {
   gateThresholdValue: $('#gateThresholdValue'),
   joinByCodeButton: $('#joinByCodeButton'),
   leaveButton: $('#leaveButton'),
+  micGateMarker: $('#micGateMarker'),
+  micLevelFill: $('#micLevelFill'),
+  micLevelTrack: $('#micLevelTrack'),
+  micLevelValue: $('#micLevelValue'),
   muteButton: $('#muteButton'),
   muteText: $('#muteText'),
   noiseModeSelect: $('#noiseModeSelect'),
@@ -128,7 +135,7 @@ const state = {
   autoJoinStarted: false,
   connecting: false,
   eventSource: null,
-  gateThreshold: getStoredGateThreshold(),
+  gateThresholdDb: getStoredGateThresholdDb(),
   iceConfig: { iceServers: [] },
   iceRefreshTimer: 0,
   joined: false,
@@ -174,8 +181,9 @@ function init() {
   state.savedName = savedName;
   elements.startNameInput.value = savedName;
   elements.noiseModeSelect.value = state.noiseMode;
-  elements.gateThresholdSlider.value = String(state.gateThreshold);
+  elements.gateThresholdSlider.value = String(state.gateThresholdDb);
   refreshGateThresholdValue();
+  refreshMicrophoneLevelMeter(GATE_THRESHOLD_MIN_DB);
   elements.startForm.addEventListener('submit', saveStartName);
   elements.createRoomButton.addEventListener('click', createRoomFromStart);
   elements.joinByCodeButton.addEventListener('click', joinRoomByCode);
@@ -263,9 +271,16 @@ function getStoredNoiseMode() {
   return getNoiseMode(localStorage.getItem(NOISE_MODE_STORAGE_KEY));
 }
 
-function getStoredGateThreshold() {
-  const value = Number.parseInt(localStorage.getItem(GATE_THRESHOLD_STORAGE_KEY) || String(DEFAULT_GATE_THRESHOLD), 10);
-  return Number.isFinite(value) ? Math.min(100, Math.max(0, value)) : DEFAULT_GATE_THRESHOLD;
+function getStoredGateThresholdDb() {
+  const storedValue = Number.parseInt(localStorage.getItem(GATE_THRESHOLD_DB_STORAGE_KEY) || '', 10);
+  if (Number.isFinite(storedValue)) return clampGateThresholdDb(storedValue);
+
+  const legacyValue = Number.parseInt(localStorage.getItem(LEGACY_GATE_THRESHOLD_STORAGE_KEY) || '', 10);
+  if (!Number.isFinite(legacyValue)) return DEFAULT_GATE_THRESHOLD_DB;
+
+  const migratedValue = legacyGatePercentToDb(legacyValue);
+  localStorage.setItem(GATE_THRESHOLD_DB_STORAGE_KEY, String(migratedValue));
+  return migratedValue;
 }
 
 function setNoiseMode(mode) {
@@ -278,23 +293,79 @@ function getNoiseModeLabel(mode) {
   return NOISE_MODES[getNoiseMode(mode)].label;
 }
 
-function setGateThreshold(value) {
+function setGateThresholdDb(value) {
   const threshold = Number.parseInt(value, 10);
-  state.gateThreshold = Number.isFinite(threshold) ? Math.min(100, Math.max(0, threshold)) : DEFAULT_GATE_THRESHOLD;
-  elements.gateThresholdSlider.value = String(state.gateThreshold);
-  localStorage.setItem(GATE_THRESHOLD_STORAGE_KEY, String(state.gateThreshold));
+  state.gateThresholdDb = Number.isFinite(threshold) ? clampGateThresholdDb(threshold) : DEFAULT_GATE_THRESHOLD_DB;
+  elements.gateThresholdSlider.value = String(state.gateThresholdDb);
+  localStorage.setItem(GATE_THRESHOLD_DB_STORAGE_KEY, String(state.gateThresholdDb));
   refreshGateThresholdValue();
 }
 
 function refreshGateThresholdValue() {
-  elements.gateThresholdValue.textContent = state.gateThreshold > 0 ? `${state.gateThreshold}%` : 'Выкл';
+  elements.gateThresholdValue.textContent = isGateDisabled() ? 'Выкл' : `${state.gateThresholdDb} dB`;
+  refreshGateMarker();
 }
 
 function getGateThresholdAmplitude() {
-  if (state.gateThreshold <= 0) return 0;
+  if (isGateDisabled()) return 0;
 
-  const amount = state.gateThreshold / 100;
-  return GATE_MIN_AMPLITUDE + amount * amount * (GATE_MAX_AMPLITUDE - GATE_MIN_AMPLITUDE);
+  return dbToAmplitude(state.gateThresholdDb);
+}
+
+function clampGateThresholdDb(value) {
+  return Math.min(GATE_THRESHOLD_MAX_DB, Math.max(GATE_THRESHOLD_MIN_DB, value));
+}
+
+function isGateDisabled() {
+  return state.gateThresholdDb <= GATE_THRESHOLD_MIN_DB;
+}
+
+function dbToAmplitude(db) {
+  return 10 ** (db / 20);
+}
+
+function amplitudeToDb(amplitude) {
+  if (!Number.isFinite(amplitude) || amplitude <= 0) return GATE_THRESHOLD_MIN_DB;
+  return Math.max(GATE_THRESHOLD_MIN_DB, Math.min(GATE_THRESHOLD_MAX_DB, 20 * Math.log10(amplitude)));
+}
+
+function legacyGatePercentToDb(value) {
+  if (value <= 0) return DEFAULT_GATE_THRESHOLD_DB;
+
+  const amount = Math.min(100, Math.max(0, value)) / 100;
+  const amplitude = LEGACY_GATE_MIN_AMPLITUDE + amount * amount * (LEGACY_GATE_MAX_AMPLITUDE - LEGACY_GATE_MIN_AMPLITUDE);
+  return Math.round(amplitudeToDb(amplitude));
+}
+
+function getDbMeterPosition(db) {
+  const clampedDb = clampGateThresholdDb(db);
+  return (clampedDb - GATE_THRESHOLD_MIN_DB) / (GATE_THRESHOLD_MAX_DB - GATE_THRESHOLD_MIN_DB);
+}
+
+function formatLevelDb(db) {
+  return db <= GATE_THRESHOLD_MIN_DB ? '-∞ dB' : `${Math.round(db)} dB`;
+}
+
+function refreshGateMarker() {
+  if (!elements.micGateMarker) return;
+
+  const position = getDbMeterPosition(state.gateThresholdDb);
+  elements.micGateMarker.style.left = `${(position * 100).toFixed(1)}%`;
+  elements.micGateMarker.dataset.active = String(!isGateDisabled());
+}
+
+function refreshMicrophoneLevelMeter(db) {
+  if (!elements.micLevelFill || !elements.micLevelValue || !elements.micLevelTrack) return;
+
+  const levelDb = Number.isFinite(db) ? clampGateThresholdDb(db) : GATE_THRESHOLD_MIN_DB;
+  const position = getDbMeterPosition(levelDb);
+  const gateOpen = isGateDisabled() || levelDb >= state.gateThresholdDb;
+  elements.micLevelFill.style.transform = `scaleX(${position.toFixed(3)})`;
+  elements.micLevelFill.dataset.state = gateOpen ? 'open' : 'closed';
+  elements.micLevelValue.textContent = formatLevelDb(levelDb);
+  elements.micLevelTrack.setAttribute('aria-valuenow', String(Math.round(levelDb)));
+  elements.micLevelTrack.setAttribute('aria-valuetext', formatLevelDb(levelDb));
+  refreshGateMarker();
 }
 
 function persistMicrophoneDeviceId(deviceId) {
@@ -1423,7 +1494,7 @@ async function switchNoiseMode() {
 }
 
 function updateGateThresholdFromSlider() {
-  setGateThreshold(elements.gateThresholdSlider.value);
+  setGateThresholdDb(elements.gateThresholdSlider.value);
 
   window.clearTimeout(gateSwitchTimer);
   if (!state.joined || !state.localStream) return;
@@ -1432,7 +1503,7 @@ function updateGateThresholdFromSlider() {
     switchMicrophone({
       failureMessage: 'Не удалось применить гейт',
       refreshDeviceList: false,
-      successMessage: state.gateThreshold > 0 ? `Гейт: ${state.gateThreshold}%` : 'Гейт выключен'
+      successMessage: isGateDisabled() ? 'Гейт выключен' : `Гейт: ${state.gateThresholdDb} dB`
     }).catch((error) => console.error(error));
   }, 280);
 }
@@ -2160,10 +2231,14 @@ function updateMeter(participant) {
     sum += centered * centered;
   }
 
-  const level = Math.min(1, Math.sqrt(sum / participant.meterData.length) / 48);
+  const rms = Math.sqrt(sum / participant.meterData.length);
+  const level = Math.min(1, rms / 48);
+  const levelDb = amplitudeToDb(Math.min(1, rms / 128));
   const visibleLevel = participant.muted ? 0 : level;
+  const visibleLevelDb = participant.muted ? GATE_THRESHOLD_MIN_DB : levelDb;
   participant.node.style.setProperty('--level', visibleLevel.toFixed(3));
   participant.node.dataset.speaking = String(visibleLevel > 0.08);
+  if (participant.isLocal) refreshMicrophoneLevelMeter(visibleLevelDb);
 }
 
 function getCueGain(value) {
@@ -2788,6 +2863,7 @@ function stopLocalStream() {
   state.localStream = null;
   state.localRawStream = null;
   state.micProcessor = null;
+  refreshMicrophoneLevelMeter(GATE_THRESHOLD_MIN_DB);
 }
 
 function stopStream(stream) {

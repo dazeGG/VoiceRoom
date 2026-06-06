@@ -1280,6 +1280,72 @@ button:focus-visible,
   white-space: nowrap;
 }
 
+.mic-level-control {
+  display: grid;
+  gap: 7px;
+}
+
+.mic-level-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 850;
+}
+
+.mic-level-heading output {
+  color: oklch(96% 0.008 92);
+  white-space: nowrap;
+}
+
+.mic-level-track {
+  position: relative;
+  height: 14px;
+  overflow: hidden;
+  border: 1px solid oklch(35% 0.02 92 / 0.86);
+  border-radius: 999px;
+  background:
+    repeating-linear-gradient(
+      90deg,
+      transparent 0 13px,
+      oklch(7% 0.01 92 / 0.68) 13px 15px
+    ),
+    oklch(14% 0.014 92);
+}
+
+.mic-level-fill {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, oklch(55% 0.13 164), var(--green));
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 80ms linear, background 120ms ease;
+}
+
+.mic-level-fill[data-state="closed"] {
+  background: linear-gradient(90deg, oklch(38% 0.036 92), oklch(48% 0.055 92));
+}
+
+.mic-gate-marker {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 2px;
+  border-radius: 999px;
+  background: oklch(96% 0.008 92);
+  box-shadow: 0 0 0 1px oklch(6% 0.02 92 / 0.72);
+  opacity: 0;
+  transform: translateX(-1px);
+  transition: left 120ms ease, opacity 120ms ease;
+}
+
+.mic-gate-marker[data-active="true"] {
+  opacity: 1;
+}
+
 .sound-button {
   min-height: 48px;
   border: 1px solid var(--control-line);
