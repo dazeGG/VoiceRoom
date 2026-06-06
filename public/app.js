@@ -19,6 +19,7 @@ const PEER_LATENCY_GOOD_MS = 120;
 const PEER_LATENCY_FAIR_MS = 250;
 const PEER_RECONNECT_COOLDOWN_MS = 5000;
 const PEER_RECONNECT_DELAY_MS = 1200;
+const SPEAKING_SIGNAL_RMS_FLOOR = 0.5;
 const NOISE_MODES = {
   browser: {
     label: 'Браузерный',
@@ -982,15 +983,8 @@ async function openElectronScreenShare(profile) {
   }
 
   const source = await selectDesktopCaptureSource();
-  const captureAudio = shouldCaptureElectronDesktopAudio();
   let stream = null;
   let audioCaptureError = null;
-
-  if (!captureAudio) {
-    stream = await openElectronDesktopStream(source.id, profile, { audio: false, audioMode: 'none' });
-    await applyScreenCaptureProfile(stream, profile);
-    return stream;
-  }
 
   try {
     stream = await openElectronDesktopStream(source.id, profile, { audio: true, audioMode: 'loopback' });
@@ -1010,11 +1004,6 @@ async function openElectronScreenShare(profile) {
 
   await applyScreenCaptureProfile(stream, profile);
   return stream;
-}
-
-function shouldCaptureElectronDesktopAudio() {
-  // On macOS loopback can capture the room audio itself, which forces us to mute callers locally.
-  return getElectronPlatform() === 'win32';
 }
 
 async function openElectronDesktopStream(sourceId, profile, options = {}) {
@@ -1112,10 +1101,6 @@ async function openElectronDisplayMediaStream(sourceId, withAudio) {
     audio: withAudio,
     video: true
   });
-}
-
-function getElectronPlatform() {
-  return window.voiceRoomRuntime?.platform || '';
 }
 
 function createElectronDesktopMediaConstraints(sourceId, withAudio) {
@@ -1286,13 +1271,10 @@ async function startScreenShare(profileId = state.localScreenProfileId) {
     state.localScreenStream = stream;
     state.localScreenProfileId = profile.id;
     state.screenStopping = false;
-    setLocalAppAudioSuppressed(hasScreenAudio());
+    setLocalAppAudioSuppressed(false);
     videoTrack.addEventListener('ended', () => {
       stopScreenShare({ fromBrowser: true }).catch((error) => console.error(error));
     });
-    for (const audioTrack of stream.getAudioTracks()) {
-      audioTrack.addEventListener('ended', () => setLocalAppAudioSuppressed(hasScreenAudio()), { once: true });
-    }
 
     updateParticipant({
       id: state.peerId,
@@ -2265,8 +2247,9 @@ function updateMeter(participant) {
   const levelDb = amplitudeToDb(Math.min(1, rms / 128));
   const visibleLevel = participant.muted ? 0 : level;
   const visibleLevelDb = participant.muted ? GATE_THRESHOLD_MIN_DB : levelDb;
+  const hasSignal = !participant.muted && rms > SPEAKING_SIGNAL_RMS_FLOOR;
   participant.node.style.setProperty('--level', visibleLevel.toFixed(3));
-  participant.node.dataset.speaking = String(visibleLevel > 0.08);
+  participant.node.dataset.speaking = String(hasSignal);
   if (participant.isLocal) refreshMicrophoneLevelMeter(visibleLevelDb);
 }
 

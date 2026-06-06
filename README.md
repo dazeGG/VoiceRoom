@@ -253,7 +253,7 @@ VOICE_ROOM_URL=https://voice.example.com
 Готовые файлы появляются в `dist/`. Папка `dist/`, `.env` и `electron/runtime-config.json` не коммитятся.
 Настройки сборки Electron лежат в `electron-builder.config.js`.
 
-В desktop-версии демонстрация экрана использует встроенный выбор окна/экрана через Electron `desktopCapturer` и Chromium desktop capture. Перед стартом захвата приложение приглушает собственное воспроизведение, чтобы его звук не попадал обратно в стрим. Если операционная система не отдает audio track, стрим запускается без звука. На Windows desktop audio обычно доступен штатно; на macOS системный звук зависит от версии macOS и разрешения `NSAudioCaptureUsageDescription` в собранном приложении. На старых macOS может понадобиться виртуальное аудиоустройство вроде BlackHole.
+В desktop-версии демонстрация экрана использует встроенный выбор окна/экрана через Electron `desktopCapturer` и Chromium desktop capture. Приложение пытается захватить экран со звуком и не приглушает воспроизведение комнаты автоматически; если операционная система не отдает audio track, стрим запускается без звука. На Windows desktop audio обычно доступен штатно; на macOS системный звук зависит от версии macOS и разрешения `NSAudioCaptureUsageDescription` в собранном приложении. На старых macOS может понадобиться виртуальное аудиоустройство вроде BlackHole.
 
 ## Безопасность
 
