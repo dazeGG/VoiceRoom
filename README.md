@@ -2,6 +2,215 @@
 
 Простой голосовой чат по ссылке с демонстрацией экрана. Комната живет в URL вида `/r/<room-id>`, сигналинг работает на Node.js без npm-зависимостей, звук и экран идут через WebRTC напрямую между браузерами.
 
+Этот README в первую очередь про самостоятельный деплой на VPS через Docker Compose.
+
+## Что понадобится
+
+- VPS с публичным IPv4.
+- Домен или поддомен, который можно направить на VPS.
+- Ubuntu 24.04 LTS или похожий Linux-дистрибутив.
+- Доступ к серверу по SSH с пользователем, у которого есть `sudo`.
+- Открытые входящие порты для HTTPS и, при необходимости, TURN.
+
+Для комнат до 6-8 человек обычно хватает VPS `1 vCPU / 1 GB RAM`. Если включаете TURN, лучше брать `2 vCPU / 2 GB RAM` и канал от `100 Mbps`, потому что relay-трафик идет через сервер.
+
+## Установка Docker на Ubuntu
+
+Если Docker Engine и Docker Compose plugin уже установлены, проверьте версии и переходите к DNS:
+
+```bash
+docker --version
+docker compose version
+```
+
+На чистой Ubuntu установите Docker из официального apt-репозитория:
+
+```bash
+sudo apt update
+sudo apt install -y ca-certificates curl git openssl
+
+# Если раньше ставили Docker из Ubuntu packages, удалите конфликтующие пакеты.
+sudo apt remove -y docker.io docker-compose docker-compose-v2 docker-doc podman-docker containerd runc || true
+
+sudo install -m 0755 -d /etc/apt/keyrings
+sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+sudo chmod a+r /etc/apt/keyrings/docker.asc
+
+sudo tee /etc/apt/sources.list.d/docker.sources <<EOF
+Types: deb
+URIs: https://download.docker.com/linux/ubuntu
+Suites: $(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}")
+Components: stable
+Architectures: $(dpkg --print-architecture)
+Signed-By: /etc/apt/keyrings/docker.asc
+EOF
+
+sudo apt update
+sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+sudo systemctl enable --now docker
+```
+
+Проверьте установку:
+
+```bash
+sudo docker run hello-world
+docker compose version
+```
+
+Команды деплоя ниже написаны без `sudo`. Чтобы запускать Docker от текущего пользователя, добавьте его в группу `docker`, затем перелогиньтесь или выполните `newgrp docker`:
+
+```bash
+getent group docker || sudo groupadd docker
+sudo usermod -aG docker "$USER"
+newgrp docker
+docker run hello-world
+```
+
+Группа `docker` дает root-level доступ к Docker daemon, так что добавляйте туда только доверенного пользователя.
+
+## DNS и firewall
+
+Создайте `A`-запись домена на публичный IP сервера:
+
+```text
+voice.example.com -> 203.0.113.10
+```
+
+Откройте порты:
+
+- `80/tcp`, `443/tcp` для Caddy и HTTPS.
+- `3478/tcp`, `3478/udp` для TURN/STUN, если включаете профиль `turn`.
+- `49160-49200/udp` для TURN relay-портов, если включаете профиль `turn`.
+
+Если сервер находится за NAT, пробросьте эти же порты на машину с Docker.
+
+## Подготовка проекта
+
+Склонируйте репозиторий на сервер. Если на сервере уже настроен SSH-ключ для GitHub, используйте SSH:
+
+```bash
+git clone git@github.com:dazeGG/VoiceRoom.git
+cd VoiceRoom
+```
+
+Для публичного read-only клонирования без SSH-ключа можно использовать HTTPS:
+
+```bash
+git clone https://github.com/dazeGG/VoiceRoom.git
+cd VoiceRoom
+```
+
+Создайте `.env`:
+
+```bash
+cp .env.example .env
+```
+
+Откройте `.env` и укажите домен:
+
+```dotenv
+DOMAIN=voice.example.com
+PUBLIC_HOSTNAME=voice.example.com
+
+MAX_ROOM_PEERS=12
+MAX_ROOMS=100
+STUN_URLS=stun:stun.l.google.com:19302
+TURN_PORT=3478
+TURN_TTL_SECONDS=900
+TURN_MIN_PORT=49160
+TURN_MAX_PORT=49200
+ROOM_CREATE_RATE_LIMIT=20
+ROOM_CREATE_RATE_WINDOW_MS=60000
+```
+
+Если планируете запускать TURN, заранее сгенерируйте secret и добавьте его в `.env`:
+
+```bash
+openssl rand -hex 32
+```
+
+```dotenv
+TURN_SECRET=paste-generated-secret-here
+```
+
+Если TURN не нужен, оставьте `TURN_SECRET` пустым.
+
+## Деплой без TURN
+
+Этот режим проще и часто работает для пользователей без строгого NAT.
+
+```bash
+docker compose up -d --build
+```
+
+Caddy автоматически выпустит TLS-сертификат для `DOMAIN` и проксирует приложение на Node.js контейнер.
+
+Проверьте:
+
+```bash
+docker compose ps
+curl -s https://voice.example.com/healthz
+```
+
+## Деплой с TURN
+
+TURN нужен, когда участники находятся за строгим NAT или корпоративными сетями и прямой WebRTC path не собирается.
+
+```bash
+docker compose --profile turn up -d --build
+```
+
+Проверьте контейнеры и логи:
+
+```bash
+docker compose --profile turn ps
+docker compose --profile turn logs -f voicechat caddy coturn
+```
+
+При включенном `TURN_SECRET` приложение выдает браузерам короткоживущие TURN credentials только после подключения peer-сессии к комнате.
+
+## Проверка после деплоя
+
+1. Откройте `https://voice.example.com`.
+2. Сохраните имя.
+3. Создайте комнату.
+4. Скопируйте ссылку комнаты и откройте ее во втором браузере или на другом устройстве.
+5. Проверьте микрофон, mute/unmute и демонстрацию экрана.
+
+Для совместного просмотра видео надежнее выбирать вкладку браузера и включать звук вкладки в системном диалоге шаринга. При выборе всего экрана или отдельного окна audio track может не появиться, это зависит от браузера и операционной системы.
+
+## Обновление
+
+Без TURN:
+
+```bash
+git pull
+docker compose up -d --build
+```
+
+С TURN:
+
+```bash
+git pull
+docker compose --profile turn up -d --build
+```
+
+## Переменные окружения
+
+- `PORT` - порт Node.js приложения внутри контейнера, по умолчанию `3000`.
+- `DOMAIN` - домен, на который Caddy выпускает TLS-сертификат.
+- `PUBLIC_HOSTNAME` - публичное имя сервера для TURN credentials, обычно совпадает с `DOMAIN`.
+- `STUN_URLS` - список STUN URL через запятую.
+- `TURN_SECRET` - shared secret для coturn REST credentials.
+- `TURN_HOST` - публичный host TURN-сервера, по умолчанию `PUBLIC_HOSTNAME` или `DOMAIN`.
+- `TURN_PORT` - порт TURN, по умолчанию `3478`.
+- `TURN_TTL_SECONDS` - срок жизни временных TURN credentials, по умолчанию `900`.
+- `TURN_MIN_PORT`, `TURN_MAX_PORT` - UDP relay range для coturn.
+- `MAX_ROOM_PEERS` - лимит участников комнаты, по умолчанию `12` в compose.
+- `MAX_ROOMS` - общий лимит активных комнат в памяти, по умолчанию `100`.
+- `ROOM_CREATE_RATE_LIMIT` - лимит создания комнат на IP за окно, по умолчанию `20`.
+- `ROOM_CREATE_RATE_WINDOW_MS` - окно лимита создания комнат, по умолчанию `60000`.
+
 ## Локальный запуск
 
 ```bash
@@ -10,83 +219,17 @@ npm start
 
 Откройте `http://localhost:3000`. Для доступа к микрофону и демонстрации экрана на сервере нужен HTTPS; `localhost` браузеры считают безопасным контекстом.
 
-## Демонстрация экрана
+Проверка синтаксиса:
 
-В комнате нажмите кнопку экрана в нижнем dock и выберите профиль качества: `Приемлемый` для обычного показа, `Высокий` для совместного просмотра или `Минимальный` для слабой сети. Приложение запрашивает демонстрацию экрана с выбранными video constraints и показывает остальным статус демонстрации; сами screen tracks отправляются только тем участникам, которые нажали `Смотреть экран`.
-
-Для совместного просмотра видео надежнее выбирать вкладку браузера и включать звук вкладки в системном диалоге шаринга. При выборе всего экрана или отдельного окна audio track может не появиться - это зависит от браузера и операционной системы.
+```bash
+npm run check
+```
 
 ## Безопасность
 
 Комната доступна всем, у кого есть ссылка или код комнаты. Сигналинг проверяет короткоживущую peer-сессию для отправки WebRTC-сигналов, обновления статуса и выдачи TURN credentials, но это не заменяет аккаунты, пароль или отдельную авторизацию комнаты.
 
-## Быстрый деплой через Docker Compose
-
-1. Скопируйте env:
-
-```bash
-cp .env.example .env
-```
-
-2. Укажите домен в `.env`:
-
-```bash
-DOMAIN=voice.example.com
-PUBLIC_HOSTNAME=voice.example.com
-TURN_SECRET=<openssl rand -hex 32>
-```
-
-3. Запустите приложение с HTTPS:
-
-```bash
-docker compose up -d --build
-```
-
-4. Для более надежной связи через строгие NAT включите TURN:
-
-```bash
-docker compose --profile turn up -d --build
-```
-
-## DNS и firewall
-
-DNS `A`-запись домена должна смотреть на публичный IP сервера.
-
-Откройте порты:
-
-- `80/tcp`, `443/tcp` для Caddy и HTTPS.
-- `3478/tcp`, `3478/udp` для TURN/STUN, если включен профиль `turn`.
-- `49160-49200/udp` для TURN relay-портов, если включен профиль `turn`.
-
-Если сервер находится за NAT, пробросьте эти же порты на машину с Docker.
-
-## Рекомендуемый сервер
-
-Для комнат до 6-8 человек обычно хватает VPS `1 vCPU / 1 GB RAM`. С TURN лучше брать `2 vCPU / 2 GB RAM` и смотреть на сетевой трафик: relay-аудио потребляет исходящую полосу сервера. Для небольших приватных комнат комфортный минимум - канал от `100 Mbps`, Ubuntu 24.04 LTS, Docker Engine и Docker Compose plugin.
-
 Топология WebRTC mesh хорошо подходит для малых комнат. Для десятков участников нужен SFU-сервер, например LiveKit, Janus или mediasoup.
-
-## Переменные окружения
-
-- `PORT` - порт Node.js приложения, по умолчанию `3000`.
-- `DOMAIN` - домен, на который Caddy выпускает TLS-сертификат.
-- `PUBLIC_HOSTNAME` - публичное имя сервера для TURN credentials.
-- `STUN_URLS` - список STUN URL через запятую.
-- `TURN_SECRET` - shared secret для coturn REST credentials.
-- `TURN_PORT` - порт TURN, по умолчанию `3478`.
-- `TURN_TTL_SECONDS` - срок жизни временных TURN credentials, по умолчанию `900`.
-- `TURN_MIN_PORT`, `TURN_MAX_PORT` - UDP relay range для coturn.
-- `MAX_ROOM_PEERS` - лимит участников комнаты, по умолчанию `12`.
-- `MAX_ROOMS` - общий лимит активных комнат в памяти, по умолчанию `100`.
-- `ROOM_CREATE_RATE_LIMIT` - лимит создания комнат на IP за окно, по умолчанию `20`.
-- `ROOM_CREATE_RATE_WINDOW_MS` - окно лимита создания комнат, по умолчанию `60000`.
-
-## Проверка
-
-```bash
-npm run check
-curl -s http://localhost:3000/healthz
-```
 
 ## Лицензия
 
