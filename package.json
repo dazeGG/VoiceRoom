@@ -7,11 +7,14 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
-    "check": "node --check server.js && node --check public/app.js && node --check electron/main.js && node --check electron/preload.js && node --check scripts/clean-dist.js && node --check scripts/create-electron-config.js && node --check electron-builder.config.js",
+    "check": "node --check server.js && node --check public/app.js && node --check electron/main.js && node --check electron/preload.js && node --check scripts/build-electron.js && node --check scripts/clean-dist.js && node --check scripts/create-electron-config.js && node --check electron-builder.config.js",
     "electron": "node scripts/create-electron-config.js && electron .",
-    "build": "node scripts/create-electron-config.js && electron-builder --config electron-builder.config.js --mac --win && node scripts/clean-dist.js",
-    "build:mac": "node scripts/create-electron-config.js && electron-builder --config electron-builder.config.js --mac && node scripts/clean-dist.js",
-    "build:win": "node scripts/create-electron-config.js && electron-builder --config electron-builder.config.js --win && node scripts/clean-dist.js",
+    "build": "node scripts/build-electron.js --mac --win",
+    "build:dev": "node scripts/build-electron.js --dev --mac --win",
+    "build:mac": "node scripts/build-electron.js --mac",
+    "build:mac:dev": "node scripts/build-electron.js --dev --mac",
+    "build:win": "node scripts/build-electron.js --win",
+    "build:win:dev": "node scripts/build-electron.js --dev --win",
     "clean:dist": "node scripts/clean-dist.js"
   },
   "engines": {

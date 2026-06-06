@@ -243,12 +243,17 @@ VOICE_ROOM_URL=https://voice.example.com
 
 - `npm run electron` - запускает desktop-окно локально без создания релизных файлов.
 - `npm run build` - собирает macOS `.dmg` для `arm64`/`x64` и Windows portable `.exe`.
+- `npm run build:dev` - собирает macOS и Windows в `dist/dev/<git-hash>/` с git hash в названии артефакта.
 - `npm run build:mac` - собирает только macOS `.dmg`.
+- `npm run build:mac:dev` - собирает macOS `.dmg` в `dist/dev/<git-hash>/` с git hash в названии.
 - `npm run build:win` - собирает только Windows portable `.exe`.
+- `npm run build:win:dev` - собирает Windows portable `.exe` в `dist/dev/<git-hash>/` с git hash в названии.
 - `npm run clean:dist` - чистит `dist/`, оставляя только релизные `.dmg`/`.exe`.
 
 Готовые файлы появляются в `dist/`. Папка `dist/`, `.env` и `electron/runtime-config.json` не коммитятся.
 Настройки сборки Electron лежат в `electron-builder.config.js`.
+
+В desktop-версии демонстрация экрана использует встроенный выбор окна/экрана через Electron `desktopCapturer` и Chromium desktop capture. Перед стартом захвата приложение приглушает собственное воспроизведение, чтобы его звук не попадал обратно в стрим. Если операционная система не отдает audio track, стрим запускается без звука. На Windows desktop audio обычно доступен штатно; на macOS системный звук зависит от версии macOS и разрешения `NSAudioCaptureUsageDescription` в собранном приложении. На старых macOS может понадобиться виртуальное аудиоустройство вроде BlackHole.
 
 ## Безопасность
 

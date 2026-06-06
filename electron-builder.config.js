@@ -1,11 +1,16 @@
 'use strict';
 
+const buildHash = (process.env.VOICE_ROOM_BUILD_HASH || '').trim();
+const outputDir = (process.env.VOICE_ROOM_DIST_DIR || 'dist').trim();
+
 module.exports = {
   appId: 'ru.dazinho.voiceroom',
   productName: 'Voice Room',
-  artifactName: '${productName}-${version}-${os}-${arch}.${ext}',
+  artifactName: buildHash
+    ? `\${productName}-\${version}-${buildHash}-\${os}-\${arch}.\${ext}`
+    : '${productName}-${version}-${os}-${arch}.${ext}',
   directories: {
-    output: 'dist'
+    output: outputDir
   },
   files: [
     'electron/main.js',
