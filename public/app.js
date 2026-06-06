@@ -760,12 +760,11 @@ async function openElectronDesktopStream(sourceId, profile, options = {}) {
 
 function createElectronDesktopCaptureAttempts(sourceId, withAudio) {
   const attempts = [];
-  const platform = getElectronPlatform();
 
-  if (withAudio && platform === 'win32') {
+  if (navigator.mediaDevices?.getDisplayMedia && window.voiceRoomDesktopCapture?.selectSource) {
     attempts.push({
-      method: 'getDisplayMedia-loopback',
-      open: () => openElectronDisplayMediaStream(sourceId, true)
+      method: withAudio ? 'getDisplayMedia-loopback' : 'getDisplayMedia-video',
+      open: () => openElectronDisplayMediaStream(sourceId, withAudio)
     });
   }
 
@@ -773,13 +772,6 @@ function createElectronDesktopCaptureAttempts(sourceId, withAudio) {
     attempts.push({
       method: withAudio ? 'getUserMedia-desktop-audio' : 'getUserMedia-desktop-video',
       open: () => navigator.mediaDevices.getUserMedia(createElectronDesktopMediaConstraints(sourceId, withAudio))
-    });
-  }
-
-  if (!withAudio && navigator.mediaDevices?.getDisplayMedia) {
-    attempts.push({
-      method: 'getDisplayMedia-video',
-      open: () => openElectronDisplayMediaStream(sourceId, false)
     });
   }
 
@@ -800,10 +792,6 @@ async function openElectronDisplayMediaStream(sourceId, withAudio) {
     audio: withAudio,
     video: true
   });
-}
-
-function getElectronPlatform() {
-  return window.voiceRoomRuntime?.platform || '';
 }
 
 function createElectronDesktopMediaConstraints(sourceId, withAudio) {

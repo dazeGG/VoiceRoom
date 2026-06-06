@@ -193,13 +193,11 @@ function configurePermissions() {
       }
 
       try {
-        const canCaptureLoopbackAudio = process.platform === 'win32'
-          && request.audioRequested
+        const canCaptureLoopbackAudio = request.audioRequested
           && pending.audioMode !== 'none';
-        callback({
-          audio: canCaptureLoopbackAudio ? 'loopback' : undefined,
-          video: pending.source
-        });
+        const response = { video: pending.source };
+        if (canCaptureLoopbackAudio) response.audio = 'loopback';
+        callback(response);
       } catch (error) {
         console.error('Display media request failed:', error);
         callback({});
