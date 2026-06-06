@@ -291,6 +291,7 @@ function getRoom(roomId) {
 
 function publicPeer(peer) {
   return {
+    deafened: peer.deafened,
     id: peer.id,
     joinedAt: peer.joinedAt,
     muted: peer.muted,
@@ -492,6 +493,7 @@ async function handleEvents(req, res, url) {
 
   const peer = {
     closed: false,
+    deafened: false,
     id: peerId,
     joinedAt: Date.now(),
     muted: false,
@@ -685,6 +687,9 @@ async function handleState(req, res) {
   }
   if (Object.hasOwn(body, 'muted')) {
     peer.muted = Boolean(body.muted);
+  }
+  if (Object.hasOwn(body, 'deafened')) {
+    peer.deafened = Boolean(body.deafened);
   }
   if (Object.hasOwn(body, 'screen')) {
     peer.screen = Boolean(body.screen);

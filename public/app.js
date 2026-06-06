@@ -89,7 +89,6 @@ const elements = {
   micGateMarker: $('#micGateMarker'),
   micLevelFill: $('#micLevelFill'),
   micLevelTrack: $('#micLevelTrack'),
-  micLevelValue: $('#micLevelValue'),
   muteButton: $('#muteButton'),
   muteText: $('#muteText'),
   noiseModeSelect: $('#noiseModeSelect'),
@@ -145,6 +144,7 @@ const state = {
   localStream: null,
   localAppAudioSuppressed: false,
   microphoneDeviceId: localStorage.getItem(MICROPHONE_DEVICE_STORAGE_KEY) || '',
+  micMutedBeforeOutputMute: false,
   micProcessor: null,
   muted: false,
   noiseMode: getStoredNoiseMode(),
@@ -342,10 +342,6 @@ function getDbMeterPosition(db) {
   return (clampedDb - GATE_THRESHOLD_MIN_DB) / (GATE_THRESHOLD_MAX_DB - GATE_THRESHOLD_MIN_DB);
 }
 
-function formatLevelDb(db) {
-  return db <= GATE_THRESHOLD_MIN_DB ? '-∞ dB' : `${Math.round(db)} dB`;
-}
-
 function refreshGateMarker() {
   if (!elements.micGateMarker) return;
 
@@ -355,16 +351,14 @@ function refreshGateMarker() {
 }
 
 function refreshMicrophoneLevelMeter(db) {
-  if (!elements.micLevelFill || !elements.micLevelValue || !elements.micLevelTrack) return;
+  if (!elements.micLevelFill || !elements.micLevelTrack) return;
 
   const levelDb = Number.isFinite(db) ? clampGateThresholdDb(db) : GATE_THRESHOLD_MIN_DB;
   const position = getDbMeterPosition(levelDb);
   const gateOpen = isGateDisabled() || levelDb >= state.gateThresholdDb;
   elements.micLevelFill.style.transform = `scaleX(${position.toFixed(3)})`;
   elements.micLevelFill.dataset.state = gateOpen ? 'open' : 'closed';
-  elements.micLevelValue.textContent = formatLevelDb(levelDb);
   elements.micLevelTrack.setAttribute('aria-valuenow', String(Math.round(levelDb)));
-  elements.micLevelTrack.setAttribute('aria-valuetext', formatLevelDb(levelDb));
   refreshGateMarker();
 }
 
@@ -605,15 +599,21 @@ async function joinRoom(event) {
       return;
     }
 
+    if (state.outputMuted) {
+      state.micMutedBeforeOutputMute = state.muted;
+      state.muted = true;
+    }
+
     setLocalMicrophoneCapture(await openLocalMicrophone());
     await refreshDevices();
 
     const name = getDisplayName();
     state.self = createParticipant({
       id: state.peerId,
+      deafened: state.outputMuted,
       isLocal: true,
       joinedAt: Date.now(),
-      muted: false,
+      muted: state.muted,
       name
     });
     attachMeter(state.self, state.localStream);
@@ -631,6 +631,7 @@ async function joinRoom(event) {
     };
 
     state.joined = true;
+    if (state.muted || state.outputMuted) postState().catch(() => {});
     refreshCallControls();
     refreshScreenControls();
     startMeters();
@@ -1533,10 +1534,32 @@ async function switchOutputDevice() {
 }
 
 function toggleOutputMute() {
-  state.outputMuted = !state.outputMuted;
+  const nextOutputMuted = !state.outputMuted;
+  if (nextOutputMuted) {
+    state.micMutedBeforeOutputMute = state.muted;
+  }
+
+  playOutputCue(nextOutputMuted);
+  state.outputMuted = nextOutputMuted;
   persistOutputMuted();
+
+  if (state.localStream) {
+    if (state.outputMuted) {
+      setMicrophoneMuted(true, { playCue: false, post: false });
+    } else if (!state.micMutedBeforeOutputMute) {
+      setMicrophoneMuted(false, { playCue: false, post: false });
+    }
+  }
+
   refreshOutputControls();
   syncPlaybackMuteState();
+  updateParticipant({
+    deafened: state.outputMuted,
+    id: state.peerId,
+    muted: state.muted,
+    name: getDisplayName()
+  });
+  postState().catch(() => {});
   if (!state.outputMuted) unlockAudio().catch(() => {});
 }
 
@@ -1707,14 +1730,17 @@ function createParticipant(peerInfo) {
   avatar.textContent = getInitials(peerInfo.name);
   nameLabel.textContent = peerInfo.isLocal ? `${peerInfo.name} · вы` : peerInfo.name;
   setParticipantStatus({ status }, peerInfo.isLocal ? '' : 'подключение');
+  node.dataset.deafened = String(Boolean(peerInfo.deafened));
   node.dataset.muted = String(Boolean(peerInfo.muted));
   node.dataset.screen = String(Boolean(peerInfo.screen));
+  applyParticipantPalette(node, peerInfo);
 
   elements.participants.append(node);
 
   const participant = {
     analyser: null,
     audioElements: new Map(),
+    deafened: Boolean(peerInfo.deafened),
     id: peerInfo.id,
     isLocal: Boolean(peerInfo.isLocal),
     localScreenSenders: [],
@@ -1762,12 +1788,15 @@ function updateParticipant(peerInfo) {
   const hadScreen = participant.screen;
   const hasScreenUpdate = Object.hasOwn(peerInfo, 'screen');
   if (Object.hasOwn(peerInfo, 'name')) participant.name = peerInfo.name || participant.name;
+  if (Object.hasOwn(peerInfo, 'deafened')) participant.deafened = Boolean(peerInfo.deafened);
   if (Object.hasOwn(peerInfo, 'muted')) participant.muted = Boolean(peerInfo.muted);
   if (hasScreenUpdate) participant.screen = Boolean(peerInfo.screen);
   if (Object.hasOwn(peerInfo, 'screenAudio')) participant.screenAudio = Boolean(peerInfo.screenAudio);
   if (Object.hasOwn(peerInfo, 'screenStreamId')) participant.screenStreamId = peerInfo.screenStreamId || '';
+  participant.node.dataset.deafened = String(participant.deafened);
   participant.node.dataset.muted = String(participant.muted);
   participant.node.dataset.screen = String(participant.screen);
+  applyParticipantPalette(participant.node, participant);
   participant.node.querySelector('.avatar').textContent = getInitials(participant.name);
   participant.node.querySelector('.participant-name').textContent = participant.isLocal ? `${participant.name} · вы` : participant.name;
   if (hasScreenUpdate && !participant.isLocal && hadScreen !== participant.screen) {
@@ -1952,7 +1981,7 @@ function removeLocalScreenTracks(peer) {
 }
 
 async function handleSignal(from, signalType, payload) {
-  const peer = state.peers.get(from) || createParticipant({ id: from, muted: false, name: 'Гость' });
+  const peer = state.peers.get(from) || createParticipant({ deafened: false, id: from, muted: false, name: 'Гость' });
   const pc = ensurePeerConnection(peer);
 
   if (signalType === 'screen-subscribe') {
@@ -2320,6 +2349,45 @@ function playMicCue(muted) {
   }
 }
 
+function playOutputCue(muted) {
+  if (isLocalAppAudioSuppressed()) return;
+
+  try {
+    const context = getSharedAudioContext();
+    if (context.state !== 'running') {
+      elements.soundButton.hidden = false;
+      return;
+    }
+
+    const now = context.currentTime;
+    const frequencies = muted ? [660, 360] : [360, 660];
+
+    frequencies.forEach((frequency, index) => {
+      const startedAt = now + index * 0.085;
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+
+      oscillator.type = 'sine';
+      oscillator.frequency.setValueAtTime(frequency, startedAt);
+
+      gain.gain.setValueAtTime(0.0001, startedAt);
+      gain.gain.exponentialRampToValueAtTime(getCueGain(0.034), startedAt + 0.014);
+      gain.gain.exponentialRampToValueAtTime(0.0001, startedAt + 0.11);
+
+      oscillator.connect(gain);
+      gain.connect(context.destination);
+      oscillator.start(startedAt);
+      oscillator.stop(startedAt + 0.12);
+      oscillator.addEventListener('ended', () => {
+        oscillator.disconnect();
+        gain.disconnect();
+      });
+    });
+  } catch (error) {
+    console.warn('Output sound unavailable', error);
+  }
+}
+
 function playStreamCue(type) {
   if (isAppPlaybackMuted()) return;
 
@@ -2380,6 +2448,7 @@ async function sendSignal(to, signalType, payload) {
 async function postState() {
   if (!state.joined) return;
   await postJson('/state', {
+    deafened: state.outputMuted,
     muted: state.muted,
     name: getDisplayName(),
     peerId: state.peerId,
@@ -2449,20 +2518,37 @@ async function postJson(url, body) {
   return response.json();
 }
 
-function toggleMute() {
+function setMicrophoneMuted(muted, options = {}) {
+  const {
+    playCue = true,
+    post = true
+  } = options;
   if (!state.localStream) return;
-  state.muted = !state.muted;
+  const nextMuted = Boolean(muted);
+  if (state.muted === nextMuted) return;
+
+  state.muted = nextMuted;
   setMicrophoneCaptureEnabled(getLocalMicrophoneCapture(), !state.muted);
 
-  playMicCue(state.muted);
+  if (playCue) playMicCue(state.muted);
   elements.muteButton.setAttribute('aria-pressed', String(state.muted));
   refreshCallControls();
   updateParticipant({
+    deafened: state.outputMuted,
     id: state.peerId,
     muted: state.muted,
     name: getDisplayName()
   });
-  postState().catch(() => {});
+  if (post) postState().catch(() => {});
+}
+
+function toggleMute() {
+  if (state.outputMuted && state.muted) {
+    showToast('Сначала включите звук');
+    return;
+  }
+
+  setMicrophoneMuted(!state.muted);
 }
 
 async function handleMicButtonClick(event) {
@@ -3103,6 +3189,21 @@ function getInitials(name) {
     .map((word) => word[0])
     .join('')
     .toUpperCase();
+}
+
+function applyParticipantPalette(node, peerInfo) {
+  const seed = `${peerInfo.id || ''}:${peerInfo.name || ''}`;
+  const hue = hashStringToHue(seed);
+  node.style.setProperty('--participant-pastel', `oklch(84% 0.075 ${hue})`);
+}
+
+function hashStringToHue(value) {
+  let hash = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    hash = Math.imul(31, hash) + value.charCodeAt(index);
+  }
+
+  return ((hash % 360) + 360) % 360;
 }
 
 function setStatus(stateName, label) {

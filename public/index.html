@@ -195,20 +195,16 @@
                 <label class="field">
                   <span>Гейт</span>
                   <div class="gate-control">
-                    <input id="gateThresholdSlider" type="range" min="-100" max="0" step="1" value="-100" aria-label="Порог гейта в децибелах">
+                    <div class="gate-meter-wrap">
+                      <div class="mic-level-track" id="micLevelTrack" role="meter" aria-label="Уровень микрофона" aria-valuemin="-100" aria-valuemax="0" aria-valuenow="-100">
+                        <span class="mic-level-fill" id="micLevelFill"></span>
+                        <span class="mic-gate-marker" id="micGateMarker"></span>
+                      </div>
+                      <input id="gateThresholdSlider" type="range" min="-100" max="0" step="1" value="-100" aria-label="Порог гейта в децибелах">
+                    </div>
                     <output id="gateThresholdValue" for="gateThresholdSlider">Выкл</output>
                   </div>
                 </label>
-                <div class="mic-level-control">
-                  <div class="mic-level-heading">
-                    <span>Уровень микрофона</span>
-                    <output id="micLevelValue">-∞ dB</output>
-                  </div>
-                  <div class="mic-level-track" id="micLevelTrack" role="meter" aria-label="Уровень микрофона" aria-valuemin="-100" aria-valuemax="0" aria-valuenow="-100">
-                    <span class="mic-level-fill" id="micLevelFill"></span>
-                    <span class="mic-gate-marker" id="micGateMarker"></span>
-                  </div>
-                </div>
               </div>
             </div>
 
@@ -363,6 +359,14 @@
                 <path d="M19 10a7 7 0 0 1 -.11 1.23"></path>
                 <path d="M8 21h8"></path>
                 <path d="M12 17v4"></path>
+              </svg>
+            </span>
+            <span class="participant-deafened-icon" aria-label="Звук выключен" title="Звук выключен">
+              <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                <path d="M3 3l18 18"></path>
+                <path d="M3 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1 -.36 1.14"></path>
+                <path d="M4.2 9.4a9 9 0 0 1 15.8 5.9v3.7a2 2 0 0 1 -.59 1.41"></path>
+                <path d="M15.4 14.4a2 2 0 0 1 1.6 -.4h3"></path>
               </svg>
             </span>
           </h2>
