@@ -19,7 +19,9 @@ const PEER_LATENCY_GOOD_MS = 120;
 const PEER_LATENCY_FAIR_MS = 250;
 const PEER_RECONNECT_COOLDOWN_MS = 5000;
 const PEER_RECONNECT_DELAY_MS = 1200;
-const SPEAKING_SIGNAL_RMS_FLOOR = 0.5;
+const SPEAKING_STATS_INTERVAL_MS = 200;
+const SPEAKING_SIGNAL_POWER_FLOOR = 0.00000001;
+const SPEAKING_SIGNAL_HOLD_MS = 450;
 const NOISE_MODES = {
   browser: {
     label: 'Браузерный',
@@ -172,6 +174,7 @@ let toastTimer = null;
 let meterFrame = 0;
 let gateSwitchTimer = 0;
 let peerLatencyTimer = 0;
+let speakingStatsTimer = 0;
 let rnnoiseModulePromise = null;
 const watchedRemoteScreenTracks = new WeakSet();
 
@@ -637,6 +640,7 @@ async function joinRoom(event) {
     refreshScreenControls();
     startMeters();
     startPeerLatencyStats();
+    startSpeakingStats();
     playPeerCue('join');
   } catch (error) {
     console.error(error);
@@ -1441,12 +1445,15 @@ async function switchMicrophone(options = {}) {
       if (sender && nextTrack) {
         await sender.replaceTrack(nextTrack);
         peer.micSender = sender;
+        resetAudioActivityStats(peer.outgoingVoiceStats);
+        peer.outgoingVoiceActive = false;
       }
     }
 
     setLocalMicrophoneCapture(nextCapture);
     stopMicrophoneCapture(previousCapture);
     attachMeter(state.self, state.localStream);
+    setParticipantSpeaking(state.self, false);
     if (refreshDeviceList) await refreshDevices();
     showToast(typeof successMessage === 'function' ? successMessage(nextCapture) : successMessage);
     return true;
@@ -1724,6 +1731,8 @@ function createParticipant(peerInfo) {
     audioElements: new Map(),
     deafened: Boolean(peerInfo.deafened),
     id: peerInfo.id,
+    incomingVoiceActive: false,
+    incomingVoiceStats: createAudioActivityStats(),
     isLocal: Boolean(peerInfo.isLocal),
     localScreenSenders: [],
     lastReconnectAt: 0,
@@ -1735,6 +1744,8 @@ function createParticipant(peerInfo) {
     needsRenegotiate: false,
     network,
     node,
+    outgoingVoiceActive: false,
+    outgoingVoiceStats: createAudioActivityStats(),
     pendingCandidates: [],
     pingMs: null,
     pingNode,
@@ -1743,6 +1754,7 @@ function createParticipant(peerInfo) {
     reconnectButton,
     reconnecting: false,
     reconnectTimer: 0,
+    micReceiver: null,
     screen: Boolean(peerInfo.screen),
     screenAction,
     screenAudio: Boolean(peerInfo.screenAudio),
@@ -1781,6 +1793,13 @@ function updateParticipant(peerInfo) {
   applyParticipantPalette(participant.node, participant);
   participant.node.querySelector('.avatar').textContent = getInitials(participant.name);
   participant.node.querySelector('.participant-name').textContent = participant.isLocal ? `${participant.name} · вы` : participant.name;
+  if (Object.hasOwn(peerInfo, 'muted') && participant.muted) {
+    resetAudioActivityStats(participant.incomingVoiceStats);
+    resetAudioActivityStats(participant.outgoingVoiceStats);
+    participant.incomingVoiceActive = false;
+    participant.outgoingVoiceActive = false;
+    setParticipantSpeaking(participant, false);
+  }
   if (hasScreenUpdate && !participant.isLocal && hadScreen !== participant.screen) {
     playStreamCue(participant.screen ? 'start' : 'stop');
   }
@@ -1810,6 +1829,7 @@ function removePeer(peerId) {
   }
   peer.node.remove();
   state.peers.delete(peerId);
+  if (state.peers.size === 0) setParticipantSpeaking(state.self, false);
 }
 
 async function callPeer(peerId) {
@@ -1824,6 +1844,12 @@ function ensurePeerConnection(peer) {
 
   const pc = new RTCPeerConnection(state.iceConfig);
   peer.pc = pc;
+  peer.incomingVoiceActive = false;
+  peer.outgoingVoiceActive = false;
+  peer.micReceiver = null;
+  resetAudioActivityStats(peer.incomingVoiceStats);
+  resetAudioActivityStats(peer.outgoingVoiceStats);
+  setParticipantSpeaking(peer, false);
 
   for (const track of state.localStream.getTracks()) {
     const sender = pc.addTrack(track, state.localStream);
@@ -1840,7 +1866,7 @@ function ensurePeerConnection(peer) {
 
   pc.addEventListener('track', (event) => {
     const [stream] = event.streams;
-    attachRemoteTrack(peer, event.track, stream);
+    attachRemoteTrack(peer, event.track, stream, event.receiver);
   });
 
   pc.addEventListener('connectionstatechange', () => handlePeerConnectionStateChange(peer));
@@ -2033,7 +2059,7 @@ async function flushCandidates(peer) {
   }
 }
 
-function attachRemoteTrack(peer, track, stream) {
+function attachRemoteTrack(peer, track, stream, receiver = null) {
   const mediaStream = stream || new MediaStream([track]);
   const isScreenStream = isRemoteScreenTrack(peer, track, mediaStream);
 
@@ -2044,8 +2070,19 @@ function attachRemoteTrack(peer, track, stream) {
 
   if (track.kind === 'audio') {
     peer.stream = mediaStream;
+    peer.micReceiver = receiver;
     attachRemoteAudioTrack(peer, track);
     if (!peer.analyser) attachMeter(peer, new MediaStream([track]));
+    track.addEventListener(
+      'ended',
+      () => {
+        if (peer.micReceiver === receiver) peer.micReceiver = null;
+        resetAudioActivityStats(peer.incomingVoiceStats);
+        peer.incomingVoiceActive = false;
+        setParticipantSpeaking(peer, false);
+      },
+      { once: true }
+    );
     updatePeerStatus(peer);
   }
 }
@@ -2193,6 +2230,179 @@ function stopPeerLatencyStats() {
   peerLatencyTimer = 0;
 }
 
+function startSpeakingStats() {
+  if (speakingStatsTimer) return;
+
+  const tick = () => {
+    updateSpeakingStats().catch((error) => console.warn('Speaking stats unavailable', error));
+  };
+  speakingStatsTimer = window.setInterval(tick, SPEAKING_STATS_INTERVAL_MS);
+  tick();
+}
+
+function stopSpeakingStats() {
+  if (speakingStatsTimer) window.clearInterval(speakingStatsTimer);
+  speakingStatsTimer = 0;
+  setParticipantSpeaking(state.self, false);
+  for (const peer of state.peers.values()) {
+    resetAudioActivityStats(peer.incomingVoiceStats);
+    resetAudioActivityStats(peer.outgoingVoiceStats);
+    peer.incomingVoiceActive = false;
+    peer.outgoingVoiceActive = false;
+    setParticipantSpeaking(peer, false);
+  }
+}
+
+async function updateSpeakingStats() {
+  if (!state.joined) return;
+
+  const peers = [...state.peers.values()];
+  await Promise.allSettled(peers.map((peer) => updatePeerVoiceActivity(peer)));
+
+  setParticipantSpeaking(state.self, !state.muted && peers.some((peer) => peer.outgoingVoiceActive));
+  for (const peer of peers) {
+    setParticipantSpeaking(peer, !peer.muted && peer.incomingVoiceActive);
+  }
+}
+
+async function updatePeerVoiceActivity(peer) {
+  const [outgoing, incoming] = await Promise.allSettled([
+    readOutgoingVoiceActivity(peer),
+    readIncomingVoiceActivity(peer)
+  ]);
+
+  peer.outgoingVoiceActive = outgoing.status === 'fulfilled' && outgoing.value;
+  peer.incomingVoiceActive = incoming.status === 'fulfilled' && incoming.value;
+}
+
+async function readOutgoingVoiceActivity(peer) {
+  const track = peer.micSender?.track;
+  if (state.muted || !isPeerConnectionStatsUsable(peer) || !isLiveEnabledTrack(track)) {
+    resetAudioActivityStats(peer.outgoingVoiceStats);
+    return false;
+  }
+
+  return readAudioActivityStats(peer.micSender, peer.outgoingVoiceStats);
+}
+
+async function readIncomingVoiceActivity(peer) {
+  const receiver = peer.micReceiver || findVoiceReceiver(peer);
+  const track = receiver?.track;
+  if (peer.muted || !isPeerConnectionStatsUsable(peer) || !isLiveEnabledTrack(track)) {
+    resetAudioActivityStats(peer.incomingVoiceStats);
+    return false;
+  }
+
+  peer.micReceiver = receiver;
+  return readAudioActivityStats(receiver, peer.incomingVoiceStats);
+}
+
+function findVoiceReceiver(peer) {
+  if (!peer.pc || !peer.stream) return null;
+
+  const voiceTracks = new Set(peer.stream.getAudioTracks().filter((track) => track.readyState !== 'ended'));
+  return peer.pc.getReceivers().find((receiver) => voiceTracks.has(receiver.track)) || null;
+}
+
+function isPeerConnectionStatsUsable(peer) {
+  if (!peer?.pc) return false;
+
+  return peer.pc.connectionState === 'connected'
+    || peer.pc.iceConnectionState === 'connected'
+    || peer.pc.iceConnectionState === 'completed';
+}
+
+function isLiveEnabledTrack(track) {
+  return Boolean(track && track.kind === 'audio' && track.readyState !== 'ended' && track.enabled);
+}
+
+async function readAudioActivityStats(source, activityStats) {
+  if (!source?.getStats) {
+    resetAudioActivityStats(activityStats);
+    return false;
+  }
+
+  const stats = await source.getStats();
+  return getAudioActivityFromStats(stats, activityStats);
+}
+
+function createAudioActivityStats() {
+  return {
+    activeUntil: 0,
+    reports: new Map()
+  };
+}
+
+function resetAudioActivityStats(activityStats) {
+  if (!activityStats) return;
+  activityStats.activeUntil = 0;
+  activityStats.reports.clear();
+}
+
+function getAudioActivityFromStats(stats, activityStats) {
+  const now = performance.now();
+  let activeNow = false;
+  let sawAudioReport = false;
+  const currentReports = new Set();
+
+  stats.forEach((report) => {
+    if (!isAudioActivityReport(report)) return;
+    sawAudioReport = true;
+
+    if (typeof report.audioLevel === 'number' && report.audioLevel > 0) {
+      activeNow = true;
+    }
+
+    if (typeof report.totalAudioEnergy !== 'number' || typeof report.totalSamplesDuration !== 'number') {
+      return;
+    }
+
+    const reportId = report.id || `${report.type}:${currentReports.size}`;
+    currentReports.add(reportId);
+    const previous = activityStats.reports.get(reportId);
+    if (
+      previous
+      && report.totalAudioEnergy >= previous.energy
+      && report.totalSamplesDuration > previous.duration
+    ) {
+      const energyDelta = report.totalAudioEnergy - previous.energy;
+      const durationDelta = report.totalSamplesDuration - previous.duration;
+      if (energyDelta > 0 && energyDelta / durationDelta > SPEAKING_SIGNAL_POWER_FLOOR) {
+        activeNow = true;
+      }
+    }
+
+    activityStats.reports.set(reportId, {
+      duration: report.totalSamplesDuration,
+      energy: report.totalAudioEnergy
+    });
+  });
+
+  for (const reportId of activityStats.reports.keys()) {
+    if (!currentReports.has(reportId)) activityStats.reports.delete(reportId);
+  }
+
+  if (!sawAudioReport) {
+    resetAudioActivityStats(activityStats);
+    return false;
+  }
+
+  if (activeNow) activityStats.activeUntil = now + SPEAKING_SIGNAL_HOLD_MS;
+  return activityStats.activeUntil > now;
+}
+
+function isAudioActivityReport(report) {
+  return report.kind === 'audio'
+    || report.mediaType === 'audio'
+    || typeof report.audioLevel === 'number'
+    || typeof report.totalAudioEnergy === 'number';
+}
+
+function setParticipantSpeaking(participant, speaking) {
+  if (!participant?.node) return;
+  participant.node.dataset.speaking = String(Boolean(speaking));
+}
+
 async function updatePeerLatencyStats() {
   if (!state.joined) return;
 
@@ -2247,9 +2457,7 @@ function updateMeter(participant) {
   const levelDb = amplitudeToDb(Math.min(1, rms / 128));
   const visibleLevel = participant.muted ? 0 : level;
   const visibleLevelDb = participant.muted ? GATE_THRESHOLD_MIN_DB : levelDb;
-  const hasSignal = !participant.muted && rms > SPEAKING_SIGNAL_RMS_FLOOR;
   participant.node.style.setProperty('--level', visibleLevel.toFixed(3));
-  participant.node.dataset.speaking = String(hasSignal);
   if (participant.isLocal) refreshMicrophoneLevelMeter(visibleLevelDb);
 }
 
@@ -2916,6 +3124,7 @@ function leaveRoom() {
   stopLocalScreenStream();
   stopMeters();
   stopPeerLatencyStats();
+  stopSpeakingStats();
 
   state.muted = false;
   refreshCallControls();
