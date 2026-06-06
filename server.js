@@ -16,10 +16,15 @@ const TURN_TTL_SECONDS = readEnvInt('TURN_TTL_SECONDS', 900, 60);
 const ROOM_IDLE_TTL_MS = readEnvInt('ROOM_IDLE_TTL_MS', 900000, 1000);
 const ROOM_CREATE_RATE_LIMIT = readEnvInt('ROOM_CREATE_RATE_LIMIT', 20, 0);
 const ROOM_CREATE_RATE_WINDOW_MS = readEnvInt('ROOM_CREATE_RATE_WINDOW_MS', 60000, 1000);
+const MAX_EMPTY_ROOMS_PER_IP = readEnvInt('MAX_EMPTY_ROOMS_PER_IP', 3, 0);
+const ROOM_CREATE_POW_DIFFICULTY = Math.min(readEnvInt('ROOM_CREATE_POW_DIFFICULTY', 14, 0), 32);
+const ROOM_CREATE_POW_TTL_MS = readEnvInt('ROOM_CREATE_POW_TTL_MS', 120000, 10000);
 const DEFAULT_STUN_URLS = 'stun:stun.l.google.com:19302';
 
 const rooms = new Map();
 const roomCreateRates = new Map();
+const usedPowChallenges = new Map();
+const powSecret = crypto.randomBytes(32);
 
 const mimeTypes = {
   '.css': 'text/css; charset=utf-8',
@@ -117,10 +122,22 @@ function pruneRooms(now = Date.now()) {
   }
 }
 
+function prunePowChallenges(now = Date.now()) {
+  for (const [challengeId, expiresAt] of usedPowChallenges) {
+    if (expiresAt <= now) {
+      usedPowChallenges.delete(challengeId);
+    }
+  }
+}
+
 function getClientIp(req) {
   const forwardedFor = req.headers['x-forwarded-for'];
   const forwardedValue = Array.isArray(forwardedFor) ? forwardedFor[0] : forwardedFor;
-  const forwardedIp = String(forwardedValue || '').split(',')[0].trim();
+  const forwardedIps = String(forwardedValue || '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+  const forwardedIp = forwardedIps.at(-1);
   return forwardedIp || req.socket.remoteAddress || 'unknown';
 }
 
@@ -150,7 +167,99 @@ function checkRoomCreateRate(req, now = Date.now()) {
   };
 }
 
-function createRoom() {
+function signPowPayload(payload, clientIp) {
+  return crypto.createHmac('sha256', powSecret).update(`${clientIp}:${payload}`).digest('base64url');
+}
+
+function createPowChallenge(req, now = Date.now()) {
+  const challengeId = crypto.randomBytes(16).toString('base64url');
+  const payload = `${challengeId}.${now}.${ROOM_CREATE_POW_DIFFICULTY}`;
+  const signature = signPowPayload(payload, getClientIp(req));
+  return `${payload}.${signature}`;
+}
+
+function parsePowChallenge(challenge) {
+  if (typeof challenge !== 'string') return null;
+
+  const parts = challenge.split('.');
+  if (parts.length !== 4) return null;
+
+  const [challengeId, issuedAtValue, difficultyValue, signature] = parts;
+  const issuedAt = Number.parseInt(issuedAtValue, 10);
+  const difficulty = Number.parseInt(difficultyValue, 10);
+  if (!/^[A-Za-z0-9_-]{16,64}$/.test(challengeId)) return null;
+  if (!Number.isFinite(issuedAt) || issuedAt <= 0) return null;
+  if (!Number.isFinite(difficulty) || difficulty < 0 || difficulty > 32) return null;
+  if (!/^[A-Za-z0-9_-]{32,96}$/.test(signature)) return null;
+
+  return { challengeId, difficulty, issuedAt, signature };
+}
+
+function normalizePowNonce(value) {
+  if (Number.isSafeInteger(value) && value >= 0) return String(value);
+  if (typeof value === 'string' && /^(0|[1-9]\d{0,15})$/.test(value)) return value;
+  return '';
+}
+
+function hasLeadingZeroBits(buffer, bits) {
+  const fullBytes = Math.floor(bits / 8);
+  const remainingBits = bits % 8;
+
+  for (let index = 0; index < fullBytes; index += 1) {
+    if (buffer[index] !== 0) return false;
+  }
+
+  if (remainingBits === 0) return true;
+  const mask = 0xff << (8 - remainingBits);
+  return (buffer[fullBytes] & mask) === 0;
+}
+
+function verifyRoomCreateProof(req, proof, now = Date.now()) {
+  if (ROOM_CREATE_POW_DIFFICULTY <= 0) return { ok: true };
+  prunePowChallenges(now);
+
+  const challenge = typeof proof?.challenge === 'string' ? proof.challenge : '';
+  const nonce = normalizePowNonce(proof?.nonce);
+  const parsed = parsePowChallenge(challenge);
+  if (!parsed || !nonce) {
+    return { ok: false, status: 403, error: 'Room creation proof is required' };
+  }
+
+  const { challengeId, difficulty, issuedAt, signature } = parsed;
+  const payload = `${challengeId}.${issuedAt}.${difficulty}`;
+  const expectedSignature = signPowPayload(payload, getClientIp(req));
+  if (difficulty !== ROOM_CREATE_POW_DIFFICULTY || !tokensMatch(expectedSignature, signature)) {
+    return { ok: false, status: 403, error: 'Invalid room creation proof' };
+  }
+
+  if (now < issuedAt || now - issuedAt > ROOM_CREATE_POW_TTL_MS) {
+    return { ok: false, status: 403, error: 'Room creation proof expired' };
+  }
+
+  if (usedPowChallenges.has(challengeId)) {
+    return { ok: false, status: 403, error: 'Room creation proof was already used' };
+  }
+
+  const digest = crypto.createHash('sha256').update(`${challenge}:${nonce}`).digest();
+  if (!hasLeadingZeroBits(digest, difficulty)) {
+    return { ok: false, status: 403, error: 'Invalid room creation proof' };
+  }
+
+  usedPowChallenges.set(challengeId, now + ROOM_CREATE_POW_TTL_MS);
+  return { ok: true };
+}
+
+function countEmptyRoomsForIp(clientIp) {
+  let count = 0;
+  for (const room of rooms.values()) {
+    if (room.creatorIp === clientIp && room.peers.size === 0 && room.emptySince) {
+      count += 1;
+    }
+  }
+  return count;
+}
+
+function createRoom(creatorIp) {
   pruneRooms();
 
   let roomId = createRoomId();
@@ -161,6 +270,7 @@ function createRoom() {
   const now = Date.now();
   const room = {
     createdAt: now,
+    creatorIp,
     emptySince: now,
     id: roomId,
     peers: new Map(),
@@ -433,6 +543,25 @@ function handleConfig(req, res, url) {
   sendJson(res, 200, buildIceConfig(req));
 }
 
+function handlePowChallenge(req, res) {
+  prunePowChallenges();
+
+  if (ROOM_CREATE_POW_DIFFICULTY <= 0) {
+    sendJson(res, 200, { ok: true, required: false });
+    return;
+  }
+
+  const now = Date.now();
+  sendJson(res, 200, {
+    ok: true,
+    algorithm: 'sha256',
+    challenge: createPowChallenge(req, now),
+    difficulty: ROOM_CREATE_POW_DIFFICULTY,
+    expiresAt: now + ROOM_CREATE_POW_TTL_MS,
+    required: true
+  });
+}
+
 async function handleCreateRoom(req, res) {
   const rate = checkRoomCreateRate(req);
   if (!rate.allowed) {
@@ -445,14 +574,29 @@ async function handleCreateRoom(req, res) {
     return;
   }
 
-  await readJsonBody(req);
+  const body = await readJsonBody(req);
+  const proof = verifyRoomCreateProof(req, body.proof);
+  if (!proof.ok) {
+    sendJson(res, proof.status, { ok: false, error: proof.error });
+    return;
+  }
+
   pruneRooms();
+  const clientIp = getClientIp(req);
+  if (MAX_EMPTY_ROOMS_PER_IP > 0 && countEmptyRoomsForIp(clientIp) >= MAX_EMPTY_ROOMS_PER_IP) {
+    sendJson(res, 429, {
+      ok: false,
+      error: 'Too many empty rooms created from this IP, join one or try later'
+    });
+    return;
+  }
+
   if (rooms.size >= MAX_ROOMS) {
     sendJson(res, 503, { ok: false, error: 'Room capacity is temporarily full' });
     return;
   }
 
-  const room = createRoom();
+  const room = createRoom(clientIp);
   sendJson(res, 201, {
     ok: true,
     maxRooms: MAX_ROOMS,
@@ -614,6 +758,11 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === 'GET' && url.pathname === '/config') {
       handleConfig(req, res, url);
+      return;
+    }
+
+    if (req.method === 'GET' && url.pathname === '/pow-challenge') {
+      handlePowChallenge(req, res);
       return;
     }
 

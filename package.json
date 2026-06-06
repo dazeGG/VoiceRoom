@@ -1,6 +1,6 @@
 {
   "name": "voice-room",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "private": true,
   "description": "Simple link-based WebRTC voice chat with dependency-free Node signaling.",
   "main": "server.js",

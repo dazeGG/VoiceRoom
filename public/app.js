@@ -21,6 +21,7 @@ const NOISE_MODES = {
 const RNNOISE_ASSET_BASE = '/rnnoise/';
 const DEFAULT_SCREEN_PROFILE_ID = 'balanced';
 const SCREEN_AUDIO_BITRATE = 192_000;
+const ROOM_PROOF_BATCH_SIZE = 64;
 const SCREEN_STREAM_PROFILES = {
   balanced: {
     contentHint: 'detail',
@@ -321,16 +322,73 @@ function saveStartName(event) {
 async function createRoomFromStart() {
   if (!requireSavedName(elements.startNameInput)) return;
 
+  const previousLabel = elements.createRoomButton.textContent;
   elements.createRoomButton.disabled = true;
+  elements.createRoomButton.textContent = 'Создаём...';
   try {
-    const room = await postJson('/rooms', {});
+    const proof = await createRoomProof();
+    const room = await postJson('/rooms', { proof });
     openRoom(room.roomId);
   } catch (error) {
     console.error(error);
-    showToast('Не удалось создать комнату');
+    showToast(error.message || 'Не удалось создать комнату');
   } finally {
+    elements.createRoomButton.textContent = previousLabel;
     elements.createRoomButton.disabled = false;
   }
+}
+
+async function createRoomProof() {
+  const challenge = await fetchJson('/pow-challenge');
+  if (!challenge.required) return null;
+
+  if (!window.crypto?.subtle || typeof TextEncoder !== 'function') {
+    throw new Error('Откройте сайт через HTTPS или localhost');
+  }
+
+  return {
+    challenge: challenge.challenge,
+    nonce: await solveProofOfWork(challenge.challenge, challenge.difficulty, challenge.expiresAt)
+  };
+}
+
+async function solveProofOfWork(challenge, difficulty, expiresAt) {
+  const targetBits = Number(difficulty);
+  const expiresAtMs = Number(expiresAt);
+  if (typeof challenge !== 'string' || !challenge) throw new Error('Не удалось создать комнату');
+  if (!Number.isInteger(targetBits) || targetBits < 0 || targetBits > 32) throw new Error('Не удалось создать комнату');
+  if (!Number.isFinite(expiresAtMs)) throw new Error('Не удалось создать комнату');
+
+  const encoder = new TextEncoder();
+  let nonce = 0;
+  while (Date.now() < expiresAtMs) {
+    for (let index = 0; index < ROOM_PROOF_BATCH_SIZE; index += 1) {
+      const data = encoder.encode(`${challenge}:${nonce}`);
+      const hash = new Uint8Array(await window.crypto.subtle.digest('SHA-256', data));
+      if (hasLeadingZeroBits(hash, targetBits)) return nonce;
+      nonce += 1;
+    }
+    await waitForUi();
+  }
+
+  throw new Error('Проверка создания комнаты истекла');
+}
+
+function hasLeadingZeroBits(bytes, bits) {
+  const fullBytes = Math.floor(bits / 8);
+  const remainingBits = bits % 8;
+
+  for (let index = 0; index < fullBytes; index += 1) {
+    if (bytes[index] !== 0) return false;
+  }
+
+  if (remainingBits === 0) return true;
+  const mask = 0xff << (8 - remainingBits);
+  return (bytes[fullBytes] & mask) === 0;
+}
+
+function waitForUi() {
+  return new Promise((resolve) => window.setTimeout(resolve, 0));
 }
 
 function joinRoomByCode() {

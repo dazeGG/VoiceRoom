@@ -114,6 +114,9 @@ PUBLIC_HOSTNAME=voice.example.com
 
 MAX_ROOM_PEERS=12
 MAX_ROOMS=100
+MAX_EMPTY_ROOMS_PER_IP=3
+ROOM_CREATE_POW_DIFFICULTY=14
+ROOM_CREATE_POW_TTL_MS=120000
 STUN_URLS=stun:stun.l.google.com:19302
 TURN_PORT=3478
 TURN_TTL_SECONDS=900
@@ -208,6 +211,9 @@ docker compose --profile turn up -d --build
 - `TURN_MIN_PORT`, `TURN_MAX_PORT` - UDP relay range для coturn.
 - `MAX_ROOM_PEERS` - лимит участников комнаты, по умолчанию `12` в compose.
 - `MAX_ROOMS` - общий лимит активных комнат в памяти, по умолчанию `100`.
+- `MAX_EMPTY_ROOMS_PER_IP` - лимит пустых комнат, созданных с одного IP, по умолчанию `3`. Значение `0` отключает лимит.
+- `ROOM_CREATE_POW_DIFFICULTY` - сложность proof-of-work перед созданием комнаты, по умолчанию `14`. Значение `0` отключает PoW.
+- `ROOM_CREATE_POW_TTL_MS` - срок жизни proof-of-work challenge, по умолчанию `120000`.
 - `ROOM_CREATE_RATE_LIMIT` - лимит создания комнат на IP за окно, по умолчанию `20`.
 - `ROOM_CREATE_RATE_WINDOW_MS` - окно лимита создания комнат, по умолчанию `60000`.
 
@@ -227,7 +233,7 @@ npm run check
 
 ## Безопасность
 
-Комната доступна всем, у кого есть ссылка или код комнаты. Сигналинг проверяет короткоживущую peer-сессию для отправки WebRTC-сигналов, обновления статуса и выдачи TURN credentials, но это не заменяет аккаунты, пароль или отдельную авторизацию комнаты.
+Комната доступна всем, у кого есть ссылка или код комнаты. Создание комнаты защищено rate limit, proof-of-work challenge и лимитом пустых комнат на IP. Сигналинг проверяет короткоживущую peer-сессию для отправки WebRTC-сигналов, обновления статуса и выдачи TURN credentials, но это не заменяет аккаунты, пароль или отдельную авторизацию комнаты.
 
 Топология WebRTC mesh хорошо подходит для малых комнат. Для десятков участников нужен SFU-сервер, например LiveKit, Janus или mediasoup.
 
