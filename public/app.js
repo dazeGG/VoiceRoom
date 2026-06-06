@@ -84,6 +84,9 @@ const elements = {
   screenPlaceholder: $('#screenPlaceholder'),
   screenProfileOptions: $('#screenProfileOptions'),
   screenProfilePopover: $('#screenProfilePopover'),
+  screenSourceCloseButton: $('#screenSourceCloseButton'),
+  screenSourceDialog: $('#screenSourceDialog'),
+  screenSourceOptions: $('#screenSourceOptions'),
   screenStage: $('#screenStage'),
   screenText: $('#screenText'),
   screenVideo: $('#screenVideo'),
@@ -113,6 +116,7 @@ const state = {
   localScreenStream: null,
   localScreenProfileId: DEFAULT_SCREEN_PROFILE_ID,
   localStream: null,
+  localAppAudioSuppressed: false,
   micProcessor: null,
   muted: false,
   noiseMode: getStoredNoiseMode(),
@@ -124,6 +128,7 @@ const state = {
   screenFullscreen: false,
   screenMuted: false,
   screenRequesting: false,
+  screenSourceRequest: null,
   screenStopping: false,
   screenVolume: 1,
   self: null,
@@ -135,6 +140,7 @@ const state = {
 let toastTimer = null;
 let meterFrame = 0;
 let rnnoiseModulePromise = null;
+const watchedRemoteScreenTracks = new WeakSet();
 
 init();
 
@@ -155,6 +161,8 @@ function init() {
   elements.screenButton.addEventListener('click', handleScreenButtonClick);
   elements.screenExitButton.addEventListener('click', () => leaveScreenView().catch((error) => console.error(error)));
   elements.screenFullscreenButton.addEventListener('click', toggleScreenFullscreen);
+  elements.screenSourceCloseButton.addEventListener('click', cancelScreenSourcePicker);
+  elements.screenSourceDialog.addEventListener('click', closeScreenSourceOnBackdrop);
   elements.streamVolumeButton.addEventListener('click', toggleScreenMute);
   elements.streamVolumeSlider.addEventListener('input', updateScreenVolumeFromSlider);
   syncScreenVideoAudio();
@@ -167,6 +175,7 @@ function init() {
   document.addEventListener('click', closeScreenProfileOnOutside);
   document.addEventListener('keydown', closeDevicePopoverOnEscape);
   document.addEventListener('keydown', closeScreenProfileOnEscape);
+  document.addEventListener('keydown', closeScreenSourceOnEscape);
   document.addEventListener('fullscreenchange', updateScreenFullscreenState);
   window.addEventListener('beforeunload', leaveRoom);
 
@@ -649,29 +658,269 @@ function disconnectAudioNode(node) {
 }
 
 async function openScreenShare(profile) {
+  if (hasElectronDesktopCapture()) {
+    return openElectronScreenShare(profile);
+  }
+
+  if (isElectronApp()) {
+    throw new Error('Electron не загрузил модуль выбора экрана. Перезапустите приложение из новой сборки.');
+  }
+
+  return openBrowserScreenShare(profile);
+}
+
+function hasElectronDesktopCapture() {
+  return Boolean(window.voiceRoomDesktopCapture?.getSources);
+}
+
+function isElectronApp() {
+  return Boolean(window.voiceRoomRuntime?.isElectron) || navigator.userAgent.includes('Electron');
+}
+
+async function openBrowserScreenShare(profile) {
   if (!navigator.mediaDevices?.getDisplayMedia) {
     throw new Error('Браузер не поддерживает демонстрацию экрана. Нужен HTTPS или localhost.');
   }
 
-  const stream = await navigator.mediaDevices.getDisplayMedia({
+  const stream = await navigator.mediaDevices.getDisplayMedia(createBrowserDisplayMediaConstraints(profile, {
+    suppressLocalAudioPlayback: false
+  }));
+
+  await applyScreenCaptureProfile(stream, profile);
+  return stream;
+}
+
+function createBrowserDisplayMediaConstraints(profile, options = {}) {
+  const { audio = true, suppressLocalAudioPlayback = false } = options;
+  const video = {
+    frameRate: { ideal: profile.frameRate, max: profile.frameRate },
+    height: { ideal: profile.height, max: profile.height },
+    width: { ideal: profile.width, max: profile.width }
+  };
+
+  if (!audio) {
+    return {
+      audio: false,
+      video
+    };
+  }
+
+  return {
     audio: {
       autoGainControl: false,
       echoCancellation: false,
       noiseSuppression: false,
-      suppressLocalAudioPlayback: false
+      suppressLocalAudioPlayback
     },
-    selfBrowserSurface: 'exclude',
-    surfaceSwitching: 'include',
-    systemAudio: 'include',
-    video: {
-      frameRate: { ideal: profile.frameRate, max: profile.frameRate },
-      height: { ideal: profile.height, max: profile.height },
-      width: { ideal: profile.width, max: profile.width }
+    video
+  };
+}
+
+async function openElectronScreenShare(profile) {
+  if (!navigator.mediaDevices?.getDisplayMedia && !navigator.mediaDevices?.getUserMedia) {
+    throw new Error('Electron не дал доступ к захвату экрана.');
+  }
+
+  const source = await selectDesktopCaptureSource();
+  let stream = null;
+  setLocalAppAudioSuppressed(true);
+  try {
+    stream = await openElectronDesktopStream(source.id, profile, { audio: true, audioMode: 'loopback' });
+  } catch (error) {
+    if (error.name === 'NotAllowedError' || error.name === 'AbortError') {
+      setLocalAppAudioSuppressed(false);
+      throw error;
     }
-  });
+    console.warn('Desktop audio capture unavailable, retrying without audio', error);
+    stream = await openElectronDesktopStream(source.id, profile, { audio: false, audioMode: 'none' });
+  }
 
   await applyScreenCaptureProfile(stream, profile);
   return stream;
+}
+
+async function openElectronDesktopStream(sourceId, profile, options = {}) {
+  const withAudio = options.audio !== false;
+  const attempts = createElectronDesktopCaptureAttempts(sourceId, withAudio);
+  const errors = [];
+
+  for (const attempt of attempts) {
+    try {
+      return await attempt.open();
+    } catch (error) {
+      errors.push({ error, method: attempt.method });
+      console.warn(`Electron desktop capture failed via ${attempt.method}`, error);
+    }
+  }
+
+  const lastError = errors.at(-1)?.error;
+  if (lastError) throw lastError;
+  throw new Error('Electron не поддерживает захват экрана в этой сборке.');
+}
+
+function createElectronDesktopCaptureAttempts(sourceId, withAudio) {
+  const attempts = [];
+  const platform = getElectronPlatform();
+
+  if (withAudio && platform === 'win32') {
+    attempts.push({
+      method: 'getDisplayMedia-loopback',
+      open: () => openElectronDisplayMediaStream(sourceId, true)
+    });
+  }
+
+  if (navigator.mediaDevices?.getUserMedia) {
+    attempts.push({
+      method: withAudio ? 'getUserMedia-desktop-audio' : 'getUserMedia-desktop-video',
+      open: () => navigator.mediaDevices.getUserMedia(createElectronDesktopMediaConstraints(sourceId, withAudio))
+    });
+  }
+
+  if (!withAudio && navigator.mediaDevices?.getDisplayMedia) {
+    attempts.push({
+      method: 'getDisplayMedia-video',
+      open: () => openElectronDisplayMediaStream(sourceId, false)
+    });
+  }
+
+  return attempts;
+}
+
+async function openElectronDisplayMediaStream(sourceId, withAudio) {
+  if (!navigator.mediaDevices?.getDisplayMedia) {
+    throw new Error('Electron не поддерживает display media capture.');
+  }
+
+  if (!window.voiceRoomDesktopCapture?.selectSource) {
+    throw new Error('Electron не дал доступ к выбору источника экрана.');
+  }
+
+  await window.voiceRoomDesktopCapture.selectSource(sourceId, withAudio ? 'loopback' : 'none');
+  return navigator.mediaDevices.getDisplayMedia({
+    audio: withAudio,
+    video: true
+  });
+}
+
+function getElectronPlatform() {
+  return window.voiceRoomRuntime?.platform || '';
+}
+
+function createElectronDesktopMediaConstraints(sourceId, withAudio) {
+  return {
+    audio: withAudio
+      ? {
+          mandatory: {
+            chromeMediaSource: 'desktop'
+          }
+        }
+      : false,
+    video: {
+      mandatory: {
+        chromeMediaSource: 'desktop',
+        chromeMediaSourceId: sourceId
+      }
+    }
+  };
+}
+
+async function selectDesktopCaptureSource() {
+  const sources = await window.voiceRoomDesktopCapture.getSources();
+  if (!sources.length) {
+    throw new Error('Нет доступных источников экрана');
+  }
+
+  return showScreenSourcePicker(sources);
+}
+
+function showScreenSourcePicker(sources) {
+  if (state.screenSourceRequest) cancelScreenSourcePicker();
+
+  return new Promise((resolve, reject) => {
+    state.screenSourceRequest = { reject, resolve };
+    elements.screenSourceOptions.textContent = '';
+
+    for (const source of sources) {
+      const button = createScreenSourceButton(source);
+      elements.screenSourceOptions.append(button);
+    }
+
+    elements.screenSourceDialog.hidden = false;
+    window.setTimeout(() => {
+      elements.screenSourceOptions.querySelector('button')?.focus();
+    }, 0);
+  });
+}
+
+function createScreenSourceButton(source) {
+  const button = document.createElement('button');
+  button.className = 'screen-source-option';
+  button.type = 'button';
+  button.setAttribute('aria-label', source.name);
+
+  const preview = document.createElement('span');
+  preview.className = 'screen-source-preview';
+  if (source.thumbnail) {
+    const image = document.createElement('img');
+    image.alt = '';
+    image.src = source.thumbnail;
+    preview.append(image);
+  } else {
+    const fallback = document.createElement('span');
+    fallback.className = 'screen-source-fallback';
+    fallback.textContent = source.type === 'screen' ? 'Экран' : 'Окно';
+    preview.append(fallback);
+  }
+
+  const label = document.createElement('span');
+  label.className = 'screen-source-label';
+  if (source.appIcon) {
+    const icon = document.createElement('img');
+    icon.alt = '';
+    icon.src = source.appIcon;
+    label.append(icon);
+  }
+  const name = document.createElement('span');
+  name.textContent = source.name;
+  label.append(name);
+
+  button.append(preview, label);
+  button.addEventListener('click', () => resolveScreenSourcePicker(source));
+  return button;
+}
+
+function resolveScreenSourcePicker(source) {
+  const request = closeScreenSourcePicker();
+  request?.resolve(source);
+}
+
+function cancelScreenSourcePicker() {
+  const request = closeScreenSourcePicker();
+  request?.reject(createAbortError('Выбор источника отменен'));
+}
+
+function closeScreenSourcePicker() {
+  const request = state.screenSourceRequest;
+  state.screenSourceRequest = null;
+  elements.screenSourceDialog.hidden = true;
+  elements.screenSourceOptions.textContent = '';
+  return request;
+}
+
+function closeScreenSourceOnBackdrop(event) {
+  if (event.target === elements.screenSourceDialog) cancelScreenSourcePicker();
+}
+
+function closeScreenSourceOnEscape(event) {
+  if (event.key !== 'Escape' || !state.screenSourceRequest) return;
+  event.preventDefault();
+  cancelScreenSourcePicker();
+}
+
+function createAbortError(message) {
+  const error = new Error(message);
+  error.name = 'AbortError';
+  return error;
 }
 
 async function applyScreenCaptureProfile(stream, profile) {
@@ -725,6 +974,7 @@ async function startScreenShare(profileId = state.localScreenProfileId) {
     state.localScreenStream = stream;
     state.localScreenProfileId = profile.id;
     state.screenStopping = false;
+    syncLocalAppAudioSuppression();
     videoTrack.addEventListener('ended', () => {
       stopScreenShare({ fromBrowser: true }).catch((error) => console.error(error));
     });
@@ -744,11 +994,14 @@ async function startScreenShare(profileId = state.localScreenProfileId) {
     playStreamCue('start');
     showToast(hasScreenAudio() ? `Стрим запущен: ${profile.label}, звук включен` : `Стрим запущен: ${profile.label}, без звука`);
   } catch (error) {
-    if (error.name !== 'NotAllowedError') console.error(error);
+    const cancelled = error.name === 'NotAllowedError' || error.name === 'AbortError';
+    if (!cancelled) console.error(error);
     if (state.localScreenStream) {
       await stopScreenShare({ notify: false, quiet: true }).catch((cleanupError) => console.error(cleanupError));
+    } else {
+      setLocalAppAudioSuppressed(false);
     }
-    showToast(error.name === 'NotAllowedError' ? 'Демонстрация отменена' : error.message || 'Не удалось показать экран');
+    showToast(cancelled ? 'Демонстрация отменена' : error.message || 'Не удалось показать экран');
   } finally {
     elements.screenButton.disabled = false;
     refreshScreenControls();
@@ -765,6 +1018,7 @@ async function stopScreenShare(options = {}) {
     state.localScreenStream = null;
 
     stopStream(previousStream);
+    setLocalAppAudioSuppressed(false);
 
     for (const peer of state.peers.values()) {
       removeLocalScreenTracks(peer);
@@ -1200,7 +1454,7 @@ async function flushCandidates(peer) {
 
 function attachRemoteTrack(peer, track, stream) {
   const mediaStream = stream || new MediaStream([track]);
-  const isScreenStream = track.kind === 'video' || (peer.screenStreamId && mediaStream.id === peer.screenStreamId);
+  const isScreenStream = isRemoteScreenTrack(peer, track, mediaStream);
 
   if (isScreenStream) {
     attachRemoteScreenStream(peer, mediaStream);
@@ -1215,17 +1469,32 @@ function attachRemoteTrack(peer, track, stream) {
   }
 }
 
+function isRemoteScreenTrack(peer, track, stream) {
+  if (track.kind === 'video') return true;
+  if (peer.screenStreamId && stream.id === peer.screenStreamId) return true;
+  if (track.kind !== 'audio' || !peer.screen || !peer.screenAudio) return false;
+
+  const alreadyHasMicAudio = Boolean(peer.stream?.getAudioTracks().some((audioTrack) => audioTrack.readyState !== 'ended'));
+  const alreadyWatchingScreen = state.viewedScreenPeerId === peer.id || Boolean(peer.screenStream);
+  return alreadyHasMicAudio && alreadyWatchingScreen;
+}
+
 function attachRemoteScreenStream(peer, stream) {
+  const screenStream = mergeRemoteScreenStream(peer, stream);
   peer.screen = true;
-  peer.screenStream = stream;
-  peer.screenAudio = peer.screenAudio || stream.getAudioTracks().some((track) => track.readyState !== 'ended');
-  peer.screenStreamId ||= stream.id;
+  peer.screenStream = screenStream;
+  peer.screenAudio = peer.screenAudio || screenStream.getAudioTracks().some((track) => track.readyState !== 'ended');
+  peer.screenStreamId ||= screenStream.id;
   peer.node.dataset.screen = 'true';
 
-  for (const track of stream.getVideoTracks()) {
+  for (const track of screenStream.getVideoTracks()) {
+    if (watchedRemoteScreenTracks.has(track)) continue;
+    watchedRemoteScreenTracks.add(track);
     track.addEventListener('ended', () => detachRemoteScreen(peer), { once: true });
   }
-  for (const track of stream.getAudioTracks()) {
+  for (const track of screenStream.getAudioTracks()) {
+    if (watchedRemoteScreenTracks.has(track)) continue;
+    watchedRemoteScreenTracks.add(track);
     track.addEventListener(
       'ended',
       () => {
@@ -1248,6 +1517,17 @@ function attachRemoteScreenStream(peer, stream) {
   updatePeerStatus(peer);
 }
 
+function mergeRemoteScreenStream(peer, stream) {
+  if (!peer.screenStream || peer.screenStream === stream) return stream;
+
+  const existingTrackIds = new Set(peer.screenStream.getTracks().map((track) => track.id));
+  for (const track of stream.getTracks()) {
+    if (!existingTrackIds.has(track.id)) peer.screenStream.addTrack(track);
+  }
+
+  return peer.screenStream;
+}
+
 function detachRemoteScreen(peer) {
   peer.screenStream = null;
   peer.node.dataset.screen = String(peer.screen);
@@ -1262,6 +1542,7 @@ function attachRemoteAudioTrack(peer, track) {
 
   const audio = document.createElement('audio');
   audio.autoplay = true;
+  audio.muted = isLocalAppAudioSuppressed();
   audio.playsInline = true;
   audio.srcObject = new MediaStream([track]);
   peer.audioElements.set(track.id, audio);
@@ -1337,6 +1618,8 @@ function getCueGain(value) {
 }
 
 function playPeerCue(type) {
+  if (isLocalAppAudioSuppressed()) return;
+
   try {
     state.audioContext ||= new AudioContext();
     const context = state.audioContext;
@@ -1376,6 +1659,8 @@ function playPeerCue(type) {
 }
 
 function playMicCue(muted) {
+  if (isLocalAppAudioSuppressed()) return;
+
   try {
     state.audioContext ||= new AudioContext();
     const context = state.audioContext;
@@ -1410,6 +1695,8 @@ function playMicCue(muted) {
 }
 
 function playStreamCue(type) {
+  if (isLocalAppAudioSuppressed()) return;
+
   try {
     state.audioContext ||= new AudioContext();
     const context = state.audioContext;
@@ -1766,16 +2053,39 @@ function hideScreenStage() {
   if (document.fullscreenElement === elements.screenStage) {
     document.exitFullscreen().catch(() => {});
   }
+  if (document.body.dataset.electronScreenFullscreen === 'true') {
+    setElectronScreenFullscreen(false).catch((error) => console.error(error));
+  }
 }
 
 function syncScreenVideoAudio() {
-  const muted = state.screenMuted || state.screenVolume <= 0;
+  const muted = state.screenMuted || state.screenVolume <= 0 || isLocalAppAudioSuppressed();
   elements.screenVideo.volume = state.screenVolume;
   elements.screenVideo.muted = muted;
   elements.streamVolumeSlider.value = String(Math.round(state.screenVolume * 100));
   elements.streamVolumeButton.dataset.muted = String(muted);
   elements.streamVolumeButton.setAttribute('aria-pressed', String(muted));
   elements.streamVolumeButton.setAttribute('aria-label', muted ? 'Включить звук стрима' : 'Выключить звук стрима');
+}
+
+function isLocalAppAudioSuppressed() {
+  return state.localAppAudioSuppressed;
+}
+
+function setLocalAppAudioSuppressed(suppressed) {
+  state.localAppAudioSuppressed = Boolean(suppressed);
+  syncLocalAppAudioSuppression();
+}
+
+function syncLocalAppAudioSuppression() {
+  const suppressed = isLocalAppAudioSuppressed();
+  for (const peer of state.peers.values()) {
+    for (const audio of peer.audioElements.values()) {
+      audio.muted = suppressed;
+    }
+  }
+  syncScreenVideoAudio();
+  if (suppressed) elements.soundButton.hidden = true;
 }
 
 function toggleScreenMute() {
@@ -1796,16 +2106,31 @@ function updateScreenVolumeFromSlider() {
 }
 
 async function toggleScreenFullscreen() {
-  if (!document.fullscreenEnabled) {
-    showToast('Полноэкранный режим недоступен');
-    return;
-  }
-
   try {
     if (document.fullscreenElement === elements.screenStage) {
       await document.exitFullscreen();
+      return;
+    }
+
+    if (document.body.dataset.electronScreenFullscreen === 'true') {
+      await setElectronScreenFullscreen(false);
+      return;
+    }
+
+    if (document.fullscreenEnabled) {
+      try {
+        await elements.screenStage.requestFullscreen();
+        return;
+      } catch (error) {
+        if (!hasElectronWindowControls()) throw error;
+        console.warn('Stage fullscreen unavailable, using Electron window fullscreen', error);
+      }
+    }
+
+    if (hasElectronWindowControls()) {
+      await setElectronScreenFullscreen(true);
     } else {
-      await elements.screenStage.requestFullscreen();
+      showToast('Полноэкранный режим недоступен');
     }
   } catch (error) {
     console.error(error);
@@ -1813,8 +2138,31 @@ async function toggleScreenFullscreen() {
   }
 }
 
+function hasElectronWindowControls() {
+  return Boolean(window.voiceRoomWindow?.setFullscreen);
+}
+
+async function setElectronScreenFullscreen(fullscreen) {
+  const active = await window.voiceRoomWindow.setFullscreen(fullscreen);
+  if (active) {
+    document.body.dataset.electronScreenFullscreen = 'true';
+  } else {
+    delete document.body.dataset.electronScreenFullscreen;
+  }
+  setScreenFullscreenState(active || document.fullscreenElement === elements.screenStage);
+}
+
 function updateScreenFullscreenState() {
   const fullscreen = document.fullscreenElement === elements.screenStage;
+  if (!fullscreen && document.body.dataset.electronScreenFullscreen !== 'true') {
+    setScreenFullscreenState(false);
+    return;
+  }
+
+  setScreenFullscreenState(fullscreen || document.body.dataset.electronScreenFullscreen === 'true');
+}
+
+function setScreenFullscreenState(fullscreen) {
   state.screenFullscreen = fullscreen;
   elements.screenFullscreenButton.dataset.fullscreen = String(fullscreen);
   elements.screenFullscreenButton.setAttribute('aria-pressed', String(fullscreen));
@@ -1833,6 +2181,7 @@ function leaveRoom() {
   state.iceRefreshTimer = 0;
   state.eventSource?.close();
   state.eventSource = null;
+  if (state.screenSourceRequest) cancelScreenSourcePicker();
   closeScreenView();
 
   for (const peer of state.peers.values()) {
@@ -1873,6 +2222,7 @@ function stopLocalScreenStream() {
   stopStream(state.localScreenStream);
   state.localScreenStream = null;
   state.screenStopping = false;
+  setLocalAppAudioSuppressed(false);
   hideScreenStage();
 }
 

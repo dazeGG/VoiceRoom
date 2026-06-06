@@ -494,10 +494,9 @@ h1 {
   position: absolute;
   right: 0;
   bottom: calc(100% + var(--space-xs));
-  display: grid;
+  display: block;
   width: 42px;
   height: 142px;
-  place-items: center;
   border: 1px solid oklch(86% 0.012 92 / 0.2);
   border-radius: var(--radius-sm);
   padding: var(--space-sm) 0;
@@ -517,6 +516,9 @@ h1 {
 }
 
 .stream-volume-slider {
+  position: absolute;
+  top: 50%;
+  left: 50%;
   width: 104px;
   min-height: 0;
   border: 0;
@@ -524,7 +526,8 @@ h1 {
   background: transparent;
   accent-color: var(--control-active);
   cursor: pointer;
-  transform: rotate(-90deg);
+  transform: translate(-50%, -50%) rotate(-90deg);
+  transform-origin: center;
 }
 
 .stream-volume-icon-off,
@@ -1199,6 +1202,144 @@ button:focus-visible,
   white-space: nowrap;
 }
 
+.screen-source-dialog {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: var(--space-lg);
+  background: oklch(5% 0.012 92 / 0.76);
+}
+
+.screen-source-panel {
+  display: grid;
+  width: min(920px, 100%);
+  max-height: min(720px, calc(100vh - 48px));
+  gap: var(--space-md);
+  border: 1px solid oklch(36% 0.022 92);
+  border-radius: var(--radius-md);
+  padding: var(--space-lg);
+  background: oklch(11% 0.012 92);
+  box-shadow: var(--shadow);
+}
+
+.screen-source-heading {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: var(--space-md);
+}
+
+.screen-source-heading h2 {
+  margin: 0;
+  font-size: 1.45rem;
+  line-height: 1.1;
+}
+
+.screen-source-close {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid var(--control-line);
+  border-radius: var(--radius-sm);
+  padding: 0;
+  background: var(--control);
+  color: var(--ink);
+}
+
+.screen-source-close:hover {
+  background: var(--control-hover);
+}
+
+.screen-source-close svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+}
+
+.screen-source-options {
+  display: grid;
+  max-height: min(560px, calc(100vh - 190px));
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: var(--space-sm);
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.screen-source-option {
+  display: grid;
+  min-width: 0;
+  grid-template-rows: auto minmax(42px, auto);
+  gap: var(--space-xs);
+  border: 1px solid oklch(34% 0.02 92);
+  border-radius: var(--radius-sm);
+  padding: var(--space-xs);
+  background: oklch(15% 0.014 92);
+  color: inherit;
+  text-align: left;
+  transition: border-color 140ms ease, background 140ms ease, transform 140ms ease;
+}
+
+.screen-source-option:hover,
+.screen-source-option:focus-visible {
+  border-color: color-mix(in oklch, var(--control-line), var(--ink) 28%);
+  background: oklch(19% 0.016 92);
+  transform: translateY(-1px);
+}
+
+.screen-source-preview {
+  display: grid;
+  aspect-ratio: 16 / 9;
+  place-items: center;
+  overflow: hidden;
+  border-radius: calc(var(--radius-sm) - 2px);
+  background: oklch(7% 0.01 92);
+}
+
+.screen-source-preview img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.screen-source-fallback {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.screen-source-label {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--space-xs);
+  color: oklch(96% 0.008 92);
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
+.screen-source-label img {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+}
+
+.screen-source-label span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .toast {
   position: fixed;
   right: var(--space-lg);
@@ -1345,6 +1486,24 @@ button:focus-visible,
 
   .screen-profile-meta {
     justify-self: start;
+  }
+
+  .screen-source-dialog {
+    padding: var(--space-sm);
+  }
+
+  .screen-source-panel {
+    max-height: calc(100vh - 24px);
+    padding: var(--space-md);
+  }
+
+  .screen-source-heading h2 {
+    font-size: 1.24rem;
+  }
+
+  .screen-source-options {
+    max-height: calc(100vh - 160px);
+    grid-template-columns: 1fr;
   }
 
   .voice-ring {

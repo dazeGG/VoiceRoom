@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#10110f">
     <title>Voice Room</title>
     <link rel="icon" href="/icon.svg" type="image/svg+xml">
-    <link rel="stylesheet" href="/styles.css?v=20260606-20">
+    <link rel="stylesheet" href="/styles.css?v=20260606-22">
   </head>
   <body>
     <div class="app-shell">
@@ -258,6 +258,24 @@
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
+    <div class="screen-source-dialog" id="screenSourceDialog" role="dialog" aria-modal="true" aria-labelledby="screenSourceTitle" hidden>
+      <section class="screen-source-panel">
+        <div class="screen-source-heading">
+          <div>
+            <p class="eyebrow">источник</p>
+            <h2 id="screenSourceTitle">Что показать</h2>
+          </div>
+          <button class="screen-source-close" id="screenSourceCloseButton" type="button" aria-label="Отменить выбор">
+            <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+              <path d="M18 6l-12 12"></path>
+              <path d="M6 6l12 12"></path>
+            </svg>
+          </button>
+        </div>
+        <div class="screen-source-options" id="screenSourceOptions"></div>
+      </section>
+    </div>
+
     <template id="participantTemplate">
       <article class="participant" data-peer-id="">
         <div class="voice-ring" aria-hidden="true">
@@ -292,6 +310,6 @@
       </article>
     </template>
 
-    <script src="/app.js?v=20260606-27" defer></script>
+    <script src="/app.js?v=20260606-33" defer></script>
   </body>
 </html>

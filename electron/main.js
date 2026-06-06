@@ -1,12 +1,14 @@
 'use strict';
 
-const { app, BrowserWindow, desktopCapturer, dialog, shell, session } = require('electron');
+const { app, BrowserWindow, desktopCapturer, dialog, ipcMain, shell, session } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
 
 const runtimeConfig = readRuntimeConfig();
 const APP_URL = process.env.VOICE_ROOM_URL || runtimeConfig.voiceRoomUrl || '';
 const TRUSTED_ORIGIN = APP_URL ? new URL(APP_URL).origin : '';
+const pendingDesktopCaptureSources = new Map();
+let latestPendingDesktopCaptureSource = null;
 
 function readRuntimeConfig() {
   const configPath = path.join(__dirname, 'runtime-config.json');
@@ -25,39 +27,185 @@ function isTrustedUrl(rawUrl) {
   }
 }
 
+function isTrustedFrame(frame) {
+  return Boolean(frame?.url && isTrustedUrl(frame.url));
+}
+
+function getFrameKey(frame) {
+  if (!frame || typeof frame.processId !== 'number' || typeof frame.routingId !== 'number') return '';
+  return `${frame.processId}:${frame.routingId}`;
+}
+
+function serializeDesktopSource(source) {
+  const thumbnail = source.thumbnail && !source.thumbnail.isEmpty()
+    ? source.thumbnail.resize({ height: 180 }).toDataURL()
+    : '';
+  const appIcon = source.appIcon && !source.appIcon.isEmpty()
+    ? source.appIcon.resize({ height: 32 }).toDataURL()
+    : '';
+
+  return {
+    appIcon,
+    id: source.id,
+    name: source.name,
+    thumbnail,
+    type: source.id.startsWith('screen:') ? 'screen' : 'window'
+  };
+}
+
+function configureDesktopCaptureIpc() {
+  ipcMain.handle('desktop-capture:get-sources', async (event) => {
+    if (!isTrustedFrame(event.senderFrame)) {
+      throw new Error('Desktop capture is only available for the configured Voice Room URL.');
+    }
+
+    const sources = await getDesktopCaptureSources();
+
+    return sources.map(serializeDesktopSource);
+  });
+
+  ipcMain.handle('desktop-capture:select-source', async (event, sourceId, audioMode = 'loopback') => {
+    const frameKey = getFrameKey(event.senderFrame);
+    if (!isTrustedFrame(event.senderFrame)) {
+      throw new Error('Desktop capture is only available for the configured Voice Room URL.');
+    }
+
+    const sources = await getDesktopCaptureSources();
+    const source = sources.find((item) => item.id === sourceId);
+    if (!source) {
+      throw new Error('Desktop capture source is no longer available.');
+    }
+
+    const previous = frameKey ? pendingDesktopCaptureSources.get(frameKey) : null;
+    if (previous?.timer) clearTimeout(previous.timer);
+
+    const timer = setTimeout(() => {
+      if (frameKey) pendingDesktopCaptureSources.delete(frameKey);
+      if (latestPendingDesktopCaptureSource?.source.id === source.id) {
+        latestPendingDesktopCaptureSource = null;
+      }
+    }, 15_000);
+    timer.unref?.();
+
+    const pendingSource = {
+      audioMode: audioMode === 'none' ? 'none' : 'loopback',
+      source,
+      timer
+    };
+    if (frameKey) pendingDesktopCaptureSources.set(frameKey, pendingSource);
+    latestPendingDesktopCaptureSource = {
+      audioMode: pendingSource.audioMode,
+      expiresAt: Date.now() + 15_000,
+      source
+    };
+    return true;
+  });
+}
+
+function getDesktopCaptureSources() {
+  return desktopCapturer.getSources({
+    fetchWindowIcons: true,
+    thumbnailSize: { height: 360, width: 640 },
+    types: ['screen', 'window']
+  });
+}
+
+function takePendingDesktopCaptureSource(frame) {
+  const frameKey = getFrameKey(frame);
+  if (frameKey) {
+    const pending = pendingDesktopCaptureSources.get(frameKey);
+    pendingDesktopCaptureSources.delete(frameKey);
+    if (pending?.timer) clearTimeout(pending.timer);
+    if (pending?.source) {
+      clearPendingDesktopCaptureSource(pending.source.id);
+      return pending;
+    }
+  }
+
+  if (!latestPendingDesktopCaptureSource || latestPendingDesktopCaptureSource.expiresAt < Date.now()) {
+    latestPendingDesktopCaptureSource = null;
+    return null;
+  }
+
+  const { audioMode, source } = latestPendingDesktopCaptureSource;
+  clearPendingDesktopCaptureSource(source.id);
+  return { audioMode, source };
+}
+
+function clearPendingDesktopCaptureSource(sourceId) {
+  if (latestPendingDesktopCaptureSource?.source.id === sourceId) {
+    latestPendingDesktopCaptureSource = null;
+  }
+
+  for (const [frameKey, pending] of pendingDesktopCaptureSources.entries()) {
+    if (pending.source.id !== sourceId) continue;
+    if (pending.timer) clearTimeout(pending.timer);
+    pendingDesktopCaptureSources.delete(frameKey);
+  }
+}
+
+function configureWindowIpc() {
+  ipcMain.handle('window:set-fullscreen', (event, fullscreen) => {
+    if (!isTrustedFrame(event.senderFrame)) {
+      throw new Error('Window controls are only available for the configured Voice Room URL.');
+    }
+
+    const window = BrowserWindow.fromWebContents(event.sender);
+    if (!window) return false;
+    window.setFullScreen(Boolean(fullscreen));
+    return window.isFullScreen();
+  });
+
+  ipcMain.handle('window:is-fullscreen', (event) => {
+    if (!isTrustedFrame(event.senderFrame)) {
+      throw new Error('Window controls are only available for the configured Voice Room URL.');
+    }
+
+    return Boolean(BrowserWindow.fromWebContents(event.sender)?.isFullScreen());
+  });
+}
+
 function configurePermissions() {
   const defaultSession = session.defaultSession;
 
   defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
-    const allowedPermissions = new Set(['display-capture', 'media', 'mediaKeySystem', 'clipboard-sanitized-write']);
+    const allowedPermissions = new Set(['display-capture', 'fullscreen', 'media', 'mediaKeySystem', 'clipboard-sanitized-write']);
     const allowed = allowedPermissions.has(permission) && isTrustedUrl(webContents.getURL());
     callback(allowed);
   });
 
   defaultSession.setPermissionCheckHandler((webContents, permission, requestingOrigin) => {
-    const allowedPermissions = new Set(['display-capture', 'media', 'mediaKeySystem', 'clipboard-sanitized-write']);
+    const allowedPermissions = new Set(['display-capture', 'fullscreen', 'media', 'mediaKeySystem', 'clipboard-sanitized-write']);
     return Boolean(TRUSTED_ORIGIN) && allowedPermissions.has(permission) && requestingOrigin === TRUSTED_ORIGIN && isTrustedUrl(webContents.getURL());
   });
 
   defaultSession.setDisplayMediaRequestHandler(
-    async (_request, callback) => {
+    async (request, callback) => {
+      if (!isTrustedFrame(request.frame)) {
+        callback({});
+        return;
+      }
+
+      const pending = takePendingDesktopCaptureSource(request.frame);
+      if (!pending?.source) {
+        callback({});
+        return;
+      }
+
       try {
-        const sources = await desktopCapturer.getSources({
-          fetchWindowIcons: true,
-          types: ['screen', 'window']
+        const canCaptureLoopbackAudio = process.platform === 'win32'
+          && request.audioRequested
+          && pending.audioMode !== 'none';
+        callback({
+          audio: canCaptureLoopbackAudio ? 'loopback' : undefined,
+          video: pending.source
         });
-        const source = sources[0];
-        if (!source) {
-          callback({});
-          return;
-        }
-        callback({ video: source, audio: 'loopback' });
       } catch (error) {
         console.error('Display media request failed:', error);
         callback({});
       }
     },
-    { useSystemPicker: true }
+    { useSystemPicker: false }
   );
 }
 
@@ -123,6 +271,8 @@ if (!gotLock) {
 
   app.whenReady().then(() => {
     configurePermissions();
+    configureDesktopCaptureIpc();
+    configureWindowIpc();
     createWindow();
 
     app.on('activate', () => {
