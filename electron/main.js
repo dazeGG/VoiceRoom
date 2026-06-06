@@ -1,6 +1,6 @@
 'use strict';
 
-const { app, BrowserWindow, desktopCapturer, dialog, ipcMain, shell, session } = require('electron');
+const { app, BrowserWindow, desktopCapturer, dialog, ipcMain, shell, session, systemPreferences } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
 
@@ -9,6 +9,7 @@ const APP_URL = process.env.VOICE_ROOM_URL || runtimeConfig.voiceRoomUrl || '';
 const TRUSTED_ORIGIN = APP_URL ? new URL(APP_URL).origin : '';
 const pendingDesktopCaptureSources = new Map();
 let latestPendingDesktopCaptureSource = null;
+let lastScreenCaptureSettingsOpenAt = 0;
 
 function readRuntimeConfig() {
   const configPath = path.join(__dirname, 'runtime-config.json');
@@ -103,11 +104,65 @@ function configureDesktopCaptureIpc() {
 }
 
 function getDesktopCaptureSources() {
-  return desktopCapturer.getSources({
-    fetchWindowIcons: true,
-    thumbnailSize: { height: 360, width: 640 },
-    types: ['screen', 'window']
-  });
+  assertMacScreenCaptureAccess();
+
+  return desktopCapturer
+    .getSources({
+      fetchWindowIcons: true,
+      thumbnailSize: { height: 360, width: 640 },
+      types: ['screen', 'window']
+    })
+    .catch((error) => {
+      if (process.platform === 'darwin') {
+        openMacScreenCaptureSettings();
+        throw createMacScreenCaptureAccessError(error);
+      }
+
+      throw error;
+    });
+}
+
+function assertMacScreenCaptureAccess() {
+  if (process.platform !== 'darwin') return;
+
+  const status = getMacScreenCaptureStatus();
+  if (status === 'granted' || status === 'unknown') return;
+
+  openMacScreenCaptureSettings();
+  throw createMacScreenCaptureAccessError();
+}
+
+function getMacScreenCaptureStatus() {
+  try {
+    return systemPreferences.getMediaAccessStatus('screen');
+  } catch {
+    return 'unknown';
+  }
+}
+
+function createMacScreenCaptureAccessError(cause) {
+  const status = getMacScreenCaptureStatus();
+  const appName = app.getName() || 'Voice Room';
+  const devHint = process.defaultApp ? ' При запуске через npm run electron разрешение может называться Electron.' : '';
+  const causeText = cause?.message ? `\nElectron: ${cause.message}` : '';
+  const error = new Error(
+    [
+      'macOS не дала приложению доступ к записи экрана.',
+      `Статус Screen Recording: ${status}.`,
+      `Откройте System Settings -> Privacy & Security -> Screen & System Audio Recording и включите ${appName}.${devHint}`,
+      'После изменения полностью закройте и снова откройте приложение.'
+    ].join('\n') + causeText
+  );
+  error.name = 'ScreenCapturePermissionError';
+  return error;
+}
+
+function openMacScreenCaptureSettings() {
+  const now = Date.now();
+  if (now - lastScreenCaptureSettingsOpenAt < 5000) return;
+
+  lastScreenCaptureSettingsOpenAt = now;
+  shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture').catch(() => {});
 }
 
 function takePendingDesktopCaptureSource(frame) {
