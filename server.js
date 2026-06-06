@@ -6,16 +6,20 @@ const http = require('node:http');
 const path = require('node:path');
 const { URL } = require('node:url');
 
-const PORT = Number.parseInt(process.env.PORT || '3000', 10);
+const PORT = readEnvInt('PORT', 3000, 1);
 const PUBLIC_DIR = path.join(__dirname, 'public');
-const MAX_ROOM_PEERS = Number.parseInt(process.env.MAX_ROOM_PEERS || '8', 10);
-const KEEPALIVE_MS = Number.parseInt(process.env.SSE_KEEPALIVE_MS || '15000', 10);
-const BODY_LIMIT_BYTES = Number.parseInt(process.env.BODY_LIMIT_BYTES || '65536', 10);
-const TURN_TTL_SECONDS = Number.parseInt(process.env.TURN_TTL_SECONDS || '43200', 10);
-const ROOM_IDLE_TTL_MS = Number.parseInt(process.env.ROOM_IDLE_TTL_MS || '900000', 10);
+const MAX_ROOM_PEERS = readEnvInt('MAX_ROOM_PEERS', 8, 1);
+const MAX_ROOMS = readEnvInt('MAX_ROOMS', 100, 1);
+const KEEPALIVE_MS = readEnvInt('SSE_KEEPALIVE_MS', 15000, 1000);
+const BODY_LIMIT_BYTES = readEnvInt('BODY_LIMIT_BYTES', 65536, 1024);
+const TURN_TTL_SECONDS = readEnvInt('TURN_TTL_SECONDS', 900, 60);
+const ROOM_IDLE_TTL_MS = readEnvInt('ROOM_IDLE_TTL_MS', 900000, 1000);
+const ROOM_CREATE_RATE_LIMIT = readEnvInt('ROOM_CREATE_RATE_LIMIT', 20, 0);
+const ROOM_CREATE_RATE_WINDOW_MS = readEnvInt('ROOM_CREATE_RATE_WINDOW_MS', 60000, 1000);
 const DEFAULT_STUN_URLS = 'stun:stun.l.google.com:19302';
 
 const rooms = new Map();
+const roomCreateRates = new Map();
 
 const mimeTypes = {
   '.css': 'text/css; charset=utf-8',
@@ -30,6 +34,11 @@ const mimeTypes = {
   '.wasm': 'application/wasm',
   '.webmanifest': 'application/manifest+json; charset=utf-8'
 };
+
+function readEnvInt(name, fallback, min) {
+  const value = Number.parseInt(process.env[name] || String(fallback), 10);
+  return Number.isFinite(value) && value >= min ? value : fallback;
+}
 
 function baseHeaders() {
   return {
@@ -75,6 +84,12 @@ function normalizePeerId(value) {
   return /^[A-Za-z0-9_-]{8,80}$/.test(peerId) ? peerId : '';
 }
 
+function normalizeSessionToken(value) {
+  if (typeof value !== 'string') return '';
+  const token = value.trim();
+  return /^[A-Za-z0-9_-]{32,128}$/.test(token) ? token : '';
+}
+
 function cleanName(value) {
   if (typeof value !== 'string') return 'Guest';
   const compact = value.replace(/\s+/g, ' ').trim();
@@ -100,6 +115,39 @@ function pruneRooms(now = Date.now()) {
       rooms.delete(roomId);
     }
   }
+}
+
+function getClientIp(req) {
+  const forwardedFor = req.headers['x-forwarded-for'];
+  const forwardedValue = Array.isArray(forwardedFor) ? forwardedFor[0] : forwardedFor;
+  const forwardedIp = String(forwardedValue || '').split(',')[0].trim();
+  return forwardedIp || req.socket.remoteAddress || 'unknown';
+}
+
+function checkRoomCreateRate(req, now = Date.now()) {
+  if (ROOM_CREATE_RATE_LIMIT <= 0 || ROOM_CREATE_RATE_WINDOW_MS <= 0) {
+    return { allowed: true, retryAfterSeconds: 0 };
+  }
+
+  for (const [clientIp, entry] of roomCreateRates) {
+    if (now - entry.startedAt > ROOM_CREATE_RATE_WINDOW_MS) {
+      roomCreateRates.delete(clientIp);
+    }
+  }
+
+  const clientIp = getClientIp(req);
+  const current = roomCreateRates.get(clientIp);
+  if (!current || now - current.startedAt >= ROOM_CREATE_RATE_WINDOW_MS) {
+    roomCreateRates.set(clientIp, { count: 1, startedAt: now });
+    return { allowed: true, retryAfterSeconds: 0 };
+  }
+
+  current.count += 1;
+  const retryAfterSeconds = Math.ceil((ROOM_CREATE_RATE_WINDOW_MS - (now - current.startedAt)) / 1000);
+  return {
+    allowed: current.count <= ROOM_CREATE_RATE_LIMIT,
+    retryAfterSeconds
+  };
 }
 
 function createRoom() {
@@ -141,6 +189,18 @@ function publicPeer(peer) {
     screenAudio: peer.screenAudio,
     screenStreamId: peer.screenStreamId
   };
+}
+
+function tokensMatch(expected, actual) {
+  if (!expected || !actual || expected.length !== actual.length) return false;
+  return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(actual));
+}
+
+function getAuthorizedPeer(roomId, peerId, sessionToken) {
+  const room = rooms.get(roomId);
+  const peer = room?.peers.get(peerId);
+  if (!room || !peer || !tokensMatch(peer.sessionToken, sessionToken)) return null;
+  return { peer, room };
 }
 
 function sendEvent(peer, message) {
@@ -258,10 +318,11 @@ async function readJsonBody(req) {
 async function handleEvents(req, res, url) {
   const roomId = normalizeRoomId(url.searchParams.get('room'));
   const peerId = normalizePeerId(url.searchParams.get('peer'));
+  const sessionToken = normalizeSessionToken(url.searchParams.get('token'));
   const name = cleanName(url.searchParams.get('name'));
 
-  if (!roomId || !peerId) {
-    sendJson(res, 400, { ok: false, error: 'Invalid room or peer id' });
+  if (!roomId || !peerId || !sessionToken) {
+    sendJson(res, 400, { ok: false, error: 'Invalid room, peer, or session token' });
     return;
   }
 
@@ -280,6 +341,11 @@ async function handleEvents(req, res, url) {
   }
 
   const reconnecting = room.peers.has(peerId);
+  const previous = room.peers.get(peerId);
+  if (previous && !tokensMatch(previous.sessionToken, sessionToken)) {
+    sendJson(res, 403, { ok: false, error: 'Invalid peer session' });
+    return;
+  }
 
   if (!reconnecting && room.peers.size >= MAX_ROOM_PEERS) {
     res.writeHead(200, {
@@ -298,7 +364,6 @@ async function handleEvents(req, res, url) {
     .filter((peer) => peer.id !== peerId)
     .map(publicPeer);
 
-  const previous = room.peers.get(peerId);
   if (previous) {
     previous.closed = true;
     previous.replaced = true;
@@ -324,6 +389,7 @@ async function handleEvents(req, res, url) {
     screen: false,
     screenAudio: false,
     screenStreamId: '',
+    sessionToken,
     res
   };
   room.peers.set(peerId, peer);
@@ -332,6 +398,7 @@ async function handleEvents(req, res, url) {
 
   sendEvent(peer, {
     type: 'hello',
+    iceConfig: buildIceConfig(req),
     peer: publicPeer(peer),
     peers: existingPeers,
     roomId
@@ -348,11 +415,47 @@ async function handleEvents(req, res, url) {
   });
 }
 
+function handleConfig(req, res, url) {
+  const roomId = normalizeRoomId(url.searchParams.get('room'));
+  const peerId = normalizePeerId(url.searchParams.get('peer'));
+  const sessionToken = normalizeSessionToken(url.searchParams.get('token'));
+
+  if (!roomId || !peerId || !sessionToken) {
+    sendJson(res, 401, { ok: false, error: 'Peer session is required' });
+    return;
+  }
+
+  if (!getAuthorizedPeer(roomId, peerId, sessionToken)) {
+    sendJson(res, 403, { ok: false, error: 'Invalid peer session' });
+    return;
+  }
+
+  sendJson(res, 200, buildIceConfig(req));
+}
+
 async function handleCreateRoom(req, res) {
+  const rate = checkRoomCreateRate(req);
+  if (!rate.allowed) {
+    sendJson(
+      res,
+      429,
+      { ok: false, error: 'Too many rooms created, try again later' },
+      { 'Retry-After': String(rate.retryAfterSeconds) }
+    );
+    return;
+  }
+
   await readJsonBody(req);
+  pruneRooms();
+  if (rooms.size >= MAX_ROOMS) {
+    sendJson(res, 503, { ok: false, error: 'Room capacity is temporarily full' });
+    return;
+  }
+
   const room = createRoom();
   sendJson(res, 201, {
     ok: true,
+    maxRooms: MAX_ROOMS,
     maxRoomPeers: MAX_ROOM_PEERS,
     roomId: room.id
   });
@@ -388,18 +491,24 @@ async function handleSignal(req, res) {
   const roomId = normalizeRoomId(body.roomId);
   const from = normalizePeerId(body.from);
   const to = normalizePeerId(body.to);
+  const sessionToken = normalizeSessionToken(body.sessionToken);
   const signalType = typeof body.signalType === 'string' ? body.signalType : '';
   const payload = body.payload && typeof body.payload === 'object' ? body.payload : null;
 
-  if (!roomId || !from || !to || !signalType || !payload) {
+  if (!roomId || !from || !to || !sessionToken || !signalType || !payload) {
     sendJson(res, 400, { ok: false, error: 'Invalid signal payload' });
     return;
   }
 
-  const room = rooms.get(roomId);
-  const sender = room?.peers.get(from);
+  const authorized = getAuthorizedPeer(roomId, from, sessionToken);
+  if (!authorized) {
+    sendJson(res, 403, { ok: false, error: 'Invalid peer session' });
+    return;
+  }
+
+  const { room } = authorized;
   const target = room?.peers.get(to);
-  if (!room || !sender || !target) {
+  if (!target) {
     sendJson(res, 404, { ok: false, error: 'Peer is no longer in the room' });
     return;
   }
@@ -417,13 +526,15 @@ async function handleState(req, res) {
   const body = await readJsonBody(req);
   const roomId = normalizeRoomId(body.roomId);
   const peerId = normalizePeerId(body.peerId);
-  const room = roomId && rooms.get(roomId);
-  const peer = room && room.peers.get(peerId);
+  const sessionToken = normalizeSessionToken(body.sessionToken);
+  const authorized = getAuthorizedPeer(roomId, peerId, sessionToken);
 
-  if (!room || !peer) {
-    sendJson(res, 404, { ok: false, error: 'Peer is no longer in the room' });
+  if (!authorized) {
+    sendJson(res, 403, { ok: false, error: 'Invalid peer session' });
     return;
   }
+
+  const { peer, room } = authorized;
 
   if (Object.hasOwn(body, 'name')) {
     peer.name = cleanName(body.name);
@@ -494,6 +605,7 @@ const server = http.createServer(async (req, res) => {
       pruneRooms();
       sendJson(res, 200, {
         ok: true,
+        maxRooms: MAX_ROOMS,
         rooms: rooms.size,
         peers: Array.from(rooms.values()).reduce((count, room) => count + room.peers.size, 0)
       });
@@ -501,7 +613,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === 'GET' && url.pathname === '/config') {
-      sendJson(res, 200, buildIceConfig(req));
+      handleConfig(req, res, url);
       return;
     }
 

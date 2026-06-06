@@ -106,6 +106,7 @@ const state = {
   connecting: false,
   eventSource: null,
   iceConfig: { iceServers: [] },
+  iceRefreshTimer: 0,
   joined: false,
   localRawStream: null,
   localScreenStream: null,
@@ -125,6 +126,7 @@ const state = {
   screenStopping: false,
   screenVolume: 1,
   self: null,
+  sessionToken: createSessionToken(),
   sharedScreenPeerId: '',
   viewedScreenPeerId: ''
 };
@@ -234,6 +236,12 @@ function getRoomIdFromPath() {
 function createPeerId() {
   if (crypto.randomUUID) return crypto.randomUUID();
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+}
+
+function createSessionToken() {
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
 function hideScreens() {
@@ -374,7 +382,6 @@ async function joinRoom(event) {
       return;
     }
 
-    state.iceConfig = await fetchJson('/config');
     setLocalMicrophoneCapture(await openLocalMicrophone());
     await refreshDevices();
 
@@ -390,7 +397,7 @@ async function joinRoom(event) {
     updatePeerStatus(state.self);
 
     state.eventSource = new EventSource(
-      `/events?room=${encodeURIComponent(state.roomId)}&peer=${encodeURIComponent(state.peerId)}&name=${encodeURIComponent(name)}`
+      `/events?room=${encodeURIComponent(state.roomId)}&peer=${encodeURIComponent(state.peerId)}&token=${encodeURIComponent(state.sessionToken)}&name=${encodeURIComponent(name)}`
     );
     state.eventSource.onmessage = handleServerMessage;
     state.eventSource.onerror = () => {
@@ -809,6 +816,7 @@ async function handleServerMessage(event) {
   const message = JSON.parse(event.data);
 
   if (message.type === 'hello') {
+    applyIceConfig(message.iceConfig);
     setStatus('connected', '');
     syncPeers(message.peers.map((peer) => peer.id));
     for (const peer of message.peers) {
@@ -1393,6 +1401,7 @@ async function sendSignal(to, signalType, payload) {
     from: state.peerId,
     payload,
     roomId: state.roomId,
+    sessionToken: state.sessionToken,
     signalType,
     to
   });
@@ -1407,8 +1416,37 @@ async function postState() {
     roomId: state.roomId,
     screen: Boolean(state.localScreenStream),
     screenAudio: hasScreenAudio(),
-    screenStreamId: state.localScreenStream?.id || ''
+    screenStreamId: state.localScreenStream?.id || '',
+    sessionToken: state.sessionToken
   });
+}
+
+function applyIceConfig(iceConfig) {
+  if (!iceConfig || !Array.isArray(iceConfig.iceServers)) return;
+  state.iceConfig = iceConfig;
+  scheduleIceConfigRefresh(iceConfig.turnTtlSeconds);
+}
+
+function scheduleIceConfigRefresh(ttlSeconds) {
+  window.clearTimeout(state.iceRefreshTimer);
+  if (!state.joined) return;
+
+  const ttlMs = Number(ttlSeconds) * 1000;
+  const delay = Number.isFinite(ttlMs) && ttlMs > 0 ? Math.max(60_000, Math.floor(ttlMs * 0.7)) : 600_000;
+  state.iceRefreshTimer = window.setTimeout(() => {
+    refreshIceConfig().catch((error) => console.warn('ICE config refresh failed', error));
+  }, delay);
+}
+
+async function refreshIceConfig() {
+  if (!state.joined || !state.roomId) return;
+
+  const query = new URLSearchParams({
+    peer: state.peerId,
+    room: state.roomId,
+    token: state.sessionToken
+  });
+  applyIceConfig(await fetchJson(`/config?${query}`));
 }
 
 async function fetchJson(url) {
@@ -1733,6 +1771,8 @@ function leaveRoom() {
 
   state.connecting = false;
   state.joined = false;
+  window.clearTimeout(state.iceRefreshTimer);
+  state.iceRefreshTimer = 0;
   state.eventSource?.close();
   state.eventSource = null;
   closeScreenView();
