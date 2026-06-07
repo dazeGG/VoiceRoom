@@ -12,7 +12,7 @@
 
 {$LIVEKIT_DOMAIN} {
   encode zstd gzip
-  reverse_proxy host.docker.internal:7880
+  reverse_proxy livekit:7880
 
   header {
     Strict-Transport-Security "max-age=31536000; includeSubDomains"

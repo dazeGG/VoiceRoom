@@ -26,11 +26,10 @@ services:
     restart: unless-stopped
     depends_on:
       - voicechat
+      - livekit
     environment:
       DOMAIN: ${DOMAIN:?set DOMAIN in .env}
       LIVEKIT_DOMAIN: ${LIVEKIT_DOMAIN:-livekit.${DOMAIN}}
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     ports:
       - "80:80"
       - "443:443"
@@ -42,7 +41,6 @@ services:
   livekit:
     image: ${LIVEKIT_IMAGE:-livekit/livekit-server:latest}
     restart: unless-stopped
-    network_mode: host
     environment:
       LIVEKIT_CONFIG: |
         port: 7880
@@ -55,6 +53,11 @@ services:
           use_external_ip: true
         keys:
           "${LIVEKIT_API_KEY:?set LIVEKIT_API_KEY in .env}": "${LIVEKIT_API_SECRET:?set LIVEKIT_API_SECRET in .env}"
+    expose:
+      - "7880"
+    ports:
+      - "7881:7881/tcp"
+      - "7882:7882/udp"
 
 volumes:
   caddy_data:
