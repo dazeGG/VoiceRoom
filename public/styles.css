@@ -1300,10 +1300,44 @@ button:focus-visible,
   position: absolute;
   inset: 0;
   z-index: 2;
+  height: 24px;
   min-width: 0;
   margin: 0;
-  opacity: 0;
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
   cursor: pointer;
+}
+
+.gate-control input::-webkit-slider-runnable-track {
+  height: 8px;
+  border: 0;
+  background: transparent;
+}
+
+.gate-control input::-webkit-slider-thumb {
+  width: 16px;
+  height: 16px;
+  margin-top: -4px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.gate-control input::-moz-range-track {
+  height: 8px;
+  border: 0;
+  background: transparent;
+}
+
+.gate-control input::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
 }
 
 .gate-control output {
