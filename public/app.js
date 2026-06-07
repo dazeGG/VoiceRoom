@@ -137,7 +137,6 @@ const elements = {
   screenMetaProfile: $('#screenMetaProfile'),
   screenMetaTitle: $('#screenMetaTitle'),
   screenMetaViewers: $('#screenMetaViewers'),
-  screenMinimizeButton: $('#screenMinimizeButton'),
   screenPlaceholder: $('#screenPlaceholder'),
   screenProfileOptions: $('#screenProfileOptions'),
   screenProfilePopover: $('#screenProfilePopover'),
@@ -250,7 +249,6 @@ function init() {
   elements.screenButton.addEventListener('click', handleScreenButtonClick);
   elements.screenExitButton.addEventListener('click', () => leaveScreenView().catch((error) => console.error(error)));
   elements.screenFullscreenButton.addEventListener('click', toggleScreenFullscreen);
-  elements.screenMinimizeButton.addEventListener('click', () => leaveScreenView().catch((error) => console.error(error)));
   elements.screenSourceCloseButton.addEventListener('click', cancelScreenSourcePicker);
   elements.screenSourceDialog.addEventListener('click', closeScreenSourceOnBackdrop);
   elements.streamVolumeButton.addEventListener('click', toggleScreenMute);
@@ -3857,7 +3855,7 @@ function showScreenStage({ peer, stream }) {
   document.body.dataset.screenView = 'true';
   elements.screenStage.hidden = false;
   elements.screenViewControls.hidden = !stream;
-  elements.leaveButton.hidden = false;
+  elements.leaveButton.hidden = true;
   elements.screenExitButton.hidden = false;
   elements.screenPlaceholder.hidden = Boolean(stream);
   refreshScreenMeta(peer);
