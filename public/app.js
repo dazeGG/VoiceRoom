@@ -476,7 +476,7 @@ function showRoomScreen() {
   elements.roomTitle.textContent = state.roomId;
   hideScreens();
   elements.roomScreen.hidden = false;
-  elements.statusPill.hidden = true;
+  setStatus('idle', 'готово');
 
   updateNameStatuses();
   refreshCallControls();
@@ -658,7 +658,7 @@ async function joinRoom(event) {
       `/events?room=${encodeURIComponent(state.roomId)}&peer=${encodeURIComponent(state.peerId)}&token=${encodeURIComponent(state.sessionToken)}&name=${encodeURIComponent(name)}`
     );
     state.eventSource.onopen = () => {
-      if (state.joined) setStatus('connected', '');
+      if (state.joined) setStatus('connected', 'подключено');
     };
     state.eventSource.onmessage = handleServerMessage;
     state.eventSource.onerror = () => {
@@ -789,13 +789,13 @@ function logLocalLiveKitDebug(level, ...args) {
 
 function bindLiveKitRoomEvents(room) {
   room.on(RoomEvent.Connected, () => {
-    setStatus('connected', '');
+    setStatus('connected', 'подключено');
   });
   room.on(RoomEvent.Reconnecting, () => {
     if (state.joined || state.connecting) setStatus('connecting', 'переподключение');
   });
   room.on(RoomEvent.Reconnected, () => {
-    if (state.joined || state.connecting) setStatus('connected', '');
+    if (state.joined || state.connecting) setStatus('connected', 'подключено');
   });
   room.on(RoomEvent.Disconnected, () => {
     if (state.joined) setStatus('connecting', 'соединение потеряно');
@@ -2103,7 +2103,7 @@ async function handleServerMessage(event) {
   const message = JSON.parse(event.data);
 
   if (message.type === 'hello') {
-    setStatus('connected', '');
+    setStatus('connected', 'подключено');
     syncPeers(message.peers.map((peer) => peer.id));
     for (const peer of message.peers) {
       createParticipant(peer);
@@ -2113,7 +2113,7 @@ async function handleServerMessage(event) {
   }
 
   if (message.type === 'ping') {
-    setStatus('connected', '');
+    setStatus('connected', 'подключено');
     return;
   }
 
@@ -3971,7 +3971,7 @@ function hashStringToHue(value) {
 function setStatus(stateName, label) {
   elements.statusPill.dataset.state = stateName;
   elements.statusText.textContent = label;
-  elements.statusPill.hidden = stateName === 'idle' || stateName === 'connected';
+  elements.statusPill.hidden = stateName === 'idle' || document.body.dataset.screen !== 'room';
 }
 
 function showToast(message, options = {}) {
