@@ -157,6 +157,7 @@ const elements = {
   startScreen: $('#startScreen'),
   statusPill: $('#statusPill'),
   statusText: $('#statusText'),
+  tileGrid: $('#tileGrid'),
   streamTiles: $('#streamTiles'),
   streamVolumeButton: $('#streamVolumeButton'),
   streamVolumeSlider: $('#streamVolumeSlider'),
@@ -3809,6 +3810,7 @@ function closeScreenView() {
   const peerId = state.viewedScreenPeerId;
   setViewedScreenPeerId('');
   state.screenRequesting = false;
+  state.stripCollapsed = false;
 
   const peer = getParticipantById(peerId);
   if (peer && !peer.isLocal && peer.screenStream) {
@@ -3937,12 +3939,14 @@ function refreshScreenTiles() {
 
   const screenParticipants = getScreenParticipants();
   elements.streamTiles.hidden = screenParticipants.length === 0;
+  elements.streamTiles.dataset.count = String(Math.min(screenParticipants.length, 8));
 
   for (const participant of screenParticipants) {
     elements.streamTiles.append(createStreamTile(participant));
   }
 
   refreshStageStripControls();
+  refreshStageGridState();
 }
 
 function createStreamTile(participant) {
@@ -3969,15 +3973,12 @@ function createStreamTile(participant) {
   const title = document.createElement('strong');
   title.textContent = participant.isLocal ? 'Ваш стрим' : `Стрим ${participant.name}`;
 
-  const profile = document.createElement('span');
-  profile.textContent = formatScreenProfileLine(participant);
+  const action = document.createElement('span');
+  action.className = 'stream-tile-action';
+  action.textContent = state.viewedScreenPeerId === participant.id ? 'Свернуть стрим' : 'Смотреть стрим';
 
-  const viewers = document.createElement('span');
-  viewers.className = 'stream-tile-viewers';
-  viewers.textContent = formatScreenViewersLine(participant.id);
-
-  copy.append(title, profile, viewers);
-  button.append(preview, copy);
+  copy.append(title);
+  button.append(preview, copy, action);
   button.addEventListener('click', () => toggleScreenTile(participant.id).catch((error) => console.error(error)));
   return button;
 }
@@ -4011,14 +4012,13 @@ function refreshScreenMeta(participant) {
 
   elements.screenMeta.hidden = false;
   elements.screenMetaTitle.textContent = participant.isLocal ? 'Ваш стрим' : `Стрим ${participant.name}`;
-  elements.screenMetaProfile.textContent = formatScreenProfileLine(participant);
+  elements.screenMetaProfile.textContent = getScreenProfileLabel(participant);
   elements.screenMetaViewers.textContent = formatScreenViewersLine(participant.id);
 }
 
-function formatScreenProfileLine(participant) {
+function getScreenProfileLabel(participant) {
   const profile = getScreenProfile(participant.isLocal ? state.localScreenProfileId : participant.screenProfileId);
-  const audioLabel = participant.screenAudio ? 'звук' : 'без звука';
-  return `${profile.label} · ${profile.detail} · ${audioLabel}`;
+  return profile.label;
 }
 
 function formatScreenViewersLine(ownerPeerId) {
@@ -4041,23 +4041,28 @@ function refreshStageStripControls() {
   const streamLabel = streamCount
     ? ` · ${formatRussianCount(streamCount, 'стрим', 'стрима', 'стримов')}`
     : '';
+  const viewing = Boolean(state.viewedScreenPeerId);
 
-  elements.stageStripKicker.textContent = state.viewedScreenPeerId ? 'Сцена' : 'В комнате';
+  elements.stageStripKicker.textContent = viewing ? 'Сцена' : '';
   elements.stageStripSummary.textContent = `${participantLabel}${streamLabel}`;
+  elements.stripToggleButton.hidden = !viewing;
   elements.stripToggleButton.setAttribute('aria-pressed', String(state.stripCollapsed));
   elements.stripToggleButton.setAttribute(
     'aria-label',
     state.stripCollapsed ? 'Показать пользователей' : 'Свернуть пользователей'
   );
 
-  if (state.stripCollapsed) {
+  if (state.stripCollapsed && viewing) {
     document.body.dataset.stripCollapsed = 'true';
   } else {
     delete document.body.dataset.stripCollapsed;
   }
+
+  document.body.dataset.stageSummary = viewing ? 'visible' : 'hidden';
 }
 
 function toggleParticipantStrip() {
+  if (!state.viewedScreenPeerId) return;
   state.stripCollapsed = !state.stripCollapsed;
   refreshStageStripControls();
 }
@@ -4513,6 +4518,18 @@ function refreshParticipantState() {
   const participantCount = elements.participants.children.length;
   elements.participants.dataset.count = String(Math.min(participantCount, 8));
   elements.emptyRoom.hidden = participantCount > 0;
+  refreshStageGridState();
+}
+
+function refreshStageGridState() {
+  if (!elements.tileGrid) return;
+
+  const participantCount = elements.participants.children.length;
+  const streamCount = getScreenParticipants().length;
+  const totalCount = participantCount + streamCount;
+  elements.tileGrid.dataset.count = String(Math.min(totalCount, 8));
+  elements.tileGrid.dataset.streams = String(Math.min(streamCount, 8));
+  elements.emptyRoom.hidden = totalCount > 0;
 }
 
 function queueAudioUnlock(options = {}) {
