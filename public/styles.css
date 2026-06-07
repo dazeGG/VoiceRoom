@@ -1354,7 +1354,7 @@ button:focus-visible,
   position: relative;
   height: 8px;
   overflow: visible;
-  border: 1px solid oklch(38% 0.018 92 / 0.72);
+  border: 0;
   border-radius: 999px;
   background: oklch(14% 0.014 92);
   cursor: pointer;
