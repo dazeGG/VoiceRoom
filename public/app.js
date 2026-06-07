@@ -36,7 +36,7 @@ const PEER_LATENCY_FAIR_MS = 300;
 const PEER_RECONNECT_COOLDOWN_MS = 5000;
 const PEER_RECONNECT_DELAY_MS = 1200;
 const GATE_CAPTURE_SWITCH_DEBOUNCE_MS = 700;
-const LOCAL_GATE_DISABLED_RMS_FLOOR = 0.5;
+const LOCAL_GATE_DISABLED_SPEAKING_DB = -42;
 const SPEAKING_STATS_INTERVAL_MS = 200;
 const REMOTE_SPEAKING_AUDIO_LEVEL_FLOOR = 0.005;
 const REMOTE_SPEAKING_SIGNAL_POWER_FLOOR = REMOTE_SPEAKING_AUDIO_LEVEL_FLOOR ** 2;
@@ -3069,7 +3069,7 @@ function isLocalMicrophoneSpeaking(participant, levelDb, rms) {
   if (participant.muted) return false;
   if (!isGateDisabled()) return levelDb >= state.gateThresholdDb;
 
-  return rms > LOCAL_GATE_DISABLED_RMS_FLOOR;
+  return levelDb >= LOCAL_GATE_DISABLED_SPEAKING_DB;
 }
 
 function getCueGain(value) {
