@@ -239,6 +239,7 @@ function init() {
   elements.soundButton.addEventListener('click', unlockAudio);
   elements.deviceSelect.addEventListener('change', switchMicrophone);
   elements.gateThresholdSlider.addEventListener('input', updateGateThresholdFromSlider);
+  elements.micLevelTrack.addEventListener('pointerdown', handleGateThresholdPointerDown);
   elements.noiseModeSelect.addEventListener('change', switchNoiseMode);
   elements.outputDeviceSelect.addEventListener('change', switchOutputDevice);
   document.addEventListener('click', closeDevicePopoverOnOutside);
@@ -378,7 +379,7 @@ function refreshGateMarker() {
   if (!elements.micGateMarker) return;
 
   const position = getDbMeterPosition(state.gateThresholdDb);
-  elements.micGateMarker.style.setProperty('--gate-position', position.toFixed(4));
+  elements.micGateMarker.style.left = `${(position * 100).toFixed(2)}%`;
   elements.micGateMarker.dataset.active = String(!isGateDisabled());
 }
 
@@ -2004,6 +2005,34 @@ function updateActiveGateThreshold(threshold) {
     processor.setThreshold(threshold);
   }
   return true;
+}
+
+function handleGateThresholdPointerDown(event) {
+  event.preventDefault();
+  updateGateThresholdFromPointer(event);
+  elements.micLevelTrack.setPointerCapture?.(event.pointerId);
+  elements.micLevelTrack.addEventListener('pointermove', handleGateThresholdPointerMove);
+  elements.micLevelTrack.addEventListener('pointerup', handleGateThresholdPointerEnd, { once: true });
+  elements.micLevelTrack.addEventListener('pointercancel', handleGateThresholdPointerEnd, { once: true });
+}
+
+function handleGateThresholdPointerMove(event) {
+  updateGateThresholdFromPointer(event);
+}
+
+function handleGateThresholdPointerEnd(event) {
+  elements.micLevelTrack.releasePointerCapture?.(event.pointerId);
+  elements.micLevelTrack.removeEventListener('pointermove', handleGateThresholdPointerMove);
+}
+
+function updateGateThresholdFromPointer(event) {
+  const rect = elements.micLevelTrack.getBoundingClientRect();
+  if (rect.width <= 0) return;
+
+  const position = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width));
+  const value = Math.round(GATE_THRESHOLD_MIN_DB + position * (GATE_THRESHOLD_MAX_DB - GATE_THRESHOLD_MIN_DB));
+  elements.gateThresholdSlider.value = String(value);
+  updateGateThresholdFromSlider();
 }
 
 async function switchOutputDevice() {

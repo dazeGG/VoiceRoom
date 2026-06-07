@@ -1307,6 +1307,8 @@ button:focus-visible,
   -webkit-appearance: none;
   background: transparent;
   cursor: pointer;
+  outline: none;
+  pointer-events: none;
 }
 
 .gate-control input::-webkit-slider-runnable-track {
@@ -1355,6 +1357,8 @@ button:focus-visible,
   border: 1px solid oklch(38% 0.018 92 / 0.72);
   border-radius: 999px;
   background: oklch(14% 0.014 92);
+  cursor: pointer;
+  touch-action: none;
 }
 
 .mic-level-fill {
@@ -1372,10 +1376,8 @@ button:focus-visible,
 }
 
 .mic-gate-marker {
-  --gate-position: 0;
   position: absolute;
   top: 50%;
-  left: calc(8px + (100% - 16px) * var(--gate-position));
   width: 16px;
   height: 16px;
   border-radius: 50%;
