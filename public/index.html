@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#10110f">
     <title>Voice Room</title>
     <link rel="icon" href="/icon.svg" type="image/svg+xml">
-    <link rel="stylesheet" href="/styles.css?v=20260607-room-topbar-1">
+    <link rel="stylesheet" href="/styles.css?v=20260607-discord-stage-1">
   </head>
   <body>
     <div class="app-shell">
@@ -82,7 +82,23 @@
           <div class="screen-stage" id="screenStage" hidden>
             <video class="screen-video" id="screenVideo" autoplay playsinline></video>
             <div class="screen-placeholder" id="screenPlaceholder">Подключение к экрану</div>
+            <div class="screen-meta" id="screenMeta" hidden>
+              <span class="screen-meta-live" aria-hidden="true"></span>
+              <span class="screen-meta-title" id="screenMetaTitle"></span>
+              <span class="screen-meta-detail" id="screenMetaProfile"></span>
+              <span class="screen-meta-detail" id="screenMetaViewers"></span>
+            </div>
             <div class="screen-view-controls" id="screenViewControls" hidden>
+              <button class="screen-control-button screen-minimize-button" id="screenMinimizeButton" type="button" aria-label="Свернуть стрим до плитки">
+                <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                  <path d="M5 5h14v14h-14z"></path>
+                  <path d="M9 9h6v6h-6z"></path>
+                  <path d="M4 14l5 -5"></path>
+                  <path d="M20 14l-5 -5"></path>
+                  <path d="M4 20l5 -5"></path>
+                  <path d="M20 20l-5 -5"></path>
+                </svg>
+              </button>
               <div class="stream-volume-control">
                 <button class="screen-control-button stream-volume-button" id="streamVolumeButton" type="button" aria-label="Выключить звук стрима" aria-pressed="false">
                   <span class="stream-volume-icon stream-volume-icon-on" aria-hidden="true">
@@ -134,11 +150,26 @@
             </div>
           </div>
 
-          <div class="participants" id="participants" data-count="0" aria-live="polite"></div>
+          <div class="stage-strip" id="stageStrip" aria-label="Плитки комнаты">
+            <div class="stage-strip-bar">
+              <div class="stage-strip-title">
+                <span class="stage-strip-kicker" id="stageStripKicker">В комнате</span>
+                <strong id="stageStripSummary">0 участников</strong>
+              </div>
+              <button class="strip-toggle-button" id="stripToggleButton" type="button" aria-label="Свернуть пользователей" aria-pressed="false">
+                <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                  <path d="M6 9l6 6l6 -6"></path>
+                </svg>
+              </button>
+            </div>
 
-          <div class="empty-room" id="emptyRoom">
-            <span class="empty-orbit" aria-hidden="true"></span>
-            <p>Здесь пока тихо</p>
+            <div class="stream-tiles" id="streamTiles" hidden></div>
+            <div class="participants" id="participants" data-count="0" aria-live="polite"></div>
+
+            <div class="empty-room" id="emptyRoom">
+              <span class="empty-orbit" aria-hidden="true"></span>
+              <p>Здесь пока тихо</p>
+            </div>
           </div>
 
           <div class="room-dock" aria-label="Управление голосом">
@@ -271,7 +302,7 @@
               </svg>
             </button>
 
-            <button class="dock-button screen-exit-button" id="screenExitButton" type="button" aria-label="Выйти из просмотра" hidden>
+            <button class="dock-button screen-exit-button" id="screenExitButton" type="button" aria-label="Свернуть стрим до плитки" hidden>
               <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
                 <path d="M4 5a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v8a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2z"></path>
                 <path d="M8 21h8"></path>
@@ -362,6 +393,6 @@
     </template>
 
     <script src="/vendor/livekit-client.umd.js?v=2.19.1" defer></script>
-    <script src="/app.js?v=20260607-audio-unlock-1" defer></script>
+    <script src="/app.js?v=20260607-discord-stage-1" defer></script>
   </body>
 </html>

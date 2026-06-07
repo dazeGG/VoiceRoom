@@ -133,6 +133,11 @@ const elements = {
   screenButton: $('#screenButton'),
   screenExitButton: $('#screenExitButton'),
   screenFullscreenButton: $('#screenFullscreenButton'),
+  screenMeta: $('#screenMeta'),
+  screenMetaProfile: $('#screenMetaProfile'),
+  screenMetaTitle: $('#screenMetaTitle'),
+  screenMetaViewers: $('#screenMetaViewers'),
+  screenMinimizeButton: $('#screenMinimizeButton'),
   screenPlaceholder: $('#screenPlaceholder'),
   screenProfileOptions: $('#screenProfileOptions'),
   screenProfilePopover: $('#screenProfilePopover'),
@@ -144,14 +149,18 @@ const elements = {
   screenVideo: $('#screenVideo'),
   screenViewControls: $('#screenViewControls'),
   soundButton: $('#soundButton'),
+  stageStripKicker: $('#stageStripKicker'),
+  stageStripSummary: $('#stageStripSummary'),
   startForm: $('#startForm'),
   startNameInput: $('#startNameInput'),
   startNameStatus: $('#startNameStatus'),
   startScreen: $('#startScreen'),
   statusPill: $('#statusPill'),
   statusText: $('#statusText'),
+  streamTiles: $('#streamTiles'),
   streamVolumeButton: $('#streamVolumeButton'),
   streamVolumeSlider: $('#streamVolumeSlider'),
+  stripToggleButton: $('#stripToggleButton'),
   template: $('#participantTemplate'),
   toast: $('#toast')
 };
@@ -197,6 +206,7 @@ const state = {
   screenSourceRequest: null,
   screenStopping: false,
   screenVolume: 1,
+  stripCollapsed: false,
   self: null,
   serverConnection: 'idle',
   serverPeerIds: new Set(),
@@ -239,10 +249,12 @@ function init() {
   elements.screenButton.addEventListener('click', handleScreenButtonClick);
   elements.screenExitButton.addEventListener('click', () => leaveScreenView().catch((error) => console.error(error)));
   elements.screenFullscreenButton.addEventListener('click', toggleScreenFullscreen);
+  elements.screenMinimizeButton.addEventListener('click', () => leaveScreenView().catch((error) => console.error(error)));
   elements.screenSourceCloseButton.addEventListener('click', cancelScreenSourcePicker);
   elements.screenSourceDialog.addEventListener('click', closeScreenSourceOnBackdrop);
   elements.streamVolumeButton.addEventListener('click', toggleScreenMute);
   elements.streamVolumeSlider.addEventListener('input', updateScreenVolumeFromSlider);
+  elements.stripToggleButton.addEventListener('click', toggleParticipantStrip);
   syncScreenVideoAudio();
   elements.deviceMenuButton.addEventListener('click', toggleDevicePopover);
   elements.outputMenuButton.addEventListener('click', toggleOutputPopover);
@@ -266,6 +278,7 @@ function init() {
   navigator.mediaDevices?.addEventListener?.('devicechange', () => refreshDevices().catch(() => {}));
   window.addEventListener('beforeunload', leaveRoom);
   refreshOutputControls();
+  refreshStageStripControls();
   refreshLocalNetworkIndicator();
 
   if (state.roomRoute && !state.roomId) {
@@ -1636,16 +1649,29 @@ async function openBrowserScreenShare(profile) {
     throw new Error('Браузер не поддерживает демонстрацию экрана. Нужен HTTPS или localhost.');
   }
 
-  const stream = await navigator.mediaDevices.getDisplayMedia(createBrowserDisplayMediaConstraints(profile, {
-    suppressLocalAudioPlayback: false
-  }));
+  let stream = null;
+  try {
+    stream = await navigator.mediaDevices.getDisplayMedia(createBrowserDisplayMediaConstraints(profile, {
+      suppressLocalAudioPlayback: false
+    }));
+  } catch (error) {
+    if (error?.name !== 'TypeError') throw error;
+    stream = await navigator.mediaDevices.getDisplayMedia(createBrowserDisplayMediaConstraints(profile, {
+      includeAudioHints: false,
+      suppressLocalAudioPlayback: false
+    }));
+  }
 
   await applyScreenCaptureProfile(stream, profile);
   return stream;
 }
 
 function createBrowserDisplayMediaConstraints(profile, options = {}) {
-  const { audio = true, suppressLocalAudioPlayback = false } = options;
+  const {
+    audio = true,
+    includeAudioHints = true,
+    suppressLocalAudioPlayback = false
+  } = options;
   const video = {
     frameRate: { ideal: profile.frameRate, max: profile.frameRate },
     height: { ideal: profile.height, max: profile.height },
@@ -1666,7 +1692,15 @@ function createBrowserDisplayMediaConstraints(profile, options = {}) {
       noiseSuppression: false,
       suppressLocalAudioPlayback
     },
-    video
+    video,
+    ...(includeAudioHints
+      ? {
+          selfBrowserSurface: 'exclude',
+          surfaceSwitching: 'include',
+          systemAudio: 'include',
+          windowAudio: 'system'
+        }
+      : {})
   };
 }
 
@@ -1976,14 +2010,19 @@ async function startScreenShare(profileId = state.localScreenProfileId) {
       name: getDisplayName(),
       screen: true,
       screenAudio: hasScreenAudio(),
+      screenProfileId: profile.id,
       screenStreamId: stream.id
     });
+    if (!state.viewedScreenPeerId) {
+      state.viewedScreenPeerId = state.peerId;
+      if (state.self) state.self.viewedScreenPeerId = state.peerId;
+    }
     refreshScreenControls();
     refreshScreenStage();
     await postState();
 
     playStreamCue('start');
-    showToast(hasScreenAudio() ? `Стрим запущен: ${profile.label}, звук включен` : `Стрим запущен: ${profile.label}, без звука`);
+    showScreenShareStartedToast(profile);
   } catch (error) {
     const cancelled = isCaptureCancelled(error);
     if (!cancelled) console.error(error);
@@ -2025,6 +2064,7 @@ async function stopScreenShare(options = {}) {
       name: getDisplayName(),
       screen: false,
       screenAudio: false,
+      screenProfileId: '',
       screenStreamId: ''
     });
     refreshScreenControls();
@@ -2487,11 +2527,13 @@ function createParticipant(peerInfo) {
     screen: Boolean(peerInfo.screen),
     screenAction,
     screenAudio: Boolean(peerInfo.screenAudio),
+    screenProfileId: getScreenProfile(peerInfo.screenProfileId).id,
     screenSubscribed: false,
     screenStream: null,
     screenStreamId: peerInfo.screenStreamId || '',
     status,
     stream: null,
+    viewedScreenPeerId: peerInfo.viewedScreenPeerId || '',
     voiceIssue: ''
   };
 
@@ -2503,6 +2545,7 @@ function createParticipant(peerInfo) {
     state.peers.set(peerInfo.id, participant);
   }
   refreshScreenAction(participant);
+  refreshScreenTiles();
   refreshParticipantState();
   return participant;
 }
@@ -2518,7 +2561,9 @@ function updateParticipant(peerInfo) {
   if (Object.hasOwn(peerInfo, 'muted')) participant.muted = Boolean(peerInfo.muted);
   if (hasScreenUpdate) participant.screen = Boolean(peerInfo.screen);
   if (Object.hasOwn(peerInfo, 'screenAudio')) participant.screenAudio = Boolean(peerInfo.screenAudio);
+  if (Object.hasOwn(peerInfo, 'screenProfileId')) participant.screenProfileId = getScreenProfile(peerInfo.screenProfileId).id;
   if (Object.hasOwn(peerInfo, 'screenStreamId')) participant.screenStreamId = peerInfo.screenStreamId || '';
+  if (Object.hasOwn(peerInfo, 'viewedScreenPeerId')) participant.viewedScreenPeerId = peerInfo.viewedScreenPeerId || '';
   participant.node.dataset.deafened = String(participant.deafened);
   participant.node.dataset.muted = String(participant.muted);
   participant.node.dataset.screen = String(participant.screen);
@@ -2541,6 +2586,7 @@ function updateParticipant(peerInfo) {
   }
   updatePeerStatus(participant);
   refreshScreenAction(participant);
+  refreshScreenTiles();
   refreshScreenStage();
 }
 
@@ -2561,6 +2607,8 @@ function removePeer(peerId) {
   peer.node.remove();
   state.peers.delete(peerId);
   if (state.peers.size === 0) setParticipantSpeaking(state.self, false);
+  refreshScreenTiles();
+  refreshParticipantState();
 }
 
 function detachLiveKitParticipant(peer, voiceIssue = 'подключает голос') {
@@ -3479,8 +3527,10 @@ async function postState() {
     roomId: state.roomId,
     screen: Boolean(state.localScreenStream),
     screenAudio: hasScreenAudio(),
+    screenProfileId: state.localScreenStream ? state.localScreenProfileId : '',
     screenStreamId: state.localScreenStream?.id || '',
-    sessionToken: state.sessionToken
+    sessionToken: state.sessionToken,
+    viewedScreenPeerId: state.viewedScreenPeerId || ''
   });
 }
 
@@ -3707,11 +3757,21 @@ function refreshScreenControls() {
   if (sharing || !state.joined || state.connecting) closeScreenProfilePopover();
 }
 
+async function toggleScreenTile(peerId) {
+  if (state.viewedScreenPeerId === peerId) {
+    await leaveScreenView();
+    return;
+  }
+
+  await enterScreenView(peerId);
+}
+
 async function enterScreenView(peerId) {
-  const peer = state.peers.get(peerId);
+  const peer = getParticipantById(peerId);
   if (!peer?.screen) {
     showToast('Демонстрация уже завершена');
     refreshAllScreenActions();
+    refreshScreenTiles();
     return;
   }
 
@@ -3720,40 +3780,44 @@ async function enterScreenView(peerId) {
     await leaveScreenView({ quiet: true });
   }
 
-  state.viewedScreenPeerId = peerId;
-  state.screenRequesting = true;
+  setViewedScreenPeerId(peerId);
+  state.screenRequesting = !peer.isLocal && !peer.screenStream;
   refreshAllScreenActions();
+  refreshScreenTiles();
   refreshScreenStage();
 
-  syncLiveKitScreenSubscriptions(peer);
-  if (peer.screenStream) {
+  if (!peer.isLocal) syncLiveKitScreenSubscriptions(peer);
+  if (peer.isLocal || peer.screenStream) {
     state.screenRequesting = false;
     refreshScreenStage();
   }
+  postState().catch(() => {});
 }
 
 async function leaveScreenView(options = {}) {
   const { quiet = false } = options;
   const peerId = closeScreenView();
-  if (!peerId || !state.peers.has(peerId)) return;
+  if (!peerId) return;
 
-  const peer = state.peers.get(peerId);
-  syncLiveKitScreenSubscriptions(peer);
+  const peer = getParticipantById(peerId);
+  if (peer && !peer.isLocal) syncLiveKitScreenSubscriptions(peer);
   if (!quiet) refreshAllScreenActions();
+  postState().catch(() => {});
 }
 
 function closeScreenView() {
   const peerId = state.viewedScreenPeerId;
-  state.viewedScreenPeerId = '';
+  setViewedScreenPeerId('');
   state.screenRequesting = false;
 
-  const peer = peerId && state.peers.get(peerId);
-  if (peer?.screenStream) {
+  const peer = getParticipantById(peerId);
+  if (peer && !peer.isLocal && peer.screenStream) {
     detachRemoteScreen(peer);
   } else {
     hideScreenStage();
   }
   refreshAllScreenActions();
+  refreshScreenTiles();
   return peerId;
 }
 
@@ -3773,7 +3837,7 @@ function refreshAllScreenActions() {
 }
 
 function refreshScreenStage() {
-  const peer = state.viewedScreenPeerId && state.peers.get(state.viewedScreenPeerId);
+  const peer = getActiveScreenPeer();
   if (!peer?.screen) {
     if (state.viewedScreenPeerId) closeScreenView();
     else hideScreenStage();
@@ -3781,19 +3845,20 @@ function refreshScreenStage() {
   }
 
   showScreenStage({
-    peerId: peer.id,
-    stream: peer.screenStream
+    peer,
+    stream: getScreenStreamForParticipant(peer)
   });
 }
 
-function showScreenStage({ peerId, stream }) {
-  state.sharedScreenPeerId = stream ? peerId : '';
+function showScreenStage({ peer, stream }) {
+  state.sharedScreenPeerId = stream ? peer.id : '';
   document.body.dataset.screenView = 'true';
   elements.screenStage.hidden = false;
   elements.screenViewControls.hidden = !stream;
-  elements.leaveButton.hidden = true;
+  elements.leaveButton.hidden = false;
   elements.screenExitButton.hidden = false;
   elements.screenPlaceholder.hidden = Boolean(stream);
+  refreshScreenMeta(peer);
 
   if (stream && elements.screenVideo.srcObject !== stream) {
     elements.screenVideo.srcObject = stream;
@@ -3805,6 +3870,8 @@ function showScreenStage({ peerId, stream }) {
     elements.screenVideo.pause();
     elements.screenVideo.srcObject = null;
   }
+  refreshScreenTiles();
+  refreshStageStripControls();
 }
 
 function hideScreenStage() {
@@ -3812,6 +3879,7 @@ function hideScreenStage() {
   delete document.body.dataset.screenView;
   elements.screenStage.hidden = true;
   elements.screenViewControls.hidden = true;
+  elements.screenMeta.hidden = true;
   elements.screenPlaceholder.hidden = false;
   elements.screenExitButton.hidden = true;
   elements.leaveButton.hidden = false;
@@ -3823,6 +3891,187 @@ function hideScreenStage() {
   if (document.body.dataset.desktopScreenFullscreen === 'true') {
     setDesktopScreenFullscreen(false).catch((error) => console.error(error));
   }
+  refreshScreenTiles();
+  refreshStageStripControls();
+}
+
+function getParticipantById(peerId) {
+  if (!peerId) return null;
+  if (peerId === state.peerId) return state.self;
+  return state.peers.get(peerId) || null;
+}
+
+function getActiveScreenPeer() {
+  return getParticipantById(state.viewedScreenPeerId);
+}
+
+function getAllParticipants() {
+  return [
+    ...(state.self ? [state.self] : []),
+    ...state.peers.values()
+  ];
+}
+
+function getScreenParticipants() {
+  return getAllParticipants()
+    .filter((participant) => participant.screen)
+    .sort((first, second) => {
+      if (first.id === state.viewedScreenPeerId) return -1;
+      if (second.id === state.viewedScreenPeerId) return 1;
+      return first.joinedAt - second.joinedAt;
+    });
+}
+
+function getScreenStreamForParticipant(participant) {
+  if (!participant?.screen) return null;
+  return participant.isLocal ? state.localScreenStream : participant.screenStream;
+}
+
+function setViewedScreenPeerId(peerId) {
+  state.viewedScreenPeerId = peerId || '';
+  if (state.self) state.self.viewedScreenPeerId = state.viewedScreenPeerId;
+}
+
+function refreshScreenTiles() {
+  elements.streamTiles.textContent = '';
+
+  const screenParticipants = getScreenParticipants();
+  elements.streamTiles.hidden = screenParticipants.length === 0;
+
+  for (const participant of screenParticipants) {
+    elements.streamTiles.append(createStreamTile(participant));
+  }
+
+  refreshStageStripControls();
+}
+
+function createStreamTile(participant) {
+  const button = document.createElement('button');
+  button.className = 'stream-tile';
+  button.type = 'button';
+  button.dataset.active = String(state.viewedScreenPeerId === participant.id);
+  button.dataset.local = String(participant.isLocal);
+  button.setAttribute('aria-pressed', String(state.viewedScreenPeerId === participant.id));
+  button.setAttribute(
+    'aria-label',
+    state.viewedScreenPeerId === participant.id
+      ? `Свернуть стрим ${participant.name} до плитки`
+      : `Открыть стрим ${participant.name}`
+  );
+
+  const preview = document.createElement('span');
+  preview.className = 'stream-tile-preview';
+  preview.append(createStreamTileIcon(), createStreamTileInitials(participant));
+
+  const copy = document.createElement('span');
+  copy.className = 'stream-tile-copy';
+
+  const title = document.createElement('strong');
+  title.textContent = participant.isLocal ? 'Ваш стрим' : `Стрим ${participant.name}`;
+
+  const profile = document.createElement('span');
+  profile.textContent = formatScreenProfileLine(participant);
+
+  const viewers = document.createElement('span');
+  viewers.className = 'stream-tile-viewers';
+  viewers.textContent = formatScreenViewersLine(participant.id);
+
+  copy.append(title, profile, viewers);
+  button.append(preview, copy);
+  button.addEventListener('click', () => toggleScreenTile(participant.id).catch((error) => console.error(error)));
+  return button;
+}
+
+function createStreamTileIcon() {
+  const icon = document.createElement('span');
+  icon.className = 'stream-tile-icon';
+  icon.setAttribute('aria-hidden', 'true');
+  icon.innerHTML = `
+    <svg viewBox="0 0 24 24" focusable="false">
+      <path d="M4 5a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v8a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2z"></path>
+      <path d="M8 21h8"></path>
+      <path d="M12 15v6"></path>
+    </svg>
+  `;
+  return icon;
+}
+
+function createStreamTileInitials(participant) {
+  const initials = document.createElement('span');
+  initials.className = 'stream-tile-initials';
+  initials.textContent = getInitials(participant.name);
+  return initials;
+}
+
+function refreshScreenMeta(participant) {
+  if (!participant) {
+    elements.screenMeta.hidden = true;
+    return;
+  }
+
+  elements.screenMeta.hidden = false;
+  elements.screenMetaTitle.textContent = participant.isLocal ? 'Ваш стрим' : `Стрим ${participant.name}`;
+  elements.screenMetaProfile.textContent = formatScreenProfileLine(participant);
+  elements.screenMetaViewers.textContent = formatScreenViewersLine(participant.id);
+}
+
+function formatScreenProfileLine(participant) {
+  const profile = getScreenProfile(participant.isLocal ? state.localScreenProfileId : participant.screenProfileId);
+  const audioLabel = participant.screenAudio ? 'звук' : 'без звука';
+  return `${profile.label} · ${profile.detail} · ${audioLabel}`;
+}
+
+function formatScreenViewersLine(ownerPeerId) {
+  const viewers = getScreenViewers(ownerPeerId);
+  if (viewers.length === 0) return 'Смотрят: 0';
+
+  const names = viewers.slice(0, 3).map((viewer) => (viewer.isLocal ? 'вы' : viewer.name));
+  const rest = viewers.length - names.length;
+  return rest > 0 ? `Смотрят: ${names.join(', ')} +${rest}` : `Смотрят: ${names.join(', ')}`;
+}
+
+function getScreenViewers(ownerPeerId) {
+  return getAllParticipants().filter((participant) => participant.viewedScreenPeerId === ownerPeerId);
+}
+
+function refreshStageStripControls() {
+  const participantCount = elements.participants.children.length;
+  const streamCount = getScreenParticipants().length;
+  const participantLabel = formatRussianCount(participantCount, 'участник', 'участника', 'участников');
+  const streamLabel = streamCount
+    ? ` · ${formatRussianCount(streamCount, 'стрим', 'стрима', 'стримов')}`
+    : '';
+
+  elements.stageStripKicker.textContent = state.viewedScreenPeerId ? 'Сцена' : 'В комнате';
+  elements.stageStripSummary.textContent = `${participantLabel}${streamLabel}`;
+  elements.stripToggleButton.setAttribute('aria-pressed', String(state.stripCollapsed));
+  elements.stripToggleButton.setAttribute(
+    'aria-label',
+    state.stripCollapsed ? 'Показать пользователей' : 'Свернуть пользователей'
+  );
+
+  if (state.stripCollapsed) {
+    document.body.dataset.stripCollapsed = 'true';
+  } else {
+    delete document.body.dataset.stripCollapsed;
+  }
+}
+
+function toggleParticipantStrip() {
+  state.stripCollapsed = !state.stripCollapsed;
+  refreshStageStripControls();
+}
+
+function formatRussianCount(count, one, few, many) {
+  const value = Number(count) || 0;
+  const mod10 = value % 10;
+  const mod100 = value % 100;
+  const word = mod10 === 1 && mod100 !== 11
+    ? one
+    : mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)
+      ? few
+      : many;
+  return `${value} ${word}`;
 }
 
 function syncScreenVideoAudio() {
@@ -4004,6 +4253,25 @@ function stopLocalScreenStream() {
 
 function hasScreenAudio() {
   return Boolean(state.localScreenStream?.getAudioTracks().some((track) => track.readyState !== 'ended'));
+}
+
+function showScreenShareStartedToast(profile) {
+  if (hasScreenAudio()) {
+    showToast(`Стрим запущен: ${profile.label}, звук включен`);
+    return;
+  }
+
+  if (isSafariBrowser()) {
+    showToast(`Стрим запущен: ${profile.label}, без звука. Safari обычно не дает выбор системного звука для демонстрации.`);
+    return;
+  }
+
+  showToast(`Стрим запущен: ${profile.label}, без звука`);
+}
+
+function isSafariBrowser() {
+  const userAgent = navigator.userAgent || '';
+  return /Safari/i.test(userAgent) && !/Chrome|Chromium|CriOS|Edg|OPR|Firefox|FxiOS/i.test(userAgent);
 }
 
 function playMediaElement(element) {

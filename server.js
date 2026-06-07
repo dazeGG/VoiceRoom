@@ -23,6 +23,7 @@ const ROOM_CREATE_POW_DIFFICULTY = Math.min(readEnvInt('ROOM_CREATE_POW_DIFFICUL
 const ROOM_CREATE_POW_TTL_MS = readEnvInt('ROOM_CREATE_POW_TTL_MS', 120000, 10000);
 const DEFAULT_STUN_URLS = 'stun:stun.l.google.com:19302';
 const LIVEKIT_CLIENT_BUNDLE = path.join(__dirname, 'node_modules', 'livekit-client', 'dist', 'livekit-client.umd.js');
+const SCREEN_PROFILE_IDS = new Set(['balanced', 'high', 'low']);
 
 const rooms = new Map();
 const roomCreateRates = new Map();
@@ -119,6 +120,12 @@ function cleanStreamId(value) {
   if (typeof value !== 'string') return '';
   const streamId = value.trim();
   return /^[A-Za-z0-9_.:-]{1,120}$/.test(streamId) ? streamId : '';
+}
+
+function cleanScreenProfileId(value) {
+  if (typeof value !== 'string') return '';
+  const profileId = value.trim();
+  return SCREEN_PROFILE_IDS.has(profileId) ? profileId : '';
 }
 
 function cleanLiveKitUrl(value) {
@@ -334,7 +341,9 @@ function publicPeer(peer) {
     name: peer.name,
     screen: peer.screen,
     screenAudio: peer.screenAudio,
-    screenStreamId: peer.screenStreamId
+    screenProfileId: peer.screenProfileId,
+    screenStreamId: peer.screenStreamId,
+    viewedScreenPeerId: peer.viewedScreenPeerId
   };
 }
 
@@ -542,7 +551,9 @@ async function handleEvents(req, res, url) {
     name,
     screen: false,
     screenAudio: false,
+    screenProfileId: '',
     screenStreamId: '',
+    viewedScreenPeerId: '',
     sessionToken,
     res
   };
@@ -801,8 +812,14 @@ async function handleState(req, res) {
   if (Object.hasOwn(body, 'screenAudio')) {
     peer.screenAudio = Boolean(body.screenAudio);
   }
+  if (Object.hasOwn(body, 'screenProfileId')) {
+    peer.screenProfileId = cleanScreenProfileId(body.screenProfileId);
+  }
   if (Object.hasOwn(body, 'screenStreamId')) {
     peer.screenStreamId = cleanStreamId(body.screenStreamId);
+  }
+  if (Object.hasOwn(body, 'viewedScreenPeerId')) {
+    peer.viewedScreenPeerId = normalizePeerId(body.viewedScreenPeerId) || '';
   }
 
   broadcast(room, { type: 'peer-updated', peer: publicPeer(peer) });
