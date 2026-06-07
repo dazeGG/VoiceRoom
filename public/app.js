@@ -75,14 +75,14 @@ const SCREEN_STREAM_PROFILES = {
     width: 1280
   },
   high: {
-    contentHint: 'motion',
+    contentHint: 'detail',
     detail: '1080p · 30 fps',
     frameRate: 30,
     height: 1080,
     id: 'high',
     intent: 'Совместный просмотр',
     label: 'Высокий',
-    videoBitrate: 5_500_000,
+    videoBitrate: 8_000_000,
     width: 1920
   },
   low: {
