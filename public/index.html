@@ -146,6 +146,17 @@
           </div>
 
           <div class="room-dock" aria-label="Управление голосом">
+            <span class="local-network local-network-bubble" id="localNetwork" data-quality="unknown" title="Пинг до LiveKit неизвестен">
+              <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                <path d="M4 20h.01"></path>
+                <path d="M8 20v-4"></path>
+                <path d="M12 20v-8"></path>
+                <path d="M16 20v-12"></path>
+                <path d="M20 20v-16"></path>
+              </svg>
+              <span id="localNetworkValue">--</span>
+            </span>
+
             <div class="dock-cluster">
               <button class="dock-button mic-button" id="muteButton" type="button" aria-pressed="false" aria-label="Подключить микрофон">
                 <span class="dock-icon dock-icon-mic" aria-hidden="true">
@@ -327,24 +338,6 @@
       <article class="participant" data-peer-id="">
         <div class="voice-ring" aria-hidden="true">
           <span class="avatar"></span>
-        </div>
-        <div class="participant-network" hidden>
-          <span class="participant-ping" data-quality="unknown" title="Пинг неизвестен">
-            <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
-              <path d="M4 20h.01"></path>
-              <path d="M8 20v-4"></path>
-              <path d="M12 20v-8"></path>
-              <path d="M16 20v-12"></path>
-              <path d="M20 20v-16"></path>
-            </svg>
-            <span class="participant-ping-value">--</span>
-          </span>
-          <button class="participant-reconnect" type="button" aria-label="Переподключиться" title="Переподключиться" hidden>
-            <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
-              <path d="M21 12a9 9 0 1 1 -2.64 -6.36"></path>
-              <path d="M21 3v6h-6"></path>
-            </svg>
-          </button>
         </div>
         <div class="participant-copy">
           <h2>

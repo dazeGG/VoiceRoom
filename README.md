@@ -11,7 +11,7 @@
 - Ubuntu 24.04 LTS или похожий Linux-дистрибутив.
 - Доступ к серверу по SSH с пользователем, у которого есть `sudo`.
 - Открытые входящие порты для HTTPS и LiveKit media.
-- Для локальной разработки: Node.js `20.20.2` и pnpm `11.5.1`.
+- Для локальной разработки: Node.js `20.20.2` и pnpm `10.23.0`.
 
 Для старта обычно хватает VPS `4 vCPU / 8 GB RAM / 60 GB SSD` с портом `1 Gbps`. Для небольшого теста можно начать с `2 vCPU / 4 GB RAM`, но screen share быстро упирается в исходящий канал.
 
@@ -202,28 +202,32 @@ docker compose up -d --build
 Запустите локальный LiveKit server в dev-режиме:
 
 ```bash
-docker run --rm --network host livekit/livekit-server:latest --dev
+corepack pnpm run dev:livekit
 ```
+
+Команда пробрасывает порты `7880/tcp`, `7881/tcp` и `7882/udp`, поэтому работает в Docker Desktop на macOS без `--network host`.
 
 В другом терминале:
 
 ```bash
 corepack enable
-corepack prepare pnpm@11.5.1 --activate
-pnpm install --frozen-lockfile
+corepack prepare pnpm@10.23.0 --activate
+corepack pnpm install --frozen-lockfile
 
-export LIVEKIT_URL=ws://localhost:7880
+export LIVEKIT_URL=ws://127.0.0.1:7880
 export LIVEKIT_API_KEY=devkey
 export LIVEKIT_API_SECRET=secret
-pnpm start
+corepack pnpm start
 ```
+
+Если команда `pnpm` все равно запускает старую standalone-версию из `~/Library/pnpm`, используйте `corepack pnpm ...` или поправьте `PATH`, чтобы Corepack shim шел раньше standalone pnpm.
 
 Откройте `http://localhost:3000`. Для доступа к микрофону и демонстрации экрана на сервере нужен HTTPS; `localhost` браузеры считают безопасным контекстом.
 
 Проверка синтаксиса:
 
 ```bash
-pnpm run check
+corepack pnpm run check
 ```
 
 ## Desktop

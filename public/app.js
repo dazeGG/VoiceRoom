@@ -108,6 +108,8 @@ const elements = {
   gateThresholdValue: $('#gateThresholdValue'),
   joinByCodeButton: $('#joinByCodeButton'),
   leaveButton: $('#leaveButton'),
+  localNetwork: $('#localNetwork'),
+  localNetworkValue: $('#localNetworkValue'),
   micGateMarker: $('#micGateMarker'),
   micLevelFill: $('#micLevelFill'),
   micLevelTrack: $('#micLevelTrack'),
@@ -160,7 +162,9 @@ const state = {
   iceConfig: { iceServers: [] },
   iceRefreshTimer: 0,
   joined: false,
+  localConnectionQuality: 'unknown',
   livekitRoom: null,
+  localPingMs: null,
   localMicPublication: null,
   localScreenPublications: new Map(),
   localRawStream: null,
@@ -247,6 +251,7 @@ function init() {
   navigator.mediaDevices?.addEventListener?.('devicechange', () => refreshDevices().catch(() => {}));
   window.addEventListener('beforeunload', leaveRoom);
   refreshOutputControls();
+  refreshLocalNetworkIndicator();
 
   if (state.roomRoute && !state.roomId) {
     showRoomNotFound();
@@ -615,6 +620,9 @@ async function joinRoom(event) {
   requireLiveKitSdk();
 
   state.connecting = true;
+  state.localConnectionQuality = 'unknown';
+  state.localPingMs = null;
+  refreshLocalNetworkIndicator();
   elements.muteButton.disabled = true;
   setStatus('connecting', 'соединение');
   refreshCallControls();
@@ -668,12 +676,15 @@ async function joinRoom(event) {
     playPeerCue('join');
   } catch (error) {
     console.error(error);
-    showToast(error.message || 'Не удалось подключиться');
+    showToast(formatJoinError(error));
     setStatus('error', 'ошибка');
     state.eventSource?.close();
     state.eventSource = null;
     await disconnectLiveKitRoom();
+    state.self?.node.remove();
+    state.self = null;
     stopLocalStream();
+    refreshParticipantState();
   } finally {
     state.connecting = false;
     elements.muteButton.disabled = false;
@@ -703,6 +714,14 @@ function requireLiveKitSdk() {
   }
 }
 
+function formatJoinError(error) {
+  const message = error?.message || String(error || '');
+  if (/signal connection|failed to fetch/i.test(message)) {
+    return 'LiveKit недоступен: проверьте LIVEKIT_URL=ws://127.0.0.1:7880 и перезапустите VoiceRoom';
+  }
+  return message || 'Не удалось подключиться';
+}
+
 async function connectLiveKitRoom(name) {
   const credentials = await postJson('/livekit-token', {
     name,
@@ -711,19 +730,61 @@ async function connectLiveKitRoom(name) {
     sessionToken: state.sessionToken
   });
 
-  const room = new LiveKitRoom({
-    adaptiveStream: true,
-    dynacast: true
-  });
-  state.livekitRoom = room;
-  bindLiveKitRoomEvents(room);
-
-  await room.connect(credentials.url, credentials.token, {
-    autoSubscribe: false
-  });
+  const room = await connectLiveKitWithFallback(credentials);
 
   await publishLocalMicrophone();
   syncLiveKitParticipants(room);
+}
+
+async function connectLiveKitWithFallback(credentials) {
+  const urls = getLiveKitConnectUrls(credentials.url);
+  let lastError = null;
+
+  for (const url of urls) {
+    const room = new LiveKitRoom({
+      adaptiveStream: true,
+      dynacast: true
+    });
+    state.livekitRoom = room;
+    bindLiveKitRoomEvents(room);
+
+    try {
+      await room.connect(url, credentials.token, {
+        autoSubscribe: false
+      });
+      logLocalLiveKitDebug('info', `LiveKit connected to ${url}`);
+      return room;
+    } catch (error) {
+      lastError = error;
+      logLocalLiveKitDebug('warn', `LiveKit connect failed for ${url}`, error);
+      state.livekitRoom = null;
+      await room.disconnect(false).catch(() => {});
+    }
+  }
+
+  throw new Error(`${lastError?.message || 'LiveKit connection failed'} (${urls.join(', ')})`);
+}
+
+function getLiveKitConnectUrls(url) {
+  const urls = [url];
+  try {
+    const parsed = new URL(url);
+    if (parsed.hostname === 'localhost') {
+      parsed.hostname = '127.0.0.1';
+      urls.push(parsed.toString());
+    } else if (parsed.hostname === '127.0.0.1') {
+      parsed.hostname = 'localhost';
+      urls.push(parsed.toString());
+    }
+  } catch {
+    // Keep the backend-provided URL as-is.
+  }
+  return [...new Set(urls)];
+}
+
+function logLocalLiveKitDebug(level, ...args) {
+  if (!['localhost', '127.0.0.1', '::1'].includes(window.location.hostname)) return;
+  console[level]?.(...args);
 }
 
 function bindLiveKitRoomEvents(room) {
@@ -783,10 +844,14 @@ function bindLiveKitRoomEvents(room) {
     }
   });
   room.on(RoomEvent.ConnectionQualityChanged, (quality, participant) => {
-    if (!participant || participant.isLocal) return;
+    if (!participant) return;
+    if (participant.isLocal) {
+      state.localConnectionQuality = quality || 'unknown';
+      refreshLocalNetworkIndicator();
+      return;
+    }
     const peer = createLiveKitParticipant(participant);
     peer.connectionQuality = quality || 'unknown';
-    refreshPeerNetworkIndicator(peer);
   });
   room.on(RoomEvent.ParticipantNameChanged, (name, participant) => {
     updateParticipant({ id: participant.identity, name: name || participant.identity });
@@ -810,6 +875,7 @@ function createLiveKitParticipant(participant) {
   const peer = createParticipant({
     deafened: getLiveKitBooleanAttribute(participant, 'deafened'),
     id: participant.identity,
+    isLocal: participant.isLocal || participant.identity === state.peerId,
     joinedAt: participant.joinedAt ? participant.joinedAt.getTime() : Date.now(),
     muted: !participant.isMicrophoneEnabled || getLiveKitBooleanAttribute(participant, 'muted'),
     name: participant.name || participant.identity,
@@ -2097,8 +2163,16 @@ function syncPeers(peerIds) {
 }
 
 function createParticipant(peerInfo) {
-  const existing = peerInfo.isLocal ? state.self : state.peers.get(peerInfo.id);
+  const isLocal = Boolean(peerInfo.isLocal || peerInfo.id === state.peerId);
+  peerInfo.isLocal = isLocal;
+
+  const existing = isLocal ? state.self : state.peers.get(peerInfo.id);
   if (existing) {
+    if (isLocal) {
+      const duplicate = state.peers.get(peerInfo.id);
+      duplicate?.node.remove();
+      state.peers.delete(peerInfo.id);
+    }
     updateParticipant(peerInfo);
     return existing;
   }
@@ -2107,18 +2181,14 @@ function createParticipant(peerInfo) {
   const node = fragment.querySelector('.participant');
   const avatar = fragment.querySelector('.avatar');
   const nameLabel = fragment.querySelector('.participant-name');
-  const network = fragment.querySelector('.participant-network');
-  const pingNode = fragment.querySelector('.participant-ping');
-  const pingValue = fragment.querySelector('.participant-ping-value');
-  const reconnectButton = fragment.querySelector('.participant-reconnect');
   const screenAction = fragment.querySelector('.participant-screen-action');
   const status = fragment.querySelector('p');
 
   node.dataset.peerId = peerInfo.id;
-  if (peerInfo.isLocal) node.dataset.local = 'true';
+  if (isLocal) node.dataset.local = 'true';
   avatar.textContent = getInitials(peerInfo.name);
-  nameLabel.textContent = peerInfo.isLocal ? `${peerInfo.name} · вы` : peerInfo.name;
-  setParticipantStatus({ status }, peerInfo.isLocal ? '' : 'подключение');
+  nameLabel.textContent = isLocal ? `${peerInfo.name} · вы` : peerInfo.name;
+  setParticipantStatus({ status }, isLocal ? '' : 'подключение');
   node.dataset.deafened = String(Boolean(peerInfo.deafened));
   node.dataset.muted = String(Boolean(peerInfo.muted));
   node.dataset.screen = String(Boolean(peerInfo.screen));
@@ -2133,7 +2203,7 @@ function createParticipant(peerInfo) {
     id: peerInfo.id,
     incomingVoiceActive: false,
     incomingVoiceStats: createAudioActivityStats(),
-    isLocal: Boolean(peerInfo.isLocal),
+    isLocal,
     localScreenSenders: [],
     lastReconnectAt: 0,
     livekitParticipant: null,
@@ -2144,14 +2214,10 @@ function createParticipant(peerInfo) {
     muted: Boolean(peerInfo.muted),
     name: peerInfo.name,
     needsRenegotiate: false,
-    network,
     node,
     pendingCandidates: [],
     pingMs: null,
-    pingNode,
-    pingValue,
     pc: null,
-    reconnectButton,
     reconnecting: false,
     reconnectTimer: 0,
     micReceiver: null,
@@ -2165,11 +2231,13 @@ function createParticipant(peerInfo) {
     stream: null
   };
 
-  network.hidden = participant.isLocal;
-  reconnectButton.addEventListener('click', () => reconnectPeer(participant, { manual: true }).catch((error) => console.error(error)));
   screenAction.addEventListener('click', () => enterScreenView(participant.id).catch((error) => console.error(error)));
-  if (!participant.isLocal) state.peers.set(peerInfo.id, participant);
-  refreshPeerNetworkIndicator(participant);
+  if (participant.isLocal) {
+    state.self = participant;
+    state.peers.delete(peerInfo.id);
+  } else {
+    state.peers.set(peerInfo.id, participant);
+  }
   refreshScreenAction(participant);
   refreshParticipantState();
   return participant;
@@ -2283,7 +2351,6 @@ function ensurePeerConnection(peer) {
 
 function handlePeerConnectionStateChange(peer) {
   updatePeerStatus(peer);
-  refreshPeerNetworkIndicator(peer);
 
   if (isPeerConnected(peer)) {
     window.clearTimeout(peer.reconnectTimer);
@@ -2318,7 +2385,6 @@ async function reconnectPeer(peer, options = {}) {
   peer.lastReconnectAt = Date.now();
   peer.reconnecting = true;
   updatePeerStatus(peer);
-  refreshPeerNetworkIndicator(peer);
 
   try {
     if (!peer.pc || peer.pc.connectionState === 'closed') {
@@ -2336,7 +2402,6 @@ async function reconnectPeer(peer, options = {}) {
   } finally {
     peer.reconnecting = false;
     updatePeerStatus(peer);
-    refreshPeerNetworkIndicator(peer);
   }
 }
 
@@ -2822,7 +2887,59 @@ function setParticipantSpeaking(participant, speaking) {
 async function updatePeerLatencyStats() {
   if (!state.joined) return;
 
+  if (state.livekitRoom) {
+    await updateLocalLiveKitLatency();
+    return;
+  }
+
   await Promise.allSettled([...state.peers.values()].map((peer) => updatePeerLatency(peer)));
+}
+
+async function updateLocalLiveKitLatency() {
+  try {
+    const publication = state.localMicPublication || findFirstLocalPublication();
+    const stats = await publication?.track?.getRTCStatsReport?.();
+    const rttMs = getRoundTripTimeFromStats(stats);
+    if (rttMs !== null) {
+      state.localPingMs = Math.max(0, Math.round(rttMs));
+    }
+  } catch (error) {
+    console.warn('LiveKit latency unavailable', error);
+  }
+
+  refreshLocalNetworkIndicator();
+}
+
+function findFirstLocalPublication() {
+  return state.livekitRoom?.localParticipant?.trackPublications?.values?.().next?.().value || null;
+}
+
+function getRoundTripTimeFromStats(stats) {
+  if (!stats?.forEach) return null;
+
+  let candidatePairRttMs = null;
+  let remoteInboundRttMs = null;
+  stats.forEach((report) => {
+    if (
+      report.type === 'candidate-pair'
+      && report.state === 'succeeded'
+      && (report.nominated || report.selected)
+      && typeof report.currentRoundTripTime === 'number'
+    ) {
+      candidatePairRttMs = report.currentRoundTripTime * 1000;
+      return;
+    }
+
+    if (
+      remoteInboundRttMs === null
+      && report.type === 'remote-inbound-rtp'
+      && typeof report.roundTripTime === 'number'
+    ) {
+      remoteInboundRttMs = report.roundTripTime * 1000;
+    }
+  });
+
+  return candidatePairRttMs ?? remoteInboundRttMs;
 }
 
 async function updatePeerLatency(peer) {
@@ -2855,7 +2972,6 @@ async function updatePeerLatency(peer) {
   if (rttMs === null) return;
 
   peer.pingMs = Math.max(0, Math.round(rttMs));
-  refreshPeerNetworkIndicator(peer);
 }
 
 function updateMeter(participant) {
@@ -3131,8 +3247,16 @@ async function postJson(url, body) {
     },
     method: 'POST'
   });
-  if (!response.ok) throw new Error('Сигналинг недоступен');
-  return response.json();
+  let payload = null;
+  try {
+    payload = await response.json();
+  } catch {
+    // Non-JSON errors are handled by the generic message below.
+  }
+  if (!response.ok) {
+    throw new Error(payload?.error || 'Сервер недоступен');
+  }
+  return payload;
 }
 
 function setMicrophoneMuted(muted, options = {}) {
@@ -3523,6 +3647,9 @@ function leaveRoom() {
 
   state.connecting = false;
   state.joined = false;
+  state.localConnectionQuality = 'unknown';
+  state.localPingMs = null;
+  refreshLocalNetworkIndicator();
   window.clearTimeout(gateSwitchTimer);
   gateSwitchTimer = 0;
   window.clearTimeout(state.iceRefreshTimer);
@@ -3625,36 +3752,35 @@ function updatePeerStatus(peer) {
   setParticipantStatus(peer, 'подключение');
 }
 
-function refreshPeerNetworkIndicator(peer) {
-  if (!peer?.network || peer.isLocal) return;
+function refreshLocalNetworkIndicator() {
+  if (!elements.localNetwork || !elements.localNetworkValue) return;
 
-  const disconnected = isPeerDisconnected(peer);
-  const quality = disconnected ? 'lost' : getPeerLatencyQuality(peer.pingMs, peer.connectionQuality);
-  peer.network.hidden = false;
-  peer.pingNode.dataset.quality = quality;
-  peer.pingValue.textContent = disconnected
-    ? '--'
-    : peer.pingMs === null
-      ? getPeerConnectionQualityLabel(peer.connectionQuality)
-      : `${peer.pingMs} мс`;
-  peer.pingNode.title = disconnected
-    ? 'Соединение потеряно'
-    : peer.pingMs === null
-      ? 'Качество соединения LiveKit'
-      : `Пинг ${peer.pingMs} мс`;
-  peer.reconnectButton.hidden = !disconnected;
-  peer.reconnectButton.disabled = peer.reconnecting;
+  const disconnected = state.joined && state.localConnectionQuality === 'lost';
+  const quality = disconnected ? 'lost' : getPeerLatencyQuality(state.localPingMs, state.localConnectionQuality);
+  elements.localNetwork.dataset.quality = state.joined ? quality : 'unknown';
+  elements.localNetworkValue.textContent = state.joined
+    ? state.localPingMs === null
+      ? getPeerConnectionQualityLabel(state.localConnectionQuality)
+      : `${state.localPingMs} мс`
+    : '--';
+  elements.localNetwork.title = !state.joined
+    ? 'Пинг до LiveKit появится после подключения'
+    : state.localPingMs === null
+      ? 'Качество соединения до LiveKit'
+      : `Пинг до LiveKit ${state.localPingMs} мс`;
 }
 
 function getPeerLatencyQuality(pingMs, connectionQuality = 'unknown') {
+  if (pingMs !== null && Number.isFinite(pingMs)) {
+    if (pingMs <= PEER_LATENCY_GOOD_MS) return 'good';
+    if (pingMs <= PEER_LATENCY_FAIR_MS) return 'fair';
+    return 'poor';
+  }
   if (connectionQuality === 'excellent') return 'good';
   if (connectionQuality === 'good') return 'fair';
   if (connectionQuality === 'poor') return 'poor';
   if (connectionQuality === 'lost') return 'lost';
-  if (pingMs === null || !Number.isFinite(pingMs)) return 'unknown';
-  if (pingMs <= PEER_LATENCY_GOOD_MS) return 'good';
-  if (pingMs <= PEER_LATENCY_FAIR_MS) return 'fair';
-  return 'poor';
+  return 'unknown';
 }
 
 function getPeerConnectionQualityLabel(connectionQuality) {

@@ -49,11 +49,21 @@ function readEnvInt(name, fallback, min) {
 }
 
 function baseHeaders() {
+  const connectSrc = [
+    "'self'",
+    'https:',
+    'wss:',
+    ...(process.env.NODE_ENV === 'production' ? [] : ['ws://localhost:7880', 'ws://127.0.0.1:7880']),
+    'stun:',
+    'turn:',
+    'turns:'
+  ].join(' ');
+
   return {
     'Content-Security-Policy': [
       "default-src 'self'",
       "base-uri 'none'",
-      "connect-src 'self' https: wss: stun: turn: turns:",
+      `connect-src ${connectSrc}`,
       "font-src 'self'",
       "form-action 'none'",
       "frame-ancestors 'none'",
@@ -576,7 +586,7 @@ async function handleLiveKitToken(req, res) {
   if (!livekit.enabled) {
     sendJson(res, 503, {
       ok: false,
-      error: 'LiveKit is not configured'
+      error: 'LiveKit не настроен: проверьте LIVEKIT_URL, LIVEKIT_API_KEY и LIVEKIT_API_SECRET'
     });
     return;
   }
@@ -594,13 +604,13 @@ async function handleLiveKitToken(req, res) {
 
   const room = getRoom(roomId);
   if (!room) {
-    sendJson(res, 404, { ok: false, error: 'Room not found' });
+    sendJson(res, 404, { ok: false, error: 'Комната не найдена' });
     return;
   }
 
   const existingPeer = room.peers.get(peerId);
   if (existingPeer && !tokensMatch(existingPeer.sessionToken, sessionToken)) {
-    sendJson(res, 403, { ok: false, error: 'Invalid peer session' });
+    sendJson(res, 403, { ok: false, error: 'Сессия участника недействительна' });
     return;
   }
 
@@ -836,8 +846,10 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === 'GET' && url.pathname === '/healthz') {
       pruneRooms();
+      const livekit = getLiveKitConfig();
       sendJson(res, 200, {
-        livekit: getLiveKitConfig().enabled,
+        livekit: livekit.enabled,
+        livekitUrl: livekit.url || null,
         ok: true,
         maxRooms: MAX_ROOMS,
         rooms: rooms.size,
