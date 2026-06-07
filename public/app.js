@@ -9,6 +9,15 @@ const GATE_THRESHOLD_MAX_DB = 0;
 const GATE_THRESHOLD_MIN_DB = -100;
 const LEGACY_GATE_MAX_AMPLITUDE = 0.18;
 const LEGACY_GATE_MIN_AMPLITUDE = 0.006;
+const AUDIO_GATE_WORKLET_URL = '/audio-gate.worklet.js';
+const GATE_ATTACK_MS = 8;
+const GATE_CLOSE_RATIO = 0.65;
+const GATE_DETECTOR_ATTACK_MS = 4;
+const GATE_DETECTOR_RELEASE_MS = 55;
+const GATE_FLOOR_GAIN = 0.02;
+const GATE_HOLD_MS = 140;
+const GATE_PROCESSOR_BUFFER_SIZE = 2048;
+const GATE_RELEASE_MS = 160;
 const NOTIFICATION_VOLUME_BOOST = 3;
 const MICROPHONE_DEVICE_STORAGE_KEY = 'voice-room:microphone-device-id';
 const NOISE_MODE_STORAGE_KEY = 'voice-room:noise-mode';
@@ -750,32 +759,9 @@ async function createNoiseGatedStream(inputStream) {
 
   const context = createProcessingAudioContext();
   try {
-    if (typeof context.createScriptProcessor !== 'function') {
-      throw new Error('ScriptProcessor недоступен');
-    }
-
     const source = context.createMediaStreamSource(inputStream);
-    const gate = context.createScriptProcessor(1024, 1, 1);
+    const gate = await createNoiseGateNode(context, threshold);
     const destination = context.createMediaStreamDestination();
-    let openness = 0;
-
-    gate.onaudioprocess = (event) => {
-      const input = event.inputBuffer.getChannelData(0);
-      const output = event.outputBuffer.getChannelData(0);
-      let sum = 0;
-
-      for (const sample of input) {
-        sum += sample * sample;
-      }
-
-      const rms = Math.sqrt(sum / input.length);
-      const target = rms >= threshold ? 1 : 0;
-      openness += (target - openness) * (target > openness ? 0.42 : 0.08);
-
-      for (let index = 0; index < input.length; index += 1) {
-        output[index] = input[index] * openness;
-      }
-    };
 
     source.connect(gate);
     gate.connect(destination);
@@ -802,6 +788,108 @@ async function createNoiseGatedStream(inputStream) {
     context.close().catch(() => {});
     throw error;
   }
+}
+
+async function createNoiseGateNode(context, threshold) {
+  if (window.AudioWorkletNode && context.audioWorklet?.addModule) {
+    try {
+      await context.audioWorklet.addModule(AUDIO_GATE_WORKLET_URL);
+      return new AudioWorkletNode(context, 'voice-room-noise-gate', {
+        channelCount: 1,
+        channelCountMode: 'explicit',
+        channelInterpretation: 'speakers',
+        numberOfInputs: 1,
+        numberOfOutputs: 1,
+        outputChannelCount: [1],
+        processorOptions: createNoiseGateOptions(threshold)
+      });
+    } catch (error) {
+      console.warn('AudioWorklet gate unavailable, using ScriptProcessor', error);
+    }
+  }
+
+  return createScriptProcessorNoiseGateNode(context, threshold);
+}
+
+function createNoiseGateOptions(threshold) {
+  return {
+    attackMs: GATE_ATTACK_MS,
+    closeRatio: GATE_CLOSE_RATIO,
+    detectorAttackMs: GATE_DETECTOR_ATTACK_MS,
+    detectorReleaseMs: GATE_DETECTOR_RELEASE_MS,
+    floorGain: GATE_FLOOR_GAIN,
+    holdMs: GATE_HOLD_MS,
+    releaseMs: GATE_RELEASE_MS,
+    threshold
+  };
+}
+
+function createScriptProcessorNoiseGateNode(context, threshold) {
+  if (typeof context.createScriptProcessor !== 'function') {
+    throw new Error('ScriptProcessor недоступен');
+  }
+
+  const gate = context.createScriptProcessor(GATE_PROCESSOR_BUFFER_SIZE, 1, 1);
+  const envelope = createNoiseGateEnvelope(threshold, context.sampleRate || 48000);
+  gate.onaudioprocess = (event) => {
+    const input = event.inputBuffer.getChannelData(0);
+    const output = event.outputBuffer.getChannelData(0);
+
+    for (let index = 0; index < input.length; index += 1) {
+      output[index] = processNoiseGateSample(input[index] || 0, envelope);
+    }
+  };
+
+  return gate;
+}
+
+function createNoiseGateEnvelope(threshold, sampleRate) {
+  return {
+    attackCoefficient: getGateSmoothingCoefficient(GATE_ATTACK_MS, sampleRate),
+    closeThreshold: threshold * GATE_CLOSE_RATIO,
+    detector: 0,
+    detectorAttackCoefficient: getGateSmoothingCoefficient(GATE_DETECTOR_ATTACK_MS, sampleRate),
+    detectorReleaseCoefficient: getGateSmoothingCoefficient(GATE_DETECTOR_RELEASE_MS, sampleRate),
+    floorGain: GATE_FLOOR_GAIN,
+    gain: threshold > 0 ? GATE_FLOOR_GAIN : 1,
+    holdRemaining: 0,
+    holdSamples: Math.round(GATE_HOLD_MS * sampleRate / 1000),
+    open: false,
+    releaseCoefficient: getGateSmoothingCoefficient(GATE_RELEASE_MS, sampleRate),
+    threshold
+  };
+}
+
+function processNoiseGateSample(sample, envelope) {
+  const level = Math.abs(sample);
+  const detectorCoefficient = level > envelope.detector
+    ? envelope.detectorAttackCoefficient
+    : envelope.detectorReleaseCoefficient;
+  envelope.detector += (level - envelope.detector) * detectorCoefficient;
+
+  if (envelope.detector >= envelope.threshold) {
+    envelope.open = true;
+    envelope.holdRemaining = envelope.holdSamples;
+  } else if (envelope.open && envelope.detector < envelope.closeThreshold) {
+    if (envelope.holdRemaining > 0) {
+      envelope.holdRemaining -= 1;
+    } else {
+      envelope.open = false;
+    }
+  }
+
+  const targetGain = envelope.open ? 1 : envelope.floorGain;
+  const gainCoefficient = targetGain > envelope.gain
+    ? envelope.attackCoefficient
+    : envelope.releaseCoefficient;
+  envelope.gain += (targetGain - envelope.gain) * gainCoefficient;
+
+  return sample * envelope.gain;
+}
+
+function getGateSmoothingCoefficient(milliseconds, sampleRate) {
+  const duration = Math.max(0.001, milliseconds / 1000);
+  return 1 - Math.exp(-1 / (duration * sampleRate));
 }
 
 async function createNoiseSuppressedStream(rawStream) {
@@ -926,23 +1014,23 @@ function disconnectAudioNode(node) {
 }
 
 async function openScreenShare(profile) {
-  if (hasElectronDesktopCapture()) {
-    return openElectronScreenShare(profile);
+  if (hasDesktopCapture()) {
+    return openDesktopScreenShare(profile);
   }
 
-  if (isElectronApp()) {
-    throw new Error('Electron не загрузил модуль выбора экрана. Перезапустите приложение из новой сборки.');
+  if (isDesktopApp()) {
+    throw new Error('Desktop-оболочка не загрузила модуль выбора экрана. Перезапустите приложение из новой сборки.');
   }
 
   return openBrowserScreenShare(profile);
 }
 
-function hasElectronDesktopCapture() {
+function hasDesktopCapture() {
   return Boolean(window.voiceRoomDesktopCapture?.getSources);
 }
 
-function isElectronApp() {
-  return Boolean(window.voiceRoomRuntime?.isElectron) || navigator.userAgent.includes('Electron');
+function isDesktopApp() {
+  return Boolean(window.voiceRoomRuntime?.isDesktop);
 }
 
 async function openBrowserScreenShare(profile) {
@@ -984,9 +1072,9 @@ function createBrowserDisplayMediaConstraints(profile, options = {}) {
   };
 }
 
-async function openElectronScreenShare(profile) {
+async function openDesktopScreenShare(profile) {
   if (!navigator.mediaDevices?.getDisplayMedia && !navigator.mediaDevices?.getUserMedia) {
-    throw new Error('Electron не дал доступ к захвату экрана.');
+    throw new Error('Desktop-оболочка не дала доступ к захвату экрана.');
   }
 
   const source = await selectDesktopCaptureSource();
@@ -994,7 +1082,7 @@ async function openElectronScreenShare(profile) {
   let audioCaptureError = null;
 
   try {
-    stream = await openElectronDesktopStream(source.id, profile, { audio: true, audioMode: 'loopback' });
+    stream = await openDesktopStream(source.id, profile, { audio: true, audioMode: 'loopback' });
   } catch (error) {
     if (isCaptureCancelled(error)) {
       setLocalAppAudioSuppressed(false);
@@ -1003,9 +1091,9 @@ async function openElectronScreenShare(profile) {
     audioCaptureError = error;
     console.warn('Desktop audio capture unavailable, retrying without audio', error);
     try {
-      stream = await openElectronDesktopStream(source.id, profile, { audio: false, audioMode: 'none' });
+      stream = await openDesktopStream(source.id, profile, { audio: false, audioMode: 'none' });
     } catch (videoError) {
-      throw mergeElectronDesktopCaptureErrors(audioCaptureError, videoError);
+      throw mergeDesktopCaptureErrors(audioCaptureError, videoError);
     }
   }
 
@@ -1013,9 +1101,9 @@ async function openElectronScreenShare(profile) {
   return stream;
 }
 
-async function openElectronDesktopStream(sourceId, profile, options = {}) {
+async function openDesktopStream(sourceId, profile, options = {}) {
   const withAudio = options.audio !== false;
-  const attempts = createElectronDesktopCaptureAttempts(sourceId, withAudio);
+  const attempts = createDesktopCaptureAttempts(sourceId, withAudio);
   const errors = [];
 
   for (const attempt of attempts) {
@@ -1023,28 +1111,28 @@ async function openElectronDesktopStream(sourceId, profile, options = {}) {
       return await attempt.open();
     } catch (error) {
       errors.push({ error, method: attempt.method });
-      console.warn(`Electron desktop capture failed via ${attempt.method}`, error);
+      console.warn(`Desktop capture failed via ${attempt.method}`, error);
     }
   }
 
-  if (errors.length) throw createElectronDesktopCaptureError(errors);
-  throw new Error('Electron не поддерживает захват экрана в этой сборке.');
+  if (errors.length) throw createDesktopCaptureError(errors);
+  throw new Error('Desktop-оболочка не поддерживает захват экрана в этой сборке.');
 }
 
-function mergeElectronDesktopCaptureErrors(...errors) {
+function mergeDesktopCaptureErrors(...errors) {
   const attemptDetails = errors.flatMap((error) => error?.captureAttemptDetails || [{ error, method: 'unknown' }]);
-  return createElectronDesktopCaptureError(attemptDetails);
+  return createDesktopCaptureError(attemptDetails);
 }
 
-function createElectronDesktopCaptureError(attemptDetails) {
+function createDesktopCaptureError(attemptDetails) {
   const lastError = attemptDetails.at(-1)?.error;
-  const error = new Error(formatElectronDesktopCaptureError(attemptDetails));
+  const error = new Error(formatDesktopCaptureError(attemptDetails));
   error.name = lastError?.name || 'DesktopCaptureError';
   error.captureAttemptDetails = attemptDetails;
   return error;
 }
 
-function formatElectronDesktopCaptureError(attemptDetails) {
+function formatDesktopCaptureError(attemptDetails) {
   const platform = window.voiceRoomRuntime?.platform || 'unknown';
   const displayMedia = navigator.mediaDevices?.getDisplayMedia ? 'yes' : 'no';
   const userMedia = navigator.mediaDevices?.getUserMedia ? 'yes' : 'no';
@@ -1052,7 +1140,7 @@ function formatElectronDesktopCaptureError(attemptDetails) {
 
   return [
     'Не удалось запустить демонстрацию экрана.',
-    `Среда: Electron ${platform}, getDisplayMedia=${displayMedia}, getUserMedia=${userMedia}.`,
+    `Среда: desktop ${platform}, getDisplayMedia=${displayMedia}, getUserMedia=${userMedia}.`,
     'Попытки:',
     attempts
   ].join('\n');
@@ -1074,33 +1162,33 @@ function formatCaptureError(error) {
   return [name, message, ...details].join(': ');
 }
 
-function createElectronDesktopCaptureAttempts(sourceId, withAudio) {
+function createDesktopCaptureAttempts(sourceId, withAudio) {
   const attempts = [];
 
   if (navigator.mediaDevices?.getDisplayMedia && window.voiceRoomDesktopCapture?.selectSource) {
     attempts.push({
       method: withAudio ? 'getDisplayMedia-loopback' : 'getDisplayMedia-video',
-      open: () => openElectronDisplayMediaStream(sourceId, withAudio)
+      open: () => openDesktopDisplayMediaStream(sourceId, withAudio)
     });
   }
 
   if (navigator.mediaDevices?.getUserMedia) {
     attempts.push({
       method: withAudio ? 'getUserMedia-desktop-audio' : 'getUserMedia-desktop-video',
-      open: () => navigator.mediaDevices.getUserMedia(createElectronDesktopMediaConstraints(sourceId, withAudio))
+      open: () => navigator.mediaDevices.getUserMedia(createDesktopMediaConstraints(sourceId, withAudio))
     });
   }
 
   return attempts;
 }
 
-async function openElectronDisplayMediaStream(sourceId, withAudio) {
+async function openDesktopDisplayMediaStream(sourceId, withAudio) {
   if (!navigator.mediaDevices?.getDisplayMedia) {
-    throw new Error('Electron не поддерживает display media capture.');
+    throw new Error('Desktop-оболочка не поддерживает display media capture.');
   }
 
   if (!window.voiceRoomDesktopCapture?.selectSource) {
-    throw new Error('Electron не дал доступ к выбору источника экрана.');
+    throw new Error('Desktop-оболочка не дала доступ к выбору источника экрана.');
   }
 
   await window.voiceRoomDesktopCapture.selectSource(sourceId, withAudio ? 'loopback' : 'none');
@@ -1110,7 +1198,7 @@ async function openElectronDisplayMediaStream(sourceId, withAudio) {
   });
 }
 
-function createElectronDesktopMediaConstraints(sourceId, withAudio) {
+function createDesktopMediaConstraints(sourceId, withAudio) {
   return {
     audio: withAudio
       ? {
@@ -2995,8 +3083,8 @@ function hideScreenStage() {
   if (document.fullscreenElement === elements.screenStage) {
     document.exitFullscreen().catch(() => {});
   }
-  if (document.body.dataset.electronScreenFullscreen === 'true') {
-    setElectronScreenFullscreen(false).catch((error) => console.error(error));
+  if (document.body.dataset.desktopScreenFullscreen === 'true') {
+    setDesktopScreenFullscreen(false).catch((error) => console.error(error));
   }
 }
 
@@ -3048,8 +3136,8 @@ async function toggleScreenFullscreen() {
       return;
     }
 
-    if (document.body.dataset.electronScreenFullscreen === 'true') {
-      await setElectronScreenFullscreen(false);
+    if (document.body.dataset.desktopScreenFullscreen === 'true') {
+      await setDesktopScreenFullscreen(false);
       return;
     }
 
@@ -3058,13 +3146,13 @@ async function toggleScreenFullscreen() {
         await elements.screenStage.requestFullscreen();
         return;
       } catch (error) {
-        if (!hasElectronWindowControls()) throw error;
-        console.warn('Stage fullscreen unavailable, using Electron window fullscreen', error);
+        if (!hasDesktopWindowControls()) throw error;
+        console.warn('Stage fullscreen unavailable, using desktop window fullscreen', error);
       }
     }
 
-    if (hasElectronWindowControls()) {
-      await setElectronScreenFullscreen(true);
+    if (hasDesktopWindowControls()) {
+      await setDesktopScreenFullscreen(true);
     } else {
       showToast('Полноэкранный режим недоступен');
     }
@@ -3074,28 +3162,28 @@ async function toggleScreenFullscreen() {
   }
 }
 
-function hasElectronWindowControls() {
+function hasDesktopWindowControls() {
   return Boolean(window.voiceRoomWindow?.setFullscreen);
 }
 
-async function setElectronScreenFullscreen(fullscreen) {
+async function setDesktopScreenFullscreen(fullscreen) {
   const active = await window.voiceRoomWindow.setFullscreen(fullscreen);
   if (active) {
-    document.body.dataset.electronScreenFullscreen = 'true';
+    document.body.dataset.desktopScreenFullscreen = 'true';
   } else {
-    delete document.body.dataset.electronScreenFullscreen;
+    delete document.body.dataset.desktopScreenFullscreen;
   }
   setScreenFullscreenState(active || document.fullscreenElement === elements.screenStage);
 }
 
 function updateScreenFullscreenState() {
   const fullscreen = document.fullscreenElement === elements.screenStage;
-  if (!fullscreen && document.body.dataset.electronScreenFullscreen !== 'true') {
+  if (!fullscreen && document.body.dataset.desktopScreenFullscreen !== 'true') {
     setScreenFullscreenState(false);
     return;
   }
 
-  setScreenFullscreenState(fullscreen || document.body.dataset.electronScreenFullscreen === 'true');
+  setScreenFullscreenState(fullscreen || document.body.dataset.desktopScreenFullscreen === 'true');
 }
 
 function setScreenFullscreenState(fullscreen) {

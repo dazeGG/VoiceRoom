@@ -3,26 +3,13 @@
   "version": "1.2.0",
   "private": true,
   "description": "Simple link-based WebRTC voice chat with dependency-free Node signaling.",
-  "main": "electron/main.js",
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
-    "check": "node --check server.js && node --check public/app.js && node --check electron/main.js && node --check electron/preload.js && node --check scripts/build-electron.js && node --check scripts/clean-dist.js && node --check scripts/create-electron-config.js && node --check electron-builder.config.js",
-    "electron": "node scripts/create-electron-config.js && electron .",
-    "build": "node scripts/build-electron.js --mac --win",
-    "build:dev": "node scripts/build-electron.js --dev --mac --win",
-    "build:mac": "node scripts/build-electron.js --mac",
-    "build:mac:dev": "node scripts/build-electron.js --dev --mac",
-    "build:win": "node scripts/build-electron.js --win",
-    "build:win:dev": "node scripts/build-electron.js --dev --win",
-    "clean:dist": "node scripts/clean-dist.js"
+    "check": "node --check server.js && node --check public/app.js && node --check public/audio-gate.worklet.js"
   },
   "engines": {
     "node": ">=20"
   },
-  "license": "MIT",
-  "devDependencies": {
-    "electron": "^42.3.3",
-    "electron-builder": "^26.15.0"
-  }
+  "license": "MIT"
 }

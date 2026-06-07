@@ -23,7 +23,6 @@ work/
 outputs/
 deploy/
 dist/
-electron/runtime-config.json
 
 # Docker/Caddy local state
 caddy_data/
