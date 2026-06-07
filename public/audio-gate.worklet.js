@@ -37,6 +37,21 @@ class VoiceRoomNoiseGateProcessor extends AudioWorkletProcessor {
     this.releaseCoefficient = getSmoothingCoefficient(processorOptions.releaseMs);
     this.detectorAttackCoefficient = getSmoothingCoefficient(processorOptions.detectorAttackMs);
     this.detectorReleaseCoefficient = getSmoothingCoefficient(processorOptions.detectorReleaseMs);
+    this.closeRatio = Math.max(0, Math.min(1, processorOptions.closeRatio));
+
+    this.port.onmessage = (event) => {
+      if (event.data?.type !== 'set-threshold') return;
+      this.setThreshold(event.data.threshold);
+    };
+  }
+
+  setThreshold(value) {
+    this.threshold = Math.max(0, Number(value) || 0);
+    this.closeThreshold = this.threshold * this.closeRatio;
+    if (this.threshold <= 0) {
+      this.open = true;
+      this.holdRemaining = this.holdSamples;
+    }
   }
 
   process(inputs, outputs) {

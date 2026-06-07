@@ -35,6 +35,7 @@ const PEER_LATENCY_GOOD_MS = 150;
 const PEER_LATENCY_FAIR_MS = 300;
 const PEER_RECONNECT_COOLDOWN_MS = 5000;
 const PEER_RECONNECT_DELAY_MS = 1200;
+const GATE_CAPTURE_SWITCH_DEBOUNCE_MS = 700;
 const LOCAL_GATE_DISABLED_RMS_FLOOR = 0.5;
 const SPEAKING_STATS_INTERVAL_MS = 200;
 const REMOTE_SPEAKING_AUDIO_LEVEL_FLOOR = 0.005;
@@ -1165,11 +1166,14 @@ async function createNoiseGatedStream(inputStream) {
     if ('contentHint' in outputTrack) outputTrack.contentHint = 'speech';
 
     return {
+      kind: 'gate',
       processor: {
         context,
         destination,
         node: gate,
-        source
+        setThreshold: (nextThreshold) => setNoiseGateNodeThreshold(gate, nextThreshold),
+        source,
+        type: 'gate'
       },
       stream: destination.stream
     };
@@ -1183,7 +1187,7 @@ async function createNoiseGateNode(context, threshold) {
   if (window.AudioWorkletNode && context.audioWorklet?.addModule) {
     try {
       await context.audioWorklet.addModule(AUDIO_GATE_WORKLET_URL);
-      return new AudioWorkletNode(context, 'voice-room-noise-gate', {
+      const node = new AudioWorkletNode(context, 'voice-room-noise-gate', {
         channelCount: 1,
         channelCountMode: 'explicit',
         channelInterpretation: 'speakers',
@@ -1192,6 +1196,10 @@ async function createNoiseGateNode(context, threshold) {
         outputChannelCount: [1],
         processorOptions: createNoiseGateOptions(threshold)
       });
+      node.setThreshold = (nextThreshold) => {
+        node.port.postMessage({ threshold: nextThreshold, type: 'set-threshold' });
+      };
+      return node;
     } catch (error) {
       console.warn('AudioWorklet gate unavailable, using ScriptProcessor', error);
     }
@@ -1220,6 +1228,7 @@ function createScriptProcessorNoiseGateNode(context, threshold) {
 
   const gate = context.createScriptProcessor(GATE_PROCESSOR_BUFFER_SIZE, 1, 1);
   const envelope = createNoiseGateEnvelope(threshold, context.sampleRate || 48000);
+  gate.setThreshold = (nextThreshold) => setNoiseGateEnvelopeThreshold(envelope, nextThreshold);
   gate.onaudioprocess = (event) => {
     const input = event.inputBuffer.getChannelData(0);
     const output = event.outputBuffer.getChannelData(0);
@@ -1230,6 +1239,23 @@ function createScriptProcessorNoiseGateNode(context, threshold) {
   };
 
   return gate;
+}
+
+function setNoiseGateNodeThreshold(node, threshold) {
+  if (typeof node?.setThreshold === 'function') {
+    node.setThreshold(threshold);
+    return true;
+  }
+  return false;
+}
+
+function setNoiseGateEnvelopeThreshold(envelope, threshold) {
+  envelope.threshold = Math.max(0, Number(threshold) || 0);
+  envelope.closeThreshold = envelope.threshold * GATE_CLOSE_RATIO;
+  if (envelope.threshold <= 0) {
+    envelope.open = true;
+    envelope.holdRemaining = envelope.holdSamples;
+  }
 }
 
 function createNoiseGateEnvelope(threshold, sampleRate) {
@@ -1953,9 +1979,12 @@ async function switchNoiseMode() {
 
 function updateGateThresholdFromSlider() {
   setGateThresholdDb(elements.gateThresholdSlider.value);
+  const threshold = getGateThresholdAmplitude();
 
   window.clearTimeout(gateSwitchTimer);
   if (!state.joined || !state.localStream) return;
+  if (updateActiveGateThreshold(threshold)) return;
+  if (threshold <= 0) return;
 
   gateSwitchTimer = window.setTimeout(() => {
     switchMicrophone({
@@ -1963,7 +1992,18 @@ function updateGateThresholdFromSlider() {
       refreshDeviceList: false,
       successMessage: isGateDisabled() ? 'Гейт выключен' : `Гейт: ${state.gateThresholdDb} dB`
     }).catch((error) => console.error(error));
-  }, 280);
+  }, GATE_CAPTURE_SWITCH_DEBOUNCE_MS);
+}
+
+function updateActiveGateThreshold(threshold) {
+  const gateProcessors = getMicrophoneProcessors(state.micProcessor)
+    .filter((processor) => processor.type === 'gate' && typeof processor.setThreshold === 'function');
+  if (gateProcessors.length === 0) return false;
+
+  for (const processor of gateProcessors) {
+    processor.setThreshold(threshold);
+  }
+  return true;
 }
 
 async function switchOutputDevice() {
