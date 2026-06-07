@@ -1293,12 +1293,12 @@ button:focus-visible,
   display: grid;
   align-items: center;
   min-width: 0;
-  height: 22px;
+  height: 24px;
 }
 
 .gate-control input {
   position: absolute;
-  inset: 0 -8px;
+  inset: 0;
   z-index: 2;
   min-width: 0;
   margin: 0;
@@ -1316,17 +1316,11 @@ button:focus-visible,
 
 .mic-level-track {
   position: relative;
-  height: 14px;
+  height: 8px;
   overflow: hidden;
-  border: 1px solid oklch(35% 0.02 92 / 0.86);
+  border: 1px solid oklch(38% 0.018 92 / 0.72);
   border-radius: 999px;
-  background:
-    repeating-linear-gradient(
-      90deg,
-      transparent 0 13px,
-      oklch(7% 0.01 92 / 0.68) 13px 15px
-    ),
-    oklch(14% 0.014 92);
+  background: oklch(14% 0.014 92);
 }
 
 .mic-level-fill {
@@ -1345,15 +1339,17 @@ button:focus-visible,
 
 .mic-gate-marker {
   position: absolute;
-  top: -5px;
-  bottom: -5px;
-  width: 18px;
-  border-radius: 999px;
-  border: 2px solid var(--green);
-  background: oklch(13% 0.014 92);
-  box-shadow: 0 0 0 2px oklch(6% 0.02 92 / 0.7);
+  top: 50%;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 0;
+  background: oklch(98% 0.006 92);
+  box-shadow:
+    0 0 0 2px oklch(8% 0.012 92 / 0.76),
+    0 4px 12px oklch(4% 0.014 92 / 0.58);
   opacity: 0;
-  transform: translateX(-9px);
+  transform: translate(-50%, -50%);
   transition: left 120ms ease, opacity 120ms ease;
 }
 
