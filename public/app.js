@@ -60,6 +60,7 @@ const RNNOISE_ASSET_BASE = '/rnnoise/';
 const DEFAULT_SCREEN_PROFILE_ID = 'balanced';
 const MICROPHONE_AUDIO_BITRATE = 64_000;
 const SCREEN_AUDIO_BITRATE = 192_000;
+const PEER_SESSION_STORAGE_PREFIX = 'voice-room:peer-session:';
 const ROOM_PROOF_BATCH_SIZE = 64;
 const SCREEN_STREAM_PROFILES = {
   balanced: {
@@ -155,8 +156,12 @@ const elements = {
   toast: $('#toast')
 };
 
+const initialRoomId = getRoomIdFromPath();
+const initialPeerSession = getStoredPeerSession(initialRoomId);
+
 const state = {
   audioContext: null,
+  audioUnlockPending: false,
   autoJoinStarted: false,
   connecting: false,
   eventSource: null,
@@ -182,8 +187,8 @@ const state = {
   outputDeviceId: localStorage.getItem(OUTPUT_DEVICE_STORAGE_KEY) || '',
   outputMuted: localStorage.getItem(OUTPUT_MUTED_STORAGE_KEY) === 'true',
   peers: new Map(),
-  peerId: createPeerId(),
-  roomId: getRoomIdFromPath(),
+  peerId: initialPeerSession.peerId,
+  roomId: initialRoomId,
   roomRoute: window.location.pathname.startsWith('/r/'),
   savedName: '',
   screenFullscreen: false,
@@ -194,7 +199,9 @@ const state = {
   screenVolume: 1,
   self: null,
   serverConnection: 'idle',
-  sessionToken: createSessionToken(),
+  serverPeerIds: new Set(),
+  serverPeerSyncReady: false,
+  sessionToken: initialPeerSession.sessionToken,
   sharedScreenPeerId: '',
   voiceConnection: 'idle',
   viewedScreenPeerId: ''
@@ -240,7 +247,7 @@ function init() {
   elements.deviceMenuButton.addEventListener('click', toggleDevicePopover);
   elements.outputMenuButton.addEventListener('click', toggleOutputPopover);
   elements.leaveButton.addEventListener('click', handleLeaveButtonClick);
-  elements.soundButton.addEventListener('click', unlockAudio);
+  elements.soundButton.addEventListener('click', () => unlockAudio().catch((error) => console.warn('Audio unlock failed', error)));
   elements.deviceSelect.addEventListener('change', switchMicrophone);
   elements.gateThresholdSlider.addEventListener('input', updateGateThresholdFromSlider);
   elements.micLevelTrack.addEventListener('pointerdown', handleGateThresholdPointerDown);
@@ -253,6 +260,8 @@ function init() {
   document.addEventListener('keydown', closeOutputPopoverOnEscape);
   document.addEventListener('keydown', closeScreenProfileOnEscape);
   document.addEventListener('keydown', closeScreenSourceOnEscape);
+  document.addEventListener('pointerdown', handleAudioUnlockGesture, { passive: true });
+  document.addEventListener('keydown', handleAudioUnlockGesture);
   document.addEventListener('fullscreenchange', updateScreenFullscreenState);
   navigator.mediaDevices?.addEventListener?.('devicechange', () => refreshDevices().catch(() => {}));
   window.addEventListener('beforeunload', leaveRoom);
@@ -439,6 +448,33 @@ function createSessionToken() {
   const bytes = new Uint8Array(32);
   crypto.getRandomValues(bytes);
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+function getStoredPeerSession(roomId) {
+  const fallback = {
+    peerId: createPeerId(),
+    sessionToken: createSessionToken()
+  };
+  if (!roomId) return fallback;
+
+  const storageKey = `${PEER_SESSION_STORAGE_PREFIX}${roomId}`;
+  try {
+    const stored = JSON.parse(sessionStorage.getItem(storageKey) || 'null');
+    const peerId = typeof stored?.peerId === 'string' ? stored.peerId : '';
+    const sessionToken = typeof stored?.sessionToken === 'string' ? stored.sessionToken : '';
+    if (/^[A-Za-z0-9_-]{8,80}$/.test(peerId) && /^[A-Za-z0-9_-]{32,128}$/.test(sessionToken)) {
+      return { peerId, sessionToken };
+    }
+  } catch {
+    // A malformed stored session should not block joining the room.
+  }
+
+  try {
+    sessionStorage.setItem(storageKey, JSON.stringify(fallback));
+  } catch {
+    // Session storage may be unavailable in hardened browser contexts.
+  }
+  return fallback;
 }
 
 function hideScreens() {
@@ -694,6 +730,8 @@ async function joinRoom(event) {
     setVoiceConnectionStatus(isVoiceRouteError(error) ? 'no-route' : 'error');
     state.eventSource?.close();
     state.eventSource = null;
+    state.serverPeerIds.clear();
+    state.serverPeerSyncReady = false;
     await disconnectLiveKitRoom();
     state.self?.node.remove();
     state.self = null;
@@ -824,7 +862,7 @@ function bindLiveKitRoomEvents(room) {
     if (state.joined) setVoiceConnectionStatus('lost');
   });
   room.on(RoomEvent.ParticipantConnected, (participant) => {
-    createLiveKitParticipant(participant);
+    syncLiveKitParticipant(participant);
     refreshParticipantState();
   });
   room.on(RoomEvent.ParticipantDisconnected, (participant) => {
@@ -850,14 +888,18 @@ function bindLiveKitRoomEvents(room) {
   });
   bindOptionalRoomEvent(room, RoomEvent.TrackSubscriptionFailed, (trackSid, participant) => {
     if (!participant) return;
-    const peer = state.peers.get(participant.identity) || createLiveKitParticipant(participant);
+    const peer = state.peers.get(participant.identity) || syncLiveKitParticipant(participant);
+    if (!peer) return;
     peer.voiceIssue = 'голос не подключен';
     updatePeerStatus(peer);
   });
   bindOptionalRoomEvent(room, RoomEvent.AudioPlaybackStatusChanged, () => {
     if (room.canPlaybackAudio === false) {
+      queueAudioUnlock({ showFallback: true });
       setVoiceConnectionStatus('playback-blocked');
     } else if (state.voiceConnection === 'playback-blocked') {
+      state.audioUnlockPending = false;
+      elements.soundButton.hidden = true;
       setVoiceConnectionStatus('connected');
     }
   });
@@ -866,6 +908,7 @@ function bindLiveKitRoomEvents(room) {
   });
   room.on(RoomEvent.TrackPublished, (publication, participant) => {
     const peer = createLiveKitParticipant(participant);
+    if (!peer) return;
     updateLiveKitPublicationState(peer, publication);
     syncLiveKitPublicationSubscription(peer, publication);
   });
@@ -880,12 +923,14 @@ function bindLiveKitRoomEvents(room) {
   });
   room.on(RoomEvent.TrackMuted, (publication, participant) => {
     const peer = createLiveKitParticipant(participant);
+    if (!peer) return;
     if (isMicrophonePublication(publication)) {
       updateParticipant({ id: peer.id, muted: true });
     }
   });
   room.on(RoomEvent.TrackUnmuted, (publication, participant) => {
     const peer = createLiveKitParticipant(participant);
+    if (!peer) return;
     if (isMicrophonePublication(publication)) {
       updateParticipant({ id: peer.id, muted: false });
     }
@@ -904,6 +949,7 @@ function bindLiveKitRoomEvents(room) {
       return;
     }
     const peer = createLiveKitParticipant(participant);
+    if (!peer) return;
     peer.connectionQuality = quality || 'unknown';
   });
   room.on(RoomEvent.ParticipantNameChanged, (name, participant) => {
@@ -912,19 +958,34 @@ function bindLiveKitRoomEvents(room) {
 }
 
 function syncLiveKitParticipants(room) {
+  prunePeersOutsideServerList();
+  if (!room) return;
+
   room.remoteParticipants.forEach((participant) => {
-    const peer = createLiveKitParticipant(participant);
-    participant.trackPublications.forEach((publication) => {
-      updateLiveKitPublicationState(peer, publication);
-      syncLiveKitPublicationSubscription(peer, publication);
-      if (publication.track && publication.isSubscribed) {
-        handleLiveKitTrackSubscribed(publication.track, publication, participant);
-      }
-    });
+    syncLiveKitParticipant(participant);
   });
 }
 
+function syncLiveKitParticipant(participant) {
+  if (!participant || !isServerKnownRemotePeer(participant.identity)) return null;
+
+  const peer = createLiveKitParticipant(participant);
+  if (!peer) return null;
+
+  participant.trackPublications.forEach((publication) => {
+    updateLiveKitPublicationState(peer, publication);
+    syncLiveKitPublicationSubscription(peer, publication);
+    if (publication.track && publication.isSubscribed) {
+      handleLiveKitTrackSubscribed(publication.track, publication, participant);
+    }
+  });
+
+  return peer;
+}
+
 function createLiveKitParticipant(participant) {
+  if (!isServerKnownRemotePeer(participant.identity)) return null;
+
   const peer = createParticipant({
     deafened: getLiveKitBooleanAttribute(participant, 'deafened'),
     id: participant.identity,
@@ -938,6 +999,27 @@ function createLiveKitParticipant(participant) {
   peer.voiceIssue = '';
   updatePeerStatus(peer);
   return peer;
+}
+
+function isServerKnownRemotePeer(peerId) {
+  if (!peerId || peerId === state.peerId) return true;
+  return !state.serverPeerSyncReady || state.serverPeerIds.has(peerId);
+}
+
+function syncLiveKitParticipantById(peerId) {
+  if (!peerId || peerId === state.peerId || !state.livekitRoom?.remoteParticipants?.get) return null;
+  return syncLiveKitParticipant(state.livekitRoom.remoteParticipants.get(peerId));
+}
+
+function prunePeersOutsideServerList() {
+  if (!state.serverPeerSyncReady) return;
+
+  for (const peerId of state.peers.keys()) {
+    if (!state.serverPeerIds.has(peerId)) {
+      removePeer(peerId);
+      clearPeerJoinCue(peerId);
+    }
+  }
 }
 
 function getLiveKitBooleanAttribute(participant, name) {
@@ -1105,6 +1187,7 @@ function findLocalMicrophonePublication() {
 
 function handleLiveKitTrackSubscribed(track, publication, participant) {
   const peer = createLiveKitParticipant(participant);
+  if (!peer) return;
   updateLiveKitPublicationState(peer, publication);
 
   const mediaTrack = track.mediaStreamTrack;
@@ -2200,7 +2283,10 @@ function refreshOutputControls() {
 function syncPlaybackMuteState() {
   syncRemoteAudioPlayback();
   syncScreenVideoAudio();
-  if (isAppPlaybackMuted()) elements.soundButton.hidden = true;
+  if (isAppPlaybackMuted()) {
+    state.audioUnlockPending = false;
+    elements.soundButton.hidden = true;
+  }
 }
 
 function syncRemoteAudioPlayback() {
@@ -2271,11 +2357,15 @@ async function handleServerMessage(event) {
   const message = JSON.parse(event.data);
 
   if (message.type === 'hello') {
+    const peers = Array.isArray(message.peers) ? message.peers : [];
+    state.serverPeerIds = new Set(peers.map((peer) => peer.id).filter(Boolean));
+    state.serverPeerSyncReady = true;
     setServerConnectionStatus('connected');
-    syncPeers(message.peers.map((peer) => peer.id));
-    for (const peer of message.peers) {
+    syncPeers([...state.serverPeerIds]);
+    for (const peer of peers) {
       createParticipant(peer);
     }
+    syncLiveKitParticipants(state.livekitRoom);
     refreshParticipantState();
     return;
   }
@@ -2291,7 +2381,9 @@ async function handleServerMessage(event) {
   }
 
   if (message.type === 'peer-joined') {
+    if (message.peer?.id) state.serverPeerIds.add(message.peer.id);
     createParticipant(message.peer);
+    syncLiveKitParticipantById(message.peer?.id);
     playPeerJoinCue(message.peer?.id);
     refreshParticipantState();
     return;
@@ -2299,6 +2391,7 @@ async function handleServerMessage(event) {
 
   if (message.type === 'peer-left') {
     const hadPeer = state.peers.has(message.peerId);
+    state.serverPeerIds.delete(message.peerId);
     removePeer(message.peerId);
     clearPeerJoinCue(message.peerId);
     if (hadPeer) playPeerCue('leave');
@@ -3211,7 +3304,7 @@ function playPeerCue(type) {
   try {
     const context = getSharedAudioContext();
     if (context.state !== 'running') {
-      elements.soundButton.hidden = false;
+      queueAudioUnlock();
       return;
     }
 
@@ -3251,7 +3344,7 @@ function playMicCue(muted) {
   try {
     const context = getSharedAudioContext();
     if (context.state !== 'running') {
-      elements.soundButton.hidden = false;
+      queueAudioUnlock();
       return;
     }
 
@@ -3286,7 +3379,7 @@ function playOutputCue(muted) {
   try {
     const context = getSharedAudioContext();
     if (context.state !== 'running') {
-      elements.soundButton.hidden = false;
+      queueAudioUnlock();
       return;
     }
 
@@ -3325,7 +3418,7 @@ function playStreamCue(type) {
   try {
     const context = getSharedAudioContext();
     if (context.state !== 'running') {
-      elements.soundButton.hidden = false;
+      queueAudioUnlock();
       return;
     }
 
@@ -3845,6 +3938,7 @@ function leaveRoom() {
 
   state.connecting = false;
   state.joined = false;
+  state.audioUnlockPending = false;
   state.localConnectionQuality = 'unknown';
   state.localPingMs = null;
   refreshLocalNetworkIndicator();
@@ -3854,6 +3948,8 @@ function leaveRoom() {
   state.iceRefreshTimer = 0;
   state.eventSource?.close();
   state.eventSource = null;
+  state.serverPeerIds.clear();
+  state.serverPeerSyncReady = false;
   disconnectLiveKitRoom().catch((error) => console.warn('LiveKit disconnect failed', error));
   if (state.screenSourceRequest) cancelScreenSourcePicker();
   closeScreenView();
@@ -3912,7 +4008,7 @@ function hasScreenAudio() {
 
 function playMediaElement(element) {
   element.play().catch(() => {
-    if (!element.muted) elements.soundButton.hidden = false;
+    if (!element.muted) queueAudioUnlock({ showFallback: true });
   });
 }
 
@@ -4151,6 +4247,25 @@ function refreshParticipantState() {
   elements.emptyRoom.hidden = participantCount > 0;
 }
 
+function queueAudioUnlock(options = {}) {
+  if (isAppPlaybackMuted()) return;
+
+  state.audioUnlockPending = true;
+  if (options.showFallback) elements.soundButton.hidden = false;
+}
+
+function handleAudioUnlockGesture() {
+  if (!shouldAttemptAudioUnlock()) return;
+
+  unlockAudio().catch((error) => console.warn('Audio unlock failed', error));
+}
+
+function shouldAttemptAudioUnlock() {
+  return state.audioUnlockPending
+    || state.voiceConnection === 'playback-blocked'
+    || state.audioContext?.state === 'suspended';
+}
+
 async function unlockAudio() {
   await state.audioContext?.resume();
   await Promise.allSettled(getMicrophoneProcessors(state.micProcessor).map((processor) => processor.context?.resume()));
@@ -4160,6 +4275,7 @@ async function unlockAudio() {
   }
   if (!elements.screenStage.hidden) plays.push(elements.screenVideo.play());
   await Promise.allSettled(plays);
+  state.audioUnlockPending = false;
   elements.soundButton.hidden = true;
   if (state.voiceConnection === 'playback-blocked') setVoiceConnectionStatus('connected');
 }

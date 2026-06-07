@@ -362,10 +362,16 @@ function sendEvent(peer, message) {
 }
 
 function broadcast(room, message, exceptPeerId = '') {
+  const failedPeers = [];
   for (const peer of room.peers.values()) {
     if (peer.id !== exceptPeerId) {
-      sendEvent(peer, message);
+      const sent = sendEvent(peer, message);
+      if (!sent) failedPeers.push(peer);
     }
+  }
+
+  for (const peer of failedPeers) {
+    closePeer(room.id, peer.id, peer.res, 'lost');
   }
 }
 
@@ -554,7 +560,11 @@ async function handleEvents(req, res, url) {
   broadcast(room, { type: 'peer-joined', peer: publicPeer(peer) }, peerId);
 
   const keepalive = setInterval(() => {
-    sendEvent(peer, { type: 'ping', at: Date.now() });
+    const sent = sendEvent(peer, { type: 'ping', at: Date.now() });
+    if (!sent) {
+      clearInterval(keepalive);
+      closePeer(roomId, peerId, res, 'lost');
+    }
   }, KEEPALIVE_MS);
 
   req.on('close', () => {
