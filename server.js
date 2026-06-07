@@ -5,6 +5,7 @@ const fs = require('node:fs/promises');
 const http = require('node:http');
 const path = require('node:path');
 const { URL } = require('node:url');
+const { AccessToken, TrackSource } = require('livekit-server-sdk');
 
 const PORT = readEnvInt('PORT', 3000, 1);
 const PUBLIC_DIR = path.join(__dirname, 'public');
@@ -13,6 +14,7 @@ const MAX_ROOMS = readEnvInt('MAX_ROOMS', 100, 1);
 const KEEPALIVE_MS = readEnvInt('SSE_KEEPALIVE_MS', 15000, 1000);
 const BODY_LIMIT_BYTES = readEnvInt('BODY_LIMIT_BYTES', 65536, 1024);
 const TURN_TTL_SECONDS = readEnvInt('TURN_TTL_SECONDS', 900, 60);
+const LIVEKIT_TOKEN_TTL_SECONDS = readEnvInt('LIVEKIT_TOKEN_TTL_SECONDS', 21600, 60);
 const ROOM_IDLE_TTL_MS = readEnvInt('ROOM_IDLE_TTL_MS', 900000, 1000);
 const ROOM_CREATE_RATE_LIMIT = readEnvInt('ROOM_CREATE_RATE_LIMIT', 20, 0);
 const ROOM_CREATE_RATE_WINDOW_MS = readEnvInt('ROOM_CREATE_RATE_WINDOW_MS', 60000, 1000);
@@ -20,6 +22,7 @@ const MAX_EMPTY_ROOMS_PER_IP = readEnvInt('MAX_EMPTY_ROOMS_PER_IP', 3, 0);
 const ROOM_CREATE_POW_DIFFICULTY = Math.min(readEnvInt('ROOM_CREATE_POW_DIFFICULTY', 14, 0), 32);
 const ROOM_CREATE_POW_TTL_MS = readEnvInt('ROOM_CREATE_POW_TTL_MS', 120000, 10000);
 const DEFAULT_STUN_URLS = 'stun:stun.l.google.com:19302';
+const LIVEKIT_CLIENT_BUNDLE = path.join(__dirname, 'node_modules', 'livekit-client', 'dist', 'livekit-client.umd.js');
 
 const rooms = new Map();
 const roomCreateRates = new Map();
@@ -106,6 +109,29 @@ function cleanStreamId(value) {
   if (typeof value !== 'string') return '';
   const streamId = value.trim();
   return /^[A-Za-z0-9_.:-]{1,120}$/.test(streamId) ? streamId : '';
+}
+
+function cleanLiveKitUrl(value) {
+  if (typeof value !== 'string') return '';
+  const url = value.trim();
+  return /^wss?:\/\/[^\s/$.?#].[^\s]*$/i.test(url) ? url : '';
+}
+
+function getLiveKitRoomName(roomId) {
+  const prefix = String(process.env.LIVEKIT_ROOM_PREFIX || 'voice-room-').replace(/[^A-Za-z0-9_.:-]/g, '-');
+  return `${prefix}${roomId}`;
+}
+
+function getLiveKitConfig() {
+  const url = cleanLiveKitUrl(process.env.LIVEKIT_URL || '');
+  const apiKey = process.env.LIVEKIT_API_KEY && process.env.LIVEKIT_API_KEY.trim();
+  const apiSecret = process.env.LIVEKIT_API_SECRET && process.env.LIVEKIT_API_SECRET.trim();
+  return {
+    apiKey,
+    apiSecret,
+    enabled: Boolean(url && apiKey && apiSecret),
+    url
+  };
 }
 
 function createRoomId() {
@@ -545,6 +571,64 @@ function handleConfig(req, res, url) {
   sendJson(res, 200, buildIceConfig(req));
 }
 
+async function handleLiveKitToken(req, res) {
+  const livekit = getLiveKitConfig();
+  if (!livekit.enabled) {
+    sendJson(res, 503, {
+      ok: false,
+      error: 'LiveKit is not configured'
+    });
+    return;
+  }
+
+  const body = await readJsonBody(req);
+  const roomId = normalizeRoomId(body.roomId);
+  const peerId = normalizePeerId(body.peerId);
+  const sessionToken = normalizeSessionToken(body.sessionToken);
+  const name = cleanName(body.name);
+
+  if (!roomId || !peerId || !sessionToken) {
+    sendJson(res, 400, { ok: false, error: 'Invalid room, peer, or session token' });
+    return;
+  }
+
+  const room = getRoom(roomId);
+  if (!room) {
+    sendJson(res, 404, { ok: false, error: 'Room not found' });
+    return;
+  }
+
+  const existingPeer = room.peers.get(peerId);
+  if (existingPeer && !tokensMatch(existingPeer.sessionToken, sessionToken)) {
+    sendJson(res, 403, { ok: false, error: 'Invalid peer session' });
+    return;
+  }
+
+  const livekitRoom = getLiveKitRoomName(roomId);
+  const token = new AccessToken(livekit.apiKey, livekit.apiSecret, {
+    identity: peerId,
+    metadata: JSON.stringify({ roomId }),
+    name,
+    ttl: LIVEKIT_TOKEN_TTL_SECONDS
+  });
+  token.addGrant({
+    canPublish: true,
+    canPublishData: true,
+    canPublishSources: [TrackSource.MICROPHONE, TrackSource.SCREEN_SHARE, TrackSource.SCREEN_SHARE_AUDIO],
+    canSubscribe: true,
+    room: livekitRoom,
+    roomJoin: true
+  });
+
+  sendJson(res, 200, {
+    ok: true,
+    room: livekitRoom,
+    token: await token.toJwt(),
+    ttlSeconds: LIVEKIT_TOKEN_TTL_SECONDS,
+    url: livekit.url
+  });
+}
+
 function handlePowChallenge(req, res) {
   prunePowChallenges();
 
@@ -753,6 +837,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'GET' && url.pathname === '/healthz') {
       pruneRooms();
       sendJson(res, 200, {
+        livekit: getLiveKitConfig().enabled,
         ok: true,
         maxRooms: MAX_ROOMS,
         rooms: rooms.size,
@@ -763,6 +848,17 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === 'GET' && url.pathname === '/config') {
       handleConfig(req, res, url);
+      return;
+    }
+
+    if (req.method === 'GET' && url.pathname === '/vendor/livekit-client.umd.js') {
+      const data = await fs.readFile(LIVEKIT_CLIENT_BUNDLE);
+      res.writeHead(200, {
+        ...baseHeaders(),
+        'Cache-Control': 'public, max-age=3600',
+        'Content-Type': 'application/javascript; charset=utf-8'
+      });
+      res.end(data);
       return;
     }
 
@@ -788,6 +884,11 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === 'POST' && url.pathname === '/signal') {
       await handleSignal(req, res);
+      return;
+    }
+
+    if (req.method === 'POST' && url.pathname === '/livekit-token') {
+      await handleLiveKitToken(req, res);
       return;
     }
 

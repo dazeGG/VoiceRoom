@@ -9,3 +9,14 @@
     Permissions-Policy "microphone=(self), display-capture=(self), camera=(), geolocation=(), payment=()"
   }
 }
+
+{$LIVEKIT_DOMAIN} {
+  encode zstd gzip
+  reverse_proxy host.docker.internal:7880
+
+  header {
+    Strict-Transport-Security "max-age=31536000; includeSubDomains"
+    X-Content-Type-Options "nosniff"
+    Referrer-Policy "same-origin"
+  }
+}

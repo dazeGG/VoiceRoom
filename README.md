@@ -1,6 +1,6 @@
 # Voice Room
 
-Простой голосовой чат по ссылке с демонстрацией экрана. Комната живет в URL вида `/r/<room-id>`, сигналинг работает на Node.js без npm-зависимостей, звук и экран идут через WebRTC напрямую между браузерами.
+Простой голосовой чат по ссылке с демонстрацией экрана. Комната живет в URL вида `/r/<room-id>`, приложение на Node.js создает комнаты и выдает LiveKit JWT, а звук и экран идут через self-host LiveKit SFU по схеме browser -> server -> browser.
 
 Этот README в первую очередь про самостоятельный деплой на VPS через Docker Compose.
 
@@ -10,9 +10,10 @@
 - Домен или поддомен, который можно направить на VPS.
 - Ubuntu 24.04 LTS или похожий Linux-дистрибутив.
 - Доступ к серверу по SSH с пользователем, у которого есть `sudo`.
-- Открытые входящие порты для HTTPS и, при необходимости, TURN.
+- Открытые входящие порты для HTTPS и LiveKit media.
+- Для локальной разработки: Node.js `20.20.2` и pnpm `11.5.1`.
 
-Для комнат до 6-8 человек обычно хватает VPS `1 vCPU / 1 GB RAM`. Если включаете TURN, лучше брать `2 vCPU / 2 GB RAM` и канал от `100 Mbps`, потому что relay-трафик идет через сервер.
+Для старта обычно хватает VPS `4 vCPU / 8 GB RAM / 60 GB SSD` с портом `1 Gbps`. Для небольшого теста можно начать с `2 vCPU / 4 GB RAM`, но screen share быстро упирается в исходящий канал.
 
 ## Установка Docker на Ubuntu
 
@@ -79,8 +80,8 @@ voice.example.com -> 203.0.113.10
 Откройте порты:
 
 - `80/tcp`, `443/tcp` для Caddy и HTTPS.
-- `3478/tcp`, `3478/udp` для TURN/STUN, если включаете профиль `turn`.
-- `49160-49200/udp` для TURN relay-портов, если включаете профиль `turn`.
+- `7881/tcp` для LiveKit ICE/TCP fallback.
+- `7882/udp` для LiveKit ICE/UDP mux.
 
 Если сервер находится за NAT, пробросьте эти же порты на машину с Docker.
 
@@ -111,42 +112,39 @@ cp .env.example .env
 ```dotenv
 DOMAIN=voice.example.com
 PUBLIC_HOSTNAME=voice.example.com
+LIVEKIT_DOMAIN=livekit.voice.example.com
+LIVEKIT_URL=wss://livekit.voice.example.com
+
+LIVEKIT_API_KEY=change-me-livekit-key
+LIVEKIT_API_SECRET=change-me-livekit-secret
+LIVEKIT_TOKEN_TTL_SECONDS=21600
+LIVEKIT_ROOM_PREFIX=voice-room-
 
 MAX_ROOM_PEERS=12
 MAX_ROOMS=100
 MAX_EMPTY_ROOMS_PER_IP=3
 ROOM_CREATE_POW_DIFFICULTY=14
 ROOM_CREATE_POW_TTL_MS=120000
-STUN_URLS=stun:stun.l.google.com:19302
-TURN_PORT=3478
-TURN_TTL_SECONDS=900
-TURN_MIN_PORT=49160
-TURN_MAX_PORT=49200
 ROOM_CREATE_RATE_LIMIT=20
 ROOM_CREATE_RATE_WINDOW_MS=60000
 ```
 
-Если планируете запускать TURN, заранее сгенерируйте secret и добавьте его в `.env`:
+Сгенерируйте LiveKit credentials:
 
 ```bash
+openssl rand -hex 12
 openssl rand -hex 32
 ```
 
-```dotenv
-TURN_SECRET=paste-generated-secret-here
-```
+Первое значение удобно использовать как `LIVEKIT_API_KEY`, второе как `LIVEKIT_API_SECRET`.
 
-Если TURN не нужен, оставьте `TURN_SECRET` пустым.
-
-## Деплой без TURN
-
-Этот режим проще и часто работает для пользователей без строгого NAT.
+## Деплой
 
 ```bash
 docker compose up -d --build
 ```
 
-Caddy автоматически выпустит TLS-сертификат для `DOMAIN` и проксирует приложение на Node.js контейнер.
+Caddy автоматически выпустит TLS-сертификаты для `DOMAIN` и `LIVEKIT_DOMAIN`, проксирует приложение на Node.js контейнер и LiveKit API/WebSocket на локальный LiveKit.
 
 Проверьте:
 
@@ -155,22 +153,14 @@ docker compose ps
 curl -s https://voice.example.com/healthz
 ```
 
-## Деплой с TURN
-
-TURN нужен, когда участники находятся за строгим NAT или корпоративными сетями и прямой WebRTC path не собирается.
-
-```bash
-docker compose --profile turn up -d --build
-```
-
 Проверьте контейнеры и логи:
 
 ```bash
-docker compose --profile turn ps
-docker compose --profile turn logs -f voicechat caddy coturn
+docker compose ps
+docker compose logs -f voicechat caddy livekit
 ```
 
-При включенном `TURN_SECRET` приложение выдает браузерам короткоживущие TURN credentials только после подключения peer-сессии к комнате.
+Если пользователи сидят за строгими корпоративными сетями, следующим шагом стоит включить embedded TURN/TLS в LiveKit. На первом этапе конфигурация использует LiveKit ICE/UDP mux на `7882/udp` и ICE/TCP fallback на `7881/tcp`.
 
 ## Проверка после деплоя
 
@@ -184,31 +174,21 @@ docker compose --profile turn logs -f voicechat caddy coturn
 
 ## Обновление
 
-Без TURN:
-
 ```bash
 git pull
 docker compose up -d --build
-```
-
-С TURN:
-
-```bash
-git pull
-docker compose --profile turn up -d --build
 ```
 
 ## Переменные окружения
 
 - `PORT` - порт Node.js приложения внутри контейнера, по умолчанию `3000`.
 - `DOMAIN` - домен, на который Caddy выпускает TLS-сертификат.
-- `PUBLIC_HOSTNAME` - публичное имя сервера для TURN credentials, обычно совпадает с `DOMAIN`.
-- `STUN_URLS` - список STUN URL через запятую.
-- `TURN_SECRET` - shared secret для coturn REST credentials.
-- `TURN_HOST` - публичный host TURN-сервера, по умолчанию `PUBLIC_HOSTNAME` или `DOMAIN`.
-- `TURN_PORT` - порт TURN, по умолчанию `3478`.
-- `TURN_TTL_SECONDS` - срок жизни временных TURN credentials, по умолчанию `900`.
-- `TURN_MIN_PORT`, `TURN_MAX_PORT` - UDP relay range для coturn.
+- `PUBLIC_HOSTNAME` - публичное имя сервера, обычно совпадает с `DOMAIN`.
+- `LIVEKIT_DOMAIN` - домен LiveKit endpoint, например `livekit.voice.example.com`.
+- `LIVEKIT_URL` - публичный WebSocket URL LiveKit, например `wss://livekit.voice.example.com`.
+- `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` - credentials LiveKit server и backend token endpoint.
+- `LIVEKIT_TOKEN_TTL_SECONDS` - срок жизни LiveKit join token, по умолчанию `21600`.
+- `LIVEKIT_ROOM_PREFIX` - префикс LiveKit room names, по умолчанию `voice-room-`.
 - `MAX_ROOM_PEERS` - лимит участников комнаты, по умолчанию `12` в compose.
 - `MAX_ROOMS` - общий лимит активных комнат в памяти, по умолчанию `100`.
 - `MAX_EMPTY_ROOMS_PER_IP` - лимит пустых комнат, созданных с одного IP, по умолчанию `3`. Значение `0` отключает лимит.
@@ -219,8 +199,23 @@ docker compose --profile turn up -d --build
 
 ## Локальный запуск
 
+Запустите локальный LiveKit server в dev-режиме:
+
 ```bash
-npm start
+docker run --rm --network host livekit/livekit-server:latest --dev
+```
+
+В другом терминале:
+
+```bash
+corepack enable
+corepack prepare pnpm@11.5.1 --activate
+pnpm install --frozen-lockfile
+
+export LIVEKIT_URL=ws://localhost:7880
+export LIVEKIT_API_KEY=devkey
+export LIVEKIT_API_SECRET=secret
+pnpm start
 ```
 
 Откройте `http://localhost:3000`. Для доступа к микрофону и демонстрации экрана на сервере нужен HTTPS; `localhost` браузеры считают безопасным контекстом.
@@ -228,7 +223,7 @@ npm start
 Проверка синтаксиса:
 
 ```bash
-npm run check
+pnpm run check
 ```
 
 ## Desktop
@@ -247,9 +242,9 @@ npm run desktop
 
 ## Безопасность
 
-Комната доступна всем, у кого есть ссылка или код комнаты. Создание комнаты защищено rate limit, proof-of-work challenge и лимитом пустых комнат на IP. Сигналинг проверяет короткоживущую peer-сессию для отправки WebRTC-сигналов, обновления статуса и выдачи TURN credentials, но это не заменяет аккаунты, пароль или отдельную авторизацию комнаты.
+Комната доступна всем, у кого есть ссылка или код комнаты. Создание комнаты защищено rate limit, proof-of-work challenge и лимитом пустых комнат на IP. Backend выдает LiveKit join token только для существующей комнаты, но это не заменяет аккаунты, пароль или отдельную авторизацию комнаты.
 
-Топология WebRTC mesh хорошо подходит для малых комнат. Для десятков участников нужен SFU-сервер, например LiveKit, Janus или mediasoup.
+LiveKit SFU снимает mesh-нагрузку с браузеров: каждый участник публикует микрофон и экран один раз на сервер, а остальные получают подписанные tracks через LiveKit.
 
 ## Лицензия
 

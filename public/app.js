@@ -1,6 +1,13 @@
 'use strict';
 
 const $ = (selector) => document.querySelector(selector);
+const LiveKitClient = window.LivekitClient || {};
+const {
+  AudioPresets,
+  Room: LiveKitRoom,
+  RoomEvent,
+  Track
+} = LiveKitClient;
 const DEFAULT_NOISE_MODE = 'browser';
 const DEFAULT_GATE_THRESHOLD_DB = -100;
 const GATE_THRESHOLD_DB_STORAGE_KEY = 'voice-room:gate-threshold-db';
@@ -153,6 +160,9 @@ const state = {
   iceConfig: { iceServers: [] },
   iceRefreshTimer: 0,
   joined: false,
+  livekitRoom: null,
+  localMicPublication: null,
+  localScreenPublications: new Map(),
   localRawStream: null,
   localScreenStream: null,
   localScreenProfileId: DEFAULT_SCREEN_PROFILE_ID,
@@ -602,6 +612,7 @@ function ensureNameForRoomLink() {
 async function joinRoom(event) {
   event?.preventDefault();
   if (state.joined || state.connecting) return;
+  requireLiveKitSdk();
 
   state.connecting = true;
   elements.muteButton.disabled = true;
@@ -646,6 +657,7 @@ async function joinRoom(event) {
       if (state.joined) setStatus('connecting', 'переподключение');
     };
 
+    await connectLiveKitRoom(name);
     state.joined = true;
     if (state.muted || state.outputMuted) postState().catch(() => {});
     refreshCallControls();
@@ -658,6 +670,9 @@ async function joinRoom(event) {
     console.error(error);
     showToast(error.message || 'Не удалось подключиться');
     setStatus('error', 'ошибка');
+    state.eventSource?.close();
+    state.eventSource = null;
+    await disconnectLiveKitRoom();
     stopLocalStream();
   } finally {
     state.connecting = false;
@@ -680,6 +695,314 @@ function autoJoinRoom() {
       setStatus('error', 'ошибка');
     });
   }, 0);
+}
+
+function requireLiveKitSdk() {
+  if (!LiveKitRoom || !RoomEvent || !Track) {
+    throw new Error('LiveKit SDK не загрузился. Проверьте сборку и CSP.');
+  }
+}
+
+async function connectLiveKitRoom(name) {
+  const credentials = await postJson('/livekit-token', {
+    name,
+    peerId: state.peerId,
+    roomId: state.roomId,
+    sessionToken: state.sessionToken
+  });
+
+  const room = new LiveKitRoom({
+    adaptiveStream: true,
+    dynacast: true
+  });
+  state.livekitRoom = room;
+  bindLiveKitRoomEvents(room);
+
+  await room.connect(credentials.url, credentials.token, {
+    autoSubscribe: false
+  });
+
+  await publishLocalMicrophone();
+  syncLiveKitParticipants(room);
+}
+
+function bindLiveKitRoomEvents(room) {
+  room.on(RoomEvent.Connected, () => {
+    setStatus('connected', '');
+  });
+  room.on(RoomEvent.Reconnecting, () => {
+    if (state.joined || state.connecting) setStatus('connecting', 'переподключение');
+  });
+  room.on(RoomEvent.Reconnected, () => {
+    if (state.joined || state.connecting) setStatus('connected', '');
+  });
+  room.on(RoomEvent.Disconnected, () => {
+    if (state.joined) setStatus('connecting', 'соединение потеряно');
+  });
+  room.on(RoomEvent.ParticipantConnected, (participant) => {
+    createLiveKitParticipant(participant);
+    playPeerCue('join');
+    refreshParticipantState();
+  });
+  room.on(RoomEvent.ParticipantDisconnected, (participant) => {
+    const hadPeer = state.peers.has(participant.identity);
+    removePeer(participant.identity);
+    if (hadPeer) playPeerCue('leave');
+    refreshParticipantState();
+  });
+  room.on(RoomEvent.TrackPublished, (publication, participant) => {
+    const peer = createLiveKitParticipant(participant);
+    updateLiveKitPublicationState(peer, publication);
+    syncLiveKitPublicationSubscription(peer, publication);
+  });
+  room.on(RoomEvent.TrackUnpublished, (publication, participant) => {
+    handleLiveKitTrackUnpublished(publication, participant);
+  });
+  room.on(RoomEvent.TrackSubscribed, (track, publication, participant) => {
+    handleLiveKitTrackSubscribed(track, publication, participant);
+  });
+  room.on(RoomEvent.TrackUnsubscribed, (track, publication, participant) => {
+    handleLiveKitTrackUnsubscribed(track, publication, participant);
+  });
+  room.on(RoomEvent.TrackMuted, (publication, participant) => {
+    const peer = createLiveKitParticipant(participant);
+    if (isMicrophonePublication(publication)) {
+      updateParticipant({ id: peer.id, muted: true });
+    }
+  });
+  room.on(RoomEvent.TrackUnmuted, (publication, participant) => {
+    const peer = createLiveKitParticipant(participant);
+    if (isMicrophonePublication(publication)) {
+      updateParticipant({ id: peer.id, muted: false });
+    }
+  });
+  room.on(RoomEvent.ActiveSpeakersChanged, (speakers) => {
+    const activeIds = new Set(speakers.map((participant) => participant.identity));
+    for (const peer of state.peers.values()) {
+      setParticipantSpeaking(peer, activeIds.has(peer.id));
+    }
+  });
+  room.on(RoomEvent.ConnectionQualityChanged, (quality, participant) => {
+    if (!participant || participant.isLocal) return;
+    const peer = createLiveKitParticipant(participant);
+    peer.connectionQuality = quality || 'unknown';
+    refreshPeerNetworkIndicator(peer);
+  });
+  room.on(RoomEvent.ParticipantNameChanged, (name, participant) => {
+    updateParticipant({ id: participant.identity, name: name || participant.identity });
+  });
+}
+
+function syncLiveKitParticipants(room) {
+  room.remoteParticipants.forEach((participant) => {
+    const peer = createLiveKitParticipant(participant);
+    participant.trackPublications.forEach((publication) => {
+      updateLiveKitPublicationState(peer, publication);
+      syncLiveKitPublicationSubscription(peer, publication);
+      if (publication.track && publication.isSubscribed) {
+        handleLiveKitTrackSubscribed(publication.track, publication, participant);
+      }
+    });
+  });
+}
+
+function createLiveKitParticipant(participant) {
+  const peer = createParticipant({
+    deafened: getLiveKitBooleanAttribute(participant, 'deafened'),
+    id: participant.identity,
+    joinedAt: participant.joinedAt ? participant.joinedAt.getTime() : Date.now(),
+    muted: !participant.isMicrophoneEnabled || getLiveKitBooleanAttribute(participant, 'muted'),
+    name: participant.name || participant.identity,
+    screen: participant.isScreenShareEnabled
+  });
+  peer.livekitParticipant = participant;
+  return peer;
+}
+
+function getLiveKitBooleanAttribute(participant, name) {
+  return participant?.attributes?.[name] === 'true';
+}
+
+async function publishLocalMicrophone() {
+  if (!state.livekitRoom || !state.localStream) return;
+  const [track] = state.localStream.getAudioTracks();
+  if (!track) throw new Error('Браузер не отдал аудио-трек');
+
+  state.localMicPublication = await state.livekitRoom.localParticipant.publishTrack(track, {
+    audioPreset: { maxBitrate: MICROPHONE_AUDIO_BITRATE },
+    dtx: true,
+    name: 'microphone',
+    red: true,
+    source: Track.Source.Microphone
+  });
+  await syncLocalMicrophonePublicationMuted();
+}
+
+async function unpublishLocalMicrophone(stopOnUnpublish = false) {
+  if (!state.livekitRoom || !state.localMicPublication?.track) {
+    state.localMicPublication = null;
+    return;
+  }
+
+  await state.livekitRoom.localParticipant.unpublishTrack(state.localMicPublication.track, stopOnUnpublish);
+  state.localMicPublication = null;
+}
+
+async function syncLocalMicrophonePublicationMuted() {
+  const publication = state.localMicPublication;
+  if (!publication) return;
+
+  if (state.muted) {
+    await publication.mute();
+  } else {
+    await publication.unmute();
+  }
+}
+
+async function publishLocalScreenTracks() {
+  if (!state.livekitRoom || !state.localScreenStream) return;
+  const profile = getScreenProfile(state.localScreenProfileId);
+  state.localScreenPublications.clear();
+
+  for (const track of state.localScreenStream.getTracks()) {
+    const publication = await state.livekitRoom.localParticipant.publishTrack(track, {
+      audioPreset: track.kind === 'audio' ? { maxBitrate: SCREEN_AUDIO_BITRATE } : undefined,
+      name: track.kind === 'video' ? 'screen' : 'screen-audio',
+      screenShareEncoding: track.kind === 'video'
+        ? { maxBitrate: profile.videoBitrate, maxFramerate: profile.frameRate }
+        : undefined,
+      source: track.kind === 'video' ? Track.Source.ScreenShare : Track.Source.ScreenShareAudio,
+      stream: state.localScreenStream.id
+    });
+    state.localScreenPublications.set(track.id, publication);
+  }
+}
+
+async function unpublishLocalScreenTracks(stopOnUnpublish = false) {
+  if (!state.livekitRoom || state.localScreenPublications.size === 0) {
+    state.localScreenPublications.clear();
+    return;
+  }
+
+  const publications = [...state.localScreenPublications.values()];
+  state.localScreenPublications.clear();
+  await Promise.allSettled(
+    publications
+      .map((publication) => publication.track)
+      .filter(Boolean)
+      .map((track) => state.livekitRoom.localParticipant.unpublishTrack(track, stopOnUnpublish))
+  );
+}
+
+async function disconnectLiveKitRoom() {
+  const room = state.livekitRoom;
+  state.livekitRoom = null;
+  state.localMicPublication = null;
+  state.localScreenPublications.clear();
+  if (!room) return;
+
+  try {
+    room.removeAllListeners?.();
+    await room.disconnect(false);
+  } catch (error) {
+    console.warn('LiveKit disconnect failed', error);
+  }
+}
+
+function updateLiveKitPublicationState(peer, publication) {
+  if (isScreenPublication(publication)) {
+    peer.screen = true;
+    peer.screenAudio = peer.screenAudio || isScreenAudioPublication(publication);
+    peer.node.dataset.screen = 'true';
+    updatePeerStatus(peer);
+    refreshScreenAction(peer);
+  }
+  if (isMicrophonePublication(publication)) {
+    peer.muted = publication.isMuted;
+    peer.node.dataset.muted = String(peer.muted);
+  }
+}
+
+function syncLiveKitPublicationSubscription(peer, publication) {
+  if (!publication?.setSubscribed) return;
+
+  if (isMicrophonePublication(publication)) {
+    publication.setSubscribed(true);
+    return;
+  }
+
+  if (isScreenPublication(publication)) {
+    publication.setSubscribed(state.viewedScreenPeerId === peer.id);
+  }
+}
+
+function syncLiveKitScreenSubscriptions(peer) {
+  const participant = peer?.livekitParticipant;
+  if (!participant) return;
+
+  participant.trackPublications.forEach((publication) => {
+    if (isScreenPublication(publication)) {
+      syncLiveKitPublicationSubscription(peer, publication);
+    }
+  });
+}
+
+function handleLiveKitTrackSubscribed(track, publication, participant) {
+  const peer = createLiveKitParticipant(participant);
+  updateLiveKitPublicationState(peer, publication);
+
+  const mediaTrack = track.mediaStreamTrack;
+  const stream = track.mediaStream || new MediaStream([mediaTrack]);
+  if (isScreenPublication(publication)) {
+    attachRemoteScreenStream(peer, stream);
+    return;
+  }
+
+  if (isMicrophonePublication(publication)) {
+    attachRemoteTrack(peer, mediaTrack, stream, track.receiver);
+  }
+}
+
+function handleLiveKitTrackUnsubscribed(track, publication, participant) {
+  const peer = state.peers.get(participant.identity);
+  if (!peer) return;
+
+  if (isScreenPublication(publication)) {
+    detachRemoteScreen(peer);
+    return;
+  }
+
+  if (isMicrophonePublication(publication)) {
+    detachRemoteAudioTrack(peer, track.mediaStreamTrack.id);
+    peer.micReceiver = null;
+  }
+}
+
+function handleLiveKitTrackUnpublished(publication, participant) {
+  const peer = state.peers.get(participant.identity);
+  if (!peer) return;
+
+  if (isScreenPublication(publication)) {
+    peer.screen = participant.isScreenShareEnabled;
+    peer.screenAudio = participant.trackPublications
+      ? [...participant.trackPublications.values()].some(isScreenAudioPublication)
+      : false;
+    peer.node.dataset.screen = String(peer.screen);
+    if (!peer.screen) detachRemoteScreen(peer);
+    refreshScreenAction(peer);
+  }
+}
+
+function isMicrophonePublication(publication) {
+  return publication?.source === Track.Source.Microphone;
+}
+
+function isScreenPublication(publication) {
+  return publication?.source === Track.Source.ScreenShare || publication?.source === Track.Source.ScreenShareAudio;
+}
+
+function isScreenAudioPublication(publication) {
+  return publication?.source === Track.Source.ScreenShareAudio;
 }
 
 async function openMicrophone(mode = state.noiseMode) {
@@ -1370,6 +1693,7 @@ async function startScreenShare(profileId = state.localScreenProfileId) {
     videoTrack.addEventListener('ended', () => {
       stopScreenShare({ fromBrowser: true }).catch((error) => console.error(error));
     });
+    await publishLocalScreenTracks();
 
     updateParticipant({
       id: state.peerId,
@@ -1412,18 +1736,13 @@ async function stopScreenShare(options = {}) {
 
   state.screenStopping = true;
   try {
-    const { notify = true, quiet = false, renegotiate = true } = options;
+    const { notify = true, quiet = false } = options;
     const previousStream = state.localScreenStream;
     state.localScreenStream = null;
 
+    await unpublishLocalScreenTracks(false);
     stopStream(previousStream);
     setLocalAppAudioSuppressed(false);
-
-    for (const peer of state.peers.values()) {
-      removeLocalScreenTracks(peer);
-      peer.screenSubscribed = false;
-      if (renegotiate) await renegotiatePeer(peer);
-    }
 
     updateParticipant({
       id: state.peerId,
@@ -1531,16 +1850,9 @@ async function switchMicrophone(options = {}) {
     const [nextTrack] = nextCapture.stream.getAudioTracks();
     if (!nextTrack) throw new Error('Браузер не отдал аудио-трек');
 
-    for (const peer of state.peers.values()) {
-      const sender = peer.micSender || peer.pc?.getSenders().find((item) => item.track?.kind === 'audio');
-      if (sender && nextTrack) {
-        await sender.replaceTrack(nextTrack);
-        peer.micSender = sender;
-        applyMicrophoneSenderProfile(sender).catch((error) => console.warn('Microphone sender profile unavailable', error));
-      }
-    }
-
+    await unpublishLocalMicrophone(false);
     setLocalMicrophoneCapture(nextCapture);
+    await publishLocalMicrophone();
     stopMicrophoneCapture(previousCapture);
     attachMeter(state.self, state.localStream);
     setParticipantSpeaking(state.self, false);
@@ -1725,12 +2037,10 @@ async function handleServerMessage(event) {
   const message = JSON.parse(event.data);
 
   if (message.type === 'hello') {
-    applyIceConfig(message.iceConfig);
     setStatus('connected', '');
     syncPeers(message.peers.map((peer) => peer.id));
     for (const peer of message.peers) {
       createParticipant(peer);
-      await callPeer(peer.id);
     }
     refreshParticipantState();
     return;
@@ -1826,6 +2136,8 @@ function createParticipant(peerInfo) {
     isLocal: Boolean(peerInfo.isLocal),
     localScreenSenders: [],
     lastReconnectAt: 0,
+    livekitParticipant: null,
+    connectionQuality: 'unknown',
     makingOffer: false,
     micSender: null,
     meterData: null,
@@ -2227,7 +2539,7 @@ function attachRemoteScreenStream(peer, stream) {
   }
 
   if (state.viewedScreenPeerId !== peer.id) {
-    sendSignal(peer.id, 'screen-unsubscribe', { active: false }).catch(() => {});
+    syncLiveKitScreenSubscriptions(peer);
     detachRemoteScreen(peer);
     return;
   }
@@ -2279,6 +2591,16 @@ function attachRemoteAudioTrack(peer, track) {
     },
     { once: true }
   );
+}
+
+function detachRemoteAudioTrack(peer, trackId) {
+  const audio = peer.audioElements.get(trackId);
+  if (!audio) return;
+
+  audio.pause();
+  audio.srcObject = null;
+  audio.remove();
+  peer.audioElements.delete(trackId);
 }
 
 function removeAudioElements(peer) {
@@ -2376,6 +2698,10 @@ async function updatePeerVoiceActivity(peer) {
 }
 
 async function readIncomingVoiceActivity(peer) {
+  if (peer.livekitParticipant) {
+    return Boolean(peer.livekitParticipant.isSpeaking);
+  }
+
   const receiver = peer.micReceiver || findVoiceReceiver(peer);
   const track = receiver?.track;
   if (peer.muted || !isPeerConnectionStatsUsable(peer) || !isLiveEnabledTrack(track)) {
@@ -2820,6 +3146,7 @@ function setMicrophoneMuted(muted, options = {}) {
 
   state.muted = nextMuted;
   setMicrophoneCaptureEnabled(getLocalMicrophoneCapture(), !state.muted);
+  syncLocalMicrophonePublicationMuted().catch((error) => console.warn('LiveKit microphone mute failed', error));
 
   if (playCue) playMicCue(state.muted);
   elements.muteButton.setAttribute('aria-pressed', String(state.muted));
@@ -2983,12 +3310,10 @@ async function enterScreenView(peerId) {
   refreshAllScreenActions();
   refreshScreenStage();
 
-  try {
-    await sendSignal(peerId, 'screen-subscribe', { active: true });
-  } catch (error) {
-    console.error(error);
-    closeScreenView();
-    showToast('Не удалось подключиться к экрану');
+  syncLiveKitScreenSubscriptions(peer);
+  if (peer.screenStream) {
+    state.screenRequesting = false;
+    refreshScreenStage();
   }
 }
 
@@ -2997,12 +3322,9 @@ async function leaveScreenView(options = {}) {
   const peerId = closeScreenView();
   if (!peerId || !state.peers.has(peerId)) return;
 
-  try {
-    await sendSignal(peerId, 'screen-unsubscribe', { active: false });
-  } catch (error) {
-    console.error(error);
-    if (!quiet) showToast('Не удалось отключить просмотр');
-  }
+  const peer = state.peers.get(peerId);
+  syncLiveKitScreenSubscriptions(peer);
+  if (!quiet) refreshAllScreenActions();
 }
 
 function closeScreenView() {
@@ -3207,6 +3529,7 @@ function leaveRoom() {
   state.iceRefreshTimer = 0;
   state.eventSource?.close();
   state.eventSource = null;
+  disconnectLiveKitRoom().catch((error) => console.warn('LiveKit disconnect failed', error));
   if (state.screenSourceRequest) cancelScreenSourcePicker();
   closeScreenView();
 
@@ -3288,6 +3611,11 @@ function updatePeerStatus(peer) {
     return;
   }
 
+  if (peer.livekitParticipant) {
+    setParticipantStatus(peer, '');
+    return;
+  }
+
   const stateText = peer.pc?.connectionState || peer.pc?.iceConnectionState;
   if (peer.isLocal || stateText === 'connected' || stateText === 'completed') {
     setParticipantStatus(peer, '');
@@ -3301,24 +3629,40 @@ function refreshPeerNetworkIndicator(peer) {
   if (!peer?.network || peer.isLocal) return;
 
   const disconnected = isPeerDisconnected(peer);
-  const quality = disconnected ? 'lost' : getPeerLatencyQuality(peer.pingMs);
+  const quality = disconnected ? 'lost' : getPeerLatencyQuality(peer.pingMs, peer.connectionQuality);
   peer.network.hidden = false;
   peer.pingNode.dataset.quality = quality;
-  peer.pingValue.textContent = disconnected || peer.pingMs === null ? '--' : `${peer.pingMs} мс`;
+  peer.pingValue.textContent = disconnected
+    ? '--'
+    : peer.pingMs === null
+      ? getPeerConnectionQualityLabel(peer.connectionQuality)
+      : `${peer.pingMs} мс`;
   peer.pingNode.title = disconnected
     ? 'Соединение потеряно'
     : peer.pingMs === null
-      ? 'Пинг неизвестен'
+      ? 'Качество соединения LiveKit'
       : `Пинг ${peer.pingMs} мс`;
   peer.reconnectButton.hidden = !disconnected;
   peer.reconnectButton.disabled = peer.reconnecting;
 }
 
-function getPeerLatencyQuality(pingMs) {
+function getPeerLatencyQuality(pingMs, connectionQuality = 'unknown') {
+  if (connectionQuality === 'excellent') return 'good';
+  if (connectionQuality === 'good') return 'fair';
+  if (connectionQuality === 'poor') return 'poor';
+  if (connectionQuality === 'lost') return 'lost';
   if (pingMs === null || !Number.isFinite(pingMs)) return 'unknown';
   if (pingMs <= PEER_LATENCY_GOOD_MS) return 'good';
   if (pingMs <= PEER_LATENCY_FAIR_MS) return 'fair';
   return 'poor';
+}
+
+function getPeerConnectionQualityLabel(connectionQuality) {
+  if (connectionQuality === 'excellent') return 'OK';
+  if (connectionQuality === 'good') return 'OK';
+  if (connectionQuality === 'poor') return 'LOW';
+  if (connectionQuality === 'lost') return '--';
+  return '--';
 }
 
 function getPeerConnectionState(peer) {
