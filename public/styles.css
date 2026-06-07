@@ -1317,7 +1317,7 @@ button:focus-visible,
 .mic-level-track {
   position: relative;
   height: 8px;
-  overflow: hidden;
+  overflow: visible;
   border: 1px solid oklch(38% 0.018 92 / 0.72);
   border-radius: 999px;
   background: oklch(14% 0.014 92);
@@ -1338,8 +1338,10 @@ button:focus-visible,
 }
 
 .mic-gate-marker {
+  --gate-position: 0;
   position: absolute;
   top: 50%;
+  left: calc(8px + (100% - 16px) * var(--gate-position));
   width: 16px;
   height: 16px;
   border-radius: 50%;
@@ -1350,7 +1352,7 @@ button:focus-visible,
     0 4px 12px oklch(4% 0.014 92 / 0.58);
   opacity: 0;
   transform: translate(-50%, -50%);
-  transition: left 120ms ease, opacity 120ms ease;
+  transition: opacity 120ms ease;
 }
 
 .mic-gate-marker[data-active="true"] {

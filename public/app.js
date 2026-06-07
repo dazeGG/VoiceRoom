@@ -378,7 +378,7 @@ function refreshGateMarker() {
   if (!elements.micGateMarker) return;
 
   const position = getDbMeterPosition(state.gateThresholdDb);
-  elements.micGateMarker.style.left = `${(position * 100).toFixed(1)}%`;
+  elements.micGateMarker.style.setProperty('--gate-position', position.toFixed(4));
   elements.micGateMarker.dataset.active = String(!isGateDisabled());
 }
 
