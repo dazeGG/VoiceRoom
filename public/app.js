@@ -33,6 +33,7 @@ const OUTPUT_MUTED_STORAGE_KEY = 'voice-room:output-muted';
 const PEER_LATENCY_INTERVAL_MS = 3000;
 const PEER_LATENCY_GOOD_MS = 150;
 const PEER_LATENCY_FAIR_MS = 300;
+const PEER_JOIN_CUE_DEDUPE_MS = 4000;
 const PEER_RECONNECT_COOLDOWN_MS = 5000;
 const PEER_RECONNECT_DELAY_MS = 1200;
 const GATE_CAPTURE_SWITCH_DEBOUNCE_MS = 700;
@@ -109,8 +110,6 @@ const elements = {
   gateThresholdValue: $('#gateThresholdValue'),
   joinByCodeButton: $('#joinByCodeButton'),
   leaveButton: $('#leaveButton'),
-  localNetwork: $('#localNetwork'),
-  localNetworkValue: $('#localNetworkValue'),
   micGateMarker: $('#micGateMarker'),
   micLevelFill: $('#micLevelFill'),
   micLevelTrack: $('#micLevelTrack'),
@@ -192,8 +191,10 @@ const state = {
   screenStopping: false,
   screenVolume: 1,
   self: null,
+  serverConnection: 'idle',
   sessionToken: createSessionToken(),
   sharedScreenPeerId: '',
+  voiceConnection: 'idle',
   viewedScreenPeerId: ''
 };
 
@@ -201,6 +202,7 @@ let toastTimer = null;
 let meterFrame = 0;
 let gateSwitchTimer = 0;
 let peerLatencyTimer = 0;
+const peerJoinCueTimes = new Map();
 let speakingStatsTimer = 0;
 let rnnoiseModulePromise = null;
 const watchedRemoteScreenTracks = new WeakSet();
@@ -478,7 +480,7 @@ function showRoomScreen() {
   elements.roomTitle.textContent = state.roomId;
   hideScreens();
   elements.roomScreen.hidden = false;
-  setStatus('idle', 'готово');
+  resetConnectionStatus();
 
   updateNameStatuses();
   refreshCallControls();
@@ -624,9 +626,11 @@ async function joinRoom(event) {
   state.connecting = true;
   state.localConnectionQuality = 'unknown';
   state.localPingMs = null;
+  resetConnectionStatus();
   refreshLocalNetworkIndicator();
   elements.muteButton.disabled = true;
-  setStatus('connecting', 'соединение');
+  setServerConnectionStatus('connecting');
+  setVoiceConnectionStatus('idle');
   refreshCallControls();
 
   try {
@@ -660,11 +664,11 @@ async function joinRoom(event) {
       `/events?room=${encodeURIComponent(state.roomId)}&peer=${encodeURIComponent(state.peerId)}&token=${encodeURIComponent(state.sessionToken)}&name=${encodeURIComponent(name)}`
     );
     state.eventSource.onopen = () => {
-      if (state.joined) setStatus('connected', 'подключено');
+      setServerConnectionStatus('connected');
     };
     state.eventSource.onmessage = handleServerMessage;
     state.eventSource.onerror = () => {
-      if (state.joined) setStatus('connecting', 'переподключение');
+      if (state.joined || state.connecting) setServerConnectionStatus('reconnecting');
     };
 
     await connectLiveKitRoom(name);
@@ -679,7 +683,7 @@ async function joinRoom(event) {
   } catch (error) {
     console.error(error);
     showToast(formatJoinError(error));
-    setStatus('error', 'ошибка');
+    setVoiceConnectionStatus(isVoiceRouteError(error) ? 'no-route' : 'error');
     state.eventSource?.close();
     state.eventSource = null;
     await disconnectLiveKitRoom();
@@ -705,7 +709,7 @@ function autoJoinRoom() {
     joinRoom().catch((error) => {
       console.error(error);
       showToast('Не удалось подключиться');
-      setStatus('error', 'ошибка');
+      setVoiceConnectionStatus(isVoiceRouteError(error) ? 'no-route' : 'error');
     });
   }, 0);
 }
@@ -724,7 +728,14 @@ function formatJoinError(error) {
   return message || 'Не удалось подключиться';
 }
 
+function isVoiceRouteError(error) {
+  const message = error?.message || String(error || '');
+  return /ice|no route|signal connection|failed to fetch|timeout|websocket/i.test(message);
+}
+
 async function connectLiveKitRoom(name) {
+  setVoiceConnectionStatus('connecting');
+
   const credentials = await postJson('/livekit-token', {
     name,
     peerId: state.peerId,
@@ -736,6 +747,7 @@ async function connectLiveKitRoom(name) {
 
   await publishLocalMicrophone();
   syncLiveKitParticipants(room);
+  setVoiceConnectionStatus('connected');
 }
 
 async function connectLiveKitWithFallback(credentials) {
@@ -791,27 +803,58 @@ function logLocalLiveKitDebug(level, ...args) {
 
 function bindLiveKitRoomEvents(room) {
   room.on(RoomEvent.Connected, () => {
-    setStatus('connected', 'подключено');
+    if (state.voiceConnection !== 'connected') setVoiceConnectionStatus('connecting');
   });
   room.on(RoomEvent.Reconnecting, () => {
-    if (state.joined || state.connecting) setStatus('connecting', 'переподключение');
+    if (state.joined || state.connecting) setVoiceConnectionStatus('reconnecting');
   });
   room.on(RoomEvent.Reconnected, () => {
-    if (state.joined || state.connecting) setStatus('connected', 'подключено');
+    if (state.joined || state.connecting) setVoiceConnectionStatus('connected');
+    recoverLiveKitRoom(room).catch((error) => console.warn('LiveKit recovery failed', error));
   });
   room.on(RoomEvent.Disconnected, () => {
-    if (state.joined) setStatus('connecting', 'соединение потеряно');
+    if (state.joined) setVoiceConnectionStatus('lost');
   });
   room.on(RoomEvent.ParticipantConnected, (participant) => {
     createLiveKitParticipant(participant);
-    playPeerCue('join');
     refreshParticipantState();
   });
   room.on(RoomEvent.ParticipantDisconnected, (participant) => {
-    const hadPeer = state.peers.has(participant.identity);
-    removePeer(participant.identity);
-    if (hadPeer) playPeerCue('leave');
+    const peer = state.peers.get(participant.identity);
+    if (peer) detachLiveKitParticipant(peer, 'голос переподключается');
     refreshParticipantState();
+  });
+  bindOptionalRoomEvent(room, RoomEvent.SignalReconnecting, () => {
+    if (state.joined || state.connecting) setVoiceConnectionStatus('signal-reconnecting');
+  });
+  bindOptionalRoomEvent(room, RoomEvent.SignalConnected, () => {
+    if (state.voiceConnection === 'signal-reconnecting') setVoiceConnectionStatus('connecting');
+  });
+  bindOptionalRoomEvent(room, RoomEvent.LocalTrackPublished, (publication) => {
+    if (!isMicrophonePublication(publication)) return;
+    state.localMicPublication = publication;
+    setVoiceConnectionStatus('connected');
+  });
+  bindOptionalRoomEvent(room, RoomEvent.LocalTrackUnpublished, (publication) => {
+    if (!isMicrophonePublication(publication)) return;
+    state.localMicPublication = null;
+    if (state.joined) setVoiceConnectionStatus('reconnecting');
+  });
+  bindOptionalRoomEvent(room, RoomEvent.TrackSubscriptionFailed, (trackSid, participant) => {
+    if (!participant) return;
+    const peer = state.peers.get(participant.identity) || createLiveKitParticipant(participant);
+    peer.voiceIssue = 'голос не подключен';
+    updatePeerStatus(peer);
+  });
+  bindOptionalRoomEvent(room, RoomEvent.AudioPlaybackStatusChanged, () => {
+    if (room.canPlaybackAudio === false) {
+      setVoiceConnectionStatus('playback-blocked');
+    } else if (state.voiceConnection === 'playback-blocked') {
+      setVoiceConnectionStatus('connected');
+    }
+  });
+  bindOptionalRoomEvent(room, RoomEvent.LocalAudioSilenceDetected, () => {
+    if (!state.muted) showToast('Микрофон не передает звук');
   });
   room.on(RoomEvent.TrackPublished, (publication, participant) => {
     const peer = createLiveKitParticipant(participant);
@@ -884,6 +927,8 @@ function createLiveKitParticipant(participant) {
     screen: participant.isScreenShareEnabled
   });
   peer.livekitParticipant = participant;
+  peer.voiceIssue = '';
+  updatePeerStatus(peer);
   return peer;
 }
 
@@ -988,6 +1033,8 @@ function updateLiveKitPublicationState(peer, publication) {
   if (isMicrophonePublication(publication)) {
     peer.muted = publication.isMuted;
     peer.node.dataset.muted = String(peer.muted);
+    peer.voiceIssue = '';
+    updatePeerStatus(peer);
   }
 }
 
@@ -1015,6 +1062,39 @@ function syncLiveKitScreenSubscriptions(peer) {
   });
 }
 
+function bindOptionalRoomEvent(room, eventName, handler) {
+  if (!eventName) return;
+  room.on(eventName, handler);
+}
+
+async function recoverLiveKitRoom(room) {
+  syncLiveKitParticipants(room);
+  await ensureLocalMicrophonePublished();
+  syncRemoteAudioPlayback();
+  refreshParticipantState();
+  refreshCallControls();
+  refreshScreenControls();
+}
+
+async function ensureLocalMicrophonePublished() {
+  const existingPublication = findLocalMicrophonePublication();
+  if (existingPublication) {
+    state.localMicPublication = existingPublication;
+    await syncLocalMicrophonePublicationMuted();
+    return;
+  }
+
+  if (state.livekitRoom && state.localStream) {
+    await publishLocalMicrophone();
+  }
+}
+
+function findLocalMicrophonePublication() {
+  const publications = state.livekitRoom?.localParticipant?.trackPublications;
+  if (!publications?.values) return null;
+  return [...publications.values()].find(isMicrophonePublication) || null;
+}
+
 function handleLiveKitTrackSubscribed(track, publication, participant) {
   const peer = createLiveKitParticipant(participant);
   updateLiveKitPublicationState(peer, publication);
@@ -1027,7 +1107,9 @@ function handleLiveKitTrackSubscribed(track, publication, participant) {
   }
 
   if (isMicrophonePublication(publication)) {
+    peer.voiceIssue = '';
     attachRemoteTrack(peer, mediaTrack, stream, track.receiver);
+    updatePeerStatus(peer);
   }
 }
 
@@ -1043,6 +1125,8 @@ function handleLiveKitTrackUnsubscribed(track, publication, participant) {
   if (isMicrophonePublication(publication)) {
     detachRemoteAudioTrack(peer, track.mediaStreamTrack.id);
     peer.micReceiver = null;
+    peer.voiceIssue = 'подключает голос';
+    updatePeerStatus(peer);
   }
 }
 
@@ -1058,6 +1142,13 @@ function handleLiveKitTrackUnpublished(publication, participant) {
     peer.node.dataset.screen = String(peer.screen);
     if (!peer.screen) detachRemoteScreen(peer);
     refreshScreenAction(peer);
+    return;
+  }
+
+  if (isMicrophonePublication(publication)) {
+    peer.micReceiver = null;
+    peer.voiceIssue = 'подключает голос';
+    updatePeerStatus(peer);
   }
 }
 
@@ -2172,7 +2263,7 @@ async function handleServerMessage(event) {
   const message = JSON.parse(event.data);
 
   if (message.type === 'hello') {
-    setStatus('connected', 'подключено');
+    setServerConnectionStatus('connected');
     syncPeers(message.peers.map((peer) => peer.id));
     for (const peer of message.peers) {
       createParticipant(peer);
@@ -2182,7 +2273,7 @@ async function handleServerMessage(event) {
   }
 
   if (message.type === 'ping') {
-    setStatus('connected', 'подключено');
+    setServerConnectionStatus('connected');
     return;
   }
 
@@ -2193,7 +2284,7 @@ async function handleServerMessage(event) {
 
   if (message.type === 'peer-joined') {
     createParticipant(message.peer);
-    playPeerCue('join');
+    playPeerJoinCue(message.peer?.id);
     refreshParticipantState();
     return;
   }
@@ -2201,6 +2292,7 @@ async function handleServerMessage(event) {
   if (message.type === 'peer-left') {
     const hadPeer = state.peers.has(message.peerId);
     removePeer(message.peerId);
+    clearPeerJoinCue(message.peerId);
     if (hadPeer) playPeerCue('leave');
     refreshParticipantState();
     return;
@@ -2227,6 +2319,7 @@ function syncPeers(peerIds) {
   for (const peerId of state.peers.keys()) {
     if (!livePeerIds.has(peerId)) {
       removePeer(peerId);
+      clearPeerJoinCue(peerId);
     }
   }
 }
@@ -2257,7 +2350,7 @@ function createParticipant(peerInfo) {
   if (isLocal) node.dataset.local = 'true';
   avatar.textContent = getInitials(peerInfo.name);
   nameLabel.textContent = isLocal ? `${peerInfo.name} · вы` : peerInfo.name;
-  setParticipantStatus({ status }, isLocal ? '' : 'подключение');
+  setParticipantStatus({ status }, isLocal ? '' : 'подключает голос');
   node.dataset.deafened = String(Boolean(peerInfo.deafened));
   node.dataset.muted = String(Boolean(peerInfo.muted));
   node.dataset.screen = String(Boolean(peerInfo.screen));
@@ -2297,7 +2390,8 @@ function createParticipant(peerInfo) {
     screenStream: null,
     screenStreamId: peerInfo.screenStreamId || '',
     status,
-    stream: null
+    stream: null,
+    voiceIssue: ''
   };
 
   screenAction.addEventListener('click', () => enterScreenView(participant.id).catch((error) => console.error(error)));
@@ -2353,6 +2447,7 @@ function removePeer(peerId) {
   const peer = state.peers.get(peerId);
   if (!peer) return;
 
+  clearPeerJoinCue(peerId);
   peer.pc?.close();
   window.clearTimeout(peer.reconnectTimer);
   removeAudioElements(peer);
@@ -2365,6 +2460,17 @@ function removePeer(peerId) {
   peer.node.remove();
   state.peers.delete(peerId);
   if (state.peers.size === 0) setParticipantSpeaking(state.self, false);
+}
+
+function detachLiveKitParticipant(peer, voiceIssue = 'подключает голос') {
+  peer.livekitParticipant = null;
+  peer.voiceIssue = voiceIssue;
+  peer.micReceiver = null;
+  removeAudioElements(peer);
+  resetAudioActivityStats(peer.incomingVoiceStats);
+  peer.incomingVoiceActive = false;
+  setParticipantSpeaking(peer, false);
+  updatePeerStatus(peer);
 }
 
 async function callPeer(peerId) {
@@ -2966,7 +3072,7 @@ async function updatePeerLatencyStats() {
 
 async function updateLocalLiveKitLatency() {
   try {
-    const publication = state.localMicPublication || findFirstLocalPublication();
+    const publication = state.localMicPublication || findLocalMicrophonePublication() || findFirstLocalPublication();
     const stats = await publication?.track?.getRTCStatsReport?.();
     const rttMs = getRoundTripTimeFromStats(stats);
     if (rttMs !== null) {
@@ -3074,6 +3180,21 @@ function isLocalMicrophoneSpeaking(participant, levelDb, rms) {
 
 function getCueGain(value) {
   return value * NOTIFICATION_VOLUME_BOOST;
+}
+
+function playPeerJoinCue(peerId) {
+  if (!peerId || peerId === state.peerId) return;
+
+  const now = Date.now();
+  const lastPlayedAt = peerJoinCueTimes.get(peerId) || 0;
+  if (now - lastPlayedAt < PEER_JOIN_CUE_DEDUPE_MS) return;
+
+  peerJoinCueTimes.set(peerId, now);
+  playPeerCue('join');
+}
+
+function clearPeerJoinCue(peerId) {
+  if (peerId) peerJoinCueTimes.delete(peerId);
 }
 
 function playPeerCue(type) {
@@ -3746,12 +3867,13 @@ function leaveRoom() {
   stopSpeakingStats();
 
   state.muted = false;
+  peerJoinCueTimes.clear();
   refreshCallControls();
   refreshScreenControls();
   closeDevicePopover();
   closeOutputPopover();
   closeScreenProfilePopover();
-  setStatus('idle', 'готово');
+  resetConnectionStatus();
   refreshParticipantState();
 }
 
@@ -3797,17 +3919,27 @@ function updatePeerStatus(peer) {
     return;
   }
 
+  if (!peer.isLocal && peer.voiceIssue) {
+    setParticipantStatus(peer, peer.voiceIssue);
+    return;
+  }
+
   if (peer.screen) {
     setParticipantStatus(peer, peer.isLocal ? 'экран в эфире' : 'показывает экран');
     return;
   }
 
-  if (peer.muted) {
+  if (!peer.isLocal && peer.livekitParticipant && !hasConnectedLiveKitVoice(peer)) {
+    setParticipantStatus(peer, 'подключает голос');
+    return;
+  }
+
+  if (!peer.isLocal && peer.livekitParticipant) {
     setParticipantStatus(peer, '');
     return;
   }
 
-  if (peer.livekitParticipant) {
+  if (peer.muted) {
     setParticipantStatus(peer, '');
     return;
   }
@@ -3818,25 +3950,159 @@ function updatePeerStatus(peer) {
     return;
   }
 
-  setParticipantStatus(peer, 'подключение');
+  setParticipantStatus(peer, 'подключает голос');
+}
+
+function hasConnectedLiveKitVoice(peer) {
+  if (!peer.livekitParticipant) return false;
+
+  const publication = getLiveKitMicrophonePublication(peer);
+  if (!publication) return false;
+  return Boolean(publication.isMuted || publication.isSubscribed || publication.track || peer.audioElements.size > 0);
+}
+
+function getLiveKitMicrophonePublication(peer) {
+  const publications = peer.livekitParticipant?.trackPublications;
+  if (!publications) return null;
+
+  if (typeof publications.values === 'function') {
+    return [...publications.values()].find(isMicrophonePublication) || null;
+  }
+
+  if (Array.isArray(publications)) {
+    return publications.find(isMicrophonePublication) || null;
+  }
+
+  return null;
+}
+
+function resetConnectionStatus() {
+  state.serverConnection = 'idle';
+  state.voiceConnection = 'idle';
+  renderConnectionStatus();
+}
+
+function setServerConnectionStatus(connection) {
+  state.serverConnection = connection;
+  renderConnectionStatus();
+}
+
+function setVoiceConnectionStatus(connection) {
+  state.voiceConnection = connection;
+  renderConnectionStatus();
 }
 
 function refreshLocalNetworkIndicator() {
-  if (!elements.localNetwork || !elements.localNetworkValue) return;
+  renderConnectionStatus();
+}
 
-  const disconnected = state.joined && state.localConnectionQuality === 'lost';
-  const quality = disconnected ? 'lost' : getPeerLatencyQuality(state.localPingMs, state.localConnectionQuality);
-  elements.localNetwork.dataset.quality = state.joined ? quality : 'unknown';
-  elements.localNetworkValue.textContent = state.joined
-    ? state.localPingMs === null
-      ? getPeerConnectionQualityLabel(state.localConnectionQuality)
-      : `${state.localPingMs} мс`
-    : '--';
-  elements.localNetwork.title = !state.joined
-    ? 'Пинг до LiveKit появится после подключения'
-    : state.localPingMs === null
-      ? 'Качество соединения до LiveKit'
-      : `Пинг до LiveKit ${state.localPingMs} мс`;
+function renderConnectionStatus() {
+  const { stateName, label, title } = getConnectionStatusView();
+  setStatus(stateName, label, title);
+}
+
+function getConnectionStatusView() {
+  if (state.voiceConnection === 'playback-blocked') {
+    return {
+      label: 'Звук заблокирован',
+      stateName: 'warning',
+      title: 'Браузер заблокировал воспроизведение звука'
+    };
+  }
+
+  if (state.voiceConnection === 'no-route') {
+    return {
+      label: 'Нет маршрута к голосу',
+      stateName: 'error',
+      title: 'LiveKit не смог установить медиасоединение'
+    };
+  }
+
+  if (state.voiceConnection === 'error') {
+    return {
+      label: 'Ошибка подключения',
+      stateName: 'error',
+      title: 'Не удалось подключить голосовой канал'
+    };
+  }
+
+  if (state.voiceConnection === 'lost' || (state.voiceConnection === 'connected' && state.localConnectionQuality === 'lost')) {
+    return {
+      label: 'Голос потерян',
+      stateName: 'error',
+      title: 'Медиасоединение до LiveKit потеряно'
+    };
+  }
+
+  if (state.voiceConnection === 'reconnecting') {
+    return {
+      label: 'Переподключение голоса',
+      stateName: 'connecting',
+      title: 'LiveKit восстанавливает голосовой канал'
+    };
+  }
+
+  if (state.voiceConnection === 'signal-reconnecting') {
+    return {
+      label: 'Сигнал переподключается',
+      stateName: 'connecting',
+      title: 'Служебное соединение LiveKit восстанавливается'
+    };
+  }
+
+  if (state.serverConnection === 'reconnecting' || state.serverConnection === 'lost') {
+    return {
+      label: 'Сервер переподключается',
+      stateName: 'connecting',
+      title: 'Канал событий комнаты восстанавливается'
+    };
+  }
+
+  if (state.voiceConnection === 'connected') {
+    const quality = getPeerLatencyQuality(state.localPingMs, state.localConnectionQuality);
+    const ping = formatLocalPing();
+    const unstable = quality === 'poor';
+    const label = `${unstable ? 'Голос нестабилен' : 'Голос подключен'}${ping ? ` · ${ping}` : ''}`;
+    return {
+      label,
+      stateName: unstable ? 'warning' : 'connected',
+      title: ping ? `Пинг до LiveKit ${ping}` : 'Голосовой канал LiveKit подключен'
+    };
+  }
+
+  if (state.voiceConnection === 'connecting') {
+    return {
+      label: state.serverConnection === 'connected' ? 'Подключение голоса' : 'Подключение',
+      stateName: 'connecting',
+      title: 'Подключаем голосовой канал'
+    };
+  }
+
+  if (state.serverConnection === 'connected') {
+    return {
+      label: 'Сервер на связи',
+      stateName: 'connecting',
+      title: 'Канал событий комнаты подключен'
+    };
+  }
+
+  if (state.serverConnection === 'connecting') {
+    return {
+      label: 'Подключение к серверу',
+      stateName: 'connecting',
+      title: 'Подключаем канал событий комнаты'
+    };
+  }
+
+  return {
+    label: 'готово',
+    stateName: 'idle',
+    title: ''
+  };
+}
+
+function formatLocalPing() {
+  return Number.isFinite(state.localPingMs) ? `${state.localPingMs} мс` : '';
 }
 
 function getPeerLatencyQuality(pingMs, connectionQuality = 'unknown') {
@@ -3850,14 +4116,6 @@ function getPeerLatencyQuality(pingMs, connectionQuality = 'unknown') {
   if (connectionQuality === 'poor') return 'poor';
   if (connectionQuality === 'lost') return 'lost';
   return 'unknown';
-}
-
-function getPeerConnectionQualityLabel(connectionQuality) {
-  if (connectionQuality === 'excellent') return 'OK';
-  if (connectionQuality === 'good') return 'OK';
-  if (connectionQuality === 'poor') return 'LOW';
-  if (connectionQuality === 'lost') return '--';
-  return '--';
 }
 
 function getPeerConnectionState(peer) {
@@ -3895,6 +4153,7 @@ async function unlockAudio() {
   if (!elements.screenStage.hidden) plays.push(elements.screenVideo.play());
   await Promise.allSettled(plays);
   elements.soundButton.hidden = true;
+  if (state.voiceConnection === 'playback-blocked') setVoiceConnectionStatus('connected');
 }
 
 async function copyRoomCode() {
@@ -4037,9 +4296,10 @@ function hashStringToHue(value) {
   return ((hash % 360) + 360) % 360;
 }
 
-function setStatus(stateName, label) {
+function setStatus(stateName, label, title = '') {
   elements.statusPill.dataset.state = stateName;
   elements.statusText.textContent = label;
+  elements.statusPill.title = title;
   elements.statusPill.hidden = stateName === 'idle' || document.body.dataset.screen !== 'room';
 }
 
