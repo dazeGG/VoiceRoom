@@ -81,6 +81,7 @@ button:disabled {
 
 .topbar {
   display: flex;
+  min-width: 0;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-md);
@@ -101,6 +102,29 @@ button:disabled {
   height: 32px;
   display: block;
   flex: 0 0 auto;
+}
+
+.topbar-room-heading {
+  display: none;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+body[data-screen="room"] .topbar {
+  align-items: flex-start;
+}
+
+body[data-screen="room"] .brand {
+  display: none;
+}
+
+body[data-screen="room"] .topbar-room-heading {
+  display: flex;
+}
+
+.topbar-room-heading h1 {
+  max-width: min(52vw, 18ch);
+  font-size: 3rem;
 }
 
 .status-pill {
@@ -257,8 +281,8 @@ button:disabled {
   position: relative;
   display: grid;
   min-height: 100%;
-  grid-template-rows: auto minmax(0, 1fr);
-  gap: var(--space-xl);
+  grid-template-rows: minmax(0, 1fr);
+  gap: 0;
   overflow: visible;
   padding: var(--space-md) var(--space-xl) 104px;
   background: transparent;
@@ -1593,6 +1617,11 @@ button:focus-visible,
     min-height: 100%;
   }
 
+  .topbar-room-heading h1 {
+    max-width: calc(100vw - 280px);
+    font-size: 2.4rem;
+  }
+
   .participants[data-count="5"],
   .participants[data-count="6"],
   .participants[data-count="7"],
@@ -1616,6 +1645,11 @@ button:focus-visible,
   .heading-actions,
   .tool-button {
     width: 100%;
+  }
+
+  .topbar-room-heading h1 {
+    max-width: 100%;
+    font-size: 2rem;
   }
 
   .heading-actions {

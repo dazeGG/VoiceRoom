@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#10110f">
     <title>Voice Room</title>
     <link rel="icon" href="/icon.svg" type="image/svg+xml">
-    <link rel="stylesheet" href="/styles.css?v=20260607-voice-status-1">
+    <link rel="stylesheet" href="/styles.css?v=20260607-room-topbar-1">
   </head>
   <body>
     <div class="app-shell">
@@ -15,6 +15,27 @@
           <img class="brand-mark" src="/icon.svg" width="32" height="32" alt="" aria-hidden="true">
           <span>Voice Room</span>
         </a>
+        <div class="room-heading topbar-room-heading" aria-label="Комната" hidden>
+          <div class="room-title-line">
+            <h1 id="roomTitle">room</h1>
+            <div class="room-title-actions">
+              <button class="copy-room-button" id="copyCodeButton" type="button" aria-label="Скопировать код комнаты">
+                <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                  <path d="M8 8m0 2a2 2 0 0 1 2 -2h8a2 2 0 0 1 2 2v8a2 2 0 0 1 -2 2h-8a2 2 0 0 1 -2 -2z"></path>
+                  <path d="M16 8v-2a2 2 0 0 0 -2 -2h-8a2 2 0 0 0 -2 2v8a2 2 0 0 0 2 2h2"></path>
+                </svg>
+              </button>
+
+              <button class="copy-room-button" id="copyLinkButton" type="button" aria-label="Скопировать ссылку на комнату">
+                <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                  <path d="M9 15l6 -6"></path>
+                  <path d="M11 6l.8 -.8a4 4 0 0 1 5.7 5.7l-1.7 1.7a4 4 0 0 1 -5.7 0"></path>
+                  <path d="M13 18l-.8 .8a4 4 0 0 1 -5.7 -5.7l1.7 -1.7a4 4 0 0 1 5.7 0"></path>
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
         <div class="status-pill" data-state="idle" id="statusPill" hidden>
           <span class="status-dot" aria-hidden="true"></span>
           <span id="statusText">готово</span>
@@ -58,31 +79,6 @@
 
       <main class="room-layout" id="roomScreen" hidden>
         <section class="stage" aria-label="Голосовая комната">
-          <div class="room-heading">
-            <div>
-              <p class="eyebrow">комната</p>
-              <div class="room-title-line">
-                <h1 id="roomTitle">room</h1>
-                <div class="room-title-actions">
-                  <button class="copy-room-button" id="copyCodeButton" type="button" aria-label="Скопировать код комнаты">
-                    <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
-                      <path d="M8 8m0 2a2 2 0 0 1 2 -2h8a2 2 0 0 1 2 2v8a2 2 0 0 1 -2 2h-8a2 2 0 0 1 -2 -2z"></path>
-                      <path d="M16 8v-2a2 2 0 0 0 -2 -2h-8a2 2 0 0 0 -2 2v8a2 2 0 0 0 2 2h2"></path>
-                    </svg>
-                  </button>
-
-                  <button class="copy-room-button" id="copyLinkButton" type="button" aria-label="Скопировать ссылку на комнату">
-                    <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
-                      <path d="M9 15l6 -6"></path>
-                      <path d="M11 6l.8 -.8a4 4 0 0 1 5.7 5.7l-1.7 1.7a4 4 0 0 1 -5.7 0"></path>
-                      <path d="M13 18l-.8 .8a4 4 0 0 1 -5.7 -5.7l1.7 -1.7a4 4 0 0 1 5.7 0"></path>
-                    </svg>
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-
           <div class="screen-stage" id="screenStage" hidden>
             <video class="screen-video" id="screenVideo" autoplay playsinline></video>
             <div class="screen-placeholder" id="screenPlaceholder">Подключение к экрану</div>
@@ -366,6 +362,6 @@
     </template>
 
     <script src="/vendor/livekit-client.umd.js?v=2.19.1" defer></script>
-    <script src="/app.js?v=20260607-voice-status-1" defer></script>
+    <script src="/app.js?v=20260607-room-topbar-1" defer></script>
   </body>
 </html>

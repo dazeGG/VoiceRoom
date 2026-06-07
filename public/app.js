@@ -99,6 +99,7 @@ const SCREEN_STREAM_PROFILES = {
 const SCREEN_PROFILE_ORDER = ['balanced', 'high', 'low'];
 
 const elements = {
+  brand: $('.brand'),
   copyCodeButton: $('#copyCodeButton'),
   copyLinkButton: $('#copyLinkButton'),
   createRoomButton: $('#createRoomButton'),
@@ -126,6 +127,7 @@ const elements = {
   roomCodeInput: $('#roomCodeInput'),
   roomScreen: $('#roomScreen'),
   roomTitle: $('#roomTitle'),
+  topbarRoomHeading: $('.topbar-room-heading'),
   missingRoomCode: $('#missingRoomCode'),
   screenButton: $('#screenButton'),
   screenExitButton: $('#screenExitButton'),
@@ -449,6 +451,8 @@ function showStartScreen() {
   document.body.dataset.screen = 'start';
   document.title = 'Voice Room';
   hideScreens();
+  elements.brand.hidden = false;
+  elements.topbarRoomHeading.hidden = true;
   elements.startScreen.hidden = false;
   elements.statusPill.hidden = true;
   updateNameStatuses();
@@ -479,6 +483,8 @@ function showRoomScreen() {
   document.title = `${state.roomId} · Voice Room`;
   elements.roomTitle.textContent = state.roomId;
   hideScreens();
+  elements.brand.hidden = true;
+  elements.topbarRoomHeading.hidden = false;
   elements.roomScreen.hidden = false;
   resetConnectionStatus();
 
@@ -496,6 +502,8 @@ function showRoomNotFound() {
   document.title = 'Комната не найдена · Voice Room';
   elements.missingRoomCode.textContent = state.roomId || getMissingRoomLabel();
   hideScreens();
+  elements.brand.hidden = false;
+  elements.topbarRoomHeading.hidden = true;
   elements.notFoundScreen.hidden = false;
   elements.statusPill.hidden = true;
 }
