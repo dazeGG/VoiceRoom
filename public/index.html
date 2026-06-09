@@ -86,6 +86,7 @@
               <span class="screen-meta-live" aria-hidden="true"></span>
               <span class="screen-meta-title" id="screenMetaTitle"></span>
               <span class="screen-meta-detail" id="screenMetaProfile"></span>
+              <span class="screen-meta-detail screen-meta-stats" id="screenMetaStats" hidden></span>
               <span class="screen-meta-detail" id="screenMetaViewers"></span>
             </div>
             <div class="screen-view-controls" id="screenViewControls" hidden>
@@ -282,7 +283,15 @@
               <span class="sr-only" id="screenText">Показать экран</span>
             </button>
             <div class="screen-profile-popover" id="screenProfilePopover" hidden>
-              <p class="screen-profile-title">Качество стрима</p>
+              <p class="screen-profile-title">Запустить стрим</p>
+              <label class="screen-audio-toggle" id="screenAudioToggleRow" hidden>
+                <span class="screen-audio-toggle-copy">
+                  <strong>Звук стрима</strong>
+                  <span>Системный звук без эха в desktop-приложении</span>
+                </span>
+                <input id="screenAudioToggle" type="checkbox" checked>
+                <span class="screen-audio-switch" aria-hidden="true"></span>
+              </label>
               <div class="screen-profile-options" id="screenProfileOptions"></div>
             </div>
 

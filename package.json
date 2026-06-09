@@ -7,7 +7,7 @@
     "start": "node server.js",
     "dev": "node --watch server.js",
     "dev:livekit": "docker run --rm -p 7880:7880 -p 7881:7881 -p 7882:7882/udp livekit/livekit-server:latest --dev --bind 0.0.0.0",
-    "check": "node --check server.js && node --check public/app.js && node --check public/audio-gate.worklet.js"
+    "check": "node --check server.js && node --check public/app.js && node --check public/audio-gate.worklet.js && node --check public/desktop-audio-source.worklet.js"
   },
   "dependencies": {
     "livekit-client": "^2.19.1",

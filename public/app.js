@@ -6,7 +6,9 @@ const {
   AudioPresets,
   Room: LiveKitRoom,
   RoomEvent,
-  Track
+  Track,
+  VideoPreset,
+  supportsVP9
 } = LiveKitClient;
 const DEFAULT_NOISE_MODE = 'browser';
 const DEFAULT_GATE_THRESHOLD_DB = -100;
@@ -17,6 +19,7 @@ const GATE_THRESHOLD_MIN_DB = -100;
 const LEGACY_GATE_MAX_AMPLITUDE = 0.18;
 const LEGACY_GATE_MIN_AMPLITUDE = 0.006;
 const AUDIO_GATE_WORKLET_URL = '/audio-gate.worklet.js';
+const DESKTOP_AUDIO_SOURCE_WORKLET_URL = '/desktop-audio-source.worklet.js';
 const GATE_ATTACK_MS = 8;
 const GATE_CLOSE_RATIO = 0.65;
 const GATE_DETECTOR_ATTACK_MS = 4;
@@ -30,6 +33,7 @@ const MICROPHONE_DEVICE_STORAGE_KEY = 'voice-room:microphone-device-id';
 const NOISE_MODE_STORAGE_KEY = 'voice-room:noise-mode';
 const OUTPUT_DEVICE_STORAGE_KEY = 'voice-room:output-device-id';
 const OUTPUT_MUTED_STORAGE_KEY = 'voice-room:output-muted';
+const SCREEN_AUDIO_ENABLED_STORAGE_KEY = 'voice-room:screen-audio-enabled';
 const PEER_LATENCY_INTERVAL_MS = 3000;
 const PEER_LATENCY_GOOD_MS = 150;
 const PEER_LATENCY_FAIR_MS = 300;
@@ -57,47 +61,67 @@ const NOISE_MODES = {
   }
 };
 const RNNOISE_ASSET_BASE = '/rnnoise/';
-const DEFAULT_SCREEN_PROFILE_ID = 'balanced';
+const DEFAULT_SCREEN_QUALITY_ID = 'balanced';
+const DEFAULT_SCREEN_FPS_ID = '30';
+const DEFAULT_SCREEN_PROFILE_ID = `${DEFAULT_SCREEN_QUALITY_ID}-${DEFAULT_SCREEN_FPS_ID}`;
 const MICROPHONE_AUDIO_BITRATE = 64_000;
 const SCREEN_AUDIO_BITRATE = 192_000;
+const SCREEN_ADAPT_GOOD_SAMPLE_TARGET = 16;
+const SCREEN_ADAPT_MIN_INTERVAL_MS = 20_000;
+const SCREEN_ADAPT_POOR_SAMPLE_TARGET = 3;
+const SCREEN_ADAPT_PROFILE_ORDER = ['low-15', 'low-30', 'balanced-15', 'balanced-30', 'high-15', 'high-30'];
+const SCREEN_STATS_INTERVAL_MS = 1500;
+const SCREEN_VIDEO_BACKUP_CODEC = 'vp8';
 const PEER_SESSION_STORAGE_PREFIX = 'voice-room:peer-session:';
 const ROOM_PROOF_BATCH_SIZE = 64;
-const SCREEN_STREAM_PROFILES = {
+const SCREEN_QUALITY_OPTIONS = {
   balanced: {
-    contentHint: 'detail',
-    detail: '720p · 24 fps',
-    frameRate: 24,
+    bitrateByFps: {
+      15: 1_300_000,
+      30: 2_000_000
+    },
     height: 720,
     id: 'balanced',
-    intent: 'Показ экрана',
-    label: 'Приемлемый',
-    videoBitrate: 2_200_000,
+    label: '720p',
     width: 1280
   },
   high: {
-    contentHint: 'detail',
-    detail: '1080p · 30 fps',
-    frameRate: 30,
+    bitrateByFps: {
+      15: 3_200_000,
+      30: 5_000_000
+    },
     height: 1080,
     id: 'high',
-    intent: 'Совместный просмотр',
-    label: 'Высокий',
-    videoBitrate: 8_000_000,
+    label: '1080p',
     width: 1920
   },
   low: {
-    contentHint: 'detail',
-    detail: '540p · 12 fps',
-    frameRate: 12,
+    bitrateByFps: {
+      15: 850_000,
+      30: 1_150_000
+    },
     height: 540,
     id: 'low',
-    intent: 'Слабая сеть',
-    label: 'Минимальный',
-    videoBitrate: 800_000,
+    label: '540p',
     width: 960
   }
 };
-const SCREEN_PROFILE_ORDER = ['balanced', 'high', 'low'];
+const SCREEN_QUALITY_ORDER = ['low', 'balanced', 'high'];
+const SCREEN_FPS_OPTIONS = {
+  15: {
+    contentHint: 'detail',
+    frameRate: 15,
+    id: '15',
+    label: '15 FPS'
+  },
+  30: {
+    contentHint: 'motion',
+    frameRate: 30,
+    id: '30',
+    label: '30 FPS'
+  }
+};
+const SCREEN_FPS_ORDER = ['15', '30'];
 
 const elements = {
   brand: $('.brand'),
@@ -135,9 +159,12 @@ const elements = {
   screenFullscreenButton: $('#screenFullscreenButton'),
   screenMeta: $('#screenMeta'),
   screenMetaProfile: $('#screenMetaProfile'),
+  screenMetaStats: $('#screenMetaStats'),
   screenMetaTitle: $('#screenMetaTitle'),
   screenMetaViewers: $('#screenMetaViewers'),
   screenPlaceholder: $('#screenPlaceholder'),
+  screenAudioToggle: $('#screenAudioToggle'),
+  screenAudioToggleRow: $('#screenAudioToggleRow'),
   screenProfileOptions: $('#screenProfileOptions'),
   screenProfilePopover: $('#screenProfilePopover'),
   screenSourceCloseButton: $('#screenSourceCloseButton'),
@@ -167,6 +194,9 @@ const elements = {
 
 const initialRoomId = getRoomIdFromPath();
 const initialPeerSession = getStoredPeerSession(initialRoomId);
+const initialScreenQualityId = DEFAULT_SCREEN_QUALITY_ID;
+const initialScreenFpsId = DEFAULT_SCREEN_FPS_ID;
+const initialScreenProfileId = createScreenProfileId(initialScreenQualityId, initialScreenFpsId);
 
 const state = {
   audioContext: null,
@@ -183,9 +213,20 @@ const state = {
   localPingMs: null,
   localMicPublication: null,
   localScreenPublications: new Map(),
+  localScreenAdaptGoodSamples: 0,
+  localScreenAdaptLastAt: 0,
+  localScreenAdaptPoorSamples: 0,
+  localScreenAudioCapture: null,
+  localScreenAudioEnabled: getStoredScreenAudioEnabled(),
+  localScreenStats: null,
+  localScreenStatsPrevious: null,
+  localScreenStatsTimer: 0,
+  localScreenQualityId: initialScreenQualityId,
+  localScreenFpsId: initialScreenFpsId,
+  localScreenTargetProfileId: initialScreenProfileId,
   localRawStream: null,
   localScreenStream: null,
-  localScreenProfileId: DEFAULT_SCREEN_PROFILE_ID,
+  localScreenProfileId: initialScreenProfileId,
   localStream: null,
   localAppAudioSuppressed: false,
   microphoneDeviceId: localStorage.getItem(MICROPHONE_DEVICE_STORAGE_KEY) || '',
@@ -234,6 +275,8 @@ function init() {
   elements.startNameInput.value = savedName;
   elements.noiseModeSelect.value = state.noiseMode;
   elements.gateThresholdSlider.value = String(state.gateThresholdDb);
+  elements.screenAudioToggle.checked = state.localScreenAudioEnabled;
+  refreshScreenAudioToggleVisibility();
   refreshGateThresholdValue();
   refreshMicrophoneLevelMeter(GATE_THRESHOLD_MIN_DB);
   elements.startForm.addEventListener('submit', saveStartName);
@@ -247,6 +290,7 @@ function init() {
   elements.muteButton.addEventListener('click', handleMicButtonClick);
   elements.outputButton.addEventListener('click', toggleOutputMute);
   elements.screenButton.addEventListener('click', handleScreenButtonClick);
+  elements.screenAudioToggle.addEventListener('change', updateScreenAudioPreference);
   elements.screenExitButton.addEventListener('click', () => leaveScreenView().catch((error) => console.error(error)));
   elements.screenFullscreenButton.addEventListener('click', toggleScreenFullscreen);
   elements.screenSourceCloseButton.addEventListener('click', cancelScreenSourcePicker);
@@ -295,30 +339,111 @@ function init() {
 
 function renderScreenProfileOptions() {
   elements.screenProfileOptions.textContent = '';
-  for (const profileId of SCREEN_PROFILE_ORDER) {
-    const profile = getScreenProfile(profileId);
-    const button = document.createElement('button');
-    button.className = 'screen-profile-option';
-    button.type = 'button';
-    button.dataset.profile = profile.id;
-    button.setAttribute('aria-pressed', String(profile.id === state.localScreenProfileId));
-    button.innerHTML = `
-      <span class="screen-profile-copy">
-        <strong>${profile.label}</strong>
-        <span>${profile.intent}</span>
-      </span>
-      <span class="screen-profile-meta">${profile.detail}</span>
-    `;
-    button.addEventListener('click', () => {
-      closeScreenProfilePopover();
-      startScreenShare(profile.id).catch((error) => console.error(error));
-    });
-    elements.screenProfileOptions.append(button);
-  }
+
+  const startButton = document.createElement('button');
+  startButton.className = 'screen-profile-start';
+  startButton.type = 'button';
+  startButton.textContent = 'Запустить';
+  startButton.addEventListener('click', (event) => {
+    event.stopPropagation();
+    closeScreenProfilePopover();
+    startScreenShare(DEFAULT_SCREEN_PROFILE_ID).catch((error) => console.error(error));
+  });
+  elements.screenProfileOptions.append(startButton);
 }
 
 function getScreenProfile(profileId) {
-  return SCREEN_STREAM_PROFILES[profileId] || SCREEN_STREAM_PROFILES[DEFAULT_SCREEN_PROFILE_ID];
+  const { qualityId, fpsId } = parseScreenProfileId(profileId);
+  const quality = SCREEN_QUALITY_OPTIONS[qualityId] || SCREEN_QUALITY_OPTIONS[DEFAULT_SCREEN_QUALITY_ID];
+  const fps = SCREEN_FPS_OPTIONS[fpsId] || SCREEN_FPS_OPTIONS[DEFAULT_SCREEN_FPS_ID];
+  const videoBitrate = quality.bitrateByFps[fps.id] || quality.bitrateByFps[DEFAULT_SCREEN_FPS_ID];
+
+  return {
+    contentHint: fps.contentHint,
+    detail: `${quality.label} · ${fps.label} · до ${formatBitrate(videoBitrate)}`,
+    frameRate: fps.frameRate,
+    fpsId: fps.id,
+    height: quality.height,
+    id: createScreenProfileId(quality.id, fps.id),
+    label: `${quality.label} ${fps.label}`,
+    qualityId: quality.id,
+    videoBitrate,
+    width: quality.width
+  };
+}
+
+function parseScreenProfileId(profileId) {
+  const normalized = String(profileId || '').trim();
+  if (Object.hasOwn(SCREEN_QUALITY_OPTIONS, normalized)) {
+    return { qualityId: normalized, fpsId: DEFAULT_SCREEN_FPS_ID };
+  }
+
+  const [qualityId, fpsId] = normalized.split('-');
+  return {
+    fpsId: Object.hasOwn(SCREEN_FPS_OPTIONS, fpsId) ? fpsId : DEFAULT_SCREEN_FPS_ID,
+    qualityId: Object.hasOwn(SCREEN_QUALITY_OPTIONS, qualityId) ? qualityId : DEFAULT_SCREEN_QUALITY_ID
+  };
+}
+
+function createScreenProfileId(qualityId, fpsId) {
+  return `${qualityId}-${fpsId}`;
+}
+
+function getScreenProfileRank(profileId) {
+  const rank = SCREEN_ADAPT_PROFILE_ORDER.indexOf(getScreenProfile(profileId).id);
+  return rank >= 0 ? rank : SCREEN_ADAPT_PROFILE_ORDER.indexOf(DEFAULT_SCREEN_PROFILE_ID);
+}
+
+function getLowerScreenProfileId(profileId) {
+  const rank = getScreenProfileRank(profileId);
+  return rank > 0 ? SCREEN_ADAPT_PROFILE_ORDER[rank - 1] : '';
+}
+
+function getHigherScreenProfileId(profileId, ceilingProfileId) {
+  const rank = getScreenProfileRank(profileId);
+  const ceilingRank = getScreenProfileRank(ceilingProfileId);
+  return rank < ceilingRank ? SCREEN_ADAPT_PROFILE_ORDER[rank + 1] : '';
+}
+
+function getPreferredScreenVideoCodec() {
+  return typeof supportsVP9 === 'function' && supportsVP9() ? 'vp9' : 'h264';
+}
+
+function getScreenPublishVideoOptions(profile) {
+  const videoCodec = getPreferredScreenVideoCodec();
+  const encoding = {
+    maxBitrate: profile.videoBitrate,
+    maxFramerate: profile.frameRate
+  };
+
+  return {
+    backupCodec: videoCodec === SCREEN_VIDEO_BACKUP_CODEC ? false : {
+      codec: SCREEN_VIDEO_BACKUP_CODEC,
+      encoding
+    },
+    screenShareSimulcastLayers: getScreenSimulcastLayers(profile),
+    screenShareEncoding: encoding,
+    simulcast: true,
+    source: Track.Source.ScreenShare,
+    videoCodec
+  };
+}
+
+function getScreenSimulcastLayers(profile) {
+  if (typeof VideoPreset !== 'function') return undefined;
+
+  const qualityRank = SCREEN_QUALITY_ORDER.indexOf(profile.qualityId);
+  const layers = [];
+  for (const qualityId of SCREEN_QUALITY_ORDER.slice(0, qualityRank)) {
+    const layer = getScreenProfile(createScreenProfileId(qualityId, profile.fpsId));
+    layers.push(new VideoPreset({
+      height: layer.height,
+      maxBitrate: layer.videoBitrate,
+      maxFramerate: layer.frameRate,
+      width: layer.width
+    }));
+  }
+  return layers.length ? layers : undefined;
 }
 
 function getNoiseMode(mode) {
@@ -339,6 +464,23 @@ function getStoredGateThresholdDb() {
   const migratedValue = legacyGatePercentToDb(legacyValue);
   localStorage.setItem(GATE_THRESHOLD_DB_STORAGE_KEY, String(migratedValue));
   return migratedValue;
+}
+
+function getStoredScreenAudioEnabled() {
+  return localStorage.getItem(SCREEN_AUDIO_ENABLED_STORAGE_KEY) !== 'false';
+}
+
+function updateScreenAudioPreference() {
+  state.localScreenAudioEnabled = elements.screenAudioToggle.checked;
+  localStorage.setItem(SCREEN_AUDIO_ENABLED_STORAGE_KEY, String(state.localScreenAudioEnabled));
+}
+
+function refreshScreenAudioToggleVisibility() {
+  elements.screenAudioToggleRow.hidden = !isDesktopApp();
+}
+
+function wantsScreenShareAudio() {
+  return isDesktopApp() ? state.localScreenAudioEnabled : true;
 }
 
 function setNoiseMode(mode) {
@@ -802,6 +944,7 @@ async function connectLiveKitRoom(name) {
   });
 
   const room = await connectLiveKitWithFallback(credentials);
+  closeLegacyPeerConnections();
 
   await publishLocalMicrophone();
   syncLiveKitParticipants(room);
@@ -1080,13 +1223,12 @@ async function publishLocalScreenTracks() {
   state.localScreenPublications.clear();
 
   for (const track of state.localScreenStream.getTracks()) {
+    const videoOptions = track.kind === 'video' ? getScreenPublishVideoOptions(profile) : null;
     const publication = await state.livekitRoom.localParticipant.publishTrack(track, {
       audioPreset: track.kind === 'audio' ? { maxBitrate: SCREEN_AUDIO_BITRATE } : undefined,
       name: track.kind === 'video' ? 'screen' : 'screen-audio',
-      screenShareEncoding: track.kind === 'video'
-        ? { maxBitrate: profile.videoBitrate, maxFramerate: profile.frameRate }
-        : undefined,
-      source: track.kind === 'video' ? Track.Source.ScreenShare : Track.Source.ScreenShareAudio,
+      ...videoOptions,
+      source: track.kind === 'video' ? videoOptions.source : Track.Source.ScreenShareAudio,
       stream: state.localScreenStream.id
     });
     state.localScreenPublications.set(track.id, publication);
@@ -1651,11 +1793,13 @@ async function openBrowserScreenShare(profile) {
   let stream = null;
   try {
     stream = await navigator.mediaDevices.getDisplayMedia(createBrowserDisplayMediaConstraints(profile, {
+      audio: wantsScreenShareAudio(),
       suppressLocalAudioPlayback: false
     }));
   } catch (error) {
     if (error?.name !== 'TypeError') throw error;
     stream = await navigator.mediaDevices.getDisplayMedia(createBrowserDisplayMediaConstraints(profile, {
+      audio: wantsScreenShareAudio(),
       includeAudioHints: false,
       suppressLocalAudioPlayback: false
     }));
@@ -1709,8 +1853,43 @@ async function openDesktopScreenShare(profile) {
   }
 
   const source = await selectDesktopCaptureSource();
+  const withAudio = wantsScreenShareAudio();
   let stream = null;
   let audioCaptureError = null;
+
+  if (!withAudio) {
+    stream = await openDesktopStream(source.id, profile, { audio: false, audioMode: 'none' });
+    await applyScreenCaptureProfile(stream, profile);
+    return stream;
+  }
+
+  if (hasNativeDesktopSafeAudio()) {
+    stream = await openDesktopStream(source.id, profile, { audio: false, audioMode: 'safe-system' });
+    try {
+      const audioCapture = await startDesktopSafeScreenAudioCapture();
+      stream.addTrack(audioCapture.track);
+      state.localScreenAudioCapture = audioCapture;
+    } catch (error) {
+      console.warn('Native desktop audio capture failed, continuing without stream audio', error);
+      showToast('Стрим запущен без звука: безопасный системный звук недоступен', {
+        duration: 9000,
+        variant: 'error'
+      });
+    }
+
+    await applyScreenCaptureProfile(stream, profile);
+    return stream;
+  }
+
+  if (isDesktopApp()) {
+    stream = await openDesktopStream(source.id, profile, { audio: false, audioMode: 'safe-system' });
+    showToast('Стрим запущен без звука: в этой сборке нет безопасного системного звука', {
+      duration: 9000,
+      variant: 'error'
+    });
+    await applyScreenCaptureProfile(stream, profile);
+    return stream;
+  }
 
   try {
     stream = await openDesktopStream(source.id, profile, { audio: true, audioMode: 'loopback' });
@@ -1732,9 +1911,155 @@ async function openDesktopScreenShare(profile) {
   return stream;
 }
 
+function hasNativeDesktopSafeAudio() {
+  return Boolean(
+    window.voiceRoomDesktopAudio?.startSafeSystem
+      && window.voiceRoomDesktopAudio?.stop
+      && window.voiceRoomDesktopAudio?.onData
+      && window.voiceRoomDesktopAudio?.onEvent
+  );
+}
+
+async function startDesktopSafeScreenAudioCapture() {
+  stopLocalScreenAudioCapture();
+
+  let sessionId = '';
+  let formatEvent = null;
+  let resolveFormat = null;
+  let rejectFormat = null;
+  const formatPromise = new Promise((resolve, reject) => {
+    resolveFormat = resolve;
+    rejectFormat = reject;
+  });
+  const formatTimer = window.setTimeout(() => {
+    rejectFormat(new Error('Native audio helper did not report audio format.'));
+  }, 3000);
+
+  const removeEventListener = window.voiceRoomDesktopAudio.onEvent(({ sessionId: payloadSessionId, event }) => {
+    if (sessionId && payloadSessionId !== sessionId) return;
+    if (event?.event === 'format') {
+      formatEvent = event;
+      resolveFormat(event);
+      return;
+    }
+    if (event?.event === 'error') {
+      rejectFormat(new Error(event.message || 'Native audio helper failed.'));
+    }
+  });
+
+  try {
+    const audioSession = await window.voiceRoomDesktopAudio.startSafeSystem({
+      mode: 'safe-system'
+    });
+    sessionId = audioSession.sessionId;
+    const format = formatEvent || await formatPromise;
+    window.clearTimeout(formatTimer);
+    return await createDesktopSafeAudioTrack({
+      format,
+      removeEventListener,
+      sessionId
+    });
+  } catch (error) {
+    window.clearTimeout(formatTimer);
+    removeEventListener();
+    if (sessionId) await stopDesktopAudioSession(sessionId);
+    throw error;
+  }
+}
+
+async function createDesktopSafeAudioTrack({ format, removeEventListener, sessionId }) {
+  const channels = Math.max(1, Math.min(8, Number(format.channels) || 2));
+  const sampleRate = Math.max(8000, Math.min(192000, Number(format.sampleRate) || 48000));
+  const audioContext = createDesktopAudioContext(sampleRate);
+  try {
+    await audioContext.audioWorklet.addModule(DESKTOP_AUDIO_SOURCE_WORKLET_URL);
+  } catch (error) {
+    audioContext.close().catch(() => {});
+    throw error;
+  }
+
+  const source = new AudioWorkletNode(audioContext, 'voice-room-desktop-audio-source', {
+    numberOfInputs: 0,
+    numberOfOutputs: 1,
+    outputChannelCount: [channels],
+    processorOptions: { channels }
+  });
+  const destination = audioContext.createMediaStreamDestination();
+  source.connect(destination);
+
+  const removeDataListener = window.voiceRoomDesktopAudio.onData((payload) => {
+    if (payload.sessionId !== sessionId) return;
+    const samples = getDesktopPcmSamples(payload.chunk);
+    if (!samples.length) return;
+    source.port.postMessage({ samples, type: 'samples' }, [samples.buffer]);
+  });
+
+  const [track] = destination.stream.getAudioTracks();
+  track.contentHint = 'music';
+
+  const capture = {
+    audioContext,
+    cleanup: null,
+    destination,
+    removeDataListener,
+    removeEventListener,
+    sessionId,
+    source,
+    track
+  };
+  capture.cleanup = () => stopDesktopSafeAudioCapture(capture);
+  track.addEventListener('ended', capture.cleanup, { once: true });
+  return capture;
+}
+
+function createDesktopAudioContext(sampleRate) {
+  try {
+    return new AudioContext({ sampleRate });
+  } catch {
+    return new AudioContext();
+  }
+}
+
+function getDesktopPcmSamples(chunk) {
+  if (!chunk) return new Float32Array();
+
+  const bytes = chunk instanceof Uint8Array
+    ? chunk
+    : new Uint8Array(chunk);
+  const byteLength = bytes.byteLength - (bytes.byteLength % Float32Array.BYTES_PER_ELEMENT);
+  if (byteLength <= 0) return new Float32Array();
+
+  return new Float32Array(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + byteLength));
+}
+
+function stopLocalScreenAudioCapture() {
+  const capture = state.localScreenAudioCapture;
+  state.localScreenAudioCapture = null;
+  stopDesktopSafeAudioCapture(capture);
+}
+
+function stopDesktopSafeAudioCapture(capture) {
+  if (!capture) return;
+
+  capture.track?.removeEventListener?.('ended', capture.cleanup);
+  capture.removeDataListener?.();
+  capture.removeEventListener?.();
+  disconnectAudioNode(capture.source);
+  disconnectAudioNode(capture.destination);
+  capture.audioContext?.close?.().catch(() => {});
+  stopDesktopAudioSession(capture.sessionId).catch((error) => {
+    console.warn('Native desktop audio stop failed', error);
+  });
+}
+
+async function stopDesktopAudioSession(sessionId) {
+  if (!sessionId || !window.voiceRoomDesktopAudio?.stop) return;
+  await window.voiceRoomDesktopAudio.stop(sessionId);
+}
+
 async function openDesktopStream(sourceId, profile, options = {}) {
   const withAudio = options.audio !== false;
-  const attempts = createDesktopCaptureAttempts(sourceId, withAudio);
+  const attempts = createDesktopCaptureAttempts(sourceId, withAudio, profile, options.audioMode || (withAudio ? 'loopback' : 'none'));
   const errors = [];
 
   for (const attempt of attempts) {
@@ -1793,27 +2118,27 @@ function formatCaptureError(error) {
   return [name, message, ...details].join(': ');
 }
 
-function createDesktopCaptureAttempts(sourceId, withAudio) {
+function createDesktopCaptureAttempts(sourceId, withAudio, profile, audioMode = withAudio ? 'loopback' : 'none') {
   const attempts = [];
 
   if (navigator.mediaDevices?.getDisplayMedia && window.voiceRoomDesktopCapture?.selectSource) {
     attempts.push({
-      method: withAudio ? 'getDisplayMedia-loopback' : 'getDisplayMedia-video',
-      open: () => openDesktopDisplayMediaStream(sourceId, withAudio)
+      method: withAudio ? `getDisplayMedia-${audioMode}` : 'getDisplayMedia-video',
+      open: () => openDesktopDisplayMediaStream(sourceId, withAudio, audioMode)
     });
   }
 
   if (navigator.mediaDevices?.getUserMedia) {
     attempts.push({
       method: withAudio ? 'getUserMedia-desktop-audio' : 'getUserMedia-desktop-video',
-      open: () => navigator.mediaDevices.getUserMedia(createDesktopMediaConstraints(sourceId, withAudio))
+      open: () => navigator.mediaDevices.getUserMedia(createDesktopMediaConstraints(sourceId, withAudio, profile))
     });
   }
 
   return attempts;
 }
 
-async function openDesktopDisplayMediaStream(sourceId, withAudio) {
+async function openDesktopDisplayMediaStream(sourceId, withAudio, audioMode = withAudio ? 'loopback' : 'none') {
   if (!navigator.mediaDevices?.getDisplayMedia) {
     throw new Error('Desktop-оболочка не поддерживает display media capture.');
   }
@@ -1822,14 +2147,18 @@ async function openDesktopDisplayMediaStream(sourceId, withAudio) {
     throw new Error('Desktop-оболочка не дала доступ к выбору источника экрана.');
   }
 
-  await window.voiceRoomDesktopCapture.selectSource(sourceId, withAudio ? 'loopback' : 'none');
+  await window.voiceRoomDesktopCapture.selectSource(sourceId, {
+    allowEchoFallback: false,
+    enabled: withAudio,
+    mode: audioMode
+  });
   return navigator.mediaDevices.getDisplayMedia({
     audio: withAudio,
     video: true
   });
 }
 
-function createDesktopMediaConstraints(sourceId, withAudio) {
+function createDesktopMediaConstraints(sourceId, withAudio, profile = getScreenProfile(DEFAULT_SCREEN_PROFILE_ID)) {
   return {
     audio: withAudio
       ? {
@@ -1841,7 +2170,10 @@ function createDesktopMediaConstraints(sourceId, withAudio) {
     video: {
       mandatory: {
         chromeMediaSource: 'desktop',
-        chromeMediaSourceId: sourceId
+        chromeMediaSourceId: sourceId,
+        maxFrameRate: profile.frameRate,
+        maxHeight: profile.height,
+        maxWidth: profile.width
       }
     }
   };
@@ -1971,7 +2303,12 @@ async function handleScreenButtonClick() {
     return;
   }
 
-  toggleScreenProfilePopover();
+  if (isDesktopApp()) {
+    toggleScreenProfilePopover();
+    return;
+  }
+
+  await startScreenShare(DEFAULT_SCREEN_PROFILE_ID);
 }
 
 async function startScreenShare(profileId = state.localScreenProfileId) {
@@ -1983,12 +2320,17 @@ async function startScreenShare(profileId = state.localScreenProfileId) {
 
   const profile = getScreenProfile(profileId);
   state.localScreenProfileId = profile.id;
+  state.localScreenQualityId = profile.qualityId;
+  state.localScreenFpsId = profile.fpsId;
+  state.localScreenTargetProfileId = profile.id;
+  resetLocalScreenAdaptation();
   renderScreenProfileOptions();
   elements.screenButton.disabled = true;
   try {
     const stream = await openScreenShare(profile);
     const [videoTrack] = stream.getVideoTracks();
     if (!videoTrack) {
+      stopLocalScreenAudioCapture();
       stopStream(stream);
       showToast('Браузер не отдал видео экрана');
       return;
@@ -1996,12 +2338,17 @@ async function startScreenShare(profileId = state.localScreenProfileId) {
 
     state.localScreenStream = stream;
     state.localScreenProfileId = profile.id;
+    state.localScreenQualityId = profile.qualityId;
+    state.localScreenFpsId = profile.fpsId;
+    state.localScreenTargetProfileId = profile.id;
+    resetLocalScreenAdaptation();
     state.screenStopping = false;
     setLocalAppAudioSuppressed(false);
     videoTrack.addEventListener('ended', () => {
       stopScreenShare({ fromBrowser: true }).catch((error) => console.error(error));
     });
     await publishLocalScreenTracks();
+    startLocalScreenStatsMonitor();
 
     updateParticipant({
       id: state.peerId,
@@ -2052,8 +2399,11 @@ async function stopScreenShare(options = {}) {
     const { notify = true, quiet = false } = options;
     const previousStream = state.localScreenStream;
     state.localScreenStream = null;
+    stopLocalScreenStatsMonitor({ refresh: false });
+    resetLocalScreenAdaptation();
 
     await unpublishLocalScreenTracks(false);
+    stopLocalScreenAudioCapture();
     stopStream(previousStream);
     setLocalAppAudioSuppressed(false);
 
@@ -2621,7 +2971,21 @@ function detachLiveKitParticipant(peer, voiceIssue = 'подключает го�
   updatePeerStatus(peer);
 }
 
+function closeLegacyPeerConnections() {
+  for (const peer of state.peers.values()) {
+    peer.pc?.close();
+    peer.pc = null;
+    peer.localScreenSenders = [];
+    peer.micSender = null;
+    peer.micReceiver = null;
+    peer.pendingCandidates = [];
+    peer.screenSubscribed = false;
+    peer.needsRenegotiate = false;
+  }
+}
+
 async function callPeer(peerId) {
+  if (isLiveKitMediaActive()) return;
   const peer = state.peers.get(peerId);
   if (!peer) return;
 
@@ -2792,6 +3156,8 @@ function removeLocalScreenTracks(peer) {
 }
 
 async function handleSignal(from, signalType, payload) {
+  if (isLiveKitMediaActive()) return;
+
   const peer = state.peers.get(from) || createParticipant({ deafened: false, id: from, muted: false, name: 'Гость' });
   const pc = ensurePeerConnection(peer);
 
@@ -2838,6 +3204,8 @@ async function handleSignal(from, signalType, payload) {
 }
 
 async function renegotiatePeer(peer) {
+  if (isLiveKitMediaActive()) return;
+
   const pc = ensurePeerConnection(peer);
   if (pc.signalingState !== 'stable') {
     peer.needsRenegotiate = true;
@@ -3233,6 +3601,294 @@ async function updateLocalLiveKitLatency() {
   refreshLocalNetworkIndicator();
 }
 
+function startLocalScreenStatsMonitor() {
+  stopLocalScreenStatsMonitor({ refresh: false });
+  updateLocalScreenStats().catch((error) => console.warn('Screen stats unavailable', error));
+  state.localScreenStatsTimer = window.setInterval(() => {
+    updateLocalScreenStats().catch((error) => console.warn('Screen stats unavailable', error));
+  }, SCREEN_STATS_INTERVAL_MS);
+}
+
+function stopLocalScreenStatsMonitor(options = {}) {
+  const { refresh = true } = options;
+  window.clearInterval(state.localScreenStatsTimer);
+  state.localScreenStatsTimer = 0;
+  state.localScreenStats = null;
+  state.localScreenStatsPrevious = null;
+  if (refresh) refreshScreenMeta(getActiveScreenPeer());
+}
+
+function resetLocalScreenAdaptation() {
+  state.localScreenAdaptGoodSamples = 0;
+  state.localScreenAdaptPoorSamples = 0;
+  state.localScreenAdaptLastAt = 0;
+}
+
+async function updateLocalScreenStats() {
+  if (!state.localScreenStream) {
+    stopLocalScreenStatsMonitor();
+    return;
+  }
+
+  const publication = findLocalScreenVideoPublication();
+  const track = publication?.track;
+  const stats = await track?.getRTCStatsReport?.();
+  const parsed = parseLocalScreenStats(stats, state.localScreenStatsPrevious);
+  const [mediaTrack] = state.localScreenStream.getVideoTracks();
+  const settings = mediaTrack?.getSettings?.() || {};
+
+  state.localScreenStats = {
+    availableOutgoingBitrate: parsed.availableOutgoingBitrate,
+    bitrate: parsed.bitrate || track?.currentBitrate || 0,
+    codec: parsed.codec || track?.codec || getPreferredScreenVideoCodec(),
+    firCount: parsed.firCount,
+    firDelta: parsed.firDelta,
+    fps: parsed.fps || settings.frameRate || 0,
+    framesDropped: parsed.framesDropped,
+    framesDroppedDelta: parsed.framesDroppedDelta,
+    framesEncoded: parsed.framesEncoded,
+    framesSent: parsed.framesSent,
+    height: parsed.height || settings.height || 0,
+    keyFramesEncoded: parsed.keyFramesEncoded,
+    lossPct: parsed.lossPct,
+    nackCount: parsed.nackCount,
+    nackDelta: parsed.nackDelta,
+    pliCount: parsed.pliCount,
+    pliDelta: parsed.pliDelta,
+    qualityLimitationReason: parsed.qualityLimitationReason || '',
+    qpSum: parsed.qpSum,
+    rttMs: parsed.rttMs,
+    width: parsed.width || settings.width || 0
+  };
+  state.localScreenStatsPrevious = parsed.previous;
+
+  const peer = getActiveScreenPeer();
+  if (peer?.isLocal) refreshScreenMeta(peer);
+  await adaptLocalScreenProfile();
+}
+
+function findLocalScreenVideoPublication() {
+  for (const publication of state.localScreenPublications.values()) {
+    if (publication?.source === Track.Source.ScreenShare) return publication;
+    const track = publication?.track;
+    if (track?.kind === 'video' || track?.mediaStreamTrack?.kind === 'video') return publication;
+  }
+  return null;
+}
+
+function parseLocalScreenStats(stats, previous) {
+  if (!stats?.forEach) return { previous: null };
+
+  const codecs = new Map();
+  let candidatePair = null;
+  let outbound = null;
+  let remoteInbound = null;
+
+  stats.forEach((report) => {
+    if (report.type === 'codec') {
+      codecs.set(report.id, report);
+      return;
+    }
+
+    if (report.type === 'candidate-pair' && report.state === 'succeeded' && report.nominated) {
+      candidatePair = report;
+      return;
+    }
+
+    if (report.type === 'remote-inbound-rtp' && isVideoStatsReport(report)) {
+      remoteInbound = report;
+      return;
+    }
+
+    if (report.type !== 'outbound-rtp' || report.isRemote || !isVideoStatsReport(report)) return;
+    if (!outbound || Number(report.bytesSent || 0) > Number(outbound.bytesSent || 0)) {
+      outbound = report;
+    }
+  });
+
+  if (!outbound) return { previous: null };
+
+  const bytesSent = Number(outbound.bytesSent || 0);
+  const framesEncoded = Number(outbound.framesEncoded || 0);
+  const timestamp = Number(outbound.timestamp || Date.now());
+  const elapsedMs = previous?.timestamp ? timestamp - previous.timestamp : 0;
+  const bitrate = elapsedMs > 0 && bytesSent >= previous.bytesSent
+    ? ((bytesSent - previous.bytesSent) * 8 * 1000) / elapsedMs
+    : 0;
+  const fps = Number(outbound.framesPerSecond || 0) || (
+    elapsedMs > 0 && framesEncoded >= previous?.framesEncoded
+      ? ((framesEncoded - previous.framesEncoded) * 1000) / elapsedMs
+      : 0
+  );
+  const codec = getCodecNameFromStats(outbound, codecs);
+  const lossPct = Number.isFinite(remoteInbound?.fractionLost) ? remoteInbound.fractionLost * 100 : null;
+  const rttMs = Number.isFinite(remoteInbound?.roundTripTime) ? remoteInbound.roundTripTime * 1000 : null;
+  const availableOutgoingBitrate = Number(candidatePair?.availableOutgoingBitrate || candidatePair?.availableOutgoingBitrate === 0
+    ? candidatePair.availableOutgoingBitrate
+    : candidatePair?.estimatedOutgoingBitrate || 0);
+  const framesDropped = Number(outbound.framesDropped || 0);
+  const firCount = Number(outbound.firCount || 0);
+  const nackCount = Number(outbound.nackCount || 0);
+  const pliCount = Number(outbound.pliCount || 0);
+
+  return {
+    availableOutgoingBitrate,
+    bitrate,
+    codec,
+    firCount,
+    firDelta: previous ? Math.max(0, firCount - Number(previous.firCount || 0)) : 0,
+    fps,
+    framesDropped,
+    framesDroppedDelta: previous ? Math.max(0, framesDropped - Number(previous.framesDropped || 0)) : 0,
+    framesEncoded,
+    framesSent: Number(outbound.framesSent || 0),
+    height: Number(outbound.frameHeight || 0),
+    keyFramesEncoded: Number(outbound.keyFramesEncoded || 0),
+    lossPct,
+    nackCount,
+    nackDelta: previous ? Math.max(0, nackCount - Number(previous.nackCount || 0)) : 0,
+    pliCount,
+    pliDelta: previous ? Math.max(0, pliCount - Number(previous.pliCount || 0)) : 0,
+    previous: { bytesSent, firCount, framesDropped, framesEncoded, nackCount, pliCount, timestamp },
+    qualityLimitationReason: outbound.qualityLimitationReason || '',
+    qpSum: Number(outbound.qpSum || 0),
+    rttMs,
+    width: Number(outbound.frameWidth || 0)
+  };
+}
+
+function isVideoStatsReport(report) {
+  return report.kind === 'video' || report.mediaType === 'video';
+}
+
+function getCodecNameFromStats(report, codecs) {
+  const codec = codecs.get(report.codecId);
+  const mimeType = codec?.mimeType || codec?.mime || '';
+  return mimeType.replace(/^video\//i, '').toUpperCase();
+}
+
+async function adaptLocalScreenProfile() {
+  if (!state.localScreenStream || !state.localScreenStats) return;
+
+  const health = getLocalScreenStatsHealth(state.localScreenStats);
+  if (health === 'poor') {
+    state.localScreenAdaptPoorSamples += 1;
+    state.localScreenAdaptGoodSamples = 0;
+  } else if (health === 'good') {
+    state.localScreenAdaptGoodSamples += 1;
+    state.localScreenAdaptPoorSamples = Math.max(0, state.localScreenAdaptPoorSamples - 1);
+  } else {
+    state.localScreenAdaptGoodSamples = 0;
+    state.localScreenAdaptPoorSamples = Math.max(0, state.localScreenAdaptPoorSamples - 1);
+  }
+
+  const now = Date.now();
+  if (now - state.localScreenAdaptLastAt < SCREEN_ADAPT_MIN_INTERVAL_MS) return;
+
+  if (state.localScreenAdaptPoorSamples >= SCREEN_ADAPT_POOR_SAMPLE_TARGET) {
+    const nextProfileId = getLowerScreenProfileId(state.localScreenProfileId);
+    if (nextProfileId) {
+      await setLocalScreenProfile(nextProfileId, {
+        toast: 'Сеть просела, снизили качество стрима'
+      });
+      return;
+    }
+  }
+
+  if (state.localScreenAdaptGoodSamples >= SCREEN_ADAPT_GOOD_SAMPLE_TARGET) {
+    const nextProfileId = getHigherScreenProfileId(state.localScreenProfileId, state.localScreenTargetProfileId);
+    if (nextProfileId) {
+      await setLocalScreenProfile(nextProfileId, {
+        toast: 'Сеть стабильна, вернули качество стрима'
+      });
+    }
+  }
+}
+
+function getLocalScreenStatsHealth(stats) {
+  const lossPct = Number(stats.lossPct || 0);
+  const rttMs = Number(stats.rttMs || 0);
+  const availableOutgoingBitrate = Number(stats.availableOutgoingBitrate || 0);
+  const profile = getScreenProfile(state.localScreenProfileId);
+  const bandwidthLimited = stats.qualityLimitationReason === 'bandwidth';
+  const bitrateConstrained = availableOutgoingBitrate > 0 && availableOutgoingBitrate < profile.videoBitrate * 0.72;
+  const receiverPressure = Number(stats.nackDelta || 0) >= 8 || Number(stats.pliDelta || 0) > 0 || Number(stats.firDelta || 0) > 0;
+  const encoderPressure = Number(stats.framesDroppedDelta || 0) >= Math.max(3, Math.round(profile.frameRate * 0.25));
+  const poorLoss = lossPct >= 5;
+  const poorRtt = rttMs >= 650;
+  const goodLoss = !stats.lossPct || lossPct < 1;
+  const goodRtt = !stats.rttMs || rttMs < 260;
+  const goodBitrate = !availableOutgoingBitrate || availableOutgoingBitrate > profile.videoBitrate * 1.25;
+
+  if (bandwidthLimited || bitrateConstrained || receiverPressure || encoderPressure || poorLoss || poorRtt) return 'poor';
+  if (goodLoss && goodRtt && goodBitrate) return 'good';
+  return 'fair';
+}
+
+async function setLocalScreenProfile(profileId, options = {}) {
+  if (!state.localScreenStream) return;
+
+  const profile = getScreenProfile(profileId);
+  if (profile.id === state.localScreenProfileId) return;
+
+  state.localScreenProfileId = profile.id;
+  state.localScreenQualityId = profile.qualityId;
+  state.localScreenFpsId = profile.fpsId;
+  state.localScreenAdaptGoodSamples = 0;
+  state.localScreenAdaptPoorSamples = 0;
+  state.localScreenAdaptLastAt = Date.now();
+
+  await applyScreenCaptureProfile(state.localScreenStream, profile);
+  await applyLocalScreenEncodingProfile(profile);
+
+  updateParticipant({
+    id: state.peerId,
+    muted: state.muted,
+    name: getDisplayName(),
+    screen: true,
+    screenAudio: hasScreenAudio(),
+    screenProfileId: profile.id,
+    screenStreamId: state.localScreenStream.id
+  });
+  renderScreenProfileOptions();
+  refreshScreenControls();
+  refreshScreenStage();
+  await postState();
+  if (options.toast) showToast(options.toast);
+}
+
+async function applyLocalScreenEncodingProfile(profile) {
+  const tasks = [];
+
+  for (const publication of state.localScreenPublications.values()) {
+    const track = publication?.track;
+    if (publication?.source !== Track.Source.ScreenShare && track?.mediaStreamTrack?.kind !== 'video') continue;
+    const sender = track?.sender;
+    if (sender) tasks.push(applyScreenSenderEncoding(sender, profile));
+  }
+
+  for (const peer of state.peers.values()) {
+    for (const sender of peer.localScreenSenders || []) {
+      if (sender.track?.kind === 'video') tasks.push(applyScreenSenderEncoding(sender, profile));
+    }
+  }
+
+  await Promise.allSettled(tasks);
+}
+
+async function applyScreenSenderEncoding(sender, profile) {
+  if (!sender?.getParameters || !sender.setParameters) return;
+
+  const parameters = sender.getParameters();
+  if (!parameters.encodings?.length) return;
+
+  for (const encoding of parameters.encodings) {
+    encoding.maxBitrate = profile.videoBitrate;
+    encoding.maxFramerate = profile.frameRate;
+  }
+  await sender.setParameters(parameters);
+}
+
 function findFirstLocalPublication() {
   return state.livekitRoom?.localParticipant?.trackPublications?.values?.().next?.().value || null;
 }
@@ -3506,6 +4162,8 @@ function wait(ms) {
 }
 
 async function sendSignal(to, signalType, payload) {
+  if (isLiveKitMediaActive()) return null;
+
   return postJson('/signal', {
     from: state.peerId,
     payload,
@@ -3514,6 +4172,10 @@ async function sendSignal(to, signalType, payload) {
     signalType,
     to
   });
+}
+
+function isLiveKitMediaActive() {
+  return Boolean(state.livekitRoom);
 }
 
 async function postState() {
@@ -4011,12 +4673,38 @@ function refreshScreenMeta(participant) {
   elements.screenMeta.hidden = false;
   elements.screenMetaTitle.textContent = participant.isLocal ? 'Ваш стрим' : `Стрим ${participant.name}`;
   elements.screenMetaProfile.textContent = getScreenProfileLabel(participant);
+  elements.screenMetaStats.hidden = true;
+  elements.screenMetaStats.textContent = '';
   elements.screenMetaViewers.textContent = formatScreenViewersLine(participant.id);
 }
 
 function getScreenProfileLabel(participant) {
   const profile = getScreenProfile(participant.isLocal ? state.localScreenProfileId : participant.screenProfileId);
   return profile.label;
+}
+
+function getScreenStatsLabel(participant) {
+  if (!participant?.isLocal || !state.localScreenStats) return '';
+
+  const stats = state.localScreenStats;
+  const parts = [];
+  if (stats.codec) parts.push(stats.codec);
+  if (stats.bitrate > 0) parts.push(formatBitrate(stats.bitrate));
+  if (stats.fps > 0) parts.push(`${Math.round(stats.fps)} fps`);
+  if (stats.width > 0 && stats.height > 0) parts.push(`${stats.width}x${stats.height}`);
+  if (stats.lossPct > 0.5) parts.push(`loss ${Math.round(stats.lossPct)}%`);
+  if (stats.framesDroppedDelta > 0) parts.push(`drop +${stats.framesDroppedDelta}`);
+  if (stats.nackDelta > 0) parts.push(`nack +${stats.nackDelta}`);
+  if (stats.pliDelta > 0) parts.push(`pli +${stats.pliDelta}`);
+  if (stats.rttMs > 0) parts.push(`${Math.round(stats.rttMs)} ms`);
+  return parts.join(' · ');
+}
+
+function formatBitrate(bitrate) {
+  if (bitrate >= 1_000_000) {
+    return `${(bitrate / 1_000_000).toFixed(bitrate >= 10_000_000 ? 0 : 1)} Mbps`;
+  }
+  return `${Math.round(bitrate / 1_000)} kbps`;
 }
 
 function formatScreenViewersLine(ownerPeerId) {
@@ -4247,6 +4935,7 @@ function stopStream(stream) {
 
 function stopLocalScreenStream() {
   if (!state.localScreenStream) return;
+  stopLocalScreenAudioCapture();
   stopStream(state.localScreenStream);
   state.localScreenStream = null;
   state.screenStopping = false;
