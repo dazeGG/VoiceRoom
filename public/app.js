@@ -292,12 +292,12 @@ function init() {
   elements.screenButton.addEventListener('click', handleScreenButtonClick);
   elements.screenAudioToggle.addEventListener('change', updateScreenAudioPreference);
   elements.screenExitButton.addEventListener('click', () => leaveScreenView().catch((error) => console.error(error)));
+  elements.screenStage.addEventListener('click', handleScreenStageClick);
   elements.screenFullscreenButton.addEventListener('click', toggleScreenFullscreen);
   elements.screenSourceCloseButton.addEventListener('click', cancelScreenSourcePicker);
   elements.screenSourceDialog.addEventListener('click', closeScreenSourceOnBackdrop);
   elements.streamVolumeButton.addEventListener('click', toggleScreenMute);
   elements.streamVolumeSlider.addEventListener('input', updateScreenVolumeFromSlider);
-  elements.stripToggleButton.addEventListener('click', toggleParticipantStrip);
   syncScreenVideoAudio();
   elements.deviceMenuButton.addEventListener('click', toggleDevicePopover);
   elements.outputMenuButton.addEventListener('click', toggleOutputPopover);
@@ -4427,6 +4427,19 @@ async function toggleScreenTile(peerId) {
   await enterScreenView(peerId);
 }
 
+function handleScreenStageClick(event) {
+  if (!state.viewedScreenPeerId || elements.screenStage.hidden) return;
+  if (
+    event.target.closest('.screen-view-controls')
+    || event.target.closest('.screen-meta')
+    || event.target.closest('.screen-placeholder')
+  ) {
+    return;
+  }
+
+  leaveScreenView().catch((error) => console.error(error));
+}
+
 async function enterScreenView(peerId) {
   const peer = getParticipantById(peerId);
   if (!peer?.screen) {
@@ -4597,7 +4610,8 @@ function setViewedScreenPeerId(peerId) {
 function refreshScreenTiles() {
   elements.streamTiles.textContent = '';
 
-  const screenParticipants = getScreenParticipants();
+  const screenParticipants = getScreenParticipants()
+    .filter((participant) => participant.id !== state.viewedScreenPeerId);
   elements.streamTiles.hidden = screenParticipants.length === 0;
   elements.streamTiles.dataset.count = String(Math.min(screenParticipants.length, 8));
 
@@ -4672,6 +4686,7 @@ function refreshScreenMeta(participant) {
 
   elements.screenMeta.hidden = false;
   elements.screenMetaTitle.textContent = participant.isLocal ? 'Ваш стрим' : `Стрим ${participant.name}`;
+  elements.screenMetaProfile.hidden = false;
   elements.screenMetaProfile.textContent = getScreenProfileLabel(participant);
   elements.screenMetaStats.hidden = true;
   elements.screenMetaStats.textContent = '';
@@ -4721,30 +4736,14 @@ function getScreenViewers(ownerPeerId) {
 }
 
 function refreshStageStripControls() {
-  const participantCount = elements.participants.children.length;
-  const streamCount = getScreenParticipants().length;
-  const participantLabel = formatRussianCount(participantCount, 'участник', 'участника', 'участников');
-  const streamLabel = streamCount
-    ? ` · ${formatRussianCount(streamCount, 'стрим', 'стрима', 'стримов')}`
-    : '';
-  const viewing = Boolean(state.viewedScreenPeerId);
-
-  elements.stageStripKicker.textContent = viewing ? 'Сцена' : '';
-  elements.stageStripSummary.textContent = `${participantLabel}${streamLabel}`;
-  elements.stripToggleButton.hidden = !viewing;
-  elements.stripToggleButton.setAttribute('aria-pressed', String(state.stripCollapsed));
-  elements.stripToggleButton.setAttribute(
-    'aria-label',
-    state.stripCollapsed ? 'Показать пользователей' : 'Свернуть пользователей'
-  );
-
-  if (state.stripCollapsed && viewing) {
-    document.body.dataset.stripCollapsed = 'true';
-  } else {
-    delete document.body.dataset.stripCollapsed;
-  }
-
-  document.body.dataset.stageSummary = viewing ? 'visible' : 'hidden';
+  state.stripCollapsed = false;
+  elements.stageStripKicker.textContent = '';
+  elements.stageStripSummary.textContent = '';
+  elements.stripToggleButton.hidden = true;
+  elements.stripToggleButton.setAttribute('aria-pressed', 'false');
+  elements.stripToggleButton.setAttribute('aria-label', 'Свернуть пользователей');
+  delete document.body.dataset.stripCollapsed;
+  document.body.dataset.stageSummary = 'hidden';
 }
 
 function toggleParticipantStrip() {

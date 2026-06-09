@@ -909,6 +909,12 @@ body[data-screen-view="true"] .empty-room {
 body[data-screen-view="true"] .screen-stage {
   height: 100%;
   min-height: 0;
+  cursor: pointer;
+}
+
+body[data-screen-view="true"] .screen-view-controls,
+body[data-screen-view="true"] .screen-meta {
+  cursor: auto;
 }
 
 body[data-screen-view="true"] .stage-strip {
