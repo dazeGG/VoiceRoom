@@ -2279,7 +2279,6 @@ async function startScreenShare(profileId = state.localScreenProfileId) {
   state.localScreenFpsId = profile.fpsId;
   state.localScreenTargetProfileId = profile.id;
   resetLocalScreenAdaptation();
-  renderScreenProfileOptions();
   elements.screenButton.disabled = true;
   try {
     const stream = await openScreenShare(profile);
@@ -3805,7 +3804,6 @@ async function setLocalScreenProfile(profileId, options = {}) {
     screenProfileId: profile.id,
     screenStreamId: state.localScreenStream.id
   });
-  renderScreenProfileOptions();
   refreshScreenControls();
   refreshScreenStage();
   await postState();
