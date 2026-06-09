@@ -1726,18 +1726,32 @@ function disconnectAudioNode(node) {
 }
 
 async function openScreenShare(profile) {
-  if (hasDesktopCapture()) {
-    return openDesktopScreenShare(profile);
+  if (hasDesktopOpenPicker()) {
+    return openDesktopScreenShareWithPicker(profile);
+  }
+
+  if (hasLegacyDesktopCapture()) {
+    return {
+      profile,
+      stream: await openDesktopScreenShare(profile)
+    };
   }
 
   if (isDesktopApp()) {
     throw new Error('Desktop-оболочка не загрузила модуль выбора экрана. Перезапустите приложение из новой сборки.');
   }
 
-  return openBrowserScreenShare(profile);
+  return {
+    profile,
+    stream: await openBrowserScreenShare(profile)
+  };
 }
 
-function hasDesktopCapture() {
+function hasDesktopOpenPicker() {
+  return typeof window.voiceRoomDesktopCapture?.openPicker === 'function';
+}
+
+function hasLegacyDesktopCapture() {
   return Boolean(window.voiceRoomDesktopCapture?.getSources);
 }
 
@@ -1869,6 +1883,79 @@ async function openDesktopScreenShare(profile) {
 
   await applyScreenCaptureProfile(stream, profile);
   return stream;
+}
+
+async function openDesktopScreenShareWithPicker(profile) {
+  const selection = await openDesktopCapturePicker(profile);
+  const selectedProfile = getDesktopPickerProfile(selection, profile);
+  const stream = await openStagedDesktopScreenShare(selectedProfile, selection.streamAudioEnabled === true);
+
+  await applyScreenCaptureProfile(stream, selectedProfile);
+  return {
+    profile: selectedProfile,
+    stream
+  };
+}
+
+async function openDesktopCapturePicker(profile) {
+  const selection = await window.voiceRoomDesktopCapture.openPicker({
+    fpsId: state.localScreenFpsId || profile.fpsId,
+    qualityId: state.localScreenQualityId || profile.qualityId,
+    streamAudioEnabled: true
+  });
+
+  if (!selection) throw createAbortError('Выбор источника отменен');
+  return selection;
+}
+
+function getDesktopPickerProfile(selection, fallbackProfile) {
+  if (selection?.profileId) return getScreenProfile(selection.profileId);
+  if (selection?.qualityId || selection?.fpsId) {
+    return getScreenProfile(createScreenProfileId(
+      selection.qualityId || fallbackProfile.qualityId,
+      selection.fpsId || fallbackProfile.fpsId
+    ));
+  }
+  return fallbackProfile;
+}
+
+async function openStagedDesktopScreenShare(profile, withAudio) {
+  const stream = await openStagedDesktopDisplayMedia();
+
+  if (!withAudio) return stream;
+
+  if (!hasNativeDesktopSafeAudio()) {
+    showToast('Стрим запущен без звука: в этой сборке нет безопасного системного звука', {
+      duration: 9000,
+      variant: 'error'
+    });
+    return stream;
+  }
+
+  try {
+    const audioCapture = await startDesktopSafeScreenAudioCapture();
+    stream.addTrack(audioCapture.track);
+    state.localScreenAudioCapture = audioCapture;
+  } catch (error) {
+    console.warn('Native desktop audio capture failed, continuing without stream audio', error);
+    showToast('Стрим запущен без звука: безопасный системный звук недоступен', {
+      duration: 9000,
+      variant: 'error'
+    });
+  }
+
+  return stream;
+}
+
+async function openStagedDesktopDisplayMedia() {
+  if (!navigator.mediaDevices?.getDisplayMedia) {
+    throw new Error('Desktop-оболочка не поддерживает staged display media capture.');
+  }
+
+  return navigator.mediaDevices.getDisplayMedia({
+    audio: false,
+    video: true
+  });
 }
 
 function hasNativeDesktopSafeAudio() {
@@ -2273,15 +2360,12 @@ async function startScreenShare(profileId = state.localScreenProfileId) {
   }
   if (state.localScreenStream) return;
 
-  const profile = getScreenProfile(profileId);
-  state.localScreenProfileId = profile.id;
-  state.localScreenQualityId = profile.qualityId;
-  state.localScreenFpsId = profile.fpsId;
-  state.localScreenTargetProfileId = profile.id;
-  resetLocalScreenAdaptation();
+  let profile = getScreenProfile(profileId);
   elements.screenButton.disabled = true;
   try {
-    const stream = await openScreenShare(profile);
+    const capture = await openScreenShare(profile);
+    const stream = capture.stream;
+    profile = capture.profile || profile;
     const [videoTrack] = stream.getVideoTracks();
     if (!videoTrack) {
       stopLocalScreenAudioCapture();
