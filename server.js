@@ -23,7 +23,17 @@ const ROOM_CREATE_POW_DIFFICULTY = Math.min(readEnvInt('ROOM_CREATE_POW_DIFFICUL
 const ROOM_CREATE_POW_TTL_MS = readEnvInt('ROOM_CREATE_POW_TTL_MS', 120000, 10000);
 const DEFAULT_STUN_URLS = 'stun:stun.l.google.com:19302';
 const LIVEKIT_CLIENT_BUNDLE = path.join(__dirname, 'node_modules', 'livekit-client', 'dist', 'livekit-client.umd.js');
-const SCREEN_PROFILE_IDS = new Set(['balanced', 'high', 'low']);
+const SCREEN_PROFILE_IDS = new Set([
+  'balanced',
+  'balanced-15',
+  'balanced-30',
+  'high',
+  'high-15',
+  'high-30',
+  'low',
+  'low-15',
+  'low-30'
+]);
 
 const rooms = new Map();
 const roomCreateRates = new Map();

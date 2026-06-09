@@ -33,7 +33,6 @@ const MICROPHONE_DEVICE_STORAGE_KEY = 'voice-room:microphone-device-id';
 const NOISE_MODE_STORAGE_KEY = 'voice-room:noise-mode';
 const OUTPUT_DEVICE_STORAGE_KEY = 'voice-room:output-device-id';
 const OUTPUT_MUTED_STORAGE_KEY = 'voice-room:output-muted';
-const SCREEN_AUDIO_ENABLED_STORAGE_KEY = 'voice-room:screen-audio-enabled';
 const PEER_LATENCY_INTERVAL_MS = 3000;
 const PEER_LATENCY_GOOD_MS = 150;
 const PEER_LATENCY_FAIR_MS = 300;
@@ -163,10 +162,6 @@ const elements = {
   screenMetaTitle: $('#screenMetaTitle'),
   screenMetaViewers: $('#screenMetaViewers'),
   screenPlaceholder: $('#screenPlaceholder'),
-  screenAudioToggle: $('#screenAudioToggle'),
-  screenAudioToggleRow: $('#screenAudioToggleRow'),
-  screenProfileOptions: $('#screenProfileOptions'),
-  screenProfilePopover: $('#screenProfilePopover'),
   screenSourceCloseButton: $('#screenSourceCloseButton'),
   screenSourceDialog: $('#screenSourceDialog'),
   screenSourceOptions: $('#screenSourceOptions'),
@@ -217,7 +212,6 @@ const state = {
   localScreenAdaptLastAt: 0,
   localScreenAdaptPoorSamples: 0,
   localScreenAudioCapture: null,
-  localScreenAudioEnabled: getStoredScreenAudioEnabled(),
   localScreenStats: null,
   localScreenStatsPrevious: null,
   localScreenStatsTimer: 0,
@@ -275,8 +269,6 @@ function init() {
   elements.startNameInput.value = savedName;
   elements.noiseModeSelect.value = state.noiseMode;
   elements.gateThresholdSlider.value = String(state.gateThresholdDb);
-  elements.screenAudioToggle.checked = state.localScreenAudioEnabled;
-  refreshScreenAudioToggleVisibility();
   refreshGateThresholdValue();
   refreshMicrophoneLevelMeter(GATE_THRESHOLD_MIN_DB);
   elements.startForm.addEventListener('submit', saveStartName);
@@ -284,13 +276,11 @@ function init() {
   elements.joinByCodeButton.addEventListener('click', joinRoomByCode);
   elements.roomCodeInput.addEventListener('keydown', handleRoomCodeKeydown);
   elements.startNameInput.addEventListener('input', updateNameStatuses);
-  renderScreenProfileOptions();
   elements.copyCodeButton.addEventListener('click', copyRoomCode);
   elements.copyLinkButton.addEventListener('click', copyRoomLink);
   elements.muteButton.addEventListener('click', handleMicButtonClick);
   elements.outputButton.addEventListener('click', toggleOutputMute);
   elements.screenButton.addEventListener('click', handleScreenButtonClick);
-  elements.screenAudioToggle.addEventListener('change', updateScreenAudioPreference);
   elements.screenExitButton.addEventListener('click', () => leaveScreenView().catch((error) => console.error(error)));
   elements.screenStage.addEventListener('click', handleScreenStageClick);
   elements.screenFullscreenButton.addEventListener('click', toggleScreenFullscreen);
@@ -310,10 +300,8 @@ function init() {
   elements.outputDeviceSelect.addEventListener('change', switchOutputDevice);
   document.addEventListener('click', closeDevicePopoverOnOutside);
   document.addEventListener('click', closeOutputPopoverOnOutside);
-  document.addEventListener('click', closeScreenProfileOnOutside);
   document.addEventListener('keydown', closeDevicePopoverOnEscape);
   document.addEventListener('keydown', closeOutputPopoverOnEscape);
-  document.addEventListener('keydown', closeScreenProfileOnEscape);
   document.addEventListener('keydown', closeScreenSourceOnEscape);
   document.addEventListener('pointerdown', handleAudioUnlockGesture, { passive: true });
   document.addEventListener('keydown', handleAudioUnlockGesture);
@@ -335,21 +323,6 @@ function init() {
   } else {
     showStartScreen();
   }
-}
-
-function renderScreenProfileOptions() {
-  elements.screenProfileOptions.textContent = '';
-
-  const startButton = document.createElement('button');
-  startButton.className = 'screen-profile-start';
-  startButton.type = 'button';
-  startButton.textContent = 'Запустить';
-  startButton.addEventListener('click', (event) => {
-    event.stopPropagation();
-    closeScreenProfilePopover();
-    startScreenShare(DEFAULT_SCREEN_PROFILE_ID).catch((error) => console.error(error));
-  });
-  elements.screenProfileOptions.append(startButton);
 }
 
 function getScreenProfile(profileId) {
@@ -466,21 +439,8 @@ function getStoredGateThresholdDb() {
   return migratedValue;
 }
 
-function getStoredScreenAudioEnabled() {
-  return localStorage.getItem(SCREEN_AUDIO_ENABLED_STORAGE_KEY) !== 'false';
-}
-
-function updateScreenAudioPreference() {
-  state.localScreenAudioEnabled = elements.screenAudioToggle.checked;
-  localStorage.setItem(SCREEN_AUDIO_ENABLED_STORAGE_KEY, String(state.localScreenAudioEnabled));
-}
-
-function refreshScreenAudioToggleVisibility() {
-  elements.screenAudioToggleRow.hidden = !isDesktopApp();
-}
-
 function wantsScreenShareAudio() {
-  return isDesktopApp() ? state.localScreenAudioEnabled : true;
+  return true;
 }
 
 function setNoiseMode(mode) {
@@ -2300,11 +2260,6 @@ async function applyScreenCaptureProfile(stream, profile) {
 async function handleScreenButtonClick() {
   if (state.localScreenStream) {
     await stopScreenShare();
-    return;
-  }
-
-  if (isDesktopApp()) {
-    toggleScreenProfilePopover();
     return;
   }
 
@@ -4317,7 +4272,6 @@ async function handleLeaveButtonClick() {
 function toggleDevicePopover(event) {
   event.stopPropagation();
   closeOutputPopover();
-  closeScreenProfilePopover();
   const willOpen = elements.devicePopover.hidden;
   elements.devicePopover.hidden = !willOpen;
   elements.deviceMenuButton.setAttribute('aria-expanded', String(willOpen));
@@ -4342,7 +4296,6 @@ function closeDevicePopoverOnEscape(event) {
 function toggleOutputPopover(event) {
   event.stopPropagation();
   closeDevicePopover();
-  closeScreenProfilePopover();
   const willOpen = elements.outputPopover.hidden;
   elements.outputPopover.hidden = !willOpen;
   elements.outputMenuButton.setAttribute('aria-expanded', String(willOpen));
@@ -4362,33 +4315,6 @@ function closeOutputPopoverOnOutside(event) {
 
 function closeOutputPopoverOnEscape(event) {
   if (event.key === 'Escape') closeOutputPopover();
-}
-
-function toggleScreenProfilePopover() {
-  if (!state.joined || state.connecting) {
-    showToast('Сначала подключитесь к комнате');
-    return;
-  }
-  closeDevicePopover();
-  closeOutputPopover();
-  const willOpen = elements.screenProfilePopover.hidden;
-  elements.screenProfilePopover.hidden = !willOpen;
-  elements.screenButton.setAttribute('aria-expanded', String(willOpen));
-}
-
-function closeScreenProfilePopover() {
-  elements.screenProfilePopover.hidden = true;
-  elements.screenButton.setAttribute('aria-expanded', 'false');
-}
-
-function closeScreenProfileOnOutside(event) {
-  if (elements.screenProfilePopover.hidden) return;
-  if (elements.screenProfilePopover.contains(event.target) || elements.screenButton.contains(event.target)) return;
-  closeScreenProfilePopover();
-}
-
-function closeScreenProfileOnEscape(event) {
-  if (event.key === 'Escape') closeScreenProfilePopover();
 }
 
 function refreshCallControls() {
@@ -4415,7 +4341,6 @@ function refreshScreenControls() {
   elements.screenButton.setAttribute('aria-label', label);
   elements.screenButton.setAttribute('aria-pressed', String(sharing));
   elements.screenButton.dataset.state = sharing ? 'live' : 'idle';
-  if (sharing || !state.joined || state.connecting) closeScreenProfilePopover();
 }
 
 async function toggleScreenTile(peerId) {
@@ -4915,7 +4840,6 @@ function leaveRoom() {
   refreshScreenControls();
   closeDevicePopover();
   closeOutputPopover();
-  closeScreenProfilePopover();
   resetConnectionStatus();
   refreshParticipantState();
 }
