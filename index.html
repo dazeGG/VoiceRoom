@@ -85,12 +85,14 @@
             <div class="screen-meta" id="screenMeta" hidden>
               <span class="screen-meta-live" aria-hidden="true"></span>
               <span class="screen-meta-title" id="screenMetaTitle"></span>
+              <span class="screen-meta-sep" id="screenMetaSepProfile" aria-hidden="true">·</span>
               <span class="screen-meta-detail" id="screenMetaProfile"></span>
-              <span class="screen-meta-detail screen-meta-stats" id="screenMetaStats" hidden></span>
+              <span class="screen-meta-sep" id="screenMetaSepViewers" aria-hidden="true">·</span>
               <span class="screen-meta-detail" id="screenMetaViewers"></span>
+              <span class="screen-meta-detail screen-meta-stats" id="screenMetaStats" hidden></span>
             </div>
             <div class="screen-view-controls" id="screenViewControls" hidden>
-              <div class="stream-volume-control">
+              <div class="stream-volume-control" id="streamVolumeControl">
                 <button class="screen-control-button stream-volume-button" id="streamVolumeButton" type="button" aria-label="Выключить звук стрима" aria-pressed="false">
                   <span class="stream-volume-icon stream-volume-icon-on" aria-hidden="true">
                     <svg viewBox="0 0 24 24" focusable="false">

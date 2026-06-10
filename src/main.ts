@@ -37,6 +37,7 @@ import {
 } from './room/room';
 import { handleScreenButtonClick } from './room/screen-share';
 import {
+  bindScreenStageIdleUi,
   handleScreenStageClick,
   leaveScreenView,
   refreshStageStripControls,
@@ -75,6 +76,7 @@ function init(): void {
   elements.streamVolumeButton.addEventListener('click', toggleScreenMute);
   elements.streamVolumeSlider.addEventListener('input', updateScreenVolumeFromSlider);
   syncScreenVideoAudio();
+  bindScreenStageIdleUi();
   elements.deviceMenuButton.addEventListener('click', toggleDevicePopover);
   elements.outputMenuButton.addEventListener('click', toggleOutputPopover);
   elements.leaveButton.addEventListener('click', handleLeaveButtonClick);

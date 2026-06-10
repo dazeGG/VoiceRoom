@@ -14,6 +14,10 @@ import {
 } from '../room/participants';
 import type { Participant } from '../core/types';
 
+const SCREEN_UI_IDLE_MS = 2200;
+let screenUiIdleTimer = 0;
+let screenUiIdleBound = false;
+
 async function toggleScreenTile(peerId: string): Promise<void> {
   if (state.viewedScreenPeerId === peerId) {
     await leaveScreenView();
@@ -127,10 +131,12 @@ function showScreenStage({ peer, stream }: { peer: Participant; stream: MediaStr
   document.body.dataset.screenView = 'true';
   elements.screenStage.hidden = false;
   elements.screenViewControls.hidden = !stream;
+  refreshScreenStreamControls(peer);
   elements.leaveButton.hidden = true;
   elements.screenExitButton.hidden = false;
   elements.screenPlaceholder.hidden = Boolean(stream);
   refreshScreenMeta(peer);
+  activateScreenStageUi();
 
   if (stream && elements.screenVideo.srcObject !== stream) {
     elements.screenVideo.srcObject = stream;
@@ -149,6 +155,7 @@ function showScreenStage({ peer, stream }: { peer: Participant; stream: MediaStr
 export function hideScreenStage(): void {
   state.sharedScreenPeerId = '';
   delete document.body.dataset.screenView;
+  stopScreenStageIdleUi();
   elements.screenStage.hidden = true;
   elements.screenViewControls.hidden = true;
   elements.screenMeta.hidden = true;
@@ -270,11 +277,22 @@ export function refreshScreenMeta(participant: Participant | null): void {
 
   elements.screenMeta.hidden = false;
   elements.screenMetaTitle.textContent = participant.isLocal ? 'Ваш стрим' : `Стрим ${participant.name}`;
-  elements.screenMetaProfile.hidden = false;
-  elements.screenMetaProfile.textContent = getScreenProfileLabel(participant);
+  const profileLabel = getScreenProfileLabel(participant);
+  elements.screenMetaProfile.hidden = !profileLabel;
+  elements.screenMetaProfile.textContent = profileLabel;
+  elements.screenMetaSepProfile.hidden = !profileLabel;
   elements.screenMetaStats.hidden = true;
   elements.screenMetaStats.textContent = '';
-  elements.screenMetaViewers.textContent = formatScreenViewersLine(participant.id);
+  const viewersLine = formatScreenViewersLine(participant.id);
+  elements.screenMetaViewers.textContent = viewersLine;
+  elements.screenMetaViewers.hidden = !viewersLine;
+  elements.screenMetaSepViewers.hidden = !profileLabel || !viewersLine;
+  refreshScreenStreamControls(participant);
+}
+
+function refreshScreenStreamControls(participant: Participant | null): void {
+  const hideVolume = Boolean(participant?.isLocal);
+  elements.streamVolumeControl.hidden = hideVolume;
 }
 
 function getScreenProfileLabel(participant: Participant): string {
@@ -307,14 +325,22 @@ export function refreshStageStripControls(): void {
 }
 
 export function syncScreenVideoAudio(): void {
-  const muted = state.screenMuted || state.screenVolume <= 0 || isAppPlaybackMuted();
-  elements.screenVideo.volume = state.screenVolume;
+  const peer = getActiveScreenPeer();
+  const isLocalStream = Boolean(peer?.isLocal);
+  const muted =
+    isLocalStream || state.screenMuted || state.screenVolume <= 0 || isAppPlaybackMuted();
+  elements.screenVideo.volume = isLocalStream ? 0 : state.screenVolume;
   elements.screenVideo.muted = muted;
   applyAudioOutputDevice(elements.screenVideo).catch(() => {});
-  elements.streamVolumeSlider.value = String(Math.round(state.screenVolume * 100));
-  elements.streamVolumeButton.dataset.muted = String(muted);
-  elements.streamVolumeButton.setAttribute('aria-pressed', String(muted));
-  elements.streamVolumeButton.setAttribute('aria-label', muted ? 'Включить звук стрима' : 'Выключить звук стрима');
+  if (!isLocalStream) {
+    elements.streamVolumeSlider.value = String(Math.round(state.screenVolume * 100));
+    elements.streamVolumeButton.dataset.muted = String(muted);
+    elements.streamVolumeButton.setAttribute('aria-pressed', String(muted));
+    elements.streamVolumeButton.setAttribute(
+      'aria-label',
+      muted ? 'Включить звук стрима' : 'Выключить звук стрима'
+    );
+  }
 }
 
 export function toggleScreenMute(): void {
@@ -399,4 +425,41 @@ function setScreenFullscreenState(fullscreen: boolean): void {
     'aria-label',
     fullscreen ? 'Выйти из полноэкранного режима' : 'Открыть стрим на весь экран'
   );
+}
+
+export function bindScreenStageIdleUi(): void {
+  if (screenUiIdleBound) return;
+  screenUiIdleBound = true;
+
+  const stage = elements.screenStage;
+  const wake = () => {
+    if (stage.hidden) return;
+    activateScreenStageUi();
+  };
+
+  stage.addEventListener('mousemove', wake);
+  stage.addEventListener('mousedown', wake);
+  stage.addEventListener('wheel', wake, { passive: true });
+  stage.addEventListener('touchstart', wake, { passive: true });
+  elements.screenViewControls.addEventListener('mouseenter', wake);
+  elements.screenViewControls.addEventListener('focusin', wake);
+}
+
+function activateScreenStageUi(): void {
+  window.clearTimeout(screenUiIdleTimer);
+  elements.screenStage.dataset.uiActive = 'true';
+  screenUiIdleTimer = window.setTimeout(() => {
+    if (elements.screenStage.hidden) return;
+    if (elements.screenViewControls.matches(':hover') || elements.screenViewControls.contains(document.activeElement)) {
+      activateScreenStageUi();
+      return;
+    }
+    delete elements.screenStage.dataset.uiActive;
+  }, SCREEN_UI_IDLE_MS);
+}
+
+function stopScreenStageIdleUi(): void {
+  window.clearTimeout(screenUiIdleTimer);
+  screenUiIdleTimer = 0;
+  delete elements.screenStage.dataset.uiActive;
 }
