@@ -49,7 +49,7 @@ function waitForHealthz(port, timeoutMs = 5000) {
   });
 }
 
-function startServer(port) {
+function startServer(port, logs) {
   const child = spawn(process.execPath, ['server.js'], {
     cwd: path.join(__dirname, '..'),
     env: {
@@ -62,7 +62,23 @@ function startServer(port) {
     stdio: ['ignore', 'pipe', 'pipe']
   });
 
+  child.stdout.on('data', (chunk) => {
+    logs.stdout += chunk.toString();
+  });
+  child.stderr.on('data', (chunk) => {
+    logs.stderr += chunk.toString();
+  });
+
   return child;
+}
+
+function dumpServerLogs(logs) {
+  if (logs.stderr.trim()) {
+    console.error('Server stderr:\n', logs.stderr.trimEnd());
+  }
+  if (logs.stdout.trim()) {
+    console.error('Server stdout:\n', logs.stdout.trimEnd());
+  }
 }
 
 async function postJson(port, pathname, body) {
@@ -161,78 +177,73 @@ function wait(ms) {
 
 test('SSE reconnect preserves presence and avoids spurious join/leave events', async (t) => {
   const port = await getFreePort();
-  const child = startServer(port);
+  const serverLogs = { stdout: '', stderr: '' };
+  const child = startServer(port, serverLogs);
   t.after(() => {
     child.kill('SIGTERM');
   });
 
-  await waitForHealthz(port);
+  try {
+    await waitForHealthz(port);
 
-  const created = await postJson(port, '/rooms', {});
-  assert.equal(created.status, 201);
-  const roomId = created.body.roomId;
+    const created = await postJson(port, '/rooms', {});
+    assert.equal(created.status, 201);
+    const roomId = created.body.roomId;
 
-  const peerA = openSse(port, {
-    roomId,
-    peerId: PEER_A,
-    token: TOKEN_A,
-    name: 'Alice'
-  });
-  await peerA.waitFor('hello');
+    const peerA = openSse(port, {
+      roomId,
+      peerId: PEER_A,
+      token: TOKEN_A,
+      name: 'Alice'
+    });
+    await peerA.waitFor('hello');
 
-  const peerB = openSse(port, {
-    roomId,
-    peerId: PEER_B,
-    token: TOKEN_B,
-    name: 'Bob'
-  });
-  await peerB.waitFor('hello');
-  await wait(100);
+    const peerB = openSse(port, {
+      roomId,
+      peerId: PEER_B,
+      token: TOKEN_B,
+      name: 'Bob'
+    });
+    await peerB.waitFor('hello');
+    await wait(100);
 
-  const baselineCount = peerB.messages.length;
-  await postJson(port, '/state', {
-    roomId,
-    peerId: PEER_A,
-    sessionToken: TOKEN_A,
-    muted: true,
-    deafened: true
-  });
-  await peerB.waitFor('peer-updated');
-  const beforeReconnect = peerB.messages.length;
+    await postJson(port, '/state', {
+      roomId,
+      peerId: PEER_A,
+      sessionToken: TOKEN_A,
+      muted: true,
+      deafened: true
+    });
+    await peerB.waitFor('peer-updated');
+    const beforeReconnect = peerB.messages.length;
 
-  const peerA2 = openSse(port, {
-    roomId,
-    peerId: PEER_A,
-    token: TOKEN_A,
-    name: 'Evil'
-  });
-  await peerA2.waitFor('hello');
-  peerA.req.destroy();
-  await wait(150);
+    const peerA2 = openSse(port, {
+      roomId,
+      peerId: PEER_A,
+      token: TOKEN_A,
+      name: 'Evil'
+    });
+    await peerA2.waitFor('hello');
+    peerA.req.destroy();
+    await wait(150);
 
-  const reconnectEvents = peerB.messages.slice(beforeReconnect);
-  assert.equal(
-    reconnectEvents.some((message) => message.type === 'peer-left' && message.peerId === PEER_A),
-    false
-  );
-  assert.equal(
-    reconnectEvents.some(
-      (message) => message.type === 'peer-joined' && message.peer?.id === PEER_A
-    ),
-    false
-  );
-  assert.ok(peerB.messages.length >= baselineCount);
+    const reconnectEvents = peerB.messages.slice(beforeReconnect);
+    assert.equal(reconnectEvents.length, 0);
 
-  const state = await postJson(port, '/state', {
-    roomId,
-    peerId: PEER_A,
-    sessionToken: TOKEN_A
-  });
-  assert.equal(state.status, 200);
-  assert.equal(state.body.peer.name, 'Alice');
-  assert.equal(state.body.peer.muted, true);
-  assert.equal(state.body.peer.deafened, true);
+    const state = await postJson(port, '/state', {
+      roomId,
+      peerId: PEER_A,
+      sessionToken: TOKEN_A
+    });
+    assert.equal(state.status, 200);
+    assert.equal(state.body.peer.name, 'Alice');
+    assert.equal(state.body.peer.muted, true);
+    assert.equal(state.body.peer.deafened, true);
 
-  peerA2.req.destroy();
-  peerB.req.destroy();
+    peerA2.req.destroy();
+    peerB.req.destroy();
+  } catch (error) {
+    dumpServerLogs(serverLogs);
+    throw error;
+  }
 });
