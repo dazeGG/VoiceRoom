@@ -1,5 +1,3 @@
-'use strict';
-
 const DEFAULT_OPTIONS = {
   attackMs: 8,
   closeRatio: 0.65,

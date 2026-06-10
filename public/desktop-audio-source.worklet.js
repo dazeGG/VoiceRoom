@@ -1,5 +1,3 @@
-'use strict';
-
 class VoiceRoomDesktopAudioSourceProcessor extends AudioWorkletProcessor {
   constructor(options = {}) {
     super();
