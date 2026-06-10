@@ -221,7 +221,9 @@ export async function joinRoom(event?: Event): Promise<void> {
       setServerConnectionStatus('connected');
     };
     state.eventSource.onmessage = (event) => {
-      handleServerMessage(event).catch(() => {});
+      handleServerMessage(event).catch((err) => {
+        console.error('SSE handler failed', err);
+      });
     };
     state.eventSource.onerror = () => {
       if (state.joined || state.connecting) setServerConnectionStatus('reconnecting');
