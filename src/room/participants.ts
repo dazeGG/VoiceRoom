@@ -8,7 +8,7 @@ import {
   playMediaElement
 } from '../media/playback';
 import { STREAM_CUE_DEDUPE_MS } from '../core/config';
-import { clearPeerJoinCue, playStreamCue } from '../media/cues';
+import { clearPeerJoinCue, playStreamCue, playStreamViewerCue } from '../media/cues';
 import { attachMeter } from '../media/meters';
 import { isMicrophonePublication, syncLiveKitScreenSubscriptions } from './livekit';
 import {
@@ -42,6 +42,34 @@ export function clearRemoteScreenCue(peerId: string | undefined): void {
   if (!peerId) return;
   streamCueTimes.delete(`${peerId}:start`);
   streamCueTimes.delete(`${peerId}:stop`);
+}
+
+function getAttendedStreamOwnerIds(): Set<string> {
+  const ownerIds = new Set(state.screenSubscribedPeerIds);
+  if (state.viewedScreenPeerId) ownerIds.add(state.viewedScreenPeerId);
+  return ownerIds;
+}
+
+export function applyStreamViewerCue(
+  participant: Participant,
+  hadViewedOwnerId: string,
+  nextViewedOwnerId: string
+): void {
+  if (participant.isLocal || hadViewedOwnerId === nextViewedOwnerId) return;
+
+  const attendedOwnerIds = getAttendedStreamOwnerIds();
+  if (attendedOwnerIds.size === 0) return;
+
+  for (const ownerId of attendedOwnerIds) {
+    if (hadViewedOwnerId !== ownerId && nextViewedOwnerId === ownerId) {
+      playStreamViewerCue('join');
+      return;
+    }
+    if (hadViewedOwnerId === ownerId && nextViewedOwnerId !== ownerId) {
+      playStreamViewerCue('leave');
+      return;
+    }
+  }
 }
 
 export function syncPeers(peerIds: string[]): void {
@@ -145,7 +173,11 @@ export function updateParticipant(peerInfo: PeerInfo): void {
   if (Object.hasOwn(peerInfo, 'screenAudio')) participant.screenAudio = Boolean(peerInfo.screenAudio);
   if (Object.hasOwn(peerInfo, 'screenProfileId')) participant.screenProfileId = getScreenProfile(peerInfo.screenProfileId ?? '').id;
   if (Object.hasOwn(peerInfo, 'screenStreamId')) participant.screenStreamId = peerInfo.screenStreamId || '';
-  if (Object.hasOwn(peerInfo, 'viewedScreenPeerId')) participant.viewedScreenPeerId = peerInfo.viewedScreenPeerId || '';
+  const hadViewedScreenOwnerId = participant.viewedScreenPeerId;
+  if (Object.hasOwn(peerInfo, 'viewedScreenPeerId')) {
+    participant.viewedScreenPeerId = peerInfo.viewedScreenPeerId || '';
+    applyStreamViewerCue(participant, hadViewedScreenOwnerId, participant.viewedScreenPeerId);
+  }
   participant.node.dataset.deafened = String(participant.deafened);
   participant.node.dataset.muted = String(participant.muted);
   participant.node.dataset.screen = String(participant.screen);
@@ -179,6 +211,7 @@ export function removePeer(peerId: string): void {
   const peer = state.peers.get(peerId);
   if (!peer) return;
 
+  applyStreamViewerCue(peer, peer.viewedScreenPeerId, '');
   clearPeerJoinCue(peerId);
   clearRemoteScreenCue(peerId);
   removeAudioElements(peer);
