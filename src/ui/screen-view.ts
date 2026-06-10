@@ -266,17 +266,50 @@ function setViewedScreenPeerId(peerId: string): void {
   if (state.self) state.self.viewedScreenPeerId = state.viewedScreenPeerId;
 }
 
-export function refreshScreenTiles(): void {
-  elements.streamTiles.textContent = '';
+function getStreamTileStateKey(participant: Participant): string {
+  const hasPreview = hasStreamTilePreview(participant);
+  const isCollapsed = isStreamTileCollapsed(participant);
+  const stream = getScreenStreamForParticipant(participant);
+  return [
+    participant.id,
+    hasPreview,
+    isCollapsed,
+    stream?.id || '',
+    participant.name,
+    isScreenSubscribed(participant.id)
+  ].join('|');
+}
 
+export function refreshScreenTiles(): void {
   const screenParticipants = getScreenParticipants()
     .filter((participant) => participant.id !== state.viewedScreenPeerId);
   elements.streamTiles.hidden = screenParticipants.length === 0;
   elements.streamTiles.dataset.count = String(Math.min(screenParticipants.length, 8));
 
-  for (const participant of screenParticipants) {
-    elements.streamTiles.append(createStreamTile(participant));
+  const existingTiles = new Map<string, { key: string; node: HTMLButtonElement }>();
+  for (const node of elements.streamTiles.querySelectorAll<HTMLButtonElement>('button.stream-tile[data-peer-id]')) {
+    const peerId = node.dataset.peerId;
+    if (!peerId) continue;
+    existingTiles.set(peerId, { key: node.dataset.tileState || '', node });
   }
+
+  const nextTiles: HTMLButtonElement[] = [];
+  for (const participant of screenParticipants) {
+    const stateKey = getStreamTileStateKey(participant);
+    const cached = existingTiles.get(participant.id);
+    if (cached?.key === stateKey) {
+      nextTiles.push(cached.node);
+      existingTiles.delete(participant.id);
+      continue;
+    }
+
+    const tile = createStreamTile(participant);
+    tile.dataset.peerId = participant.id;
+    tile.dataset.tileState = stateKey;
+    nextTiles.push(tile);
+  }
+
+  elements.streamTiles.replaceChildren(...nextTiles);
 
   refreshStageStripControls();
   refreshStageGridState();

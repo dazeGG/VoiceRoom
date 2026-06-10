@@ -165,6 +165,9 @@ export function updateParticipant(peerInfo: PeerInfo): void {
   if (!participant) return;
 
   const hadScreen = participant.screen;
+  const hadScreenAudio = participant.screenAudio;
+  const hadScreenStreamId = participant.screenStreamId;
+  const hadName = participant.name;
   const hasScreenUpdate = Object.hasOwn(peerInfo, 'screen');
   if (Object.hasOwn(peerInfo, 'name')) participant.name = peerInfo.name || participant.name;
   if (Object.hasOwn(peerInfo, 'deafened')) participant.deafened = Boolean(peerInfo.deafened);
@@ -203,8 +206,40 @@ export function updateParticipant(peerInfo: PeerInfo): void {
   }
   updatePeerStatus(participant);
   refreshScreenAction(participant);
-  refreshScreenTiles();
-  refreshScreenStage();
+
+  if (shouldRefreshScreenTiles(peerInfo, hadScreen, hadScreenAudio, hadScreenStreamId, hadName)) {
+    refreshScreenTiles();
+  }
+
+  if (shouldRefreshScreenStage(peerInfo, hadScreen, hadScreenAudio, hadScreenStreamId, hadName)) {
+    refreshScreenStage();
+  }
+}
+
+function shouldRefreshScreenTiles(
+  peerInfo: PeerInfo,
+  hadScreen: boolean,
+  hadScreenAudio: boolean,
+  hadScreenStreamId: string,
+  hadName: string
+): boolean {
+  if (Object.hasOwn(peerInfo, 'name') && (peerInfo.name || '') !== hadName) return true;
+  if (Object.hasOwn(peerInfo, 'screen') && Boolean(peerInfo.screen) !== hadScreen) return true;
+  if (Object.hasOwn(peerInfo, 'screenAudio') && Boolean(peerInfo.screenAudio) !== hadScreenAudio) return true;
+  if (Object.hasOwn(peerInfo, 'screenStreamId') && (peerInfo.screenStreamId || '') !== hadScreenStreamId) return true;
+  return false;
+}
+
+function shouldRefreshScreenStage(
+  peerInfo: PeerInfo,
+  hadScreen: boolean,
+  hadScreenAudio: boolean,
+  hadScreenStreamId: string,
+  hadName: string
+): boolean {
+  if (shouldRefreshScreenTiles(peerInfo, hadScreen, hadScreenAudio, hadScreenStreamId, hadName)) return true;
+  if (Object.hasOwn(peerInfo, 'screenProfileId')) return true;
+  return false;
 }
 
 export function removePeer(peerId: string): void {
