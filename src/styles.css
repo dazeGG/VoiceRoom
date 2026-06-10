@@ -932,6 +932,10 @@ body[data-screen-view="true"] .empty-room {
 body[data-screen-view="true"] .screen-stage {
   height: 100%;
   min-height: 0;
+  cursor: none;
+}
+
+body[data-screen-view="true"] .screen-stage[data-ui-active="true"] {
   cursor: pointer;
 }
 
@@ -957,6 +961,11 @@ body[data-screen-view="true"] .screen-view-controls {
 
 .screen-stage:fullscreen,
 .screen-stage:-webkit-full-screen {
+  cursor: none;
+}
+
+.screen-stage:fullscreen[data-ui-active="true"],
+.screen-stage:-webkit-full-screen[data-ui-active="true"] {
   cursor: pointer;
 }
 
