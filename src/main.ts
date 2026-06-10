@@ -1,6 +1,7 @@
 import './styles.css';
 import { GATE_THRESHOLD_MIN_DB } from './core/config';
 import { elements } from './ui/dom';
+import { mountIcons } from './ui/icons';
 import { state } from './core/state';
 import { cleanDisplayName } from './core/utils';
 import { showToast } from './ui/toast';
@@ -51,6 +52,9 @@ import { cancelScreenSourcePicker, closeScreenSourceOnBackdrop, closeScreenSourc
 import { refreshLocalNetworkIndicator } from './ui/status';
 
 function init(): void {
+  mountIcons();
+  mountIcons(elements.template.content);
+
   const savedName = cleanDisplayName(localStorage.getItem('voice-room:name'));
   state.savedName = savedName;
   elements.startNameInput.value = savedName;

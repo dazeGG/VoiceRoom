@@ -71,6 +71,10 @@ button:disabled {
   opacity: 0.56;
 }
 
+[data-icon] svg {
+  display: block;
+}
+
 .app-shell {
   display: grid;
   min-height: 100dvh;
@@ -360,11 +364,6 @@ h1 {
 .copy-room-button svg {
   width: 21px;
   height: 21px;
-  fill: none;
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 2.2;
 }
 
 .heading-actions {
@@ -491,11 +490,6 @@ body[data-stage-summary="hidden"] .stage-strip-bar {
 .strip-toggle-button svg {
   width: 19px;
   height: 19px;
-  fill: none;
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 2.4;
   transition: transform 160ms var(--ease-out);
 }
 
@@ -569,14 +563,8 @@ body[data-strip-collapsed="true"] .strip-toggle-button svg {
 }
 
 .stream-tile-icon svg {
-  display: block;
   width: 42px;
   height: 42px;
-  fill: none;
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 1.8;
 }
 
 .stream-tile-video {
@@ -858,14 +846,8 @@ body[data-strip-collapsed="true"] .strip-toggle-button svg {
 }
 
 .screen-control-button svg {
-  display: block;
   width: 21px;
   height: 21px;
-  fill: none;
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 2.2;
 }
 
 .stream-volume-icon,
@@ -1260,14 +1242,8 @@ body[data-screen-view="true"][data-strip-collapsed="true"] .stage-strip {
 
 .participant-muted-icon svg,
 .participant-deafened-icon svg {
-  display: block;
   width: 16px;
   height: 16px;
-  fill: none;
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 2.4;
 }
 
 .participant[data-muted="true"] .participant-muted-icon {
@@ -1316,15 +1292,10 @@ body[data-screen-view="true"][data-strip-collapsed="true"] .stage-strip {
   transform: translateY(-1px);
 }
 
-.participant-screen-action svg {
+.participant-screen-action [data-icon] svg {
   width: 15px;
   height: 15px;
   flex: 0 0 auto;
-  fill: none;
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 2.3;
 }
 
 .empty-room {
@@ -1529,12 +1500,6 @@ button:focus-visible,
 .dock-menu-button svg {
   width: 21px;
   height: 21px;
-  display: block;
-  fill: none;
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 2.35;
 }
 
 .dock-icon {
@@ -1623,12 +1588,13 @@ button:focus-visible,
 
 .leave-button {
   background: var(--coral);
-  color: oklch(8% 0.014 92);
+  color: oklch(99% 0.004 92);
   pointer-events: auto;
 }
 
 .leave-button:hover {
   background: oklch(56% 0.18 31);
+  color: oklch(99% 0.004 92);
   box-shadow: inset 0 0 0 1px oklch(92% 0.06 31 / 0.22);
 }
 
@@ -1877,11 +1843,6 @@ button:focus-visible,
 .screen-source-close svg {
   width: 20px;
   height: 20px;
-  fill: none;
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 2;
 }
 
 .screen-source-options {

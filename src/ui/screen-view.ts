@@ -1,4 +1,5 @@
 import { elements } from './dom';
+import { renderIcon } from './icons';
 import { state } from '../core/state';
 import { showToast } from './toast';
 import { getScreenProfile, parseScreenProfileId } from '../media/profiles';
@@ -342,13 +343,7 @@ function createStreamTileIcon(): HTMLElement {
   const icon = document.createElement('span');
   icon.className = 'stream-tile-icon';
   icon.setAttribute('aria-hidden', 'true');
-  icon.innerHTML = `
-    <svg viewBox="0 0 24 24" focusable="false">
-      <path d="M4 5a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v8a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2z"></path>
-      <path d="M8 21h8"></path>
-      <path d="M12 15v6"></path>
-    </svg>
-  `;
+  icon.innerHTML = renderIcon('monitor');
   return icon;
 }
 
