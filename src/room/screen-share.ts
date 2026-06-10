@@ -80,10 +80,6 @@ export async function startScreenShare(profileId: string = state.localScreenProf
       screenProfileId: profile.id,
       screenStreamId: stream.id
     });
-    if (!state.viewedScreenPeerId) {
-      state.viewedScreenPeerId = state.peerId;
-      if (state.self) state.self.viewedScreenPeerId = state.peerId;
-    }
     refreshScreenControls();
     refreshScreenStage();
     await postState();

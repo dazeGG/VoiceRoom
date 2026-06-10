@@ -1,8 +1,9 @@
 import { elements } from './dom';
 import { state } from '../core/state';
 import { showToast } from './toast';
-import { getScreenProfile } from '../media/profiles';
-import { getInitials } from '../core/utils';
+import { getScreenProfile, parseScreenProfileId } from '../media/profiles';
+import { SCREEN_FPS_OPTIONS, SCREEN_QUALITY_OPTIONS } from '../core/config';
+
 import { postState } from '../room/presence';
 import { isAppPlaybackMuted, applyAudioOutputDevice, playMediaElement } from '../media/playback';
 import { syncLiveKitScreenSubscriptions } from '../room/livekit';
@@ -18,15 +19,6 @@ const SCREEN_UI_IDLE_MS = 2200;
 let screenUiIdleTimer = 0;
 let screenStagePointerInside = false;
 let screenUiHoverBound = false;
-
-async function toggleScreenTile(peerId: string): Promise<void> {
-  if (state.viewedScreenPeerId === peerId) {
-    await leaveScreenView();
-    return;
-  }
-
-  await enterScreenView(peerId);
-}
 
 export function handleScreenStageClick(event: MouseEvent): void {
   if (!state.viewedScreenPeerId || elements.screenStage.hidden) return;
@@ -57,6 +49,7 @@ export async function enterScreenView(peerId: string): Promise<void> {
   }
 
   setViewedScreenPeerId(peerId);
+  state.screenSubscribedPeerIds.add(peerId);
   state.screenRequesting = !peer.isLocal && !peer.screenStream;
   refreshAllScreenActions();
   refreshScreenTiles();
@@ -70,32 +63,74 @@ export async function enterScreenView(peerId: string): Promise<void> {
   postState().catch(() => {});
 }
 
-export async function leaveScreenView(options: { quiet?: boolean } = {}): Promise<void> {
-  const { quiet = false } = options;
-  const peerId = closeScreenView();
+export async function leaveScreenView(options: { quiet?: boolean; keepPreview?: boolean } = {}): Promise<void> {
+  const { quiet = false, keepPreview = true } = options;
+  const peerId = state.viewedScreenPeerId;
   if (!peerId) return;
 
+  setViewedScreenPeerId('');
+  state.screenRequesting = false;
+  state.stripCollapsed = false;
+  hideScreenStage();
+
   const peer = getParticipantById(peerId);
+  if (keepPreview) {
+    state.screenSubscribedPeerIds.add(peerId);
+  } else {
+    state.screenSubscribedPeerIds.delete(peerId);
+    if (peer && !peer.isLocal) detachRemoteScreen(peer);
+  }
+
   if (peer && !peer.isLocal) syncLiveKitScreenSubscriptions(peer);
   if (!quiet) refreshAllScreenActions();
+  refreshScreenTiles();
+  postState().catch(() => {});
+}
+
+export function disconnectScreen(peerId: string): void {
+  state.screenSubscribedPeerIds.delete(peerId);
+
+  if (state.viewedScreenPeerId === peerId) {
+    void leaveScreenView({ quiet: true, keepPreview: false });
+    return;
+  }
+
+  const peer = getParticipantById(peerId);
+  if (peer && !peer.isLocal) {
+    detachRemoteScreen(peer);
+    syncLiveKitScreenSubscriptions(peer);
+  }
+
+  refreshAllScreenActions();
+  refreshScreenTiles();
   postState().catch(() => {});
 }
 
 export function closeScreenView(): string {
   const peerId = state.viewedScreenPeerId;
+  if (!peerId) return '';
+
   setViewedScreenPeerId('');
   state.screenRequesting = false;
   state.stripCollapsed = false;
+  state.screenSubscribedPeerIds.delete(peerId);
+  hideScreenStage();
 
   const peer = getParticipantById(peerId);
-  if (peer && !peer.isLocal && peer.screenStream) {
+  if (peer && !peer.isLocal) {
     detachRemoteScreen(peer);
-  } else {
-    hideScreenStage();
+    syncLiveKitScreenSubscriptions(peer);
   }
+
   refreshAllScreenActions();
   refreshScreenTiles();
   return peerId;
+}
+
+export function isScreenSubscribed(peerId: string): boolean {
+  if (!peerId) return false;
+  if (state.viewedScreenPeerId === peerId) return true;
+  return state.screenSubscribedPeerIds.has(peerId);
 }
 
 export function refreshScreenAction(participant: Participant | null): void {
@@ -216,37 +251,79 @@ export function refreshScreenTiles(): void {
 }
 
 function createStreamTile(participant: Participant): HTMLButtonElement {
+  const subscribed = isScreenSubscribed(participant.id);
+  const stream = getScreenStreamForParticipant(participant);
+  const hasPreview = subscribed && Boolean(stream);
+
   const button = document.createElement('button');
   button.className = 'stream-tile';
   button.type = 'button';
-  button.dataset.active = String(state.viewedScreenPeerId === participant.id);
+  button.dataset.preview = String(hasPreview);
+  button.dataset.subscribed = String(subscribed);
   button.dataset.local = String(participant.isLocal);
-  button.setAttribute('aria-pressed', String(state.viewedScreenPeerId === participant.id));
+  button.setAttribute('aria-pressed', 'false');
   button.setAttribute(
     'aria-label',
-    state.viewedScreenPeerId === participant.id
-      ? `Свернуть стрим ${participant.name} до плитки`
-      : `Открыть стрим ${participant.name}`
+    hasPreview ? `Развернуть стрим ${participant.name}` : `Смотреть стрим ${participant.name}`
   );
 
   const preview = document.createElement('span');
   preview.className = 'stream-tile-preview';
-  preview.append(createStreamTileIcon(), createStreamTileInitials(participant));
+  if (hasPreview) {
+    mountStreamTileVideo(preview, stream!);
+  } else {
+    preview.append(createStreamTileIcon());
+  }
 
   const copy = document.createElement('span');
   copy.className = 'stream-tile-copy';
 
   const title = document.createElement('strong');
-  title.textContent = participant.isLocal ? 'Ваш стрим' : `Стрим ${participant.name}`;
+  title.textContent = participant.isLocal ? 'Ваш стрим' : participant.name;
 
-  const action = document.createElement('span');
-  action.className = 'stream-tile-action';
-  action.textContent = state.viewedScreenPeerId === participant.id ? 'Свернуть стрим' : 'Смотреть стрим';
+  const actions = document.createElement('span');
+  actions.className = 'stream-tile-actions';
+
+  const primaryAction = document.createElement('span');
+  primaryAction.className = 'stream-tile-action stream-tile-action-primary';
+  primaryAction.textContent = hasPreview
+    ? 'Развернуть'
+    : subscribed
+      ? 'Подключение'
+      : 'Смотреть стрим';
+
+  actions.append(primaryAction);
+
+  if (subscribed) {
+    const disconnectAction = document.createElement('button');
+    disconnectAction.type = 'button';
+    disconnectAction.className = 'stream-tile-action stream-tile-action-disconnect';
+    disconnectAction.textContent = 'Отключить';
+    disconnectAction.setAttribute('aria-label', `Отключиться от стрима ${participant.name}`);
+    disconnectAction.addEventListener('click', (event) => {
+      event.stopPropagation();
+      disconnectScreen(participant.id);
+    });
+    actions.append(disconnectAction);
+  }
 
   copy.append(title);
-  button.append(preview, copy, action);
-  button.addEventListener('click', () => toggleScreenTile(participant.id).catch((error) => console.error(error)));
+  button.append(preview, copy, actions);
+  button.addEventListener('click', () => {
+    enterScreenView(participant.id).catch((error) => console.error(error));
+  });
   return button;
+}
+
+function mountStreamTileVideo(preview: HTMLElement, stream: MediaStream): void {
+  const video = document.createElement('video');
+  video.className = 'stream-tile-video';
+  video.autoplay = true;
+  video.muted = true;
+  video.playsInline = true;
+  video.srcObject = stream;
+  preview.append(video);
+  playMediaElement(video);
 }
 
 function createStreamTileIcon(): HTMLElement {
@@ -263,13 +340,6 @@ function createStreamTileIcon(): HTMLElement {
   return icon;
 }
 
-function createStreamTileInitials(participant: Participant): HTMLElement {
-  const initials = document.createElement('span');
-  initials.className = 'stream-tile-initials';
-  initials.textContent = getInitials(participant.name);
-  return initials;
-}
-
 export function refreshScreenMeta(participant: Participant | null): void {
   if (!participant) {
     elements.screenMeta.hidden = true;
@@ -278,16 +348,19 @@ export function refreshScreenMeta(participant: Participant | null): void {
 
   elements.screenMeta.hidden = false;
   elements.screenMetaTitle.textContent = participant.isLocal ? 'Ваш стрим' : `Стрим ${participant.name}`;
-  const profileLabel = getScreenProfileLabel(participant);
-  elements.screenMetaProfile.hidden = !profileLabel;
-  elements.screenMetaProfile.textContent = profileLabel;
-  elements.screenMetaSepProfile.hidden = !profileLabel;
+  const { qualityLabel, fpsLabel } = getScreenMetaLabels(participant);
+  elements.screenMetaQuality.hidden = !qualityLabel;
+  elements.screenMetaQuality.textContent = qualityLabel;
+  elements.screenMetaFps.hidden = !fpsLabel;
+  elements.screenMetaFps.textContent = fpsLabel;
+  elements.screenMetaSepProfile.hidden = !qualityLabel;
+  elements.screenMetaSepFps.hidden = !qualityLabel || !fpsLabel;
   elements.screenMetaStats.hidden = true;
   elements.screenMetaStats.textContent = '';
   const viewersLine = formatScreenViewersLine(participant.id);
   elements.screenMetaViewers.textContent = viewersLine;
   elements.screenMetaViewers.hidden = !viewersLine;
-  elements.screenMetaSepViewers.hidden = !profileLabel || !viewersLine;
+  elements.screenMetaSepViewers.hidden = (!qualityLabel && !fpsLabel) || !viewersLine;
   refreshScreenStreamControls(participant);
 }
 
@@ -296,9 +369,15 @@ function refreshScreenStreamControls(participant: Participant | null): void {
   elements.streamVolumeControl.hidden = hideVolume;
 }
 
-function getScreenProfileLabel(participant: Participant): string {
+function getScreenMetaLabels(participant: Participant): { qualityLabel: string; fpsLabel: string } {
   const profile = getScreenProfile(participant.isLocal ? state.localScreenProfileId : participant.screenProfileId);
-  return profile.label;
+  const { qualityId, fpsId } = parseScreenProfileId(profile.id);
+  const quality = SCREEN_QUALITY_OPTIONS[qualityId];
+  const fps = SCREEN_FPS_OPTIONS[fpsId];
+  return {
+    qualityLabel: quality?.label || '',
+    fpsLabel: fps?.label || ''
+  };
 }
 
 function formatScreenViewersLine(ownerPeerId: string): string {

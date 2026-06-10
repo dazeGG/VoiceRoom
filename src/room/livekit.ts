@@ -394,7 +394,9 @@ function syncLiveKitPublicationSubscription(peer: Participant, publication: Trac
   }
 
   if (isScreenPublication(publication)) {
-    remotePublication.setSubscribed(state.viewedScreenPeerId === peer.id);
+    remotePublication.setSubscribed(
+      state.viewedScreenPeerId === peer.id || state.screenSubscribedPeerIds.has(peer.id)
+    );
   }
 }
 

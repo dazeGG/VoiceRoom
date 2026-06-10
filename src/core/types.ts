@@ -189,6 +189,7 @@ export interface AppState {
   screenFullscreen: boolean;
   screenMuted: boolean;
   screenRequesting: boolean;
+  screenSubscribedPeerIds: Set<string>;
   screenSourceRequest: ScreenSourceRequest | null;
   screenStopping: boolean;
   screenVolume: number;

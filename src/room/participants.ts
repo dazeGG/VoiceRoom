@@ -136,8 +136,11 @@ export function updateParticipant(peerInfo: PeerInfo): void {
   if (hasScreenUpdate && !participant.isLocal && hadScreen !== participant.screen) {
     playStreamCue(participant.screen ? 'start' : 'stop');
   }
-  if (!participant.screen && state.viewedScreenPeerId === participant.id) {
-    closeScreenView();
+  if (!participant.screen) {
+    state.screenSubscribedPeerIds.delete(participant.id);
+    if (state.viewedScreenPeerId === participant.id) {
+      closeScreenView();
+    }
   }
   if (!participant.screen && state.sharedScreenPeerId === participant.id) {
     detachRemoteScreen(participant);
@@ -154,6 +157,7 @@ export function removePeer(peerId: string): void {
 
   clearPeerJoinCue(peerId);
   removeAudioElements(peer);
+  state.screenSubscribedPeerIds.delete(peerId);
   if (state.viewedScreenPeerId === peer.id) {
     closeScreenView();
   }
@@ -215,7 +219,8 @@ function isRemoteScreenTrack(peer: Participant, track: MediaStreamTrack, stream:
   if (track.kind !== 'audio' || !peer.screen || !peer.screenAudio) return false;
 
   const alreadyHasMicAudio = Boolean(peer.stream?.getAudioTracks().some((audioTrack) => audioTrack.readyState !== 'ended'));
-  const alreadyWatchingScreen = state.viewedScreenPeerId === peer.id || Boolean(peer.screenStream);
+  const subscribed = state.viewedScreenPeerId === peer.id || state.screenSubscribedPeerIds.has(peer.id);
+  const alreadyWatchingScreen = subscribed || Boolean(peer.screenStream);
   return alreadyHasMicAudio && alreadyWatchingScreen;
 }
 
@@ -245,7 +250,8 @@ export function attachRemoteScreenStream(peer: Participant, stream: MediaStream)
     );
   }
 
-  if (state.viewedScreenPeerId !== peer.id) {
+  const subscribed = state.viewedScreenPeerId === peer.id || state.screenSubscribedPeerIds.has(peer.id);
+  if (!subscribed) {
     syncLiveKitScreenSubscriptions(peer);
     detachRemoteScreen(peer);
     return;
@@ -254,6 +260,7 @@ export function attachRemoteScreenStream(peer: Participant, stream: MediaStream)
   state.screenRequesting = false;
   refreshAllScreenActions();
   refreshScreenStage();
+  refreshScreenTiles();
   updatePeerStatus(peer);
 }
 
