@@ -389,7 +389,7 @@ function syncLiveKitPublicationSubscription(peer: Participant, publication: Trac
   if (typeof remotePublication.setSubscribed !== 'function') return;
 
   if (isMicrophonePublication(publication)) {
-    remotePublication.setSubscribed(true);
+    remotePublication.setSubscribed(!state.outputMuted);
     return;
   }
 
@@ -409,9 +409,25 @@ export function syncLiveKitScreenSubscriptions(peer: Participant | null): void {
   });
 }
 
+export function syncLiveKitVoiceSubscriptions(): void {
+  const room = state.livekitRoom;
+  if (!room) return;
+
+  room.remoteParticipants.forEach((participant) => {
+    const peer = state.peers.get(participant.identity);
+    if (!peer) return;
+
+    participant.trackPublications.forEach((publication) => {
+      if (!isMicrophonePublication(publication)) return;
+      syncLiveKitPublicationSubscription(peer, publication);
+    });
+  });
+}
+
 async function recoverLiveKitRoom(room: Room): Promise<void> {
   syncLiveKitParticipants(room);
   await ensureLocalMicrophonePublished();
+  syncLiveKitVoiceSubscriptions();
   syncRemoteAudioPlayback();
   refreshParticipantState();
   refreshCallControls();
@@ -476,7 +492,7 @@ function handleLiveKitTrackUnsubscribed(
   if (isMicrophonePublication(publication)) {
     detachRemoteAudioTrack(peer, track.mediaStreamTrack.id);
     peer.micReceiver = null;
-    peer.voiceIssue = 'подключает голос';
+    if (!state.outputMuted) peer.voiceIssue = 'подключает голос';
     updatePeerStatus(peer);
   }
 }

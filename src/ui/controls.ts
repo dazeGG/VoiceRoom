@@ -8,7 +8,7 @@ import {
 } from '../media/playback';
 import { playMicCue, playOutputCue } from '../media/cues';
 import { getLocalMicrophoneCapture, setMicrophoneCaptureEnabled } from '../media/microphone';
-import { syncLocalMicrophonePublicationMuted } from '../room/livekit';
+import { syncLiveKitVoiceSubscriptions, syncLocalMicrophonePublicationMuted } from '../room/livekit';
 import { getDisplayName } from './names';
 import { updateParticipant } from '../room/participants';
 import { persistOutputMuted } from './devices';
@@ -77,6 +77,7 @@ export function toggleOutputMute(): void {
   }
 
   refreshOutputControls();
+  syncLiveKitVoiceSubscriptions();
   syncPlaybackMuteState();
   updateParticipant({
     deafened: state.outputMuted,
