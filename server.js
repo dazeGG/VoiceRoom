@@ -1,19 +1,33 @@
 'use strict';
 
 const crypto = require('node:crypto');
+const { existsSync } = require('node:fs');
 const fs = require('node:fs/promises');
 const http = require('node:http');
 const path = require('node:path');
 const { URL } = require('node:url');
 const { AccessToken, TrackSource } = require('livekit-server-sdk');
 
+const { readEnvInt, readEnvBool } = require('./lib/config');
+const {
+  normalizeRoomId,
+  normalizePeerId,
+  normalizeSessionToken,
+  cleanName,
+  cleanStreamId,
+  cleanScreenProfileId,
+  cleanLiveKitUrl
+} = require('./lib/validation');
+const { createProofOfWork } = require('./lib/pow');
+const { getClientIp, createRateLimiter } = require('./lib/rate-limit');
+
 const PORT = readEnvInt('PORT', 3000, 1);
-const PUBLIC_DIR = path.join(__dirname, 'public');
-const MAX_ROOM_PEERS = readEnvInt('MAX_ROOM_PEERS', 8, 1);
+const STATIC_DIR = path.join(__dirname, 'dist');
+const MAX_ROOM_PEERS = readEnvInt('MAX_ROOM_PEERS', 12, 1);
 const MAX_ROOMS = readEnvInt('MAX_ROOMS', 100, 1);
 const KEEPALIVE_MS = readEnvInt('SSE_KEEPALIVE_MS', 15000, 1000);
 const BODY_LIMIT_BYTES = readEnvInt('BODY_LIMIT_BYTES', 65536, 1024);
-const TURN_TTL_SECONDS = readEnvInt('TURN_TTL_SECONDS', 900, 60);
+const TRUST_PROXY = readEnvBool('TRUST_PROXY', false);
 const LIVEKIT_TOKEN_TTL_SECONDS = readEnvInt('LIVEKIT_TOKEN_TTL_SECONDS', 21600, 60);
 const ROOM_IDLE_TTL_MS = readEnvInt('ROOM_IDLE_TTL_MS', 900000, 1000);
 const ROOM_CREATE_RATE_LIMIT = readEnvInt('ROOM_CREATE_RATE_LIMIT', 20, 0);
@@ -21,24 +35,17 @@ const ROOM_CREATE_RATE_WINDOW_MS = readEnvInt('ROOM_CREATE_RATE_WINDOW_MS', 6000
 const MAX_EMPTY_ROOMS_PER_IP = readEnvInt('MAX_EMPTY_ROOMS_PER_IP', 3, 0);
 const ROOM_CREATE_POW_DIFFICULTY = Math.min(readEnvInt('ROOM_CREATE_POW_DIFFICULTY', 14, 0), 32);
 const ROOM_CREATE_POW_TTL_MS = readEnvInt('ROOM_CREATE_POW_TTL_MS', 120000, 10000);
-const DEFAULT_STUN_URLS = 'stun:stun.l.google.com:19302';
-const LIVEKIT_CLIENT_BUNDLE = path.join(__dirname, 'node_modules', 'livekit-client', 'dist', 'livekit-client.umd.js');
-const SCREEN_PROFILE_IDS = new Set([
-  'balanced',
-  'balanced-15',
-  'balanced-30',
-  'high',
-  'high-15',
-  'high-30',
-  'low',
-  'low-15',
-  'low-30'
-]);
 
 const rooms = new Map();
-const roomCreateRates = new Map();
-const usedPowChallenges = new Map();
-const powSecret = crypto.randomBytes(32);
+const pow = createProofOfWork({
+  secret: crypto.randomBytes(32),
+  difficulty: ROOM_CREATE_POW_DIFFICULTY,
+  ttlMs: ROOM_CREATE_POW_TTL_MS
+});
+const roomCreateLimiter = createRateLimiter({
+  limit: ROOM_CREATE_RATE_LIMIT,
+  windowMs: ROOM_CREATE_RATE_WINDOW_MS
+});
 
 const mimeTypes = {
   '.css': 'text/css; charset=utf-8',
@@ -54,16 +61,31 @@ const mimeTypes = {
   '.webmanifest': 'application/manifest+json; charset=utf-8'
 };
 
-function readEnvInt(name, fallback, min) {
-  const value = Number.parseInt(process.env[name] || String(fallback), 10);
-  return Number.isFinite(value) && value >= min ? value : fallback;
+function getLiveKitConnectSources() {
+  const url = cleanLiveKitUrl(process.env.LIVEKIT_URL || '');
+  if (!url) return [];
+
+  const sources = new Set();
+  try {
+    const parsed = new URL(url);
+    sources.add(parsed.origin);
+    if (parsed.hostname === 'localhost') {
+      parsed.hostname = '127.0.0.1';
+      sources.add(parsed.origin);
+    } else if (parsed.hostname === '127.0.0.1') {
+      parsed.hostname = 'localhost';
+      sources.add(parsed.origin);
+    }
+  } catch {
+    // Ignore a malformed LIVEKIT_URL; the client will surface the connection error.
+  }
+  return [...sources];
 }
 
 function baseHeaders() {
   const connectSrc = [
     "'self'",
-    'https:',
-    'wss:',
+    ...getLiveKitConnectSources(),
     ...(process.env.NODE_ENV === 'production' ? [] : ['ws://localhost:7880', 'ws://127.0.0.1:7880']),
     'stun:',
     'turn:',
@@ -101,49 +123,6 @@ function sendJson(res, status, payload, headers = {}) {
   res.end(JSON.stringify(payload));
 }
 
-function normalizeRoomId(value) {
-  if (typeof value !== 'string') return '';
-  const roomId = value.trim();
-  return /^[A-Za-z0-9_-]{3,48}$/.test(roomId) ? roomId : '';
-}
-
-function normalizePeerId(value) {
-  if (typeof value !== 'string') return '';
-  const peerId = value.trim();
-  return /^[A-Za-z0-9_-]{8,80}$/.test(peerId) ? peerId : '';
-}
-
-function normalizeSessionToken(value) {
-  if (typeof value !== 'string') return '';
-  const token = value.trim();
-  return /^[A-Za-z0-9_-]{32,128}$/.test(token) ? token : '';
-}
-
-function cleanName(value) {
-  if (typeof value !== 'string') return 'Guest';
-  const compact = value.replace(/\s+/g, ' ').trim();
-  if (!compact) return 'Guest';
-  return compact.slice(0, 40);
-}
-
-function cleanStreamId(value) {
-  if (typeof value !== 'string') return '';
-  const streamId = value.trim();
-  return /^[A-Za-z0-9_.:-]{1,120}$/.test(streamId) ? streamId : '';
-}
-
-function cleanScreenProfileId(value) {
-  if (typeof value !== 'string') return '';
-  const profileId = value.trim();
-  return SCREEN_PROFILE_IDS.has(profileId) ? profileId : '';
-}
-
-function cleanLiveKitUrl(value) {
-  if (typeof value !== 'string') return '';
-  const url = value.trim();
-  return /^wss?:\/\/[^\s/$.?#].[^\s]*$/i.test(url) ? url : '';
-}
-
 function getLiveKitRoomName(roomId) {
   const prefix = String(process.env.LIVEKIT_ROOM_PREFIX || 'voice-room-').replace(/[^A-Za-z0-9_.:-]/g, '-');
   return `${prefix}${roomId}`;
@@ -173,133 +152,6 @@ function pruneRooms(now = Date.now()) {
       rooms.delete(roomId);
     }
   }
-}
-
-function prunePowChallenges(now = Date.now()) {
-  for (const [challengeId, expiresAt] of usedPowChallenges) {
-    if (expiresAt <= now) {
-      usedPowChallenges.delete(challengeId);
-    }
-  }
-}
-
-function getClientIp(req) {
-  const forwardedFor = req.headers['x-forwarded-for'];
-  const forwardedValue = Array.isArray(forwardedFor) ? forwardedFor[0] : forwardedFor;
-  const forwardedIps = String(forwardedValue || '')
-    .split(',')
-    .map((item) => item.trim())
-    .filter(Boolean);
-  const forwardedIp = forwardedIps.at(-1);
-  return forwardedIp || req.socket.remoteAddress || 'unknown';
-}
-
-function checkRoomCreateRate(req, now = Date.now()) {
-  if (ROOM_CREATE_RATE_LIMIT <= 0 || ROOM_CREATE_RATE_WINDOW_MS <= 0) {
-    return { allowed: true, retryAfterSeconds: 0 };
-  }
-
-  for (const [clientIp, entry] of roomCreateRates) {
-    if (now - entry.startedAt > ROOM_CREATE_RATE_WINDOW_MS) {
-      roomCreateRates.delete(clientIp);
-    }
-  }
-
-  const clientIp = getClientIp(req);
-  const current = roomCreateRates.get(clientIp);
-  if (!current || now - current.startedAt >= ROOM_CREATE_RATE_WINDOW_MS) {
-    roomCreateRates.set(clientIp, { count: 1, startedAt: now });
-    return { allowed: true, retryAfterSeconds: 0 };
-  }
-
-  current.count += 1;
-  const retryAfterSeconds = Math.ceil((ROOM_CREATE_RATE_WINDOW_MS - (now - current.startedAt)) / 1000);
-  return {
-    allowed: current.count <= ROOM_CREATE_RATE_LIMIT,
-    retryAfterSeconds
-  };
-}
-
-function signPowPayload(payload, clientIp) {
-  return crypto.createHmac('sha256', powSecret).update(`${clientIp}:${payload}`).digest('base64url');
-}
-
-function createPowChallenge(req, now = Date.now()) {
-  const challengeId = crypto.randomBytes(16).toString('base64url');
-  const payload = `${challengeId}.${now}.${ROOM_CREATE_POW_DIFFICULTY}`;
-  const signature = signPowPayload(payload, getClientIp(req));
-  return `${payload}.${signature}`;
-}
-
-function parsePowChallenge(challenge) {
-  if (typeof challenge !== 'string') return null;
-
-  const parts = challenge.split('.');
-  if (parts.length !== 4) return null;
-
-  const [challengeId, issuedAtValue, difficultyValue, signature] = parts;
-  const issuedAt = Number.parseInt(issuedAtValue, 10);
-  const difficulty = Number.parseInt(difficultyValue, 10);
-  if (!/^[A-Za-z0-9_-]{16,64}$/.test(challengeId)) return null;
-  if (!Number.isFinite(issuedAt) || issuedAt <= 0) return null;
-  if (!Number.isFinite(difficulty) || difficulty < 0 || difficulty > 32) return null;
-  if (!/^[A-Za-z0-9_-]{32,96}$/.test(signature)) return null;
-
-  return { challengeId, difficulty, issuedAt, signature };
-}
-
-function normalizePowNonce(value) {
-  if (Number.isSafeInteger(value) && value >= 0) return String(value);
-  if (typeof value === 'string' && /^(0|[1-9]\d{0,15})$/.test(value)) return value;
-  return '';
-}
-
-function hasLeadingZeroBits(buffer, bits) {
-  const fullBytes = Math.floor(bits / 8);
-  const remainingBits = bits % 8;
-
-  for (let index = 0; index < fullBytes; index += 1) {
-    if (buffer[index] !== 0) return false;
-  }
-
-  if (remainingBits === 0) return true;
-  const mask = 0xff << (8 - remainingBits);
-  return (buffer[fullBytes] & mask) === 0;
-}
-
-function verifyRoomCreateProof(req, proof, now = Date.now()) {
-  if (ROOM_CREATE_POW_DIFFICULTY <= 0) return { ok: true };
-  prunePowChallenges(now);
-
-  const challenge = typeof proof?.challenge === 'string' ? proof.challenge : '';
-  const nonce = normalizePowNonce(proof?.nonce);
-  const parsed = parsePowChallenge(challenge);
-  if (!parsed || !nonce) {
-    return { ok: false, status: 403, error: 'Room creation proof is required' };
-  }
-
-  const { challengeId, difficulty, issuedAt, signature } = parsed;
-  const payload = `${challengeId}.${issuedAt}.${difficulty}`;
-  const expectedSignature = signPowPayload(payload, getClientIp(req));
-  if (difficulty !== ROOM_CREATE_POW_DIFFICULTY || !tokensMatch(expectedSignature, signature)) {
-    return { ok: false, status: 403, error: 'Invalid room creation proof' };
-  }
-
-  if (now < issuedAt || now - issuedAt > ROOM_CREATE_POW_TTL_MS) {
-    return { ok: false, status: 403, error: 'Room creation proof expired' };
-  }
-
-  if (usedPowChallenges.has(challengeId)) {
-    return { ok: false, status: 403, error: 'Room creation proof was already used' };
-  }
-
-  const digest = crypto.createHash('sha256').update(`${challenge}:${nonce}`).digest();
-  if (!hasLeadingZeroBits(digest, difficulty)) {
-    return { ok: false, status: 403, error: 'Invalid room creation proof' };
-  }
-
-  usedPowChallenges.set(challengeId, now + ROOM_CREATE_POW_TTL_MS);
-  return { ok: true };
 }
 
 function countEmptyRoomsForIp(clientIp) {
@@ -415,58 +267,6 @@ function closePeer(roomId, peerId, res, reason = 'left') {
   }
 }
 
-function parseList(value) {
-  return String(value || '')
-    .split(',')
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
-
-function getPublicHost(req) {
-  const explicitTurnHost = process.env.TURN_HOST && process.env.TURN_HOST.trim();
-  if (explicitTurnHost) return explicitTurnHost;
-
-  const explicitPublicHost = process.env.PUBLIC_HOSTNAME && process.env.PUBLIC_HOSTNAME.trim();
-  if (explicitPublicHost) return explicitPublicHost;
-
-  const forwardedHost = req.headers['x-forwarded-host'];
-  const rawHost = Array.isArray(forwardedHost) ? forwardedHost[0] : forwardedHost || req.headers.host || '';
-  return rawHost.split(',')[0].trim().replace(/:\d+$/, '');
-}
-
-function buildIceConfig(req) {
-  const iceServers = [];
-  const stunUrls = parseList(process.env.STUN_URLS || DEFAULT_STUN_URLS);
-
-  if (stunUrls.length > 0) {
-    iceServers.push({ urls: stunUrls });
-  }
-
-  const turnSecret = process.env.TURN_SECRET && process.env.TURN_SECRET.trim();
-  const turnHost = getPublicHost(req);
-  if (turnSecret && turnHost) {
-    const expiresAt = Math.floor(Date.now() / 1000) + TURN_TTL_SECONDS;
-    const username = `${expiresAt}:voice`;
-    const credential = crypto.createHmac('sha1', turnSecret).update(username).digest('base64');
-    const port = process.env.TURN_PORT || '3478';
-    iceServers.push({
-      urls: [
-        `turn:${turnHost}:${port}?transport=udp`,
-        `turn:${turnHost}:${port}?transport=tcp`
-      ],
-      username,
-      credential
-    });
-  }
-
-  return {
-    iceServers,
-    iceTransportPolicy: process.env.ICE_TRANSPORT_POLICY || 'all',
-    maxRoomPeers: MAX_ROOM_PEERS,
-    turnTtlSeconds: TURN_TTL_SECONDS
-  };
-}
-
 async function readJsonBody(req) {
   let body = '';
   for await (const chunk of req) {
@@ -554,16 +354,16 @@ async function handleEvents(req, res, url) {
 
   const peer = {
     closed: false,
-    deafened: false,
+    deafened: previous?.deafened ?? false,
     id: peerId,
-    joinedAt: Date.now(),
-    muted: false,
+    joinedAt: previous?.joinedAt ?? Date.now(),
+    muted: previous?.muted ?? false,
     name,
-    screen: false,
-    screenAudio: false,
-    screenProfileId: '',
-    screenStreamId: '',
-    viewedScreenPeerId: '',
+    screen: previous?.screen ?? false,
+    screenAudio: previous?.screenAudio ?? false,
+    screenProfileId: previous?.screenProfileId ?? '',
+    screenStreamId: previous?.screenStreamId ?? '',
+    viewedScreenPeerId: previous?.viewedScreenPeerId ?? '',
     sessionToken,
     res
   };
@@ -573,12 +373,13 @@ async function handleEvents(req, res, url) {
 
   sendEvent(peer, {
     type: 'hello',
-    iceConfig: buildIceConfig(req),
     peer: publicPeer(peer),
     peers: existingPeers,
     roomId
   });
-  broadcast(room, { type: 'peer-joined', peer: publicPeer(peer) }, peerId);
+  if (!reconnecting) {
+    broadcast(room, { type: 'peer-joined', peer: publicPeer(peer) }, peerId);
+  }
 
   const keepalive = setInterval(() => {
     const sent = sendEvent(peer, { type: 'ping', at: Date.now() });
@@ -592,24 +393,6 @@ async function handleEvents(req, res, url) {
     clearInterval(keepalive);
     closePeer(roomId, peerId, res);
   });
-}
-
-function handleConfig(req, res, url) {
-  const roomId = normalizeRoomId(url.searchParams.get('room'));
-  const peerId = normalizePeerId(url.searchParams.get('peer'));
-  const sessionToken = normalizeSessionToken(url.searchParams.get('token'));
-
-  if (!roomId || !peerId || !sessionToken) {
-    sendJson(res, 401, { ok: false, error: 'Peer session is required' });
-    return;
-  }
-
-  if (!getAuthorizedPeer(roomId, peerId, sessionToken)) {
-    sendJson(res, 403, { ok: false, error: 'Invalid peer session' });
-    return;
-  }
-
-  sendJson(res, 200, buildIceConfig(req));
 }
 
 async function handleLiveKitToken(req, res) {
@@ -671,7 +454,7 @@ async function handleLiveKitToken(req, res) {
 }
 
 function handlePowChallenge(req, res) {
-  prunePowChallenges();
+  pow.prune();
 
   if (ROOM_CREATE_POW_DIFFICULTY <= 0) {
     sendJson(res, 200, { ok: true, required: false });
@@ -682,7 +465,7 @@ function handlePowChallenge(req, res) {
   sendJson(res, 200, {
     ok: true,
     algorithm: 'sha256',
-    challenge: createPowChallenge(req, now),
+    challenge: pow.createChallenge(getClientIp(req, TRUST_PROXY), now),
     difficulty: ROOM_CREATE_POW_DIFFICULTY,
     expiresAt: now + ROOM_CREATE_POW_TTL_MS,
     required: true
@@ -690,7 +473,7 @@ function handlePowChallenge(req, res) {
 }
 
 async function handleCreateRoom(req, res) {
-  const rate = checkRoomCreateRate(req);
+  const rate = roomCreateLimiter.check(getClientIp(req, TRUST_PROXY));
   if (!rate.allowed) {
     sendJson(
       res,
@@ -702,14 +485,14 @@ async function handleCreateRoom(req, res) {
   }
 
   const body = await readJsonBody(req);
-  const proof = verifyRoomCreateProof(req, body.proof);
+  const proof = pow.verify(getClientIp(req, TRUST_PROXY), body.proof);
   if (!proof.ok) {
     sendJson(res, proof.status, { ok: false, error: proof.error });
     return;
   }
 
   pruneRooms();
-  const clientIp = getClientIp(req);
+  const clientIp = getClientIp(req, TRUST_PROXY);
   if (MAX_EMPTY_ROOMS_PER_IP > 0 && countEmptyRoomsForIp(clientIp) >= MAX_EMPTY_ROOMS_PER_IP) {
     sendJson(res, 429, {
       ok: false,
@@ -755,42 +538,6 @@ function handleRoomStatus(res, url) {
     peers: room.peers.size,
     roomId
   });
-}
-
-async function handleSignal(req, res) {
-  const body = await readJsonBody(req);
-  const roomId = normalizeRoomId(body.roomId);
-  const from = normalizePeerId(body.from);
-  const to = normalizePeerId(body.to);
-  const sessionToken = normalizeSessionToken(body.sessionToken);
-  const signalType = typeof body.signalType === 'string' ? body.signalType : '';
-  const payload = body.payload && typeof body.payload === 'object' ? body.payload : null;
-
-  if (!roomId || !from || !to || !sessionToken || !signalType || !payload) {
-    sendJson(res, 400, { ok: false, error: 'Invalid signal payload' });
-    return;
-  }
-
-  const authorized = getAuthorizedPeer(roomId, from, sessionToken);
-  if (!authorized) {
-    sendJson(res, 403, { ok: false, error: 'Invalid peer session' });
-    return;
-  }
-
-  const { room } = authorized;
-  const target = room?.peers.get(to);
-  if (!target) {
-    sendJson(res, 404, { ok: false, error: 'Peer is no longer in the room' });
-    return;
-  }
-
-  sendEvent(target, {
-    type: 'signal',
-    from,
-    signalType,
-    payload
-  });
-  sendJson(res, 200, { ok: true });
 }
 
 async function handleState(req, res) {
@@ -850,8 +597,8 @@ async function serveStatic(req, res, url) {
     pathname = '/index.html';
   }
 
-  const resolvedPath = path.resolve(PUBLIC_DIR, `.${pathname}`);
-  if (!resolvedPath.startsWith(`${PUBLIC_DIR}${path.sep}`) && resolvedPath !== path.join(PUBLIC_DIR, 'index.html')) {
+  const resolvedPath = path.resolve(STATIC_DIR, `.${pathname}`);
+  if (!resolvedPath.startsWith(`${STATIC_DIR}${path.sep}`) && resolvedPath !== path.join(STATIC_DIR, 'index.html')) {
     sendJson(res, 403, { ok: false, error: 'Forbidden' });
     return;
   }
@@ -865,9 +612,11 @@ async function serveStatic(req, res, url) {
   }
 
   const ext = path.extname(resolvedPath);
+  // Vite emits content-hashed filenames under /assets/, safe to cache forever.
+  const cacheControl = pathname.startsWith('/assets/') ? 'public, max-age=31536000, immutable' : 'no-cache';
   res.writeHead(statusCode, {
     ...baseHeaders(),
-    'Cache-Control': 'no-cache',
+    'Cache-Control': cacheControl,
     'Content-Type': mimeTypes[ext] || 'application/octet-stream'
   });
   if (req.method === 'HEAD') {
@@ -895,22 +644,6 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    if (req.method === 'GET' && url.pathname === '/config') {
-      handleConfig(req, res, url);
-      return;
-    }
-
-    if (req.method === 'GET' && url.pathname === '/vendor/livekit-client.umd.js') {
-      const data = await fs.readFile(LIVEKIT_CLIENT_BUNDLE);
-      res.writeHead(200, {
-        ...baseHeaders(),
-        'Cache-Control': 'public, max-age=3600',
-        'Content-Type': 'application/javascript; charset=utf-8'
-      });
-      res.end(data);
-      return;
-    }
-
     if (req.method === 'GET' && url.pathname === '/pow-challenge') {
       handlePowChallenge(req, res);
       return;
@@ -928,11 +661,6 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === 'GET' && url.pathname === '/events') {
       await handleEvents(req, res, url);
-      return;
-    }
-
-    if (req.method === 'POST' && url.pathname === '/signal') {
-      await handleSignal(req, res);
       return;
     }
 
@@ -968,4 +696,7 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, () => {
   console.log(`Voice chat is listening on http://localhost:${PORT}`);
+  if (!existsSync(path.join(STATIC_DIR, 'index.html'))) {
+    console.warn('Client build not found in dist/. Run "npm run build" (production) or use "npm run dev:web" (development).');
+  }
 });

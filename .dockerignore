@@ -16,3 +16,4 @@ work
 deploy
 caddy_data
 caddy_config
+dist
