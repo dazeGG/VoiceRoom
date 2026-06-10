@@ -1,8 +1,10 @@
 import { elements } from './dom';
+import { mountIcons, renderIcon } from './icons';
 import { state } from '../core/state';
 import { showToast } from './toast';
-import { getScreenProfile } from '../media/profiles';
-import { getInitials } from '../core/utils';
+import { getScreenProfile, parseScreenProfileId } from '../media/profiles';
+import { SCREEN_FPS_OPTIONS, SCREEN_QUALITY_OPTIONS } from '../core/config';
+
 import { postState } from '../room/presence';
 import { isAppPlaybackMuted, applyAudioOutputDevice, playMediaElement } from '../media/playback';
 import { syncLiveKitScreenSubscriptions } from '../room/livekit';
@@ -14,14 +16,10 @@ import {
 } from '../room/participants';
 import type { Participant } from '../core/types';
 
-async function toggleScreenTile(peerId: string): Promise<void> {
-  if (state.viewedScreenPeerId === peerId) {
-    await leaveScreenView();
-    return;
-  }
-
-  await enterScreenView(peerId);
-}
+const SCREEN_UI_IDLE_MS = 2200;
+let screenUiIdleTimer = 0;
+let screenStagePointerInside = false;
+let screenUiHoverBound = false;
 
 export function handleScreenStageClick(event: MouseEvent): void {
   if (!state.viewedScreenPeerId || elements.screenStage.hidden) return;
@@ -34,11 +32,30 @@ export function handleScreenStageClick(event: MouseEvent): void {
     return;
   }
 
-  leaveScreenView().catch((error) => console.error(error));
+  leaveScreenView({ keepPreview: true }).catch((error) => console.error(error));
+}
+
+export function openLocalStreamPreview(): void {
+  const peerId = state.peerId;
+  if (!peerId || !state.localScreenStream) return;
+
+  if (state.viewedScreenPeerId === peerId) {
+    void leaveScreenView({ quiet: true, keepPreview: true });
+    return;
+  }
+
+  state.screenSubscribedPeerIds.add(peerId);
+  state.screenCollapsedPeerIds.add(peerId);
+  refreshScreenTiles();
+  refreshScreenStage();
 }
 
 export async function enterScreenView(peerId: string): Promise<void> {
   const peer = getParticipantById(peerId);
+  if (peer?.isLocal && state.localScreenStream) {
+    peer.screen = true;
+    peer.node.dataset.screen = 'true';
+  }
   if (!peer?.screen) {
     showToast('Демонстрация уже завершена');
     refreshAllScreenActions();
@@ -48,10 +65,12 @@ export async function enterScreenView(peerId: string): Promise<void> {
 
   if (state.viewedScreenPeerId === peerId) return;
   if (state.viewedScreenPeerId) {
-    await leaveScreenView({ quiet: true });
+    await leaveScreenView({ quiet: true, keepPreview: true });
   }
 
   setViewedScreenPeerId(peerId);
+  state.screenCollapsedPeerIds.delete(peerId);
+  state.screenSubscribedPeerIds.add(peerId);
   state.screenRequesting = !peer.isLocal && !peer.screenStream;
   refreshAllScreenActions();
   refreshScreenTiles();
@@ -65,32 +84,78 @@ export async function enterScreenView(peerId: string): Promise<void> {
   postState().catch(() => {});
 }
 
-export async function leaveScreenView(options: { quiet?: boolean } = {}): Promise<void> {
-  const { quiet = false } = options;
-  const peerId = closeScreenView();
+export async function leaveScreenView(options: { quiet?: boolean; keepPreview?: boolean } = {}): Promise<void> {
+  const { quiet = false, keepPreview = false } = options;
+  const peerId = state.viewedScreenPeerId;
   if (!peerId) return;
 
+  setViewedScreenPeerId('');
+  state.screenRequesting = false;
+  state.stripCollapsed = false;
+  hideScreenStage();
+
   const peer = getParticipantById(peerId);
+  if (keepPreview) {
+    state.screenSubscribedPeerIds.add(peerId);
+    state.screenCollapsedPeerIds.add(peerId);
+  } else {
+    state.screenCollapsedPeerIds.delete(peerId);
+    state.screenSubscribedPeerIds.delete(peerId);
+    if (peer && !peer.isLocal) detachRemoteScreen(peer);
+  }
+
   if (peer && !peer.isLocal) syncLiveKitScreenSubscriptions(peer);
   if (!quiet) refreshAllScreenActions();
+  refreshScreenTiles();
+  postState().catch(() => {});
+}
+
+export function disconnectScreen(peerId: string): void {
+  state.screenCollapsedPeerIds.delete(peerId);
+  state.screenSubscribedPeerIds.delete(peerId);
+
+  if (state.viewedScreenPeerId === peerId) {
+    void leaveScreenView({ quiet: true, keepPreview: false });
+    return;
+  }
+
+  const peer = getParticipantById(peerId);
+  if (peer && !peer.isLocal) {
+    detachRemoteScreen(peer);
+    syncLiveKitScreenSubscriptions(peer);
+  }
+
+  refreshAllScreenActions();
+  refreshScreenTiles();
   postState().catch(() => {});
 }
 
 export function closeScreenView(): string {
   const peerId = state.viewedScreenPeerId;
+  if (!peerId) return '';
+
   setViewedScreenPeerId('');
   state.screenRequesting = false;
   state.stripCollapsed = false;
+  state.screenCollapsedPeerIds.delete(peerId);
+  state.screenSubscribedPeerIds.delete(peerId);
+  hideScreenStage();
 
   const peer = getParticipantById(peerId);
-  if (peer && !peer.isLocal && peer.screenStream) {
+  if (peer && !peer.isLocal) {
     detachRemoteScreen(peer);
-  } else {
-    hideScreenStage();
+    syncLiveKitScreenSubscriptions(peer);
   }
+
   refreshAllScreenActions();
   refreshScreenTiles();
   return peerId;
+}
+
+export function isScreenSubscribed(peerId: string): boolean {
+  if (!peerId) return false;
+  if (state.viewedScreenPeerId === peerId) return true;
+  return state.screenSubscribedPeerIds.has(peerId);
 }
 
 export function refreshScreenAction(participant: Participant | null): void {
@@ -108,9 +173,15 @@ export function refreshAllScreenActions(): void {
   for (const peer of state.peers.values()) refreshScreenAction(peer);
 }
 
+function isParticipantStreaming(participant: Participant | null): boolean {
+  if (!participant) return false;
+  if (participant.screen) return true;
+  return participant.isLocal && Boolean(state.localScreenStream);
+}
+
 export function refreshScreenStage(): void {
   const peer = getActiveScreenPeer();
-  if (!peer?.screen) {
+  if (!isParticipantStreaming(peer)) {
     if (state.viewedScreenPeerId) closeScreenView();
     else hideScreenStage();
     return;
@@ -127,10 +198,13 @@ function showScreenStage({ peer, stream }: { peer: Participant; stream: MediaStr
   document.body.dataset.screenView = 'true';
   elements.screenStage.hidden = false;
   elements.screenViewControls.hidden = !stream;
+  refreshScreenStreamControls(peer);
   elements.leaveButton.hidden = true;
   elements.screenExitButton.hidden = false;
+  mountIcons(elements.screenExitButton);
   elements.screenPlaceholder.hidden = Boolean(stream);
   refreshScreenMeta(peer);
+  syncScreenStagePointerState();
 
   if (stream && elements.screenVideo.srcObject !== stream) {
     elements.screenVideo.srcObject = stream;
@@ -149,6 +223,7 @@ function showScreenStage({ peer, stream }: { peer: Participant; stream: MediaStr
 export function hideScreenStage(): void {
   state.sharedScreenPeerId = '';
   delete document.body.dataset.screenView;
+  stopScreenStageIdleUi();
   elements.screenStage.hidden = true;
   elements.screenViewControls.hidden = true;
   elements.screenMeta.hidden = true;
@@ -191,75 +266,178 @@ function setViewedScreenPeerId(peerId: string): void {
   if (state.self) state.self.viewedScreenPeerId = state.viewedScreenPeerId;
 }
 
-export function refreshScreenTiles(): void {
-  elements.streamTiles.textContent = '';
+function getStreamTileStateKey(participant: Participant): string {
+  const hasPreview = hasStreamTilePreview(participant);
+  const isCollapsed = isStreamTileCollapsed(participant);
+  const stream = getScreenStreamForParticipant(participant);
+  return [
+    participant.id,
+    hasPreview,
+    isCollapsed,
+    stream?.id || '',
+    participant.name,
+    isScreenSubscribed(participant.id)
+  ].join('|');
+}
 
+export function refreshScreenTiles(): void {
   const screenParticipants = getScreenParticipants()
     .filter((participant) => participant.id !== state.viewedScreenPeerId);
   elements.streamTiles.hidden = screenParticipants.length === 0;
   elements.streamTiles.dataset.count = String(Math.min(screenParticipants.length, 8));
 
-  for (const participant of screenParticipants) {
-    elements.streamTiles.append(createStreamTile(participant));
+  const existingTiles = new Map<string, { key: string; node: HTMLElement }>();
+  for (const node of elements.streamTiles.querySelectorAll<HTMLElement>('.stream-tile[data-peer-id]')) {
+    const peerId = node.dataset.peerId;
+    if (!peerId) continue;
+    existingTiles.set(peerId, { key: node.dataset.tileState || '', node });
   }
+
+  const nextTiles: HTMLElement[] = [];
+  for (const participant of screenParticipants) {
+    const stateKey = getStreamTileStateKey(participant);
+    const cached = existingTiles.get(participant.id);
+    if (cached?.key === stateKey) {
+      nextTiles.push(cached.node);
+      existingTiles.delete(participant.id);
+      continue;
+    }
+
+    const tile = createStreamTile(participant);
+    tile.dataset.peerId = participant.id;
+    tile.dataset.tileState = stateKey;
+    nextTiles.push(tile);
+  }
+
+  elements.streamTiles.replaceChildren(...nextTiles);
 
   refreshStageStripControls();
   refreshStageGridState();
 }
 
-function createStreamTile(participant: Participant): HTMLButtonElement {
-  const button = document.createElement('button');
-  button.className = 'stream-tile';
-  button.type = 'button';
-  button.dataset.active = String(state.viewedScreenPeerId === participant.id);
-  button.dataset.local = String(participant.isLocal);
-  button.setAttribute('aria-pressed', String(state.viewedScreenPeerId === participant.id));
-  button.setAttribute(
-    'aria-label',
-    state.viewedScreenPeerId === participant.id
-      ? `Свернуть стрим ${participant.name} до плитки`
-      : `Открыть стрим ${participant.name}`
-  );
+function hasStreamTilePreview(participant: Participant): boolean {
+  return isScreenSubscribed(participant.id) && Boolean(getScreenStreamForParticipant(participant));
+}
+
+function isStreamTileCollapsed(participant: Participant): boolean {
+  return state.screenCollapsedPeerIds.has(participant.id) && hasStreamTilePreview(participant);
+}
+
+function createStreamTile(participant: Participant): HTMLElement {
+  const subscribed = isScreenSubscribed(participant.id);
+  const hasPreview = hasStreamTilePreview(participant);
+  const isCollapsed = isStreamTileCollapsed(participant);
+  const isIdle = !hasPreview;
+  const stream = getScreenStreamForParticipant(participant);
+
+  const tile = document.createElement(isCollapsed ? 'div' : 'button');
+  tile.className = 'stream-tile';
+  if (tile instanceof HTMLButtonElement) {
+    tile.type = 'button';
+  } else {
+    tile.setAttribute('role', 'group');
+  }
+  tile.dataset.preview = String(hasPreview);
+  tile.dataset.collapsed = String(isCollapsed);
+  tile.dataset.idle = String(isIdle);
+  tile.dataset.local = String(participant.isLocal);
+  const isActive = hasPreview || subscribed;
+  if (tile instanceof HTMLButtonElement) {
+    tile.setAttribute('aria-pressed', String(isActive));
+    tile.setAttribute(
+      'aria-label',
+      hasPreview
+        ? `Развернуть стрим ${participant.name}`
+        : subscribed
+          ? `Подключение к стриму ${participant.name}`
+          : `Смотреть стрим ${participant.name}`
+    );
+  }
 
   const preview = document.createElement('span');
   preview.className = 'stream-tile-preview';
-  preview.append(createStreamTileIcon(), createStreamTileInitials(participant));
+  if (hasPreview && stream) {
+    mountStreamTileVideo(preview, stream);
+  } else {
+    preview.append(createStreamTileIcon());
+  }
 
-  const copy = document.createElement('span');
-  copy.className = 'stream-tile-copy';
+  tile.append(preview);
 
-  const title = document.createElement('strong');
-  title.textContent = participant.isLocal ? 'Ваш стрим' : `Стрим ${participant.name}`;
+  if (isCollapsed) {
+    const copy = document.createElement('span');
+    copy.className = 'stream-tile-copy';
+    const title = document.createElement('strong');
+    title.textContent = participant.isLocal ? 'Ваш стрим' : participant.name;
+    copy.append(title);
 
-  const action = document.createElement('span');
-  action.className = 'stream-tile-action';
-  action.textContent = state.viewedScreenPeerId === participant.id ? 'Свернуть стрим' : 'Смотреть стрим';
+    const expandButton = document.createElement('button');
+    expandButton.type = 'button';
+    expandButton.className = 'stream-tile-expand';
+    expandButton.setAttribute('aria-pressed', String(isActive));
+    expandButton.setAttribute(
+      'aria-label',
+      `Развернуть стрим ${participant.isLocal ? 'ваш' : participant.name}`
+    );
+    expandButton.addEventListener('click', () => {
+      enterScreenView(participant.id).catch((error) => console.error(error));
+    });
 
-  copy.append(title);
-  button.append(preview, copy, action);
-  button.addEventListener('click', () => toggleScreenTile(participant.id).catch((error) => console.error(error)));
-  return button;
+    const actions = document.createElement('span');
+    actions.className = 'stream-tile-actions stream-tile-actions-collapsed';
+    const disconnectAction = document.createElement('button');
+    disconnectAction.type = 'button';
+    disconnectAction.className = 'stream-tile-action stream-tile-action-disconnect';
+    disconnectAction.textContent = 'Отключиться';
+    disconnectAction.addEventListener('click', (event) => {
+      event.stopPropagation();
+      disconnectScreen(participant.id);
+    });
+    actions.append(disconnectAction);
+
+    tile.append(expandButton, copy, actions);
+  } else if (isIdle) {
+    const copy = document.createElement('span');
+    copy.className = 'stream-tile-copy stream-tile-copy-idle';
+    const title = document.createElement('strong');
+    title.textContent = participant.isLocal ? 'Ваш стрим' : participant.name;
+    copy.append(title);
+
+    const actions = document.createElement('span');
+    actions.className = 'stream-tile-actions';
+    const primaryAction = document.createElement('span');
+    primaryAction.className = 'stream-tile-action stream-tile-action-primary';
+    primaryAction.textContent = subscribed ? 'Подключение' : 'Смотреть стрим';
+    actions.append(primaryAction);
+
+    tile.append(copy, actions);
+  }
+
+  if (tile instanceof HTMLButtonElement) {
+    tile.addEventListener('click', () => {
+      enterScreenView(participant.id).catch((error) => console.error(error));
+    });
+  }
+  return tile;
+}
+
+function mountStreamTileVideo(preview: HTMLElement, stream: MediaStream): void {
+  const video = document.createElement('video');
+  video.className = 'stream-tile-video';
+  video.autoplay = true;
+  video.muted = true;
+  video.playsInline = true;
+  video.srcObject = stream;
+  preview.append(video);
+  playMediaElement(video);
 }
 
 function createStreamTileIcon(): HTMLElement {
   const icon = document.createElement('span');
   icon.className = 'stream-tile-icon';
   icon.setAttribute('aria-hidden', 'true');
-  icon.innerHTML = `
-    <svg viewBox="0 0 24 24" focusable="false">
-      <path d="M4 5a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v8a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2z"></path>
-      <path d="M8 21h8"></path>
-      <path d="M12 15v6"></path>
-    </svg>
-  `;
+  icon.innerHTML = renderIcon('monitor');
   return icon;
-}
-
-function createStreamTileInitials(participant: Participant): HTMLElement {
-  const initials = document.createElement('span');
-  initials.className = 'stream-tile-initials';
-  initials.textContent = getInitials(participant.name);
-  return initials;
 }
 
 export function refreshScreenMeta(participant: Participant | null): void {
@@ -270,16 +448,36 @@ export function refreshScreenMeta(participant: Participant | null): void {
 
   elements.screenMeta.hidden = false;
   elements.screenMetaTitle.textContent = participant.isLocal ? 'Ваш стрим' : `Стрим ${participant.name}`;
-  elements.screenMetaProfile.hidden = false;
-  elements.screenMetaProfile.textContent = getScreenProfileLabel(participant);
+  const { qualityLabel, fpsLabel } = getScreenMetaLabels(participant);
+  elements.screenMetaQuality.hidden = !qualityLabel;
+  elements.screenMetaQuality.textContent = qualityLabel;
+  elements.screenMetaFps.hidden = !fpsLabel;
+  elements.screenMetaFps.textContent = fpsLabel;
+  elements.screenMetaSepProfile.hidden = !qualityLabel;
+  elements.screenMetaSepFps.hidden = !qualityLabel || !fpsLabel;
   elements.screenMetaStats.hidden = true;
   elements.screenMetaStats.textContent = '';
-  elements.screenMetaViewers.textContent = formatScreenViewersLine(participant.id);
+  const viewersLine = formatScreenViewersLine(participant.id);
+  elements.screenMetaViewers.textContent = viewersLine;
+  elements.screenMetaViewers.hidden = !viewersLine;
+  elements.screenMetaSepViewers.hidden = (!qualityLabel && !fpsLabel) || !viewersLine;
+  refreshScreenStreamControls(participant);
 }
 
-function getScreenProfileLabel(participant: Participant): string {
+function refreshScreenStreamControls(participant: Participant | null): void {
+  const hideVolume = Boolean(participant?.isLocal);
+  elements.streamVolumeControl.hidden = hideVolume;
+}
+
+function getScreenMetaLabels(participant: Participant): { qualityLabel: string; fpsLabel: string } {
   const profile = getScreenProfile(participant.isLocal ? state.localScreenProfileId : participant.screenProfileId);
-  return profile.label;
+  const { qualityId, fpsId } = parseScreenProfileId(profile.id);
+  const quality = SCREEN_QUALITY_OPTIONS[qualityId];
+  const fps = SCREEN_FPS_OPTIONS[fpsId];
+  return {
+    qualityLabel: quality?.label || '',
+    fpsLabel: fps?.label || ''
+  };
 }
 
 function formatScreenViewersLine(ownerPeerId: string): string {
@@ -307,14 +505,22 @@ export function refreshStageStripControls(): void {
 }
 
 export function syncScreenVideoAudio(): void {
-  const muted = state.screenMuted || state.screenVolume <= 0 || isAppPlaybackMuted();
-  elements.screenVideo.volume = state.screenVolume;
+  const peer = getActiveScreenPeer();
+  const isLocalStream = Boolean(peer?.isLocal);
+  const muted =
+    isLocalStream || state.screenMuted || state.screenVolume <= 0 || isAppPlaybackMuted();
+  elements.screenVideo.volume = isLocalStream ? 0 : state.screenVolume;
   elements.screenVideo.muted = muted;
   applyAudioOutputDevice(elements.screenVideo).catch(() => {});
-  elements.streamVolumeSlider.value = String(Math.round(state.screenVolume * 100));
-  elements.streamVolumeButton.dataset.muted = String(muted);
-  elements.streamVolumeButton.setAttribute('aria-pressed', String(muted));
-  elements.streamVolumeButton.setAttribute('aria-label', muted ? 'Включить звук стрима' : 'Выключить звук стрима');
+  if (!isLocalStream) {
+    elements.streamVolumeSlider.value = String(Math.round(state.screenVolume * 100));
+    elements.streamVolumeButton.dataset.muted = String(muted);
+    elements.streamVolumeButton.setAttribute('aria-pressed', String(muted));
+    elements.streamVolumeButton.setAttribute(
+      'aria-label',
+      muted ? 'Включить звук стрима' : 'Выключить звук стрима'
+    );
+  }
 }
 
 export function toggleScreenMute(): void {
@@ -389,6 +595,9 @@ export function updateScreenFullscreenState(): void {
   }
 
   setScreenFullscreenState(fullscreen || document.body.dataset.desktopScreenFullscreen === 'true');
+  if (!elements.screenStage.hidden) {
+    syncScreenStagePointerState();
+  }
 }
 
 function setScreenFullscreenState(fullscreen: boolean): void {
@@ -399,4 +608,96 @@ function setScreenFullscreenState(fullscreen: boolean): void {
     'aria-label',
     fullscreen ? 'Выйти из полноэкранного режима' : 'Открыть стрим на весь экран'
   );
+}
+
+export function bindScreenStageIdleUi(): void {
+  if (screenUiHoverBound) return;
+  screenUiHoverBound = true;
+
+  const stage = elements.screenStage;
+  const wakeScreenStageUi = () => {
+    if (!screenStagePointerInside || stage.hidden) return;
+    activateScreenStageUi();
+  };
+
+  stage.addEventListener('pointerenter', () => {
+    screenStagePointerInside = true;
+    activateScreenStageUi();
+  });
+  stage.addEventListener('pointerleave', () => {
+    screenStagePointerInside = false;
+    deactivateScreenStageUi();
+  });
+  stage.addEventListener('pointermove', wakeScreenStageUi);
+  stage.addEventListener('mousedown', wakeScreenStageUi);
+  stage.addEventListener('wheel', wakeScreenStageUi, { passive: true });
+  stage.addEventListener('touchstart', () => {
+    screenStagePointerInside = true;
+    activateScreenStageUi();
+  }, { passive: true });
+  document.addEventListener(
+    'touchstart',
+    (event) => {
+      if (stage.hidden) return;
+      const target = event.target;
+      if (target instanceof Node && stage.contains(target)) {
+        screenStagePointerInside = true;
+        activateScreenStageUi();
+        return;
+      }
+      screenStagePointerInside = false;
+      deactivateScreenStageUi();
+    },
+    { passive: true }
+  );
+}
+
+function shouldDeferScreenUiIdle(): boolean {
+  return elements.screenViewControls.matches(':hover') || elements.screenViewControls.matches(':focus-within');
+}
+
+function activateScreenStageUi(): void {
+  window.clearTimeout(screenUiIdleTimer);
+  elements.screenStage.dataset.uiActive = 'true';
+
+  if (!screenStagePointerInside) return;
+
+  screenUiIdleTimer = window.setTimeout(() => {
+    if (!screenStagePointerInside || elements.screenStage.hidden) return;
+    if (shouldDeferScreenUiIdle()) {
+      activateScreenStageUi();
+      return;
+    }
+
+    const active = document.activeElement;
+    if (active instanceof HTMLElement && elements.screenViewControls.contains(active)) {
+      active.blur();
+    }
+
+    delete elements.screenStage.dataset.uiActive;
+  }, SCREEN_UI_IDLE_MS);
+}
+
+function deactivateScreenStageUi(): void {
+  window.clearTimeout(screenUiIdleTimer);
+  screenUiIdleTimer = 0;
+  delete elements.screenStage.dataset.uiActive;
+}
+
+function syncScreenStagePointerState(): void {
+  const stage = elements.screenStage;
+  if (stage.hidden) return;
+
+  screenStagePointerInside = stage.matches(':hover');
+  if (screenStagePointerInside) {
+    activateScreenStageUi();
+    return;
+  }
+
+  deactivateScreenStageUi();
+}
+
+function stopScreenStageIdleUi(): void {
+  screenStagePointerInside = false;
+  deactivateScreenStageUi();
 }

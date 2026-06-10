@@ -1,8 +1,13 @@
-import { NOTIFICATION_VOLUME_BOOST, PEER_JOIN_CUE_DEDUPE_MS } from '../core/config';
+import {
+  NOTIFICATION_VOLUME_BOOST,
+  PEER_JOIN_CUE_DEDUPE_MS,
+  STREAM_VIEWER_CUE_DEDUPE_MS
+} from '../core/config';
 import { state } from '../core/state';
 import { getSharedAudioContext, isAppPlaybackMuted, isLocalAppAudioSuppressed, queueAudioUnlock } from './playback';
 
 const peerJoinCueTimes = new Map<string, number>();
+const streamViewerCueTimes = new Map<string, number>();
 
 function getCueGain(value: number): number {
   return value * NOTIFICATION_VOLUME_BOOST;
@@ -25,6 +30,19 @@ export function clearPeerJoinCue(peerId: string | undefined): void {
 
 export function clearAllPeerJoinCues(): void {
   peerJoinCueTimes.clear();
+}
+
+export function clearStreamViewerCues(): void {
+  streamViewerCueTimes.clear();
+}
+
+function shouldPlayStreamViewerCue(type: 'join' | 'leave'): boolean {
+  const now = Date.now();
+  const lastPlayedAt = streamViewerCueTimes.get(type) || 0;
+  if (now - lastPlayedAt < STREAM_VIEWER_CUE_DEDUPE_MS) return false;
+
+  streamViewerCueTimes.set(type, now);
+  return true;
 }
 
 export function playPeerCue(type: 'join' | 'leave'): void {
@@ -78,24 +96,36 @@ export function playMicCue(muted: boolean): void {
     }
 
     const now = context.currentTime;
-    const oscillator = context.createOscillator();
-    const gain = context.createGain();
+    const notes = muted
+      ? [
+          { frequency: 587, peak: 0.042 },
+          { frequency: 440, peak: 0.034 }
+        ]
+      : [
+          { frequency: 440, peak: 0.04 },
+          { frequency: 659, peak: 0.048 }
+        ];
 
-    oscillator.type = 'triangle';
-    oscillator.frequency.setValueAtTime(muted ? 460 : 260, now);
-    oscillator.frequency.exponentialRampToValueAtTime(muted ? 190 : 620, now + 0.2);
+    notes.forEach((note, index) => {
+      const startedAt = now + index * 0.1;
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
 
-    gain.gain.setValueAtTime(0.0001, now);
-    gain.gain.exponentialRampToValueAtTime(getCueGain(0.038), now + 0.018);
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.24);
+      oscillator.type = 'sine';
+      oscillator.frequency.setValueAtTime(note.frequency, startedAt);
 
-    oscillator.connect(gain);
-    gain.connect(context.destination);
-    oscillator.start(now);
-    oscillator.stop(now + 0.26);
-    oscillator.addEventListener('ended', () => {
-      oscillator.disconnect();
-      gain.disconnect();
+      gain.gain.setValueAtTime(0.0001, startedAt);
+      gain.gain.exponentialRampToValueAtTime(getCueGain(note.peak), startedAt + 0.016);
+      gain.gain.exponentialRampToValueAtTime(0.0001, startedAt + 0.1);
+
+      oscillator.connect(gain);
+      gain.connect(context.destination);
+      oscillator.start(startedAt);
+      oscillator.stop(startedAt + 0.12);
+      oscillator.addEventListener('ended', () => {
+        oscillator.disconnect();
+        gain.disconnect();
+      });
     });
   } catch (error) {
     console.warn('Mic sound unavailable', error);
@@ -178,5 +208,72 @@ export function playStreamCue(type: 'start' | 'stop'): void {
     });
   } catch (error) {
     console.warn('Stream sound unavailable', error);
+  }
+}
+
+export function playStreamViewerCue(type: 'join' | 'leave'): void {
+  if (isAppPlaybackMuted()) return;
+  if (!shouldPlayStreamViewerCue(type)) return;
+
+  try {
+    const context = getSharedAudioContext();
+    if (context.state !== 'running') {
+      queueAudioUnlock();
+      return;
+    }
+
+    const now = context.currentTime;
+
+    if (type === 'join') {
+      const notes = [
+        { frequency: 440, peak: 0.024 },
+        { frequency: 523, peak: 0.02 }
+      ];
+
+      notes.forEach((note, index) => {
+        const startedAt = now + index * 0.12;
+        const oscillator = context.createOscillator();
+        const gain = context.createGain();
+
+        oscillator.type = 'sine';
+        oscillator.frequency.setValueAtTime(note.frequency, startedAt);
+
+        gain.gain.setValueAtTime(0.0001, startedAt);
+        gain.gain.exponentialRampToValueAtTime(getCueGain(note.peak), startedAt + 0.018);
+        gain.gain.exponentialRampToValueAtTime(0.0001, startedAt + 0.11);
+
+        oscillator.connect(gain);
+        gain.connect(context.destination);
+        oscillator.start(startedAt);
+        oscillator.stop(startedAt + 0.13);
+        oscillator.addEventListener('ended', () => {
+          oscillator.disconnect();
+          gain.disconnect();
+        });
+      });
+      return;
+    }
+
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+
+    oscillator.type = 'sine';
+    oscillator.frequency.setValueAtTime(523, now);
+    oscillator.frequency.exponentialRampToValueAtTime(440, now + 0.16);
+
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(getCueGain(0.018), now + 0.014);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.16);
+
+    oscillator.connect(gain);
+    gain.connect(context.destination);
+    oscillator.start(now);
+    oscillator.stop(now + 0.18);
+    oscillator.addEventListener('ended', () => {
+      oscillator.disconnect();
+      gain.disconnect();
+    });
+  } catch (error) {
+    console.warn('Stream viewer sound unavailable', error);
   }
 }

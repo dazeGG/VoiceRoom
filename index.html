@@ -19,20 +19,9 @@
           <div class="room-title-line">
             <h1 id="roomTitle">room</h1>
             <div class="room-title-actions">
-              <button class="copy-room-button" id="copyCodeButton" type="button" aria-label="Скопировать код комнаты">
-                <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
-                  <path d="M8 8m0 2a2 2 0 0 1 2 -2h8a2 2 0 0 1 2 2v8a2 2 0 0 1 -2 2h-8a2 2 0 0 1 -2 -2z"></path>
-                  <path d="M16 8v-2a2 2 0 0 0 -2 -2h-8a2 2 0 0 0 -2 2v8a2 2 0 0 0 2 2h2"></path>
-                </svg>
-              </button>
+              <button class="copy-room-button" id="copyCodeButton" type="button" aria-label="Скопировать код комнаты" data-icon="copy"></button>
 
-              <button class="copy-room-button" id="copyLinkButton" type="button" aria-label="Скопировать ссылку на комнату">
-                <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
-                  <path d="M9 15l6 -6"></path>
-                  <path d="M11 6l.8 -.8a4 4 0 0 1 5.7 5.7l-1.7 1.7a4 4 0 0 1 -5.7 0"></path>
-                  <path d="M13 18l-.8 .8a4 4 0 0 1 -5.7 -5.7l1.7 -1.7a4 4 0 0 1 5.7 0"></path>
-                </svg>
-              </button>
+              <button class="copy-room-button" id="copyLinkButton" type="button" aria-label="Скопировать ссылку на комнату" data-icon="link"></button>
             </div>
           </div>
         </div>
@@ -85,27 +74,19 @@
             <div class="screen-meta" id="screenMeta" hidden>
               <span class="screen-meta-live" aria-hidden="true"></span>
               <span class="screen-meta-title" id="screenMetaTitle"></span>
-              <span class="screen-meta-detail" id="screenMetaProfile"></span>
-              <span class="screen-meta-detail screen-meta-stats" id="screenMetaStats" hidden></span>
+              <span class="screen-meta-sep" id="screenMetaSepProfile" aria-hidden="true">·</span>
+              <span class="screen-meta-detail" id="screenMetaQuality"></span>
+              <span class="screen-meta-sep" id="screenMetaSepFps" aria-hidden="true">·</span>
+              <span class="screen-meta-detail" id="screenMetaFps"></span>
+              <span class="screen-meta-sep" id="screenMetaSepViewers" aria-hidden="true">·</span>
               <span class="screen-meta-detail" id="screenMetaViewers"></span>
+              <span class="screen-meta-detail screen-meta-stats" id="screenMetaStats" hidden></span>
             </div>
             <div class="screen-view-controls" id="screenViewControls" hidden>
-              <div class="stream-volume-control">
+              <div class="stream-volume-control" id="streamVolumeControl">
                 <button class="screen-control-button stream-volume-button" id="streamVolumeButton" type="button" aria-label="Выключить звук стрима" aria-pressed="false">
-                  <span class="stream-volume-icon stream-volume-icon-on" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" focusable="false">
-                      <path d="M11 5l-5 4h-3v6h3l5 4z"></path>
-                      <path d="M15.5 8.5a5 5 0 0 1 0 7"></path>
-                      <path d="M18.5 5.5a9 9 0 0 1 0 13"></path>
-                    </svg>
-                  </span>
-                  <span class="stream-volume-icon stream-volume-icon-off" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" focusable="false">
-                      <path d="M11 5l-5 4h-3v6h3l5 4z"></path>
-                      <path d="M16 9l5 5"></path>
-                      <path d="M21 9l-5 5"></path>
-                    </svg>
-                  </span>
+                  <span class="stream-volume-icon stream-volume-icon-on" data-icon="volume-on" aria-hidden="true"></span>
+                  <span class="stream-volume-icon stream-volume-icon-off" data-icon="volume-off" aria-hidden="true"></span>
                 </button>
                 <div class="stream-volume-popover" id="streamVolumePopover">
                   <input class="stream-volume-slider" id="streamVolumeSlider" type="range" min="0" max="100" value="100" aria-label="Громкость стрима">
@@ -113,30 +94,8 @@
               </div>
 
               <button class="screen-control-button screen-fullscreen-button" id="screenFullscreenButton" type="button" aria-label="Открыть стрим на весь экран" aria-pressed="false">
-                <span class="screen-fullscreen-icon screen-fullscreen-icon-enter" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" focusable="false">
-                    <path d="M8 3h-5v5"></path>
-                    <path d="M3 3l6 6"></path>
-                    <path d="M16 3h5v5"></path>
-                    <path d="M21 3l-6 6"></path>
-                    <path d="M8 21h-5v-5"></path>
-                    <path d="M3 21l6 -6"></path>
-                    <path d="M16 21h5v-5"></path>
-                    <path d="M21 21l-6 -6"></path>
-                  </svg>
-                </span>
-                <span class="screen-fullscreen-icon screen-fullscreen-icon-exit" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" focusable="false">
-                    <path d="M9 3v6h-6"></path>
-                    <path d="M3 9l6 -6"></path>
-                    <path d="M15 3v6h6"></path>
-                    <path d="M21 9l-6 -6"></path>
-                    <path d="M9 21v-6h-6"></path>
-                    <path d="M3 15l6 6"></path>
-                    <path d="M15 21v-6h6"></path>
-                    <path d="M21 15l-6 6"></path>
-                  </svg>
-                </span>
+                <span class="screen-fullscreen-icon screen-fullscreen-icon-enter" data-icon="fullscreen-enter" aria-hidden="true"></span>
+                <span class="screen-fullscreen-icon screen-fullscreen-icon-exit" data-icon="fullscreen-exit" aria-hidden="true"></span>
               </button>
             </div>
           </div>
@@ -147,11 +106,7 @@
                 <span class="stage-strip-kicker" id="stageStripKicker">В комнате</span>
                 <strong id="stageStripSummary">0 участников</strong>
               </div>
-              <button class="strip-toggle-button" id="stripToggleButton" type="button" aria-label="Свернуть пользователей" aria-pressed="false" hidden>
-                <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
-                  <path d="M6 9l6 6l6 -6"></path>
-                </svg>
-              </button>
+              <button class="strip-toggle-button" id="stripToggleButton" type="button" aria-label="Свернуть пользователей" aria-pressed="false" data-icon="chevron-down" hidden></button>
             </div>
 
             <div class="tile-grid" id="tileGrid" data-count="0">
@@ -168,34 +123,12 @@
           <div class="room-dock" aria-label="Управление голосом">
             <div class="dock-cluster">
               <button class="dock-button mic-button" id="muteButton" type="button" aria-pressed="false" aria-label="Подключить микрофон">
-                <span class="dock-icon dock-icon-mic" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" focusable="false">
-                    <path d="M9 5a3 3 0 0 1 3 -3h0a3 3 0 0 1 3 3v5a3 3 0 0 1 -3 3h0a3 3 0 0 1 -3 -3z"></path>
-                    <path d="M5 10a7 7 0 0 0 14 0"></path>
-                    <path d="M8 21h8"></path>
-                    <path d="M12 17v4"></path>
-                  </svg>
-                </span>
-                <span class="dock-icon dock-icon-muted" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" focusable="false">
-                    <path d="M3 3l18 18"></path>
-                    <path d="M9 5a3 3 0 0 1 5.12 -2.12"></path>
-                    <path d="M15 9.34v.66a3 3 0 0 1 -.13 .88"></path>
-                    <path d="M9 9v1a3 3 0 0 0 3 3c.34 0 .67 -.06 .97 -.16"></path>
-                    <path d="M5 10a7 7 0 0 0 11.95 4.95"></path>
-                    <path d="M19 10a7 7 0 0 1 -.11 1.23"></path>
-                    <path d="M8 21h8"></path>
-                    <path d="M12 17v4"></path>
-                  </svg>
-                </span>
+                <span class="dock-icon dock-icon-mic" data-icon="mic" aria-hidden="true"></span>
+                <span class="dock-icon dock-icon-muted" data-icon="mic-muted" aria-hidden="true"></span>
                 <span class="sr-only" id="muteText">Подключить микрофон</span>
               </button>
 
-              <button class="dock-menu-button" id="deviceMenuButton" type="button" aria-expanded="false" aria-controls="devicePopover" aria-label="Выбрать микрофон">
-                <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
-                  <path d="M6 9l6 6l6 -6"></path>
-                </svg>
-              </button>
+              <button class="dock-menu-button" id="deviceMenuButton" type="button" aria-expanded="false" aria-controls="devicePopover" aria-label="Выбрать микрофон" data-icon="chevron-down"></button>
 
               <div class="device-popover" id="devicePopover" hidden>
                 <label class="field">
@@ -230,27 +163,12 @@
 
             <div class="dock-cluster">
               <button class="dock-button output-button" id="outputButton" type="button" aria-pressed="false" aria-label="Выключить звук">
-                <span class="dock-icon dock-icon-output" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" focusable="false">
-                    <path d="M3 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1 -2 2h-1a2 2 0 0 1 -2 -2v-7a9 9 0 0 1 18 0v7a2 2 0 0 1 -2 2h-1a2 2 0 0 1 -2 -2v-3a2 2 0 0 1 2 -2h3"></path>
-                  </svg>
-                </span>
-                <span class="dock-icon dock-icon-output-muted" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" focusable="false">
-                    <path d="M3 3l18 18"></path>
-                    <path d="M3 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1 -.36 1.14"></path>
-                    <path d="M4.2 9.4a9 9 0 0 1 15.8 5.9v3.7a2 2 0 0 1 -.59 1.41"></path>
-                    <path d="M15.4 14.4a2 2 0 0 1 1.6 -.4h3"></path>
-                  </svg>
-                </span>
+                <span class="dock-icon dock-icon-output" data-icon="headphones" aria-hidden="true"></span>
+                <span class="dock-icon dock-icon-output-muted" data-icon="headphones-muted" aria-hidden="true"></span>
                 <span class="sr-only" id="outputText">Выключить звук</span>
               </button>
 
-              <button class="dock-menu-button" id="outputMenuButton" type="button" aria-expanded="false" aria-controls="outputPopover" aria-label="Выбрать динамик">
-                <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
-                  <path d="M6 9l6 6l6 -6"></path>
-                </svg>
-              </button>
+              <button class="dock-menu-button" id="outputMenuButton" type="button" aria-expanded="false" aria-controls="outputPopover" aria-label="Выбрать динамик" data-icon="chevron-down"></button>
 
               <div class="device-popover output-popover" id="outputPopover" hidden>
                 <label class="field">
@@ -263,42 +181,13 @@
             </div>
 
             <button class="dock-button screen-button" id="screenButton" type="button" aria-pressed="false" aria-label="Показать экран">
-              <span class="dock-icon dock-icon-screen" aria-hidden="true">
-                <svg viewBox="0 0 24 24" focusable="false">
-                  <path d="M4 5a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v8a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2z"></path>
-                  <path d="M8 21h8"></path>
-                  <path d="M12 15v6"></path>
-                  <path d="M9 9l3 -3l3 3"></path>
-                  <path d="M12 6v7"></path>
-                </svg>
-              </span>
-              <span class="dock-icon dock-icon-screen-stop" aria-hidden="true">
-                <svg viewBox="0 0 24 24" focusable="false">
-                  <path d="M4 5a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v8a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2z"></path>
-                  <path d="M8 21h8"></path>
-                  <path d="M12 15v6"></path>
-                  <path d="M9 8h6v5h-6z"></path>
-                </svg>
-              </span>
+              <span class="dock-icon dock-icon-screen" data-icon="screen-share" aria-hidden="true"></span>
+              <span class="dock-icon dock-icon-screen-stop" data-icon="screen-stop" aria-hidden="true"></span>
               <span class="sr-only" id="screenText">Показать экран</span>
             </button>
-            <button class="dock-button leave-button" id="leaveButton" type="button" aria-label="Выйти из комнаты">
-              <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
-                <path d="M3 21l18 -18"></path>
-                <path d="M5.8 14.2a15.9 15.9 0 0 1 -2.8 -8.2a2 2 0 0 1 2 -2h4l2 5l-2.5 1.5l.54 .82"></path>
-                <path d="M12.2 15.2a11 11 0 0 0 1.3 .8l1.5 -2.5l5 2v4a2 2 0 0 1 -2 2a15.9 15.9 0 0 1 -8.2 -2.8"></path>
-              </svg>
-            </button>
+            <button class="dock-button leave-button" id="leaveButton" type="button" aria-label="Выйти из комнаты" data-icon="leave"></button>
 
-            <button class="dock-button screen-exit-button" id="screenExitButton" type="button" aria-label="Свернуть стрим до плитки" hidden>
-              <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
-                <path d="M4 5a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v8a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2z"></path>
-                <path d="M8 21h8"></path>
-                <path d="M12 15v6"></path>
-                <path d="M9 8l6 6"></path>
-                <path d="M15 8l-6 6"></path>
-              </svg>
-            </button>
+            <button class="dock-button screen-exit-button" id="screenExitButton" type="button" aria-label="Выйти со стрима" data-icon="screen-stop" hidden></button>
 
             <button class="sound-button" id="soundButton" type="button" hidden>Разрешить звук</button>
           </div>
@@ -327,12 +216,7 @@
             <p class="eyebrow">источник</p>
             <h2 id="screenSourceTitle">Что показать</h2>
           </div>
-          <button class="screen-source-close" id="screenSourceCloseButton" type="button" aria-label="Отменить выбор">
-            <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
-              <path d="M18 6l-12 12"></path>
-              <path d="M6 6l12 12"></path>
-            </svg>
-          </button>
+          <button class="screen-source-close" id="screenSourceCloseButton" type="button" aria-label="Отменить выбор" data-icon="close"></button>
         </div>
         <div class="screen-source-options" id="screenSourceOptions"></div>
       </section>
@@ -346,34 +230,12 @@
         <div class="participant-copy">
           <h2>
             <span class="participant-name"></span>
-            <span class="participant-muted-icon" aria-label="Микрофон выключен" title="Микрофон выключен">
-              <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
-                <path d="M3 3l18 18"></path>
-                <path d="M9 5a3 3 0 0 1 5.12 -2.12"></path>
-                <path d="M15 9.34v.66a3 3 0 0 1 -.13 .88"></path>
-                <path d="M9 9v1a3 3 0 0 0 3 3c.34 0 .67 -.06 .97 -.16"></path>
-                <path d="M5 10a7 7 0 0 0 11.95 4.95"></path>
-                <path d="M19 10a7 7 0 0 1 -.11 1.23"></path>
-                <path d="M8 21h8"></path>
-                <path d="M12 17v4"></path>
-              </svg>
-            </span>
-            <span class="participant-deafened-icon" aria-label="Звук выключен" title="Звук выключен">
-              <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
-                <path d="M3 3l18 18"></path>
-                <path d="M3 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1 -.36 1.14"></path>
-                <path d="M4.2 9.4a9 9 0 0 1 15.8 5.9v3.7a2 2 0 0 1 -.59 1.41"></path>
-                <path d="M15.4 14.4a2 2 0 0 1 1.6 -.4h3"></path>
-              </svg>
-            </span>
+            <span class="participant-muted-icon" data-icon="mic-muted" aria-label="Микрофон выключен" title="Микрофон выключен"></span>
+            <span class="participant-deafened-icon" data-icon="headphones-muted" aria-label="Звук выключен" title="Звук выключен"></span>
           </h2>
           <p></p>
           <button class="participant-screen-action" type="button" hidden>
-            <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
-              <path d="M4 5a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v8a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2z"></path>
-              <path d="M8 21h8"></path>
-              <path d="M12 15v6"></path>
-            </svg>
+            <span data-icon="watch-screen" aria-hidden="true"></span>
             <span>Смотреть экран</span>
           </button>
         </div>

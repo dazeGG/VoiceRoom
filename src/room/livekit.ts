@@ -19,6 +19,7 @@ import { refreshCallControls } from '../ui/controls';
 import { errorMessage } from '../core/utils';
 import { getScreenProfile, getScreenPublishVideoOptions } from '../media/profiles';
 import {
+  applyRemoteScreenCue,
   attachRemoteScreenStream,
   attachRemoteTrack,
   createParticipant,
@@ -32,7 +33,7 @@ import {
   updatePeerStatus
 } from './participants';
 import { refreshScreenControls } from './screen-share';
-import { refreshScreenAction } from '../ui/screen-view';
+import { refreshScreenAction, refreshScreenStage, refreshScreenTiles } from '../ui/screen-view';
 import type { Participant } from '../core/types';
 
 export async function connectLiveKitRoom(name: string): Promise<void> {
@@ -327,6 +328,7 @@ export async function publishLocalScreenTracks(): Promise<void> {
     const videoOptions = track.kind === 'video' ? getScreenPublishVideoOptions(profile) : null;
     const publication = await state.livekitRoom.localParticipant.publishTrack(track, {
       audioPreset: track.kind === 'audio' ? { maxBitrate: SCREEN_AUDIO_BITRATE } : undefined,
+      ...(track.kind === 'audio' ? { dtx: false } : {}),
       name: track.kind === 'video' ? 'screen' : 'screen-audio',
       ...(videoOptions ?? {}),
       source: track.kind === 'video' ? videoOptions!.source : Track.Source.ScreenShareAudio,
@@ -370,11 +372,14 @@ export async function disconnectLiveKitRoom(): Promise<void> {
 
 export function updateLiveKitPublicationState(peer: Participant, publication: TrackPublication): void {
   if (isScreenPublication(publication)) {
+    const hadScreen = peer.screen;
     peer.screen = true;
     peer.screenAudio = peer.screenAudio || isScreenAudioPublication(publication);
     peer.node.dataset.screen = 'true';
+    applyRemoteScreenCue(peer, hadScreen, true);
     updatePeerStatus(peer);
     refreshScreenAction(peer);
+    if (!hadScreen) refreshScreenTiles();
   }
   if (isMicrophonePublication(publication)) {
     peer.muted = publication.isMuted;
@@ -394,7 +399,9 @@ function syncLiveKitPublicationSubscription(peer: Participant, publication: Trac
   }
 
   if (isScreenPublication(publication)) {
-    remotePublication.setSubscribed(state.viewedScreenPeerId === peer.id);
+    remotePublication.setSubscribed(
+      state.viewedScreenPeerId === peer.id || state.screenSubscribedPeerIds.has(peer.id)
+    );
   }
 }
 
@@ -502,13 +509,17 @@ function handleLiveKitTrackUnpublished(publication: RemoteTrackPublication, part
   if (!peer) return;
 
   if (isScreenPublication(publication)) {
+    const hadScreen = peer.screen;
     peer.screen = participant.isScreenShareEnabled;
     peer.screenAudio = participant.trackPublications
       ? [...participant.trackPublications.values()].some(isScreenAudioPublication)
       : false;
     peer.node.dataset.screen = String(peer.screen);
+    applyRemoteScreenCue(peer, hadScreen, peer.screen);
     if (!peer.screen) detachRemoteScreen(peer);
     refreshScreenAction(peer);
+    refreshScreenTiles();
+    if (!peer.screen) refreshScreenStage();
     return;
   }
 

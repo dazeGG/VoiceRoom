@@ -59,6 +59,8 @@ export const state: AppState = {
   screenFullscreen: false,
   screenMuted: false,
   screenRequesting: false,
+  screenCollapsedPeerIds: new Set(),
+  screenSubscribedPeerIds: new Set(),
   screenSourceRequest: null,
   screenStopping: false,
   screenVolume: 1,

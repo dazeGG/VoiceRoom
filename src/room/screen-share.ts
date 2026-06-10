@@ -24,7 +24,13 @@ import { getDisplayName } from '../ui/names';
 import { publishLocalScreenTracks, unpublishLocalScreenTracks } from './livekit';
 import { applyScreenCaptureProfile, openScreenShare, stopLocalScreenAudioCapture } from '../media/screen-capture';
 import { updateParticipant } from './participants';
-import { getActiveScreenPeer, hideScreenStage, refreshScreenMeta, refreshScreenStage } from '../ui/screen-view';
+import {
+  getActiveScreenPeer,
+  hideScreenStage,
+  openLocalStreamPreview,
+  refreshScreenMeta,
+  refreshScreenStage
+} from '../ui/screen-view';
 import type { ParsedScreenStats, ScreenProfile, ScreenStatsPrevious } from '../core/types';
 
 export async function handleScreenButtonClick(): Promise<void> {
@@ -80,12 +86,8 @@ export async function startScreenShare(profileId: string = state.localScreenProf
       screenProfileId: profile.id,
       screenStreamId: stream.id
     });
-    if (!state.viewedScreenPeerId) {
-      state.viewedScreenPeerId = state.peerId;
-      if (state.self) state.self.viewedScreenPeerId = state.peerId;
-    }
     refreshScreenControls();
-    refreshScreenStage();
+    openLocalStreamPreview();
     await postState();
 
     playStreamCue('start');
@@ -148,7 +150,7 @@ export async function stopScreenShare(options: { notify?: boolean; quiet?: boole
 
 export function refreshScreenControls(): void {
   const sharing = Boolean(state.localScreenStream);
-  const label = sharing ? 'Остановить демонстрацию' : 'Показать экран';
+  const label = sharing ? 'Закончить стрим' : 'Показать экран';
 
   elements.screenText.textContent = label;
   elements.screenButton.disabled = !state.joined || state.connecting;

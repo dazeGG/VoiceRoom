@@ -1,6 +1,7 @@
 import './styles.css';
 import { GATE_THRESHOLD_MIN_DB } from './core/config';
 import { elements } from './ui/dom';
+import { mountIcons } from './ui/icons';
 import { state } from './core/state';
 import { cleanDisplayName } from './core/utils';
 import { showToast } from './ui/toast';
@@ -37,6 +38,7 @@ import {
 } from './room/room';
 import { handleScreenButtonClick } from './room/screen-share';
 import {
+  bindScreenStageIdleUi,
   handleScreenStageClick,
   leaveScreenView,
   refreshStageStripControls,
@@ -50,6 +52,9 @@ import { cancelScreenSourcePicker, closeScreenSourceOnBackdrop, closeScreenSourc
 import { refreshLocalNetworkIndicator } from './ui/status';
 
 function init(): void {
+  mountIcons();
+  mountIcons(elements.template.content);
+
   const savedName = cleanDisplayName(localStorage.getItem('voice-room:name'));
   state.savedName = savedName;
   elements.startNameInput.value = savedName;
@@ -67,7 +72,7 @@ function init(): void {
   elements.muteButton.addEventListener('click', handleMicButtonClick);
   elements.outputButton.addEventListener('click', toggleOutputMute);
   elements.screenButton.addEventListener('click', handleScreenButtonClick);
-  elements.screenExitButton.addEventListener('click', () => leaveScreenView().catch((error) => console.error(error)));
+  elements.screenExitButton.addEventListener('click', () => leaveScreenView({ keepPreview: false }).catch((error) => console.error(error)));
   elements.screenStage.addEventListener('click', handleScreenStageClick);
   elements.screenFullscreenButton.addEventListener('click', toggleScreenFullscreen);
   elements.screenSourceCloseButton.addEventListener('click', cancelScreenSourcePicker);
@@ -75,6 +80,7 @@ function init(): void {
   elements.streamVolumeButton.addEventListener('click', toggleScreenMute);
   elements.streamVolumeSlider.addEventListener('input', updateScreenVolumeFromSlider);
   syncScreenVideoAudio();
+  bindScreenStageIdleUi();
   elements.deviceMenuButton.addEventListener('click', toggleDevicePopover);
   elements.outputMenuButton.addEventListener('click', toggleOutputPopover);
   elements.leaveButton.addEventListener('click', handleLeaveButtonClick);

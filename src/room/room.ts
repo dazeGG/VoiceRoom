@@ -34,7 +34,7 @@ import {
 import { getLocalMicrophoneCapture, openLocalMicrophone, setLocalMicrophoneCapture, stopMicrophoneCapture } from '../media/microphone';
 import { attachMeter, startMeters, stopMeters } from '../media/meters';
 import { startPeerLatencyStats, startSpeakingStats, stopPeerLatencyStats, stopSpeakingStats } from './stats';
-import { clearAllPeerJoinCues, clearPeerJoinCue, playPeerCue, playPeerJoinCue } from '../media/cues';
+import { clearAllPeerJoinCues, clearPeerJoinCue, clearStreamViewerCues, playPeerCue, playPeerJoinCue } from '../media/cues';
 import { cancelScreenSourcePicker } from '../media/screen-capture';
 import {
   clearGateSwitchTimer,
@@ -368,6 +368,8 @@ export function leaveRoom(): void {
   disconnectLiveKitRoom().catch((error) => console.warn('LiveKit disconnect failed', error));
   if (state.screenSourceRequest) cancelScreenSourcePicker();
   closeScreenView();
+  state.screenCollapsedPeerIds.clear();
+  state.screenSubscribedPeerIds.clear();
 
   for (const peer of state.peers.values()) {
     removeAudioElements(peer);
@@ -385,6 +387,7 @@ export function leaveRoom(): void {
 
   state.muted = false;
   clearAllPeerJoinCues();
+  clearStreamViewerCues();
   refreshCallControls();
   refreshScreenControls();
   closeDevicePopover();
