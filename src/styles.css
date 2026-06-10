@@ -670,8 +670,32 @@ body[data-strip-collapsed="true"] .strip-toggle-button svg {
   transform: translate(-50%, -50%) scale(1);
 }
 
-.stream-tile[data-preview="true"] .stream-tile-actions {
+.stream-tile[data-preview="true"]:not([data-collapsed="true"]) .stream-tile-actions {
   display: none;
+}
+
+.stream-tile-expand {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.stream-tile[data-collapsed="true"] .stream-tile-actions {
+  display: inline-flex;
+  z-index: 2;
+}
+
+.stream-tile[data-collapsed="true"]:hover .stream-tile-actions,
+.stream-tile[data-collapsed="true"]:focus-visible .stream-tile-actions,
+.stream-tile[data-collapsed="true"]:focus-within .stream-tile-actions {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translate(-50%, -50%) scale(1);
 }
 
 .participants {

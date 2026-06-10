@@ -33,7 +33,7 @@ import {
   updatePeerStatus
 } from './participants';
 import { refreshScreenControls } from './screen-share';
-import { refreshScreenAction } from '../ui/screen-view';
+import { refreshScreenAction, refreshScreenStage, refreshScreenTiles } from '../ui/screen-view';
 import type { Participant } from '../core/types';
 
 export async function connectLiveKitRoom(name: string): Promise<void> {
@@ -378,6 +378,7 @@ export function updateLiveKitPublicationState(peer: Participant, publication: Tr
     applyRemoteScreenCue(peer, hadScreen, true);
     updatePeerStatus(peer);
     refreshScreenAction(peer);
+    if (!hadScreen) refreshScreenTiles();
   }
   if (isMicrophonePublication(publication)) {
     peer.muted = publication.isMuted;
@@ -516,6 +517,8 @@ function handleLiveKitTrackUnpublished(publication: RemoteTrackPublication, part
     applyRemoteScreenCue(peer, hadScreen, peer.screen);
     if (!peer.screen) detachRemoteScreen(peer);
     refreshScreenAction(peer);
+    refreshScreenTiles();
+    if (!peer.screen) refreshScreenStage();
     return;
   }
 

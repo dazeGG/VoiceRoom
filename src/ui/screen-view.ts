@@ -286,14 +286,14 @@ export function refreshScreenTiles(): void {
   elements.streamTiles.hidden = screenParticipants.length === 0;
   elements.streamTiles.dataset.count = String(Math.min(screenParticipants.length, 8));
 
-  const existingTiles = new Map<string, { key: string; node: HTMLButtonElement }>();
-  for (const node of elements.streamTiles.querySelectorAll<HTMLButtonElement>('button.stream-tile[data-peer-id]')) {
+  const existingTiles = new Map<string, { key: string; node: HTMLElement }>();
+  for (const node of elements.streamTiles.querySelectorAll<HTMLElement>('.stream-tile[data-peer-id]')) {
     const peerId = node.dataset.peerId;
     if (!peerId) continue;
     existingTiles.set(peerId, { key: node.dataset.tileState || '', node });
   }
 
-  const nextTiles: HTMLButtonElement[] = [];
+  const nextTiles: HTMLElement[] = [];
   for (const participant of screenParticipants) {
     const stateKey = getStreamTileStateKey(participant);
     const cached = existingTiles.get(participant.id);
@@ -323,25 +323,36 @@ function isStreamTileCollapsed(participant: Participant): boolean {
   return state.screenCollapsedPeerIds.has(participant.id) && hasStreamTilePreview(participant);
 }
 
-function createStreamTile(participant: Participant): HTMLButtonElement {
+function createStreamTile(participant: Participant): HTMLElement {
   const subscribed = isScreenSubscribed(participant.id);
   const hasPreview = hasStreamTilePreview(participant);
   const isCollapsed = isStreamTileCollapsed(participant);
   const isIdle = !hasPreview;
   const stream = getScreenStreamForParticipant(participant);
 
-  const button = document.createElement('button');
-  button.className = 'stream-tile';
-  button.type = 'button';
-  button.dataset.preview = String(hasPreview);
-  button.dataset.collapsed = String(isCollapsed);
-  button.dataset.idle = String(isIdle);
-  button.dataset.local = String(participant.isLocal);
-  button.setAttribute('aria-pressed', 'false');
-  button.setAttribute(
-    'aria-label',
-    hasPreview ? `Развернуть стрим ${participant.name}` : `Смотреть стрим ${participant.name}`
-  );
+  const tile = document.createElement(isCollapsed ? 'div' : 'button');
+  tile.className = 'stream-tile';
+  if (tile instanceof HTMLButtonElement) {
+    tile.type = 'button';
+  } else {
+    tile.setAttribute('role', 'group');
+  }
+  tile.dataset.preview = String(hasPreview);
+  tile.dataset.collapsed = String(isCollapsed);
+  tile.dataset.idle = String(isIdle);
+  tile.dataset.local = String(participant.isLocal);
+  const isActive = hasPreview || subscribed;
+  if (tile instanceof HTMLButtonElement) {
+    tile.setAttribute('aria-pressed', String(isActive));
+    tile.setAttribute(
+      'aria-label',
+      hasPreview
+        ? `Развернуть стрим ${participant.name}`
+        : subscribed
+          ? `Подключение к стриму ${participant.name}`
+          : `Смотреть стрим ${participant.name}`
+    );
+  }
 
   const preview = document.createElement('span');
   preview.className = 'stream-tile-preview';
@@ -351,7 +362,7 @@ function createStreamTile(participant: Participant): HTMLButtonElement {
     preview.append(createStreamTileIcon());
   }
 
-  button.append(preview);
+  tile.append(preview);
 
   if (isCollapsed) {
     const copy = document.createElement('span');
@@ -359,7 +370,32 @@ function createStreamTile(participant: Participant): HTMLButtonElement {
     const title = document.createElement('strong');
     title.textContent = participant.isLocal ? 'Ваш стрим' : participant.name;
     copy.append(title);
-    button.append(copy);
+
+    const expandButton = document.createElement('button');
+    expandButton.type = 'button';
+    expandButton.className = 'stream-tile-expand';
+    expandButton.setAttribute('aria-pressed', String(isActive));
+    expandButton.setAttribute(
+      'aria-label',
+      `Развернуть стрим ${participant.isLocal ? 'ваш' : participant.name}`
+    );
+    expandButton.addEventListener('click', () => {
+      enterScreenView(participant.id).catch((error) => console.error(error));
+    });
+
+    const actions = document.createElement('span');
+    actions.className = 'stream-tile-actions stream-tile-actions-collapsed';
+    const disconnectAction = document.createElement('button');
+    disconnectAction.type = 'button';
+    disconnectAction.className = 'stream-tile-action stream-tile-action-disconnect';
+    disconnectAction.textContent = 'Отключиться';
+    disconnectAction.addEventListener('click', (event) => {
+      event.stopPropagation();
+      disconnectScreen(participant.id);
+    });
+    actions.append(disconnectAction);
+
+    tile.append(expandButton, copy, actions);
   } else if (isIdle) {
     const copy = document.createElement('span');
     copy.className = 'stream-tile-copy stream-tile-copy-idle';
@@ -374,13 +410,15 @@ function createStreamTile(participant: Participant): HTMLButtonElement {
     primaryAction.textContent = subscribed ? 'Подключение' : 'Смотреть стрим';
     actions.append(primaryAction);
 
-    button.append(copy, actions);
+    tile.append(copy, actions);
   }
 
-  button.addEventListener('click', () => {
-    enterScreenView(participant.id).catch((error) => console.error(error));
-  });
-  return button;
+  if (tile instanceof HTMLButtonElement) {
+    tile.addEventListener('click', () => {
+      enterScreenView(participant.id).catch((error) => console.error(error));
+    });
+  }
+  return tile;
 }
 
 function mountStreamTileVideo(preview: HTMLElement, stream: MediaStream): void {
@@ -615,7 +653,7 @@ export function bindScreenStageIdleUi(): void {
 }
 
 function shouldDeferScreenUiIdle(): boolean {
-  return elements.streamVolumeControl.matches(':hover') || elements.streamVolumeControl.matches(':focus-within');
+  return elements.screenViewControls.matches(':hover') || elements.screenViewControls.matches(':focus-within');
 }
 
 function activateScreenStageUi(): void {
