@@ -358,7 +358,7 @@ async function handleEvents(req, res, url) {
     id: peerId,
     joinedAt: previous?.joinedAt ?? Date.now(),
     muted: previous?.muted ?? false,
-    name,
+    name: reconnecting ? (previous?.name ?? name) : name,
     screen: previous?.screen ?? false,
     screenAudio: previous?.screenAudio ?? false,
     screenProfileId: previous?.screenProfileId ?? '',
