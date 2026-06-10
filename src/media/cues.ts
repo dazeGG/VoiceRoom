@@ -43,21 +43,22 @@ async function ensureCueContext(): Promise<AudioContext | null> {
 function scheduleTone(context: AudioContext, tone: ToneSpec): void {
   const oscillator = context.createOscillator();
   const gain = context.createGain();
-  const endAt = tone.start + tone.attack + tone.decay;
+  const start = context.currentTime + tone.start;
+  const endAt = start + tone.attack + tone.decay;
 
   oscillator.type = tone.type ?? 'sine';
-  oscillator.frequency.setValueAtTime(Math.max(tone.freq, 1), tone.start);
+  oscillator.frequency.setValueAtTime(Math.max(tone.freq, 1), start);
   if (tone.endFreq) {
     oscillator.frequency.exponentialRampToValueAtTime(Math.max(tone.endFreq, 1), endAt);
   }
 
-  gain.gain.setValueAtTime(0.0001, tone.start);
-  gain.gain.exponentialRampToValueAtTime(getCueGain(tone.peak), tone.start + tone.attack);
+  gain.gain.setValueAtTime(0.0001, start);
+  gain.gain.exponentialRampToValueAtTime(getCueGain(tone.peak), start + tone.attack);
   gain.gain.exponentialRampToValueAtTime(0.0001, endAt);
 
   oscillator.connect(gain);
   gain.connect(context.destination);
-  oscillator.start(tone.start);
+  oscillator.start(start);
   oscillator.stop(endAt + 0.02);
   oscillator.addEventListener('ended', () => {
     oscillator.disconnect();
@@ -112,8 +113,8 @@ export function playPeerCue(type: 'join' | 'leave'): void {
 
   if (type === 'join') {
     void playTonePattern([
-      { type: 'triangle', freq: 523, start: 0, attack: 0.016, decay: 0.12, peak: 0.05 },
-      { type: 'triangle', freq: 659, start: 0.1, attack: 0.016, decay: 0.14, peak: 0.046 }
+      { type: 'sine', freq: 294, start: 0, attack: 0.02, decay: 0.15, peak: 0.052 },
+      { type: 'sine', freq: 370, start: 0.16, attack: 0.02, decay: 0.17, peak: 0.048 }
     ]);
     return;
   }
