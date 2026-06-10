@@ -955,6 +955,37 @@ body[data-screen-view="true"] .screen-view-controls {
   pointer-events: auto;
 }
 
+.screen-stage:fullscreen,
+.screen-stage:-webkit-full-screen {
+  cursor: none;
+}
+
+.screen-stage:fullscreen[data-ui-active="true"],
+.screen-stage:-webkit-full-screen[data-ui-active="true"] {
+  cursor: default;
+}
+
+.screen-stage:fullscreen:not([data-ui-active="true"]) .screen-meta,
+.screen-stage:fullscreen:not([data-ui-active="true"]) .screen-view-controls,
+.screen-stage:-webkit-full-screen:not([data-ui-active="true"]) .screen-meta,
+.screen-stage:-webkit-full-screen:not([data-ui-active="true"]) .screen-view-controls {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.screen-stage:fullscreen[data-ui-active="true"] .screen-meta,
+.screen-stage:fullscreen[data-ui-active="true"] .screen-view-controls,
+.screen-stage:-webkit-full-screen[data-ui-active="true"] .screen-meta,
+.screen-stage:-webkit-full-screen[data-ui-active="true"] .screen-view-controls {
+  opacity: 1;
+}
+
+.screen-stage:fullscreen .screen-view-controls,
+.screen-stage:-webkit-full-screen .screen-view-controls {
+  cursor: auto;
+  pointer-events: auto;
+}
+
 body[data-screen-view="true"] .stage-strip {
   min-height: 0;
   max-height: 104px;

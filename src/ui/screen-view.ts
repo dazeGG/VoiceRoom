@@ -415,6 +415,9 @@ export function updateScreenFullscreenState(): void {
   }
 
   setScreenFullscreenState(fullscreen || document.body.dataset.desktopScreenFullscreen === 'true');
+  if (!elements.screenStage.hidden) {
+    activateScreenStageUi();
+  }
 }
 
 function setScreenFullscreenState(fullscreen: boolean): void {
@@ -441,8 +444,18 @@ export function bindScreenStageIdleUi(): void {
   stage.addEventListener('mousedown', wake);
   stage.addEventListener('wheel', wake, { passive: true });
   stage.addEventListener('touchstart', wake, { passive: true });
+  document.addEventListener('pointermove', wake, { passive: true });
   elements.screenViewControls.addEventListener('mouseenter', wake);
   elements.screenViewControls.addEventListener('focusin', wake);
+}
+
+function shouldDeferScreenUiIdle(): boolean {
+  if (elements.streamVolumeControl.matches(':hover') || elements.streamVolumeControl.matches(':focus-within')) {
+    return true;
+  }
+
+  const active = document.activeElement;
+  return active === elements.streamVolumeSlider;
 }
 
 function activateScreenStageUi(): void {
@@ -450,10 +463,16 @@ function activateScreenStageUi(): void {
   elements.screenStage.dataset.uiActive = 'true';
   screenUiIdleTimer = window.setTimeout(() => {
     if (elements.screenStage.hidden) return;
-    if (elements.screenViewControls.matches(':hover') || elements.screenViewControls.contains(document.activeElement)) {
+    if (shouldDeferScreenUiIdle()) {
       activateScreenStageUi();
       return;
     }
+
+    const active = document.activeElement;
+    if (active instanceof HTMLElement && elements.screenViewControls.contains(active)) {
+      active.blur();
+    }
+
     delete elements.screenStage.dataset.uiActive;
   }, SCREEN_UI_IDLE_MS);
 }
