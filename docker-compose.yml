@@ -5,7 +5,7 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3000
-      PUBLIC_HOSTNAME: ${PUBLIC_HOSTNAME:-${DOMAIN}}
+      TRUST_PROXY: ${TRUST_PROXY:-true}
       LIVEKIT_URL: ${LIVEKIT_URL:-wss://${LIVEKIT_DOMAIN:-livekit.${DOMAIN}}}
       LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:?set LIVEKIT_API_KEY in .env}
       LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:?set LIVEKIT_API_SECRET in .env}
