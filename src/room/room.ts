@@ -220,7 +220,9 @@ export async function joinRoom(event?: Event): Promise<void> {
     state.eventSource.onopen = () => {
       setServerConnectionStatus('connected');
     };
-    state.eventSource.onmessage = handleServerMessage;
+    state.eventSource.onmessage = (event) => {
+      handleServerMessage(event).catch(() => {});
+    };
     state.eventSource.onerror = () => {
       if (state.joined || state.connecting) setServerConnectionStatus('reconnecting');
     };
@@ -284,7 +286,12 @@ export function isVoiceRouteError(error: unknown): boolean {
 }
 
 async function handleServerMessage(event: MessageEvent): Promise<void> {
-  const message = JSON.parse(event.data) as ServerMessage;
+  let message: ServerMessage;
+  try {
+    message = JSON.parse(event.data) as ServerMessage;
+  } catch {
+    return;
+  }
 
   if (message.type === 'hello') {
     const peers = Array.isArray(message.peers) ? message.peers : [];
@@ -297,6 +304,7 @@ async function handleServerMessage(event: MessageEvent): Promise<void> {
     }
     syncLiveKitParticipants(state.livekitRoom);
     refreshParticipantState();
+    if (state.joined) postState().catch(() => {});
     return;
   }
 
