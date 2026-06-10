@@ -1,5 +1,5 @@
 import { elements } from './dom';
-import { renderIcon } from './icons';
+import { mountIcons, renderIcon } from './icons';
 import { state } from '../core/state';
 import { showToast } from './toast';
 import { getScreenProfile, parseScreenProfileId } from '../media/profiles';
@@ -32,11 +32,30 @@ export function handleScreenStageClick(event: MouseEvent): void {
     return;
   }
 
-  leaveScreenView().catch((error) => console.error(error));
+  leaveScreenView({ keepPreview: true }).catch((error) => console.error(error));
+}
+
+export function openLocalStreamPreview(): void {
+  const peerId = state.peerId;
+  if (!peerId || !state.localScreenStream) return;
+
+  if (state.viewedScreenPeerId === peerId) {
+    void leaveScreenView({ quiet: true, keepPreview: true });
+    return;
+  }
+
+  state.screenSubscribedPeerIds.add(peerId);
+  state.screenCollapsedPeerIds.add(peerId);
+  refreshScreenTiles();
+  refreshScreenStage();
 }
 
 export async function enterScreenView(peerId: string): Promise<void> {
   const peer = getParticipantById(peerId);
+  if (peer?.isLocal && state.localScreenStream) {
+    peer.screen = true;
+    peer.node.dataset.screen = 'true';
+  }
   if (!peer?.screen) {
     showToast('Демонстрация уже завершена');
     refreshAllScreenActions();
@@ -46,7 +65,7 @@ export async function enterScreenView(peerId: string): Promise<void> {
 
   if (state.viewedScreenPeerId === peerId) return;
   if (state.viewedScreenPeerId) {
-    await leaveScreenView({ quiet: true });
+    await leaveScreenView({ quiet: true, keepPreview: true });
   }
 
   setViewedScreenPeerId(peerId);
@@ -66,7 +85,7 @@ export async function enterScreenView(peerId: string): Promise<void> {
 }
 
 export async function leaveScreenView(options: { quiet?: boolean; keepPreview?: boolean } = {}): Promise<void> {
-  const { quiet = false, keepPreview = true } = options;
+  const { quiet = false, keepPreview = false } = options;
   const peerId = state.viewedScreenPeerId;
   if (!peerId) return;
 
@@ -154,9 +173,15 @@ export function refreshAllScreenActions(): void {
   for (const peer of state.peers.values()) refreshScreenAction(peer);
 }
 
+function isParticipantStreaming(participant: Participant | null): boolean {
+  if (!participant) return false;
+  if (participant.screen) return true;
+  return participant.isLocal && Boolean(state.localScreenStream);
+}
+
 export function refreshScreenStage(): void {
   const peer = getActiveScreenPeer();
-  if (!peer?.screen) {
+  if (!isParticipantStreaming(peer)) {
     if (state.viewedScreenPeerId) closeScreenView();
     else hideScreenStage();
     return;
@@ -176,6 +201,7 @@ function showScreenStage({ peer, stream }: { peer: Participant; stream: MediaStr
   refreshScreenStreamControls(peer);
   elements.leaveButton.hidden = true;
   elements.screenExitButton.hidden = false;
+  mountIcons(elements.screenExitButton);
   elements.screenPlaceholder.hidden = Boolean(stream);
   refreshScreenMeta(peer);
   syncScreenStagePointerState();
@@ -257,10 +283,6 @@ export function refreshScreenTiles(): void {
 }
 
 function hasStreamTilePreview(participant: Participant): boolean {
-  if (participant.isLocal) {
-    return Boolean(participant.screen && state.localScreenStream);
-  }
-
   return isScreenSubscribed(participant.id) && Boolean(getScreenStreamForParticipant(participant));
 }
 

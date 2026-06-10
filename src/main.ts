@@ -72,7 +72,7 @@ function init(): void {
   elements.muteButton.addEventListener('click', handleMicButtonClick);
   elements.outputButton.addEventListener('click', toggleOutputMute);
   elements.screenButton.addEventListener('click', handleScreenButtonClick);
-  elements.screenExitButton.addEventListener('click', () => leaveScreenView().catch((error) => console.error(error)));
+  elements.screenExitButton.addEventListener('click', () => leaveScreenView({ keepPreview: false }).catch((error) => console.error(error)));
   elements.screenStage.addEventListener('click', handleScreenStageClick);
   elements.screenFullscreenButton.addEventListener('click', toggleScreenFullscreen);
   elements.screenSourceCloseButton.addEventListener('click', cancelScreenSourcePicker);
