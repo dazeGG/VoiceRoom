@@ -14,9 +14,7 @@ import {
 } from '../room/participants';
 import type { Participant } from '../core/types';
 
-const SCREEN_UI_IDLE_MS = 2200;
-let screenUiIdleTimer = 0;
-let screenUiIdleBound = false;
+let screenUiHoverBound = false;
 
 async function toggleScreenTile(peerId: string): Promise<void> {
   if (state.viewedScreenPeerId === peerId) {
@@ -136,7 +134,7 @@ function showScreenStage({ peer, stream }: { peer: Participant; stream: MediaStr
   elements.screenExitButton.hidden = false;
   elements.screenPlaceholder.hidden = Boolean(stream);
   refreshScreenMeta(peer);
-  activateScreenStageUi();
+  syncScreenStageUiVisibility();
 
   if (stream && elements.screenVideo.srcObject !== stream) {
     elements.screenVideo.srcObject = stream;
@@ -416,7 +414,7 @@ export function updateScreenFullscreenState(): void {
 
   setScreenFullscreenState(fullscreen || document.body.dataset.desktopScreenFullscreen === 'true');
   if (!elements.screenStage.hidden) {
-    activateScreenStageUi();
+    syncScreenStageUiVisibility();
   }
 }
 
@@ -431,54 +429,50 @@ function setScreenFullscreenState(fullscreen: boolean): void {
 }
 
 export function bindScreenStageIdleUi(): void {
-  if (screenUiIdleBound) return;
-  screenUiIdleBound = true;
+  if (screenUiHoverBound) return;
+  screenUiHoverBound = true;
 
   const stage = elements.screenStage;
-  const wake = () => {
+  const showScreenStageUi = () => {
     if (stage.hidden) return;
-    activateScreenStageUi();
+    stage.dataset.uiActive = 'true';
+  };
+  const scheduleHideScreenStageUi = () => {
+    window.requestAnimationFrame(() => {
+      syncScreenStageUiVisibility();
+    });
   };
 
-  stage.addEventListener('mousemove', wake);
-  stage.addEventListener('mousedown', wake);
-  stage.addEventListener('wheel', wake, { passive: true });
-  stage.addEventListener('touchstart', wake, { passive: true });
-  document.addEventListener('pointermove', wake, { passive: true });
-  elements.screenViewControls.addEventListener('mouseenter', wake);
-  elements.screenViewControls.addEventListener('focusin', wake);
+  stage.addEventListener('pointerenter', showScreenStageUi);
+  stage.addEventListener('pointerleave', scheduleHideScreenStageUi);
+  stage.addEventListener('touchstart', showScreenStageUi, { passive: true });
+  document.addEventListener(
+    'touchstart',
+    (event) => {
+      if (stage.hidden) return;
+      const target = event.target;
+      if (target instanceof Node && stage.contains(target)) {
+        showScreenStageUi();
+        return;
+      }
+      scheduleHideScreenStageUi();
+    },
+    { passive: true }
+  );
 }
 
-function shouldDeferScreenUiIdle(): boolean {
-  if (elements.streamVolumeControl.matches(':hover') || elements.streamVolumeControl.matches(':focus-within')) {
-    return true;
+function syncScreenStageUiVisibility(): void {
+  const stage = elements.screenStage;
+  if (stage.hidden) return;
+
+  if (stage.matches(':hover')) {
+    stage.dataset.uiActive = 'true';
+    return;
   }
 
-  const active = document.activeElement;
-  return active === elements.streamVolumeSlider;
-}
-
-function activateScreenStageUi(): void {
-  window.clearTimeout(screenUiIdleTimer);
-  elements.screenStage.dataset.uiActive = 'true';
-  screenUiIdleTimer = window.setTimeout(() => {
-    if (elements.screenStage.hidden) return;
-    if (shouldDeferScreenUiIdle()) {
-      activateScreenStageUi();
-      return;
-    }
-
-    const active = document.activeElement;
-    if (active instanceof HTMLElement && elements.screenViewControls.contains(active)) {
-      active.blur();
-    }
-
-    delete elements.screenStage.dataset.uiActive;
-  }, SCREEN_UI_IDLE_MS);
+  delete stage.dataset.uiActive;
 }
 
 function stopScreenStageIdleUi(): void {
-  window.clearTimeout(screenUiIdleTimer);
-  screenUiIdleTimer = 0;
   delete elements.screenStage.dataset.uiActive;
 }
