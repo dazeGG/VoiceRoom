@@ -23,7 +23,7 @@ const { getClientIp, createRateLimiter } = require('./lib/rate-limit');
 
 const PORT = readEnvInt('PORT', 3000, 1);
 const STATIC_DIR = path.join(__dirname, 'dist');
-const MAX_ROOM_PEERS = readEnvInt('MAX_ROOM_PEERS', 8, 1);
+const MAX_ROOM_PEERS = readEnvInt('MAX_ROOM_PEERS', 12, 1);
 const MAX_ROOMS = readEnvInt('MAX_ROOMS', 100, 1);
 const KEEPALIVE_MS = readEnvInt('SSE_KEEPALIVE_MS', 15000, 1000);
 const BODY_LIMIT_BYTES = readEnvInt('BODY_LIMIT_BYTES', 65536, 1024);
@@ -354,16 +354,16 @@ async function handleEvents(req, res, url) {
 
   const peer = {
     closed: false,
-    deafened: false,
+    deafened: previous?.deafened ?? false,
     id: peerId,
-    joinedAt: Date.now(),
-    muted: false,
+    joinedAt: previous?.joinedAt ?? Date.now(),
+    muted: previous?.muted ?? false,
     name,
-    screen: false,
-    screenAudio: false,
-    screenProfileId: '',
-    screenStreamId: '',
-    viewedScreenPeerId: '',
+    screen: previous?.screen ?? false,
+    screenAudio: previous?.screenAudio ?? false,
+    screenProfileId: previous?.screenProfileId ?? '',
+    screenStreamId: previous?.screenStreamId ?? '',
+    viewedScreenPeerId: previous?.viewedScreenPeerId ?? '',
     sessionToken,
     res
   };
@@ -377,7 +377,9 @@ async function handleEvents(req, res, url) {
     peers: existingPeers,
     roomId
   });
-  broadcast(room, { type: 'peer-joined', peer: publicPeer(peer) }, peerId);
+  if (!reconnecting) {
+    broadcast(room, { type: 'peer-joined', peer: publicPeer(peer) }, peerId);
+  }
 
   const keepalive = setInterval(() => {
     const sent = sendEvent(peer, { type: 'ping', at: Date.now() });
