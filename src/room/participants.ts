@@ -7,6 +7,7 @@ import {
   isVoicePlaybackMuted,
   playMediaElement
 } from '../media/playback';
+import { STREAM_CUE_DEDUPE_MS } from '../core/config';
 import { clearPeerJoinCue, playStreamCue } from '../media/cues';
 import { attachMeter } from '../media/meters';
 import { isMicrophonePublication, syncLiveKitScreenSubscriptions } from './livekit';
@@ -23,6 +24,25 @@ import {
 import type { Participant, PeerInfo } from '../core/types';
 
 const watchedRemoteScreenTracks = new WeakSet<MediaStreamTrack>();
+const streamCueTimes = new Map<string, number>();
+
+export function applyRemoteScreenCue(participant: Participant, hadScreen: boolean, nextScreen: boolean): void {
+  if (participant.isLocal || hadScreen === nextScreen) return;
+
+  const dedupeKey = `${participant.id}:${nextScreen ? 'start' : 'stop'}`;
+  const now = Date.now();
+  const lastPlayedAt = streamCueTimes.get(dedupeKey) || 0;
+  if (now - lastPlayedAt < STREAM_CUE_DEDUPE_MS) return;
+
+  streamCueTimes.set(dedupeKey, now);
+  playStreamCue(nextScreen ? 'start' : 'stop');
+}
+
+export function clearRemoteScreenCue(peerId: string | undefined): void {
+  if (!peerId) return;
+  streamCueTimes.delete(`${peerId}:start`);
+  streamCueTimes.delete(`${peerId}:stop`);
+}
 
 export function syncPeers(peerIds: string[]): void {
   const livePeerIds = new Set(peerIds);
@@ -106,6 +126,9 @@ export function createParticipant(peerInfo: PeerInfo): Participant {
   refreshScreenAction(participant);
   refreshScreenTiles();
   refreshParticipantState();
+  if (!participant.isLocal && participant.screen) {
+    applyRemoteScreenCue(participant, false, true);
+  }
   return participant;
 }
 
@@ -133,8 +156,8 @@ export function updateParticipant(peerInfo: PeerInfo): void {
     participant.incomingVoiceActive = false;
     setParticipantSpeaking(participant, false);
   }
-  if (hasScreenUpdate && !participant.isLocal && hadScreen !== participant.screen) {
-    playStreamCue(participant.screen ? 'start' : 'stop');
+  if (hasScreenUpdate) {
+    applyRemoteScreenCue(participant, hadScreen, participant.screen);
   }
   if (!participant.screen) {
     state.screenCollapsedPeerIds.delete(participant.id);
@@ -157,6 +180,7 @@ export function removePeer(peerId: string): void {
   if (!peer) return;
 
   clearPeerJoinCue(peerId);
+  clearRemoteScreenCue(peerId);
   removeAudioElements(peer);
   state.screenCollapsedPeerIds.delete(peerId);
   state.screenSubscribedPeerIds.delete(peerId);

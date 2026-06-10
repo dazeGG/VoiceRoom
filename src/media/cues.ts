@@ -142,10 +142,17 @@ export function playOutputCue(muted: boolean): void {
 }
 
 export function playStreamCue(type: 'start' | 'stop'): void {
+  void playStreamCueInternal(type);
+}
+
+async function playStreamCueInternal(type: 'start' | 'stop'): Promise<void> {
   if (isAppPlaybackMuted()) return;
 
   try {
     const context = getSharedAudioContext();
+    if (context.state === 'suspended') {
+      await context.resume();
+    }
     if (context.state !== 'running') {
       queueAudioUnlock();
       return;

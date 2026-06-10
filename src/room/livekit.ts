@@ -19,6 +19,7 @@ import { refreshCallControls } from '../ui/controls';
 import { errorMessage } from '../core/utils';
 import { getScreenProfile, getScreenPublishVideoOptions } from '../media/profiles';
 import {
+  applyRemoteScreenCue,
   attachRemoteScreenStream,
   attachRemoteTrack,
   createParticipant,
@@ -370,9 +371,11 @@ export async function disconnectLiveKitRoom(): Promise<void> {
 
 export function updateLiveKitPublicationState(peer: Participant, publication: TrackPublication): void {
   if (isScreenPublication(publication)) {
+    const hadScreen = peer.screen;
     peer.screen = true;
     peer.screenAudio = peer.screenAudio || isScreenAudioPublication(publication);
     peer.node.dataset.screen = 'true';
+    applyRemoteScreenCue(peer, hadScreen, true);
     updatePeerStatus(peer);
     refreshScreenAction(peer);
   }
@@ -504,11 +507,13 @@ function handleLiveKitTrackUnpublished(publication: RemoteTrackPublication, part
   if (!peer) return;
 
   if (isScreenPublication(publication)) {
+    const hadScreen = peer.screen;
     peer.screen = participant.isScreenShareEnabled;
     peer.screenAudio = participant.trackPublications
       ? [...participant.trackPublications.values()].some(isScreenAudioPublication)
       : false;
     peer.node.dataset.screen = String(peer.screen);
+    applyRemoteScreenCue(peer, hadScreen, peer.screen);
     if (!peer.screen) detachRemoteScreen(peer);
     refreshScreenAction(peer);
     return;
