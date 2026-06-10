@@ -9,24 +9,27 @@ import { getSharedAudioContext, isAppPlaybackMuted, isLocalAppAudioSuppressed, q
 const peerJoinCueTimes = new Map<string, number>();
 const streamViewerCueTimes = new Map<string, number>();
 
-/** Spacing between paired/arpeggiated cue notes. */
 const NOTE_GAP = 0.12;
 
+/** Soft attack/decay envelope for understated UI tones. */
+const ATTACK = 0.028;
+const DECAY_PAIR = 0.2;
+const DECAY_GLIDE = 0.22;
+const DECAY_SUBTLE = 0.16;
+
 /**
- * D major — bright Tchaikovsky-adjacent palette (Nutcracker / festival register).
- * All UI cues stay inside this key so notifications feel cheerful and cohesive.
+ * A minor pentatonic — open, neutral palette without major cheer or minor drama.
+ * Intervals lean on fourths/fifths for a premium, minimal feel.
  */
-const DM = {
+const PM = {
+  A3: 220,
+  C4: 262,
   D4: 294,
   E4: 330,
-  Fs4: 370,
   G4: 392,
   A4: 440,
-  B4: 494,
-  Cs5: 554,
-  D5: 587,
-  Fs5: 740,
-  A5: 880
+  C5: 523,
+  D5: 587
 } as const;
 
 type ToneSpec = {
@@ -46,30 +49,14 @@ function getCueGain(value: number): number {
 function pairedNotes(
   first: number,
   second: number,
-  options: { peak?: number; secondPeak?: number; type?: OscillatorType } = {}
+  options: { peak?: number; secondPeak?: number } = {}
 ): ToneSpec[] {
-  const { peak = 0.052, secondPeak = 0.048, type = 'sine' } = options;
+  const { peak = 0.038, secondPeak = 0.034 } = options;
 
   return [
-    { type, freq: first, start: 0, attack: 0.02, decay: 0.14, peak },
-    { type, freq: second, start: NOTE_GAP, attack: 0.02, decay: 0.15, peak: secondPeak }
+    { type: 'sine', freq: first, start: 0, attack: ATTACK, decay: DECAY_PAIR, peak },
+    { type: 'sine', freq: second, start: NOTE_GAP, attack: ATTACK, decay: DECAY_PAIR, peak: secondPeak }
   ];
-}
-
-function arpeggio(
-  notes: number[],
-  options: { peak?: number; type?: OscillatorType } = {}
-): ToneSpec[] {
-  const { peak = 0.046, type = 'sine' } = options;
-
-  return notes.map((freq, index) => ({
-    type,
-    freq,
-    start: NOTE_GAP * index,
-    attack: 0.014,
-    decay: 0.11,
-    peak: peak - index * 0.002
-  }));
 }
 
 async function ensureCueContext(): Promise<AudioContext | null> {
@@ -161,11 +148,11 @@ export function playPeerCue(type: 'join' | 'leave'): void {
   if (isAppPlaybackMuted()) return;
 
   if (type === 'join') {
-    void playTonePattern(pairedNotes(DM.G4, DM.B4, { type: 'triangle' }));
+    void playTonePattern(pairedNotes(PM.G4, PM.C5));
     return;
   }
 
-  void playTonePattern(pairedNotes(DM.B4, DM.G4, { secondPeak: 0.044 }));
+  void playTonePattern(pairedNotes(PM.C5, PM.G4, { secondPeak: 0.03 }));
 }
 
 export function playMicCue(muted: boolean): void {
@@ -173,13 +160,13 @@ export function playMicCue(muted: boolean): void {
 
   if (muted) {
     void playTonePattern([
-      { type: 'triangle', freq: DM.Fs4, endFreq: DM.D4, start: 0, attack: 0.014, decay: 0.18, peak: 0.048 }
+      { type: 'sine', freq: PM.G4, endFreq: PM.E4, start: 0, attack: ATTACK, decay: DECAY_GLIDE, peak: 0.034 }
     ]);
     return;
   }
 
   void playTonePattern([
-    { type: 'triangle', freq: DM.D4, endFreq: DM.Fs4, start: 0, attack: 0.016, decay: 0.2, peak: 0.05 }
+    { type: 'sine', freq: PM.E4, endFreq: PM.G4, start: 0, attack: ATTACK, decay: DECAY_GLIDE, peak: 0.036 }
   ]);
 }
 
@@ -187,22 +174,22 @@ export function playOutputCue(muted: boolean): void {
   if (isLocalAppAudioSuppressed()) return;
 
   if (muted) {
-    void playTonePattern(pairedNotes(DM.Fs4, DM.D4, { peak: 0.04, secondPeak: 0.036 }));
+    void playTonePattern(pairedNotes(PM.A4, PM.E4, { peak: 0.032, secondPeak: 0.028 }));
     return;
   }
 
-  void playTonePattern(pairedNotes(DM.D4, DM.Fs4, { peak: 0.042, secondPeak: 0.04 }));
+  void playTonePattern(pairedNotes(PM.E4, PM.A4, { peak: 0.034, secondPeak: 0.03 }));
 }
 
 export function playStreamCue(type: 'start' | 'stop'): void {
   if (isAppPlaybackMuted()) return;
 
   if (type === 'start') {
-    void playTonePattern(arpeggio([DM.D4, DM.Fs4, DM.A4], { type: 'triangle', peak: 0.048 }));
+    void playTonePattern(pairedNotes(PM.G4, PM.D5, { peak: 0.036, secondPeak: 0.032 }));
     return;
   }
 
-  void playTonePattern(arpeggio([DM.A4, DM.Fs4, DM.D4], { peak: 0.042 }));
+  void playTonePattern(pairedNotes(PM.D5, PM.G4, { peak: 0.032, secondPeak: 0.028 }));
 }
 
 export function playStreamViewerCue(type: 'join' | 'leave'): void {
@@ -210,11 +197,11 @@ export function playStreamViewerCue(type: 'join' | 'leave'): void {
   if (!shouldPlayStreamViewerCue(type)) return;
 
   if (type === 'join') {
-    void playTonePattern(pairedNotes(DM.Fs4, DM.A4, { peak: 0.032, secondPeak: 0.028 }));
+    void playTonePattern(pairedNotes(PM.A4, PM.C5, { peak: 0.024, secondPeak: 0.02 }));
     return;
   }
 
   void playTonePattern([
-    { type: 'sine', freq: DM.A4, endFreq: DM.Fs4, start: 0, attack: 0.01, decay: 0.12, peak: 0.026 }
+    { type: 'sine', freq: PM.C5, endFreq: PM.A4, start: 0, attack: 0.02, decay: DECAY_SUBTLE, peak: 0.018 }
   ]);
 }
