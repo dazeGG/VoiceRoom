@@ -368,6 +368,7 @@ export function leaveRoom(): void {
   disconnectLiveKitRoom().catch((error) => console.warn('LiveKit disconnect failed', error));
   if (state.screenSourceRequest) cancelScreenSourcePicker();
   closeScreenView();
+  state.screenCollapsedPeerIds.clear();
   state.screenSubscribedPeerIds.clear();
 
   for (const peer of state.peers.values()) {

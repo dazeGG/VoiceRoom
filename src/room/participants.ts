@@ -137,6 +137,7 @@ export function updateParticipant(peerInfo: PeerInfo): void {
     playStreamCue(participant.screen ? 'start' : 'stop');
   }
   if (!participant.screen) {
+    state.screenCollapsedPeerIds.delete(participant.id);
     state.screenSubscribedPeerIds.delete(participant.id);
     if (state.viewedScreenPeerId === participant.id) {
       closeScreenView();
@@ -157,6 +158,7 @@ export function removePeer(peerId: string): void {
 
   clearPeerJoinCue(peerId);
   removeAudioElements(peer);
+  state.screenCollapsedPeerIds.delete(peerId);
   state.screenSubscribedPeerIds.delete(peerId);
   if (state.viewedScreenPeerId === peer.id) {
     closeScreenView();

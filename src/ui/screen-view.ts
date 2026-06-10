@@ -49,6 +49,7 @@ export async function enterScreenView(peerId: string): Promise<void> {
   }
 
   setViewedScreenPeerId(peerId);
+  state.screenCollapsedPeerIds.delete(peerId);
   state.screenSubscribedPeerIds.add(peerId);
   state.screenRequesting = !peer.isLocal && !peer.screenStream;
   refreshAllScreenActions();
@@ -76,7 +77,9 @@ export async function leaveScreenView(options: { quiet?: boolean; keepPreview?: 
   const peer = getParticipantById(peerId);
   if (keepPreview) {
     state.screenSubscribedPeerIds.add(peerId);
+    state.screenCollapsedPeerIds.add(peerId);
   } else {
+    state.screenCollapsedPeerIds.delete(peerId);
     state.screenSubscribedPeerIds.delete(peerId);
     if (peer && !peer.isLocal) detachRemoteScreen(peer);
   }
@@ -88,6 +91,7 @@ export async function leaveScreenView(options: { quiet?: boolean; keepPreview?: 
 }
 
 export function disconnectScreen(peerId: string): void {
+  state.screenCollapsedPeerIds.delete(peerId);
   state.screenSubscribedPeerIds.delete(peerId);
 
   if (state.viewedScreenPeerId === peerId) {
@@ -113,6 +117,7 @@ export function closeScreenView(): string {
   setViewedScreenPeerId('');
   state.screenRequesting = false;
   state.stripCollapsed = false;
+  state.screenCollapsedPeerIds.delete(peerId);
   state.screenSubscribedPeerIds.delete(peerId);
   hideScreenStage();
 
@@ -250,16 +255,31 @@ export function refreshScreenTiles(): void {
   refreshStageGridState();
 }
 
+function hasStreamTilePreview(participant: Participant): boolean {
+  if (participant.isLocal) {
+    return Boolean(participant.screen && state.localScreenStream);
+  }
+
+  return isScreenSubscribed(participant.id) && Boolean(getScreenStreamForParticipant(participant));
+}
+
+function isStreamTileCollapsed(participant: Participant): boolean {
+  return state.screenCollapsedPeerIds.has(participant.id) && hasStreamTilePreview(participant);
+}
+
 function createStreamTile(participant: Participant): HTMLButtonElement {
   const subscribed = isScreenSubscribed(participant.id);
+  const hasPreview = hasStreamTilePreview(participant);
+  const isCollapsed = isStreamTileCollapsed(participant);
+  const isIdle = !hasPreview;
   const stream = getScreenStreamForParticipant(participant);
-  const hasPreview = subscribed && Boolean(stream);
 
   const button = document.createElement('button');
   button.className = 'stream-tile';
   button.type = 'button';
   button.dataset.preview = String(hasPreview);
-  button.dataset.subscribed = String(subscribed);
+  button.dataset.collapsed = String(isCollapsed);
+  button.dataset.idle = String(isIdle);
   button.dataset.local = String(participant.isLocal);
   button.setAttribute('aria-pressed', 'false');
   button.setAttribute(
@@ -269,46 +289,38 @@ function createStreamTile(participant: Participant): HTMLButtonElement {
 
   const preview = document.createElement('span');
   preview.className = 'stream-tile-preview';
-  if (hasPreview) {
-    mountStreamTileVideo(preview, stream!);
+  if (hasPreview && stream) {
+    mountStreamTileVideo(preview, stream);
   } else {
     preview.append(createStreamTileIcon());
   }
 
-  const copy = document.createElement('span');
-  copy.className = 'stream-tile-copy';
+  button.append(preview);
 
-  const title = document.createElement('strong');
-  title.textContent = participant.isLocal ? 'Ваш стрим' : participant.name;
+  if (isCollapsed) {
+    const copy = document.createElement('span');
+    copy.className = 'stream-tile-copy';
+    const title = document.createElement('strong');
+    title.textContent = participant.isLocal ? 'Ваш стрим' : participant.name;
+    copy.append(title);
+    button.append(copy);
+  } else if (isIdle) {
+    const copy = document.createElement('span');
+    copy.className = 'stream-tile-copy stream-tile-copy-idle';
+    const title = document.createElement('strong');
+    title.textContent = participant.isLocal ? 'Ваш стрим' : participant.name;
+    copy.append(title);
 
-  const actions = document.createElement('span');
-  actions.className = 'stream-tile-actions';
+    const actions = document.createElement('span');
+    actions.className = 'stream-tile-actions';
+    const primaryAction = document.createElement('span');
+    primaryAction.className = 'stream-tile-action stream-tile-action-primary';
+    primaryAction.textContent = subscribed ? 'Подключение' : 'Смотреть стрим';
+    actions.append(primaryAction);
 
-  const primaryAction = document.createElement('span');
-  primaryAction.className = 'stream-tile-action stream-tile-action-primary';
-  primaryAction.textContent = hasPreview
-    ? 'Развернуть'
-    : subscribed
-      ? 'Подключение'
-      : 'Смотреть стрим';
-
-  actions.append(primaryAction);
-
-  if (subscribed) {
-    const disconnectAction = document.createElement('button');
-    disconnectAction.type = 'button';
-    disconnectAction.className = 'stream-tile-action stream-tile-action-disconnect';
-    disconnectAction.textContent = 'Отключить';
-    disconnectAction.setAttribute('aria-label', `Отключиться от стрима ${participant.name}`);
-    disconnectAction.addEventListener('click', (event) => {
-      event.stopPropagation();
-      disconnectScreen(participant.id);
-    });
-    actions.append(disconnectAction);
+    button.append(copy, actions);
   }
 
-  copy.append(title);
-  button.append(preview, copy, actions);
   button.addEventListener('click', () => {
     enterScreenView(participant.id).catch((error) => console.error(error));
   });
