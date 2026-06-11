@@ -58,7 +58,8 @@ const mimeTypes = {
   '.svg': 'image/svg+xml; charset=utf-8',
   '.txt': 'text/plain; charset=utf-8',
   '.wasm': 'application/wasm',
-  '.webmanifest': 'application/manifest+json; charset=utf-8'
+  '.webmanifest': 'application/manifest+json; charset=utf-8',
+  '.woff2': 'font/woff2'
 };
 
 function getLiveKitConnectSources() {
@@ -589,6 +590,8 @@ async function serveStatic(req, res, url) {
 
   if (pathname === '/') {
     pathname = '/index.html';
+  } else if (pathname === '/download' || pathname === '/download/') {
+    pathname = '/download.html';
   } else if (pathname.startsWith('/r/')) {
     const match = pathname.match(/^\/r\/([A-Za-z0-9_-]{3,48})\/?$/);
     const roomId = match ? normalizeRoomId(match[1]) : '';

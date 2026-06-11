@@ -85,31 +85,8 @@ button:disabled {
   gap: var(--space-lg);
 }
 
-.topbar {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-md);
-}
-
-.brand {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-sm);
-  color: var(--ink);
-  font-weight: 750;
-  letter-spacing: 0;
-  text-decoration: none;
-}
-
-.brand-mark {
-  width: 32px;
-  height: 32px;
-  display: block;
-  flex: 0 0 auto;
-}
-
+/* Base .topbar / .brand / .brand-mark live in shared/topbar.css (one component
+   shared with the /download page). Only app-specific overrides remain here. */
 .topbar-room-heading {
   display: none;
   flex: 1 1 auto;

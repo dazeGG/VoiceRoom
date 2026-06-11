@@ -1,0 +1,568 @@
+:root {
+  /* Shell background matches the main app (src/styles.css). */
+  --paper: oklch(15.5% 0.015 92);
+  --paper-deep: oklch(10.5% 0.012 92);
+  --dl-bg: #100f0b;
+  --dl-ink: #ece7d9;
+  --dl-ink-soft: #e7e2d4;
+  --dl-lead: #b3ac9b;
+  --dl-muted: #9a9484;
+  --dl-muted-2: #8c8576;
+  --dl-faint: #6f6a5c;
+  --dl-mono-value: #cfc9ba;
+  --dl-green: #4fae74;
+  --dl-amber: #9a8f6a;
+  --dl-line: rgba(255, 255, 255, 0.07);
+  --dl-card-line: rgba(255, 255, 255, 0.08);
+  --dl-beige: #d9d3c3;
+  --dl-beige-hover: #e7e1d1;
+  --dl-dark-ink: #17150f;
+  --font-sans: 'Archivo', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', 'Cascadia Mono', monospace;
+}
+
+/* Self-hosted fonts (CSP-safe: font-src 'self'). Archivo lacks a Cyrillic
+   subset, so Cyrillic text falls back to the system sans — matching how the
+   reference design rendered. JetBrains Mono carries the monospace labels,
+   including the Russian uppercase eyebrows, so its Cyrillic subset is bundled. */
+@font-face {
+  font-family: 'Archivo';
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+  src: url('/fonts/archivo-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Archivo';
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+  src: url('/fonts/archivo-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400 500;
+  font-display: swap;
+  src: url('/fonts/jetbrainsmono-cyrillic.woff2') format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400 500;
+  font-display: swap;
+  src: url('/fonts/jetbrainsmono-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400 500;
+  font-display: swap;
+  src: url('/fonts/jetbrainsmono-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+* { box-sizing: border-box; }
+
+[hidden] { display: none !important; }
+
+html, body { margin: 0; }
+
+html {
+  min-height: 100%;
+}
+
+body {
+  min-height: 100dvh;
+  color: var(--dl-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  background:
+    radial-gradient(circle at 12% 14%, oklch(37% 0.09 158 / 0.18), transparent 30%),
+    radial-gradient(circle at 84% 10%, oklch(42% 0.11 31 / 0.14), transparent 28%),
+    linear-gradient(135deg, var(--paper-deep), var(--paper) 48%, oklch(13% 0.018 76)),
+    var(--paper);
+}
+
+.dl-page {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Topbar — the .topbar / .brand component is shared with the main app
+   (src/shared/topbar.css); here we only provide the page padding that the
+   app-shell supplies on the main page (24px, 16px ≤900px), so the logo sits
+   in exactly the same spot on both pages. */
+.dl-page > .topbar {
+  padding: 24px;
+}
+
+@media (max-width: 900px) {
+  .dl-page > .topbar {
+    padding: 16px;
+  }
+}
+
+/* Layout */
+.dl-main {
+  flex: 1;
+  display: flex;
+  /* Top-anchored so switching platforms (which changes the card height) grows
+     the card downward instead of recentering and shifting the hero. */
+  align-items: flex-start;
+  justify-content: center;
+  padding: clamp(24px, 6vh, 72px) 40px 64px;
+}
+
+.dl-grid {
+  width: 100%;
+  max-width: 1180px;
+  display: grid;
+  grid-template-columns: 1fr 452px;
+  gap: 80px;
+  align-items: start;
+}
+
+/* Intro */
+.dl-eyebrow {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.18em;
+  color: var(--dl-faint);
+  text-transform: uppercase;
+}
+
+.dl-title {
+  margin: 18px 0 0;
+  font-size: 58px;
+  line-height: 1.03;
+  letter-spacing: -0.025em;
+  font-weight: 800;
+  color: var(--dl-ink);
+  max-width: 560px;
+  text-wrap: balance;
+}
+
+.dl-lead {
+  margin: 22px 0 0;
+  font-size: 17px;
+  line-height: 1.55;
+  color: var(--dl-lead);
+  max-width: 460px;
+}
+
+.dl-features {
+  list-style: none;
+  margin: 44px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  max-width: 500px;
+}
+
+.dl-feature {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.dl-feature-num {
+  flex: none;
+  width: 20px;
+  padding-top: 2px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--dl-faint);
+}
+
+.dl-feature-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--dl-ink-soft);
+  letter-spacing: -0.01em;
+}
+
+.dl-feature-desc {
+  margin: 3px 0 0;
+  font-size: 14px;
+  color: var(--dl-muted-2);
+  line-height: 1.5;
+}
+
+/* Card */
+.dl-card {
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid var(--dl-card-line);
+  border-radius: 20px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.dl-card-eyebrow {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  color: var(--dl-faint);
+  text-transform: uppercase;
+}
+
+.dl-card-sub {
+  margin: 7px 0 0;
+  font-size: 13px;
+  color: var(--dl-muted-2);
+}
+
+.dl-platform-switch {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--dl-card-line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.dl-platform-tab {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 9px 12px;
+  border-radius: 9px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--dl-muted-2);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.dl-platform-tab:hover {
+  color: var(--dl-ink);
+}
+
+.dl-platform-tab.is-active {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.08);
+  color: var(--dl-ink);
+}
+
+.dl-platform-tab svg {
+  flex: none;
+}
+
+.dl-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.dl-divider {
+  height: 1px;
+  background: var(--dl-line);
+}
+
+.dl-version-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.dl-version-label {
+  font-size: 13px;
+  color: var(--dl-muted-2);
+}
+
+.dl-version-value {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--dl-mono-value);
+}
+
+/* Requirements */
+.dl-reqs-title {
+  margin: 0 0 10px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  color: var(--dl-faint);
+  text-transform: uppercase;
+}
+
+.dl-reqs-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dl-req {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--dl-muted);
+}
+
+.dl-req svg {
+  flex: none;
+  color: var(--dl-faint);
+}
+
+/* Unsigned annotation */
+.dl-unsigned {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.dl-unsigned-title {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  color: var(--dl-amber);
+  text-transform: uppercase;
+}
+
+.dl-unsigned-mac {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.dl-unsigned-note {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--dl-muted-2);
+  line-height: 1.55;
+}
+
+.dl-unsigned-os {
+  color: var(--dl-lead);
+  font-weight: 600;
+}
+
+.dl-cmd {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #0c0b08;
+  border: 1px solid var(--dl-card-line);
+  border-radius: 10px;
+  padding: 10px 11px;
+}
+
+.dl-cmd-text {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--dl-mono-value);
+  line-height: 1.55;
+  word-break: break-all;
+}
+
+.dl-cmd-copy {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--dl-mono-value);
+  border-radius: 8px;
+  padding: 6px 9px;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.dl-cmd-copy:hover {
+  background: rgba(255, 255, 255, 0.10);
+}
+
+.dl-cmd-copy-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dl-cmd.is-copied .dl-cmd-copy-icon {
+  color: var(--dl-green);
+}
+
+/* Download buttons */
+.dl-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 13px 15px;
+  border-radius: 13px;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  text-align: left;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  background: var(--dl-dark-ink);
+  color: var(--dl-ink);
+  transition: background 0.15s ease, transform 0.1s ease, border-color 0.15s ease;
+}
+
+.dl-btn:hover {
+  background: #211e16;
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+.dl-btn:active {
+  transform: translateY(1px);
+}
+
+.dl-btn--primary {
+  border-color: rgba(0, 0, 0, 0.12);
+  background: var(--dl-beige);
+  color: var(--dl-dark-ink);
+}
+
+.dl-btn--primary:hover {
+  background: var(--dl-beige-hover);
+  border-color: rgba(0, 0, 0, 0.12);
+}
+
+.dl-btn-icon {
+  flex: none;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--dl-ink);
+}
+
+.dl-btn--primary .dl-btn-icon {
+  background: var(--dl-dark-ink);
+  color: var(--dl-ink);
+}
+
+.dl-btn-copy {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.dl-btn-action {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.dl-btn-meta {
+  font-size: 12px;
+  font-weight: 500;
+  font-family: var(--font-mono);
+  color: var(--dl-muted-2);
+}
+
+.dl-btn--primary .dl-btn-meta {
+  color: #6a6555;
+}
+
+.dl-btn-trail {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  color: var(--dl-ink);
+}
+
+.dl-btn--primary .dl-btn-trail {
+  color: var(--dl-dark-ink);
+}
+
+.dl-btn-arrow {
+  display: flex;
+}
+
+.dl-btn-spinner {
+  display: none;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  border: 2px solid rgba(236, 231, 217, 0.25);
+  border-top-color: var(--dl-ink);
+  animation: dl-spin 0.7s linear infinite;
+}
+
+.dl-btn--primary .dl-btn-spinner {
+  border-color: rgba(23, 21, 15, 0.25);
+  border-top-color: var(--dl-dark-ink);
+}
+
+.dl-btn.is-loading .dl-btn-arrow {
+  display: none;
+}
+
+.dl-btn.is-loading .dl-btn-spinner {
+  display: block;
+}
+
+@keyframes dl-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Responsive */
+@media (max-width: 920px) {
+  .dl-grid {
+    grid-template-columns: 1fr;
+    gap: 48px;
+    max-width: 560px;
+  }
+  .dl-card {
+    order: 2;
+  }
+  .dl-title {
+    font-size: 44px;
+  }
+}
+
+@media (max-width: 560px) {
+  .dl-main {
+    padding: 16px 20px 48px;
+  }
+  .dl-title {
+    font-size: 36px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dl-btn-spinner {
+    animation: none;
+  }
+}
