@@ -15,23 +15,20 @@ Voice Room - голосовая комната по ссылке с демонс
 ## Архитектура
 
 ```
-server.js          HTTP API + SSE + раздача dist/ (без фреймворка)
-lib/               серверные модули: config, validation, pow, rate-limit
-src/               клиент (TypeScript, Vite)
-  main.ts          входная точка: wiring DOM-событий и стартовый роутинг
-  core/            нижний слой без DOM-логики: config, types, state, session, settings, utils
-  net/             HTTP-примитивы: api (fetch/post), pow (proof-of-work)
-  media/           захват и обработка медиа: microphone (гейт, RNNoise),
-                   screen-capture, playback (output-устройства, unlock), cues, meters, profiles
-  room/            домен комнаты: room (join/leave/SSE), livekit, participants,
-                   presence (postState), screen-share (статы, автоадаптация), stats
-  ui/              DOM-слой: dom (elements), controls, devices, names,
-                   screen-view (сцена, плитки), status, toast
-public/            статика как есть: воркеты, rnnoise (wasm), icon
-test/              unit-тесты серверных модулей (node:test)
+apps/
+  api/             Node.js HTTP API + SSE + раздача собранного web build
+    src/server.js  сервер приложения
+    src/lib/       серверные модули: config, pow, rate-limit
+    test/          unit/integration тесты API
+  web/             SvelteKit frontend app
+    src/routes/    тонкие SvelteKit routes: /, /r/[roomId], /download
+    src/lib/       frontend shell и legacy client layer
+    static/        статика как есть: воркеты, rnnoise (wasm), icon, fonts
+packages/
+  shared/          общие contracts/validation для web и api
 ```
 
-Правила слоёв: `core` ни от кого не зависит, `net` зависит только от `core`. `media`, `room` и `ui` могут ссылаться друг на друга (циклы только на уровне вызовов — top-level инициализация остаётся ацикличной).
+SvelteKit сейчас используется как shell/router поверх существующего client layer, чтобы миграция была безопасной. `apps/web/src/lib/legacy` сохраняет прежние границы `core`, `net`, `media`, `room`, `ui`; дальше их можно постепенно переводить в Svelte-компоненты и feature stores.
 
 ## Требования
 
@@ -41,7 +38,7 @@ test/              unit-тесты серверных модулей (node:test)
 
 ## Локальный запуск
 
-Клиент собирается Vite (TypeScript, `src/`), сервер — Node.js без сборки (`server.js` + `lib/`).
+Проект организован как npm workspaces. Frontend живет в `apps/web` (SvelteKit + Vite), backend — в `apps/api`, общая validation-логика — в `packages/shared`.
 
 Терминал 1 — LiveKit в dev-режиме:
 
@@ -52,6 +49,8 @@ npm run dev:livekit
 Терминал 2 — API-сервер:
 
 ```bash
+source ~/.nvm/nvm.sh
+nvm use
 npm install
 
 export LIVEKIT_URL=ws://127.0.0.1:7880
@@ -68,13 +67,13 @@ npm run dev:web
 
 Откройте `http://localhost:5173`. `localhost` считается безопасным browser context, поэтому микрофон и screen capture работают без HTTPS.
 
-Production-режим без Docker: `npm run build`, затем `npm start` — сервер раздаёт собранный клиент из `dist/` на `http://localhost:3000`.
+Production-режим без Docker: `npm run build`, затем `npm start` — API-сервер раздаёт собранный SvelteKit static build из `apps/web/build` на `http://localhost:3000`.
 
 Проверки:
 
 ```bash
 npm run check   # node --check серверной части + tsc --noEmit клиента
-npm test        # unit-тесты серверных модулей (node:test)
+npm test        # unit/integration тесты shared/api (node:test)
 ```
 
 ## Environment
@@ -154,4 +153,4 @@ LiveKit снимает mesh-нагрузку с браузеров: каждый
 
 ## Лицензия
 
-MIT License. Vendored RNNoise assets в `public/rnnoise/` распространяются под собственной MIT-лицензией в `public/rnnoise/LICENSE`.
+MIT License. Vendored RNNoise assets в `apps/web/static/rnnoise/` распространяются под собственной MIT-лицензией в `apps/web/static/rnnoise/LICENSE`.

@@ -1,0 +1,13 @@
+{
+  "name": "@voice-room/shared",
+  "version": "1.6.1",
+  "private": true,
+  "type": "commonjs",
+  "exports": {
+    "./validation": "./src/validation.js"
+  },
+  "scripts": {
+    "check": "node --check src/validation.js",
+    "test": "node --test test"
+  }
+}

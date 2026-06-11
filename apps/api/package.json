@@ -1,0 +1,16 @@
+{
+  "name": "@voice-room/api",
+  "version": "1.6.1",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "check": "node --check src/server.js",
+    "test": "node --test test"
+  },
+  "dependencies": {
+    "@voice-room/shared": "file:../../packages/shared",
+    "livekit-server-sdk": "^2.15.4"
+  }
+}
