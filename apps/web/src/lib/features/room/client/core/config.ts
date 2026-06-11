@@ -1,11 +1,11 @@
 export const DEFAULT_NOISE_MODE = 'browser';
 export const DEFAULT_GATE_THRESHOLD_DB = -100;
 export const GATE_THRESHOLD_DB_STORAGE_KEY = 'voice-room:gate-threshold-db';
-export const LEGACY_GATE_THRESHOLD_STORAGE_KEY = 'voice-room:gate-threshold';
+export const PREVIOUS_GATE_THRESHOLD_STORAGE_KEY = 'voice-room:gate-threshold';
 export const GATE_THRESHOLD_MAX_DB = 0;
 export const GATE_THRESHOLD_MIN_DB = -100;
-export const LEGACY_GATE_MAX_AMPLITUDE = 0.18;
-export const LEGACY_GATE_MIN_AMPLITUDE = 0.006;
+export const PREVIOUS_GATE_MAX_AMPLITUDE = 0.18;
+export const PREVIOUS_GATE_MIN_AMPLITUDE = 0.006;
 export const AUDIO_GATE_WORKLET_URL = '/audio-gate.worklet.js';
 export const DESKTOP_AUDIO_SOURCE_WORKLET_URL = '/desktop-audio-source.worklet.js';
 export const GATE_ATTACK_MS = 8;

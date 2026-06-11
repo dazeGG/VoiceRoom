@@ -22,13 +22,19 @@ apps/
     test/          unit/integration тесты API
   web/             SvelteKit frontend app
     src/routes/    тонкие SvelteKit routes: /, /r/[roomId], /download
-    src/lib/       frontend shell и legacy client layer
+    src/lib/api/   typed fetch client: rooms, pow, common HTTP primitives
+    src/lib/components/
+                   общие UI-кусочки и CSS компоненты
+    src/lib/features/
+      home/        стартовая страница на Svelte
+      download/    страница загрузки на Svelte
+      room/        Svelte room shell + room client/media layer
     static/        статика как есть: воркеты, rnnoise (wasm), icon, fonts
 packages/
   shared/          общие contracts/validation для web и api
 ```
 
-SvelteKit сейчас используется как shell/router поверх существующего client layer, чтобы миграция была безопасной. `apps/web/src/lib/legacy` сохраняет прежние границы `core`, `net`, `media`, `room`, `ui`; дальше их можно постепенно переводить в Svelte-компоненты и feature stores.
+`/` и `/download` не зависят от room/media кода. `/r/[roomId]` монтирует Svelte-разметку комнаты и lazy-загружает `features/room/client/main.ts`; сам `livekit-client` дополнительно загружается через `features/room/client/media/livekit-runtime.ts` только при подключении/публикации. Это держит стартовый и download routes маленькими, а WebRTC-слой изолированным внутри room feature.
 
 ## Требования
 
@@ -72,7 +78,7 @@ Production-режим без Docker: `npm run build`, затем `npm start` —
 Проверки:
 
 ```bash
-npm run check   # node --check серверной части + tsc --noEmit клиента
+npm run check   # node --check shared/api/worklets + tsc --noEmit клиента
 npm test        # unit/integration тесты shared/api (node:test)
 ```
 

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import RoomApp from '$lib/shell/RoomApp.svelte';
+  import HomePage from '$lib/features/home/HomePage.svelte';
 </script>
 
 <svelte:head>
@@ -7,4 +7,4 @@
   <meta name="theme-color" content="#10110f">
 </svelte:head>
 
-<RoomApp />
+<HomePage />

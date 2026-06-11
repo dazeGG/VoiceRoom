@@ -1,3 +1,14 @@
+<script lang="ts">
+  import { onMount } from 'svelte';
+  import '$lib/components/topbar.css';
+  import './client/styles.css';
+
+  onMount(async () => {
+    const { mountRoomClient } = await import('./client/main');
+    mountRoomClient();
+  });
+</script>
+
 <div class="app-shell">
       <header class="topbar">
         <a class="brand" href="/" aria-label="Новая голосовая комната" data-sveltekit-reload>
@@ -218,7 +229,7 @@
         </div>
         <div class="participant-copy">
           <h2>
-            <span class="participant-name"></span>
+            <span class="participant-name">Участник</span>
             <span class="participant-muted-icon" data-icon="mic-muted" aria-label="Микрофон выключен" title="Микрофон выключен"></span>
             <span class="participant-deafened-icon" data-icon="headphones-muted" aria-label="Звук выключен" title="Звук выключен"></span>
           </h2>

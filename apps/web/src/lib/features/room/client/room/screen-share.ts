@@ -1,4 +1,3 @@
-import { Track } from 'livekit-client';
 import type { LocalTrackPublication } from 'livekit-client';
 import {
   DEFAULT_SCREEN_PROFILE_ID,
@@ -23,6 +22,7 @@ import { playStreamCue } from '../media/cues';
 import { getDisplayName } from '../ui/names';
 import { publishLocalScreenTracks, unpublishLocalScreenTracks } from './livekit';
 import { applyScreenCaptureProfile, openScreenShare, stopLocalScreenAudioCapture } from '../media/screen-capture';
+import { TRACK_SOURCE } from '../media/livekit-runtime';
 import { updateParticipant } from './participants';
 import {
   getActiveScreenPeer,
@@ -255,7 +255,7 @@ async function updateLocalScreenStats(): Promise<void> {
 
 function findLocalScreenVideoPublication(): LocalTrackPublication | null {
   for (const publication of state.localScreenPublications.values()) {
-    if (publication?.source === Track.Source.ScreenShare) return publication;
+    if (publication?.source === TRACK_SOURCE.ScreenShare) return publication;
     const track = publication?.track;
     if (track?.kind === 'video' || track?.mediaStreamTrack?.kind === 'video') return publication;
   }
@@ -447,7 +447,7 @@ async function applyLocalScreenEncodingProfile(profile: ScreenProfile): Promise<
 
   for (const publication of state.localScreenPublications.values()) {
     const track = publication?.track;
-    if (publication?.source !== Track.Source.ScreenShare && track?.mediaStreamTrack?.kind !== 'video') continue;
+    if (publication?.source !== TRACK_SOURCE.ScreenShare && track?.mediaStreamTrack?.kind !== 'video') continue;
     const sender = (track as { sender?: RTCRtpSender } | undefined)?.sender;
     if (sender) tasks.push(applyScreenSenderEncoding(sender, profile));
   }

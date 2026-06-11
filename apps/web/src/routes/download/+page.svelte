@@ -1,5 +1,5 @@
 <script lang="ts">
-  import DownloadApp from '$lib/shell/DownloadApp.svelte';
+  import DownloadPage from '$lib/features/download/DownloadPage.svelte';
 </script>
 
 <svelte:head>
@@ -8,4 +8,4 @@
   <meta name="theme-color" content="#100f0b">
 </svelte:head>
 
-<DownloadApp />
+<DownloadPage />

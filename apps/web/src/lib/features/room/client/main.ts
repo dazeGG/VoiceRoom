@@ -51,7 +51,12 @@ import {
 import { cancelScreenSourcePicker, closeScreenSourceOnBackdrop, closeScreenSourceOnEscape } from './media/screen-capture';
 import { refreshLocalNetworkIndicator } from './ui/status';
 
-function init(): void {
+let mounted = false;
+
+export function mountRoomClient(): void {
+  if (mounted) return;
+  mounted = true;
+
   mountIcons();
   mountIcons(elements.template.content);
 
@@ -116,5 +121,3 @@ function init(): void {
     showStartScreen();
   }
 }
-
-init();

@@ -1,5 +1,4 @@
-import { ScreenSharePresets, Track, VideoPreset, supportsVP9 } from 'livekit-client';
-import type { ScreenShareCaptureOptions, TrackPublishOptions } from 'livekit-client';
+import type { ScreenShareCaptureOptions, ScreenSharePresets, TrackPublishOptions, VideoPreset } from 'livekit-client';
 import {
   DEFAULT_SCREEN_FPS_ID,
   DEFAULT_SCREEN_PROFILE_ID,
@@ -11,6 +10,7 @@ import {
   SCREEN_VIDEO_BACKUP_CODEC
 } from '../core/config';
 import type { ScreenProfile } from '../core/types';
+import { loadLiveKitClient, TRACK_SOURCE } from './livekit-runtime';
 
 export function getScreenProfile(profileId: string): ScreenProfile {
   const { qualityId, fpsId } = parseScreenProfileId(profileId);
@@ -66,10 +66,12 @@ export function getHigherScreenProfileId(profileId: string, ceilingProfileId: st
 }
 
 export function getPreferredScreenVideoCodec(): 'vp9' | 'h264' {
-  return supportsVP9() ? 'vp9' : 'h264';
+  const codecs = RTCRtpSender.getCapabilities?.('video')?.codecs || [];
+  return codecs.some((codec) => /video\/vp9/i.test(codec.mimeType)) ? 'vp9' : 'h264';
 }
 
-export function getScreenPublishVideoOptions(profile: ScreenProfile): TrackPublishOptions {
+export async function getScreenPublishVideoOptions(profile: ScreenProfile): Promise<TrackPublishOptions> {
+  const { VideoPreset } = await loadLiveKitClient();
   const videoCodec = getPreferredScreenVideoCodec();
   const encoding = {
     maxBitrate: profile.videoBitrate,
@@ -81,20 +83,23 @@ export function getScreenPublishVideoOptions(profile: ScreenProfile): TrackPubli
       codec: SCREEN_VIDEO_BACKUP_CODEC,
       encoding
     },
-    screenShareSimulcastLayers: getScreenSimulcastLayers(profile),
+    screenShareSimulcastLayers: getScreenSimulcastLayers(profile, VideoPreset),
     screenShareEncoding: encoding,
     simulcast: true,
-    source: Track.Source.ScreenShare,
+    source: TRACK_SOURCE.ScreenShare,
     videoCodec
   } as TrackPublishOptions;
 }
 
-export function getScreenSimulcastLayers(profile: ScreenProfile): VideoPreset[] | undefined {
+export function getScreenSimulcastLayers(
+  profile: ScreenProfile,
+  VideoPresetClass: typeof VideoPreset
+): VideoPreset[] | undefined {
   const qualityRank = SCREEN_QUALITY_ORDER.indexOf(profile.qualityId);
   const layers: VideoPreset[] = [];
   for (const qualityId of SCREEN_QUALITY_ORDER.slice(0, qualityRank)) {
     const layer = getScreenProfile(createScreenProfileId(qualityId, profile.fpsId));
-    layers.push(new VideoPreset({
+    layers.push(new VideoPresetClass({
       height: layer.height,
       maxBitrate: layer.videoBitrate,
       maxFramerate: layer.frameRate,
@@ -111,5 +116,4 @@ export function formatBitrate(bitrate: number): string {
   return `${Math.round(bitrate / 1_000)} kbps`;
 }
 
-// Referenced only to keep the type import accurate for capture options downstream.
 export type { ScreenShareCaptureOptions, ScreenSharePresets };

@@ -1,10 +1,11 @@
-import { Room, RoomEvent, Track } from 'livekit-client';
 import type {
   LocalTrackPublication,
   Participant as LiveKitParticipant,
+  Room,
   RemoteParticipant,
   RemoteTrack,
   RemoteTrackPublication,
+  Track,
   TrackPublication
 } from 'livekit-client';
 import { MICROPHONE_AUDIO_BITRATE, SCREEN_AUDIO_BITRATE } from '../core/config';
@@ -18,6 +19,7 @@ import { clearPeerJoinCue } from '../media/cues';
 import { refreshCallControls } from '../ui/controls';
 import { errorMessage } from '../core/utils';
 import { getScreenProfile, getScreenPublishVideoOptions } from '../media/profiles';
+import { loadLiveKitClient, TRACK_SOURCE } from '../media/livekit-runtime';
 import {
   applyRemoteScreenCue,
   attachRemoteScreenStream,
@@ -54,6 +56,7 @@ export async function connectLiveKitRoom(name: string): Promise<void> {
 }
 
 async function connectLiveKitWithFallback(credentials: { url: string; token: string }): Promise<Room> {
+  const { Room } = await loadLiveKitClient();
   const urls = getLiveKitConnectUrls(credentials.url);
   let lastError: unknown = null;
 
@@ -63,7 +66,7 @@ async function connectLiveKitWithFallback(credentials: { url: string; token: str
       dynacast: true
     });
     state.livekitRoom = room;
-    bindLiveKitRoomEvents(room);
+    await bindLiveKitRoomEvents(room);
 
     try {
       await room.connect(url, credentials.token, {
@@ -104,7 +107,9 @@ function logLocalLiveKitDebug(level: 'info' | 'warn', ...args: unknown[]): void 
   console[level](...args);
 }
 
-function bindLiveKitRoomEvents(room: Room): void {
+async function bindLiveKitRoomEvents(room: Room): Promise<void> {
+  const { RoomEvent } = await loadLiveKitClient();
+
   room.on(RoomEvent.Connected, () => {
     if (state.voiceConnection !== 'connected') setVoiceConnectionStatus('connecting');
   });
@@ -293,7 +298,7 @@ export async function publishLocalMicrophone(): Promise<void> {
     dtx: true,
     name: 'microphone',
     red: true,
-    source: Track.Source.Microphone
+    source: TRACK_SOURCE.Microphone as Track.Source
   });
   await syncLocalMicrophonePublicationMuted();
 }
@@ -325,13 +330,13 @@ export async function publishLocalScreenTracks(): Promise<void> {
   state.localScreenPublications.clear();
 
   for (const track of state.localScreenStream.getTracks()) {
-    const videoOptions = track.kind === 'video' ? getScreenPublishVideoOptions(profile) : null;
+    const videoOptions = track.kind === 'video' ? await getScreenPublishVideoOptions(profile) : null;
     const publication = await state.livekitRoom.localParticipant.publishTrack(track, {
       audioPreset: track.kind === 'audio' ? { maxBitrate: SCREEN_AUDIO_BITRATE } : undefined,
       ...(track.kind === 'audio' ? { dtx: false } : {}),
       name: track.kind === 'video' ? 'screen' : 'screen-audio',
       ...(videoOptions ?? {}),
-      source: track.kind === 'video' ? videoOptions!.source : Track.Source.ScreenShareAudio,
+      source: track.kind === 'video' ? videoOptions!.source : TRACK_SOURCE.ScreenShareAudio as Track.Source,
       stream: state.localScreenStream.id
     });
     state.localScreenPublications.set(track.id, publication);
@@ -531,15 +536,15 @@ function handleLiveKitTrackUnpublished(publication: RemoteTrackPublication, part
 }
 
 export function isMicrophonePublication(publication: TrackPublication | null | undefined): boolean {
-  return publication?.source === Track.Source.Microphone;
+  return publication?.source === TRACK_SOURCE.Microphone;
 }
 
 export function isScreenPublication(publication: TrackPublication | null | undefined): boolean {
-  return publication?.source === Track.Source.ScreenShare || publication?.source === Track.Source.ScreenShareAudio;
+  return publication?.source === TRACK_SOURCE.ScreenShare || publication?.source === TRACK_SOURCE.ScreenShareAudio;
 }
 
 export function isScreenAudioPublication(publication: TrackPublication | null | undefined): boolean {
-  return publication?.source === Track.Source.ScreenShareAudio;
+  return publication?.source === TRACK_SOURCE.ScreenShareAudio;
 }
 
 export function findFirstLocalPublication(): LocalTrackPublication | null {

@@ -4,11 +4,11 @@ import {
   GATE_THRESHOLD_DB_STORAGE_KEY,
   GATE_THRESHOLD_MAX_DB,
   GATE_THRESHOLD_MIN_DB,
-  LEGACY_GATE_MAX_AMPLITUDE,
-  LEGACY_GATE_MIN_AMPLITUDE,
-  LEGACY_GATE_THRESHOLD_STORAGE_KEY,
   NOISE_MODES,
   NOISE_MODE_STORAGE_KEY,
+  PREVIOUS_GATE_MAX_AMPLITUDE,
+  PREVIOUS_GATE_MIN_AMPLITUDE,
+  PREVIOUS_GATE_THRESHOLD_STORAGE_KEY,
   type NoiseMode
 } from './config';
 
@@ -30,10 +30,10 @@ export function getStoredGateThresholdDb(): number {
   const storedValue = Number.parseInt(localStorage.getItem(GATE_THRESHOLD_DB_STORAGE_KEY) || '', 10);
   if (Number.isFinite(storedValue)) return clampGateThresholdDb(storedValue);
 
-  const legacyValue = Number.parseInt(localStorage.getItem(LEGACY_GATE_THRESHOLD_STORAGE_KEY) || '', 10);
-  if (!Number.isFinite(legacyValue)) return DEFAULT_GATE_THRESHOLD_DB;
+  const previousValue = Number.parseInt(localStorage.getItem(PREVIOUS_GATE_THRESHOLD_STORAGE_KEY) || '', 10);
+  if (!Number.isFinite(previousValue)) return DEFAULT_GATE_THRESHOLD_DB;
 
-  const migratedValue = legacyGatePercentToDb(legacyValue);
+  const migratedValue = previousGatePercentToDb(previousValue);
   localStorage.setItem(GATE_THRESHOLD_DB_STORAGE_KEY, String(migratedValue));
   return migratedValue;
 }
@@ -51,11 +51,11 @@ export function amplitudeToDb(amplitude: number): number {
   return Math.max(GATE_THRESHOLD_MIN_DB, Math.min(GATE_THRESHOLD_MAX_DB, 20 * Math.log10(amplitude)));
 }
 
-export function legacyGatePercentToDb(value: number): number {
+export function previousGatePercentToDb(value: number): number {
   if (value <= 0) return DEFAULT_GATE_THRESHOLD_DB;
 
   const amount = Math.min(100, Math.max(0, value)) / 100;
-  const amplitude = LEGACY_GATE_MIN_AMPLITUDE + amount * amount * (LEGACY_GATE_MAX_AMPLITUDE - LEGACY_GATE_MIN_AMPLITUDE);
+  const amplitude = PREVIOUS_GATE_MIN_AMPLITUDE + amount * amount * (PREVIOUS_GATE_MAX_AMPLITUDE - PREVIOUS_GATE_MIN_AMPLITUDE);
   return Math.round(amplitudeToDb(amplitude));
 }
 
