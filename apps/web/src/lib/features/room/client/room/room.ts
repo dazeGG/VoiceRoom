@@ -14,7 +14,7 @@ import {
   refreshLocalNetworkIndicator
 } from '../ui/status';
 import { refreshCallControls } from '../ui/controls';
-import { refreshScreenControls, stopLocalScreenStream } from './screen-share';
+import { refreshScreenControls, stopLocalScreenStream } from '../services/screen-share-service';
 import { closeScreenView, refreshScreenStage } from '../ui/screen-view';
 import {
   createParticipant,
@@ -31,12 +31,12 @@ import {
   disconnectLiveKitRoom,
   syncLiveKitParticipantById,
   syncLiveKitParticipants
-} from './livekit';
-import { getLocalMicrophoneCapture, openLocalMicrophone, setLocalMicrophoneCapture, stopMicrophoneCapture } from '../media/microphone';
+} from '../services/livekit-service';
+import { getLocalMicrophoneCapture, openLocalMicrophone, setLocalMicrophoneCapture, stopMicrophoneCapture } from '../services/microphone-service';
 import { attachMeter, startMeters, stopMeters } from '../media/meters';
 import { startPeerLatencyStats, startSpeakingStats, stopPeerLatencyStats, stopSpeakingStats } from './stats';
 import { clearAllPeerJoinCues, clearPeerJoinCue, clearStreamViewerCues, playPeerCue, playPeerJoinCue } from '../media/cues';
-import { cancelScreenSourcePicker } from '../media/screen-capture';
+import { cancelScreenSourcePicker } from '../ui/screen-source-picker';
 import {
   clearGateSwitchTimer,
   closeDevicePopover,

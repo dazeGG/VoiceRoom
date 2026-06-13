@@ -16,14 +16,14 @@ import {
   getPreferredScreenVideoCodec,
   getScreenProfile
 } from '../media/profiles';
-import { postState } from './presence';
-import { setLocalAppAudioSuppressed } from '../media/playback';
+import { postState } from '../room/presence';
+import { setLocalAppAudioSuppressed } from './media-playback-service';
 import { playStreamCue } from '../media/cues';
 import { getDisplayName } from '../ui/names';
-import { publishLocalScreenTracks, unpublishLocalScreenTracks } from './livekit';
-import { applyScreenCaptureProfile, openScreenShare, stopLocalScreenAudioCapture } from '../media/screen-capture';
+import { publishLocalScreenTracks, unpublishLocalScreenTracks } from './livekit-service';
+import { applyScreenCaptureProfile, openScreenShare, stopLocalScreenAudioCapture } from './screen-capture-service';
 import { TRACK_SOURCE } from '../media/livekit-runtime';
-import { updateParticipant } from './participants';
+import { updateParticipant } from '../room/participants';
 import {
   getActiveScreenPeer,
   hideScreenStage,

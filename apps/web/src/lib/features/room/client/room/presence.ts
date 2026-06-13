@@ -1,7 +1,7 @@
 import { postJson } from '../net/api';
 import { state } from '../core/state';
 import { getDisplayName } from '../ui/names';
-import { hasScreenAudio } from './screen-share';
+import { hasScreenAudio } from '../services/screen-share-service';
 
 export async function postState(): Promise<void> {
   if (!state.joined) return;

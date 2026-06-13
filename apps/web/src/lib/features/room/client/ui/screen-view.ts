@@ -6,8 +6,8 @@ import { getScreenProfile, parseScreenProfileId } from '../media/profiles';
 import { SCREEN_FPS_OPTIONS, SCREEN_QUALITY_OPTIONS } from '../core/config';
 
 import { postState } from '../room/presence';
-import { isAppPlaybackMuted, applyAudioOutputDevice, playMediaElement } from '../media/playback';
-import { syncLiveKitScreenSubscriptions } from '../room/livekit';
+import { isAppPlaybackMuted, applyAudioOutputDevice, playMediaElement } from '../services/media-playback-service';
+import { syncLiveKitScreenSubscriptions } from '../services/livekit-service';
 import {
   detachRemoteScreen,
   getAllParticipants,

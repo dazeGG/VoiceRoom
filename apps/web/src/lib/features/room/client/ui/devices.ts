@@ -21,9 +21,9 @@ import {
   setLocalMicrophoneCapture,
   setNoiseMode,
   stopMicrophoneCapture
-} from '../media/microphone';
-import { publishLocalMicrophone, unpublishLocalMicrophone } from '../room/livekit';
-import { supportsAudioOutputSelection, syncAudioOutputDevices } from '../media/playback';
+} from '../services/microphone-service';
+import { publishLocalMicrophone, unpublishLocalMicrophone } from '../services/livekit-service';
+import { supportsAudioOutputSelection, syncAudioOutputDevices } from '../services/media-playback-service';
 import { attachMeter } from '../media/meters';
 import { setParticipantSpeaking } from '../room/participants';
 import { refreshCallControls, refreshOutputControls } from './controls';

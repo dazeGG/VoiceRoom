@@ -1,7 +1,7 @@
 
 import { elements } from '../ui/dom';
 import { state } from '../core/state';
-import { getMicrophoneProcessors } from './microphone';
+import { getMicrophoneProcessors } from './microphone-service';
 import { setVoiceConnectionStatus } from '../ui/status';
 import { syncScreenVideoAudio } from '../ui/screen-view';
 

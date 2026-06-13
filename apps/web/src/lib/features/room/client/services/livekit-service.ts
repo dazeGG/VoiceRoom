@@ -14,7 +14,7 @@ import { state } from '../core/state';
 import { refreshLocalNetworkIndicator, setVoiceConnectionStatus } from '../ui/status';
 import { showToast } from '../ui/toast';
 import { postJson } from '../net/api';
-import { queueAudioUnlock, syncRemoteAudioPlayback } from '../media/playback';
+import { queueAudioUnlock, syncRemoteAudioPlayback } from './media-playback-service';
 import { clearPeerJoinCue } from '../media/cues';
 import { refreshCallControls } from '../ui/controls';
 import { errorMessage } from '../core/utils';
@@ -34,8 +34,8 @@ import {
   setParticipantSpeaking,
   updateParticipant,
   updatePeerStatus
-} from './participants';
-import { refreshScreenControls } from './screen-share';
+} from '../room/participants';
+import { refreshScreenControls } from './screen-share-service';
 import { refreshScreenAction, refreshScreenStage, refreshScreenTiles } from '../ui/screen-view';
 import type { Participant } from '../core/types';
 

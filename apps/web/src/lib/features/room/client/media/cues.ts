@@ -4,7 +4,7 @@ import {
   STREAM_VIEWER_CUE_DEDUPE_MS
 } from '../core/config';
 import { state } from '../core/state';
-import { getSharedAudioContext, isAppPlaybackMuted, isLocalAppAudioSuppressed, queueAudioUnlock } from './playback';
+import { getSharedAudioContext, isAppPlaybackMuted, isLocalAppAudioSuppressed, queueAudioUnlock } from '../services/media-playback-service';
 
 const peerJoinCueTimes = new Map<string, number>();
 const streamViewerCueTimes = new Map<string, number>();

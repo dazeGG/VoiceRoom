@@ -6,11 +6,11 @@ import {
   applyAudioOutputDevice,
   isVoicePlaybackMuted,
   playMediaElement
-} from '../media/playback';
+} from '../services/media-playback-service';
 import { STREAM_CUE_DEDUPE_MS } from '../core/config';
 import { clearPeerJoinCue, playStreamCue, playStreamViewerCue } from '../media/cues';
 import { attachMeter } from '../media/meters';
-import { isMicrophonePublication, syncLiveKitScreenSubscriptions } from './livekit';
+import { isMicrophonePublication, syncLiveKitScreenSubscriptions } from '../services/livekit-service';
 import {
   closeScreenView,
   enterScreenView,

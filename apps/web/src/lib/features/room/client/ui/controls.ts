@@ -5,10 +5,10 @@ import {
   supportsAudioOutputSelection,
   syncPlaybackMuteState,
   unlockAudio
-} from '../media/playback';
+} from '../services/media-playback-service';
 import { playMicCue, playOutputCue } from '../media/cues';
-import { getLocalMicrophoneCapture, setMicrophoneCaptureEnabled } from '../media/microphone';
-import { syncLiveKitVoiceSubscriptions, syncLocalMicrophonePublicationMuted } from '../room/livekit';
+import { getLocalMicrophoneCapture, setMicrophoneCaptureEnabled } from '../services/microphone-service';
+import { syncLiveKitVoiceSubscriptions, syncLocalMicrophonePublicationMuted } from '../services/livekit-service';
 import { getDisplayName } from './names';
 import { updateParticipant } from '../room/participants';
 import { persistOutputMuted } from './devices';

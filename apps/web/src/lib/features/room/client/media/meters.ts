@@ -1,8 +1,8 @@
 import { GATE_THRESHOLD_MIN_DB, LOCAL_GATE_DISABLED_SPEAKING_DB } from '../core/config';
 import { state } from '../core/state';
 import { amplitudeToDb } from '../core/settings';
-import { getSharedAudioContext } from './playback';
-import { isGateDisabled } from './microphone';
+import { getSharedAudioContext } from '../services/media-playback-service';
+import { isGateDisabled } from '../services/microphone-service';
 import { refreshMicrophoneLevelMeter } from '../ui/devices';
 import { getParticipantView, setParticipantSpeaking } from '../room/participants';
 import type { Participant } from '../core/types';

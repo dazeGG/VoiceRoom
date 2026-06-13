@@ -5,7 +5,7 @@ import { mountIcons } from './ui/icons';
 import { state } from './core/state';
 import { cleanDisplayName } from './core/utils';
 import { showToast } from './ui/toast';
-import { handleAudioUnlockGesture, unlockAudio } from './media/playback';
+import { handleAudioUnlockGesture, unlockAudio } from './services/media-playback-service';
 import {
   closeDevicePopoverOnEscape,
   closeDevicePopoverOnOutside,
@@ -36,7 +36,7 @@ import {
   showRoomRoute,
   showStartScreen
 } from './room/room';
-import { handleScreenButtonClick } from './room/screen-share';
+import { handleScreenButtonClick } from './services/screen-share-service';
 import {
   bindScreenStageIdleUi,
   handleScreenStageClick,
@@ -48,7 +48,7 @@ import {
   updateScreenFullscreenState,
   updateScreenVolumeFromSlider
 } from './ui/screen-view';
-import { cancelScreenSourcePicker, closeScreenSourceOnBackdrop, closeScreenSourceOnEscape } from './media/screen-capture';
+import { cancelScreenSourcePicker, closeScreenSourceOnBackdrop, closeScreenSourceOnEscape } from './ui/screen-source-picker';
 import { refreshLocalNetworkIndicator } from './ui/status';
 
 let mounted = false;
