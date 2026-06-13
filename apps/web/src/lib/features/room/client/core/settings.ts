@@ -48,13 +48,24 @@ export function getStoredStreamVolume(): number {
     : DEFAULT_STREAM_VOLUME;
 }
 
-export function storeStreamVolume(volume: number): void {
-  localStorage.setItem(STREAM_VOLUME_STORAGE_KEY, String(clampStreamVolume(volume)));
+export function storeStreamVolume(volume: number, maxVolume = MAX_STREAM_VOLUME): number {
+  const clampedVolume = clampStreamVolume(volume, maxVolume);
+  localStorage.setItem(STREAM_VOLUME_STORAGE_KEY, String(clampedVolume));
+  return clampedVolume;
 }
 
-export function clampStreamVolume(volume: number): number {
+export function normalizeStoredStreamVolume(volume: number, maxVolume = MAX_STREAM_VOLUME): number {
+  const clampedVolume = clampStreamVolume(volume, maxVolume);
+  if (volume !== clampedVolume) {
+    localStorage.setItem(STREAM_VOLUME_STORAGE_KEY, String(clampedVolume));
+  }
+  return clampedVolume;
+}
+
+export function clampStreamVolume(volume: number, maxVolume = MAX_STREAM_VOLUME): number {
+  const upperBound = Math.min(MAX_STREAM_VOLUME, Math.max(0, maxVolume));
   return Number.isFinite(volume)
-    ? Math.min(MAX_STREAM_VOLUME, Math.max(0, volume))
+    ? Math.min(upperBound, Math.max(0, volume))
     : DEFAULT_STREAM_VOLUME;
 }
 

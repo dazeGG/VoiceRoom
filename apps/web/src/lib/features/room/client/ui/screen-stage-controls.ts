@@ -2,9 +2,14 @@ import { elements } from './dom';
 import { state } from '../core/state';
 import { showToast } from './toast';
 import { getScreenProfile, parseScreenProfileId } from '../media/profiles';
-import { MAX_STREAM_VOLUME, SCREEN_FPS_OPTIONS, SCREEN_QUALITY_OPTIONS } from '../core/config';
-import { clampStreamVolume, storeStreamVolume } from '../core/settings';
-import { isAppPlaybackMuted, applyAudioOutputDevice, applyScreenMediaElementVolume } from '../services/media-playback-service';
+import { SCREEN_FPS_OPTIONS, SCREEN_QUALITY_OPTIONS } from '../core/config';
+import { clampStreamVolume, normalizeStoredStreamVolume, storeStreamVolume } from '../core/settings';
+import {
+  isAppPlaybackMuted,
+  applyAudioOutputDevice,
+  applyScreenMediaElementVolume,
+  getAvailableScreenMediaElementVolumeMax
+} from '../services/media-playback-service';
 import { getAllParticipants } from '../room/participants';
 import type { Participant } from '../core/types';
 
@@ -91,7 +96,11 @@ export function syncScreenVideoAudio(): void {
   const peer = getActiveScreenPeerRef();
   const isLocalStream = Boolean(peer?.isLocal);
   const isRemoteStreamActive = Boolean(peer && !peer.isLocal && elements.screenVideo.srcObject);
-  const streamVolume = clampStreamVolume(state.screenVolume);
+  const maxStreamVolume = getAvailableScreenMediaElementVolumeMax();
+  const streamVolume = clampStreamVolume(state.screenVolume, maxStreamVolume);
+  if (state.screenVolume !== streamVolume) {
+    state.screenVolume = normalizeStoredStreamVolume(state.screenVolume, maxStreamVolume);
+  }
   const muted =
     isLocalStream || state.screenMuted || streamVolume <= 0 || isAppPlaybackMuted();
   applyScreenMediaElementVolume(elements.screenVideo, {
@@ -101,7 +110,7 @@ export function syncScreenVideoAudio(): void {
   });
   applyAudioOutputDevice(elements.screenVideo).catch(() => {});
   if (!isLocalStream) {
-    elements.streamVolumeSlider.max = String(MAX_STREAM_VOLUME * 100);
+    elements.streamVolumeSlider.max = String(maxStreamVolume * 100);
     elements.streamVolumeSlider.value = String(Math.round(streamVolume * 100));
     elements.streamVolumeButton.dataset.muted = String(muted);
     elements.streamVolumeButton.setAttribute('aria-pressed', String(muted));
@@ -116,7 +125,7 @@ export function toggleScreenMute(): void {
   if (state.screenMuted || state.screenVolume <= 0) {
     state.screenMuted = false;
     if (state.screenVolume <= 0) state.screenVolume = 1;
-    storeStreamVolume(state.screenVolume);
+    state.screenVolume = storeStreamVolume(state.screenVolume, getAvailableScreenMediaElementVolumeMax());
   } else {
     state.screenMuted = true;
   }
@@ -125,8 +134,7 @@ export function toggleScreenMute(): void {
 
 export function updateScreenVolumeFromSlider(): void {
   const nextVolume = Number(elements.streamVolumeSlider.value) / 100;
-  state.screenVolume = clampStreamVolume(nextVolume);
-  storeStreamVolume(state.screenVolume);
+  state.screenVolume = storeStreamVolume(nextVolume, getAvailableScreenMediaElementVolumeMax());
   state.screenMuted = state.screenVolume <= 0;
   syncScreenVideoAudio();
 }

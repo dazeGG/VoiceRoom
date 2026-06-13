@@ -1,6 +1,7 @@
 
 import { elements } from '../ui/dom';
 import { state } from '../core/state';
+import { MAX_STREAM_VOLUME } from '../core/config';
 import { getMicrophoneProcessors } from './microphone-service';
 import { setVoiceConnectionStatus } from '../ui/status';
 import { syncScreenVideoAudio } from '../ui/screen-view';
@@ -11,6 +12,12 @@ export function supportsAudioOutputSelection(): boolean {
 
 function supportsAudioContextOutputSelection(): boolean {
   return typeof AudioContext !== 'undefined' && 'setSinkId' in AudioContext.prototype;
+}
+
+export function getAvailableScreenMediaElementVolumeMax(): number {
+  return state.outputDeviceId && supportsAudioOutputSelection() && !supportsAudioContextOutputSelection()
+    ? 1
+    : MAX_STREAM_VOLUME;
 }
 
 export function syncPlaybackMuteState(): void {
@@ -34,6 +41,10 @@ export function syncRemoteAudioPlayback(): void {
 
 export async function syncAudioOutputDevices(): Promise<boolean> {
   if (!supportsAudioOutputSelection()) return false;
+  if (state.outputDeviceId && screenAudioGainElement && !supportsAudioContextOutputSelection()) {
+    console.warn('Audio output device unavailable while stream boost is active');
+    return false;
+  }
 
   const mediaElements: HTMLMediaElement[] = [elements.screenVideo];
   for (const peer of state.peers.values()) {
@@ -42,6 +53,7 @@ export async function syncAudioOutputDevices(): Promise<boolean> {
 
   const results = await Promise.all(mediaElements.map((mediaElement) => applyAudioOutputDevice(mediaElement)));
   const contextSynced = await applyAudioOutputDeviceToContext();
+  syncScreenVideoAudio();
   return results.every(Boolean) && contextSynced !== false;
 }
 
@@ -82,13 +94,14 @@ export function getSharedAudioContext(): AudioContext {
 let screenAudioSource: MediaElementAudioSourceNode | null = null;
 let screenAudioGain: GainNode | null = null;
 let screenAudioGainElement: HTMLMediaElement | null = null;
-let warnedScreenBoostOutputDeviceFallback = false;
 
 export function applyScreenMediaElementVolume(
   mediaElement: HTMLMediaElement,
   options: { boostAllowed: boolean; muted: boolean; volume: number }
 ): boolean {
-  const volume = Number.isFinite(options.volume) ? Math.max(0, options.volume) : 1;
+  const volume = Number.isFinite(options.volume)
+    ? Math.min(getAvailableScreenMediaElementVolumeMax(), Math.max(0, options.volume))
+    : 1;
   if (volume <= 1 || !options.boostAllowed) {
     mediaElement.volume = screenAudioGainElement === mediaElement ? 1 : Math.min(1, volume);
     mediaElement.muted = options.muted;
@@ -96,16 +109,6 @@ export function applyScreenMediaElementVolume(
       screenAudioGain.gain.value = options.muted ? 0 : Math.min(1, volume);
     }
     return true;
-  }
-
-  if (supportsAudioOutputSelection() && !supportsAudioContextOutputSelection()) {
-    if (!warnedScreenBoostOutputDeviceFallback) {
-      warnedScreenBoostOutputDeviceFallback = true;
-      console.warn('Stream audio boost unavailable while preserving output device selection');
-    }
-    mediaElement.volume = Math.min(1, volume);
-    mediaElement.muted = options.muted;
-    return false;
   }
 
   try {
