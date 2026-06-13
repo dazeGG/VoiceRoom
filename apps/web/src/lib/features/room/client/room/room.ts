@@ -430,11 +430,11 @@ async function copyText(text: string): Promise<void> {
   try {
     await navigator.clipboard.writeText(text);
   } catch {
-    const temporaryInput = document.createElement('input');
-    temporaryInput.value = text;
-    document.body.append(temporaryInput);
-    temporaryInput.select();
+    const clipboardFallbackInput = document.createElement('input');
+    clipboardFallbackInput.value = text;
+    document.body.append(clipboardFallbackInput);
+    clipboardFallbackInput.select();
     document.execCommand('copy');
-    temporaryInput.remove();
+    clipboardFallbackInput.remove();
   }
 }

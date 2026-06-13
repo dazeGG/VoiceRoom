@@ -7,7 +7,7 @@
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
     "check": "node --check src/server.js",
-    "test": "node --test test"
+    "test": "node --test \"test/**/*.test.js\""
   },
   "dependencies": {
     "@voice-room/shared": "file:../../packages/shared",

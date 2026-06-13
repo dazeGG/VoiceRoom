@@ -8,6 +8,6 @@
   },
   "scripts": {
     "check": "node --check src/validation.js",
-    "test": "node --test test"
+    "test": "node --test \"test/**/*.test.js\""
   }
 }
