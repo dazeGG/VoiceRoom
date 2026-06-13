@@ -1,6 +1,6 @@
 {
   "name": "@voice-room/shared",
-  "version": "1.6.1",
+  "version": "1.7.0",
   "private": true,
   "type": "commonjs",
   "exports": {
