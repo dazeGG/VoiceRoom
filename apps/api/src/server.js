@@ -32,8 +32,14 @@ const ROOM_CREATE_RATE_WINDOW_MS = readEnvInt('ROOM_CREATE_RATE_WINDOW_MS', 6000
 const MAX_EMPTY_ROOMS_PER_IP = readEnvInt('MAX_EMPTY_ROOMS_PER_IP', 3, 0);
 const ROOM_CREATE_POW_DIFFICULTY = Math.min(readEnvInt('ROOM_CREATE_POW_DIFFICULTY', 14, 0), 32);
 const ROOM_CREATE_POW_TTL_MS = readEnvInt('ROOM_CREATE_POW_TTL_MS', 120000, 10000);
+// Desktop app downloads are served from the latest GitHub release of this repo.
+// Metadata is cached server-side so visitors never hit GitHub's per-IP rate limit.
+const DESKTOP_RELEASE_REPO = (process.env.DESKTOP_RELEASE_REPO || 'dazeGG/VoiceRoomDesktop').trim();
+const DESKTOP_RELEASE_CACHE_MS = readEnvInt('DESKTOP_RELEASE_CACHE_MS', 600000, 1000);
+const DESKTOP_RELEASE_TIMEOUT_MS = readEnvInt('DESKTOP_RELEASE_TIMEOUT_MS', 6000, 1000);
 
 const rooms = new Map();
+let desktopReleaseCache = { at: 0, data: null };
 const pow = createProofOfWork({
   secret: crypto.randomBytes(32),
   difficulty: ROOM_CREATE_POW_DIFFICULTY,
@@ -566,6 +572,77 @@ async function handleState(req, res) {
   sendJson(res, 200, { ok: true, peer: publicPeer(peer) });
 }
 
+function pickReleaseAsset(assets, patterns) {
+  for (const pattern of patterns) {
+    const found = assets.find((asset) => pattern.test(asset.name || ''));
+    if (found && found.browser_download_url) {
+      return { url: found.browser_download_url, size: Number(found.size) || 0 };
+    }
+  }
+  return null;
+}
+
+function normalizeRelease(release) {
+  const assets = Array.isArray(release.assets) ? release.assets : [];
+  return {
+    version: String(release.tag_name || '').replace(/^v/, ''),
+    htmlUrl: typeof release.html_url === 'string' ? release.html_url : '',
+    assets: {
+      'mac-arm64': pickReleaseAsset(assets, [/-mac-arm64\.dmg$/i]),
+      'mac-x64': pickReleaseAsset(assets, [/-mac-x64\.dmg$/i]),
+      // Prefer the NSIS installer; fall back to the portable build.
+      'win-x64': pickReleaseAsset(assets, [/-win-x64-setup\.exe$/i, /-win-x64\.exe$/i])
+    }
+  };
+}
+
+async function fetchLatestRelease() {
+  const headers = {
+    Accept: 'application/vnd.github+json',
+    'User-Agent': 'voice-room-web',
+    'X-GitHub-Api-Version': '2022-11-28'
+  };
+  const token = process.env.GITHUB_TOKEN && process.env.GITHUB_TOKEN.trim();
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), DESKTOP_RELEASE_TIMEOUT_MS);
+  try {
+    const response = await fetch(
+      `https://api.github.com/repos/${DESKTOP_RELEASE_REPO}/releases/latest`,
+      { headers, signal: controller.signal }
+    );
+    if (!response.ok) {
+      throw new Error(`GitHub responded ${response.status}`);
+    }
+    return normalizeRelease(await response.json());
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function handleDesktopLatest(res) {
+  const now = Date.now();
+  if (desktopReleaseCache.data && now - desktopReleaseCache.at < DESKTOP_RELEASE_CACHE_MS) {
+    sendJson(res, 200, { ok: true, ...desktopReleaseCache.data }, { 'Cache-Control': 'public, max-age=300' });
+    return;
+  }
+
+  try {
+    const data = await fetchLatestRelease();
+    desktopReleaseCache = { at: now, data };
+    sendJson(res, 200, { ok: true, ...data }, { 'Cache-Control': 'public, max-age=300' });
+  } catch (error) {
+    // Serve stale metadata if we have any; the binaries are still valid.
+    if (desktopReleaseCache.data) {
+      sendJson(res, 200, { ok: true, ...desktopReleaseCache.data }, { 'Cache-Control': 'public, max-age=60' });
+      return;
+    }
+    console.error('Failed to fetch desktop release:', error.message);
+    sendJson(res, 502, { ok: false, error: 'Не удалось получить данные о релизе' });
+  }
+}
+
 function getApiRoutePath(pathname) {
   if (pathname === API_PREFIX) return '/';
   if (pathname.startsWith(`${API_PREFIX}/`)) return pathname.slice(API_PREFIX.length);
@@ -597,6 +674,11 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === 'GET' && routePath === '/pow-challenge') {
       handlePowChallenge(req, res);
+      return;
+    }
+
+    if (req.method === 'GET' && routePath === '/desktop/latest') {
+      await handleDesktopLatest(res);
       return;
     }
 

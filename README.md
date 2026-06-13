@@ -114,6 +114,14 @@ ROOM_CREATE_POW_DIFFICULTY=14
 ROOM_CREATE_POW_TTL_MS=120000
 ROOM_CREATE_RATE_LIMIT=20
 ROOM_CREATE_RATE_WINDOW_MS=60000
+
+# Блок «Десктоп-приложение» на главной берёт ссылки из latest-релиза GitHub
+# через эндпоинт GET /api/desktop/latest (метаданные кэшируются на сервере).
+DESKTOP_RELEASE_REPO=dazeGG/VoiceRoomDesktop
+DESKTOP_RELEASE_CACHE_MS=600000
+# Необязательный токен — поднимает лимит запросов к GitHub API (репо публичный,
+# при кэше в 10 минут хватает и анонимных 60 запросов/час).
+GITHUB_TOKEN=
 ```
 
 Для локального LiveKit dev server используйте:
