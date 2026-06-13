@@ -1143,12 +1143,12 @@ body[data-screen-view="true"][data-strip-collapsed="true"] .stage-strip {
   min-height: 0;
   height: 100%;
   aspect-ratio: auto;
-  /* Size container so the avatar/ring can scale down on short tiles. */
+  /* Size container so descendant avatar/ring elements can scale down on short tiles. */
   container-type: size;
   place-items: center;
   border: 1px solid color-mix(in oklch, var(--line), var(--ink) 8%);
   border-radius: var(--radius-sm);
-  padding: var(--space-lg) var(--space-md);
+  padding: clamp(var(--space-sm), 2.2vh, var(--space-lg)) var(--space-md);
   overflow: hidden;
   background:
     linear-gradient(
@@ -1232,9 +1232,6 @@ body[data-screen-view="true"][data-strip-collapsed="true"] .stage-strip {
     width: 44px;
     height: 44px;
     font-size: 1rem;
-  }
-  .participant {
-    padding: var(--space-sm);
   }
 }
 
