@@ -613,6 +613,13 @@
     background: rgba(255, 255, 255, 0.02);
   }
 
+  /* Inside the Electron shell the preload tags <html> with .is-desktop before
+     page scripts run, so the download card is hidden with no flash. Contract:
+     window.voiceRoomDesktop = { isDesktop, isElectron, platform, version }. */
+  :global(html.is-desktop) .home-app {
+    display: none;
+  }
+
   .home-app-head {
     display: flex;
     align-items: center;
