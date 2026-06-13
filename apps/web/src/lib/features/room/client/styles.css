@@ -85,14 +85,14 @@ button:disabled {
   gap: var(--space-lg);
 }
 
-/* Outside the room the topbar is constrained to the same 1180px content
+/* Outside the room the topbar is constrained to the same 1020px content
    container as the start layout, so the logo sits on the content edge. */
 body:not([data-screen="room"]) .app-shell {
   padding-inline: 40px;
 }
 
 body:not([data-screen="room"]) .topbar {
-  width: min(100%, 1180px);
+  width: min(100%, 1020px);
   margin-inline: auto;
 }
 
@@ -177,11 +177,11 @@ body[data-screen="room"] .topbar-room-heading {
 /* Top-anchored hero layout: copy on the left, the panel column on the right. */
 .start-layout {
   display: grid;
-  width: min(100%, 1180px);
+  width: min(100%, 1020px);
   grid-template-columns: minmax(0, 1fr) minmax(340px, 452px);
   align-items: start;
   align-content: start;
-  gap: clamp(var(--space-xl), 6vw, 80px);
+  gap: clamp(var(--space-lg), 4vw, 56px);
   margin-inline: auto;
   padding-top: clamp(24px, 6vh, 72px);
 }

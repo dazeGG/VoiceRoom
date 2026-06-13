@@ -206,7 +206,6 @@
 
   <main class="start-layout" id="startScreen" aria-label="Стартовый экран">
     <section class="start-copy" aria-labelledby="startTitle">
-      <p class="eyebrow">voice room</p>
       <h1 class="hero-title" id="startTitle">Голосовая комната без лишних дверей</h1>
       <p class="hero-lead">Сначала сохраните имя, потом создайте комнату или зайдите к своим по коду.</p>
 
@@ -373,6 +372,12 @@
   /* Right block — stepped primary card (name → room) + collapsible app card.
      Implements the «Voice Room - Главная» design handoff. Scoped so the warm
      panel values win over the global input/select rules in styles.css. */
+  /* No eyebrow above the hero here, so drop the lockup top offset and align
+     the title with the top of the right card. */
+  .start-copy .hero-title {
+    margin-top: 0;
+  }
+
   .home-side {
     display: flex;
     flex-direction: column;
