@@ -1,4 +1,4 @@
-import { postJson } from './client';
+import { postJson } from './http';
 import { createRoomProof } from './pow';
 
 interface CreateRoomResponse {

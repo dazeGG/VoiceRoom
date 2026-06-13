@@ -2,13 +2,13 @@
   import { onMount } from 'svelte';
   import { createRoom } from '$lib/api/rooms';
   import { fetchDesktopRelease, type DesktopRelease } from '$lib/api/desktop';
-  import FeatureList from '$lib/components/FeatureList.svelte';
-  import Topbar from '$lib/components/Topbar.svelte';
-  import '$lib/components/typography.css';
-  import '$lib/features/room/client/styles.css';
-  import { START_FEATURES } from './features';
-  import { extractRoomId } from '$lib/utils/room';
-  import { cleanDisplayName } from '$lib/utils/text';
+  import FeatureList from '$lib/shared/components/FeatureList.svelte';
+  import Topbar from '$lib/shared/components/Topbar.svelte';
+  import '$lib/shared/styles/typography.css';
+  import '$lib/shared/styles/app.css';
+  import { START_FEATURES } from '$lib/features/shared-content/start-features';
+  import { extractRoomId } from '$lib/shared/utils/room';
+  import { cleanDisplayName } from '$lib/shared/utils/text';
 
   const QUARANTINE_CMD = 'sudo xattr -rd com.apple.quarantine /Applications/Voice\\ Room.app';
   const RELEASES_URL = 'https://github.com/dazeGG/VoiceRoomDesktop/releases/latest';

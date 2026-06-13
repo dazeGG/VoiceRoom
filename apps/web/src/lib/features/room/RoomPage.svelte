@@ -1,9 +1,10 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import FeatureList from '$lib/components/FeatureList.svelte';
-  import Topbar from '$lib/components/Topbar.svelte';
-  import '$lib/components/typography.css';
-  import { START_FEATURES } from '$lib/features/home/features';
+  import FeatureList from '$lib/shared/components/FeatureList.svelte';
+  import Topbar from '$lib/shared/components/Topbar.svelte';
+  import '$lib/shared/styles/typography.css';
+  import '$lib/shared/styles/app.css';
+  import { START_FEATURES } from '$lib/features/shared-content/start-features';
   import './client/styles.css';
 
   onMount(async () => {

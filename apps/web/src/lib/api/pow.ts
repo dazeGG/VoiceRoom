@@ -1,4 +1,4 @@
-import { fetchJson } from './client';
+import { fetchJson } from './http';
 
 const ROOM_PROOF_BATCH_SIZE = 250;
 

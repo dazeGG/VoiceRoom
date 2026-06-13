@@ -1,4 +1,4 @@
-import { fetchJson } from './client';
+import { fetchJson } from './http';
 
 export interface DesktopAsset {
   url: string;
