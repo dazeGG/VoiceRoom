@@ -7,7 +7,7 @@ import { isAppPlaybackMuted, applyAudioOutputDevice } from '../services/media-pl
 import { getAllParticipants } from '../room/participants';
 import type { Participant } from '../core/types';
 
-const SCREEN_UI_IDLE_MS = 2200;
+const SCREEN_UI_IDLE_MS = 1000;
 let screenUiIdleTimer = 0;
 let screenStagePointerInside = false;
 let screenUiHoverBound = false;
@@ -234,10 +234,6 @@ export function bindScreenStageIdleUi(): void {
   );
 }
 
-function shouldDeferScreenUiIdle(): boolean {
-  return elements.screenViewControls.matches(':hover') || elements.screenViewControls.matches(':focus-within');
-}
-
 function activateScreenStageUi(): void {
   window.clearTimeout(screenUiIdleTimer);
   elements.screenStage.dataset.uiActive = 'true';
@@ -246,18 +242,21 @@ function activateScreenStageUi(): void {
 
   screenUiIdleTimer = window.setTimeout(() => {
     if (!screenStagePointerInside || elements.screenStage.hidden) return;
-    if (shouldDeferScreenUiIdle()) {
-      activateScreenStageUi();
-      return;
-    }
 
-    const active = document.activeElement;
-    if (active instanceof HTMLElement && elements.screenViewControls.contains(active)) {
-      active.blur();
-    }
-
+    blurFocusedStreamControl();
     delete elements.screenStage.dataset.uiActive;
   }, SCREEN_UI_IDLE_MS);
+}
+
+function blurFocusedStreamControl(): void {
+  const active = document.activeElement;
+  if (!(active instanceof HTMLElement)) return;
+  if (!elements.screenViewControls.contains(active)) return;
+
+  // `screenViewControls` is the explicit stream-HUD focus boundary. Keep
+  // controls that should surrender focus on idle inside this subtree so
+  // pointer inactivity can hide the HUD without touching broader room chrome.
+  active.blur();
 }
 
 function deactivateScreenStageUi(): void {
