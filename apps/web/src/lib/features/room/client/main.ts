@@ -1,6 +1,6 @@
 import './styles.css';
 import { GATE_THRESHOLD_MIN_DB } from './core/config';
-import { elements } from './ui/dom';
+import { elements, setElementsRoot } from './ui/dom';
 import { mountIcons } from './ui/icons';
 import { state } from './core/state';
 import { cleanDisplayName } from './core/utils';
@@ -53,9 +53,10 @@ import { refreshLocalNetworkIndicator } from './ui/status';
 
 let mounted = false;
 
-export function mountRoomClient(): void {
+export function mountRoomClient(root: ParentNode = document): void {
   if (mounted) return;
   mounted = true;
+  setElementsRoot(root);
 
   mountIcons();
   mountIcons(elements.template.content);
