@@ -1,12 +1,10 @@
 <script lang="ts">
-  import type { DesktopAsset } from '$lib/api/desktop';
   import { DESKTOP_BUILDS, QUARANTINE_CMD, RELEASES_URL, type DesktopBuild } from '../model/desktop-builds';
 
   let {
     appOpen,
     selectedBuildId = $bindable(),
     selectedBuild,
-    selectedAsset,
     releaseError,
     releaseLoading,
     appDownloadState,
@@ -20,7 +18,6 @@
     appOpen: boolean;
     selectedBuildId: string;
     selectedBuild: DesktopBuild;
-    selectedAsset: DesktopAsset | null | undefined;
     releaseError: boolean;
     releaseLoading: boolean;
     appDownloadState: 'idle' | 'loading' | 'done';

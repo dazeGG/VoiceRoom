@@ -195,7 +195,6 @@
         bind:selectedBuildId
         {appOpen}
         {selectedBuild}
-        {selectedAsset}
         {releaseError}
         {releaseLoading}
         {appDownloadState}

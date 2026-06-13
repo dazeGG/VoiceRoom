@@ -210,4 +210,3 @@ body[data-stage-summary="hidden"] .stage-strip-bar {
 body[data-strip-collapsed="true"] .strip-toggle-button svg {
   transform: rotate(180deg);
 }
-

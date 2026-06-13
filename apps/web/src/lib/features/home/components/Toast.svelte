@@ -3,5 +3,5 @@
 </script>
 
 {#if message}
-  <div class="toast is-visible" role="status" aria-live="polite">{message}</div>
+  <div class="toast" data-visible="true" role="status" aria-live="polite">{message}</div>
 {/if}
