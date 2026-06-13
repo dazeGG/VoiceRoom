@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { createRoom } from '$lib/api/rooms';
+  import { fetchDesktopRelease, type DesktopRelease } from '$lib/api/desktop';
   import FeatureList from '$lib/components/FeatureList.svelte';
   import Topbar from '$lib/components/Topbar.svelte';
   import '$lib/components/typography.css';
@@ -10,12 +11,12 @@
   import { cleanDisplayName } from '$lib/utils/text';
 
   const QUARANTINE_CMD = 'sudo xattr -rd com.apple.quarantine /Applications/Voice\\ Room.app';
-  const APP_VERSION = 'v1.4.2';
+  const RELEASES_URL = 'https://github.com/dazeGG/VoiceRoomDesktop/releases/latest';
 
   const BUILDS = [
-    { id: 'mac-arm64', label: 'macOS · Apple Silicon', meta: '.dmg · ~100 МБ · macOS 12+', mac: true },
-    { id: 'mac-x64', label: 'macOS · Intel', meta: '.dmg · ~100 МБ · macOS 12+', mac: true },
-    { id: 'win-x64', label: 'Windows · 64-bit', meta: '.exe · ~100 МБ · Windows 10 и 11', mac: false }
+    { id: 'mac-arm64', label: 'macOS · Apple Silicon', ext: '.dmg', req: 'macOS 12+', mac: true },
+    { id: 'mac-x64', label: 'macOS · Intel', ext: '.dmg', req: 'macOS 12+', mac: true },
+    { id: 'win-x64', label: 'Windows · 64-bit', ext: '.exe', req: 'Windows 10/11', mac: false }
   ];
 
   let savedName = $state('');
@@ -26,17 +27,22 @@
   let toastTimer = 0;
 
   let selectedBuildId = $state('mac-arm64');
-  let appOpen = $state(true);
+  let appOpen = $state(false);
   let appDownloadState = $state<'idle' | 'loading' | 'done'>('idle');
   let cmdCopied = $state(false);
   let copyResetTimer = 0;
   let downloadTimer = 0;
   let downloadResetTimer = 0;
 
+  let release = $state<DesktopRelease | null>(null);
+  let releaseLoading = $state(false);
+  let releaseError = $state(false);
+
   // The room step is gated on an explicitly saved name: it unlocks only while
   // the input still matches what was saved (editing re-locks it).
   const nameMatchesSaved = $derived(Boolean(savedName) && cleanDisplayName(nameInput) === savedName);
   const selectedBuild = $derived(BUILDS.find((build) => build.id === selectedBuildId) ?? BUILDS[0]);
+  const selectedAsset = $derived(release?.assets[selectedBuildId] ?? null);
 
   onMount(() => {
     document.body.dataset.screen = 'start';
@@ -62,21 +68,56 @@
     return 'mac-arm64';
   }
 
+  async function ensureRelease(): Promise<void> {
+    if (release || releaseLoading) return;
+    releaseLoading = true;
+    releaseError = false;
+    try {
+      release = await fetchDesktopRelease();
+    } catch {
+      releaseError = true;
+    } finally {
+      releaseLoading = false;
+    }
+  }
+
+  function triggerDownload(url: string): void {
+    const link = document.createElement('a');
+    link.href = url;
+    link.rel = 'noopener';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  }
+
   function handleAppDownload(): void {
-    if (appDownloadState === 'loading') return;
+    if (appDownloadState === 'loading' || releaseLoading) return;
+    const asset = selectedAsset;
+    if (!asset) {
+      void ensureRelease();
+      return;
+    }
 
     appDownloadState = 'loading';
+    triggerDownload(asset.url);
 
     window.clearTimeout(downloadTimer);
     downloadTimer = window.setTimeout(() => {
       appDownloadState = 'done';
-      // TODO: replace with the real build URL for `selectedBuild.id` once artifacts are published.
-    }, 1500);
+    }, 1200);
 
     window.clearTimeout(downloadResetTimer);
     downloadResetTimer = window.setTimeout(() => {
       appDownloadState = 'idle';
     }, 4800);
+  }
+
+  function appMeta(): string {
+    if (releaseLoading) return 'Получаем последний релиз…';
+    if (releaseError) return 'Не удалось получить релиз — откройте страницу загрузок.';
+    const size = selectedAsset ? `~${Math.round(selectedAsset.size / (1024 * 1024))} МБ` : '';
+    const version = release ? `v${release.version}` : '';
+    return [selectedBuild.ext, size, selectedBuild.req, version].filter(Boolean).join(' · ');
   }
 
   async function copyQuarantineCommand(): Promise<void> {
@@ -95,12 +136,13 @@
 
   function appDownloadLabel(): string {
     if (appDownloadState === 'loading') return 'Загрузка…';
-    if (appDownloadState === 'done') return 'Готово';
+    if (appDownloadState === 'done') return 'Загрузка началась';
     return 'Скачать приложение';
   }
 
   function toggleApp(): void {
     appOpen = !appOpen;
+    if (appOpen) void ensureRelease();
   }
 
   function saveName(event?: Event): void {
@@ -199,7 +241,7 @@
         </form>
         <p class="home-hint" class:home-hint--saved={nameMatchesSaved}>
           {#if nameMatchesSaved}
-            Сохранено как <b>{savedName}</b> · только на этом устройстве
+            Сохранено как&nbsp;<b>{savedName}</b>&nbsp;· только на этом устройстве
           {:else}
             Хранится только на вашем устройстве — без регистрации.
           {/if}
@@ -219,7 +261,7 @@
           {/if}
         </div>
 
-        <div class="home-room" data-locked={!nameMatchesSaved} aria-hidden={!nameMatchesSaved}>
+        <div class="home-room" data-locked={!nameMatchesSaved} inert={!nameMatchesSaved}>
           <button class="home-create" type="button" disabled={creating} onclick={handleCreateRoom}>
             {#if creating}
               <span class="home-spinner" aria-hidden="true"></span>
@@ -278,18 +320,25 @@
               </div>
             </div>
 
-            <button class="home-dl" type="button" disabled={appDownloadState === 'loading'} onclick={handleAppDownload}>
-              {#if appDownloadState === 'loading'}
-                <span class="home-spinner" aria-hidden="true"></span>
-              {:else if appDownloadState === 'done'}
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7ec99a" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="5 12 10 17 19 7"></polyline></svg>
-              {:else}
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="4" x2="12" y2="15"></line><polyline points="7 11 12 16 17 11"></polyline><line x1="5" y1="20" x2="19" y2="20"></line></svg>
-              {/if}
-              {appDownloadLabel()}
-            </button>
+            {#if releaseError}
+              <a class="home-dl" href={RELEASES_URL} target="_blank" rel="noopener">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+                Открыть страницу загрузок
+              </a>
+            {:else}
+              <button class="home-dl" type="button" disabled={releaseLoading || appDownloadState === 'loading'} onclick={handleAppDownload}>
+                {#if appDownloadState === 'loading' || releaseLoading}
+                  <span class="home-spinner" aria-hidden="true"></span>
+                {:else if appDownloadState === 'done'}
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7ec99a" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="5 12 10 17 19 7"></polyline></svg>
+                {:else}
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="4" x2="12" y2="15"></line><polyline points="7 11 12 16 17 11"></polyline><line x1="5" y1="20" x2="19" y2="20"></line></svg>
+                {/if}
+                {appDownloadLabel()}
+              </button>
+            {/if}
 
-            <p class="home-app-meta">{selectedBuild.meta} · {APP_VERSION}</p>
+            <p class="home-app-meta">{appMeta()}</p>
 
             {#if selectedBuild.mac}
               <div>
@@ -681,16 +730,18 @@
     font-family: var(--font-sans);
     font-size: 14px;
     font-weight: 600;
+    text-decoration: none;
     cursor: pointer;
     transition: background 0.15s ease;
   }
 
-  .home-dl:hover {
-    background: rgba(255, 255, 255, 0.1);
-  }
-
   .home-dl:disabled {
     cursor: default;
+    opacity: 0.7;
+  }
+
+  .home-dl:hover {
+    background: rgba(255, 255, 255, 0.1);
   }
 
   .home-app-meta {
