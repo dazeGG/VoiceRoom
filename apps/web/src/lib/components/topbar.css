@@ -1,6 +1,6 @@
 /* Shared top bar / brand — the single source of truth for the logo on every
-   page (main app shell and the /download landing). Keep page-specific spacing
-   (e.g. the app-shell padding) out of here so the component stays identical. */
+   page. Keep page-specific spacing (e.g. the app-shell padding) out of here
+   so the component stays identical. */
 .topbar {
   display: flex;
   min-width: 0;

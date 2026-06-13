@@ -1,6 +1,9 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import '$lib/components/topbar.css';
+  import FeatureList from '$lib/components/FeatureList.svelte';
+  import Topbar from '$lib/components/Topbar.svelte';
+  import '$lib/components/typography.css';
+  import { START_FEATURES } from '$lib/features/home/features';
   import './client/styles.css';
 
   onMount(async () => {
@@ -10,11 +13,7 @@
 </script>
 
 <div class="app-shell">
-      <header class="topbar">
-        <a class="brand" href="/" aria-label="Новая голосовая комната" data-sveltekit-reload>
-          <img class="brand-mark" src="/icon.svg" width="32" height="32" alt="" aria-hidden="true">
-          <span>Voice Room</span>
-        </a>
+      <Topbar label="Новая голосовая комната" reload>
         <div class="room-heading topbar-room-heading" aria-label="Комната" hidden>
           <div class="room-title-line">
             <h1 id="roomTitle">room</h1>
@@ -29,13 +28,15 @@
           <span class="status-dot" aria-hidden="true"></span>
           <span id="statusText">готово</span>
         </div>
-      </header>
+      </Topbar>
 
       <main class="start-layout" id="startScreen" aria-label="Стартовый экран">
         <section class="start-copy" aria-labelledby="startTitle">
           <p class="eyebrow">voice room</p>
-          <h1 id="startTitle">Голосовая комната без лишних дверей</h1>
-          <p class="start-lead">Сначала сохраните имя, потом создайте комнату или зайдите к своим по коду.</p>
+          <h1 class="hero-title" id="startTitle">Голосовая комната без лишних дверей</h1>
+          <p class="hero-lead">Сначала сохраните имя, потом создайте комнату или зайдите к своим по коду.</p>
+
+          <FeatureList items={START_FEATURES} />
         </section>
 
         <section class="start-panel" aria-label="Создать или найти комнату">
@@ -197,7 +198,7 @@
       <main class="not-found-layout" id="notFoundScreen" hidden aria-labelledby="notFoundTitle">
         <section class="not-found-panel">
           <p class="eyebrow">404</p>
-          <h1 id="notFoundTitle">Комната не найдена</h1>
+          <h1 class="hero-title" id="notFoundTitle">Комната не найдена</h1>
           <p class="not-found-copy">
             Код <span id="missingRoomCode">room</span> не привязан к активной комнате. Создайте новую комнату или попросите свежий код.
           </p>

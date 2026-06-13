@@ -85,8 +85,19 @@ button:disabled {
   gap: var(--space-lg);
 }
 
+/* Outside the room the topbar is constrained to the same 1180px content
+   container as the start layout, so the logo sits on the content edge. */
+body:not([data-screen="room"]) .app-shell {
+  padding-inline: 40px;
+}
+
+body:not([data-screen="room"]) .topbar {
+  width: min(100%, 1180px);
+  margin-inline: auto;
+}
+
 /* Base .topbar / .brand / .brand-mark live in shared/topbar.css (one component
-   shared with the /download page). Only app-specific overrides remain here. */
+   used on every page). Only app-specific overrides remain here. */
 .topbar-room-heading {
   display: none;
   flex: 1 1 auto;
@@ -163,35 +174,25 @@ body[data-screen="room"] .topbar-room-heading {
   place-items: center;
 }
 
+/* Top-anchored hero layout: copy on the left, the panel column on the right. */
 .start-layout {
   display: grid;
-  width: min(100%, 1040px);
-  min-height: min(760px, calc(100dvh - 116px));
-  grid-template-columns: minmax(0, 500px) minmax(340px, 430px);
-  align-items: center;
-  justify-content: center;
-  gap: clamp(var(--space-xl), 4vw, 64px);
+  width: min(100%, 1180px);
+  grid-template-columns: minmax(0, 1fr) minmax(340px, 452px);
+  align-items: start;
+  align-content: start;
+  gap: clamp(var(--space-xl), 6vw, 80px);
   margin-inline: auto;
+  padding-top: clamp(24px, 6vh, 72px);
 }
 
 .start-copy {
-  display: grid;
-  align-content: center;
-  gap: var(--space-md);
   max-width: 680px;
 }
 
 .start-copy h1 {
-  max-width: 13ch;
-  font-size: clamp(3.5rem, 5vw, 4.4rem);
-}
-
-.start-lead {
-  max-width: 38ch;
-  margin: 0;
-  color: var(--muted);
-  font-size: 1.15rem;
-  font-weight: 650;
+  max-width: 14ch;
+  font-size: clamp(2.75rem, 4.8vw, 3.625rem);
 }
 
 .start-panel {
@@ -221,7 +222,10 @@ body[data-screen="room"] .topbar-room-heading {
 }
 
 .not-found-panel h1 {
+  /* The panel grid already spaces the lockup — drop the .hero-title margin. */
+  margin-top: 0;
   max-width: 12ch;
+  font-size: clamp(2.5rem, 4vw, 3rem);
 }
 
 .not-found-copy {
@@ -296,14 +300,7 @@ body[data-screen="room"] .topbar-room-heading {
   gap: var(--space-xs);
 }
 
-.eyebrow {
-  margin: 0 0 var(--space-xs);
-  color: var(--muted);
-  font-size: 0.75rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
+/* .eyebrow lives in src/lib/components/typography.css. */
 
 h1 {
   max-width: 18ch;
@@ -1822,6 +1819,13 @@ button:focus-visible,
   align-items: start;
   justify-content: space-between;
   gap: var(--space-md);
+  /* The dialog panel is lighter than the page background — the shared faint
+     eyebrow ink would wash out here. */
+  --eyebrow-ink: var(--muted);
+}
+
+.screen-source-heading .eyebrow {
+  margin-bottom: var(--space-xs);
 }
 
 .screen-source-heading h2 {
@@ -1975,16 +1979,18 @@ button:focus-visible,
     grid-template-columns: 1fr;
   }
 
+  body:not([data-screen="room"]) .app-shell {
+    padding-inline: 20px;
+  }
+
   .start-layout {
-    min-height: auto;
     grid-template-columns: 1fr;
-    align-content: start;
     gap: var(--space-xl);
   }
 
   .start-copy h1 {
     max-width: 14ch;
-    font-size: 3rem;
+    font-size: 2.75rem;
   }
 
   .stage {
@@ -2010,16 +2016,6 @@ button:focus-visible,
 }
 
 @media (max-width: 560px) {
-  .topbar {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  body[data-screen="room"] .topbar {
-    align-items: center;
-    flex-direction: row;
-  }
-
   .room-heading {
     align-items: stretch;
     flex-direction: column;
@@ -2073,11 +2069,7 @@ button:focus-visible,
   }
 
   .start-copy h1 {
-    font-size: 2.5rem;
-  }
-
-  .start-lead {
-    font-size: 1rem;
+    font-size: 2.25rem;
   }
 
   .participant {
