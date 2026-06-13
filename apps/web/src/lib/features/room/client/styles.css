@@ -401,9 +401,15 @@ h1 {
   position: relative;
   z-index: 1;
   display: grid;
+  /* Optional bar (auto) + the tile grid which fills the remaining height. */
+  grid-template-rows: auto minmax(0, 1fr);
   min-height: 0;
-  align-content: stretch;
   gap: var(--space-sm);
+}
+
+/* When the summary bar is hidden the grid is the only row. */
+body[data-stage-summary="hidden"] .stage-strip {
+  grid-template-rows: minmax(0, 1fr);
 }
 
 body[data-stage-summary="hidden"] .stage-strip-bar {
@@ -477,13 +483,16 @@ body[data-strip-collapsed="true"] .strip-toggle-button svg {
   --tile-columns: 1;
   display: grid;
   grid-template-columns: repeat(var(--tile-columns, 1), minmax(0, 1fr));
-  grid-auto-rows: minmax(180px, 1fr);
-  align-content: center;
+  /* Rows share the available height and shrink freely, so the grid fits the
+     stage without the page scrolling until the viewport gets very short. */
+  grid-auto-rows: minmax(0, 1fr);
+  align-content: stretch;
   justify-content: center;
   justify-items: stretch;
   gap: var(--space-md);
   min-width: 0;
-  min-height: min(520px, calc(100vh - 250px));
+  min-height: 0;
+  height: 100%;
 }
 
 .stream-tiles,
@@ -1092,19 +1101,23 @@ body[data-screen-view="true"][data-strip-collapsed="true"] .stage-strip {
 
 .tile-grid[data-count="0"] {
   display: block;
-  min-height: clamp(260px, calc(100dvh - 360px), 360px);
+  height: auto;
+  min-height: clamp(180px, calc(100dvh - 360px), 360px);
 }
 
+/* One or two participants: cap the tile size and center it instead of letting
+   it stretch to fill a tall stage; still allowed to shrink (min 0). */
 .tile-grid[data-count="1"] {
   width: min(860px, 100%);
-  min-height: min(420px, calc(100vh - 280px));
-  grid-template-rows: minmax(280px, min(420px, 48vh));
+  grid-template-rows: minmax(0, min(440px, 56vh));
+  align-content: center;
   margin-inline: auto;
 }
 
 .tile-grid[data-count="2"] {
   --tile-columns: 2;
-  grid-template-rows: minmax(280px, min(460px, 52vh));
+  grid-template-rows: minmax(0, min(460px, 56vh));
+  align-content: center;
 }
 
 .tile-grid[data-count="3"],
@@ -1130,6 +1143,8 @@ body[data-screen-view="true"][data-strip-collapsed="true"] .stage-strip {
   min-height: 0;
   height: 100%;
   aspect-ratio: auto;
+  /* Size container so the avatar/ring can scale down on short tiles. */
+  container-type: size;
   place-items: center;
   border: 1px solid color-mix(in oklch, var(--line), var(--ink) 8%);
   border-radius: var(--radius-sm);
@@ -1193,6 +1208,46 @@ body[data-screen-view="true"][data-strip-collapsed="true"] .stage-strip {
 
 .participant[data-speaking="true"] .avatar {
   box-shadow: none;
+}
+
+/* Scale the avatar/ring down as the tile gets shorter so it never clips. */
+@container (max-height: 210px) {
+  .voice-ring {
+    width: 64px;
+    height: 64px;
+  }
+  .avatar {
+    width: 56px;
+    height: 56px;
+    font-size: 1.18rem;
+  }
+}
+
+@container (max-height: 150px) {
+  .voice-ring {
+    width: 50px;
+    height: 50px;
+  }
+  .avatar {
+    width: 44px;
+    height: 44px;
+    font-size: 1rem;
+  }
+  .participant {
+    padding: var(--space-sm);
+  }
+}
+
+@container (max-height: 104px) {
+  .voice-ring {
+    width: 38px;
+    height: 38px;
+  }
+  .avatar {
+    width: 34px;
+    height: 34px;
+    font-size: 0.85rem;
+  }
 }
 
 .participant-copy {
@@ -2045,11 +2100,6 @@ button:focus-visible,
     justify-content: stretch;
   }
 
-  .tile-grid {
-    min-height: auto;
-    grid-auto-rows: minmax(148px, 1fr);
-  }
-
   .tile-grid[data-count="2"],
   .tile-grid[data-count="3"],
   .tile-grid[data-count="4"],
@@ -2070,10 +2120,6 @@ button:focus-visible,
 
   .start-copy h1 {
     font-size: 2.25rem;
-  }
-
-  .participant {
-    min-height: 148px;
   }
 
   .room-dock {
