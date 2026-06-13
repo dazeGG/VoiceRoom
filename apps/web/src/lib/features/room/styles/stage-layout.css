@@ -1,0 +1,212 @@
+.stage {
+  position: relative;
+  display: grid;
+  min-height: 100%;
+  grid-template-rows: minmax(0, 1fr);
+  gap: var(--space-md);
+  overflow: hidden;
+  padding: var(--space-sm) var(--space-xl) 104px;
+  background: transparent;
+}
+
+.room-heading {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-md);
+}
+
+.room-title-line {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+
+.room-title-actions {
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: var(--space-xs);
+}
+
+/* .eyebrow lives in src/lib/shared/styles/typography.css. */
+
+h1 {
+  max-width: 18ch;
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-family: "Arial Narrow", Aptos, "Segoe UI", sans-serif;
+  font-size: 3.75rem;
+  line-height: 0.92;
+  letter-spacing: 0;
+}
+
+.copy-room-button {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 0;
+  background: var(--panel);
+  color: var(--muted);
+  transition: background 160ms var(--ease-out), border-color 160ms var(--ease-out), color 160ms var(--ease-out), box-shadow 160ms var(--ease-out), transform 160ms var(--ease-out);
+}
+
+.copy-room-button:hover {
+  border-color: color-mix(in oklch, var(--control-line), var(--ink) 18%);
+  background: var(--panel-strong);
+  color: var(--ink);
+  box-shadow: 0 0 0 3px oklch(84% 0.012 92 / 0.1);
+}
+
+.copy-room-button:active {
+  transform: translateY(1px);
+}
+
+.copy-room-button svg {
+  width: 21px;
+  height: 21px;
+}
+
+.heading-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-xs);
+}
+
+.tool-button,
+.primary-button,
+.secondary-button,
+.home-link-button,
+.leave-button,
+.sound-button {
+  min-height: 44px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 0 16px;
+  transition: background 160ms var(--ease-out), color 160ms var(--ease-out), border-color 160ms var(--ease-out), box-shadow 160ms var(--ease-out), transform 160ms var(--ease-out);
+}
+
+.tool-button {
+  background: var(--panel);
+  color: var(--ink);
+  font-weight: 750;
+}
+
+.home-link-button {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  justify-content: center;
+  border-color: var(--control-line);
+  background: var(--control);
+  color: var(--ink);
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.tool-button:hover,
+.primary-button:hover,
+.secondary-button:hover,
+.home-link-button:hover,
+.sound-button:hover {
+  border-color: color-mix(in oklch, var(--control-line), var(--ink) 22%);
+  box-shadow: 0 0 0 3px oklch(84% 0.012 92 / 0.1);
+}
+
+.tool-button:active,
+.primary-button:active,
+.secondary-button:active,
+.home-link-button:active,
+.sound-button:active {
+  transform: translateY(1px);
+}
+
+.stage-strip {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  /* Optional bar (auto) + the tile grid which fills the remaining height. */
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
+  gap: var(--space-sm);
+}
+
+/* When the summary bar is hidden the grid is the only row. */
+body[data-stage-summary="hidden"] .stage-strip {
+  grid-template-rows: minmax(0, 1fr);
+}
+
+body[data-stage-summary="hidden"] .stage-strip-bar {
+  display: none;
+}
+
+.stage-strip-bar {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+}
+
+.stage-strip-title {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.stage-strip-kicker {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 850;
+  letter-spacing: 0.06em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.stage-strip-title strong {
+  overflow: hidden;
+  color: oklch(94% 0.012 92);
+  font-size: 0.92rem;
+  font-weight: 850;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.strip-toggle-button {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 0;
+  background: oklch(14% 0.013 92 / 0.92);
+  color: var(--muted);
+  transition: background 140ms var(--ease-out), border-color 140ms var(--ease-out), color 140ms var(--ease-out);
+}
+
+.strip-toggle-button:hover {
+  border-color: color-mix(in oklch, var(--control-line), var(--ink) 18%);
+  background: var(--control);
+  color: var(--ink);
+}
+
+.strip-toggle-button svg {
+  width: 19px;
+  height: 19px;
+  transition: transform 160ms var(--ease-out);
+}
+
+body[data-strip-collapsed="true"] .strip-toggle-button svg {
+  transform: rotate(180deg);
+}

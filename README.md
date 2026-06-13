@@ -15,23 +15,28 @@ Voice Room - голосовая комната по ссылке с демонс
 ## Архитектура
 
 ```
-server.js          HTTP API + SSE + раздача dist/ (без фреймворка)
-lib/               серверные модули: config, validation, pow, rate-limit
-src/               клиент (TypeScript, Vite)
-  main.ts          входная точка: wiring DOM-событий и стартовый роутинг
-  core/            нижний слой без DOM-логики: config, types, state, session, settings, utils
-  net/             HTTP-примитивы: api (fetch/post), pow (proof-of-work)
-  media/           захват и обработка медиа: microphone (гейт, RNNoise),
-                   screen-capture, playback (output-устройства, unlock), cues, meters, profiles
-  room/            домен комнаты: room (join/leave/SSE), livekit, participants,
-                   presence (postState), screen-share (статы, автоадаптация), stats
-  ui/              DOM-слой: dom (elements), controls, devices, names,
-                   screen-view (сцена, плитки), status, toast
-public/            статика как есть: воркеты, rnnoise (wasm), icon
-test/              unit-тесты серверных модулей (node:test)
+apps/
+  api/             Node.js HTTP API + SSE, только строгий /api/* контракт
+    src/server.js  API-сервер комнат, presence/state и LiveKit JWT
+    src/lib/       серверные модули: config, pow, rate-limit
+    test/          unit/integration тесты API
+  web/             SvelteKit frontend app
+    src/routes/    тонкие SvelteKit routes: /, /r/[roomId]
+    src/lib/api/   typed fetch client: rooms, pow, common HTTP primitives
+    src/lib/shared/
+                   общие UI-компоненты, стили и утилиты
+    src/lib/features/
+      home/        стартовая страница на Svelte (вместе с блоком загрузки приложения)
+      room/        Svelte room shell + room client/media layer
+    static/        статика как есть: воркеты, rnnoise (wasm), icon, fonts
+    dist/          production static build для Caddy
+packages/
+  shared/          общие contracts/validation для web и api
 ```
 
-Правила слоёв: `core` ни от кого не зависит, `net` зависит только от `core`. `media`, `room` и `ui` могут ссылаться друг на друга (циклы только на уровне вызовов — top-level инициализация остаётся ацикличной).
+`/` не зависит от room/media кода. `/r/[roomId]` монтирует Svelte-разметку комнаты и lazy-загружает `features/room/client/main.ts`; сам `livekit-client` дополнительно загружается через `features/room/client/media/livekit-runtime.ts` только при подключении/публикации. Это держит стартовый route маленьким, а WebRTC-слой изолированным внутри room feature.
+
+В production frontend и backend разделены: Caddy раздаёт SvelteKit static build из `/srv/web`, а запросы `/api/*` проксирует в `apps/api`. API не отдаёт HTML и не знает про frontend build.
 
 ## Требования
 
@@ -41,7 +46,7 @@ test/              unit-тесты серверных модулей (node:test)
 
 ## Локальный запуск
 
-Клиент собирается Vite (TypeScript, `src/`), сервер — Node.js без сборки (`server.js` + `lib/`).
+Проект организован как npm workspaces. Frontend живет в `apps/web` (SvelteKit + Vite), backend — в `apps/api`, общая validation-логика — в `packages/shared`.
 
 Терминал 1 — LiveKit в dev-режиме:
 
@@ -52,11 +57,14 @@ npm run dev:livekit
 Терминал 2 — API-сервер:
 
 ```bash
+source ~/.nvm/nvm.sh
+nvm use
 npm install
 
-export LIVEKIT_URL=ws://127.0.0.1:7880
-export LIVEKIT_API_KEY=devkey
-export LIVEKIT_API_SECRET=secret
+set -a
+source .env
+set +a
+
 npm run dev
 ```
 
@@ -66,15 +74,15 @@ npm run dev
 npm run dev:web
 ```
 
-Откройте `http://localhost:5173`. `localhost` считается безопасным browser context, поэтому микрофон и screen capture работают без HTTPS.
+Откройте `http://127.0.0.1:5173`. Vite проксирует `/api/*` на API-сервер `http://localhost:3000`. `localhost` и `127.0.0.1` считаются безопасным browser context, поэтому микрофон и screen capture работают без HTTPS.
 
-Production-режим без Docker: `npm run build`, затем `npm start` — сервер раздаёт собранный клиент из `dist/` на `http://localhost:3000`.
+Production frontend build создаётся командой `npm run build` и кладётся в `apps/web/dist`. API запускается отдельно через `npm start` и отвечает только на `/api/*`; static frontend в production раздаёт Caddy.
 
 Проверки:
 
 ```bash
-npm run check   # node --check серверной части + tsc --noEmit клиента
-npm test        # unit-тесты серверных модулей (node:test)
+npm run check   # node --check shared/api/worklets + tsc --noEmit клиента
+npm test        # unit/integration тесты shared/api (node:test)
 ```
 
 ## Environment
@@ -106,6 +114,14 @@ ROOM_CREATE_POW_DIFFICULTY=14
 ROOM_CREATE_POW_TTL_MS=120000
 ROOM_CREATE_RATE_LIMIT=20
 ROOM_CREATE_RATE_WINDOW_MS=60000
+
+# Блок «Десктоп-приложение» на главной берёт ссылки из latest-релиза GitHub
+# через эндпоинт GET /api/desktop/latest (метаданные кэшируются на сервере).
+DESKTOP_RELEASE_REPO=dazeGG/VoiceRoomDesktop
+DESKTOP_RELEASE_CACHE_MS=600000
+# Необязательный токен — поднимает лимит запросов к GitHub API (репо публичный,
+# при кэше в 10 минут хватает и анонимных 60 запросов/час).
+GITHUB_TOKEN=
 ```
 
 Для локального LiveKit dev server используйте:
@@ -118,21 +134,18 @@ LIVEKIT_API_SECRET=secret
 
 ## Docker
 
-Собрать app image:
+Production compose собирает два runtime-образа из одного Dockerfile:
+
+- `api` — Node.js API на `:3000`, только `/api/*`;
+- `caddy` — frontend static build из `apps/web/dist`, reverse proxy для `/api/*` и отдельный reverse proxy для LiveKit domain.
+
+Запуск:
 
 ```bash
-docker build -t voice-room .
+docker compose up --build
 ```
 
-Запустить с доступным LiveKit endpoint:
-
-```bash
-docker run --rm -p 3000:3000 \
-  -e LIVEKIT_URL=wss://livekit.example.com \
-  -e LIVEKIT_API_KEY=change-me-livekit-key \
-  -e LIVEKIT_API_SECRET=change-me-livekit-secret \
-  voice-room
-```
+Для Docker/production используйте отдельный prod-like `.env`: `LIVEKIT_URL` должен быть публичным URL из браузера, обычно `wss://$LIVEKIT_DOMAIN`. Локальный dev `.env` с `LIVEKIT_URL=ws://127.0.0.1:7880` предназначен для запуска через `npm run dev`, внутри Docker-контейнера такой адрес будет указывать на сам контейнер.
 
 В production приложение должно стоять за HTTPS, а LiveKit должен иметь публично доступные ICE/TCP и ICE/UDP порты. Если пользователи часто сидят за строгими корпоративными сетями, следующим шагом стоит добавить TURN/TLS в LiveKit deployment.
 
@@ -154,4 +167,4 @@ LiveKit снимает mesh-нагрузку с браузеров: каждый
 
 ## Лицензия
 
-MIT License. Vendored RNNoise assets в `public/rnnoise/` распространяются под собственной MIT-лицензией в `public/rnnoise/LICENSE`.
+MIT License. Vendored RNNoise assets в `apps/web/static/rnnoise/` распространяются под собственной MIT-лицензией в `apps/web/static/rnnoise/LICENSE`.

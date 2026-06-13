@@ -1,0 +1,457 @@
+/* Right block — stepped primary card (name → room) + collapsible app card.
+     Implements the «Voice Room - Главная» design handoff. Scoped so the warm
+     panel values win over the global input/select rules in styles.css. */
+  /* No eyebrow above the hero here, so drop the lockup top offset and align
+     the title with the top of the right card. */
+  .start-copy .hero-title {
+    margin-top: 0;
+  }
+
+  .home-side {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  /* Primary card */
+  .home-card {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    border-radius: 20px;
+    padding: 6px 24px 24px;
+    background: rgba(255, 255, 255, 0.04);
+  }
+
+  .home-step {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    padding: 18px 0 14px;
+  }
+
+  .home-badge {
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    background: #1b1a14;
+    color: #cfc9ba;
+    font-family: var(--font-mono);
+    font-size: 12px;
+  }
+
+  .home-badge[data-done='true'] {
+    border-color: rgba(79, 174, 116, 0.5);
+    background: rgba(79, 174, 116, 0.16);
+    color: #7ec99a;
+  }
+
+  .home-badge[data-dim='true'] {
+    border-color: rgba(255, 255, 255, 0.07);
+    background: rgba(255, 255, 255, 0.02);
+    color: #5a5547;
+  }
+
+  .home-step-label {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    letter-spacing: 0.14em;
+    color: #9a9484;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .home-step-label[data-dim='true'] {
+    color: #5a5547;
+  }
+
+  .home-lock {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    color: #6f6a5c;
+    font-size: 11px;
+  }
+
+  .home-field-row {
+    display: flex;
+    gap: 8px;
+  }
+
+  .home-input {
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 13px 15px;
+    background: #0c0b08;
+    color: #ece7d9;
+    font-family: var(--font-sans);
+    font-size: 15px;
+    outline: none;
+    transition: border-color 0.15s ease;
+  }
+
+  .home-input::placeholder {
+    color: #6f6a5c;
+  }
+
+  .home-input:hover {
+    border-color: rgba(255, 255, 255, 0.16);
+    background: #0c0b08;
+  }
+
+  .home-input:focus {
+    border-color: rgba(154, 143, 106, 0.7);
+  }
+
+  .home-input--code {
+    font-family: var(--font-mono);
+    letter-spacing: 0.04em;
+  }
+
+  .home-ghost-button {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 12px;
+    padding: 0 16px;
+    background: rgba(255, 255, 255, 0.05);
+    color: #ece7d9;
+    font-family: var(--font-sans);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s ease;
+  }
+
+  .home-ghost-button:hover {
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  .home-hint {
+    min-height: 18px;
+    margin: 9px 0 0;
+    display: flex;
+    align-items: center;
+    color: #6f6a5c;
+    font-size: 12.5px;
+  }
+
+  .home-hint--saved {
+    color: #7d7768;
+  }
+
+  .home-hint b {
+    color: #a9c9b6;
+    font-weight: 600;
+  }
+
+  .home-rule {
+    height: 1px;
+    margin-top: 18px;
+    background: rgba(255, 255, 255, 0.07);
+  }
+
+  .home-room {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    transition: opacity 0.2s ease;
+  }
+
+  .home-room[data-locked='true'] {
+    opacity: 0.4;
+    pointer-events: none;
+  }
+
+  .home-create {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+    width: 100%;
+    border: none;
+    border-radius: 12px;
+    padding: 15px;
+    background: #d9d3c3;
+    color: #17150f;
+    font-family: var(--font-sans);
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    cursor: pointer;
+    transition: background 0.15s ease;
+  }
+
+  .home-create:hover {
+    background: #e7e1d1;
+  }
+
+  .home-create:disabled {
+    cursor: default;
+    opacity: 0.8;
+  }
+
+  .home-create .home-spinner {
+    border-color: rgba(23, 21, 15, 0.25);
+    border-top-color: #17150f;
+  }
+
+  .home-or {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: #6f6a5c;
+    font-size: 12px;
+  }
+
+  .home-or::before,
+  .home-or::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: rgba(255, 255, 255, 0.07);
+  }
+
+  .home-spinner {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 2px solid rgba(236, 231, 217, 0.25);
+    border-top-color: #ece7d9;
+    animation: home-spin 0.7s linear infinite;
+  }
+
+  @keyframes home-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  /* Secondary card — collapsible desktop app */
+  .home-app {
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 20px;
+    padding: 20px 24px 22px;
+    background: rgba(255, 255, 255, 0.02);
+  }
+
+  /* Inside the Electron shell the preload tags <html> with .is-desktop before
+     page scripts run, so the download card is hidden with no flash. Contract:
+     window.voiceRoomDesktop = { isDesktop, isElectron, platform, version }. */
+  html.is-desktop .home-app {
+    display: none;
+  }
+
+  .home-app-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
+    padding: 0;
+    border: none;
+    background: none;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .home-app-head-main {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .home-app-title {
+    display: block;
+    color: #cfc9ba;
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+
+  .home-app-sub {
+    display: block;
+    margin-top: 2px;
+    color: #7d7768;
+    font-size: 12.5px;
+  }
+
+  .home-app-chevron {
+    display: inline-flex;
+    color: #7d7768;
+    transition: transform 0.2s ease;
+  }
+
+  .home-app[data-open='true'] .home-app-chevron {
+    transform: rotate(180deg);
+  }
+
+  .home-app-body {
+    margin-top: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .home-app-fieldlabel {
+    margin-bottom: 8px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    color: #6f6a5c;
+    text-transform: uppercase;
+  }
+
+  .home-select-wrap {
+    position: relative;
+  }
+
+  .home-select {
+    width: 100%;
+    min-height: 0;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    border: 1px solid rgba(154, 143, 106, 0.55);
+    border-radius: 12px;
+    padding: 13px 40px 13px 15px;
+    background: #0c0b08;
+    color: #ece7d9;
+    font-family: var(--font-sans);
+    font-size: 14px;
+    font-weight: 500;
+    outline: none;
+    cursor: pointer;
+  }
+
+  .home-select:hover {
+    border-color: rgba(154, 143, 106, 0.7);
+    background: #0c0b08;
+  }
+
+  .home-select option {
+    background: #16140f;
+    color: #ece7d9;
+  }
+
+  .home-select-chevron {
+    position: absolute;
+    right: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    pointer-events: none;
+    display: inline-flex;
+    color: #9a9484;
+  }
+
+  .home-dl {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+    width: 100%;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 12px;
+    padding: 14px;
+    background: rgba(255, 255, 255, 0.05);
+    color: #ece7d9;
+    font-family: var(--font-sans);
+    font-size: 14px;
+    font-weight: 600;
+    text-decoration: none;
+    cursor: pointer;
+    transition: background 0.15s ease;
+  }
+
+  .home-dl:disabled {
+    cursor: default;
+    opacity: 0.7;
+  }
+
+  .home-dl:hover {
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  .home-app-meta {
+    margin: 0;
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    letter-spacing: 0.02em;
+    color: #6f6a5c;
+  }
+
+  .home-app-note {
+    margin: 2px 0 0;
+    color: #8c8576;
+    font-size: 12px;
+    line-height: 1.55;
+  }
+
+  .home-cmd-label {
+    margin: 0 0 8px;
+    color: #8c8576;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+
+  .home-cmd {
+    display: flex;
+    align-items: stretch;
+    gap: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 11px;
+    padding: 10px 11px;
+    background: #0c0b08;
+  }
+
+  .home-cmd code {
+    flex: 1;
+    min-width: 0;
+    align-self: center;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    line-height: 1.5;
+    color: #cfc9ba;
+    word-break: break-all;
+  }
+
+  .home-cmd-copy {
+    flex: none;
+    align-self: center;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    padding: 6px 10px;
+    background: rgba(255, 255, 255, 0.05);
+    color: #cfc9ba;
+    font-family: var(--font-sans);
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s ease;
+  }
+
+  .home-cmd-copy:hover {
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .home-spinner {
+      animation: none;
+    }
+  }

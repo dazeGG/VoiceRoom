@@ -1,0 +1,86 @@
+body[data-screen-view="true"] .stage-strip {
+  min-height: 0;
+  max-height: 104px;
+  align-content: end;
+  overflow: hidden;
+  border-top: 1px solid oklch(36% 0.02 92 / 0.46);
+  padding-top: var(--space-xs);
+}
+
+body[data-screen-view="true"] .tile-grid {
+  display: flex;
+  min-height: 0;
+  min-width: 0;
+  height: 76px;
+  align-items: stretch;
+  justify-content: center;
+  gap: var(--space-sm);
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 2px;
+  scrollbar-width: thin;
+}
+
+body[data-screen-view="true"] .stream-tile {
+  flex: 0 0 132px;
+  width: 132px;
+  min-height: 74px;
+  aspect-ratio: auto;
+}
+
+body[data-screen-view="true"] .stream-tile-icon svg {
+  width: 24px;
+  height: 24px;
+}
+
+body[data-screen-view="true"] .stream-tile-copy {
+  padding: var(--space-xs);
+}
+
+body[data-screen-view="true"] .stream-tile-copy strong {
+  font-size: 0.72rem;
+}
+
+body[data-screen-view="true"] .stream-tile-actions {
+  display: none;
+}
+
+body[data-screen-view="true"] .participant {
+  flex: 0 0 132px;
+  width: 132px;
+  height: 100%;
+  min-height: 74px;
+  padding: var(--space-xs);
+}
+
+body[data-screen-view="true"] .voice-ring {
+  width: 42px;
+  height: 42px;
+}
+
+body[data-screen-view="true"] .avatar {
+  width: 36px;
+  height: 36px;
+  font-size: 0.82rem;
+}
+
+body[data-screen-view="true"] .participant-copy {
+  right: var(--space-xs);
+  bottom: var(--space-xs);
+  left: var(--space-xs);
+}
+
+body[data-screen-view="true"] .participant h2 {
+  max-width: calc(100% - 2px);
+  padding: 3px 6px;
+  font-size: 0.72rem;
+}
+
+body[data-screen-view="true"] .participant p,
+body[data-screen-view="true"] .participant-screen-action {
+  display: none;
+}
+
+body[data-strip-collapsed="true"] .participants {
+  display: none;
+}

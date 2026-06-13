@@ -24,6 +24,9 @@ work/
 outputs/
 deploy/
 dist/
+apps/web/build/
+apps/web/dist/
+apps/web/.svelte-kit/
 
 # Docker/Caddy local state
 caddy_data/
@@ -32,3 +35,6 @@ caddy_config/
 # Test and coverage output
 coverage/
 .nyc_output/
+.omx/
+.codex/
+.claude/
