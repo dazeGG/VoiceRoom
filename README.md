@@ -23,8 +23,8 @@ apps/
   web/             SvelteKit frontend app
     src/routes/    тонкие SvelteKit routes: /, /r/[roomId]
     src/lib/api/   typed fetch client: rooms, pow, common HTTP primitives
-    src/lib/components/
-                   общие UI-кусочки и CSS компоненты
+    src/lib/shared/
+                   общие UI-компоненты, стили и утилиты
     src/lib/features/
       home/        стартовая страница на Svelte (вместе с блоком загрузки приложения)
       room/        Svelte room shell + room client/media layer
