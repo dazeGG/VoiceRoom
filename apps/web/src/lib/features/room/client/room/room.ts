@@ -20,6 +20,7 @@ import {
   createParticipant,
   refreshParticipantState,
   removeAudioElements,
+  removeParticipantView,
   removePeer,
   syncPeers,
   updateParticipant,
@@ -247,7 +248,7 @@ export async function joinRoom(event?: Event): Promise<void> {
     state.serverPeerIds.clear();
     state.serverPeerSyncReady = false;
     await disconnectLiveKitRoom();
-    state.self?.node.remove();
+    removeParticipantView(state.self?.id || state.peerId);
     state.self = null;
     stopLocalStream();
     refreshParticipantState();
@@ -373,11 +374,11 @@ export function leaveRoom(): void {
 
   for (const peer of state.peers.values()) {
     removeAudioElements(peer);
-    peer.node.remove();
+    removeParticipantView(peer.id);
   }
   state.peers.clear();
 
-  state.self?.node.remove();
+  removeParticipantView(state.self?.id || state.peerId);
   state.self = null;
   stopLocalStream();
   stopLocalScreenStream();

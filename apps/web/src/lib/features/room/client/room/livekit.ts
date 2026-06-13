@@ -25,6 +25,7 @@ import {
   attachRemoteScreenStream,
   attachRemoteTrack,
   createParticipant,
+  getParticipantView,
   detachLiveKitParticipant,
   detachRemoteAudioTrack,
   detachRemoteScreen,
@@ -375,12 +376,18 @@ export async function disconnectLiveKitRoom(): Promise<void> {
   }
 }
 
+function setParticipantDataset(peer: Participant, key: string, value: string): void {
+  const view = getParticipantView(peer);
+  if (!view) return;
+  view.node.dataset[key] = value;
+}
+
 export function updateLiveKitPublicationState(peer: Participant, publication: TrackPublication): void {
   if (isScreenPublication(publication)) {
     const hadScreen = peer.screen;
     peer.screen = true;
     peer.screenAudio = peer.screenAudio || isScreenAudioPublication(publication);
-    peer.node.dataset.screen = 'true';
+    setParticipantDataset(peer, 'screen', 'true');
     applyRemoteScreenCue(peer, hadScreen, true);
     updatePeerStatus(peer);
     refreshScreenAction(peer);
@@ -388,7 +395,7 @@ export function updateLiveKitPublicationState(peer: Participant, publication: Tr
   }
   if (isMicrophonePublication(publication)) {
     peer.muted = publication.isMuted;
-    peer.node.dataset.muted = String(peer.muted);
+    setParticipantDataset(peer, 'muted', String(peer.muted));
     peer.voiceIssue = '';
     updatePeerStatus(peer);
   }
@@ -519,7 +526,7 @@ function handleLiveKitTrackUnpublished(publication: RemoteTrackPublication, part
     peer.screenAudio = participant.trackPublications
       ? [...participant.trackPublications.values()].some(isScreenAudioPublication)
       : false;
-    peer.node.dataset.screen = String(peer.screen);
+    setParticipantDataset(peer, 'screen', String(peer.screen));
     applyRemoteScreenCue(peer, hadScreen, peer.screen);
     if (!peer.screen) detachRemoteScreen(peer);
     refreshScreenAction(peer);

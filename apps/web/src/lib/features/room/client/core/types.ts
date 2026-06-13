@@ -1,5 +1,7 @@
-import type { LocalTrackPublication, Participant as LiveKitParticipant, Room } from 'livekit-client';
+import type { LocalTrackPublication, Room } from 'livekit-client';
 import type { NoiseMode } from './config';
+import type { Participant, ParticipantViewRefs, PeerInfo } from '../model/participants';
+export type { Participant, ParticipantViewRefs, PeerInfo } from '../model/participants';
 
 export interface ScreenProfile {
   contentHint: string;
@@ -17,47 +19,6 @@ export interface ScreenProfile {
 export interface PeerSession {
   peerId: string;
   sessionToken: string;
-}
-
-export interface PeerInfo {
-  id: string;
-  name?: string;
-  deafened?: boolean;
-  muted?: boolean;
-  screen?: boolean;
-  screenAudio?: boolean;
-  screenProfileId?: string;
-  screenStreamId?: string;
-  viewedScreenPeerId?: string;
-  joinedAt?: number;
-  isLocal?: boolean;
-}
-
-export interface Participant {
-  analyser: AnalyserNode | null;
-  audioElements: Map<string, HTMLAudioElement>;
-  deafened: boolean;
-  id: string;
-  incomingVoiceActive: boolean;
-  isLocal: boolean;
-  joinedAt: number;
-  livekitParticipant: LiveKitParticipant | null;
-  connectionQuality: string;
-  meterData: Uint8Array<ArrayBuffer> | null;
-  muted: boolean;
-  name: string;
-  node: HTMLElement;
-  micReceiver: RTCRtpReceiver | null;
-  screen: boolean;
-  screenAction: HTMLButtonElement;
-  screenAudio: boolean;
-  screenProfileId: string;
-  screenStream: MediaStream | null;
-  screenStreamId: string;
-  status: HTMLParagraphElement;
-  stream: MediaStream | null;
-  viewedScreenPeerId: string;
-  voiceIssue: string;
 }
 
 export interface MicProcessor {
@@ -146,18 +107,52 @@ export interface ScreenSourceRequest {
   reject: (error: Error) => void;
 }
 
-export interface AppState {
-  audioContext: AudioContext | null;
-  audioUnlockPending: boolean;
+export interface RoomSessionState {
   autoJoinStarted: boolean;
+  joined: boolean;
+  peerId: string;
+  roomId: string;
+  roomRoute: boolean;
+  savedName: string;
+  sessionToken: string;
+}
+
+export interface RoomConnectionState {
   connecting: boolean;
   eventSource: EventSource | null;
-  gateThresholdDb: number;
-  joined: boolean;
   localConnectionQuality: string;
-  livekitRoom: Room | null;
   localPingMs: number | null;
+  livekitRoom: Room | null;
+  serverConnection: string;
+  serverPeerIds: Set<string>;
+  serverPeerSyncReady: boolean;
+  voiceConnection: string;
+}
+
+export interface RoomParticipantState {
+  peers: Map<string, Participant>;
+  participantViews: Map<string, ParticipantViewRefs>;
+  self: Participant | null;
+}
+
+export interface RoomAudioState {
+  audioContext: AudioContext | null;
+  audioUnlockPending: boolean;
+  gateThresholdDb: number;
   localMicPublication: LocalTrackPublication | null;
+  localRawStream: MediaStream | null;
+  localStream: MediaStream | null;
+  localAppAudioSuppressed: boolean;
+  microphoneDeviceId: string;
+  micMutedBeforeOutputMute: boolean;
+  micProcessor: MicProcessor | MicProcessor[] | null;
+  muted: boolean;
+  noiseMode: NoiseMode;
+  outputDeviceId: string;
+  outputMuted: boolean;
+}
+
+export interface RoomScreenState {
   localScreenPublications: Map<string, LocalTrackPublication>;
   localScreenAdaptGoodSamples: number;
   localScreenAdaptLastAt: number;
@@ -169,23 +164,8 @@ export interface AppState {
   localScreenQualityId: string;
   localScreenFpsId: string;
   localScreenTargetProfileId: string;
-  localRawStream: MediaStream | null;
   localScreenStream: MediaStream | null;
   localScreenProfileId: string;
-  localStream: MediaStream | null;
-  localAppAudioSuppressed: boolean;
-  microphoneDeviceId: string;
-  micMutedBeforeOutputMute: boolean;
-  micProcessor: MicProcessor | MicProcessor[] | null;
-  muted: boolean;
-  noiseMode: NoiseMode;
-  outputDeviceId: string;
-  outputMuted: boolean;
-  peers: Map<string, Participant>;
-  peerId: string;
-  roomId: string;
-  roomRoute: boolean;
-  savedName: string;
   screenFullscreen: boolean;
   screenMuted: boolean;
   screenRequesting: boolean;
@@ -195,15 +175,16 @@ export interface AppState {
   screenStopping: boolean;
   screenVolume: number;
   stripCollapsed: boolean;
-  self: Participant | null;
-  serverConnection: string;
-  serverPeerIds: Set<string>;
-  serverPeerSyncReady: boolean;
-  sessionToken: string;
   sharedScreenPeerId: string;
-  voiceConnection: string;
   viewedScreenPeerId: string;
 }
+
+export interface AppState
+  extends RoomSessionState,
+    RoomConnectionState,
+    RoomParticipantState,
+    RoomAudioState,
+    RoomScreenState {}
 
 export type ServerMessage =
   | { type: 'hello'; peer: PeerInfo; peers: PeerInfo[]; roomId: string }

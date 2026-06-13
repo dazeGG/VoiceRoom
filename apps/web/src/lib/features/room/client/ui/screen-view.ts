@@ -12,6 +12,7 @@ import {
   detachRemoteScreen,
   getAllParticipants,
   getParticipantById,
+  getParticipantView,
   refreshStageGridState
 } from '../room/participants';
 import type { Participant } from '../core/types';
@@ -50,11 +51,17 @@ export function openLocalStreamPreview(): void {
   refreshScreenStage();
 }
 
+function setParticipantDataset(peer: Participant, key: string, value: string): void {
+  const view = getParticipantView(peer);
+  if (!view) return;
+  view.node.dataset[key] = value;
+}
+
 export async function enterScreenView(peerId: string): Promise<void> {
   const peer = getParticipantById(peerId);
   if (peer?.isLocal && state.localScreenStream) {
     peer.screen = true;
-    peer.node.dataset.screen = 'true';
+    setParticipantDataset(peer, 'screen', 'true');
   }
   if (!peer?.screen) {
     showToast('Демонстрация уже завершена');
@@ -159,13 +166,14 @@ export function isScreenSubscribed(peerId: string): boolean {
 }
 
 export function refreshScreenAction(participant: Participant | null): void {
-  if (!participant?.screenAction) return;
+  const view = getParticipantView(participant);
+  if (!participant || !view) return;
 
   const viewing = state.viewedScreenPeerId === participant.id;
   const canWatch = !participant.isLocal && participant.screen && !viewing;
-  participant.screenAction.hidden = !canWatch;
-  participant.screenAction.disabled = state.screenRequesting;
-  participant.screenAction.querySelector('span')!.textContent = state.screenRequesting ? 'Подключение' : 'Смотреть экран';
+  view.screenAction.hidden = !canWatch;
+  view.screenAction.disabled = state.screenRequesting;
+  view.screenAction.querySelector('span')!.textContent = state.screenRequesting ? 'Подключение' : 'Смотреть экран';
 }
 
 export function refreshAllScreenActions(): void {

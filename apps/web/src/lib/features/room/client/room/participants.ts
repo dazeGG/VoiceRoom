@@ -21,10 +21,31 @@ import {
   refreshScreenStage,
   refreshScreenTiles
 } from '../ui/screen-view';
-import type { Participant, PeerInfo } from '../core/types';
+import type { Participant, ParticipantViewRefs, PeerInfo } from '../core/types';
 
 const watchedRemoteScreenTracks = new WeakSet<MediaStreamTrack>();
 const streamCueTimes = new Map<string, number>();
+
+export function getParticipantView(participant: Participant | string | null | undefined): ParticipantViewRefs | null {
+  const peerId = typeof participant === 'string' ? participant : participant?.id;
+  return peerId ? state.participantViews.get(peerId) || null : null;
+}
+
+function setParticipantView(participant: Participant, view: ParticipantViewRefs): void {
+  state.participantViews.set(participant.id, view);
+}
+
+export function removeParticipantView(peerId: string): void {
+  const view = getParticipantView(peerId);
+  view?.node.remove();
+  state.participantViews.delete(peerId);
+}
+
+function requireParticipantView(participant: Participant): ParticipantViewRefs {
+  const view = getParticipantView(participant);
+  if (!view) throw new Error(`Missing participant view for ${participant.id}`);
+  return view;
+}
 
 export function applyRemoteScreenCue(participant: Participant, hadScreen: boolean, nextScreen: boolean): void {
   if (participant.isLocal || hadScreen === nextScreen) return;
@@ -90,7 +111,7 @@ export function createParticipant(peerInfo: PeerInfo): Participant {
   if (existing) {
     if (isLocal) {
       const duplicate = state.peers.get(peerInfo.id);
-      duplicate?.node.remove();
+      removeParticipantView(duplicate?.id || peerInfo.id);
       state.peers.delete(peerInfo.id);
     }
     updateParticipant(peerInfo);
@@ -109,7 +130,8 @@ export function createParticipant(peerInfo: PeerInfo): Participant {
   if (isLocal) node.dataset.local = 'true';
   avatar.textContent = getInitials(name);
   nameLabel.textContent = isLocal ? `${name} · вы` : name;
-  setParticipantStatus({ status }, isLocal ? '' : 'подключает голос');
+  const view = { node, screenAction, status };
+  setParticipantStatus(view, isLocal ? '' : 'подключает голос');
   node.dataset.deafened = String(Boolean(peerInfo.deafened));
   node.dataset.muted = String(Boolean(peerInfo.muted));
   node.dataset.screen = String(Boolean(peerInfo.screen));
@@ -130,20 +152,18 @@ export function createParticipant(peerInfo: PeerInfo): Participant {
     meterData: null,
     muted: Boolean(peerInfo.muted),
     name,
-    node,
     micReceiver: null,
     screen: Boolean(peerInfo.screen),
-    screenAction,
     screenAudio: Boolean(peerInfo.screenAudio),
     screenProfileId: getScreenProfile(peerInfo.screenProfileId ?? '').id,
     screenStream: null,
     screenStreamId: peerInfo.screenStreamId || '',
-    status,
     stream: null,
     viewedScreenPeerId: peerInfo.viewedScreenPeerId || '',
     voiceIssue: ''
   };
 
+  setParticipantView(participant, view);
   screenAction.addEventListener('click', () => enterScreenView(participant.id).catch((error) => console.error(error)));
   if (participant.isLocal) {
     state.self = participant;
@@ -181,12 +201,13 @@ export function updateParticipant(peerInfo: PeerInfo): void {
     participant.viewedScreenPeerId = peerInfo.viewedScreenPeerId || '';
     applyStreamViewerCue(participant, hadViewedScreenOwnerId, participant.viewedScreenPeerId);
   }
-  participant.node.dataset.deafened = String(participant.deafened);
-  participant.node.dataset.muted = String(participant.muted);
-  participant.node.dataset.screen = String(participant.screen);
-  applyParticipantPalette(participant.node, participant);
-  participant.node.querySelector('.avatar')!.textContent = getInitials(participant.name);
-  participant.node.querySelector('.participant-name')!.textContent = participant.isLocal ? `${participant.name} · вы` : participant.name;
+  const view = requireParticipantView(participant);
+  view.node.dataset.deafened = String(participant.deafened);
+  view.node.dataset.muted = String(participant.muted);
+  view.node.dataset.screen = String(participant.screen);
+  applyParticipantPalette(view.node, participant);
+  view.node.querySelector('.avatar')!.textContent = getInitials(participant.name);
+  view.node.querySelector('.participant-name')!.textContent = participant.isLocal ? `${participant.name} · вы` : participant.name;
   if (Object.hasOwn(peerInfo, 'muted') && participant.muted) {
     participant.incomingVoiceActive = false;
     setParticipantSpeaking(participant, false);
@@ -258,7 +279,7 @@ export function removePeer(peerId: string): void {
   if (state.sharedScreenPeerId === peer.id) {
     hideScreenStage();
   }
-  peer.node.remove();
+  removeParticipantView(peerId);
   state.peers.delete(peerId);
   if (state.peers.size === 0) setParticipantSpeaking(state.self, false);
   refreshScreenTiles();
@@ -324,7 +345,7 @@ export function attachRemoteScreenStream(peer: Participant, stream: MediaStream)
   peer.screenStream = screenStream;
   peer.screenAudio = peer.screenAudio || screenStream.getAudioTracks().some((track) => track.readyState !== 'ended');
   peer.screenStreamId ||= screenStream.id;
-  peer.node.dataset.screen = 'true';
+  setParticipantScreenDataset(peer, true);
 
   for (const track of screenStream.getVideoTracks()) {
     if (watchedRemoteScreenTracks.has(track)) continue;
@@ -371,7 +392,7 @@ function mergeRemoteScreenStream(peer: Participant, stream: MediaStream): MediaS
 
 export function detachRemoteScreen(peer: Participant): void {
   peer.screenStream = null;
-  peer.node.dataset.screen = String(peer.screen);
+  setParticipantScreenDataset(peer, peer.screen);
   if (state.sharedScreenPeerId === peer.id) hideScreenStage();
   refreshScreenStage();
   updatePeerStatus(peer);
@@ -419,8 +440,15 @@ export function removeAudioElements(peer: Participant): void {
 }
 
 export function setParticipantSpeaking(participant: Participant | null, speaking: boolean): void {
-  if (!participant?.node) return;
-  participant.node.dataset.speaking = String(Boolean(speaking));
+  const view = getParticipantView(participant);
+  if (!view) return;
+  view.node.dataset.speaking = String(Boolean(speaking));
+}
+
+function setParticipantScreenDataset(participant: Participant, screen: boolean): void {
+  const view = getParticipantView(participant);
+  if (!view) return;
+  view.node.dataset.screen = String(screen);
 }
 
 export function updatePeerStatus(peer: Participant): void {
@@ -467,9 +495,11 @@ function getLiveKitMicrophonePublication(peer: Participant) {
   return [...publications.values()].find(isMicrophonePublication) || null;
 }
 
-function setParticipantStatus(peer: Pick<Participant, 'status'>, label: string): void {
-  peer.status.textContent = label;
-  peer.status.hidden = !label;
+function setParticipantStatus(peer: Participant | ParticipantViewRefs, label: string): void {
+  const view = 'status' in peer ? peer : getParticipantView(peer);
+  if (!view) return;
+  view.status.textContent = label;
+  view.status.hidden = !label;
 }
 
 export function refreshParticipantState(): void {
