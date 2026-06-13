@@ -16,25 +16,27 @@ Voice Room - голосовая комната по ссылке с демонс
 
 ```
 apps/
-  api/             Node.js HTTP API + SSE + раздача собранного web build
-    src/server.js  сервер приложения
+  api/             Node.js HTTP API + SSE, только строгий /api/* контракт
+    src/server.js  API-сервер комнат, presence/state и LiveKit JWT
     src/lib/       серверные модули: config, pow, rate-limit
     test/          unit/integration тесты API
   web/             SvelteKit frontend app
-    src/routes/    тонкие SvelteKit routes: /, /r/[roomId], /download
+    src/routes/    тонкие SvelteKit routes: /, /r/[roomId]
     src/lib/api/   typed fetch client: rooms, pow, common HTTP primitives
     src/lib/components/
                    общие UI-кусочки и CSS компоненты
     src/lib/features/
-      home/        стартовая страница на Svelte
-      download/    страница загрузки на Svelte
+      home/        стартовая страница на Svelte (вместе с блоком загрузки приложения)
       room/        Svelte room shell + room client/media layer
     static/        статика как есть: воркеты, rnnoise (wasm), icon, fonts
+    dist/          production static build для Caddy
 packages/
   shared/          общие contracts/validation для web и api
 ```
 
-`/` и `/download` не зависят от room/media кода. `/r/[roomId]` монтирует Svelte-разметку комнаты и lazy-загружает `features/room/client/main.ts`; сам `livekit-client` дополнительно загружается через `features/room/client/media/livekit-runtime.ts` только при подключении/публикации. Это держит стартовый и download routes маленькими, а WebRTC-слой изолированным внутри room feature.
+`/` не зависит от room/media кода. `/r/[roomId]` монтирует Svelte-разметку комнаты и lazy-загружает `features/room/client/main.ts`; сам `livekit-client` дополнительно загружается через `features/room/client/media/livekit-runtime.ts` только при подключении/публикации. Это держит стартовый route маленьким, а WebRTC-слой изолированным внутри room feature.
+
+В production frontend и backend разделены: Caddy раздаёт SvelteKit static build из `/srv/web`, а запросы `/api/*` проксирует в `apps/api`. API не отдаёт HTML и не знает про frontend build.
 
 ## Требования
 
@@ -59,9 +61,10 @@ source ~/.nvm/nvm.sh
 nvm use
 npm install
 
-export LIVEKIT_URL=ws://127.0.0.1:7880
-export LIVEKIT_API_KEY=devkey
-export LIVEKIT_API_SECRET=secret
+set -a
+source .env
+set +a
+
 npm run dev
 ```
 
@@ -71,9 +74,9 @@ npm run dev
 npm run dev:web
 ```
 
-Откройте `http://localhost:5173`. `localhost` считается безопасным browser context, поэтому микрофон и screen capture работают без HTTPS.
+Откройте `http://127.0.0.1:5173`. Vite проксирует `/api/*` на API-сервер `http://localhost:3000`. `localhost` и `127.0.0.1` считаются безопасным browser context, поэтому микрофон и screen capture работают без HTTPS.
 
-Production-режим без Docker: `npm run build`, затем `npm start` — API-сервер раздаёт собранный SvelteKit static build из `apps/web/build` на `http://localhost:3000`.
+Production frontend build создаётся командой `npm run build` и кладётся в `apps/web/dist`. API запускается отдельно через `npm start` и отвечает только на `/api/*`; static frontend в production раздаёт Caddy.
 
 Проверки:
 
@@ -123,21 +126,18 @@ LIVEKIT_API_SECRET=secret
 
 ## Docker
 
-Собрать app image:
+Production compose собирает два runtime-образа из одного Dockerfile:
+
+- `api` — Node.js API на `:3000`, только `/api/*`;
+- `caddy` — frontend static build из `apps/web/dist`, reverse proxy для `/api/*` и отдельный reverse proxy для LiveKit domain.
+
+Запуск:
 
 ```bash
-docker build -t voice-room .
+docker compose up --build
 ```
 
-Запустить с доступным LiveKit endpoint:
-
-```bash
-docker run --rm -p 3000:3000 \
-  -e LIVEKIT_URL=wss://livekit.example.com \
-  -e LIVEKIT_API_KEY=change-me-livekit-key \
-  -e LIVEKIT_API_SECRET=change-me-livekit-secret \
-  voice-room
-```
+Для Docker/production используйте отдельный prod-like `.env`: `LIVEKIT_URL` должен быть публичным URL из браузера, обычно `wss://$LIVEKIT_DOMAIN`. Локальный dev `.env` с `LIVEKIT_URL=ws://127.0.0.1:7880` предназначен для запуска через `npm run dev`, внутри Docker-контейнера такой адрес будет указывать на сам контейнер.
 
 В production приложение должно стоять за HTTPS, а LiveKit должен иметь публично доступные ICE/TCP и ICE/UDP порты. Если пользователи часто сидят за строгими корпоративными сетями, следующим шагом стоит добавить TURN/TLS в LiveKit deployment.
 
