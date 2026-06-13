@@ -9,6 +9,10 @@ export function supportsAudioOutputSelection(): boolean {
   return typeof HTMLMediaElement !== 'undefined' && 'setSinkId' in HTMLMediaElement.prototype;
 }
 
+function supportsAudioContextOutputSelection(): boolean {
+  return typeof AudioContext !== 'undefined' && 'setSinkId' in AudioContext.prototype;
+}
+
 export function syncPlaybackMuteState(): void {
   syncRemoteAudioPlayback();
   syncScreenVideoAudio();
@@ -75,6 +79,68 @@ export function getSharedAudioContext(): AudioContext {
   return state.audioContext;
 }
 
+let screenAudioSource: MediaElementAudioSourceNode | null = null;
+let screenAudioGain: GainNode | null = null;
+let screenAudioGainElement: HTMLMediaElement | null = null;
+let warnedScreenBoostOutputDeviceFallback = false;
+
+export function applyScreenMediaElementVolume(
+  mediaElement: HTMLMediaElement,
+  options: { boostAllowed: boolean; muted: boolean; volume: number }
+): boolean {
+  const volume = Number.isFinite(options.volume) ? Math.max(0, options.volume) : 1;
+  if (volume <= 1 || !options.boostAllowed) {
+    mediaElement.volume = screenAudioGainElement === mediaElement ? 1 : Math.min(1, volume);
+    mediaElement.muted = options.muted;
+    if (screenAudioGainElement === mediaElement && screenAudioGain) {
+      screenAudioGain.gain.value = options.muted ? 0 : Math.min(1, volume);
+    }
+    return true;
+  }
+
+  if (supportsAudioOutputSelection() && !supportsAudioContextOutputSelection()) {
+    if (!warnedScreenBoostOutputDeviceFallback) {
+      warnedScreenBoostOutputDeviceFallback = true;
+      console.warn('Stream audio boost unavailable while preserving output device selection');
+    }
+    mediaElement.volume = Math.min(1, volume);
+    mediaElement.muted = options.muted;
+    return false;
+  }
+
+  try {
+    const context = getSharedAudioContext() as AudioContext & { setSinkId?: (sinkId: string) => Promise<void> };
+    if (state.outputDeviceId && typeof context.setSinkId === 'function') {
+      context.setSinkId(state.outputDeviceId).catch((error) => {
+        console.warn('Audio context output device unavailable', error);
+      });
+    }
+    if (context.state !== 'running') {
+      queueAudioUnlock({ showFallback: true });
+      context.resume().catch(() => {});
+    }
+
+    if (screenAudioGainElement !== mediaElement) {
+      screenAudioSource?.disconnect();
+      screenAudioGain?.disconnect();
+      screenAudioSource = context.createMediaElementSource(mediaElement);
+      screenAudioGain = context.createGain();
+      screenAudioSource.connect(screenAudioGain);
+      screenAudioGain.connect(context.destination);
+      screenAudioGainElement = mediaElement;
+    }
+    mediaElement.volume = 1;
+    mediaElement.muted = options.muted;
+    screenAudioGain!.gain.value = options.muted ? 0 : volume;
+    return true;
+  } catch (error) {
+    console.warn('Stream audio boost unavailable', error);
+    mediaElement.volume = Math.min(1, volume);
+    mediaElement.muted = options.muted;
+    return false;
+  }
+}
+
 export function isVoicePlaybackMuted(): boolean {
   return state.outputMuted || isLocalAppAudioSuppressed();
 }
@@ -134,4 +200,3 @@ export function playMediaElement(element: HTMLMediaElement): void {
     if (!element.muted) queueAudioUnlock({ showFallback: true });
   });
 }
-

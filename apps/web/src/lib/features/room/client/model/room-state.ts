@@ -7,7 +7,7 @@ import {
   OUTPUT_MUTED_STORAGE_KEY
 } from '../core/config';
 import { getRoomIdFromPath, getStoredPeerSession } from '../core/session';
-import { getStoredGateThresholdDb, getStoredNoiseMode } from '../core/settings';
+import { getStoredGateThresholdDb, getStoredNoiseMode, getStoredStreamVolume } from '../core/settings';
 import type { AppState } from '../core/types';
 
 export function createInitialRoomState(): AppState {
@@ -65,7 +65,7 @@ export function createInitialRoomState(): AppState {
     screenSubscribedPeerIds: new Set(),
     screenSourceRequest: null,
     screenStopping: false,
-    screenVolume: 1,
+    screenVolume: getStoredStreamVolume(),
     stripCollapsed: false,
     self: null,
     serverConnection: 'idle',

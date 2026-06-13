@@ -1,14 +1,17 @@
 import {
   DEFAULT_GATE_THRESHOLD_DB,
   DEFAULT_NOISE_MODE,
+  DEFAULT_STREAM_VOLUME,
   GATE_THRESHOLD_DB_STORAGE_KEY,
   GATE_THRESHOLD_MAX_DB,
   GATE_THRESHOLD_MIN_DB,
+  MAX_STREAM_VOLUME,
   NOISE_MODES,
   NOISE_MODE_STORAGE_KEY,
   PREVIOUS_GATE_MAX_AMPLITUDE,
   PREVIOUS_GATE_MIN_AMPLITUDE,
   PREVIOUS_GATE_THRESHOLD_STORAGE_KEY,
+  STREAM_VOLUME_STORAGE_KEY,
   type NoiseMode
 } from './config';
 
@@ -36,6 +39,23 @@ export function getStoredGateThresholdDb(): number {
   const migratedValue = previousGatePercentToDb(previousValue);
   localStorage.setItem(GATE_THRESHOLD_DB_STORAGE_KEY, String(migratedValue));
   return migratedValue;
+}
+
+export function getStoredStreamVolume(): number {
+  const storedValue = Number.parseFloat(localStorage.getItem(STREAM_VOLUME_STORAGE_KEY) || '');
+  return Number.isFinite(storedValue)
+    ? clampStreamVolume(storedValue)
+    : DEFAULT_STREAM_VOLUME;
+}
+
+export function storeStreamVolume(volume: number): void {
+  localStorage.setItem(STREAM_VOLUME_STORAGE_KEY, String(clampStreamVolume(volume)));
+}
+
+export function clampStreamVolume(volume: number): number {
+  return Number.isFinite(volume)
+    ? Math.min(MAX_STREAM_VOLUME, Math.max(0, volume))
+    : DEFAULT_STREAM_VOLUME;
 }
 
 export function clampGateThresholdDb(value: number): number {

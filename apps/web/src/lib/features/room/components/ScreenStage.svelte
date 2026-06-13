@@ -19,7 +19,7 @@
         <span class="stream-volume-icon stream-volume-icon-off" data-icon="volume-off" aria-hidden="true"></span>
       </button>
       <div class="stream-volume-popover" id="streamVolumePopover">
-        <input class="stream-volume-slider" id="streamVolumeSlider" type="range" min="0" max="100" value="100" aria-label="Громкость стрима">
+        <input class="stream-volume-slider" id="streamVolumeSlider" type="range" min="0" max="200" value="50" aria-label="Громкость стрима">
       </div>
     </div>
 
