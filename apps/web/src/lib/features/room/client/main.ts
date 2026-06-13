@@ -1,4 +1,3 @@
-import './styles.css';
 import { GATE_THRESHOLD_MIN_DB } from './core/config';
 import { elements, setElementsRoot } from './ui/dom';
 import { mountIcons } from './ui/icons';

@@ -1,0 +1,216 @@
+.tile-grid {
+  --tile-columns: 1;
+  display: grid;
+  grid-template-columns: repeat(var(--tile-columns, 1), minmax(0, 1fr));
+  /* Rows share the available height and shrink freely, so the grid fits the
+     stage without the page scrolling until the viewport gets very short. */
+  grid-auto-rows: minmax(0, 1fr);
+  align-content: stretch;
+  justify-content: center;
+  justify-items: stretch;
+  gap: var(--space-md);
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+}
+
+.stream-tiles,
+.participants {
+  display: contents;
+}
+
+.stream-tile {
+  position: relative;
+  display: block;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  aspect-ratio: 16 / 10;
+  border: 0;
+  border-radius: var(--radius-sm);
+  padding: 0;
+  overflow: hidden;
+  background: oklch(24% 0.008 92);
+  color: oklch(90% 0.008 92);
+  text-align: left;
+  transition: background 160ms var(--ease-out), box-shadow 160ms var(--ease-out);
+}
+
+.stream-tile[data-idle="true"]:hover,
+.stream-tile[data-idle="true"]:focus-visible {
+  background: oklch(27% 0.008 92);
+  box-shadow: inset 0 0 0 1px oklch(78% 0.01 92 / 0.12);
+}
+
+.stream-tile[data-preview="true"] {
+  background: oklch(14% 0.01 92);
+  cursor: pointer;
+}
+
+.stream-tile[data-preview="true"]:hover,
+.stream-tile[data-preview="true"]:focus-visible {
+  background: oklch(14% 0.01 92);
+  box-shadow: none;
+}
+
+.stream-tile-preview {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: oklch(22% 0.008 92);
+}
+
+.stream-tile-icon {
+  color: oklch(72% 0.01 92 / 0.42);
+}
+
+.stream-tile-icon svg {
+  width: 42px;
+  height: 42px;
+}
+
+.stream-tile-video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: oklch(10% 0.01 92);
+  object-fit: cover;
+}
+
+.stream-tile-copy {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 1;
+  display: grid;
+  justify-items: start;
+  min-width: 0;
+  padding: var(--space-sm);
+  background: transparent;
+  pointer-events: none;
+}
+
+.stream-tile[data-collapsed="true"] .stream-tile-copy {
+  background: linear-gradient(180deg, oklch(12% 0.01 92 / 0), oklch(10% 0.012 92 / 0.84) 68%);
+}
+
+.stream-tile-copy strong {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  color: oklch(97% 0.006 92);
+  font-size: 0.86rem;
+  font-weight: 820;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stream-tile[data-collapsed="true"] .stream-tile-copy strong {
+  text-shadow: 0 1px 8px oklch(8% 0.01 92 / 0.72);
+}
+
+.stream-tile-copy-idle strong {
+  color: oklch(88% 0.008 92);
+  font-size: 0.8rem;
+  font-weight: 780;
+}
+
+.stream-tile-actions {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 2;
+  display: inline-flex;
+  max-width: calc(100% - 20px);
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, -50%) scale(0.96);
+  transition: opacity 140ms var(--ease-out), transform 140ms var(--ease-out);
+}
+
+.stream-tile-action {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  padding: 0 14px;
+  background: oklch(84% 0.012 92);
+  color: oklch(9% 0.012 92);
+  font-size: 0.82rem;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.stream-tile-action-disconnect {
+  border: 0;
+  background: oklch(18% 0.012 92 / 0.92);
+  color: oklch(94% 0.008 92);
+  box-shadow: inset 0 0 0 1px oklch(78% 0.01 92 / 0.18);
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.stream-tile-action-disconnect:hover {
+  background: oklch(24% 0.014 92 / 0.96);
+}
+
+.stream-tile[data-idle="true"]:hover .stream-tile-actions,
+.stream-tile[data-idle="true"]:focus-visible .stream-tile-actions,
+.stream-tile[data-idle="true"]:focus-within .stream-tile-actions {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translate(-50%, -50%) scale(1);
+}
+
+.stream-tile[data-preview="true"]:not([data-collapsed="true"]) .stream-tile-actions {
+  display: none;
+}
+
+.stream-tile-expand {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.stream-tile[data-collapsed="true"] .stream-tile-actions {
+  display: inline-flex;
+  z-index: 2;
+}
+
+.stream-tile[data-collapsed="true"]:hover .stream-tile-actions,
+.stream-tile[data-collapsed="true"]:focus-visible .stream-tile-actions,
+.stream-tile[data-collapsed="true"]:focus-within .stream-tile-actions {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translate(-50%, -50%) scale(1);
+}
+
+.participants {
+  --tile-columns: 1;
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  min-height: min(520px, calc(100vh - 250px));
+  grid-template-columns: repeat(var(--tile-columns), minmax(0, 1fr));
+  grid-auto-rows: minmax(180px, 1fr);
+  align-content: center;
+  justify-content: center;
+  justify-items: stretch;
+  gap: var(--space-md);
+}
+

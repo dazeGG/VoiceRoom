@@ -1,0 +1,289 @@
+body[data-screen-view="true"][data-strip-collapsed="true"] .stage-strip {
+  max-height: 42px;
+}
+
+.tile-grid[data-count="0"] {
+  display: block;
+  height: auto;
+  min-height: clamp(180px, calc(100dvh - 360px), 360px);
+}
+
+/* One or two participants: cap the tile size and center it instead of letting
+   it stretch to fill a tall stage; still allowed to shrink (min 0). */
+.tile-grid[data-count="1"] {
+  width: min(860px, 100%);
+  grid-template-rows: minmax(0, min(440px, 56vh));
+  align-content: center;
+  margin-inline: auto;
+}
+
+.tile-grid[data-count="2"] {
+  --tile-columns: 2;
+  grid-template-rows: minmax(0, min(460px, 56vh));
+  align-content: center;
+}
+
+.tile-grid[data-count="3"],
+.tile-grid[data-count="4"] {
+  --tile-columns: 2;
+}
+
+.tile-grid[data-count="5"],
+.tile-grid[data-count="6"] {
+  --tile-columns: 3;
+}
+
+.tile-grid[data-count="7"],
+.tile-grid[data-count="8"] {
+  --tile-columns: 4;
+}
+
+.participant {
+  --level: 0;
+  --participant-pastel: oklch(84% 0.07 164);
+  position: relative;
+  display: grid;
+  min-height: 0;
+  height: 100%;
+  aspect-ratio: auto;
+  /* Size container so descendant avatar/ring elements can scale down on short tiles. */
+  container-type: size;
+  place-items: center;
+  border: 1px solid color-mix(in oklch, var(--line), var(--ink) 8%);
+  border-radius: var(--radius-sm);
+  padding: clamp(var(--space-sm), 2.2vh, var(--space-lg)) var(--space-md);
+  overflow: hidden;
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in oklch, var(--participant-pastel), var(--paper-deep) 72%),
+      color-mix(in oklch, var(--participant-pastel), var(--paper-deep) 84%)
+    ),
+    var(--panel);
+  box-shadow: 0 10px 30px oklch(30% 0.03 245 / 0.08);
+  transition: border-color 180ms ease, background 180ms ease, box-shadow 180ms ease;
+}
+
+.participant[data-local="true"] {
+  border-color: color-mix(in oklch, var(--green), var(--line) 56%);
+}
+
+.participant[data-muted="true"] {
+  opacity: 0.82;
+}
+
+.participant[data-screen="true"] {
+  border-color: color-mix(in oklch, var(--blue), var(--line) 28%);
+}
+
+.participant[data-speaking="true"] {
+  border-color: var(--green);
+}
+
+.voice-ring {
+  display: grid;
+  width: 86px;
+  height: 86px;
+  place-items: center;
+  border-radius: 50%;
+  background: transparent;
+  transition: transform 160ms ease;
+}
+
+.participant[data-speaking="true"] .voice-ring {
+  transform: scale(1.03);
+}
+
+.avatar {
+  display: grid;
+  width: 74px;
+  height: 74px;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: color-mix(in oklch, var(--participant-pastel), var(--paper-deep) 48%);
+  color: var(--ink);
+  font-size: 1.38rem;
+  font-weight: 850;
+  box-shadow: none;
+  transition: transform 160ms ease;
+}
+
+.participant[data-speaking="true"] .avatar {
+  box-shadow: none;
+}
+
+/* Scale the avatar/ring down as the tile gets shorter so it never clips. */
+@container (max-height: 210px) {
+  .voice-ring {
+    width: 64px;
+    height: 64px;
+  }
+  .avatar {
+    width: 56px;
+    height: 56px;
+    font-size: 1.18rem;
+  }
+}
+
+@container (max-height: 150px) {
+  .voice-ring {
+    width: 50px;
+    height: 50px;
+  }
+  .avatar {
+    width: 44px;
+    height: 44px;
+    font-size: 1rem;
+  }
+}
+
+@container (max-height: 104px) {
+  .voice-ring {
+    width: 38px;
+    height: 38px;
+  }
+  .avatar {
+    width: 34px;
+    height: 34px;
+    font-size: 0.85rem;
+  }
+}
+
+.participant-copy {
+  position: absolute;
+  right: var(--space-sm);
+  bottom: var(--space-sm);
+  left: var(--space-sm);
+  display: grid;
+  justify-items: start;
+  gap: var(--space-2xs);
+  min-width: 0;
+}
+
+.participant h2 {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  margin: 0;
+  overflow: hidden;
+  border-radius: 7px;
+  padding: 5px 8px;
+  background: oklch(9% 0.012 92 / 0.84);
+  color: oklch(98% 0.006 92);
+  font-size: 0.9rem;
+  font-weight: 850;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.participant-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.participant-muted-icon,
+.participant-deafened-icon {
+  display: none;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  place-items: center;
+  color: oklch(93% 0.034 32);
+}
+
+.participant-muted-icon svg,
+.participant-deafened-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.participant[data-muted="true"] .participant-muted-icon {
+  display: grid;
+}
+
+.participant[data-deafened="true"] .participant-deafened-icon {
+  display: grid;
+}
+
+.participant p {
+  max-width: 100%;
+  margin: 0;
+  overflow: hidden;
+  border-radius: 999px;
+  padding: 3px 7px;
+  background: oklch(9% 0.012 92 / 0.78);
+  color: oklch(86% 0.035 86);
+  font-size: 0.76rem;
+  font-weight: 800;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.participant-screen-action {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid color-mix(in oklch, var(--control-line), var(--ink) 12%);
+  border-radius: 999px;
+  padding: 0 10px;
+  background: oklch(84% 0.012 92);
+  color: oklch(9% 0.012 92);
+  font-size: 0.76rem;
+  font-weight: 850;
+  line-height: 1;
+  white-space: nowrap;
+  transition: background 160ms var(--ease-out), border-color 160ms var(--ease-out), transform 160ms var(--ease-out);
+}
+
+.participant-screen-action:hover {
+  background: var(--control-active-hover);
+  transform: translateY(-1px);
+}
+
+.participant-screen-action [data-icon] svg {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+}
+
+.empty-room {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-auto-rows: max-content;
+  align-content: center;
+  justify-items: center;
+  gap: var(--space-md);
+  padding: 0 var(--space-md) 92px;
+  color: var(--muted);
+  font-weight: 750;
+  pointer-events: none;
+  text-align: center;
+}
+
+.empty-room[hidden] {
+  display: none;
+}
+
+.empty-orbit {
+  width: 108px;
+  height: 108px;
+  border: 1px dashed oklch(55% 0.06 238 / 0.42);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle, var(--blue) 0 8px, transparent 9px),
+    radial-gradient(circle at 72% 30%, var(--coral) 0 6px, transparent 7px),
+    radial-gradient(circle at 34% 78%, var(--amber) 0 7px, transparent 8px);
+}
+
+.empty-room p {
+  margin: 0;
+}
+

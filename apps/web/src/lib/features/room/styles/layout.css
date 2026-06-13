@@ -1,0 +1,149 @@
+/* Base .topbar / .brand / .brand-mark live in shared/topbar.css (one component
+   used on every page). Only app-specific overrides remain here. */
+.topbar-room-heading {
+  display: none;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+body[data-screen="room"] .topbar {
+  align-items: center;
+}
+
+body[data-screen="room"] .brand {
+  display: none;
+}
+
+body[data-screen="room"] .topbar-room-heading {
+  display: flex;
+}
+
+.topbar-room-heading h1 {
+  max-width: min(62vw, 28ch);
+  font-size: 2.35rem;
+  line-height: 0.95;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  min-width: 178px;
+  margin-left: auto;
+  justify-content: center;
+  gap: var(--space-xs);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 8px 12px;
+  background: oklch(18% 0.014 92 / 0.72);
+  color: var(--muted);
+  font-size: 0.875rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--amber);
+}
+
+.status-pill[data-state="connected"] .status-dot {
+  background: var(--green);
+}
+
+.status-pill[data-state="error"] .status-dot {
+  background: var(--coral);
+}
+
+.status-pill[data-state="warning"] .status-dot {
+  background: var(--amber);
+}
+
+.status-pill[data-state="connecting"] .status-dot {
+  animation: blink 1s infinite;
+  background: var(--blue);
+}
+
+.room-layout {
+  display: grid;
+  min-height: 0;
+}
+
+.not-found-layout {
+  display: grid;
+  min-height: min(760px, calc(100dvh - 116px));
+  place-items: center;
+}
+
+.start-panel {
+  display: grid;
+  gap: var(--space-lg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: var(--space-xl);
+  background:
+    linear-gradient(180deg, oklch(22% 0.018 92 / 0.96), oklch(17% 0.014 92 / 0.96)),
+    var(--panel);
+  box-shadow: var(--shadow);
+}
+
+.not-found-panel {
+  display: grid;
+  width: min(100%, 620px);
+  gap: var(--space-lg);
+  border: 1px solid color-mix(in oklch, var(--line), var(--coral) 18%);
+  border-radius: var(--radius-md);
+  padding: clamp(var(--space-xl), 5vw, 64px);
+  background:
+    radial-gradient(circle at 18% 4%, oklch(62% 0.15 31 / 0.16), transparent 38%),
+    linear-gradient(180deg, oklch(22% 0.018 92 / 0.96), oklch(14% 0.013 92 / 0.98)),
+    var(--panel);
+  box-shadow: var(--shadow);
+}
+
+.not-found-panel h1 {
+  /* The panel grid already spaces the lockup — drop the .hero-title margin. */
+  margin-top: 0;
+  max-width: 12ch;
+  font-size: clamp(2.5rem, 4vw, 3rem);
+}
+
+.not-found-copy {
+  max-width: 46ch;
+  margin: 0;
+  color: var(--muted);
+  font-size: 1.06rem;
+  font-weight: 650;
+}
+
+.not-found-copy span {
+  color: var(--ink);
+  font-weight: 850;
+  overflow-wrap: anywhere;
+}
+
+.start-divider {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.start-divider::before,
+.start-divider::after {
+  height: 1px;
+  flex: 1;
+  background: var(--line);
+  content: "";
+}
+
+.room-actions {
+  display: grid;
+  gap: var(--space-md);
+}
+

@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import '$lib/shared/styles/typography.css';
   import '$lib/shared/styles/app.css';
-  import './client/styles.css';
+  import './styles/room.css';
   import NotFoundScreen from './components/NotFoundScreen.svelte';
   import RoomOverlays from './components/RoomOverlays.svelte';
   import RoomStage from './components/RoomStage.svelte';
