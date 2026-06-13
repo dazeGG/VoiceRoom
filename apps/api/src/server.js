@@ -1,10 +1,7 @@
 'use strict';
 
 const crypto = require('node:crypto');
-const { existsSync } = require('node:fs');
-const fs = require('node:fs/promises');
 const http = require('node:http');
-const path = require('node:path');
 const { URL } = require('node:url');
 const { AccessToken, TrackSource } = require('livekit-server-sdk');
 
@@ -21,8 +18,8 @@ const {
 const { createProofOfWork } = require('./lib/pow');
 const { getClientIp, createRateLimiter } = require('./lib/rate-limit');
 
+const API_PREFIX = '/api';
 const PORT = readEnvInt('PORT', 3000, 1);
-const STATIC_DIR = path.join(__dirname, '..', '..', 'web', 'build');
 const MAX_ROOM_PEERS = readEnvInt('MAX_ROOM_PEERS', 12, 1);
 const MAX_ROOMS = readEnvInt('MAX_ROOMS', 100, 1);
 const KEEPALIVE_MS = readEnvInt('SSE_KEEPALIVE_MS', 15000, 1000);
@@ -47,21 +44,6 @@ const roomCreateLimiter = createRateLimiter({
   windowMs: ROOM_CREATE_RATE_WINDOW_MS
 });
 
-const mimeTypes = {
-  '.css': 'text/css; charset=utf-8',
-  '.html': 'text/html; charset=utf-8',
-  '.ico': 'image/x-icon',
-  '.js': 'application/javascript; charset=utf-8',
-  '.json': 'application/json; charset=utf-8',
-  '.mjs': 'application/javascript; charset=utf-8',
-  '.png': 'image/png',
-  '.svg': 'image/svg+xml; charset=utf-8',
-  '.txt': 'text/plain; charset=utf-8',
-  '.wasm': 'application/wasm',
-  '.webmanifest': 'application/manifest+json; charset=utf-8',
-  '.woff2': 'font/woff2'
-};
-
 function getLiveKitConnectSources() {
   const url = cleanLiveKitUrl(process.env.LIVEKIT_URL || '');
   if (!url) return [];
@@ -83,7 +65,7 @@ function getLiveKitConnectSources() {
   return [...sources];
 }
 
-function baseHeaders({ inlineScriptHashes = [] } = {}) {
+function baseHeaders() {
   const connectSrc = [
     "'self'",
     ...getLiveKitConnectSources(),
@@ -91,11 +73,6 @@ function baseHeaders({ inlineScriptHashes = [] } = {}) {
     'stun:',
     'turn:',
     'turns:'
-  ].join(' ');
-  const scriptSrc = [
-    "'self'",
-    "'wasm-unsafe-eval'",
-    ...inlineScriptHashes.map((hash) => `'sha256-${hash}'`)
   ].join(' ');
 
   return {
@@ -109,7 +86,7 @@ function baseHeaders({ inlineScriptHashes = [] } = {}) {
       "img-src 'self' data:",
       "media-src 'self' blob:",
       "object-src 'none'",
-      `script-src ${scriptSrc}`,
+      "script-src 'self' 'wasm-unsafe-eval'",
       "style-src 'self'"
     ].join('; '),
     'Cross-Origin-Opener-Policy': 'same-origin',
@@ -117,18 +94,6 @@ function baseHeaders({ inlineScriptHashes = [] } = {}) {
     'Referrer-Policy': 'same-origin',
     'X-Content-Type-Options': 'nosniff'
   };
-}
-
-function getInlineScriptHashes(data) {
-  const html = data.toString('utf8');
-  const hashes = [];
-  const scriptPattern = /<script>([\s\S]*?)<\/script>/gi;
-  let match = scriptPattern.exec(html);
-  while (match) {
-    hashes.push(crypto.createHash('sha256').update(match[1]).digest('base64'));
-    match = scriptPattern.exec(html);
-  }
-  return hashes;
 }
 
 function sendJson(res, status, payload, headers = {}) {
@@ -601,59 +566,20 @@ async function handleState(req, res) {
   sendJson(res, 200, { ok: true, peer: publicPeer(peer) });
 }
 
-async function serveStatic(req, res, url) {
-  let pathname = decodeURIComponent(url.pathname);
-  let statusCode = 200;
-
-  if (pathname === '/') {
-    pathname = '/index.html';
-  } else if (pathname === '/download' || pathname === '/download/') {
-    pathname = '/index.html';
-  } else if (pathname.startsWith('/r/')) {
-    const match = pathname.match(/^\/r\/([A-Za-z0-9_-]{3,48})\/?$/);
-    const roomId = match ? normalizeRoomId(match[1]) : '';
-    pruneRooms();
-    statusCode = roomId && rooms.has(roomId) ? 200 : 404;
-    pathname = '/index.html';
-  }
-
-  const resolvedPath = path.resolve(STATIC_DIR, `.${pathname}`);
-  if (!resolvedPath.startsWith(`${STATIC_DIR}${path.sep}`) && resolvedPath !== path.join(STATIC_DIR, 'index.html')) {
-    sendJson(res, 403, { ok: false, error: 'Forbidden' });
-    return;
-  }
-
-  let data;
-  try {
-    data = await fs.readFile(resolvedPath);
-  } catch (error) {
-    sendJson(res, 404, { ok: false, error: 'Not found' });
-    return;
-  }
-
-  const ext = path.extname(resolvedPath);
-  // Vite emits content-hashed filenames under /assets/, safe to cache forever.
-  const cacheControl =
-    pathname.startsWith('/_app/immutable/') || pathname.startsWith('/assets/')
-      ? 'public, max-age=31536000, immutable'
-      : 'no-cache';
-  const headers = ext === '.html' ? baseHeaders({ inlineScriptHashes: getInlineScriptHashes(data) }) : baseHeaders();
-  res.writeHead(statusCode, {
-    ...headers,
-    'Cache-Control': cacheControl,
-    'Content-Type': mimeTypes[ext] || 'application/octet-stream'
-  });
-  if (req.method === 'HEAD') {
-    res.end();
-  } else {
-    res.end(data);
-  }
+function getApiRoutePath(pathname) {
+  if (pathname === API_PREFIX) return '/';
+  if (pathname.startsWith(`${API_PREFIX}/`)) return pathname.slice(API_PREFIX.length);
+  return null;
 }
 
 const server = http.createServer(async (req, res) => {
   try {
     const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
-    const routePath = url.pathname.startsWith('/api/') ? url.pathname.slice(4) || '/' : url.pathname;
+    const routePath = getApiRoutePath(url.pathname);
+    if (!routePath) {
+      sendJson(res, 404, { ok: false, error: 'Not found' });
+      return;
+    }
 
     if (req.method === 'GET' && routePath === '/healthz') {
       pruneRooms();
@@ -699,17 +625,7 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    if (url.pathname.startsWith('/api/')) {
-      sendJson(res, 404, { ok: false, error: 'Not found' });
-      return;
-    }
-
-    if (req.method === 'GET' || req.method === 'HEAD') {
-      await serveStatic(req, res, url);
-      return;
-    }
-
-    sendJson(res, 405, { ok: false, error: 'Method not allowed' }, { Allow: 'GET, HEAD, POST' });
+    sendJson(res, 404, { ok: false, error: 'Not found' });
   } catch (error) {
     const status = error.statusCode || 500;
     const message = error.publicMessage || (status >= 500 ? 'Internal server error' : error.message);
@@ -725,8 +641,5 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`Voice chat is listening on http://localhost:${PORT}`);
-  if (!existsSync(path.join(STATIC_DIR, 'index.html'))) {
-    console.warn('Client build not found in apps/web/build. Run "npm run build" (production) or use "npm run dev:web" (development).');
-  }
+  console.log(`Voice Room API is listening on http://localhost:${PORT}`);
 });

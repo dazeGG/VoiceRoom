@@ -28,7 +28,7 @@ function waitForHealthz(port, timeoutMs = 5000) {
   return new Promise((resolve, reject) => {
     const attempt = () => {
       http
-        .get(`http://127.0.0.1:${port}/healthz`, (res) => {
+        .get(`http://127.0.0.1:${port}/api/healthz`, (res) => {
           res.resume();
           if (res.statusCode === 200) {
             resolve();
@@ -123,7 +123,7 @@ function eventsUrl(port, { roomId, peerId, token, name }) {
     token,
     name
   });
-  return `http://127.0.0.1:${port}/events?${params}`;
+  return `http://127.0.0.1:${port}/api/events?${params}`;
 }
 
 function openSse(port, params) {
@@ -186,7 +186,7 @@ test('SSE reconnect preserves presence and avoids spurious join/leave events', a
   try {
     await waitForHealthz(port);
 
-    const created = await postJson(port, '/rooms', {});
+    const created = await postJson(port, '/api/rooms', {});
     assert.equal(created.status, 201);
     const roomId = created.body.roomId;
 
@@ -207,7 +207,7 @@ test('SSE reconnect preserves presence and avoids spurious join/leave events', a
     await peerB.waitFor('hello');
     await wait(100);
 
-    await postJson(port, '/state', {
+    await postJson(port, '/api/state', {
       roomId,
       peerId: PEER_A,
       sessionToken: TOKEN_A,
@@ -230,7 +230,7 @@ test('SSE reconnect preserves presence and avoids spurious join/leave events', a
     const reconnectEvents = peerB.messages.slice(beforeReconnect);
     assert.equal(reconnectEvents.length, 0);
 
-    const state = await postJson(port, '/state', {
+    const state = await postJson(port, '/api/state', {
       roomId,
       peerId: PEER_A,
       sessionToken: TOKEN_A

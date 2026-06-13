@@ -1,12 +1,32 @@
 {$DOMAIN} {
   encode zstd gzip
-  reverse_proxy voicechat:3000
 
   header {
     Strict-Transport-Security "max-age=31536000; includeSubDomains"
+    Content-Security-Policy "frame-ancestors 'none'"
+    Cross-Origin-Opener-Policy "same-origin"
     X-Content-Type-Options "nosniff"
     Referrer-Policy "same-origin"
     Permissions-Policy "microphone=(self), display-capture=(self), camera=(), geolocation=(), payment=()"
+  }
+
+  @immutable path /_app/immutable/* /assets/*
+  @web_fallback {
+    not path /api/* /_app/immutable/* /assets/*
+  }
+  header @immutable Cache-Control "public, max-age=31536000, immutable"
+  header @web_fallback Cache-Control "no-cache"
+
+  handle /api/* {
+    reverse_proxy api:3000 {
+      flush_interval -1
+    }
+  }
+
+  handle {
+    root * /srv/web
+    try_files {path} /index.html
+    file_server
   }
 }
 

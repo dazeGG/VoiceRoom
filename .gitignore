@@ -25,6 +25,7 @@ outputs/
 deploy/
 dist/
 apps/web/build/
+apps/web/dist/
 apps/web/.svelte-kit/
 
 # Docker/Caddy local state

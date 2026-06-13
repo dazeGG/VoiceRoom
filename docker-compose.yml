@@ -1,6 +1,8 @@
 services:
-  voicechat:
-    build: .
+  api:
+    build:
+      context: .
+      target: api
     restart: unless-stopped
     environment:
       NODE_ENV: production
@@ -22,10 +24,12 @@ services:
       - "3000"
 
   caddy:
-    image: caddy:2.11.3-alpine
+    build:
+      context: .
+      target: web
     restart: unless-stopped
     depends_on:
-      - voicechat
+      - api
       - livekit
     environment:
       DOMAIN: ${DOMAIN:?set DOMAIN in .env}
@@ -34,7 +38,6 @@ services:
       - "80:80"
       - "443:443"
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
 
