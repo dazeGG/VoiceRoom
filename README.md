@@ -48,14 +48,14 @@ packages/
 
 Проект организован как npm workspaces. Frontend живет в `apps/web` (SvelteKit + Vite), backend — в `apps/api`, общая validation-логика — в `packages/shared`.
 
-Самый простой dev-режим через Docker Compose поднимает PostgreSQL, API с `node --watch`, Vite dev server и LiveKit:
+Самый простой dev-режим теперь Docker-first: root `npm run dev` поднимает PostgreSQL, API с `node --watch`, Vite dev server и LiveKit через `docker-compose.dev.yml`:
 
 ```bash
 cp .env.example .env
-docker compose -f docker-compose.dev.yml up --build
+npm run dev
 ```
 
-Откройте `http://127.0.0.1:5173`. В dev compose Vite слушает `0.0.0.0:5173` внутри контейнера, проксирует `/api/*` на `http://api:3000`, а API использует PostgreSQL service `postgres`. Host-local запуск по-прежнему остаётся дефолтом: без `VITE_DEV_HOST` Vite слушает `127.0.0.1`, а `/api` проксируется на `http://localhost:3000`.
+Откройте `http://127.0.0.1:5173`. В dev compose Vite слушает `0.0.0.0:5173` внутри контейнера, проксирует `/api/*` на `http://api:3000`, а API использует PostgreSQL service `postgres`. Host-local запуск остаётся доступен через `dev:host:*`: без `VITE_DEV_HOST` Vite слушает `127.0.0.1`, а `/api` проксируется на `http://localhost:3000`.
 
 Ручной запуск без dev compose:
 
@@ -64,21 +64,21 @@ source ~/.nvm/nvm.sh
 nvm use
 npm install
 
-# Поднимите PostgreSQL и LiveKit отдельно. Например LiveKit:
-npm run dev:livekit
+# Поднимите PostgreSQL и LiveKit отдельно. Например LiveKit без compose stack:
+npm run dev:host:livekit
 
 set -a
 source .env
 set +a
 
 # DATABASE_URL обязателен: миграции применяются при bootstrap до listen.
-npm run dev
+npm run dev:host:api
 
 # Во втором терминале:
-npm run dev:web
+npm run dev:host:web
 ```
 
-Production frontend build создаётся командой `npm run build` и кладётся в `apps/web/dist`. API запускается отдельно через `npm start`, перед первым listen применяет PostgreSQL migrations и отвечает только на `/api/*`; static frontend в production раздаёт Caddy.
+Production frontend build создаётся командой `npm run build` и кладётся в `apps/web/dist`. Root `npm start` теперь запускает production-like Docker Compose stack; если нужен host-only API без compose, используйте `npm --workspace @voice-room/api start`. API перед первым listen применяет PostgreSQL migrations и отвечает только на `/api/*`; static frontend в production раздаёт Caddy.
 
 Проверки:
 
@@ -173,18 +173,27 @@ Production compose собирает runtime-образы из одного Docke
 - `caddy` — frontend static build из `apps/web/dist`, reverse proxy для `/api/*` и отдельный reverse proxy для LiveKit domain;
 - `livekit` — LiveKit SFU.
 
-Запуск:
+Production-like запуск:
 
 ```bash
 cp .env.example .env
 # поменяйте DOMAIN, LIVEKIT_* и POSTGRES_PASSWORD
-docker compose up --build
+npm start
 ```
 
-Dev compose:
+Остановить production-like stack:
 
 ```bash
-docker compose -f docker-compose.dev.yml up --build
+npm run stop
+```
+
+Dev compose через npm scripts:
+
+```bash
+npm run dev       # foreground
+npm run dev:up    # background
+npm run dev:logs
+npm run dev:down
 ```
 
 Он публикует Vite на `127.0.0.1:${WEB_PORT:-5173}`, API на `${API_PORT:-3000}`, PostgreSQL на `${POSTGRES_PORT:-5432}` и LiveKit на `7880/7881/7882`. Внутри compose Vite проксирует `/api` на `http://api:3000`; вне compose дефолты остаются host-local. Если меняете `LIVEKIT_HTTP_PORT`, задайте и browser-facing `LIVEKIT_PUBLIC_URL` (например `ws://localhost:17880`), потому что это значение API отдаёт клиенту.
@@ -206,8 +215,8 @@ docker compose -f docker-compose.dev.yml up --build
 
    ```bash
    docker compose restart api
-   # или для dev compose:
-   docker compose -f docker-compose.dev.yml restart api
+   # или для dev compose через npm script:
+   npm run dev:restart
    ```
 
 6. Снова откройте `/r/<room-id>` и проверьте, что room существует, static flag сохранился, а отправленное сообщение осталось в истории чата.
