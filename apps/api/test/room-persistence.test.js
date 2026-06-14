@@ -5,22 +5,10 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const http = require('node:http');
 const os = require('node:os');
+const { createTestDatabase } = require('./db-harness');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
-const { spawnSync } = require('node:child_process');
 
-function canListen() {
-  const script = [
-    "const net=require('node:net')",
-    "const server=net.createServer()",
-    "server.once('error',()=>process.exit(1))",
-    "server.listen({host:'127.0.0.1',port:0},()=>server.close(()=>process.exit(0)))"
-  ].join(';');
-  const result = spawnSync(process.execPath, ['-e', script], { stdio: 'ignore' });
-  return result.status === 0;
-}
-
-const networkTest = canListen() ? test : test.skip;
 
 function getSocketPath() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'voice-room-sock-'));
@@ -56,15 +44,16 @@ function waitForHealthz(socketPath, timeoutMs = 5000) {
   });
 }
 
-function startServer(socketPath, dataDir, logs, envOverrides = {}) {
+function startServer(socketPath, databaseUrl, logs, envOverrides = {}) {
   const child = spawn(process.execPath, ['src/server.js'], {
     cwd: path.join(__dirname, '..'),
     env: {
       ...process.env,
+      NODE_ENV: 'test',
       MAX_EMPTY_ROOMS_PER_IP: '0',
       ROOM_CREATE_POW_DIFFICULTY: '0',
       ROOM_CREATE_RATE_LIMIT: '0',
-      ROOM_DATA_DIR: dataDir,
+      DATABASE_URL: databaseUrl,
       ROOM_IDLE_TTL_MS: '60000',
       SOCKET_PATH: socketPath,
       ...envOverrides
@@ -200,15 +189,15 @@ async function getJson(port, pathname) {
   };
 }
 
-networkTest('room registry survives restart and preserves the static flag', async (t) => {
+test('room registry survives restart and preserves the static flag', async (t) => {
   const { dir, socketPath } = getSocketPath();
-  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'voice-room-state-'));
+  const { cleanup, databaseUrl } = await createTestDatabase(t);
   const serverLogs = { stdout: '', stderr: '' };
-  const child = startServer(socketPath, dataDir, serverLogs);
+  const child = startServer(socketPath, databaseUrl, serverLogs);
   t.after(() => {
     child.kill('SIGTERM');
-    fs.rmSync(dataDir, { recursive: true, force: true });
     fs.rmSync(dir, { recursive: true, force: true });
+    return cleanup();
   });
 
   try {
@@ -235,7 +224,7 @@ networkTest('room registry survives restart and preserves the static flag', asyn
     await new Promise((resolve) => child.once('exit', resolve));
 
     const restartLogs = { stdout: '', stderr: '' };
-    const restarted = startServer(socketPath, dataDir, restartLogs);
+    const restarted = startServer(socketPath, databaseUrl, restartLogs);
     t.after(() => {
       restarted.kill('SIGTERM');
     });
@@ -264,15 +253,15 @@ networkTest('room registry survives restart and preserves the static flag', asyn
 });
 
 
-networkTest('static empty rooms count toward per-IP empty-room quota', async (t) => {
+test('static empty rooms count toward per-IP empty-room quota', async (t) => {
   const { dir, socketPath } = getSocketPath();
-  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'voice-room-state-'));
+  const { cleanup, databaseUrl } = await createTestDatabase(t);
   const logs = { stdout: '', stderr: '' };
-  const child = startServer(socketPath, dataDir, logs, { MAX_EMPTY_ROOMS_PER_IP: '1' });
+  const child = startServer(socketPath, databaseUrl, logs, { MAX_EMPTY_ROOMS_PER_IP: '1' });
   t.after(() => {
     child.kill('SIGTERM');
-    fs.rmSync(dataDir, { recursive: true, force: true });
     fs.rmSync(dir, { recursive: true, force: true });
+    return cleanup();
   });
 
   try {
@@ -292,15 +281,15 @@ networkTest('static empty rooms count toward per-IP empty-room quota', async (t)
 });
 
 
-networkTest('active static rooms stay counted toward per-IP room creation quota', async (t) => {
+test('active static rooms stay counted toward per-IP room creation quota', async (t) => {
   const { dir, socketPath } = getSocketPath();
-  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'voice-room-state-'));
+  const { cleanup, databaseUrl } = await createTestDatabase(t);
   const logs = { stdout: '', stderr: '' };
-  const child = startServer(socketPath, dataDir, logs, { MAX_EMPTY_ROOMS_PER_IP: '1' });
+  const child = startServer(socketPath, databaseUrl, logs, { MAX_EMPTY_ROOMS_PER_IP: '1' });
   t.after(() => {
     child.kill('SIGTERM');
-    fs.rmSync(dataDir, { recursive: true, force: true });
     fs.rmSync(dir, { recursive: true, force: true });
+    return cleanup();
   });
 
   try {

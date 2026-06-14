@@ -1,10 +1,8 @@
 'use strict';
 
-const fs = require('node:fs');
-const path = require('node:path');
 const crypto = require('node:crypto');
+const { createDbPool, transaction } = require('./db');
 
-const DEFAULT_FILE_NAME = 'voice-room-state.json';
 const DEFAULT_MESSAGE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 function createRoomId() {
@@ -13,258 +11,319 @@ function createRoomId() {
   return Array.from(bytes, (byte) => alphabet[byte % alphabet.length]).join('');
 }
 
+function normalizePositiveInt(value, fallback) {
+  const next = Number(value);
+  return Number.isFinite(next) && next >= 0 ? next : fallback;
+}
+
+function toDate(ms) {
+  return new Date(normalizePositiveInt(ms, Date.now()));
+}
+
+function toMillis(value) {
+  if (value instanceof Date) return value.getTime();
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : Date.now();
+}
+
+function normalizeMessageLimit(value) {
+  return normalizePositiveInt(value, 500);
+}
+
+function mapRoom(row) {
+  if (!row) return null;
+  return {
+    createdAt: toMillis(row.created_at),
+    creatorIp: row.creator_ip || '',
+    emptySince: row.empty_since ? toMillis(row.empty_since) : null,
+    id: row.id,
+    isStatic: Boolean(row.is_static),
+    messages: [],
+    peers: new Map(),
+    updatedAt: toMillis(row.updated_at)
+  };
+}
+
+function mapMessage(row) {
+  if (!row) return null;
+  return {
+    createdAt: toMillis(row.created_at),
+    expiresAt: row.expires_at ? toMillis(row.expires_at) : null,
+    id: row.id,
+    name: row.name || '',
+    peerId: row.peer_id || '',
+    roomId: row.room_id,
+    text: row.text || ''
+  };
+}
+
+function roomIdFrom(roomOrId) {
+  return typeof roomOrId === 'string' ? roomOrId : roomOrId?.id;
+}
+
 function createRoomStore({
-  dataDir = path.resolve(__dirname, '..', '..', 'data'),
-  fileName = DEFAULT_FILE_NAME,
+  databaseUrl,
+  logger = console,
   maxMessagesPerRoom = 500,
   messageTtlMs = DEFAULT_MESSAGE_TTL_MS,
+  pool,
   roomIdleTtlMs = 15 * 60 * 1000
 } = {}) {
-  const filePath = path.join(dataDir, fileName);
-  const rooms = new Map();
-  const retainedMessageLimit = normalizePositiveInt(maxMessagesPerRoom, 500);
-
-  function ensureDir() {
-    fs.mkdirSync(path.dirname(filePath), { recursive: true });
-  }
-
-  function normalizePositiveInt(value, fallback) {
-    const next = Number(value);
-    return Number.isFinite(next) && next >= 0 ? next : fallback;
-  }
-
-  function normalizeMessage(message, now) {
-    if (!message || typeof message !== 'object') return null;
-    const createdAt = normalizePositiveInt(message.createdAt, now);
-    const expiresAt = normalizePositiveInt(message.expiresAt, createdAt + messageTtlMs);
-    if (!expiresAt || expiresAt <= now) return null;
-
-    return {
-      createdAt,
-      expiresAt,
-      id: typeof message.id === 'string' && message.id ? message.id : crypto.randomUUID?.() || createRoomId(),
-      name: typeof message.name === 'string' ? message.name : '',
-      peerId: typeof message.peerId === 'string' ? message.peerId : '',
-      roomId: typeof message.roomId === 'string' ? message.roomId : '',
-      text: typeof message.text === 'string' ? message.text : ''
-    };
-  }
-
-  function normalizeEmptySince(room, now) {
-    const peerCount = normalizePositiveInt(room.peerCount, 0);
-    const emptySince = normalizePositiveInt(room.emptySince, 0);
-    if (peerCount > 0) return now;
-    if (emptySince > 0) return emptySince;
-    const createdAt = normalizePositiveInt(room.createdAt, now);
-    return createdAt > 0 ? createdAt : now;
-  }
-
-  function hydrateRoom(room, now) {
-    const id = typeof room.id === 'string' ? room.id : '';
-    if (!id) return null;
-
-    const createdAt = normalizePositiveInt(room.createdAt, now);
-    const updatedAt = normalizePositiveInt(room.updatedAt, createdAt);
-    const messages = Array.isArray(room.messages)
-      ? room.messages
-          .map((message) => normalizeMessage(message, now))
-          .filter(Boolean)
-          .slice(retainedMessageLimit > 0 ? -retainedMessageLimit : undefined)
-      : [];
-
-    return {
-      createdAt,
-      creatorIp: typeof room.creatorIp === 'string' ? room.creatorIp : '',
-      emptySince: normalizeEmptySince(room, now),
-      id,
-      isStatic: Boolean(room.isStatic),
-      messages,
-      peers: new Map(),
-      updatedAt
-    };
-  }
-
-  function serializeRoom(room) {
-    return {
-      createdAt: room.createdAt,
-      creatorIp: room.creatorIp,
-      emptySince: room.emptySince,
-      id: room.id,
-      isStatic: room.isStatic,
-      messages: room.messages.map((message) => ({
-        createdAt: message.createdAt,
-        expiresAt: message.expiresAt,
-        id: message.id,
-        name: message.name,
-        peerId: message.peerId,
-        roomId: message.roomId,
-        text: message.text
-      })),
-      peerCount: room.peers.size,
-      updatedAt: room.updatedAt
-    };
-  }
-
-  function save() {
-    ensureDir();
-    const snapshot = {
-      roomIdleTtlMs,
-      savedAt: Date.now(),
-      version: 1,
-      rooms: Array.from(rooms.values()).map(serializeRoom)
-    };
-    const tmpFile = `${filePath}.${process.pid}.${Date.now()}.tmp`;
-    fs.writeFileSync(tmpFile, JSON.stringify(snapshot, null, 2));
-    fs.renameSync(tmpFile, filePath);
-  }
-
-  function load() {
-    rooms.clear();
-
-    let payload = null;
-    let hadFile = false;
-    try {
-      const raw = fs.readFileSync(filePath, 'utf8');
-      payload = JSON.parse(raw);
-      hadFile = true;
-    } catch (error) {
-      if (error.code !== 'ENOENT') {
-        console.warn(`Failed to read durable room store at ${filePath}:`, error.message);
-      }
+  let activePool = pool || null;
+  const retainedMessageLimit = normalizeMessageLimit(maxMessagesPerRoom);
+  function getPool() {
+    if (!activePool) {
+      activePool = createDbPool({ databaseUrl, logger });
     }
-
-    const now = Date.now();
-    if (payload && Array.isArray(payload.rooms)) {
-      for (const entry of payload.rooms) {
-        const room = hydrateRoom(entry, now);
-        if (room) {
-          rooms.set(room.id, room);
-        }
-      }
-    }
-
-    const changed = pruneRooms(now, { persist: false });
-    if (hadFile || changed) {
-      save();
-    }
+    return activePool;
   }
 
-  function createRoom({ roomId = createRoomId(), creatorIp, isStatic = false, now = Date.now() }) {
+  async function createRoom({ roomId = createRoomId(), creatorIp, isStatic = false, now = Date.now() }) {
     const id = String(roomId || '').trim();
     if (!id) {
       throw new Error('Room id is required');
     }
-    if (rooms.has(id)) {
-      throw new Error(`Room already exists: ${id}`);
+
+    const result = await getPool().query(
+      `INSERT INTO rooms (id, creator_ip, is_static, created_at, updated_at, empty_since)
+       VALUES ($1, $2, $3, $4, $4, $4)
+       RETURNING *`,
+      [id, typeof creatorIp === 'string' ? creatorIp : '', Boolean(isStatic), toDate(now)]
+    );
+    return mapRoom(result.rows[0]);
+  }
+
+  async function createRoomWithQuota({
+    roomId = createRoomId(),
+    creatorIp,
+    isStatic = false,
+    maxQuotaRoomsPerIp = 0,
+    maxRooms = 100,
+    now = Date.now()
+  }) {
+    const id = String(roomId || '').trim();
+    if (!id) {
+      throw new Error('Room id is required');
     }
 
-    const room = {
-      createdAt: now,
-      creatorIp: typeof creatorIp === 'string' ? creatorIp : '',
-      emptySince: now,
-      id,
-      isStatic: Boolean(isStatic),
-      messages: [],
-      peers: new Map(),
-      updatedAt: now
-    };
-    rooms.set(room.id, room);
-    save();
-    return room;
-  }
+    return transaction(getPool(), async (client) => {
+      await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, ['voice-room:create-room']);
 
-  function deleteRoom(roomId) {
-    const deleted = rooms.delete(roomId);
-    if (deleted) save();
-    return deleted;
-  }
-
-  function getRoom(roomId) {
-    return rooms.get(roomId) || null;
-  }
-
-  function markRoomActive(room, now = Date.now()) {
-    if (!room) return;
-    if (room.emptySince !== null) {
-      room.emptySince = null;
-      room.updatedAt = now;
-      save();
-      return;
-    }
-    room.updatedAt = now;
-  }
-
-  function markRoomEmpty(room, now = Date.now()) {
-    if (!room) return;
-    if (room.emptySince !== now) {
-      room.emptySince = now;
-      room.updatedAt = now;
-      save();
-      return;
-    }
-    room.updatedAt = now;
-  }
-
-  function pruneMessages(room, now = Date.now()) {
-    if (!room || !Array.isArray(room.messages) || room.messages.length === 0) return false;
-    const before = room.messages.length;
-    room.messages = room.messages.filter((message) => normalizePositiveInt(message?.expiresAt, 0) > now);
-    return room.messages.length !== before;
-  }
-
-  function pruneRooms(now = Date.now(), { persist = true } = {}) {
-    let changed = false;
-    for (const room of rooms.values()) {
-      const messagesChanged = pruneMessages(room, now);
-      const roomExpired =
-        !room.isStatic &&
-        room.peers.size === 0 &&
-        room.emptySince !== null &&
-        now - room.emptySince > roomIdleTtlMs;
-
-      if (messagesChanged) changed = true;
-      if (roomExpired) {
-        rooms.delete(room.id);
-        changed = true;
+      const normalizedCreatorIp = typeof creatorIp === 'string' ? creatorIp : '';
+      if (maxQuotaRoomsPerIp > 0) {
+        const quota = await client.query(
+          `SELECT COUNT(*)::int AS count
+           FROM rooms
+           WHERE creator_ip = $1
+             AND deleted_at IS NULL
+             AND (is_static = true OR empty_since IS NOT NULL)`,
+          [normalizedCreatorIp]
+        );
+        if ((quota.rows[0]?.count || 0) >= maxQuotaRoomsPerIp) {
+          return { room: null, status: 'quota_exceeded' };
+        }
       }
-    }
 
-    if (changed && persist) {
-      save();
-    }
-    return changed;
+      const capacity = await client.query(`SELECT COUNT(*)::int AS count FROM rooms WHERE deleted_at IS NULL`);
+      if ((capacity.rows[0]?.count || 0) >= maxRooms) {
+        return { room: null, status: 'capacity_exceeded' };
+      }
+
+      const inserted = await client.query(
+        `INSERT INTO rooms (id, creator_ip, is_static, created_at, updated_at, empty_since)
+         VALUES ($1, $2, $3, $4, $4, $4)
+         RETURNING *`,
+        [id, normalizedCreatorIp, Boolean(isStatic), toDate(now)]
+      );
+      return { room: mapRoom(inserted.rows[0]), status: 'created' };
+    });
   }
 
-  function appendMessage(roomId, message) {
-    const room = rooms.get(roomId);
-    if (!room) return null;
-
-    const now = Date.now();
-    const entry = normalizeMessage({ ...message, roomId }, now);
-    if (!entry) return null;
-
-    room.messages.push(entry);
-    if (retainedMessageLimit > 0 && room.messages.length > retainedMessageLimit) {
-      room.messages = room.messages.slice(-retainedMessageLimit);
-    }
-    room.updatedAt = now;
-    save();
-    return entry;
+  async function getRoom(roomId) {
+    const result = await getPool().query(
+      `SELECT * FROM rooms WHERE id = $1 AND deleted_at IS NULL`,
+      [roomId]
+    );
+    return mapRoom(result.rows[0]);
   }
 
-  load();
+  async function deleteRoom(roomId, now = Date.now()) {
+    const result = await getPool().query(
+      `UPDATE rooms
+       SET deleted_at = COALESCE(deleted_at, $2), updated_at = $2
+       WHERE id = $1 AND deleted_at IS NULL`,
+      [roomId, toDate(now)]
+    );
+    return result.rowCount > 0;
+  }
+
+  async function markRoomActive(roomOrId, now = Date.now()) {
+    const roomId = roomIdFrom(roomOrId);
+    if (!roomId) return null;
+    const result = await getPool().query(
+      `UPDATE rooms
+       SET empty_since = NULL, updated_at = $2
+       WHERE id = $1 AND deleted_at IS NULL
+       RETURNING *`,
+      [roomId, toDate(now)]
+    );
+    return mapRoom(result.rows[0]);
+  }
+
+  async function markRoomEmpty(roomOrId, now = Date.now()) {
+    const roomId = roomIdFrom(roomOrId);
+    if (!roomId) return null;
+    const result = await getPool().query(
+      `UPDATE rooms
+       SET empty_since = COALESCE(empty_since, $2), updated_at = $2
+       WHERE id = $1 AND deleted_at IS NULL
+       RETURNING *`,
+      [roomId, toDate(now)]
+    );
+    return mapRoom(result.rows[0]);
+  }
+
+  async function countRooms() {
+    const result = await getPool().query(`SELECT COUNT(*)::int AS count FROM rooms WHERE deleted_at IS NULL`);
+    return result.rows[0]?.count || 0;
+  }
+
+  async function countQuotaRoomsForIp(creatorIp) {
+    const result = await getPool().query(
+      `SELECT COUNT(*)::int AS count
+       FROM rooms
+       WHERE creator_ip = $1
+         AND deleted_at IS NULL
+         AND (is_static = true OR empty_since IS NOT NULL)`,
+      [typeof creatorIp === 'string' ? creatorIp : '']
+    );
+    return result.rows[0]?.count || 0;
+  }
+
+  async function countEmptyRoomsForIp(creatorIp) {
+    return countQuotaRoomsForIp(creatorIp);
+  }
+
+  async function pruneRooms(now = Date.now()) {
+    const nowDate = toDate(now);
+    const idleBefore = toDate(now - roomIdleTtlMs);
+    return transaction(getPool(), async (client) => {
+      const expiredMessages = await client.query(
+        `UPDATE room_messages
+         SET deleted_at = $1
+         WHERE deleted_at IS NULL AND expires_at IS NOT NULL AND expires_at <= $1`,
+        [nowDate]
+      );
+      const expiredRooms = await client.query(
+        `UPDATE rooms
+         SET deleted_at = $1, updated_at = $1
+         WHERE deleted_at IS NULL
+           AND is_static = false
+           AND empty_since IS NOT NULL
+           AND empty_since <= $2`,
+        [nowDate, idleBefore]
+      );
+      return expiredMessages.rowCount > 0 || expiredRooms.rowCount > 0;
+    });
+  }
+
+  async function appendMessage(roomId, message, now = Date.now()) {
+    const id = typeof message?.id === 'string' && message.id ? message.id : crypto.randomUUID();
+    const createdAt = normalizePositiveInt(message?.createdAt, now);
+    const expiresAt = normalizePositiveInt(message?.expiresAt, createdAt + messageTtlMs);
+    if (!expiresAt || expiresAt <= now) return null;
+
+    return transaction(getPool(), async (client) => {
+      const room = await client.query(
+        `SELECT id FROM rooms WHERE id = $1 AND deleted_at IS NULL`,
+        [roomId]
+      );
+      if (room.rowCount === 0) return null;
+
+      const inserted = await client.query(
+        `INSERT INTO room_messages (id, room_id, peer_id, name, text, created_at, expires_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         RETURNING *`,
+        [
+          id,
+          roomId,
+          typeof message?.peerId === 'string' ? message.peerId : '',
+          typeof message?.name === 'string' ? message.name : '',
+          typeof message?.text === 'string' ? message.text : '',
+          toDate(createdAt),
+          toDate(expiresAt)
+        ]
+      );
+
+      await client.query(`UPDATE rooms SET updated_at = $2 WHERE id = $1`, [roomId, toDate(now)]);
+
+      if (retainedMessageLimit > 0) {
+        await client.query(
+          `WITH ranked AS (
+             SELECT id, row_number() OVER (ORDER BY created_at DESC, id DESC) AS position
+             FROM room_messages
+             WHERE room_id = $1 AND deleted_at IS NULL
+           )
+           UPDATE room_messages
+           SET deleted_at = $2
+           WHERE id IN (SELECT id FROM ranked WHERE position > $3)`,
+          [roomId, toDate(now), retainedMessageLimit]
+        );
+      }
+
+      return mapMessage(inserted.rows[0]);
+    });
+  }
+
+  async function listMessages(roomId, { limit = retainedMessageLimit, now = Date.now() } = {}) {
+    await getPool().query(
+      `UPDATE room_messages
+       SET deleted_at = $2
+       WHERE room_id = $1 AND deleted_at IS NULL AND expires_at IS NOT NULL AND expires_at <= $2`,
+      [roomId, toDate(now)]
+    );
+    const boundedLimit = Math.max(0, normalizePositiveInt(limit, retainedMessageLimit));
+    if (boundedLimit === 0) return [];
+
+    const result = await getPool().query(
+      `SELECT *
+       FROM room_messages
+       WHERE room_id = $1
+         AND deleted_at IS NULL
+         AND (expires_at IS NULL OR expires_at > $2)
+       ORDER BY created_at ASC, id ASC
+       LIMIT $3`,
+      [roomId, toDate(now), boundedLimit]
+    );
+    return result.rows.map(mapMessage);
+  }
+
+  async function close() {
+    if (activePool) {
+      await activePool.end();
+    }
+  }
 
   return {
     appendMessage,
+    close,
+    countEmptyRoomsForIp,
+    countQuotaRoomsForIp,
+    countRooms,
     createRoom,
+    createRoomWithQuota,
     deleteRoom,
     getRoom,
+    listMessages,
     markRoomActive,
     markRoomEmpty,
-    pruneRooms,
-    rooms,
-    save
+    pruneRooms
   };
 }
 
-module.exports = { createRoomStore };
+module.exports = {
+  createRoomId,
+  createRoomStore,
+  mapMessage,
+  mapRoom
+};

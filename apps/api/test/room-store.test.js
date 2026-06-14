@@ -2,121 +2,85 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const os = require('node:os');
-const path = require('node:path');
 
 const { createRoomStore } = require('../src/lib/room-store');
+const { runMigrations } = require('../src/lib/migrate');
+const { createTestDatabase } = require('./db-harness');
 
-test('durable room store persists registry and message shape to disk', () => {
-  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'voice-room-store-'));
+async function createMigratedStore(t, options = {}) {
+  const { cleanup, databaseUrl } = await createTestDatabase(t);
+  await runMigrations({ databaseUrl, logger: { log() {}, info() {}, warn() {}, error() {} } });
+  const store = createRoomStore({ databaseUrl, ...options });
+  t.after(async () => {
+    await store.close();
+    await cleanup();
+  });
+  return store;
+}
 
-  try {
-    const store = createRoomStore({ dataDir, messageTtlMs: 7 * 24 * 60 * 60 * 1000, roomIdleTtlMs: 60000 });
-    const dynamic = store.createRoom({ creatorIp: '1.2.3.4', roomId: 'dyn-room' });
-    const statik = store.createRoom({ creatorIp: '5.6.7.8', isStatic: true, roomId: 'static-room' });
-    store.appendMessage(dynamic.id, {
-      createdAt: dynamic.createdAt,
-      expiresAt: dynamic.createdAt + 60000,
-      id: 'msg-1',
-      name: 'Alice',
-      peerId: 'peer-a',
-      text: 'hello'
-    });
+test('PostgreSQL room store persists registry and message shape across store instances', async (t) => {
+  const { cleanup, databaseUrl } = await createTestDatabase(t);
+  await runMigrations({ databaseUrl, logger: { log() {}, info() {}, warn() {}, error() {} } });
+  const store = createRoomStore({ databaseUrl, maxMessagesPerRoom: 10, messageTtlMs: 60000 });
+  t.after(async () => {
+    await store.close();
+    await reopened.close();
+    await cleanup();
+  });
 
-    const persisted = JSON.parse(fs.readFileSync(path.join(dataDir, 'voice-room-state.json'), 'utf8'));
-    assert.equal(persisted.version, 1);
-    assert.equal(persisted.rooms.length, 2);
-    assert.deepEqual(
-      persisted.rooms.map((room) => ({ id: room.id, isStatic: room.isStatic, peerCount: room.peerCount })).sort((a, b) =>
-        a.id.localeCompare(b.id)
-      ),
-      [
-        { id: 'dyn-room', isStatic: false, peerCount: 0 },
-        { id: 'static-room', isStatic: true, peerCount: 0 }
-      ]
-    );
+  const room = await store.createRoom({ creatorIp: '127.0.0.1', isStatic: true, roomId: 'roompersist1', now: 1000 });
+  const message = await store.appendMessage(room.id, {
+    createdAt: 1100,
+    expiresAt: 61000,
+    id: 'msg-persist-1',
+    name: 'Ada',
+    peerId: 'peer-persist',
+    text: 'hello'
+  }, 1100);
 
-    const reloaded = createRoomStore({ dataDir, messageTtlMs: 7 * 24 * 60 * 60 * 1000, roomIdleTtlMs: 60000 });
-    const reloadedDynamic = reloaded.getRoom(dynamic.id);
-    const reloadedStatic = reloaded.getRoom(statik.id);
-    assert.equal(reloadedDynamic?.createdAt, dynamic.createdAt);
-    assert.equal(reloadedDynamic?.isStatic, false);
-    assert.equal(reloadedDynamic?.messages.length, 1);
-    assert.equal(reloadedDynamic?.messages[0].text, 'hello');
-    assert.equal(reloadedStatic?.isStatic, true);
-  } finally {
-    fs.rmSync(dataDir, { recursive: true, force: true });
-  }
+  assert.equal(room.isStatic, true);
+  assert.equal(message.roomId, room.id);
+
+  const reopened = createRoomStore({ databaseUrl, maxMessagesPerRoom: 10, messageTtlMs: 60000 });
+  const restoredRoom = await reopened.getRoom(room.id);
+  const restoredMessages = await reopened.listMessages(room.id, { now: 2000, limit: 10 });
+
+  assert.equal(restoredRoom.id, room.id);
+  assert.equal(restoredRoom.isStatic, true);
+  assert.deepEqual(restoredMessages.map((entry) => entry.text), ['hello']);
 });
 
-test('durable room store prunes expired chat messages on reload', async () => {
-  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'voice-room-store-'));
+test('PostgreSQL room store prunes expired chat messages during active cleanup', async (t) => {
+  const store = await createMigratedStore(t, { maxMessagesPerRoom: 10, messageTtlMs: 1000 });
+  const room = await store.createRoom({ creatorIp: '127.0.0.1', isStatic: true, roomId: 'roomprune1', now: 1000 });
 
-  try {
-    const store = createRoomStore({ dataDir, messageTtlMs: 1, roomIdleTtlMs: 60000 });
-    const room = store.createRoom({ creatorIp: '1.2.3.4', roomId: 'ttl-room' });
-    store.appendMessage(room.id, {
-      createdAt: room.createdAt,
-      id: 'expired-msg',
-      name: 'Alice',
-      peerId: 'peer-a',
-      text: 'short-lived',
-      expiresAt: room.createdAt + 1
-    });
+  await store.appendMessage(room.id, { id: 'expired-msg', text: 'old', createdAt: 1000, expiresAt: 1500 }, 1000);
+  await store.appendMessage(room.id, { id: 'fresh-msg', text: 'fresh', createdAt: 2000, expiresAt: 5000 }, 2000);
 
-    await new Promise((resolve) => setTimeout(resolve, 10));
-
-    const reloaded = createRoomStore({ dataDir, messageTtlMs: 1, roomIdleTtlMs: 60000 });
-    const reloadedRoom = reloaded.getRoom(room.id);
-    assert.equal(reloadedRoom?.messages.length, 0);
-  } finally {
-    fs.rmSync(dataDir, { recursive: true, force: true });
-  }
+  assert.equal(await store.pruneRooms(2500), true);
+  const messages = await store.listMessages(room.id, { now: 2500, limit: 10 });
+  assert.deepEqual(messages.map((message) => message.id), ['fresh-msg']);
 });
 
-test('durable room store prunes expired chat messages during active cleanup', async () => {
-  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'voice-room-store-'));
+test('PostgreSQL room store caps retained chat messages per room', async (t) => {
+  const store = await createMigratedStore(t, { maxMessagesPerRoom: 2, messageTtlMs: 60000 });
+  const room = await store.createRoom({ creatorIp: '127.0.0.1', isStatic: true, roomId: 'roomcap1', now: 1000 });
 
-  try {
-    const store = createRoomStore({ dataDir, messageTtlMs: 60000, roomIdleTtlMs: 60000 });
-    const room = store.createRoom({ creatorIp: '1.2.3.4', roomId: 'cleanup-room', isStatic: true });
-    store.appendMessage(room.id, {
-      createdAt: room.createdAt,
-      id: 'cleanup-msg',
-      name: 'Alice',
-      peerId: 'peer-a',
-      text: 'cleanup-me',
-      expiresAt: Number.MAX_SAFE_INTEGER - 1
-    });
+  await store.appendMessage(room.id, { id: 'msg-1', text: 'one', createdAt: 1000, expiresAt: 60000 }, 1000);
+  await store.appendMessage(room.id, { id: 'msg-2', text: 'two', createdAt: 2000, expiresAt: 60000 }, 2000);
+  await store.appendMessage(room.id, { id: 'msg-3', text: 'three', createdAt: 3000, expiresAt: 60000 }, 3000);
 
-    const changed = store.pruneRooms(Number.MAX_SAFE_INTEGER);
-    assert.equal(changed, true);
-    assert.equal(store.getRoom(room.id)?.messages.length, 0);
-  } finally {
-    fs.rmSync(dataDir, { recursive: true, force: true });
-  }
+  const messages = await store.listMessages(room.id, { now: 4000, limit: 10 });
+  assert.deepEqual(messages.map((message) => message.id), ['msg-2', 'msg-3']);
 });
 
+test('PostgreSQL room store counts quota rooms and prunes idle dynamic rooms', async (t) => {
+  const store = await createMigratedStore(t, { roomIdleTtlMs: 1000 });
+  await store.createRoom({ creatorIp: 'ip-a', isStatic: true, roomId: 'staticquota1', now: 1000 });
+  await store.createRoom({ creatorIp: 'ip-a', isStatic: false, roomId: 'emptyquota1', now: 1000 });
 
-test('durable room store caps retained chat messages per room', () => {
-  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'voice-room-store-'));
-  try {
-    const store = createRoomStore({ dataDir, maxMessagesPerRoom: 2, messageTtlMs: 60000, roomIdleTtlMs: 60000 });
-    const room = store.createRoom({ creatorIp: '127.0.0.1', roomId: 'caproom1' });
-    for (let index = 1; index <= 3; index += 1) {
-      store.appendMessage(room.id, {
-        createdAt: index,
-        expiresAt: Date.now() + 60000,
-        id: `m${index}`,
-        name: 'Guest',
-        peerId: `peer-${index}`,
-        text: `message ${index}`
-      });
-    }
-
-    assert.deepEqual(store.getRoom(room.id).messages.map((message) => message.id), ['m2', 'm3']);
-  } finally {
-    fs.rmSync(dataDir, { recursive: true, force: true });
-  }
+  assert.equal(await store.countQuotaRoomsForIp('ip-a'), 2);
+  assert.equal(await store.pruneRooms(2500), true);
+  assert.equal(await store.getRoom('emptyquota1'), null);
+  assert.ok(await store.getRoom('staticquota1'));
 });

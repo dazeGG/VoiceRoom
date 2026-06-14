@@ -5,26 +5,14 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const http = require('node:http');
 const { spawn } = require('node:child_process');
-const { spawnSync } = require('node:child_process');
 const path = require('node:path');
 const os = require('node:os');
+const { createTestDatabase } = require('./db-harness');
 
 const ROOM_ID = 'chat-room1';
 const PEER_ID = 'peer-chat1';
 const TOKEN = 'c'.repeat(32);
 
-function canListen() {
-  const script = [
-    "const net=require('node:net')",
-    "const server=net.createServer()",
-    "server.once('error',()=>process.exit(1))",
-    "server.listen({host:'127.0.0.1',port:0},()=>server.close(()=>process.exit(0)))"
-  ].join(';');
-  const result = spawnSync(process.execPath, ['-e', script], { stdio: 'ignore' });
-  return result.status === 0;
-}
-
-const networkTest = canListen() ? test : test.skip;
 
 function getSocketPath() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'voice-room-sock-'));
@@ -60,16 +48,17 @@ function waitForHealthz(socketPath, timeoutMs = 5000) {
   });
 }
 
-function startServer(socketPath, dataDir, logs, envOverrides = {}) {
+function startServer(socketPath, databaseUrl, logs, envOverrides = {}) {
   const child = spawn(process.execPath, ['src/server.js'], {
     cwd: path.join(__dirname, '..'),
     env: {
       ...process.env,
+      NODE_ENV: 'test',
       MAX_EMPTY_ROOMS_PER_IP: '0',
       ROOM_CHAT_TTL_MS: '60000',
       ROOM_CREATE_POW_DIFFICULTY: '0',
       ROOM_CREATE_RATE_LIMIT: '0',
-      ROOM_DATA_DIR: dataDir,
+      DATABASE_URL: databaseUrl,
       SOCKET_PATH: socketPath,
       ...envOverrides
     },
@@ -194,15 +183,15 @@ function openSse(socketPath, pathname) {
   };
 }
 
-networkTest('chat API persists, streams, and respects room auth', async (t) => {
+test('chat API persists, streams, and respects room auth', async (t) => {
   const { dir, socketPath } = getSocketPath();
-  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'voice-room-state-'));
+  const { cleanup, databaseUrl } = await createTestDatabase(t);
   const logs = { stdout: '', stderr: '' };
-  const child = startServer(socketPath, dataDir, logs);
+  const child = startServer(socketPath, databaseUrl, logs);
   t.after(() => {
     child.kill('SIGTERM');
-    fs.rmSync(dataDir, { recursive: true, force: true });
     fs.rmSync(dir, { recursive: true, force: true });
+    return cleanup();
   });
 
   try {
@@ -250,15 +239,15 @@ networkTest('chat API persists, streams, and respects room auth', async (t) => {
 });
 
 
-networkTest('chat API allows posting by room link without joining voice', async (t) => {
+test('chat API allows posting by room link without joining voice', async (t) => {
   const { dir, socketPath } = getSocketPath();
-  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'voice-room-state-'));
+  const { cleanup, databaseUrl } = await createTestDatabase(t);
   const logs = { stdout: '', stderr: '' };
-  const child = startServer(socketPath, dataDir, logs);
+  const child = startServer(socketPath, databaseUrl, logs);
   t.after(() => {
     child.kill('SIGTERM');
-    fs.rmSync(dataDir, { recursive: true, force: true });
     fs.rmSync(dir, { recursive: true, force: true });
+    return cleanup();
   });
 
   try {
@@ -295,15 +284,15 @@ networkTest('chat API allows posting by room link without joining voice', async 
   }
 });
 
-networkTest('chat API still protects active voice peer identities', async (t) => {
+test('chat API still protects active voice peer identities', async (t) => {
   const { dir, socketPath } = getSocketPath();
-  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'voice-room-state-'));
+  const { cleanup, databaseUrl } = await createTestDatabase(t);
   const logs = { stdout: '', stderr: '' };
-  const child = startServer(socketPath, dataDir, logs);
+  const child = startServer(socketPath, databaseUrl, logs);
   t.after(() => {
     child.kill('SIGTERM');
-    fs.rmSync(dataDir, { recursive: true, force: true });
     fs.rmSync(dir, { recursive: true, force: true });
+    return cleanup();
   });
 
   try {
@@ -345,18 +334,18 @@ networkTest('chat API still protects active voice peer identities', async (t) =>
 });
 
 
-networkTest('chat API rate limits room-link posts per room and IP', async (t) => {
+test('chat API rate limits room-link posts per room and IP', async (t) => {
   const { dir, socketPath } = getSocketPath();
-  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'voice-room-state-'));
+  const { cleanup, databaseUrl } = await createTestDatabase(t);
   const logs = { stdout: '', stderr: '' };
-  const child = startServer(socketPath, dataDir, logs, {
+  const child = startServer(socketPath, databaseUrl, logs, {
     ROOM_CHAT_RATE_LIMIT: '1',
     ROOM_CHAT_RATE_WINDOW_MS: '60000'
   });
   t.after(() => {
     child.kill('SIGTERM');
-    fs.rmSync(dataDir, { recursive: true, force: true });
     fs.rmSync(dir, { recursive: true, force: true });
+    return cleanup();
   });
 
   try {
@@ -387,15 +376,15 @@ networkTest('chat API rate limits room-link posts per room and IP', async (t) =>
 });
 
 
-networkTest('manual static-room chat scenario survives API restart without voice join', async (t) => {
+test('manual static-room chat scenario survives API restart without voice join', async (t) => {
   const { dir, socketPath } = getSocketPath();
-  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'voice-room-state-'));
+  const { cleanup, databaseUrl } = await createTestDatabase(t);
   const logs = { stdout: '', stderr: '' };
-  let child = startServer(socketPath, dataDir, logs);
+  let child = startServer(socketPath, databaseUrl, logs);
   t.after(() => {
     child.kill('SIGTERM');
-    fs.rmSync(dataDir, { recursive: true, force: true });
     fs.rmSync(dir, { recursive: true, force: true });
+    return cleanup();
   });
 
   try {
@@ -421,7 +410,7 @@ networkTest('manual static-room chat scenario survives API restart without voice
     await new Promise((resolve) => child.once('exit', resolve));
 
     const restartLogs = { stdout: '', stderr: '' };
-    child = startServer(socketPath, dataDir, restartLogs);
+    child = startServer(socketPath, databaseUrl, restartLogs);
     await waitForHealthz(socketPath);
 
     const statusAfterRestart = await getJson(socketPath, `/api/rooms/${created.body.roomId}`);
