@@ -17,9 +17,13 @@ const {
 } = require('@voice-room/shared/validation');
 const { createProofOfWork } = require('./lib/pow');
 const { getClientIp, createRateLimiter } = require('./lib/rate-limit');
+const { createRoomStore } = require('./lib/room-store');
+const { startApiListener } = require('./lib/listen');
 
 const API_PREFIX = '/api';
+const HOST = (process.env.HOST || '127.0.0.1').trim();
 const PORT = readEnvInt('PORT', 3000, 1);
+const SOCKET_PATH = (process.env.SOCKET_PATH || '').trim();
 const MAX_ROOM_PEERS = readEnvInt('MAX_ROOM_PEERS', 12, 1);
 const MAX_ROOMS = readEnvInt('MAX_ROOMS', 100, 1);
 const KEEPALIVE_MS = readEnvInt('SSE_KEEPALIVE_MS', 15000, 1000);
@@ -27,6 +31,10 @@ const BODY_LIMIT_BYTES = readEnvInt('BODY_LIMIT_BYTES', 65536, 1024);
 const TRUST_PROXY = readEnvBool('TRUST_PROXY', false);
 const LIVEKIT_TOKEN_TTL_SECONDS = readEnvInt('LIVEKIT_TOKEN_TTL_SECONDS', 21600, 60);
 const ROOM_IDLE_TTL_MS = readEnvInt('ROOM_IDLE_TTL_MS', 900000, 1000);
+const ROOM_CHAT_TTL_MS = readEnvInt('ROOM_CHAT_TTL_MS', 7 * 24 * 60 * 60 * 1000, 1000);
+const ROOM_CHAT_MAX_MESSAGES = readEnvInt('ROOM_CHAT_MAX_MESSAGES', 500, 1);
+const ROOM_CHAT_RATE_LIMIT = readEnvInt('ROOM_CHAT_RATE_LIMIT', 60, 0);
+const ROOM_CHAT_RATE_WINDOW_MS = readEnvInt('ROOM_CHAT_RATE_WINDOW_MS', 60000, 1000);
 const ROOM_CREATE_RATE_LIMIT = readEnvInt('ROOM_CREATE_RATE_LIMIT', 20, 0);
 const ROOM_CREATE_RATE_WINDOW_MS = readEnvInt('ROOM_CREATE_RATE_WINDOW_MS', 60000, 1000);
 const MAX_EMPTY_ROOMS_PER_IP = readEnvInt('MAX_EMPTY_ROOMS_PER_IP', 3, 0);
@@ -38,7 +46,14 @@ const DESKTOP_RELEASE_REPO = (process.env.DESKTOP_RELEASE_REPO || 'dazeGG/VoiceR
 const DESKTOP_RELEASE_CACHE_MS = readEnvInt('DESKTOP_RELEASE_CACHE_MS', 600000, 1000);
 const DESKTOP_RELEASE_TIMEOUT_MS = readEnvInt('DESKTOP_RELEASE_TIMEOUT_MS', 6000, 1000);
 
-const rooms = new Map();
+const roomStore = createRoomStore({
+  dataDir: process.env.ROOM_DATA_DIR || undefined,
+  maxMessagesPerRoom: ROOM_CHAT_MAX_MESSAGES,
+  messageTtlMs: ROOM_CHAT_TTL_MS,
+  roomIdleTtlMs: ROOM_IDLE_TTL_MS
+});
+const rooms = roomStore.rooms;
+const roomChatStreams = new Map();
 let desktopReleaseCache = { at: 0, data: null };
 const pow = createProofOfWork({
   secret: crypto.randomBytes(32),
@@ -48,6 +63,10 @@ const pow = createProofOfWork({
 const roomCreateLimiter = createRateLimiter({
   limit: ROOM_CREATE_RATE_LIMIT,
   windowMs: ROOM_CREATE_RATE_WINDOW_MS
+});
+const roomChatLimiter = createRateLimiter({
+  limit: ROOM_CHAT_RATE_LIMIT,
+  windowMs: ROOM_CHAT_RATE_WINDOW_MS
 });
 
 function getLiveKitConnectSources() {
@@ -112,6 +131,16 @@ function sendJson(res, status, payload, headers = {}) {
   res.end(JSON.stringify(payload));
 }
 
+function sendSse(res, message) {
+  if (!res || res.writableEnded || !res.writable) return false;
+  try {
+    res.write(`event: message\ndata: ${JSON.stringify(message)}\n\n`);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function getLiveKitRoomName(roomId) {
   const prefix = String(process.env.LIVEKIT_ROOM_PREFIX || 'voice-room-').replace(/[^A-Za-z0-9_.:-]/g, '-');
   return `${prefix}${roomId}`;
@@ -136,24 +165,32 @@ function createRoomId() {
 }
 
 function pruneRooms(now = Date.now()) {
-  for (const [roomId, room] of rooms) {
-    if (room.peers.size === 0 && room.emptySince && now - room.emptySince > ROOM_IDLE_TTL_MS) {
-      rooms.delete(roomId);
+  roomStore.pruneRooms(now);
+  for (const [roomId, subscribers] of roomChatStreams) {
+    if (rooms.has(roomId)) continue;
+    for (const subscriber of subscribers) {
+      try {
+        subscriber.end();
+      } catch {
+        // Ignore cleanup failures.
+      }
     }
+    roomChatStreams.delete(roomId);
   }
 }
 
-function countEmptyRoomsForIp(clientIp) {
+function countRoomCreationQuotaRoomsForIp(clientIp) {
   let count = 0;
   for (const room of rooms.values()) {
-    if (room.creatorIp === clientIp && room.peers.size === 0 && room.emptySince) {
+    if (room.creatorIp !== clientIp) continue;
+    if (room.isStatic || (room.peers.size === 0 && room.emptySince !== null)) {
       count += 1;
     }
   }
   return count;
 }
 
-function createRoom(creatorIp) {
+function createRoom(creatorIp, isStatic = false) {
   pruneRooms();
 
   let roomId = createRoomId();
@@ -161,17 +198,7 @@ function createRoom(creatorIp) {
     roomId = createRoomId();
   }
 
-  const now = Date.now();
-  const room = {
-    createdAt: now,
-    creatorIp,
-    emptySince: now,
-    id: roomId,
-    peers: new Map(),
-    updatedAt: now
-  };
-  rooms.set(roomId, room);
-  return room;
+  return roomStore.createRoom({ creatorIp, isStatic, roomId });
 }
 
 function getRoom(roomId) {
@@ -211,14 +238,9 @@ function getAuthorizedPeer(roomId, peerId, sessionToken) {
 }
 
 function sendEvent(peer, message) {
-  if (!peer || peer.closed || !peer.res.writable) return false;
-  try {
-    peer.res.write(`event: message\ndata: ${JSON.stringify(message)}\n\n`);
-    return true;
-  } catch (error) {
-    peer.closed = true;
-    return false;
-  }
+  const sent = sendSse(peer?.res, message);
+  if (!sent && peer) peer.closed = true;
+  return sent;
 }
 
 function broadcast(room, message, exceptPeerId = '') {
@@ -249,10 +271,60 @@ function closePeer(roomId, peerId, res, reason = 'left') {
   }
 
   if (room.peers.size === 0) {
-    room.emptySince = Date.now();
-    room.updatedAt = room.emptySince;
+    roomStore.markRoomEmpty(room);
   } else {
     room.updatedAt = Date.now();
+  }
+}
+
+function parseBoolean(value) {
+  return value === true || value === 'true' || value === 1 || value === '1';
+}
+
+function cleanChatText(value) {
+  return String(value || '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 500);
+}
+
+function publicChatMessage(message) {
+  return {
+    createdAt: message.createdAt,
+    expiresAt: message.expiresAt,
+    id: message.id,
+    name: message.name,
+    peerId: message.peerId,
+    roomId: message.roomId,
+    text: message.text
+  };
+}
+
+function getChatSubscribers(roomId) {
+  let subscribers = roomChatStreams.get(roomId);
+  if (!subscribers) {
+    subscribers = new Set();
+    roomChatStreams.set(roomId, subscribers);
+  }
+  return subscribers;
+}
+
+function broadcastChat(roomId, message) {
+  const subscribers = roomChatStreams.get(roomId);
+  if (!subscribers || subscribers.size === 0) return;
+
+  const payload = { type: 'chat-message', message: publicChatMessage(message) };
+  const failed = [];
+  for (const res of subscribers) {
+    if (!sendSse(res, payload)) {
+      failed.push(res);
+    }
+  }
+  for (const res of failed) {
+    subscribers.delete(res);
+  }
+  if (subscribers.size === 0) {
+    roomChatStreams.delete(roomId);
   }
 }
 
@@ -357,8 +429,8 @@ async function handleEvents(req, res, url) {
     res
   };
   room.peers.set(peerId, peer);
-  room.emptySince = 0;
   room.updatedAt = peer.joinedAt;
+  roomStore.markRoomActive(room, peer.joinedAt);
 
   sendEvent(peer, {
     type: 'hello',
@@ -482,10 +554,10 @@ async function handleCreateRoom(req, res) {
 
   pruneRooms();
   const clientIp = getClientIp(req, TRUST_PROXY);
-  if (MAX_EMPTY_ROOMS_PER_IP > 0 && countEmptyRoomsForIp(clientIp) >= MAX_EMPTY_ROOMS_PER_IP) {
+  if (MAX_EMPTY_ROOMS_PER_IP > 0 && countRoomCreationQuotaRoomsForIp(clientIp) >= MAX_EMPTY_ROOMS_PER_IP) {
     sendJson(res, 429, {
       ok: false,
-      error: 'Too many empty rooms created from this IP, join one or try later'
+      error: 'Too many rooms waiting from this IP, reuse one or try later'
     });
     return;
   }
@@ -495,11 +567,13 @@ async function handleCreateRoom(req, res) {
     return;
   }
 
-  const room = createRoom(clientIp);
+  const room = createRoom(clientIp, parseBoolean(body.isStatic));
   sendJson(res, 201, {
     ok: true,
+    createdAt: room.createdAt,
     maxRooms: MAX_ROOMS,
     maxRoomPeers: MAX_ROOM_PEERS,
+    isStatic: room.isStatic,
     roomId: room.id
   });
 }
@@ -523,6 +597,8 @@ function handleRoomStatus(res, url) {
     ok: true,
     createdAt: room.createdAt,
     exists: true,
+    emptySince: room.emptySince,
+    isStatic: room.isStatic,
     maxRoomPeers: MAX_ROOM_PEERS,
     peers: room.peers.size,
     roomId
@@ -570,6 +646,123 @@ async function handleState(req, res) {
 
   broadcast(room, { type: 'peer-updated', peer: publicPeer(peer) });
   sendJson(res, 200, { ok: true, peer: publicPeer(peer) });
+}
+
+function handleRoomChatList(res, roomId) {
+  pruneRooms();
+  const room = getRoom(roomId);
+  if (!room) {
+    sendJson(res, 404, { ok: false, error: 'Room not found', roomId });
+    return;
+  }
+
+  sendJson(res, 200, {
+    ok: true,
+    messages: room.messages.slice(-100).map(publicChatMessage),
+    roomId
+  });
+}
+
+function handleRoomChatStream(req, res, roomId) {
+  const room = getRoom(roomId);
+  if (!room) {
+    res.writeHead(200, {
+      ...baseHeaders(),
+      'Cache-Control': 'no-cache, no-transform',
+      Connection: 'keep-alive',
+      'Content-Type': 'text/event-stream; charset=utf-8',
+      'X-Accel-Buffering': 'no'
+    });
+    sendSse(res, { type: 'room-not-found', roomId });
+    res.end();
+    return;
+  }
+
+  res.writeHead(200, {
+    ...baseHeaders(),
+    'Cache-Control': 'no-cache, no-transform',
+    Connection: 'keep-alive',
+    'Content-Type': 'text/event-stream; charset=utf-8',
+    'X-Accel-Buffering': 'no'
+  });
+  res.flushHeaders?.();
+  res.write(': connected\n\n');
+
+  const subscribers = getChatSubscribers(roomId);
+  subscribers.add(res);
+
+  const keepalive = setInterval(() => {
+    if (!sendSse(res, { type: 'ping', at: Date.now() })) {
+      clearInterval(keepalive);
+      subscribers.delete(res);
+      if (subscribers.size === 0) {
+        roomChatStreams.delete(roomId);
+      }
+    }
+  }, KEEPALIVE_MS);
+
+  req.on('close', () => {
+    clearInterval(keepalive);
+    subscribers.delete(res);
+    if (subscribers.size === 0) {
+      roomChatStreams.delete(roomId);
+    }
+  });
+}
+
+async function handleRoomChatPost(req, res, roomId) {
+  pruneRooms();
+  const room = getRoom(roomId);
+  const clientIp = getClientIp(req, TRUST_PROXY);
+  const body = await readJsonBody(req);
+  const requestedPeerId = normalizePeerId(body.peerId);
+  const sessionToken = normalizeSessionToken(body.sessionToken);
+  const name = cleanName(body.name);
+  const text = cleanChatText(body.text);
+
+  if (!room || !text) {
+    sendJson(res, 400, { ok: false, error: 'Invalid chat message' });
+    return;
+  }
+
+  const rate = roomChatLimiter.check(`${clientIp}:${roomId}`);
+  if (!rate.allowed) {
+    sendJson(
+      res,
+      429,
+      { ok: false, error: 'Too many chat messages', retryAfterSeconds: rate.retryAfterSeconds },
+      { 'Retry-After': String(rate.retryAfterSeconds) }
+    );
+    return;
+  }
+
+  let peerId = requestedPeerId || `chat-${crypto.randomBytes(12).toString('hex')}`;
+  const activePeer = requestedPeerId ? room.peers.get(requestedPeerId) : null;
+  if (activePeer) {
+    if (!tokensMatch(activePeer.sessionToken, sessionToken)) {
+      sendJson(res, 403, { ok: false, error: 'Invalid peer session' });
+      return;
+    }
+    peerId = activePeer.id;
+  }
+
+  const now = Date.now();
+  const message = roomStore.appendMessage(roomId, {
+    createdAt: now,
+    expiresAt: now + ROOM_CHAT_TTL_MS,
+    id: crypto.randomUUID?.() || crypto.randomBytes(16).toString('hex'),
+    name,
+    peerId,
+    text
+  });
+
+  if (!message) {
+    sendJson(res, 400, { ok: false, error: 'Invalid chat message' });
+    return;
+  }
+
+  broadcastChat(roomId, message);
+  sendJson(res, 201, { ok: true, message: publicChatMessage(message) });
 }
 
 function pickReleaseAsset(assets, patterns) {
@@ -688,6 +881,18 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === 'GET' && routePath.startsWith('/rooms/')) {
+      const chatMatch = routePath.match(/^\/rooms\/([A-Za-z0-9_-]{3,48})\/chat\/stream$/);
+      if (chatMatch) {
+        handleRoomChatStream(req, res, normalizeRoomId(chatMatch[1]));
+        return;
+      }
+
+      const listMatch = routePath.match(/^\/rooms\/([A-Za-z0-9_-]{3,48})\/chat$/);
+      if (listMatch) {
+        handleRoomChatList(res, normalizeRoomId(listMatch[1]));
+        return;
+      }
+
       handleRoomStatus(res, new URL(routePath, url));
       return;
     }
@@ -707,6 +912,14 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    if (req.method === 'POST') {
+      const chatMatch = routePath.match(/^\/rooms\/([A-Za-z0-9_-]{3,48})\/chat$/);
+      if (chatMatch) {
+        await handleRoomChatPost(req, res, normalizeRoomId(chatMatch[1]));
+        return;
+      }
+    }
+
     sendJson(res, 404, { ok: false, error: 'Not found' });
   } catch (error) {
     const status = error.statusCode || 500;
@@ -722,6 +935,9 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-server.listen(PORT, () => {
-  console.log(`Voice Room API is listening on http://localhost:${PORT}`);
+startApiListener({
+  host: HOST,
+  port: PORT,
+  server,
+  socketPath: SOCKET_PATH
 });

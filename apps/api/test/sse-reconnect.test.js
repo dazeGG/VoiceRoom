@@ -3,32 +3,44 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const http = require('node:http');
-const net = require('node:net');
 const { spawn } = require('node:child_process');
+const { spawnSync } = require('node:child_process');
 const path = require('node:path');
+const fs = require('node:fs');
+const os = require('node:os');
 
 const PEER_A = 'peer-alice1';
 const PEER_B = 'peer-bobbb1';
 const TOKEN_A = 'a'.repeat(32);
 const TOKEN_B = 'b'.repeat(32);
 
-async function getFreePort() {
-  return new Promise((resolve, reject) => {
-    const server = net.createServer();
-    server.listen(0, () => {
-      const { port } = server.address();
-      server.close((error) => (error ? reject(error) : resolve(port)));
-    });
-    server.on('error', reject);
-  });
+function canListen() {
+  const script = [
+    "const net=require('node:net')",
+    "const server=net.createServer()",
+    "server.once('error',()=>process.exit(1))",
+    "server.listen({host:'127.0.0.1',port:0},()=>server.close(()=>process.exit(0)))"
+  ].join(';');
+  const result = spawnSync(process.execPath, ['-e', script], { stdio: 'ignore' });
+  return result.status === 0;
 }
 
-function waitForHealthz(port, timeoutMs = 5000) {
+const networkTest = canListen() ? test : test.skip;
+
+function getSocketPath() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'voice-room-sock-'));
+  return {
+    dir,
+    socketPath: path.join(dir, 'api.sock')
+  };
+}
+
+function waitForHealthz(socketPath, timeoutMs = 5000) {
   const started = Date.now();
   return new Promise((resolve, reject) => {
     const attempt = () => {
       http
-        .get(`http://127.0.0.1:${port}/api/healthz`, (res) => {
+        .get({ path: '/api/healthz', socketPath }, (res) => {
           res.resume();
           if (res.statusCode === 200) {
             resolve();
@@ -49,15 +61,16 @@ function waitForHealthz(port, timeoutMs = 5000) {
   });
 }
 
-function startServer(port, logs) {
+function startServer(socketPath, dataDir, logs) {
   const child = spawn(process.execPath, ['src/server.js'], {
     cwd: path.join(__dirname, '..'),
     env: {
       ...process.env,
-      PORT: String(port),
+      ROOM_DATA_DIR: dataDir,
       ROOM_CREATE_POW_DIFFICULTY: '0',
       ROOM_CREATE_RATE_LIMIT: '0',
-      MAX_EMPTY_ROOMS_PER_IP: '0'
+      MAX_EMPTY_ROOMS_PER_IP: '0',
+      SOCKET_PATH: socketPath
     },
     stdio: ['ignore', 'pipe', 'pipe']
   });
@@ -81,15 +94,14 @@ function dumpServerLogs(logs) {
   }
 }
 
-async function postJson(port, pathname, body) {
+async function postJson(socketPath, pathname, body) {
   const payload = JSON.stringify(body);
   const response = await new Promise((resolve, reject) => {
     const req = http.request(
       {
-        hostname: '127.0.0.1',
-        port,
         path: pathname,
         method: 'POST',
+        socketPath,
         headers: {
           'Content-Type': 'application/json',
           'Content-Length': Buffer.byteLength(payload)
@@ -116,19 +128,19 @@ async function postJson(port, pathname, body) {
   };
 }
 
-function eventsUrl(port, { roomId, peerId, token, name }) {
+function eventsRequest(socketPath, { roomId, peerId, token, name }) {
   const params = new URLSearchParams({
     room: roomId,
     peer: peerId,
     token,
     name
   });
-  return `http://127.0.0.1:${port}/api/events?${params}`;
+  return { path: `/api/events?${params}`, socketPath };
 }
 
-function openSse(port, params) {
+function openSse(socketPath, params) {
   const messages = [];
-  const req = http.get(eventsUrl(port, params), (res) => {
+  const req = http.get(eventsRequest(socketPath, params), (res) => {
     let buffer = '';
     res.on('data', (chunk) => {
       buffer += chunk.toString('utf8');
@@ -175,22 +187,25 @@ function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-test('SSE reconnect preserves presence and avoids spurious join/leave events', async (t) => {
-  const port = await getFreePort();
+networkTest('SSE reconnect preserves presence and avoids spurious join/leave events', async (t) => {
+  const { dir, socketPath } = getSocketPath();
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'voice-room-state-'));
   const serverLogs = { stdout: '', stderr: '' };
-  const child = startServer(port, serverLogs);
+  const child = startServer(socketPath, dataDir, serverLogs);
   t.after(() => {
     child.kill('SIGTERM');
+    fs.rmSync(dataDir, { recursive: true, force: true });
+    fs.rmSync(dir, { recursive: true, force: true });
   });
 
   try {
-    await waitForHealthz(port);
+    await waitForHealthz(socketPath);
 
-    const created = await postJson(port, '/api/rooms', {});
+    const created = await postJson(socketPath, '/api/rooms', {});
     assert.equal(created.status, 201);
     const roomId = created.body.roomId;
 
-    const peerA = openSse(port, {
+    const peerA = openSse(socketPath, {
       roomId,
       peerId: PEER_A,
       token: TOKEN_A,
@@ -198,7 +213,7 @@ test('SSE reconnect preserves presence and avoids spurious join/leave events', a
     });
     await peerA.waitFor('hello');
 
-    const peerB = openSse(port, {
+    const peerB = openSse(socketPath, {
       roomId,
       peerId: PEER_B,
       token: TOKEN_B,
@@ -207,7 +222,7 @@ test('SSE reconnect preserves presence and avoids spurious join/leave events', a
     await peerB.waitFor('hello');
     await wait(100);
 
-    await postJson(port, '/api/state', {
+    await postJson(socketPath, '/api/state', {
       roomId,
       peerId: PEER_A,
       sessionToken: TOKEN_A,
@@ -217,7 +232,7 @@ test('SSE reconnect preserves presence and avoids spurious join/leave events', a
     await peerB.waitFor('peer-updated');
     const beforeReconnect = peerB.messages.length;
 
-    const peerA2 = openSse(port, {
+    const peerA2 = openSse(socketPath, {
       roomId,
       peerId: PEER_A,
       token: TOKEN_A,
@@ -230,7 +245,7 @@ test('SSE reconnect preserves presence and avoids spurious join/leave events', a
     const reconnectEvents = peerB.messages.slice(beforeReconnect);
     assert.equal(reconnectEvents.length, 0);
 
-    const state = await postJson(port, '/api/state', {
+    const state = await postJson(socketPath, '/api/state', {
       roomId,
       peerId: PEER_A,
       sessionToken: TOKEN_A
