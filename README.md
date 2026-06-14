@@ -18,7 +18,7 @@ Voice Room - голосовая комната по ссылке с демонс
 apps/
   api/             Node.js HTTP API + SSE, только строгий /api/* контракт
     src/server.js  API-сервер комнат, presence/state и LiveKit JWT
-    src/lib/       серверные модули: config, pow, rate-limit
+    src/lib/       серверные модули: config, db/migrations, pow, rate-limit
     test/          unit/integration тесты API
   web/             SvelteKit frontend app
     src/routes/    тонкие SvelteKit routes: /, /r/[roomId]
@@ -42,63 +42,80 @@ packages/
 
 - Node.js `20.20.2`
 - npm `10.8.2`
-- Docker, если нужно локально поднять LiveKit или собрать production image
+- Docker, если нужно локально поднять PostgreSQL/LiveKit или собрать production image
 
 ## Локальный запуск
 
 Проект организован как npm workspaces. Frontend живет в `apps/web` (SvelteKit + Vite), backend — в `apps/api`, общая validation-логика — в `packages/shared`.
 
-Терминал 1 — LiveKit в dev-режиме:
+Самый простой dev-режим через Docker Compose поднимает PostgreSQL, API с `node --watch`, Vite dev server и LiveKit:
 
 ```bash
-npm run dev:livekit
+cp .env.example .env
+docker compose -f docker-compose.dev.yml up --build
 ```
 
-Терминал 2 — API-сервер:
+Откройте `http://127.0.0.1:5173`. В dev compose Vite слушает `0.0.0.0:5173` внутри контейнера, проксирует `/api/*` на `http://api:3000`, а API использует PostgreSQL service `postgres`. Host-local запуск по-прежнему остаётся дефолтом: без `VITE_DEV_HOST` Vite слушает `127.0.0.1`, а `/api` проксируется на `http://localhost:3000`.
+
+Ручной запуск без dev compose:
 
 ```bash
 source ~/.nvm/nvm.sh
 nvm use
 npm install
 
+# Поднимите PostgreSQL и LiveKit отдельно. Например LiveKit:
+npm run dev:livekit
+
 set -a
 source .env
 set +a
 
+# DATABASE_URL обязателен: миграции применяются при bootstrap до listen.
 npm run dev
-```
 
-Терминал 3 — Vite dev-сервер клиента (проксирует API на :3000):
-
-```bash
+# Во втором терминале:
 npm run dev:web
 ```
 
-Откройте `http://127.0.0.1:5173`. Vite проксирует `/api/*` на API-сервер `http://localhost:3000`. `localhost` и `127.0.0.1` считаются безопасным browser context, поэтому микрофон и screen capture работают без HTTPS.
-
-Production frontend build создаётся командой `npm run build` и кладётся в `apps/web/dist`. API запускается отдельно через `npm start` и отвечает только на `/api/*`; static frontend в production раздаёт Caddy.
+Production frontend build создаётся командой `npm run build` и кладётся в `apps/web/dist`. API запускается отдельно через `npm start`, перед первым listen применяет PostgreSQL migrations и отвечает только на `/api/*`; static frontend в production раздаёт Caddy.
 
 Проверки:
 
 ```bash
 npm run check   # node --check shared/api/worklets + tsc --noEmit клиента
-npm test        # unit/integration тесты shared/api (node:test)
+TEST_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55432/postgres npm test
 ```
+
+`TEST_DATABASE_URL` обязателен для API-тестов. Test harness создаёт отдельную временную PostgreSQL database на каждый integration test и удаляет её после завершения; silent skip для отсутствующей БД не используется.
 
 ## Environment
 
-Обязательные переменные для LiveKit:
+Обязательные переменные для PostgreSQL persistence и LiveKit:
 
 ```dotenv
+DATABASE_URL=postgres://voice_room:change-me-postgres-password@127.0.0.1:5432/voice_room
 LIVEKIT_URL=wss://livekit.example.com
 LIVEKIT_API_KEY=change-me-livekit-key
 LIVEKIT_API_SECRET=change-me-livekit-secret
+```
+
+`DATABASE_URL` — основной durable storage для registry комнат и истории чата. API валидирует его на bootstrap, применяет migrations через `node-pg-migrate` до первого listen и не имеет runtime fallback на JSON-файл. `ROOM_DATA_DIR` больше не является primary persistence path. Для compose можно не задавать `DATABASE_URL` явно: он собирается из `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` и service name `postgres`.
+
+Миграции:
+
+```bash
+npm --workspace @voice-room/api run db:migrate
+npm --workspace @voice-room/api run db:rollback
 ```
 
 Часто используемые настройки:
 
 ```dotenv
 PORT=3000
+POSTGRES_DB=voice_room
+POSTGRES_USER=voice_room
+POSTGRES_PASSWORD=change-me-postgres-password
 LIVEKIT_TOKEN_TTL_SECONDS=21600
 LIVEKIT_ROOM_PREFIX=voice-room-
 
@@ -110,14 +127,11 @@ TRUST_PROXY=false
 MAX_ROOM_PEERS=12
 MAX_ROOMS=100
 MAX_EMPTY_ROOMS_PER_IP=3
-
-# Где API хранит durable registry комнат и chat history.
-# По умолчанию: apps/api/data/voice-room-state.json в dev/runtime-контейнере.
-ROOM_DATA_DIR=
 ROOM_IDLE_TTL_MS=900000
+ROOM_PRUNE_INTERVAL_MS=60000
 
 # Чат доступен по ссылке/коду комнаты без входа в голос. Сообщения хранятся
-# durable, но ограничены TTL, количеством сообщений на комнату и rate limit.
+# в PostgreSQL, но ограничены TTL, количеством сообщений на комнату и rate limit.
 ROOM_CHAT_TTL_MS=604800000
 ROOM_CHAT_MAX_MESSAGES=500
 ROOM_CHAT_RATE_LIMIT=60
@@ -152,20 +166,53 @@ LIVEKIT_API_SECRET=secret
 
 ## Docker
 
-Production compose собирает два runtime-образа из одного Dockerfile:
+Production compose собирает runtime-образы из одного Dockerfile и поднимает durable services:
 
-- `api` — Node.js API на `:3000`, только `/api/*`;
-- `caddy` — frontend static build из `apps/web/dist`, reverse proxy для `/api/*` и отдельный reverse proxy для LiveKit domain.
+- `postgres` — PostgreSQL с volume `postgres_data` и healthcheck;
+- `api` — Node.js API на `:3000`, ждёт healthy Postgres, применяет migrations и отвечает только на `/api/*`;
+- `caddy` — frontend static build из `apps/web/dist`, reverse proxy для `/api/*` и отдельный reverse proxy для LiveKit domain;
+- `livekit` — LiveKit SFU.
 
 Запуск:
 
 ```bash
+cp .env.example .env
+# поменяйте DOMAIN, LIVEKIT_* и POSTGRES_PASSWORD
 docker compose up --build
 ```
 
-Для Docker/production используйте отдельный prod-like `.env`: `LIVEKIT_URL` должен быть публичным URL из браузера, обычно `wss://$LIVEKIT_DOMAIN`. Локальный dev `.env` с `LIVEKIT_URL=ws://127.0.0.1:7880` предназначен для запуска через `npm run dev`, внутри Docker-контейнера такой адрес будет указывать на сам контейнер.
+Dev compose:
 
-В production приложение должно стоять за HTTPS, а LiveKit должен иметь публично доступные ICE/TCP и ICE/UDP порты. Если пользователи часто сидят за строгими корпоративными сетями, следующим шагом стоит добавить TURN/TLS в LiveKit deployment.
+```bash
+docker compose -f docker-compose.dev.yml up --build
+```
+
+Он публикует Vite на `127.0.0.1:${WEB_PORT:-5173}`, API на `${API_PORT:-3000}`, PostgreSQL на `${POSTGRES_PORT:-5432}` и LiveKit на `7880/7881/7882`. Внутри compose Vite проксирует `/api` на `http://api:3000`; вне compose дефолты остаются host-local. Если меняете `LIVEKIT_HTTP_PORT`, задайте и browser-facing `LIVEKIT_PUBLIC_URL` (например `ws://localhost:17880`), потому что это значение API отдаёт клиенту.
+
+Для Docker/production используйте отдельный prod-like `.env`: `LIVEKIT_URL` должен быть публичным URL из браузера, обычно `wss://$LIVEKIT_DOMAIN`. Локальный dev `.env` с `LIVEKIT_URL=ws://127.0.0.1:7880` предназначен для host/dev compose сценария; в production контейнере такой URL будет неверен для внешних браузеров.
+
+В production приложение должно стоять за HTTPS, PostgreSQL volume нужно бэкапить, а LiveKit должен иметь публично доступные ICE/TCP и ICE/UDP порты. Если пользователи часто сидят за строгими корпоративными сетями, следующим шагом стоит добавить TURN/TLS в LiveKit deployment.
+
+
+## Ручной release smoke: static room + chat persist after API restart
+
+Сценарий проверяет главный persistence contract без входа в голос:
+
+1. Запустите prod или dev compose с PostgreSQL.
+2. Откройте `http://127.0.0.1:5173` в dev compose или production domain.
+3. Создайте static room и откройте её ссылку `/r/<room-id>`.
+4. Не подключаясь к голосу, отправьте сообщение в чат комнаты.
+5. Перезапустите только API:
+
+   ```bash
+   docker compose restart api
+   # или для dev compose:
+   docker compose -f docker-compose.dev.yml restart api
+   ```
+
+6. Снова откройте `/r/<room-id>` и проверьте, что room существует, static flag сохранился, а отправленное сообщение осталось в истории чата.
+
+Автоматизированный аналог покрыт тестом `manual static-room chat scenario survives API restart without voice join` в `apps/api/test/chat.test.js`.
 
 ## Desktop
 
@@ -183,7 +230,7 @@ npm run desktop
 
 Static rooms не удаляются по idle TTL, поэтому они считаются в `MAX_EMPTY_ROOMS_PER_IP`: это защищает `MAX_ROOMS` от постоянного заполнения пустыми static-комнатами одним IP. Список «Мои статичные комнаты» в браузере — локальная bookmark-память (`localStorage`), а не аккаунтный серверный реестр.
 
-История чата хранится в durable state до `ROOM_CHAT_TTL_MS`, но на комнату сохраняется не больше `ROOM_CHAT_MAX_MESSAGES` последних сообщений. Отправка чата ограничена `ROOM_CHAT_RATE_LIMIT` на пару IP+room за `ROOM_CHAT_RATE_WINDOW_MS`. Для production важно монтировать `ROOM_DATA_DIR` на постоянный volume. Инвариант текущей реализации: durable JSON-store рассчитан на ровно один API writer/container; не запускайте несколько API-инстансов, которые одновременно пишут в один state-файл. Если нужен multi-writer/high-throughput режим, этот слой надо заменить на БД или append-only storage.
+История чата хранится в PostgreSQL до `ROOM_CHAT_TTL_MS`, но на комнату сохраняется не больше `ROOM_CHAT_MAX_MESSAGES` последних сообщений. Отправка чата ограничена `ROOM_CHAT_RATE_LIMIT` на пару IP+room за `ROOM_CHAT_RATE_WINDOW_MS`. Для production важно бэкапить PostgreSQL volume и не терять `DATABASE_URL`/credentials. Cleanup expired chat/idle dynamic rooms runs on request paths and on a process-local `ROOM_PRUNE_INTERVAL_MS` timer. Горизонтальное масштабирование API возможно только с учётом того, что presence, SSE handles, session tokens, cleanup timers и non-durable rate limit state остаются process-local; durable комнаты и сообщения находятся в PostgreSQL, а room quota/capacity enforcement выполняется транзакционно в PostgreSQL при создании комнаты.
 
 LiveKit снимает mesh-нагрузку с браузеров: каждый участник публикует микрофон и экран один раз в SFU, а остальные клиенты подписываются на tracks через LiveKit.
 

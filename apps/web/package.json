@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite --host 127.0.0.1",
+    "dev": "vite",
     "build": "vite build",
     "check": "node --check static/audio-gate.worklet.js && node --check static/desktop-audio-source.worklet.js && node --check static/rnnoise/rnnoise.worklet.js && svelte-kit sync && tsc --noEmit",
     "preview": "vite preview"
