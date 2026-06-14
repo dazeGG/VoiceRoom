@@ -6,6 +6,7 @@ services:
     restart: unless-stopped
     environment:
       NODE_ENV: production
+      HOST: 0.0.0.0
       PORT: 3000
       TRUST_PROXY: ${TRUST_PROXY:-true}
       LIVEKIT_URL: ${LIVEKIT_URL:-wss://${LIVEKIT_DOMAIN:-livekit.${DOMAIN}}}
@@ -20,6 +21,13 @@ services:
       ROOM_CREATE_POW_TTL_MS: ${ROOM_CREATE_POW_TTL_MS:-120000}
       ROOM_CREATE_RATE_LIMIT: ${ROOM_CREATE_RATE_LIMIT:-20}
       ROOM_CREATE_RATE_WINDOW_MS: ${ROOM_CREATE_RATE_WINDOW_MS:-60000}
+      ROOM_CHAT_TTL_MS: ${ROOM_CHAT_TTL_MS:-604800000}
+      ROOM_CHAT_MAX_MESSAGES: ${ROOM_CHAT_MAX_MESSAGES:-500}
+      ROOM_CHAT_RATE_LIMIT: ${ROOM_CHAT_RATE_LIMIT:-60}
+      ROOM_CHAT_RATE_WINDOW_MS: ${ROOM_CHAT_RATE_WINDOW_MS:-60000}
+      ROOM_DATA_DIR: /app/apps/api/data
+    volumes:
+      - ./apps/api/data:/app/apps/api/data
     expose:
       - "3000"
 

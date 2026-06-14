@@ -110,10 +110,28 @@ TRUST_PROXY=false
 MAX_ROOM_PEERS=12
 MAX_ROOMS=100
 MAX_EMPTY_ROOMS_PER_IP=3
+
+# Где API хранит durable registry комнат и chat history.
+# По умолчанию: apps/api/data/voice-room-state.json в dev/runtime-контейнере.
+ROOM_DATA_DIR=
+ROOM_IDLE_TTL_MS=900000
+
+# Чат доступен по ссылке/коду комнаты без входа в голос. Сообщения хранятся
+# durable, но ограничены TTL, количеством сообщений на комнату и rate limit.
+ROOM_CHAT_TTL_MS=604800000
+ROOM_CHAT_MAX_MESSAGES=500
+ROOM_CHAT_RATE_LIMIT=60
+ROOM_CHAT_RATE_WINDOW_MS=60000
+
 ROOM_CREATE_POW_DIFFICULTY=14
 ROOM_CREATE_POW_TTL_MS=120000
 ROOM_CREATE_RATE_LIMIT=20
 ROOM_CREATE_RATE_WINDOW_MS=60000
+
+# Для reverse proxy / systemd можно слушать Unix socket вместо TCP.
+# Если SOCKET_PATH пустой, API слушает HOST:PORT.
+HOST=127.0.0.1
+SOCKET_PATH=
 
 # Блок «Десктоп-приложение» на главной берёт ссылки из latest-релиза GitHub
 # через эндпоинт GET /api/desktop/latest (метаданные кэшируются на сервере).
@@ -161,7 +179,11 @@ npm run desktop
 
 ## Безопасность
 
-Комнаты приватны только за счет ссылки. Любой, у кого есть URL или код комнаты, может войти. Backend выдает LiveKit tokens только для существующих room sessions, но это не заменяет авторизацию, пароли комнат или аккаунты.
+Комнаты приватны только за счет ссылки. Любой, у кого есть URL или код комнаты, может войти. Backend выдает LiveKit tokens только для существующих room sessions, но это не заменяет авторизацию, пароли комнат или аккаунты. Чат следует той же модели доступа: писать можно по ссылке/коду комнаты без входа в голосовую сессию.
+
+Static rooms не удаляются по idle TTL, поэтому они считаются в `MAX_EMPTY_ROOMS_PER_IP`: это защищает `MAX_ROOMS` от постоянного заполнения пустыми static-комнатами одним IP. Список «Мои статичные комнаты» в браузере — локальная bookmark-память (`localStorage`), а не аккаунтный серверный реестр.
+
+История чата хранится в durable state до `ROOM_CHAT_TTL_MS`, но на комнату сохраняется не больше `ROOM_CHAT_MAX_MESSAGES` последних сообщений. Отправка чата ограничена `ROOM_CHAT_RATE_LIMIT` на пару IP+room за `ROOM_CHAT_RATE_WINDOW_MS`. Для production важно монтировать `ROOM_DATA_DIR` на постоянный volume. Инвариант текущей реализации: durable JSON-store рассчитан на ровно один API writer/container; не запускайте несколько API-инстансов, которые одновременно пишут в один state-файл. Если нужен multi-writer/high-throughput режим, этот слой надо заменить на БД или append-only storage.
 
 LiveKit снимает mesh-нагрузку с браузеров: каждый участник публикует микрофон и экран один раз в SFU, а остальные клиенты подписываются на tracks через LiveKit.
 
