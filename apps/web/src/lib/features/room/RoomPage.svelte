@@ -5,6 +5,7 @@
   import './styles/room.css';
   import NotFoundScreen from './components/NotFoundScreen.svelte';
   import RoomOverlays from './components/RoomOverlays.svelte';
+  import RoomChat from './components/RoomChat.svelte';
   import RoomStage from './components/RoomStage.svelte';
   import RoomTopbar from './components/RoomTopbar.svelte';
   import StartRoomScreen from './components/StartRoomScreen.svelte';
@@ -22,6 +23,7 @@
   <RoomTopbar />
   <StartRoomScreen />
   <RoomStage />
+  <RoomChat />
   <NotFoundScreen />
   <RoomOverlays />
 </div>

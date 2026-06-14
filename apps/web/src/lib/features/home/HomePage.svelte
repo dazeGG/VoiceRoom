@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { createRoom } from '$lib/api/rooms';
+  import { createRoom, fetchRoomStatus } from '$lib/api/rooms';
   import { fetchDesktopRelease, type DesktopRelease } from '$lib/api/desktop';
   import Topbar from '$lib/shared/components/Topbar.svelte';
   import '$lib/shared/styles/typography.css';
@@ -11,6 +11,7 @@
   import DesktopAppCard from './components/DesktopAppCard.svelte';
   import HeroIntro from './components/HeroIntro.svelte';
   import NameRoomCard from './components/NameRoomCard.svelte';
+  import StaticRoomsCard from './components/StaticRoomsCard.svelte';
   import Toast from './components/Toast.svelte';
   import { copyText, triggerDesktopDownload } from './services/desktop-download';
   import {
@@ -24,9 +25,12 @@
   let savedName = $state('');
   let nameInput = $state('');
   let roomCode = $state('');
+  let staticRoomEnabled = $state(false);
   let creating = $state(false);
+  let addingRoom = $state(false);
   let toast = $state('');
   let toastTimer = 0;
+  let staticRooms = $state<SavedStaticRoom[]>([]);
 
   let selectedBuildId = $state('mac-arm64');
   let appOpen = $state(false);
@@ -48,10 +52,18 @@
   const appMeta = $derived(formatDesktopReleaseMeta(selectedBuild, selectedAsset, release, releaseLoading, releaseError));
   const downloadLabel = $derived(desktopDownloadLabel(appDownloadState));
 
+  interface SavedStaticRoom {
+    roomId: string;
+    savedAt: number;
+  }
+
+  const STATIC_ROOMS_KEY = 'voice-room:static-rooms';
+
   onMount(() => {
     document.body.dataset.screen = 'start';
     savedName = cleanDisplayName(localStorage.getItem('voice-room:name'));
     nameInput = savedName;
+    staticRooms = loadStaticRooms();
     selectedBuildId = detectDesktopBuildId();
     return () => {
       delete document.body.dataset.screen;
@@ -133,7 +145,10 @@
 
     creating = true;
     try {
-      const roomId = await createRoom();
+      const roomId = await createRoom({ isStatic: staticRoomEnabled });
+      if (staticRoomEnabled) {
+        upsertStaticRoom(roomId);
+      }
       openRoom(roomId);
     } catch (error) {
       console.error(error);
@@ -153,6 +168,37 @@
     openRoom(roomId);
   }
 
+  async function handleAddRoom(): Promise<void> {
+    if (!nameMatchesSaved || addingRoom) return;
+
+    const roomId = extractRoomId(roomCode);
+    if (!roomId) {
+      showToast('Введите код комнаты');
+      return;
+    }
+
+    addingRoom = true;
+    try {
+      const room = await fetchRoomStatus(roomId);
+      if (!room) {
+        showToast('Комната не найдена');
+        return;
+      }
+      if (!room.isStatic) {
+        showToast('Это не статичная комната');
+        return;
+      }
+
+      const added = upsertStaticRoom(roomId);
+      showToast(added ? 'Комната добавлена в список' : 'Комната уже в списке');
+    } catch (error) {
+      console.error(error);
+      showToast(error instanceof Error && error.message ? error.message : 'Не удалось добавить комнату');
+    } finally {
+      addingRoom = false;
+    }
+  }
+
   function handleRoomCodeKeydown(event: KeyboardEvent): void {
     if (event.key !== 'Enter') return;
     event.preventDefault();
@@ -161,6 +207,53 @@
 
   function openRoom(roomId: string): void {
     window.location.href = `/r/${encodeURIComponent(roomId)}`;
+  }
+
+  function loadStaticRooms(): SavedStaticRoom[] {
+    try {
+      const raw = localStorage.getItem(STATIC_ROOMS_KEY);
+      const parsed = raw ? JSON.parse(raw) : [];
+      if (!Array.isArray(parsed)) return [];
+      const seen = new Set<string>();
+      return parsed
+        .map((entry) => {
+          const roomId = extractRoomId(entry?.roomId);
+          if (!roomId) return null;
+          const savedAt = Number(entry?.savedAt);
+          return {
+            roomId,
+            savedAt: Number.isFinite(savedAt) ? savedAt : Date.now()
+          } satisfies SavedStaticRoom;
+        })
+        .filter((entry): entry is SavedStaticRoom => {
+          if (!entry || seen.has(entry.roomId)) return false;
+          seen.add(entry.roomId);
+          return true;
+        })
+        .sort((a, b) => b.savedAt - a.savedAt);
+    } catch {
+      return [];
+    }
+  }
+
+  function persistStaticRooms(nextRooms: SavedStaticRoom[]): void {
+    staticRooms = nextRooms;
+    localStorage.setItem(STATIC_ROOMS_KEY, JSON.stringify(nextRooms));
+  }
+
+  function upsertStaticRoom(roomId: string): boolean {
+    const normalized = extractRoomId(roomId);
+    if (!normalized) return false;
+    if (staticRooms.some((room) => room.roomId === normalized)) return false;
+
+    persistStaticRooms([{ roomId: normalized, savedAt: Date.now() }, ...staticRooms]);
+    return true;
+  }
+
+  function removeStaticRoom(roomId: string): void {
+    const normalized = extractRoomId(roomId);
+    if (!normalized) return;
+    persistStaticRooms(staticRooms.filter((room) => room.roomId !== normalized));
   }
 
   function showToast(message: string): void {
@@ -182,13 +275,22 @@
       <NameRoomCard
         bind:nameInput
         bind:roomCode
+        bind:staticRoomEnabled
         {savedName}
         {nameMatchesSaved}
         {creating}
+        {addingRoom}
         onSaveName={saveName}
         onCreateRoom={handleCreateRoom}
         onJoinRoom={handleJoinRoom}
+        onAddRoom={handleAddRoom}
         onRoomCodeKeydown={handleRoomCodeKeydown}
+      />
+
+      <StaticRoomsCard
+        rooms={staticRooms}
+        onOpenRoom={openRoom}
+        onRemoveRoom={removeStaticRoom}
       />
 
       <DesktopAppCard

@@ -3,21 +3,27 @@
     savedName,
     nameInput = $bindable(),
     roomCode = $bindable(),
+    staticRoomEnabled = $bindable(),
     nameMatchesSaved,
     creating,
+    addingRoom,
     onSaveName,
     onCreateRoom,
     onJoinRoom,
+    onAddRoom,
     onRoomCodeKeydown
   } = $props<{
     savedName: string;
     nameInput: string;
     roomCode: string;
+    staticRoomEnabled: boolean;
     nameMatchesSaved: boolean;
     creating: boolean;
+    addingRoom: boolean;
     onSaveName: (event?: Event) => void;
     onCreateRoom: () => void;
     onJoinRoom: () => void;
+    onAddRoom: () => void;
     onRoomCodeKeydown: (event: KeyboardEvent) => void;
   }>();
 </script>
@@ -76,6 +82,14 @@
       {creating ? 'Создаём…' : 'Создать комнату'}
     </button>
 
+    <label class="home-static-toggle">
+      <input type="checkbox" bind:checked={staticRoomEnabled} disabled={!nameMatchesSaved}>
+      <span>
+        <strong>Статичная комната</strong>
+        <small>Появится в локальном списке и переживёт перезагрузку сервера.</small>
+      </span>
+    </label>
+
     <div class="home-or"><span>или войдите по коду</span></div>
 
     <div class="home-field-row">
@@ -89,6 +103,13 @@
         bind:value={roomCode}
         onkeydown={onRoomCodeKeydown}
       >
+      <button class="home-icon-button" type="button" disabled={addingRoom} onclick={onAddRoom} aria-label="Добавить комнату в локальный список">
+        {#if addingRoom}
+          <span class="home-spinner home-spinner--small" aria-hidden="true"></span>
+        {:else}
+          +
+        {/if}
+      </button>
       <button class="home-ghost-button" type="button" onclick={onJoinRoom}>Войти</button>
     </div>
   </div>

@@ -32,6 +32,6 @@ export async function checkRoomExists(roomId: string): Promise<boolean> {
   if (response.status === 404) return false;
   if (!response.ok) throw new Error('Не удалось проверить комнату');
 
-  const payload = await response.json();
-  return Boolean(payload.exists);
+  const status = await response.json();
+  return Boolean(status?.exists);
 }
