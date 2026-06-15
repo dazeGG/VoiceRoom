@@ -4,7 +4,15 @@
   "private": true,
   "type": "commonjs",
   "exports": {
-    "./validation": "./src/validation.js"
+    "./validation": {
+      "types": "./src/validation.d.ts",
+      "require": "./src/validation.js"
+    },
+    "./visual-identity": {
+      "types": "./src/visual-identity.d.ts",
+      "import": "./src/visual-identity.mjs",
+      "require": "./src/visual-identity.json"
+    }
   },
   "scripts": {
     "check": "node --check src/validation.js",

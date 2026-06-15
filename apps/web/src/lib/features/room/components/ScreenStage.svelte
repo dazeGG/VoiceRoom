@@ -9,7 +9,7 @@
     <span class="screen-meta-sep" id="screenMetaSepFps" aria-hidden="true">·</span>
     <span class="screen-meta-detail" id="screenMetaFps"></span>
     <span class="screen-meta-sep" id="screenMetaSepViewers" aria-hidden="true">·</span>
-    <span class="screen-meta-detail" id="screenMetaViewers"></span>
+    <span class="screen-meta-detail screen-meta-viewers" id="screenMetaViewers"></span>
     <span class="screen-meta-detail screen-meta-stats" id="screenMetaStats" hidden></span>
   </div>
   <div class="screen-view-controls" id="screenViewControls" hidden>

@@ -8,14 +8,23 @@
     "packages/*"
   ],
   "scripts": {
-    "start": "npm --workspace @voice-room/api run start",
-    "dev": "npm --workspace @voice-room/api run dev",
-    "dev:api": "npm --workspace @voice-room/api run dev",
-    "dev:web": "npm --workspace @voice-room/web run dev",
-    "dev:livekit": "docker run --rm -p 7880:7880 -p 7881:7881 -p 7882:7882/udp livekit/livekit-server:latest --dev --bind 0.0.0.0",
+    "start": "docker compose up -d --build",
+    "stop": "docker compose down",
+    "logs": "docker compose logs -f",
+    "dev": "docker compose -f docker-compose.dev.yml up --build",
+    "dev:up": "docker compose -f docker-compose.dev.yml up -d --build",
+    "dev:down": "docker compose -f docker-compose.dev.yml down",
+    "dev:logs": "docker compose -f docker-compose.dev.yml logs -f",
+    "dev:restart": "docker compose -f docker-compose.dev.yml restart api web",
+    "dev:api": "docker compose -f docker-compose.dev.yml up --build api",
+    "dev:web": "docker compose -f docker-compose.dev.yml up --build web",
+    "dev:livekit": "docker compose -f docker-compose.dev.yml up --build livekit",
+    "dev:host:api": "npm --workspace @voice-room/api run dev",
+    "dev:host:web": "npm --workspace @voice-room/web run dev",
+    "dev:host:livekit": "docker run --rm -p 7880:7880 -p 7881:7881 -p 7882:7882/udp livekit/livekit-server:latest --dev --bind 0.0.0.0",
     "build": "npm --workspace @voice-room/web run build",
     "check": "npm --workspace @voice-room/shared run check && npm --workspace @voice-room/api run check && npm --workspace @voice-room/web run check",
-    "test": "npm --workspace @voice-room/shared run test && npm --workspace @voice-room/api run test"
+    "test": "npm --workspace @voice-room/shared run test && npm --workspace @voice-room/api run test && npm --workspace @voice-room/web run test"
   },
   "packageManager": "npm@10.8.2",
   "engines": {

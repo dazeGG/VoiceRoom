@@ -5,7 +5,7 @@
 
 <section class="start-copy" aria-labelledby="startTitle">
   <h1 class="hero-title" id="startTitle">Голосовая комната без лишних дверей</h1>
-  <p class="hero-lead">Сначала сохраните имя, потом создайте комнату или зайдите к своим по коду.</p>
+  <p class="hero-lead">Нажмите — и вы уже в комнате. Код и ссылка появятся сразу. Аккаунт нужен, только если хотите сохранять комнаты.</p>
 
   <FeatureList items={START_FEATURES} />
 </section>

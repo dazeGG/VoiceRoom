@@ -112,6 +112,11 @@ export interface RoomSessionState {
   joined: boolean;
   peerId: string;
   roomId: string;
+  roomName: string;
+  roomEmoji: string;
+  roomColorKey: string;
+  roomIconKey: string;
+  roomPresetKey: string;
   roomRoute: boolean;
   savedName: string;
   sessionToken: string;

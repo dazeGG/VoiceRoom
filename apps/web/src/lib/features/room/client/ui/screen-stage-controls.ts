@@ -1,6 +1,8 @@
 import { elements } from './dom';
+import { getAvatarColor } from '$lib/visual/tokens';
 import { state } from '../core/state';
 import { showToast } from './toast';
+import { getInitials } from '../core/utils';
 import { getScreenProfile, parseScreenProfileId } from '../media/profiles';
 import { SCREEN_FPS_OPTIONS, SCREEN_QUALITY_OPTIONS } from '../core/config';
 import { clampStreamVolume, normalizeStoredStreamVolume, storeStreamVolume } from '../core/settings';
@@ -45,10 +47,9 @@ export function refreshScreenMeta(participant: Participant | null): void {
   elements.screenMetaSepFps.hidden = !qualityLabel || !fpsLabel;
   elements.screenMetaStats.hidden = true;
   elements.screenMetaStats.textContent = '';
-  const viewersLine = formatScreenViewersLine(participant.id);
-  elements.screenMetaViewers.textContent = viewersLine;
-  elements.screenMetaViewers.hidden = !viewersLine;
-  elements.screenMetaSepViewers.hidden = (!qualityLabel && !fpsLabel) || !viewersLine;
+  const hasViewers = renderScreenViewers(participant.id);
+  elements.screenMetaViewers.hidden = !hasViewers;
+  elements.screenMetaSepViewers.hidden = (!qualityLabel && !fpsLabel) || !hasViewers;
   refreshScreenStreamControls(participant);
 }
 
@@ -68,13 +69,40 @@ function getScreenMetaLabels(participant: Participant): { qualityLabel: string; 
   };
 }
 
-function formatScreenViewersLine(ownerPeerId: string): string {
+function renderScreenViewers(ownerPeerId: string): boolean {
   const viewers = getScreenViewers(ownerPeerId);
-  if (viewers.length === 0) return 'Смотрят: 0';
+  elements.screenMetaViewers.replaceChildren();
+  if (viewers.length === 0) {
+    elements.screenMetaViewers.textContent = 'Смотрят: 0';
+    return true;
+  }
 
-  const names = viewers.slice(0, 3).map((viewer) => (viewer.isLocal ? 'вы' : viewer.name));
-  const rest = viewers.length - names.length;
-  return rest > 0 ? `Смотрят: ${names.join(', ')} +${rest}` : `Смотрят: ${names.join(', ')}`;
+  for (const viewer of viewers.slice(0, 3)) {
+    elements.screenMetaViewers.append(createScreenViewerAvatar(viewer));
+  }
+
+  const rest = viewers.length - 3;
+  if (rest > 0) {
+    const restBadge = document.createElement('span');
+    restBadge.className = 'screen-meta-viewers-rest';
+    restBadge.textContent = `+${rest}`;
+    elements.screenMetaViewers.append(restBadge);
+  }
+  return true;
+}
+
+function createScreenViewerAvatar(viewer: Participant): HTMLElement {
+  const avatarColor = getAvatarColor(viewer.avatarColorKey);
+  const avatar = document.createElement('span');
+  avatar.className = 'screen-meta-viewer-avatar';
+  avatar.title = viewer.isLocal ? 'вы' : viewer.name;
+  avatar.setAttribute('role', 'img');
+  avatar.setAttribute('aria-label', viewer.isLocal ? 'вы' : viewer.name);
+  avatar.style.setProperty('--avatar-bg', avatarColor.background);
+  avatar.style.setProperty('--avatar-fg', avatarColor.foreground);
+  avatar.style.setProperty('--avatar-shadow', avatarColor.shadow);
+  avatar.textContent = getInitials(viewer.name);
+  return avatar;
 }
 
 function getScreenViewers(ownerPeerId: string): Participant[] {

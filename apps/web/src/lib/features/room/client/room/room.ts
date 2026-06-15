@@ -1,10 +1,11 @@
+import { getRoomPreset } from '$lib/visual/tokens';
 import { elements } from '../ui/dom';
 import { state } from '../core/state';
 import { showToast } from '../ui/toast';
 import { checkRoomExists, postJson } from '../net/api';
 import { postState } from './presence';
 import { createRoomProof } from '../net/pow';
-import { cleanDisplayName, errorMessage, wait } from '../core/utils';
+import { cleanDisplayName, errorMessage, getInitials, wait } from '../core/utils';
 import { extractRoomId } from '../core/session';
 import { getDisplayName, persistName, requireSavedName, updateNameStatuses } from '../ui/names';
 import {
@@ -86,8 +87,21 @@ export async function showRoomRoute(): Promise<void> {
 
 function showRoomScreen(): void {
   document.body.dataset.screen = 'room';
-  document.title = `${state.roomId} · Voice Room`;
-  elements.roomTitle.textContent = state.roomId;
+  const heading = state.roomName || state.roomId;
+  document.title = `${heading} · Voice Room`;
+  elements.roomTitle.textContent = heading;
+  elements.roomCodeText.textContent = state.roomId;
+  const roomVisual = getRoomPreset({
+    emoji: state.roomEmoji,
+    roomColorKey: state.roomColorKey,
+    roomIconKey: state.roomIconKey,
+    roomPresetKey: state.roomPresetKey
+  });
+  elements.roomEmojiBadge.textContent = roomVisual.emoji;
+  elements.roomEmojiBadge.style.background = roomVisual.background;
+  elements.roomEmojiBadge.style.boxShadow = `0 0 0 1px ${roomVisual.ring}`;
+  elements.roomEmojiBadge.hidden = false;
+  elements.emptyRoomAvatar.textContent = getInitials(state.savedName);
   hideScreens();
   elements.brand.hidden = true;
   elements.topbarRoomHeading.hidden = false;
@@ -302,6 +316,9 @@ async function handleServerMessage(event: MessageEvent): Promise<void> {
     state.serverPeerSyncReady = true;
     setServerConnectionStatus('connected');
     syncPeers([...state.serverPeerIds]);
+    if (message.peer?.id) {
+      updateParticipant({ ...message.peer, isLocal: true });
+    }
     for (const peer of peers) {
       createParticipant(peer);
     }

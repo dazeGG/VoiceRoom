@@ -4,6 +4,9 @@
   display: none;
   flex: 1 1 auto;
   min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
 }
 
 body[data-screen="room"] .topbar {
@@ -18,10 +21,136 @@ body[data-screen="room"] .topbar-room-heading {
   display: flex;
 }
 
+/* The connection state moved into the dock (v2 design), so the old top-right
+   status pill is suppressed in-room. */
+body[data-screen="room"] .status-pill {
+  display: none;
+}
+
+.room-heading-main {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.room-emoji-badge {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  background: oklch(84% 0.012 92 / 0.1);
+  font-size: 20px;
+  line-height: 1;
+}
+
 .topbar-room-heading h1 {
-  max-width: min(62vw, 28ch);
-  font-size: 2.35rem;
-  line-height: 0.95;
+  max-width: min(46vw, 22ch);
+  overflow: hidden;
+  font-family: var(--font-mono);
+  font-size: 1.35rem;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  line-height: 1.05;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.room-code-chip {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 9px;
+  padding: 0 11px;
+  background: rgba(255, 255, 255, 0.05);
+  color: #cfc9ba;
+  transition: background 150ms var(--ease-out);
+}
+
+.room-code-chip:hover {
+  background: rgba(255, 255, 255, 0.11);
+}
+
+.room-code-text {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: #cfc9ba;
+}
+
+.room-code-copy {
+  display: inline-flex;
+  color: #8c8676;
+}
+
+.room-code-copy svg {
+  width: 13px;
+  height: 13px;
+}
+
+.room-link-button {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 9px;
+  padding: 0 11px;
+  background: rgba(255, 255, 255, 0.05);
+  color: #9a9484;
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  font-weight: 600;
+  transition: background 150ms var(--ease-out);
+}
+
+.room-link-button:hover {
+  background: rgba(255, 255, 255, 0.11);
+  color: #cfc9ba;
+}
+
+.room-link-button svg {
+  width: 14px;
+  height: 14px;
+}
+
+.room-chat-toggle {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 7px;
+  height: 36px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 11px;
+  padding: 0 14px;
+  background: rgba(255, 255, 255, 0.05);
+  color: #cfc9ba;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 150ms var(--ease-out), color 150ms var(--ease-out), border-color 150ms var(--ease-out);
+}
+
+.room-chat-toggle:hover {
+  background: rgba(255, 255, 255, 0.11);
+}
+
+.room-chat-toggle[data-active="true"] {
+  border-color: rgba(217, 211, 195, 0.5);
+  background: rgba(217, 211, 195, 0.14);
+  color: #ece7d9;
+}
+
+.room-chat-toggle svg {
+  width: 15px;
+  height: 15px;
 }
 
 .status-pill {
@@ -66,8 +195,20 @@ body[data-screen="room"] .topbar-room-heading {
 }
 
 .room-layout {
-  display: grid;
+  display: flex;
+  min-width: 0;
   min-height: 0;
+}
+
+.room-layout > .stage {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+@media (min-width: 901px) {
+  body[data-chat-open="true"] .room-layout {
+    padding-right: var(--chat-rail-width);
+  }
 }
 
 .not-found-layout {
