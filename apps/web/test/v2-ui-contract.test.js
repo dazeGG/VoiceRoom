@@ -1,9 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
 
 const root = resolve(import.meta.dirname, '..');
+const require = createRequire(import.meta.url);
 const read = (path) => readFileSync(resolve(root, path), 'utf8');
 
 test('home auth flow is loader-first and has no localStorage session oracle', () => {
@@ -61,4 +63,58 @@ test('auth client does not mask unexpected backend failures as anonymous or empt
   assert.match(home, /await logout\(\);\n\s+clearSession\(\);/);
   assert.match(home, /Не удалось выйти из аккаунта/);
   assert.match(lobby, /Не удалось загрузить комнаты/);
+});
+
+test('visual identity UI consumes backend keys and exposes only curated room presets', () => {
+  const authApi = read('src/lib/api/auth.ts');
+  const roomsApi = read('src/lib/api/rooms.ts');
+  const tokens = read('src/lib/visual/tokens.ts');
+  const userMenu = read('src/lib/features/home/components/UserMenu.svelte');
+  const roomCard = read('src/lib/features/home/components/RoomCard.svelte');
+  const createDialog = read('src/lib/features/home/components/CreateRoomDialog.svelte');
+  const participants = read('src/lib/features/room/client/room/participants.ts');
+  const chat = read('src/lib/features/room/components/RoomChat.svelte');
+  const roomNet = read('src/lib/features/room/client/net/api.ts');
+  const roomView = read('src/lib/features/room/client/room/room.ts');
+
+  assert.match(authApi, /avatarColorKey: string/);
+  assert.match(authApi, /roomIconKey: string/);
+  assert.match(authApi, /roomColorKey: string/);
+  assert.match(roomsApi, /avatarColorKey: string/);
+  assert.match(roomsApi, /roomPresetKey\?: string/);
+  assert.match(tokens, /export const AVATAR_COLORS/);
+  assert.match(tokens, /export const ROOM_PRESETS/);
+  assert.match(userMenu, /getAvatarColor\(user\.avatarColorKey\)/);
+  assert.match(roomCard, /roomVisual\(room\)/);
+  assert.match(createDialog, /ROOM_PRESETS/);
+  assert.match(createDialog, /roomPresetKey/);
+  assert.doesNotMatch(createDialog, /type="file"|upload|custom|contenteditable/i);
+  assert.match(participants, /getAvatarColor\(peerInfo\.avatarColorKey\)/);
+  assert.doesNotMatch(participants, /hashStringToHue\(seed\)/);
+  assert.match(chat, /getAvatarColor\(message\.avatarColorKey\)/);
+  assert.doesNotMatch(chat, /hashStringToHue/);
+  assert.match(roomNet, /status\?\.roomIconKey/);
+  assert.match(roomView, /getRoomPreset/);
+  assert.match(roomView, /updateParticipant\(\{ \.\.\.message\.peer, isLocal: true \}\)/);
+  assert.match(tokens, /ROOM_ICON_EMOJIS/);
+  assert.match(tokens, /ROOM_COLOR_TOKENS/);
+  assert.match(tokens, /key: '',/);
+  assert.doesNotMatch(roomCard, /room\.emoji \|\| visual\.emoji/);
+  assert.doesNotMatch(roomView, /state\.roomEmoji \|\| roomVisual\.emoji/);
+  assert.ok(tokens.indexOf('if (hasIconKey || hasColorKey)') < tokens.indexOf('item.emoji === value.emoji'));
+});
+
+test('frontend visual catalog stays aligned with shared backend key contracts', () => {
+  const shared = require('@voice-room/shared/validation');
+  const tokens = read('src/lib/visual/tokens.ts');
+
+  for (const key of shared.AVATAR_COLOR_KEYS) {
+    assert.ok(tokens.includes(`${key}: { key: '${key}'`));
+  }
+  assert.match(tokens, /SHARED_ROOM_PRESETS\.map/);
+  assert.doesNotMatch(tokens, /key: 'voice-blue'/);
+  assert.doesNotMatch(tokens, /emoji: '🎧'/);
+  for (const key of shared.ROOM_COLOR_KEYS) {
+    assert.ok(tokens.includes(`${key}: { background:`));
+  }
 });

@@ -1,16 +1,16 @@
 <script lang="ts">
-  import { ROOM_EMOJIS } from '../model/rooms';
+  import { ROOM_PRESETS } from '../model/rooms';
 
   let { open, creating, onClose, onCreate } = $props<{
     open: boolean;
     creating: boolean;
     onClose: () => void;
-    onCreate: (payload: { name: string; emoji: string; isStatic: boolean }) => void;
+    onCreate: (payload: { name: string; roomPresetKey: string; isStatic: boolean }) => void;
   }>();
 
   let tab = $state<'permanent' | 'temp'>('permanent');
   let name = $state('');
-  let emoji = $state<string>(ROOM_EMOJIS[0]);
+  let roomPresetKey = $state<string>(ROOM_PRESETS[0].key);
   let error = $state('');
 
   // Reset the form each time the dialog opens.
@@ -19,7 +19,7 @@
     if (open && !wasOpen) {
       tab = 'permanent';
       name = '';
-      emoji = ROOM_EMOJIS[0];
+      roomPresetKey = ROOM_PRESETS[0].key;
       error = '';
     }
     wasOpen = open;
@@ -35,7 +35,7 @@
     }
     onCreate({
       name: trimmed,
-      emoji: tab === 'permanent' ? emoji : '',
+      roomPresetKey: tab === 'permanent' ? roomPresetKey : '',
       isStatic: tab === 'permanent'
     });
   }
@@ -101,15 +101,16 @@
           <div class="dialog-field">
             <div class="dialog-label">Иконка</div>
             <div class="dialog-emoji-row" role="radiogroup" aria-label="Иконка комнаты">
-              {#each ROOM_EMOJIS as item (item)}
+              {#each ROOM_PRESETS as preset (preset.key)}
                 <button
                   type="button"
                   class="dialog-emoji"
                   role="radio"
-                  aria-checked={emoji === item}
-                  data-active={emoji === item}
-                  onclick={() => (emoji = item)}
-                >{item}</button>
+                  aria-checked={roomPresetKey === preset.key}
+                  data-active={roomPresetKey === preset.key}
+                  style={`background:${preset.background}`}
+                  onclick={() => (roomPresetKey = preset.key)}
+                >{preset.emoji}</button>
               {/each}
             </div>
           </div>

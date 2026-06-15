@@ -1,36 +1,14 @@
 import type { OwnedRoom } from '$lib/api/auth';
+import { ROOM_PRESETS, getRoomPreset } from '$lib/visual/tokens';
 
-// Mirror of the API's room icon palette (packages/shared validation ROOM_EMOJIS).
-// The create dialog offers exactly these; the server validates against the same set.
-export const ROOM_EMOJIS = ['🎧', '📌', '🌙', '☀️', '🎮', '🎙️', '🔥'] as const;
-
-export type RoomEmoji = (typeof ROOM_EMOJIS)[number];
-
-// Warm tints for the icon tile, mirroring the design's per-room backgrounds.
-const ROOM_TINTS = [
-  'rgba(124,79,74,0.22)',
-  'rgba(95,107,78,0.22)',
-  'rgba(138,111,60,0.22)',
-  'rgba(106,90,122,0.22)',
-  'rgba(79,107,106,0.22)',
-  'rgba(199,140,62,0.2)'
-];
-
-function hash(seed: string): number {
-  let value = 0;
-  for (let i = 0; i < seed.length; i += 1) {
-    value = (value * 31 + seed.charCodeAt(i)) >>> 0;
-  }
-  return value;
-}
-
-// Stable tint per room so the same room always gets the same icon background.
-export function roomTint(seed: string): string {
-  return ROOM_TINTS[hash(seed) % ROOM_TINTS.length];
-}
+export { ROOM_PRESETS, getRoomPreset };
 
 export function roomDisplayName(room: OwnedRoom): string {
   return room.name?.trim() || room.roomId;
+}
+
+export function roomVisual(room: Pick<OwnedRoom, 'emoji' | 'roomColorKey' | 'roomIconKey' | 'roomPresetKey'>) {
+  return getRoomPreset(room);
 }
 
 // Russian plural for «комната».

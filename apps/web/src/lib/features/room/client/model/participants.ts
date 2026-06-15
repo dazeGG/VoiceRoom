@@ -1,6 +1,7 @@
 import type { Participant as LiveKitParticipant } from 'livekit-client';
 
 export interface PeerInfo {
+  avatarColorKey?: string;
   id: string;
   name?: string;
   deafened?: boolean;
@@ -17,6 +18,7 @@ export interface PeerInfo {
 export interface Participant {
   analyser: AnalyserNode | null;
   audioElements: Map<string, HTMLAudioElement>;
+  avatarColorKey: string;
   deafened: boolean;
   id: string;
   incomingVoiceActive: boolean;

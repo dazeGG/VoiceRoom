@@ -1,7 +1,8 @@
 import { elements } from '../ui/dom';
 import { state } from '../core/state';
 import { getScreenProfile } from '../media/profiles';
-import { getInitials, hashStringToHue } from '../core/utils';
+import { getAvatarColor } from '$lib/visual/tokens';
+import { getInitials } from '../core/utils';
 import {
   applyAudioOutputDevice,
   isVoicePlaybackMuted,
@@ -142,6 +143,7 @@ export function createParticipant(peerInfo: PeerInfo): Participant {
   const participant: Participant = {
     analyser: null,
     audioElements: new Map(),
+    avatarColorKey: peerInfo.avatarColorKey || '',
     deafened: Boolean(peerInfo.deafened),
     id: peerInfo.id,
     incomingVoiceActive: false,
@@ -189,6 +191,7 @@ export function updateParticipant(peerInfo: PeerInfo): void {
   const hadScreenStreamId = participant.screenStreamId;
   const hadName = participant.name;
   const hasScreenUpdate = Object.hasOwn(peerInfo, 'screen');
+  if (Object.hasOwn(peerInfo, 'avatarColorKey')) participant.avatarColorKey = peerInfo.avatarColorKey || participant.avatarColorKey;
   if (Object.hasOwn(peerInfo, 'name')) participant.name = peerInfo.name || participant.name;
   if (Object.hasOwn(peerInfo, 'deafened')) participant.deafened = Boolean(peerInfo.deafened);
   if (Object.hasOwn(peerInfo, 'muted')) participant.muted = Boolean(peerInfo.muted);
@@ -520,10 +523,11 @@ export function refreshStageGridState(): void {
   elements.emptyRoom.hidden = totalCount > 0;
 }
 
-function applyParticipantPalette(node: HTMLElement, peerInfo: { id?: string; name?: string }): void {
-  const seed = `${peerInfo.id || ''}:${peerInfo.name || ''}`;
-  const hue = hashStringToHue(seed);
-  node.style.setProperty('--participant-pastel', `oklch(84% 0.075 ${hue})`);
+function applyParticipantPalette(node: HTMLElement, peerInfo: { avatarColorKey?: string; id?: string; name?: string }): void {
+  const color = getAvatarColor(peerInfo.avatarColorKey);
+  node.style.setProperty('--participant-pastel', color.background);
+  node.style.setProperty('--participant-avatar-fg', color.foreground);
+  node.style.setProperty('--participant-avatar-shadow', color.shadow);
 }
 
 export function getParticipantById(peerId: string): Participant | null {

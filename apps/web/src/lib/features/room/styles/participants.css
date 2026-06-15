@@ -40,7 +40,9 @@ body[data-screen-view="true"][data-strip-collapsed="true"] .stage-strip {
 
 .participant {
   --level: 0;
-  --participant-pastel: oklch(84% 0.07 164);
+  --participant-pastel: oklch(54% 0.22 276);
+  --participant-avatar-fg: #fff;
+  --participant-avatar-shadow: 0 10px 24px rgba(88, 101, 242, 0.32);
   position: relative;
   display: grid;
   min-height: 0;
@@ -102,11 +104,11 @@ body[data-screen-view="true"][data-strip-collapsed="true"] .stage-strip {
   place-items: center;
   border: 0;
   border-radius: 50%;
-  background: color-mix(in oklch, var(--participant-pastel), var(--paper-deep) 48%);
-  color: var(--ink);
+  background: var(--participant-pastel);
+  color: var(--participant-avatar-fg);
   font-size: 1.38rem;
   font-weight: 850;
-  box-shadow: none;
+  box-shadow: var(--participant-avatar-shadow);
   transition: transform 160ms ease;
 }
 

@@ -2,8 +2,9 @@
   import { onMount } from 'svelte';
   import { fetchRoomChat, postRoomChat, type ChatMessage } from '$lib/api/rooms';
   import { cleanDisplayName } from '$lib/shared/utils/text';
+  import { getAvatarColor } from '$lib/visual/tokens';
   import { getRoomIdFromPath, getStoredPeerSession } from '../client/core/session';
-  import { getInitials, hashStringToHue } from '../client/core/utils';
+  import { getInitials } from '../client/core/utils';
   import { roomUi, closeChat, incrementUnreadChat, markChatRead } from '../room-ui.svelte';
 
   let roomId = $state('');
@@ -24,7 +25,9 @@
     name: string;
     peerId: string;
     self: boolean;
-    hue: number;
+    avatarBackground: string;
+    avatarForeground: string;
+    avatarShadow: string;
     time: string;
     messages: ChatMessage[];
   }
@@ -55,12 +58,15 @@
         last!.messages.push(message);
         continue;
       }
+      const avatar = getAvatarColor(message.avatarColorKey);
       result.push({
         key: message.id,
         name: author,
         peerId: message.peerId,
         self: message.peerId === peerId,
-        hue: hashStringToHue(`${message.peerId}:${author}`),
+        avatarBackground: avatar.background,
+        avatarForeground: avatar.foreground,
+        avatarShadow: avatar.shadow,
         time: formatTime(message.createdAt),
         messages: [message]
       });
@@ -201,12 +207,12 @@
     {:else if groups.length}
       {#each groups as group (group.key)}
         <div class="chat-msg" data-self={group.self}>
-          <span class="chat-msg-avatar" style={`background:oklch(58% 0.07 ${group.hue})`} aria-hidden="true">
+          <span class="chat-msg-avatar" style={`background:${group.avatarBackground};color:${group.avatarForeground};box-shadow:${group.avatarShadow}`} aria-hidden="true">
             {getInitials(group.name)}
           </span>
           <div class="chat-msg-main">
             <div class="chat-msg-meta">
-              <span class="chat-msg-author" style={`color:oklch(82% 0.05 ${group.hue})`}>{group.name}</span>
+              <span class="chat-msg-author" style={`color:${group.avatarBackground}`}>{group.name}</span>
               <time class="chat-msg-time" datetime={new Date(group.messages[0].createdAt).toISOString()}>{group.time}</time>
             </div>
             {#each group.messages as message (message.id)}

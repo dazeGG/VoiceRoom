@@ -63,7 +63,7 @@
     openRoom(roomId);
   }
 
-  async function handleCreate(payload: { name: string; emoji: string; isStatic: boolean }): Promise<void> {
+  async function handleCreate(payload: { name: string; roomPresetKey: string; isStatic: boolean }): Promise<void> {
     if (creating) return;
     creating = true;
     try {

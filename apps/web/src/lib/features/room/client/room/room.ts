@@ -1,3 +1,4 @@
+import { getRoomPreset } from '$lib/visual/tokens';
 import { elements } from '../ui/dom';
 import { state } from '../core/state';
 import { showToast } from '../ui/toast';
@@ -90,8 +91,16 @@ function showRoomScreen(): void {
   document.title = `${heading} · Voice Room`;
   elements.roomTitle.textContent = heading;
   elements.roomCodeText.textContent = state.roomId;
-  elements.roomEmojiBadge.textContent = state.roomEmoji;
-  elements.roomEmojiBadge.hidden = !state.roomEmoji;
+  const roomVisual = getRoomPreset({
+    emoji: state.roomEmoji,
+    roomColorKey: state.roomColorKey,
+    roomIconKey: state.roomIconKey,
+    roomPresetKey: state.roomPresetKey
+  });
+  elements.roomEmojiBadge.textContent = roomVisual.emoji;
+  elements.roomEmojiBadge.style.background = roomVisual.background;
+  elements.roomEmojiBadge.style.boxShadow = `0 0 0 1px ${roomVisual.ring}`;
+  elements.roomEmojiBadge.hidden = false;
   elements.emptyRoomAvatar.textContent = getInitials(state.savedName);
   hideScreens();
   elements.brand.hidden = true;
@@ -307,6 +316,9 @@ async function handleServerMessage(event: MessageEvent): Promise<void> {
     state.serverPeerSyncReady = true;
     setServerConnectionStatus('connected');
     syncPeers([...state.serverPeerIds]);
+    if (message.peer?.id) {
+      updateParticipant({ ...message.peer, isLocal: true });
+    }
     for (const peer of peers) {
       createParticipant(peer);
     }

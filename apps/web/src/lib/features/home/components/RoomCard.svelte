@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { OwnedRoom } from '$lib/api/auth';
-  import { roomDisplayName, roomTint } from '../model/rooms';
+  import { roomDisplayName, roomVisual } from '../model/rooms';
 
   let { room, onOpen } = $props<{
     room: OwnedRoom;
@@ -8,14 +8,14 @@
   }>();
 
   const label = $derived(roomDisplayName(room));
-  const tint = $derived(roomTint(room.roomId));
+  const visual = $derived(roomVisual(room));
   const live = $derived(room.peers > 0);
 </script>
 
 <article class="room-card">
   <div class="room-card-head">
     <div class="room-card-id">
-      <span class="room-card-emoji" style={`background:${tint}`} aria-hidden="true">{room.emoji || '🎙️'}</span>
+      <span class="room-card-emoji" style={`background:${visual.background};box-shadow:0 0 0 1px ${visual.ring}`} aria-hidden="true">{visual.emoji}</span>
       <div class="room-card-meta">
         <div class="room-card-name" title={label}>{label}</div>
         <div class="room-card-code">{room.roomId}</div>

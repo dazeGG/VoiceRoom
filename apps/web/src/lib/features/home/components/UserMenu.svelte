@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { AuthUser } from '$lib/api/auth';
+  import { getAvatarColor } from '$lib/visual/tokens';
 
   let { user, loggingOut, onLogout } = $props<{
     user: AuthUser;
@@ -8,6 +9,7 @@
   }>();
 
   const label = $derived(user.displayName?.trim() || user.login);
+  const avatar = $derived(getAvatarColor(user.avatarColorKey));
   const initials = $derived(
     label
       .split(/\s+/)
@@ -19,7 +21,7 @@
 </script>
 
 <div class="user-menu">
-  <span class="user-avatar" aria-hidden="true">{initials}</span>
+  <span class="user-avatar" style={`background:${avatar.background};color:${avatar.foreground};box-shadow:${avatar.shadow}`} aria-hidden="true">{initials}</span>
   <span class="user-name" title={`@${user.login}`}>{label}</span>
   <button class="user-logout" type="button" onclick={onLogout} disabled={loggingOut} aria-label="Выйти из аккаунта">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">

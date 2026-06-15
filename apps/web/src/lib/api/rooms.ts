@@ -5,10 +5,16 @@ export interface CreateRoomOptions {
   isStatic?: boolean;
   name?: string;
   emoji?: string;
+  roomPresetKey?: string;
 }
 
 export interface RoomStatus {
   createdAt: number;
+  emoji: string;
+  name: string;
+  roomColorKey: string;
+  roomIconKey: string;
+  roomPresetKey: string;
   emptySince: number | null;
   exists: boolean;
   isStatic: boolean;
@@ -18,6 +24,7 @@ export interface RoomStatus {
 }
 
 export interface ChatMessage {
+  avatarColorKey: string;
   createdAt: number;
   expiresAt: number;
   id: string;
@@ -30,6 +37,9 @@ export interface ChatMessage {
 interface CreateRoomResponse {
   createdAt: number;
   emoji: string;
+  roomColorKey: string;
+  roomIconKey: string;
+  roomPresetKey: string;
   isStatic: boolean;
   name: string;
   roomId: string;
@@ -41,6 +51,7 @@ export async function createRoom(options: CreateRoomOptions = {}): Promise<strin
     isStatic: Boolean(options.isStatic),
     name: options.name ?? '',
     emoji: options.emoji ?? '',
+    roomPresetKey: options.roomPresetKey ?? '',
     proof
   });
   return room.roomId;
