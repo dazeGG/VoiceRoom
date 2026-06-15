@@ -165,9 +165,11 @@ test('screen stage viewer badge renders viewer avatars instead of names', () => 
   assert.match(controls, /createScreenViewerAvatar/);
   assert.match(controls, /getAvatarColor\(viewer\.avatarColorKey\)/);
   assert.match(controls, /getInitials\(viewer\.name\)/);
+  assert.doesNotMatch(controls, /screen-meta-viewers-label/);
   assert.doesNotMatch(controls, /formatScreenViewersLine/);
   assert.doesNotMatch(controls, /names\.join/);
   assert.match(css, /\.screen-meta-viewer-avatar/);
+  assert.doesNotMatch(css, /screen-meta-viewers-label/);
 });
 
 test('frontend visual catalog stays aligned with shared backend key contracts', () => {

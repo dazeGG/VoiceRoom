@@ -77,11 +77,6 @@ function renderScreenViewers(ownerPeerId: string): boolean {
     return true;
   }
 
-  const label = document.createElement('span');
-  label.className = 'screen-meta-viewers-label';
-  label.textContent = 'Смотрят:';
-  elements.screenMetaViewers.append(label);
-
   for (const viewer of viewers.slice(0, 3)) {
     elements.screenMetaViewers.append(createScreenViewerAvatar(viewer));
   }

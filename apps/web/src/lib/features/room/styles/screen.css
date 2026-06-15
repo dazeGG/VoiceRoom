@@ -103,11 +103,6 @@
   display: none;
 }
 
-.screen-meta-viewers-label {
-  margin-right: 1px;
-  white-space: nowrap;
-}
-
 .screen-meta-viewer-avatar,
 .screen-meta-viewers-rest {
   display: grid;
