@@ -66,12 +66,98 @@ function cleanRoomName(value) {
   return value.replace(/\s+/g, ' ').trim().slice(0, 60);
 }
 
-// Fixed palette of room icons. Restricting to a known set keeps emoji validation
-// trivial and storage bounded — the picker on the client offers exactly these.
-const ROOM_EMOJIS = ['🎧', '📌', '🌙', '☀️', '🎮', '🎙️', '🔥'];
+// Curated high-contrast avatar colors. The backend stores only these stable
+// keys; the frontend owns the OKLCH/CSS rendering values.
+const AVATAR_COLOR_KEYS = [
+  'blurple',
+  'violet',
+  'orchid',
+  'magenta',
+  'rose',
+  'coral',
+  'rust',
+  'amber',
+  'olive',
+  'green',
+  'teal',
+  'cyan',
+  'sky',
+  'blue',
+  'indigo',
+  'slate'
+];
+const AVATAR_COLOR_KEY_SET = new Set(AVATAR_COLOR_KEYS);
+
+function cleanAvatarColorKey(value) {
+  return typeof value === 'string' && AVATAR_COLOR_KEY_SET.has(value) ? value : '';
+}
+
+// Room visuals are architecturally split into an icon key and a background
+// color key. MVP creation may expose curated presets, but storage should keep
+// icon/color keys independent so later UI can edit either side.
+const ROOM_ICON_KEYS = [
+  'headphones',
+  'pin',
+  'moon',
+  'sun',
+  'gamepad',
+  'mic',
+  'fire',
+  'coffee',
+  'music',
+  'book'
+];
+const ROOM_COLOR_KEYS = [
+  'blue',
+  'slate',
+  'violet',
+  'amber',
+  'indigo',
+  'rose',
+  'rust',
+  'green'
+];
+const ROOM_ICON_KEY_SET = new Set(ROOM_ICON_KEYS);
+const ROOM_COLOR_KEY_SET = new Set(ROOM_COLOR_KEYS);
+
+const ROOM_PRESETS = [
+  { key: 'voice-blue', iconKey: 'headphones', emoji: '🎧', colorKey: 'blue' },
+  { key: 'focus-slate', iconKey: 'pin', emoji: '📌', colorKey: 'slate' },
+  { key: 'night-violet', iconKey: 'moon', emoji: '🌙', colorKey: 'violet' },
+  { key: 'day-amber', iconKey: 'sun', emoji: '☀️', colorKey: 'amber' },
+  { key: 'game-indigo', iconKey: 'gamepad', emoji: '🎮', colorKey: 'indigo' },
+  { key: 'talk-rose', iconKey: 'mic', emoji: '🎙️', colorKey: 'rose' },
+  { key: 'fire-rust', iconKey: 'fire', emoji: '🔥', colorKey: 'rust' },
+  { key: 'coffee-amber', iconKey: 'coffee', emoji: '☕', colorKey: 'amber' },
+  { key: 'music-rose', iconKey: 'music', emoji: '🎵', colorKey: 'rose' },
+  { key: 'study-green', iconKey: 'book', emoji: '📚', colorKey: 'green' }
+];
+const ROOM_PRESET_KEYS = ROOM_PRESETS.map((preset) => preset.key);
+const ROOM_PRESET_KEY_SET = new Set(ROOM_PRESET_KEYS);
+
+// Legacy emoji palette remains exported during migration. It mirrors the room
+// presets that existed before icon/color keys were introduced.
+const ROOM_EMOJIS = ROOM_PRESETS.slice(0, 7).map((preset) => preset.emoji);
 
 function cleanRoomEmoji(value) {
   return typeof value === 'string' && ROOM_EMOJIS.includes(value) ? value : '';
+}
+
+function cleanRoomIconKey(value) {
+  return typeof value === 'string' && ROOM_ICON_KEY_SET.has(value) ? value : '';
+}
+
+function cleanRoomColorKey(value) {
+  return typeof value === 'string' && ROOM_COLOR_KEY_SET.has(value) ? value : '';
+}
+
+function cleanRoomPresetKey(value) {
+  return typeof value === 'string' && ROOM_PRESET_KEY_SET.has(value) ? value : '';
+}
+
+function getRoomPreset(value) {
+  const key = cleanRoomPresetKey(value);
+  return key ? ROOM_PRESETS.find((preset) => preset.key === key) || null : null;
 }
 
 function cleanStreamId(value) {
@@ -93,17 +179,27 @@ function cleanLiveKitUrl(value) {
 }
 
 module.exports = {
+  AVATAR_COLOR_KEYS,
   PASSWORD_MAX_LENGTH,
   PASSWORD_MIN_LENGTH,
   ROOM_EMOJIS,
+  ROOM_COLOR_KEYS,
+  ROOM_ICON_KEYS,
+  ROOM_PRESET_KEYS,
+  ROOM_PRESETS,
   SCREEN_PROFILE_IDS,
+  cleanAvatarColorKey,
   cleanDisplayName,
   cleanLiveKitUrl,
   cleanName,
+  cleanRoomColorKey,
   cleanRoomEmoji,
+  cleanRoomIconKey,
   cleanRoomName,
+  cleanRoomPresetKey,
   cleanScreenProfileId,
   cleanStreamId,
+  getRoomPreset,
   isValidPassword,
   normalizeLogin,
   normalizePeerId,

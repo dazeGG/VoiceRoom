@@ -13,9 +13,19 @@ const {
   cleanLiveKitUrl,
   cleanRoomName,
   cleanRoomEmoji,
+  cleanAvatarColorKey,
+  cleanRoomIconKey,
+  cleanRoomColorKey,
+  cleanRoomPresetKey,
+  getRoomPreset,
   isValidPassword,
   normalizeLogin,
-  ROOM_EMOJIS
+  AVATAR_COLOR_KEYS,
+  ROOM_COLOR_KEYS,
+  ROOM_EMOJIS,
+  ROOM_ICON_KEYS,
+  ROOM_PRESET_KEYS,
+  ROOM_PRESETS
 } = require('../src/validation');
 
 test('normalizeRoomId accepts valid ids and trims', () => {
@@ -120,4 +130,82 @@ test('cleanRoomEmoji only allows the fixed palette', () => {
   assert.equal(cleanRoomEmoji('not-an-emoji'), '');
   assert.equal(cleanRoomEmoji(''), '');
   assert.equal(cleanRoomEmoji(123), '');
+});
+
+test('avatar color keys are curated tokens only', () => {
+  assert.deepEqual(AVATAR_COLOR_KEYS, [
+    'blurple',
+    'violet',
+    'orchid',
+    'magenta',
+    'rose',
+    'coral',
+    'rust',
+    'amber',
+    'olive',
+    'green',
+    'teal',
+    'cyan',
+    'sky',
+    'blue',
+    'indigo',
+    'slate'
+  ]);
+
+  for (const key of AVATAR_COLOR_KEYS) {
+    assert.equal(cleanAvatarColorKey(key), key);
+  }
+
+  assert.equal(cleanAvatarColorKey(''), '');
+  assert.equal(cleanAvatarColorKey('red'), '');
+  assert.equal(cleanAvatarColorKey('BLURPLE'), '');
+  assert.equal(cleanAvatarColorKey(' blurple '), '');
+  assert.equal(cleanAvatarColorKey(AVATAR_COLOR_KEYS[0].toUpperCase()), '');
+  assert.equal(cleanAvatarColorKey(null), '');
+});
+
+test('room visual keys validate icon and color independently', () => {
+  for (const key of ROOM_ICON_KEYS) {
+    assert.equal(cleanRoomIconKey(key), key);
+  }
+  for (const key of ROOM_COLOR_KEYS) {
+    assert.equal(cleanRoomColorKey(key), key);
+  }
+
+  assert.equal(cleanRoomIconKey('headphones'), 'headphones');
+  assert.equal(cleanRoomIconKey('🎧'), '');
+  assert.equal(cleanRoomIconKey('custom-icon'), '');
+  assert.equal(cleanRoomIconKey(' headphones '), '');
+  assert.equal(cleanRoomColorKey('blue'), 'blue');
+  assert.equal(cleanRoomColorKey('oklch(48% 0.18 278)'), '');
+  assert.equal(cleanRoomColorKey('purple'), '');
+  assert.equal(cleanRoomColorKey(undefined), '');
+});
+
+test('room presets are valid curated emoji plus independent keys', () => {
+  assert.equal(ROOM_PRESETS.length, ROOM_PRESET_KEYS.length);
+  assert.equal(new Set(ROOM_PRESET_KEYS).size, ROOM_PRESET_KEYS.length);
+
+  for (const preset of ROOM_PRESETS) {
+    assert.equal(cleanRoomPresetKey(preset.key), preset.key);
+    assert.equal(cleanRoomIconKey(preset.iconKey), preset.iconKey);
+    assert.equal(cleanRoomColorKey(preset.colorKey), preset.colorKey);
+    assert.equal(typeof preset.emoji, 'string');
+    assert.ok(preset.emoji.length > 0);
+    assert.deepEqual(getRoomPreset(preset.key), preset);
+  }
+
+  assert.equal(cleanRoomPresetKey(''), '');
+  assert.equal(cleanRoomPresetKey('voice'), '');
+  assert.equal(cleanRoomPresetKey(' voice-blue '), '');
+  assert.equal(cleanRoomPresetKey(123), '');
+  assert.equal(getRoomPreset('missing'), null);
+});
+
+test('legacy room emoji palette remains the original seven presets', () => {
+  assert.deepEqual(ROOM_EMOJIS, ['🎧', '📌', '🌙', '☀️', '🎮', '🎙️', '🔥']);
+  assert.deepEqual(
+    ROOM_PRESETS.slice(0, 7).map((preset) => preset.emoji),
+    ROOM_EMOJIS
+  );
 });

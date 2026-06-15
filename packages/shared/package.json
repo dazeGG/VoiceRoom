@@ -4,7 +4,11 @@
   "private": true,
   "type": "commonjs",
   "exports": {
-    "./validation": "./src/validation.js"
+    "./validation": {
+      "types": "./src/validation.d.ts",
+      "require": "./src/validation.js",
+      "import": "./src/validation.js"
+    }
   },
   "scripts": {
     "check": "node --check src/validation.js",
