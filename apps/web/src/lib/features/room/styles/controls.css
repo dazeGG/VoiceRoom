@@ -58,8 +58,7 @@ select:hover {
 
 input:focus,
 select:focus,
-button:focus-visible,
-.home-link-button:focus-visible {
+button:focus-visible {
   outline: 3px solid oklch(70% 0.14 82 / 0.55);
   outline-offset: 2px;
 }
@@ -81,10 +80,6 @@ button:focus-visible,
 
 .primary-button:hover {
   background: var(--control-active-hover);
-}
-
-.home-link-button:hover {
-  background: var(--control-hover);
 }
 
 .secondary-button:hover {

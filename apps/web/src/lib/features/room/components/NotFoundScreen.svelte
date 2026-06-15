@@ -1,10 +1,18 @@
 <main class="not-found-layout" id="notFoundScreen" hidden aria-labelledby="notFoundTitle">
-  <section class="not-found-panel">
-    <p class="eyebrow">404</p>
-    <h1 class="hero-title" id="notFoundTitle">Комната не найдена</h1>
+  <div class="not-found-watermark" aria-hidden="true">404</div>
+  <div class="not-found-content">
+    <h1 class="not-found-title" id="notFoundTitle">Комнаты с таким кодом нет</h1>
     <p class="not-found-copy">
-      Код <span id="missingRoomCode">room</span> не привязан к активной комнате. Создайте новую комнату или попросите свежий код.
+      Код <span class="not-found-code"><span class="not-found-code-dot" aria-hidden="true"></span><span id="missingRoomCode">room</span></span> не привязан к активной комнате. Возможно, она уже завершилась, или в коде опечатка.
     </p>
-    <a class="home-link-button" href="/" data-sveltekit-reload>На стартовый экран</a>
-  </section>
+    <div class="not-found-actions">
+      <a class="not-found-home" href="/" data-sveltekit-reload>
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M3 11l9-8 9 8"></path>
+          <path d="M5 10v10h14V10"></path>
+        </svg>
+        На стартовый экран
+      </a>
+    </div>
+  </div>
 </main>

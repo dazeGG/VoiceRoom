@@ -211,10 +211,47 @@ body[data-screen="room"] .status-pill {
   }
 }
 
+/* 404 — "room not found". A full-bleed editorial surface (per the Claude
+   Design handoff): warm-dark backdrop with a giant bleeding "404" watermark,
+   a left-aligned headline, a mono code chip and a single home CTA — no card.
+   The warm palette (#0e0d0a / #ece7d9 / #9a9484 / #cfc9ba) is specific to this
+   screen, so it uses literal values rather than the app tokens. */
+body[data-screen="not-found"] {
+  background:
+    radial-gradient(58% 64% at 88% 14%, rgba(96, 54, 28, 0.34), transparent 56%),
+    radial-gradient(52% 60% at 4% 92%, rgba(46, 74, 49, 0.2), transparent 54%),
+    #0e0d0a;
+}
+
 .not-found-layout {
-  display: grid;
+  display: flex;
+  align-items: center;
+  width: min(100%, 1020px);
   min-height: min(760px, calc(100dvh - 116px));
-  place-items: center;
+  margin-inline: auto;
+  padding-bottom: clamp(40px, 9vh, 90px);
+}
+
+/* Bleeds off the bottom-right of the viewport, behind everything (z-index -1
+   keeps it under the static topbar and content but above the body backdrop). */
+.not-found-watermark {
+  position: fixed;
+  right: -3vw;
+  bottom: -12vh;
+  z-index: -1;
+  font-family: var(--font-sans);
+  font-weight: 800;
+  font-size: 46vw;
+  line-height: 0.8;
+  letter-spacing: -0.05em;
+  color: rgba(236, 231, 217, 0.035);
+  pointer-events: none;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.not-found-content {
+  width: 100%;
 }
 
 .start-panel {
@@ -229,39 +266,88 @@ body[data-screen="room"] .status-pill {
   box-shadow: var(--shadow);
 }
 
-.not-found-panel {
-  display: grid;
-  width: min(100%, 620px);
-  gap: var(--space-lg);
-  border: 1px solid color-mix(in oklch, var(--line), var(--coral) 18%);
-  border-radius: var(--radius-md);
-  padding: clamp(var(--space-xl), 5vw, 64px);
-  background:
-    radial-gradient(circle at 18% 4%, oklch(62% 0.15 31 / 0.16), transparent 38%),
-    linear-gradient(180deg, oklch(22% 0.018 92 / 0.96), oklch(14% 0.013 92 / 0.98)),
-    var(--panel);
-  box-shadow: var(--shadow);
-}
-
-.not-found-panel h1 {
-  /* The panel grid already spaces the lockup — drop the .hero-title margin. */
-  margin-top: 0;
-  max-width: 12ch;
-  font-size: clamp(2.5rem, 4vw, 3rem);
+.not-found-title {
+  margin: 0;
+  max-width: 560px;
+  font-family: var(--font-sans);
+  font-size: clamp(2.5rem, 5vw, 3.625rem); /* tops out at 58px, like the home hero */
+  font-weight: 800;
+  line-height: 1.04;
+  letter-spacing: -0.03em;
+  color: #ece7d9;
+  text-wrap: balance;
 }
 
 .not-found-copy {
-  max-width: 46ch;
-  margin: 0;
-  color: var(--muted);
-  font-size: 1.06rem;
-  font-weight: 650;
+  max-width: 520px;
+  margin: 26px 0 0;
+  font-size: 18px;
+  line-height: 1.55;
+  color: #9a9484;
 }
 
-.not-found-copy span {
-  color: var(--ink);
-  font-weight: 850;
+.not-found-code {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  font-family: var(--font-mono);
+  font-size: 14.5px;
+  letter-spacing: 0.04em;
+  color: #cfc9ba;
+  vertical-align: middle;
   overflow-wrap: anywhere;
+}
+
+.not-found-code-dot {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #8a5236;
+}
+
+.not-found-actions {
+  margin-top: 34px;
+}
+
+.not-found-home {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  border: none;
+  border-radius: 13px;
+  padding: 14px 22px;
+  background: #ece7d9;
+  color: #1a1813;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background 140ms ease, transform 140ms ease;
+}
+
+.not-found-home:hover {
+  background: #fff;
+  transform: translateY(-1px);
+}
+
+.not-found-home:active {
+  transform: translateY(0);
+}
+
+.not-found-home:focus-visible {
+  outline: 3px solid oklch(70% 0.14 82 / 0.55);
+  outline-offset: 2px;
+}
+
+.not-found-home svg {
+  display: block;
 }
 
 .start-divider {
