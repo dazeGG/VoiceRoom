@@ -43,6 +43,5 @@ export interface Participant {
 export interface ParticipantViewRefs {
   node: HTMLElement;
   screenAction: HTMLButtonElement;
-  screenMeta: HTMLElement;
   status: HTMLParagraphElement;
 }

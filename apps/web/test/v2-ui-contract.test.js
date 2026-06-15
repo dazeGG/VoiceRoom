@@ -133,17 +133,26 @@ test('screen stream thumbnails show profile metadata instead of an action button
   const overlays = read('src/lib/features/room/components/RoomOverlays.svelte');
   const refs = read('src/lib/features/room/client/model/participants.ts');
   const participants = read('src/lib/features/room/client/room/participants.ts');
-  const css = read('src/lib/features/room/styles/participants.css');
+  const screenTiles = read('src/lib/features/room/client/ui/screen-tile-elements.ts');
+  const screenView = read('src/lib/features/room/client/ui/screen-view.ts');
+  const participantsCss = read('src/lib/features/room/styles/participants.css');
+  const streamTilesCss = read('src/lib/features/room/styles/stream-tiles.css');
 
-  assert.match(overlays, /participant-screen-meta/);
-  assert.match(refs, /screenMeta: HTMLElement/);
-  assert.match(participants, /parseScreenProfileId/);
-  assert.match(participants, /SCREEN_QUALITY_OPTIONS/);
-  assert.match(participants, /SCREEN_FPS_OPTIONS/);
-  assert.match(participants, /refreshParticipantScreenMeta\(participant\)/);
+  assert.doesNotMatch(overlays, /participant-screen-meta/);
+  assert.doesNotMatch(refs, /screenMeta: HTMLElement/);
+  assert.doesNotMatch(participants, /refreshParticipantScreenMeta/);
   assert.match(participants, /node\.addEventListener\('click'/);
-  assert.match(css, /\.participant\[data-screen="true"\] \.participant-screen-action\s*\{\s*display: none;/s);
-  assert.match(css, /\.participant-screen-meta/);
+  assert.match(participantsCss, /\.participant\[data-screen="true"\] \.participant-screen-action\s*\{\s*display: none;/s);
+  assert.match(screenTiles, /createStreamTileProfileMeta/);
+  assert.match(screenTiles, /stream-tile-profile-meta/);
+  assert.match(screenTiles, /parseScreenProfileId/);
+  assert.match(screenTiles, /SCREEN_QUALITY_OPTIONS/);
+  assert.match(screenTiles, /SCREEN_FPS_OPTIONS/);
+  assert.doesNotMatch(screenTiles, /stream-tile-action-disconnect/);
+  assert.doesNotMatch(screenTiles, /Отключиться/);
+  assert.match(screenView, /participant\.isLocal \? state\.localScreenProfileId : participant\.screenProfileId/);
+  assert.match(streamTilesCss, /\.stream-tile-profile-meta/);
+  assert.doesNotMatch(streamTilesCss, /stream-tile-action-disconnect/);
 });
 
 test('frontend visual catalog stays aligned with shared backend key contracts', () => {

@@ -289,6 +289,7 @@ function getStreamTileStateKey(participant: Participant): string {
     hasPreview,
     isCollapsed,
     stream?.id || '',
+    participant.isLocal ? state.localScreenProfileId : participant.screenProfileId,
     participant.name,
     isScreenSubscribed(participant.id)
   ].join('|');
@@ -325,7 +326,6 @@ export function refreshScreenTiles(): void {
       hasPreview: hasStreamTilePreview(participant),
       isCollapsed: isStreamTileCollapsed(participant),
       isSubscribed: isScreenSubscribed(participant.id),
-      onDisconnect: disconnectScreen,
       onEnter: openScreenTile,
       participant,
       stream: getScreenStreamForParticipant(participant)

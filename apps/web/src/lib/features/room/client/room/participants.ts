@@ -1,6 +1,6 @@
 import { elements } from '../ui/dom';
 import { state } from '../core/state';
-import { getScreenProfile, parseScreenProfileId } from '../media/profiles';
+import { getScreenProfile } from '../media/profiles';
 import { getAvatarColor } from '$lib/visual/tokens';
 import { getInitials } from '../core/utils';
 import {
@@ -8,7 +8,7 @@ import {
   isVoicePlaybackMuted,
   playMediaElement
 } from '../services/media-playback-service';
-import { SCREEN_FPS_OPTIONS, SCREEN_QUALITY_OPTIONS, STREAM_CUE_DEDUPE_MS } from '../core/config';
+import { STREAM_CUE_DEDUPE_MS } from '../core/config';
 import { clearPeerJoinCue, playStreamCue, playStreamViewerCue } from '../media/cues';
 import { attachMeter } from '../media/meters';
 import { isMicrophonePublication, syncLiveKitScreenSubscriptions } from '../services/livekit-service';
@@ -124,7 +124,6 @@ export function createParticipant(peerInfo: PeerInfo): Participant {
   const avatar = fragment.querySelector<HTMLElement>('.avatar')!;
   const nameLabel = fragment.querySelector<HTMLElement>('.participant-name')!;
   const screenAction = fragment.querySelector<HTMLButtonElement>('.participant-screen-action')!;
-  const screenMeta = fragment.querySelector<HTMLElement>('.participant-screen-meta')!;
   const status = fragment.querySelector<HTMLParagraphElement>('p')!;
 
   const name = peerInfo.name ?? '';
@@ -132,7 +131,7 @@ export function createParticipant(peerInfo: PeerInfo): Participant {
   if (isLocal) node.dataset.local = 'true';
   avatar.textContent = getInitials(name);
   nameLabel.textContent = isLocal ? `${name} · вы` : name;
-  const view = { node, screenAction, screenMeta, status };
+  const view = { node, screenAction, status };
   setParticipantStatus(view, isLocal ? '' : 'подключает голос');
   node.dataset.deafened = String(Boolean(peerInfo.deafened));
   node.dataset.muted = String(Boolean(peerInfo.muted));
@@ -167,7 +166,6 @@ export function createParticipant(peerInfo: PeerInfo): Participant {
   };
 
   setParticipantView(participant, view);
-  refreshParticipantScreenMeta(participant);
   const openScreenView = () => enterScreenView(participant.id).catch((error) => console.error(error));
   screenAction.addEventListener('click', (event) => {
     event.stopPropagation();
@@ -219,7 +217,6 @@ export function updateParticipant(peerInfo: PeerInfo): void {
   view.node.dataset.deafened = String(participant.deafened);
   view.node.dataset.muted = String(participant.muted);
   view.node.dataset.screen = String(participant.screen);
-  refreshParticipantScreenMeta(participant);
   applyParticipantPalette(view.node, participant);
   view.node.querySelector('.avatar')!.textContent = getInitials(participant.name);
   view.node.querySelector('.participant-name')!.textContent = participant.isLocal ? `${participant.name} · вы` : participant.name;
@@ -460,29 +457,10 @@ export function setParticipantSpeaking(participant: Participant | null, speaking
   view.node.dataset.speaking = String(Boolean(speaking));
 }
 
-function refreshParticipantScreenMeta(participant: Participant): void {
-  const view = getParticipantView(participant);
-  if (!view) return;
-  if (!participant.screen) {
-    view.screenMeta.hidden = true;
-    view.screenMeta.textContent = '';
-    return;
-  }
-
-  const profile = getScreenProfile(participant.isLocal ? state.localScreenProfileId : participant.screenProfileId);
-  const { qualityId, fpsId } = parseScreenProfileId(profile.id);
-  const qualityLabel = SCREEN_QUALITY_OPTIONS[qualityId]?.label || '';
-  const fpsLabel = SCREEN_FPS_OPTIONS[fpsId]?.label || '';
-  const labels = [qualityLabel, fpsLabel].filter(Boolean);
-  view.screenMeta.textContent = labels.join(' · ');
-  view.screenMeta.hidden = labels.length === 0;
-}
-
 function setParticipantScreenDataset(participant: Participant, screen: boolean): void {
   const view = getParticipantView(participant);
   if (!view) return;
   view.node.dataset.screen = String(screen);
-  refreshParticipantScreenMeta(participant);
 }
 
 export function updatePeerStatus(peer: Participant): void {
