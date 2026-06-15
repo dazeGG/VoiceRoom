@@ -66,26 +66,12 @@ function cleanRoomName(value) {
   return value.replace(/\s+/g, ' ').trim().slice(0, 60);
 }
 
-// Curated high-contrast avatar colors. The backend stores only these stable
-// keys; the frontend owns the OKLCH/CSS rendering values.
-const AVATAR_COLOR_KEYS = [
-  'blurple',
-  'violet',
-  'orchid',
-  'magenta',
-  'rose',
-  'coral',
-  'rust',
-  'amber',
-  'olive',
-  'green',
-  'teal',
-  'cyan',
-  'sky',
-  'blue',
-  'indigo',
-  'slate'
-];
+// Curated visual identity keys live in JSON so both the CommonJS backend and
+// the Vite/Svelte frontend can consume the same vocabulary without SSR loading
+// this CommonJS validation module. The frontend owns CSS/OKLCH rendering values.
+const visualIdentity = require('./visual-identity.json');
+
+const AVATAR_COLOR_KEYS = visualIdentity.AVATAR_COLOR_KEYS;
 const AVATAR_COLOR_KEY_SET = new Set(AVATAR_COLOR_KEYS);
 
 function cleanAvatarColorKey(value) {
@@ -95,43 +81,12 @@ function cleanAvatarColorKey(value) {
 // Room visuals are architecturally split into an icon key and a background
 // color key. MVP creation may expose curated presets, but storage should keep
 // icon/color keys independent so later UI can edit either side.
-const ROOM_ICON_KEYS = [
-  'headphones',
-  'pin',
-  'moon',
-  'sun',
-  'gamepad',
-  'mic',
-  'fire',
-  'coffee',
-  'music',
-  'book'
-];
-const ROOM_COLOR_KEYS = [
-  'blue',
-  'slate',
-  'violet',
-  'amber',
-  'indigo',
-  'rose',
-  'rust',
-  'green'
-];
+const ROOM_ICON_KEYS = visualIdentity.ROOM_ICON_KEYS;
+const ROOM_COLOR_KEYS = visualIdentity.ROOM_COLOR_KEYS;
 const ROOM_ICON_KEY_SET = new Set(ROOM_ICON_KEYS);
 const ROOM_COLOR_KEY_SET = new Set(ROOM_COLOR_KEYS);
 
-const ROOM_PRESETS = [
-  { key: 'voice-blue', iconKey: 'headphones', emoji: '🎧', colorKey: 'blue' },
-  { key: 'focus-slate', iconKey: 'pin', emoji: '📌', colorKey: 'slate' },
-  { key: 'night-violet', iconKey: 'moon', emoji: '🌙', colorKey: 'violet' },
-  { key: 'day-amber', iconKey: 'sun', emoji: '☀️', colorKey: 'amber' },
-  { key: 'game-indigo', iconKey: 'gamepad', emoji: '🎮', colorKey: 'indigo' },
-  { key: 'talk-rose', iconKey: 'mic', emoji: '🎙️', colorKey: 'rose' },
-  { key: 'fire-rust', iconKey: 'fire', emoji: '🔥', colorKey: 'rust' },
-  { key: 'coffee-amber', iconKey: 'coffee', emoji: '☕', colorKey: 'amber' },
-  { key: 'music-rose', iconKey: 'music', emoji: '🎵', colorKey: 'rose' },
-  { key: 'study-green', iconKey: 'book', emoji: '📚', colorKey: 'green' }
-];
+const ROOM_PRESETS = visualIdentity.ROOM_PRESETS;
 const ROOM_PRESET_KEYS = ROOM_PRESETS.map((preset) => preset.key);
 const ROOM_PRESET_KEY_SET = new Set(ROOM_PRESET_KEYS);
 

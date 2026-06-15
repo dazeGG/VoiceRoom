@@ -111,7 +111,8 @@ test('frontend visual catalog stays aligned with shared backend key contracts', 
   for (const key of shared.AVATAR_COLOR_KEYS) {
     assert.ok(tokens.includes(`${key}: { key: '${key}'`));
   }
-  assert.match(tokens, /SHARED_ROOM_PRESETS\.map/);
+  assert.match(tokens, /@voice-room\/shared\/visual-identity/);
+  assert.match(tokens, /visualIdentity\.ROOM_PRESETS\.map/);
   assert.doesNotMatch(tokens, /key: 'voice-blue'/);
   assert.doesNotMatch(tokens, /emoji: '🎧'/);
   for (const key of shared.ROOM_COLOR_KEYS) {

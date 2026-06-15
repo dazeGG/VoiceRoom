@@ -1,4 +1,4 @@
-import { AVATAR_COLOR_KEYS as SHARED_AVATAR_COLOR_KEYS, ROOM_PRESETS as SHARED_ROOM_PRESETS } from '@voice-room/shared/validation';
+import visualIdentity from '@voice-room/shared/visual-identity';
 import type { AvatarColorKey, RoomColorKey, RoomIconKey, RoomPresetKey } from '@voice-room/shared/validation';
 
 export type { AvatarColorKey, RoomColorKey, RoomIconKey, RoomPresetKey };
@@ -44,7 +44,7 @@ export interface RoomPresetToken {
 
 
 const ROOM_ICON_EMOJIS = Object.fromEntries(
-  SHARED_ROOM_PRESETS.map((preset) => [preset.iconKey, preset.emoji])
+  visualIdentity.ROOM_PRESETS.map((preset) => [preset.iconKey, preset.emoji])
 ) as Record<RoomIconKey, string>;
 
 const ROOM_COLOR_TOKENS: Record<RoomColorKey, Pick<RoomPresetToken, 'background' | 'ring'>> = {
@@ -66,7 +66,7 @@ function isRoomColorKey(value: string | null | undefined): value is RoomColorKey
   return Boolean(value && Object.hasOwn(ROOM_COLOR_TOKENS, value));
 }
 
-export const ROOM_PRESETS: RoomPresetToken[] = SHARED_ROOM_PRESETS.map((preset) => ({
+export const ROOM_PRESETS: RoomPresetToken[] = visualIdentity.ROOM_PRESETS.map((preset) => ({
   key: preset.key,
   iconKey: preset.iconKey,
   emoji: preset.emoji,
@@ -76,10 +76,10 @@ export const ROOM_PRESETS: RoomPresetToken[] = SHARED_ROOM_PRESETS.map((preset) 
 
 export const DEFAULT_ROOM_PRESET = ROOM_PRESETS[0];
 
-for (const key of SHARED_AVATAR_COLOR_KEYS) {
+for (const key of visualIdentity.AVATAR_COLOR_KEYS) {
   if (!AVATAR_COLORS[key]) throw new Error(`Missing avatar color token: ${key}`);
 }
-for (const preset of SHARED_ROOM_PRESETS) {
+for (const preset of visualIdentity.ROOM_PRESETS) {
   if (!ROOM_COLOR_TOKENS[preset.colorKey]) throw new Error(`Missing room color token: ${preset.colorKey}`);
   if (!ROOM_ICON_EMOJIS[preset.iconKey]) throw new Error(`Missing room icon token: ${preset.iconKey}`);
 }
