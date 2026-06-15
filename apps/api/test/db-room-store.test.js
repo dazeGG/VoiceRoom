@@ -4,7 +4,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { createRoomStore, mapMessage, mapRoom } = require('../src/lib/room-store');
+const { createRoomStore, mapMessage, mapRoom, normalizeRoomVisuals } = require('../src/lib/room-store');
 
 function createFakePool(handler) {
   const calls = [];
@@ -52,6 +52,30 @@ test('mapRoom maps PostgreSQL row shape to API room shape with ephemeral peers m
   assert.equal(room.updatedAt, 2000);
   assert.equal(room.emptySince, null);
   assert.ok(room.peers instanceof Map);
+  assert.equal(room.roomIconKey, 'headphones');
+  assert.equal(room.roomColorKey, 'blue');
+  assert.equal(room.roomPresetKey, 'voice-blue');
+});
+
+test('normalizeRoomVisuals maps curated presets and rejects invalid legacy emoji', () => {
+  assert.deepEqual(normalizeRoomVisuals({ roomPresetKey: 'game-indigo' }), {
+    emoji: '🎮',
+    roomColorKey: 'indigo',
+    roomIconKey: 'gamepad',
+    roomPresetKey: 'game-indigo'
+  });
+  assert.deepEqual(normalizeRoomVisuals({ emoji: '🦄' }), {
+    emoji: '🎧',
+    roomColorKey: 'blue',
+    roomIconKey: 'headphones',
+    roomPresetKey: 'voice-blue'
+  });
+  assert.deepEqual(normalizeRoomVisuals({ emoji: '🎧', roomIconKey: 'coffee', roomColorKey: 'green' }), {
+    emoji: '☕',
+    roomColorKey: 'green',
+    roomIconKey: 'coffee',
+    roomPresetKey: ''
+  });
 });
 
 test('createRoom inserts durable room row with parameterized SQL', async () => {
@@ -69,6 +93,8 @@ test('createRoom inserts durable room row with parameterized SQL', async () => {
   assert.equal(room.id, 'room1');
   assert.match(pool.calls[0].text, /INSERT INTO rooms/);
   assert.deepEqual(pool.calls[0].values.slice(0, 3), ['room1', 'ip', true]);
+  assert.match(pool.calls[0].text, /room_icon_key, room_color_key/);
+  assert.deepEqual(pool.calls[0].values.slice(6, 8), ['headphones', 'blue']);
 });
 
 test('appendMessage uses a transaction, verifies room existence, inserts row, and enforces cap', async () => {
@@ -92,7 +118,7 @@ test('appendMessage uses a transaction, verifies room existence, inserts row, an
   }, 1000);
 
   assert.deepEqual(message, {
-    id: 'msg1', roomId: 'room1', peerId: 'peer1', name: 'Ada', text: 'hello', createdAt: 1000, expiresAt: 2000
+    id: 'msg1', avatarColorKey: message.avatarColorKey, roomId: 'room1', peerId: 'peer1', name: 'Ada', text: 'hello', createdAt: 1000, expiresAt: 2000
   });
   assert.ok(pool.calls.some((call) => call.text === 'BEGIN'));
   assert.ok(pool.calls.some((call) => /INSERT INTO room_messages/.test(call.text)));
@@ -122,7 +148,8 @@ test('listMessages soft-deletes expired messages before selecting active rows', 
     created_at: new Date(1000), expires_at: new Date(2000)
   })]);
   assert.match(pool.calls[0].text, /UPDATE room_messages/);
-  assert.match(pool.calls[1].text, /ORDER BY created_at ASC, id ASC/);
+  assert.match(pool.calls[1].text, /LEFT JOIN room_peer_identities/);
+  assert.match(pool.calls[1].text, /ORDER BY recent.created_at ASC, recent.id ASC/);
 });
 
 
@@ -148,6 +175,7 @@ test('createRoomWithQuota enforces room limits inside one advisory-locked transa
     maxTempRoomsPerIp: 1,
     maxRooms: 10,
     roomId: 'room-quota',
+    roomPresetKey: 'game-indigo',
     now: 1000
   });
 
@@ -158,7 +186,9 @@ test('createRoomWithQuota enforces room limits inside one advisory-locked transa
   assert.ok(pool.calls.some((call) => /creator_ip = \$1/.test(call.text)));
   assert.ok(pool.calls.some((call) => /is_static = false/.test(call.text)));
   assert.ok(pool.calls.some((call) => /SELECT COUNT\(\*\)::int AS count FROM rooms/.test(call.text)));
-  assert.ok(pool.calls.some((call) => /INSERT INTO rooms/.test(call.text)));
+  const insertCall = pool.calls.find((call) => /INSERT INTO rooms/.test(call.text));
+  assert.ok(insertCall);
+  assert.deepEqual(insertCall.values.slice(6, 8), ['gamepad', 'indigo']);
   assert.ok(pool.calls.some((call) => call.text === 'COMMIT'));
 });
 
@@ -250,4 +280,97 @@ test('createRoomWithQuota returns quota status without inserting when per-IP tem
 
   assert.deepEqual(result, { room: null, status: 'quota_exceeded' });
   assert.equal(pool.calls.some((call) => /INSERT INTO rooms/.test(call.text)), false);
+});
+
+
+test('getOrCreatePeerIdentity creates, reuses, and rejects mismatched tokens by hash', async () => {
+  const identities = new Map();
+  const pool = createFakePool((text, values) => {
+    if (/SELECT \* FROM room_peer_identities/.test(text)) {
+      const row = identities.get(`${values[0]}:${values[1]}`);
+      return { rows: row ? [row] : [], rowCount: row ? 1 : 0 };
+    }
+    if (/INSERT INTO room_peer_identities/.test(text)) {
+      assert.match(text, /ON CONFLICT \(room_id, peer_id\) DO NOTHING/);
+      const row = {
+        id: values[0],
+        room_id: values[1],
+        peer_id: values[2],
+        session_token_hash: values[3],
+        avatar_color_key: values[4],
+        display_name: values[5],
+        created_at: values[6],
+        last_seen_at: values[6]
+      };
+      identities.set(`${values[1]}:${values[2]}`, row);
+      return { rows: [row], rowCount: 1 };
+    }
+    if (/UPDATE room_peer_identities/.test(text)) {
+      const row = identities.get(`${values[0]}:${values[1]}`);
+      row.last_seen_at = values[2];
+      row.display_name = values[3];
+      return { rows: [row], rowCount: 1 };
+    }
+    return { rows: [], rowCount: 1 };
+  });
+  const store = createRoomStore({ pool });
+
+  const created = await store.getOrCreatePeerIdentity({ roomId: 'room1', peerId: 'peer123456', sessionToken: 'token-a', displayName: 'Ada', now: 1000 });
+  assert.equal(created.status, 'created');
+  assert.ok(created.identity.avatarColorKey);
+  assert.notEqual(created.identity.sessionTokenHash, 'token-a');
+
+  const reused = await store.getOrCreatePeerIdentity({ roomId: 'room1', peerId: 'peer123456', sessionToken: 'token-a', displayName: 'Ada 2', now: 2000 });
+  assert.equal(reused.status, 'reused');
+  assert.equal(reused.identity.avatarColorKey, created.identity.avatarColorKey);
+  assert.equal(reused.identity.displayName, 'Ada 2');
+
+  const mismatch = await store.getOrCreatePeerIdentity({ roomId: 'room1', peerId: 'peer123456', sessionToken: 'token-b', now: 3000 });
+  assert.equal(mismatch.status, 'token_mismatch');
+});
+
+
+test('getOrCreatePeerIdentity recovers when concurrent first-touch insert wins the unique key', async () => {
+  let insertAttempts = 0;
+  const existingRow = {
+    id: 'identity-1',
+    room_id: 'room-race',
+    peer_id: 'peer123456',
+    session_token_hash: null,
+    avatar_color_key: 'rose',
+    display_name: 'Winner',
+    created_at: new Date(1000),
+    last_seen_at: new Date(1000)
+  };
+  const pool = createFakePool((text, values) => {
+    if (/SELECT \* FROM room_peer_identities/.test(text)) {
+      if (insertAttempts === 0) return { rows: [], rowCount: 0 };
+      return { rows: [existingRow], rowCount: 1 };
+    }
+    if (/INSERT INTO room_peer_identities/.test(text)) {
+      assert.match(text, /ON CONFLICT \(room_id, peer_id\) DO NOTHING/);
+      insertAttempts += 1;
+      existingRow.session_token_hash = values[3];
+      return { rows: [], rowCount: 0 };
+    }
+    if (/UPDATE room_peer_identities/.test(text)) {
+      existingRow.last_seen_at = values[2];
+      existingRow.display_name = values[3];
+      return { rows: [existingRow], rowCount: 1 };
+    }
+    return { rows: [], rowCount: 1 };
+  });
+  const store = createRoomStore({ pool });
+
+  const result = await store.getOrCreatePeerIdentity({
+    roomId: 'room-race',
+    peerId: 'peer123456',
+    sessionToken: 'token-a',
+    displayName: 'Retry',
+    now: 2000
+  });
+
+  assert.equal(result.status, 'reused');
+  assert.equal(result.identity.avatarColorKey, 'rose');
+  assert.equal(result.identity.displayName, 'Retry');
 });

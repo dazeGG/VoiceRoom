@@ -130,6 +130,7 @@ test('auth flow: register, session, owned rooms, logout', async (t) => {
   const me = await request(socketPath, { pathname: '/api/auth/me', cookie });
   assert.equal(me.status, 200);
   assert.equal(me.body.user.login, 'vovosh');
+  assert.ok(me.body.user.avatarColorKey);
 
   // Without the cookie there is no session.
   const anon = await request(socketPath, { pathname: '/api/auth/me' });
@@ -153,22 +154,27 @@ test('auth flow: register, session, owned rooms, logout', async (t) => {
   const room = await request(socketPath, {
     method: 'POST',
     pathname: '/api/rooms',
-    body: { isStatic: true, name: '  квартирник  ', emoji: '🎧' },
+    body: { isStatic: true, name: '  квартирник  ', roomPresetKey: 'game-indigo' },
     cookie
   });
   assert.equal(room.status, 201);
   assert.equal(room.body.owned, true);
   assert.equal(room.body.name, 'квартирник');
-  assert.equal(room.body.emoji, '🎧');
+  assert.equal(room.body.emoji, '🎮');
+  assert.equal(room.body.roomIconKey, 'gamepad');
+  assert.equal(room.body.roomColorKey, 'indigo');
+  assert.equal(room.body.roomPresetKey, 'game-indigo');
 
-  // Unknown emoji is rejected, name is still kept.
+  // Unknown emoji is rejected, name is still kept; visual keys fall back to the default preset.
   const fancyRoom = await request(socketPath, {
     method: 'POST',
     pathname: '/api/rooms',
     body: { isStatic: true, name: 'дейли', emoji: '🦄' },
     cookie
   });
-  assert.equal(fancyRoom.body.emoji, '');
+  assert.equal(fancyRoom.body.emoji, '🎧');
+  assert.equal(fancyRoom.body.roomIconKey, 'headphones');
+  assert.equal(fancyRoom.body.roomColorKey, 'blue');
   assert.equal(fancyRoom.body.name, 'дейли');
 
   const thirdRoom = await request(socketPath, {

@@ -29,13 +29,18 @@ function createFakeStore() {
     async countRooms() {
       return rooms.size;
     },
-    async createRoom({ creatorIp, isStatic, roomId, now = Date.now() }) {
+    async createRoom({ creatorIp, isStatic, roomId, name = '', emoji = '', roomColorKey = 'blue', roomIconKey = 'headphones', roomPresetKey = 'voice-blue', now = Date.now() }) {
       const room = {
         createdAt: now,
         creatorIp,
         emptySince: now,
         id: roomId,
         isStatic,
+        emoji,
+        name,
+        roomColorKey,
+        roomIconKey,
+        roomPresetKey,
         messages: [],
         peers: new Map(),
         updatedAt: now
@@ -50,6 +55,12 @@ function createFakeStore() {
     async getRoom(roomId) {
       const room = rooms.get(roomId);
       return room ? { ...room, peers: new Map() } : null;
+    },
+    async getOrCreatePeerIdentity({ peerId, sessionToken }) {
+      if (sessionToken && sessionToken.startsWith('bad')) {
+        return { identity: null, status: 'token_mismatch' };
+      }
+      return { identity: { avatarColorKey: 'blurple', peerId }, status: 'created' };
     },
     async listMessages(roomId) {
       return messages.get(roomId) || [];
@@ -116,6 +127,13 @@ test('server preserves active voice peer spoof protection while chat without voi
     await new Promise((resolve) => events.once('response', resolve));
     await new Promise((resolve) => setTimeout(resolve, 25));
 
+    const activePost = await request(port, '/api/rooms/room1/chat', {
+      method: 'POST',
+      body: { peerId: 'peer0001', sessionToken: 'goodtoken12345678901234567890123', name: 'Ada', text: 'from voice' }
+    });
+    assert.equal(activePost.response.status, 201);
+    assert.equal(activePost.json.message.avatarColorKey, 'blurple');
+
     const spoof = await request(port, '/api/rooms/room1/chat', {
       method: 'POST',
       body: { peerId: 'peer0001', sessionToken: 'badtoken123456789012345678901234', name: 'Mallory', text: 'spoof' }
@@ -127,6 +145,7 @@ test('server preserves active voice peer spoof protection while chat without voi
       body: { name: 'Link user', text: 'allowed' }
     });
     assert.equal(linkOnly.response.status, 201);
+    assert.ok(linkOnly.json.message.avatarColorKey);
   } finally {
     events.destroy();
     await close(server);

@@ -14,7 +14,11 @@ const {
   cleanName,
   cleanDisplayName,
   cleanRoomName,
+  cleanRoomColorKey,
   cleanRoomEmoji,
+  cleanRoomIconKey,
+  cleanRoomPresetKey,
+  getRoomPreset,
   cleanStreamId,
   cleanScreenProfileId,
   cleanLiveKitUrl,
@@ -23,7 +27,7 @@ const {
 } = require('@voice-room/shared/validation');
 const { createProofOfWork } = require('./lib/pow');
 const { getClientIp, createRateLimiter } = require('./lib/rate-limit');
-const { createRoomStore } = require('./lib/room-store');
+const { avatarColorForPeerId, createRoomStore } = require('./lib/room-store');
 const { createUserStore, publicUser } = require('./lib/user-store');
 const { startApiListener } = require('./lib/listen');
 const { runMigrations } = require('./lib/migrate');
@@ -304,7 +308,7 @@ async function countRoomCreationQuotaRoomsForIp(clientIp) {
   return getRoomStore().countQuotaRoomsForIp(clientIp);
 }
 
-async function createRoomForRequest(creatorIp, { isStatic = false, ownerId = null, name = '', emoji = '' } = {}) {
+async function createRoomForRequest(creatorIp, { isStatic = false, ownerId = null, name = '', emoji = '', roomColorKey = '', roomIconKey = '', roomPresetKey = '' } = {}) {
   await pruneRooms();
 
   let roomId = createRoomId();
@@ -318,6 +322,9 @@ async function createRoomForRequest(creatorIp, { isStatic = false, ownerId = nul
     ownerId,
     name,
     emoji,
+    roomColorKey,
+    roomIconKey,
+    roomPresetKey,
     maxOwnedStaticRoomsPerUser: MAX_STATIC_ROOMS_PER_USER,
     maxRooms: MAX_ROOMS,
     maxTempRoomsPerIp: MAX_TEMP_ROOMS_PER_IP,
@@ -335,6 +342,7 @@ async function getRoom(roomId) {
 
 function publicPeer(peer) {
   return {
+    avatarColorKey: peer.avatarColorKey || avatarColorForPeerId(peer.id),
     deafened: peer.deafened,
     id: peer.id,
     joinedAt: peer.joinedAt,
@@ -415,6 +423,7 @@ function cleanChatText(value) {
 
 function publicChatMessage(message) {
   return {
+    avatarColorKey: message.avatarColorKey || avatarColorForPeerId(message.peerId),
     createdAt: message.createdAt,
     expiresAt: message.expiresAt,
     id: message.id,
@@ -509,6 +518,13 @@ async function handleEvents(req, res, url) {
     return;
   }
 
+  const identityResult = await getRoomStore().getOrCreatePeerIdentity({ roomId, peerId, sessionToken, displayName: name });
+  if (identityResult.status === 'token_mismatch') {
+    sendJson(res, 403, { ok: false, error: 'Invalid peer session' });
+    return;
+  }
+  const avatarColorKey = identityResult.identity?.avatarColorKey || avatarColorForPeerId(peerId);
+
   if (!reconnecting && room.peers.size >= MAX_ROOM_PEERS) {
     res.writeHead(200, {
       ...baseHeaders(),
@@ -545,6 +561,7 @@ async function handleEvents(req, res, url) {
   const peer = {
     closed: false,
     deafened: previous?.deafened ?? false,
+    avatarColorKey,
     id: peerId,
     joinedAt: previous?.joinedAt ?? Date.now(),
     muted: previous?.muted ?? false,
@@ -617,6 +634,11 @@ async function handleLiveKitToken(req, res) {
     sendJson(res, 403, { ok: false, error: 'Сессия участника недействительна' });
     return;
   }
+  const identityResult = await getRoomStore().getOrCreatePeerIdentity({ roomId, peerId, sessionToken, displayName: name });
+  if (identityResult.status === 'token_mismatch') {
+    sendJson(res, 403, { ok: false, error: 'Сессия участника недействительна' });
+    return;
+  }
 
   const livekitRoom = getLiveKitRoomName(roomId);
   const token = new AccessToken(livekit.apiKey, livekit.apiSecret, {
@@ -684,7 +706,11 @@ async function handleCreateRoom(req, res) {
   const clientIp = getClientIp(req, TRUST_PROXY);
   const isStatic = parseBoolean(body.isStatic);
   const name = cleanRoomName(body.name);
-  const emoji = cleanRoomEmoji(body.emoji);
+  const requestedPresetKey = cleanRoomPresetKey(body.roomPresetKey || body.presetKey || body.roomPreset);
+  const requestedPreset = getRoomPreset(requestedPresetKey);
+  const emoji = requestedPreset?.emoji || cleanRoomEmoji(body.emoji);
+  const roomIconKey = requestedPreset?.iconKey || cleanRoomIconKey(body.roomIconKey);
+  const roomColorKey = requestedPreset?.colorKey || cleanRoomColorKey(body.roomColorKey);
   // Persistent rooms are tied to the account that creates them so they can be
   // listed back from any device; temporary rooms stay ownerless.
   const session = isStatic ? await resolveSessionUser(req) : null;
@@ -693,7 +719,15 @@ async function handleCreateRoom(req, res) {
     return;
   }
   const ownerId = session?.user?.id ?? null;
-  const created = await createRoomForRequest(clientIp, { isStatic, ownerId, name, emoji });
+  const created = await createRoomForRequest(clientIp, {
+    isStatic,
+    ownerId,
+    name,
+    emoji,
+    roomColorKey,
+    roomIconKey,
+    roomPresetKey: requestedPresetKey
+  });
   if (created.status === 'auth_required') {
     sendJson(res, 401, { ok: false, error: 'Требуется вход для создания постоянной комнаты' });
     return;
@@ -717,6 +751,9 @@ async function handleCreateRoom(req, res) {
     ok: true,
     createdAt: room.createdAt,
     emoji: room.emoji,
+    roomColorKey: room.roomColorKey,
+    roomIconKey: room.roomIconKey,
+    roomPresetKey: room.roomPresetKey,
     maxRooms: MAX_ROOMS,
     maxRoomPeers: MAX_ROOM_PEERS,
     isStatic: room.isStatic,
@@ -827,6 +864,9 @@ function publicLobbyRoom(room) {
   return {
     createdAt: room.createdAt,
     emoji: room.emoji,
+    roomColorKey: room.roomColorKey,
+    roomIconKey: room.roomIconKey,
+    roomPresetKey: room.roomPresetKey,
     emptySince: room.emptySince,
     isStatic: room.isStatic,
     name: room.name,
@@ -898,6 +938,9 @@ async function handleRoomStatus(res, url) {
     ok: true,
     createdAt: room.createdAt,
     emoji: room.emoji,
+    roomColorKey: room.roomColorKey,
+    roomIconKey: room.roomIconKey,
+    roomPresetKey: room.roomPresetKey,
     exists: true,
     emptySince: room.emptySince,
     isStatic: room.isStatic,
@@ -1045,6 +1088,7 @@ async function handleRoomChatPost(req, res, roomId) {
   }
 
   let peerId = requestedPeerId || `chat-${crypto.randomBytes(12).toString('hex')}`;
+  let avatarColorKey = avatarColorForPeerId(peerId);
   const activePeer = requestedPeerId ? room.peers.get(requestedPeerId) : null;
   if (activePeer) {
     if (!tokensMatch(activePeer.sessionToken, sessionToken)) {
@@ -1052,6 +1096,14 @@ async function handleRoomChatPost(req, res, roomId) {
       return;
     }
     peerId = activePeer.id;
+    avatarColorKey = activePeer.avatarColorKey || avatarColorForPeerId(peerId);
+  } else if (requestedPeerId && sessionToken) {
+    const identityResult = await getRoomStore().getOrCreatePeerIdentity({ roomId, peerId: requestedPeerId, sessionToken, displayName: name });
+    if (identityResult.status === 'token_mismatch') {
+      sendJson(res, 403, { ok: false, error: 'Invalid peer session' });
+      return;
+    }
+    avatarColorKey = identityResult.identity?.avatarColorKey || avatarColorKey;
   }
 
   const now = Date.now();
@@ -1059,6 +1111,7 @@ async function handleRoomChatPost(req, res, roomId) {
     createdAt: now,
     expiresAt: now + ROOM_CHAT_TTL_MS,
     id: crypto.randomUUID?.() || crypto.randomBytes(16).toString('hex'),
+    avatarColorKey,
     name,
     peerId,
     text
@@ -1069,8 +1122,9 @@ async function handleRoomChatPost(req, res, roomId) {
     return;
   }
 
-  broadcastChat(roomId, message);
-  sendJson(res, 201, { ok: true, message: publicChatMessage(message) });
+  const publicMessage = { ...message, avatarColorKey };
+  broadcastChat(roomId, publicMessage);
+  sendJson(res, 201, { ok: true, message: publicChatMessage(publicMessage) });
 }
 
 function pickReleaseAsset(assets, patterns) {

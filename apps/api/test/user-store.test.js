@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const { createUserStore, publicUser } = require('../src/lib/user-store');
+const { AVATAR_COLOR_KEYS } = require('@voice-room/shared/validation');
 const { runMigrations } = require('../src/lib/migrate');
 const { createTestDatabase } = require('./db-harness');
 
@@ -28,6 +29,7 @@ test('createUser persists a hashed account and rejects duplicate logins', async 
   assert.equal(created.user.login, 'vovosh');
   assert.equal(created.user.displayName, 'Вова');
   assert.ok(created.user.id);
+  assert.ok(AVATAR_COLOR_KEYS.includes(created.user.avatarColorKey));
 
   const duplicate = await store.createUser({ login: 'vovosh', password: 'another-password' });
   assert.equal(duplicate.status, 'login_taken');
@@ -51,6 +53,7 @@ test('sessions resolve to their user and expire', async (t) => {
   const resolved = await store.getSessionUser(session.token, 1500);
   assert.equal(resolved.user.id, user.id);
   assert.equal(resolved.user.login, 'grace');
+  assert.ok(AVATAR_COLOR_KEYS.includes(resolved.user.avatarColorKey));
 
   const expired = await store.getSessionUser(session.token, 5000);
   assert.equal(expired, null);
@@ -73,5 +76,14 @@ test('publicUser never leaks the password hash', async (t) => {
   const { user } = await store.createUser({ login: 'safe', password: 'no-leak-please' });
   const exposed = publicUser(user);
   assert.equal('passwordHash' in exposed, false);
-  assert.deepEqual(Object.keys(exposed).sort(), ['createdAt', 'displayName', 'id', 'login']);
+  assert.deepEqual(Object.keys(exposed).sort(), ['avatarColorKey', 'createdAt', 'displayName', 'id', 'login']);
+  assert.ok(AVATAR_COLOR_KEYS.includes(exposed.avatarColorKey));
+});
+
+
+test('createUser accepts a valid injected avatar color for deterministic callers', async (t) => {
+  const store = await createMigratedStore(t);
+  const { user } = await store.createUser({ login: 'colorful', avatarColorKey: 'rose', password: 'password123' });
+  assert.equal(user.avatarColorKey, 'rose');
+  assert.equal(publicUser(user).avatarColorKey, 'rose');
 });

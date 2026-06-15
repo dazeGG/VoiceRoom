@@ -3,6 +3,7 @@
 const crypto = require('node:crypto');
 const { createDbPool } = require('./db');
 const { hashPassword, verifyPassword } = require('./password');
+const { AVATAR_COLOR_KEYS, cleanAvatarColorKey } = require('@voice-room/shared/validation');
 
 const DEFAULT_SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const UNIQUE_VIOLATION = '23505';
@@ -18,9 +19,14 @@ function toMillis(value) {
   return Number.isFinite(parsed) ? parsed : Date.now();
 }
 
+function randomAvatarColorKey() {
+  return AVATAR_COLOR_KEYS[crypto.randomInt(AVATAR_COLOR_KEYS.length)];
+}
+
 function mapUser(row) {
   if (!row) return null;
   return {
+    avatarColorKey: cleanAvatarColorKey(row.avatar_color_key) || 'blurple',
     createdAt: toMillis(row.created_at),
     displayName: row.display_name || '',
     id: row.id,
@@ -34,6 +40,7 @@ function publicUser(user) {
   if (!user) return null;
   return {
     createdAt: user.createdAt,
+    avatarColorKey: user.avatarColorKey || 'blurple',
     displayName: user.displayName || '',
     id: user.id,
     login: user.login
@@ -53,17 +60,18 @@ function createUserStore({ databaseUrl, logger = console, pool, sessionTtlMs = D
     return activePool;
   }
 
-  async function createUser({ login, displayName = '', password, now = Date.now() }) {
+  async function createUser({ login, avatarColorKey = '', displayName = '', password, now = Date.now() }) {
     if (!login) throw new Error('Login is required');
     const passwordHash = await hashPassword(password);
     const id = crypto.randomUUID();
+    const assignedAvatarColorKey = cleanAvatarColorKey(avatarColorKey) || randomAvatarColorKey();
 
     try {
       const result = await getPool().query(
-        `INSERT INTO users (id, login, display_name, password_hash, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $5)
+        `INSERT INTO users (id, login, display_name, password_hash, avatar_color_key, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $6)
          RETURNING *`,
-        [id, login, displayName, passwordHash, toDate(now)]
+        [id, login, displayName, passwordHash, assignedAvatarColorKey, toDate(now)]
       );
       return { status: 'created', user: mapUser(result.rows[0]) };
     } catch (error) {
@@ -159,5 +167,6 @@ function createUserStore({ databaseUrl, logger = console, pool, sessionTtlMs = D
 module.exports = {
   createUserStore,
   mapUser,
-  publicUser
+  publicUser,
+  randomAvatarColorKey
 };

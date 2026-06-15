@@ -16,13 +16,18 @@ function createFakeStore() {
     async countRooms() {
       return rooms.size;
     },
-    async createRoom({ creatorIp, isStatic, roomId, now = Date.now() }) {
+    async createRoom({ creatorIp, isStatic, roomId, name = '', emoji = '', roomColorKey = 'blue', roomIconKey = 'headphones', roomPresetKey = 'voice-blue', now = Date.now() }) {
       const room = {
         createdAt: now,
         creatorIp,
         emptySince: now,
         id: roomId,
         isStatic,
+        emoji,
+        name,
+        roomColorKey,
+        roomIconKey,
+        roomPresetKey,
         messages: [],
         peers: new Map(),
         updatedAt: now
@@ -37,6 +42,12 @@ function createFakeStore() {
     async getRoom(roomId) {
       const room = rooms.get(roomId);
       return room ? { ...room, peers: new Map() } : null;
+    },
+    async getOrCreatePeerIdentity({ peerId, sessionToken }) {
+      if (sessionToken && sessionToken.startsWith('bad')) {
+        return { identity: null, status: 'token_mismatch' };
+      }
+      return { identity: { avatarColorKey: 'blurple', peerId }, status: 'created' };
     },
     async markRoomActive() {},
     async markRoomEmpty() {},
@@ -59,6 +70,17 @@ test('createApiApp exposes a Fastify app with inject-based routes', async (t) =>
   });
   assert.equal(created.statusCode, 201);
   assert.equal(created.json().ok, true);
+
+  const visualRoom = await app.inject({
+    method: 'POST',
+    url: '/api/rooms',
+    payload: { isStatic: false, roomPresetKey: 'game-indigo' }
+  });
+  assert.equal(visualRoom.statusCode, 201);
+  assert.equal(visualRoom.json().emoji, '🎮');
+  assert.equal(visualRoom.json().roomIconKey, 'gamepad');
+  assert.equal(visualRoom.json().roomColorKey, 'indigo');
+  assert.equal(visualRoom.json().roomPresetKey, 'game-indigo');
 });
 
 test('createApiServer keeps the legacy http server contract while exposing app/inject', async () => {
@@ -112,4 +134,44 @@ test('logout session store failures return 5xx instead of false success', async 
 
   assert.equal(response.statusCode, 500);
   assert.equal(response.json().error, 'Internal server error');
+});
+
+
+test('livekit token validates persisted anonymous peer identity before issuing voice access', async (t) => {
+  const previous = {
+    url: process.env.LIVEKIT_URL,
+    key: process.env.LIVEKIT_API_KEY,
+    secret: process.env.LIVEKIT_API_SECRET
+  };
+  process.env.LIVEKIT_URL = 'ws://127.0.0.1:7880';
+  process.env.LIVEKIT_API_KEY = 'devkey';
+  process.env.LIVEKIT_API_SECRET = 'devsecretdevsecretdevsecret';
+
+  const app = createApiApp({ store: createFakeStore() });
+  t.after(async () => {
+    await app.close();
+    if (previous.url === undefined) delete process.env.LIVEKIT_URL;
+    else process.env.LIVEKIT_URL = previous.url;
+    if (previous.key === undefined) delete process.env.LIVEKIT_API_KEY;
+    else process.env.LIVEKIT_API_KEY = previous.key;
+    if (previous.secret === undefined) delete process.env.LIVEKIT_API_SECRET;
+    else process.env.LIVEKIT_API_SECRET = previous.secret;
+  });
+
+  const room = await app.inject({ method: 'POST', url: '/api/rooms', payload: { isStatic: false } });
+  assert.equal(room.statusCode, 201);
+
+  const response = await app.inject({
+    method: 'POST',
+    url: '/api/livekit-token',
+    payload: {
+      name: 'Mallory',
+      peerId: 'peer0001',
+      roomId: room.json().roomId,
+      sessionToken: 'badtoken123456789012345678901234'
+    }
+  });
+
+  assert.equal(response.statusCode, 403);
+  assert.match(response.json().error, /недействительна/i);
 });

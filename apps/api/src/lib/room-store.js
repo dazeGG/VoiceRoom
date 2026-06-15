@@ -2,8 +2,50 @@
 
 const crypto = require('node:crypto');
 const { createDbPool, transaction } = require('./db');
+const {
+  AVATAR_COLOR_KEYS,
+  ROOM_PRESETS,
+  cleanRoomColorKey,
+  cleanRoomEmoji,
+  cleanRoomIconKey,
+  cleanRoomPresetKey,
+  getRoomPreset
+} = require('@voice-room/shared/validation');
 
 const DEFAULT_MESSAGE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+const DEFAULT_ROOM_PRESET = ROOM_PRESETS[0];
+
+function presetFromEmoji(emoji) {
+  return ROOM_PRESETS.find((preset) => preset.emoji === emoji) || null;
+}
+
+function presetFromVisualKeys(iconKey, colorKey) {
+  return ROOM_PRESETS.find((preset) => preset.iconKey === iconKey && preset.colorKey === colorKey) || null;
+}
+
+function emojiFromIconKey(iconKey) {
+  return ROOM_PRESETS.find((preset) => preset.iconKey === iconKey)?.emoji || DEFAULT_ROOM_PRESET.emoji;
+}
+
+function normalizeRoomVisuals({ emoji = '', roomColorKey = '', roomIconKey = '', roomPresetKey = '' } = {}) {
+  const legacyEmoji = cleanRoomEmoji(emoji);
+  const explicitIconKey = cleanRoomIconKey(roomIconKey);
+  const explicitColorKey = cleanRoomColorKey(roomColorKey);
+  const preset = getRoomPreset(cleanRoomPresetKey(roomPresetKey));
+  const legacyPreset = presetFromEmoji(legacyEmoji);
+  const iconKey = explicitIconKey || preset?.iconKey || legacyPreset?.iconKey || DEFAULT_ROOM_PRESET.iconKey;
+  const colorKey = explicitColorKey || preset?.colorKey || legacyPreset?.colorKey || DEFAULT_ROOM_PRESET.colorKey;
+  const matchedPreset = presetFromVisualKeys(iconKey, colorKey);
+  const hasExplicitVisualKey = Boolean(explicitIconKey || explicitColorKey || preset);
+  return {
+    emoji: matchedPreset?.emoji || (hasExplicitVisualKey ? emojiFromIconKey(iconKey) : legacyEmoji) || DEFAULT_ROOM_PRESET.emoji,
+    roomColorKey: colorKey,
+    roomIconKey: iconKey,
+    roomPresetKey: matchedPreset?.key || ''
+  };
+}
+
 
 function createRowId() {
   return crypto.randomUUID?.() || crypto.randomBytes(16).toString('hex');
@@ -36,10 +78,15 @@ function normalizeMessageLimit(value) {
 
 function mapRoom(row) {
   if (!row) return null;
+  const visuals = normalizeRoomVisuals({
+    emoji: row.emoji || '',
+    roomColorKey: row.room_color_key || '',
+    roomIconKey: row.room_icon_key || ''
+  });
   return {
     createdAt: toMillis(row.created_at),
     creatorIp: row.creator_ip || '',
-    emoji: row.emoji || '',
+    emoji: visuals.emoji,
     emptySince: row.empty_since ? toMillis(row.empty_since) : null,
     id: row.id,
     isStatic: Boolean(row.is_static),
@@ -47,6 +94,9 @@ function mapRoom(row) {
     name: row.name || '',
     ownerId: row.owner_id || null,
     peers: new Map(),
+    roomColorKey: visuals.roomColorKey,
+    roomIconKey: visuals.roomIconKey,
+    roomPresetKey: visuals.roomPresetKey,
     updatedAt: toMillis(row.updated_at)
   };
 }
@@ -55,12 +105,40 @@ function withRelationship(room, relationship) {
   return room ? { ...room, relationship: relationship || '' } : null;
 }
 
+function hashPeerSessionToken(sessionToken) {
+  return crypto.createHash('sha256').update(String(sessionToken || '')).digest('hex');
+}
+
+function hashesMatch(expected, actual) {
+  if (typeof expected !== 'string' || typeof actual !== 'string' || expected.length !== actual.length) return false;
+  return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(actual));
+}
+
+function avatarColorForPeerId(peerId) {
+  const digest = crypto.createHash('sha256').update(String(peerId || '')).digest();
+  return AVATAR_COLOR_KEYS[digest[0] % AVATAR_COLOR_KEYS.length];
+}
+
+function mapPeerIdentity(row) {
+  if (!row) return null;
+  return {
+    avatarColorKey: row.avatar_color_key || avatarColorForPeerId(row.peer_id),
+    createdAt: toMillis(row.created_at),
+    displayName: row.display_name || '',
+    lastSeenAt: toMillis(row.last_seen_at),
+    peerId: row.peer_id || '',
+    roomId: row.room_id,
+    sessionTokenHash: row.session_token_hash || ''
+  };
+}
+
 function mapMessage(row) {
   if (!row) return null;
   return {
     createdAt: toMillis(row.created_at),
     expiresAt: row.expires_at ? toMillis(row.expires_at) : null,
     id: row.id,
+    avatarColorKey: row.avatar_color_key || avatarColorForPeerId(row.peer_id),
     name: row.name || '',
     peerId: row.peer_id || '',
     roomId: row.room_id,
@@ -96,6 +174,9 @@ function createRoomStore({
     ownerId = null,
     name = '',
     emoji = '',
+    roomColorKey = '',
+    roomIconKey = '',
+    roomPresetKey = '',
     now = Date.now()
   }) {
     const id = String(roomId || '').trim();
@@ -103,9 +184,10 @@ function createRoomStore({
       throw new Error('Room id is required');
     }
 
+    const visuals = normalizeRoomVisuals({ emoji, roomColorKey, roomIconKey, roomPresetKey });
     const result = await getPool().query(
-      `INSERT INTO rooms (id, creator_ip, is_static, owner_id, name, emoji, created_at, updated_at, empty_since)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $7, $7)
+      `INSERT INTO rooms (id, creator_ip, is_static, owner_id, name, emoji, room_icon_key, room_color_key, created_at, updated_at, empty_since)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $9, $9)
        RETURNING *`,
       [
         id,
@@ -113,7 +195,9 @@ function createRoomStore({
         Boolean(isStatic),
         ownerId || null,
         typeof name === 'string' ? name : '',
-        typeof emoji === 'string' ? emoji : '',
+        visuals.emoji,
+        visuals.roomIconKey,
+        visuals.roomColorKey,
         toDate(now)
       ]
     );
@@ -127,6 +211,9 @@ function createRoomStore({
     ownerId = null,
     name = '',
     emoji = '',
+    roomColorKey = '',
+    roomIconKey = '',
+    roomPresetKey = '',
     maxOwnedStaticRoomsPerUser = 3,
     maxQuotaRoomsPerIp = 0,
     maxRooms = 100,
@@ -179,9 +266,10 @@ function createRoomStore({
         return { room: null, status: 'capacity_exceeded' };
       }
 
+      const visuals = normalizeRoomVisuals({ emoji, roomColorKey, roomIconKey, roomPresetKey });
       const inserted = await client.query(
-        `INSERT INTO rooms (id, creator_ip, is_static, owner_id, name, emoji, created_at, updated_at, empty_since)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $7, $7)
+        `INSERT INTO rooms (id, creator_ip, is_static, owner_id, name, emoji, room_icon_key, room_color_key, created_at, updated_at, empty_since)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $9, $9)
          RETURNING *`,
         [
           id,
@@ -189,7 +277,9 @@ function createRoomStore({
           Boolean(isStatic),
           ownerId || null,
           typeof name === 'string' ? name : '',
-          typeof emoji === 'string' ? emoji : '',
+          visuals.emoji,
+          visuals.roomIconKey,
+          visuals.roomColorKey,
           toDate(now)
         ]
       );
@@ -287,6 +377,56 @@ function createRoomStore({
     return countQuotaRoomsForIp(creatorIp);
   }
 
+  async function getOrCreatePeerIdentity({ roomId, peerId, sessionToken, displayName = '', now = Date.now() }) {
+    if (!roomId || !peerId || !sessionToken) return { identity: null, status: 'invalid' };
+    const sessionTokenHash = hashPeerSessionToken(sessionToken);
+    const seenAt = toDate(now);
+    const nextDisplayName = typeof displayName === 'string' ? displayName : '';
+
+    async function reuseExisting(client, status = 'reused') {
+      const existing = await client.query(
+        `SELECT * FROM room_peer_identities WHERE room_id = $1 AND peer_id = $2 FOR UPDATE`,
+        [roomId, peerId]
+      );
+      const identity = existing.rows[0];
+      if (!identity) return null;
+      if (!hashesMatch(identity.session_token_hash, sessionTokenHash)) {
+        return { identity: mapPeerIdentity(identity), status: 'token_mismatch' };
+      }
+      const updated = await client.query(
+        `UPDATE room_peer_identities
+         SET display_name = $4, last_seen_at = $3, metadata = COALESCE(metadata, '{}'::jsonb)
+         WHERE room_id = $1 AND peer_id = $2
+         RETURNING *`,
+        [roomId, peerId, seenAt, nextDisplayName]
+      );
+      return { identity: mapPeerIdentity(updated.rows[0]), status };
+    }
+
+    return transaction(getPool(), async (client) => {
+      const existingResult = await reuseExisting(client);
+      if (existingResult) return existingResult;
+
+      const inserted = await client.query(
+        `INSERT INTO room_peer_identities (id, room_id, peer_id, session_token_hash, avatar_color_key, display_name, created_at, last_seen_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $7)
+         ON CONFLICT (room_id, peer_id) DO NOTHING
+         RETURNING *`,
+        [
+          createRowId(),
+          roomId,
+          peerId,
+          sessionTokenHash,
+          avatarColorForPeerId(`${roomId}:${peerId}:${sessionTokenHash}`),
+          nextDisplayName,
+          seenAt
+        ]
+      );
+      if (inserted.rows[0]) return { identity: mapPeerIdentity(inserted.rows[0]), status: 'created' };
+      return reuseExisting(client, 'reused');
+    });
+  }
+
   async function pruneRooms(now = Date.now()) {
     const nowDate = toDate(now);
     const idleBefore = toDate(now - roomIdleTtlMs);
@@ -381,7 +521,7 @@ function createRoomStore({
     if (boundedLimit === 0) return [];
 
     const result = await getPool().query(
-      `SELECT *
+      `SELECT recent.*, rpi.avatar_color_key
        FROM (
          SELECT *
          FROM room_messages
@@ -391,7 +531,10 @@ function createRoomStore({
          ORDER BY created_at DESC, id DESC
          LIMIT $3
        ) recent
-       ORDER BY created_at ASC, id ASC`,
+       LEFT JOIN room_peer_identities rpi
+         ON rpi.room_id = recent.room_id
+        AND rpi.peer_id = recent.peer_id
+       ORDER BY recent.created_at ASC, recent.id ASC`,
       [roomId, toDate(now), boundedLimit]
     );
     return result.rows.map(mapMessage);
@@ -490,6 +633,7 @@ function createRoomStore({
     createRoom,
     createRoomWithQuota,
     deleteRoom,
+    getOrCreatePeerIdentity,
     getRoom,
     listMessages,
     listRoomsForOwner,
@@ -505,6 +649,11 @@ function createRoomStore({
 module.exports = {
   createRoomId,
   createRoomStore,
+  avatarColorForPeerId,
+  hashPeerSessionToken,
+  hashesMatch,
   mapMessage,
-  mapRoom
+  mapPeerIdentity,
+  mapRoom,
+  normalizeRoomVisuals
 };
