@@ -105,6 +105,15 @@ test('visual identity UI consumes backend keys and exposes only curated room pre
 });
 
 
+
+test('local participant updates do not remove the self tile when LiveKit mute events resync', () => {
+  const participants = read('src/lib/features/room/client/room/participants.ts');
+
+  assert.match(participants, /const duplicate = state\.peers\.get\(peerInfo\.id\)/);
+  assert.match(participants, /if \(duplicate\) removeParticipantView\(duplicate\.id\)/);
+  assert.doesNotMatch(participants, /removeParticipantView\(duplicate\?\.id \|\| peerInfo\.id\)/);
+});
+
 test('participant tiles stay visually uniform and highlight only active speakers', () => {
   const css = read('src/lib/features/room/styles/participants.css');
   const participants = read('src/lib/features/room/client/room/participants.ts');

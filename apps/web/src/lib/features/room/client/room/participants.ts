@@ -112,7 +112,7 @@ export function createParticipant(peerInfo: PeerInfo): Participant {
   if (existing) {
     if (isLocal) {
       const duplicate = state.peers.get(peerInfo.id);
-      removeParticipantView(duplicate?.id || peerInfo.id);
+      if (duplicate) removeParticipantView(duplicate.id);
       state.peers.delete(peerInfo.id);
     }
     updateParticipant(peerInfo);
