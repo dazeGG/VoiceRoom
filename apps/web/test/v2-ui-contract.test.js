@@ -129,6 +129,23 @@ test('participant tiles stay visually uniform and highlight only active speakers
   assert.match(livekit, /RoomEvent\.ActiveSpeakersChanged/);
 });
 
+test('screen stream thumbnails show profile metadata instead of an action button', () => {
+  const overlays = read('src/lib/features/room/components/RoomOverlays.svelte');
+  const refs = read('src/lib/features/room/client/model/participants.ts');
+  const participants = read('src/lib/features/room/client/room/participants.ts');
+  const css = read('src/lib/features/room/styles/participants.css');
+
+  assert.match(overlays, /participant-screen-meta/);
+  assert.match(refs, /screenMeta: HTMLElement/);
+  assert.match(participants, /parseScreenProfileId/);
+  assert.match(participants, /SCREEN_QUALITY_OPTIONS/);
+  assert.match(participants, /SCREEN_FPS_OPTIONS/);
+  assert.match(participants, /refreshParticipantScreenMeta\(participant\)/);
+  assert.match(participants, /node\.addEventListener\('click'/);
+  assert.match(css, /\.participant\[data-screen="true"\] \.participant-screen-action\s*\{\s*display: none;/s);
+  assert.match(css, /\.participant-screen-meta/);
+});
+
 test('frontend visual catalog stays aligned with shared backend key contracts', () => {
   const shared = require('@voice-room/shared/validation');
   const tokens = read('src/lib/visual/tokens.ts');

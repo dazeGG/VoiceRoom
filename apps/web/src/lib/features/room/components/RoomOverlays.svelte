@@ -15,6 +15,7 @@
 
 <template id="participantTemplate">
   <article class="participant" data-peer-id="">
+    <div class="participant-screen-meta" hidden></div>
     <div class="voice-ring" aria-hidden="true">
       <span class="avatar"></span>
     </div>

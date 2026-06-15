@@ -151,6 +151,43 @@ body[data-screen-view="true"][data-strip-collapsed="true"] .stage-strip {
   }
 }
 
+.participant-screen-meta {
+  position: absolute;
+  top: var(--space-sm);
+  left: var(--space-sm);
+  z-index: 2;
+  display: inline-flex;
+  max-width: calc(100% - var(--space-sm) * 2);
+  align-items: center;
+  overflow: hidden;
+  border-radius: 999px;
+  padding: 4px 8px;
+  background: oklch(9% 0.012 92 / 0.82);
+  color: oklch(92% 0.02 96);
+  font-size: 0.72rem;
+  font-weight: 850;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  backdrop-filter: blur(10px);
+}
+
+.participant-screen-meta[hidden] {
+  display: none;
+}
+
+.participant[data-screen="true"]:not([data-local="true"]) {
+  cursor: pointer;
+}
+
+.participant[data-screen="true"][data-local="true"] {
+  cursor: default;
+}
+
+.participant[data-screen="true"] .participant-screen-action {
+  display: none;
+}
+
 .participant-copy {
   position: absolute;
   right: var(--space-sm);
