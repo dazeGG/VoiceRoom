@@ -310,6 +310,18 @@ function createRoomStore({
     });
   }
 
+  async function markActiveTemporaryRoomsEmpty(now = Date.now()) {
+    const result = await getPool().query(
+      `UPDATE rooms
+       SET empty_since = $1, updated_at = $1
+       WHERE deleted_at IS NULL
+         AND is_static = false
+         AND empty_since IS NULL`,
+      [toDate(now)]
+    );
+    return result.rowCount;
+  }
+
   async function appendMessage(roomId, message, now = Date.now()) {
     const id = typeof message?.id === 'string' && message.id ? message.id : crypto.randomUUID();
     const createdAt = normalizePositiveInt(message?.createdAt, now);
@@ -370,12 +382,16 @@ function createRoomStore({
 
     const result = await getPool().query(
       `SELECT *
-       FROM room_messages
-       WHERE room_id = $1
-         AND deleted_at IS NULL
-         AND (expires_at IS NULL OR expires_at > $2)
-       ORDER BY created_at ASC, id ASC
-       LIMIT $3`,
+       FROM (
+         SELECT *
+         FROM room_messages
+         WHERE room_id = $1
+           AND deleted_at IS NULL
+           AND (expires_at IS NULL OR expires_at > $2)
+         ORDER BY created_at DESC, id DESC
+         LIMIT $3
+       ) recent
+       ORDER BY created_at ASC, id ASC`,
       [roomId, toDate(now), boundedLimit]
     );
     return result.rows.map(mapMessage);
@@ -479,6 +495,7 @@ function createRoomStore({
     listRoomsForOwner,
     listVisibleRoomsForUser,
     addRoomBookmarkForUser,
+    markActiveTemporaryRoomsEmpty,
     markRoomActive,
     markRoomEmpty,
     pruneRooms

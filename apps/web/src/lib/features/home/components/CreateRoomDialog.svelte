@@ -121,7 +121,7 @@
         {:else}
           <div class="dialog-note dialog-note--warn">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><polyline points="12 7 12 12 15 14"></polyline></svg>
-            <span>Код появится после создания. Живёт ещё сутки после того, как все выйдут — потом исчезает.</span>
+            <span>Код появится после создания. После выхода всех участников комната исчезнет примерно через 15 минут.</span>
           </div>
         {/if}
 

@@ -136,6 +136,10 @@ test('auth flow: register, session, owned rooms, logout', async (t) => {
   assert.equal(anon.status, 200);
   assert.equal(anon.body.user, null);
 
+  const malformedCookie = await request(socketPath, { pathname: '/api/auth/me', cookie: 'vr_session=%' });
+  assert.equal(malformedCookie.status, 200);
+  assert.equal(malformedCookie.body.user, null);
+
   // Static rooms cannot be created anonymously in v2.
   const anonStatic = await request(socketPath, {
     method: 'POST',

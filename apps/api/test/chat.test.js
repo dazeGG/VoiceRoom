@@ -287,6 +287,34 @@ test('chat API allows posting by room link without joining voice', async (t) => 
   }
 });
 
+test('chat API returns not found when posting to a missing room', async (t) => {
+  const { dir, socketPath } = getSocketPath();
+  const { cleanup, databaseUrl } = await createTestDatabase(t);
+  const logs = { stdout: '', stderr: '' };
+  const child = startServer(socketPath, databaseUrl, logs);
+  t.after(() => {
+    child.kill('SIGTERM');
+    fs.rmSync(dir, { recursive: true, force: true });
+    return cleanup();
+  });
+
+  try {
+    await waitForHealthz(socketPath);
+
+    const posted = await postJson(socketPath, '/api/rooms/missing-room1/chat', {
+      name: 'Link Guest',
+      text: 'hello?'
+    });
+    assert.equal(posted.status, 404);
+    assert.equal(posted.body.error, 'Room not found');
+  } catch (error) {
+    if (logs.stderr.trim()) {
+      console.error('Server stderr:\n', logs.stderr.trimEnd());
+    }
+    throw error;
+  }
+});
+
 test('chat API still protects active voice peer identities', async (t) => {
   const { dir, socketPath } = getSocketPath();
   const { cleanup, databaseUrl } = await createTestDatabase(t);

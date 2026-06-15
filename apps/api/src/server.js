@@ -204,7 +204,11 @@ function parseCookies(req) {
     if (index === -1) continue;
     const name = part.slice(0, index).trim();
     if (!name) continue;
-    cookies[name] = decodeURIComponent(part.slice(index + 1).trim());
+    try {
+      cookies[name] = decodeURIComponent(part.slice(index + 1).trim());
+    } catch {
+      // Ignore malformed cookie values instead of failing auth checks with 500s.
+    }
   }
   return cookies;
 }
@@ -1019,7 +1023,12 @@ async function handleRoomChatPost(req, res, roomId) {
   const name = cleanName(body.name);
   const text = cleanChatText(body.text);
 
-  if (!room || !text) {
+  if (!room) {
+    sendJson(res, 404, { ok: false, error: 'Room not found', roomId });
+    return;
+  }
+
+  if (!text) {
     sendJson(res, 400, { ok: false, error: 'Invalid chat message' });
     return;
   }
@@ -1265,6 +1274,8 @@ async function bootstrap({ env = process.env, logger = console, exit = process.e
       messageTtlMs: ROOM_CHAT_TTL_MS,
       roomIdleTtlMs: ROOM_IDLE_TTL_MS
     });
+    await roomStore.markActiveTemporaryRoomsEmpty();
+    await roomStore.pruneRooms();
     userStore = createUserStore({ databaseUrl: database.url, logger, sessionTtlMs: SESSION_TTL_MS });
     const server = createApiServer({ store: roomStore, users: userStore });
     await server.app.ready();

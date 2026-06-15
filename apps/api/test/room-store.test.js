@@ -74,6 +74,23 @@ test('PostgreSQL room store caps retained chat messages per room', async (t) => 
   assert.deepEqual(messages.map((message) => message.id), ['msg-2', 'msg-3']);
 });
 
+test('PostgreSQL room store returns the latest limited chat messages in display order', async (t) => {
+  const store = await createMigratedStore(t, { maxMessagesPerRoom: 10, messageTtlMs: 60000 });
+  const room = await store.createRoom({ creatorIp: '127.0.0.1', isStatic: true, roomId: 'roomlatest1', now: 1000 });
+
+  for (let index = 1; index <= 5; index += 1) {
+    await store.appendMessage(room.id, {
+      id: `msg-latest-${index}`,
+      text: `message ${index}`,
+      createdAt: 1000 + index,
+      expiresAt: 60000
+    }, 1000 + index);
+  }
+
+  const messages = await store.listMessages(room.id, { now: 2000, limit: 3 });
+  assert.deepEqual(messages.map((message) => message.id), ['msg-latest-3', 'msg-latest-4', 'msg-latest-5']);
+});
+
 test('PostgreSQL room store counts only temporary rooms for IP quota and prunes idle dynamic rooms', async (t) => {
   const store = await createMigratedStore(t, { roomIdleTtlMs: 1000 });
   await store.createRoom({ creatorIp: 'ip-a', isStatic: true, roomId: 'staticquota1', now: 1000 });
@@ -83,4 +100,21 @@ test('PostgreSQL room store counts only temporary rooms for IP quota and prunes 
   assert.equal(await store.pruneRooms(2500), true);
   assert.equal(await store.getRoom('emptyquota1'), null);
   assert.ok(await store.getRoom('staticquota1'));
+});
+
+test('PostgreSQL room store can reconcile active temporary rooms after process restart', async (t) => {
+  const store = await createMigratedStore(t, { roomIdleTtlMs: 1000 });
+  const temp = await store.createRoom({ creatorIp: 'ip-restart', isStatic: false, roomId: 'temprestart1', now: 1000 });
+  const permanent = await store.createRoom({ creatorIp: 'ip-restart', isStatic: true, roomId: 'staticrestart1', now: 1000 });
+
+  await store.markRoomActive(temp.id, 1200);
+  await store.markRoomActive(permanent.id, 1200);
+
+  assert.equal((await store.getRoom(temp.id)).emptySince, null);
+  assert.equal(await store.markActiveTemporaryRoomsEmpty(2000), 1);
+  assert.equal((await store.getRoom(temp.id)).emptySince, 2000);
+  assert.equal((await store.getRoom(permanent.id)).emptySince, null);
+  assert.equal(await store.pruneRooms(3500), true);
+  assert.equal(await store.getRoom(temp.id), null);
+  assert.ok(await store.getRoom(permanent.id));
 });
