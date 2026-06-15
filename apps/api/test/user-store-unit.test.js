@@ -3,7 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { createUserStore, publicUser } = require('../src/lib/user-store');
+const { createUserStore, hashSessionToken, publicUser } = require('../src/lib/user-store');
 const { AVATAR_COLOR_KEYS } = require('@voice-room/shared/validation');
 
 function createFakePool(handler) {
@@ -68,4 +68,26 @@ test('createUser falls back to a curated random avatar color for invalid input',
 
   assert.ok(AVATAR_COLOR_KEYS.includes(result.user.avatarColorKey));
   assert.ok(AVATAR_COLOR_KEYS.includes(pool.calls[0].values[4]));
+});
+
+test('sessions store only token hashes in the database', async () => {
+  const rawToken = 'session-token-for-cookie-only';
+  const pool = createFakePool((text, values) => {
+    if (/INSERT INTO sessions/.test(text)) {
+      assert.equal(values[0], hashSessionToken(rawToken));
+      assert.notEqual(values[0], rawToken);
+      return { rows: [], rowCount: 1 };
+    }
+    if (/DELETE FROM sessions/.test(text)) {
+      assert.equal(values[0], hashSessionToken(rawToken));
+      assert.notEqual(values[0], rawToken);
+      return { rows: [], rowCount: 1 };
+    }
+    throw new Error(`Unexpected query: ${text}`);
+  });
+  const store = createUserStore({ pool });
+
+  const session = await store.createSession({ userId: 'user-1', now: 1000, token: rawToken });
+  assert.equal(session.token, rawToken);
+  assert.equal(await store.deleteSession(rawToken), true);
 });

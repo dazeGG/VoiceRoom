@@ -136,6 +136,47 @@ test('logout session store failures return 5xx instead of false success', async 
   assert.equal(response.json().error, 'Internal server error');
 });
 
+test('cookie-authenticated writes reject cross-origin browser requests', async (t) => {
+  let deleted = false;
+  const app = createApiApp({
+    store: createFakeStore(),
+    users: {
+      async deleteSession() {
+        deleted = true;
+        return true;
+      }
+    }
+  });
+  t.after(() => app.close());
+
+  const response = await app.inject({
+    method: 'POST',
+    url: '/api/auth/logout',
+    headers: {
+      cookie: 'vr_session=test-token',
+      host: 'voice.local',
+      origin: 'https://evil.local'
+    }
+  });
+
+  assert.equal(response.statusCode, 403);
+  assert.equal(response.json().error, 'Cross-origin request rejected');
+  assert.equal(deleted, false);
+
+  const sameOrigin = await app.inject({
+    method: 'POST',
+    url: '/api/auth/logout',
+    headers: {
+      cookie: 'vr_session=test-token',
+      host: 'voice.local',
+      origin: 'http://voice.local'
+    }
+  });
+
+  assert.equal(sameOrigin.statusCode, 200);
+  assert.equal(deleted, true);
+});
+
 
 
 test('livekit token uses authenticated user avatar color for room peer identity', async (t) => {

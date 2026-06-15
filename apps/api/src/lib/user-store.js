@@ -51,6 +51,10 @@ function createSessionToken() {
   return crypto.randomBytes(32).toString('base64url');
 }
 
+function hashSessionToken(token) {
+  return crypto.createHash('sha256').update(String(token)).digest('base64url');
+}
+
 function createUserStore({ databaseUrl, logger = console, pool, sessionTtlMs = DEFAULT_SESSION_TTL_MS } = {}) {
   let activePool = pool || null;
   function getPool() {
@@ -106,29 +110,31 @@ function createUserStore({ databaseUrl, logger = console, pool, sessionTtlMs = D
 
   async function createSession({ userId, now = Date.now(), token = createSessionToken() }) {
     const expiresAt = now + sessionTtlMs;
+    const tokenHash = hashSessionToken(token);
     await getPool().query(
       `INSERT INTO sessions (id, user_id, created_at, last_seen_at, expires_at)
        VALUES ($1, $2, $3, $3, $4)`,
-      [token, userId, toDate(now), toDate(expiresAt)]
+      [tokenHash, userId, toDate(now), toDate(expiresAt)]
     );
     return { token, expiresAt };
   }
 
   async function getSessionUser(token, now = Date.now()) {
     if (typeof token !== 'string' || !token) return null;
+    const tokenHash = hashSessionToken(token);
     const result = await getPool().query(
       `SELECT u.*, s.expires_at AS session_expires_at
        FROM sessions s
        JOIN users u ON u.id = s.user_id
        WHERE s.id = $1 AND s.expires_at > $2`,
-      [token, toDate(now)]
+      [tokenHash, toDate(now)]
     );
     const row = result.rows[0];
     if (!row) return null;
 
     // Best-effort sliding touch; failures here must not block the request.
     getPool()
-      .query(`UPDATE sessions SET last_seen_at = $2 WHERE id = $1`, [token, toDate(now)])
+      .query(`UPDATE sessions SET last_seen_at = $2 WHERE id = $1`, [tokenHash, toDate(now)])
       .catch((error) => logger.error('Failed to touch session:', error));
 
     return { session: { expiresAt: toMillis(row.session_expires_at), token }, user: mapUser(row) };
@@ -136,7 +142,7 @@ function createUserStore({ databaseUrl, logger = console, pool, sessionTtlMs = D
 
   async function deleteSession(token) {
     if (typeof token !== 'string' || !token) return false;
-    const result = await getPool().query(`DELETE FROM sessions WHERE id = $1`, [token]);
+    const result = await getPool().query(`DELETE FROM sessions WHERE id = $1`, [hashSessionToken(token)]);
     return result.rowCount > 0;
   }
 
@@ -166,6 +172,7 @@ function createUserStore({ databaseUrl, logger = console, pool, sessionTtlMs = D
 
 module.exports = {
   createUserStore,
+  hashSessionToken,
   mapUser,
   publicUser,
   randomAvatarColorKey

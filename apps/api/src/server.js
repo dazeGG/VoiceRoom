@@ -255,6 +255,43 @@ function clearSessionCookie() {
   return parts.join('; ');
 }
 
+function requestHost(req) {
+  const host = req.headers?.host;
+  return typeof host === 'string' ? host.toLowerCase() : '';
+}
+
+function originHost(value) {
+  if (typeof value !== 'string' || !value) return '';
+  try {
+    return new URL(value).host.toLowerCase();
+  } catch {
+    return '';
+  }
+}
+
+function requestHasUnsafeMethod(req) {
+  return !['GET', 'HEAD', 'OPTIONS'].includes(String(req.method || '').toUpperCase());
+}
+
+function hasValidSameOrigin(req) {
+  const host = requestHost(req);
+  if (!host) return false;
+  const origin = req.headers?.origin;
+  if (typeof origin === 'string' && origin) return originHost(origin) === host;
+  const referer = req.headers?.referer;
+  if (typeof referer === 'string' && referer) return originHost(referer) === host;
+  return true;
+}
+
+function rejectCrossOriginCookieWrite(req, res) {
+  if (!requestHasUnsafeMethod(req)) return false;
+  if (!getSessionToken(req)) return false;
+  const hasBrowserOrigin = Boolean(req.headers?.origin || req.headers?.referer);
+  if (!hasBrowserOrigin || hasValidSameOrigin(req)) return false;
+  sendJson(res, 403, { ok: false, error: 'Cross-origin request rejected' });
+  return true;
+}
+
 function getLiveKitRoomName(roomId) {
   const prefix = String(process.env.LIVEKIT_ROOM_PREFIX || 'voice-room-').replace(/[^A-Za-z0-9_.:-]/g, '-');
   return `${prefix}${roomId}`;
@@ -1229,6 +1266,7 @@ async function runLegacyHandler(request, reply, handler) {
   const res = reply.raw;
 
   try {
+    if (rejectCrossOriginCookieWrite(req, res)) return;
     await handler(req, res, request);
   } catch (error) {
     const status = error.statusCode || 500;

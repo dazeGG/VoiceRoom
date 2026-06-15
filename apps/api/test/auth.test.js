@@ -212,7 +212,10 @@ test('auth flow: register, session, owned rooms, logout', async (t) => {
   );
   const listed = rooms.body.rooms.find((entry) => entry.roomId === room.body.roomId);
   assert.equal(listed.name, 'квартирник');
-  assert.equal(listed.emoji, '🎧');
+  assert.equal(listed.emoji, '🎮');
+  assert.equal(listed.roomIconKey, 'gamepad');
+  assert.equal(listed.roomColorKey, 'indigo');
+  assert.equal(listed.roomPresetKey, 'game-indigo');
   assert.equal(listed.relationship, 'owner');
 
   // Adding an already owned room by code is idempotent and the lobby keeps the
