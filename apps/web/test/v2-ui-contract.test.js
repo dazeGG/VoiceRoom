@@ -144,6 +144,10 @@ test('screen stream thumbnails show profile metadata instead of an action button
   assert.match(participants, /node\.addEventListener\('click'/);
   assert.match(participantsCss, /\.participant\[data-screen="true"\] \.participant-screen-action\s*\{\s*display: none;/s);
   assert.match(screenTiles, /createStreamTileProfileMeta/);
+  assert.match(screenTiles, /createStreamTileAvatar\(participant\)/);
+  assert.match(screenTiles, /getAvatarColor\(participant\.avatarColorKey\)/);
+  assert.match(screenTiles, /getInitials\(participant\.name\)/);
+  assert.doesNotMatch(screenTiles, /renderIcon/);
   assert.match(screenTiles, /stream-tile-profile-meta/);
   assert.match(screenTiles, /parseScreenProfileId/);
   assert.match(screenTiles, /SCREEN_QUALITY_OPTIONS/);
@@ -152,6 +156,7 @@ test('screen stream thumbnails show profile metadata instead of an action button
   assert.doesNotMatch(screenTiles, /Отключиться/);
   assert.match(screenView, /participant\.isLocal \? state\.localScreenProfileId : participant\.screenProfileId/);
   assert.match(streamTilesCss, /\.stream-tile-profile-meta/);
+  assert.match(streamTilesCss, /\.stream-tile-avatar/);
   assert.doesNotMatch(streamTilesCss, /stream-tile-action-disconnect/);
 });
 

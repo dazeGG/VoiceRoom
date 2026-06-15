@@ -62,13 +62,20 @@
   background: oklch(22% 0.008 92);
 }
 
-.stream-tile-icon {
-  color: oklch(72% 0.01 92 / 0.42);
-}
-
-.stream-tile-icon svg {
-  width: 42px;
-  height: 42px;
+.stream-tile-avatar {
+  display: grid;
+  width: clamp(48px, 18%, 84px);
+  aspect-ratio: 1;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--avatar-bg, oklch(54% 0.22 276));
+  color: var(--avatar-fg, #fff);
+  box-shadow: var(--avatar-shadow, 0 10px 24px rgb(88 101 242 / 0.32));
+  font-size: clamp(1rem, 3vw, 1.55rem);
+  font-weight: 900;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  text-transform: uppercase;
 }
 
 .stream-tile-video {
