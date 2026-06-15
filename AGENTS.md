@@ -46,6 +46,12 @@ Keep runtime marker contracts stable and non-destructive when overlays are appli
 <!-- OMX:GUIDANCE:OPERATING:END -->
 </operating_principles>
 
+## Repository Git Flow
+- Follow `docs/GIT_FLOW.md` for branch strategy and PR targets.
+- Default integration target is `develop`; feature branches must branch from `develop` and open PRs back into `develop`.
+- Keep `main` stable/release-only; do not commit feature work directly to `main`.
+- Do not commit local screenshots/debug artifacts such as `img.png` or `img_*.png` unless explicitly requested.
+
 ## Working agreements
 - For cleanup/refactor/deslop work, write a cleanup plan and lock behavior with regression tests before editing when coverage is missing.
 - Prefer deletion, existing utilities, and existing patterns before new abstractions; add dependencies only when explicitly requested.
