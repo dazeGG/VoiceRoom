@@ -137,6 +137,62 @@ test('logout session store failures return 5xx instead of false success', async 
 });
 
 
+
+test('livekit token uses authenticated user avatar color for room peer identity', async (t) => {
+  const previous = {
+    url: process.env.LIVEKIT_URL,
+    key: process.env.LIVEKIT_API_KEY,
+    secret: process.env.LIVEKIT_API_SECRET
+  };
+  process.env.LIVEKIT_URL = 'ws://127.0.0.1:7880';
+  process.env.LIVEKIT_API_KEY = 'devkey';
+  process.env.LIVEKIT_API_SECRET = 'devsecretdevsecretdevsecret';
+
+  const store = createFakeStore();
+  let identityInput = null;
+  store.getOrCreatePeerIdentity = async (input) => {
+    identityInput = input;
+    return { identity: { avatarColorKey: input.avatarColorKey, peerId: input.peerId }, status: 'created' };
+  };
+
+  const app = createApiApp({
+    store,
+    users: {
+      async getSessionUser(token) {
+        assert.equal(token, 'session-token');
+        return { user: { id: 'user-1', avatarColorKey: 'green' } };
+      }
+    }
+  });
+  t.after(async () => {
+    await app.close();
+    if (previous.url === undefined) delete process.env.LIVEKIT_URL;
+    else process.env.LIVEKIT_URL = previous.url;
+    if (previous.key === undefined) delete process.env.LIVEKIT_API_KEY;
+    else process.env.LIVEKIT_API_KEY = previous.key;
+    if (previous.secret === undefined) delete process.env.LIVEKIT_API_SECRET;
+    else process.env.LIVEKIT_API_SECRET = previous.secret;
+  });
+
+  const room = await app.inject({ method: 'POST', url: '/api/rooms', payload: { isStatic: false } });
+  assert.equal(room.statusCode, 201);
+
+  const response = await app.inject({
+    method: 'POST',
+    url: '/api/livekit-token',
+    headers: { cookie: 'vr_session=session-token' },
+    payload: {
+      name: 'вовощ',
+      peerId: 'peer0001',
+      roomId: room.json().roomId,
+      sessionToken: 'goodtoken123456789012345678901234'
+    }
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(identityInput.avatarColorKey, 'green');
+});
+
 test('livekit token validates persisted anonymous peer identity before issuing voice access', async (t) => {
   const previous = {
     url: process.env.LIVEKIT_URL,

@@ -309,20 +309,21 @@ test('getOrCreatePeerIdentity creates, reuses, and rejects mismatched tokens by 
       const row = identities.get(`${values[0]}:${values[1]}`);
       row.last_seen_at = values[2];
       row.display_name = values[3];
+      if (values[4]) row.avatar_color_key = values[4];
       return { rows: [row], rowCount: 1 };
     }
     return { rows: [], rowCount: 1 };
   });
   const store = createRoomStore({ pool });
 
-  const created = await store.getOrCreatePeerIdentity({ roomId: 'room1', peerId: 'peer123456', sessionToken: 'token-a', displayName: 'Ada', now: 1000 });
+  const created = await store.getOrCreatePeerIdentity({ roomId: 'room1', peerId: 'peer123456', sessionToken: 'token-a', displayName: 'Ada', avatarColorKey: 'green', now: 1000 });
   assert.equal(created.status, 'created');
-  assert.ok(created.identity.avatarColorKey);
+  assert.equal(created.identity.avatarColorKey, 'green');
   assert.notEqual(created.identity.sessionTokenHash, 'token-a');
 
-  const reused = await store.getOrCreatePeerIdentity({ roomId: 'room1', peerId: 'peer123456', sessionToken: 'token-a', displayName: 'Ada 2', now: 2000 });
+  const reused = await store.getOrCreatePeerIdentity({ roomId: 'room1', peerId: 'peer123456', sessionToken: 'token-a', displayName: 'Ada 2', avatarColorKey: 'rose', now: 2000 });
   assert.equal(reused.status, 'reused');
-  assert.equal(reused.identity.avatarColorKey, created.identity.avatarColorKey);
+  assert.equal(reused.identity.avatarColorKey, 'rose');
   assert.equal(reused.identity.displayName, 'Ada 2');
 
   const mismatch = await store.getOrCreatePeerIdentity({ roomId: 'room1', peerId: 'peer123456', sessionToken: 'token-b', now: 3000 });

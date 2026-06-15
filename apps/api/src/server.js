@@ -227,6 +227,16 @@ async function resolveSessionUser(req) {
   return getUserStore().getSessionUser(token);
 }
 
+async function resolveOptionalSessionUser(req) {
+  if (!getSessionToken(req)) return null;
+  const session = await resolveSessionUser(req);
+  return session?.user || null;
+}
+
+function sessionAvatarColorKey(user) {
+  return user?.avatarColorKey || '';
+}
+
 function buildSessionCookie(token, maxAgeSeconds) {
   const parts = [
     `${SESSION_COOKIE_NAME}=${encodeURIComponent(token)}`,
@@ -491,6 +501,7 @@ async function handleEvents(req, res, url) {
   const peerId = normalizePeerId(url.searchParams.get('peer'));
   const sessionToken = normalizeSessionToken(url.searchParams.get('token'));
   const name = cleanName(url.searchParams.get('name'));
+  const sessionUser = await resolveOptionalSessionUser(req);
 
   if (!roomId || !peerId || !sessionToken) {
     sendJson(res, 400, { ok: false, error: 'Invalid room, peer, or session token' });
@@ -518,7 +529,7 @@ async function handleEvents(req, res, url) {
     return;
   }
 
-  const identityResult = await getRoomStore().getOrCreatePeerIdentity({ roomId, peerId, sessionToken, displayName: name });
+  const identityResult = await getRoomStore().getOrCreatePeerIdentity({ roomId, peerId, sessionToken, displayName: name, avatarColorKey: sessionAvatarColorKey(sessionUser) });
   if (identityResult.status === 'token_mismatch') {
     sendJson(res, 403, { ok: false, error: 'Invalid peer session' });
     return;
@@ -617,6 +628,7 @@ async function handleLiveKitToken(req, res) {
   const peerId = normalizePeerId(body.peerId);
   const sessionToken = normalizeSessionToken(body.sessionToken);
   const name = cleanName(body.name);
+  const sessionUser = await resolveOptionalSessionUser(req);
 
   if (!roomId || !peerId || !sessionToken) {
     sendJson(res, 400, { ok: false, error: 'Invalid room, peer, or session token' });
@@ -634,7 +646,7 @@ async function handleLiveKitToken(req, res) {
     sendJson(res, 403, { ok: false, error: 'Сессия участника недействительна' });
     return;
   }
-  const identityResult = await getRoomStore().getOrCreatePeerIdentity({ roomId, peerId, sessionToken, displayName: name });
+  const identityResult = await getRoomStore().getOrCreatePeerIdentity({ roomId, peerId, sessionToken, displayName: name, avatarColorKey: sessionAvatarColorKey(sessionUser) });
   if (identityResult.status === 'token_mismatch') {
     sendJson(res, 403, { ok: false, error: 'Сессия участника недействительна' });
     return;
@@ -1064,6 +1076,7 @@ async function handleRoomChatPost(req, res, roomId) {
   const requestedPeerId = normalizePeerId(body.peerId);
   const sessionToken = normalizeSessionToken(body.sessionToken);
   const name = cleanName(body.name);
+  const sessionUser = await resolveOptionalSessionUser(req);
   const text = cleanChatText(body.text);
 
   if (!room) {
@@ -1096,9 +1109,10 @@ async function handleRoomChatPost(req, res, roomId) {
       return;
     }
     peerId = activePeer.id;
+    if (sessionAvatarColorKey(sessionUser)) activePeer.avatarColorKey = sessionAvatarColorKey(sessionUser);
     avatarColorKey = activePeer.avatarColorKey || avatarColorForPeerId(peerId);
   } else if (requestedPeerId && sessionToken) {
-    const identityResult = await getRoomStore().getOrCreatePeerIdentity({ roomId, peerId: requestedPeerId, sessionToken, displayName: name });
+    const identityResult = await getRoomStore().getOrCreatePeerIdentity({ roomId, peerId: requestedPeerId, sessionToken, displayName: name, avatarColorKey: sessionAvatarColorKey(sessionUser) });
     if (identityResult.status === 'token_mismatch') {
       sendJson(res, 403, { ok: false, error: 'Invalid peer session' });
       return;

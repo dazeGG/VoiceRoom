@@ -5,6 +5,7 @@ const { createDbPool, transaction } = require('./db');
 const {
   AVATAR_COLOR_KEYS,
   ROOM_PRESETS,
+  cleanAvatarColorKey,
   cleanRoomColorKey,
   cleanRoomEmoji,
   cleanRoomIconKey,
@@ -377,11 +378,12 @@ function createRoomStore({
     return countQuotaRoomsForIp(creatorIp);
   }
 
-  async function getOrCreatePeerIdentity({ roomId, peerId, sessionToken, displayName = '', now = Date.now() }) {
+  async function getOrCreatePeerIdentity({ roomId, peerId, sessionToken, displayName = '', avatarColorKey = '', now = Date.now() }) {
     if (!roomId || !peerId || !sessionToken) return { identity: null, status: 'invalid' };
     const sessionTokenHash = hashPeerSessionToken(sessionToken);
     const seenAt = toDate(now);
     const nextDisplayName = typeof displayName === 'string' ? displayName : '';
+    const preferredAvatarColorKey = cleanAvatarColorKey(avatarColorKey);
 
     async function reuseExisting(client, status = 'reused') {
       const existing = await client.query(
@@ -395,10 +397,13 @@ function createRoomStore({
       }
       const updated = await client.query(
         `UPDATE room_peer_identities
-         SET display_name = $4, last_seen_at = $3, metadata = COALESCE(metadata, '{}'::jsonb)
+         SET display_name = $4,
+             last_seen_at = $3,
+             avatar_color_key = CASE WHEN $5 <> '' THEN $5 ELSE avatar_color_key END,
+             metadata = COALESCE(metadata, '{}'::jsonb)
          WHERE room_id = $1 AND peer_id = $2
          RETURNING *`,
-        [roomId, peerId, seenAt, nextDisplayName]
+        [roomId, peerId, seenAt, nextDisplayName, preferredAvatarColorKey]
       );
       return { identity: mapPeerIdentity(updated.rows[0]), status };
     }
@@ -417,7 +422,7 @@ function createRoomStore({
           roomId,
           peerId,
           sessionTokenHash,
-          avatarColorForPeerId(`${roomId}:${peerId}:${sessionTokenHash}`),
+          preferredAvatarColorKey || avatarColorForPeerId(`${roomId}:${peerId}:${sessionTokenHash}`),
           nextDisplayName,
           seenAt
         ]
