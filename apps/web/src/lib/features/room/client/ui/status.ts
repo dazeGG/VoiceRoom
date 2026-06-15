@@ -155,4 +155,11 @@ function setStatus(stateName: string, label: string, title = ''): void {
   elements.statusText.textContent = label;
   elements.statusPill.title = title;
   elements.statusPill.hidden = stateName === 'idle' || document.body.dataset.screen !== 'room';
+
+  // The dock connection indicator mirrors the same state; the human-readable
+  // label (including ping) shows in the hover popover, matching VoiceDock.
+  const dock = elements.dockConnection;
+  dock.dataset.state = stateName;
+  dock.setAttribute('aria-label', label || 'Связь');
+  elements.dockConnectionLabel.textContent = label || 'Связь';
 }

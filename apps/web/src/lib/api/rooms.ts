@@ -3,6 +3,8 @@ import { createRoomProof } from './pow';
 
 export interface CreateRoomOptions {
   isStatic?: boolean;
+  name?: string;
+  emoji?: string;
 }
 
 export interface RoomStatus {
@@ -27,7 +29,9 @@ export interface ChatMessage {
 
 interface CreateRoomResponse {
   createdAt: number;
+  emoji: string;
   isStatic: boolean;
+  name: string;
   roomId: string;
 }
 
@@ -35,6 +39,8 @@ export async function createRoom(options: CreateRoomOptions = {}): Promise<strin
   const proof = await createRoomProof();
   const room = await postJson<CreateRoomResponse>('/api/rooms', {
     isStatic: Boolean(options.isStatic),
+    name: options.name ?? '',
+    emoji: options.emoji ?? '',
     proof
   });
   return room.roomId;

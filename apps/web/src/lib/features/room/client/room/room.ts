@@ -4,7 +4,7 @@ import { showToast } from '../ui/toast';
 import { checkRoomExists, postJson } from '../net/api';
 import { postState } from './presence';
 import { createRoomProof } from '../net/pow';
-import { cleanDisplayName, errorMessage, wait } from '../core/utils';
+import { cleanDisplayName, errorMessage, getInitials, wait } from '../core/utils';
 import { extractRoomId } from '../core/session';
 import { getDisplayName, persistName, requireSavedName, updateNameStatuses } from '../ui/names';
 import {
@@ -86,8 +86,13 @@ export async function showRoomRoute(): Promise<void> {
 
 function showRoomScreen(): void {
   document.body.dataset.screen = 'room';
-  document.title = `${state.roomId} · Voice Room`;
-  elements.roomTitle.textContent = state.roomId;
+  const heading = state.roomName || state.roomId;
+  document.title = `${heading} · Voice Room`;
+  elements.roomTitle.textContent = heading;
+  elements.roomCodeText.textContent = state.roomId;
+  elements.roomEmojiBadge.textContent = state.roomEmoji;
+  elements.roomEmojiBadge.hidden = !state.roomEmoji;
+  elements.emptyRoomAvatar.textContent = getInitials(state.savedName);
   hideScreens();
   elements.brand.hidden = true;
   elements.topbarRoomHeading.hidden = false;

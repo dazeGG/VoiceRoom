@@ -9,28 +9,8 @@
   background: transparent;
 }
 
-.room-heading {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-md);
-}
-
-.room-title-line {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--space-sm);
-}
-
-.room-title-actions {
-  display: inline-flex;
-  flex: 0 0 auto;
-  gap: var(--space-xs);
-}
+/* The in-room top-bar heading (.room-heading.topbar-room-heading) is laid out
+   entirely by layout.css now. */
 
 /* .eyebrow lives in src/lib/shared/styles/typography.css. */
 
@@ -42,36 +22,6 @@ h1 {
   font-size: 3.75rem;
   line-height: 0.92;
   letter-spacing: 0;
-}
-
-.copy-room-button {
-  display: grid;
-  width: 44px;
-  height: 44px;
-  flex: 0 0 auto;
-  place-items: center;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  padding: 0;
-  background: var(--panel);
-  color: var(--muted);
-  transition: background 160ms var(--ease-out), border-color 160ms var(--ease-out), color 160ms var(--ease-out), box-shadow 160ms var(--ease-out), transform 160ms var(--ease-out);
-}
-
-.copy-room-button:hover {
-  border-color: color-mix(in oklch, var(--control-line), var(--ink) 18%);
-  background: var(--panel-strong);
-  color: var(--ink);
-  box-shadow: 0 0 0 3px oklch(84% 0.012 92 / 0.1);
-}
-
-.copy-room-button:active {
-  transform: translateY(1px);
-}
-
-.copy-room-button svg {
-  width: 21px;
-  height: 21px;
 }
 
 .heading-actions {

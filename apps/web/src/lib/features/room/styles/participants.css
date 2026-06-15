@@ -92,6 +92,7 @@ body[data-screen-view="true"][data-strip-collapsed="true"] .stage-strip {
 
 .participant[data-speaking="true"] .voice-ring {
   transform: scale(1.03);
+  box-shadow: 0 0 0 2.5px color-mix(in oklch, var(--green), transparent 14%);
 }
 
 .avatar {
@@ -260,7 +261,7 @@ body[data-screen-view="true"][data-strip-collapsed="true"] .stage-strip {
   grid-auto-rows: max-content;
   align-content: center;
   justify-items: center;
-  gap: var(--space-md);
+  gap: var(--space-sm);
   padding: 0 var(--space-md) 92px;
   color: var(--muted);
   font-weight: 750;
@@ -272,17 +273,91 @@ body[data-screen-view="true"][data-strip-collapsed="true"] .stage-strip {
   display: none;
 }
 
-.empty-orbit {
-  width: 108px;
-  height: 108px;
-  border: 1px dashed oklch(55% 0.06 238 / 0.42);
+.empty-avatar {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 124px;
+  height: 124px;
+  margin-bottom: var(--space-sm);
   border-radius: 50%;
-  background:
-    radial-gradient(circle, var(--blue) 0 8px, transparent 9px),
-    radial-gradient(circle at 72% 30%, var(--coral) 0 6px, transparent 7px),
-    radial-gradient(circle at 34% 78%, var(--amber) 0 7px, transparent 8px);
+  background: oklch(52% 0.066 52);
+  color: oklch(96% 0.02 80);
+  font-family: var(--font-sans);
+  font-size: 3rem;
+  font-weight: 800;
 }
 
-.empty-room p {
+.empty-avatar::after {
+  content: "";
+  position: absolute;
+  inset: -9px;
+  border-radius: 50%;
+  border: 2.5px solid color-mix(in oklch, var(--green), transparent 30%);
+}
+
+.empty-title {
   margin: 0;
+  color: var(--ink);
+  font-size: 1.6rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.empty-sub {
+  margin: 0;
+  max-width: 440px;
+  color: var(--muted);
+  font-size: 0.97rem;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.empty-waiting {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: var(--space-md);
+  color: #7d7768;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.empty-dots {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.empty-dots span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #6f6a5c;
+  animation: empty-wait 1.4s ease-in-out infinite;
+}
+
+.empty-dots span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.empty-dots span:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes empty-wait {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.35;
+    transform: scale(0.8);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .empty-dots span {
+    animation: none;
+  }
 }

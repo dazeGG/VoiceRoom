@@ -56,6 +56,8 @@ export function createInitialRoomState(): AppState {
     participantViews: new Map(),
     peerId: peerSession.peerId,
     roomId,
+    roomName: '',
+    roomEmoji: '',
     roomRoute: window.location.pathname.startsWith('/r/'),
     savedName: '',
     screenFullscreen: false,

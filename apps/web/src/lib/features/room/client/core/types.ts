@@ -112,6 +112,8 @@ export interface RoomSessionState {
   joined: boolean;
   peerId: string;
   roomId: string;
+  roomName: string;
+  roomEmoji: string;
   roomRoute: boolean;
   savedName: string;
   sessionToken: string;

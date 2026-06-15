@@ -1,3 +1,5 @@
+import { state } from '../core/state';
+
 export async function fetchJson(url: string): Promise<any> {
   const response = await fetch(url, { headers: { Accept: 'application/json' } });
   if (!response.ok) throw new Error('Сервер недоступен');
@@ -33,5 +35,9 @@ export async function checkRoomExists(roomId: string): Promise<boolean> {
   if (!response.ok) throw new Error('Не удалось проверить комнату');
 
   const status = await response.json();
+  // Capture the room's display name/icon so the in-room top bar can show them
+  // instead of the bare code.
+  state.roomName = typeof status?.name === 'string' ? status.name : '';
+  state.roomEmoji = typeof status?.emoji === 'string' ? status.emoji : '';
   return Boolean(status?.exists);
 }
