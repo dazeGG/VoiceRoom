@@ -155,6 +155,21 @@ test('screen stream thumbnails show profile metadata instead of an action button
   assert.doesNotMatch(streamTilesCss, /stream-tile-action-disconnect/);
 });
 
+test('screen stage viewer badge renders viewer avatars instead of names', () => {
+  const stage = read('src/lib/features/room/components/ScreenStage.svelte');
+  const controls = read('src/lib/features/room/client/ui/screen-stage-controls.ts');
+  const css = read('src/lib/features/room/styles/screen.css');
+
+  assert.match(stage, /screen-meta-viewers/);
+  assert.match(controls, /renderScreenViewers/);
+  assert.match(controls, /createScreenViewerAvatar/);
+  assert.match(controls, /getAvatarColor\(viewer\.avatarColorKey\)/);
+  assert.match(controls, /getInitials\(viewer\.name\)/);
+  assert.doesNotMatch(controls, /formatScreenViewersLine/);
+  assert.doesNotMatch(controls, /names\.join/);
+  assert.match(css, /\.screen-meta-viewer-avatar/);
+});
+
 test('frontend visual catalog stays aligned with shared backend key contracts', () => {
   const shared = require('@voice-room/shared/validation');
   const tokens = read('src/lib/visual/tokens.ts');
