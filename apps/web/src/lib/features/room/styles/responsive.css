@@ -69,10 +69,6 @@
     padding: var(--space-lg);
   }
 
-  .not-found-panel {
-    padding: var(--space-lg);
-  }
-
   .room-dock {
     padding-inline: var(--space-xs);
   }

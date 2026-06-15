@@ -9,7 +9,12 @@ export default defineConfig({
   server: {
     host: DEV_HOST,
     proxy: {
-      '/api': API_TARGET
+      '/api': {
+        target: API_TARGET,
+        // Keep the browser-facing Host so the API same-origin guard can
+        // compare cookie-authenticated writes against the real page Origin.
+        changeOrigin: false
+      }
     }
   }
 });
