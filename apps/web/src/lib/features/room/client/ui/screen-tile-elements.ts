@@ -1,7 +1,6 @@
-import { getAvatarColor } from '$lib/visual/tokens';
+import { renderIcon } from './icons';
 import { SCREEN_FPS_OPTIONS, SCREEN_QUALITY_OPTIONS } from '../core/config';
 import { state } from '../core/state';
-import { getInitials } from '../core/utils';
 import { getScreenProfile, parseScreenProfileId } from '../media/profiles';
 import { playMediaElement } from '../services/media-playback-service';
 import type { Participant } from '../core/types';
@@ -55,7 +54,7 @@ export function createStreamTile({
     mountStreamTileVideo(preview, stream);
     preview.append(createStreamTileProfileMeta(participant));
   } else {
-    preview.append(createStreamTileAvatar(participant));
+    preview.append(createStreamTileIcon());
   }
 
   tile.append(preview);
@@ -143,14 +142,10 @@ function mountStreamTileVideo(preview: HTMLElement, stream: MediaStream): void {
   playMediaElement(video);
 }
 
-function createStreamTileAvatar(participant: Participant): HTMLElement {
-  const avatarColor = getAvatarColor(participant.avatarColorKey);
-  const avatar = document.createElement('span');
-  avatar.className = 'stream-tile-avatar';
-  avatar.setAttribute('aria-hidden', 'true');
-  avatar.style.setProperty('--avatar-bg', avatarColor.background);
-  avatar.style.setProperty('--avatar-fg', avatarColor.foreground);
-  avatar.style.setProperty('--avatar-shadow', avatarColor.shadow);
-  avatar.textContent = getInitials(participant.name);
-  return avatar;
+function createStreamTileIcon(): HTMLElement {
+  const icon = document.createElement('span');
+  icon.className = 'stream-tile-icon';
+  icon.setAttribute('aria-hidden', 'true');
+  icon.innerHTML = renderIcon('monitor');
+  return icon;
 }
