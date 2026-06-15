@@ -104,6 +104,22 @@ test('visual identity UI consumes backend keys and exposes only curated room pre
   assert.ok(tokens.indexOf('if (hasIconKey || hasColorKey)') < tokens.indexOf('item.emoji === value.emoji'));
 });
 
+
+test('participant tiles stay visually uniform and highlight only active speakers', () => {
+  const css = read('src/lib/features/room/styles/participants.css');
+  const participants = read('src/lib/features/room/client/room/participants.ts');
+  const meters = read('src/lib/features/room/client/media/meters.ts');
+  const livekit = read('src/lib/features/room/client/services/livekit-service.ts');
+
+  assert.match(css, /\.participant\[data-speaking="true"\]/);
+  assert.match(css, /border-color: var\(--green\)/);
+  assert.match(css, /\.participant\[data-speaking="true"\] \.voice-ring/);
+  assert.doesNotMatch(css, /\.participant\[data-local="true"\]\s*\{\s*border-color/s);
+  assert.match(participants, /view\.node\.dataset\.speaking = String\(Boolean\(speaking\)\)/);
+  assert.match(meters, /setParticipantSpeaking\(participant, isLocalMicrophoneSpeaking/);
+  assert.match(livekit, /RoomEvent\.ActiveSpeakersChanged/);
+});
+
 test('frontend visual catalog stays aligned with shared backend key contracts', () => {
   const shared = require('@voice-room/shared/validation');
   const tokens = read('src/lib/visual/tokens.ts');

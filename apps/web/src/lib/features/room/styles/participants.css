@@ -56,30 +56,26 @@ body[data-screen-view="true"][data-strip-collapsed="true"] .stage-strip {
   padding: clamp(var(--space-sm), 2.2vh, var(--space-lg)) var(--space-md);
   overflow: hidden;
   background:
-    linear-gradient(
-      180deg,
-      color-mix(in oklch, var(--participant-pastel), var(--paper-deep) 72%),
-      color-mix(in oklch, var(--participant-pastel), var(--paper-deep) 84%)
-    ),
-    var(--panel);
-  box-shadow: 0 10px 30px oklch(30% 0.03 245 / 0.08);
-  transition: border-color 180ms ease, background 180ms ease, box-shadow 180ms ease;
-}
-
-.participant[data-local="true"] {
-  border-color: color-mix(in oklch, var(--green), var(--line) 56%);
+    radial-gradient(circle at 50% 28%, oklch(22% 0.014 92 / 0.55), transparent 42%),
+    linear-gradient(160deg, oklch(12% 0.012 92), oklch(8.5% 0.01 92));
+  box-shadow: inset 0 1px 0 oklch(100% 0 0 / 0.04), 0 10px 30px oklch(0% 0 0 / 0.16);
+  transition: border-color 180ms ease, background 180ms ease, box-shadow 180ms ease, opacity 180ms ease;
 }
 
 .participant[data-muted="true"] {
-  opacity: 0.82;
+  opacity: 1;
 }
 
 .participant[data-screen="true"] {
-  border-color: color-mix(in oklch, var(--blue), var(--line) 28%);
+  border-color: color-mix(in oklch, var(--line), var(--blue) 16%);
 }
 
 .participant[data-speaking="true"] {
   border-color: var(--green);
+  box-shadow:
+    inset 0 1px 0 oklch(100% 0 0 / 0.05),
+    0 0 0 1px color-mix(in oklch, var(--green), transparent 34%),
+    0 18px 44px color-mix(in oklch, var(--green), transparent 82%);
 }
 
 .voice-ring {
@@ -94,7 +90,9 @@ body[data-screen-view="true"][data-strip-collapsed="true"] .stage-strip {
 
 .participant[data-speaking="true"] .voice-ring {
   transform: scale(1.03);
-  box-shadow: 0 0 0 2.5px color-mix(in oklch, var(--green), transparent 14%);
+  box-shadow:
+    0 0 0 2.5px color-mix(in oklch, var(--green), transparent 10%),
+    0 0 28px color-mix(in oklch, var(--green), transparent 78%);
 }
 
 .avatar {
@@ -113,7 +111,7 @@ body[data-screen-view="true"][data-strip-collapsed="true"] .stage-strip {
 }
 
 .participant[data-speaking="true"] .avatar {
-  box-shadow: none;
+  box-shadow: var(--participant-avatar-shadow);
 }
 
 /* Scale the avatar/ring down as the tile gets shorter so it never clips. */
