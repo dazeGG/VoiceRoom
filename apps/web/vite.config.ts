@@ -9,7 +9,10 @@ export default defineConfig({
   server: {
     host: DEV_HOST,
     proxy: {
-      '/api': API_TARGET
+      '/api': {
+        target: API_TARGET,
+        changeOrigin: false
+      }
     }
   }
 });
