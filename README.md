@@ -5,6 +5,11 @@ Voice Room - голосовая комната по ссылке с демонс
 ## Возможности
 
 - Комната по ссылке или короткому коду.
+- Временная комната в один клик — без имени и регистрации.
+- Аккаунты (логин + опциональное имя + пароль): постоянные комнаты привязываются к аккаунту и доступны с любого устройства. Имя из аккаунта автоподставляется в комнату.
+- Лобби комнат на `/` для залогиненного пользователя: сетка карточек с названием, эмодзи-иконкой, кодом и статусом «в эфире», создание комнаты через диалог (Постоянная / Временная) и вход по коду. Гость видит лендинг.
+- У комнаты есть название и эмодзи-иконка (из фиксированной палитры), выбираются при создании.
+- Внутри комнаты: сетка участников (аватары, обводка говорящего, иконка мьюта), сворачиваемый чат-рейл справа (кнопка «Чат» в шапке) и плавающий док с индикатором связи. Шапка показывает название комнаты, чип кода с копированием и «Ссылку».
 - Голос через self-hosted LiveKit SFU.
 - Демонстрация экрана без ручных настроек в вебе: старт по умолчанию `720p 30 FPS`, дальше приложение само снижает/возвращает качество по sender stats и состоянию соединения.
 - Внутренние профили стрима для автоадаптации (`540p`, `720p`, `1080p` при `15/30 FPS`) без UI выбора качества в браузере.
@@ -18,15 +23,16 @@ Voice Room - голосовая комната по ссылке с демонс
 apps/
   api/             Node.js HTTP API + SSE, только строгий /api/* контракт
     src/server.js  API-сервер комнат, presence/state и LiveKit JWT
-    src/lib/       серверные модули: config, db/migrations, pow, rate-limit
+    src/lib/       серверные модули: config, db/migrations, pow, rate-limit, auth (users/sessions, scrypt)
     test/          unit/integration тесты API
   web/             SvelteKit frontend app
-    src/routes/    тонкие SvelteKit routes: /, /r/[roomId]
-    src/lib/api/   typed fetch client: rooms, pow, common HTTP primitives
+    src/routes/    тонкие SvelteKit routes: /, /login, /register, /r/[roomId]
+    src/lib/api/   typed fetch client: rooms, auth, pow, common HTTP primitives
     src/lib/shared/
                    общие UI-компоненты, стили и утилиты
     src/lib/features/
-      home/        стартовая страница на Svelte (вместе с блоком загрузки приложения)
+      home/        «/»: лендинг для гостя и лобби комнат для залогиненного (плюс блок загрузки приложения)
+      auth/        экраны входа/регистрации + клиентский session store
       room/        Svelte room shell + room client/media layer
     static/        статика как есть: воркеты, rnnoise (wasm), icon, fonts
     dist/          production static build для Caddy
@@ -142,6 +148,15 @@ ROOM_CREATE_POW_TTL_MS=120000
 ROOM_CREATE_RATE_LIMIT=20
 ROOM_CREATE_RATE_WINDOW_MS=60000
 
+# Аккаунты и сессии. Сессия хранится в HttpOnly + SameSite=Lax cookie,
+# флаг Secure включается автоматически в production (NODE_ENV=production);
+# переопределите через SESSION_COOKIE_SECURE, если TLS терминируется иначе.
+# Пароли хешируются scrypt (встроенный node:crypto, без нативных зависимостей).
+SESSION_TTL_MS=2592000000
+# SESSION_COOKIE_SECURE=true
+AUTH_RATE_LIMIT=30
+AUTH_RATE_WINDOW_MS=60000
+
 # Для reverse proxy / systemd можно слушать Unix socket вместо TCP.
 # Если SOCKET_PATH пустой, API слушает HOST:PORT.
 HOST=127.0.0.1
@@ -235,9 +250,11 @@ npm run desktop
 
 ## Безопасность
 
-Комнаты приватны только за счет ссылки. Любой, у кого есть URL или код комнаты, может войти. Backend выдает LiveKit tokens только для существующих room sessions, но это не заменяет авторизацию, пароли комнат или аккаунты. Чат следует той же модели доступа: писать можно по ссылке/коду комнаты без входа в голосовую сессию.
+Комнаты приватны только за счет ссылки. Любой, у кого есть URL или код комнаты, может войти. Backend выдает LiveKit tokens только для существующих room sessions, но это не заменяет авторизацию или пароли на сами комнаты. Чат следует той же модели доступа: писать можно по ссылке/коду комнаты без входа в голосовую сессию.
 
-Static rooms не удаляются по idle TTL, поэтому они считаются в `MAX_EMPTY_ROOMS_PER_IP`: это защищает `MAX_ROOMS` от постоянного заполнения пустыми static-комнатами одним IP. Список «Мои статичные комнаты» в браузере — локальная bookmark-память (`localStorage`), а не аккаунтный серверный реестр.
+Аккаунты служат для владения постоянными комнатами, а не для контроля доступа к ним. Пароли хешируются `scrypt` (встроенный `node:crypto`), сессия живёт в HttpOnly + SameSite=Lax cookie (`vr_session`) до `SESSION_TTL_MS`; попытки входа/регистрации ограничены `AUTH_RATE_LIMIT` на IP. Логин нормализуется в нижний регистр и уникален. При создании постоянной комнаты залогиненным пользователем она получает `owner_id`, и список «Мои комнаты» приходит с сервера (`GET /api/auth/rooms`). Временные комнаты остаются ownerless.
+
+Постоянные комнаты больше не считаются в IP-квоту: создавать их могут только авторизованные пользователи, а владение ограничено `MAX_STATIC_ROOMS_PER_USER` (по умолчанию 3). Временные ownerless-комнаты остаются ограничены по IP через `MAX_TEMP_ROOMS_PER_IP` (legacy `MAX_EMPTY_ROOMS_PER_IP` используется только как fallback для старых env-файлов), чтобы один IP не заполнял `MAX_ROOMS` пустыми временными комнатами.
 
 История чата хранится в PostgreSQL до `ROOM_CHAT_TTL_MS`, но на комнату сохраняется не больше `ROOM_CHAT_MAX_MESSAGES` последних сообщений. Отправка чата ограничена `ROOM_CHAT_RATE_LIMIT` на пару IP+room за `ROOM_CHAT_RATE_WINDOW_MS`. Для production важно бэкапить PostgreSQL volume и не терять `DATABASE_URL`/credentials. Cleanup expired chat/idle dynamic rooms runs on request paths and on a process-local `ROOM_PRUNE_INTERVAL_MS` timer. Горизонтальное масштабирование API возможно только с учётом того, что presence, SSE handles, session tokens, cleanup timers и non-durable rate limit state остаются process-local; durable комнаты и сообщения находятся в PostgreSQL, а room quota/capacity enforcement выполняется транзакционно в PostgreSQL при создании комнаты.
 
