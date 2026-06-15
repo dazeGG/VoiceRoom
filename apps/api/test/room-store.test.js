@@ -74,12 +74,12 @@ test('PostgreSQL room store caps retained chat messages per room', async (t) => 
   assert.deepEqual(messages.map((message) => message.id), ['msg-2', 'msg-3']);
 });
 
-test('PostgreSQL room store counts quota rooms and prunes idle dynamic rooms', async (t) => {
+test('PostgreSQL room store counts only temporary rooms for IP quota and prunes idle dynamic rooms', async (t) => {
   const store = await createMigratedStore(t, { roomIdleTtlMs: 1000 });
   await store.createRoom({ creatorIp: 'ip-a', isStatic: true, roomId: 'staticquota1', now: 1000 });
   await store.createRoom({ creatorIp: 'ip-a', isStatic: false, roomId: 'emptyquota1', now: 1000 });
 
-  assert.equal(await store.countQuotaRoomsForIp('ip-a'), 2);
+  assert.equal(await store.countQuotaRoomsForIp('ip-a'), 1);
   assert.equal(await store.pruneRooms(2500), true);
   assert.equal(await store.getRoom('emptyquota1'), null);
   assert.ok(await store.getRoom('staticquota1'));

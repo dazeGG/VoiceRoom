@@ -5,6 +5,10 @@ const { createDbPool, transaction } = require('./db');
 
 const DEFAULT_MESSAGE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
+function createRowId() {
+  return crypto.randomUUID?.() || crypto.randomBytes(16).toString('hex');
+}
+
 function createRoomId() {
   const alphabet = 'abcdefghijkmnpqrstuvwxyz23456789';
   const bytes = crypto.randomBytes(10);
@@ -35,13 +39,20 @@ function mapRoom(row) {
   return {
     createdAt: toMillis(row.created_at),
     creatorIp: row.creator_ip || '',
+    emoji: row.emoji || '',
     emptySince: row.empty_since ? toMillis(row.empty_since) : null,
     id: row.id,
     isStatic: Boolean(row.is_static),
     messages: [],
+    name: row.name || '',
+    ownerId: row.owner_id || null,
     peers: new Map(),
     updatedAt: toMillis(row.updated_at)
   };
+}
+
+function withRelationship(room, relationship) {
+  return room ? { ...room, relationship: relationship || '' } : null;
 }
 
 function mapMessage(row) {
@@ -78,17 +89,33 @@ function createRoomStore({
     return activePool;
   }
 
-  async function createRoom({ roomId = createRoomId(), creatorIp, isStatic = false, now = Date.now() }) {
+  async function createRoom({
+    roomId = createRoomId(),
+    creatorIp,
+    isStatic = false,
+    ownerId = null,
+    name = '',
+    emoji = '',
+    now = Date.now()
+  }) {
     const id = String(roomId || '').trim();
     if (!id) {
       throw new Error('Room id is required');
     }
 
     const result = await getPool().query(
-      `INSERT INTO rooms (id, creator_ip, is_static, created_at, updated_at, empty_since)
-       VALUES ($1, $2, $3, $4, $4, $4)
+      `INSERT INTO rooms (id, creator_ip, is_static, owner_id, name, emoji, created_at, updated_at, empty_since)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $7, $7)
        RETURNING *`,
-      [id, typeof creatorIp === 'string' ? creatorIp : '', Boolean(isStatic), toDate(now)]
+      [
+        id,
+        typeof creatorIp === 'string' ? creatorIp : '',
+        Boolean(isStatic),
+        ownerId || null,
+        typeof name === 'string' ? name : '',
+        typeof emoji === 'string' ? emoji : '',
+        toDate(now)
+      ]
     );
     return mapRoom(result.rows[0]);
   }
@@ -97,8 +124,13 @@ function createRoomStore({
     roomId = createRoomId(),
     creatorIp,
     isStatic = false,
+    ownerId = null,
+    name = '',
+    emoji = '',
+    maxOwnedStaticRoomsPerUser = 3,
     maxQuotaRoomsPerIp = 0,
     maxRooms = 100,
+    maxTempRoomsPerIp = maxQuotaRoomsPerIp,
     now = Date.now()
   }) {
     const id = String(roomId || '').trim();
@@ -110,16 +142,34 @@ function createRoomStore({
       await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, ['voice-room:create-room']);
 
       const normalizedCreatorIp = typeof creatorIp === 'string' ? creatorIp : '';
-      if (maxQuotaRoomsPerIp > 0) {
+      if (isStatic && !ownerId) {
+        return { room: null, status: 'auth_required' };
+      }
+      if (isStatic && maxOwnedStaticRoomsPerUser > 0) {
+        const ownedQuota = await client.query(
+          `SELECT COUNT(*)::int AS count
+           FROM room_memberships rm
+           JOIN rooms r ON r.id = rm.room_id
+           WHERE rm.user_id = $1
+             AND rm.role = 'owner'
+             AND r.is_static = true
+             AND r.deleted_at IS NULL`,
+          [ownerId]
+        );
+        if ((ownedQuota.rows[0]?.count || 0) >= maxOwnedStaticRoomsPerUser) {
+          return { room: null, status: 'quota_exceeded' };
+        }
+      }
+      if (!isStatic && maxTempRoomsPerIp > 0) {
         const quota = await client.query(
           `SELECT COUNT(*)::int AS count
            FROM rooms
            WHERE creator_ip = $1
              AND deleted_at IS NULL
-             AND (is_static = true OR empty_since IS NOT NULL)`,
+             AND is_static = false`,
           [normalizedCreatorIp]
         );
-        if ((quota.rows[0]?.count || 0) >= maxQuotaRoomsPerIp) {
+        if ((quota.rows[0]?.count || 0) >= maxTempRoomsPerIp) {
           return { room: null, status: 'quota_exceeded' };
         }
       }
@@ -130,11 +180,29 @@ function createRoomStore({
       }
 
       const inserted = await client.query(
-        `INSERT INTO rooms (id, creator_ip, is_static, created_at, updated_at, empty_since)
-         VALUES ($1, $2, $3, $4, $4, $4)
+        `INSERT INTO rooms (id, creator_ip, is_static, owner_id, name, emoji, created_at, updated_at, empty_since)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $7, $7)
          RETURNING *`,
-        [id, normalizedCreatorIp, Boolean(isStatic), toDate(now)]
+        [
+          id,
+          normalizedCreatorIp,
+          Boolean(isStatic),
+          ownerId || null,
+          typeof name === 'string' ? name : '',
+          typeof emoji === 'string' ? emoji : '',
+          toDate(now)
+        ]
       );
+      if (isStatic && ownerId) {
+        await client.query(
+          `INSERT INTO room_memberships (id, room_id, user_id, role, created_at, updated_at)
+           VALUES ($1, $2, $3, 'owner', $4, $4)
+           ON CONFLICT (room_id, user_id) DO UPDATE
+           SET role = 'owner', updated_at = EXCLUDED.updated_at`,
+          [createRowId(), id, ownerId, toDate(now)]
+        );
+      }
+
       return { room: mapRoom(inserted.rows[0]), status: 'created' };
     });
   }
@@ -194,8 +262,23 @@ function createRoomStore({
        FROM rooms
        WHERE creator_ip = $1
          AND deleted_at IS NULL
-         AND (is_static = true OR empty_since IS NOT NULL)`,
+         AND is_static = false`,
       [typeof creatorIp === 'string' ? creatorIp : '']
+    );
+    return result.rows[0]?.count || 0;
+  }
+
+  async function countOwnedStaticRoomsForUser(userId) {
+    if (!userId) return 0;
+    const result = await getPool().query(
+      `SELECT COUNT(*)::int AS count
+       FROM room_memberships rm
+       JOIN rooms r ON r.id = rm.room_id
+       WHERE rm.user_id = $1
+         AND rm.role = 'owner'
+         AND r.is_static = true
+         AND r.deleted_at IS NULL`,
+      [userId]
     );
     return result.rows[0]?.count || 0;
   }
@@ -298,6 +381,83 @@ function createRoomStore({
     return result.rows.map(mapMessage);
   }
 
+  async function listRoomsForOwner(ownerId) {
+    if (!ownerId) return [];
+    const result = await getPool().query(
+      `SELECT r.*
+       FROM room_memberships rm
+       JOIN rooms r ON r.id = rm.room_id
+       WHERE rm.user_id = $1
+         AND rm.role = 'owner'
+         AND r.deleted_at IS NULL
+       ORDER BY r.created_at DESC`,
+      [ownerId]
+    );
+    return result.rows.map(mapRoom);
+  }
+
+  async function listVisibleRoomsForUser(userId) {
+    if (!userId) return [];
+    const result = await getPool().query(
+      `WITH visible AS (
+         SELECT r.*, 'owner'::text AS relationship, 1 AS priority
+         FROM room_memberships rm
+         JOIN rooms r ON r.id = rm.room_id
+         WHERE rm.user_id = $1
+           AND rm.role = 'owner'
+           AND r.is_static = true
+           AND r.deleted_at IS NULL
+         UNION ALL
+         SELECT r.*, 'bookmarked'::text AS relationship, 2 AS priority
+         FROM room_bookmarks rb
+         JOIN rooms r ON r.id = rb.room_id
+         WHERE rb.user_id = $1
+           AND r.is_static = true
+           AND r.deleted_at IS NULL
+       ), deduped AS (
+         SELECT DISTINCT ON (id) *
+         FROM visible
+         ORDER BY id, priority ASC, created_at DESC
+       )
+       SELECT * FROM deduped
+       ORDER BY created_at DESC, id ASC`,
+      [userId]
+    );
+    return result.rows.map((row) => withRelationship(mapRoom(row), row.relationship));
+  }
+
+  async function addRoomBookmarkForUser(userId, roomId, now = Date.now()) {
+    if (!userId || !roomId) return { room: null, status: 'not_found' };
+    return transaction(getPool(), async (client) => {
+      const roomResult = await client.query(
+        `SELECT * FROM rooms WHERE id = $1 AND deleted_at IS NULL`,
+        [roomId]
+      );
+      const room = mapRoom(roomResult.rows[0]);
+      if (!room) return { room: null, status: 'not_found' };
+      if (!room.isStatic) return { room: null, status: 'temporary_room' };
+
+      await client.query(
+        `INSERT INTO room_bookmarks (id, room_id, user_id, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $4)
+         ON CONFLICT (user_id, room_id) DO UPDATE
+         SET updated_at = EXCLUDED.updated_at`,
+        [createRowId(), room.id, userId, toDate(now)]
+      );
+
+      const owner = await client.query(
+        `SELECT 1 FROM room_memberships
+         WHERE room_id = $1 AND user_id = $2 AND role = 'owner'
+         LIMIT 1`,
+        [room.id, userId]
+      );
+      return {
+        room: withRelationship(room, owner.rowCount > 0 ? 'owner' : 'bookmarked'),
+        status: 'bookmarked'
+      };
+    });
+  }
+
   async function close() {
     if (activePool) {
       await activePool.end();
@@ -308,6 +468,7 @@ function createRoomStore({
     appendMessage,
     close,
     countEmptyRoomsForIp,
+    countOwnedStaticRoomsForUser,
     countQuotaRoomsForIp,
     countRooms,
     createRoom,
@@ -315,6 +476,9 @@ function createRoomStore({
     deleteRoom,
     getRoom,
     listMessages,
+    listRoomsForOwner,
+    listVisibleRoomsForUser,
+    addRoomBookmarkForUser,
     markRoomActive,
     markRoomEmpty,
     pruneRooms

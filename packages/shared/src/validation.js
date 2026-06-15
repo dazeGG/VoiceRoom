@@ -37,6 +37,43 @@ function cleanName(value) {
   return compact.slice(0, 40);
 }
 
+// Account login: lower-cased handle, 3–32 chars of [a-z0-9._-]. Returns '' when
+// the value can't be a valid login so callers can branch on the empty string.
+function normalizeLogin(value) {
+  if (typeof value !== 'string') return '';
+  const login = value.trim().toLowerCase();
+  return /^[a-z0-9._-]{3,32}$/.test(login) ? login : '';
+}
+
+// Optional display name shown to other people. Unlike cleanName it never
+// substitutes a "Guest" fallback — an empty result means "not provided".
+function cleanDisplayName(value) {
+  if (typeof value !== 'string') return '';
+  return value.replace(/\s+/g, ' ').trim().slice(0, 40);
+}
+
+const PASSWORD_MIN_LENGTH = 8;
+const PASSWORD_MAX_LENGTH = 200;
+
+function isValidPassword(value) {
+  return typeof value === 'string' && value.length >= PASSWORD_MIN_LENGTH && value.length <= PASSWORD_MAX_LENGTH;
+}
+
+// Optional room name shown in the lobby and in-room. Empty result means "no name"
+// (room is then identified by its code).
+function cleanRoomName(value) {
+  if (typeof value !== 'string') return '';
+  return value.replace(/\s+/g, ' ').trim().slice(0, 60);
+}
+
+// Fixed palette of room icons. Restricting to a known set keeps emoji validation
+// trivial and storage bounded — the picker on the client offers exactly these.
+const ROOM_EMOJIS = ['🎧', '📌', '🌙', '☀️', '🎮', '🎙️', '🔥'];
+
+function cleanRoomEmoji(value) {
+  return typeof value === 'string' && ROOM_EMOJIS.includes(value) ? value : '';
+}
+
 function cleanStreamId(value) {
   if (typeof value !== 'string') return '';
   const streamId = value.trim();
@@ -56,12 +93,20 @@ function cleanLiveKitUrl(value) {
 }
 
 module.exports = {
+  PASSWORD_MAX_LENGTH,
+  PASSWORD_MIN_LENGTH,
+  ROOM_EMOJIS,
   SCREEN_PROFILE_IDS,
-  normalizeRoomId,
-  normalizePeerId,
-  normalizeSessionToken,
+  cleanDisplayName,
+  cleanLiveKitUrl,
   cleanName,
-  cleanStreamId,
+  cleanRoomEmoji,
+  cleanRoomName,
   cleanScreenProfileId,
-  cleanLiveKitUrl
+  cleanStreamId,
+  isValidPassword,
+  normalizeLogin,
+  normalizePeerId,
+  normalizeRoomId,
+  normalizeSessionToken
 };

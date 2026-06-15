@@ -1,7 +1,8 @@
 'use strict';
 
 const crypto = require('node:crypto');
-const http = require('node:http');
+const fastify = require('fastify');
+const fastifyCookie = require('@fastify/cookie');
 const { URL } = require('node:url');
 const { AccessToken, TrackSource } = require('livekit-server-sdk');
 
@@ -11,13 +12,19 @@ const {
   normalizePeerId,
   normalizeSessionToken,
   cleanName,
+  cleanDisplayName,
+  cleanRoomName,
+  cleanRoomEmoji,
   cleanStreamId,
   cleanScreenProfileId,
-  cleanLiveKitUrl
+  cleanLiveKitUrl,
+  isValidPassword,
+  normalizeLogin
 } = require('@voice-room/shared/validation');
 const { createProofOfWork } = require('./lib/pow');
 const { getClientIp, createRateLimiter } = require('./lib/rate-limit');
 const { createRoomStore } = require('./lib/room-store');
+const { createUserStore, publicUser } = require('./lib/user-store');
 const { startApiListener } = require('./lib/listen');
 const { runMigrations } = require('./lib/migrate');
 
@@ -39,9 +46,19 @@ const ROOM_CHAT_RATE_LIMIT = readEnvInt('ROOM_CHAT_RATE_LIMIT', 60, 0);
 const ROOM_CHAT_RATE_WINDOW_MS = readEnvInt('ROOM_CHAT_RATE_WINDOW_MS', 60000, 1000);
 const ROOM_CREATE_RATE_LIMIT = readEnvInt('ROOM_CREATE_RATE_LIMIT', 20, 0);
 const ROOM_CREATE_RATE_WINDOW_MS = readEnvInt('ROOM_CREATE_RATE_WINDOW_MS', 60000, 1000);
-const MAX_EMPTY_ROOMS_PER_IP = readEnvInt('MAX_EMPTY_ROOMS_PER_IP', 3, 0);
+const MAX_TEMP_ROOMS_PER_IP = readEnvInt(
+  'MAX_TEMP_ROOMS_PER_IP',
+  readEnvInt('MAX_EMPTY_ROOMS_PER_IP', 1, 0),
+  0
+);
+const MAX_STATIC_ROOMS_PER_USER = readEnvInt('MAX_STATIC_ROOMS_PER_USER', 3, 0);
 const ROOM_CREATE_POW_DIFFICULTY = Math.min(readEnvInt('ROOM_CREATE_POW_DIFFICULTY', 14, 0), 32);
 const ROOM_CREATE_POW_TTL_MS = readEnvInt('ROOM_CREATE_POW_TTL_MS', 120000, 10000);
+const SESSION_TTL_MS = readEnvInt('SESSION_TTL_MS', 30 * 24 * 60 * 60 * 1000, 60000);
+const SESSION_COOKIE_NAME = 'vr_session';
+const SESSION_COOKIE_SECURE = readEnvBool('SESSION_COOKIE_SECURE', process.env.NODE_ENV === 'production');
+const AUTH_RATE_LIMIT = readEnvInt('AUTH_RATE_LIMIT', 30, 0);
+const AUTH_RATE_WINDOW_MS = readEnvInt('AUTH_RATE_WINDOW_MS', 60000, 1000);
 // Desktop app downloads are served from the latest GitHub release of this repo.
 // Metadata is cached server-side so visitors never hit GitHub's per-IP rate limit.
 const DESKTOP_RELEASE_REPO = (process.env.DESKTOP_RELEASE_REPO || 'dazeGG/VoiceRoomDesktop').trim();
@@ -49,6 +66,7 @@ const DESKTOP_RELEASE_CACHE_MS = readEnvInt('DESKTOP_RELEASE_CACHE_MS', 600000, 
 const DESKTOP_RELEASE_TIMEOUT_MS = readEnvInt('DESKTOP_RELEASE_TIMEOUT_MS', 6000, 1000);
 
 let roomStore = null;
+let userStore = null;
 const presenceRooms = new Map();
 const roomChatStreams = new Map();
 
@@ -61,6 +79,13 @@ function getRoomStore() {
     });
   }
   return roomStore;
+}
+
+function getUserStore() {
+  if (!userStore) {
+    userStore = createUserStore({ sessionTtlMs: SESSION_TTL_MS });
+  }
+  return userStore;
 }
 
 function getPresenceRoom(roomId) {
@@ -92,6 +117,10 @@ const roomCreateLimiter = createRateLimiter({
 const roomChatLimiter = createRateLimiter({
   limit: ROOM_CHAT_RATE_LIMIT,
   windowMs: ROOM_CHAT_RATE_WINDOW_MS
+});
+const authLimiter = createRateLimiter({
+  limit: AUTH_RATE_LIMIT,
+  windowMs: AUTH_RATE_WINDOW_MS
 });
 
 function getLiveKitConnectSources() {
@@ -166,6 +195,48 @@ function sendSse(res, message) {
   }
 }
 
+function parseCookies(req) {
+  const header = req.headers?.cookie;
+  const cookies = {};
+  if (typeof header !== 'string' || !header) return cookies;
+  for (const part of header.split(';')) {
+    const index = part.indexOf('=');
+    if (index === -1) continue;
+    const name = part.slice(0, index).trim();
+    if (!name) continue;
+    cookies[name] = decodeURIComponent(part.slice(index + 1).trim());
+  }
+  return cookies;
+}
+
+function getSessionToken(req) {
+  return parseCookies(req)[SESSION_COOKIE_NAME] || '';
+}
+
+async function resolveSessionUser(req) {
+  const token = getSessionToken(req);
+  if (!token) return null;
+  return getUserStore().getSessionUser(token);
+}
+
+function buildSessionCookie(token, maxAgeSeconds) {
+  const parts = [
+    `${SESSION_COOKIE_NAME}=${encodeURIComponent(token)}`,
+    'Path=/',
+    'HttpOnly',
+    'SameSite=Lax',
+    `Max-Age=${Math.max(0, Math.floor(maxAgeSeconds))}`
+  ];
+  if (SESSION_COOKIE_SECURE) parts.push('Secure');
+  return parts.join('; ');
+}
+
+function clearSessionCookie() {
+  const parts = [`${SESSION_COOKIE_NAME}=`, 'Path=/', 'HttpOnly', 'SameSite=Lax', 'Max-Age=0'];
+  if (SESSION_COOKIE_SECURE) parts.push('Secure');
+  return parts.join('; ');
+}
+
 function getLiveKitRoomName(roomId) {
   const prefix = String(process.env.LIVEKIT_ROOM_PREFIX || 'voice-room-').replace(/[^A-Za-z0-9_.:-]/g, '-');
   return `${prefix}${roomId}`;
@@ -213,6 +284,11 @@ function startPruneTimer(server, logger = console) {
     void pruneRooms().catch((error) => {
       logger.error('Room prune timer failed:', error);
     });
+    void getUserStore()
+      .pruneSessions()
+      .catch((error) => {
+        logger.error('Session prune timer failed:', error);
+      });
   }, ROOM_PRUNE_INTERVAL_MS);
 
   if (typeof timer.unref === 'function') timer.unref();
@@ -224,7 +300,7 @@ async function countRoomCreationQuotaRoomsForIp(clientIp) {
   return getRoomStore().countQuotaRoomsForIp(clientIp);
 }
 
-async function createRoomForRequest(creatorIp, isStatic = false) {
+async function createRoomForRequest(creatorIp, { isStatic = false, ownerId = null, name = '', emoji = '' } = {}) {
   await pruneRooms();
 
   let roomId = createRoomId();
@@ -235,8 +311,12 @@ async function createRoomForRequest(creatorIp, isStatic = false) {
   return getRoomStore().createRoomWithQuota({
     creatorIp,
     isStatic,
-    maxQuotaRoomsPerIp: MAX_EMPTY_ROOMS_PER_IP,
+    ownerId,
+    name,
+    emoji,
+    maxOwnedStaticRoomsPerUser: MAX_STATIC_ROOMS_PER_USER,
     maxRooms: MAX_ROOMS,
+    maxTempRoomsPerIp: MAX_TEMP_ROOMS_PER_IP,
     roomId
   });
 }
@@ -370,6 +450,10 @@ function broadcastChat(roomId, message) {
 }
 
 async function readJsonBody(req) {
+  if (req && Object.hasOwn(req, 'body')) {
+    return req.body && typeof req.body === 'object' ? req.body : {};
+  }
+
   let body = '';
   for await (const chunk of req) {
     body += chunk;
@@ -594,11 +678,28 @@ async function handleCreateRoom(req, res) {
   }
 
   const clientIp = getClientIp(req, TRUST_PROXY);
-  const created = await createRoomForRequest(clientIp, parseBoolean(body.isStatic));
+  const isStatic = parseBoolean(body.isStatic);
+  const name = cleanRoomName(body.name);
+  const emoji = cleanRoomEmoji(body.emoji);
+  // Persistent rooms are tied to the account that creates them so they can be
+  // listed back from any device; temporary rooms stay ownerless.
+  const session = isStatic ? await resolveSessionUser(req) : null;
+  if (isStatic && !session) {
+    sendJson(res, 401, { ok: false, error: 'Требуется вход для создания постоянной комнаты' });
+    return;
+  }
+  const ownerId = session?.user?.id ?? null;
+  const created = await createRoomForRequest(clientIp, { isStatic, ownerId, name, emoji });
+  if (created.status === 'auth_required') {
+    sendJson(res, 401, { ok: false, error: 'Требуется вход для создания постоянной комнаты' });
+    return;
+  }
   if (created.status === 'quota_exceeded') {
     sendJson(res, 429, {
       ok: false,
-      error: 'Too many rooms waiting from this IP, reuse one or try later'
+      error: isStatic
+        ? 'Можно владеть максимум 3 постоянными комнатами'
+        : 'Too many temporary rooms waiting from this IP, reuse one or try later'
     });
     return;
   }
@@ -611,11 +712,167 @@ async function handleCreateRoom(req, res) {
   sendJson(res, 201, {
     ok: true,
     createdAt: room.createdAt,
+    emoji: room.emoji,
     maxRooms: MAX_ROOMS,
     maxRoomPeers: MAX_ROOM_PEERS,
     isStatic: room.isStatic,
+    name: room.name,
+    owned: Boolean(room.ownerId),
     roomId: room.id
   });
+}
+
+async function handleRegister(req, res) {
+  const clientIp = getClientIp(req, TRUST_PROXY);
+  const rate = authLimiter.check(`register:${clientIp}`);
+  if (!rate.allowed) {
+    sendJson(
+      res,
+      429,
+      { ok: false, error: 'Слишком много попыток, попробуйте позже' },
+      { 'Retry-After': String(rate.retryAfterSeconds) }
+    );
+    return;
+  }
+
+  const body = await readJsonBody(req);
+  const login = normalizeLogin(body.login);
+  const displayName = cleanDisplayName(body.displayName);
+  const password = typeof body.password === 'string' ? body.password : '';
+  const passwordConfirm = typeof body.passwordConfirm === 'string' ? body.passwordConfirm : password;
+
+  if (!login) {
+    sendJson(res, 400, { ok: false, error: 'Логин: 3–32 символа, латиница, цифры, . _ -' });
+    return;
+  }
+  if (!isValidPassword(password)) {
+    sendJson(res, 400, { ok: false, error: 'Пароль должен быть не короче 8 символов' });
+    return;
+  }
+  if (password !== passwordConfirm) {
+    sendJson(res, 400, { ok: false, error: 'Пароли не совпадают' });
+    return;
+  }
+
+  const created = await getUserStore().createUser({ login, displayName, password });
+  if (created.status === 'login_taken') {
+    sendJson(res, 409, { ok: false, error: 'Этот логин уже занят' });
+    return;
+  }
+
+  const session = await getUserStore().createSession({ userId: created.user.id });
+  sendJson(
+    res,
+    201,
+    { ok: true, user: publicUser(created.user) },
+    { 'Set-Cookie': buildSessionCookie(session.token, SESSION_TTL_MS / 1000) }
+  );
+}
+
+async function handleLogin(req, res) {
+  const clientIp = getClientIp(req, TRUST_PROXY);
+  const rate = authLimiter.check(`login:${clientIp}`);
+  if (!rate.allowed) {
+    sendJson(
+      res,
+      429,
+      { ok: false, error: 'Слишком много попыток, попробуйте позже' },
+      { 'Retry-After': String(rate.retryAfterSeconds) }
+    );
+    return;
+  }
+
+  const body = await readJsonBody(req);
+  const login = normalizeLogin(body.login);
+  const password = typeof body.password === 'string' ? body.password : '';
+
+  if (!login || !password) {
+    sendJson(res, 401, { ok: false, error: 'Неверный логин или пароль' });
+    return;
+  }
+
+  const user = await getUserStore().verifyCredentials(login, password);
+  if (!user) {
+    sendJson(res, 401, { ok: false, error: 'Неверный логин или пароль' });
+    return;
+  }
+
+  const session = await getUserStore().createSession({ userId: user.id });
+  sendJson(
+    res,
+    200,
+    { ok: true, user: publicUser(user) },
+    { 'Set-Cookie': buildSessionCookie(session.token, SESSION_TTL_MS / 1000) }
+  );
+}
+
+async function handleLogout(req, res) {
+  const token = getSessionToken(req);
+  if (token) {
+    await getUserStore().deleteSession(token);
+  }
+  sendJson(res, 200, { ok: true }, { 'Set-Cookie': clearSessionCookie() });
+}
+
+async function handleMe(req, res) {
+  const session = await resolveSessionUser(req);
+  sendJson(res, 200, { ok: true, user: session ? publicUser(session.user) : null });
+}
+
+function publicLobbyRoom(room) {
+  return {
+    createdAt: room.createdAt,
+    emoji: room.emoji,
+    emptySince: room.emptySince,
+    isStatic: room.isStatic,
+    name: room.name,
+    peers: presenceRooms.get(room.id)?.peers.size ?? 0,
+    relationship: room.relationship || 'owner',
+    roomId: room.id
+  };
+}
+
+async function handleAuthRooms(req, res) {
+  const session = await resolveSessionUser(req);
+  if (!session) {
+    sendJson(res, 401, { ok: false, error: 'Требуется вход' });
+    return;
+  }
+
+  await pruneRooms();
+  const rooms = await getRoomStore().listVisibleRoomsForUser(session.user.id);
+  sendJson(res, 200, {
+    ok: true,
+    rooms: rooms.map(publicLobbyRoom)
+  });
+}
+
+async function handleAddAuthRoom(req, res) {
+  const session = await resolveSessionUser(req);
+  if (!session) {
+    sendJson(res, 401, { ok: false, error: 'Требуется вход' });
+    return;
+  }
+
+  const body = await readJsonBody(req);
+  const roomId = normalizeRoomId(body.roomId || body.code || body.roomCode);
+  if (!roomId) {
+    sendJson(res, 400, { ok: false, error: 'Неверный код комнаты' });
+    return;
+  }
+
+  await pruneRooms();
+  const added = await getRoomStore().addRoomBookmarkForUser(session.user.id, roomId);
+  if (added.status === 'not_found') {
+    sendJson(res, 404, { ok: false, error: 'Комната не найдена' });
+    return;
+  }
+  if (added.status === 'temporary_room') {
+    sendJson(res, 400, { ok: false, error: 'В список можно добавить только постоянную комнату' });
+    return;
+  }
+
+  sendJson(res, 200, { ok: true, room: publicLobbyRoom(added.room) });
 }
 
 async function handleRoomStatus(res, url) {
@@ -636,10 +893,12 @@ async function handleRoomStatus(res, url) {
   sendJson(res, 200, {
     ok: true,
     createdAt: room.createdAt,
+    emoji: room.emoji,
     exists: true,
     emptySince: room.emptySince,
     isStatic: room.isStatic,
     maxRoomPeers: MAX_ROOM_PEERS,
+    name: room.name,
     peers: room.peers.size,
     roomId
   });
@@ -882,87 +1141,18 @@ function getApiRoutePath(pathname) {
   return null;
 }
 
-function createApiServer({ store = null } = {}) {
-  if (store) roomStore = store;
-  return http.createServer(async (req, res) => {
+function attachFastifyRequestBody(request) {
+  request.raw.body = request.body;
+  return request.raw;
+}
+
+async function runLegacyHandler(request, reply, handler) {
+  reply.hijack();
+  const req = attachFastifyRequestBody(request);
+  const res = reply.raw;
+
   try {
-    const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
-    const routePath = getApiRoutePath(url.pathname);
-    if (!routePath) {
-      sendJson(res, 404, { ok: false, error: 'Not found' });
-      return;
-    }
-
-    if (req.method === 'GET' && routePath === '/healthz') {
-      await pruneRooms();
-      const livekit = getLiveKitConfig();
-      sendJson(res, 200, {
-        livekit: livekit.enabled,
-        livekitUrl: livekit.url || null,
-        ok: true,
-        maxRooms: MAX_ROOMS,
-        rooms: await getRoomStore().countRooms(),
-        peers: Array.from(presenceRooms.values()).reduce((count, room) => count + room.peers.size, 0)
-      });
-      return;
-    }
-
-    if (req.method === 'GET' && routePath === '/pow-challenge') {
-      handlePowChallenge(req, res);
-      return;
-    }
-
-    if (req.method === 'GET' && routePath === '/desktop/latest') {
-      await handleDesktopLatest(res);
-      return;
-    }
-
-    if (req.method === 'POST' && routePath === '/rooms') {
-      await handleCreateRoom(req, res);
-      return;
-    }
-
-    if (req.method === 'GET' && routePath.startsWith('/rooms/')) {
-      const chatMatch = routePath.match(/^\/rooms\/([A-Za-z0-9_-]{3,48})\/chat\/stream$/);
-      if (chatMatch) {
-        await handleRoomChatStream(req, res, normalizeRoomId(chatMatch[1]));
-        return;
-      }
-
-      const listMatch = routePath.match(/^\/rooms\/([A-Za-z0-9_-]{3,48})\/chat$/);
-      if (listMatch) {
-        await handleRoomChatList(res, normalizeRoomId(listMatch[1]));
-        return;
-      }
-
-      await handleRoomStatus(res, new URL(routePath, url));
-      return;
-    }
-
-    if (req.method === 'GET' && routePath === '/events') {
-      await handleEvents(req, res, url);
-      return;
-    }
-
-    if (req.method === 'POST' && routePath === '/livekit-token') {
-      await handleLiveKitToken(req, res);
-      return;
-    }
-
-    if (req.method === 'POST' && routePath === '/state') {
-      await handleState(req, res);
-      return;
-    }
-
-    if (req.method === 'POST') {
-      const chatMatch = routePath.match(/^\/rooms\/([A-Za-z0-9_-]{3,48})\/chat$/);
-      if (chatMatch) {
-        await handleRoomChatPost(req, res, normalizeRoomId(chatMatch[1]));
-        return;
-      }
-    }
-
-    sendJson(res, 404, { ok: false, error: 'Not found' });
+    await handler(req, res, request);
   } catch (error) {
     const status = error.statusCode || 500;
     const message = error.publicMessage || (status >= 500 ? 'Internal server error' : error.message);
@@ -971,11 +1161,97 @@ function createApiServer({ store = null } = {}) {
     }
     if (!res.headersSent) {
       sendJson(res, status, { ok: false, error: message });
-    } else {
+    } else if (!res.writableEnded) {
       res.end();
     }
   }
+}
+
+function createApiApp({ store = null, users = null } = {}) {
+  if (store) roomStore = store;
+  if (users) userStore = users;
+
+  const app = fastify({
+    bodyLimit: BODY_LIMIT_BYTES,
+    logger: false,
+    trustProxy: TRUST_PROXY
   });
+
+  app.register(fastifyCookie, { hook: 'onRequest' });
+
+  app.setNotFoundHandler((request, reply) => {
+    reply.headers(baseHeaders()).code(404).send({ ok: false, error: 'Not found' });
+  });
+
+  app.get('/api/healthz', (request, reply) => runLegacyHandler(request, reply, async (req, res) => {
+    await pruneRooms();
+    const livekit = getLiveKitConfig();
+    sendJson(res, 200, {
+      livekit: livekit.enabled,
+      livekitUrl: livekit.url || null,
+      ok: true,
+      maxRooms: MAX_ROOMS,
+      rooms: await getRoomStore().countRooms(),
+      peers: Array.from(presenceRooms.values()).reduce((count, room) => count + room.peers.size, 0)
+    });
+  }));
+
+  app.get('/api/pow-challenge', (request, reply) => runLegacyHandler(request, reply, handlePowChallenge));
+  app.get('/api/desktop/latest', (request, reply) => runLegacyHandler(request, reply, (_req, res) => handleDesktopLatest(res)));
+  app.post('/api/auth/register', (request, reply) => runLegacyHandler(request, reply, handleRegister));
+  app.post('/api/auth/login', (request, reply) => runLegacyHandler(request, reply, handleLogin));
+  app.post('/api/auth/logout', (request, reply) => runLegacyHandler(request, reply, handleLogout));
+  app.get('/api/auth/me', (request, reply) => runLegacyHandler(request, reply, handleMe));
+  app.get('/api/auth/rooms', (request, reply) => runLegacyHandler(request, reply, handleAuthRooms));
+  app.post('/api/auth/rooms', (request, reply) => runLegacyHandler(request, reply, handleAddAuthRoom));
+  app.post('/api/rooms', (request, reply) => runLegacyHandler(request, reply, handleCreateRoom));
+  app.get('/api/rooms/:roomId', (request, reply) => runLegacyHandler(request, reply, (_req, res) => {
+    const roomId = normalizeRoomId(request.params.roomId);
+    return handleRoomStatus(res, new URL(`/rooms/${roomId}`, 'http://localhost'));
+  }));
+  app.get('/api/rooms/:roomId/chat', (request, reply) => runLegacyHandler(request, reply, (_req, res) => {
+    return handleRoomChatList(res, normalizeRoomId(request.params.roomId));
+  }));
+  app.get('/api/rooms/:roomId/chat/stream', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
+    return handleRoomChatStream(req, res, normalizeRoomId(request.params.roomId));
+  }));
+  app.post('/api/rooms/:roomId/chat', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
+    return handleRoomChatPost(req, res, normalizeRoomId(request.params.roomId));
+  }));
+  app.get('/api/events', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
+    const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
+    return handleEvents(req, res, url);
+  }));
+  app.post('/api/livekit-token', (request, reply) => runLegacyHandler(request, reply, handleLiveKitToken));
+  app.post('/api/state', (request, reply) => runLegacyHandler(request, reply, handleState));
+
+  return app;
+}
+
+function createApiServer(options = {}) {
+  const app = createApiApp(options);
+  const server = app.server;
+  const listen = server.listen.bind(server);
+  server.app = app;
+  server.inject = app.inject.bind(app);
+  server.listen = (...args) => {
+    const callback = typeof args.at(-1) === 'function' ? args.at(-1) : null;
+    const listenArgs = callback ? args.slice(0, -1) : args;
+
+    app.ready((error) => {
+      if (error) {
+        if (callback) {
+          callback(error);
+          return;
+        }
+        server.emit('error', error);
+        return;
+      }
+      listen(...listenArgs, callback || undefined);
+    });
+    return server;
+  };
+  return server;
 }
 
 async function bootstrap({ env = process.env, logger = console, exit = process.exit } = {}) {
@@ -989,7 +1265,9 @@ async function bootstrap({ env = process.env, logger = console, exit = process.e
       messageTtlMs: ROOM_CHAT_TTL_MS,
       roomIdleTtlMs: ROOM_IDLE_TTL_MS
     });
-    const server = createApiServer({ store: roomStore });
+    userStore = createUserStore({ databaseUrl: database.url, logger, sessionTtlMs: SESSION_TTL_MS });
+    const server = createApiServer({ store: roomStore, users: userStore });
+    await server.app.ready();
     startPruneTimer(server, logger);
     startApiListener({
       host: HOST,
@@ -1016,5 +1294,6 @@ if (require.main === module) {
 
 module.exports = {
   bootstrap,
+  createApiApp,
   createApiServer
 };

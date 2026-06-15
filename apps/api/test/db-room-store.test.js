@@ -145,7 +145,7 @@ test('createRoomWithQuota enforces room limits inside one advisory-locked transa
   const result = await store.createRoomWithQuota({
     creatorIp: 'ip',
     isStatic: false,
-    maxQuotaRoomsPerIp: 1,
+    maxTempRoomsPerIp: 1,
     maxRooms: 10,
     roomId: 'room-quota',
     now: 1000
@@ -156,12 +156,84 @@ test('createRoomWithQuota enforces room limits inside one advisory-locked transa
   assert.ok(pool.calls.some((call) => call.text === 'BEGIN'));
   assert.ok(pool.calls.some((call) => /pg_advisory_xact_lock/.test(call.text)));
   assert.ok(pool.calls.some((call) => /creator_ip = \$1/.test(call.text)));
+  assert.ok(pool.calls.some((call) => /is_static = false/.test(call.text)));
   assert.ok(pool.calls.some((call) => /SELECT COUNT\(\*\)::int AS count FROM rooms/.test(call.text)));
   assert.ok(pool.calls.some((call) => /INSERT INTO rooms/.test(call.text)));
   assert.ok(pool.calls.some((call) => call.text === 'COMMIT'));
 });
 
-test('createRoomWithQuota returns quota status without inserting when per-IP cap is full', async () => {
+test('createRoomWithQuota creates owner membership for authenticated static rooms', async () => {
+  const pool = createFakePool((text) => {
+    if (/room_memberships rm/.test(text)) return { rows: [{ count: 0 }], rowCount: 1 };
+    if (/SELECT COUNT\(\*\)::int AS count FROM rooms/.test(text)) return { rows: [{ count: 0 }], rowCount: 1 };
+    if (/INSERT INTO rooms/.test(text)) {
+      return {
+        rows: [{
+          id: 'owned-room', creator_ip: 'ip', is_static: true, owner_id: 'user-1',
+          created_at: new Date(1000), updated_at: new Date(1000), empty_since: new Date(1000)
+        }],
+        rowCount: 1
+      };
+    }
+    return { rows: [], rowCount: 1 };
+  });
+  const store = createRoomStore({ pool });
+
+  const result = await store.createRoomWithQuota({
+    creatorIp: 'ip',
+    isStatic: true,
+    ownerId: 'user-1',
+    maxOwnedStaticRoomsPerUser: 3,
+    maxRooms: 10,
+    roomId: 'owned-room',
+    now: 1000
+  });
+
+  assert.equal(result.status, 'created');
+  assert.equal(result.room.ownerId, 'user-1');
+  assert.ok(pool.calls.some((call) => /JOIN rooms r ON r.id = rm.room_id/.test(call.text)));
+  assert.ok(pool.calls.some((call) => /INSERT INTO room_memberships/.test(call.text)));
+});
+
+test('createRoomWithQuota requires an owner for static rooms', async () => {
+  const pool = createFakePool((text) => {
+    if (/INSERT INTO rooms/.test(text)) throw new Error('insert should not run');
+    return { rows: [], rowCount: 1 };
+  });
+  const store = createRoomStore({ pool });
+
+  const result = await store.createRoomWithQuota({
+    creatorIp: 'ip',
+    isStatic: true,
+    maxOwnedStaticRoomsPerUser: 3,
+    maxRooms: 10,
+    roomId: 'anon-static'
+  });
+
+  assert.deepEqual(result, { room: null, status: 'auth_required' });
+});
+
+test('createRoomWithQuota enforces static ownership quota per user', async () => {
+  const pool = createFakePool((text) => {
+    if (/room_memberships rm/.test(text)) return { rows: [{ count: 3 }], rowCount: 1 };
+    if (/INSERT INTO rooms/.test(text)) throw new Error('insert should not run');
+    return { rows: [], rowCount: 1 };
+  });
+  const store = createRoomStore({ pool });
+
+  const result = await store.createRoomWithQuota({
+    creatorIp: 'ip',
+    isStatic: true,
+    ownerId: 'user-1',
+    maxOwnedStaticRoomsPerUser: 3,
+    maxRooms: 10,
+    roomId: 'owned-room-4'
+  });
+
+  assert.deepEqual(result, { room: null, status: 'quota_exceeded' });
+});
+
+test('createRoomWithQuota returns quota status without inserting when per-IP temp cap is full', async () => {
   const pool = createFakePool((text) => {
     if (/creator_ip = \$1/.test(text)) return { rows: [{ count: 1 }], rowCount: 1 };
     if (/INSERT INTO rooms/.test(text)) throw new Error('insert should not run');
@@ -171,7 +243,7 @@ test('createRoomWithQuota returns quota status without inserting when per-IP cap
 
   const result = await store.createRoomWithQuota({
     creatorIp: 'ip',
-    maxQuotaRoomsPerIp: 1,
+    maxTempRoomsPerIp: 1,
     maxRooms: 10,
     roomId: 'blocked-room'
   });

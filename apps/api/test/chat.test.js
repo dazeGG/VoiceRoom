@@ -75,7 +75,7 @@ function startServer(socketPath, databaseUrl, logs, envOverrides = {}) {
   return child;
 }
 
-async function postJson(socketPath, pathname, body) {
+async function postJson(socketPath, pathname, body, { cookie } = {}) {
   const payload = JSON.stringify(body);
   const response = await new Promise((resolve, reject) => {
     const req = http.request(
@@ -85,7 +85,8 @@ async function postJson(socketPath, pathname, body) {
         socketPath,
         headers: {
           'Content-Type': 'application/json',
-          'Content-Length': Buffer.byteLength(payload)
+          'Content-Length': Buffer.byteLength(payload),
+          ...(cookie ? { Cookie: cookie } : {})
         }
       },
       resolve
@@ -105,7 +106,8 @@ async function postJson(socketPath, pathname, body) {
 
   return {
     status: response.statusCode,
-    body: text ? JSON.parse(text) : null
+    body: text ? JSON.parse(text) : null,
+    setCookie: response.headers['set-cookie']?.[0]?.split(';')[0] || ''
   };
 }
 
@@ -134,7 +136,8 @@ async function getJson(socketPath, pathname) {
 
   return {
     status: response.statusCode,
-    body: text ? JSON.parse(text) : null
+    body: text ? JSON.parse(text) : null,
+    setCookie: response.headers['set-cookie']?.[0]?.split(';')[0] || ''
   };
 }
 
@@ -253,7 +256,7 @@ test('chat API allows posting by room link without joining voice', async (t) => 
   try {
     await waitForHealthz(socketPath);
 
-    const created = await postJson(socketPath, '/api/rooms', { isStatic: true });
+    const created = await postJson(socketPath, '/api/rooms', { isStatic: false });
     assert.equal(created.status, 201);
 
     const stream = openSse(socketPath, `/api/rooms/${created.body.roomId}/chat/stream`);
@@ -351,7 +354,7 @@ test('chat API rate limits room-link posts per room and IP', async (t) => {
   try {
     await waitForHealthz(socketPath);
 
-    const created = await postJson(socketPath, '/api/rooms', { isStatic: true });
+    const created = await postJson(socketPath, '/api/rooms', { isStatic: false });
     assert.equal(created.status, 201);
 
     const first = await postJson(socketPath, `/api/rooms/${created.body.roomId}/chat`, {
@@ -390,7 +393,14 @@ test('manual static-room chat scenario survives API restart without voice join',
   try {
     await waitForHealthz(socketPath);
 
-    const created = await postJson(socketPath, '/api/rooms', { isStatic: true });
+    const registered = await postJson(socketPath, '/api/auth/register', {
+      login: 'manual-owner',
+      password: 'password123'
+    });
+    assert.equal(registered.status, 201);
+    const sessionCookie = registered.setCookie;
+
+    const created = await postJson(socketPath, '/api/rooms', { isStatic: true }, { cookie: sessionCookie });
     assert.equal(created.status, 201);
     assert.equal(created.body.isStatic, true);
 

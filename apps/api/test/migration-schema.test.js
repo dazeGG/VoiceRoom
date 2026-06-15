@@ -5,6 +5,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const migration = require('../src/migrations/20260614144500_create_rooms_and_room_messages');
+const membershipMigration = require('../src/migrations/20260615140000_create_room_memberships_and_bookmarks');
 
 function createRecorder() {
   const calls = [];
@@ -16,8 +17,14 @@ function createRecorder() {
     createTable(name, columns) {
       calls.push({ type: 'createTable', name, columns });
     },
-    createIndex(table, columns, options) {
+    createIndex(table, columns, options = {}) {
       calls.push({ type: 'createIndex', table, columns, options });
+    },
+    addConstraint(table, name, options) {
+      calls.push({ type: 'addConstraint', table, name, options });
+    },
+    sql(text) {
+      calls.push({ type: 'sql', text });
     },
     dropTable(name) {
       calls.push({ type: 'dropTable', name });
@@ -72,5 +79,50 @@ test('rooms migration down drops child table before parent table', () => {
   assert.deepEqual(
     pgm.calls.filter((call) => call.type === 'dropTable').map((call) => call.name),
     ['room_messages', 'rooms']
+  );
+});
+
+
+test('room memberships and bookmarks migration defines authoritative ownership tables', () => {
+  const pgm = createRecorder();
+  membershipMigration.up(pgm);
+
+  const memberships = pgm.calls.find((call) => call.type === 'createTable' && call.name === 'room_memberships');
+  const bookmarks = pgm.calls.find((call) => call.type === 'createTable' && call.name === 'room_bookmarks');
+  assert.ok(memberships, 'room_memberships table is created');
+  assert.ok(bookmarks, 'room_bookmarks table is created');
+
+  assert.equal(memberships.columns.room_id.references, 'rooms(id)');
+  assert.equal(memberships.columns.user_id.references, 'users(id)');
+  assert.equal(memberships.columns.role.default, 'owner'.replace('owner', 'member'));
+  assert.equal(bookmarks.columns.room_id.references, 'rooms(id)');
+  assert.equal(bookmarks.columns.user_id.references, 'users(id)');
+
+  const constraints = pgm.calls.filter((call) => call.type === 'addConstraint');
+  assert.ok(constraints.some((call) => call.name === 'room_memberships_role_check'));
+
+  const indexes = new Map(
+    pgm.calls
+      .filter((call) => call.type === 'createIndex')
+      .map((call) => [call.options.name, call])
+  );
+  assert.deepEqual(indexes.get('room_memberships_room_user_unique_idx').columns, ['room_id', 'user_id']);
+  assert.equal(indexes.get('room_memberships_room_user_unique_idx').options.unique, true);
+  assert.deepEqual(indexes.get('room_bookmarks_user_room_unique_idx').columns, ['user_id', 'room_id']);
+  assert.equal(indexes.get('room_bookmarks_user_room_unique_idx').options.unique, true);
+
+  const backfill = pgm.calls.find((call) => call.type === 'sql' && /INSERT INTO room_memberships/.test(call.text));
+  assert.ok(backfill, 'owner_id compatibility rows are backfilled');
+  assert.match(backfill.text, /r\.owner_id IS NOT NULL/);
+  assert.match(backfill.text, /r\.is_static = true/);
+});
+
+test('room memberships migration down drops bookmarks before memberships', () => {
+  const pgm = createRecorder();
+  membershipMigration.down(pgm);
+
+  assert.deepEqual(
+    pgm.calls.filter((call) => call.type === 'dropTable').map((call) => call.name),
+    ['room_bookmarks', 'room_memberships']
   );
 });

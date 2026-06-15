@@ -7,9 +7,15 @@ const {
   normalizePeerId,
   normalizeSessionToken,
   cleanName,
+  cleanDisplayName,
   cleanStreamId,
   cleanScreenProfileId,
-  cleanLiveKitUrl
+  cleanLiveKitUrl,
+  cleanRoomName,
+  cleanRoomEmoji,
+  isValidPassword,
+  normalizeLogin,
+  ROOM_EMOJIS
 } = require('../src/validation');
 
 test('normalizeRoomId accepts valid ids and trims', () => {
@@ -71,4 +77,47 @@ test('cleanLiveKitUrl accepts ws/wss only', () => {
   assert.equal(cleanLiveKitUrl('https://example.com'), '');
   assert.equal(cleanLiveKitUrl('javascript:alert(1)'), '');
   assert.equal(cleanLiveKitUrl(''), '');
+});
+
+test('normalizeLogin lower-cases and validates the handle', () => {
+  assert.equal(normalizeLogin('Vovosh'), 'vovosh');
+  assert.equal(normalizeLogin('  ADA_lovelace.99-x '), 'ada_lovelace.99-x');
+  assert.equal(normalizeLogin('ab'), '');
+  assert.equal(normalizeLogin('has space'), '');
+  assert.equal(normalizeLogin('emoji😀'), '');
+  assert.equal(normalizeLogin('x'.repeat(33)), '');
+  assert.equal(normalizeLogin(42), '');
+});
+
+test('cleanDisplayName collapses whitespace and allows empty', () => {
+  assert.equal(cleanDisplayName('  Вова   Пупкин '), 'Вова Пупкин');
+  assert.equal(cleanDisplayName(''), '');
+  assert.equal(cleanDisplayName('   '), '');
+  assert.equal(cleanDisplayName(undefined), '');
+  assert.equal(cleanDisplayName('x'.repeat(60)).length, 40);
+});
+
+test('isValidPassword enforces length bounds', () => {
+  assert.equal(isValidPassword('password123'), true);
+  assert.equal(isValidPassword('short'), false);
+  assert.equal(isValidPassword('x'.repeat(201)), false);
+  assert.equal(isValidPassword(12345678), false);
+});
+
+test('cleanRoomName collapses whitespace, allows empty, truncates to 60', () => {
+  assert.equal(cleanRoomName('  квартирник  '), 'квартирник');
+  assert.equal(cleanRoomName('созвон   по   проекту'), 'созвон по проекту');
+  assert.equal(cleanRoomName(''), '');
+  assert.equal(cleanRoomName(undefined), '');
+  assert.equal(cleanRoomName('x'.repeat(80)).length, 60);
+});
+
+test('cleanRoomEmoji only allows the fixed palette', () => {
+  for (const emoji of ROOM_EMOJIS) {
+    assert.equal(cleanRoomEmoji(emoji), emoji);
+  }
+  assert.equal(cleanRoomEmoji('🦄'), '');
+  assert.equal(cleanRoomEmoji('not-an-emoji'), '');
+  assert.equal(cleanRoomEmoji(''), '');
+  assert.equal(cleanRoomEmoji(123), '');
 });

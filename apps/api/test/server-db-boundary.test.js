@@ -84,9 +84,9 @@ test('server create/chat handlers use async store and allow link-only chat', asy
   const server = createApiServer({ store });
   const port = await listen(server);
   try {
-    const created = await request(port, '/api/rooms', { method: 'POST', body: { isStatic: true } });
+    const created = await request(port, '/api/rooms', { method: 'POST', body: { isStatic: false } });
     assert.equal(created.response.status, 201);
-    assert.equal(created.json.isStatic, true);
+    assert.equal(created.json.isStatic, false);
 
     const posted = await request(port, `/api/rooms/${created.json.roomId}/chat`, {
       method: 'POST',

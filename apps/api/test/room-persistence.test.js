@@ -80,7 +80,7 @@ function dumpServerLogs(logs) {
   }
 }
 
-async function postJson(port, pathname, body) {
+async function postJson(port, pathname, body, { cookie } = {}) {
   const payload = JSON.stringify(body);
   const response = await new Promise((resolve, reject) => {
     const req = http.request(
@@ -90,7 +90,8 @@ async function postJson(port, pathname, body) {
         socketPath: port,
         headers: {
           'Content-Type': 'application/json',
-          'Content-Length': Buffer.byteLength(payload)
+          'Content-Length': Buffer.byteLength(payload),
+          ...(cookie ? { Cookie: cookie } : {})
         }
       },
       resolve
@@ -110,7 +111,8 @@ async function postJson(port, pathname, body) {
 
   return {
     status: response.statusCode,
-    body: text ? JSON.parse(text) : null
+    body: text ? JSON.parse(text) : null,
+    setCookie: response.headers['set-cookie']?.[0]?.split(';')[0] || ''
   };
 }
 
@@ -185,7 +187,8 @@ async function getJson(port, pathname) {
 
   return {
     status: response.statusCode,
-    body: text ? JSON.parse(text) : null
+    body: text ? JSON.parse(text) : null,
+    setCookie: response.headers['set-cookie']?.[0]?.split(';')[0] || ''
   };
 }
 
@@ -207,7 +210,13 @@ test('room registry survives restart and preserves the static flag', async (t) =
     assert.equal(dynamicRoom.status, 201);
     assert.equal(dynamicRoom.body.isStatic, false);
 
-    const staticRoom = await postJson(socketPath, '/api/rooms', { isStatic: true });
+    const registered = await postJson(socketPath, '/api/auth/register', {
+      login: 'persist-owner',
+      password: 'password123'
+    });
+    assert.equal(registered.status, 201);
+
+    const staticRoom = await postJson(socketPath, '/api/rooms', { isStatic: true }, { cookie: registered.setCookie });
     assert.equal(staticRoom.status, 201);
     assert.equal(staticRoom.body.isStatic, true);
 
@@ -253,11 +262,11 @@ test('room registry survives restart and preserves the static flag', async (t) =
 });
 
 
-test('static empty rooms count toward per-IP empty-room quota', async (t) => {
+test('temporary empty rooms count toward per-IP room quota', async (t) => {
   const { dir, socketPath } = getSocketPath();
   const { cleanup, databaseUrl } = await createTestDatabase(t);
   const logs = { stdout: '', stderr: '' };
-  const child = startServer(socketPath, databaseUrl, logs, { MAX_EMPTY_ROOMS_PER_IP: '1' });
+  const child = startServer(socketPath, databaseUrl, logs, { MAX_TEMP_ROOMS_PER_IP: '1' });
   t.after(() => {
     child.kill('SIGTERM');
     fs.rmSync(dir, { recursive: true, force: true });
@@ -267,13 +276,13 @@ test('static empty rooms count toward per-IP empty-room quota', async (t) => {
   try {
     await waitForHealthz(socketPath);
 
-    const staticRoom = await postJson(socketPath, '/api/rooms', { isStatic: true });
-    assert.equal(staticRoom.status, 201);
-    assert.equal(staticRoom.body.isStatic, true);
+    const tempRoom = await postJson(socketPath, '/api/rooms', { isStatic: false });
+    assert.equal(tempRoom.status, 201);
+    assert.equal(tempRoom.body.isStatic, false);
 
-    const blocked = await postJson(socketPath, '/api/rooms', { isStatic: true });
+    const blocked = await postJson(socketPath, '/api/rooms', { isStatic: false });
     assert.equal(blocked.status, 429);
-    assert.equal(blocked.body.error, 'Too many rooms waiting from this IP, reuse one or try later');
+    assert.equal(blocked.body.error, 'Too many temporary rooms waiting from this IP, reuse one or try later');
   } catch (error) {
     dumpServerLogs(logs);
     throw error;
@@ -281,11 +290,11 @@ test('static empty rooms count toward per-IP empty-room quota', async (t) => {
 });
 
 
-test('active static rooms stay counted toward per-IP room creation quota', async (t) => {
+test('active temporary rooms stay counted toward per-IP room creation quota', async (t) => {
   const { dir, socketPath } = getSocketPath();
   const { cleanup, databaseUrl } = await createTestDatabase(t);
   const logs = { stdout: '', stderr: '' };
-  const child = startServer(socketPath, databaseUrl, logs, { MAX_EMPTY_ROOMS_PER_IP: '1' });
+  const child = startServer(socketPath, databaseUrl, logs, { MAX_TEMP_ROOMS_PER_IP: '1' });
   t.after(() => {
     child.kill('SIGTERM');
     fs.rmSync(dir, { recursive: true, force: true });
@@ -295,20 +304,20 @@ test('active static rooms stay counted toward per-IP room creation quota', async
   try {
     await waitForHealthz(socketPath);
 
-    const staticRoom = await postJson(socketPath, '/api/rooms', { isStatic: true });
-    assert.equal(staticRoom.status, 201);
-    assert.equal(staticRoom.body.isStatic, true);
+    const tempRoom = await postJson(socketPath, '/api/rooms', { isStatic: false });
+    assert.equal(tempRoom.status, 201);
+    assert.equal(tempRoom.body.isStatic, false);
 
     const joined = openSse(
       socketPath,
-      `/api/events?room=${encodeURIComponent(staticRoom.body.roomId)}&peer=${encodeURIComponent('peer-aaaa')}&token=${encodeURIComponent('token-aaaaaaaaaaaaaaaaaaaaaaaaaa')}&name=${encodeURIComponent('Alice')}`
+      `/api/events?room=${encodeURIComponent(tempRoom.body.roomId)}&peer=${encodeURIComponent('peer-aaaa')}&token=${encodeURIComponent('token-aaaaaaaaaaaaaaaaaaaaaaaaaa')}&name=${encodeURIComponent('Alice')}`
     );
     t.after(() => joined.req.destroy());
     await joined.waitFor('hello');
 
-    const blocked = await postJson(socketPath, '/api/rooms', { isStatic: true });
+    const blocked = await postJson(socketPath, '/api/rooms', { isStatic: false });
     assert.equal(blocked.status, 429);
-    assert.equal(blocked.body.error, 'Too many rooms waiting from this IP, reuse one or try later');
+    assert.equal(blocked.body.error, 'Too many temporary rooms waiting from this IP, reuse one or try later');
   } catch (error) {
     dumpServerLogs(logs);
     throw error;
