@@ -8,7 +8,7 @@
     "build": "vite build",
     "check": "node --check static/audio-gate.worklet.js && node --check static/desktop-audio-source.worklet.js && node --check static/rnnoise/rnnoise.worklet.js && svelte-kit sync && tsc --noEmit",
     "preview": "vite preview",
-    "test": "node --test \"test/**/*.test.js\""
+    "test": "node --test test/*.test.js"
   },
   "dependencies": {
     "@voice-room/shared": "file:../../packages/shared",
