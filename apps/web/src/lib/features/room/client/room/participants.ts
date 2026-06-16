@@ -325,17 +325,8 @@ export function attachRemoteTrack(
   if (track.kind === 'audio') {
     peer.stream = mediaStream;
     peer.micReceiver = receiver ?? null;
-    attachRemoteAudioTrack(peer, track);
+    ensureRemoteAudioElement(peer, track, mediaStream, receiver);
     if (!peer.analyser) attachMeter(peer, new MediaStream([track]));
-    track.addEventListener(
-      'ended',
-      () => {
-        if (peer.micReceiver === receiver) peer.micReceiver = null;
-        peer.incomingVoiceActive = false;
-        setParticipantSpeaking(peer, false);
-      },
-      { once: true }
-    );
     updatePeerStatus(peer);
   }
 }
@@ -411,14 +402,48 @@ export function detachRemoteScreen(peer: Participant): void {
   refreshScreenAction(peer);
 }
 
-function attachRemoteAudioTrack(peer: Participant, track: MediaStreamTrack): void {
-  if (peer.audioElements.has(track.id)) return;
+export function ensureRemoteAudioElement(
+  peer: Participant,
+  track: MediaStreamTrack,
+  stream: MediaStream | null = null,
+  receiver: RTCRtpReceiver | null | undefined = null
+): void {
+  if (track.kind !== 'audio' || track.readyState === 'ended') return;
 
+  const audio = peer.audioElements.get(track.id);
+  const existingStream = audio?.srcObject instanceof MediaStream ? audio.srcObject : null;
+  const existingHasLiveTrack = Boolean(
+    existingStream?.getAudioTracks().some((audioTrack) => audioTrack === track && audioTrack.readyState !== 'ended')
+  );
+
+  if (audio && existingHasLiveTrack) {
+    audio.muted = isVoicePlaybackMuted();
+    if (!audio.isConnected) document.body.append(audio);
+    applyAudioOutputDevice(audio).catch(() => {});
+    playMediaElement(audio);
+    return;
+  }
+
+  if (audio) {
+    audio.pause();
+    audio.srcObject = null;
+    audio.remove();
+  }
+
+  attachRemoteAudioTrack(peer, track, stream, receiver);
+}
+
+function attachRemoteAudioTrack(
+  peer: Participant,
+  track: MediaStreamTrack,
+  stream: MediaStream | null = null,
+  receiver: RTCRtpReceiver | null | undefined = null
+): void {
   const audio = document.createElement('audio');
   audio.autoplay = true;
   audio.muted = isVoicePlaybackMuted();
   (audio as HTMLAudioElement & { playsInline: boolean }).playsInline = true;
-  audio.srcObject = new MediaStream([track]);
+  audio.srcObject = stream || new MediaStream([track]);
   peer.audioElements.set(track.id, audio);
   document.body.append(audio);
   applyAudioOutputDevice(audio).catch(() => {});
@@ -429,6 +454,9 @@ function attachRemoteAudioTrack(peer: Participant, track: MediaStreamTrack): voi
     () => {
       audio.remove();
       peer.audioElements.delete(track.id);
+      if (peer.micReceiver === receiver) peer.micReceiver = null;
+      peer.incomingVoiceActive = false;
+      setParticipantSpeaking(peer, false);
     },
     { once: true }
   );

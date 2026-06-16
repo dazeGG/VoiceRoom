@@ -25,6 +25,7 @@ import {
   attachRemoteScreenStream,
   attachRemoteTrack,
   createParticipant,
+  ensureRemoteAudioElement,
   getParticipantView,
   detachLiveKitParticipant,
   detachRemoteAudioTrack,
@@ -406,12 +407,13 @@ function syncLiveKitPublicationSubscription(peer: Participant, publication: Trac
   if (typeof remotePublication.setSubscribed !== 'function') return;
 
   if (isMicrophonePublication(publication)) {
-    remotePublication.setSubscribed(!state.outputMuted);
+    setRemotePublicationSubscribed(remotePublication, !state.outputMuted);
     return;
   }
 
   if (isScreenPublication(publication)) {
-    remotePublication.setSubscribed(
+    setRemotePublicationSubscribed(
+      remotePublication,
       state.viewedScreenPeerId === peer.id || state.screenSubscribedPeerIds.has(peer.id)
     );
   }
@@ -439,8 +441,14 @@ export function syncLiveKitVoiceSubscriptions(): void {
     participant.trackPublications.forEach((publication) => {
       if (!isMicrophonePublication(publication)) return;
       syncLiveKitPublicationSubscription(peer, publication);
+      ensureRemoteMicrophonePlayback(peer, publication);
     });
   });
+}
+
+function setRemotePublicationSubscribed(publication: RemoteTrackPublication, subscribed: boolean): void {
+  if (publication.isSubscribed === subscribed) return;
+  publication.setSubscribed(subscribed);
 }
 
 async function recoverLiveKitRoom(room: Room): Promise<void> {
@@ -451,6 +459,24 @@ async function recoverLiveKitRoom(room: Room): Promise<void> {
   refreshParticipantState();
   refreshCallControls();
   refreshScreenControls();
+}
+
+function ensureRemoteMicrophonePlayback(peer: Participant, publication: TrackPublication): void {
+  if (!isMicrophonePublication(publication)) return;
+  if (state.outputMuted) return;
+
+  const remotePublication = publication as RemoteTrackPublication;
+  const track = remotePublication.track as RemoteTrack | null | undefined;
+  const mediaTrack = track?.mediaStreamTrack;
+  if (!mediaTrack || mediaTrack.kind !== 'audio' || mediaTrack.readyState === 'ended') return;
+  if (remotePublication.isSubscribed === false) return;
+
+  peer.voiceIssue = '';
+  const stream = track.mediaStream || new MediaStream([mediaTrack]);
+  peer.stream = stream;
+  peer.micReceiver = track.receiver ?? peer.micReceiver;
+  ensureRemoteAudioElement(peer, mediaTrack, stream, track.receiver);
+  updatePeerStatus(peer);
 }
 
 async function ensureLocalMicrophonePublished(): Promise<void> {
