@@ -31,7 +31,7 @@ COPY packages/shared ./packages/shared
 USER node
 EXPOSE 3000
 
-CMD ["npm", "start"]
+CMD ["npm", "--workspace", "@voice-room/api", "start"]
 
 FROM caddy:2.11.3-alpine AS web
 
