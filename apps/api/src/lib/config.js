@@ -11,4 +11,24 @@ function readEnvBool(name, fallback, env = process.env) {
   return /^(1|true|yes|on)$/i.test(value.trim());
 }
 
-module.exports = { readEnvInt, readEnvBool };
+function readDatabaseConfig(env = process.env) {
+  const raw = typeof env.DATABASE_URL === 'string' ? env.DATABASE_URL.trim() : '';
+  if (!raw) {
+    throw new Error('DATABASE_URL is required for PostgreSQL persistence');
+  }
+
+  let parsed;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    throw new Error('DATABASE_URL must be a valid PostgreSQL connection URL');
+  }
+
+  if (parsed.protocol !== 'postgres:' && parsed.protocol !== 'postgresql:') {
+    throw new Error('DATABASE_URL must use postgres:// or postgresql://');
+  }
+
+  return { url: raw };
+}
+
+module.exports = { readEnvInt, readEnvBool, readDatabaseConfig };

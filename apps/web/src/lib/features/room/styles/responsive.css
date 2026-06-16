@@ -69,23 +69,12 @@
     padding: var(--space-lg);
   }
 
-  .not-found-panel {
-    padding: var(--space-lg);
-  }
-
   .room-dock {
-    gap: var(--space-xs);
     padding-inline: var(--space-xs);
   }
 
-  .dock-button {
-    width: 46px;
-    height: 46px;
-  }
-
-  .dock-menu-button {
-    width: 38px;
-    height: 46px;
+  .dock-shell {
+    gap: var(--space-xs);
   }
 
   body[data-screen-view="true"] .stage {
@@ -156,18 +145,28 @@
 }
 
 @media (max-width: 360px) {
-  .room-dock {
+  .dock-shell {
     gap: 6px;
+    padding: 8px 9px;
   }
 
-  .dock-button {
-    width: 44px;
-    height: 44px;
+  .dock-split {
+    height: 42px;
+  }
+
+  .mic-button,
+  .output-button,
+  .screen-button,
+  .leave-button,
+  .screen-exit-button,
+  .dock-connection {
+    width: 42px;
+    height: 42px;
   }
 
   .dock-menu-button {
-    width: 36px;
-    height: 44px;
+    width: 24px;
+    height: 42px;
   }
 }
 

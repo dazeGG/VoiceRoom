@@ -1,0 +1,364 @@
+<script lang="ts">
+  import type { AuthUser } from '$lib/api/auth';
+  import { changePassword, updateDisplayName } from '$lib/api/auth';
+  import { isValidPassword, PASSWORD_MIN_LENGTH } from '$lib/features/auth/account';
+  import { clearSession, setUser } from '$lib/features/auth/session.svelte';
+  import { getAvatarColor } from '$lib/visual/tokens';
+  import {
+    enumerateMicrophones,
+    enumerateSpeakers,
+    gateMeterPosition,
+    gateValueLabel,
+    isGateDisabled,
+    NOISE_OPTIONS,
+    persistGateThreshold,
+    persistMicrophone,
+    persistNoiseMode,
+    persistSpeaker,
+    readSoundSettings,
+    startMicMeter,
+    GATE_THRESHOLD_MAX_DB,
+    GATE_THRESHOLD_MIN_DB,
+    type DeviceOption,
+    type MicMeter
+  } from '../model/sound-settings';
+
+  let {
+    open,
+    tab = $bindable('profile'),
+    user,
+    onClose,
+    onToast
+  } = $props<{
+    open: boolean;
+    tab: 'profile' | 'sound';
+    user: AuthUser | null;
+    onClose: () => void;
+    onToast: (message: string) => void;
+  }>();
+
+  // Default speaking-level threshold used when the gate is switched on from "off".
+  const GATE_DEFAULT_DB = -40;
+
+  // Profile form
+  let name = $state('');
+  let currentPassword = $state('');
+  let newPassword = $state('');
+  let saving = $state(false);
+
+  // Sound form
+  let microphones = $state<DeviceOption[]>([]);
+  let speakers = $state<DeviceOption[]>([]);
+  let micId = $state('');
+  let speakerId = $state('');
+  let noiseMode = $state('rnnoise');
+  let gateOn = $state(false);
+  let gateDb = $state(GATE_DEFAULT_DB);
+  let micLevelDb = $state(GATE_THRESHOLD_MIN_DB);
+
+  const avatar = $derived(getAvatarColor(user?.avatarColorKey));
+  const label = $derived(user?.displayName?.trim() || user?.login || '');
+  const initials = $derived(
+    (label
+      .split(/\s+/)
+      .slice(0, 2)
+      .map((part: string) => part.charAt(0))
+      .join('')
+      .toUpperCase() || label.charAt(0).toUpperCase()) || '·'
+  );
+  const avatarStyle = $derived(
+    `background:${avatar.background};color:${avatar.foreground};box-shadow:${avatar.shadow}`
+  );
+
+  const gateOpen = $derived(!gateOn || micLevelDb >= gateDb);
+  // Only surface the live level while the gate is on — off means "don't capture
+  // or show the mic level" (the meter effect below stops capturing too).
+  const levelScale = $derived(gateOn ? gateMeterPosition(micLevelDb).toFixed(3) : '0');
+  const markerLeft = $derived(`${(gateMeterPosition(gateDb) * 100).toFixed(2)}%`);
+  const gateLabel = $derived(gateOn ? gateValueLabel(gateDb) : 'Выкл');
+
+  // Reset both forms whenever the modal (re)opens or the account changes.
+  $effect(() => {
+    if (!open) return;
+    name = user?.displayName ?? '';
+    currentPassword = '';
+    newPassword = '';
+
+    const sound = readSoundSettings();
+    micId = sound.microphoneDeviceId;
+    speakerId = sound.outputDeviceId;
+    noiseMode = sound.noiseMode;
+    gateOn = !isGateDisabled(sound.gateThresholdDb);
+    gateDb = gateOn ? sound.gateThresholdDb : GATE_DEFAULT_DB;
+    void enumerateMicrophones().then((list) => (microphones = list));
+    void enumerateSpeakers().then((list) => (speakers = list));
+  });
+
+  // Live mic meter — only while the Звук tab is visible AND the gate is on, so the
+  // mic is captured solely to show the level for tuning the threshold, and is
+  // released the moment the gate goes off, the tab changes, or the modal closes.
+  $effect(() => {
+    if (!(open && tab === 'sound' && gateOn)) return;
+    const id = micId;
+    let active = true;
+    let meter: MicMeter | null = null;
+
+    void startMicMeter(id, (db) => {
+      if (active) micLevelDb = db;
+    }).then((started) => {
+      if (!active) {
+        started?.stop();
+        return;
+      }
+      meter = started;
+      if (started) {
+        // Permission granted: device labels are now readable, so refresh the lists.
+        void enumerateMicrophones().then((list) => {
+          if (active) microphones = list;
+        });
+        void enumerateSpeakers().then((list) => {
+          if (active) speakers = list;
+        });
+      }
+    });
+
+    return () => {
+      active = false;
+      meter?.stop();
+      micLevelDb = GATE_THRESHOLD_MIN_DB;
+    };
+  });
+
+  function onOverlayClick(event: MouseEvent): void {
+    if (event.target === event.currentTarget) onClose();
+  }
+
+  function onKeydown(event: KeyboardEvent): void {
+    if (open && event.key === 'Escape') onClose();
+  }
+
+  async function saveProfile(): Promise<void> {
+    if (saving) return;
+    // Snapshot before any await: updating the session re-runs the reset effect.
+    const trimmedName = name.trim();
+    const curPass = currentPassword;
+    const nextPass = newPassword;
+    const wantsRename = trimmedName !== (user?.displayName ?? '');
+    const wantsPassword = curPass.length > 0 || nextPass.length > 0;
+
+    if (!wantsRename && !wantsPassword) {
+      onClose();
+      return;
+    }
+    if (wantsPassword && !isValidPassword(nextPass)) {
+      onToast(`Новый пароль: минимум ${PASSWORD_MIN_LENGTH} символов`);
+      return;
+    }
+
+    saving = true;
+    let renamed = false;
+    try {
+      if (wantsRename) {
+        setUser(await updateDisplayName(trimmedName));
+        renamed = true;
+      }
+      if (wantsPassword) {
+        await changePassword(curPass, nextPass);
+        currentPassword = '';
+        newPassword = '';
+        clearSession();
+        onToast('Пароль изменён, войдите снова');
+      } else {
+        onToast('Изменения сохранены');
+      }
+      onClose();
+    } catch (error) {
+      const message = error instanceof Error && error.message ? error.message : 'Не удалось сохранить';
+      onToast(renamed ? `Имя сохранено, пароль не изменён: ${message}` : message);
+    } finally {
+      saving = false;
+    }
+  }
+
+  function onMicChange(event: Event): void {
+    micId = (event.target as HTMLSelectElement).value;
+    persistMicrophone(micId);
+  }
+
+  function onSpeakerChange(event: Event): void {
+    speakerId = (event.target as HTMLSelectElement).value;
+    persistSpeaker(speakerId);
+  }
+
+  function onNoiseChange(event: Event): void {
+    noiseMode = persistNoiseMode((event.target as HTMLSelectElement).value);
+  }
+
+  function persistGate(): void {
+    persistGateThreshold(gateOn ? gateDb : GATE_THRESHOLD_MIN_DB);
+  }
+
+  function toggleGate(): void {
+    gateOn = !gateOn;
+    persistGate();
+  }
+
+  function onGateInput(event: Event): void {
+    gateDb = Math.round(Number((event.target as HTMLInputElement).value));
+    if (gateOn) persistGate();
+  }
+</script>
+
+<svelte:window onkeydown={onKeydown} />
+
+{#if open}
+  <div class="settings-overlay" role="presentation" onclick={onOverlayClick}>
+    <div class="settings-modal" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+      <div class="settings-head">
+        <span class="settings-title" id="settingsTitle">Настройки</span>
+        <button class="settings-close" type="button" aria-label="Закрыть" onclick={onClose}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="6" x2="18" y2="18"></line><line x1="18" y1="6" x2="6" y2="18"></line></svg>
+        </button>
+      </div>
+
+      <div class="settings-body">
+        <nav class="settings-nav" aria-label="Разделы настроек">
+          <button class="settings-nav-item" type="button" data-active={tab === 'profile'} onclick={() => (tab = 'profile')}>
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg>
+            Профиль
+          </button>
+          <button class="settings-nav-item" type="button" data-active={tab === 'sound'} onclick={() => (tab = 'sound')}>
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M6 11 a6 6 0 0 0 12 0"></path><line x1="12" y1="17" x2="12" y2="21"></line><line x1="8" y1="21" x2="16" y2="21"></line></svg>
+            Звук
+          </button>
+        </nav>
+
+        <div class="settings-content">
+          {#if tab === 'profile'}
+            <div class="settings-profile-head">
+              <span class="settings-profile-avatar" style={avatarStyle} aria-hidden="true">{initials}</span>
+              <div>
+                <div class="settings-profile-name">{label}</div>
+                <div class="settings-profile-sub">@{user?.login}</div>
+              </div>
+            </div>
+
+            <div class="settings-fields">
+              <div>
+                <span class="settings-field-label">Имя</span>
+                <input class="settings-input" bind:value={name} maxlength="40" autocomplete="nickname" />
+              </div>
+
+              <div class="settings-divider"></div>
+
+              <div>
+                <span class="settings-field-label">Текущий пароль</span>
+                <input class="settings-input" type="password" bind:value={currentPassword} placeholder="••••••••" autocomplete="current-password" />
+              </div>
+              <div>
+                <span class="settings-field-label">Новый пароль</span>
+                <input class="settings-input" type="password" bind:value={newPassword} placeholder="Минимум {PASSWORD_MIN_LENGTH} символов" autocomplete="new-password" />
+              </div>
+            </div>
+
+            <div class="settings-actions">
+              <button class="settings-save" type="button" onclick={saveProfile} disabled={saving}>
+                {#if saving}<span class="home-spinner" aria-hidden="true"></span>{/if}
+                Сохранить
+              </button>
+              <button class="settings-cancel" type="button" onclick={onClose} disabled={saving}>Отмена</button>
+            </div>
+          {:else}
+            <div class="settings-sound">
+              <div>
+                <span class="settings-field-label">Микрофон</span>
+                <div class="settings-select-wrap">
+                  <select class="settings-select" value={micId} onchange={onMicChange}>
+                    <option value="">Системный</option>
+                    {#each microphones as mic (mic.deviceId)}
+                      <option value={mic.deviceId}>{mic.label}</option>
+                    {/each}
+                  </select>
+                  <span class="settings-select-chevron" aria-hidden="true">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                  </span>
+                </div>
+              </div>
+
+              <div>
+                <span class="settings-field-label">Динамик</span>
+                <div class="settings-select-wrap">
+                  <select class="settings-select" value={speakerId} onchange={onSpeakerChange}>
+                    <option value="">Системный</option>
+                    {#each speakers as speaker (speaker.deviceId)}
+                      <option value={speaker.deviceId}>{speaker.label}</option>
+                    {/each}
+                  </select>
+                  <span class="settings-select-chevron" aria-hidden="true">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                  </span>
+                </div>
+              </div>
+
+              <div>
+                <span class="settings-field-label">Шумоподавление</span>
+                <div class="settings-select-wrap">
+                  <select class="settings-select" value={noiseMode} onchange={onNoiseChange}>
+                    {#each NOISE_OPTIONS as option (option.value)}
+                      <option value={option.value}>{option.label}</option>
+                    {/each}
+                  </select>
+                  <span class="settings-select-chevron" aria-hidden="true">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                  </span>
+                </div>
+              </div>
+
+              <div>
+                <div class="settings-gate-head">
+                  <span class="settings-field-label">Гейт</span>
+                  <button
+                    class="settings-switch"
+                    type="button"
+                    role="switch"
+                    aria-checked={gateOn}
+                    aria-label="Шумовой гейт"
+                    onclick={toggleGate}
+                  >
+                    <span class="settings-switch-knob" aria-hidden="true"></span>
+                  </button>
+                </div>
+
+                <div class="settings-gate-body" data-disabled={!gateOn}>
+                  <div class="settings-gate">
+                    <div class="settings-gate-meter">
+                      <span class="settings-gate-track" aria-hidden="true">
+                        <span class="settings-gate-fill" data-state={gateOpen ? 'open' : 'closed'} style={`transform:scaleX(${levelScale})`}></span>
+                        <span class="settings-gate-marker" data-active={gateOn} style={`left:${markerLeft}`}></span>
+                      </span>
+                      <input
+                        class="settings-gate-slider"
+                        type="range"
+                        min={GATE_THRESHOLD_MIN_DB}
+                        max={GATE_THRESHOLD_MAX_DB}
+                        step="1"
+                        value={gateDb}
+                        disabled={!gateOn}
+                        aria-label="Порог гейта в децибелах"
+                        oninput={onGateInput}
+                      />
+                    </div>
+                    <span class="settings-gate-value">{gateLabel}</span>
+                  </div>
+                  <div class="settings-gate-hint">
+                    Микрофон открывается, только когда звук громче порога — отсекает фоновый шум и дыхание.
+                  </div>
+                </div>
+              </div>
+            </div>
+          {/if}
+        </div>
+      </div>
+    </div>
+  </div>
+{/if}

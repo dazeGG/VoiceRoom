@@ -1,4 +1,5 @@
 <script lang="ts">
+  import RoomChat from './RoomChat.svelte';
   import RoomDock from './RoomDock.svelte';
   import ScreenStage from './ScreenStage.svelte';
   import StageTiles from './StageTiles.svelte';
@@ -10,4 +11,5 @@
     <StageTiles />
     <RoomDock />
   </section>
+  <RoomChat />
 </main>

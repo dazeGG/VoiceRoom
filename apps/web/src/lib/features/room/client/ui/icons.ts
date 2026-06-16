@@ -47,6 +47,18 @@ export const icons = {
   'chevron-down': phosphor(
     '<path fill="currentColor" d="m213.66 101.66l-80 80a8 8 0 0 1-11.32 0l-80-80a8 8 0 0 1 11.32-11.32L128 164.69l74.34-74.35a8 8 0 0 1 11.32 11.32"/>'
   ),
+  'chevron-right': phosphor(
+    '<path fill="currentColor" d="M181.66 133.66l-80 80a8 8 0 0 1-11.32-11.32L164.69 128L90.34 53.66a8 8 0 0 1 11.32-11.32l80 80a8 8 0 0 1 0 11.32"/>'
+  ),
+  chat: phosphor(
+    '<path fill="currentColor" d="M216 48H40a16 16 0 0 0-16 16v160a15.84 15.84 0 0 0 9.25 14.5A16.05 16.05 0 0 0 40 240a15.89 15.89 0 0 0 10.25-3.78l.09-.07L83 208h133a16 16 0 0 0 16-16V64a16 16 0 0 0-16-16M40 224V64h176v128H82.4a8 8 0 0 0-5.13 1.86Z"/>'
+  ),
+  send: phosphor(
+    '<path fill="currentColor" d="M223.69 42.18a8 8 0 0 0-9.87-9.87L11.32 84.27a8 8 0 0 0-1.49 14.92l85.62 41.21l41.21 85.62a8 8 0 0 0 7.2 4.53h.46a8 8 0 0 0 7.26-5.93ZM150.7 207.86l-31-64.42l50.74-50.74a8 8 0 0 0-11.31-11.32L108.56 132.3l-64.42-31l155.66-39.81Z"/>'
+  ),
+  signal: phosphor(
+    '<rect x="32" y="148" width="34" height="64" rx="8" fill="currentColor"/><rect x="92" y="104" width="34" height="108" rx="8" fill="currentColor"/><rect x="152" y="60" width="34" height="152" rx="8" fill="currentColor"/>'
+  ),
   close: phosphor(
     '<path fill="currentColor" d="M205.66 194.34a8 8 0 0 1-11.32 11.32L128 139.31l-66.34 66.35a8 8 0 0 1-11.32-11.32L116.69 128L50.34 61.66a8 8 0 0 1 11.32-11.32L128 116.69l66.34-66.35a8 8 0 0 1 11.32 11.32L139.31 128Z"/>'
   ),

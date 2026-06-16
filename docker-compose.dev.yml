@@ -1,0 +1,84 @@
+services:
+  postgres:
+    image: ${POSTGRES_IMAGE:-postgres:16-alpine}
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-voice_room_dev}
+      POSTGRES_USER: ${POSTGRES_USER:-voice_room}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-voice_room_dev}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+
+  api:
+    build:
+      context: .
+      target: deps
+    command: npm --workspace @voice-room/api run dev
+    working_dir: /app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      livekit:
+        condition: service_started
+    environment:
+      NODE_ENV: development
+      HOST: 0.0.0.0
+      PORT: 3000
+      DATABASE_URL: ${DATABASE_URL:-postgres://${POSTGRES_USER:-voice_room}:${POSTGRES_PASSWORD:-voice_room_dev}@postgres:5432/${POSTGRES_DB:-voice_room_dev}}
+      LIVEKIT_URL: ${LIVEKIT_PUBLIC_URL:-ws://localhost:7880}
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:-devkey}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:-devsecret}
+      ROOM_CREATE_POW_DIFFICULTY: ${ROOM_CREATE_POW_DIFFICULTY:-0}
+      ROOM_CREATE_RATE_LIMIT: ${ROOM_CREATE_RATE_LIMIT:-0}
+      TRUST_PROXY: ${TRUST_PROXY:-false}
+    ports:
+      - "${API_PORT:-3000}:3000"
+    volumes:
+      - .:/app
+      - node_modules:/app/node_modules
+      - api_node_modules:/app/apps/api/node_modules
+      - web_node_modules:/app/apps/web/node_modules
+      - shared_node_modules:/app/packages/shared/node_modules
+
+  web:
+    build:
+      context: .
+      target: deps
+    command: npm --workspace @voice-room/web run dev
+    working_dir: /app
+    depends_on:
+      api:
+        condition: service_started
+    environment:
+      VITE_DEV_HOST: 0.0.0.0
+      VITE_DEV_API_TARGET: http://api:3000
+    ports:
+      - "${WEB_PORT:-5173}:5173"
+    volumes:
+      - .:/app
+      - node_modules:/app/node_modules
+      - api_node_modules:/app/apps/api/node_modules
+      - web_node_modules:/app/apps/web/node_modules
+      - shared_node_modules:/app/packages/shared/node_modules
+
+  livekit:
+    image: ${LIVEKIT_IMAGE:-livekit/livekit-server:latest}
+    command: --dev --bind 0.0.0.0
+    ports:
+      - "${LIVEKIT_HTTP_PORT:-7880}:7880"
+      - "${LIVEKIT_TCP_PORT:-7881}:7881"
+      - "${LIVEKIT_UDP_PORT:-7882}:7882/udp"
+
+volumes:
+  postgres_dev_data:
+  node_modules:
+  api_node_modules:
+  web_node_modules:
+  shared_node_modules:

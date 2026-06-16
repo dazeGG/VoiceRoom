@@ -1,13 +1,21 @@
 {
   "name": "@voice-room/shared",
-  "version": "1.7.0",
+  "version": "2.0.0",
   "private": true,
   "type": "commonjs",
   "exports": {
-    "./validation": "./src/validation.js"
+    "./validation": {
+      "types": "./src/validation.d.ts",
+      "require": "./src/validation.js"
+    },
+    "./visual-identity": {
+      "types": "./src/visual-identity.d.ts",
+      "import": "./src/visual-identity.mjs",
+      "require": "./src/visual-identity.json"
+    }
   },
   "scripts": {
     "check": "node --check src/validation.js",
-    "test": "node --test \"test/**/*.test.js\""
+    "test": "node --test test/*.test.js"
   }
 }

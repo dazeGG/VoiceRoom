@@ -1,0 +1,54 @@
+{
+  "AVATAR_COLOR_KEYS": [
+    "blurple",
+    "violet",
+    "orchid",
+    "magenta",
+    "rose",
+    "coral",
+    "rust",
+    "amber",
+    "olive",
+    "green",
+    "teal",
+    "cyan",
+    "sky",
+    "blue",
+    "indigo",
+    "slate"
+  ],
+  "ROOM_ICON_KEYS": [
+    "headphones",
+    "pin",
+    "moon",
+    "sun",
+    "gamepad",
+    "mic",
+    "fire",
+    "coffee",
+    "music",
+    "book"
+  ],
+  "ROOM_COLOR_KEYS": [
+    "blue",
+    "slate",
+    "violet",
+    "amber",
+    "indigo",
+    "rose",
+    "rust",
+    "green"
+  ],
+  "ROOM_PRESETS": [
+    { "key": "voice-blue", "iconKey": "headphones", "emoji": "🎧", "colorKey": "blue" },
+    { "key": "focus-slate", "iconKey": "pin", "emoji": "📌", "colorKey": "slate" },
+    { "key": "night-violet", "iconKey": "moon", "emoji": "🌙", "colorKey": "violet" },
+    { "key": "day-amber", "iconKey": "sun", "emoji": "☀️", "colorKey": "amber" },
+    { "key": "game-indigo", "iconKey": "gamepad", "emoji": "🎮", "colorKey": "indigo" },
+    { "key": "talk-rose", "iconKey": "mic", "emoji": "🎙️", "colorKey": "rose" },
+    { "key": "fire-rust", "iconKey": "fire", "emoji": "🔥", "colorKey": "rust" },
+    { "key": "coffee-amber", "iconKey": "coffee", "emoji": "☕", "colorKey": "amber" },
+    { "key": "music-rose", "iconKey": "music", "emoji": "🎵", "colorKey": "rose" },
+    { "key": "study-green", "iconKey": "book", "emoji": "📚", "colorKey": "green" }
+  ]
+}

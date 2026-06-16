@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { readEnvInt, readEnvBool } = require('../src/lib/config');
+const { readEnvInt, readEnvBool, readDatabaseConfig } = require('../src/lib/config');
 
 test('readEnvInt parses a valid integer', () => {
   assert.equal(readEnvInt('PORT', 3000, 1, { PORT: '8080' }), 8080);
@@ -35,4 +35,26 @@ test('readEnvBool reads falsey strings', () => {
 test('readEnvBool returns fallback when undefined', () => {
   assert.equal(readEnvBool('TRUST_PROXY', true, {}), true);
   assert.equal(readEnvBool('TRUST_PROXY', false, {}), false);
+});
+
+
+test('readDatabaseConfig requires DATABASE_URL', () => {
+  assert.throws(() => readDatabaseConfig({}), /DATABASE_URL is required/);
+});
+
+test('readDatabaseConfig rejects malformed DATABASE_URL', () => {
+  assert.throws(() => readDatabaseConfig({ DATABASE_URL: 'not a url' }), /valid PostgreSQL connection URL/);
+});
+
+test('readDatabaseConfig rejects non-PostgreSQL protocols', () => {
+  assert.throws(() => readDatabaseConfig({ DATABASE_URL: 'mysql://user:pass@localhost/db' }), /postgres:\/\/ or postgresql:\/\//);
+});
+
+test('readDatabaseConfig accepts postgres URLs', () => {
+  assert.deepEqual(readDatabaseConfig({ DATABASE_URL: 'postgres://user:pass@localhost:5432/voice_room' }), {
+    url: 'postgres://user:pass@localhost:5432/voice_room'
+  });
+  assert.deepEqual(readDatabaseConfig({ DATABASE_URL: ' postgresql://user:pass@localhost/voice_room ' }), {
+    url: 'postgresql://user:pass@localhost/voice_room'
+  });
 });

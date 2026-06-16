@@ -1,4 +1,7 @@
 import { renderIcon } from './icons';
+import { SCREEN_FPS_OPTIONS, SCREEN_QUALITY_OPTIONS } from '../core/config';
+import { state } from '../core/state';
+import { getScreenProfile, parseScreenProfileId } from '../media/profiles';
 import { playMediaElement } from '../services/media-playback-service';
 import type { Participant } from '../core/types';
 
@@ -6,7 +9,6 @@ export interface StreamTileOptions {
   hasPreview: boolean;
   isCollapsed: boolean;
   isSubscribed: boolean;
-  onDisconnect: (peerId: string) => void;
   onEnter: (peerId: string) => void;
   participant: Participant;
   stream: MediaStream | null;
@@ -16,7 +18,6 @@ export function createStreamTile({
   hasPreview,
   isCollapsed,
   isSubscribed,
-  onDisconnect,
   onEnter,
   participant,
   stream
@@ -51,6 +52,7 @@ export function createStreamTile({
   preview.className = 'stream-tile-preview';
   if (hasPreview && stream) {
     mountStreamTileVideo(preview, stream);
+    preview.append(createStreamTileProfileMeta(participant));
   } else {
     preview.append(createStreamTileIcon());
   }
@@ -60,8 +62,7 @@ export function createStreamTile({
   if (isCollapsed) {
     tile.append(
       createCollapsedExpandButton(participant, isActive, onEnter),
-      createStreamTileTitle(participant),
-      createCollapsedTileActions(participant, onDisconnect)
+      createStreamTileTitle(participant)
     );
   } else if (isIdle) {
     tile.append(createIdleStreamTileTitle(participant), createIdleTileActions(isSubscribed));
@@ -71,6 +72,18 @@ export function createStreamTile({
     tile.addEventListener('click', () => onEnter(participant.id));
   }
   return tile;
+}
+
+function createStreamTileProfileMeta(participant: Participant): HTMLElement {
+  const profile = getScreenProfile(participant.isLocal ? state.localScreenProfileId : participant.screenProfileId);
+  const { qualityId, fpsId } = parseScreenProfileId(profile.id);
+  const qualityLabel = SCREEN_QUALITY_OPTIONS[qualityId]?.label || '';
+  const fpsLabel = SCREEN_FPS_OPTIONS[fpsId]?.label || '';
+  const meta = document.createElement('span');
+  meta.className = 'stream-tile-profile-meta';
+  meta.textContent = [qualityLabel, fpsLabel].filter(Boolean).join(' · ');
+  meta.hidden = !meta.textContent;
+  return meta;
 }
 
 function createCollapsedExpandButton(
@@ -97,24 +110,6 @@ function createStreamTileTitle(participant: Participant): HTMLElement {
   title.textContent = participant.isLocal ? 'Ваш стрим' : participant.name;
   copy.append(title);
   return copy;
-}
-
-function createCollapsedTileActions(
-  participant: Participant,
-  onDisconnect: (peerId: string) => void
-): HTMLElement {
-  const actions = document.createElement('span');
-  actions.className = 'stream-tile-actions stream-tile-actions-collapsed';
-  const disconnectAction = document.createElement('button');
-  disconnectAction.type = 'button';
-  disconnectAction.className = 'stream-tile-action stream-tile-action-disconnect';
-  disconnectAction.textContent = 'Отключиться';
-  disconnectAction.addEventListener('click', (event) => {
-    event.stopPropagation();
-    onDisconnect(participant.id);
-  });
-  actions.append(disconnectAction);
-  return actions;
 }
 
 function createIdleStreamTileTitle(participant: Participant): HTMLElement {

@@ -1,0 +1,227 @@
+/* In-room chat as a collapsible right rail (screen 02b of the «Комнаты и чат
+   v2» design). It sits in-flow beside the voice stage and is toggled by the
+   «Чат» button in the top bar; when hidden it leaves no layout footprint. */
+
+:root {
+  --chat-rail-width: 360px;
+}
+
+.room-chat-rail {
+  flex: none;
+  width: var(--chat-rail-width);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-left: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(10, 9, 7, 0.55);
+}
+
+@media (min-width: 901px) {
+  .room-chat-rail {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 18;
+    height: 100dvh;
+    background:
+      linear-gradient(180deg, rgba(17, 14, 11, 0.96), rgba(8, 7, 6, 0.98)),
+      #0a0907;
+    box-shadow: -22px 0 54px rgba(0, 0, 0, 0.28);
+  }
+}
+
+.chat-rail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.chat-rail-title {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: #e7e2d4;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.chat-rail-title svg {
+  color: #9a9484;
+}
+
+.chat-rail-collapse {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.05);
+  color: #9a9484;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.chat-rail-collapse:hover {
+  background: rgba(255, 255, 255, 0.11);
+  color: #ece7d9;
+}
+
+.chat-rail-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 15px;
+  padding: 18px 20px;
+}
+
+.chat-msg {
+  display: flex;
+  gap: 11px;
+}
+
+.chat-msg-avatar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  color: #f3eee2;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.chat-msg-main {
+  min-width: 0;
+}
+
+.chat-msg-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.chat-msg-author {
+  font-size: 13.5px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-msg-time {
+  flex: none;
+  color: #6f6a5c;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+}
+
+.chat-msg-text {
+  margin: 2px 0 0;
+  color: #c4bdac;
+  font-size: 13.5px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.chat-msg-text + .chat-msg-text {
+  margin-top: 3px;
+}
+
+.chat-rail-note,
+.chat-rail-error {
+  margin: auto 0 0;
+  color: #8e897b;
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.chat-rail-error {
+  margin: 0;
+  padding: 0 20px 8px;
+  color: #d2a08c;
+}
+
+.chat-rail-compose {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 14px 18px 18px;
+}
+
+.chat-rail-input {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 13px;
+  padding: 12px 14px;
+  background: #0c0b08;
+  color: #ece7d9;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.chat-rail-input::placeholder {
+  color: #6f6a5c;
+}
+
+.chat-rail-input:focus {
+  border-color: rgba(154, 143, 106, 0.65);
+}
+
+.chat-rail-send {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: 11px;
+  background: #d9d3c3;
+  color: #17150f;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.chat-rail-send:hover {
+  background: #e7e1d1;
+}
+
+.chat-rail-send:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+/* On narrow screens the rail overlays the room instead of squeezing the grid. */
+@media (max-width: 900px) {
+  .room-chat-rail {
+    position: fixed;
+    top: 76px;
+    right: 12px;
+    bottom: 92px;
+    left: 12px;
+    width: auto;
+    z-index: 20;
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    border-radius: 18px;
+    background:
+      linear-gradient(180deg, rgba(21, 20, 15, 0.98), rgba(14, 13, 10, 0.98)),
+      #0e0d0a;
+    box-shadow: 0 22px 44px rgba(0, 0, 0, 0.4);
+  }
+}
