@@ -18,7 +18,7 @@ This repository uses a lightweight Git Flow so work can continue consistently ac
 - Default PR target for feature work is `develop`.
 - Default PR target for release branches is `main`.
 - Default PR target for hotfix branches is `main`; after merge, back-merge/cherry-pick to `develop`.
-- Prefer merge commits for feature PRs unless the user explicitly asks to squash. Keeping feature commit history is useful for multi-chat traceability.
+- When the user explicitly asks an agent to merge a PR, default to squash merge and delete the source branch after merge unless the user says otherwise.
 - Create normal ready-for-review PRs by default. Use draft PRs only when the user explicitly asks for a draft.
 
 ## Commit rules
