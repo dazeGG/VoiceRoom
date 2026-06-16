@@ -2,6 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const crypto = require('node:crypto');
 
 const { createUserStore, publicUser } = require('../src/lib/user-store');
 const { AVATAR_COLOR_KEYS } = require('@voice-room/shared/validation');
@@ -43,6 +44,54 @@ test('verifyCredentials authenticates only with the correct password', async (t)
   assert.ok(await store.verifyCredentials('ada', 'lovelace-1843'));
   assert.equal(await store.verifyCredentials('ada', 'wrong'), null);
   assert.equal(await store.verifyCredentials('ghost', 'whatever'), null);
+});
+
+test('updateDisplayName renames the account and tolerates an empty name', async (t) => {
+  const store = await createMigratedStore(t);
+  const { user } = await store.createUser({ login: 'vovosh', displayName: 'Вова', password: 'password123' });
+
+  const renamed = await store.updateDisplayName({ userId: user.id, displayName: 'Вовощ' });
+  assert.equal(renamed.displayName, 'Вовощ');
+  assert.equal(renamed.id, user.id);
+  assert.equal((await store.getUserById(user.id)).displayName, 'Вовощ');
+
+  const cleared = await store.updateDisplayName({ userId: user.id, displayName: '' });
+  assert.equal(cleared.displayName, '');
+
+  const missing = await store.updateDisplayName({ userId: crypto.randomUUID(), displayName: 'ghost' });
+  assert.equal(missing, null);
+});
+
+test('changePassword rotates the credential only after verifying the current one', async (t) => {
+  const store = await createMigratedStore(t);
+  const { user } = await store.createUser({ login: 'ada', password: 'lovelace-1843' });
+
+  const wrong = await store.changePassword({
+    userId: user.id,
+    currentPassword: 'not-the-password',
+    newPassword: 'analytical-engine'
+  });
+  assert.equal(wrong.status, 'invalid_password');
+  assert.ok(await store.verifyCredentials('ada', 'lovelace-1843'));
+
+  const session = await store.createSession({ userId: user.id, now: 1000 });
+
+  const updated = await store.changePassword({
+    userId: user.id,
+    currentPassword: 'lovelace-1843',
+    newPassword: 'analytical-engine'
+  });
+  assert.equal(updated.status, 'updated');
+  assert.equal(await store.verifyCredentials('ada', 'lovelace-1843'), null);
+  assert.ok(await store.verifyCredentials('ada', 'analytical-engine'));
+  assert.equal(await store.getSessionUser(session.token, 1500), null);
+
+  const missing = await store.changePassword({
+    userId: crypto.randomUUID(),
+    currentPassword: 'whatever',
+    newPassword: 'whatever-else'
+  });
+  assert.equal(missing.status, 'not_found');
 });
 
 test('sessions resolve to their user and expire', async (t) => {

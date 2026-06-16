@@ -909,6 +909,69 @@ async function handleMe(req, res) {
   sendJson(res, 200, { ok: true, user: session ? publicUser(session.user) : null });
 }
 
+async function handleUpdateProfile(req, res) {
+  const session = await resolveSessionUser(req);
+  if (!session) {
+    sendJson(res, 401, { ok: false, error: 'Требуется вход' });
+    return;
+  }
+
+  const body = await readJsonBody(req);
+  const displayName = cleanDisplayName(body.displayName);
+  const user = await getUserStore().updateDisplayName({ userId: session.user.id, displayName });
+  if (!user) {
+    sendJson(res, 404, { ok: false, error: 'Аккаунт не найден' });
+    return;
+  }
+
+  sendJson(res, 200, { ok: true, user: publicUser(user) });
+}
+
+async function handleChangePassword(req, res) {
+  const session = await resolveSessionUser(req);
+  if (!session) {
+    sendJson(res, 401, { ok: false, error: 'Требуется вход' });
+    return;
+  }
+
+  // Throttle on the account so a hijacked session can't brute-force the current
+  // password, which is the only secret guarding the rotation.
+  const rate = authLimiter.check(`password:${session.user.id}`);
+  if (!rate.allowed) {
+    sendJson(
+      res,
+      429,
+      { ok: false, error: 'Слишком много попыток, попробуйте позже' },
+      { 'Retry-After': String(rate.retryAfterSeconds) }
+    );
+    return;
+  }
+
+  const body = await readJsonBody(req);
+  const currentPassword = typeof body.currentPassword === 'string' ? body.currentPassword : '';
+  const newPassword = typeof body.newPassword === 'string' ? body.newPassword : '';
+  if (!isValidPassword(newPassword)) {
+    sendJson(res, 400, { ok: false, error: 'Пароль должен быть не короче 8 символов' });
+    return;
+  }
+
+  const result = await getUserStore().changePassword({
+    userId: session.user.id,
+    currentPassword,
+    newPassword
+  });
+  if (result.status === 'not_found') {
+    sendJson(res, 404, { ok: false, error: 'Аккаунт не найден' });
+    return;
+  }
+  if (result.status === 'invalid_password') {
+    sendJson(res, 400, { ok: false, error: 'Неверный текущий пароль' });
+    return;
+  }
+
+  sendJson(res, 200, { ok: true }, { 'Set-Cookie': clearSessionCookie() });
+}
+
 function publicLobbyRoom(room) {
   return {
     createdAt: room.createdAt,
@@ -1317,6 +1380,8 @@ function createApiApp({ store = null, users = null } = {}) {
   app.post('/api/auth/login', (request, reply) => runLegacyHandler(request, reply, handleLogin));
   app.post('/api/auth/logout', (request, reply) => runLegacyHandler(request, reply, handleLogout));
   app.get('/api/auth/me', (request, reply) => runLegacyHandler(request, reply, handleMe));
+  app.post('/api/auth/profile', (request, reply) => runLegacyHandler(request, reply, handleUpdateProfile));
+  app.post('/api/auth/password', (request, reply) => runLegacyHandler(request, reply, handleChangePassword));
   app.get('/api/auth/rooms', (request, reply) => runLegacyHandler(request, reply, handleAuthRooms));
   app.post('/api/auth/rooms', (request, reply) => runLegacyHandler(request, reply, handleAddAuthRoom));
   app.post('/api/rooms', (request, reply) => runLegacyHandler(request, reply, handleCreateRoom));

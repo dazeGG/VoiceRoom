@@ -1,0 +1,28 @@
+services:
+  node-exporter:
+    image: prom/node-exporter:v1.8.2
+    restart: unless-stopped
+    command:
+      - --path.rootfs=/host
+      # Keep localhost by default. For a separate status VPS over Tailscale,
+      # set TAILSCALE_BIND_ADDRESS to the VoiceRoom server Tailscale IP.
+      - --web.listen-address=${TAILSCALE_BIND_ADDRESS:-127.0.0.1}:9100
+    network_mode: host
+    pid: host
+    volumes:
+      - /:/host:ro,rslave
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    restart: unless-stopped
+    privileged: true
+    ports:
+      # Keep localhost by default. For a separate status VPS over Tailscale,
+      # set TAILSCALE_BIND_ADDRESS to the VoiceRoom server Tailscale IP.
+      - "${TAILSCALE_BIND_ADDRESS:-127.0.0.1}:8080:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro

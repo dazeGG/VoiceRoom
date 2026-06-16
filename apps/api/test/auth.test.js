@@ -338,3 +338,94 @@ test('auth flow: validation, duplicate login, and wrong password', async (t) => 
   assert.equal(ok.status, 200);
   assert.equal(ok.body.user.login, 'ada');
 });
+
+test('account settings: rename and change password', async (t) => {
+  const { dir, socketPath } = getSocketPath();
+  const { cleanup, databaseUrl } = await createTestDatabase(t);
+  const logs = { stdout: '', stderr: '' };
+  const child = startServer(socketPath, databaseUrl, logs);
+  t.after(() => {
+    child.kill('SIGTERM');
+    fs.rmSync(dir, { recursive: true, force: true });
+    return cleanup();
+  });
+
+  await waitForHealthz(socketPath);
+
+  const registered = await request(socketPath, {
+    method: 'POST',
+    pathname: '/api/auth/register',
+    body: { login: 'vovosh', displayName: 'Вова', password: 'password123' }
+  });
+  assert.equal(registered.status, 201);
+  const cookie = cookieFrom(registered.setCookie);
+
+  // Profile and password changes require a session.
+  const anonRename = await request(socketPath, {
+    method: 'POST',
+    pathname: '/api/auth/profile',
+    body: { displayName: 'нельзя' }
+  });
+  assert.equal(anonRename.status, 401);
+
+  // Renaming returns the updated public user and is reflected by /auth/me.
+  const renamed = await request(socketPath, {
+    method: 'POST',
+    pathname: '/api/auth/profile',
+    body: { displayName: '  Вовощ  ' },
+    cookie
+  });
+  assert.equal(renamed.status, 200);
+  assert.equal(renamed.body.user.displayName, 'Вовощ');
+  assert.equal('passwordHash' in renamed.body.user, false);
+  const me = await request(socketPath, { pathname: '/api/auth/me', cookie });
+  assert.equal(me.body.user.displayName, 'Вовощ');
+
+  // A too-short new password is rejected before touching the stored hash.
+  const tooShort = await request(socketPath, {
+    method: 'POST',
+    pathname: '/api/auth/password',
+    body: { currentPassword: 'password123', newPassword: 'short' },
+    cookie
+  });
+  assert.equal(tooShort.status, 400);
+
+  // A wrong current password is rejected.
+  const wrongCurrent = await request(socketPath, {
+    method: 'POST',
+    pathname: '/api/auth/password',
+    body: { currentPassword: 'not-it-at-all', newPassword: 'brand-new-password' },
+    cookie
+  });
+  assert.equal(wrongCurrent.status, 400);
+
+  // The correct current password rotates the credential.
+  const changed = await request(socketPath, {
+    method: 'POST',
+    pathname: '/api/auth/password',
+    body: { currentPassword: 'password123', newPassword: 'brand-new-password' },
+    cookie
+  });
+  assert.equal(changed.status, 200);
+  assert.match(String(changed.setCookie[0] || ''), /Max-Age=0/);
+
+  // Password rotation revokes existing sessions, including the current cookie.
+  const staleMe = await request(socketPath, { pathname: '/api/auth/me', cookie });
+  assert.equal(staleMe.status, 200);
+  assert.equal(staleMe.body.user, null);
+
+  // The old password no longer logs in; the new one does.
+  const oldLogin = await request(socketPath, {
+    method: 'POST',
+    pathname: '/api/auth/login',
+    body: { login: 'vovosh', password: 'password123' }
+  });
+  assert.equal(oldLogin.status, 401);
+
+  const newLogin = await request(socketPath, {
+    method: 'POST',
+    pathname: '/api/auth/login',
+    body: { login: 'vovosh', password: 'brand-new-password' }
+  });
+  assert.equal(newLogin.status, 200);
+});

@@ -96,6 +96,54 @@ function createUserStore({ databaseUrl, logger = console, pool, sessionTtlMs = D
     return mapUser(result.rows[0]);
   }
 
+  // Rename: the display name is the only mutable identity field. An empty value
+  // is allowed (the room then falls back to the login). Returns the updated
+  // public-shaped user, or null when the account no longer exists.
+  async function updateDisplayName({ userId, displayName = '', now = Date.now() }) {
+    const result = await getPool().query(
+      `UPDATE users SET display_name = $2, updated_at = $3 WHERE id = $1 RETURNING *`,
+      [userId, displayName, toDate(now)]
+    );
+    return mapUser(result.rows[0]);
+  }
+
+  // Password change always re-verifies the current password first so a leaked
+  // session alone can't rotate the credential. Status mirrors the createUser
+  // shape so the route layer can branch without inspecting errors.
+  async function changePassword({ userId, currentPassword, newPassword, now = Date.now() }) {
+    const pool = getPool();
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const userResult = await client.query(`SELECT * FROM users WHERE id = $1 FOR UPDATE`, [userId]);
+      const user = mapUser(userResult.rows[0]);
+      if (!user) {
+        await client.query('ROLLBACK');
+        return { status: 'not_found' };
+      }
+
+      const ok = await verifyPassword(currentPassword, user.passwordHash);
+      if (!ok) {
+        await client.query('ROLLBACK');
+        return { status: 'invalid_password' };
+      }
+
+      const passwordHash = await hashPassword(newPassword);
+      await client.query(
+        `UPDATE users SET password_hash = $2, updated_at = $3 WHERE id = $1`,
+        [userId, passwordHash, toDate(now)]
+      );
+      await client.query(`DELETE FROM sessions WHERE user_id = $1`, [userId]);
+      await client.query('COMMIT');
+      return { status: 'updated' };
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   async function verifyCredentials(login, password) {
     const user = await getUserByLogin(login);
     if (!user) {
@@ -158,6 +206,7 @@ function createUserStore({ databaseUrl, logger = console, pool, sessionTtlMs = D
   }
 
   return {
+    changePassword,
     close,
     createSession,
     createUser,
@@ -166,6 +215,7 @@ function createUserStore({ databaseUrl, logger = console, pool, sessionTtlMs = D
     getUserById,
     getUserByLogin,
     pruneSessions,
+    updateDisplayName,
     verifyCredentials
   };
 }
