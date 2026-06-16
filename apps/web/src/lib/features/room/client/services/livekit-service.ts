@@ -175,7 +175,6 @@ async function bindLiveKitRoomEvents(room: Room): Promise<void> {
     if (!peer) return;
     updateLiveKitPublicationState(peer, publication);
     syncLiveKitPublicationSubscription(peer, publication);
-    ensureRemoteMicrophonePlayback(peer, publication);
   });
   room.on(RoomEvent.TrackUnpublished, (publication, participant) => {
     handleLiveKitTrackUnpublished(publication, participant);
@@ -243,7 +242,6 @@ export function syncLiveKitParticipant(participant: RemoteParticipant | null | u
     if (publication.track && publication.isSubscribed) {
       handleLiveKitTrackSubscribed(publication.track, publication, participant);
     }
-    ensureRemoteMicrophonePlayback(peer, publication);
   });
 
   return peer;
@@ -409,12 +407,13 @@ function syncLiveKitPublicationSubscription(peer: Participant, publication: Trac
   if (typeof remotePublication.setSubscribed !== 'function') return;
 
   if (isMicrophonePublication(publication)) {
-    remotePublication.setSubscribed(!state.outputMuted);
+    setRemotePublicationSubscribed(remotePublication, !state.outputMuted);
     return;
   }
 
   if (isScreenPublication(publication)) {
-    remotePublication.setSubscribed(
+    setRemotePublicationSubscribed(
+      remotePublication,
       state.viewedScreenPeerId === peer.id || state.screenSubscribedPeerIds.has(peer.id)
     );
   }
@@ -447,32 +446,23 @@ export function syncLiveKitVoiceSubscriptions(): void {
   });
 }
 
+function setRemotePublicationSubscribed(publication: RemoteTrackPublication, subscribed: boolean): void {
+  if (publication.isSubscribed === subscribed) return;
+  publication.setSubscribed(subscribed);
+}
+
 async function recoverLiveKitRoom(room: Room): Promise<void> {
   syncLiveKitParticipants(room);
   await ensureLocalMicrophonePublished();
   syncLiveKitVoiceSubscriptions();
-  ensureRemoteMicrophonePlaybackForRoom(room);
   syncRemoteAudioPlayback();
   refreshParticipantState();
   refreshCallControls();
   refreshScreenControls();
 }
 
-function ensureRemoteMicrophonePlaybackForRoom(room: Room): void {
-  room.remoteParticipants.forEach((participant) => {
-    const peer = state.peers.get(participant.identity) || syncLiveKitParticipant(participant);
-    if (!peer) return;
-
-    participant.trackPublications.forEach((publication) => {
-      ensureRemoteMicrophonePlayback(peer, publication);
-    });
-  });
-}
-
 function ensureRemoteMicrophonePlayback(peer: Participant, publication: TrackPublication): void {
   if (!isMicrophonePublication(publication)) return;
-
-  syncLiveKitPublicationSubscription(peer, publication);
   if (state.outputMuted) return;
 
   const remotePublication = publication as RemoteTrackPublication;

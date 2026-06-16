@@ -413,7 +413,7 @@ export function ensureRemoteAudioElement(
   const audio = peer.audioElements.get(track.id);
   const existingStream = audio?.srcObject instanceof MediaStream ? audio.srcObject : null;
   const existingHasLiveTrack = Boolean(
-    existingStream?.getAudioTracks().some((audioTrack) => audioTrack.id === track.id && audioTrack.readyState !== 'ended')
+    existingStream?.getAudioTracks().some((audioTrack) => audioTrack === track && audioTrack.readyState !== 'ended')
   );
 
   if (audio && existingHasLiveTrack) {

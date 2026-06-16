@@ -8,6 +8,20 @@ const root = resolve(import.meta.dirname, '..');
 const require = createRequire(import.meta.url);
 const read = (path) => readFileSync(resolve(root, path), 'utf8');
 
+function functionBody(source, name) {
+  const start = source.indexOf(`function ${name}`);
+  assert.notEqual(start, -1, `${name} function is present`);
+  const open = source.indexOf('{', start);
+  let depth = 0;
+  for (let index = open; index < source.length; index += 1) {
+    const char = source[index];
+    if (char === '{') depth += 1;
+    if (char === '}') depth -= 1;
+    if (depth === 0) return source.slice(open + 1, index);
+  }
+  assert.fail(`${name} function body is closed`);
+}
+
 test('home auth flow is loader-first and has no localStorage session oracle', () => {
   const session = read('src/lib/features/auth/session.svelte.ts');
   const home = read('src/lib/features/home/HomePage.svelte');
@@ -210,14 +224,27 @@ test('anonymous quick-start and join-by-code stay independent from account APIs'
 test('remote microphone playback has subscription and audio-element recovery hooks', () => {
   const livekit = read('src/lib/features/room/client/services/livekit-service.ts');
   const participants = read('src/lib/features/room/client/room/participants.ts');
+  const syncVoiceSubscriptions = functionBody(livekit, 'syncLiveKitVoiceSubscriptions');
+  const subscriptionSync = functionBody(livekit, 'syncLiveKitPublicationSubscription');
+  const subscriptionSetter = functionBody(livekit, 'setRemotePublicationSubscribed');
+  const recovery = functionBody(livekit, 'ensureRemoteMicrophonePlayback');
+  const recoverRoom = functionBody(livekit, 'recoverLiveKitRoom');
+  const trackPublishedHandler = livekit.match(/RoomEvent\.TrackPublished[\s\S]*?\n  \}\);/)?.[0] || '';
+  const audioRecovery = functionBody(participants, 'ensureRemoteAudioElement');
 
-  assert.match(livekit, /ensureRemoteMicrophonePlayback/);
-  assert.match(livekit, /recoverLiveKitRoom[\s\S]*ensureRemoteMicrophonePlayback/);
-  assert.match(livekit, /syncLiveKitParticipant[\s\S]*ensureRemoteMicrophonePlayback/);
-  assert.match(livekit, /RoomEvent\.TrackSubscribed[\s\S]*ensureRemoteMicrophonePlayback/);
-  assert.match(participants, /ensureRemoteAudioElement/);
-  assert.match(participants, /track\.readyState !== 'ended'/);
-  assert.match(participants, /audio\.isConnected/);
+  assert.match(syncVoiceSubscriptions, /syncLiveKitPublicationSubscription\(peer, publication\)/);
+  assert.match(syncVoiceSubscriptions, /ensureRemoteMicrophonePlayback\(peer, publication\)/);
+  assert.match(subscriptionSync, /setRemotePublicationSubscribed\(remotePublication, !state\.outputMuted\)/);
+  assert.match(subscriptionSetter, /publication\.isSubscribed === subscribed/);
+  assert.match(subscriptionSetter, /publication\.setSubscribed\(subscribed\)/);
+  assert.match(recoverRoom, /syncLiveKitVoiceSubscriptions\(\)/);
+  assert.doesNotMatch(recoverRoom, /ensureRemoteMicrophonePlaybackForRoom|ensureRemoteMicrophonePlayback\(/);
+  assert.match(recovery, /if \(state\.outputMuted\) return/);
+  assert.doesNotMatch(recovery, /syncLiveKitPublicationSubscription/);
+  assert.match(recovery, /ensureRemoteAudioElement\(peer, mediaTrack, stream, track\.receiver\)/);
+  assert.doesNotMatch(trackPublishedHandler, /ensureRemoteMicrophonePlayback/);
+  assert.match(audioRecovery, /audioTrack === track && audioTrack\.readyState !== 'ended'/);
+  assert.match(audioRecovery, /audio\.isConnected/);
   assert.match(participants, /if \(peer\.micReceiver === receiver\) peer\.micReceiver = null/);
 });
 
