@@ -1,0 +1,396 @@
+/* Top-bar account block — recreates screens 01–03 of the «Voice Room - Профиль
+   и меню» design: a download + platform pill (web only) next to the profile
+   trigger that opens the account dropdown. */
+
+.topbar-account {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+/* ---- download + platform pill (screen 01) ---- */
+.topbar-download {
+  display: flex;
+  align-items: center;
+  height: 40px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  overflow: hidden;
+}
+
+/* Inside the Electron shell the preload tags <html> with .is-desktop before
+   page scripts run (same contract as the home download card), so the topbar
+   download pill is hidden with no flash — screen 03 «уже в приложении». */
+html.is-desktop .topbar-download {
+  display: none;
+}
+
+.topbar-download-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px 9px 14px;
+  border: none;
+  background: transparent;
+  color: #e7e2d4;
+  font-family: var(--font-sans);
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.topbar-download-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.topbar-download-btn:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
+.topbar-download-divider {
+  width: 1px;
+  height: 22px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.topbar-download-platform {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.topbar-download-select {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  padding: 9px 30px 9px 12px;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: #bdb7a8;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.topbar-download-select option {
+  background: #16140f;
+  color: #ece7d9;
+}
+
+.topbar-download-chevron {
+  position: absolute;
+  right: 11px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  pointer-events: none;
+  color: #8d877a;
+}
+
+.topbar-download .home-spinner {
+  width: 14px;
+  height: 14px;
+}
+
+/* ---- profile trigger (screens 01 / 02) ---- */
+.profile-menu {
+  position: relative;
+  flex: none;
+}
+
+.profile-trigger {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 40px;
+  padding: 0 12px 0 6px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  font-family: var(--font-sans);
+  cursor: pointer;
+  transition: background 0.16s ease, border-color 0.16s ease;
+}
+
+.profile-trigger:hover,
+.profile-trigger[aria-expanded='true'] {
+  background: rgba(255, 255, 255, 0.09);
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+.profile-avatar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.profile-trigger-name {
+  max-width: 160px;
+  overflow: hidden;
+  color: #e7e2d4;
+  font-size: 13.5px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-trigger-chevron {
+  display: inline-flex;
+  color: #8d877a;
+  transition: transform 0.16s ease;
+}
+
+.profile-trigger[aria-expanded='true'] .profile-trigger-chevron {
+  transform: rotate(180deg);
+}
+
+/* ---- account popover (screen 02) ---- */
+.profile-popover {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  width: 276px;
+  padding: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 18px;
+  background: #16140f;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55), 0 2px 0 rgba(255, 255, 255, 0.04) inset;
+  z-index: 50;
+}
+
+.profile-popover-head {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 14px;
+}
+
+.profile-popover-avatar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  font-size: 18px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.profile-popover-name {
+  min-width: 0;
+  overflow: hidden;
+  color: #ece7d9;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-menu-divider {
+  height: 1px;
+  margin: 2px 8px 6px;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.profile-menu-divider--tight {
+  margin: 6px 8px;
+}
+
+.profile-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 11px 12px;
+  border: none;
+  border-radius: 11px;
+  background: transparent;
+  font-family: var(--font-sans);
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.14s ease;
+}
+
+.profile-menu-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.profile-menu-item:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.profile-menu-item-icon {
+  flex: none;
+  display: inline-flex;
+  color: #b8b2a2;
+}
+
+.profile-menu-item-label {
+  flex: 1;
+  color: #e7e2d4;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.profile-menu-item-chevron {
+  flex: none;
+  display: inline-flex;
+  color: #5a5547;
+}
+
+.profile-menu-item--danger:hover {
+  background: rgba(214, 118, 90, 0.12);
+}
+
+.profile-menu-item--danger .profile-menu-item-icon {
+  color: #d97a5c;
+}
+
+.profile-menu-item--danger .profile-menu-item-label {
+  color: #e9a68f;
+  font-weight: 600;
+}
+
+/* ---- quick inline rename (from «Изменить имя») ---- */
+.profile-edit {
+  padding: 6px;
+}
+
+.profile-edit-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 6px 12px;
+}
+
+.profile-edit-back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: #9a9484;
+  cursor: pointer;
+  transition: background 0.14s ease, color 0.14s ease;
+}
+
+.profile-edit-back:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #e7e2d4;
+}
+
+.profile-edit-title {
+  color: #ece7d9;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.profile-edit-input {
+  width: 100%;
+  padding: 11px 13px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 11px;
+  background: #0c0b08;
+  color: #ece7d9;
+  font-family: var(--font-sans);
+  font-size: 14.5px;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.profile-edit-input::placeholder {
+  color: #6f6a5c;
+}
+
+.profile-edit-input:focus {
+  border-color: rgba(154, 143, 106, 0.7);
+}
+
+.profile-edit-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.profile-edit-cancel {
+  flex: none;
+  padding: 9px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  background: transparent;
+  color: #cfc9ba;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.profile-edit-cancel:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.profile-edit-save {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 9px 14px;
+  border: none;
+  border-radius: 10px;
+  background: #d9d3c3;
+  color: #17150f;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.profile-edit-save:hover {
+  background: #e7e1d1;
+}
+
+.profile-edit-save:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.profile-edit-save .home-spinner {
+  width: 13px;
+  height: 13px;
+  border-color: rgba(23, 21, 15, 0.25);
+  border-top-color: #17150f;
+}
+
+@media (max-width: 720px) {
+  .topbar-download {
+    display: none;
+  }
+
+  .profile-trigger-name {
+    max-width: 110px;
+  }
+}

@@ -71,6 +71,15 @@ export async function logout(): Promise<void> {
   await authPost('/auth/logout', {});
 }
 
+export async function updateDisplayName(displayName: string): Promise<AuthUser> {
+  const payload = await authPost<{ user: AuthUser }>('/auth/profile', { displayName });
+  return payload.user;
+}
+
+export async function changePassword(currentPassword: string, newPassword: string): Promise<void> {
+  await authPost('/auth/password', { currentPassword, newPassword });
+}
+
 export async function fetchMe(): Promise<AuthUser | null> {
   const response = await fetch('/api/auth/me', {
     credentials: 'same-origin',

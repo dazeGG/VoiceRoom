@@ -6,10 +6,14 @@
   import { extractRoomId } from '$lib/shared/utils/room';
   import Topbar from '$lib/shared/components/Topbar.svelte';
   import UserMenu from './components/UserMenu.svelte';
+  import TopbarDownload from './components/TopbarDownload.svelte';
+  import SettingsModal from './components/SettingsModal.svelte';
   import RoomCard from './components/RoomCard.svelte';
   import CreateRoomDialog from './components/CreateRoomDialog.svelte';
   import { pluralizeRooms } from './model/rooms';
   import './styles/lobby.css';
+  import './styles/account-menu.css';
+  import './styles/settings.css';
 
   let { user, loggingOut, onLogout, onToast } = $props<{
     user: AuthUser | null;
@@ -28,6 +32,8 @@
   let adding = $state(false);
   let addRoomCode = $state('');
   let addError = $state('');
+  let settingsOpen = $state(false);
+  let settingsTab = $state<'profile' | 'sound'>('profile');
 
   const liveCount = $derived(rooms.filter((room) => room.peers > 0).length);
 
@@ -120,6 +126,11 @@
   function onDialogKeydown(event: KeyboardEvent): void {
     if (addDialogOpen && event.key === 'Escape') closeAddDialog();
   }
+
+  function openSettings(tab: 'profile' | 'sound'): void {
+    settingsTab = tab;
+    settingsOpen = true;
+  }
 </script>
 
 <svelte:window onkeydown={onDialogKeydown} />
@@ -127,7 +138,10 @@
 <div class="app-shell">
   <Topbar label="Мои комнаты Voice Room">
     {#if user}
-      <UserMenu {user} {loggingOut} {onLogout} />
+      <div class="topbar-account">
+        <TopbarDownload />
+        <UserMenu {user} {loggingOut} {onLogout} onOpenSettings={openSettings} {onToast} />
+      </div>
     {/if}
   </Topbar>
 
@@ -184,6 +198,8 @@
 </div>
 
 <CreateRoomDialog open={createDialogOpen} {creating} onClose={() => (createDialogOpen = false)} onCreate={handleCreate} />
+
+<SettingsModal open={settingsOpen} bind:tab={settingsTab} {user} onClose={() => (settingsOpen = false)} onToast={onToast} />
 
 {#if addDialogOpen}
   <div class="dialog-overlay" role="presentation" onclick={onDialogOverlayClick}>
