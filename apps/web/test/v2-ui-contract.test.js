@@ -172,6 +172,55 @@ test('screen stage viewer badge renders viewer avatars instead of names', () => 
   assert.doesNotMatch(css, /screen-meta-viewers-label/);
 });
 
+test('anonymous room route bypasses account lobby auth gate', () => {
+  const roomRoute = read('src/routes/r/[roomId]/+page.svelte');
+  const roomRouteOptions = read('src/routes/r/[roomId]/+page.ts');
+  const roomPage = read('src/lib/features/room/RoomPage.svelte');
+  const roomClient = read('src/lib/features/room/client/main.ts');
+  const home = read('src/lib/features/home/HomePage.svelte');
+
+  assert.match(roomRoute, /import RoomPage from '\$lib\/features\/room\/RoomPage\.svelte'/);
+  assert.match(roomRouteOptions, /export const ssr = false/);
+  assert.match(roomPage, /mountRoomClient\(roomRoot\)/);
+  assert.match(roomClient, /showRoomRoute\(\)/);
+  assert.match(roomClient, /showStartScreen\(\)/);
+  assert.doesNotMatch(roomRoute, /HomePage|loadSession|authLoadError|LobbyPage/);
+  assert.doesNotMatch(roomPage, /loadSession|authLoadError|LobbyPage/);
+  assert.match(home, /auth-session-error/);
+});
+
+test('anonymous quick-start and join-by-code stay independent from account APIs', () => {
+  const home = read('src/lib/features/home/HomePage.svelte');
+  const entry = read('src/lib/features/home/components/EntryCard.svelte');
+  const roomsApi = read('src/lib/api/rooms.ts');
+  const authApi = read('src/lib/api/auth.ts');
+
+  assert.match(home, /<EntryCard[\s\S]*onCreateTemp=\{handleCreateTemp\}[\s\S]*onJoin=\{handleJoinRoom\}/);
+  assert.match(home, /const showLobby = \$derived\(session\.loaded && Boolean\(user\)\)/);
+  assert.match(home, /function handleJoinRoom\(\): void[\s\S]*openRoom\(roomId\)/);
+  assert.match(home, /async function handleCreateTemp\(\): Promise<void>[\s\S]*createRoom\(\{ isStatic: false \}\)/);
+  assert.match(entry, /Без регистрации/);
+  assert.match(entry, /или войдите по коду/);
+  assert.match(roomsApi, /postJson<CreateRoomResponse>\('\/api\/rooms'/);
+  assert.match(roomsApi, /isStatic: Boolean\(options\.isStatic\)/);
+  assert.doesNotMatch(roomsApi, /authPost|fetchMe|\/auth\/rooms/);
+  assert.doesNotMatch(authApi, /createRoom\(/);
+});
+
+test('remote microphone playback has subscription and audio-element recovery hooks', () => {
+  const livekit = read('src/lib/features/room/client/services/livekit-service.ts');
+  const participants = read('src/lib/features/room/client/room/participants.ts');
+
+  assert.match(livekit, /ensureRemoteMicrophonePlayback/);
+  assert.match(livekit, /recoverLiveKitRoom[\s\S]*ensureRemoteMicrophonePlayback/);
+  assert.match(livekit, /syncLiveKitParticipant[\s\S]*ensureRemoteMicrophonePlayback/);
+  assert.match(livekit, /RoomEvent\.TrackSubscribed[\s\S]*ensureRemoteMicrophonePlayback/);
+  assert.match(participants, /ensureRemoteAudioElement/);
+  assert.match(participants, /track\.readyState !== 'ended'/);
+  assert.match(participants, /audio\.isConnected/);
+  assert.match(participants, /if \(peer\.micReceiver === receiver\) peer\.micReceiver = null/);
+});
+
 test('frontend visual catalog stays aligned with shared backend key contracts', () => {
   const shared = require('@voice-room/shared/validation');
   const tokens = read('src/lib/visual/tokens.ts');
