@@ -209,6 +209,9 @@ test('room route checks /auth/me and blocks anonymous entry on guest-name modal'
   assert.match(roomMain, /bindGuestNameDialog\(\)/);
   assert.match(roomMain, /resetGuestNameDialog/);
   assert.match(roomMain, /unbindGuestNameDialog/);
+  assert.match(roomMain, /new AbortController\(\)/);
+  assert.match(roomMain, /listenerSignal/);
+  assert.match(roomMain, /mountAbortController\?\.abort\(\)/);
   assert.match(roomMain, /mounted = false/);
   assert.doesNotMatch(roomRoute, /HomePage|loadSession|authLoadError|LobbyPage/);
   assert.doesNotMatch(roomPage, /loadSession|authLoadError|LobbyPage/);

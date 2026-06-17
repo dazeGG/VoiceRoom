@@ -51,11 +51,14 @@ import { cancelScreenSourcePicker, closeScreenSourceOnBackdrop, closeScreenSourc
 import { refreshLocalNetworkIndicator } from './ui/status';
 
 let mounted = false;
+let mountAbortController: AbortController | null = null;
 
 export function mountRoomClient(root: ParentNode = document): () => void {
   if (mounted) return unmountRoomClient;
   mounted = true;
   setElementsRoot(root);
+  mountAbortController = new AbortController();
+  const listenerSignal = mountAbortController.signal;
 
   mountIcons();
   mountIcons(elements.template.content);
@@ -67,45 +70,45 @@ export function mountRoomClient(root: ParentNode = document): () => void {
   elements.gateThresholdSlider.value = String(state.gateThresholdDb);
   refreshGateThresholdValue();
   refreshMicrophoneLevelMeter(GATE_THRESHOLD_MIN_DB);
-  elements.startForm.addEventListener('submit', saveStartName);
+  elements.startForm.addEventListener('submit', saveStartName, { signal: listenerSignal });
   bindGuestNameDialog();
-  elements.createRoomButton.addEventListener('click', createRoomFromStart);
-  elements.joinByCodeButton.addEventListener('click', joinRoomByCode);
-  elements.roomCodeInput.addEventListener('keydown', handleRoomCodeKeydown);
-  elements.startNameInput.addEventListener('input', updateNameStatuses);
-  elements.copyCodeButton.addEventListener('click', copyRoomCode);
-  elements.copyLinkButton.addEventListener('click', copyRoomLink);
-  elements.muteButton.addEventListener('click', handleMicButtonClick);
-  elements.outputButton.addEventListener('click', toggleOutputMute);
-  elements.screenButton.addEventListener('click', handleScreenButtonClick);
-  elements.screenExitButton.addEventListener('click', () => leaveScreenView({ keepPreview: false }).catch((error) => console.error(error)));
-  elements.screenStage.addEventListener('click', handleScreenStageClick);
-  elements.screenFullscreenButton.addEventListener('click', toggleScreenFullscreen);
-  elements.screenSourceCloseButton.addEventListener('click', cancelScreenSourcePicker);
-  elements.screenSourceDialog.addEventListener('click', closeScreenSourceOnBackdrop);
-  elements.streamVolumeButton.addEventListener('click', toggleScreenMute);
-  elements.streamVolumeSlider.addEventListener('input', updateScreenVolumeFromSlider);
+  elements.createRoomButton.addEventListener('click', createRoomFromStart, { signal: listenerSignal });
+  elements.joinByCodeButton.addEventListener('click', joinRoomByCode, { signal: listenerSignal });
+  elements.roomCodeInput.addEventListener('keydown', handleRoomCodeKeydown, { signal: listenerSignal });
+  elements.startNameInput.addEventListener('input', updateNameStatuses, { signal: listenerSignal });
+  elements.copyCodeButton.addEventListener('click', copyRoomCode, { signal: listenerSignal });
+  elements.copyLinkButton.addEventListener('click', copyRoomLink, { signal: listenerSignal });
+  elements.muteButton.addEventListener('click', handleMicButtonClick, { signal: listenerSignal });
+  elements.outputButton.addEventListener('click', toggleOutputMute, { signal: listenerSignal });
+  elements.screenButton.addEventListener('click', handleScreenButtonClick, { signal: listenerSignal });
+  elements.screenExitButton.addEventListener('click', () => leaveScreenView({ keepPreview: false }).catch((error) => console.error(error)), { signal: listenerSignal });
+  elements.screenStage.addEventListener('click', handleScreenStageClick, { signal: listenerSignal });
+  elements.screenFullscreenButton.addEventListener('click', toggleScreenFullscreen, { signal: listenerSignal });
+  elements.screenSourceCloseButton.addEventListener('click', cancelScreenSourcePicker, { signal: listenerSignal });
+  elements.screenSourceDialog.addEventListener('click', closeScreenSourceOnBackdrop, { signal: listenerSignal });
+  elements.streamVolumeButton.addEventListener('click', toggleScreenMute, { signal: listenerSignal });
+  elements.streamVolumeSlider.addEventListener('input', updateScreenVolumeFromSlider, { signal: listenerSignal });
   syncScreenVideoAudio();
   bindScreenStageIdleUi();
-  elements.deviceMenuButton.addEventListener('click', toggleDevicePopover);
-  elements.outputMenuButton.addEventListener('click', toggleOutputPopover);
-  elements.leaveButton.addEventListener('click', handleLeaveButtonClick);
-  elements.soundButton.addEventListener('click', () => unlockAudio().catch((error) => console.warn('Audio unlock failed', error)));
-  elements.deviceSelect.addEventListener('change', () => switchMicrophone());
-  elements.gateThresholdSlider.addEventListener('input', updateGateThresholdFromSlider);
-  elements.micLevelTrack.addEventListener('pointerdown', handleGateThresholdPointerDown);
-  elements.noiseModeSelect.addEventListener('change', switchNoiseMode);
-  elements.outputDeviceSelect.addEventListener('change', switchOutputDevice);
-  document.addEventListener('click', closeDevicePopoverOnOutside);
-  document.addEventListener('click', closeOutputPopoverOnOutside);
-  document.addEventListener('keydown', closeDevicePopoverOnEscape);
-  document.addEventListener('keydown', closeOutputPopoverOnEscape);
-  document.addEventListener('keydown', closeScreenSourceOnEscape);
-  document.addEventListener('pointerdown', handleAudioUnlockGesture, { passive: true });
-  document.addEventListener('keydown', handleAudioUnlockGesture);
-  document.addEventListener('fullscreenchange', updateScreenFullscreenState);
-  navigator.mediaDevices?.addEventListener?.('devicechange', () => refreshDevices().catch(() => {}));
-  window.addEventListener('beforeunload', leaveRoom);
+  elements.deviceMenuButton.addEventListener('click', toggleDevicePopover, { signal: listenerSignal });
+  elements.outputMenuButton.addEventListener('click', toggleOutputPopover, { signal: listenerSignal });
+  elements.leaveButton.addEventListener('click', handleLeaveButtonClick, { signal: listenerSignal });
+  elements.soundButton.addEventListener('click', () => unlockAudio().catch((error) => console.warn('Audio unlock failed', error)), { signal: listenerSignal });
+  elements.deviceSelect.addEventListener('change', () => switchMicrophone(), { signal: listenerSignal });
+  elements.gateThresholdSlider.addEventListener('input', updateGateThresholdFromSlider, { signal: listenerSignal });
+  elements.micLevelTrack.addEventListener('pointerdown', handleGateThresholdPointerDown, { signal: listenerSignal });
+  elements.noiseModeSelect.addEventListener('change', switchNoiseMode, { signal: listenerSignal });
+  elements.outputDeviceSelect.addEventListener('change', switchOutputDevice, { signal: listenerSignal });
+  document.addEventListener('click', closeDevicePopoverOnOutside, { signal: listenerSignal });
+  document.addEventListener('click', closeOutputPopoverOnOutside, { signal: listenerSignal });
+  document.addEventListener('keydown', closeDevicePopoverOnEscape, { signal: listenerSignal });
+  document.addEventListener('keydown', closeOutputPopoverOnEscape, { signal: listenerSignal });
+  document.addEventListener('keydown', closeScreenSourceOnEscape, { signal: listenerSignal });
+  document.addEventListener('pointerdown', handleAudioUnlockGesture, { passive: true, signal: listenerSignal });
+  document.addEventListener('keydown', handleAudioUnlockGesture, { signal: listenerSignal });
+  document.addEventListener('fullscreenchange', updateScreenFullscreenState, { signal: listenerSignal });
+  navigator.mediaDevices?.addEventListener?.('devicechange', () => refreshDevices().catch(() => {}), { signal: listenerSignal });
+  window.addEventListener('beforeunload', leaveRoom, { signal: listenerSignal });
   refreshOutputControls();
   refreshStageStripControls();
   refreshLocalNetworkIndicator();
@@ -126,6 +129,8 @@ export function mountRoomClient(root: ParentNode = document): () => void {
 }
 
 function unmountRoomClient(): void {
+  mountAbortController?.abort();
+  mountAbortController = null;
   resetGuestNameDialog();
   unbindGuestNameDialog();
   mounted = false;
