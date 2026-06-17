@@ -11,10 +11,15 @@
 
   let roomRoot = $state<HTMLElement>();
 
-  onMount(async () => {
-    if (!roomRoot) return;
-    const { mountRoomClient } = await import('./client/main');
-    mountRoomClient(roomRoot);
+  onMount(() => {
+    let cleanup: (() => void) | undefined;
+
+    void import('./client/main').then(({ mountRoomClient }) => {
+      if (!roomRoot) return;
+      cleanup = mountRoomClient(roomRoot);
+    });
+
+    return () => cleanup?.();
   });
 </script>
 

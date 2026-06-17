@@ -22,7 +22,7 @@ import {
   updateGateThresholdFromSlider
 } from './ui/devices';
 import { handleMicButtonClick, refreshOutputControls, toggleOutputMute } from './ui/controls';
-import { bindGuestNameDialog, saveStartName, updateNameStatuses } from './ui/names';
+import { bindGuestNameDialog, resetGuestNameDialog, saveStartName, updateNameStatuses } from './ui/names';
 import {
   copyRoomCode,
   copyRoomLink,
@@ -52,8 +52,8 @@ import { refreshLocalNetworkIndicator } from './ui/status';
 
 let mounted = false;
 
-export function mountRoomClient(root: ParentNode = document): void {
-  if (mounted) return;
+export function mountRoomClient(root: ParentNode = document): () => void {
+  if (mounted) return resetGuestNameDialog;
   mounted = true;
   setElementsRoot(root);
 
@@ -121,4 +121,6 @@ export function mountRoomClient(root: ParentNode = document): void {
   } else {
     showStartScreen();
   }
+
+  return resetGuestNameDialog;
 }

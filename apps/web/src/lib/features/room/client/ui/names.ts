@@ -6,6 +6,7 @@ import { cleanDisplayName } from '../core/utils';
 let guestNameDialogBound = false;
 let pendingGuestNamePromise: Promise<string> | null = null;
 let resolvePendingGuestName: ((name: string) => void) | null = null;
+let rejectPendingGuestName: (() => void) | null = null;
 
 export function getDisplayName(): string {
   return state.savedName || 'Гость';
@@ -33,11 +34,12 @@ export function requestGuestNameForRoom(): Promise<string> {
 
   elements.guestNameInput.value = '';
   elements.guestNameError.textContent = '';
-  elements.guestNameDialog.hidden = false;
+  setGuestNameDialogOpen(true);
   window.setTimeout(() => elements.guestNameInput.focus(), 0);
 
-  pendingGuestNamePromise = new Promise((resolve) => {
+  pendingGuestNamePromise = new Promise((resolve, reject) => {
     resolvePendingGuestName = resolve;
+    rejectPendingGuestName = () => reject(new Error('Guest name request cancelled'));
   });
   return pendingGuestNamePromise;
 }
@@ -54,11 +56,48 @@ function handleGuestNameSubmit(event: Event): void {
   }
 
   persistName(name);
-  elements.guestNameDialog.hidden = true;
+  setGuestNameDialogOpen(false);
   const resolve = resolvePendingGuestName;
-  resolvePendingGuestName = null;
-  pendingGuestNamePromise = null;
+  clearPendingGuestNameRequest();
   resolve?.(name);
+}
+
+
+export function resetGuestNameDialog(): void {
+  if (!pendingGuestNamePromise) {
+    setGuestNameDialogOpen(false);
+    return;
+  }
+
+  const reject = rejectPendingGuestName;
+  clearPendingGuestNameRequest();
+  setGuestNameDialogOpen(false);
+  reject?.();
+}
+
+function clearPendingGuestNameRequest(): void {
+  resolvePendingGuestName = null;
+  rejectPendingGuestName = null;
+  pendingGuestNamePromise = null;
+}
+
+function setGuestNameDialogOpen(open: boolean): void {
+  elements.guestNameDialog.hidden = !open;
+  setGuestNameSiblingInert(open);
+}
+
+function setGuestNameSiblingInert(inert: boolean): void {
+  const parent = elements.guestNameDialog.parentElement;
+  if (!parent) return;
+
+  for (const child of Array.from(parent.children)) {
+    if (child === elements.guestNameDialog) continue;
+    if (inert) {
+      child.setAttribute('inert', '');
+      continue;
+    }
+    child.removeAttribute('inert');
+  }
 }
 
 function handleGuestNameDialogClick(event: MouseEvent): void {

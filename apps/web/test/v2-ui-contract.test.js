@@ -207,6 +207,7 @@ test('room route checks /auth/me and blocks anonymous entry on guest-name modal'
   assert.match(roomMain, /showRoomRoute\(\)/);
   assert.match(roomMain, /showStartScreen\(\)/);
   assert.match(roomMain, /bindGuestNameDialog\(\)/);
+  assert.match(roomMain, /resetGuestNameDialog/);
   assert.doesNotMatch(roomRoute, /HomePage|loadSession|authLoadError|LobbyPage/);
   assert.doesNotMatch(roomPage, /loadSession|authLoadError|LobbyPage/);
   assert.match(home, /auth-session-error/);
@@ -224,6 +225,7 @@ test('room route checks /auth/me and blocks anonymous entry on guest-name modal'
   assert.match(resolveRoomEntryName, /return 'authenticated'/);
   assert.match(resolveRoomEntryName, /return 'failure'/);
   assert.match(resolveRoomEntryName, /await requestGuestNameForRoom\(\)/);
+  assert.match(resolveRoomEntryName, /Guest name request cancelled/);
   assert.match(resolveRoomEntryName, /return 'anonymous'/);
   assert.doesNotMatch(resolveRoomEntryName, /loadSession|showRoomScreen|autoJoinRoom|showRoomNotFound/);
   assert.doesNotMatch(roomView, /window\.prompt|prompt\(/);
@@ -241,16 +243,21 @@ test('room route checks /auth/me and blocks anonymous entry on guest-name modal'
   assert.match(dom, /get guestNameInput\(\)/);
   assert.match(dom, /get guestNameError\(\)/);
   assert.match(names, /pendingGuestNamePromise/);
+  assert.match(names, /resetGuestNameDialog/);
+  assert.match(names, /rejectPendingGuestName/);
+  assert.match(names, /setGuestNameSiblingInert/);
+  assert.match(names, /child\.setAttribute\('inert', ''\)/);
+  assert.match(names, /child\.removeAttribute\('inert'\)/);
   assert.match(names, /handleGuestNameDialogKeydown/);
   assert.match(names, /event\.key === 'Escape'[\s\S]*guestNameInput\.focus\(\)/);
   assert.match(names, /event\.key !== 'Tab'/);
   assert.match(names, /handleGuestNameDialogClick/);
-  assert.match(requestGuestNameForRoom, /guestNameDialog\.hidden = false/);
+  assert.match(requestGuestNameForRoom, /setGuestNameDialogOpen\(true\)/);
   assert.match(requestGuestNameForRoom, /guestNameInput\.focus\(\)/);
   assert.match(handleGuestNameSubmit, /cleanDisplayName\(elements\.guestNameInput\.value\)/);
   assert.match(handleGuestNameSubmit, /Введите имя, чтобы войти в комнату/);
   assert.match(handleGuestNameSubmit, /persistName\(name\)/);
-  assert.ok(handleGuestNameSubmit.indexOf('persistName(name)') < handleGuestNameSubmit.indexOf('guestNameDialog.hidden = true'));
+  assert.ok(handleGuestNameSubmit.indexOf('persistName(name)') < handleGuestNameSubmit.indexOf('setGuestNameDialogOpen(false)'));
 });
 
 test('anonymous quick-start and join-by-code stay independent from account APIs', () => {

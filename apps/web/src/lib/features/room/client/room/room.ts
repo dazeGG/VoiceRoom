@@ -193,8 +193,13 @@ async function resolveRoomEntryName(): Promise<RoomEntryGateResult> {
     return 'failure';
   }
 
-  await requestGuestNameForRoom();
-  return 'anonymous';
+  try {
+    await requestGuestNameForRoom();
+    return 'anonymous';
+  } catch (error) {
+    console.warn('Guest name request cancelled', error);
+    return 'failure';
+  }
 }
 
 export async function joinRoom(event?: Event): Promise<void> {
