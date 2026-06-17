@@ -89,7 +89,7 @@ export function mountRoomClient(root: ParentNode = document): () => void {
   elements.streamVolumeButton.addEventListener('click', toggleScreenMute, { signal: listenerSignal });
   elements.streamVolumeSlider.addEventListener('input', updateScreenVolumeFromSlider, { signal: listenerSignal });
   syncScreenVideoAudio();
-  bindScreenStageIdleUi();
+  bindScreenStageIdleUi(listenerSignal);
   elements.deviceMenuButton.addEventListener('click', toggleDevicePopover, { signal: listenerSignal });
   elements.outputMenuButton.addEventListener('click', toggleOutputPopover, { signal: listenerSignal });
   elements.leaveButton.addEventListener('click', handleLeaveButtonClick, { signal: listenerSignal });

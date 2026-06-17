@@ -145,6 +145,7 @@ test('participant tiles stay visually uniform and highlight only active speakers
 
 test('screen stream thumbnails show profile metadata instead of an action button', () => {
   const overlays = read('src/lib/features/room/components/RoomOverlays.svelte');
+  const screenStageControls = read('src/lib/features/room/client/ui/screen-stage-controls.ts');
   const refs = read('src/lib/features/room/client/model/participants.ts');
   const participants = read('src/lib/features/room/client/room/participants.ts');
   const screenTiles = read('src/lib/features/room/client/ui/screen-tile-elements.ts');
@@ -195,6 +196,7 @@ test('room route checks /auth/me and blocks anonymous entry on guest-name modal'
   const names = read('src/lib/features/room/client/ui/names.ts');
   const dom = read('src/lib/features/room/client/ui/dom.ts');
   const overlays = read('src/lib/features/room/components/RoomOverlays.svelte');
+  const screenStageControls = read('src/lib/features/room/client/ui/screen-stage-controls.ts');
   const home = read('src/lib/features/home/HomePage.svelte');
   const showRoomRoute = functionBody(roomView, 'showRoomRoute');
   const resolveRoomEntryName = functionBody(roomView, 'resolveRoomEntryName');
@@ -212,6 +214,7 @@ test('room route checks /auth/me and blocks anonymous entry on guest-name modal'
   assert.match(roomMain, /new AbortController\(\)/);
   assert.match(roomMain, /listenerSignal/);
   assert.match(roomMain, /mountAbortController\?\.abort\(\)/);
+  assert.match(roomMain, /bindScreenStageIdleUi\(listenerSignal\)/);
   assert.match(roomMain, /mounted = false/);
   assert.doesNotMatch(roomRoute, /HomePage|loadSession|authLoadError|LobbyPage/);
   assert.doesNotMatch(roomPage, /loadSession|authLoadError|LobbyPage/);
@@ -248,6 +251,10 @@ test('room route checks /auth/me and blocks anonymous entry on guest-name modal'
   assert.match(dom, /get guestNameInput\(\)/);
   assert.match(dom, /get guestNameError\(\)/);
   assert.match(names, /pendingGuestNamePromise/);
+  assert.match(screenStageControls, /bindScreenStageIdleUi\(signal\?: AbortSignal\)/);
+  assert.match(screenStageControls, /resetScreenStageIdleUi/);
+  assert.match(screenStageControls, /screenUiHoverBound = false/);
+  assert.match(screenStageControls, /signal\?\.addEventListener\('abort'/);
   assert.match(names, /resetGuestNameDialog/);
   assert.match(names, /unbindGuestNameDialog/);
   assert.match(names, /rejectPendingGuestName/);
