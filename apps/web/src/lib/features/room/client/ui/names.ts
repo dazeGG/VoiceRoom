@@ -24,9 +24,21 @@ export function bindGuestNameDialog(): void {
   elements.guestNameDialog.addEventListener('click', handleGuestNameDialogClick);
   elements.guestNameDialog.addEventListener('keydown', handleGuestNameDialogKeydown);
   elements.guestNameForm.addEventListener('submit', handleGuestNameSubmit);
-  elements.guestNameInput.addEventListener('input', () => {
-    elements.guestNameError.textContent = '';
-  });
+  elements.guestNameInput.addEventListener('input', clearGuestNameError);
+}
+
+export function unbindGuestNameDialog(): void {
+  if (!guestNameDialogBound) return;
+  guestNameDialogBound = false;
+
+  elements.guestNameDialog.removeEventListener('click', handleGuestNameDialogClick);
+  elements.guestNameDialog.removeEventListener('keydown', handleGuestNameDialogKeydown);
+  elements.guestNameForm.removeEventListener('submit', handleGuestNameSubmit);
+  elements.guestNameInput.removeEventListener('input', clearGuestNameError);
+}
+
+function clearGuestNameError(): void {
+  elements.guestNameError.textContent = '';
 }
 
 export function requestGuestNameForRoom(): Promise<string> {
@@ -87,11 +99,11 @@ function setGuestNameDialogOpen(open: boolean): void {
 }
 
 function setGuestNameSiblingInert(inert: boolean): void {
-  const parent = elements.guestNameDialog.parentElement;
-  if (!parent) return;
+  const shell = elements.guestNameDialog.closest('.app-shell');
+  if (!shell) return;
 
-  for (const child of Array.from(parent.children)) {
-    if (child === elements.guestNameDialog) continue;
+  for (const child of Array.from(shell.children)) {
+    if (child.contains(elements.guestNameDialog)) continue;
     if (inert) {
       child.setAttribute('inert', '');
       continue;

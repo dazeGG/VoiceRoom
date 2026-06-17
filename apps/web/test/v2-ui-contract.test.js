@@ -208,6 +208,8 @@ test('room route checks /auth/me and blocks anonymous entry on guest-name modal'
   assert.match(roomMain, /showStartScreen\(\)/);
   assert.match(roomMain, /bindGuestNameDialog\(\)/);
   assert.match(roomMain, /resetGuestNameDialog/);
+  assert.match(roomMain, /unbindGuestNameDialog/);
+  assert.match(roomMain, /mounted = false/);
   assert.doesNotMatch(roomRoute, /HomePage|loadSession|authLoadError|LobbyPage/);
   assert.doesNotMatch(roomPage, /loadSession|authLoadError|LobbyPage/);
   assert.match(home, /auth-session-error/);
@@ -244,8 +246,11 @@ test('room route checks /auth/me and blocks anonymous entry on guest-name modal'
   assert.match(dom, /get guestNameError\(\)/);
   assert.match(names, /pendingGuestNamePromise/);
   assert.match(names, /resetGuestNameDialog/);
+  assert.match(names, /unbindGuestNameDialog/);
   assert.match(names, /rejectPendingGuestName/);
   assert.match(names, /setGuestNameSiblingInert/);
+  assert.match(names, /closest\('\.app-shell'\)/);
+  assert.match(names, /child\.contains\(elements\.guestNameDialog\)/);
   assert.match(names, /child\.setAttribute\('inert', ''\)/);
   assert.match(names, /child\.removeAttribute\('inert'\)/);
   assert.match(names, /handleGuestNameDialogKeydown/);
