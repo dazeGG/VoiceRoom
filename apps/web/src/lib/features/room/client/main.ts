@@ -22,7 +22,7 @@ import {
   updateGateThresholdFromSlider
 } from './ui/devices';
 import { handleMicButtonClick, refreshOutputControls, toggleOutputMute } from './ui/controls';
-import { saveStartName, updateNameStatuses } from './ui/names';
+import { bindGuestNameDialog, saveStartName, updateNameStatuses } from './ui/names';
 import {
   copyRoomCode,
   copyRoomLink,
@@ -68,6 +68,7 @@ export function mountRoomClient(root: ParentNode = document): void {
   refreshGateThresholdValue();
   refreshMicrophoneLevelMeter(GATE_THRESHOLD_MIN_DB);
   elements.startForm.addEventListener('submit', saveStartName);
+  bindGuestNameDialog();
   elements.createRoomButton.addEventListener('click', createRoomFromStart);
   elements.joinByCodeButton.addEventListener('click', joinRoomByCode);
   elements.roomCodeInput.addEventListener('keydown', handleRoomCodeKeydown);

@@ -1,13 +1,15 @@
 import { getRoomPreset } from '$lib/visual/tokens';
+import { fetchMe } from '$lib/api/auth';
+import { roomNameFor } from '$lib/features/auth/account';
 import { elements } from '../ui/dom';
 import { state } from '../core/state';
 import { showToast } from '../ui/toast';
 import { checkRoomExists, postJson } from '../net/api';
 import { postState } from './presence';
 import { createRoomProof } from '../net/pow';
-import { cleanDisplayName, errorMessage, getInitials, wait } from '../core/utils';
+import { errorMessage, getInitials, wait } from '../core/utils';
 import { extractRoomId } from '../core/session';
-import { getDisplayName, persistName, requireSavedName, updateNameStatuses } from '../ui/names';
+import { getDisplayName, persistName, requestGuestNameForRoom, requireSavedName, updateNameStatuses } from '../ui/names';
 import {
   resetConnectionStatus,
   setServerConnectionStatus,
@@ -48,6 +50,8 @@ import {
 import { GATE_THRESHOLD_MIN_DB } from '../core/config';
 import type { ServerMessage } from '../core/types';
 
+type RoomEntryGateResult = 'authenticated' | 'anonymous' | 'failure';
+
 function hideScreens(): void {
   elements.startScreen.hidden = true;
   elements.roomScreen.hidden = true;
@@ -76,10 +80,8 @@ export async function showRoomRoute(): Promise<void> {
     return;
   }
 
-  if (!ensureNameForRoomLink()) {
-    window.location.href = '/';
-    return;
-  }
+  const entryGate = await resolveRoomEntryName();
+  if (entryGate === 'failure') return;
 
   showRoomScreen();
   refreshDevices().catch(() => {});
@@ -178,14 +180,21 @@ function openRoom(roomId: string): void {
   window.location.href = `/r/${encodeURIComponent(roomId)}`;
 }
 
-function ensureNameForRoomLink(): boolean {
-  if (state.savedName) return true;
+async function resolveRoomEntryName(): Promise<RoomEntryGateResult> {
+  try {
+    const user = await fetchMe();
+    if (user) {
+      persistName(roomNameFor(user));
+      return 'authenticated';
+    }
+  } catch (error) {
+    console.error('Failed to check room entry session', error);
+    showToast('Не удалось проверить аккаунт. Попробуйте обновить страницу.');
+    return 'failure';
+  }
 
-  const promptedName = cleanDisplayName(window.prompt('Как вас зовут?'));
-  if (!promptedName) return false;
-
-  persistName(promptedName);
-  return true;
+  await requestGuestNameForRoom();
+  return 'anonymous';
 }
 
 export async function joinRoom(event?: Event): Promise<void> {
