@@ -145,6 +145,7 @@ test('participant tiles stay visually uniform and highlight only active speakers
 
 test('screen stream thumbnails show profile metadata instead of an action button', () => {
   const overlays = read('src/lib/features/room/components/RoomOverlays.svelte');
+  const screenStageControls = read('src/lib/features/room/client/ui/screen-stage-controls.ts');
   const refs = read('src/lib/features/room/client/model/participants.ts');
   const participants = read('src/lib/features/room/client/room/participants.ts');
   const screenTiles = read('src/lib/features/room/client/ui/screen-tile-elements.ts');
@@ -186,21 +187,92 @@ test('screen stage viewer badge renders viewer avatars instead of names', () => 
   assert.doesNotMatch(css, /screen-meta-viewers-label/);
 });
 
-test('anonymous room route bypasses account lobby auth gate', () => {
+test('room route checks /auth/me and blocks anonymous entry on guest-name modal', () => {
   const roomRoute = read('src/routes/r/[roomId]/+page.svelte');
   const roomRouteOptions = read('src/routes/r/[roomId]/+page.ts');
   const roomPage = read('src/lib/features/room/RoomPage.svelte');
-  const roomClient = read('src/lib/features/room/client/main.ts');
+  const roomMain = read('src/lib/features/room/client/main.ts');
+  const roomView = read('src/lib/features/room/client/room/room.ts');
+  const names = read('src/lib/features/room/client/ui/names.ts');
+  const dom = read('src/lib/features/room/client/ui/dom.ts');
+  const overlays = read('src/lib/features/room/components/RoomOverlays.svelte');
+  const screenStageControls = read('src/lib/features/room/client/ui/screen-stage-controls.ts');
   const home = read('src/lib/features/home/HomePage.svelte');
+  const showRoomRoute = functionBody(roomView, 'showRoomRoute');
+  const resolveRoomEntryName = functionBody(roomView, 'resolveRoomEntryName');
+  const requestGuestNameForRoom = functionBody(names, 'requestGuestNameForRoom');
+  const handleGuestNameSubmit = functionBody(names, 'handleGuestNameSubmit');
 
   assert.match(roomRoute, /import RoomPage from '\$lib\/features\/room\/RoomPage\.svelte'/);
   assert.match(roomRouteOptions, /export const ssr = false/);
   assert.match(roomPage, /mountRoomClient\(roomRoot\)/);
-  assert.match(roomClient, /showRoomRoute\(\)/);
-  assert.match(roomClient, /showStartScreen\(\)/);
+  assert.match(roomMain, /showRoomRoute\(\)/);
+  assert.match(roomMain, /showStartScreen\(\)/);
+  assert.match(roomMain, /bindGuestNameDialog\(\)/);
+  assert.match(roomMain, /resetGuestNameDialog/);
+  assert.match(roomMain, /unbindGuestNameDialog/);
+  assert.match(roomMain, /new AbortController\(\)/);
+  assert.match(roomMain, /listenerSignal/);
+  assert.match(roomMain, /mountAbortController\?\.abort\(\)/);
+  assert.match(roomMain, /bindScreenStageIdleUi\(listenerSignal\)/);
+  assert.match(roomMain, /mounted = false/);
   assert.doesNotMatch(roomRoute, /HomePage|loadSession|authLoadError|LobbyPage/);
   assert.doesNotMatch(roomPage, /loadSession|authLoadError|LobbyPage/);
   assert.match(home, /auth-session-error/);
+
+  assert.match(roomView, /import \{ fetchMe \} from '\$lib\/api\/auth'/);
+  assert.match(roomView, /import \{ roomNameFor \} from '\$lib\/features\/auth\/account'/);
+  assert.match(roomView, /type RoomEntryGateResult = 'authenticated' \| 'anonymous' \| 'failure'/);
+  assert.match(showRoomRoute, /const exists = await checkRoomExists\(state\.roomId\)/);
+  assert.ok(showRoomRoute.indexOf('showRoomNotFound()') < showRoomRoute.indexOf('resolveRoomEntryName()'));
+  assert.match(showRoomRoute, /const entryGate = await resolveRoomEntryName\(\)/);
+  assert.match(showRoomRoute, /if \(entryGate === 'failure'\) return/);
+  assert.ok(showRoomRoute.indexOf('resolveRoomEntryName()') < showRoomRoute.indexOf('showRoomScreen()'));
+  assert.match(resolveRoomEntryName, /const user = await fetchMe\(\)/);
+  assert.match(resolveRoomEntryName, /persistName\(roomNameFor\(user\)\)/);
+  assert.match(resolveRoomEntryName, /return 'authenticated'/);
+  assert.match(resolveRoomEntryName, /return 'failure'/);
+  assert.match(resolveRoomEntryName, /await requestGuestNameForRoom\(\)/);
+  assert.match(resolveRoomEntryName, /Guest name request cancelled/);
+  assert.match(resolveRoomEntryName, /return 'anonymous'/);
+  assert.doesNotMatch(resolveRoomEntryName, /loadSession|showRoomScreen|autoJoinRoom|showRoomNotFound/);
+  assert.doesNotMatch(roomView, /window\.prompt|prompt\(/);
+  assert.doesNotMatch(roomView, /loadSession/);
+
+  assert.match(overlays, /id="guestNameDialog"[\s\S]*role="dialog"[\s\S]*aria-modal="true"/);
+  assert.match(overlays, /id="guestNameForm"/);
+  assert.match(overlays, /id="guestNameInput"/);
+  assert.doesNotMatch(overlays, /id="guestNameInput"[^>]*required/);
+  assert.match(overlays, /id="guestNameError"/);
+  assert.match(overlays, /id="guestNameSubmitButton"[\s\S]*type="submit"/);
+  assert.doesNotMatch(overlays, /guestNameClose|guest-name-close|Отмена|Закрыть/);
+  assert.match(dom, /get guestNameDialog\(\)/);
+  assert.match(dom, /get guestNameForm\(\)/);
+  assert.match(dom, /get guestNameInput\(\)/);
+  assert.match(dom, /get guestNameError\(\)/);
+  assert.match(names, /pendingGuestNamePromise/);
+  assert.match(screenStageControls, /bindScreenStageIdleUi\(signal\?: AbortSignal\)/);
+  assert.match(screenStageControls, /resetScreenStageIdleUi/);
+  assert.match(screenStageControls, /screenUiHoverBound = false/);
+  assert.match(screenStageControls, /signal\?\.addEventListener\('abort'/);
+  assert.match(names, /resetGuestNameDialog/);
+  assert.match(names, /unbindGuestNameDialog/);
+  assert.match(names, /rejectPendingGuestName/);
+  assert.match(names, /setGuestNameSiblingInert/);
+  assert.match(names, /closest\('\.app-shell'\)/);
+  assert.match(names, /child\.contains\(elements\.guestNameDialog\)/);
+  assert.match(names, /child\.setAttribute\('inert', ''\)/);
+  assert.match(names, /child\.removeAttribute\('inert'\)/);
+  assert.match(names, /handleGuestNameDialogKeydown/);
+  assert.match(names, /event\.key === 'Escape'[\s\S]*guestNameInput\.focus\(\)/);
+  assert.match(names, /event\.key !== 'Tab'/);
+  assert.match(names, /handleGuestNameDialogClick/);
+  assert.match(requestGuestNameForRoom, /setGuestNameDialogOpen\(true\)/);
+  assert.match(requestGuestNameForRoom, /guestNameInput\.focus\(\)/);
+  assert.match(handleGuestNameSubmit, /cleanDisplayName\(elements\.guestNameInput\.value\)/);
+  assert.match(handleGuestNameSubmit, /Введите имя, чтобы войти в комнату/);
+  assert.match(handleGuestNameSubmit, /persistName\(name\)/);
+  assert.ok(handleGuestNameSubmit.indexOf('persistName(name)') < handleGuestNameSubmit.indexOf('setGuestNameDialogOpen(false)'));
 });
 
 test('anonymous quick-start and join-by-code stay independent from account APIs', () => {
