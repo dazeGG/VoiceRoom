@@ -7,6 +7,61 @@
   white-space: nowrap;
 }
 
+.guest-name-dialog {
+  position: fixed;
+  inset: 0;
+  z-index: 22;
+  display: grid;
+  place-items: center;
+  padding: var(--space-lg);
+  background: oklch(5% 0.012 92 / 0.76);
+}
+
+.guest-name-panel {
+  display: grid;
+  width: min(430px, 100%);
+  gap: var(--space-lg);
+  border: 1px solid oklch(36% 0.022 92);
+  border-radius: var(--radius-md);
+  padding: var(--space-lg);
+  background: oklch(11% 0.012 92);
+  box-shadow: var(--shadow);
+}
+
+.guest-name-heading {
+  display: grid;
+  gap: var(--space-xs);
+  --eyebrow-ink: var(--muted);
+}
+
+.guest-name-heading h2,
+.guest-name-heading p {
+  margin: 0;
+}
+
+.guest-name-heading h2 {
+  font-size: 1.55rem;
+  line-height: 1.08;
+}
+
+.guest-name-heading p:not(.eyebrow) {
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.guest-name-form {
+  display: grid;
+  gap: var(--space-md);
+}
+
+.guest-name-error {
+  min-height: 1.2em;
+  margin: calc(var(--space-xs) * -1) 0 0;
+  color: color-mix(in oklch, var(--coral), var(--ink) 22%);
+  font-size: 0.84rem;
+  font-weight: 750;
+}
+
 .screen-source-dialog {
   position: fixed;
   inset: 0;
