@@ -181,6 +181,9 @@ function openRoom(roomId: string): void {
 }
 
 async function resolveRoomEntryName(): Promise<RoomEntryGateResult> {
+  // Room links intentionally verify the account directly instead of using the
+  // home session loader: this route has no lobby session UI, and an auth-check
+  // failure must stop entry instead of silently treating the user as anonymous.
   try {
     const user = await fetchMe();
     if (user) {
