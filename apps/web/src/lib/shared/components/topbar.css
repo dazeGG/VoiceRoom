@@ -35,6 +35,7 @@
    sets .is-desktop, so this has no effect on the web. */
 html.is-desktop .topbar {
   -webkit-app-region: drag;
+  app-region: drag;
 }
 
 html.is-desktop .topbar a,
@@ -44,4 +45,5 @@ html.is-desktop .topbar select,
 html.is-desktop .topbar .profile-menu,
 html.is-desktop .topbar [role='menu'] {
   -webkit-app-region: no-drag;
+  app-region: no-drag;
 }
