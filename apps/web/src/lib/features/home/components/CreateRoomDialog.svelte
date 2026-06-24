@@ -92,7 +92,7 @@
           <input
             class="dialog-input"
             maxlength="60"
-            placeholder={tab === 'permanent' ? 'например, квартирник' : 'быстрый созвон'}
+            placeholder={tab === 'permanent' ? 'Название комнаты' : 'Название созвона'}
             bind:value={name}
           />
         </div>

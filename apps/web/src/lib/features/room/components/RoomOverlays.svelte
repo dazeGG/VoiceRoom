@@ -11,7 +11,7 @@
     <form class="guest-name-form" id="guestNameForm">
       <label class="field" for="guestNameInput">
         <span>Ваше имя</span>
-        <input id="guestNameInput" maxlength="40" autocomplete="name" placeholder="Например, Даша">
+        <input id="guestNameInput" maxlength="40" autocomplete="name" placeholder="Ваше имя">
       </label>
       <p class="guest-name-error" id="guestNameError" role="alert" aria-live="polite"></p>
       <button class="primary-button" id="guestNameSubmitButton" type="submit">Войти в комнату</button>

@@ -83,7 +83,7 @@
         autocapitalize="off"
         autocomplete="username"
         spellcheck="false"
-        placeholder="например, vovosh"
+        placeholder="Ваш логин"
         bind:value={loginValue}
         required
       />

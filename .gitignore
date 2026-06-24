@@ -35,6 +35,5 @@ caddy_config/
 # Test and coverage output
 coverage/
 .nyc_output/
-.omx/
-.codex/
 .claude/
+.omc/
