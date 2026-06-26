@@ -21,33 +21,40 @@ export function flipPlacementVertical(
   return `${vertical}-${horizontal}`;
 }
 
-export function effectivePanelHeight(panel: HTMLElement): number {
-  const maxHeight = Number.parseFloat(getComputedStyle(panel).maxHeight);
-  if (!Number.isFinite(maxHeight)) return panel.scrollHeight;
-  return Math.min(panel.scrollHeight, maxHeight);
+export function viewportSpaceAroundTrigger(
+  triggerRect: DOMRect,
+  viewportHeight = window.innerHeight
+): { spaceAbove: number; spaceBelow: number } {
+  const gap = POPOVER_PANEL_GAP_PX;
+  const margin = POPOVER_VIEWPORT_MARGIN_PX;
+  return {
+    spaceAbove: triggerRect.top - gap - margin,
+    spaceBelow: viewportHeight - triggerRect.bottom - gap - margin
+  };
 }
 
-/** Prefer `placement`; flip vertically only when the panel would leave the viewport. */
+/** Prefer `placement`; flip vertically only after measuring the rendered panel box. */
 export function resolvePopoverPlacement(
   triggerRect: DOMRect,
-  panelHeight: number,
+  panelRect: DOMRect,
   preferred: PopoverPlacement,
   viewportHeight = window.innerHeight
 ): PopoverPlacement {
   const { vertical } = parsePlacement(preferred);
-  const gap = POPOVER_PANEL_GAP_PX;
   const margin = POPOVER_VIEWPORT_MARGIN_PX;
-
-  const spaceBelow = viewportHeight - triggerRect.bottom - gap - margin;
-  const spaceAbove = triggerRect.top - gap - margin;
+  const { spaceAbove, spaceBelow } = viewportSpaceAroundTrigger(triggerRect, viewportHeight);
 
   if (vertical === 'bottom') {
-    if (panelHeight <= spaceBelow) return preferred;
+    const overflowsBelow =
+      panelRect.bottom > viewportHeight - margin || panelRect.height > spaceBelow;
+    if (!overflowsBelow) return preferred;
     if (spaceAbove > spaceBelow) return flipPlacementVertical(preferred, 'top');
     return preferred;
   }
 
-  if (panelHeight <= spaceAbove) return preferred;
+  const overflowsAbove =
+    panelRect.top < margin || panelRect.height > spaceAbove;
+  if (!overflowsAbove) return preferred;
   if (spaceBelow > spaceAbove) return flipPlacementVertical(preferred, 'bottom');
   return preferred;
 }

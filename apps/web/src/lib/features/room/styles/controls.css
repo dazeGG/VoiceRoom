@@ -415,9 +415,10 @@ button:focus-visible {
 
 .device-popover {
   position: absolute;
-  right: 0;
-  left: auto;
+  left: 50%;
+  right: auto;
   bottom: calc(100% + 18px);
+  transform: translateX(-50%);
   display: grid;
   gap: var(--space-md);
   width: min(320px, calc(100vw - 48px));

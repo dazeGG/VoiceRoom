@@ -83,7 +83,8 @@ test('room chat keeps transport mounted and tracks unread state while closed', (
   assert.match(dock, /flip/);
   const controls = read('src/lib/features/room/styles/controls.css');
   assert.match(controls, /\.device-popover[\s\S]*overflow:\s*visible/);
-  assert.match(controls, /\.device-popover[\s\S]*right:\s*0/);
+  assert.match(controls, /\.device-popover[\s\S]*left:\s*50%/);
+  assert.match(controls, /translateX\(-50%\)/);
 });
 
 test('room chat terminal lifecycle frames leave the room screen', () => {
@@ -138,7 +139,7 @@ test('popover placement flips vertically only when the preferred side would over
   const placement = read('src/lib/shared/components/popover-placement.ts');
 
   assert.match(placement, /export function resolvePopoverPlacement/);
-  assert.match(placement, /if \(panelHeight <= spaceBelow\) return preferred/);
+  assert.match(placement, /panelRect\.bottom > viewportHeight - margin/);
   assert.match(placement, /if \(spaceAbove > spaceBelow\) return flipPlacementVertical/);
 });
 
@@ -155,6 +156,7 @@ test('shared Popover primitive exposes trigger/content slots and dismiss behavio
   assert.match(popover, /requestClose\('escape'\)/);
   assert.match(popover, /data-placement=\{resolvedPlacement\}/);
   assert.match(popover, /resolvePopoverPlacement/);
+  assert.match(popover, /openWithPlacement/);
   assert.match(popover, /flip = false/);
   assert.match(popoverCss, /\.popover-panel/);
   assert.match(popoverCss, /\.popover-menu-item/);

@@ -2,11 +2,11 @@
   import { tick } from 'svelte';
   import type { Snippet } from 'svelte';
   import '$lib/shared/styles/popover.css';
-  import {
-    effectivePanelHeight,
-    resolvePopoverPlacement,
-    type PopoverPlacement
-  } from './popover-placement';
+  import { resolvePopoverPlacement, type PopoverPlacement } from './popover-placement';
+
+  function nextFrame(): Promise<void> {
+    return new Promise((resolve) => requestAnimationFrame(() => resolve()));
+  }
 
   export type { PopoverPlacement } from './popover-placement';
   export type PopoverRole = 'menu' | 'listbox' | 'dialog';
@@ -57,43 +57,42 @@
   const panelId = `popover-panel-${++panelCounter}`;
   let root = $state<HTMLElement | null>(null);
   let resolvedPlacement = $state<PopoverPlacement>(placement);
+  let measureGeneration = 0;
 
   $effect(() => {
-    if (!open) {
-      resolvedPlacement = placement;
-      return;
-    }
-
-    if (!flip || !root) {
-      resolvedPlacement = placement;
-      return;
-    }
-
-    let cancelled = false;
-    resolvedPlacement = placement;
-
-    void (async () => {
-      await tick();
-      if (cancelled || !root) return;
-
-      const panel = root.querySelector<HTMLElement>('.popover-panel');
-      const triggerEl = root.firstElementChild;
-      if (!(panel instanceof HTMLElement) || !(triggerEl instanceof HTMLElement)) return;
-
-      resolvedPlacement = resolvePopoverPlacement(
-        triggerEl.getBoundingClientRect(),
-        effectivePanelHeight(panel),
-        placement
-      );
-    })();
-
-    return () => {
-      cancelled = true;
-    };
+    if (!open) resolvedPlacement = placement;
   });
 
+  async function resolvePlacementAfterOpen(generation: number): Promise<void> {
+    await tick();
+    await nextFrame();
+    if (generation !== measureGeneration || !open || !root) return;
+
+    const panel = root.querySelector<HTMLElement>('.popover-panel');
+    const triggerEl = root.firstElementChild;
+    if (!(panel instanceof HTMLElement) || !(triggerEl instanceof HTMLElement)) return;
+
+    resolvedPlacement = resolvePopoverPlacement(
+      triggerEl.getBoundingClientRect(),
+      panel.getBoundingClientRect(),
+      placement
+    );
+  }
+
+  function openWithPlacement(): void {
+    resolvedPlacement = placement;
+    if (!flip) return;
+    const generation = ++measureGeneration;
+    void resolvePlacementAfterOpen(generation);
+  }
+
   function toggle(): void {
-    open = !open;
+    if (open) {
+      open = false;
+      return;
+    }
+    open = true;
+    openWithPlacement();
   }
 
   function close(): void {
