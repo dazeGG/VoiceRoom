@@ -3,7 +3,7 @@ import {
   createPermanentRoom,
   enterRoom,
   registerViaUi,
-  settingsButton,
+  openRoomSettings,
   settingsDialog,
   uniqueLogin
 } from './helpers';
@@ -18,7 +18,7 @@ test('owner can delete a room: redirected home, gone from list, direct URL is no
   await enterRoom(page, roomId);
 
   // Open settings -> reveal danger zone -> two-step confirm.
-  await settingsButton(page).click();
+  await openRoomSettings(page);
   const dialog = settingsDialog(page);
   await expect(dialog).toBeVisible();
 

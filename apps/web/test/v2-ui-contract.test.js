@@ -62,6 +62,35 @@ test('room chat keeps transport mounted and tracks unread state while closed', (
   assert.match(chat, /messageIds/);
   assert.match(chat, /incrementUnreadChat\(\)/);
   assert.match(topbar, /room-chat-unread/);
+  assert.match(topbar, /import Popover from '\$lib\/shared\/components\/Popover\.svelte'/);
+  assert.match(topbar, /<h1 class="room-heading-title-wrap">/);
+  assert.match(topbar, /room-heading-trigger/);
+  assert.match(topbar, /Скопировать код/);
+  assert.match(topbar, /keepContentMounted/);
+  assert.match(topbar, /room-heading-popover-head/);
+  assert.match(topbar, /roomPopoverEmojiBadge/);
+  assert.match(topbar, /roomPopoverTitle/);
+  assert.doesNotMatch(topbar, /copyCodeButton|copyLinkButton|room-settings-button/);
+
+  const roomView = read('src/lib/features/room/client/room/room.ts');
+  assert.match(roomView, /document\.querySelector\('#roomCodeText'\)/);
+  assert.match(roomView, /roomPopoverEmojiBadge/);
+  assert.doesNotMatch(roomView, /elements\.roomCodeText/);
+
+  const select = read('src/lib/shared/components/Select.svelte');
+  assert.match(select, /import Ellipsis from '\$lib\/shared\/components\/Ellipsis\.svelte'/);
+
+  const dock = read('src/lib/features/room/components/RoomDock.svelte');
+  assert.match(dock, /dock-anchor/);
+  assert.match(dock, /flip/);
+  const controls = read('src/lib/features/room/styles/controls.css');
+  assert.match(controls, /\.device-popover[\s\S]*overflow:\s*visible/);
+  assert.match(controls, /\.dock-anchor/);
+  assert.match(controls, /\.device-popover[\s\S]*left:\s*50%/);
+  assert.match(controls, /translateX\(-50%\)/);
+
+  const selectCss = read('src/lib/shared/styles/select.css');
+  assert.match(selectCss, /\.select-trigger--dock \.select-trigger-chevron[\s\S]*right:\s*11px/);
 });
 
 test('room chat terminal lifecycle frames leave the room screen', () => {
@@ -87,6 +116,78 @@ test('auth client does not mask unexpected backend failures as anonymous or empt
   assert.match(home, /await logout\(\);\n\s+clearSession\(\);/);
   assert.match(home, /Не удалось выйти из аккаунта/);
   assert.match(lobby, /Не удалось загрузить комнаты/);
+});
+
+test('shared Select primitive wraps Popover listbox slots for site-wide dropdowns', () => {
+  const select = read('src/lib/shared/components/Select.svelte');
+  const selectCss = read('src/lib/shared/styles/select.css');
+  const topbarDownload = read('src/lib/features/home/components/TopbarDownload.svelte');
+  const settingsModal = read('src/lib/features/home/components/SettingsModal.svelte');
+  const roomDock = read('src/lib/features/room/components/RoomDock.svelte');
+  const devices = read('src/lib/features/room/client/ui/devices.ts');
+
+  assert.match(select, /import Popover from '\$lib\/shared\/components\/Popover\.svelte'/);
+  assert.match(select, /\{flip\}/);
+  assert.match(select, /\{#snippet trigger\(/);
+  assert.match(select, /\{#snippet content\(/);
+  assert.match(select, /role="option"/);
+  assert.match(select, /onTriggerKeydown/);
+  assert.match(select, /onOptionKeydown/);
+  assert.match(select, /ArrowDown/);
+  assert.match(select, /Home/);
+  assert.match(select, /End/);
+  assert.match(select, /typeahead/);
+  assert.match(select, /event\.key === 'Tab'/);
+  assert.match(select, /close\(false\)/);
+  assert.match(select, /tabindex=\{index === activeIndex \? 0 : -1\}/);
+  assert.match(select, /use:registerOption=\{index\}/);
+  assert.doesNotMatch(select, /bind:this=\{optionRefs\[index\]\}/);
+  assert.match(selectCss, /\.select-trigger/);
+  assert.match(topbarDownload, /import Select from '\$lib\/shared\/components\/Select\.svelte'/);
+  assert.match(settingsModal, /import Select from '\$lib\/shared\/components\/Select\.svelte'/);
+  assert.match(roomDock, /import Select from '\$lib\/shared\/components\/Select\.svelte'/);
+  assert.doesNotMatch(topbarDownload, /<select\b/);
+  assert.doesNotMatch(settingsModal, /<select\b/);
+  assert.doesNotMatch(roomDock, /<select\b/);
+  assert.doesNotMatch(devices, /deviceSelect|noiseModeSelect|outputDeviceSelect/);
+});
+
+test('popover placement flips vertically only when the preferred side would overflow', () => {
+  const placement = read('src/lib/shared/components/popover-placement.ts');
+
+  assert.match(placement, /export function resolvePopoverPlacement/);
+  assert.match(placement, /panelRect\.bottom > viewportHeight - margin/);
+  assert.match(placement, /if \(spaceAbove > spaceBelow\) return flipPlacementVertical/);
+});
+
+test('shared Popover primitive exposes trigger/content slots and dismiss behavior', () => {
+  const popover = read('src/lib/shared/components/Popover.svelte');
+  const popoverCss = read('src/lib/shared/styles/popover.css');
+  const userMenu = read('src/lib/features/home/components/UserMenu.svelte');
+
+  assert.match(popover, /trigger: Snippet<\[PopoverTriggerState\]>/);
+  assert.match(popover, /content: Snippet<\[PopoverContentState\]>/);
+  assert.match(popover, /\{@render trigger\(triggerState\)\}/);
+  assert.match(popover, /\{@render content\(contentState\)\}/);
+  assert.match(popover, /onpointerdown=\{onWindowPointerDown\}/);
+  assert.match(popover, /requestClose\('escape'\)/);
+  assert.match(popover, /script lang="ts" module/);
+  assert.match(popover, /popoverPanelCounter/);
+  assert.match(popover, /focusTrigger/);
+  assert.match(popover, /onfocusout=\{onFocusOut\}/);
+  assert.match(popover, /requestClose\('focusout', false\)/);
+  assert.match(popover, /requestClose\('outside', false\)/);
+  assert.match(popover, /data-placement=\{resolvedPlacement\}/);
+  assert.match(popover, /resolvePopoverPlacement/);
+  assert.match(popover, /openWithPlacement/);
+  assert.match(popover, /flip = false/);
+  assert.match(popoverCss, /\.popover-panel/);
+  assert.match(popoverCss, /\.popover-menu-item/);
+  assert.match(popoverCss, /\.popover-option/);
+  assert.match(userMenu, /import Popover from '\$lib\/shared\/components\/Popover\.svelte'/);
+  assert.match(userMenu, /\{#snippet trigger\(/);
+  assert.match(userMenu, /\{#snippet content\(/);
+  assert.match(userMenu, /aria-haspopup="menu"/);
 });
 
 test('visual identity UI consumes backend keys and exposes only curated room presets', () => {

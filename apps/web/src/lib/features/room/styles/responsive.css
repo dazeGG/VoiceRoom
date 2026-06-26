@@ -8,7 +8,7 @@
     padding-inline: var(--space-md);
   }
 
-  .topbar-room-heading h1 {
+  .room-heading-title {
     max-width: calc(100vw - 280px);
     font-size: 2rem;
   }
@@ -46,7 +46,7 @@
     text-overflow: ellipsis;
   }
 
-  .topbar-room-heading h1 {
+  .room-heading-title {
     max-width: calc(100vw - 172px);
     font-size: 1.55rem;
   }

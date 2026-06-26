@@ -1,5 +1,8 @@
 <script lang="ts">
+  import Select from '$lib/shared/components/Select.svelte';
   import { DESKTOP_BUILDS, QUARANTINE_CMD, RELEASES_URL, type DesktopBuild } from '../model/desktop-builds';
+
+  const BUILD_OPTIONS = DESKTOP_BUILDS.map((build) => ({ value: build.id, label: build.label }));
 
   let {
     appOpen,
@@ -48,16 +51,12 @@
     <div class="home-app-body">
       <div>
         <div class="home-app-fieldlabel">Платформа</div>
-        <div class="home-select-wrap">
-          <select class="home-select" bind:value={selectedBuildId}>
-            {#each DESKTOP_BUILDS as build}
-              <option value={build.id}>{build.label}</option>
-            {/each}
-          </select>
-          <span class="home-select-chevron" aria-hidden="true">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
-          </span>
-        </div>
+        <Select
+          bind:value={selectedBuildId}
+          options={BUILD_OPTIONS}
+          label="Платформа"
+          variant="home"
+        />
       </div>
 
       {#if releaseError}

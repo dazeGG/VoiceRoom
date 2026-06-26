@@ -64,9 +64,22 @@ export function roomHeading(page: Page) {
   return page.locator('#roomTitle');
 }
 
-// Owner-only gear button in the room topbar.
-export function settingsButton(page: Page) {
-  return page.getByRole('button', { name: 'Настройки комнаты' });
+export function roomHeadingMenuButton(page: Page) {
+  return page.locator('.room-heading-trigger');
+}
+
+export async function openRoomHeadingMenu(page: Page): Promise<void> {
+  await roomHeadingMenuButton(page).click();
+}
+
+// Owner-only item inside the room heading popover menu.
+export function roomSettingsMenuItem(page: Page) {
+  return page.getByRole('menuitem', { name: 'Настройки комнаты' });
+}
+
+export async function openRoomSettings(page: Page): Promise<void> {
+  await openRoomHeadingMenu(page);
+  await roomSettingsMenuItem(page).click();
 }
 
 export function settingsDialog(page: Page) {

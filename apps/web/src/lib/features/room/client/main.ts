@@ -1,4 +1,5 @@
 import { GATE_THRESHOLD_MIN_DB } from './core/config';
+import { roomDeviceUi } from '$lib/features/room/room-device-ui.svelte';
 import { elements, setElementsRoot } from './ui/dom';
 import { mountIcons } from './ui/icons';
 import { state } from './core/state';
@@ -14,9 +15,6 @@ import {
   refreshDevices,
   refreshGateThresholdValue,
   refreshMicrophoneLevelMeter,
-  switchMicrophone,
-  switchNoiseMode,
-  switchOutputDevice,
   toggleDevicePopover,
   toggleOutputPopover,
   updateGateThresholdFromSlider
@@ -24,8 +22,6 @@ import {
 import { handleMicButtonClick, refreshOutputControls, toggleOutputMute } from './ui/controls';
 import { bindGuestNameDialog, resetGuestNameDialog, saveStartName, unbindGuestNameDialog, updateNameStatuses } from './ui/names';
 import {
-  copyRoomCode,
-  copyRoomLink,
   createRoomFromStart,
   handleLeaveButtonClick,
   handleRoomCodeKeydown,
@@ -66,7 +62,7 @@ export function mountRoomClient(root: ParentNode = document): () => void {
   const savedName = cleanDisplayName(localStorage.getItem('voice-room:name'));
   state.savedName = savedName;
   elements.startNameInput.value = savedName;
-  elements.noiseModeSelect.value = state.noiseMode;
+  roomDeviceUi.noiseMode = state.noiseMode;
   elements.gateThresholdSlider.value = String(state.gateThresholdDb);
   refreshGateThresholdValue();
   refreshMicrophoneLevelMeter(GATE_THRESHOLD_MIN_DB);
@@ -76,8 +72,7 @@ export function mountRoomClient(root: ParentNode = document): () => void {
   elements.joinByCodeButton.addEventListener('click', joinRoomByCode, { signal: listenerSignal });
   elements.roomCodeInput.addEventListener('keydown', handleRoomCodeKeydown, { signal: listenerSignal });
   elements.startNameInput.addEventListener('input', updateNameStatuses, { signal: listenerSignal });
-  elements.copyCodeButton.addEventListener('click', copyRoomCode, { signal: listenerSignal });
-  elements.copyLinkButton.addEventListener('click', copyRoomLink, { signal: listenerSignal });
+
   elements.muteButton.addEventListener('click', handleMicButtonClick, { signal: listenerSignal });
   elements.outputButton.addEventListener('click', toggleOutputMute, { signal: listenerSignal });
   elements.screenButton.addEventListener('click', handleScreenButtonClick, { signal: listenerSignal });
@@ -94,11 +89,8 @@ export function mountRoomClient(root: ParentNode = document): () => void {
   elements.outputMenuButton.addEventListener('click', toggleOutputPopover, { signal: listenerSignal });
   elements.leaveButton.addEventListener('click', handleLeaveButtonClick, { signal: listenerSignal });
   elements.soundButton.addEventListener('click', () => unlockAudio().catch((error) => console.warn('Audio unlock failed', error)), { signal: listenerSignal });
-  elements.deviceSelect.addEventListener('change', () => switchMicrophone(), { signal: listenerSignal });
   elements.gateThresholdSlider.addEventListener('input', updateGateThresholdFromSlider, { signal: listenerSignal });
   elements.micLevelTrack.addEventListener('pointerdown', handleGateThresholdPointerDown, { signal: listenerSignal });
-  elements.noiseModeSelect.addEventListener('change', switchNoiseMode, { signal: listenerSignal });
-  elements.outputDeviceSelect.addEventListener('change', switchOutputDevice, { signal: listenerSignal });
   document.addEventListener('click', closeDevicePopoverOnOutside, { signal: listenerSignal });
   document.addEventListener('click', closeOutputPopoverOnOutside, { signal: listenerSignal });
   document.addEventListener('keydown', closeDevicePopoverOnEscape, { signal: listenerSignal });

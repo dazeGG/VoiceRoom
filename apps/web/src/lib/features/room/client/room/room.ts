@@ -92,21 +92,44 @@ export async function showRoomRoute(): Promise<void> {
 // Pulled out of showRoomScreen so a live room-updated event (rename/recolor
 // from the owner) can refresh the heading without re-running the whole
 // screen transition.
+function applyRoomEmojiBadge(element: HTMLElement, emoji: string, background: string, ring: string): void {
+  element.textContent = emoji;
+  element.style.background = background;
+  element.style.boxShadow = `0 0 0 1px ${ring}`;
+  element.hidden = false;
+}
+
 export function refreshRoomHeading(): void {
   const heading = state.roomName || state.roomId;
   document.title = `${heading} · Voice Room`;
   elements.roomTitle.textContent = heading;
-  elements.roomCodeText.textContent = state.roomId;
+  elements.roomTitle.title = heading;
+
+  const roomCodeEl = document.querySelector('#roomCodeText');
+  if (roomCodeEl) {
+    roomCodeEl.textContent = state.roomId;
+    roomCodeEl.setAttribute('title', state.roomId);
+  }
+
+  const popoverTitle = document.querySelector('#roomPopoverTitle');
+  if (popoverTitle) {
+    popoverTitle.textContent = heading;
+    popoverTitle.setAttribute('title', heading);
+  }
+
   const roomVisual = getRoomPreset({
     emoji: state.roomEmoji,
     roomColorKey: state.roomColorKey,
     roomIconKey: state.roomIconKey,
     roomPresetKey: state.roomPresetKey
   });
-  elements.roomEmojiBadge.textContent = roomVisual.emoji;
-  elements.roomEmojiBadge.style.background = roomVisual.background;
-  elements.roomEmojiBadge.style.boxShadow = `0 0 0 1px ${roomVisual.ring}`;
-  elements.roomEmojiBadge.hidden = false;
+  applyRoomEmojiBadge(elements.roomEmojiBadge, roomVisual.emoji, roomVisual.background, roomVisual.ring);
+
+  const popoverBadge = document.querySelector('#roomPopoverEmojiBadge');
+  if (popoverBadge instanceof HTMLElement) {
+    applyRoomEmojiBadge(popoverBadge, roomVisual.emoji, roomVisual.background, roomVisual.ring);
+  }
+
   elements.emptyRoomAvatar.textContent = getInitials(state.savedName);
 }
 
