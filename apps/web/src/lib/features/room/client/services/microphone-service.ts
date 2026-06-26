@@ -14,7 +14,7 @@ import {
   RNNOISE_ASSET_BASE,
   type NoiseMode
 } from '../core/config';
-import { elements } from '../ui/dom';
+import { roomDeviceUi } from '$lib/features/room/room-device-ui.svelte';
 import { state } from '../core/state';
 import { dbToAmplitude, getNoiseMode } from '../core/settings';
 import { showToast } from '../ui/toast';
@@ -52,7 +52,7 @@ export function getGateThresholdAmplitude(): number {
 
 export function setNoiseMode(mode: unknown): void {
   state.noiseMode = getNoiseMode(mode);
-  elements.noiseModeSelect.value = state.noiseMode;
+  roomDeviceUi.noiseMode = state.noiseMode;
   localStorage.setItem(NOISE_MODE_STORAGE_KEY, state.noiseMode);
 }
 
@@ -62,7 +62,7 @@ export async function openMicrophone(mode: NoiseMode = state.noiseMode): Promise
   }
 
   const noiseMode = NOISE_MODES[getNoiseMode(mode)];
-  const deviceId = state.microphoneDeviceId || elements.deviceSelect.value;
+  const deviceId = state.microphoneDeviceId || roomDeviceUi.microphoneId;
   return navigator.mediaDevices.getUserMedia({
     audio: {
       autoGainControl: true,

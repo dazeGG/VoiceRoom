@@ -3,6 +3,7 @@
   import { changePassword, updateDisplayName } from '$lib/api/auth';
   import { isValidPassword, PASSWORD_MIN_LENGTH } from '$lib/features/auth/account';
   import { clearSession, setUser } from '$lib/features/auth/session.svelte';
+  import Select from '$lib/shared/components/Select.svelte';
   import { getAvatarColor } from '$lib/visual/tokens';
   import {
     enumerateMicrophones,
@@ -76,6 +77,17 @@
   const levelScale = $derived(gateOn ? gateMeterPosition(micLevelDb).toFixed(3) : '0');
   const markerLeft = $derived(`${(gateMeterPosition(gateDb) * 100).toFixed(2)}%`);
   const gateLabel = $derived(gateOn ? gateValueLabel(gateDb) : 'Выкл');
+  const microphoneOptions = $derived([
+    { value: '', label: 'Системный' },
+    ...microphones.map((mic) => ({ value: mic.deviceId, label: mic.label }))
+  ]);
+  const speakerOptions = $derived([
+    { value: '', label: 'Системный' },
+    ...speakers.map((speaker) => ({ value: speaker.deviceId, label: speaker.label }))
+  ]);
+  const noiseOptions = $derived(
+    NOISE_OPTIONS.map((option) => ({ value: option.value, label: option.label }))
+  );
 
   // Reset both forms whenever the modal (re)opens or the account changes.
   $effect(() => {
@@ -180,18 +192,18 @@
     }
   }
 
-  function onMicChange(event: Event): void {
-    micId = (event.target as HTMLSelectElement).value;
+  function onMicChange(value: string): void {
+    micId = value;
     persistMicrophone(micId);
   }
 
-  function onSpeakerChange(event: Event): void {
-    speakerId = (event.target as HTMLSelectElement).value;
+  function onSpeakerChange(value: string): void {
+    speakerId = value;
     persistSpeaker(speakerId);
   }
 
-  function onNoiseChange(event: Event): void {
-    noiseMode = persistNoiseMode((event.target as HTMLSelectElement).value);
+  function onNoiseChange(value: string): void {
+    noiseMode = persistNoiseMode(value);
   }
 
   function persistGate(): void {
@@ -272,46 +284,35 @@
             <div class="settings-sound">
               <div>
                 <span class="settings-field-label">Микрофон</span>
-                <div class="settings-select-wrap">
-                  <select class="settings-select" value={micId} onchange={onMicChange}>
-                    <option value="">Системный</option>
-                    {#each microphones as mic (mic.deviceId)}
-                      <option value={mic.deviceId}>{mic.label}</option>
-                    {/each}
-                  </select>
-                  <span class="settings-select-chevron" aria-hidden="true">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
-                  </span>
-                </div>
+                <Select
+                  bind:value={micId}
+                  options={microphoneOptions}
+                  label="Микрофон"
+                  variant="field"
+                  onValueChange={onMicChange}
+                />
               </div>
 
               <div>
                 <span class="settings-field-label">Динамик</span>
-                <div class="settings-select-wrap">
-                  <select class="settings-select" value={speakerId} onchange={onSpeakerChange}>
-                    <option value="">Системный</option>
-                    {#each speakers as speaker (speaker.deviceId)}
-                      <option value={speaker.deviceId}>{speaker.label}</option>
-                    {/each}
-                  </select>
-                  <span class="settings-select-chevron" aria-hidden="true">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
-                  </span>
-                </div>
+                <Select
+                  bind:value={speakerId}
+                  options={speakerOptions}
+                  label="Динамик"
+                  variant="field"
+                  onValueChange={onSpeakerChange}
+                />
               </div>
 
               <div>
                 <span class="settings-field-label">Шумоподавление</span>
-                <div class="settings-select-wrap">
-                  <select class="settings-select" value={noiseMode} onchange={onNoiseChange}>
-                    {#each NOISE_OPTIONS as option (option.value)}
-                      <option value={option.value}>{option.label}</option>
-                    {/each}
-                  </select>
-                  <span class="settings-select-chevron" aria-hidden="true">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
-                  </span>
-                </div>
+                <Select
+                  bind:value={noiseMode}
+                  options={noiseOptions}
+                  label="Шумоподавление"
+                  variant="field"
+                  onValueChange={onNoiseChange}
+                />
               </div>
 
               <div>

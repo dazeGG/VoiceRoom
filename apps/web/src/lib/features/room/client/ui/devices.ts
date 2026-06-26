@@ -8,6 +8,8 @@ import {
   OUTPUT_DEVICE_STORAGE_KEY,
   OUTPUT_MUTED_STORAGE_KEY
 } from '../core/config';
+import type { SelectOption } from '$lib/shared/components/select-types';
+import { roomDeviceUi } from '$lib/features/room/room-device-ui.svelte';
 import { elements } from './dom';
 import { state } from '../core/state';
 import { clampGateThresholdDb, getDbMeterPosition, getNoiseModeLabel } from '../core/settings';
@@ -95,66 +97,60 @@ export async function refreshDevices(): Promise<void> {
   if (!navigator.mediaDevices?.enumerateDevices) return;
 
   const activeMicrophoneId = getActiveMicrophoneDeviceId();
-  const currentMicrophoneId = state.microphoneDeviceId || elements.deviceSelect.value || activeMicrophoneId;
-  const currentOutputId = state.outputDeviceId || elements.outputDeviceSelect.value;
+  const currentMicrophoneId = state.microphoneDeviceId || roomDeviceUi.microphoneId || activeMicrophoneId;
+  const currentOutputId = state.outputDeviceId || roomDeviceUi.outputDeviceId;
   const devices = await navigator.mediaDevices.enumerateDevices();
   const microphones = devices.filter((device) => device.kind === 'audioinput');
   const outputs = devices.filter((device) => device.kind === 'audiooutput');
 
-  renderDeviceOptions(elements.deviceSelect, microphones, {
+  roomDeviceUi.microphoneOptions = buildDeviceOptions(microphones, {
     defaultLabel: 'Системный',
-    fallbackLabel: 'Микрофон',
-    selectedId: currentMicrophoneId
+    fallbackLabel: 'Микрофон'
   });
-  if (currentMicrophoneId && !hasSelectValue(elements.deviceSelect, currentMicrophoneId)) {
+  if (currentMicrophoneId && !hasOptionValue(roomDeviceUi.microphoneOptions, currentMicrophoneId)) {
     persistMicrophoneDeviceId('');
-  } else if (hasSelectValue(elements.deviceSelect, currentMicrophoneId)) {
-    elements.deviceSelect.value = currentMicrophoneId;
+    roomDeviceUi.microphoneId = '';
+  } else if (hasOptionValue(roomDeviceUi.microphoneOptions, currentMicrophoneId)) {
+    roomDeviceUi.microphoneId = currentMicrophoneId;
   }
 
-  elements.outputDeviceSelect.disabled = !supportsAudioOutputSelection();
-  renderDeviceOptions(elements.outputDeviceSelect, outputs, {
+  roomDeviceUi.outputDisabled = !supportsAudioOutputSelection();
+  roomDeviceUi.outputOptions = buildDeviceOptions(outputs, {
     defaultLabel: 'Системный',
-    fallbackLabel: 'Динамик',
-    selectedId: currentOutputId
+    fallbackLabel: 'Динамик'
   });
-  if (currentOutputId && !hasSelectValue(elements.outputDeviceSelect, currentOutputId)) {
+  if (currentOutputId && !hasOptionValue(roomDeviceUi.outputOptions, currentOutputId)) {
     persistOutputDeviceId('');
-  } else if (hasSelectValue(elements.outputDeviceSelect, currentOutputId)) {
-    elements.outputDeviceSelect.value = currentOutputId;
+    roomDeviceUi.outputDeviceId = '';
+  } else if (hasOptionValue(roomDeviceUi.outputOptions, currentOutputId)) {
+    roomDeviceUi.outputDeviceId = currentOutputId;
   }
 
   refreshOutputControls();
 }
 
-function renderDeviceOptions(
-  select: HTMLSelectElement,
+function buildDeviceOptions(
   devices: MediaDeviceInfo[],
-  options: { defaultLabel: string; fallbackLabel: string; selectedId: string }
-): void {
-  const { defaultLabel, fallbackLabel, selectedId } = options;
+  options: { defaultLabel: string; fallbackLabel: string }
+): SelectOption[] {
+  const { defaultLabel, fallbackLabel } = options;
   const renderedDeviceIds = new Set(['']);
-  select.textContent = '';
-
-  const defaultOption = document.createElement('option');
-  defaultOption.value = '';
-  defaultOption.textContent = defaultLabel;
-  select.append(defaultOption);
+  const selectOptions: SelectOption[] = [{ value: '', label: defaultLabel }];
 
   devices.forEach((device, index) => {
     if (!device.deviceId || renderedDeviceIds.has(device.deviceId)) return;
     renderedDeviceIds.add(device.deviceId);
-    const option = document.createElement('option');
-    option.value = device.deviceId;
-    option.textContent = device.label || `${fallbackLabel} ${index + 1}`;
-    select.append(option);
+    selectOptions.push({
+      value: device.deviceId,
+      label: device.label || `${fallbackLabel} ${index + 1}`
+    });
   });
 
-  select.value = hasSelectValue(select, selectedId) ? selectedId : '';
+  return selectOptions;
 }
 
-function hasSelectValue(select: HTMLSelectElement, value: string): boolean {
-  return [...select.options].some((option) => option.value === value);
+function hasOptionValue(options: SelectOption[], value: string): boolean {
+  return options.some((option) => option.value === value);
 }
 
 function getActiveMicrophoneDeviceId(): string {
@@ -175,7 +171,7 @@ export async function switchMicrophone(options: SwitchMicrophoneOptions = {}): P
     successMessage = 'Микрофон переключен'
   } = options;
   const previousDeviceId = state.microphoneDeviceId;
-  persistMicrophoneDeviceId(elements.deviceSelect.value);
+  persistMicrophoneDeviceId(roomDeviceUi.microphoneId);
   refreshCallControls();
   if (!state.joined || !state.localStream) return false;
 
@@ -199,8 +195,8 @@ export async function switchMicrophone(options: SwitchMicrophoneOptions = {}): P
     console.error(error);
     if (nextCapture) stopMicrophoneCapture(nextCapture);
     persistMicrophoneDeviceId(previousDeviceId);
-    if (hasSelectValue(elements.deviceSelect, previousDeviceId)) {
-      elements.deviceSelect.value = previousDeviceId;
+    if (hasOptionValue(roomDeviceUi.microphoneOptions, previousDeviceId)) {
+      roomDeviceUi.microphoneId = previousDeviceId;
     }
     showToast(failureMessage);
     return false;
@@ -209,7 +205,7 @@ export async function switchMicrophone(options: SwitchMicrophoneOptions = {}): P
 
 export async function switchNoiseMode(): Promise<void> {
   const previousMode = state.noiseMode;
-  setNoiseMode(elements.noiseModeSelect.value);
+  setNoiseMode(roomDeviceUi.noiseMode);
 
   if (!state.joined || !state.localStream) return;
 
@@ -280,19 +276,19 @@ function updateGateThresholdFromPointer(event: PointerEvent): void {
 
 export async function switchOutputDevice(): Promise<void> {
   if (!supportsAudioOutputSelection()) {
-    elements.outputDeviceSelect.value = '';
+    roomDeviceUi.outputDeviceId = '';
     persistOutputDeviceId('');
     showToast('Выбор динамика недоступен в этой среде');
     return;
   }
 
   const previousDeviceId = state.outputDeviceId;
-  persistOutputDeviceId(elements.outputDeviceSelect.value);
+  persistOutputDeviceId(roomDeviceUi.outputDeviceId);
   const synced = await syncAudioOutputDevices();
   if (!synced) {
     persistOutputDeviceId(previousDeviceId);
-    if (hasSelectValue(elements.outputDeviceSelect, previousDeviceId)) {
-      elements.outputDeviceSelect.value = previousDeviceId;
+    if (hasOptionValue(roomDeviceUi.outputOptions, previousDeviceId)) {
+      roomDeviceUi.outputDeviceId = previousDeviceId;
     }
     await syncAudioOutputDevices();
     showToast('Не удалось переключить динамик');

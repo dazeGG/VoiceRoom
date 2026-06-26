@@ -1,14 +1,15 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { fetchDesktopRelease, type DesktopRelease } from '$lib/api/desktop';
+  import Select from '$lib/shared/components/Select.svelte';
   import { RELEASES_URL, detectDesktopBuildId } from '../model/desktop-builds';
   import { triggerDesktopDownload } from '../services/desktop-download';
 
   // Compact platform labels for the inline control (the full card uses longer ones).
-  const PLATFORMS = [
-    { id: 'mac-arm64', label: 'macOS' },
-    { id: 'mac-x64', label: 'macOS · Intel' },
-    { id: 'win-x64', label: 'Windows' }
+  const PLATFORM_OPTIONS = [
+    { value: 'mac-arm64', label: 'macOS' },
+    { value: 'mac-x64', label: 'macOS · Intel' },
+    { value: 'win-x64', label: 'Windows' }
   ];
 
   let selectedBuildId = $state('mac-arm64');
@@ -90,13 +91,12 @@
   <span class="topbar-download-divider" aria-hidden="true"></span>
 
   <div class="topbar-download-platform">
-    <select class="topbar-download-select" aria-label="Платформа" bind:value={selectedBuildId}>
-      {#each PLATFORMS as platform}
-        <option value={platform.id}>{platform.label}</option>
-      {/each}
-    </select>
-    <span class="topbar-download-chevron" aria-hidden="true">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
-    </span>
+    <Select
+      bind:value={selectedBuildId}
+      options={PLATFORM_OPTIONS}
+      label="Платформа"
+      variant="compact"
+      placement="bottom-end"
+    />
   </div>
 </div>

@@ -51,7 +51,13 @@ Keep runtime marker contracts stable and non-destructive when overlays are appli
 - For cleanup/refactor/deslop work, write a cleanup plan and lock behavior with regression tests before editing when coverage is missing.
 - Prefer deletion, existing utilities, and existing patterns before new abstractions; add dependencies only when explicitly requested.
 - Keep diffs small, reviewable, and reversible.
-- Use Conventional Commits for all future commit messages.
+- Use [Conventional Commits](https://www.conventionalcommits.org/) for **every** commit message in this repo.
+  - Format: `<type>(<scope>): <subject>` — imperative mood, lowercase subject, no trailing period.
+  - Common types: `feat`, `fix`, `refactor`, `test`, `chore`, `docs`, `style`, `perf`, `ci`.
+  - Scope: affected area (`web`, `api`, `shared`, …); omit only when truly repo-wide.
+  - Body (optional): explain *why* when the subject alone is not enough; reference issues/PRs when relevant.
+  - Breaking changes: append `!` after type/scope (`feat(api)!: …`) and describe migration in the body/footer.
+  - Split unrelated changes into separate commits; one logical change per commit.
 - Merge PRs into `develop` with squash merge and delete the source branch after a successful merge.
 - Verify with lint, typecheck, tests, and static analysis after changes; final reports include changed files, simplifications, and remaining risks.
 

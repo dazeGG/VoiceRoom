@@ -1,3 +1,16 @@
+<script lang="ts">
+  import Select from '$lib/shared/components/Select.svelte';
+  import {
+    NOISE_MODE_SELECT_OPTIONS,
+    roomDeviceUi
+  } from '$lib/features/room/room-device-ui.svelte';
+  import {
+    switchMicrophone,
+    switchNoiseMode,
+    switchOutputDevice
+  } from '../client/ui/devices';
+</script>
+
 <div class="room-dock" aria-label="Управление голосом">
   <div class="dock-shell">
     <!-- Mic split: toggle + settings chevron -->
@@ -14,17 +27,23 @@
       <div class="device-popover" id="devicePopover" hidden>
         <label class="field">
           <span>Микрофон</span>
-          <select id="deviceSelect">
-            <option value="">Системный</option>
-          </select>
+          <Select
+            bind:value={roomDeviceUi.microphoneId}
+            options={roomDeviceUi.microphoneOptions}
+            label="Микрофон"
+            variant="dock"
+            onValueChange={() => void switchMicrophone()}
+          />
         </label>
         <label class="field">
           <span>Шумоподавление</span>
-          <select id="noiseModeSelect">
-            <option value="off">Выкл</option>
-            <option value="browser">Браузерный</option>
-            <option value="rnnoise">RNNoise</option>
-          </select>
+          <Select
+            bind:value={roomDeviceUi.noiseMode}
+            options={NOISE_MODE_SELECT_OPTIONS}
+            label="Шумоподавление"
+            variant="dock"
+            onValueChange={() => void switchNoiseMode()}
+          />
         </label>
         <label class="field">
           <span>Гейт</span>
@@ -56,9 +75,14 @@
       <div class="device-popover output-popover" id="outputPopover" hidden>
         <label class="field">
           <span>Динамик</span>
-          <select id="outputDeviceSelect">
-            <option value="">Системный</option>
-          </select>
+          <Select
+            bind:value={roomDeviceUi.outputDeviceId}
+            options={roomDeviceUi.outputOptions}
+            label="Динамик"
+            variant="dock"
+            disabled={roomDeviceUi.outputDisabled}
+            onValueChange={() => void switchOutputDevice()}
+          />
         </label>
       </div>
     </div>

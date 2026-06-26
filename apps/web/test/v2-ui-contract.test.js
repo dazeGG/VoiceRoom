@@ -89,6 +89,49 @@ test('auth client does not mask unexpected backend failures as anonymous or empt
   assert.match(lobby, /Не удалось загрузить комнаты/);
 });
 
+test('shared Select primitive wraps Popover listbox slots for site-wide dropdowns', () => {
+  const select = read('src/lib/shared/components/Select.svelte');
+  const selectCss = read('src/lib/shared/styles/select.css');
+  const topbarDownload = read('src/lib/features/home/components/TopbarDownload.svelte');
+  const settingsModal = read('src/lib/features/home/components/SettingsModal.svelte');
+  const roomDock = read('src/lib/features/room/components/RoomDock.svelte');
+  const devices = read('src/lib/features/room/client/ui/devices.ts');
+
+  assert.match(select, /import Popover from '\$lib\/shared\/components\/Popover\.svelte'/);
+  assert.match(select, /\{#snippet trigger\(/);
+  assert.match(select, /\{#snippet content\(/);
+  assert.match(select, /role="option"/);
+  assert.match(selectCss, /\.select-trigger/);
+  assert.match(topbarDownload, /import Select from '\$lib\/shared\/components\/Select\.svelte'/);
+  assert.match(settingsModal, /import Select from '\$lib\/shared\/components\/Select\.svelte'/);
+  assert.match(roomDock, /import Select from '\$lib\/shared\/components\/Select\.svelte'/);
+  assert.doesNotMatch(topbarDownload, /<select\b/);
+  assert.doesNotMatch(settingsModal, /<select\b/);
+  assert.doesNotMatch(roomDock, /<select\b/);
+  assert.doesNotMatch(devices, /deviceSelect|noiseModeSelect|outputDeviceSelect/);
+});
+
+test('shared Popover primitive exposes trigger/content slots and dismiss behavior', () => {
+  const popover = read('src/lib/shared/components/Popover.svelte');
+  const popoverCss = read('src/lib/shared/styles/popover.css');
+  const userMenu = read('src/lib/features/home/components/UserMenu.svelte');
+
+  assert.match(popover, /trigger: Snippet<\[PopoverTriggerState\]>/);
+  assert.match(popover, /content: Snippet<\[PopoverContentState\]>/);
+  assert.match(popover, /\{@render trigger\(triggerState\)\}/);
+  assert.match(popover, /\{@render content\(contentState\)\}/);
+  assert.match(popover, /onpointerdown=\{onWindowPointerDown\}/);
+  assert.match(popover, /requestClose\('escape'\)/);
+  assert.match(popover, /data-placement=\{placement\}/);
+  assert.match(popoverCss, /\.popover-panel/);
+  assert.match(popoverCss, /\.popover-menu-item/);
+  assert.match(popoverCss, /\.popover-option/);
+  assert.match(userMenu, /import Popover from '\$lib\/shared\/components\/Popover\.svelte'/);
+  assert.match(userMenu, /\{#snippet trigger\(/);
+  assert.match(userMenu, /\{#snippet content\(/);
+  assert.match(userMenu, /aria-haspopup="menu"/);
+});
+
 test('visual identity UI consumes backend keys and exposes only curated room presets', () => {
   const authApi = read('src/lib/api/auth.ts');
   const roomsApi = read('src/lib/api/rooms.ts');

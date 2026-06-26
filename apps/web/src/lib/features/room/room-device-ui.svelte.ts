@@ -1,0 +1,16 @@
+import type { SelectOption } from '$lib/shared/components/select-types';
+
+export const NOISE_MODE_SELECT_OPTIONS: SelectOption[] = [
+  { value: 'off', label: 'Выкл' },
+  { value: 'browser', label: 'Браузерный' },
+  { value: 'rnnoise', label: 'RNNoise' }
+];
+
+export const roomDeviceUi = $state({
+  microphoneId: '',
+  outputDeviceId: '',
+  noiseMode: 'off',
+  microphoneOptions: [{ value: '', label: 'Системный' }] as SelectOption[],
+  outputOptions: [{ value: '', label: 'Системный' }] as SelectOption[],
+  outputDisabled: false
+});

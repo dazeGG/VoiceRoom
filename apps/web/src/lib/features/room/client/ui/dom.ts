@@ -17,7 +17,6 @@ export const elements = {
   get createRoomButton() { return $<HTMLButtonElement>('#createRoomButton'); },
   get deviceMenuButton() { return $<HTMLButtonElement>('#deviceMenuButton'); },
   get devicePopover() { return $<HTMLElement>('#devicePopover'); },
-  get deviceSelect() { return $<HTMLSelectElement>('#deviceSelect'); },
   get dockConnection() { return $<HTMLElement>('#dockConnection'); },
   get dockConnectionLabel() { return $<HTMLElement>('#dockConnectionLabel'); },
   get emptyRoom() { return $<HTMLElement>('#emptyRoom'); },
@@ -35,10 +34,10 @@ export const elements = {
   get micLevelTrack() { return $<HTMLElement>('#micLevelTrack'); },
   get muteButton() { return $<HTMLButtonElement>('#muteButton'); },
   get muteText() { return $<HTMLElement>('#muteText'); },
-  get noiseModeSelect() { return $<HTMLSelectElement>('#noiseModeSelect'); },
+
   get notFoundScreen() { return $<HTMLElement>('#notFoundScreen'); },
   get outputButton() { return $<HTMLButtonElement>('#outputButton'); },
-  get outputDeviceSelect() { return $<HTMLSelectElement>('#outputDeviceSelect'); },
+
   get outputMenuButton() { return $<HTMLButtonElement>('#outputMenuButton'); },
   get outputPopover() { return $<HTMLElement>('#outputPopover'); },
   get outputText() { return $<HTMLElement>('#outputText'); },

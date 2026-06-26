@@ -432,12 +432,6 @@ button:focus-visible {
   color: var(--muted);
 }
 
-.device-popover select {
-  border-color: var(--line);
-  background: oklch(15% 0.014 92);
-  color: oklch(96% 0.008 92);
-}
-
 .gate-control {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 58px;
