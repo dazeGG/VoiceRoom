@@ -63,6 +63,7 @@ test('room chat keeps transport mounted and tracks unread state while closed', (
   assert.match(chat, /incrementUnreadChat\(\)/);
   assert.match(topbar, /room-chat-unread/);
   assert.match(topbar, /import Popover from '\$lib\/shared\/components\/Popover\.svelte'/);
+  assert.match(topbar, /<h1 class="room-heading-title-wrap">/);
   assert.match(topbar, /room-heading-trigger/);
   assert.match(topbar, /Скопировать код/);
   assert.match(topbar, /keepContentMounted/);
@@ -130,6 +131,13 @@ test('shared Select primitive wraps Popover listbox slots for site-wide dropdown
   assert.match(select, /\{#snippet trigger\(/);
   assert.match(select, /\{#snippet content\(/);
   assert.match(select, /role="option"/);
+  assert.match(select, /onTriggerKeydown/);
+  assert.match(select, /onOptionKeydown/);
+  assert.match(select, /ArrowDown/);
+  assert.match(select, /Home/);
+  assert.match(select, /End/);
+  assert.match(select, /typeahead/);
+  assert.match(select, /tabindex=\{index === activeIndex \? 0 : -1\}/);
   assert.match(selectCss, /\.select-trigger/);
   assert.match(topbarDownload, /import Select from '\$lib\/shared\/components\/Select\.svelte'/);
   assert.match(settingsModal, /import Select from '\$lib\/shared\/components\/Select\.svelte'/);
@@ -159,6 +167,9 @@ test('shared Popover primitive exposes trigger/content slots and dismiss behavio
   assert.match(popover, /\{@render content\(contentState\)\}/);
   assert.match(popover, /onpointerdown=\{onWindowPointerDown\}/);
   assert.match(popover, /requestClose\('escape'\)/);
+  assert.match(popover, /script lang="ts" module/);
+  assert.match(popover, /popoverPanelCounter/);
+  assert.match(popover, /focusTrigger/);
   assert.match(popover, /data-placement=\{resolvedPlacement\}/);
   assert.match(popover, /resolvePopoverPlacement/);
   assert.match(popover, /openWithPlacement/);

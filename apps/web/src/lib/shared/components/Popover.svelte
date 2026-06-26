@@ -1,3 +1,7 @@
+<script lang="ts" module>
+  let popoverPanelCounter = 0;
+</script>
+
 <script lang="ts">
   import { tick } from 'svelte';
   import type { Snippet } from 'svelte';
@@ -23,8 +27,6 @@
     open: boolean;
     close: () => void;
   };
-
-  let panelCounter = 0;
 
   let {
     open = $bindable(false),
@@ -54,9 +56,9 @@
     content: Snippet<[PopoverContentState]>;
   } = $props();
 
-  const panelId = `popover-panel-${++panelCounter}`;
+  const panelId = `popover-panel-${++popoverPanelCounter}`;
   let root = $state<HTMLElement | null>(null);
-  let resolvedPlacement = $state<PopoverPlacement>(placement);
+  let resolvedPlacement = $state<PopoverPlacement>('bottom-end');
   let measureGeneration = 0;
 
   $effect(() => {
@@ -95,8 +97,16 @@
     openWithPlacement();
   }
 
+  function focusTrigger(): void {
+    const triggerEl = root?.firstElementChild;
+    if (triggerEl instanceof HTMLElement) {
+      queueMicrotask(() => triggerEl.focus());
+    }
+  }
+
   function close(): void {
     open = false;
+    focusTrigger();
   }
 
   function requestClose(reason: PopoverCloseReason): void {

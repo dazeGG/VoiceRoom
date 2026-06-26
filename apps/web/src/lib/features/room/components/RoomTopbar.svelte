@@ -35,20 +35,22 @@
         keepContentMounted
       >
         {#snippet trigger({ open, toggle, panelId })}
-          <button
-            class="room-heading-trigger"
-            type="button"
-            aria-haspopup="menu"
-            aria-expanded={open}
-            aria-controls={panelId}
-            onclick={toggle}
-          >
-            <span class="room-emoji-badge" id="roomEmojiBadge" aria-hidden="true" hidden></span>
-            <span id="roomTitle" class="room-heading-title ellipsis">room</span>
-            <span class="room-heading-trigger-chevron" aria-hidden="true">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
-            </span>
-          </button>
+          <h1 class="room-heading-title-wrap">
+            <button
+              class="room-heading-trigger"
+              type="button"
+              aria-haspopup="menu"
+              aria-expanded={open}
+              aria-controls={panelId}
+              onclick={toggle}
+            >
+              <span class="room-emoji-badge" id="roomEmojiBadge" aria-hidden="true" hidden></span>
+              <span id="roomTitle" class="room-heading-title ellipsis">room</span>
+              <span class="room-heading-trigger-chevron" aria-hidden="true">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+              </span>
+            </button>
+          </h1>
         {/snippet}
 
         {#snippet content({ close })}
