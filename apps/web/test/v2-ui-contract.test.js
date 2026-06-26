@@ -64,6 +64,16 @@ test('room chat keeps transport mounted and tracks unread state while closed', (
   assert.match(topbar, /room-chat-unread/);
 });
 
+test('room chat terminal lifecycle frames leave the room screen', () => {
+  const chat = read('src/lib/features/room/components/RoomChat.svelte');
+  const lifecycle = read('src/lib/features/room/client/room/lifecycle.ts');
+
+  assert.match(lifecycle, /export function applyRoomNotFound/);
+  assert.match(chat, /applyRoomNotFound/);
+  assert.match(chat, /payload\?\.type === 'room-not-found'[\s\S]*applyRoomNotFound\(payload\.roomId\)[\s\S]*stream\.close\(\)/);
+  assert.match(chat, /payload\?\.type === 'room-deleted'[\s\S]*applyRoomDeleted\(payload\.roomId\)[\s\S]*stream\.close\(\)/);
+});
+
 
 test('auth client does not mask unexpected backend failures as anonymous or empty state', () => {
   const authApi = read('src/lib/api/auth.ts');

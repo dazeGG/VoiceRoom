@@ -22,6 +22,12 @@ export function applyRoomUpdated(room: RoomLifecycleSummary): void {
   }
 }
 
+export function applyRoomNotFound(roomId: string): void {
+  if (roomId !== state.roomId) return;
+  if (document.body.dataset.screen === 'not-found') return;
+  showRoomNotFound();
+}
+
 export function applyRoomDeleted(roomId: string): void {
   if (roomId !== state.roomId) return;
   // The owner initiated delete — skip the broadcast they would receive over SSE

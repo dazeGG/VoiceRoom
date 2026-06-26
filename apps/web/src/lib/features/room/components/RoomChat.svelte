@@ -6,7 +6,7 @@
   import { getRoomIdFromPath, getStoredPeerSession } from '../client/core/session';
   import { getInitials } from '../client/core/utils';
   import type { RoomLifecycleSummary } from '../client/core/types';
-  import { applyRoomDeleted, applyRoomUpdated } from '../client/room/lifecycle';
+  import { applyRoomDeleted, applyRoomNotFound, applyRoomUpdated } from '../client/room/lifecycle';
   import { roomUi, closeChat, incrementUnreadChat, markChatRead } from '../room-ui.svelte';
 
   let roomId = $state('');
@@ -106,6 +106,7 @@
           type?: string;
         };
         if (payload?.type === 'room-not-found') {
+          if (payload.roomId) applyRoomNotFound(payload.roomId);
           error = 'Комната не найдена';
           stream.close();
           return;
