@@ -421,7 +421,9 @@ button:focus-visible {
   gap: var(--space-md);
   width: min(320px, calc(100vw - 48px));
   min-width: 0;
-  overflow: hidden;
+  /* Visible overflow: Select listboxes are absolutely positioned inside the
+     panel; hidden clipped long device lists when a dropdown opened. */
+  overflow: visible;
   border: 1px solid oklch(34% 0.02 92);
   border-radius: var(--radius-md);
   padding: var(--space-md);

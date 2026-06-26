@@ -32,6 +32,7 @@
             options={roomDeviceUi.microphoneOptions}
             label="Микрофон"
             variant="dock"
+            placement="top-start"
             onValueChange={() => void switchMicrophone()}
           />
         </label>
@@ -42,6 +43,7 @@
             options={NOISE_MODE_SELECT_OPTIONS}
             label="Шумоподавление"
             variant="dock"
+            placement="top-start"
             onValueChange={() => void switchNoiseMode()}
           />
         </label>
@@ -80,6 +82,7 @@
             options={roomDeviceUi.outputOptions}
             label="Динамик"
             variant="dock"
+            placement="top-start"
             disabled={roomDeviceUi.outputDisabled}
             onValueChange={() => void switchOutputDevice()}
           />
