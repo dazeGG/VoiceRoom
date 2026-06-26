@@ -1,5 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 
+// E2e targets the dev web server at baseURL. Start the full stack from the
+// repo root before running (`npm run dev:up`), or wire the same command into CI.
 export default defineConfig({
 	testDir: './e2e',
 	timeout: 30_000,

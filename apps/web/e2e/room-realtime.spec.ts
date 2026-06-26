@@ -47,3 +47,35 @@ test('a rename by the owner propagates live to another participant without reloa
   await ownerCtx.close();
   await guestCtx.close();
 });
+
+test('an owner delete propagates live to another participant without reload', async ({ browser }) => {
+  const ownerLogin = uniqueLogin('rtdelowner');
+  const guestLogin = uniqueLogin('rtdelguest');
+  const roomName = `Realtime delete ${ownerLogin}`;
+
+  const ownerCtx = await browser.newContext();
+  const ownerPage = await ownerCtx.newPage();
+  await registerViaUi(ownerPage, ownerLogin);
+  const roomId = await createPermanentRoom(ownerPage, roomName);
+  await enterRoom(ownerPage, roomId);
+
+  const guestCtx = await browser.newContext();
+  const guestPage = await guestCtx.newPage();
+  await registerViaUi(guestPage, guestLogin);
+  await enterRoom(guestPage, roomId);
+  await expect(roomHeading(guestPage)).toHaveText(roomName, { timeout: 15_000 });
+
+  await settingsButton(ownerPage).click();
+  const dialog = settingsDialog(ownerPage);
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole('button', { name: 'Удалить комнату' }).click();
+  await dialog.getByRole('button', { name: 'Удалить навсегда' }).click();
+  await ownerPage.waitForURL('**/', { timeout: 15_000 });
+
+  await expect(guestPage.locator('body')).toHaveAttribute('data-screen', 'not-found', { timeout: 20_000 });
+  await expect(guestPage.locator('#notFoundScreen')).toBeVisible();
+  await expect(guestPage.locator('#missingRoomCode')).toHaveText(roomId);
+
+  await ownerCtx.close();
+  await guestCtx.close();
+});

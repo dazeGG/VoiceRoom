@@ -54,11 +54,13 @@
   async function confirmDelete(): Promise<void> {
     if (deleting) return;
     deleting = true;
+    roomSettingsUi.deleting = true;
     try {
       await deleteRoom(roomClientState.roomId);
       window.location.href = '/';
     } catch (err) {
       deleting = false;
+      roomSettingsUi.deleting = false;
       error = err instanceof Error && err.message ? err.message : 'Не удалось удалить комнату';
     }
   }

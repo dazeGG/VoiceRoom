@@ -25,7 +25,7 @@
     "build": "npm --workspace @voice-room/web run build",
     "check": "npm --workspace @voice-room/shared run check && npm --workspace @voice-room/api run check && npm --workspace @voice-room/web run check",
     "test": "npm --workspace @voice-room/shared run test && npm --workspace @voice-room/api run test && npm --workspace @voice-room/web run test",
-    "e2e": "playwright test"
+    "e2e": "npm --workspace @voice-room/web run e2e"
   },
   "packageManager": "npm@10.8.2",
   "engines": {

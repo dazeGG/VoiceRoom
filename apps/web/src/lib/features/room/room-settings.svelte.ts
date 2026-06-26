@@ -4,9 +4,10 @@
 // `isOwner` is mirrored here (set once room.ts resolves ownership) because
 // the vanilla `state` object is not itself Svelte-reactive — the topbar
 // button needs a reactive flag to show/hide.
-export const roomSettingsUi = $state<{ isOwner: boolean; open: boolean }>({
+export const roomSettingsUi = $state<{ isOwner: boolean; open: boolean; deleting: boolean }>({
   isOwner: false,
-  open: false
+  open: false,
+  deleting: false
 });
 
 export function openRoomSettings(): void {
