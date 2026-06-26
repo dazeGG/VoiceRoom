@@ -80,9 +80,10 @@ test('room chat keeps transport mounted and tracks unread state while closed', (
   assert.match(select, /import Ellipsis from '\$lib\/shared\/components\/Ellipsis\.svelte'/);
 
   const dock = read('src/lib/features/room/components/RoomDock.svelte');
-  assert.match(dock, /placement="top-start"/);
+  assert.match(dock, /flip/);
   const controls = read('src/lib/features/room/styles/controls.css');
   assert.match(controls, /\.device-popover[\s\S]*overflow:\s*visible/);
+  assert.match(controls, /\.device-popover[\s\S]*right:\s*0/);
 });
 
 test('room chat terminal lifecycle frames leave the room screen', () => {
@@ -119,6 +120,7 @@ test('shared Select primitive wraps Popover listbox slots for site-wide dropdown
   const devices = read('src/lib/features/room/client/ui/devices.ts');
 
   assert.match(select, /import Popover from '\$lib\/shared\/components\/Popover\.svelte'/);
+  assert.match(select, /\{flip\}/);
   assert.match(select, /\{#snippet trigger\(/);
   assert.match(select, /\{#snippet content\(/);
   assert.match(select, /role="option"/);
@@ -132,6 +134,14 @@ test('shared Select primitive wraps Popover listbox slots for site-wide dropdown
   assert.doesNotMatch(devices, /deviceSelect|noiseModeSelect|outputDeviceSelect/);
 });
 
+test('popover placement flips vertically only when the preferred side would overflow', () => {
+  const placement = read('src/lib/shared/components/popover-placement.ts');
+
+  assert.match(placement, /export function resolvePopoverPlacement/);
+  assert.match(placement, /if \(panelHeight <= spaceBelow\) return preferred/);
+  assert.match(placement, /if \(spaceAbove > spaceBelow\) return flipPlacementVertical/);
+});
+
 test('shared Popover primitive exposes trigger/content slots and dismiss behavior', () => {
   const popover = read('src/lib/shared/components/Popover.svelte');
   const popoverCss = read('src/lib/shared/styles/popover.css');
@@ -143,7 +153,9 @@ test('shared Popover primitive exposes trigger/content slots and dismiss behavio
   assert.match(popover, /\{@render content\(contentState\)\}/);
   assert.match(popover, /onpointerdown=\{onWindowPointerDown\}/);
   assert.match(popover, /requestClose\('escape'\)/);
-  assert.match(popover, /data-placement=\{placement\}/);
+  assert.match(popover, /data-placement=\{resolvedPlacement\}/);
+  assert.match(popover, /resolvePopoverPlacement/);
+  assert.match(popover, /flip = false/);
   assert.match(popoverCss, /\.popover-panel/);
   assert.match(popoverCss, /\.popover-menu-item/);
   assert.match(popoverCss, /\.popover-option/);

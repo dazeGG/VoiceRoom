@@ -14,6 +14,7 @@
     label = '',
     disabled = false,
     placement = 'bottom-start',
+    flip = false,
     variant = 'field',
     onValueChange
   }: {
@@ -22,6 +23,7 @@
     label?: string;
     disabled?: boolean;
     placement?: 'bottom-end' | 'bottom-start' | 'top-end' | 'top-start';
+    flip?: boolean;
     variant?: SelectVariant;
     onValueChange?: (value: string) => void;
   } = $props();
@@ -42,7 +44,7 @@
 </script>
 
 <div class="select-root">
-  <Popover {placement} role="listbox" ariaLabel={label} panelClass="select-panel">
+  <Popover {placement} {flip} role="listbox" ariaLabel={label} panelClass="select-panel">
     {#snippet trigger({ open, toggle, panelId })}
       <button
         class="select-trigger select-trigger--{variant}"
