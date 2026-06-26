@@ -220,7 +220,7 @@ test('room route checks /auth/me and blocks anonymous entry on guest-name modal'
   assert.doesNotMatch(roomPage, /loadSession|authLoadError|LobbyPage/);
   assert.match(home, /auth-session-error/);
 
-  assert.match(roomView, /import \{ fetchMe \} from '\$lib\/api\/auth'/);
+  assert.match(roomView, /import \{ fetchMe, fetchOwnedRooms \} from '\$lib\/api\/auth'/);
   assert.match(roomView, /import \{ roomNameFor \} from '\$lib\/features\/auth\/account'/);
   assert.match(roomView, /type RoomEntryGateResult = 'authenticated' \| 'anonymous' \| 'failure'/);
   assert.match(showRoomRoute, /const exists = await checkRoomExists\(state\.roomId\)/);

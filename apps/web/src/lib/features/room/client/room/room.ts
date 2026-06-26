@@ -1,6 +1,7 @@
 import { getRoomPreset } from '$lib/visual/tokens';
-import { fetchMe } from '$lib/api/auth';
+import { fetchMe, fetchOwnedRooms } from '$lib/api/auth';
 import { roomNameFor } from '$lib/features/auth/account';
+import { roomSettingsUi } from '../../room-settings.svelte';
 import { elements } from '../ui/dom';
 import { state } from '../core/state';
 import { showToast } from '../ui/toast';
@@ -49,6 +50,7 @@ import {
 } from '../ui/devices';
 import { GATE_THRESHOLD_MIN_DB } from '../core/config';
 import type { ServerMessage } from '../core/types';
+import { applyRoomDeleted, applyRoomUpdated } from './lifecycle';
 
 type RoomEntryGateResult = 'authenticated' | 'anonymous' | 'failure';
 
@@ -87,8 +89,10 @@ export async function showRoomRoute(): Promise<void> {
   refreshDevices().catch(() => {});
 }
 
-function showRoomScreen(): void {
-  document.body.dataset.screen = 'room';
+// Pulled out of showRoomScreen so a live room-updated event (rename/recolor
+// from the owner) can refresh the heading without re-running the whole
+// screen transition.
+export function refreshRoomHeading(): void {
   const heading = state.roomName || state.roomId;
   document.title = `${heading} · Voice Room`;
   elements.roomTitle.textContent = heading;
@@ -104,6 +108,11 @@ function showRoomScreen(): void {
   elements.roomEmojiBadge.style.boxShadow = `0 0 0 1px ${roomVisual.ring}`;
   elements.roomEmojiBadge.hidden = false;
   elements.emptyRoomAvatar.textContent = getInitials(state.savedName);
+}
+
+function showRoomScreen(): void {
+  document.body.dataset.screen = 'room';
+  refreshRoomHeading();
   hideScreens();
   elements.brand.hidden = true;
   elements.topbarRoomHeading.hidden = false;
@@ -188,6 +197,14 @@ async function resolveRoomEntryName(): Promise<RoomEntryGateResult> {
     const user = await fetchMe();
     if (user) {
       persistName(roomNameFor(user));
+      // Settings/delete UI is owner-only; the lobby's room list is the only
+      // place "owner" is known client-side, so cross-check it here.
+      try {
+        const owned = await fetchOwnedRooms();
+        roomSettingsUi.isOwner = owned.some((room) => room.roomId === state.roomId && room.relationship === 'owner');
+      } catch (ownedError) {
+        console.warn('Failed to resolve room ownership', ownedError);
+      }
       return 'authenticated';
     }
   } catch (error) {
@@ -382,6 +399,16 @@ async function handleServerMessage(event: MessageEvent): Promise<void> {
   if (message.type === 'room-full') {
     showToast(`Комната заполнена: максимум ${message.maxRoomPeers}`);
     leaveRoom();
+    return;
+  }
+
+  if (message.type === 'room-updated') {
+    applyRoomUpdated(message.room);
+    return;
+  }
+
+  if (message.type === 'room-deleted') {
+    applyRoomDeleted(message.roomId);
     return;
   }
 }

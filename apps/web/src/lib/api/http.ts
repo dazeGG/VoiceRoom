@@ -27,3 +27,51 @@ export async function postJson<T>(url: string, body: unknown): Promise<T> {
 
   return payload as T;
 }
+
+// Room mutations carry the session cookie, so they use 'same-origin' (not
+// the default 'omit') — same template as authPost (lib/api/auth.ts).
+export async function putJson<T>(url: string, body: unknown): Promise<T> {
+  const response = await fetch(url, {
+    body: JSON.stringify(body),
+    credentials: 'same-origin',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json'
+    },
+    method: 'PUT'
+  });
+
+  let payload: { error?: string } | null = null;
+  try {
+    payload = await response.json();
+  } catch {
+    // Non-JSON errors are handled by the generic message below.
+  }
+
+  if (!response.ok) {
+    throw new Error(payload?.error || 'Сервер недоступен');
+  }
+
+  return payload as T;
+}
+
+export async function del<T>(url: string): Promise<T> {
+  const response = await fetch(url, {
+    credentials: 'same-origin',
+    headers: { Accept: 'application/json' },
+    method: 'DELETE'
+  });
+
+  let payload: { error?: string } | null = null;
+  try {
+    payload = await response.json();
+  } catch {
+    // Non-JSON errors are handled by the generic message below.
+  }
+
+  if (!response.ok) {
+    throw new Error(payload?.error || 'Сервер недоступен');
+  }
+
+  return payload as T;
+}

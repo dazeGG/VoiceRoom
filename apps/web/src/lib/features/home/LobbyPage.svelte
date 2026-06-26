@@ -11,6 +11,7 @@
   import RoomCard from './components/RoomCard.svelte';
   import CreateRoomDialog from './components/CreateRoomDialog.svelte';
   import { pluralizeRooms } from './model/rooms';
+  import '$lib/shared/styles/dialog.css';
   import './styles/lobby.css';
   import './styles/account-menu.css';
   import './styles/settings.css';
