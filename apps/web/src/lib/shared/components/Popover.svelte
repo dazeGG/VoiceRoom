@@ -14,18 +14,18 @@
 
   export type { PopoverPlacement } from './popover-placement';
   export type PopoverRole = 'menu' | 'listbox' | 'dialog';
-  export type PopoverCloseReason = 'outside' | 'escape';
+  export type PopoverCloseReason = 'outside' | 'escape' | 'focusout';
 
   export type PopoverTriggerState = {
     open: boolean;
     toggle: () => void;
-    close: () => void;
+    close: (restoreFocus?: boolean) => void;
     panelId: string;
   };
 
   export type PopoverContentState = {
     open: boolean;
-    close: () => void;
+    close: (restoreFocus?: boolean) => void;
   };
 
   let {
@@ -104,19 +104,26 @@
     }
   }
 
-  function close(): void {
+  function close(restoreFocus = true): void {
     open = false;
-    focusTrigger();
+    if (restoreFocus) focusTrigger();
   }
 
-  function requestClose(reason: PopoverCloseReason): void {
+  function requestClose(reason: PopoverCloseReason, restoreFocus = reason === 'escape'): void {
     if (onBeforeClose?.(reason) === false) return;
-    close();
+    close(restoreFocus);
   }
 
   function onWindowPointerDown(event: PointerEvent): void {
     if (!open || !root) return;
-    if (!root.contains(event.target as Node)) requestClose('outside');
+    if (!root.contains(event.target as Node)) requestClose('outside', false);
+  }
+
+  function onFocusOut(event: FocusEvent): void {
+    if (!open || !root) return;
+    const nextTarget = event.relatedTarget;
+    if (nextTarget instanceof Node && root.contains(nextTarget)) return;
+    requestClose('focusout', false);
   }
 
   function onWindowKeydown(event: KeyboardEvent): void {
@@ -139,7 +146,7 @@
 
 <svelte:window onpointerdown={onWindowPointerDown} onkeydown={onWindowKeydown} />
 
-<div class={`popover-root ${rootClass}`.trim()} bind:this={root}>
+<div class={`popover-root ${rootClass}`.trim()} bind:this={root} onfocusout={onFocusOut}>
   {@render trigger(triggerState)}
 
   {#if open || keepContentMounted}

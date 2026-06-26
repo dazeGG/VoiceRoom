@@ -38,7 +38,7 @@
 
   let open = $state(false);
   let activeIndex = $state(0);
-  let optionRefs: Array<HTMLButtonElement | null> = [];
+  let optionRefs: HTMLButtonElement[] = [];
   let typeahead = '';
   let typeaheadTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -56,7 +56,21 @@
     await focusOption(activeIndex);
   }
 
-  function choose(next: string, close: () => void): void {
+  function registerOption(node: HTMLButtonElement, index: number) {
+    optionRefs[index] = node;
+    return {
+      update(nextIndex: number) {
+        delete optionRefs[index];
+        index = nextIndex;
+        optionRefs[index] = node;
+      },
+      destroy() {
+        delete optionRefs[index];
+      }
+    };
+  }
+
+  function choose(next: string, close: (restoreFocus?: boolean) => void): void {
     if (disabled) return;
     const changed = next !== value;
     value = next;
@@ -99,7 +113,7 @@
     }
   }
 
-  function onOptionKeydown(event: KeyboardEvent, option: SelectOption, close: () => void): void {
+  function onOptionKeydown(event: KeyboardEvent, option: SelectOption, close: (restoreFocus?: boolean) => void): void {
     if (event.key === 'ArrowDown') {
       event.preventDefault();
       move(1);
@@ -118,6 +132,8 @@
     } else if (event.key === 'Escape') {
       event.preventDefault();
       close();
+    } else if (event.key === 'Tab') {
+      close(false);
     } else if (event.key.length === 1 && !event.metaKey && !event.ctrlKey && !event.altKey) {
       matchTypeahead(event.key);
     }
@@ -150,7 +166,7 @@
     {#snippet content({ close })}
       {#each options as option, index (option.value)}
         <button
-          bind:this={optionRefs[index]}
+          use:registerOption={index}
           class="popover-option"
           type="button"
           role="option"

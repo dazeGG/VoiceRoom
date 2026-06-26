@@ -137,7 +137,11 @@ test('shared Select primitive wraps Popover listbox slots for site-wide dropdown
   assert.match(select, /Home/);
   assert.match(select, /End/);
   assert.match(select, /typeahead/);
+  assert.match(select, /event\.key === 'Tab'/);
+  assert.match(select, /close\(false\)/);
   assert.match(select, /tabindex=\{index === activeIndex \? 0 : -1\}/);
+  assert.match(select, /use:registerOption=\{index\}/);
+  assert.doesNotMatch(select, /bind:this=\{optionRefs\[index\]\}/);
   assert.match(selectCss, /\.select-trigger/);
   assert.match(topbarDownload, /import Select from '\$lib\/shared\/components\/Select\.svelte'/);
   assert.match(settingsModal, /import Select from '\$lib\/shared\/components\/Select\.svelte'/);
@@ -170,6 +174,9 @@ test('shared Popover primitive exposes trigger/content slots and dismiss behavio
   assert.match(popover, /script lang="ts" module/);
   assert.match(popover, /popoverPanelCounter/);
   assert.match(popover, /focusTrigger/);
+  assert.match(popover, /onfocusout=\{onFocusOut\}/);
+  assert.match(popover, /requestClose\('focusout', false\)/);
+  assert.match(popover, /requestClose\('outside', false\)/);
   assert.match(popover, /data-placement=\{resolvedPlacement\}/);
   assert.match(popover, /resolvePopoverPlacement/);
   assert.match(popover, /openWithPlacement/);
