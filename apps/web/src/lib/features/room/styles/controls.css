@@ -118,8 +118,13 @@ button:focus-visible {
    settings popover; the inner .dock-split is the rounded-rect that clips the
    toggle + chevron into one pill. */
 .dock-cluster {
-  position: relative;
   display: flex;
+}
+
+/* Anchor popover centering to the mic/headphones split pill (toggle + chevron). */
+.dock-anchor {
+  position: relative;
+  width: fit-content;
 }
 
 .dock-split {

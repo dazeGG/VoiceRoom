@@ -94,6 +94,9 @@
 }
 
 .select-trigger--dock {
+  position: relative;
+  justify-content: flex-start;
+  gap: 0;
   border-color: oklch(34% 0.02 92);
   border-radius: var(--radius-sm, 10px);
   padding: 10px 36px 10px 12px;
@@ -102,7 +105,18 @@
   font-size: 14px;
 }
 
+.select-trigger--dock .select-trigger-chevron {
+  position: absolute;
+  right: 11px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
 .select-trigger--dock:hover:not(:disabled),
 .select-trigger--dock[aria-expanded='true'] {
   border-color: oklch(42% 0.02 92);
+}
+
+.select-trigger--dock[aria-expanded='true'] .select-trigger-chevron {
+  transform: translateY(-50%) rotate(180deg);
 }
