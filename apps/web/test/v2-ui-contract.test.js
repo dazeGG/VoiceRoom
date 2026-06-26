@@ -65,7 +65,12 @@ test('room chat keeps transport mounted and tracks unread state while closed', (
   assert.match(topbar, /import Popover from '\$lib\/shared\/components\/Popover\.svelte'/);
   assert.match(topbar, /room-heading-trigger/);
   assert.match(topbar, /Скопировать код/);
+  assert.match(topbar, /keepContentMounted/);
   assert.doesNotMatch(topbar, /copyCodeButton|copyLinkButton|room-settings-button/);
+
+  const roomView = read('src/lib/features/room/client/room/room.ts');
+  assert.match(roomView, /document\.querySelector\('#roomCodeText'\)/);
+  assert.doesNotMatch(roomView, /elements\.roomCodeText/);
 });
 
 test('room chat terminal lifecycle frames leave the room screen', () => {

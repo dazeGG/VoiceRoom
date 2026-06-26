@@ -27,6 +27,7 @@
     ariaLabel = '',
     rootClass = '',
     panelClass = '',
+    keepContentMounted = false,
     onBeforeClose,
     trigger,
     content
@@ -37,6 +38,8 @@
     ariaLabel?: string;
     rootClass?: string;
     panelClass?: string;
+    /** Keep panel in the DOM when closed (for ids the vanilla client updates). */
+    keepContentMounted?: boolean;
     onBeforeClose?: (reason: PopoverCloseReason) => boolean | void;
     trigger: Snippet<[PopoverTriggerState]>;
     content: Snippet<[PopoverContentState]>;
@@ -86,13 +89,16 @@
 <div class={`popover-root ${rootClass}`.trim()} bind:this={root}>
   {@render trigger(triggerState)}
 
-  {#if open}
+  {#if open || keepContentMounted}
     <div
       id={panelId}
       class={`popover-panel ${panelClass}`.trim()}
+      class:popover-panel--closed={keepContentMounted && !open}
       data-placement={placement}
       {role}
       aria-label={ariaLabel || undefined}
+      aria-hidden={keepContentMounted && !open ? true : undefined}
+      hidden={keepContentMounted && !open ? true : undefined}
     >
       {@render content(contentState)}
     </div>

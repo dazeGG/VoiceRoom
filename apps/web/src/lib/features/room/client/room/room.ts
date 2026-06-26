@@ -96,7 +96,8 @@ export function refreshRoomHeading(): void {
   const heading = state.roomName || state.roomId;
   document.title = `${heading} · Voice Room`;
   elements.roomTitle.textContent = heading;
-  elements.roomCodeText.textContent = state.roomId;
+  const roomCodeEl = document.querySelector('#roomCodeText');
+  if (roomCodeEl) roomCodeEl.textContent = state.roomId;
   const roomVisual = getRoomPreset({
     emoji: state.roomEmoji,
     roomColorKey: state.roomColorKey,

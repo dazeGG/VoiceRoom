@@ -26,7 +26,13 @@
 <Topbar label="Новая голосовая комната" reload>
   <div class="room-heading topbar-room-heading" aria-label="Комната" hidden>
     <div class="room-heading-main">
-      <Popover placement="bottom-start" role="menu" ariaLabel="Меню комнаты" panelClass="room-heading-popover">
+      <Popover
+        placement="bottom-start"
+        role="menu"
+        ariaLabel="Меню комнаты"
+        panelClass="room-heading-popover"
+        keepContentMounted
+      >
         {#snippet trigger({ open, toggle, panelId })}
           <button
             class="room-heading-trigger"
