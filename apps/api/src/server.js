@@ -513,7 +513,7 @@ function broadcastChat(roomId, message) {
 // chat SSE stream, mirroring the existing room-not-found path. Unlike
 // broadcastChat this writes the message verbatim instead of wrapping it as a
 // chat-message frame.
-function broadcastRoomLifecycle(roomId, message) {
+function broadcastRoomLifecycle(roomId, message, { end = false } = {}) {
   const subscribers = roomChatStreams.get(roomId);
   if (!subscribers || subscribers.size === 0) return;
 
@@ -521,12 +521,20 @@ function broadcastRoomLifecycle(roomId, message) {
   for (const res of subscribers) {
     if (!sendSse(res, message)) {
       failed.push(res);
+      continue;
+    }
+    if (end) {
+      try {
+        res.end();
+      } catch {
+        failed.push(res);
+      }
     }
   }
   for (const res of failed) {
     subscribers.delete(res);
   }
-  if (subscribers.size === 0) {
+  if (end || subscribers.size === 0) {
     roomChatStreams.delete(roomId);
   }
 }
@@ -916,12 +924,18 @@ async function handleDeleteRoom(req, res, roomId) {
   const room = await authorizeRoomMutation(req, res, roomId);
   if (!room) return;
 
-  // Broadcast before teardown so the SSE writes are not racing socket close.
+  const deleted = await getRoomStore().deleteRoom(roomId);
+  if (!deleted) {
+    // Lost a race with a concurrent delete (UPDATE matched 0 rows).
+    sendJson(res, 404, { ok: false, error: 'Комната не найдена' });
+    return;
+  }
+
+  // Broadcast after durable soft-delete, before presence teardown so the SSE
+  // writes are not racing socket close.
   const presence = presenceRooms.get(roomId);
   if (presence) broadcast(presence, { type: 'room-deleted', roomId });
-  broadcastRoomLifecycle(roomId, { type: 'room-deleted', roomId });
-
-  await getRoomStore().deleteRoom(roomId);
+  broadcastRoomLifecycle(roomId, { type: 'room-deleted', roomId }, { end: true });
 
   // Belt-and-suspenders: force-close active peers after the signal. Clients
   // also self-exit on room-deleted, so this only matters for missed events.

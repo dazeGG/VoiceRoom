@@ -346,6 +346,15 @@ function openSseStream(socketPath, pathname, { readyType = 'hello', timeoutMs = 
   let buffer = '';
   let streamTimer = null;
   let req = null;
+  let closed = false;
+  let resolveClosed = null;
+  const closedPromise = new Promise((resolve) => {
+    resolveClosed = resolve;
+  });
+  const markClosed = () => {
+    closed = true;
+    resolveClosed?.();
+  };
 
   const ready = new Promise((resolve, reject) => {
     const resolveOnce = () => {
@@ -359,6 +368,8 @@ function openSseStream(socketPath, pathname, { readyType = 'hello', timeoutMs = 
     req = http.get({ socketPath, path: pathname }, (res) => {
       if (!readyType) resolveOnce();
       res.setEncoding('utf8');
+      res.on('end', markClosed);
+      res.on('close', markClosed);
       res.on('data', (chunk) => {
         buffer += chunk;
         let index;
@@ -373,7 +384,10 @@ function openSseStream(socketPath, pathname, { readyType = 'hello', timeoutMs = 
         }
       });
     });
-    req.on('error', reject);
+    req.on('error', (error) => {
+      markClosed();
+      reject(error);
+    });
   });
 
   return {
@@ -383,6 +397,13 @@ function openSseStream(socketPath, pathname, { readyType = 'hello', timeoutMs = 
     clearTimer() {
       if (streamTimer) clearTimeout(streamTimer);
       streamTimer = null;
+    },
+    waitUntilClosed(timeoutMs = 1000) {
+      if (closed) return Promise.resolve();
+      return Promise.race([
+        closedPromise,
+        new Promise((_, reject) => setTimeout(() => reject(new Error('SSE stream did not close')), timeoutMs))
+      ]);
     },
     waitFor(type, timeoutMs = 3000) {
       return new Promise((resolve, reject) => {
@@ -399,10 +420,9 @@ function openSseStream(socketPath, pathname, { readyType = 'hello', timeoutMs = 
   };
 }
 
-async function startSocketServer(seed) {
+async function startSocketServer(seed, { store = createFakeStore(seed) } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'voice-room-crud-'));
   const socketPath = path.join(dir, 'api.sock');
-  const store = createFakeStore(seed);
   const server = createApiServer({ store, users: createFakeUsers() });
   await new Promise((resolve, reject) => {
     server.listen({ path: socketPath }, (error) => (error ? reject(error) : resolve()));
@@ -528,4 +548,23 @@ test('a chat-stream subscriber receives room-updated and room-deleted lifecycle 
 
   const deleted = await chat.waitFor('room-deleted');
   assert.equal(deleted.roomId, 'room1');
+  await chat.waitUntilClosed();
+});
+
+test('DELETE does not broadcast lifecycle frames when persistence fails', async (t) => {
+  const store = createFakeStore({ room1: staticRoom() });
+  store.deleteRoom = async () => false;
+  const { dir, socketPath, server } = await startSocketServer(null, { store });
+  const chat = openSseStream(socketPath, '/api/rooms/room1/chat/stream', { readyType: null });
+  teardownSocketServer(t, { server, dir, streams: [chat] });
+
+  await chat.ready;
+
+  const deleteStatus = await requestOnSocket(socketPath, {
+    method: 'DELETE',
+    path: '/api/rooms/room1',
+    cookie: `vr_session=${OWNER_TOKEN}`
+  });
+  assert.equal(deleteStatus, 404);
+  await assert.rejects(chat.waitFor('room-deleted', 150), /room-deleted frame not received/);
 });

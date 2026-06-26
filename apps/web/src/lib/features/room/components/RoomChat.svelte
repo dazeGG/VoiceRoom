@@ -107,6 +107,7 @@
         };
         if (payload?.type === 'room-not-found') {
           error = 'Комната не найдена';
+          stream.close();
           return;
         }
         if (payload?.type === 'room-updated' && payload.room) {
@@ -115,6 +116,7 @@
         }
         if (payload?.type === 'room-deleted' && payload.roomId) {
           applyRoomDeleted(payload.roomId);
+          stream.close();
           return;
         }
         const message = payload?.message;
