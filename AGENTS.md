@@ -52,6 +52,7 @@ Keep runtime marker contracts stable and non-destructive when overlays are appli
 - Prefer deletion, existing utilities, and existing patterns before new abstractions; add dependencies only when explicitly requested.
 - Keep diffs small, reviewable, and reversible.
 - Use Conventional Commits for all future commit messages.
+- Merge PRs into `develop` with squash merge and delete the source branch after a successful merge.
 - Verify with lint, typecheck, tests, and static analysis after changes; final reports include changed files, simplifications, and remaining risks.
 
 
