@@ -2,9 +2,11 @@
   import { onMount } from 'svelte';
   import '$lib/shared/styles/typography.css';
   import '$lib/shared/styles/app.css';
+  import '$lib/shared/styles/dialog.css';
   import './styles/room.css';
   import NotFoundScreen from './components/NotFoundScreen.svelte';
   import RoomOverlays from './components/RoomOverlays.svelte';
+  import RoomSettingsDialog from './components/RoomSettingsDialog.svelte';
   import RoomStage from './components/RoomStage.svelte';
   import RoomTopbar from './components/RoomTopbar.svelte';
   import StartRoomScreen from './components/StartRoomScreen.svelte';
@@ -29,4 +31,5 @@
   <RoomStage />
   <NotFoundScreen />
   <RoomOverlays />
+  <RoomSettingsDialog />
 </div>

@@ -509,6 +509,36 @@ function broadcastChat(roomId, message) {
   }
 }
 
+// Lifecycle events (room-updated / room-deleted) reach page viewers over the
+// chat SSE stream, mirroring the existing room-not-found path. Unlike
+// broadcastChat this writes the message verbatim instead of wrapping it as a
+// chat-message frame.
+function broadcastRoomLifecycle(roomId, message, { end = false } = {}) {
+  const subscribers = roomChatStreams.get(roomId);
+  if (!subscribers || subscribers.size === 0) return;
+
+  const failed = [];
+  for (const res of subscribers) {
+    if (!sendSse(res, message)) {
+      failed.push(res);
+      continue;
+    }
+    if (end) {
+      try {
+        res.end();
+      } catch {
+        failed.push(res);
+      }
+    }
+  }
+  for (const res of failed) {
+    subscribers.delete(res);
+  }
+  if (end || subscribers.size === 0) {
+    roomChatStreams.delete(roomId);
+  }
+}
+
 async function readJsonBody(req) {
   if (req && Object.hasOwn(req, 'body')) {
     return req.body && typeof req.body === 'object' ? req.body : {};
@@ -810,6 +840,112 @@ async function handleCreateRoom(req, res) {
     owned: Boolean(room.ownerId),
     roomId: room.id
   });
+}
+
+// Shared auth + ownership gate for room mutations. Returns the room on success,
+// or null after writing the appropriate error response (401/403/404).
+async function authorizeRoomMutation(req, res, roomId) {
+  const session = await resolveSessionUser(req);
+  if (!session) {
+    sendJson(res, 401, { ok: false, error: 'Требуется вход' });
+    return null;
+  }
+  const room = await getRoom(roomId);
+  if (!room) {
+    sendJson(res, 404, { ok: false, error: 'Комната не найдена' });
+    return null;
+  }
+  if (!room.isStatic || room.ownerId !== session.user.id) {
+    sendJson(res, 403, { ok: false, error: 'Недостаточно прав' });
+    return null;
+  }
+  return room;
+}
+
+async function handleUpdateRoom(req, res, roomId) {
+  const room = await authorizeRoomMutation(req, res, roomId);
+  if (!room) return;
+
+  const body = await readJsonBody(req);
+
+  // Reject unknown icon/color/preset keys before touching the DB. The clean*
+  // helpers normalize a known key to itself and an unknown one to '', so a
+  // non-empty input that cleans to '' means the caller sent something the
+  // CHECK constraints would reject — return a clean 400 instead of an SQL error.
+  if (typeof body.roomPresetKey === 'string' && body.roomPresetKey && !cleanRoomPresetKey(body.roomPresetKey)) {
+    sendJson(res, 400, { ok: false, error: 'Неизвестный пресет комнаты' });
+    return;
+  }
+  if (typeof body.roomIconKey === 'string' && body.roomIconKey && !cleanRoomIconKey(body.roomIconKey)) {
+    sendJson(res, 400, { ok: false, error: 'Неизвестная иконка комнаты' });
+    return;
+  }
+  if (typeof body.roomColorKey === 'string' && body.roomColorKey && !cleanRoomColorKey(body.roomColorKey)) {
+    sendJson(res, 400, { ok: false, error: 'Неизвестный цвет комнаты' });
+    return;
+  }
+  if (typeof body.emoji === 'string' && body.emoji && !cleanRoomEmoji(body.emoji)) {
+    sendJson(res, 400, { ok: false, error: 'Неизвестный эмодзи комнаты' });
+    return;
+  }
+
+  // Merge with the authorized room so omitted fields keep their current values.
+  // A newly provided preset drives icon/color/emoji so the curated combination
+  // stays consistent. Without a new preset, explicit visual fields are partial
+  // updates over the stored room instead of being overwritten by the old preset.
+  const nextName = body.name !== undefined ? cleanRoomName(body.name) : room.name;
+  if (!nextName) {
+    sendJson(res, 400, { ok: false, error: 'Дайте комнате название' });
+    return;
+  }
+  const requestedPreset = body.roomPresetKey !== undefined ? getRoomPreset(body.roomPresetKey) : null;
+  const updated = await getRoomStore().updateRoom(roomId, {
+    name: nextName,
+    emoji: requestedPreset?.emoji || (body.emoji !== undefined ? cleanRoomEmoji(body.emoji) : room.emoji),
+    roomIconKey: requestedPreset?.iconKey || (body.roomIconKey !== undefined ? cleanRoomIconKey(body.roomIconKey) : room.roomIconKey),
+    roomColorKey: requestedPreset?.colorKey || (body.roomColorKey !== undefined ? cleanRoomColorKey(body.roomColorKey) : room.roomColorKey),
+    roomPresetKey: body.roomPresetKey !== undefined ? cleanRoomPresetKey(body.roomPresetKey) : cleanRoomPresetKey(room.roomPresetKey)
+  });
+  if (!updated) {
+    // Lost a race with a concurrent delete (UPDATE matched 0 rows).
+    sendJson(res, 404, { ok: false, error: 'Комната не найдена' });
+    return;
+  }
+
+  const payload = publicLobbyRoom(updated);
+  const presence = presenceRooms.get(roomId);
+  if (presence) broadcast(presence, { type: 'room-updated', room: payload });
+  broadcastRoomLifecycle(roomId, { type: 'room-updated', room: payload });
+
+  sendJson(res, 200, { ok: true, room: payload });
+}
+
+async function handleDeleteRoom(req, res, roomId) {
+  const room = await authorizeRoomMutation(req, res, roomId);
+  if (!room) return;
+
+  const deleted = await getRoomStore().deleteRoom(roomId);
+  if (!deleted) {
+    // Lost a race with a concurrent delete (UPDATE matched 0 rows).
+    sendJson(res, 404, { ok: false, error: 'Комната не найдена' });
+    return;
+  }
+
+  // Broadcast after durable soft-delete, before presence teardown so the SSE
+  // writes are not racing socket close.
+  const presence = presenceRooms.get(roomId);
+  if (presence) broadcast(presence, { type: 'room-deleted', roomId });
+  broadcastRoomLifecycle(roomId, { type: 'room-deleted', roomId }, { end: true });
+
+  // Belt-and-suspenders: force-close active peers after the signal. Clients
+  // also self-exit on room-deleted, so this only matters for missed events.
+  if (presence) {
+    for (const peer of Array.from(presence.peers.values())) {
+      closePeer(roomId, peer.id, peer.res, 'deleted');
+    }
+  }
+
+  sendJson(res, 200, { ok: true });
 }
 
 async function handleRegister(req, res) {
@@ -1385,6 +1521,12 @@ function createApiApp({ store = null, users = null } = {}) {
   app.get('/api/auth/rooms', (request, reply) => runLegacyHandler(request, reply, handleAuthRooms));
   app.post('/api/auth/rooms', (request, reply) => runLegacyHandler(request, reply, handleAddAuthRoom));
   app.post('/api/rooms', (request, reply) => runLegacyHandler(request, reply, handleCreateRoom));
+  app.put('/api/rooms/:roomId', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
+    return handleUpdateRoom(req, res, normalizeRoomId(request.params.roomId));
+  }));
+  app.delete('/api/rooms/:roomId', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
+    return handleDeleteRoom(req, res, normalizeRoomId(request.params.roomId));
+  }));
   app.get('/api/rooms/:roomId', (request, reply) => runLegacyHandler(request, reply, (_req, res) => {
     const roomId = normalizeRoomId(request.params.roomId);
     return handleRoomStatus(res, new URL(`/rooms/${roomId}`, 'http://localhost'));

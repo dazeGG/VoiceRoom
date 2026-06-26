@@ -5,6 +5,8 @@
   import { getAvatarColor } from '$lib/visual/tokens';
   import { getRoomIdFromPath, getStoredPeerSession } from '../client/core/session';
   import { getInitials } from '../client/core/utils';
+  import type { RoomLifecycleSummary } from '../client/core/types';
+  import { applyRoomDeleted, applyRoomNotFound, applyRoomUpdated } from '../client/room/lifecycle';
   import { roomUi, closeChat, incrementUnreadChat, markChatRead } from '../room-ui.svelte';
 
   let roomId = $state('');
@@ -97,9 +99,25 @@
 
     stream.addEventListener('message', (event) => {
       try {
-        const payload = JSON.parse((event as MessageEvent).data) as { message?: ChatMessage; type?: string };
+        const payload = JSON.parse((event as MessageEvent).data) as {
+          message?: ChatMessage;
+          room?: RoomLifecycleSummary;
+          roomId?: string;
+          type?: string;
+        };
         if (payload?.type === 'room-not-found') {
+          if (payload.roomId) applyRoomNotFound(payload.roomId);
           error = 'Комната не найдена';
+          stream.close();
+          return;
+        }
+        if (payload?.type === 'room-updated' && payload.room) {
+          applyRoomUpdated(payload.room);
+          return;
+        }
+        if (payload?.type === 'room-deleted' && payload.roomId) {
+          applyRoomDeleted(payload.roomId);
+          stream.close();
           return;
         }
         const message = payload?.message;

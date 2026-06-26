@@ -1,0 +1,275 @@
+/* Shared modal dialog chrome — overlay, card, tabs, form fields, emoji
+   picker, actions. Originally lived in features/home/styles/lobby.css
+   (create-room dialog); pulled out here so the room settings dialog
+   (features/room/components/RoomSettingsDialog.svelte) can reuse it without
+   importing the lobby's full stylesheet. */
+.dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(8, 7, 5, 0.62);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+.dialog-card {
+  width: min(430px, 100%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  background: #16140f;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+}
+
+.dialog-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 22px 16px;
+}
+
+.dialog-title {
+  color: #ece7d9;
+  font-family: var(--font-sans);
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.dialog-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.05);
+  color: #9a9484;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.dialog-close:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ece7d9;
+}
+
+.dialog-tabs {
+  display: flex;
+  gap: 4px;
+  margin: 0 22px;
+  padding: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  background: #0c0b08;
+}
+
+.dialog-tab {
+  flex: 1;
+  border: none;
+  border-radius: 9px;
+  padding: 9px 0;
+  background: transparent;
+  color: #9a9484;
+  font-family: var(--font-sans);
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.dialog-tab[data-active='true'] {
+  background: #d9d3c3;
+  color: #17150f;
+  font-weight: 700;
+}
+
+.dialog-tab--temp[data-active='true'] {
+  background: #c79350;
+  color: #1a1206;
+}
+
+.dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 20px 22px 22px;
+}
+
+.dialog-error {
+  margin: 0;
+  border: 1px solid rgba(214, 109, 92, 0.4);
+  border-radius: 11px;
+  padding: 9px 12px;
+  background: rgba(214, 109, 92, 0.12);
+  color: #e8b3a8;
+  font-size: 12.5px;
+}
+
+.dialog-field {
+  display: flex;
+  flex-direction: column;
+}
+
+.dialog-label {
+  margin-bottom: 9px;
+  color: #6f6a5c;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.dialog-label-soft {
+  color: #5a5547;
+}
+
+.dialog-input {
+  width: 100%;
+  min-height: 0;
+  border: 1px solid rgba(154, 143, 106, 0.5);
+  border-radius: 12px;
+  padding: 13px 15px;
+  background: #0c0b08;
+  color: #ece7d9;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.dialog-input::placeholder {
+  color: #6f6a5c;
+}
+
+.dialog-input:focus {
+  border-color: rgba(154, 143, 106, 0.85);
+}
+
+.dialog-input--mono {
+  font-family: var(--font-mono);
+  letter-spacing: 0.02em;
+}
+
+.dialog-emoji-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.dialog-emoji {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 19px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.dialog-emoji:hover {
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.dialog-emoji[data-active='true'] {
+  border-color: rgba(217, 211, 195, 0.6);
+  background: rgba(217, 211, 195, 0.16);
+}
+
+.dialog-note {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  border-radius: 11px;
+  padding: 11px 13px;
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
+.dialog-note svg {
+  flex: none;
+}
+
+.dialog-note--ok {
+  border: 1px solid rgba(79, 174, 116, 0.22);
+  background: rgba(79, 174, 116, 0.08);
+  color: #a9c9b6;
+}
+
+.dialog-note--ok svg {
+  stroke: #7ec99a;
+}
+
+.dialog-note--warn {
+  border: 1px solid rgba(199, 140, 62, 0.28);
+  background: rgba(199, 140, 62, 0.1);
+  color: #e3b780;
+}
+
+.dialog-note--warn svg {
+  stroke: #e3b780;
+}
+
+.dialog-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.dialog-cancel {
+  flex: none;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  padding: 13px 20px;
+  background: transparent;
+  color: #cfc9ba;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.dialog-cancel:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.dialog-submit {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  border: none;
+  border-radius: 12px;
+  padding: 13px 0;
+  background: #d9d3c3;
+  color: #17150f;
+  font-family: var(--font-sans);
+  font-size: 14.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.dialog-submit:hover {
+  background: #e7e1d1;
+}
+
+.dialog-submit:disabled {
+  cursor: default;
+  opacity: 0.8;
+}
+
+.dialog-submit .home-spinner {
+  border-color: rgba(23, 21, 15, 0.25);
+  border-top-color: #17150f;
+}
