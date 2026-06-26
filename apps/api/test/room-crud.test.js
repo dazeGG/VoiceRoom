@@ -10,10 +10,49 @@ const os = require('node:os');
 const path = require('node:path');
 
 const { createApiApp, createApiServer } = require('../src/server');
+const {
+  ROOM_PRESETS,
+  cleanRoomColorKey,
+  cleanRoomEmoji,
+  cleanRoomIconKey,
+  cleanRoomPresetKey,
+  getRoomPreset
+} = require('@voice-room/shared/validation');
 
 const OWNER_ID = 'user-owner';
 const OWNER_TOKEN = 'session-owner';
 const OTHER_TOKEN = 'session-other';
+const DEFAULT_ROOM_PRESET = ROOM_PRESETS[0];
+
+function presetFromEmoji(emoji) {
+  return ROOM_PRESETS.find((preset) => preset.emoji === emoji) || null;
+}
+
+function presetFromVisualKeys(iconKey, colorKey) {
+  return ROOM_PRESETS.find((preset) => preset.iconKey === iconKey && preset.colorKey === colorKey) || null;
+}
+
+function emojiFromIconKey(iconKey) {
+  return ROOM_PRESETS.find((preset) => preset.iconKey === iconKey)?.emoji || DEFAULT_ROOM_PRESET.emoji;
+}
+
+function normalizeRoomVisuals({ emoji = '', roomColorKey = '', roomIconKey = '', roomPresetKey = '' } = {}) {
+  const legacyEmoji = cleanRoomEmoji(emoji);
+  const explicitIconKey = cleanRoomIconKey(roomIconKey);
+  const explicitColorKey = cleanRoomColorKey(roomColorKey);
+  const preset = getRoomPreset(cleanRoomPresetKey(roomPresetKey));
+  const legacyPreset = presetFromEmoji(legacyEmoji);
+  const iconKey = explicitIconKey || preset?.iconKey || legacyPreset?.iconKey || DEFAULT_ROOM_PRESET.iconKey;
+  const colorKey = explicitColorKey || preset?.colorKey || legacyPreset?.colorKey || DEFAULT_ROOM_PRESET.colorKey;
+  const matchedPreset = presetFromVisualKeys(iconKey, colorKey);
+  const hasExplicitVisualKey = Boolean(explicitIconKey || explicitColorKey || preset);
+  return {
+    emoji: matchedPreset?.emoji || (hasExplicitVisualKey ? emojiFromIconKey(iconKey) : legacyEmoji) || DEFAULT_ROOM_PRESET.emoji,
+    roomColorKey: colorKey,
+    roomIconKey: iconKey,
+    roomPresetKey: matchedPreset?.key || ''
+  };
+}
 
 // In-memory room store covering only the surface the CRUD handlers touch. It
 // mirrors the real store's contract: getRoom filters soft-deleted rows, and
@@ -39,7 +78,7 @@ function createFakeStore(seed = {}) {
     async updateRoom(roomId, patch) {
       const room = rooms.get(roomId);
       if (!room || room.deletedAt) return null;
-      Object.assign(room, patch, { updatedAt: Date.now() });
+      Object.assign(room, patch, normalizeRoomVisuals(patch), { updatedAt: Date.now() });
       return { ...room, peers: new Map() };
     },
     async deleteRoom(roomId, now = Date.now()) {
@@ -166,6 +205,60 @@ test('PUT on a soft-deleted room returns 404', async (t) => {
   assert.equal(response.statusCode, 404);
 });
 
+test('PUT with only a name preserves existing visuals', async (t) => {
+  const { app, store } = buildApp({ room1: staticRoom() });
+  t.after(() => app.close());
+
+  const response = await app.inject({
+    method: 'PUT',
+    url: '/api/rooms/room1',
+    headers: { cookie: `vr_session=${OWNER_TOKEN}` },
+    payload: { name: 'Renamed only' }
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.json().room.name, 'Renamed only');
+  assert.equal(response.json().room.roomPresetKey, 'game-indigo');
+  assert.equal(response.json().room.roomIconKey, 'gamepad');
+  assert.equal(response.json().room.roomColorKey, 'indigo');
+  assert.equal(store.rooms.get('room1').roomColorKey, 'indigo');
+});
+
+test('PUT with only a visual field applies it over the existing preset', async (t) => {
+  const { app, store } = buildApp({ room1: staticRoom() });
+  t.after(() => app.close());
+
+  const response = await app.inject({
+    method: 'PUT',
+    url: '/api/rooms/room1',
+    headers: { cookie: `vr_session=${OWNER_TOKEN}` },
+    payload: { roomColorKey: 'blue' }
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.json().room.name, 'Original');
+  assert.equal(response.json().room.roomPresetKey, '');
+  assert.equal(response.json().room.roomIconKey, 'gamepad');
+  assert.equal(response.json().room.roomColorKey, 'blue');
+  assert.equal(store.rooms.get('room1').roomColorKey, 'blue');
+});
+
+test('PUT rejects an empty name for static rooms', async (t) => {
+  const { app, store } = buildApp({ room1: staticRoom() });
+  t.after(() => app.close());
+
+  const response = await app.inject({
+    method: 'PUT',
+    url: '/api/rooms/room1',
+    headers: { cookie: `vr_session=${OWNER_TOKEN}` },
+    payload: { name: '   ' }
+  });
+
+  assert.equal(response.statusCode, 400);
+  assert.equal(response.json().error, 'Дайте комнате название');
+  assert.equal(store.rooms.get('room1').name, 'Original');
+});
+
 test('PUT rejects an unknown visual key before persisting', async (t) => {
   const { app, store } = buildApp({ room1: staticRoom() });
   t.after(() => app.close());
@@ -248,77 +341,91 @@ test('cookie-authenticated PUT/DELETE reject cross-origin browser requests (CSRF
   assert.equal(store.rooms.get('room1').deletedAt, undefined);
 });
 
-// End-to-end over a real socket so an active peer holds a live /api/events SSE
-// stream and observes the room-updated frame broadcast by the PUT handler.
-test('an active peer receives room-updated over the presence stream', async (t) => {
+function openSseStream(socketPath, pathname, { readyType = 'hello', timeoutMs = 5000 } = {}) {
+  const frames = [];
+  let buffer = '';
+  let streamTimer = null;
+  let req = null;
+
+  const ready = new Promise((resolve, reject) => {
+    const resolveOnce = () => {
+      if (streamTimer) clearTimeout(streamTimer);
+      streamTimer = null;
+      resolve();
+    };
+    if (readyType) {
+      streamTimer = setTimeout(() => reject(new Error(`SSE stream did not deliver ${readyType}`)), timeoutMs);
+    }
+    req = http.get({ socketPath, path: pathname }, (res) => {
+      if (!readyType) resolveOnce();
+      res.setEncoding('utf8');
+      res.on('data', (chunk) => {
+        buffer += chunk;
+        let index;
+        while ((index = buffer.indexOf('\n\n')) !== -1) {
+          const block = buffer.slice(0, index);
+          buffer = buffer.slice(index + 2);
+          const dataLine = block.split('\n').find((line) => line.startsWith('data:'));
+          if (!dataLine) continue;
+          const parsed = JSON.parse(dataLine.slice(5).trim());
+          frames.push(parsed);
+          if (readyType && parsed.type === readyType) resolveOnce();
+        }
+      });
+    });
+    req.on('error', reject);
+  });
+
+  return {
+    frames,
+    req,
+    ready,
+    clearTimer() {
+      if (streamTimer) clearTimeout(streamTimer);
+      streamTimer = null;
+    },
+    waitFor(type, timeoutMs = 3000) {
+      return new Promise((resolve, reject) => {
+        const deadline = Date.now() + timeoutMs;
+        const poll = () => {
+          const found = frames.find((frame) => frame.type === type);
+          if (found) return resolve(found);
+          if (Date.now() > deadline) return reject(new Error(`${type} frame not received`));
+          setTimeout(poll, 25);
+        };
+        poll();
+      });
+    }
+  };
+}
+
+async function startSocketServer(seed) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'voice-room-crud-'));
   const socketPath = path.join(dir, 'api.sock');
-
-  const store = createFakeStore({ room1: staticRoom() });
+  const store = createFakeStore(seed);
   const server = createApiServer({ store, users: createFakeUsers() });
   await new Promise((resolve, reject) => {
     server.listen({ path: socketPath }, (error) => (error ? reject(error) : resolve()));
   });
+  return { dir, socketPath, store, server };
+}
 
-  const peerToken = 'peertoken12345678901234567890123456';
-  const frames = [];
-  let buffer = '';
-  let streamTimer = null;
-  let eventsReq = null;
-
-  // Teardown is explicit (not via t.after LIFO ordering): drop the live SSE
-  // socket first, then force-close any lingering keep-alive connections so
-  // server.close resolves instead of waiting on the open stream forever.
-  t.after(async () => {
-    if (streamTimer) clearTimeout(streamTimer);
-    eventsReq?.destroy();
-    server.closeAllConnections?.();
-    await new Promise((resolve) => server.close(resolve));
-    fs.rmSync(dir, { recursive: true, force: true });
-  });
-
-  const streamReady = new Promise((resolve, reject) => {
-    streamTimer = setTimeout(() => reject(new Error('SSE stream did not deliver hello')), 5000);
-    const resolveOnce = () => {
-      clearTimeout(streamTimer);
-      streamTimer = null;
-      resolve();
-    };
-    eventsReq = http.get(
-      { socketPath, path: `/api/events?room=room1&peer=peer0001&token=${peerToken}&name=Tester` },
-      (res) => {
-        res.setEncoding('utf8');
-        res.on('data', (chunk) => {
-          buffer += chunk;
-          let index;
-          while ((index = buffer.indexOf('\n\n')) !== -1) {
-            const block = buffer.slice(0, index);
-            buffer = buffer.slice(index + 2);
-            const dataLine = block.split('\n').find((line) => line.startsWith('data:'));
-            if (!dataLine) continue;
-            const parsed = JSON.parse(dataLine.slice(5).trim());
-            frames.push(parsed);
-            if (parsed.type === 'hello') resolveOnce();
-          }
-        });
-      }
-    );
-    eventsReq.on('error', () => {});
-  });
-
-  await streamReady;
-
-  const updateBody = JSON.stringify({ name: 'Live Rename', roomPresetKey: 'voice-blue' });
-  const updateStatus = await new Promise((resolve, reject) => {
+async function requestOnSocket(socketPath, { method, path: reqPath, body, cookie }) {
+  const payload = body ? JSON.stringify(body) : null;
+  return new Promise((resolve, reject) => {
     const req = http.request(
       {
         socketPath,
-        method: 'PUT',
-        path: '/api/rooms/room1',
+        method,
+        path: reqPath,
         headers: {
-          'Content-Type': 'application/json',
-          'Content-Length': Buffer.byteLength(updateBody),
-          cookie: `vr_session=${OWNER_TOKEN}`
+          ...(payload
+            ? {
+                'Content-Type': 'application/json',
+                'Content-Length': Buffer.byteLength(payload)
+              }
+            : {}),
+          ...(cookie ? { cookie } : {})
         }
       },
       (res) => {
@@ -327,24 +434,98 @@ test('an active peer receives room-updated over the presence stream', async (t) 
       }
     );
     req.on('error', reject);
-    req.write(updateBody);
+    if (payload) req.write(payload);
     req.end();
+  });
+}
+
+function teardownSocketServer(t, { server, dir, streams = [] }) {
+  t.after(async () => {
+    for (const stream of streams) {
+      stream.clearTimer?.();
+      stream.req?.destroy();
+    }
+    server.closeAllConnections?.();
+    await new Promise((resolve) => server.close(resolve));
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+}
+
+// End-to-end over a real socket so an active peer holds a live /api/events SSE
+// stream and observes the room-updated frame broadcast by the PUT handler.
+test('an active peer receives room-updated over the presence stream', async (t) => {
+  const { dir, socketPath, server } = await startSocketServer({ room1: staticRoom() });
+  const peerToken = 'peertoken12345678901234567890123456';
+  const presence = openSseStream(
+    socketPath,
+    `/api/events?room=room1&peer=peer0001&token=${peerToken}&name=Tester`
+  );
+  teardownSocketServer(t, { server, dir, streams: [presence] });
+
+  await presence.ready;
+
+  const updateStatus = await requestOnSocket(socketPath, {
+    method: 'PUT',
+    path: '/api/rooms/room1',
+    cookie: `vr_session=${OWNER_TOKEN}`,
+    body: { name: 'Live Rename', roomPresetKey: 'voice-blue' }
   });
   assert.equal(updateStatus, 200);
 
-  // Wait for the room-updated frame to land on the peer's stream.
-  await new Promise((resolve, reject) => {
-    const deadline = Date.now() + 3000;
-    const poll = () => {
-      if (frames.some((frame) => frame.type === 'room-updated')) return resolve();
-      if (Date.now() > deadline) return reject(new Error('room-updated frame not received'));
-      setTimeout(poll, 25);
-    };
-    poll();
-  });
-
-  const updated = frames.find((frame) => frame.type === 'room-updated');
+  const updated = await presence.waitFor('room-updated');
   assert.equal(updated.room.name, 'Live Rename');
   assert.equal(updated.room.roomColorKey, 'blue');
   assert.equal(updated.room.roomId, 'room1');
+});
+
+test('an active peer receives room-deleted over the presence stream', async (t) => {
+  const { dir, socketPath, server } = await startSocketServer({ room1: staticRoom() });
+  const peerToken = 'peertoken12345678901234567890123456';
+  const presence = openSseStream(
+    socketPath,
+    `/api/events?room=room1&peer=peer0001&token=${peerToken}&name=Tester`
+  );
+  teardownSocketServer(t, { server, dir, streams: [presence] });
+
+  await presence.ready;
+
+  const deleteStatus = await requestOnSocket(socketPath, {
+    method: 'DELETE',
+    path: '/api/rooms/room1',
+    cookie: `vr_session=${OWNER_TOKEN}`
+  });
+  assert.equal(deleteStatus, 200);
+
+  const deleted = await presence.waitFor('room-deleted');
+  assert.equal(deleted.roomId, 'room1');
+});
+
+test('a chat-stream subscriber receives room-updated and room-deleted lifecycle frames', async (t) => {
+  const { dir, socketPath, server } = await startSocketServer({ room1: staticRoom() });
+  const chat = openSseStream(socketPath, '/api/rooms/room1/chat/stream', { readyType: null });
+  teardownSocketServer(t, { server, dir, streams: [chat] });
+
+  await chat.ready;
+
+  const updateStatus = await requestOnSocket(socketPath, {
+    method: 'PUT',
+    path: '/api/rooms/room1',
+    cookie: `vr_session=${OWNER_TOKEN}`,
+    body: { name: 'Chat Rename', roomPresetKey: 'voice-blue' }
+  });
+  assert.equal(updateStatus, 200);
+
+  const updated = await chat.waitFor('room-updated');
+  assert.equal(updated.room.name, 'Chat Rename');
+  assert.equal(updated.room.roomId, 'room1');
+
+  const deleteStatus = await requestOnSocket(socketPath, {
+    method: 'DELETE',
+    path: '/api/rooms/room1',
+    cookie: `vr_session=${OWNER_TOKEN}`
+  });
+  assert.equal(deleteStatus, 200);
+
+  const deleted = await chat.waitFor('room-deleted');
+  assert.equal(deleted.roomId, 'room1');
 });

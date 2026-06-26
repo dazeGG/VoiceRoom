@@ -881,15 +881,22 @@ async function handleUpdateRoom(req, res, roomId) {
     return;
   }
 
-  // A preset, when provided, drives icon/color/emoji so the curated combination
-  // stays consistent — same precedence as room creation (line ~759).
-  const requestedPreset = getRoomPreset(cleanRoomPresetKey(body.roomPresetKey));
+  // Merge with the authorized room so omitted fields keep their current values.
+  // A newly provided preset drives icon/color/emoji so the curated combination
+  // stays consistent. Without a new preset, explicit visual fields are partial
+  // updates over the stored room instead of being overwritten by the old preset.
+  const nextName = body.name !== undefined ? cleanRoomName(body.name) : room.name;
+  if (!nextName) {
+    sendJson(res, 400, { ok: false, error: 'Дайте комнате название' });
+    return;
+  }
+  const requestedPreset = body.roomPresetKey !== undefined ? getRoomPreset(body.roomPresetKey) : null;
   const updated = await getRoomStore().updateRoom(roomId, {
-    name: cleanRoomName(body.name),
-    emoji: requestedPreset?.emoji || cleanRoomEmoji(body.emoji),
-    roomIconKey: requestedPreset?.iconKey || cleanRoomIconKey(body.roomIconKey),
-    roomColorKey: requestedPreset?.colorKey || cleanRoomColorKey(body.roomColorKey),
-    roomPresetKey: cleanRoomPresetKey(body.roomPresetKey)
+    name: nextName,
+    emoji: requestedPreset?.emoji || (body.emoji !== undefined ? cleanRoomEmoji(body.emoji) : room.emoji),
+    roomIconKey: requestedPreset?.iconKey || (body.roomIconKey !== undefined ? cleanRoomIconKey(body.roomIconKey) : room.roomIconKey),
+    roomColorKey: requestedPreset?.colorKey || (body.roomColorKey !== undefined ? cleanRoomColorKey(body.roomColorKey) : room.roomColorKey),
+    roomPresetKey: body.roomPresetKey !== undefined ? cleanRoomPresetKey(body.roomPresetKey) : cleanRoomPresetKey(room.roomPresetKey)
   });
   if (!updated) {
     // Lost a race with a concurrent delete (UPDATE matched 0 rows).
