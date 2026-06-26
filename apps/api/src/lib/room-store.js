@@ -306,6 +306,25 @@ function createRoomStore({
     return mapRoom(result.rows[0]);
   }
 
+  async function updateRoom(roomId, { name = '', emoji = '', roomColorKey = '', roomIconKey = '', roomPresetKey = '' } = {}, now = Date.now()) {
+    const visuals = normalizeRoomVisuals({ emoji, roomColorKey, roomIconKey, roomPresetKey });
+    const result = await getPool().query(
+      `UPDATE rooms
+       SET name = $2, emoji = $3, room_icon_key = $4, room_color_key = $5, updated_at = $6
+       WHERE id = $1 AND deleted_at IS NULL
+       RETURNING *`,
+      [
+        roomId,
+        typeof name === 'string' ? name : '',
+        visuals.emoji,
+        visuals.roomIconKey,
+        visuals.roomColorKey,
+        toDate(now)
+      ]
+    );
+    return mapRoom(result.rows[0]);
+  }
+
   async function deleteRoom(roomId, now = Date.now()) {
     const result = await getPool().query(
       `UPDATE rooms
@@ -647,7 +666,8 @@ function createRoomStore({
     markActiveTemporaryRoomsEmpty,
     markRoomActive,
     markRoomEmpty,
-    pruneRooms
+    pruneRooms,
+    updateRoom
   };
 }
 
