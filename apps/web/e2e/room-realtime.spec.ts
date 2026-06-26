@@ -4,7 +4,7 @@ import {
   enterRoom,
   registerViaUi,
   roomHeading,
-  settingsButton,
+  openRoomSettings,
   settingsDialog,
   uniqueLogin
 } from './helpers';
@@ -33,7 +33,7 @@ test('a rename by the owner propagates live to another participant without reloa
   await expect(roomHeading(guestPage)).toHaveText(originalName, { timeout: 15_000 });
 
   // Owner renames in context A.
-  await settingsButton(ownerPage).click();
+  await openRoomSettings(ownerPage);
   const dialog = settingsDialog(ownerPage);
   await expect(dialog).toBeVisible();
   await dialog.locator('input.dialog-input').fill(newName);
@@ -65,7 +65,7 @@ test('an owner delete propagates live to another participant without reload', as
   await enterRoom(guestPage, roomId);
   await expect(roomHeading(guestPage)).toHaveText(roomName, { timeout: 15_000 });
 
-  await settingsButton(ownerPage).click();
+  await openRoomSettings(ownerPage);
   const dialog = settingsDialog(ownerPage);
   await expect(dialog).toBeVisible();
   await dialog.getByRole('button', { name: 'Удалить комнату' }).click();

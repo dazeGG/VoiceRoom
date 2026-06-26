@@ -4,7 +4,8 @@ import {
   enterRoom,
   registerViaUi,
   roomHeading,
-  settingsButton,
+  roomSettingsMenuItem,
+  openRoomHeadingMenu,
   settingsDialog,
   uniqueLogin
 } from './helpers';
@@ -20,9 +21,9 @@ test('owner can rename a room and change its preset, reflected in-room and in th
   await enterRoom(page, roomId);
   await expect(roomHeading(page)).toHaveText(originalName);
 
-  // Owner-only gear button opens the settings dialog.
-  await expect(settingsButton(page)).toBeVisible();
-  await settingsButton(page).click();
+  await openRoomHeadingMenu(page);
+  await expect(roomSettingsMenuItem(page)).toBeVisible();
+  await roomSettingsMenuItem(page).click();
   const dialog = settingsDialog(page);
   await expect(dialog).toBeVisible();
 

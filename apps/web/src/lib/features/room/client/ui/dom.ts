@@ -12,8 +12,7 @@ function $<T extends Element>(selector: string): T {
 
 export const elements = {
   get brand() { return $<HTMLAnchorElement>('.brand'); },
-  get copyCodeButton() { return $<HTMLButtonElement>('#copyCodeButton'); },
-  get copyLinkButton() { return $<HTMLButtonElement>('#copyLinkButton'); },
+
   get createRoomButton() { return $<HTMLButtonElement>('#createRoomButton'); },
   get deviceMenuButton() { return $<HTMLButtonElement>('#deviceMenuButton'); },
   get devicePopover() { return $<HTMLElement>('#devicePopover'); },
@@ -46,7 +45,7 @@ export const elements = {
   get roomCodeText() { return $<HTMLElement>('#roomCodeText'); },
   get roomEmojiBadge() { return $<HTMLElement>('#roomEmojiBadge'); },
   get roomScreen() { return $<HTMLElement>('#roomScreen'); },
-  get roomTitle() { return $<HTMLHeadingElement>('#roomTitle'); },
+  get roomTitle() { return $<HTMLElement>('#roomTitle'); },
   get topbarRoomHeading() { return $<HTMLElement>('.topbar-room-heading'); },
   get missingRoomCode() { return $<HTMLElement>('#missingRoomCode'); },
   get screenButton() { return $<HTMLButtonElement>('#screenButton'); },

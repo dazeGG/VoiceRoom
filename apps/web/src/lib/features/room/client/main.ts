@@ -22,8 +22,6 @@ import {
 import { handleMicButtonClick, refreshOutputControls, toggleOutputMute } from './ui/controls';
 import { bindGuestNameDialog, resetGuestNameDialog, saveStartName, unbindGuestNameDialog, updateNameStatuses } from './ui/names';
 import {
-  copyRoomCode,
-  copyRoomLink,
   createRoomFromStart,
   handleLeaveButtonClick,
   handleRoomCodeKeydown,
@@ -74,8 +72,7 @@ export function mountRoomClient(root: ParentNode = document): () => void {
   elements.joinByCodeButton.addEventListener('click', joinRoomByCode, { signal: listenerSignal });
   elements.roomCodeInput.addEventListener('keydown', handleRoomCodeKeydown, { signal: listenerSignal });
   elements.startNameInput.addEventListener('input', updateNameStatuses, { signal: listenerSignal });
-  elements.copyCodeButton.addEventListener('click', copyRoomCode, { signal: listenerSignal });
-  elements.copyLinkButton.addEventListener('click', copyRoomLink, { signal: listenerSignal });
+
   elements.muteButton.addEventListener('click', handleMicButtonClick, { signal: listenerSignal });
   elements.outputButton.addEventListener('click', toggleOutputMute, { signal: listenerSignal });
   elements.screenButton.addEventListener('click', handleScreenButtonClick, { signal: listenerSignal });
