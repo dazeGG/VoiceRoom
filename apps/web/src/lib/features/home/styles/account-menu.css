@@ -69,6 +69,25 @@ html.is-desktop .topbar-download {
   width: auto;
 }
 
+/* Match the old native select + absolute chevron at right: 11px. */
+.topbar-download-platform .select-trigger--compact {
+  position: relative;
+  justify-content: flex-start;
+  gap: 0;
+}
+
+.topbar-download-platform .select-trigger--compact .select-trigger-chevron {
+  position: absolute;
+  right: 11px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #8d877a;
+}
+
+.topbar-download-platform .select-trigger--compact[aria-expanded='true'] .select-trigger-chevron {
+  transform: translateY(-50%) rotate(180deg);
+}
+
 .topbar-download-platform .select-panel {
   right: 0;
   left: auto;
