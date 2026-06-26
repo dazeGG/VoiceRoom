@@ -70,14 +70,11 @@ body[data-screen="room"] .status-pill {
 
 .room-heading-title {
   max-width: min(46vw, 22ch);
-  overflow: hidden;
   font-family: var(--font-mono);
   font-size: 1.35rem;
   font-weight: 500;
   letter-spacing: -0.01em;
   line-height: 1.05;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .room-heading-trigger-chevron {
@@ -92,29 +89,49 @@ body[data-screen="room"] .status-pill {
 }
 
 .room-heading-popover {
-  width: 248px;
+  width: 276px;
 }
 
-.room-heading-popover-meta {
+.room-heading-popover-head {
   display: flex;
+  align-items: flex-start;
+  gap: 13px;
+  padding: 14px;
+}
+
+.room-heading-popover-badge {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 11px;
+  font-size: 22px;
+  line-height: 1;
+}
+
+.room-heading-popover-info {
+  display: flex;
+  flex: 1;
   flex-direction: column;
   gap: 4px;
-  padding: 10px 12px 6px;
+  min-width: 0;
 }
 
-.room-heading-popover-label {
-  color: #8c8676;
+.room-heading-popover-name {
+  color: #ece7d9;
   font-family: var(--font-sans);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
 }
 
-.room-code-text {
+.room-heading-popover-code {
   font-family: var(--font-mono);
-  font-size: 14px;
-  color: #e7e2d4;
+  font-size: 13px;
+  color: #9a9484;
+  letter-spacing: 0.02em;
 }
 
 .room-chat-toggle {

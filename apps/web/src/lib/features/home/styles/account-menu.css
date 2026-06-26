@@ -166,13 +166,11 @@ html.is-desktop .topbar-download {
 
 .profile-trigger-name {
   max-width: 160px;
-  overflow: hidden;
+  min-width: 0;
   color: #e7e2d4;
   font-size: 13.5px;
   font-weight: 600;
   letter-spacing: -0.01em;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .profile-trigger-chevron {
@@ -212,13 +210,10 @@ html.is-desktop .topbar-download {
 
 .profile-popover-name {
   min-width: 0;
-  overflow: hidden;
   color: #ece7d9;
   font-size: 16px;
   font-weight: 700;
   letter-spacing: -0.01em;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 /* ---- quick inline rename (from «Изменить имя») ---- */

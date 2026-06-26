@@ -1,4 +1,5 @@
 <script lang="ts">
+  import '$lib/shared/styles/ellipsis.css';
   import Topbar from '$lib/shared/components/Topbar.svelte';
   import Popover from '$lib/shared/components/Popover.svelte';
   import PopoverDivider from '$lib/shared/components/PopoverDivider.svelte';
@@ -43,7 +44,7 @@
             onclick={toggle}
           >
             <span class="room-emoji-badge" id="roomEmojiBadge" aria-hidden="true" hidden></span>
-            <span id="roomTitle" class="room-heading-title">room</span>
+            <span id="roomTitle" class="room-heading-title ellipsis">room</span>
             <span class="room-heading-trigger-chevron" aria-hidden="true">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
             </span>
@@ -51,9 +52,12 @@
         {/snippet}
 
         {#snippet content({ close })}
-          <div class="room-heading-popover-meta">
-            <span class="room-heading-popover-label">Код комнаты</span>
-            <span class="room-code-text" id="roomCodeText"></span>
+          <div class="room-heading-popover-head">
+            <span class="room-heading-popover-badge" id="roomPopoverEmojiBadge" aria-hidden="true" hidden></span>
+            <div class="room-heading-popover-info">
+              <span id="roomPopoverTitle" class="room-heading-popover-name ellipsis">room</span>
+              <span class="room-heading-popover-code ellipsis" id="roomCodeText"></span>
+            </div>
           </div>
 
           <PopoverDivider />

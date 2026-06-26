@@ -2,6 +2,7 @@
   import type { AuthUser } from '$lib/api/auth';
   import { updateDisplayName } from '$lib/api/auth';
   import { setUser } from '$lib/features/auth/session.svelte';
+  import Ellipsis from '$lib/shared/components/Ellipsis.svelte';
   import Popover from '$lib/shared/components/Popover.svelte';
   import PopoverDivider from '$lib/shared/components/PopoverDivider.svelte';
   import PopoverMenuItem from '$lib/shared/components/PopoverMenuItem.svelte';
@@ -123,7 +124,9 @@
       onclick={toggle}
     >
       <span class="profile-avatar" style={avatarStyle} aria-hidden="true">{initials}</span>
-      <span class="profile-trigger-name" title={`@${user.login}`}>{label}</span>
+      <span class="profile-trigger-name">
+        <Ellipsis text={label} title={`@${user.login}`} />
+      </span>
       <span class="profile-trigger-chevron" aria-hidden="true">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
       </span>
@@ -159,7 +162,7 @@
     {:else}
       <div class="profile-popover-head">
         <span class="profile-popover-avatar" style={avatarStyle} aria-hidden="true">{initials}</span>
-        <div class="profile-popover-name" title={`@${user.login}`}>{label}</div>
+        <Ellipsis class="profile-popover-name" text={label} title={`@${user.login}`} />
       </div>
 
       <PopoverDivider />

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Ellipsis from '$lib/shared/components/Ellipsis.svelte';
   import Popover from '$lib/shared/components/Popover.svelte';
   import type { SelectOption } from '$lib/shared/components/select-types';
   import '$lib/shared/styles/select.css';
@@ -53,7 +54,9 @@
         aria-label={label || undefined}
         onclick={toggle}
       >
-        <span class="select-trigger-label">{selectedLabel}</span>
+        <span class="select-trigger-label">
+          <Ellipsis text={selectedLabel} title={selectedLabel} />
+        </span>
         <span class="select-trigger-chevron" aria-hidden="true">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
         </span>
@@ -70,7 +73,7 @@
           data-selected={option.value === value}
           onclick={() => choose(option.value, close)}
         >
-          {option.label}
+          <Ellipsis text={option.label} title={option.label} />
         </button>
       {/each}
     {/snippet}

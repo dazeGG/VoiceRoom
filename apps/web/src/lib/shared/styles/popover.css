@@ -116,6 +116,7 @@
   align-items: center;
   gap: 10px;
   width: 100%;
+  min-width: 0;
   padding: 10px 12px;
   border: none;
   border-radius: 10px;
