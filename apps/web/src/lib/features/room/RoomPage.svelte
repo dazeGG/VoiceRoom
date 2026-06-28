@@ -10,22 +10,32 @@
   import RoomStage from './components/RoomStage.svelte';
   import RoomTopbar from './components/RoomTopbar.svelte';
   import StartRoomScreen from './components/StartRoomScreen.svelte';
+  import { setRoomEmbedded } from './client/core/embed';
+
+  let { embeddedRoomId = '' } = $props<{
+    embeddedRoomId?: string;
+  }>();
 
   let roomRoot = $state<HTMLElement>();
+  const embedded = $derived(Boolean(embeddedRoomId));
 
   onMount(() => {
     let cleanup: (() => void) | undefined;
+    setRoomEmbedded(Boolean(embeddedRoomId));
 
     void import('./client/main').then(({ mountRoomClient }) => {
       if (!roomRoot) return;
-      cleanup = mountRoomClient(roomRoot);
+      cleanup = mountRoomClient(roomRoot, { embeddedRoomId });
     });
 
-    return () => cleanup?.();
+    return () => {
+      cleanup?.();
+      setRoomEmbedded(false);
+    };
   });
 </script>
 
-<div class="app-shell" bind:this={roomRoot}>
+<div class="app-shell" class:room-embedded-shell={embedded} bind:this={roomRoot}>
   <RoomTopbar />
   <StartRoomScreen />
   <RoomStage />

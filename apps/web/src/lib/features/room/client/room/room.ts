@@ -10,6 +10,7 @@ import { postState } from './presence';
 import { createRoomProof } from '../net/pow';
 import { errorMessage, getInitials, wait } from '../core/utils';
 import { extractRoomId } from '../core/session';
+import { isRoomEmbedded } from '../core/embed';
 import { getDisplayName, persistName, requestGuestNameForRoom, requireSavedName, updateNameStatuses } from '../ui/names';
 import {
   resetConnectionStatus,
@@ -494,6 +495,11 @@ export async function handleLeaveButtonClick(): Promise<void> {
     playPeerCue('leave');
     await wait(180);
     leaveRoom();
+  }
+
+  if (isRoomEmbedded()) {
+    window.dispatchEvent(new CustomEvent('voice-room:embedded-leave', { detail: { roomId: state.roomId } }));
+    return;
   }
 
   window.location.href = '/';

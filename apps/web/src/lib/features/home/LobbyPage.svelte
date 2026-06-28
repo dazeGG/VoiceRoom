@@ -4,16 +4,20 @@
   import { addRoomByCode, fetchOwnedRooms } from '$lib/api/auth';
   import { createRoom } from '$lib/api/rooms';
   import { extractRoomId } from '$lib/shared/utils/room';
-  import Topbar from '$lib/shared/components/Topbar.svelte';
-  import UserMenu from './components/UserMenu.svelte';
-  import TopbarDownload from './components/TopbarDownload.svelte';
   import SettingsModal from './components/SettingsModal.svelte';
-  import RoomCard from './components/RoomCard.svelte';
+  import RoomPage from '$lib/features/room/RoomPage.svelte';
   import CreateRoomDialog from './components/CreateRoomDialog.svelte';
-  import { pluralizeRooms } from './model/rooms';
+  import Sidebar from './components/lobby/Sidebar.svelte';
+  import HomeView from './components/lobby/HomeView.svelte';
+  import DmView from './components/lobby/DmView.svelte';
+  import RequestsView from './components/lobby/RequestsView.svelte';
+  import AddFriendView from './components/lobby/AddFriendView.svelte';
+  import RoomsHomeView from './components/lobby/RoomsHomeView.svelte';
+  import RoomPreviewView from './components/lobby/RoomPreviewView.svelte';
+  import { friendsState, initLobby } from './model/friends.svelte';
+  import '$lib/shared/styles/typography.css';
   import '$lib/shared/styles/dialog.css';
-  import './styles/lobby.css';
-  import './styles/account-menu.css';
+  import './styles/friends.css';
   import './styles/settings.css';
 
   let { user, loggingOut, onLogout, onToast } = $props<{
@@ -24,49 +28,89 @@
   }>();
 
   let rooms = $state<OwnedRoom[]>([]);
-  let loading = $state(true);
   let roomCode = $state('');
-  let joining = $state(false);
+  let creating = $state(false);
   let createDialogOpen = $state(false);
   let addDialogOpen = $state(false);
-  let creating = $state(false);
-  let adding = $state(false);
   let addRoomCode = $state('');
   let addError = $state('');
+  let adding = $state(false);
   let settingsOpen = $state(false);
   let settingsTab = $state<'profile' | 'sound'>('profile');
+  let selectedRoomId = $state<string | null>(null);
+  let embeddedRoomId = $state<string | null>(null);
 
-  const liveCount = $derived(rooms.filter((room) => room.peers > 0).length);
+  const selectedRoom = $derived(rooms.find((room) => room.roomId === selectedRoomId) ?? null);
 
   onMount(() => {
-    void refresh();
+    void refreshRooms();
+    const teardown = user ? initLobby(user.id) : () => {};
+    function restoreLobbyDocumentState(): void {
+      document.body.dataset.screen = 'start';
+      delete document.body.dataset.chatOpen;
+      delete document.body.dataset.screenView;
+      delete document.body.dataset.stripCollapsed;
+      document.title = 'Voice Room';
+    }
+
+    function closeEmbeddedRoom({ replaceUrl = true }: { replaceUrl?: boolean } = {}): void {
+      embeddedRoomId = null;
+      restoreLobbyDocumentState();
+      if (replaceUrl && selectedRoomId) {
+        history.replaceState(null, '', '/');
+      }
+    }
+
+    function onEmbeddedLeave(): void {
+      closeEmbeddedRoom();
+    }
+
+    function onPopState(): void {
+      const roomId = extractRoomId(window.location.pathname);
+      if (roomId) {
+        selectedRoomId = roomId;
+        embeddedRoomId = roomId;
+        friendsState.mode = 'rooms';
+        return;
+      }
+      if (embeddedRoomId) closeEmbeddedRoom({ replaceUrl: false });
+    }
+
+    window.addEventListener('voice-room:embedded-leave', onEmbeddedLeave);
+    window.addEventListener('popstate', onPopState);
+    return () => {
+      teardown();
+      window.removeEventListener('voice-room:embedded-leave', onEmbeddedLeave);
+      window.removeEventListener('popstate', onPopState);
+    };
   });
 
-  async function refresh(): Promise<void> {
-    loading = true;
+  async function refreshRooms(): Promise<void> {
     try {
       rooms = await fetchOwnedRooms();
     } catch (error) {
       rooms = [];
       onToast(error instanceof Error && error.message ? error.message : 'Не удалось загрузить комнаты');
-    } finally {
-      loading = false;
     }
   }
 
   function openRoom(roomId: string): void {
-    window.location.href = `/r/${encodeURIComponent(roomId)}`;
+    selectedRoomId = roomId;
+    embeddedRoomId = roomId;
+    history.pushState(null, '', `/r/${encodeURIComponent(roomId)}`);
   }
 
-  function handleJoin(event: Event): void {
-    event.preventDefault();
-    if (joining) return;
+  function previewRoom(roomId: string): void {
+    selectedRoomId = roomId;
+    friendsState.mode = 'rooms';
+  }
+
+  function handleJoin(): void {
     const roomId = extractRoomId(roomCode);
     if (!roomId) {
       onToast('Введите код комнаты');
       return;
     }
-    joining = true;
     openRoom(roomId);
   }
 
@@ -76,9 +120,8 @@
     try {
       const roomId = await createRoom(payload);
       if (payload.isStatic) {
-        // Persistent room: keep the user in the lobby and surface the new room.
         createDialogOpen = false;
-        await refresh();
+        await refreshRooms();
         onToast('Комната создана');
       } else {
         openRoom(roomId);
@@ -98,14 +141,13 @@
       addError = 'Введите код постоянной комнаты';
       return;
     }
-
     adding = true;
     addError = '';
     try {
       await addRoomByCode(roomId);
       addDialogOpen = false;
       addRoomCode = '';
-      await refresh();
+      await refreshRooms();
       onToast('Комната добавлена');
     } catch (error) {
       addError = error instanceof Error && error.message ? error.message : 'Не удалось добавить комнату';
@@ -124,122 +166,101 @@
     if (event.target === event.currentTarget) closeAddDialog();
   }
 
-  function onDialogKeydown(event: KeyboardEvent): void {
+  function onWindowKeydown(event: KeyboardEvent): void {
     if (addDialogOpen && event.key === 'Escape') closeAddDialog();
   }
 
-  function openSettings(tab: 'profile' | 'sound'): void {
-    settingsTab = tab;
+  function openSettings(): void {
+    settingsTab = 'profile';
     settingsOpen = true;
   }
 </script>
 
-<svelte:window onkeydown={onDialogKeydown} />
+<svelte:window onkeydown={onWindowKeydown} />
 
-<div class="app-shell">
-  <Topbar label="Мои комнаты Voice Room">
-    {#if user}
-      <div class="topbar-account">
-        <TopbarDownload />
-        <UserMenu {user} {loggingOut} {onLogout} onOpenSettings={openSettings} {onToast} />
-      </div>
-    {/if}
-  </Topbar>
+{#if user}
+  <div class="lobby-shell">
+    <Sidebar
+      {user}
+      {rooms}
+      bind:roomCode
+      selectedRoomId={selectedRoomId}
+      onOpenRoom={previewRoom}
+      onCreateRoom={() => (createDialogOpen = true)}
+      onJoinRoom={handleJoin}
+      onAddRoom={() => (addDialogOpen = true)}
+      onOpenSettings={openSettings}
+    />
 
-  <main class="lobby" aria-label="Мои комнаты">
-    <div class="lobby-actions">
-      <button class="lobby-create" type="button" onclick={() => (createDialogOpen = true)}>
-        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-        Создать комнату
-      </button>
+    <main class="lobby-main" aria-label="Главная Voice Room">
+      {#if embeddedRoomId}
+        {#key embeddedRoomId}
+          <RoomPage embeddedRoomId={embeddedRoomId} />
+        {/key}
+      {:else if selectedRoom}
+        <RoomPreviewView room={selectedRoom} onEnter={() => openRoom(selectedRoom.roomId)} onBack={() => (selectedRoomId = null)} />
+      {:else if friendsState.mode === 'rooms'}
+        <RoomsHomeView {rooms} onCreateRoom={() => (createDialogOpen = true)} onOpenRoom={previewRoom} />
+      {:else if friendsState.view === 'dm'}
+        <DmView selfId={user.id} />
+      {:else if friendsState.view === 'requests'}
+        <RequestsView {onToast} />
+      {:else if friendsState.view === 'add'}
+        <AddFriendView {user} {onToast} />
+      {:else}
+        <HomeView {user} {rooms} onOpenRoom={previewRoom} />
+      {/if}
+    </main>
+  </div>
 
-      <form class="lobby-search" onsubmit={handleJoin}>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.5" y2="16.5"></line></svg>
-        <input
-          class="lobby-search-input"
-          placeholder="Войти по коду — x7m2kq9p"
-          maxlength="120"
-          autocapitalize="off"
-          autocomplete="off"
-          spellcheck="false"
-          bind:value={roomCode}
-        />
-        <button class="lobby-search-btn" type="submit" disabled={joining}>Войти</button>
-      </form>
-    </div>
+  <CreateRoomDialog open={createDialogOpen} {creating} onClose={() => (createDialogOpen = false)} onCreate={handleCreate} />
+  <SettingsModal
+    open={settingsOpen}
+    bind:tab={settingsTab}
+    {user}
+    {loggingOut}
+    onClose={() => (settingsOpen = false)}
+    {onToast}
+    {onLogout}
+  />
 
-    <div class="lobby-section-head">
-      <span class="lobby-section-title">Мои комнаты</span>
-      <span class="lobby-section-meta">
-        {#if loading && rooms.length === 0}
-          Загружаем…
-        {:else}
-          {rooms.length} {pluralizeRooms(rooms.length)}{#if liveCount > 0} · {liveCount} в эфире{/if}
-        {/if}
-      </span>
-    </div>
-
-    <div class="lobby-grid">
-      {#each rooms as room (room.roomId)}
-        <RoomCard {room} onOpen={openRoom} />
-      {/each}
-
-      <button class="lobby-add" type="button" onclick={() => (addDialogOpen = true)}>
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-        <span>Добавить комнату</span>
-      </button>
-    </div>
-
-    {#if !loading && rooms.length === 0}
-      <p class="lobby-empty">
-        Пока нет комнат в списке. Создайте постоянную комнату или добавьте существующую по коду.
-      </p>
-    {/if}
-  </main>
-</div>
-
-<CreateRoomDialog open={createDialogOpen} {creating} onClose={() => (createDialogOpen = false)} onCreate={handleCreate} />
-
-<SettingsModal open={settingsOpen} bind:tab={settingsTab} {user} onClose={() => (settingsOpen = false)} onToast={onToast} />
-
-{#if addDialogOpen}
-  <div class="dialog-overlay" role="presentation" onclick={onDialogOverlayClick}>
-    <div class="dialog-card" role="dialog" aria-modal="true" aria-labelledby="addRoomTitle">
-      <div class="dialog-head">
-        <span class="dialog-title" id="addRoomTitle">Добавить комнату</span>
-        <button class="dialog-close" type="button" aria-label="Закрыть" onclick={closeAddDialog}>
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="6" y1="6" x2="18" y2="18"></line><line x1="18" y1="6" x2="6" y2="18"></line></svg>
-        </button>
-      </div>
-
-      <form class="dialog-body" onsubmit={handleAddRoom}>
-        <p class="dialog-note">Введите код уже созданной постоянной комнаты. Временные комнаты в список не добавляются.</p>
-        {#if addError}
-          <p class="dialog-error" role="alert">{addError}</p>
-        {/if}
-        <div class="dialog-field">
-          <div class="dialog-label">Код комнаты</div>
-          <input
-            class="dialog-input dialog-input--mono"
-            maxlength="120"
-            placeholder="x7m2kq9p"
-            autocapitalize="off"
-            autocomplete="off"
-            spellcheck="false"
-            bind:value={addRoomCode}
-          />
-        </div>
-
-        <div class="dialog-actions">
-          <button class="dialog-cancel" type="button" onclick={closeAddDialog}>Отмена</button>
-          <button class="dialog-submit" type="submit" disabled={adding}>
-            {#if adding}
-              <span class="home-spinner" aria-hidden="true"></span>
-            {/if}
-            Добавить
+  {#if addDialogOpen}
+    <div class="dialog-overlay" role="presentation" onclick={onDialogOverlayClick}>
+      <div class="dialog-card" role="dialog" aria-modal="true" aria-labelledby="addRoomTitle">
+        <div class="dialog-head">
+          <span class="dialog-title" id="addRoomTitle">Добавить комнату</span>
+          <button class="dialog-close" type="button" aria-label="Закрыть" onclick={closeAddDialog}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="6" y1="6" x2="18" y2="18"></line><line x1="18" y1="6" x2="6" y2="18"></line></svg>
           </button>
         </div>
-      </form>
+
+        <form class="dialog-body" onsubmit={handleAddRoom}>
+          <p class="dialog-note">Введите код уже созданной постоянной комнаты. Временные комнаты в список не добавляются.</p>
+          {#if addError}
+            <p class="dialog-error" role="alert">{addError}</p>
+          {/if}
+          <div class="dialog-field">
+            <div class="dialog-label">Код комнаты</div>
+            <input
+              class="dialog-input dialog-input--mono"
+              maxlength="120"
+              placeholder="x7m2kq9p"
+              autocapitalize="off"
+              autocomplete="off"
+              spellcheck="false"
+              bind:value={addRoomCode}
+            />
+          </div>
+
+          <div class="dialog-actions">
+            <button class="dialog-cancel" type="button" onclick={closeAddDialog}>Отмена</button>
+            <button class="dialog-submit" type="submit" disabled={adding}>
+              {#if adding}<span class="home-spinner" aria-hidden="true"></span>{/if}
+              Добавить
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
-  </div>
+  {/if}
 {/if}

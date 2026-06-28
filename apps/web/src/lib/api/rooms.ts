@@ -92,6 +92,26 @@ export async function deleteRoom(roomId: string): Promise<void> {
   await del(`/api/rooms/${encodeURIComponent(roomId)}`);
 }
 
+// A read-only view of a current room occupant (mirrors the server's publicPeer).
+export interface RoomPeer {
+  avatarColorKey: string;
+  id: string;
+  muted: boolean;
+  name: string;
+}
+
+// Snapshot of who is in a room right now, without joining it — powers the lobby
+// room preview.
+export async function fetchRoomPeers(roomId: string): Promise<RoomPeer[]> {
+  const response = await fetch(`/api/rooms/${encodeURIComponent(roomId)}/peers`, {
+    headers: { Accept: 'application/json' }
+  });
+  if (response.status === 404) return [];
+  if (!response.ok) throw new Error('Не удалось загрузить участников');
+  const payload = (await response.json()) as { peers?: RoomPeer[] };
+  return Array.isArray(payload.peers) ? payload.peers : [];
+}
+
 export async function fetchRoomStatus(roomId: string): Promise<RoomStatus | null> {
   const response = await fetch(`/api/rooms/${encodeURIComponent(roomId)}`, {
     headers: { Accept: 'application/json' }

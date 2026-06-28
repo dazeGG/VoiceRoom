@@ -3,6 +3,7 @@ import { roomDeviceUi } from '$lib/features/room/room-device-ui.svelte';
 import { elements, setElementsRoot } from './ui/dom';
 import { mountIcons } from './ui/icons';
 import { state } from './core/state';
+import { getStoredPeerSession } from './core/session';
 import { cleanDisplayName } from './core/utils';
 import { showToast } from './ui/toast';
 import { handleAudioUnlockGesture, unlockAudio } from './services/media-playback-service';
@@ -49,12 +50,35 @@ import { refreshLocalNetworkIndicator } from './ui/status';
 let mounted = false;
 let mountAbortController: AbortController | null = null;
 
-export function mountRoomClient(root: ParentNode = document): () => void {
+export function mountRoomClient(root: ParentNode = document, options: { embeddedRoomId?: string } = {}): () => void {
   if (mounted) return unmountRoomClient;
   mounted = true;
   setElementsRoot(root);
   mountAbortController = new AbortController();
   const listenerSignal = mountAbortController.signal;
+
+  if (options.embeddedRoomId) {
+    const peerSession = getStoredPeerSession(options.embeddedRoomId);
+    state.autoJoinStarted = false;
+    state.connecting = false;
+    state.joined = false;
+    state.eventSource?.close();
+    state.eventSource = null;
+    state.peers.clear();
+    state.participantViews.clear();
+    state.serverPeerIds.clear();
+    state.serverPeerSyncReady = false;
+    state.self = null;
+    state.roomName = '';
+    state.roomEmoji = '';
+    state.roomColorKey = '';
+    state.roomIconKey = '';
+    state.roomPresetKey = '';
+    state.roomId = options.embeddedRoomId;
+    state.roomRoute = true;
+    state.peerId = peerSession.peerId;
+    state.sessionToken = peerSession.sessionToken;
+  }
 
   mountIcons();
   mountIcons(elements.template.content);
@@ -121,6 +145,7 @@ export function mountRoomClient(root: ParentNode = document): () => void {
 }
 
 function unmountRoomClient(): void {
+  leaveRoom();
   mountAbortController?.abort();
   mountAbortController = null;
   resetGuestNameDialog();
