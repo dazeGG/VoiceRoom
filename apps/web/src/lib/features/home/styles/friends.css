@@ -803,6 +803,7 @@
   font-size: 14px;
   line-height: 1.45;
   word-break: break-word;
+  white-space: pre-wrap;
 }
 .lobby-dm-bubble--them {
   background: rgba(255, 255, 255, 0.05);

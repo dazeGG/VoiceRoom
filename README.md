@@ -157,6 +157,15 @@ SESSION_TTL_MS=2592000000
 AUTH_RATE_LIMIT=30
 AUTH_RATE_WINDOW_MS=60000
 
+# Друзья и личные сообщения. Отправка DM и заявок в друзья ограничена rate limit
+# на пользователя, а число одновременных realtime (SSE) подключений на аккаунт —
+# MAX_REALTIME_STREAMS_PER_USER.
+DM_RATE_LIMIT=30
+DM_RATE_WINDOW_MS=10000
+FRIEND_REQUEST_RATE_LIMIT=20
+FRIEND_REQUEST_RATE_WINDOW_MS=60000
+MAX_REALTIME_STREAMS_PER_USER=8
+
 # Для reverse proxy / systemd можно слушать Unix socket вместо TCP.
 # Если SOCKET_PATH пустой, API слушает HOST:PORT.
 HOST=127.0.0.1

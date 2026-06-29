@@ -64,6 +64,13 @@ const SESSION_COOKIE_NAME = 'vr_session';
 const SESSION_COOKIE_SECURE = readEnvBool('SESSION_COOKIE_SECURE', process.env.NODE_ENV === 'production');
 const AUTH_RATE_LIMIT = readEnvInt('AUTH_RATE_LIMIT', 30, 0);
 const AUTH_RATE_WINDOW_MS = readEnvInt('AUTH_RATE_WINDOW_MS', 60000, 1000);
+const DM_RATE_LIMIT = readEnvInt('DM_RATE_LIMIT', 30, 0);
+const DM_RATE_WINDOW_MS = readEnvInt('DM_RATE_WINDOW_MS', 10000, 1000);
+const FRIEND_REQUEST_RATE_LIMIT = readEnvInt('FRIEND_REQUEST_RATE_LIMIT', 20, 0);
+const FRIEND_REQUEST_RATE_WINDOW_MS = readEnvInt('FRIEND_REQUEST_RATE_WINDOW_MS', 60000, 1000);
+// Cap concurrent realtime (SSE) streams per user so a single account cannot
+// pin an unbounded number of keep-alive connections.
+const MAX_REALTIME_STREAMS_PER_USER = readEnvInt('MAX_REALTIME_STREAMS_PER_USER', 8, 1);
 // Desktop app downloads are served from the latest GitHub release of this repo.
 // Metadata is cached server-side so visitors never hit GitHub's per-IP rate limit.
 const DESKTOP_RELEASE_REPO = (process.env.DESKTOP_RELEASE_REPO || 'dazeGG/VoiceRoomDesktop').trim();
@@ -163,6 +170,14 @@ const roomChatLimiter = createRateLimiter({
 const authLimiter = createRateLimiter({
   limit: AUTH_RATE_LIMIT,
   windowMs: AUTH_RATE_WINDOW_MS
+});
+const dmLimiter = createRateLimiter({
+  limit: DM_RATE_LIMIT,
+  windowMs: DM_RATE_WINDOW_MS
+});
+const friendRequestLimiter = createRateLimiter({
+  limit: FRIEND_REQUEST_RATE_LIMIT,
+  windowMs: FRIEND_REQUEST_RATE_WINDOW_MS
 });
 
 function getLiveKitConnectSources() {
@@ -1432,9 +1447,14 @@ async function handleRoomChatPost(req, res, roomId) {
 
 // --- Friends, requests, and direct messages -----------------------------
 
+// Normalize a DM body without destroying multi-line formatting: collapse runs
+// of horizontal whitespace, trim spaces around newlines, cap consecutive blank
+// lines, then trim and length-limit.
 function cleanDmText(value) {
   return String(value || '')
-    .replace(/\s+/g, ' ')
+    .replace(/[^\S\n]+/g, ' ')
+    .replace(/ *\n */g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
     .trim()
     .slice(0, 2000);
 }
@@ -1521,6 +1541,17 @@ async function handleFriendRequestsList(req, res) {
 async function handleSendFriendRequest(req, res) {
   const user = await requireSessionUser(req, res);
   if (!user) return;
+
+  const rate = friendRequestLimiter.check(user.id);
+  if (!rate.allowed) {
+    sendJson(
+      res,
+      429,
+      { ok: false, error: 'Слишком много заявок, попробуйте позже', retryAfterSeconds: rate.retryAfterSeconds },
+      { 'Retry-After': String(rate.retryAfterSeconds) }
+    );
+    return;
+  }
 
   const body = await readJsonBody(req);
   const login = normalizeLogin(body.login || body.handle || '');
@@ -1656,6 +1687,17 @@ async function handleSendDm(req, res, peerId) {
     return;
   }
 
+  const rate = dmLimiter.check(user.id);
+  if (!rate.allowed) {
+    sendJson(
+      res,
+      429,
+      { ok: false, error: 'Слишком много сообщений, попробуйте позже', retryAfterSeconds: rate.retryAfterSeconds },
+      { 'Retry-After': String(rate.retryAfterSeconds) }
+    );
+    return;
+  }
+
   if (!(await getFriendStore().areFriends(user.id, id))) {
     sendJson(res, 403, { ok: false, error: 'Вы не друзья' });
     return;
@@ -1700,6 +1742,19 @@ async function handleRealtime(req, res) {
   }
   const userId = session.user.id;
 
+  // Reject before upgrading to SSE so we can answer with a clean JSON 429
+  // instead of a half-open event stream.
+  const existing = presenceUsers.get(userId);
+  if (existing && existing.size >= MAX_REALTIME_STREAMS_PER_USER) {
+    sendJson(
+      res,
+      429,
+      { ok: false, error: 'Слишком много активных подключений' },
+      { 'Retry-After': '5' }
+    );
+    return;
+  }
+
   res.writeHead(200, {
     ...baseHeaders(),
     'Cache-Control': 'no-cache, no-transform',
@@ -1718,8 +1773,9 @@ async function handleRealtime(req, res) {
   }
   set.add(res);
 
-  // Snapshot friends now so presence-offline on disconnect notifies the same
-  // set we announced presence-online to.
+  // Snapshot friends now to announce presence-online and to seed the `ready`
+  // frame. The offline fan-out on disconnect re-queries instead of reusing this
+  // snapshot so friends added mid-session still receive the offline event.
   let friendIds = [];
   try {
     friendIds = await getFriendStore().getFriendIds(userId);
@@ -1733,6 +1789,12 @@ async function handleRealtime(req, res) {
   }
   sendSse(res, { type: 'ready', onlineFriendIds: friendIds.filter(isUserOnline) });
 
+  function announceOffline(ids) {
+    for (const friendId of ids) {
+      broadcastToUser(friendId, { type: 'presence', userId, online: false });
+    }
+  }
+
   let closed = false;
   function cleanup() {
     if (closed) return;
@@ -1743,9 +1805,12 @@ async function handleRealtime(req, res) {
     current.delete(res);
     if (current.size === 0) {
       presenceUsers.delete(userId);
-      for (const friendId of friendIds) {
-        broadcastToUser(friendId, { type: 'presence', userId, online: false });
-      }
+      // Re-query so a friend added during this session is still notified; fall
+      // back to the connect-time snapshot if the lookup fails.
+      getFriendStore()
+        .getFriendIds(userId)
+        .then((ids) => announceOffline(ids))
+        .catch(() => announceOffline(friendIds));
     }
   }
 
