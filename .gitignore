@@ -5,7 +5,6 @@ node_modules/
 # Local environment and secrets
 .env
 .env.*
-!.env.example
 
 # Logs and runtime output
 *.log

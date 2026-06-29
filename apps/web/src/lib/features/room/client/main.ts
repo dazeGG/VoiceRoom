@@ -1,8 +1,10 @@
 import { GATE_THRESHOLD_MIN_DB } from './core/config';
 import { roomDeviceUi } from '$lib/features/room/room-device-ui.svelte';
+import { registerActiveVoiceLeave } from '$lib/features/room/voice-session.svelte';
 import { elements, setElementsRoot } from './ui/dom';
 import { mountIcons } from './ui/icons';
 import { state } from './core/state';
+import { getStoredPeerSession } from './core/session';
 import { cleanDisplayName } from './core/utils';
 import { showToast } from './ui/toast';
 import { handleAudioUnlockGesture, unlockAudio } from './services/media-playback-service';
@@ -25,8 +27,10 @@ import {
   createRoomFromStart,
   handleLeaveButtonClick,
   handleRoomCodeKeydown,
+  joinRoom,
   joinRoomByCode,
   leaveRoom,
+  showRoomEntryFailure,
   showRoomNotFound,
   showRoomRoute,
   showStartScreen
@@ -48,13 +52,38 @@ import { refreshLocalNetworkIndicator } from './ui/status';
 
 let mounted = false;
 let mountAbortController: AbortController | null = null;
+let activeVoiceLeaveTeardown: (() => void) | null = null;
 
-export function mountRoomClient(root: ParentNode = document): () => void {
+export function mountRoomClient(root: ParentNode = document, options: { roomId?: string; embeddedRoomId?: string; autoJoin?: boolean } = {}): () => void {
   if (mounted) return unmountRoomClient;
   mounted = true;
   setElementsRoot(root);
   mountAbortController = new AbortController();
   const listenerSignal = mountAbortController.signal;
+  activeVoiceLeaveTeardown = registerActiveVoiceLeave(leaveRoom);
+
+  const mountedRoomId = options.roomId || options.embeddedRoomId || '';
+  if (mountedRoomId) {
+    const peerSession = getStoredPeerSession(mountedRoomId);
+    state.connecting = false;
+    state.joined = false;
+    state.eventSource?.close();
+    state.eventSource = null;
+    state.peers.clear();
+    state.participantViews.clear();
+    state.serverPeerIds.clear();
+    state.serverPeerSyncReady = false;
+    state.self = null;
+    state.roomName = '';
+    state.roomEmoji = '';
+    state.roomColorKey = '';
+    state.roomIconKey = '';
+    state.roomPresetKey = '';
+    state.roomId = mountedRoomId;
+    state.roomRoute = true;
+    state.peerId = peerSession.peerId;
+    state.sessionToken = peerSession.sessionToken;
+  }
 
   mountIcons();
   mountIcons(elements.template.content);
@@ -105,14 +134,24 @@ export function mountRoomClient(root: ParentNode = document): () => void {
   refreshStageStripControls();
   refreshLocalNetworkIndicator();
 
+  function runRoomRoute(): void {
+    showRoomRoute()
+      .then((ready) => {
+        if (ready && options.autoJoin) return joinRoom();
+      })
+      .catch((error) => {
+        console.error(error);
+        showRoomEntryFailure();
+        showToast('Не удалось проверить комнату');
+      });
+  }
+
+  elements.entryRetryButton.addEventListener('click', runRoomRoute, { signal: listenerSignal });
+
   if (state.roomRoute && !state.roomId) {
     showRoomNotFound();
   } else if (state.roomId) {
-    showRoomRoute().catch((error) => {
-      console.error(error);
-      showRoomNotFound();
-      showToast('Не удалось проверить комнату');
-    });
+    runRoomRoute();
   } else {
     showStartScreen();
   }
@@ -121,6 +160,9 @@ export function mountRoomClient(root: ParentNode = document): () => void {
 }
 
 function unmountRoomClient(): void {
+  leaveRoom();
+  activeVoiceLeaveTeardown?.();
+  activeVoiceLeaveTeardown = null;
   mountAbortController?.abort();
   mountAbortController = null;
   resetGuestNameDialog();

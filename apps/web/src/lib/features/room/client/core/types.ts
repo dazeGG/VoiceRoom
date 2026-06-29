@@ -108,7 +108,6 @@ export interface ScreenSourceRequest {
 }
 
 export interface RoomSessionState {
-  autoJoinStarted: boolean;
   joined: boolean;
   peerId: string;
   roomId: string;

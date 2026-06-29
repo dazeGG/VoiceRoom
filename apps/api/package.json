@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
-    "check": "node --check src/server.js && node --check src/lib/config.js && node --check src/lib/db.js && node --check src/lib/migrate.js && node --check src/lib/password.js && node --check src/lib/room-store.js && node --check src/lib/user-store.js && node --check src/scripts/migrate.js && node --check src/migrations/*.js && node --check test/db-harness.js && node --check test/require-test-database-url.js",
+    "check": "node --check src/server.js && node --check src/lib/config.js && node --check src/lib/db.js && node --check src/lib/migrate.js && node --check src/lib/password.js && node --check src/lib/room-store.js && node --check src/lib/user-store.js && node --check src/lib/friend-store.js && node --check src/scripts/migrate.js && node --check src/migrations/*.js && node --check test/db-harness.js && node --check test/require-test-database-url.js",
     "test": "node --test test/*.test.js",
     "db:migrate": "node src/scripts/migrate.js up",
     "db:rollback": "node src/scripts/migrate.js down",

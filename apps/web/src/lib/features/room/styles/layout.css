@@ -224,6 +224,20 @@ body[data-screen="room"] .status-pill {
   min-width: 0;
 }
 
+.room-embedded-shell {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  padding: 16px;
+  gap: 14px;
+  background: transparent;
+}
+
+.room-embedded-shell .topbar {
+  width: 100%;
+  margin-inline: 0;
+}
+
 @media (min-width: 901px) {
   body[data-chat-open="true"] .room-layout {
     padding-right: var(--chat-rail-width);

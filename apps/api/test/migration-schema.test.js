@@ -7,6 +7,7 @@ const assert = require('node:assert/strict');
 const migration = require('../src/migrations/20260614144500_create_rooms_and_room_messages');
 const membershipMigration = require('../src/migrations/20260615140000_create_room_memberships_and_bookmarks');
 const visualIdentityMigration = require('../src/migrations/20260615150000_add_visual_identity_keys');
+const friendsMigration = require('../src/migrations/20260627120000_create_friends_and_direct_messages');
 
 function createRecorder() {
   const calls = [];
@@ -200,6 +201,53 @@ test('visual identity migration constrains keys and backfills legacy users and r
   assert.deepEqual(indexes.get('room_peer_identities_room_peer_unique_idx').columns, ['room_id', 'peer_id']);
   assert.equal(indexes.get('room_peer_identities_room_peer_unique_idx').options.unique, true);
   assert.deepEqual(indexes.get('room_peer_identities_room_seen_idx').columns, ['room_id', 'last_seen_at']);
+});
+
+test('friends migration captures friend requests, friendships, and direct messages', () => {
+  const pgm = createRecorder();
+  friendsMigration.up(pgm);
+
+  const requests = pgm.calls.find((call) => call.type === 'createTable' && call.name === 'friend_requests');
+  const friendships = pgm.calls.find((call) => call.type === 'createTable' && call.name === 'friendships');
+  const messages = pgm.calls.find((call) => call.type === 'createTable' && call.name === 'direct_messages');
+
+  assert.ok(requests, 'friend_requests table is created');
+  assert.ok(friendships, 'friendships table is created');
+  assert.ok(messages, 'direct_messages table is created');
+
+  for (const column of ['id', 'requester_id', 'addressee_id', 'status', 'created_at', 'responded_at']) {
+    assert.ok(requests.columns[column], `friend_requests.${column} exists`);
+  }
+  for (const column of ['id', 'user_a_id', 'user_b_id', 'created_at']) {
+    assert.ok(friendships.columns[column], `friendships.${column} exists`);
+  }
+  for (const column of ['id', 'sender_id', 'recipient_id', 'body', 'created_at', 'read_at']) {
+    assert.ok(messages.columns[column], `direct_messages.${column} exists`);
+  }
+
+  const constraints = new Map(
+    pgm.calls.filter((call) => call.type === 'addConstraint').map((call) => [call.name, call])
+  );
+  assert.match(constraints.get('friend_requests_status_check').options.check, /pending/);
+  assert.match(constraints.get('friendships_ordered_check').options.check, /user_a_id < user_b_id/);
+
+  const indexes = new Map(
+    pgm.calls.filter((call) => call.type === 'createIndex').map((call) => [call.options.name, call])
+  );
+  // Only one pending request per ordered pair.
+  assert.equal(indexes.get('friend_requests_pending_unique_idx').options.unique, true);
+  assert.match(indexes.get('friend_requests_pending_unique_idx').options.where, /pending/);
+  assert.equal(indexes.get('friendships_pair_unique_idx').options.unique, true);
+});
+
+test('friends migration down drops messages, friendships, then requests', () => {
+  const pgm = createRecorder();
+  friendsMigration.down(pgm);
+
+  assert.deepEqual(
+    pgm.calls.filter((call) => call.type === 'dropTable').map((call) => call.name),
+    ['direct_messages', 'friendships', 'friend_requests']
+  );
 });
 
 test('visual identity migration down removes peer identities before visual columns', () => {
