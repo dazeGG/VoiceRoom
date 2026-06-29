@@ -57,7 +57,8 @@ packages/
 Самый простой dev-режим теперь Docker-first: root `npm run dev` поднимает PostgreSQL, API с `node --watch`, Vite dev server и LiveKit через `docker-compose.dev.yml`:
 
 ```bash
-# Создайте локальный .env вручную по разделу "Environment и секреты", затем:
+# Работает из коробки: все dev-значения зашиты дефолтами в docker-compose.dev.yml,
+# поэтому .env для dev compose не нужен. Создавайте его только чтобы что-то переопределить.
 npm run dev
 ```
 
@@ -113,7 +114,8 @@ GitHub-аналог GitLab CI/CD variables находится здесь:
 | --- | --- | --- |
 | `POSTGRES_PASSWORD` | docker compose / production | Пароль PostgreSQL. |
 | `DATABASE_URL` | API host-only / non-compose deploy | Полная PostgreSQL URL. В compose обычно собирается из `POSTGRES_*`. |
-| `TEST_DATABASE_URL` | CI/API tests | Admin-capable PostgreSQL URL для test harness. |
+| `TEST_DATABASE_URL` | Локальные/внешние API tests | Admin-capable PostgreSQL URL для test harness. В CI **не нужен**: workflow поднимает эфемерный Postgres service и задаёт URL сам. |
+| `SSH_HOST` / `SSH_USER` / `SSH_KEY` / `SSH_PORT` | CD (deploy job) | Доступ к серверу для SSH-деплоя. `SSH_PORT` опционален (по умолчанию `22`). |
 | `LIVEKIT_API_KEY` | API / LiveKit | Ключ LiveKit. |
 | `LIVEKIT_API_SECRET` | API / LiveKit | Секрет LiveKit. Сгенерировать случайным значением. |
 | `GITHUB_TOKEN` | API desktop release endpoint, optional | Нужен только если хочется повысить лимит GitHub API. |
@@ -158,23 +160,22 @@ GitHub-аналог GitLab CI/CD variables находится здесь:
 | `SOCKET_PATH` | empty | Unix socket вместо TCP, если нужен. |
 | `DESKTOP_RELEASE_REPO` | `dazeGG/VoiceRoomDesktop` | Repo для latest desktop release. |
 | `DESKTOP_RELEASE_CACHE_MS` | `600000` | Cache TTL для desktop release metadata. |
+| `DEPLOY_PATH` | `/srv/voiceroom` | Путь к git-клону репозитория на сервере для CD (deploy job). |
 
-### Минимальный local `.env` для dev compose
+### Переопределение dev-значений (опционально)
 
-Создайте файл `.env` локально, не коммитьте его:
+Для dev compose `.env` **не требуется** — `docker-compose.dev.yml` задаёт все нужные значения дефолтами (`devkey`/`devsecret` для LiveKit, локальный PostgreSQL, POW и create rate limit выключены). Сервис LiveKit получает `LIVEKIT_KEYS` из тех же переменных, что и API, поэтому ключи всегда совпадают и голос работает из коробки.
+
+Файл `.env` нужен только чтобы что-то переопределить (например, занятые порты или внешний LiveKit). Создайте его локально и не коммитьте:
 
 ```dotenv
-DOMAIN=localhost
-LIVEKIT_DOMAIN=localhost
-LIVEKIT_URL=ws://localhost:7880
-LIVEKIT_PUBLIC_URL=ws://localhost:7880
+# Любая из этих строк опциональна — задавайте только то, что меняете.
 LIVEKIT_API_KEY=devkey
-LIVEKIT_API_SECRET=devsecretdevsecretdevsecret
-POSTGRES_DB=voice_room
-POSTGRES_USER=voice_room
+LIVEKIT_API_SECRET=devsecret
 POSTGRES_PASSWORD=<local-random-password>
-TRUST_PROXY=false
-ROOM_CREATE_POW_DIFFICULTY=0
+POSTGRES_PORT=5432
+WEB_PORT=5180
+API_PORT=3000
 ```
 
 Для host-only API добавьте `DATABASE_URL`, потому что вне compose она не собирается автоматически:
@@ -197,12 +198,32 @@ LIVEKIT_API_SECRET
 
 `DATABASE_URL` в compose соберётся автоматически из `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` и service name `postgres`. Если деплой не через compose — задайте `DATABASE_URL` явно как secret.
 
-### Как настроить в GitHub Actions
+### CI/CD (GitHub Actions)
 
-- `TEST_DATABASE_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, `POSTGRES_PASSWORD`, `DATABASE_URL` → **Secrets**.
-- Домены, лимиты, TTL и rate limits → **Variables**.
-- Для protected production включите Environment protection rules и required reviewers.
-- Не печатайте secrets в workflow logs; передавайте их через `env:` только в конкретные jobs/steps, где они нужны.
+Пайплайн описан в `.github/workflows/ci.yml` и триггерится на pull request в `main` и push в `main`:
+
+- **check** — `npm ci`, `npm run check` (shared+api+web: `node --check`, `svelte-kit sync`, `tsc --noEmit`), `npm run build` (Vite).
+- **test** — `npm test` против эфемерного PostgreSQL service-контейнера. `TEST_DATABASE_URL` задаётся прямо в workflow одноразовым значением — секрет для этого **не нужен** (test harness создаёт/удаляет временную БД на каждый тест).
+- **deploy** — только на push в `main` и только после зелёных `check`+`test`. По SSH делает `git reset --hard origin/main` и `docker compose up -d --build` в каталоге деплоя. Миграции применяются API на bootstrap, отдельного шага нет.
+
+**Secrets для деплоя** (Settings → Secrets and variables → Actions → Secrets):
+
+| Name | Назначение |
+| --- | --- |
+| `SSH_HOST` | Хост сервера. |
+| `SSH_USER` | SSH-пользователь с доступом к docker compose. |
+| `SSH_KEY` | Приватный SSH-ключ (PEM). Публичный — в `authorized_keys` сервера. |
+| `SSH_PORT` | Опционально, по умолчанию `22`. |
+
+**Variables для деплоя**: `DEPLOY_PATH` — путь к клону репозитория на сервере (по умолчанию `/srv/voiceroom`).
+
+На сервере должен быть git-клон репозитория в `DEPLOY_PATH` со своим production `.env` (как минимум `DOMAIN`, `POSTGRES_PASSWORD`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`) — деплой пересобирает стек из исходников, app-секреты живут на сервере, а не в Actions.
+
+Прочие рекомендации:
+
+- Для protected production включите Environment protection rules и required reviewers; в Settings → Branches сделайте `check` и `test` обязательными проверками для merge в `main`.
+- Не печатайте secrets в workflow logs; передавайте их через `with:`/`env:` только в нужные jobs/steps.
+- Для supply-chain harden можно запинить `appleboy/ssh-action` на commit SHA вместо тега `v1.2.5`.
 
 Миграции:
 
