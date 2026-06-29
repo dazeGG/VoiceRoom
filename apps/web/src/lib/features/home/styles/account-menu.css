@@ -17,7 +17,9 @@
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.04);
-  overflow: hidden;
+  /* Visible overflow: the custom Select panel is absolutely positioned inside
+     this pill; hidden clipped the listbox (native <select> drew OS UI outside). */
+  overflow: visible;
 }
 
 /* Inside the Electron shell the preload tags <html> with .is-desktop before
@@ -63,6 +65,35 @@ html.is-desktop .topbar-download {
   align-items: center;
 }
 
+.topbar-download-platform .select-root {
+  width: auto;
+}
+
+/* Match the old native select + absolute chevron at right: 11px. */
+.topbar-download-platform .select-trigger--compact {
+  position: relative;
+  justify-content: flex-start;
+  gap: 0;
+}
+
+.topbar-download-platform .select-trigger--compact .select-trigger-chevron {
+  position: absolute;
+  right: 11px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #8d877a;
+}
+
+.topbar-download-platform .select-trigger--compact[aria-expanded='true'] .select-trigger-chevron {
+  transform: translateY(-50%) rotate(180deg);
+}
+
+.topbar-download-platform .select-panel {
+  right: 0;
+  left: auto;
+  min-width: max(100%, 168px);
+}
+
 .topbar-download-select {
   -webkit-appearance: none;
   -moz-appearance: none;
@@ -99,10 +130,6 @@ html.is-desktop .topbar-download {
 }
 
 /* ---- profile trigger (screens 01 / 02) ---- */
-.profile-menu {
-  position: relative;
-  flex: none;
-}
 
 .profile-trigger {
   display: flex;
@@ -139,13 +166,11 @@ html.is-desktop .topbar-download {
 
 .profile-trigger-name {
   max-width: 160px;
-  overflow: hidden;
+  min-width: 0;
   color: #e7e2d4;
   font-size: 13.5px;
   font-weight: 600;
   letter-spacing: -0.01em;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .profile-trigger-chevron {
@@ -158,18 +183,9 @@ html.is-desktop .topbar-download {
   transform: rotate(180deg);
 }
 
-/* ---- account popover (screen 02) ---- */
+/* ---- account popover (screen 02) — panel chrome from shared popover.css ---- */
 .profile-popover {
-  position: absolute;
-  top: calc(100% + 10px);
-  right: 0;
   width: 276px;
-  padding: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 18px;
-  background: #16140f;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55), 0 2px 0 rgba(255, 255, 255, 0.04) inset;
-  z-index: 50;
 }
 
 .profile-popover-head {
@@ -194,79 +210,10 @@ html.is-desktop .topbar-download {
 
 .profile-popover-name {
   min-width: 0;
-  overflow: hidden;
   color: #ece7d9;
   font-size: 16px;
   font-weight: 700;
   letter-spacing: -0.01em;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.profile-menu-divider {
-  height: 1px;
-  margin: 2px 8px 6px;
-  background: rgba(255, 255, 255, 0.07);
-}
-
-.profile-menu-divider--tight {
-  margin: 6px 8px;
-}
-
-.profile-menu-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  padding: 11px 12px;
-  border: none;
-  border-radius: 11px;
-  background: transparent;
-  font-family: var(--font-sans);
-  text-align: left;
-  cursor: pointer;
-  transition: background 0.14s ease;
-}
-
-.profile-menu-item:hover {
-  background: rgba(255, 255, 255, 0.05);
-}
-
-.profile-menu-item:disabled {
-  cursor: default;
-  opacity: 0.6;
-}
-
-.profile-menu-item-icon {
-  flex: none;
-  display: inline-flex;
-  color: #b8b2a2;
-}
-
-.profile-menu-item-label {
-  flex: 1;
-  color: #e7e2d4;
-  font-size: 14px;
-  font-weight: 500;
-}
-
-.profile-menu-item-chevron {
-  flex: none;
-  display: inline-flex;
-  color: #5a5547;
-}
-
-.profile-menu-item--danger:hover {
-  background: rgba(214, 118, 90, 0.12);
-}
-
-.profile-menu-item--danger .profile-menu-item-icon {
-  color: #d97a5c;
-}
-
-.profile-menu-item--danger .profile-menu-item-label {
-  color: #e9a68f;
-  font-weight: 600;
 }
 
 /* ---- quick inline rename (from «Изменить имя») ---- */

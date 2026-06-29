@@ -1,4 +1,4 @@
-import { fetchJson, postJson } from './http';
+import { del, fetchJson, postJson, putJson } from './http';
 import { createRoomProof } from './pow';
 
 export interface CreateRoomOptions {
@@ -6,6 +6,28 @@ export interface CreateRoomOptions {
   name?: string;
   emoji?: string;
   roomPresetKey?: string;
+}
+
+export interface UpdateRoomOptions {
+  name: string;
+  roomPresetKey: string;
+  emoji?: string;
+}
+
+// Mirrors the server's publicLobbyRoom() shape (server.js) — the same body the
+// PUT response and the room-updated SSE broadcast both carry.
+export interface RoomSummary {
+  createdAt: number;
+  emoji: string;
+  roomColorKey: string;
+  roomIconKey: string;
+  roomPresetKey: string;
+  emptySince: number | null;
+  isStatic: boolean;
+  name: string;
+  peers: number;
+  relationship: string;
+  roomId: string;
 }
 
 export interface RoomStatus {
@@ -55,6 +77,39 @@ export async function createRoom(options: CreateRoomOptions = {}): Promise<strin
     proof
   });
   return room.roomId;
+}
+
+export async function updateRoom(roomId: string, options: UpdateRoomOptions): Promise<RoomSummary> {
+  const payload = await putJson<{ room: RoomSummary }>(`/api/rooms/${encodeURIComponent(roomId)}`, {
+    name: options.name,
+    roomPresetKey: options.roomPresetKey,
+    emoji: options.emoji ?? ''
+  });
+  return payload.room;
+}
+
+export async function deleteRoom(roomId: string): Promise<void> {
+  await del(`/api/rooms/${encodeURIComponent(roomId)}`);
+}
+
+// A read-only view of a current room occupant (mirrors the server's publicPeer).
+export interface RoomPeer {
+  avatarColorKey: string;
+  id: string;
+  muted: boolean;
+  name: string;
+}
+
+// Snapshot of who is in a room right now, without joining it — powers the lobby
+// room preview.
+export async function fetchRoomPeers(roomId: string): Promise<RoomPeer[]> {
+  const response = await fetch(`/api/rooms/${encodeURIComponent(roomId)}/peers`, {
+    headers: { Accept: 'application/json' }
+  });
+  if (response.status === 404) return [];
+  if (!response.ok) throw new Error('Не удалось загрузить участников');
+  const payload = (await response.json()) as { peers?: RoomPeer[] };
+  return Array.isArray(payload.peers) ? payload.peers : [];
 }
 
 export async function fetchRoomStatus(roomId: string): Promise<RoomStatus | null> {

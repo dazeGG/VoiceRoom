@@ -20,7 +20,6 @@ export function createInitialRoomState(): AppState {
   return {
     audioContext: null,
     audioUnlockPending: false,
-    autoJoinStarted: false,
     connecting: false,
     eventSource: null,
     gateThresholdDb: getStoredGateThresholdDb(),

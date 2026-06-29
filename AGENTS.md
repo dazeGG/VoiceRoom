@@ -14,6 +14,7 @@ Role prompts under `prompts/*.md` are narrower execution surfaces. They must fol
 When OMX is installed, load the installed prompt/skill/agent surfaces from `./.codex/prompts`, `./.codex/skills`, and `./.codex/agents` (or the project-local `./.codex/...` equivalents when project scope is active).
 
 <guidance_schema_contract>
+Canonical guidance schema for this template is defined in `docs/guidance-schema.md`.
 Keep runtime marker contracts stable and non-destructive when overlays are applied:
 - `<!-- OMX:RUNTIME:START --> ... <!-- OMX:RUNTIME:END -->`
 - `<!-- OMX:TEAM:WORKER:START --> ... <!-- OMX:TEAM:WORKER:END -->`
@@ -46,19 +47,19 @@ Keep runtime marker contracts stable and non-destructive when overlays are appli
 <!-- OMX:GUIDANCE:OPERATING:END -->
 </operating_principles>
 
-## Repository Git Flow
-- Follow `docs/GIT_FLOW.md` for branch strategy and PR targets.
-- Default integration target is `develop`; feature branches must branch from `develop` and open PRs back into `develop`.
-- Keep `main` stable/release-only; do not commit feature work directly to `main`.
-- Do not commit local screenshots/debug artifacts such as `img.png` or `img_*.png` unless explicitly requested.
-- Create normal ready-for-review PRs by default; use draft PRs only when explicitly requested.
-
 ## Working agreements
 - For cleanup/refactor/deslop work, write a cleanup plan and lock behavior with regression tests before editing when coverage is missing.
 - Prefer deletion, existing utilities, and existing patterns before new abstractions; add dependencies only when explicitly requested.
 - Keep diffs small, reviewable, and reversible.
+- Use [Conventional Commits](https://www.conventionalcommits.org/) for **every** commit message in this repo.
+  - Format: `<type>(<scope>): <subject>` — imperative mood, lowercase subject, no trailing period.
+  - Common types: `feat`, `fix`, `refactor`, `test`, `chore`, `docs`, `style`, `perf`, `ci`.
+  - Scope: affected area (`web`, `api`, `shared`, …); omit only when truly repo-wide.
+  - Body (optional): explain *why* when the subject alone is not enough; reference issues/PRs when relevant.
+  - Breaking changes: append `!` after type/scope (`feat(api)!: …`) and describe migration in the body/footer.
+  - Split unrelated changes into separate commits; one logical change per commit.
+- Merge PRs into `develop` with squash merge and delete the source branch after a successful merge.
 - Verify with lint, typecheck, tests, and static analysis after changes; final reports include changed files, simplifications, and remaining risks.
-- Use Conventional Commits for all commits by default.
 
 
 <delegation_rules>

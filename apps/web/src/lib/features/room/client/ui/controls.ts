@@ -1,3 +1,4 @@
+import { roomDeviceUi } from '$lib/features/room/room-device-ui.svelte';
 import { elements } from './dom';
 import { state } from '../core/state';
 import { postState } from '../room/presence';
@@ -95,7 +96,7 @@ export function refreshOutputControls(): void {
   elements.outputButton.setAttribute('aria-label', label);
   elements.outputButton.setAttribute('aria-pressed', String(state.outputMuted));
   elements.outputButton.dataset.state = state.outputMuted ? 'muted' : 'live';
-  elements.outputDeviceSelect.disabled = !supportsAudioOutputSelection();
+  roomDeviceUi.outputDisabled = !supportsAudioOutputSelection();
 }
 
 export function refreshCallControls(): void {

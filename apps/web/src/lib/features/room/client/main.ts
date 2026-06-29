@@ -1,7 +1,10 @@
 import { GATE_THRESHOLD_MIN_DB } from './core/config';
+import { roomDeviceUi } from '$lib/features/room/room-device-ui.svelte';
+import { registerActiveVoiceLeave } from '$lib/features/room/voice-session.svelte';
 import { elements, setElementsRoot } from './ui/dom';
 import { mountIcons } from './ui/icons';
 import { state } from './core/state';
+import { getStoredPeerSession } from './core/session';
 import { cleanDisplayName } from './core/utils';
 import { showToast } from './ui/toast';
 import { handleAudioUnlockGesture, unlockAudio } from './services/media-playback-service';
@@ -14,9 +17,6 @@ import {
   refreshDevices,
   refreshGateThresholdValue,
   refreshMicrophoneLevelMeter,
-  switchMicrophone,
-  switchNoiseMode,
-  switchOutputDevice,
   toggleDevicePopover,
   toggleOutputPopover,
   updateGateThresholdFromSlider
@@ -24,13 +24,13 @@ import {
 import { handleMicButtonClick, refreshOutputControls, toggleOutputMute } from './ui/controls';
 import { bindGuestNameDialog, resetGuestNameDialog, saveStartName, unbindGuestNameDialog, updateNameStatuses } from './ui/names';
 import {
-  copyRoomCode,
-  copyRoomLink,
   createRoomFromStart,
   handleLeaveButtonClick,
   handleRoomCodeKeydown,
+  joinRoom,
   joinRoomByCode,
   leaveRoom,
+  showRoomEntryFailure,
   showRoomNotFound,
   showRoomRoute,
   showStartScreen
@@ -52,13 +52,38 @@ import { refreshLocalNetworkIndicator } from './ui/status';
 
 let mounted = false;
 let mountAbortController: AbortController | null = null;
+let activeVoiceLeaveTeardown: (() => void) | null = null;
 
-export function mountRoomClient(root: ParentNode = document): () => void {
+export function mountRoomClient(root: ParentNode = document, options: { roomId?: string; embeddedRoomId?: string; autoJoin?: boolean } = {}): () => void {
   if (mounted) return unmountRoomClient;
   mounted = true;
   setElementsRoot(root);
   mountAbortController = new AbortController();
   const listenerSignal = mountAbortController.signal;
+  activeVoiceLeaveTeardown = registerActiveVoiceLeave(leaveRoom);
+
+  const mountedRoomId = options.roomId || options.embeddedRoomId || '';
+  if (mountedRoomId) {
+    const peerSession = getStoredPeerSession(mountedRoomId);
+    state.connecting = false;
+    state.joined = false;
+    state.eventSource?.close();
+    state.eventSource = null;
+    state.peers.clear();
+    state.participantViews.clear();
+    state.serverPeerIds.clear();
+    state.serverPeerSyncReady = false;
+    state.self = null;
+    state.roomName = '';
+    state.roomEmoji = '';
+    state.roomColorKey = '';
+    state.roomIconKey = '';
+    state.roomPresetKey = '';
+    state.roomId = mountedRoomId;
+    state.roomRoute = true;
+    state.peerId = peerSession.peerId;
+    state.sessionToken = peerSession.sessionToken;
+  }
 
   mountIcons();
   mountIcons(elements.template.content);
@@ -66,7 +91,7 @@ export function mountRoomClient(root: ParentNode = document): () => void {
   const savedName = cleanDisplayName(localStorage.getItem('voice-room:name'));
   state.savedName = savedName;
   elements.startNameInput.value = savedName;
-  elements.noiseModeSelect.value = state.noiseMode;
+  roomDeviceUi.noiseMode = state.noiseMode;
   elements.gateThresholdSlider.value = String(state.gateThresholdDb);
   refreshGateThresholdValue();
   refreshMicrophoneLevelMeter(GATE_THRESHOLD_MIN_DB);
@@ -76,8 +101,7 @@ export function mountRoomClient(root: ParentNode = document): () => void {
   elements.joinByCodeButton.addEventListener('click', joinRoomByCode, { signal: listenerSignal });
   elements.roomCodeInput.addEventListener('keydown', handleRoomCodeKeydown, { signal: listenerSignal });
   elements.startNameInput.addEventListener('input', updateNameStatuses, { signal: listenerSignal });
-  elements.copyCodeButton.addEventListener('click', copyRoomCode, { signal: listenerSignal });
-  elements.copyLinkButton.addEventListener('click', copyRoomLink, { signal: listenerSignal });
+
   elements.muteButton.addEventListener('click', handleMicButtonClick, { signal: listenerSignal });
   elements.outputButton.addEventListener('click', toggleOutputMute, { signal: listenerSignal });
   elements.screenButton.addEventListener('click', handleScreenButtonClick, { signal: listenerSignal });
@@ -94,11 +118,8 @@ export function mountRoomClient(root: ParentNode = document): () => void {
   elements.outputMenuButton.addEventListener('click', toggleOutputPopover, { signal: listenerSignal });
   elements.leaveButton.addEventListener('click', handleLeaveButtonClick, { signal: listenerSignal });
   elements.soundButton.addEventListener('click', () => unlockAudio().catch((error) => console.warn('Audio unlock failed', error)), { signal: listenerSignal });
-  elements.deviceSelect.addEventListener('change', () => switchMicrophone(), { signal: listenerSignal });
   elements.gateThresholdSlider.addEventListener('input', updateGateThresholdFromSlider, { signal: listenerSignal });
   elements.micLevelTrack.addEventListener('pointerdown', handleGateThresholdPointerDown, { signal: listenerSignal });
-  elements.noiseModeSelect.addEventListener('change', switchNoiseMode, { signal: listenerSignal });
-  elements.outputDeviceSelect.addEventListener('change', switchOutputDevice, { signal: listenerSignal });
   document.addEventListener('click', closeDevicePopoverOnOutside, { signal: listenerSignal });
   document.addEventListener('click', closeOutputPopoverOnOutside, { signal: listenerSignal });
   document.addEventListener('keydown', closeDevicePopoverOnEscape, { signal: listenerSignal });
@@ -113,14 +134,24 @@ export function mountRoomClient(root: ParentNode = document): () => void {
   refreshStageStripControls();
   refreshLocalNetworkIndicator();
 
+  function runRoomRoute(): void {
+    showRoomRoute()
+      .then((ready) => {
+        if (ready && options.autoJoin) return joinRoom();
+      })
+      .catch((error) => {
+        console.error(error);
+        showRoomEntryFailure();
+        showToast('Не удалось проверить комнату');
+      });
+  }
+
+  elements.entryRetryButton.addEventListener('click', runRoomRoute, { signal: listenerSignal });
+
   if (state.roomRoute && !state.roomId) {
     showRoomNotFound();
   } else if (state.roomId) {
-    showRoomRoute().catch((error) => {
-      console.error(error);
-      showRoomNotFound();
-      showToast('Не удалось проверить комнату');
-    });
+    runRoomRoute();
   } else {
     showStartScreen();
   }
@@ -129,6 +160,9 @@ export function mountRoomClient(root: ParentNode = document): () => void {
 }
 
 function unmountRoomClient(): void {
+  leaveRoom();
+  activeVoiceLeaveTeardown?.();
+  activeVoiceLeaveTeardown = null;
   mountAbortController?.abort();
   mountAbortController = null;
   resetGuestNameDialog();

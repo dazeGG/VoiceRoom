@@ -12,16 +12,16 @@ function $<T extends Element>(selector: string): T {
 
 export const elements = {
   get brand() { return $<HTMLAnchorElement>('.brand'); },
-  get copyCodeButton() { return $<HTMLButtonElement>('#copyCodeButton'); },
-  get copyLinkButton() { return $<HTMLButtonElement>('#copyLinkButton'); },
+
   get createRoomButton() { return $<HTMLButtonElement>('#createRoomButton'); },
   get deviceMenuButton() { return $<HTMLButtonElement>('#deviceMenuButton'); },
   get devicePopover() { return $<HTMLElement>('#devicePopover'); },
-  get deviceSelect() { return $<HTMLSelectElement>('#deviceSelect'); },
   get dockConnection() { return $<HTMLElement>('#dockConnection'); },
   get dockConnectionLabel() { return $<HTMLElement>('#dockConnectionLabel'); },
   get emptyRoom() { return $<HTMLElement>('#emptyRoom'); },
   get emptyRoomAvatar() { return $<HTMLElement>('#emptyRoomAvatar'); },
+  get entryErrorScreen() { return $<HTMLElement>('#entryErrorScreen'); },
+  get entryRetryButton() { return $<HTMLButtonElement>('#entryRetryButton'); },
   get gateThresholdSlider() { return $<HTMLInputElement>('#gateThresholdSlider'); },
   get gateThresholdValue() { return $<HTMLOutputElement>('#gateThresholdValue'); },
   get guestNameDialog() { return $<HTMLElement>('#guestNameDialog'); },
@@ -35,10 +35,10 @@ export const elements = {
   get micLevelTrack() { return $<HTMLElement>('#micLevelTrack'); },
   get muteButton() { return $<HTMLButtonElement>('#muteButton'); },
   get muteText() { return $<HTMLElement>('#muteText'); },
-  get noiseModeSelect() { return $<HTMLSelectElement>('#noiseModeSelect'); },
+
   get notFoundScreen() { return $<HTMLElement>('#notFoundScreen'); },
   get outputButton() { return $<HTMLButtonElement>('#outputButton'); },
-  get outputDeviceSelect() { return $<HTMLSelectElement>('#outputDeviceSelect'); },
+
   get outputMenuButton() { return $<HTMLButtonElement>('#outputMenuButton'); },
   get outputPopover() { return $<HTMLElement>('#outputPopover'); },
   get outputText() { return $<HTMLElement>('#outputText'); },
@@ -47,7 +47,7 @@ export const elements = {
   get roomCodeText() { return $<HTMLElement>('#roomCodeText'); },
   get roomEmojiBadge() { return $<HTMLElement>('#roomEmojiBadge'); },
   get roomScreen() { return $<HTMLElement>('#roomScreen'); },
-  get roomTitle() { return $<HTMLHeadingElement>('#roomTitle'); },
+  get roomTitle() { return $<HTMLElement>('#roomTitle'); },
   get topbarRoomHeading() { return $<HTMLElement>('.topbar-room-heading'); },
   get missingRoomCode() { return $<HTMLElement>('#missingRoomCode'); },
   get screenButton() { return $<HTMLButtonElement>('#screenButton'); },

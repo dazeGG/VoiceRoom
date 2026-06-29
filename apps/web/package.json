@@ -1,6 +1,6 @@
 {
   "name": "@voice-room/web",
-  "version": "2.0.2",
+  "version": "2.1.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -8,13 +8,15 @@
     "build": "vite build",
     "check": "node --check static/audio-gate.worklet.js && node --check static/desktop-audio-source.worklet.js && node --check static/rnnoise/rnnoise.worklet.js && svelte-kit sync && tsc --noEmit",
     "preview": "vite preview",
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/*.test.js",
+    "e2e": "playwright test"
   },
   "dependencies": {
     "@voice-room/shared": "file:../../packages/shared",
     "livekit-client": "^2.19.2"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.1",
     "@sveltejs/adapter-static": "^3.0.8",
     "@sveltejs/kit": "^2.0.0",
     "@types/node": "^20.19.0",

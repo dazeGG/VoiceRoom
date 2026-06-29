@@ -16,7 +16,7 @@
     <form class="name-panel" id="startForm">
       <label class="field">
         <span>Ваше имя</span>
-        <input id="startNameInput" maxlength="40" autocomplete="name" placeholder="Например, Даша" required>
+        <input id="startNameInput" maxlength="40" autocomplete="name" placeholder="Ваше имя" required>
       </label>
 
       <button class="secondary-button" type="submit">Сохранить имя</button>

@@ -27,3 +27,23 @@
   display: block;
   flex: 0 0 auto;
 }
+
+/* Desktop (Electron) only: the bare top bar doubles as a window-drag handle so
+   the frameless window can be moved by its top edge. Every interactive control
+   inside must opt out with no-drag, otherwise the OS swallows clicks and the
+   context menu over that region (the "dead top bar" symptom). The browser never
+   sets .is-desktop, so this has no effect on the web. */
+html.is-desktop .topbar {
+  -webkit-app-region: drag;
+  app-region: drag;
+}
+
+html.is-desktop .topbar a,
+html.is-desktop .topbar button,
+html.is-desktop .topbar input,
+html.is-desktop .topbar select,
+html.is-desktop .topbar .profile-menu,
+html.is-desktop .topbar [role='menu'] {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}

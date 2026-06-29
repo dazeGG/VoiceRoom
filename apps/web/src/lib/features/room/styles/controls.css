@@ -118,8 +118,13 @@ button:focus-visible {
    settings popover; the inner .dock-split is the rounded-rect that clips the
    toggle + chevron into one pill. */
 .dock-cluster {
-  position: relative;
   display: flex;
+}
+
+/* Anchor popover centering to the mic/headphones split pill (toggle + chevron). */
+.dock-anchor {
+  position: relative;
+  width: fit-content;
 }
 
 .dock-split {
@@ -415,11 +420,17 @@ button:focus-visible {
 
 .device-popover {
   position: absolute;
-  bottom: calc(100% + var(--space-sm));
-  left: 0;
+  left: 50%;
+  right: auto;
+  bottom: calc(100% + 18px);
+  transform: translateX(-50%);
   display: grid;
   gap: var(--space-md);
   width: min(320px, calc(100vw - 48px));
+  min-width: 0;
+  /* Visible overflow: Select listboxes are absolutely positioned inside the
+     panel; hidden clipped long device lists when a dropdown opened. */
+  overflow: visible;
   border: 1px solid oklch(34% 0.02 92);
   border-radius: var(--radius-md);
   padding: var(--space-md);
@@ -428,14 +439,17 @@ button:focus-visible {
   box-shadow: 0 22px 54px oklch(6% 0.02 92 / 0.46);
 }
 
+.device-popover .field {
+  min-width: 0;
+}
+
 .device-popover .field span {
   color: var(--muted);
 }
 
-.device-popover select {
-  border-color: var(--line);
-  background: oklch(15% 0.014 92);
-  color: oklch(96% 0.008 92);
+.device-popover .select-root,
+.device-popover .select-trigger {
+  max-width: 100%;
 }
 
 .gate-control {

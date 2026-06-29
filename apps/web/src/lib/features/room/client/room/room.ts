@@ -1,6 +1,8 @@
 import { getRoomPreset } from '$lib/visual/tokens';
-import { fetchMe } from '$lib/api/auth';
+import { fetchMe, fetchOwnedRooms } from '$lib/api/auth';
 import { roomNameFor } from '$lib/features/auth/account';
+import { roomSettingsUi } from '../../room-settings.svelte';
+import { clearConnectedVoiceRoom, setConnectedVoiceRoom } from '../../voice-session.svelte';
 import { elements } from '../ui/dom';
 import { state } from '../core/state';
 import { showToast } from '../ui/toast';
@@ -9,6 +11,7 @@ import { postState } from './presence';
 import { createRoomProof } from '../net/pow';
 import { errorMessage, getInitials, wait } from '../core/utils';
 import { extractRoomId } from '../core/session';
+import { isRoomEmbedded } from '../core/embed';
 import { getDisplayName, persistName, requestGuestNameForRoom, requireSavedName, updateNameStatuses } from '../ui/names';
 import {
   resetConnectionStatus,
@@ -49,6 +52,7 @@ import {
 } from '../ui/devices';
 import { GATE_THRESHOLD_MIN_DB } from '../core/config';
 import type { ServerMessage } from '../core/types';
+import { applyRoomDeleted, applyRoomUpdated } from './lifecycle';
 
 type RoomEntryGateResult = 'authenticated' | 'anonymous' | 'failure';
 
@@ -56,6 +60,7 @@ function hideScreens(): void {
   elements.startScreen.hidden = true;
   elements.roomScreen.hidden = true;
   elements.notFoundScreen.hidden = true;
+  elements.entryErrorScreen.hidden = true;
 }
 
 export function showStartScreen(): void {
@@ -69,7 +74,7 @@ export function showStartScreen(): void {
   updateNameStatuses();
 }
 
-export async function showRoomRoute(): Promise<void> {
+export async function showRoomRoute(): Promise<boolean> {
   document.body.dataset.screen = 'checking';
   hideScreens();
   elements.statusPill.hidden = true;
@@ -77,33 +82,67 @@ export async function showRoomRoute(): Promise<void> {
   const exists = await checkRoomExists(state.roomId);
   if (!exists) {
     showRoomNotFound();
-    return;
+    return false;
   }
 
   const entryGate = await resolveRoomEntryName();
-  if (entryGate === 'failure') return;
+  if (entryGate === 'failure') {
+    showRoomEntryFailure();
+    return false;
+  }
 
   showRoomScreen();
   refreshDevices().catch(() => {});
+  return true;
 }
 
-function showRoomScreen(): void {
-  document.body.dataset.screen = 'room';
+// Pulled out of showRoomScreen so a live room-updated event (rename/recolor
+// from the owner) can refresh the heading without re-running the whole
+// screen transition.
+function applyRoomEmojiBadge(element: HTMLElement, emoji: string, background: string, ring: string): void {
+  element.textContent = emoji;
+  element.style.background = background;
+  element.style.boxShadow = `0 0 0 1px ${ring}`;
+  element.hidden = false;
+}
+
+export function refreshRoomHeading(): void {
   const heading = state.roomName || state.roomId;
   document.title = `${heading} · Voice Room`;
   elements.roomTitle.textContent = heading;
-  elements.roomCodeText.textContent = state.roomId;
+  elements.roomTitle.title = heading;
+
+  const roomCodeEl = document.querySelector('#roomCodeText');
+  if (roomCodeEl) {
+    roomCodeEl.textContent = state.roomId;
+    roomCodeEl.setAttribute('title', state.roomId);
+  }
+
+  const popoverTitle = document.querySelector('#roomPopoverTitle');
+  if (popoverTitle) {
+    popoverTitle.textContent = heading;
+    popoverTitle.setAttribute('title', heading);
+  }
+
   const roomVisual = getRoomPreset({
     emoji: state.roomEmoji,
     roomColorKey: state.roomColorKey,
     roomIconKey: state.roomIconKey,
     roomPresetKey: state.roomPresetKey
   });
-  elements.roomEmojiBadge.textContent = roomVisual.emoji;
-  elements.roomEmojiBadge.style.background = roomVisual.background;
-  elements.roomEmojiBadge.style.boxShadow = `0 0 0 1px ${roomVisual.ring}`;
-  elements.roomEmojiBadge.hidden = false;
+  applyRoomEmojiBadge(elements.roomEmojiBadge, roomVisual.emoji, roomVisual.background, roomVisual.ring);
+
+  const popoverBadge = document.querySelector('#roomPopoverEmojiBadge');
+  if (popoverBadge instanceof HTMLElement) {
+    applyRoomEmojiBadge(popoverBadge, roomVisual.emoji, roomVisual.background, roomVisual.ring);
+  }
+
   elements.emptyRoomAvatar.textContent = getInitials(state.savedName);
+}
+
+function showRoomScreen(): void {
+  document.body.dataset.screen = 'room';
+  refreshRoomHeading();
   hideScreens();
   elements.brand.hidden = true;
   elements.topbarRoomHeading.hidden = false;
@@ -115,7 +154,17 @@ function showRoomScreen(): void {
   refreshScreenControls();
   refreshScreenStage();
   refreshParticipantState();
-  autoJoinRoom();
+}
+
+export function showRoomEntryFailure(): void {
+  leaveRoom();
+  document.body.dataset.screen = 'entry-error';
+  document.title = 'Не удалось проверить вход · Voice Room';
+  hideScreens();
+  elements.brand.hidden = false;
+  elements.topbarRoomHeading.hidden = true;
+  elements.entryErrorScreen.hidden = false;
+  elements.statusPill.hidden = true;
 }
 
 export function showRoomNotFound(): void {
@@ -188,6 +237,14 @@ async function resolveRoomEntryName(): Promise<RoomEntryGateResult> {
     const user = await fetchMe();
     if (user) {
       persistName(roomNameFor(user));
+      // Settings/delete UI is owner-only; the lobby's room list is the only
+      // place "owner" is known client-side, so cross-check it here.
+      try {
+        const owned = await fetchOwnedRooms();
+        roomSettingsUi.isOwner = owned.some((room) => room.roomId === state.roomId && room.relationship === 'owner');
+      } catch (ownedError) {
+        console.warn('Failed to resolve room ownership', ownedError);
+      }
       return 'authenticated';
     }
   } catch (error) {
@@ -263,6 +320,7 @@ export async function joinRoom(event?: Event): Promise<void> {
 
     await connectLiveKitRoom(name);
     state.joined = true;
+    setConnectedVoiceRoom(state.roomId);
     if (state.muted || state.outputMuted) postState().catch(() => {});
     refreshCallControls();
     refreshScreenControls();
@@ -289,21 +347,6 @@ export async function joinRoom(event?: Event): Promise<void> {
     refreshCallControls();
     refreshScreenControls();
   }
-}
-
-function autoJoinRoom(): void {
-  if (state.autoJoinStarted) return;
-  state.autoJoinStarted = true;
-
-  window.setTimeout(() => {
-    if (!state.roomId || state.joined || state.connecting) return;
-
-    joinRoom().catch((error) => {
-      console.error(error);
-      showToast('Не удалось подключиться');
-      setVoiceConnectionStatus(isVoiceRouteError(error) ? 'no-route' : 'error');
-    });
-  }, 0);
 }
 
 function formatJoinError(error: unknown): string {
@@ -384,11 +427,22 @@ async function handleServerMessage(event: MessageEvent): Promise<void> {
     leaveRoom();
     return;
   }
+
+  if (message.type === 'room-updated') {
+    applyRoomUpdated(message.room);
+    return;
+  }
+
+  if (message.type === 'room-deleted') {
+    applyRoomDeleted(message.roomId);
+    return;
+  }
 }
 
 export function leaveRoom(): void {
   if (!state.joined && !state.localStream && !state.localScreenStream && !state.connecting) return;
 
+  const disconnectedRoomId = state.roomId;
   state.connecting = false;
   state.joined = false;
   state.audioUnlockPending = false;
@@ -429,6 +483,7 @@ export function leaveRoom(): void {
   closeOutputPopover();
   resetConnectionStatus();
   refreshParticipantState();
+  clearConnectedVoiceRoom(disconnectedRoomId);
 }
 
 function stopLocalStream(): void {
@@ -444,6 +499,11 @@ export async function handleLeaveButtonClick(): Promise<void> {
     playPeerCue('leave');
     await wait(180);
     leaveRoom();
+  }
+
+  if (isRoomEmbedded()) {
+    window.dispatchEvent(new CustomEvent('voice-room:embedded-leave', { detail: { roomId: state.roomId } }));
+    return;
   }
 
   window.location.href = '/';

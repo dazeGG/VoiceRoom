@@ -29,6 +29,7 @@ const { createProofOfWork } = require('./lib/pow');
 const { getClientIp, createRateLimiter } = require('./lib/rate-limit');
 const { avatarColorForPeerId, createRoomStore } = require('./lib/room-store');
 const { createUserStore, publicUser } = require('./lib/user-store');
+const { createFriendStore } = require('./lib/friend-store');
 const { startApiListener } = require('./lib/listen');
 const { runMigrations } = require('./lib/migrate');
 
@@ -63,6 +64,13 @@ const SESSION_COOKIE_NAME = 'vr_session';
 const SESSION_COOKIE_SECURE = readEnvBool('SESSION_COOKIE_SECURE', process.env.NODE_ENV === 'production');
 const AUTH_RATE_LIMIT = readEnvInt('AUTH_RATE_LIMIT', 30, 0);
 const AUTH_RATE_WINDOW_MS = readEnvInt('AUTH_RATE_WINDOW_MS', 60000, 1000);
+const DM_RATE_LIMIT = readEnvInt('DM_RATE_LIMIT', 30, 0);
+const DM_RATE_WINDOW_MS = readEnvInt('DM_RATE_WINDOW_MS', 10000, 1000);
+const FRIEND_REQUEST_RATE_LIMIT = readEnvInt('FRIEND_REQUEST_RATE_LIMIT', 20, 0);
+const FRIEND_REQUEST_RATE_WINDOW_MS = readEnvInt('FRIEND_REQUEST_RATE_WINDOW_MS', 60000, 1000);
+// Cap concurrent realtime (SSE) streams per user so a single account cannot
+// pin an unbounded number of keep-alive connections.
+const MAX_REALTIME_STREAMS_PER_USER = readEnvInt('MAX_REALTIME_STREAMS_PER_USER', 8, 1);
 // Desktop app downloads are served from the latest GitHub release of this repo.
 // Metadata is cached server-side so visitors never hit GitHub's per-IP rate limit.
 const DESKTOP_RELEASE_REPO = (process.env.DESKTOP_RELEASE_REPO || 'dazeGG/VoiceRoomDesktop').trim();
@@ -71,6 +79,12 @@ const DESKTOP_RELEASE_TIMEOUT_MS = readEnvInt('DESKTOP_RELEASE_TIMEOUT_MS', 6000
 
 let roomStore = null;
 let userStore = null;
+let friendStore = null;
+
+// Global per-user realtime: userId -> Set<res> of open /api/realtime SSE
+// streams. A user counts as "online" while this set is non-empty, which drives
+// friend presence dots and lets us push DM/friend events to every open tab.
+const presenceUsers = new Map();
 const presenceRooms = new Map();
 const roomChatStreams = new Map();
 
@@ -90,6 +104,37 @@ function getUserStore() {
     userStore = createUserStore({ sessionTtlMs: SESSION_TTL_MS });
   }
   return userStore;
+}
+
+function getFriendStore() {
+  if (!friendStore) {
+    friendStore = createFriendStore({});
+  }
+  return friendStore;
+}
+
+function isUserOnline(userId) {
+  const set = presenceUsers.get(userId);
+  return Boolean(set && set.size > 0);
+}
+
+// Push an SSE frame to every open realtime stream a user has. Prunes dead
+// connections; returns the number of live streams that received it.
+function broadcastToUser(userId, message) {
+  const set = presenceUsers.get(userId);
+  if (!set || set.size === 0) return 0;
+  let delivered = 0;
+  const failed = [];
+  for (const res of set) {
+    if (sendSse(res, message)) {
+      delivered += 1;
+    } else {
+      failed.push(res);
+    }
+  }
+  for (const res of failed) set.delete(res);
+  if (set.size === 0) presenceUsers.delete(userId);
+  return delivered;
 }
 
 function getPresenceRoom(roomId) {
@@ -125,6 +170,14 @@ const roomChatLimiter = createRateLimiter({
 const authLimiter = createRateLimiter({
   limit: AUTH_RATE_LIMIT,
   windowMs: AUTH_RATE_WINDOW_MS
+});
+const dmLimiter = createRateLimiter({
+  limit: DM_RATE_LIMIT,
+  windowMs: DM_RATE_WINDOW_MS
+});
+const friendRequestLimiter = createRateLimiter({
+  limit: FRIEND_REQUEST_RATE_LIMIT,
+  windowMs: FRIEND_REQUEST_RATE_WINDOW_MS
 });
 
 function getLiveKitConnectSources() {
@@ -509,6 +562,36 @@ function broadcastChat(roomId, message) {
   }
 }
 
+// Lifecycle events (room-updated / room-deleted) reach page viewers over the
+// chat SSE stream, mirroring the existing room-not-found path. Unlike
+// broadcastChat this writes the message verbatim instead of wrapping it as a
+// chat-message frame.
+function broadcastRoomLifecycle(roomId, message, { end = false } = {}) {
+  const subscribers = roomChatStreams.get(roomId);
+  if (!subscribers || subscribers.size === 0) return;
+
+  const failed = [];
+  for (const res of subscribers) {
+    if (!sendSse(res, message)) {
+      failed.push(res);
+      continue;
+    }
+    if (end) {
+      try {
+        res.end();
+      } catch {
+        failed.push(res);
+      }
+    }
+  }
+  for (const res of failed) {
+    subscribers.delete(res);
+  }
+  if (end || subscribers.size === 0) {
+    roomChatStreams.delete(roomId);
+  }
+}
+
 async function readJsonBody(req) {
   if (req && Object.hasOwn(req, 'body')) {
     return req.body && typeof req.body === 'object' ? req.body : {};
@@ -812,6 +895,112 @@ async function handleCreateRoom(req, res) {
   });
 }
 
+// Shared auth + ownership gate for room mutations. Returns the room on success,
+// or null after writing the appropriate error response (401/403/404).
+async function authorizeRoomMutation(req, res, roomId) {
+  const session = await resolveSessionUser(req);
+  if (!session) {
+    sendJson(res, 401, { ok: false, error: 'Требуется вход' });
+    return null;
+  }
+  const room = await getRoom(roomId);
+  if (!room) {
+    sendJson(res, 404, { ok: false, error: 'Комната не найдена' });
+    return null;
+  }
+  if (!room.isStatic || room.ownerId !== session.user.id) {
+    sendJson(res, 403, { ok: false, error: 'Недостаточно прав' });
+    return null;
+  }
+  return room;
+}
+
+async function handleUpdateRoom(req, res, roomId) {
+  const room = await authorizeRoomMutation(req, res, roomId);
+  if (!room) return;
+
+  const body = await readJsonBody(req);
+
+  // Reject unknown icon/color/preset keys before touching the DB. The clean*
+  // helpers normalize a known key to itself and an unknown one to '', so a
+  // non-empty input that cleans to '' means the caller sent something the
+  // CHECK constraints would reject — return a clean 400 instead of an SQL error.
+  if (typeof body.roomPresetKey === 'string' && body.roomPresetKey && !cleanRoomPresetKey(body.roomPresetKey)) {
+    sendJson(res, 400, { ok: false, error: 'Неизвестный пресет комнаты' });
+    return;
+  }
+  if (typeof body.roomIconKey === 'string' && body.roomIconKey && !cleanRoomIconKey(body.roomIconKey)) {
+    sendJson(res, 400, { ok: false, error: 'Неизвестная иконка комнаты' });
+    return;
+  }
+  if (typeof body.roomColorKey === 'string' && body.roomColorKey && !cleanRoomColorKey(body.roomColorKey)) {
+    sendJson(res, 400, { ok: false, error: 'Неизвестный цвет комнаты' });
+    return;
+  }
+  if (typeof body.emoji === 'string' && body.emoji && !cleanRoomEmoji(body.emoji)) {
+    sendJson(res, 400, { ok: false, error: 'Неизвестный эмодзи комнаты' });
+    return;
+  }
+
+  // Merge with the authorized room so omitted fields keep their current values.
+  // A newly provided preset drives icon/color/emoji so the curated combination
+  // stays consistent. Without a new preset, explicit visual fields are partial
+  // updates over the stored room instead of being overwritten by the old preset.
+  const nextName = body.name !== undefined ? cleanRoomName(body.name) : room.name;
+  if (!nextName) {
+    sendJson(res, 400, { ok: false, error: 'Дайте комнате название' });
+    return;
+  }
+  const requestedPreset = body.roomPresetKey !== undefined ? getRoomPreset(body.roomPresetKey) : null;
+  const updated = await getRoomStore().updateRoom(roomId, {
+    name: nextName,
+    emoji: requestedPreset?.emoji || (body.emoji !== undefined ? cleanRoomEmoji(body.emoji) : room.emoji),
+    roomIconKey: requestedPreset?.iconKey || (body.roomIconKey !== undefined ? cleanRoomIconKey(body.roomIconKey) : room.roomIconKey),
+    roomColorKey: requestedPreset?.colorKey || (body.roomColorKey !== undefined ? cleanRoomColorKey(body.roomColorKey) : room.roomColorKey),
+    roomPresetKey: body.roomPresetKey !== undefined ? cleanRoomPresetKey(body.roomPresetKey) : cleanRoomPresetKey(room.roomPresetKey)
+  });
+  if (!updated) {
+    // Lost a race with a concurrent delete (UPDATE matched 0 rows).
+    sendJson(res, 404, { ok: false, error: 'Комната не найдена' });
+    return;
+  }
+
+  const payload = publicLobbyRoom(updated);
+  const presence = presenceRooms.get(roomId);
+  if (presence) broadcast(presence, { type: 'room-updated', room: payload });
+  broadcastRoomLifecycle(roomId, { type: 'room-updated', room: payload });
+
+  sendJson(res, 200, { ok: true, room: payload });
+}
+
+async function handleDeleteRoom(req, res, roomId) {
+  const room = await authorizeRoomMutation(req, res, roomId);
+  if (!room) return;
+
+  const deleted = await getRoomStore().deleteRoom(roomId);
+  if (!deleted) {
+    // Lost a race with a concurrent delete (UPDATE matched 0 rows).
+    sendJson(res, 404, { ok: false, error: 'Комната не найдена' });
+    return;
+  }
+
+  // Broadcast after durable soft-delete, before presence teardown so the SSE
+  // writes are not racing socket close.
+  const presence = presenceRooms.get(roomId);
+  if (presence) broadcast(presence, { type: 'room-deleted', roomId });
+  broadcastRoomLifecycle(roomId, { type: 'room-deleted', roomId }, { end: true });
+
+  // Belt-and-suspenders: force-close active peers after the signal. Clients
+  // also self-exit on room-deleted, so this only matters for missed events.
+  if (presence) {
+    for (const peer of Array.from(presence.peers.values())) {
+      closePeer(roomId, peer.id, peer.res, 'deleted');
+    }
+  }
+
+  sendJson(res, 200, { ok: true });
+}
+
 async function handleRegister(req, res) {
   const clientIp = getClientIp(req, TRUST_PROXY);
   const rate = authLimiter.check(`register:${clientIp}`);
@@ -1063,6 +1252,21 @@ async function handleRoomStatus(res, url) {
   });
 }
 
+// Read-only snapshot of who is currently in a room. Powers the lobby's room
+// preview ("how the room looks before you enter") without creating a peer.
+async function handleRoomPeers(res, roomId) {
+  const room = await getRoom(roomId);
+  if (!room) {
+    sendJson(res, 404, { ok: false, error: 'Room not found', roomId });
+    return;
+  }
+  sendJson(res, 200, {
+    ok: true,
+    roomId,
+    peers: Array.from(room.peers.values()).map(publicPeer)
+  });
+}
+
 async function handleState(req, res) {
   const body = await readJsonBody(req);
   const roomId = normalizeRoomId(body.roomId);
@@ -1241,6 +1445,386 @@ async function handleRoomChatPost(req, res, roomId) {
   sendJson(res, 201, { ok: true, message: publicChatMessage(publicMessage) });
 }
 
+// --- Friends, requests, and direct messages -----------------------------
+
+// Normalize a DM body without destroying multi-line formatting: collapse runs
+// of horizontal whitespace, trim spaces around newlines, cap consecutive blank
+// lines, then trim and length-limit.
+function cleanDmText(value) {
+  return String(value || '')
+    .replace(/[^\S\n]+/g, ' ')
+    .replace(/ *\n */g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+    .slice(0, 2000);
+}
+
+// UUIDs from path params; reject anything that can't be one so a bad value
+// doesn't reach the DB as a parameterized-but-nonsensical lookup.
+function cleanUuid(value) {
+  const id = String(value || '').trim();
+  return /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(id) ? id : '';
+}
+
+async function requireSessionUser(req, res) {
+  const session = await resolveSessionUser(req);
+  if (!session) {
+    sendJson(res, 401, { ok: false, error: 'Требуется вход' });
+    return null;
+  }
+  return session.user;
+}
+
+function publicFriendEntry(entry) {
+  return {
+    user: entry.user,
+    online: isUserOnline(entry.user.id),
+    unreadCount: entry.unreadCount,
+    lastMessage: entry.lastMessage
+  };
+}
+
+async function handleFriendsList(req, res) {
+  const user = await requireSessionUser(req, res);
+  if (!user) return;
+
+  const [friends, requestCount] = await Promise.all([
+    getFriendStore().listFriends(user.id),
+    getFriendStore().countIncomingRequests(user.id)
+  ]);
+  sendJson(res, 200, {
+    ok: true,
+    friends: friends.map(publicFriendEntry),
+    incomingRequestCount: requestCount
+  });
+}
+
+async function handleFriendsSearch(req, res, url) {
+  const user = await requireSessionUser(req, res);
+  if (!user) return;
+
+  const query = url.searchParams.get('q') || '';
+  const [results, friendIds, requests] = await Promise.all([
+    getFriendStore().searchUsers({ query, excludeUserId: user.id }),
+    getFriendStore().getFriendIds(user.id),
+    getFriendStore().listRequests(user.id)
+  ]);
+
+  const friendSet = new Set(friendIds);
+  const outgoing = new Set(requests.outgoing.map((row) => row.user.id));
+  const incoming = new Set(requests.incoming.map((row) => row.user.id));
+
+  sendJson(res, 200, {
+    ok: true,
+    results: results.map((candidate) => ({
+      user: candidate,
+      online: isUserOnline(candidate.id),
+      relationship: friendSet.has(candidate.id)
+        ? 'friend'
+        : outgoing.has(candidate.id)
+          ? 'outgoing'
+          : incoming.has(candidate.id)
+            ? 'incoming'
+            : 'none'
+    }))
+  });
+}
+
+async function handleFriendRequestsList(req, res) {
+  const user = await requireSessionUser(req, res);
+  if (!user) return;
+
+  const requests = await getFriendStore().listRequests(user.id);
+  sendJson(res, 200, { ok: true, ...requests });
+}
+
+async function handleSendFriendRequest(req, res) {
+  const user = await requireSessionUser(req, res);
+  if (!user) return;
+
+  const rate = friendRequestLimiter.check(user.id);
+  if (!rate.allowed) {
+    sendJson(
+      res,
+      429,
+      { ok: false, error: 'Слишком много заявок, попробуйте позже', retryAfterSeconds: rate.retryAfterSeconds },
+      { 'Retry-After': String(rate.retryAfterSeconds) }
+    );
+    return;
+  }
+
+  const body = await readJsonBody(req);
+  const login = normalizeLogin(body.login || body.handle || '');
+  if (!login) {
+    sendJson(res, 400, { ok: false, error: 'Неверный логин' });
+    return;
+  }
+
+  const result = await getFriendStore().sendRequest({ requesterId: user.id, addresseeLogin: login });
+  switch (result.status) {
+    case 'not_found':
+      sendJson(res, 404, { ok: false, error: 'Пользователь не найден' });
+      return;
+    case 'self':
+      sendJson(res, 400, { ok: false, error: 'Нельзя добавить себя' });
+      return;
+    case 'already_friends':
+      sendJson(res, 200, { ok: true, status: 'already_friends', user: result.user });
+      return;
+    case 'already_sent':
+      sendJson(res, 200, { ok: true, status: 'already_sent', user: result.user });
+      return;
+    case 'accepted':
+      // Reverse request existed: both sides are now friends.
+      broadcastToUser(result.user.id, { type: 'friend-accepted', userId: user.id });
+      sendJson(res, 200, { ok: true, status: 'accepted', user: result.user });
+      return;
+    default:
+      broadcastToUser(result.user.id, { type: 'friend-request' });
+      sendJson(res, 201, { ok: true, status: 'sent', user: result.user });
+  }
+}
+
+async function handleRespondFriendRequest(req, res, requestId, action) {
+  const user = await requireSessionUser(req, res);
+  if (!user) return;
+
+  const id = cleanUuid(requestId);
+  if (!id) {
+    sendJson(res, 404, { ok: false, error: 'Заявка не найдена' });
+    return;
+  }
+
+  const result = await getFriendStore().respondRequest({ userId: user.id, requestId: id, action });
+  if (result.status === 'not_found') {
+    sendJson(res, 404, { ok: false, error: 'Заявка не найдена' });
+    return;
+  }
+  if (result.status === 'accepted') {
+    broadcastToUser(result.requesterId, { type: 'friend-accepted', userId: user.id });
+    sendJson(res, 200, { ok: true, status: 'accepted', user: result.user });
+    return;
+  }
+  sendJson(res, 200, { ok: true, status: 'declined' });
+}
+
+async function handleCancelFriendRequest(req, res, requestId) {
+  const user = await requireSessionUser(req, res);
+  if (!user) return;
+
+  const id = cleanUuid(requestId);
+  if (!id) {
+    sendJson(res, 404, { ok: false, error: 'Заявка не найдена' });
+    return;
+  }
+
+  const result = await getFriendStore().cancelRequest({ userId: user.id, requestId: id });
+  if (result.status === 'not_found') {
+    sendJson(res, 404, { ok: false, error: 'Заявка не найдена' });
+    return;
+  }
+  broadcastToUser(result.addresseeId, { type: 'friend-request' });
+  sendJson(res, 200, { ok: true });
+}
+
+async function handleRemoveFriend(req, res, friendId) {
+  const user = await requireSessionUser(req, res);
+  if (!user) return;
+
+  const id = cleanUuid(friendId);
+  if (!id) {
+    sendJson(res, 404, { ok: false, error: 'Друг не найден' });
+    return;
+  }
+
+  const result = await getFriendStore().removeFriend({ userId: user.id, friendId: id });
+  if (result.status === 'not_found') {
+    sendJson(res, 404, { ok: false, error: 'Друг не найден' });
+    return;
+  }
+  broadcastToUser(id, { type: 'friend-removed', userId: user.id });
+  sendJson(res, 200, { ok: true });
+}
+
+async function handleDmThread(req, res, peerId) {
+  const user = await requireSessionUser(req, res);
+  if (!user) return;
+
+  const id = cleanUuid(peerId);
+  if (!id || id === user.id) {
+    sendJson(res, 404, { ok: false, error: 'Диалог не найден' });
+    return;
+  }
+
+  if (!(await getFriendStore().areFriends(user.id, id))) {
+    sendJson(res, 403, { ok: false, error: 'Вы не друзья' });
+    return;
+  }
+
+  const peer = await getUserStore().getUserById(id);
+  if (!peer) {
+    sendJson(res, 404, { ok: false, error: 'Пользователь не найден' });
+    return;
+  }
+
+  const messages = await getFriendStore().listThread({ userId: user.id, peerId: id });
+  // Opening the thread clears the unread badge and lets the peer see the read.
+  const read = await getFriendStore().markRead({ userId: user.id, peerId: id });
+  if (read.count > 0) {
+    broadcastToUser(id, { type: 'dm-read', userId: user.id });
+  }
+
+  sendJson(res, 200, { ok: true, peer: publicUser(peer), messages });
+}
+
+async function handleSendDm(req, res, peerId) {
+  const user = await requireSessionUser(req, res);
+  if (!user) return;
+
+  const id = cleanUuid(peerId);
+  if (!id || id === user.id) {
+    sendJson(res, 404, { ok: false, error: 'Диалог не найден' });
+    return;
+  }
+
+  const rate = dmLimiter.check(user.id);
+  if (!rate.allowed) {
+    sendJson(
+      res,
+      429,
+      { ok: false, error: 'Слишком много сообщений, попробуйте позже', retryAfterSeconds: rate.retryAfterSeconds },
+      { 'Retry-After': String(rate.retryAfterSeconds) }
+    );
+    return;
+  }
+
+  if (!(await getFriendStore().areFriends(user.id, id))) {
+    sendJson(res, 403, { ok: false, error: 'Вы не друзья' });
+    return;
+  }
+
+  const body = await readJsonBody(req);
+  const text = cleanDmText(body.text);
+  if (!text) {
+    sendJson(res, 400, { ok: false, error: 'Пустое сообщение' });
+    return;
+  }
+
+  const message = await getFriendStore().sendMessage({ senderId: user.id, recipientId: id, body: text });
+  // Deliver to the recipient and the sender's other tabs; clients dedupe by id.
+  broadcastToUser(id, { type: 'dm-message', message });
+  broadcastToUser(user.id, { type: 'dm-message', message });
+  sendJson(res, 201, { ok: true, message });
+}
+
+async function handleMarkDmRead(req, res, peerId) {
+  const user = await requireSessionUser(req, res);
+  if (!user) return;
+
+  const id = cleanUuid(peerId);
+  if (!id) {
+    sendJson(res, 404, { ok: false, error: 'Диалог не найден' });
+    return;
+  }
+
+  const result = await getFriendStore().markRead({ userId: user.id, peerId: id });
+  if (result.count > 0) {
+    broadcastToUser(id, { type: 'dm-read', userId: user.id });
+  }
+  sendJson(res, 200, { ok: true, count: result.count });
+}
+
+async function handleRealtime(req, res) {
+  const session = await resolveSessionUser(req);
+  if (!session) {
+    sendJson(res, 401, { ok: false, error: 'Требуется вход' });
+    return;
+  }
+  const userId = session.user.id;
+
+  // Reject before upgrading to SSE so we can answer with a clean JSON 429
+  // instead of a half-open event stream.
+  const existing = presenceUsers.get(userId);
+  if (existing && existing.size >= MAX_REALTIME_STREAMS_PER_USER) {
+    sendJson(
+      res,
+      429,
+      { ok: false, error: 'Слишком много активных подключений' },
+      { 'Retry-After': '5' }
+    );
+    return;
+  }
+
+  res.writeHead(200, {
+    ...baseHeaders(),
+    'Cache-Control': 'no-cache, no-transform',
+    Connection: 'keep-alive',
+    'Content-Type': 'text/event-stream; charset=utf-8',
+    'X-Accel-Buffering': 'no'
+  });
+  res.flushHeaders?.();
+  res.write(': connected\n\n');
+
+  let set = presenceUsers.get(userId);
+  const wasOffline = !set || set.size === 0;
+  if (!set) {
+    set = new Set();
+    presenceUsers.set(userId, set);
+  }
+  set.add(res);
+
+  // Snapshot friends now to announce presence-online and to seed the `ready`
+  // frame. The offline fan-out on disconnect re-queries instead of reusing this
+  // snapshot so friends added mid-session still receive the offline event.
+  let friendIds = [];
+  try {
+    friendIds = await getFriendStore().getFriendIds(userId);
+  } catch (error) {
+    console.error('Failed to load friends for realtime presence:', error);
+  }
+  if (wasOffline) {
+    for (const friendId of friendIds) {
+      broadcastToUser(friendId, { type: 'presence', userId, online: true });
+    }
+  }
+  sendSse(res, { type: 'ready', onlineFriendIds: friendIds.filter(isUserOnline) });
+
+  function announceOffline(ids) {
+    // The friend-id lookup is async, so the user may have reconnected (a new tab
+    // or EventSource auto-reconnect) between teardown and here. Skip the stale
+    // offline broadcast in that case so friends don't flip to offline-then-stay.
+    if (isUserOnline(userId)) return;
+    for (const friendId of ids) {
+      broadcastToUser(friendId, { type: 'presence', userId, online: false });
+    }
+  }
+
+  let closed = false;
+  function cleanup() {
+    if (closed) return;
+    closed = true;
+    clearInterval(keepalive);
+    const current = presenceUsers.get(userId);
+    if (!current) return;
+    current.delete(res);
+    if (current.size === 0) {
+      presenceUsers.delete(userId);
+      // Re-query so a friend added during this session is still notified; fall
+      // back to the connect-time snapshot if the lookup fails.
+      getFriendStore()
+        .getFriendIds(userId)
+        .then((ids) => announceOffline(ids))
+        .catch(() => announceOffline(friendIds));
+    }
+  }
+
+  const keepalive = setInterval(() => {
+    if (!sendSse(res, { type: 'ping', at: Date.now() })) cleanup();
+  }, KEEPALIVE_MS);
+
+  req.on('close', cleanup);
+}
+
 function pickReleaseAsset(assets, patterns) {
   for (const pattern of patterns) {
     const found = assets.find((asset) => pattern.test(asset.name || ''));
@@ -1345,9 +1929,10 @@ async function runLegacyHandler(request, reply, handler) {
   }
 }
 
-function createApiApp({ store = null, users = null } = {}) {
+function createApiApp({ store = null, users = null, friends = null } = {}) {
   if (store) roomStore = store;
   if (users) userStore = users;
+  if (friends) friendStore = friends;
 
   const app = fastify({
     bodyLimit: BODY_LIMIT_BYTES,
@@ -1385,9 +1970,18 @@ function createApiApp({ store = null, users = null } = {}) {
   app.get('/api/auth/rooms', (request, reply) => runLegacyHandler(request, reply, handleAuthRooms));
   app.post('/api/auth/rooms', (request, reply) => runLegacyHandler(request, reply, handleAddAuthRoom));
   app.post('/api/rooms', (request, reply) => runLegacyHandler(request, reply, handleCreateRoom));
+  app.put('/api/rooms/:roomId', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
+    return handleUpdateRoom(req, res, normalizeRoomId(request.params.roomId));
+  }));
+  app.delete('/api/rooms/:roomId', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
+    return handleDeleteRoom(req, res, normalizeRoomId(request.params.roomId));
+  }));
   app.get('/api/rooms/:roomId', (request, reply) => runLegacyHandler(request, reply, (_req, res) => {
     const roomId = normalizeRoomId(request.params.roomId);
     return handleRoomStatus(res, new URL(`/rooms/${roomId}`, 'http://localhost'));
+  }));
+  app.get('/api/rooms/:roomId/peers', (request, reply) => runLegacyHandler(request, reply, (_req, res) => {
+    return handleRoomPeers(res, normalizeRoomId(request.params.roomId));
   }));
   app.get('/api/rooms/:roomId/chat', (request, reply) => runLegacyHandler(request, reply, (_req, res) => {
     return handleRoomChatList(res, normalizeRoomId(request.params.roomId));
@@ -1404,6 +1998,36 @@ function createApiApp({ store = null, users = null } = {}) {
   }));
   app.post('/api/livekit-token', (request, reply) => runLegacyHandler(request, reply, handleLiveKitToken));
   app.post('/api/state', (request, reply) => runLegacyHandler(request, reply, handleState));
+
+  app.get('/api/friends', (request, reply) => runLegacyHandler(request, reply, handleFriendsList));
+  app.get('/api/friends/search', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
+    const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
+    return handleFriendsSearch(req, res, url);
+  }));
+  app.get('/api/friends/requests', (request, reply) => runLegacyHandler(request, reply, handleFriendRequestsList));
+  app.post('/api/friends/requests', (request, reply) => runLegacyHandler(request, reply, handleSendFriendRequest));
+  app.post('/api/friends/requests/:id/accept', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
+    return handleRespondFriendRequest(req, res, request.params.id, 'accept');
+  }));
+  app.post('/api/friends/requests/:id/decline', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
+    return handleRespondFriendRequest(req, res, request.params.id, 'decline');
+  }));
+  app.delete('/api/friends/requests/:id', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
+    return handleCancelFriendRequest(req, res, request.params.id);
+  }));
+  app.delete('/api/friends/:userId', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
+    return handleRemoveFriend(req, res, request.params.userId);
+  }));
+  app.get('/api/dm/:userId', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
+    return handleDmThread(req, res, request.params.userId);
+  }));
+  app.post('/api/dm/:userId', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
+    return handleSendDm(req, res, request.params.userId);
+  }));
+  app.post('/api/dm/:userId/read', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
+    return handleMarkDmRead(req, res, request.params.userId);
+  }));
+  app.get('/api/realtime', (request, reply) => runLegacyHandler(request, reply, handleRealtime));
 
   return app;
 }
@@ -1448,7 +2072,8 @@ async function bootstrap({ env = process.env, logger = console, exit = process.e
     await roomStore.markActiveTemporaryRoomsEmpty();
     await roomStore.pruneRooms();
     userStore = createUserStore({ databaseUrl: database.url, logger, sessionTtlMs: SESSION_TTL_MS });
-    const server = createApiServer({ store: roomStore, users: userStore });
+    friendStore = createFriendStore({ databaseUrl: database.url, logger });
+    const server = createApiServer({ store: roomStore, users: userStore, friends: friendStore });
     await server.app.ready();
     startPruneTimer(server, logger);
     startApiListener({

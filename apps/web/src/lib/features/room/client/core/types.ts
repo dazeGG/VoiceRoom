@@ -108,7 +108,6 @@ export interface ScreenSourceRequest {
 }
 
 export interface RoomSessionState {
-  autoJoinStarted: boolean;
   joined: boolean;
   peerId: string;
   roomId: string;
@@ -191,6 +190,22 @@ export interface AppState
     RoomAudioState,
     RoomScreenState {}
 
+// Mirrors the server's publicLobbyRoom() shape (server.js) — the body carried
+// by both the PUT /api/rooms/:roomId response and the room-updated broadcast.
+export interface RoomLifecycleSummary {
+  createdAt: number;
+  emoji: string;
+  roomColorKey: string;
+  roomIconKey: string;
+  roomPresetKey: string;
+  emptySince: number | null;
+  isStatic: boolean;
+  name: string;
+  peers: number;
+  relationship: string;
+  roomId: string;
+}
+
 export type ServerMessage =
   | { type: 'hello'; peer: PeerInfo; peers: PeerInfo[]; roomId: string }
   | { type: 'ping'; at: number }
@@ -198,7 +213,9 @@ export type ServerMessage =
   | { type: 'peer-joined'; peer: PeerInfo }
   | { type: 'peer-left'; peerId: string; reason: string }
   | { type: 'peer-updated'; peer: PeerInfo }
-  | { type: 'room-full'; maxRoomPeers: number };
+  | { type: 'room-full'; maxRoomPeers: number }
+  | { type: 'room-updated'; room: RoomLifecycleSummary }
+  | { type: 'room-deleted'; roomId: string };
 
 interface DesktopAudioFormatEvent {
   event: 'format' | 'error';

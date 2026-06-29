@@ -1,6 +1,6 @@
 {
   "name": "voice-room",
-  "version": "2.0.2",
+  "version": "2.1.0",
   "private": true,
   "description": "Simple link-based LiveKit voice chat with screen sharing.",
   "workspaces": [
@@ -21,10 +21,11 @@
     "dev:livekit": "docker compose -f docker-compose.dev.yml up --build livekit",
     "dev:host:api": "npm --workspace @voice-room/api run dev",
     "dev:host:web": "npm --workspace @voice-room/web run dev",
-    "dev:host:livekit": "docker run --rm -p 7880:7880 -p 7881:7881 -p 7882:7882/udp livekit/livekit-server:latest --dev --bind 0.0.0.0",
+    "dev:host:livekit": "docker run --rm -e LIVEKIT_KEYS=\"devkey: devsecret\" -p 7880:7880 -p 7881:7881 -p 7882:7882/udp livekit/livekit-server:latest --dev --bind 0.0.0.0",
     "build": "npm --workspace @voice-room/web run build",
     "check": "npm --workspace @voice-room/shared run check && npm --workspace @voice-room/api run check && npm --workspace @voice-room/web run check",
-    "test": "npm --workspace @voice-room/shared run test && npm --workspace @voice-room/api run test && npm --workspace @voice-room/web run test"
+    "test": "npm --workspace @voice-room/shared run test && npm --workspace @voice-room/api run test && npm --workspace @voice-room/web run test",
+    "e2e": "npm --workspace @voice-room/web run e2e"
   },
   "packageManager": "npm@10.8.2",
   "engines": {

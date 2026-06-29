@@ -50,6 +50,86 @@ test('lobby grid add action is add-by-code, not create-room', () => {
   assert.match(lobby, /Введите код уже созданной постоянной комнаты/);
 });
 
+test('lobby separates viewed room from connected voice room', () => {
+  const lobby = read('src/lib/features/home/LobbyPage.svelte');
+  const browseView = read('src/lib/features/home/components/lobby/RoomBrowseView.svelte');
+  const voiceSession = read('src/lib/features/room/voice-session.svelte.ts');
+  const roomNavigation = read('src/lib/features/home/model/room-navigation.svelte.ts');
+  const previewRoom = functionBody(lobby, 'previewRoom');
+  const enterRoom = functionBody(lobby, 'enterRoom');
+  const leaveConnectedVoiceRoom = functionBody(lobby, 'leaveConnectedVoiceRoom');
+  const closeViewedRoom = functionBody(lobby, 'closeViewedRoom');
+  const onEmbeddedLeave = functionBody(lobby, 'onEmbeddedLeave');
+
+  assert.match(lobby, /roomNavigation\.viewedRoomId/);
+  assert.match(lobby, /connectedRoomIsViewed\(friendsState\.mode\)/);
+  assert.match(lobby, /embeddedRoomIsVisible\(friendsState\.mode\)/);
+  assert.match(roomNavigation, /viewedRoomId: string \| null/);
+  assert.match(roomNavigation, /embeddedRoomId: string \| null/);
+  assert.match(roomNavigation, /joinIntentRoomId: string \| null/);
+  assert.match(roomNavigation, /export function getActiveVoiceRoomId/);
+  assert.match(roomNavigation, /Room-navigation state machine/);
+  assert.match(roomNavigation, /viewedRoomId mirrors the URL-level room preview/);
+  assert.match(roomNavigation, /embeddedRoomId is the mounted room client/);
+  assert.match(roomNavigation, /browsing\n\/\/   never creates it/);
+  assert.match(roomNavigation, /joinIntentRoomId is set only by an explicit Enter action/);
+  assert.match(roomNavigation, /function setViewedRoomFromRoute/);
+  assert.match(roomNavigation, /export function routeToRoom/);
+  assert.match(roomNavigation, /export function routeToHome/);
+  assert.match(roomNavigation, /export function leaveViewedConnectedRoom/);
+  assert.doesNotMatch(functionBody(roomNavigation, 'routeToRoom'), /roomNavigation\.embeddedRoomId = roomId/);
+  assert.match(previewRoom, /selectRoomPreview\(roomId\)/);
+  assert.doesNotMatch(previewRoom, /leaveActiveVoiceRoom|setConnectedVoiceRoom|clearConnectedVoiceRoom/);
+  assert.match(enterRoom, /selectRoomForVoiceEntry\(roomId\)/);
+  assert.match(roomNavigation, /roomNavigation\.embeddedRoomId = roomId/);
+  assert.match(roomNavigation, /roomNavigation\.joinIntentRoomId = roomId/);
+  assert.match(enterRoom, /friendsState\.mode = 'rooms'/);
+  assert.match(closeViewedRoom, /const transition = routeToHome\(\)/);
+  assert.match(closeViewedRoom, /if \(transition\.closeEmbeddedRoom\) closeEmbeddedRoom\(\{ replaceUrl: false \}\)/);
+  assert.match(closeViewedRoom, /history\.pushState\(null, '', '\/'\)/);
+  assert.match(lobby, /function closeEmbeddedRoom\(\{ replaceUrl = true, closedRoomId = embeddedRoomId \}/);
+  assert.match(lobby, /replaceUrl && closedRoomId && selectedRoomId === closedRoomId/);
+  assert.doesNotMatch(lobby, /!closedRoomId \|\| selectedRoomId === closedRoomId/);
+  assert.match(onEmbeddedLeave, /event instanceof CustomEvent/);
+  assert.match(onEmbeddedLeave, /event\.detail\?\.roomId/);
+  assert.match(onEmbeddedLeave, /const closedViewedRoom = Boolean\(closedRoomId && selectedRoomId === closedRoomId\)/);
+  assert.match(onEmbeddedLeave, /closeEmbeddedRoom\(\{ closedRoomId \}\)/);
+  assert.match(onEmbeddedLeave, /if \(closedViewedRoom\) clearViewedRoom\(\)/);
+  assert.match(leaveConnectedVoiceRoom, /const leavingRoomId = connectedVoiceRoomId/);
+  assert.match(leaveConnectedVoiceRoom, /leaveActiveVoiceRoom\(\)/);
+  assert.match(leaveConnectedVoiceRoom, /resolveLeaveViewedConnectedRoom\(leavingRoomId\)/);
+  assert.match(leaveConnectedVoiceRoom, /closeEmbeddedRoom\(\)/);
+  assert.ok(
+    leaveConnectedVoiceRoom.indexOf('closeEmbeddedRoom()') < leaveConnectedVoiceRoom.indexOf('clearViewedRoom()'),
+    'sidebar leave restores URL before clearing the viewed room'
+  );
+  assert.match(lobby, /<RoomBrowseView room=\{selectedRoom\} onEnter=\{\(\) => enterRoom\(selectedRoom\.roomId\)\}/);
+  assert.match(browseView, /const requestedRoomId = room\.roomId/);
+  assert.match(browseView, /if \(room\.roomId !== requestedRoomId\) return/);
+  assert.match(browseView, /let loadError = \$state\(''\)/);
+  assert.match(browseView, /Не удалось загрузить участников/);
+  assert.match(browseView, /role="status"/);
+  assert.match(voiceSession, /registerActiveVoiceLeave/);
+  assert.match(roomNavigation, /export function connectedRoomIsViewed/);
+  assert.match(roomNavigation, /export function embeddedRoomIsVisible/);
+  assert.match(lobby, /autoJoin=\{autoJoinRoomId === embeddedRoomId\}/);
+
+  const roomPage = read('src/lib/features/room/RoomPage.svelte');
+  const roomDom = read('src/lib/features/room/client/ui/dom.ts');
+  const roomClient = read('src/lib/features/room/client/main.ts');
+  const roomView = read('src/lib/features/room/client/room/room.ts');
+  const entryError = read('src/lib/features/room/components/RoomEntryErrorScreen.svelte');
+
+  assert.match(roomPage, /RoomEntryErrorScreen/);
+  assert.match(roomDom, /entryErrorScreen/);
+  assert.match(roomDom, /entryRetryButton/);
+  assert.match(roomClient, /function runRoomRoute/);
+  assert.match(roomClient, /entryRetryButton\.addEventListener\('click', runRoomRoute/);
+  assert.match(roomView, /export function showRoomEntryFailure/);
+  assert.match(roomView, /if \(entryGate === 'failure'\) \{[\s\S]*showRoomEntryFailure\(\);[\s\S]*return false;[\s\S]*\}/);
+  assert.match(entryError, /Повторить проверку/);
+});
+
 test('room chat keeps transport mounted and tracks unread state while closed', () => {
   const stage = read('src/lib/features/room/components/RoomStage.svelte');
   const ui = read('src/lib/features/room/room-ui.svelte.ts');
@@ -62,6 +142,45 @@ test('room chat keeps transport mounted and tracks unread state while closed', (
   assert.match(chat, /messageIds/);
   assert.match(chat, /incrementUnreadChat\(\)/);
   assert.match(topbar, /room-chat-unread/);
+  assert.match(topbar, /import Popover from '\$lib\/shared\/components\/Popover\.svelte'/);
+  assert.match(topbar, /<h1 class="room-heading-title-wrap">/);
+  assert.match(topbar, /room-heading-trigger/);
+  assert.match(topbar, /Скопировать код/);
+  assert.match(topbar, /keepContentMounted/);
+  assert.match(topbar, /room-heading-popover-head/);
+  assert.match(topbar, /roomPopoverEmojiBadge/);
+  assert.match(topbar, /roomPopoverTitle/);
+  assert.doesNotMatch(topbar, /copyCodeButton|copyLinkButton|room-settings-button/);
+
+  const roomView = read('src/lib/features/room/client/room/room.ts');
+  assert.match(roomView, /document\.querySelector\('#roomCodeText'\)/);
+  assert.match(roomView, /roomPopoverEmojiBadge/);
+  assert.doesNotMatch(roomView, /elements\.roomCodeText/);
+
+  const select = read('src/lib/shared/components/Select.svelte');
+  assert.match(select, /import Ellipsis from '\$lib\/shared\/components\/Ellipsis\.svelte'/);
+
+  const dock = read('src/lib/features/room/components/RoomDock.svelte');
+  assert.match(dock, /dock-anchor/);
+  assert.match(dock, /flip/);
+  const controls = read('src/lib/features/room/styles/controls.css');
+  assert.match(controls, /\.device-popover[\s\S]*overflow:\s*visible/);
+  assert.match(controls, /\.dock-anchor/);
+  assert.match(controls, /\.device-popover[\s\S]*left:\s*50%/);
+  assert.match(controls, /translateX\(-50%\)/);
+
+  const selectCss = read('src/lib/shared/styles/select.css');
+  assert.match(selectCss, /\.select-trigger--dock \.select-trigger-chevron[\s\S]*right:\s*11px/);
+});
+
+test('room chat terminal lifecycle frames leave the room screen', () => {
+  const chat = read('src/lib/features/room/components/RoomChat.svelte');
+  const lifecycle = read('src/lib/features/room/client/room/lifecycle.ts');
+
+  assert.match(lifecycle, /export function applyRoomNotFound/);
+  assert.match(chat, /applyRoomNotFound/);
+  assert.match(chat, /payload\?\.type === 'room-not-found'[\s\S]*applyRoomNotFound\(payload\.roomId\)[\s\S]*stream\.close\(\)/);
+  assert.match(chat, /payload\?\.type === 'room-deleted'[\s\S]*applyRoomDeleted\(payload\.roomId\)[\s\S]*stream\.close\(\)/);
 });
 
 
@@ -77,6 +196,78 @@ test('auth client does not mask unexpected backend failures as anonymous or empt
   assert.match(home, /await logout\(\);\n\s+clearSession\(\);/);
   assert.match(home, /Не удалось выйти из аккаунта/);
   assert.match(lobby, /Не удалось загрузить комнаты/);
+});
+
+test('shared Select primitive wraps Popover listbox slots for site-wide dropdowns', () => {
+  const select = read('src/lib/shared/components/Select.svelte');
+  const selectCss = read('src/lib/shared/styles/select.css');
+  const topbarDownload = read('src/lib/features/home/components/TopbarDownload.svelte');
+  const settingsModal = read('src/lib/features/home/components/SettingsModal.svelte');
+  const roomDock = read('src/lib/features/room/components/RoomDock.svelte');
+  const devices = read('src/lib/features/room/client/ui/devices.ts');
+
+  assert.match(select, /import Popover from '\$lib\/shared\/components\/Popover\.svelte'/);
+  assert.match(select, /\{flip\}/);
+  assert.match(select, /\{#snippet trigger\(/);
+  assert.match(select, /\{#snippet content\(/);
+  assert.match(select, /role="option"/);
+  assert.match(select, /onTriggerKeydown/);
+  assert.match(select, /onOptionKeydown/);
+  assert.match(select, /ArrowDown/);
+  assert.match(select, /Home/);
+  assert.match(select, /End/);
+  assert.match(select, /typeahead/);
+  assert.match(select, /event\.key === 'Tab'/);
+  assert.match(select, /close\(false\)/);
+  assert.match(select, /tabindex=\{index === activeIndex \? 0 : -1\}/);
+  assert.match(select, /use:registerOption=\{index\}/);
+  assert.doesNotMatch(select, /bind:this=\{optionRefs\[index\]\}/);
+  assert.match(selectCss, /\.select-trigger/);
+  assert.match(topbarDownload, /import Select from '\$lib\/shared\/components\/Select\.svelte'/);
+  assert.match(settingsModal, /import Select from '\$lib\/shared\/components\/Select\.svelte'/);
+  assert.match(roomDock, /import Select from '\$lib\/shared\/components\/Select\.svelte'/);
+  assert.doesNotMatch(topbarDownload, /<select\b/);
+  assert.doesNotMatch(settingsModal, /<select\b/);
+  assert.doesNotMatch(roomDock, /<select\b/);
+  assert.doesNotMatch(devices, /deviceSelect|noiseModeSelect|outputDeviceSelect/);
+});
+
+test('popover placement flips vertically only when the preferred side would overflow', () => {
+  const placement = read('src/lib/shared/components/popover-placement.ts');
+
+  assert.match(placement, /export function resolvePopoverPlacement/);
+  assert.match(placement, /panelRect\.bottom > viewportHeight - margin/);
+  assert.match(placement, /if \(spaceAbove > spaceBelow\) return flipPlacementVertical/);
+});
+
+test('shared Popover primitive exposes trigger/content slots and dismiss behavior', () => {
+  const popover = read('src/lib/shared/components/Popover.svelte');
+  const popoverCss = read('src/lib/shared/styles/popover.css');
+  const userMenu = read('src/lib/features/home/components/UserMenu.svelte');
+
+  assert.match(popover, /trigger: Snippet<\[PopoverTriggerState\]>/);
+  assert.match(popover, /content: Snippet<\[PopoverContentState\]>/);
+  assert.match(popover, /\{@render trigger\(triggerState\)\}/);
+  assert.match(popover, /\{@render content\(contentState\)\}/);
+  assert.match(popover, /onpointerdown=\{onWindowPointerDown\}/);
+  assert.match(popover, /requestClose\('escape'\)/);
+  assert.match(popover, /script lang="ts" module/);
+  assert.match(popover, /popoverPanelCounter/);
+  assert.match(popover, /focusTrigger/);
+  assert.match(popover, /onfocusout=\{onFocusOut\}/);
+  assert.match(popover, /requestClose\('focusout', false\)/);
+  assert.match(popover, /requestClose\('outside', false\)/);
+  assert.match(popover, /data-placement=\{resolvedPlacement\}/);
+  assert.match(popover, /resolvePopoverPlacement/);
+  assert.match(popover, /openWithPlacement/);
+  assert.match(popover, /flip = false/);
+  assert.match(popoverCss, /\.popover-panel/);
+  assert.match(popoverCss, /\.popover-menu-item/);
+  assert.match(popoverCss, /\.popover-option/);
+  assert.match(userMenu, /import Popover from '\$lib\/shared\/components\/Popover\.svelte'/);
+  assert.match(userMenu, /\{#snippet trigger\(/);
+  assert.match(userMenu, /\{#snippet content\(/);
+  assert.match(userMenu, /aria-haspopup="menu"/);
 });
 
 test('visual identity UI consumes backend keys and exposes only curated room presets', () => {
@@ -187,7 +378,7 @@ test('screen stage viewer badge renders viewer avatars instead of names', () => 
   assert.doesNotMatch(css, /screen-meta-viewers-label/);
 });
 
-test('room route checks /auth/me and blocks anonymous entry on guest-name modal', () => {
+test('room route uses lobby for authenticated users and preserves standalone guest entry', () => {
   const roomRoute = read('src/routes/r/[roomId]/+page.svelte');
   const roomRouteOptions = read('src/routes/r/[roomId]/+page.ts');
   const roomPage = read('src/lib/features/room/RoomPage.svelte');
@@ -204,8 +395,18 @@ test('room route checks /auth/me and blocks anonymous entry on guest-name modal'
   const handleGuestNameSubmit = functionBody(names, 'handleGuestNameSubmit');
 
   assert.match(roomRoute, /import RoomPage from '\$lib\/features\/room\/RoomPage\.svelte'/);
+  assert.match(roomRoute, /import LobbyPage from '\$lib\/features\/home\/LobbyPage\.svelte'/);
+  assert.match(roomRoute, /loadSession\(\)/);
+  assert.match(roomRoute, /session\.user/);
+  assert.match(roomRoute, /<LobbyPage user=\{session\.user\}/);
+  assert.match(roomRoute, /\{#key routeRoomId\}[\s\S]*<RoomPage roomId=\{routeRoomId\} \/>[\s\S]*\{\/key\}/);
   assert.match(roomRouteOptions, /export const ssr = false/);
-  assert.match(roomPage, /mountRoomClient\(roomRoot\)/);
+  assert.match(roomPage, /roomId = ''/);
+  assert.match(roomPage, /autoJoin = false/);
+  assert.match(roomPage, /mountRoomClient\(roomRoot, \{ roomId: embeddedRoomId \|\| roomId, embeddedRoomId, autoJoin \}\)/);
+  assert.match(roomMain, /const mountedRoomId = options\.roomId \|\| options\.embeddedRoomId \|\| ''/);
+  assert.match(roomMain, /state\.roomId = mountedRoomId/);
+  assert.match(roomMain, /if \(ready && options\.autoJoin\) return joinRoom\(\)/);
   assert.match(roomMain, /showRoomRoute\(\)/);
   assert.match(roomMain, /showStartScreen\(\)/);
   assert.match(roomMain, /bindGuestNameDialog\(\)/);
@@ -216,18 +417,22 @@ test('room route checks /auth/me and blocks anonymous entry on guest-name modal'
   assert.match(roomMain, /mountAbortController\?\.abort\(\)/);
   assert.match(roomMain, /bindScreenStageIdleUi\(listenerSignal\)/);
   assert.match(roomMain, /mounted = false/);
-  assert.doesNotMatch(roomRoute, /HomePage|loadSession|authLoadError|LobbyPage/);
+  assert.doesNotMatch(roomRoute, /HomePage/);
   assert.doesNotMatch(roomPage, /loadSession|authLoadError|LobbyPage/);
   assert.match(home, /auth-session-error/);
+  assert.match(roomRoute, /Не удалось проверить аккаунт/);
+  assert.match(roomRoute, /features\/home\/styles\/home\.css/);
 
-  assert.match(roomView, /import \{ fetchMe \} from '\$lib\/api\/auth'/);
+  assert.match(roomView, /import \{ fetchMe, fetchOwnedRooms \} from '\$lib\/api\/auth'/);
   assert.match(roomView, /import \{ roomNameFor \} from '\$lib\/features\/auth\/account'/);
   assert.match(roomView, /type RoomEntryGateResult = 'authenticated' \| 'anonymous' \| 'failure'/);
   assert.match(showRoomRoute, /const exists = await checkRoomExists\(state\.roomId\)/);
   assert.ok(showRoomRoute.indexOf('showRoomNotFound()') < showRoomRoute.indexOf('resolveRoomEntryName()'));
+  assert.match(showRoomRoute, /return false/);
   assert.match(showRoomRoute, /const entryGate = await resolveRoomEntryName\(\)/);
-  assert.match(showRoomRoute, /if \(entryGate === 'failure'\) return/);
+  assert.match(showRoomRoute, /if \(entryGate === 'failure'\) \{[\s\S]*showRoomEntryFailure\(\);[\s\S]*return false;[\s\S]*\}/);
   assert.ok(showRoomRoute.indexOf('resolveRoomEntryName()') < showRoomRoute.indexOf('showRoomScreen()'));
+  assert.match(showRoomRoute, /return true/);
   assert.match(resolveRoomEntryName, /const user = await fetchMe\(\)/);
   assert.match(resolveRoomEntryName, /persistName\(roomNameFor\(user\)\)/);
   assert.match(resolveRoomEntryName, /return 'authenticated'/);
