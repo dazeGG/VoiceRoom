@@ -218,8 +218,12 @@ function createFriendStore({ databaseUrl, logger = console, pool } = {}) {
   // count of mutual friends (used by the design's "N общих друга" line).
   async function listRequests(userId) {
     const pool = getPool();
+    // Alias the request columns: `u.*` also exposes `id`/`created_at`, and a
+    // duplicate column name makes node-postgres keep the last one — without the
+    // aliases `row.id` would be the requester's user id, not the request id, so
+    // accept/decline would hit the wrong row ("Заявка не найдена").
     const incoming = await pool.query(
-      `SELECT fr.id, fr.created_at, u.*,
+      `SELECT fr.id AS request_id, fr.created_at AS request_created_at, u.*,
               (SELECT COUNT(*)::int FROM friendships fa
                JOIN friendships fb
                  ON (CASE WHEN fb.user_a_id = u.id THEN fb.user_b_id ELSE fb.user_a_id END)
@@ -233,7 +237,7 @@ function createFriendStore({ databaseUrl, logger = console, pool } = {}) {
       [userId]
     );
     const outgoing = await pool.query(
-      `SELECT fr.id, fr.created_at, u.*
+      `SELECT fr.id AS request_id, fr.created_at AS request_created_at, u.*
        FROM friend_requests fr
        JOIN users u ON u.id = fr.addressee_id
        WHERE fr.requester_id = $1 AND fr.status = 'pending'
@@ -242,14 +246,14 @@ function createFriendStore({ databaseUrl, logger = console, pool } = {}) {
     );
     return {
       incoming: incoming.rows.map((row) => ({
-        id: row.id,
-        createdAt: toMillis(row.created_at),
+        id: row.request_id,
+        createdAt: toMillis(row.request_created_at),
         mutualFriends: row.mutual || 0,
         user: mapPublicUser(row)
       })),
       outgoing: outgoing.rows.map((row) => ({
-        id: row.id,
-        createdAt: toMillis(row.created_at),
+        id: row.request_id,
+        createdAt: toMillis(row.request_created_at),
         user: mapPublicUser(row)
       }))
     };

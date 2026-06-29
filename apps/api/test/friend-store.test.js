@@ -119,6 +119,30 @@ test('accept turns a request into a mutual friendship', async (t) => {
   assert.equal(aliceFriends[0].user.id, bob.id);
 });
 
+test('listRequests surfaces the request id (not the joined user id) so accept works', async (t) => {
+  const { users, friends } = await createStores(t);
+  const alice = await makeUser(users, 'alice');
+  const bob = await makeUser(users, 'bob');
+
+  const sent = await friends.sendRequest({ requesterId: alice.id, addresseeLogin: 'bob' });
+
+  // Regression: `u.*` in the SELECT also exposes `id`, and duplicate column
+  // names make node-postgres keep the last one — so `row.id` used to be the
+  // requester's user id, breaking accept/decline ("Заявка не найдена").
+  const incoming = (await friends.listRequests(bob.id)).incoming[0];
+  assert.equal(incoming.id, sent.requestId);
+  assert.notEqual(incoming.id, alice.id);
+
+  const outgoing = (await friends.listRequests(alice.id)).outgoing[0];
+  assert.equal(outgoing.id, sent.requestId);
+  assert.notEqual(outgoing.id, bob.id);
+
+  // Accepting with the id the client actually has (from listRequests) succeeds.
+  const accepted = await friends.respondRequest({ userId: bob.id, requestId: incoming.id, action: 'accept' });
+  assert.equal(accepted.status, 'accepted');
+  assert.equal(await friends.areFriends(alice.id, bob.id), true);
+});
+
 test('decline and cancel leave no friendship', async (t) => {
   const { users, friends } = await createStores(t);
   const alice = await makeUser(users, 'alice');
