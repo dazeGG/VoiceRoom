@@ -57,7 +57,7 @@ packages/
 Самый простой dev-режим теперь Docker-first: root `npm run dev` поднимает PostgreSQL, API с `node --watch`, Vite dev server и LiveKit через `docker-compose.dev.yml`:
 
 ```bash
-cp .env.example .env
+# Создайте локальный .env вручную по разделу "Environment и секреты", затем:
 npm run dev
 ```
 
@@ -95,18 +95,114 @@ TEST_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55432/postgres npm test
 
 `TEST_DATABASE_URL` обязателен для API-тестов. Test harness создаёт отдельную временную PostgreSQL database на каждый integration test и удаляет её после завершения; silent skip для отсутствующей БД не используется.
 
-## Environment
+## Environment и секреты
 
-Обязательные переменные для PostgreSQL persistence и LiveKit:
+`.env`, `.env.*` и любые реальные значения окружения не хранятся в Git. Для локального запуска создайте `.env` вручную из защищённого источника: password manager, серверный vault или приватная заметка владельца проекта. GitHub Secrets/Variables используйте для CI/CD и protected deploy environments; после сохранения GitHub не показывает secret-значения обратно, поэтому это не удобный источник для локального копирования.
+
+### Где хранить значения
+
+GitHub-аналог GitLab CI/CD variables находится здесь:
+
+1. Repository → **Settings** → **Secrets and variables** → **Actions**.
+2. Для production/staging лучше использовать **Environments**: `production`, `staging`.
+3. Секреты кладите в **Secrets**, обычные настройки — в **Variables**.
+
+**Secrets** — значения, которые нельзя показывать в логах и PR:
+
+| Name | Где нужно | Комментарий |
+| --- | --- | --- |
+| `POSTGRES_PASSWORD` | docker compose / production | Пароль PostgreSQL. |
+| `DATABASE_URL` | API host-only / non-compose deploy | Полная PostgreSQL URL. В compose обычно собирается из `POSTGRES_*`. |
+| `TEST_DATABASE_URL` | CI/API tests | Admin-capable PostgreSQL URL для test harness. |
+| `LIVEKIT_API_KEY` | API / LiveKit | Ключ LiveKit. |
+| `LIVEKIT_API_SECRET` | API / LiveKit | Секрет LiveKit. Сгенерировать случайным значением. |
+| `GITHUB_TOKEN` | API desktop release endpoint, optional | Нужен только если хочется повысить лимит GitHub API. |
+
+**Variables** — не секреты, но окружение-зависимые настройки:
+
+| Name | Default/пример | Комментарий |
+| --- | --- | --- |
+| `DOMAIN` | `voice.example.com` | Основной домен web-приложения. |
+| `LIVEKIT_DOMAIN` | `livekit.${DOMAIN}` | Домен LiveKit. |
+| `LIVEKIT_URL` | `wss://livekit.example.com` | Browser-facing LiveKit URL. В production не используйте `127.0.0.1`. |
+| `LIVEKIT_PUBLIC_URL` | optional | Для dev compose, если внешний LiveKit port отличается. |
+| `TRUST_PROXY` | `true` в compose/proxy | Включать только за доверенным reverse proxy. |
+| `LIVEKIT_TOKEN_TTL_SECONDS` | `21600` | TTL LiveKit token. |
+| `LIVEKIT_ROOM_PREFIX` | `voice-room-` | Prefix room id в LiveKit. |
+| `MAX_ROOM_PEERS` | `12` | Max peers per room. |
+| `MAX_ROOMS` | `100` | Общий лимит комнат. |
+| `MAX_EMPTY_ROOMS_PER_IP` | `3` | Legacy лимит временных empty rooms на IP. |
+| `MAX_TEMP_ROOMS_PER_IP` | optional | Новый явный лимит temporary rooms на IP. |
+| `MAX_STATIC_ROOMS_PER_USER` | `3` | Лимит постоянных комнат на аккаунт. |
+| `ROOM_IDLE_TTL_MS` | `900000` | TTL пустой dynamic room. |
+| `ROOM_PRUNE_INTERVAL_MS` | `60000` | Интервал cleanup. |
+| `ROOM_CHAT_TTL_MS` | `604800000` | TTL chat history. |
+| `ROOM_CHAT_MAX_MESSAGES` | `500` | Max chat messages per room. |
+| `ROOM_CHAT_RATE_LIMIT` | `60` | Room chat rate limit. |
+| `ROOM_CHAT_RATE_WINDOW_MS` | `60000` | Room chat rate window. |
+| `ROOM_CREATE_POW_DIFFICULTY` | `14` | Proof-of-work difficulty. Для dev/test можно `0`. |
+| `ROOM_CREATE_POW_TTL_MS` | `120000` | Proof-of-work TTL. |
+| `ROOM_CREATE_RATE_LIMIT` | `20` | Room create rate limit. |
+| `ROOM_CREATE_RATE_WINDOW_MS` | `60000` | Room create rate window. |
+| `SESSION_TTL_MS` | `2592000000` | Session lifetime. |
+| `SESSION_COOKIE_SECURE` | auto in production | Обычно не задавать; true при HTTPS/prod. |
+| `AUTH_RATE_LIMIT` | `30` | Auth rate limit. |
+| `AUTH_RATE_WINDOW_MS` | `60000` | Auth rate window. |
+| `DM_RATE_LIMIT` | `30` | DM send rate limit per user. |
+| `DM_RATE_WINDOW_MS` | `10000` | DM rate window. |
+| `FRIEND_REQUEST_RATE_LIMIT` | `20` | Friend request rate limit per user. |
+| `FRIEND_REQUEST_RATE_WINDOW_MS` | `60000` | Friend request rate window. |
+| `MAX_REALTIME_STREAMS_PER_USER` | `8` | Max concurrent SSE streams per user. |
+| `HOST` | `127.0.0.1` | Host for host-only API. Compose sets `0.0.0.0`. |
+| `PORT` | `3000` | API port. |
+| `SOCKET_PATH` | empty | Unix socket вместо TCP, если нужен. |
+| `DESKTOP_RELEASE_REPO` | `dazeGG/VoiceRoomDesktop` | Repo для latest desktop release. |
+| `DESKTOP_RELEASE_CACHE_MS` | `600000` | Cache TTL для desktop release metadata. |
+
+### Минимальный local `.env` для dev compose
+
+Создайте файл `.env` локально, не коммитьте его:
 
 ```dotenv
-DATABASE_URL=postgres://voice_room:change-me-postgres-password@127.0.0.1:5432/voice_room
-LIVEKIT_URL=wss://livekit.example.com
-LIVEKIT_API_KEY=change-me-livekit-key
-LIVEKIT_API_SECRET=change-me-livekit-secret
+DOMAIN=localhost
+LIVEKIT_DOMAIN=localhost
+LIVEKIT_URL=ws://localhost:7880
+LIVEKIT_PUBLIC_URL=ws://localhost:7880
+LIVEKIT_API_KEY=devkey
+LIVEKIT_API_SECRET=devsecretdevsecretdevsecret
+POSTGRES_DB=voice_room
+POSTGRES_USER=voice_room
+POSTGRES_PASSWORD=<local-random-password>
+TRUST_PROXY=false
+ROOM_CREATE_POW_DIFFICULTY=0
 ```
 
-`DATABASE_URL` — основной durable storage для registry комнат и истории чата. API валидирует его на bootstrap, применяет migrations через `node-pg-migrate` до первого listen и не имеет runtime fallback на JSON-файл. `ROOM_DATA_DIR` больше не является primary persistence path. Для compose можно не задавать `DATABASE_URL` явно: он собирается из `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` и service name `postgres`.
+Для host-only API добавьте `DATABASE_URL`, потому что вне compose она не собирается автоматически:
+
+```dotenv
+DATABASE_URL=postgres://voice_room:<local-random-password>@127.0.0.1:5432/voice_room
+```
+
+### Минимальный production набор
+
+Для production compose обычно достаточно задать:
+
+```text
+DOMAIN
+LIVEKIT_DOMAIN
+POSTGRES_PASSWORD
+LIVEKIT_API_KEY
+LIVEKIT_API_SECRET
+```
+
+`DATABASE_URL` в compose соберётся автоматически из `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` и service name `postgres`. Если деплой не через compose — задайте `DATABASE_URL` явно как secret.
+
+### Как настроить в GitHub Actions
+
+- `TEST_DATABASE_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, `POSTGRES_PASSWORD`, `DATABASE_URL` → **Secrets**.
+- Домены, лимиты, TTL и rate limits → **Variables**.
+- Для protected production включите Environment protection rules и required reviewers.
+- Не печатайте secrets в workflow logs; передавайте их через `env:` только в конкретные jobs/steps, где они нужны.
 
 Миграции:
 
@@ -115,78 +211,7 @@ npm --workspace @voice-room/api run db:migrate
 npm --workspace @voice-room/api run db:rollback
 ```
 
-Часто используемые настройки:
-
-```dotenv
-PORT=3000
-POSTGRES_DB=voice_room
-POSTGRES_USER=voice_room
-POSTGRES_PASSWORD=change-me-postgres-password
-LIVEKIT_TOKEN_TTL_SECONDS=21600
-LIVEKIT_ROOM_PREFIX=voice-room-
-
-# Доверять заголовку X-Forwarded-For (последний хоп) для определения IP клиента.
-# Включайте ТОЛЬКО когда приложение стоит за доверенным reverse proxy (Caddy в docker-compose).
-# По умолчанию false: IP берётся из реального соединения (socket.remoteAddress).
-TRUST_PROXY=false
-
-MAX_ROOM_PEERS=12
-MAX_ROOMS=100
-MAX_EMPTY_ROOMS_PER_IP=3
-ROOM_IDLE_TTL_MS=900000
-ROOM_PRUNE_INTERVAL_MS=60000
-
-# Чат доступен по ссылке/коду комнаты без входа в голос. Сообщения хранятся
-# в PostgreSQL, но ограничены TTL, количеством сообщений на комнату и rate limit.
-ROOM_CHAT_TTL_MS=604800000
-ROOM_CHAT_MAX_MESSAGES=500
-ROOM_CHAT_RATE_LIMIT=60
-ROOM_CHAT_RATE_WINDOW_MS=60000
-
-ROOM_CREATE_POW_DIFFICULTY=14
-ROOM_CREATE_POW_TTL_MS=120000
-ROOM_CREATE_RATE_LIMIT=20
-ROOM_CREATE_RATE_WINDOW_MS=60000
-
-# Аккаунты и сессии. Сессия хранится в HttpOnly + SameSite=Lax cookie,
-# флаг Secure включается автоматически в production (NODE_ENV=production);
-# переопределите через SESSION_COOKIE_SECURE, если TLS терминируется иначе.
-# Пароли хешируются scrypt (встроенный node:crypto, без нативных зависимостей).
-SESSION_TTL_MS=2592000000
-# SESSION_COOKIE_SECURE=true
-AUTH_RATE_LIMIT=30
-AUTH_RATE_WINDOW_MS=60000
-
-# Друзья и личные сообщения. Отправка DM и заявок в друзья ограничена rate limit
-# на пользователя, а число одновременных realtime (SSE) подключений на аккаунт —
-# MAX_REALTIME_STREAMS_PER_USER.
-DM_RATE_LIMIT=30
-DM_RATE_WINDOW_MS=10000
-FRIEND_REQUEST_RATE_LIMIT=20
-FRIEND_REQUEST_RATE_WINDOW_MS=60000
-MAX_REALTIME_STREAMS_PER_USER=8
-
-# Для reverse proxy / systemd можно слушать Unix socket вместо TCP.
-# Если SOCKET_PATH пустой, API слушает HOST:PORT.
-HOST=127.0.0.1
-SOCKET_PATH=
-
-# Блок «Десктоп-приложение» на главной берёт ссылки из latest-релиза GitHub
-# через эндпоинт GET /api/desktop/latest (метаданные кэшируются на сервере).
-DESKTOP_RELEASE_REPO=dazeGG/VoiceRoomDesktop
-DESKTOP_RELEASE_CACHE_MS=600000
-# Необязательный токен — поднимает лимит запросов к GitHub API (репо публичный,
-# при кэше в 10 минут хватает и анонимных 60 запросов/час).
-GITHUB_TOKEN=
-```
-
-Для локального LiveKit dev server используйте:
-
-```dotenv
-LIVEKIT_URL=ws://127.0.0.1:7880
-LIVEKIT_API_KEY=devkey
-LIVEKIT_API_SECRET=secret
-```
+`DATABASE_URL` — основной durable storage для registry комнат и истории чата. API валидирует его на bootstrap, применяет migrations через `node-pg-migrate` до первого listen и не имеет runtime fallback на JSON-файл. Для compose можно не задавать `DATABASE_URL` явно: он собирается из `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` и service name `postgres`.
 
 ## Docker
 
@@ -200,8 +225,7 @@ Production compose собирает runtime-образы из одного Docke
 Production-like запуск:
 
 ```bash
-cp .env.example .env
-# поменяйте DOMAIN, LIVEKIT_* и POSTGRES_PASSWORD
+# Создайте production .env на сервере из приватного vault/секретов деплоя, затем:
 npm start
 ```
 
@@ -253,7 +277,7 @@ Desktop-оболочка живет в соседнем проекте `VoiceRoo
 
 ```bash
 cd ../VoiceRoomDesktop
-cp .env.example .env
+# Создайте .env для desktop по документации VoiceRoomDesktop
 npm run desktop
 ```
 
