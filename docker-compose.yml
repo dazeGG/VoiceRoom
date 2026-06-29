@@ -88,6 +88,7 @@ services:
         bind_addresses:
           - 0.0.0.0
         log_level: info
+        prometheus_port: ${LIVEKIT_METRICS_PORT:-6789}
         rtc:
           tcp_port: 7881
           udp_port: 7882
@@ -96,7 +97,9 @@ services:
           "${LIVEKIT_API_KEY:?set LIVEKIT_API_KEY in .env}": "${LIVEKIT_API_SECRET:?set LIVEKIT_API_SECRET in .env}"
     expose:
       - "7880"
+      - "${LIVEKIT_METRICS_PORT:-6789}"
     ports:
+      - "${LIVEKIT_METRICS_BIND_ADDRESS:-127.0.0.1}:${LIVEKIT_METRICS_PORT:-6789}:${LIVEKIT_METRICS_PORT:-6789}"
       - "7881:7881/tcp"
       - "7882:7882/udp"
 
