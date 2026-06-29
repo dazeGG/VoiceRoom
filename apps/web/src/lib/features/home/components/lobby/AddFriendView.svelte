@@ -1,19 +1,13 @@
 <script lang="ts">
   import type { AuthUser } from '$lib/api/auth';
-  import { searchUsers, type SearchResult } from '$lib/api/friends';
   import { copyText } from '../../services/desktop-download';
-  import { friendName } from '../../model/lobby-format';
   import { addFriendByLogin } from '../../model/friends.svelte';
-  import Avatar from './Avatar.svelte';
 
   let { user, onToast } = $props<{ user: AuthUser; onToast: (message: string) => void }>();
 
   let query = $state('');
-  let results = $state<SearchResult[]>([]);
   let sending = $state(false);
   let copied = $state(false);
-  let busy = $state<Record<string, boolean>>({});
-  let searchTimer = 0;
 
   function statusMessage(status: string): string {
     switch (status) {
@@ -28,24 +22,6 @@
     }
   }
 
-  function onInput(): void {
-    window.clearTimeout(searchTimer);
-    const term = query.trim();
-    if (term.length < 2) {
-      results = [];
-      return;
-    }
-    searchTimer = window.setTimeout(() => {
-      void searchUsers(term)
-        .then((found) => {
-          results = found;
-        })
-        .catch(() => {
-          results = [];
-        });
-    }, 250);
-  }
-
   async function sendByLogin(): Promise<void> {
     const login = query.trim().replace(/^@/, '');
     if (!login || sending) return;
@@ -54,7 +30,6 @@
       const { status } = await addFriendByLogin(login);
       onToast(statusMessage(status));
       query = '';
-      results = [];
     } catch (error) {
       onToast(error instanceof Error && error.message ? error.message : 'Не удалось отправить заявку');
     } finally {
@@ -62,37 +37,9 @@
     }
   }
 
-  async function addResult(result: SearchResult): Promise<void> {
-    const id = result.user.id;
-    if (busy[id]) return;
-    busy = { ...busy, [id]: true };
-    try {
-      const { status } = await addFriendByLogin(result.user.login);
-      onToast(statusMessage(status));
-      result.relationship = status === 'accepted' ? 'friend' : status === 'already_friends' ? 'friend' : 'outgoing';
-    } catch (error) {
-      onToast(error instanceof Error && error.message ? error.message : 'Не удалось отправить заявку');
-    } finally {
-      busy = { ...busy, [id]: false };
-    }
-  }
-
-  function relationshipLabel(rel: string): string {
-    switch (rel) {
-      case 'friend':
-        return 'Уже друзья';
-      case 'outgoing':
-        return 'Отправлено';
-      case 'incoming':
-        return 'Ждёт ответа';
-      default:
-        return 'Добавить';
-    }
-  }
-
   async function copyLogin(): Promise<void> {
     try {
-      await copyText(`@${user.login}`);
+      await copyText(user.login);
     } catch {
       // Clipboard may be unavailable; still show feedback.
     }
@@ -110,7 +57,7 @@
 
 <div class="lobby-view-head">
   <div class="lobby-view-title">Добавить друга</div>
-  <div class="lobby-view-sub">Введите логин — например <span class="mono">@artem</span>. Заявка уйдёт, как только логин найдётся.</div>
+  <div class="lobby-view-sub">Введите логин — например <span class="mono">@daze</span>. Заявка уйдёт после нажатия кнопки.</div>
 </div>
 
 <div class="lobby-view-body lobby-scroll">
@@ -126,42 +73,11 @@
             autocomplete="off"
             spellcheck="false"
             bind:value={query}
-            oninput={onInput}
             onkeydown={onKeydown}
           />
         </label>
         <button class="lobby-add-send" type="button" onclick={sendByLogin} disabled={sending || !query.trim()}>Отправить заявку</button>
       </div>
-
-      <div class="lobby-divider"></div>
-
-      <div class="lobby-mono" style="font-size:11px;color:#7d7768;margin-bottom:14px;">
-        {query.trim().length >= 2 ? 'Результаты поиска' : 'Начните вводить логин'}
-      </div>
-
-      {#if results.length === 0}
-        <p class="lobby-empty">
-          {query.trim().length >= 2 ? 'Никого не нашлось по этому запросу.' : 'Введите хотя бы два символа, чтобы найти людей.'}
-        </p>
-      {:else}
-        <div class="lobby-req-list">
-          {#each results as result (result.user.id)}
-            <div class="lobby-result-card">
-              <Avatar name={friendName(result.user)} colorKey={result.user.avatarColorKey} size={40} online={result.online} showDot={result.online} ring="#0c0b08" />
-              <div style="flex:1;min-width:0;">
-                <div class="lobby-result-name">{friendName(result.user)}</div>
-                <div class="lobby-result-handle">@{result.user.login}</div>
-              </div>
-              <button
-                class="lobby-result-add"
-                type="button"
-                disabled={busy[result.user.id] || result.relationship !== 'none'}
-                onclick={() => addResult(result)}
-              >{relationshipLabel(result.relationship)}</button>
-            </div>
-          {/each}
-        </div>
-      {/if}
     </div>
 
     <div>
