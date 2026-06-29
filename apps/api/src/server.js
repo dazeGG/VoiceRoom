@@ -290,6 +290,15 @@ function sessionAvatarColorKey(user) {
   return user?.avatarColorKey || '';
 }
 
+function sessionDisplayName(user) {
+  if (!user) return '';
+  return cleanName(user.displayName || user.login);
+}
+
+function sessionChatPeerId(user) {
+  return user?.id ? normalizePeerId(`auth-${user.id}`) : '';
+}
+
 function buildSessionCookie(token, maxAgeSeconds) {
   const parts = [
     `${SESSION_COOKIE_NAME}=${encodeURIComponent(token)}`,
@@ -1379,8 +1388,8 @@ async function handleRoomChatPost(req, res, roomId) {
   const body = await readJsonBody(req);
   const requestedPeerId = normalizePeerId(body.peerId);
   const sessionToken = normalizeSessionToken(body.sessionToken);
-  const name = cleanName(body.name);
   const sessionUser = await resolveOptionalSessionUser(req);
+  const name = sessionDisplayName(sessionUser) || cleanName(body.name);
   const text = cleanChatText(body.text);
 
   if (!room) {
@@ -1404,8 +1413,9 @@ async function handleRoomChatPost(req, res, roomId) {
     return;
   }
 
-  let peerId = requestedPeerId || `chat-${crypto.randomBytes(12).toString('hex')}`;
-  let avatarColorKey = avatarColorForPeerId(peerId);
+  const authenticatedPeerId = requestedPeerId ? '' : sessionChatPeerId(sessionUser);
+  let peerId = requestedPeerId || authenticatedPeerId || `chat-${crypto.randomBytes(12).toString('hex')}`;
+  let avatarColorKey = sessionAvatarColorKey(sessionUser) || avatarColorForPeerId(peerId);
   const activePeer = requestedPeerId ? room.peers.get(requestedPeerId) : null;
   if (activePeer) {
     if (!tokensMatch(activePeer.sessionToken, sessionToken)) {

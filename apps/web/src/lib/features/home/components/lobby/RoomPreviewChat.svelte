@@ -27,6 +27,7 @@
   }
 
   const displayName = $derived(friendName(user));
+  const accountPeerId = $derived(`auth-${user.id}`);
   const groups = $derived(buildGroups(messages));
   const messageIds = new Set<string>();
 
@@ -46,7 +47,7 @@
         key: message.id,
         name: author,
         peerId: message.peerId,
-        self: author === displayName,
+        self: message.peerId === accountPeerId,
         avatarBackground: avatar.background,
         avatarForeground: avatar.foreground,
         avatarShadow: avatar.shadow,
