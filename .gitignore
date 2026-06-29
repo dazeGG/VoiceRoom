@@ -19,6 +19,7 @@ pnpm-debug.log*
 .vscode/
 
 # Local scratch and generated artifacts
+graphify-out/
 work/
 outputs/
 deploy/
