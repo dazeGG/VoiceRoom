@@ -18,8 +18,6 @@ export const elements = {
   get devicePopover() { return $<HTMLElement>('#devicePopover'); },
   get dockConnection() { return $<HTMLElement>('#dockConnection'); },
   get dockConnectionLabel() { return $<HTMLElement>('#dockConnectionLabel'); },
-  get emptyRoom() { return $<HTMLElement>('#emptyRoom'); },
-  get emptyRoomAvatar() { return $<HTMLElement>('#emptyRoomAvatar'); },
   get entryErrorScreen() { return $<HTMLElement>('#entryErrorScreen'); },
   get entryRetryButton() { return $<HTMLButtonElement>('#entryRetryButton'); },
   get gateThresholdSlider() { return $<HTMLInputElement>('#gateThresholdSlider'); },

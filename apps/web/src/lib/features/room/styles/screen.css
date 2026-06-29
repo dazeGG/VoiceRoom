@@ -284,10 +284,6 @@ body[data-screen-view="true"] .stage {
   padding: 0 var(--space-xl) 86px;
 }
 
-body[data-screen-view="true"] .empty-room {
-  display: none;
-}
-
 body[data-screen-view="true"] .screen-stage {
   height: 100%;
   min-height: 0;

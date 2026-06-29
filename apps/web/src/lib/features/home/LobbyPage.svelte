@@ -301,9 +301,9 @@
       {/if}
 
       {#if friendsState.mode === 'rooms' && selectedRoom && connectedVoiceRoomId && selectedRoom.roomId !== connectedVoiceRoomId}
-        <RoomBrowseView {user} room={selectedRoom} onEnter={() => enterRoom(selectedRoom.roomId)} onBack={closeViewedRoom} />
+        <RoomBrowseView {user} room={selectedRoom} onEnter={() => enterRoom(selectedRoom.roomId)} onBack={closeViewedRoom} {onToast} />
       {:else if friendsState.mode === 'rooms' && selectedRoom && (!embeddedRoomId || !embeddedRoomVisible)}
-        <RoomPreviewView {user} room={selectedRoom} onEnter={() => enterRoom(selectedRoom.roomId)} onBack={closeViewedRoom} />
+        <RoomPreviewView {user} room={selectedRoom} onEnter={() => enterRoom(selectedRoom.roomId)} onBack={closeViewedRoom} {onToast} />
       {:else if friendsState.mode === 'rooms' && !embeddedRoomVisible}
         <RoomsHomeView {rooms} onCreateRoom={() => (createDialogOpen = true)} onOpenRoom={previewRoom} />
       {:else if friendsState.mode === 'friends' && friendsState.view === 'dm'}

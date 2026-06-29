@@ -545,7 +545,6 @@ function setParticipantStatus(peer: Participant | ParticipantViewRefs, label: st
 export function refreshParticipantState(): void {
   const participantCount = elements.participants.children.length;
   elements.participants.dataset.count = String(Math.min(participantCount, 8));
-  elements.emptyRoom.hidden = participantCount > 0;
   refreshStageGridState();
 }
 
@@ -557,7 +556,6 @@ export function refreshStageGridState(): void {
   const totalCount = participantCount + streamCount;
   elements.tileGrid.dataset.count = String(Math.min(totalCount, 8));
   elements.tileGrid.dataset.streams = String(Math.min(streamCount, 8));
-  elements.emptyRoom.hidden = totalCount > 0;
 }
 
 function applyParticipantPalette(node: HTMLElement, peerInfo: { avatarColorKey?: string; id?: string; name?: string }): void {
