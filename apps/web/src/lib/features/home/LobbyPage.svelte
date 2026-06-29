@@ -35,7 +35,9 @@
   import { roomDisplayName } from './model/rooms';
   import '$lib/shared/styles/typography.css';
   import '$lib/shared/styles/dialog.css';
+  import '$lib/features/room/styles/chat-rail.css';
   import './styles/friends.css';
+  import './styles/account-menu.css';
   import './styles/settings.css';
 
   let { user, loggingOut, onLogout, onToast } = $props<{
@@ -67,6 +69,7 @@
   function restoreLobbyDocumentState(): void {
     document.body.dataset.screen = 'start';
     delete document.body.dataset.chatOpen;
+    delete document.body.dataset.lobbyEmbedded;
     delete document.body.dataset.screenView;
     delete document.body.dataset.stripCollapsed;
     document.title = 'Voice Room';
@@ -119,17 +122,20 @@
   });
 
   $effect(() => {
-    if (!embeddedRoomId) return;
-    if (embeddedRoomVisible) {
-      document.body.dataset.screen = 'room';
+    if (!embeddedRoomId) {
+      delete document.body.dataset.lobbyEmbedded;
       return;
     }
-    if (!embeddedRoomVisible) {
-      document.body.dataset.screen = 'start';
-      delete document.body.dataset.chatOpen;
-      delete document.body.dataset.screenView;
-      delete document.body.dataset.stripCollapsed;
+    if (embeddedRoomVisible) {
+      document.body.dataset.screen = 'room';
+      document.body.dataset.lobbyEmbedded = 'true';
+      return;
     }
+    document.body.dataset.screen = 'start';
+    delete document.body.dataset.chatOpen;
+    delete document.body.dataset.lobbyEmbedded;
+    delete document.body.dataset.screenView;
+    delete document.body.dataset.stripCollapsed;
   });
 
   $effect(() => {
@@ -285,9 +291,9 @@
       {/if}
 
       {#if friendsState.mode === 'rooms' && selectedRoom && connectedVoiceRoomId && selectedRoom.roomId !== connectedVoiceRoomId}
-        <RoomBrowseView room={selectedRoom} onEnter={() => enterRoom(selectedRoom.roomId)} onBack={closeViewedRoom} />
+        <RoomBrowseView {user} room={selectedRoom} onEnter={() => enterRoom(selectedRoom.roomId)} onBack={closeViewedRoom} />
       {:else if friendsState.mode === 'rooms' && selectedRoom && (!embeddedRoomId || !embeddedRoomVisible)}
-        <RoomPreviewView room={selectedRoom} onEnter={() => enterRoom(selectedRoom.roomId)} onBack={closeViewedRoom} />
+        <RoomPreviewView {user} room={selectedRoom} onEnter={() => enterRoom(selectedRoom.roomId)} onBack={closeViewedRoom} />
       {:else if friendsState.mode === 'rooms' && !embeddedRoomVisible}
         <RoomsHomeView {rooms} onCreateRoom={() => (createDialogOpen = true)} onOpenRoom={previewRoom} />
       {:else if friendsState.mode === 'friends' && friendsState.view === 'dm'}
