@@ -33,6 +33,7 @@
     setViewedRoomFromRoute
   } from './model/room-navigation.svelte';
   import { roomDisplayName } from './model/rooms';
+  import { roomUi } from '$lib/features/room/room-ui.svelte';
   import '$lib/shared/styles/typography.css';
   import '$lib/shared/styles/dialog.css';
   import '$lib/features/room/styles/chat-rail.css';
@@ -106,9 +107,14 @@
       if (transition.closeEmbeddedRoom) closeEmbeddedRoom({ replaceUrl: false });
     }
 
+    // On a fresh load/reload the URL is the only persisted state, so a /r/:id
+    // route means the user wants to be back inside that room. Enter with
+    // auto-join (like the "Войти" button) instead of only previewing — otherwise
+    // temporary rooms (absent from "Мои комнаты") leave the user stranded on the
+    // rooms home with the route still pointing at the room.
     const initialRoomId = extractRoomId(window.location.pathname);
     if (initialRoomId) {
-      setViewedRoomFromRoute(initialRoomId);
+      selectRoomForVoiceEntry(initialRoomId);
       friendsState.mode = 'rooms';
     }
 
@@ -129,6 +135,10 @@
     if (embeddedRoomVisible) {
       document.body.dataset.screen = 'room';
       document.body.dataset.lobbyEmbedded = 'true';
+      // Re-show clears data-chat-open below on hide, but RoomChat's own effect
+      // won't re-fire (chatOpen didn't change), so the stage/dock wouldn't shift
+      // back for an already-open chat. Sync it from the shared state here.
+      document.body.dataset.chatOpen = roomUi.chatOpen ? 'true' : 'false';
       return;
     }
     document.body.dataset.screen = 'start';

@@ -180,6 +180,10 @@
     sending = true;
     error = '';
     try {
+      // Re-read the saved name at send time: the guest name dialog can persist a
+      // name after this component mounted, so the value captured in onMount may be
+      // stale (showing "Гость" even though the user entered a name).
+      displayName = cleanDisplayName(localStorage.getItem('voice-room:name')) || 'Гость';
       const message = await postRoomChat(roomId, {
         name: displayName,
         peerId,
