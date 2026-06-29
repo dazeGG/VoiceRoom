@@ -203,7 +203,7 @@ test('auth client does not mask unexpected backend failures as anonymous or empt
 test('shared Select primitive wraps Popover listbox slots for site-wide dropdowns', () => {
   const select = read('src/lib/shared/components/Select.svelte');
   const selectCss = read('src/lib/shared/styles/select.css');
-  const topbarDownload = read('src/lib/features/home/components/TopbarDownload.svelte');
+  const sidebarDownload = read('src/lib/features/home/components/SidebarDownload.svelte');
   const settingsModal = read('src/lib/features/home/components/SettingsModal.svelte');
   const roomDock = read('src/lib/features/room/components/RoomDock.svelte');
   const devices = read('src/lib/features/room/client/ui/devices.ts');
@@ -225,10 +225,11 @@ test('shared Select primitive wraps Popover listbox slots for site-wide dropdown
   assert.match(select, /use:registerOption=\{index\}/);
   assert.doesNotMatch(select, /bind:this=\{optionRefs\[index\]\}/);
   assert.match(selectCss, /\.select-trigger/);
-  assert.match(topbarDownload, /import Select from '\$lib\/shared\/components\/Select\.svelte'/);
+  assert.match(sidebarDownload, /import Popover from '\$lib\/shared\/components\/Popover\.svelte'/);
+  assert.match(sidebarDownload, /import PopoverMenuItem from '\$lib\/shared\/components\/PopoverMenuItem\.svelte'/);
   assert.match(settingsModal, /import Select from '\$lib\/shared\/components\/Select\.svelte'/);
   assert.match(roomDock, /import Select from '\$lib\/shared\/components\/Select\.svelte'/);
-  assert.doesNotMatch(topbarDownload, /<select\b/);
+  assert.doesNotMatch(sidebarDownload, /<select\b/);
   assert.doesNotMatch(settingsModal, /<select\b/);
   assert.doesNotMatch(roomDock, /<select\b/);
   assert.doesNotMatch(devices, /deviceSelect|noiseModeSelect|outputDeviceSelect/);
@@ -539,8 +540,8 @@ test('hotfix lobby UX keeps dock in main area, preview chat, and add-friend subm
 
   assert.match(controls, /body\[data-lobby-embedded="true"\] \.room-dock/);
   assert.match(controls, /left: var\(--lobby-sidebar-width, 312px\)/);
-  assert.match(sidebar, /import TopbarDownload from '\.\.\/TopbarDownload\.svelte'/);
-  assert.match(sidebar, /<TopbarDownload \/>/);
+  assert.match(sidebar, /import SidebarDownload from '\.\.\/SidebarDownload\.svelte'/);
+  assert.match(sidebar, /<SidebarDownload \/>/);
   assert.match(previewView, /RoomPreviewChat/);
   assert.match(browseView, /RoomPreviewChat/);
   assert.doesNotMatch(previewView, /тихо сейчас/);
