@@ -20,7 +20,11 @@
     onCreateRoom,
     onJoinRoom,
     onAddRoom,
-    onOpenSettings
+    onOpenSettings,
+    activeVoiceRoomId = null,
+    activeVoiceRoomName = '',
+    onOpenVoiceRoom,
+    onLeaveVoiceRoom
   } = $props<{
     user: AuthUser;
     rooms: OwnedRoom[];
@@ -31,6 +35,10 @@
     onJoinRoom: () => void;
     onAddRoom: () => void;
     onOpenSettings: () => void;
+    activeVoiceRoomId?: string | null;
+    activeVoiceRoomName?: string;
+    onOpenVoiceRoom?: () => void;
+    onLeaveVoiceRoom?: () => void;
   }>();
 
   let search = $state('');
@@ -47,6 +55,7 @@
   const offline = $derived(filtered.filter((entry) => !entry.online));
 
   const selfName = $derived(user.displayName?.trim() || user.login);
+  const activeVoiceLabel = $derived(activeVoiceRoomName?.trim() || activeVoiceRoomId || '');
 
   function lastMessagePreview(entry: (typeof friendsState.friends)[number]): string {
     if (!entry.lastMessage) return entry.online ? 'в сети' : 'не в сети';
@@ -216,6 +225,22 @@
             </button>
           {/each}
         {/if}
+      </div>
+    </div>
+  {/if}
+
+  {#if activeVoiceRoomId}
+    <div class="lobby-voice-panel" aria-label="Активный голос">
+      <div class="lobby-voice-state">
+        <span class="lobby-live-dot" aria-hidden="true"></span>
+        <span>Вы в голосе</span>
+      </div>
+      <div class="lobby-voice-room" title={activeVoiceLabel}>{activeVoiceLabel}</div>
+      <div class="lobby-voice-actions">
+        <button class="lobby-voice-open" type="button" onclick={onOpenVoiceRoom}>Открыть</button>
+        <button class="lobby-voice-leave" type="button" onclick={onLeaveVoiceRoom} aria-label="Выйти из голосовой комнаты">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"></path><polyline points="10 17 15 12 10 7"></polyline><line x1="15" y1="12" x2="3" y2="12"></line></svg>
+        </button>
       </div>
     </div>
   {/if}

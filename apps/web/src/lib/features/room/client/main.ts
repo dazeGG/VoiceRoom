@@ -1,5 +1,6 @@
 import { GATE_THRESHOLD_MIN_DB } from './core/config';
 import { roomDeviceUi } from '$lib/features/room/room-device-ui.svelte';
+import { registerActiveVoiceLeave } from '$lib/features/room/voice-session.svelte';
 import { elements, setElementsRoot } from './ui/dom';
 import { mountIcons } from './ui/icons';
 import { state } from './core/state';
@@ -26,8 +27,10 @@ import {
   createRoomFromStart,
   handleLeaveButtonClick,
   handleRoomCodeKeydown,
+  joinRoom,
   joinRoomByCode,
   leaveRoom,
+  showRoomEntryFailure,
   showRoomNotFound,
   showRoomRoute,
   showStartScreen
@@ -49,17 +52,19 @@ import { refreshLocalNetworkIndicator } from './ui/status';
 
 let mounted = false;
 let mountAbortController: AbortController | null = null;
+let activeVoiceLeaveTeardown: (() => void) | null = null;
 
-export function mountRoomClient(root: ParentNode = document, options: { embeddedRoomId?: string } = {}): () => void {
+export function mountRoomClient(root: ParentNode = document, options: { roomId?: string; embeddedRoomId?: string; autoJoin?: boolean } = {}): () => void {
   if (mounted) return unmountRoomClient;
   mounted = true;
   setElementsRoot(root);
   mountAbortController = new AbortController();
   const listenerSignal = mountAbortController.signal;
+  activeVoiceLeaveTeardown = registerActiveVoiceLeave(leaveRoom);
 
-  if (options.embeddedRoomId) {
-    const peerSession = getStoredPeerSession(options.embeddedRoomId);
-    state.autoJoinStarted = false;
+  const mountedRoomId = options.roomId || options.embeddedRoomId || '';
+  if (mountedRoomId) {
+    const peerSession = getStoredPeerSession(mountedRoomId);
     state.connecting = false;
     state.joined = false;
     state.eventSource?.close();
@@ -74,7 +79,7 @@ export function mountRoomClient(root: ParentNode = document, options: { embedded
     state.roomColorKey = '';
     state.roomIconKey = '';
     state.roomPresetKey = '';
-    state.roomId = options.embeddedRoomId;
+    state.roomId = mountedRoomId;
     state.roomRoute = true;
     state.peerId = peerSession.peerId;
     state.sessionToken = peerSession.sessionToken;
@@ -129,14 +134,24 @@ export function mountRoomClient(root: ParentNode = document, options: { embedded
   refreshStageStripControls();
   refreshLocalNetworkIndicator();
 
+  function runRoomRoute(): void {
+    showRoomRoute()
+      .then((ready) => {
+        if (ready && options.autoJoin) return joinRoom();
+      })
+      .catch((error) => {
+        console.error(error);
+        showRoomEntryFailure();
+        showToast('Не удалось проверить комнату');
+      });
+  }
+
+  elements.entryRetryButton.addEventListener('click', runRoomRoute, { signal: listenerSignal });
+
   if (state.roomRoute && !state.roomId) {
     showRoomNotFound();
   } else if (state.roomId) {
-    showRoomRoute().catch((error) => {
-      console.error(error);
-      showRoomNotFound();
-      showToast('Не удалось проверить комнату');
-    });
+    runRoomRoute();
   } else {
     showStartScreen();
   }
@@ -146,6 +161,8 @@ export function mountRoomClient(root: ParentNode = document, options: { embedded
 
 function unmountRoomClient(): void {
   leaveRoom();
+  activeVoiceLeaveTeardown?.();
+  activeVoiceLeaveTeardown = null;
   mountAbortController?.abort();
   mountAbortController = null;
   resetGuestNameDialog();

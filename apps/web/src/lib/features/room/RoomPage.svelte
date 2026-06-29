@@ -5,6 +5,7 @@
   import '$lib/shared/styles/dialog.css';
   import './styles/room.css';
   import NotFoundScreen from './components/NotFoundScreen.svelte';
+  import RoomEntryErrorScreen from './components/RoomEntryErrorScreen.svelte';
   import RoomOverlays from './components/RoomOverlays.svelte';
   import RoomSettingsDialog from './components/RoomSettingsDialog.svelte';
   import RoomStage from './components/RoomStage.svelte';
@@ -12,8 +13,10 @@
   import StartRoomScreen from './components/StartRoomScreen.svelte';
   import { setRoomEmbedded } from './client/core/embed';
 
-  let { embeddedRoomId = '' } = $props<{
+  let { embeddedRoomId = '', roomId = '', autoJoin = false } = $props<{
     embeddedRoomId?: string;
+    roomId?: string;
+    autoJoin?: boolean;
   }>();
 
   let roomRoot = $state<HTMLElement>();
@@ -25,7 +28,7 @@
 
     void import('./client/main').then(({ mountRoomClient }) => {
       if (!roomRoot) return;
-      cleanup = mountRoomClient(roomRoot, { embeddedRoomId });
+      cleanup = mountRoomClient(roomRoot, { roomId: embeddedRoomId || roomId, embeddedRoomId, autoJoin });
     });
 
     return () => {
@@ -39,6 +42,7 @@
   <RoomTopbar />
   <StartRoomScreen />
   <RoomStage />
+  <RoomEntryErrorScreen />
   <NotFoundScreen />
   <RoomOverlays />
   <RoomSettingsDialog />

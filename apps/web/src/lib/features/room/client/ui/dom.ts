@@ -20,6 +20,8 @@ export const elements = {
   get dockConnectionLabel() { return $<HTMLElement>('#dockConnectionLabel'); },
   get emptyRoom() { return $<HTMLElement>('#emptyRoom'); },
   get emptyRoomAvatar() { return $<HTMLElement>('#emptyRoomAvatar'); },
+  get entryErrorScreen() { return $<HTMLElement>('#entryErrorScreen'); },
+  get entryRetryButton() { return $<HTMLButtonElement>('#entryRetryButton'); },
   get gateThresholdSlider() { return $<HTMLInputElement>('#gateThresholdSlider'); },
   get gateThresholdValue() { return $<HTMLOutputElement>('#gateThresholdValue'); },
   get guestNameDialog() { return $<HTMLElement>('#guestNameDialog'); },

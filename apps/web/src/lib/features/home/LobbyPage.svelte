@@ -6,6 +6,7 @@
   import { extractRoomId } from '$lib/shared/utils/room';
   import SettingsModal from './components/SettingsModal.svelte';
   import RoomPage from '$lib/features/room/RoomPage.svelte';
+  import { leaveActiveVoiceRoom } from '$lib/features/room/voice-session.svelte';
   import CreateRoomDialog from './components/CreateRoomDialog.svelte';
   import Sidebar from './components/lobby/Sidebar.svelte';
   import HomeView from './components/lobby/HomeView.svelte';
@@ -13,8 +14,25 @@
   import RequestsView from './components/lobby/RequestsView.svelte';
   import AddFriendView from './components/lobby/AddFriendView.svelte';
   import RoomsHomeView from './components/lobby/RoomsHomeView.svelte';
+  import RoomBrowseView from './components/lobby/RoomBrowseView.svelte';
   import RoomPreviewView from './components/lobby/RoomPreviewView.svelte';
   import { friendsState, initLobby } from './model/friends.svelte';
+  import {
+    getActiveVoiceRoomId,
+    clearDisconnectedHiddenEmbed,
+    clearEmbeddedRoom as clearEmbeddedRoomState,
+    clearViewedRoom,
+    connectedRoomIsViewed,
+    embeddedRoomIsVisible,
+    leaveViewedConnectedRoom as resolveLeaveViewedConnectedRoom,
+    openActiveVoiceRoom,
+    roomNavigation,
+    routeToHome,
+    selectRoomForVoiceEntry,
+    selectRoomPreview,
+    setViewedRoomFromRoute
+  } from './model/room-navigation.svelte';
+  import { roomDisplayName } from './model/rooms';
   import '$lib/shared/styles/typography.css';
   import '$lib/shared/styles/dialog.css';
   import './styles/friends.css';
@@ -37,43 +55,58 @@
   let adding = $state(false);
   let settingsOpen = $state(false);
   let settingsTab = $state<'profile' | 'sound'>('profile');
-  let selectedRoomId = $state<string | null>(null);
-  let embeddedRoomId = $state<string | null>(null);
-
+  const selectedRoomId = $derived(roomNavigation.viewedRoomId);
+  const embeddedRoomId = $derived(roomNavigation.embeddedRoomId);
+  const autoJoinRoomId = $derived(roomNavigation.joinIntentRoomId);
+  const connectedVoiceRoomId = $derived(getActiveVoiceRoomId());
   const selectedRoom = $derived(rooms.find((room) => room.roomId === selectedRoomId) ?? null);
+  const connectedVoiceRoom = $derived(rooms.find((room) => room.roomId === connectedVoiceRoomId) ?? null);
+  const connectedRoomVisible = $derived(connectedRoomIsViewed(friendsState.mode));
+  const embeddedRoomVisible = $derived(embeddedRoomIsVisible(friendsState.mode));
+
+  function restoreLobbyDocumentState(): void {
+    document.body.dataset.screen = 'start';
+    delete document.body.dataset.chatOpen;
+    delete document.body.dataset.screenView;
+    delete document.body.dataset.stripCollapsed;
+    document.title = 'Voice Room';
+  }
+
+  function closeEmbeddedRoom({ replaceUrl = true, closedRoomId = embeddedRoomId }: { replaceUrl?: boolean; closedRoomId?: string | null } = {}): void {
+    const shouldReplaceUrl = Boolean(replaceUrl && closedRoomId && selectedRoomId === closedRoomId);
+    clearEmbeddedRoomState();
+    restoreLobbyDocumentState();
+    if (shouldReplaceUrl) {
+      history.replaceState(null, '', '/');
+    }
+  }
 
   onMount(() => {
     void refreshRooms();
     const teardown = user ? initLobby(user.id) : () => {};
-    function restoreLobbyDocumentState(): void {
-      document.body.dataset.screen = 'start';
-      delete document.body.dataset.chatOpen;
-      delete document.body.dataset.screenView;
-      delete document.body.dataset.stripCollapsed;
-      document.title = 'Voice Room';
-    }
 
-    function closeEmbeddedRoom({ replaceUrl = true }: { replaceUrl?: boolean } = {}): void {
-      embeddedRoomId = null;
-      restoreLobbyDocumentState();
-      if (replaceUrl && selectedRoomId) {
-        history.replaceState(null, '', '/');
-      }
-    }
-
-    function onEmbeddedLeave(): void {
-      closeEmbeddedRoom();
+    function onEmbeddedLeave(event: Event): void {
+      const closedRoomId = event instanceof CustomEvent && typeof event.detail?.roomId === 'string' ? event.detail.roomId : null;
+      const closedViewedRoom = Boolean(closedRoomId && selectedRoomId === closedRoomId);
+      closeEmbeddedRoom({ closedRoomId });
+      if (closedViewedRoom) clearViewedRoom();
     }
 
     function onPopState(): void {
       const roomId = extractRoomId(window.location.pathname);
       if (roomId) {
-        selectedRoomId = roomId;
-        embeddedRoomId = roomId;
+        setViewedRoomFromRoute(roomId);
         friendsState.mode = 'rooms';
         return;
       }
-      if (embeddedRoomId) closeEmbeddedRoom({ replaceUrl: false });
+      const transition = routeToHome();
+      if (transition.closeEmbeddedRoom) closeEmbeddedRoom({ replaceUrl: false });
+    }
+
+    const initialRoomId = extractRoomId(window.location.pathname);
+    if (initialRoomId) {
+      setViewedRoomFromRoute(initialRoomId);
+      friendsState.mode = 'rooms';
     }
 
     window.addEventListener('voice-room:embedded-leave', onEmbeddedLeave);
@@ -85,6 +118,26 @@
     };
   });
 
+  $effect(() => {
+    if (!embeddedRoomId) return;
+    if (embeddedRoomVisible) {
+      document.body.dataset.screen = 'room';
+      return;
+    }
+    if (!embeddedRoomVisible) {
+      document.body.dataset.screen = 'start';
+      delete document.body.dataset.chatOpen;
+      delete document.body.dataset.screenView;
+      delete document.body.dataset.stripCollapsed;
+    }
+  });
+
+  $effect(() => {
+    if (!connectedVoiceRoomId && embeddedRoomId && selectedRoomId !== embeddedRoomId) {
+      clearDisconnectedHiddenEmbed();
+    }
+  });
+
   async function refreshRooms(): Promise<void> {
     try {
       rooms = await fetchOwnedRooms();
@@ -94,15 +147,41 @@
     }
   }
 
-  function openRoom(roomId: string): void {
-    selectedRoomId = roomId;
-    embeddedRoomId = roomId;
+  // Explicit voice enter/switch path. Browsing a room uses previewRoom(); this
+  // path may remount the room client because the user chose to enter voice here.
+  function enterRoom(roomId: string): void {
+    selectRoomForVoiceEntry(roomId);
+    friendsState.mode = 'rooms';
     history.pushState(null, '', `/r/${encodeURIComponent(roomId)}`);
   }
 
   function previewRoom(roomId: string): void {
-    selectedRoomId = roomId;
+    selectRoomPreview(roomId);
     friendsState.mode = 'rooms';
+    history.pushState(null, '', `/r/${encodeURIComponent(roomId)}`);
+  }
+
+  function closeViewedRoom(): void {
+    const transition = routeToHome();
+    if (transition.closeEmbeddedRoom) closeEmbeddedRoom({ replaceUrl: false });
+    history.pushState(null, '', '/');
+  }
+
+  function openConnectedVoiceRoom(): void {
+    const openedRoomId = openActiveVoiceRoom();
+    if (!openedRoomId) return;
+    friendsState.mode = 'rooms';
+    history.pushState(null, '', `/r/${encodeURIComponent(openedRoomId)}`);
+  }
+
+  function leaveConnectedVoiceRoom(): void {
+    const leavingRoomId = connectedVoiceRoomId;
+    const transition = resolveLeaveViewedConnectedRoom(leavingRoomId);
+    leaveActiveVoiceRoom();
+    if (transition.closeEmbeddedRoom) {
+      closeEmbeddedRoom();
+      clearViewedRoom();
+    }
   }
 
   function handleJoin(): void {
@@ -111,7 +190,7 @@
       onToast('Введите код комнаты');
       return;
     }
-    openRoom(roomId);
+    enterRoom(roomId);
   }
 
   async function handleCreate(payload: { name: string; roomPresetKey: string; isStatic: boolean }): Promise<void> {
@@ -124,7 +203,7 @@
         await refreshRooms();
         onToast('Комната создана');
       } else {
-        openRoom(roomId);
+        enterRoom(roomId);
       }
     } catch (error) {
       onToast(error instanceof Error && error.message ? error.message : 'Не удалось создать комнату');
@@ -190,24 +269,34 @@
       onJoinRoom={handleJoin}
       onAddRoom={() => (addDialogOpen = true)}
       onOpenSettings={openSettings}
+      activeVoiceRoomId={connectedVoiceRoomId}
+      activeVoiceRoomName={connectedVoiceRoom ? roomDisplayName(connectedVoiceRoom) : connectedVoiceRoomId || ''}
+      onOpenVoiceRoom={openConnectedVoiceRoom}
+      onLeaveVoiceRoom={leaveConnectedVoiceRoom}
     />
 
     <main class="lobby-main" aria-label="Главная Voice Room">
       {#if embeddedRoomId}
-        {#key embeddedRoomId}
-          <RoomPage embeddedRoomId={embeddedRoomId} />
-        {/key}
-      {:else if selectedRoom}
-        <RoomPreviewView room={selectedRoom} onEnter={() => openRoom(selectedRoom.roomId)} onBack={() => (selectedRoomId = null)} />
-      {:else if friendsState.mode === 'rooms'}
+        <div class="lobby-embedded-room" hidden={!embeddedRoomVisible}>
+          {#key embeddedRoomId}
+            <RoomPage embeddedRoomId={embeddedRoomId} autoJoin={autoJoinRoomId === embeddedRoomId} />
+          {/key}
+        </div>
+      {/if}
+
+      {#if friendsState.mode === 'rooms' && selectedRoom && connectedVoiceRoomId && selectedRoom.roomId !== connectedVoiceRoomId}
+        <RoomBrowseView room={selectedRoom} onEnter={() => enterRoom(selectedRoom.roomId)} onBack={closeViewedRoom} />
+      {:else if friendsState.mode === 'rooms' && selectedRoom && (!embeddedRoomId || !embeddedRoomVisible)}
+        <RoomPreviewView room={selectedRoom} onEnter={() => enterRoom(selectedRoom.roomId)} onBack={closeViewedRoom} />
+      {:else if friendsState.mode === 'rooms' && !embeddedRoomVisible}
         <RoomsHomeView {rooms} onCreateRoom={() => (createDialogOpen = true)} onOpenRoom={previewRoom} />
-      {:else if friendsState.view === 'dm'}
+      {:else if friendsState.mode === 'friends' && friendsState.view === 'dm'}
         <DmView selfId={user.id} />
-      {:else if friendsState.view === 'requests'}
+      {:else if friendsState.mode === 'friends' && friendsState.view === 'requests'}
         <RequestsView {onToast} />
-      {:else if friendsState.view === 'add'}
+      {:else if friendsState.mode === 'friends' && friendsState.view === 'add'}
         <AddFriendView {user} {onToast} />
-      {:else}
+      {:else if friendsState.mode === 'friends'}
         <HomeView {user} {rooms} onOpenRoom={previewRoom} />
       {/if}
     </main>

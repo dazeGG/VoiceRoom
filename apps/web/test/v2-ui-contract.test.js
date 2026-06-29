@@ -50,6 +50,86 @@ test('lobby grid add action is add-by-code, not create-room', () => {
   assert.match(lobby, /Введите код уже созданной постоянной комнаты/);
 });
 
+test('lobby separates viewed room from connected voice room', () => {
+  const lobby = read('src/lib/features/home/LobbyPage.svelte');
+  const browseView = read('src/lib/features/home/components/lobby/RoomBrowseView.svelte');
+  const voiceSession = read('src/lib/features/room/voice-session.svelte.ts');
+  const roomNavigation = read('src/lib/features/home/model/room-navigation.svelte.ts');
+  const previewRoom = functionBody(lobby, 'previewRoom');
+  const enterRoom = functionBody(lobby, 'enterRoom');
+  const leaveConnectedVoiceRoom = functionBody(lobby, 'leaveConnectedVoiceRoom');
+  const closeViewedRoom = functionBody(lobby, 'closeViewedRoom');
+  const onEmbeddedLeave = functionBody(lobby, 'onEmbeddedLeave');
+
+  assert.match(lobby, /roomNavigation\.viewedRoomId/);
+  assert.match(lobby, /connectedRoomIsViewed\(friendsState\.mode\)/);
+  assert.match(lobby, /embeddedRoomIsVisible\(friendsState\.mode\)/);
+  assert.match(roomNavigation, /viewedRoomId: string \| null/);
+  assert.match(roomNavigation, /embeddedRoomId: string \| null/);
+  assert.match(roomNavigation, /joinIntentRoomId: string \| null/);
+  assert.match(roomNavigation, /export function getActiveVoiceRoomId/);
+  assert.match(roomNavigation, /Room-navigation state machine/);
+  assert.match(roomNavigation, /viewedRoomId mirrors the URL-level room preview/);
+  assert.match(roomNavigation, /embeddedRoomId is the mounted room client/);
+  assert.match(roomNavigation, /browsing\n\/\/   never creates it/);
+  assert.match(roomNavigation, /joinIntentRoomId is set only by an explicit Enter action/);
+  assert.match(roomNavigation, /function setViewedRoomFromRoute/);
+  assert.match(roomNavigation, /export function routeToRoom/);
+  assert.match(roomNavigation, /export function routeToHome/);
+  assert.match(roomNavigation, /export function leaveViewedConnectedRoom/);
+  assert.doesNotMatch(functionBody(roomNavigation, 'routeToRoom'), /roomNavigation\.embeddedRoomId = roomId/);
+  assert.match(previewRoom, /selectRoomPreview\(roomId\)/);
+  assert.doesNotMatch(previewRoom, /leaveActiveVoiceRoom|setConnectedVoiceRoom|clearConnectedVoiceRoom/);
+  assert.match(enterRoom, /selectRoomForVoiceEntry\(roomId\)/);
+  assert.match(roomNavigation, /roomNavigation\.embeddedRoomId = roomId/);
+  assert.match(roomNavigation, /roomNavigation\.joinIntentRoomId = roomId/);
+  assert.match(enterRoom, /friendsState\.mode = 'rooms'/);
+  assert.match(closeViewedRoom, /const transition = routeToHome\(\)/);
+  assert.match(closeViewedRoom, /if \(transition\.closeEmbeddedRoom\) closeEmbeddedRoom\(\{ replaceUrl: false \}\)/);
+  assert.match(closeViewedRoom, /history\.pushState\(null, '', '\/'\)/);
+  assert.match(lobby, /function closeEmbeddedRoom\(\{ replaceUrl = true, closedRoomId = embeddedRoomId \}/);
+  assert.match(lobby, /replaceUrl && closedRoomId && selectedRoomId === closedRoomId/);
+  assert.doesNotMatch(lobby, /!closedRoomId \|\| selectedRoomId === closedRoomId/);
+  assert.match(onEmbeddedLeave, /event instanceof CustomEvent/);
+  assert.match(onEmbeddedLeave, /event\.detail\?\.roomId/);
+  assert.match(onEmbeddedLeave, /const closedViewedRoom = Boolean\(closedRoomId && selectedRoomId === closedRoomId\)/);
+  assert.match(onEmbeddedLeave, /closeEmbeddedRoom\(\{ closedRoomId \}\)/);
+  assert.match(onEmbeddedLeave, /if \(closedViewedRoom\) clearViewedRoom\(\)/);
+  assert.match(leaveConnectedVoiceRoom, /const leavingRoomId = connectedVoiceRoomId/);
+  assert.match(leaveConnectedVoiceRoom, /leaveActiveVoiceRoom\(\)/);
+  assert.match(leaveConnectedVoiceRoom, /resolveLeaveViewedConnectedRoom\(leavingRoomId\)/);
+  assert.match(leaveConnectedVoiceRoom, /closeEmbeddedRoom\(\)/);
+  assert.ok(
+    leaveConnectedVoiceRoom.indexOf('closeEmbeddedRoom()') < leaveConnectedVoiceRoom.indexOf('clearViewedRoom()'),
+    'sidebar leave restores URL before clearing the viewed room'
+  );
+  assert.match(lobby, /<RoomBrowseView room=\{selectedRoom\} onEnter=\{\(\) => enterRoom\(selectedRoom\.roomId\)\}/);
+  assert.match(browseView, /const requestedRoomId = room\.roomId/);
+  assert.match(browseView, /if \(room\.roomId !== requestedRoomId\) return/);
+  assert.match(browseView, /let loadError = \$state\(''\)/);
+  assert.match(browseView, /Не удалось загрузить участников/);
+  assert.match(browseView, /role="status"/);
+  assert.match(voiceSession, /registerActiveVoiceLeave/);
+  assert.match(roomNavigation, /export function connectedRoomIsViewed/);
+  assert.match(roomNavigation, /export function embeddedRoomIsVisible/);
+  assert.match(lobby, /autoJoin=\{autoJoinRoomId === embeddedRoomId\}/);
+
+  const roomPage = read('src/lib/features/room/RoomPage.svelte');
+  const roomDom = read('src/lib/features/room/client/ui/dom.ts');
+  const roomClient = read('src/lib/features/room/client/main.ts');
+  const roomView = read('src/lib/features/room/client/room/room.ts');
+  const entryError = read('src/lib/features/room/components/RoomEntryErrorScreen.svelte');
+
+  assert.match(roomPage, /RoomEntryErrorScreen/);
+  assert.match(roomDom, /entryErrorScreen/);
+  assert.match(roomDom, /entryRetryButton/);
+  assert.match(roomClient, /function runRoomRoute/);
+  assert.match(roomClient, /entryRetryButton\.addEventListener\('click', runRoomRoute/);
+  assert.match(roomView, /export function showRoomEntryFailure/);
+  assert.match(roomView, /if \(entryGate === 'failure'\) \{[\s\S]*showRoomEntryFailure\(\);[\s\S]*return false;[\s\S]*\}/);
+  assert.match(entryError, /Повторить проверку/);
+});
+
 test('room chat keeps transport mounted and tracks unread state while closed', () => {
   const stage = read('src/lib/features/room/components/RoomStage.svelte');
   const ui = read('src/lib/features/room/room-ui.svelte.ts');
@@ -298,7 +378,7 @@ test('screen stage viewer badge renders viewer avatars instead of names', () => 
   assert.doesNotMatch(css, /screen-meta-viewers-label/);
 });
 
-test('room route checks /auth/me and blocks anonymous entry on guest-name modal', () => {
+test('room route uses lobby for authenticated users and preserves standalone guest entry', () => {
   const roomRoute = read('src/routes/r/[roomId]/+page.svelte');
   const roomRouteOptions = read('src/routes/r/[roomId]/+page.ts');
   const roomPage = read('src/lib/features/room/RoomPage.svelte');
@@ -315,8 +395,18 @@ test('room route checks /auth/me and blocks anonymous entry on guest-name modal'
   const handleGuestNameSubmit = functionBody(names, 'handleGuestNameSubmit');
 
   assert.match(roomRoute, /import RoomPage from '\$lib\/features\/room\/RoomPage\.svelte'/);
+  assert.match(roomRoute, /import LobbyPage from '\$lib\/features\/home\/LobbyPage\.svelte'/);
+  assert.match(roomRoute, /loadSession\(\)/);
+  assert.match(roomRoute, /session\.user/);
+  assert.match(roomRoute, /<LobbyPage user=\{session\.user\}/);
+  assert.match(roomRoute, /\{#key routeRoomId\}[\s\S]*<RoomPage roomId=\{routeRoomId\} \/>[\s\S]*\{\/key\}/);
   assert.match(roomRouteOptions, /export const ssr = false/);
-  assert.match(roomPage, /mountRoomClient\(roomRoot\)/);
+  assert.match(roomPage, /roomId = ''/);
+  assert.match(roomPage, /autoJoin = false/);
+  assert.match(roomPage, /mountRoomClient\(roomRoot, \{ roomId: embeddedRoomId \|\| roomId, embeddedRoomId, autoJoin \}\)/);
+  assert.match(roomMain, /const mountedRoomId = options\.roomId \|\| options\.embeddedRoomId \|\| ''/);
+  assert.match(roomMain, /state\.roomId = mountedRoomId/);
+  assert.match(roomMain, /if \(ready && options\.autoJoin\) return joinRoom\(\)/);
   assert.match(roomMain, /showRoomRoute\(\)/);
   assert.match(roomMain, /showStartScreen\(\)/);
   assert.match(roomMain, /bindGuestNameDialog\(\)/);
@@ -327,18 +417,22 @@ test('room route checks /auth/me and blocks anonymous entry on guest-name modal'
   assert.match(roomMain, /mountAbortController\?\.abort\(\)/);
   assert.match(roomMain, /bindScreenStageIdleUi\(listenerSignal\)/);
   assert.match(roomMain, /mounted = false/);
-  assert.doesNotMatch(roomRoute, /HomePage|loadSession|authLoadError|LobbyPage/);
+  assert.doesNotMatch(roomRoute, /HomePage/);
   assert.doesNotMatch(roomPage, /loadSession|authLoadError|LobbyPage/);
   assert.match(home, /auth-session-error/);
+  assert.match(roomRoute, /Не удалось проверить аккаунт/);
+  assert.match(roomRoute, /features\/home\/styles\/home\.css/);
 
   assert.match(roomView, /import \{ fetchMe, fetchOwnedRooms \} from '\$lib\/api\/auth'/);
   assert.match(roomView, /import \{ roomNameFor \} from '\$lib\/features\/auth\/account'/);
   assert.match(roomView, /type RoomEntryGateResult = 'authenticated' \| 'anonymous' \| 'failure'/);
   assert.match(showRoomRoute, /const exists = await checkRoomExists\(state\.roomId\)/);
   assert.ok(showRoomRoute.indexOf('showRoomNotFound()') < showRoomRoute.indexOf('resolveRoomEntryName()'));
+  assert.match(showRoomRoute, /return false/);
   assert.match(showRoomRoute, /const entryGate = await resolveRoomEntryName\(\)/);
-  assert.match(showRoomRoute, /if \(entryGate === 'failure'\) return/);
+  assert.match(showRoomRoute, /if \(entryGate === 'failure'\) \{[\s\S]*showRoomEntryFailure\(\);[\s\S]*return false;[\s\S]*\}/);
   assert.ok(showRoomRoute.indexOf('resolveRoomEntryName()') < showRoomRoute.indexOf('showRoomScreen()'));
+  assert.match(showRoomRoute, /return true/);
   assert.match(resolveRoomEntryName, /const user = await fetchMe\(\)/);
   assert.match(resolveRoomEntryName, /persistName\(roomNameFor\(user\)\)/);
   assert.match(resolveRoomEntryName, /return 'authenticated'/);

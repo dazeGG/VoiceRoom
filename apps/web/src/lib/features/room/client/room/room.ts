@@ -2,6 +2,7 @@ import { getRoomPreset } from '$lib/visual/tokens';
 import { fetchMe, fetchOwnedRooms } from '$lib/api/auth';
 import { roomNameFor } from '$lib/features/auth/account';
 import { roomSettingsUi } from '../../room-settings.svelte';
+import { clearConnectedVoiceRoom, setConnectedVoiceRoom } from '../../voice-session.svelte';
 import { elements } from '../ui/dom';
 import { state } from '../core/state';
 import { showToast } from '../ui/toast';
@@ -59,6 +60,7 @@ function hideScreens(): void {
   elements.startScreen.hidden = true;
   elements.roomScreen.hidden = true;
   elements.notFoundScreen.hidden = true;
+  elements.entryErrorScreen.hidden = true;
 }
 
 export function showStartScreen(): void {
@@ -72,7 +74,7 @@ export function showStartScreen(): void {
   updateNameStatuses();
 }
 
-export async function showRoomRoute(): Promise<void> {
+export async function showRoomRoute(): Promise<boolean> {
   document.body.dataset.screen = 'checking';
   hideScreens();
   elements.statusPill.hidden = true;
@@ -80,14 +82,18 @@ export async function showRoomRoute(): Promise<void> {
   const exists = await checkRoomExists(state.roomId);
   if (!exists) {
     showRoomNotFound();
-    return;
+    return false;
   }
 
   const entryGate = await resolveRoomEntryName();
-  if (entryGate === 'failure') return;
+  if (entryGate === 'failure') {
+    showRoomEntryFailure();
+    return false;
+  }
 
   showRoomScreen();
   refreshDevices().catch(() => {});
+  return true;
 }
 
 // Pulled out of showRoomScreen so a live room-updated event (rename/recolor
@@ -148,7 +154,17 @@ function showRoomScreen(): void {
   refreshScreenControls();
   refreshScreenStage();
   refreshParticipantState();
-  autoJoinRoom();
+}
+
+export function showRoomEntryFailure(): void {
+  leaveRoom();
+  document.body.dataset.screen = 'entry-error';
+  document.title = 'Не удалось проверить вход · Voice Room';
+  hideScreens();
+  elements.brand.hidden = false;
+  elements.topbarRoomHeading.hidden = true;
+  elements.entryErrorScreen.hidden = false;
+  elements.statusPill.hidden = true;
 }
 
 export function showRoomNotFound(): void {
@@ -304,6 +320,7 @@ export async function joinRoom(event?: Event): Promise<void> {
 
     await connectLiveKitRoom(name);
     state.joined = true;
+    setConnectedVoiceRoom(state.roomId);
     if (state.muted || state.outputMuted) postState().catch(() => {});
     refreshCallControls();
     refreshScreenControls();
@@ -330,21 +347,6 @@ export async function joinRoom(event?: Event): Promise<void> {
     refreshCallControls();
     refreshScreenControls();
   }
-}
-
-function autoJoinRoom(): void {
-  if (state.autoJoinStarted) return;
-  state.autoJoinStarted = true;
-
-  window.setTimeout(() => {
-    if (!state.roomId || state.joined || state.connecting) return;
-
-    joinRoom().catch((error) => {
-      console.error(error);
-      showToast('Не удалось подключиться');
-      setVoiceConnectionStatus(isVoiceRouteError(error) ? 'no-route' : 'error');
-    });
-  }, 0);
 }
 
 function formatJoinError(error: unknown): string {
@@ -440,6 +442,7 @@ async function handleServerMessage(event: MessageEvent): Promise<void> {
 export function leaveRoom(): void {
   if (!state.joined && !state.localStream && !state.localScreenStream && !state.connecting) return;
 
+  const disconnectedRoomId = state.roomId;
   state.connecting = false;
   state.joined = false;
   state.audioUnlockPending = false;
@@ -480,6 +483,7 @@ export function leaveRoom(): void {
   closeOutputPopover();
   resetConnectionStatus();
   refreshParticipantState();
+  clearConnectedVoiceRoom(disconnectedRoomId);
 }
 
 function stopLocalStream(): void {
