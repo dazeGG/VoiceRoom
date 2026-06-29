@@ -402,7 +402,7 @@ test('room route uses lobby for authenticated users and preserves standalone gue
   assert.match(roomRoute, /loadSession\(\)/);
   assert.match(roomRoute, /session\.user/);
   assert.match(roomRoute, /<LobbyPage user=\{session\.user\}/);
-  assert.match(roomRoute, /\{#key routeRoomId\}[\s\S]*<RoomPage roomId=\{routeRoomId\} \/>[\s\S]*\{\/key\}/);
+  assert.match(roomRoute, /\{#key routeRoomId\}[\s\S]*<RoomPage roomId=\{routeRoomId\} autoJoin \/>[\s\S]*\{\/key\}/);
   assert.match(roomRouteOptions, /export const ssr = false/);
   assert.match(roomPage, /roomId = ''/);
   assert.match(roomPage, /autoJoin = false/);

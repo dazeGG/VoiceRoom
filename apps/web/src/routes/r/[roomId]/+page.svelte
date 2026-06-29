@@ -86,7 +86,7 @@
   <LobbyPage user={session.user} {loggingOut} onLogout={handleLogout} onToast={showToast} />
 {:else}
   {#key routeRoomId}
-    <RoomPage roomId={routeRoomId} />
+    <RoomPage roomId={routeRoomId} autoJoin />
   {/key}
 {/if}
 
