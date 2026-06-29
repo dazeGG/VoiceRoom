@@ -1790,6 +1790,10 @@ async function handleRealtime(req, res) {
   sendSse(res, { type: 'ready', onlineFriendIds: friendIds.filter(isUserOnline) });
 
   function announceOffline(ids) {
+    // The friend-id lookup is async, so the user may have reconnected (a new tab
+    // or EventSource auto-reconnect) between teardown and here. Skip the stale
+    // offline broadcast in that case so friends don't flip to offline-then-stay.
+    if (isUserOnline(userId)) return;
     for (const friendId of ids) {
       broadcastToUser(friendId, { type: 'presence', userId, online: false });
     }

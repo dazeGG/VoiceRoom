@@ -69,6 +69,26 @@ test('sendRequest is idempotent and rejects self/missing targets', async (t) => 
   assert.equal((await friends.sendRequest({ requesterId: alice.id, addresseeLogin: 'bob' })).status, 'already_sent');
 });
 
+test('concurrent duplicate sendRequest does not throw and stays idempotent', async (t) => {
+  const { users, friends } = await createStores(t);
+  const alice = await makeUser(users, 'alice');
+  await makeUser(users, 'bob');
+
+  // Race two sends for the same pair: the partial unique index would raise a
+  // 23505 without ON CONFLICT. Neither call should throw.
+  const [a, b] = await Promise.all([
+    friends.sendRequest({ requesterId: alice.id, addresseeLogin: 'bob' }),
+    friends.sendRequest({ requesterId: alice.id, addresseeLogin: 'bob' })
+  ]);
+
+  const statuses = [a.status, b.status].sort();
+  assert.deepEqual(statuses, ['already_sent', 'sent']);
+
+  // Exactly one pending request survived.
+  const bobReqs = await friends.listRequests(alice.id);
+  assert.equal(bobReqs.outgoing.length, 1);
+});
+
 test('reverse request auto-accepts into a friendship', async (t) => {
   const { users, friends } = await createStores(t);
   const alice = await makeUser(users, 'alice');

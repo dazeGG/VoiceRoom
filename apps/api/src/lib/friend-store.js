@@ -183,12 +183,22 @@ function createFriendStore({ databaseUrl, logger = console, pool } = {}) {
         return { status: 'already_sent', user: mapPublicUser(addressee) };
       }
 
+      // The pre-check above is racy under READ COMMITTED: two concurrent sends
+      // (double-click, two tabs) both pass it, then collide on the partial
+      // unique index `friend_requests_pending_unique_idx`. ON CONFLICT over that
+      // index's predicate makes the loser a no-op so we return an idempotent
+      // already_sent instead of bubbling a 23505 up as a 500.
       const id = crypto.randomUUID();
-      await client.query(
+      const inserted = await client.query(
         `INSERT INTO friend_requests (id, requester_id, addressee_id, status, created_at)
-         VALUES ($1, $2, $3, 'pending', current_timestamp)`,
+         VALUES ($1, $2, $3, 'pending', current_timestamp)
+         ON CONFLICT (requester_id, addressee_id) WHERE status = 'pending' DO NOTHING
+         RETURNING id`,
         [id, requesterId, addressee.id]
       );
+      if (inserted.rowCount === 0) {
+        return { status: 'already_sent', user: mapPublicUser(addressee) };
+      }
       return { status: 'sent', requestId: id, user: mapPublicUser(addressee) };
     });
   }
