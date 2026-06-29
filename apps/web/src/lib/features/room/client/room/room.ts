@@ -9,7 +9,7 @@ import { showToast } from '../ui/toast';
 import { checkRoomExists, postJson } from '../net/api';
 import { postState } from './presence';
 import { createRoomProof } from '../net/pow';
-import { errorMessage, getInitials, wait } from '../core/utils';
+import { errorMessage, wait } from '../core/utils';
 import { extractRoomId } from '../core/session';
 import { isRoomEmbedded } from '../core/embed';
 import { getDisplayName, persistName, requestGuestNameForRoom, requireSavedName, updateNameStatuses } from '../ui/names';
@@ -136,8 +136,6 @@ export function refreshRoomHeading(): void {
   if (popoverBadge instanceof HTMLElement) {
     applyRoomEmojiBadge(popoverBadge, roomVisual.emoji, roomVisual.background, roomVisual.ring);
   }
-
-  elements.emptyRoomAvatar.textContent = getInitials(state.savedName);
 }
 
 function showRoomScreen(): void {
