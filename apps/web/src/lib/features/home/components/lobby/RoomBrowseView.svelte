@@ -3,18 +3,19 @@
   import type { AuthUser, OwnedRoom } from '$lib/api/auth';
   import { fetchRoomPeers, type RoomPeer } from '$lib/api/rooms';
   import { getAvatarColor } from '$lib/visual/tokens';
-  import { roomDisplayName, roomVisual } from '../../model/rooms';
+  import { roomDisplayName } from '../../model/rooms';
   import { initial } from '../../model/lobby-format';
   import RoomPreviewChat from './RoomPreviewChat.svelte';
+  import RoomViewHeader from './RoomViewHeader.svelte';
 
-  let { room, user, onEnter, onBack } = $props<{
+  let { room, user, onEnter, onBack, onToast } = $props<{
     room: OwnedRoom;
     user: AuthUser;
     onEnter: () => void;
     onBack: () => void;
+    onToast?: (message: string) => void;
   }>();
 
-  const visual = $derived(roomVisual(room));
   const name = $derived(roomDisplayName(room));
 
   let peers = $state<RoomPeer[]>([]);
@@ -58,18 +59,7 @@
 
 <div class="lobby-browse-room" aria-label={`Комната ${name}`}>
   <header class="lobby-browse-topbar">
-    <div class="lobby-roomview-head">
-      <button class="lobby-roomview-back" type="button" title="К списку комнат" aria-label="Назад" onclick={onBack}>
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
-      </button>
-      <div class="lobby-roomview-id">
-        <span class="lobby-roomview-id-tile" style={`background:${visual.background};box-shadow:0 0 0 1px ${visual.ring}`}>{visual.emoji}</span>
-        <div style="min-width:0;">
-          <div class="lobby-roomview-name">{name}</div>
-          <div class="lobby-roomview-code">{room.roomId}</div>
-        </div>
-      </div>
-    </div>
+    <RoomViewHeader {room} {onBack} {onToast} />
     {#if peers.length > 0}
       <span class="lobby-roomview-state" data-live="true">
         <span class="lobby-live-dot"></span>
@@ -102,11 +92,9 @@
             </div>
           {/each}
         </div>
-      {:else}
+      {:else if !loading}
         <div class="lobby-stage-empty">
-          <div class="lobby-stage-empty-tile" style={`background:${visual.background};box-shadow:0 0 0 1px ${visual.ring}`}>{visual.emoji}</div>
-          <h2>{loadError || (loading ? 'Заглядываем в комнату…' : 'Вы смотрите комнату без подключения')}</h2>
-          <p>{loadError ? 'Голос в другой комнате не прерывается, но участников сейчас не удалось показать.' : 'Голос в другой комнате не прерывается. Чтобы перейти сюда голосом, нажмите «Войти в комнату».'}</p>
+          <p class="lobby-stage-empty-note">Пока никого нет</p>
         </div>
       {/if}
 
