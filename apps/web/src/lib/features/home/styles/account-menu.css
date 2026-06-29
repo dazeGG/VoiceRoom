@@ -9,126 +9,6 @@
   min-width: 0;
 }
 
-/* ---- download + platform pill (screen 01) ---- */
-.topbar-download {
-  display: flex;
-  align-items: center;
-  height: 40px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.04);
-  /* Visible overflow: the custom Select panel is absolutely positioned inside
-     this pill; hidden clipped the listbox (native <select> drew OS UI outside). */
-  overflow: visible;
-}
-
-/* Inside the Electron shell the preload tags <html> with .is-desktop before
-   page scripts run (same contract as the home download card), so the topbar
-   download pill is hidden with no flash — screen 03 «уже в приложении». */
-html.is-desktop .topbar-download {
-  display: none;
-}
-
-.topbar-download-btn {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 9px 12px 9px 14px;
-  border: none;
-  background: transparent;
-  color: #e7e2d4;
-  font-family: var(--font-sans);
-  font-size: 13.5px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.15s ease;
-}
-
-.topbar-download-btn:hover {
-  background: rgba(255, 255, 255, 0.06);
-}
-
-.topbar-download-btn:disabled {
-  cursor: default;
-  opacity: 0.7;
-}
-
-.topbar-download-divider {
-  width: 1px;
-  height: 22px;
-  background: rgba(255, 255, 255, 0.1);
-}
-
-.topbar-download-platform {
-  position: relative;
-  display: flex;
-  align-items: center;
-}
-
-.topbar-download-platform .select-root {
-  width: auto;
-}
-
-/* Match the old native select + absolute chevron at right: 11px. */
-.topbar-download-platform .select-trigger--compact {
-  position: relative;
-  justify-content: flex-start;
-  gap: 0;
-}
-
-.topbar-download-platform .select-trigger--compact .select-trigger-chevron {
-  position: absolute;
-  right: 11px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: #8d877a;
-}
-
-.topbar-download-platform .select-trigger--compact[aria-expanded='true'] .select-trigger-chevron {
-  transform: translateY(-50%) rotate(180deg);
-}
-
-.topbar-download-platform .select-panel {
-  right: 0;
-  left: auto;
-  min-width: max(100%, 168px);
-}
-
-.topbar-download-select {
-  -webkit-appearance: none;
-  -moz-appearance: none;
-  appearance: none;
-  padding: 9px 30px 9px 12px;
-  border: none;
-  outline: none;
-  background: transparent;
-  color: #bdb7a8;
-  font-family: var(--font-sans);
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-}
-
-.topbar-download-select option {
-  background: #16140f;
-  color: #ece7d9;
-}
-
-.topbar-download-chevron {
-  position: absolute;
-  right: 11px;
-  top: 50%;
-  transform: translateY(-50%);
-  display: inline-flex;
-  pointer-events: none;
-  color: #8d877a;
-}
-
-.topbar-download .home-spinner {
-  width: 14px;
-  height: 14px;
-}
-
 /* ---- profile trigger (screens 01 / 02) ---- */
 
 .profile-trigger {
@@ -333,10 +213,6 @@ html.is-desktop .topbar-download {
 }
 
 @media (max-width: 720px) {
-  .topbar-download {
-    display: none;
-  }
-
   .profile-trigger-name {
     max-width: 110px;
   }
