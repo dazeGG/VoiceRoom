@@ -389,9 +389,19 @@ button:focus-visible {
   color: #bcd6c6;
 }
 
+/* Keep the floating dock centred in the lobby main area (not over the sidebar). */
+body[data-lobby-embedded="true"] .room-dock {
+  left: var(--lobby-sidebar-width, 312px);
+}
+
 /* Keep the floating dock centred in the voice area when the chat rail is open. */
 @media (min-width: 901px) {
   body[data-chat-open="true"] .room-dock {
+    right: var(--chat-rail-width);
+  }
+
+  body[data-lobby-embedded="true"][data-chat-open="true"] .room-dock {
+    left: var(--lobby-sidebar-width, 312px);
     right: var(--chat-rail-width);
   }
 }

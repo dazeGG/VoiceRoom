@@ -287,6 +287,59 @@ test('chat API allows posting by room link without joining voice', async (t) => 
   }
 });
 
+test('authenticated room-link chat reuses stable account identity without joining voice', async (t) => {
+  const { dir, socketPath } = getSocketPath();
+  const { cleanup, databaseUrl } = await createTestDatabase(t);
+  const logs = { stdout: '', stderr: '' };
+  const child = startServer(socketPath, databaseUrl, logs);
+  t.after(() => {
+    child.kill('SIGTERM');
+    fs.rmSync(dir, { recursive: true, force: true });
+    return cleanup();
+  });
+
+  try {
+    await waitForHealthz(socketPath);
+
+    const registered = await postJson(socketPath, '/api/auth/register', {
+      login: 'preview-chat-user',
+      displayName: 'Preview User',
+      password: 'password123',
+      passwordConfirm: 'password123'
+    });
+    assert.equal(registered.status, 201);
+    const sessionCookie = registered.setCookie;
+    const accountPeerId = `auth-${registered.body.user.id}`;
+
+    const created = await postJson(socketPath, '/api/rooms', { isStatic: false });
+    assert.equal(created.status, 201);
+
+    const first = await postJson(socketPath, `/api/rooms/${created.body.roomId}/chat`, {
+      name: 'Spoofed Name',
+      text: 'Первое сообщение из превью'
+    }, { cookie: sessionCookie });
+    assert.equal(first.status, 201);
+    assert.equal(first.body.message.peerId, accountPeerId);
+    assert.equal(first.body.message.name, 'Preview User');
+    assert.equal(first.body.message.avatarColorKey, registered.body.user.avatarColorKey);
+
+    const second = await postJson(socketPath, `/api/rooms/${created.body.roomId}/chat`, {
+      name: 'Another Spoof',
+      text: 'Второе сообщение из превью'
+    }, { cookie: sessionCookie });
+    assert.equal(second.status, 201);
+    assert.equal(second.body.message.peerId, accountPeerId);
+    assert.equal(second.body.message.name, 'Preview User');
+    assert.equal(second.body.message.avatarColorKey, first.body.message.avatarColorKey);
+  } catch (error) {
+    if (logs.stderr.trim()) {
+      console.error('Server stderr:\n', logs.stderr.trimEnd());
+    }
+    throw error;
+  }
+});
+
+
 test('chat API returns not found when posting to a missing room', async (t) => {
   const { dir, socketPath } = getSocketPath();
   const { cleanup, databaseUrl } = await createTestDatabase(t);

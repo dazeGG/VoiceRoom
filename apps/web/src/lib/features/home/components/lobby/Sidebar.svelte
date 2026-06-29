@@ -10,6 +10,7 @@
     showRequests
   } from '../../model/friends.svelte';
   import Avatar from './Avatar.svelte';
+  import TopbarDownload from '../TopbarDownload.svelte';
 
   let {
     user,
@@ -74,6 +75,9 @@
   <div class="lobby-brand">
     <img src="/icon.svg" width="30" height="30" alt="Voice Room" />
     <span class="lobby-brand-name">Voice Room</span>
+    <div class="lobby-brand-download">
+      <TopbarDownload />
+    </div>
   </div>
 
   <div class="lobby-switch">

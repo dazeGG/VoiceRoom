@@ -49,7 +49,18 @@
   padding: 20px 20px 16px;
 }
 .lobby-brand img { display: block; border-radius: 9px; }
-.lobby-brand-name { font-weight: 700; font-size: 15.5px; letter-spacing: -0.01em; }
+.lobby-brand-name { flex: 1; min-width: 0; font-weight: 700; font-size: 15.5px; letter-spacing: -0.01em; }
+.lobby-brand-download {
+  flex: none;
+  margin-left: auto;
+}
+.lobby-brand-download .topbar-download {
+  height: 36px;
+}
+.lobby-brand-download .topbar-download-btn {
+  padding: 8px 10px 8px 12px;
+  font-size: 12.5px;
+}
 
 .lobby-switch {
   margin: 0 16px 14px;
@@ -609,6 +620,36 @@
   font-weight: 700;
 }
 .lobby-roomview-state[data-live='true'] { color: #9ed1ae; }
+
+.lobby-roomview-content {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+.lobby-roomview-stage-pane {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  position: relative;
+}
+
+.lobby-browse-content {
+  flex: 1;
+  min-height: 0;
+}
+
+.lobby-preview-chat {
+  flex: none;
+  width: var(--chat-rail-width, 360px);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-left: 1px solid rgba(255, 255, 255, 0.07);
+  background:
+    linear-gradient(180deg, rgba(17, 14, 11, 0.96), rgba(8, 7, 6, 0.98)),
+    #0a0907;
+}
 
 .lobby-roomview-stage { flex: 1; min-height: 0; position: relative; }
 

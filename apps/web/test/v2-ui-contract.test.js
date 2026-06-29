@@ -103,7 +103,9 @@ test('lobby separates viewed room from connected voice room', () => {
     leaveConnectedVoiceRoom.indexOf('closeEmbeddedRoom()') < leaveConnectedVoiceRoom.indexOf('clearViewedRoom()'),
     'sidebar leave restores URL before clearing the viewed room'
   );
-  assert.match(lobby, /<RoomBrowseView room=\{selectedRoom\} onEnter=\{\(\) => enterRoom\(selectedRoom\.roomId\)\}/);
+  assert.match(lobby, /<RoomBrowseView \{user\} room=\{selectedRoom\} onEnter=\{\(\) => enterRoom\(selectedRoom\.roomId\)\}/);
+  assert.match(lobby, /dataset\.lobbyEmbedded = 'true'/);
+  assert.match(lobby, /delete document\.body\.dataset\.lobbyEmbedded/);
   assert.match(browseView, /const requestedRoomId = room\.roomId/);
   assert.match(browseView, /if \(room\.roomId !== requestedRoomId\) return/);
   assert.match(browseView, /let loadError = \$state\(''\)/);
@@ -523,6 +525,34 @@ test('remote microphone playback has subscription and audio-element recovery hoo
   assert.match(audioRecovery, /audioTrack === track && audioTrack\.readyState !== 'ended'/);
   assert.match(audioRecovery, /audio\.isConnected/);
   assert.match(participants, /if \(peer\.micReceiver === receiver\) peer\.micReceiver = null/);
+});
+
+test('hotfix lobby UX keeps dock in main area, preview chat, and add-friend submit flow', () => {
+  const controls = read('src/lib/features/room/styles/controls.css');
+  const lobby = read('src/lib/features/home/LobbyPage.svelte');
+  const sidebar = read('src/lib/features/home/components/lobby/Sidebar.svelte');
+  const previewView = read('src/lib/features/home/components/lobby/RoomPreviewView.svelte');
+  const browseView = read('src/lib/features/home/components/lobby/RoomBrowseView.svelte');
+  const previewChat = read('src/lib/features/home/components/lobby/RoomPreviewChat.svelte');
+  const addFriend = read('src/lib/features/home/components/lobby/AddFriendView.svelte');
+  const friendsCss = read('src/lib/features/home/styles/friends.css');
+
+  assert.match(controls, /body\[data-lobby-embedded="true"\] \.room-dock/);
+  assert.match(controls, /left: var\(--lobby-sidebar-width, 312px\)/);
+  assert.match(sidebar, /import TopbarDownload from '\.\.\/TopbarDownload\.svelte'/);
+  assert.match(sidebar, /<TopbarDownload \/>/);
+  assert.match(previewView, /RoomPreviewChat/);
+  assert.match(browseView, /RoomPreviewChat/);
+  assert.doesNotMatch(previewView, /тихо сейчас/);
+  assert.doesNotMatch(browseView, /тихо сейчас/);
+  assert.match(previewChat, /fetchRoomChat\(roomId\)/);
+  assert.match(previewChat, /postRoomChat\(roomId/);
+  assert.match(addFriend, /copyText\(user\.login\)/);
+  assert.doesNotMatch(addFriend, /searchUsers/);
+  assert.doesNotMatch(addFriend, /oninput=\{onInput\}/);
+  assert.match(addFriend, /@daze/);
+  assert.match(friendsCss, /\.lobby-preview-chat/);
+  assert.match(lobby, /import '\$lib\/features\/room\/styles\/chat-rail\.css'/);
 });
 
 test('frontend visual catalog stays aligned with shared backend key contracts', () => {
