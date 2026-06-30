@@ -757,6 +757,18 @@ test('participant context menu is remote-only and exposes relationship-aware loc
   assert.match(menu, /<VolumeSlider[\s\S]*bind:value=\{volumePercent\}/);
 });
 
+test('shared slider component backs volume slider UI', () => {
+  const slider = read('src/lib/shared/ui/Slider/Slider.svelte');
+  const volumeSlider = read('src/lib/shared/ui/VolumeSlider/VolumeSlider.svelte');
+  const uiIndex = read('src/lib/shared/ui/index.ts');
+
+  assert.match(uiIndex, /export \* from '\.\/Slider'/);
+  assert.match(slider, /class="vr-slider"/);
+  assert.match(slider, /--slider-fraction/);
+  assert.match(volumeSlider, /import \{ Slider \} from '\.\.\/Slider'/);
+  assert.match(volumeSlider, /<Slider[\s\S]*bind:value/);
+});
+
 test('desktop shell layout stays in shared web styles, not electron overrides', () => {
   const appCss = read('src/lib/shared/styles/app.css');
   const desktopShell = read('src/lib/shared/styles/desktop-shell.css');
