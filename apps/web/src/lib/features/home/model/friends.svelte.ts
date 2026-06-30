@@ -168,6 +168,18 @@ export function getFriendRelationship(userId: string): Relationship {
   return 'none';
 }
 
+// Resolve a user's @login when we already know them (friend or pending request).
+// Returns '' for strangers, whose login is not exposed to the client.
+export function getKnownLogin(userId: string): string {
+  const friend = findFriend(userId);
+  if (friend) return friend.user.login;
+  const incoming = friendsState.requests.incoming.find((request) => request.user.id === userId);
+  if (incoming) return incoming.user.login;
+  const outgoing = friendsState.requests.outgoing.find((request) => request.user.id === userId);
+  if (outgoing) return outgoing.user.login;
+  return '';
+}
+
 export async function acceptRequestByUserId(userId: string): Promise<void> {
   const request = friendsState.requests.incoming.find((entry) => entry.user.id === userId);
   if (!request) return;

@@ -54,6 +54,52 @@ interface VoiceAudioGain {
 }
 
 const voiceAudioGains = new WeakMap<HTMLMediaElement, VoiceAudioGain>();
+let activeVoiceAudioGainCount = 0;
+
+function hasActiveVoiceAudioGains(): boolean {
+  return activeVoiceAudioGainCount > 0;
+}
+
+function rebuildActiveVoiceAudioElementsForOutputSwitch(): boolean {
+  if (!hasActiveVoiceAudioGains()) return true;
+
+  for (const peer of state.peers.values()) {
+    for (const [trackId, audio] of peer.audioElements.entries()) {
+      if (!voiceAudioGains.has(audio)) continue;
+
+      const stream = audio.srcObject instanceof MediaStream ? audio.srcObject : null;
+      const track = stream?.getAudioTracks().find((audioTrack) => audioTrack.id === trackId)
+        ?? stream?.getAudioTracks()[0]
+        ?? null;
+      if (!stream || !track || track.readyState === 'ended') return false;
+
+      const replacement = document.createElement('audio');
+      replacement.autoplay = true;
+      replacement.muted = true;
+      (replacement as HTMLAudioElement & { playsInline: boolean }).playsInline = true;
+      replacement.srcObject = stream;
+      document.body.append(replacement);
+
+      releaseRemoteAudioElement(audio);
+      audio.pause();
+      audio.srcObject = null;
+      audio.remove();
+      peer.audioElements.set(trackId, replacement);
+
+      track.addEventListener(
+        'ended',
+        () => {
+          releaseRemoteAudioElement(replacement);
+          replacement.remove();
+          if (peer.audioElements.get(trackId) === replacement) peer.audioElements.delete(trackId);
+        },
+        { once: true }
+      );
+    }
+  }
+
+  return !hasActiveVoiceAudioGains();
+}
 
 export function releaseRemoteAudioElement(mediaElement: HTMLMediaElement): void {
   const existing = voiceAudioGains.get(mediaElement);
@@ -61,6 +107,7 @@ export function releaseRemoteAudioElement(mediaElement: HTMLMediaElement): void 
   existing.source.disconnect();
   existing.gain.disconnect();
   voiceAudioGains.delete(mediaElement);
+  activeVoiceAudioGainCount = Math.max(0, activeVoiceAudioGainCount - 1);
 }
 
 function getAvailableVoiceMediaElementVolumeMax(): number {
@@ -77,20 +124,22 @@ function applyVoiceMediaElementVolume(
   const volume = Number.isFinite(options.volume) ? Math.min(maxVolume, Math.max(0, options.volume)) : 1;
   const existing = voiceAudioGains.get(mediaElement);
 
-  if (existing && maxVolume > 1) {
+  if (existing) {
+    // Once a media element is routed through createMediaElementSource(), browsers keep
+    // that element's playback on the Web Audio graph for its lifetime. Keep the graph
+    // alive and use gain=1 for normal volume instead of disconnecting it, because
+    // disconnecting here can silence the element after a user lowers volume from >100%.
     mediaElement.volume = 1;
     mediaElement.muted = options.muted;
     existing.gain.gain.value = options.muted ? 0 : volume;
+    playMediaElement(mediaElement);
     return true;
-  }
-
-  if (existing) {
-    releaseRemoteAudioElement(mediaElement);
   }
 
   if (volume <= 1) {
     mediaElement.volume = Math.min(1, volume);
     mediaElement.muted = options.muted;
+    playMediaElement(mediaElement);
     return true;
   }
 
@@ -111,14 +160,17 @@ function applyVoiceMediaElementVolume(
     source.connect(gain);
     gain.connect(context.destination);
     voiceAudioGains.set(mediaElement, { source, gain });
+    activeVoiceAudioGainCount += 1;
     mediaElement.volume = 1;
     mediaElement.muted = options.muted;
     gain.gain.value = options.muted ? 0 : volume;
+    playMediaElement(mediaElement);
     return true;
   } catch (error) {
     console.warn('Participant audio boost unavailable', error);
     mediaElement.volume = Math.min(1, volume);
     mediaElement.muted = options.muted;
+    playMediaElement(mediaElement);
     return false;
   }
 }
@@ -127,6 +179,10 @@ export async function syncAudioOutputDevices(): Promise<boolean> {
   if (!supportsAudioOutputSelection()) return false;
   if (state.outputDeviceId && screenAudioGainElement && !supportsAudioContextOutputSelection()) {
     console.warn('Audio output device unavailable while stream boost is active');
+    return false;
+  }
+  if (state.outputDeviceId && !supportsAudioContextOutputSelection() && !rebuildActiveVoiceAudioElementsForOutputSwitch()) {
+    console.warn('Audio output device unavailable while participant voice boost is active');
     return false;
   }
 
