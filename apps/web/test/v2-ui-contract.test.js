@@ -564,6 +564,9 @@ test('hotfix lobby UX keeps dock in main area, preview chat, and add-friend subm
   const controls = read('src/lib/features/room/styles/controls.css');
   const lobby = read('src/lib/features/home/LobbyPage.svelte');
   const sidebar = read('src/lib/features/home/components/lobby/Sidebar.svelte');
+  assert.match(sidebar, /function friendStatusLabel/);
+  assert.doesNotMatch(sidebar, /lastMessagePreview/);
+  assert.doesNotMatch(sidebar, /entry\.lastMessage\.body/);
   const previewView = read('src/lib/features/home/components/lobby/RoomPreviewView.svelte');
   const browseView = read('src/lib/features/home/components/lobby/RoomBrowseView.svelte');
   const previewChat = read('src/lib/features/home/components/lobby/RoomPreviewChat.svelte');
