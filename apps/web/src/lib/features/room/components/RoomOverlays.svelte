@@ -32,22 +32,3 @@
   </section>
 </div>
 
-<template id="participantTemplate">
-  <article class="participant" data-peer-id="">
-    <div class="voice-ring" aria-hidden="true">
-      <span class="avatar"></span>
-    </div>
-    <div class="participant-copy">
-      <h2>
-        <span class="participant-name">Участник</span>
-        <span class="participant-muted-icon" data-icon="mic-muted" aria-label="Микрофон выключен" title="Микрофон выключен"></span>
-        <span class="participant-deafened-icon" data-icon="headphones-muted" aria-label="Звук выключен" title="Звук выключен"></span>
-      </h2>
-      <p></p>
-      <button class="participant-screen-action" type="button" hidden>
-        <span data-icon="watch-screen" aria-hidden="true"></span>
-        <span>Смотреть экран</span>
-      </button>
-    </div>
-  </article>
-</template>

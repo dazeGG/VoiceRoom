@@ -66,6 +66,7 @@ export function createInitialRoomState(): AppState {
     screenFullscreen: false,
     screenMuted: false,
     screenRequesting: false,
+    screenStarting: false,
     screenCollapsedPeerIds: new Set(),
     screenSubscribedPeerIds: new Set(),
     screenSourceRequest: null,

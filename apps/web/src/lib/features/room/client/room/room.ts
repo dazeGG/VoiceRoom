@@ -24,7 +24,6 @@ import {
   createParticipant,
   refreshParticipantState,
   removeAudioElements,
-  removeParticipantView,
   removePeer,
   syncPeers,
   updateParticipant,
@@ -41,7 +40,7 @@ import { attachMeter, startMeters, stopMeters } from '../media/meters';
 import { startPeerLatencyStats, startSpeakingStats, stopPeerLatencyStats, stopSpeakingStats } from './stats';
 import { clearAllPeerJoinCues, clearPeerJoinCue, clearStreamViewerCues, playPeerCue, playPeerJoinCue } from '../media/cues';
 import { cancelScreenSourcePicker } from '../ui/screen-source-picker';
-import { closeParticipantContextMenu } from '../ui/participant-context-menu';
+import { closeParticipantContextMenu } from '../../participant-context-ui.svelte';
 import {
   clearGateSwitchTimer,
   closeDevicePopover,
@@ -300,7 +299,6 @@ export async function joinRoom(event?: Event): Promise<void> {
     state.serverPeerIds.clear();
     state.serverPeerSyncReady = false;
     await disconnectLiveKitRoom();
-    removeParticipantView(state.self?.id || state.peerId);
     state.self = null;
     stopLocalStream();
     refreshParticipantState();
@@ -425,11 +423,9 @@ export function leaveRoom(): void {
 
   for (const peer of state.peers.values()) {
     removeAudioElements(peer);
-    removeParticipantView(peer.id);
   }
   state.peers.clear();
 
-  removeParticipantView(state.self?.id || state.peerId);
   state.self = null;
   stopLocalStream();
   stopLocalScreenStream();

@@ -7,25 +7,12 @@ import { state } from './core/state.svelte';
 import { getStoredPeerSession } from './core/session';
 import { cleanDisplayName } from './core/utils';
 import { showToast } from './ui/toast';
-import { handleAudioUnlockGesture, unlockAudio } from './services/media-playback-service';
-import {
-  closeDevicePopoverOnEscape,
-  closeDevicePopoverOnOutside,
-  closeOutputPopoverOnEscape,
-  closeOutputPopoverOnOutside,
-  handleGateThresholdPointerDown,
-  refreshDevices,
-  refreshGateThresholdValue,
-  refreshMicrophoneLevelMeter,
-  toggleDevicePopover,
-  toggleOutputPopover,
-  updateGateThresholdFromSlider
-} from './ui/devices';
-import { handleMicButtonClick, refreshOutputControls, toggleOutputMute } from './ui/controls';
+import { handleAudioUnlockGesture } from './services/media-playback-service';
+import { refreshDevices, refreshMicrophoneLevelMeter } from './ui/devices';
+import { syncOutputDeviceUiState } from './ui/controls';
 import { bindGuestNameDialog, resetGuestNameDialog, saveStartName, unbindGuestNameDialog, updateNameStatuses } from './ui/names';
 import {
   createRoomFromStart,
-  handleLeaveButtonClick,
   handleRoomCodeKeydown,
   joinRoom,
   joinRoomByCode,
@@ -35,11 +22,9 @@ import {
   showRoomRoute,
   showStartScreen
 } from './room/room';
-import { handleScreenButtonClick } from './services/screen-share-service';
 import {
   bindScreenStageIdleUi,
   handleScreenStageClick,
-  leaveScreenView,
   refreshStageStripControls,
   syncScreenVideoAudio,
   toggleScreenFullscreen,
@@ -48,7 +33,7 @@ import {
   updateScreenVolumeFromSlider
 } from './ui/screen-view';
 import { cancelScreenSourcePicker, closeScreenSourceOnBackdrop, closeScreenSourceOnEscape } from './ui/screen-source-picker';
-import { bindParticipantContextMenu } from './ui/participant-context-menu';
+
 
 let mounted = false;
 let mountAbortController: AbortController | null = null;
@@ -86,14 +71,12 @@ export function mountRoomClient(root: ParentNode = document, options: { roomId?:
   }
 
   mountIcons();
-  mountIcons(elements.template.content);
+
 
   const savedName = cleanDisplayName(localStorage.getItem('voice-room:name'));
   state.savedName = savedName;
   elements.startNameInput.value = savedName;
   roomDeviceUi.noiseMode = state.noiseMode;
-  elements.gateThresholdSlider.value = String(state.gateThresholdDb);
-  refreshGateThresholdValue();
   refreshMicrophoneLevelMeter(GATE_THRESHOLD_MIN_DB);
   elements.startForm.addEventListener('submit', saveStartName, { signal: listenerSignal });
   bindGuestNameDialog();
@@ -102,10 +85,7 @@ export function mountRoomClient(root: ParentNode = document, options: { roomId?:
   elements.roomCodeInput.addEventListener('keydown', handleRoomCodeKeydown, { signal: listenerSignal });
   elements.startNameInput.addEventListener('input', updateNameStatuses, { signal: listenerSignal });
 
-  elements.muteButton.addEventListener('click', handleMicButtonClick, { signal: listenerSignal });
-  elements.outputButton.addEventListener('click', toggleOutputMute, { signal: listenerSignal });
-  elements.screenButton.addEventListener('click', handleScreenButtonClick, { signal: listenerSignal });
-  elements.screenExitButton.addEventListener('click', () => leaveScreenView({ keepPreview: false }).catch((error) => console.error(error)), { signal: listenerSignal });
+
   elements.screenStage.addEventListener('click', handleScreenStageClick, { signal: listenerSignal });
   elements.screenFullscreenButton.addEventListener('click', toggleScreenFullscreen, { signal: listenerSignal });
   elements.screenSourceCloseButton.addEventListener('click', cancelScreenSourcePicker, { signal: listenerSignal });
@@ -114,24 +94,15 @@ export function mountRoomClient(root: ParentNode = document, options: { roomId?:
   elements.streamVolumeSlider.addEventListener('input', updateScreenVolumeFromSlider, { signal: listenerSignal });
   syncScreenVideoAudio();
   bindScreenStageIdleUi(listenerSignal);
-  bindParticipantContextMenu(listenerSignal);
-  elements.deviceMenuButton.addEventListener('click', toggleDevicePopover, { signal: listenerSignal });
-  elements.outputMenuButton.addEventListener('click', toggleOutputPopover, { signal: listenerSignal });
-  elements.leaveButton.addEventListener('click', handleLeaveButtonClick, { signal: listenerSignal });
-  elements.soundButton.addEventListener('click', () => unlockAudio().catch((error) => console.warn('Audio unlock failed', error)), { signal: listenerSignal });
-  elements.gateThresholdSlider.addEventListener('input', updateGateThresholdFromSlider, { signal: listenerSignal });
-  elements.micLevelTrack.addEventListener('pointerdown', handleGateThresholdPointerDown, { signal: listenerSignal });
-  document.addEventListener('click', closeDevicePopoverOnOutside, { signal: listenerSignal });
-  document.addEventListener('click', closeOutputPopoverOnOutside, { signal: listenerSignal });
-  document.addEventListener('keydown', closeDevicePopoverOnEscape, { signal: listenerSignal });
-  document.addEventListener('keydown', closeOutputPopoverOnEscape, { signal: listenerSignal });
+
+
   document.addEventListener('keydown', closeScreenSourceOnEscape, { signal: listenerSignal });
   document.addEventListener('pointerdown', handleAudioUnlockGesture, { passive: true, signal: listenerSignal });
   document.addEventListener('keydown', handleAudioUnlockGesture, { signal: listenerSignal });
   document.addEventListener('fullscreenchange', updateScreenFullscreenState, { signal: listenerSignal });
   navigator.mediaDevices?.addEventListener?.('devicechange', () => refreshDevices().catch(() => {}), { signal: listenerSignal });
   window.addEventListener('beforeunload', leaveRoom, { signal: listenerSignal });
-  refreshOutputControls();
+  syncOutputDeviceUiState();
   refreshStageStripControls();
 
   function runRoomRoute(): void {

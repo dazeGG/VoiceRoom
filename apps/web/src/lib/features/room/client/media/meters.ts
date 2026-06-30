@@ -4,7 +4,7 @@ import { amplitudeToDb } from '../core/settings';
 import { getSharedAudioContext } from '../services/media-playback-service';
 import { isGateDisabled } from '../services/microphone-service';
 import { refreshMicrophoneLevelMeter } from '../ui/devices';
-import { getParticipantView, setParticipantSpeaking } from '../room/participants';
+import { setParticipantSpeaking } from '../room/participants';
 import type { Participant } from '../core/types';
 
 let meterFrame = 0;
@@ -55,7 +55,7 @@ function updateMeter(participant: Participant | null): void {
   const levelDb = amplitudeToDb(Math.min(1, rms / 128));
   const visibleLevel = participant.muted ? 0 : level;
   const visibleLevelDb = participant.muted ? GATE_THRESHOLD_MIN_DB : levelDb;
-  getParticipantView(participant)?.node.style.setProperty('--level', visibleLevel.toFixed(3));
+  participant.level = visibleLevel;
   if (participant.isLocal) {
     refreshMicrophoneLevelMeter(visibleLevelDb);
     setParticipantSpeaking(participant, isLocalMicrophoneSpeaking(participant, levelDb));

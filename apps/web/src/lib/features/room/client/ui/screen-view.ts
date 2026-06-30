@@ -4,12 +4,11 @@ import { showToast } from './toast';
 import { state } from '../core/state.svelte';
 import { postState } from '../room/presence';
 import { syncLiveKitScreenSubscriptions } from '../services/livekit-service';
+import { bumpParticipantsRevision } from '../../participants-ui.svelte';
 import {
   detachRemoteScreen,
   getAllParticipants,
-  getParticipantById,
-  getParticipantView,
-  refreshStageGridState
+  getParticipantById
 } from '../room/participants';
 import type { Participant } from '../core/types';
 import { createStreamTile } from './screen-tile-elements';
@@ -56,17 +55,11 @@ export function openLocalStreamPreview(): void {
   refreshScreenStage();
 }
 
-function setParticipantDataset(peer: Participant, key: string, value: string): void {
-  const view = getParticipantView(peer);
-  if (!view) return;
-  view.node.dataset[key] = value;
-}
-
 export async function enterScreenView(peerId: string): Promise<void> {
   const peer = getParticipantById(peerId);
   if (peer?.isLocal && state.localScreenStream) {
     peer.screen = true;
-    setParticipantDataset(peer, 'screen', 'true');
+    bumpParticipantsRevision();
   }
   if (!peer?.screen) {
     showToast('Демонстрация уже завершена');
@@ -170,20 +163,11 @@ export function isScreenSubscribed(peerId: string): boolean {
   return state.screenSubscribedPeerIds.has(peerId);
 }
 
-export function refreshScreenAction(participant: Participant | null): void {
-  const view = getParticipantView(participant);
-  if (!participant || !view) return;
-
-  const viewing = state.viewedScreenPeerId === participant.id;
-  const canWatch = !participant.isLocal && participant.screen && !viewing;
-  view.screenAction.hidden = !canWatch;
-  view.screenAction.disabled = state.screenRequesting;
-  view.screenAction.querySelector('span')!.textContent = state.screenRequesting ? 'Подключение' : 'Смотреть экран';
-}
+/** Screen action button state is derived in ParticipantTile.svelte. */
+export function refreshScreenAction(_participant: Participant | null): void {}
 
 export function refreshAllScreenActions(): void {
-  if (state.self) refreshScreenAction(state.self);
-  for (const peer of state.peers.values()) refreshScreenAction(peer);
+  bumpParticipantsRevision();
 }
 
 function isParticipantStreaming(participant: Participant | null): boolean {
@@ -338,7 +322,7 @@ export function refreshScreenTiles(): void {
   elements.streamTiles.replaceChildren(...nextTiles);
 
   refreshStageStripControls();
-  refreshStageGridState();
+  bumpParticipantsRevision();
 }
 
 function hasStreamTilePreview(participant: Participant): boolean {

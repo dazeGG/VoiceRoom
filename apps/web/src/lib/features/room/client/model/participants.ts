@@ -30,6 +30,9 @@ export interface Participant {
   connectionQuality: string;
   meterData: Uint8Array<ArrayBuffer> | null;
   muted: boolean;
+  speaking: boolean;
+  statusLabel: string;
+  level: number;
   name: string;
   micReceiver: RTCRtpReceiver | null;
   screen: boolean;

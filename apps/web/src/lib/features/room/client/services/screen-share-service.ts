@@ -6,7 +6,6 @@ import {
   SCREEN_ADAPT_POOR_SAMPLE_TARGET,
   SCREEN_STATS_INTERVAL_MS
 } from '../core/config';
-import { elements } from '../ui/dom';
 import { state } from '../core/state.svelte';
 import { showToast } from '../ui/toast';
 import { errorMessage, isCaptureCancelled, isSafariBrowser, stopStream } from '../core/utils';
@@ -50,7 +49,7 @@ export async function startScreenShare(profileId: string = state.localScreenProf
   if (state.localScreenStream) return;
 
   let profile = getScreenProfile(profileId);
-  elements.screenButton.disabled = true;
+  state.screenStarting = true;
   try {
     const capture = await openScreenShare(profile);
     const stream = capture.stream;
@@ -105,7 +104,7 @@ export async function startScreenShare(profileId: string = state.localScreenProf
       cancelled ? undefined : { duration: 12000, variant: 'error' }
     );
   } finally {
-    elements.screenButton.disabled = false;
+    state.screenStarting = false;
     refreshScreenControls();
   }
 }
@@ -148,16 +147,8 @@ export async function stopScreenShare(options: { notify?: boolean; quiet?: boole
   }
 }
 
-export function refreshScreenControls(): void {
-  const sharing = Boolean(state.localScreenStream);
-  const label = sharing ? 'Закончить стрим' : 'Показать экран';
-
-  elements.screenText.textContent = label;
-  elements.screenButton.disabled = !state.joined || state.connecting;
-  elements.screenButton.setAttribute('aria-label', label);
-  elements.screenButton.setAttribute('aria-pressed', String(sharing));
-  elements.screenButton.dataset.state = sharing ? 'live' : 'idle';
-}
+/** @deprecated Screen dock button is reactive in RoomDock.svelte. */
+export function refreshScreenControls(): void {}
 
 export function hasScreenAudio(): boolean {
   return Boolean(state.localScreenStream?.getAudioTracks().some((track) => track.readyState !== 'ended'));

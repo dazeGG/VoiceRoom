@@ -175,6 +175,7 @@ export interface RoomScreenState {
   screenFullscreen: boolean;
   screenMuted: boolean;
   screenRequesting: boolean;
+  screenStarting: boolean;
   screenCollapsedPeerIds: Set<string>;
   screenSubscribedPeerIds: Set<string>;
   screenSourceRequest: ScreenSourceRequest | null;

@@ -10,7 +10,6 @@ import {
 } from '../core/config';
 import type { SelectOption } from '$lib/shared/ui';
 import { roomDeviceUi } from '$lib/features/room/room-device-ui.svelte';
-import { elements } from './dom';
 import { state } from '../core/state.svelte';
 import { clampGateThresholdDb, getDbMeterPosition, getNoiseModeLabel } from '../core/settings';
 import { showToast } from './toast';
@@ -28,10 +27,37 @@ import { publishLocalMicrophone, unpublishLocalMicrophone } from '../services/li
 import { supportsAudioOutputSelection, syncAudioOutputDevices } from '../services/media-playback-service';
 import { attachMeter } from '../media/meters';
 import { setParticipantSpeaking } from '../room/participants';
-import { refreshCallControls, refreshOutputControls } from './controls';
+import { syncOutputDeviceUiState } from './controls';
 import type { MicrophoneCapture } from '../core/types';
 
 let gateSwitchTimer = 0;
+
+export interface GateControlView {
+  levelScale: number;
+  levelState: 'open' | 'closed';
+  markerLeft: string;
+  markerActive: boolean;
+  thresholdLabel: string;
+  ariaValueNow: number;
+  thresholdValue: number;
+}
+
+export function getGateControlView(): GateControlView {
+  const levelDb = Number.isFinite(roomDeviceUi.micLevelDb) ? clampGateThresholdDb(roomDeviceUi.micLevelDb) : GATE_THRESHOLD_MIN_DB;
+  const position = getDbMeterPosition(levelDb);
+  const gateOpen = isGateDisabled() || levelDb >= state.gateThresholdDb;
+  const markerPosition = getDbMeterPosition(state.gateThresholdDb);
+
+  return {
+    levelScale: position,
+    levelState: gateOpen ? 'open' : 'closed',
+    markerLeft: `${(markerPosition * 100).toFixed(2)}%`,
+    markerActive: !isGateDisabled(),
+    thresholdLabel: isGateDisabled() ? 'Выкл' : `${state.gateThresholdDb} dB`,
+    ariaValueNow: Math.round(levelDb),
+    thresholdValue: state.gateThresholdDb
+  };
+}
 
 export function clearGateSwitchTimer(): void {
   window.clearTimeout(gateSwitchTimer);
@@ -41,34 +67,11 @@ export function clearGateSwitchTimer(): void {
 export function setGateThresholdDb(value: string | number): void {
   const threshold = Number.parseInt(String(value), 10);
   state.gateThresholdDb = Number.isFinite(threshold) ? clampGateThresholdDb(threshold) : DEFAULT_GATE_THRESHOLD_DB;
-  elements.gateThresholdSlider.value = String(state.gateThresholdDb);
   localStorage.setItem(GATE_THRESHOLD_DB_STORAGE_KEY, String(state.gateThresholdDb));
-  refreshGateThresholdValue();
-}
-
-export function refreshGateThresholdValue(): void {
-  elements.gateThresholdValue.textContent = isGateDisabled() ? 'Выкл' : `${state.gateThresholdDb} dB`;
-  refreshGateMarker();
-}
-
-function refreshGateMarker(): void {
-  if (!elements.micGateMarker) return;
-
-  const position = getDbMeterPosition(state.gateThresholdDb);
-  elements.micGateMarker.style.left = `${(position * 100).toFixed(2)}%`;
-  elements.micGateMarker.dataset.active = String(!isGateDisabled());
 }
 
 export function refreshMicrophoneLevelMeter(db: number): void {
-  if (!elements.micLevelFill || !elements.micLevelTrack) return;
-
-  const levelDb = Number.isFinite(db) ? clampGateThresholdDb(db) : GATE_THRESHOLD_MIN_DB;
-  const position = getDbMeterPosition(levelDb);
-  const gateOpen = isGateDisabled() || levelDb >= state.gateThresholdDb;
-  elements.micLevelFill.style.transform = `scaleX(${position.toFixed(3)})`;
-  elements.micLevelFill.dataset.state = gateOpen ? 'open' : 'closed';
-  elements.micLevelTrack.setAttribute('aria-valuenow', String(Math.round(levelDb)));
-  refreshGateMarker();
+  roomDeviceUi.micLevelDb = Number.isFinite(db) ? clampGateThresholdDb(db) : GATE_THRESHOLD_MIN_DB;
 }
 
 function persistMicrophoneDeviceId(deviceId: string): void {
@@ -126,7 +129,7 @@ export async function refreshDevices(): Promise<void> {
     roomDeviceUi.outputDeviceId = currentOutputId;
   }
 
-  refreshOutputControls();
+  syncOutputDeviceUiState();
 }
 
 function buildDeviceOptions(
@@ -172,7 +175,6 @@ export async function switchMicrophone(options: SwitchMicrophoneOptions = {}): P
   } = options;
   const previousDeviceId = state.microphoneDeviceId;
   persistMicrophoneDeviceId(roomDeviceUi.microphoneId);
-  refreshCallControls();
   if (!state.joined || !state.localStream) return false;
 
   let nextCapture: MicrophoneCapture | null = null;
@@ -217,8 +219,8 @@ export async function switchNoiseMode(): Promise<void> {
   if (!switched) setNoiseMode(previousMode);
 }
 
-export function updateGateThresholdFromSlider(): void {
-  setGateThresholdDb(elements.gateThresholdSlider.value);
+export function updateGateThresholdFromSlider(value: string | number): void {
+  setGateThresholdDb(value);
   const threshold = getGateThresholdAmplitude();
 
   window.clearTimeout(gateSwitchTimer);
@@ -235,6 +237,14 @@ export function updateGateThresholdFromSlider(): void {
   }, GATE_CAPTURE_SWITCH_DEBOUNCE_MS);
 }
 
+export function updateGateThresholdFromPosition(clientX: number, trackLeft: number, trackWidth: number): void {
+  if (trackWidth <= 0) return;
+
+  const position = Math.min(1, Math.max(0, (clientX - trackLeft) / trackWidth));
+  const value = Math.round(GATE_THRESHOLD_MIN_DB + position * (GATE_THRESHOLD_MAX_DB - GATE_THRESHOLD_MIN_DB));
+  updateGateThresholdFromSlider(value);
+}
+
 function updateActiveGateThreshold(threshold: number): boolean {
   const gateProcessors = getMicrophoneProcessors(state.micProcessor)
     .filter((processor) => processor.type === 'gate' && typeof processor.setThreshold === 'function');
@@ -244,34 +254,6 @@ function updateActiveGateThreshold(threshold: number): boolean {
     processor.setThreshold!(threshold);
   }
   return true;
-}
-
-export function handleGateThresholdPointerDown(event: PointerEvent): void {
-  event.preventDefault();
-  updateGateThresholdFromPointer(event);
-  elements.micLevelTrack.setPointerCapture?.(event.pointerId);
-  elements.micLevelTrack.addEventListener('pointermove', handleGateThresholdPointerMove);
-  elements.micLevelTrack.addEventListener('pointerup', handleGateThresholdPointerEnd, { once: true });
-  elements.micLevelTrack.addEventListener('pointercancel', handleGateThresholdPointerEnd, { once: true });
-}
-
-function handleGateThresholdPointerMove(event: PointerEvent): void {
-  updateGateThresholdFromPointer(event);
-}
-
-function handleGateThresholdPointerEnd(event: PointerEvent): void {
-  elements.micLevelTrack.releasePointerCapture?.(event.pointerId);
-  elements.micLevelTrack.removeEventListener('pointermove', handleGateThresholdPointerMove);
-}
-
-function updateGateThresholdFromPointer(event: PointerEvent): void {
-  const rect = elements.micLevelTrack.getBoundingClientRect();
-  if (rect.width <= 0) return;
-
-  const position = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width));
-  const value = Math.round(GATE_THRESHOLD_MIN_DB + position * (GATE_THRESHOLD_MAX_DB - GATE_THRESHOLD_MIN_DB));
-  elements.gateThresholdSlider.value = String(value);
-  updateGateThresholdFromSlider();
 }
 
 export async function switchOutputDevice(): Promise<void> {
@@ -298,52 +280,10 @@ export async function switchOutputDevice(): Promise<void> {
   showToast('Динамик переключен');
 }
 
-export function toggleDevicePopover(event: MouseEvent): void {
-  event.stopPropagation();
-  closeOutputPopover();
-  const willOpen = elements.devicePopover.hidden;
-  elements.devicePopover.hidden = !willOpen;
-  elements.deviceMenuButton.setAttribute('aria-expanded', String(willOpen));
-  if (willOpen) refreshDevices().catch(() => {});
-}
-
 export function closeDevicePopover(): void {
-  elements.devicePopover.hidden = true;
-  elements.deviceMenuButton.setAttribute('aria-expanded', 'false');
-}
-
-export function closeDevicePopoverOnOutside(event: MouseEvent): void {
-  if (elements.devicePopover.hidden) return;
-  const target = event.target as Node;
-  if (elements.devicePopover.contains(target) || elements.deviceMenuButton.contains(target)) return;
-  closeDevicePopover();
-}
-
-export function closeDevicePopoverOnEscape(event: KeyboardEvent): void {
-  if (event.key === 'Escape') closeDevicePopover();
-}
-
-export function toggleOutputPopover(event: MouseEvent): void {
-  event.stopPropagation();
-  closeDevicePopover();
-  const willOpen = elements.outputPopover.hidden;
-  elements.outputPopover.hidden = !willOpen;
-  elements.outputMenuButton.setAttribute('aria-expanded', String(willOpen));
-  if (willOpen) refreshDevices().catch(() => {});
+  roomDeviceUi.devicePopoverOpen = false;
 }
 
 export function closeOutputPopover(): void {
-  elements.outputPopover.hidden = true;
-  elements.outputMenuButton.setAttribute('aria-expanded', 'false');
-}
-
-export function closeOutputPopoverOnOutside(event: MouseEvent): void {
-  if (elements.outputPopover.hidden) return;
-  const target = event.target as Node;
-  if (elements.outputPopover.contains(target) || elements.outputMenuButton.contains(target)) return;
-  closeOutputPopover();
-}
-
-export function closeOutputPopoverOnEscape(event: KeyboardEvent): void {
-  if (event.key === 'Escape') closeOutputPopover();
+  roomDeviceUi.outputPopoverOpen = false;
 }

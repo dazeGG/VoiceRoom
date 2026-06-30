@@ -287,7 +287,7 @@ test('visual identity UI consumes backend keys and exposes only curated room pre
   const userMenu = read('src/lib/features/home/components/UserMenu.svelte');
   const roomCard = read('src/lib/features/home/components/RoomCard.svelte');
   const createDialog = read('src/lib/features/home/components/CreateRoomDialog.svelte');
-  const participants = read('src/lib/features/room/client/room/participants.ts');
+  const participantTile = read('src/lib/features/room/components/ParticipantTile.svelte');
   const chat = read('src/lib/features/room/components/RoomChat.svelte');
   const roomNet = read('src/lib/features/room/client/net/api.ts');
   const roomView = read('src/lib/features/room/client/room/room.ts');
@@ -304,8 +304,8 @@ test('visual identity UI consumes backend keys and exposes only curated room pre
   assert.match(createDialog, /ROOM_PRESETS/);
   assert.match(createDialog, /roomPresetKey/);
   assert.doesNotMatch(createDialog, /type="file"|upload|custom|contenteditable/i);
-  assert.match(participants, /getAvatarColor\(peerInfo\.avatarColorKey\)/);
-  assert.doesNotMatch(participants, /hashStringToHue\(seed\)/);
+  assert.match(participantTile, /getAvatarColor\(participant\.avatarColorKey\)/);
+  assert.doesNotMatch(participantTile, /hashStringToHue\(seed\)/);
   assert.match(chat, /getAvatarColor\(message\.avatarColorKey\)/);
   assert.doesNotMatch(chat, /hashStringToHue/);
   assert.match(roomNet, /status\?\.roomIconKey/);
@@ -348,13 +348,14 @@ test('local participant updates do not remove the self tile when LiveKit mute ev
   const participants = read('src/lib/features/room/client/room/participants.ts');
 
   assert.match(participants, /const duplicate = state\.peers\.get\(peerInfo\.id\)/);
-  assert.match(participants, /if \(duplicate\) removeParticipantView\(duplicate\.id\)/);
-  assert.doesNotMatch(participants, /removeParticipantView\(duplicate\?\.id \|\| peerInfo\.id\)/);
+  assert.match(participants, /if \(duplicate\) state\.peers\.delete\(duplicate\.id\)/);
+  assert.doesNotMatch(participants, /removeParticipantView/);
 });
 
 test('participant tiles stay visually uniform and highlight only active speakers', () => {
   const css = read('src/lib/features/room/styles/participants.css');
   const participants = read('src/lib/features/room/client/room/participants.ts');
+  const participantTile = read('src/lib/features/room/components/ParticipantTile.svelte');
   const meters = read('src/lib/features/room/client/media/meters.ts');
   const livekit = read('src/lib/features/room/client/services/livekit-service.ts');
 
@@ -362,7 +363,8 @@ test('participant tiles stay visually uniform and highlight only active speakers
   assert.match(css, /border-color: var\(--green\)/);
   assert.match(css, /\.participant\[data-speaking="true"\] \.voice-ring/);
   assert.doesNotMatch(css, /\.participant\[data-local="true"\]\s*\{\s*border-color/s);
-  assert.match(participants, /view\.node\.dataset\.speaking = String\(Boolean\(speaking\)\)/);
+  assert.match(participants, /participant\.speaking = nextSpeaking/);
+  assert.match(participantTile, /data-speaking=\{String\(participant\.speaking\)\}/);
   assert.match(meters, /setParticipantSpeaking\(participant, isLocalMicrophoneSpeaking/);
   assert.match(livekit, /RoomEvent\.ActiveSpeakersChanged/);
 });
@@ -380,7 +382,9 @@ test('screen stream thumbnails show profile metadata instead of an action button
   assert.doesNotMatch(overlays, /participant-screen-meta/);
   assert.doesNotMatch(refs, /screenMeta: HTMLElement/);
   assert.doesNotMatch(participants, /refreshParticipantScreenMeta/);
-  assert.match(participants, /node\.addEventListener\('click'/);
+  const participantTile = read('src/lib/features/room/components/ParticipantTile.svelte');
+  assert.match(participantTile, /handleTileClick/);
+  assert.match(participantTile, /enterScreenView\(participant\.id\)/);
   assert.match(participantsCss, /\.participant\[data-screen="true"\] \.participant-screen-action\s*\{\s*display: none;/s);
   assert.match(screenTiles, /createStreamTileProfileMeta/);
   assert.match(screenTiles, /stream-tile-profile-meta/);
@@ -644,48 +648,43 @@ test('remote participant audio preferences persist volume and local mute separat
 });
 
 test('participant context menu is remote-only and exposes relationship-aware local audio controls', () => {
-  const menu = read('src/lib/features/room/client/ui/participant-context-menu.ts');
+  const menu = read('src/lib/features/room/components/ParticipantContextMenu.svelte');
+  const tile = read('src/lib/features/room/components/ParticipantTile.svelte');
   const main = read('src/lib/features/room/client/main.ts');
   const participants = read('src/lib/features/room/client/room/participants.ts');
   const room = read('src/lib/features/room/client/room/room.ts');
   const css = read('src/lib/features/room/styles/participants.css');
 
-  assert.match(main, /bindParticipantContextMenu\(listenerSignal\)/);
-  assert.match(menu, /elements\.participants\.addEventListener\('contextmenu', openParticipantContextMenuFromPointerEvent/);
-  assert.match(menu, /elements\.participants\.addEventListener\('keydown', openParticipantContextMenuFromKeyboardEvent/);
-  assert.match(functionBody(menu, 'openParticipantContextMenuFromPointerEvent'), /const peer = getRemoteParticipantFromTile\(tile\)/);
-  assert.match(functionBody(menu, 'openParticipantContextMenuFromPointerEvent'), /event\.preventDefault\(\)/);
-  assert.match(functionBody(menu, 'openParticipantContextMenuFromKeyboardEvent'), /event\.key === 'ContextMenu'/);
-  assert.match(functionBody(menu, 'openParticipantContextMenuFromKeyboardEvent'), /event\.key === 'F10' && event\.shiftKey/);
-  assert.match(menu, /export function syncParticipantContextMenuA11y\(tile: HTMLElement, peer: Participant\)/);
-  assert.match(menu, /tile\.tabIndex = 0/);
-  assert.match(menu, /tile\.setAttribute\('aria-haspopup', 'dialog'\)/);
-  assert.match(participants, /syncParticipantContextMenuA11y\(node, participant\)/);
+  assert.doesNotMatch(main, /bindParticipantContextMenu/);
+  assert.match(tile, /oncontextmenu=\{handleContextMenu\}/);
+  assert.match(tile, /onkeydown=\{handleKeydown\}/);
+  assert.match(tile, /event\.preventDefault\(\)/);
+  assert.match(tile, /event\.key === 'ContextMenu'/);
+  assert.match(tile, /event\.key === 'F10' && event\.shiftKey/);
+  assert.match(tile, /tabindex=\{participant\.isLocal \? undefined : 0\}/);
+  assert.match(tile, /aria-haspopup=\{participant\.isLocal \? undefined : 'dialog'\}/);
+  assert.match(tile, /openParticipantContextMenu\(participant\.id/);
 
-  assert.match(menu, /const canUseSocialActions = Boolean\(session\.user && peer\.accountUserId && peer\.accountUserId !== session\.user\.id\)/);
+  assert.match(menu, /const canUseSocialActions = \$derived/);
   assert.match(menu, /getFriendRelationship\(peer\.accountUserId\)/);
-  assert.match(menu, /createActionButton\('Написать сообщение', 'message', peer\)/);
-  assert.match(menu, /createActionButton\('Принять заявку', 'accept-request', peer\)/);
-  assert.match(menu, /createPendingRequestNote\(\)/);
-  assert.match(menu, /createActionButton\('Добавить в друзья', 'add-friend', peer\)/);
+  assert.match(menu, /Написать сообщение/);
+  assert.match(menu, /Принять заявку/);
+  assert.match(menu, /Заявка в друзья уже отправлена/);
+  assert.match(menu, /Добавить в друзья/);
   assert.match(menu, /Гость: доступны только локальные настройки звука/);
 
-  assert.match(menu, /slider\.min = '0'/);
-  assert.match(menu, /slider\.max = '200'/);
+  assert.match(menu, /min="0"/);
+  assert.match(menu, /max="200"/);
   assert.match(menu, /storeParticipantAudioPreference\(preferenceKey, \{ volume: safePercent \/ 100 \}\)/);
-  assert.match(menu, /storeParticipantAudioPreference\(preferenceKey, \{[\s\S]*muted: !getParticipantAudioPreference\(preferenceKey\)\.muted[\s\S]*\}\)/);
+  assert.match(menu, /muted: !getParticipantAudioPreference\(preferenceKey\)\.muted/);
   assert.match(menu, /applyRemoteParticipantAudioPreferences\(peer\)/);
 
-  assert.match(menu, /panel\.setAttribute\('role', 'dialog'\)/);
-  assert.match(menu, /focusParticipantContextMenu\(panel\)/);
-  assert.match(menu, /queueMicrotask\(\(\) => focusTarget\.focus\(\)\)/);
-  assert.match(menu, /document\.addEventListener\('pointerdown', closeParticipantContextMenuOnOutside, \{ capture: true, signal \}\)/);
-  assert.match(menu, /document\.addEventListener\('focusin', closeParticipantContextMenuOnFocusOutside/);
-  assert.match(menu, /document\.addEventListener\('keydown', handleParticipantContextMenuKeydown/);
-  assert.match(functionBody(menu, 'handleParticipantContextMenuKeydown'), /activeElement instanceof HTMLInputElement && activeElement\.type === 'range'/);
-  assert.match(functionBody(menu, 'handleParticipantContextMenuKeydown'), /event\.key === 'ArrowDown' && !isRangeInput/);
-  assert.match(functionBody(menu, 'handleParticipantContextMenuKeydown'), /event\.key === 'ArrowUp' && !isRangeInput/);
-  assert.match(menu, /signal\.addEventListener\('abort', \(\) => closeParticipantContextMenu\('', false\)/);
+  assert.match(menu, /role="dialog"/);
+  assert.match(menu, /document\.addEventListener\('keydown', handleKeydown/);
+  assert.match(menu, /document\.addEventListener\('pointerdown', handlePointerDown, \{ capture: true \}\)/);
+  assert.match(menu, /activeElement instanceof HTMLInputElement && activeElement\.type === 'range'/);
+  assert.match(menu, /event\.key === 'ArrowDown' && !isRangeInput/);
+  assert.match(menu, /event\.key === 'ArrowUp' && !isRangeInput/);
   assert.match(participants, /closeParticipantContextMenu\(peerId\)/);
   assert.match(room, /closeParticipantContextMenu\(\)/);
   assert.match(menu, /closeParticipantContextMenu\(peer\.id\)/);

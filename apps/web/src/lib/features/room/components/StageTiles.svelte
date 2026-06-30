@@ -1,3 +1,20 @@
+<script lang="ts">
+  import ParticipantList from './ParticipantList.svelte';
+  import { getScreenParticipants } from '../client/ui/screen-view';
+  import { getParticipantCount, participantsUi } from '../participants-ui.svelte';
+  import { state } from '../client/core/state.svelte';
+
+  const participantCount = $derived.by(() => {
+    void participantsUi.revision;
+    return getParticipantCount();
+  });
+  const streamCount = $derived.by(() => {
+    void participantsUi.revision;
+    return getScreenParticipants().filter((participant) => participant.id !== state.viewedScreenPeerId).length;
+  });
+  const totalCount = $derived(participantCount + streamCount);
+</script>
+
 <div class="stage-strip" id="stageStrip" aria-label="Плитки комнаты">
   <div class="stage-strip-bar" hidden>
     <div class="stage-strip-title">
@@ -7,8 +24,13 @@
     <button class="strip-toggle-button" id="stripToggleButton" type="button" aria-label="Свернуть пользователей" aria-pressed="false" data-icon="chevron-down" hidden></button>
   </div>
 
-  <div class="tile-grid" id="tileGrid" data-count="0">
+  <div
+    class="tile-grid"
+    id="tileGrid"
+    data-count={Math.min(totalCount, 8)}
+    data-streams={Math.min(streamCount, 8)}
+  >
     <div class="stream-tiles" id="streamTiles" hidden></div>
-    <div class="participants" id="participants" data-count="0" aria-live="polite"></div>
+    <ParticipantList />
   </div>
 </div>
