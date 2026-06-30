@@ -20,6 +20,8 @@
 
   let peers = $state<RoomPeer[]>([]);
   let loading = $state(true);
+
+  let previewChatOpen = $state(true);
   let loadError = $state('');
 
   async function refresh(): Promise<void> {
@@ -44,6 +46,7 @@
     loading = true;
     peers = [];
     loadError = '';
+    previewChatOpen = true;
     void refresh();
   });
 
@@ -60,15 +63,23 @@
 <div class="lobby-browse-room" aria-label={`Комната ${name}`}>
   <header class="lobby-browse-topbar">
     <RoomViewHeader {room} {onBack} {onToast} />
-    {#if peers.length > 0}
-      <span class="lobby-roomview-state" data-live="true">
-        <span class="lobby-live-dot"></span>
-        {peers.length} в эфире
-      </span>
-    {/if}
+    <div class="lobby-roomview-actions">
+      {#if peers.length > 0}
+        <span class="lobby-roomview-state" data-live="true">
+          <span class="lobby-live-dot"></span>
+          {peers.length} в эфире
+        </span>
+      {/if}
+      {#if !previewChatOpen}
+        <button class="room-chat-toggle" type="button" onclick={() => (previewChatOpen = true)}>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+          <span>Чат</span>
+        </button>
+      {/if}
+    </div>
   </header>
 
-  <div class="lobby-roomview-content lobby-browse-content">
+  <div class="lobby-roomview-content lobby-browse-content" data-preview-chat-open={previewChatOpen}>
     <main class="lobby-browse-stage lobby-roomview-stage-pane" aria-label="Просмотр комнаты без подключения к голосу">
       {#if loadError}
         <p class="lobby-stage-error" role="status">{loadError}. Попробуем обновить список автоматически.</p>
@@ -104,8 +115,10 @@
       </button>
     </main>
 
-    {#key room.roomId}
-      <RoomPreviewChat roomId={room.roomId} {user} />
-    {/key}
+    {#if previewChatOpen}
+      {#key room.roomId}
+        <RoomPreviewChat roomId={room.roomId} {user} onClose={() => (previewChatOpen = false)} />
+      {/key}
+    {/if}
   </div>
 </div>

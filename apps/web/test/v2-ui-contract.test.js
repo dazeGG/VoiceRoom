@@ -575,11 +575,16 @@ test('hotfix lobby UX keeps dock in main area, preview chat, and add-friend subm
   assert.doesNotMatch(browseView, /тихо сейчас/);
   assert.match(previewChat, /fetchRoomChat\(roomId\)/);
   assert.match(previewChat, /postRoomChat\(roomId/);
+  assert.match(previewChat, /chat-rail-collapse/);
+  assert.match(previewView, /previewChatOpen/);
+  assert.match(browseView, /previewChatOpen/);
   assert.match(addFriend, /copyText\(user\.login\)/);
   assert.doesNotMatch(addFriend, /searchUsers/);
   assert.doesNotMatch(addFriend, /oninput=\{onInput\}/);
   assert.match(addFriend, /@daze/);
   assert.match(friendsCss, /\.lobby-preview-chat/);
+  assert.match(friendsCss, /data-preview-chat-open/);
+  assert.match(friendsCss, /\.lobby-dm-head[\s\S]*border: 0/);
   assert.match(lobby, /import '\$lib\/features\/room\/styles\/chat-rail\.css'/);
 });
 

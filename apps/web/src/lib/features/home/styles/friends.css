@@ -587,6 +587,14 @@ html.is-desktop .sidebar-download { display: none; }
   padding: 20px 28px;
 }
 
+.lobby-roomview-actions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
 .lobby-roomview-head { display: flex; align-items: center; gap: 10px; }
 .lobby-roomview-back {
   flex: none;
@@ -679,6 +687,10 @@ html.is-desktop .sidebar-download { display: none; }
   display: flex;
 }
 
+.lobby-roomview-content[data-preview-chat-open='true'] {
+  padding-right: var(--chat-rail-width, 360px);
+}
+
 .lobby-roomview-stage-pane {
   flex: 1;
   min-width: 0;
@@ -692,6 +704,11 @@ html.is-desktop .sidebar-download { display: none; }
 }
 
 .lobby-preview-chat {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 18;
   flex: none;
   width: var(--chat-rail-width, 360px);
   display: flex;
@@ -701,6 +718,23 @@ html.is-desktop .sidebar-download { display: none; }
   background:
     linear-gradient(180deg, rgba(17, 14, 11, 0.96), rgba(8, 7, 6, 0.98)),
     #0a0907;
+  box-shadow: -22px 0 54px rgba(0, 0, 0, 0.28);
+}
+
+@media (max-width: 900px) {
+  .lobby-roomview-content[data-preview-chat-open='true'] {
+    padding-right: 0;
+  }
+
+  .lobby-preview-chat {
+    top: 12px;
+    right: 12px;
+    bottom: 12px;
+    left: 12px;
+    width: auto;
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    border-radius: 18px;
+  }
 }
 
 .lobby-roomview-stage { flex: 1; min-height: 0; position: relative; }
@@ -805,6 +839,7 @@ html.is-desktop .sidebar-download { display: none; }
 .lobby-roomview-join:hover { background: #e7e1d1; }
 
 .lobby-browse-room {
+  position: relative;
   flex: 1;
   min-height: 0;
   display: flex;
@@ -857,6 +892,7 @@ html.is-desktop .sidebar-download { display: none; }
   align-items: center;
   gap: 12px;
   padding: 13px 24px;
+  border: 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.07);
   cursor: pointer;
   transition: background 0.14s ease;
