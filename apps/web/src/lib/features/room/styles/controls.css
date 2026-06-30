@@ -430,8 +430,9 @@ body[data-lobby-embedded="true"] .room-dock {
 
 .device-popover {
   position: absolute;
-  left: 50%;
+  top: auto;
   right: auto;
+  left: 50%;
   bottom: calc(100% + 18px);
   transform: translateX(-50%);
   display: grid;

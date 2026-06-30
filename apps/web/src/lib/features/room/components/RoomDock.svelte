@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { Popover } from '$lib/shared/ui';
   import { Select } from '$lib/shared/ui';
   import {
     NOISE_MODE_SELECT_OPTIONS,
@@ -38,43 +38,20 @@
 
   let micLevelTrack: HTMLDivElement | undefined;
 
-  function toggleDevicePopover(event: MouseEvent): void {
+  function toggleDevicePopover(event: MouseEvent, toggle: () => void): void {
     event.stopPropagation();
     closeOutputPopover();
-    roomDeviceUi.devicePopoverOpen = !roomDeviceUi.devicePopoverOpen;
-    if (roomDeviceUi.devicePopoverOpen) void refreshDevices();
+    const wasOpen = roomDeviceUi.devicePopoverOpen;
+    toggle();
+    if (!wasOpen) void refreshDevices();
   }
 
-  function toggleOutputPopover(event: MouseEvent): void {
+  function toggleOutputPopover(event: MouseEvent, toggle: () => void): void {
     event.stopPropagation();
     closeDevicePopover();
-    roomDeviceUi.outputPopoverOpen = !roomDeviceUi.outputPopoverOpen;
-    if (roomDeviceUi.outputPopoverOpen) void refreshDevices();
-  }
-
-  function handleDocumentClick(event: MouseEvent): void {
-    const target = event.target as Node;
-    if (roomDeviceUi.devicePopoverOpen) {
-      const popover = document.getElementById('devicePopover');
-      const button = document.getElementById('deviceMenuButton');
-      if (popover && button && !popover.contains(target) && !button.contains(target)) {
-        closeDevicePopover();
-      }
-    }
-    if (roomDeviceUi.outputPopoverOpen) {
-      const popover = document.getElementById('outputPopover');
-      const button = document.getElementById('outputMenuButton');
-      if (popover && button && !popover.contains(target) && !button.contains(target)) {
-        closeOutputPopover();
-      }
-    }
-  }
-
-  function handleDocumentKeydown(event: KeyboardEvent): void {
-    if (event.key === 'Escape') {
-      closeDevicePopover();
-      closeOutputPopover();
-    }
+    const wasOpen = roomDeviceUi.outputPopoverOpen;
+    toggle();
+    if (!wasOpen) void refreshDevices();
   }
 
   function handleGatePointerDown(event: PointerEvent): void {
@@ -100,49 +77,50 @@
     const rect = micLevelTrack.getBoundingClientRect();
     updateGateThresholdFromPosition(event.clientX, rect.left, rect.width);
   }
-
-  onMount(() => {
-    document.addEventListener('click', handleDocumentClick);
-    document.addEventListener('keydown', handleDocumentKeydown);
-    return () => {
-      document.removeEventListener('click', handleDocumentClick);
-      document.removeEventListener('keydown', handleDocumentKeydown);
-    };
-  });
 </script>
 
 <div class="room-dock" aria-label="Управление голосом">
   <div class="dock-shell">
     <div class="dock-cluster">
-      <div class="dock-anchor">
-        <div class="dock-split">
-          <button
-            class="dock-button mic-button"
-            id="muteButton"
-            type="button"
-            aria-pressed={callControls.ariaPressed}
-            aria-label={callControls.label}
-            data-state={callControls.stateName}
-            disabled={callControls.disabled}
-            onclick={handleMicButtonClick}
-          >
-            <span class="dock-icon dock-icon-mic" data-icon="mic" aria-hidden="true"></span>
-            <span class="dock-icon dock-icon-muted" data-icon="mic-muted" aria-hidden="true"></span>
-            <span class="sr-only" id="muteText">{callControls.label}</span>
-          </button>
-          <button
-            class="dock-menu-button"
-            id="deviceMenuButton"
-            type="button"
-            aria-expanded={roomDeviceUi.devicePopoverOpen}
-            aria-controls="devicePopover"
-            aria-label="Выбрать микрофон"
-            data-icon="chevron-down"
-            onclick={toggleDevicePopover}
-          ></button>
-        </div>
+      <Popover
+        bind:open={roomDeviceUi.devicePopoverOpen}
+        placement="top-end"
+        role="dialog"
+        ariaLabel="Настройки микрофона"
+        rootClass="dock-anchor"
+        panelClass="device-popover"
+        keepContentMounted
+      >
+        {#snippet trigger({ open, toggle, panelId })}
+          <div class="dock-split">
+            <button
+              class="dock-button mic-button"
+              id="muteButton"
+              type="button"
+              aria-pressed={callControls.ariaPressed}
+              aria-label={callControls.label}
+              data-state={callControls.stateName}
+              disabled={callControls.disabled}
+              onclick={handleMicButtonClick}
+            >
+              <span class="dock-icon dock-icon-mic" data-icon="mic" aria-hidden="true"></span>
+              <span class="dock-icon dock-icon-muted" data-icon="mic-muted" aria-hidden="true"></span>
+              <span class="sr-only" id="muteText">{callControls.label}</span>
+            </button>
+            <button
+              class="dock-menu-button"
+              id="deviceMenuButton"
+              type="button"
+              aria-expanded={open}
+              aria-controls={panelId}
+              aria-label="Выбрать микрофон"
+              data-icon="chevron-down"
+              onclick={(event) => toggleDevicePopover(event, toggle)}
+            ></button>
+          </div>
+        {/snippet}
 
-        <div class="device-popover" id="devicePopover" hidden={!roomDeviceUi.devicePopoverOpen}>
+        {#snippet content()}
           <label class="field">
             <span>Микрофон</span>
             <Select
@@ -207,39 +185,49 @@
               <output id="gateThresholdValue" for="gateThresholdSlider">{gate.thresholdLabel}</output>
             </div>
           </label>
-        </div>
-      </div>
+        {/snippet}
+      </Popover>
     </div>
 
     <div class="dock-cluster">
-      <div class="dock-anchor">
-        <div class="dock-split">
-          <button
-            class="dock-button output-button"
-            id="outputButton"
-            type="button"
-            aria-pressed={outputControls.ariaPressed}
-            aria-label={outputControls.label}
-            data-state={outputControls.stateName}
-            onclick={toggleOutputMute}
-          >
-            <span class="dock-icon dock-icon-output" data-icon="headphones" aria-hidden="true"></span>
-            <span class="dock-icon dock-icon-output-muted" data-icon="headphones-muted" aria-hidden="true"></span>
-            <span class="sr-only" id="outputText">{outputControls.label}</span>
-          </button>
-          <button
-            class="dock-menu-button"
-            id="outputMenuButton"
-            type="button"
-            aria-expanded={roomDeviceUi.outputPopoverOpen}
-            aria-controls="outputPopover"
-            aria-label="Выбрать динамик"
-            data-icon="chevron-down"
-            onclick={toggleOutputPopover}
-          ></button>
-        </div>
+      <Popover
+        bind:open={roomDeviceUi.outputPopoverOpen}
+        placement="top-end"
+        role="dialog"
+        ariaLabel="Настройки динамика"
+        rootClass="dock-anchor"
+        panelClass="device-popover output-popover"
+        keepContentMounted
+      >
+        {#snippet trigger({ open, toggle, panelId })}
+          <div class="dock-split">
+            <button
+              class="dock-button output-button"
+              id="outputButton"
+              type="button"
+              aria-pressed={outputControls.ariaPressed}
+              aria-label={outputControls.label}
+              data-state={outputControls.stateName}
+              onclick={toggleOutputMute}
+            >
+              <span class="dock-icon dock-icon-output" data-icon="headphones" aria-hidden="true"></span>
+              <span class="dock-icon dock-icon-output-muted" data-icon="headphones-muted" aria-hidden="true"></span>
+              <span class="sr-only" id="outputText">{outputControls.label}</span>
+            </button>
+            <button
+              class="dock-menu-button"
+              id="outputMenuButton"
+              type="button"
+              aria-expanded={open}
+              aria-controls={panelId}
+              aria-label="Выбрать динамик"
+              data-icon="chevron-down"
+              onclick={(event) => toggleOutputPopover(event, toggle)}
+            ></button>
+          </div>
+        {/snippet}
 
-        <div class="device-popover output-popover" id="outputPopover" hidden={!roomDeviceUi.outputPopoverOpen}>
+        {#snippet content()}
           <label class="field">
             <span>Динамик</span>
             <Select
@@ -252,8 +240,8 @@
               onValueChange={() => void switchOutputDevice()}
             />
           </label>
-        </div>
-      </div>
+        {/snippet}
+      </Popover>
     </div>
 
     <button
