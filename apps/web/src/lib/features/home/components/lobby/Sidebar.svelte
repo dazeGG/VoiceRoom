@@ -58,9 +58,8 @@
   const selfName = $derived(user.displayName?.trim() || user.login);
   const activeVoiceLabel = $derived(activeVoiceRoomName?.trim() || activeVoiceRoomId || '');
 
-  function lastMessagePreview(entry: (typeof friendsState.friends)[number]): string {
-    if (!entry.lastMessage) return entry.online ? 'в сети' : 'не в сети';
-    return `${entry.lastMessage.fromMe ? 'Вы: ' : ''}${entry.lastMessage.body}`;
+  function friendStatusLabel(entry: (typeof friendsState.friends)[number]): string {
+    return entry.online ? 'в сети' : 'не в сети';
   }
 
   function onJoinKeydown(event: KeyboardEvent): void {
@@ -137,7 +136,7 @@
                 <Avatar name={friendName(entry.user)} colorKey={entry.user.avatarColorKey} online showDot ring="#0a0907" />
                 <div class="lobby-row-body">
                   <div class="lobby-row-name">{friendName(entry.user)}</div>
-                  <div class="lobby-row-sub">{lastMessagePreview(entry)}</div>
+                  <div class="lobby-row-sub">{friendStatusLabel(entry)}</div>
                 </div>
                 {#if entry.unreadCount > 0}
                   <span class="lobby-badge lobby-badge--sm">{entry.unreadCount}</span>
@@ -158,7 +157,7 @@
                 <Avatar name={friendName(entry.user)} colorKey={entry.user.avatarColorKey} />
                 <div class="lobby-row-body">
                   <div class="lobby-row-name">{friendName(entry.user)}</div>
-                  <div class="lobby-row-sub lobby-row-sub--muted">{lastMessagePreview(entry)}</div>
+                  <div class="lobby-row-sub lobby-row-sub--muted">{friendStatusLabel(entry)}</div>
                 </div>
                 {#if entry.unreadCount > 0}
                   <span class="lobby-badge lobby-badge--sm">{entry.unreadCount}</span>
