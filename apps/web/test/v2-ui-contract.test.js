@@ -644,16 +644,22 @@ test('remote participant audio preferences persist volume and local mute separat
   );
   assert.match(
     outputSyncBody,
-    /state\.outputDeviceId && hasActiveVoiceAudioGains\(\) && !supportsAudioContextOutputSelection\(\)[\s\S]*return false/,
-    'active voice gain graphs must fail output-device switching when the AudioContext destination cannot switch sinks'
+    /state\.outputDeviceId && !supportsAudioContextOutputSelection\(\) && !rebuildActiveVoiceAudioElementsForOutputSwitch\(\)[\s\S]*return false/,
+    'active voice gain graphs must be rebuilt or fail output-device switching when the AudioContext destination cannot switch sinks'
   );
   assert.ok(
-    outputSyncBody.indexOf('hasActiveVoiceAudioGains()') < outputSyncBody.indexOf('syncRemoteAudioPlayback()'),
-    'stale voice gain graphs must block output switching before reporting media-element sink success'
+    outputSyncBody.indexOf('rebuildActiveVoiceAudioElementsForOutputSwitch()') < outputSyncBody.indexOf('syncRemoteAudioPlayback()'),
+    'stale voice gain graphs must be rebuilt before reporting media-element sink success'
   );
   assert.match(playback, /const voiceAudioGains = new WeakMap<HTMLMediaElement, VoiceAudioGain>\(\)/);
   assert.match(playback, /let activeVoiceAudioGainCount = 0/);
   assert.match(functionBody(playback, 'hasActiveVoiceAudioGains'), /return activeVoiceAudioGainCount > 0/);
+  const rebuildVoiceBody = functionBody(playback, 'rebuildActiveVoiceAudioElementsForOutputSwitch');
+  assert.match(rebuildVoiceBody, /voiceAudioGains\.has\(audio\)/);
+  assert.match(rebuildVoiceBody, /document\.createElement\('audio'\)/);
+  assert.match(rebuildVoiceBody, /releaseRemoteAudioElement\(audio\)/);
+  assert.match(rebuildVoiceBody, /peer\.audioElements\.set\(trackId, replacement\)/);
+  assert.match(rebuildVoiceBody, /return !hasActiveVoiceAudioGains\(\)/);
   assert.match(playback, /export function releaseRemoteAudioElement\(mediaElement: HTMLMediaElement\)/);
   assert.match(functionBody(playback, 'releaseRemoteAudioElement'), /activeVoiceAudioGainCount = Math\.max\(0, activeVoiceAudioGainCount - 1\)/);
   assert.match(playback, /function applyVoiceMediaElementVolume[\s\S]*if \(existing\) \{[\s\S]*existing\.gain\.gain\.value = options\.muted \? 0 : volume[\s\S]*playMediaElement\(mediaElement\)/);

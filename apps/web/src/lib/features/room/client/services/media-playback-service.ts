@@ -60,6 +60,47 @@ function hasActiveVoiceAudioGains(): boolean {
   return activeVoiceAudioGainCount > 0;
 }
 
+function rebuildActiveVoiceAudioElementsForOutputSwitch(): boolean {
+  if (!hasActiveVoiceAudioGains()) return true;
+
+  for (const peer of state.peers.values()) {
+    for (const [trackId, audio] of peer.audioElements.entries()) {
+      if (!voiceAudioGains.has(audio)) continue;
+
+      const stream = audio.srcObject instanceof MediaStream ? audio.srcObject : null;
+      const track = stream?.getAudioTracks().find((audioTrack) => audioTrack.id === trackId)
+        ?? stream?.getAudioTracks()[0]
+        ?? null;
+      if (!stream || !track || track.readyState === 'ended') return false;
+
+      const replacement = document.createElement('audio');
+      replacement.autoplay = true;
+      replacement.muted = true;
+      (replacement as HTMLAudioElement & { playsInline: boolean }).playsInline = true;
+      replacement.srcObject = stream;
+      document.body.append(replacement);
+
+      releaseRemoteAudioElement(audio);
+      audio.pause();
+      audio.srcObject = null;
+      audio.remove();
+      peer.audioElements.set(trackId, replacement);
+
+      track.addEventListener(
+        'ended',
+        () => {
+          releaseRemoteAudioElement(replacement);
+          replacement.remove();
+          if (peer.audioElements.get(trackId) === replacement) peer.audioElements.delete(trackId);
+        },
+        { once: true }
+      );
+    }
+  }
+
+  return !hasActiveVoiceAudioGains();
+}
+
 export function releaseRemoteAudioElement(mediaElement: HTMLMediaElement): void {
   const existing = voiceAudioGains.get(mediaElement);
   if (!existing) return;
@@ -140,7 +181,7 @@ export async function syncAudioOutputDevices(): Promise<boolean> {
     console.warn('Audio output device unavailable while stream boost is active');
     return false;
   }
-  if (state.outputDeviceId && hasActiveVoiceAudioGains() && !supportsAudioContextOutputSelection()) {
+  if (state.outputDeviceId && !supportsAudioContextOutputSelection() && !rebuildActiveVoiceAudioElementsForOutputSwitch()) {
     console.warn('Audio output device unavailable while participant voice boost is active');
     return false;
   }
