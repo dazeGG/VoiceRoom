@@ -61,6 +61,58 @@ Keep runtime marker contracts stable and non-destructive when overlays are appli
 - Merge PRs into `develop` with squash merge and delete the source branch after a successful merge.
 - Verify with lint, typecheck, tests, and static analysis after changes; final reports include changed files, simplifications, and remaining risks.
 
+## graphify (codebase knowledge graph)
+
+Applies to **Codex CLI (OMX)** and **Grok in Cursor**. Same contract as `CLAUDE.md`.
+
+This repo has a navigable knowledge graph at `graphify-out/` (gitignored — each machine builds it locally). Prefer graphify over broad grep or reading many files when the question is structural.
+
+### Query graphify first
+
+Use graphify before wide repo search when the task involves:
+
+- architecture, data flow, or "how does X work?"
+- call chains, imports across modules, or cross-cutting dependencies
+- planning or implementing features that touch multiple areas
+- exploring unfamiliar parts of the codebase
+
+When `graphify-out/graph.json` exists, run:
+
+```bash
+graphify query "<question>"              # BFS subgraph (default)
+graphify query "<question>" --dfs        # trace a specific path
+graphify path "<concept A>" "<concept B>"
+graphify explain "<concept>"
+```
+
+Answer from the graph output; cite `source_location` when stating a specific fact. Then read only the files the subgraph points to.
+
+### When grep or direct reads are still fine
+
+- exact symbol lookup when the file or identifier is already known
+- implementation details inside a function after graphify narrowed the scope
+- configs, tests, or paths the graph does not cover
+
+### Navigation priority
+
+1. `graphify query` / `path` / `explain`
+2. `graphify-out/wiki/index.md` if it exists
+3. `graphify-out/GRAPH_REPORT.md` only for broad architecture review
+4. targeted reads using graph `source_file` / `source_location`
+5. broad grep only as fallback when graphify returns nothing useful
+
+### Keep the graph current
+
+- After code changes: `graphify update .` (AST-only, fast, no API key)
+- First-time setup or doc/image changes: `/graphify .` or `/graphify . --update`
+- If `graphify-out/` is missing, run `/graphify .` once before relying on query
+
+### Subagents (Codex OMX)
+
+When dispatching exploration subagents, instruct them to use `graphify query` first for codebase questions. Do not have parallel subagents each grep the full repo independently.
+
+Optional: MCP stdio server (`python -m graphify.serve graphify-out/graph.json`) for tool-native graph access in MCP-capable hosts.
+
 
 <delegation_rules>
 Default posture: work directly.
