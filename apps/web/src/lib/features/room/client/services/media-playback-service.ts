@@ -77,11 +77,15 @@ function applyVoiceMediaElementVolume(
   const volume = Number.isFinite(options.volume) ? Math.min(maxVolume, Math.max(0, options.volume)) : 1;
   const existing = voiceAudioGains.get(mediaElement);
 
-  if (existing) {
+  if (existing && maxVolume > 1) {
     mediaElement.volume = 1;
     mediaElement.muted = options.muted;
     existing.gain.gain.value = options.muted ? 0 : volume;
     return true;
+  }
+
+  if (existing) {
+    releaseRemoteAudioElement(mediaElement);
   }
 
   if (volume <= 1) {

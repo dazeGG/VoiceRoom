@@ -15,7 +15,8 @@ import {
   type IncomingRequest,
   type OutgoingRequest,
   type PublicUser,
-  type SendRequestStatus
+  type SendRequestStatus,
+  type Relationship
 } from '$lib/api/friends';
 import { fetchThread, markThreadRead, sendDirectMessage, type DirectMessage } from '$lib/api/dm';
 import { connectRealtime, type RealtimeEvent, type RealtimeHandle } from '$lib/api/realtime';
@@ -160,8 +161,17 @@ function bumpLastMessage(peerId: string, message: DirectMessage): void {
 
 // --- Friend request actions --------------------------------------------
 
-export function getFriendRelationship(userId: string): 'friend' | 'none' {
-  return findFriend(userId) ? 'friend' : 'none';
+export function getFriendRelationship(userId: string): Relationship {
+  if (findFriend(userId)) return 'friend';
+  if (friendsState.requests.incoming.some((request) => request.user.id === userId)) return 'incoming';
+  if (friendsState.requests.outgoing.some((request) => request.user.id === userId)) return 'outgoing';
+  return 'none';
+}
+
+export async function acceptRequestByUserId(userId: string): Promise<void> {
+  const request = friendsState.requests.incoming.find((entry) => entry.user.id === userId);
+  if (!request) return;
+  await acceptRequest(request.id);
 }
 
 export async function addFriendByLogin(login: string): Promise<{ status: SendRequestStatus; user: PublicUser }> {

@@ -10,7 +10,7 @@ import {
   releaseRemoteAudioElement
 } from '../services/media-playback-service';
 import { STREAM_CUE_DEDUPE_MS } from '../core/config';
-import { closeParticipantContextMenu } from '../ui/participant-context-menu';
+import { closeParticipantContextMenu, syncParticipantContextMenuA11y } from '../ui/participant-context-menu';
 import { clearPeerJoinCue, playStreamCue, playStreamViewerCue } from '../media/cues';
 import { attachMeter } from '../media/meters';
 import { isMicrophonePublication, syncLiveKitScreenSubscriptions } from '../services/livekit-service';
@@ -170,6 +170,7 @@ export function createParticipant(peerInfo: PeerInfo): Participant {
   };
 
   setParticipantView(participant, view);
+  syncParticipantContextMenuA11y(node, participant);
   const openScreenView = () => enterScreenView(participant.id).catch((error) => console.error(error));
   screenAction.addEventListener('click', (event) => {
     event.stopPropagation();
@@ -226,6 +227,7 @@ export function updateParticipant(peerInfo: PeerInfo): void {
   view.node.dataset.muted = String(participant.muted);
   view.node.dataset.screen = String(participant.screen);
   applyParticipantPalette(view.node, participant);
+  syncParticipantContextMenuA11y(view.node, participant);
   view.node.querySelector('.avatar')!.textContent = getInitials(participant.name);
   view.node.querySelector('.participant-name')!.textContent = participant.isLocal ? `${participant.name} · вы` : participant.name;
   if (Object.hasOwn(peerInfo, 'muted') && participant.muted) {

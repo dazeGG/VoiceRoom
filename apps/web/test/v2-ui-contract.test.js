@@ -597,7 +597,8 @@ test('remote participant audio preferences persist volume and local mute separat
   assert.match(functionBody(playback, 'applyRemoteParticipantAudioPreferences'), /applyVoiceMediaElementVolume\(audio, \{ muted, volume: preference\.volume \}\)/);
   assert.match(playback, /const voiceAudioGains = new WeakMap<HTMLMediaElement, VoiceAudioGain>\(\)/);
   assert.match(playback, /export function releaseRemoteAudioElement\(mediaElement: HTMLMediaElement\)/);
-  assert.match(playback, /function applyVoiceMediaElementVolume[\s\S]*existing\.gain\.gain\.value = options\.muted \? 0 : volume/);
+  assert.match(playback, /function applyVoiceMediaElementVolume[\s\S]*existing && maxVolume > 1[\s\S]*existing\.gain\.gain\.value = options\.muted \? 0 : volume/);
+  assert.match(playback, /function applyVoiceMediaElementVolume[\s\S]*if \(existing\) \{[\s\S]*releaseRemoteAudioElement\(mediaElement\)/);
   assert.match(playback, /function applyVoiceMediaElementVolume[\s\S]*mediaElement\.volume = Math\.min\(1, volume\)/);
 
   assert.match(participants, /applyRemoteParticipantAudioPreferences\(peer\)/);
@@ -614,14 +615,22 @@ test('participant context menu is remote-only and exposes relationship-aware loc
   const css = read('src/lib/features/room/styles/participants.css');
 
   assert.match(main, /bindParticipantContextMenu\(listenerSignal\)/);
-  assert.match(menu, /elements\.participants\.addEventListener\('contextmenu', openParticipantContextMenuFromEvent/);
-  assert.match(functionBody(menu, 'openParticipantContextMenuFromEvent'), /const peer = state\.peers\.get\(peerId\)/);
-  assert.match(functionBody(menu, 'openParticipantContextMenuFromEvent'), /if \(!peer \|\| peer\.isLocal\) return/);
-  assert.match(functionBody(menu, 'openParticipantContextMenuFromEvent'), /event\.preventDefault\(\)/);
+  assert.match(menu, /elements\.participants\.addEventListener\('contextmenu', openParticipantContextMenuFromPointerEvent/);
+  assert.match(menu, /elements\.participants\.addEventListener\('keydown', openParticipantContextMenuFromKeyboardEvent/);
+  assert.match(functionBody(menu, 'openParticipantContextMenuFromPointerEvent'), /const peer = getRemoteParticipantFromTile\(tile\)/);
+  assert.match(functionBody(menu, 'openParticipantContextMenuFromPointerEvent'), /event\.preventDefault\(\)/);
+  assert.match(functionBody(menu, 'openParticipantContextMenuFromKeyboardEvent'), /event\.key === 'ContextMenu'/);
+  assert.match(functionBody(menu, 'openParticipantContextMenuFromKeyboardEvent'), /event\.key === 'F10' && event\.shiftKey/);
+  assert.match(menu, /export function syncParticipantContextMenuA11y\(tile: HTMLElement, peer: Participant\)/);
+  assert.match(menu, /tile\.tabIndex = 0/);
+  assert.match(menu, /tile\.setAttribute\('aria-haspopup', 'dialog'\)/);
+  assert.match(participants, /syncParticipantContextMenuA11y\(node, participant\)/);
 
   assert.match(menu, /const canUseSocialActions = Boolean\(session\.user && peer\.accountUserId && peer\.accountUserId !== session\.user\.id\)/);
   assert.match(menu, /getFriendRelationship\(peer\.accountUserId\)/);
   assert.match(menu, /createActionButton\('Написать сообщение', 'message', peer\)/);
+  assert.match(menu, /createActionButton\('Принять заявку', 'accept-request', peer\)/);
+  assert.match(menu, /createPendingRequestNote\(\)/);
   assert.match(menu, /createActionButton\('Добавить в друзья', 'add-friend', peer\)/);
   assert.match(menu, /Гость: доступны только локальные настройки звука/);
 
@@ -631,16 +640,22 @@ test('participant context menu is remote-only and exposes relationship-aware loc
   assert.match(menu, /storeParticipantAudioPreference\(preferenceKey, \{[\s\S]*muted: !getParticipantAudioPreference\(preferenceKey\)\.muted[\s\S]*\}\)/);
   assert.match(menu, /applyRemoteParticipantAudioPreferences\(peer\)/);
 
+  assert.match(menu, /panel\.setAttribute\('role', 'dialog'\)/);
+  assert.match(menu, /focusParticipantContextMenu\(panel\)/);
+  assert.match(menu, /queueMicrotask\(\(\) => focusTarget\.focus\(\)\)/);
   assert.match(menu, /document\.addEventListener\('pointerdown', closeParticipantContextMenuOnOutside, \{ capture: true, signal \}\)/);
-  assert.match(menu, /document\.addEventListener\('keydown', closeParticipantContextMenuOnEscape/);
-  assert.match(menu, /signal\.addEventListener\('abort', \(\) => closeParticipantContextMenu\(\)/);
+  assert.match(menu, /document\.addEventListener\('focusin', closeParticipantContextMenuOnFocusOutside/);
+  assert.match(menu, /document\.addEventListener\('keydown', handleParticipantContextMenuKeydown/);
+  assert.match(menu, /signal\.addEventListener\('abort', \(\) => closeParticipantContextMenu\('', false\)/);
   assert.match(participants, /closeParticipantContextMenu\(peerId\)/);
   assert.match(room, /closeParticipantContextMenu\(\)/);
   assert.match(menu, /closeParticipantContextMenu\(peer\.id\)/);
   assert.match(menu, /addFriendByUserId\(peer\.accountUserId\)/);
+  assert.match(menu, /acceptRequestByUserId\(peer\.accountUserId\)/);
   assert.match(menu, /setMode\('friends'\)/);
   assert.match(menu, /await openDm\(peer\.accountUserId\)/);
   assert.match(menu, /showToast\('Не удалось отправить заявку в друзья', \{ variant: 'error' \}\)/);
+  assert.match(menu, /showToast\('Не удалось принять заявку в друзья', \{ variant: 'error' \}\)/);
   assert.match(menu, /showToast\('Не удалось открыть личные сообщения', \{ variant: 'error' \}\)/);
 
   assert.match(css, /\.participant-context-menu/);
