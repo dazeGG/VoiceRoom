@@ -7,9 +7,8 @@ import { createInitialRoomState } from '../model/room-state';
  * transparent to plain reads/writes — while Svelte components can now read fields
  * reactively. This replaces the bridge that the migration plan originally proposed.
  *
- * Note: `$state` deep-proxies plain objects/arrays, but NOT Map/Set. Fields like
- * `peers` (Map) and `screen*PeerIds` (Set) stay non-reactive at the
- * entry level for now — swap them to SvelteMap/SvelteSet in the participants phase when
- * a component needs to react to their contents.
+ * Note: `$state` deep-proxies plain objects/arrays, but NOT Map/Set. `peers` uses
+ * `SvelteMap` so participant mutations propagate to Svelte. `screen*PeerIds` (Set)
+ * still rely on `screenUi.revision` until migrated to SvelteSet.
  */
 export const state = $state(createInitialRoomState());

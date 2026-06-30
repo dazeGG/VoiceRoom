@@ -2,7 +2,7 @@ import { showToast } from './toast';
 import { state } from '../core/state.svelte';
 import { postState } from '../room/presence';
 import { syncLiveKitScreenSubscriptions } from '../services/livekit-service';
-import { bumpParticipantsRevision } from '../../participants-ui.svelte';
+
 import { bumpScreenUiRevision, screenUi } from '../../screen-ui.svelte';
 import {
   detachRemoteScreen,
@@ -55,7 +55,7 @@ export async function enterScreenView(peerId: string): Promise<void> {
   const peer = getParticipantById(peerId);
   if (peer?.isLocal && state.localScreenStream) {
     peer.screen = true;
-    bumpParticipantsRevision();
+
   }
   if (!peer?.screen) {
     showToast('Демонстрация уже завершена');
@@ -162,7 +162,7 @@ export function isScreenSubscribed(peerId: string): boolean {
 export function refreshScreenAction(_participant: Participant | null): void {}
 
 export function refreshAllScreenActions(): void {
-  bumpParticipantsRevision();
+
 }
 
 function isParticipantStreaming(participant: Participant | null): boolean {
@@ -272,7 +272,7 @@ export function refreshScreenTiles(): void {
   screenUi.streamTilesCount = Math.min(screenParticipants.length, 8);
   refreshStageStripControls();
   bumpScreenUiRevision();
-  bumpParticipantsRevision();
+
 }
 
 export function hasStreamTilePreview(participant: Participant): boolean {

@@ -1,4 +1,5 @@
 import type { LocalTrackPublication, Room } from 'livekit-client';
+import type { SvelteMap } from 'svelte/reactivity';
 import type { NoiseMode } from './config';
 import type { Participant, PeerInfo } from '../model/participants';
 export type { Participant, ParticipantViewRefs, PeerInfo } from '../model/participants';
@@ -136,7 +137,7 @@ export interface RoomConnectionState {
 }
 
 export interface RoomParticipantState {
-  peers: Map<string, Participant>;
+  peers: SvelteMap<string, Participant>;
   self: Participant | null;
 }
 

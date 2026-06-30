@@ -2,17 +2,13 @@
   import ParticipantList from './ParticipantList.svelte';
   import StreamTiles from './StreamTiles.svelte';
   import { getScreenParticipants } from '../client/ui/screen-view';
-  import { getParticipantCount, participantsUi } from '../participants-ui.svelte';
+  import { getParticipantCount } from '../participants-ui.svelte';
   import { state } from '../client/core/state.svelte';
 
-  const participantCount = $derived.by(() => {
-    void participantsUi.revision;
-    return getParticipantCount();
-  });
-  const streamCount = $derived.by(() => {
-    void participantsUi.revision;
-    return getScreenParticipants().filter((participant) => participant.id !== state.viewedScreenPeerId).length;
-  });
+  const participantCount = $derived(getParticipantCount());
+  const streamCount = $derived(
+    getScreenParticipants().filter((participant) => participant.id !== state.viewedScreenPeerId).length
+  );
   const totalCount = $derived(participantCount + streamCount);
 </script>
 

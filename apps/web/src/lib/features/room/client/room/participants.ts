@@ -1,4 +1,3 @@
-import { bumpParticipantsRevision } from '../../participants-ui.svelte';
 import { closeParticipantContextMenu } from '../../participant-context-ui.svelte';
 import { state } from '../core/state.svelte';
 import { getScreenProfile } from '../media/profiles';
@@ -140,7 +139,6 @@ export function createParticipant(peerInfo: PeerInfo): Participant {
   if (!participant.isLocal && participant.screen) {
     applyRemoteScreenCue(participant, false, true);
   }
-  bumpParticipantsRevision();
   return participant;
 }
 
@@ -198,7 +196,7 @@ export function updateParticipant(peerInfo: PeerInfo): void {
   if (shouldRefreshScreenStage(peerInfo, hadScreen, hadScreenAudio, hadScreenStreamId, hadName)) {
     refreshScreenStage();
   }
-  bumpParticipantsRevision();
+
 }
 
 function shouldRefreshScreenTiles(
@@ -248,7 +246,7 @@ export function removePeer(peerId: string): void {
   if (state.peers.size === 0) setParticipantSpeaking(state.self, false);
   refreshScreenTiles();
   refreshParticipantState();
-  bumpParticipantsRevision();
+
 }
 
 export function detachLiveKitParticipant(peer: Participant, voiceIssue = 'подключает голос'): void {
@@ -332,7 +330,7 @@ export function attachRemoteScreenStream(peer: Participant, stream: MediaStream)
   refreshScreenStage();
   refreshScreenTiles();
   updatePeerStatus(peer);
-  bumpParticipantsRevision();
+
 }
 
 function mergeRemoteScreenStream(peer: Participant, stream: MediaStream): MediaStream {
@@ -352,7 +350,7 @@ export function detachRemoteScreen(peer: Participant): void {
   refreshScreenStage();
   updatePeerStatus(peer);
   refreshAllScreenActions();
-  bumpParticipantsRevision();
+
 }
 
 export function ensureRemoteAudioElement(
@@ -441,7 +439,7 @@ export function setParticipantSpeaking(participant: Participant | null, speaking
   const nextSpeaking = Boolean(speaking);
   if (participant.speaking === nextSpeaking) return;
   participant.speaking = nextSpeaking;
-  bumpParticipantsRevision();
+
 }
 
 export function updatePeerStatus(peer: Participant): void {
@@ -491,15 +489,15 @@ function getLiveKitMicrophonePublication(peer: Participant) {
 function setParticipantStatus(peer: Participant, label: string): void {
   if (peer.statusLabel === label) return;
   peer.statusLabel = label;
-  bumpParticipantsRevision();
+
 }
 
 export function refreshParticipantState(): void {
-  bumpParticipantsRevision();
+
 }
 
 export function refreshStageGridState(): void {
-  bumpParticipantsRevision();
+
 }
 
 export function getParticipantById(peerId: string): Participant | null {
