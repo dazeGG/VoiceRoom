@@ -13,13 +13,23 @@
   import { unlockAudio } from '../client/services/media-playback-service';
   import {
     clearGuestNameError,
-    handleGuestNameSubmit
+    handleGuestNameDialogClick,
+    handleGuestNameDialogKeydown,
+    handleGuestNameSubmit,
+    syncGuestNameDialogInert
   } from '../client/ui/names';
 
   let closeButton: HTMLButtonElement | undefined;
+  let guestNameDialog: HTMLDivElement | undefined;
+  let guestNameInput: HTMLInputElement | undefined;
+
+  $effect(() => {
+    syncGuestNameDialogInert(guestNameUi.open, guestNameDialog ?? null);
+  });
 
   onMount(() => {
     if (closeButton) mountIcons(closeButton);
+    return () => syncGuestNameDialogInert(false, guestNameDialog ?? null);
   });
 </script>
 
@@ -28,12 +38,15 @@
 </div>
 
 <div
+  bind:this={guestNameDialog}
   class="guest-name-dialog"
   id="guestNameDialog"
   role="dialog"
   aria-modal="true"
   aria-labelledby="guestNameTitle"
   hidden={!guestNameUi.open}
+  onclick={(event) => handleGuestNameDialogClick(event, guestNameInput ?? null)}
+  onkeydown={(event) => guestNameDialog && handleGuestNameDialogKeydown(event, guestNameDialog, guestNameInput ?? null)}
 >
   <section class="guest-name-panel">
     <div class="guest-name-heading">
@@ -46,6 +59,7 @@
       <label class="field" for="guestNameInput">
         <span>Ваше имя</span>
         <input
+          bind:this={guestNameInput}
           id="guestNameInput"
           bind:value={guestNameUi.inputValue}
           maxlength="40"

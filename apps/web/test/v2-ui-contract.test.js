@@ -495,7 +495,13 @@ test('room route uses lobby for authenticated users and preserves standalone gue
   assert.match(names, /resetGuestNameDialog/);
   assert.match(names, /rejectPendingGuestName/);
   assert.match(names, /guestNameUi/);
-  assert.doesNotMatch(names, /unbindGuestNameDialog|setGuestNameSiblingInert|elements\.guestName/);
+  assert.doesNotMatch(names, /unbindGuestNameDialog|elements\.guestName/);
+  assert.match(names, /syncGuestNameDialogInert/);
+  assert.match(names, /handleGuestNameDialogKeydown/);
+  assert.match(names, /handleGuestNameDialogClick/);
+  assert.match(overlays, /syncGuestNameDialogInert/);
+  assert.match(overlays, /handleGuestNameDialogKeydown/);
+  assert.match(overlays, /handleGuestNameDialogClick/);
   assert.match(requestGuestNameForRoom, /setGuestNameDialogOpen\(true\)/);
   assert.match(requestGuestNameForRoom, /guestNameUi\.inputValue = ''/);
   assert.match(handleGuestNameSubmit, /cleanDisplayName\(guestNameUi\.inputValue\)/);

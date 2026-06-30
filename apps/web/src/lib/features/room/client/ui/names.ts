@@ -57,6 +57,7 @@ export function requestGuestNameForRoom(): Promise<string> {
   guestNameUi.inputValue = '';
   guestNameUi.error = '';
   setGuestNameDialogOpen(true);
+  queueMicrotask(() => document.getElementById('guestNameInput')?.focus());
 
   pendingGuestNamePromise = new Promise((resolve, reject) => {
     resolvePendingGuestName = resolve;
@@ -85,6 +86,55 @@ export function resetGuestNameDialog(): void {
 
 export function setGuestNameDialogOpen(open: boolean): void {
   guestNameUi.open = open;
+}
+
+export function syncGuestNameDialogInert(open: boolean, dialog: HTMLElement | null): void {
+  if (!dialog) return;
+  const shell = dialog.closest('.app-shell');
+  if (!shell) return;
+
+  for (const child of Array.from(shell.children)) {
+    if (child.contains(dialog)) continue;
+    if (open) {
+      child.setAttribute('inert', '');
+      continue;
+    }
+    child.removeAttribute('inert');
+  }
+}
+
+export function handleGuestNameDialogClick(event: MouseEvent, input: HTMLInputElement | null): void {
+  if (event.target === event.currentTarget) {
+    input?.focus();
+  }
+}
+
+export function handleGuestNameDialogKeydown(event: KeyboardEvent, dialog: HTMLElement, input: HTMLInputElement | null): void {
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    input?.focus();
+    return;
+  }
+
+  if (event.key !== 'Tab') return;
+
+  const focusableElements = Array.from(
+    dialog.querySelectorAll<HTMLElement>('input, button')
+  ).filter((element) => !element.hasAttribute('disabled'));
+  const first = focusableElements[0];
+  const last = focusableElements.at(-1);
+  if (!first || !last) return;
+
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+    return;
+  }
+
+  if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
 }
 
 export function persistName(name: string): void {
