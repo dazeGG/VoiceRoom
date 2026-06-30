@@ -7,6 +7,7 @@
   import { getInitials } from '../client/core/utils';
   import type { RoomLifecycleSummary } from '../client/core/types';
   import { applyRoomDeleted, applyRoomNotFound, applyRoomUpdated } from '../client/room/lifecycle';
+  import { openParticipantContextMenu } from '../participant-context-ui.svelte';
   import { roomUi, closeChat, incrementUnreadChat, markChatRead } from '../room-ui.svelte';
 
   let roomId = $state('');
@@ -210,6 +211,14 @@
     if (!chatBody) return;
     chatBody.scrollTop = chatBody.scrollHeight;
   }
+
+  // Open the participant context menu from a chat author (avatar or name). Only
+  // works for others who are still in the room; self and absent peers are inert.
+  function openUserMenu(group: ChatGroup, event: MouseEvent): void {
+    if (group.self) return;
+    event.stopPropagation();
+    openParticipantContextMenu(group.peerId, event.clientX, event.clientY);
+  }
 </script>
 
 <aside class="room-chat-rail" aria-label="Чат комнаты" data-open={roomUi.chatOpen} hidden={!roomUi.chatOpen}>
@@ -229,12 +238,37 @@
     {:else if groups.length}
       {#each groups as group (group.key)}
         <div class="chat-msg" data-self={group.self}>
-          <span class="chat-msg-avatar" style={`background:${group.avatarBackground};color:${group.avatarForeground};box-shadow:${group.avatarShadow}`} aria-hidden="true">
-            {getInitials(group.name)}
-          </span>
+          {#if group.self}
+            <span class="chat-msg-avatar" style={`background:${group.avatarBackground};color:${group.avatarForeground};box-shadow:${group.avatarShadow}`} aria-hidden="true">
+              {getInitials(group.name)}
+            </span>
+          {:else}
+            <button
+              class="chat-msg-avatar chat-msg-trigger"
+              type="button"
+              style={`background:${group.avatarBackground};color:${group.avatarForeground};box-shadow:${group.avatarShadow}`}
+              aria-haspopup="dialog"
+              aria-label={`Действия для ${group.name}`}
+              title={`Действия для ${group.name}`}
+              onclick={(event) => openUserMenu(group, event)}
+            >
+              {getInitials(group.name)}
+            </button>
+          {/if}
           <div class="chat-msg-main">
             <div class="chat-msg-meta">
-              <span class="chat-msg-author" style={`color:${group.avatarBackground}`}>{group.name}</span>
+              {#if group.self}
+                <span class="chat-msg-author" style={`color:${group.avatarBackground}`}>{group.name}</span>
+              {:else}
+                <button
+                  class="chat-msg-author chat-msg-trigger"
+                  type="button"
+                  style={`color:${group.avatarBackground}`}
+                  aria-haspopup="dialog"
+                  aria-label={`Действия для ${group.name}`}
+                  onclick={(event) => openUserMenu(group, event)}
+                >{group.name}</button>
+              {/if}
               <time class="chat-msg-time" datetime={new Date(group.messages[0].createdAt).toISOString()}>{group.time}</time>
             </div>
             {#each group.messages as message (message.id)}
