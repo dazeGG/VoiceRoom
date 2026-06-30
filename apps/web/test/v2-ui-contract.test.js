@@ -232,6 +232,11 @@ test('shared Select primitive wraps Popover listbox slots for site-wide dropdown
   assert.match(sidebarDownload, /import \{[^}]*\bPopover\b[^}]*\} from '\$lib\/shared\/ui'/);
   assert.match(sidebarDownload, /import \{[^}]*\bPopoverMenuItem\b[^}]*\} from '\$lib\/shared\/ui'/);
   assert.match(settingsModal, /import \{[^}]*\bSelect\b[^}]*\} from '\$lib\/shared\/ui'/);
+  assert.match(settingsModal, /import \{[^}]*\bSlider\b[^}]*\} from '\$lib\/shared\/ui'/);
+  assert.match(settingsModal, /import \{[^}]*\bVolumeSlider\b[^}]*\} from '\$lib\/shared\/ui'/);
+  assert.match(settingsModal, /<Slider[\s\S]*onValueChange=\{onGateChange\}/);
+  assert.match(settingsModal, /<VolumeSlider[\s\S]*label="Звуки интерфейса"/);
+  assert.match(settingsModal, /playPeerCue\('join'\)/);
   assert.match(roomDock, /import \{[^}]*\bSelect\b[^}]*\} from '\$lib\/shared\/ui'/);
   assert.match(roomDock, /import \{[^}]*\bPopover\b[^}]*\} from '\$lib\/shared\/ui'/);
   assert.doesNotMatch(sidebarDownload, /<select\b/);
@@ -755,6 +760,14 @@ test('participant context menu is remote-only and exposes relationship-aware loc
   assert.match(css, /\.participant-context-menu/);
   assert.match(css, /\.pcm-volume/);
   assert.match(menu, /<VolumeSlider[\s\S]*bind:value=\{volumePercent\}/);
+});
+
+test('notification cue volume respects stored multiplier', () => {
+  const cues = read('src/lib/features/room/client/media/cues.ts');
+  const settings = read('src/lib/features/room/client/core/settings.ts');
+
+  assert.match(settings, /getNotificationVolumeMultiplier/);
+  assert.match(cues, /getNotificationVolumeMultiplier\(\)/);
 });
 
 test('shared slider component backs volume slider UI', () => {

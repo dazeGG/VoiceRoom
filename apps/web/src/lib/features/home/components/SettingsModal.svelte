@@ -3,7 +3,8 @@
   import { changePassword, updateDisplayName } from '$lib/api/auth';
   import { isValidPassword, PASSWORD_MIN_LENGTH } from '$lib/features/auth/account';
   import { clearSession, setUser } from '$lib/features/auth/session.svelte';
-  import { Select } from '$lib/shared/ui';
+  import { playPeerCue } from '$lib/features/room/client/media/cues';
+  import { Select, Slider, VolumeSlider } from '$lib/shared/ui';
   import { getAvatarColor } from '$lib/visual/tokens';
   import {
     enumerateMicrophones,
@@ -15,6 +16,7 @@
     persistGateThreshold,
     persistMicrophone,
     persistNoiseMode,
+    persistNotificationVolume,
     persistSpeaker,
     readSoundSettings,
     startMicMeter,
@@ -60,6 +62,7 @@
   let gateOn = $state(false);
   let gateDb = $state(GATE_DEFAULT_DB);
   let micLevelDb = $state(GATE_THRESHOLD_MIN_DB);
+  let notificationVolume = $state(100);
 
   const avatar = $derived(getAvatarColor(user?.avatarColorKey));
   const label = $derived(user?.displayName?.trim() || user?.login || '');
@@ -106,6 +109,7 @@
     noiseMode = sound.noiseMode;
     gateOn = !isGateDisabled(sound.gateThresholdDb);
     gateDb = gateOn ? sound.gateThresholdDb : GATE_DEFAULT_DB;
+    notificationVolume = sound.notificationVolume;
     void enumerateMicrophones().then((list) => (microphones = list));
     void enumerateSpeakers().then((list) => (speakers = list));
   });
@@ -219,9 +223,17 @@
     persistGate();
   }
 
-  function onGateInput(event: Event): void {
-    gateDb = Math.round(Number((event.target as HTMLInputElement).value));
+  function onGateChange(value: number): void {
+    gateDb = Math.round(value);
     if (gateOn) persistGate();
+  }
+
+  function onNotificationVolumeChange(value: number): void {
+    notificationVolume = persistNotificationVolume(value);
+  }
+
+  function previewNotificationSound(): void {
+    playPeerCue('join');
   }
 </script>
 
@@ -347,23 +359,43 @@
                         <span class="settings-gate-fill" data-state={gateOpen ? 'open' : 'closed'} style={`transform:scaleX(${levelScale})`}></span>
                         <span class="settings-gate-marker" data-active={gateOn} style={`left:${markerLeft}`}></span>
                       </span>
-                      <input
-                        class="settings-gate-slider"
-                        type="range"
-                        min={GATE_THRESHOLD_MIN_DB}
-                        max={GATE_THRESHOLD_MAX_DB}
-                        step="1"
-                        value={gateDb}
-                        disabled={!gateOn}
-                        aria-label="Порог гейта в децибелах"
-                        oninput={onGateInput}
-                      />
+                      <div class="settings-gate-slider-wrap" data-disabled={!gateOn}>
+                        <Slider
+                          bind:value={gateDb}
+                          min={GATE_THRESHOLD_MIN_DB}
+                          max={GATE_THRESHOLD_MAX_DB}
+                          step={1}
+                          defaultValue={GATE_DEFAULT_DB}
+                          disabled={!gateOn}
+                          ariaLabel="Порог гейта в децибелах"
+                          ariaValueText={gateLabel}
+                          onValueChange={onGateChange}
+                        />
+                      </div>
                     </div>
                     <span class="settings-gate-value">{gateLabel}</span>
                   </div>
                   <div class="settings-gate-hint">
                     Микрофон открывается, только когда звук громче порога — отсекает фоновый шум и дыхание.
                   </div>
+                </div>
+              </div>
+
+              <div>
+                <VolumeSlider
+                  bind:value={notificationVolume}
+                  min={0}
+                  max={100}
+                  defaultValue={100}
+                  step={1}
+                  label="Звуки интерфейса"
+                  snap={false}
+                  onValueChange={onNotificationVolumeChange}
+                />
+                <div class="settings-sound-actions">
+                  <button class="settings-sound-preview" type="button" onclick={previewNotificationSound}>
+                    Проверить звук
+                  </button>
                 </div>
               </div>
             </div>
