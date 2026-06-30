@@ -1,0 +1,52 @@
+/* Electron desktop shell layout. Preload tags <html class="is-desktop"> and the
+   shell injects --voice-room-shell-topbar. Keep desktop-only layout deltas here
+   instead of overriding hosted styles from the desktop package. */
+
+html.is-desktop {
+  --voice-room-shell-topbar: 32px;
+}
+
+html.is-desktop .lobby-shell,
+html.is-desktop .app-shell {
+  height: 100%;
+  max-height: 100%;
+  min-height: 0;
+}
+
+@media (min-width: 901px) {
+  html.is-desktop .room-chat-rail {
+    top: var(--voice-room-shell-topbar, 0px);
+    height: calc(100dvh - var(--voice-room-shell-topbar, 0px));
+    max-height: calc(100dvh - var(--voice-room-shell-topbar, 0px));
+    bottom: auto;
+  }
+}
+
+@media (max-width: 900px) {
+  html.is-desktop .room-chat-rail {
+    top: calc(var(--voice-room-shell-topbar, 0px) + 44px);
+    bottom: 92px;
+    height: auto;
+    max-height: none;
+  }
+}
+
+html.is-desktop body[data-screen-view='true'] .app-shell {
+  height: 100%;
+  max-height: 100%;
+  min-height: 0;
+}
+
+html.is-desktop .auth-loader {
+  min-height: calc(var(--voice-room-app-height, 100vh) - 96px);
+}
+
+html.is-desktop .auth-session-error {
+  min-height: calc(var(--voice-room-app-height, 100vh) - 76px);
+}
+
+html.is-desktop.is-shell-fullscreen .lobby-shell,
+html.is-desktop.is-shell-fullscreen .app-shell {
+  height: 100%;
+  max-height: 100%;
+}
