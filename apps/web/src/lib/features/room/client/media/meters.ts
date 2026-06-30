@@ -1,3 +1,4 @@
+import { roomDeviceUi } from '$lib/features/room/room-device-ui.svelte';
 import { GATE_THRESHOLD_MIN_DB, LOCAL_GATE_DISABLED_SPEAKING_DB } from '../core/config';
 import { state } from '../core/state.svelte';
 import { amplitudeToDb } from '../core/settings';
@@ -57,7 +58,9 @@ function updateMeter(participant: Participant | null): void {
   const visibleLevelDb = participant.muted ? GATE_THRESHOLD_MIN_DB : levelDb;
   participant.level = visibleLevel;
   if (participant.isLocal) {
-    refreshMicrophoneLevelMeter(visibleLevelDb);
+    if (roomDeviceUi.devicePopoverOpen) {
+      refreshMicrophoneLevelMeter(visibleLevelDb);
+    }
     setParticipantSpeaking(participant, isLocalMicrophoneSpeaking(participant, levelDb));
   }
 }
