@@ -787,6 +787,18 @@ test('shared slider component backs volume slider UI', () => {
   assert.match(volumeSlider, /<Slider[\s\S]*bind:value/);
 });
 
+test('focus styles use shared green ring tokens instead of amber outline', () => {
+  const appCss = read('src/lib/shared/styles/app.css');
+  const controlsCss = read('src/lib/features/room/styles/controls.css');
+  const friendsCss = read('src/lib/features/home/styles/friends.css');
+
+  assert.match(appCss, /--focus-border/);
+  assert.match(appCss, /--focus-ring/);
+  assert.match(controlsCss, /var\(--focus-ring\)/);
+  assert.doesNotMatch(controlsCss, /oklch\(70% 0\.14 82/);
+  assert.match(friendsCss, /\.lobby-dm-input:focus[\s\S]*var\(--focus-ring\)/);
+});
+
 test('desktop shell layout stays in shared web styles, not electron overrides', () => {
   const appCss = read('src/lib/shared/styles/app.css');
   const desktopShell = read('src/lib/shared/styles/desktop-shell.css');

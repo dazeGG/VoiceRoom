@@ -57,10 +57,17 @@ select:hover {
 }
 
 input:focus,
+input:focus-visible,
 select:focus,
+select:focus-visible {
+  outline: none;
+  border-color: var(--focus-border);
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
 button:focus-visible {
-  outline: 3px solid oklch(70% 0.14 82 / 0.55);
-  outline-offset: 2px;
+  outline: none;
+  box-shadow: 0 0 0 3px var(--focus-ring);
 }
 
 .primary-button {
