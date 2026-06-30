@@ -1,9 +1,7 @@
 <script lang="ts">
-  import '$lib/shared/styles/ellipsis.css';
+  import '$lib/shared/ui/Ellipsis/ellipsis.css';
   import Topbar from '$lib/shared/components/Topbar.svelte';
-  import Popover from '$lib/shared/components/Popover.svelte';
-  import PopoverDivider from '$lib/shared/components/PopoverDivider.svelte';
-  import PopoverMenuItem from '$lib/shared/components/PopoverMenuItem.svelte';
+  import { Popover, PopoverDivider, PopoverMenuItem } from '$lib/shared/ui';
   import { copyRoomCode, copyRoomLink } from '../client/room/room';
   import { roomUi, toggleChat } from '../room-ui.svelte';
   import { roomSettingsUi, openRoomSettings } from '../room-settings.svelte';

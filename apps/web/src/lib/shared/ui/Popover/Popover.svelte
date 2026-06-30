@@ -4,29 +4,18 @@
 
 <script lang="ts">
   import { tick } from 'svelte';
-  import type { Snippet } from 'svelte';
-  import '$lib/shared/styles/popover.css';
-  import { resolvePopoverPlacement, type PopoverPlacement } from './popover-placement';
+  import { resolvePopoverPlacement } from './popover-placement';
+  import type {
+    PopoverCloseReason,
+    PopoverContentState,
+    PopoverPlacement,
+    PopoverProps,
+    PopoverTriggerState
+  } from './types';
 
   function nextFrame(): Promise<void> {
     return new Promise((resolve) => requestAnimationFrame(() => resolve()));
   }
-
-  export type { PopoverPlacement } from './popover-placement';
-  export type PopoverRole = 'menu' | 'listbox' | 'dialog';
-  export type PopoverCloseReason = 'outside' | 'escape' | 'focusout';
-
-  export type PopoverTriggerState = {
-    open: boolean;
-    toggle: () => void;
-    close: (restoreFocus?: boolean) => void;
-    panelId: string;
-  };
-
-  export type PopoverContentState = {
-    open: boolean;
-    close: (restoreFocus?: boolean) => void;
-  };
 
   let {
     open = $bindable(false),
@@ -40,21 +29,7 @@
     onBeforeClose,
     trigger,
     content
-  }: {
-    open?: boolean;
-    placement?: PopoverPlacement;
-    role?: PopoverRole;
-    ariaLabel?: string;
-    rootClass?: string;
-    panelClass?: string;
-    /** Keep panel in the DOM when closed (for ids the vanilla client updates). */
-    keepContentMounted?: boolean;
-    /** Flip vertically on open when the preferred side would leave the viewport. */
-    flip?: boolean;
-    onBeforeClose?: (reason: PopoverCloseReason) => boolean | void;
-    trigger: Snippet<[PopoverTriggerState]>;
-    content: Snippet<[PopoverContentState]>;
-  } = $props();
+  }: PopoverProps = $props();
 
   const panelId = `popover-panel-${++popoverPanelCounter}`;
   let root = $state<HTMLElement | null>(null);
@@ -164,3 +139,49 @@
     </div>
   {/if}
 </div>
+
+<style>
+  /* Floating panel chrome — Popover owns open/close + placement; consumers fill slots. */
+  .popover-root {
+    position: relative;
+    flex: none;
+  }
+
+  .popover-panel {
+    position: absolute;
+    z-index: 50;
+    min-width: 0;
+    padding: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 18px;
+    background: #16140f;
+    box-shadow:
+      0 24px 60px rgba(0, 0, 0, 0.55),
+      0 2px 0 rgba(255, 255, 255, 0.04) inset;
+  }
+
+  .popover-panel--closed {
+    display: none !important;
+    pointer-events: none;
+  }
+
+  .popover-panel[data-placement='bottom-end'] {
+    top: calc(100% + 10px);
+    right: 0;
+  }
+
+  .popover-panel[data-placement='bottom-start'] {
+    top: calc(100% + 10px);
+    left: 0;
+  }
+
+  .popover-panel[data-placement='top-end'] {
+    bottom: calc(100% + 10px);
+    right: 0;
+  }
+
+  .popover-panel[data-placement='top-start'] {
+    bottom: calc(100% + 10px);
+    left: 0;
+  }
+</style>

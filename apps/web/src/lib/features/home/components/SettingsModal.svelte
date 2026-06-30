@@ -3,7 +3,7 @@
   import { changePassword, updateDisplayName } from '$lib/api/auth';
   import { isValidPassword, PASSWORD_MIN_LENGTH } from '$lib/features/auth/account';
   import { clearSession, setUser } from '$lib/features/auth/session.svelte';
-  import Select from '$lib/shared/components/Select.svelte';
+  import { Select } from '$lib/shared/ui';
   import { getAvatarColor } from '$lib/visual/tokens';
   import {
     enumerateMicrophones,

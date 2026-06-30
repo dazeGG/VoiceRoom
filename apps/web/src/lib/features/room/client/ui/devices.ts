@@ -8,7 +8,7 @@ import {
   OUTPUT_DEVICE_STORAGE_KEY,
   OUTPUT_MUTED_STORAGE_KEY
 } from '../core/config';
-import type { SelectOption } from '$lib/shared/components/select-types';
+import type { SelectOption } from '$lib/shared/ui';
 import { roomDeviceUi } from '$lib/features/room/room-device-ui.svelte';
 import { elements } from './dom';
 import { state } from '../core/state';

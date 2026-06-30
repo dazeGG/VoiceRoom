@@ -1,9 +1,6 @@
 <script lang="ts">
   import type { OwnedRoom } from '$lib/api/auth';
-  import Ellipsis from '$lib/shared/components/Ellipsis.svelte';
-  import Popover from '$lib/shared/components/Popover.svelte';
-  import PopoverDivider from '$lib/shared/components/PopoverDivider.svelte';
-  import PopoverMenuItem from '$lib/shared/components/PopoverMenuItem.svelte';
+  import { Ellipsis, Popover, PopoverDivider, PopoverMenuItem } from '$lib/shared/ui';
   import { roomDisplayName, roomVisual } from '../../model/rooms';
   import { copyText } from '../../services/desktop-download';
 

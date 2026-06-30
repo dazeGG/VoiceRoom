@@ -1,5 +1,5 @@
 <script lang="ts">
-  import Select from '$lib/shared/components/Select.svelte';
+  import { Select } from '$lib/shared/ui';
   import {
     NOISE_MODE_SELECT_OPTIONS,
     roomDeviceUi

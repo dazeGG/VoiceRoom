@@ -144,7 +144,7 @@ test('room chat keeps transport mounted and tracks unread state while closed', (
   assert.match(chat, /messageIds/);
   assert.match(chat, /incrementUnreadChat\(\)/);
   assert.match(topbar, /room-chat-unread/);
-  assert.match(topbar, /import Popover from '\$lib\/shared\/components\/Popover\.svelte'/);
+  assert.match(topbar, /import \{[^}]*\bPopover\b[^}]*\} from '\$lib\/shared\/ui'/);
   assert.match(topbar, /<h1 class="room-heading-title-wrap">/);
   assert.match(topbar, /room-heading-trigger/);
   assert.match(topbar, /Скопировать код/);
@@ -159,8 +159,8 @@ test('room chat keeps transport mounted and tracks unread state while closed', (
   assert.match(roomView, /roomPopoverEmojiBadge/);
   assert.doesNotMatch(roomView, /elements\.roomCodeText/);
 
-  const select = read('src/lib/shared/components/Select.svelte');
-  assert.match(select, /import Ellipsis from '\$lib\/shared\/components\/Ellipsis\.svelte'/);
+  const select = read('src/lib/shared/ui/Select/Select.svelte');
+  assert.match(select, /import \{ Ellipsis \} from '\.\.\/Ellipsis'/);
 
   const dock = read('src/lib/features/room/components/RoomDock.svelte');
   assert.match(dock, /dock-anchor/);
@@ -171,8 +171,7 @@ test('room chat keeps transport mounted and tracks unread state while closed', (
   assert.match(controls, /\.device-popover[\s\S]*left:\s*50%/);
   assert.match(controls, /translateX\(-50%\)/);
 
-  const selectCss = read('src/lib/shared/styles/select.css');
-  assert.match(selectCss, /\.select-trigger--dock \.select-trigger-chevron[\s\S]*right:\s*11px/);
+  assert.match(select, /\.select-trigger--dock \.select-trigger-chevron[\s\S]*right:\s*11px/);
 });
 
 test('room chat terminal lifecycle frames leave the room screen', () => {
@@ -201,14 +200,13 @@ test('auth client does not mask unexpected backend failures as anonymous or empt
 });
 
 test('shared Select primitive wraps Popover listbox slots for site-wide dropdowns', () => {
-  const select = read('src/lib/shared/components/Select.svelte');
-  const selectCss = read('src/lib/shared/styles/select.css');
+  const select = read('src/lib/shared/ui/Select/Select.svelte');
   const sidebarDownload = read('src/lib/features/home/components/SidebarDownload.svelte');
   const settingsModal = read('src/lib/features/home/components/SettingsModal.svelte');
   const roomDock = read('src/lib/features/room/components/RoomDock.svelte');
   const devices = read('src/lib/features/room/client/ui/devices.ts');
 
-  assert.match(select, /import Popover from '\$lib\/shared\/components\/Popover\.svelte'/);
+  assert.match(select, /import \{ Popover \} from '\.\.\/Popover'/);
   assert.match(select, /\{flip\}/);
   assert.match(select, /\{#snippet trigger\(/);
   assert.match(select, /\{#snippet content\(/);
@@ -224,11 +222,11 @@ test('shared Select primitive wraps Popover listbox slots for site-wide dropdown
   assert.match(select, /tabindex=\{index === activeIndex \? 0 : -1\}/);
   assert.match(select, /use:registerOption=\{index\}/);
   assert.doesNotMatch(select, /bind:this=\{optionRefs\[index\]\}/);
-  assert.match(selectCss, /\.select-trigger/);
-  assert.match(sidebarDownload, /import Popover from '\$lib\/shared\/components\/Popover\.svelte'/);
-  assert.match(sidebarDownload, /import PopoverMenuItem from '\$lib\/shared\/components\/PopoverMenuItem\.svelte'/);
-  assert.match(settingsModal, /import Select from '\$lib\/shared\/components\/Select\.svelte'/);
-  assert.match(roomDock, /import Select from '\$lib\/shared\/components\/Select\.svelte'/);
+  assert.match(select, /\.select-trigger/);
+  assert.match(sidebarDownload, /import \{[^}]*\bPopover\b[^}]*\} from '\$lib\/shared\/ui'/);
+  assert.match(sidebarDownload, /import \{[^}]*\bPopoverMenuItem\b[^}]*\} from '\$lib\/shared\/ui'/);
+  assert.match(settingsModal, /import \{[^}]*\bSelect\b[^}]*\} from '\$lib\/shared\/ui'/);
+  assert.match(roomDock, /import \{[^}]*\bSelect\b[^}]*\} from '\$lib\/shared\/ui'/);
   assert.doesNotMatch(sidebarDownload, /<select\b/);
   assert.doesNotMatch(settingsModal, /<select\b/);
   assert.doesNotMatch(roomDock, /<select\b/);
@@ -236,7 +234,7 @@ test('shared Select primitive wraps Popover listbox slots for site-wide dropdown
 });
 
 test('popover placement flips vertically only when the preferred side would overflow', () => {
-  const placement = read('src/lib/shared/components/popover-placement.ts');
+  const placement = read('src/lib/shared/ui/Popover/popover-placement.ts');
 
   assert.match(placement, /export function resolvePopoverPlacement/);
   assert.match(placement, /panelRect\.bottom > viewportHeight - margin/);
@@ -244,12 +242,14 @@ test('popover placement flips vertically only when the preferred side would over
 });
 
 test('shared Popover primitive exposes trigger/content slots and dismiss behavior', () => {
-  const popover = read('src/lib/shared/components/Popover.svelte');
-  const popoverCss = read('src/lib/shared/styles/popover.css');
+  const popover = read('src/lib/shared/ui/Popover/Popover.svelte');
+  const popoverTypes = read('src/lib/shared/ui/Popover/types.ts');
+  const popoverMenuItem = read('src/lib/shared/ui/Popover/PopoverMenuItem.svelte');
+  const selectOption = read('src/lib/shared/ui/Select/Select.svelte');
   const userMenu = read('src/lib/features/home/components/UserMenu.svelte');
 
-  assert.match(popover, /trigger: Snippet<\[PopoverTriggerState\]>/);
-  assert.match(popover, /content: Snippet<\[PopoverContentState\]>/);
+  assert.match(popoverTypes, /trigger: Snippet<\[PopoverTriggerState\]>/);
+  assert.match(popoverTypes, /content: Snippet<\[PopoverContentState\]>/);
   assert.match(popover, /\{@render trigger\(triggerState\)\}/);
   assert.match(popover, /\{@render content\(contentState\)\}/);
   assert.match(popover, /onpointerdown=\{onWindowPointerDown\}/);
@@ -264,10 +264,10 @@ test('shared Popover primitive exposes trigger/content slots and dismiss behavio
   assert.match(popover, /resolvePopoverPlacement/);
   assert.match(popover, /openWithPlacement/);
   assert.match(popover, /flip = false/);
-  assert.match(popoverCss, /\.popover-panel/);
-  assert.match(popoverCss, /\.popover-menu-item/);
-  assert.match(popoverCss, /\.popover-option/);
-  assert.match(userMenu, /import Popover from '\$lib\/shared\/components\/Popover\.svelte'/);
+  assert.match(popover, /\.popover-panel/);
+  assert.match(popoverMenuItem, /\.popover-menu-item/);
+  assert.match(selectOption, /\.popover-option/);
+  assert.match(userMenu, /import \{[^}]*\bPopover\b[^}]*\} from '\$lib\/shared\/ui'/);
   assert.match(userMenu, /\{#snippet trigger\(/);
   assert.match(userMenu, /\{#snippet content\(/);
   assert.match(userMenu, /aria-haspopup="menu"/);

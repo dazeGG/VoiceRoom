@@ -1,12 +1,7 @@
-export type PopoverPlacement = 'bottom-end' | 'bottom-start' | 'top-end' | 'top-start';
+import type { PlacementAxis, PopoverPlacement } from './types';
 
 export const POPOVER_PANEL_GAP_PX = 10;
 export const POPOVER_VIEWPORT_MARGIN_PX = 8;
-
-type PlacementAxis = {
-  vertical: 'top' | 'bottom';
-  horizontal: 'start' | 'end';
-};
 
 export function parsePlacement(placement: PopoverPlacement): PlacementAxis {
   const [vertical, horizontal] = placement.split('-') as ['top' | 'bottom', 'start' | 'end'];
