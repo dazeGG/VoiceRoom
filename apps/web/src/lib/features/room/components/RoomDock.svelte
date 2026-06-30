@@ -27,8 +27,9 @@
   import { handleScreenButtonClick } from '../client/services/screen-share-service';
   import { handleLeaveButtonClick } from '../client/room/room';
   import { leaveScreenView } from '../client/ui/screen-view';
-  import { unlockAudio } from '../client/services/media-playback-service';
+
   import { state } from '../client/core/state.svelte';
+  import { screenUi } from '../screen-ui.svelte';
 
   const connection = $derived(getConnectionStatusView());
   const callControls = $derived(getCallControlsView());
@@ -123,6 +124,7 @@
             aria-pressed={callControls.ariaPressed}
             aria-label={callControls.label}
             data-state={callControls.stateName}
+            disabled={callControls.disabled}
             onclick={handleMicButtonClick}
           >
             <span class="dock-icon dock-icon-mic" data-icon="mic" aria-hidden="true"></span>
@@ -284,16 +286,15 @@
       </span>
     </div>
 
-    <button class="dock-button leave-button" id="leaveButton" type="button" aria-label="Выйти из комнаты" data-icon="leave" onclick={handleLeaveButtonClick}></button>
+    <button class="dock-button leave-button" id="leaveButton" type="button" aria-label="Выйти из комнаты" data-icon="leave" hidden={screenUi.hideLeaveButton} onclick={handleLeaveButtonClick}></button>
     <button
       class="dock-button screen-exit-button"
       id="screenExitButton"
       type="button"
       aria-label="Выйти со стрима"
       data-icon="screen-stop"
-      hidden={!state.screen}
+      hidden={!screenUi.showScreenExit}
       onclick={() => leaveScreenView({ keepPreview: false }).catch((error) => console.error(error))}
     ></button>
-    <button class="sound-button" id="soundButton" type="button" hidden onclick={() => unlockAudio().catch((error) => console.warn('Audio unlock failed', error))}>Разрешить звук</button>
   </div>
 </div>

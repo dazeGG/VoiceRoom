@@ -18,6 +18,7 @@ import { showToast } from './toast';
 export interface CallControlsView {
   label: string;
   ariaPressed: boolean;
+  disabled: boolean;
   stateName: 'idle' | 'connecting' | 'muted' | 'live';
 }
 
@@ -46,6 +47,7 @@ export function getCallControlsView(): CallControlsView {
   return {
     label,
     ariaPressed: Boolean(state.joined && state.muted),
+    disabled: state.connecting,
     stateName: state.connecting ? 'connecting' : !state.joined ? 'idle' : state.muted ? 'muted' : 'live'
   };
 }

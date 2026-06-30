@@ -1,7 +1,7 @@
 import { GATE_THRESHOLD_MIN_DB } from './core/config';
 import { roomDeviceUi } from '$lib/features/room/room-device-ui.svelte';
+import { startUi } from '$lib/features/room/start-ui.svelte';
 import { registerActiveVoiceLeave } from '$lib/features/room/voice-session.svelte';
-import { elements, setElementsRoot } from './ui/dom';
 import { mountIcons } from './ui/icons';
 import { state } from './core/state.svelte';
 import { getStoredPeerSession } from './core/session';
@@ -10,12 +10,9 @@ import { showToast } from './ui/toast';
 import { handleAudioUnlockGesture } from './services/media-playback-service';
 import { refreshDevices, refreshMicrophoneLevelMeter } from './ui/devices';
 import { syncOutputDeviceUiState } from './ui/controls';
-import { bindGuestNameDialog, resetGuestNameDialog, saveStartName, unbindGuestNameDialog, updateNameStatuses } from './ui/names';
+import { resetGuestNameDialog, updateNameStatuses } from './ui/names';
 import {
-  createRoomFromStart,
-  handleRoomCodeKeydown,
   joinRoom,
-  joinRoomByCode,
   leaveRoom,
   showRoomEntryFailure,
   showRoomNotFound,
@@ -24,25 +21,20 @@ import {
 } from './room/room';
 import {
   bindScreenStageIdleUi,
-  handleScreenStageClick,
   refreshStageStripControls,
   syncScreenVideoAudio,
-  toggleScreenFullscreen,
-  toggleScreenMute,
-  updateScreenFullscreenState,
-  updateScreenVolumeFromSlider
+  updateScreenFullscreenState
 } from './ui/screen-view';
-import { cancelScreenSourcePicker, closeScreenSourceOnBackdrop, closeScreenSourceOnEscape } from './ui/screen-source-picker';
+import { closeScreenSourceOnEscape } from './ui/screen-source-picker';
 
 
 let mounted = false;
 let mountAbortController: AbortController | null = null;
 let activeVoiceLeaveTeardown: (() => void) | null = null;
 
-export function mountRoomClient(root: ParentNode = document, options: { roomId?: string; embeddedRoomId?: string; autoJoin?: boolean } = {}): () => void {
+export function mountRoomClient(_root: ParentNode = document, options: { roomId?: string; embeddedRoomId?: string; autoJoin?: boolean } = {}): () => void {
   if (mounted) return unmountRoomClient;
   mounted = true;
-  setElementsRoot(root);
   mountAbortController = new AbortController();
   const listenerSignal = mountAbortController.signal;
   activeVoiceLeaveTeardown = registerActiveVoiceLeave(leaveRoom);
@@ -55,7 +47,6 @@ export function mountRoomClient(root: ParentNode = document, options: { roomId?:
     state.eventSource?.close();
     state.eventSource = null;
     state.peers.clear();
-    state.participantViews.clear();
     state.serverPeerIds.clear();
     state.serverPeerSyncReady = false;
     state.self = null;
@@ -72,29 +63,15 @@ export function mountRoomClient(root: ParentNode = document, options: { roomId?:
 
   mountIcons();
 
-
   const savedName = cleanDisplayName(localStorage.getItem('voice-room:name'));
   state.savedName = savedName;
-  elements.startNameInput.value = savedName;
+  startUi.nameInput = savedName;
+  updateNameStatuses(savedName);
   roomDeviceUi.noiseMode = state.noiseMode;
   refreshMicrophoneLevelMeter(GATE_THRESHOLD_MIN_DB);
-  elements.startForm.addEventListener('submit', saveStartName, { signal: listenerSignal });
-  bindGuestNameDialog();
-  elements.createRoomButton.addEventListener('click', createRoomFromStart, { signal: listenerSignal });
-  elements.joinByCodeButton.addEventListener('click', joinRoomByCode, { signal: listenerSignal });
-  elements.roomCodeInput.addEventListener('keydown', handleRoomCodeKeydown, { signal: listenerSignal });
-  elements.startNameInput.addEventListener('input', updateNameStatuses, { signal: listenerSignal });
 
-
-  elements.screenStage.addEventListener('click', handleScreenStageClick, { signal: listenerSignal });
-  elements.screenFullscreenButton.addEventListener('click', toggleScreenFullscreen, { signal: listenerSignal });
-  elements.screenSourceCloseButton.addEventListener('click', cancelScreenSourcePicker, { signal: listenerSignal });
-  elements.screenSourceDialog.addEventListener('click', closeScreenSourceOnBackdrop, { signal: listenerSignal });
-  elements.streamVolumeButton.addEventListener('click', toggleScreenMute, { signal: listenerSignal });
-  elements.streamVolumeSlider.addEventListener('input', updateScreenVolumeFromSlider, { signal: listenerSignal });
   syncScreenVideoAudio();
   bindScreenStageIdleUi(listenerSignal);
-
 
   document.addEventListener('keydown', closeScreenSourceOnEscape, { signal: listenerSignal });
   document.addEventListener('pointerdown', handleAudioUnlockGesture, { passive: true, signal: listenerSignal });
@@ -117,8 +94,6 @@ export function mountRoomClient(root: ParentNode = document, options: { roomId?:
       });
   }
 
-  elements.entryRetryButton.addEventListener('click', runRoomRoute, { signal: listenerSignal });
-
   if (state.roomRoute && !state.roomId) {
     showRoomNotFound();
   } else if (state.roomId) {
@@ -137,6 +112,5 @@ function unmountRoomClient(): void {
   mountAbortController?.abort();
   mountAbortController = null;
   resetGuestNameDialog();
-  unbindGuestNameDialog();
   mounted = false;
 }

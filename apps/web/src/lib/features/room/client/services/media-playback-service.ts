@@ -1,5 +1,5 @@
-
-import { elements } from '../ui/dom';
+import { startUi } from '$lib/features/room/start-ui.svelte';
+import { getScreenVideo, screenUi } from '$lib/features/room/screen-ui.svelte';
 import { state } from '../core/state.svelte';
 import { MAX_PARTICIPANT_VOLUME, MAX_STREAM_VOLUME } from '../core/config';
 import { getMicrophoneProcessors } from './microphone-service';
@@ -27,7 +27,7 @@ export function syncPlaybackMuteState(): void {
   syncScreenVideoAudio();
   if (isAppPlaybackMuted()) {
     state.audioUnlockPending = false;
-    elements.soundButton.hidden = true;
+    startUi.soundButtonVisible = false;
   }
 }
 
@@ -132,7 +132,8 @@ export async function syncAudioOutputDevices(): Promise<boolean> {
 
   syncRemoteAudioPlayback();
 
-  const mediaElements: HTMLMediaElement[] = [elements.screenVideo];
+  const screenVideo = getScreenVideo();
+  const mediaElements: HTMLMediaElement[] = screenVideo ? [screenVideo] : [];
   for (const peer of state.peers.values()) {
     mediaElements.push(...peer.audioElements.values());
   }
@@ -255,7 +256,7 @@ export function queueAudioUnlock(options: { showFallback?: boolean } = {}): void
   if (isAppPlaybackMuted()) return;
 
   state.audioUnlockPending = true;
-  if (options.showFallback) elements.soundButton.hidden = false;
+  if (options.showFallback) startUi.soundButtonVisible = true;
 }
 
 export function handleAudioUnlockGesture(): void {
@@ -277,10 +278,11 @@ export async function unlockAudio(): Promise<void> {
   for (const peer of state.peers.values()) {
     for (const audio of peer.audioElements.values()) plays.push(audio.play());
   }
-  if (!elements.screenStage.hidden) plays.push(elements.screenVideo.play());
+  const screenVideo = getScreenVideo();
+  if (screenUi.stageVisible && screenVideo) plays.push(screenVideo.play());
   await Promise.allSettled(plays);
   state.audioUnlockPending = false;
-  elements.soundButton.hidden = true;
+  startUi.soundButtonVisible = false;
   if (state.voiceConnection === 'playback-blocked') setVoiceConnectionStatus('connected');
 }
 

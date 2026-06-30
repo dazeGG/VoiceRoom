@@ -39,7 +39,7 @@
 </script>
 
 <Topbar label="Новая голосовая комната" reload>
-  <div class="room-heading topbar-room-heading" aria-label="Комната" hidden>
+  <div class="room-heading topbar-room-heading" aria-label="Комната" hidden={state.screen !== 'room'}>
     <div class="room-heading-main">
       <Popover
         placement="bottom-start"

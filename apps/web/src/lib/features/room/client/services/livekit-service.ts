@@ -9,7 +9,7 @@ import type {
   TrackPublication
 } from 'livekit-client';
 import { MICROPHONE_AUDIO_BITRATE, SCREEN_AUDIO_BITRATE } from '../core/config';
-import { elements } from '../ui/dom';
+import { startUi } from '$lib/features/room/start-ui.svelte';
 import { state } from '../core/state.svelte';
 import { setVoiceConnectionStatus } from '../ui/status';
 import { showToast } from '../ui/toast';
@@ -162,7 +162,7 @@ async function bindLiveKitRoomEvents(room: Room): Promise<void> {
       setVoiceConnectionStatus('playback-blocked');
     } else if (state.voiceConnection === 'playback-blocked') {
       state.audioUnlockPending = false;
-      elements.soundButton.hidden = true;
+      startUi.soundButtonVisible = false;
       setVoiceConnectionStatus('connected');
     }
   });

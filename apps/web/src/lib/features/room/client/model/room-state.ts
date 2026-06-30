@@ -52,7 +52,6 @@ export function createInitialRoomState(): AppState {
     outputDeviceId: localStorage.getItem(OUTPUT_DEVICE_STORAGE_KEY) || '',
     outputMuted: localStorage.getItem(OUTPUT_MUTED_STORAGE_KEY) === 'true',
     peers: new Map(),
-    participantViews: new Map(),
     peerId: peerSession.peerId,
     roomId,
     roomName: '',

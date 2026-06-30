@@ -1,5 +1,6 @@
 <script lang="ts">
   import ParticipantList from './ParticipantList.svelte';
+  import StreamTiles from './StreamTiles.svelte';
   import { getScreenParticipants } from '../client/ui/screen-view';
   import { getParticipantCount, participantsUi } from '../participants-ui.svelte';
   import { state } from '../client/core/state.svelte';
@@ -30,7 +31,7 @@
     data-count={Math.min(totalCount, 8)}
     data-streams={Math.min(streamCount, 8)}
   >
-    <div class="stream-tiles" id="streamTiles" hidden></div>
+    <StreamTiles />
     <ParticipantList />
   </div>
 </div>

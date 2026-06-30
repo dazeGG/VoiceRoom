@@ -1,8 +1,8 @@
 import { fetchMe, fetchOwnedRooms } from '$lib/api/auth';
 import { roomNameFor } from '$lib/features/auth/account';
 import { roomSettingsUi } from '../../room-settings.svelte';
+import { startUi } from '../../start-ui.svelte';
 import { clearConnectedVoiceRoom, setConnectedVoiceRoom } from '../../voice-session.svelte';
-import { elements } from '../ui/dom';
 import { state } from '../core/state.svelte';
 import { showToast } from '../ui/toast';
 import { checkRoomExists, postJson } from '../net/api';
@@ -54,28 +54,16 @@ import { applyRoomDeleted, applyRoomUpdated } from './lifecycle';
 
 type RoomEntryGateResult = 'authenticated' | 'anonymous' | 'failure';
 
-function hideScreens(): void {
-  elements.startScreen.hidden = true;
-  elements.roomScreen.hidden = true;
-  elements.notFoundScreen.hidden = true;
-  elements.entryErrorScreen.hidden = true;
-}
-
 export function showStartScreen(): void {
   document.body.dataset.screen = 'start';
   state.screen = 'start';
   document.title = 'Voice Room';
-  hideScreens();
-  elements.brand.hidden = false;
-  elements.topbarRoomHeading.hidden = true;
-  elements.startScreen.hidden = false;
   updateNameStatuses();
 }
 
 export async function showRoomRoute(): Promise<boolean> {
   document.body.dataset.screen = 'checking';
   state.screen = 'checking';
-  hideScreens();
 
   const exists = await checkRoomExists(state.roomId);
   if (!exists) {
@@ -106,10 +94,6 @@ function showRoomScreen(): void {
   document.body.dataset.screen = 'room';
   state.screen = 'room';
   refreshRoomHeading();
-  hideScreens();
-  elements.brand.hidden = true;
-  elements.topbarRoomHeading.hidden = false;
-  elements.roomScreen.hidden = false;
   resetConnectionStatus();
 
   updateNameStatuses();
@@ -124,10 +108,6 @@ export function showRoomEntryFailure(): void {
   document.body.dataset.screen = 'entry-error';
   state.screen = 'entry-error';
   document.title = 'Не удалось проверить вход · Voice Room';
-  hideScreens();
-  elements.brand.hidden = false;
-  elements.topbarRoomHeading.hidden = true;
-  elements.entryErrorScreen.hidden = false;
 }
 
 export function showRoomNotFound(): void {
@@ -135,11 +115,7 @@ export function showRoomNotFound(): void {
   document.body.dataset.screen = 'not-found';
   state.screen = 'not-found';
   document.title = 'Комната не найдена · Voice Room';
-  elements.missingRoomCode.textContent = state.roomId || getMissingRoomLabel();
-  hideScreens();
-  elements.brand.hidden = false;
-  elements.topbarRoomHeading.hidden = true;
-  elements.notFoundScreen.hidden = false;
+  startUi.missingRoomCode = state.roomId || getMissingRoomLabel();
 }
 
 function getMissingRoomLabel(): string {
@@ -151,11 +127,9 @@ function getMissingRoomLabel(): string {
 }
 
 export async function createRoomFromStart(): Promise<void> {
-  if (!requireSavedName(elements.startNameInput)) return;
+  if (!requireSavedName(startUi.nameInput)) return;
 
-  const previousLabel = elements.createRoomButton.textContent;
-  elements.createRoomButton.disabled = true;
-  elements.createRoomButton.textContent = 'Создаём...';
+  startUi.createRoomLoading = true;
   try {
     const proof = await createRoomProof();
     const room = await postJson('/api/rooms', { proof });
@@ -164,18 +138,16 @@ export async function createRoomFromStart(): Promise<void> {
     console.error(error);
     showToast(errorMessage(error) || 'Не удалось создать комнату');
   } finally {
-    elements.createRoomButton.textContent = previousLabel;
-    elements.createRoomButton.disabled = false;
+    startUi.createRoomLoading = false;
   }
 }
 
 export function joinRoomByCode(): void {
-  if (!requireSavedName(elements.startNameInput)) return;
+  if (!requireSavedName(startUi.nameInput)) return;
 
-  const roomId = extractRoomId(elements.roomCodeInput.value);
+  const roomId = extractRoomId(startUi.roomCode);
   if (!roomId) {
     showToast('Введите код комнаты');
-    elements.roomCodeInput.focus();
     return;
   }
 
@@ -233,7 +205,6 @@ export async function joinRoom(event?: Event): Promise<void> {
   state.localConnectionQuality = 'unknown';
   state.localPingMs = null;
   resetConnectionStatus();
-  elements.muteButton.disabled = true;
   setServerConnectionStatus('connecting');
   setVoiceConnectionStatus('idle');
   refreshCallControls();
@@ -304,7 +275,6 @@ export async function joinRoom(event?: Event): Promise<void> {
     refreshParticipantState();
   } finally {
     state.connecting = false;
-    elements.muteButton.disabled = false;
     refreshCallControls();
     refreshScreenControls();
   }

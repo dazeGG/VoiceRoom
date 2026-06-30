@@ -1,20 +1,17 @@
-import { elements } from './dom';
-import { mountIcons } from './icons';
 import { showToast } from './toast';
 import { state } from '../core/state.svelte';
 import { postState } from '../room/presence';
 import { syncLiveKitScreenSubscriptions } from '../services/livekit-service';
 import { bumpParticipantsRevision } from '../../participants-ui.svelte';
+import { bumpScreenUiRevision, screenUi } from '../../screen-ui.svelte';
 import {
   detachRemoteScreen,
   getAllParticipants,
   getParticipantById
 } from '../room/participants';
 import type { Participant } from '../core/types';
-import { createStreamTile } from './screen-tile-elements';
 import { playMediaElement } from '../services/media-playback-service';
 import {
-  configureScreenStageControls,
   refreshScreenMeta,
   refreshScreenStreamControls,
   refreshStageStripControls,
@@ -23,11 +20,10 @@ import {
   syncScreenStagePointerState,
   syncScreenVideoAudio
 } from './screen-stage-controls';
-
-configureScreenStageControls({ getActiveScreenPeer });
+import { getScreenVideo } from '../../screen-ui.svelte';
 
 export function handleScreenStageClick(event: MouseEvent): void {
-  if (!state.viewedScreenPeerId || elements.screenStage.hidden) return;
+  if (!state.viewedScreenPeerId || !screenUi.stageVisible) return;
   const target = event.target as Element;
   if (
     target.closest('.screen-view-controls')
@@ -163,7 +159,6 @@ export function isScreenSubscribed(peerId: string): boolean {
   return state.screenSubscribedPeerIds.has(peerId);
 }
 
-/** Screen action button state is derived in ParticipantTile.svelte. */
 export function refreshScreenAction(_participant: Participant | null): void {}
 
 export function refreshAllScreenActions(): void {
@@ -194,43 +189,44 @@ export function refreshScreenStage(): void {
 function showScreenStage({ peer, stream }: { peer: Participant; stream: MediaStream | null }): void {
   state.sharedScreenPeerId = stream ? peer.id : '';
   document.body.dataset.screenView = 'true';
-  elements.screenStage.hidden = false;
-  elements.screenViewControls.hidden = !stream;
+  screenUi.stageVisible = true;
+  screenUi.hasStream = Boolean(stream);
+  screenUi.showControls = Boolean(stream);
+  screenUi.showPlaceholder = !stream;
+  screenUi.activeStream = stream;
+  screenUi.hideLeaveButton = true;
+  screenUi.showScreenExit = true;
   refreshScreenStreamControls(peer);
-  elements.leaveButton.hidden = true;
-  elements.screenExitButton.hidden = false;
-  mountIcons(elements.screenExitButton);
-  elements.screenPlaceholder.hidden = Boolean(stream);
   refreshScreenMeta(peer);
   syncScreenStagePointerState();
 
-  if (stream && elements.screenVideo.srcObject !== stream) {
-    elements.screenVideo.srcObject = stream;
-  }
-  if (stream) {
+  const video = getScreenVideo();
+  if (stream && video) {
     syncScreenVideoAudio();
-    playMediaElement(elements.screenVideo);
-  } else {
-    elements.screenVideo.pause();
-    elements.screenVideo.srcObject = null;
+    playMediaElement(video);
   }
   refreshScreenTiles();
   refreshStageStripControls();
+  bumpScreenUiRevision();
 }
 
 export function hideScreenStage(): void {
   state.sharedScreenPeerId = '';
   delete document.body.dataset.screenView;
   stopScreenStageIdleUi();
-  elements.screenStage.hidden = true;
-  elements.screenViewControls.hidden = true;
-  elements.screenMeta.hidden = true;
-  elements.screenPlaceholder.hidden = false;
-  elements.screenExitButton.hidden = true;
-  elements.leaveButton.hidden = false;
-  elements.screenVideo.pause();
-  elements.screenVideo.srcObject = null;
-  if (document.fullscreenElement === elements.screenStage) {
+  screenUi.stageVisible = false;
+  screenUi.showControls = false;
+  screenUi.showMeta = false;
+  screenUi.showPlaceholder = true;
+  screenUi.activeStream = null;
+  screenUi.hideLeaveButton = false;
+  screenUi.showScreenExit = false;
+
+  const video = getScreenVideo();
+  const stage = getScreenStage();
+  video?.pause();
+  if (video) video.srcObject = null;
+  if (stage && document.fullscreenElement === stage) {
     document.exitFullscreen().catch(() => {});
   }
   if (document.body.dataset.desktopScreenFullscreen === 'true') {
@@ -238,6 +234,11 @@ export function hideScreenStage(): void {
   }
   refreshScreenTiles();
   refreshStageStripControls();
+  bumpScreenUiRevision();
+}
+
+function getScreenStage() {
+  return document.getElementById('screenStage');
 }
 
 export function getActiveScreenPeer(): Participant | null {
@@ -254,7 +255,7 @@ export function getScreenParticipants(): Participant[] {
     });
 }
 
-function getScreenStreamForParticipant(participant: Participant | null): MediaStream | null {
+export function getScreenStreamForParticipant(participant: Participant | null): MediaStream | null {
   if (!participant?.screen) return null;
   return participant.isLocal ? state.localScreenStream : participant.screenStream;
 }
@@ -264,72 +265,21 @@ function setViewedScreenPeerId(peerId: string): void {
   if (state.self) state.self.viewedScreenPeerId = state.viewedScreenPeerId;
 }
 
-function getStreamTileStateKey(participant: Participant): string {
-  const hasPreview = hasStreamTilePreview(participant);
-  const isCollapsed = isStreamTileCollapsed(participant);
-  const stream = getScreenStreamForParticipant(participant);
-  return [
-    participant.id,
-    hasPreview,
-    isCollapsed,
-    stream?.id || '',
-    participant.isLocal ? state.localScreenProfileId : participant.screenProfileId,
-    participant.name,
-    isScreenSubscribed(participant.id)
-  ].join('|');
-}
-
-function openScreenTile(peerId: string): void {
-  enterScreenView(peerId).catch((error) => console.error(error));
-}
-
 export function refreshScreenTiles(): void {
   const screenParticipants = getScreenParticipants()
     .filter((participant) => participant.id !== state.viewedScreenPeerId);
-  elements.streamTiles.hidden = screenParticipants.length === 0;
-  elements.streamTiles.dataset.count = String(Math.min(screenParticipants.length, 8));
-
-  const existingTiles = new Map<string, { key: string; node: HTMLElement }>();
-  for (const node of elements.streamTiles.querySelectorAll<HTMLElement>('.stream-tile[data-peer-id]')) {
-    const peerId = node.dataset.peerId;
-    if (!peerId) continue;
-    existingTiles.set(peerId, { key: node.dataset.tileState || '', node });
-  }
-
-  const nextTiles: HTMLElement[] = [];
-  for (const participant of screenParticipants) {
-    const stateKey = getStreamTileStateKey(participant);
-    const cached = existingTiles.get(participant.id);
-    if (cached?.key === stateKey) {
-      nextTiles.push(cached.node);
-      existingTiles.delete(participant.id);
-      continue;
-    }
-
-    const tile = createStreamTile({
-      hasPreview: hasStreamTilePreview(participant),
-      isCollapsed: isStreamTileCollapsed(participant),
-      isSubscribed: isScreenSubscribed(participant.id),
-      onEnter: openScreenTile,
-      participant,
-      stream: getScreenStreamForParticipant(participant)
-    });
-    tile.dataset.peerId = participant.id;
-    tile.dataset.tileState = stateKey;
-    nextTiles.push(tile);
-  }
-
-  elements.streamTiles.replaceChildren(...nextTiles);
-
+  screenUi.streamTilesVisible = screenParticipants.length > 0;
+  screenUi.streamTilesCount = Math.min(screenParticipants.length, 8);
   refreshStageStripControls();
+  bumpScreenUiRevision();
   bumpParticipantsRevision();
 }
 
-function hasStreamTilePreview(participant: Participant): boolean {
+export function hasStreamTilePreview(participant: Participant): boolean {
   return isScreenSubscribed(participant.id) && Boolean(getScreenStreamForParticipant(participant));
 }
 
-function isStreamTileCollapsed(participant: Participant): boolean {
+export function isStreamTileCollapsed(participant: Participant): boolean {
   return state.screenCollapsedPeerIds.has(participant.id) && hasStreamTilePreview(participant);
 }
 

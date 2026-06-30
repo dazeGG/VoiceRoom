@@ -8,7 +8,7 @@ import { createInitialRoomState } from '../model/room-state';
  * reactively. This replaces the bridge that the migration plan originally proposed.
  *
  * Note: `$state` deep-proxies plain objects/arrays, but NOT Map/Set. Fields like
- * `peers`/`participantViews` (Map) and `screen*PeerIds` (Set) stay non-reactive at the
+ * `peers` (Map) and `screen*PeerIds` (Set) stay non-reactive at the
  * entry level for now — swap them to SvelteMap/SvelteSet in the participants phase when
  * a component needs to react to their contents.
  */

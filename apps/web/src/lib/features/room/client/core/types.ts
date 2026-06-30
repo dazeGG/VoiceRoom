@@ -1,6 +1,6 @@
 import type { LocalTrackPublication, Room } from 'livekit-client';
 import type { NoiseMode } from './config';
-import type { Participant, ParticipantViewRefs, PeerInfo } from '../model/participants';
+import type { Participant, PeerInfo } from '../model/participants';
 export type { Participant, ParticipantViewRefs, PeerInfo } from '../model/participants';
 
 export interface ScreenProfile {
@@ -137,7 +137,6 @@ export interface RoomConnectionState {
 
 export interface RoomParticipantState {
   peers: Map<string, Participant>;
-  participantViews: Map<string, ParticipantViewRefs>;
   self: Participant | null;
 }
 

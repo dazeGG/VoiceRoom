@@ -1,10 +1,5 @@
-import { elements } from './dom';
-import { getAvatarColor } from '$lib/visual/tokens';
 import { state } from '../core/state.svelte';
 import { showToast } from './toast';
-import { getInitials } from '../core/utils';
-import { getScreenProfile, parseScreenProfileId } from '../media/profiles';
-import { SCREEN_FPS_OPTIONS, SCREEN_QUALITY_OPTIONS } from '../core/config';
 import { clampStreamVolume, normalizeStoredStreamVolume, storeStreamVolume } from '../core/settings';
 import {
   isAppPlaybackMuted,
@@ -12,7 +7,14 @@ import {
   applyScreenMediaElementVolume,
   getAvailableScreenMediaElementVolumeMax
 } from '../services/media-playback-service';
-import { getAllParticipants } from '../room/participants';
+import {
+  bumpScreenUiRevision,
+  getActiveScreenPeer,
+  getScreenStage,
+  getScreenVideo,
+  getStreamVolumeSlider,
+  screenUi
+} from '../../screen-ui.svelte';
 import type { Participant } from '../core/types';
 
 const SCREEN_UI_IDLE_MS = 1000;
@@ -20,133 +22,47 @@ let screenUiIdleTimer = 0;
 let screenStagePointerInside = false;
 let screenUiHoverBound = false;
 
-export interface ScreenStageControlOptions {
-  getActiveScreenPeer: () => Participant | null;
-}
-
-let getActiveScreenPeerRef: () => Participant | null = () => null;
-
-export function configureScreenStageControls(options: ScreenStageControlOptions): void {
-  getActiveScreenPeerRef = options.getActiveScreenPeer;
-}
-
 export function refreshScreenMeta(participant: Participant | null): void {
-  if (!participant) {
-    elements.screenMeta.hidden = true;
-    return;
-  }
-
-  elements.screenMeta.hidden = false;
-  elements.screenMetaTitle.textContent = participant.isLocal ? 'Ваш стрим' : `Стрим ${participant.name}`;
-  const { qualityLabel, fpsLabel } = getScreenMetaLabels(participant);
-  elements.screenMetaQuality.hidden = !qualityLabel;
-  elements.screenMetaQuality.textContent = qualityLabel;
-  elements.screenMetaFps.hidden = !fpsLabel;
-  elements.screenMetaFps.textContent = fpsLabel;
-  elements.screenMetaSepProfile.hidden = !qualityLabel;
-  elements.screenMetaSepFps.hidden = !qualityLabel || !fpsLabel;
-  elements.screenMetaStats.hidden = true;
-  elements.screenMetaStats.textContent = '';
-  const hasViewers = renderScreenViewers(participant.id);
-  elements.screenMetaViewers.hidden = !hasViewers;
-  elements.screenMetaSepViewers.hidden = (!qualityLabel && !fpsLabel) || !hasViewers;
-  refreshScreenStreamControls(participant);
+  screenUi.showMeta = Boolean(participant);
+  bumpScreenUiRevision();
 }
 
-export function refreshScreenStreamControls(participant: Participant | null): void {
-  const hideVolume = Boolean(participant?.isLocal);
-  elements.streamVolumeControl.hidden = hideVolume;
-}
-
-function getScreenMetaLabels(participant: Participant): { qualityLabel: string; fpsLabel: string } {
-  const profile = getScreenProfile(participant.isLocal ? state.localScreenProfileId : participant.screenProfileId);
-  const { qualityId, fpsId } = parseScreenProfileId(profile.id);
-  const quality = SCREEN_QUALITY_OPTIONS[qualityId];
-  const fps = SCREEN_FPS_OPTIONS[fpsId];
-  return {
-    qualityLabel: quality?.label || '',
-    fpsLabel: fps?.label || ''
-  };
-}
-
-function renderScreenViewers(ownerPeerId: string): boolean {
-  const viewers = getScreenViewers(ownerPeerId);
-  elements.screenMetaViewers.replaceChildren();
-  if (viewers.length === 0) {
-    elements.screenMetaViewers.textContent = 'Смотрят: 0';
-    return true;
-  }
-
-  for (const viewer of viewers.slice(0, 3)) {
-    elements.screenMetaViewers.append(createScreenViewerAvatar(viewer));
-  }
-
-  const rest = viewers.length - 3;
-  if (rest > 0) {
-    const restBadge = document.createElement('span');
-    restBadge.className = 'screen-meta-viewers-rest';
-    restBadge.textContent = `+${rest}`;
-    elements.screenMetaViewers.append(restBadge);
-  }
-  return true;
-}
-
-function createScreenViewerAvatar(viewer: Participant): HTMLElement {
-  const avatarColor = getAvatarColor(viewer.avatarColorKey);
-  const avatar = document.createElement('span');
-  avatar.className = 'screen-meta-viewer-avatar';
-  avatar.title = viewer.isLocal ? 'вы' : viewer.name;
-  avatar.setAttribute('role', 'img');
-  avatar.setAttribute('aria-label', viewer.isLocal ? 'вы' : viewer.name);
-  avatar.style.setProperty('--avatar-bg', avatarColor.background);
-  avatar.style.setProperty('--avatar-fg', avatarColor.foreground);
-  avatar.style.setProperty('--avatar-shadow', avatarColor.shadow);
-  avatar.textContent = getInitials(viewer.name);
-  return avatar;
-}
-
-function getScreenViewers(ownerPeerId: string): Participant[] {
-  return getAllParticipants().filter((participant) => participant.viewedScreenPeerId === ownerPeerId);
+export function refreshScreenStreamControls(_participant: Participant | null): void {
+  bumpScreenUiRevision();
 }
 
 export function refreshStageStripControls(): void {
   state.stripCollapsed = false;
-  elements.stageStripKicker.textContent = '';
-  elements.stageStripSummary.textContent = '';
-  elements.stripToggleButton.hidden = true;
-  elements.stripToggleButton.setAttribute('aria-pressed', 'false');
-  elements.stripToggleButton.setAttribute('aria-label', 'Свернуть пользователей');
   delete document.body.dataset.stripCollapsed;
   document.body.dataset.stageSummary = 'hidden';
 }
 
 export function syncScreenVideoAudio(): void {
-  const peer = getActiveScreenPeerRef();
+  const video = getScreenVideo();
+  if (!video) return;
+
+  const peer = getActiveScreenPeer();
   const isLocalStream = Boolean(peer?.isLocal);
-  const isRemoteStreamActive = Boolean(peer && !peer.isLocal && elements.screenVideo.srcObject);
+  const isRemoteStreamActive = Boolean(peer && !peer.isLocal && video.srcObject);
   const maxStreamVolume = getAvailableScreenMediaElementVolumeMax();
   const streamVolume = clampStreamVolume(state.screenVolume, maxStreamVolume);
   if (state.screenVolume !== streamVolume) {
     state.screenVolume = normalizeStoredStreamVolume(state.screenVolume, maxStreamVolume);
   }
-  const muted =
-    isLocalStream || state.screenMuted || streamVolume <= 0 || isAppPlaybackMuted();
-  applyScreenMediaElementVolume(elements.screenVideo, {
+  const muted = isLocalStream || state.screenMuted || streamVolume <= 0 || isAppPlaybackMuted();
+  applyScreenMediaElementVolume(video, {
     boostAllowed: isRemoteStreamActive,
     muted,
     volume: isLocalStream ? 0 : streamVolume
   });
-  applyAudioOutputDevice(elements.screenVideo).catch(() => {});
-  if (!isLocalStream) {
-    elements.streamVolumeSlider.max = String(maxStreamVolume * 100);
-    elements.streamVolumeSlider.value = String(Math.round(streamVolume * 100));
-    elements.streamVolumeButton.dataset.muted = String(muted);
-    elements.streamVolumeButton.setAttribute('aria-pressed', String(muted));
-    elements.streamVolumeButton.setAttribute(
-      'aria-label',
-      muted ? 'Включить звук стрима' : 'Выключить звук стрима'
-    );
+  applyAudioOutputDevice(video).catch(() => {});
+
+  const slider = getStreamVolumeSlider();
+  if (!isLocalStream && slider) {
+    slider.max = String(maxStreamVolume * 100);
+    slider.value = String(Math.round(streamVolume * 100));
   }
+  bumpScreenUiRevision();
 }
 
 export function toggleScreenMute(): void {
@@ -161,15 +77,20 @@ export function toggleScreenMute(): void {
 }
 
 export function updateScreenVolumeFromSlider(): void {
-  const nextVolume = Number(elements.streamVolumeSlider.value) / 100;
+  const slider = getStreamVolumeSlider();
+  if (!slider) return;
+  const nextVolume = Number(slider.value) / 100;
   state.screenVolume = storeStreamVolume(nextVolume, getAvailableScreenMediaElementVolumeMax());
   state.screenMuted = state.screenVolume <= 0;
   syncScreenVideoAudio();
 }
 
 export async function toggleScreenFullscreen(): Promise<void> {
+  const stage = getScreenStage();
+  if (!stage) return;
+
   try {
-    if (document.fullscreenElement === elements.screenStage) {
+    if (document.fullscreenElement === stage) {
       await document.exitFullscreen();
       return;
     }
@@ -181,7 +102,7 @@ export async function toggleScreenFullscreen(): Promise<void> {
 
     if (document.fullscreenEnabled) {
       try {
-        await elements.screenStage.requestFullscreen();
+        await stage.requestFullscreen();
         return;
       } catch (error) {
         if (!hasDesktopWindowControls()) throw error;
@@ -205,36 +126,33 @@ function hasDesktopWindowControls(): boolean {
 }
 
 export async function setDesktopScreenFullscreen(fullscreen: boolean): Promise<void> {
+  const stage = getScreenStage();
   const active = await window.voiceRoomWindow!.setFullscreen(fullscreen);
   if (active) {
     document.body.dataset.desktopScreenFullscreen = 'true';
   } else {
     delete document.body.dataset.desktopScreenFullscreen;
   }
-  setScreenFullscreenState(active || document.fullscreenElement === elements.screenStage);
+  setScreenFullscreenState(active || document.fullscreenElement === stage);
 }
 
 export function updateScreenFullscreenState(): void {
-  const fullscreen = document.fullscreenElement === elements.screenStage;
+  const stage = getScreenStage();
+  const fullscreen = Boolean(stage && document.fullscreenElement === stage);
   if (!fullscreen && document.body.dataset.desktopScreenFullscreen !== 'true') {
     setScreenFullscreenState(false);
     return;
   }
 
   setScreenFullscreenState(fullscreen || document.body.dataset.desktopScreenFullscreen === 'true');
-  if (!elements.screenStage.hidden) {
+  if (screenUi.stageVisible) {
     syncScreenStagePointerState();
   }
 }
 
 function setScreenFullscreenState(fullscreen: boolean): void {
   state.screenFullscreen = fullscreen;
-  elements.screenFullscreenButton.dataset.fullscreen = String(fullscreen);
-  elements.screenFullscreenButton.setAttribute('aria-pressed', String(fullscreen));
-  elements.screenFullscreenButton.setAttribute(
-    'aria-label',
-    fullscreen ? 'Выйти из полноэкранного режима' : 'Открыть стрим на весь экран'
-  );
+  bumpScreenUiRevision();
 }
 
 export function bindScreenStageIdleUi(signal?: AbortSignal): void {
@@ -242,9 +160,11 @@ export function bindScreenStageIdleUi(signal?: AbortSignal): void {
   screenUiHoverBound = true;
   signal?.addEventListener('abort', resetScreenStageIdleUi, { once: true });
 
-  const stage = elements.screenStage;
+  const stage = getScreenStage();
+  if (!stage) return;
+
   const wakeScreenStageUi = () => {
-    if (!screenStagePointerInside || stage.hidden) return;
+    if (!screenStagePointerInside || !screenUi.stageVisible) return;
     activateScreenStageUi();
   };
 
@@ -266,7 +186,7 @@ export function bindScreenStageIdleUi(signal?: AbortSignal): void {
   document.addEventListener(
     'touchstart',
     (event) => {
-      if (stage.hidden) return;
+      if (!screenUi.stageVisible || !stage) return;
       const target = event.target;
       if (target instanceof Node && stage.contains(target)) {
         screenStagePointerInside = true;
@@ -284,50 +204,44 @@ function resetScreenStageIdleUi(): void {
   screenUiHoverBound = false;
   screenStagePointerInside = false;
   window.clearTimeout(screenUiIdleTimer);
-  delete elements.screenStage.dataset.uiActive;
+  screenUi.uiActive = false;
 }
 
 function activateScreenStageUi(): void {
   window.clearTimeout(screenUiIdleTimer);
-  elements.screenStage.dataset.uiActive = 'true';
-
+  screenUi.uiActive = true;
   if (!screenStagePointerInside) return;
 
   screenUiIdleTimer = window.setTimeout(() => {
-    if (!screenStagePointerInside || elements.screenStage.hidden) return;
-
+    if (!screenStagePointerInside || !screenUi.stageVisible) return;
     blurFocusedStreamControl();
-    delete elements.screenStage.dataset.uiActive;
+    screenUi.uiActive = false;
   }, SCREEN_UI_IDLE_MS);
 }
 
 function blurFocusedStreamControl(): void {
   const active = document.activeElement;
   if (!(active instanceof HTMLElement)) return;
-  if (!elements.screenViewControls.contains(active)) return;
-
-  // `screenViewControls` is the explicit stream-HUD focus boundary. Keep
-  // controls that should surrender focus on idle inside this subtree so
-  // pointer inactivity can hide the HUD without touching broader room chrome.
+  const controls = document.getElementById('screenViewControls');
+  if (!controls?.contains(active)) return;
   active.blur();
 }
 
 function deactivateScreenStageUi(): void {
   window.clearTimeout(screenUiIdleTimer);
   screenUiIdleTimer = 0;
-  delete elements.screenStage.dataset.uiActive;
+  screenUi.uiActive = false;
 }
 
 export function syncScreenStagePointerState(): void {
-  const stage = elements.screenStage;
-  if (stage.hidden) return;
+  const stage = getScreenStage();
+  if (!stage || !screenUi.stageVisible) return;
 
   screenStagePointerInside = stage.matches(':hover');
   if (screenStagePointerInside) {
     activateScreenStageUi();
     return;
   }
-
   deactivateScreenStageUi();
 }
 

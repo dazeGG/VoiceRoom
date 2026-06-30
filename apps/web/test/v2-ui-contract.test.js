@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
 
@@ -117,16 +117,15 @@ test('lobby separates viewed room from connected voice room', () => {
   assert.match(lobby, /autoJoin=\{autoJoinRoomId === embeddedRoomId\}/);
 
   const roomPage = read('src/lib/features/room/RoomPage.svelte');
-  const roomDom = read('src/lib/features/room/client/ui/dom.ts');
   const roomClient = read('src/lib/features/room/client/main.ts');
   const roomView = read('src/lib/features/room/client/room/room.ts');
   const entryError = read('src/lib/features/room/components/RoomEntryErrorScreen.svelte');
 
   assert.match(roomPage, /RoomEntryErrorScreen/);
-  assert.match(roomDom, /entryErrorScreen/);
-  assert.match(roomDom, /entryRetryButton/);
-  assert.match(roomClient, /function runRoomRoute/);
-  assert.match(roomClient, /entryRetryButton\.addEventListener\('click', runRoomRoute/);
+  assert.equal(existsSync(resolve(root, 'src/lib/features/room/client/ui/dom.ts')), false);
+  assert.match(roomClient, /showRoomRoute\(\)/);
+  assert.match(entryError, /id="entryRetryButton"/);
+  assert.match(entryError, /showRoomRoute\(\)/);
   assert.match(roomView, /export function showRoomEntryFailure/);
   assert.match(roomView, /if \(entryGate === 'failure'\) \{[\s\S]*showRoomEntryFailure\(\);[\s\S]*return false;[\s\S]*\}/);
   assert.match(entryError, /Повторить проверку/);
@@ -325,7 +324,6 @@ test('connection status renders reactively from room state, not imperative DOM w
   const status = read('src/lib/features/room/client/ui/status.ts');
   const topbar = read('src/lib/features/room/components/RoomTopbar.svelte');
   const dock = read('src/lib/features/room/components/RoomDock.svelte');
-  const dom = read('src/lib/features/room/client/ui/dom.ts');
 
   // status.ts is a pure derivation over reactive state — no DOM writes or refresh hooks.
   assert.match(status, /export function getConnectionStatusView\(\): ConnectionStatusView/);
@@ -338,8 +336,8 @@ test('connection status renders reactively from room state, not imperative DOM w
   assert.match(dock, /const connection = \$derived\(getConnectionStatusView\(\)\)/);
   assert.match(dock, /data-state=\{connection\.stateName\}/);
 
-  // The vanilla element cache no longer carries these now-reactive nodes.
-  assert.doesNotMatch(dom, /statusPill|statusText|dockConnection/);
+  // The imperative element cache is gone — screens and controls render in Svelte.
+  assert.equal(existsSync(resolve(root, 'src/lib/features/room/client/ui/dom.ts')), false);
 });
 
 
@@ -374,7 +372,7 @@ test('screen stream thumbnails show profile metadata instead of an action button
   const screenStageControls = read('src/lib/features/room/client/ui/screen-stage-controls.ts');
   const refs = read('src/lib/features/room/client/model/participants.ts');
   const participants = read('src/lib/features/room/client/room/participants.ts');
-  const screenTiles = read('src/lib/features/room/client/ui/screen-tile-elements.ts');
+  const streamTile = read('src/lib/features/room/components/StreamTile.svelte');
   const screenView = read('src/lib/features/room/client/ui/screen-view.ts');
   const participantsCss = read('src/lib/features/room/styles/participants.css');
   const streamTilesCss = read('src/lib/features/room/styles/stream-tiles.css');
@@ -386,31 +384,31 @@ test('screen stream thumbnails show profile metadata instead of an action button
   assert.match(participantTile, /handleTileClick/);
   assert.match(participantTile, /enterScreenView\(participant\.id\)/);
   assert.match(participantsCss, /\.participant\[data-screen="true"\] \.participant-screen-action\s*\{\s*display: none;/s);
-  assert.match(screenTiles, /createStreamTileProfileMeta/);
-  assert.match(screenTiles, /stream-tile-profile-meta/);
-  assert.match(screenTiles, /parseScreenProfileId/);
-  assert.match(screenTiles, /SCREEN_QUALITY_OPTIONS/);
-  assert.match(screenTiles, /SCREEN_FPS_OPTIONS/);
-  assert.doesNotMatch(screenTiles, /stream-tile-action-disconnect/);
-  assert.doesNotMatch(screenTiles, /Отключиться/);
-  assert.match(screenView, /participant\.isLocal \? state\.localScreenProfileId : participant\.screenProfileId/);
+  assert.match(streamTile, /stream-tile-profile-meta/);
+  assert.match(streamTile, /parseScreenProfileId/);
+  assert.match(streamTile, /SCREEN_QUALITY_OPTIONS/);
+  assert.match(streamTile, /SCREEN_FPS_OPTIONS/);
+  assert.doesNotMatch(streamTile, /stream-tile-action-disconnect/);
+  assert.doesNotMatch(streamTile, /Отключиться/);
+  assert.match(streamTile, /participant\.isLocal \? state\.localScreenProfileId : participant\.screenProfileId/);
   assert.match(streamTilesCss, /\.stream-tile-profile-meta/);
   assert.doesNotMatch(streamTilesCss, /stream-tile-action-disconnect/);
 });
 
 test('screen stage viewer badge renders viewer avatars instead of names', () => {
   const stage = read('src/lib/features/room/components/ScreenStage.svelte');
-  const controls = read('src/lib/features/room/client/ui/screen-stage-controls.ts');
+  const screenUi = read('src/lib/features/room/screen-ui.svelte.ts');
   const css = read('src/lib/features/room/styles/screen.css');
 
   assert.match(stage, /screen-meta-viewers/);
-  assert.match(controls, /renderScreenViewers/);
-  assert.match(controls, /createScreenViewerAvatar/);
-  assert.match(controls, /getAvatarColor\(viewer\.avatarColorKey\)/);
-  assert.match(controls, /getInitials\(viewer\.name\)/);
-  assert.doesNotMatch(controls, /screen-meta-viewers-label/);
-  assert.doesNotMatch(controls, /formatScreenViewersLine/);
-  assert.doesNotMatch(controls, /names\.join/);
+  assert.match(stage, /getViewerAvatarStyle/);
+  assert.match(stage, /getViewerInitials/);
+  assert.match(screenUi, /getViewerAvatarStyle/);
+  assert.match(screenUi, /getAvatarColor\(viewer\.avatarColorKey\)/);
+  assert.match(screenUi, /getInitials\(viewer\.name\)/);
+  assert.doesNotMatch(screenUi, /screen-meta-viewers-label/);
+  assert.doesNotMatch(screenUi, /formatScreenViewersLine/);
+  assert.doesNotMatch(screenUi, /names\.join/);
   assert.match(css, /\.screen-meta-viewer-avatar/);
   assert.doesNotMatch(css, /screen-meta-viewers-label/);
 });
@@ -422,7 +420,6 @@ test('room route uses lobby for authenticated users and preserves standalone gue
   const roomMain = read('src/lib/features/room/client/main.ts');
   const roomView = read('src/lib/features/room/client/room/room.ts');
   const names = read('src/lib/features/room/client/ui/names.ts');
-  const dom = read('src/lib/features/room/client/ui/dom.ts');
   const overlays = read('src/lib/features/room/components/RoomOverlays.svelte');
   const screenStageControls = read('src/lib/features/room/client/ui/screen-stage-controls.ts');
   const home = read('src/lib/features/home/HomePage.svelte');
@@ -446,9 +443,8 @@ test('room route uses lobby for authenticated users and preserves standalone gue
   assert.match(roomMain, /if \(ready && options\.autoJoin\) return joinRoom\(\)/);
   assert.match(roomMain, /showRoomRoute\(\)/);
   assert.match(roomMain, /showStartScreen\(\)/);
-  assert.match(roomMain, /bindGuestNameDialog\(\)/);
   assert.match(roomMain, /resetGuestNameDialog/);
-  assert.match(roomMain, /unbindGuestNameDialog/);
+  assert.doesNotMatch(roomMain, /bindGuestNameDialog|unbindGuestNameDialog|setElementsRoot|elements\./);
   assert.match(roomMain, /new AbortController\(\)/);
   assert.match(roomMain, /listenerSignal/);
   assert.match(roomMain, /mountAbortController\?\.abort\(\)/);
@@ -488,30 +484,21 @@ test('room route uses lobby for authenticated users and preserves standalone gue
   assert.match(overlays, /id="guestNameError"/);
   assert.match(overlays, /id="guestNameSubmitButton"[\s\S]*type="submit"/);
   assert.doesNotMatch(overlays, /guestNameClose|guest-name-close|Отмена|Закрыть/);
-  assert.match(dom, /get guestNameDialog\(\)/);
-  assert.match(dom, /get guestNameForm\(\)/);
-  assert.match(dom, /get guestNameInput\(\)/);
-  assert.match(dom, /get guestNameError\(\)/);
+  assert.equal(existsSync(resolve(root, 'src/lib/features/room/client/ui/dom.ts')), false);
+  assert.match(overlays, /guestNameUi\.open/);
+  assert.match(overlays, /bind:value=\{guestNameUi\.inputValue\}/);
   assert.match(names, /pendingGuestNamePromise/);
   assert.match(screenStageControls, /bindScreenStageIdleUi\(signal\?: AbortSignal\)/);
   assert.match(screenStageControls, /resetScreenStageIdleUi/);
   assert.match(screenStageControls, /screenUiHoverBound = false/);
   assert.match(screenStageControls, /signal\?\.addEventListener\('abort'/);
   assert.match(names, /resetGuestNameDialog/);
-  assert.match(names, /unbindGuestNameDialog/);
   assert.match(names, /rejectPendingGuestName/);
-  assert.match(names, /setGuestNameSiblingInert/);
-  assert.match(names, /closest\('\.app-shell'\)/);
-  assert.match(names, /child\.contains\(elements\.guestNameDialog\)/);
-  assert.match(names, /child\.setAttribute\('inert', ''\)/);
-  assert.match(names, /child\.removeAttribute\('inert'\)/);
-  assert.match(names, /handleGuestNameDialogKeydown/);
-  assert.match(names, /event\.key === 'Escape'[\s\S]*guestNameInput\.focus\(\)/);
-  assert.match(names, /event\.key !== 'Tab'/);
-  assert.match(names, /handleGuestNameDialogClick/);
+  assert.match(names, /guestNameUi/);
+  assert.doesNotMatch(names, /unbindGuestNameDialog|setGuestNameSiblingInert|elements\.guestName/);
   assert.match(requestGuestNameForRoom, /setGuestNameDialogOpen\(true\)/);
-  assert.match(requestGuestNameForRoom, /guestNameInput\.focus\(\)/);
-  assert.match(handleGuestNameSubmit, /cleanDisplayName\(elements\.guestNameInput\.value\)/);
+  assert.match(requestGuestNameForRoom, /guestNameUi\.inputValue = ''/);
+  assert.match(handleGuestNameSubmit, /cleanDisplayName\(guestNameUi\.inputValue\)/);
   assert.match(handleGuestNameSubmit, /Введите имя, чтобы войти в комнату/);
   assert.match(handleGuestNameSubmit, /persistName\(name\)/);
   assert.ok(handleGuestNameSubmit.indexOf('persistName(name)') < handleGuestNameSubmit.indexOf('setGuestNameDialogOpen(false)'));
