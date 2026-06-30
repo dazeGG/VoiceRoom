@@ -9,9 +9,9 @@ import type {
   TrackPublication
 } from 'livekit-client';
 import { MICROPHONE_AUDIO_BITRATE, SCREEN_AUDIO_BITRATE } from '../core/config';
-import { elements } from '../ui/dom';
-import { state } from '../core/state';
-import { refreshLocalNetworkIndicator, setVoiceConnectionStatus } from '../ui/status';
+import { startUi } from '$lib/features/room/start-ui.svelte';
+import { state } from '../core/state.svelte';
+import { setVoiceConnectionStatus } from '../ui/status';
 import { showToast } from '../ui/toast';
 import { postJson } from '../net/api';
 import { queueAudioUnlock, syncRemoteAudioPlayback } from './media-playback-service';
@@ -26,7 +26,6 @@ import {
   attachRemoteTrack,
   createParticipant,
   ensureRemoteAudioElement,
-  getParticipantView,
   detachLiveKitParticipant,
   detachRemoteAudioTrack,
   detachRemoteScreen,
@@ -163,7 +162,7 @@ async function bindLiveKitRoomEvents(room: Room): Promise<void> {
       setVoiceConnectionStatus('playback-blocked');
     } else if (state.voiceConnection === 'playback-blocked') {
       state.audioUnlockPending = false;
-      elements.soundButton.hidden = true;
+      startUi.soundButtonVisible = false;
       setVoiceConnectionStatus('connected');
     }
   });
@@ -209,7 +208,6 @@ async function bindLiveKitRoomEvents(room: Room): Promise<void> {
     if (!participant) return;
     if (participant.isLocal) {
       state.localConnectionQuality = quality || 'unknown';
-      refreshLocalNetworkIndicator();
       return;
     }
     const peer = createLiveKitParticipant(participant);
@@ -377,18 +375,11 @@ export async function disconnectLiveKitRoom(): Promise<void> {
   }
 }
 
-function setParticipantDataset(peer: Participant, key: string, value: string): void {
-  const view = getParticipantView(peer);
-  if (!view) return;
-  view.node.dataset[key] = value;
-}
-
 export function updateLiveKitPublicationState(peer: Participant, publication: TrackPublication): void {
   if (isScreenPublication(publication)) {
     const hadScreen = peer.screen;
     peer.screen = true;
     peer.screenAudio = peer.screenAudio || isScreenAudioPublication(publication);
-    setParticipantDataset(peer, 'screen', 'true');
     applyRemoteScreenCue(peer, hadScreen, true);
     updatePeerStatus(peer);
     refreshScreenAction(peer);
@@ -396,7 +387,6 @@ export function updateLiveKitPublicationState(peer: Participant, publication: Tr
   }
   if (isMicrophonePublication(publication)) {
     peer.muted = publication.isMuted;
-    setParticipantDataset(peer, 'muted', String(peer.muted));
     peer.voiceIssue = '';
     updatePeerStatus(peer);
   }
@@ -552,7 +542,7 @@ function handleLiveKitTrackUnpublished(publication: RemoteTrackPublication, part
     peer.screenAudio = participant.trackPublications
       ? [...participant.trackPublications.values()].some(isScreenAudioPublication)
       : false;
-    setParticipantDataset(peer, 'screen', String(peer.screen));
+
     applyRemoteScreenCue(peer, hadScreen, peer.screen);
     if (!peer.screen) detachRemoteScreen(peer);
     refreshScreenAction(peer);

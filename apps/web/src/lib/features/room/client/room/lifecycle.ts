@@ -4,7 +4,7 @@
 // reaction lives here once instead of being duplicated in each handler.
 import type { RoomLifecycleSummary } from '../core/types';
 import { roomSettingsUi } from '../../room-settings.svelte';
-import { state } from '../core/state';
+import { state } from '../core/state.svelte';
 import { showToast } from '../ui/toast';
 import { refreshRoomHeading, showRoomNotFound } from './room';
 

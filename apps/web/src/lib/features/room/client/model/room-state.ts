@@ -1,3 +1,4 @@
+import { SvelteMap } from 'svelte/reactivity';
 import {
   DEFAULT_SCREEN_FPS_ID,
   DEFAULT_SCREEN_PROFILE_ID,
@@ -51,8 +52,7 @@ export function createInitialRoomState(): AppState {
     noiseMode: getStoredNoiseMode(),
     outputDeviceId: localStorage.getItem(OUTPUT_DEVICE_STORAGE_KEY) || '',
     outputMuted: localStorage.getItem(OUTPUT_MUTED_STORAGE_KEY) === 'true',
-    peers: new Map(),
-    participantViews: new Map(),
+    peers: new SvelteMap(),
     peerId: peerSession.peerId,
     roomId,
     roomName: '',
@@ -61,10 +61,12 @@ export function createInitialRoomState(): AppState {
     roomIconKey: '',
     roomPresetKey: '',
     roomRoute: window.location.pathname.startsWith('/r/'),
+    screen: '',
     savedName: '',
     screenFullscreen: false,
     screenMuted: false,
     screenRequesting: false,
+    screenStarting: false,
     screenCollapsedPeerIds: new Set(),
     screenSubscribedPeerIds: new Set(),
     screenSourceRequest: null,

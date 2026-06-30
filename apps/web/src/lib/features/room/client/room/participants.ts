@@ -1,8 +1,7 @@
-import { elements } from '../ui/dom';
-import { state } from '../core/state';
+import { closeParticipantContextMenu } from '../../participant-context-ui.svelte';
+import { bumpParticipantsRevision, participantsUi } from '../../participants-ui.svelte';
+import { state } from '../core/state.svelte';
 import { getScreenProfile } from '../media/profiles';
-import { getAvatarColor } from '$lib/visual/tokens';
-import { getInitials } from '../core/utils';
 import {
   applyAudioOutputDevice,
   applyRemoteParticipantAudioPreferences,
@@ -10,44 +9,51 @@ import {
   releaseRemoteAudioElement
 } from '../services/media-playback-service';
 import { STREAM_CUE_DEDUPE_MS } from '../core/config';
-import { closeParticipantContextMenu, syncParticipantContextMenuA11y } from '../ui/participant-context-menu';
 import { clearPeerJoinCue, playStreamCue, playStreamViewerCue } from '../media/cues';
 import { attachMeter } from '../media/meters';
 import { isMicrophonePublication, syncLiveKitScreenSubscriptions } from '../services/livekit-service';
 import {
   closeScreenView,
-  enterScreenView,
-  getScreenParticipants,
   hideScreenStage,
   refreshAllScreenActions,
-  refreshScreenAction,
   refreshScreenStage,
   refreshScreenTiles
 } from '../ui/screen-view';
-import type { Participant, ParticipantViewRefs, PeerInfo } from '../core/types';
+import type { Participant, PeerInfo } from '../core/types';
 
 const watchedRemoteScreenTracks = new WeakSet<MediaStreamTrack>();
 const streamCueTimes = new Map<string, number>();
 
-export function getParticipantView(participant: Participant | string | null | undefined): ParticipantViewRefs | null {
-  const peerId = typeof participant === 'string' ? participant : participant?.id;
-  return peerId ? state.participantViews.get(peerId) || null : null;
-}
-
-function setParticipantView(participant: Participant, view: ParticipantViewRefs): void {
-  state.participantViews.set(participant.id, view);
-}
-
-export function removeParticipantView(peerId: string): void {
-  const view = getParticipantView(peerId);
-  view?.node.remove();
-  state.participantViews.delete(peerId);
-}
-
-function requireParticipantView(participant: Participant): ParticipantViewRefs {
-  const view = getParticipantView(participant);
-  if (!view) throw new Error(`Missing participant view for ${participant.id}`);
-  return view;
+function createParticipantModel(peerInfo: PeerInfo, isLocal: boolean): Participant {
+  const name = peerInfo.name ?? '';
+  return {
+    accountUserId: peerInfo.accountUserId || '',
+    analyser: null,
+    audioElements: new Map(),
+    avatarColorKey: peerInfo.avatarColorKey || '',
+    deafened: Boolean(peerInfo.deafened),
+    id: peerInfo.id,
+    incomingVoiceActive: false,
+    isLocal,
+    joinedAt: peerInfo.joinedAt ?? Date.now(),
+    livekitParticipant: null,
+    connectionQuality: 'unknown',
+    meterData: null,
+    muted: Boolean(peerInfo.muted),
+    speaking: false,
+    statusLabel: isLocal ? '' : 'подключает голос',
+    level: 0,
+    name,
+    micReceiver: null,
+    screen: Boolean(peerInfo.screen),
+    screenAudio: Boolean(peerInfo.screenAudio),
+    screenProfileId: getScreenProfile(peerInfo.screenProfileId ?? '').id,
+    screenStream: null,
+    screenStreamId: peerInfo.screenStreamId || '',
+    stream: null,
+    viewedScreenPeerId: peerInfo.viewedScreenPeerId || '',
+    voiceIssue: ''
+  };
 }
 
 export function applyRemoteScreenCue(participant: Participant, hadScreen: boolean, nextScreen: boolean): void {
@@ -114,81 +120,22 @@ export function createParticipant(peerInfo: PeerInfo): Participant {
   if (existing) {
     if (isLocal) {
       const duplicate = state.peers.get(peerInfo.id);
-      if (duplicate) removeParticipantView(duplicate.id);
-      state.peers.delete(peerInfo.id);
+      if (duplicate) state.peers.delete(duplicate.id);
     }
     updateParticipant(peerInfo);
     return existing;
   }
 
-  const fragment = elements.template.content.cloneNode(true) as DocumentFragment;
-  const node = fragment.querySelector<HTMLElement>('.participant')!;
-  const avatar = fragment.querySelector<HTMLElement>('.avatar')!;
-  const nameLabel = fragment.querySelector<HTMLElement>('.participant-name')!;
-  const screenAction = fragment.querySelector<HTMLButtonElement>('.participant-screen-action')!;
-  const status = fragment.querySelector<HTMLParagraphElement>('p')!;
+  const participant = createParticipantModel(peerInfo, isLocal);
 
-  const name = peerInfo.name ?? '';
-  node.dataset.peerId = peerInfo.id;
-  if (peerInfo.accountUserId) node.dataset.accountUserId = peerInfo.accountUserId;
-  if (isLocal) node.dataset.local = 'true';
-  avatar.textContent = getInitials(name);
-  nameLabel.textContent = isLocal ? `${name} · вы` : name;
-  const view = { node, screenAction, status };
-  setParticipantStatus(view, isLocal ? '' : 'подключает голос');
-  node.dataset.deafened = String(Boolean(peerInfo.deafened));
-  node.dataset.muted = String(Boolean(peerInfo.muted));
-  node.dataset.screen = String(Boolean(peerInfo.screen));
-  applyParticipantPalette(node, peerInfo);
-
-  elements.participants.append(node);
-
-  const participant: Participant = {
-    accountUserId: peerInfo.accountUserId || '',
-    analyser: null,
-    audioElements: new Map(),
-    avatarColorKey: peerInfo.avatarColorKey || '',
-    deafened: Boolean(peerInfo.deafened),
-    id: peerInfo.id,
-    incomingVoiceActive: false,
-    isLocal,
-    joinedAt: peerInfo.joinedAt ?? Date.now(),
-    livekitParticipant: null,
-    connectionQuality: 'unknown',
-    meterData: null,
-    muted: Boolean(peerInfo.muted),
-    name,
-    micReceiver: null,
-    screen: Boolean(peerInfo.screen),
-    screenAudio: Boolean(peerInfo.screenAudio),
-    screenProfileId: getScreenProfile(peerInfo.screenProfileId ?? '').id,
-    screenStream: null,
-    screenStreamId: peerInfo.screenStreamId || '',
-    stream: null,
-    viewedScreenPeerId: peerInfo.viewedScreenPeerId || '',
-    voiceIssue: ''
-  };
-
-  setParticipantView(participant, view);
-  syncParticipantContextMenuA11y(node, participant);
-  const openScreenView = () => enterScreenView(participant.id).catch((error) => console.error(error));
-  screenAction.addEventListener('click', (event) => {
-    event.stopPropagation();
-    openScreenView();
-  });
-  node.addEventListener('click', (event) => {
-    if (!participant.screen || participant.isLocal || state.viewedScreenPeerId === participant.id) return;
-    if ((event.target as HTMLElement | null)?.closest('button, select, input, a')) return;
-    openScreenView();
-  });
   if (participant.isLocal) {
     state.self = participant;
     state.peers.delete(peerInfo.id);
   } else {
     state.peers.set(peerInfo.id, participant);
   }
-  refreshScreenAction(participant);
-  refreshScreenTiles();
+
+  refreshAllScreenActions();
   refreshParticipantState();
   if (!participant.isLocal && participant.screen) {
     applyRemoteScreenCue(participant, false, true);
@@ -220,16 +167,6 @@ export function updateParticipant(peerInfo: PeerInfo): void {
     participant.viewedScreenPeerId = peerInfo.viewedScreenPeerId || '';
     applyStreamViewerCue(participant, hadViewedScreenOwnerId, participant.viewedScreenPeerId);
   }
-  const view = requireParticipantView(participant);
-  if (participant.accountUserId) view.node.dataset.accountUserId = participant.accountUserId;
-  else delete view.node.dataset.accountUserId;
-  view.node.dataset.deafened = String(participant.deafened);
-  view.node.dataset.muted = String(participant.muted);
-  view.node.dataset.screen = String(participant.screen);
-  applyParticipantPalette(view.node, participant);
-  syncParticipantContextMenuA11y(view.node, participant);
-  view.node.querySelector('.avatar')!.textContent = getInitials(participant.name);
-  view.node.querySelector('.participant-name')!.textContent = participant.isLocal ? `${participant.name} · вы` : participant.name;
   if (Object.hasOwn(peerInfo, 'muted') && participant.muted) {
     participant.incomingVoiceActive = false;
     setParticipantSpeaking(participant, false);
@@ -251,7 +188,7 @@ export function updateParticipant(peerInfo: PeerInfo): void {
   if (!participant.isLocal && participant.accountUserId !== hadAccountUserId) {
     applyRemoteParticipantAudioPreferences(participant);
   }
-  refreshScreenAction(participant);
+  refreshAllScreenActions();
 
   if (shouldRefreshScreenTiles(peerInfo, hadScreen, hadScreenAudio, hadScreenStreamId, hadName)) {
     refreshScreenTiles();
@@ -260,6 +197,8 @@ export function updateParticipant(peerInfo: PeerInfo): void {
   if (shouldRefreshScreenStage(peerInfo, hadScreen, hadScreenAudio, hadScreenStreamId, hadName)) {
     refreshScreenStage();
   }
+
+  refreshParticipantState();
 }
 
 function shouldRefreshScreenTiles(
@@ -305,11 +244,11 @@ export function removePeer(peerId: string): void {
   if (state.sharedScreenPeerId === peer.id) {
     hideScreenStage();
   }
-  removeParticipantView(peerId);
   state.peers.delete(peerId);
   if (state.peers.size === 0) setParticipantSpeaking(state.self, false);
   refreshScreenTiles();
   refreshParticipantState();
+
 }
 
 export function detachLiveKitParticipant(peer: Participant, voiceIssue = 'подключает голос'): void {
@@ -362,7 +301,6 @@ export function attachRemoteScreenStream(peer: Participant, stream: MediaStream)
   peer.screenStream = screenStream;
   peer.screenAudio = peer.screenAudio || screenStream.getAudioTracks().some((track) => track.readyState !== 'ended');
   peer.screenStreamId ||= screenStream.id;
-  setParticipantScreenDataset(peer, true);
 
   for (const track of screenStream.getVideoTracks()) {
     if (watchedRemoteScreenTracks.has(track)) continue;
@@ -394,6 +332,7 @@ export function attachRemoteScreenStream(peer: Participant, stream: MediaStream)
   refreshScreenStage();
   refreshScreenTiles();
   updatePeerStatus(peer);
+  refreshParticipantState();
 }
 
 function mergeRemoteScreenStream(peer: Participant, stream: MediaStream): MediaStream {
@@ -409,11 +348,11 @@ function mergeRemoteScreenStream(peer: Participant, stream: MediaStream): MediaS
 
 export function detachRemoteScreen(peer: Participant): void {
   peer.screenStream = null;
-  setParticipantScreenDataset(peer, peer.screen);
   if (state.sharedScreenPeerId === peer.id) hideScreenStage();
   refreshScreenStage();
   updatePeerStatus(peer);
-  refreshScreenAction(peer);
+  refreshAllScreenActions();
+  refreshParticipantState();
 }
 
 export function ensureRemoteAudioElement(
@@ -498,15 +437,11 @@ export function removeAudioElements(peer: Participant): void {
 }
 
 export function setParticipantSpeaking(participant: Participant | null, speaking: boolean): void {
-  const view = getParticipantView(participant);
-  if (!view) return;
-  view.node.dataset.speaking = String(Boolean(speaking));
-}
-
-function setParticipantScreenDataset(participant: Participant, screen: boolean): void {
-  const view = getParticipantView(participant);
-  if (!view) return;
-  view.node.dataset.screen = String(screen);
+  if (!participant) return;
+  const nextSpeaking = Boolean(speaking);
+  if (participant.speaking === nextSpeaking) return;
+  participant.speaking = nextSpeaking;
+  refreshParticipantState();
 }
 
 export function updatePeerStatus(peer: Participant): void {
@@ -553,34 +488,18 @@ function getLiveKitMicrophonePublication(peer: Participant) {
   return [...publications.values()].find(isMicrophonePublication) || null;
 }
 
-function setParticipantStatus(peer: Participant | ParticipantViewRefs, label: string): void {
-  const view = 'status' in peer ? peer : getParticipantView(peer);
-  if (!view) return;
-  view.status.textContent = label;
-  view.status.hidden = !label;
+function setParticipantStatus(peer: Participant, label: string): void {
+  if (peer.statusLabel === label) return;
+  peer.statusLabel = label;
+  refreshParticipantState();
 }
 
 export function refreshParticipantState(): void {
-  const participantCount = elements.participants.children.length;
-  elements.participants.dataset.count = String(Math.min(participantCount, 8));
-  refreshStageGridState();
+  bumpParticipantsRevision();
 }
 
 export function refreshStageGridState(): void {
-  if (!elements.tileGrid) return;
-
-  const participantCount = elements.participants.children.length;
-  const streamCount = getScreenParticipants().length;
-  const totalCount = participantCount + streamCount;
-  elements.tileGrid.dataset.count = String(Math.min(totalCount, 8));
-  elements.tileGrid.dataset.streams = String(Math.min(streamCount, 8));
-}
-
-function applyParticipantPalette(node: HTMLElement, peerInfo: { avatarColorKey?: string; id?: string; name?: string }): void {
-  const color = getAvatarColor(peerInfo.avatarColorKey);
-  node.style.setProperty('--participant-pastel', color.background);
-  node.style.setProperty('--participant-avatar-fg', color.foreground);
-  node.style.setProperty('--participant-avatar-shadow', color.shadow);
+  bumpParticipantsRevision();
 }
 
 export function getParticipantById(peerId: string): Participant | null {
@@ -590,6 +509,7 @@ export function getParticipantById(peerId: string): Participant | null {
 }
 
 export function getAllParticipants(): Participant[] {
+  void participantsUi.revision;
   return [
     ...(state.self ? [state.self] : []),
     ...state.peers.values()

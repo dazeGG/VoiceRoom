@@ -1,19 +1,24 @@
 # Room client architecture
 
-The room client is a Svelte-mounted imperative island around browser-only APIs
+The room client is a Svelte-owned UI shell around browser-only runtime APIs
 (LiveKit, `getUserMedia`, `getDisplayMedia`, fullscreen, SSE and audio worklets).
-Svelte owns the route shell and stable mount points; client modules own runtime
-state and DOM updates after the lazy `client/main` import.
+Svelte owns route structure, room controls, participant tiles, overlays and screen
+stage rendering. Client modules own media/session side effects after the lazy
+`client/main` import.
 
 ## Boundaries
 
 - `core/` keeps shared runtime state, config, session and primitive utilities.
+  `core/state.svelte.ts` is the reactive room runtime state used by both Svelte
+  components and imperative services.
 - `room/` owns room lifecycle, SSE messages and participant domain updates.
 - `services/` owns external browser/media integrations. These files stay grouped
   by API lifecycle because capture, publication and teardown order is the bug-prone
   part of the feature.
-- `ui/` owns DOM rendering for the imperative island. `dom.ts` is the only selector
-  registry and is scoped to the Svelte room root via `setElementsRoot(root)`.
+- `ui/` now contains browser/media UI helpers and pure view derivations rather
+  than a selector registry. The old `dom.ts`/`elements` cache has been removed.
+- `components/` owns the rendered Svelte surfaces: dock, topbar, participants,
+  overlays, screen stage and stream tiles.
 - `styles/` is split by surface and imported through `room.css`.
 
 ## Deliberate transitional modules
@@ -29,11 +34,10 @@ Some service modules are still larger than the preferred component size:
   tests/mocks.
 - `microphone-service.ts` — noise suppression, gating and device fallback are kept
   together to avoid splitting one capture pipeline across files.
-- `participants.ts` — participant domain state and participant DOM refs are still
-  coupled because the current UI uses an imperative template, not Svelte components.
+- `participants.ts` — participant domain state, remote audio element lifecycle and
+  LiveKit track attachment remain imperative; visual rendering lives in Svelte.
 - `room.ts` — route/lifecycle coordinator; it should remain orchestration-only and
   delegate browser/media details to services.
 
-The next safe split is to replace participant and stage template refs with Svelte
-component props/context. Until then, new code should prefer existing seams above
-instead of adding more selectors or cross-module state mutation.
+New UI work should prefer Svelte components plus reactive view derivations instead
+of adding new global selectors or cross-module DOM mutation.

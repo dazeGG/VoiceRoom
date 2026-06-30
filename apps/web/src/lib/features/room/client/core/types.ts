@@ -1,6 +1,7 @@
 import type { LocalTrackPublication, Room } from 'livekit-client';
+import type { SvelteMap } from 'svelte/reactivity';
 import type { NoiseMode } from './config';
-import type { Participant, ParticipantViewRefs, PeerInfo } from '../model/participants';
+import type { Participant, PeerInfo } from '../model/participants';
 export type { Participant, ParticipantViewRefs, PeerInfo } from '../model/participants';
 
 export interface ScreenProfile {
@@ -117,6 +118,8 @@ export interface RoomSessionState {
   roomIconKey: string;
   roomPresetKey: string;
   roomRoute: boolean;
+  /** Mirrors document.body.dataset.screen so Svelte components react to screen transitions. */
+  screen: string;
   savedName: string;
   sessionToken: string;
 }
@@ -134,8 +137,7 @@ export interface RoomConnectionState {
 }
 
 export interface RoomParticipantState {
-  peers: Map<string, Participant>;
-  participantViews: Map<string, ParticipantViewRefs>;
+  peers: SvelteMap<string, Participant>;
   self: Participant | null;
 }
 
@@ -173,6 +175,7 @@ export interface RoomScreenState {
   screenFullscreen: boolean;
   screenMuted: boolean;
   screenRequesting: boolean;
+  screenStarting: boolean;
   screenCollapsedPeerIds: Set<string>;
   screenSubscribedPeerIds: Set<string>;
   screenSourceRequest: ScreenSourceRequest | null;
