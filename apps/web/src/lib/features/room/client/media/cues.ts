@@ -3,6 +3,7 @@ import {
   PEER_JOIN_CUE_DEDUPE_MS,
   STREAM_VIEWER_CUE_DEDUPE_MS
 } from '../core/config';
+import { getNotificationVolumeMultiplier } from '../core/settings';
 import { state } from '../core/state.svelte';
 import { getSharedAudioContext, isAppPlaybackMuted, isLocalAppAudioSuppressed, queueAudioUnlock } from '../services/media-playback-service';
 
@@ -10,7 +11,7 @@ const peerJoinCueTimes = new Map<string, number>();
 const streamViewerCueTimes = new Map<string, number>();
 
 function getCueGain(value: number): number {
-  return value * NOTIFICATION_VOLUME_BOOST;
+  return value * NOTIFICATION_VOLUME_BOOST * getNotificationVolumeMultiplier();
 }
 
 export function playPeerJoinCue(peerId: string | undefined): void {

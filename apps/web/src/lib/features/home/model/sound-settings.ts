@@ -8,6 +8,7 @@
 import {
   DEFAULT_GATE_THRESHOLD_DB,
   DEFAULT_NOISE_MODE,
+  DEFAULT_NOTIFICATION_VOLUME,
   GATE_THRESHOLD_DB_STORAGE_KEY,
   GATE_THRESHOLD_MAX_DB,
   GATE_THRESHOLD_MIN_DB,
@@ -23,8 +24,11 @@ import {
   getDbMeterPosition,
   getNoiseMode,
   getStoredGateThresholdDb,
-  getStoredNoiseMode
+  getStoredNoiseMode,
+  getStoredNotificationVolume
 } from '$lib/features/room/client/core/settings';
+
+export { getNotificationVolumeMultiplier, persistNotificationVolume } from '$lib/features/room/client/core/settings';
 
 export { GATE_THRESHOLD_MAX_DB, GATE_THRESHOLD_MIN_DB };
 
@@ -48,6 +52,7 @@ export interface SoundSettings {
   outputDeviceId: string;
   noiseMode: NoiseMode;
   gateThresholdDb: number;
+  notificationVolume: number;
 }
 
 // The gate is disabled when parked at the floor — exactly how the room decides
@@ -80,14 +85,16 @@ export function readSoundSettings(): SoundSettings {
       gateThresholdDb: getStoredGateThresholdDb(),
       microphoneDeviceId: readDeviceId(MICROPHONE_DEVICE_STORAGE_KEY),
       noiseMode: getStoredNoiseMode(),
-      outputDeviceId: readDeviceId(OUTPUT_DEVICE_STORAGE_KEY)
+      outputDeviceId: readDeviceId(OUTPUT_DEVICE_STORAGE_KEY),
+      notificationVolume: getStoredNotificationVolume()
     };
   } catch {
     return {
       gateThresholdDb: DEFAULT_GATE_THRESHOLD_DB,
       microphoneDeviceId: '',
       noiseMode: DEFAULT_NOISE_MODE,
-      outputDeviceId: ''
+      outputDeviceId: '',
+      notificationVolume: DEFAULT_NOTIFICATION_VOLUME
     };
   }
 }
