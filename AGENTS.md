@@ -271,6 +271,7 @@ Use the `cancel` skill to end active execution modes when work is done and verif
 
 <state_management>
 Hooks own normal skill-active and workflow-state persistence under `.omx/state/`. OMX runtime state lives under `.omx/`; do not manually duplicate hook-owned activation state unless recovering from missing or stale state.
+Keep OMX/OMC runtime artifacts rooted at the repository top: run manual `omx`/`omc` commands from the repository root, or explicitly set `OMX_ROOT=$REPO_ROOT` / `OMX_STATE_ROOT=$REPO_ROOT` / `OMC_STATE_DIR=$REPO_ROOT/.omc` before invoking them from subdirectories; do not let tools infer runtime state from a nested cwd.
 </state_management>
 
 ## Setup
