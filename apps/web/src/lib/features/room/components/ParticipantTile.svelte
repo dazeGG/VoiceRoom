@@ -10,7 +10,7 @@
 
   let { participant }: { participant: Participant } = $props();
 
-  let tile: HTMLElement | undefined;
+  let tile = $state<HTMLElement>();
 
   const palette = $derived(
     getAvatarColor(participant.avatarColorKey)
@@ -53,8 +53,9 @@
   }
 </script>
 
-<article
+<div
   bind:this={tile}
+  role="button"
   class="participant"
   data-peer-id={participant.id}
   data-local={participant.isLocal ? 'true' : undefined}
@@ -101,4 +102,4 @@
       <span>{screenActionLabel}</span>
     </button>
   </div>
-</article>
+</div>

@@ -24,7 +24,7 @@
   const MENU_WIDTH = 292;
   const MENU_EDGE_GAP = 10;
 
-  let panel: HTMLElement | undefined;
+  let panel = $state<HTMLElement>();
   let volumePercent = $state(100);
   let localMuted = $state(false);
 
@@ -183,7 +183,7 @@
 </script>
 
 {#if participantContextMenu.open && peer && !peer.isLocal}
-  <section
+  <div
     bind:this={panel}
     class="participant-context-menu"
     data-peer-id={peer.id}
@@ -215,7 +215,7 @@
     <label class="participant-context-menu-volume">
       <span class="participant-context-menu-label-row">
         <span>Громкость</span>
-        <output value={volumePercent}>{volumePercent}%</output>
+        <output>{volumePercent}%</output>
       </span>
       <span class="gate-control participant-volume-control">
         <span class="gate-meter-wrap">
@@ -249,5 +249,5 @@
     >
       {localMuted ? 'Включить локально' : 'Заглушить локально'}
     </button>
-  </section>
+  </div>
 {/if}

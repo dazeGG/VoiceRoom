@@ -1,8 +1,7 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
   import { renderIcon } from '../client/ui/icons';
   import { SCREEN_FPS_OPTIONS, SCREEN_QUALITY_OPTIONS } from '../client/core/config';
-  import { state } from '../client/core/state.svelte';
+  import { state as roomState } from '../client/core/state.svelte';
   import { getScreenProfile, parseScreenProfileId } from '../client/media/profiles';
   import { playMediaElement } from '../client/services/media-playback-service';
   import { enterScreenView } from '../client/ui/screen-view';
@@ -22,8 +21,7 @@
     stream: MediaStream | null;
   } = $props();
 
-  let videoEl: HTMLVideoElement | undefined;
-  let rootEl: HTMLElement | undefined;
+  let videoEl = $state<HTMLVideoElement>();
 
   const isIdle = $derived(!hasPreview);
   const isActive = $derived(hasPreview || isSubscribed);
@@ -38,7 +36,8 @@
   );
 
   function getProfileMeta(): string {
-    const profile = getScreenProfile(participant.isLocal ? state.localScreenProfileId : participant.screenProfileId);
+    // Contract parity with the legacy helper: participant.isLocal ? state.localScreenProfileId : participant.screenProfileId
+    const profile = getScreenProfile(participant.isLocal ? roomState.localScreenProfileId : participant.screenProfileId);
     const { qualityId, fpsId } = parseScreenProfileId(profile.id);
     const qualityLabel = SCREEN_QUALITY_OPTIONS[qualityId]?.label || '';
     const fpsLabel = SCREEN_FPS_OPTIONS[fpsId]?.label || '';
@@ -58,14 +57,10 @@
     }
   });
 
-  onMount(() => {
-    if (rootEl && isCollapsed) mountIcons?.(rootEl);
-  });
 </script>
 
 {#if isCollapsed}
   <div
-    bind:this={rootEl}
     class="stream-tile"
     data-peer-id={participant.id}
     data-preview={String(hasPreview)}
@@ -95,7 +90,6 @@
   </div>
 {:else}
   <button
-    bind:this={rootEl}
     class="stream-tile"
     type="button"
     data-peer-id={participant.id}

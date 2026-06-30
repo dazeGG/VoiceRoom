@@ -13,8 +13,7 @@
   import { unlockAudio } from '../client/services/media-playback-service';
   import {
     clearGuestNameError,
-    handleGuestNameSubmit,
-    setGuestNameDialogOpen
+    handleGuestNameSubmit
   } from '../client/ui/names';
 
   let closeButton: HTMLButtonElement | undefined;
@@ -68,7 +67,8 @@
   aria-modal="true"
   aria-labelledby="screenSourceTitle"
   hidden={!screenSourceUi.open}
-  onclick={closeScreenSourceOnBackdrop}
+  tabindex="-1"
+  onpointerdown={closeScreenSourceOnBackdrop}
 >
   <section class="screen-source-panel">
     <div class="screen-source-heading">

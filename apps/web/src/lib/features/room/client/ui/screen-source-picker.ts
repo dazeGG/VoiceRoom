@@ -31,7 +31,7 @@ function closeScreenSourcePicker() {
   return request;
 }
 
-export function closeScreenSourceOnBackdrop(event: MouseEvent): void {
+export function closeScreenSourceOnBackdrop(event: MouseEvent | PointerEvent): void {
   if ((event.target as HTMLElement).id === 'screenSourceDialog') cancelScreenSourcePicker();
 }
 

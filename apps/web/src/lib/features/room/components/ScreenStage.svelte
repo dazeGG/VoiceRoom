@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { mountIcons } from '../client/ui/icons';
-  import { leaveScreenView, handleScreenStageClick } from '../client/ui/screen-view';
+  import { handleScreenStageClick } from '../client/ui/screen-view';
   import {
     getFullscreenView,
     getScreenMetaView,
@@ -20,9 +20,9 @@
     updateScreenVolumeFromSlider
   } from '../client/ui/screen-stage-controls';
 
-  let stageEl: HTMLElement | undefined;
-  let videoEl: HTMLVideoElement | undefined;
-  let volumeSliderEl: HTMLInputElement | undefined;
+  let stageEl = $state<HTMLElement>();
+  let videoEl = $state<HTMLVideoElement>();
+  let volumeSliderEl = $state<HTMLInputElement>();
 
   const meta = $derived(getScreenMetaView());
   const volume = $derived(getStreamVolumeView());
@@ -57,7 +57,11 @@
   bind:this={stageEl}
   hidden={!screenUi.stageVisible}
   data-ui-active={screenUi.uiActive ? 'true' : undefined}
+  role="button"
+  tabindex="-1"
+  aria-label="Закрыть просмотр экрана"
   onclick={handleScreenStageClick}
+  onkeydown={(event) => { if (event.key === 'Enter' || event.key === ' ') handleScreenStageClick(event as unknown as MouseEvent); }}
   onpointerenter={() => { screenUi.uiActive = true; }}
   onpointerleave={() => { screenUi.uiActive = false; }}
   onpointermove={() => { if (screenUi.stageVisible) screenUi.uiActive = true; }}

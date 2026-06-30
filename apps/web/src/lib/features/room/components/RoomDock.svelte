@@ -28,7 +28,6 @@
   import { handleLeaveButtonClick } from '../client/room/room';
   import { leaveScreenView } from '../client/ui/screen-view';
 
-  import { state } from '../client/core/state.svelte';
   import { screenUi } from '../screen-ui.svelte';
 
   const connection = $derived(getConnectionStatusView());
