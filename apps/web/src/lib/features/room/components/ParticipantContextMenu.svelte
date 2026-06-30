@@ -5,9 +5,11 @@
     acceptRequestByUserId,
     addFriendByUserId,
     getFriendRelationship,
+    getKnownLogin,
     openDm,
     setMode
   } from '$lib/features/home/model/friends.svelte';
+  import { VolumeSlider } from '$lib/shared/ui';
   import {
     getParticipantAudioPreference,
     getParticipantAudioPreferenceKey,
@@ -15,13 +17,14 @@
   } from '../client/core/settings';
   import { applyRemoteParticipantAudioPreferences } from '../client/services/media-playback-service';
   import { getParticipantById } from '../client/room/participants';
+  import { getAvatarPresentation } from '../client/ui/avatar-presentation';
   import { showToast } from '../client/ui/toast';
   import {
     closeParticipantContextMenu,
     participantContextMenu
   } from '../participant-context-ui.svelte';
 
-  const MENU_WIDTH = 292;
+  const MENU_WIDTH = 272;
   const MENU_EDGE_GAP = 10;
 
   let panel = $state<HTMLElement>();
@@ -30,11 +33,16 @@
 
   const peer = $derived(participantContextMenu.open ? getParticipantById(participantContextMenu.peerId) : null);
   const preferenceKey = $derived(peer ? getParticipantAudioPreferenceKey(peer.accountUserId, peer.id) : '');
+  const avatar = $derived(peer ? getAvatarPresentation(peer) : null);
   const canUseSocialActions = $derived(
     Boolean(peer && session.user && peer.accountUserId && peer.accountUserId !== session.user?.id)
   );
   const relationship = $derived(
     canUseSocialActions && peer?.accountUserId ? getFriendRelationship(peer.accountUserId) : 'none'
+  );
+  const handle = $derived(peer?.accountUserId ? getKnownLogin(peer.accountUserId) : '');
+  const subtitle = $derived(
+    handle ? `@${handle}` : peer?.accountUserId ? 'Участник комнаты' : 'Гость комнаты'
   );
 
   $effect(() => {
@@ -63,10 +71,9 @@
     panel.style.top = `${top}px`;
   }
 
-  function handleVolumeInput(event: Event): void {
+  function setVolume(percent: number): void {
     if (!peer || !preferenceKey) return;
-    const percent = Number.parseInt((event.currentTarget as HTMLInputElement).value, 10);
-    const safePercent = Number.isFinite(percent) ? percent : 100;
+    const safePercent = Math.min(200, Math.max(0, Number.isFinite(percent) ? percent : 100));
     volumePercent = safePercent;
     storeParticipantAudioPreference(preferenceKey, { volume: safePercent / 100 });
     applyRemoteParticipantAudioPreferences(peer);
@@ -195,7 +202,7 @@
   });
 </script>
 
-{#if participantContextMenu.open && peer && !peer.isLocal}
+{#if participantContextMenu.open && peer && !peer.isLocal && avatar}
   <div
     bind:this={panel}
     class="participant-context-menu"
@@ -205,62 +212,69 @@
     tabindex="-1"
   >
     <div class="participant-context-menu-head">
-      <strong>{peer.name}</strong>
-      <span>{peer.accountUserId ? 'Участник комнаты' : 'Гость комнаты'}</span>
+      <span
+        class="pcm-avatar"
+        aria-hidden="true"
+        style={`background:${avatar.background};color:${avatar.foreground};box-shadow:${avatar.shadow}`}
+      >
+        {avatar.initials}
+        <span class="pcm-avatar-status"></span>
+      </span>
+      <span class="pcm-identity">
+        <strong>{peer.name}</strong>
+        <span class="pcm-handle">{subtitle}</span>
+      </span>
     </div>
 
     {#if canUseSocialActions && relationship === 'friend'}
-      <button class="participant-context-menu-action" type="button" onclick={openDirectMessage}>Написать сообщение</button>
+      <span class="participant-context-menu-divider" aria-hidden="true"></span>
+      <button class="pcm-item" type="button" onclick={openDirectMessage}>
+        <svg class="pcm-item-icon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+        <span>Написать сообщение</span>
+      </button>
     {:else if canUseSocialActions && relationship === 'incoming'}
-      <button class="participant-context-menu-action" type="button" onclick={acceptFriendRequest}>Принять заявку</button>
+      <span class="participant-context-menu-divider" aria-hidden="true"></span>
+      <button class="pcm-item pcm-item--accent" type="button" onclick={acceptFriendRequest}>
+        <svg class="pcm-item-icon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg>
+        <span>Принять заявку</span>
+      </button>
     {:else if canUseSocialActions && relationship === 'outgoing'}
+      <span class="participant-context-menu-divider" aria-hidden="true"></span>
       <p class="participant-context-menu-note">Заявка в друзья уже отправлена.</p>
     {:else if canUseSocialActions}
-      <button class="participant-context-menu-action" type="button" onclick={sendFriendRequest}>Добавить в друзья</button>
+      <span class="participant-context-menu-divider" aria-hidden="true"></span>
+      <button class="pcm-item pcm-item--accent" type="button" onclick={sendFriendRequest}>
+        <svg class="pcm-item-icon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><line x1="19" y1="8" x2="19" y2="14"></line><line x1="22" y1="11" x2="16" y2="11"></line></svg>
+        <span>Добавить в друзья</span>
+      </button>
     {:else if !peer.accountUserId}
+      <span class="participant-context-menu-divider" aria-hidden="true"></span>
       <p class="participant-context-menu-note">Гость: доступны только локальные настройки звука.</p>
     {/if}
 
-    {#if canUseSocialActions || !peer.accountUserId}
-      <span class="participant-context-menu-divider" aria-hidden="true"></span>
-    {/if}
+    <span class="participant-context-menu-divider" aria-hidden="true"></span>
 
-    <label class="participant-context-menu-volume">
-      <span class="participant-context-menu-label-row">
-        <span>Громкость</span>
-        <output>{volumePercent}%</output>
-      </span>
-      <span class="gate-control participant-volume-control">
-        <span class="gate-meter-wrap">
-          <span
-            class="mic-level-track participant-volume-track"
-            data-boosted={String(volumePercent > 100)}
-          >
-            <span
-              class="mic-level-fill participant-volume-fill"
-              style:width="{Math.max(0, Math.min(100, volumePercent / 2))}%"
-            ></span>
-          </span>
-          <input
-            type="range"
-            min="0"
-            max="200"
-            step="1"
-            value={volumePercent}
-            aria-label={`Громкость ${peer.name}`}
-            oninput={handleVolumeInput}
-          />
-        </span>
-      </span>
-    </label>
+    <div class="pcm-volume">
+      <VolumeSlider
+        bind:value={volumePercent}
+        min={0}
+        max={200}
+        label="Громкость"
+        ariaLabel={`Громкость ${peer.name}`}
+        onValueChange={setVolume}
+      />
+    </div>
+
+    <span class="participant-context-menu-divider" aria-hidden="true"></span>
 
     <button
-      class="participant-context-menu-action participant-context-menu-mute"
+      class="pcm-item pcm-item--mute"
       type="button"
       aria-pressed={localMuted}
       onclick={toggleLocalMute}
     >
-      {localMuted ? 'Включить локально' : 'Заглушить локально'}
+      <svg class="pcm-item-icon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="1" y1="1" x2="23" y2="23"></line><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"></path><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
+      <span>{localMuted ? 'Включить локально' : 'Заглушить'}</span>
     </button>
   </div>
 {/if}
