@@ -1,3 +1,5 @@
+@import './desktop-shell.css';
+
 :root {
   color-scheme: dark;
   --paper: oklch(15.5% 0.015 92);

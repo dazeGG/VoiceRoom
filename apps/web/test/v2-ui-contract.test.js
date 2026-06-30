@@ -729,3 +729,14 @@ test('participant context menu is remote-only and exposes relationship-aware loc
   assert.match(css, /\.participant-context-menu \.participant-volume-control input[\s\S]*pointer-events:\s*auto/);
   assert.match(css, /\.participant-volume-track\[data-boosted="true"\]/);
 });
+
+test('desktop shell layout stays in shared web styles, not electron overrides', () => {
+  const appCss = read('src/lib/shared/styles/app.css');
+  const desktopShell = read('src/lib/shared/styles/desktop-shell.css');
+
+  assert.match(appCss, /@import '\.\/desktop-shell\.css'/);
+  assert.match(desktopShell, /html\.is-desktop \.lobby-shell/);
+  assert.match(desktopShell, /html\.is-desktop \.room-chat-rail/);
+  assert.match(desktopShell, /--voice-room-shell-topbar/);
+  assert.doesNotMatch(desktopShell, /\.lobby-preview-chat/);
+});
