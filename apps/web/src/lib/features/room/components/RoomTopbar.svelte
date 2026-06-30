@@ -1,10 +1,23 @@
 <script lang="ts">
-  import '$lib/shared/ui/Ellipsis/ellipsis.css';
   import Topbar from '$lib/shared/components/Topbar.svelte';
-  import { Popover, PopoverDivider, PopoverMenuItem } from '$lib/shared/ui';
+  import { Ellipsis, Popover, PopoverDivider, PopoverMenuItem } from '$lib/shared/ui';
+  import { getRoomPreset } from '$lib/visual/tokens';
+  import { state } from '../client/core/state.svelte';
   import { copyRoomCode, copyRoomLink } from '../client/room/room';
   import { roomUi, toggleChat } from '../room-ui.svelte';
   import { roomSettingsUi, openRoomSettings } from '../room-settings.svelte';
+
+  // Heading content is derived from the reactive room state — the vanilla client
+  // populates state.room* on join/rename, and these update without imperative DOM writes.
+  const heading = $derived(state.roomName || state.roomId);
+  const visual = $derived(
+    getRoomPreset({
+      emoji: state.roomEmoji,
+      roomColorKey: state.roomColorKey,
+      roomIconKey: state.roomIconKey,
+      roomPresetKey: state.roomPresetKey
+    })
+  );
 
   async function handleCopyCode(close: () => void): Promise<void> {
     await copyRoomCode();
@@ -42,8 +55,12 @@
               aria-controls={panelId}
               onclick={toggle}
             >
-              <span class="room-emoji-badge" id="roomEmojiBadge" aria-hidden="true" hidden></span>
-              <span id="roomTitle" class="room-heading-title ellipsis">room</span>
+              <span
+                class="room-emoji-badge"
+                aria-hidden="true"
+                style="background: {visual.background}; box-shadow: 0 0 0 1px {visual.ring};"
+              >{visual.emoji}</span>
+              <Ellipsis text={heading} title={heading} class="room-heading-title" />
               <span class="room-heading-trigger-chevron" aria-hidden="true">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
               </span>
@@ -53,10 +70,14 @@
 
         {#snippet content({ close })}
           <div class="room-heading-popover-head">
-            <span class="room-heading-popover-badge" id="roomPopoverEmojiBadge" aria-hidden="true" hidden></span>
+            <span
+              class="room-heading-popover-badge"
+              aria-hidden="true"
+              style="background: {visual.background}; box-shadow: 0 0 0 1px {visual.ring};"
+            >{visual.emoji}</span>
             <div class="room-heading-popover-info">
-              <span id="roomPopoverTitle" class="room-heading-popover-name ellipsis">room</span>
-              <span class="room-heading-popover-code ellipsis" id="roomCodeText"></span>
+              <Ellipsis text={heading} title={heading} class="room-heading-popover-name" />
+              <Ellipsis text={state.roomId} title={state.roomId} class="room-heading-popover-code" />
             </div>
           </div>
 

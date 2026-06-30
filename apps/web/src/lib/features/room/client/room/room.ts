@@ -1,4 +1,3 @@
-import { getRoomPreset } from '$lib/visual/tokens';
 import { fetchMe, fetchOwnedRooms } from '$lib/api/auth';
 import { roomNameFor } from '$lib/features/auth/account';
 import { roomSettingsUi } from '../../room-settings.svelte';
@@ -97,46 +96,12 @@ export async function showRoomRoute(): Promise<boolean> {
   return true;
 }
 
-// Pulled out of showRoomScreen so a live room-updated event (rename/recolor
-// from the owner) can refresh the heading without re-running the whole
-// screen transition.
-function applyRoomEmojiBadge(element: HTMLElement, emoji: string, background: string, ring: string): void {
-  element.textContent = emoji;
-  element.style.background = background;
-  element.style.boxShadow = `0 0 0 1px ${ring}`;
-  element.hidden = false;
-}
-
+// The room heading (title, code, emoji badge) is rendered reactively by
+// RoomTopbar.svelte from the room state. Only the document title — a side effect
+// outside the component tree — stays here; it runs on screen entry and rename.
 export function refreshRoomHeading(): void {
   const heading = state.roomName || state.roomId;
   document.title = `${heading} · Voice Room`;
-  elements.roomTitle.textContent = heading;
-  elements.roomTitle.title = heading;
-
-  const roomCodeEl = document.querySelector('#roomCodeText');
-  if (roomCodeEl) {
-    roomCodeEl.textContent = state.roomId;
-    roomCodeEl.setAttribute('title', state.roomId);
-  }
-
-  const popoverTitle = document.querySelector('#roomPopoverTitle');
-  if (popoverTitle) {
-    popoverTitle.textContent = heading;
-    popoverTitle.setAttribute('title', heading);
-  }
-
-  const roomVisual = getRoomPreset({
-    emoji: state.roomEmoji,
-    roomColorKey: state.roomColorKey,
-    roomIconKey: state.roomIconKey,
-    roomPresetKey: state.roomPresetKey
-  });
-  applyRoomEmojiBadge(elements.roomEmojiBadge, roomVisual.emoji, roomVisual.background, roomVisual.ring);
-
-  const popoverBadge = document.querySelector('#roomPopoverEmojiBadge');
-  if (popoverBadge instanceof HTMLElement) {
-    applyRoomEmojiBadge(popoverBadge, roomVisual.emoji, roomVisual.background, roomVisual.ring);
-  }
 }
 
 function showRoomScreen(): void {

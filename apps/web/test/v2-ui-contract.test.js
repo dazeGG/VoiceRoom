@@ -150,14 +150,21 @@ test('room chat keeps transport mounted and tracks unread state while closed', (
   assert.match(topbar, /Скопировать код/);
   assert.match(topbar, /keepContentMounted/);
   assert.match(topbar, /room-heading-popover-head/);
-  assert.match(topbar, /roomPopoverEmojiBadge/);
-  assert.match(topbar, /roomPopoverTitle/);
+  assert.match(topbar, /room-heading-popover-badge/);
+  assert.match(topbar, /room-heading-popover-info/);
   assert.doesNotMatch(topbar, /copyCodeButton|copyLinkButton|room-settings-button/);
 
+  // Heading (title/code/emoji) is rendered reactively from room state, not written
+  // imperatively by the vanilla client. The plain `.ellipsis` spans are gone.
+  assert.match(topbar, /import \{ state \} from '\.\.\/client\/core\/state\.svelte'/);
+  assert.match(topbar, /const heading = \$derived\(state\.roomName \|\| state\.roomId\)/);
+  assert.match(topbar, /<Ellipsis text=\{heading\} title=\{heading\} class="room-heading-title"/);
+  assert.match(topbar, /<Ellipsis text=\{state\.roomId\}/);
+  assert.doesNotMatch(topbar, /id="roomTitle"|id="roomCodeText"|class="[^"]*\bellipsis\b/);
+
   const roomView = read('src/lib/features/room/client/room/room.ts');
-  assert.match(roomView, /document\.querySelector\('#roomCodeText'\)/);
-  assert.match(roomView, /roomPopoverEmojiBadge/);
-  assert.doesNotMatch(roomView, /elements\.roomCodeText/);
+  assert.match(roomView, /document\.title = `\$\{heading\} · Voice Room`/);
+  assert.doesNotMatch(roomView, /elements\.roomTitle|#roomCodeText|roomPopoverEmojiBadge/);
 
   const select = read('src/lib/shared/ui/Select/Select.svelte');
   assert.match(select, /import \{ Ellipsis \} from '\.\.\/Ellipsis'/);
@@ -302,7 +309,9 @@ test('visual identity UI consumes backend keys and exposes only curated room pre
   assert.match(chat, /getAvatarColor\(message\.avatarColorKey\)/);
   assert.doesNotMatch(chat, /hashStringToHue/);
   assert.match(roomNet, /status\?\.roomIconKey/);
-  assert.match(roomView, /getRoomPreset/);
+  // The room heading consumes the curated preset reactively in RoomTopbar now.
+  const roomTopbar = read('src/lib/features/room/components/RoomTopbar.svelte');
+  assert.match(roomTopbar, /getRoomPreset/);
   assert.match(roomView, /updateParticipant\(\{ \.\.\.message\.peer, isLocal: true \}\)/);
   assert.match(tokens, /ROOM_ICON_EMOJIS/);
   assert.match(tokens, /ROOM_COLOR_TOKENS/);
