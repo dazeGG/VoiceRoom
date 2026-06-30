@@ -593,8 +593,10 @@ test('hotfix lobby UX keeps dock in main area, preview chat, and add-friend subm
   assert.match(previewChat, /fetchRoomChat\(roomId\)/);
   assert.match(previewChat, /postRoomChat\(roomId/);
   assert.match(previewChat, /chat-rail-collapse/);
-  assert.match(previewView, /previewChatOpen/);
-  assert.match(browseView, /previewChatOpen/);
+  assert.match(previewView, /let previewChatOpen = \$state\(false\)/);
+  assert.match(browseView, /let previewChatOpen = \$state\(false\)/);
+  assert.match(previewView, /previewChatOpen = false/);
+  assert.match(browseView, /previewChatOpen = false/);
   assert.match(addFriend, /copyText\(user\.login\)/);
   assert.doesNotMatch(addFriend, /searchUsers/);
   assert.doesNotMatch(addFriend, /oninput=\{onInput\}/);

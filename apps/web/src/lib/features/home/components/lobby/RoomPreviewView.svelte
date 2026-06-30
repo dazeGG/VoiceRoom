@@ -18,7 +18,7 @@
   let peers = $state<RoomPeer[]>([]);
   let loading = $state(true);
 
-  let previewChatOpen = $state(true);
+  let previewChatOpen = $state(false);
 
   async function refresh(): Promise<void> {
     try {
@@ -34,7 +34,7 @@
     void room.roomId;
     loading = true;
     peers = [];
-    previewChatOpen = true;
+    previewChatOpen = false;
     void refresh();
   });
 
