@@ -1,7 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { getAvatarColor } from '$lib/visual/tokens';
-  import { getInitials } from '../client/core/utils';
+  import { getAvatarPresentation } from '../client/ui/avatar-presentation';
   import { state as roomState } from '../client/core/state.svelte';
   import { enterScreenView } from '../client/ui/screen-view';
   import { mountIcons } from '../client/ui/icons';
@@ -12,9 +11,7 @@
 
   let tile = $state<HTMLElement>();
 
-  const palette = $derived(
-    getAvatarColor(participant.avatarColorKey)
-  );
+  const avatar = $derived(getAvatarPresentation(participant));
   const displayName = $derived(participant.isLocal ? `${participant.name} · вы` : participant.name);
   const viewing = $derived(roomState.viewedScreenPeerId === participant.id);
   const canWatch = $derived(!participant.isLocal && participant.screen && !viewing);
@@ -70,15 +67,15 @@
     ? undefined
     : `${participant.name}. Откройте контекстное меню Shift+F10 или клавишей меню.`}
   style:--level={participant.level.toFixed(3)}
-  style:--participant-pastel={palette.background}
-  style:--participant-avatar-fg={palette.foreground}
-  style:--participant-avatar-shadow={palette.shadow}
+  style:--participant-pastel={avatar.background}
+  style:--participant-avatar-fg={avatar.foreground}
+  style:--participant-avatar-shadow={avatar.shadow}
   onclick={handleTileClick}
   oncontextmenu={handleContextMenu}
   onkeydown={handleKeydown}
 >
   <div class="voice-ring" aria-hidden="true">
-    <span class="avatar">{getInitials(participant.name)}</span>
+    <span class="avatar">{avatar.initials}</span>
   </div>
   <div class="participant-copy">
     <h2>

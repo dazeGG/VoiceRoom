@@ -1,5 +1,5 @@
-import { getAvatarColor } from '$lib/visual/tokens';
 import { state } from './client/core/state.svelte';
+import { getAvatarPresentation } from './client/ui/avatar-presentation';
 import { getScreenProfileLabels } from './client/media/profiles';
 import { getAllParticipants, getParticipantById } from './client/room/participants';
 import type { Participant } from './client/core/types';
@@ -103,17 +103,17 @@ export function getViewerAvatarStyle(viewer: Participant): {
   shadow: string;
   label: string;
 } {
-  const color = getAvatarColor(viewer.avatarColorKey);
+  const avatar = getAvatarPresentation(viewer);
   return {
-    background: color.background,
-    foreground: color.foreground,
-    shadow: color.shadow,
-    label: viewer.isLocal ? 'вы' : viewer.name
+    background: avatar.background,
+    foreground: avatar.foreground,
+    shadow: avatar.shadow,
+    label: avatar.label
   };
 }
 
 export function getViewerInitials(viewer: Participant): string {
-  return getInitials(viewer.name);
+  return getAvatarPresentation(viewer).initials;
 }
 
 export interface StreamVolumeView {
