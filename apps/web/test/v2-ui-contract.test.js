@@ -571,3 +571,79 @@ test('frontend visual catalog stays aligned with shared backend key contracts', 
     assert.ok(tokens.includes(`${key}: { background:`));
   }
 });
+
+test('remote participant audio preferences persist volume and local mute separately', () => {
+  const config = read('src/lib/features/room/client/core/config.ts');
+  const settings = read('src/lib/features/room/client/core/settings.ts');
+  const playback = read('src/lib/features/room/client/services/media-playback-service.ts');
+  const participants = read('src/lib/features/room/client/room/participants.ts');
+
+  assert.match(config, /PARTICIPANT_AUDIO_PREFERENCES_STORAGE_KEY = 'voice-room:participant-audio-preferences'/);
+  assert.match(config, /DEFAULT_PARTICIPANT_VOLUME = 1/);
+  assert.match(config, /MAX_PARTICIPANT_VOLUME = 2/);
+
+  assert.match(settings, /interface ParticipantAudioPreference[\s\S]*muted: boolean;[\s\S]*volume: number;/);
+  assert.match(settings, /getParticipantAudioPreferenceKey\(accountUserId: string, peerId: string\)/);
+  assert.match(functionBody(settings, 'getParticipantAudioPreferenceKey'), /return `account:\$\{accountKey\}`/);
+  assert.match(functionBody(settings, 'getParticipantAudioPreferenceKey'), /return `peer:\$\{String\(peerId \|\| ''\)\.trim\(\)\}`/);
+  assert.match(settings, /export function getParticipantAudioPreference\(key: string\): ParticipantAudioPreference \{[\s\S]*DEFAULT_PARTICIPANT_AUDIO_PREFERENCE\.muted[\s\S]*DEFAULT_PARTICIPANT_AUDIO_PREFERENCE\.volume[\s\S]*\n\}/);
+  assert.match(functionBody(settings, 'storeParticipantAudioPreference'), /muted: Object\.hasOwn\(patch, 'muted'\)/);
+  assert.match(functionBody(settings, 'storeParticipantAudioPreference'), /volume: Object\.hasOwn\(patch, 'volume'\)/);
+  assert.match(functionBody(settings, 'clampParticipantVolume'), /Math\.min\(MAX_PARTICIPANT_VOLUME, Math\.max\(0, volume\)\)/);
+
+  assert.match(playback, /export function applyRemoteParticipantAudioPreferences\(peer: Participant\)/);
+  assert.match(functionBody(playback, 'applyRemoteParticipantAudioPreferences'), /getParticipantAudioPreferenceKey\(peer\.accountUserId, peer\.id\)/);
+  assert.match(functionBody(playback, 'applyRemoteParticipantAudioPreferences'), /isVoicePlaybackMuted\(\) \|\| preference\.muted \|\| preference\.volume <= 0/);
+  assert.match(functionBody(playback, 'applyRemoteParticipantAudioPreferences'), /applyVoiceMediaElementVolume\(audio, \{ muted, volume: preference\.volume \}\)/);
+  assert.match(playback, /const voiceAudioGains = new WeakMap<HTMLMediaElement, VoiceAudioGain>\(\)/);
+  assert.match(playback, /export function releaseRemoteAudioElement\(mediaElement: HTMLMediaElement\)/);
+  assert.match(playback, /function applyVoiceMediaElementVolume[\s\S]*existing\.gain\.gain\.value = options\.muted \? 0 : volume/);
+  assert.match(playback, /function applyVoiceMediaElementVolume[\s\S]*mediaElement\.volume = Math\.min\(1, volume\)/);
+
+  assert.match(participants, /applyRemoteParticipantAudioPreferences\(peer\)/);
+  assert.match(participants, /const hadAccountUserId = participant\.accountUserId/);
+  assert.match(participants, /participant\.accountUserId !== hadAccountUserId[\s\S]*applyRemoteParticipantAudioPreferences\(participant\)/);
+  assert.match(participants, /releaseRemoteAudioElement\(audio\)/);
+});
+
+test('participant context menu is remote-only and exposes relationship-aware local audio controls', () => {
+  const menu = read('src/lib/features/room/client/ui/participant-context-menu.ts');
+  const main = read('src/lib/features/room/client/main.ts');
+  const participants = read('src/lib/features/room/client/room/participants.ts');
+  const room = read('src/lib/features/room/client/room/room.ts');
+  const css = read('src/lib/features/room/styles/participants.css');
+
+  assert.match(main, /bindParticipantContextMenu\(listenerSignal\)/);
+  assert.match(menu, /elements\.participants\.addEventListener\('contextmenu', openParticipantContextMenuFromEvent/);
+  assert.match(functionBody(menu, 'openParticipantContextMenuFromEvent'), /const peer = state\.peers\.get\(peerId\)/);
+  assert.match(functionBody(menu, 'openParticipantContextMenuFromEvent'), /if \(!peer \|\| peer\.isLocal\) return/);
+  assert.match(functionBody(menu, 'openParticipantContextMenuFromEvent'), /event\.preventDefault\(\)/);
+
+  assert.match(menu, /const canUseSocialActions = Boolean\(session\.user && peer\.accountUserId && peer\.accountUserId !== session\.user\.id\)/);
+  assert.match(menu, /getFriendRelationship\(peer\.accountUserId\)/);
+  assert.match(menu, /createActionButton\('Написать сообщение', 'message', peer\)/);
+  assert.match(menu, /createActionButton\('Добавить в друзья', 'add-friend', peer\)/);
+  assert.match(menu, /Гость: доступны только локальные настройки звука/);
+
+  assert.match(menu, /slider\.min = '0'/);
+  assert.match(menu, /slider\.max = '200'/);
+  assert.match(menu, /storeParticipantAudioPreference\(preferenceKey, \{ volume: safePercent \/ 100 \}\)/);
+  assert.match(menu, /storeParticipantAudioPreference\(preferenceKey, \{[\s\S]*muted: !getParticipantAudioPreference\(preferenceKey\)\.muted[\s\S]*\}\)/);
+  assert.match(menu, /applyRemoteParticipantAudioPreferences\(peer\)/);
+
+  assert.match(menu, /document\.addEventListener\('pointerdown', closeParticipantContextMenuOnOutside, \{ capture: true, signal \}\)/);
+  assert.match(menu, /document\.addEventListener\('keydown', closeParticipantContextMenuOnEscape/);
+  assert.match(menu, /signal\.addEventListener\('abort', \(\) => closeParticipantContextMenu\(\)/);
+  assert.match(participants, /closeParticipantContextMenu\(peerId\)/);
+  assert.match(room, /closeParticipantContextMenu\(\)/);
+  assert.match(menu, /closeParticipantContextMenu\(peer\.id\)/);
+  assert.match(menu, /addFriendByUserId\(peer\.accountUserId\)/);
+  assert.match(menu, /setMode\('friends'\)/);
+  assert.match(menu, /await openDm\(peer\.accountUserId\)/);
+  assert.match(menu, /showToast\('Не удалось отправить заявку в друзья', \{ variant: 'error' \}\)/);
+  assert.match(menu, /showToast\('Не удалось открыть личные сообщения', \{ variant: 'error' \}\)/);
+
+  assert.match(css, /\.participant-context-menu/);
+  assert.match(css, /\.participant-context-menu \.participant-volume-control input[\s\S]*pointer-events:\s*auto/);
+  assert.match(css, /\.participant-volume-track\[data-boosted="true"\]/);
+});

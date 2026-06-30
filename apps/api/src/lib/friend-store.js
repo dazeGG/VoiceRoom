@@ -143,12 +143,16 @@ function createFriendStore({ databaseUrl, logger = console, pool } = {}) {
 
   // --- Requests -----------------------------------------------------------
 
-  // Send a friend request to a login. Auto-accepts when a reverse pending
-  // request already exists, so two people who request each other become friends
-  // without an extra accept step. Returns a discriminated status.
-  async function sendRequest({ requesterId, addresseeLogin }) {
+  // Send a friend request to a login or explicit user id. Auto-accepts when a
+  // reverse pending request already exists, so two people who request each
+  // other become friends without an extra accept step. Returns a discriminated
+  // status. The user-id path supports in-room social actions without exposing
+  // logins in room presence payloads.
+  async function sendRequest({ requesterId, addresseeLogin = '', addresseeUserId = '' }) {
     return transaction(getPool(), async (client) => {
-      const userResult = await client.query(`SELECT * FROM users WHERE login = $1`, [addresseeLogin]);
+      const userResult = addresseeUserId
+        ? await client.query(`SELECT * FROM users WHERE id = $1`, [addresseeUserId])
+        : await client.query(`SELECT * FROM users WHERE login = $1`, [addresseeLogin]);
       const addressee = userResult.rows[0];
       if (!addressee) return { status: 'not_found' };
       if (addressee.id === requesterId) return { status: 'self' };

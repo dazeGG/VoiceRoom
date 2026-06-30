@@ -43,6 +43,7 @@ import { attachMeter, startMeters, stopMeters } from '../media/meters';
 import { startPeerLatencyStats, startSpeakingStats, stopPeerLatencyStats, stopSpeakingStats } from './stats';
 import { clearAllPeerJoinCues, clearPeerJoinCue, clearStreamViewerCues, playPeerCue, playPeerJoinCue } from '../media/cues';
 import { cancelScreenSourcePicker } from '../ui/screen-source-picker';
+import { closeParticipantContextMenu } from '../ui/participant-context-menu';
 import {
   clearGateSwitchTimer,
   closeDevicePopover,
@@ -455,6 +456,7 @@ export function leaveRoom(): void {
   disconnectLiveKitRoom().catch((error) => console.warn('LiveKit disconnect failed', error));
   if (state.screenSourceRequest) cancelScreenSourcePicker();
   closeScreenView();
+  closeParticipantContextMenu();
   state.screenCollapsedPeerIds.clear();
   state.screenSubscribedPeerIds.clear();
 

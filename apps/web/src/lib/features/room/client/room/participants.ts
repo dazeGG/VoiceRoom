@@ -5,10 +5,12 @@ import { getAvatarColor } from '$lib/visual/tokens';
 import { getInitials } from '../core/utils';
 import {
   applyAudioOutputDevice,
-  isVoicePlaybackMuted,
-  playMediaElement
+  applyRemoteParticipantAudioPreferences,
+  playMediaElement,
+  releaseRemoteAudioElement
 } from '../services/media-playback-service';
 import { STREAM_CUE_DEDUPE_MS } from '../core/config';
+import { closeParticipantContextMenu } from '../ui/participant-context-menu';
 import { clearPeerJoinCue, playStreamCue, playStreamViewerCue } from '../media/cues';
 import { attachMeter } from '../media/meters';
 import { isMicrophonePublication, syncLiveKitScreenSubscriptions } from '../services/livekit-service';
@@ -128,6 +130,7 @@ export function createParticipant(peerInfo: PeerInfo): Participant {
 
   const name = peerInfo.name ?? '';
   node.dataset.peerId = peerInfo.id;
+  if (peerInfo.accountUserId) node.dataset.accountUserId = peerInfo.accountUserId;
   if (isLocal) node.dataset.local = 'true';
   avatar.textContent = getInitials(name);
   nameLabel.textContent = isLocal ? `${name} · вы` : name;
@@ -141,6 +144,7 @@ export function createParticipant(peerInfo: PeerInfo): Participant {
   elements.participants.append(node);
 
   const participant: Participant = {
+    accountUserId: peerInfo.accountUserId || '',
     analyser: null,
     audioElements: new Map(),
     avatarColorKey: peerInfo.avatarColorKey || '',
@@ -199,7 +203,9 @@ export function updateParticipant(peerInfo: PeerInfo): void {
   const hadScreenAudio = participant.screenAudio;
   const hadScreenStreamId = participant.screenStreamId;
   const hadName = participant.name;
+  const hadAccountUserId = participant.accountUserId;
   const hasScreenUpdate = Object.hasOwn(peerInfo, 'screen');
+  if (Object.hasOwn(peerInfo, 'accountUserId')) participant.accountUserId = peerInfo.accountUserId || '';
   if (Object.hasOwn(peerInfo, 'avatarColorKey')) participant.avatarColorKey = peerInfo.avatarColorKey || participant.avatarColorKey;
   if (Object.hasOwn(peerInfo, 'name')) participant.name = peerInfo.name || participant.name;
   if (Object.hasOwn(peerInfo, 'deafened')) participant.deafened = Boolean(peerInfo.deafened);
@@ -214,6 +220,8 @@ export function updateParticipant(peerInfo: PeerInfo): void {
     applyStreamViewerCue(participant, hadViewedScreenOwnerId, participant.viewedScreenPeerId);
   }
   const view = requireParticipantView(participant);
+  if (participant.accountUserId) view.node.dataset.accountUserId = participant.accountUserId;
+  else delete view.node.dataset.accountUserId;
   view.node.dataset.deafened = String(participant.deafened);
   view.node.dataset.muted = String(participant.muted);
   view.node.dataset.screen = String(participant.screen);
@@ -238,6 +246,9 @@ export function updateParticipant(peerInfo: PeerInfo): void {
     detachRemoteScreen(participant);
   }
   updatePeerStatus(participant);
+  if (!participant.isLocal && participant.accountUserId !== hadAccountUserId) {
+    applyRemoteParticipantAudioPreferences(participant);
+  }
   refreshScreenAction(participant);
 
   if (shouldRefreshScreenTiles(peerInfo, hadScreen, hadScreenAudio, hadScreenStreamId, hadName)) {
@@ -278,6 +289,7 @@ function shouldRefreshScreenStage(
 export function removePeer(peerId: string): void {
   const peer = state.peers.get(peerId);
   if (!peer) return;
+  closeParticipantContextMenu(peerId);
 
   applyStreamViewerCue(peer, peer.viewedScreenPeerId, '');
   clearPeerJoinCue(peerId);
@@ -417,9 +429,8 @@ export function ensureRemoteAudioElement(
   );
 
   if (audio && existingHasLiveTrack) {
-    audio.muted = isVoicePlaybackMuted();
     if (!audio.isConnected) document.body.append(audio);
-    applyAudioOutputDevice(audio).catch(() => {});
+    applyRemoteParticipantAudioPreferences(peer);
     playMediaElement(audio);
     return;
   }
@@ -427,6 +438,7 @@ export function ensureRemoteAudioElement(
   if (audio) {
     audio.pause();
     audio.srcObject = null;
+    releaseRemoteAudioElement(audio);
     audio.remove();
   }
 
@@ -441,17 +453,19 @@ function attachRemoteAudioTrack(
 ): void {
   const audio = document.createElement('audio');
   audio.autoplay = true;
-  audio.muted = isVoicePlaybackMuted();
+  audio.muted = true;
   (audio as HTMLAudioElement & { playsInline: boolean }).playsInline = true;
   audio.srcObject = stream || new MediaStream([track]);
   peer.audioElements.set(track.id, audio);
   document.body.append(audio);
+  applyRemoteParticipantAudioPreferences(peer);
   applyAudioOutputDevice(audio).catch(() => {});
   playMediaElement(audio);
 
   track.addEventListener(
     'ended',
     () => {
+      releaseRemoteAudioElement(audio);
       audio.remove();
       peer.audioElements.delete(track.id);
       if (peer.micReceiver === receiver) peer.micReceiver = null;
@@ -468,12 +482,14 @@ export function detachRemoteAudioTrack(peer: Participant, trackId: string): void
 
   audio.pause();
   audio.srcObject = null;
+  releaseRemoteAudioElement(audio);
   audio.remove();
   peer.audioElements.delete(trackId);
 }
 
 export function removeAudioElements(peer: Participant): void {
   for (const audio of peer.audioElements.values()) {
+    releaseRemoteAudioElement(audio);
     audio.remove();
   }
   peer.audioElements.clear();

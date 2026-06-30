@@ -81,6 +81,13 @@ export async function sendFriendRequest(login: string): Promise<{ status: SendRe
   return payload;
 }
 
+export async function sendFriendRequestByUserId(userId: string): Promise<{ status: SendRequestStatus; user: PublicUser }> {
+  const payload = await postJsonAuth<{ status: SendRequestStatus; user: PublicUser }>('/api/friends/requests', {
+    userId
+  });
+  return payload;
+}
+
 export async function acceptFriendRequest(requestId: string): Promise<PublicUser> {
   const payload = await postJsonAuth<{ user: PublicUser }>(
     `/api/friends/requests/${encodeURIComponent(requestId)}/accept`,

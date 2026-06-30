@@ -10,6 +10,7 @@ import {
   fetchRequests,
   removeFriend as apiRemoveFriend,
   sendFriendRequest,
+  sendFriendRequestByUserId,
   type Friend,
   type IncomingRequest,
   type OutgoingRequest,
@@ -159,8 +160,18 @@ function bumpLastMessage(peerId: string, message: DirectMessage): void {
 
 // --- Friend request actions --------------------------------------------
 
+export function getFriendRelationship(userId: string): 'friend' | 'none' {
+  return findFriend(userId) ? 'friend' : 'none';
+}
+
 export async function addFriendByLogin(login: string): Promise<{ status: SendRequestStatus; user: PublicUser }> {
   const result = await sendFriendRequest(login);
+  await Promise.all([refreshFriends().catch(() => {}), refreshRequests().catch(() => {})]);
+  return result;
+}
+
+export async function addFriendByUserId(userId: string): Promise<{ status: SendRequestStatus; user: PublicUser }> {
+  const result = await sendFriendRequestByUserId(userId);
   await Promise.all([refreshFriends().catch(() => {}), refreshRequests().catch(() => {})]);
   return result;
 }

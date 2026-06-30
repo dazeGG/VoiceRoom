@@ -1,13 +1,16 @@
 import {
   DEFAULT_GATE_THRESHOLD_DB,
   DEFAULT_NOISE_MODE,
+  DEFAULT_PARTICIPANT_VOLUME,
   DEFAULT_STREAM_VOLUME,
   GATE_THRESHOLD_DB_STORAGE_KEY,
   GATE_THRESHOLD_MAX_DB,
   GATE_THRESHOLD_MIN_DB,
+  MAX_PARTICIPANT_VOLUME,
   MAX_STREAM_VOLUME,
   NOISE_MODES,
   NOISE_MODE_STORAGE_KEY,
+  PARTICIPANT_AUDIO_PREFERENCES_STORAGE_KEY,
   PREVIOUS_GATE_MAX_AMPLITUDE,
   PREVIOUS_GATE_MIN_AMPLITUDE,
   PREVIOUS_GATE_THRESHOLD_STORAGE_KEY,
@@ -93,4 +96,64 @@ export function previousGatePercentToDb(value: number): number {
 export function getDbMeterPosition(db: number): number {
   const clampedDb = clampGateThresholdDb(db);
   return (clampedDb - GATE_THRESHOLD_MIN_DB) / (GATE_THRESHOLD_MAX_DB - GATE_THRESHOLD_MIN_DB);
+}
+
+export interface ParticipantAudioPreference {
+  muted: boolean;
+  volume: number;
+}
+
+const DEFAULT_PARTICIPANT_AUDIO_PREFERENCE: ParticipantAudioPreference = {
+  muted: false,
+  volume: DEFAULT_PARTICIPANT_VOLUME
+};
+
+function readParticipantAudioPreferences(): Record<string, Partial<ParticipantAudioPreference>> {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(PARTICIPANT_AUDIO_PREFERENCES_STORAGE_KEY) || '{}');
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeParticipantAudioPreferences(preferences: Record<string, Partial<ParticipantAudioPreference>>): void {
+  localStorage.setItem(PARTICIPANT_AUDIO_PREFERENCES_STORAGE_KEY, JSON.stringify(preferences));
+}
+
+export function getParticipantAudioPreferenceKey(accountUserId: string, peerId: string): string {
+  const accountKey = String(accountUserId || '').trim();
+  if (accountKey) return `account:${accountKey}`;
+  return `peer:${String(peerId || '').trim()}`;
+}
+
+export function getParticipantAudioPreference(key: string): ParticipantAudioPreference {
+  const stored = readParticipantAudioPreferences()[key] || {};
+  return {
+    muted: Object.hasOwn(stored, 'muted') ? Boolean(stored.muted) : DEFAULT_PARTICIPANT_AUDIO_PREFERENCE.muted,
+    volume: Object.hasOwn(stored, 'volume')
+      ? clampParticipantVolume(Number(stored.volume))
+      : DEFAULT_PARTICIPANT_AUDIO_PREFERENCE.volume
+  };
+}
+
+export function storeParticipantAudioPreference(
+  key: string,
+  patch: Partial<ParticipantAudioPreference>
+): ParticipantAudioPreference {
+  const preferences = readParticipantAudioPreferences();
+  const current = getParticipantAudioPreference(key);
+  const next = {
+    muted: Object.hasOwn(patch, 'muted') ? Boolean(patch.muted) : current.muted,
+    volume: Object.hasOwn(patch, 'volume') ? clampParticipantVolume(Number(patch.volume)) : current.volume
+  };
+  preferences[key] = next;
+  writeParticipantAudioPreferences(preferences);
+  return next;
+}
+
+export function clampParticipantVolume(volume: number): number {
+  return Number.isFinite(volume)
+    ? Math.min(MAX_PARTICIPANT_VOLUME, Math.max(0, volume))
+    : DEFAULT_PARTICIPANT_VOLUME;
 }
