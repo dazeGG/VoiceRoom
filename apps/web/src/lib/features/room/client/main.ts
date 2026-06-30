@@ -48,7 +48,6 @@ import {
   updateScreenVolumeFromSlider
 } from './ui/screen-view';
 import { cancelScreenSourcePicker, closeScreenSourceOnBackdrop, closeScreenSourceOnEscape } from './ui/screen-source-picker';
-import { refreshLocalNetworkIndicator } from './ui/status';
 import { bindParticipantContextMenu } from './ui/participant-context-menu';
 
 let mounted = false;
@@ -134,7 +133,6 @@ export function mountRoomClient(root: ParentNode = document, options: { roomId?:
   window.addEventListener('beforeunload', leaveRoom, { signal: listenerSignal });
   refreshOutputControls();
   refreshStageStripControls();
-  refreshLocalNetworkIndicator();
 
   function runRoomRoute(): void {
     showRoomRoute()

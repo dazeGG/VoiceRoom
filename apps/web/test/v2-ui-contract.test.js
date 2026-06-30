@@ -321,6 +321,27 @@ test('visual identity UI consumes backend keys and exposes only curated room pre
   assert.ok(tokens.indexOf('if (hasIconKey || hasColorKey)') < tokens.indexOf('item.emoji === value.emoji'));
 });
 
+test('connection status renders reactively from room state, not imperative DOM writes', () => {
+  const status = read('src/lib/features/room/client/ui/status.ts');
+  const topbar = read('src/lib/features/room/components/RoomTopbar.svelte');
+  const dock = read('src/lib/features/room/components/RoomDock.svelte');
+  const dom = read('src/lib/features/room/client/ui/dom.ts');
+
+  // status.ts is a pure derivation over reactive state — no DOM writes or refresh hooks.
+  assert.match(status, /export function getConnectionStatusView\(\): ConnectionStatusView/);
+  assert.doesNotMatch(status, /elements\.|setStatus|renderConnectionStatus|refreshLocalNetworkIndicator/);
+
+  // Pill (topbar) and signal bars (dock) both subscribe via $derived.
+  assert.match(topbar, /const connection = \$derived\(getConnectionStatusView\(\)\)/);
+  assert.match(topbar, /data-state=\{connection\.stateName\}/);
+  assert.match(topbar, /hidden=\{connection\.stateName === 'idle' \|\| state\.screen !== 'room'\}/);
+  assert.match(dock, /const connection = \$derived\(getConnectionStatusView\(\)\)/);
+  assert.match(dock, /data-state=\{connection\.stateName\}/);
+
+  // The vanilla element cache no longer carries these now-reactive nodes.
+  assert.doesNotMatch(dom, /statusPill|statusText|dockConnection/);
+});
+
 
 
 test('local participant updates do not remove the self tile when LiveKit mute events resync', () => {

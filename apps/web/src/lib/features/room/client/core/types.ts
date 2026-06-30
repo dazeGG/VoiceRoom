@@ -117,6 +117,8 @@ export interface RoomSessionState {
   roomIconKey: string;
   roomPresetKey: string;
   roomRoute: boolean;
+  /** Mirrors document.body.dataset.screen so Svelte components react to screen transitions. */
+  screen: string;
   savedName: string;
   sessionToken: string;
 }

@@ -3,9 +3,12 @@
   import { Ellipsis, Popover, PopoverDivider, PopoverMenuItem } from '$lib/shared/ui';
   import { getRoomPreset } from '$lib/visual/tokens';
   import { state } from '../client/core/state.svelte';
+  import { getConnectionStatusView } from '../client/ui/status';
   import { copyRoomCode, copyRoomLink } from '../client/room/room';
   import { roomUi, toggleChat } from '../room-ui.svelte';
   import { roomSettingsUi, openRoomSettings } from '../room-settings.svelte';
+
+  const connection = $derived(getConnectionStatusView());
 
   // Heading content is derived from the reactive room state — the vanilla client
   // populates state.room* on join/rename, and these update without imperative DOM writes.
@@ -123,8 +126,13 @@
     </button>
   </div>
 
-  <div class="status-pill" data-state="idle" id="statusPill" hidden>
+  <div
+    class="status-pill"
+    data-state={connection.stateName}
+    title={connection.title || undefined}
+    hidden={connection.stateName === 'idle' || state.screen !== 'room'}
+  >
     <span class="status-dot" aria-hidden="true"></span>
-    <span id="statusText">готово</span>
+    <span>{connection.label}</span>
   </div>
 </Topbar>

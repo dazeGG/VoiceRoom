@@ -15,8 +15,7 @@ import { getDisplayName, persistName, requestGuestNameForRoom, requireSavedName,
 import {
   resetConnectionStatus,
   setServerConnectionStatus,
-  setVoiceConnectionStatus,
-  refreshLocalNetworkIndicator
+  setVoiceConnectionStatus
 } from '../ui/status';
 import { refreshCallControls } from '../ui/controls';
 import { refreshScreenControls, stopLocalScreenStream } from '../services/screen-share-service';
@@ -65,19 +64,19 @@ function hideScreens(): void {
 
 export function showStartScreen(): void {
   document.body.dataset.screen = 'start';
+  state.screen = 'start';
   document.title = 'Voice Room';
   hideScreens();
   elements.brand.hidden = false;
   elements.topbarRoomHeading.hidden = true;
   elements.startScreen.hidden = false;
-  elements.statusPill.hidden = true;
   updateNameStatuses();
 }
 
 export async function showRoomRoute(): Promise<boolean> {
   document.body.dataset.screen = 'checking';
+  state.screen = 'checking';
   hideScreens();
-  elements.statusPill.hidden = true;
 
   const exists = await checkRoomExists(state.roomId);
   if (!exists) {
@@ -106,6 +105,7 @@ export function refreshRoomHeading(): void {
 
 function showRoomScreen(): void {
   document.body.dataset.screen = 'room';
+  state.screen = 'room';
   refreshRoomHeading();
   hideScreens();
   elements.brand.hidden = true;
@@ -123,24 +123,24 @@ function showRoomScreen(): void {
 export function showRoomEntryFailure(): void {
   leaveRoom();
   document.body.dataset.screen = 'entry-error';
+  state.screen = 'entry-error';
   document.title = 'Не удалось проверить вход · Voice Room';
   hideScreens();
   elements.brand.hidden = false;
   elements.topbarRoomHeading.hidden = true;
   elements.entryErrorScreen.hidden = false;
-  elements.statusPill.hidden = true;
 }
 
 export function showRoomNotFound(): void {
   leaveRoom();
   document.body.dataset.screen = 'not-found';
+  state.screen = 'not-found';
   document.title = 'Комната не найдена · Voice Room';
   elements.missingRoomCode.textContent = state.roomId || getMissingRoomLabel();
   hideScreens();
   elements.brand.hidden = false;
   elements.topbarRoomHeading.hidden = true;
   elements.notFoundScreen.hidden = false;
-  elements.statusPill.hidden = true;
 }
 
 function getMissingRoomLabel(): string {
@@ -234,7 +234,6 @@ export async function joinRoom(event?: Event): Promise<void> {
   state.localConnectionQuality = 'unknown';
   state.localPingMs = null;
   resetConnectionStatus();
-  refreshLocalNetworkIndicator();
   elements.muteButton.disabled = true;
   setServerConnectionStatus('connecting');
   setVoiceConnectionStatus('idle');
@@ -412,7 +411,6 @@ export function leaveRoom(): void {
   state.audioUnlockPending = false;
   state.localConnectionQuality = 'unknown';
   state.localPingMs = null;
-  refreshLocalNetworkIndicator();
   clearGateSwitchTimer();
   state.eventSource?.close();
   state.eventSource = null;

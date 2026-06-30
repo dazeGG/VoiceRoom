@@ -11,7 +11,7 @@ import type {
 import { MICROPHONE_AUDIO_BITRATE, SCREEN_AUDIO_BITRATE } from '../core/config';
 import { elements } from '../ui/dom';
 import { state } from '../core/state.svelte';
-import { refreshLocalNetworkIndicator, setVoiceConnectionStatus } from '../ui/status';
+import { setVoiceConnectionStatus } from '../ui/status';
 import { showToast } from '../ui/toast';
 import { postJson } from '../net/api';
 import { queueAudioUnlock, syncRemoteAudioPlayback } from './media-playback-service';
@@ -209,7 +209,6 @@ async function bindLiveKitRoomEvents(room: Room): Promise<void> {
     if (!participant) return;
     if (participant.isLocal) {
       state.localConnectionQuality = quality || 'unknown';
-      refreshLocalNetworkIndicator();
       return;
     }
     const peer = createLiveKitParticipant(participant);

@@ -61,6 +61,7 @@ export function createInitialRoomState(): AppState {
     roomIconKey: '',
     roomPresetKey: '',
     roomRoute: window.location.pathname.startsWith('/r/'),
+    screen: '',
     savedName: '',
     screenFullscreen: false,
     screenMuted: false,

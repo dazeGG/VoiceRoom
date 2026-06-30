@@ -9,6 +9,9 @@
     switchNoiseMode,
     switchOutputDevice
   } from '../client/ui/devices';
+  import { getConnectionStatusView } from '../client/ui/status';
+
+  const connection = $derived(getConnectionStatusView());
 </script>
 
 <div class="room-dock" aria-label="Управление голосом">
@@ -105,14 +108,14 @@
 
     <!-- Connection: signal bars + ping popover on hover -->
     <div class="dock-connection-wrap">
-      <div class="dock-connection" id="dockConnection" data-state="idle" role="status" aria-label="Состояние связи">
+      <div class="dock-connection" data-state={connection.stateName} role="status" aria-label={connection.label || 'Связь'}>
         <span class="dock-bar" aria-hidden="true"></span>
         <span class="dock-bar" aria-hidden="true"></span>
         <span class="dock-bar" aria-hidden="true"></span>
       </div>
       <span class="dock-connection-popover" role="tooltip">
         <span class="dock-connection-dot" aria-hidden="true"></span>
-        <span class="dock-connection-label" id="dockConnectionLabel"></span>
+        <span class="dock-connection-label">{connection.label || 'Связь'}</span>
       </span>
     </div>
 
