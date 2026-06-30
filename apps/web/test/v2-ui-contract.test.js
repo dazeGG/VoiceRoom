@@ -644,9 +644,10 @@ test('remote participant audio preferences persist volume and local mute separat
   );
   assert.match(playback, /const voiceAudioGains = new WeakMap<HTMLMediaElement, VoiceAudioGain>\(\)/);
   assert.match(playback, /export function releaseRemoteAudioElement\(mediaElement: HTMLMediaElement\)/);
-  assert.match(playback, /function applyVoiceMediaElementVolume[\s\S]*existing && maxVolume > 1[\s\S]*existing\.gain\.gain\.value = options\.muted \? 0 : volume/);
-  assert.match(playback, /function applyVoiceMediaElementVolume[\s\S]*if \(existing\) \{[\s\S]*releaseRemoteAudioElement\(mediaElement\)/);
+  assert.match(playback, /function applyVoiceMediaElementVolume[\s\S]*if \(existing\) \{[\s\S]*existing\.gain\.gain\.value = options\.muted \? 0 : volume[\s\S]*playMediaElement\(mediaElement\)/);
+  assert.doesNotMatch(functionBody(playback, 'applyVoiceMediaElementVolume'), /releaseRemoteAudioElement\(mediaElement\)/);
   assert.match(playback, /function applyVoiceMediaElementVolume[\s\S]*mediaElement\.volume = Math\.min\(1, volume\)/);
+  assert.match(playback, /function applyVoiceMediaElementVolume[\s\S]*gain\.gain\.value = options\.muted \? 0 : volume[\s\S]*playMediaElement\(mediaElement\)/);
 
   assert.match(participants, /applyRemoteParticipantAudioPreferences\(peer\)/);
   assert.match(participants, /const hadAccountUserId = participant\.accountUserId/);
@@ -695,8 +696,9 @@ test('participant context menu is remote-only and exposes relationship-aware loc
   assert.match(menu, /Добавить в друзья/);
   assert.match(menu, /Гость: доступны только локальные настройки звука/);
 
-  assert.match(menu, /min="0"/);
-  assert.match(menu, /max="200"/);
+  assert.match(menu, /min=\{0\}/);
+  assert.match(menu, /max=\{200\}/);
+  assert.match(menu, /const safePercent = Math\.min\(200, Math\.max\(0, Number\.isFinite\(percent\) \? percent : 100\)\)/);
   assert.match(menu, /storeParticipantAudioPreference\(preferenceKey, \{ volume: safePercent \/ 100 \}\)/);
   assert.match(menu, /muted: !getParticipantAudioPreference\(preferenceKey\)\.muted/);
   assert.match(menu, /applyRemoteParticipantAudioPreferences\(peer\)/);
@@ -726,8 +728,8 @@ test('participant context menu is remote-only and exposes relationship-aware loc
   assert.match(menu, /showToast\('Не удалось открыть личные сообщения', \{ variant: 'error' \}\)/);
 
   assert.match(css, /\.participant-context-menu/);
-  assert.match(css, /\.participant-context-menu \.participant-volume-control input[\s\S]*pointer-events:\s*auto/);
-  assert.match(css, /\.participant-volume-track\[data-boosted="true"\]/);
+  assert.match(css, /\.pcm-volume/);
+  assert.match(menu, /<VolumeSlider[\s\S]*bind:value=\{volumePercent\}/);
 });
 
 test('desktop shell layout stays in shared web styles, not electron overrides', () => {

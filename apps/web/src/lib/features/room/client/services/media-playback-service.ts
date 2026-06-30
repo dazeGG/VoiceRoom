@@ -77,20 +77,22 @@ function applyVoiceMediaElementVolume(
   const volume = Number.isFinite(options.volume) ? Math.min(maxVolume, Math.max(0, options.volume)) : 1;
   const existing = voiceAudioGains.get(mediaElement);
 
-  if (existing && maxVolume > 1) {
+  if (existing) {
+    // Once a media element is routed through createMediaElementSource(), browsers keep
+    // that element's playback on the Web Audio graph for its lifetime. Keep the graph
+    // alive and use gain=1 for normal volume instead of disconnecting it, because
+    // disconnecting here can silence the element after a user lowers volume from >100%.
     mediaElement.volume = 1;
     mediaElement.muted = options.muted;
     existing.gain.gain.value = options.muted ? 0 : volume;
+    playMediaElement(mediaElement);
     return true;
-  }
-
-  if (existing) {
-    releaseRemoteAudioElement(mediaElement);
   }
 
   if (volume <= 1) {
     mediaElement.volume = Math.min(1, volume);
     mediaElement.muted = options.muted;
+    playMediaElement(mediaElement);
     return true;
   }
 
@@ -114,11 +116,13 @@ function applyVoiceMediaElementVolume(
     mediaElement.volume = 1;
     mediaElement.muted = options.muted;
     gain.gain.value = options.muted ? 0 : volume;
+    playMediaElement(mediaElement);
     return true;
   } catch (error) {
     console.warn('Participant audio boost unavailable', error);
     mediaElement.volume = Math.min(1, volume);
     mediaElement.muted = options.muted;
+    playMediaElement(mediaElement);
     return false;
   }
 }
