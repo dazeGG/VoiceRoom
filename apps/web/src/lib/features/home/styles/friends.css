@@ -739,52 +739,9 @@ html.is-desktop .sidebar-download { display: none; }
 
 .lobby-roomview-stage { flex: 1; min-height: 0; position: relative; }
 
-.lobby-stage-grid {
-  position: absolute;
-  inset: 0 28px 108px;
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  grid-auto-rows: minmax(150px, 1fr);
-  gap: 16px;
-  overflow-y: auto;
+.lobby-preview-stage {
+  min-height: 100%;
 }
-.lobby-stage-tile {
-  position: relative;
-  border-radius: 18px;
-  background: linear-gradient(160deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02));
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  min-height: 150px;
-}
-.lobby-stage-avatar {
-  width: 94px;
-  height: 94px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 700;
-  font-size: 37px;
-  color: #f4efe4;
-}
-.lobby-stage-name {
-  position: absolute;
-  left: 14px;
-  bottom: 14px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: rgba(8, 7, 5, 0.66);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
-  border-radius: 10px;
-  padding: 7px 11px;
-}
-.lobby-stage-name span { font-family: var(--font-mono); font-size: 12.5px; color: #ece7d9; }
-.lobby-stage-name .muted { display: flex; color: #e8a094; }
 
 .lobby-stage-empty {
   position: absolute;
@@ -867,13 +824,6 @@ html.is-desktop .sidebar-download { display: none; }
   position: relative;
   display: flex;
   flex-direction: column;
-}
-
-.lobby-browse-stage .lobby-stage-grid {
-  flex: 1;
-  min-height: 0;
-  padding: 26px;
-  overflow-y: auto;
 }
 
 .lobby-browse-stage .lobby-roomview-join {

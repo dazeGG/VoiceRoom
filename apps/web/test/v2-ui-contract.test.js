@@ -571,6 +571,15 @@ test('hotfix lobby UX keeps dock in main area, preview chat, and add-friend subm
   assert.match(sidebar, /<SidebarDownload \/>/);
   assert.match(previewView, /RoomPreviewChat/);
   assert.match(browseView, /RoomPreviewChat/);
+  assert.match(previewView, /'\$lib\/features\/room\/styles\/room\.css'/);
+  assert.match(browseView, /'\$lib\/features\/room\/styles\/room\.css'/);
+  assert.match(previewView, /class="stage lobby-preview-stage"/);
+  assert.match(browseView, /class="stage lobby-preview-stage"/);
+  assert.match(previewView, /class="participant lobby-preview-participant"/);
+  assert.match(browseView, /class="participant lobby-preview-participant"/);
+  assert.doesNotMatch(previewView, /lobby-stage-tile|lobby-stage-avatar|lobby-stage-grid/);
+  assert.doesNotMatch(browseView, /lobby-stage-tile|lobby-stage-avatar|lobby-stage-grid/);
+  assert.doesNotMatch(friendsCss, /lobby-stage-tile|lobby-stage-avatar|lobby-stage-grid/);
   assert.doesNotMatch(previewView, /тихо сейчас/);
   assert.doesNotMatch(browseView, /тихо сейчас/);
   assert.match(previewChat, /fetchRoomChat\(roomId\)/);
@@ -643,6 +652,20 @@ test('remote participant audio preferences persist volume and local mute separat
   assert.match(participants, /const hadAccountUserId = participant\.accountUserId/);
   assert.match(participants, /participant\.accountUserId !== hadAccountUserId[\s\S]*applyRemoteParticipantAudioPreferences\(participant\)/);
   assert.match(participants, /releaseRemoteAudioElement\(audio\)/);
+});
+
+test('remote participant tiles do not show transient voice-connecting placeholder', () => {
+  const participants = read('src/lib/features/room/client/room/participants.ts');
+  const livekit = read('src/lib/features/room/client/services/livekit-service.ts');
+  const tile = read('src/lib/features/room/components/ParticipantTile.svelte');
+
+  assert.match(tile, /participant\.statusLabel/);
+  assert.doesNotMatch(`${participants}
+${livekit}`, /подключает голос/);
+  assert.match(participants, /statusLabel: ''/);
+  assert.match(participants, /export function detachLiveKitParticipant\(peer: Participant, voiceIssue = ''\)/);
+  assert.match(livekit, /peer\.voiceIssue = 'голос не подключен'/);
+  assert.match(livekit, /detachLiveKitParticipant\(peer, 'голос переподключается'\)/);
 });
 
 test('participant context menu is remote-only and exposes relationship-aware local audio controls', () => {

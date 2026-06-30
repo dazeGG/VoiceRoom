@@ -527,7 +527,7 @@ function handleLiveKitTrackUnsubscribed(
   if (isMicrophonePublication(publication)) {
     detachRemoteAudioTrack(peer, track.mediaStreamTrack.id);
     peer.micReceiver = null;
-    if (!state.outputMuted) peer.voiceIssue = 'подключает голос';
+    if (!state.outputMuted) peer.voiceIssue = '';
     updatePeerStatus(peer);
   }
 }
@@ -553,7 +553,7 @@ function handleLiveKitTrackUnpublished(publication: RemoteTrackPublication, part
 
   if (isMicrophonePublication(publication)) {
     peer.micReceiver = null;
-    peer.voiceIssue = 'подключает голос';
+    peer.voiceIssue = '';
     updatePeerStatus(peer);
   }
 }

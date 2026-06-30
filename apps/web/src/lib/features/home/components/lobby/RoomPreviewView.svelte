@@ -2,8 +2,8 @@
   import { onMount } from 'svelte';
   import type { AuthUser, OwnedRoom } from '$lib/api/auth';
   import { fetchRoomPeers, type RoomPeer } from '$lib/api/rooms';
-  import { getAvatarColor } from '$lib/visual/tokens';
-  import { initial } from '../../model/lobby-format';
+  import { getAvatarPresentation } from '$lib/features/room/client/ui/avatar-presentation';
+  import '$lib/features/room/styles/room.css';
   import RoomPreviewChat from './RoomPreviewChat.svelte';
   import RoomViewHeader from './RoomViewHeader.svelte';
 
@@ -46,6 +46,14 @@
   function peerName(peer: RoomPeer): string {
     return peer.name?.trim() || 'Гость';
   }
+
+  function peerAvatar(peer: RoomPeer): ReturnType<typeof getAvatarPresentation> {
+    return getAvatarPresentation({
+      avatarColorKey: peer.avatarColorKey,
+      isLocal: false,
+      name: peerName(peer)
+    });
+  }
 </script>
 
 <div class="lobby-roomview">
@@ -69,25 +77,41 @@
 
   <div class="lobby-roomview-content" data-preview-chat-open={previewChatOpen}>
     <div class="lobby-roomview-stage-pane">
-      {#if peers.length > 0}
-        <div class="lobby-stage-grid lobby-scroll">
-          {#each peers as peer (peer.id)}
-            <div class="lobby-stage-tile">
-              <div class="lobby-stage-avatar" style={`background:${getAvatarColor(peer.avatarColorKey).background}`}>
-                {initial(peerName(peer))}
+      <section class="stage lobby-preview-stage" aria-label="Участники комнаты">
+        <div class="stage-strip" aria-label="Плитки комнаты">
+          <div class="tile-grid" data-count={Math.min(peers.length, 8)} data-streams="0">
+            {#each peers as peer (peer.id)}
+              {@const avatar = peerAvatar(peer)}
+              <div
+                class="participant lobby-preview-participant"
+                data-peer-id={peer.id}
+                data-muted={String(peer.muted)}
+                data-screen="false"
+                data-speaking="false"
+                style:--level="0"
+                style:--participant-pastel={avatar.background}
+                style:--participant-avatar-fg={avatar.foreground}
+                style:--participant-avatar-shadow={avatar.shadow}
+              >
+                <div class="voice-ring" aria-hidden="true">
+                  <span class="avatar">{avatar.initials}</span>
+                </div>
+                <div class="participant-copy">
+                  <h2>
+                    <span class="participant-name">{peerName(peer)}</span>
+                    <span class="participant-muted-icon" aria-label="Микрофон выключен" title="Микрофон выключен">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="3" y1="3" x2="21" y2="21"></line><path d="M9 9v3a3 3 0 0 0 5.1 2.1"></path><path d="M15 11V5a3 3 0 0 0-5.9-.8"></path><path d="M6 11a6 6 0 0 0 9 5.2"></path><line x1="12" y1="19" x2="12" y2="22"></line></svg>
+                    </span>
+                  </h2>
+                  <p hidden></p>
+                </div>
               </div>
-              <div class="lobby-stage-name">
-                {#if peer.muted}
-                  <span class="muted" aria-label="микрофон выключен">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="3" x2="21" y2="21"></line><path d="M9 9v3a3 3 0 0 0 5.1 2.1"></path><path d="M15 11V5a3 3 0 0 0-5.9-.8"></path><path d="M6 11a6 6 0 0 0 9 5.2"></path><line x1="12" y1="19" x2="12" y2="22"></line></svg>
-                  </span>
-                {/if}
-                <span>{peerName(peer)}</span>
-              </div>
-            </div>
-          {/each}
+            {/each}
+          </div>
         </div>
-      {:else if !loading}
+      </section>
+
+      {#if peers.length === 0 && !loading}
         <div class="lobby-stage-empty">
           <p class="lobby-stage-empty-note">Пока никого нет</p>
         </div>
