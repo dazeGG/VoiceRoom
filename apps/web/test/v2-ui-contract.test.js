@@ -595,7 +595,12 @@ test('remote participant audio preferences persist volume and local mute separat
   assert.match(functionBody(playback, 'applyRemoteParticipantAudioPreferences'), /getParticipantAudioPreferenceKey\(peer\.accountUserId, peer\.id\)/);
   assert.match(functionBody(playback, 'applyRemoteParticipantAudioPreferences'), /isVoicePlaybackMuted\(\) \|\| preference\.muted \|\| preference\.volume <= 0/);
   assert.match(functionBody(playback, 'applyRemoteParticipantAudioPreferences'), /applyVoiceMediaElementVolume\(audio, \{ muted, volume: preference\.volume \}\)/);
-  assert.match(functionBody(playback, 'syncAudioOutputDevices'), /syncRemoteAudioPlayback\(\)/);
+  const outputSyncBody = functionBody(playback, 'syncAudioOutputDevices');
+  assert.match(outputSyncBody, /syncRemoteAudioPlayback\(\)/);
+  assert.ok(
+    outputSyncBody.indexOf('syncRemoteAudioPlayback()') < outputSyncBody.indexOf('applyAudioOutputDevice(mediaElement)'),
+    'remote voice gains must be downgraded before applying output sink ids'
+  );
   assert.match(playback, /const voiceAudioGains = new WeakMap<HTMLMediaElement, VoiceAudioGain>\(\)/);
   assert.match(playback, /export function releaseRemoteAudioElement\(mediaElement: HTMLMediaElement\)/);
   assert.match(playback, /function applyVoiceMediaElementVolume[\s\S]*existing && maxVolume > 1[\s\S]*existing\.gain\.gain\.value = options\.muted \? 0 : volume/);
@@ -649,6 +654,7 @@ test('participant context menu is remote-only and exposes relationship-aware loc
   assert.match(menu, /document\.addEventListener\('keydown', handleParticipantContextMenuKeydown/);
   assert.match(functionBody(menu, 'handleParticipantContextMenuKeydown'), /activeElement instanceof HTMLInputElement && activeElement\.type === 'range'/);
   assert.match(functionBody(menu, 'handleParticipantContextMenuKeydown'), /event\.key === 'ArrowDown' && !isRangeInput/);
+  assert.match(functionBody(menu, 'handleParticipantContextMenuKeydown'), /event\.key === 'ArrowUp' && !isRangeInput/);
   assert.match(menu, /signal\.addEventListener\('abort', \(\) => closeParticipantContextMenu\('', false\)/);
   assert.match(participants, /closeParticipantContextMenu\(peerId\)/);
   assert.match(room, /closeParticipantContextMenu\(\)/);
