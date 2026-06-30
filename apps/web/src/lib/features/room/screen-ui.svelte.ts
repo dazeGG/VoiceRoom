@@ -1,8 +1,6 @@
 import { getAvatarColor } from '$lib/visual/tokens';
-import { SCREEN_FPS_OPTIONS, SCREEN_QUALITY_OPTIONS } from './client/core/config';
 import { state } from './client/core/state.svelte';
-import { getInitials } from './client/core/utils';
-import { getScreenProfile, parseScreenProfileId } from './client/media/profiles';
+import { getScreenProfileLabels } from './client/media/profiles';
 import { getAllParticipants, getParticipantById } from './client/room/participants';
 import type { Participant } from './client/core/types';
 
@@ -76,10 +74,8 @@ export function getScreenMetaView(): ScreenMetaView | null {
   const participant = getActiveScreenPeer();
   if (!participant || !screenUi.showMeta) return null;
 
-  const profile = getScreenProfile(participant.isLocal ? state.localScreenProfileId : participant.screenProfileId);
-  const { qualityId, fpsId } = parseScreenProfileId(profile.id);
-  const qualityLabel = SCREEN_QUALITY_OPTIONS[qualityId]?.label || '';
-  const fpsLabel = SCREEN_FPS_OPTIONS[fpsId]?.label || '';
+  const profileId = participant.isLocal ? state.localScreenProfileId : participant.screenProfileId;
+  const { qualityLabel, fpsLabel } = getScreenProfileLabels(profileId);
   const viewers = getScreenViewers(participant.id);
 
   return {

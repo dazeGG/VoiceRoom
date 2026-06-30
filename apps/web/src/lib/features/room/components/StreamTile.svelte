@@ -1,8 +1,7 @@
 <script lang="ts">
   import { renderIcon } from '../client/ui/icons';
-  import { SCREEN_FPS_OPTIONS, SCREEN_QUALITY_OPTIONS } from '../client/core/config';
   import { state as roomState } from '../client/core/state.svelte';
-  import { getScreenProfile, parseScreenProfileId } from '../client/media/profiles';
+  import { getScreenProfileLabels } from '../client/media/profiles';
   import { playMediaElement } from '../client/services/media-playback-service';
   import { enterScreenView } from '../client/ui/screen-view';
   import type { Participant } from '../client/core/types';
@@ -36,11 +35,8 @@
   );
 
   function getProfileMeta(): string {
-    // Contract parity with the legacy helper: participant.isLocal ? state.localScreenProfileId : participant.screenProfileId
-    const profile = getScreenProfile(participant.isLocal ? roomState.localScreenProfileId : participant.screenProfileId);
-    const { qualityId, fpsId } = parseScreenProfileId(profile.id);
-    const qualityLabel = SCREEN_QUALITY_OPTIONS[qualityId]?.label || '';
-    const fpsLabel = SCREEN_FPS_OPTIONS[fpsId]?.label || '';
+    const profileId = participant.isLocal ? roomState.localScreenProfileId : participant.screenProfileId;
+    const { qualityLabel, fpsLabel } = getScreenProfileLabels(profileId);
     return [qualityLabel, fpsLabel].filter(Boolean).join(' · ');
   }
 

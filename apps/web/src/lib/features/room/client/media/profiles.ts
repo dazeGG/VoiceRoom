@@ -32,6 +32,15 @@ export function getScreenProfile(profileId: string): ScreenProfile {
   };
 }
 
+export function getScreenProfileLabels(profileId: string): { qualityLabel: string; fpsLabel: string } {
+  const profile = getScreenProfile(profileId);
+  const { qualityId, fpsId } = parseScreenProfileId(profile.id);
+  return {
+    qualityLabel: SCREEN_QUALITY_OPTIONS[qualityId]?.label || '',
+    fpsLabel: SCREEN_FPS_OPTIONS[fpsId]?.label || ''
+  };
+}
+
 export function parseScreenProfileId(profileId: string): { qualityId: string; fpsId: string } {
   const normalized = String(profileId || '').trim();
   if (Object.hasOwn(SCREEN_QUALITY_OPTIONS, normalized)) {
