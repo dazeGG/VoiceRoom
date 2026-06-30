@@ -11,7 +11,7 @@ import {
 import { STREAM_CUE_DEDUPE_MS } from '../core/config';
 import { clearPeerJoinCue, playStreamCue, playStreamViewerCue } from '../media/cues';
 import { attachMeter } from '../media/meters';
-import { isMicrophonePublication, syncLiveKitScreenSubscriptions } from '../services/livekit-service';
+import { syncLiveKitScreenSubscriptions } from '../services/livekit-service';
 import {
   closeScreenView,
   hideScreenStage,
@@ -41,7 +41,7 @@ function createParticipantModel(peerInfo: PeerInfo, isLocal: boolean): Participa
     meterData: null,
     muted: Boolean(peerInfo.muted),
     speaking: false,
-    statusLabel: isLocal ? '' : 'подключает голос',
+    statusLabel: '',
     level: 0,
     name,
     micReceiver: null,
@@ -251,7 +251,7 @@ export function removePeer(peerId: string): void {
 
 }
 
-export function detachLiveKitParticipant(peer: Participant, voiceIssue = 'подключает голос'): void {
+export function detachLiveKitParticipant(peer: Participant, voiceIssue = ''): void {
   peer.livekitParticipant = null;
   peer.voiceIssue = voiceIssue;
   peer.micReceiver = null;
@@ -455,11 +455,6 @@ export function updatePeerStatus(peer: Participant): void {
     return;
   }
 
-  if (!peer.isLocal && peer.livekitParticipant && !hasConnectedLiveKitVoice(peer)) {
-    setParticipantStatus(peer, 'подключает голос');
-    return;
-  }
-
   if (!peer.isLocal && peer.livekitParticipant) {
     setParticipantStatus(peer, '');
     return;
@@ -470,22 +465,7 @@ export function updatePeerStatus(peer: Participant): void {
     return;
   }
 
-  setParticipantStatus(peer, 'подключает голос');
-}
-
-function hasConnectedLiveKitVoice(peer: Participant): boolean {
-  if (!peer.livekitParticipant) return false;
-
-  const publication = getLiveKitMicrophonePublication(peer);
-  if (!publication) return false;
-  return Boolean(publication.isMuted || publication.isSubscribed || publication.track || peer.audioElements.size > 0);
-}
-
-function getLiveKitMicrophonePublication(peer: Participant) {
-  const publications = peer.livekitParticipant?.trackPublications;
-  if (!publications) return null;
-
-  return [...publications.values()].find(isMicrophonePublication) || null;
+  setParticipantStatus(peer, '');
 }
 
 function setParticipantStatus(peer: Participant, label: string): void {
