@@ -130,6 +130,8 @@ export async function syncAudioOutputDevices(): Promise<boolean> {
     return false;
   }
 
+  syncRemoteAudioPlayback();
+
   const mediaElements: HTMLMediaElement[] = [elements.screenVideo];
   for (const peer of state.peers.values()) {
     mediaElements.push(...peer.audioElements.values());

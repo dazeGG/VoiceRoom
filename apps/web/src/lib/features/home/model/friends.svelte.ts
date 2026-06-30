@@ -77,7 +77,7 @@ export async function refreshRequests(): Promise<void> {
 // teardown function for onMount cleanup.
 export function initLobby(currentUserId: string): () => void {
   selfId = currentUserId;
-  void refreshFriends().catch(() => {
+  void Promise.all([refreshFriends(), refreshRequests()]).catch(() => {
     friendsState.loaded = true;
   });
   realtime = connectRealtime(handleRealtimeEvent);

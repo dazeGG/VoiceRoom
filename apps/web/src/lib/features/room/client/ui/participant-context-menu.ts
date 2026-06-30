@@ -348,17 +348,19 @@ function closeParticipantContextMenuOnFocusOutside(event: FocusEvent): void {
 
 function handleParticipantContextMenuKeydown(event: KeyboardEvent): void {
   if (!menu) return;
+  const activeElement = document.activeElement;
+  const isRangeInput = activeElement instanceof HTMLInputElement && activeElement.type === 'range';
   if (event.key === 'Escape') {
     event.preventDefault();
     closeParticipantContextMenu();
     return;
   }
-  if (event.key === 'ArrowDown') {
+  if (event.key === 'ArrowDown' && !isRangeInput) {
     event.preventDefault();
     moveMenuFocus(1);
     return;
   }
-  if (event.key === 'ArrowUp') {
+  if (event.key === 'ArrowUp' && !isRangeInput) {
     event.preventDefault();
     moveMenuFocus(-1);
   }

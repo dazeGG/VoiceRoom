@@ -595,6 +595,7 @@ test('remote participant audio preferences persist volume and local mute separat
   assert.match(functionBody(playback, 'applyRemoteParticipantAudioPreferences'), /getParticipantAudioPreferenceKey\(peer\.accountUserId, peer\.id\)/);
   assert.match(functionBody(playback, 'applyRemoteParticipantAudioPreferences'), /isVoicePlaybackMuted\(\) \|\| preference\.muted \|\| preference\.volume <= 0/);
   assert.match(functionBody(playback, 'applyRemoteParticipantAudioPreferences'), /applyVoiceMediaElementVolume\(audio, \{ muted, volume: preference\.volume \}\)/);
+  assert.match(functionBody(playback, 'syncAudioOutputDevices'), /syncRemoteAudioPlayback\(\)/);
   assert.match(playback, /const voiceAudioGains = new WeakMap<HTMLMediaElement, VoiceAudioGain>\(\)/);
   assert.match(playback, /export function releaseRemoteAudioElement\(mediaElement: HTMLMediaElement\)/);
   assert.match(playback, /function applyVoiceMediaElementVolume[\s\S]*existing && maxVolume > 1[\s\S]*existing\.gain\.gain\.value = options\.muted \? 0 : volume/);
@@ -646,12 +647,18 @@ test('participant context menu is remote-only and exposes relationship-aware loc
   assert.match(menu, /document\.addEventListener\('pointerdown', closeParticipantContextMenuOnOutside, \{ capture: true, signal \}\)/);
   assert.match(menu, /document\.addEventListener\('focusin', closeParticipantContextMenuOnFocusOutside/);
   assert.match(menu, /document\.addEventListener\('keydown', handleParticipantContextMenuKeydown/);
+  assert.match(functionBody(menu, 'handleParticipantContextMenuKeydown'), /activeElement instanceof HTMLInputElement && activeElement\.type === 'range'/);
+  assert.match(functionBody(menu, 'handleParticipantContextMenuKeydown'), /event\.key === 'ArrowDown' && !isRangeInput/);
   assert.match(menu, /signal\.addEventListener\('abort', \(\) => closeParticipantContextMenu\('', false\)/);
   assert.match(participants, /closeParticipantContextMenu\(peerId\)/);
   assert.match(room, /closeParticipantContextMenu\(\)/);
   assert.match(menu, /closeParticipantContextMenu\(peer\.id\)/);
   assert.match(menu, /addFriendByUserId\(peer\.accountUserId\)/);
   assert.match(menu, /acceptRequestByUserId\(peer\.accountUserId\)/);
+  const friends = read('src/lib/features/home/model/friends.svelte.ts');
+  assert.match(functionBody(friends, 'initLobby'), /Promise\.all\(\[refreshFriends\(\), refreshRequests\(\)\]\)/);
+  assert.match(functionBody(friends, 'getFriendRelationship'), /requests\.incoming\.some/);
+  assert.match(functionBody(friends, 'getFriendRelationship'), /requests\.outgoing\.some/);
   assert.match(menu, /setMode\('friends'\)/);
   assert.match(menu, /await openDm\(peer\.accountUserId\)/);
   assert.match(menu, /showToast\('Не удалось отправить заявку в друзья', \{ variant: 'error' \}\)/);
