@@ -45,6 +45,7 @@
   aria-modal="true"
   aria-labelledby="guestNameTitle"
   hidden={!guestNameUi.open}
+  tabindex="-1"
   onclick={(event) => handleGuestNameDialogClick(event, guestNameInput ?? null)}
   onkeydown={(event) => guestNameDialog && handleGuestNameDialogKeydown(event, guestNameDialog, guestNameInput ?? null)}
 >

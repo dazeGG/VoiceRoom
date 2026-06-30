@@ -266,11 +266,8 @@ function setViewedScreenPeerId(peerId: string): void {
 }
 
 export function refreshScreenTiles(): void {
-  const screenParticipants = getScreenParticipants()
-    .filter((participant) => participant.id !== state.viewedScreenPeerId);
   refreshStageStripControls();
   bumpScreenUiRevision();
-
 }
 
 export function hasStreamTilePreview(participant: Participant): boolean {

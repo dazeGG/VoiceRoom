@@ -233,6 +233,7 @@ test('shared Select primitive wraps Popover listbox slots for site-wide dropdown
   assert.match(sidebarDownload, /import \{[^}]*\bPopoverMenuItem\b[^}]*\} from '\$lib\/shared\/ui'/);
   assert.match(settingsModal, /import \{[^}]*\bSelect\b[^}]*\} from '\$lib\/shared\/ui'/);
   assert.match(roomDock, /import \{[^}]*\bSelect\b[^}]*\} from '\$lib\/shared\/ui'/);
+  assert.match(roomDock, /import \{[^}]*\bPopover\b[^}]*\} from '\$lib\/shared\/ui'/);
   assert.doesNotMatch(sidebarDownload, /<select\b/);
   assert.doesNotMatch(settingsModal, /<select\b/);
   assert.doesNotMatch(roomDock, /<select\b/);
@@ -303,7 +304,7 @@ test('visual identity UI consumes backend keys and exposes only curated room pre
   assert.match(createDialog, /ROOM_PRESETS/);
   assert.match(createDialog, /roomPresetKey/);
   assert.doesNotMatch(createDialog, /type="file"|upload|custom|contenteditable/i);
-  assert.match(participantTile, /getAvatarColor\(participant\.avatarColorKey\)/);
+  assert.match(participantTile, /getAvatarPresentation\(participant\)/);
   assert.doesNotMatch(participantTile, /hashStringToHue\(seed\)/);
   assert.match(chat, /getAvatarColor\(message\.avatarColorKey\)/);
   assert.doesNotMatch(chat, /hashStringToHue/);
@@ -385,12 +386,10 @@ test('screen stream thumbnails show profile metadata instead of an action button
   assert.match(participantTile, /enterScreenView\(participant\.id\)/);
   assert.match(participantsCss, /\.participant\[data-screen="true"\] \.participant-screen-action\s*\{\s*display: none;/s);
   assert.match(streamTile, /stream-tile-profile-meta/);
-  assert.match(streamTile, /parseScreenProfileId/);
-  assert.match(streamTile, /SCREEN_QUALITY_OPTIONS/);
-  assert.match(streamTile, /SCREEN_FPS_OPTIONS/);
+  assert.match(streamTile, /getScreenProfileLabels/);
   assert.doesNotMatch(streamTile, /stream-tile-action-disconnect/);
   assert.doesNotMatch(streamTile, /Отключиться/);
-  assert.match(streamTile, /participant\.isLocal \? state\.localScreenProfileId : participant\.screenProfileId/);
+  assert.match(streamTile, /participant\.isLocal \? roomState\.localScreenProfileId : participant\.screenProfileId/);
   assert.match(streamTilesCss, /\.stream-tile-profile-meta/);
   assert.doesNotMatch(streamTilesCss, /stream-tile-action-disconnect/);
 });
@@ -404,8 +403,7 @@ test('screen stage viewer badge renders viewer avatars instead of names', () => 
   assert.match(stage, /getViewerAvatarStyle/);
   assert.match(stage, /getViewerInitials/);
   assert.match(screenUi, /getViewerAvatarStyle/);
-  assert.match(screenUi, /getAvatarColor\(viewer\.avatarColorKey\)/);
-  assert.match(screenUi, /getInitials\(viewer\.name\)/);
+  assert.match(screenUi, /getAvatarPresentation\(viewer\)/);
   assert.doesNotMatch(screenUi, /screen-meta-viewers-label/);
   assert.doesNotMatch(screenUi, /formatScreenViewersLine/);
   assert.doesNotMatch(screenUi, /names\.join/);
