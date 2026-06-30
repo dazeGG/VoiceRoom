@@ -12,8 +12,6 @@ export const screenUi = $state({
   showPlaceholder: true,
   showMeta: false,
   uiActive: false,
-  streamTilesVisible: false,
-  streamTilesCount: 0,
   activeStream: null as MediaStream | null,
   hideLeaveButton: false,
   showScreenExit: false
@@ -87,7 +85,7 @@ export function getScreenMetaView(): ScreenMetaView | null {
     showSepProfile: Boolean(qualityLabel),
     showSepFps: Boolean(qualityLabel && fpsLabel),
     showViewers: true,
-    showSepViewers: Boolean((qualityLabel || fpsLabel) && viewers.length >= 0),
+    showSepViewers: Boolean(qualityLabel || fpsLabel),
     viewers: viewers.slice(0, 3),
     viewersRest: Math.max(0, viewers.length - 3)
   };
