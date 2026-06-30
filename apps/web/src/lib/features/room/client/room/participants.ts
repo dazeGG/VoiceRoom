@@ -1,4 +1,5 @@
 import { closeParticipantContextMenu } from '../../participant-context-ui.svelte';
+import { bumpParticipantsRevision, participantsUi } from '../../participants-ui.svelte';
 import { state } from '../core/state.svelte';
 import { getScreenProfile } from '../media/profiles';
 import {
@@ -197,6 +198,7 @@ export function updateParticipant(peerInfo: PeerInfo): void {
     refreshScreenStage();
   }
 
+  refreshParticipantState();
 }
 
 function shouldRefreshScreenTiles(
@@ -330,7 +332,7 @@ export function attachRemoteScreenStream(peer: Participant, stream: MediaStream)
   refreshScreenStage();
   refreshScreenTiles();
   updatePeerStatus(peer);
-
+  refreshParticipantState();
 }
 
 function mergeRemoteScreenStream(peer: Participant, stream: MediaStream): MediaStream {
@@ -350,7 +352,7 @@ export function detachRemoteScreen(peer: Participant): void {
   refreshScreenStage();
   updatePeerStatus(peer);
   refreshAllScreenActions();
-
+  refreshParticipantState();
 }
 
 export function ensureRemoteAudioElement(
@@ -439,7 +441,7 @@ export function setParticipantSpeaking(participant: Participant | null, speaking
   const nextSpeaking = Boolean(speaking);
   if (participant.speaking === nextSpeaking) return;
   participant.speaking = nextSpeaking;
-
+  refreshParticipantState();
 }
 
 export function updatePeerStatus(peer: Participant): void {
@@ -489,15 +491,15 @@ function getLiveKitMicrophonePublication(peer: Participant) {
 function setParticipantStatus(peer: Participant, label: string): void {
   if (peer.statusLabel === label) return;
   peer.statusLabel = label;
-
+  refreshParticipantState();
 }
 
 export function refreshParticipantState(): void {
-
+  bumpParticipantsRevision();
 }
 
 export function refreshStageGridState(): void {
-
+  bumpParticipantsRevision();
 }
 
 export function getParticipantById(peerId: string): Participant | null {
@@ -507,6 +509,7 @@ export function getParticipantById(peerId: string): Participant | null {
 }
 
 export function getAllParticipants(): Participant[] {
+  void participantsUi.revision;
   return [
     ...(state.self ? [state.self] : []),
     ...state.peers.values()

@@ -363,6 +363,8 @@ test('participant tiles stay visually uniform and highlight only active speakers
   assert.match(css, /\.participant\[data-speaking="true"\] \.voice-ring/);
   assert.doesNotMatch(css, /\.participant\[data-local="true"\]\s*\{\s*border-color/s);
   assert.match(participants, /participant\.speaking = nextSpeaking/);
+  assert.match(participants, /refreshParticipantState\(\)/);
+  assert.match(participants, /bumpParticipantsRevision\(\)/);
   assert.match(participantTile, /data-speaking=\{String\(participant\.speaking\)\}/);
   assert.match(meters, /setParticipantSpeaking\(participant, isLocalMicrophoneSpeaking/);
   assert.match(livekit, /RoomEvent\.ActiveSpeakersChanged/);
