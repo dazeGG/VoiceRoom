@@ -54,6 +54,11 @@ interface VoiceAudioGain {
 }
 
 const voiceAudioGains = new WeakMap<HTMLMediaElement, VoiceAudioGain>();
+let activeVoiceAudioGainCount = 0;
+
+function hasActiveVoiceAudioGains(): boolean {
+  return activeVoiceAudioGainCount > 0;
+}
 
 export function releaseRemoteAudioElement(mediaElement: HTMLMediaElement): void {
   const existing = voiceAudioGains.get(mediaElement);
@@ -61,6 +66,7 @@ export function releaseRemoteAudioElement(mediaElement: HTMLMediaElement): void 
   existing.source.disconnect();
   existing.gain.disconnect();
   voiceAudioGains.delete(mediaElement);
+  activeVoiceAudioGainCount = Math.max(0, activeVoiceAudioGainCount - 1);
 }
 
 function getAvailableVoiceMediaElementVolumeMax(): number {
@@ -113,6 +119,7 @@ function applyVoiceMediaElementVolume(
     source.connect(gain);
     gain.connect(context.destination);
     voiceAudioGains.set(mediaElement, { source, gain });
+    activeVoiceAudioGainCount += 1;
     mediaElement.volume = 1;
     mediaElement.muted = options.muted;
     gain.gain.value = options.muted ? 0 : volume;
@@ -131,6 +138,10 @@ export async function syncAudioOutputDevices(): Promise<boolean> {
   if (!supportsAudioOutputSelection()) return false;
   if (state.outputDeviceId && screenAudioGainElement && !supportsAudioContextOutputSelection()) {
     console.warn('Audio output device unavailable while stream boost is active');
+    return false;
+  }
+  if (state.outputDeviceId && hasActiveVoiceAudioGains() && !supportsAudioContextOutputSelection()) {
+    console.warn('Audio output device unavailable while participant voice boost is active');
     return false;
   }
 

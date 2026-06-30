@@ -640,14 +640,26 @@ test('remote participant audio preferences persist volume and local mute separat
   assert.match(outputSyncBody, /syncRemoteAudioPlayback\(\)/);
   assert.ok(
     outputSyncBody.indexOf('syncRemoteAudioPlayback()') < outputSyncBody.indexOf('applyAudioOutputDevice(mediaElement)'),
-    'remote voice gains must be downgraded before applying output sink ids'
+    'remote voice preferences must be applied before output sink ids'
+  );
+  assert.match(
+    outputSyncBody,
+    /state\.outputDeviceId && hasActiveVoiceAudioGains\(\) && !supportsAudioContextOutputSelection\(\)[\s\S]*return false/,
+    'active voice gain graphs must fail output-device switching when the AudioContext destination cannot switch sinks'
+  );
+  assert.ok(
+    outputSyncBody.indexOf('hasActiveVoiceAudioGains()') < outputSyncBody.indexOf('syncRemoteAudioPlayback()'),
+    'stale voice gain graphs must block output switching before reporting media-element sink success'
   );
   assert.match(playback, /const voiceAudioGains = new WeakMap<HTMLMediaElement, VoiceAudioGain>\(\)/);
+  assert.match(playback, /let activeVoiceAudioGainCount = 0/);
+  assert.match(functionBody(playback, 'hasActiveVoiceAudioGains'), /return activeVoiceAudioGainCount > 0/);
   assert.match(playback, /export function releaseRemoteAudioElement\(mediaElement: HTMLMediaElement\)/);
+  assert.match(functionBody(playback, 'releaseRemoteAudioElement'), /activeVoiceAudioGainCount = Math\.max\(0, activeVoiceAudioGainCount - 1\)/);
   assert.match(playback, /function applyVoiceMediaElementVolume[\s\S]*if \(existing\) \{[\s\S]*existing\.gain\.gain\.value = options\.muted \? 0 : volume[\s\S]*playMediaElement\(mediaElement\)/);
   assert.doesNotMatch(functionBody(playback, 'applyVoiceMediaElementVolume'), /releaseRemoteAudioElement\(mediaElement\)/);
   assert.match(playback, /function applyVoiceMediaElementVolume[\s\S]*mediaElement\.volume = Math\.min\(1, volume\)/);
-  assert.match(playback, /function applyVoiceMediaElementVolume[\s\S]*gain\.gain\.value = options\.muted \? 0 : volume[\s\S]*playMediaElement\(mediaElement\)/);
+  assert.match(playback, /function applyVoiceMediaElementVolume[\s\S]*activeVoiceAudioGainCount \+= 1[\s\S]*gain\.gain\.value = options\.muted \? 0 : volume[\s\S]*playMediaElement\(mediaElement\)/);
 
   assert.match(participants, /applyRemoteParticipantAudioPreferences\(peer\)/);
   assert.match(participants, /const hadAccountUserId = participant\.accountUserId/);
