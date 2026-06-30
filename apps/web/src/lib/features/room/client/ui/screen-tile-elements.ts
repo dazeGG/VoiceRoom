@@ -1,6 +1,6 @@
 import { renderIcon } from './icons';
 import { SCREEN_FPS_OPTIONS, SCREEN_QUALITY_OPTIONS } from '../core/config';
-import { state } from '../core/state';
+import { state } from '../core/state.svelte';
 import { getScreenProfile, parseScreenProfileId } from '../media/profiles';
 import { playMediaElement } from '../services/media-playback-service';
 import type { Participant } from '../core/types';

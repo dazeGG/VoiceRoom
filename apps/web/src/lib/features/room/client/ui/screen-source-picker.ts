@@ -1,4 +1,4 @@
-import { state } from '../core/state';
+import { state } from '../core/state.svelte';
 import type { DesktopCaptureSource } from '../core/types';
 import { createAbortError } from '../core/utils';
 import { elements } from './dom';

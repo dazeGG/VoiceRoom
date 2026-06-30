@@ -3,7 +3,7 @@ import { roomDeviceUi } from '$lib/features/room/room-device-ui.svelte';
 import { registerActiveVoiceLeave } from '$lib/features/room/voice-session.svelte';
 import { elements, setElementsRoot } from './ui/dom';
 import { mountIcons } from './ui/icons';
-import { state } from './core/state';
+import { state } from './core/state.svelte';
 import { getStoredPeerSession } from './core/session';
 import { cleanDisplayName } from './core/utils';
 import { showToast } from './ui/toast';

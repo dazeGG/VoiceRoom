@@ -1,5 +1,5 @@
 import { GATE_THRESHOLD_MIN_DB, LOCAL_GATE_DISABLED_SPEAKING_DB } from '../core/config';
-import { state } from '../core/state';
+import { state } from '../core/state.svelte';
 import { amplitudeToDb } from '../core/settings';
 import { getSharedAudioContext } from '../services/media-playback-service';
 import { isGateDisabled } from '../services/microphone-service';

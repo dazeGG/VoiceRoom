@@ -1,6 +1,6 @@
 import { roomDeviceUi } from '$lib/features/room/room-device-ui.svelte';
 import { elements } from './dom';
-import { state } from '../core/state';
+import { state } from '../core/state.svelte';
 import { postState } from '../room/presence';
 import {
   supportsAudioOutputSelection,

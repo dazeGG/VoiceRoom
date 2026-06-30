@@ -1,6 +1,6 @@
 import { PEER_LATENCY_FAIR_MS, PEER_LATENCY_GOOD_MS } from '../core/config';
 import { elements } from './dom';
-import { state } from '../core/state';
+import { state } from '../core/state.svelte';
 
 interface ConnectionStatusView {
   stateName: string;

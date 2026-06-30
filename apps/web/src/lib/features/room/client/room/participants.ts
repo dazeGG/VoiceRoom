@@ -1,5 +1,5 @@
 import { elements } from '../ui/dom';
-import { state } from '../core/state';
+import { state } from '../core/state.svelte';
 import { getScreenProfile } from '../media/profiles';
 import { getAvatarColor } from '$lib/visual/tokens';
 import { getInitials } from '../core/utils';

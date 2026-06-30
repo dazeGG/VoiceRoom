@@ -15,7 +15,7 @@ import {
   type NoiseMode
 } from '../core/config';
 import { roomDeviceUi } from '$lib/features/room/room-device-ui.svelte';
-import { state } from '../core/state';
+import { state } from '../core/state.svelte';
 import { dbToAmplitude, getNoiseMode } from '../core/settings';
 import { showToast } from '../ui/toast';
 import { disconnectAudioNode, stopStream } from '../core/utils';

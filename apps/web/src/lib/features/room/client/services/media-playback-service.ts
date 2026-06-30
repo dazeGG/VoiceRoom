@@ -1,6 +1,6 @@
 
 import { elements } from '../ui/dom';
-import { state } from '../core/state';
+import { state } from '../core/state.svelte';
 import { MAX_PARTICIPANT_VOLUME, MAX_STREAM_VOLUME } from '../core/config';
 import { getMicrophoneProcessors } from './microphone-service';
 import { getParticipantAudioPreference, getParticipantAudioPreferenceKey } from '../core/settings';

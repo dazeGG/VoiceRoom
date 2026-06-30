@@ -1,5 +1,5 @@
 import { elements } from './dom';
-import { state } from '../core/state';
+import { state } from '../core/state.svelte';
 import { showToast } from './toast';
 import { cleanDisplayName } from '../core/utils';
 

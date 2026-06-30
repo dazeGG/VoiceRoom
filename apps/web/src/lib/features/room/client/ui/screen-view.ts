@@ -1,7 +1,7 @@
 import { elements } from './dom';
 import { mountIcons } from './icons';
 import { showToast } from './toast';
-import { state } from '../core/state';
+import { state } from '../core/state.svelte';
 import { postState } from '../room/presence';
 import { syncLiveKitScreenSubscriptions } from '../services/livekit-service';
 import {

@@ -10,7 +10,7 @@ import type {
 } from 'livekit-client';
 import { MICROPHONE_AUDIO_BITRATE, SCREEN_AUDIO_BITRATE } from '../core/config';
 import { elements } from '../ui/dom';
-import { state } from '../core/state';
+import { state } from '../core/state.svelte';
 import { refreshLocalNetworkIndicator, setVoiceConnectionStatus } from '../ui/status';
 import { showToast } from '../ui/toast';
 import { postJson } from '../net/api';

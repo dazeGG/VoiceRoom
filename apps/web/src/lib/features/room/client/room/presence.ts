@@ -1,5 +1,5 @@
 import { postJson } from '../net/api';
-import { state } from '../core/state';
+import { state } from '../core/state.svelte';
 import { getDisplayName } from '../ui/names';
 import { hasScreenAudio } from '../services/screen-share-service';
 

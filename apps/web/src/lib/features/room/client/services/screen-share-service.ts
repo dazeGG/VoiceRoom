@@ -7,7 +7,7 @@ import {
   SCREEN_STATS_INTERVAL_MS
 } from '../core/config';
 import { elements } from '../ui/dom';
-import { state } from '../core/state';
+import { state } from '../core/state.svelte';
 import { showToast } from '../ui/toast';
 import { errorMessage, isCaptureCancelled, isSafariBrowser, stopStream } from '../core/utils';
 import {

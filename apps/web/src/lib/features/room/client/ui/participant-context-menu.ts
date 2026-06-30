@@ -6,7 +6,7 @@ import {
   openDm,
   setMode
 } from '$lib/features/home/model/friends.svelte';
-import { state } from '../core/state';
+import { state } from '../core/state.svelte';
 import {
   getParticipantAudioPreference,
   getParticipantAudioPreferenceKey,

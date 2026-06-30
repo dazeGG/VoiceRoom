@@ -1,5 +1,5 @@
 import { PEER_LATENCY_INTERVAL_MS, SPEAKING_STATS_INTERVAL_MS } from '../core/config';
-import { state } from '../core/state';
+import { state } from '../core/state.svelte';
 import { refreshLocalNetworkIndicator } from '../ui/status';
 import { findFirstLocalPublication, findLocalMicrophonePublication } from '../services/livekit-service';
 import { setParticipantSpeaking } from './participants';

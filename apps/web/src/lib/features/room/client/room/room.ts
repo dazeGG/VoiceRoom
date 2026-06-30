@@ -4,7 +4,7 @@ import { roomNameFor } from '$lib/features/auth/account';
 import { roomSettingsUi } from '../../room-settings.svelte';
 import { clearConnectedVoiceRoom, setConnectedVoiceRoom } from '../../voice-session.svelte';
 import { elements } from '../ui/dom';
-import { state } from '../core/state';
+import { state } from '../core/state.svelte';
 import { showToast } from '../ui/toast';
 import { checkRoomExists, postJson } from '../net/api';
 import { postState } from './presence';

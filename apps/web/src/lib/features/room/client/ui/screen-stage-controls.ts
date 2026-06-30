@@ -1,6 +1,6 @@
 import { elements } from './dom';
 import { getAvatarColor } from '$lib/visual/tokens';
-import { state } from '../core/state';
+import { state } from '../core/state.svelte';
 import { showToast } from './toast';
 import { getInitials } from '../core/utils';
 import { getScreenProfile, parseScreenProfileId } from '../media/profiles';

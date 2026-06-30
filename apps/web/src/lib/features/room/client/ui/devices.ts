@@ -11,7 +11,7 @@ import {
 import type { SelectOption } from '$lib/shared/ui';
 import { roomDeviceUi } from '$lib/features/room/room-device-ui.svelte';
 import { elements } from './dom';
-import { state } from '../core/state';
+import { state } from '../core/state.svelte';
 import { clampGateThresholdDb, getDbMeterPosition, getNoiseModeLabel } from '../core/settings';
 import { showToast } from './toast';
 import {
