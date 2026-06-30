@@ -1,6 +1,6 @@
 {
   "name": "@voice-room/api",
-  "version": "2.1.5",
+  "version": "2.1.6",
   "private": true,
   "type": "commonjs",
   "scripts": {
