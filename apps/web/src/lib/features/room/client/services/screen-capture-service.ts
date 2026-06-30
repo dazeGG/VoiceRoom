@@ -1,5 +1,5 @@
 import { DESKTOP_AUDIO_SOURCE_WORKLET_URL, DEFAULT_SCREEN_PROFILE_ID } from '../core/config';
-import { state } from '../core/state';
+import { state } from '../core/state.svelte';
 import { showToast } from '../ui/toast';
 import { createScreenProfileId, getScreenProfile } from '../media/profiles';
 import { createAbortError, disconnectAudioNode, isCaptureCancelled } from '../core/utils';

@@ -2,6 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const crypto = require('node:crypto');
 
 const { createFriendStore, orderedPair } = require('../src/lib/friend-store');
 const { createUserStore } = require('../src/lib/user-store');
@@ -67,6 +68,21 @@ test('sendRequest is idempotent and rejects self/missing targets', async (t) => 
 
   await friends.sendRequest({ requesterId: alice.id, addresseeLogin: 'bob' });
   assert.equal((await friends.sendRequest({ requesterId: alice.id, addresseeLogin: 'bob' })).status, 'already_sent');
+});
+
+
+test('sendRequest can target a user id without requiring public login exposure', async (t) => {
+  const { users, friends } = await createStores(t);
+  const alice = await makeUser(users, 'alice');
+  const bob = await makeUser(users, 'bob');
+
+  const sent = await friends.sendRequest({ requesterId: alice.id, addresseeUserId: bob.id });
+  assert.equal(sent.status, 'sent');
+  assert.equal(sent.user.id, bob.id);
+  assert.equal(sent.user.login, 'bob');
+
+  assert.equal((await friends.sendRequest({ requesterId: alice.id, addresseeUserId: alice.id })).status, 'self');
+  assert.equal((await friends.sendRequest({ requesterId: alice.id, addresseeUserId: crypto.randomUUID() })).status, 'not_found');
 });
 
 test('concurrent duplicate sendRequest does not throw and stays idempotent', async (t) => {

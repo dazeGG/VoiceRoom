@@ -18,6 +18,8 @@
   let peers = $state<RoomPeer[]>([]);
   let loading = $state(true);
 
+  let previewChatOpen = $state(true);
+
   async function refresh(): Promise<void> {
     try {
       peers = await fetchRoomPeers(room.roomId);
@@ -32,6 +34,7 @@
     void room.roomId;
     loading = true;
     peers = [];
+    previewChatOpen = true;
     void refresh();
   });
 
@@ -48,15 +51,23 @@
 <div class="lobby-roomview">
   <div class="lobby-roomview-top">
     <RoomViewHeader {room} {onBack} {onToast} />
-    {#if peers.length > 0}
-      <span class="lobby-roomview-state" data-live="true">
-        <span class="lobby-live-dot"></span>
-        {peers.length} в эфире
-      </span>
-    {/if}
+    <div class="lobby-roomview-actions">
+      {#if peers.length > 0}
+        <span class="lobby-roomview-state" data-live="true">
+          <span class="lobby-live-dot"></span>
+          {peers.length} в эфире
+        </span>
+      {/if}
+      {#if !previewChatOpen}
+        <button class="room-chat-toggle" type="button" onclick={() => (previewChatOpen = true)}>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+          <span>Чат</span>
+        </button>
+      {/if}
+    </div>
   </div>
 
-  <div class="lobby-roomview-content">
+  <div class="lobby-roomview-content" data-preview-chat-open={previewChatOpen}>
     <div class="lobby-roomview-stage-pane">
       {#if peers.length > 0}
         <div class="lobby-stage-grid lobby-scroll">
@@ -88,8 +99,10 @@
       </button>
     </div>
 
-    {#key room.roomId}
-      <RoomPreviewChat roomId={room.roomId} {user} />
-    {/key}
+    {#if previewChatOpen}
+      {#key room.roomId}
+        <RoomPreviewChat roomId={room.roomId} {user} onClose={() => (previewChatOpen = false)} />
+      {/key}
+    {/if}
   </div>
 </div>

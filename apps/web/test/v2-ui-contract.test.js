@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
 
@@ -117,16 +117,15 @@ test('lobby separates viewed room from connected voice room', () => {
   assert.match(lobby, /autoJoin=\{autoJoinRoomId === embeddedRoomId\}/);
 
   const roomPage = read('src/lib/features/room/RoomPage.svelte');
-  const roomDom = read('src/lib/features/room/client/ui/dom.ts');
   const roomClient = read('src/lib/features/room/client/main.ts');
   const roomView = read('src/lib/features/room/client/room/room.ts');
   const entryError = read('src/lib/features/room/components/RoomEntryErrorScreen.svelte');
 
   assert.match(roomPage, /RoomEntryErrorScreen/);
-  assert.match(roomDom, /entryErrorScreen/);
-  assert.match(roomDom, /entryRetryButton/);
-  assert.match(roomClient, /function runRoomRoute/);
-  assert.match(roomClient, /entryRetryButton\.addEventListener\('click', runRoomRoute/);
+  assert.equal(existsSync(resolve(root, 'src/lib/features/room/client/ui/dom.ts')), false);
+  assert.match(roomClient, /showRoomRoute\(\)/);
+  assert.match(entryError, /id="entryRetryButton"/);
+  assert.match(entryError, /showRoomRoute\(\)/);
   assert.match(roomView, /export function showRoomEntryFailure/);
   assert.match(roomView, /if \(entryGate === 'failure'\) \{[\s\S]*showRoomEntryFailure\(\);[\s\S]*return false;[\s\S]*\}/);
   assert.match(entryError, /Повторить проверку/);
@@ -144,23 +143,30 @@ test('room chat keeps transport mounted and tracks unread state while closed', (
   assert.match(chat, /messageIds/);
   assert.match(chat, /incrementUnreadChat\(\)/);
   assert.match(topbar, /room-chat-unread/);
-  assert.match(topbar, /import Popover from '\$lib\/shared\/components\/Popover\.svelte'/);
+  assert.match(topbar, /import \{[^}]*\bPopover\b[^}]*\} from '\$lib\/shared\/ui'/);
   assert.match(topbar, /<h1 class="room-heading-title-wrap">/);
   assert.match(topbar, /room-heading-trigger/);
   assert.match(topbar, /Скопировать код/);
   assert.match(topbar, /keepContentMounted/);
   assert.match(topbar, /room-heading-popover-head/);
-  assert.match(topbar, /roomPopoverEmojiBadge/);
-  assert.match(topbar, /roomPopoverTitle/);
+  assert.match(topbar, /room-heading-popover-badge/);
+  assert.match(topbar, /room-heading-popover-info/);
   assert.doesNotMatch(topbar, /copyCodeButton|copyLinkButton|room-settings-button/);
 
-  const roomView = read('src/lib/features/room/client/room/room.ts');
-  assert.match(roomView, /document\.querySelector\('#roomCodeText'\)/);
-  assert.match(roomView, /roomPopoverEmojiBadge/);
-  assert.doesNotMatch(roomView, /elements\.roomCodeText/);
+  // Heading (title/code/emoji) is rendered reactively from room state, not written
+  // imperatively by the vanilla client. The plain `.ellipsis` spans are gone.
+  assert.match(topbar, /import \{ state \} from '\.\.\/client\/core\/state\.svelte'/);
+  assert.match(topbar, /const heading = \$derived\(state\.roomName \|\| state\.roomId\)/);
+  assert.match(topbar, /<Ellipsis text=\{heading\} title=\{heading\} class="room-heading-title"/);
+  assert.match(topbar, /<Ellipsis text=\{state\.roomId\}/);
+  assert.doesNotMatch(topbar, /id="roomTitle"|id="roomCodeText"|class="[^"]*\bellipsis\b/);
 
-  const select = read('src/lib/shared/components/Select.svelte');
-  assert.match(select, /import Ellipsis from '\$lib\/shared\/components\/Ellipsis\.svelte'/);
+  const roomView = read('src/lib/features/room/client/room/room.ts');
+  assert.match(roomView, /document\.title = `\$\{heading\} · Voice Room`/);
+  assert.doesNotMatch(roomView, /elements\.roomTitle|#roomCodeText|roomPopoverEmojiBadge/);
+
+  const select = read('src/lib/shared/ui/Select/Select.svelte');
+  assert.match(select, /import \{ Ellipsis \} from '\.\.\/Ellipsis'/);
 
   const dock = read('src/lib/features/room/components/RoomDock.svelte');
   assert.match(dock, /dock-anchor/);
@@ -171,8 +177,7 @@ test('room chat keeps transport mounted and tracks unread state while closed', (
   assert.match(controls, /\.device-popover[\s\S]*left:\s*50%/);
   assert.match(controls, /translateX\(-50%\)/);
 
-  const selectCss = read('src/lib/shared/styles/select.css');
-  assert.match(selectCss, /\.select-trigger--dock \.select-trigger-chevron[\s\S]*right:\s*11px/);
+  assert.match(select, /\.select-trigger--dock \.select-trigger-chevron[\s\S]*right:\s*11px/);
 });
 
 test('room chat terminal lifecycle frames leave the room screen', () => {
@@ -201,14 +206,13 @@ test('auth client does not mask unexpected backend failures as anonymous or empt
 });
 
 test('shared Select primitive wraps Popover listbox slots for site-wide dropdowns', () => {
-  const select = read('src/lib/shared/components/Select.svelte');
-  const selectCss = read('src/lib/shared/styles/select.css');
+  const select = read('src/lib/shared/ui/Select/Select.svelte');
   const sidebarDownload = read('src/lib/features/home/components/SidebarDownload.svelte');
   const settingsModal = read('src/lib/features/home/components/SettingsModal.svelte');
   const roomDock = read('src/lib/features/room/components/RoomDock.svelte');
   const devices = read('src/lib/features/room/client/ui/devices.ts');
 
-  assert.match(select, /import Popover from '\$lib\/shared\/components\/Popover\.svelte'/);
+  assert.match(select, /import \{ Popover \} from '\.\.\/Popover'/);
   assert.match(select, /\{flip\}/);
   assert.match(select, /\{#snippet trigger\(/);
   assert.match(select, /\{#snippet content\(/);
@@ -224,11 +228,12 @@ test('shared Select primitive wraps Popover listbox slots for site-wide dropdown
   assert.match(select, /tabindex=\{index === activeIndex \? 0 : -1\}/);
   assert.match(select, /use:registerOption=\{index\}/);
   assert.doesNotMatch(select, /bind:this=\{optionRefs\[index\]\}/);
-  assert.match(selectCss, /\.select-trigger/);
-  assert.match(sidebarDownload, /import Popover from '\$lib\/shared\/components\/Popover\.svelte'/);
-  assert.match(sidebarDownload, /import PopoverMenuItem from '\$lib\/shared\/components\/PopoverMenuItem\.svelte'/);
-  assert.match(settingsModal, /import Select from '\$lib\/shared\/components\/Select\.svelte'/);
-  assert.match(roomDock, /import Select from '\$lib\/shared\/components\/Select\.svelte'/);
+  assert.match(select, /\.select-trigger/);
+  assert.match(sidebarDownload, /import \{[^}]*\bPopover\b[^}]*\} from '\$lib\/shared\/ui'/);
+  assert.match(sidebarDownload, /import \{[^}]*\bPopoverMenuItem\b[^}]*\} from '\$lib\/shared\/ui'/);
+  assert.match(settingsModal, /import \{[^}]*\bSelect\b[^}]*\} from '\$lib\/shared\/ui'/);
+  assert.match(roomDock, /import \{[^}]*\bSelect\b[^}]*\} from '\$lib\/shared\/ui'/);
+  assert.match(roomDock, /import \{[^}]*\bPopover\b[^}]*\} from '\$lib\/shared\/ui'/);
   assert.doesNotMatch(sidebarDownload, /<select\b/);
   assert.doesNotMatch(settingsModal, /<select\b/);
   assert.doesNotMatch(roomDock, /<select\b/);
@@ -236,7 +241,7 @@ test('shared Select primitive wraps Popover listbox slots for site-wide dropdown
 });
 
 test('popover placement flips vertically only when the preferred side would overflow', () => {
-  const placement = read('src/lib/shared/components/popover-placement.ts');
+  const placement = read('src/lib/shared/ui/Popover/popover-placement.ts');
 
   assert.match(placement, /export function resolvePopoverPlacement/);
   assert.match(placement, /panelRect\.bottom > viewportHeight - margin/);
@@ -244,12 +249,14 @@ test('popover placement flips vertically only when the preferred side would over
 });
 
 test('shared Popover primitive exposes trigger/content slots and dismiss behavior', () => {
-  const popover = read('src/lib/shared/components/Popover.svelte');
-  const popoverCss = read('src/lib/shared/styles/popover.css');
+  const popover = read('src/lib/shared/ui/Popover/Popover.svelte');
+  const popoverTypes = read('src/lib/shared/ui/Popover/types.ts');
+  const popoverMenuItem = read('src/lib/shared/ui/Popover/PopoverMenuItem.svelte');
+  const selectOption = read('src/lib/shared/ui/Select/Select.svelte');
   const userMenu = read('src/lib/features/home/components/UserMenu.svelte');
 
-  assert.match(popover, /trigger: Snippet<\[PopoverTriggerState\]>/);
-  assert.match(popover, /content: Snippet<\[PopoverContentState\]>/);
+  assert.match(popoverTypes, /trigger: Snippet<\[PopoverTriggerState\]>/);
+  assert.match(popoverTypes, /content: Snippet<\[PopoverContentState\]>/);
   assert.match(popover, /\{@render trigger\(triggerState\)\}/);
   assert.match(popover, /\{@render content\(contentState\)\}/);
   assert.match(popover, /onpointerdown=\{onWindowPointerDown\}/);
@@ -264,10 +271,10 @@ test('shared Popover primitive exposes trigger/content slots and dismiss behavio
   assert.match(popover, /resolvePopoverPlacement/);
   assert.match(popover, /openWithPlacement/);
   assert.match(popover, /flip = false/);
-  assert.match(popoverCss, /\.popover-panel/);
-  assert.match(popoverCss, /\.popover-menu-item/);
-  assert.match(popoverCss, /\.popover-option/);
-  assert.match(userMenu, /import Popover from '\$lib\/shared\/components\/Popover\.svelte'/);
+  assert.match(popover, /\.popover-panel/);
+  assert.match(popoverMenuItem, /\.popover-menu-item/);
+  assert.match(selectOption, /\.popover-option/);
+  assert.match(userMenu, /import \{[^}]*\bPopover\b[^}]*\} from '\$lib\/shared\/ui'/);
   assert.match(userMenu, /\{#snippet trigger\(/);
   assert.match(userMenu, /\{#snippet content\(/);
   assert.match(userMenu, /aria-haspopup="menu"/);
@@ -280,7 +287,7 @@ test('visual identity UI consumes backend keys and exposes only curated room pre
   const userMenu = read('src/lib/features/home/components/UserMenu.svelte');
   const roomCard = read('src/lib/features/home/components/RoomCard.svelte');
   const createDialog = read('src/lib/features/home/components/CreateRoomDialog.svelte');
-  const participants = read('src/lib/features/room/client/room/participants.ts');
+  const participantTile = read('src/lib/features/room/components/ParticipantTile.svelte');
   const chat = read('src/lib/features/room/components/RoomChat.svelte');
   const roomNet = read('src/lib/features/room/client/net/api.ts');
   const roomView = read('src/lib/features/room/client/room/room.ts');
@@ -297,12 +304,14 @@ test('visual identity UI consumes backend keys and exposes only curated room pre
   assert.match(createDialog, /ROOM_PRESETS/);
   assert.match(createDialog, /roomPresetKey/);
   assert.doesNotMatch(createDialog, /type="file"|upload|custom|contenteditable/i);
-  assert.match(participants, /getAvatarColor\(peerInfo\.avatarColorKey\)/);
-  assert.doesNotMatch(participants, /hashStringToHue\(seed\)/);
+  assert.match(participantTile, /getAvatarPresentation\(participant\)/);
+  assert.doesNotMatch(participantTile, /hashStringToHue\(seed\)/);
   assert.match(chat, /getAvatarColor\(message\.avatarColorKey\)/);
   assert.doesNotMatch(chat, /hashStringToHue/);
   assert.match(roomNet, /status\?\.roomIconKey/);
-  assert.match(roomView, /getRoomPreset/);
+  // The room heading consumes the curated preset reactively in RoomTopbar now.
+  const roomTopbar = read('src/lib/features/room/components/RoomTopbar.svelte');
+  assert.match(roomTopbar, /getRoomPreset/);
   assert.match(roomView, /updateParticipant\(\{ \.\.\.message\.peer, isLocal: true \}\)/);
   assert.match(tokens, /ROOM_ICON_EMOJIS/);
   assert.match(tokens, /ROOM_COLOR_TOKENS/);
@@ -312,19 +321,40 @@ test('visual identity UI consumes backend keys and exposes only curated room pre
   assert.ok(tokens.indexOf('if (hasIconKey || hasColorKey)') < tokens.indexOf('item.emoji === value.emoji'));
 });
 
+test('connection status renders reactively from room state, not imperative DOM writes', () => {
+  const status = read('src/lib/features/room/client/ui/status.ts');
+  const topbar = read('src/lib/features/room/components/RoomTopbar.svelte');
+  const dock = read('src/lib/features/room/components/RoomDock.svelte');
+
+  // status.ts is a pure derivation over reactive state — no DOM writes or refresh hooks.
+  assert.match(status, /export function getConnectionStatusView\(\): ConnectionStatusView/);
+  assert.doesNotMatch(status, /elements\.|setStatus|renderConnectionStatus|refreshLocalNetworkIndicator/);
+
+  // Pill (topbar) and signal bars (dock) both subscribe via $derived.
+  assert.match(topbar, /const connection = \$derived\(getConnectionStatusView\(\)\)/);
+  assert.match(topbar, /data-state=\{connection\.stateName\}/);
+  assert.match(topbar, /hidden=\{connection\.stateName === 'idle' \|\| state\.screen !== 'room'\}/);
+  assert.match(dock, /const connection = \$derived\(getConnectionStatusView\(\)\)/);
+  assert.match(dock, /data-state=\{connection\.stateName\}/);
+
+  // The imperative element cache is gone — screens and controls render in Svelte.
+  assert.equal(existsSync(resolve(root, 'src/lib/features/room/client/ui/dom.ts')), false);
+});
+
 
 
 test('local participant updates do not remove the self tile when LiveKit mute events resync', () => {
   const participants = read('src/lib/features/room/client/room/participants.ts');
 
   assert.match(participants, /const duplicate = state\.peers\.get\(peerInfo\.id\)/);
-  assert.match(participants, /if \(duplicate\) removeParticipantView\(duplicate\.id\)/);
-  assert.doesNotMatch(participants, /removeParticipantView\(duplicate\?\.id \|\| peerInfo\.id\)/);
+  assert.match(participants, /if \(duplicate\) state\.peers\.delete\(duplicate\.id\)/);
+  assert.doesNotMatch(participants, /removeParticipantView/);
 });
 
 test('participant tiles stay visually uniform and highlight only active speakers', () => {
   const css = read('src/lib/features/room/styles/participants.css');
   const participants = read('src/lib/features/room/client/room/participants.ts');
+  const participantTile = read('src/lib/features/room/components/ParticipantTile.svelte');
   const meters = read('src/lib/features/room/client/media/meters.ts');
   const livekit = read('src/lib/features/room/client/services/livekit-service.ts');
 
@@ -332,7 +362,10 @@ test('participant tiles stay visually uniform and highlight only active speakers
   assert.match(css, /border-color: var\(--green\)/);
   assert.match(css, /\.participant\[data-speaking="true"\] \.voice-ring/);
   assert.doesNotMatch(css, /\.participant\[data-local="true"\]\s*\{\s*border-color/s);
-  assert.match(participants, /view\.node\.dataset\.speaking = String\(Boolean\(speaking\)\)/);
+  assert.match(participants, /participant\.speaking = nextSpeaking/);
+  assert.match(participants, /refreshParticipantState\(\)/);
+  assert.match(participants, /bumpParticipantsRevision\(\)/);
+  assert.match(participantTile, /data-speaking=\{String\(participant\.speaking\)\}/);
   assert.match(meters, /setParticipantSpeaking\(participant, isLocalMicrophoneSpeaking/);
   assert.match(livekit, /RoomEvent\.ActiveSpeakersChanged/);
 });
@@ -342,7 +375,7 @@ test('screen stream thumbnails show profile metadata instead of an action button
   const screenStageControls = read('src/lib/features/room/client/ui/screen-stage-controls.ts');
   const refs = read('src/lib/features/room/client/model/participants.ts');
   const participants = read('src/lib/features/room/client/room/participants.ts');
-  const screenTiles = read('src/lib/features/room/client/ui/screen-tile-elements.ts');
+  const streamTile = read('src/lib/features/room/components/StreamTile.svelte');
   const screenView = read('src/lib/features/room/client/ui/screen-view.ts');
   const participantsCss = read('src/lib/features/room/styles/participants.css');
   const streamTilesCss = read('src/lib/features/room/styles/stream-tiles.css');
@@ -350,33 +383,32 @@ test('screen stream thumbnails show profile metadata instead of an action button
   assert.doesNotMatch(overlays, /participant-screen-meta/);
   assert.doesNotMatch(refs, /screenMeta: HTMLElement/);
   assert.doesNotMatch(participants, /refreshParticipantScreenMeta/);
-  assert.match(participants, /node\.addEventListener\('click'/);
+  const participantTile = read('src/lib/features/room/components/ParticipantTile.svelte');
+  assert.match(participantTile, /handleTileClick/);
+  assert.match(participantTile, /enterScreenView\(participant\.id\)/);
   assert.match(participantsCss, /\.participant\[data-screen="true"\] \.participant-screen-action\s*\{\s*display: none;/s);
-  assert.match(screenTiles, /createStreamTileProfileMeta/);
-  assert.match(screenTiles, /stream-tile-profile-meta/);
-  assert.match(screenTiles, /parseScreenProfileId/);
-  assert.match(screenTiles, /SCREEN_QUALITY_OPTIONS/);
-  assert.match(screenTiles, /SCREEN_FPS_OPTIONS/);
-  assert.doesNotMatch(screenTiles, /stream-tile-action-disconnect/);
-  assert.doesNotMatch(screenTiles, /Отключиться/);
-  assert.match(screenView, /participant\.isLocal \? state\.localScreenProfileId : participant\.screenProfileId/);
+  assert.match(streamTile, /stream-tile-profile-meta/);
+  assert.match(streamTile, /getScreenProfileLabels/);
+  assert.doesNotMatch(streamTile, /stream-tile-action-disconnect/);
+  assert.doesNotMatch(streamTile, /Отключиться/);
+  assert.match(streamTile, /participant\.isLocal \? roomState\.localScreenProfileId : participant\.screenProfileId/);
   assert.match(streamTilesCss, /\.stream-tile-profile-meta/);
   assert.doesNotMatch(streamTilesCss, /stream-tile-action-disconnect/);
 });
 
 test('screen stage viewer badge renders viewer avatars instead of names', () => {
   const stage = read('src/lib/features/room/components/ScreenStage.svelte');
-  const controls = read('src/lib/features/room/client/ui/screen-stage-controls.ts');
+  const screenUi = read('src/lib/features/room/screen-ui.svelte.ts');
   const css = read('src/lib/features/room/styles/screen.css');
 
   assert.match(stage, /screen-meta-viewers/);
-  assert.match(controls, /renderScreenViewers/);
-  assert.match(controls, /createScreenViewerAvatar/);
-  assert.match(controls, /getAvatarColor\(viewer\.avatarColorKey\)/);
-  assert.match(controls, /getInitials\(viewer\.name\)/);
-  assert.doesNotMatch(controls, /screen-meta-viewers-label/);
-  assert.doesNotMatch(controls, /formatScreenViewersLine/);
-  assert.doesNotMatch(controls, /names\.join/);
+  assert.match(stage, /getViewerAvatarStyle/);
+  assert.match(stage, /getViewerInitials/);
+  assert.match(screenUi, /getViewerAvatarStyle/);
+  assert.match(screenUi, /getAvatarPresentation\(viewer\)/);
+  assert.doesNotMatch(screenUi, /screen-meta-viewers-label/);
+  assert.doesNotMatch(screenUi, /formatScreenViewersLine/);
+  assert.doesNotMatch(screenUi, /names\.join/);
   assert.match(css, /\.screen-meta-viewer-avatar/);
   assert.doesNotMatch(css, /screen-meta-viewers-label/);
 });
@@ -388,7 +420,6 @@ test('room route uses lobby for authenticated users and preserves standalone gue
   const roomMain = read('src/lib/features/room/client/main.ts');
   const roomView = read('src/lib/features/room/client/room/room.ts');
   const names = read('src/lib/features/room/client/ui/names.ts');
-  const dom = read('src/lib/features/room/client/ui/dom.ts');
   const overlays = read('src/lib/features/room/components/RoomOverlays.svelte');
   const screenStageControls = read('src/lib/features/room/client/ui/screen-stage-controls.ts');
   const home = read('src/lib/features/home/HomePage.svelte');
@@ -412,9 +443,8 @@ test('room route uses lobby for authenticated users and preserves standalone gue
   assert.match(roomMain, /if \(ready && options\.autoJoin\) return joinRoom\(\)/);
   assert.match(roomMain, /showRoomRoute\(\)/);
   assert.match(roomMain, /showStartScreen\(\)/);
-  assert.match(roomMain, /bindGuestNameDialog\(\)/);
   assert.match(roomMain, /resetGuestNameDialog/);
-  assert.match(roomMain, /unbindGuestNameDialog/);
+  assert.doesNotMatch(roomMain, /bindGuestNameDialog|unbindGuestNameDialog|setElementsRoot|elements\./);
   assert.match(roomMain, /new AbortController\(\)/);
   assert.match(roomMain, /listenerSignal/);
   assert.match(roomMain, /mountAbortController\?\.abort\(\)/);
@@ -454,30 +484,27 @@ test('room route uses lobby for authenticated users and preserves standalone gue
   assert.match(overlays, /id="guestNameError"/);
   assert.match(overlays, /id="guestNameSubmitButton"[\s\S]*type="submit"/);
   assert.doesNotMatch(overlays, /guestNameClose|guest-name-close|Отмена|Закрыть/);
-  assert.match(dom, /get guestNameDialog\(\)/);
-  assert.match(dom, /get guestNameForm\(\)/);
-  assert.match(dom, /get guestNameInput\(\)/);
-  assert.match(dom, /get guestNameError\(\)/);
+  assert.equal(existsSync(resolve(root, 'src/lib/features/room/client/ui/dom.ts')), false);
+  assert.match(overlays, /guestNameUi\.open/);
+  assert.match(overlays, /bind:value=\{guestNameUi\.inputValue\}/);
   assert.match(names, /pendingGuestNamePromise/);
   assert.match(screenStageControls, /bindScreenStageIdleUi\(signal\?: AbortSignal\)/);
   assert.match(screenStageControls, /resetScreenStageIdleUi/);
   assert.match(screenStageControls, /screenUiHoverBound = false/);
   assert.match(screenStageControls, /signal\?\.addEventListener\('abort'/);
   assert.match(names, /resetGuestNameDialog/);
-  assert.match(names, /unbindGuestNameDialog/);
   assert.match(names, /rejectPendingGuestName/);
-  assert.match(names, /setGuestNameSiblingInert/);
-  assert.match(names, /closest\('\.app-shell'\)/);
-  assert.match(names, /child\.contains\(elements\.guestNameDialog\)/);
-  assert.match(names, /child\.setAttribute\('inert', ''\)/);
-  assert.match(names, /child\.removeAttribute\('inert'\)/);
+  assert.match(names, /guestNameUi/);
+  assert.doesNotMatch(names, /unbindGuestNameDialog|elements\.guestName/);
+  assert.match(names, /syncGuestNameDialogInert/);
   assert.match(names, /handleGuestNameDialogKeydown/);
-  assert.match(names, /event\.key === 'Escape'[\s\S]*guestNameInput\.focus\(\)/);
-  assert.match(names, /event\.key !== 'Tab'/);
   assert.match(names, /handleGuestNameDialogClick/);
+  assert.match(overlays, /syncGuestNameDialogInert/);
+  assert.match(overlays, /handleGuestNameDialogKeydown/);
+  assert.match(overlays, /handleGuestNameDialogClick/);
   assert.match(requestGuestNameForRoom, /setGuestNameDialogOpen\(true\)/);
-  assert.match(requestGuestNameForRoom, /guestNameInput\.focus\(\)/);
-  assert.match(handleGuestNameSubmit, /cleanDisplayName\(elements\.guestNameInput\.value\)/);
+  assert.match(requestGuestNameForRoom, /guestNameUi\.inputValue = ''/);
+  assert.match(handleGuestNameSubmit, /cleanDisplayName\(guestNameUi\.inputValue\)/);
   assert.match(handleGuestNameSubmit, /Введите имя, чтобы войти в комнату/);
   assert.match(handleGuestNameSubmit, /persistName\(name\)/);
   assert.ok(handleGuestNameSubmit.indexOf('persistName(name)') < handleGuestNameSubmit.indexOf('setGuestNameDialogOpen(false)'));
@@ -548,11 +575,16 @@ test('hotfix lobby UX keeps dock in main area, preview chat, and add-friend subm
   assert.doesNotMatch(browseView, /тихо сейчас/);
   assert.match(previewChat, /fetchRoomChat\(roomId\)/);
   assert.match(previewChat, /postRoomChat\(roomId/);
+  assert.match(previewChat, /chat-rail-collapse/);
+  assert.match(previewView, /previewChatOpen/);
+  assert.match(browseView, /previewChatOpen/);
   assert.match(addFriend, /copyText\(user\.login\)/);
   assert.doesNotMatch(addFriend, /searchUsers/);
   assert.doesNotMatch(addFriend, /oninput=\{onInput\}/);
   assert.match(addFriend, /@daze/);
   assert.match(friendsCss, /\.lobby-preview-chat/);
+  assert.match(friendsCss, /data-preview-chat-open/);
+  assert.match(friendsCss, /\.lobby-dm-head[\s\S]*border: 0/);
   assert.match(lobby, /import '\$lib\/features\/room\/styles\/chat-rail\.css'/);
 });
 
@@ -570,4 +602,107 @@ test('frontend visual catalog stays aligned with shared backend key contracts', 
   for (const key of shared.ROOM_COLOR_KEYS) {
     assert.ok(tokens.includes(`${key}: { background:`));
   }
+});
+
+test('remote participant audio preferences persist volume and local mute separately', () => {
+  const config = read('src/lib/features/room/client/core/config.ts');
+  const settings = read('src/lib/features/room/client/core/settings.ts');
+  const playback = read('src/lib/features/room/client/services/media-playback-service.ts');
+  const participants = read('src/lib/features/room/client/room/participants.ts');
+
+  assert.match(config, /PARTICIPANT_AUDIO_PREFERENCES_STORAGE_KEY = 'voice-room:participant-audio-preferences'/);
+  assert.match(config, /DEFAULT_PARTICIPANT_VOLUME = 1/);
+  assert.match(config, /MAX_PARTICIPANT_VOLUME = 2/);
+
+  assert.match(settings, /interface ParticipantAudioPreference[\s\S]*muted: boolean;[\s\S]*volume: number;/);
+  assert.match(settings, /getParticipantAudioPreferenceKey\(accountUserId: string, peerId: string\)/);
+  assert.match(functionBody(settings, 'getParticipantAudioPreferenceKey'), /return `account:\$\{accountKey\}`/);
+  assert.match(functionBody(settings, 'getParticipantAudioPreferenceKey'), /return `peer:\$\{String\(peerId \|\| ''\)\.trim\(\)\}`/);
+  assert.match(settings, /export function getParticipantAudioPreference\(key: string\): ParticipantAudioPreference \{[\s\S]*DEFAULT_PARTICIPANT_AUDIO_PREFERENCE\.muted[\s\S]*DEFAULT_PARTICIPANT_AUDIO_PREFERENCE\.volume[\s\S]*\n\}/);
+  assert.match(functionBody(settings, 'storeParticipantAudioPreference'), /muted: Object\.hasOwn\(patch, 'muted'\)/);
+  assert.match(functionBody(settings, 'storeParticipantAudioPreference'), /volume: Object\.hasOwn\(patch, 'volume'\)/);
+  assert.match(functionBody(settings, 'clampParticipantVolume'), /Math\.min\(MAX_PARTICIPANT_VOLUME, Math\.max\(0, volume\)\)/);
+
+  assert.match(playback, /export function applyRemoteParticipantAudioPreferences\(peer: Participant\)/);
+  assert.match(functionBody(playback, 'applyRemoteParticipantAudioPreferences'), /getParticipantAudioPreferenceKey\(peer\.accountUserId, peer\.id\)/);
+  assert.match(functionBody(playback, 'applyRemoteParticipantAudioPreferences'), /isVoicePlaybackMuted\(\) \|\| preference\.muted \|\| preference\.volume <= 0/);
+  assert.match(functionBody(playback, 'applyRemoteParticipantAudioPreferences'), /applyVoiceMediaElementVolume\(audio, \{ muted, volume: preference\.volume \}\)/);
+  const outputSyncBody = functionBody(playback, 'syncAudioOutputDevices');
+  assert.match(outputSyncBody, /syncRemoteAudioPlayback\(\)/);
+  assert.ok(
+    outputSyncBody.indexOf('syncRemoteAudioPlayback()') < outputSyncBody.indexOf('applyAudioOutputDevice(mediaElement)'),
+    'remote voice gains must be downgraded before applying output sink ids'
+  );
+  assert.match(playback, /const voiceAudioGains = new WeakMap<HTMLMediaElement, VoiceAudioGain>\(\)/);
+  assert.match(playback, /export function releaseRemoteAudioElement\(mediaElement: HTMLMediaElement\)/);
+  assert.match(playback, /function applyVoiceMediaElementVolume[\s\S]*existing && maxVolume > 1[\s\S]*existing\.gain\.gain\.value = options\.muted \? 0 : volume/);
+  assert.match(playback, /function applyVoiceMediaElementVolume[\s\S]*if \(existing\) \{[\s\S]*releaseRemoteAudioElement\(mediaElement\)/);
+  assert.match(playback, /function applyVoiceMediaElementVolume[\s\S]*mediaElement\.volume = Math\.min\(1, volume\)/);
+
+  assert.match(participants, /applyRemoteParticipantAudioPreferences\(peer\)/);
+  assert.match(participants, /const hadAccountUserId = participant\.accountUserId/);
+  assert.match(participants, /participant\.accountUserId !== hadAccountUserId[\s\S]*applyRemoteParticipantAudioPreferences\(participant\)/);
+  assert.match(participants, /releaseRemoteAudioElement\(audio\)/);
+});
+
+test('participant context menu is remote-only and exposes relationship-aware local audio controls', () => {
+  const menu = read('src/lib/features/room/components/ParticipantContextMenu.svelte');
+  const contextUi = read('src/lib/features/room/participant-context-ui.svelte.ts');
+  const tile = read('src/lib/features/room/components/ParticipantTile.svelte');
+  const main = read('src/lib/features/room/client/main.ts');
+  const participants = read('src/lib/features/room/client/room/participants.ts');
+  const room = read('src/lib/features/room/client/room/room.ts');
+  const css = read('src/lib/features/room/styles/participants.css');
+
+  assert.doesNotMatch(main, /bindParticipantContextMenu/);
+  assert.match(tile, /oncontextmenu=\{handleContextMenu\}/);
+  assert.match(tile, /onkeydown=\{handleKeydown\}/);
+  assert.match(tile, /event\.preventDefault\(\)/);
+  assert.match(tile, /event\.key === 'ContextMenu'/);
+  assert.match(tile, /event\.key === 'F10' && event\.shiftKey/);
+  assert.match(tile, /tabindex=\{participant\.isLocal \? undefined : 0\}/);
+  assert.match(tile, /aria-haspopup=\{participant\.isLocal \? undefined : 'dialog'\}/);
+  assert.match(tile, /openParticipantContextMenu\(participant\.id/);
+
+  assert.match(menu, /const canUseSocialActions = \$derived/);
+  assert.match(menu, /getFriendRelationship\(peer\.accountUserId\)/);
+  assert.match(menu, /Написать сообщение/);
+  assert.match(menu, /Принять заявку/);
+  assert.match(menu, /Заявка в друзья уже отправлена/);
+  assert.match(menu, /Добавить в друзья/);
+  assert.match(menu, /Гость: доступны только локальные настройки звука/);
+
+  assert.match(menu, /min="0"/);
+  assert.match(menu, /max="200"/);
+  assert.match(menu, /storeParticipantAudioPreference\(preferenceKey, \{ volume: safePercent \/ 100 \}\)/);
+  assert.match(menu, /muted: !getParticipantAudioPreference\(preferenceKey\)\.muted/);
+  assert.match(menu, /applyRemoteParticipantAudioPreferences\(peer\)/);
+
+  assert.match(menu, /role="dialog"/);
+  assert.match(menu, /document\.addEventListener\('keydown', handleKeydown/);
+  assert.match(menu, /document\.addEventListener\('pointerdown', handlePointerDown, \{ capture: true \}\)/);
+  assert.match(menu, /document\.addEventListener\('focusin', handleFocusIn\)/);
+  assert.match(contextUi, /restoreFocusPeerId/);
+  assert.match(contextUi, /queueMicrotask\(\(\) => focusParticipantTile/);
+  assert.match(menu, /activeElement instanceof HTMLInputElement && activeElement\.type === 'range'/);
+  assert.match(menu, /event\.key === 'ArrowDown' && !isRangeInput/);
+  assert.match(menu, /event\.key === 'ArrowUp' && !isRangeInput/);
+  assert.match(participants, /closeParticipantContextMenu\(peerId\)/);
+  assert.match(room, /closeParticipantContextMenu\(\)/);
+  assert.match(menu, /closeParticipantContextMenu\(peer\.id\)/);
+  assert.match(menu, /addFriendByUserId\(peer\.accountUserId\)/);
+  assert.match(menu, /acceptRequestByUserId\(peer\.accountUserId\)/);
+  const friends = read('src/lib/features/home/model/friends.svelte.ts');
+  assert.match(functionBody(friends, 'initLobby'), /Promise\.all\(\[refreshFriends\(\), refreshRequests\(\)\]\)/);
+  assert.match(functionBody(friends, 'getFriendRelationship'), /requests\.incoming\.some/);
+  assert.match(functionBody(friends, 'getFriendRelationship'), /requests\.outgoing\.some/);
+  assert.match(menu, /setMode\('friends'\)/);
+  assert.match(menu, /await openDm\(peer\.accountUserId\)/);
+  assert.match(menu, /showToast\('Не удалось отправить заявку в друзья', \{ variant: 'error' \}\)/);
+  assert.match(menu, /showToast\('Не удалось принять заявку в друзья', \{ variant: 'error' \}\)/);
+  assert.match(menu, /showToast\('Не удалось открыть личные сообщения', \{ variant: 'error' \}\)/);
+
+  assert.match(css, /\.participant-context-menu/);
+  assert.match(css, /\.participant-context-menu \.participant-volume-control input[\s\S]*pointer-events:\s*auto/);
+  assert.match(css, /\.participant-volume-track\[data-boosted="true"\]/);
 });

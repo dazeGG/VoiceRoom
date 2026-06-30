@@ -451,6 +451,7 @@ async function getRoom(roomId) {
 
 function publicPeer(peer) {
   return {
+    accountUserId: peer.accountUserId || '',
     avatarColorKey: peer.avatarColorKey || avatarColorForPeerId(peer.id),
     deafened: peer.deafened,
     id: peer.id,
@@ -701,6 +702,7 @@ async function handleEvents(req, res, url) {
   const peer = {
     closed: false,
     deafened: previous?.deafened ?? false,
+    accountUserId: sessionUser?.id || '',
     avatarColorKey,
     id: peerId,
     joinedAt: previous?.joinedAt ?? Date.now(),
@@ -1564,13 +1566,18 @@ async function handleSendFriendRequest(req, res) {
   }
 
   const body = await readJsonBody(req);
+  const targetUserId = cleanUuid(body.userId || body.addresseeUserId || '');
   const login = normalizeLogin(body.login || body.handle || '');
-  if (!login) {
-    sendJson(res, 400, { ok: false, error: 'Неверный логин' });
+  if (!targetUserId && !login) {
+    sendJson(res, 400, { ok: false, error: 'Неверный пользователь' });
     return;
   }
 
-  const result = await getFriendStore().sendRequest({ requesterId: user.id, addresseeLogin: login });
+  const result = await getFriendStore().sendRequest({
+    requesterId: user.id,
+    addresseeLogin: login,
+    addresseeUserId: targetUserId
+  });
   switch (result.status) {
     case 'not_found':
       sendJson(res, 404, { ok: false, error: 'Пользователь не найден' });

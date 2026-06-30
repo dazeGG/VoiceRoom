@@ -1,8 +1,7 @@
 import { PEER_LATENCY_FAIR_MS, PEER_LATENCY_GOOD_MS } from '../core/config';
-import { elements } from './dom';
-import { state } from '../core/state';
+import { state } from '../core/state.svelte';
 
-interface ConnectionStatusView {
+export interface ConnectionStatusView {
   stateName: string;
   label: string;
   title: string;
@@ -11,29 +10,20 @@ interface ConnectionStatusView {
 export function resetConnectionStatus(): void {
   state.serverConnection = 'idle';
   state.voiceConnection = 'idle';
-  renderConnectionStatus();
 }
 
 export function setServerConnectionStatus(connection: string): void {
   state.serverConnection = connection;
-  renderConnectionStatus();
 }
 
 export function setVoiceConnectionStatus(connection: string): void {
   state.voiceConnection = connection;
-  renderConnectionStatus();
 }
 
-export function refreshLocalNetworkIndicator(): void {
-  renderConnectionStatus();
-}
-
-function renderConnectionStatus(): void {
-  const { stateName, label, title } = getConnectionStatusView();
-  setStatus(stateName, label, title);
-}
-
-function getConnectionStatusView(): ConnectionStatusView {
+// Pure view derived from the reactive room state. RoomTopbar (status pill) and
+// RoomDock (connection bars) each subscribe via `$derived(getConnectionStatusView())`,
+// so changing state.serverConnection/voiceConnection/localPingMs repaints both.
+export function getConnectionStatusView(): ConnectionStatusView {
   if (state.voiceConnection === 'playback-blocked') {
     return {
       label: 'Звук заблокирован',
@@ -148,18 +138,4 @@ export function getPeerLatencyQuality(pingMs: number | null, connectionQuality =
   if (connectionQuality === 'poor') return 'poor';
   if (connectionQuality === 'lost') return 'lost';
   return 'unknown';
-}
-
-function setStatus(stateName: string, label: string, title = ''): void {
-  elements.statusPill.dataset.state = stateName;
-  elements.statusText.textContent = label;
-  elements.statusPill.title = title;
-  elements.statusPill.hidden = stateName === 'idle' || document.body.dataset.screen !== 'room';
-
-  // The dock connection indicator mirrors the same state; the human-readable
-  // label (including ping) shows in the hover popover, matching VoiceDock.
-  const dock = elements.dockConnection;
-  dock.dataset.state = stateName;
-  dock.setAttribute('aria-label', label || 'Связь');
-  elements.dockConnectionLabel.textContent = label || 'Связь';
 }

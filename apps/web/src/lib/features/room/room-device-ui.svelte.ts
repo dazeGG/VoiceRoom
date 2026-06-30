@@ -1,4 +1,5 @@
-import type { SelectOption } from '$lib/shared/components/select-types';
+import { GATE_THRESHOLD_MIN_DB } from './client/core/config';
+import type { SelectOption } from '$lib/shared/ui';
 
 export const NOISE_MODE_SELECT_OPTIONS: SelectOption[] = [
   { value: 'off', label: 'Выкл' },
@@ -12,5 +13,8 @@ export const roomDeviceUi = $state({
   noiseMode: 'off',
   microphoneOptions: [{ value: '', label: 'Системный' }] as SelectOption[],
   outputOptions: [{ value: '', label: 'Системный' }] as SelectOption[],
-  outputDisabled: false
+  outputDisabled: false,
+  devicePopoverOpen: false,
+  outputPopoverOpen: false,
+  micLevelDb: GATE_THRESHOLD_MIN_DB
 });

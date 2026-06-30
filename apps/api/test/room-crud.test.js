@@ -341,7 +341,7 @@ test('cookie-authenticated PUT/DELETE reject cross-origin browser requests (CSRF
   assert.equal(store.rooms.get('room1').deletedAt, undefined);
 });
 
-function openSseStream(socketPath, pathname, { readyType = 'hello', timeoutMs = 5000 } = {}) {
+function openSseStream(socketPath, pathname, { cookie = '', readyType = 'hello', timeoutMs = 5000 } = {}) {
   const frames = [];
   let buffer = '';
   let streamTimer = null;
@@ -365,7 +365,7 @@ function openSseStream(socketPath, pathname, { readyType = 'hello', timeoutMs = 
     if (readyType) {
       streamTimer = setTimeout(() => reject(new Error(`SSE stream did not deliver ${readyType}`)), timeoutMs);
     }
-    req = http.get({ socketPath, path: pathname }, (res) => {
+    req = http.get({ socketPath, path: pathname, headers: cookie ? { cookie } : undefined }, (res) => {
       if (!readyType) resolveOnce();
       res.setEncoding('utf8');
       res.on('end', markClosed);
@@ -470,6 +470,31 @@ function teardownSocketServer(t, { server, dir, streams = [] }) {
     fs.rmSync(dir, { recursive: true, force: true });
   });
 }
+
+
+test('authenticated room presence exposes only minimal account user id on peers', async (t) => {
+  const { dir, socketPath, server } = await startSocketServer({ room1: staticRoom() });
+  const ownerPresence = openSseStream(
+    socketPath,
+    '/api/events?room=room1&peer=peer0001&token=peertoken12345678901234567890123456&name=Owner',
+    { cookie: `vr_session=${OWNER_TOKEN}` }
+  );
+  const guestPresence = openSseStream(
+    socketPath,
+    '/api/events?room=room1&peer=peer0002&token=guesttoken12345678901234567890123456&name=Guest'
+  );
+  teardownSocketServer(t, { server, dir, streams: [ownerPresence, guestPresence] });
+
+  const ownerHello = await ownerPresence.waitFor('hello');
+  assert.equal(ownerHello.peer.accountUserId, OWNER_ID);
+  assert.equal('login' in ownerHello.peer, false);
+
+  const guestHello = await guestPresence.waitFor('hello');
+  assert.equal(guestHello.peer.accountUserId, '');
+  const ownerAsPeer = guestHello.peers.find((peer) => peer.id === 'peer0001');
+  assert.equal(ownerAsPeer.accountUserId, OWNER_ID);
+  assert.equal('login' in ownerAsPeer, false);
+});
 
 // End-to-end over a real socket so an active peer holds a live /api/events SSE
 // stream and observes the room-updated frame broadcast by the PUT handler.

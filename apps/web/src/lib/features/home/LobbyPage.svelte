@@ -149,6 +149,7 @@
   });
 
   $effect(() => {
+    void connectedRoomVisible;
     if (!connectedVoiceRoomId && embeddedRoomId && selectedRoomId !== embeddedRoomId) {
       clearDisconnectedHiddenEmbed();
     }

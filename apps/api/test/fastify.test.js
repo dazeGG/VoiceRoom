@@ -179,6 +179,52 @@ test('cookie-authenticated writes reject cross-origin browser requests', async (
 
 
 
+
+test('friend request route accepts account user id targets', async (t) => {
+  let requestInput = null;
+  const app = createApiApp({
+    store: createFakeStore(),
+    users: {
+      async getSessionUser(token) {
+        assert.equal(token, 'session-token');
+        return { user: { id: '11111111-1111-4111-8111-111111111111' } };
+      }
+    },
+    friends: {
+      async sendRequest(input) {
+        requestInput = input;
+        return {
+          status: 'sent',
+          requestId: 'request-1',
+          user: {
+            avatarColorKey: 'rose',
+            createdAt: Date.now(),
+            displayName: 'Bob',
+            id: input.addresseeUserId,
+            login: 'bob'
+          }
+        };
+      }
+    }
+  });
+  t.after(() => app.close());
+
+  const response = await app.inject({
+    method: 'POST',
+    url: '/api/friends/requests',
+    headers: { cookie: 'vr_session=session-token' },
+    payload: { userId: '22222222-2222-4222-8222-222222222222' }
+  });
+
+  assert.equal(response.statusCode, 201);
+  assert.equal(response.json().status, 'sent');
+  assert.deepEqual(requestInput, {
+    requesterId: '11111111-1111-4111-8111-111111111111',
+    addresseeLogin: '',
+    addresseeUserId: '22222222-2222-4222-8222-222222222222'
+  });
+});
+
 test('livekit token uses authenticated user avatar color for room peer identity', async (t) => {
   const previous = {
     url: process.env.LIVEKIT_URL,

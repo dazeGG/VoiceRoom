@@ -1,8 +1,10 @@
-
-import { elements } from '../ui/dom';
-import { state } from '../core/state';
-import { MAX_STREAM_VOLUME } from '../core/config';
+import { startUi } from '$lib/features/room/start-ui.svelte';
+import { getScreenVideo, screenUi } from '$lib/features/room/screen-ui.svelte';
+import { state } from '../core/state.svelte';
+import { MAX_PARTICIPANT_VOLUME, MAX_STREAM_VOLUME } from '../core/config';
 import { getMicrophoneProcessors } from './microphone-service';
+import { getParticipantAudioPreference, getParticipantAudioPreferenceKey } from '../core/settings';
+import type { Participant } from '../core/types';
 import { setVoiceConnectionStatus } from '../ui/status';
 import { syncScreenVideoAudio } from '../ui/screen-view';
 
@@ -25,17 +27,99 @@ export function syncPlaybackMuteState(): void {
   syncScreenVideoAudio();
   if (isAppPlaybackMuted()) {
     state.audioUnlockPending = false;
-    elements.soundButton.hidden = true;
+    startUi.soundButtonVisible = false;
   }
 }
 
 export function syncRemoteAudioPlayback(): void {
-  const muted = isVoicePlaybackMuted();
   for (const peer of state.peers.values()) {
-    for (const audio of peer.audioElements.values()) {
-      audio.muted = muted;
-      applyAudioOutputDevice(audio).catch(() => {});
+    applyRemoteParticipantAudioPreferences(peer);
+  }
+}
+
+export function applyRemoteParticipantAudioPreferences(peer: Participant): void {
+  const preferenceKey = getParticipantAudioPreferenceKey(peer.accountUserId, peer.id);
+  const preference = getParticipantAudioPreference(preferenceKey);
+  const muted = isVoicePlaybackMuted() || preference.muted || preference.volume <= 0;
+  for (const audio of peer.audioElements.values()) {
+    applyVoiceMediaElementVolume(audio, { muted, volume: preference.volume });
+    applyAudioOutputDevice(audio).catch(() => {});
+  }
+}
+
+
+interface VoiceAudioGain {
+  gain: GainNode;
+  source: MediaElementAudioSourceNode;
+}
+
+const voiceAudioGains = new WeakMap<HTMLMediaElement, VoiceAudioGain>();
+
+export function releaseRemoteAudioElement(mediaElement: HTMLMediaElement): void {
+  const existing = voiceAudioGains.get(mediaElement);
+  if (!existing) return;
+  existing.source.disconnect();
+  existing.gain.disconnect();
+  voiceAudioGains.delete(mediaElement);
+}
+
+function getAvailableVoiceMediaElementVolumeMax(): number {
+  return state.outputDeviceId && supportsAudioOutputSelection() && !supportsAudioContextOutputSelection()
+    ? 1
+    : MAX_PARTICIPANT_VOLUME;
+}
+
+function applyVoiceMediaElementVolume(
+  mediaElement: HTMLMediaElement,
+  options: { muted: boolean; volume: number }
+): boolean {
+  const maxVolume = getAvailableVoiceMediaElementVolumeMax();
+  const volume = Number.isFinite(options.volume) ? Math.min(maxVolume, Math.max(0, options.volume)) : 1;
+  const existing = voiceAudioGains.get(mediaElement);
+
+  if (existing && maxVolume > 1) {
+    mediaElement.volume = 1;
+    mediaElement.muted = options.muted;
+    existing.gain.gain.value = options.muted ? 0 : volume;
+    return true;
+  }
+
+  if (existing) {
+    releaseRemoteAudioElement(mediaElement);
+  }
+
+  if (volume <= 1) {
+    mediaElement.volume = Math.min(1, volume);
+    mediaElement.muted = options.muted;
+    return true;
+  }
+
+  try {
+    const context = getSharedAudioContext() as AudioContext & { setSinkId?: (sinkId: string) => Promise<void> };
+    if (state.outputDeviceId && typeof context.setSinkId === 'function') {
+      context.setSinkId(state.outputDeviceId).catch((error) => {
+        console.warn('Audio context output device unavailable', error);
+      });
     }
+    if (context.state !== 'running') {
+      queueAudioUnlock({ showFallback: true });
+      context.resume().catch(() => {});
+    }
+
+    const source = context.createMediaElementSource(mediaElement);
+    const gain = context.createGain();
+    source.connect(gain);
+    gain.connect(context.destination);
+    voiceAudioGains.set(mediaElement, { source, gain });
+    mediaElement.volume = 1;
+    mediaElement.muted = options.muted;
+    gain.gain.value = options.muted ? 0 : volume;
+    return true;
+  } catch (error) {
+    console.warn('Participant audio boost unavailable', error);
+    mediaElement.volume = Math.min(1, volume);
+    mediaElement.muted = options.muted;
+    return false;
   }
 }
 
@@ -46,7 +130,10 @@ export async function syncAudioOutputDevices(): Promise<boolean> {
     return false;
   }
 
-  const mediaElements: HTMLMediaElement[] = [elements.screenVideo];
+  syncRemoteAudioPlayback();
+
+  const screenVideo = getScreenVideo();
+  const mediaElements: HTMLMediaElement[] = screenVideo ? [screenVideo] : [];
   for (const peer of state.peers.values()) {
     mediaElements.push(...peer.audioElements.values());
   }
@@ -169,7 +256,7 @@ export function queueAudioUnlock(options: { showFallback?: boolean } = {}): void
   if (isAppPlaybackMuted()) return;
 
   state.audioUnlockPending = true;
-  if (options.showFallback) elements.soundButton.hidden = false;
+  if (options.showFallback) startUi.soundButtonVisible = true;
 }
 
 export function handleAudioUnlockGesture(): void {
@@ -191,10 +278,11 @@ export async function unlockAudio(): Promise<void> {
   for (const peer of state.peers.values()) {
     for (const audio of peer.audioElements.values()) plays.push(audio.play());
   }
-  if (!elements.screenStage.hidden) plays.push(elements.screenVideo.play());
+  const screenVideo = getScreenVideo();
+  if (screenUi.stageVisible && screenVideo) plays.push(screenVideo.play());
   await Promise.allSettled(plays);
   state.audioUnlockPending = false;
-  elements.soundButton.hidden = true;
+  startUi.soundButtonVisible = false;
   if (state.voiceConnection === 'playback-blocked') setVoiceConnectionStatus('connected');
 }
 

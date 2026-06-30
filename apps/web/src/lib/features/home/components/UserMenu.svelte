@@ -2,10 +2,7 @@
   import type { AuthUser } from '$lib/api/auth';
   import { updateDisplayName } from '$lib/api/auth';
   import { setUser } from '$lib/features/auth/session.svelte';
-  import Ellipsis from '$lib/shared/components/Ellipsis.svelte';
-  import Popover from '$lib/shared/components/Popover.svelte';
-  import PopoverDivider from '$lib/shared/components/PopoverDivider.svelte';
-  import PopoverMenuItem from '$lib/shared/components/PopoverMenuItem.svelte';
+  import { Ellipsis, Popover, PopoverDivider, PopoverMenuItem, type PopoverCloseReason } from '$lib/shared/ui';
   import { getAvatarColor } from '$lib/visual/tokens';
 
   let { user, loggingOut, onLogout, onOpenSettings, onToast } = $props<{
@@ -99,7 +96,7 @@
     }
   }
 
-  function onBeforeClose(reason: 'outside' | 'escape'): boolean | void {
+  function onBeforeClose(reason: PopoverCloseReason): boolean | void {
     if (editing && reason === 'escape') return false;
     editing = false;
   }

@@ -1,21 +1,15 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
   import { fetchDesktopRelease, type DesktopRelease } from '$lib/api/desktop';
-  import Popover from '$lib/shared/components/Popover.svelte';
-  import PopoverMenuItem from '$lib/shared/components/PopoverMenuItem.svelte';
-  import { DESKTOP_BUILDS, RELEASES_URL, detectDesktopBuildId } from '../model/desktop-builds';
+  import { Popover, PopoverMenuItem } from '$lib/shared/ui';
+  import { DESKTOP_BUILDS, RELEASES_URL } from '../model/desktop-builds';
   import { triggerDesktopDownload } from '../services/desktop-download';
 
   let open = $state(false);
-  let detectedBuildId = $state('mac-arm64');
   let release = $state<DesktopRelease | null>(null);
   let releaseLoading = $state(false);
   let releaseError = $state(false);
   let downloadingId = $state('');
 
-  onMount(() => {
-    detectedBuildId = detectDesktopBuildId();
-  });
 
   async function ensureRelease(): Promise<DesktopRelease | null> {
     if (release) return release;

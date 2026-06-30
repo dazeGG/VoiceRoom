@@ -1,6 +1,7 @@
 import type { Participant as LiveKitParticipant } from 'livekit-client';
 
 export interface PeerInfo {
+  accountUserId?: string;
   avatarColorKey?: string;
   id: string;
   name?: string;
@@ -16,6 +17,7 @@ export interface PeerInfo {
 }
 
 export interface Participant {
+  accountUserId: string;
   analyser: AnalyserNode | null;
   audioElements: Map<string, HTMLAudioElement>;
   avatarColorKey: string;
@@ -28,6 +30,9 @@ export interface Participant {
   connectionQuality: string;
   meterData: Uint8Array<ArrayBuffer> | null;
   muted: boolean;
+  speaking: boolean;
+  statusLabel: string;
+  level: number;
   name: string;
   micReceiver: RTCRtpReceiver | null;
   screen: boolean;

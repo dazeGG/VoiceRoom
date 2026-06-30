@@ -1,5 +1,5 @@
 <script lang="ts">
-  import Select from '$lib/shared/components/Select.svelte';
+  import { Select } from '$lib/shared/ui';
   import { DESKTOP_BUILDS, QUARANTINE_CMD, RELEASES_URL, type DesktopBuild } from '../model/desktop-builds';
 
   const BUILD_OPTIONS = DESKTOP_BUILDS.map((build) => ({ value: build.id, label: build.label }));

@@ -1,12 +1,26 @@
 <script lang="ts">
-  import '$lib/shared/styles/ellipsis.css';
   import Topbar from '$lib/shared/components/Topbar.svelte';
-  import Popover from '$lib/shared/components/Popover.svelte';
-  import PopoverDivider from '$lib/shared/components/PopoverDivider.svelte';
-  import PopoverMenuItem from '$lib/shared/components/PopoverMenuItem.svelte';
+  import { Ellipsis, Popover, PopoverDivider, PopoverMenuItem } from '$lib/shared/ui';
+  import { getRoomPreset } from '$lib/visual/tokens';
+  import { state } from '../client/core/state.svelte';
+  import { getConnectionStatusView } from '../client/ui/status';
   import { copyRoomCode, copyRoomLink } from '../client/room/room';
   import { roomUi, toggleChat } from '../room-ui.svelte';
   import { roomSettingsUi, openRoomSettings } from '../room-settings.svelte';
+
+  const connection = $derived(getConnectionStatusView());
+
+  // Heading content is derived from the reactive room state — the vanilla client
+  // populates state.room* on join/rename, and these update without imperative DOM writes.
+  const heading = $derived(state.roomName || state.roomId);
+  const visual = $derived(
+    getRoomPreset({
+      emoji: state.roomEmoji,
+      roomColorKey: state.roomColorKey,
+      roomIconKey: state.roomIconKey,
+      roomPresetKey: state.roomPresetKey
+    })
+  );
 
   async function handleCopyCode(close: () => void): Promise<void> {
     await copyRoomCode();
@@ -25,7 +39,7 @@
 </script>
 
 <Topbar label="Новая голосовая комната" reload>
-  <div class="room-heading topbar-room-heading" aria-label="Комната" hidden>
+  <div class="room-heading topbar-room-heading" aria-label="Комната" hidden={state.screen !== 'room'}>
     <div class="room-heading-main">
       <Popover
         placement="bottom-start"
@@ -44,8 +58,12 @@
               aria-controls={panelId}
               onclick={toggle}
             >
-              <span class="room-emoji-badge" id="roomEmojiBadge" aria-hidden="true" hidden></span>
-              <span id="roomTitle" class="room-heading-title ellipsis">room</span>
+              <span
+                class="room-emoji-badge"
+                aria-hidden="true"
+                style="background: {visual.background}; box-shadow: 0 0 0 1px {visual.ring};"
+              >{visual.emoji}</span>
+              <Ellipsis text={heading} title={heading} class="room-heading-title" />
               <span class="room-heading-trigger-chevron" aria-hidden="true">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
               </span>
@@ -55,10 +73,14 @@
 
         {#snippet content({ close })}
           <div class="room-heading-popover-head">
-            <span class="room-heading-popover-badge" id="roomPopoverEmojiBadge" aria-hidden="true" hidden></span>
+            <span
+              class="room-heading-popover-badge"
+              aria-hidden="true"
+              style="background: {visual.background}; box-shadow: 0 0 0 1px {visual.ring};"
+            >{visual.emoji}</span>
             <div class="room-heading-popover-info">
-              <span id="roomPopoverTitle" class="room-heading-popover-name ellipsis">room</span>
-              <span class="room-heading-popover-code ellipsis" id="roomCodeText"></span>
+              <Ellipsis text={heading} title={heading} class="room-heading-popover-name" />
+              <Ellipsis text={state.roomId} title={state.roomId} class="room-heading-popover-code" />
             </div>
           </div>
 
@@ -104,8 +126,13 @@
     </button>
   </div>
 
-  <div class="status-pill" data-state="idle" id="statusPill" hidden>
+  <div
+    class="status-pill"
+    data-state={connection.stateName}
+    title={connection.title || undefined}
+    hidden={connection.stateName === 'idle' || state.screen !== 'room'}
+  >
     <span class="status-dot" aria-hidden="true"></span>
-    <span id="statusText">готово</span>
+    <span>{connection.label}</span>
   </div>
 </Topbar>

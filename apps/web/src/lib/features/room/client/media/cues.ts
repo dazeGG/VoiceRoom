@@ -3,7 +3,7 @@ import {
   PEER_JOIN_CUE_DEDUPE_MS,
   STREAM_VIEWER_CUE_DEDUPE_MS
 } from '../core/config';
-import { state } from '../core/state';
+import { state } from '../core/state.svelte';
 import { getSharedAudioContext, isAppPlaybackMuted, isLocalAppAudioSuppressed, queueAudioUnlock } from '../services/media-playback-service';
 
 const peerJoinCueTimes = new Map<string, number>();

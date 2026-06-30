@@ -1,6 +1,5 @@
 import { roomDeviceUi } from '$lib/features/room/room-device-ui.svelte';
-import { elements } from './dom';
-import { state } from '../core/state';
+import { state } from '../core/state.svelte';
 import { postState } from '../room/presence';
 import {
   supportsAudioOutputSelection,
@@ -16,6 +15,66 @@ import { persistOutputMuted } from './devices';
 import { joinRoom } from '../room/room';
 import { showToast } from './toast';
 
+export interface CallControlsView {
+  label: string;
+  ariaPressed: boolean;
+  disabled: boolean;
+  stateName: 'idle' | 'connecting' | 'muted' | 'live';
+}
+
+export interface OutputControlsView {
+  label: string;
+  ariaPressed: boolean;
+  stateName: 'muted' | 'live';
+}
+
+export interface ScreenControlsView {
+  label: string;
+  ariaPressed: boolean;
+  disabled: boolean;
+  stateName: 'idle' | 'live';
+}
+
+export function getCallControlsView(): CallControlsView {
+  const label = !state.joined
+    ? state.connecting
+      ? 'Подключение'
+      : 'Подключить микрофон'
+    : state.muted
+      ? 'Включить микрофон'
+      : 'Выключить микрофон';
+
+  return {
+    label,
+    ariaPressed: Boolean(state.joined && state.muted),
+    disabled: state.connecting,
+    stateName: state.connecting ? 'connecting' : !state.joined ? 'idle' : state.muted ? 'muted' : 'live'
+  };
+}
+
+export function getOutputControlsView(): OutputControlsView {
+  const label = state.outputMuted ? 'Включить звук' : 'Выключить звук';
+  return {
+    label,
+    ariaPressed: state.outputMuted,
+    stateName: state.outputMuted ? 'muted' : 'live'
+  };
+}
+
+export function getScreenControlsView(): ScreenControlsView {
+  const sharing = Boolean(state.localScreenStream);
+  return {
+    label: sharing ? 'Закончить стрим' : 'Показать экран',
+    ariaPressed: sharing,
+    disabled: !state.joined || state.connecting || state.screenStarting,
+    stateName: sharing ? 'live' : 'idle'
+  };
+}
+
+export function syncOutputDeviceUiState(): void {
+  roomDeviceUi.outputDisabled = !supportsAudioOutputSelection();
+}
+
 export function setMicrophoneMuted(muted: boolean, options: { playCue?: boolean; post?: boolean } = {}): void {
   const {
     playCue = true,
@@ -30,8 +89,6 @@ export function setMicrophoneMuted(muted: boolean, options: { playCue?: boolean;
   syncLocalMicrophonePublicationMuted().catch((error) => console.warn('LiveKit microphone mute failed', error));
 
   if (playCue) playMicCue(state.muted);
-  elements.muteButton.setAttribute('aria-pressed', String(state.muted));
-  refreshCallControls();
   updateParticipant({
     deafened: state.outputMuted,
     id: state.peerId,
@@ -77,7 +134,7 @@ export function toggleOutputMute(): void {
     }
   }
 
-  refreshOutputControls();
+  syncOutputDeviceUiState();
   syncLiveKitVoiceSubscriptions();
   syncPlaybackMuteState();
   updateParticipant({
@@ -90,26 +147,10 @@ export function toggleOutputMute(): void {
   if (!state.outputMuted) unlockAudio().catch(() => {});
 }
 
+/** @deprecated Reactive views replace imperative DOM refresh. */
 export function refreshOutputControls(): void {
-  const label = state.outputMuted ? 'Включить звук' : 'Выключить звук';
-  elements.outputText.textContent = label;
-  elements.outputButton.setAttribute('aria-label', label);
-  elements.outputButton.setAttribute('aria-pressed', String(state.outputMuted));
-  elements.outputButton.dataset.state = state.outputMuted ? 'muted' : 'live';
-  roomDeviceUi.outputDisabled = !supportsAudioOutputSelection();
+  syncOutputDeviceUiState();
 }
 
-export function refreshCallControls(): void {
-  const label = !state.joined
-    ? state.connecting
-      ? 'Подключение'
-      : 'Подключить микрофон'
-    : state.muted
-      ? 'Включить микрофон'
-      : 'Выключить микрофон';
-
-  elements.muteText.textContent = label;
-  elements.muteButton.setAttribute('aria-label', label);
-  elements.muteButton.setAttribute('aria-pressed', String(state.joined && state.muted));
-  elements.muteButton.dataset.state = state.connecting ? 'connecting' : !state.joined ? 'idle' : state.muted ? 'muted' : 'live';
-}
+/** @deprecated Reactive views replace imperative DOM refresh. */
+export function refreshCallControls(): void {}

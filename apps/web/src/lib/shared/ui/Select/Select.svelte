@@ -1,13 +1,8 @@
 <script lang="ts">
   import { tick } from 'svelte';
-  import Ellipsis from '$lib/shared/components/Ellipsis.svelte';
-  import Popover from '$lib/shared/components/Popover.svelte';
-  import type { SelectOption } from '$lib/shared/components/select-types';
-  import '$lib/shared/styles/select.css';
-
-  export type { SelectOption } from '$lib/shared/components/select-types';
-
-  export type SelectVariant = 'field' | 'home' | 'compact' | 'dock';
+  import { Ellipsis } from '../Ellipsis';
+  import { Popover } from '../Popover';
+  import type { SelectOption, SelectProps } from './types';
 
   let {
     value = $bindable(''),
@@ -18,16 +13,7 @@
     flip = false,
     variant = 'field',
     onValueChange
-  }: {
-    value?: string;
-    options?: SelectOption[];
-    label?: string;
-    disabled?: boolean;
-    placement?: 'bottom-end' | 'bottom-start' | 'top-end' | 'top-start';
-    flip?: boolean;
-    variant?: SelectVariant;
-    onValueChange?: (value: string) => void;
-  } = $props();
+  }: SelectProps = $props();
 
   const selectedLabel = $derived(
     options.find((option) => option.value === value)?.label
@@ -183,3 +169,160 @@
     {/snippet}
   </Popover>
 </div>
+
+<style>
+  .select-root {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .select-trigger {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    width: 100%;
+    min-width: 0;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 12px;
+    padding: 13px 14px 13px 15px;
+    background: #0c0b08;
+    color: #ece7d9;
+    font-family: var(--font-sans);
+    font-size: 14.5px;
+    font-weight: 500;
+    text-align: left;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease;
+  }
+
+  .select-trigger:hover:not(:disabled),
+  .select-trigger[aria-expanded='true'] {
+    border-color: rgba(154, 143, 106, 0.7);
+  }
+
+  .select-trigger:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+  }
+
+  .select-trigger-label {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .select-trigger-chevron {
+    flex: none;
+    display: inline-flex;
+    color: #9a9484;
+    transition: transform 0.16s ease;
+  }
+
+  .select-trigger[aria-expanded='true'] .select-trigger-chevron {
+    transform: rotate(180deg);
+  }
+
+  /* Panel chrome lives on the Popover-owned div (passed via panelClass), so it must be global. */
+  :global(.select-panel) {
+    left: 0;
+    right: 0;
+    width: auto;
+    min-width: 100%;
+    max-height: min(280px, 50vh);
+    overflow: auto;
+    padding: 6px;
+  }
+
+  .select-trigger--field {
+    font-size: 14px;
+  }
+
+  .select-trigger--home {
+    border-color: rgba(154, 143, 106, 0.55);
+  }
+
+  .select-trigger--home:hover:not(:disabled),
+  .select-trigger--home[aria-expanded='true'] {
+    border-color: rgba(154, 143, 106, 0.7);
+    background: #0c0b08;
+  }
+
+  .select-trigger--compact {
+    width: auto;
+    min-width: 0;
+    padding: 9px 30px 9px 12px;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    color: #bdb7a8;
+    font-size: 13px;
+  }
+
+  .select-trigger--compact:hover:not(:disabled),
+  .select-trigger--compact[aria-expanded='true'] {
+    border-color: transparent;
+    background: rgba(255, 255, 255, 0.04);
+    color: #e7e2d4;
+  }
+
+  .select-trigger--dock {
+    position: relative;
+    justify-content: flex-start;
+    gap: 0;
+    border-color: oklch(34% 0.02 92);
+    border-radius: var(--radius-sm, 10px);
+    padding: 10px 36px 10px 12px;
+    background: oklch(15% 0.014 92);
+    color: oklch(96% 0.008 92);
+    font-size: 14px;
+  }
+
+  .select-trigger--dock .select-trigger-chevron {
+    position: absolute;
+    right: 11px;
+    top: 50%;
+    transform: translateY(-50%);
+  }
+
+  .select-trigger--dock:hover:not(:disabled),
+  .select-trigger--dock[aria-expanded='true'] {
+    border-color: oklch(42% 0.02 92);
+  }
+
+  .select-trigger--dock[aria-expanded='true'] .select-trigger-chevron {
+    transform: translateY(-50%) rotate(180deg);
+  }
+
+  /* Selected option row — rendered inside Select's content snippet, scoped here. */
+  .popover-option {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    min-width: 0;
+    padding: 10px 12px;
+    border: none;
+    border-radius: 10px;
+    background: transparent;
+    font-family: var(--font-sans);
+    font-size: 14px;
+    font-weight: 500;
+    color: #e7e2d4;
+    text-align: left;
+    cursor: pointer;
+    transition: background 0.14s ease;
+  }
+
+  .popover-option:hover {
+    background: rgba(255, 255, 255, 0.05);
+  }
+
+  .popover-option[data-selected='true'] {
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  .popover-option:disabled {
+    cursor: default;
+    opacity: 0.55;
+  }
+</style>

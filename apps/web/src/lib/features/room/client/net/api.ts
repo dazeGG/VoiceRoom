@@ -1,4 +1,4 @@
-import { state } from '../core/state';
+import { state } from '../core/state.svelte';
 
 export async function fetchJson(url: string): Promise<any> {
   const response = await fetch(url, { headers: { Accept: 'application/json' } });

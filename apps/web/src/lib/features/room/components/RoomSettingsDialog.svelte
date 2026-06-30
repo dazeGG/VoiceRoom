@@ -1,7 +1,7 @@
 <script lang="ts">
   import { ROOM_PRESETS } from '$lib/visual/tokens';
   import { deleteRoom, updateRoom } from '$lib/api/rooms';
-  import { state as roomClientState } from '../client/core/state';
+  import { state as roomClientState } from '../client/core/state.svelte';
   import { applyRoomUpdated } from '../client/room/lifecycle';
   import { showToast } from '../client/ui/toast';
   import { roomSettingsUi, closeRoomSettings } from '../room-settings.svelte';
