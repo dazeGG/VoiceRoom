@@ -736,7 +736,11 @@ test('participant context menu is remote-only and exposes relationship-aware loc
   assert.match(menu, /addFriendByUserId\(peer\.accountUserId\)/);
   assert.match(menu, /acceptRequestByUserId\(peer\.accountUserId\)/);
   const friends = read('src/lib/features/home/model/friends.svelte.ts');
+  assert.match(functionBody(friends, 'initLobby'), /connectRealtime\(handleRealtimeEvent\)/);
   assert.match(functionBody(friends, 'initLobby'), /Promise\.all\(\[refreshFriends\(\), refreshRequests\(\)\]\)/);
+  assert.match(functionBody(friends, 'refreshFriends'), /friendOnlineFromPresence\(friend\.user\.id, friend\.online\)/);
+  assert.match(functionBody(friends, 'handleRealtimeEvent'), /setOnlineSnapshot\(event\.onlineFriendIds\)/);
+  assert.match(functionBody(friends, 'handleRealtimeEvent'), /setFriendOnline\(event\.userId, event\.online\)/);
   assert.match(functionBody(friends, 'getFriendRelationship'), /requests\.incoming\.some/);
   assert.match(functionBody(friends, 'getFriendRelationship'), /requests\.outgoing\.some/);
   assert.match(menu, /setMode\('friends'\)/);
