@@ -594,6 +594,9 @@ test('hotfix lobby UX keeps dock in main area, preview chat, and add-friend subm
   assert.match(friendsCss, /\.lobby-preview-chat/);
   assert.match(friendsCss, /data-preview-chat-open/);
   assert.match(friendsCss, /\.lobby-dm-head[\s\S]*border: 0/);
+  const dmView = read('src/lib/features/home/components/lobby/DmView.svelte');
+  assert.match(dmView, /bind:this=\{inputEl\}/);
+  assert.match(dmView, /inputEl\?\.focus\(\)/);
   assert.match(lobby, /import '\$lib\/features\/room\/styles\/chat-rail\.css'/);
 });
 

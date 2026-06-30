@@ -16,6 +16,7 @@
   let draft = $state('');
   let sending = $state(false);
   let scrollEl = $state<HTMLDivElement | null>(null);
+  let inputEl = $state<HTMLInputElement | null>(null);
 
   const peer = $derived(friendsState.threadPeer);
   const friendEntry = $derived(
@@ -60,6 +61,13 @@
     void tick().then(() => {
       if (scrollEl) scrollEl.scrollTop = scrollEl.scrollHeight;
     });
+  });
+
+  // Focus the compose field when opening or switching DM threads.
+  $effect(() => {
+    const peerId = friendsState.selectedFriendId;
+    if (friendsState.view !== 'dm' || !peerId) return;
+    void tick().then(() => inputEl?.focus());
   });
 
   async function submit(): Promise<void> {
@@ -143,6 +151,7 @@
       <input
         class="lobby-dm-input"
         placeholder="Написать сообщение…"
+        bind:this={inputEl}
         bind:value={draft}
         onkeydown={onKeydown}
         disabled={sending}
