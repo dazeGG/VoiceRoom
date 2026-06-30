@@ -165,7 +165,7 @@
   .vr-slider-control:focus-within .vr-slider-thumb {
     box-shadow:
       0 1px 3px rgba(0, 0, 0, 0.45),
-      0 0 0 4px color-mix(in oklch, var(--slider-fill, var(--green, oklch(72% 0.16 164))) 45%, transparent);
+      0 0 0 3px var(--focus-ring, color-mix(in oklch, var(--green, oklch(72% 0.16 164)) 28%, transparent));
   }
 
   .vr-slider--disabled {

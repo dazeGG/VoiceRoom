@@ -148,7 +148,8 @@
 }
 
 .dialog-input:focus {
-  border-color: rgba(154, 143, 106, 0.85);
+  border-color: var(--focus-border);
+  box-shadow: 0 0 0 3px var(--focus-ring);
 }
 
 .dialog-input--mono {
