@@ -159,15 +159,28 @@
 
   function handlePointerDown(event: PointerEvent): void {
     if (!panel || panel.contains(event.target as Node)) return;
-    closeParticipantContextMenu();
+    closeParticipantContextMenu('', false);
+  }
+
+  function handleFocusIn(event: FocusEvent): void {
+    if (!participantContextMenu.open || !panel) return;
+    const target = event.target;
+    if (target instanceof Node && panel.contains(target)) return;
+    const opener = document.querySelector<HTMLElement>(
+      `.participant[data-peer-id="${CSS.escape(participantContextMenu.restoreFocusPeerId)}"]`
+    );
+    if (opener && target instanceof Node && opener.contains(target)) return;
+    closeParticipantContextMenu('', false);
   }
 
   onMount(() => {
     document.addEventListener('keydown', handleKeydown);
     document.addEventListener('pointerdown', handlePointerDown, { capture: true });
+    document.addEventListener('focusin', handleFocusIn);
     return () => {
       document.removeEventListener('keydown', handleKeydown);
       document.removeEventListener('pointerdown', handlePointerDown, { capture: true });
+      document.removeEventListener('focusin', handleFocusIn);
     };
   });
 

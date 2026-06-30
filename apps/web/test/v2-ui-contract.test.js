@@ -642,6 +642,7 @@ test('remote participant audio preferences persist volume and local mute separat
 
 test('participant context menu is remote-only and exposes relationship-aware local audio controls', () => {
   const menu = read('src/lib/features/room/components/ParticipantContextMenu.svelte');
+  const contextUi = read('src/lib/features/room/participant-context-ui.svelte.ts');
   const tile = read('src/lib/features/room/components/ParticipantTile.svelte');
   const main = read('src/lib/features/room/client/main.ts');
   const participants = read('src/lib/features/room/client/room/participants.ts');
@@ -675,6 +676,9 @@ test('participant context menu is remote-only and exposes relationship-aware loc
   assert.match(menu, /role="dialog"/);
   assert.match(menu, /document\.addEventListener\('keydown', handleKeydown/);
   assert.match(menu, /document\.addEventListener\('pointerdown', handlePointerDown, \{ capture: true \}\)/);
+  assert.match(menu, /document\.addEventListener\('focusin', handleFocusIn\)/);
+  assert.match(contextUi, /restoreFocusPeerId/);
+  assert.match(contextUi, /queueMicrotask\(\(\) => focusParticipantTile/);
   assert.match(menu, /activeElement instanceof HTMLInputElement && activeElement\.type === 'range'/);
   assert.match(menu, /event\.key === 'ArrowDown' && !isRangeInput/);
   assert.match(menu, /event\.key === 'ArrowUp' && !isRangeInput/);
