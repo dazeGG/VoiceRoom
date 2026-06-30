@@ -1,8 +1,10 @@
 
 import { elements } from '../ui/dom';
 import { state } from '../core/state';
-import { MAX_STREAM_VOLUME } from '../core/config';
+import { MAX_PARTICIPANT_VOLUME, MAX_STREAM_VOLUME } from '../core/config';
 import { getMicrophoneProcessors } from './microphone-service';
+import { getParticipantAudioPreference, getParticipantAudioPreferenceKey } from '../core/settings';
+import type { Participant } from '../core/types';
 import { setVoiceConnectionStatus } from '../ui/status';
 import { syncScreenVideoAudio } from '../ui/screen-view';
 
@@ -30,12 +32,94 @@ export function syncPlaybackMuteState(): void {
 }
 
 export function syncRemoteAudioPlayback(): void {
-  const muted = isVoicePlaybackMuted();
   for (const peer of state.peers.values()) {
-    for (const audio of peer.audioElements.values()) {
-      audio.muted = muted;
-      applyAudioOutputDevice(audio).catch(() => {});
+    applyRemoteParticipantAudioPreferences(peer);
+  }
+}
+
+export function applyRemoteParticipantAudioPreferences(peer: Participant): void {
+  const preferenceKey = getParticipantAudioPreferenceKey(peer.accountUserId, peer.id);
+  const preference = getParticipantAudioPreference(preferenceKey);
+  const muted = isVoicePlaybackMuted() || preference.muted || preference.volume <= 0;
+  for (const audio of peer.audioElements.values()) {
+    applyVoiceMediaElementVolume(audio, { muted, volume: preference.volume });
+    applyAudioOutputDevice(audio).catch(() => {});
+  }
+}
+
+
+interface VoiceAudioGain {
+  gain: GainNode;
+  source: MediaElementAudioSourceNode;
+}
+
+const voiceAudioGains = new WeakMap<HTMLMediaElement, VoiceAudioGain>();
+
+export function releaseRemoteAudioElement(mediaElement: HTMLMediaElement): void {
+  const existing = voiceAudioGains.get(mediaElement);
+  if (!existing) return;
+  existing.source.disconnect();
+  existing.gain.disconnect();
+  voiceAudioGains.delete(mediaElement);
+}
+
+function getAvailableVoiceMediaElementVolumeMax(): number {
+  return state.outputDeviceId && supportsAudioOutputSelection() && !supportsAudioContextOutputSelection()
+    ? 1
+    : MAX_PARTICIPANT_VOLUME;
+}
+
+function applyVoiceMediaElementVolume(
+  mediaElement: HTMLMediaElement,
+  options: { muted: boolean; volume: number }
+): boolean {
+  const maxVolume = getAvailableVoiceMediaElementVolumeMax();
+  const volume = Number.isFinite(options.volume) ? Math.min(maxVolume, Math.max(0, options.volume)) : 1;
+  const existing = voiceAudioGains.get(mediaElement);
+
+  if (existing && maxVolume > 1) {
+    mediaElement.volume = 1;
+    mediaElement.muted = options.muted;
+    existing.gain.gain.value = options.muted ? 0 : volume;
+    return true;
+  }
+
+  if (existing) {
+    releaseRemoteAudioElement(mediaElement);
+  }
+
+  if (volume <= 1) {
+    mediaElement.volume = Math.min(1, volume);
+    mediaElement.muted = options.muted;
+    return true;
+  }
+
+  try {
+    const context = getSharedAudioContext() as AudioContext & { setSinkId?: (sinkId: string) => Promise<void> };
+    if (state.outputDeviceId && typeof context.setSinkId === 'function') {
+      context.setSinkId(state.outputDeviceId).catch((error) => {
+        console.warn('Audio context output device unavailable', error);
+      });
     }
+    if (context.state !== 'running') {
+      queueAudioUnlock({ showFallback: true });
+      context.resume().catch(() => {});
+    }
+
+    const source = context.createMediaElementSource(mediaElement);
+    const gain = context.createGain();
+    source.connect(gain);
+    gain.connect(context.destination);
+    voiceAudioGains.set(mediaElement, { source, gain });
+    mediaElement.volume = 1;
+    mediaElement.muted = options.muted;
+    gain.gain.value = options.muted ? 0 : volume;
+    return true;
+  } catch (error) {
+    console.warn('Participant audio boost unavailable', error);
+    mediaElement.volume = Math.min(1, volume);
+    mediaElement.muted = options.muted;
+    return false;
   }
 }
 
@@ -45,6 +129,8 @@ export async function syncAudioOutputDevices(): Promise<boolean> {
     console.warn('Audio output device unavailable while stream boost is active');
     return false;
   }
+
+  syncRemoteAudioPlayback();
 
   const mediaElements: HTMLMediaElement[] = [elements.screenVideo];
   for (const peer of state.peers.values()) {

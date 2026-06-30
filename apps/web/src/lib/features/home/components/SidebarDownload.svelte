@@ -1,8 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { fetchDesktopRelease, type DesktopRelease } from '$lib/api/desktop';
-  import Popover from '$lib/shared/components/Popover.svelte';
-  import PopoverMenuItem from '$lib/shared/components/PopoverMenuItem.svelte';
+  import { Popover, PopoverMenuItem } from '$lib/shared/ui';
   import { DESKTOP_BUILDS, RELEASES_URL, detectDesktopBuildId } from '../model/desktop-builds';
   import { triggerDesktopDownload } from '../services/desktop-download';
 

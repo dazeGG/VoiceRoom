@@ -49,6 +49,7 @@ import {
 } from './ui/screen-view';
 import { cancelScreenSourcePicker, closeScreenSourceOnBackdrop, closeScreenSourceOnEscape } from './ui/screen-source-picker';
 import { refreshLocalNetworkIndicator } from './ui/status';
+import { bindParticipantContextMenu } from './ui/participant-context-menu';
 
 let mounted = false;
 let mountAbortController: AbortController | null = null;
@@ -114,6 +115,7 @@ export function mountRoomClient(root: ParentNode = document, options: { roomId?:
   elements.streamVolumeSlider.addEventListener('input', updateScreenVolumeFromSlider, { signal: listenerSignal });
   syncScreenVideoAudio();
   bindScreenStageIdleUi(listenerSignal);
+  bindParticipantContextMenu(listenerSignal);
   elements.deviceMenuButton.addEventListener('click', toggleDevicePopover, { signal: listenerSignal });
   elements.outputMenuButton.addEventListener('click', toggleOutputPopover, { signal: listenerSignal });
   elements.leaveButton.addEventListener('click', handleLeaveButtonClick, { signal: listenerSignal });

@@ -1,6 +1,6 @@
 <script lang="ts">
-  import type { Snippet } from 'svelte';
-  import '$lib/shared/styles/ellipsis.css';
+  import './ellipsis.css';
+  import type { EllipsisProps } from './types';
 
   let {
     text = '',
@@ -9,14 +9,7 @@
     inline = false,
     tag = 'span',
     children
-  }: {
-    text?: string;
-    title?: string;
-    class?: string;
-    inline?: boolean;
-    tag?: keyof HTMLElementTagNameMap;
-    children?: Snippet;
-  } = $props();
+  }: EllipsisProps = $props();
 
   const resolvedTitle = $derived(title ?? text);
   const classes = $derived(

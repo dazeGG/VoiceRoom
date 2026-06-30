@@ -1,4 +1,4 @@
-/* Single-line truncation — use via Ellipsis.svelte or class="ellipsis" on plain nodes. */
+/* Single-line truncation — global utility, used via Ellipsis.svelte or class="ellipsis" on plain nodes. */
 
 .ellipsis {
   display: block;

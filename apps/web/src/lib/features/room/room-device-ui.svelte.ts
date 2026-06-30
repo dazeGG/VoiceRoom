@@ -1,4 +1,4 @@
-import type { SelectOption } from '$lib/shared/components/select-types';
+import type { SelectOption } from '$lib/shared/ui';
 
 export const NOISE_MODE_SELECT_OPTIONS: SelectOption[] = [
   { value: 'off', label: 'Выкл' },
