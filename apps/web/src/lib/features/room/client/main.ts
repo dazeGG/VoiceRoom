@@ -1,7 +1,7 @@
 import { GATE_THRESHOLD_MIN_DB } from './core/config';
 import { roomDeviceUi } from '$lib/features/room/room-device-ui.svelte';
 import { startUi } from '$lib/features/room/start-ui.svelte';
-import { registerActiveVoiceLeave } from '$lib/features/room/voice-session.svelte';
+import { registerActiveVoiceControls, registerActiveVoiceLeave } from '$lib/features/room/voice-session.svelte';
 import { mountIcons } from './ui/icons';
 import { state } from './core/state.svelte';
 import { getStoredPeerSession } from './core/session';
@@ -9,7 +9,7 @@ import { cleanDisplayName } from './core/utils';
 import { showToast } from './ui/toast';
 import { handleAudioUnlockGesture } from './services/media-playback-service';
 import { refreshDevices, refreshMicrophoneLevelMeter } from './ui/devices';
-import { syncOutputDeviceUiState } from './ui/controls';
+import { syncOutputDeviceUiState, toggleMicrophoneMuted, toggleOutputMute } from './ui/controls';
 import { resetGuestNameDialog, updateNameStatuses } from './ui/names';
 import {
   joinRoom,
@@ -31,6 +31,7 @@ import { closeScreenSourceOnEscape } from './ui/screen-source-picker';
 let mounted = false;
 let mountAbortController: AbortController | null = null;
 let activeVoiceLeaveTeardown: (() => void) | null = null;
+let activeVoiceControlsTeardown: (() => void) | null = null;
 
 export function mountRoomClient(_root: ParentNode = document, options: { roomId?: string; embeddedRoomId?: string; autoJoin?: boolean } = {}): () => void {
   if (mounted) return unmountRoomClient;
@@ -38,6 +39,10 @@ export function mountRoomClient(_root: ParentNode = document, options: { roomId?
   mountAbortController = new AbortController();
   const listenerSignal = mountAbortController.signal;
   activeVoiceLeaveTeardown = registerActiveVoiceLeave(leaveRoom);
+  activeVoiceControlsTeardown = registerActiveVoiceControls({
+    toggleMic: toggleMicrophoneMuted,
+    toggleDeafen: toggleOutputMute
+  });
 
   const mountedRoomId = options.roomId || options.embeddedRoomId || '';
   if (mountedRoomId) {
@@ -109,6 +114,8 @@ function unmountRoomClient(): void {
   leaveRoom();
   activeVoiceLeaveTeardown?.();
   activeVoiceLeaveTeardown = null;
+  activeVoiceControlsTeardown?.();
+  activeVoiceControlsTeardown = null;
   mountAbortController?.abort();
   mountAbortController = null;
   resetGuestNameDialog();

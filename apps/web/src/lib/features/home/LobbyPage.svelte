@@ -8,7 +8,12 @@
   import { extractRoomId } from '$lib/shared/utils/room';
   import SettingsModal from './components/SettingsModal.svelte';
   import RoomPage from '$lib/features/room/RoomPage.svelte';
-  import { leaveActiveVoiceRoom } from '$lib/features/room/voice-session.svelte';
+  import {
+    leaveActiveVoiceRoom,
+    toggleActiveVoiceMic,
+    toggleActiveVoiceDeafen,
+    voiceSession
+  } from '$lib/features/room/voice-session.svelte';
   import CreateRoomDialog from './components/CreateRoomDialog.svelte';
   import Sidebar from './components/lobby/Sidebar.svelte';
   import HomeView from './components/lobby/HomeView.svelte';
@@ -311,8 +316,12 @@
       onOpenSettings={openSettings}
       activeVoiceRoomId={connectedVoiceRoomId}
       activeVoiceRoomName={connectedVoiceRoom ? roomDisplayName(connectedVoiceRoom) : connectedVoiceRoomId || ''}
+      activeVoiceMuted={voiceSession.muted}
+      activeVoiceDeafened={voiceSession.deafened}
       onOpenVoiceRoom={openConnectedVoiceRoom}
       onLeaveVoiceRoom={leaveConnectedVoiceRoom}
+      onToggleVoiceMic={toggleActiveVoiceMic}
+      onToggleVoiceDeafen={toggleActiveVoiceDeafen}
     />
 
     <main class="lobby-main" aria-label="Главная Voice Room">

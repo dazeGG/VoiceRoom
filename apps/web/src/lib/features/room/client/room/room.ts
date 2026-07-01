@@ -2,7 +2,7 @@ import { fetchMe, fetchOwnedRooms } from '$lib/api/auth';
 import { roomNameFor } from '$lib/features/auth/account';
 import { roomSettingsUi } from '../../room-settings.svelte';
 import { startUi } from '../../start-ui.svelte';
-import { clearConnectedVoiceRoom, setConnectedVoiceRoom } from '../../voice-session.svelte';
+import { clearConnectedVoiceRoom, setConnectedVoiceRoom, setVoiceControlsState } from '../../voice-session.svelte';
 import { state } from '../core/state.svelte';
 import { showToast } from '../ui/toast';
 import { checkRoomExists, postJson } from '../net/api';
@@ -260,6 +260,7 @@ export async function joinRoom(event?: Event): Promise<void> {
     await connectLiveKitRoom(name);
     state.joined = true;
     setConnectedVoiceRoom(state.roomId);
+    setVoiceControlsState({ muted: state.muted, deafened: state.outputMuted });
     if (state.muted || state.outputMuted) postState().catch(() => {});
     refreshCallControls();
     refreshScreenControls();

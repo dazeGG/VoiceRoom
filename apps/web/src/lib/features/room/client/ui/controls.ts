@@ -14,6 +14,12 @@ import { updateParticipant } from '../room/participants';
 import { persistOutputMuted } from './devices';
 import { joinRoom } from '../room/room';
 import { showToast } from './toast';
+import { setVoiceControlsState } from '$lib/features/room/voice-session.svelte';
+
+/** Mirror the current mic/output mute state to the lobby voice-session store. */
+function syncVoiceSessionControls(): void {
+  setVoiceControlsState({ muted: state.muted, deafened: state.outputMuted });
+}
 
 export interface CallControlsView {
   label: string;
@@ -95,6 +101,7 @@ export function setMicrophoneMuted(muted: boolean, options: { playCue?: boolean;
     muted: state.muted,
     name: getDisplayName()
   });
+  syncVoiceSessionControls();
   if (post) postState().catch(() => {});
 }
 
@@ -113,6 +120,12 @@ export async function handleMicButtonClick(event: Event): Promise<void> {
     return;
   }
 
+  toggleMute();
+}
+
+/** Toggle the microphone from outside the room UI (e.g. the lobby voice widget). */
+export function toggleMicrophoneMuted(): void {
+  if (!state.joined) return;
   toggleMute();
 }
 
@@ -143,6 +156,7 @@ export function toggleOutputMute(): void {
     muted: state.muted,
     name: getDisplayName()
   });
+  syncVoiceSessionControls();
   postState().catch(() => {});
   if (!state.outputMuted) unlockAudio().catch(() => {});
 }
