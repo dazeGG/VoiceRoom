@@ -97,7 +97,13 @@
   function onFocusOut(event: FocusEvent): void {
     if (!open || !root) return;
     const nextTarget = event.relatedTarget;
-    if (nextTarget instanceof Node && root.contains(nextTarget)) return;
+    // A null relatedTarget is ambiguous — it also happens when focus is lost
+    // to a non-focusable click inside the panel (plain label/text), not just
+    // when focus truly leaves the popover. Only close on a definite focus
+    // move to a real outside element; onWindowPointerDown already covers
+    // genuine outside clicks.
+    if (!(nextTarget instanceof Node)) return;
+    if (root.contains(nextTarget)) return;
     requestClose('focusout', false);
   }
 
