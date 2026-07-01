@@ -88,7 +88,10 @@
     if (activeVoiceRoomId !== roomId) return peers;
 
     const localPeer = selfPeer();
-    if (peers.some((peer) => peer.id === localPeer.id)) return peers;
+    const alreadyPresent = peers.some(
+      (peer) => peer.id === localPeer.id || peer.name.trim() === localPeer.name.trim()
+    );
+    if (alreadyPresent) return peers;
     return [...peers, localPeer];
   }
 
@@ -249,7 +252,6 @@
                   <div class="lobby-voices">
                     <span class="lobby-live-dot"></span>
                     <AvatarStack items={roomAvatars(room.roomId)} maxAvatars={5} size={22} ariaLabel="В комнате" />
-                    <span class="lobby-row-sub" style="color:#8fa888;">{displayPeers} в эфире</span>
                   </div>
                 {:else}
                   <div class="lobby-row-sub lobby-row-sub--muted">тихо сейчас</div>
