@@ -479,92 +479,12 @@ body[data-lobby-embedded="true"] .room-dock {
   gap: var(--space-sm);
 }
 
-.gate-meter-wrap {
-  position: relative;
-  display: grid;
-  align-items: center;
-  min-width: 0;
-  height: 24px;
-}
-
-.gate-control input {
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  height: 24px;
-  min-height: 0;
-  min-width: 0;
-  border: 0;
-  border-radius: 0;
-  padding: 0;
-  margin: 0;
-  appearance: none;
-  -webkit-appearance: none;
-  background: transparent;
-  cursor: pointer;
-  outline: none;
-  pointer-events: none;
-  transition: none;
-  box-shadow: none;
-}
-
-.gate-control input:hover,
-.gate-control input:focus,
-.gate-control input:focus-visible {
-  border: 0;
-  background: transparent;
-  outline: none;
-  box-shadow: none;
-}
-
-.gate-control input::-webkit-slider-runnable-track {
-  height: 8px;
-  border: 0;
-  background: transparent;
-}
-
-.gate-control input::-webkit-slider-thumb {
-  width: 16px;
-  height: 16px;
-  margin-top: -4px;
-  border: 0;
-  border-radius: 50%;
-  background: transparent;
-  -webkit-appearance: none;
-  appearance: none;
-}
-
-.gate-control input::-moz-range-track {
-  height: 8px;
-  border: 0;
-  background: transparent;
-}
-
-.gate-control input::-moz-range-thumb {
-  width: 16px;
-  height: 16px;
-  border: 0;
-  border-radius: 50%;
-  background: transparent;
-}
-
 .gate-control output {
   color: oklch(96% 0.008 92);
   font-size: 0.78rem;
   font-weight: 850;
   text-align: right;
   white-space: nowrap;
-}
-
-.mic-level-track {
-  position: relative;
-  height: 8px;
-  overflow: visible;
-  border: 0;
-  border-radius: 999px;
-  background: oklch(14% 0.014 92);
-  cursor: pointer;
-  touch-action: none;
 }
 
 .mic-level-fill {
@@ -579,26 +499,6 @@ body[data-lobby-embedded="true"] .room-dock {
 
 .mic-level-fill[data-state="closed"] {
   background: linear-gradient(90deg, oklch(38% 0.036 92), oklch(48% 0.055 92));
-}
-
-.mic-gate-marker {
-  position: absolute;
-  top: 50%;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  border: 0;
-  background: oklch(98% 0.006 92);
-  box-shadow:
-    0 0 0 2px oklch(8% 0.012 92 / 0.76),
-    0 4px 12px oklch(4% 0.014 92 / 0.58);
-  opacity: 0;
-  transform: translate(-50%, -50%);
-  transition: opacity 120ms ease;
-}
-
-.mic-gate-marker[data-active="true"] {
-  opacity: 1;
 }
 
 .sound-button {

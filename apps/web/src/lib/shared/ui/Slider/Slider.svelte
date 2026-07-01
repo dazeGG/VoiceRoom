@@ -10,8 +10,10 @@
     snap = false,
     snapThreshold = 0,
     disabled = false,
+    showFill = true,
     ariaLabel = 'Значение',
     ariaValueText,
+    background,
     onValueChange
   }: SliderProps = $props();
 
@@ -51,7 +53,12 @@
 >
   <div class="vr-slider-control">
     <span class="vr-slider-track" aria-hidden="true">
-      <span class="vr-slider-fill"></span>
+      {#if background}
+        {@render background()}
+      {/if}
+      {#if showFill}
+        <span class="vr-slider-fill"></span>
+      {/if}
       <span class="vr-slider-thumb"></span>
     </span>
     <input

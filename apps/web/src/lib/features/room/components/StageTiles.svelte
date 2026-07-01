@@ -24,8 +24,8 @@
   <div
     class="tile-grid"
     id="tileGrid"
-    data-count={Math.min(totalCount, 8)}
-    data-streams={Math.min(streamCount, 8)}
+    data-count={Math.min(totalCount, 9)}
+    data-streams={Math.min(streamCount, 9)}
   >
     <StreamTiles />
     <ParticipantList />

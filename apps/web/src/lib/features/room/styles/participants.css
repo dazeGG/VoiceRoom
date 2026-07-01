@@ -8,34 +8,65 @@ body[data-screen-view="true"][data-strip-collapsed="true"] .stage-strip {
   min-height: clamp(180px, calc(100dvh - 360px), 360px);
 }
 
-/* One or two participants: cap the tile size and center it instead of letting
-   it stretch to fill a tall stage; still allowed to shrink (min 0). */
+/* Per-participant-count grids. Each tile is a fixed 16:9 frame; the block is
+   capped in width and centred. Layouts follow the "Плитки звонка" spec:
+   incomplete bottom rows (3, 5, 7) get their trailing tile nudged one
+   half-track so the short row sits centred under the row above. */
 .tile-grid[data-count="1"] {
-  width: min(860px, 100%);
-  grid-template-rows: minmax(0, min(440px, 56vh));
-  align-content: center;
-  margin-inline: auto;
+  --tile-columns: 1;
+  max-width: min(600px, 100%);
 }
 
 .tile-grid[data-count="2"] {
   --tile-columns: 2;
-  grid-template-rows: minmax(0, min(460px, 56vh));
-  align-content: center;
+  max-width: min(640px, 100%);
 }
 
-.tile-grid[data-count="3"],
+.tile-grid[data-count="3"] {
+  --tile-columns: 2;
+  max-width: min(640px, 100%);
+}
+
+.tile-grid[data-count="3"] .participant:nth-child(3) {
+  grid-column: 2 / span 2;
+}
+
 .tile-grid[data-count="4"] {
   --tile-columns: 2;
+  max-width: min(680px, 100%);
 }
 
-.tile-grid[data-count="5"],
+.tile-grid[data-count="5"] {
+  --tile-columns: 3;
+  max-width: min(1000px, 100%);
+}
+
+.tile-grid[data-count="5"] .participant:nth-child(4) {
+  grid-column: 2 / span 2;
+}
+
 .tile-grid[data-count="6"] {
   --tile-columns: 3;
+  max-width: min(1000px, 100%);
 }
 
-.tile-grid[data-count="7"],
+.tile-grid[data-count="7"] {
+  --tile-columns: 4;
+  max-width: min(1040px, 100%);
+}
+
+.tile-grid[data-count="7"] .participant:nth-child(5) {
+  grid-column: 2 / span 2;
+}
+
 .tile-grid[data-count="8"] {
   --tile-columns: 4;
+  max-width: min(1040px, 100%);
+}
+
+.tile-grid[data-count="9"] {
+  --tile-columns: 3;
+  max-width: min(1000px, 100%);
 }
 
 .participant {
@@ -46,8 +77,9 @@ body[data-screen-view="true"][data-strip-collapsed="true"] .stage-strip {
   position: relative;
   display: grid;
   min-height: 0;
-  height: 100%;
-  aspect-ratio: auto;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  grid-column: span 2;
   /* Size container so descendant avatar/ring elements can scale down on short tiles. */
   container-type: size;
   place-items: center;
@@ -414,4 +446,48 @@ body[data-screen-view="true"][data-strip-collapsed="true"] .stage-strip {
 
 .pcm-volume {
   padding: 6px 10px 8px;
+  display: grid;
+  gap: 9px;
+}
+
+.pcm-volume-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm, 12px);
+}
+
+.pcm-volume-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: var(--ink, #ece7d9);
+  font-family: var(--font-sans, sans-serif);
+  font-size: 13.5px;
+  font-weight: 700;
+}
+
+.pcm-volume-label svg {
+  flex: none;
+  color: var(--muted, #9a9484);
+}
+
+.pcm-volume-value {
+  flex: none;
+  color: var(--ink, #ece7d9);
+  font-family: var(--font-sans, sans-serif);
+  font-size: 13.5px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.pcm-volume-scale {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--muted, #9a9484);
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  letter-spacing: 0.02em;
 }

@@ -233,9 +233,8 @@ test('shared Select primitive wraps Popover listbox slots for site-wide dropdown
   assert.match(sidebarDownload, /import \{[^}]*\bPopoverMenuItem\b[^}]*\} from '\$lib\/shared\/ui'/);
   assert.match(settingsModal, /import \{[^}]*\bSelect\b[^}]*\} from '\$lib\/shared\/ui'/);
   assert.match(settingsModal, /import \{[^}]*\bSlider\b[^}]*\} from '\$lib\/shared\/ui'/);
-  assert.match(settingsModal, /import \{[^}]*\bVolumeSlider\b[^}]*\} from '\$lib\/shared\/ui'/);
   assert.match(settingsModal, /<Slider[\s\S]*onValueChange=\{onGateChange\}/);
-  assert.match(settingsModal, /<VolumeSlider[\s\S]*label="Звуки интерфейса"/);
+  assert.match(settingsModal, /<span class="settings-field-label">Звуки интерфейса<\/span>[\s\S]*<Slider[\s\S]*onValueChange=\{onNotificationVolumeChange\}/);
   assert.match(settingsModal, /playPeerCue\('join'\)/);
   assert.match(roomDock, /import \{[^}]*\bSelect\b[^}]*\} from '\$lib\/shared\/ui'/);
   assert.match(roomDock, /import \{[^}]*\bPopover\b[^}]*\} from '\$lib\/shared\/ui'/);
@@ -773,7 +772,7 @@ test('participant context menu is remote-only and exposes relationship-aware loc
 
   assert.match(css, /\.participant-context-menu/);
   assert.match(css, /\.pcm-volume/);
-  assert.match(menu, /<VolumeSlider[\s\S]*bind:value=\{volumePercent\}/);
+  assert.match(menu, /<Slider[\s\S]*bind:value=\{volumePercent\}/);
 });
 
 test('notification cue volume respects stored multiplier', () => {
@@ -800,16 +799,23 @@ test('sound cue layer covers direct messages and friend request events', () => {
   assert.match(settingsModal, /previewCue\('friend-request'\)/);
 });
 
-test('shared slider component backs volume slider UI', () => {
+test('shared slider component supports custom track backgrounds and backs volume UI', () => {
   const slider = read('src/lib/shared/ui/Slider/Slider.svelte');
-  const volumeSlider = read('src/lib/shared/ui/VolumeSlider/VolumeSlider.svelte');
+  const sliderTypes = read('src/lib/shared/ui/Slider/types.ts');
   const uiIndex = read('src/lib/shared/ui/index.ts');
+  const settingsModal = read('src/lib/features/home/components/SettingsModal.svelte');
+  const participantMenu = read('src/lib/features/room/components/ParticipantContextMenu.svelte');
 
   assert.match(uiIndex, /export \* from '\.\/Slider'/);
+  assert.doesNotMatch(uiIndex, /VolumeSlider/);
   assert.match(slider, /class="vr-slider"/);
   assert.match(slider, /--slider-fraction/);
-  assert.match(volumeSlider, /import \{ Slider \} from '\.\.\/Slider'/);
-  assert.match(volumeSlider, /<Slider[\s\S]*bind:value/);
+  assert.match(sliderTypes, /showFill\?: boolean/);
+  assert.match(sliderTypes, /background\?: Snippet/);
+  assert.match(slider, /\{#if background\}[\s\S]*\{@render background\(\)\}/);
+  assert.match(slider, /\{#if showFill\}[\s\S]*vr-slider-fill/);
+  assert.match(settingsModal, /<Slider[\s\S]*onValueChange=\{onNotificationVolumeChange\}/);
+  assert.match(participantMenu, /<Slider[\s\S]*bind:value=\{volumePercent\}/);
 });
 
 test('focus styles use light border tokens instead of colored glow', () => {

@@ -2,7 +2,6 @@ import {
   DEFAULT_GATE_THRESHOLD_DB,
   GATE_CAPTURE_SWITCH_DEBOUNCE_MS,
   GATE_THRESHOLD_DB_STORAGE_KEY,
-  GATE_THRESHOLD_MAX_DB,
   GATE_THRESHOLD_MIN_DB,
   MICROPHONE_DEVICE_STORAGE_KEY,
   OUTPUT_DEVICE_STORAGE_KEY,
@@ -35,10 +34,8 @@ let gateSwitchTimer = 0;
 export interface GateControlView {
   levelScale: number;
   levelState: 'open' | 'closed';
-  markerLeft: string;
   markerActive: boolean;
   thresholdLabel: string;
-  ariaValueNow: number;
   thresholdValue: number;
 }
 
@@ -46,15 +43,12 @@ export function getGateControlView(): GateControlView {
   const levelDb = Number.isFinite(roomDeviceUi.micLevelDb) ? clampGateThresholdDb(roomDeviceUi.micLevelDb) : GATE_THRESHOLD_MIN_DB;
   const position = getDbMeterPosition(levelDb);
   const gateOpen = isGateDisabled() || levelDb >= state.gateThresholdDb;
-  const markerPosition = getDbMeterPosition(state.gateThresholdDb);
 
   return {
     levelScale: position,
     levelState: gateOpen ? 'open' : 'closed',
-    markerLeft: `${(markerPosition * 100).toFixed(2)}%`,
     markerActive: !isGateDisabled(),
     thresholdLabel: isGateDisabled() ? 'Выкл' : `${state.gateThresholdDb} dB`,
-    ariaValueNow: Math.round(levelDb),
     thresholdValue: state.gateThresholdDb
   };
 }
@@ -235,14 +229,6 @@ export function updateGateThresholdFromSlider(value: string | number): void {
       successMessage: isGateDisabled() ? 'Гейт выключен' : `Гейт: ${state.gateThresholdDb} dB`
     }).catch((error) => console.error(error));
   }, GATE_CAPTURE_SWITCH_DEBOUNCE_MS);
-}
-
-export function updateGateThresholdFromPosition(clientX: number, trackLeft: number, trackWidth: number): void {
-  if (trackWidth <= 0) return;
-
-  const position = Math.min(1, Math.max(0, (clientX - trackLeft) / trackWidth));
-  const value = Math.round(GATE_THRESHOLD_MIN_DB + position * (GATE_THRESHOLD_MAX_DB - GATE_THRESHOLD_MIN_DB));
-  updateGateThresholdFromSlider(value);
 }
 
 function updateActiveGateThreshold(threshold: number): boolean {
