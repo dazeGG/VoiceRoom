@@ -15,6 +15,7 @@
   } from '../../model/friends.svelte';
   import Avatar from './Avatar.svelte';
   import SidebarDownload from '../SidebarDownload.svelte';
+  import VoiceCallWidget from './VoiceCallWidget.svelte';
 
   let {
     user,
@@ -28,8 +29,12 @@
     onOpenSettings,
     activeVoiceRoomId = null,
     activeVoiceRoomName = '',
+    activeVoiceMuted = false,
+    activeVoiceDeafened = false,
     onOpenVoiceRoom,
-    onLeaveVoiceRoom
+    onLeaveVoiceRoom,
+    onToggleVoiceMic,
+    onToggleVoiceDeafen
   } = $props<{
     user: AuthUser;
     rooms: OwnedRoom[];
@@ -42,8 +47,12 @@
     onOpenSettings: () => void;
     activeVoiceRoomId?: string | null;
     activeVoiceRoomName?: string;
+    activeVoiceMuted?: boolean;
+    activeVoiceDeafened?: boolean;
     onOpenVoiceRoom?: () => void;
     onLeaveVoiceRoom?: () => void;
+    onToggleVoiceMic?: () => void;
+    onToggleVoiceDeafen?: () => void;
   }>();
 
   let search = $state('');
@@ -265,19 +274,15 @@
   {/if}
 
   {#if activeVoiceRoomId}
-    <div class="lobby-voice-panel" aria-label="Активный голос">
-      <div class="lobby-voice-state">
-        <span class="lobby-live-dot" aria-hidden="true"></span>
-        <span>Вы в голосе</span>
-      </div>
-      <div class="lobby-voice-room" title={activeVoiceLabel}>{activeVoiceLabel}</div>
-      <div class="lobby-voice-actions">
-        <button class="lobby-voice-open" type="button" onclick={onOpenVoiceRoom}>Открыть</button>
-        <button class="lobby-voice-leave" type="button" onclick={onLeaveVoiceRoom} aria-label="Выйти из голосовой комнаты">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"></path><polyline points="10 17 15 12 10 7"></polyline><line x1="15" y1="12" x2="3" y2="12"></line></svg>
-        </button>
-      </div>
-    </div>
+    <VoiceCallWidget
+      roomName={activeVoiceLabel}
+      muted={activeVoiceMuted}
+      deafened={activeVoiceDeafened}
+      onOpen={onOpenVoiceRoom}
+      onToggleMic={onToggleVoiceMic}
+      onToggleDeafen={onToggleVoiceDeafen}
+      onLeave={onLeaveVoiceRoom}
+    />
   {/if}
 
   <div class="lobby-profile">
