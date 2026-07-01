@@ -3,6 +3,10 @@
 const crypto = require('node:crypto');
 const fastify = require('fastify');
 const fastifyCookie = require('@fastify/cookie');
+const fastifyWebsocket = require('@fastify/websocket');
+const { createConnectionRegistry } = require('./realtime/registry');
+const { createWsHandler } = require('./realtime/ws-handler');
+const { createRoomRealtimeRuntime } = require('./realtime/room-runtime');
 const { URL } = require('node:url');
 const { AccessToken, TrackSource } = require('livekit-server-sdk');
 
@@ -68,8 +72,8 @@ const DM_RATE_LIMIT = readEnvInt('DM_RATE_LIMIT', 30, 0);
 const DM_RATE_WINDOW_MS = readEnvInt('DM_RATE_WINDOW_MS', 10000, 1000);
 const FRIEND_REQUEST_RATE_LIMIT = readEnvInt('FRIEND_REQUEST_RATE_LIMIT', 20, 0);
 const FRIEND_REQUEST_RATE_WINDOW_MS = readEnvInt('FRIEND_REQUEST_RATE_WINDOW_MS', 60000, 1000);
-// Cap concurrent realtime (SSE) streams per user so a single account cannot
-// pin an unbounded number of keep-alive connections.
+// Cap concurrent realtime (WebSocket) connections per user so a single account
+// cannot pin an unbounded number of keep-alive connections.
 const MAX_REALTIME_STREAMS_PER_USER = readEnvInt('MAX_REALTIME_STREAMS_PER_USER', 8, 1);
 // Desktop app downloads are served from the latest GitHub release of this repo.
 // Metadata is cached server-side so visitors never hit GitHub's per-IP rate limit.
@@ -81,12 +85,9 @@ let roomStore = null;
 let userStore = null;
 let friendStore = null;
 
-// Global per-user realtime: userId -> Set<res> of open /api/realtime SSE
-// streams. A user counts as "online" while this set is non-empty, which drives
-// friend presence dots and lets us push DM/friend events to every open tab.
-const presenceUsers = new Map();
 const presenceRooms = new Map();
-const roomChatStreams = new Map();
+let wsRegistry = null;
+let roomRuntime = null;
 
 function getRoomStore() {
   if (!roomStore) {
@@ -114,27 +115,12 @@ function getFriendStore() {
 }
 
 function isUserOnline(userId) {
-  const set = presenceUsers.get(userId);
-  return Boolean(set && set.size > 0);
+  return Boolean(wsRegistry && wsRegistry.connectionCount(userId) > 0);
 }
 
-// Push an SSE frame to every open realtime stream a user has. Prunes dead
-// connections; returns the number of live streams that received it.
 function broadcastToUser(userId, message) {
-  const set = presenceUsers.get(userId);
-  if (!set || set.size === 0) return 0;
-  let delivered = 0;
-  const failed = [];
-  for (const res of set) {
-    if (sendSse(res, message)) {
-      delivered += 1;
-    } else {
-      failed.push(res);
-    }
-  }
-  for (const res of failed) set.delete(res);
-  if (set.size === 0) presenceUsers.delete(userId);
-  return delivered;
+  if (!wsRegistry) return 0;
+  return wsRegistry.broadcastAccountEvent(userId, message);
 }
 
 function getPresenceRoom(roomId) {
@@ -240,16 +226,6 @@ function sendJson(res, status, payload, headers = {}) {
     ...headers
   });
   res.end(JSON.stringify(payload));
-}
-
-function sendSse(res, message) {
-  if (!res || res.writableEnded || !res.writable) return false;
-  try {
-    res.write(`event: message\ndata: ${JSON.stringify(message)}\n\n`);
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 function parseCookies(req) {
@@ -379,17 +355,9 @@ function createRoomId() {
 
 async function pruneRooms(now = Date.now()) {
   await getRoomStore().pruneRooms(now);
-  for (const [roomId, subscribers] of roomChatStreams) {
+  for (const roomId of [...presenceRooms.keys()]) {
     const room = await getRoomStore().getRoom(roomId);
     if (room) continue;
-    for (const subscriber of subscribers) {
-      try {
-        subscriber.end();
-      } catch {
-        // Ignore cleanup failures.
-      }
-    }
-    roomChatStreams.delete(roomId);
     presenceRooms.delete(roomId);
   }
 }
@@ -479,11 +447,14 @@ function getAuthorizedPeer(roomId, peerId, sessionToken) {
 }
 
 function sendEvent(peer, message) {
-  const sent = sendSse(peer?.res, message);
+  const sent = peer?.transport?.send(message) ?? false;
   if (!sent && peer) peer.closed = true;
   return sent;
 }
 
+// Delivers a legacy room event to active peers over their own transports.
+// Preview-only WS subscribers are reached separately via mirrorLegacyRoomEvent
+// at each call site, so nothing is double-delivered.
 function broadcast(room, message, exceptPeerId = '') {
   const failedPeers = [];
   for (const peer of room.peers.values()) {
@@ -494,21 +465,26 @@ function broadcast(room, message, exceptPeerId = '') {
   }
 
   for (const peer of failedPeers) {
-    closePeer(room.id, peer.id, peer.res, 'lost');
+    closePeer(room.id, peer.id, peer.transport?.id, 'lost');
+  }
+  if (failedPeers.length > 0) {
+    roomRuntime?.scheduleSummaryBroadcast(room.id);
   }
 }
 
-function closePeer(roomId, peerId, res, reason = 'left') {
+function closePeer(roomId, peerId, transportId, reason = 'left') {
   const room = presenceRooms.get(roomId);
   if (!room) return;
 
   const current = room.peers.get(peerId);
-  if (!current || current.res !== res) return;
+  if (!current || !transportId || current.transport?.id !== transportId) return;
 
   current.closed = true;
   room.peers.delete(peerId);
   if (!current.replaced) {
     broadcast(room, { type: 'peer-left', peerId, reason });
+    roomRuntime?.mirrorLegacyRoomEvent(roomId, { type: 'peer-left', peerId, reason });
+    roomRuntime?.scheduleSummaryBroadcast(roomId);
   }
 
   if (room.peers.size === 0) {
@@ -544,64 +520,6 @@ function publicChatMessage(message) {
   };
 }
 
-function getChatSubscribers(roomId) {
-  let subscribers = roomChatStreams.get(roomId);
-  if (!subscribers) {
-    subscribers = new Set();
-    roomChatStreams.set(roomId, subscribers);
-  }
-  return subscribers;
-}
-
-function broadcastChat(roomId, message) {
-  const subscribers = roomChatStreams.get(roomId);
-  if (!subscribers || subscribers.size === 0) return;
-
-  const payload = { type: 'chat-message', message: publicChatMessage(message) };
-  const failed = [];
-  for (const res of subscribers) {
-    if (!sendSse(res, payload)) {
-      failed.push(res);
-    }
-  }
-  for (const res of failed) {
-    subscribers.delete(res);
-  }
-  if (subscribers.size === 0) {
-    roomChatStreams.delete(roomId);
-  }
-}
-
-// Lifecycle events (room-updated / room-deleted) reach page viewers over the
-// chat SSE stream, mirroring the existing room-not-found path. Unlike
-// broadcastChat this writes the message verbatim instead of wrapping it as a
-// chat-message frame.
-function broadcastRoomLifecycle(roomId, message, { end = false } = {}) {
-  const subscribers = roomChatStreams.get(roomId);
-  if (!subscribers || subscribers.size === 0) return;
-
-  const failed = [];
-  for (const res of subscribers) {
-    if (!sendSse(res, message)) {
-      failed.push(res);
-      continue;
-    }
-    if (end) {
-      try {
-        res.end();
-      } catch {
-        failed.push(res);
-      }
-    }
-  }
-  for (const res of failed) {
-    subscribers.delete(res);
-  }
-  if (end || subscribers.size === 0) {
-    roomChatStreams.delete(roomId);
-  }
-}
-
 async function readJsonBody(req) {
   if (req && Object.hasOwn(req, 'body')) {
     return req.body && typeof req.body === 'object' ? req.body : {};
@@ -624,124 +542,6 @@ async function readJsonBody(req) {
     error.publicMessage = 'Invalid JSON';
     throw error;
   }
-}
-
-async function handleEvents(req, res, url) {
-  const roomId = normalizeRoomId(url.searchParams.get('room'));
-  const peerId = normalizePeerId(url.searchParams.get('peer'));
-  const sessionToken = normalizeSessionToken(url.searchParams.get('token'));
-  const name = cleanName(url.searchParams.get('name'));
-  const sessionUser = await resolveOptionalSessionUser(req);
-
-  if (!roomId || !peerId || !sessionToken) {
-    sendJson(res, 400, { ok: false, error: 'Invalid room, peer, or session token' });
-    return;
-  }
-
-  const room = await getRoom(roomId);
-  if (!room) {
-    res.writeHead(200, {
-      ...baseHeaders(),
-      'Cache-Control': 'no-cache, no-transform',
-      Connection: 'keep-alive',
-      'Content-Type': 'text/event-stream; charset=utf-8',
-      'X-Accel-Buffering': 'no'
-    });
-    res.write(`event: message\ndata: ${JSON.stringify({ type: 'room-not-found', roomId })}\n\n`);
-    res.end();
-    return;
-  }
-
-  const reconnecting = room.peers.has(peerId);
-  const previous = room.peers.get(peerId);
-  if (previous && !tokensMatch(previous.sessionToken, sessionToken)) {
-    sendJson(res, 403, { ok: false, error: 'Invalid peer session' });
-    return;
-  }
-
-  const identityResult = await getRoomStore().getOrCreatePeerIdentity({ roomId, peerId, sessionToken, displayName: name, avatarColorKey: sessionAvatarColorKey(sessionUser) });
-  if (identityResult.status === 'token_mismatch') {
-    sendJson(res, 403, { ok: false, error: 'Invalid peer session' });
-    return;
-  }
-  const avatarColorKey = identityResult.identity?.avatarColorKey || avatarColorForPeerId(peerId);
-
-  if (!reconnecting && room.peers.size >= MAX_ROOM_PEERS) {
-    res.writeHead(200, {
-      ...baseHeaders(),
-      'Cache-Control': 'no-cache, no-transform',
-      Connection: 'keep-alive',
-      'Content-Type': 'text/event-stream; charset=utf-8',
-      'X-Accel-Buffering': 'no'
-    });
-    res.write(`event: message\ndata: ${JSON.stringify({ type: 'room-full', maxRoomPeers: MAX_ROOM_PEERS })}\n\n`);
-    res.end();
-    return;
-  }
-
-  const existingPeers = Array.from(room.peers.values())
-    .filter((peer) => peer.id !== peerId)
-    .map(publicPeer);
-
-  if (previous) {
-    previous.closed = true;
-    previous.replaced = true;
-    previous.res.end();
-  }
-
-  res.writeHead(200, {
-    ...baseHeaders(),
-    'Cache-Control': 'no-cache, no-transform',
-    Connection: 'keep-alive',
-    'Content-Type': 'text/event-stream; charset=utf-8',
-    'X-Accel-Buffering': 'no'
-  });
-  res.flushHeaders?.();
-  res.write(': connected\n\n');
-
-  const peer = {
-    closed: false,
-    deafened: previous?.deafened ?? false,
-    accountUserId: sessionUser?.id || '',
-    avatarColorKey,
-    id: peerId,
-    joinedAt: previous?.joinedAt ?? Date.now(),
-    muted: previous?.muted ?? false,
-    name: reconnecting ? (previous?.name ?? name) : name,
-    screen: previous?.screen ?? false,
-    screenAudio: previous?.screenAudio ?? false,
-    screenProfileId: previous?.screenProfileId ?? '',
-    screenStreamId: previous?.screenStreamId ?? '',
-    viewedScreenPeerId: previous?.viewedScreenPeerId ?? '',
-    sessionToken,
-    res
-  };
-  room.peers.set(peerId, peer);
-  room.updatedAt = peer.joinedAt;
-  await getRoomStore().markRoomActive(roomId, peer.joinedAt);
-
-  sendEvent(peer, {
-    type: 'hello',
-    peer: publicPeer(peer),
-    peers: existingPeers,
-    roomId
-  });
-  if (!reconnecting) {
-    broadcast(room, { type: 'peer-joined', peer: publicPeer(peer) }, peerId);
-  }
-
-  const keepalive = setInterval(() => {
-    const sent = sendEvent(peer, { type: 'ping', at: Date.now() });
-    if (!sent) {
-      clearInterval(keepalive);
-      closePeer(roomId, peerId, res, 'lost');
-    }
-  }, KEEPALIVE_MS);
-
-  req.on('close', () => {
-    clearInterval(keepalive);
-    closePeer(roomId, peerId, res);
-  });
 }
 
 async function handleLiveKitToken(req, res) {
@@ -979,7 +779,9 @@ async function handleUpdateRoom(req, res, roomId) {
   const payload = publicLobbyRoom(updated);
   const presence = presenceRooms.get(roomId);
   if (presence) broadcast(presence, { type: 'room-updated', room: payload });
-  broadcastRoomLifecycle(roomId, { type: 'room-updated', room: payload });
+  roomRuntime?.mirrorLegacyRoomEvent(roomId, { type: 'room-updated', room: payload });
+  roomRuntime?.invalidateRecipientCache(roomId);
+  roomRuntime?.scheduleSummaryBroadcast(roomId);
 
   sendJson(res, 200, { ok: true, room: payload });
 }
@@ -995,17 +797,18 @@ async function handleDeleteRoom(req, res, roomId) {
     return;
   }
 
-  // Broadcast after durable soft-delete, before presence teardown so the SSE
+  // Broadcast after durable soft-delete, before presence teardown so the WS
   // writes are not racing socket close.
   const presence = presenceRooms.get(roomId);
   if (presence) broadcast(presence, { type: 'room-deleted', roomId });
-  broadcastRoomLifecycle(roomId, { type: 'room-deleted', roomId }, { end: true });
+  roomRuntime?.mirrorLegacyRoomEvent(roomId, { type: 'room-deleted', roomId });
+  roomRuntime?.invalidateRecipientCache(roomId);
 
   // Belt-and-suspenders: force-close active peers after the signal. Clients
   // also self-exit on room-deleted, so this only matters for missed events.
   if (presence) {
     for (const peer of Array.from(presence.peers.values())) {
-      closePeer(roomId, peer.id, peer.res, 'deleted');
+      closePeer(roomId, peer.id, peer.transport?.id, 'deleted');
     }
   }
 
@@ -1228,6 +1031,7 @@ async function handleAddAuthRoom(req, res) {
     return;
   }
 
+  roomRuntime?.invalidateRecipientCache(roomId);
   sendJson(res, 200, { ok: true, room: publicLobbyRoom(added.room) });
 }
 
@@ -1318,6 +1122,8 @@ async function handleState(req, res) {
   }
 
   broadcast(room, { type: 'peer-updated', peer: publicPeer(peer) });
+  roomRuntime?.mirrorLegacyRoomEvent(roomId, { type: 'peer-updated', peer: publicPeer(peer) });
+  roomRuntime?.scheduleSummaryBroadcast(roomId);
   sendJson(res, 200, { ok: true, peer: publicPeer(peer) });
 }
 
@@ -1333,53 +1139,6 @@ async function handleRoomChatList(res, roomId) {
     ok: true,
     messages: (await getRoomStore().listMessages(roomId, { limit: 100 })).map(publicChatMessage),
     roomId
-  });
-}
-
-async function handleRoomChatStream(req, res, roomId) {
-  const room = await getRoom(roomId);
-  if (!room) {
-    res.writeHead(200, {
-      ...baseHeaders(),
-      'Cache-Control': 'no-cache, no-transform',
-      Connection: 'keep-alive',
-      'Content-Type': 'text/event-stream; charset=utf-8',
-      'X-Accel-Buffering': 'no'
-    });
-    sendSse(res, { type: 'room-not-found', roomId });
-    res.end();
-    return;
-  }
-
-  res.writeHead(200, {
-    ...baseHeaders(),
-    'Cache-Control': 'no-cache, no-transform',
-    Connection: 'keep-alive',
-    'Content-Type': 'text/event-stream; charset=utf-8',
-    'X-Accel-Buffering': 'no'
-  });
-  res.flushHeaders?.();
-  res.write(': connected\n\n');
-
-  const subscribers = getChatSubscribers(roomId);
-  subscribers.add(res);
-
-  const keepalive = setInterval(() => {
-    if (!sendSse(res, { type: 'ping', at: Date.now() })) {
-      clearInterval(keepalive);
-      subscribers.delete(res);
-      if (subscribers.size === 0) {
-        roomChatStreams.delete(roomId);
-      }
-    }
-  }, KEEPALIVE_MS);
-
-  req.on('close', () => {
-    clearInterval(keepalive);
-    subscribers.delete(res);
-    if (subscribers.size === 0) {
-      roomChatStreams.delete(roomId);
-    }
   });
 }
 
@@ -1453,7 +1212,7 @@ async function handleRoomChatPost(req, res, roomId) {
   }
 
   const publicMessage = { ...message, avatarColorKey };
-  broadcastChat(roomId, publicMessage);
+  roomRuntime?.broadcastChatMessage(roomId, publicMessage);
   sendJson(res, 201, { ok: true, message: publicChatMessage(publicMessage) });
 }
 
@@ -1751,97 +1510,6 @@ async function handleMarkDmRead(req, res, peerId) {
   sendJson(res, 200, { ok: true, count: result.count });
 }
 
-async function handleRealtime(req, res) {
-  const session = await resolveSessionUser(req);
-  if (!session) {
-    sendJson(res, 401, { ok: false, error: 'Требуется вход' });
-    return;
-  }
-  const userId = session.user.id;
-
-  // Reject before upgrading to SSE so we can answer with a clean JSON 429
-  // instead of a half-open event stream.
-  const existing = presenceUsers.get(userId);
-  if (existing && existing.size >= MAX_REALTIME_STREAMS_PER_USER) {
-    sendJson(
-      res,
-      429,
-      { ok: false, error: 'Слишком много активных подключений' },
-      { 'Retry-After': '5' }
-    );
-    return;
-  }
-
-  res.writeHead(200, {
-    ...baseHeaders(),
-    'Cache-Control': 'no-cache, no-transform',
-    Connection: 'keep-alive',
-    'Content-Type': 'text/event-stream; charset=utf-8',
-    'X-Accel-Buffering': 'no'
-  });
-  res.flushHeaders?.();
-  res.write(': connected\n\n');
-
-  let set = presenceUsers.get(userId);
-  const wasOffline = !set || set.size === 0;
-  if (!set) {
-    set = new Set();
-    presenceUsers.set(userId, set);
-  }
-  set.add(res);
-
-  // Snapshot friends now to announce presence-online and to seed the `ready`
-  // frame. The offline fan-out on disconnect re-queries instead of reusing this
-  // snapshot so friends added mid-session still receive the offline event.
-  let friendIds = [];
-  try {
-    friendIds = await getFriendStore().getFriendIds(userId);
-  } catch (error) {
-    console.error('Failed to load friends for realtime presence:', error);
-  }
-  if (wasOffline) {
-    for (const friendId of friendIds) {
-      broadcastToUser(friendId, { type: 'presence', userId, online: true });
-    }
-  }
-  sendSse(res, { type: 'ready', onlineFriendIds: friendIds.filter(isUserOnline) });
-
-  function announceOffline(ids) {
-    // The friend-id lookup is async, so the user may have reconnected (a new tab
-    // or EventSource auto-reconnect) between teardown and here. Skip the stale
-    // offline broadcast in that case so friends don't flip to offline-then-stay.
-    if (isUserOnline(userId)) return;
-    for (const friendId of ids) {
-      broadcastToUser(friendId, { type: 'presence', userId, online: false });
-    }
-  }
-
-  let closed = false;
-  function cleanup() {
-    if (closed) return;
-    closed = true;
-    clearInterval(keepalive);
-    const current = presenceUsers.get(userId);
-    if (!current) return;
-    current.delete(res);
-    if (current.size === 0) {
-      presenceUsers.delete(userId);
-      // Re-query so a friend added during this session is still notified; fall
-      // back to the connect-time snapshot if the lookup fails.
-      getFriendStore()
-        .getFriendIds(userId)
-        .then((ids) => announceOffline(ids))
-        .catch(() => announceOffline(friendIds));
-    }
-  }
-
-  const keepalive = setInterval(() => {
-    if (!sendSse(res, { type: 'ping', at: Date.now() })) cleanup();
-  }, KEEPALIVE_MS);
-
-  req.on('close', cleanup);
-}
-
 function pickReleaseAsset(assets, patterns) {
   for (const pattern of patterns) {
     const found = assets.find((asset) => pattern.test(asset.name || ''));
@@ -1958,6 +1626,44 @@ function createApiApp({ store = null, users = null, friends = null } = {}) {
   });
 
   app.register(fastifyCookie, { hook: 'onRequest' });
+  app.register(fastifyWebsocket);
+
+  wsRegistry = createConnectionRegistry({
+    maxConnectionsPerUser: MAX_REALTIME_STREAMS_PER_USER,
+    keepaliveMs: KEEPALIVE_MS,
+    isUserOnline,
+    onPresenceChange: (friendId, userId, online) => {
+      broadcastToUser(friendId, { type: 'presence', userId, online });
+    },
+    getFriendIds: (userId) => getFriendStore().getFriendIds(userId),
+    onConnectionClose: (connection) => {
+      roomRuntime?.cleanupConnection(connection);
+    }
+  });
+
+  roomRuntime = createRoomRealtimeRuntime({
+    presenceRooms,
+    wsRegistry,
+    getRoomStore,
+    getRoom,
+    publicPeer,
+    publicLobbyRoom,
+    publicChatMessage,
+    broadcast,
+    closePeer,
+    avatarColorForPeerId,
+    MAX_ROOM_PEERS,
+    tokensMatch,
+    sessionAvatarColorKey
+  });
+
+  const wsHandler = createWsHandler({
+    registry: wsRegistry,
+    roomRuntime,
+    resolveSessionUser,
+    getFriendIds: (userId) => getFriendStore().getFriendIds(userId),
+    isUserOnline
+  });
 
   app.setNotFoundHandler((request, reply) => {
     reply.headers(baseHeaders()).code(404).send({ ok: false, error: 'Not found' });
@@ -2003,15 +1709,8 @@ function createApiApp({ store = null, users = null, friends = null } = {}) {
   app.get('/api/rooms/:roomId/chat', (request, reply) => runLegacyHandler(request, reply, (_req, res) => {
     return handleRoomChatList(res, normalizeRoomId(request.params.roomId));
   }));
-  app.get('/api/rooms/:roomId/chat/stream', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
-    return handleRoomChatStream(req, res, normalizeRoomId(request.params.roomId));
-  }));
   app.post('/api/rooms/:roomId/chat', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
     return handleRoomChatPost(req, res, normalizeRoomId(request.params.roomId));
-  }));
-  app.get('/api/events', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
-    const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
-    return handleEvents(req, res, url);
   }));
   app.post('/api/livekit-token', (request, reply) => runLegacyHandler(request, reply, handleLiveKitToken));
   app.post('/api/state', (request, reply) => runLegacyHandler(request, reply, handleState));
@@ -2044,7 +1743,13 @@ function createApiApp({ store = null, users = null, friends = null } = {}) {
   app.post('/api/dm/:userId/read', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
     return handleMarkDmRead(req, res, request.params.userId);
   }));
-  app.get('/api/realtime', (request, reply) => runLegacyHandler(request, reply, handleRealtime));
+
+  // Register after plugins finish loading so @fastify/websocket can wrap the handler.
+  app.after(() => {
+    app.get('/api/ws', { websocket: true }, (socket, request) => {
+      void wsHandler.handleConnection(socket, request.raw);
+    });
+  });
 
   return app;
 }

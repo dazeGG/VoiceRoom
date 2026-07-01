@@ -15,7 +15,7 @@ export interface UpdateRoomOptions {
 }
 
 // Mirrors the server's publicLobbyRoom() shape (server.js) — the same body the
-// PUT response and the room-updated SSE broadcast both carry.
+// PUT response and the room.updated WebSocket broadcast both carry.
 export interface RoomSummary {
   createdAt: number;
   emoji: string;

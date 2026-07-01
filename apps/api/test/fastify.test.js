@@ -51,7 +51,10 @@ function createFakeStore() {
     },
     async markRoomActive() {},
     async markRoomEmpty() {},
-    async pruneRooms() {}
+    async pruneRooms() {},
+    async listSummaryRecipientUserIds() {
+      return [];
+    }
   };
 }
 

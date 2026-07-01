@@ -8,6 +8,7 @@ const { spawn } = require('node:child_process');
 const path = require('node:path');
 const os = require('node:os');
 const { createTestDatabase } = require('./db-harness');
+const { openWs, joinVoiceRoom, subscribeRoomPreview, waitForWsType } = require('./ws-harness');
 
 const ROOM_ID = 'chat-room1';
 const PEER_ID = 'peer-chat1';
@@ -141,51 +142,6 @@ async function getJson(socketPath, pathname) {
   };
 }
 
-function openSse(socketPath, pathname) {
-  const messages = [];
-  const req = http.get({ path: pathname, socketPath }, (res) => {
-    let buffer = '';
-    res.on('data', (chunk) => {
-      buffer += chunk.toString('utf8');
-      let splitAt = buffer.indexOf('\n\n');
-      while (splitAt !== -1) {
-        const frame = buffer.slice(0, splitAt);
-        buffer = buffer.slice(splitAt + 2);
-        const dataLine = frame
-          .split('\n')
-          .find((line) => line.startsWith('data: '));
-        if (dataLine) {
-          messages.push(JSON.parse(dataLine.slice(6)));
-        }
-        splitAt = buffer.indexOf('\n\n');
-      }
-    });
-  });
-
-  return {
-    messages,
-    req,
-    waitFor(type, timeoutMs = 3000) {
-      const started = Date.now();
-      return new Promise((resolve, reject) => {
-        const check = () => {
-          const found = messages.find((message) => message.type === type);
-          if (found) {
-            resolve(found);
-            return;
-          }
-          if (Date.now() - started > timeoutMs) {
-            reject(new Error(`Timed out waiting for SSE message type: ${type}`));
-            return;
-          }
-          setTimeout(check, 20);
-        };
-        check();
-      });
-    }
-  };
-}
-
 test('chat API persists, streams, and respects room auth', async (t) => {
   const { dir, socketPath } = getSocketPath();
   const { cleanup, databaseUrl } = await createTestDatabase(t);
@@ -203,17 +159,19 @@ test('chat API persists, streams, and respects room auth', async (t) => {
     const created = await postJson(socketPath, '/api/rooms', {});
     assert.equal(created.status, 201);
 
-    const join = openSse(
-      socketPath,
-      `/api/events?room=${encodeURIComponent(created.body.roomId)}&peer=${encodeURIComponent(PEER_ID)}&token=${encodeURIComponent(TOKEN)}&name=${encodeURIComponent('Alice')}`
-    );
-    await join.waitFor('hello');
+    const voice = openWs(socketPath);
+    await voice.ready;
+    await joinVoiceRoom(voice, {
+      roomId: created.body.roomId,
+      peerId: PEER_ID,
+      sessionToken: TOKEN,
+      name: 'Alice'
+    });
 
     const empty = await getJson(socketPath, `/api/rooms/${created.body.roomId}/chat`);
     assert.equal(empty.status, 200);
     assert.deepEqual(empty.body.messages, []);
 
-    const stream = openSse(socketPath, `/api/rooms/${created.body.roomId}/chat/stream`);
     const posted = await postJson(socketPath, `/api/rooms/${created.body.roomId}/chat`, {
       name: 'Alice',
       peerId: PEER_ID,
@@ -223,16 +181,19 @@ test('chat API persists, streams, and respects room auth', async (t) => {
     assert.equal(posted.status, 201);
     assert.equal(posted.body.message.text, 'Привет, чат!');
 
-    const streamed = await stream.waitFor('chat-message');
-    assert.equal(streamed.message.text, 'Привет, чат!');
+    const streamed = await waitForWsType(
+      voice.frames,
+      'room.chat.message',
+      (frame) => frame.payload?.message?.text === 'Привет, чат!'
+    );
+    assert.equal(streamed.payload.message.text, 'Привет, чат!');
 
     const after = await getJson(socketPath, `/api/rooms/${created.body.roomId}/chat`);
     assert.equal(after.status, 200);
     assert.equal(after.body.messages.length, 1);
     assert.equal(after.body.messages[0].text, 'Привет, чат!');
 
-    join.req.destroy();
-    stream.req.destroy();
+    voice.ws.close();
   } catch (error) {
     if (logs.stderr.trim()) {
       console.error('Server stderr:\n', logs.stderr.trimEnd());
@@ -259,7 +220,10 @@ test('chat API allows posting by room link without joining voice', async (t) => 
     const created = await postJson(socketPath, '/api/rooms', { isStatic: false });
     assert.equal(created.status, 201);
 
-    const stream = openSse(socketPath, `/api/rooms/${created.body.roomId}/chat/stream`);
+    const preview = openWs(socketPath);
+    await preview.ready;
+    await subscribeRoomPreview(preview, created.body.roomId);
+
     const posted = await postJson(socketPath, `/api/rooms/${created.body.roomId}/chat`, {
       name: 'Link Guest',
       text: 'Пишу без входа в голос'
@@ -269,16 +233,20 @@ test('chat API allows posting by room link without joining voice', async (t) => 
     assert.equal(posted.body.message.text, 'Пишу без входа в голос');
     assert.match(posted.body.message.peerId, /^chat-[a-f0-9]{24}$/);
 
-    const streamed = await stream.waitFor('chat-message');
-    assert.equal(streamed.message.id, posted.body.message.id);
-    assert.equal(streamed.message.text, 'Пишу без входа в голос');
+    const streamed = await waitForWsType(
+      preview.frames,
+      'room.chat.message',
+      (frame) => frame.payload?.message?.id === posted.body.message.id
+    );
+    assert.equal(streamed.payload.message.id, posted.body.message.id);
+    assert.equal(streamed.payload.message.text, 'Пишу без входа в голос');
 
     const after = await getJson(socketPath, `/api/rooms/${created.body.roomId}/chat`);
     assert.equal(after.status, 200);
     assert.equal(after.body.messages.length, 1);
     assert.equal(after.body.messages[0].id, posted.body.message.id);
 
-    stream.req.destroy();
+    preview.ws.close();
   } catch (error) {
     if (logs.stderr.trim()) {
       console.error('Server stderr:\n', logs.stderr.trimEnd());
@@ -385,11 +353,14 @@ test('chat API still protects active voice peer identities', async (t) => {
     const created = await postJson(socketPath, '/api/rooms', {});
     assert.equal(created.status, 201);
 
-    const join = openSse(
-      socketPath,
-      `/api/events?room=${encodeURIComponent(created.body.roomId)}&peer=${encodeURIComponent(PEER_ID)}&token=${encodeURIComponent(TOKEN)}&name=${encodeURIComponent('Alice')}`
-    );
-    await join.waitFor('hello');
+    const voice = openWs(socketPath);
+    await voice.ready;
+    await joinVoiceRoom(voice, {
+      roomId: created.body.roomId,
+      peerId: PEER_ID,
+      sessionToken: TOKEN,
+      name: 'Alice'
+    });
 
     const spoofed = await postJson(socketPath, `/api/rooms/${created.body.roomId}/chat`, {
       name: 'Mallory',
@@ -408,7 +379,7 @@ test('chat API still protects active voice peer identities', async (t) => {
     assert.equal(valid.status, 201);
     assert.equal(valid.body.message.peerId, PEER_ID);
 
-    join.req.destroy();
+    voice.ws.close();
   } catch (error) {
     if (logs.stderr.trim()) {
       console.error('Server stderr:\n', logs.stderr.trimEnd());

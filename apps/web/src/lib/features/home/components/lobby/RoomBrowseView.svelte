@@ -1,14 +1,15 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
   import { AvatarStack } from '$lib/shared/ui';
   import type { AuthUser, OwnedRoom } from '$lib/api/auth';
-  import { fetchRoomPeers, type RoomPeer } from '$lib/api/rooms';
+  import type { RoomPeer } from '$lib/api/rooms';
+  import type { RealtimeEvent } from '$lib/api/realtime';
   import { roomDisplayName } from '../../model/rooms';
   import { getAvatarPresentation } from '$lib/features/room/client/ui/avatar-presentation';
   import '$lib/features/room/styles/room.css';
   import RoomPreviewChat from './RoomPreviewChat.svelte';
   import RoomViewHeader from './RoomViewHeader.svelte';
   import { roomPeerAvatarItems } from '../../model/room-avatars';
+  import { subscribeRoomPreview } from '../../model/room-realtime';
 
   let { room, user, onEnter, onBack, onToast } = $props<{
     room: OwnedRoom;
@@ -27,20 +28,30 @@
   let loadError = $state('');
   const peerAvatars = $derived(roomPeerAvatarItems(peers));
 
-  async function refresh(): Promise<void> {
-    const requestedRoomId = room.roomId;
-    try {
-      const nextPeers = await fetchRoomPeers(requestedRoomId);
-      if (room.roomId !== requestedRoomId) return;
-      peers = nextPeers;
-      loadError = '';
-    } catch (error) {
-      if (room.roomId !== requestedRoomId) return;
-      loadError = 'Не удалось загрузить участников';
-      console.warn('Room preview peers failed', error);
-    } finally {
-      if (room.roomId !== requestedRoomId) return;
+  function handlePreviewEvent(event: RealtimeEvent): void {
+    if (event.type === 'room.snapshot' && event.payload.roomId === room.roomId) {
+      peers = event.payload.peers;
       loading = false;
+      loadError = '';
+      return;
+    }
+    if (event.type === 'room.not_found' && event.payload.roomId === room.roomId) {
+      loadError = 'Комната не найдена';
+      loading = false;
+      return;
+    }
+    if (event.type === 'room.peer.joined' && event.payload.roomId === room.roomId) {
+      if (!peers.some((peer) => peer.id === event.payload.peer.id)) {
+        peers = [...peers, event.payload.peer];
+      }
+      return;
+    }
+    if (event.type === 'room.peer.left' && event.payload.roomId === room.roomId) {
+      peers = peers.filter((peer) => peer.id !== event.payload.peerId);
+      return;
+    }
+    if (event.type === 'room.peer.updated' && event.payload.roomId === room.roomId) {
+      peers = peers.map((peer) => (peer.id === event.payload.peer.id ? event.payload.peer : peer));
     }
   }
 
@@ -50,12 +61,8 @@
     peers = [];
     loadError = '';
     previewChatOpen = false;
-    void refresh();
-  });
-
-  onMount(() => {
-    const timer = window.setInterval(refresh, 4000);
-    return () => window.clearInterval(timer);
+    const unsubscribe = subscribeRoomPreview(room.roomId, handlePreviewEvent);
+    return unsubscribe;
   });
 
   function peerName(peer: RoomPeer): string {
@@ -132,7 +139,7 @@
       </section>
 
       {#if loadError}
-        <p class="lobby-stage-error" role="status">{loadError}. Попробуем обновить список автоматически.</p>
+        <p class="lobby-stage-error" role="status">{loadError}</p>
       {:else if peers.length === 0 && !loading}
         <div class="lobby-stage-empty">
           <p class="lobby-stage-empty-note">Пока никого нет</p>

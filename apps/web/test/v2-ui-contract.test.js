@@ -106,10 +106,10 @@ test('lobby separates viewed room from connected voice room', () => {
   assert.match(lobby, /<RoomBrowseView \{user\} room=\{selectedRoom\} onEnter=\{\(\) => enterRoom\(selectedRoom\.roomId\)\}/);
   assert.match(lobby, /dataset\.lobbyEmbedded = 'true'/);
   assert.match(lobby, /delete document\.body\.dataset\.lobbyEmbedded/);
-  assert.match(browseView, /const requestedRoomId = room\.roomId/);
-  assert.match(browseView, /if \(room\.roomId !== requestedRoomId\) return/);
+  assert.match(browseView, /subscribeRoomPreview\(room\.roomId, handlePreviewEvent\)/);
   assert.match(browseView, /let loadError = \$state\(''\)/);
-  assert.match(browseView, /Не удалось загрузить участников/);
+  assert.match(browseView, /event\.type === 'room\.not_found'/);
+  assert.match(browseView, /Комната не найдена/);
   assert.match(browseView, /role="status"/);
   assert.match(voiceSession, /registerActiveVoiceLeave/);
   assert.match(roomNavigation, /export function connectedRoomIsViewed/);
@@ -186,8 +186,9 @@ test('room chat terminal lifecycle frames leave the room screen', () => {
 
   assert.match(lifecycle, /export function applyRoomNotFound/);
   assert.match(chat, /applyRoomNotFound/);
-  assert.match(chat, /payload\?\.type === 'room-not-found'[\s\S]*applyRoomNotFound\(payload\.roomId\)[\s\S]*stream\.close\(\)/);
-  assert.match(chat, /payload\?\.type === 'room-deleted'[\s\S]*applyRoomDeleted\(payload\.roomId\)[\s\S]*stream\.close\(\)/);
+  assert.match(chat, /event\.type === 'room\.not_found'[\s\S]*applyRoomNotFound\(event\.payload\.roomId\)/);
+  assert.match(chat, /event\.type === 'room\.deleted'[\s\S]*applyRoomDeleted\(event\.payload\.roomId\)/);
+  assert.match(chat, /getAppRealtime\(\)\.subscribe/);
 });
 
 
@@ -316,7 +317,8 @@ test('visual identity UI consumes backend keys and exposes only curated room pre
   // The room heading consumes the curated preset reactively in RoomTopbar now.
   const roomTopbar = read('src/lib/features/room/components/RoomTopbar.svelte');
   assert.match(roomTopbar, /getRoomPreset/);
-  assert.match(roomView, /updateParticipant\(\{ \.\.\.message\.peer, isLocal: true \}\)/);
+  assert.match(roomView, /updateParticipant\(event\.payload\.peer\)/);
+  assert.match(roomView, /updateParticipant\(\{ \.\.\.localPeer, isLocal: true \}\)/);
   assert.match(tokens, /ROOM_ICON_EMOJIS/);
   assert.match(tokens, /ROOM_COLOR_TOKENS/);
   assert.match(tokens, /key: '',/);
@@ -419,8 +421,10 @@ test('screen stage and lobby room previews use shared AvatarStack for participan
   assert.match(browseView, /<AvatarStack items=\{peerAvatars\} maxAvatars=\{5\}/);
   assert.match(previewView, /<AvatarStack items=\{peerAvatars\} maxAvatars=\{5\}/);
   assert.match(lobby, /decrementRoomPeerCount/);
-  assert.match(lobby, /setRoomPeerCount\(roomId, current - 1\)/);
-  assert.match(lobby, /refreshRoomPresence\(roomId\)/);
+  assert.match(lobby, /setRoomPeerCount\(roomId, Math\.max\(0, current - 1\)\)/);
+  assert.match(lobby, /initLobbyRoomRealtime/);
+  assert.match(browseView, /subscribeRoomPreview/);
+  assert.match(previewView, /subscribeRoomPreview/);
   assert.doesNotMatch(screenUi, /screen-meta-viewers-label/);
   assert.doesNotMatch(screenUi, /formatScreenViewersLine/);
   assert.doesNotMatch(screenUi, /names\.join/);
@@ -760,8 +764,12 @@ test('participant context menu is remote-only and exposes relationship-aware loc
   assert.match(functionBody(friends, 'initLobby'), /connectRealtime\(handleRealtimeEvent\)/);
   assert.match(functionBody(friends, 'initLobby'), /Promise\.all\(\[refreshFriends\(\), refreshRequests\(\)\]\)/);
   assert.match(functionBody(friends, 'refreshFriends'), /friendOnlineFromPresence\(friend\.user\.id, friend\.online\)/);
-  assert.match(functionBody(friends, 'handleRealtimeEvent'), /setOnlineSnapshot\(event\.onlineFriendIds\)/);
-  assert.match(functionBody(friends, 'handleRealtimeEvent'), /setFriendOnline\(event\.userId, event\.online\)/);
+  assert.match(functionBody(friends, 'handleRealtimeEvent'), /setOnlineSnapshot\(event\.payload\.onlineFriendIds(?: \?\? \[\])?\)/);
+  assert.match(functionBody(friends, 'handleRealtimeEvent'), /setFriendOnline\(event\.payload\.userId, event\.payload\.online\)/);
+  const realtime = read('src/lib/api/realtime.ts');
+  assert.match(realtime, /new WebSocket\(wsUrl\(\)\)/);
+  assert.match(realtime, /\/api\/ws/);
+  assert.match(realtime, /friend\.presence/);
   assert.match(functionBody(friends, 'getFriendRelationship'), /requests\.incoming\.some/);
   assert.match(functionBody(friends, 'getFriendRelationship'), /requests\.outgoing\.some/);
   assert.match(menu, /setMode\('friends'\)/);
@@ -792,9 +800,9 @@ test('sound cue layer covers direct messages and friend request events', () => {
   assert.match(cues, /playFriendRequestCue/);
   assert.match(cues, /playFriendAcceptedCue/);
   assert.match(cues, /playCueSequence/);
-  assert.match(friends, /case 'friend-request'[\s\S]*playFriendRequestCue\(\)/);
-  assert.match(friends, /case 'friend-accepted'[\s\S]*playFriendAcceptedCue\(\)/);
-  assert.match(friends, /case 'dm-message'[\s\S]*playDirectMessageCue\(\)/);
+  assert.match(friends, /case 'friend\.request'[\s\S]*playFriendRequestCue\(\)/);
+  assert.match(friends, /case 'friend\.accepted'[\s\S]*playFriendAcceptedCue\(\)/);
+  assert.match(friends, /case 'dm\.message'[\s\S]*playDirectMessageCue\(\)/);
   assert.match(settingsModal, /settings-cue-grid/);
   assert.match(settingsModal, /previewCue\('friend-request'\)/);
 });

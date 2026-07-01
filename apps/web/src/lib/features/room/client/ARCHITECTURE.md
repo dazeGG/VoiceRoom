@@ -1,7 +1,7 @@
 # Room client architecture
 
 The room client is a Svelte-owned UI shell around browser-only runtime APIs
-(LiveKit, `getUserMedia`, `getDisplayMedia`, fullscreen, SSE and audio worklets).
+(LiveKit, `getUserMedia`, `getDisplayMedia`, fullscreen, the app WebSocket and audio worklets).
 Svelte owns route structure, room controls, participant tiles, overlays and screen
 stage rendering. Client modules own media/session side effects after the lazy
 `client/main` import.
@@ -11,7 +11,7 @@ stage rendering. Client modules own media/session side effects after the lazy
 - `core/` keeps shared runtime state, config, session and primitive utilities.
   `core/state.svelte.ts` is the reactive room runtime state used by both Svelte
   components and imperative services.
-- `room/` owns room lifecycle, SSE messages and participant domain updates.
+- `room/` owns room lifecycle, WebSocket messages and participant domain updates.
 - `services/` owns external browser/media integrations. These files stay grouped
   by API lifecycle because capture, publication and teardown order is the bug-prone
   part of the feature.

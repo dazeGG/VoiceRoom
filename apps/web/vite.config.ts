@@ -20,7 +20,8 @@ export default defineConfig({
         target: API_TARGET,
         // Keep the browser-facing Host so the API same-origin guard can
         // compare cookie-authenticated writes against the real page Origin.
-        changeOrigin: false
+        changeOrigin: false,
+        ws: true
       }
     }
   }

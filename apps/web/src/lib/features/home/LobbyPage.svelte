@@ -3,7 +3,8 @@
   import type { AuthUser, OwnedRoom } from '$lib/api/auth';
   import { addRoomByCode, fetchOwnedRooms } from '$lib/api/auth';
   import { createRoom } from '$lib/api/rooms';
-  import { refreshRoomPresence, setRoomPresence } from './model/room-presence.svelte';
+  import { clearRoomPresence } from './model/room-presence.svelte';
+  import { initLobbyRoomRealtime } from './model/room-realtime';
   import { extractRoomId } from '$lib/shared/utils/room';
   import SettingsModal from './components/SettingsModal.svelte';
   import RoomPage from '$lib/features/room/RoomPage.svelte';
@@ -76,22 +77,9 @@
   function decrementRoomPeerCount(roomId: string | null): void {
     if (!roomId) return;
     const current = rooms.find((room) => room.roomId === roomId)?.peers ?? 0;
-    setRoomPeerCount(roomId, current - 1);
-    setRoomPresence(roomId, []);
+    setRoomPeerCount(roomId, Math.max(0, current - 1));
+    clearRoomPresence(roomId);
     void refreshRooms();
-    void refreshRoomPresence(roomId).then((peers) => setRoomPeerCount(roomId, peers.length)).catch(() => {});
-  }
-
-  function refreshVisibleRoomPresence(): void {
-    for (const room of rooms) {
-      if (room.peers <= 0) {
-        setRoomPresence(room.roomId, []);
-        continue;
-      }
-      void refreshRoomPresence(room.roomId)
-        .then((peers) => setRoomPeerCount(room.roomId, peers.length))
-        .catch(() => {});
-    }
   }
 
   function restoreLobbyDocumentState(): void {
@@ -114,7 +102,12 @@
 
   onMount(() => {
     void refreshRooms();
-    const teardown = user ? initLobby(user.id) : () => {};
+    const teardownFriends = user ? initLobby(user.id) : () => {};
+    const teardownRooms = user
+      ? initLobbyRoomRealtime((updater) => {
+          rooms = updater(rooms);
+        })
+      : () => {};
 
     function onEmbeddedLeave(event: Event): void {
       const closedRoomId = event instanceof CustomEvent && typeof event.detail?.roomId === 'string' ? event.detail.roomId : null;
@@ -149,7 +142,8 @@
     window.addEventListener('voice-room:embedded-leave', onEmbeddedLeave);
     window.addEventListener('popstate', onPopState);
     return () => {
-      teardown();
+      teardownFriends();
+      teardownRooms();
       window.removeEventListener('voice-room:embedded-leave', onEmbeddedLeave);
       window.removeEventListener('popstate', onPopState);
     };
@@ -186,7 +180,6 @@
   async function refreshRooms(): Promise<void> {
     try {
       rooms = await fetchOwnedRooms();
-      queueMicrotask(refreshVisibleRoomPresence);
     } catch (error) {
       rooms = [];
       onToast(error instanceof Error && error.message ? error.message : 'Не удалось загрузить комнаты');
