@@ -12,6 +12,8 @@ body[data-screen-view="true"] .tile-grid {
   min-height: 0;
   min-width: 0;
   height: 76px;
+  max-width: none;
+  margin-inline: 0;
   align-items: stretch;
   justify-content: center;
   gap: var(--space-sm);
