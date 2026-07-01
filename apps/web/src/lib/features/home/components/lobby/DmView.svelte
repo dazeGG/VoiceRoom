@@ -126,9 +126,7 @@
           {#each groups as group (group.key)}
             {#if group.dayLabel}
               <div class="lobby-dm-day">
-                <span></span>
                 <span class="lobby-dm-day-label">{group.dayLabel}</span>
-                <span></span>
               </div>
             {/if}
             <div class="lobby-dm-group" class:lobby-dm-group--me={group.fromMe}>
