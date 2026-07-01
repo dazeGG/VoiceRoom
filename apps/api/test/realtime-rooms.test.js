@@ -194,9 +194,9 @@ test('room owner receives bounded room.summary as peers join and leave', async (
       ownerWs.frames,
       'room.summary',
       (frame) => frame.payload?.room?.roomId === roomId && frame.payload.room.peers === 5,
-      5000
+      5000,
+      sinceLeave
     );
-    assert.ok(ownerWs.frames.indexOf(afterLeave) >= sinceLeave, 'summary must reflect the leave');
     assert.equal(afterLeave.payload.room.visiblePeers.length, 5);
     assert.equal(afterLeave.payload.room.hiddenPeerCount, 0);
 
