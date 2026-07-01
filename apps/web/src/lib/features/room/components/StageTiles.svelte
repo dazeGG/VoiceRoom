@@ -26,6 +26,7 @@
     id="tileGrid"
     data-count={Math.min(totalCount, 9)}
     data-streams={Math.min(streamCount, 9)}
+    aria-live="polite"
   >
     <StreamTiles />
     <ParticipantList />

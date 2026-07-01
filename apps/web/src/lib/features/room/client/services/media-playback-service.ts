@@ -151,8 +151,7 @@ function applyVoiceMediaElementVolume(
       });
     }
     if (context.state !== 'running') {
-      queueAudioUnlock({ showFallback: true });
-      context.resume().catch(() => {});
+      context.resume().catch(() => queueAudioUnlock({ showFallback: true }));
     }
 
     const source = context.createMediaElementSource(mediaElement);
@@ -262,8 +261,7 @@ export function applyScreenMediaElementVolume(
       });
     }
     if (context.state !== 'running') {
-      queueAudioUnlock({ showFallback: true });
-      context.resume().catch(() => {});
+      context.resume().catch(() => queueAudioUnlock({ showFallback: true }));
     }
 
     if (screenAudioGainElement !== mediaElement) {
