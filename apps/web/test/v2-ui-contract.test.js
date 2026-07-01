@@ -317,6 +317,8 @@ test('visual identity UI consumes backend keys and exposes only curated room pre
   // The room heading consumes the curated preset reactively in RoomTopbar now.
   const roomTopbar = read('src/lib/features/room/components/RoomTopbar.svelte');
   assert.match(roomTopbar, /getRoomPreset/);
+  assert.match(roomView, /import \{ session \} from '\$lib\/features\/auth\/session\.svelte'/);
+  assert.match(roomView, /avatarColorKey: session\.user\?\.avatarColorKey \|\| ''/);
   assert.match(roomView, /updateParticipant\(event\.payload\.peer\)/);
   assert.match(roomView, /updateParticipant\(\{ \.\.\.localPeer, isLocal: true \}\)/);
   assert.match(tokens, /ROOM_ICON_EMOJIS/);
@@ -587,6 +589,9 @@ test('hotfix lobby UX keeps dock in main area, preview chat, and add-friend subm
 
   assert.match(controls, /body\[data-lobby-embedded="true"\] \.room-dock/);
   assert.match(controls, /left: var\(--lobby-sidebar-width, 312px\)/);
+  const roomLayoutCss = read('src/lib/features/room/styles/layout.css');
+  assert.match(roomLayoutCss, /body\[data-lobby-embedded="true"\] \.app-shell\.room-embedded-shell/);
+  assert.match(roomLayoutCss, /body\[data-lobby-embedded="true"\] \.room-embedded-shell \.topbar/);
   assert.match(sidebar, /import SidebarDownload from '\.\.\/SidebarDownload\.svelte'/);
   assert.match(sidebar, /<SidebarDownload \/>/);
   assert.match(previewView, /RoomPreviewChat/);
