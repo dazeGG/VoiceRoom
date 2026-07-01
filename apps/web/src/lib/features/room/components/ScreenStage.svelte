@@ -1,13 +1,12 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { AvatarStack } from '$lib/shared/ui';
   import { mountIcons } from '../client/ui/icons';
   import { handleScreenStageClick } from '../client/ui/screen-view';
   import {
     getFullscreenView,
     getScreenMetaView,
     getStreamVolumeView,
-    getViewerAvatarStyle,
-    getViewerInitials,
     registerScreenStage,
     registerScreenVideo,
     registerStreamVolumeSlider,
@@ -89,24 +88,10 @@
         <span class="screen-meta-sep" id="screenMetaSepViewers" aria-hidden="true">·</span>
       {/if}
       <span class="screen-meta-detail screen-meta-viewers" id="screenMetaViewers">
-        {#if meta.viewers.length === 0}
+        {#if meta.viewerAvatars.length === 0}
           Смотрят: 0
         {:else}
-          {#each meta.viewers as viewer (viewer.id)}
-            {@const avatar = getViewerAvatarStyle(viewer)}
-            <span
-              class="screen-meta-viewer-avatar"
-              title={avatar.label}
-              role="img"
-              aria-label={avatar.label}
-              style:--avatar-bg={avatar.background}
-              style:--avatar-fg={avatar.foreground}
-              style:--avatar-shadow={avatar.shadow}
-            >{getViewerInitials(viewer)}</span>
-          {/each}
-          {#if meta.viewersRest > 0}
-            <span class="screen-meta-viewers-rest">+{meta.viewersRest}</span>
-          {/if}
+          <AvatarStack items={meta.viewerAvatars} maxAvatars={null} size={22} ariaLabel="Смотрят стрим" class="screen-meta-avatar-stack" />
         {/if}
       </span>
     </div>

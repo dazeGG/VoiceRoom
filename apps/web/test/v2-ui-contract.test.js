@@ -401,21 +401,30 @@ test('screen stream thumbnails show profile metadata instead of an action button
   assert.doesNotMatch(streamTilesCss, /stream-tile-action-disconnect/);
 });
 
-test('screen stage viewer badge renders viewer avatars instead of names', () => {
+test('screen stage and lobby room previews use shared AvatarStack for participant avatars', () => {
   const stage = read('src/lib/features/room/components/ScreenStage.svelte');
   const screenUi = read('src/lib/features/room/screen-ui.svelte.ts');
-  const css = read('src/lib/features/room/styles/screen.css');
+  const avatarStack = read('src/lib/shared/ui/AvatarStack/AvatarStack.svelte');
+  const uiIndex = read('src/lib/shared/ui/index.ts');
+  const browseView = read('src/lib/features/home/components/lobby/RoomBrowseView.svelte');
+  const previewView = read('src/lib/features/home/components/lobby/RoomPreviewView.svelte');
+  const lobby = read('src/lib/features/home/LobbyPage.svelte');
 
-  assert.match(stage, /screen-meta-viewers/);
-  assert.match(stage, /getViewerAvatarStyle/);
-  assert.match(stage, /getViewerInitials/);
-  assert.match(screenUi, /getViewerAvatarStyle/);
+  assert.match(uiIndex, /export \{ AvatarStack \} from '\.\/AvatarStack'/);
+  assert.match(avatarStack, /maxAvatars/);
+  assert.match(avatarStack, /avatar-stack-rest/);
+  assert.match(stage, /<AvatarStack items=\{meta\.viewerAvatars\} maxAvatars=\{null\}/);
+  assert.match(screenUi, /getViewerAvatarItem/);
+  assert.match(screenUi, /viewerAvatars: viewers\.map\(getViewerAvatarItem\)/);
   assert.match(screenUi, /getAvatarPresentation\(viewer\)/);
+  assert.match(browseView, /<AvatarStack items=\{peerAvatars\} maxAvatars=\{5\}/);
+  assert.match(previewView, /<AvatarStack items=\{peerAvatars\} maxAvatars=\{5\}/);
+  assert.match(lobby, /decrementRoomPeerCount/);
+  assert.match(lobby, /setRoomPeerCount\(roomId, current - 1\)/);
+  assert.match(lobby, /refreshRoomPresence\(roomId\)/);
   assert.doesNotMatch(screenUi, /screen-meta-viewers-label/);
   assert.doesNotMatch(screenUi, /formatScreenViewersLine/);
   assert.doesNotMatch(screenUi, /names\.join/);
-  assert.match(css, /\.screen-meta-viewer-avatar/);
-  assert.doesNotMatch(css, /screen-meta-viewers-label/);
 });
 
 test('room route uses lobby for authenticated users and preserves standalone guest entry', () => {
@@ -775,6 +784,22 @@ test('notification cue volume respects stored multiplier', () => {
   assert.match(cues, /getNotificationVolumeMultiplier\(\)/);
 });
 
+test('sound cue layer covers direct messages and friend request events', () => {
+  const cues = read('src/lib/features/room/client/media/cues.ts');
+  const friends = read('src/lib/features/home/model/friends.svelte.ts');
+  const settingsModal = read('src/lib/features/home/components/SettingsModal.svelte');
+
+  assert.match(cues, /playDirectMessageCue/);
+  assert.match(cues, /playFriendRequestCue/);
+  assert.match(cues, /playFriendAcceptedCue/);
+  assert.match(cues, /playCueSequence/);
+  assert.match(friends, /case 'friend-request'[\s\S]*playFriendRequestCue\(\)/);
+  assert.match(friends, /case 'friend-accepted'[\s\S]*playFriendAcceptedCue\(\)/);
+  assert.match(friends, /case 'dm-message'[\s\S]*playDirectMessageCue\(\)/);
+  assert.match(settingsModal, /settings-cue-grid/);
+  assert.match(settingsModal, /previewCue\('friend-request'\)/);
+});
+
 test('shared slider component backs volume slider UI', () => {
   const slider = read('src/lib/shared/ui/Slider/Slider.svelte');
   const volumeSlider = read('src/lib/shared/ui/VolumeSlider/VolumeSlider.svelte');
@@ -787,16 +812,17 @@ test('shared slider component backs volume slider UI', () => {
   assert.match(volumeSlider, /<Slider[\s\S]*bind:value/);
 });
 
-test('focus styles use shared green ring tokens instead of amber outline', () => {
+test('focus styles use light border tokens instead of colored glow', () => {
   const appCss = read('src/lib/shared/styles/app.css');
   const controlsCss = read('src/lib/features/room/styles/controls.css');
   const friendsCss = read('src/lib/features/home/styles/friends.css');
 
   assert.match(appCss, /--focus-border/);
-  assert.match(appCss, /--focus-ring/);
-  assert.match(controlsCss, /var\(--focus-ring\)/);
+  assert.match(appCss, /--focus-ring: color-mix\(in oklch, var\(--ink\)/);
+  assert.match(controlsCss, /border-color: var\(--focus-border/);
   assert.doesNotMatch(controlsCss, /oklch\(70% 0\.14 82/);
-  assert.match(friendsCss, /\.lobby-dm-input:focus[\s\S]*var\(--focus-ring\)/);
+  assert.doesNotMatch(controlsCss, /box-shadow: 0 0 0 3px var\(--focus-ring\)/);
+  assert.match(friendsCss, /\.lobby-dm-input:focus[\s\S]*border-color: var\(--focus-border/);
 });
 
 test('desktop shell layout stays in shared web styles, not electron overrides', () => {

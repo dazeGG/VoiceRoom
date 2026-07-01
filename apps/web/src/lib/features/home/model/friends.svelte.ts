@@ -20,6 +20,7 @@ import {
 } from '$lib/api/friends';
 import { fetchThread, markThreadRead, sendDirectMessage, type DirectMessage } from '$lib/api/dm';
 import { connectRealtime, type RealtimeEvent, type RealtimeHandle } from '$lib/api/realtime';
+import { playDirectMessageCue, playFriendAcceptedCue, playFriendRequestCue } from '$lib/features/room/client/media/cues';
 
 export type LobbyMode = 'friends' | 'rooms';
 export type LobbyView = 'home' | 'dm' | 'requests' | 'add';
@@ -269,8 +270,18 @@ function handleRealtimeEvent(event: RealtimeEvent): void {
       setFriendOnline(event.userId, event.online);
       break;
     }
-    case 'friend-request':
-    case 'friend-accepted':
+    case 'friend-request': {
+      playFriendRequestCue();
+      void refreshFriends().catch(() => {});
+      void refreshRequests().catch(() => {});
+      break;
+    }
+    case 'friend-accepted': {
+      playFriendAcceptedCue();
+      void refreshFriends().catch(() => {});
+      void refreshRequests().catch(() => {});
+      break;
+    }
     case 'friend-removed': {
       void refreshFriends().catch(() => {});
       void refreshRequests().catch(() => {});
@@ -286,6 +297,7 @@ function handleRealtimeEvent(event: RealtimeEvent): void {
         // We're looking at it: keep it read.
         if (message.senderId !== selfId) void markThreadRead(peerId).catch(() => {});
       } else if (message.senderId !== selfId) {
+        playDirectMessageCue();
         const friend = findFriend(peerId);
         if (friend) friend.unreadCount += 1;
       }

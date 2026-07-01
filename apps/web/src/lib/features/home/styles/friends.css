@@ -901,7 +901,8 @@ html.is-desktop .sidebar-download { display: none; }
 }
 .lobby-dm-input:focus {
   border-color: var(--focus-border);
-  box-shadow: 0 0 0 3px var(--focus-ring);
+  border-color: var(--focus-border, rgba(255, 255, 255, 0.72));
+  box-shadow: none;
 }
 .lobby-dm-input::placeholder { color: #6f6a5c; }
 

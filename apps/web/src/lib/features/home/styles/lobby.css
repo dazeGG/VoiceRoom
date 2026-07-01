@@ -67,7 +67,8 @@
 
 .lobby-search:focus-within {
   border-color: var(--focus-border);
-  box-shadow: 0 0 0 3px var(--focus-ring);
+  border-color: var(--focus-border, rgba(255, 255, 255, 0.72));
+  box-shadow: none;
 }
 
 .lobby-search-input {

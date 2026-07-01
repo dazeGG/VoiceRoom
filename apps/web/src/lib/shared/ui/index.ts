@@ -3,3 +3,5 @@ export * from './Popover';
 export * from './Ellipsis';
 export * from './Slider';
 export * from './VolumeSlider';
+export { AvatarStack } from './AvatarStack';
+export type { AvatarStackItem, AvatarStackProps } from './AvatarStack';

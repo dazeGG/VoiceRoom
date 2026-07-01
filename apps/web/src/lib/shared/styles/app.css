@@ -21,7 +21,8 @@
   --coral: oklch(67% 0.18 31);
   --amber: oklch(79% 0.14 82);
   --focus-border: color-mix(in oklch, var(--green), var(--line) 52%);
-  --focus-ring: color-mix(in oklch, var(--green), transparent 72%);
+  --focus-ring: color-mix(in oklch, var(--ink), transparent 68%);
+  --focus-border: rgba(255, 255, 255, 0.72);
   --shadow: 0 24px 70px oklch(6% 0.02 92 / 0.46);
   --radius-sm: 8px;
   --radius-md: 14px;

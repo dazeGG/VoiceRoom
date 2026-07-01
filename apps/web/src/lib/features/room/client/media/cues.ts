@@ -14,6 +14,75 @@ function getCueGain(value: number): number {
   return value * NOTIFICATION_VOLUME_BOOST * getNotificationVolumeMultiplier();
 }
 
+interface CueNote {
+  frequency: number;
+  peak: number;
+  start?: number;
+  duration?: number;
+  type?: OscillatorType;
+}
+
+function playCueSequence(notes: CueNote[], label: string): void {
+  if (isAppPlaybackMuted()) return;
+
+  try {
+    const context = getSharedAudioContext();
+    if (context.state !== 'running') {
+      queueAudioUnlock();
+      return;
+    }
+
+    const now = context.currentTime;
+    notes.forEach((note, index) => {
+      const startedAt = now + (note.start ?? index * 0.095);
+      const duration = note.duration ?? 0.12;
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+
+      oscillator.type = note.type || 'sine';
+      oscillator.frequency.setValueAtTime(note.frequency, startedAt);
+      gain.gain.setValueAtTime(0.0001, startedAt);
+      gain.gain.exponentialRampToValueAtTime(getCueGain(note.peak), startedAt + 0.014);
+      gain.gain.exponentialRampToValueAtTime(0.0001, startedAt + duration);
+
+      oscillator.connect(gain);
+      gain.connect(context.destination);
+      oscillator.start(startedAt);
+      oscillator.stop(startedAt + duration + 0.02);
+      oscillator.addEventListener('ended', () => {
+        oscillator.disconnect();
+        gain.disconnect();
+      });
+    });
+  } catch (error) {
+    console.warn(`${label} sound unavailable`, error);
+  }
+}
+
+
+export function playDirectMessageCue(): void {
+  playCueSequence([
+    { frequency: 660, peak: 0.030, duration: 0.105 },
+    { frequency: 880, peak: 0.026, start: 0.075, duration: 0.12 }
+  ], 'DM');
+}
+
+export function playFriendRequestCue(): void {
+  playCueSequence([
+    { frequency: 523, peak: 0.028, duration: 0.11 },
+    { frequency: 659, peak: 0.030, start: 0.085, duration: 0.11 },
+    { frequency: 784, peak: 0.024, start: 0.17, duration: 0.13 }
+  ], 'Friend request');
+}
+
+export function playFriendAcceptedCue(): void {
+  playCueSequence([
+    { frequency: 587, peak: 0.028, duration: 0.10 },
+    { frequency: 740, peak: 0.030, start: 0.08, duration: 0.11 },
+    { frequency: 988, peak: 0.022, start: 0.17, duration: 0.16 }
+  ], 'Friend accepted');
+}
+
 export function playPeerJoinCue(peerId: string | undefined): void {
   if (!peerId || peerId === state.peerId) return;
 

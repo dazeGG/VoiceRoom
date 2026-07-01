@@ -78,6 +78,8 @@
     draft = '';
     try {
       await sendMessage(pending);
+      await tick();
+      inputEl?.focus();
     } catch {
       draft = pending;
     } finally {

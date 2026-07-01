@@ -207,7 +207,8 @@
 
 .settings-input:focus {
   border-color: var(--focus-border);
-  box-shadow: 0 0 0 3px var(--focus-ring);
+  border-color: var(--focus-border, rgba(255, 255, 255, 0.72));
+  box-shadow: none;
 }
 
 .settings-divider {
@@ -558,4 +559,26 @@
     flex: none;
     margin-top: 0;
   }
+}
+
+.settings-cue-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.settings-cue-grid button {
+  border: 1px solid var(--line, #2a261d);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.035);
+  color: var(--ink, #ece7d9);
+  cursor: pointer;
+  font: 700 12px var(--font-sans, sans-serif);
+  padding: 7px 10px;
+}
+
+.settings-cue-grid button:focus-visible {
+  border-color: var(--focus-border, rgba(255, 255, 255, 0.72));
+  outline: none;
 }

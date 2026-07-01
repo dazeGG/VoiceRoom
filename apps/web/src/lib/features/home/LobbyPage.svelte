@@ -3,6 +3,7 @@
   import type { AuthUser, OwnedRoom } from '$lib/api/auth';
   import { addRoomByCode, fetchOwnedRooms } from '$lib/api/auth';
   import { createRoom } from '$lib/api/rooms';
+  import { refreshRoomPresence, setRoomPresence } from './model/room-presence.svelte';
   import { extractRoomId } from '$lib/shared/utils/room';
   import SettingsModal from './components/SettingsModal.svelte';
   import RoomPage from '$lib/features/room/RoomPage.svelte';
@@ -67,6 +68,32 @@
   const connectedRoomVisible = $derived(connectedRoomIsViewed(friendsState.mode));
   const embeddedRoomVisible = $derived(embeddedRoomIsVisible(friendsState.mode));
 
+
+  function setRoomPeerCount(roomId: string, peers: number): void {
+    rooms = rooms.map((room) => room.roomId === roomId ? { ...room, peers: Math.max(0, peers) } : room);
+  }
+
+  function decrementRoomPeerCount(roomId: string | null): void {
+    if (!roomId) return;
+    const current = rooms.find((room) => room.roomId === roomId)?.peers ?? 0;
+    setRoomPeerCount(roomId, current - 1);
+    setRoomPresence(roomId, []);
+    void refreshRooms();
+    void refreshRoomPresence(roomId).then((peers) => setRoomPeerCount(roomId, peers.length)).catch(() => {});
+  }
+
+  function refreshVisibleRoomPresence(): void {
+    for (const room of rooms) {
+      if (room.peers <= 0) {
+        setRoomPresence(room.roomId, []);
+        continue;
+      }
+      void refreshRoomPresence(room.roomId)
+        .then((peers) => setRoomPeerCount(room.roomId, peers.length))
+        .catch(() => {});
+    }
+  }
+
   function restoreLobbyDocumentState(): void {
     document.body.dataset.screen = 'start';
     delete document.body.dataset.chatOpen;
@@ -92,6 +119,7 @@
     function onEmbeddedLeave(event: Event): void {
       const closedRoomId = event instanceof CustomEvent && typeof event.detail?.roomId === 'string' ? event.detail.roomId : null;
       const closedViewedRoom = Boolean(closedRoomId && selectedRoomId === closedRoomId);
+      decrementRoomPeerCount(closedRoomId);
       closeEmbeddedRoom({ closedRoomId });
       if (closedViewedRoom) clearViewedRoom();
     }
@@ -158,6 +186,7 @@
   async function refreshRooms(): Promise<void> {
     try {
       rooms = await fetchOwnedRooms();
+      queueMicrotask(refreshVisibleRoomPresence);
     } catch (error) {
       rooms = [];
       onToast(error instanceof Error && error.message ? error.message : 'Не удалось загрузить комнаты');
@@ -194,6 +223,7 @@
   function leaveConnectedVoiceRoom(): void {
     const leavingRoomId = connectedVoiceRoomId;
     const transition = resolveLeaveViewedConnectedRoom(leavingRoomId);
+    decrementRoomPeerCount(leavingRoomId);
     leaveActiveVoiceRoom();
     if (transition.closeEmbeddedRoom) {
       closeEmbeddedRoom();

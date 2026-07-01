@@ -3,7 +3,7 @@
   import { changePassword, updateDisplayName } from '$lib/api/auth';
   import { isValidPassword, PASSWORD_MIN_LENGTH } from '$lib/features/auth/account';
   import { clearSession, setUser } from '$lib/features/auth/session.svelte';
-  import { playPeerCue } from '$lib/features/room/client/media/cues';
+  import { playPeerCue, playDirectMessageCue, playFriendAcceptedCue, playFriendRequestCue, playMicCue, playStreamCue, playStreamViewerCue } from '$lib/features/room/client/media/cues';
   import { Select, Slider, VolumeSlider } from '$lib/shared/ui';
   import { getAvatarColor } from '$lib/visual/tokens';
   import {
@@ -234,6 +234,21 @@
 
   function previewNotificationSound(): void {
     playPeerCue('join');
+    window.setTimeout(() => playDirectMessageCue(), 180);
+    window.setTimeout(() => playFriendRequestCue(), 360);
+  }
+
+  function previewCue(kind: string): void {
+    if (kind === 'peer-leave') playPeerCue('leave');
+    else if (kind === 'mute') playMicCue(true);
+    else if (kind === 'unmute') playMicCue(false);
+    else if (kind === 'stream-start') playStreamCue('start');
+    else if (kind === 'stream-stop') playStreamCue('stop');
+    else if (kind === 'stream-viewer') playStreamViewerCue('join');
+    else if (kind === 'dm') playDirectMessageCue();
+    else if (kind === 'friend-request') playFriendRequestCue();
+    else if (kind === 'friend-accepted') playFriendAcceptedCue();
+    else playPeerCue('join');
   }
 </script>
 
@@ -394,8 +409,20 @@
                 />
                 <div class="settings-sound-actions">
                   <button class="settings-sound-preview" type="button" onclick={previewNotificationSound}>
-                    Проверить звук
+                    Проверить набор
                   </button>
+                </div>
+                <div class="settings-cue-grid" aria-label="Предпрослушивание событий">
+                  <button type="button" onclick={() => previewCue('peer-join')}>Вход</button>
+                  <button type="button" onclick={() => previewCue('peer-leave')}>Выход</button>
+                  <button type="button" onclick={() => previewCue('mute')}>Mute</button>
+                  <button type="button" onclick={() => previewCue('unmute')}>Unmute</button>
+                  <button type="button" onclick={() => previewCue('stream-start')}>Стрим старт</button>
+                  <button type="button" onclick={() => previewCue('stream-stop')}>Стрим стоп</button>
+                  <button type="button" onclick={() => previewCue('stream-viewer')}>Зритель</button>
+                  <button type="button" onclick={() => previewCue('dm')}>Сообщение</button>
+                  <button type="button" onclick={() => previewCue('friend-request')}>Заявка</button>
+                  <button type="button" onclick={() => previewCue('friend-accepted')}>Приняли</button>
                 </div>
               </div>
             </div>

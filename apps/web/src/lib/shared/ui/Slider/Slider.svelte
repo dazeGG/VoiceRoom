@@ -162,10 +162,14 @@
     background: transparent;
   }
 
+  .vr-slider-control:focus-within .vr-slider-track {
+    background: color-mix(in oklch, var(--focus-border, rgba(255, 255, 255, 0.72)) 28%, oklch(15% 0.014 92));
+  }
+
   .vr-slider-control:focus-within .vr-slider-thumb {
     box-shadow:
       0 1px 3px rgba(0, 0, 0, 0.45),
-      0 0 0 3px var(--focus-ring, color-mix(in oklch, var(--green, oklch(72% 0.16 164)) 28%, transparent));
+      0 0 0 1px var(--focus-border, rgba(255, 255, 255, 0.72));
   }
 
   .vr-slider--disabled {

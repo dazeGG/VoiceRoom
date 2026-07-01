@@ -1,5 +1,8 @@
 <script lang="ts">
+  import { AvatarStack } from '$lib/shared/ui';
   import type { AuthUser, OwnedRoom } from '$lib/api/auth';
+  import { roomPresence } from '../../model/room-presence.svelte';
+  import { roomPeerAvatarItems } from '../../model/room-avatars';
   import { roomDisplayName, roomVisual } from '../../model/rooms';
   import { friendName } from '../../model/lobby-format';
   import {
@@ -67,6 +70,11 @@
       event.preventDefault();
       onJoinRoom();
     }
+  }
+
+
+  function roomAvatars(roomId: string) {
+    return roomPeerAvatarItems(roomPresence.peersByRoomId[roomId] || []);
   }
 </script>
 
@@ -216,6 +224,7 @@
                 {#if room.peers > 0}
                   <div class="lobby-voices">
                     <span class="lobby-live-dot"></span>
+                    <AvatarStack items={roomAvatars(room.roomId)} maxAvatars={5} size={22} ariaLabel="В комнате" />
                     <span class="lobby-row-sub" style="color:#8fa888;">{room.peers} в эфире</span>
                   </div>
                 {:else}
