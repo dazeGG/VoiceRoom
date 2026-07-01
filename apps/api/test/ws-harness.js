@@ -32,11 +32,11 @@ function openWs(target, { cookie, path = '/api/ws' } = {}) {
   return { ws, frames, ready };
 }
 
-function waitForWsType(frames, type, predicate = () => true, timeoutMs = 5000) {
+function waitForWsType(frames, type, predicate = () => true, timeoutMs = 5000, sinceIndex = 0) {
   const started = Date.now();
   return new Promise((resolve, reject) => {
     const check = () => {
-      const found = frames.find((frame) => frame.type === type && predicate(frame));
+      const found = frames.slice(sinceIndex).find((frame) => frame.type === type && predicate(frame));
       if (found) {
         resolve(found);
         return;
