@@ -39,10 +39,10 @@ Key gauges scraped by the status stack:
 | --- | --- |
 | `livekit_room_total` | Active SFU rooms |
 | `livekit_participant_total` | Connected LiveKit participants |
-| `livekit_track_published_total{kind="audio"}` | Published microphone tracks |
-| `livekit_track_published_total{kind="video"}` | Published video tracks, including screen share |
+| `livekit_track_published_total{kind="AUDIO"}` | Published microphone tracks |
+| `livekit_track_published_total{kind="VIDEO"}` | Published video tracks, including screen share |
 
-LiveKit does not expose a separate screen-share gauge. Screen share is counted inside `kind="video"`.
+LiveKit does not expose a separate screen-share gauge. Screen share is counted inside `kind="VIDEO"`.
 
 ## Start on the VoiceRoom server
 
