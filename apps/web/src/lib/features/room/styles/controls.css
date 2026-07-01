@@ -57,10 +57,19 @@ select:hover {
 }
 
 input:focus,
+input:focus-visible,
 select:focus,
+select:focus-visible {
+  outline: none;
+  border-color: var(--focus-border);
+  border-color: var(--focus-border, rgba(255, 255, 255, 0.72));
+  box-shadow: none;
+}
+
 button:focus-visible {
-  outline: 3px solid oklch(70% 0.14 82 / 0.55);
-  outline-offset: 2px;
+  outline: none;
+  border-color: var(--focus-border, rgba(255, 255, 255, 0.72));
+  box-shadow: none;
 }
 
 .primary-button {

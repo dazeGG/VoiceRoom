@@ -899,7 +899,11 @@ html.is-desktop .sidebar-download { display: none; }
   outline: none;
   transition: border-color 0.15s ease;
 }
-.lobby-dm-input:focus { border-color: rgba(154, 143, 106, 0.7); }
+.lobby-dm-input:focus {
+  border-color: var(--focus-border);
+  border-color: var(--focus-border, rgba(255, 255, 255, 0.72));
+  box-shadow: none;
+}
 .lobby-dm-input::placeholder { color: #6f6a5c; }
 
 .lobby-dm-empty { flex: 1; display: flex; align-items: center; justify-content: center; color: #6f6a5c; font-size: 13.5px; }

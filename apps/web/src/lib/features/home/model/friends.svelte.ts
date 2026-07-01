@@ -20,6 +20,7 @@ import {
 } from '$lib/api/friends';
 import { fetchThread, markThreadRead, sendDirectMessage, type DirectMessage } from '$lib/api/dm';
 import { connectRealtime, type RealtimeEvent, type RealtimeHandle } from '$lib/api/realtime';
+import { playDirectMessageCue, playFriendAcceptedCue, playFriendRequestCue } from '$lib/features/room/client/media/cues';
 
 export type LobbyMode = 'friends' | 'rooms';
 export type LobbyView = 'home' | 'dm' | 'requests' | 'add';
@@ -54,16 +55,47 @@ export const friendsState = $state<FriendsState>({
 
 let realtime: RealtimeHandle | null = null;
 let selfId = '';
+// Realtime `ready` can arrive before the first friends fetch finishes. Keep the
+// snapshot so a later refreshFriends() still applies the correct online flags.
+let presenceReady = false;
+let onlineFriendIds = new Set<string>();
 
 function findFriend(userId: string): Friend | undefined {
   return friendsState.friends.find((entry) => entry.user.id === userId);
+}
+
+function friendOnlineFromPresence(userId: string, fallback = false): boolean {
+  return presenceReady ? onlineFriendIds.has(userId) : fallback;
+}
+
+function applyOnlineToFriends(): void {
+  if (!presenceReady) return;
+  for (const friend of friendsState.friends) {
+    friend.online = onlineFriendIds.has(friend.user.id);
+  }
+}
+
+function setOnlineSnapshot(ids: Iterable<string>): void {
+  onlineFriendIds = new Set(ids);
+  presenceReady = true;
+  applyOnlineToFriends();
+}
+
+function setFriendOnline(userId: string, online: boolean): void {
+  if (online) onlineFriendIds.add(userId);
+  else onlineFriendIds.delete(userId);
+  const friend = findFriend(userId);
+  if (friend) friend.online = online;
 }
 
 // --- Loading ------------------------------------------------------------
 
 export async function refreshFriends(): Promise<void> {
   const { friends, incomingRequestCount } = await fetchFriends();
-  friendsState.friends = friends;
+  friendsState.friends = friends.map((friend) => ({
+    ...friend,
+    online: friendOnlineFromPresence(friend.user.id, friend.online)
+  }));
   friendsState.incomingRequestCount = incomingRequestCount;
   friendsState.loaded = true;
 }
@@ -77,13 +109,17 @@ export async function refreshRequests(): Promise<void> {
 // teardown function for onMount cleanup.
 export function initLobby(currentUserId: string): () => void {
   selfId = currentUserId;
+  presenceReady = false;
+  onlineFriendIds = new Set();
+  realtime = connectRealtime(handleRealtimeEvent);
   void Promise.all([refreshFriends(), refreshRequests()]).catch(() => {
     friendsState.loaded = true;
   });
-  realtime = connectRealtime(handleRealtimeEvent);
   return () => {
     realtime?.close();
     realtime = null;
+    presenceReady = false;
+    onlineFriendIds = new Set();
   };
 }
 
@@ -227,19 +263,25 @@ export async function removeFriend(userId: string): Promise<void> {
 function handleRealtimeEvent(event: RealtimeEvent): void {
   switch (event.type) {
     case 'ready': {
-      const online = new Set(event.onlineFriendIds);
-      for (const friend of friendsState.friends) {
-        friend.online = online.has(friend.user.id);
-      }
+      setOnlineSnapshot(event.onlineFriendIds);
       break;
     }
     case 'presence': {
-      const friend = findFriend(event.userId);
-      if (friend) friend.online = event.online;
+      setFriendOnline(event.userId, event.online);
       break;
     }
-    case 'friend-request':
-    case 'friend-accepted':
+    case 'friend-request': {
+      playFriendRequestCue();
+      void refreshFriends().catch(() => {});
+      void refreshRequests().catch(() => {});
+      break;
+    }
+    case 'friend-accepted': {
+      playFriendAcceptedCue();
+      void refreshFriends().catch(() => {});
+      void refreshRequests().catch(() => {});
+      break;
+    }
     case 'friend-removed': {
       void refreshFriends().catch(() => {});
       void refreshRequests().catch(() => {});
@@ -255,6 +297,7 @@ function handleRealtimeEvent(event: RealtimeEvent): void {
         // We're looking at it: keep it read.
         if (message.senderId !== selfId) void markThreadRead(peerId).catch(() => {});
       } else if (message.senderId !== selfId) {
+        playDirectMessageCue();
         const friend = findFriend(peerId);
         if (friend) friend.unreadCount += 1;
       }

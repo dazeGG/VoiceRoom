@@ -144,7 +144,7 @@ button.chat-msg-author {
 
 .chat-msg-avatar.chat-msg-trigger:hover,
 .chat-msg-avatar.chat-msg-trigger:focus-visible {
-  outline: 2px solid color-mix(in oklch, var(--green), transparent 30%);
+  outline: 2px solid var(--focus-border, rgba(255, 255, 255, 0.72));
   outline-offset: 2px;
 }
 

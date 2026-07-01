@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { AvatarStack } from '$lib/shared/ui';
   import type { AuthUser, OwnedRoom } from '$lib/api/auth';
   import { fetchRoomPeers, type RoomPeer } from '$lib/api/rooms';
   import { roomDisplayName } from '../../model/rooms';
@@ -7,6 +8,7 @@
   import '$lib/features/room/styles/room.css';
   import RoomPreviewChat from './RoomPreviewChat.svelte';
   import RoomViewHeader from './RoomViewHeader.svelte';
+  import { roomPeerAvatarItems } from '../../model/room-avatars';
 
   let { room, user, onEnter, onBack, onToast } = $props<{
     room: OwnedRoom;
@@ -21,8 +23,9 @@
   let peers = $state<RoomPeer[]>([]);
   let loading = $state(true);
 
-  let previewChatOpen = $state(true);
+  let previewChatOpen = $state(false);
   let loadError = $state('');
+  const peerAvatars = $derived(roomPeerAvatarItems(peers));
 
   async function refresh(): Promise<void> {
     const requestedRoomId = room.roomId;
@@ -46,7 +49,7 @@
     loading = true;
     peers = [];
     loadError = '';
-    previewChatOpen = true;
+    previewChatOpen = false;
     void refresh();
   });
 
@@ -75,7 +78,8 @@
       {#if peers.length > 0}
         <span class="lobby-roomview-state" data-live="true">
           <span class="lobby-live-dot"></span>
-          {peers.length} в эфире
+          <AvatarStack items={peerAvatars} maxAvatars={5} size={24} ariaLabel="В комнате" />
+          <span>{peers.length} в эфире</span>
         </span>
       {/if}
       {#if !previewChatOpen}

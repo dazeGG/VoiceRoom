@@ -1,5 +1,6 @@
 import { state } from './client/core/state.svelte';
 import { getAvatarPresentation } from './client/ui/avatar-presentation';
+import type { AvatarStackItem } from '$lib/shared/ui';
 import { getScreenProfileLabels } from './client/media/profiles';
 import { getAllParticipants, getParticipantById } from './client/room/participants';
 import type { Participant } from './client/core/types';
@@ -63,8 +64,7 @@ export interface ScreenMetaView {
   showSepFps: boolean;
   showViewers: boolean;
   showSepViewers: boolean;
-  viewers: Participant[];
-  viewersRest: number;
+  viewerAvatars: AvatarStackItem[];
 }
 
 export function getScreenMetaView(): ScreenMetaView | null {
@@ -86,8 +86,7 @@ export function getScreenMetaView(): ScreenMetaView | null {
     showSepFps: Boolean(qualityLabel && fpsLabel),
     showViewers: true,
     showSepViewers: Boolean(qualityLabel || fpsLabel),
-    viewers: viewers.slice(0, 3),
-    viewersRest: Math.max(0, viewers.length - 3)
+    viewerAvatars: viewers.map(getViewerAvatarItem)
   };
 }
 
@@ -95,23 +94,16 @@ function getScreenViewers(ownerPeerId: string): Participant[] {
   return getAllParticipants().filter((participant) => participant.viewedScreenPeerId === ownerPeerId);
 }
 
-export function getViewerAvatarStyle(viewer: Participant): {
-  background: string;
-  foreground: string;
-  shadow: string;
-  label: string;
-} {
+export function getViewerAvatarItem(viewer: Participant): AvatarStackItem {
   const avatar = getAvatarPresentation(viewer);
   return {
     background: avatar.background,
     foreground: avatar.foreground,
-    shadow: avatar.shadow,
-    label: avatar.label
+    id: viewer.id,
+    initials: avatar.initials,
+    label: avatar.label,
+    shadow: avatar.shadow
   };
-}
-
-export function getViewerInitials(viewer: Participant): string {
-  return getAvatarPresentation(viewer).initials;
 }
 
 export interface StreamVolumeView {

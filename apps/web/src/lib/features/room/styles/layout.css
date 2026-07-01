@@ -375,8 +375,9 @@ body[data-screen="not-found"] {
 }
 
 .not-found-home:focus-visible {
-  outline: 3px solid oklch(70% 0.14 82 / 0.55);
-  outline-offset: 2px;
+  outline: none;
+  border-color: var(--focus-border, rgba(255, 255, 255, 0.72));
+  box-shadow: none;
 }
 
 .not-found-home svg {

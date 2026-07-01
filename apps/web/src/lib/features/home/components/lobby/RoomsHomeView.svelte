@@ -1,5 +1,8 @@
 <script lang="ts">
+  import { AvatarStack } from '$lib/shared/ui';
   import type { OwnedRoom } from '$lib/api/auth';
+  import { roomPresence } from '../../model/room-presence.svelte';
+  import { roomPeerAvatarItems } from '../../model/room-avatars';
   import { roomDisplayName, roomVisual } from '../../model/rooms';
 
   let { rooms, onCreateRoom, onOpenRoom } = $props<{
@@ -10,6 +13,11 @@
 
   const liveRooms = $derived(rooms.filter((room: OwnedRoom) => room.peers > 0));
   const idleRooms = $derived(rooms.filter((room: OwnedRoom) => room.peers === 0));
+
+
+  function roomAvatars(roomId: string) {
+    return roomPeerAvatarItems(roomPresence.peersByRoomId[roomId] || []);
+  }
 </script>
 
 <div class="lobby-page lobby-scroll">
@@ -43,7 +51,7 @@
                 </div>
               </div>
               <div class="lobby-room-card-foot">
-                <span class="lobby-voices"><span class="lobby-live-dot"></span><span class="lobby-room-card-meta" style="margin-top:0;">в разговоре</span></span>
+                <span class="lobby-voices"><span class="lobby-live-dot"></span><AvatarStack items={roomAvatars(room.roomId)} maxAvatars={5} size={24} ariaLabel="В комнате" /><span class="lobby-room-card-meta" style="margin-top:0;">в разговоре</span></span>
                 <span class="lobby-room-enter">Войти<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 17l5-5-5-5"></path><path d="M20 12H9"></path><path d="M9 21H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3"></path></svg></span>
               </div>
             </button>

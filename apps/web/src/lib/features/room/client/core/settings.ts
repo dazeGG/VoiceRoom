@@ -1,15 +1,18 @@
 import {
   DEFAULT_GATE_THRESHOLD_DB,
   DEFAULT_NOISE_MODE,
+  DEFAULT_NOTIFICATION_VOLUME,
   DEFAULT_PARTICIPANT_VOLUME,
   DEFAULT_STREAM_VOLUME,
   GATE_THRESHOLD_DB_STORAGE_KEY,
   GATE_THRESHOLD_MAX_DB,
   GATE_THRESHOLD_MIN_DB,
+  MAX_NOTIFICATION_VOLUME,
   MAX_PARTICIPANT_VOLUME,
   MAX_STREAM_VOLUME,
   NOISE_MODES,
   NOISE_MODE_STORAGE_KEY,
+  NOTIFICATION_VOLUME_STORAGE_KEY,
   PARTICIPANT_AUDIO_PREFERENCES_STORAGE_KEY,
   PREVIOUS_GATE_MAX_AMPLITUDE,
   PREVIOUS_GATE_MIN_AMPLITUDE,
@@ -26,6 +29,22 @@ export function getNoiseMode(mode: unknown): NoiseMode {
 
 export function getStoredNoiseMode(): NoiseMode {
   return getNoiseMode(localStorage.getItem(NOISE_MODE_STORAGE_KEY));
+}
+
+export function getStoredNotificationVolume(): number {
+  const parsed = Number.parseInt(localStorage.getItem(NOTIFICATION_VOLUME_STORAGE_KEY) || '', 10);
+  if (!Number.isFinite(parsed)) return DEFAULT_NOTIFICATION_VOLUME;
+  return Math.min(MAX_NOTIFICATION_VOLUME, Math.max(0, parsed));
+}
+
+export function getNotificationVolumeMultiplier(): number {
+  return getStoredNotificationVolume() / 100;
+}
+
+export function persistNotificationVolume(volume: number): number {
+  const value = Math.min(MAX_NOTIFICATION_VOLUME, Math.max(0, Math.round(volume)));
+  localStorage.setItem(NOTIFICATION_VOLUME_STORAGE_KEY, String(value));
+  return value;
 }
 
 export function getNoiseModeLabel(mode: unknown): string {

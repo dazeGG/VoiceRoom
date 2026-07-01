@@ -206,7 +206,9 @@
 }
 
 .settings-input:focus {
-  border-color: rgba(154, 143, 106, 0.7);
+  border-color: var(--focus-border);
+  border-color: var(--focus-border, rgba(255, 255, 255, 0.72));
+  box-shadow: none;
 }
 
 .settings-divider {
@@ -430,7 +432,42 @@
   opacity: 1;
 }
 
-/* Transparent interactive range on top of the meter; the marker is the visible thumb. */
+.settings-gate-slider-wrap {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+}
+
+.settings-gate-slider-wrap[data-disabled='true'] {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.settings-sound-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
+.settings-sound-preview {
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 10px;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #ece7d9;
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 150ms ease, border-color 150ms ease;
+}
+
+.settings-sound-preview:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
+/* Legacy native range styles kept for older snapshots; gate now uses shared Slider. */
 .settings-gate-slider {
   position: absolute;
   inset: 0;
@@ -522,4 +559,26 @@
     flex: none;
     margin-top: 0;
   }
+}
+
+.settings-cue-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.settings-cue-grid button {
+  border: 1px solid var(--line, #2a261d);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.035);
+  color: var(--ink, #ece7d9);
+  cursor: pointer;
+  font: 700 12px var(--font-sans, sans-serif);
+  padding: 7px 10px;
+}
+
+.settings-cue-grid button:focus-visible {
+  border-color: var(--focus-border, rgba(255, 255, 255, 0.72));
+  outline: none;
 }

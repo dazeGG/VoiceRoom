@@ -66,7 +66,9 @@
 }
 
 .lobby-search:focus-within {
-  border-color: rgba(154, 143, 106, 0.7);
+  border-color: var(--focus-border);
+  border-color: var(--focus-border, rgba(255, 255, 255, 0.72));
+  box-shadow: none;
 }
 
 .lobby-search-input {

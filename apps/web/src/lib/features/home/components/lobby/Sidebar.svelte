@@ -1,5 +1,8 @@
 <script lang="ts">
+  import { AvatarStack } from '$lib/shared/ui';
   import type { AuthUser, OwnedRoom } from '$lib/api/auth';
+  import { roomPresence } from '../../model/room-presence.svelte';
+  import { roomPeerAvatarItems } from '../../model/room-avatars';
   import { roomDisplayName, roomVisual } from '../../model/rooms';
   import { friendName } from '../../model/lobby-format';
   import {
@@ -58,9 +61,8 @@
   const selfName = $derived(user.displayName?.trim() || user.login);
   const activeVoiceLabel = $derived(activeVoiceRoomName?.trim() || activeVoiceRoomId || '');
 
-  function lastMessagePreview(entry: (typeof friendsState.friends)[number]): string {
-    if (!entry.lastMessage) return entry.online ? 'в сети' : 'не в сети';
-    return `${entry.lastMessage.fromMe ? 'Вы: ' : ''}${entry.lastMessage.body}`;
+  function friendStatusLabel(entry: (typeof friendsState.friends)[number]): string {
+    return entry.online ? 'в сети' : 'не в сети';
   }
 
   function onJoinKeydown(event: KeyboardEvent): void {
@@ -68,6 +70,11 @@
       event.preventDefault();
       onJoinRoom();
     }
+  }
+
+
+  function roomAvatars(roomId: string) {
+    return roomPeerAvatarItems(roomPresence.peersByRoomId[roomId] || []);
   }
 </script>
 
@@ -137,7 +144,7 @@
                 <Avatar name={friendName(entry.user)} colorKey={entry.user.avatarColorKey} online showDot ring="#0a0907" />
                 <div class="lobby-row-body">
                   <div class="lobby-row-name">{friendName(entry.user)}</div>
-                  <div class="lobby-row-sub">{lastMessagePreview(entry)}</div>
+                  <div class="lobby-row-sub">{friendStatusLabel(entry)}</div>
                 </div>
                 {#if entry.unreadCount > 0}
                   <span class="lobby-badge lobby-badge--sm">{entry.unreadCount}</span>
@@ -158,7 +165,7 @@
                 <Avatar name={friendName(entry.user)} colorKey={entry.user.avatarColorKey} />
                 <div class="lobby-row-body">
                   <div class="lobby-row-name">{friendName(entry.user)}</div>
-                  <div class="lobby-row-sub lobby-row-sub--muted">{lastMessagePreview(entry)}</div>
+                  <div class="lobby-row-sub lobby-row-sub--muted">{friendStatusLabel(entry)}</div>
                 </div>
                 {#if entry.unreadCount > 0}
                   <span class="lobby-badge lobby-badge--sm">{entry.unreadCount}</span>
@@ -217,6 +224,7 @@
                 {#if room.peers > 0}
                   <div class="lobby-voices">
                     <span class="lobby-live-dot"></span>
+                    <AvatarStack items={roomAvatars(room.roomId)} maxAvatars={5} size={22} ariaLabel="В комнате" />
                     <span class="lobby-row-sub" style="color:#8fa888;">{room.peers} в эфире</span>
                   </div>
                 {:else}
