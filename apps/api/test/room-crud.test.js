@@ -10,6 +10,7 @@ const os = require('node:os');
 const path = require('node:path');
 
 const { createApiApp, createApiServer } = require('../src/server');
+const { openWs, joinVoiceRoom, subscribeRoomPreview, waitForWsType } = require('./ws-harness');
 const {
   ROOM_PRESETS,
   cleanRoomColorKey,
@@ -89,7 +90,21 @@ function createFakeStore(seed = {}) {
     },
     async markRoomActive() {},
     async markRoomEmpty() {},
-    async pruneRooms() {}
+    async pruneRooms() {},
+    async listSummaryRecipientUserIds() {
+      return [];
+    },
+    async listMessages() {
+      return [];
+    }
+  };
+}
+
+function createFakeFriends() {
+  return {
+    async getFriendIds() {
+      return [];
+    }
   };
 }
 
@@ -341,89 +356,27 @@ test('cookie-authenticated PUT/DELETE reject cross-origin browser requests (CSRF
   assert.equal(store.rooms.get('room1').deletedAt, undefined);
 });
 
-function openSseStream(socketPath, pathname, { cookie = '', readyType = 'hello', timeoutMs = 5000 } = {}) {
-  const frames = [];
-  let buffer = '';
-  let streamTimer = null;
-  let req = null;
-  let closed = false;
-  let resolveClosed = null;
-  const closedPromise = new Promise((resolve) => {
-    resolveClosed = resolve;
-  });
-  const markClosed = () => {
-    closed = true;
-    resolveClosed?.();
-  };
+const OWNER_PEER_TOKEN = 'peertoken12345678901234567890123456';
+const GUEST_PEER_TOKEN = 'guesttoken12345678901234567890123456';
 
-  const ready = new Promise((resolve, reject) => {
-    const resolveOnce = () => {
-      if (streamTimer) clearTimeout(streamTimer);
-      streamTimer = null;
-      resolve();
-    };
-    if (readyType) {
-      streamTimer = setTimeout(() => reject(new Error(`SSE stream did not deliver ${readyType}`)), timeoutMs);
-    }
-    req = http.get({ socketPath, path: pathname, headers: cookie ? { cookie } : undefined }, (res) => {
-      if (!readyType) resolveOnce();
-      res.setEncoding('utf8');
-      res.on('end', markClosed);
-      res.on('close', markClosed);
-      res.on('data', (chunk) => {
-        buffer += chunk;
-        let index;
-        while ((index = buffer.indexOf('\n\n')) !== -1) {
-          const block = buffer.slice(0, index);
-          buffer = buffer.slice(index + 2);
-          const dataLine = block.split('\n').find((line) => line.startsWith('data:'));
-          if (!dataLine) continue;
-          const parsed = JSON.parse(dataLine.slice(5).trim());
-          frames.push(parsed);
-          if (readyType && parsed.type === readyType) resolveOnce();
-        }
-      });
-    });
-    req.on('error', (error) => {
-      markClosed();
-      reject(error);
-    });
-  });
+async function openVoiceSession(socketPath, { cookie = '', roomId, peerId, sessionToken, name }) {
+  const session = openWs(socketPath, { cookie });
+  await session.ready;
+  await joinVoiceRoom(session, { roomId, peerId, sessionToken, name });
+  return session;
+}
 
-  return {
-    frames,
-    req,
-    ready,
-    clearTimer() {
-      if (streamTimer) clearTimeout(streamTimer);
-      streamTimer = null;
-    },
-    waitUntilClosed(timeoutMs = 1000) {
-      if (closed) return Promise.resolve();
-      return Promise.race([
-        closedPromise,
-        new Promise((_, reject) => setTimeout(() => reject(new Error('SSE stream did not close')), timeoutMs))
-      ]);
-    },
-    waitFor(type, timeoutMs = 3000) {
-      return new Promise((resolve, reject) => {
-        const deadline = Date.now() + timeoutMs;
-        const poll = () => {
-          const found = frames.find((frame) => frame.type === type);
-          if (found) return resolve(found);
-          if (Date.now() > deadline) return reject(new Error(`${type} frame not received`));
-          setTimeout(poll, 25);
-        };
-        poll();
-      });
-    }
-  };
+async function openPreviewSession(socketPath, roomId, { cookie = '' } = {}) {
+  const session = openWs(socketPath, { cookie });
+  await session.ready;
+  await subscribeRoomPreview(session, roomId);
+  return session;
 }
 
 async function startSocketServer(seed, { store = createFakeStore(seed) } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'voice-room-crud-'));
   const socketPath = path.join(dir, 'api.sock');
-  const server = createApiServer({ store, users: createFakeUsers() });
+  const server = createApiServer({ store, users: createFakeUsers(), friends: createFakeFriends() });
   await new Promise((resolve, reject) => {
     server.listen({ path: socketPath }, (error) => (error ? reject(error) : resolve()));
   });
@@ -459,11 +412,10 @@ async function requestOnSocket(socketPath, { method, path: reqPath, body, cookie
   });
 }
 
-function teardownSocketServer(t, { server, dir, streams = [] }) {
+function teardownSocketServer(t, { server, dir, sessions = [] }) {
   t.after(async () => {
-    for (const stream of streams) {
-      stream.clearTimer?.();
-      stream.req?.destroy();
+    for (const session of sessions) {
+      session.ws?.close();
     }
     server.closeAllConnections?.();
     await new Promise((resolve) => server.close(resolve));
@@ -474,40 +426,44 @@ function teardownSocketServer(t, { server, dir, streams = [] }) {
 
 test('authenticated room presence exposes only minimal account user id on peers', async (t) => {
   const { dir, socketPath, server } = await startSocketServer({ room1: staticRoom() });
-  const ownerPresence = openSseStream(
-    socketPath,
-    '/api/events?room=room1&peer=peer0001&token=peertoken12345678901234567890123456&name=Owner',
-    { cookie: `vr_session=${OWNER_TOKEN}` }
-  );
-  const guestPresence = openSseStream(
-    socketPath,
-    '/api/events?room=room1&peer=peer0002&token=guesttoken12345678901234567890123456&name=Guest'
-  );
-  teardownSocketServer(t, { server, dir, streams: [ownerPresence, guestPresence] });
+  const ownerPresence = await openVoiceSession(socketPath, {
+    cookie: `vr_session=${OWNER_TOKEN}`,
+    roomId: 'room1',
+    peerId: 'peer0001',
+    sessionToken: OWNER_PEER_TOKEN,
+    name: 'Owner'
+  });
+  const guestPresence = await openVoiceSession(socketPath, {
+    roomId: 'room1',
+    peerId: 'peer0002',
+    sessionToken: GUEST_PEER_TOKEN,
+    name: 'Guest'
+  });
+  teardownSocketServer(t, { server, dir, sessions: [ownerPresence, guestPresence] });
 
-  const ownerHello = await ownerPresence.waitFor('hello');
-  assert.equal(ownerHello.peer.accountUserId, OWNER_ID);
-  assert.equal('login' in ownerHello.peer, false);
+  const ownerPeer = ownerPresence.frames
+    .find((frame) => frame.type === 'room.snapshot')
+    ?.payload?.peers?.find((peer) => peer.id === 'peer0001');
+  assert.equal(ownerPeer.accountUserId, OWNER_ID);
+  assert.equal('login' in ownerPeer, false);
 
-  const guestHello = await guestPresence.waitFor('hello');
-  assert.equal(guestHello.peer.accountUserId, '');
-  const ownerAsPeer = guestHello.peers.find((peer) => peer.id === 'peer0001');
+  const guestSnapshot = guestPresence.frames.find((frame) => frame.type === 'room.snapshot')?.payload;
+  const guestSelf = guestSnapshot?.peers?.find((peer) => peer.id === 'peer0002');
+  assert.equal(guestSelf.accountUserId, '');
+  const ownerAsPeer = guestSnapshot?.peers?.find((peer) => peer.id === 'peer0001');
   assert.equal(ownerAsPeer.accountUserId, OWNER_ID);
   assert.equal('login' in ownerAsPeer, false);
 });
 
-// End-to-end over a real socket so an active peer holds a live /api/events SSE
-// stream and observes the room-updated frame broadcast by the PUT handler.
-test('an active peer receives room-updated over the presence stream', async (t) => {
+test('an active peer receives room.updated over the voice stream', async (t) => {
   const { dir, socketPath, server } = await startSocketServer({ room1: staticRoom() });
-  const peerToken = 'peertoken12345678901234567890123456';
-  const presence = openSseStream(
-    socketPath,
-    `/api/events?room=room1&peer=peer0001&token=${peerToken}&name=Tester`
-  );
-  teardownSocketServer(t, { server, dir, streams: [presence] });
-
-  await presence.ready;
+  const presence = await openVoiceSession(socketPath, {
+    roomId: 'room1',
+    peerId: 'peer0001',
+    sessionToken: OWNER_PEER_TOKEN,
+    name: 'Tester'
+  });
+  teardownSocketServer(t, { server, dir, sessions: [presence] });
 
   const updateStatus = await requestOnSocket(socketPath, {
     method: 'PUT',
@@ -517,22 +473,21 @@ test('an active peer receives room-updated over the presence stream', async (t) 
   });
   assert.equal(updateStatus, 200);
 
-  const updated = await presence.waitFor('room-updated');
-  assert.equal(updated.room.name, 'Live Rename');
-  assert.equal(updated.room.roomColorKey, 'blue');
-  assert.equal(updated.room.roomId, 'room1');
+  const updated = await waitForWsType(presence.frames, 'room.updated');
+  assert.equal(updated.payload.room.name, 'Live Rename');
+  assert.equal(updated.payload.room.roomColorKey, 'blue');
+  assert.equal(updated.payload.room.roomId, 'room1');
 });
 
-test('an active peer receives room-deleted over the presence stream', async (t) => {
+test('an active peer receives room.deleted over the voice stream', async (t) => {
   const { dir, socketPath, server } = await startSocketServer({ room1: staticRoom() });
-  const peerToken = 'peertoken12345678901234567890123456';
-  const presence = openSseStream(
-    socketPath,
-    `/api/events?room=room1&peer=peer0001&token=${peerToken}&name=Tester`
-  );
-  teardownSocketServer(t, { server, dir, streams: [presence] });
-
-  await presence.ready;
+  const presence = await openVoiceSession(socketPath, {
+    roomId: 'room1',
+    peerId: 'peer0001',
+    sessionToken: OWNER_PEER_TOKEN,
+    name: 'Tester'
+  });
+  teardownSocketServer(t, { server, dir, sessions: [presence] });
 
   const deleteStatus = await requestOnSocket(socketPath, {
     method: 'DELETE',
@@ -541,16 +496,14 @@ test('an active peer receives room-deleted over the presence stream', async (t) 
   });
   assert.equal(deleteStatus, 200);
 
-  const deleted = await presence.waitFor('room-deleted');
-  assert.equal(deleted.roomId, 'room1');
+  const deleted = await waitForWsType(presence.frames, 'room.deleted');
+  assert.equal(deleted.payload.roomId, 'room1');
 });
 
-test('a chat-stream subscriber receives room-updated and room-deleted lifecycle frames', async (t) => {
+test('a preview subscriber receives room.updated and room.deleted lifecycle frames', async (t) => {
   const { dir, socketPath, server } = await startSocketServer({ room1: staticRoom() });
-  const chat = openSseStream(socketPath, '/api/rooms/room1/chat/stream', { readyType: null });
-  teardownSocketServer(t, { server, dir, streams: [chat] });
-
-  await chat.ready;
+  const preview = await openPreviewSession(socketPath, 'room1');
+  teardownSocketServer(t, { server, dir, sessions: [preview] });
 
   const updateStatus = await requestOnSocket(socketPath, {
     method: 'PUT',
@@ -560,9 +513,9 @@ test('a chat-stream subscriber receives room-updated and room-deleted lifecycle 
   });
   assert.equal(updateStatus, 200);
 
-  const updated = await chat.waitFor('room-updated');
-  assert.equal(updated.room.name, 'Chat Rename');
-  assert.equal(updated.room.roomId, 'room1');
+  const updated = await waitForWsType(preview.frames, 'room.updated');
+  assert.equal(updated.payload.room.name, 'Chat Rename');
+  assert.equal(updated.payload.room.roomId, 'room1');
 
   const deleteStatus = await requestOnSocket(socketPath, {
     method: 'DELETE',
@@ -571,19 +524,16 @@ test('a chat-stream subscriber receives room-updated and room-deleted lifecycle 
   });
   assert.equal(deleteStatus, 200);
 
-  const deleted = await chat.waitFor('room-deleted');
-  assert.equal(deleted.roomId, 'room1');
-  await chat.waitUntilClosed();
+  const deleted = await waitForWsType(preview.frames, 'room.deleted');
+  assert.equal(deleted.payload.roomId, 'room1');
 });
 
 test('DELETE does not broadcast lifecycle frames when persistence fails', async (t) => {
   const store = createFakeStore({ room1: staticRoom() });
   store.deleteRoom = async () => false;
   const { dir, socketPath, server } = await startSocketServer(null, { store });
-  const chat = openSseStream(socketPath, '/api/rooms/room1/chat/stream', { readyType: null });
-  teardownSocketServer(t, { server, dir, streams: [chat] });
-
-  await chat.ready;
+  const preview = await openPreviewSession(socketPath, 'room1');
+  teardownSocketServer(t, { server, dir, sessions: [preview] });
 
   const deleteStatus = await requestOnSocket(socketPath, {
     method: 'DELETE',
@@ -591,5 +541,5 @@ test('DELETE does not broadcast lifecycle frames when persistence fails', async 
     cookie: `vr_session=${OWNER_TOKEN}`
   });
   assert.equal(deleteStatus, 404);
-  await assert.rejects(chat.waitFor('room-deleted', 150), /room-deleted frame not received/);
+  await assert.rejects(waitForWsType(preview.frames, 'room.deleted', () => true, 150), /room.deleted/);
 });

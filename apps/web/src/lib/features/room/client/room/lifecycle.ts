@@ -1,7 +1,7 @@
-// Shared room-updated/room-deleted dispatcher. Both SSE consumers — the
-// presence stream (`/api/events`, handleServerMessage in room.ts) and the
-// chat stream (RoomChat.svelte) — carry these lifecycle frames, so the
-// reaction lives here once instead of being duplicated in each handler.
+// Shared room-updated/room-deleted dispatcher. Lifecycle frames arrive over the
+// app WebSocket (room.updated/room.deleted, handleServerMessage in room.ts), and
+// may reach a client on more than one logical channel, so the reaction lives
+// here once instead of being duplicated in each handler.
 import type { RoomLifecycleSummary } from '../core/types';
 import { roomSettingsUi } from '../../room-settings.svelte';
 import { state } from '../core/state.svelte';
@@ -30,10 +30,10 @@ export function applyRoomNotFound(roomId: string): void {
 
 export function applyRoomDeleted(roomId: string): void {
   if (roomId !== state.roomId) return;
-  // The owner initiated delete — skip the broadcast they would receive over SSE
-  // before navigation completes.
+  // The owner initiated delete — skip the broadcast they would receive over the
+  // WebSocket before navigation completes.
   if (roomSettingsUi.deleting) return;
-  // Both presence and chat SSE streams deliver lifecycle frames; handle once.
+  // A lifecycle frame may be delivered more than once; handle it a single time.
   if (handledRoomDeletedId === roomId) return;
   if (document.body.dataset.screen === 'not-found') return;
   handledRoomDeletedId = roomId;

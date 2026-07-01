@@ -126,7 +126,7 @@ export interface RoomSessionState {
 
 export interface RoomConnectionState {
   connecting: boolean;
-  eventSource: EventSource | null;
+  voiceRealtimeTeardown: (() => void) | null;
   localConnectionQuality: string;
   localPingMs: number | null;
   livekitRoom: Room | null;

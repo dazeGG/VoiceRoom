@@ -1,6 +1,7 @@
 <script lang="ts">
 
   import type { AuthUser } from '$lib/api/auth';
+  import { getAppRealtime } from '$lib/api/realtime';
   import { fetchRoomChat, postRoomChat, type ChatMessage } from '$lib/api/rooms';
   import { getAvatarColor } from '$lib/visual/tokens';
   import { friendName, initial } from '../../model/lobby-format';
@@ -120,30 +121,19 @@
 
     const controller = new AbortController();
     void refreshMessages(controller.signal);
-    const stream = new EventSource(`/api/rooms/${encodeURIComponent(activeRoomId)}/chat/stream`);
-
-    stream.addEventListener('message', (event) => {
-      try {
-        const payload = JSON.parse((event as MessageEvent).data) as { message?: ChatMessage };
-        const message = payload?.message;
-        if (!message?.id || message.roomId !== activeRoomId) return;
-        if (messageIds.has(message.id) || messages.some((item) => item.id === message.id)) return;
-        messageIds.add(message.id);
-        error = '';
-        messages = [...messages, message];
-        queueMicrotask(scrollToBottom);
-      } catch {
-        // Ignore malformed chat frames.
-      }
-    });
-
-    stream.addEventListener('error', () => {
-      if (!error) error = 'Чат временно недоступен';
+    const unsubscribe = getAppRealtime().subscribe((event) => {
+      if (event.type !== 'room.chat.message' || event.payload.roomId !== activeRoomId) return;
+      const message = event.payload.message;
+      if (!message?.id || messageIds.has(message.id) || messages.some((item) => item.id === message.id)) return;
+      messageIds.add(message.id);
+      error = '';
+      messages = [...messages, message];
+      queueMicrotask(scrollToBottom);
     });
 
     return () => {
       controller.abort();
-      stream.close();
+      unsubscribe();
     };
   });
 </script>
@@ -155,7 +145,7 @@
       <span>Чат комнаты</span>
     </div>
     <button class="chat-rail-collapse" type="button" aria-label="Свернуть чат" onclick={onClose}>
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"></polyline></svg>
     </button>
   </header>
 

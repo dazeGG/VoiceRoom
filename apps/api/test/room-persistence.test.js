@@ -6,6 +6,7 @@ const fs = require('node:fs');
 const http = require('node:http');
 const os = require('node:os');
 const { createTestDatabase } = require('./db-harness');
+const { openWs, joinVoiceRoom } = require('./ws-harness');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
 
@@ -116,51 +117,6 @@ async function postJson(port, pathname, body, { cookie } = {}) {
   };
 }
 
-
-function openSse(socketPath, pathname) {
-  const messages = [];
-  const req = http.get({ path: pathname, socketPath }, (res) => {
-    let buffer = '';
-    res.on('data', (chunk) => {
-      buffer += chunk.toString('utf8');
-      let splitAt = buffer.indexOf('\n\n');
-      while (splitAt !== -1) {
-        const frame = buffer.slice(0, splitAt);
-        buffer = buffer.slice(splitAt + 2);
-        const dataLine = frame
-          .split('\n')
-          .find((line) => line.startsWith('data: '));
-        if (dataLine) {
-          messages.push(JSON.parse(dataLine.slice(6)));
-        }
-        splitAt = buffer.indexOf('\n\n');
-      }
-    });
-  });
-
-  return {
-    messages,
-    req,
-    waitFor(type, timeoutMs = 3000) {
-      const started = Date.now();
-      return new Promise((resolve, reject) => {
-        const check = () => {
-          const found = messages.find((message) => message.type === type);
-          if (found) {
-            resolve(found);
-            return;
-          }
-          if (Date.now() - started > timeoutMs) {
-            reject(new Error(`Timed out waiting for SSE message type: ${type}`));
-            return;
-          }
-          setTimeout(check, 20);
-        };
-        check();
-      });
-    }
-  };
-}
 
 async function getJson(port, pathname) {
   const response = await new Promise((resolve, reject) => {
@@ -308,12 +264,15 @@ test('active temporary rooms stay counted toward per-IP room creation quota', as
     assert.equal(tempRoom.status, 201);
     assert.equal(tempRoom.body.isStatic, false);
 
-    const joined = openSse(
-      socketPath,
-      `/api/events?room=${encodeURIComponent(tempRoom.body.roomId)}&peer=${encodeURIComponent('peer-aaaa')}&token=${encodeURIComponent('token-aaaaaaaaaaaaaaaaaaaaaaaaaa')}&name=${encodeURIComponent('Alice')}`
-    );
-    t.after(() => joined.req.destroy());
-    await joined.waitFor('hello');
+    const joined = openWs(socketPath);
+    t.after(() => joined.ws.close());
+    await joined.ready;
+    await joinVoiceRoom(joined, {
+      roomId: tempRoom.body.roomId,
+      peerId: 'peer-aaaa',
+      sessionToken: 'token-aaaaaaaaaaaaaaaaaaaaaaaaaa',
+      name: 'Alice'
+    });
 
     const blocked = await postJson(socketPath, '/api/rooms', { isStatic: false });
     assert.equal(blocked.status, 429);

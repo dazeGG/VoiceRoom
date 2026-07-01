@@ -49,7 +49,13 @@ import {
   refreshMicrophoneLevelMeter
 } from '../ui/devices';
 import { GATE_THRESHOLD_MIN_DB } from '../core/config';
-import type { ServerMessage } from '../core/types';
+import type { RealtimeEvent } from '$lib/api/realtime';
+import {
+  ensureAppRealtimeConnected,
+  joinVoiceRoom,
+  leaveVoiceRoom as sendVoiceLeave,
+  subscribeRoomVoice
+} from '$lib/features/home/model/room-realtime';
 import { applyRoomDeleted, applyRoomUpdated } from './lifecycle';
 
 type RoomEntryGateResult = 'authenticated' | 'anonymous' | 'failure';
@@ -236,20 +242,20 @@ export async function joinRoom(event?: Event): Promise<void> {
     attachMeter(state.self, state.localStream);
     updatePeerStatus(state.self);
 
-    state.eventSource = new EventSource(
-      `/api/events?room=${encodeURIComponent(state.roomId)}&peer=${encodeURIComponent(state.peerId)}&token=${encodeURIComponent(state.sessionToken)}&name=${encodeURIComponent(name)}`
-    );
-    state.eventSource.onopen = () => {
-      setServerConnectionStatus('connected');
-    };
-    state.eventSource.onmessage = (event) => {
-      handleServerMessage(event).catch((err) => {
-        console.error('SSE handler failed', err);
+    ensureAppRealtimeConnected();
+    state.voiceRealtimeTeardown?.();
+    state.voiceRealtimeTeardown = subscribeRoomVoice(state.roomId, (event) => {
+      handleVoiceRealtimeEvent(event).catch((err) => {
+        console.error('Voice realtime handler failed', err);
       });
-    };
-    state.eventSource.onerror = () => {
-      if (state.joined || state.connecting) setServerConnectionStatus('reconnecting');
-    };
+    });
+    joinVoiceRoom({
+      roomId: state.roomId,
+      peerId: state.peerId,
+      sessionToken: state.sessionToken,
+      name
+    });
+    setServerConnectionStatus('connecting');
 
     await connectLiveKitRoom(name);
     state.joined = true;
@@ -265,8 +271,8 @@ export async function joinRoom(event?: Event): Promise<void> {
     console.error(error);
     showToast(formatJoinError(error));
     setVoiceConnectionStatus(isVoiceRouteError(error) ? 'no-route' : 'error');
-    state.eventSource?.close();
-    state.eventSource = null;
+    state.voiceRealtimeTeardown?.();
+    state.voiceRealtimeTeardown = null;
     state.serverPeerIds.clear();
     state.serverPeerSyncReady = false;
     await disconnectLiveKitRoom();
@@ -293,24 +299,26 @@ export function isVoiceRouteError(error: unknown): boolean {
   return /ice|no route|signal connection|failed to fetch|timeout|websocket/i.test(message);
 }
 
-async function handleServerMessage(event: MessageEvent): Promise<void> {
-  let message: ServerMessage;
-  try {
-    message = JSON.parse(event.data) as ServerMessage;
-  } catch {
+async function handleVoiceRealtimeEvent(event: RealtimeEvent): Promise<void> {
+  if (event.type === 'pong') {
+    setServerConnectionStatus('connected');
     return;
   }
 
-  if (message.type === 'hello') {
-    const peers = Array.isArray(message.peers) ? message.peers : [];
-    state.serverPeerIds = new Set(peers.map((peer) => peer.id).filter(Boolean));
+  if (event.type === 'room.snapshot') {
+    const snapshot = event.payload;
+    if (snapshot.roomId !== state.roomId) return;
+    const peers = Array.isArray(snapshot.peers) ? snapshot.peers : [];
+    const localPeer = peers.find((peer) => peer.id === state.peerId);
+    const remotePeers = peers.filter((peer) => peer.id !== state.peerId);
+    state.serverPeerIds = new Set(remotePeers.map((peer) => peer.id).filter(Boolean));
     state.serverPeerSyncReady = true;
     setServerConnectionStatus('connected');
     syncPeers([...state.serverPeerIds]);
-    if (message.peer?.id) {
-      updateParticipant({ ...message.peer, isLocal: true });
+    if (localPeer) {
+      updateParticipant({ ...localPeer, isLocal: true });
     }
-    for (const peer of peers) {
+    for (const peer of remotePeers) {
       createParticipant(peer);
     }
     syncLiveKitParticipants(state.livekitRoom);
@@ -319,53 +327,48 @@ async function handleServerMessage(event: MessageEvent): Promise<void> {
     return;
   }
 
-  if (message.type === 'ping') {
-    setServerConnectionStatus('connected');
-    return;
-  }
-
-  if (message.type === 'room-not-found') {
+  if (event.type === 'room.not_found') {
     showRoomNotFound();
     return;
   }
 
-  if (message.type === 'peer-joined') {
-    if (message.peer?.id) state.serverPeerIds.add(message.peer.id);
-    createParticipant(message.peer);
-    syncLiveKitParticipantById(message.peer?.id);
-    playPeerJoinCue(message.peer?.id);
+  if (event.type === 'room.peer.joined') {
+    if (event.payload.peer?.id) state.serverPeerIds.add(event.payload.peer.id);
+    createParticipant(event.payload.peer);
+    syncLiveKitParticipantById(event.payload.peer?.id);
+    playPeerJoinCue(event.payload.peer?.id);
     refreshParticipantState();
     return;
   }
 
-  if (message.type === 'peer-left') {
-    const hadPeer = state.peers.has(message.peerId);
-    state.serverPeerIds.delete(message.peerId);
-    removePeer(message.peerId);
-    clearPeerJoinCue(message.peerId);
+  if (event.type === 'room.peer.left') {
+    const hadPeer = state.peers.has(event.payload.peerId);
+    state.serverPeerIds.delete(event.payload.peerId);
+    removePeer(event.payload.peerId);
+    clearPeerJoinCue(event.payload.peerId);
     if (hadPeer) playPeerCue('leave');
     refreshParticipantState();
     return;
   }
 
-  if (message.type === 'peer-updated') {
-    updateParticipant(message.peer);
+  if (event.type === 'room.peer.updated') {
+    updateParticipant(event.payload.peer);
     return;
   }
 
-  if (message.type === 'room-full') {
-    showToast(`Комната заполнена: максимум ${message.maxRoomPeers}`);
+  if (event.type === 'room.full') {
+    showToast(`Комната заполнена: максимум ${event.payload.maxRoomPeers}`);
     leaveRoom();
     return;
   }
 
-  if (message.type === 'room-updated') {
-    applyRoomUpdated(message.room);
+  if (event.type === 'room.updated') {
+    applyRoomUpdated(event.payload.room);
     return;
   }
 
-  if (message.type === 'room-deleted') {
-    applyRoomDeleted(message.roomId);
+  if (event.type === 'room.deleted') {
+    applyRoomDeleted(event.payload.roomId);
     return;
   }
 }
@@ -380,8 +383,15 @@ export function leaveRoom(): void {
   state.localConnectionQuality = 'unknown';
   state.localPingMs = null;
   clearGateSwitchTimer();
-  state.eventSource?.close();
-  state.eventSource = null;
+  if (state.roomId && state.peerId && state.sessionToken) {
+    sendVoiceLeave({
+      roomId: state.roomId,
+      peerId: state.peerId,
+      sessionToken: state.sessionToken
+    });
+  }
+  state.voiceRealtimeTeardown?.();
+  state.voiceRealtimeTeardown = null;
   state.serverPeerIds.clear();
   state.serverPeerSyncReady = false;
   disconnectLiveKitRoom().catch((error) => console.warn('LiveKit disconnect failed', error));

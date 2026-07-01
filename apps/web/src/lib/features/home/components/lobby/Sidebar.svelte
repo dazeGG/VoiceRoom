@@ -1,6 +1,7 @@
 <script lang="ts">
   import { AvatarStack } from '$lib/shared/ui';
   import type { AuthUser, OwnedRoom } from '$lib/api/auth';
+  import type { RoomPeer } from '$lib/api/rooms';
   import { roomPresence } from '../../model/room-presence.svelte';
   import { roomPeerAvatarItems } from '../../model/room-avatars';
   import { roomDisplayName, roomVisual } from '../../model/rooms';
@@ -73,8 +74,30 @@
   }
 
 
+  function selfPeer(): RoomPeer {
+    return {
+      avatarColorKey: user.avatarColorKey,
+      id: `auth-${user.id}`,
+      muted: false,
+      name: selfName
+    };
+  }
+
+  function roomPeersForDisplay(roomId: string): RoomPeer[] {
+    const peers = roomPresence.peersByRoomId[roomId] || [];
+    if (activeVoiceRoomId !== roomId) return peers;
+
+    const localPeer = selfPeer();
+    if (peers.some((peer) => peer.id === localPeer.id)) return peers;
+    return [...peers, localPeer];
+  }
+
+  function roomPeerCount(room: OwnedRoom): number {
+    return Math.max(room.peers, roomPeersForDisplay(room.roomId).length);
+  }
+
   function roomAvatars(roomId: string) {
-    return roomPeerAvatarItems(roomPresence.peersByRoomId[roomId] || []);
+    return roomPeerAvatarItems(roomPeersForDisplay(roomId));
   }
 </script>
 
@@ -212,6 +235,7 @@
         {:else}
           {#each rooms as room (room.roomId)}
             {@const visual = roomVisual(room)}
+            {@const displayPeers = roomPeerCount(room)}
             <button
               class="lobby-row lobby-row--room"
               class:is-active={selectedRoomId === room.roomId}
@@ -221,11 +245,11 @@
               <span class="lobby-tile" style={`width:38px;height:38px;font-size:18px;background:${visual.background};box-shadow:0 0 0 1px ${visual.ring}`}>{visual.emoji}</span>
               <div class="lobby-row-body">
                 <div class="lobby-row-name">{roomDisplayName(room)}</div>
-                {#if room.peers > 0}
+                {#if displayPeers > 0}
                   <div class="lobby-voices">
                     <span class="lobby-live-dot"></span>
                     <AvatarStack items={roomAvatars(room.roomId)} maxAvatars={5} size={22} ariaLabel="В комнате" />
-                    <span class="lobby-row-sub" style="color:#8fa888;">{room.peers} в эфире</span>
+                    <span class="lobby-row-sub" style="color:#8fa888;">{displayPeers} в эфире</span>
                   </div>
                 {:else}
                   <div class="lobby-row-sub lobby-row-sub--muted">тихо сейчас</div>

@@ -1,13 +1,14 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
   import { AvatarStack } from '$lib/shared/ui';
   import type { AuthUser, OwnedRoom } from '$lib/api/auth';
-  import { fetchRoomPeers, type RoomPeer } from '$lib/api/rooms';
+  import type { RoomPeer } from '$lib/api/rooms';
+  import type { RealtimeEvent } from '$lib/api/realtime';
   import { getAvatarPresentation } from '$lib/features/room/client/ui/avatar-presentation';
   import '$lib/features/room/styles/room.css';
   import RoomPreviewChat from './RoomPreviewChat.svelte';
   import RoomViewHeader from './RoomViewHeader.svelte';
   import { roomPeerAvatarItems } from '../../model/room-avatars';
+  import { subscribeRoomPreview } from '../../model/room-realtime';
 
   let { room, user, onEnter, onBack, onToast } = $props<{
     room: OwnedRoom;
@@ -23,27 +24,38 @@
   let previewChatOpen = $state(false);
   const peerAvatars = $derived(roomPeerAvatarItems(peers));
 
-  async function refresh(): Promise<void> {
-    try {
-      peers = await fetchRoomPeers(room.roomId);
-    } catch {
-      // Keep the last snapshot on a transient failure.
-    } finally {
-      loading = false;
+  function applySnapshot(peerList: RoomPeer[]): void {
+    peers = peerList;
+    loading = false;
+  }
+
+  function handlePreviewEvent(event: RealtimeEvent): void {
+    if (event.type === 'room.snapshot' && event.payload.roomId === room.roomId) {
+      applySnapshot(event.payload.peers);
+      return;
+    }
+    if (event.type === 'room.peer.joined' && event.payload.roomId === room.roomId) {
+      if (!peers.some((peer) => peer.id === event.payload.peer.id)) {
+        peers = [...peers, event.payload.peer];
+      }
+      return;
+    }
+    if (event.type === 'room.peer.left' && event.payload.roomId === room.roomId) {
+      peers = peers.filter((peer) => peer.id !== event.payload.peerId);
+      return;
+    }
+    if (event.type === 'room.peer.updated' && event.payload.roomId === room.roomId) {
+      peers = peers.map((peer) => (peer.id === event.payload.peer.id ? event.payload.peer : peer));
     }
   }
 
   $effect(() => {
-    void room.roomId;
+    const roomId = room.roomId;
     loading = true;
     peers = [];
     previewChatOpen = false;
-    void refresh();
-  });
-
-  onMount(() => {
-    const timer = window.setInterval(refresh, 4000);
-    return () => window.clearInterval(timer);
+    const unsubscribe = subscribeRoomPreview(roomId, handlePreviewEvent);
+    return unsubscribe;
   });
 
   function peerName(peer: RoomPeer): string {

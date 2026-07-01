@@ -22,7 +22,7 @@ export function createInitialRoomState(): AppState {
     audioContext: null,
     audioUnlockPending: false,
     connecting: false,
-    eventSource: null,
+    voiceRealtimeTeardown: null,
     gateThresholdDb: getStoredGateThresholdDb(),
     joined: false,
     localConnectionQuality: 'unknown',

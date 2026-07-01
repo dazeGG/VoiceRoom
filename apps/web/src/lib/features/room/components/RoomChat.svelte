@@ -1,11 +1,11 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { getAppRealtime } from '$lib/api/realtime';
   import { fetchRoomChat, postRoomChat, type ChatMessage } from '$lib/api/rooms';
   import { cleanDisplayName } from '$lib/shared/utils/text';
   import { getAvatarColor } from '$lib/visual/tokens';
   import { getRoomIdFromPath, getStoredPeerSession } from '../client/core/session';
   import { getInitials } from '../client/core/utils';
-  import type { RoomLifecycleSummary } from '../client/core/types';
   import { applyRoomDeleted, applyRoomNotFound, applyRoomUpdated } from '../client/room/lifecycle';
   import { openParticipantContextMenu } from '../participant-context-ui.svelte';
   import { roomUi, closeChat, incrementUnreadChat, markChatRead } from '../room-ui.svelte';
@@ -96,57 +96,37 @@
 
     const controller = new AbortController();
     void refreshMessages(controller.signal);
-    const stream = new EventSource(`/api/rooms/${encodeURIComponent(roomId)}/chat/stream`);
-
-    stream.addEventListener('message', (event) => {
-      try {
-        const payload = JSON.parse((event as MessageEvent).data) as {
-          message?: ChatMessage;
-          room?: RoomLifecycleSummary;
-          roomId?: string;
-          type?: string;
-        };
-        if (payload?.type === 'room-not-found') {
-          if (payload.roomId) applyRoomNotFound(payload.roomId);
-          error = 'Комната не найдена';
-          stream.close();
-          return;
-        }
-        if (payload?.type === 'room-updated' && payload.room) {
-          applyRoomUpdated(payload.room);
-          return;
-        }
-        if (payload?.type === 'room-deleted' && payload.roomId) {
-          applyRoomDeleted(payload.roomId);
-          stream.close();
-          return;
-        }
-        const message = payload?.message;
-        if (!message?.id || message.roomId !== roomId) return;
-        if (messageIds.has(message.id) || messages.some((item) => item.id === message.id)) return;
-        messageIds.add(message.id);
-        error = '';
-        messages = [...messages, message];
-        if (roomUi.chatOpen) {
-          markChatRead();
-          queueMicrotask(scrollToBottom);
-        } else {
-          incrementUnreadChat();
-        }
-      } catch {
-        // Ignore malformed chat frames.
+    const unsubscribe = getAppRealtime().subscribe((event) => {
+      if (event.type === 'room.not_found' && event.payload.roomId === roomId) {
+        applyRoomNotFound(event.payload.roomId);
+        error = 'Комната не найдена';
+        return;
       }
-    });
-
-    stream.addEventListener('error', () => {
-      if (!error) {
-        error = 'Чат временно недоступен';
+      if (event.type === 'room.updated' && event.payload.room.roomId === roomId) {
+        applyRoomUpdated(event.payload.room);
+        return;
+      }
+      if (event.type === 'room.deleted' && event.payload.roomId === roomId) {
+        applyRoomDeleted(event.payload.roomId);
+        return;
+      }
+      if (event.type !== 'room.chat.message' || event.payload.roomId !== roomId) return;
+      const message = event.payload.message;
+      if (!message?.id || messageIds.has(message.id) || messages.some((item) => item.id === message.id)) return;
+      messageIds.add(message.id);
+      error = '';
+      messages = [...messages, message];
+      if (roomUi.chatOpen) {
+        markChatRead();
+        queueMicrotask(scrollToBottom);
+      } else {
+        incrementUnreadChat();
       }
     });
 
     return () => {
       controller.abort();
-      stream.close();
+      unsubscribe();
     };
   });
 
