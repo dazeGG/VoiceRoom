@@ -589,6 +589,9 @@ test('hotfix lobby UX keeps dock in main area, preview chat, and add-friend subm
 
   assert.match(controls, /body\[data-lobby-embedded="true"\] \.room-dock/);
   assert.match(controls, /left: var\(--lobby-sidebar-width, 312px\)/);
+  const roomLayoutCss = read('src/lib/features/room/styles/layout.css');
+  assert.match(roomLayoutCss, /body\[data-lobby-embedded="true"\] \.app-shell\.room-embedded-shell/);
+  assert.match(roomLayoutCss, /body\[data-lobby-embedded="true"\] \.room-embedded-shell \.topbar/);
   assert.match(sidebar, /import SidebarDownload from '\.\.\/SidebarDownload\.svelte'/);
   assert.match(sidebar, /<SidebarDownload \/>/);
   assert.match(previewView, /RoomPreviewChat/);
