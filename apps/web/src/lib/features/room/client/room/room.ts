@@ -1,4 +1,5 @@
 import { fetchMe, fetchOwnedRooms } from '$lib/api/auth';
+import { session } from '$lib/features/auth/session.svelte';
 import { roomNameFor } from '$lib/features/auth/account';
 import { roomSettingsUi } from '../../room-settings.svelte';
 import { startUi } from '../../start-ui.svelte';
@@ -237,7 +238,8 @@ export async function joinRoom(event?: Event): Promise<void> {
       isLocal: true,
       joinedAt: Date.now(),
       muted: state.muted,
-      name
+      name,
+      avatarColorKey: session.user?.avatarColorKey || ''
     });
     attachMeter(state.self, state.localStream);
     updatePeerStatus(state.self);
