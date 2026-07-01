@@ -446,4 +446,48 @@ body[data-screen-view="true"][data-strip-collapsed="true"] .stage-strip {
 
 .pcm-volume {
   padding: 6px 10px 8px;
+  display: grid;
+  gap: 9px;
+}
+
+.pcm-volume-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm, 12px);
+}
+
+.pcm-volume-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: var(--ink, #ece7d9);
+  font-family: var(--font-sans, sans-serif);
+  font-size: 13.5px;
+  font-weight: 700;
+}
+
+.pcm-volume-label svg {
+  flex: none;
+  color: var(--muted, #9a9484);
+}
+
+.pcm-volume-value {
+  flex: none;
+  color: var(--ink, #ece7d9);
+  font-family: var(--font-sans, sans-serif);
+  font-size: 13.5px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.pcm-volume-scale {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--muted, #9a9484);
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  letter-spacing: 0.02em;
 }

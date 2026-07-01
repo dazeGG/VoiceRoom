@@ -9,7 +9,7 @@
     openDm,
     setMode
   } from '$lib/features/home/model/friends.svelte';
-  import { VolumeSlider } from '$lib/shared/ui';
+  import { Slider } from '$lib/shared/ui';
   import {
     getParticipantAudioPreference,
     getParticipantAudioPreferenceKey,
@@ -31,6 +31,7 @@
   let volumePercent = $state(100);
   let localMuted = $state(false);
 
+  const volumeLabel = $derived(`${Math.round(volumePercent)}%`);
   const peer = $derived(participantContextMenu.open ? getParticipantById(participantContextMenu.peerId) : null);
   const preferenceKey = $derived(peer ? getParticipantAudioPreferenceKey(peer.accountUserId, peer.id) : '');
   const avatar = $derived(peer ? getAvatarPresentation(peer) : null);
@@ -255,14 +256,34 @@
     <span class="participant-context-menu-divider" aria-hidden="true"></span>
 
     <div class="pcm-volume">
-      <VolumeSlider
+      <div class="pcm-volume-head">
+        <span class="pcm-volume-label">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+            <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+            <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
+          </svg>
+          <span>Громкость</span>
+        </span>
+        <output class="pcm-volume-value">{volumeLabel}</output>
+      </div>
+      <Slider
         bind:value={volumePercent}
         min={0}
         max={200}
-        label="Громкость"
+        step={1}
+        defaultValue={100}
+        snap
+        snapThreshold={6}
         ariaLabel={`Громкость ${peer.name}`}
+        ariaValueText={volumeLabel}
         onValueChange={setVolume}
       />
+      <div class="pcm-volume-scale" aria-hidden="true">
+        <span>0%</span>
+        <span>100%</span>
+        <span>200%</span>
+      </div>
     </div>
 
     <span class="participant-context-menu-divider" aria-hidden="true"></span>

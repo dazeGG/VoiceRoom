@@ -1,10 +1,10 @@
 <script lang="ts">
-  import { Popover } from '$lib/shared/ui';
-  import { Select } from '$lib/shared/ui';
+  import { Popover, Select, Slider } from '$lib/shared/ui';
   import {
     NOISE_MODE_SELECT_OPTIONS,
     roomDeviceUi
   } from '$lib/features/room/room-device-ui.svelte';
+  import { GATE_THRESHOLD_MAX_DB, GATE_THRESHOLD_MIN_DB } from '../client/core/config';
   import {
     closeDevicePopover,
     closeOutputPopover,
@@ -13,7 +13,6 @@
     switchMicrophone,
     switchNoiseMode,
     switchOutputDevice,
-    updateGateThresholdFromPosition,
     updateGateThresholdFromSlider
   } from '../client/ui/devices';
   import {
@@ -36,8 +35,6 @@
   const screenControls = $derived(getScreenControlsView());
   const gate = $derived(getGateControlView());
 
-  let micLevelTrack: HTMLDivElement | undefined;
-
   function toggleDevicePopover(event: MouseEvent, toggle: () => void): void {
     event.stopPropagation();
     closeOutputPopover();
@@ -54,29 +51,6 @@
     if (!wasOpen) void refreshDevices();
   }
 
-  function handleGatePointerDown(event: PointerEvent): void {
-    event.preventDefault();
-    updateGateFromPointer(event);
-    micLevelTrack?.setPointerCapture?.(event.pointerId);
-    micLevelTrack?.addEventListener('pointermove', handleGatePointerMove);
-    micLevelTrack?.addEventListener('pointerup', handleGatePointerEnd, { once: true });
-    micLevelTrack?.addEventListener('pointercancel', handleGatePointerEnd, { once: true });
-  }
-
-  function handleGatePointerMove(event: PointerEvent): void {
-    updateGateFromPointer(event);
-  }
-
-  function handleGatePointerEnd(event: PointerEvent): void {
-    micLevelTrack?.releasePointerCapture?.(event.pointerId);
-    micLevelTrack?.removeEventListener('pointermove', handleGatePointerMove);
-  }
-
-  function updateGateFromPointer(event: PointerEvent): void {
-    if (!micLevelTrack) return;
-    const rect = micLevelTrack.getBoundingClientRect();
-    updateGateThresholdFromPosition(event.clientX, rect.left, rect.width);
-  }
 </script>
 
 <div class="room-dock" aria-label="Управление голосом">
@@ -146,43 +120,26 @@
           <label class="field">
             <span>Гейт</span>
             <div class="gate-control">
-              <div class="gate-meter-wrap">
-                <div
-                  class="mic-level-track"
-                  id="micLevelTrack"
-                  bind:this={micLevelTrack}
-                  role="meter"
-                  aria-label="Уровень микрофона"
-                  aria-valuemin="-100"
-                  aria-valuemax="0"
-                  aria-valuenow={gate.ariaValueNow}
-                  onpointerdown={handleGatePointerDown}
-                >
+              <Slider
+                value={gate.thresholdValue}
+                min={GATE_THRESHOLD_MIN_DB}
+                max={GATE_THRESHOLD_MAX_DB}
+                step={1}
+                disabled={!gate.markerActive}
+                showFill={false}
+                ariaLabel="Порог гейта в децибелах"
+                ariaValueText={gate.thresholdLabel}
+                onValueChange={updateGateThresholdFromSlider}
+              >
+                {#snippet background()}
                   <span
                     class="mic-level-fill"
-                    id="micLevelFill"
                     style:transform="scaleX({gate.levelScale.toFixed(3)})"
                     data-state={gate.levelState}
                   ></span>
-                  <span
-                    class="mic-gate-marker"
-                    id="micGateMarker"
-                    style:left={gate.markerLeft}
-                    data-active={String(gate.markerActive)}
-                  ></span>
-                </div>
-                <input
-                  id="gateThresholdSlider"
-                  type="range"
-                  min="-100"
-                  max="0"
-                  step="1"
-                  value={gate.thresholdValue}
-                  aria-label="Порог гейта в децибелах"
-                  oninput={(event) => updateGateThresholdFromSlider(event.currentTarget.value)}
-                />
-              </div>
-              <output id="gateThresholdValue" for="gateThresholdSlider">{gate.thresholdLabel}</output>
+                {/snippet}
+              </Slider>
+              <output id="gateThresholdValue">{gate.thresholdLabel}</output>
             </div>
           </label>
         {/snippet}
