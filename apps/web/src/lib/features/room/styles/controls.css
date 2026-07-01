@@ -437,7 +437,10 @@ body[data-lobby-embedded="true"] .room-dock {
   background: #c8543c;
 }
 
-.device-popover {
+/* .dock-anchor prefix bumps specificity above Popover's own scoped
+   `.popover-panel` base chrome (padding/border/background/shadow), which
+   otherwise wins the tie against a plain `.device-popover` selector here. */
+.dock-anchor .popover-panel.device-popover {
   position: absolute;
   top: auto;
   right: auto;
@@ -453,7 +456,7 @@ body[data-lobby-embedded="true"] .room-dock {
   overflow: visible;
   border: 1px solid oklch(34% 0.02 92);
   border-radius: var(--radius-md);
-  padding: var(--space-md);
+  padding: var(--space-lg);
   background: oklch(11% 0.012 92);
   color: oklch(96% 0.008 92);
   box-shadow: 0 22px 54px oklch(6% 0.02 92 / 0.46);
