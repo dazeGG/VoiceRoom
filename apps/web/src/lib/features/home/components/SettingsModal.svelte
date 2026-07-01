@@ -4,7 +4,7 @@
   import { isValidPassword, PASSWORD_MIN_LENGTH } from '$lib/features/auth/account';
   import { clearSession, setUser } from '$lib/features/auth/session.svelte';
   import { playPeerCue, playDirectMessageCue, playFriendAcceptedCue, playFriendRequestCue, playMicCue, playStreamCue, playStreamViewerCue } from '$lib/features/room/client/media/cues';
-  import { Select, Slider, VolumeSlider } from '$lib/shared/ui';
+  import { Select, Slider } from '$lib/shared/ui';
   import { getAvatarColor } from '$lib/visual/tokens';
   import {
     enumerateMicrophones,
@@ -82,7 +82,6 @@
   // Only surface the live level while the gate is on — off means "don't capture
   // or show the mic level" (the meter effect below stops capturing too).
   const levelScale = $derived(gateOn ? gateMeterPosition(micLevelDb).toFixed(3) : '0');
-  const markerLeft = $derived(`${(gateMeterPosition(gateDb) * 100).toFixed(2)}%`);
   const gateLabel = $derived(gateOn ? gateValueLabel(gateDb) : 'Выкл');
   const microphoneOptions = $derived([
     { value: '', label: 'Системный' },
@@ -369,25 +368,22 @@
 
                 <div class="settings-gate-body" data-disabled={!gateOn}>
                   <div class="settings-gate">
-                    <div class="settings-gate-meter">
-                      <span class="settings-gate-track" aria-hidden="true">
+                    <Slider
+                      bind:value={gateDb}
+                      min={GATE_THRESHOLD_MIN_DB}
+                      max={GATE_THRESHOLD_MAX_DB}
+                      step={1}
+                      defaultValue={GATE_DEFAULT_DB}
+                      disabled={!gateOn}
+                      showFill={false}
+                      ariaLabel="Порог гейта в децибелах"
+                      ariaValueText={gateLabel}
+                      onValueChange={onGateChange}
+                    >
+                      {#snippet background()}
                         <span class="settings-gate-fill" data-state={gateOpen ? 'open' : 'closed'} style={`transform:scaleX(${levelScale})`}></span>
-                        <span class="settings-gate-marker" data-active={gateOn} style={`left:${markerLeft}`}></span>
-                      </span>
-                      <div class="settings-gate-slider-wrap" data-disabled={!gateOn}>
-                        <Slider
-                          bind:value={gateDb}
-                          min={GATE_THRESHOLD_MIN_DB}
-                          max={GATE_THRESHOLD_MAX_DB}
-                          step={1}
-                          defaultValue={GATE_DEFAULT_DB}
-                          disabled={!gateOn}
-                          ariaLabel="Порог гейта в децибелах"
-                          ariaValueText={gateLabel}
-                          onValueChange={onGateChange}
-                        />
-                      </div>
-                    </div>
+                      {/snippet}
+                    </Slider>
                     <span class="settings-gate-value">{gateLabel}</span>
                   </div>
                   <div class="settings-gate-hint">
@@ -397,14 +393,15 @@
               </div>
 
               <div>
-                <VolumeSlider
+                <span class="settings-field-label">Звуки интерфейса</span>
+                <Slider
                   bind:value={notificationVolume}
                   min={0}
                   max={100}
                   defaultValue={100}
                   step={1}
-                  label="Звуки интерфейса"
-                  snap={false}
+                  ariaLabel="Звуки интерфейса"
+                  ariaValueText={`${Math.round(notificationVolume)}%`}
                   onValueChange={onNotificationVolumeChange}
                 />
                 <div class="settings-sound-actions">
