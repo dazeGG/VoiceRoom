@@ -609,6 +609,29 @@ function createRoomStore({
     return result.rows.map((row) => withRelationship(mapRoom(row), row.relationship));
   }
 
+  async function listSummaryRecipientUserIds(roomId) {
+    if (!roomId) return [];
+    const result = await getPool().query(
+      `SELECT DISTINCT user_id
+       FROM (
+         SELECT rm.user_id
+         FROM room_memberships rm
+         JOIN rooms r ON r.id = rm.room_id
+         WHERE rm.room_id = $1
+           AND rm.role = 'owner'
+           AND r.deleted_at IS NULL
+         UNION ALL
+         SELECT rb.user_id
+         FROM room_bookmarks rb
+         JOIN rooms r ON r.id = rb.room_id
+         WHERE rb.room_id = $1
+           AND r.deleted_at IS NULL
+       ) recipients`,
+      [roomId]
+    );
+    return result.rows.map((row) => row.user_id).filter(Boolean);
+  }
+
   async function addRoomBookmarkForUser(userId, roomId, now = Date.now()) {
     if (!userId || !roomId) return { room: null, status: 'not_found' };
     return transaction(getPool(), async (client) => {
@@ -662,6 +685,7 @@ function createRoomStore({
     listMessages,
     listRoomsForOwner,
     listVisibleRoomsForUser,
+    listSummaryRecipientUserIds,
     addRoomBookmarkForUser,
     markActiveTemporaryRoomsEmpty,
     markRoomActive,

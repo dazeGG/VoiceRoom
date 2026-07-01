@@ -44,8 +44,8 @@ export function mountRoomClient(_root: ParentNode = document, options: { roomId?
     const peerSession = getStoredPeerSession(mountedRoomId);
     state.connecting = false;
     state.joined = false;
-    state.eventSource?.close();
-    state.eventSource = null;
+    state.voiceRealtimeTeardown?.();
+    state.voiceRealtimeTeardown = null;
     state.peers.clear();
     state.serverPeerIds.clear();
     state.serverPeerSyncReady = false;

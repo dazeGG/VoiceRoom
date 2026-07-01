@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
-    "check": "node --check src/server.js && node --check src/lib/config.js && node --check src/lib/db.js && node --check src/lib/migrate.js && node --check src/lib/password.js && node --check src/lib/room-store.js && node --check src/lib/user-store.js && node --check src/lib/friend-store.js && node --check src/scripts/migrate.js && node --check src/migrations/*.js && node --check test/db-harness.js && node --check test/require-test-database-url.js",
+    "check": "node --check src/server.js && node --check src/realtime/envelope.js && node --check src/realtime/summary.js && node --check src/realtime/account-events.js && node --check src/realtime/legacy-events.js && node --check src/realtime/room-runtime.js && node --check src/realtime/peer-transport.js && node --check src/realtime/registry.js && node --check src/realtime/ws-handler.js && node --check src/lib/config.js && node --check src/lib/db.js && node --check src/lib/migrate.js && node --check src/lib/password.js && node --check src/lib/room-store.js && node --check src/lib/user-store.js && node --check src/lib/friend-store.js && node --check src/scripts/migrate.js && node --check src/migrations/*.js && node --check test/db-harness.js && node --check test/require-test-database-url.js",
     "test": "node --test test/*.test.js",
     "db:migrate": "node src/scripts/migrate.js up",
     "db:rollback": "node src/scripts/migrate.js down",
@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@fastify/cookie": "^11.0.2",
+    "@fastify/websocket": "^11.2.0",
     "@voice-room/shared": "file:../../packages/shared",
     "fastify": "^5.8.5",
     "livekit-server-sdk": "^2.15.4",

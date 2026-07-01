@@ -9,6 +9,7 @@ const assert = require('node:assert/strict');
 const http = require('node:http');
 
 const { createApiServer } = require('../src/server');
+const { openWs, joinVoiceRoom } = require('./ws-harness');
 
 function createFakeStore() {
   const rooms = new Map();
@@ -121,11 +122,16 @@ test('server preserves active voice peer spoof protection while chat without voi
   assert.equal(room.id, 'room1');
   const server = createApiServer({ store });
   const port = await listen(server);
-  const events = http.get(`http://127.0.0.1:${port}/api/events?room=room1&peer=peer0001&token=goodtoken12345678901234567890123&name=Ada`);
+  const voice = openWs(port);
+  await voice.ready;
+  await joinVoiceRoom(voice, {
+    roomId: 'room1',
+    peerId: 'peer0001',
+    sessionToken: 'goodtoken12345678901234567890123',
+    name: 'Ada'
+  });
 
   try {
-    await new Promise((resolve) => events.once('response', resolve));
-    await new Promise((resolve) => setTimeout(resolve, 25));
 
     const activePost = await request(port, '/api/rooms/room1/chat', {
       method: 'POST',
@@ -147,7 +153,7 @@ test('server preserves active voice peer spoof protection while chat without voi
     assert.equal(linkOnly.response.status, 201);
     assert.ok(linkOnly.json.message.avatarColorKey);
   } finally {
-    events.destroy();
+    voice.ws.close();
     await close(server);
   }
 });
@@ -166,16 +172,22 @@ test('server logs mark-empty failures instead of creating unhandled rejections',
   console.error = (...args) => errors.push(args);
   const server = createApiServer({ store });
   const port = await listen(server);
-  const events = http.get(`http://127.0.0.1:${port}/api/events?room=room-empty-fail&peer=peer0002&token=goodtoken12345678901234567890123&name=Ada`);
+  const voice = openWs(port);
+  await voice.ready;
+  await joinVoiceRoom(voice, {
+    roomId: 'room-empty-fail',
+    peerId: 'peer0002',
+    sessionToken: 'goodtoken12345678901234567890123',
+    name: 'Ada'
+  });
 
   try {
-    await new Promise((resolve) => events.once('response', resolve));
-    events.destroy();
+    voice.ws.close();
     await new Promise((resolve) => setTimeout(resolve, 50));
     assert.equal(errors.some((entry) => String(entry[0]).includes('Failed to mark room empty')), true);
   } finally {
     console.error = originalError;
-    events.destroy();
+    voice.ws.close();
     await close(server);
   }
 });

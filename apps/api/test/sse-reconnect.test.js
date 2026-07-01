@@ -2,18 +2,18 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
 const http = require('node:http');
 const { spawn } = require('node:child_process');
 const path = require('node:path');
-const fs = require('node:fs');
 const os = require('node:os');
 const { createTestDatabase } = require('./db-harness');
+const { openWs, joinVoiceRoom, waitForWsType } = require('./ws-harness');
 
 const PEER_A = 'peer-alice1';
 const PEER_B = 'peer-bobbb1';
 const TOKEN_A = 'a'.repeat(32);
 const TOKEN_B = 'b'.repeat(32);
-
 
 function getSocketPath() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'voice-room-sock-'));
@@ -117,66 +117,11 @@ async function postJson(socketPath, pathname, body) {
   };
 }
 
-function eventsRequest(socketPath, { roomId, peerId, token, name }) {
-  const params = new URLSearchParams({
-    room: roomId,
-    peer: peerId,
-    token,
-    name
-  });
-  return { path: `/api/events?${params}`, socketPath };
-}
-
-function openSse(socketPath, params) {
-  const messages = [];
-  const req = http.get(eventsRequest(socketPath, params), (res) => {
-    let buffer = '';
-    res.on('data', (chunk) => {
-      buffer += chunk.toString('utf8');
-      let splitAt = buffer.indexOf('\n\n');
-      while (splitAt !== -1) {
-        const frame = buffer.slice(0, splitAt);
-        buffer = buffer.slice(splitAt + 2);
-        const dataLine = frame
-          .split('\n')
-          .find((line) => line.startsWith('data: '));
-        if (dataLine) {
-          messages.push(JSON.parse(dataLine.slice(6)));
-        }
-        splitAt = buffer.indexOf('\n\n');
-      }
-    });
-  });
-
-  return {
-    req,
-    messages,
-    waitFor(type, timeoutMs = 3000) {
-      const started = Date.now();
-      return new Promise((resolve, reject) => {
-        const check = () => {
-          const found = messages.find((message) => message.type === type);
-          if (found) {
-            resolve(found);
-            return;
-          }
-          if (Date.now() - started > timeoutMs) {
-            reject(new Error(`Timed out waiting for SSE message type: ${type}`));
-            return;
-          }
-          setTimeout(check, 20);
-        };
-        check();
-      });
-    }
-  };
-}
-
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-test('SSE reconnect preserves presence and avoids spurious join/leave events', async (t) => {
+test('WS reconnect preserves presence and avoids spurious join/leave events', async (t) => {
   const { dir, socketPath } = getSocketPath();
   const { cleanup, databaseUrl } = await createTestDatabase(t);
   const serverLogs = { stdout: '', stderr: '' };
@@ -194,21 +139,13 @@ test('SSE reconnect preserves presence and avoids spurious join/leave events', a
     assert.equal(created.status, 201);
     const roomId = created.body.roomId;
 
-    const peerA = openSse(socketPath, {
-      roomId,
-      peerId: PEER_A,
-      token: TOKEN_A,
-      name: 'Alice'
-    });
-    await peerA.waitFor('hello');
+    const peerA = openWs(socketPath);
+    await peerA.ready;
+    await joinVoiceRoom(peerA, { roomId, peerId: PEER_A, sessionToken: TOKEN_A, name: 'Alice' });
 
-    const peerB = openSse(socketPath, {
-      roomId,
-      peerId: PEER_B,
-      token: TOKEN_B,
-      name: 'Bob'
-    });
-    await peerB.waitFor('hello');
+    const peerB = openWs(socketPath);
+    await peerB.ready;
+    await joinVoiceRoom(peerB, { roomId, peerId: PEER_B, sessionToken: TOKEN_B, name: 'Bob' });
     await wait(100);
 
     await postJson(socketPath, '/api/state', {
@@ -218,20 +155,20 @@ test('SSE reconnect preserves presence and avoids spurious join/leave events', a
       muted: true,
       deafened: true
     });
-    await peerB.waitFor('peer-updated');
-    const beforeReconnect = peerB.messages.length;
+    const updated = await waitForWsType(peerB.frames, 'room.peer.updated', (frame) => frame.payload?.peer?.id === PEER_A);
+    assert.equal(updated.payload.peer.muted, true);
+    assert.equal(updated.payload.peer.deafened, true);
+    const beforeReconnect = peerB.frames.length;
 
-    const peerA2 = openSse(socketPath, {
-      roomId,
-      peerId: PEER_A,
-      token: TOKEN_A,
-      name: 'Evil'
-    });
-    await peerA2.waitFor('hello');
-    peerA.req.destroy();
+    const peerA2 = openWs(socketPath);
+    await peerA2.ready;
+    await joinVoiceRoom(peerA2, { roomId, peerId: PEER_A, sessionToken: TOKEN_A, name: 'Evil' });
+    peerA.ws.close();
     await wait(150);
 
-    const reconnectEvents = peerB.messages.slice(beforeReconnect);
+    const reconnectEvents = peerB.frames.slice(beforeReconnect).filter((frame) =>
+      frame.type === 'room.peer.joined' || frame.type === 'room.peer.left'
+    );
     assert.equal(reconnectEvents.length, 0);
 
     const state = await postJson(socketPath, '/api/state', {
@@ -244,8 +181,8 @@ test('SSE reconnect preserves presence and avoids spurious join/leave events', a
     assert.equal(state.body.peer.muted, true);
     assert.equal(state.body.peer.deafened, true);
 
-    peerA2.req.destroy();
-    peerB.req.destroy();
+    peerA2.ws.close();
+    peerB.ws.close();
   } catch (error) {
     dumpServerLogs(serverLogs);
     throw error;

@@ -263,32 +263,32 @@ export async function removeFriend(userId: string): Promise<void> {
 function handleRealtimeEvent(event: RealtimeEvent): void {
   switch (event.type) {
     case 'ready': {
-      setOnlineSnapshot(event.onlineFriendIds);
+      setOnlineSnapshot(event.payload.onlineFriendIds ?? []);
       break;
     }
-    case 'presence': {
-      setFriendOnline(event.userId, event.online);
+    case 'friend.presence': {
+      setFriendOnline(event.payload.userId, event.payload.online);
       break;
     }
-    case 'friend-request': {
+    case 'friend.request': {
       playFriendRequestCue();
       void refreshFriends().catch(() => {});
       void refreshRequests().catch(() => {});
       break;
     }
-    case 'friend-accepted': {
+    case 'friend.accepted': {
       playFriendAcceptedCue();
       void refreshFriends().catch(() => {});
       void refreshRequests().catch(() => {});
       break;
     }
-    case 'friend-removed': {
+    case 'friend.removed': {
       void refreshFriends().catch(() => {});
       void refreshRequests().catch(() => {});
       break;
     }
-    case 'dm-message': {
-      const { message } = event;
+    case 'dm.message': {
+      const { message } = event.payload;
       const peerId = message.senderId === selfId ? message.recipientId : message.senderId;
       bumpLastMessage(peerId, message);
       const isOpenThread = friendsState.view === 'dm' && friendsState.selectedFriendId === peerId;
@@ -303,9 +303,9 @@ function handleRealtimeEvent(event: RealtimeEvent): void {
       }
       break;
     }
-    case 'dm-read': {
+    case 'dm.read': {
       // The peer read our messages: flip readAt on our sent bubbles.
-      if (friendsState.view === 'dm' && friendsState.selectedFriendId === event.userId) {
+      if (friendsState.view === 'dm' && friendsState.selectedFriendId === event.payload.userId) {
         const now = Date.now();
         friendsState.thread = friendsState.thread.map((message) =>
           message.senderId === selfId && message.readAt == null ? { ...message, readAt: now } : message

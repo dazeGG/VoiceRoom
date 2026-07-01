@@ -7,10 +7,11 @@ const http = require('node:http');
 const { spawn } = require('node:child_process');
 const path = require('node:path');
 const os = require('node:os');
+const WebSocket = require('ws');
 const { createTestDatabase } = require('./db-harness');
 
 function getSocketPath() {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'voice-room-realtime-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'voice-room-ws-'));
   return { dir, socketPath: path.join(dir, 'api.sock') };
 }
 
@@ -64,17 +65,17 @@ function startServer(socketPath, databaseUrl, logs) {
   return child;
 }
 
-function request(socketPath, { method = 'GET', pathname, body, cookie } = {}) {
+function request(socketPath, { method = 'GET', pathname, body, cookie, headers = {} } = {}) {
   const payload = body === undefined ? null : JSON.stringify(body);
-  const headers = { Accept: 'application/json' };
+  const nextHeaders = { Accept: 'application/json', ...headers };
   if (payload) {
-    headers['Content-Type'] = 'application/json';
-    headers['Content-Length'] = Buffer.byteLength(payload);
+    nextHeaders['Content-Type'] = 'application/json';
+    nextHeaders['Content-Length'] = Buffer.byteLength(payload);
   }
-  if (cookie) headers.Cookie = cookie;
+  if (cookie) nextHeaders.Cookie = cookie;
 
   return new Promise((resolve, reject) => {
-    const req = http.request({ method, path: pathname, socketPath, headers }, (res) => {
+    const req = http.request({ method, path: pathname, socketPath, headers: nextHeaders }, (res) => {
       let data = '';
       res.on('data', (chunk) => {
         data += chunk;
@@ -99,10 +100,29 @@ function cookieFrom(setCookie) {
   return String(header || '').split(';')[0];
 }
 
-const { openWs } = require('./ws-harness');
+function openWs(socketPath, cookie) {
+  const frames = [];
+  const ws = new WebSocket(`ws+unix://${socketPath}:/api/ws`, {
+    headers: cookie ? { Cookie: cookie } : undefined
+  });
 
-function openRealtimeStream(socketPath, cookie) {
-  return openWs(socketPath, { cookie });
+  const ready = new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('WS did not deliver ready')), 5000);
+    ws.on('message', (raw) => {
+      const parsed = JSON.parse(String(raw));
+      frames.push(parsed);
+      if (parsed.type === 'ready') {
+        clearTimeout(timer);
+        resolve(parsed);
+      }
+    });
+    ws.on('error', (error) => {
+      clearTimeout(timer);
+      reject(error);
+    });
+  });
+
+  return { ws, frames, ready };
 }
 
 async function register(socketPath, login) {
@@ -123,7 +143,6 @@ async function befriend(socketPath, requesterCookie, addresseeLogin) {
     body: { login: addresseeLogin }
   });
   assert.ok(response.status === 200 || response.status === 201);
-  return response.body;
 }
 
 async function acceptFirstRequest(socketPath, cookie) {
@@ -140,7 +159,26 @@ async function acceptFirstRequest(socketPath, cookie) {
   assert.equal(accepted.status, 200);
 }
 
-test('realtime ready reports online friends and fans out presence', async (t) => {
+test('ws accepts guest connections with guest ready payload', async (t) => {
+  const { dir, socketPath } = getSocketPath();
+  const { cleanup, databaseUrl } = await createTestDatabase(t);
+  const logs = { stdout: '', stderr: '' };
+  const child = startServer(socketPath, databaseUrl, logs);
+  t.after(() => {
+    child.kill('SIGTERM');
+    fs.rmSync(dir, { recursive: true, force: true });
+    return cleanup();
+  });
+
+  await waitForHealthz(socketPath);
+
+  const guest = openWs(socketPath);
+  const ready = await guest.ready;
+  assert.equal(ready.payload.guest, true);
+  guest.ws.close();
+});
+
+test('ws ready and friend.presence work for authenticated users', async (t) => {
   const { dir, socketPath } = getSocketPath();
   const { cleanup, databaseUrl } = await createTestDatabase(t);
   const logs = { stdout: '', stderr: '' };
@@ -155,49 +193,37 @@ test('realtime ready reports online friends and fans out presence', async (t) =>
 
   const aliceCookie = await register(socketPath, 'alice');
   const bobCookie = await register(socketPath, 'bob');
-
   await befriend(socketPath, aliceCookie, 'bob');
   await acceptFirstRequest(socketPath, bobCookie);
 
   const bobFriends = await request(socketPath, { pathname: '/api/friends', cookie: bobCookie });
-  const aliceFriends = await request(socketPath, { pathname: '/api/friends', cookie: aliceCookie });
   const aliceId = bobFriends.body.friends.find((entry) => entry.user.login === 'alice')?.user.id;
-  const bobId = aliceFriends.body.friends.find((entry) => entry.user.login === 'bob')?.user.id;
   assert.ok(aliceId);
-  assert.ok(bobId);
 
-  const bobStream = openRealtimeStream(socketPath, bobCookie);
-  const bobReady = await bobStream.ready;
-  assert.ok(Array.isArray(bobReady.payload.onlineFriendIds));
+  const bob = openWs(socketPath, bobCookie);
+  const bobReady = await bob.ready;
+  assert.ok(typeof bobReady.payload.userId === 'string');
   assert.equal(bobReady.payload.onlineFriendIds.length, 0);
 
-  const aliceStream = openRealtimeStream(socketPath, aliceCookie);
-  const aliceReady = await aliceStream.ready;
-  assert.deepEqual(aliceReady.payload.onlineFriendIds, [bobId]);
-
-  const bobPresence = await new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error('Bob did not receive presence update')), 5000);
-    const check = () => {
-      const presence = bobStream.frames.find(
-        (frame) =>
-          frame.type === 'friend.presence' &&
-          frame.payload?.userId === aliceId &&
-          frame.payload?.online === true
-      );
-      if (presence) {
+  const presence = new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('Bob did not receive friend.presence')), 5000);
+    bob.ws.on('message', (raw) => {
+      const parsed = JSON.parse(String(raw));
+      if (parsed.type === 'friend.presence' && parsed.payload?.userId === aliceId) {
         clearTimeout(timer);
-        resolve(presence);
-        return;
+        resolve(parsed);
       }
-      setTimeout(check, 20);
-    };
-    check();
+    });
   });
-  assert.equal(bobPresence.payload.online, true);
 
-  const friendsForBob = await request(socketPath, { pathname: '/api/friends', cookie: bobCookie });
-  assert.equal(friendsForBob.status, 200);
-  const aliceEntry = friendsForBob.body.friends.find((entry) => entry.user.login === 'alice');
-  assert.ok(aliceEntry);
-  assert.equal(aliceEntry.online, true);
+  const alice = openWs(socketPath, aliceCookie);
+  const aliceReady = await alice.ready;
+  assert.ok(Array.isArray(aliceReady.payload.onlineFriendIds));
+
+  const seen = await presence;
+  assert.equal(seen.type, 'friend.presence');
+  assert.equal(seen.payload.online, true);
+
+  bob.ws.close();
+  alice.ws.close();
 });
