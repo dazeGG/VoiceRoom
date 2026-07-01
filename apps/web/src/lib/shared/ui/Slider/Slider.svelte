@@ -129,6 +129,8 @@
     z-index: 2;
     width: 100%;
     height: 100%;
+    min-width: 0;
+    min-height: 0;
     margin: 0;
     padding: 0;
     border: 0;
