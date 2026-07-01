@@ -72,8 +72,8 @@ const DM_RATE_LIMIT = readEnvInt('DM_RATE_LIMIT', 30, 0);
 const DM_RATE_WINDOW_MS = readEnvInt('DM_RATE_WINDOW_MS', 10000, 1000);
 const FRIEND_REQUEST_RATE_LIMIT = readEnvInt('FRIEND_REQUEST_RATE_LIMIT', 20, 0);
 const FRIEND_REQUEST_RATE_WINDOW_MS = readEnvInt('FRIEND_REQUEST_RATE_WINDOW_MS', 60000, 1000);
-// Cap concurrent realtime (SSE) streams per user so a single account cannot
-// pin an unbounded number of keep-alive connections.
+// Cap concurrent realtime (WebSocket) connections per user so a single account
+// cannot pin an unbounded number of keep-alive connections.
 const MAX_REALTIME_STREAMS_PER_USER = readEnvInt('MAX_REALTIME_STREAMS_PER_USER', 8, 1);
 // Desktop app downloads are served from the latest GitHub release of this repo.
 // Metadata is cached server-side so visitors never hit GitHub's per-IP rate limit.
@@ -797,7 +797,7 @@ async function handleDeleteRoom(req, res, roomId) {
     return;
   }
 
-  // Broadcast after durable soft-delete, before presence teardown so the SSE
+  // Broadcast after durable soft-delete, before presence teardown so the WS
   // writes are not racing socket close.
   const presence = presenceRooms.get(roomId);
   if (presence) broadcast(presence, { type: 'room-deleted', roomId });
