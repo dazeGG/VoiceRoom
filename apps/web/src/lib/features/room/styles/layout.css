@@ -236,6 +236,7 @@ body[data-screen="room"] .status-pill {
 .room-embedded-shell .topbar {
   width: 100%;
   margin-inline: 0;
+  padding: 20px 28px;
 }
 
 @media (min-width: 901px) {
