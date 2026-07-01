@@ -281,11 +281,17 @@ body[data-screen-view="true"] .stage {
   height: 100%;
   grid-template-rows: minmax(0, 1fr) auto;
   gap: var(--space-sm);
-  padding: 0 var(--space-xl) 86px;
+  padding: 0 var(--space-xl) 104px;
 }
 
 body[data-screen-view="true"] .screen-stage {
-  height: 100%;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 100%;
+  aspect-ratio: 16 / 9;
+  justify-self: center;
+  align-self: center;
   min-height: 0;
   cursor: none;
 }

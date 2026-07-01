@@ -3,8 +3,6 @@ body[data-screen-view="true"] .stage-strip {
   max-height: 104px;
   align-content: end;
   overflow: hidden;
-  border-top: 1px solid oklch(36% 0.02 92 / 0.46);
-  padding-top: var(--space-xs);
 }
 
 body[data-screen-view="true"] .tile-grid {
@@ -83,6 +81,6 @@ body[data-screen-view="true"] .participant-screen-action {
   display: none;
 }
 
-body[data-strip-collapsed="true"] .participants {
+body[data-strip-collapsed="true"] .participant {
   display: none;
 }

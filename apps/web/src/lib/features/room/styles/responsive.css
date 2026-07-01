@@ -22,15 +22,15 @@
   }
 
   /* Re-centre the incomplete bottom rows for the narrowed 3-column layouts. */
-  .tile-grid[data-count="7"] .participant:nth-child(5) {
+  .tile-grid[data-count="7"] :is(.stream-tile, .participant):nth-child(5) {
     grid-column: span 2;
   }
 
-  .tile-grid[data-count="7"] .participant:nth-child(7) {
+  .tile-grid[data-count="7"] :is(.stream-tile, .participant):nth-child(7) {
     grid-column: 3 / span 2;
   }
 
-  .tile-grid[data-count="8"] .participant:nth-child(7) {
+  .tile-grid[data-count="8"] :is(.stream-tile, .participant):nth-child(7) {
     grid-column: 2 / span 2;
   }
 
@@ -82,27 +82,27 @@
 
   /* Two columns: keep each single-tile trailing row centred, and reset the
      wider-layout nudges that no longer apply. */
-  .tile-grid[data-count="5"] .participant:nth-child(4) {
+  .tile-grid[data-count="5"] :is(.stream-tile, .participant):nth-child(4) {
     grid-column: span 2;
   }
 
-  .tile-grid[data-count="5"] .participant:nth-child(5) {
+  .tile-grid[data-count="5"] :is(.stream-tile, .participant):nth-child(5) {
     grid-column: 2 / span 2;
   }
 
-  .tile-grid[data-count="7"] .participant:nth-child(5) {
+  .tile-grid[data-count="7"] :is(.stream-tile, .participant):nth-child(5) {
     grid-column: span 2;
   }
 
-  .tile-grid[data-count="7"] .participant:nth-child(7) {
+  .tile-grid[data-count="7"] :is(.stream-tile, .participant):nth-child(7) {
     grid-column: 2 / span 2;
   }
 
-  .tile-grid[data-count="8"] .participant:nth-child(7) {
+  .tile-grid[data-count="8"] :is(.stream-tile, .participant):nth-child(7) {
     grid-column: span 2;
   }
 
-  .tile-grid[data-count="9"] .participant:nth-child(9) {
+  .tile-grid[data-count="9"] :is(.stream-tile, .participant):nth-child(9) {
     grid-column: 2 / span 2;
   }
 

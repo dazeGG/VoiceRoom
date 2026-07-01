@@ -19,11 +19,6 @@
   margin-inline: auto;
 }
 
-.stream-tiles,
-.participants {
-  display: contents;
-}
-
 .stream-tile {
   position: relative;
   display: block;
@@ -204,18 +199,4 @@
   margin: 0;
   background: transparent;
   cursor: pointer;
-}
-
-.participants {
-  --tile-columns: 1;
-  position: relative;
-  z-index: 1;
-  width: 100%;
-  min-height: min(520px, calc(100vh - 250px));
-  grid-template-columns: repeat(var(--tile-columns), minmax(0, 1fr));
-  grid-auto-rows: minmax(180px, 1fr);
-  align-content: center;
-  justify-content: center;
-  justify-items: stretch;
-  gap: var(--space-md);
 }

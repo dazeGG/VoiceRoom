@@ -16,19 +16,12 @@
   });
 </script>
 
-<div
-  class="stream-tiles"
-  id="streamTiles"
-  hidden={tiles.length === 0}
-  data-count={Math.min(tiles.length, 8)}
->
-  {#each tiles as participant (participant.id)}
-    <StreamTile
-      {participant}
-      hasPreview={hasStreamTilePreview(participant)}
-      isCollapsed={isStreamTileCollapsed(participant)}
-      isSubscribed={isScreenSubscribed(participant.id)}
-      stream={getScreenStreamForParticipant(participant)}
-    />
-  {/each}
-</div>
+{#each tiles as participant (participant.id)}
+  <StreamTile
+    {participant}
+    hasPreview={hasStreamTilePreview(participant)}
+    isCollapsed={isStreamTileCollapsed(participant)}
+    isSubscribed={isScreenSubscribed(participant.id)}
+    stream={getScreenStreamForParticipant(participant)}
+  />
+{/each}
