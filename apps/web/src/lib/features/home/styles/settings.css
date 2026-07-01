@@ -395,6 +395,26 @@
   background: linear-gradient(90deg, #4a463c, #6b6557);
 }
 
+.settings-sound-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 9px;
+}
+
+.settings-sound-head .settings-field-label {
+  margin-bottom: 0;
+}
+
+.settings-sound-value {
+  color: #ece7d9;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 .settings-sound-actions {
   display: flex;
   justify-content: flex-end;

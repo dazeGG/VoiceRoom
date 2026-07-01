@@ -393,7 +393,10 @@
               </div>
 
               <div>
-                <span class="settings-field-label">Звуки интерфейса</span>
+                <div class="settings-sound-head">
+                  <span class="settings-field-label">Звуки интерфейса</span>
+                  <output class="settings-sound-value">{Math.round(notificationVolume)}%</output>
+                </div>
                 <Slider
                   bind:value={notificationVolume}
                   min={0}
