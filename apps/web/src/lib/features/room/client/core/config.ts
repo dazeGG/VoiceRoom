@@ -66,12 +66,17 @@ export const RNNOISE_ASSET_BASE = '/rnnoise/';
 export const DEFAULT_SCREEN_QUALITY_ID = 'balanced';
 export const DEFAULT_SCREEN_FPS_ID = '30';
 export const DEFAULT_SCREEN_PROFILE_ID = `${DEFAULT_SCREEN_QUALITY_ID}-${DEFAULT_SCREEN_FPS_ID}`;
+export const DEFAULT_SCREEN_STREAM_MODE = 'games';
+export const SCREEN_STREAM_MODE_PROFILES = {
+  games: 'balanced-30',
+  text: 'balanced-5'
+} as const;
 export const MICROPHONE_AUDIO_BITRATE = 64_000;
 export const SCREEN_AUDIO_BITRATE = 192_000;
 export const SCREEN_ADAPT_GOOD_SAMPLE_TARGET = 16;
 export const SCREEN_ADAPT_MIN_INTERVAL_MS = 20_000;
 export const SCREEN_ADAPT_POOR_SAMPLE_TARGET = 3;
-export const SCREEN_ADAPT_PROFILE_ORDER = ['low-15', 'low-30', 'balanced-15', 'low-60', 'high-15', 'balanced-30', 'balanced-60', 'high-30', 'high-60'];
+export const SCREEN_ADAPT_PROFILE_ORDER = ['low-5', 'balanced-5', 'high-5', 'low-15', 'low-30', 'balanced-15', 'low-60', 'high-15', 'balanced-30', 'balanced-60', 'high-30', 'high-60'];
 export const SCREEN_STATS_INTERVAL_MS = 1500;
 export const SCREEN_VIDEO_BACKUP_CODEC: string = 'vp8';
 export const PEER_SESSION_STORAGE_PREFIX = 'voice-room:peer-session:';
@@ -88,6 +93,7 @@ export interface ScreenQualityOption {
 export const SCREEN_QUALITY_OPTIONS: Record<string, ScreenQualityOption> = {
   balanced: {
     bitrateByFps: {
+      5: 1_200_000,
       15: 3_000_000,
       30: 5_000_000,
       60: 7_000_000
@@ -99,6 +105,7 @@ export const SCREEN_QUALITY_OPTIONS: Record<string, ScreenQualityOption> = {
   },
   high: {
     bitrateByFps: {
+      5: 1_800_000,
       15: 4_000_000,
       30: 7_000_000,
       60: 9_000_000
@@ -110,6 +117,7 @@ export const SCREEN_QUALITY_OPTIONS: Record<string, ScreenQualityOption> = {
   },
   low: {
     bitrateByFps: {
+      5: 800_000,
       15: 2_000_000,
       30: 3_000_000,
       60: 4_000_000
@@ -131,6 +139,12 @@ export interface ScreenFpsOption {
 }
 
 export const SCREEN_FPS_OPTIONS: Record<string, ScreenFpsOption> = {
+  5: {
+    contentHint: 'detail',
+    frameRate: 5,
+    id: '5',
+    label: '5 FPS'
+  },
   15: {
     contentHint: 'detail',
     frameRate: 15,

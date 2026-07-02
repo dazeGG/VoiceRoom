@@ -4,6 +4,8 @@ import type { NoiseMode } from './config';
 import type { Participant, PeerInfo } from '../model/participants';
 export type { Participant, ParticipantViewRefs, PeerInfo } from '../model/participants';
 
+export type ScreenStreamMode = 'games' | 'text' | 'custom';
+
 export interface ScreenProfile {
   contentHint: string;
   detail: string;
@@ -65,6 +67,11 @@ export interface DesktopPickerSelection {
   streamAudioEnabled?: boolean;
 }
 
+export interface ScreenSourceSelection extends DesktopPickerSelection {
+  mode: ScreenStreamMode;
+  source: DesktopCaptureSource;
+}
+
 export interface ScreenStatsSnapshot {
   availableOutgoingBitrate: number;
   bitrate: number;
@@ -104,7 +111,7 @@ export interface ParsedScreenStats extends Partial<ScreenStatsSnapshot> {
 }
 
 export interface ScreenSourceRequest {
-  resolve: (source: DesktopCaptureSource) => void;
+  resolve: (selection: ScreenSourceSelection) => void;
   reject: (error: Error) => void;
 }
 
@@ -172,6 +179,7 @@ export interface RoomScreenState {
   localScreenTargetProfileId: string;
   localScreenStream: MediaStream | null;
   localScreenProfileId: string;
+  localScreenMode: ScreenStreamMode;
   screenFullscreen: boolean;
   screenMuted: boolean;
   screenRequesting: boolean;

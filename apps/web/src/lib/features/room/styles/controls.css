@@ -475,6 +475,7 @@ body[data-lobby-embedded="true"] .room-dock {
   max-width: 100%;
 }
 
+
 .gate-control {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 58px;
