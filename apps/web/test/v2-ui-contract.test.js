@@ -406,7 +406,11 @@ test('screen share quality contract exposes Discord-like modes with custom advan
   const state = read('src/lib/features/room/client/model/room-state.ts');
   const screenShare = read('src/lib/features/room/client/services/screen-share-service.ts');
   const dock = read('src/lib/features/room/components/RoomDock.svelte');
+  const overlays = read('src/lib/features/room/components/RoomOverlays.svelte');
+  const picker = read('src/lib/features/room/client/ui/screen-source-picker.ts');
+  const sourceUi = read('src/lib/features/room/screen-source-ui.svelte.ts');
   const controls = read('src/lib/features/room/styles/controls.css');
+  const overlayStyles = read('src/lib/features/room/styles/overlays.css');
 
   assert.match(config, /DEFAULT_SCREEN_STREAM_MODE = 'games'/);
   assert.match(config, /SCREEN_STREAM_MODE_PROFILES = \{[\s\S]*games: 'balanced-30'[\s\S]*text: 'high-15'/);
@@ -419,15 +423,22 @@ test('screen share quality contract exposes Discord-like modes with custom advan
   assert.match(screenShare, /export async function setCustomScreenQuality/);
   assert.match(screenShare, /export async function setCustomScreenFps/);
   assert.match(screenShare, /state\.localScreenTargetProfileId = profile\.id/);
-  assert.match(dock, /screenMenuButton/);
-  assert.match(dock, /Режим стрима/);
-  assert.match(dock, /role="radiogroup"/);
-  assert.match(dock, /selectScreenStreamMode\(mode\.id\)/);
-  assert.match(dock, /roomState\.localScreenMode === 'custom'/);
-  assert.match(dock, /onValueChange=\{setCustomScreenQuality\}/);
-  assert.match(dock, /onValueChange=\{setCustomScreenFps\}/);
-  assert.match(controls, /\.screen-mode-option/);
-  assert.match(controls, /\.screen-mode-option\[data-active="true"\]/);
+  assert.doesNotMatch(dock, /screenMenuButton/);
+  assert.match(sourceUi, /mode: 'games' as 'games' \| 'text'/);
+  assert.match(sourceUi, /quality: 'balanced' as 'balanced' \| 'high'/);
+  assert.match(sourceUi, /selectedSourceId: null as string \| null/);
+  assert.match(picker, /export function confirmScreenSourcePicker/);
+  assert.match(picker, /state\.localScreenMode = stateMode/);
+  assert.match(picker, /state\.localScreenTargetProfileId = profileId/);
+  assert.match(overlays, /Режим стрима/);
+  assert.match(overlays, /Плавное видео/);
+  assert.match(overlays, /Чёткая картинка/);
+  assert.match(overlays, /screenSourceUi\.mode = 'games'; screenSourceUi\.quality = 'balanced'/);
+  assert.match(overlays, /screenSourceUi\.mode = 'text'; screenSourceUi\.quality = 'high'/);
+  assert.match(overlays, /onclick=\{confirmScreenSourcePicker\}/);
+  assert.doesNotMatch(controls, /\.screen-mode-option/);
+  assert.match(overlayStyles, /\.screen-source-pop-preset/);
+  assert.match(overlayStyles, /\.screen-source-res-btn\[aria-pressed="true"\]/);
 });
 
 test('screen stream thumbnails show profile metadata instead of an action button', () => {
