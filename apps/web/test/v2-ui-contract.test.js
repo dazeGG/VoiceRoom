@@ -378,6 +378,28 @@ test('participant tiles stay visually uniform and highlight only active speakers
   assert.match(livekit, /RoomEvent\.ActiveSpeakersChanged/);
 });
 
+test('screen share publish tuning applies codec, bitrate, degradation and contentHint contracts', () => {
+  const config = read('src/lib/features/room/client/core/config.ts');
+  const profiles = read('src/lib/features/room/client/media/profiles.ts');
+  const capture = read('src/lib/features/room/client/services/screen-capture-service.ts');
+  const screenShare = read('src/lib/features/room/client/services/screen-share-service.ts');
+
+  assert.match(config, /low:[\s\S]*15: 2_000_000[\s\S]*30: 3_000_000[\s\S]*60: 4_000_000/);
+  assert.match(config, /balanced:[\s\S]*15: 3_000_000[\s\S]*30: 5_000_000[\s\S]*60: 7_000_000/);
+  assert.match(config, /high:[\s\S]*15: 4_000_000[\s\S]*30: 7_000_000[\s\S]*60: 9_000_000/);
+  assert.match(config, /60:[\s\S]*contentHint: 'motion'[\s\S]*frameRate: 60/);
+  assert.match(profiles, /return 'h264'/);
+  assert.match(profiles, /return 'vp9'/);
+  assert.match(profiles, /return 'vp8'/);
+  assert.match(profiles, /getScreenDegradationPreference/);
+  assert.match(capture, /'contentHint' in videoTrack && !videoTrack\.contentHint/);
+  assert.match(screenShare, /await publishLocalScreenTracks\(\);[\s\S]*await applyLocalScreenEncodingProfile\(profile\)/);
+  assert.match(screenShare, /if \(!parameters\.encodings\?\.length\) parameters\.encodings = \[\{\}\]/);
+  assert.match(screenShare, /primaryEncoding\.maxBitrate = profile\.videoBitrate/);
+  assert.match(screenShare, /primaryEncoding\.degradationPreference = degradationPreference/);
+  assert.match(screenShare, /parameters\.degradationPreference = degradationPreference/);
+});
+
 test('screen stream thumbnails show profile metadata instead of an action button', () => {
   const overlays = read('src/lib/features/room/components/RoomOverlays.svelte');
   const screenStageControls = read('src/lib/features/room/client/ui/screen-stage-controls.ts');

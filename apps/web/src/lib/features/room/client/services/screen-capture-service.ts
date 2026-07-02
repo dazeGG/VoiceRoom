@@ -569,7 +569,7 @@ export async function applyScreenCaptureProfile(stream: MediaStream, profile: Sc
   const [videoTrack] = stream.getVideoTracks();
   if (!videoTrack) return;
 
-  if ('contentHint' in videoTrack) {
+  if ('contentHint' in videoTrack && !videoTrack.contentHint) {
     videoTrack.contentHint = profile.contentHint;
   }
 

@@ -74,9 +74,15 @@ export function getHigherScreenProfileId(profileId: string, ceilingProfileId: st
   return rank < ceilingRank ? SCREEN_ADAPT_PROFILE_ORDER[rank + 1] : '';
 }
 
-export function getPreferredScreenVideoCodec(): 'vp9' | 'h264' {
+export function getPreferredScreenVideoCodec(): 'h264' | 'vp9' | 'vp8' {
   const codecs = RTCRtpSender.getCapabilities?.('video')?.codecs || [];
-  return codecs.some((codec) => /video\/vp9/i.test(codec.mimeType)) ? 'vp9' : 'h264';
+  if (codecs.some((codec) => /video\/h264/i.test(codec.mimeType))) return 'h264';
+  if (codecs.some((codec) => /video\/vp9/i.test(codec.mimeType))) return 'vp9';
+  return 'vp8';
+}
+
+export function getScreenDegradationPreference(contentHint: string): RTCDegradationPreference {
+  return contentHint === 'motion' ? 'maintain-framerate' : 'balanced';
 }
 
 export async function getScreenPublishVideoOptions(profile: ScreenProfile): Promise<TrackPublishOptions> {
