@@ -1,9 +1,10 @@
 import { state } from '../core/state.svelte';
-import type { DesktopCaptureSource } from '../core/types';
+import type { DesktopCaptureSource, ScreenSourceSelection } from '../core/types';
 import { createAbortError } from '../core/utils';
+import { createScreenProfileId } from '../media/profiles';
 import { screenSourceUi } from '../../screen-source-ui.svelte';
 
-export function showScreenSourcePicker(sources: DesktopCaptureSource[]): Promise<DesktopCaptureSource> {
+export function showScreenSourcePicker(sources: DesktopCaptureSource[]): Promise<ScreenSourceSelection> {
   if (state.screenSourceRequest) cancelScreenSourcePicker();
 
   return new Promise((resolve, reject) => {
@@ -31,7 +32,7 @@ export function confirmScreenSourcePicker(): void {
 
   const fpsId = screenSourceUi.mode === 'text' ? '5' : '30';
   const qualityId = screenSourceUi.quality;
-  const profileId = `${qualityId}-${fpsId}`;
+  const profileId = createScreenProfileId(qualityId, fpsId);
 
   state.localScreenMode = screenSourceUi.mode;
   state.localScreenQualityId = qualityId;
@@ -39,7 +40,13 @@ export function confirmScreenSourcePicker(): void {
   state.localScreenProfileId = profileId;
   state.localScreenTargetProfileId = profileId;
 
-  resolveScreenSourcePicker(source);
+  resolveScreenSourcePicker({
+    fpsId,
+    profileId,
+    qualityId,
+    source,
+    streamAudioEnabled: screenSourceUi.audio
+  });
 }
 
 export function switchScreenTab(tab: 'screens' | 'windows'): void {
@@ -48,9 +55,9 @@ export function switchScreenTab(tab: 'screens' | 'windows'): void {
   screenSourceUi.popOpen = false;
 }
 
-export function resolveScreenSourcePicker(source: DesktopCaptureSource): void {
+export function resolveScreenSourcePicker(selection: ScreenSourceSelection): void {
   const request = closeScreenSourcePicker();
-  request?.resolve(source);
+  request?.resolve(selection);
 }
 
 export function cancelScreenSourcePicker(): void {

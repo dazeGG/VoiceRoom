@@ -5,7 +5,7 @@ import { createScreenProfileId, getScreenProfile } from '../media/profiles';
 import { createAbortError, disconnectAudioNode, isCaptureCancelled } from '../core/utils';
 import { showScreenSourcePicker } from '../ui/screen-source-picker';
 import { setLocalAppAudioSuppressed } from './media-playback-service';
-import type { DesktopAudioCapture, DesktopCaptureSource, DesktopPickerSelection, ScreenProfile } from '../core/types';
+import type { DesktopAudioCapture, DesktopPickerSelection, ScreenProfile, ScreenSourceSelection } from '../core/types';
 
 interface CaptureAttemptDetail {
   error: unknown;
@@ -29,10 +29,7 @@ export async function openScreenShare(profile: ScreenProfile): Promise<ScreenSha
   }
 
   if (hasLegacyDesktopCapture()) {
-    return {
-      profile,
-      stream: await openDesktopScreenShare(profile)
-    };
+    return openDesktopScreenShare(profile);
   }
 
   if (isDesktopApp()) {
@@ -122,24 +119,26 @@ function createBrowserDisplayMediaConstraints(
   } as DisplayMediaStreamOptions;
 }
 
-async function openDesktopScreenShare(profile: ScreenProfile): Promise<MediaStream> {
+async function openDesktopScreenShare(profile: ScreenProfile): Promise<ScreenShareCapture> {
   if (!navigator.mediaDevices?.getDisplayMedia && !navigator.mediaDevices?.getUserMedia) {
     throw new Error('Desktop-оболочка не дала доступ к захвату экрана.');
   }
 
-  const source = await selectDesktopCaptureSource();
-  const withAudio = wantsScreenShareAudio();
+  const selection = await selectDesktopCaptureSource();
+  const source = selection.source;
+  const selectedProfile = getDesktopPickerProfile(selection, profile);
+  const withAudio = selection.streamAudioEnabled === true;
   let stream: MediaStream;
   let audioCaptureError: unknown = null;
 
   if (!withAudio) {
-    stream = await openDesktopStream(source.id, profile, { audio: false, audioMode: 'none' });
-    await applyScreenCaptureProfile(stream, profile);
-    return stream;
+    stream = await openDesktopStream(source.id, selectedProfile, { audio: false, audioMode: 'none' });
+    await applyScreenCaptureProfile(stream, selectedProfile);
+    return { profile: selectedProfile, stream };
   }
 
   if (hasNativeDesktopSafeAudio()) {
-    stream = await openDesktopStream(source.id, profile, { audio: false, audioMode: 'safe-system' });
+    stream = await openDesktopStream(source.id, selectedProfile, { audio: false, audioMode: 'safe-system' });
     try {
       const audioCapture = await startDesktopSafeScreenAudioCapture();
       stream.addTrack(audioCapture.track);
@@ -152,22 +151,22 @@ async function openDesktopScreenShare(profile: ScreenProfile): Promise<MediaStre
       });
     }
 
-    await applyScreenCaptureProfile(stream, profile);
-    return stream;
+    await applyScreenCaptureProfile(stream, selectedProfile);
+    return { profile: selectedProfile, stream };
   }
 
   if (isDesktopApp()) {
-    stream = await openDesktopStream(source.id, profile, { audio: false, audioMode: 'safe-system' });
+    stream = await openDesktopStream(source.id, selectedProfile, { audio: false, audioMode: 'safe-system' });
     showToast('Стрим запущен без звука: в этой сборке нет безопасного системного звука', {
       duration: 9000,
       variant: 'error'
     });
-    await applyScreenCaptureProfile(stream, profile);
-    return stream;
+    await applyScreenCaptureProfile(stream, selectedProfile);
+    return { profile: selectedProfile, stream };
   }
 
   try {
-    stream = await openDesktopStream(source.id, profile, { audio: true, audioMode: 'loopback' });
+    stream = await openDesktopStream(source.id, selectedProfile, { audio: true, audioMode: 'loopback' });
   } catch (error) {
     if (isCaptureCancelled(error)) {
       setLocalAppAudioSuppressed(false);
@@ -176,14 +175,14 @@ async function openDesktopScreenShare(profile: ScreenProfile): Promise<MediaStre
     audioCaptureError = error;
     console.warn('Desktop audio capture unavailable, retrying without audio', error);
     try {
-      stream = await openDesktopStream(source.id, profile, { audio: false, audioMode: 'none' });
+      stream = await openDesktopStream(source.id, selectedProfile, { audio: false, audioMode: 'none' });
     } catch (videoError) {
       throw mergeDesktopCaptureErrors(audioCaptureError, videoError);
     }
   }
 
-  await applyScreenCaptureProfile(stream, profile);
-  return stream;
+  await applyScreenCaptureProfile(stream, selectedProfile);
+  return { profile: selectedProfile, stream };
 }
 
 async function openDesktopScreenShareWithPicker(profile: ScreenProfile): Promise<ScreenShareCapture> {
@@ -556,7 +555,7 @@ function createDesktopMediaConstraints(
   } as unknown as MediaStreamConstraints;
 }
 
-async function selectDesktopCaptureSource(): Promise<DesktopCaptureSource> {
+async function selectDesktopCaptureSource(): Promise<ScreenSourceSelection> {
   const sources = await window.voiceRoomDesktopCapture!.getSources!();
   if (!sources.length) {
     throw new Error('Нет доступных источников экрана');

@@ -67,6 +67,10 @@ export interface DesktopPickerSelection {
   streamAudioEnabled?: boolean;
 }
 
+export interface ScreenSourceSelection extends DesktopPickerSelection {
+  source: DesktopCaptureSource;
+}
+
 export interface ScreenStatsSnapshot {
   availableOutgoingBitrate: number;
   bitrate: number;
@@ -106,7 +110,7 @@ export interface ParsedScreenStats extends Partial<ScreenStatsSnapshot> {
 }
 
 export interface ScreenSourceRequest {
-  resolve: (source: DesktopCaptureSource) => void;
+  resolve: (selection: ScreenSourceSelection) => void;
   reject: (error: Error) => void;
 }
 
