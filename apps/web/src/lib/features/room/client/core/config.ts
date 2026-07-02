@@ -69,7 +69,7 @@ export const DEFAULT_SCREEN_PROFILE_ID = `${DEFAULT_SCREEN_QUALITY_ID}-${DEFAULT
 export const DEFAULT_SCREEN_STREAM_MODE = 'games';
 export const SCREEN_STREAM_MODE_PROFILES = {
   games: 'balanced-30',
-  text: 'high-15'
+  text: 'balanced-5'
 } as const;
 export const MICROPHONE_AUDIO_BITRATE = 64_000;
 export const SCREEN_AUDIO_BITRATE = 192_000;
@@ -136,6 +136,12 @@ export interface ScreenFpsOption {
 }
 
 export const SCREEN_FPS_OPTIONS: Record<string, ScreenFpsOption> = {
+  5: {
+    contentHint: 'detail',
+    frameRate: 5,
+    id: '5',
+    label: '5 FPS'
+  },
   15: {
     contentHint: 'detail',
     frameRate: 15,

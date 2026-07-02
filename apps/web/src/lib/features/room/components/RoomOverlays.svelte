@@ -30,7 +30,7 @@
   ));
   const selectedSource = $derived(screenSourceUi.sources.find((s) => s.id === screenSourceUi.selectedSourceId));
   const qualityLabel = $derived(screenSourceUi.quality === 'high' ? '1080p' : '720p');
-  const fpsLabel = $derived(screenSourceUi.mode === 'text' ? '15 к/с' : '30 к/с');
+  const fpsLabel = $derived(screenSourceUi.mode === 'text' ? '5 к/с' : '30 к/с');
   const summaryName = $derived(selectedSource?.name ?? 'Не выбрано');
   const summaryDetail = $derived(`${screenSourceUi.quality === 'high' ? 'HD' : 'SD'} · ${qualityLabel} · ${fpsLabel}${screenSourceUi.audio ? ' · звук' : ''}`);
 
@@ -234,7 +234,7 @@
               <button
                 class="screen-source-pop-preset"
                 aria-pressed={screenSourceUi.mode === 'games'}
-                onclick={() => { screenSourceUi.mode = 'games'; screenSourceUi.quality = 'balanced'; }}
+                onclick={() => { screenSourceUi.mode = 'games'; }}
               >
                 <span class="screen-source-pop-icon">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -252,7 +252,7 @@
               <button
                 class="screen-source-pop-preset"
                 aria-pressed={screenSourceUi.mode === 'text'}
-                onclick={() => { screenSourceUi.mode = 'text'; screenSourceUi.quality = 'high'; }}
+                onclick={() => { screenSourceUi.mode = 'text'; }}
               >
                 <span class="screen-source-pop-icon">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -261,7 +261,7 @@
                 </span>
                 <span class="screen-source-pop-info">
                   <span class="screen-source-pop-title">Чёткая картинка</span>
-                  <span class="screen-source-pop-desc">15 к/с · для текста и кода</span>
+                  <span class="screen-source-pop-desc">5 к/с · для текста и кода</span>
                 </span>
                 <span class="screen-source-pop-radio" aria-hidden="true">
                   {#if screenSourceUi.mode === 'text'}<span class="screen-source-pop-dot"></span>{/if}

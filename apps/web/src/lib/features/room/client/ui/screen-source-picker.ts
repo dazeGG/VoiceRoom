@@ -1,5 +1,5 @@
 import { state } from '../core/state.svelte';
-import type { DesktopCaptureSource, ScreenStreamMode } from '../core/types';
+import type { DesktopCaptureSource } from '../core/types';
 import { createAbortError } from '../core/utils';
 import { screenSourceUi } from '../../screen-source-ui.svelte';
 
@@ -29,15 +29,11 @@ export function confirmScreenSourcePicker(): void {
   const source = screenSourceUi.sources.find((s) => s.id === screenSourceUi.selectedSourceId);
   if (!source) return;
 
-  const fpsId = screenSourceUi.mode === 'text' ? '15' : '30';
+  const fpsId = screenSourceUi.mode === 'text' ? '5' : '30';
   const qualityId = screenSourceUi.quality;
   const profileId = `${qualityId}-${fpsId}`;
 
-  const stateMode: ScreenStreamMode =
-    qualityId === 'balanced' && fpsId === '30' ? 'games' :
-    qualityId === 'high' && fpsId === '15' ? 'text' : 'custom';
-
-  state.localScreenMode = stateMode;
+  state.localScreenMode = screenSourceUi.mode;
   state.localScreenQualityId = qualityId;
   state.localScreenFpsId = fpsId;
   state.localScreenProfileId = profileId;

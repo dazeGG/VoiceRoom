@@ -413,7 +413,7 @@ test('screen share quality contract exposes Discord-like modes with custom advan
   const overlayStyles = read('src/lib/features/room/styles/overlays.css');
 
   assert.match(config, /DEFAULT_SCREEN_STREAM_MODE = 'games'/);
-  assert.match(config, /SCREEN_STREAM_MODE_PROFILES = \{[\s\S]*games: 'balanced-30'[\s\S]*text: 'high-15'/);
+  assert.match(config, /SCREEN_STREAM_MODE_PROFILES = \{[\s\S]*games: 'balanced-30'[\s\S]*text: 'balanced-5'/);
   assert.match(profiles, /export function getScreenProfileForMode/);
   assert.match(profiles, /export function getScreenModeSummary/);
   assert.match(state, /localScreenMode: DEFAULT_SCREEN_STREAM_MODE/);
@@ -428,13 +428,13 @@ test('screen share quality contract exposes Discord-like modes with custom advan
   assert.match(sourceUi, /quality: 'balanced' as 'balanced' \| 'high'/);
   assert.match(sourceUi, /selectedSourceId: null as string \| null/);
   assert.match(picker, /export function confirmScreenSourcePicker/);
-  assert.match(picker, /state\.localScreenMode = stateMode/);
+  assert.match(picker, /state\.localScreenMode = screenSourceUi\.mode/);
   assert.match(picker, /state\.localScreenTargetProfileId = profileId/);
   assert.match(overlays, /Режим стрима/);
   assert.match(overlays, /Плавное видео/);
   assert.match(overlays, /Чёткая картинка/);
-  assert.match(overlays, /screenSourceUi\.mode = 'games'; screenSourceUi\.quality = 'balanced'/);
-  assert.match(overlays, /screenSourceUi\.mode = 'text'; screenSourceUi\.quality = 'high'/);
+  assert.match(overlays, /screenSourceUi\.mode = 'games'/);
+  assert.match(overlays, /screenSourceUi\.mode = 'text'/);
   assert.match(overlays, /onclick=\{confirmScreenSourcePicker\}/);
   assert.doesNotMatch(controls, /\.screen-mode-option/);
   assert.match(overlayStyles, /\.screen-source-pop-preset/);
