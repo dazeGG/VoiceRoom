@@ -1,6 +1,6 @@
 import type { LocalTrackPublication } from 'livekit-client';
 import {
-  DEFAULT_SCREEN_PROFILE_ID,
+  DEFAULT_SCREEN_STREAM_MODE,
   SCREEN_ADAPT_GOOD_SAMPLE_TARGET,
   SCREEN_ADAPT_MIN_INTERVAL_MS,
   SCREEN_ADAPT_POOR_SAMPLE_TARGET,
@@ -14,7 +14,10 @@ import {
   getLowerScreenProfileId,
   getPreferredScreenVideoCodec,
   getScreenDegradationPreference,
-  getScreenProfile
+  getScreenModeForProfile,
+  getScreenModeSummary,
+  getScreenProfile,
+  getScreenProfileForMode
 } from '../media/profiles';
 import { postState } from '../room/presence';
 import { setLocalAppAudioSuppressed } from './media-playback-service';
@@ -31,7 +34,7 @@ import {
   refreshScreenMeta,
   refreshScreenStage
 } from '../ui/screen-view';
-import type { ParsedScreenStats, ScreenProfile, ScreenStatsPrevious } from '../core/types';
+import type { ParsedScreenStats, ScreenProfile, ScreenStatsPrevious, ScreenStreamMode } from '../core/types';
 
 export async function handleScreenButtonClick(): Promise<void> {
   if (state.localScreenStream) {
@@ -39,10 +42,65 @@ export async function handleScreenButtonClick(): Promise<void> {
     return;
   }
 
-  await startScreenShare(DEFAULT_SCREEN_PROFILE_ID);
+  await startScreenShare(getSelectedScreenProfileId());
 }
 
-export async function startScreenShare(profileId: string = state.localScreenProfileId): Promise<void> {
+export function getSelectedScreenProfileId(): string {
+  return getScreenProfileForMode(state.localScreenMode || DEFAULT_SCREEN_STREAM_MODE, state.localScreenProfileId).id;
+}
+
+export function getScreenStreamModeView(): Array<{ id: ScreenStreamMode; label: string; summary: string; checked: boolean }> {
+  const mode = state.localScreenMode || DEFAULT_SCREEN_STREAM_MODE;
+  return [
+    { id: 'games', label: 'Игры', summary: getScreenModeSummary('games'), checked: mode === 'games' },
+    { id: 'text', label: 'Демонстрация экрана', summary: getScreenModeSummary('text'), checked: mode === 'text' },
+    { id: 'custom', label: 'Пользовательские', summary: getScreenModeSummary('custom', state.localScreenProfileId), checked: mode === 'custom' }
+  ];
+}
+
+export async function selectScreenStreamMode(mode: ScreenStreamMode): Promise<void> {
+  const nextMode = mode || DEFAULT_SCREEN_STREAM_MODE;
+  const profile = getScreenProfileForMode(nextMode, state.localScreenProfileId);
+  state.localScreenMode = nextMode;
+  state.localScreenTargetProfileId = profile.id;
+  if (state.localScreenStream) {
+    await setLocalScreenProfile(profile.id);
+    return;
+  }
+  applyLocalScreenProfileState(profile, nextMode);
+}
+
+export async function setCustomScreenQuality(qualityId: string): Promise<void> {
+  const profile = getScreenProfile(`${qualityId}-${state.localScreenFpsId}`);
+  state.localScreenMode = 'custom';
+  state.localScreenTargetProfileId = profile.id;
+  if (state.localScreenStream) {
+    await setLocalScreenProfile(profile.id);
+    return;
+  }
+  applyLocalScreenProfileState(profile, 'custom');
+}
+
+export async function setCustomScreenFps(fpsId: string): Promise<void> {
+  const profile = getScreenProfile(`${state.localScreenQualityId}-${fpsId}`);
+  state.localScreenMode = 'custom';
+  state.localScreenTargetProfileId = profile.id;
+  if (state.localScreenStream) {
+    await setLocalScreenProfile(profile.id);
+    return;
+  }
+  applyLocalScreenProfileState(profile, 'custom');
+}
+
+function applyLocalScreenProfileState(profile: ScreenProfile, mode: ScreenStreamMode): void {
+  state.localScreenMode = mode;
+  state.localScreenProfileId = profile.id;
+  state.localScreenQualityId = profile.qualityId;
+  state.localScreenFpsId = profile.fpsId;
+  state.localScreenTargetProfileId = profile.id;
+}
+
+export async function startScreenShare(profileId: string = getSelectedScreenProfileId()): Promise<void> {
   if (!state.joined || state.connecting) {
     showToast('Сначала подключитесь к комнате');
     return;
@@ -64,10 +122,7 @@ export async function startScreenShare(profileId: string = state.localScreenProf
     }
 
     state.localScreenStream = stream;
-    state.localScreenProfileId = profile.id;
-    state.localScreenQualityId = profile.qualityId;
-    state.localScreenFpsId = profile.fpsId;
-    state.localScreenTargetProfileId = profile.id;
+    applyLocalScreenProfileState(profile, getScreenModeForProfile(profile.id));
     resetLocalScreenAdaptation();
     state.screenStopping = false;
     setLocalAppAudioSuppressed(false);

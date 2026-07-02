@@ -400,6 +400,36 @@ test('screen share publish tuning applies codec, bitrate, degradation and conten
   assert.match(screenShare, /parameters\.degradationPreference = degradationPreference/);
 });
 
+test('screen share quality contract exposes Discord-like modes with custom advanced controls', () => {
+  const config = read('src/lib/features/room/client/core/config.ts');
+  const profiles = read('src/lib/features/room/client/media/profiles.ts');
+  const state = read('src/lib/features/room/client/model/room-state.ts');
+  const screenShare = read('src/lib/features/room/client/services/screen-share-service.ts');
+  const dock = read('src/lib/features/room/components/RoomDock.svelte');
+  const controls = read('src/lib/features/room/styles/controls.css');
+
+  assert.match(config, /DEFAULT_SCREEN_STREAM_MODE = 'games'/);
+  assert.match(config, /SCREEN_STREAM_MODE_PROFILES = \{[\s\S]*games: 'balanced-30'[\s\S]*text: 'high-15'/);
+  assert.match(profiles, /export function getScreenProfileForMode/);
+  assert.match(profiles, /export function getScreenModeSummary/);
+  assert.match(state, /localScreenMode: DEFAULT_SCREEN_STREAM_MODE/);
+  assert.match(screenShare, /export function getSelectedScreenProfileId/);
+  assert.match(screenShare, /export function getScreenStreamModeView/);
+  assert.match(screenShare, /export async function selectScreenStreamMode/);
+  assert.match(screenShare, /export async function setCustomScreenQuality/);
+  assert.match(screenShare, /export async function setCustomScreenFps/);
+  assert.match(screenShare, /state\.localScreenTargetProfileId = profile\.id/);
+  assert.match(dock, /screenMenuButton/);
+  assert.match(dock, /Режим стрима/);
+  assert.match(dock, /role="radiogroup"/);
+  assert.match(dock, /selectScreenStreamMode\(mode\.id\)/);
+  assert.match(dock, /roomState\.localScreenMode === 'custom'/);
+  assert.match(dock, /onValueChange=\{setCustomScreenQuality\}/);
+  assert.match(dock, /onValueChange=\{setCustomScreenFps\}/);
+  assert.match(controls, /\.screen-mode-option/);
+  assert.match(controls, /\.screen-mode-option\[data-active="true"\]/);
+});
+
 test('screen stream thumbnails show profile metadata instead of an action button', () => {
   const overlays = read('src/lib/features/room/components/RoomOverlays.svelte');
   const screenStageControls = read('src/lib/features/room/client/ui/screen-stage-controls.ts');

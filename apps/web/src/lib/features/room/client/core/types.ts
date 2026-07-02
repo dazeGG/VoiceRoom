@@ -4,6 +4,8 @@ import type { NoiseMode } from './config';
 import type { Participant, PeerInfo } from '../model/participants';
 export type { Participant, ParticipantViewRefs, PeerInfo } from '../model/participants';
 
+export type ScreenStreamMode = 'games' | 'text' | 'custom';
+
 export interface ScreenProfile {
   contentHint: string;
   detail: string;
@@ -172,6 +174,7 @@ export interface RoomScreenState {
   localScreenTargetProfileId: string;
   localScreenStream: MediaStream | null;
   localScreenProfileId: string;
+  localScreenMode: ScreenStreamMode;
   screenFullscreen: boolean;
   screenMuted: boolean;
   screenRequesting: boolean;

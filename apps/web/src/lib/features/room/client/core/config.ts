@@ -66,6 +66,11 @@ export const RNNOISE_ASSET_BASE = '/rnnoise/';
 export const DEFAULT_SCREEN_QUALITY_ID = 'balanced';
 export const DEFAULT_SCREEN_FPS_ID = '30';
 export const DEFAULT_SCREEN_PROFILE_ID = `${DEFAULT_SCREEN_QUALITY_ID}-${DEFAULT_SCREEN_FPS_ID}`;
+export const DEFAULT_SCREEN_STREAM_MODE = 'games';
+export const SCREEN_STREAM_MODE_PROFILES = {
+  games: 'balanced-30',
+  text: 'high-15'
+} as const;
 export const MICROPHONE_AUDIO_BITRATE = 64_000;
 export const SCREEN_AUDIO_BITRATE = 192_000;
 export const SCREEN_ADAPT_GOOD_SAMPLE_TARGET = 16;
