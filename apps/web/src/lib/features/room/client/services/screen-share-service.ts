@@ -13,6 +13,7 @@ import {
   getHigherScreenProfileId,
   getLowerScreenProfileId,
   getPreferredScreenVideoCodec,
+  getScreenDegradationPreference,
   getScreenProfile
 } from '../media/profiles';
 import { postState } from '../room/presence';
@@ -74,6 +75,7 @@ export async function startScreenShare(profileId: string = state.localScreenProf
       stopScreenShare().catch((error) => console.error(error));
     });
     await publishLocalScreenTracks();
+    await applyLocalScreenEncodingProfile(profile);
     startLocalScreenStatsMonitor();
 
     updateParticipant({
@@ -450,11 +452,31 @@ async function applyScreenSenderEncoding(sender: RTCRtpSender, profile: ScreenPr
   if (!sender?.getParameters || !sender.setParameters) return;
 
   const parameters = sender.getParameters();
-  if (!parameters.encodings?.length) return;
+  if (!parameters.encodings?.length) parameters.encodings = [{}];
 
-  for (const encoding of parameters.encodings) {
-    encoding.maxBitrate = profile.videoBitrate;
-    (encoding as RTCRtpEncodingParameters & { maxFramerate?: number }).maxFramerate = profile.frameRate;
-  }
+  const contentHint = sender.track?.contentHint || profile.contentHint;
+  const degradationPreference = getScreenDegradationPreference(contentHint);
+  const primaryEncoding = getPrimaryScreenEncoding(parameters.encodings);
+  primaryEncoding.maxBitrate = profile.videoBitrate;
+  primaryEncoding.maxFramerate = profile.frameRate;
+  primaryEncoding.degradationPreference = degradationPreference;
+  parameters.degradationPreference = degradationPreference;
+
   await sender.setParameters(parameters);
+}
+
+function getPrimaryScreenEncoding(encodings: RTCRtpEncodingParameters[]): RTCRtpEncodingParameters & {
+  degradationPreference?: RTCDegradationPreference;
+  maxFramerate?: number;
+} {
+  return encodings.reduce((primary, encoding) => {
+    const primaryBitrate = Number(primary.maxBitrate || 0);
+    const encodingBitrate = Number(encoding.maxBitrate || 0);
+    if (encodingBitrate > primaryBitrate) return encoding;
+    if (!primaryBitrate && !primary.rid) return primary;
+    return primary;
+  }, encodings[0]) as RTCRtpEncodingParameters & {
+    degradationPreference?: RTCDegradationPreference;
+    maxFramerate?: number;
+  };
 }
