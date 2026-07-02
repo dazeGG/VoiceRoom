@@ -2,6 +2,7 @@ import { SvelteMap } from 'svelte/reactivity';
 import {
   DEFAULT_SCREEN_FPS_ID,
   DEFAULT_SCREEN_PROFILE_ID,
+  DEFAULT_SCREEN_STREAM_MODE,
   DEFAULT_SCREEN_QUALITY_ID,
   MICROPHONE_DEVICE_STORAGE_KEY,
   OUTPUT_DEVICE_STORAGE_KEY,
@@ -43,6 +44,7 @@ export function createInitialRoomState(): AppState {
     localRawStream: null,
     localScreenStream: null,
     localScreenProfileId: screenProfileId,
+    localScreenMode: DEFAULT_SCREEN_STREAM_MODE,
     localStream: null,
     localAppAudioSuppressed: false,
     microphoneDeviceId: localStorage.getItem(MICROPHONE_DEVICE_STORAGE_KEY) || '',

@@ -4,12 +4,13 @@ import {
   DEFAULT_SCREEN_PROFILE_ID,
   DEFAULT_SCREEN_QUALITY_ID,
   SCREEN_ADAPT_PROFILE_ORDER,
+  SCREEN_STREAM_MODE_PROFILES,
   SCREEN_FPS_OPTIONS,
   SCREEN_QUALITY_OPTIONS,
   SCREEN_QUALITY_ORDER,
   SCREEN_VIDEO_BACKUP_CODEC
 } from '../core/config';
-import type { ScreenProfile } from '../core/types';
+import type { ScreenProfile, ScreenStreamMode } from '../core/types';
 import { loadLiveKitClient, TRACK_SOURCE } from './livekit-runtime';
 
 export function getScreenProfile(profileId: string): ScreenProfile {
@@ -30,6 +31,26 @@ export function getScreenProfile(profileId: string): ScreenProfile {
     videoBitrate,
     width: quality.width
   };
+}
+
+export function getScreenProfileForMode(mode: ScreenStreamMode, fallbackProfileId: string = DEFAULT_SCREEN_PROFILE_ID): ScreenProfile {
+  if (mode === 'custom') return getScreenProfile(fallbackProfileId);
+  return getScreenProfile(SCREEN_STREAM_MODE_PROFILES[mode] || DEFAULT_SCREEN_PROFILE_ID);
+}
+
+export function getScreenModeForProfile(profileId: string): ScreenStreamMode {
+  const profile = getScreenProfile(profileId);
+  for (const [mode, modeProfileId] of Object.entries(SCREEN_STREAM_MODE_PROFILES)) {
+    if (profile.id === getScreenProfile(modeProfileId).id) return mode as ScreenStreamMode;
+  }
+  return 'custom';
+}
+
+export function getScreenModeSummary(mode: ScreenStreamMode, fallbackProfileId: string = DEFAULT_SCREEN_PROFILE_ID): string {
+  const profile = getScreenProfileForMode(mode, fallbackProfileId);
+  if (mode === 'games') return `Более плавное видео (${profile.label})`;
+  if (mode === 'text') return `Более чёткий текст (${profile.label})`;
+  return `Свои параметры (${profile.label})`;
 }
 
 export function getScreenProfileLabels(profileId: string): { qualityLabel: string; fpsLabel: string } {
@@ -74,9 +95,15 @@ export function getHigherScreenProfileId(profileId: string, ceilingProfileId: st
   return rank < ceilingRank ? SCREEN_ADAPT_PROFILE_ORDER[rank + 1] : '';
 }
 
-export function getPreferredScreenVideoCodec(): 'vp9' | 'h264' {
+export function getPreferredScreenVideoCodec(): 'h264' | 'vp9' | 'vp8' {
   const codecs = RTCRtpSender.getCapabilities?.('video')?.codecs || [];
-  return codecs.some((codec) => /video\/vp9/i.test(codec.mimeType)) ? 'vp9' : 'h264';
+  if (codecs.some((codec) => /video\/h264/i.test(codec.mimeType))) return 'h264';
+  if (codecs.some((codec) => /video\/vp9/i.test(codec.mimeType))) return 'vp9';
+  return 'vp8';
+}
+
+export function getScreenDegradationPreference(contentHint: string): RTCDegradationPreference {
+  return contentHint === 'motion' ? 'maintain-framerate' : 'balanced';
 }
 
 export async function getScreenPublishVideoOptions(profile: ScreenProfile): Promise<TrackPublishOptions> {

@@ -378,6 +378,86 @@ test('participant tiles stay visually uniform and highlight only active speakers
   assert.match(livekit, /RoomEvent\.ActiveSpeakersChanged/);
 });
 
+test('screen share publish tuning applies codec, bitrate, degradation and contentHint contracts', () => {
+  const config = read('src/lib/features/room/client/core/config.ts');
+  const profiles = read('src/lib/features/room/client/media/profiles.ts');
+  const capture = read('src/lib/features/room/client/services/screen-capture-service.ts');
+  const screenShare = read('src/lib/features/room/client/services/screen-share-service.ts');
+
+  assert.match(config, /low:[\s\S]*15: 2_000_000[\s\S]*30: 3_000_000[\s\S]*60: 4_000_000/);
+  assert.match(config, /balanced:[\s\S]*15: 3_000_000[\s\S]*30: 5_000_000[\s\S]*60: 7_000_000/);
+  assert.match(config, /high:[\s\S]*15: 4_000_000[\s\S]*30: 7_000_000[\s\S]*60: 9_000_000/);
+  assert.match(config, /60:[\s\S]*contentHint: 'motion'[\s\S]*frameRate: 60/);
+  assert.match(profiles, /return 'h264'/);
+  assert.match(profiles, /return 'vp9'/);
+  assert.match(profiles, /return 'vp8'/);
+  assert.match(profiles, /getScreenDegradationPreference/);
+  assert.match(capture, /'contentHint' in videoTrack && !videoTrack\.contentHint/);
+  assert.match(screenShare, /await publishLocalScreenTracks\(\);[\s\S]*await applyLocalScreenEncodingProfile\(profile\)/);
+  assert.match(screenShare, /if \(!parameters\.encodings\?\.length\) parameters\.encodings = \[\{\}\]/);
+  assert.match(screenShare, /primaryEncoding\.maxBitrate = profile\.videoBitrate/);
+  assert.match(screenShare, /primaryEncoding\.degradationPreference = degradationPreference/);
+  assert.match(screenShare, /parameters\.degradationPreference = degradationPreference/);
+});
+
+test('screen share quality contract exposes Discord-like modes with custom advanced controls', () => {
+  const config = read('src/lib/features/room/client/core/config.ts');
+  const profiles = read('src/lib/features/room/client/media/profiles.ts');
+  const state = read('src/lib/features/room/client/model/room-state.ts');
+  const screenShare = read('src/lib/features/room/client/services/screen-share-service.ts');
+  const capture = read('src/lib/features/room/client/services/screen-capture-service.ts');
+  const types = read('src/lib/features/room/client/core/types.ts');
+  const dock = read('src/lib/features/room/components/RoomDock.svelte');
+  const overlays = read('src/lib/features/room/components/RoomOverlays.svelte');
+  const picker = read('src/lib/features/room/client/ui/screen-source-picker.ts');
+  const sourceUi = read('src/lib/features/room/screen-source-ui.svelte.ts');
+  const controls = read('src/lib/features/room/styles/controls.css');
+  const overlayStyles = read('src/lib/features/room/styles/overlays.css');
+
+  assert.match(config, /DEFAULT_SCREEN_STREAM_MODE = 'games'/);
+  assert.match(config, /SCREEN_STREAM_MODE_PROFILES = \{[\s\S]*games: 'balanced-30'[\s\S]*text: 'balanced-5'/);
+  assert.match(config, /SCREEN_ADAPT_PROFILE_ORDER = \['low-5', 'balanced-5', 'high-5'/);
+  assert.match(config, /balanced:[\s\S]*5: 1_200_000[\s\S]*15: 3_000_000/);
+  assert.match(config, /high:[\s\S]*5: 1_800_000[\s\S]*15: 4_000_000/);
+  assert.match(config, /low:[\s\S]*5: 800_000[\s\S]*15: 2_000_000/);
+  assert.match(profiles, /export function getScreenProfileForMode/);
+  assert.match(profiles, /export function getScreenModeSummary/);
+  assert.match(state, /localScreenMode: DEFAULT_SCREEN_STREAM_MODE/);
+  assert.match(screenShare, /export function getSelectedScreenProfileId/);
+  assert.match(screenShare, /export function getScreenStreamModeView/);
+  assert.match(screenShare, /export async function selectScreenStreamMode/);
+  assert.match(screenShare, /export async function setCustomScreenQuality/);
+  assert.match(screenShare, /export async function setCustomScreenFps/);
+  assert.match(screenShare, /state\.localScreenTargetProfileId = profile\.id/);
+  assert.doesNotMatch(dock, /screenMenuButton/);
+  assert.match(sourceUi, /mode: 'games' as 'games' \| 'text'/);
+  assert.match(sourceUi, /quality: 'balanced' as 'balanced' \| 'high'/);
+  assert.match(sourceUi, /selectedSourceId: null as string \| null/);
+  assert.match(types, /export interface ScreenSourceSelection extends DesktopPickerSelection/);
+  assert.match(types, /mode: ScreenStreamMode/);
+  assert.match(types, /source: DesktopCaptureSource/);
+  assert.match(picker, /export function confirmScreenSourcePicker/);
+  assert.match(picker, /createScreenProfileId\(qualityId, fpsId\)/);
+  assert.match(picker, /mode: screenSourceUi\.mode/);
+  assert.match(picker, /streamAudioEnabled: screenSourceUi\.audio/);
+  assert.doesNotMatch(picker, /state\.localScreenMode = screenSourceUi\.mode/);
+  assert.doesNotMatch(picker, /state\.localScreenTargetProfileId = profileId/);
+  assert.match(screenShare, /const mode = capture\.mode \|\| getScreenModeForProfile\(profile\.id\)/);
+  assert.match(capture, /const selectedProfile = getDesktopPickerProfile\(selection, profile\)/);
+  assert.match(capture, /const withAudio = selection\.streamAudioEnabled === true/);
+  assert.match(capture, /openDesktopStream\(source\.id, selectedProfile/);
+  assert.match(capture, /return \{ mode: selection\.mode, profile: selectedProfile, stream \}/);
+  assert.match(overlays, /Режим стрима/);
+  assert.match(overlays, /Плавное видео/);
+  assert.match(overlays, /Чёткая картинка/);
+  assert.match(overlays, /screenSourceUi\.mode = 'games'/);
+  assert.match(overlays, /screenSourceUi\.mode = 'text'/);
+  assert.match(overlays, /onclick=\{confirmScreenSourcePicker\}/);
+  assert.doesNotMatch(controls, /\.screen-mode-option/);
+  assert.match(overlayStyles, /\.screen-source-pop-preset/);
+  assert.match(overlayStyles, /\.screen-source-res-btn\[aria-pressed="true"\]/);
+});
+
 test('screen stream thumbnails show profile metadata instead of an action button', () => {
   const overlays = read('src/lib/features/room/components/RoomOverlays.svelte');
   const screenStageControls = read('src/lib/features/room/client/ui/screen-stage-controls.ts');

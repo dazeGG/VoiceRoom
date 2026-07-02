@@ -4,7 +4,10 @@
     NOISE_MODE_SELECT_OPTIONS,
     roomDeviceUi
   } from '$lib/features/room/room-device-ui.svelte';
-  import { GATE_THRESHOLD_MAX_DB, GATE_THRESHOLD_MIN_DB } from '../client/core/config';
+  import {
+    GATE_THRESHOLD_MAX_DB,
+    GATE_THRESHOLD_MIN_DB
+  } from '../client/core/config';
   import {
     closeDevicePopover,
     closeOutputPopover,
@@ -50,6 +53,7 @@
     toggle();
     if (!wasOpen) void refreshDevices();
   }
+
 
 </script>
 
@@ -201,20 +205,22 @@
       </Popover>
     </div>
 
-    <button
-      class="dock-button screen-button"
-      id="screenButton"
-      type="button"
-      aria-pressed={screenControls.ariaPressed}
-      aria-label={screenControls.label}
-      data-state={screenControls.stateName}
-      disabled={screenControls.disabled}
-      onclick={handleScreenButtonClick}
-    >
-      <span class="dock-icon dock-icon-screen" data-icon="screen-share" aria-hidden="true"></span>
-      <span class="dock-icon dock-icon-screen-stop" data-icon="screen-stop" aria-hidden="true"></span>
-      <span class="sr-only" id="screenText">{screenControls.label}</span>
-    </button>
+    <div class="dock-cluster">
+      <button
+        class="dock-button screen-button"
+        id="screenButton"
+        type="button"
+        aria-pressed={screenControls.ariaPressed}
+        aria-label={screenControls.label}
+        data-state={screenControls.stateName}
+        disabled={screenControls.disabled}
+        onclick={handleScreenButtonClick}
+      >
+        <span class="dock-icon dock-icon-screen" data-icon="screen-share" aria-hidden="true"></span>
+        <span class="dock-icon dock-icon-screen-stop" data-icon="screen-stop" aria-hidden="true"></span>
+        <span class="sr-only" id="screenText">{screenControls.label}</span>
+      </button>
+    </div>
 
     <span class="dock-divider" aria-hidden="true"></span>
 
