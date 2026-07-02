@@ -34,14 +34,9 @@ export function confirmScreenSourcePicker(): void {
   const qualityId = screenSourceUi.quality;
   const profileId = createScreenProfileId(qualityId, fpsId);
 
-  state.localScreenMode = screenSourceUi.mode;
-  state.localScreenQualityId = qualityId;
-  state.localScreenFpsId = fpsId;
-  state.localScreenProfileId = profileId;
-  state.localScreenTargetProfileId = profileId;
-
   resolveScreenSourcePicker({
     fpsId,
+    mode: screenSourceUi.mode,
     profileId,
     qualityId,
     source,

@@ -5,7 +5,7 @@ import { createScreenProfileId, getScreenProfile } from '../media/profiles';
 import { createAbortError, disconnectAudioNode, isCaptureCancelled } from '../core/utils';
 import { showScreenSourcePicker } from '../ui/screen-source-picker';
 import { setLocalAppAudioSuppressed } from './media-playback-service';
-import type { DesktopAudioCapture, DesktopPickerSelection, ScreenProfile, ScreenSourceSelection } from '../core/types';
+import type { DesktopAudioCapture, DesktopPickerSelection, ScreenProfile, ScreenSourceSelection, ScreenStreamMode } from '../core/types';
 
 interface CaptureAttemptDetail {
   error: unknown;
@@ -15,6 +15,7 @@ interface CaptureAttemptDetail {
 type CaptureError = Error & { captureAttemptDetails?: CaptureAttemptDetail[] };
 
 export interface ScreenShareCapture {
+  mode?: ScreenStreamMode;
   profile: ScreenProfile;
   stream: MediaStream;
 }
@@ -134,7 +135,7 @@ async function openDesktopScreenShare(profile: ScreenProfile): Promise<ScreenSha
   if (!withAudio) {
     stream = await openDesktopStream(source.id, selectedProfile, { audio: false, audioMode: 'none' });
     await applyScreenCaptureProfile(stream, selectedProfile);
-    return { profile: selectedProfile, stream };
+    return { mode: selection.mode, profile: selectedProfile, stream };
   }
 
   if (hasNativeDesktopSafeAudio()) {
@@ -152,7 +153,7 @@ async function openDesktopScreenShare(profile: ScreenProfile): Promise<ScreenSha
     }
 
     await applyScreenCaptureProfile(stream, selectedProfile);
-    return { profile: selectedProfile, stream };
+    return { mode: selection.mode, profile: selectedProfile, stream };
   }
 
   if (isDesktopApp()) {
@@ -162,7 +163,7 @@ async function openDesktopScreenShare(profile: ScreenProfile): Promise<ScreenSha
       variant: 'error'
     });
     await applyScreenCaptureProfile(stream, selectedProfile);
-    return { profile: selectedProfile, stream };
+    return { mode: selection.mode, profile: selectedProfile, stream };
   }
 
   try {
@@ -182,7 +183,7 @@ async function openDesktopScreenShare(profile: ScreenProfile): Promise<ScreenSha
   }
 
   await applyScreenCaptureProfile(stream, selectedProfile);
-  return { profile: selectedProfile, stream };
+  return { mode: selection.mode, profile: selectedProfile, stream };
 }
 
 async function openDesktopScreenShareWithPicker(profile: ScreenProfile): Promise<ScreenShareCapture> {

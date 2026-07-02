@@ -68,6 +68,7 @@ export interface DesktopPickerSelection {
 }
 
 export interface ScreenSourceSelection extends DesktopPickerSelection {
+  mode: ScreenStreamMode;
   source: DesktopCaptureSource;
 }
 

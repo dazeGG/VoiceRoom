@@ -113,6 +113,7 @@ export async function startScreenShare(profileId: string = getSelectedScreenProf
     const capture = await openScreenShare(profile);
     const stream = capture.stream;
     profile = capture.profile || profile;
+    const mode = capture.mode || getScreenModeForProfile(profile.id);
     const [videoTrack] = stream.getVideoTracks();
     if (!videoTrack) {
       stopLocalScreenAudioCapture();
@@ -122,7 +123,7 @@ export async function startScreenShare(profileId: string = getSelectedScreenProf
     }
 
     state.localScreenStream = stream;
-    applyLocalScreenProfileState(profile, getScreenModeForProfile(profile.id));
+    applyLocalScreenProfileState(profile, mode);
     resetLocalScreenAdaptation();
     state.screenStopping = false;
     setLocalAppAudioSuppressed(false);
