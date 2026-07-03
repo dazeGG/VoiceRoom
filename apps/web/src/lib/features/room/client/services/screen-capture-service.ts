@@ -566,6 +566,16 @@ async function selectDesktopCaptureSource(): Promise<ScreenSourceSelection> {
 }
 
 export async function applyScreenCaptureProfile(stream: MediaStream, profile: ScreenProfile): Promise<void> {
+  const bridge = window.voiceRoomDesktopCapture;
+  if (typeof bridge?.applyProfile === 'function') {
+    try {
+      const result = await bridge.applyProfile({ fpsId: profile.fpsId, qualityId: profile.qualityId });
+      if (result?.ok) return;
+    } catch (error) {
+      console.warn('Desktop applyProfile failed, falling back to constraints', error);
+    }
+  }
+
   const [videoTrack] = stream.getVideoTracks();
   if (!videoTrack) return;
 
