@@ -58,10 +58,13 @@ export interface ScreenMetaView {
   title: string;
   qualityLabel: string;
   fpsLabel: string;
+  captureLabel: string;
   showQuality: boolean;
   showFps: boolean;
+  showCapture: boolean;
   showSepProfile: boolean;
   showSepFps: boolean;
+  showSepCapture: boolean;
   showViewers: boolean;
   showSepViewers: boolean;
   viewerAvatars: AvatarStackItem[];
@@ -69,23 +72,31 @@ export interface ScreenMetaView {
 
 export function getScreenMetaView(): ScreenMetaView | null {
   void screenUi.revision;
+  void state.localScreenStats;
   const participant = getActiveScreenPeer();
   if (!participant || !screenUi.showMeta) return null;
 
   const profileId = participant.isLocal ? state.localScreenProfileId : participant.screenProfileId;
   const { qualityLabel, fpsLabel } = getScreenProfileLabels(profileId);
   const viewers = getScreenViewers(participant.id);
+  const captureStats = participant.isLocal ? state.localScreenStats : null;
+  const captureLabel = captureStats?.captureFramesReceived !== undefined
+    ? `захват: ${captureStats.captureFramesReceived}/${captureStats.captureFramesWritten ?? 0}/${captureStats.captureDropsBackpressure ?? 0}`
+    : '';
 
   return {
     title: participant.isLocal ? 'Ваш стрим' : `Стрим ${participant.name}`,
     qualityLabel,
     fpsLabel,
+    captureLabel,
     showQuality: Boolean(qualityLabel),
     showFps: Boolean(fpsLabel),
+    showCapture: Boolean(captureLabel),
     showSepProfile: Boolean(qualityLabel),
     showSepFps: Boolean(qualityLabel && fpsLabel),
+    showSepCapture: Boolean(qualityLabel || fpsLabel || captureLabel),
     showViewers: true,
-    showSepViewers: Boolean(qualityLabel || fpsLabel),
+    showSepViewers: Boolean(qualityLabel || fpsLabel || captureLabel),
     viewerAvatars: viewers.map(getViewerAvatarItem)
   };
 }

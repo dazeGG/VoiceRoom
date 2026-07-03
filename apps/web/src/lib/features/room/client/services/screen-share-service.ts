@@ -269,12 +269,18 @@ async function updateLocalScreenStats(): Promise<void> {
   const track = publication?.track;
   const stats = await track?.getRTCStatsReport?.();
   const parsed = parseLocalScreenStats(stats, state.localScreenStatsPrevious);
+  const captureStats = readNativeCaptureStats(state.localScreenStatsPrevious);
   const [mediaTrack] = state.localScreenStream.getVideoTracks();
   const settings = mediaTrack?.getSettings?.() || {};
 
   state.localScreenStats = {
     availableOutgoingBitrate: parsed.availableOutgoingBitrate ?? 0,
     bitrate: parsed.bitrate || track?.currentBitrate || 0,
+    captureDropsBackpressure: captureStats.captureDropsBackpressure,
+    captureDropsBackpressureDelta: captureStats.captureDropsBackpressureDelta,
+    captureFramesReceived: captureStats.captureFramesReceived,
+    captureFramesWritten: captureStats.captureFramesWritten,
+    captureRelayRestarts: captureStats.captureRelayRestarts,
     codec: parsed.codec || (track as { codec?: string } | undefined)?.codec || getPreferredScreenVideoCodec(),
     firCount: parsed.firCount ?? 0,
     firDelta: parsed.firDelta ?? 0,
@@ -295,7 +301,9 @@ async function updateLocalScreenStats(): Promise<void> {
     rttMs: parsed.rttMs ?? null,
     width: parsed.width || settings.width || 0
   };
-  state.localScreenStatsPrevious = parsed.previous;
+  state.localScreenStatsPrevious = parsed.previous
+    ? { ...parsed.previous, ...captureStats.previous }
+    : null;
 
   const peer = getActiveScreenPeer();
   if (peer?.isLocal) refreshScreenMeta(peer);
@@ -309,6 +317,40 @@ function findLocalScreenVideoPublication(): LocalTrackPublication | null {
     if (track?.kind === 'video' || track?.mediaStreamTrack?.kind === 'video') return publication;
   }
   return null;
+}
+
+function readNativeCaptureStats(previous: ScreenStatsPrevious | null): {
+  captureDropsBackpressure?: number;
+  captureDropsBackpressureDelta?: number;
+  captureFramesReceived?: number;
+  captureFramesWritten?: number;
+  captureRelayRestarts?: number;
+  previous: Partial<ScreenStatsPrevious>;
+} {
+  if (typeof window.__voiceRoomNativeCaptureStats !== 'function') {
+    return { previous: {} };
+  }
+
+  const snapshot = window.__voiceRoomNativeCaptureStats();
+  const captureFramesReceived = Number(snapshot.framesReceived || 0);
+  const captureFramesWritten = Number(snapshot.framesWritten || 0);
+  const captureDropsBackpressure = Number(snapshot.framesDroppedBackpressure || 0);
+  const captureRelayRestarts = Number(snapshot.relay?.restarts || 0);
+
+  return {
+    captureDropsBackpressure,
+    captureDropsBackpressureDelta: previous?.captureDropsBackpressure === undefined
+      ? 0
+      : Math.max(0, captureDropsBackpressure - Number(previous.captureDropsBackpressure || 0)),
+    captureFramesReceived,
+    captureFramesWritten,
+    captureRelayRestarts,
+    previous: {
+      captureDropsBackpressure,
+      captureFramesReceived,
+      captureFramesWritten
+    }
+  };
 }
 
 function parseLocalScreenStats(stats: RTCStatsReport | undefined, previous: ScreenStatsPrevious | null): ParsedScreenStats {
@@ -448,7 +490,9 @@ function getLocalScreenStatsHealth(stats: NonNullable<typeof state.localScreenSt
   const bandwidthLimited = stats.qualityLimitationReason === 'bandwidth';
   const bitrateConstrained = availableOutgoingBitrate > 0 && availableOutgoingBitrate < profile.videoBitrate * 0.72;
   const receiverPressure = Number(stats.nackDelta || 0) >= 8 || Number(stats.pliDelta || 0) > 0 || Number(stats.firDelta || 0) > 0;
-  const encoderPressure = Number(stats.framesDroppedDelta || 0) >= Math.max(3, Math.round(profile.frameRate * 0.25));
+  const captureBackpressure = Number(stats.captureDropsBackpressureDelta || 0) >= Math.max(2, Math.round(profile.frameRate * 0.2));
+  const encoderPressure = captureBackpressure
+    || Number(stats.framesDroppedDelta || 0) >= Math.max(3, Math.round(profile.frameRate * 0.25));
   const poorLoss = lossPct >= 5;
   const poorRtt = rttMs >= 650;
   const goodLoss = !stats.lossPct || lossPct < 1;

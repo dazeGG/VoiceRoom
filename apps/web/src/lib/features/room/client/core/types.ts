@@ -75,6 +75,11 @@ export interface ScreenSourceSelection extends DesktopPickerSelection {
 export interface ScreenStatsSnapshot {
   availableOutgoingBitrate: number;
   bitrate: number;
+  captureDropsBackpressure?: number;
+  captureDropsBackpressureDelta?: number;
+  captureFramesReceived?: number;
+  captureFramesWritten?: number;
+  captureRelayRestarts?: number;
   codec: string;
   firCount: number;
   firDelta: number;
@@ -98,6 +103,9 @@ export interface ScreenStatsSnapshot {
 
 export interface ScreenStatsPrevious {
   bytesSent: number;
+  captureDropsBackpressure?: number;
+  captureFramesReceived?: number;
+  captureFramesWritten?: number;
   firCount: number;
   framesDropped: number;
   framesEncoded: number;
@@ -238,6 +246,16 @@ interface DesktopAudioFormatEvent {
 declare global {
   interface Window {
     voiceRoomDesktopCapture?: {
+      applyProfile?: (options: {
+        fpsId?: string;
+        qualityId?: string;
+      }) => Promise<{
+        fpsId?: string;
+        maxHeight?: number;
+        ok: boolean;
+        qualityId?: string;
+        reason?: string;
+      }>;
       openPicker?: (options: {
         fpsId?: string;
         qualityId?: string;
@@ -248,6 +266,18 @@ declare global {
         sourceId: string,
         options: { allowEchoFallback?: boolean; enabled?: boolean; mode?: string }
       ) => Promise<void>;
+    };
+    __voiceRoomNativeCaptureStats?: () => {
+      framesDroppedBackpressure?: number;
+      framesDroppedCreate?: number;
+      framesReceived?: number;
+      framesWritten?: number;
+      relay?: {
+        framesParsed?: number;
+        framesPosted?: number;
+        restarts?: number;
+      } | null;
+      sessionId?: string;
     };
     voiceRoomDesktopAudio?: {
       startSafeSystem: (options: { mode: string }) => Promise<{ sessionId: string }>;
