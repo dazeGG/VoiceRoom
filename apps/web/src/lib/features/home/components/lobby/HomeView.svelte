@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { AvatarStack } from '$lib/shared/ui';
+  import { AvatarStack, Ellipsis } from '$lib/shared/ui';
   import type { AuthUser, OwnedRoom } from '$lib/api/auth';
   import { roomPresence } from '../../model/room-presence.svelte';
   import { roomPeerAvatarItems } from '../../model/room-avatars';
@@ -81,7 +81,7 @@
             <div class="lobby-room-card-head">
               <span class="lobby-tile" style={`width:46px;height:46px;font-size:23px;background:${visual.background};box-shadow:0 0 0 1px ${visual.ring}`}>{visual.emoji}</span>
               <div style="min-width:0;flex:1;">
-                <div class="lobby-room-card-name">{roomDisplayName(room)}</div>
+                <Ellipsis text={roomDisplayName(room)} class="lobby-room-card-name" tag="div" />
                 <div class="lobby-room-card-meta">{room.peers} в эфире</div>
               </div>
             </div>
