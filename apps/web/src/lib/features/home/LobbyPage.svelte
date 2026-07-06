@@ -109,9 +109,14 @@
     void refreshRooms();
     const teardownFriends = user ? initLobby(user.id) : () => {};
     const teardownRooms = user
-      ? initLobbyRoomRealtime((updater) => {
-          rooms = updater(rooms);
-        })
+      ? initLobbyRoomRealtime(
+          (updater) => {
+            rooms = updater(rooms);
+          },
+          () => {
+            void refreshRooms();
+          }
+        )
       : () => {};
 
     function onEmbeddedLeave(event: Event): void {

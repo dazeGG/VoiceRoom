@@ -110,9 +110,12 @@ function createConnectionRegistry({
     let delivered = 0;
     const failed = [];
     for (const connection of set) {
+      // Do not touch lastHeartbeatAt here: a successful send only means the
+      // frame was queued locally, not that the client is alive. Liveness is
+      // tracked from inbound ping/hello frames so pruneStale can reap
+      // half-open sockets that still accept writes.
       if (sendToConnection(connection, envelope)) {
         delivered += 1;
-        connection.lastHeartbeatAt = Date.now();
       } else {
         failed.push(connection);
       }
@@ -141,8 +144,10 @@ function createConnectionRegistry({
 
   function pruneStale(now = Date.now()) {
     const stale = [];
+    // 5x keepalive: background tabs throttle timers, so a healthy client's
+    // ping interval can stretch to ~60s; 3x (45s) would reap live tabs.
     for (const connection of connections.values()) {
-      if (now - connection.lastHeartbeatAt > keepaliveMs * 3) stale.push(connection);
+      if (now - connection.lastHeartbeatAt > keepaliveMs * 5) stale.push(connection);
     }
     for (const connection of stale) {
       try {
