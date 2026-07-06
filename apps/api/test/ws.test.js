@@ -9,6 +9,7 @@ const path = require('node:path');
 const os = require('node:os');
 const WebSocket = require('ws');
 const { createTestDatabase } = require('./db-harness');
+const { joinVoiceRoom, openWs: openHarnessWs, waitForWsType } = require('./ws-harness');
 
 function getSocketPath() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'voice-room-ws-'));
@@ -176,6 +177,54 @@ test('ws accepts guest connections with guest ready payload', async (t) => {
   const ready = await guest.ready;
   assert.equal(ready.payload.guest, true);
   guest.ws.close();
+});
+
+test('ws pushes room summaries to authenticated users right after ready', async (t) => {
+  const { dir, socketPath } = getSocketPath();
+  const { cleanup, databaseUrl } = await createTestDatabase(t);
+  const logs = { stdout: '', stderr: '' };
+  const child = startServer(socketPath, databaseUrl, logs);
+  t.after(() => {
+    child.kill('SIGTERM');
+    fs.rmSync(dir, { recursive: true, force: true });
+    return cleanup();
+  });
+
+  await waitForHealthz(socketPath);
+
+  const ownerCookie = await register(socketPath, 'roomowner');
+  const created = await request(socketPath, {
+    method: 'POST',
+    pathname: '/api/rooms',
+    cookie: ownerCookie,
+    body: { isStatic: true, name: 'Летучка' }
+  });
+  assert.equal(created.status, 201);
+  const roomId = created.body.roomId;
+
+  const guest = openHarnessWs(socketPath);
+  await guest.ready;
+  await joinVoiceRoom(guest, {
+    roomId,
+    peerId: 'guest-peer-summary-1',
+    sessionToken: 'g'.repeat(32),
+    name: 'Гость'
+  });
+
+  // The owner's lobby connection must learn the live roster without waiting
+  // for the next room event: a room.summary push follows `ready`.
+  const owner = openHarnessWs(socketPath, { cookie: ownerCookie });
+  await owner.ready;
+  const summary = await waitForWsType(
+    owner.frames,
+    'room.summary',
+    (frame) => frame.payload?.room?.roomId === roomId
+  );
+  assert.equal(summary.payload.room.visiblePeers.length, 1);
+  assert.equal(summary.payload.room.visiblePeers[0].name, 'Гость');
+
+  guest.ws.close();
+  owner.ws.close();
 });
 
 test('ws ready and friend.presence work for authenticated users', async (t) => {

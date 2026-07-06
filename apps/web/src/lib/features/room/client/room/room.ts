@@ -50,7 +50,7 @@ import {
   refreshMicrophoneLevelMeter
 } from '../ui/devices';
 import { GATE_THRESHOLD_MIN_DB } from '../core/config';
-import type { RealtimeEvent } from '$lib/api/realtime';
+import { getAppRealtime, type RealtimeEvent } from '$lib/api/realtime';
 import {
   ensureAppRealtimeConnected,
   joinVoiceRoom,
@@ -246,11 +246,20 @@ export async function joinRoom(event?: Event): Promise<void> {
 
     ensureAppRealtimeConnected();
     state.voiceRealtimeTeardown?.();
-    state.voiceRealtimeTeardown = subscribeRoomVoice(state.roomId, (event) => {
+    const detachVoiceEvents = subscribeRoomVoice(state.roomId, (event) => {
       handleVoiceRealtimeEvent(event).catch((err) => {
         console.error('Voice realtime handler failed', err);
       });
     });
+    // Surface WS drops in the status pill; the snapshot that follows the
+    // automatic re-join flips it back to 'connected'.
+    const detachConnState = getAppRealtime().onStateChange((connected) => {
+      setServerConnectionStatus(connected ? 'connecting' : 'reconnecting');
+    });
+    state.voiceRealtimeTeardown = () => {
+      detachConnState();
+      detachVoiceEvents();
+    };
     joinVoiceRoom({
       roomId: state.roomId,
       peerId: state.peerId,

@@ -188,7 +188,11 @@ test('room chat terminal lifecycle frames leave the room screen', () => {
   assert.match(chat, /applyRoomNotFound/);
   assert.match(chat, /event\.type === 'room\.not_found'[\s\S]*applyRoomNotFound\(event\.payload\.roomId\)/);
   assert.match(chat, /event\.type === 'room\.deleted'[\s\S]*applyRoomDeleted\(event\.payload\.roomId\)/);
-  assert.match(chat, /getAppRealtime\(\)\.subscribe/);
+  // Chat must hold a server-side preview subscription: the API only routes
+  // room events to preview subscribers or active voice peers, so a bare
+  // connection-level subscribe would go silent until the user joins voice.
+  assert.match(chat, /subscribeRoomPreview\(roomId/);
+  assert.doesNotMatch(chat, /getAppRealtime\(\)\.subscribe/);
 });
 
 

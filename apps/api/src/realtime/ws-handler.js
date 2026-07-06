@@ -83,15 +83,18 @@ function createWsHandler({
   async function handleConnection(socket, req) {
     const session = await resolveSessionUser(req);
     const sessionUser = session?.user || null;
-    const connection = sessionUser
-      ? registry.addConnection(sessionUser.id, socket)
-      : registry.addGuestConnection(socket);
 
+    // Check the limit before registering: adding first and then removing would
+    // count the doomed connection toward the limit (off-by-one) and flap the
+    // user's presence for friends when it was their first connection.
     if (sessionUser && registry.rejectOverLimit(sessionUser.id)) {
-      registry.removeConnection(connection);
       socket.close(4429, 'Too many connections');
       return;
     }
+
+    const connection = sessionUser
+      ? registry.addConnection(sessionUser.id, socket)
+      : registry.addGuestConnection(socket);
 
     if (sessionUser) {
       let friendIds = [];
@@ -104,6 +107,7 @@ function createWsHandler({
         userId: sessionUser.id,
         onlineFriendIds: friendIds.filter((friendId) => isUserOnline(friendId))
       });
+      void roomRuntime.sendAccountSummaries(connection, sessionUser.id);
     } else {
       registry.sendReady(connection, { guest: true });
     }

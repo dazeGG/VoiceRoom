@@ -21,6 +21,35 @@ function dispatchRoomDetail(roomId: string, event: RealtimeEvent): void {
   for (const handler of handlers) handler(event);
 }
 
+// One shared connection subscription fans events out to per-room handlers.
+// A subscription per subscribeRoom* call would dispatch every event once per
+// subscriber of that room (preview + voice on the same room = duplicates).
+let detailDispatchUnsub: (() => void) | null = null;
+let detailDispatchRefs = 0;
+
+function retainDetailDispatch(): void {
+  detailDispatchRefs += 1;
+  if (detailDispatchUnsub) return;
+  detailDispatchUnsub = getAppRealtime().subscribe((event) => {
+    if (event.type === 'pong') {
+      // Heartbeat has no roomId; every room handler may use it as liveness.
+      for (const roomId of detailHandlers.keys()) dispatchRoomDetail(roomId, event);
+      return;
+    }
+    for (const roomId of detailHandlers.keys()) {
+      if (roomDetailEventTargetsRoom(event, roomId)) dispatchRoomDetail(roomId, event);
+    }
+  });
+}
+
+function releaseDetailDispatch(): void {
+  detailDispatchRefs = Math.max(0, detailDispatchRefs - 1);
+  if (detailDispatchRefs === 0) {
+    detailDispatchUnsub?.();
+    detailDispatchUnsub = null;
+  }
+}
+
 let lobbyHooked = false;
 let activeVoiceJoin: {
   roomId: string;
@@ -44,9 +73,13 @@ function ensureReconnectRestore(): void {
 }
 
 export function initLobbyRoomRealtime(
-  onRoomsUpdate: (updater: (rooms: import('$lib/api/auth').OwnedRoom[]) => import('$lib/api/auth').OwnedRoom[]) => void
+  onRoomsUpdate: (updater: (rooms: import('$lib/api/auth').OwnedRoom[]) => import('$lib/api/auth').OwnedRoom[]) => void,
+  onReconnect?: () => void
 ): () => void {
   const conn = getAppRealtime();
+  // Rosters resync via the room.summary push that follows `ready`; the rooms
+  // list itself (created/deleted/renamed while offline) needs a refetch.
+  const offRestore = onReconnect ? conn.onRestore(onReconnect) : null;
   const unsubscribe = conn.subscribe((event) => {
     if (event.type === 'room.summary') {
       applyRoomSummary(event.payload.room);
@@ -89,6 +122,7 @@ export function initLobbyRoomRealtime(
   lobbyHooked = true;
   return () => {
     lobbyHooked = false;
+    offRestore?.();
     unsubscribe();
   };
 }
@@ -102,6 +136,7 @@ export function subscribeRoomPreview(roomId: string, handler: RoomDetailHandler)
     detailHandlers.set(roomId, handlers);
   }
   handlers.add(handler);
+  retainDetailDispatch();
 
   const count = (previewSubscriptions.get(roomId) ?? 0) + 1;
   previewSubscriptions.set(roomId, count);
@@ -109,15 +144,10 @@ export function subscribeRoomPreview(roomId: string, handler: RoomDetailHandler)
     conn.send('room.preview.subscribe', { roomId });
   }
 
-  const unsubscribe = conn.subscribe((event) => {
-    if (!roomDetailEventTargetsRoom(event, roomId)) return;
-    dispatchRoomDetail(roomId, event);
-  });
-
   return () => {
     handlers?.delete(handler);
     if (handlers && handlers.size === 0) detailHandlers.delete(roomId);
-    unsubscribe();
+    releaseDetailDispatch();
 
     const next = (previewSubscriptions.get(roomId) ?? 1) - 1;
     if (next <= 0) {
@@ -130,23 +160,18 @@ export function subscribeRoomPreview(roomId: string, handler: RoomDetailHandler)
 }
 
 export function subscribeRoomVoice(roomId: string, handler: RoomDetailHandler): () => void {
-  const conn = getAppRealtime();
   let handlers = detailHandlers.get(roomId);
   if (!handlers) {
     handlers = new Set();
     detailHandlers.set(roomId, handlers);
   }
   handlers.add(handler);
-
-  const unsubscribe = conn.subscribe((event) => {
-    if (!roomDetailEventTargetsRoom(event, roomId)) return;
-    dispatchRoomDetail(roomId, event);
-  });
+  retainDetailDispatch();
 
   return () => {
     handlers?.delete(handler);
     if (handlers && handlers.size === 0) detailHandlers.delete(roomId);
-    unsubscribe();
+    releaseDetailDispatch();
   };
 }
 

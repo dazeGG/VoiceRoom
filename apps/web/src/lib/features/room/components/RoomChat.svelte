@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { getAppRealtime } from '$lib/api/realtime';
   import { fetchRoomChat, postRoomChat, type ChatMessage } from '$lib/api/rooms';
+  import { subscribeRoomPreview } from '$lib/features/home/model/room-realtime';
   import { cleanDisplayName } from '$lib/shared/utils/text';
   import { getAvatarColor } from '$lib/visual/tokens';
   import { getRoomIdFromPath, getStoredPeerSession } from '../client/core/session';
@@ -96,21 +96,33 @@
 
     const controller = new AbortController();
     void refreshMessages(controller.signal);
-    const unsubscribe = getAppRealtime().subscribe((event) => {
-      if (event.type === 'room.not_found' && event.payload.roomId === roomId) {
+    // Server-side preview subscription: without it the API only routes room
+    // events (chat included) to active voice peers, so a user who opened the
+    // room page but had not joined voice never received realtime messages.
+    // It also re-subscribes after a WS reconnect and backfills missed
+    // messages from the fresh room.snapshot.
+    const unsubscribe = subscribeRoomPreview(roomId, (event) => {
+      if (event.type === 'room.not_found') {
         applyRoomNotFound(event.payload.roomId);
         error = 'Комната не найдена';
         return;
       }
-      if (event.type === 'room.updated' && event.payload.room.roomId === roomId) {
+      if (event.type === 'room.updated') {
         applyRoomUpdated(event.payload.room);
         return;
       }
-      if (event.type === 'room.deleted' && event.payload.roomId === roomId) {
+      if (event.type === 'room.deleted') {
         applyRoomDeleted(event.payload.roomId);
         return;
       }
-      if (event.type !== 'room.chat.message' || event.payload.roomId !== roomId) return;
+      if (event.type === 'room.snapshot') {
+        if (Array.isArray(event.payload.recentMessages)) {
+          mergeMessages(event.payload.recentMessages);
+          loading = false;
+        }
+        return;
+      }
+      if (event.type !== 'room.chat.message') return;
       const message = event.payload.message;
       if (!message?.id || messageIds.has(message.id) || messages.some((item) => item.id === message.id)) return;
       messageIds.add(message.id);
@@ -129,6 +141,22 @@
       unsubscribe();
     };
   });
+
+  // Union the server's recent-message window with what's already rendered:
+  // keeps locally-appended messages the window may race past and stays
+  // idempotent for the duplicate snapshots a resubscribe can produce.
+  function mergeMessages(recent: ChatMessage[]): void {
+    const known = new Set(messages.map((item) => item.id));
+    const incoming = recent.filter((item) => item?.id && !known.has(item.id));
+    if (incoming.length === 0) return;
+    error = '';
+    for (const item of incoming) messageIds.add(item.id);
+    messages = [...messages, ...incoming].sort((a, b) => a.createdAt - b.createdAt);
+    if (roomUi.chatOpen) {
+      markChatRead();
+      queueMicrotask(scrollToBottom);
+    }
+  }
 
   async function refreshMessages(signal?: AbortSignal): Promise<void> {
     if (!roomId) return;

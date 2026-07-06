@@ -84,6 +84,8 @@ class AppRealtimeConnection {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private outboundQueue: string[] = [];
   private restoreHandlers = new Set<() => void>();
+  private stateHandlers = new Set<(connected: boolean) => void>();
+  private everConnected = false;
 
   subscribe(handler: (event: RealtimeEvent) => void): () => void {
     this.handlers.add(handler);
@@ -150,9 +152,16 @@ class AppRealtimeConnection {
     this.socket.onopen = () => {
       this.reconnectAttempt = 0;
       this.send('hello', {});
-      for (const restore of this.restoreHandlers) restore();
+      // Restore handlers replay subscriptions lost with the previous socket.
+      // On the very first open the originals are still sitting in the
+      // outbound queue, so replaying would double-send them.
+      if (this.everConnected) {
+        for (const restore of this.restoreHandlers) restore();
+      }
+      this.everConnected = true;
       this.flushQueue();
       this.startHeartbeat();
+      this.emitState(true);
     };
     this.socket.onmessage = (event) => {
       let envelope: ServerEnvelope | null = null;
@@ -167,6 +176,7 @@ class AppRealtimeConnection {
     this.socket.onclose = () => {
       this.clearTimers();
       this.socket = null;
+      this.emitState(false);
       this.scheduleReconnect();
     };
     this.socket.onerror = () => {
@@ -179,6 +189,18 @@ class AppRealtimeConnection {
     return () => {
       this.restoreHandlers.delete(handler);
     };
+  }
+
+  // Connection liveness for UI indicators: true on socket open, false on loss.
+  onStateChange(handler: (connected: boolean) => void): () => void {
+    this.stateHandlers.add(handler);
+    return () => {
+      this.stateHandlers.delete(handler);
+    };
+  }
+
+  private emitState(connected: boolean): void {
+    for (const handler of this.stateHandlers) handler(connected);
   }
 
   ensureConnected(): void {

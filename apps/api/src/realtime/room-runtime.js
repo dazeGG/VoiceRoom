@@ -239,6 +239,9 @@ function createRoomRealtimeRuntime(deps) {
     }
 
     if (!reconnecting) {
+      // A new account member must be part of the summary audience right away,
+      // not after the 30s recipient cache expires.
+      invalidateRecipientCache(roomId);
       broadcast(room, { type: 'peer-joined', peer: publicPeer(peer) }, peerId);
       mirrorLegacyRoomEvent(roomId, { type: 'peer-joined', peer: publicPeer(peer) });
       scheduleSummaryBroadcast(roomId);
@@ -295,6 +298,27 @@ function createRoomRealtimeRuntime(deps) {
     return { ok: true, peer: publicPeer(peer) };
   }
 
+  // Push current summaries for every room visible to the account over one
+  // connection. Runs right after `ready` so the lobby renders live rosters on
+  // first load and resyncs after a reconnect (including clearing stale ones —
+  // empty rooms are sent too).
+  async function sendAccountSummaries(connection, userId) {
+    if (!userId) return;
+    let rooms = [];
+    try {
+      rooms = await getRoomStore().listVisibleRoomsForUser(userId);
+    } catch (error) {
+      console.error('Failed to list rooms for WS ready summaries:', error);
+      return;
+    }
+    for (const dbRoom of rooms) {
+      const presence = presenceRooms.get(dbRoom.id);
+      const peers = presence ? Array.from(presence.peers.values()).map(publicPeer) : [];
+      const summary = buildRoomRealtimeSummaryFromLobbyRoom(publicLobbyRoom(dbRoom), peers, avatarColorForPeerId);
+      wsRegistry.sendToConnection(connection, buildServerEnvelope('room.summary', { room: summary }));
+    }
+  }
+
   function cleanupConnection(connection) {
     if (connection.activeVoice) {
       void leaveVoiceRoom(connection, connection.activeVoice);
@@ -313,6 +337,7 @@ function createRoomRealtimeRuntime(deps) {
     leaveVoiceRoom,
     mirrorLegacyRoomEvent,
     scheduleSummaryBroadcast,
+    sendAccountSummaries,
     subscribePreview,
     unsubscribePreview,
     updatePeerState

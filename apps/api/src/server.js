@@ -363,6 +363,19 @@ async function pruneRooms(now = Date.now()) {
 }
 
 function startPruneTimer(server, logger = console) {
+  // Reap WS connections whose clients stopped heartbeating (half-open sockets
+  // never emit 'close'), otherwise dead peers linger in rosters and friends
+  // stay "online" forever.
+  const wsTimer = setInterval(() => {
+    try {
+      wsRegistry?.pruneStale();
+    } catch (error) {
+      logger.error('WS prune timer failed:', error);
+    }
+  }, KEEPALIVE_MS);
+  if (typeof wsTimer.unref === 'function') wsTimer.unref();
+  server.once('close', () => clearInterval(wsTimer));
+
   if (ROOM_PRUNE_INTERVAL_MS <= 0) return null;
 
   const timer = setInterval(() => {
