@@ -51,36 +51,44 @@
 .lobby-brand img { display: block; border-radius: 9px; }
 .lobby-brand-name { flex: 1; min-width: 0; font-weight: 700; font-size: 15.5px; letter-spacing: -0.01em; }
 
-.lobby-switch {
-  margin: 0 16px 14px;
+.lobby-side-head { padding: 0 16px; display: flex; flex-direction: column; gap: 10px; }
+
+.lobby-sec-head {
   display: flex;
-  gap: 4px;
-  background: #0c0b08;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 12px;
-  padding: 4px;
+  align-items: center;
+  justify-content: space-between;
+  margin: 4px 16px 10px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #6f6a5c;
 }
-.lobby-switch-btn {
-  flex: 1;
+.lobby-mini-btn {
+  position: relative;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: #8a8475;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 7px;
-  border: none;
-  border-radius: 9px;
-  background: transparent;
-  color: #8a8475;
-  font-family: var(--font-sans);
-  font-size: 13px;
-  font-weight: 700;
-  padding: 9px 0;
   cursor: pointer;
   transition: background 0.15s ease, color 0.15s ease;
 }
-.lobby-switch-btn.is-active { background: rgba(255, 255, 255, 0.08); color: #ece7d9; }
-.lobby-switch-btn:not(.is-active):hover { color: #cfc9ba; }
-
-.lobby-side-head { padding: 0 16px; display: flex; flex-direction: column; gap: 10px; }
+.lobby-mini-btn:hover { background: rgba(255, 255, 255, 0.08); color: #cfc9ba; }
+.lobby-mini-btn-dot {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #d8634a;
+  box-shadow: 0 0 0 2px #100f0b;
+}
 
 .lobby-search {
   display: flex;
@@ -135,25 +143,6 @@
   background: rgba(255, 255, 255, 0.11);
 }
 
-.lobby-add-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  width: 100%;
-  border: none;
-  border-radius: 11px;
-  background: rgba(255, 255, 255, 0.06);
-  color: #ece7d9;
-  padding: 11px 0;
-  font-family: var(--font-sans);
-  font-size: 13.5px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: background 0.15s ease;
-}
-.lobby-add-btn:hover { background: rgba(255, 255, 255, 0.11); }
-
 /* cream primary button (create room / send request / accept) */
 .lobby-primary {
   display: flex;
@@ -175,38 +164,9 @@
 }
 .lobby-primary:hover { background: #e7e1d1; }
 .lobby-primary:disabled { opacity: 0.6; cursor: default; }
+.lobby-primary--inline { width: auto; padding: 0 18px; height: 44px; }
 
 .lobby-pane { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-
-.lobby-requests-row {
-  margin: 12px 12px 4px;
-  display: flex;
-  align-items: center;
-  gap: 11px;
-  padding: 10px 12px;
-  border-radius: 11px;
-  background: transparent;
-  border: none;
-  width: calc(100% - 24px);
-  cursor: pointer;
-  transition: background 0.14s ease;
-  color: inherit;
-  text-align: left;
-}
-.lobby-requests-row:hover { background: rgba(255, 255, 255, 0.06); }
-.lobby-requests-icon {
-  flex: none;
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
-  background: rgba(79, 174, 116, 0.14);
-  border: 1px solid rgba(79, 174, 116, 0.34);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #7ec99a;
-}
-.lobby-requests-label { flex: 1; font-size: 14px; font-weight: 600; color: #e7e2d4; }
 
 .lobby-badge {
   flex: none;
@@ -422,6 +382,21 @@ html.is-desktop .sidebar-download { display: none; }
 
 .lobby-grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
 .lobby-grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.lobby-grid-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; }
+
+.lobby-rooms-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 34px 0 18px;
+}
+.lobby-rooms-head-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+
+@media (max-width: 980px) {
+  .lobby-grid-cards { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+}
 
 /* friend card (home) */
 .lobby-friend-card {
@@ -986,6 +961,34 @@ html.is-desktop .sidebar-download { display: none; }
 }
 
 /* add friend */
+.lobby-add-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; max-width: 520px; }
+.lobby-add-hint {
+  margin-top: 12px;
+  font-size: 12.5px;
+  color: #8a8475;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.lobby-add-hint code { font-family: var(--font-mono); font-size: 12.5px; color: #cfc9ba; }
+.lobby-add-copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: #cfc9ba;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 4px;
+  border-radius: 6px;
+  transition: background 0.15s ease;
+}
+.lobby-add-copy:hover { background: rgba(255, 255, 255, 0.08); }
+
 .lobby-add-form { display: flex; gap: 9px; }
 .lobby-add-field {
   flex: 1;
