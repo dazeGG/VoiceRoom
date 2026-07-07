@@ -1,6 +1,6 @@
 import { closeParticipantContextMenu } from '../../participant-context-ui.svelte';
 import { bumpParticipantsRevision, participantsUi } from '../../participants-ui.svelte';
-import { state } from '../core/state.svelte';
+import { reactiveParticipant, state } from '../core/state.svelte';
 import { getScreenProfile } from '../media/profiles';
 import {
   applyAudioOutputDevice,
@@ -126,12 +126,15 @@ export function createParticipant(peerInfo: PeerInfo): Participant {
     return existing;
   }
 
-  const participant = createParticipantModel(peerInfo, isLocal);
+  const model = createParticipantModel(peerInfo, isLocal);
 
-  if (participant.isLocal) {
-    state.self = participant;
+  let participant: Participant;
+  if (model.isLocal) {
+    state.self = model;
     state.peers.delete(peerInfo.id);
+    participant = model;
   } else {
+    participant = reactiveParticipant(model);
     state.peers.set(peerInfo.id, participant);
   }
 
