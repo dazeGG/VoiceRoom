@@ -35,6 +35,20 @@
   --space-2xl: 48px;
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
   font-family: Aptos, "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+
+  /* ---- Volt accent + warm-neutral scale (landing redesign) ----
+     Signature electric-lime highlight for the guest landing's primary CTA,
+     kicker text and feature icons. Kept separate from --ink/--muted/--paper
+     above so the rest of the app (lobby, room) is unaffected. */
+  --accent: oklch(89% 0.24 122);
+  --accent-hover: oklch(93% 0.2 122);
+  --accent-ink: oklch(16% 0.03 122);
+  --accent-glow: oklch(89% 0.24 122 / 0.4);
+  --warm-ink: #f6f1e6;
+  --warm-ink-dim: #d9d2bf;
+  --warm-muted: #a39c8a;
+  --warm-muted-dim: #948d7c;
+  --warm-faint: #7d7666;
 }
 
 * {

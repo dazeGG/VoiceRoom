@@ -10,8 +10,7 @@
   import './styles/home.css';
   import { extractRoomId } from '$lib/shared/utils/room';
   import DesktopAppCard from './components/DesktopAppCard.svelte';
-  import EntryCard from './components/EntryCard.svelte';
-  import HeroIntro from './components/HeroIntro.svelte';
+  import LandingHero from './components/LandingHero.svelte';
   import Toast from './components/Toast.svelte';
   import LobbyPage from './LobbyPage.svelte';
   import { copyText, triggerDesktopDownload } from './services/desktop-download';
@@ -216,21 +215,21 @@
   <LobbyPage {user} {loggingOut} onLogout={handleLogout} onToast={showToast} />
 {:else}
   <div class="app-shell">
-    <Topbar label="Новая голосовая комната" />
+    <Topbar label="Новая голосовая комната">
+      <a class="landing-header-login" href="/login">Войти →</a>
+    </Topbar>
 
-    <main class="start-layout" id="startScreen" aria-label="Стартовый экран">
-      <HeroIntro />
+    <main class="landing-layout" id="startScreen" aria-label="Стартовый экран">
+      <LandingHero
+        {creatingTemp}
+        {joining}
+        bind:roomCode
+        onCreateTemp={handleCreateTemp}
+        onJoin={handleJoinRoom}
+        onRoomCodeKeydown={handleRoomCodeKeydown}
+      />
 
-      <div class="home-side">
-        <EntryCard
-          {creatingTemp}
-          {joining}
-          bind:roomCode
-          onCreateTemp={handleCreateTemp}
-          onJoin={handleJoinRoom}
-          onRoomCodeKeydown={handleRoomCodeKeydown}
-        />
-
+      <div class="landing-app-section">
         <DesktopAppCard
           bind:selectedBuildId
           {appOpen}
