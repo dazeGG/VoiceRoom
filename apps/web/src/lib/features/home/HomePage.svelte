@@ -9,11 +9,12 @@
   import '$lib/shared/styles/app.css';
   import './styles/home.css';
   import { extractRoomId } from '$lib/shared/utils/room';
+  import { ToastStack } from '$lib/shared/ui';
   import DesktopAppCard from './components/DesktopAppCard.svelte';
   import LandingHero from './components/LandingHero.svelte';
-  import Toast from './components/Toast.svelte';
   import LobbyPage from './LobbyPage.svelte';
   import { copyText, triggerDesktopDownload } from './services/desktop-download';
+  import { dismissToast, pushToast, toastState } from './model/toasts.svelte';
   import {
     DESKTOP_BUILDS,
     QUARANTINE_CMD,
@@ -27,8 +28,6 @@
   let joining = $state(false);
   let loggingOut = $state(false);
   let authLoadError = $state(false);
-  let toast = $state('');
-  let toastTimer = 0;
 
   let selectedBuildId = $state('mac-arm64');
   let appOpen = $state(false);
@@ -58,7 +57,6 @@
     });
     return () => {
       delete document.body.dataset.screen;
-      window.clearTimeout(toastTimer);
       window.clearTimeout(copyResetTimer);
       window.clearTimeout(downloadTimer);
       window.clearTimeout(downloadResetTimer);
@@ -177,11 +175,7 @@
   }
 
   function showToast(message: string): void {
-    toast = message;
-    window.clearTimeout(toastTimer);
-    toastTimer = window.setTimeout(() => {
-      toast = '';
-    }, 2600);
+    pushToast(message);
   }
 </script>
 
@@ -249,4 +243,4 @@
   </div>
 {/if}
 
-<Toast message={toast} />
+<ToastStack toasts={toastState.items} onDismiss={dismissToast} />

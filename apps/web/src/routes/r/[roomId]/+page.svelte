@@ -4,32 +4,23 @@
   import { logout } from '$lib/api/auth';
   import { clearSession, loadSession, session } from '$lib/features/auth/session.svelte';
   import LobbyPage from '$lib/features/home/LobbyPage.svelte';
-  import Toast from '$lib/features/home/components/Toast.svelte';
+  import { dismissToast, pushToast, toastState } from '$lib/features/home/model/toasts.svelte';
   import '$lib/features/home/styles/home.css';
   import RoomPage from '$lib/features/room/RoomPage.svelte';
+  import { ToastStack } from '$lib/shared/ui';
 
   let loggingOut = $state(false);
   let authLoadError = $state(false);
-  let toast = $state('');
-  let toastTimer = 0;
   const routeRoomId = $derived(page.params.roomId || '');
 
   onMount(() => {
     void loadSession().catch(() => {
       authLoadError = true;
     });
-
-    return () => {
-      window.clearTimeout(toastTimer);
-    };
   });
 
   function showToast(message: string): void {
-    toast = message;
-    window.clearTimeout(toastTimer);
-    toastTimer = window.setTimeout(() => {
-      toast = '';
-    }, 2600);
+    pushToast(message);
   }
 
   function retrySessionLoad(): void {
@@ -90,4 +81,4 @@
   {/key}
 {/if}
 
-<Toast message={toast} />
+<ToastStack toasts={toastState.items} onDismiss={dismissToast} />
