@@ -7,7 +7,7 @@
     size = 36,
     online = null,
     showDot = false,
-    ring = '#0a0907'
+    ring = 'var(--paper-deep)'
   } = $props<{
     name: string;
     colorKey?: string;
@@ -19,7 +19,7 @@
 
   const fontSize = $derived(Math.round(size * 0.39));
   const dotSize = $derived(Math.max(10, Math.round(size * 0.3)));
-  const dotColor = $derived(online ? '#4fae74' : '#6f6a5c');
+  const dotColor = $derived(online ? 'var(--green)' : 'var(--warm-faint)');
 </script>
 
 <span

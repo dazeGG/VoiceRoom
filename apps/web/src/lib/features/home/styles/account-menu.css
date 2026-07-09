@@ -47,7 +47,7 @@
 .profile-trigger-name {
   max-width: 160px;
   min-width: 0;
-  color: #e7e2d4;
+  color: var(--warm-ink);
   font-size: 13.5px;
   font-weight: 600;
   letter-spacing: -0.01em;
@@ -55,7 +55,7 @@
 
 .profile-trigger-chevron {
   display: inline-flex;
-  color: #8d877a;
+  color: var(--warm-muted);
   transition: transform 0.16s ease;
 }
 
@@ -90,7 +90,7 @@
 
 .profile-popover-name {
   min-width: 0;
-  color: #ece7d9;
+  color: var(--warm-ink);
   font-size: 16px;
   font-weight: 700;
   letter-spacing: -0.01em;
@@ -117,18 +117,18 @@
   border: none;
   border-radius: 8px;
   background: transparent;
-  color: #9a9484;
+  color: var(--warm-muted);
   cursor: pointer;
   transition: background 0.14s ease, color 0.14s ease;
 }
 
 .profile-edit-back:hover {
   background: rgba(255, 255, 255, 0.06);
-  color: #e7e2d4;
+  color: var(--warm-ink);
 }
 
 .profile-edit-title {
-  color: #ece7d9;
+  color: var(--warm-ink);
   font-size: 14px;
   font-weight: 600;
 }
@@ -138,8 +138,8 @@
   padding: 11px 13px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 11px;
-  background: #0c0b08;
-  color: #ece7d9;
+  background: var(--paper-deep);
+  color: var(--warm-ink);
   font-family: var(--font-sans);
   font-size: 14.5px;
   outline: none;
@@ -147,7 +147,7 @@
 }
 
 .profile-edit-input::placeholder {
-  color: #6f6a5c;
+  color: var(--warm-faint);
 }
 
 .profile-edit-input:focus {
@@ -168,7 +168,7 @@
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 10px;
   background: transparent;
-  color: #cfc9ba;
+  color: var(--warm-ink-dim);
   font-family: var(--font-sans);
   font-size: 13px;
   font-weight: 600;
@@ -189,8 +189,8 @@
   padding: 9px 14px;
   border: none;
   border-radius: 10px;
-  background: #d9d3c3;
-  color: #17150f;
+  background: var(--accent);
+  color: var(--accent-ink);
   font-family: var(--font-sans);
   font-size: 13px;
   font-weight: 700;
@@ -199,7 +199,7 @@
 }
 
 .profile-edit-save:hover {
-  background: #e7e1d1;
+  background: var(--accent-hover);
 }
 
 .profile-edit-save:disabled {
@@ -211,7 +211,7 @@
   width: 13px;
   height: 13px;
   border-color: rgba(23, 21, 15, 0.25);
-  border-top-color: #17150f;
+  border-top-color: var(--accent-ink);
 }
 
 @media (max-width: 720px) {

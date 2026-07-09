@@ -79,7 +79,7 @@
             type="button"
             onclick={() => openDm(entry.user.id)}
           >
-            <Avatar name={friendName(entry.user)} colorKey={entry.user.avatarColorKey} online={entry.online} showDot={entry.online} ring="#0a0907" />
+            <Avatar name={friendName(entry.user)} colorKey={entry.user.avatarColorKey} online={entry.online} showDot={entry.online} ring="var(--paper-deep)" />
             <div class="lobby-row-body">
               <div class="lobby-row-name" style={`font-weight:${entry.unreadCount > 0 ? 750 : 650}`}>{friendName(entry.user)}</div>
               <div class="lobby-row-sub" class:lobby-row-sub--muted={!entry.online}>{friendStatusLabel(entry)}</div>

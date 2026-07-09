@@ -103,7 +103,7 @@
   <div class="lobby-dm-col">
     {#if peer}
       <button class="lobby-dm-head" type="button" onclick={toggleProfile}>
-        <Avatar name={friendName(peer)} colorKey={peer.avatarColorKey} size={38} {online} showDot ring="#0e0d0a" />
+        <Avatar name={friendName(peer)} colorKey={peer.avatarColorKey} size={38} {online} showDot ring="var(--paper-deep)" />
         <div style="flex:1;min-width:0;">
           <div class="lobby-dm-head-name">{friendName(peer)}</div>
           <div class="lobby-dm-head-status" style={`color:${online ? '#8fa888' : '#8a8475'}`}>
@@ -167,7 +167,7 @@
         </button>
       </div>
       <div class="lobby-profile-body">
-        <Avatar name={friendName(peer)} colorKey={peer.avatarColorKey} size={76} {online} showDot ring="#0c0b08" />
+        <Avatar name={friendName(peer)} colorKey={peer.avatarColorKey} size={76} {online} showDot ring="var(--paper-deep)" />
         <div class="lobby-profile-panel-name">{friendName(peer)}</div>
         <div class="lobby-profile-panel-handle">@{peer.login}</div>
 
