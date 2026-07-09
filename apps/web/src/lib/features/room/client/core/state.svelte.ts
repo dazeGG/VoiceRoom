@@ -20,5 +20,6 @@ export const state = $state(createInitialRoomState());
  * Svelte components — otherwise only `state.self` (deep-proxied via the root object) updates.
  */
 export function reactiveParticipant<T extends object>(value: T): T {
-  return $state(value);
+  const reactiveValue = $state(value);
+  return reactiveValue;
 }
