@@ -229,7 +229,7 @@
         onRoomCodeKeydown={handleRoomCodeKeydown}
       />
 
-      <div class="landing-app-section">
+      <div class="landing-app-section" hidden>
         <DesktopAppCard
           bind:selectedBuildId
           {appOpen}

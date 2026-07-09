@@ -716,22 +716,6 @@
   font-size: 13px;
 }
 
-.landing-auth-line {
-  margin: 10px 0 0;
-  color: var(--warm-muted-dim, #948d7c);
-  font-size: 13px;
-}
-
-.landing-auth-line a {
-  color: var(--warm-ink-dim, #d9d2bf);
-  font-weight: 600;
-  text-decoration: none;
-}
-
-.landing-auth-line a:hover {
-  color: var(--accent);
-}
-
 .landing-features {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));

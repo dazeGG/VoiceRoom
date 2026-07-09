@@ -55,7 +55,5 @@
 
   <p class="landing-disclaimer">Без имени и регистрации · комната живёт, пока в ней есть люди, и ещё сутки после</p>
 
-  <p class="landing-auth-line">Нужны постоянные комнаты? <a href="/login">Войти</a> · <a href="/register">Регистрация</a></p>
-
   <LandingFeatureGrid items={START_FEATURES} />
 </section>
