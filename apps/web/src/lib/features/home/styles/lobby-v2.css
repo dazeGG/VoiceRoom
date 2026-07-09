@@ -1,0 +1,738 @@
+/* Voice-first lobby (v2) — presence-first playful geometry, single flat
+   sidebar with friends only, rooms as living cards on the main pane.
+   Ported from the claude.ai/design "Лобби VoiceRoom - редизайн v2" prototype
+   (lobby-redesign/lobby.css + voice.css) and adapted to the project's real
+   tokens (--font-body in the prototype → --font-sans here, this project has
+   no Aptos fallback chain). */
+
+.lv {
+  display: flex;
+  height: 100%;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  --lv-side-w: 312px;
+  --lv-row-pad: 9px 10px;
+  --lv-name: 13.5px;
+  --lv-sub: 11.5px;
+  --lv-tile: 34px;
+  --lv-gap: 16px;
+}
+
+.lv-side {
+  width: var(--lv-side-w);
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--panel);
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.lv-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.lv-main-scroll {
+  flex: 1;
+  overflow: auto;
+  padding: 36px 44px;
+}
+
+.lv-side-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 16px 10px;
+  flex: none;
+}
+
+.lv-brand-name {
+  font-weight: 800;
+  font-size: 14.5px;
+  color: var(--warm-ink);
+  flex: 1;
+  letter-spacing: -0.01em;
+}
+
+.lv-side-scroll {
+  flex: 1;
+  overflow: auto;
+  padding: 2px 8px 10px;
+}
+
+.lv-sec-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 8px 6px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--warm-faint);
+}
+
+.lv-sec-actions {
+  display: flex;
+  gap: 2px;
+}
+
+.lv-mini-btn {
+  position: relative;
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  border: none;
+  background: transparent;
+  color: var(--warm-faint);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.lv-mini-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--warm-ink);
+}
+
+.lv-mini-btn-dot {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 2px var(--panel);
+}
+
+.lv-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  color: inherit;
+  border-radius: 12px;
+  padding: var(--lv-row-pad);
+  font-family: var(--font-sans);
+  transition: background 0.13s ease;
+}
+
+.lv-row:hover {
+  background: rgba(255, 255, 255, 0.055);
+}
+
+.lv-row.is-active {
+  background: color-mix(in oklch, var(--accent), transparent 88%);
+}
+
+.lv-row-name {
+  font-size: var(--lv-name);
+  font-weight: 650;
+  color: var(--warm-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lv-row-sub {
+  font-size: var(--lv-sub);
+  color: var(--warm-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lv-row-sub--muted {
+  opacity: 0.85;
+}
+
+.lv-tile {
+  flex: none;
+  width: var(--lv-tile);
+  height: var(--lv-tile);
+  border-radius: 31%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: calc(var(--lv-tile) * 0.5);
+}
+
+.lv-profile {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  flex: none;
+}
+
+.lv-profile-handle {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--warm-muted-dim);
+}
+
+/* ---- room live cards (main pane) ---- */
+.lv-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(248px, 1fr));
+  gap: var(--lv-gap);
+}
+
+@media (min-width: 1500px) {
+  .lv-cards {
+    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  }
+}
+
+.lv-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.035);
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.lv-card:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+.lv-card.is-live {
+  border-color: color-mix(in oklch, var(--green), transparent 68%);
+}
+
+.lv-card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+/* ---- joined "join by code" group ---- */
+.lv-join {
+  display: flex;
+  align-items: stretch;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.04);
+  overflow: hidden;
+  height: 44px;
+}
+
+.lv-join:focus-within {
+  border-color: var(--accent);
+}
+
+.lv-join-input {
+  border: none;
+  background: transparent;
+  outline: none;
+  color: var(--warm-ink);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  padding: 0 14px;
+  width: 150px;
+}
+
+.lv-join-input::placeholder {
+  color: var(--warm-faint);
+}
+
+.lv-join-btn {
+  border: none;
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--warm-ink);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 700;
+  padding: 0 18px;
+  cursor: pointer;
+  transition: background 0.13s ease;
+}
+
+.lv-join-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+/* ---- shared "lr" text/utility classes ---- */
+.lr-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--warm-faint);
+}
+
+.lr-title {
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -0.015em;
+  margin-top: 6px;
+  color: var(--warm-ink);
+}
+
+.lr-empty {
+  color: var(--warm-faint);
+  font-size: 13.5px;
+  margin: 4px 0 0;
+}
+
+.lr-icon-btn {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--warm-muted);
+  cursor: pointer;
+}
+
+.lr-icon-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--warm-ink);
+}
+
+.lr-section-link {
+  border: none;
+  background: transparent;
+  color: var(--warm-muted);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+}
+
+.lr-section-link:hover {
+  color: var(--accent);
+}
+
+.lr-livedot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 0 3px color-mix(in oklch, var(--green), transparent 78%);
+  flex: none;
+}
+
+/* ---- callout (friend requests banner) ---- */
+.lr-callout {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  margin-top: 22px;
+  padding: 14px 16px;
+  border: 1px solid color-mix(in oklch, var(--accent), transparent 60%);
+  border-radius: var(--radius-lg);
+  background: color-mix(in oklch, var(--accent), transparent 92%);
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+}
+
+.lr-callout:hover {
+  background: color-mix(in oklch, var(--accent), transparent 86%);
+}
+
+.lr-callout-icon {
+  flex: none;
+  width: 38px;
+  height: 38px;
+  border-radius: var(--radius-md);
+  background: color-mix(in oklch, var(--accent), transparent 78%);
+  color: var(--accent-ink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.lr-callout-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--warm-ink);
+}
+
+.lr-callout-sub {
+  font-size: 12px;
+  color: var(--warm-muted);
+  margin-top: 1px;
+}
+
+/* ---- search field ---- */
+.lr-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-md);
+  padding: 9px 12px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--warm-muted);
+}
+
+.lr-search input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  outline: none;
+  color: var(--warm-ink);
+  font-family: var(--font-sans);
+  font-size: 13.5px;
+}
+
+.lr-search input::placeholder {
+  color: var(--warm-faint);
+}
+
+.lr-search:focus-within {
+  border-color: var(--accent);
+}
+
+/* ---- requests list (People screen) ---- */
+.lr-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 14px;
+}
+
+.lr-req-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.03);
+  margin-bottom: 10px;
+}
+
+.lr-req-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--warm-ink);
+}
+
+.lr-req-handle {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--warm-muted-dim);
+  margin-top: 2px;
+}
+
+.lr-req-meta {
+  font-size: 12px;
+  color: var(--warm-faint);
+  margin-top: 2px;
+}
+
+.lr-req-pending {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--warm-faint);
+  margin-top: 2px;
+}
+
+.lr-req-pending-dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--amber);
+}
+
+.lr-req-actions {
+  display: flex;
+  gap: 6px;
+  flex: none;
+}
+
+.lr-req-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--warm-ink);
+}
+
+.lr-req-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.lr-req-btn.accept {
+  color: var(--green);
+}
+
+.lr-req-btn.accept:hover {
+  background: color-mix(in oklch, var(--green), transparent 82%);
+  border-color: color-mix(in oklch, var(--green), transparent 50%);
+}
+
+.lr-req-btn.decline:hover {
+  color: var(--coral);
+  background: color-mix(in oklch, var(--coral), transparent 82%);
+  border-color: color-mix(in oklch, var(--coral), transparent 50%);
+}
+
+/* ---- add friend ---- */
+.lr-add-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  max-width: 520px;
+}
+
+.lr-add-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.lr-add-field .at {
+  color: var(--warm-faint);
+  font-family: var(--font-mono);
+  font-weight: 700;
+}
+
+.lr-add-field input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  outline: none;
+  color: var(--warm-ink);
+  font-family: var(--font-mono);
+  font-size: 14px;
+}
+
+.lr-add-field:focus-within {
+  border-color: var(--accent);
+}
+
+.lr-add-hint {
+  margin-top: 12px;
+  font-size: 12.5px;
+  color: var(--warm-faint);
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.lr-add-hint code {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  color: var(--warm-muted);
+}
+
+.lr-add-copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--accent);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 4px;
+  border-radius: 6px;
+}
+
+.lr-add-copy:hover {
+  background: color-mix(in oklch, var(--accent), transparent 88%);
+}
+
+/* ---- create room dialog ---- */
+.lr-field {
+  margin-bottom: 4px;
+}
+
+.lr-field-label {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--warm-muted);
+  margin-bottom: 8px;
+}
+
+.lr-field-label-soft {
+  color: var(--warm-faint);
+  font-weight: 500;
+}
+
+.lr-dialog-input {
+  width: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-md);
+  padding: 13px 15px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--warm-ink);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.lr-dialog-input::placeholder {
+  color: var(--warm-faint);
+}
+
+.lr-dialog-input:focus {
+  border-color: var(--accent);
+}
+
+.lr-dialog-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-md);
+  background: var(--warm-950, rgba(0, 0, 0, 0.3));
+}
+
+.lr-dialog-tab {
+  flex: 1;
+  border: none;
+  border-radius: 12px;
+  padding: 9px 0;
+  background: transparent;
+  color: var(--warm-muted);
+  font-family: var(--font-sans);
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.lr-dialog-tab[data-active='true'] {
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 700;
+}
+
+.lr-emoji-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.lr-emoji-btn {
+  aspect-ratio: 1;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 19px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.lr-emoji-btn:hover {
+  background: rgba(255, 255, 255, 0.09);
+}
+
+.lr-emoji-btn[data-active='true'] {
+  border-color: var(--accent);
+  background: color-mix(in oklch, var(--accent), transparent 84%);
+}
+
+.lr-dialog-note {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  border-radius: var(--radius-md);
+  padding: 11px 13px;
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
+.lr-dialog-note svg {
+  flex: none;
+}
+
+.lr-dialog-note--ok {
+  border: 1px solid color-mix(in oklch, var(--green), transparent 78%);
+  background: color-mix(in oklch, var(--green), transparent 92%);
+  color: var(--warm-ink-dim);
+}
+
+.lr-dialog-note--ok svg {
+  stroke: var(--green);
+}
+
+.lr-dialog-note--warn {
+  border: 1px solid color-mix(in oklch, var(--amber), transparent 72%);
+  background: color-mix(in oklch, var(--amber), transparent 90%);
+  color: var(--warm-ink-dim);
+}
+
+.lr-dialog-note--warn svg {
+  stroke: var(--amber);
+}
+
+.lr-dialog-error {
+  margin: 0;
+  border: 1px solid color-mix(in oklch, var(--coral), transparent 60%);
+  border-radius: var(--radius-md);
+  padding: 9px 12px;
+  background: color-mix(in oklch, var(--coral), transparent 88%);
+  color: var(--warm-ink-dim);
+  font-size: 12.5px;
+}
+
+.lr-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+@media (max-width: 980px) {
+  .lv-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

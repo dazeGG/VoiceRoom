@@ -16,12 +16,12 @@
   } from '$lib/features/room/voice-session.svelte';
   import CreateRoomDialog from './components/CreateRoomDialog.svelte';
   import Sidebar from './components/lobby/Sidebar.svelte';
-  import Home from './components/lobby/Home.svelte';
+  import VoiceHome from './components/lobby/VoiceHome.svelte';
   import DmView from './components/lobby/DmView.svelte';
   import PeopleView from './components/lobby/PeopleView.svelte';
   import RoomBrowseView from './components/lobby/RoomBrowseView.svelte';
   import RoomPreviewView from './components/lobby/RoomPreviewView.svelte';
-  import { friendsState, initLobby, showPeople } from './model/friends.svelte';
+  import { friendsState, initLobby, showHome, showPeople } from './model/friends.svelte';
   import {
     getActiveVoiceRoomId,
     clearDisconnectedHiddenEmbed,
@@ -43,8 +43,8 @@
   import '$lib/shared/styles/dialog.css';
   import '$lib/features/room/styles/chat-rail.css';
   import './styles/friends.css';
-  import './styles/account-menu.css';
   import './styles/settings.css';
+  import './styles/lobby-v2.css';
 
   let { user, loggingOut, onLogout, onToast } = $props<{
     user: AuthUser | null;
@@ -305,14 +305,20 @@
     friendsState.mode = 'friends';
     showPeople();
   }
+
+  function goHome(): void {
+    showHome();
+    if (selectedRoomId) closeViewedRoom();
+  }
 </script>
 
 <svelte:window onkeydown={onWindowKeydown} />
 
 {#if user}
-  <div class="lobby-shell">
+  <div class="lobby-shell lv dens-cozy">
     <Sidebar
       {user}
+      onGoHome={goHome}
       onOpenPeople={openPeople}
       onOpenSettings={openSettings}
       activeVoiceRoomId={connectedVoiceRoomId}
@@ -325,7 +331,7 @@
       onToggleVoiceDeafen={toggleActiveVoiceDeafen}
     />
 
-    <main class="lobby-main" aria-label="Главная Voice Room">
+    <main class="lobby-main lv-main" aria-label="Главная Voice Room">
       {#if embeddedRoomId}
         <div class="lobby-embedded-room" hidden={!embeddedRoomVisible}>
           {#key embeddedRoomId}
@@ -339,13 +345,13 @@
       {:else if friendsState.mode === 'rooms' && selectedRoom && (!embeddedRoomId || !embeddedRoomVisible)}
         <RoomPreviewView {user} room={selectedRoom} onEnter={() => enterRoom(selectedRoom.roomId)} onBack={closeViewedRoom} {onToast} />
       {:else if friendsState.mode === 'rooms' && !embeddedRoomVisible}
-        <Home {user} {rooms} onOpenRoom={previewRoom} onCreateRoom={() => (createDialogOpen = true)} onJoinCode={handleJoin} onAddRoom={() => (addDialogOpen = true)} />
+        <VoiceHome {user} {rooms} onOpenRoom={previewRoom} onCreateRoom={() => (createDialogOpen = true)} onJoinCode={handleJoin} onAddRoom={() => (addDialogOpen = true)} />
       {:else if friendsState.mode === 'friends' && friendsState.view === 'dm'}
-        <DmView selfId={user.id} />
+        <DmView selfId={user.id} onHome={goHome} />
       {:else if friendsState.mode === 'friends' && friendsState.view === 'people'}
-        <PeopleView {user} {onToast} />
+        <PeopleView {user} {onToast} onHome={goHome} />
       {:else if friendsState.mode === 'friends'}
-        <Home {user} {rooms} onOpenRoom={previewRoom} onCreateRoom={() => (createDialogOpen = true)} onJoinCode={handleJoin} onAddRoom={() => (addDialogOpen = true)} />
+        <VoiceHome {user} {rooms} onOpenRoom={previewRoom} onCreateRoom={() => (createDialogOpen = true)} onJoinCode={handleJoin} onAddRoom={() => (addDialogOpen = true)} />
       {/if}
     </main>
   </div>
