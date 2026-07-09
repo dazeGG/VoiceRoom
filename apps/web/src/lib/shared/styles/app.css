@@ -26,6 +26,9 @@
   --shadow: 0 24px 70px oklch(6% 0.02 92 / 0.46);
   --radius-sm: 8px;
   --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-xl: 26px;
+  --radius-pill: 999px;
   --space-2xs: 4px;
   --space-xs: 8px;
   --space-sm: 12px;
