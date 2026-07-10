@@ -1,5 +1,5 @@
 import { addRoomByCode, fetchMe, fetchOwnedRooms } from '$lib/api/auth';
-import { session } from '$lib/features/auth/session.svelte';
+import { session, setUser } from '$lib/features/auth/session.svelte';
 import { roomNameFor } from '$lib/features/auth/account';
 import { roomSettingsUi } from '../../room-settings.svelte';
 import { startUi } from '../../start-ui.svelte';
@@ -193,6 +193,7 @@ async function resolveRoomEntryName(): Promise<RoomEntryGateResult> {
   try {
     const user = await fetchMe();
     if (user) {
+      setUser(user);
       persistName(roomNameFor(user));
       void autoSaveRoomForAuthenticatedUser(state.roomId);
       // Settings/delete UI is owner-only; the lobby's room list is the only

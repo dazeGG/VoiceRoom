@@ -381,7 +381,7 @@ test('visual identity UI consumes backend keys and exposes only curated room pre
   // The room heading consumes the curated preset reactively in RoomTopbar now.
   const roomTopbar = read('src/lib/features/room/components/RoomTopbar.svelte');
   assert.match(roomTopbar, /getRoomPreset/);
-  assert.match(roomView, /import \{ session \} from '\$lib\/features\/auth\/session\.svelte'/);
+  assert.match(roomView, /import \{ session, setUser \} from '\$lib\/features\/auth\/session\.svelte'/);
   assert.match(roomView, /avatarColorKey: session\.user\?\.avatarColorKey \|\| ''/);
   assert.match(roomView, /updateParticipant\(event\.payload\.peer\)/);
   assert.match(roomView, /updateParticipant\(\{ \.\.\.localPeer,[\s\S]*isLocal: true/);
@@ -623,6 +623,7 @@ test('room route uses lobby for authenticated users and preserves standalone gue
   assert.match(roomRoute, /features\/home\/styles\/home\.css/);
 
   assert.match(roomView, /import \{ addRoomByCode, fetchMe, fetchOwnedRooms \} from '\$lib\/api\/auth'/);
+  assert.match(roomView, /import \{ session, setUser \} from '\$lib\/features\/auth\/session\.svelte'/);
   assert.match(roomView, /import \{ roomNameFor \} from '\$lib\/features\/auth\/account'/);
   assert.match(roomView, /type RoomEntryGateResult = 'authenticated' \| 'anonymous' \| 'failure'/);
   assert.match(showRoomRoute, /const exists = await checkRoomExists\(state\.roomId\)/);
@@ -633,6 +634,8 @@ test('room route uses lobby for authenticated users and preserves standalone gue
   assert.ok(showRoomRoute.indexOf('resolveRoomEntryName()') < showRoomRoute.indexOf('showRoomScreen()'));
   assert.match(showRoomRoute, /return true/);
   assert.match(resolveRoomEntryName, /const user = await fetchMe\(\)/);
+  assert.match(resolveRoomEntryName, /setUser\(user\)/);
+  assert.ok(resolveRoomEntryName.indexOf('setUser(user)') < resolveRoomEntryName.indexOf('persistName(roomNameFor(user))'));
   assert.match(resolveRoomEntryName, /persistName\(roomNameFor\(user\)\)/);
   assert.match(resolveRoomEntryName, /void autoSaveRoomForAuthenticatedUser\(state\.roomId\)/);
   assert.ok(resolveRoomEntryName.indexOf('void autoSaveRoomForAuthenticatedUser(state.roomId)') < resolveRoomEntryName.indexOf("return 'authenticated'"));
