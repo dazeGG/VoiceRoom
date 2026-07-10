@@ -936,9 +936,10 @@ test('participant context menu is remote-only and exposes relationship-aware loc
   assert.match(functionBody(friends, 'getFriendRelationship'), /requests\.outgoing\.some/);
   assert.match(menu, /setMode\('friends'\)/);
   assert.match(menu, /await openDm\(peer\.accountUserId\)/);
-  assert.match(menu, /showToast\('Не удалось отправить заявку в друзья', \{ variant: 'error' \}\)/);
-  assert.match(menu, /showToast\('Не удалось принять заявку в друзья', \{ variant: 'error' \}\)/);
-  assert.match(menu, /showToast\('Не удалось открыть личные сообщения', \{ variant: 'error' \}\)/);
+  assert.match(menu, /function errorToastMessage\(error: unknown, fallback: string\): string/);
+  assert.match(menu, /showToast\(errorToastMessage\(error, 'Не удалось отправить заявку в друзья'\), \{ variant: 'error' \}\)/);
+  assert.match(menu, /showToast\(errorToastMessage\(error, 'Не удалось принять заявку в друзья'\), \{ variant: 'error' \}\)/);
+  assert.match(menu, /showToast\(errorToastMessage\(error, 'Не удалось открыть личные сообщения'\), \{ variant: 'error' \}\)/);
 
   assert.match(css, /\.participant-context-menu/);
   assert.match(css, /\.pcm-volume/);

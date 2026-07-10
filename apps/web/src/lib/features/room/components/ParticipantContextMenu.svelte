@@ -92,6 +92,10 @@
     closeParticipantContextMenu(peer.id);
   }
 
+  function errorToastMessage(error: unknown, fallback: string): string {
+    return error instanceof Error && error.message ? error.message : fallback;
+  }
+
   async function openDirectMessage(): Promise<void> {
     if (!peer?.accountUserId) return;
     closeParticipantContextMenu(peer.id);
@@ -100,7 +104,7 @@
       await openDm(peer.accountUserId);
     } catch (error) {
       console.error(error);
-      showToast('Не удалось открыть личные сообщения', { variant: 'error' });
+      showToast(errorToastMessage(error, 'Не удалось открыть личные сообщения'), { variant: 'error' });
     }
   }
 
@@ -112,7 +116,7 @@
       showToast(getFriendRequestToast(result.status));
     } catch (error) {
       console.error(error);
-      showToast('Не удалось отправить заявку в друзья', { variant: 'error' });
+      showToast(errorToastMessage(error, 'Не удалось отправить заявку в друзья'), { variant: 'error' });
     }
   }
 
@@ -124,7 +128,7 @@
       showToast('Заявка принята');
     } catch (error) {
       console.error(error);
-      showToast('Не удалось принять заявку в друзья', { variant: 'error' });
+      showToast(errorToastMessage(error, 'Не удалось принять заявку в друзья'), { variant: 'error' });
     }
   }
 
