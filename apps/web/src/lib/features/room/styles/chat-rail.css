@@ -78,9 +78,34 @@
   overflow: auto;
   display: flex;
   flex-direction: column;
-  justify-content: flex-end;
   gap: 15px;
   padding: 18px 20px;
+}
+
+/* Anchor content to the bottom without `justify-content: flex-end`: that would
+   make overflowing messages above the visible area unreachable by scrolling. */
+.chat-rail-body > :first-child {
+  margin-top: auto;
+}
+
+.chat-day-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 3px 0;
+  color: #6f6a5c;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.chat-day-divider::before,
+.chat-day-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.07);
 }
 
 .chat-msg {

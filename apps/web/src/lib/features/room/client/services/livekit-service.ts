@@ -184,20 +184,6 @@ async function bindLiveKitRoomEvents(room: Room): Promise<void> {
   room.on(RoomEvent.TrackUnsubscribed, (track, publication, participant) => {
     handleLiveKitTrackUnsubscribed(track, publication, participant);
   });
-  room.on(RoomEvent.TrackMuted, (publication, participant) => {
-    const peer = createLiveKitParticipant(participant);
-    if (!peer) return;
-    if (isMicrophonePublication(publication)) {
-      updateParticipant({ id: peer.id, muted: true });
-    }
-  });
-  room.on(RoomEvent.TrackUnmuted, (publication, participant) => {
-    const peer = createLiveKitParticipant(participant);
-    if (!peer) return;
-    if (isMicrophonePublication(publication)) {
-      updateParticipant({ id: peer.id, muted: false });
-    }
-  });
   room.on(RoomEvent.ActiveSpeakersChanged, (speakers) => {
     const activeIds = new Set(speakers.map((participant) => participant.identity));
     for (const peer of state.peers.values()) {
@@ -248,12 +234,13 @@ export function syncLiveKitParticipant(participant: RemoteParticipant | null | u
 function createLiveKitParticipant(participant: LiveKitParticipant): Participant | null {
   if (!isServerKnownRemotePeer(participant.identity)) return null;
 
+  // muted/deafened intentionally omitted: presence (`room.peer.updated`) is the
+  // single source of truth for them. LiveKit's isMicrophoneEnabled reflects track
+  // publication state, not user intent (local mute only disables the capture track).
   const peer = createParticipant({
-    deafened: getLiveKitBooleanAttribute(participant, 'deafened'),
     id: participant.identity,
     isLocal: participant.isLocal || participant.identity === state.peerId,
     joinedAt: participant.joinedAt ? participant.joinedAt.getTime() : Date.now(),
-    muted: !participant.isMicrophoneEnabled || getLiveKitBooleanAttribute(participant, 'muted'),
     name: participant.name || participant.identity,
     screen: participant.isScreenShareEnabled
   });
@@ -284,9 +271,6 @@ function prunePeersOutsideServerList(): void {
   }
 }
 
-function getLiveKitBooleanAttribute(participant: LiveKitParticipant, name: string): boolean {
-  return participant?.attributes?.[name] === 'true';
-}
 
 export async function publishLocalMicrophone(): Promise<void> {
   if (!state.livekitRoom || !state.localStream) return;
