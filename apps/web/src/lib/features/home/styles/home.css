@@ -677,8 +677,10 @@
   outline: none;
   padding: 0 16px;
   color: var(--warm-ink, #ece7d9);
+  height: 100%;
   font-family: var(--font-mono);
   font-size: 14px;
+  line-height: 1;
   letter-spacing: 0.04em;
 }
 

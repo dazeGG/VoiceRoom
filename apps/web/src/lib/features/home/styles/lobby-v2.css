@@ -251,8 +251,10 @@
   background: transparent;
   outline: none;
   color: var(--warm-ink);
+  height: 100%;
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: 14px;
+  line-height: 1;
   padding: 0 16px;
   width: 178px;
 }
