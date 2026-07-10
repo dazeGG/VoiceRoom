@@ -185,12 +185,14 @@
     min-width: 0;
     border: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: 12px;
-    padding: 13px 14px 13px 15px;
+    min-height: var(--interactive-lg, 52px);
+    padding: 0 14px 0 15px;
     background: #0c0b08;
     color: #ece7d9;
     font-family: var(--font-sans);
     font-size: 14.5px;
     font-weight: 500;
+    line-height: 1;
     text-align: left;
     cursor: pointer;
     transition: border-color 0.15s ease, background 0.15s ease;
@@ -250,7 +252,8 @@
   .select-trigger--compact {
     width: auto;
     min-width: 0;
-    padding: 9px 30px 9px 12px;
+    min-height: var(--interactive-md, 40px);
+    padding: 0 30px 0 12px;
     border: none;
     border-radius: 0;
     background: transparent;
