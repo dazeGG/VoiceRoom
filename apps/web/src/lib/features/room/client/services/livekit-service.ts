@@ -61,7 +61,7 @@ async function connectLiveKitWithFallback(credentials: { url: string; token: str
 
   for (const url of urls) {
     const room = new Room({
-      adaptiveStream: true,
+      adaptiveStream: false,
       dynacast: true
     });
     state.livekitRoom = room;

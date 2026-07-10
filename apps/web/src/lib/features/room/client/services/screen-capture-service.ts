@@ -1,4 +1,4 @@
-import { DESKTOP_AUDIO_SOURCE_WORKLET_URL, DEFAULT_SCREEN_PROFILE_ID } from '../core/config';
+import { DESKTOP_AUDIO_SOURCE_WORKLET_URL, DEFAULT_SCREEN_PROFILE_ID, SCREEN_QUALITY_OPTIONS } from '../core/config';
 import { state } from '../core/state.svelte';
 import { showToast } from '../ui/toast';
 import { createScreenProfileId, getScreenProfile } from '../media/profiles';
@@ -88,11 +88,7 @@ function createBrowserDisplayMediaConstraints(
     includeAudioHints = true,
     suppressLocalAudioPlayback = false
   } = options;
-  const video = {
-    frameRate: { ideal: profile.frameRate, max: profile.frameRate },
-    height: { ideal: profile.height, max: profile.height },
-    width: { ideal: profile.width, max: profile.width }
-  };
+  const video = createScreenVideoConstraints(profile);
 
   if (!audio) {
     return {
@@ -118,6 +114,20 @@ function createBrowserDisplayMediaConstraints(
         }
       : {})
   } as DisplayMediaStreamOptions;
+}
+
+function createScreenVideoConstraints(profile: ScreenProfile): DisplayMediaStreamOptions['video'] {
+  if (SCREEN_QUALITY_OPTIONS[profile.qualityId]?.source) {
+    return {
+      frameRate: { ideal: profile.frameRate, max: profile.frameRate }
+    };
+  }
+
+  return {
+    frameRate: { ideal: profile.frameRate, max: profile.frameRate },
+    height: { ideal: profile.height, max: profile.height },
+    width: { ideal: profile.width, max: profile.width }
+  };
 }
 
 async function openDesktopScreenShare(profile: ScreenProfile): Promise<ScreenShareCapture> {
@@ -549,8 +559,10 @@ function createDesktopMediaConstraints(
         chromeMediaSource: 'desktop',
         chromeMediaSourceId: sourceId,
         maxFrameRate: profile.frameRate,
-        maxHeight: profile.height,
-        maxWidth: profile.width
+        ...(SCREEN_QUALITY_OPTIONS[profile.qualityId]?.source ? {} : {
+          maxHeight: profile.height,
+          maxWidth: profile.width
+        })
       }
     }
   } as unknown as MediaStreamConstraints;
@@ -566,6 +578,13 @@ async function selectDesktopCaptureSource(): Promise<ScreenSourceSelection> {
 }
 
 export async function applyScreenCaptureProfile(stream: MediaStream, profile: ScreenProfile): Promise<void> {
+  const [videoTrack] = stream.getVideoTracks();
+  if (!videoTrack) return;
+
+  if ('contentHint' in videoTrack) {
+    videoTrack.contentHint = profile.contentHint;
+  }
+
   const bridge = window.voiceRoomDesktopCapture;
   if (typeof bridge?.applyProfile === 'function') {
     try {
@@ -576,19 +595,15 @@ export async function applyScreenCaptureProfile(stream: MediaStream, profile: Sc
     }
   }
 
-  const [videoTrack] = stream.getVideoTracks();
-  if (!videoTrack) return;
-
-  if ('contentHint' in videoTrack && !videoTrack.contentHint) {
-    videoTrack.contentHint = profile.contentHint;
-  }
-
   try {
-    await videoTrack.applyConstraints({
-      frameRate: { max: profile.frameRate },
-      height: { max: profile.height },
-      width: { max: profile.width }
-    });
+    const constraints: MediaTrackConstraints = {
+      frameRate: { max: profile.frameRate }
+    };
+    if (!SCREEN_QUALITY_OPTIONS[profile.qualityId]?.source) {
+      constraints.height = { max: profile.height };
+      constraints.width = { max: profile.width };
+    }
+    await videoTrack.applyConstraints(constraints);
   } catch (error) {
     console.warn('Screen capture constraints unavailable', error);
   }

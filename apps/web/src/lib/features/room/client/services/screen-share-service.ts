@@ -10,12 +10,12 @@ import { state } from '../core/state.svelte';
 import { showToast } from '../ui/toast';
 import { errorMessage, isCaptureCancelled, isSafariBrowser, stopStream } from '../core/utils';
 import {
+  createSourceScreenProfile,
   getHigherScreenProfileId,
   getLowerScreenProfileId,
   getPreferredScreenVideoCodec,
   getScreenDegradationPreference,
   getScreenModeForProfile,
-  getScreenModeSummary,
   getScreenProfile,
   getScreenProfileForMode
 } from '../media/profiles';
@@ -49,49 +49,6 @@ export function getSelectedScreenProfileId(): string {
   return getScreenProfileForMode(state.localScreenMode || DEFAULT_SCREEN_STREAM_MODE, state.localScreenProfileId).id;
 }
 
-export function getScreenStreamModeView(): Array<{ id: ScreenStreamMode; label: string; summary: string; checked: boolean }> {
-  const mode = state.localScreenMode || DEFAULT_SCREEN_STREAM_MODE;
-  return [
-    { id: 'games', label: 'Игры', summary: getScreenModeSummary('games'), checked: mode === 'games' },
-    { id: 'text', label: 'Демонстрация экрана', summary: getScreenModeSummary('text'), checked: mode === 'text' },
-    { id: 'custom', label: 'Пользовательские', summary: getScreenModeSummary('custom', state.localScreenProfileId), checked: mode === 'custom' }
-  ];
-}
-
-export async function selectScreenStreamMode(mode: ScreenStreamMode): Promise<void> {
-  const nextMode = mode || DEFAULT_SCREEN_STREAM_MODE;
-  const profile = getScreenProfileForMode(nextMode, state.localScreenProfileId);
-  state.localScreenMode = nextMode;
-  state.localScreenTargetProfileId = profile.id;
-  if (state.localScreenStream) {
-    await setLocalScreenProfile(profile.id);
-    return;
-  }
-  applyLocalScreenProfileState(profile, nextMode);
-}
-
-export async function setCustomScreenQuality(qualityId: string): Promise<void> {
-  const profile = getScreenProfile(`${qualityId}-${state.localScreenFpsId}`);
-  state.localScreenMode = 'custom';
-  state.localScreenTargetProfileId = profile.id;
-  if (state.localScreenStream) {
-    await setLocalScreenProfile(profile.id);
-    return;
-  }
-  applyLocalScreenProfileState(profile, 'custom');
-}
-
-export async function setCustomScreenFps(fpsId: string): Promise<void> {
-  const profile = getScreenProfile(`${state.localScreenQualityId}-${fpsId}`);
-  state.localScreenMode = 'custom';
-  state.localScreenTargetProfileId = profile.id;
-  if (state.localScreenStream) {
-    await setLocalScreenProfile(profile.id);
-    return;
-  }
-  applyLocalScreenProfileState(profile, 'custom');
-}
-
 function applyLocalScreenProfileState(profile: ScreenProfile, mode: ScreenStreamMode): void {
   state.localScreenMode = mode;
   state.localScreenProfileId = profile.id;
@@ -113,7 +70,6 @@ export async function startScreenShare(profileId: string = getSelectedScreenProf
     const capture = await openScreenShare(profile);
     const stream = capture.stream;
     profile = capture.profile || profile;
-    const mode = capture.mode || getScreenModeForProfile(profile.id);
     const [videoTrack] = stream.getVideoTracks();
     if (!videoTrack) {
       stopLocalScreenAudioCapture();
@@ -121,6 +77,9 @@ export async function startScreenShare(profileId: string = getSelectedScreenProf
       showToast('Браузер не отдал видео экрана');
       return;
     }
+
+    profile = createSourceScreenProfile(profile, videoTrack);
+    const mode = capture.mode || getScreenModeForProfile(profile.id);
 
     state.localScreenStream = stream;
     applyLocalScreenProfileState(profile, mode);
@@ -282,6 +241,7 @@ async function updateLocalScreenStats(): Promise<void> {
     captureFramesWritten: captureStats.captureFramesWritten,
     captureRelayRestarts: captureStats.captureRelayRestarts,
     codec: parsed.codec || (track as { codec?: string } | undefined)?.codec || getPreferredScreenVideoCodec(),
+    encoderImplementation: parsed.encoderImplementation || '',
     firCount: parsed.firCount ?? 0,
     firDelta: parsed.firDelta ?? 0,
     fps: parsed.fps || settings.frameRate || 0,
@@ -398,6 +358,7 @@ function parseLocalScreenStats(stats: RTCStatsReport | undefined, previous: Scre
       : 0
   );
   const codec = getCodecNameFromStats(outbound, codecs);
+  const encoderImplementation = String(outbound.encoderImplementation || '');
   const lossPct = Number.isFinite(remoteInbound?.fractionLost) ? remoteInbound.fractionLost * 100 : null;
   const rttMs = Number.isFinite(remoteInbound?.roundTripTime) ? remoteInbound.roundTripTime * 1000 : null;
   const availableOutgoingBitrate = Number(candidatePair?.availableOutgoingBitrate || candidatePair?.availableOutgoingBitrate === 0
@@ -412,6 +373,7 @@ function parseLocalScreenStats(stats: RTCStatsReport | undefined, previous: Scre
     availableOutgoingBitrate,
     bitrate,
     codec,
+    encoderImplementation,
     firCount,
     firDelta: previous ? Math.max(0, firCount - Number(previous.firCount || 0)) : 0,
     fps,
@@ -426,7 +388,7 @@ function parseLocalScreenStats(stats: RTCStatsReport | undefined, previous: Scre
     nackDelta: previous ? Math.max(0, nackCount - Number(previous.nackCount || 0)) : 0,
     pliCount,
     pliDelta: previous ? Math.max(0, pliCount - Number(previous.pliCount || 0)) : 0,
-    previous: { bytesSent, firCount, framesDropped, framesEncoded, nackCount, pliCount, timestamp },
+    previous: { bytesSent, encoderImplementation, firCount, framesDropped, framesEncoded, nackCount, pliCount, timestamp },
     qualityLimitationReason: outbound.qualityLimitationReason || '',
     qpSum: Number(outbound.qpSum || 0),
     rttMs,
@@ -463,7 +425,7 @@ async function adaptLocalScreenProfile(): Promise<void> {
   if (now - state.localScreenAdaptLastAt < SCREEN_ADAPT_MIN_INTERVAL_MS) return;
 
   if (state.localScreenAdaptPoorSamples >= SCREEN_ADAPT_POOR_SAMPLE_TARGET) {
-    const nextProfileId = getLowerScreenProfileId(state.localScreenProfileId);
+    const nextProfileId = getLowerScreenProfileId(state.localScreenProfileId, state.localScreenMode || DEFAULT_SCREEN_STREAM_MODE);
     if (nextProfileId) {
       await setLocalScreenProfile(nextProfileId, {
         toast: 'Сеть просела, снизили качество стрима'
@@ -473,7 +435,11 @@ async function adaptLocalScreenProfile(): Promise<void> {
   }
 
   if (state.localScreenAdaptGoodSamples >= SCREEN_ADAPT_GOOD_SAMPLE_TARGET) {
-    const nextProfileId = getHigherScreenProfileId(state.localScreenProfileId, state.localScreenTargetProfileId);
+    const nextProfileId = getHigherScreenProfileId(
+      state.localScreenProfileId,
+      state.localScreenTargetProfileId,
+      state.localScreenMode || DEFAULT_SCREEN_STREAM_MODE
+    );
     if (nextProfileId) {
       await setLocalScreenProfile(nextProfileId, {
         toast: 'Сеть стабильна, вернули качество стрима'
@@ -486,7 +452,8 @@ function getLocalScreenStatsHealth(stats: NonNullable<typeof state.localScreenSt
   const lossPct = Number(stats.lossPct || 0);
   const rttMs = Number(stats.rttMs || 0);
   const availableOutgoingBitrate = Number(stats.availableOutgoingBitrate || 0);
-  const profile = getScreenProfile(state.localScreenProfileId);
+  const [mediaTrack] = state.localScreenStream?.getVideoTracks() || [];
+  const profile = createSourceScreenProfile(getScreenProfile(state.localScreenProfileId), mediaTrack);
   const bandwidthLimited = stats.qualityLimitationReason === 'bandwidth';
   const bitrateConstrained = availableOutgoingBitrate > 0 && availableOutgoingBitrate < profile.videoBitrate * 0.72;
   const receiverPressure = Number(stats.nackDelta || 0) >= 8 || Number(stats.pliDelta || 0) > 0 || Number(stats.firDelta || 0) > 0;
@@ -507,7 +474,9 @@ function getLocalScreenStatsHealth(stats: NonNullable<typeof state.localScreenSt
 async function setLocalScreenProfile(profileId: string, options: { toast?: string } = {}): Promise<void> {
   if (!state.localScreenStream) return;
 
-  const profile = getScreenProfile(profileId);
+  let profile = getScreenProfile(profileId);
+  const [videoTrack] = state.localScreenStream.getVideoTracks();
+  profile = createSourceScreenProfile(profile, videoTrack);
   if (profile.id === state.localScreenProfileId) return;
 
   state.localScreenProfileId = profile.id;
