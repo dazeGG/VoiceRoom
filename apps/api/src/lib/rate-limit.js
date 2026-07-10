@@ -21,14 +21,18 @@ function getClientIp(req, trustProxy) {
 // Fixed-window per-key rate limiter. A limit or window of <= 0 disables it.
 function createRateLimiter({ limit, windowMs }) {
   const entries = new Map();
+  let lastPruneAt = 0;
 
   function check(key, now = Date.now()) {
     if (limit <= 0 || windowMs <= 0) {
       return { allowed: true, retryAfterSeconds: 0 };
     }
 
-    for (const [entryKey, entry] of entries) {
-      if (now - entry.startedAt > windowMs) entries.delete(entryKey);
+    if (now - lastPruneAt >= windowMs) {
+      for (const [entryKey, entry] of entries) {
+        if (now - entry.startedAt > windowMs) entries.delete(entryKey);
+      }
+      lastPruneAt = now;
     }
 
     const current = entries.get(key);

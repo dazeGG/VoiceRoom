@@ -80,3 +80,7 @@
 
 ## Open questions
 - [ ] Should shared `Button` expose explicit `size` props instead of class-based compact override? Owner: frontend. Impact: broader design-system API clarity.
+
+## Deployment/runtime constraints
+- API runtime is intentionally single-instance today: presence, WebSocket registry, POW challenges, cleanup timers, and in-memory rate limits are process-local. Horizontal scaling requires shared state/pub-sub before adding more API replicas.
+- User enumeration through registration conflict and friend search is accepted for this social app model; keep auth/search rate limits enabled.

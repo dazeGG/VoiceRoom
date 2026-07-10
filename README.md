@@ -119,6 +119,7 @@ GitHub-аналог GitLab CI/CD variables находится здесь:
 | `LIVEKIT_API_KEY` | API / LiveKit | Ключ LiveKit. |
 | `LIVEKIT_API_SECRET` | API / LiveKit | Секрет LiveKit. Сгенерировать случайным значением. |
 | `GITHUB_TOKEN` | API desktop release endpoint, optional | Нужен только если хочется повысить лимит GitHub API. |
+| `POW_SECRET` | API production/staging, optional | Стабильный secret для proof-of-work challenge; если не задан, генерируется на процесс и challenge'и инвалидируются при рестарте. |
 
 **Variables** — не секреты, но окружение-зависимые настройки:
 
@@ -137,7 +138,9 @@ GitHub-аналог GitLab CI/CD variables находится здесь:
 | `MAX_TEMP_ROOMS_PER_IP` | optional | Новый явный лимит temporary rooms на IP. |
 | `MAX_STATIC_ROOMS_PER_USER` | `3` | Лимит постоянных комнат на аккаунт. |
 | `ROOM_IDLE_TTL_MS` | `900000` | TTL пустой dynamic room. |
-| `ROOM_PRUNE_INTERVAL_MS` | `60000` | Интервал cleanup. |
+| `ROOM_PRUNE_INTERVAL_MS` | `60000` | Интервал soft-cleanup expired messages / idle dynamic rooms. |
+| `RETENTION_PURGE_INTERVAL_MS` | `3600000` | Интервал физического удаления старых soft-deleted rows. `0` выключает purge. |
+| `RETENTION_KEEP_DELETED_MS` | `2592000000` | Сколько хранить soft-deleted rows перед hard-delete. |
 | `ROOM_CHAT_TTL_MS` | `604800000` | TTL chat history. |
 | `ROOM_CHAT_MAX_MESSAGES` | `500` | Max chat messages per room. |
 | `ROOM_CHAT_RATE_LIMIT` | `60` | Room chat rate limit. |
@@ -154,7 +157,9 @@ GitHub-аналог GitLab CI/CD variables находится здесь:
 | `DM_RATE_WINDOW_MS` | `10000` | DM rate window. |
 | `FRIEND_REQUEST_RATE_LIMIT` | `20` | Friend request rate limit per user. |
 | `FRIEND_REQUEST_RATE_WINDOW_MS` | `60000` | Friend request rate window. |
-| `MAX_REALTIME_STREAMS_PER_USER` | `8` | Max concurrent SSE streams per user. |
+| `MAX_REALTIME_STREAMS_PER_USER` | `8` | Max concurrent WebSocket streams per authenticated user. |
+| `MAX_GUEST_STREAMS_PER_IP` | `8` | Max concurrent guest WebSocket streams per client IP. |
+| `WS_MAX_PAYLOAD_BYTES` | `65536` | Max inbound WebSocket frame payload. |
 | `HOST` | `127.0.0.1` | Host for host-only API. Compose sets `0.0.0.0`. |
 | `PORT` | `3000` | API port. |
 | `SOCKET_PATH` | empty | Unix socket вместо TCP, если нужен. |
@@ -304,13 +309,13 @@ npm run desktop
 
 ## Безопасность
 
-Комнаты приватны только за счет ссылки. Любой, у кого есть URL или код комнаты, может войти. Backend выдает LiveKit tokens только для существующих room sessions, но это не заменяет авторизацию или пароли на сами комнаты. Чат следует той же модели доступа: писать можно по ссылке/коду комнаты без входа в голосовую сессию.
+Комнаты приватны только за счет ссылки. Любой, у кого есть URL или код комнаты, может войти. Backend выдает LiveKit tokens только для существующих room sessions, но это не заменяет авторизацию или пароли на сами комнаты. Чат следует модели presence: читать можно по ссылке/коду комнаты, а писать может только активный участник комнаты с валидной peer-сессией или залогиненный пользователь.
 
 Аккаунты служат для владения постоянными комнатами, а не для контроля доступа к ним. Пароли хешируются `scrypt` (встроенный `node:crypto`), сессия живёт в HttpOnly + SameSite=Lax cookie (`vr_session`) до `SESSION_TTL_MS`; попытки входа/регистрации ограничены `AUTH_RATE_LIMIT` на IP. Логин нормализуется в нижний регистр и уникален. При создании постоянной комнаты залогиненным пользователем она получает `owner_id`, и список «Мои комнаты» приходит с сервера (`GET /api/auth/rooms`). Временные комнаты остаются ownerless.
 
 Постоянные комнаты больше не считаются в IP-квоту: создавать их могут только авторизованные пользователи, а владение ограничено `MAX_STATIC_ROOMS_PER_USER` (по умолчанию 3). Временные ownerless-комнаты остаются ограничены по IP через `MAX_TEMP_ROOMS_PER_IP` (legacy `MAX_EMPTY_ROOMS_PER_IP` используется только как fallback для старых env-файлов), чтобы один IP не заполнял `MAX_ROOMS` пустыми временными комнатами.
 
-История чата хранится в PostgreSQL до `ROOM_CHAT_TTL_MS`, но на комнату сохраняется не больше `ROOM_CHAT_MAX_MESSAGES` последних сообщений. Отправка чата ограничена `ROOM_CHAT_RATE_LIMIT` на пару IP+room за `ROOM_CHAT_RATE_WINDOW_MS`. Для production важно бэкапить PostgreSQL volume и не терять `DATABASE_URL`/credentials. Cleanup expired chat/idle dynamic rooms runs on request paths and on a process-local `ROOM_PRUNE_INTERVAL_MS` timer. Горизонтальное масштабирование API возможно только с учётом того, что presence, SSE handles, session tokens, cleanup timers и non-durable rate limit state остаются process-local; durable комнаты и сообщения находятся в PostgreSQL, а room quota/capacity enforcement выполняется транзакционно в PostgreSQL при создании комнаты.
+История чата хранится в PostgreSQL до `ROOM_CHAT_TTL_MS`, но на комнату сохраняется не больше `ROOM_CHAT_MAX_MESSAGES` последних сообщений. Отправка чата ограничена `ROOM_CHAT_RATE_LIMIT` на пару IP+room за `ROOM_CHAT_RATE_WINDOW_MS`. Для production важно бэкапить PostgreSQL volume и не терять `DATABASE_URL`/credentials. Cleanup expired chat/idle dynamic rooms runs on a process-local `ROOM_PRUNE_INTERVAL_MS` timer; old soft-deleted rows are physically purged by `RETENTION_PURGE_INTERVAL_MS` after `RETENTION_KEEP_DELETED_MS`. API currently assumes exactly one running instance: presence, WebSocket registry, POW challenges, cleanup timers and non-durable rate-limit state are process-local. Durable rooms/messages/users live in PostgreSQL, and room quota/capacity enforcement is transactional in PostgreSQL at room creation time. Horizontal scaling requires sticky WebSocket routing and moving process-local state to shared storage such as Redis/pub-sub.
 
 LiveKit снимает mesh-нагрузку с браузеров: каждый участник публикует микрофон и экран один раз в SFU, а остальные клиенты подписываются на tracks через LiveKit.
 

@@ -306,6 +306,14 @@ function createRoomStore({
     return mapRoom(result.rows[0]);
   }
 
+  async function roomIdExists(roomId) {
+    const result = await getPool().query(
+      `SELECT 1 FROM rooms WHERE id = $1 LIMIT 1`,
+      [roomId]
+    );
+    return result.rowCount > 0;
+  }
+
   async function updateRoom(roomId, { name = '', emoji = '', roomColorKey = '', roomIconKey = '', roomPresetKey = '' } = {}, now = Date.now()) {
     const visuals = normalizeRoomVisuals({ emoji, roomColorKey, roomIconKey, roomPresetKey });
     const result = await getPool().query(
@@ -471,6 +479,47 @@ function createRoomStore({
         [nowDate, idleBefore]
       );
       return expiredMessages.rowCount > 0 || expiredRooms.rowCount > 0;
+    });
+  }
+
+  async function purgeDeleted({ olderThanMs = 30 * 24 * 60 * 60 * 1000, batchSize = 5000, now = Date.now() } = {}) {
+    const cutoff = toDate(now - normalizePositiveInt(olderThanMs, 30 * 24 * 60 * 60 * 1000));
+    const limit = Math.max(1, normalizePositiveInt(batchSize, 5000));
+    return transaction(getPool(), async (client) => {
+      const messages = await client.query(
+        `WITH doomed AS (
+           SELECT id FROM room_messages
+           WHERE deleted_at IS NOT NULL AND deleted_at < $1
+           ORDER BY deleted_at ASC
+           LIMIT $2
+         )
+         DELETE FROM room_messages
+         WHERE id IN (SELECT id FROM doomed)`,
+        [cutoff, limit]
+      );
+      const rooms = await client.query(
+        `WITH doomed AS (
+           SELECT id FROM rooms
+           WHERE deleted_at IS NOT NULL AND deleted_at < $1
+           ORDER BY deleted_at ASC
+           LIMIT $2
+         )
+         DELETE FROM rooms
+         WHERE id IN (SELECT id FROM doomed)`,
+        [cutoff, limit]
+      );
+      const identities = await client.query(
+        `WITH doomed AS (
+           SELECT id FROM room_peer_identities
+           WHERE last_seen_at < $1
+           ORDER BY last_seen_at ASC
+           LIMIT $2
+         )
+         DELETE FROM room_peer_identities
+         WHERE id IN (SELECT id FROM doomed)`,
+        [cutoff, limit]
+      );
+      return { messages: messages.rowCount, rooms: rooms.rowCount, identities: identities.rowCount };
     });
   }
 
@@ -691,6 +740,8 @@ function createRoomStore({
     markRoomActive,
     markRoomEmpty,
     pruneRooms,
+    purgeDeleted,
+    roomIdExists,
     updateRoom
   };
 }

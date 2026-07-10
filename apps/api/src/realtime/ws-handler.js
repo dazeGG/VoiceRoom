@@ -8,7 +8,8 @@ function createWsHandler({
   roomRuntime,
   resolveSessionUser,
   getFriendIds,
-  isUserOnline
+  isUserOnline,
+  getClientIp = () => 'unknown'
 }) {
   async function handleMessage(connection, sessionUser, envelope) {
     if (envelope.type === 'hello') {
@@ -92,9 +93,15 @@ function createWsHandler({
       return;
     }
 
+    const guestIp = sessionUser ? '' : getClientIp(req);
+    if (!sessionUser && registry.rejectGuestOverLimit(guestIp)) {
+      socket.close(4429, 'Too many connections');
+      return;
+    }
+
     const connection = sessionUser
       ? registry.addConnection(sessionUser.id, socket)
-      : registry.addGuestConnection(socket);
+      : registry.addGuestConnection(socket, guestIp);
 
     if (sessionUser) {
       let friendIds = [];

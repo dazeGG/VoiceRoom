@@ -28,7 +28,8 @@ function createRoomRealtimeRuntime(deps) {
     avatarColorForPeerId,
     MAX_ROOM_PEERS,
     tokensMatch,
-    sessionAvatarColorKey
+    sessionAvatarColorKey,
+    roomEmptyQueue = new Map()
   } = deps;
 
   const recipientCache = new Map();
@@ -91,7 +92,7 @@ function createRoomRealtimeRuntime(deps) {
   }
 
   function broadcastRoomDetail(roomId, envelope, { previewOnly = false } = {}) {
-    for (const connection of wsRegistry.connections.values()) {
+    for (const connection of wsRegistry.roomDetailSubscribers(roomId)) {
       const isActivePeer = connection.activeVoice?.roomId === roomId;
       if (previewOnly) {
         // Active peers already receive this over their voice transport via
@@ -135,10 +136,12 @@ function createRoomRealtimeRuntime(deps) {
 
   async function subscribePreview(connection, roomId) {
     connection.previewRoomIds.add(roomId);
+    wsRegistry.registerConnectionForRoom(connection, roomId);
     const snapshot = await buildRoomSnapshot(roomId, 'preview');
     if (!snapshot) {
       wsRegistry.sendToConnection(connection, buildServerEnvelope('room.not_found', { roomId }));
       connection.previewRoomIds.delete(roomId);
+      wsRegistry.unregisterConnectionForRoom(connection, roomId);
       return;
     }
     wsRegistry.sendToConnection(connection, buildServerEnvelope('room.snapshot', snapshot));
@@ -146,6 +149,7 @@ function createRoomRealtimeRuntime(deps) {
 
   function unsubscribePreview(connection, roomId) {
     connection.previewRoomIds.delete(roomId);
+    if (connection.activeVoice?.roomId !== roomId) wsRegistry.unregisterConnectionForRoom(connection, roomId);
   }
 
   function attachVoiceTransport(connection, roomId, peerId, sessionToken) {
@@ -155,6 +159,7 @@ function createRoomRealtimeRuntime(deps) {
       return wsRegistry.sendToConnection(connection, envelope);
     });
     connection.activeVoice = { roomId, peerId, sessionToken, transportId: transport.id };
+    wsRegistry.registerConnectionForRoom(connection, roomId);
     return transport;
   }
 
@@ -167,6 +172,9 @@ function createRoomRealtimeRuntime(deps) {
     if (!roomId || !peerId || !sessionToken) {
       return { ok: false, code: 'invalid_join', message: 'Invalid room, peer, or session token' };
     }
+
+    const pendingEmpty = roomEmptyQueue.get(roomId);
+    if (pendingEmpty) await pendingEmpty;
 
     const room = await getRoom(roomId);
     if (!room) {
@@ -262,6 +270,7 @@ function createRoomRealtimeRuntime(deps) {
     }
     if (connection.activeVoice?.roomId === payload.roomId && connection.activeVoice?.peerId === payload.peerId) {
       connection.activeVoice = null;
+      if (!connection.previewRoomIds.has(payload.roomId)) wsRegistry.unregisterConnectionForRoom(connection, payload.roomId);
     }
     scheduleSummaryBroadcast(payload.roomId);
   }
@@ -323,6 +332,7 @@ function createRoomRealtimeRuntime(deps) {
     if (connection.activeVoice) {
       void leaveVoiceRoom(connection, connection.activeVoice);
     }
+    wsRegistry.unregisterConnectionFromAllRooms(connection);
     connection.previewRoomIds.clear();
   }
 

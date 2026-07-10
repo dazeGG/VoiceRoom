@@ -203,7 +203,7 @@ test('chat API persists, streams, and respects room auth', async (t) => {
 });
 
 
-test('chat API allows posting by room link without joining voice', async (t) => {
+test('chat API rejects anonymous room-link posting without active presence', async (t) => {
   const { dir, socketPath } = getSocketPath();
   const { cleanup, databaseUrl } = await createTestDatabase(t);
   const logs = { stdout: '', stderr: '' };
@@ -228,23 +228,12 @@ test('chat API allows posting by room link without joining voice', async (t) => 
       name: 'Link Guest',
       text: 'Пишу без входа в голос'
     });
-    assert.equal(posted.status, 201);
-    assert.equal(posted.body.message.name, 'Link Guest');
-    assert.equal(posted.body.message.text, 'Пишу без входа в голос');
-    assert.match(posted.body.message.peerId, /^chat-[a-f0-9]{24}$/);
-
-    const streamed = await waitForWsType(
-      preview.frames,
-      'room.chat.message',
-      (frame) => frame.payload?.message?.id === posted.body.message.id
-    );
-    assert.equal(streamed.payload.message.id, posted.body.message.id);
-    assert.equal(streamed.payload.message.text, 'Пишу без входа в голос');
+    assert.equal(posted.status, 403);
+    assert.equal(posted.body.error, 'Active room presence or login required');
 
     const after = await getJson(socketPath, `/api/rooms/${created.body.roomId}/chat`);
     assert.equal(after.status, 200);
-    assert.equal(after.body.messages.length, 1);
-    assert.equal(after.body.messages[0].id, posted.body.message.id);
+    assert.equal(after.body.messages.length, 0);
 
     preview.ws.close();
   } catch (error) {
@@ -406,19 +395,27 @@ test('chat API rate limits room-link posts per room and IP', async (t) => {
   try {
     await waitForHealthz(socketPath);
 
+    const registered = await postJson(socketPath, '/api/auth/register', {
+      login: 'rate-chat-user',
+      password: 'password123',
+      passwordConfirm: 'password123'
+    });
+    assert.equal(registered.status, 201);
+    const sessionCookie = registered.setCookie;
+
     const created = await postJson(socketPath, '/api/rooms', { isStatic: false });
     assert.equal(created.status, 201);
 
     const first = await postJson(socketPath, `/api/rooms/${created.body.roomId}/chat`, {
       name: 'Link Guest',
       text: 'first'
-    });
+    }, { cookie: sessionCookie });
     assert.equal(first.status, 201);
 
     const second = await postJson(socketPath, `/api/rooms/${created.body.roomId}/chat`, {
       name: 'Link Guest',
       text: 'second'
-    });
+    }, { cookie: sessionCookie });
     assert.equal(second.status, 429);
     assert.equal(second.body.error, 'Too many chat messages');
     assert.equal(typeof second.body.retryAfterSeconds, 'number');
@@ -464,9 +461,9 @@ test('manual static-room chat scenario survives API restart without voice join',
     const posted = await postJson(socketPath, `/api/rooms/${created.body.roomId}/chat`, {
       name: 'Manual Guest',
       text: 'Сообщение до перезапуска API'
-    });
+    }, { cookie: sessionCookie });
     assert.equal(posted.status, 201);
-    assert.match(posted.body.message.peerId, /^chat-[a-f0-9]{24}$/);
+    assert.equal(posted.body.message.peerId, `auth-${registered.body.user.id}`);
 
     child.kill('SIGTERM');
     await new Promise((resolve) => child.once('exit', resolve));

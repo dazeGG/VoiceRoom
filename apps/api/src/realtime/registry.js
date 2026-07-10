@@ -10,6 +10,7 @@ function createConnectionId(prefix) {
 
 function createConnectionRegistry({
   maxConnectionsPerUser,
+  maxGuestConnectionsPerIp = 0,
   keepaliveMs,
   isUserOnline,
   onPresenceChange,
@@ -17,6 +18,8 @@ function createConnectionRegistry({
   getFriendIds
 }) {
   const userConnections = new Map();
+  const guestConnectionsByIp = new Map();
+  const roomDetailConnections = new Map();
   const connections = new Map();
 
   function connectionCount(userId) {
@@ -30,6 +33,7 @@ function createConnectionRegistry({
       id: createConnectionId(userId || 'guest'),
       userId: userId || null,
       guest: !userId,
+      guestIp: null,
       socket,
       previewRoomIds: new Set(),
       activeVoice: null,
@@ -57,8 +61,15 @@ function createConnectionRegistry({
     return connection;
   }
 
-  function addGuestConnection(socket) {
+  function addGuestConnection(socket, guestIp = 'unknown') {
     const connection = createConnectionRecord(null, socket);
+    connection.guestIp = guestIp || 'unknown';
+    let set = guestConnectionsByIp.get(connection.guestIp);
+    if (!set) {
+      set = new Set();
+      guestConnectionsByIp.set(connection.guestIp, set);
+    }
+    set.add(connection);
     connections.set(connection.id, connection);
     return connection;
   }
@@ -85,6 +96,8 @@ function createConnectionRegistry({
       onConnectionClose(connection);
     }
 
+    unregisterConnectionFromAllRooms(connection);
+
     if (connection.userId) {
       const set = userConnections.get(connection.userId);
       if (set) {
@@ -94,6 +107,12 @@ function createConnectionRegistry({
       const stillOnline = isUserOnline(connection.userId);
       if (!stillOnline) {
         void notifyFriendsPresence(connection.userId, false);
+      }
+    } else if (connection.guestIp) {
+      const set = guestConnectionsByIp.get(connection.guestIp);
+      if (set) {
+        set.delete(connection);
+        if (set.size === 0) guestConnectionsByIp.delete(connection.guestIp);
       }
     }
 
@@ -138,6 +157,43 @@ function createConnectionRegistry({
     return connectionCount(userId) >= maxConnectionsPerUser;
   }
 
+  function guestConnectionCount(guestIp) {
+    const set = guestConnectionsByIp.get(guestIp || 'unknown');
+    return set ? set.size : 0;
+  }
+
+  function rejectGuestOverLimit(guestIp) {
+    return maxGuestConnectionsPerIp > 0 && guestConnectionCount(guestIp) >= maxGuestConnectionsPerIp;
+  }
+
+  function registerConnectionForRoom(connection, roomId) {
+    if (!connection || !roomId) return;
+    let set = roomDetailConnections.get(roomId);
+    if (!set) {
+      set = new Set();
+      roomDetailConnections.set(roomId, set);
+    }
+    set.add(connection);
+  }
+
+  function unregisterConnectionForRoom(connection, roomId) {
+    const set = roomDetailConnections.get(roomId);
+    if (!set) return;
+    set.delete(connection);
+    if (set.size === 0) roomDetailConnections.delete(roomId);
+  }
+
+  function unregisterConnectionFromAllRooms(connection) {
+    for (const roomId of connection.previewRoomIds || []) {
+      unregisterConnectionForRoom(connection, roomId);
+    }
+    if (connection.activeVoice?.roomId) unregisterConnectionForRoom(connection, connection.activeVoice.roomId);
+  }
+
+  function roomDetailSubscribers(roomId) {
+    return roomDetailConnections.get(roomId) || new Set();
+  }
+
   function touch(connection) {
     connection.lastHeartbeatAt = Date.now();
   }
@@ -166,12 +222,17 @@ function createConnectionRegistry({
     connectionCount,
     connections,
     removeConnection,
+    registerConnectionForRoom,
+    rejectGuestOverLimit,
     rejectOverLimit,
+    roomDetailSubscribers,
     sendReady,
     sendToConnection,
     sendToUser,
     touch,
     pruneStale,
+    unregisterConnectionForRoom,
+    unregisterConnectionFromAllRooms,
     userConnections
   };
 }

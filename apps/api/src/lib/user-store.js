@@ -181,8 +181,17 @@ function createUserStore({ databaseUrl, logger = console, pool, sessionTtlMs = D
     if (!row) return null;
 
     // Best-effort sliding touch; failures here must not block the request.
+    // Throttle writes to roughly once per hour and extend the server-side TTL.
+    const nextExpiresAt = toDate(now + sessionTtlMs);
     getPool()
-      .query(`UPDATE sessions SET last_seen_at = $2 WHERE id = $1`, [tokenHash, toDate(now)])
+      .query(
+        `UPDATE sessions
+         SET last_seen_at = $2,
+             expires_at = GREATEST(expires_at, $3)
+         WHERE id = $1
+           AND last_seen_at <= $4`,
+        [tokenHash, toDate(now), nextExpiresAt, toDate(now - 60 * 60 * 1000)]
+      )
       .catch((error) => logger.error('Failed to touch session:', error));
 
     return { session: { expiresAt: toMillis(row.session_expires_at), token }, user: mapUser(row) };

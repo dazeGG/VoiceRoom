@@ -53,6 +53,11 @@ services:
       ROOM_CREATE_POW_DIFFICULTY: ${ROOM_CREATE_POW_DIFFICULTY:-0}
       ROOM_CREATE_RATE_LIMIT: ${ROOM_CREATE_RATE_LIMIT:-0}
       TRUST_PROXY: ${TRUST_PROXY:-false}
+      MAX_GUEST_STREAMS_PER_IP: ${MAX_GUEST_STREAMS_PER_IP:-8}
+      WS_MAX_PAYLOAD_BYTES: ${WS_MAX_PAYLOAD_BYTES:-65536}
+      RETENTION_PURGE_INTERVAL_MS: ${RETENTION_PURGE_INTERVAL_MS:-3600000}
+      RETENTION_KEEP_DELETED_MS: ${RETENTION_KEEP_DELETED_MS:-2592000000}
+      POW_SECRET: ${POW_SECRET:-}
     ports:
       - "${API_PORT:-3000}:3000"
     volumes:
@@ -86,7 +91,7 @@ services:
       - shared_node_modules:/app/packages/shared/node_modules
 
   livekit:
-    image: ${LIVEKIT_IMAGE:-livekit/livekit-server:latest}
+    image: ${LIVEKIT_IMAGE:-livekit/livekit-server:v1.9.0}
     command: --dev --bind 0.0.0.0
     environment:
       # Keep the server's key/secret in lockstep with the API (which signs the

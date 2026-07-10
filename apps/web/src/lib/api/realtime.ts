@@ -40,7 +40,9 @@ export type RealtimeRoomEvent =
   | { type: 'room.not_found'; payload: { roomId: string } }
   | { type: 'room.full'; payload: { roomId: string; maxRoomPeers: number } };
 
-export type RealtimeEvent = RealtimeAccountEvent | RealtimeRoomEvent;
+export type RealtimeErrorEvent = { type: 'error'; payload: { code: string; message: string; id?: string } };
+
+export type RealtimeEvent = RealtimeAccountEvent | RealtimeRoomEvent | RealtimeErrorEvent;
 
 /** @deprecated Use RealtimeEvent */
 export type { RealtimeEvent as RealtimeEventUnion };
@@ -70,7 +72,17 @@ function wsUrl(): string {
 }
 
 function parseRealtimeEvent(envelope: ServerEnvelope): RealtimeEvent | null {
-  if (!envelope || typeof envelope.type !== 'string' || envelope.type === 'error') return null;
+  if (!envelope || typeof envelope.type !== 'string') return null;
+  if (envelope.type === 'error') {
+    return {
+      type: 'error',
+      payload: {
+        code: envelope.error?.code || 'unknown_error',
+        message: envelope.error?.message || 'WebSocket error',
+        id: envelope.id
+      }
+    };
+  }
   return { type: envelope.type, payload: envelope.payload ?? {} } as RealtimeEvent;
 }
 
@@ -133,7 +145,8 @@ class AppRealtimeConnection {
 
   private scheduleReconnect(): void {
     if (this.closedByClient || this.refCount === 0) return;
-    const delay = Math.min(RECONNECT_MAX_MS, RECONNECT_BASE_MS * 2 ** this.reconnectAttempt);
+    const baseDelay = Math.min(RECONNECT_MAX_MS, RECONNECT_BASE_MS * 2 ** this.reconnectAttempt);
+    const delay = baseDelay * (0.5 + Math.random() * 0.5);
     this.reconnectAttempt += 1;
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;

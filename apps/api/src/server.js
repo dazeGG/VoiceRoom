@@ -75,6 +75,10 @@ const FRIEND_REQUEST_RATE_WINDOW_MS = readEnvInt('FRIEND_REQUEST_RATE_WINDOW_MS'
 // Cap concurrent realtime (WebSocket) connections per user so a single account
 // cannot pin an unbounded number of keep-alive connections.
 const MAX_REALTIME_STREAMS_PER_USER = readEnvInt('MAX_REALTIME_STREAMS_PER_USER', 8, 1);
+const MAX_GUEST_STREAMS_PER_IP = readEnvInt('MAX_GUEST_STREAMS_PER_IP', 8, 1);
+const WS_MAX_PAYLOAD_BYTES = readEnvInt('WS_MAX_PAYLOAD_BYTES', 64 * 1024, 1024);
+const RETENTION_PURGE_INTERVAL_MS = readEnvInt('RETENTION_PURGE_INTERVAL_MS', 60 * 60 * 1000, 0);
+const RETENTION_KEEP_DELETED_MS = readEnvInt('RETENTION_KEEP_DELETED_MS', 30 * 24 * 60 * 60 * 1000, 60000);
 // Desktop app downloads are served from the latest GitHub release of this repo.
 // Metadata is cached server-side so visitors never hit GitHub's per-IP rate limit.
 const DESKTOP_RELEASE_REPO = (process.env.DESKTOP_RELEASE_REPO || 'dazeGG/VoiceRoomDesktop').trim();
@@ -88,6 +92,7 @@ let friendStore = null;
 const presenceRooms = new Map();
 let wsRegistry = null;
 let roomRuntime = null;
+const roomEmptyQueue = new Map();
 
 function getRoomStore() {
   if (!roomStore) {
@@ -140,8 +145,9 @@ function attachPresence(dbRoom) {
 }
 
 let desktopReleaseCache = { at: 0, data: null };
+let desktopReleaseFetchPromise = null;
 const pow = createProofOfWork({
-  secret: crypto.randomBytes(32),
+  secret: process.env.POW_SECRET || crypto.randomBytes(32),
   difficulty: ROOM_CREATE_POW_DIFFICULTY,
   ttlMs: ROOM_CREATE_POW_TTL_MS
 });
@@ -387,6 +393,13 @@ function startPruneTimer(server, logger = console) {
       .catch((error) => {
         logger.error('Session prune timer failed:', error);
       });
+    if (RETENTION_PURGE_INTERVAL_MS > 0 && getRoomStore().purgeDeleted) {
+      void getRoomStore()
+        .purgeDeleted({ olderThanMs: RETENTION_KEEP_DELETED_MS })
+        .catch((error) => {
+          logger.error('Retention purge timer failed:', error);
+        });
+    }
   }, ROOM_PRUNE_INTERVAL_MS);
 
   if (typeof timer.unref === 'function') timer.unref();
@@ -399,10 +412,8 @@ async function countRoomCreationQuotaRoomsForIp(clientIp) {
 }
 
 async function createRoomForRequest(creatorIp, { isStatic = false, ownerId = null, name = '', emoji = '', roomColorKey = '', roomIconKey = '', roomPresetKey = '' } = {}) {
-  await pruneRooms();
-
   let roomId = createRoomId();
-  while (await getRoomStore().getRoom(roomId)) {
+  while (getRoomStore().roomIdExists ? await getRoomStore().roomIdExists(roomId) : await getRoomStore().getRoom(roomId)) {
     roomId = createRoomId();
   }
 
@@ -423,7 +434,6 @@ async function createRoomForRequest(creatorIp, { isStatic = false, ownerId = nul
 }
 
 async function getRoom(roomId) {
-  await pruneRooms();
   const room = await getRoomStore().getRoom(roomId);
   if (!room) return null;
   room.updatedAt = Date.now();
@@ -501,9 +511,17 @@ function closePeer(roomId, peerId, transportId, reason = 'left') {
   }
 
   if (room.peers.size === 0) {
-    void getRoomStore().markRoomEmpty(roomId).catch((error) => {
-      console.error('Failed to mark room empty:', error);
-    });
+    const markEmpty = Promise.resolve()
+      .then(async () => {
+        if (room.peers.size === 0) await getRoomStore().markRoomEmpty(roomId);
+      })
+      .catch((error) => {
+        console.error('Failed to mark room empty:', error);
+      })
+      .finally(() => {
+        if (roomEmptyQueue.get(roomId) === markEmpty) roomEmptyQueue.delete(roomId);
+      });
+    roomEmptyQueue.set(roomId, markEmpty);
   } else {
     room.updatedAt = Date.now();
   }
@@ -1011,7 +1029,6 @@ async function handleAuthRooms(req, res) {
     return;
   }
 
-  await pruneRooms();
   const rooms = await getRoomStore().listVisibleRoomsForUser(session.user.id);
   sendJson(res, 200, {
     ok: true,
@@ -1033,7 +1050,6 @@ async function handleAddAuthRoom(req, res) {
     return;
   }
 
-  await pruneRooms();
   const added = await getRoomStore().addRoomBookmarkForUser(session.user.id, roomId);
   if (added.status === 'not_found') {
     sendJson(res, 404, { ok: false, error: 'Комната не найдена' });
@@ -1141,7 +1157,6 @@ async function handleState(req, res) {
 }
 
 async function handleRoomChatList(res, roomId) {
-  await pruneRooms();
   const room = await getRoom(roomId);
   if (!room) {
     sendJson(res, 404, { ok: false, error: 'Room not found', roomId });
@@ -1156,7 +1171,6 @@ async function handleRoomChatList(res, roomId) {
 }
 
 async function handleRoomChatPost(req, res, roomId) {
-  await pruneRooms();
   const room = await getRoom(roomId);
   const clientIp = getClientIp(req, TRUST_PROXY);
   const body = await readJsonBody(req);
@@ -1188,7 +1202,7 @@ async function handleRoomChatPost(req, res, roomId) {
   }
 
   const authenticatedPeerId = requestedPeerId ? '' : sessionChatPeerId(sessionUser);
-  let peerId = requestedPeerId || authenticatedPeerId || `chat-${crypto.randomBytes(12).toString('hex')}`;
+  let peerId = requestedPeerId || authenticatedPeerId;
   let avatarColorKey = sessionAvatarColorKey(sessionUser) || avatarColorForPeerId(peerId);
   const activePeer = requestedPeerId ? room.peers.get(requestedPeerId) : null;
   if (activePeer) {
@@ -1199,13 +1213,9 @@ async function handleRoomChatPost(req, res, roomId) {
     peerId = activePeer.id;
     if (sessionAvatarColorKey(sessionUser)) activePeer.avatarColorKey = sessionAvatarColorKey(sessionUser);
     avatarColorKey = activePeer.avatarColorKey || avatarColorForPeerId(peerId);
-  } else if (requestedPeerId && sessionToken) {
-    const identityResult = await getRoomStore().getOrCreatePeerIdentity({ roomId, peerId: requestedPeerId, sessionToken, displayName: name, avatarColorKey: sessionAvatarColorKey(sessionUser) });
-    if (identityResult.status === 'token_mismatch') {
-      sendJson(res, 403, { ok: false, error: 'Invalid peer session' });
-      return;
-    }
-    avatarColorKey = identityResult.identity?.avatarColorKey || avatarColorKey;
+  } else if (!sessionUser) {
+    sendJson(res, 403, { ok: false, error: 'Active room presence or login required' });
+    return;
   }
 
   const now = Date.now();
@@ -1580,7 +1590,12 @@ async function handleDesktopLatest(res) {
   }
 
   try {
-    const data = await fetchLatestRelease();
+    if (!desktopReleaseFetchPromise) {
+      desktopReleaseFetchPromise = fetchLatestRelease().finally(() => {
+        desktopReleaseFetchPromise = null;
+      });
+    }
+    const data = await desktopReleaseFetchPromise;
     desktopReleaseCache = { at: now, data };
     sendJson(res, 200, { ok: true, ...data }, { 'Cache-Control': 'public, max-age=300' });
   } catch (error) {
@@ -1639,10 +1654,11 @@ function createApiApp({ store = null, users = null, friends = null } = {}) {
   });
 
   app.register(fastifyCookie, { hook: 'onRequest' });
-  app.register(fastifyWebsocket);
+  app.register(fastifyWebsocket, { options: { maxPayload: WS_MAX_PAYLOAD_BYTES } });
 
   wsRegistry = createConnectionRegistry({
     maxConnectionsPerUser: MAX_REALTIME_STREAMS_PER_USER,
+    maxGuestConnectionsPerIp: MAX_GUEST_STREAMS_PER_IP,
     keepaliveMs: KEEPALIVE_MS,
     isUserOnline,
     onPresenceChange: (friendId, userId, online) => {
@@ -1667,7 +1683,8 @@ function createApiApp({ store = null, users = null, friends = null } = {}) {
     avatarColorForPeerId,
     MAX_ROOM_PEERS,
     tokensMatch,
-    sessionAvatarColorKey
+    sessionAvatarColorKey,
+    roomEmptyQueue
   });
 
   const wsHandler = createWsHandler({
@@ -1675,7 +1692,8 @@ function createApiApp({ store = null, users = null, friends = null } = {}) {
     roomRuntime,
     resolveSessionUser,
     getFriendIds: (userId) => getFriendStore().getFriendIds(userId),
-    isUserOnline
+    isUserOnline,
+    getClientIp: (req) => getClientIp(req, TRUST_PROXY)
   });
 
   app.setNotFoundHandler((request, reply) => {
@@ -1683,7 +1701,6 @@ function createApiApp({ store = null, users = null, friends = null } = {}) {
   });
 
   app.get('/api/healthz', (request, reply) => runLegacyHandler(request, reply, async (req, res) => {
-    await pruneRooms();
     const livekit = getLiveKitConfig();
     sendJson(res, 200, {
       livekit: livekit.enabled,
@@ -1793,6 +1810,53 @@ function createApiServer(options = {}) {
   return server;
 }
 
+async function closeStores(logger = console) {
+  await Promise.allSettled([
+    roomStore?.close?.(),
+    userStore?.close?.(),
+    friendStore?.close?.()
+  ]).then((results) => {
+    for (const result of results) {
+      if (result.status === 'rejected') logger.error('Failed to close store:', result.reason);
+    }
+  });
+}
+
+function installGracefulShutdown(server, { logger = console, exit = process.exit, timeoutMs = 8000 } = {}) {
+  let shuttingDown = false;
+  async function shutdown(signal) {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    logger.info?.(`Received ${signal}; shutting down gracefully`);
+    const timeout = setTimeout(() => {
+      logger.error?.('Graceful shutdown timed out; exiting');
+      exit(1);
+    }, timeoutMs);
+    if (typeof timeout.unref === 'function') timeout.unref();
+
+    try {
+      for (const connection of wsRegistry?.connections?.values?.() || []) {
+        try {
+          connection.socket.close(1001, 'Going away');
+        } catch {
+          // Ignore close failures while draining.
+        }
+      }
+      await new Promise((resolve) => server.close(resolve));
+      await closeStores(logger);
+      clearTimeout(timeout);
+      exit(0);
+    } catch (error) {
+      clearTimeout(timeout);
+      logger.error?.('Graceful shutdown failed:', error);
+      exit(1);
+    }
+  }
+
+  process.once('SIGTERM', () => void shutdown('SIGTERM'));
+  process.once('SIGINT', () => void shutdown('SIGINT'));
+}
+
 async function bootstrap({ env = process.env, logger = console, exit = process.exit } = {}) {
   try {
     const database = readDatabaseConfig(env);
@@ -1819,6 +1883,7 @@ async function bootstrap({ env = process.env, logger = console, exit = process.e
       logger,
       exit
     });
+    installGracefulShutdown(server, { logger, exit });
     return server;
   } catch (error) {
     logger.error('Voice Room API failed to bootstrap:', error.message);
@@ -1836,6 +1901,7 @@ if (require.main === module) {
 
 module.exports = {
   bootstrap,
+  closeStores,
   createApiApp,
   createApiServer
 };

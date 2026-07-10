@@ -91,7 +91,7 @@ async function request(port, path, { method = 'GET', body } = {}) {
   return { response, json: await response.json() };
 }
 
-test('server create/chat handlers use async store and allow link-only chat', async () => {
+test('server create/chat handlers use async store and reject anonymous link-only chat', async () => {
   const store = createFakeStore();
   const server = createApiServer({ store });
   const port = await listen(server);
@@ -104,19 +104,18 @@ test('server create/chat handlers use async store and allow link-only chat', asy
       method: 'POST',
       body: { name: 'Link user', text: 'hello from link' }
     });
-    assert.equal(posted.response.status, 201);
-    assert.match(posted.json.message.peerId, /^chat-/);
-    assert.equal(posted.json.message.text, 'hello from link');
+    assert.equal(posted.response.status, 403);
+    assert.equal(posted.json.error, 'Active room presence or login required');
 
     const listed = await request(port, `/api/rooms/${created.json.roomId}/chat`);
     assert.equal(listed.response.status, 200);
-    assert.equal(listed.json.messages.length, 1);
+    assert.equal(listed.json.messages.length, 0);
   } finally {
     await close(server);
   }
 });
 
-test('server preserves active voice peer spoof protection while chat without voice remains open', async () => {
+test('server preserves active voice peer spoof protection and rejects anonymous link-only chat', async () => {
   const store = createFakeStore();
   const room = await store.createRoom({ creatorIp: 'test', isStatic: true, roomId: 'room1', now: Date.now() });
   assert.equal(room.id, 'room1');
@@ -150,8 +149,8 @@ test('server preserves active voice peer spoof protection while chat without voi
       method: 'POST',
       body: { name: 'Link user', text: 'allowed' }
     });
-    assert.equal(linkOnly.response.status, 201);
-    assert.ok(linkOnly.json.message.avatarColorKey);
+    assert.equal(linkOnly.response.status, 403);
+    assert.equal(linkOnly.json.error, 'Active room presence or login required');
   } finally {
     voice.ws.close();
     await close(server);

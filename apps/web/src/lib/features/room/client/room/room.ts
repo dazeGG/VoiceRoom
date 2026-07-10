@@ -61,6 +61,8 @@ import { applyRoomDeleted, applyRoomUpdated } from './lifecycle';
 
 type RoomEntryGateResult = 'authenticated' | 'anonymous' | 'failure';
 
+let voiceJoinSent = false;
+
 export function showStartScreen(): void {
   document.body.dataset.screen = 'start';
   state.screen = 'start';
@@ -280,6 +282,7 @@ export async function joinRoom(event?: Event): Promise<void> {
       sessionToken: state.sessionToken,
       name
     });
+    voiceJoinSent = true;
     setServerConnectionStatus('connecting');
 
     await connectLiveKitRoom(name);
@@ -297,6 +300,10 @@ export async function joinRoom(event?: Event): Promise<void> {
     console.error(error);
     showToast(formatJoinError(error));
     setVoiceConnectionStatus(isVoiceRouteError(error) ? 'no-route' : 'error');
+    if (voiceJoinSent && state.roomId && state.peerId && state.sessionToken) {
+      sendVoiceLeave({ roomId: state.roomId, peerId: state.peerId, sessionToken: state.sessionToken });
+      voiceJoinSent = false;
+    }
     state.voiceRealtimeTeardown?.();
     state.voiceRealtimeTeardown = null;
     state.serverPeerIds.clear();
@@ -355,6 +362,15 @@ async function handleVoiceRealtimeEvent(event: RealtimeEvent): Promise<void> {
     return;
   }
 
+  if (event.type === 'error') {
+    showToast(event.payload.message || 'Ошибка realtime-соединения');
+    if (event.payload.code === 'invalid_session' || event.payload.code === 'join_failed' || event.payload.code === 'room_full') {
+      leaveRoom();
+      setVoiceConnectionStatus('error');
+    }
+    return;
+  }
+
   if (event.type === 'room.not_found') {
     showRoomNotFound();
     return;
@@ -402,7 +418,7 @@ async function handleVoiceRealtimeEvent(event: RealtimeEvent): Promise<void> {
 }
 
 export function leaveRoom(): void {
-  if (!state.joined && !state.localStream && !state.localScreenStream && !state.connecting) return;
+  if (!state.joined && !state.localStream && !state.localScreenStream && !state.connecting && !voiceJoinSent && !state.voiceRealtimeTeardown) return;
 
   const disconnectedRoomId = state.roomId;
   state.connecting = false;
@@ -417,6 +433,7 @@ export function leaveRoom(): void {
       peerId: state.peerId,
       sessionToken: state.sessionToken
     });
+    voiceJoinSent = false;
   }
   state.voiceRealtimeTeardown?.();
   state.voiceRealtimeTeardown = null;
@@ -477,25 +494,27 @@ export async function handleLeaveButtonClick(): Promise<void> {
 }
 
 export async function copyRoomCode(): Promise<void> {
-  await copyText(state.roomId);
-  showToast('Код комнаты скопирован');
+  if (await copyText(state.roomId)) {
+    showToast('Код комнаты скопирован');
+  } else {
+    showToast(`Не удалось скопировать. Код: ${state.roomId}`);
+  }
 }
 
 export async function copyRoomLink(): Promise<void> {
   const roomUrl = new URL(`/r/${encodeURIComponent(state.roomId)}`, window.location.origin);
-  await copyText(roomUrl.href);
-  showToast('Ссылка на комнату скопирована');
+  if (await copyText(roomUrl.href)) {
+    showToast('Ссылка на комнату скопирована');
+  } else {
+    showToast(`Не удалось скопировать. Ссылка: ${roomUrl.href}`);
+  }
 }
 
-async function copyText(text: string): Promise<void> {
+async function copyText(text: string): Promise<boolean> {
   try {
     await navigator.clipboard.writeText(text);
+    return true;
   } catch {
-    const clipboardFallbackInput = document.createElement('input');
-    clipboardFallbackInput.value = text;
-    document.body.append(clipboardFallbackInput);
-    clipboardFallbackInput.select();
-    document.execCommand('copy');
-    clipboardFallbackInput.remove();
+    return false;
   }
 }
