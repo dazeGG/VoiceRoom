@@ -23,7 +23,7 @@ import { connectRealtime, type RealtimeEvent, type RealtimeHandle } from '$lib/a
 import { playDirectMessageCue, playFriendAcceptedCue, playFriendRequestCue } from '$lib/features/room/client/media/cues';
 
 export type LobbyMode = 'friends' | 'rooms';
-export type LobbyView = 'home' | 'dm' | 'requests' | 'add';
+export type LobbyView = 'home' | 'dm' | 'people';
 
 interface FriendsState {
   loaded: boolean;
@@ -133,13 +133,9 @@ export function showHome(): void {
   friendsState.view = 'home';
 }
 
-export function showRequests(): void {
-  friendsState.view = 'requests';
+export function showPeople(): void {
+  friendsState.view = 'people';
   void refreshRequests().catch(() => {});
-}
-
-export function showAdd(): void {
-  friendsState.view = 'add';
 }
 
 export async function openDm(userId: string): Promise<void> {

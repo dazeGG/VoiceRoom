@@ -1,6 +1,7 @@
 <script lang="ts">
   import { tick } from 'svelte';
   import type { DirectMessage } from '$lib/api/dm';
+  import { Avatar } from '$lib/shared/ui';
   import { friendName, formatDayLabel, formatTime, isSameDay } from '../../model/lobby-format';
   import {
     friendsState,
@@ -9,9 +10,8 @@
     sendMessage,
     toggleProfile
   } from '../../model/friends.svelte';
-  import Avatar from './Avatar.svelte';
 
-  let { selfId } = $props<{ selfId: string }>();
+  let { selfId, onHome } = $props<{ selfId: string; onHome: () => void }>();
 
   let draft = $state('');
   let sending = $state(false);
@@ -101,9 +101,13 @@
 
 <div class="lobby-dm">
   <div class="lobby-dm-col">
+    <button class="lr-section-link" type="button" style="margin:14px 0 0 14px;" onclick={onHome}>
+      <span style="transform:rotate(180deg);display:flex;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg></span>
+      На главную
+    </button>
     {#if peer}
       <button class="lobby-dm-head" type="button" onclick={toggleProfile}>
-        <Avatar name={friendName(peer)} colorKey={peer.avatarColorKey} size={38} {online} showDot ring="#0e0d0a" />
+        <Avatar name={friendName(peer)} colorKey={peer.avatarColorKey} size={38} {online} showDot ring="var(--paper-deep)" />
         <div style="flex:1;min-width:0;">
           <div class="lobby-dm-head-name">{friendName(peer)}</div>
           <div class="lobby-dm-head-status" style={`color:${online ? '#8fa888' : '#8a8475'}`}>
@@ -167,7 +171,7 @@
         </button>
       </div>
       <div class="lobby-profile-body">
-        <Avatar name={friendName(peer)} colorKey={peer.avatarColorKey} size={76} {online} showDot ring="#0c0b08" />
+        <Avatar name={friendName(peer)} colorKey={peer.avatarColorKey} size={76} {online} showDot ring="var(--paper-deep)" />
         <div class="lobby-profile-panel-name">{friendName(peer)}</div>
         <div class="lobby-profile-panel-handle">@{peer.login}</div>
 

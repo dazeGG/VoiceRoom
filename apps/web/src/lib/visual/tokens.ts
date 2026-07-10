@@ -11,22 +11,22 @@ export interface AvatarColorToken {
 }
 
 export const AVATAR_COLORS: Record<AvatarColorKey, AvatarColorToken> = {
-  blurple: { key: 'blurple', background: 'oklch(54% 0.22 276)', foreground: '#fff', shadow: '0 10px 24px rgba(88, 101, 242, 0.32)' },
-  violet: { key: 'violet', background: 'oklch(50% 0.21 302)', foreground: '#fff', shadow: '0 10px 24px rgba(139, 92, 246, 0.3)' },
-  orchid: { key: 'orchid', background: 'oklch(54% 0.20 325)', foreground: '#fff', shadow: '0 10px 24px rgba(192, 92, 210, 0.3)' },
-  magenta: { key: 'magenta', background: 'oklch(52% 0.22 350)', foreground: '#fff', shadow: '0 10px 24px rgba(219, 39, 119, 0.28)' },
-  rose: { key: 'rose', background: 'oklch(54% 0.21 18)', foreground: '#fff', shadow: '0 10px 24px rgba(225, 29, 72, 0.28)' },
-  coral: { key: 'coral', background: 'oklch(56% 0.19 38)', foreground: '#fff', shadow: '0 10px 24px rgba(234, 88, 12, 0.26)' },
-  rust: { key: 'rust', background: 'oklch(48% 0.17 45)', foreground: '#fff', shadow: '0 10px 24px rgba(154, 52, 18, 0.26)' },
-  amber: { key: 'amber', background: 'oklch(57% 0.16 72)', foreground: '#fff', shadow: '0 10px 24px rgba(180, 83, 9, 0.24)' },
-  olive: { key: 'olive', background: 'oklch(45% 0.13 112)', foreground: '#fff', shadow: '0 10px 24px rgba(77, 124, 15, 0.24)' },
-  green: { key: 'green', background: 'oklch(47% 0.16 148)', foreground: '#fff', shadow: '0 10px 24px rgba(22, 163, 74, 0.24)' },
-  teal: { key: 'teal', background: 'oklch(48% 0.15 182)', foreground: '#fff', shadow: '0 10px 24px rgba(13, 148, 136, 0.24)' },
-  cyan: { key: 'cyan', background: 'oklch(50% 0.15 215)', foreground: '#fff', shadow: '0 10px 24px rgba(8, 145, 178, 0.24)' },
-  sky: { key: 'sky', background: 'oklch(52% 0.16 242)', foreground: '#fff', shadow: '0 10px 24px rgba(2, 132, 199, 0.25)' },
-  blue: { key: 'blue', background: 'oklch(49% 0.19 260)', foreground: '#fff', shadow: '0 10px 24px rgba(37, 99, 235, 0.28)' },
-  indigo: { key: 'indigo', background: 'oklch(47% 0.20 284)', foreground: '#fff', shadow: '0 10px 24px rgba(79, 70, 229, 0.3)' },
-  slate: { key: 'slate', background: 'oklch(40% 0.05 260)', foreground: '#fff', shadow: '0 10px 24px rgba(51, 65, 85, 0.28)' }
+  blurple: { key: 'blurple', background: 'oklch(58% 0.26 278)', foreground: '#fff', shadow: '0 10px 24px rgba(88, 101, 242, 0.32)' },
+  violet: { key: 'violet', background: 'oklch(55% 0.25 304)', foreground: '#fff', shadow: '0 10px 24px rgba(139, 92, 246, 0.3)' },
+  orchid: { key: 'orchid', background: 'oklch(58% 0.24 326)', foreground: '#fff', shadow: '0 10px 24px rgba(192, 92, 210, 0.3)' },
+  magenta: { key: 'magenta', background: 'oklch(56% 0.26 351)', foreground: '#fff', shadow: '0 10px 24px rgba(219, 39, 119, 0.28)' },
+  rose: { key: 'rose', background: 'oklch(58% 0.24 16)', foreground: '#fff', shadow: '0 10px 24px rgba(225, 29, 72, 0.28)' },
+  coral: { key: 'coral', background: 'oklch(61% 0.22 36)', foreground: '#fff', shadow: '0 10px 24px rgba(234, 88, 12, 0.26)' },
+  rust: { key: 'rust', background: 'oklch(53% 0.20 42)', foreground: '#fff', shadow: '0 10px 24px rgba(154, 52, 18, 0.26)' },
+  amber: { key: 'amber', background: 'oklch(63% 0.19 70)', foreground: '#fff', shadow: '0 10px 24px rgba(180, 83, 9, 0.24)' },
+  olive: { key: 'olive', background: 'oklch(50% 0.16 112)', foreground: '#fff', shadow: '0 10px 24px rgba(77, 124, 15, 0.24)' },
+  green: { key: 'green', background: 'oklch(52% 0.19 148)', foreground: '#fff', shadow: '0 10px 24px rgba(22, 163, 74, 0.24)' },
+  teal: { key: 'teal', background: 'oklch(53% 0.18 182)', foreground: '#fff', shadow: '0 10px 24px rgba(13, 148, 136, 0.24)' },
+  cyan: { key: 'cyan', background: 'oklch(55% 0.17 214)', foreground: '#fff', shadow: '0 10px 24px rgba(8, 145, 178, 0.24)' },
+  sky: { key: 'sky', background: 'oklch(57% 0.18 242)', foreground: '#fff', shadow: '0 10px 24px rgba(2, 132, 199, 0.25)' },
+  blue: { key: 'blue', background: 'oklch(54% 0.22 260)', foreground: '#fff', shadow: '0 10px 24px rgba(37, 99, 235, 0.28)' },
+  indigo: { key: 'indigo', background: 'oklch(51% 0.23 284)', foreground: '#fff', shadow: '0 10px 24px rgba(79, 70, 229, 0.3)' },
+  slate: { key: 'slate', background: 'oklch(44% 0.06 260)', foreground: '#fff', shadow: '0 10px 24px rgba(51, 65, 85, 0.28)' }
 };
 
 export function getAvatarColor(key: string | null | undefined): AvatarColorToken {
@@ -48,14 +48,14 @@ const ROOM_ICON_EMOJIS = Object.fromEntries(
 ) as Record<RoomIconKey, string>;
 
 const ROOM_COLOR_TOKENS: Record<RoomColorKey, Pick<RoomPresetToken, 'background' | 'ring'>> = {
-  blue: { background: 'linear-gradient(135deg, oklch(55% 0.20 260), oklch(42% 0.16 282))', ring: 'rgba(88, 101, 242, 0.34)' },
-  slate: { background: 'linear-gradient(135deg, oklch(42% 0.05 260), oklch(31% 0.04 255))', ring: 'rgba(148, 163, 184, 0.25)' },
-  violet: { background: 'linear-gradient(135deg, oklch(50% 0.21 302), oklch(36% 0.15 285))', ring: 'rgba(139, 92, 246, 0.32)' },
-  amber: { background: 'linear-gradient(135deg, oklch(63% 0.18 75), oklch(49% 0.16 52))', ring: 'rgba(245, 158, 11, 0.28)' },
-  indigo: { background: 'linear-gradient(135deg, oklch(50% 0.20 284), oklch(38% 0.17 266))', ring: 'rgba(99, 102, 241, 0.32)' },
-  rose: { background: 'linear-gradient(135deg, oklch(55% 0.21 18), oklch(43% 0.17 350))', ring: 'rgba(244, 63, 94, 0.3)' },
-  rust: { background: 'linear-gradient(135deg, oklch(52% 0.18 45), oklch(39% 0.14 35))', ring: 'rgba(194, 65, 12, 0.28)' },
-  green: { background: 'linear-gradient(135deg, oklch(49% 0.15 148), oklch(36% 0.10 170))', ring: 'rgba(34, 197, 94, 0.26)' }
+  blue: { background: 'linear-gradient(135deg, oklch(58% 0.22 258), oklch(44% 0.19 280))', ring: 'rgba(96, 130, 255, 0.4)' },
+  slate: { background: 'linear-gradient(135deg, oklch(46% 0.06 258), oklch(33% 0.05 253))', ring: 'rgba(168, 183, 204, 0.3)' },
+  violet: { background: 'linear-gradient(135deg, oklch(55% 0.25 302), oklch(39% 0.20 285))', ring: 'rgba(168, 112, 255, 0.38)' },
+  amber: { background: 'linear-gradient(135deg, oklch(68% 0.20 75), oklch(53% 0.19 52))', ring: 'rgba(255, 178, 36, 0.34)' },
+  indigo: { background: 'linear-gradient(135deg, oklch(54% 0.24 284), oklch(41% 0.21 266))', ring: 'rgba(129, 118, 255, 0.38)' },
+  rose: { background: 'linear-gradient(135deg, oklch(59% 0.25 16), oklch(46% 0.21 350))', ring: 'rgba(255, 87, 122, 0.36)' },
+  rust: { background: 'linear-gradient(135deg, oklch(56% 0.22 42), oklch(42% 0.18 33))', ring: 'rgba(255, 120, 62, 0.34)' },
+  green: { background: 'linear-gradient(135deg, oklch(53% 0.19 148), oklch(39% 0.14 168))', ring: 'rgba(64, 220, 130, 0.32)' }
 };
 
 function isRoomIconKey(value: string | null | undefined): value is RoomIconKey {

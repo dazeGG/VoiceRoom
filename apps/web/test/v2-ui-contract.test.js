@@ -39,15 +39,20 @@ test('home auth flow is loader-first and has no localStorage session oracle', ()
   assert.match(home, /retrySessionLoad/);
 });
 
-test('lobby grid add action is add-by-code, not create-room', () => {
+test('lobby join is the single room-code action and explains auto-save', () => {
   const lobby = read('src/lib/features/home/LobbyPage.svelte');
+  const voiceHome = read('src/lib/features/home/components/lobby/VoiceHome.svelte');
   const authApi = read('src/lib/api/auth.ts');
 
   assert.match(authApi, /addRoomByCode/);
   assert.match(authApi, /authPost<\{ room: OwnedRoom \}>\('\/auth\/rooms'/);
-  assert.match(lobby, /handleAddRoom/);
-  assert.match(lobby, /addDialogOpen = true/);
-  assert.match(lobby, /Введите код уже созданной постоянной комнаты/);
+  assert.doesNotMatch(lobby, /handleAddRoom|addDialogOpen|addRoomCode|addError|adding/);
+  assert.doesNotMatch(lobby, /Введите код уже созданной постоянной комнаты|Комната добавлена/);
+  assert.doesNotMatch(voiceHome, /onAddRoom|Добавить комнату по коду|lr-icon-btn/);
+  assert.match(voiceHome, /placeholder="Код или ссылка"/);
+  assert.match(voiceHome, /aria-describedby="roomAutoSaveHint"/);
+  assert.match(voiceHome, /id="roomAutoSaveHint"/);
+  assert.match(voiceHome, /Постоянные комнаты сохраняются автоматически/);
 });
 
 test('lobby separates viewed room from connected voice room', () => {
@@ -522,6 +527,7 @@ test('room route uses lobby for authenticated users and preserves standalone gue
   const roomPage = read('src/lib/features/room/RoomPage.svelte');
   const roomMain = read('src/lib/features/room/client/main.ts');
   const roomView = read('src/lib/features/room/client/room/room.ts');
+  const lobby = read('src/lib/features/home/LobbyPage.svelte');
   const names = read('src/lib/features/room/client/ui/names.ts');
   const overlays = read('src/lib/features/room/components/RoomOverlays.svelte');
   const screenStageControls = read('src/lib/features/room/client/ui/screen-stage-controls.ts');
@@ -559,7 +565,7 @@ test('room route uses lobby for authenticated users and preserves standalone gue
   assert.match(roomRoute, /Не удалось проверить аккаунт/);
   assert.match(roomRoute, /features\/home\/styles\/home\.css/);
 
-  assert.match(roomView, /import \{ fetchMe, fetchOwnedRooms \} from '\$lib\/api\/auth'/);
+  assert.match(roomView, /import \{ addRoomByCode, fetchMe, fetchOwnedRooms \} from '\$lib\/api\/auth'/);
   assert.match(roomView, /import \{ roomNameFor \} from '\$lib\/features\/auth\/account'/);
   assert.match(roomView, /type RoomEntryGateResult = 'authenticated' \| 'anonymous' \| 'failure'/);
   assert.match(showRoomRoute, /const exists = await checkRoomExists\(state\.roomId\)/);
@@ -571,12 +577,21 @@ test('room route uses lobby for authenticated users and preserves standalone gue
   assert.match(showRoomRoute, /return true/);
   assert.match(resolveRoomEntryName, /const user = await fetchMe\(\)/);
   assert.match(resolveRoomEntryName, /persistName\(roomNameFor\(user\)\)/);
+  assert.match(resolveRoomEntryName, /void autoSaveRoomForAuthenticatedUser\(state\.roomId\)/);
+  assert.ok(resolveRoomEntryName.indexOf('void autoSaveRoomForAuthenticatedUser(state.roomId)') < resolveRoomEntryName.indexOf("return 'authenticated'"));
   assert.match(resolveRoomEntryName, /return 'authenticated'/);
   assert.match(resolveRoomEntryName, /return 'failure'/);
   assert.match(resolveRoomEntryName, /await requestGuestNameForRoom\(\)/);
   assert.match(resolveRoomEntryName, /Guest name request cancelled/);
   assert.match(resolveRoomEntryName, /return 'anonymous'/);
   assert.doesNotMatch(resolveRoomEntryName, /loadSession|showRoomScreen|autoJoinRoom|showRoomNotFound/);
+  assert.match(roomView, /async function autoSaveRoomForAuthenticatedUser\(roomId: string\): Promise<void>/);
+  assert.match(roomView, /await addRoomByCode\(roomId\)/);
+  assert.match(roomView, /window\.dispatchEvent\(new CustomEvent\('voice-room:rooms-changed'/);
+  assert.match(roomView, /console\.debug\('Room auto-save skipped'/);
+  assert.match(lobby, /window\.addEventListener\('voice-room:rooms-changed', onRoomsChanged\)/);
+  assert.match(lobby, /window\.removeEventListener\('voice-room:rooms-changed', onRoomsChanged\)/);
+  assert.match(functionBody(lobby, 'onRoomsChanged'), /void refreshRooms\(\)/);
   assert.doesNotMatch(roomView, /window\.prompt|prompt\(/);
   assert.doesNotMatch(roomView, /loadSession/);
 

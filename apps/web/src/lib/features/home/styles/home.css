@@ -1,19 +1,4 @@
-/* Right block — stepped primary card (name → room) + collapsible app card.
-     Implements the «Voice Room - Главная» design handoff. Scoped so the warm
-     panel values win over the global input/select rules in styles.css. */
-  /* No eyebrow above the hero here, so drop the lockup top offset and align
-     the title with the top of the right card. */
-  .start-copy .hero-title {
-    margin-top: 0;
-  }
-
-  .home-side {
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-  }
-
-  /* Primary card */
+/* Primary card */
   .home-card {
     display: flex;
     flex-direction: column;
@@ -442,150 +427,6 @@
     background: rgba(255, 255, 255, 0.1);
   }
 
-  /* Entry card — «Быстрый старт» (landing right column). Mirrors the
-     «Лендинг и вход» design: a one-click temporary room, then either the
-     login/register actions or a persistent-room action, depending on whether
-     someone is signed in. */
-  .entry-card {
-    display: flex;
-    flex-direction: column;
-    border: 1px solid rgba(255, 255, 255, 0.09);
-    border-radius: 20px;
-    padding: 24px;
-    background: rgba(255, 255, 255, 0.04);
-  }
-
-  .entry-kicker {
-    margin-bottom: 14px;
-    font-family: var(--font-mono);
-    font-size: 11px;
-    letter-spacing: 0.18em;
-    color: #6f6a5c;
-    text-transform: uppercase;
-  }
-
-  .entry-primary {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    width: 100%;
-    border: none;
-    border-radius: 14px;
-    padding: 17px 20px;
-    background: #d9d3c3;
-    color: #17150f;
-    font-family: var(--font-sans);
-    font-size: 16px;
-    font-weight: 700;
-    letter-spacing: -0.01em;
-    cursor: pointer;
-    transition: background 0.15s ease;
-  }
-
-  .entry-primary:hover {
-    background: #e7e1d1;
-  }
-
-  .entry-primary:disabled {
-    cursor: default;
-    opacity: 0.8;
-  }
-
-  .entry-primary-main {
-    display: inline-flex;
-    align-items: center;
-    gap: 11px;
-  }
-
-  .entry-primary .home-spinner {
-    border-color: rgba(23, 21, 15, 0.25);
-    border-top-color: #17150f;
-  }
-
-  .entry-hint {
-    margin: 12px 0 0;
-    color: #8c8576;
-    font-size: 13px;
-    line-height: 1.55;
-  }
-
-  .entry-divider {
-    margin: 24px 0;
-  }
-
-  .entry-auth {
-    display: flex;
-    gap: 10px;
-  }
-
-  .entry-auth-btn {
-    flex: 1;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 12px;
-    padding: 13px 0;
-    font-family: var(--font-sans);
-    font-size: 14.5px;
-    font-weight: 600;
-    text-decoration: none;
-    cursor: pointer;
-    transition: background 0.15s ease;
-  }
-
-  .entry-auth-btn--solid {
-    border: 1px solid rgba(255, 255, 255, 0.14);
-    background: rgba(255, 255, 255, 0.06);
-    color: #ece7d9;
-  }
-
-  .entry-auth-btn--solid:hover {
-    background: rgba(255, 255, 255, 0.12);
-  }
-
-  .entry-auth-btn--ghost {
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    background: transparent;
-    color: #cfc9ba;
-  }
-
-  .entry-auth-btn--ghost:hover {
-    background: rgba(255, 255, 255, 0.06);
-  }
-
-  .entry-secondary {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 9px;
-    width: 100%;
-    border: 1px solid rgba(255, 255, 255, 0.14);
-    border-radius: 12px;
-    padding: 13px 0;
-    background: rgba(255, 255, 255, 0.06);
-    color: #ece7d9;
-    font-family: var(--font-sans);
-    font-size: 14.5px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: background 0.15s ease;
-  }
-
-  .entry-secondary:hover {
-    background: rgba(255, 255, 255, 0.12);
-  }
-
-  .entry-secondary:disabled {
-    cursor: default;
-    opacity: 0.7;
-  }
-
-  .entry-join {
-    display: flex;
-    gap: 8px;
-  }
-
   .home-room-row-presence {
     flex: none;
     color: #8e897b;
@@ -708,4 +549,257 @@
   margin: 0 0 22px;
   color: rgba(236, 229, 255, 0.72);
   line-height: 1.55;
+}
+
+/* Guest landing — «Лендинг VoiceRoom, Вариант B»: single centered column
+   instead of the old two-column split. Kept separate from the shared
+   .start-layout/.start-copy classes, which the room reconnect screen
+   (StartRoomScreen.svelte) still uses as-is. */
+.landing-header-login {
+  flex: none;
+  color: var(--warm-ink-dim, #ece7d9);
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.landing-header-login:hover {
+  color: var(--accent);
+}
+
+.landing-layout {
+  width: min(100%, 1120px);
+  margin-inline: auto;
+  padding-top: clamp(20px, 5vh, 56px);
+  display: flex;
+  flex-direction: column;
+  gap: 48px;
+}
+
+.landing-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.landing-kicker {
+  margin: 0 0 20px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.landing-title {
+  margin: 0;
+  max-width: 16ch;
+  font-family: var(--font-sans);
+  font-weight: 800;
+  font-size: clamp(2.5rem, 5.5vw, 4.125rem);
+  line-height: 1;
+  letter-spacing: -0.035em;
+  color: var(--warm-ink, #ece7d9);
+}
+
+.landing-lead {
+  margin: 22px 0 0;
+  max-width: 540px;
+  font-size: 17.5px;
+  line-height: 1.55;
+  color: var(--warm-muted, #a39c8a);
+}
+
+.landing-cta-row {
+  display: flex;
+  align-items: stretch;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 32px;
+}
+
+.landing-primary-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  height: 52px;
+  border: none;
+  border-radius: 14px;
+  padding: 0 26px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-family: var(--font-sans);
+  font-size: 15.5px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.landing-primary-button:hover {
+  background: var(--accent-hover);
+}
+
+.landing-primary-button:disabled {
+  cursor: default;
+  opacity: 0.8;
+}
+
+.landing-primary-button .home-spinner {
+  border-color: color-mix(in oklch, var(--accent-ink), transparent 75%);
+  border-top-color: var(--accent-ink);
+}
+
+.lv-join {
+  display: flex;
+  align-items: stretch;
+  height: 52px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  overflow: hidden;
+  transition: border-color 0.15s ease;
+}
+
+.lv-join:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
+.lv-join-input {
+  width: 168px;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  outline: none;
+  padding: 0 16px;
+  color: var(--warm-ink, #ece7d9);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  letter-spacing: 0.04em;
+}
+
+.lv-join-input::placeholder {
+  color: var(--warm-faint, #7d7666);
+  letter-spacing: normal;
+}
+
+.lv-join-btn {
+  flex: none;
+  border: none;
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--warm-ink, #ece7d9);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 700;
+  padding: 0 22px;
+  cursor: pointer;
+  transition: background 0.13s ease;
+}
+
+.lv-join-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.lv-join-btn:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
+.landing-disclaimer {
+  margin: 16px 0 0;
+  color: var(--warm-faint, #7d7666);
+  font-size: 13px;
+}
+
+.landing-features {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 8px;
+}
+
+.landing-feature {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 18px 18px 20px;
+  background: rgba(255, 255, 255, 0.035);
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.landing-feature:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+.landing-feature-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.landing-feature-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  color: var(--accent);
+}
+
+.landing-feature-num {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  letter-spacing: 0.1em;
+  color: var(--warm-faint, #7d7666);
+}
+
+.landing-feature-title {
+  margin: 0;
+  font-size: 14.5px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+  color: var(--warm-ink, #ece7d9);
+}
+
+.landing-feature-desc {
+  margin: 7px 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--warm-muted-dim, #948d7c);
+}
+
+.landing-app-section {
+  width: min(100%, 460px);
+  margin-inline: auto;
+}
+
+@media (max-width: 900px) {
+  .landing-features {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .landing-cta-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .lv-join-input {
+    width: auto;
+  }
+
+  .landing-features {
+    grid-template-columns: 1fr;
+  }
 }
