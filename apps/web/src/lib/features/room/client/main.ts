@@ -44,6 +44,19 @@ export function mountRoomClient(_root: ParentNode = document, options: { roomId?
     toggleDeafen: toggleOutputMute
   });
 
+  // 2.4.0: global mic mute hotkey (Ctrl/Cmd+Shift+M), ignore when typing
+  function onMicHotkey(ev: KeyboardEvent) {
+    const isMac = /Mac|iPod|iPhone|iPad/.test(navigator.platform);
+    const mod = isMac ? ev.metaKey : ev.ctrlKey;
+    if (mod && ev.shiftKey && ev.key.toLowerCase() === 'm') {
+      const t = ev.target as HTMLElement | null;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      ev.preventDefault();
+      toggleMicrophoneMuted();
+    }
+  }
+  window.addEventListener('keydown', onMicHotkey, { signal: listenerSignal });
+
   const mountedRoomId = options.roomId || options.embeddedRoomId || '';
   if (mountedRoomId) {
     const peerSession = getStoredPeerSession(mountedRoomId);

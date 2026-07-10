@@ -16,6 +16,13 @@ Voice Room - голосовая комната по ссылке с демонс
 - Просмотр стрима на основной сцене или сворачивание обратно в плитку.
 - Noise suppression, mic gate, выбор input/output устройств и локальный meter микрофона.
 - Защита создания комнат: rate limit, proof-of-work challenge и лимит пустых комнат.
+- Модерация в статичных комнатах: кик и перманентный бан (по user+IP); владелец может удалять любые сообщения.
+- Удаление сообщений: свои — везде; владелец комнаты — в своей комнате. Полное исчезновение (soft-delete).
+- Ring: «Позвать друга» из комнаты только друзьям (эphemeral, без статуса доставки отправителю).
+- Web Push: ring, DM, friend requests (подавляются если вкладка в фокусе).
+- Настройки уведомлений: DND (сервер), mute DM thread (сервер), mute room sounds (local).
+- Многострочный чат + кликабельные ссылки (http/https/www) в чате комнаты и ЛС.
+- Хоткей ⌘⇧M / Ctrl+Shift+M для мьюта микрофона в комнате.
 
 ## Архитектура
 
@@ -160,6 +167,10 @@ GitHub-аналог GitLab CI/CD variables находится здесь:
 | `FRIEND_REQUEST_RATE_WINDOW_MS` | `60000` | Friend request rate window. |
 | `MAX_REALTIME_STREAMS_PER_USER` | `8` | Max concurrent WebSocket streams per authenticated user. |
 | `MAX_GUEST_STREAMS_PER_IP` | `8` | Max concurrent guest WebSocket streams per client IP. |
+| `MAX_ROOM_BANS` | `100` | Max ban records per static room (enforced on POST /ban). |
+| `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` | — | Web Push VAPID keys (e.g. mailto:). If absent push is disabled gracefully. |
+| `RING_RATE_LIMIT` / `RING_RATE_WINDOW_MS` | `1` / `30000` | Ring cooldown per sender→recipient pair. |
+| `RING_TTL_MS` | `30000` | Lifetime of a ring (toast + push TTL). |
 | `WS_MAX_PAYLOAD_BYTES` | `65536` | Max inbound WebSocket frame payload. |
 | `HOST` | `127.0.0.1` | Host for host-only API. Compose sets `0.0.0.0`. |
 | `PORT` | `3000` | API port. |
@@ -314,6 +325,8 @@ npm run desktop
 Комнаты приватны только за счет ссылки. Любой, у кого есть URL или код комнаты, может войти. Backend выдает LiveKit tokens только для существующих room sessions, но это не заменяет авторизацию или пароли на сами комнаты. Чат следует модели presence: читать можно по ссылке/коду комнаты, а писать может только активный участник комнаты с валидной peer-сессией или залогиненный пользователь.
 
 Аккаунты служат для владения постоянными комнатами, а не для контроля доступа к ним. Пароли хешируются `scrypt` (встроенный `node:crypto`), сессия живёт в HttpOnly + SameSite=Lax cookie (`vr_session`) до `SESSION_TTL_MS`; попытки входа/регистрации ограничены `AUTH_RATE_LIMIT` на IP. Логин нормализуется в нижний регистр и уникален. При создании постоянной комнаты залогиненным пользователем она получает `owner_id`, и список «Мои комнаты» приходит с сервера (`GET /api/auth/rooms`). Временные комнаты остаются ownerless.
+
+Модерация (2.4.0): кик и бан доступны только владельцу статичной комнаты. Бан хранит user_id (nullable) + ip на момент бана; на входе (join, token, chat, preview) проверяется ИЛИ user_id ИЛИ ip. Разбан только через undo-тост сразу после бана (DELETE /bans/:id). Причина не показывается цели. VPN-обход гостем с того же IP принят как ограничение (как Discord/Telegram). Баны и подписки durable в Postgres; ring/undo/presence-IP process-local (consistent with current single-instance design).
 
 Постоянные комнаты больше не считаются в IP-квоту: создавать их могут только авторизованные пользователи, а владение ограничено `MAX_STATIC_ROOMS_PER_USER` (по умолчанию 3). Временные ownerless-комнаты остаются ограничены по IP через `MAX_TEMP_ROOMS_PER_IP` (legacy `MAX_EMPTY_ROOMS_PER_IP` используется только как fallback для старых env-файлов), чтобы один IP не заполнял `MAX_ROOMS` пустыми временными комнатами.
 
