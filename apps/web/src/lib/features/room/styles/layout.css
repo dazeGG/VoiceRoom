@@ -13,6 +13,14 @@ body[data-screen="room"] .topbar {
   align-items: center;
 }
 
+/* .app-shell's shared padding-top (var(--space-lg) = 24px) is 4px taller than
+   the lobby room preview's own header padding (.lobby-roomview-top: 20px), so
+   the two screens jump on join. Match the preview's top offset here instead of
+   touching the shared .app-shell padding used by every other screen. */
+body[data-screen="room"] .app-shell {
+  padding-top: 20px;
+}
+
 body[data-screen="room"] .brand {
   display: none;
 }
