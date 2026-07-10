@@ -7,6 +7,7 @@ const fastifyWebsocket = require('@fastify/websocket');
 const { createConnectionRegistry } = require('./realtime/registry');
 const { createWsHandler } = require('./realtime/ws-handler');
 const { createRoomRealtimeRuntime } = require('./realtime/room-runtime');
+const { buildServerEnvelope } = require('./realtime/envelope');
 const { URL } = require('node:url');
 const { AccessToken, TrackSource } = require('livekit-server-sdk');
 
@@ -1607,17 +1608,11 @@ async function handleDeleteRoomChatMessage(req, res, roomId, messageId) {
     return;
   }
 
-  // Realtime delete notification to both voice peers and preview subscribers
-  const delEvent = { type: 'room.chat.deleted', payload: { roomId, messageId } };
-  try {
-    // active voice peers via legacy broadcast
-    const presence = getPresenceRoom ? getPresenceRoom(roomId) : null;
-    if (presence) broadcast(presence, delEvent);
-  } catch {}
-  try {
-    // previews + active via runtime detail broadcast (raw event ok for client listener)
-    roomRuntime?.broadcastRoomDetail?.(roomId, delEvent);
-  } catch {}
+  // Realtime delete notification to both voice peers and preview subscribers.
+  // Use the room-detail WS envelope directly: legacy peer broadcast only accepts
+  // legacy event names and treats unknown events as transport failures.
+  const delEvent = buildServerEnvelope('room.chat.deleted', { roomId, messageId });
+  roomRuntime?.broadcastRoomDetail?.(roomId, delEvent);
 
   sendJson(res, 200, { ok: true, deleted: true });
 }

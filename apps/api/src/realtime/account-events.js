@@ -21,6 +21,12 @@ function toWsAccountEvent(message) {
       return buildServerEnvelope('dm.message', { message: message.message });
     case 'dm-read':
       return buildServerEnvelope('dm.read', { userId: message.userId });
+    case 'dm.message.deleted':
+    case 'dm-message-deleted':
+      return buildServerEnvelope('dm.message.deleted', {
+        messageId: message.messageId,
+        peerUserId: message.peerUserId
+      });
     default:
       return null;
   }

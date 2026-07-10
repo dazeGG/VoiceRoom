@@ -146,6 +146,14 @@
     const controller = new AbortController();
     void refreshMessages(controller.signal);
     const unsubscribe = getAppRealtime().subscribe((event) => {
+      if (event.type === 'room.chat.deleted' && event.payload.roomId === activeRoomId) {
+        const messageId = event.payload.messageId;
+        if (messageId) {
+          messages = messages.filter((message) => message.id !== messageId);
+          messageIds.delete(messageId);
+        }
+        return;
+      }
       if (event.type !== 'room.chat.message' || event.payload.roomId !== activeRoomId) return;
       const message = event.payload.message;
       if (!message?.id || messageIds.has(message.id) || messages.some((item) => item.id === message.id)) return;

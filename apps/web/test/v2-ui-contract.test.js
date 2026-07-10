@@ -1060,3 +1060,18 @@ test('chat linkify util safely detects http/www links and rejects dangerous sche
   // guard logic present
   assert.match(linkifySrc, /https\?:/);
 });
+
+test('delete realtime contracts avoid stale chat and false room affordances', () => {
+  const roomChat = read('src/lib/features/room/components/RoomChat.svelte');
+  const previewChat = read('src/lib/features/home/components/lobby/RoomPreviewChat.svelte');
+  const friends = read('src/lib/features/home/model/friends.svelte.ts');
+  const accountEvents = read('../api/src/realtime/account-events.js');
+  const apiServer = read('../api/src/server.js');
+
+  assert.match(apiServer, /buildServerEnvelope\('room\.chat\.deleted'/);
+  assert.doesNotMatch(apiServer, /broadcast\(presence, delEvent\)/);
+  assert.match(accountEvents, /case 'dm\.message\.deleted'/);
+  assert.match(previewChat, /event\.type === 'room\.chat\.deleted'[\s\S]*messages = messages\.filter/);
+  assert.match(friends, /case 'dm\.message\.deleted'[\s\S]*refreshFriends\(\)/);
+  assert.match(roomChat, /\{#if group\.self\}[\s\S]*class="chat-msg-delete"/);
+});

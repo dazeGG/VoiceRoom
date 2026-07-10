@@ -180,9 +180,10 @@ export async function deleteMessage(messageId: string): Promise<void> {
   const peerId = friendsState.selectedFriendId;
   if (!peerId || !messageId) return;
   await deleteDirectMessage(peerId, messageId);
-  // remove locally; realtime delete will also arrive for other tabs
+  // Remove locally; realtime delete will also arrive for other tabs. Refresh the
+  // summary so last-message ordering and unread badges reflect soft-deletes.
   friendsState.thread = friendsState.thread.filter((m) => m.id !== messageId);
-  // lastMessage may need refresh but ok for now
+  await refreshFriends().catch(() => {});
 }
 
 function appendToThread(message: DirectMessage): void {
@@ -323,6 +324,7 @@ function handleRealtimeEvent(event: RealtimeEvent): void {
       const mid = event.payload?.messageId;
       if (mid) {
         friendsState.thread = friendsState.thread.filter((m) => m.id !== mid);
+        void refreshFriends().catch(() => {});
       }
       break;
     }

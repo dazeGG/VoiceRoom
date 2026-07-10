@@ -381,7 +381,7 @@ function createFriendStore({ databaseUrl, logger = console, pool } = {}) {
     const result = await getPool().query(
       `UPDATE direct_messages
        SET read_at = current_timestamp
-       WHERE recipient_id = $1 AND sender_id = $2 AND read_at IS NULL`,
+       WHERE recipient_id = $1 AND sender_id = $2 AND read_at IS NULL AND deleted_at IS NULL`,
       [userId, peerId]
     );
     return { count: result.rowCount };
@@ -391,7 +391,7 @@ function createFriendStore({ databaseUrl, logger = console, pool } = {}) {
     const result = await getPool().query(
       `SELECT sender_id, COUNT(*)::int AS count
        FROM direct_messages
-       WHERE recipient_id = $1 AND read_at IS NULL
+       WHERE recipient_id = $1 AND read_at IS NULL AND deleted_at IS NULL
        GROUP BY sender_id`,
       [userId]
     );

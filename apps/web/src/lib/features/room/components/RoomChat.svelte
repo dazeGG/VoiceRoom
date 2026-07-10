@@ -347,13 +347,15 @@
             {#each group.messages as message (message.id)}
               <p class="chat-msg-text">
                 <ChatText text={message.text} />
-                <button
-                  type="button"
-                  class="chat-msg-delete"
-                  aria-label="Удалить сообщение"
-                  title="Удалить"
-                  onclick={() => deleteMessage(message.id)}
-                >×</button>
+                {#if group.self}
+                  <button
+                    type="button"
+                    class="chat-msg-delete"
+                    aria-label="Удалить сообщение"
+                    title="Удалить"
+                    onclick={() => deleteMessage(message.id)}
+                  >×</button>
+                {/if}
               </p>
             {/each}
           </div>
