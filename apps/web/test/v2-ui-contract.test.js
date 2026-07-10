@@ -267,7 +267,7 @@ test('shared Popover primitive exposes trigger/content slots and dismiss behavio
   const popoverTypes = read('src/lib/shared/ui/Popover/types.ts');
   const popoverMenuItem = read('src/lib/shared/ui/Popover/PopoverMenuItem.svelte');
   const selectOption = read('src/lib/shared/ui/Select/Select.svelte');
-  const userMenu = read('src/lib/features/home/components/UserMenu.svelte');
+  const sidebarDownload = read('src/lib/features/home/components/SidebarDownload.svelte');
 
   assert.match(popoverTypes, /trigger: Snippet<\[PopoverTriggerState\]>/);
   assert.match(popoverTypes, /content: Snippet<\[PopoverContentState\]>/);
@@ -288,18 +288,18 @@ test('shared Popover primitive exposes trigger/content slots and dismiss behavio
   assert.match(popover, /\.popover-panel/);
   assert.match(popoverMenuItem, /\.popover-menu-item/);
   assert.match(selectOption, /\.popover-option/);
-  assert.match(userMenu, /import \{[^}]*\bPopover\b[^}]*\} from '\$lib\/shared\/ui'/);
-  assert.match(userMenu, /\{#snippet trigger\(/);
-  assert.match(userMenu, /\{#snippet content\(/);
-  assert.match(userMenu, /aria-haspopup="menu"/);
+  assert.match(sidebarDownload, /import \{[^}]*\bPopover\b[^}]*\} from '\$lib\/shared\/ui'/);
+  assert.match(sidebarDownload, /\{#snippet trigger\(/);
+  assert.match(sidebarDownload, /\{#snippet content\(/);
+  assert.match(sidebarDownload, /aria-haspopup="menu"/);
 });
 
 test('visual identity UI consumes backend keys and exposes only curated room presets', () => {
   const authApi = read('src/lib/api/auth.ts');
   const roomsApi = read('src/lib/api/rooms.ts');
   const tokens = read('src/lib/visual/tokens.ts');
-  const userMenu = read('src/lib/features/home/components/UserMenu.svelte');
-  const roomCard = read('src/lib/features/home/components/RoomCard.svelte');
+  const settingsModal = read('src/lib/features/home/components/SettingsModal.svelte');
+  const voiceHome = read('src/lib/features/home/components/lobby/VoiceHome.svelte');
   const createDialog = read('src/lib/features/home/components/CreateRoomDialog.svelte');
   const participantTile = read('src/lib/features/room/components/ParticipantTile.svelte');
   const chat = read('src/lib/features/room/components/RoomChat.svelte');
@@ -313,8 +313,8 @@ test('visual identity UI consumes backend keys and exposes only curated room pre
   assert.match(roomsApi, /roomPresetKey\?: string/);
   assert.match(tokens, /export const AVATAR_COLORS/);
   assert.match(tokens, /export const ROOM_PRESETS/);
-  assert.match(userMenu, /getAvatarColor\(user\.avatarColorKey\)/);
-  assert.match(roomCard, /roomVisual\(room\)/);
+  assert.match(settingsModal, /getAvatarColor\(user\?\.avatarColorKey\)/);
+  assert.match(voiceHome, /roomVisual\(room\)/);
   assert.match(createDialog, /ROOM_PRESETS/);
   assert.match(createDialog, /roomPresetKey/);
   assert.doesNotMatch(createDialog, /type="file"|upload|custom|contenteditable/i);
@@ -329,11 +329,11 @@ test('visual identity UI consumes backend keys and exposes only curated room pre
   assert.match(roomView, /import \{ session \} from '\$lib\/features\/auth\/session\.svelte'/);
   assert.match(roomView, /avatarColorKey: session\.user\?\.avatarColorKey \|\| ''/);
   assert.match(roomView, /updateParticipant\(event\.payload\.peer\)/);
-  assert.match(roomView, /updateParticipant\(\{ \.\.\.localPeer, isLocal: true \}\)/);
+  assert.match(roomView, /updateParticipant\(\{ \.\.\.localPeer,[\s\S]*isLocal: true/);
   assert.match(tokens, /ROOM_ICON_EMOJIS/);
   assert.match(tokens, /ROOM_COLOR_TOKENS/);
   assert.match(tokens, /key: '',/);
-  assert.doesNotMatch(roomCard, /room\.emoji \|\| visual\.emoji/);
+  assert.doesNotMatch(voiceHome, /room\.emoji \|\| visual\.emoji/);
   assert.doesNotMatch(roomView, /state\.roomEmoji \|\| roomVisual\.emoji/);
   assert.ok(tokens.indexOf('if (hasIconKey || hasColorKey)') < tokens.indexOf('item.emoji === value.emoji'));
 });
@@ -630,16 +630,16 @@ test('room route uses lobby for authenticated users and preserves standalone gue
 
 test('anonymous quick-start and join-by-code stay independent from account APIs', () => {
   const home = read('src/lib/features/home/HomePage.svelte');
-  const entry = read('src/lib/features/home/components/EntryCard.svelte');
+  const landingHero = read('src/lib/features/home/components/LandingHero.svelte');
   const roomsApi = read('src/lib/api/rooms.ts');
   const authApi = read('src/lib/api/auth.ts');
 
-  assert.match(home, /<EntryCard[\s\S]*onCreateTemp=\{handleCreateTemp\}[\s\S]*onJoin=\{handleJoinRoom\}/);
+  assert.match(home, /<LandingHero[\s\S]*onCreateTemp=\{handleCreateTemp\}[\s\S]*onJoin=\{handleJoinRoom\}/);
   assert.match(home, /const showLobby = \$derived\(session\.loaded && Boolean\(user\)\)/);
   assert.match(home, /function handleJoinRoom\(\): void[\s\S]*openRoom\(roomId\)/);
   assert.match(home, /async function handleCreateTemp\(\): Promise<void>[\s\S]*createRoom\(\{ isStatic: false \}\)/);
-  assert.match(entry, /Без регистрации/);
-  assert.match(entry, /или войдите по коду/);
+  assert.match(landingHero, /Без имени и регистрации/);
+  assert.match(landingHero, /Код комнаты/);
   assert.match(roomsApi, /postJson<CreateRoomResponse>\('\/api\/rooms'/);
   assert.match(roomsApi, /isStatic: Boolean\(options\.isStatic\)/);
   assert.doesNotMatch(roomsApi, /authPost|fetchMe|\/auth\/rooms/);
@@ -673,17 +673,18 @@ test('remote microphone playback has subscription and audio-element recovery hoo
   assert.match(participants, /if \(peer\.micReceiver === receiver\) peer\.micReceiver = null/);
 });
 
-test('hotfix lobby UX keeps dock in main area, preview chat, and add-friend submit flow', () => {
+test('lobby v2 keeps dock in main area, preview chat, and people add-friend flow', () => {
   const controls = read('src/lib/features/room/styles/controls.css');
   const lobby = read('src/lib/features/home/LobbyPage.svelte');
   const sidebar = read('src/lib/features/home/components/lobby/Sidebar.svelte');
-  assert.match(sidebar, /function friendStatusLabel/);
+  assert.match(sidebar, /import \{ Avatar, Badge \} from '\$lib\/shared\/ui'/);
+  assert.match(sidebar, /onOpenPeople/);
   assert.doesNotMatch(sidebar, /lastMessagePreview/);
   assert.doesNotMatch(sidebar, /entry\.lastMessage\.body/);
   const previewView = read('src/lib/features/home/components/lobby/RoomPreviewView.svelte');
   const browseView = read('src/lib/features/home/components/lobby/RoomBrowseView.svelte');
   const previewChat = read('src/lib/features/home/components/lobby/RoomPreviewChat.svelte');
-  const addFriend = read('src/lib/features/home/components/lobby/AddFriendView.svelte');
+  const peopleView = read('src/lib/features/home/components/lobby/PeopleView.svelte');
   const friendsCss = read('src/lib/features/home/styles/friends.css');
 
   assert.match(controls, /body\[data-lobby-embedded="true"\] \.room-dock/);
@@ -713,10 +714,10 @@ test('hotfix lobby UX keeps dock in main area, preview chat, and add-friend subm
   assert.match(browseView, /let previewChatOpen = \$state\(false\)/);
   assert.match(previewView, /previewChatOpen = false/);
   assert.match(browseView, /previewChatOpen = false/);
-  assert.match(addFriend, /copyText\(user\.login\)/);
-  assert.doesNotMatch(addFriend, /searchUsers/);
-  assert.doesNotMatch(addFriend, /oninput=\{onInput\}/);
-  assert.match(addFriend, /@daze/);
+  assert.match(peopleView, /copyText\(user\.login\)/);
+  assert.doesNotMatch(peopleView, /searchUsers/);
+  assert.doesNotMatch(peopleView, /oninput=\{onInput\}/);
+  assert.match(peopleView, /@\{user\.login\}/);
   assert.match(friendsCss, /\.lobby-preview-chat/);
   assert.match(friendsCss, /data-preview-chat-open/);
   assert.match(friendsCss, /\.lobby-dm-head[\s\S]*border: 0/);
