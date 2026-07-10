@@ -9,7 +9,7 @@
   import SettingsModal from './components/SettingsModal.svelte';
   import RoomPage from '$lib/features/room/RoomPage.svelte';
   import {
-    leaveActiveVoiceRoom,
+    leaveActiveVoiceRoomWithCue,
     toggleActiveVoiceMic,
     toggleActiveVoiceDeafen,
     voiceSession
@@ -37,7 +37,7 @@
     selectRoomPreview,
     setViewedRoomFromRoute
   } from './model/room-navigation.svelte';
-  import { roomDisplayName } from './model/rooms';
+  import { roomDisplayName, roomVisual } from './model/rooms';
   import { roomUi } from '$lib/features/room/room-ui.svelte';
   import '$lib/shared/styles/typography.css';
   import '$lib/shared/styles/dialog.css';
@@ -64,6 +64,7 @@
   const connectedVoiceRoomId = $derived(getActiveVoiceRoomId());
   const selectedRoom = $derived(rooms.find((room) => room.roomId === selectedRoomId) ?? null);
   const connectedVoiceRoom = $derived(rooms.find((room) => room.roomId === connectedVoiceRoomId) ?? null);
+  const connectedVoiceRoomVisual = $derived(connectedVoiceRoom ? roomVisual(connectedVoiceRoom) : null);
   const connectedRoomVisible = $derived(connectedRoomIsViewed(friendsState.mode));
   const embeddedRoomVisible = $derived(embeddedRoomIsVisible(friendsState.mode));
 
@@ -222,11 +223,11 @@
     history.pushState(null, '', `/r/${encodeURIComponent(openedRoomId)}`);
   }
 
-  function leaveConnectedVoiceRoom(): void {
+  async function leaveConnectedVoiceRoom(): Promise<void> {
     const leavingRoomId = connectedVoiceRoomId;
     const transition = resolveLeaveViewedConnectedRoom(leavingRoomId);
+    await leaveActiveVoiceRoomWithCue();
     decrementRoomPeerCount(leavingRoomId);
-    leaveActiveVoiceRoom();
     if (transition.closeEmbeddedRoom) {
       closeEmbeddedRoom();
       clearViewedRoom();
@@ -287,6 +288,7 @@
       onOpenSettings={openSettings}
       activeVoiceRoomId={connectedVoiceRoomId}
       activeVoiceRoomName={connectedVoiceRoom ? roomDisplayName(connectedVoiceRoom) : connectedVoiceRoomId || ''}
+      activeVoiceRoomVisual={connectedVoiceRoomVisual}
       activeVoiceMuted={voiceSession.muted}
       activeVoiceDeafened={voiceSession.deafened}
       onOpenVoiceRoom={openConnectedVoiceRoom}

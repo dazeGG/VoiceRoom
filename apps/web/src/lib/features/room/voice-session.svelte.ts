@@ -1,3 +1,6 @@
+import { wait } from './client/core/utils';
+import { playPeerCue } from './client/media/cues';
+
 type LeaveHandler = () => void;
 type ControlHandler = () => void;
 
@@ -41,8 +44,11 @@ export function registerActiveVoiceLeave(handler: LeaveHandler): () => void {
   };
 }
 
-export function leaveActiveVoiceRoom(): void {
-  activeLeaveHandler?.();
+export async function leaveActiveVoiceRoomWithCue(): Promise<void> {
+  if (!activeLeaveHandler) return;
+  playPeerCue('leave');
+  await wait(180);
+  activeLeaveHandler();
 }
 
 export function registerActiveVoiceControls(handlers: {

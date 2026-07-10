@@ -55,6 +55,47 @@ test('lobby join is the single room-code action and explains auto-save', () => {
   assert.match(voiceHome, /Постоянные комнаты сохраняются автоматически/);
 });
 
+test('active voice widget uses room visual header open and leave cue parity', () => {
+  const lobby = read('src/lib/features/home/LobbyPage.svelte');
+  const sidebar = read('src/lib/features/home/components/lobby/Sidebar.svelte');
+  const widget = read('src/lib/features/home/components/lobby/VoiceCallWidget.svelte');
+  const voiceSession = read('src/lib/features/room/voice-session.svelte.ts');
+  const roomView = read('src/lib/features/room/client/room/room.ts');
+  const leaveConnectedVoiceRoom = functionBody(lobby, 'leaveConnectedVoiceRoom');
+  const leaveWithCue = functionBody(voiceSession, 'leaveActiveVoiceRoomWithCue');
+  const dockLeave = functionBody(roomView, 'handleLeaveButtonClick');
+
+  assert.match(lobby, /import \{ roomDisplayName, roomVisual \} from '\.\/model\/rooms'/);
+  assert.match(lobby, /const connectedVoiceRoomVisual = \$derived\(connectedVoiceRoom \? roomVisual\(connectedVoiceRoom\) : null\)/);
+  assert.match(lobby, /activeVoiceRoomVisual=\{connectedVoiceRoomVisual\}/);
+
+  assert.match(sidebar, /import type \{ RoomPresetToken \} from '\$lib\/visual\/tokens'/);
+  assert.match(sidebar, /activeVoiceRoomVisual\?: RoomPresetToken \| null/);
+  assert.match(sidebar, /roomVisual=\{activeVoiceRoomVisual\}/);
+
+  assert.match(widget, /import \{ getRoomPreset, type RoomPresetToken \} from '\$lib\/visual\/tokens'/);
+  assert.match(widget, /const visual = \$derived\(roomVisual \?\? getRoomPreset\(null\)\)/);
+  assert.match(widget, /<button class="voice-head" type="button" aria-label=\{openLabel\} title=\{openLabel\} onclick=\{onOpen\}>/);
+  assert.match(widget, /style=\{`background:\$\{visual\.background\};box-shadow:0 0 0 1px \$\{visual\.ring\}`\}/);
+  assert.match(widget, />\{visual\.emoji\}<\/span>/);
+  assert.doesNotMatch(widget, /class="voice-open"|\.voice-open|>Открыть<|iconLg/);
+
+  assert.match(widget, /onclick=\{onToggleMic\}/);
+  assert.match(widget, /onclick=\{onToggleDeafen\}/);
+  assert.match(widget, /onclick=\{onLeave\}/);
+
+  assert.match(lobby, /leaveActiveVoiceRoomWithCue/);
+  assert.match(leaveConnectedVoiceRoom, /await leaveActiveVoiceRoomWithCue\(\)/);
+  assert.match(voiceSession, /import \{ playPeerCue \} from '\.\/client\/media\/cues'/);
+  assert.match(voiceSession, /import \{ wait \} from '\.\/client\/core\/utils'/);
+  assert.match(leaveWithCue, /playPeerCue\('leave'\)/);
+  assert.match(leaveWithCue, /await wait\(180\)/);
+  assert.match(leaveWithCue, /activeLeaveHandler\(\)/);
+
+  assert.match(dockLeave, /playPeerCue\('leave'\)/);
+  assert.match(dockLeave, /await wait\(180\)/);
+});
+
 test('lobby separates viewed room from connected voice room', () => {
   const lobby = read('src/lib/features/home/LobbyPage.svelte');
   const browseView = read('src/lib/features/home/components/lobby/RoomBrowseView.svelte');
@@ -101,7 +142,7 @@ test('lobby separates viewed room from connected voice room', () => {
   assert.match(onEmbeddedLeave, /closeEmbeddedRoom\(\{ closedRoomId \}\)/);
   assert.match(onEmbeddedLeave, /if \(closedViewedRoom\) clearViewedRoom\(\)/);
   assert.match(leaveConnectedVoiceRoom, /const leavingRoomId = connectedVoiceRoomId/);
-  assert.match(leaveConnectedVoiceRoom, /leaveActiveVoiceRoom\(\)/);
+  assert.match(leaveConnectedVoiceRoom, /leaveActiveVoiceRoomWithCue\(\)/);
   assert.match(leaveConnectedVoiceRoom, /resolveLeaveViewedConnectedRoom\(leavingRoomId\)/);
   assert.match(leaveConnectedVoiceRoom, /closeEmbeddedRoom\(\)/);
   assert.ok(
