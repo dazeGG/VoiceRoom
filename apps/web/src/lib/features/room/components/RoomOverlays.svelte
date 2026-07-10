@@ -31,10 +31,10 @@
     screenSourceUi.tab === 'screens' ? s.type === 'screen' : s.type !== 'screen'
   ));
   const selectedSource = $derived(screenSourceUi.sources.find((s) => s.id === screenSourceUi.selectedSourceId));
-  const qualityLabel = $derived(screenSourceUi.quality === 'high' ? '1080p' : '720p');
+  const qualityLabel = $derived(screenSourceUi.mode === 'text' ? 'Источник' : screenSourceUi.quality === 'high' ? '1080p' : '720p');
   const fpsLabel = $derived(screenSourceUi.mode === 'text' ? '5 к/с' : '30 к/с');
   const summaryName = $derived(selectedSource?.name ?? 'Не выбрано');
-  const summaryDetail = $derived(`${screenSourceUi.quality === 'high' ? 'HD' : 'SD'} · ${qualityLabel} · ${fpsLabel}${screenSourceUi.audio ? ' · звук' : ''}`);
+  const summaryDetail = $derived(`${screenSourceUi.mode === 'text' ? 'Текст' : screenSourceUi.quality === 'high' ? 'HD' : 'SD'} · ${qualityLabel} · ${fpsLabel}${screenSourceUi.audio ? ' · звук' : ''}`);
 
   $effect(() => {
     syncGuestNameDialogInert(guestNameUi.open, guestNameDialog ?? null);
@@ -188,6 +188,7 @@
 
       <div class="screen-source-footer-actions">
         <!-- SD / HD toggle -->
+        {#if screenSourceUi.mode === 'games'}
         <div class="screen-source-res-toggle" role="group" aria-label="Качество">
           <button
             class="screen-source-res-btn"
@@ -200,6 +201,7 @@
             onclick={() => { screenSourceUi.quality = 'high'; }}
           >HD</button>
         </div>
+        {/if}
 
         <!-- Settings gear + popover -->
         <div class="screen-source-gear-wrap">

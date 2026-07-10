@@ -80,9 +80,7 @@ export function getScreenMetaView(): ScreenMetaView | null {
   const { qualityLabel, fpsLabel } = getScreenProfileLabels(profileId);
   const viewers = getScreenViewers(participant.id);
   const captureStats = participant.isLocal ? state.localScreenStats : null;
-  const captureLabel = captureStats?.captureFramesReceived !== undefined
-    ? `захват: ${captureStats.captureFramesReceived}/${captureStats.captureFramesWritten ?? 0}/${captureStats.captureDropsBackpressure ?? 0}`
-    : '';
+  const captureLabel = getScreenCaptureLabel(captureStats);
 
   return {
     title: participant.isLocal ? 'Ваш стрим' : `Стрим ${participant.name}`,
@@ -99,6 +97,16 @@ export function getScreenMetaView(): ScreenMetaView | null {
     showSepViewers: Boolean(qualityLabel || fpsLabel || captureLabel),
     viewerAvatars: viewers.map(getViewerAvatarItem)
   };
+}
+
+function getScreenCaptureLabel(captureStats: typeof state.localScreenStats): string {
+  if (!captureStats) return '';
+  const parts: string[] = [];
+  if (captureStats.encoderImplementation) parts.push(`энкодер: ${captureStats.encoderImplementation}`);
+  if (captureStats.captureFramesReceived !== undefined) {
+    parts.push(`захват: ${captureStats.captureFramesReceived}/${captureStats.captureFramesWritten ?? 0}/${captureStats.captureDropsBackpressure ?? 0}`);
+  }
+  return parts.join(' · ');
 }
 
 function getScreenViewers(ownerPeerId: string): Participant[] {

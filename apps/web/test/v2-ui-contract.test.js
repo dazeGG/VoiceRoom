@@ -449,24 +449,30 @@ test('screen share publish tuning applies codec, bitrate, degradation and conten
   const profiles = read('src/lib/features/room/client/media/profiles.ts');
   const capture = read('src/lib/features/room/client/services/screen-capture-service.ts');
   const screenShare = read('src/lib/features/room/client/services/screen-share-service.ts');
+  const livekit = read('src/lib/features/room/client/services/livekit-service.ts');
 
-  assert.match(config, /low:[\s\S]*15: 2_000_000[\s\S]*30: 3_000_000[\s\S]*60: 4_000_000/);
-  assert.match(config, /balanced:[\s\S]*15: 3_000_000[\s\S]*30: 5_000_000[\s\S]*60: 7_000_000/);
-  assert.match(config, /high:[\s\S]*15: 4_000_000[\s\S]*30: 7_000_000[\s\S]*60: 9_000_000/);
-  assert.match(config, /60:[\s\S]*contentHint: 'motion'[\s\S]*frameRate: 60/);
+  assert.doesNotMatch(config, /low:/);
+  assert.match(config, /balanced:[\s\S]*15: 3_000_000[\s\S]*30: 5_000_000/);
+  assert.match(config, /high:[\s\S]*15: 4_000_000[\s\S]*30: 7_000_000/);
+  assert.match(config, /source:[\s\S]*5: 1_800_000[\s\S]*source: true/);
+  assert.doesNotMatch(config, /60:[\s\S]*contentHint: 'motion'[\s\S]*frameRate: 60/);
+  assert.match(config, /SCREEN_SIMULCAST_LAYER = \{[\s\S]*height: 540[\s\S]*width: 960[\s\S]*5: 500_000[\s\S]*30: 1_500_000/);
   assert.match(profiles, /return 'h264'/);
   assert.match(profiles, /return 'vp9'/);
   assert.match(profiles, /return 'vp8'/);
   assert.match(profiles, /getScreenDegradationPreference/);
-  assert.match(capture, /'contentHint' in videoTrack && !videoTrack\.contentHint/);
+  assert.match(capture, /videoTrack\.contentHint = profile\.contentHint/);
+  assert.doesNotMatch(capture, /&& !videoTrack\.contentHint/);
   assert.match(screenShare, /await publishLocalScreenTracks\(\);[\s\S]*await applyLocalScreenEncodingProfile\(profile\)/);
   assert.match(screenShare, /if \(!parameters\.encodings\?\.length\) parameters\.encodings = \[\{\}\]/);
   assert.match(screenShare, /primaryEncoding\.maxBitrate = profile\.videoBitrate/);
   assert.match(screenShare, /primaryEncoding\.degradationPreference = degradationPreference/);
   assert.match(screenShare, /parameters\.degradationPreference = degradationPreference/);
+  assert.match(screenShare, /encoderImplementation/);
+  assert.match(livekit, /adaptiveStream: false/);
 });
 
-test('screen share quality contract exposes Discord-like modes with custom advanced controls', () => {
+test('screen share quality contract exposes Discord-like source text and game modes', () => {
   const config = read('src/lib/features/room/client/core/config.ts');
   const profiles = read('src/lib/features/room/client/media/profiles.ts');
   const state = read('src/lib/features/room/client/model/room-state.ts');
@@ -481,19 +487,20 @@ test('screen share quality contract exposes Discord-like modes with custom advan
   const overlayStyles = read('src/lib/features/room/styles/overlays.css');
 
   assert.match(config, /DEFAULT_SCREEN_STREAM_MODE = 'games'/);
-  assert.match(config, /SCREEN_STREAM_MODE_PROFILES = \{[\s\S]*games: 'balanced-30'[\s\S]*text: 'balanced-5'/);
-  assert.match(config, /SCREEN_ADAPT_PROFILE_ORDER = \['low-5', 'balanced-5', 'high-5'/);
+  assert.match(config, /SCREEN_STREAM_MODE_PROFILES = \{[\s\S]*games: 'balanced-30'[\s\S]*text: 'source-5'/);
+  assert.match(config, /SCREEN_ADAPT_PROFILE_ORDER_BY_MODE = \{[\s\S]*games: \['balanced-15', 'balanced-30', 'high-30'\][\s\S]*text: \['balanced-5', 'source-5'\]/);
   assert.match(config, /balanced:[\s\S]*5: 1_200_000[\s\S]*15: 3_000_000/);
   assert.match(config, /high:[\s\S]*5: 1_800_000[\s\S]*15: 4_000_000/);
-  assert.match(config, /low:[\s\S]*5: 800_000[\s\S]*15: 2_000_000/);
+  assert.match(config, /source:[\s\S]*5: 1_800_000[\s\S]*label: 'Источник'/);
+  assert.doesNotMatch(config, /low:/);
   assert.match(profiles, /export function getScreenProfileForMode/);
   assert.match(profiles, /export function getScreenModeSummary/);
   assert.match(state, /localScreenMode: DEFAULT_SCREEN_STREAM_MODE/);
   assert.match(screenShare, /export function getSelectedScreenProfileId/);
-  assert.match(screenShare, /export function getScreenStreamModeView/);
-  assert.match(screenShare, /export async function selectScreenStreamMode/);
-  assert.match(screenShare, /export async function setCustomScreenQuality/);
-  assert.match(screenShare, /export async function setCustomScreenFps/);
+  assert.doesNotMatch(screenShare, /export function getScreenStreamModeView/);
+  assert.doesNotMatch(screenShare, /export async function selectScreenStreamMode/);
+  assert.doesNotMatch(screenShare, /export async function setCustomScreenQuality/);
+  assert.doesNotMatch(screenShare, /export async function setCustomScreenFps/);
   assert.match(screenShare, /state\.localScreenTargetProfileId = profile\.id/);
   assert.doesNotMatch(dock, /screenMenuButton/);
   assert.match(sourceUi, /mode: 'games' as 'games' \| 'text'/);
@@ -503,6 +510,7 @@ test('screen share quality contract exposes Discord-like modes with custom advan
   assert.match(types, /mode: ScreenStreamMode/);
   assert.match(types, /source: DesktopCaptureSource/);
   assert.match(picker, /export function confirmScreenSourcePicker/);
+  assert.match(picker, /screenSourceUi\.mode === 'text' \? 'source' : screenSourceUi\.quality/);
   assert.match(picker, /createScreenProfileId\(qualityId, fpsId\)/);
   assert.match(picker, /mode: screenSourceUi\.mode/);
   assert.match(picker, /streamAudioEnabled: screenSourceUi\.audio/);
@@ -513,6 +521,7 @@ test('screen share quality contract exposes Discord-like modes with custom advan
   assert.match(capture, /const withAudio = selection\.streamAudioEnabled === true/);
   assert.match(capture, /openDesktopStream\(source\.id, selectedProfile/);
   assert.match(capture, /return \{ mode: selection\.mode, profile: selectedProfile, stream \}/);
+  assert.match(capture, /SCREEN_QUALITY_OPTIONS\[profile\.qualityId\]\?\.source/);
   assert.match(overlays, /Режим стрима/);
   assert.match(overlays, /Плавное видео/);
   assert.match(overlays, /Чёткая картинка/);
@@ -521,6 +530,8 @@ test('screen share quality contract exposes Discord-like modes with custom advan
   assert.match(overlays, /onclick=\{confirmScreenSourcePicker\}/);
   assert.doesNotMatch(controls, /\.screen-mode-option/);
   assert.match(overlayStyles, /\.screen-source-pop-preset/);
+  assert.match(overlays, /screenSourceUi\.mode === 'games'/);
+  assert.match(overlays, /Источник/);
   assert.match(overlayStyles, /\.screen-source-res-btn\[aria-pressed="true"\]/);
 });
 

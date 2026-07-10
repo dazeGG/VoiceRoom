@@ -31,7 +31,7 @@ export function confirmScreenSourcePicker(): void {
   if (!source) return;
 
   const fpsId = screenSourceUi.mode === 'text' ? '5' : '30';
-  const qualityId = screenSourceUi.quality;
+  const qualityId = screenSourceUi.mode === 'text' ? 'source' : screenSourceUi.quality;
   const profileId = createScreenProfileId(qualityId, fpsId);
 
   resolveScreenSourcePicker({
