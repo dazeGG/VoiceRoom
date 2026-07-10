@@ -32,6 +32,12 @@
   --radius-lg: 20px;
   --radius-xl: 26px;
   --radius-pill: 999px;
+  --interactive-sm: 36px;
+  --interactive-md: 40px;
+  --interactive-lg: 52px;
+  --interactive-radius: var(--radius-md);
+  --interactive-gap: 10px;
+  --interactive-pad-x: 22px;
   --space-2xs: 4px;
   --space-xs: 8px;
   --space-sm: 12px;
