@@ -69,6 +69,10 @@ services:
     build:
       context: .
       target: web
+      args:
+        DOMAIN: ${DOMAIN:?set DOMAIN in .env}
+        LIVEKIT_DOMAIN: ${LIVEKIT_DOMAIN:-livekit.${DOMAIN}}
+        LIVEKIT_URL: ${LIVEKIT_URL:-wss://${LIVEKIT_DOMAIN:-livekit.${DOMAIN}}}
     restart: unless-stopped
     depends_on:
       api:

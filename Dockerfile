@@ -10,6 +10,13 @@ RUN npm ci
 
 FROM deps AS web-build
 
+ARG DOMAIN
+ARG LIVEKIT_DOMAIN
+ARG LIVEKIT_URL
+ENV DOMAIN=$DOMAIN
+ENV LIVEKIT_DOMAIN=$LIVEKIT_DOMAIN
+ENV LIVEKIT_URL=$LIVEKIT_URL
+
 COPY apps/web ./apps/web
 COPY packages ./packages
 RUN npm run build

@@ -39,6 +39,20 @@ test('home auth flow is loader-first and has no localStorage session oracle', ()
   assert.match(home, /retrySessionLoad/);
 });
 
+test('page CSP narrows websocket connect sources to configured LiveKit origins', () => {
+  const config = read('svelte.config.js');
+  const cspBlock = config.slice(config.indexOf("'connect-src'"), config.indexOf("'default-src'"));
+
+  assert.match(config, /function liveKitConnectSources/);
+  assert.ok(cspBlock.includes('...liveKitConnectSources()'));
+  assert.ok(cspBlock.includes("'ws://localhost:*'"));
+  assert.ok(cspBlock.includes("'ws://127.0.0.1:*'"));
+  assert.doesNotMatch(cspBlock, /'ws:'\s*,/);
+  assert.doesNotMatch(cspBlock, /'wss:'\s*,/);
+  assert.ok(config.includes("'style-src': ['self', 'unsafe-inline']"));
+  assert.match(config, /style attributes/);
+});
+
 test('lobby join is the single room-code action and explains auto-save', () => {
   const lobby = read('src/lib/features/home/LobbyPage.svelte');
   const voiceHome = read('src/lib/features/home/components/lobby/VoiceHome.svelte');

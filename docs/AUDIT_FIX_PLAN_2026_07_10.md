@@ -186,9 +186,11 @@
 
 **Сложность:** S (шаг 1). **Риск:** нулевой.
 
-### C7. Гармонизировать CSP страницы с CSP API (перенесено из security-прохода) `[ ]`
+### C7. Гармонизировать CSP страницы с CSP API (перенесено из security-прохода) `[x]`
 
 `svelte.config.js`: `style-src 'unsafe-inline'` и `connect-src ws: wss:` (любые хосты) против строгого CSP API (`server.js:190`). Svelte 5 обычно совместим с nonce/hash-подходом SvelteKit (`mode: 'hash'` уже включён — проверить, какие инлайны требуют `unsafe-inline`, вероятно scoped-стили компилируются в файлы и директиву можно сузить). `connect-src` сузить до self + LiveKit-домен (прокинуть через env в build или отдавать meta с API).
+
+Сделано 2026-07-10: `connect-src` больше не разрешает глобальные `ws:`/`wss:`; разрешены `self`, LiveKit origin из build env (`LIVEKIT_URL`/`LIVEKIT_PUBLIC_URL`/`LIVEKIT_DOMAIN`/`DOMAIN`), локальные dev WS origins и ICE schemes. Production compose прокидывает build args в web build. `style-src 'unsafe-inline'` оставлен осознанно: проверка показала текущие inline `style` attributes в Svelte markup (`app.html`, lobby/room components), их удаление — отдельный UI-refactor, иначе ломаются стили.
 **Сложность:** M. **Риск:** средний (легко сломать стили/подключение — проверять e2e и вручную).
 
 ---
