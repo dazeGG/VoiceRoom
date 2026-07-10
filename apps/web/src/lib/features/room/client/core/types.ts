@@ -4,7 +4,7 @@ import type { NoiseMode } from './config';
 import type { Participant, PeerInfo } from '../model/participants';
 export type { Participant, ParticipantViewRefs, PeerInfo } from '../model/participants';
 
-export type ScreenStreamMode = 'games' | 'text' | 'custom';
+export type ScreenStreamMode = 'games' | 'text';
 
 export interface ScreenProfile {
   contentHint: string;
@@ -81,6 +81,7 @@ export interface ScreenStatsSnapshot {
   captureFramesWritten?: number;
   captureRelayRestarts?: number;
   codec: string;
+  encoderImplementation: string;
   firCount: number;
   firDelta: number;
   fps: number;
@@ -103,6 +104,7 @@ export interface ScreenStatsSnapshot {
 
 export interface ScreenStatsPrevious {
   bytesSent: number;
+  encoderImplementation?: string;
   captureDropsBackpressure?: number;
   captureFramesReceived?: number;
   captureFramesWritten?: number;

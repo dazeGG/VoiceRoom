@@ -69,14 +69,17 @@ export const DEFAULT_SCREEN_PROFILE_ID = `${DEFAULT_SCREEN_QUALITY_ID}-${DEFAULT
 export const DEFAULT_SCREEN_STREAM_MODE = 'games';
 export const SCREEN_STREAM_MODE_PROFILES = {
   games: 'balanced-30',
-  text: 'balanced-5'
+  text: 'source-5'
 } as const;
 export const MICROPHONE_AUDIO_BITRATE = 64_000;
 export const SCREEN_AUDIO_BITRATE = 192_000;
 export const SCREEN_ADAPT_GOOD_SAMPLE_TARGET = 16;
 export const SCREEN_ADAPT_MIN_INTERVAL_MS = 20_000;
 export const SCREEN_ADAPT_POOR_SAMPLE_TARGET = 3;
-export const SCREEN_ADAPT_PROFILE_ORDER = ['low-5', 'balanced-5', 'high-5', 'low-15', 'low-30', 'balanced-15', 'low-60', 'high-15', 'balanced-30', 'balanced-60', 'high-30', 'high-60'];
+export const SCREEN_ADAPT_PROFILE_ORDER_BY_MODE = {
+  games: ['balanced-15', 'balanced-30', 'high-30'],
+  text: ['balanced-5', 'source-5']
+} as const;
 export const SCREEN_STATS_INTERVAL_MS = 1500;
 export const SCREEN_VIDEO_BACKUP_CODEC: string = 'vp8';
 export const PEER_SESSION_STORAGE_PREFIX = 'voice-room:peer-session:';
@@ -87,6 +90,7 @@ export interface ScreenQualityOption {
   height: number;
   id: string;
   label: string;
+  source?: boolean;
   width: number;
 }
 
@@ -95,8 +99,7 @@ export const SCREEN_QUALITY_OPTIONS: Record<string, ScreenQualityOption> = {
     bitrateByFps: {
       5: 1_200_000,
       15: 3_000_000,
-      30: 5_000_000,
-      60: 7_000_000
+      30: 5_000_000
     },
     height: 720,
     id: 'balanced',
@@ -107,29 +110,40 @@ export const SCREEN_QUALITY_OPTIONS: Record<string, ScreenQualityOption> = {
     bitrateByFps: {
       5: 1_800_000,
       15: 4_000_000,
-      30: 7_000_000,
-      60: 9_000_000
+      30: 7_000_000
     },
     height: 1080,
     id: 'high',
     label: '1080p',
     width: 1920
   },
-  low: {
+  source: {
     bitrateByFps: {
-      5: 800_000,
-      15: 2_000_000,
-      30: 3_000_000,
-      60: 4_000_000
+      5: 1_800_000,
+      15: 3_000_000,
+      30: 7_000_000
     },
-    height: 540,
-    id: 'low',
-    label: '540p',
-    width: 960
+    height: 0,
+    id: 'source',
+    label: 'Источник',
+    source: true,
+    width: 0
   }
 };
 
-export const SCREEN_QUALITY_ORDER = ['low', 'balanced', 'high'];
+export const SCREEN_QUALITY_ORDER = ['balanced', 'high'];
+export const SCREEN_SOURCE_BASE_BITRATE = 1_800_000;
+export const SCREEN_SOURCE_BASE_PIXELS = 1920 * 1080;
+export const SCREEN_SOURCE_MAX_BITRATE = 8_000_000;
+export const SCREEN_SIMULCAST_LAYER = {
+  height: 540,
+  width: 960,
+  bitrateByFps: {
+    5: 500_000,
+    15: 1_000_000,
+    30: 1_500_000
+  }
+} as const;
 
 export interface ScreenFpsOption {
   contentHint: string;
@@ -156,11 +170,5 @@ export const SCREEN_FPS_OPTIONS: Record<string, ScreenFpsOption> = {
     frameRate: 30,
     id: '30',
     label: '30 FPS'
-  },
-  60: {
-    contentHint: 'motion',
-    frameRate: 60,
-    id: '60',
-    label: '60 FPS'
   }
 };

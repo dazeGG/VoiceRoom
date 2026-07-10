@@ -3,11 +3,14 @@ import {
   DEFAULT_SCREEN_FPS_ID,
   DEFAULT_SCREEN_PROFILE_ID,
   DEFAULT_SCREEN_QUALITY_ID,
-  SCREEN_ADAPT_PROFILE_ORDER,
+  SCREEN_ADAPT_PROFILE_ORDER_BY_MODE,
   SCREEN_STREAM_MODE_PROFILES,
   SCREEN_FPS_OPTIONS,
   SCREEN_QUALITY_OPTIONS,
-  SCREEN_QUALITY_ORDER,
+  SCREEN_SIMULCAST_LAYER,
+  SCREEN_SOURCE_BASE_BITRATE,
+  SCREEN_SOURCE_BASE_PIXELS,
+  SCREEN_SOURCE_MAX_BITRATE,
   SCREEN_VIDEO_BACKUP_CODEC
 } from '../core/config';
 import type { ScreenProfile, ScreenStreamMode } from '../core/types';
@@ -34,8 +37,7 @@ export function getScreenProfile(profileId: string): ScreenProfile {
 }
 
 export function getScreenProfileForMode(mode: ScreenStreamMode, fallbackProfileId: string = DEFAULT_SCREEN_PROFILE_ID): ScreenProfile {
-  if (mode === 'custom') return getScreenProfile(fallbackProfileId);
-  return getScreenProfile(SCREEN_STREAM_MODE_PROFILES[mode] || DEFAULT_SCREEN_PROFILE_ID);
+  return getScreenProfile(SCREEN_STREAM_MODE_PROFILES[mode] || fallbackProfileId || DEFAULT_SCREEN_PROFILE_ID);
 }
 
 export function getScreenModeForProfile(profileId: string): ScreenStreamMode {
@@ -43,14 +45,13 @@ export function getScreenModeForProfile(profileId: string): ScreenStreamMode {
   for (const [mode, modeProfileId] of Object.entries(SCREEN_STREAM_MODE_PROFILES)) {
     if (profile.id === getScreenProfile(modeProfileId).id) return mode as ScreenStreamMode;
   }
-  return 'custom';
+  return profile.fpsId === '5' ? 'text' : 'games';
 }
 
 export function getScreenModeSummary(mode: ScreenStreamMode, fallbackProfileId: string = DEFAULT_SCREEN_PROFILE_ID): string {
   const profile = getScreenProfileForMode(mode, fallbackProfileId);
   if (mode === 'games') return `Более плавное видео (${profile.label})`;
-  if (mode === 'text') return `Более чёткий текст (${profile.label})`;
-  return `Свои параметры (${profile.label})`;
+  return `Более чёткий текст (${profile.label})`;
 }
 
 export function getScreenProfileLabels(profileId: string): { qualityLabel: string; fpsLabel: string } {
@@ -65,34 +66,51 @@ export function getScreenProfileLabels(profileId: string): { qualityLabel: strin
 export function parseScreenProfileId(profileId: string): { qualityId: string; fpsId: string } {
   const normalized = String(profileId || '').trim();
   if (Object.hasOwn(SCREEN_QUALITY_OPTIONS, normalized)) {
-    return { qualityId: normalized, fpsId: DEFAULT_SCREEN_FPS_ID };
+    return { qualityId: normalizeScreenQualityId(normalized), fpsId: DEFAULT_SCREEN_FPS_ID };
   }
 
-  const [qualityId, fpsId] = normalized.split('-');
+  const [rawQualityId, rawFpsId] = normalized.split('-');
   return {
-    fpsId: Object.hasOwn(SCREEN_FPS_OPTIONS, fpsId) ? fpsId : DEFAULT_SCREEN_FPS_ID,
-    qualityId: Object.hasOwn(SCREEN_QUALITY_OPTIONS, qualityId) ? qualityId : DEFAULT_SCREEN_QUALITY_ID
+    fpsId: normalizeScreenFpsId(rawFpsId),
+    qualityId: normalizeScreenQualityId(rawQualityId)
   };
 }
 
+function normalizeScreenQualityId(qualityId: string): string {
+  if (qualityId === 'low') return 'balanced';
+  return Object.hasOwn(SCREEN_QUALITY_OPTIONS, qualityId) ? qualityId : DEFAULT_SCREEN_QUALITY_ID;
+}
+
+function normalizeScreenFpsId(fpsId: string): string {
+  if (fpsId === '60') return '30';
+  return Object.hasOwn(SCREEN_FPS_OPTIONS, fpsId) ? fpsId : DEFAULT_SCREEN_FPS_ID;
+}
+
 export function createScreenProfileId(qualityId: string, fpsId: string): string {
-  return `${qualityId}-${fpsId}`;
+  return `${normalizeScreenQualityId(qualityId)}-${normalizeScreenFpsId(fpsId)}`;
 }
 
-export function getScreenProfileRank(profileId: string): number {
-  const rank = SCREEN_ADAPT_PROFILE_ORDER.indexOf(getScreenProfile(profileId).id);
-  return rank >= 0 ? rank : SCREEN_ADAPT_PROFILE_ORDER.indexOf(DEFAULT_SCREEN_PROFILE_ID);
+export function getScreenProfileRank(profileId: string, mode: ScreenStreamMode = getScreenModeForProfile(profileId)): number {
+  const order = getScreenAdaptProfileOrder(mode);
+  const rank = order.indexOf(getScreenProfile(profileId).id);
+  return rank >= 0 ? rank : order.indexOf(getScreenProfileForMode(mode).id);
 }
 
-export function getLowerScreenProfileId(profileId: string): string {
-  const rank = getScreenProfileRank(profileId);
-  return rank > 0 ? SCREEN_ADAPT_PROFILE_ORDER[rank - 1] : '';
+export function getLowerScreenProfileId(profileId: string, mode: ScreenStreamMode = getScreenModeForProfile(profileId)): string {
+  const order = getScreenAdaptProfileOrder(mode);
+  const rank = getScreenProfileRank(profileId, mode);
+  return rank > 0 ? order[rank - 1] : '';
 }
 
-export function getHigherScreenProfileId(profileId: string, ceilingProfileId: string): string {
-  const rank = getScreenProfileRank(profileId);
-  const ceilingRank = getScreenProfileRank(ceilingProfileId);
-  return rank < ceilingRank ? SCREEN_ADAPT_PROFILE_ORDER[rank + 1] : '';
+export function getHigherScreenProfileId(profileId: string, ceilingProfileId: string, mode: ScreenStreamMode = getScreenModeForProfile(profileId)): string {
+  const order = getScreenAdaptProfileOrder(mode);
+  const rank = getScreenProfileRank(profileId, mode);
+  const ceilingRank = getScreenProfileRank(ceilingProfileId, mode);
+  return rank < ceilingRank ? order[rank + 1] : '';
+}
+
+function getScreenAdaptProfileOrder(mode: ScreenStreamMode): readonly string[] {
+  return SCREEN_ADAPT_PROFILE_ORDER_BY_MODE[mode] || SCREEN_ADAPT_PROFILE_ORDER_BY_MODE.games;
 }
 
 export function getPreferredScreenVideoCodec(): 'h264' | 'vp9' | 'vp8' {
@@ -103,7 +121,7 @@ export function getPreferredScreenVideoCodec(): 'h264' | 'vp9' | 'vp8' {
 }
 
 export function getScreenDegradationPreference(contentHint: string): RTCDegradationPreference {
-  return contentHint === 'motion' ? 'maintain-framerate' : 'balanced';
+  return contentHint === 'motion' ? 'maintain-framerate' : 'maintain-resolution';
 }
 
 export async function getScreenPublishVideoOptions(profile: ScreenProfile): Promise<TrackPublishOptions> {
@@ -130,19 +148,43 @@ export async function getScreenPublishVideoOptions(profile: ScreenProfile): Prom
 export function getScreenSimulcastLayers(
   profile: ScreenProfile,
   VideoPresetClass: typeof VideoPreset
-): VideoPreset[] | undefined {
-  const qualityRank = SCREEN_QUALITY_ORDER.indexOf(profile.qualityId);
-  const layers: VideoPreset[] = [];
-  for (const qualityId of SCREEN_QUALITY_ORDER.slice(0, qualityRank)) {
-    const layer = getScreenProfile(createScreenProfileId(qualityId, profile.fpsId));
-    layers.push(new VideoPresetClass({
-      height: layer.height,
-      maxBitrate: layer.videoBitrate,
-      maxFramerate: layer.frameRate,
-      width: layer.width
-    }));
-  }
-  return layers.length ? layers : undefined;
+): VideoPreset[] {
+  const maxBitrate = getSimulcastLayerBitrate(profile.fpsId);
+  return [new VideoPresetClass({
+    height: SCREEN_SIMULCAST_LAYER.height,
+    maxBitrate,
+    maxFramerate: profile.frameRate,
+    width: SCREEN_SIMULCAST_LAYER.width
+  })];
+}
+
+function getSimulcastLayerBitrate(fpsId: string): number {
+  if (fpsId === '5') return SCREEN_SIMULCAST_LAYER.bitrateByFps[5];
+  if (fpsId === '15') return SCREEN_SIMULCAST_LAYER.bitrateByFps[15];
+  return SCREEN_SIMULCAST_LAYER.bitrateByFps[30];
+}
+
+export function createSourceScreenProfile(baseProfile: ScreenProfile, track: MediaStreamTrack | undefined): ScreenProfile {
+  if (baseProfile.qualityId !== 'source') return baseProfile;
+
+  const settings = track?.getSettings?.() || {};
+  const width = Math.round(Number(settings.width || 0));
+  const height = Math.round(Number(settings.height || 0));
+  const pixels = width > 0 && height > 0 ? width * height : SCREEN_SOURCE_BASE_PIXELS;
+  const videoBitrate = Math.min(
+    SCREEN_SOURCE_MAX_BITRATE,
+    Math.max(baseProfile.videoBitrate, Math.round(SCREEN_SOURCE_BASE_BITRATE * (pixels / SCREEN_SOURCE_BASE_PIXELS)))
+  );
+  const qualityLabel = width > 0 && height > 0 ? `${width}×${height}` : 'Источник';
+
+  return {
+    ...baseProfile,
+    detail: `${qualityLabel} · ${baseProfile.frameRate} FPS · до ${formatBitrate(videoBitrate)}`,
+    height,
+    label: `${qualityLabel} ${baseProfile.frameRate} FPS`,
+    videoBitrate,
+    width
+  };
 }
 
 export function formatBitrate(bitrate: number): string {
