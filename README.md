@@ -130,6 +130,7 @@ GitHub-аналог GitLab CI/CD variables находится здесь:
 | `LIVEKIT_URL` | `wss://livekit.example.com` | Browser-facing LiveKit URL. В production не используйте `127.0.0.1`. |
 | `LIVEKIT_PUBLIC_URL` | optional | Для dev compose, если внешний LiveKit port отличается. |
 | `TRUST_PROXY` | `true` в compose/proxy | Включать только за доверенным reverse proxy. |
+| `LOG_LEVEL` | `info` в production compose | Уровень JSON-логов API (`debug`, `info`, `warn`, `error`; `silent`/`off` выключают). Health-check запросы не пишутся в request-log. |
 | `LIVEKIT_TOKEN_TTL_SECONDS` | `21600` | TTL LiveKit token. |
 | `LIVEKIT_ROOM_PREFIX` | `voice-room-` | Prefix room id в LiveKit. |
 | `MAX_ROOM_PEERS` | `12` | Max peers per room. |
@@ -163,6 +164,7 @@ GitHub-аналог GitLab CI/CD variables находится здесь:
 | `HOST` | `127.0.0.1` | Host for host-only API. Compose sets `0.0.0.0`. |
 | `PORT` | `3000` | API port. |
 | `SOCKET_PATH` | empty | Unix socket вместо TCP, если нужен. |
+| `API_METRICS_ALLOWED_REMOTE` | `127.0.0.1` | Caddy allowlist для публичного пути `/api/metrics`; задайте Tailscale IP/range status-сервера, иначе endpoint закрыт снаружи. |
 | `DESKTOP_RELEASE_REPO` | `dazeGG/VoiceRoomDesktop` | Repo для latest desktop release. |
 | `DESKTOP_RELEASE_CACHE_MS` | `600000` | Cache TTL для desktop release metadata. |
 | `DEPLOY_PATH` | `/srv/voiceroom` | Путь к git-клону репозитория на сервере для CD (deploy job). |

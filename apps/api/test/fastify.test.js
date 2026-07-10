@@ -6,6 +6,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const { createApiApp, createApiServer } = require('../src/server');
+const { resetMetricsForTest } = require('../src/lib/metrics');
 
 function createFakeStore() {
   const rooms = new Map();
@@ -94,6 +95,25 @@ test('createApiServer keeps the legacy http server contract while exposing app/i
   assert.equal(typeof server.app.inject, 'function');
   await server.app.ready();
   await server.app.close();
+});
+
+test('api metrics expose prometheus counters and runtime gauges', async (t) => {
+  resetMetricsForTest();
+  const app = createApiApp({ store: createFakeStore() });
+  t.after(() => app.close());
+
+  const health = await app.inject({ method: 'GET', url: '/api/healthz' });
+  assert.equal(health.statusCode, 200);
+
+  const metrics = await app.inject({ method: 'GET', url: '/api/metrics' });
+  assert.equal(metrics.statusCode, 200);
+  assert.match(metrics.headers['content-type'], /text\/plain/);
+  assert.match(metrics.body, /# TYPE voice_room_api_http_requests_total counter/);
+  assert.ok(metrics.body.includes('voice_room_api_http_requests_total{method="GET",route="/api/healthz",status="200"} 1'));
+  assert.match(metrics.body, /voice_room_api_ws_connections 0/);
+  assert.match(metrics.body, /voice_room_api_ws_guest_connections 0/);
+  assert.match(metrics.body, /voice_room_api_presence_rooms 0/);
+  assert.match(metrics.body, /voice_room_api_pg_pool_errors_total 0/);
 });
 
 

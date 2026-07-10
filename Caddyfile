@@ -17,6 +17,19 @@
   header @immutable Cache-Control "public, max-age=31536000, immutable"
   header @web_fallback Cache-Control "no-cache"
 
+  @api_metrics_allowed {
+    path /api/metrics
+    remote_ip {$API_METRICS_ALLOWED_REMOTE:127.0.0.1}
+  }
+  handle @api_metrics_allowed {
+    reverse_proxy api:3000
+  }
+
+  @api_metrics path /api/metrics
+  handle @api_metrics {
+    respond 404
+  }
+
   handle /api/* {
     reverse_proxy api:3000 {
       flush_interval -1

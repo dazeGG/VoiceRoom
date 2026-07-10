@@ -2,6 +2,7 @@
 
 const { Pool } = require('pg');
 const { readDatabaseConfig } = require('./config');
+const { recordPgPoolError } = require('./metrics');
 
 function createDbPool({ databaseUrl = readDatabaseConfig().url, logger = console, max = 10 } = {}) {
   const pool = new Pool({
@@ -10,6 +11,7 @@ function createDbPool({ databaseUrl = readDatabaseConfig().url, logger = console
   });
 
   pool.on('error', (error) => {
+    recordPgPoolError();
     logger.error('Unexpected PostgreSQL pool error:', error);
   });
 

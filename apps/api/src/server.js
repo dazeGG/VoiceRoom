@@ -36,6 +36,11 @@ const { createUserStore, publicUser } = require('./lib/user-store');
 const { createFriendStore } = require('./lib/friend-store');
 const { startApiListener } = require('./lib/listen');
 const { runMigrations } = require('./lib/migrate');
+const {
+  observeMaintenance,
+  recordHttpRequest,
+  renderPrometheus
+} = require('./lib/metrics');
 
 const API_PREFIX = '/api';
 const HOST = (process.env.HOST || '127.0.0.1').trim();
@@ -93,6 +98,18 @@ const presenceRooms = new Map();
 let wsRegistry = null;
 let roomRuntime = null;
 const roomEmptyQueue = new Map();
+
+function getLogLevel(env = process.env) {
+  const configured = (env.LOG_LEVEL || '').trim();
+  if (configured) return configured;
+  return env.NODE_ENV === 'production' ? 'info' : 'silent';
+}
+
+function createFastifyLoggerOptions(env = process.env) {
+  const level = getLogLevel(env).toLowerCase();
+  if (['false', 'off', 'none', 'silent'].includes(level)) return false;
+  return { level };
+}
 
 function getRoomStore() {
   if (!roomStore) {
@@ -385,17 +402,15 @@ function startPruneTimer(server, logger = console) {
   if (ROOM_PRUNE_INTERVAL_MS <= 0) return null;
 
   const timer = setInterval(() => {
-    void pruneRooms().catch((error) => {
+    void observeMaintenance('room_prune', () => pruneRooms()).catch((error) => {
       logger.error('Room prune timer failed:', error);
     });
-    void getUserStore()
-      .pruneSessions()
+    void observeMaintenance('session_prune', () => getUserStore().pruneSessions())
       .catch((error) => {
         logger.error('Session prune timer failed:', error);
       });
     if (RETENTION_PURGE_INTERVAL_MS > 0 && getRoomStore().purgeDeleted) {
-      void getRoomStore()
-        .purgeDeleted({ olderThanMs: RETENTION_KEEP_DELETED_MS })
+      void observeMaintenance('retention_purge', () => getRoomStore().purgeDeleted({ olderThanMs: RETENTION_KEEP_DELETED_MS }))
         .catch((error) => {
           logger.error('Retention purge timer failed:', error);
         });
@@ -1620,10 +1635,38 @@ function attachFastifyRequestBody(request) {
   return request.raw;
 }
 
+function getRequestRouteLabel(request) {
+  return request.routeOptions?.url || request.routerPath || request.url || 'unknown';
+}
+
+function logHttpRequest(request, statusCode, durationMs) {
+  const route = getRequestRouteLabel(request);
+  if (route === '/api/healthz') return;
+  request.log?.info?.({
+    method: request.method,
+    route,
+    statusCode,
+    durationMs: Math.round(durationMs * 100) / 100
+  }, 'request completed');
+}
+
 async function runLegacyHandler(request, reply, handler) {
   reply.hijack();
   const req = attachFastifyRequestBody(request);
   const res = reply.raw;
+  const startedAt = process.hrtime.bigint();
+  const route = getRequestRouteLabel(request);
+
+  res.once('finish', () => {
+    const durationMs = Number(process.hrtime.bigint() - startedAt) / 1e6;
+    recordHttpRequest({
+      method: request.method,
+      route,
+      statusCode: res.statusCode,
+      durationMs
+    });
+    logHttpRequest(request, res.statusCode, durationMs);
+  });
 
   try {
     if (rejectCrossOriginCookieWrite(req, res)) return;
@@ -1632,7 +1675,7 @@ async function runLegacyHandler(request, reply, handler) {
     const status = error.statusCode || 500;
     const message = error.publicMessage || (status >= 500 ? 'Internal server error' : error.message);
     if (status >= 500) {
-      console.error(error);
+      request.log?.error?.({ err: error }, 'legacy handler failed') || console.error(error);
     }
     if (!res.headersSent) {
       sendJson(res, status, { ok: false, error: message });
@@ -1642,6 +1685,19 @@ async function runLegacyHandler(request, reply, handler) {
   }
 }
 
+function getPresencePeerCount() {
+  return Array.from(presenceRooms.values()).reduce((count, room) => count + room.peers.size, 0);
+}
+
+function getActiveGuestWsCount() {
+  if (!wsRegistry?.connections) return 0;
+  let count = 0;
+  for (const connection of wsRegistry.connections.values()) {
+    if (connection.guest) count += 1;
+  }
+  return count;
+}
+
 function createApiApp({ store = null, users = null, friends = null } = {}) {
   if (store) roomStore = store;
   if (users) userStore = users;
@@ -1649,7 +1705,8 @@ function createApiApp({ store = null, users = null, friends = null } = {}) {
 
   const app = fastify({
     bodyLimit: BODY_LIMIT_BYTES,
-    logger: false,
+    disableRequestLogging: true,
+    logger: createFastifyLoggerOptions(),
     trustProxy: TRUST_PROXY
   });
 
@@ -1708,9 +1765,21 @@ function createApiApp({ store = null, users = null, friends = null } = {}) {
       ok: true,
       maxRooms: MAX_ROOMS,
       rooms: await getRoomStore().countRooms(),
-      peers: Array.from(presenceRooms.values()).reduce((count, room) => count + room.peers.size, 0)
+      peers: getPresencePeerCount()
     });
   }));
+
+  app.get('/api/metrics', (request, reply) => {
+    const body = renderPrometheus({
+      activeWs: wsRegistry?.connections?.size || 0,
+      activeGuestWs: getActiveGuestWsCount(),
+      presenceRooms: presenceRooms.size,
+      presencePeers: getPresencePeerCount()
+    });
+    reply
+      .header('Content-Type', 'text/plain; version=0.0.4; charset=utf-8')
+      .send(body);
+  });
 
   app.get('/api/pow-challenge', (request, reply) => runLegacyHandler(request, reply, handlePowChallenge));
   app.get('/api/desktop/latest', (request, reply) => runLegacyHandler(request, reply, (_req, res) => handleDesktopLatest(res)));

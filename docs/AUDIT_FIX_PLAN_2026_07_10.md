@@ -195,7 +195,7 @@
 
 ## Фаза D — наблюдаемость, техдолг, документация
 
-### D1. Логи и метрики API `[ ]`
+### D1. Логи и метрики API `[x]`
 
 **Проблема.** `fastify({ logger: false })`, только точечные `console.error`; метрик нет (у LiveKit prometheus есть, у API нет). Диагностика прод-инцидента невозможна.
 
@@ -203,6 +203,8 @@
 1. Включить fastify-логгер (pino) с уровнем из `LOG_LEVEL` (prod: `info`, JSON в stdout — docker собирает). Отключить лог health-чеков (шум каждые 10 с).
 2. Минимальный `/api/metrics` (prometheus text): счётчики HTTP по маршрутам/статусам, активные WS (всего/гости), размер `presenceRooms`, длительность prune/purge, ошибки пула pg. Биндить только на внутренний интерфейс или закрыть в Caddy (как LiveKit-метрики в MONITORING_AGENT.md).
 3. Согласовать с `docs/MONITORING_AGENT.md` — добавить API-метрики в существующий стек.
+
+Сделано 2026-07-10: `LOG_LEVEL` управляет Fastify/pino JSON-логами, health-check исключён из request-log, `/api/metrics` отдаёт Prometheus text, Caddy закрывает публичный endpoint allowlist-переменной `API_METRICS_ALLOWED_REMOTE`, monitoring docs обновлены.
 
 **Сложность:** M. **Риск:** низкий.
 
