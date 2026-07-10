@@ -139,6 +139,7 @@ export function showPeople(): void {
 }
 
 export async function openDm(userId: string): Promise<void> {
+  friendsState.mode = 'friends';
   friendsState.selectedFriendId = userId;
   friendsState.view = 'dm';
   friendsState.threadLoading = true;
