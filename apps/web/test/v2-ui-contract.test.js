@@ -424,7 +424,9 @@ test('participant tiles stay visually uniform and highlight only active speakers
   assert.match(participants, /refreshParticipantState\(\)/);
   assert.match(participants, /bumpParticipantsRevision\(\)/);
   assert.match(participantTile, /data-speaking=\{String\(participant\.speaking\)\}/);
-  assert.match(meters, /setParticipantSpeaking\(participant, isLocalMicrophoneSpeaking/);
+  assert.match(meters, /const speaking = isLocalMicrophoneSpeaking\(participant, levelDb\)/);
+  assert.match(meters, /participant\.speaking = speaking/);
+  assert.match(meters, /bumpParticipantsRevision\(\)/);
   assert.match(livekit, /RoomEvent\.ActiveSpeakersChanged/);
 });
 

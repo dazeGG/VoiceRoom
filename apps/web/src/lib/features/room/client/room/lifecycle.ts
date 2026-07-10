@@ -6,9 +6,16 @@ import type { RoomLifecycleSummary } from '../core/types';
 import { roomSettingsUi } from '../../room-settings.svelte';
 import { state } from '../core/state.svelte';
 import { showToast } from '../ui/toast';
-import { refreshRoomHeading, showRoomNotFound } from './room';
 
 let handledRoomDeletedId: string | null = null;
+
+function refreshRoomHeadingSoon(): void {
+  void import('./room').then((module) => module.refreshRoomHeading());
+}
+
+function showRoomNotFoundSoon(): void {
+  void import('./room').then((module) => module.showRoomNotFound());
+}
 
 export function applyRoomUpdated(room: RoomLifecycleSummary): void {
   if (room.roomId !== state.roomId) return;
@@ -18,14 +25,14 @@ export function applyRoomUpdated(room: RoomLifecycleSummary): void {
   state.roomIconKey = room.roomIconKey || '';
   state.roomPresetKey = room.roomPresetKey || '';
   if (document.body.dataset.screen === 'room') {
-    refreshRoomHeading();
+    refreshRoomHeadingSoon();
   }
 }
 
 export function applyRoomNotFound(roomId: string): void {
   if (roomId !== state.roomId) return;
   if (document.body.dataset.screen === 'not-found') return;
-  showRoomNotFound();
+  showRoomNotFoundSoon();
 }
 
 export function applyRoomDeleted(roomId: string): void {
@@ -38,5 +45,5 @@ export function applyRoomDeleted(roomId: string): void {
   if (document.body.dataset.screen === 'not-found') return;
   handledRoomDeletedId = roomId;
   showToast('Комната удалена владельцем');
-  showRoomNotFound();
+  showRoomNotFoundSoon();
 }

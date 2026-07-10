@@ -11,8 +11,7 @@ import { getLocalMicrophoneCapture, setMicrophoneCaptureEnabled } from '../servi
 import { syncLiveKitVoiceSubscriptions, syncLocalMicrophonePublicationMuted } from '../services/livekit-service';
 import { getDisplayName } from './names';
 import { updateParticipant } from '../room/participants';
-import { persistOutputMuted } from './devices';
-import { joinRoom } from '../room/room';
+import { persistOutputMuted } from '../core/settings';
 import { showToast } from './toast';
 import { setVoiceControlsState } from '$lib/features/room/voice-session.svelte';
 
@@ -116,6 +115,7 @@ function toggleMute(): void {
 
 export async function handleMicButtonClick(event: Event): Promise<void> {
   if (!state.joined) {
+    const { joinRoom } = await import('../room/room');
     await joinRoom(event);
     return;
   }
@@ -137,7 +137,7 @@ export function toggleOutputMute(): void {
 
   playOutputCue(nextOutputMuted);
   state.outputMuted = nextOutputMuted;
-  persistOutputMuted();
+  persistOutputMuted(state.outputMuted);
 
   if (state.localStream) {
     if (state.outputMuted) {

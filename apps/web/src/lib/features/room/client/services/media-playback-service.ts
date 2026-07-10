@@ -1,12 +1,20 @@
 import { startUi } from '$lib/features/room/start-ui.svelte';
-import { getScreenVideo, screenUi } from '$lib/features/room/screen-ui.svelte';
 import { state } from '../core/state.svelte';
 import { MAX_PARTICIPANT_VOLUME, MAX_STREAM_VOLUME } from '../core/config';
 import { getMicrophoneProcessors } from './microphone-service';
 import { getParticipantAudioPreference, getParticipantAudioPreferenceKey } from '../core/settings';
 import type { Participant } from '../core/types';
 import { setVoiceConnectionStatus } from '../ui/status';
-import { syncScreenVideoAudio } from '../ui/screen-view';
+
+
+function syncScreenVideoAudioSoon(): void {
+  void import('../ui/screen-view').then((module) => module.syncScreenVideoAudio());
+}
+
+async function getScreenVideoElement(): Promise<HTMLVideoElement | null> {
+  const { getScreenVideo } = await import('$lib/features/room/screen-ui.svelte');
+  return getScreenVideo();
+}
 
 export function supportsAudioOutputSelection(): boolean {
   return typeof HTMLMediaElement !== 'undefined' && 'setSinkId' in HTMLMediaElement.prototype;
@@ -24,7 +32,7 @@ export function getAvailableScreenMediaElementVolumeMax(): number {
 
 export function syncPlaybackMuteState(): void {
   syncRemoteAudioPlayback();
-  syncScreenVideoAudio();
+  syncScreenVideoAudioSoon();
   if (isAppPlaybackMuted()) {
     state.audioUnlockPending = false;
     startUi.soundButtonVisible = false;
@@ -187,7 +195,7 @@ export async function syncAudioOutputDevices(): Promise<boolean> {
 
   syncRemoteAudioPlayback();
 
-  const screenVideo = getScreenVideo();
+  const screenVideo = await getScreenVideoElement();
   const mediaElements: HTMLMediaElement[] = screenVideo ? [screenVideo] : [];
   for (const peer of state.peers.values()) {
     mediaElements.push(...peer.audioElements.values());
@@ -195,7 +203,7 @@ export async function syncAudioOutputDevices(): Promise<boolean> {
 
   const results = await Promise.all(mediaElements.map((mediaElement) => applyAudioOutputDevice(mediaElement)));
   const contextSynced = await applyAudioOutputDeviceToContext();
-  syncScreenVideoAudio();
+  syncScreenVideoAudioSoon();
   return results.every(Boolean) && contextSynced !== false;
 }
 
@@ -332,6 +340,7 @@ export async function unlockAudio(): Promise<void> {
   for (const peer of state.peers.values()) {
     for (const audio of peer.audioElements.values()) plays.push(audio.play());
   }
+  const { getScreenVideo, screenUi } = await import('$lib/features/room/screen-ui.svelte');
   const screenVideo = getScreenVideo();
   if (screenUi.stageVisible && screenVideo) plays.push(screenVideo.play());
   await Promise.allSettled(plays);

@@ -16,7 +16,6 @@ import { showToast } from '../ui/toast';
 import { postJson } from '../net/api';
 import { queueAudioUnlock, syncRemoteAudioPlayback } from './media-playback-service';
 import { clearPeerJoinCue } from '../media/cues';
-import { refreshCallControls } from '../ui/controls';
 import { errorMessage } from '../core/utils';
 import { getScreenProfile, getScreenPublishVideoOptions } from '../media/profiles';
 import { loadLiveKitClient, TRACK_SOURCE } from '../media/livekit-runtime';
@@ -35,7 +34,6 @@ import {
   updateParticipant,
   updatePeerStatus
 } from '../room/participants';
-import { refreshScreenControls } from './screen-share-service';
 import { refreshScreenAction, refreshScreenStage, refreshScreenTiles } from '../ui/screen-view';
 import type { Participant } from '../core/types';
 
@@ -431,8 +429,6 @@ async function recoverLiveKitRoom(room: Room): Promise<void> {
   syncLiveKitVoiceSubscriptions();
   syncRemoteAudioPlayback();
   refreshParticipantState();
-  refreshCallControls();
-  refreshScreenControls();
 }
 
 function ensureRemoteMicrophonePlayback(peer: Participant, publication: TrackPublication): void {

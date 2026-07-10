@@ -216,11 +216,14 @@
 `room.ts:490` (`copyText`): fallback на deprecated `execCommand('copy')`. Целевые браузеры (secure context, современные) поддерживают `navigator.clipboard`; fallback оставить только как toast «Скопируйте вручную: <код>» либо удалить. Висит с аудита 2026-06-10.
 **Сложность:** S. **Риск:** нулевой.
 
-### D4. Распутать import-циклы room-клиента `[ ]`
+### D4. Распутать import-циклы room-клиента `[x]`
 
-GRAPH_REPORT: 3–5-файловые циклы вокруг `client/room/participants.ts ↔ services/* ↔ ui/*` (полный список — `graphify-out/GRAPH_REPORT.md`, раздел Import Cycles). Не баг, но блокирует чистые границы модулей и совпадает по зоне с планом Svelte-миграции (`docs/ROOM_SVELTE_MIGRATION_PLAN.md`) — **делать в рамках очередной фазы миграции**, не отдельным рефакторингом:
-- вынести общие типы/стейт в `core/` (без обратных импортов),
-- события UI → колбэки/шина вместо прямых импортов ui из services.
+GRAPH_REPORT: 3–5-файловые циклы вокруг `client/room/participants.ts ↔ services/* ↔ ui/*` (полный список — `graphify-out/GRAPH_REPORT.md`, раздел Import Cycles). Исправлено 2026-07-10 без смены runtime-контракта:
+- локальные pure helpers перенесены ближе к `core/`/state (`persistOutputMuted`, `hasLocalScreenAudio`);
+- обратные UI/service импорты заменены на отложенные boundary-calls в местах, где это side-effect refresh/sync;
+- `room` lifecycle, meters/devices, screen-view/livekit, participants/screen-view/livekit статически больше не образуют SCC.
+
+Проверка: `npm --workspace @voice-room/web run check` и локальный static-import SCC scan по room-client → `cycles 0`.
 
 **Сложность:** L (растянуто по миграции). **Риск:** средний.
 
@@ -259,7 +262,7 @@ Register отдаёт 409 «логин занят», friends-search раскры
 | D1 | Логи + метрики API | P2 | M | api |
 | D2 | Single-flight кэша релиза | P3 | S | api |
 | D3 | Убрать execCommand | P3 | S | web |
-| D4 | Import-циклы (в Svelte-миграции) | P3 | L | web |
+| D4 | Import-циклы room-клиента | P3 | L | web |
 | D5 | Enumeration: решение | P3 | S | docs |
 | D6 | Документация ENV | P3 | S | docs |
 

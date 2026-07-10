@@ -1,7 +1,6 @@
 import { showToast } from './toast';
 import { state } from '../core/state.svelte';
 import { postState } from '../room/presence';
-import { syncLiveKitScreenSubscriptions } from '../services/livekit-service';
 
 import { bumpScreenUiRevision, screenUi } from '../../screen-ui.svelte';
 import {
@@ -21,6 +20,10 @@ import {
   syncScreenVideoAudio
 } from './screen-stage-controls';
 import { getScreenVideo } from '../../screen-ui.svelte';
+
+function syncLiveKitScreenSubscriptionsSoon(peer: Participant): void {
+  void import('../services/livekit-service').then((module) => module.syncLiveKitScreenSubscriptions(peer));
+}
 
 export function handleScreenStageClick(event: MouseEvent): void {
   if (!state.viewedScreenPeerId || !screenUi.stageVisible) return;
@@ -77,7 +80,7 @@ export async function enterScreenView(peerId: string): Promise<void> {
   refreshScreenTiles();
   refreshScreenStage();
 
-  if (!peer.isLocal) syncLiveKitScreenSubscriptions(peer);
+  if (!peer.isLocal) syncLiveKitScreenSubscriptionsSoon(peer);
   if (peer.isLocal || peer.screenStream) {
     state.screenRequesting = false;
     refreshScreenStage();
@@ -105,7 +108,7 @@ export async function leaveScreenView(options: { quiet?: boolean; keepPreview?: 
     if (peer && !peer.isLocal) detachRemoteScreen(peer);
   }
 
-  if (peer && !peer.isLocal) syncLiveKitScreenSubscriptions(peer);
+  if (peer && !peer.isLocal) syncLiveKitScreenSubscriptionsSoon(peer);
   if (!quiet) refreshAllScreenActions();
   refreshScreenTiles();
   postState().catch(() => {});
@@ -123,7 +126,7 @@ export function disconnectScreen(peerId: string): void {
   const peer = getParticipantById(peerId);
   if (peer && !peer.isLocal) {
     detachRemoteScreen(peer);
-    syncLiveKitScreenSubscriptions(peer);
+    syncLiveKitScreenSubscriptionsSoon(peer);
   }
 
   refreshAllScreenActions();
@@ -145,7 +148,7 @@ export function closeScreenView(): string {
   const peer = getParticipantById(peerId);
   if (peer && !peer.isLocal) {
     detachRemoteScreen(peer);
-    syncLiveKitScreenSubscriptions(peer);
+    syncLiveKitScreenSubscriptionsSoon(peer);
   }
 
   refreshAllScreenActions();

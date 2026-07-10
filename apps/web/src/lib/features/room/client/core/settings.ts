@@ -13,6 +13,7 @@ import {
   NOISE_MODES,
   NOISE_MODE_STORAGE_KEY,
   NOTIFICATION_VOLUME_STORAGE_KEY,
+  OUTPUT_MUTED_STORAGE_KEY,
   PARTICIPANT_AUDIO_PREFERENCES_STORAGE_KEY,
   PREVIOUS_GATE_MAX_AMPLITUDE,
   PREVIOUS_GATE_MIN_AMPLITUDE,
@@ -39,6 +40,11 @@ export function getStoredNotificationVolume(): number {
 
 export function getNotificationVolumeMultiplier(): number {
   return getStoredNotificationVolume() / 100;
+}
+
+
+export function persistOutputMuted(muted: boolean): void {
+  localStorage.setItem(OUTPUT_MUTED_STORAGE_KEY, String(Boolean(muted)));
 }
 
 export function persistNotificationVolume(volume: number): number {

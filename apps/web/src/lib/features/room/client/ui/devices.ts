@@ -4,8 +4,7 @@ import {
   GATE_THRESHOLD_DB_STORAGE_KEY,
   GATE_THRESHOLD_MIN_DB,
   MICROPHONE_DEVICE_STORAGE_KEY,
-  OUTPUT_DEVICE_STORAGE_KEY,
-  OUTPUT_MUTED_STORAGE_KEY
+  OUTPUT_DEVICE_STORAGE_KEY
 } from '../core/config';
 import type { SelectOption } from '$lib/shared/ui';
 import { roomDeviceUi } from '$lib/features/room/room-device-ui.svelte';
@@ -26,7 +25,6 @@ import { publishLocalMicrophone, unpublishLocalMicrophone } from '../services/li
 import { supportsAudioOutputSelection, syncAudioOutputDevices } from '../services/media-playback-service';
 import { attachMeter } from '../media/meters';
 import { setParticipantSpeaking } from '../room/participants';
-import { syncOutputDeviceUiState } from './controls';
 import type { MicrophoneCapture } from '../core/types';
 
 let gateSwitchTimer = 0;
@@ -103,8 +101,8 @@ function persistOutputDeviceId(deviceId: string): void {
   }
 }
 
-export function persistOutputMuted(): void {
-  localStorage.setItem(OUTPUT_MUTED_STORAGE_KEY, String(state.outputMuted));
+function syncOutputDeviceUiStateSoon(): void {
+  void import('./controls').then((module) => module.syncOutputDeviceUiState());
 }
 
 export async function refreshDevices(): Promise<void> {
@@ -140,7 +138,7 @@ export async function refreshDevices(): Promise<void> {
     roomDeviceUi.outputDeviceId = currentOutputId;
   }
 
-  syncOutputDeviceUiState();
+  syncOutputDeviceUiStateSoon();
 }
 
 function buildDeviceOptions(

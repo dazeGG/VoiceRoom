@@ -1,7 +1,10 @@
 import { updateVoicePeer } from '$lib/features/home/model/room-realtime';
 import { state } from '../core/state.svelte';
 import { getDisplayName } from '../ui/names';
-import { hasScreenAudio } from '../services/screen-share-service';
+
+function hasLocalScreenAudio(): boolean {
+  return Boolean(state.localScreenStream?.getAudioTracks().some((track) => track.readyState !== 'ended'));
+}
 
 export async function postState(): Promise<void> {
   if (!state.joined) return;
@@ -14,7 +17,7 @@ export async function postState(): Promise<void> {
       muted: state.muted,
       name: getDisplayName(),
       screen: Boolean(state.localScreenStream),
-      screenAudio: hasScreenAudio(),
+      screenAudio: hasLocalScreenAudio(),
       screenProfileId: state.localScreenStream ? state.localScreenProfileId : '',
       screenStreamId: state.localScreenStream?.id || '',
       viewedScreenPeerId: state.viewedScreenPeerId || ''

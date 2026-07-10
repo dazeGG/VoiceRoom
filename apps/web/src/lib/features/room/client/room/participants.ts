@@ -10,19 +10,38 @@ import {
 } from '../services/media-playback-service';
 import { STREAM_CUE_DEDUPE_MS } from '../core/config';
 import { clearPeerJoinCue, playStreamCue, playStreamViewerCue } from '../media/cues';
-import { attachMeter } from '../media/meters';
-import { syncLiveKitScreenSubscriptions } from '../services/livekit-service';
-import {
-  closeScreenView,
-  hideScreenStage,
-  refreshAllScreenActions,
-  refreshScreenStage,
-  refreshScreenTiles
-} from '../ui/screen-view';
 import type { Participant, PeerInfo } from '../core/types';
 
 const watchedRemoteScreenTracks = new WeakSet<MediaStreamTrack>();
 const streamCueTimes = new Map<string, number>();
+
+function attachMeterSoon(participant: Participant | null, stream: MediaStream | null): void {
+  void import('../media/meters').then((module) => module.attachMeter(participant, stream));
+}
+
+function syncLiveKitScreenSubscriptionsSoon(peer: Participant): void {
+  void import('../services/livekit-service').then((module) => module.syncLiveKitScreenSubscriptions(peer));
+}
+
+function closeScreenViewSoon(): void {
+  void import('../ui/screen-view').then((module) => module.closeScreenView());
+}
+
+function hideScreenStageSoon(): void {
+  void import('../ui/screen-view').then((module) => module.hideScreenStage());
+}
+
+function refreshAllScreenActionsSoon(): void {
+  void import('../ui/screen-view').then((module) => module.refreshAllScreenActions());
+}
+
+function refreshScreenStageSoon(): void {
+  void import('../ui/screen-view').then((module) => module.refreshScreenStage());
+}
+
+function refreshScreenTilesSoon(): void {
+  void import('../ui/screen-view').then((module) => module.refreshScreenTiles());
+}
 
 function createParticipantModel(peerInfo: PeerInfo, isLocal: boolean): Participant {
   const name = peerInfo.name ?? '';
@@ -138,7 +157,7 @@ export function createParticipant(peerInfo: PeerInfo): Participant {
     state.peers.set(peerInfo.id, participant);
   }
 
-  refreshAllScreenActions();
+  refreshAllScreenActionsSoon();
   refreshParticipantState();
   if (!participant.isLocal && participant.screen) {
     applyRemoteScreenCue(participant, false, true);
@@ -181,7 +200,7 @@ export function updateParticipant(peerInfo: PeerInfo): void {
     state.screenCollapsedPeerIds.delete(participant.id);
     state.screenSubscribedPeerIds.delete(participant.id);
     if (state.viewedScreenPeerId === participant.id) {
-      closeScreenView();
+      closeScreenViewSoon();
     }
   }
   if (!participant.screen && state.sharedScreenPeerId === participant.id) {
@@ -191,14 +210,14 @@ export function updateParticipant(peerInfo: PeerInfo): void {
   if (!participant.isLocal && participant.accountUserId !== hadAccountUserId) {
     applyRemoteParticipantAudioPreferences(participant);
   }
-  refreshAllScreenActions();
+  refreshAllScreenActionsSoon();
 
   if (shouldRefreshScreenTiles(peerInfo, hadScreen, hadScreenAudio, hadScreenStreamId, hadName)) {
-    refreshScreenTiles();
+    refreshScreenTilesSoon();
   }
 
   if (shouldRefreshScreenStage(peerInfo, hadScreen, hadScreenAudio, hadScreenStreamId, hadName)) {
-    refreshScreenStage();
+    refreshScreenStageSoon();
   }
 
   refreshParticipantState();
@@ -242,14 +261,14 @@ export function removePeer(peerId: string): void {
   state.screenCollapsedPeerIds.delete(peerId);
   state.screenSubscribedPeerIds.delete(peerId);
   if (state.viewedScreenPeerId === peer.id) {
-    closeScreenView();
+    closeScreenViewSoon();
   }
   if (state.sharedScreenPeerId === peer.id) {
-    hideScreenStage();
+    hideScreenStageSoon();
   }
   state.peers.delete(peerId);
   if (state.peers.size === 0) setParticipantSpeaking(state.self, false);
-  refreshScreenTiles();
+  refreshScreenTilesSoon();
   refreshParticipantState();
 
 }
@@ -282,7 +301,7 @@ export function attachRemoteTrack(
     peer.stream = mediaStream;
     peer.micReceiver = receiver ?? null;
     ensureRemoteAudioElement(peer, track, mediaStream, receiver);
-    if (!peer.analyser) attachMeter(peer, new MediaStream([track]));
+    if (!peer.analyser) attachMeterSoon(peer, new MediaStream([track]));
     updatePeerStatus(peer);
   }
 }
@@ -317,7 +336,7 @@ export function attachRemoteScreenStream(peer: Participant, stream: MediaStream)
       'ended',
       () => {
         peer.screenAudio = false;
-        refreshScreenStage();
+        refreshScreenStageSoon();
       },
       { once: true }
     );
@@ -325,15 +344,15 @@ export function attachRemoteScreenStream(peer: Participant, stream: MediaStream)
 
   const subscribed = state.viewedScreenPeerId === peer.id || state.screenSubscribedPeerIds.has(peer.id);
   if (!subscribed) {
-    syncLiveKitScreenSubscriptions(peer);
+    syncLiveKitScreenSubscriptionsSoon(peer);
     detachRemoteScreen(peer);
     return;
   }
 
   state.screenRequesting = false;
-  refreshAllScreenActions();
-  refreshScreenStage();
-  refreshScreenTiles();
+  refreshAllScreenActionsSoon();
+  refreshScreenStageSoon();
+  refreshScreenTilesSoon();
   updatePeerStatus(peer);
   refreshParticipantState();
 }
@@ -351,10 +370,10 @@ function mergeRemoteScreenStream(peer: Participant, stream: MediaStream): MediaS
 
 export function detachRemoteScreen(peer: Participant): void {
   peer.screenStream = null;
-  if (state.sharedScreenPeerId === peer.id) hideScreenStage();
-  refreshScreenStage();
+  if (state.sharedScreenPeerId === peer.id) hideScreenStageSoon();
+  refreshScreenStageSoon();
   updatePeerStatus(peer);
-  refreshAllScreenActions();
+  refreshAllScreenActionsSoon();
   refreshParticipantState();
 }
 

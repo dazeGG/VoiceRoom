@@ -4,11 +4,14 @@ import { state } from '../core/state.svelte';
 import { amplitudeToDb } from '../core/settings';
 import { getSharedAudioContext } from '../services/media-playback-service';
 import { isGateDisabled } from '../services/microphone-service';
-import { refreshMicrophoneLevelMeter } from '../ui/devices';
-import { setParticipantSpeaking } from '../room/participants';
+import { bumpParticipantsRevision } from '../../participants-ui.svelte';
 import type { Participant } from '../core/types';
 
 let meterFrame = 0;
+
+function refreshMicrophoneLevelMeterSoon(levelDb: number): void {
+  void import('../ui/devices').then((module) => module.refreshMicrophoneLevelMeter(levelDb));
+}
 
 export function attachMeter(participant: Participant | null, stream: MediaStream | null): void {
   if (!participant || !stream) return;
@@ -59,9 +62,13 @@ function updateMeter(participant: Participant | null): void {
   participant.level = visibleLevel;
   if (participant.isLocal) {
     if (roomDeviceUi.devicePopoverOpen) {
-      refreshMicrophoneLevelMeter(visibleLevelDb);
+      refreshMicrophoneLevelMeterSoon(visibleLevelDb);
     }
-    setParticipantSpeaking(participant, isLocalMicrophoneSpeaking(participant, levelDb));
+    const speaking = isLocalMicrophoneSpeaking(participant, levelDb);
+    if (participant.speaking !== speaking) {
+      participant.speaking = speaking;
+      bumpParticipantsRevision();
+    }
   }
 }
 
