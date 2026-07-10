@@ -1,6 +1,8 @@
 <script lang="ts">
+  import { Check, ChevronLeft, Copy, X } from '@lucide/svelte';
   import type { AuthUser } from '$lib/api/auth';
   import { Avatar, Button } from '$lib/shared/ui';
+  import { iconMd, iconSm, iconXs } from '$lib/shared/ui/icons';
   import { copyText } from '../../services/desktop-download';
   import { friendName } from '../../model/lobby-format';
   import {
@@ -90,7 +92,7 @@
 
 <div class="lv-main-scroll">
   <button class="lr-section-link" type="button" style="margin-bottom:18px;" onclick={onHome}>
-    <span style="transform:rotate(180deg);display:flex;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg></span>
+    <ChevronLeft {...iconSm} aria-hidden="true" />
     На главную
   </button>
   <div class="lr-title" style="margin-bottom:4px;">Друзья и заявки</div>
@@ -114,7 +116,7 @@
   <div class="lr-add-hint">
     Ваш логин <code>@{user.login}</code>
     <button class="lr-add-copy" type="button" onclick={copyLogin}>
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"></rect><path d="M5 15V5a2 2 0 0 1 2-2h10"></path></svg>
+      <Copy {...iconXs} aria-hidden="true" />
       {copied ? 'скопировано' : 'копировать'}
     </button>
     — поделитесь им, чтобы вас нашли.
@@ -137,10 +139,10 @@
             </div>
             <div class="lr-req-actions">
               <button class="lr-req-btn accept" type="button" title="Принять" disabled={busy[request.id]} onclick={() => run(request.id, () => acceptRequest(request.id), 'Заявка принята')}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 12 10 17 19 7"></polyline></svg>
+                <Check {...iconMd} aria-hidden="true" />
               </button>
               <button class="lr-req-btn decline" type="button" title="Отклонить" disabled={busy[request.id]} onclick={() => run(request.id, () => declineRequest(request.id), 'Заявка отклонена')}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="6" x2="18" y2="18"></line><line x1="18" y1="6" x2="6" y2="18"></line></svg>
+                <X {...iconSm} aria-hidden="true" />
               </button>
             </div>
           </div>

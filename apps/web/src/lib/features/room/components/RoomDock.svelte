@@ -1,4 +1,14 @@
 <script lang="ts">
+  import {
+    ChevronDown,
+    HeadphoneOff,
+    Headphones,
+    Mic,
+    MicOff,
+    ScreenShare,
+    ScreenShareOff,
+    X
+  } from '@lucide/svelte';
   import { Popover, Select, Slider } from '$lib/shared/ui';
   import {
     NOISE_MODE_SELECT_OPTIONS,
@@ -81,8 +91,8 @@
               disabled={callControls.disabled}
               onclick={handleMicButtonClick}
             >
-              <span class="dock-icon dock-icon-mic" data-icon="mic" aria-hidden="true"></span>
-              <span class="dock-icon dock-icon-muted" data-icon="mic-muted" aria-hidden="true"></span>
+              <span class="dock-icon dock-icon-mic" aria-hidden="true"><Mic /></span>
+              <span class="dock-icon dock-icon-muted" aria-hidden="true"><MicOff /></span>
               <span class="sr-only" id="muteText">{callControls.label}</span>
             </button>
             <button
@@ -92,9 +102,10 @@
               aria-expanded={open}
               aria-controls={panelId}
               aria-label="Выбрать микрофон"
-              data-icon="chevron-down"
               onclick={(event) => toggleDevicePopover(event, toggle)}
-            ></button>
+            >
+              <ChevronDown />
+            </button>
           </div>
         {/snippet}
 
@@ -171,8 +182,8 @@
               data-state={outputControls.stateName}
               onclick={toggleOutputMute}
             >
-              <span class="dock-icon dock-icon-output" data-icon="headphones" aria-hidden="true"></span>
-              <span class="dock-icon dock-icon-output-muted" data-icon="headphones-muted" aria-hidden="true"></span>
+              <span class="dock-icon dock-icon-output" aria-hidden="true"><Headphones /></span>
+              <span class="dock-icon dock-icon-output-muted" aria-hidden="true"><HeadphoneOff /></span>
               <span class="sr-only" id="outputText">{outputControls.label}</span>
             </button>
             <button
@@ -182,9 +193,10 @@
               aria-expanded={open}
               aria-controls={panelId}
               aria-label="Выбрать динамик"
-              data-icon="chevron-down"
               onclick={(event) => toggleOutputPopover(event, toggle)}
-            ></button>
+            >
+              <ChevronDown />
+            </button>
           </div>
         {/snippet}
 
@@ -216,8 +228,8 @@
         disabled={screenControls.disabled}
         onclick={handleScreenButtonClick}
       >
-        <span class="dock-icon dock-icon-screen" data-icon="screen-share" aria-hidden="true"></span>
-        <span class="dock-icon dock-icon-screen-stop" data-icon="screen-stop" aria-hidden="true"></span>
+        <span class="dock-icon dock-icon-screen" aria-hidden="true"><ScreenShare /></span>
+        <span class="dock-icon dock-icon-screen-stop" aria-hidden="true"><ScreenShareOff /></span>
         <span class="sr-only" id="screenText">{screenControls.label}</span>
       </button>
     </div>
@@ -236,15 +248,18 @@
       </span>
     </div>
 
-    <button class="dock-button leave-button" id="leaveButton" type="button" aria-label="Выйти из комнаты" data-icon="leave" hidden={screenUi.hideLeaveButton} onclick={handleLeaveButtonClick}></button>
+    <button class="dock-button leave-button" id="leaveButton" type="button" aria-label="Выйти из комнаты" hidden={screenUi.hideLeaveButton} onclick={handleLeaveButtonClick}>
+      <X aria-hidden="true" />
+    </button>
     <button
       class="dock-button screen-exit-button"
       id="screenExitButton"
       type="button"
       aria-label="Выйти со стрима"
-      data-icon="screen-stop"
       hidden={!screenUi.showScreenExit}
       onclick={() => leaveScreenView({ keepPreview: false }).catch((error) => console.error(error))}
-    ></button>
+    >
+      <ScreenShareOff aria-hidden="true" />
+    </button>
   </div>
 </div>

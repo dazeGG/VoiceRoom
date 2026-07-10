@@ -292,7 +292,7 @@ body[data-screen-view="true"][data-strip-collapsed="true"] .stage-strip {
   transform: translateY(-1px);
 }
 
-.participant-screen-action [data-icon] svg {
+.participant-screen-action .lucide {
   width: 15px;
   height: 15px;
   flex: 0 0 auto;

@@ -1,5 +1,7 @@
 <script lang="ts">
+  import { LogIn, MessageSquare, MicOff } from '@lucide/svelte';
   import { AvatarStack } from '$lib/shared/ui';
+  import { iconMd, iconSm } from '$lib/shared/ui/icons';
   import type { AuthUser, OwnedRoom } from '$lib/api/auth';
   import type { RoomPeer } from '$lib/api/rooms';
   import type { RealtimeEvent } from '$lib/api/realtime';
@@ -84,7 +86,7 @@
       {/if}
       {#if !previewChatOpen}
         <button class="room-chat-toggle" type="button" onclick={() => (previewChatOpen = true)}>
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+          <MessageSquare {...iconSm} aria-hidden="true" />
           <span>Чат</span>
         </button>
       {/if}
@@ -116,7 +118,7 @@
                   <h2>
                     <span class="participant-name">{peerName(peer)}</span>
                     <span class="participant-muted-icon" aria-label="Микрофон выключен" title="Микрофон выключен">
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="3" y1="3" x2="21" y2="21"></line><path d="M9 9v3a3 3 0 0 0 5.1 2.1"></path><path d="M15 11V5a3 3 0 0 0-5.9-.8"></path><path d="M6 11a6 6 0 0 0 9 5.2"></path><line x1="12" y1="19" x2="12" y2="22"></line></svg>
+                      <MicOff {...iconSm} aria-hidden="true" />
                     </span>
                   </h2>
                   <p hidden></p>
@@ -134,7 +136,7 @@
       {/if}
 
       <button class="lobby-roomview-join" type="button" onclick={onEnter}>
-        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 17l5-5-5-5"></path><path d="M20 12H9"></path><path d="M9 21H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3"></path></svg>
+        <LogIn {...iconMd} aria-hidden="true" />
         Войти в комнату
       </button>
     </div>

@@ -1,4 +1,7 @@
 <script lang="ts">
+  import { HeadphoneOff, Headphones, LogOut, Mic, MicOff } from '@lucide/svelte';
+  import { iconLg, iconMd, iconSm } from '$lib/shared/ui/icons';
+
   let {
     roomName = '',
     muted = false,
@@ -22,14 +25,14 @@
   <!-- header: room + status -->
   <div class="voice-head">
     <span class="voice-tile" aria-hidden="true">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14v-2a8 8 0 0 1 16 0v2"></path><rect x="3" y="14" width="4" height="6" rx="1.5"></rect><rect x="17" y="14" width="4" height="6" rx="1.5"></rect></svg>
+      <Headphones {...iconLg} aria-hidden="true" />
     </span>
     <div class="voice-head-body">
       <div class="voice-room-name" title={roomName}>{roomName}</div>
       {#if muted}
         <div class="voice-status voice-status--muted">
           <span class="voice-status-icon">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="3" x2="21" y2="21"></line><path d="M9 9v3a3 3 0 0 0 5.1 2.1"></path><path d="M15 11V5a3 3 0 0 0-5.9-.8"></path><path d="M6 11a6 6 0 0 0 9 5.2"></path><line x1="12" y1="19" x2="12" y2="22"></line></svg>
+            <MicOff {...iconSm} aria-hidden="true" />
           </span>
           <span>Микрофон выключен</span>
         </div>
@@ -56,9 +59,9 @@
       onclick={onToggleMic}
     >
       {#if muted}
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="3" x2="21" y2="21"></line><path d="M9 9v3a3 3 0 0 0 5.1 2.1"></path><path d="M15 11V5a3 3 0 0 0-5.9-.8"></path><path d="M6 11a6 6 0 0 0 9 5.2"></path><line x1="12" y1="19" x2="12" y2="22"></line></svg>
+        <MicOff {...iconMd} aria-hidden="true" />
       {:else}
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M6 11a6 6 0 0 0 12 0"></path><line x1="12" y1="17" x2="12" y2="21"></line><line x1="8" y1="21" x2="16" y2="21"></line></svg>
+        <Mic {...iconMd} aria-hidden="true" />
       {/if}
     </button>
 
@@ -72,15 +75,15 @@
       onclick={onToggleDeafen}
     >
       {#if deafened}
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="3" x2="21" y2="21"></line><path d="M4 14v-2a8 8 0 0 1 12.5-6.6"></path><path d="M20 12v2"></path><rect x="3" y="14" width="4" height="6" rx="1.5"></rect><rect x="17" y="14" width="4" height="6" rx="1.5"></rect></svg>
+        <HeadphoneOff {...iconMd} aria-hidden="true" />
       {:else}
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14v-2a8 8 0 0 1 16 0v2"></path><rect x="3" y="14" width="4" height="6" rx="1.5"></rect><rect x="17" y="14" width="4" height="6" rx="1.5"></rect></svg>
+        <Headphones {...iconMd} aria-hidden="true" />
       {/if}
     </button>
 
     <!-- leave -->
     <button class="voice-leave" type="button" title="Выйти" aria-label="Выйти из голосовой комнаты" onclick={onLeave}>
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 17l5-5-5-5"></path><path d="M20 12H9"></path><path d="M9 21H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3"></path></svg>
+      <LogOut {...iconMd} aria-hidden="true" />
     </button>
   </div>
 </div>

@@ -104,8 +104,9 @@ button:disabled {
   opacity: 0.56;
 }
 
-[data-icon] svg {
+.lucide {
   display: block;
+  flex-shrink: 0;
 }
 
 .app-shell {

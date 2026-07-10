@@ -1,5 +1,7 @@
 <script lang="ts">
+  import { ChevronRight, Plus, UserPlus } from '@lucide/svelte';
   import { AvatarStack, Button, Ellipsis } from '$lib/shared/ui';
+  import { iconMd, iconSm } from '$lib/shared/ui/icons';
   import type { AuthUser, OwnedRoom } from '$lib/api/auth';
   import { roomPresence } from '../../model/room-presence.svelte';
   import { roomPeerAvatarItems } from '../../model/room-avatars';
@@ -39,14 +41,14 @@
   {#if requestCount > 0}
     <button class="lr-callout" type="button" onclick={showPeople}>
       <span class="lr-callout-icon">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><line x1="19" y1="8" x2="19" y2="14"></line><line x1="22" y1="11" x2="16" y2="11"></line></svg>
+        <UserPlus {...iconMd} aria-hidden="true" />
       </span>
       <div style="flex:1;min-width:0;">
         <div class="lr-callout-title">{requestCount} {requestCount === 1 ? 'новая заявка' : 'новые заявки'} в друзья</div>
         <div class="lr-callout-sub">Откройте, чтобы принять или отклонить</div>
       </div>
       <span style="flex:none;color:var(--warm-faint);">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+        <ChevronRight {...iconMd} aria-hidden="true" />
       </span>
     </button>
   {/if}
@@ -65,7 +67,7 @@
         <button class="lv-join-btn" type="submit">Войти</button>
       </form>
       <Button variant="primary" onclick={onCreateRoom}>
-        {#snippet icon()}<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>{/snippet}
+        {#snippet icon()}<Plus {...iconSm} aria-hidden="true" />{/snippet}
         Создать комнату
       </Button>
     </div>

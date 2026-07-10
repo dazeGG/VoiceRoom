@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { ChevronRight, MessageSquare, Send } from '@lucide/svelte';
+  import { iconSm } from '$lib/shared/ui/icons';
   import { onMount } from 'svelte';
   import { fetchRoomChat, postRoomChat, type ChatMessage } from '$lib/api/rooms';
   import { subscribeRoomPreview } from '$lib/features/home/model/room-realtime';
@@ -246,11 +248,11 @@
 <aside class="room-chat-rail" aria-label="Чат комнаты" data-open={roomUi.chatOpen} hidden={!roomUi.chatOpen}>
   <header class="chat-rail-head">
     <div class="chat-rail-title">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+      <MessageSquare {...iconSm} aria-hidden="true" />
       <span>Чат комнаты</span>
     </div>
     <button class="chat-rail-collapse" type="button" aria-label="Свернуть чат" onclick={closeChat}>
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"></polyline></svg>
+      <ChevronRight {...iconSm} aria-hidden="true" />
     </button>
   </header>
 
@@ -322,7 +324,7 @@
       autocomplete="off"
     />
     <button class="chat-rail-send" type="submit" aria-label="Отправить" disabled={sending || !draft.trim()}>
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+      <Send {...iconSm} aria-hidden="true" />
     </button>
   </form>
 </aside>

@@ -1,5 +1,7 @@
 <script lang="ts">
+  import { LogOut, Mic, User, X } from '@lucide/svelte';
   import type { AuthUser } from '$lib/api/auth';
+  import { iconMd, iconSm } from '$lib/shared/ui/icons';
   import { changePassword, updateDisplayName } from '$lib/api/auth';
   import { isValidPassword, PASSWORD_MIN_LENGTH } from '$lib/features/auth/account';
   import { clearSession, setUser } from '$lib/features/auth/session.svelte';
@@ -259,7 +261,7 @@
       <div class="settings-head">
         <span class="settings-title" id="settingsTitle">Настройки</span>
         <button class="settings-close" type="button" aria-label="Закрыть" onclick={onClose}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="6" x2="18" y2="18"></line><line x1="18" y1="6" x2="6" y2="18"></line></svg>
+          <X {...iconSm} aria-hidden="true" />
         </button>
       </div>
 
@@ -267,16 +269,16 @@
         <nav class="settings-nav" aria-label="Разделы настроек">
           <div class="settings-nav-main">
             <button class="settings-nav-item" type="button" data-active={tab === 'profile'} onclick={() => (tab = 'profile')}>
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg>
+              <User {...iconMd} aria-hidden="true" />
               Профиль
             </button>
             <button class="settings-nav-item" type="button" data-active={tab === 'sound'} onclick={() => (tab = 'sound')}>
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M6 11 a6 6 0 0 0 12 0"></path><line x1="12" y1="17" x2="12" y2="21"></line><line x1="8" y1="21" x2="16" y2="21"></line></svg>
+              <Mic {...iconMd} aria-hidden="true" />
               Звук
             </button>
           </div>
           <button class="settings-nav-item settings-nav-item--danger" type="button" disabled={loggingOut} onclick={onLogout}>
-            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+            <LogOut {...iconMd} aria-hidden="true" />
             {loggingOut ? 'Выходим…' : 'Выйти'}
           </button>
         </nav>

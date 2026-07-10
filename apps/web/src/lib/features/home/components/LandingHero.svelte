@@ -1,5 +1,7 @@
 <script lang="ts">
+  import { ArrowRight } from '@lucide/svelte';
   import { START_FEATURES } from '$lib/features/shared-content/start-features';
+  import { iconMd } from '$lib/shared/ui/icons';
   import LandingFeatureGrid from './LandingFeatureGrid.svelte';
 
   let {
@@ -35,7 +37,7 @@
         <span class="home-spinner" aria-hidden="true"></span>
       {/if}
       Создать временную комнату
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="13 5 20 12 13 19"></polyline></svg>
+      <ArrowRight {...iconMd} aria-hidden="true" />
     </button>
 
     <form class="lv-join" onsubmit={submitJoin}>

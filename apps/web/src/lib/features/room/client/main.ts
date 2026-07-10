@@ -2,7 +2,7 @@ import { GATE_THRESHOLD_MIN_DB } from './core/config';
 import { roomDeviceUi } from '$lib/features/room/room-device-ui.svelte';
 import { startUi } from '$lib/features/room/start-ui.svelte';
 import { registerActiveVoiceControls, registerActiveVoiceLeave } from '$lib/features/room/voice-session.svelte';
-import { mountIcons } from './ui/icons';
+
 import { state } from './core/state.svelte';
 import { getStoredPeerSession } from './core/session';
 import { cleanDisplayName } from './core/utils';
@@ -65,8 +65,6 @@ export function mountRoomClient(_root: ParentNode = document, options: { roomId?
     state.peerId = peerSession.peerId;
     state.sessionToken = peerSession.sessionToken;
   }
-
-  mountIcons();
 
   const savedName = cleanDisplayName(localStorage.getItem('voice-room:name'));
   state.savedName = savedName;
