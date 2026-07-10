@@ -1,4 +1,4 @@
-import { fetchMe, fetchOwnedRooms } from '$lib/api/auth';
+import { addRoomByCode, fetchMe, fetchOwnedRooms } from '$lib/api/auth';
 import { session } from '$lib/features/auth/session.svelte';
 import { roomNameFor } from '$lib/features/auth/account';
 import { roomSettingsUi } from '../../room-settings.svelte';
@@ -171,6 +171,19 @@ function openRoom(roomId: string): void {
   window.location.href = `/r/${encodeURIComponent(roomId)}`;
 }
 
+async function autoSaveRoomForAuthenticatedUser(roomId: string): Promise<void> {
+  if (!roomId) return;
+  try {
+    await addRoomByCode(roomId);
+    window.dispatchEvent(new CustomEvent('voice-room:rooms-changed', { detail: { roomId } }));
+  } catch (error) {
+    // Auto-save is a convenience side effect: temporary rooms, already-pruned
+    // rooms, and transient bookmark failures must never block or noisy-toast
+    // the room entry flow.
+    console.debug('Room auto-save skipped', error);
+  }
+}
+
 async function resolveRoomEntryName(): Promise<RoomEntryGateResult> {
   // Room links intentionally verify the account directly instead of using the
   // home session loader: this route has no lobby session UI, and an auth-check
@@ -179,6 +192,7 @@ async function resolveRoomEntryName(): Promise<RoomEntryGateResult> {
     const user = await fetchMe();
     if (user) {
       persistName(roomNameFor(user));
+      void autoSaveRoomForAuthenticatedUser(state.roomId);
       // Settings/delete UI is owner-only; the lobby's room list is the only
       // place "owner" is known client-side, so cross-check it here.
       try {

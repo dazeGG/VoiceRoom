@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import type { AuthUser, OwnedRoom } from '$lib/api/auth';
-  import { addRoomByCode, fetchOwnedRooms } from '$lib/api/auth';
+  import { fetchOwnedRooms } from '$lib/api/auth';
   import { createRoom } from '$lib/api/rooms';
   import { clearRoomPresence } from './model/room-presence.svelte';
   import { initLobbyRoomRealtime } from './model/room-realtime';
@@ -56,10 +56,6 @@
   let rooms = $state<OwnedRoom[]>([]);
   let creating = $state(false);
   let createDialogOpen = $state(false);
-  let addDialogOpen = $state(false);
-  let addRoomCode = $state('');
-  let addError = $state('');
-  let adding = $state(false);
   let settingsOpen = $state(false);
   let settingsTab = $state<'profile' | 'sound'>('profile');
   const selectedRoomId = $derived(roomNavigation.viewedRoomId);
@@ -135,6 +131,10 @@
       if (transition.closeEmbeddedRoom) closeEmbeddedRoom({ replaceUrl: false });
     }
 
+    function onRoomsChanged(): void {
+      void refreshRooms();
+    }
+
     // On a fresh load/reload the URL is the only persisted state, so a /r/:id
     // route means the user wants to be back inside that room. Enter with
     // auto-join (like the "Войти" button) instead of only previewing — otherwise
@@ -147,11 +147,13 @@
     }
 
     window.addEventListener('voice-room:embedded-leave', onEmbeddedLeave);
+    window.addEventListener('voice-room:rooms-changed', onRoomsChanged);
     window.addEventListener('popstate', onPopState);
     return () => {
       teardownFriends();
       teardownRooms();
       window.removeEventListener('voice-room:embedded-leave', onEmbeddedLeave);
+      window.removeEventListener('voice-room:rooms-changed', onRoomsChanged);
       window.removeEventListener('popstate', onPopState);
     };
   });
@@ -259,43 +261,6 @@
     }
   }
 
-  async function handleAddRoom(event: Event): Promise<void> {
-    event.preventDefault();
-    if (adding) return;
-    const roomId = extractRoomId(addRoomCode);
-    if (!roomId) {
-      addError = 'Введите код постоянной комнаты';
-      return;
-    }
-    adding = true;
-    addError = '';
-    try {
-      await addRoomByCode(roomId);
-      addDialogOpen = false;
-      addRoomCode = '';
-      await refreshRooms();
-      onToast('Комната добавлена');
-    } catch (error) {
-      addError = error instanceof Error && error.message ? error.message : 'Не удалось добавить комнату';
-    } finally {
-      adding = false;
-    }
-  }
-
-  function closeAddDialog(): void {
-    if (adding) return;
-    addDialogOpen = false;
-    addError = '';
-  }
-
-  function onDialogOverlayClick(event: MouseEvent): void {
-    if (event.target === event.currentTarget) closeAddDialog();
-  }
-
-  function onWindowKeydown(event: KeyboardEvent): void {
-    if (addDialogOpen && event.key === 'Escape') closeAddDialog();
-  }
-
   function openSettings(): void {
     settingsTab = 'profile';
     settingsOpen = true;
@@ -312,7 +277,6 @@
   }
 </script>
 
-<svelte:window onkeydown={onWindowKeydown} />
 
 {#if user}
   <div class="lobby-shell lv dens-cozy">
@@ -345,13 +309,13 @@
       {:else if friendsState.mode === 'rooms' && selectedRoom && (!embeddedRoomId || !embeddedRoomVisible)}
         <RoomPreviewView {user} room={selectedRoom} onEnter={() => enterRoom(selectedRoom.roomId)} onBack={closeViewedRoom} {onToast} />
       {:else if friendsState.mode === 'rooms' && !embeddedRoomVisible}
-        <VoiceHome {user} {rooms} onOpenRoom={previewRoom} onCreateRoom={() => (createDialogOpen = true)} onJoinCode={handleJoin} onAddRoom={() => (addDialogOpen = true)} />
+        <VoiceHome {user} {rooms} onOpenRoom={previewRoom} onCreateRoom={() => (createDialogOpen = true)} onJoinCode={handleJoin} />
       {:else if friendsState.mode === 'friends' && friendsState.view === 'dm'}
         <DmView selfId={user.id} onHome={goHome} />
       {:else if friendsState.mode === 'friends' && friendsState.view === 'people'}
         <PeopleView {user} {onToast} onHome={goHome} />
       {:else if friendsState.mode === 'friends'}
-        <VoiceHome {user} {rooms} onOpenRoom={previewRoom} onCreateRoom={() => (createDialogOpen = true)} onJoinCode={handleJoin} onAddRoom={() => (addDialogOpen = true)} />
+        <VoiceHome {user} {rooms} onOpenRoom={previewRoom} onCreateRoom={() => (createDialogOpen = true)} onJoinCode={handleJoin} />
       {/if}
     </main>
   </div>
@@ -366,44 +330,4 @@
     {onToast}
     {onLogout}
   />
-
-  {#if addDialogOpen}
-    <div class="dialog-overlay" role="presentation" onclick={onDialogOverlayClick}>
-      <div class="dialog-card" role="dialog" aria-modal="true" aria-labelledby="addRoomTitle">
-        <div class="dialog-head">
-          <span class="dialog-title" id="addRoomTitle">Добавить комнату</span>
-          <button class="dialog-close" type="button" aria-label="Закрыть" onclick={closeAddDialog}>
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="6" y1="6" x2="18" y2="18"></line><line x1="18" y1="6" x2="6" y2="18"></line></svg>
-          </button>
-        </div>
-
-        <form class="dialog-body" onsubmit={handleAddRoom}>
-          <p class="dialog-note">Введите код уже созданной постоянной комнаты. Временные комнаты в список не добавляются.</p>
-          {#if addError}
-            <p class="dialog-error" role="alert">{addError}</p>
-          {/if}
-          <div class="dialog-field">
-            <div class="dialog-label">Код комнаты</div>
-            <input
-              class="dialog-input dialog-input--mono"
-              maxlength="120"
-              placeholder="x7m2kq9p"
-              autocapitalize="off"
-              autocomplete="off"
-              spellcheck="false"
-              bind:value={addRoomCode}
-            />
-          </div>
-
-          <div class="dialog-actions">
-            <button class="dialog-cancel" type="button" onclick={closeAddDialog}>Отмена</button>
-            <button class="dialog-submit" type="submit" disabled={adding}>
-              {#if adding}<span class="home-spinner" aria-hidden="true"></span>{/if}
-              Добавить
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  {/if}
 {/if}

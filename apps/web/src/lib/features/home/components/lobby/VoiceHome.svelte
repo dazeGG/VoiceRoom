@@ -6,13 +6,12 @@
   import { roomDisplayName, roomVisual } from '../../model/rooms';
   import { friendsState, showPeople } from '../../model/friends.svelte';
 
-  let { user, rooms, onOpenRoom, onCreateRoom, onJoinCode, onAddRoom } = $props<{
+  let { user, rooms, onOpenRoom, onCreateRoom, onJoinCode } = $props<{
     user: AuthUser;
     rooms: OwnedRoom[];
     onOpenRoom: (roomId: string) => void;
     onCreateRoom: () => void;
     onJoinCode: (code: string) => void;
-    onAddRoom: () => void;
   }>();
 
   let joinCode = $state('');
@@ -55,13 +54,16 @@
   <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:16px;margin:34px 0 18px;">
     <h2 class="lr-title" style="margin:0;font-size:22px;">Комнаты</h2>
     <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;">
-      <form class="lv-join" onsubmit={submitJoinCode}>
-        <input class="lv-join-input" placeholder="Войти по коду" bind:value={joinCode} />
+      <form class="lv-join" onsubmit={submitJoinCode} aria-describedby="roomAutoSaveHint">
+        <input class="lv-join-input" placeholder="Код или ссылка" bind:value={joinCode} />
+        <span
+          class="lv-join-hint"
+          title="Постоянные комнаты сохраняются автоматически"
+          aria-hidden="true"
+        >i</span>
+        <span class="lv-sr-only" id="roomAutoSaveHint">Постоянные комнаты сохраняются автоматически</span>
         <button class="lv-join-btn" type="submit">Войти</button>
       </form>
-      <button class="lr-icon-btn" type="button" title="Добавить комнату по коду" onclick={onAddRoom}>
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-      </button>
       <Button variant="primary" onclick={onCreateRoom}>
         {#snippet icon()}<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>{/snippet}
         Создать комнату

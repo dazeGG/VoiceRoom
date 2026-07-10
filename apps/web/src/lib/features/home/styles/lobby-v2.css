@@ -7,7 +7,11 @@
 
 .lv {
   display: flex;
-  height: 100%;
+  /* Height comes from .lobby-shell (height: 100vh, combined on the same
+     root element in LobbyPage.svelte) — html/body only set min-height, so a
+     height:100% here would resolve to auto and collapse the whole shell
+     (and everything nested inside it, incl. the embedded room) to content
+     height instead of the viewport. Do not add height here. */
   background: var(--paper);
   color: var(--ink);
   font-family: var(--font-sans);
@@ -250,11 +254,42 @@
   font-family: var(--font-mono);
   font-size: 13px;
   padding: 0 14px;
-  width: 150px;
+  width: 170px;
 }
 
 .lv-join-input::placeholder {
   color: var(--warm-faint);
+}
+
+.lv-join-hint {
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin-right: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  color: var(--warm-muted);
+  cursor: help;
+  font-family: var(--font-serif);
+  font-size: 12px;
+  font-style: italic;
+  line-height: 1;
+}
+
+.lv-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .lv-join-btn {
