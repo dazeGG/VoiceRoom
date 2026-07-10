@@ -476,11 +476,57 @@ body[data-lobby-embedded="true"] .room-dock {
 }
 
 
+.gate-field-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.gate-switch {
+  position: relative;
+  flex: none;
+  width: 36px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid oklch(100% 0 0 / 0.12);
+  border-radius: 10px;
+  background: oklch(100% 0 0 / 0.06);
+  cursor: pointer;
+  transition: background 0.16s ease, border-color 0.16s ease;
+}
+
+.gate-switch[aria-checked='true'] {
+  border-color: oklch(72% 0.14 164 / 0.55);
+  background: oklch(72% 0.14 164 / 0.3);
+}
+
+.gate-switch-knob {
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--muted);
+  transition: left 0.16s ease, background 0.16s ease;
+}
+
+.gate-switch[aria-checked='true'] .gate-switch-knob {
+  left: 17px;
+  background: var(--green);
+}
+
 .gate-control {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 58px;
   align-items: center;
   gap: var(--space-sm);
+  margin-top: var(--space-xs);
+  transition: opacity 0.2s ease;
+}
+
+.gate-control[data-disabled='true'] {
+  opacity: 0.45;
 }
 
 .gate-control output {

@@ -30,6 +30,12 @@ import { syncOutputDeviceUiState } from './controls';
 import type { MicrophoneCapture } from '../core/types';
 
 let gateSwitchTimer = 0;
+// Same on-default as SettingsModal's GATE_DEFAULT_DB, used when there's no prior
+// threshold to restore (gate has never been turned on in this session).
+const GATE_TOGGLE_DEFAULT_DB = -40;
+// Remembers the last non-off threshold so toggling the gate back on restores it,
+// mirroring SettingsModal's local gateDb/gateOn split.
+let lastGateThresholdDb = GATE_TOGGLE_DEFAULT_DB;
 
 export interface GateControlView {
   levelScale: number;
@@ -37,6 +43,7 @@ export interface GateControlView {
   markerActive: boolean;
   thresholdLabel: string;
   thresholdValue: number;
+  gateOn: boolean;
 }
 
 export function getGateControlView(): GateControlView {
@@ -49,8 +56,18 @@ export function getGateControlView(): GateControlView {
     levelState: gateOpen ? 'open' : 'closed',
     markerActive: !isGateDisabled(),
     thresholdLabel: isGateDisabled() ? 'Выкл' : `${state.gateThresholdDb} dB`,
-    thresholdValue: state.gateThresholdDb
+    thresholdValue: state.gateThresholdDb,
+    gateOn: !isGateDisabled()
   };
+}
+
+export function toggleGate(): void {
+  if (isGateDisabled()) {
+    updateGateThresholdFromSlider(lastGateThresholdDb);
+  } else {
+    lastGateThresholdDb = state.gateThresholdDb;
+    updateGateThresholdFromSlider(GATE_THRESHOLD_MIN_DB);
+  }
 }
 
 export function clearGateSwitchTimer(): void {

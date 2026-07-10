@@ -26,6 +26,7 @@
     switchMicrophone,
     switchNoiseMode,
     switchOutputDevice,
+    toggleGate,
     updateGateThresholdFromSlider
   } from '../client/ui/devices';
   import {
@@ -132,9 +133,21 @@
               onValueChange={() => void switchNoiseMode()}
             />
           </label>
-          <label class="field">
-            <span>Гейт</span>
-            <div class="gate-control">
+          <div class="field">
+            <div class="gate-field-head">
+              <span>Гейт</span>
+              <button
+                class="gate-switch"
+                type="button"
+                role="switch"
+                aria-checked={gate.gateOn}
+                aria-label="Шумовой гейт"
+                onclick={toggleGate}
+              >
+                <span class="gate-switch-knob" aria-hidden="true"></span>
+              </button>
+            </div>
+            <div class="gate-control" data-disabled={!gate.markerActive}>
               <Slider
                 value={gate.thresholdValue}
                 min={GATE_THRESHOLD_MIN_DB}
@@ -156,7 +169,7 @@
               </Slider>
               <output id="gateThresholdValue">{gate.thresholdLabel}</output>
             </div>
-          </label>
+          </div>
         {/snippet}
       </Popover>
     </div>
