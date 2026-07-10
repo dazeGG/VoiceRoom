@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { fetchRoomChat, postRoomChat, type ChatMessage } from '$lib/api/rooms';
   import { subscribeRoomPreview } from '$lib/features/home/model/room-realtime';
+  import { formatChatDayLabel, isSameDay } from '$lib/shared/utils/chat-date';
   import { cleanDisplayName } from '$lib/shared/utils/text';
   import { getAvatarColor } from '$lib/visual/tokens';
   import { getRoomIdFromPath, getStoredPeerSession } from '../client/core/session';
@@ -35,7 +36,14 @@
     messages: ChatMessage[];
   }
 
-  const groups = $derived(buildGroups(messages));
+  // Messages grouped by calendar day so each day renders under its own divider.
+  interface ChatDay {
+    key: string;
+    label: string;
+    groups: ChatGroup[];
+  }
+
+  const days = $derived(buildDays(messages));
   const messageIds = new Set<string>();
 
   // Reflect chat state onto <body> so the room layout + dock can react in CSS.
@@ -50,11 +58,17 @@
     };
   });
 
-  function buildGroups(items: ChatMessage[]): ChatGroup[] {
-    const result: ChatGroup[] = [];
+  function buildDays(items: ChatMessage[]): ChatDay[] {
+    const result: ChatDay[] = [];
     for (const message of items) {
+      let day = result.at(-1);
+      if (!day || !isSameDay(Number(day.key), message.createdAt)) {
+        day = { key: String(message.createdAt), label: formatChatDayLabel(message.createdAt), groups: [] };
+        result.push(day);
+      }
+
       const author = message.name || 'Гость';
-      const last = result.at(-1);
+      const last = day.groups.at(-1);
       const sameAuthor = last && last.peerId === message.peerId && last.name === author;
       const close = last && message.createdAt - (last.messages.at(-1)?.createdAt ?? 0) < 5 * 60 * 1000;
       if (sameAuthor && close) {
@@ -62,7 +76,7 @@
         continue;
       }
       const avatar = getAvatarColor(message.avatarColorKey);
-      result.push({
+      day.groups.push({
         key: message.id,
         name: author,
         peerId: message.peerId,
@@ -243,8 +257,12 @@
   <div class="chat-rail-body" bind:this={chatBody}>
     {#if loading}
       <p class="chat-rail-note">Загружаем сообщения…</p>
-    {:else if groups.length}
-      {#each groups as group (group.key)}
+    {:else if days.length}
+      {#each days as day (day.key)}
+        <div class="chat-day-divider" role="separator" aria-label={day.label}>
+          <span>{day.label}</span>
+        </div>
+        {#each day.groups as group (group.key)}
         <div class="chat-msg" data-self={group.self}>
           {#if group.self}
             <span class="chat-msg-avatar" style={`background:${group.avatarBackground};color:${group.avatarForeground};box-shadow:${group.avatarShadow}`} aria-hidden="true">
@@ -284,6 +302,7 @@
             {/each}
           </div>
         </div>
+        {/each}
       {/each}
     {:else}
       <p class="chat-rail-note">Пока пусто. Напишите первое сообщение.</p>
