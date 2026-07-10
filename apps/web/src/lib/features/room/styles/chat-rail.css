@@ -193,6 +193,34 @@ button.chat-msg-author {
   margin-top: 3px;
 }
 
+.chat-msg-text a,
+.lobby-dm-bubble a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.chat-msg-text a:hover,
+.lobby-dm-bubble a:hover {
+  opacity: 0.85;
+}
+
+.chat-msg-delete {
+  margin-left: 6px;
+  font-size: 11px;
+  line-height: 1;
+  border: none;
+  background: transparent;
+  color: #8e897b;
+  cursor: pointer;
+  padding: 0 2px;
+  opacity: 0.6;
+}
+.chat-msg-delete:hover {
+  color: #c66;
+  opacity: 1;
+}
+.chat-msg[data-self="true"] .chat-msg-delete { opacity: 0.7; }
+
 .chat-rail-note,
 .chat-rail-error {
   margin: auto 0 0;
@@ -227,6 +255,14 @@ button.chat-msg-author {
   font-size: 14px;
   outline: none;
   transition: border-color 0.15s ease;
+}
+
+.chat-rail-textarea {
+  resize: none;
+  overflow-y: auto;
+  min-height: 42px;
+  max-height: 140px;
+  line-height: 1.35;
 }
 
 .chat-rail-input::placeholder {

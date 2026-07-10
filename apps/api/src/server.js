@@ -547,10 +547,18 @@ function parseBoolean(value) {
 }
 
 function cleanChatText(value) {
-  return String(value || '')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, 500);
+  // Preserve newlines for multiline chat (2.4.0); collapse only horizontal runs.
+  // Cap consecutive blank lines and total lines; length cap remains.
+  let text = String(value || '')
+    .replace(/[^\S\n]+/g, ' ')
+    .replace(/ *\n */g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+  const lines = text.split('\n');
+  if (lines.length > 20) {
+    text = lines.slice(0, 20).join('\n');
+  }
+  return text.slice(0, 500);
 }
 
 function publicChatMessage(message) {
@@ -563,6 +571,7 @@ function publicChatMessage(message) {
     peerId: message.peerId,
     roomId: message.roomId,
     text: message.text
+    // authorUserId intentionally not exposed to clients
   };
 }
 
@@ -1241,7 +1250,8 @@ async function handleRoomChatPost(req, res, roomId) {
     avatarColorKey,
     name,
     peerId,
-    text
+    text,
+    authorUserId: sessionUser ? sessionUser.id : null
   });
 
   if (!message) {
@@ -1548,6 +1558,109 @@ async function handleMarkDmRead(req, res, peerId) {
   sendJson(res, 200, { ok: true, count: result.count });
 }
 
+async function handleDeleteRoomChatMessage(req, res, roomId, messageId) {
+  const room = await getRoom(roomId);
+  if (!room) {
+    sendJson(res, 404, { ok: false, error: 'Room not found', roomId });
+    return;
+  }
+  const body = await readJsonBody(req);
+  const requestedPeerId = normalizePeerId(body.peerId);
+  const sessionToken = normalizeSessionToken(body.sessionToken);
+  const sessionUser = await resolveOptionalSessionUser(req);
+
+  // Load the message (must not be deleted)
+  const msg = await getRoomStore().getMessage(roomId, messageId);
+  if (!msg) {
+    sendJson(res, 404, { ok: false, error: 'Message not found' });
+    return;
+  }
+
+  // Permission:
+  // - guest peer session matches the message peerId, or
+  // - logged in authorUserId matches current, or
+  // - current user is owner of static room
+  const isPeerAuthor = requestedPeerId && requestedPeerId === msg.peerId;
+  const isAccountAuthor = sessionUser && msg.authorUserId && sessionUser.id === msg.authorUserId;
+  const isRoomOwner = sessionUser && room.isStatic && room.ownerId === sessionUser.id;
+
+  if (isPeerAuthor) {
+    // verify guest token
+    const activePeer = room.peers.get(requestedPeerId);
+    if (!activePeer || !tokensMatch(activePeer.sessionToken, sessionToken)) {
+      sendJson(res, 403, { ok: false, error: 'Invalid peer session' });
+      return;
+    }
+  } else if (!isAccountAuthor && !isRoomOwner) {
+    sendJson(res, 403, { ok: false, error: 'Not allowed to delete this message' });
+    return;
+  }
+  // Only owners allowed on non-static? Per plan: only static have moderation.
+  if (isRoomOwner && !room.isStatic) {
+    sendJson(res, 403, { ok: false, error: 'Moderation only for static rooms' });
+    return;
+  }
+
+  const deleted = await getRoomStore().softDeleteMessage(roomId, messageId);
+  if (!deleted) {
+    sendJson(res, 404, { ok: false, error: 'Message not found' });
+    return;
+  }
+
+  // Realtime delete notification to both voice peers and preview subscribers
+  const delEvent = { type: 'room.chat.deleted', payload: { roomId, messageId } };
+  try {
+    // active voice peers via legacy broadcast
+    const presence = getPresenceRoom ? getPresenceRoom(roomId) : null;
+    if (presence) broadcast(presence, delEvent);
+  } catch {}
+  try {
+    // previews + active via runtime detail broadcast (raw event ok for client listener)
+    roomRuntime?.broadcastRoomDetail?.(roomId, delEvent);
+  } catch {}
+
+  sendJson(res, 200, { ok: true, deleted: true });
+}
+
+async function handleDeleteDmMessage(req, res, peerIdParam, messageId) {
+  const user = await requireSessionUser(req, res);
+  if (!user) return;
+
+  const peerId = cleanUuid(peerIdParam);
+  if (!peerId) {
+    sendJson(res, 404, { ok: false, error: 'Диалог не найден' });
+    return;
+  }
+
+  const msg = await getFriendStore().getMessage(user.id, peerId, messageId);
+  if (!msg) {
+    sendJson(res, 404, { ok: false, error: 'Сообщение не найдено' });
+    return;
+  }
+
+  // Only sender can delete own message (deletes for both)
+  if (msg.senderId !== user.id) {
+    sendJson(res, 403, { ok: false, error: 'Можно удалять только свои сообщения' });
+    return;
+  }
+
+  const deleted = await getFriendStore().softDeleteMessage(messageId);
+  if (!deleted) {
+    sendJson(res, 404, { ok: false, error: 'Сообщение не найдено' });
+    return;
+  }
+
+  // Notify both sides so they can remove from UI and adjust unread if needed
+  const delEvent = { type: 'dm.message.deleted', messageId, peerUserId: peerId };
+  broadcastToUser(peerId, delEvent);
+  broadcastToUser(user.id, delEvent);
+
+  // If the deleted msg was unread for the other side, they may recalc, we can also send dm-read like bump?
+  // For simplicity, let client re-fetch count on delete event if needed.
+
+  sendJson(res, 200, { ok: true, deleted: true });
+}
+
 function pickReleaseAsset(assets, patterns) {
   for (const pattern of patterns) {
     const found = assets.find((asset) => pattern.test(asset.name || ''));
@@ -1811,6 +1924,9 @@ function createApiApp({ store = null, users = null, friends = null } = {}) {
   app.post('/api/rooms/:roomId/chat', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
     return handleRoomChatPost(req, res, normalizeRoomId(request.params.roomId));
   }));
+  app.delete('/api/rooms/:roomId/chat/:messageId', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
+    return handleDeleteRoomChatMessage(req, res, normalizeRoomId(request.params.roomId), request.params.messageId);
+  }));
   app.post('/api/livekit-token', (request, reply) => runLegacyHandler(request, reply, handleLiveKitToken));
   app.post('/api/state', (request, reply) => runLegacyHandler(request, reply, handleState));
 
@@ -1841,6 +1957,9 @@ function createApiApp({ store = null, users = null, friends = null } = {}) {
   }));
   app.post('/api/dm/:userId/read', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
     return handleMarkDmRead(req, res, request.params.userId);
+  }));
+  app.delete('/api/dm/:userId/messages/:messageId', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
+    return handleDeleteDmMessage(req, res, request.params.userId, request.params.messageId);
   }));
 
   // Register after plugins finish loading so @fastify/websocket can wrap the handler.

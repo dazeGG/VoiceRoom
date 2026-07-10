@@ -98,10 +98,12 @@
 
   async function openDirectMessage(): Promise<void> {
     if (!peer?.accountUserId) return;
-    closeParticipantContextMenu(peer.id);
+    const peerId = peer.id;
+    const accountUserId = peer.accountUserId;
+    closeParticipantContextMenu(peerId);
     try {
       setMode('friends');
-      await openDm(peer.accountUserId);
+      await openDm(accountUserId);
     } catch (error) {
       console.error(error);
       showToast(errorToastMessage(error, 'Не удалось открыть личные сообщения'), { variant: 'error' });
@@ -110,9 +112,11 @@
 
   async function sendFriendRequest(): Promise<void> {
     if (!peer?.accountUserId) return;
-    closeParticipantContextMenu(peer.id);
+    const peerId = peer.id;
+    const accountUserId = peer.accountUserId;
+    closeParticipantContextMenu(peerId);
     try {
-      const result = await addFriendByUserId(peer.accountUserId);
+      const result = await addFriendByUserId(accountUserId);
       showToast(getFriendRequestToast(result.status));
     } catch (error) {
       console.error(error);
@@ -122,9 +126,11 @@
 
   async function acceptFriendRequest(): Promise<void> {
     if (!peer?.accountUserId) return;
-    closeParticipantContextMenu(peer.id);
+    const peerId = peer.id;
+    const accountUserId = peer.accountUserId;
+    closeParticipantContextMenu(peerId);
     try {
-      await acceptRequestByUserId(peer.accountUserId);
+      await acceptRequestByUserId(accountUserId);
       showToast('Заявка принята');
     } catch (error) {
       console.error(error);

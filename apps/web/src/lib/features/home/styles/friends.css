@@ -801,6 +801,27 @@ html.is-desktop .sidebar-download { display: none; }
   color: var(--accent-ink);
   border-bottom-right-radius: 5px;
 }
+
+.lobby-dm-bubble a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.lobby-dm-bubble a:hover {
+  opacity: 0.85;
+}
+
+.dm-msg-delete {
+  margin-left: 4px;
+  font-size: 10px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  opacity: 0.5;
+  cursor: pointer;
+  padding: 0 1px;
+}
+.dm-msg-delete:hover { opacity: 1; color: #c66; }
 .lobby-dm-time { font-family: var(--font-mono); font-size: 10px; color: var(--warm-faint); margin-top: 2px; padding: 0 4px; }
 
 .lobby-dm-compose { flex: none; padding: 14px 24px 20px; }
@@ -815,6 +836,13 @@ html.is-desktop .sidebar-download { display: none; }
   font-size: 14px;
   outline: none;
   transition: border-color 0.15s ease;
+  resize: none;
+}
+.lobby-dm-textarea {
+  min-height: 48px;
+  max-height: 140px;
+  overflow-y: auto;
+  line-height: 1.35;
 }
 .lobby-dm-input:focus {
   border-color: var(--focus-border);

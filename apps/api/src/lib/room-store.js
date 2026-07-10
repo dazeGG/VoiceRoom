@@ -143,7 +143,9 @@ function mapMessage(row) {
     name: row.name || '',
     peerId: row.peer_id || '',
     roomId: row.room_id,
-    text: row.text || ''
+    text: row.text || '',
+    // 2.4.0: author for ownership (nullable for guests/legacy)
+    authorUserId: row.author_user_id || null
   };
 }
 
@@ -549,8 +551,8 @@ function createRoomStore({
       if (room.rowCount === 0) return null;
 
       const inserted = await client.query(
-        `INSERT INTO room_messages (id, room_id, peer_id, name, text, created_at, expires_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)
+        `INSERT INTO room_messages (id, room_id, peer_id, name, text, created_at, expires_at, author_user_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
          RETURNING *`,
         [
           id,
@@ -559,7 +561,8 @@ function createRoomStore({
           typeof message?.name === 'string' ? message.name : '',
           typeof message?.text === 'string' ? message.text : '',
           toDate(createdAt),
-          toDate(expiresAt)
+          toDate(expiresAt),
+          typeof message?.authorUserId === 'string' ? message.authorUserId : null
         ]
       );
 
@@ -611,6 +614,29 @@ function createRoomStore({
       [roomId, toDate(now), boundedLimit]
     );
     return result.rows.map(mapMessage);
+  }
+
+  async function getMessage(roomId, messageId) {
+    const result = await getPool().query(
+      `SELECT m.*, rpi.avatar_color_key
+       FROM room_messages m
+       LEFT JOIN room_peer_identities rpi
+         ON rpi.room_id = m.room_id AND rpi.peer_id = m.peer_id
+       WHERE m.room_id = $1 AND m.id = $2 AND m.deleted_at IS NULL
+       LIMIT 1`,
+      [roomId, messageId]
+    );
+    return mapMessage(result.rows[0] || null);
+  }
+
+  async function softDeleteMessage(roomId, messageId) {
+    const result = await getPool().query(
+      `UPDATE room_messages
+       SET deleted_at = now()
+       WHERE room_id = $1 AND id = $2 AND deleted_at IS NULL`,
+      [roomId, messageId]
+    );
+    return result.rowCount > 0;
   }
 
   async function listRoomsForOwner(ownerId) {
@@ -732,6 +758,8 @@ function createRoomStore({
     getOrCreatePeerIdentity,
     getRoom,
     listMessages,
+    getMessage,
+    softDeleteMessage,
     listRoomsForOwner,
     listVisibleRoomsForUser,
     listSummaryRecipientUserIds,

@@ -137,3 +137,15 @@ export async function postRoomChat(
   const payload = await postJson<{ message: ChatMessage }>(`/api/rooms/${encodeURIComponent(roomId)}/chat`, body);
   return payload.message;
 }
+
+export async function deleteRoomChatMessage(
+  roomId: string,
+  messageId: string,
+  body?: { peerId?: string; sessionToken?: string }
+): Promise<{ ok: boolean; deleted?: boolean }> {
+  const payload = await del<{ ok: boolean; deleted?: boolean }>(
+    `/api/rooms/${encodeURIComponent(roomId)}/chat/${encodeURIComponent(messageId)}`,
+    body ?? {}
+  );
+  return payload;
+}

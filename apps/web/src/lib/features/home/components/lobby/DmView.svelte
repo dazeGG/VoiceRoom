@@ -4,10 +4,12 @@
   import { tick } from 'svelte';
   import type { DirectMessage } from '$lib/api/dm';
   import { Avatar } from '$lib/shared/ui';
+  import ChatText from '$lib/shared/components/ChatText.svelte';
   import { friendName, formatDayLabel, formatTime, isSameDay } from '../../model/lobby-format';
   import {
     friendsState,
     closeProfile,
+    deleteMessage,
     removeFriend,
     sendMessage,
     toggleProfile
@@ -18,7 +20,26 @@
   let draft = $state('');
   let sending = $state(false);
   let scrollEl = $state<HTMLDivElement | null>(null);
-  let inputEl = $state<HTMLInputElement | null>(null);
+  let inputEl = $state<HTMLTextAreaElement | null>(null);
+
+  function autoResize() {
+    if (!inputEl) return;
+    inputEl.style.height = 'auto';
+    const next = Math.min(inputEl.scrollHeight, 140);
+    inputEl.style.height = `${next}px`;
+  }
+
+  function onKeydown(event: KeyboardEvent): void {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      void submit();
+      queueMicrotask(() => {
+        if (inputEl) inputEl.style.height = 'auto';
+      });
+    } else {
+      queueMicrotask(autoResize);
+    }
+  }
 
   const peer = $derived(friendsState.threadPeer);
   const friendEntry = $derived(
@@ -89,15 +110,16 @@
     }
   }
 
-  function onKeydown(event: KeyboardEvent): void {
-    if (event.key === 'Enter' && !event.shiftKey) {
-      event.preventDefault();
-      void submit();
-    }
-  }
+
 
   async function handleRemove(): Promise<void> {
     if (peer) await removeFriend(peer.id);
+  }
+
+  async function onDelete(mid: string): Promise<void> {
+    try {
+      await deleteMessage(mid);
+    } catch {}
   }
 </script>
 
@@ -142,7 +164,10 @@
               <div class="lobby-dm-bubbles">
                 {#each group.bubbles as bubble (bubble.id)}
                   <div class="lobby-dm-bubble" class:lobby-dm-bubble--me={group.fromMe} class:lobby-dm-bubble--them={!group.fromMe}>
-                    {bubble.body}
+                    <ChatText text={bubble.body} />
+                    {#if group.fromMe}
+                      <button type="button" class="dm-msg-delete" aria-label="Удалить" onclick={() => onDelete(bubble.id)}>×</button>
+                    {/if}
                   </div>
                 {/each}
                 <div class="lobby-dm-time">{formatTime(group.bubbles[group.bubbles.length - 1].createdAt)}</div>
@@ -154,14 +179,15 @@
     </div>
 
     <div class="lobby-dm-compose">
-      <input
-        class="lobby-dm-input"
+      <textarea
+        class="lobby-dm-input lobby-dm-textarea"
         placeholder="Написать сообщение…"
         bind:this={inputEl}
         bind:value={draft}
         onkeydown={onKeydown}
+        oninput={autoResize}
         disabled={sending}
-      />
+      ></textarea>
     </div>
   </div>
 

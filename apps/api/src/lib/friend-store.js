@@ -32,7 +32,9 @@ function mapMessage(row) {
     recipientId: row.recipient_id,
     body: row.body,
     createdAt: toMillis(row.created_at),
-    readAt: toMillis(row.read_at)
+    readAt: toMillis(row.read_at),
+    // deletedAt kept internal; callers filter before map
+    deletedAt: row.deleted_at ? toMillis(row.deleted_at) : null
   };
 }
 
@@ -93,7 +95,7 @@ function createFriendStore({ databaseUrl, logger = console, pool } = {}) {
     const unreadResult = await pool.query(
       `SELECT sender_id, COUNT(*)::int AS count
        FROM direct_messages
-       WHERE recipient_id = $1 AND read_at IS NULL
+       WHERE recipient_id = $1 AND read_at IS NULL AND deleted_at IS NULL
        GROUP BY sender_id`,
       [userId]
     );
@@ -105,7 +107,7 @@ function createFriendStore({ databaseUrl, logger = console, pool } = {}) {
          SELECT CASE WHEN sender_id = $1 THEN recipient_id ELSE sender_id END AS peer,
                 id, body, created_at, sender_id
          FROM direct_messages
-         WHERE sender_id = $1 OR recipient_id = $1
+         WHERE (sender_id = $1 OR recipient_id = $1) AND deleted_at IS NULL
        ) t
        ORDER BY peer, created_at DESC, id DESC`,
       [userId]
@@ -330,13 +332,36 @@ function createFriendStore({ databaseUrl, logger = console, pool } = {}) {
   async function listThread({ userId, peerId, limit = 100 }) {
     const result = await getPool().query(
       `SELECT * FROM direct_messages
-       WHERE (sender_id = $1 AND recipient_id = $2)
-          OR (sender_id = $2 AND recipient_id = $1)
+       WHERE ((sender_id = $1 AND recipient_id = $2)
+          OR (sender_id = $2 AND recipient_id = $1))
+         AND deleted_at IS NULL
        ORDER BY created_at ASC, id ASC
        LIMIT $3`,
       [userId, peerId, limit]
     );
     return result.rows.map(mapMessage);
+  }
+
+  async function getMessage(userId, peerId, messageId) {
+    const result = await getPool().query(
+      `SELECT * FROM direct_messages
+       WHERE id = $1
+         AND ((sender_id = $2 AND recipient_id = $3) OR (sender_id = $3 AND recipient_id = $2))
+         AND deleted_at IS NULL
+       LIMIT 1`,
+      [messageId, userId, peerId]
+    );
+    return mapMessage(result.rows[0] || null);
+  }
+
+  async function softDeleteMessage(messageId) {
+    const result = await getPool().query(
+      `UPDATE direct_messages
+       SET deleted_at = now()
+       WHERE id = $1 AND deleted_at IS NULL`,
+      [messageId]
+    );
+    return result.rowCount > 0;
   }
 
   async function sendMessage({ senderId, recipientId, body }) {
@@ -389,6 +414,8 @@ function createFriendStore({ databaseUrl, logger = console, pool } = {}) {
     listFriends,
     listRequests,
     listThread,
+    getMessage,
+    softDeleteMessage,
     markRead,
     removeFriend,
     respondRequest,

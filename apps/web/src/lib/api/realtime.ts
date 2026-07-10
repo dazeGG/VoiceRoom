@@ -11,7 +11,8 @@ export type RealtimeAccountEvent =
   | { type: 'friend.accepted'; payload: { userId: string } }
   | { type: 'friend.removed'; payload: { userId: string } }
   | { type: 'dm.message'; payload: { message: DirectMessage } }
-  | { type: 'dm.read'; payload: { userId: string } };
+  | { type: 'dm.read'; payload: { userId: string } }
+  | { type: 'dm.message.deleted'; payload: { messageId: string; peerUserId?: string } };
 
 export type RoomRealtimeSummary = RoomSummary & {
   visiblePeers: RoomPeer[];
@@ -35,6 +36,7 @@ export type RealtimeRoomEvent =
   | { type: 'room.peer.left'; payload: { roomId: string; peerId: string; reason: string } }
   | { type: 'room.peer.updated'; payload: { roomId: string; peer: RoomPeer } }
   | { type: 'room.chat.message'; payload: { roomId: string; message: ChatMessage } }
+  | { type: 'room.chat.deleted'; payload: { roomId: string; messageId: string } }
   | { type: 'room.updated'; payload: { room: RoomSummary } }
   | { type: 'room.deleted'; payload: { roomId: string } }
   | { type: 'room.not_found'; payload: { roomId: string } }

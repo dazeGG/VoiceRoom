@@ -7,6 +7,7 @@
   import { playRoomChatMessageCue } from '$lib/features/room/client/media/cues';
   import { getAvatarColor } from '$lib/visual/tokens';
   import { friendName, initial } from '../../model/lobby-format';
+  import ChatText from '$lib/shared/components/ChatText.svelte';
 
   let { roomId, user, onClose } = $props<{ roomId: string; user: AuthUser; onClose?: () => void }>();
 
@@ -16,6 +17,26 @@
   let sending = $state(false);
   let error = $state('');
   let chatBody: HTMLDivElement | null = null;
+  let composeEl: HTMLTextAreaElement | null = null;
+
+  function autoResize() {
+    if (!composeEl) return;
+    composeEl.style.height = 'auto';
+    const next = Math.min(composeEl.scrollHeight, 140);
+    composeEl.style.height = `${next}px`;
+  }
+
+  function onComposeKeydown(e: KeyboardEvent) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      void sendMessage();
+      queueMicrotask(() => {
+        if (composeEl) composeEl.style.height = 'auto';
+      });
+    } else {
+      queueMicrotask(autoResize);
+    }
+  }
 
   interface ChatGroup {
     key: string;
@@ -87,7 +108,8 @@
     event?.preventDefault();
     if (!roomId || sending) return;
 
-    const text = draft.replace(/\s+/g, ' ').trim();
+    // Do not collapse whitespace; newlines are intentional (2.4.0).
+    const text = draft.trim();
     if (!text) return;
 
     sending = true;
@@ -167,7 +189,7 @@
               <time class="chat-msg-time" datetime={new Date(group.messages[0].createdAt).toISOString()}>{group.time}</time>
             </div>
             {#each group.messages as message (message.id)}
-              <p class="chat-msg-text">{message.text}</p>
+              <p class="chat-msg-text"><ChatText text={message.text} /></p>
             {/each}
           </div>
         </div>
@@ -182,13 +204,16 @@
   {/if}
 
   <form class="chat-rail-compose" onsubmit={sendMessage}>
-    <input
-      class="chat-rail-input"
+    <textarea
+      class="chat-rail-input chat-rail-textarea"
+      bind:this={composeEl}
       bind:value={draft}
       maxlength="500"
       placeholder="Написать в комнату…"
-      autocomplete="off"
-    />
+      onkeydown={onComposeKeydown}
+      oninput={autoResize}
+      disabled={sending}
+    ></textarea>
     <button class="chat-rail-send" type="submit" aria-label="Отправить" disabled={sending || !draft.trim()}>
       <Send {...iconSm} aria-hidden="true" />
     </button>

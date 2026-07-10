@@ -18,7 +18,7 @@ import {
   type SendRequestStatus,
   type Relationship
 } from '$lib/api/friends';
-import { fetchThread, markThreadRead, sendDirectMessage, type DirectMessage } from '$lib/api/dm';
+import { deleteDirectMessage, fetchThread, markThreadRead, sendDirectMessage, type DirectMessage } from '$lib/api/dm';
 import { connectRealtime, type RealtimeEvent, type RealtimeHandle } from '$lib/api/realtime';
 import { playDirectMessageCue, playFriendAcceptedCue, playFriendRequestCue } from '$lib/features/room/client/media/cues';
 
@@ -176,6 +176,15 @@ export async function sendMessage(text: string): Promise<void> {
   bumpLastMessage(peerId, message);
 }
 
+export async function deleteMessage(messageId: string): Promise<void> {
+  const peerId = friendsState.selectedFriendId;
+  if (!peerId || !messageId) return;
+  await deleteDirectMessage(peerId, messageId);
+  // remove locally; realtime delete will also arrive for other tabs
+  friendsState.thread = friendsState.thread.filter((m) => m.id !== messageId);
+  // lastMessage may need refresh but ok for now
+}
+
 function appendToThread(message: DirectMessage): void {
   if (friendsState.thread.some((existing) => existing.id === message.id)) return;
   friendsState.thread = [...friendsState.thread, message];
@@ -307,6 +316,13 @@ function handleRealtimeEvent(event: RealtimeEvent): void {
         friendsState.thread = friendsState.thread.map((message) =>
           message.senderId === selfId && message.readAt == null ? { ...message, readAt: now } : message
         );
+      }
+      break;
+    }
+    case 'dm.message.deleted': {
+      const mid = event.payload?.messageId;
+      if (mid) {
+        friendsState.thread = friendsState.thread.filter((m) => m.id !== mid);
       }
       break;
     }

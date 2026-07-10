@@ -2,10 +2,11 @@
   import { ChevronRight, MessageSquare, Send } from '@lucide/svelte';
   import { iconSm } from '$lib/shared/ui/icons';
   import { onMount } from 'svelte';
-  import { fetchRoomChat, postRoomChat, type ChatMessage } from '$lib/api/rooms';
+  import { deleteRoomChatMessage, fetchRoomChat, postRoomChat, type ChatMessage } from '$lib/api/rooms';
   import { subscribeRoomPreview } from '$lib/features/home/model/room-realtime';
   import { formatChatDayLabel, isSameDay } from '$lib/shared/utils/chat-date';
   import { cleanDisplayName } from '$lib/shared/utils/text';
+  import ChatText from '$lib/shared/components/ChatText.svelte';
   import { getAvatarColor } from '$lib/visual/tokens';
   import { getRoomIdFromPath, getStoredPeerSession } from '../client/core/session';
   import { getInitials } from '../client/core/utils';
@@ -24,6 +25,27 @@
   let sending = $state(false);
   let error = $state('');
   let chatBody: HTMLDivElement | null = null;
+  let composeEl: HTMLTextAreaElement | null = null;
+
+  function autoResize() {
+    if (!composeEl) return;
+    composeEl.style.height = 'auto';
+    const next = Math.min(composeEl.scrollHeight, 140);
+    composeEl.style.height = `${next}px`;
+  }
+
+  function onComposeKeydown(e: KeyboardEvent) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      void sendMessage();
+      // reset height after send clears draft (in finally)
+      queueMicrotask(() => {
+        if (composeEl) composeEl.style.height = 'auto';
+      });
+    } else {
+      queueMicrotask(autoResize);
+    }
+  }
 
   // Group consecutive messages from the same author (within 5 minutes) so the
   // avatar + name + time render once per burst, like the design's chat rail.
@@ -139,6 +161,14 @@
         }
         return;
       }
+      if (event.type === 'room.chat.deleted') {
+        const mid = event.payload?.messageId;
+        if (mid) {
+          messages = messages.filter((m) => m.id !== mid);
+          messageIds.delete(mid);
+        }
+        return;
+      }
       if (event.type !== 'room.chat.message') return;
       const message = event.payload.message;
       if (!message?.id || messageIds.has(message.id) || messages.some((item) => item.id === message.id)) return;
@@ -201,7 +231,8 @@
     event?.preventDefault();
     if (!roomId || sending) return;
 
-    const text = draft.replace(/\s+/g, ' ').trim();
+    // Do not collapse whitespace; newlines are intentional (2.4.0).
+    const text = draft.trim();
     if (!text) return;
 
     sending = true;
@@ -236,6 +267,18 @@
   function scrollToBottom(): void {
     if (!chatBody) return;
     chatBody.scrollTop = chatBody.scrollHeight;
+  }
+
+  async function deleteMessage(messageId: string): Promise<void> {
+    if (!roomId) return;
+    try {
+      await deleteRoomChatMessage(roomId, messageId, { peerId, sessionToken });
+      messages = messages.filter((m) => m.id !== messageId);
+      messageIds.delete(messageId);
+    } catch {
+      error = 'Не удалось удалить сообщение';
+      setTimeout(() => (error = ''), 1600);
+    }
   }
 
   // Open the participant context menu from a chat author (avatar or name). Only
@@ -302,7 +345,16 @@
               <time class="chat-msg-time" datetime={new Date(group.messages[0].createdAt).toISOString()}>{group.time}</time>
             </div>
             {#each group.messages as message (message.id)}
-              <p class="chat-msg-text">{message.text}</p>
+              <p class="chat-msg-text">
+                <ChatText text={message.text} />
+                <button
+                  type="button"
+                  class="chat-msg-delete"
+                  aria-label="Удалить сообщение"
+                  title="Удалить"
+                  onclick={() => deleteMessage(message.id)}
+                >×</button>
+              </p>
             {/each}
           </div>
         </div>
@@ -318,13 +370,16 @@
   {/if}
 
   <form class="chat-rail-compose" onsubmit={sendMessage}>
-    <input
-      class="chat-rail-input"
+    <textarea
+      class="chat-rail-input chat-rail-textarea"
+      bind:this={composeEl}
       bind:value={draft}
       maxlength="500"
       placeholder="Написать в комнату…"
-      autocomplete="off"
-    />
+      onkeydown={onComposeKeydown}
+      oninput={autoResize}
+      disabled={sending}
+    ></textarea>
     <button class="chat-rail-send" type="submit" aria-label="Отправить" disabled={sending || !draft.trim()}>
       <Send {...iconSm} aria-hidden="true" />
     </button>

@@ -193,6 +193,17 @@ test('chat API persists, streams, and respects room auth', async (t) => {
     assert.equal(after.body.messages.length, 1);
     assert.equal(after.body.messages[0].text, 'Привет, чат!');
 
+    // 2.4.0: multiline preserved (newlines, limited blank lines, line count cap)
+    const multi = await postJson(socketPath, `/api/rooms/${created.body.roomId}/chat`, {
+      name: 'Alice',
+      peerId: PEER_ID,
+      sessionToken: TOKEN,
+      text: 'line1\n\n\nline2\nline3'
+    });
+    assert.equal(multi.status, 201);
+    // collapses 3+ \n to 2, keeps \n
+    assert.equal(multi.body.message.text, 'line1\n\nline2\nline3');
+
     voice.ws.close();
   } catch (error) {
     if (logs.stderr.trim()) {

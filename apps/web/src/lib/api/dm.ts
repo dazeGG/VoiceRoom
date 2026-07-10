@@ -1,6 +1,6 @@
 // Direct (one-to-one) messages. Mirrors the /api/dm/:userId routes.
 
-import { getJsonAuth, postJsonAuth } from './http';
+import { del, getJsonAuth, postJsonAuth } from './http';
 import type { PublicUser } from './friends';
 
 export interface DirectMessage {
@@ -33,4 +33,9 @@ export async function sendDirectMessage(userId: string, text: string): Promise<D
 export async function markThreadRead(userId: string): Promise<number> {
   const payload = await postJsonAuth<{ count?: number }>(`/api/dm/${encodeURIComponent(userId)}/read`, {});
   return payload.count ?? 0;
+}
+
+export async function deleteDirectMessage(userId: string, messageId: string): Promise<{ ok: boolean; deleted?: boolean }> {
+  const payload = await del<{ ok: boolean; deleted?: boolean }>(`/api/dm/${encodeURIComponent(userId)}/messages/${encodeURIComponent(messageId)}`);
+  return payload;
 }
