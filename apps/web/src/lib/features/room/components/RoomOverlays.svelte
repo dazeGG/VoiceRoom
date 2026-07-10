@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { AppWindow, Check, Monitor, Play, Settings, Type, X } from '@lucide/svelte';
+  import { iconMd, iconSm, iconXs } from '$lib/shared/ui/icons';
   import { onMount } from 'svelte';
   import {
     cancelScreenSourcePicker,
@@ -105,9 +107,7 @@
         aria-label="Отменить выбор"
         onclick={cancelScreenSourcePicker}
       >
-        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <line x1="6" y1="6" x2="18" y2="18" /><line x1="18" y1="6" x2="6" y2="18" />
-        </svg>
+        <X {...iconMd} aria-hidden="true" />
       </button>
     </div>
 
@@ -119,9 +119,7 @@
         aria-pressed={screenSourceUi.tab === 'screens'}
         onclick={() => switchScreenTab('screens')}
       >
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <rect x="2" y="3" width="20" height="14" rx="2" /><line x1="8" y1="21" x2="16" y2="21" /><line x1="12" y1="17" x2="12" y2="21" />
-        </svg>
+        <Monitor {...iconSm} aria-hidden="true" />
         Экраны
       </button>
       <button
@@ -129,9 +127,7 @@
         aria-pressed={screenSourceUi.tab === 'windows'}
         onclick={() => switchScreenTab('windows')}
       >
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <rect x="3" y="4" width="18" height="16" rx="2" /><line x1="3" y1="9" x2="21" y2="9" />
-        </svg>
+        <AppWindow {...iconSm} aria-hidden="true" />
         Окна
       </button>
     </div>
@@ -160,9 +156,7 @@
             {/if}
             {#if selected}
               <span class="screen-source-check" aria-hidden="true">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#17150f" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M5 13l4 4L19 7" />
-                </svg>
+                <Check {...iconXs} color="#17150f" aria-hidden="true" />
               </span>
             {/if}
           </span>
@@ -170,13 +164,9 @@
             {#if source.appIcon}
               <img alt="" src={source.appIcon} />
             {:else if source.type === 'screen'}
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <rect x="2" y="3" width="20" height="14" rx="2" /><line x1="8" y1="21" x2="16" y2="21" /><line x1="12" y1="17" x2="12" y2="21" />
-              </svg>
+              <Monitor {...iconSm} aria-hidden="true" />
             {:else}
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <rect x="3" y="4" width="18" height="16" rx="2" /><line x1="3" y1="9" x2="21" y2="9" />
-              </svg>
+              <AppWindow {...iconSm} aria-hidden="true" />
             {/if}
             <span>{source.name}</span>
           </span>
@@ -188,9 +178,7 @@
     <div class="screen-source-footer">
       <div class="screen-source-summary">
         <span class="screen-source-summary-icon" aria-hidden="true">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="2" y="3" width="20" height="14" rx="2" /><line x1="8" y1="21" x2="16" y2="21" />
-          </svg>
+          <Monitor {...iconSm} aria-hidden="true" />
         </span>
         <div class="screen-source-summary-text">
           <div class="screen-source-summary-name">{summaryName}</div>
@@ -221,10 +209,7 @@
             title="Настройки стрима"
             onclick={() => { screenSourceUi.popOpen = !screenSourceUi.popOpen; }}
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <circle cx="12" cy="12" r="3" />
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9" />
-            </svg>
+            <Settings {...iconMd} aria-hidden="true" />
           </button>
 
           {#if screenSourceUi.popOpen}
@@ -237,9 +222,7 @@
                 onclick={() => { screenSourceUi.mode = 'games'; }}
               >
                 <span class="screen-source-pop-icon">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <polygon points="5 3 19 12 5 21 5 3" />
-                  </svg>
+                  <Play {...iconSm} aria-hidden="true" />
                 </span>
                 <span class="screen-source-pop-info">
                   <span class="screen-source-pop-title">Плавное видео</span>
@@ -255,9 +238,7 @@
                 onclick={() => { screenSourceUi.mode = 'text'; }}
               >
                 <span class="screen-source-pop-icon">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <polyline points="4 7 4 4 20 4 20 7" /><line x1="9" y1="20" x2="15" y2="20" /><line x1="12" y1="4" x2="12" y2="20" />
-                  </svg>
+                  <Type {...iconSm} aria-hidden="true" />
                 </span>
                 <span class="screen-source-pop-info">
                   <span class="screen-source-pop-title">Чёткая картинка</span>
@@ -291,9 +272,7 @@
           disabled={!screenSourceUi.selectedSourceId}
           onclick={confirmScreenSourcePicker}
         >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-            <path d="M8 5v14l11-7z" />
-          </svg>
+          <Play {...iconSm} fill="currentColor" aria-hidden="true" />
           Запустить
         </button>
       </div>

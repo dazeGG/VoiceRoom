@@ -1,5 +1,7 @@
 <script lang="ts">
+  import { ChevronDown } from '@lucide/svelte';
   import { tick } from 'svelte';
+  import { iconSm } from '$lib/shared/ui/icons';
   import { Ellipsis } from '../Ellipsis';
   import { Popover } from '../Popover';
   import type { SelectOption, SelectProps } from './types';
@@ -144,7 +146,7 @@
           <Ellipsis text={selectedLabel} title={selectedLabel} />
         </span>
         <span class="select-trigger-chevron" aria-hidden="true">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+          <ChevronDown {...iconSm} />
         </span>
       </button>
     {/snippet}

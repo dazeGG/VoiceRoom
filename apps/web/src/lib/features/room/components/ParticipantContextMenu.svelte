@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { Check, MessageSquare, MicOff, UserPlus, Volume2 } from '@lucide/svelte';
+  import { iconMd, iconSm } from '$lib/shared/ui/icons';
   import { onMount } from 'svelte';
   import { session } from '$lib/features/auth/session.svelte';
   import {
@@ -230,13 +232,13 @@
     {#if canUseSocialActions && relationship === 'friend'}
       <span class="participant-context-menu-divider" aria-hidden="true"></span>
       <button class="pcm-item" type="button" onclick={openDirectMessage}>
-        <svg class="pcm-item-icon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+        <MessageSquare class="pcm-item-icon" {...iconMd} aria-hidden="true" />
         <span>Написать сообщение</span>
       </button>
     {:else if canUseSocialActions && relationship === 'incoming'}
       <span class="participant-context-menu-divider" aria-hidden="true"></span>
       <button class="pcm-item pcm-item--accent" type="button" onclick={acceptFriendRequest}>
-        <svg class="pcm-item-icon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg>
+        <Check class="pcm-item-icon" {...iconMd} aria-hidden="true" />
         <span>Принять заявку</span>
       </button>
     {:else if canUseSocialActions && relationship === 'outgoing'}
@@ -245,7 +247,7 @@
     {:else if canUseSocialActions}
       <span class="participant-context-menu-divider" aria-hidden="true"></span>
       <button class="pcm-item pcm-item--accent" type="button" onclick={sendFriendRequest}>
-        <svg class="pcm-item-icon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><line x1="19" y1="8" x2="19" y2="14"></line><line x1="22" y1="11" x2="16" y2="11"></line></svg>
+        <UserPlus class="pcm-item-icon" {...iconMd} aria-hidden="true" />
         <span>Добавить в друзья</span>
       </button>
     {:else if !peer.accountUserId}
@@ -258,11 +260,7 @@
     <div class="pcm-volume">
       <div class="pcm-volume-head">
         <span class="pcm-volume-label">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
-            <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
-            <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
-          </svg>
+          <Volume2 {...iconSm} aria-hidden="true" />
           <span>Громкость</span>
         </span>
         <output class="pcm-volume-value">{volumeLabel}</output>
@@ -294,7 +292,7 @@
       aria-pressed={localMuted}
       onclick={toggleLocalMute}
     >
-      <svg class="pcm-item-icon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="1" y1="1" x2="23" y2="23"></line><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"></path><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
+      <MicOff class="pcm-item-icon" {...iconMd} aria-hidden="true" />
       <span>{localMuted ? 'Включить локально' : 'Заглушить'}</span>
     </button>
   </div>

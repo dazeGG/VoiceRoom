@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { renderIcon } from '../client/ui/icons';
+  import { Monitor } from '@lucide/svelte';
+  import { iconLg } from '$lib/shared/ui/icons';
   import { state as roomState } from '../client/core/state.svelte';
   import { getScreenProfileLabels } from '../client/media/profiles';
   import { playMediaElement } from '../client/services/media-playback-service';
@@ -72,7 +73,7 @@
           <span class="stream-tile-profile-meta">{profileMeta}</span>
         {/if}
       {:else}
-        <span class="stream-tile-icon" aria-hidden="true">{@html renderIcon('monitor')}</span>
+        <span class="stream-tile-icon" aria-hidden="true"><Monitor {...iconLg} /></span>
       {/if}
     </span>
     <button
@@ -104,7 +105,7 @@
           <span class="stream-tile-profile-meta">{profileMeta}</span>
         {/if}
       {:else}
-        <span class="stream-tile-icon" aria-hidden="true">{@html renderIcon('monitor')}</span>
+        <span class="stream-tile-icon" aria-hidden="true"><Monitor {...iconLg} /></span>
       {/if}
     </span>
     {#if isIdle}

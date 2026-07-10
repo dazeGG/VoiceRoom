@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { ChevronLeft, User, X } from '@lucide/svelte';
+  import { iconMd, iconSm } from '$lib/shared/ui/icons';
   import { tick } from 'svelte';
   import type { DirectMessage } from '$lib/api/dm';
   import { Avatar } from '$lib/shared/ui';
@@ -102,7 +104,7 @@
 <div class="lobby-dm">
   <div class="lobby-dm-col">
     <button class="lr-section-link" type="button" style="margin:14px 0 0 14px;" onclick={onHome}>
-      <span style="transform:rotate(180deg);display:flex;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg></span>
+      <ChevronLeft {...iconSm} aria-hidden="true" />
       На главную
     </button>
     {#if peer}
@@ -115,7 +117,7 @@
           </div>
         </div>
         <span style="flex:none;width:34px;height:34px;display:flex;align-items:center;justify-content:center;color:#9a9484;">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg>
+          <User {...iconMd} aria-hidden="true" />
         </span>
       </button>
     {/if}
@@ -167,7 +169,7 @@
     <div class="lobby-profile-panel lobby-scroll">
       <div class="lobby-profile-cover">
         <button class="lobby-profile-close" type="button" aria-label="Закрыть" onclick={closeProfile}>
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="6" x2="18" y2="18"></line><line x1="18" y1="6" x2="6" y2="18"></line></svg>
+          <X {...iconSm} aria-hidden="true" />
         </button>
       </div>
       <div class="lobby-profile-body">

@@ -12,6 +12,7 @@
     "e2e": "playwright test"
   },
   "dependencies": {
+    "@lucide/svelte": "^1.24.0",
     "@voice-room/shared": "file:../../packages/shared",
     "livekit-client": "^2.19.2"
   },

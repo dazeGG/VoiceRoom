@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { ChevronDown } from '@lucide/svelte';
   import ParticipantList from './ParticipantList.svelte';
   import StreamTiles from './StreamTiles.svelte';
   import { getScreenParticipants } from '../client/ui/screen-view';
@@ -18,7 +19,7 @@
       <span class="stage-strip-kicker" id="stageStripKicker">В комнате</span>
       <strong id="stageStripSummary">0 участников</strong>
     </div>
-    <button class="strip-toggle-button" id="stripToggleButton" type="button" aria-label="Свернуть пользователей" aria-pressed="false" data-icon="chevron-down" hidden></button>
+    <button class="strip-toggle-button" id="stripToggleButton" type="button" aria-label="Свернуть пользователей" aria-pressed="false" hidden><ChevronDown aria-hidden="true" /></button>
   </div>
 
   <div

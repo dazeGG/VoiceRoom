@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { ChevronRight } from '@lucide/svelte';
+  import { iconSm } from '$lib/shared/ui/icons';
   import type { PopoverMenuItemProps } from './types';
 
   let {
@@ -28,7 +30,7 @@
   <span class="popover-menu-item-label">{label}</span>
   {#if showChevron}
     <span class="popover-menu-item-chevron" aria-hidden="true">
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+      <ChevronRight {...iconSm} />
     </span>
   {/if}
 </button>

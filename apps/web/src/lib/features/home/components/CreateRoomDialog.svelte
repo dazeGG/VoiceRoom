@@ -1,5 +1,7 @@
 <script lang="ts">
+  import { Check, Clock } from '@lucide/svelte';
   import { Button, Dialog } from '$lib/shared/ui';
+  import { iconSm } from '$lib/shared/ui/icons';
   import { ROOM_PRESETS } from '../model/rooms';
 
   let { open, creating, onClose, onCreate } = $props<{
@@ -98,12 +100,12 @@
       </div>
 
       <div class="lr-dialog-note lr-dialog-note--ok">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 13l4 4L19 7"></path></svg>
+        <Check {...iconSm} aria-hidden="true" />
         <span>Всегда остаётся в вашем списке — заходите в любой момент.</span>
       </div>
     {:else}
       <div class="lr-dialog-note lr-dialog-note--warn">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><polyline points="12 7 12 12 15 14"></polyline></svg>
+        <Clock {...iconSm} aria-hidden="true" />
         <span>Код появится после создания. После выхода всех участников комната исчезнет примерно через 15 минут.</span>
       </div>
     {/if}

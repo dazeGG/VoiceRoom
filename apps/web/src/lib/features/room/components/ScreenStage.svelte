@@ -1,7 +1,6 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { Maximize, Minimize, Volume2, VolumeX } from '@lucide/svelte';
   import { AvatarStack } from '$lib/shared/ui';
-  import { mountIcons } from '../client/ui/icons';
   import { handleScreenStageClick } from '../client/ui/screen-view';
   import {
     getFullscreenView,
@@ -43,10 +42,6 @@
       videoEl.pause();
       videoEl.srcObject = null;
     }
-  });
-
-  onMount(() => {
-    if (stageEl) mountIcons(stageEl);
   });
 </script>
 
@@ -114,8 +109,8 @@
         data-muted={String(volume.muted)}
         onclick={toggleScreenMute}
       >
-        <span class="stream-volume-icon stream-volume-icon-on" data-icon="volume-on" aria-hidden="true"></span>
-        <span class="stream-volume-icon stream-volume-icon-off" data-icon="volume-off" aria-hidden="true"></span>
+        <span class="stream-volume-icon stream-volume-icon-on" aria-hidden="true"><Volume2 /></span>
+        <span class="stream-volume-icon stream-volume-icon-off" aria-hidden="true"><VolumeX /></span>
       </button>
       <div class="stream-volume-popover" id="streamVolumePopover">
         <input
@@ -141,8 +136,8 @@
       data-fullscreen={String(fullscreen.fullscreen)}
       onclick={() => void toggleScreenFullscreen()}
     >
-      <span class="screen-fullscreen-icon screen-fullscreen-icon-enter" data-icon="fullscreen-enter" aria-hidden="true"></span>
-      <span class="screen-fullscreen-icon screen-fullscreen-icon-exit" data-icon="fullscreen-exit" aria-hidden="true"></span>
+      <span class="screen-fullscreen-icon screen-fullscreen-icon-enter" aria-hidden="true"><Maximize /></span>
+      <span class="screen-fullscreen-icon screen-fullscreen-icon-exit" aria-hidden="true"><Minimize /></span>
     </button>
   </div>
 </div>

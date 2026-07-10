@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { Home } from '@lucide/svelte';
+  import { iconMd } from '$lib/shared/ui/icons';
   import { state } from '../client/core/state.svelte';
   import { startUi } from '../start-ui.svelte';
 </script>
@@ -12,10 +14,7 @@
     </p>
     <div class="not-found-actions">
       <a class="not-found-home" href="/" data-sveltekit-reload>
-        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M3 11l9-8 9 8"></path>
-          <path d="M5 10v10h14V10"></path>
-        </svg>
+        <Home {...iconMd} aria-hidden="true" />
         На стартовый экран
       </a>
     </div>

@@ -1,6 +1,8 @@
 <script lang="ts">
+  import { Apple, Download, Monitor } from '@lucide/svelte';
   import { fetchDesktopRelease, type DesktopRelease } from '$lib/api/desktop';
   import { Popover, PopoverMenuItem } from '$lib/shared/ui';
+  import { iconMd, iconSm } from '$lib/shared/ui/icons';
   import { DESKTOP_BUILDS, RELEASES_URL } from '../model/desktop-builds';
   import { triggerDesktopDownload } from '../services/desktop-download';
 
@@ -66,7 +68,7 @@
       aria-controls={panelId}
       onclick={toggle}
     >
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="4" x2="12" y2="15"></line><polyline points="7 11 12 16 17 11"></polyline><line x1="5" y1="20" x2="19" y2="20"></line></svg>
+      <Download {...iconSm} aria-hidden="true" />
     </button>
   {/snippet}
 
@@ -82,9 +84,9 @@
           {#if downloadingId === build.id}
             <span class="home-spinner" aria-hidden="true"></span>
           {:else if build.mac}
-            <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.4 12.7c0-2.2 1.8-3.3 1.9-3.3-1-1.5-2.6-1.7-3.2-1.7-1.4-.1-2.6.8-3.3.8-.7 0-1.7-.8-2.8-.8-1.5 0-2.8.8-3.6 2.2-1.5 2.6-.4 6.5 1.1 8.6.7 1 1.5 2.2 2.6 2.1 1-.04 1.4-.7 2.7-.7 1.2 0 1.6.7 2.7.6 1.1-.02 1.8-1 2.5-2 .8-1.2 1.1-2.3 1.1-2.3-.02-.01-2.1-.8-2.1-3.2zM14.3 6.3c.6-.7 1-1.7.9-2.7-.9.04-1.9.6-2.5 1.3-.5.6-1 1.6-.9 2.6 1 .1 1.9-.5 2.5-1.2z"></path></svg>
+            <Apple {...iconMd} aria-hidden="true" />
           {:else}
-            <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 5.5 10.5 4.4v7.1H3V5.5zm0 13 7.5 1.1v-7H3v5.9zM11.5 4.3 21 3v8.5h-9.5V4.3zm0 8.2H21V21l-9.5-1.3v-7.2z"></path></svg>
+            <Monitor {...iconMd} aria-hidden="true" />
           {/if}
         {/snippet}
       </PopoverMenuItem>

@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { X } from '@lucide/svelte';
+  import { iconXs } from '$lib/shared/ui/icons';
   import type { ToastStackProps } from './types';
 
   let { toasts, onDismiss }: ToastStackProps = $props();
@@ -10,7 +12,7 @@
       <div class="ui-toast" data-variant={toast.variant ?? 'default'}>
         <span class="ui-toast-message">{toast.message}</span>
         <button class="ui-toast-close" type="button" aria-label="Закрыть уведомление" onclick={() => onDismiss(toast.id)}>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="6" y1="6" x2="18" y2="18"></line><line x1="18" y1="6" x2="6" y2="18"></line></svg>
+          <X {...iconXs} aria-hidden="true" />
         </button>
       </div>
     {/each}

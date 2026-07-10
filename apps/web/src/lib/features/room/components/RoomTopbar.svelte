@@ -1,5 +1,7 @@
 <script lang="ts">
+  import { ChevronDown, Copy, Link, MessageSquare, Settings } from '@lucide/svelte';
   import Topbar from '$lib/shared/components/Topbar.svelte';
+  import { iconMd, iconSm } from '$lib/shared/ui/icons';
   import { Ellipsis, Popover, PopoverDivider, PopoverMenuItem } from '$lib/shared/ui';
   import { getRoomPreset } from '$lib/visual/tokens';
   import { state } from '../client/core/state.svelte';
@@ -65,7 +67,7 @@
               >{visual.emoji}</span>
               <Ellipsis text={heading} title={heading} class="room-heading-title" />
               <span class="room-heading-trigger-chevron" aria-hidden="true">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                <ChevronDown {...iconSm} aria-hidden="true" />
               </span>
             </button>
           </h1>
@@ -88,13 +90,13 @@
 
           <PopoverMenuItem label="Скопировать код" onclick={() => void handleCopyCode(close)}>
             {#snippet icon()}
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+              <Copy {...iconMd} aria-hidden="true" />
             {/snippet}
           </PopoverMenuItem>
 
           <PopoverMenuItem label="Скопировать ссылку" onclick={() => void handleCopyLink(close)}>
             {#snippet icon()}
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
+              <Link {...iconMd} aria-hidden="true" />
             {/snippet}
           </PopoverMenuItem>
 
@@ -102,7 +104,7 @@
             <PopoverDivider tight />
             <PopoverMenuItem label="Настройки комнаты" onclick={() => handleOpenSettings(close)}>
               {#snippet icon()}
-                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"></path></svg>
+                <Settings {...iconMd} aria-hidden="true" />
               {/snippet}
             </PopoverMenuItem>
           {/if}
@@ -118,7 +120,7 @@
       onclick={toggleChat}
       hidden={roomUi.chatOpen}
     >
-      <span data-icon="chat" aria-hidden="true"></span>
+      <MessageSquare {...iconMd} aria-hidden="true" />
       <span>Чат</span>
       {#if roomUi.unreadChat > 0}
         <span class="room-chat-unread" aria-label={`${roomUi.unreadChat} новых сообщений`}>{roomUi.unreadChat > 99 ? '99+' : roomUi.unreadChat}</span>

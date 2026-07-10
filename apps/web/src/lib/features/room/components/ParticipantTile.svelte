@@ -1,9 +1,9 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { HeadphoneOff, MicOff, MonitorPlay } from '@lucide/svelte';
+  import { iconSm } from '$lib/shared/ui/icons';
   import { getAvatarPresentation } from '../client/ui/avatar-presentation';
   import { state as roomState } from '../client/core/state.svelte';
   import { enterScreenView } from '../client/ui/screen-view';
-  import { mountIcons } from '../client/ui/icons';
   import { openParticipantContextMenu } from '../participant-context-ui.svelte';
   import type { Participant } from '../client/core/types';
 
@@ -16,10 +16,6 @@
   const viewing = $derived(roomState.viewedScreenPeerId === participant.id);
   const canWatch = $derived(!participant.isLocal && participant.screen && !viewing);
   const screenActionLabel = $derived(roomState.screenRequesting ? 'Подключение' : 'Смотреть экран');
-
-  onMount(() => {
-    if (tile) mountIcons(tile);
-  });
 
   function handleTileClick(event: MouseEvent): void {
     if (!participant.screen || participant.isLocal || roomState.viewedScreenPeerId === participant.id) return;
@@ -80,8 +76,8 @@
   <div class="participant-copy">
     <h2>
       <span class="participant-name">{displayName}</span>
-      <span class="participant-muted-icon" data-icon="mic-muted" aria-label="Микрофон выключен" title="Микрофон выключен"></span>
-      <span class="participant-deafened-icon" data-icon="headphones-muted" aria-label="Звук выключен" title="Звук выключен"></span>
+      <span class="participant-muted-icon" aria-label="Микрофон выключен" title="Микрофон выключен"><MicOff {...iconSm} /></span>
+      <span class="participant-deafened-icon" aria-label="Звук выключен" title="Звук выключен"><HeadphoneOff {...iconSm} /></span>
     </h2>
     {#if participant.statusLabel}
       <p>{participant.statusLabel}</p>
@@ -95,7 +91,7 @@
       disabled={roomState.screenRequesting}
       onclick={handleScreenAction}
     >
-      <span data-icon="watch-screen" aria-hidden="true"></span>
+      <MonitorPlay {...iconSm} aria-hidden="true" />
       <span>{screenActionLabel}</span>
     </button>
   </div>
