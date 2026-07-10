@@ -2,28 +2,31 @@
 
 :root {
   color-scheme: dark;
-  --paper: oklch(15.5% 0.015 92);
-  --paper-deep: oklch(10.5% 0.012 92);
-  --panel: oklch(20% 0.017 92);
-  --panel-strong: oklch(25% 0.019 92);
-  --control: oklch(23% 0.016 92);
-  --control-hover: oklch(30% 0.018 92);
-  --control-active: oklch(84% 0.012 92);
-  --control-active-hover: oklch(89% 0.01 92);
-  --control-line: oklch(41% 0.018 92);
+  /* ---- base surfaces (bold direction — olive-lime tinted, hue 112,
+     matches the Volt design system) ---- */
+  --paper: oklch(13% 0.038 112);
+  --paper-deep: oklch(8.5% 0.032 112);
+  --panel: oklch(19% 0.042 112);
+  --panel-strong: oklch(25% 0.045 112);
+  --control: oklch(22% 0.043 112);
+  --control-hover: oklch(30% 0.048 112);
+  --control-active: oklch(90% 0.02 112);
+  --control-active-hover: oklch(95% 0.015 112);
+  --control-line: oklch(44% 0.04 112);
   --ink: oklch(94% 0.012 92);
   --muted: oklch(69% 0.028 88);
-  --line: oklch(35% 0.025 92);
-  --green: oklch(72% 0.16 164);
-  --stream-live: oklch(59% 0.15 155);
-  --stream-live-hover: oklch(52% 0.15 155);
-  --blue: oklch(68% 0.14 246);
-  --coral: oklch(67% 0.18 31);
-  --amber: oklch(79% 0.14 82);
+  --line: oklch(40% 0.045 112);
+  --green: oklch(80% 0.2 150);
+  --stream-live: oklch(66% 0.18 152);
+  --stream-live-hover: oklch(60% 0.18 152);
+  --blue: oklch(71% 0.17 250);
+  --coral: oklch(64% 0.22 20);
+  --amber: oklch(82% 0.17 85);
   --focus-border: color-mix(in oklch, var(--green), var(--line) 52%);
   --focus-ring: color-mix(in oklch, var(--ink), transparent 68%);
   --focus-border: rgba(255, 255, 255, 0.72);
   --shadow: 0 24px 70px oklch(6% 0.02 92 / 0.46);
+  --shadow-glow: 0 10px 32px var(--accent-glow);
   --radius-sm: 8px;
   --radius-md: 14px;
   --radius-lg: 20px;
@@ -39,10 +42,10 @@
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
   font-family: Aptos, "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
 
-  /* ---- Volt accent + warm-neutral scale (landing redesign) ----
-     Signature electric-lime highlight for the guest landing's primary CTA,
-     kicker text and feature icons. Kept separate from --ink/--muted/--paper
-     above so the rest of the app (lobby, room) is unaffected. */
+  /* ---- Volt accent + warm-neutral scale ----
+     Signature electric-lime highlight for primary CTAs, focus rings and
+     brand text, plus a warm text scale used by the landing and lobby v2
+     surfaces above the bold-direction --paper/--panel stack. */
   --accent: oklch(89% 0.24 122);
   --accent-hover: oklch(93% 0.2 122);
   --accent-ink: oklch(16% 0.03 122);
