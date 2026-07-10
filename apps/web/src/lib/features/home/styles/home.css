@@ -625,9 +625,9 @@
   align-items: center;
   justify-content: center;
   gap: 10px;
-  height: 52px;
+  height: var(--interactive-lg);
   border: none;
-  border-radius: 14px;
+  border-radius: var(--interactive-radius);
   padding: 0 26px;
   background: var(--accent);
   color: var(--accent-ink);
@@ -656,9 +656,9 @@
 .lv-join {
   display: flex;
   align-items: stretch;
-  height: 52px;
+  height: var(--interactive-lg);
   border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 14px;
+  border-radius: var(--interactive-radius);
   background: rgba(255, 255, 255, 0.04);
   overflow: hidden;
   transition: border-color 0.15s ease;

@@ -236,10 +236,10 @@
   display: flex;
   align-items: stretch;
   border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: var(--radius-md);
+  border-radius: var(--interactive-radius, var(--radius-md));
   background: rgba(255, 255, 255, 0.04);
   overflow: hidden;
-  height: 44px;
+  height: var(--interactive-lg, 52px);
 }
 
 .lv-join:focus-within {
@@ -253,8 +253,8 @@
   color: var(--warm-ink);
   font-family: var(--font-mono);
   font-size: 13px;
-  padding: 0 14px;
-  width: 170px;
+  padding: 0 16px;
+  width: 178px;
 }
 
 .lv-join-input::placeholder {
@@ -298,9 +298,11 @@
   background: rgba(255, 255, 255, 0.05);
   color: var(--warm-ink);
   font-family: var(--font-sans);
-  font-size: 13px;
-  font-weight: 700;
-  padding: 0 18px;
+  font-size: 15px;
+  font-weight: 760;
+  line-height: 1;
+  letter-spacing: -0.01em;
+  padding: 0 var(--interactive-pad-x, 22px);
   cursor: pointer;
   transition: background 0.13s ease;
 }
