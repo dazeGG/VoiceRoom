@@ -4,6 +4,7 @@
   import { iconSm } from '$lib/shared/ui/icons';
   import { getAppRealtime } from '$lib/api/realtime';
   import { fetchRoomChat, postRoomChat, type ChatMessage } from '$lib/api/rooms';
+  import { playRoomChatMessageCue } from '$lib/features/room/client/media/cues';
   import { getAvatarColor } from '$lib/visual/tokens';
   import { friendName, initial } from '../../model/lobby-format';
 
@@ -129,6 +130,7 @@
       messageIds.add(message.id);
       error = '';
       messages = [...messages, message];
+      if (message.peerId !== accountPeerId) playRoomChatMessageCue();
       queueMicrotask(scrollToBottom);
     });
 

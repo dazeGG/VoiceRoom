@@ -5,7 +5,7 @@
   import { changePassword, updateDisplayName } from '$lib/api/auth';
   import { isValidPassword, PASSWORD_MIN_LENGTH } from '$lib/features/auth/account';
   import { clearSession, setUser } from '$lib/features/auth/session.svelte';
-  import { playPeerCue, playDirectMessageCue, playFriendAcceptedCue, playFriendRequestCue, playMicCue, playStreamCue, playStreamViewerCue } from '$lib/features/room/client/media/cues';
+  import { playPeerCue, playDirectMessageCue, playFriendAcceptedCue, playFriendRequestCue, playMicCue, playRoomChatMessageCue, playStreamCue, playStreamViewerCue } from '$lib/features/room/client/media/cues';
   import { Select, Slider } from '$lib/shared/ui';
   import { getAvatarColor } from '$lib/visual/tokens';
   import {
@@ -246,6 +246,7 @@
     else if (kind === 'stream-start') playStreamCue('start');
     else if (kind === 'stream-stop') playStreamCue('stop');
     else if (kind === 'stream-viewer') playStreamViewerCue('join');
+    else if (kind === 'room-chat') playRoomChatMessageCue();
     else if (kind === 'dm') playDirectMessageCue();
     else if (kind === 'friend-request') playFriendRequestCue();
     else if (kind === 'friend-accepted') playFriendAcceptedCue();
@@ -422,7 +423,8 @@
                   <button type="button" onclick={() => previewCue('stream-start')}>Стрим старт</button>
                   <button type="button" onclick={() => previewCue('stream-stop')}>Стрим стоп</button>
                   <button type="button" onclick={() => previewCue('stream-viewer')}>Зритель</button>
-                  <button type="button" onclick={() => previewCue('dm')}>Сообщение</button>
+                  <button type="button" onclick={() => previewCue('room-chat')}>Чат</button>
+                  <button type="button" onclick={() => previewCue('dm')}>ЛС</button>
                   <button type="button" onclick={() => previewCue('friend-request')}>Заявка</button>
                   <button type="button" onclick={() => previewCue('friend-accepted')}>Приняли</button>
                 </div>

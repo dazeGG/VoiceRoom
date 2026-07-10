@@ -67,6 +67,13 @@ export function playDirectMessageCue(): void {
   ], 'DM');
 }
 
+export function playRoomChatMessageCue(): void {
+  playCueSequence([
+    { frequency: 587, peak: 0.026, duration: 0.095 },
+    { frequency: 784, peak: 0.024, start: 0.065, duration: 0.11 }
+  ], 'Room chat');
+}
+
 export function playFriendRequestCue(): void {
   playCueSequence([
     { frequency: 523, peak: 0.028, duration: 0.11 },

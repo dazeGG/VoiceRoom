@@ -9,6 +9,7 @@
   import { getAvatarColor } from '$lib/visual/tokens';
   import { getRoomIdFromPath, getStoredPeerSession } from '../client/core/session';
   import { getInitials } from '../client/core/utils';
+  import { playRoomChatMessageCue } from '../client/media/cues';
   import { applyRoomDeleted, applyRoomNotFound, applyRoomUpdated } from '../client/room/lifecycle';
   import { openParticipantContextMenu } from '../participant-context-ui.svelte';
   import { roomUi, closeChat, incrementUnreadChat, markChatRead } from '../room-ui.svelte';
@@ -144,6 +145,7 @@
       messageIds.add(message.id);
       error = '';
       messages = [...messages, message];
+      if (message.peerId !== peerId) playRoomChatMessageCue();
       if (roomUi.chatOpen) {
         markChatRead();
         queueMicrotask(scrollToBottom);

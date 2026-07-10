@@ -960,16 +960,22 @@ test('notification cue volume respects stored multiplier', () => {
 test('sound cue layer covers direct messages and friend request events', () => {
   const cues = read('src/lib/features/room/client/media/cues.ts');
   const friends = read('src/lib/features/home/model/friends.svelte.ts');
+  const roomChat = read('src/lib/features/room/components/RoomChat.svelte');
+  const previewChat = read('src/lib/features/home/components/lobby/RoomPreviewChat.svelte');
   const settingsModal = read('src/lib/features/home/components/SettingsModal.svelte');
 
   assert.match(cues, /playDirectMessageCue/);
+  assert.match(cues, /playRoomChatMessageCue/);
   assert.match(cues, /playFriendRequestCue/);
   assert.match(cues, /playFriendAcceptedCue/);
   assert.match(cues, /playCueSequence/);
   assert.match(friends, /case 'friend\.request'[\s\S]*playFriendRequestCue\(\)/);
   assert.match(friends, /case 'friend\.accepted'[\s\S]*playFriendAcceptedCue\(\)/);
   assert.match(friends, /case 'dm\.message'[\s\S]*playDirectMessageCue\(\)/);
+  assert.match(roomChat, /event\.type !== 'room\.chat\.message'[\s\S]*message\.peerId !== peerId[\s\S]*playRoomChatMessageCue\(\)/);
+  assert.match(previewChat, /event\.type !== 'room\.chat\.message'[\s\S]*message\.peerId !== accountPeerId[\s\S]*playRoomChatMessageCue\(\)/);
   assert.match(settingsModal, /settings-cue-grid/);
+  assert.match(settingsModal, /previewCue\('room-chat'\)/);
   assert.match(settingsModal, /previewCue\('friend-request'\)/);
 });
 
