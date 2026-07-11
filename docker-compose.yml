@@ -50,14 +50,19 @@ services:
       DM_RATE_WINDOW_MS: ${DM_RATE_WINDOW_MS:-10000}
       FRIEND_REQUEST_RATE_LIMIT: ${FRIEND_REQUEST_RATE_LIMIT:-20}
       FRIEND_REQUEST_RATE_WINDOW_MS: ${FRIEND_REQUEST_RATE_WINDOW_MS:-60000}
+      AVATAR_UPLOAD_RATE_LIMIT: ${AVATAR_UPLOAD_RATE_LIMIT:-10}
+      AVATAR_UPLOAD_RATE_WINDOW_MS: ${AVATAR_UPLOAD_RATE_WINDOW_MS:-60000}
       MAX_REALTIME_STREAMS_PER_USER: ${MAX_REALTIME_STREAMS_PER_USER:-8}
       MAX_GUEST_STREAMS_PER_IP: ${MAX_GUEST_STREAMS_PER_IP:-8}
       WS_MAX_PAYLOAD_BYTES: ${WS_MAX_PAYLOAD_BYTES:-65536}
       RETENTION_PURGE_INTERVAL_MS: ${RETENTION_PURGE_INTERVAL_MS:-3600000}
       RETENTION_KEEP_DELETED_MS: ${RETENTION_KEEP_DELETED_MS:-2592000000}
       POW_SECRET: ${POW_SECRET:-}
+      UPLOADS_DIR: /data/uploads
     expose:
       - "3000"
+    volumes:
+      - uploads:/data/uploads
     healthcheck:
       test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000/api/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
       interval: 10s
@@ -118,3 +123,4 @@ volumes:
   caddy_data:
   caddy_config:
   postgres_data:
+  uploads:

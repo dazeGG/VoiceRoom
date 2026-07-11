@@ -17,13 +17,16 @@ export type ServerEnvelope = {
 export type RoomPeerSummary = {
   id: string;
   accountUserId?: string;
+  avatarAccent?: string | null;
   avatarColorKey: string;
+  avatarUrl?: string | null;
   muted: boolean;
   name: string;
 };
 
 export type RoomRealtimeSummary = {
   roomId: string;
+  avatarUrl?: string | null;
   name: string;
   isStatic: boolean;
   relationship: string;

@@ -26,7 +26,9 @@ function randomAvatarColorKey() {
 function mapUser(row) {
   if (!row) return null;
   return {
+    avatarAccent: row.avatar_accent || null,
     avatarColorKey: cleanAvatarColorKey(row.avatar_color_key) || 'blurple',
+    avatarKey: row.avatar_key || null,
     createdAt: toMillis(row.created_at),
     displayName: row.display_name || '',
     id: row.id,
@@ -39,8 +41,10 @@ function mapUser(row) {
 function publicUser(user) {
   if (!user) return null;
   return {
+    avatarAccent: user.avatarAccent || null,
     createdAt: user.createdAt,
     avatarColorKey: user.avatarColorKey || 'blurple',
+    avatarUrl: user.avatarKey ? `/api/avatars/${encodeURIComponent(user.avatarKey)}` : null,
     displayName: user.displayName || '',
     id: user.id,
     login: user.login
@@ -103,6 +107,17 @@ function createUserStore({ databaseUrl, logger = console, pool, sessionTtlMs = D
     const result = await getPool().query(
       `UPDATE users SET display_name = $2, updated_at = $3 WHERE id = $1 RETURNING *`,
       [userId, displayName, toDate(now)]
+    );
+    return mapUser(result.rows[0]);
+  }
+
+  async function updateAvatar({ userId, avatarKey = null, avatarAccent = null, now = Date.now() }) {
+    const result = await getPool().query(
+      `UPDATE users
+       SET avatar_key = $2, avatar_accent = $3, updated_at = $4
+       WHERE id = $1
+       RETURNING *`,
+      [userId, avatarKey || null, avatarAccent || null, toDate(now)]
     );
     return mapUser(result.rows[0]);
   }
@@ -224,6 +239,7 @@ function createUserStore({ databaseUrl, logger = console, pool, sessionTtlMs = D
     getUserById,
     getUserByLogin,
     pruneSessions,
+    updateAvatar,
     updateDisplayName,
     verifyCredentials
   };

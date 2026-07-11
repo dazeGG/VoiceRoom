@@ -37,6 +37,7 @@ function createFakePool(handler) {
 
 test('mapRoom maps PostgreSQL row shape to API room shape with ephemeral peers map', () => {
   const room = mapRoom({
+    avatar_key: 'room_abcdefghij_deadbeef.webp',
     id: 'abc123',
     creator_ip: '127.0.0.1',
     is_static: true,
@@ -46,6 +47,7 @@ test('mapRoom maps PostgreSQL row shape to API room shape with ephemeral peers m
   });
 
   assert.equal(room.id, 'abc123');
+  assert.equal(room.avatarKey, 'room_abcdefghij_deadbeef.webp');
   assert.equal(room.creatorIp, '127.0.0.1');
   assert.equal(room.isStatic, true);
   assert.equal(room.createdAt, 1000);
@@ -74,6 +76,28 @@ test('createRoom inserts durable room row with parameterized SQL', async () => {
   assert.doesNotMatch(pool.calls[0].text, /room_icon_key|room_color_key|emoji/);
 });
 
+test('updateRoomAvatar only updates active static rooms', async () => {
+  const pool = createFakePool((text, values) => {
+    assert.match(text, /is_static = true/);
+    assert.match(text, /deleted_at IS NULL/);
+    assert.equal(values[0], 'abcdefghij');
+    assert.equal(values[1], 'room_abcdefghij_deadbeef.webp');
+    return {
+      rows: [{
+        id: values[0], avatar_key: values[1], creator_ip: '', is_static: true,
+        created_at: new Date(1000), updated_at: values[2], empty_since: null
+      }],
+      rowCount: 1
+    };
+  });
+  const room = await createRoomStore({ pool }).updateRoomAvatar(
+    'abcdefghij',
+    'room_abcdefghij_deadbeef.webp',
+    2000
+  );
+  assert.equal(room.avatarKey, 'room_abcdefghij_deadbeef.webp');
+});
+
 test('appendMessage uses a transaction, verifies room existence, inserts row, and enforces cap', async () => {
   const pool = createFakePool((text) => {
     if (/SELECT id FROM rooms/.test(text)) return { rows: [{ id: 'room1' }], rowCount: 1 };
@@ -95,7 +119,8 @@ test('appendMessage uses a transaction, verifies room existence, inserts row, an
   }, 1000);
 
   assert.deepEqual(message, {
-    id: 'msg1', avatarColorKey: message.avatarColorKey, roomId: 'room1', peerId: 'peer1', name: 'Ada', text: 'hello', createdAt: 1000, expiresAt: 2000,
+    id: 'msg1', avatarAccent: null, avatarColorKey: message.avatarColorKey, avatarKey: null,
+    roomId: 'room1', peerId: 'peer1', name: 'Ada', text: 'hello', createdAt: 1000, expiresAt: 2000,
     authorUserId: null
   });
   assert.ok(pool.calls.some((call) => call.text === 'BEGIN'));
@@ -110,6 +135,8 @@ test('listMessages soft-deletes expired messages before selecting active rows', 
       return {
         rows: [{
           id: 'msg1', room_id: 'room1', peer_id: '', name: '', text: 'hello',
+          avatar_key: 'av_123e4567-e89b-12d3-a456-426614174000_deadbeef.webp',
+          avatar_accent: '#49303f',
           created_at: new Date(1000), expires_at: new Date(2000)
         }],
         rowCount: 1
@@ -123,10 +150,15 @@ test('listMessages soft-deletes expired messages before selecting active rows', 
 
   assert.deepEqual(messages, [mapMessage({
     id: 'msg1', room_id: 'room1', peer_id: '', name: '', text: 'hello',
+    avatar_key: 'av_123e4567-e89b-12d3-a456-426614174000_deadbeef.webp',
+    avatar_accent: '#49303f',
     created_at: new Date(1000), expires_at: new Date(2000)
   })]);
   assert.match(pool.calls[0].text, /UPDATE room_messages/);
   assert.match(pool.calls[1].text, /LEFT JOIN room_peer_identities/);
+  assert.match(pool.calls[1].text, /LEFT JOIN users/);
+  assert.equal(messages[0].avatarAccent, '#49303f');
+  assert.match(messages[0].avatarKey, /^av_/);
   assert.match(pool.calls[1].text, /ORDER BY recent.created_at ASC, recent.id ASC/);
 });
 

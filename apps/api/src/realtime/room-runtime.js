@@ -123,6 +123,7 @@ function createRoomRealtimeRuntime(deps) {
 
   function roomNotificationContext(room) {
     return {
+      avatarUrl: room.avatarKey ? `/api/avatars/${encodeURIComponent(room.avatarKey)}` : null,
       roomId: room.id,
       name: room.name || ''
     };
@@ -134,7 +135,9 @@ function createRoomRealtimeRuntime(deps) {
         id: user.id,
         displayName: user.displayName || '',
         login: user.login || '',
-        avatarColorKey: user.avatarColorKey || message.avatarColorKey || ''
+        avatarAccent: user.avatarAccent || null,
+        avatarColorKey: user.avatarColorKey || message.avatarColorKey || '',
+        avatarUrl: user.avatarKey ? `/api/avatars/${encodeURIComponent(user.avatarKey)}` : null
       };
     }
     return {
@@ -142,7 +145,9 @@ function createRoomRealtimeRuntime(deps) {
       peerId: message.peerId || '',
       displayName: message.name || '',
       login: '',
-      avatarColorKey: message.avatarColorKey || ''
+      avatarAccent: message.avatarAccent || null,
+      avatarColorKey: message.avatarColorKey || '',
+      avatarUrl: message.avatarUrl || null
     };
   }
 
@@ -305,7 +310,11 @@ function createRoomRealtimeRuntime(deps) {
       replaced: false,
       deafened: previous?.deafened ?? false,
       accountUserId: sessionUser?.id || '',
+      avatarAccent: sessionUser?.avatarAccent || null,
       avatarColorKey,
+      avatarUrl: sessionUser?.avatarKey
+        ? `/api/avatars/${encodeURIComponent(sessionUser.avatarKey)}`
+        : null,
       id: peerId,
       joinedAt: previous?.joinedAt ?? Date.now(),
       muted: previous?.muted ?? false,

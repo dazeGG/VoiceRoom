@@ -9,6 +9,7 @@ const membershipMigration = require('../src/migrations/20260615140000_create_roo
 const visualIdentityMigration = require('../src/migrations/20260615150000_add_visual_identity_keys');
 const friendsMigration = require('../src/migrations/20260627120000_create_friends_and_direct_messages');
 const notificationMigration = require('../src/migrations/20260710140000_create_notification_preferences');
+const avatarMigration = require('../src/migrations/20260711120000_add_avatars');
 
 function createRecorder() {
   const calls = [];
@@ -64,6 +65,29 @@ test('rooms and room_messages migration captures durable schema contract', () =>
   assert.equal(messages.columns.metadata.type, 'jsonb');
   assert.equal(messages.columns.room_id.references, 'rooms(id)');
   assert.equal(messages.columns.room_id.onDelete, 'CASCADE');
+});
+
+test('avatar migration adds reversible user and room avatar columns', () => {
+  const pgm = createRecorder();
+  avatarMigration.up(pgm);
+
+  const users = pgm.calls.find((call) => call.type === 'addColumns' && call.table === 'users');
+  const rooms = pgm.calls.find((call) => call.type === 'addColumns' && call.table === 'rooms');
+  const accentConstraint = pgm.calls.find(
+    (call) => call.type === 'addConstraint' && call.name === 'users_avatar_accent_check'
+  );
+  assert.equal(users.columns.avatar_key.type, 'text');
+  assert.equal(users.columns.avatar_accent.type, 'varchar(7)');
+  assert.equal(rooms.columns.avatar_key.type, 'text');
+  assert.match(accentConstraint.options.check, /^avatar_accent IS NULL OR avatar_accent/);
+
+  const down = createRecorder();
+  avatarMigration.down(down);
+  assert.deepEqual(
+    down.calls.filter((call) => call.type === 'dropColumns').map((call) => [call.table, call.columns]),
+    [['rooms', ['avatar_key']], ['users', ['avatar_key', 'avatar_accent']]]
+  );
+  assert.ok(down.calls.some((call) => call.type === 'dropConstraint' && call.name === 'users_avatar_accent_check'));
 });
 
 test('rooms and room_messages migration defines lookup, quota, idle, listing, and expiry indexes', () => {

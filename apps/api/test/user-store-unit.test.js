@@ -70,6 +70,45 @@ test('createUser falls back to a curated random avatar color for invalid input',
   assert.ok(AVATAR_COLOR_KEYS.includes(pool.calls[0].values[4]));
 });
 
+test('publicUser exposes avatar URL and accent without leaking the storage key', () => {
+  const user = publicUser({
+    id: '123e4567-e89b-12d3-a456-426614174000',
+    login: 'ada',
+    displayName: 'Ada',
+    avatarColorKey: 'rose',
+    avatarKey: 'av_123e4567-e89b-12d3-a456-426614174000_deadbeef.webp',
+    avatarAccent: '#49303f',
+    createdAt: 1000
+  });
+  assert.equal(user.avatarUrl, '/api/avatars/av_123e4567-e89b-12d3-a456-426614174000_deadbeef.webp');
+  assert.equal(user.avatarAccent, '#49303f');
+  assert.equal('avatarKey' in user, false);
+});
+
+test('updateAvatar persists the storage key and server-derived accent', async () => {
+  const pool = createFakePool((text, values) => {
+    assert.match(text, /SET avatar_key = \$2, avatar_accent = \$3/);
+    assert.equal(values[0], '123e4567-e89b-12d3-a456-426614174000');
+    assert.equal(values[1], 'av_123e4567-e89b-12d3-a456-426614174000_deadbeef.webp');
+    assert.equal(values[2], '#49303f');
+    return {
+      rows: [{
+        id: values[0], login: 'ada', avatar_key: values[1], avatar_accent: values[2],
+        avatar_color_key: 'rose', created_at: new Date(1000)
+      }],
+      rowCount: 1
+    };
+  });
+  const user = await createUserStore({ pool }).updateAvatar({
+    userId: '123e4567-e89b-12d3-a456-426614174000',
+    avatarKey: 'av_123e4567-e89b-12d3-a456-426614174000_deadbeef.webp',
+    avatarAccent: '#49303f',
+    now: 2000
+  });
+  assert.equal(user.avatarKey, 'av_123e4567-e89b-12d3-a456-426614174000_deadbeef.webp');
+  assert.equal(user.avatarAccent, '#49303f');
+});
+
 test('sessions store only token hashes in the database', async () => {
   const rawToken = 'session-token-for-cookie-only';
   const pool = createFakePool((text, values) => {

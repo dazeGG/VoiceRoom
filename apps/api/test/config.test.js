@@ -2,7 +2,8 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { readEnvInt, readEnvBool, readDatabaseConfig } = require('../src/lib/config');
+const path = require('node:path');
+const { readEnvInt, readEnvBool, readDatabaseConfig, readUploadsDir } = require('../src/lib/config');
 
 test('readEnvInt parses a valid integer', () => {
   assert.equal(readEnvInt('PORT', 3000, 1, { PORT: '8080' }), 8080);
@@ -35,6 +36,14 @@ test('readEnvBool reads falsey strings', () => {
 test('readEnvBool returns fallback when undefined', () => {
   assert.equal(readEnvBool('TRUST_PROXY', true, {}), true);
   assert.equal(readEnvBool('TRUST_PROXY', false, {}), false);
+});
+
+test('readUploadsDir uses an absolute configured directory', () => {
+  assert.equal(readUploadsDir({ UPLOADS_DIR: ' /data/uploads ' }), path.resolve('/data/uploads'));
+});
+
+test('readUploadsDir defaults to an ignored API-local directory', () => {
+  assert.equal(readUploadsDir({}), path.resolve(__dirname, '../uploads'));
 });
 
 

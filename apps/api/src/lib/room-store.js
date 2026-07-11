@@ -41,6 +41,7 @@ function normalizeMessageLimit(value) {
 function mapRoom(row) {
   if (!row) return null;
   return {
+    avatarKey: row.avatar_key || null,
     createdAt: toMillis(row.created_at),
     creatorIp: row.creator_ip || '',
     emptySince: row.empty_since ? toMillis(row.empty_since) : null,
@@ -88,9 +89,11 @@ function mapPeerIdentity(row) {
 function mapMessage(row) {
   if (!row) return null;
   return {
+    avatarAccent: row.avatar_accent || null,
     createdAt: toMillis(row.created_at),
     expiresAt: row.expires_at ? toMillis(row.expires_at) : null,
     id: row.id,
+    avatarKey: row.avatar_key || null,
     avatarColorKey: row.avatar_color_key || avatarColorForPeerId(row.peer_id),
     name: row.name || '',
     peerId: row.peer_id || '',
@@ -263,6 +266,17 @@ function createRoomStore({
         typeof name === 'string' ? name : '',
         toDate(now)
       ]
+    );
+    return mapRoom(result.rows[0]);
+  }
+
+  async function updateRoomAvatar(roomId, avatarKey = null, now = Date.now()) {
+    const result = await getPool().query(
+      `UPDATE rooms
+       SET avatar_key = $2, updated_at = $3
+       WHERE id = $1 AND deleted_at IS NULL AND is_static = true
+       RETURNING *`,
+      [roomId, avatarKey || null, toDate(now)]
     );
     return mapRoom(result.rows[0]);
   }
@@ -529,7 +543,10 @@ function createRoomStore({
     if (boundedLimit === 0) return [];
 
     const result = await getPool().query(
-      `SELECT recent.*, rpi.avatar_color_key
+      `SELECT recent.*,
+              COALESCE(u.avatar_color_key, rpi.avatar_color_key) AS avatar_color_key,
+              u.avatar_key,
+              u.avatar_accent
        FROM (
          SELECT *
          FROM room_messages
@@ -542,6 +559,8 @@ function createRoomStore({
        LEFT JOIN room_peer_identities rpi
          ON rpi.room_id = recent.room_id
         AND rpi.peer_id = recent.peer_id
+       LEFT JOIN users u
+         ON u.id = recent.author_user_id
        ORDER BY recent.created_at ASC, recent.id ASC`,
       [roomId, toDate(now), boundedLimit]
     );
@@ -550,10 +569,15 @@ function createRoomStore({
 
   async function getMessage(roomId, messageId) {
     const result = await getPool().query(
-      `SELECT m.*, rpi.avatar_color_key
+      `SELECT m.*,
+              COALESCE(u.avatar_color_key, rpi.avatar_color_key) AS avatar_color_key,
+              u.avatar_key,
+              u.avatar_accent
        FROM room_messages m
        LEFT JOIN room_peer_identities rpi
          ON rpi.room_id = m.room_id AND rpi.peer_id = m.peer_id
+       LEFT JOIN users u
+         ON u.id = m.author_user_id
        WHERE m.room_id = $1 AND m.id = $2 AND m.deleted_at IS NULL
        LIMIT 1`,
       [roomId, messageId]
@@ -734,7 +758,8 @@ function createRoomStore({
     pruneRooms,
     purgeDeleted,
     roomIdExists,
-    updateRoom
+    updateRoom,
+    updateRoomAvatar
   };
 }
 
