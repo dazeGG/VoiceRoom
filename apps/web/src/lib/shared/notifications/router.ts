@@ -457,8 +457,8 @@ export function showBrowserNotification(payload: BrowserNotificationPayload): No
   const locks = globalThis.navigator?.locks;
   if (!locks) return deliverBrowserNotification(payload);
   const key = payload.dedupeKey || payload.tag;
-  return locks.request(
+  return (locks.request(
     `voice-room-notification:${key}`,
     () => Promise.resolve(deliverBrowserNotification(payload))
-  ) as unknown as Promise<Notification | null>;
+  ) as unknown as Promise<Notification | null>).catch(() => null);
 }
