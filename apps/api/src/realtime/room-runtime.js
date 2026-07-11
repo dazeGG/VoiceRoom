@@ -124,12 +124,7 @@ function createRoomRealtimeRuntime(deps) {
   function roomNotificationContext(room) {
     return {
       roomId: room.id,
-      name: room.name || '',
-      emoji: room.emoji || '',
-      avatarColorKey: room.roomColorKey || '',
-      roomColorKey: room.roomColorKey || '',
-      roomIconKey: room.roomIconKey || '',
-      roomPresetKey: room.roomPresetKey || ''
+      name: room.name || ''
     };
   }
 

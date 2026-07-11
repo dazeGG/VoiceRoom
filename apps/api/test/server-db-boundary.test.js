@@ -30,18 +30,14 @@ function createFakeStore() {
     async countRooms() {
       return rooms.size;
     },
-    async createRoom({ creatorIp, isStatic, roomId, name = '', emoji = '', roomColorKey = 'blue', roomIconKey = 'headphones', roomPresetKey = 'voice-blue', now = Date.now() }) {
+    async createRoom({ creatorIp, isStatic, roomId, name = '', now = Date.now() }) {
       const room = {
         createdAt: now,
         creatorIp,
         emptySince: now,
         id: roomId,
         isStatic,
-        emoji,
         name,
-        roomColorKey,
-        roomIconKey,
-        roomPresetKey,
         messages: [],
         peers: new Map(),
         updatedAt: now

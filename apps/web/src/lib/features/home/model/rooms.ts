@@ -1,14 +1,7 @@
 import type { OwnedRoom } from '$lib/api/auth';
-import { ROOM_PRESETS, getRoomPreset } from '$lib/visual/tokens';
-
-export { ROOM_PRESETS, getRoomPreset };
 
 export function roomDisplayName(room: OwnedRoom): string {
   return room.name?.trim() || room.roomId;
-}
-
-export function roomVisual(room: Pick<OwnedRoom, 'emoji' | 'roomColorKey' | 'roomIconKey' | 'roomPresetKey'>) {
-  return getRoomPreset(room);
 }
 
 // Russian plural for «комната».

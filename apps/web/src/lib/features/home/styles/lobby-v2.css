@@ -19,7 +19,6 @@
   --lv-row-pad: 9px 10px;
   --lv-name: 13.5px;
   --lv-sub: 11.5px;
-  --lv-tile: 34px;
   --lv-gap: 16px;
 }
 
@@ -159,17 +158,6 @@
 
 .lv-row-sub--muted {
   opacity: 0.85;
-}
-
-.lv-tile {
-  flex: none;
-  width: var(--lv-tile);
-  height: var(--lv-tile);
-  border-radius: 31%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: calc(var(--lv-tile) * 0.5);
 }
 
 .lv-profile {
@@ -689,34 +677,6 @@
   background: var(--accent);
   color: var(--accent-ink);
   font-weight: 700;
-}
-
-.lr-emoji-grid {
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 8px;
-  margin-top: 2px;
-}
-
-.lr-emoji-btn {
-  aspect-ratio: 1;
-  border-radius: var(--radius-md);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.04);
-  font-size: 19px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-}
-
-.lr-emoji-btn:hover {
-  background: rgba(255, 255, 255, 0.09);
-}
-
-.lr-emoji-btn[data-active='true'] {
-  border-color: var(--accent);
-  background: color-mix(in oklch, var(--accent), transparent 84%);
 }
 
 .lr-dialog-note {

@@ -9,6 +9,7 @@ const membershipMigration = require('../src/migrations/20260615140000_create_roo
 const visualIdentityMigration = require('../src/migrations/20260615150000_add_visual_identity_keys');
 const friendsMigration = require('../src/migrations/20260627120000_create_friends_and_direct_messages');
 const notificationMigration = require('../src/migrations/20260710140000_create_notification_preferences');
+const dropRoomVisualIdentityMigration = require('../src/migrations/20260711120000_drop_room_visual_identity');
 
 function createRecorder() {
   const calls = [];
@@ -43,6 +44,33 @@ function createRecorder() {
     }
   };
 }
+
+test('room visual identity removal drops constraints before legacy columns', () => {
+  const pgm = createRecorder();
+  dropRoomVisualIdentityMigration.up(pgm);
+
+  assert.deepEqual(pgm.calls, [
+    { type: 'dropConstraint', table: 'rooms', name: 'rooms_room_icon_key_check' },
+    { type: 'dropConstraint', table: 'rooms', name: 'rooms_room_color_key_check' },
+    { type: 'dropColumns', table: 'rooms', columns: ['emoji', 'room_icon_key', 'room_color_key'] }
+  ]);
+});
+
+test('room visual identity removal down restores legacy defaults and checks', () => {
+  const pgm = createRecorder();
+  dropRoomVisualIdentityMigration.down(pgm);
+
+  const columns = pgm.calls.find((call) => call.type === 'addColumns').columns;
+  assert.deepEqual(columns.emoji, { type: 'varchar(16)', notNull: true, default: '' });
+  assert.deepEqual(columns.room_icon_key, { type: 'varchar(32)', notNull: true, default: 'headphones' });
+  assert.deepEqual(columns.room_color_key, { type: 'varchar(32)', notNull: true, default: 'blue' });
+
+  const constraints = new Map(
+    pgm.calls.filter((call) => call.type === 'addConstraint').map((call) => [call.name, call.options.check])
+  );
+  assert.match(constraints.get('rooms_room_icon_key_check'), /headphones/);
+  assert.match(constraints.get('rooms_room_color_key_check'), /indigo/);
+});
 
 test('rooms and room_messages migration captures durable schema contract', () => {
   const pgm = createRecorder();

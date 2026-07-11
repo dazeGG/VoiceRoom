@@ -1,5 +1,5 @@
-/* Shared modal dialog chrome — overlay, card, tabs, form fields, emoji
-   picker, actions. Originally lived in features/home/styles/lobby.css
+/* Shared modal dialog chrome — overlay, card, tabs, form fields,
+   actions. Originally lived in features/home/styles/lobby.css
    (create-room dialog); pulled out here so the room settings dialog
    (features/room/components/RoomSettingsDialog.svelte) can reuse it without
    importing the lobby's full stylesheet. */
@@ -156,35 +156,6 @@
 .dialog-input--mono {
   font-family: var(--font-mono);
   letter-spacing: 0.02em;
-}
-
-.dialog-emoji-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.dialog-emoji {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 11px;
-  background: rgba(255, 255, 255, 0.04);
-  font-size: 19px;
-  cursor: pointer;
-  transition: border-color 0.15s ease, background 0.15s ease;
-}
-
-.dialog-emoji:hover {
-  border-color: rgba(255, 255, 255, 0.2);
-}
-
-.dialog-emoji[data-active='true'] {
-  border-color: rgba(217, 211, 195, 0.6);
-  background: rgba(217, 211, 195, 0.16);
 }
 
 .dialog-note {

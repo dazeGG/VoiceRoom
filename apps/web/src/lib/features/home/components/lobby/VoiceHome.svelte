@@ -1,11 +1,11 @@
 <script lang="ts">
   import { ChevronRight, Plus, UserPlus } from '@lucide/svelte';
-  import { AvatarStack, Button, Ellipsis } from '$lib/shared/ui';
+  import { Avatar, AvatarStack, Button, Ellipsis } from '$lib/shared/ui';
   import { iconMd, iconSm } from '$lib/shared/ui/icons';
   import type { AuthUser, OwnedRoom } from '$lib/api/auth';
   import { roomPresence } from '../../model/room-presence.svelte';
   import { roomPeerAvatarItems } from '../../model/room-avatars';
-  import { roomDisplayName, roomVisual } from '../../model/rooms';
+  import { roomDisplayName } from '../../model/rooms';
   import { friendsState, showPeople } from '../../model/friends.svelte';
 
   let { user, rooms, onOpenRoom, onCreateRoom, onJoinCode } = $props<{
@@ -78,10 +78,9 @@
   {:else}
     <div class="lv-cards">
       {#each sortedRooms as room (room.roomId)}
-        {@const visual = roomVisual(room)}
         <button class="lv-card" class:is-live={room.peers > 0} type="button" onclick={() => onOpenRoom(room.roomId)}>
           <div style="display:flex;align-items:center;gap:11px;min-width:0;">
-            <span class="lv-tile" style={`width:42px;height:42px;font-size:20px;background:${visual.background};box-shadow:0 0 0 1px ${visual.ring}`}>{visual.emoji}</span>
+            <Avatar name={roomDisplayName(room)} shape="squircle" background="var(--room-avatar-bg)" size={42} />
             <div style="min-width:0;flex:1;">
               <Ellipsis text={roomDisplayName(room)} class="lv-row-name" tag="div" />
             </div>

@@ -16,10 +16,6 @@ test('buildRoomRealtimeSummaryFromLobbyRoom mirrors shared summary rules', () =>
     {
       id: 'room1',
       name: 'Test room',
-      emoji: '🎧',
-      roomColorKey: 'blue',
-      roomIconKey: 'headphones',
-      roomPresetKey: 'voice-blue',
       isStatic: true,
       relationship: 'owner'
     },
@@ -30,4 +26,6 @@ test('buildRoomRealtimeSummaryFromLobbyRoom mirrors shared summary rules', () =>
   assert.equal(summary.peers, 6);
   assert.equal(summary.visiblePeers.length, 5);
   assert.equal(summary.hiddenPeerCount, 1);
+  assert.equal(summary.name, 'Test room');
+  assert.equal('emoji' in summary, false);
 });

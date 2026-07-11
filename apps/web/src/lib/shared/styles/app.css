@@ -13,6 +13,7 @@
   --control-active: oklch(90% 0.02 112);
   --control-active-hover: oklch(95% 0.015 112);
   --control-line: oklch(44% 0.04 112);
+  --room-avatar-bg: oklch(24% 0.05 112);
   --ink: oklch(94% 0.012 92);
   --muted: oklch(69% 0.028 88);
   --line: oklch(40% 0.045 112);

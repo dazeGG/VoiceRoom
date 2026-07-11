@@ -4,24 +4,16 @@ import { createRoomProof } from './pow';
 export interface CreateRoomOptions {
   isStatic?: boolean;
   name?: string;
-  emoji?: string;
-  roomPresetKey?: string;
 }
 
 export interface UpdateRoomOptions {
   name: string;
-  roomPresetKey: string;
-  emoji?: string;
 }
 
 // Mirrors the server's publicLobbyRoom() shape (server.js) — the same body the
 // PUT response and the room.updated WebSocket broadcast both carry.
 export interface RoomSummary {
   createdAt: number;
-  emoji: string;
-  roomColorKey: string;
-  roomIconKey: string;
-  roomPresetKey: string;
   emptySince: number | null;
   isStatic: boolean;
   name: string;
@@ -32,11 +24,7 @@ export interface RoomSummary {
 
 export interface RoomStatus {
   createdAt: number;
-  emoji: string;
   name: string;
-  roomColorKey: string;
-  roomIconKey: string;
-  roomPresetKey: string;
   emptySince: number | null;
   exists: boolean;
   isStatic: boolean;
@@ -58,10 +46,6 @@ export interface ChatMessage {
 
 interface CreateRoomResponse {
   createdAt: number;
-  emoji: string;
-  roomColorKey: string;
-  roomIconKey: string;
-  roomPresetKey: string;
   isStatic: boolean;
   name: string;
   roomId: string;
@@ -72,8 +56,6 @@ export async function createRoom(options: CreateRoomOptions = {}): Promise<strin
   const room = await postJson<CreateRoomResponse>('/api/rooms', {
     isStatic: Boolean(options.isStatic),
     name: options.name ?? '',
-    emoji: options.emoji ?? '',
-    roomPresetKey: options.roomPresetKey ?? '',
     proof
   });
   return room.roomId;
@@ -81,9 +63,7 @@ export async function createRoom(options: CreateRoomOptions = {}): Promise<strin
 
 export async function updateRoom(roomId: string, options: UpdateRoomOptions): Promise<RoomSummary> {
   const payload = await putJson<{ room: RoomSummary }>(`/api/rooms/${encodeURIComponent(roomId)}`, {
-    name: options.name,
-    roomPresetKey: options.roomPresetKey,
-    emoji: options.emoji ?? ''
+    name: options.name
   });
   return payload.room;
 }

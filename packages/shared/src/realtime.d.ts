@@ -25,10 +25,6 @@ export type RoomPeerSummary = {
 export type RoomRealtimeSummary = {
   roomId: string;
   name: string;
-  emoji: string;
-  roomColorKey: string;
-  roomIconKey: string;
-  roomPresetKey: string;
   isStatic: boolean;
   relationship: string;
   peers: number;

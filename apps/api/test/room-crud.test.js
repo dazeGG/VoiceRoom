@@ -11,49 +11,10 @@ const path = require('node:path');
 
 const { createApiApp, createApiServer } = require('../src/server');
 const { openWs, joinVoiceRoom, subscribeRoomPreview, waitForWsType } = require('./ws-harness');
-const {
-  ROOM_PRESETS,
-  cleanRoomColorKey,
-  cleanRoomEmoji,
-  cleanRoomIconKey,
-  cleanRoomPresetKey,
-  getRoomPreset
-} = require('@voice-room/shared/validation');
 
 const OWNER_ID = 'user-owner';
 const OWNER_TOKEN = 'session-owner';
 const OTHER_TOKEN = 'session-other';
-const DEFAULT_ROOM_PRESET = ROOM_PRESETS[0];
-
-function presetFromEmoji(emoji) {
-  return ROOM_PRESETS.find((preset) => preset.emoji === emoji) || null;
-}
-
-function presetFromVisualKeys(iconKey, colorKey) {
-  return ROOM_PRESETS.find((preset) => preset.iconKey === iconKey && preset.colorKey === colorKey) || null;
-}
-
-function emojiFromIconKey(iconKey) {
-  return ROOM_PRESETS.find((preset) => preset.iconKey === iconKey)?.emoji || DEFAULT_ROOM_PRESET.emoji;
-}
-
-function normalizeRoomVisuals({ emoji = '', roomColorKey = '', roomIconKey = '', roomPresetKey = '' } = {}) {
-  const legacyEmoji = cleanRoomEmoji(emoji);
-  const explicitIconKey = cleanRoomIconKey(roomIconKey);
-  const explicitColorKey = cleanRoomColorKey(roomColorKey);
-  const preset = getRoomPreset(cleanRoomPresetKey(roomPresetKey));
-  const legacyPreset = presetFromEmoji(legacyEmoji);
-  const iconKey = explicitIconKey || preset?.iconKey || legacyPreset?.iconKey || DEFAULT_ROOM_PRESET.iconKey;
-  const colorKey = explicitColorKey || preset?.colorKey || legacyPreset?.colorKey || DEFAULT_ROOM_PRESET.colorKey;
-  const matchedPreset = presetFromVisualKeys(iconKey, colorKey);
-  const hasExplicitVisualKey = Boolean(explicitIconKey || explicitColorKey || preset);
-  return {
-    emoji: matchedPreset?.emoji || (hasExplicitVisualKey ? emojiFromIconKey(iconKey) : legacyEmoji) || DEFAULT_ROOM_PRESET.emoji,
-    roomColorKey: colorKey,
-    roomIconKey: iconKey,
-    roomPresetKey: matchedPreset?.key || ''
-  };
-}
 
 // In-memory room store covering only the surface the CRUD handlers touch. It
 // mirrors the real store's contract: getRoom filters soft-deleted rows, and
@@ -79,7 +40,7 @@ function createFakeStore(seed = {}) {
     async updateRoom(roomId, patch) {
       const room = rooms.get(roomId);
       if (!room || room.deletedAt) return null;
-      Object.assign(room, patch, normalizeRoomVisuals(patch), { updatedAt: Date.now() });
+      Object.assign(room, patch, { updatedAt: Date.now() });
       return { ...room, peers: new Map() };
     },
     async deleteRoom(roomId, now = Date.now()) {
@@ -121,13 +82,9 @@ function createFakeUsers() {
 function staticRoom(overrides = {}) {
   return {
     createdAt: Date.now(),
-    emoji: '🎮',
     isStatic: true,
     name: 'Original',
     ownerId: OWNER_ID,
-    roomColorKey: 'indigo',
-    roomIconKey: 'gamepad',
-    roomPresetKey: 'game-indigo',
     emptySince: null,
     ...overrides
   };
@@ -139,7 +96,7 @@ function buildApp(seed) {
   return { app, store };
 }
 
-test('PUT /api/rooms/:roomId lets the owner rename and re-skin the room', async (t) => {
+test('PUT /api/rooms/:roomId lets the owner rename the room', async (t) => {
   const { app, store } = buildApp({ room1: staticRoom() });
   t.after(() => app.close());
 
@@ -147,20 +104,16 @@ test('PUT /api/rooms/:roomId lets the owner rename and re-skin the room', async 
     method: 'PUT',
     url: '/api/rooms/room1',
     headers: { cookie: `vr_session=${OWNER_TOKEN}` },
-    payload: { name: 'Renamed', roomPresetKey: 'voice-blue' }
+    payload: { name: 'Renamed' }
   });
 
   assert.equal(response.statusCode, 200);
   const body = response.json();
   assert.equal(body.ok, true);
   assert.equal(body.room.name, 'Renamed');
-  assert.equal(body.room.roomPresetKey, 'voice-blue');
-  assert.equal(body.room.roomIconKey, 'headphones');
-  assert.equal(body.room.roomColorKey, 'blue');
   assert.equal(body.room.roomId, 'room1');
   // Persisted, not just echoed.
   assert.equal(store.rooms.get('room1').name, 'Renamed');
-  assert.equal(store.rooms.get('room1').roomColorKey, 'blue');
 });
 
 test('PUT rejects a non-owner with 403', async (t) => {
@@ -220,44 +173,6 @@ test('PUT on a soft-deleted room returns 404', async (t) => {
   assert.equal(response.statusCode, 404);
 });
 
-test('PUT with only a name preserves existing visuals', async (t) => {
-  const { app, store } = buildApp({ room1: staticRoom() });
-  t.after(() => app.close());
-
-  const response = await app.inject({
-    method: 'PUT',
-    url: '/api/rooms/room1',
-    headers: { cookie: `vr_session=${OWNER_TOKEN}` },
-    payload: { name: 'Renamed only' }
-  });
-
-  assert.equal(response.statusCode, 200);
-  assert.equal(response.json().room.name, 'Renamed only');
-  assert.equal(response.json().room.roomPresetKey, 'game-indigo');
-  assert.equal(response.json().room.roomIconKey, 'gamepad');
-  assert.equal(response.json().room.roomColorKey, 'indigo');
-  assert.equal(store.rooms.get('room1').roomColorKey, 'indigo');
-});
-
-test('PUT with only a visual field applies it over the existing preset', async (t) => {
-  const { app, store } = buildApp({ room1: staticRoom() });
-  t.after(() => app.close());
-
-  const response = await app.inject({
-    method: 'PUT',
-    url: '/api/rooms/room1',
-    headers: { cookie: `vr_session=${OWNER_TOKEN}` },
-    payload: { roomColorKey: 'blue' }
-  });
-
-  assert.equal(response.statusCode, 200);
-  assert.equal(response.json().room.name, 'Original');
-  assert.equal(response.json().room.roomPresetKey, '');
-  assert.equal(response.json().room.roomIconKey, 'gamepad');
-  assert.equal(response.json().room.roomColorKey, 'blue');
-  assert.equal(store.rooms.get('room1').roomColorKey, 'blue');
-});
-
 test('PUT rejects an empty name for static rooms', async (t) => {
   const { app, store } = buildApp({ room1: staticRoom() });
   t.after(() => app.close());
@@ -271,22 +186,6 @@ test('PUT rejects an empty name for static rooms', async (t) => {
 
   assert.equal(response.statusCode, 400);
   assert.equal(response.json().error, 'Дайте комнате название');
-  assert.equal(store.rooms.get('room1').name, 'Original');
-});
-
-test('PUT rejects an unknown visual key before persisting', async (t) => {
-  const { app, store } = buildApp({ room1: staticRoom() });
-  t.after(() => app.close());
-
-  const response = await app.inject({
-    method: 'PUT',
-    url: '/api/rooms/room1',
-    headers: { cookie: `vr_session=${OWNER_TOKEN}` },
-    payload: { name: 'Renamed', roomColorKey: 'not-a-real-color' }
-  });
-
-  assert.equal(response.statusCode, 400);
-  // Nothing written.
   assert.equal(store.rooms.get('room1').name, 'Original');
 });
 
@@ -469,13 +368,13 @@ test('an active peer receives room.updated over the voice stream', async (t) => 
     method: 'PUT',
     path: '/api/rooms/room1',
     cookie: `vr_session=${OWNER_TOKEN}`,
-    body: { name: 'Live Rename', roomPresetKey: 'voice-blue' }
+    body: { name: 'Live Rename' }
   });
   assert.equal(updateStatus, 200);
 
   const updated = await waitForWsType(presence.frames, 'room.updated');
   assert.equal(updated.payload.room.name, 'Live Rename');
-  assert.equal(updated.payload.room.roomColorKey, 'blue');
+  assert.equal('emoji' in updated.payload.room, false);
   assert.equal(updated.payload.room.roomId, 'room1');
 });
 
@@ -509,7 +408,7 @@ test('a preview subscriber receives room.updated and room.deleted lifecycle fram
     method: 'PUT',
     path: '/api/rooms/room1',
     cookie: `vr_session=${OWNER_TOKEN}`,
-    body: { name: 'Chat Rename', roomPresetKey: 'voice-blue' }
+    body: { name: 'Chat Rename' }
   });
   assert.equal(updateStatus, 200);
 

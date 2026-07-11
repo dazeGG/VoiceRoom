@@ -1,7 +1,6 @@
 <script lang="ts">
   import { Settings, UserPlus } from '@lucide/svelte';
   import type { AuthUser } from '$lib/api/auth';
-  import type { RoomPresetToken } from '$lib/visual/tokens';
   import { Avatar, Badge } from '$lib/shared/ui';
   import { iconSm } from '$lib/shared/ui/icons';
   import { friendName } from '../../model/lobby-format';
@@ -16,7 +15,6 @@
     onOpenSettings,
     activeVoiceRoomId = null,
     activeVoiceRoomName = '',
-    activeVoiceRoomVisual = null,
     activeVoiceMuted = false,
     activeVoiceDeafened = false,
     onOpenVoiceRoom,
@@ -30,7 +28,6 @@
     onOpenSettings: () => void;
     activeVoiceRoomId?: string | null;
     activeVoiceRoomName?: string;
-    activeVoiceRoomVisual?: RoomPresetToken | null;
     activeVoiceMuted?: boolean;
     activeVoiceDeafened?: boolean;
     onOpenVoiceRoom?: () => void;
@@ -93,7 +90,6 @@
   {#if activeVoiceRoomId}
     <VoiceCallWidget
       roomName={activeVoiceLabel}
-      roomVisual={activeVoiceRoomVisual}
       muted={activeVoiceMuted}
       deafened={activeVoiceDeafened}
       onOpen={onOpenVoiceRoom}

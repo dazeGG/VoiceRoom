@@ -41,7 +41,7 @@ function roomEvent(overrides = {}) {
     type: 'notification.room.message',
     payload: {
       dedupeKey: overrides.dedupeKey ?? 'room:daily:message:msg-2',
-      room: { roomId: overrides.roomId ?? 'daily', name: overrides.roomName ?? 'Daily', emoji: '☕' },
+      room: { roomId: overrides.roomId ?? 'daily', name: overrides.roomName ?? 'Daily' },
       sender: { id: overrides.senderId ?? 'bob-id', displayName: overrides.senderName ?? 'Bob', login: 'bob' },
       message: { id: overrides.messageId ?? 'msg-2', body: overrides.body ?? 'standup starts now', createdAt: 456 }
     }
@@ -82,7 +82,7 @@ test('routes notification payloads with visible non-private bodies and title for
 
   const room = router.routeNotificationEvent(roomEvent(), { permission: 'granted', notificationsAvailable: true });
   assert.equal(room.notify, true);
-  assert.equal(room.payload.title, 'Bob in ☕ Daily');
+  assert.equal(room.payload.title, 'Bob in Daily');
   assert.equal(room.payload.body, 'standup starts now');
   assert.equal(room.payload.data.roomId, 'daily');
 
@@ -345,7 +345,7 @@ test('desktop bridge unsupported result falls back to browser Notification', asy
 
     assert.ok(result);
     assert.equal(notificationCalls.length, 1);
-    assert.equal(notificationCalls[0].title, 'Bob in ☕ Daily');
+    assert.equal(notificationCalls[0].title, 'Bob in Daily');
     assert.equal(notificationCalls[0].options.tag, 'room:desktop-fallback');
   } finally {
     if (originalNotification === undefined) delete globalThis.Notification;

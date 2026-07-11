@@ -37,7 +37,7 @@
     selectRoomPreview,
     setViewedRoomFromRoute
   } from './model/room-navigation.svelte';
-  import { roomDisplayName, roomVisual } from './model/rooms';
+  import { roomDisplayName } from './model/rooms';
   import { roomUi } from '$lib/features/room/room-ui.svelte';
   import '$lib/shared/styles/typography.css';
   import '$lib/shared/styles/dialog.css';
@@ -64,7 +64,6 @@
   const connectedVoiceRoomId = $derived(getActiveVoiceRoomId());
   const selectedRoom = $derived(rooms.find((room) => room.roomId === selectedRoomId) ?? null);
   const connectedVoiceRoom = $derived(rooms.find((room) => room.roomId === connectedVoiceRoomId) ?? null);
-  const connectedVoiceRoomVisual = $derived(connectedVoiceRoom ? roomVisual(connectedVoiceRoom) : null);
   const connectedRoomVisible = $derived(connectedRoomIsViewed(friendsState.mode));
   const embeddedRoomVisible = $derived(embeddedRoomIsVisible(friendsState.mode));
 
@@ -243,7 +242,7 @@
     enterRoom(roomId);
   }
 
-  async function handleCreate(payload: { name: string; roomPresetKey: string; isStatic: boolean }): Promise<void> {
+  async function handleCreate(payload: { name: string; isStatic: boolean }): Promise<void> {
     if (creating) return;
     creating = true;
     try {
@@ -288,7 +287,6 @@
       onOpenSettings={openSettings}
       activeVoiceRoomId={connectedVoiceRoomId}
       activeVoiceRoomName={connectedVoiceRoom ? roomDisplayName(connectedVoiceRoom) : connectedVoiceRoomId || ''}
-      activeVoiceRoomVisual={connectedVoiceRoomVisual}
       activeVoiceMuted={voiceSession.muted}
       activeVoiceDeafened={voiceSession.deafened}
       onOpenVoiceRoom={openConnectedVoiceRoom}

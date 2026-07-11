@@ -14,10 +14,6 @@ export type RoomRelationship = 'owner' | 'bookmarked';
 
 export interface OwnedRoom {
   createdAt: number;
-  emoji: string;
-  roomColorKey: string;
-  roomIconKey: string;
-  roomPresetKey: string;
   emptySince: number | null;
   isStatic: boolean;
   name: string;
