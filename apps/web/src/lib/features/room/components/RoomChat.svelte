@@ -7,9 +7,9 @@
   import { formatChatDayLabel, isSameDay } from '$lib/shared/utils/chat-date';
   import { cleanDisplayName } from '$lib/shared/utils/text';
   import ChatText from '$lib/shared/components/ChatText.svelte';
-  import { getAvatarColor } from '$lib/visual/tokens';
+  import { Avatar } from '$lib/shared/ui';
+  import { getAvatarPresentation } from '../client/ui/avatar-presentation';
   import { getRoomIdFromPath, getStoredPeerSession } from '../client/core/session';
-  import { getInitials } from '../client/core/utils';
   import { playRoomChatMessageCue } from '../client/media/cues';
   import { applyRoomDeleted, applyRoomNotFound, applyRoomUpdated } from '../client/room/lifecycle';
   import { openParticipantContextMenu } from '../participant-context-ui.svelte';
@@ -57,6 +57,7 @@
     avatarBackground: string;
     avatarForeground: string;
     avatarShadow: string;
+    avatarUrl: string | null;
     time: string;
     messages: ChatMessage[];
   }
@@ -100,7 +101,13 @@
         last!.messages.push(message);
         continue;
       }
-      const avatar = getAvatarColor(message.avatarColorKey);
+      const avatar = getAvatarPresentation({
+        avatarAccent: message.avatarAccent || undefined,
+        avatarColorKey: message.avatarColorKey,
+        avatarUrl: message.avatarUrl || undefined,
+        isLocal: message.peerId === peerId,
+        name: author
+      });
       day.groups.push({
         key: message.id,
         name: author,
@@ -109,6 +116,7 @@
         avatarBackground: avatar.background,
         avatarForeground: avatar.foreground,
         avatarShadow: avatar.shadow,
+        avatarUrl: avatar.src,
         time: formatTime(message.createdAt),
         messages: [message]
       });
@@ -312,20 +320,17 @@
         {#each day.groups as group (group.key)}
         <div class="chat-msg" data-self={group.self}>
           {#if group.self}
-            <span class="chat-msg-avatar" style={`background:${group.avatarBackground};color:${group.avatarForeground};box-shadow:${group.avatarShadow}`} aria-hidden="true">
-              {getInitials(group.name)}
-            </span>
+            <Avatar class="chat-msg-avatar" name={group.name} src={group.avatarUrl} background={group.avatarBackground} size={34} />
           {:else}
             <button
-              class="chat-msg-avatar chat-msg-trigger"
+              class="chat-avatar-button chat-msg-trigger"
               type="button"
-              style={`background:${group.avatarBackground};color:${group.avatarForeground};box-shadow:${group.avatarShadow}`}
               aria-haspopup="dialog"
               aria-label={`Действия для ${group.name}`}
               title={`Действия для ${group.name}`}
               onclick={(event) => openUserMenu(group, event)}
             >
-              {getInitials(group.name)}
+              <Avatar class="chat-msg-avatar" name={group.name} src={group.avatarUrl} background={group.avatarBackground} size={34} />
             </button>
           {/if}
           <div class="chat-msg-main">

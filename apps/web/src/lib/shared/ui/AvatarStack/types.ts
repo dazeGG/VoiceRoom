@@ -7,6 +7,7 @@ export interface AvatarStackItem {
   background: string;
   foreground?: string;
   shadow?: string;
+  src?: string | null;
 }
 
 export interface AvatarStackProps {

@@ -15,6 +15,7 @@
     onOpenSettings,
     activeVoiceRoomId = null,
     activeVoiceRoomName = '',
+    activeVoiceRoomAvatarUrl = null,
     activeVoiceMuted = false,
     activeVoiceDeafened = false,
     onOpenVoiceRoom,
@@ -28,6 +29,7 @@
     onOpenSettings: () => void;
     activeVoiceRoomId?: string | null;
     activeVoiceRoomName?: string;
+    activeVoiceRoomAvatarUrl?: string | null;
     activeVoiceMuted?: boolean;
     activeVoiceDeafened?: boolean;
     onOpenVoiceRoom?: () => void;
@@ -75,7 +77,7 @@
           type="button"
           onclick={() => openDm(entry.user.id)}
         >
-          <Avatar name={friendName(entry.user)} colorKey={entry.user.avatarColorKey} online={entry.online} showDot={entry.online} ring="var(--panel)" />
+          <Avatar name={friendName(entry.user)} src={entry.user.avatarUrl} colorKey={entry.user.avatarColorKey} background={entry.user.avatarAccent || undefined} online={entry.online} showDot={entry.online} ring="var(--panel)" />
           <div style="min-width:0;flex:1;">
             <div class="lv-row-name" style={`font-weight:${entry.unreadCount > 0 ? 750 : 650}`}>{friendName(entry.user)}</div>
           </div>
@@ -90,6 +92,7 @@
   {#if activeVoiceRoomId}
     <VoiceCallWidget
       roomName={activeVoiceLabel}
+      avatarUrl={activeVoiceRoomAvatarUrl}
       muted={activeVoiceMuted}
       deafened={activeVoiceDeafened}
       onOpen={onOpenVoiceRoom}
@@ -100,7 +103,7 @@
   {/if}
 
   <div class="lv-profile">
-    <Avatar name={selfName} colorKey={user.avatarColorKey} size={34} online showDot ring="var(--panel)" />
+    <Avatar name={selfName} src={user.avatarUrl} colorKey={user.avatarColorKey} background={user.avatarAccent || undefined} size={34} online showDot ring="var(--panel)" />
     <div style="min-width:0;flex:1;">
       <div class="lv-row-name">{selfName}</div>
       <div class="lv-profile-handle">@{user.login}</div>

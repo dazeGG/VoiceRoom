@@ -11,7 +11,7 @@
     openDm,
     setMode
   } from '$lib/features/home/model/friends.svelte';
-  import { Slider } from '$lib/shared/ui';
+  import { Avatar, Slider } from '$lib/shared/ui';
   import {
     getParticipantAudioPreference,
     getParticipantAudioPreferenceKey,
@@ -225,12 +225,8 @@
     tabindex="-1"
   >
     <div class="participant-context-menu-head">
-      <span
-        class="pcm-avatar"
-        aria-hidden="true"
-        style={`background:${avatar.background};color:${avatar.foreground};box-shadow:${avatar.shadow}`}
-      >
-        {avatar.initials}
+      <span class="pcm-avatar" aria-hidden="true">
+        <Avatar name={peer.name} src={avatar.src} background={avatar.background} size={42} />
         <span class="pcm-avatar-status"></span>
       </span>
       <span class="pcm-identity">

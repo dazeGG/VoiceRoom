@@ -3,7 +3,9 @@
 // which is how a logged-in user's persistent rooms get an owner).
 
 export interface AuthUser {
+  avatarAccent: string | null;
   avatarColorKey: string;
+  avatarUrl: string | null;
   createdAt: number;
   displayName: string;
   id: string;
@@ -13,6 +15,7 @@ export interface AuthUser {
 export type RoomRelationship = 'owner' | 'bookmarked';
 
 export interface OwnedRoom {
+  avatarUrl: string | null;
   createdAt: number;
   emptySince: number | null;
   isStatic: boolean;
@@ -21,6 +24,18 @@ export interface OwnedRoom {
   relationship: RoomRelationship;
   roomId: string;
 }
+
+async function avatarRequest(path: string, method: 'POST' | 'DELETE', file?: Blob): Promise<AuthUser> {
+  const body = file ? new FormData() : undefined;
+  if (body && file) body.append('avatar', file, 'avatar.webp');
+  const response = await fetch(`/api${path}`, { method, body, credentials: 'same-origin' });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload.error || 'Не удалось обновить аватар');
+  return payload.user;
+}
+
+export const uploadUserAvatar = (file: Blob): Promise<AuthUser> => avatarRequest('/auth/avatar', 'POST', file);
+export const deleteUserAvatar = (): Promise<AuthUser> => avatarRequest('/auth/avatar', 'DELETE');
 
 export interface Credentials {
   login: string;

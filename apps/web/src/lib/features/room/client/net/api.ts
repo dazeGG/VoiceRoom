@@ -38,5 +38,6 @@ export async function checkRoomExists(roomId: string): Promise<boolean> {
   // Capture the room's display name so the in-room top bar can show it
   // instead of the bare code.
   state.roomName = typeof status?.name === 'string' ? status.name : '';
+  state.roomAvatarUrl = typeof status?.avatarUrl === 'string' ? status.avatarUrl : '';
   return Boolean(status?.exists);
 }

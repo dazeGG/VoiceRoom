@@ -256,7 +256,9 @@ export async function joinRoom(event?: Event): Promise<void> {
       joinedAt: Date.now(),
       muted: state.muted,
       name,
-      avatarColorKey: session.user?.avatarColorKey || ''
+      avatarAccent: session.user?.avatarAccent || '',
+      avatarColorKey: session.user?.avatarColorKey || '',
+      avatarUrl: session.user?.avatarUrl || ''
     });
     attachMeter(state.self, state.localStream);
     updatePeerStatus(state.self);

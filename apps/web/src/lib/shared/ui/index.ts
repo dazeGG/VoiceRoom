@@ -6,6 +6,8 @@ export { AvatarStack } from './AvatarStack';
 export type { AvatarStackItem, AvatarStackProps } from './AvatarStack';
 export { Avatar } from './Avatar';
 export type { AvatarProps } from './Avatar';
+export { AvatarCropDialog } from './AvatarCropDialog';
+export type { AvatarCropDialogProps, AvatarCropShape } from './AvatarCropDialog';
 export { Button } from './Button';
 export type { ButtonProps } from './Button';
 export { Badge } from './Badge';

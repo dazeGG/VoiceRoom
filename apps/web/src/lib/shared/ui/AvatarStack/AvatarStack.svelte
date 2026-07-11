@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { AvatarStackProps } from './types';
+  import Avatar from '../Avatar/Avatar.svelte';
 
   let {
     items,
@@ -34,7 +35,7 @@
         style:--avatar-bg={item.background}
         style:--avatar-fg={item.foreground || '#fff'}
         style:--avatar-shadow={item.shadow || 'none'}
-      >{item.initials}</span>
+      ><Avatar name={item.label} src={item.src} size={size - 4} background={item.background} class="avatar-stack-avatar" /></span>
     {/each}
     {#if rest > 0}
       <span class="avatar-stack-rest" aria-label={`Ещё ${rest}`}>+{rest}</span>
@@ -78,6 +79,10 @@
     background: var(--avatar-bg, oklch(54% 0.22 276));
     color: var(--avatar-fg, #fff);
     box-shadow: var(--avatar-shadow, none);
+  }
+
+  .avatar-stack-item :global(.avatar-stack-avatar) {
+    box-shadow: none;
   }
 
   .avatar-stack-rest {

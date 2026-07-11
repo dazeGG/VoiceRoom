@@ -5,6 +5,7 @@
 
   let {
     roomName = '',
+    avatarUrl = null,
     muted = false,
     deafened = false,
     onOpen,
@@ -13,6 +14,7 @@
     onLeave
   } = $props<{
     roomName?: string;
+    avatarUrl?: string | null;
     muted?: boolean;
     deafened?: boolean;
     onOpen?: () => void;
@@ -27,7 +29,7 @@
 <div class="voice-widget" aria-label="Активный голос">
   <!-- header: room + status -->
   <button class="voice-head" type="button" aria-label={openLabel} title={openLabel} onclick={onOpen}>
-    <Avatar name={roomName} shape="squircle" background="var(--room-avatar-bg)" size={42} />
+    <Avatar name={roomName} src={avatarUrl} shape="squircle" background="var(--room-avatar-bg)" size={42} />
     <div class="voice-head-body">
       <div class="voice-room-name" title={roomName}>{roomName}</div>
       {#if muted}

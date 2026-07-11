@@ -5,7 +5,9 @@ import { del, getJsonAuth, postJsonAuth } from './http';
 
 // Mirrors the server's publicUser() shape (user-store.js).
 export interface PublicUser {
+  avatarAccent: string | null;
   avatarColorKey: string;
+  avatarUrl: string | null;
   createdAt: number;
   displayName: string;
   id: string;

@@ -144,7 +144,7 @@
     </button>
     {#if peer}
       <button class="lobby-dm-head" type="button" onclick={toggleProfile}>
-        <Avatar name={friendName(peer)} colorKey={peer.avatarColorKey} size={38} {online} showDot ring="var(--paper-deep)" />
+        <Avatar name={friendName(peer)} src={peer.avatarUrl} colorKey={peer.avatarColorKey} background={peer.avatarAccent || undefined} size={38} {online} showDot ring="var(--paper-deep)" />
         <div style="flex:1;min-width:0;">
           <div class="lobby-dm-head-name">{friendName(peer)}</div>
           <div class="lobby-dm-head-status" style={`color:${online ? '#8fa888' : '#8a8475'}`}>
@@ -172,7 +172,7 @@
             {/if}
             <div class="lobby-dm-group" class:lobby-dm-group--me={group.fromMe}>
               {#if !group.fromMe && peer}
-                <Avatar name={friendName(peer)} colorKey={peer.avatarColorKey} size={32} />
+                <Avatar name={friendName(peer)} src={peer.avatarUrl} colorKey={peer.avatarColorKey} background={peer.avatarAccent || undefined} size={32} />
               {/if}
               <div class="lobby-dm-bubbles">
                 {#each group.bubbles as bubble (bubble.id)}
@@ -212,7 +212,7 @@
         </button>
       </div>
       <div class="lobby-profile-body">
-        <Avatar name={friendName(peer)} colorKey={peer.avatarColorKey} size={76} {online} showDot ring="var(--paper-deep)" />
+        <Avatar name={friendName(peer)} src={peer.avatarUrl} colorKey={peer.avatarColorKey} background={peer.avatarAccent || undefined} size={76} {online} showDot ring="var(--paper-deep)" />
         <div class="lobby-profile-panel-name">{friendName(peer)}</div>
         <div class="lobby-profile-panel-handle">@{peer.login}</div>
 

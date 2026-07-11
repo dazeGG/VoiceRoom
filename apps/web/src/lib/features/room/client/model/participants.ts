@@ -2,7 +2,9 @@ import type { Participant as LiveKitParticipant } from 'livekit-client';
 
 export interface PeerInfo {
   accountUserId?: string;
+  avatarAccent?: string | null;
   avatarColorKey?: string;
+  avatarUrl?: string | null;
   id: string;
   name?: string;
   deafened?: boolean;
@@ -20,7 +22,9 @@ export interface Participant {
   accountUserId: string;
   analyser: AnalyserNode | null;
   audioElements: Map<string, HTMLAudioElement>;
+  avatarAccent: string;
   avatarColorKey: string;
+  avatarUrl: string;
   deafened: boolean;
   id: string;
   incomingVoiceActive: boolean;

@@ -20,6 +20,7 @@ function showRoomNotFoundSoon(): void {
 export function applyRoomUpdated(room: RoomLifecycleSummary): void {
   if (room.roomId !== state.roomId) return;
   state.roomName = room.name || '';
+  state.roomAvatarUrl = room.avatarUrl || '';
   if (document.body.dataset.screen === 'room') {
     refreshRoomHeadingSoon();
   }
