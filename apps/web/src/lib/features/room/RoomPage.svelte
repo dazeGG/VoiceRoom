@@ -6,6 +6,7 @@
   import './styles/room.css';
   import NotFoundScreen from './components/NotFoundScreen.svelte';
   import RoomEntryErrorScreen from './components/RoomEntryErrorScreen.svelte';
+  import RoomModerationScreen from './components/RoomModerationScreen.svelte';
   import RoomOverlays from './components/RoomOverlays.svelte';
   import RoomSettingsDialog from './components/RoomSettingsDialog.svelte';
   import RoomStage from './components/RoomStage.svelte';
@@ -43,6 +44,7 @@
   <StartRoomScreen />
   <RoomStage />
   <RoomEntryErrorScreen />
+  <RoomModerationScreen />
   <NotFoundScreen />
   <RoomOverlays />
   <RoomSettingsDialog />

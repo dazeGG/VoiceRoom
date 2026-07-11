@@ -194,6 +194,36 @@ test('cookie-authenticated writes reject cross-origin browser requests', async (
   assert.equal(deleted, true);
 });
 
+test('moderation routes require the owner of a static room', async (t) => {
+  const userId = '11111111-1111-4111-8111-111111111111';
+  const users = {
+    async getSessionUser() {
+      return { user: { id: userId } };
+    }
+  };
+  const baseStore = createFakeStore();
+  const request = (url) => ({
+    method: 'POST',
+    url,
+    headers: { cookie: 'vr_session=session-token', host: 'voice.local', origin: 'http://voice.local' },
+    payload: { peerId: 'peer-12345678' }
+  });
+
+  const nonOwnerApp = createApiApp({
+    users,
+    store: { ...baseStore, async getRoom() { return { id: 'room-1', isStatic: true, ownerId: 'other-user', peers: new Map() }; } }
+  });
+  t.after(() => nonOwnerApp.close());
+  assert.equal((await nonOwnerApp.inject(request('/api/rooms/room-1/kick'))).statusCode, 403);
+
+  const temporaryApp = createApiApp({
+    users,
+    store: { ...baseStore, async getRoom() { return { id: 'room-2', isStatic: false, ownerId: userId, peers: new Map() }; } }
+  });
+  t.after(() => temporaryApp.close());
+  assert.equal((await temporaryApp.inject(request('/api/rooms/room-2/ban'))).statusCode, 403);
+});
+
 
 
 

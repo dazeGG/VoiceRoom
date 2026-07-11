@@ -28,11 +28,12 @@ function createConnectionRegistry({
     return set ? set.size : 0;
   }
 
-  function createConnectionRecord(userId, socket) {
+  function createConnectionRecord(userId, socket, clientIp = '') {
     return {
       id: createConnectionId(userId || 'guest'),
       userId: userId || null,
       guest: !userId,
+      clientIp: clientIp || '',
       guestIp: null,
       socket,
       previewRoomIds: new Set(),
@@ -42,8 +43,8 @@ function createConnectionRegistry({
     };
   }
 
-  function addConnection(userId, socket) {
-    const connection = createConnectionRecord(userId, socket);
+  function addConnection(userId, socket, clientIp = '') {
+    const connection = createConnectionRecord(userId, socket, clientIp);
 
     let set = userConnections.get(userId);
     const wasOffline = !isUserOnline(userId);
@@ -62,7 +63,7 @@ function createConnectionRegistry({
   }
 
   function addGuestConnection(socket, guestIp = 'unknown') {
-    const connection = createConnectionRecord(null, socket);
+    const connection = createConnectionRecord(null, socket, guestIp);
     connection.guestIp = guestIp || 'unknown';
     let set = guestConnectionsByIp.get(connection.guestIp);
     if (!set) {

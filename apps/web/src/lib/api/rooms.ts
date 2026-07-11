@@ -1,4 +1,4 @@
-import { del, fetchJson, postJson, putJson } from './http';
+import { del, fetchJson, postJson, postJsonAuth, putJson } from './http';
 import { createRoomProof } from './pow';
 
 export interface CreateRoomOptions {
@@ -90,12 +90,26 @@ export async function deleteRoom(roomId: string): Promise<void> {
 
 // A read-only view of a current room occupant (mirrors the server's publicPeer).
 export interface RoomPeer {
+  accountUserId?: string;
   avatarAccent: string | null;
   avatarColorKey: string;
   avatarUrl: string | null;
   id: string;
   muted: boolean;
   name: string;
+}
+
+export async function kickRoomPeer(roomId: string, peerId: string): Promise<void> {
+  await postJsonAuth(`/api/rooms/${encodeURIComponent(roomId)}/kick`, { peerId });
+}
+
+export async function banRoomPeer(roomId: string, peerId: string): Promise<string> {
+  const payload = await postJsonAuth<{ banId: string }>(`/api/rooms/${encodeURIComponent(roomId)}/ban`, { peerId });
+  return payload.banId;
+}
+
+export async function undoRoomBan(roomId: string, banId: string): Promise<void> {
+  await del(`/api/rooms/${encodeURIComponent(roomId)}/bans/${encodeURIComponent(banId)}`);
 }
 
 // Snapshot of who is in a room right now, without joining it — powers the lobby

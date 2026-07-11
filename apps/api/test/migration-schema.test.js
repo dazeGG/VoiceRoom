@@ -9,6 +9,7 @@ const membershipMigration = require('../src/migrations/20260615140000_create_roo
 const visualIdentityMigration = require('../src/migrations/20260615150000_add_visual_identity_keys');
 const friendsMigration = require('../src/migrations/20260627120000_create_friends_and_direct_messages');
 const notificationMigration = require('../src/migrations/20260710140000_create_notification_preferences');
+const roomBansMigration = require('../src/migrations/20260710130000_add_room_bans');
 const avatarMigration = require('../src/migrations/20260711120000_add_avatars');
 
 function createRecorder() {
@@ -88,6 +89,32 @@ test('avatar migration adds reversible user and room avatar columns', () => {
     [['rooms', ['avatar_key']], ['users', ['avatar_key', 'avatar_accent']]]
   );
   assert.ok(down.calls.some((call) => call.type === 'dropConstraint' && call.name === 'users_avatar_accent_check'));
+});
+
+test('room bans migration defines scoped user and IP enforcement with room cascade', () => {
+  const pgm = createRecorder();
+  roomBansMigration.up(pgm);
+
+  const bans = pgm.calls.find((call) => call.type === 'createTable' && call.name === 'room_bans');
+  assert.ok(bans, 'room_bans table is created');
+  assert.equal(bans.columns.room_id.references, 'rooms(id)');
+  assert.equal(bans.columns.room_id.onDelete, 'CASCADE');
+  assert.equal(bans.columns.user_id.references, 'users(id)');
+  assert.equal(bans.columns.user_id.onDelete, 'CASCADE');
+  assert.equal(bans.columns.user_id.notNull, undefined);
+  assert.equal(bans.columns.ip.notNull, true);
+  assert.equal(bans.columns.expires_at.notNull, undefined);
+  assert.equal(bans.columns.metadata.type, 'jsonb');
+
+  const indexes = new Map(
+    pgm.calls.filter((call) => call.type === 'createIndex').map((call) => [call.options.name, call])
+  );
+  assert.deepEqual(indexes.get('room_bans_room_user_idx').columns, ['room_id', 'user_id']);
+  assert.deepEqual(indexes.get('room_bans_room_ip_idx').columns, ['room_id', 'ip']);
+
+  const down = createRecorder();
+  roomBansMigration.down(down);
+  assert.deepEqual(down.calls.filter((call) => call.type === 'dropTable').map((call) => call.name), ['room_bans']);
 });
 
 test('rooms and room_messages migration defines lookup, quota, idle, listing, and expiry indexes', () => {

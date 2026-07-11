@@ -43,7 +43,9 @@ export type RealtimeRoomEvent =
   | { type: 'room.updated'; payload: { room: RoomSummary } }
   | { type: 'room.deleted'; payload: { roomId: string } }
   | { type: 'room.not_found'; payload: { roomId: string } }
-  | { type: 'room.full'; payload: { roomId: string; maxRoomPeers: number } };
+  | { type: 'room.full'; payload: { roomId: string; maxRoomPeers: number } }
+  | { type: 'room.kicked'; payload: { roomId: string; peerId?: string } }
+  | { type: 'room.banned'; payload: { roomId: string; peerId?: string } };
 
 export type RealtimeErrorEvent = { type: 'error'; payload: { code: string; message: string; id?: string } };
 

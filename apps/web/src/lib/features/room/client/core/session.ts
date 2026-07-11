@@ -44,6 +44,18 @@ export function getStoredPeerSession(roomId: string): PeerSession {
   return fallback;
 }
 
+export function rotateStoredPeerSession(roomId: string): PeerSession {
+  const next = { peerId: createPeerId(), sessionToken: createSessionToken() };
+  if (roomId) {
+    try {
+      sessionStorage.setItem(`${PEER_SESSION_STORAGE_PREFIX}${roomId}`, JSON.stringify(next));
+    } catch {
+      // The current runtime still receives fresh values when storage is unavailable.
+    }
+  }
+  return next;
+}
+
 export function extractRoomId(value: string): string {
   const raw = String(value || '').trim();
   if (!raw) return '';

@@ -131,6 +131,7 @@ export interface RoomSessionState {
   roomId: string;
   roomAvatarUrl: string;
   roomName: string;
+  moderationReason: 'banned' | 'kicked' | '';
   roomRoute: boolean;
   /** Mirrors document.body.dataset.screen so Svelte components react to screen transitions. */
   screen: string;

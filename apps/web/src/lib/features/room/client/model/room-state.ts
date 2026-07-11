@@ -57,6 +57,7 @@ export function createInitialRoomState(): AppState {
     peers: new SvelteMap(),
     peerId: peerSession.peerId,
     roomId,
+    moderationReason: '',
     roomAvatarUrl: '',
     roomName: '',
     roomRoute: window.location.pathname.startsWith('/r/'),
