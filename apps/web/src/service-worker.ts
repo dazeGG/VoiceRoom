@@ -9,6 +9,7 @@ type PushPayload = {
   url?: string;
   dedupeKey?: string;
   type?: string;
+  expiresAt?: number;
 };
 
 self.addEventListener('push', (event) => {
@@ -21,6 +22,7 @@ self.addEventListener('push', (event) => {
     } catch {
       payload = { body: event.data?.text() || '' };
     }
+    if (Number.isFinite(payload.expiresAt) && Number(payload.expiresAt) <= Date.now()) return;
     await self.registration.showNotification(payload.title || 'VoiceRoom', {
       body: payload.body || '',
       data: { url: payload.url || '/', dedupeKey: payload.dedupeKey, type: payload.type },

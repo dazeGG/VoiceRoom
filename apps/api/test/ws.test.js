@@ -378,6 +378,99 @@ test('ws sends additive account notification envelopes without regressing legacy
   bob.ws.close();
 });
 
+test('ring requires an active friend and delivers one expiring invitation per cooldown', async (t) => {
+  const { dir, socketPath } = getSocketPath();
+  const { cleanup, databaseUrl } = await createTestDatabase(t);
+  const logs = { stdout: '', stderr: '' };
+  const child = startServer(socketPath, databaseUrl, logs, {
+    RING_RATE_LIMIT: '1',
+    RING_RATE_WINDOW_MS: '30000',
+    RING_TTL_MS: '5000'
+  });
+  t.after(() => {
+    child.kill('SIGTERM');
+    fs.rmSync(dir, { recursive: true, force: true });
+    return cleanup();
+  });
+
+  await waitForHealthz(socketPath);
+  const aliceCookie = await register(socketPath, 'alice-ring');
+  const bobCookie = await register(socketPath, 'bob-ring');
+  const caraCookie = await register(socketPath, 'cara-ring');
+  await befriend(socketPath, aliceCookie, 'bob-ring');
+  await acceptFirstRequest(socketPath, bobCookie);
+
+  const aliceFriends = await request(socketPath, { pathname: '/api/friends', cookie: aliceCookie });
+  const bobId = aliceFriends.body.friends.find((entry) => entry.user.login === 'bob-ring')?.user.id;
+  assert.ok(bobId);
+  const caraSession = await request(socketPath, { pathname: '/api/auth/me', cookie: caraCookie });
+  const caraId = caraSession.body.user.id;
+
+  const created = await request(socketPath, {
+    method: 'POST',
+    pathname: '/api/rooms',
+    cookie: aliceCookie,
+    body: { isStatic: true, name: 'Ring Room' }
+  });
+  assert.equal(created.status, 201);
+  const roomId = created.body.roomId;
+
+  const beforeJoin = await request(socketPath, {
+    method: 'POST',
+    pathname: `/api/rooms/${encodeURIComponent(roomId)}/ring`,
+    cookie: aliceCookie,
+    body: { userId: bobId }
+  });
+  assert.equal(beforeJoin.status, 403);
+
+  const alice = openHarnessWs(socketPath, { cookie: aliceCookie });
+  const bob = openWs(socketPath, bobCookie);
+  await alice.ready;
+  await bob.ready;
+  await joinVoiceRoom(alice, {
+    roomId,
+    peerId: 'alice-ring-peer',
+    sessionToken: 'r'.repeat(32),
+    name: 'Alice Ring'
+  });
+
+  const nonFriend = await request(socketPath, {
+    method: 'POST',
+    pathname: `/api/rooms/${encodeURIComponent(roomId)}/ring`,
+    cookie: aliceCookie,
+    body: { userId: caraId }
+  });
+  assert.equal(nonFriend.status, 403);
+
+  const sentAt = Date.now();
+  const sent = await request(socketPath, {
+    method: 'POST',
+    pathname: `/api/rooms/${encodeURIComponent(roomId)}/ring`,
+    cookie: aliceCookie,
+    body: { userId: bobId }
+  });
+  assert.equal(sent.status, 200);
+  assert.equal(sent.body.ok, true);
+
+  const incoming = await waitForWsType(bob.frames, 'ring.incoming');
+  assert.equal(incoming.payload.fromUser.login, 'alice-ring');
+  assert.deepEqual(incoming.payload.room, { id: roomId, name: 'Ring Room', emoji: '' });
+  assert.ok(incoming.payload.expiresAt >= sentAt + 4500);
+  assert.ok(incoming.payload.expiresAt <= Date.now() + 5000);
+
+  const repeated = await request(socketPath, {
+    method: 'POST',
+    pathname: `/api/rooms/${encodeURIComponent(roomId)}/ring`,
+    cookie: aliceCookie,
+    body: { userId: bobId }
+  });
+  assert.equal(repeated.status, 429);
+  assert.ok(Number(repeated.body.retryAfterSeconds) > 0);
+
+  alice.ws.close();
+  bob.ws.close();
+});
+
 test('ws sends saved-room message notifications with room mutes and sender exclusion', async (t) => {
   const { dir, socketPath } = getSocketPath();
   const { cleanup, databaseUrl } = await createTestDatabase(t);

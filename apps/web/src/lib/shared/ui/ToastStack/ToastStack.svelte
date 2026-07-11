@@ -11,6 +11,13 @@
     {#each toasts as toast (toast.id)}
       <div class="ui-toast" data-variant={toast.variant ?? 'default'}>
         <span class="ui-toast-message">{toast.message}</span>
+        {#if toast.actions?.length}
+          <div class="ui-toast-actions">
+            {#each toast.actions as action}
+              <button class="ui-toast-action" type="button" onclick={() => action.onClick(toast.id)}>{action.label}</button>
+            {/each}
+          </div>
+        {/if}
         <button class="ui-toast-close" type="button" aria-label="Закрыть уведомление" onclick={() => onDismiss(toast.id)}>
           <X {...iconXs} aria-hidden="true" />
         </button>
@@ -57,6 +64,27 @@
     flex: 1;
     min-width: 0;
     white-space: pre-line;
+  }
+
+  .ui-toast-actions {
+    display: flex;
+    flex: none;
+    gap: 6px;
+  }
+
+  .ui-toast-action {
+    border: 1px solid rgba(255, 255, 255, 0.13);
+    border-radius: 7px;
+    padding: 4px 7px;
+    background: rgba(255, 255, 255, 0.07);
+    color: var(--warm-ink);
+    font: inherit;
+    font-size: 12px;
+    cursor: pointer;
+  }
+
+  .ui-toast-action:hover {
+    background: rgba(255, 255, 255, 0.12);
   }
 
   .ui-toast-close {
