@@ -177,6 +177,7 @@ function createUserStore({ databaseUrl, logger = console, pool, sessionTtlMs = D
         [userId, passwordHash, toDate(now)]
       );
       await client.query(`DELETE FROM sessions WHERE user_id = $1`, [userId]);
+      await client.query(`DELETE FROM push_subscriptions WHERE user_id = $1`, [userId]);
       await client.query('COMMIT');
       return { status: 'updated' };
     } catch (error) {

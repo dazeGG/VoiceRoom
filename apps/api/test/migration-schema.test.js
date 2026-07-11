@@ -9,6 +9,7 @@ const membershipMigration = require('../src/migrations/20260615140000_create_roo
 const visualIdentityMigration = require('../src/migrations/20260615150000_add_visual_identity_keys');
 const friendsMigration = require('../src/migrations/20260627120000_create_friends_and_direct_messages');
 const notificationMigration = require('../src/migrations/20260710140000_create_notification_preferences');
+const pushMigration = require('../src/migrations/20260711130000_create_push_subscriptions');
 const avatarMigration = require('../src/migrations/20260711120000_add_avatars');
 
 function createRecorder() {
@@ -44,6 +45,21 @@ function createRecorder() {
     }
   };
 }
+
+test('push subscriptions migration defines durable endpoint ownership and cleanup', () => {
+  const pgm = createRecorder();
+  pushMigration.up(pgm);
+  const table = pgm.calls.find((call) => call.type === 'createTable' && call.name === 'push_subscriptions');
+  assert.ok(table);
+  assert.equal(table.columns.user_id.references, 'users(id)');
+  assert.equal(table.columns.user_id.onDelete, 'CASCADE');
+  assert.equal(table.columns.endpoint.unique, true);
+  for (const column of ['p256dh', 'auth', 'created_at', 'last_success_at', 'metadata']) assert.ok(table.columns[column]);
+
+  const down = createRecorder();
+  pushMigration.down(down);
+  assert.ok(down.calls.some((call) => call.type === 'dropTable' && call.name === 'push_subscriptions'));
+});
 
 test('rooms and room_messages migration captures durable schema contract', () => {
   const pgm = createRecorder();
