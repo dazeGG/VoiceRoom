@@ -98,6 +98,36 @@ test('updateRoomAvatar only updates active static rooms', async () => {
   assert.equal(room.avatarKey, 'room_abcdefghij_deadbeef.webp');
 });
 
+test('swapRoomAvatar locks the room row and returns the exact key it replaced', async () => {
+  const oldKey = 'room_abcdefghij_0123abcd.webp';
+  const nextKey = 'room_abcdefghij_deadbeef.webp';
+  const pool = createFakePool((text, values) => {
+    if (/SELECT avatar_key/.test(text)) {
+      assert.match(text, /deleted_at IS NULL/);
+      assert.match(text, /is_static = true/);
+      assert.match(text, /FOR UPDATE/);
+      return { rows: [{ avatar_key: oldKey }], rowCount: 1 };
+    }
+    if (/UPDATE rooms SET avatar_key/.test(text)) {
+      return {
+        rows: [{
+          id: values[0], avatar_key: values[1], creator_ip: '', is_static: true,
+          created_at: new Date(1000), updated_at: values[2], empty_since: null
+        }],
+        rowCount: 1
+      };
+    }
+    throw new Error(`Unexpected query: ${text}`);
+  });
+
+  const result = await createRoomStore({ pool }).swapRoomAvatar('abcdefghij', nextKey, 2000);
+
+  assert.equal(result.previousAvatarKey, oldKey);
+  assert.equal(result.room.avatarKey, nextKey);
+  assert.ok(pool.calls.some(({ text }) => text === 'BEGIN'));
+  assert.ok(pool.calls.some(({ text }) => text === 'COMMIT'));
+});
+
 test('appendMessage uses a transaction, verifies room existence, inserts row, and enforces cap', async () => {
   const pool = createFakePool((text) => {
     if (/SELECT id FROM rooms/.test(text)) return { rows: [{ id: 'room1' }], rowCount: 1 };

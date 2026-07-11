@@ -44,6 +44,24 @@ test('avatar storage creates the uploads directory on first save', async (t) => 
   assert.equal(await fs.promises.readFile(path.join(uploadsDir, ROOM_KEY), 'utf8'), 'room-avatar');
 });
 
+test('avatar storage lists only valid avatar files', async (t) => {
+  const uploadsDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'avatar-storage-list-'));
+  t.after(() => fs.promises.rm(uploadsDir, { recursive: true, force: true }));
+  const storage = createAvatarStorage({ uploadsDir });
+
+  await storage.save(USER_KEY, Buffer.from('user'));
+  await storage.save(ROOM_KEY, Buffer.from('room'));
+  await fs.promises.writeFile(path.join(uploadsDir, 'notes.txt'), 'ignore me');
+  await fs.promises.mkdir(path.join(uploadsDir, 'av_123e4567-e89b-12d3-a456-426614174000_11111111.webp'));
+
+  assert.deepEqual((await storage.listKeys()).sort(), [ROOM_KEY, USER_KEY].sort());
+});
+
+test('Docker build context excludes runtime avatar uploads', async () => {
+  const dockerIgnore = await fs.promises.readFile(path.resolve(__dirname, '../../..', '.dockerignore'), 'utf8');
+  assert.match(dockerIgnore, /^apps\/api\/uploads\/$/m);
+});
+
 test('avatar storage rejects traversal, absolute paths, and malformed keys', async () => {
   for (const key of [
     '../' + USER_KEY,

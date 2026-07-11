@@ -4,6 +4,12 @@
   import Avatar from '../Avatar/Avatar.svelte';
   import type { AvatarCropDialogProps } from './types';
 
+  const DEFAULT_ACCENT = {
+    background: '#343731',
+    foreground: '#ffffff',
+    shadow: '0 12px 26px rgb(0 0 0 / 0.28)'
+  };
+
   let { file, name, open, shape, title, kind, onClose, onSave }: AvatarCropDialogProps = $props();
 
   let canvas = $state<HTMLCanvasElement>();
@@ -18,10 +24,19 @@
   let dragPointerId = $state<number | null>(null);
   let lastPointerX = $state(0);
   let lastPointerY = $state(0);
-  let accent = $state({ background: '#343731', foreground: '#ffffff', shadow: '0 12px 26px rgb(0 0 0 / 0.28)' });
+  let accent = $state({ ...DEFAULT_ACCENT });
 
   $effect(() => {
-    if (!open || !file) return;
+    const nextFile = file;
+    const isOpen = open;
+    image = null;
+    zoom = 1;
+    offsetX = 0;
+    offsetY = 0;
+    previewUrl = '';
+    error = '';
+    accent = { ...DEFAULT_ACCENT };
+    if (!isOpen || !nextFile) return;
     const reader = new FileReader();
     let cancelled = false;
     reader.onload = () => {
@@ -44,9 +59,10 @@
     reader.onerror = () => {
       if (!cancelled) error = 'Не удалось прочитать файл';
     };
-    reader.readAsDataURL(file);
+    reader.readAsDataURL(nextFile);
     return () => {
       cancelled = true;
+      if (reader.readyState === FileReader.LOADING) reader.abort();
     };
   });
 

@@ -350,6 +350,7 @@ test('room and participant avatars preserve fallbacks while preferring uploaded 
   const chat = read('src/lib/features/room/components/RoomChat.svelte');
   const roomNet = read('src/lib/features/room/client/net/api.ts');
   const roomTopbar = read('src/lib/features/room/components/RoomTopbar.svelte');
+  const notificationRouter = read('src/lib/shared/notifications/router.ts');
 
   assert.match(authApi, /avatarColorKey: string/);
   assert.match(roomsApi, /avatarColorKey: string/);
@@ -365,6 +366,9 @@ test('room and participant avatars preserve fallbacks while preferring uploaded 
   assert.doesNotMatch(roomNet, /roomIconKey|roomColorKey|roomPresetKey|emoji/);
   assert.match(roomTopbar, /<Avatar name=\{heading\} src=\{state\.roomAvatarUrl\} shape="squircle" background="var\(--room-avatar-bg\)"/);
   assert.doesNotMatch(roomTopbar, /getRoomPreset|roomVisual|emoji/);
+  assert.match(notificationRouter, /avatarAccent\?: string \| null/);
+  assert.match(notificationRouter, /avatarUrl\?: string \| null/);
+  assert.doesNotMatch(notificationRouter, /NotificationRoomContext[\s\S]*avatarColorKey/);
 });
 
 test('avatar crop and settings flows export a normalized bitmap and refresh live user and room state', () => {
@@ -382,6 +386,9 @@ test('avatar crop and settings flows export a normalized bitmap and refresh live
   assert.match(crop, /shape === 'circle'/);
   assert.match(crop, /shape === 'squircle'/);
   assert.match(crop, /deriveAvatarAccent/);
+  assert.match(crop, /image = null/);
+  assert.match(crop, /previewUrl = ''/);
+  assert.match(crop, /reader\.abort\(\)/);
   assert.doesNotMatch(crop, /URL\.createObjectURL/);
 
   assert.match(authApi, /uploadUserAvatar/);

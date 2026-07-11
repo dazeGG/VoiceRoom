@@ -45,7 +45,20 @@ function createAvatarStorage({ uploadsDir = readUploadsDir() } = {}) {
     return fs.createReadStream(filePath(key));
   }
 
-  return { save, remove, createReadStream };
+  async function listKeys() {
+    let entries;
+    try {
+      entries = await fs.promises.readdir(root, { withFileTypes: true });
+    } catch (error) {
+      if (error?.code === 'ENOENT') return [];
+      throw error;
+    }
+    return entries
+      .filter((entry) => entry.isFile() && AVATAR_KEY_PATTERN.test(entry.name))
+      .map((entry) => entry.name);
+  }
+
+  return { save, remove, createReadStream, listKeys };
 }
 
 module.exports = { AVATAR_KEY_PATTERN, validateAvatarKey, createAvatarStorage };

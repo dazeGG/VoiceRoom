@@ -42,37 +42,60 @@ function createHarness(uploadsDir) {
     emptySince: null,
     peers: new Map()
   };
+  let userAvatarWrites = Promise.resolve();
+  let roomAvatarWrites = Promise.resolve();
   const userStore = {
     async getSessionUser(token) {
       const id = token === 'owner-token' ? OWNER_ID : token === 'other-token' ? OTHER_ID : '';
       return id ? { user: { ...users.get(id) } } : null;
     },
-    async updateAvatar({ userId, avatarKey = null, avatarAccent = null }) {
-      const user = users.get(userId);
-      if (!user) return null;
-      Object.assign(user, { avatarKey, avatarAccent });
-      return { ...user };
+    swapAvatar({ userId, avatarKey = null, avatarAccent = null }) {
+      const operation = userAvatarWrites.then(() => {
+        const user = users.get(userId);
+        if (!user) return { previousAvatarKey: null, user: null };
+        const previousAvatarKey = user.avatarKey;
+        Object.assign(user, { avatarKey, avatarAccent });
+        return { previousAvatarKey, user: { ...user } };
+      });
+      userAvatarWrites = operation.then(() => undefined, () => undefined);
+      return operation;
     }
   };
   const roomStore = {
-    async getRoom(roomId) {
-      return roomId === ROOM_ID ? { ...room, peers: new Map() } : null;
+    async listSummaryRecipientUserIds() {
+      return [];
     },
-    async updateRoomAvatar(roomId, avatarKey = null) {
-      if (roomId !== ROOM_ID || !room.isStatic) return null;
-      room.avatarKey = avatarKey;
-      room.updatedAt = Date.now();
+    async getRoom(roomId) {
+      return roomId === ROOM_ID && !room.deletedAt ? { ...room, peers: new Map() } : null;
+    },
+    swapRoomAvatar(roomId, avatarKey = null) {
+      const operation = roomAvatarWrites.then(() => {
+        if (roomId !== ROOM_ID || !room.isStatic || room.deletedAt) {
+          return { previousAvatarKey: null, room: null };
+        }
+        const previousAvatarKey = room.avatarKey;
+        room.avatarKey = avatarKey;
+        room.updatedAt = Date.now();
+        return { previousAvatarKey, room: { ...room, peers: new Map() } };
+      });
+      roomAvatarWrites = operation.then(() => undefined, () => undefined);
+      return operation;
+    },
+    async deleteRoom(roomId, now = Date.now()) {
+      if (roomId !== ROOM_ID || room.deletedAt) return null;
+      room.deletedAt = now;
       return { ...room, peers: new Map() };
     }
   };
+  const storage = createAvatarStorage({ uploadsDir });
   const app = createApiApp({
     store: roomStore,
     users: userStore,
     friends: { async getFriendIds() { return []; } },
     notifications: {},
-    avatars: createAvatarStorage({ uploadsDir })
+    avatars: storage
   });
-  return { app, room, users };
+  return { app, room, storage, users };
 }
 
 function cookie(token) {
@@ -149,15 +172,41 @@ test('avatar routes authorize, normalize, replace, serve, and delete user and ro
   assert.notEqual(room.avatarKey, firstRoomKey);
   await assert.rejects(fs.promises.access(path.join(uploadsDir, firstRoomKey)), { code: 'ENOENT' });
 
+  const currentRoomUrl = roomReplacement.json().room.avatarUrl;
+  const currentRoomKey = path.basename(currentRoomUrl);
   const roomDelete = await app.inject({
-    method: 'DELETE', url: `/api/rooms/${ROOM_ID}/avatar`, ...cookie('owner-token')
+    method: 'DELETE', url: `/api/rooms/${ROOM_ID}`, ...cookie('owner-token')
   });
   assert.equal(roomDelete.statusCode, 200);
-  assert.equal(roomDelete.json().room.avatarUrl, null);
-  assert.equal(room.avatarKey, null);
+  await assert.rejects(fs.promises.access(path.join(uploadsDir, currentRoomKey)), { code: 'ENOENT' });
+  assert.equal((await app.inject({ method: 'GET', url: currentRoomUrl })).statusCode, 404);
 
   assert.equal((await app.inject({ method: 'GET', url: '/api/avatars/not-a-key.webp' })).statusCode, 404);
   assert.equal((await app.inject({ method: 'GET', url: `/api/avatars/${firstKey}` })).statusCode, 404);
+});
+
+test('concurrent user and room replacements retain only the final referenced avatar files', async (t) => {
+  const uploadsDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'avatar-routes-concurrent-'));
+  t.after(() => fs.promises.rm(uploadsDir, { recursive: true, force: true }));
+  const { app, room, storage, users } = createHarness(uploadsDir);
+  t.after(() => app.close());
+  const redPng = await sharp({ create: { width: 16, height: 16, channels: 3, background: '#dd2020' } }).png().toBuffer();
+  const bluePng = await sharp({ create: { width: 16, height: 16, channels: 3, background: '#2040dd' } }).png().toBuffer();
+
+  const userResponses = await Promise.all([redPng, bluePng].map((image) => app.inject({
+    method: 'POST', url: '/api/auth/avatar', ...cookie('owner-token'), ...multipart(image)
+  })));
+  assert.deepEqual(userResponses.map(({ statusCode }) => statusCode), [200, 200]);
+  assert.deepEqual(await storage.listKeys(), [users.get(OWNER_ID).avatarKey]);
+
+  const userDelete = await app.inject({ method: 'DELETE', url: '/api/auth/avatar', ...cookie('owner-token') });
+  assert.equal(userDelete.statusCode, 200);
+
+  const roomResponses = await Promise.all([redPng, bluePng].map((image) => app.inject({
+    method: 'POST', url: `/api/rooms/${ROOM_ID}/avatar`, ...cookie('owner-token'), ...multipart(image)
+  })));
+  assert.deepEqual(roomResponses.map(({ statusCode }) => statusCode), [200, 200]);
+  assert.deepEqual(await storage.listKeys(), [room.avatarKey]);
 });
 
 test('room avatar writes are limited to owned static rooms and oversized uploads are rejected', async (t) => {

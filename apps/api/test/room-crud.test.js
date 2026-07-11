@@ -18,7 +18,7 @@ const OTHER_TOKEN = 'session-other';
 
 // In-memory room store covering only the surface the CRUD handlers touch. It
 // mirrors the real store's contract: getRoom filters soft-deleted rows, and
-// updateRoom/deleteRoom return null / 0-rows once a room is gone.
+// updateRoom/deleteRoom return null once a room is gone.
 function createFakeStore(seed = {}) {
   const rooms = new Map();
   for (const [id, room] of Object.entries(seed)) {
@@ -45,14 +45,17 @@ function createFakeStore(seed = {}) {
     },
     async deleteRoom(roomId, now = Date.now()) {
       const room = rooms.get(roomId);
-      if (!room || room.deletedAt) return false;
+      if (!room || room.deletedAt) return null;
       room.deletedAt = now;
-      return true;
+      return { ...room, peers: new Map() };
     },
     async markRoomActive() {},
     async markRoomEmpty() {},
     async pruneRooms() {},
     async listSummaryRecipientUserIds() {
+      return [];
+    },
+    async listVisibleRoomsForUser() {
       return [];
     },
     async listMessages() {

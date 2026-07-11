@@ -29,6 +29,7 @@ const {
 const { createProofOfWork } = require('./lib/pow');
 const { getClientIp, createRateLimiter } = require('./lib/rate-limit');
 const { MAX_AVATAR_BYTES, createAvatarKey, processAvatar } = require('./lib/avatar-processing');
+const { reconcileAvatarStorage } = require('./lib/avatar-reconciliation');
 const { createAvatarStorage, validateAvatarKey } = require('./lib/avatar-storage');
 const { avatarColorForPeerId, createRoomStore } = require('./lib/room-store');
 const { createUserStore, publicUser } = require('./lib/user-store');
@@ -856,7 +857,7 @@ async function handleUpdateRoom(req, res, roomId) {
   sendJson(res, 200, { ok: true, room: payload });
 }
 
-async function handleDeleteRoom(req, res, roomId) {
+async function handleDeleteRoom(req, res, roomId, request) {
   const room = await authorizeRoomMutation(req, res, roomId);
   if (!room) return;
 
@@ -866,6 +867,7 @@ async function handleDeleteRoom(req, res, roomId) {
     sendJson(res, 404, { ok: false, error: 'Комната не найдена' });
     return;
   }
+  await removeAvatarBestEffort(deleted.avatarKey, request);
 
   // Broadcast after durable soft-delete, before presence teardown so the WS
   // writes are not racing socket close.
@@ -1086,27 +1088,28 @@ async function handleUploadUserAvatar(req, res, request) {
   const avatarKey = createAvatarKey('user', session.user.id, processed.hash);
   await getAvatarStorage().save(avatarKey, processed.buffer);
 
-  let user;
+  let result;
   try {
-    user = await getUserStore().updateAvatar({
+    result = await getUserStore().swapAvatar({
       userId: session.user.id,
       avatarKey,
       avatarAccent: processed.accent
     });
   } catch (error) {
-    if (session.user.avatarKey !== avatarKey) await removeAvatarBestEffort(avatarKey, request);
+    // Another request may already have committed the same content-addressed key.
+    // Reconciliation removes a truly orphaned write without risking that live file.
     throw error;
   }
-  if (!user) {
+  if (!result.user) {
     if (session.user.avatarKey !== avatarKey) await removeAvatarBestEffort(avatarKey, request);
     sendJson(res, 404, { ok: false, error: 'Аккаунт не найден' });
     return;
   }
-  if (session.user.avatarKey !== avatarKey) {
-    await removeAvatarBestEffort(session.user.avatarKey, request);
+  if (result.previousAvatarKey !== avatarKey) {
+    await removeAvatarBestEffort(result.previousAvatarKey, request);
   }
-  refreshActiveUserAvatar(user);
-  sendJson(res, 200, { ok: true, user: publicUser(user) });
+  refreshActiveUserAvatar(result.user);
+  sendJson(res, 200, { ok: true, user: publicUser(result.user) });
 }
 
 async function handleDeleteUserAvatar(req, res, request) {
@@ -1115,14 +1118,14 @@ async function handleDeleteUserAvatar(req, res, request) {
     sendJson(res, 401, { ok: false, error: 'Требуется вход' });
     return;
   }
-  const user = await getUserStore().updateAvatar({ userId: session.user.id });
-  if (!user) {
+  const result = await getUserStore().swapAvatar({ userId: session.user.id });
+  if (!result.user) {
     sendJson(res, 404, { ok: false, error: 'Аккаунт не найден' });
     return;
   }
-  await removeAvatarBestEffort(session.user.avatarKey, request);
-  refreshActiveUserAvatar(user);
-  sendJson(res, 200, { ok: true, user: publicUser(user) });
+  await removeAvatarBestEffort(result.previousAvatarKey, request);
+  refreshActiveUserAvatar(result.user);
+  sendJson(res, 200, { ok: true, user: publicUser(result.user) });
 }
 
 async function handleChangePassword(req, res) {
@@ -1202,32 +1205,35 @@ async function handleUploadRoomAvatar(req, res, roomId, request) {
   const avatarKey = createAvatarKey('room', room.id, processed.hash);
   await getAvatarStorage().save(avatarKey, processed.buffer);
 
-  let updated;
+  let result;
   try {
-    updated = await getRoomStore().updateRoomAvatar(roomId, avatarKey);
+    result = await getRoomStore().swapRoomAvatar(roomId, avatarKey);
   } catch (error) {
-    if (room.avatarKey !== avatarKey) await removeAvatarBestEffort(avatarKey, request);
+    // Another request may already have committed the same content-addressed key.
+    // Reconciliation removes a truly orphaned write without risking that live file.
     throw error;
   }
-  if (!updated) {
+  if (!result.room) {
     if (room.avatarKey !== avatarKey) await removeAvatarBestEffort(avatarKey, request);
     sendJson(res, 404, { ok: false, error: 'Комната не найдена' });
     return;
   }
-  if (room.avatarKey !== avatarKey) await removeAvatarBestEffort(room.avatarKey, request);
-  sendJson(res, 200, { ok: true, room: broadcastRoomUpdate(roomId, updated) });
+  if (result.previousAvatarKey !== avatarKey) {
+    await removeAvatarBestEffort(result.previousAvatarKey, request);
+  }
+  sendJson(res, 200, { ok: true, room: broadcastRoomUpdate(roomId, result.room) });
 }
 
 async function handleDeleteRoomAvatar(req, res, roomId, request) {
   const room = await authorizeRoomMutation(req, res, roomId);
   if (!room) return;
-  const updated = await getRoomStore().updateRoomAvatar(roomId, null);
-  if (!updated) {
+  const result = await getRoomStore().swapRoomAvatar(roomId, null);
+  if (!result.room) {
     sendJson(res, 404, { ok: false, error: 'Комната не найдена' });
     return;
   }
-  await removeAvatarBestEffort(room.avatarKey, request);
-  sendJson(res, 200, { ok: true, room: broadcastRoomUpdate(roomId, updated) });
+  await removeAvatarBestEffort(result.previousAvatarKey, request);
+  sendJson(res, 200, { ok: true, room: broadcastRoomUpdate(roomId, result.room) });
 }
 
 async function openAvatarStream(key) {
@@ -2248,7 +2254,7 @@ function createApiApp({ store = null, users = null, friends = null, notification
     return handleUpdateRoom(req, res, normalizeRoomId(request.params.roomId));
   }));
   app.delete('/api/rooms/:roomId', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
-    return handleDeleteRoom(req, res, normalizeRoomId(request.params.roomId));
+    return handleDeleteRoom(req, res, normalizeRoomId(request.params.roomId), request);
   }));
   app.post('/api/rooms/:roomId/avatar', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
     return handleUploadRoomAvatar(req, res, normalizeRoomId(request.params.roomId), request);
@@ -2419,6 +2425,14 @@ async function bootstrap({ env = process.env, logger = console, exit = process.e
     friendStore = createFriendStore({ databaseUrl: database.url, logger });
     notificationStore = createNotificationStore({ databaseUrl: database.url, logger });
     avatarStorage = createAvatarStorage({ uploadsDir: readUploadsDir(env) });
+    const reconciliation = await reconcileAvatarStorage({
+      storage: avatarStorage,
+      userStore,
+      roomStore
+    });
+    if (reconciliation.removed > 0) {
+      logger.info?.(`Removed ${reconciliation.removed} orphaned avatar file(s)`);
+    }
     const server = createApiServer({
       store: roomStore,
       users: userStore,

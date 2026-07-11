@@ -281,14 +281,45 @@ function createRoomStore({
     return mapRoom(result.rows[0]);
   }
 
+  async function swapRoomAvatar(roomId, avatarKey = null, now = Date.now()) {
+    return transaction(getPool(), async (client) => {
+      const current = await client.query(
+        `SELECT avatar_key
+         FROM rooms
+         WHERE id = $1 AND deleted_at IS NULL AND is_static = true
+         FOR UPDATE`,
+        [roomId]
+      );
+      if (current.rowCount === 0) return { previousAvatarKey: null, room: null };
+      const result = await client.query(
+        `UPDATE rooms SET avatar_key = $2, updated_at = $3 WHERE id = $1 RETURNING *`,
+        [roomId, avatarKey || null, toDate(now)]
+      );
+      return {
+        previousAvatarKey: current.rows[0].avatar_key || null,
+        room: mapRoom(result.rows[0])
+      };
+    });
+  }
+
+  async function listAvatarKeys() {
+    const result = await getPool().query(
+      `SELECT avatar_key
+       FROM rooms
+       WHERE avatar_key IS NOT NULL AND deleted_at IS NULL`
+    );
+    return result.rows.map((row) => row.avatar_key).filter(Boolean);
+  }
+
   async function deleteRoom(roomId, now = Date.now()) {
     const result = await getPool().query(
       `UPDATE rooms
        SET deleted_at = COALESCE(deleted_at, $2), updated_at = $2
-       WHERE id = $1 AND deleted_at IS NULL`,
+       WHERE id = $1 AND deleted_at IS NULL
+       RETURNING *`,
       [roomId, toDate(now)]
     );
-    return result.rowCount > 0;
+    return mapRoom(result.rows[0]);
   }
 
   async function markRoomActive(roomOrId, now = Date.now()) {
@@ -745,6 +776,7 @@ function createRoomStore({
     getOrCreatePeerIdentity,
     getRoom,
     listMessages,
+    listAvatarKeys,
     getMessage,
     softDeleteMessage,
     listRoomsForOwner,
@@ -758,6 +790,7 @@ function createRoomStore({
     pruneRooms,
     purgeDeleted,
     roomIdExists,
+    swapRoomAvatar,
     updateRoom,
     updateRoomAvatar
   };
