@@ -19,6 +19,31 @@ function toWsAccountEvent(message) {
       return buildServerEnvelope('friend.removed', { userId: message.userId });
     case 'dm-message':
       return buildServerEnvelope('dm.message', { message: message.message });
+    case 'notification.dm.message':
+      return buildServerEnvelope('notification.dm.message', {
+        dedupeKey: message.dedupeKey,
+        peer: message.peer,
+        message: message.message
+      });
+    case 'notification.room.message':
+      return buildServerEnvelope('notification.room.message', {
+        dedupeKey: message.dedupeKey,
+        room: message.room,
+        sender: message.sender,
+        message: message.message
+      });
+    case 'notification.friend.request':
+      return buildServerEnvelope('notification.friend.request', {
+        dedupeKey: message.dedupeKey,
+        requester: message.requester,
+        requestId: message.requestId
+      });
+    case 'notification.friend.accepted':
+      return buildServerEnvelope('notification.friend.accepted', {
+        dedupeKey: message.dedupeKey,
+        user: message.user,
+        context: message.context
+      });
     case 'dm-read':
       return buildServerEnvelope('dm.read', { userId: message.userId });
     case 'dm.message.deleted':

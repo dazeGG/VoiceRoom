@@ -23,6 +23,7 @@ function createRoomRealtimeRuntime(deps) {
     publicPeer,
     publicLobbyRoom,
     publicChatMessage,
+    getUserStore,
     broadcast,
     closePeer,
     avatarColorForPeerId,
@@ -117,6 +118,91 @@ function createRoomRealtimeRuntime(deps) {
       message: publicChatMessage(message)
     });
     broadcastRoomDetail(roomId, envelope);
+    void broadcastRoomMessageNotification(roomId, message);
+  }
+
+  function roomNotificationContext(room) {
+    return {
+      roomId: room.id,
+      name: room.name || '',
+      emoji: room.emoji || '',
+      avatarColorKey: room.roomColorKey || '',
+      roomColorKey: room.roomColorKey || '',
+      roomIconKey: room.roomIconKey || '',
+      roomPresetKey: room.roomPresetKey || ''
+    };
+  }
+
+  function senderNotificationContext(message, user) {
+    if (user) {
+      return {
+        id: user.id,
+        displayName: user.displayName || '',
+        login: user.login || '',
+        avatarColorKey: user.avatarColorKey || message.avatarColorKey || ''
+      };
+    }
+    return {
+      id: message.authorUserId || '',
+      peerId: message.peerId || '',
+      displayName: message.name || '',
+      login: '',
+      avatarColorKey: message.avatarColorKey || ''
+    };
+  }
+
+  async function broadcastRoomMessageNotification(roomId, message) {
+    if (!getUserStore) return;
+    let room = null;
+    try {
+      room = await getRoomStore().getRoom(roomId);
+    } catch (error) {
+      console.error('Failed to resolve room notification room:', error);
+      return;
+    }
+    if (!room?.isStatic) return;
+
+    let recipients = [];
+    try {
+      const listNotificationRecipients = getRoomStore().listNotificationRecipientUserIds;
+      recipients = typeof listNotificationRecipients === 'function'
+        ? await listNotificationRecipients(roomId)
+        : [];
+    } catch (error) {
+      console.error('Failed to resolve room notification recipients:', error);
+      return;
+    }
+
+    const authorUserId = message.authorUserId || '';
+    let authorUser = null;
+    if (authorUserId) {
+      try {
+        authorUser = await getUserStore().getUserById(authorUserId);
+      } catch (error) {
+        console.error('Failed to resolve room notification sender:', error);
+      }
+    }
+
+    const notification = {
+      type: 'notification.room.message',
+      dedupeKey: `room:${roomId}:message:${message.id}`,
+      room: roomNotificationContext(room),
+      sender: senderNotificationContext(message, authorUser),
+      message: {
+        id: message.id,
+        body: message.text,
+        createdAt: message.createdAt
+      }
+    };
+
+    for (const userId of recipients) {
+      if (!userId || (authorUserId && userId === authorUserId)) continue;
+      try {
+        wsRegistry.broadcastAccountEvent(userId, notification);
+      } catch (error) {
+        console.error('Failed to broadcast room notification:', error);
+      }
+    }
   }
 
   async function buildRoomSnapshot(roomId, mode = 'preview') {

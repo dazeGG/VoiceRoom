@@ -8,6 +8,7 @@ const migration = require('../src/migrations/20260614144500_create_rooms_and_roo
 const membershipMigration = require('../src/migrations/20260615140000_create_room_memberships_and_bookmarks');
 const visualIdentityMigration = require('../src/migrations/20260615150000_add_visual_identity_keys');
 const friendsMigration = require('../src/migrations/20260627120000_create_friends_and_direct_messages');
+const notificationMigration = require('../src/migrations/20260710140000_create_notification_preferences');
 
 function createRecorder() {
   const calls = [];
@@ -262,5 +263,49 @@ test('visual identity migration down removes peer identities before visual colum
       ['rooms', ['room_icon_key', 'room_color_key']],
       ['users', ['avatar_color_key']]
     ]
+  );
+});
+
+test('notification preferences migration captures user defaults and mute tables', () => {
+  const pgm = createRecorder();
+  notificationMigration.up(pgm);
+
+  const preferences = pgm.calls.find((call) => call.type === 'createTable' && call.name === 'notification_preferences');
+  const dmMutes = pgm.calls.find((call) => call.type === 'createTable' && call.name === 'notification_dm_mutes');
+  const roomMutes = pgm.calls.find((call) => call.type === 'createTable' && call.name === 'notification_room_mutes');
+
+  assert.ok(preferences, 'notification_preferences table is created');
+  assert.ok(dmMutes, 'notification_dm_mutes table is created');
+  assert.ok(roomMutes, 'notification_room_mutes table is created');
+  assert.equal(preferences.columns.user_id.references, 'users(id)');
+  assert.equal(preferences.columns.user_id.onDelete, 'CASCADE');
+  assert.equal(preferences.columns.private_notifications.default, false);
+  assert.equal(preferences.columns.private_notifications.notNull, true);
+  assert.equal(dmMutes.columns.peer_user_id.references, 'users(id)');
+  assert.equal(dmMutes.columns.peer_user_id.onDelete, 'CASCADE');
+  assert.equal(roomMutes.columns.room_id.references, 'rooms(id)');
+  assert.equal(roomMutes.columns.room_id.onDelete, 'CASCADE');
+
+  const constraints = new Map(
+    pgm.calls.filter((call) => call.type === 'addConstraint').map((call) => [call.name, call])
+  );
+  assert.match(constraints.get('notification_dm_mutes_no_self_check').options.check, /user_id <> peer_user_id/);
+
+  const indexes = new Map(
+    pgm.calls.filter((call) => call.type === 'createIndex').map((call) => [call.options.name, call])
+  );
+  assert.equal(indexes.get('notification_dm_mutes_user_peer_unique_idx').options.unique, true);
+  assert.deepEqual(indexes.get('notification_dm_mutes_user_peer_unique_idx').columns, ['user_id', 'peer_user_id']);
+  assert.equal(indexes.get('notification_room_mutes_user_room_unique_idx').options.unique, true);
+  assert.deepEqual(indexes.get('notification_room_mutes_user_room_unique_idx').columns, ['user_id', 'room_id']);
+});
+
+test('notification preferences migration down drops mute tables before preferences', () => {
+  const pgm = createRecorder();
+  notificationMigration.down(pgm);
+
+  assert.deepEqual(
+    pgm.calls.filter((call) => call.type === 'dropTable').map((call) => call.name),
+    ['notification_room_mutes', 'notification_dm_mutes', 'notification_preferences']
   );
 });
