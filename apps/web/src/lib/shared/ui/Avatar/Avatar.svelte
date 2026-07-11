@@ -11,13 +11,14 @@
     background = null,
     online = null,
     showDot = false,
+    dnd = false,
     ring = 'var(--paper-deep)',
     class: className = ''
   }: AvatarProps = $props();
 
   const fontSize = $derived(Math.round(size * 0.39));
   const dotSize = $derived(Math.max(10, Math.round(size * 0.3)));
-  const dotColor = $derived(online ? 'var(--green)' : 'var(--warm-faint)');
+  const dotColor = $derived(dnd ? 'var(--coral)' : online ? 'var(--green)' : 'var(--warm-faint)');
   const initial = $derived.by(() => {
     const trimmed = name.trim();
     return trimmed ? trimmed.charAt(0).toUpperCase() : '?';
@@ -47,6 +48,7 @@
   {#if showDot}
     <span
       class="ui-avatar-dot"
+      class:ui-avatar-dot--dnd={dnd}
       style:width={`${dotSize}px`}
       style:height={`${dotSize}px`}
       style:background={dotColor}
@@ -86,5 +88,17 @@
     bottom: -1px;
     border-radius: 50%;
     border: 2px solid;
+  }
+
+  .ui-avatar-dot--dnd::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 20%;
+    width: 60%;
+    height: 2px;
+    border-radius: 2px;
+    background: #fff;
+    transform: translateY(-50%);
   }
 </style>

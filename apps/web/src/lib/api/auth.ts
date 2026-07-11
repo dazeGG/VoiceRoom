@@ -8,6 +8,7 @@ export interface AuthUser {
   avatarUrl: string | null;
   createdAt: number;
   displayName: string;
+  doNotDisturb: boolean;
   id: string;
   login: string;
 }

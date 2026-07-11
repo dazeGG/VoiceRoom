@@ -25,6 +25,10 @@ function toWsAccountEvent(message) {
       });
     case 'user-updated':
       return buildServerEnvelope('friend.updated', { user: message.user });
+    case 'notification-settings-updated':
+      return buildServerEnvelope('notification.settings.updated', {
+        preferences: message.preferences
+      });
     case 'dm-message':
       return buildServerEnvelope('dm.message', { message: message.message });
     case 'notification.dm.message':

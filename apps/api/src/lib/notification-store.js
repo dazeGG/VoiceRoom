@@ -7,8 +7,9 @@ function createRowId() {
   return crypto.randomUUID?.() || crypto.randomBytes(16).toString('hex');
 }
 
-function mapPreferences({ privateNotifications = false, mutedPeerIds = [], mutedRoomIds = [] } = {}) {
+function mapPreferences({ doNotDisturb = false, privateNotifications = false, mutedPeerIds = [], mutedRoomIds = [] } = {}) {
   return {
+    doNotDisturb: Boolean(doNotDisturb),
     mutedPeerIds: [...new Set(mutedPeerIds)].sort(),
     mutedRoomIds: [...new Set(mutedRoomIds)].sort(),
     privateNotifications: Boolean(privateNotifications)
@@ -27,9 +28,10 @@ function createNotificationStore({ databaseUrl, logger = console, pool } = {}) {
   async function getPreferences(userId, client = getPool()) {
     if (!userId) return mapPreferences();
     const preferences = await client.query(
-      `SELECT private_notifications
-       FROM notification_preferences
-       WHERE user_id = $1`,
+      `SELECT u.dnd, np.private_notifications
+       FROM users u
+       LEFT JOIN notification_preferences np ON np.user_id = u.id
+       WHERE u.id = $1`,
       [userId]
     );
     const dmMutes = await client.query(
@@ -48,6 +50,7 @@ function createNotificationStore({ databaseUrl, logger = console, pool } = {}) {
     );
 
     return mapPreferences({
+      doNotDisturb: preferences.rows[0]?.dnd || false,
       privateNotifications: preferences.rows[0]?.private_notifications || false,
       mutedPeerIds: dmMutes.rows.map((row) => row.peer_user_id),
       mutedRoomIds: roomMutes.rows.map((row) => row.room_id)
@@ -84,6 +87,20 @@ function createNotificationStore({ databaseUrl, logger = console, pool } = {}) {
              updated_at = current_timestamp`,
         [userId, Boolean(privateNotifications)]
       );
+      return { status: 'updated', preferences: await getPreferences(userId, client) };
+    });
+  }
+
+  async function setDoNotDisturb({ userId, doNotDisturb }) {
+    if (!userId) return { status: 'not_found', preferences: mapPreferences() };
+    return transaction(getPool(), async (client) => {
+      const updated = await client.query(
+        `UPDATE users
+         SET dnd = $2, updated_at = current_timestamp
+         WHERE id = $1`,
+        [userId, Boolean(doNotDisturb)]
+      );
+      if (updated.rowCount === 0) return { status: 'not_found', preferences: mapPreferences() };
       return { status: 'updated', preferences: await getPreferences(userId, client) };
     });
   }
@@ -214,6 +231,7 @@ function createNotificationStore({ databaseUrl, logger = console, pool } = {}) {
     isDmMuted,
     isRoomMuted,
     setDmMute,
+    setDoNotDisturb,
     setPrivateNotifications,
     setRoomMute
   };

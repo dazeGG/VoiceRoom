@@ -7,6 +7,7 @@ export interface AvatarProps {
   background?: string | null;
   online?: boolean | null;
   showDot?: boolean;
+  dnd?: boolean;
   ring?: string;
   class?: string;
 }

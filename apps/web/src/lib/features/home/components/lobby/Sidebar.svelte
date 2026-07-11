@@ -1,10 +1,11 @@
 <script lang="ts">
-  import { Settings, UserPlus } from '@lucide/svelte';
+  import { Moon, Settings, UserPlus } from '@lucide/svelte';
   import type { AuthUser } from '$lib/api/auth';
-  import { Avatar, Badge } from '$lib/shared/ui';
+  import { Avatar, Badge, Popover, PopoverMenuItem } from '$lib/shared/ui';
   import { iconSm } from '$lib/shared/ui/icons';
   import { friendName } from '../../model/lobby-format';
   import { friendsState, openDm } from '../../model/friends.svelte';
+  import { notificationPreferences, updateDoNotDisturb } from '../../model/notification-preferences.svelte';
   import SidebarDownload from '../SidebarDownload.svelte';
   import VoiceCallWidget from './VoiceCallWidget.svelte';
 
@@ -13,6 +14,7 @@
     onGoHome,
     onOpenPeople,
     onOpenSettings,
+    onToast,
     activeVoiceRoomId = null,
     activeVoiceRoomName = '',
     activeVoiceRoomAvatarUrl = null,
@@ -27,6 +29,7 @@
     onGoHome: () => void;
     onOpenPeople: () => void;
     onOpenSettings: () => void;
+    onToast: (message: string) => void;
     activeVoiceRoomId?: string | null;
     activeVoiceRoomName?: string;
     activeVoiceRoomAvatarUrl?: string | null;
@@ -46,6 +49,21 @@
 
   const selfName = $derived(user.displayName?.trim() || user.login);
   const activeVoiceLabel = $derived(activeVoiceRoomName?.trim() || activeVoiceRoomId || '');
+  let dndSaving = $state(false);
+
+  async function toggleDnd(close: () => void): Promise<void> {
+    if (dndSaving) return;
+    dndSaving = true;
+    try {
+      await updateDoNotDisturb(!notificationPreferences.doNotDisturb);
+      onToast(notificationPreferences.doNotDisturb ? 'Режим «Не беспокоить» включён' : 'Режим «Не беспокоить» выключен');
+      close();
+    } catch {
+      onToast('Не удалось изменить режим «Не беспокоить»');
+    } finally {
+      dndSaving = false;
+    }
+  }
 </script>
 
 <aside class="lv-side">
@@ -77,7 +95,7 @@
           type="button"
           onclick={() => openDm(entry.user.id)}
         >
-          <Avatar name={friendName(entry.user)} src={entry.user.avatarUrl} colorKey={entry.user.avatarColorKey} background={entry.user.avatarAccent || undefined} online={entry.online} showDot={entry.online} ring="var(--panel)" />
+          <Avatar name={friendName(entry.user)} src={entry.user.avatarUrl} colorKey={entry.user.avatarColorKey} background={entry.user.avatarAccent || undefined} online={entry.online} dnd={entry.user.doNotDisturb} showDot={entry.online || entry.user.doNotDisturb} ring="var(--panel)" />
           <div style="min-width:0;flex:1;">
             <div class="lv-row-name" style={`font-weight:${entry.unreadCount > 0 ? 750 : 650}`}>{friendName(entry.user)}</div>
           </div>
@@ -103,11 +121,22 @@
   {/if}
 
   <div class="lv-profile">
-    <Avatar name={selfName} src={user.avatarUrl} colorKey={user.avatarColorKey} background={user.avatarAccent || undefined} size={34} online showDot ring="var(--panel)" />
-    <div style="min-width:0;flex:1;">
-      <div class="lv-row-name">{selfName}</div>
-      <div class="lv-profile-handle">@{user.login}</div>
-    </div>
+    <Popover placement="top-start" role="menu" ariaLabel="Меню пользователя">
+      {#snippet trigger({ open, toggle, panelId })}
+        <button type="button" class="lv-profile-user" aria-expanded={open} aria-controls={panelId} onclick={toggle}>
+          <Avatar name={selfName} src={user.avatarUrl} colorKey={user.avatarColorKey} background={user.avatarAccent || undefined} size={34} online dnd={notificationPreferences.doNotDisturb} showDot ring="var(--panel)" />
+          <span style="min-width:0;flex:1;text-align:left;">
+            <span class="lv-row-name" style="display:block;">{selfName}</span>
+            <span class="lv-profile-handle" style="display:block;">@{user.login}</span>
+          </span>
+        </button>
+      {/snippet}
+      {#snippet content({ close })}
+        <PopoverMenuItem label={notificationPreferences.doNotDisturb ? 'Выключить «Не беспокоить»' : 'Включить «Не беспокоить»'} disabled={dndSaving} onclick={() => void toggleDnd(close)}>
+          {#snippet icon()}<Moon {...iconSm} aria-hidden="true" />{/snippet}
+        </PopoverMenuItem>
+      {/snippet}
+    </Popover>
     <SidebarDownload />
     <button
       class="lobby-gear"
@@ -120,3 +149,18 @@
     </button>
   </div>
 </aside>
+
+<style>
+  .lv-profile-user {
+    display: flex;
+    flex: 1;
+    min-width: 0;
+    align-items: center;
+    gap: 9px;
+    border: 0;
+    padding: 0;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+  }
+</style>

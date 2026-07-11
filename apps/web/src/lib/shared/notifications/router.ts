@@ -106,6 +106,7 @@ export type NotificationRouteOptions = {
   mutedPeerIds?: readonly string[] | Set<string> | null;
   mutedRoomIds?: readonly string[] | Set<string> | null;
   privateNotifications?: boolean;
+  doNotDisturb?: boolean;
   notificationsAvailable?: boolean;
   permission?: NotificationPermissionState;
   now?: number;
@@ -387,6 +388,7 @@ export function routeNotificationEvent(
   options: NotificationRouteOptions = {}
 ): NotificationRouteResult {
   if (!isNotificationRealtimeEvent(event)) return { notify: false, reason: 'not-notification-event' };
+  if (options.doNotDisturb) return { notify: false, reason: 'do-not-disturb' };
   if (options.notificationsAvailable === false) return { notify: false, reason: 'notifications-unavailable' };
   if (options.permission && options.permission !== 'granted') return { notify: false, reason: 'notification-permission-not-granted' };
 

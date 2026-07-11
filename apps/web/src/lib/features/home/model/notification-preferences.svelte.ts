@@ -1,5 +1,6 @@
 import {
   fetchNotificationPreferences,
+  setDoNotDisturb,
   setDmNotificationsMuted,
   setPrivateNotifications,
   setRoomNotificationsMuted,
@@ -20,6 +21,7 @@ export const notificationPreferences = $state<{
   mutedPeerIds: string[];
   mutedRoomIds: string[];
   privateNotifications: boolean;
+  doNotDisturb: boolean;
   browserPermission: NotificationPermissionState;
   deliveryPermission: NotificationPermissionState;
 }>({
@@ -30,14 +32,19 @@ export const notificationPreferences = $state<{
   mutedPeerIds: [],
   mutedRoomIds: [],
   privateNotifications: false,
+  doNotDisturb: false,
   browserPermission: 'unsupported',
   deliveryPermission: 'unsupported'
 });
+
+let activeUserId: string | null = null;
+let preferenceGeneration = 0;
 
 function applyPreferenceFields(preferences: NotificationPreferences): void {
   notificationPreferences.mutedPeerIds = [...preferences.mutedPeerIds];
   notificationPreferences.mutedRoomIds = [...preferences.mutedRoomIds];
   notificationPreferences.privateNotifications = preferences.privateNotifications;
+  notificationPreferences.doNotDisturb = preferences.doNotDisturb;
 }
 
 function applyPreferences(preferences: NotificationPreferences, userId: string): void {
@@ -46,15 +53,18 @@ function applyPreferences(preferences: NotificationPreferences, userId: string):
   notificationPreferences.loadedForUserId = userId;
 }
 
-function applyMutationPreferences(preferences: NotificationPreferences): void {
-  if (notificationPreferences.loadedForUserId) {
-    applyPreferences(preferences, notificationPreferences.loadedForUserId);
-    return;
-  }
-  applyPreferenceFields(preferences);
+function applyMutationPreferences(
+  preferences: NotificationPreferences,
+  userId: string | null,
+  generation: number
+): void {
+  if (!userId || activeUserId !== userId || preferenceGeneration !== generation) return;
+  applyPreferences(preferences, userId);
 }
 
 export function resetNotificationPreferences(): void {
+  preferenceGeneration += 1;
+  activeUserId = null;
   notificationPreferences.loaded = false;
   notificationPreferences.loadedForUserId = null;
   notificationPreferences.loading = false;
@@ -62,7 +72,25 @@ export function resetNotificationPreferences(): void {
   notificationPreferences.mutedPeerIds = [];
   notificationPreferences.mutedRoomIds = [];
   notificationPreferences.privateNotifications = false;
+  notificationPreferences.doNotDisturb = false;
   syncNotificationPermission();
+}
+
+export function prepareNotificationPreferences(userId: string, doNotDisturb: boolean): void {
+  resetNotificationPreferences();
+  activeUserId = userId;
+  notificationPreferences.doNotDisturb = Boolean(doNotDisturb);
+}
+
+export function applyRealtimeNotificationPreferences(
+  userId: string,
+  preferences: NotificationPreferences
+): void {
+  if (activeUserId !== userId) return;
+  preferenceGeneration += 1;
+  notificationPreferences.loading = false;
+  notificationPreferences.loadingForUserId = null;
+  applyPreferences(preferences, userId);
 }
 
 export function areNotificationPreferencesLoadedFor(userId: string): boolean {
@@ -80,19 +108,26 @@ export async function loadNotificationPreferences(userId: string): Promise<void>
     if (notificationPreferences.loadingForUserId === userId) return;
     throw new Error('notification preferences load already in progress for another user');
   }
-  if (notificationPreferences.loadedForUserId && notificationPreferences.loadedForUserId !== userId) {
-    resetNotificationPreferences();
-  }
+  if (activeUserId !== userId) prepareNotificationPreferences(userId, false);
+  const generation = preferenceGeneration;
   notificationPreferences.loading = true;
   notificationPreferences.loadingForUserId = userId;
   syncNotificationPermission();
   try {
     const preferences = await fetchNotificationPreferences();
-    if (notificationPreferences.loadingForUserId === userId) {
+    if (
+      activeUserId === userId &&
+      preferenceGeneration === generation &&
+      notificationPreferences.loadingForUserId === userId
+    ) {
       applyPreferences(preferences, userId);
     }
   } finally {
-    if (notificationPreferences.loadingForUserId === userId) {
+    if (
+      activeUserId === userId &&
+      preferenceGeneration === generation &&
+      notificationPreferences.loadingForUserId === userId
+    ) {
       notificationPreferences.loading = false;
       notificationPreferences.loadingForUserId = null;
     }
@@ -108,18 +143,35 @@ export function isRoomNotificationsMuted(roomId: string | null | undefined): boo
 }
 
 export async function updatePeerNotificationsMuted(userId: string, muted: boolean): Promise<void> {
+  const accountUserId = activeUserId;
+  const generation = preferenceGeneration;
   const payload = await setDmNotificationsMuted(userId, muted);
-  applyMutationPreferences(payload.preferences);
+  applyMutationPreferences(payload.preferences, accountUserId, generation);
 }
 
 export async function updateRoomNotificationsMuted(roomId: string, muted: boolean): Promise<void> {
+  const accountUserId = activeUserId;
+  const generation = preferenceGeneration;
   const payload = await setRoomNotificationsMuted(roomId, muted);
-  applyMutationPreferences(payload.preferences);
+  applyMutationPreferences(payload.preferences, accountUserId, generation);
 }
 
 export async function updatePrivateNotifications(privateNotifications: boolean): Promise<void> {
+  const accountUserId = activeUserId;
+  const generation = preferenceGeneration;
   const payload = await setPrivateNotifications(privateNotifications);
-  applyMutationPreferences(payload.preferences);
+  applyMutationPreferences(payload.preferences, accountUserId, generation);
+}
+
+export async function updateDoNotDisturb(doNotDisturb: boolean): Promise<void> {
+  const accountUserId = activeUserId;
+  const generation = preferenceGeneration;
+  const payload = await setDoNotDisturb(doNotDisturb);
+  applyMutationPreferences(payload.preferences, accountUserId, generation);
+}
+
+export function isDoNotDisturbEnabled(): boolean {
+  return notificationPreferences.doNotDisturb;
 }
 
 export async function requestNotificationsFromUiAction(): Promise<NotificationPermissionState> {

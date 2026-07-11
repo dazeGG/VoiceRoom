@@ -1,6 +1,7 @@
-import { getJsonAuth, putJson } from './http';
+import { getJsonAuth, postJsonAuth, putJson } from './http';
 
 export interface NotificationPreferences {
+  doNotDisturb: boolean;
   mutedPeerIds: string[];
   mutedRoomIds: string[];
   privateNotifications: boolean;
@@ -37,8 +38,14 @@ export async function setPrivateNotifications(privateNotifications: boolean): Pr
   return { ...payload, preferences: normalizePreferences(payload.preferences) };
 }
 
+export async function setDoNotDisturb(dnd: boolean): Promise<NotificationPreferencesResponse> {
+  const payload = await postJsonAuth<NotificationPreferencesResponse>('/api/notifications/settings', { dnd });
+  return { ...payload, preferences: normalizePreferences(payload.preferences) };
+}
+
 function normalizePreferences(preferences: Partial<NotificationPreferences> | null | undefined): NotificationPreferences {
   return {
+    doNotDisturb: Boolean(preferences?.doNotDisturb),
     mutedPeerIds: Array.isArray(preferences?.mutedPeerIds) ? preferences.mutedPeerIds : [],
     mutedRoomIds: Array.isArray(preferences?.mutedRoomIds) ? preferences.mutedRoomIds : [],
     privateNotifications: Boolean(preferences?.privateNotifications)

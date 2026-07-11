@@ -31,6 +31,7 @@ function mapUser(row) {
     avatarKey: row.avatar_key || null,
     createdAt: toMillis(row.created_at),
     displayName: row.display_name || '',
+    doNotDisturb: Boolean(row.dnd),
     id: row.id,
     login: row.login,
     passwordHash: row.password_hash
@@ -46,6 +47,7 @@ function publicUser(user) {
     avatarColorKey: user.avatarColorKey || 'blurple',
     avatarUrl: user.avatarKey ? `/api/avatars/${encodeURIComponent(user.avatarKey)}` : null,
     displayName: user.displayName || '',
+    doNotDisturb: Boolean(user.doNotDisturb),
     id: user.id,
     login: user.login
   };
