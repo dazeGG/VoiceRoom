@@ -318,7 +318,19 @@ export function queueAudioUnlock(options: { showFallback?: boolean } = {}): void
   if (isAppPlaybackMuted()) return;
 
   state.audioUnlockPending = true;
-  if (options.showFallback) startUi.soundButtonVisible = true;
+  if (options.showFallback && !hasPendingStreamWatchGate()) startUi.soundButtonVisible = true;
+}
+
+// An unwatched remote stream guarantees an upcoming "Смотреть стрим" click,
+// and any pointerdown already unlocks audio (document listener in main.ts),
+// so the fallback sound button stays hidden while such a tile is on screen.
+function hasPendingStreamWatchGate(): boolean {
+  for (const peer of state.peers.values()) {
+    if (peer.isLocal || !peer.screen) continue;
+    if (state.viewedScreenPeerId === peer.id || state.screenSubscribedPeerIds.has(peer.id)) continue;
+    return true;
+  }
+  return false;
 }
 
 export function handleAudioUnlockGesture(): void {
