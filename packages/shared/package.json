@@ -14,7 +14,7 @@
     },
     "./avatar-accent": {
       "types": "./src/avatar-accent.d.ts",
-      "import": "./src/avatar-accent.js",
+      "import": "./src/avatar-accent.mjs",
       "require": "./src/avatar-accent.js"
     },
     "./visual-identity": {
@@ -24,7 +24,7 @@
     }
   },
   "scripts": {
-    "check": "node --check src/validation.js && node --check src/realtime.js && node --check src/avatar-accent.js",
+    "check": "node --check src/validation.js && node --check src/realtime.js && node --check src/avatar-accent.js && node --check src/avatar-accent.mjs",
     "test": "node --test test/*.test.js"
   }
 }

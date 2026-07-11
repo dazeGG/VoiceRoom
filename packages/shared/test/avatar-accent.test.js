@@ -77,3 +77,19 @@ test('out-of-range and invalid channel values are normalized safely', () => {
   );
   assertValidPresentation(deriveAvatarAccent(null));
 });
+
+test('package import condition exposes deriveAvatarAccent as a named ESM export', async () => {
+  const module = await import('@voice-room/shared/avatar-accent');
+  const samples = [
+    { r: 0, g: 0, b: 0 },
+    { r: 255, g: 0, b: 0 },
+    { r: 0, g: 255, b: 0 },
+    { r: 0, g: 0, b: 255 },
+    { r: -100, g: 300, b: Number.NaN }
+  ];
+
+  assert.equal(typeof module.deriveAvatarAccent, 'function');
+  for (const sample of samples) {
+    assert.deepEqual(module.deriveAvatarAccent(sample), deriveAvatarAccent(sample));
+  }
+});
