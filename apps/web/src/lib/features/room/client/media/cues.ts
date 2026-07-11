@@ -90,6 +90,15 @@ export function playFriendAcceptedCue(): void {
   ], 'Friend accepted');
 }
 
+export function playRingCue(): void {
+  playCueSequence([
+    { frequency: 659, peak: 0.032, duration: 0.14 },
+    { frequency: 880, peak: 0.034, start: 0.13, duration: 0.16 },
+    { frequency: 659, peak: 0.03, start: 0.34, duration: 0.14 },
+    { frequency: 988, peak: 0.032, start: 0.47, duration: 0.2 }
+  ], 'Ring');
+}
+
 export function playPeerJoinCue(peerId: string | undefined): void {
   if (!peerId || peerId === state.peerId) return;
 

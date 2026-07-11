@@ -1,4 +1,4 @@
-import { del, fetchJson, postJson, putJson } from './http';
+import { del, fetchJson, postJson, postJsonAuth, putJson } from './http';
 import { createRoomProof } from './pow';
 
 export interface CreateRoomOptions {
@@ -86,6 +86,10 @@ export async function updateRoom(roomId: string, options: UpdateRoomOptions): Pr
 
 export async function deleteRoom(roomId: string): Promise<void> {
   await del(`/api/rooms/${encodeURIComponent(roomId)}`);
+}
+
+export async function ringRoomFriend(roomId: string, userId: string): Promise<void> {
+  await postJsonAuth(`/api/rooms/${encodeURIComponent(roomId)}/ring`, { userId });
 }
 
 // A read-only view of a current room occupant (mirrors the server's publicPeer).

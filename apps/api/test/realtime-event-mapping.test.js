@@ -17,6 +17,20 @@ test('account realtime maps DM delete events to the public websocket contract', 
   assert.equal(event.payload.peerUserId, 'user-2');
 });
 
+test('account realtime maps ring invitations with their expiry', () => {
+  const event = toWsAccountEvent({
+    type: 'ring.incoming',
+    fromUser: { id: 'user-1', displayName: 'Alice', login: 'alice' },
+    room: { id: 'room-1', name: 'Daily', emoji: '' },
+    expiresAt: 12345
+  });
+
+  assert.equal(event.type, 'ring.incoming');
+  assert.equal(event.payload.fromUser.login, 'alice');
+  assert.equal(event.payload.room.id, 'room-1');
+  assert.equal(event.payload.expiresAt, 12345);
+});
+
 test('account realtime maps additive notification envelopes', () => {
   const dm = toWsAccountEvent({
     type: 'notification.dm.message',

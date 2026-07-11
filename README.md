@@ -170,8 +170,8 @@ GitHub-аналог GitLab CI/CD variables находится здесь:
 | `MAX_GUEST_STREAMS_PER_IP` | `8` | Max concurrent guest WebSocket streams per client IP. |
 | `MAX_ROOM_BANS` | reserved | Reserved for the planned static-room ban API; not enforced until moderation routes are shipped. |
 | `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` | empty | Web Push VAPID credentials; when any value is missing, push degrades to disabled without failing API startup. |
-| `RING_RATE_LIMIT` / `RING_RATE_WINDOW_MS` | reserved | Reserved for planned Ring support. |
-| `RING_TTL_MS` | reserved | Reserved for planned Ring support. |
+| `RING_RATE_LIMIT` / `RING_RATE_WINDOW_MS` | `1` / `30000` | Лимит Ring-приглашений от одного пользователя другому за окно. |
+| `RING_TTL_MS` | `30000` | Время жизни Ring-приглашения в realtime, toast и Web Push. |
 | `WS_MAX_PAYLOAD_BYTES` | `65536` | Max inbound WebSocket frame payload. |
 | `HOST` | `127.0.0.1` | Host for host-only API. Compose sets `0.0.0.0`. |
 | `PORT` | `3000` | API port. |
