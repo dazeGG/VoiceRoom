@@ -17,7 +17,7 @@
     padding: 13px 15px;
     background: #0c0b08;
     color: #ece7d9;
-    font-family: var(--font-sans);
+    font-family: var(--font-ui);
     font-size: 15px;
     outline: none;
     transition: border-color 0.15s ease;
@@ -54,7 +54,7 @@
     padding: 0 16px;
     background: rgba(255, 255, 255, 0.05);
     color: #ece7d9;
-    font-family: var(--font-sans);
+    font-family: var(--font-ui);
     font-size: 14px;
     font-weight: 600;
     cursor: pointer;
@@ -112,7 +112,7 @@
     display: block;
     margin-bottom: 3px;
     color: #8e897b;
-    font-family: var(--font-mono);
+    font-family: var(--font-ui);
     font-size: 11px;
     letter-spacing: 0.12em;
     text-transform: uppercase;
@@ -121,7 +121,7 @@
   .home-list-title {
     margin: 0;
     color: #ece7d9;
-    font-family: var(--font-sans);
+    font-family: var(--font-ui);
     font-size: 16px;
     font-weight: 700;
   }
@@ -132,7 +132,7 @@
     border-radius: 999px;
     background: rgba(255, 255, 255, 0.06);
     color: #b7b0a0;
-    font-family: var(--font-mono);
+    font-family: var(--font-ui);
     font-size: 12px;
   }
 
@@ -167,7 +167,7 @@
     border-radius: 999px;
     background: rgba(126, 201, 154, 0.12);
     color: #7ec99a;
-    font-family: var(--font-mono);
+    font-family: var(--font-ui);
     font-size: 10px;
     letter-spacing: 0.12em;
     text-transform: uppercase;
@@ -285,7 +285,7 @@
 
   .home-app-fieldlabel {
     margin-bottom: 8px;
-    font-family: var(--font-mono);
+    font-family: var(--font-ui);
     font-size: 11px;
     letter-spacing: 0.14em;
     color: #6f6a5c;
@@ -307,7 +307,7 @@
     padding: 13px 40px 13px 15px;
     background: #0c0b08;
     color: #ece7d9;
-    font-family: var(--font-sans);
+    font-family: var(--font-ui);
     font-size: 14px;
     font-weight: 500;
     outline: none;
@@ -345,7 +345,7 @@
     padding: 14px;
     background: rgba(255, 255, 255, 0.05);
     color: #ece7d9;
-    font-family: var(--font-sans);
+    font-family: var(--font-ui);
     font-size: 14px;
     font-weight: 600;
     text-decoration: none;
@@ -416,7 +416,7 @@
     padding: 6px 10px;
     background: rgba(255, 255, 255, 0.05);
     color: #cfc9ba;
-    font-family: var(--font-sans);
+    font-family: var(--font-ui);
     font-size: 11px;
     font-weight: 600;
     cursor: pointer;
@@ -475,7 +475,7 @@
 .auth-loader-kicker {
   margin: 0 0 8px;
   color: #9a9484;
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: 11px;
   letter-spacing: 0.16em;
   text-transform: uppercase;
@@ -585,7 +585,7 @@
 
 .landing-kicker {
   margin: 0 0 20px;
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: 12px;
   letter-spacing: 0.2em;
   text-transform: uppercase;
@@ -595,8 +595,8 @@
 .landing-title {
   margin: 0;
   max-width: 16ch;
-  font-family: var(--font-sans);
-  font-weight: 800;
+  font-family: var(--font-display);
+  font-weight: 700;
   font-size: clamp(2.5rem, 5.5vw, 4.125rem);
   line-height: 1;
   letter-spacing: -0.035em;
@@ -631,7 +631,7 @@
   padding: 0 26px;
   background: var(--accent);
   color: var(--accent-ink);
-  font-family: var(--font-sans);
+  font-family: var(--font-ui);
   font-size: 15.5px;
   font-weight: 700;
   letter-spacing: -0.01em;
@@ -695,7 +695,7 @@
   border-left: 1px solid rgba(255, 255, 255, 0.1);
   background: rgba(255, 255, 255, 0.05);
   color: var(--warm-ink, #ece7d9);
-  font-family: var(--font-sans);
+  font-family: var(--font-ui);
   font-size: 14px;
   font-weight: 700;
   padding: 0 22px;
@@ -758,7 +758,7 @@
 }
 
 .landing-feature-num {
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: 11.5px;
   letter-spacing: 0.1em;
   color: var(--warm-faint, #7d7666);

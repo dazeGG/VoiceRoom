@@ -33,7 +33,7 @@
     padding: 0 var(--interactive-pad-x, 22px);
     border: none;
     border-radius: var(--radius-md);
-    font-family: var(--font-sans);
+    font-family: var(--font-ui);
     font-size: 15px;
     font-weight: 760;
     line-height: 1;

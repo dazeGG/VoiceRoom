@@ -277,7 +277,7 @@
   .crop-zoom { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 14px; margin: 18px auto 0; max-width: 430px; color: var(--warm-muted, #aaa397); font-size: 12px; font-weight: 700; }
   .crop-zoom input { accent-color: var(--accent, #d9f27c); }
   .crop-preview { display: flex; flex-direction: column; gap: 14px; }
-  .crop-preview-label { color: var(--warm-faint, #8e887c); font-family: var(--font-mono, monospace); font-size: 10px; letter-spacing: .14em; text-transform: uppercase; }
+  .crop-preview-label { color: var(--warm-faint, #8e887c); font-family: var(--font-ui, sans-serif); font-size: 10px; letter-spacing: .14em; text-transform: uppercase; }
   .crop-user-tile { display: flex; min-height: 210px; flex-direction: column; align-items: center; justify-content: center; gap: 8px; border-radius: 18px; background: var(--preview-accent); box-shadow: var(--preview-shadow); }
   .crop-user-tile strong { margin-top: 5px; }
   .crop-user-tile span, .crop-sidebar-preview span, .crop-room-preview span { color: rgb(255 255 255 / .62); font-size: 11px; }

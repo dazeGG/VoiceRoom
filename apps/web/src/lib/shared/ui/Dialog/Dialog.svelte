@@ -63,7 +63,7 @@
 
   .ui-dialog-title {
     color: var(--warm-ink);
-    font-family: var(--font-sans);
+    font-family: var(--font-ui);
     font-size: 17px;
     font-weight: 700;
     letter-spacing: -0.01em;

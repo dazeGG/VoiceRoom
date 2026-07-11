@@ -81,7 +81,7 @@
 
 .screen-meta-title {
   max-width: min(260px, 40vw);
-  font-weight: 880;
+  font-weight: 800;
 }
 
 .screen-meta-detail {
@@ -116,7 +116,7 @@
   color: var(--avatar-fg, #fff);
   box-shadow: var(--avatar-shadow, 0 8px 18px rgb(88 101 242 / 0.24));
   font-size: 0.62rem;
-  font-weight: 900;
+  font-weight: 800;
   letter-spacing: -0.04em;
   line-height: 1;
   text-transform: uppercase;

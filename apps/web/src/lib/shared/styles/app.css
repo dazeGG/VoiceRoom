@@ -47,7 +47,7 @@
   --space-xl: 32px;
   --space-2xl: 48px;
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
-  font-family: Aptos, "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  font-family: var(--font-ui);
 
   /* ---- Volt accent + warm-neutral scale ----
      Signature electric-lime highlight for primary CTAs, focus rings and

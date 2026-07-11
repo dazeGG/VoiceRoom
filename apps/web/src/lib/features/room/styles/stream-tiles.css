@@ -95,7 +95,7 @@
   background: oklch(7% 0.012 92 / 0.82);
   color: oklch(96% 0.008 92);
   font-size: 0.72rem;
-  font-weight: 850;
+  font-weight: 800;
   line-height: 1.1;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -131,7 +131,7 @@
   overflow: hidden;
   color: oklch(97% 0.006 92);
   font-size: 0.86rem;
-  font-weight: 820;
+  font-weight: 800;
   line-height: 1.15;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -174,7 +174,7 @@
   background: oklch(84% 0.012 92);
   color: oklch(9% 0.012 92);
   font-size: 0.82rem;
-  font-weight: 900;
+  font-weight: 800;
   white-space: nowrap;
 }
 

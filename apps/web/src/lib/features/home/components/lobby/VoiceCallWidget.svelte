@@ -101,7 +101,7 @@
       radial-gradient(120% 130% at 0% 0%, color-mix(in oklch, var(--green), transparent 84%), transparent 60%),
       color-mix(in oklch, var(--green), transparent 95%);
     box-shadow: 0 0 0 1px color-mix(in oklch, var(--green), transparent 94%), 0 14px 34px color-mix(in oklch, var(--green), transparent 86%);
-    font-family: var(--font-sans);
+    font-family: var(--font-ui);
   }
 
   /* header */

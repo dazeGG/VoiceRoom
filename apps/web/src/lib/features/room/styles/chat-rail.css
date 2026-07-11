@@ -167,7 +167,7 @@
 
 button.chat-msg-author {
   max-width: 100%;
-  font-family: var(--font-sans);
+  font-family: var(--font-ui);
   text-align: left;
 }
 
@@ -261,7 +261,7 @@ button.chat-msg-author {
   padding: 12px 14px;
   background: #0c0b08;
   color: #ece7d9;
-  font-family: var(--font-sans);
+  font-family: var(--font-ui);
   font-size: 14px;
   outline: none;
   transition: border-color 0.15s ease;

@@ -41,7 +41,7 @@
     background: var(--paper-deep);
     box-shadow: var(--shadow);
     color: var(--warm-ink);
-    font-family: var(--font-sans);
+    font-family: var(--font-ui);
     font-weight: 700;
     font-size: 13.5px;
     line-height: 1.35;

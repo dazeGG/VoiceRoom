@@ -64,7 +64,7 @@
     justify-content: center;
     border-radius: 50%;
     color: #fff;
-    font-family: var(--font-sans);
+    font-family: var(--font-ui);
     font-weight: 800;
     letter-spacing: -0.02em;
   }

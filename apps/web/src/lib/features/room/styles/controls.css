@@ -77,14 +77,14 @@ button:focus-visible {
   border-color: color-mix(in oklch, var(--control-line), var(--ink) 20%);
   background: var(--control-active);
   color: oklch(9% 0.012 92);
-  font-weight: 850;
+  font-weight: 800;
 }
 
 .secondary-button {
   width: 100%;
   background: var(--panel);
   color: var(--ink);
-  font-weight: 850;
+  font-weight: 800;
 }
 
 .primary-button:hover {
@@ -532,7 +532,7 @@ body[data-lobby-embedded="true"] .room-dock {
 .gate-control output {
   color: oklch(96% 0.008 92);
   font-size: 0.78rem;
-  font-weight: 850;
+  font-weight: 800;
   text-align: right;
   white-space: nowrap;
 }
@@ -558,7 +558,7 @@ body[data-lobby-embedded="true"] .room-dock {
   padding: 0 18px;
   background: var(--control);
   color: var(--ink);
-  font-weight: 850;
+  font-weight: 800;
   pointer-events: auto;
 }
 
@@ -577,7 +577,7 @@ body[data-lobby-embedded="true"] .room-dock {
   border-radius: 999px;
   background: #d9d3c3;
   color: #17150f;
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: 10px;
   font-weight: 800;
   line-height: 1;

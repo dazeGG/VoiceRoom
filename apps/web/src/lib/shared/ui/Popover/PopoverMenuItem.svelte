@@ -45,7 +45,7 @@
     border: none;
     border-radius: 11px;
     background: transparent;
-    font-family: var(--font-sans);
+    font-family: var(--font-ui);
     text-align: left;
     cursor: pointer;
     transition: background 0.14s ease;

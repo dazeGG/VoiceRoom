@@ -18,7 +18,7 @@ h1 {
   max-width: 18ch;
   margin: 0;
   overflow-wrap: anywhere;
-  font-family: "Arial Narrow", Aptos, "Segoe UI", sans-serif;
+  font-family: var(--font-display);
   font-size: 3.75rem;
   line-height: 0.92;
   letter-spacing: 0;
@@ -100,7 +100,7 @@ body[data-stage-summary="hidden"] .stage-strip-bar {
 .stage-strip-kicker {
   color: var(--muted);
   font-size: 0.72rem;
-  font-weight: 850;
+  font-weight: 800;
   letter-spacing: 0.06em;
   line-height: 1;
   text-transform: uppercase;
@@ -110,7 +110,7 @@ body[data-stage-summary="hidden"] .stage-strip-bar {
   overflow: hidden;
   color: oklch(94% 0.012 92);
   font-size: 0.92rem;
-  font-weight: 850;
+  font-weight: 800;
   line-height: 1.1;
   text-overflow: ellipsis;
   white-space: nowrap;

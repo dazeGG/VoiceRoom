@@ -63,9 +63,9 @@
     margin-left: calc(var(--avatar-stack-size, 24px) * -0.28);
     border: 2px solid var(--avatar-stack-ring, #15130f);
     border-radius: 999px;
-    font-family: var(--font-sans, sans-serif);
+    font-family: var(--font-ui, sans-serif);
     font-size: var(--avatar-stack-font, 10px);
-    font-weight: 900;
+    font-weight: 800;
     line-height: 1;
     letter-spacing: -0.04em;
   }

@@ -191,7 +191,7 @@
     padding: 0 14px 0 15px;
     background: #0c0b08;
     color: #ece7d9;
-    font-family: var(--font-sans);
+    font-family: var(--font-ui);
     font-size: 14.5px;
     font-weight: 500;
     line-height: 1;
@@ -309,7 +309,7 @@
     border: none;
     border-radius: 10px;
     background: transparent;
-    font-family: var(--font-sans);
+    font-family: var(--font-ui);
     font-size: 14px;
     font-weight: 500;
     color: #e7e2d4;

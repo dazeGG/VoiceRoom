@@ -137,7 +137,7 @@ body[data-screen-view="true"][data-strip-collapsed="true"] .stage-strip {
   background: var(--participant-pastel);
   color: var(--participant-avatar-fg);
   font-size: 1.38rem;
-  font-weight: 850;
+  font-weight: 800;
   overflow: hidden;
   box-shadow: var(--participant-avatar-shadow);
   transition: transform 160ms ease;
@@ -226,7 +226,7 @@ body[data-screen-view="true"][data-strip-collapsed="true"] .stage-strip {
   background: oklch(9% 0.012 92 / 0.84);
   color: oklch(98% 0.006 92);
   font-size: 0.9rem;
-  font-weight: 850;
+  font-weight: 800;
   line-height: 1.15;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -289,7 +289,7 @@ body[data-screen-view="true"][data-strip-collapsed="true"] .stage-strip {
   background: oklch(84% 0.012 92);
   color: oklch(9% 0.012 92);
   font-size: 0.76rem;
-  font-weight: 850;
+  font-weight: 800;
   line-height: 1;
   white-space: nowrap;
   transition: background 160ms var(--ease-out), border-color 160ms var(--ease-out), transform 160ms var(--ease-out);
@@ -339,7 +339,7 @@ body[data-screen-view="true"][data-strip-collapsed="true"] .stage-strip {
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  font-family: var(--font-sans);
+  font-family: var(--font-ui);
   font-size: 16px;
   font-weight: 800;
   line-height: 1;
@@ -407,7 +407,7 @@ body[data-screen-view="true"][data-strip-collapsed="true"] .stage-strip {
   border-radius: 10px;
   background: transparent;
   color: var(--ink);
-  font-family: var(--font-sans);
+  font-family: var(--font-ui);
   font-size: 0.875rem;
   font-weight: 600;
   text-align: left;
@@ -471,7 +471,7 @@ body[data-screen-view="true"][data-strip-collapsed="true"] .stage-strip {
   gap: 8px;
   min-width: 0;
   color: var(--ink, #ece7d9);
-  font-family: var(--font-sans, sans-serif);
+  font-family: var(--font-ui, sans-serif);
   font-size: 13.5px;
   font-weight: 700;
 }
@@ -484,7 +484,7 @@ body[data-screen-view="true"][data-strip-collapsed="true"] .stage-strip {
 .pcm-volume-value {
   flex: none;
   color: var(--ink, #ece7d9);
-  font-family: var(--font-sans, sans-serif);
+  font-family: var(--font-ui, sans-serif);
   font-size: 13.5px;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
@@ -495,7 +495,7 @@ body[data-screen-view="true"][data-strip-collapsed="true"] .stage-strip {
   align-items: center;
   justify-content: space-between;
   color: var(--muted, #9a9484);
-  font-family: var(--font-mono, monospace);
+  font-family: var(--font-ui, sans-serif);
   font-size: 11px;
   letter-spacing: 0.02em;
 }

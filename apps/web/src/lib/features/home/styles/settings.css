@@ -97,7 +97,7 @@
   border-radius: 10px;
   background: transparent;
   color: var(--warm-muted);
-  font-family: var(--font-sans);
+  font-family: var(--font-ui);
   font-size: 14px;
   font-weight: 600;
   text-align: left;
@@ -178,7 +178,7 @@
   gap: 7px;
   padding: 8px 11px;
   border-radius: 9px;
-  font-family: var(--font-sans);
+  font-family: var(--font-ui);
   font-size: 12px;
   font-weight: 650;
   cursor: pointer;
@@ -227,7 +227,7 @@
   display: block;
   margin-bottom: 9px;
   color: var(--warm-faint);
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: 11px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -240,7 +240,7 @@
   border-radius: 12px;
   background: var(--paper-deep);
   color: var(--warm-ink);
-  font-family: var(--font-sans);
+  font-family: var(--font-ui);
   font-size: 15px;
   outline: none;
   transition: border-color 0.15s ease;
@@ -276,7 +276,7 @@
   border-radius: 12px;
   background: var(--accent);
   color: var(--accent-ink);
-  font-family: var(--font-sans);
+  font-family: var(--font-ui);
   font-size: 14px;
   font-weight: 700;
   cursor: pointer;
@@ -303,7 +303,7 @@
   border-radius: 12px;
   background: transparent;
   color: var(--warm-ink-dim);
-  font-family: var(--font-sans);
+  font-family: var(--font-ui);
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
@@ -341,7 +341,7 @@
   border-radius: 12px;
   background: var(--paper-deep);
   color: var(--warm-ink);
-  font-family: var(--font-sans);
+  font-family: var(--font-ui);
   font-size: 14.5px;
   font-weight: 500;
   outline: none;
@@ -453,7 +453,7 @@
 
 .settings-sound-value {
   color: var(--warm-ink);
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: 13px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
@@ -472,7 +472,7 @@
   padding: 8px 12px;
   background: rgba(255, 255, 255, 0.04);
   color: var(--warm-ink);
-  font-family: var(--font-sans);
+  font-family: var(--font-ui);
   font-size: 12.5px;
   font-weight: 700;
   cursor: pointer;
@@ -487,7 +487,7 @@
 .settings-gate-value {
   text-align: right;
   color: var(--warm-ink);
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: 13px;
   font-weight: 700;
   white-space: nowrap;
@@ -547,7 +547,7 @@
   background: rgba(255, 255, 255, 0.035);
   color: var(--ink);
   cursor: pointer;
-  font: 700 12px var(--font-sans, sans-serif);
+  font: 700 12px var(--font-ui, sans-serif);
   padding: 7px 10px;
 }
 

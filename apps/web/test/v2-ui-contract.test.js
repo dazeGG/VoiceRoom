@@ -1,12 +1,104 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
 
 const root = resolve(import.meta.dirname, '..');
 const require = createRequire(import.meta.url);
 const read = (path) => readFileSync(resolve(root, path), 'utf8');
+
+function readTree(path, matcher) {
+  const absolute = resolve(root, path);
+  const entries = readdirSync(absolute);
+  const sources = [];
+  for (const entry of entries) {
+    const child = `${path}/${entry}`;
+    const childAbsolute = resolve(root, child);
+    if (statSync(childAbsolute).isDirectory()) {
+      sources.push(...readTree(child, matcher));
+    } else if (matcher(child)) {
+      sources.push(read(child));
+    }
+  }
+  return sources;
+}
+
+function readTreeFiles(path, matcher) {
+  const absolute = resolve(root, path);
+  const entries = readdirSync(absolute);
+  const files = [];
+  for (const entry of entries) {
+    const child = `${path}/${entry}`;
+    const childAbsolute = resolve(root, child);
+    if (statSync(childAbsolute).isDirectory()) {
+      files.push(...readTreeFiles(child, matcher));
+    } else if (matcher(child)) {
+      files.push({ path: child, source: read(child) });
+    }
+  }
+  return files;
+}
+
+function assertRuleFont(source, selector, fontToken) {
+  const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  assert.match(
+    source,
+    new RegExp(`${escapedSelector}\\s*\\{[^}]*font-family: var\\(${fontToken.replace(/[()]/g, '\\$&')}(?:[,\\)])`),
+    `${selector} uses ${fontToken}`
+  );
+}
+
+function fontRangesByFamily(typography) {
+  const ranges = new Map();
+  const fontFacePattern = /@font-face\s*\{(?<body>[^}]+)\}/g;
+  for (const match of typography.matchAll(fontFacePattern)) {
+    const family = match.groups.body.match(/font-family:\s*'(?<family>[^']+)'/);
+    const weight = match.groups.body.match(/font-weight:\s*(?<min>\d+)\s+(?<max>\d+)/);
+    if (!family || !weight) continue;
+    const max = Number(weight.groups.max);
+    ranges.set(family.groups.family, Math.max(ranges.get(family.groups.family) ?? 0, max));
+  }
+  return ranges;
+}
+
+function fontFamiliesByRole(typography) {
+  const roles = new Map();
+  const rolePattern = /--font-(?<role>ui|display|mono):\s*'(?<family>[^']+)'/g;
+  for (const match of typography.matchAll(rolePattern)) {
+    roles.set(match.groups.role, match.groups.family);
+  }
+  return roles;
+}
+
+function assertSupportedFontWeights(files, typography) {
+  const ranges = fontRangesByFamily(typography);
+  const families = fontFamiliesByRole(typography);
+  const problems = [];
+  const blockPattern = /(?<selector>[^{}]+)\{(?<body>[^{}]*)\}/g;
+
+  for (const file of files) {
+    for (const block of file.source.matchAll(blockPattern)) {
+      const body = block.groups.body;
+      const explicitRole = body.match(/font(?:-family)?:\s*[^;]*var\(--font-(?<role>ui|display|mono)\b/);
+      const role = explicitRole?.groups.role ?? 'ui';
+      const family = families.get(role);
+      const max = ranges.get(family);
+      assert.ok(max, `${role} font role resolves to a declared @font-face range`);
+
+      const weightPattern = /font-weight:\s*(?<weight>\d{3})\b|font:\s*(?<fontWeight>\d{3})\b/g;
+      for (const weightMatch of body.matchAll(weightPattern)) {
+        const weight = Number(weightMatch.groups.weight ?? weightMatch.groups.fontWeight);
+        if (weight <= max) continue;
+        const line = file.source.slice(0, block.index + weightMatch.index).split('\n').length;
+        const selector = block.groups.selector.trim().replace(/\s+/g, ' ');
+        problems.push(`${file.path}:${line} ${selector} requests ${role}/${family} ${weight}, max ${max}`);
+      }
+    }
+  }
+
+  assert.deepEqual(problems, []);
+}
 
 function functionBody(source, name) {
   const start = source.indexOf(`function ${name}`);
@@ -821,6 +913,93 @@ test('frontend visual catalog keeps only user avatar color contracts', () => {
     assert.ok(tokens.includes(`${key}: { key: '${key}'`));
   }
   assert.doesNotMatch(tokens, /ROOM_PRESETS|ROOM_COLOR_TOKENS|ROOM_ICON_EMOJIS/);
+});
+
+test('shared typography uses CSP-safe local UI, display, and mono font roles', () => {
+  const typography = read('src/lib/shared/styles/typography.css');
+  const appCss = read('src/lib/shared/styles/app.css');
+  const topbar = read('src/lib/shared/components/topbar.css');
+  const auth = read('src/lib/features/auth/styles/auth.css');
+  const home = read('src/lib/features/home/styles/home.css');
+  const lobby = read('src/lib/features/home/styles/lobby.css');
+  const lobbyV2 = read('src/lib/features/home/styles/lobby-v2.css');
+  const voiceHome = read('src/lib/features/home/components/lobby/VoiceHome.svelte');
+  const friends = read('src/lib/features/home/styles/friends.css');
+  const settings = read('src/lib/features/home/styles/settings.css');
+  const roomLayout = read('src/lib/features/room/styles/layout.css');
+  const stageLayout = read('src/lib/features/room/styles/stage-layout.css');
+  const roomControls = read('src/lib/features/room/styles/controls.css');
+  const roomParticipants = read('src/lib/features/room/styles/participants.css');
+  const provenance = read('static/fonts/README.md');
+  const appSourceFiles = readTreeFiles('src/lib', (path) => /\.(css|svelte)$/.test(path));
+  const appSources = appSourceFiles.map(({ source }) => source).join('\n');
+
+  for (const file of [
+    'comfortaa-cyrillic-ext.woff2',
+    'comfortaa-cyrillic.woff2',
+    'comfortaa-latin-ext.woff2',
+    'comfortaa-latin.woff2',
+    'nunito-cyrillic-ext.woff2',
+    'nunito-cyrillic.woff2',
+    'nunito-latin-ext.woff2',
+    'nunito-latin.woff2',
+    'jetbrainsmono-cyrillic.woff2',
+    'jetbrainsmono-latin-ext.woff2',
+    'jetbrainsmono-latin.woff2'
+  ]) {
+    assert.ok(existsSync(resolve(root, 'static/fonts', file)), `${file} is bundled`);
+    assert.match(typography, new RegExp(`url\\('/fonts/${file}'\\) format\\('woff2'\\)`));
+    assert.match(provenance, new RegExp(`[a-f0-9]{64}  ${file}`));
+  }
+
+  assert.doesNotMatch(typography, /https?:\/\//);
+  assert.doesNotMatch(typography, /fonts\.googleapis|fonts\.gstatic|Archivo/);
+  assert.match(typography, /font-family: 'Nunito'/);
+  assert.match(typography, /font-family: 'Comfortaa'/);
+  assert.match(typography, /font-family: 'JetBrains Mono'/);
+  assert.match(typography, /--font-ui: 'Nunito', system-ui, -apple-system, 'Segoe UI', sans-serif;/);
+  assert.match(typography, /--font-display: 'Comfortaa', 'Nunito', system-ui, -apple-system, 'Segoe UI', sans-serif;/);
+  assert.match(typography, /--font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', 'Cascadia Mono', monospace;/);
+  assert.match(typography, /--font-sans: var\(--font-ui\);/);
+  assert.match(typography, /--font-serif: var\(--font-display\);/);
+  assert.match(typography, /U\+0301, U\+0400-045F/);
+  assert.match(typography, /U\+0000-00FF/);
+  assert.match(appCss, /font-family: var\(--font-ui\);/);
+  assert.match(provenance, /SIL Open Font License 1\.1/);
+
+  assert.doesNotMatch(appSources, /fonts\.googleapis|fonts\.gstatic|Archivo|Aptos|"Arial Narrow"/);
+  assert.doesNotMatch(appSources, /font-family:\s*var\(--font-sans(?:[,)]|;)/);
+  assert.doesNotMatch(appSources, /font-family:\s*var\(--font-serif(?:[,)]|;)/);
+  assert.doesNotMatch(`${voiceHome}\n${lobbyV2}`, /min-width:\s*min-content/);
+  const lrTitleRule = lobbyV2.match(/\.lr-title\s*\{(?<body>[^}]*)\}/);
+  assert.ok(lrTitleRule, '.lr-title rule is present');
+  assert.doesNotMatch(lrTitleRule.groups.body, /(?:^|[;\s])(?:min-width|width|max-width)\s*:/);
+  assertSupportedFontWeights(appSourceFiles, typography);
+
+  assertRuleFont(topbar, '.brand', '--font-display');
+  assertRuleFont(auth, '.auth-brand', '--font-display');
+  assertRuleFont(typography, '.hero-title', '--font-display');
+  assertRuleFont(home, '.landing-title', '--font-display');
+  assertRuleFont(stageLayout, 'h1', '--font-display');
+  assertRuleFont(roomLayout, '.not-found-title', '--font-display');
+
+  assertRuleFont(auth, '.auth-title', '--font-ui');
+  assertRuleFont(auth, '.auth-label', '--font-ui');
+  assertRuleFont(lobbyV2, '.lv', '--font-ui');
+  assertRuleFont(lobbyV2, '.lv-sec-head', '--font-ui');
+  assertRuleFont(lobby, '.lobby-section-title', '--font-ui');
+  assertRuleFont(friends, '.lobby-roomview-name', '--font-ui');
+  assertRuleFont(settings, '.settings-field-label', '--font-ui');
+  assertRuleFont(settings, '.settings-sound-value', '--font-ui');
+  assertRuleFont(roomLayout, '.room-heading-title', '--font-ui');
+  assertRuleFont(roomControls, '.room-chat-unread', '--font-ui');
+  assertRuleFont(roomParticipants, '.pcm-volume-scale', '--font-ui');
+
+  assertRuleFont(lobby, '.lobby-search-input', '--font-mono');
+  assertRuleFont(lobby, '.room-card-code', '--font-mono');
+  assertRuleFont(friends, '.lobby-profile-handle', '--font-mono');
+  assertRuleFont(friends, '.lobby-dm-time', '--font-mono');
+  assertRuleFont(roomLayout, '.room-heading-popover-code', '--font-mono');
 });
 
 test('remote participant audio preferences persist volume and local mute separately', () => {

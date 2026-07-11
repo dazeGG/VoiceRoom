@@ -2,8 +2,8 @@
    sidebar with friends only, rooms as living cards on the main pane.
    Ported from the claude.ai/design "Лобби VoiceRoom - редизайн v2" prototype
    (lobby-redesign/lobby.css + voice.css) and adapted to the project's real
-   tokens (--font-body in the prototype → --font-sans here, this project has
-   no Aptos fallback chain). */
+   tokens (--font-body in the prototype -> --font-ui here, with shared
+   self-hosted font roles). */
 
 .lv {
   display: flex;
@@ -14,7 +14,7 @@
      height instead of the viewport. Do not add height here. */
   background: var(--paper);
   color: var(--ink);
-  font-family: var(--font-sans);
+  font-family: var(--font-ui);
   --lv-side-w: 312px;
   --lv-row-pad: 9px 10px;
   --lv-name: 13.5px;
@@ -55,7 +55,8 @@
 }
 
 .lv-brand-name {
-  font-weight: 800;
+  font-family: var(--font-display);
+  font-weight: 700;
   font-size: 14.5px;
   color: var(--warm-ink);
   flex: 1;
@@ -73,7 +74,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 14px 8px 6px;
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: 10.5px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -127,7 +128,7 @@
   color: inherit;
   border-radius: 12px;
   padding: var(--lv-row-pad);
-  font-family: var(--font-sans);
+  font-family: var(--font-ui);
   transition: background 0.13s ease;
 }
 
@@ -264,7 +265,7 @@
   border-radius: 999px;
   color: var(--warm-muted);
   cursor: help;
-  font-family: var(--font-serif);
+  font-family: var(--font-ui);
   font-size: 12px;
   font-style: italic;
   line-height: 1;
@@ -287,7 +288,7 @@
   border-left: 1px solid rgba(255, 255, 255, 0.1);
   background: rgba(255, 255, 255, 0.05);
   color: var(--warm-ink);
-  font-family: var(--font-sans);
+  font-family: var(--font-ui);
   font-size: 15px;
   font-weight: 760;
   line-height: 1;
@@ -303,7 +304,7 @@
 
 /* ---- shared "lr" text/utility classes ---- */
 .lr-eyebrow {
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: 11px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -347,7 +348,7 @@
   border: none;
   background: transparent;
   color: var(--warm-muted);
-  font-family: var(--font-sans);
+  font-family: var(--font-ui);
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
@@ -433,7 +434,7 @@
   background: transparent;
   outline: none;
   color: var(--warm-ink);
-  font-family: var(--font-sans);
+  font-family: var(--font-ui);
   font-size: 13.5px;
 }
 
@@ -560,7 +561,7 @@
 .lr-add-field .at {
   color: var(--warm-faint);
   font-family: var(--font-mono);
-  font-weight: 700;
+  font-weight: 500;
 }
 
 .lr-add-field input {
@@ -601,7 +602,7 @@
   background: transparent;
   cursor: pointer;
   color: var(--accent);
-  font-family: var(--font-sans);
+  font-family: var(--font-ui);
   font-size: 12px;
   font-weight: 600;
   padding: 2px 4px;
@@ -636,7 +637,7 @@
   padding: 13px 15px;
   background: rgba(255, 255, 255, 0.04);
   color: var(--warm-ink);
-  font-family: var(--font-sans);
+  font-family: var(--font-ui);
   font-size: 15px;
   outline: none;
   transition: border-color 0.15s ease;
@@ -666,7 +667,7 @@
   padding: 9px 0;
   background: transparent;
   color: var(--warm-muted);
-  font-family: var(--font-sans);
+  font-family: var(--font-ui);
   font-size: 13.5px;
   font-weight: 600;
   cursor: pointer;
