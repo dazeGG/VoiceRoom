@@ -66,7 +66,9 @@
 
   function peerAvatar(peer: RoomPeer): ReturnType<typeof getAvatarPresentation> {
     return getAvatarPresentation({
+      avatarAccent: peer.avatarAccent || undefined,
       avatarColorKey: peer.avatarColorKey,
+      avatarUrl: peer.avatarUrl || undefined,
       isLocal: false,
       name: peerName(peer)
     });
@@ -112,7 +114,7 @@
                 style:--participant-avatar-shadow={avatar.shadow}
               >
                 <div class="voice-ring" aria-hidden="true">
-                  <span class="avatar">{avatar.initials}</span>
+                  <span class="avatar">{avatar.initials}{#if avatar.src}<img src={avatar.src} alt="" onerror={(event) => event.currentTarget.remove()} />{/if}</span>
                 </div>
                 <div class="participant-copy">
                   <h2>

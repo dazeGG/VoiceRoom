@@ -11,6 +11,8 @@ export type NotificationActor = {
   displayName?: string;
   login?: string;
   avatarColorKey?: string;
+  avatarAccent?: string | null;
+  avatarUrl?: string | null;
 };
 
 export type NotificationMessageBrief = {
@@ -22,7 +24,7 @@ export type NotificationMessageBrief = {
 export type NotificationRoomContext = {
   roomId: string;
   name?: string;
-  avatarColorKey?: string;
+  avatarUrl?: string | null;
 };
 
 export type NotificationDmMessageEvent = {

@@ -287,6 +287,7 @@
       onOpenSettings={openSettings}
       activeVoiceRoomId={connectedVoiceRoomId}
       activeVoiceRoomName={connectedVoiceRoom ? roomDisplayName(connectedVoiceRoom) : connectedVoiceRoomId || ''}
+      activeVoiceRoomAvatarUrl={connectedVoiceRoom?.avatarUrl ?? null}
       activeVoiceMuted={voiceSession.muted}
       activeVoiceDeafened={voiceSession.deafened}
       onOpenVoiceRoom={openConnectedVoiceRoom}

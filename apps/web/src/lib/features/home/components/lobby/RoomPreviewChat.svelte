@@ -5,8 +5,9 @@
   import { getAppRealtime } from '$lib/api/realtime';
   import { fetchRoomChat, postRoomChat, type ChatMessage } from '$lib/api/rooms';
   import { playRoomChatMessageCue } from '$lib/features/room/client/media/cues';
-  import { getAvatarColor } from '$lib/visual/tokens';
-  import { friendName, initial } from '../../model/lobby-format';
+  import { Avatar } from '$lib/shared/ui';
+  import { getAvatarPresentation } from '$lib/features/room/client/ui/avatar-presentation';
+  import { friendName } from '../../model/lobby-format';
   import ChatText from '$lib/shared/components/ChatText.svelte';
 
   let { roomId, user, onClose } = $props<{ roomId: string; user: AuthUser; onClose?: () => void }>();
@@ -46,6 +47,7 @@
     avatarBackground: string;
     avatarForeground: string;
     avatarShadow: string;
+    avatarUrl: string | null;
     time: string;
     messages: ChatMessage[];
   }
@@ -66,7 +68,13 @@
         last!.messages.push(message);
         continue;
       }
-      const avatar = getAvatarColor(message.avatarColorKey);
+      const avatar = getAvatarPresentation({
+        avatarAccent: message.avatarAccent || undefined,
+        avatarColorKey: message.avatarColorKey,
+        avatarUrl: message.avatarUrl || undefined,
+        isLocal: message.peerId === accountPeerId,
+        name: author
+      });
       result.push({
         key: message.id,
         name: author,
@@ -75,6 +83,7 @@
         avatarBackground: avatar.background,
         avatarForeground: avatar.foreground,
         avatarShadow: avatar.shadow,
+        avatarUrl: avatar.src,
         time: formatTime(message.createdAt),
         messages: [message]
       });
@@ -188,9 +197,7 @@
     {:else if groups.length}
       {#each groups as group (group.key)}
         <div class="chat-msg" data-self={group.self}>
-          <span class="chat-msg-avatar" style={`background:${group.avatarBackground};color:${group.avatarForeground};box-shadow:${group.avatarShadow}`} aria-hidden="true">
-            {initial(group.name)}
-          </span>
+          <Avatar class="chat-msg-avatar" name={group.name} src={group.avatarUrl} background={group.avatarBackground} size={34} />
           <div class="chat-msg-main">
             <div class="chat-msg-meta">
               <span class="chat-msg-author" style={`color:${group.avatarBackground}`}>{group.name}</span>

@@ -1,5 +1,7 @@
 'use strict';
 
+const path = require('node:path');
+
 function readEnvInt(name, fallback, min, env = process.env) {
   const value = Number.parseInt(env[name] || String(fallback), 10);
   return Number.isFinite(value) && value >= min ? value : fallback;
@@ -31,4 +33,9 @@ function readDatabaseConfig(env = process.env) {
   return { url: raw };
 }
 
-module.exports = { readEnvInt, readEnvBool, readDatabaseConfig };
+function readUploadsDir(env = process.env) {
+  const configured = typeof env.UPLOADS_DIR === 'string' ? env.UPLOADS_DIR.trim() : '';
+  return path.resolve(configured || path.join(__dirname, '../../uploads'));
+}
+
+module.exports = { readEnvInt, readEnvBool, readDatabaseConfig, readUploadsDir };

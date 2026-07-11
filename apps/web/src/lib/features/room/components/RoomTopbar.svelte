@@ -51,7 +51,7 @@
               aria-controls={panelId}
               onclick={toggle}
             >
-              <Avatar name={heading} shape="squircle" background="var(--room-avatar-bg)" size={38} />
+              <Avatar name={heading} src={state.roomAvatarUrl} shape="squircle" background="var(--room-avatar-bg)" size={38} />
               <Ellipsis text={heading} title={heading} class="room-heading-title" />
               <span class="room-heading-trigger-chevron" aria-hidden="true">
                 <ChevronDown {...iconSm} aria-hidden="true" />
@@ -62,7 +62,7 @@
 
         {#snippet content({ close })}
           <div class="room-heading-popover-head">
-            <Avatar name={heading} shape="squircle" background="var(--room-avatar-bg)" size={44} />
+            <Avatar name={heading} src={state.roomAvatarUrl} shape="squircle" background="var(--room-avatar-bg)" size={44} />
             <div class="room-heading-popover-info">
               <Ellipsis text={heading} title={heading} class="room-heading-popover-name" />
               <Ellipsis text={state.roomId} title={state.roomId} class="room-heading-popover-code" />

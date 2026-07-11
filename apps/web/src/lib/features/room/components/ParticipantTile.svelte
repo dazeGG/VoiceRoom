@@ -10,8 +10,13 @@
   let { participant }: { participant: Participant } = $props();
 
   let tile = $state<HTMLElement>();
+  let imageFailed = $state(false);
 
   const avatar = $derived(getAvatarPresentation(participant));
+  $effect(() => {
+    participant.avatarUrl;
+    imageFailed = false;
+  });
   const displayName = $derived(participant.isLocal ? `${participant.name} · вы` : participant.name);
   const viewing = $derived(roomState.viewedScreenPeerId === participant.id);
   const canWatch = $derived(!participant.isLocal && participant.screen && !viewing);
@@ -71,7 +76,9 @@
   onkeydown={handleKeydown}
 >
   <div class="voice-ring" aria-hidden="true">
-    <span class="avatar">{avatar.initials}</span>
+    <span class="avatar">
+      {#if avatar.src && !imageFailed}<img src={avatar.src} alt="" onerror={() => (imageFailed = true)} />{:else}{avatar.initials}{/if}
+    </span>
   </div>
   <div class="participant-copy">
     <h2>

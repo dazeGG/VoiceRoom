@@ -69,6 +69,7 @@ export function mountRoomClient(_root: ParentNode = document, options: { roomId?
     state.serverPeerSyncReady = false;
     state.self = null;
     state.roomName = '';
+    state.roomAvatarUrl = '';
     state.roomId = mountedRoomId;
     state.roomRoute = true;
     state.peerId = peerSession.peerId;

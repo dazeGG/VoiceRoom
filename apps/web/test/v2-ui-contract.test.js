@@ -81,7 +81,7 @@ test('active voice widget uses the shared room fallback and leave cue parity', (
 
   assert.match(lobby, /import \{ roomDisplayName \} from '\.\/model\/rooms'/);
   assert.match(sidebar, /roomName=\{activeVoiceLabel\}/);
-  assert.match(widget, /<Avatar name=\{roomName\} shape="squircle" background="var\(--room-avatar-bg\)" size=\{42\} \/>/);
+  assert.match(widget, /<Avatar name=\{roomName\} src=\{avatarUrl\} shape="squircle" background="var\(--room-avatar-bg\)" size=\{42\} \/>/);
   assert.doesNotMatch(widget, /RoomPresetToken|getRoomPreset|visual\.emoji/);
 
   assert.match(lobby, /leaveActiveVoiceRoomWithCue/);
@@ -200,7 +200,7 @@ test('room chat keeps transport mounted and tracks unread state while closed', (
   assert.match(topbar, /Скопировать код/);
   assert.match(topbar, /keepContentMounted/);
   assert.match(topbar, /room-heading-popover-head/);
-  assert.match(topbar, /<Avatar name=\{heading\} shape="squircle" background="var\(--room-avatar-bg\)"/);
+  assert.match(topbar, /<Avatar name=\{heading\} src=\{state\.roomAvatarUrl\} shape="squircle" background="var\(--room-avatar-bg\)"/);
   assert.match(topbar, /room-heading-popover-info/);
   assert.doesNotMatch(topbar, /copyCodeButton|copyLinkButton|room-settings-button/);
 
@@ -340,7 +340,7 @@ test('shared Popover primitive exposes trigger/content slots and dismiss behavio
   assert.match(sidebarDownload, /aria-haspopup="menu"/);
 });
 
-test('room UI uses name-only squircle fallbacks while participant colors remain curated', () => {
+test('room and participant avatars preserve fallbacks while preferring uploaded images and accents', () => {
   const authApi = read('src/lib/api/auth.ts');
   const roomsApi = read('src/lib/api/rooms.ts');
   const settingsModal = read('src/lib/features/home/components/SettingsModal.svelte');
@@ -350,19 +350,55 @@ test('room UI uses name-only squircle fallbacks while participant colors remain 
   const chat = read('src/lib/features/room/components/RoomChat.svelte');
   const roomNet = read('src/lib/features/room/client/net/api.ts');
   const roomTopbar = read('src/lib/features/room/components/RoomTopbar.svelte');
+  const notificationRouter = read('src/lib/shared/notifications/router.ts');
 
   assert.match(authApi, /avatarColorKey: string/);
   assert.match(roomsApi, /avatarColorKey: string/);
   assert.doesNotMatch(authApi, /roomIconKey|roomColorKey|roomPresetKey|emoji/);
   assert.doesNotMatch(roomsApi, /roomIconKey|roomColorKey|roomPresetKey|emoji/);
-  assert.match(settingsModal, /getAvatarColor\(user\?\.avatarColorKey\)/);
-  assert.match(voiceHome, /<Avatar name=\{roomDisplayName\(room\)\} shape="squircle" background="var\(--room-avatar-bg\)"/);
+  assert.match(settingsModal, /src=\{user\?\.avatarUrl\}/);
+  assert.match(settingsModal, /background=\{user\?\.avatarAccent \|\| undefined\}/);
+  assert.match(voiceHome, /<Avatar name=\{roomDisplayName\(room\)\} src=\{room\.avatarUrl\} shape="squircle" background="var\(--room-avatar-bg\)"/);
   assert.doesNotMatch(createDialog, /ROOM_PRESETS|roomPresetKey|roomIconKey|roomColorKey/);
   assert.match(participantTile, /getAvatarPresentation\(participant\)/);
-  assert.match(chat, /getAvatarColor\(message\.avatarColorKey\)/);
+  assert.match(chat, /getAvatarPresentation\(\{/);
+  assert.match(chat, /avatarUrl: message\.avatarUrl \|\| undefined/);
   assert.doesNotMatch(roomNet, /roomIconKey|roomColorKey|roomPresetKey|emoji/);
-  assert.match(roomTopbar, /<Avatar name=\{heading\} shape="squircle" background="var\(--room-avatar-bg\)"/);
+  assert.match(roomTopbar, /<Avatar name=\{heading\} src=\{state\.roomAvatarUrl\} shape="squircle" background="var\(--room-avatar-bg\)"/);
   assert.doesNotMatch(roomTopbar, /getRoomPreset|roomVisual|emoji/);
+  assert.match(notificationRouter, /avatarAccent\?: string \| null/);
+  assert.match(notificationRouter, /avatarUrl\?: string \| null/);
+  assert.doesNotMatch(notificationRouter, /NotificationRoomContext[\s\S]*avatarColorKey/);
+});
+
+test('avatar crop and settings flows export a normalized bitmap and refresh live user and room state', () => {
+  const crop = read('src/lib/shared/ui/AvatarCropDialog/AvatarCropDialog.svelte');
+  const authApi = read('src/lib/api/auth.ts');
+  const roomsApi = read('src/lib/api/rooms.ts');
+  const settings = read('src/lib/features/home/components/SettingsModal.svelte');
+  const roomSettings = read('src/lib/features/room/components/RoomSettingsDialog.svelte');
+
+  assert.match(crop, /output\.width = 256/);
+  assert.match(crop, /output\.height = 256/);
+  assert.match(crop, /output\.toBlob\(/);
+  assert.match(crop, /onpointerdown=\{onPointerDown\}/);
+  assert.match(crop, /bind:value=\{zoom\}/);
+  assert.match(crop, /shape === 'circle'/);
+  assert.match(crop, /shape === 'squircle'/);
+  assert.match(crop, /deriveAvatarAccent/);
+  assert.match(crop, /image = null/);
+  assert.match(crop, /previewUrl = ''/);
+  assert.match(crop, /reader\.abort\(\)/);
+  assert.doesNotMatch(crop, /URL\.createObjectURL/);
+
+  assert.match(authApi, /uploadUserAvatar/);
+  assert.match(authApi, /deleteUserAvatar/);
+  assert.match(roomsApi, /uploadRoomAvatar/);
+  assert.match(roomsApi, /deleteRoomAvatar/);
+  assert.match(settings, /const nextUser = await uploadUserAvatar\(blob\);[\s\S]*setUser\(nextUser\)/);
+  assert.match(settings, /const nextUser = await deleteUserAvatar\(\);[\s\S]*setUser\(nextUser\)/);
+  assert.match(roomSettings, /applyRoomUpdated\(room\)/);
+  assert.match(roomSettings, /voice-room:rooms-changed/);
 });
 
 test('connection status renders reactively from room state, not imperative DOM writes', () => {

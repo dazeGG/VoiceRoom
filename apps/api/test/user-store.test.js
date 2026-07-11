@@ -125,7 +125,15 @@ test('publicUser never leaks the password hash', async (t) => {
   const { user } = await store.createUser({ login: 'safe', password: 'no-leak-please' });
   const exposed = publicUser(user);
   assert.equal('passwordHash' in exposed, false);
-  assert.deepEqual(Object.keys(exposed).sort(), ['avatarColorKey', 'createdAt', 'displayName', 'id', 'login']);
+  assert.deepEqual(Object.keys(exposed).sort(), [
+    'avatarAccent',
+    'avatarColorKey',
+    'avatarUrl',
+    'createdAt',
+    'displayName',
+    'id',
+    'login'
+  ]);
   assert.ok(AVATAR_COLOR_KEYS.includes(exposed.avatarColorKey));
 });
 

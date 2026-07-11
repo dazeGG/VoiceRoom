@@ -138,8 +138,16 @@ body[data-screen-view="true"][data-strip-collapsed="true"] .stage-strip {
   color: var(--participant-avatar-fg);
   font-size: 1.38rem;
   font-weight: 850;
+  overflow: hidden;
   box-shadow: var(--participant-avatar-shadow);
   transition: transform 160ms ease;
+}
+
+.avatar > img {
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  object-fit: cover;
 }
 
 .participant[data-speaking="true"] .avatar {

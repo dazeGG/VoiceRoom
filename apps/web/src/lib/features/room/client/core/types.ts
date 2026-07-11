@@ -129,6 +129,7 @@ export interface RoomSessionState {
   joined: boolean;
   peerId: string;
   roomId: string;
+  roomAvatarUrl: string;
   roomName: string;
   roomRoute: boolean;
   /** Mirrors document.body.dataset.screen so Svelte components react to screen transitions. */
@@ -210,6 +211,7 @@ export interface AppState
 // Mirrors the server's publicLobbyRoom() shape (server.js) — the body carried
 // by both the PUT /api/rooms/:roomId response and the room-updated broadcast.
 export interface RoomLifecycleSummary {
+  avatarUrl: string | null;
   createdAt: number;
   emptySince: number | null;
   isStatic: boolean;

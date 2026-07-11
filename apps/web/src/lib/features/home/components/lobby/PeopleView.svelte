@@ -131,7 +131,7 @@
       {:else}
         {#each incoming as request (request.id)}
           <div class="lr-req-card">
-            <Avatar name={friendName(request.user)} colorKey={request.user.avatarColorKey} size={44} />
+            <Avatar name={friendName(request.user)} src={request.user.avatarUrl} colorKey={request.user.avatarColorKey} background={request.user.avatarAccent || undefined} size={44} />
             <div style="flex:1;min-width:0;">
               <div class="lr-req-name" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{friendName(request.user)}</div>
               <div class="lr-req-handle" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">@{request.user.login}</div>
@@ -157,7 +157,7 @@
       {:else}
         {#each outgoing as request (request.id)}
           <div class="lr-req-card">
-            <Avatar name={friendName(request.user)} colorKey={request.user.avatarColorKey} size={44} />
+            <Avatar name={friendName(request.user)} src={request.user.avatarUrl} colorKey={request.user.avatarColorKey} background={request.user.avatarAccent || undefined} size={44} />
             <div style="flex:1;min-width:0;">
               <div class="lr-req-name" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{friendName(request.user)}</div>
               <div class="lr-req-handle" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">@{request.user.login}</div>

@@ -62,7 +62,7 @@
         aria-controls={panelId}
         onclick={toggle}
       >
-        <Avatar name={name} shape="squircle" background="var(--room-avatar-bg)" size={34} />
+        <Avatar name={name} src={room.avatarUrl} shape="squircle" background="var(--room-avatar-bg)" size={34} />
         <span class="lobby-roomview-name">
           <Ellipsis text={name} title={room.roomId} />
         </span>
@@ -74,7 +74,7 @@
 
     {#snippet content({ close })}
       <div class="lobby-roomview-popover-head">
-        <Avatar name={name} shape="squircle" background="var(--room-avatar-bg)" size={34} />
+        <Avatar name={name} src={room.avatarUrl} shape="squircle" background="var(--room-avatar-bg)" size={34} />
         <div class="lobby-roomview-popover-info">
           <Ellipsis class="lobby-roomview-popover-name" text={name} />
           <Ellipsis class="lobby-roomview-popover-code" text={room.roomId} />

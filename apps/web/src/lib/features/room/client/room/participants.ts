@@ -49,7 +49,9 @@ function createParticipantModel(peerInfo: PeerInfo, isLocal: boolean): Participa
     accountUserId: peerInfo.accountUserId || '',
     analyser: null,
     audioElements: new Map(),
+    avatarAccent: peerInfo.avatarAccent || '',
     avatarColorKey: peerInfo.avatarColorKey || '',
+    avatarUrl: peerInfo.avatarUrl || '',
     deafened: Boolean(peerInfo.deafened),
     id: peerInfo.id,
     incomingVoiceActive: false,
@@ -176,7 +178,9 @@ export function updateParticipant(peerInfo: PeerInfo): void {
   const hadAccountUserId = participant.accountUserId;
   const hasScreenUpdate = Object.hasOwn(peerInfo, 'screen');
   if (Object.hasOwn(peerInfo, 'accountUserId')) participant.accountUserId = peerInfo.accountUserId || '';
+  if (Object.hasOwn(peerInfo, 'avatarAccent')) participant.avatarAccent = peerInfo.avatarAccent || '';
   if (Object.hasOwn(peerInfo, 'avatarColorKey')) participant.avatarColorKey = peerInfo.avatarColorKey || participant.avatarColorKey;
+  if (Object.hasOwn(peerInfo, 'avatarUrl')) participant.avatarUrl = peerInfo.avatarUrl || '';
   if (Object.hasOwn(peerInfo, 'name')) participant.name = peerInfo.name || participant.name;
   if (Object.hasOwn(peerInfo, 'deafened')) participant.deafened = Boolean(peerInfo.deafened);
   if (Object.hasOwn(peerInfo, 'muted')) participant.muted = Boolean(peerInfo.muted);

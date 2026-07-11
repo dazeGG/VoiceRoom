@@ -1,5 +1,6 @@
 export interface AvatarProps {
   name: string;
+  src?: string | null;
   colorKey?: string | null;
   size?: number;
   shape?: 'circle' | 'squircle';

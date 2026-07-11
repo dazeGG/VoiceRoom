@@ -16,7 +16,9 @@ function toMillis(value) {
 function mapPublicUser(row) {
   if (!row) return null;
   return {
+    avatarAccent: row.avatar_accent || null,
     avatarColorKey: cleanAvatarColorKey(row.avatar_color_key) || 'blurple',
+    avatarUrl: row.avatar_key ? `/api/avatars/${encodeURIComponent(row.avatar_key)}` : null,
     createdAt: toMillis(row.created_at),
     displayName: row.display_name || '',
     id: row.id,

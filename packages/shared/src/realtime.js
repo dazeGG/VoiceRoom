@@ -78,7 +78,9 @@ function toRoomPeerSummary(peer, resolveAvatarColorKey) {
   return {
     id: peer.id,
     accountUserId: peer.accountUserId || undefined,
+    avatarAccent: peer.avatarAccent ?? null,
     avatarColorKey: peer.avatarColorKey || resolver(peer.id) || 'blurple',
+    avatarUrl: peer.avatarUrl ?? null,
     muted: Boolean(peer.muted),
     name: cleanName(peer.name)
   };
@@ -93,6 +95,7 @@ function buildRoomRealtimeSummary(room, peers, resolveAvatarColorKey) {
 
   return {
     roomId: room.roomId || room.id || '',
+    avatarUrl: room.avatarUrl ?? null,
     name: room.name || '',
     isStatic: Boolean(room.isStatic),
     relationship: room.relationship || 'owner',

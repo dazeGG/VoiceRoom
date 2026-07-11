@@ -1,7 +1,8 @@
 <script lang="ts">
-  import { X } from '@lucide/svelte';
+  import { ImagePlus, Trash2, X } from '@lucide/svelte';
   import { iconSm } from '$lib/shared/ui/icons';
-  import { deleteRoom, updateRoom } from '$lib/api/rooms';
+  import { Avatar, AvatarCropDialog } from '$lib/shared/ui';
+  import { deleteRoom, deleteRoomAvatar, updateRoom, uploadRoomAvatar } from '$lib/api/rooms';
   import { state as roomClientState } from '../client/core/state.svelte';
   import { applyRoomUpdated } from '../client/room/lifecycle';
   import { showToast } from '../client/ui/toast';
@@ -12,6 +13,10 @@
   let saving = $state(false);
   let confirmingDelete = $state(false);
   let deleting = $state(false);
+  let avatarInput = $state<HTMLInputElement>();
+  let avatarFile = $state<File | null>(null);
+  let cropOpen = $state(false);
+  let avatarSaving = $state(false);
 
   // Reset the form from the live room state each time the dialog opens —
   // roomClientState (the vanilla room client's store, aliased to avoid
@@ -64,8 +69,56 @@
     }
   }
 
+  function onAvatarFile(event: Event): void {
+    const input = event.currentTarget as HTMLInputElement;
+    const selected = input.files?.[0] ?? null;
+    input.value = '';
+    if (!selected) return;
+    if (!selected.type.startsWith('image/')) {
+      error = 'Выберите изображение JPEG, PNG или WebP';
+      return;
+    }
+    if (selected.size > 5 * 1024 * 1024) {
+      error = 'Изображение должно быть меньше 5 МБ';
+      return;
+    }
+    avatarFile = selected;
+    cropOpen = true;
+  }
+
+  async function saveAvatar(blob: Blob): Promise<void> {
+    avatarSaving = true;
+    error = '';
+    try {
+      const room = await uploadRoomAvatar(roomClientState.roomId, blob);
+      applyRoomUpdated(room);
+      cropOpen = false;
+      avatarFile = null;
+      window.dispatchEvent(new CustomEvent('voice-room:rooms-changed', { detail: { roomId: room.roomId } }));
+      showToast('Аватар комнаты обновлён');
+    } finally {
+      avatarSaving = false;
+    }
+  }
+
+  async function removeAvatar(): Promise<void> {
+    if (avatarSaving || !roomClientState.roomAvatarUrl) return;
+    avatarSaving = true;
+    error = '';
+    try {
+      const room = await deleteRoomAvatar(roomClientState.roomId);
+      applyRoomUpdated(room);
+      window.dispatchEvent(new CustomEvent('voice-room:rooms-changed', { detail: { roomId: room.roomId } }));
+      showToast('Аватар комнаты удалён');
+    } catch (err) {
+      error = err instanceof Error && err.message ? err.message : 'Не удалось удалить аватар комнаты';
+    } finally {
+      avatarSaving = false;
+    }
+  }
+
   function onClose(): void {
-    if (saving || deleting) return;
+    if (saving || deleting || avatarSaving || cropOpen) return;
     closeRoomSettings();
   }
 
@@ -74,7 +127,7 @@
   }
 
   function onKeydown(event: KeyboardEvent): void {
-    if (roomSettingsUi.open && event.key === 'Escape') onClose();
+    if (roomSettingsUi.open && !cropOpen && event.key === 'Escape') onClose();
   }
 </script>
 
@@ -98,6 +151,25 @@
         <div class="dialog-field">
           <div class="dialog-label">Название</div>
           <input class="dialog-input" maxlength="60" placeholder="Название комнаты" bind:value={name} />
+        </div>
+
+        <div class="room-avatar-field">
+          <span class="dialog-label">Аватар комнаты</span>
+          <div class="room-avatar-row">
+            <Avatar name={name || roomClientState.roomId} src={roomClientState.roomAvatarUrl} shape="squircle" background="var(--room-avatar-bg)" size={58} />
+            <div class="room-avatar-actions">
+              <input bind:this={avatarInput} class="room-avatar-input" type="file" accept="image/jpeg,image/png,image/webp" onchange={onAvatarFile} />
+              <button class="room-avatar-upload" type="button" onclick={() => avatarInput?.click()} disabled={avatarSaving}>
+                <ImagePlus {...iconSm} aria-hidden="true" />
+                {roomClientState.roomAvatarUrl ? 'Заменить' : 'Загрузить'}
+              </button>
+              {#if roomClientState.roomAvatarUrl}
+                <button class="room-avatar-delete" type="button" onclick={removeAvatar} disabled={avatarSaving}>
+                  <Trash2 {...iconSm} aria-hidden="true" /> Удалить
+                </button>
+              {/if}
+            </div>
+          </div>
         </div>
 
         <div class="dialog-actions">
@@ -133,7 +205,71 @@
   </div>
 {/if}
 
+<AvatarCropDialog
+  open={cropOpen}
+  file={avatarFile}
+  name={name || roomClientState.roomName || roomClientState.roomId}
+  shape="squircle"
+  kind="room"
+  title="Аватар комнаты"
+  onClose={() => {
+    if (!avatarSaving) {
+      cropOpen = false;
+      avatarFile = null;
+    }
+  }}
+  onSave={saveAvatar}
+/>
+
 <style>
+  .room-avatar-field {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .room-avatar-row,
+  .room-avatar-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .room-avatar-input {
+    display: none;
+  }
+
+  .room-avatar-upload,
+  .room-avatar-delete {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 8px 11px;
+    border-radius: 9px;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 650;
+    cursor: pointer;
+  }
+
+  .room-avatar-upload {
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--warm-ink-dim);
+  }
+
+  .room-avatar-delete {
+    border: 1px solid rgba(239, 68, 68, 0.28);
+    background: transparent;
+    color: #f87171;
+  }
+
+  .room-avatar-upload:disabled,
+  .room-avatar-delete:disabled {
+    cursor: default;
+    opacity: 0.6;
+  }
+
   .dialog-danger-zone {
     border-top: 1px solid rgba(255, 255, 255, 0.08);
     margin-top: 4px;

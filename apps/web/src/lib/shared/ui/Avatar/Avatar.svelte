@@ -4,6 +4,7 @@
 
   let {
     name,
+    src = null,
     colorKey = '',
     size = 36,
     shape = 'circle',
@@ -21,6 +22,12 @@
     const trimmed = name.trim();
     return trimmed ? trimmed.charAt(0).toUpperCase() : '?';
   });
+  let imageFailed = $state(false);
+
+  $effect(() => {
+    src;
+    imageFailed = false;
+  });
 </script>
 
 <span
@@ -32,7 +39,11 @@
   style:background={background || getAvatarColor(colorKey).background}
   aria-hidden="true"
 >
-  {initial}
+  {#if src && !imageFailed}
+    <img src={src} alt="" onerror={() => (imageFailed = true)} />
+  {:else}
+    {initial}
+  {/if}
   {#if showDot}
     <span
       class="ui-avatar-dot"
@@ -60,6 +71,13 @@
 
   .ui-avatar--squircle {
     border-radius: 31%;
+  }
+
+  .ui-avatar > img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: inherit;
   }
 
   .ui-avatar-dot {

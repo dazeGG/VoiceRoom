@@ -121,7 +121,8 @@ export function getViewerAvatarItem(viewer: Participant): AvatarStackItem {
     id: viewer.id,
     initials: avatar.initials,
     label: avatar.label,
-    shadow: avatar.shadow
+    shadow: avatar.shadow,
+    src: avatar.src
   };
 }
 

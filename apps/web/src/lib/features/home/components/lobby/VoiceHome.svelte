@@ -80,7 +80,7 @@
       {#each sortedRooms as room (room.roomId)}
         <button class="lv-card" class:is-live={room.peers > 0} type="button" onclick={() => onOpenRoom(room.roomId)}>
           <div style="display:flex;align-items:center;gap:11px;min-width:0;">
-            <Avatar name={roomDisplayName(room)} shape="squircle" background="var(--room-avatar-bg)" size={42} />
+            <Avatar name={roomDisplayName(room)} src={room.avatarUrl} shape="squircle" background="var(--room-avatar-bg)" size={42} />
             <div style="min-width:0;flex:1;">
               <Ellipsis text={roomDisplayName(room)} class="lv-row-name" tag="div" />
             </div>

@@ -13,6 +13,7 @@ export interface UpdateRoomOptions {
 // Mirrors the server's publicLobbyRoom() shape (server.js) — the same body the
 // PUT response and the room.updated WebSocket broadcast both carry.
 export interface RoomSummary {
+  avatarUrl: string | null;
   createdAt: number;
   emptySince: number | null;
   isStatic: boolean;
@@ -23,6 +24,7 @@ export interface RoomSummary {
 }
 
 export interface RoomStatus {
+  avatarUrl: string | null;
   createdAt: number;
   name: string;
   emptySince: number | null;
@@ -33,8 +35,22 @@ export interface RoomStatus {
   roomId: string;
 }
 
+async function roomAvatarRequest(roomId: string, method: 'POST' | 'DELETE', file?: Blob): Promise<RoomSummary> {
+  const body = file ? new FormData() : undefined;
+  if (body && file) body.append('avatar', file, 'avatar.webp');
+  const response = await fetch(`/api/rooms/${encodeURIComponent(roomId)}/avatar`, { method, body, credentials: 'same-origin' });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload.error || 'Не удалось обновить аватар комнаты');
+  return payload.room;
+}
+
+export const uploadRoomAvatar = (roomId: string, file: Blob): Promise<RoomSummary> => roomAvatarRequest(roomId, 'POST', file);
+export const deleteRoomAvatar = (roomId: string): Promise<RoomSummary> => roomAvatarRequest(roomId, 'DELETE');
+
 export interface ChatMessage {
+  avatarAccent: string | null;
   avatarColorKey: string;
+  avatarUrl: string | null;
   createdAt: number;
   expiresAt: number;
   id: string;
@@ -74,7 +90,9 @@ export async function deleteRoom(roomId: string): Promise<void> {
 
 // A read-only view of a current room occupant (mirrors the server's publicPeer).
 export interface RoomPeer {
+  avatarAccent: string | null;
   avatarColorKey: string;
+  avatarUrl: string | null;
   id: string;
   muted: boolean;
   name: string;

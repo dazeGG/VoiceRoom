@@ -1,13 +1,13 @@
 <script lang="ts">
-  import { LogOut, Mic, User, X } from '@lucide/svelte';
+  import { ImagePlus, LogOut, Mic, Trash2, User, X } from '@lucide/svelte';
   import type { AuthUser } from '$lib/api/auth';
   import { iconMd, iconSm } from '$lib/shared/ui/icons';
-  import { changePassword, updateDisplayName } from '$lib/api/auth';
+  import { changePassword, deleteUserAvatar, updateDisplayName, uploadUserAvatar } from '$lib/api/auth';
   import { isValidPassword, PASSWORD_MIN_LENGTH } from '$lib/features/auth/account';
   import { clearSession, setUser } from '$lib/features/auth/session.svelte';
+  import { state as roomClientState } from '$lib/features/room/client/core/state.svelte';
   import { playPeerCue, playDirectMessageCue, playFriendAcceptedCue, playFriendRequestCue, playMicCue, playRoomChatMessageCue, playStreamCue, playStreamViewerCue } from '$lib/features/room/client/media/cues';
-  import { Select, Slider } from '$lib/shared/ui';
-  import { getAvatarColor } from '$lib/visual/tokens';
+  import { Avatar, AvatarCropDialog, Select, Slider } from '$lib/shared/ui';
   import {
     enumerateMicrophones,
     enumerateSpeakers,
@@ -60,6 +60,10 @@
   let currentPassword = $state('');
   let newPassword = $state('');
   let saving = $state(false);
+  let avatarInput = $state<HTMLInputElement>();
+  let avatarFile = $state<File | null>(null);
+  let cropOpen = $state(false);
+  let avatarSaving = $state(false);
 
   // Sound form
   let microphones = $state<DeviceOption[]>([]);
@@ -73,19 +77,7 @@
   let notificationVolume = $state(100);
   let notificationSaving = $state(false);
 
-  const avatar = $derived(getAvatarColor(user?.avatarColorKey));
   const label = $derived(user?.displayName?.trim() || user?.login || '');
-  const initials = $derived(
-    (label
-      .split(/\s+/)
-      .slice(0, 2)
-      .map((part: string) => part.charAt(0))
-      .join('')
-      .toUpperCase() || label.charAt(0).toUpperCase()) || '·'
-  );
-  const avatarStyle = $derived(
-    `background:${avatar.background};color:${avatar.foreground};box-shadow:${avatar.shadow}`
-  );
 
   const gateOpen = $derived(!gateOn || micLevelDb >= gateDb);
   // Only surface the live level while the gate is on — off means "don't capture
@@ -163,7 +155,7 @@
   }
 
   function onKeydown(event: KeyboardEvent): void {
-    if (open && event.key === 'Escape') onClose();
+    if (open && !cropOpen && event.key === 'Escape') onClose();
   }
 
   async function saveProfile(): Promise<void> {
@@ -207,6 +199,63 @@
     } finally {
       saving = false;
     }
+  }
+
+  function chooseAvatar(): void {
+    avatarInput?.click();
+  }
+
+  function onAvatarFile(event: Event): void {
+    const input = event.currentTarget as HTMLInputElement;
+    const selected = input.files?.[0] ?? null;
+    input.value = '';
+    if (!selected) return;
+    if (!selected.type.startsWith('image/')) {
+      onToast('Выберите изображение JPEG, PNG или WebP');
+      return;
+    }
+    if (selected.size > 5 * 1024 * 1024) {
+      onToast('Изображение должно быть меньше 5 МБ');
+      return;
+    }
+    avatarFile = selected;
+    cropOpen = true;
+  }
+
+  async function saveAvatar(blob: Blob): Promise<void> {
+    avatarSaving = true;
+    try {
+      const nextUser = await uploadUserAvatar(blob);
+      setUser(nextUser);
+      syncLocalParticipantAvatar(nextUser);
+      cropOpen = false;
+      avatarFile = null;
+      onToast('Аватар обновлён');
+    } finally {
+      avatarSaving = false;
+    }
+  }
+
+  async function removeAvatar(): Promise<void> {
+    if (avatarSaving || !user?.avatarUrl) return;
+    avatarSaving = true;
+    try {
+      const nextUser = await deleteUserAvatar();
+      setUser(nextUser);
+      syncLocalParticipantAvatar(nextUser);
+      onToast('Аватар удалён');
+    } catch (error) {
+      onToast(error instanceof Error && error.message ? error.message : 'Не удалось удалить аватар');
+    } finally {
+      avatarSaving = false;
+    }
+  }
+
+  function syncLocalParticipantAvatar(nextUser: AuthUser): void {
+    if (!roomClientState.self?.isLocal) return;
+    roomClientState.self.avatarAccent = nextUser.avatarAccent || '';
+    roomClientState.self.avatarColorKey = nextUser.avatarColorKey || '';
+    roomClientState.self.avatarUrl = nextUser.avatarUrl || '';
   }
 
   function onMicChange(value: string): void {
@@ -315,11 +364,25 @@
         <div class="settings-content">
           {#if tab === 'profile'}
             <div class="settings-profile-head">
-              <span class="settings-profile-avatar" style={avatarStyle} aria-hidden="true">{initials}</span>
+              <Avatar name={label} src={user?.avatarUrl} colorKey={user?.avatarColorKey} background={user?.avatarAccent || undefined} size={56} class="settings-profile-avatar" />
               <div>
                 <div class="settings-profile-name">{label}</div>
                 <div class="settings-profile-sub">@{user?.login}</div>
               </div>
+            </div>
+
+            <div class="settings-avatar-actions">
+              <input bind:this={avatarInput} class="settings-avatar-input" type="file" accept="image/jpeg,image/png,image/webp" onchange={onAvatarFile} />
+              <button type="button" class="settings-avatar-upload" onclick={chooseAvatar} disabled={avatarSaving}>
+                <ImagePlus {...iconSm} aria-hidden="true" />
+                {user?.avatarUrl ? 'Заменить аватар' : 'Загрузить аватар'}
+              </button>
+              {#if user?.avatarUrl}
+                <button type="button" class="settings-avatar-delete" onclick={removeAvatar} disabled={avatarSaving} aria-label="Удалить аватар">
+                  <Trash2 {...iconSm} aria-hidden="true" />
+                  Удалить
+                </button>
+              {/if}
             </div>
 
             <div class="settings-fields">
@@ -506,3 +569,19 @@
     </div>
   </div>
 {/if}
+
+<AvatarCropDialog
+  open={cropOpen}
+  file={avatarFile}
+  name={label}
+  shape="circle"
+  kind="user"
+  title="Аватар профиля"
+  onClose={() => {
+    if (!avatarSaving) {
+      cropOpen = false;
+      avatarFile = null;
+    }
+  }}
+  onSave={saveAvatar}
+/>

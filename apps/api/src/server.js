@@ -3,6 +3,7 @@
 const crypto = require('node:crypto');
 const fastify = require('fastify');
 const fastifyCookie = require('@fastify/cookie');
+const fastifyMultipart = require('@fastify/multipart');
 const fastifyWebsocket = require('@fastify/websocket');
 const { createConnectionRegistry } = require('./realtime/registry');
 const { createWsHandler } = require('./realtime/ws-handler');
@@ -11,7 +12,7 @@ const { buildServerEnvelope } = require('./realtime/envelope');
 const { URL } = require('node:url');
 const { AccessToken, TrackSource } = require('livekit-server-sdk');
 
-const { readEnvInt, readEnvBool, readDatabaseConfig } = require('./lib/config');
+const { readEnvInt, readEnvBool, readDatabaseConfig, readUploadsDir } = require('./lib/config');
 const {
   normalizeRoomId,
   normalizePeerId,
@@ -27,6 +28,9 @@ const {
 } = require('@voice-room/shared/validation');
 const { createProofOfWork } = require('./lib/pow');
 const { getClientIp, createRateLimiter } = require('./lib/rate-limit');
+const { MAX_AVATAR_BYTES, createAvatarKey, processAvatar } = require('./lib/avatar-processing');
+const { reconcileAvatarStorage } = require('./lib/avatar-reconciliation');
+const { createAvatarStorage, validateAvatarKey } = require('./lib/avatar-storage');
 const { avatarColorForPeerId, createRoomStore } = require('./lib/room-store');
 const { createUserStore, publicUser } = require('./lib/user-store');
 const { createFriendStore } = require('./lib/friend-store');
@@ -74,6 +78,8 @@ const DM_RATE_LIMIT = readEnvInt('DM_RATE_LIMIT', 30, 0);
 const DM_RATE_WINDOW_MS = readEnvInt('DM_RATE_WINDOW_MS', 10000, 1000);
 const FRIEND_REQUEST_RATE_LIMIT = readEnvInt('FRIEND_REQUEST_RATE_LIMIT', 20, 0);
 const FRIEND_REQUEST_RATE_WINDOW_MS = readEnvInt('FRIEND_REQUEST_RATE_WINDOW_MS', 60000, 1000);
+const AVATAR_UPLOAD_RATE_LIMIT = readEnvInt('AVATAR_UPLOAD_RATE_LIMIT', 10, 0);
+const AVATAR_UPLOAD_RATE_WINDOW_MS = readEnvInt('AVATAR_UPLOAD_RATE_WINDOW_MS', 60000, 1000);
 // Cap concurrent realtime (WebSocket) connections per user so a single account
 // cannot pin an unbounded number of keep-alive connections.
 const MAX_REALTIME_STREAMS_PER_USER = readEnvInt('MAX_REALTIME_STREAMS_PER_USER', 8, 1);
@@ -91,6 +97,7 @@ let roomStore = null;
 let userStore = null;
 let friendStore = null;
 let notificationStore = null;
+let avatarStorage = null;
 
 const presenceRooms = new Map();
 let wsRegistry = null;
@@ -141,6 +148,11 @@ function getNotificationStore() {
   return notificationStore;
 }
 
+function getAvatarStorage() {
+  if (!avatarStorage) avatarStorage = createAvatarStorage();
+  return avatarStorage;
+}
+
 function isUserOnline(userId) {
   return Boolean(wsRegistry && wsRegistry.connectionCount(userId) > 0);
 }
@@ -157,7 +169,9 @@ function notificationActor(user) {
     id: actor.id,
     displayName: actor.displayName,
     login: actor.login,
-    avatarColorKey: actor.avatarColorKey
+    avatarAccent: actor.avatarAccent,
+    avatarColorKey: actor.avatarColorKey,
+    avatarUrl: actor.avatarUrl
   };
 }
 
@@ -223,6 +237,10 @@ const dmLimiter = createRateLimiter({
 const friendRequestLimiter = createRateLimiter({
   limit: FRIEND_REQUEST_RATE_LIMIT,
   windowMs: FRIEND_REQUEST_RATE_WINDOW_MS
+});
+const avatarUploadLimiter = createRateLimiter({
+  limit: AVATAR_UPLOAD_RATE_LIMIT,
+  windowMs: AVATAR_UPLOAD_RATE_WINDOW_MS
 });
 
 function getLiveKitConnectSources() {
@@ -490,7 +508,9 @@ async function getRoom(roomId) {
 function publicPeer(peer) {
   return {
     accountUserId: peer.accountUserId || '',
+    avatarAccent: peer.avatarAccent || null,
     avatarColorKey: peer.avatarColorKey || avatarColorForPeerId(peer.id),
+    avatarUrl: peer.avatarUrl || null,
     deafened: peer.deafened,
     id: peer.id,
     joinedAt: peer.joinedAt,
@@ -595,7 +615,11 @@ function cleanChatText(value) {
 
 function publicChatMessage(message) {
   return {
+    avatarAccent: message.avatarAccent || null,
     avatarColorKey: message.avatarColorKey || avatarColorForPeerId(message.peerId),
+    avatarUrl: message.avatarUrl || (message.avatarKey
+      ? `/api/avatars/${encodeURIComponent(message.avatarKey)}`
+      : null),
     createdAt: message.createdAt,
     expiresAt: message.expiresAt,
     id: message.id,
@@ -770,6 +794,7 @@ async function handleCreateRoom(req, res) {
   const room = created.room;
   sendJson(res, 201, {
     ok: true,
+    avatarUrl: null,
     createdAt: room.createdAt,
     maxRooms: MAX_ROOMS,
     maxRoomPeers: MAX_ROOM_PEERS,
@@ -832,7 +857,7 @@ async function handleUpdateRoom(req, res, roomId) {
   sendJson(res, 200, { ok: true, room: payload });
 }
 
-async function handleDeleteRoom(req, res, roomId) {
+async function handleDeleteRoom(req, res, roomId, request) {
   const room = await authorizeRoomMutation(req, res, roomId);
   if (!room) return;
 
@@ -842,6 +867,7 @@ async function handleDeleteRoom(req, res, roomId) {
     sendJson(res, 404, { ok: false, error: 'Комната не найдена' });
     return;
   }
+  await removeAvatarBestEffort(deleted.avatarKey, request);
 
   // Broadcast after durable soft-delete, before presence teardown so the WS
   // writes are not racing socket close.
@@ -976,6 +1002,132 @@ async function handleUpdateProfile(req, res) {
   sendJson(res, 200, { ok: true, user: publicUser(user) });
 }
 
+function checkAvatarUploadRate(res, userId) {
+  const rate = avatarUploadLimiter.check(`avatar:${userId}`);
+  if (rate.allowed) return true;
+  sendJson(
+    res,
+    429,
+    { ok: false, error: 'Слишком много загрузок, попробуйте позже' },
+    { 'Retry-After': String(rate.retryAfterSeconds) }
+  );
+  return false;
+}
+
+async function readAvatarUpload(request) {
+  let part;
+  try {
+    part = await request.file({ limits: { fileSize: MAX_AVATAR_BYTES, files: 1 } });
+  } catch (cause) {
+    if (cause?.code === 'FST_REQ_FILE_TOO_LARGE' || cause?.statusCode === 413) {
+      const error = new Error('Avatar file must be at most 5 MB');
+      error.statusCode = 413;
+      throw error;
+    }
+    throw cause;
+  }
+  if (!part || part.fieldname !== 'avatar') {
+    part?.file?.resume?.();
+    const error = new Error('Multipart field "avatar" is required');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  try {
+    const buffer = await part.toBuffer();
+    if (part.file?.truncated) {
+      const error = new Error('Avatar file must be at most 5 MB');
+      error.statusCode = 413;
+      throw error;
+    }
+    return buffer;
+  } catch (cause) {
+    if (cause?.code === 'FST_REQ_FILE_TOO_LARGE' || cause?.statusCode === 413) {
+      const error = new Error('Avatar file must be at most 5 MB');
+      error.statusCode = 413;
+      throw error;
+    }
+    throw cause;
+  }
+}
+
+async function removeAvatarBestEffort(key, request) {
+  if (!key) return;
+  try {
+    await getAvatarStorage().remove(key);
+  } catch (error) {
+    request?.log?.error?.({ err: error, avatarKey: key }, 'failed to remove old avatar');
+  }
+}
+
+function refreshActiveUserAvatar(user) {
+  if (!user?.id) return;
+  const avatarUrl = user.avatarKey ? `/api/avatars/${encodeURIComponent(user.avatarKey)}` : null;
+  for (const [roomId, room] of presenceRooms) {
+    for (const peer of room.peers.values()) {
+      if (peer.accountUserId !== user.id) continue;
+      peer.avatarAccent = user.avatarAccent || null;
+      peer.avatarUrl = avatarUrl;
+      const message = { type: 'peer-updated', peer: publicPeer(peer) };
+      broadcast(room, message);
+      roomRuntime?.mirrorLegacyRoomEvent(roomId, message);
+      roomRuntime?.scheduleSummaryBroadcast(roomId);
+    }
+  }
+}
+
+async function handleUploadUserAvatar(req, res, request) {
+  const session = await resolveSessionUser(req);
+  if (!session) {
+    sendJson(res, 401, { ok: false, error: 'Требуется вход' });
+    return;
+  }
+  if (!checkAvatarUploadRate(res, session.user.id)) return;
+
+  const processed = await processAvatar(await readAvatarUpload(request));
+  const avatarKey = createAvatarKey('user', session.user.id, processed.hash);
+  await getAvatarStorage().save(avatarKey, processed.buffer);
+
+  let result;
+  try {
+    result = await getUserStore().swapAvatar({
+      userId: session.user.id,
+      avatarKey,
+      avatarAccent: processed.accent
+    });
+  } catch (error) {
+    // Another request may already have committed the same content-addressed key.
+    // Reconciliation removes a truly orphaned write without risking that live file.
+    throw error;
+  }
+  if (!result.user) {
+    if (session.user.avatarKey !== avatarKey) await removeAvatarBestEffort(avatarKey, request);
+    sendJson(res, 404, { ok: false, error: 'Аккаунт не найден' });
+    return;
+  }
+  if (result.previousAvatarKey !== avatarKey) {
+    await removeAvatarBestEffort(result.previousAvatarKey, request);
+  }
+  refreshActiveUserAvatar(result.user);
+  sendJson(res, 200, { ok: true, user: publicUser(result.user) });
+}
+
+async function handleDeleteUserAvatar(req, res, request) {
+  const session = await resolveSessionUser(req);
+  if (!session) {
+    sendJson(res, 401, { ok: false, error: 'Требуется вход' });
+    return;
+  }
+  const result = await getUserStore().swapAvatar({ userId: session.user.id });
+  if (!result.user) {
+    sendJson(res, 404, { ok: false, error: 'Аккаунт не найден' });
+    return;
+  }
+  await removeAvatarBestEffort(result.previousAvatarKey, request);
+  refreshActiveUserAvatar(result.user);
+  sendJson(res, 200, { ok: true, user: publicUser(result.user) });
+}
+
 async function handleChangePassword(req, res) {
   const session = await resolveSessionUser(req);
   if (!session) {
@@ -1023,6 +1175,7 @@ async function handleChangePassword(req, res) {
 
 function publicLobbyRoom(room) {
   return {
+    avatarUrl: room.avatarKey ? `/api/avatars/${encodeURIComponent(room.avatarKey)}` : null,
     createdAt: room.createdAt,
     emptySince: room.emptySince,
     isStatic: room.isStatic,
@@ -1031,6 +1184,85 @@ function publicLobbyRoom(room) {
     relationship: room.relationship || 'owner',
     roomId: room.id
   };
+}
+
+function broadcastRoomUpdate(roomId, room) {
+  const payload = publicLobbyRoom(room);
+  const presence = presenceRooms.get(roomId);
+  if (presence) broadcast(presence, { type: 'room-updated', room: payload });
+  roomRuntime?.mirrorLegacyRoomEvent(roomId, { type: 'room-updated', room: payload });
+  roomRuntime?.invalidateRecipientCache(roomId);
+  roomRuntime?.scheduleSummaryBroadcast(roomId);
+  return payload;
+}
+
+async function handleUploadRoomAvatar(req, res, roomId, request) {
+  const room = await authorizeRoomMutation(req, res, roomId);
+  if (!room) return;
+  if (!checkAvatarUploadRate(res, room.ownerId)) return;
+
+  const processed = await processAvatar(await readAvatarUpload(request));
+  const avatarKey = createAvatarKey('room', room.id, processed.hash);
+  await getAvatarStorage().save(avatarKey, processed.buffer);
+
+  let result;
+  try {
+    result = await getRoomStore().swapRoomAvatar(roomId, avatarKey);
+  } catch (error) {
+    // Another request may already have committed the same content-addressed key.
+    // Reconciliation removes a truly orphaned write without risking that live file.
+    throw error;
+  }
+  if (!result.room) {
+    if (room.avatarKey !== avatarKey) await removeAvatarBestEffort(avatarKey, request);
+    sendJson(res, 404, { ok: false, error: 'Комната не найдена' });
+    return;
+  }
+  if (result.previousAvatarKey !== avatarKey) {
+    await removeAvatarBestEffort(result.previousAvatarKey, request);
+  }
+  sendJson(res, 200, { ok: true, room: broadcastRoomUpdate(roomId, result.room) });
+}
+
+async function handleDeleteRoomAvatar(req, res, roomId, request) {
+  const room = await authorizeRoomMutation(req, res, roomId);
+  if (!room) return;
+  const result = await getRoomStore().swapRoomAvatar(roomId, null);
+  if (!result.room) {
+    sendJson(res, 404, { ok: false, error: 'Комната не найдена' });
+    return;
+  }
+  await removeAvatarBestEffort(result.previousAvatarKey, request);
+  sendJson(res, 200, { ok: true, room: broadcastRoomUpdate(roomId, result.room) });
+}
+
+async function openAvatarStream(key) {
+  validateAvatarKey(key);
+  const stream = getAvatarStorage().createReadStream(key);
+  await new Promise((resolve, reject) => {
+    stream.once('open', resolve);
+    stream.once('error', reject);
+  });
+  return stream;
+}
+
+async function handleGetAvatar(res, key) {
+  let stream;
+  try {
+    stream = await openAvatarStream(key);
+  } catch (error) {
+    if (error instanceof TypeError || error?.code === 'ENOENT') {
+      sendJson(res, 404, { ok: false, error: 'Avatar not found' });
+      return;
+    }
+    throw error;
+  }
+  res.writeHead(200, {
+    ...baseHeaders(),
+    'Cache-Control': 'public, max-age=31536000, immutable',
+    'Content-Type': 'image/webp'
+  });
+  stream.pipe(res);
 }
 
 async function handleAuthRooms(req, res) {
@@ -1092,6 +1324,7 @@ async function handleRoomStatus(res, url) {
 
   sendJson(res, 200, {
     ok: true,
+    avatarUrl: room.avatarKey ? `/api/avatars/${encodeURIComponent(room.avatarKey)}` : null,
     createdAt: room.createdAt,
     exists: true,
     emptySince: room.emptySince,
@@ -1242,7 +1475,14 @@ async function handleRoomChatPost(req, res, roomId) {
     return;
   }
 
-  const publicMessage = { ...message, avatarColorKey };
+  const publicMessage = {
+    ...message,
+    avatarAccent: sessionUser?.avatarAccent || activePeer?.avatarAccent || null,
+    avatarColorKey,
+    avatarUrl: sessionUser?.avatarKey
+      ? `/api/avatars/${encodeURIComponent(sessionUser.avatarKey)}`
+      : activePeer?.avatarUrl || null
+  };
   roomRuntime?.broadcastChatMessage(roomId, publicMessage);
   sendJson(res, 201, { ok: true, message: publicChatMessage(publicMessage) });
 }
@@ -1907,11 +2147,12 @@ function getActiveGuestWsCount() {
   return count;
 }
 
-function createApiApp({ store = null, users = null, friends = null, notifications = null } = {}) {
+function createApiApp({ store = null, users = null, friends = null, notifications = null, avatars = null } = {}) {
   if (store) roomStore = store;
   if (users) userStore = users;
   if (friends) friendStore = friends;
   if (notifications) notificationStore = notifications;
+  if (avatars) avatarStorage = avatars;
 
   const app = fastify({
     bodyLimit: BODY_LIMIT_BYTES,
@@ -1921,6 +2162,9 @@ function createApiApp({ store = null, users = null, friends = null, notification
   });
 
   app.register(fastifyCookie, { hook: 'onRequest' });
+  app.register(fastifyMultipart, {
+    limits: { fileSize: MAX_AVATAR_BYTES, files: 1, parts: 2 }
+  });
   app.register(fastifyWebsocket, { options: { maxPayload: WS_MAX_PAYLOAD_BYTES } });
 
   wsRegistry = createConnectionRegistry({
@@ -2000,6 +2244,8 @@ function createApiApp({ store = null, users = null, friends = null, notification
   app.post('/api/auth/logout', (request, reply) => runLegacyHandler(request, reply, handleLogout));
   app.get('/api/auth/me', (request, reply) => runLegacyHandler(request, reply, handleMe));
   app.post('/api/auth/profile', (request, reply) => runLegacyHandler(request, reply, handleUpdateProfile));
+  app.post('/api/auth/avatar', (request, reply) => runLegacyHandler(request, reply, handleUploadUserAvatar));
+  app.delete('/api/auth/avatar', (request, reply) => runLegacyHandler(request, reply, handleDeleteUserAvatar));
   app.post('/api/auth/password', (request, reply) => runLegacyHandler(request, reply, handleChangePassword));
   app.get('/api/auth/rooms', (request, reply) => runLegacyHandler(request, reply, handleAuthRooms));
   app.post('/api/auth/rooms', (request, reply) => runLegacyHandler(request, reply, handleAddAuthRoom));
@@ -2008,7 +2254,16 @@ function createApiApp({ store = null, users = null, friends = null, notification
     return handleUpdateRoom(req, res, normalizeRoomId(request.params.roomId));
   }));
   app.delete('/api/rooms/:roomId', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
-    return handleDeleteRoom(req, res, normalizeRoomId(request.params.roomId));
+    return handleDeleteRoom(req, res, normalizeRoomId(request.params.roomId), request);
+  }));
+  app.post('/api/rooms/:roomId/avatar', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
+    return handleUploadRoomAvatar(req, res, normalizeRoomId(request.params.roomId), request);
+  }));
+  app.delete('/api/rooms/:roomId/avatar', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
+    return handleDeleteRoomAvatar(req, res, normalizeRoomId(request.params.roomId), request);
+  }));
+  app.get('/api/avatars/:key', (request, reply) => runLegacyHandler(request, reply, (_req, res) => {
+    return handleGetAvatar(res, request.params.key);
   }));
   app.get('/api/rooms/:roomId', (request, reply) => runLegacyHandler(request, reply, (_req, res) => {
     const roomId = normalizeRoomId(request.params.roomId);
@@ -2169,11 +2424,21 @@ async function bootstrap({ env = process.env, logger = console, exit = process.e
     userStore = createUserStore({ databaseUrl: database.url, logger, sessionTtlMs: SESSION_TTL_MS });
     friendStore = createFriendStore({ databaseUrl: database.url, logger });
     notificationStore = createNotificationStore({ databaseUrl: database.url, logger });
+    avatarStorage = createAvatarStorage({ uploadsDir: readUploadsDir(env) });
+    const reconciliation = await reconcileAvatarStorage({
+      storage: avatarStorage,
+      userStore,
+      roomStore
+    });
+    if (reconciliation.removed > 0) {
+      logger.info?.(`Removed ${reconciliation.removed} orphaned avatar file(s)`);
+    }
     const server = createApiServer({
       store: roomStore,
       users: userStore,
       friends: friendStore,
-      notifications: notificationStore
+      notifications: notificationStore,
+      avatars: avatarStorage
     });
     await server.app.ready();
     startPruneTimer(server, logger);

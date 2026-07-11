@@ -157,6 +157,51 @@
   color: #fff;
 }
 
+.settings-profile-avatar img {
+  border-radius: inherit;
+}
+
+.settings-avatar-actions {
+  display: flex;
+  gap: 9px;
+  margin: -14px 0 24px 72px;
+}
+
+.settings-avatar-input {
+  display: none;
+}
+
+.settings-avatar-upload,
+.settings-avatar-delete {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 11px;
+  border-radius: 9px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.settings-avatar-upload {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--warm-ink-dim);
+}
+
+.settings-avatar-delete {
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  background: transparent;
+  color: #f87171;
+}
+
+.settings-avatar-upload:disabled,
+.settings-avatar-delete:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
 .settings-profile-name {
   color: var(--warm-ink);
   font-size: 17px;
