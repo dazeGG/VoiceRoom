@@ -9,7 +9,7 @@ import {
   getParticipantById
 } from '../room/participants';
 import type { Participant } from '../core/types';
-import { playMediaElement } from '../services/media-playback-service';
+import { playMediaElement, releaseScreenMediaElement } from '../services/media-playback-service';
 import {
   refreshScreenMeta,
   refreshScreenStreamControls,
@@ -228,7 +228,10 @@ export function hideScreenStage(): void {
   const video = getScreenVideo();
   const stage = getScreenStage();
   video?.pause();
-  if (video) video.srcObject = null;
+  if (video) {
+    releaseScreenMediaElement(video);
+    video.srcObject = null;
+  }
   if (stage && document.fullscreenElement === stage) {
     document.exitFullscreen().catch(() => {});
   }

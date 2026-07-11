@@ -3,7 +3,6 @@ import { bumpParticipantsRevision, participantsUi } from '../../participants-ui.
 import { reactiveParticipant, state } from '../core/state.svelte';
 import { getScreenProfile } from '../media/profiles';
 import {
-  applyAudioOutputDevice,
   applyRemoteParticipantAudioPreferences,
   playMediaElement,
   releaseRemoteAudioElement
@@ -422,11 +421,12 @@ function attachRemoteAudioTrack(
   audio.autoplay = true;
   audio.muted = true;
   (audio as HTMLAudioElement & { playsInline: boolean }).playsInline = true;
-  audio.srcObject = stream || new MediaStream([track]);
+  // The activator and WebAudio source must contain exactly this microphone
+  // track; a LiveKit stream can also carry screen audio.
+  audio.srcObject = new MediaStream([track]);
   peer.audioElements.set(track.id, audio);
   document.body.append(audio);
   applyRemoteParticipantAudioPreferences(peer);
-  applyAudioOutputDevice(audio).catch(() => {});
   playMediaElement(audio);
 
   track.addEventListener(

@@ -149,7 +149,7 @@ export function toggleOutputMute(): void {
 
   syncOutputDeviceUiState();
   syncLiveKitVoiceSubscriptions();
-  syncPlaybackMuteState();
+  syncPlaybackMuteState({ muteDelayMs: nextOutputMuted ? 220 : 0 });
   updateParticipant({
     deafened: state.outputMuted,
     id: state.peerId,

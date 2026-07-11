@@ -1104,6 +1104,7 @@ test('remote participant audio preferences persist volume and local mute separat
   const config = read('src/lib/features/room/client/core/config.ts');
   const settings = read('src/lib/features/room/client/core/settings.ts');
   const playback = read('src/lib/features/room/client/services/media-playback-service.ts');
+  const audioBus = read('src/lib/features/room/client/services/audio-bus.ts');
   const participants = read('src/lib/features/room/client/room/participants.ts');
 
   assert.match(config, /PARTICIPANT_AUDIO_PREFERENCES_STORAGE_KEY = 'voice-room:participant-audio-preferences'/);
@@ -1121,43 +1122,29 @@ test('remote participant audio preferences persist volume and local mute separat
 
   assert.match(playback, /export function applyRemoteParticipantAudioPreferences\(peer: Participant\)/);
   assert.match(functionBody(playback, 'applyRemoteParticipantAudioPreferences'), /getParticipantAudioPreferenceKey\(peer\.accountUserId, peer\.id\)/);
-  assert.match(functionBody(playback, 'applyRemoteParticipantAudioPreferences'), /isVoicePlaybackMuted\(\) \|\| preference\.muted \|\| preference\.volume <= 0/);
-  assert.match(functionBody(playback, 'applyRemoteParticipantAudioPreferences'), /applyVoiceMediaElementVolume\(audio, \{ muted, volume: preference\.volume \}\)/);
+  assert.match(functionBody(playback, 'applyRemoteParticipantAudioPreferences'), /isAppPlaybackMuted\(\) \|\| preference\.muted \|\| preference\.volume <= 0/);
+  assert.match(functionBody(playback, 'applyRemoteParticipantAudioPreferences'), /routeMediaStreamElement\(audio, 'voice', \{ muted, volume: preference\.volume \}\)/);
   const outputSyncBody = functionBody(playback, 'syncAudioOutputDevices');
-  assert.match(outputSyncBody, /syncRemoteAudioPlayback\(\)/);
-  assert.ok(
-    outputSyncBody.indexOf('syncRemoteAudioPlayback()') < outputSyncBody.indexOf('applyAudioOutputDevice(mediaElement)'),
-    'remote voice preferences must be applied before output sink ids'
-  );
-  assert.match(
-    outputSyncBody,
-    /state\.outputDeviceId && !supportsAudioContextOutputSelection\(\) && !rebuildActiveVoiceAudioElementsForOutputSwitch\(\)[\s\S]*return false/,
-    'active voice gain graphs must be rebuilt or fail output-device switching when the AudioContext destination cannot switch sinks'
-  );
-  assert.ok(
-    outputSyncBody.indexOf('rebuildActiveVoiceAudioElementsForOutputSwitch()') < outputSyncBody.indexOf('syncRemoteAudioPlayback()'),
-    'stale voice gain graphs must be rebuilt before reporting media-element sink success'
-  );
-  assert.match(playback, /const voiceAudioGains = new WeakMap<HTMLMediaElement, VoiceAudioGain>\(\)/);
-  assert.match(playback, /let activeVoiceAudioGainCount = 0/);
-  assert.match(functionBody(playback, 'hasActiveVoiceAudioGains'), /return activeVoiceAudioGainCount > 0/);
-  const rebuildVoiceBody = functionBody(playback, 'rebuildActiveVoiceAudioElementsForOutputSwitch');
-  assert.match(rebuildVoiceBody, /voiceAudioGains\.has\(audio\)/);
-  assert.match(rebuildVoiceBody, /document\.createElement\('audio'\)/);
-  assert.match(rebuildVoiceBody, /releaseRemoteAudioElement\(audio\)/);
-  assert.match(rebuildVoiceBody, /peer\.audioElements\.set\(trackId, replacement\)/);
-  assert.match(rebuildVoiceBody, /return !hasActiveVoiceAudioGains\(\)/);
+  assert.match(outputSyncBody, /syncAudioBusOutput\(\)/);
   assert.match(playback, /export function releaseRemoteAudioElement\(mediaElement: HTMLMediaElement\)/);
-  assert.match(functionBody(playback, 'releaseRemoteAudioElement'), /activeVoiceAudioGainCount = Math\.max\(0, activeVoiceAudioGainCount - 1\)/);
-  assert.match(playback, /function applyVoiceMediaElementVolume[\s\S]*if \(existing\) \{[\s\S]*existing\.gain\.gain\.value = options\.muted \? 0 : volume[\s\S]*playMediaElement\(mediaElement\)/);
-  assert.doesNotMatch(functionBody(playback, 'applyVoiceMediaElementVolume'), /releaseRemoteAudioElement\(mediaElement\)/);
-  assert.match(playback, /function applyVoiceMediaElementVolume[\s\S]*mediaElement\.volume = Math\.min\(1, volume\)/);
-  assert.match(playback, /function applyVoiceMediaElementVolume[\s\S]*activeVoiceAudioGainCount \+= 1[\s\S]*gain\.gain\.value = options\.muted \? 0 : volume[\s\S]*playMediaElement\(mediaElement\)/);
+  assert.match(functionBody(playback, 'releaseRemoteAudioElement'), /releaseMediaStreamElement\(mediaElement\)/);
+
+  assert.match(audioBus, /voice\.connect\(master\)/);
+  assert.match(audioBus, /media\.connect\(master\)/);
+  assert.match(audioBus, /sfx\.connect\(master\)/);
+  assert.match(audioBus, /master\.connect\(limiter\)/);
+  assert.match(audioBus, /createDynamicsCompressor\(\)/);
+  assert.match(audioBus, /createMediaStreamSource\(stream\)/);
+  assert.match(audioBus, /Math\.min\(2, Math\.max\(0, options\.volume\)\)/);
+  assert.match(audioBus, /createMediaStreamDestination\(\)/);
+  assert.match(audioBus, /sinkElement\.setSinkId\(sinkId\)/);
+  assert.doesNotMatch(playback, /createMediaElementSource|rebuildActiveVoiceAudioElementsForOutputSwitch|applyVoiceMediaElementVolume/);
 
   assert.match(participants, /applyRemoteParticipantAudioPreferences\(peer\)/);
   assert.match(participants, /const hadAccountUserId = participant\.accountUserId/);
   assert.match(participants, /participant\.accountUserId !== hadAccountUserId[\s\S]*applyRemoteParticipantAudioPreferences\(participant\)/);
   assert.match(participants, /releaseRemoteAudioElement\(audio\)/);
+  assert.match(participants, /audio\.srcObject = new MediaStream\(\[track\]\)/);
 });
 
 test('remote participant tiles do not show transient voice-connecting placeholder', () => {
@@ -1251,9 +1238,12 @@ test('participant context menu is remote-only and exposes relationship-aware loc
 test('notification cue volume respects stored multiplier', () => {
   const cues = read('src/lib/features/room/client/media/cues.ts');
   const settings = read('src/lib/features/room/client/core/settings.ts');
+  const audioBus = read('src/lib/features/room/client/services/audio-bus.ts');
 
   assert.match(settings, /getNotificationVolumeMultiplier/);
-  assert.match(cues, /getNotificationVolumeMultiplier\(\)/);
+  assert.match(audioBus, /graph\.sfx\.gain\.value = getNotificationVolumeMultiplier\(\)/);
+  assert.match(cues, /getAudioBusInput\('sfx'\)/);
+  assert.doesNotMatch(cues, /gain\.connect\(context\.destination\)/);
 });
 
 test('sound cue layer covers direct messages and friend request events', () => {

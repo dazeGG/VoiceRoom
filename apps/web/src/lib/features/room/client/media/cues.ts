@@ -3,10 +3,10 @@ import {
   PEER_JOIN_CUE_DEDUPE_MS,
   STREAM_VIEWER_CUE_DEDUPE_MS
 } from '../core/config';
-import { getNotificationVolumeMultiplier } from '../core/settings';
 import { isDoNotDisturbPlaybackSuppressed } from '$lib/shared/audio/playback-policy.svelte';
 import { state } from '../core/state.svelte';
 import { getSharedAudioContext, isAppPlaybackMuted, isLocalAppAudioSuppressed, queueAudioUnlock } from '../services/media-playback-service';
+import { getAudioBusInput } from '../services/audio-bus';
 
 const peerJoinCueTimes = new Map<string, number>();
 const streamViewerCueTimes = new Map<string, number>();
@@ -16,7 +16,7 @@ function isCuePlaybackSuppressed(): boolean {
 }
 
 function getCueGain(value: number): number {
-  return value * NOTIFICATION_VOLUME_BOOST * getNotificationVolumeMultiplier();
+  return value * NOTIFICATION_VOLUME_BOOST;
 }
 
 interface CueNote {
@@ -51,7 +51,7 @@ function playCueSequence(notes: CueNote[], label: string): void {
       gain.gain.exponentialRampToValueAtTime(0.0001, startedAt + duration);
 
       oscillator.connect(gain);
-      gain.connect(context.destination);
+      gain.connect(getAudioBusInput('sfx'));
       oscillator.start(startedAt);
       oscillator.stop(startedAt + duration + 0.02);
       oscillator.addEventListener('ended', () => {
@@ -164,7 +164,7 @@ export function playPeerCue(type: 'join' | 'leave'): void {
       gain.gain.exponentialRampToValueAtTime(0.0001, startedAt + 0.11);
 
       oscillator.connect(gain);
-      gain.connect(context.destination);
+      gain.connect(getAudioBusInput('sfx'));
       oscillator.start(startedAt);
       oscillator.stop(startedAt + 0.13);
       oscillator.addEventListener('ended', () => {
@@ -211,7 +211,7 @@ export function playMicCue(muted: boolean): void {
       gain.gain.exponentialRampToValueAtTime(0.0001, startedAt + 0.1);
 
       oscillator.connect(gain);
-      gain.connect(context.destination);
+      gain.connect(getAudioBusInput('sfx'));
       oscillator.start(startedAt);
       oscillator.stop(startedAt + 0.12);
       oscillator.addEventListener('ended', () => {
@@ -250,7 +250,7 @@ export function playOutputCue(muted: boolean): void {
       gain.gain.exponentialRampToValueAtTime(0.0001, startedAt + 0.11);
 
       oscillator.connect(gain);
-      gain.connect(context.destination);
+      gain.connect(getAudioBusInput('sfx'));
       oscillator.start(startedAt);
       oscillator.stop(startedAt + 0.12);
       oscillator.addEventListener('ended', () => {
@@ -290,7 +290,7 @@ export function playStreamCue(type: 'start' | 'stop'): void {
       gain.gain.exponentialRampToValueAtTime(0.0001, startedAt + 0.09);
 
       oscillator.connect(gain);
-      gain.connect(context.destination);
+      gain.connect(getAudioBusInput('sfx'));
       oscillator.start(startedAt);
       oscillator.stop(startedAt + 0.105);
       oscillator.addEventListener('ended', () => {
@@ -335,7 +335,7 @@ export function playStreamViewerCue(type: 'join' | 'leave'): void {
         gain.gain.exponentialRampToValueAtTime(0.0001, startedAt + 0.11);
 
         oscillator.connect(gain);
-        gain.connect(context.destination);
+        gain.connect(getAudioBusInput('sfx'));
         oscillator.start(startedAt);
         oscillator.stop(startedAt + 0.13);
         oscillator.addEventListener('ended', () => {
@@ -358,7 +358,7 @@ export function playStreamViewerCue(type: 'join' | 'leave'): void {
     gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.16);
 
     oscillator.connect(gain);
-    gain.connect(context.destination);
+    gain.connect(getAudioBusInput('sfx'));
     oscillator.start(now);
     oscillator.stop(now + 0.18);
     oscillator.addEventListener('ended', () => {

@@ -17,6 +17,7 @@
     isGateDisabled,
     NOISE_OPTIONS,
     persistGateThreshold,
+    persistMasterVolume,
     persistMicrophone,
     persistNoiseMode,
     persistNotificationVolume,
@@ -28,6 +29,7 @@
     type DeviceOption,
     type MicMeter
   } from '../model/sound-settings';
+  import { syncAudioBusOutput, syncAudioBusSettings } from '$lib/features/room/client/services/audio-bus';
   import {
     notificationPreferences,
     requestNotificationsFromUiAction,
@@ -84,8 +86,11 @@
   let gateOn = $state(false);
   let gateDb = $state(GATE_DEFAULT_DB);
   let micLevelDb = $state(GATE_THRESHOLD_MIN_DB);
+  let masterVolume = $state(100);
   let notificationVolume = $state(100);
   let notificationSaving = $state(false);
+  let confirmedSpeakerId = '';
+  let speakerChangeGeneration = 0;
 
   const label = $derived(user?.displayName?.trim() || user?.login || '');
 
@@ -126,9 +131,11 @@
     const sound = readSoundSettings();
     micId = sound.microphoneDeviceId;
     speakerId = sound.outputDeviceId;
+    confirmedSpeakerId = sound.outputDeviceId;
     noiseMode = sound.noiseMode;
     gateOn = !isGateDisabled(sound.gateThresholdDb);
     gateDb = gateOn ? sound.gateThresholdDb : GATE_DEFAULT_DB;
+    masterVolume = sound.masterVolume;
     notificationVolume = sound.notificationVolume;
     void enumerateMicrophones().then((list) => (microphones = list));
     void enumerateSpeakers().then((list) => (speakers = list));
@@ -283,9 +290,23 @@
     persistMicrophone(micId);
   }
 
-  function onSpeakerChange(value: string): void {
+  async function onSpeakerChange(value: string): Promise<void> {
+    const generation = ++speakerChangeGeneration;
     speakerId = value;
     persistSpeaker(speakerId);
+    roomClientState.outputDeviceId = speakerId;
+    const synced = await syncAudioBusOutput(speakerId);
+    if (generation !== speakerChangeGeneration) return;
+    if (synced) {
+      confirmedSpeakerId = speakerId;
+      return;
+    }
+
+    speakerId = confirmedSpeakerId;
+    persistSpeaker(confirmedSpeakerId);
+    roomClientState.outputDeviceId = confirmedSpeakerId;
+    await syncAudioBusOutput(confirmedSpeakerId);
+    onToast('Не удалось переключить динамик');
   }
 
   function onNoiseChange(value: string): void {
@@ -308,6 +329,12 @@
 
   function onNotificationVolumeChange(value: number): void {
     notificationVolume = persistNotificationVolume(value);
+    syncAudioBusSettings();
+  }
+
+  function onMasterVolumeChange(value: number): void {
+    masterVolume = persistMasterVolume(value);
+    syncAudioBusSettings();
   }
 
   async function toggleBrowserNotifications(): Promise<void> {
@@ -549,13 +576,30 @@
               </div>
               <div>
                 <div class="settings-sound-head">
+                  <span class="settings-field-label">Общая громкость</span>
+                  <output class="settings-sound-value">{Math.round(masterVolume)}%</output>
+                </div>
+                <Slider
+                  bind:value={masterVolume}
+                  min={0}
+                  max={200}
+                  defaultValue={100}
+                  step={1}
+                  ariaLabel="Общая громкость"
+                  ariaValueText={`${Math.round(masterVolume)}%`}
+                  onValueChange={onMasterVolumeChange}
+                />
+                <div class="settings-gate-hint">Управляет голосами, стримами и звуками интерфейса. Значения выше 100% защищены лимитером.</div>
+              </div>
+              <div>
+                <div class="settings-sound-head">
                   <span class="settings-field-label">Звуки интерфейса</span>
                   <output class="settings-sound-value">{Math.round(notificationVolume)}%</output>
                 </div>
                 <Slider
                   bind:value={notificationVolume}
                   min={0}
-                  max={100}
+                  max={200}
                   defaultValue={100}
                   step={1}
                   ariaLabel="Звуки интерфейса"
