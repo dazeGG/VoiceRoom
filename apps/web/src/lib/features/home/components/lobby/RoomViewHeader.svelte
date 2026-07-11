@@ -1,10 +1,11 @@
 <script lang="ts">
-  import { ChevronDown, ChevronLeft, Copy, Link } from '@lucide/svelte';
+  import { Bell, BellOff, ChevronDown, ChevronLeft, Copy, Link } from '@lucide/svelte';
   import type { OwnedRoom } from '$lib/api/auth';
   import { Ellipsis, Popover, PopoverDivider, PopoverMenuItem } from '$lib/shared/ui';
   import { iconMd, iconSm } from '$lib/shared/ui/icons';
   import { roomDisplayName, roomVisual } from '../../model/rooms';
   import { copyText } from '../../services/desktop-download';
+  import { isRoomNotificationsMuted, updateRoomNotificationsMuted } from '../../model/notification-preferences.svelte';
 
   let { room, onBack, onToast } = $props<{
     room: OwnedRoom;
@@ -14,6 +15,22 @@
 
   const visual = $derived(roomVisual(room));
   const name = $derived(roomDisplayName(room));
+  const roomMuted = $derived(isRoomNotificationsMuted(room.roomId));
+  let muteSaving = $state(false);
+
+  async function toggleRoomMute(close: () => void): Promise<void> {
+    if (muteSaving) return;
+    muteSaving = true;
+    try {
+      await updateRoomNotificationsMuted(room.roomId, !roomMuted);
+      onToast?.(roomMuted ? 'Уведомления комнаты включены' : 'Уведомления комнаты выключены');
+      close();
+    } catch {
+      onToast?.('Не удалось изменить уведомления');
+    } finally {
+      muteSaving = false;
+    }
+  }
 
   async function copyValue(value: string, message: string, close: () => void): Promise<void> {
     try {
@@ -70,6 +87,12 @@
       <PopoverMenuItem label="Скопировать код" onclick={() => void copyValue(room.roomId, 'Код скопирован', close)}>
         {#snippet icon()}
           <Copy {...iconMd} aria-hidden="true" />
+        {/snippet}
+      </PopoverMenuItem>
+
+      <PopoverMenuItem label={roomMuted ? 'Включить уведомления' : 'Выключить уведомления'} onclick={() => void toggleRoomMute(close)} disabled={muteSaving}>
+        {#snippet icon()}
+          {#if roomMuted}<BellOff {...iconMd} aria-hidden="true" />{:else}<Bell {...iconMd} aria-hidden="true" />{/if}
         {/snippet}
       </PopoverMenuItem>
 

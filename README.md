@@ -18,6 +18,7 @@ Voice Room - голосовая комната по ссылке с демонс
 - Защита создания комнат: rate limit, proof-of-work challenge и лимит пустых комнат.
 - Удаление сообщений: свои — везде; сервер также поддерживает soft-delete сообщений комнаты владельцем статичной комнаты.
 - Задел 2.4.x для модерации/Web Push/Ring/DND: миграции и часть контрактов могут присутствовать в коде, но end-to-end UI/API enforcement ещё не считается shipped-функциональностью.
+- Уведомления, пока приложение открыто: browser notification в вебе и native OS notification в desktop-оболочке для ЛС, сообщений в доступных комнатах, заявок в друзья и принятия заявки; можно выключить уведомления по человеку или комнате.
 - Многострочный чат + кликабельные ссылки (http/https/www) в чате комнаты и ЛС.
 - Хоткей ⌘⇧M / Ctrl+Shift+M для мьюта микрофона в комнате.
 
@@ -311,6 +312,8 @@ npm run dev:down
 
 Desktop-оболочка живет в соседнем проекте `VoiceRoomDesktop`. Это веб-приложение остается основным продуктом, а desktop-проект отвечает за нативный выбор окна/экрана, desktop capture audio, управление fullscreen-окном и packaging.
 
+Когда VoiceRoom открыт внутри desktop-оболочки, web-клиент отправляет уведомления через узкий preload bridge `window.voiceRoomDesktopNotifications.show(...)`. Electron main process валидирует payload и показывает native OS notification; если bridge недоступен или сообщает `unsupported`, web-клиент откатывается к обычному browser `Notification`. Это **не** offline/Web Push доставка: уведомления приходят только пока web/desktop приложение открыто и подключено к account realtime stream.
+
 ```bash
 cd ../VoiceRoomDesktop
 # Создайте .env для desktop по документации VoiceRoomDesktop
@@ -323,7 +326,7 @@ npm run desktop
 
 Аккаунты служат для владения постоянными комнатами, а не для контроля доступа к ним. Пароли хешируются `scrypt` (встроенный `node:crypto`), сессия живёт в HttpOnly + SameSite=Lax cookie (`vr_session`) до `SESSION_TTL_MS`; попытки входа/регистрации ограничены `AUTH_RATE_LIMIT` на IP. Логин нормализуется в нижний регистр и уникален. При создании постоянной комнаты залогиненным пользователем она получает `owner_id`, и список «Мои комнаты» приходит с сервера (`GET /api/auth/rooms`). Временные комнаты остаются ownerless.
 
-Модерация/Web Push/Ring/DND в ветке 2.4.x находятся в staged-состоянии: схема `room_bans` и документация плана есть, но публичные kick/ban/ring/push/DND маршруты и UI enforcement не считаются shipped до отдельной end-to-end реализации и тестов. Текущая shipped-модель безопасности — ссылка/код комнаты, owner_id для постоянных комнат и серверная проверка удаления сообщений.
+Модерация/Web Push/Ring/DND в ветке 2.4.x находятся в staged-состоянии: схема `room_bans` и документация плана есть, но публичные kick/ban/ring/push/DND маршруты и UI enforcement не считаются shipped до отдельной end-to-end реализации и тестов. Shipped уведомления в текущей ветке — только open-app browser/native desktop notifications от account realtime stream; закрытое приложение, service-worker push и VAPID-доставка не поддерживаются. Текущая shipped-модель безопасности — ссылка/код комнаты, owner_id для постоянных комнат и серверная проверка удаления сообщений.
 
 Постоянные комнаты больше не считаются в IP-квоту: создавать их могут только авторизованные пользователи, а владение ограничено `MAX_STATIC_ROOMS_PER_USER` (по умолчанию 3). Временные ownerless-комнаты остаются ограничены по IP через `MAX_TEMP_ROOMS_PER_IP` (legacy `MAX_EMPTY_ROOMS_PER_IP` используется только как fallback для старых env-файлов), чтобы один IP не заполнял `MAX_ROOMS` пустыми временными комнатами.
 

@@ -27,6 +27,12 @@
     type DeviceOption,
     type MicMeter
   } from '../model/sound-settings';
+  import {
+    notificationPreferences,
+    requestNotificationsFromUiAction,
+    syncNotificationPermission,
+    updatePrivateNotifications
+  } from '../model/notification-preferences.svelte';
 
   let {
     open,
@@ -65,6 +71,7 @@
   let gateDb = $state(GATE_DEFAULT_DB);
   let micLevelDb = $state(GATE_THRESHOLD_MIN_DB);
   let notificationVolume = $state(100);
+  let notificationSaving = $state(false);
 
   const avatar = $derived(getAvatarColor(user?.avatarColorKey));
   const label = $derived(user?.displayName?.trim() || user?.login || '');
@@ -104,6 +111,7 @@
     currentPassword = '';
     newPassword = '';
 
+    syncNotificationPermission();
     const sound = readSoundSettings();
     micId = sound.microphoneDeviceId;
     speakerId = sound.outputDeviceId;
@@ -231,6 +239,26 @@
 
   function onNotificationVolumeChange(value: number): void {
     notificationVolume = persistNotificationVolume(value);
+  }
+
+  async function requestBrowserNotifications(): Promise<void> {
+    const permission = await requestNotificationsFromUiAction();
+    if (permission === 'granted') onToast('Системные уведомления включены');
+    else if (permission === 'denied') onToast('Разрешите уведомления в настройках браузера');
+    else onToast('Системные уведомления недоступны');
+  }
+
+  async function togglePrivateNotifications(): Promise<void> {
+    if (notificationSaving) return;
+    notificationSaving = true;
+    try {
+      await updatePrivateNotifications(!notificationPreferences.privateNotifications);
+      onToast('Настройки уведомлений сохранены');
+    } catch {
+      onToast('Не удалось сохранить настройки уведомлений');
+    } finally {
+      notificationSaving = false;
+    }
   }
 
   function previewNotificationSound(): void {
@@ -392,6 +420,48 @@
                   <div class="settings-gate-hint">
                     Микрофон открывается, только когда звук громче порога — отсекает фоновый шум и дыхание.
                   </div>
+                </div>
+              </div>
+
+
+              <div>
+                <div class="settings-gate-head">
+                  <span class="settings-field-label">Системные уведомления</span>
+                  <button
+                    class="settings-switch"
+                    type="button"
+                    role="switch"
+                    aria-checked={notificationPreferences.deliveryPermission === 'granted'}
+                    aria-label="Системные уведомления"
+                    onclick={() => void requestBrowserNotifications()}
+                  >
+                    <span class="settings-switch-knob" aria-hidden="true"></span>
+                  </button>
+                </div>
+                <div class="settings-gate-hint">
+                  {#if notificationPreferences.deliveryPermission === 'granted'}Включены. Новые ЛС, заявки и сообщения комнат могут появляться как системные уведомления.
+                  {:else if notificationPreferences.browserPermission === 'denied'}Запрещены браузером — измените разрешение сайта в настройках браузера.
+                  {:else}Нажмите переключатель, чтобы запросить разрешение. Запрос выполняется только по вашему действию.{/if}
+                </div>
+              </div>
+
+              <div>
+                <div class="settings-gate-head">
+                  <span class="settings-field-label">Приватный текст уведомлений</span>
+                  <button
+                    class="settings-switch"
+                    type="button"
+                    role="switch"
+                    aria-checked={notificationPreferences.privateNotifications}
+                    aria-label="Приватный текст уведомлений"
+                    disabled={notificationSaving}
+                    onclick={() => void togglePrivateNotifications()}
+                  >
+                    <span class="settings-switch-knob" aria-hidden="true"></span>
+                  </button>
+                </div>
+                <div class="settings-gate-hint">
+                  Скрывает текст сообщений в системных уведомлениях.
                 </div>
               </div>
 

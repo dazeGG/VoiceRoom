@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ChevronLeft, User, X } from '@lucide/svelte';
+  import { Bell, BellOff, ChevronLeft, User, X } from '@lucide/svelte';
   import { iconMd, iconSm } from '$lib/shared/ui/icons';
   import { tick } from 'svelte';
   import type { DirectMessage } from '$lib/api/dm';
@@ -14,6 +14,7 @@
     sendMessage,
     toggleProfile
   } from '../../model/friends.svelte';
+  import { isPeerNotificationsMuted, updatePeerNotificationsMuted } from '../../model/notification-preferences.svelte';
 
   let { selfId, onHome } = $props<{ selfId: string; onHome: () => void }>();
 
@@ -46,6 +47,8 @@
     friendsState.friends.find((entry) => entry.user.id === friendsState.selectedFriendId)
   );
   const online = $derived(friendEntry?.online ?? false);
+  const peerMuted = $derived(isPeerNotificationsMuted(peer?.id));
+  let muteSaving = $state(false);
 
   interface Group {
     key: string;
@@ -111,6 +114,16 @@
   }
 
 
+
+  async function togglePeerMute(): Promise<void> {
+    if (!peer || muteSaving) return;
+    muteSaving = true;
+    try {
+      await updatePeerNotificationsMuted(peer.id, !peerMuted);
+    } finally {
+      muteSaving = false;
+    }
+  }
 
   async function handleRemove(): Promise<void> {
     if (peer) await removeFriend(peer.id);
@@ -214,6 +227,9 @@
           </div>
         </div>
 
+        <button class="lobby-profile-remove" type="button" onclick={togglePeerMute} disabled={muteSaving} data-notification-mute="dm">
+          {#if peerMuted}<BellOff {...iconSm} aria-hidden="true" /> Уведомления выключены{:else}<Bell {...iconSm} aria-hidden="true" /> Выключить уведомления{/if}
+        </button>
         <button class="lobby-profile-remove" type="button" onclick={handleRemove}>Удалить из друзей</button>
       </div>
     </div>
