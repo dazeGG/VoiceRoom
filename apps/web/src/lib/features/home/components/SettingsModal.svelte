@@ -34,6 +34,11 @@
     syncNotificationPermission,
     updatePrivateNotifications
   } from '../model/notification-preferences.svelte';
+  import {
+    pushNotifications,
+    setPushNotificationsEnabled,
+    syncPushNotificationState
+  } from '../model/push-notifications.svelte';
 
   let {
     open,
@@ -116,6 +121,7 @@
     });
 
     syncNotificationPermission();
+    void syncPushNotificationState(user?.id ?? null);
     const sound = readSoundSettings();
     micId = sound.microphoneDeviceId;
     speakerId = sound.outputDeviceId;
@@ -303,11 +309,23 @@
     notificationVolume = persistNotificationVolume(value);
   }
 
-  async function requestBrowserNotifications(): Promise<void> {
-    const permission = await requestNotificationsFromUiAction();
-    if (permission === 'granted') onToast('Системные уведомления включены');
-    else if (permission === 'denied') onToast('Разрешите уведомления в настройках браузера');
-    else onToast('Системные уведомления недоступны');
+  async function toggleBrowserNotifications(): Promise<void> {
+    try {
+      if (pushNotifications.supported) {
+        const active = await setPushNotificationsEnabled(!pushNotifications.active);
+        syncNotificationPermission();
+        onToast(active ? 'Push-уведомления включены' : 'Push-уведомления выключены');
+        return;
+      }
+      const permission = await requestNotificationsFromUiAction();
+      if (permission === 'granted') onToast('Системные уведомления включены');
+      else if (permission === 'denied') onToast('Разрешите уведомления в настройках браузера');
+      else onToast('Системные уведомления недоступны');
+    } catch {
+      onToast(pushNotifications.serverEnabled
+        ? 'Не удалось изменить push-уведомления'
+        : 'Push-уведомления не настроены на сервере');
+    }
   }
 
   async function togglePrivateNotifications(): Promise<void> {
@@ -520,15 +538,18 @@
                     class="settings-switch"
                     type="button"
                     role="switch"
-                    aria-checked={notificationPreferences.deliveryPermission === 'granted'}
+                    aria-checked={pushNotifications.supported ? pushNotifications.active : notificationPreferences.deliveryPermission === 'granted'}
                     aria-label="Системные уведомления"
-                    onclick={() => void requestBrowserNotifications()}
+                    disabled={pushNotifications.busy}
+                    onclick={() => void toggleBrowserNotifications()}
                   >
                     <span class="settings-switch-knob" aria-hidden="true"></span>
                   </button>
                 </div>
                 <div class="settings-gate-hint">
-                  {#if notificationPreferences.deliveryPermission === 'granted'}Включены. Новые ЛС, заявки и сообщения комнат могут появляться как системные уведомления.
+                  {#if pushNotifications.supported && pushNotifications.active}Включены. Новые ЛС и события друзей будут доставляться, даже когда вкладка закрыта.
+                  {:else if pushNotifications.supported && pushNotifications.loaded && !pushNotifications.serverEnabled}Отключены на сервере: настройте VAPID-ключи.
+                  {:else if notificationPreferences.deliveryPermission === 'granted'}Включены для открытой вкладки.
                   {:else if notificationPreferences.browserPermission === 'denied'}Запрещены браузером — измените разрешение сайта в настройках браузера.
                   {:else}Нажмите переключатель, чтобы запросить разрешение. Запрос выполняется только по вашему действию.{/if}
                 </div>

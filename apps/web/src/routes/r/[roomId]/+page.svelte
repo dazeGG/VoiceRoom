@@ -1,8 +1,8 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { page } from '$app/state';
-  import { logout } from '$lib/api/auth';
-  import { clearSession, loadSession, session } from '$lib/features/auth/session.svelte';
+  import { loadSession, session } from '$lib/features/auth/session.svelte';
+  import { signOut } from '$lib/features/home/model/sign-out';
   import LobbyPage from '$lib/features/home/LobbyPage.svelte';
   import { dismissToast, pushToast, toastState } from '$lib/features/home/model/toasts.svelte';
   import '$lib/features/home/styles/home.css';
@@ -36,8 +36,7 @@
     if (loggingOut) return;
     loggingOut = true;
     try {
-      await logout();
-      clearSession();
+      await signOut();
       showToast('Вы вышли из аккаунта');
     } catch (error) {
       showToast(error instanceof Error && error.message ? error.message : 'Не удалось выйти');

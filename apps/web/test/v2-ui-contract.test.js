@@ -342,13 +342,15 @@ test('room chat terminal lifecycle frames leave the room screen', () => {
 test('auth client does not mask unexpected backend failures as anonymous or empty state', () => {
   const authApi = read('src/lib/api/auth.ts');
   const home = read('src/lib/features/home/HomePage.svelte');
+  const signOut = read('src/lib/features/home/model/sign-out.ts');
   const lobby = read('src/lib/features/home/LobbyPage.svelte');
 
   assert.match(authApi, /throw new Error\('Не удалось проверить сессию'\)/);
   assert.match(authApi, /throw new Error\('Не удалось загрузить комнаты'\)/);
   assert.doesNotMatch(authApi, /if \(!response\.ok\) return null/);
   assert.doesNotMatch(authApi, /if \(!response\.ok\) return \[\]/);
-  assert.match(home, /await logout\(\);\n\s+clearSession\(\);/);
+  assert.match(home, /await signOut\(\);/);
+  assert.match(signOut, /await logout\(\);\n\s+clearSession\(\);/);
   assert.match(home, /Не удалось выйти из аккаунта/);
   assert.match(lobby, /Не удалось загрузить комнаты/);
 });
