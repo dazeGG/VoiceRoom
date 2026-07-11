@@ -2,6 +2,7 @@
 
 import type { DirectMessage } from './dm';
 import type { ChatMessage, RoomPeer, RoomSummary } from './rooms';
+import type { NotificationRealtimeEvent } from '../shared/notifications';
 
 export type RealtimeAccountEvent =
   | { type: 'ready'; payload: { userId?: string; guest?: boolean; onlineFriendIds?: string[] } }
@@ -44,7 +45,7 @@ export type RealtimeRoomEvent =
 
 export type RealtimeErrorEvent = { type: 'error'; payload: { code: string; message: string; id?: string } };
 
-export type RealtimeEvent = RealtimeAccountEvent | RealtimeRoomEvent | RealtimeErrorEvent;
+export type RealtimeEvent = RealtimeAccountEvent | RealtimeRoomEvent | RealtimeErrorEvent | NotificationRealtimeEvent;
 
 /** @deprecated Use RealtimeEvent */
 export type { RealtimeEvent as RealtimeEventUnion };

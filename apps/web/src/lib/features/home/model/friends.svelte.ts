@@ -21,6 +21,21 @@ import {
 import { deleteDirectMessage, fetchThread, markThreadRead, sendDirectMessage, type DirectMessage } from '$lib/api/dm';
 import { connectRealtime, type RealtimeEvent, type RealtimeHandle } from '$lib/api/realtime';
 import { playDirectMessageCue, playFriendAcceptedCue, playFriendRequestCue } from '$lib/features/room/client/media/cues';
+import {
+  canUseNotifications,
+  getNotificationDeliveryPermission,
+  routeNotificationEvent,
+  showBrowserNotification,
+  type NotificationActiveTarget
+} from '$lib/shared/notifications/router';
+import { roomNavigation } from './room-navigation.svelte';
+import {
+  areNotificationPreferencesLoadedFor,
+  loadNotificationPreferences,
+  notificationPreferences,
+  resetNotificationPreferences,
+  syncNotificationPermission
+} from './notification-preferences.svelte';
 
 export type LobbyMode = 'friends' | 'rooms';
 export type LobbyView = 'home' | 'dm' | 'people';
@@ -59,6 +74,10 @@ let selfId = '';
 // snapshot so a later refreshFriends() still applies the correct online flags.
 let presenceReady = false;
 let onlineFriendIds = new Set<string>();
+const MAX_PENDING_NOTIFICATION_EVENTS = 100;
+const PENDING_NOTIFICATION_TTL_MS = 60_000;
+let pendingNotificationEvents: Array<{ event: RealtimeEvent; receivedAt: number }> = [];
+let notificationPreferencesRetryTimer: ReturnType<typeof setTimeout> | null = null;
 
 function findFriend(userId: string): Friend | undefined {
   return friendsState.friends.find((entry) => entry.user.id === userId);
@@ -115,11 +134,18 @@ export function initLobby(currentUserId: string): () => void {
   void Promise.all([refreshFriends(), refreshRequests()]).catch(() => {
     friendsState.loaded = true;
   });
+  if (!areNotificationPreferencesLoadedFor(currentUserId)) resetNotificationPreferences();
+  scheduleNotificationPreferencesLoad(currentUserId);
   return () => {
     realtime?.close();
     realtime = null;
     presenceReady = false;
     onlineFriendIds = new Set();
+    if (notificationPreferencesRetryTimer) {
+      clearTimeout(notificationPreferencesRetryTimer);
+      notificationPreferencesRetryTimer = null;
+    }
+    pendingNotificationEvents = [];
   };
 }
 
@@ -267,7 +293,64 @@ export async function removeFriend(userId: string): Promise<void> {
 
 // --- Realtime -----------------------------------------------------------
 
+function getActiveNotificationTarget(): NotificationActiveTarget | null {
+  if (friendsState.view === 'dm' && friendsState.selectedFriendId) {
+    return { kind: 'dm', peerId: friendsState.selectedFriendId };
+  }
+  if (friendsState.mode === 'rooms' && roomNavigation.viewedRoomId) {
+    return { kind: 'room-preview', roomId: roomNavigation.viewedRoomId };
+  }
+  return null;
+}
+
+function handleNotificationRealtimeEvent(event: RealtimeEvent): boolean {
+  if (!event.type.startsWith('notification.')) return false;
+  if (!areNotificationPreferencesLoadedFor(selfId)) {
+    const now = Date.now();
+    pendingNotificationEvents = pendingNotificationEvents
+      .filter((entry) => now - entry.receivedAt <= PENDING_NOTIFICATION_TTL_MS)
+      .slice(-(MAX_PENDING_NOTIFICATION_EVENTS - 1));
+    pendingNotificationEvents.push({ event, receivedAt: now });
+    return true;
+  }
+  syncNotificationPermission();
+  const routed = routeNotificationEvent(event, {
+    userId: selfId,
+    activeTarget: getActiveNotificationTarget(),
+    mutedPeerIds: notificationPreferences.mutedPeerIds,
+    mutedRoomIds: notificationPreferences.mutedRoomIds,
+    privateNotifications: notificationPreferences.privateNotifications,
+    notificationsAvailable: canUseNotifications(),
+    permission: getNotificationDeliveryPermission()
+  });
+  if (routed.notify) showBrowserNotification(routed.payload);
+  return true;
+}
+
+function flushPendingNotificationEvents(): void {
+  if (!areNotificationPreferencesLoadedFor(selfId) || pendingNotificationEvents.length === 0) return;
+  const now = Date.now();
+  const events = pendingNotificationEvents
+    .filter((entry) => now - entry.receivedAt <= PENDING_NOTIFICATION_TTL_MS)
+    .map((entry) => entry.event);
+  pendingNotificationEvents = [];
+  for (const event of events) handleNotificationRealtimeEvent(event);
+}
+
+function scheduleNotificationPreferencesLoad(userId = selfId): void {
+  if (areNotificationPreferencesLoadedFor(userId) || notificationPreferencesRetryTimer) return;
+  void loadNotificationPreferences(userId)
+    .then(flushPendingNotificationEvents)
+    .catch(() => {
+      notificationPreferencesRetryTimer = setTimeout(() => {
+        notificationPreferencesRetryTimer = null;
+        scheduleNotificationPreferencesLoad(userId);
+      }, 5000);
+    });
+}
+
 function handleRealtimeEvent(event: RealtimeEvent): void {
+  if (handleNotificationRealtimeEvent(event)) return;
   switch (event.type) {
     case 'ready': {
       setOnlineSnapshot(event.payload.onlineFriendIds ?? []);

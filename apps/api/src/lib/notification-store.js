@@ -1,0 +1,225 @@
+'use strict';
+
+const crypto = require('node:crypto');
+const { createDbPool, transaction } = require('./db');
+
+function createRowId() {
+  return crypto.randomUUID?.() || crypto.randomBytes(16).toString('hex');
+}
+
+function mapPreferences({ privateNotifications = false, mutedPeerIds = [], mutedRoomIds = [] } = {}) {
+  return {
+    mutedPeerIds: [...new Set(mutedPeerIds)].sort(),
+    mutedRoomIds: [...new Set(mutedRoomIds)].sort(),
+    privateNotifications: Boolean(privateNotifications)
+  };
+}
+
+function createNotificationStore({ databaseUrl, logger = console, pool } = {}) {
+  let activePool = pool || null;
+  function getPool() {
+    if (!activePool) {
+      activePool = createDbPool({ databaseUrl, logger });
+    }
+    return activePool;
+  }
+
+  async function getPreferences(userId, client = getPool()) {
+    if (!userId) return mapPreferences();
+    const preferences = await client.query(
+      `SELECT private_notifications
+       FROM notification_preferences
+       WHERE user_id = $1`,
+      [userId]
+    );
+    const dmMutes = await client.query(
+      `SELECT peer_user_id
+       FROM notification_dm_mutes
+       WHERE user_id = $1
+       ORDER BY peer_user_id`,
+      [userId]
+    );
+    const roomMutes = await client.query(
+      `SELECT room_id
+       FROM notification_room_mutes
+       WHERE user_id = $1
+       ORDER BY room_id`,
+      [userId]
+    );
+
+    return mapPreferences({
+      privateNotifications: preferences.rows[0]?.private_notifications || false,
+      mutedPeerIds: dmMutes.rows.map((row) => row.peer_user_id),
+      mutedRoomIds: roomMutes.rows.map((row) => row.room_id)
+    });
+  }
+
+  async function userExists(userId, client) {
+    const result = await client.query(`SELECT 1 FROM users WHERE id = $1`, [userId]);
+    return result.rowCount > 0;
+  }
+
+  async function areFriends(userId, peerUserId, client) {
+    const result = await client.query(
+      `SELECT 1
+       FROM friendships
+       WHERE (user_a_id = $1 AND user_b_id = $2)
+          OR (user_a_id = $2 AND user_b_id = $1)`,
+      [userId, peerUserId]
+    );
+    return result.rowCount > 0;
+  }
+
+  async function setPrivateNotifications({ userId, privateNotifications }) {
+    if (!userId) return { status: 'not_found', preferences: mapPreferences() };
+    return transaction(getPool(), async (client) => {
+      if (!(await userExists(userId, client))) {
+        return { status: 'not_found', preferences: mapPreferences() };
+      }
+      await client.query(
+        `INSERT INTO notification_preferences (user_id, private_notifications, created_at, updated_at)
+         VALUES ($1, $2, current_timestamp, current_timestamp)
+         ON CONFLICT (user_id) DO UPDATE
+         SET private_notifications = EXCLUDED.private_notifications,
+             updated_at = current_timestamp`,
+        [userId, Boolean(privateNotifications)]
+      );
+      return { status: 'updated', preferences: await getPreferences(userId, client) };
+    });
+  }
+
+  async function setDmMute({ userId, peerUserId, muted }) {
+    if (!userId || !peerUserId) return { status: 'not_found', preferences: mapPreferences() };
+    if (userId === peerUserId) return { status: 'self', preferences: mapPreferences() };
+
+    return transaction(getPool(), async (client) => {
+      if (!(await userExists(userId, client))) {
+        return { status: 'not_found', preferences: mapPreferences() };
+      }
+      if (!(await userExists(peerUserId, client))) {
+        return { status: 'not_found', preferences: await getPreferences(userId, client) };
+      }
+      if (!(await areFriends(userId, peerUserId, client))) {
+        return { status: 'not_friends', preferences: await getPreferences(userId, client) };
+      }
+
+      if (muted) {
+        await client.query(
+          `INSERT INTO notification_dm_mutes (id, user_id, peer_user_id, created_at, updated_at)
+           VALUES ($1, $2, $3, current_timestamp, current_timestamp)
+           ON CONFLICT (user_id, peer_user_id) DO UPDATE
+           SET updated_at = current_timestamp`,
+          [createRowId(), userId, peerUserId]
+        );
+      } else {
+        await client.query(
+          `DELETE FROM notification_dm_mutes
+           WHERE user_id = $1 AND peer_user_id = $2`,
+          [userId, peerUserId]
+        );
+      }
+
+      return { status: muted ? 'muted' : 'unmuted', preferences: await getPreferences(userId, client) };
+    });
+  }
+
+  async function getVisibleStaticRoom(roomId, userId, client) {
+    const result = await client.query(
+      `SELECT r.*
+       FROM rooms r
+       WHERE r.id = $1
+         AND r.deleted_at IS NULL
+         AND (
+           EXISTS (
+             SELECT 1
+             FROM room_memberships rm
+             WHERE rm.room_id = r.id
+               AND rm.user_id = $2
+               AND rm.role = 'owner'
+           )
+           OR EXISTS (
+             SELECT 1
+             FROM room_bookmarks rb
+             WHERE rb.room_id = r.id
+               AND rb.user_id = $2
+           )
+         )`,
+      [roomId, userId]
+    );
+    return result.rows[0] || null;
+  }
+
+  async function setRoomMute({ userId, roomId, muted }) {
+    if (!userId || !roomId) return { status: 'not_found', preferences: mapPreferences() };
+
+    return transaction(getPool(), async (client) => {
+      if (!(await userExists(userId, client))) {
+        return { status: 'not_found', preferences: mapPreferences() };
+      }
+      const room = await getVisibleStaticRoom(roomId, userId, client);
+      if (!room) return { status: 'not_found', preferences: await getPreferences(userId, client) };
+      if (!room.is_static) return { status: 'temporary_room', preferences: await getPreferences(userId, client) };
+
+      if (muted) {
+        await client.query(
+          `INSERT INTO notification_room_mutes (id, user_id, room_id, created_at, updated_at)
+           VALUES ($1, $2, $3, current_timestamp, current_timestamp)
+           ON CONFLICT (user_id, room_id) DO UPDATE
+           SET updated_at = current_timestamp`,
+          [createRowId(), userId, roomId]
+        );
+      } else {
+        await client.query(
+          `DELETE FROM notification_room_mutes
+           WHERE user_id = $1 AND room_id = $2`,
+          [userId, roomId]
+        );
+      }
+
+      return { status: muted ? 'muted' : 'unmuted', preferences: await getPreferences(userId, client) };
+    });
+  }
+
+  async function isDmMuted({ userId, peerUserId }) {
+    if (!userId || !peerUserId) return false;
+    const result = await getPool().query(
+      `SELECT 1
+       FROM notification_dm_mutes
+       WHERE user_id = $1 AND peer_user_id = $2`,
+      [userId, peerUserId]
+    );
+    return result.rowCount > 0;
+  }
+
+  async function isRoomMuted({ userId, roomId }) {
+    if (!userId || !roomId) return false;
+    const result = await getPool().query(
+      `SELECT 1
+       FROM notification_room_mutes
+       WHERE user_id = $1 AND room_id = $2`,
+      [userId, roomId]
+    );
+    return result.rowCount > 0;
+  }
+
+  async function close() {
+    if (activePool) {
+      await activePool.end();
+    }
+  }
+
+  return {
+    close,
+    getPreferences,
+    isDmMuted,
+    isRoomMuted,
+    setDmMute,
+    setPrivateNotifications,
+    setRoomMute
+  };
+}
+
+module.exports = {
+  createNotificationStore,
+  mapPreferences
+};

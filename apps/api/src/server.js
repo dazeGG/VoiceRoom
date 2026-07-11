@@ -35,6 +35,7 @@ const { getClientIp, createRateLimiter } = require('./lib/rate-limit');
 const { avatarColorForPeerId, createRoomStore } = require('./lib/room-store');
 const { createUserStore, publicUser } = require('./lib/user-store');
 const { createFriendStore } = require('./lib/friend-store');
+const { createNotificationStore } = require('./lib/notification-store');
 const { startApiListener } = require('./lib/listen');
 const { runMigrations } = require('./lib/migrate');
 const {
@@ -94,6 +95,7 @@ const DESKTOP_RELEASE_TIMEOUT_MS = readEnvInt('DESKTOP_RELEASE_TIMEOUT_MS', 6000
 let roomStore = null;
 let userStore = null;
 let friendStore = null;
+let notificationStore = null;
 
 const presenceRooms = new Map();
 let wsRegistry = null;
@@ -137,6 +139,13 @@ function getFriendStore() {
   return friendStore;
 }
 
+function getNotificationStore() {
+  if (!notificationStore) {
+    notificationStore = createNotificationStore({});
+  }
+  return notificationStore;
+}
+
 function isUserOnline(userId) {
   return Boolean(wsRegistry && wsRegistry.connectionCount(userId) > 0);
 }
@@ -144,6 +153,37 @@ function isUserOnline(userId) {
 function broadcastToUser(userId, message) {
   if (!wsRegistry) return 0;
   return wsRegistry.broadcastAccountEvent(userId, message);
+}
+
+function notificationActor(user) {
+  const actor = publicUser(user);
+  if (!actor) return null;
+  return {
+    id: actor.id,
+    displayName: actor.displayName,
+    login: actor.login,
+    avatarColorKey: actor.avatarColorKey
+  };
+}
+
+async function broadcastDmNotification(recipientUserId, sender, message) {
+  if (!recipientUserId || recipientUserId === sender?.id) return 0;
+  try {
+    if (await getNotificationStore().isDmMuted({ userId: recipientUserId, peerUserId: sender.id })) return 0;
+    return broadcastToUser(recipientUserId, {
+      type: 'notification.dm.message',
+      dedupeKey: `dm:${message.id}`,
+      peer: notificationActor(sender),
+      message: {
+        id: message.id,
+        body: message.body,
+        createdAt: message.createdAt
+      }
+    });
+  } catch (error) {
+    console.error('Failed to broadcast DM notification:', error);
+    return 0;
+  }
 }
 
 function getPresenceRoom(roomId) {
@@ -1252,7 +1292,7 @@ async function handleRoomChatPost(req, res, roomId) {
     name,
     peerId,
     text,
-    authorUserId: sessionUser ? sessionUser.id : null
+    authorUserId: sessionUser ? sessionUser.id : (activePeer?.accountUserId || null)
   });
 
   if (!message) {
@@ -1402,10 +1442,22 @@ async function handleSendFriendRequest(req, res) {
     case 'accepted':
       // Reverse request existed: both sides are now friends.
       broadcastToUser(result.user.id, { type: 'friend-accepted', userId: user.id });
+      broadcastToUser(result.user.id, {
+        type: 'notification.friend.accepted',
+        dedupeKey: `friend-accepted:${result.user.id}:${user.id}`,
+        user: notificationActor(user),
+        context: { userId: user.id, relationship: 'friend' }
+      });
       sendJson(res, 200, { ok: true, status: 'accepted', user: result.user });
       return;
     default:
       broadcastToUser(result.user.id, { type: 'friend-request' });
+      broadcastToUser(result.user.id, {
+        type: 'notification.friend.request',
+        dedupeKey: `friend-request:${result.requestId}`,
+        requester: notificationActor(user),
+        requestId: result.requestId
+      });
       sendJson(res, 201, { ok: true, status: 'sent', user: result.user });
   }
 }
@@ -1427,6 +1479,12 @@ async function handleRespondFriendRequest(req, res, requestId, action) {
   }
   if (result.status === 'accepted') {
     broadcastToUser(result.requesterId, { type: 'friend-accepted', userId: user.id });
+    broadcastToUser(result.requesterId, {
+      type: 'notification.friend.accepted',
+      dedupeKey: `friend-accepted:${result.requesterId}:${user.id}`,
+      user: notificationActor(user),
+      context: { userId: user.id, relationship: 'friend', requestId: id }
+    });
     sendJson(res, 200, { ok: true, status: 'accepted', user: result.user });
     return;
   }
@@ -1538,6 +1596,7 @@ async function handleSendDm(req, res, peerId) {
   const message = await getFriendStore().sendMessage({ senderId: user.id, recipientId: id, body: text });
   // Deliver to the recipient and the sender's other tabs; clients dedupe by id.
   broadcastToUser(id, { type: 'dm-message', message });
+  await broadcastDmNotification(id, user, message);
   broadcastToUser(user.id, { type: 'dm-message', message });
   sendJson(res, 201, { ok: true, message });
 }
@@ -1557,6 +1616,106 @@ async function handleMarkDmRead(req, res, peerId) {
     broadcastToUser(id, { type: 'dm-read', userId: user.id });
   }
   sendJson(res, 200, { ok: true, count: result.count });
+}
+
+// --- Notification preferences -------------------------------------------
+
+async function handleNotificationPreferences(req, res) {
+  const user = await requireSessionUser(req, res);
+  if (!user) return;
+
+  const preferences = await getNotificationStore().getPreferences(user.id);
+  sendJson(res, 200, { ok: true, preferences });
+}
+
+function sendNotificationMutationResult(res, result, { muted = null } = {}) {
+  switch (result.status) {
+    case 'not_found':
+      sendJson(res, 404, { ok: false, error: 'Not found' });
+      return;
+    case 'self':
+      sendJson(res, 400, { ok: false, error: 'Invalid notification target' });
+      return;
+    case 'not_friends':
+      sendJson(res, 403, { ok: false, error: 'You are not friends' });
+      return;
+    case 'temporary_room':
+      sendJson(res, 403, { ok: false, error: 'Only saved rooms can be muted' });
+      return;
+    default:
+      sendJson(res, 200, {
+        ok: true,
+        ...(muted === null ? {} : { muted }),
+        preferences: result.preferences
+      });
+  }
+}
+
+function readRequiredBoolean(body, fieldName) {
+  if (!body || typeof body[fieldName] !== 'boolean') {
+    return { ok: false, error: `${fieldName} must be a boolean` };
+  }
+  return { ok: true, value: body[fieldName] };
+}
+
+async function handleSetDmMute(req, res, peerId) {
+  const user = await requireSessionUser(req, res);
+  if (!user) return;
+
+  const id = cleanUuid(peerId);
+  if (!id || id === user.id) {
+    sendJson(res, id === user.id ? 400 : 404, { ok: false, error: 'Invalid notification target' });
+    return;
+  }
+
+  const body = await readJsonBody(req);
+  const muted = readRequiredBoolean(body, 'muted');
+  if (!muted.ok) {
+    sendJson(res, 400, { ok: false, error: muted.error });
+    return;
+  }
+
+  const result = await getNotificationStore().setDmMute({ userId: user.id, peerUserId: id, muted: muted.value });
+  sendNotificationMutationResult(res, result, { muted: muted.value });
+}
+
+async function handleSetRoomMute(req, res, roomId) {
+  const user = await requireSessionUser(req, res);
+  if (!user) return;
+
+  const id = normalizeRoomId(roomId);
+  if (!id) {
+    sendJson(res, 404, { ok: false, error: 'Room not found' });
+    return;
+  }
+
+  const body = await readJsonBody(req);
+  const muted = readRequiredBoolean(body, 'muted');
+  if (!muted.ok) {
+    sendJson(res, 400, { ok: false, error: muted.error });
+    return;
+  }
+
+  const result = await getNotificationStore().setRoomMute({ userId: user.id, roomId: id, muted: muted.value });
+  sendNotificationMutationResult(res, result, { muted: muted.value });
+}
+
+async function handleSetPrivateNotifications(req, res) {
+  const user = await requireSessionUser(req, res);
+  if (!user) return;
+
+  const body = await readJsonBody(req);
+  const privateNotifications = readRequiredBoolean(body, 'privateNotifications');
+  if (!privateNotifications.ok) {
+    sendJson(res, 400, { ok: false, error: privateNotifications.error });
+    return;
+  }
+
+  const result = await getNotificationStore().setPrivateNotifications({
+    userId: user.id,
+    privateNotifications: privateNotifications.value
+  });
+  sendNotificationMutationResult(res, result);
 }
 
 async function handleDeleteRoomChatMessage(req, res, roomId, messageId) {
@@ -1806,10 +1965,11 @@ function getActiveGuestWsCount() {
   return count;
 }
 
-function createApiApp({ store = null, users = null, friends = null } = {}) {
+function createApiApp({ store = null, users = null, friends = null, notifications = null } = {}) {
   if (store) roomStore = store;
   if (users) userStore = users;
   if (friends) friendStore = friends;
+  if (notifications) notificationStore = notifications;
 
   const app = fastify({
     bodyLimit: BODY_LIMIT_BYTES,
@@ -1843,6 +2003,8 @@ function createApiApp({ store = null, users = null, friends = null } = {}) {
     publicPeer,
     publicLobbyRoom,
     publicChatMessage,
+    getNotificationStore,
+    getUserStore,
     broadcast,
     closePeer,
     avatarColorForPeerId,
@@ -1956,6 +2118,14 @@ function createApiApp({ store = null, users = null, friends = null } = {}) {
   app.delete('/api/dm/:userId/messages/:messageId', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
     return handleDeleteDmMessage(req, res, request.params.userId, request.params.messageId);
   }));
+  app.get('/api/notifications/preferences', (request, reply) => runLegacyHandler(request, reply, handleNotificationPreferences));
+  app.put('/api/notifications/dm/:userId/mute', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
+    return handleSetDmMute(req, res, request.params.userId);
+  }));
+  app.put('/api/notifications/rooms/:roomId/mute', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
+    return handleSetRoomMute(req, res, request.params.roomId);
+  }));
+  app.put('/api/notifications/privacy', (request, reply) => runLegacyHandler(request, reply, handleSetPrivateNotifications));
 
   // Register after plugins finish loading so @fastify/websocket can wrap the handler.
   app.after(() => {
@@ -1997,7 +2167,8 @@ async function closeStores(logger = console) {
   await Promise.allSettled([
     roomStore?.close?.(),
     userStore?.close?.(),
-    friendStore?.close?.()
+    friendStore?.close?.(),
+    notificationStore?.close?.()
   ]).then((results) => {
     for (const result of results) {
       if (result.status === 'rejected') logger.error('Failed to close store:', result.reason);
@@ -2055,7 +2226,13 @@ async function bootstrap({ env = process.env, logger = console, exit = process.e
     await roomStore.pruneRooms();
     userStore = createUserStore({ databaseUrl: database.url, logger, sessionTtlMs: SESSION_TTL_MS });
     friendStore = createFriendStore({ databaseUrl: database.url, logger });
-    const server = createApiServer({ store: roomStore, users: userStore, friends: friendStore });
+    notificationStore = createNotificationStore({ databaseUrl: database.url, logger });
+    const server = createApiServer({
+      store: roomStore,
+      users: userStore,
+      friends: friendStore,
+      notifications: notificationStore
+    });
     await server.app.ready();
     startPruneTimer(server, logger);
     startApiListener({

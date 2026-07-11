@@ -687,8 +687,7 @@ function createRoomStore({
   async function listSummaryRecipientUserIds(roomId) {
     if (!roomId) return [];
     const result = await getPool().query(
-      `SELECT DISTINCT user_id
-       FROM (
+      `WITH recipients AS (
          SELECT rm.user_id
          FROM room_memberships rm
          JOIN rooms r ON r.id = rm.room_id
@@ -701,7 +700,39 @@ function createRoomStore({
          JOIN rooms r ON r.id = rb.room_id
          WHERE rb.room_id = $1
            AND r.deleted_at IS NULL
-       ) recipients`,
+       )
+       SELECT DISTINCT user_id
+       FROM recipients`,
+      [roomId]
+    );
+    return result.rows.map((row) => row.user_id).filter(Boolean);
+  }
+
+  async function listNotificationRecipientUserIds(roomId) {
+    if (!roomId) return [];
+    const result = await getPool().query(
+      `WITH recipients AS (
+         SELECT rm.user_id
+         FROM room_memberships rm
+         JOIN rooms r ON r.id = rm.room_id
+         WHERE rm.room_id = $1
+           AND rm.role = 'owner'
+           AND r.is_static = true
+           AND r.deleted_at IS NULL
+         UNION ALL
+         SELECT rb.user_id
+         FROM room_bookmarks rb
+         JOIN rooms r ON r.id = rb.room_id
+         WHERE rb.room_id = $1
+           AND r.is_static = true
+           AND r.deleted_at IS NULL
+       )
+       SELECT DISTINCT recipients.user_id
+       FROM recipients
+       LEFT JOIN notification_room_mutes nrm
+         ON nrm.room_id = $1
+        AND nrm.user_id = recipients.user_id
+       WHERE nrm.user_id IS NULL`,
       [roomId]
     );
     return result.rows.map((row) => row.user_id).filter(Boolean);
@@ -763,6 +794,7 @@ function createRoomStore({
     listRoomsForOwner,
     listVisibleRoomsForUser,
     listSummaryRecipientUserIds,
+    listNotificationRecipientUserIds,
     addRoomBookmarkForUser,
     markActiveTemporaryRoomsEmpty,
     markRoomActive,

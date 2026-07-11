@@ -9,7 +9,7 @@ const path = require('node:path');
 const os = require('node:os');
 const WebSocket = require('ws');
 const { createTestDatabase } = require('./db-harness');
-const { joinVoiceRoom, openWs: openHarnessWs, waitForWsType } = require('./ws-harness');
+const { joinVoiceRoom, openWs: openHarnessWs, subscribeRoomPreview, waitForWsType } = require('./ws-harness');
 
 function getSocketPath() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'voice-room-ws-'));
@@ -99,6 +99,10 @@ function request(socketPath, { method = 'GET', pathname, body, cookie, headers =
 function cookieFrom(setCookie) {
   const header = Array.isArray(setCookie) ? setCookie[0] : setCookie;
   return String(header || '').split(';')[0];
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function openWs(socketPath, cookie) {
@@ -275,4 +279,206 @@ test('ws ready and friend.presence work for authenticated users', async (t) => {
 
   bob.ws.close();
   alice.ws.close();
+});
+
+test('ws sends additive account notification envelopes without regressing legacy DM and friend events', async (t) => {
+  const { dir, socketPath } = getSocketPath();
+  const { cleanup, databaseUrl } = await createTestDatabase(t);
+  const logs = { stdout: '', stderr: '' };
+  const child = startServer(socketPath, databaseUrl, logs);
+  t.after(() => {
+    child.kill('SIGTERM');
+    fs.rmSync(dir, { recursive: true, force: true });
+    return cleanup();
+  });
+
+  await waitForHealthz(socketPath);
+
+  const aliceCookie = await register(socketPath, 'alice-notify');
+  const bobCookie = await register(socketPath, 'bob-notify');
+  const alice = openWs(socketPath, aliceCookie);
+  const bob = openWs(socketPath, bobCookie);
+  await alice.ready;
+  await bob.ready;
+
+  const requested = await request(socketPath, {
+    method: 'POST',
+    pathname: '/api/friends/requests',
+    cookie: aliceCookie,
+    body: { login: 'bob-notify' }
+  });
+  assert.equal(requested.status, 201);
+
+  const legacyRequest = await waitForWsType(bob.frames, 'friend.request');
+  assert.equal(legacyRequest.payload.direction, 'incoming');
+  const notificationRequest = await waitForWsType(bob.frames, 'notification.friend.request');
+  assert.equal(notificationRequest.payload.requester.login, 'alice-notify');
+  assert.equal(notificationRequest.payload.requestId, notificationRequest.payload.dedupeKey.replace('friend-request:', ''));
+
+  await acceptFirstRequest(socketPath, bobCookie);
+  const legacyAccepted = await waitForWsType(alice.frames, 'friend.accepted');
+  assert.ok(legacyAccepted.payload.userId);
+  const notificationAccepted = await waitForWsType(alice.frames, 'notification.friend.accepted');
+  assert.equal(notificationAccepted.payload.user.login, 'bob-notify');
+  assert.match(notificationAccepted.payload.dedupeKey, /^friend-accepted:/);
+  const bobFriends = await request(socketPath, { pathname: '/api/friends', cookie: bobCookie });
+  assert.equal(bobFriends.status, 200);
+  const aliceId = bobFriends.body.friends.find((entry) => entry.user.login === 'alice-notify')?.user.id;
+  assert.ok(aliceId);
+
+  const aliceBeforeDm = alice.frames.length;
+  const sent = await request(socketPath, {
+    method: 'POST',
+    pathname: `/api/dm/${encodeURIComponent(legacyAccepted.payload.userId)}`,
+    cookie: aliceCookie,
+    body: { text: 'hello bob' }
+  });
+  assert.equal(sent.status, 201);
+
+  const legacyDm = await waitForWsType(bob.frames, 'dm.message', (frame) => frame.payload?.message?.body === 'hello bob');
+  assert.equal(legacyDm.payload.message.id, sent.body.message.id);
+  const notificationDm = await waitForWsType(
+    bob.frames,
+    'notification.dm.message',
+    (frame) => frame.payload?.message?.body === 'hello bob'
+  );
+  assert.equal(notificationDm.payload.dedupeKey, `dm:${sent.body.message.id}`);
+  assert.equal(notificationDm.payload.peer.login, 'alice-notify');
+  await waitForWsType(alice.frames, 'dm.message', (frame) => frame.payload?.message?.id === sent.body.message.id, 5000, aliceBeforeDm);
+  await delay(150);
+  assert.equal(alice.frames.slice(aliceBeforeDm).some((frame) => frame.type === 'notification.dm.message'), false);
+
+  const muted = await request(socketPath, {
+    method: 'PUT',
+    pathname: `/api/notifications/dm/${encodeURIComponent(aliceId)}/mute`,
+    cookie: bobCookie,
+    body: { muted: true }
+  });
+  assert.equal(muted.status, 200);
+  const bobBeforeMutedDm = bob.frames.length;
+  const mutedSent = await request(socketPath, {
+    method: 'POST',
+    pathname: `/api/dm/${encodeURIComponent(legacyAccepted.payload.userId)}`,
+    cookie: aliceCookie,
+    body: { text: 'muted but delivered' }
+  });
+  assert.equal(mutedSent.status, 201);
+  await waitForWsType(
+    bob.frames,
+    'dm.message',
+    (frame) => frame.payload?.message?.id === mutedSent.body.message.id,
+    5000,
+    bobBeforeMutedDm
+  );
+  await delay(150);
+  assert.equal(bob.frames.slice(bobBeforeMutedDm).some((frame) => frame.type === 'notification.dm.message'), false);
+
+  alice.ws.close();
+  bob.ws.close();
+});
+
+test('ws sends saved-room message notifications with room mutes and sender exclusion', async (t) => {
+  const { dir, socketPath } = getSocketPath();
+  const { cleanup, databaseUrl } = await createTestDatabase(t);
+  const logs = { stdout: '', stderr: '' };
+  const child = startServer(socketPath, databaseUrl, logs);
+  t.after(() => {
+    child.kill('SIGTERM');
+    fs.rmSync(dir, { recursive: true, force: true });
+    return cleanup();
+  });
+
+  await waitForHealthz(socketPath);
+
+  const ownerCookie = await register(socketPath, 'room-owner-notify');
+  const posterCookie = await register(socketPath, 'room-poster-notify');
+  const created = await request(socketPath, {
+    method: 'POST',
+    pathname: '/api/rooms',
+    cookie: ownerCookie,
+    body: { isStatic: true, name: 'Daily Room', emoji: '☕' }
+  });
+  assert.equal(created.status, 201);
+  const roomId = created.body.roomId;
+
+  const owner = openHarnessWs(socketPath, { cookie: ownerCookie });
+  const poster = openHarnessWs(socketPath, { cookie: posterCookie });
+  await owner.ready;
+  await poster.ready;
+  await subscribeRoomPreview(owner, roomId);
+
+  const beforeOwnerJoin = owner.frames.length;
+  await joinVoiceRoom(owner, {
+    roomId,
+    peerId: 'owner-notify-peer',
+    sessionToken: 'o'.repeat(32),
+    name: 'Owner Notify'
+  });
+  await waitForWsType(owner.frames, 'room.snapshot', (frame) => frame.payload?.roomId === roomId, 5000, beforeOwnerJoin);
+  const ownerVoiceBefore = owner.frames.length;
+  const ownerVoicePost = await request(socketPath, {
+    method: 'POST',
+    pathname: `/api/rooms/${encodeURIComponent(roomId)}/chat`,
+    body: {
+      peerId: 'owner-notify-peer',
+      sessionToken: 'o'.repeat(32),
+      text: 'owner voice post'
+    }
+  });
+  assert.equal(ownerVoicePost.status, 201);
+  await waitForWsType(
+    owner.frames,
+    'room.chat.message',
+    (frame) => frame.payload?.message?.id === ownerVoicePost.body.message.id,
+    5000,
+    ownerVoiceBefore
+  );
+  await delay(150);
+  assert.equal(owner.frames.slice(ownerVoiceBefore).some((frame) => frame.type === 'notification.room.message'), false);
+
+  const ownerBefore = owner.frames.length;
+  const posterBefore = poster.frames.length;
+  const posted = await request(socketPath, {
+    method: 'POST',
+    pathname: `/api/rooms/${encodeURIComponent(roomId)}/chat`,
+    cookie: posterCookie,
+    body: { text: 'standup starts' }
+  });
+  assert.equal(posted.status, 201);
+
+  await waitForWsType(owner.frames, 'room.chat.message', (frame) => frame.payload?.message?.id === posted.body.message.id, 5000, ownerBefore);
+  const notification = await waitForWsType(
+    owner.frames,
+    'notification.room.message',
+    (frame) => frame.payload?.message?.id === posted.body.message.id,
+    5000,
+    ownerBefore
+  );
+  assert.equal(notification.payload.dedupeKey, `room:${roomId}:message:${posted.body.message.id}`);
+  assert.equal(notification.payload.room.name, 'Daily Room');
+  assert.equal(notification.payload.sender.login, 'room-poster-notify');
+  await delay(150);
+  assert.equal(poster.frames.slice(posterBefore).some((frame) => frame.type === 'notification.room.message'), false);
+
+  const muted = await request(socketPath, {
+    method: 'PUT',
+    pathname: `/api/notifications/rooms/${encodeURIComponent(roomId)}/mute`,
+    cookie: ownerCookie,
+    body: { muted: true }
+  });
+  assert.equal(muted.status, 200);
+  const ownerBeforeMuted = owner.frames.length;
+  const mutedPost = await request(socketPath, {
+    method: 'POST',
+    pathname: `/api/rooms/${encodeURIComponent(roomId)}/chat`,
+    cookie: posterCookie,
+    body: { text: 'muted standup' }
+  });
+  assert.equal(mutedPost.status, 201);
+  await waitForWsType(owner.frames, 'room.chat.message', (frame) => frame.payload?.message?.id === mutedPost.body.message.id, 5000, ownerBeforeMuted);
+  await delay(150);
+  assert.equal(owner.frames.slice(ownerBeforeMuted).some((frame) => frame.type === 'notification.room.message'), false);
+
+  owner.ws.close();
+  poster.ws.close();
 });
