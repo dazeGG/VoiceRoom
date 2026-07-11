@@ -282,7 +282,8 @@ function baseHeaders() {
       "font-src 'self'",
       "form-action 'none'",
       "frame-ancestors 'none'",
-      "img-src 'self' data:",
+      // blob: serves local-only previews (avatar crop) rendered via object URLs.
+      "img-src 'self' data: blob:",
       "media-src 'self' blob:",
       "object-src 'none'",
       "script-src 'self' 'wasm-unsafe-eval'",
@@ -1076,6 +1077,20 @@ function refreshActiveUserAvatar(user) {
   }
 }
 
+// Push the refreshed public profile (avatar, display name) to everyone whose UI
+// caches it outside a live room: the friend list, DM threads, and pending
+// requests. Best-effort — a failed lookup must not fail the profile mutation.
+async function broadcastUserProfileToFriends(user, request) {
+  if (!user?.id) return;
+  try {
+    const friendIds = await getFriendStore().getFriendIds(user.id);
+    const message = { type: 'user-updated', user: publicUser(user) };
+    for (const friendId of friendIds) broadcastToUser(friendId, message);
+  } catch (error) {
+    request?.log?.error?.({ err: error, userId: user.id }, 'failed to broadcast profile update to friends');
+  }
+}
+
 async function handleUploadUserAvatar(req, res, request) {
   const session = await resolveSessionUser(req);
   if (!session) {
@@ -1109,6 +1124,7 @@ async function handleUploadUserAvatar(req, res, request) {
     await removeAvatarBestEffort(result.previousAvatarKey, request);
   }
   refreshActiveUserAvatar(result.user);
+  await broadcastUserProfileToFriends(result.user, request);
   sendJson(res, 200, { ok: true, user: publicUser(result.user) });
 }
 
@@ -1125,6 +1141,7 @@ async function handleDeleteUserAvatar(req, res, request) {
   }
   await removeAvatarBestEffort(result.previousAvatarKey, request);
   refreshActiveUserAvatar(result.user);
+  await broadcastUserProfileToFriends(result.user, request);
   sendJson(res, 200, { ok: true, user: publicUser(result.user) });
 }
 

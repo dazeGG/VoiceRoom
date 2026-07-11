@@ -1,6 +1,7 @@
 // App-level WebSocket at /api/ws: account events, room summaries, preview/detail, voice.
 
 import type { DirectMessage } from './dm';
+import type { PublicUser } from './friends';
 import type { ChatMessage, RoomPeer, RoomSummary } from './rooms';
 import type { NotificationRealtimeEvent } from '../shared/notifications';
 
@@ -11,6 +12,7 @@ export type RealtimeAccountEvent =
   | { type: 'friend.request'; payload: { direction: 'incoming' | 'outgoing' } }
   | { type: 'friend.accepted'; payload: { userId: string } }
   | { type: 'friend.removed'; payload: { userId: string } }
+  | { type: 'friend.updated'; payload: { user: PublicUser } }
   | { type: 'dm.message'; payload: { message: DirectMessage } }
   | { type: 'dm.read'; payload: { userId: string } }
   | { type: 'dm.message.deleted'; payload: { messageId: string; peerUserId?: string } };

@@ -17,6 +17,8 @@ function toWsAccountEvent(message) {
       return buildServerEnvelope('friend.accepted', { userId: message.userId });
     case 'friend-removed':
       return buildServerEnvelope('friend.removed', { userId: message.userId });
+    case 'user-updated':
+      return buildServerEnvelope('friend.updated', { user: message.user });
     case 'dm-message':
       return buildServerEnvelope('dm.message', { message: message.message });
     case 'notification.dm.message':

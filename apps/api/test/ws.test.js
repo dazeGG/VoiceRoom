@@ -42,7 +42,7 @@ function waitForHealthz(socketPath, timeoutMs = 5000) {
   });
 }
 
-function startServer(socketPath, databaseUrl, logs) {
+function startServer(socketPath, databaseUrl, logs, extraEnv = {}) {
   const child = spawn(process.execPath, ['src/server.js'], {
     cwd: path.join(__dirname, '..'),
     env: {
@@ -53,7 +53,8 @@ function startServer(socketPath, databaseUrl, logs) {
       ROOM_CREATE_RATE_LIMIT: '0',
       AUTH_RATE_LIMIT: '0',
       DATABASE_URL: databaseUrl,
-      SOCKET_PATH: socketPath
+      SOCKET_PATH: socketPath,
+      ...extraEnv
     },
     stdio: ['ignore', 'pipe', 'pipe']
   });
@@ -481,4 +482,88 @@ test('ws sends saved-room message notifications with room mutes and sender exclu
 
   owner.ws.close();
   poster.ws.close();
+});
+
+test('ws pushes friend.updated to friends after avatar upload and delete', async (t) => {
+  const sharp = require('sharp');
+  const { dir, socketPath } = getSocketPath();
+  const { cleanup, databaseUrl } = await createTestDatabase(t);
+  const logs = { stdout: '', stderr: '' };
+  const uploadsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'voice-room-ws-avatars-'));
+  const child = startServer(socketPath, databaseUrl, logs, { UPLOADS_DIR: uploadsDir });
+  t.after(() => {
+    child.kill('SIGTERM');
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.rmSync(uploadsDir, { recursive: true, force: true });
+    return cleanup();
+  });
+
+  await waitForHealthz(socketPath);
+
+  const anyaCookie = await register(socketPath, 'anya-avatar');
+  const borisCookie = await register(socketPath, 'boris-avatar');
+  await befriend(socketPath, anyaCookie, 'boris-avatar');
+  await acceptFirstRequest(socketPath, borisCookie);
+
+  const boris = openWs(socketPath, borisCookie);
+  await boris.ready;
+
+  const png = await sharp({
+    create: { width: 64, height: 64, channels: 3, background: { r: 200, g: 60, b: 40 } }
+  }).png().toBuffer();
+  const boundary = '----voice-room-ws-avatar';
+  const payload = Buffer.concat([
+    Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="avatar"; filename="avatar.png"\r\nContent-Type: image/png\r\n\r\n`),
+    png,
+    Buffer.from(`\r\n--${boundary}--\r\n`)
+  ]);
+  const uploaded = await new Promise((resolve, reject) => {
+    const req = http.request(
+      {
+        method: 'POST',
+        path: '/api/auth/avatar',
+        socketPath,
+        headers: {
+          Accept: 'application/json',
+          Cookie: anyaCookie,
+          'Content-Type': `multipart/form-data; boundary=${boundary}`,
+          'Content-Length': payload.length
+        }
+      },
+      (res) => {
+        let data = '';
+        res.on('data', (chunk) => {
+          data += chunk;
+        });
+        res.on('end', () => resolve({ status: res.statusCode, body: data ? JSON.parse(data) : null }));
+        res.on('error', reject);
+      }
+    );
+    req.on('error', reject);
+    req.write(payload);
+    req.end();
+  });
+  assert.equal(uploaded.status, 200);
+  assert.ok(uploaded.body.user.avatarUrl);
+
+  const updated = await waitForWsType(
+    boris.frames,
+    'friend.updated',
+    (frame) => frame.payload?.user?.login === 'anya-avatar'
+  );
+  assert.equal(updated.payload.user.avatarUrl, uploaded.body.user.avatarUrl);
+
+  const borisBeforeDelete = boris.frames.length;
+  const deleted = await request(socketPath, { method: 'DELETE', pathname: '/api/auth/avatar', cookie: anyaCookie });
+  assert.equal(deleted.status, 200);
+  const cleared = await waitForWsType(
+    boris.frames,
+    'friend.updated',
+    (frame) => frame.payload?.user?.login === 'anya-avatar',
+    5000,
+    borisBeforeDelete
+  );
+  assert.equal(cleared.payload.user.avatarUrl, null);
+
+  boris.ws.close();
 });

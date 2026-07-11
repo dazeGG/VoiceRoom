@@ -107,6 +107,23 @@ function setFriendOnline(userId: string, online: boolean): void {
   if (friend) friend.online = online;
 }
 
+// A friend changed their public profile (avatar, name): refresh every cached
+// copy — the friend list, pending requests, and the open DM header.
+function applyFriendProfile(user: PublicUser | undefined): void {
+  if (!user?.id) return;
+  const friend = findFriend(user.id);
+  if (friend) friend.user = { ...friend.user, ...user };
+  friendsState.requests.incoming = friendsState.requests.incoming.map((request) =>
+    request.user.id === user.id ? { ...request, user: { ...request.user, ...user } } : request
+  );
+  friendsState.requests.outgoing = friendsState.requests.outgoing.map((request) =>
+    request.user.id === user.id ? { ...request, user: { ...request.user, ...user } } : request
+  );
+  if (friendsState.threadPeer?.id === user.id) {
+    friendsState.threadPeer = { ...friendsState.threadPeer, ...user };
+  }
+}
+
 // --- Loading ------------------------------------------------------------
 
 export async function refreshFriends(): Promise<void> {
@@ -375,6 +392,10 @@ function handleRealtimeEvent(event: RealtimeEvent): void {
     case 'friend.removed': {
       void refreshFriends().catch(() => {});
       void refreshRequests().catch(() => {});
+      break;
+    }
+    case 'friend.updated': {
+      applyFriendProfile(event.payload.user);
       break;
     }
     case 'dm.message': {
