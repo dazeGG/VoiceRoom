@@ -1,5 +1,6 @@
 <script lang="ts">
   import { LogOut, Mic, Pencil, User, X } from '@lucide/svelte';
+  import { untrack } from 'svelte';
   import type { AuthUser } from '$lib/api/auth';
   import { iconMd, iconSm } from '$lib/shared/ui/icons';
   import { changePassword, deleteUserAvatar, updateDisplayName, uploadUserAvatar } from '$lib/api/auth';
@@ -64,6 +65,9 @@
   let avatarFile = $state<File | null>(null);
   let cropOpen = $state(false);
   let avatarSaving = $state(false);
+  let pendingAvatar = $state<Blob | null>(null);
+  let avatarPreviewUrl = $state('');
+  let removeAvatarPending = $state(false);
 
   // Sound form
   let microphones = $state<DeviceOption[]>([]);
@@ -98,10 +102,18 @@
 
   // Reset both forms whenever the modal (re)opens or the account changes.
   $effect(() => {
-    if (!open) return;
-    name = user?.displayName ?? '';
-    currentPassword = '';
-    newPassword = '';
+    const isOpen = open;
+    void user?.id;
+    if (!isOpen) return;
+    untrack(() => {
+      name = user?.displayName ?? '';
+      currentPassword = '';
+      newPassword = '';
+      if (avatarPreviewUrl) URL.revokeObjectURL(avatarPreviewUrl);
+      avatarPreviewUrl = '';
+      pendingAvatar = null;
+      removeAvatarPending = false;
+    });
 
     syncNotificationPermission();
     const sound = readSoundSettings();
@@ -166,8 +178,11 @@
     const nextPass = newPassword;
     const wantsRename = trimmedName !== (user?.displayName ?? '');
     const wantsPassword = curPass.length > 0 || nextPass.length > 0;
+    const avatarBlob = pendingAvatar;
+    const shouldRemoveAvatar = removeAvatarPending;
+    const wantsAvatar = Boolean(avatarBlob) || shouldRemoveAvatar;
 
-    if (!wantsRename && !wantsPassword) {
+    if (!wantsRename && !wantsPassword && !wantsAvatar) {
       onClose();
       return;
     }
@@ -179,9 +194,20 @@
     saving = true;
     let renamed = false;
     try {
+      let nextUser = user;
       if (wantsRename) {
-        setUser(await updateDisplayName(trimmedName));
+        nextUser = await updateDisplayName(trimmedName);
+        setUser(nextUser);
         renamed = true;
+      }
+      if (avatarBlob) {
+        nextUser = await uploadUserAvatar(avatarBlob);
+        setUser(nextUser);
+        syncLocalParticipantAvatar(nextUser);
+      } else if (shouldRemoveAvatar) {
+        nextUser = await deleteUserAvatar();
+        setUser(nextUser);
+        syncLocalParticipantAvatar(nextUser);
       }
       if (wantsPassword) {
         await changePassword(curPass, nextPass);
@@ -223,32 +249,19 @@
   }
 
   async function saveAvatar(blob: Blob): Promise<void> {
-    avatarSaving = true;
-    try {
-      const nextUser = await uploadUserAvatar(blob);
-      setUser(nextUser);
-      syncLocalParticipantAvatar(nextUser);
-      cropOpen = false;
-      avatarFile = null;
-      onToast('Аватар обновлён');
-    } finally {
-      avatarSaving = false;
-    }
+    if (avatarPreviewUrl) URL.revokeObjectURL(avatarPreviewUrl);
+    pendingAvatar = blob;
+    avatarPreviewUrl = URL.createObjectURL(blob);
+    removeAvatarPending = false;
+    cropOpen = false;
+    avatarFile = null;
   }
 
-  async function removeAvatar(): Promise<void> {
-    if (avatarSaving || !user?.avatarUrl) return;
-    avatarSaving = true;
-    try {
-      const nextUser = await deleteUserAvatar();
-      setUser(nextUser);
-      syncLocalParticipantAvatar(nextUser);
-      onToast('Аватар удалён');
-    } catch (error) {
-      onToast(error instanceof Error && error.message ? error.message : 'Не удалось удалить аватар');
-    } finally {
-      avatarSaving = false;
-    }
+  function removeAvatar(): void {
+    if (avatarPreviewUrl) URL.revokeObjectURL(avatarPreviewUrl);
+    avatarPreviewUrl = '';
+    pendingAvatar = null;
+    removeAvatarPending = true;
   }
 
   function syncLocalParticipantAvatar(nextUser: AuthUser): void {
@@ -374,12 +387,12 @@
                   aria-label={user?.avatarUrl ? 'Изменить аватар' : 'Загрузить аватар'}
                   title={user?.avatarUrl ? 'Изменить аватар' : 'Загрузить аватар'}
                 >
-                  <Avatar name={label} src={user?.avatarUrl} colorKey={user?.avatarColorKey} background={user?.avatarAccent || undefined} size={56} class="settings-profile-avatar" />
+                  <Avatar name={label} src={avatarPreviewUrl || (removeAvatarPending ? null : user?.avatarUrl)} colorKey={user?.avatarColorKey} background={user?.avatarAccent || undefined} size={56} class="settings-profile-avatar" />
                   <span class="settings-avatar-overlay" aria-hidden="true">
                     <Pencil {...iconSm} />
                   </span>
                 </button>
-                {#if user?.avatarUrl}
+                {#if avatarPreviewUrl || (user?.avatarUrl && !removeAvatarPending)}
                   <button
                     type="button"
                     class="settings-avatar-remove"
@@ -417,11 +430,11 @@
             </div>
 
             <div class="settings-actions">
+              <button class="settings-cancel" type="button" onclick={onClose} disabled={saving}>Отмена</button>
               <button class="settings-save" type="button" onclick={saveProfile} disabled={saving}>
                 {#if saving}<span class="home-spinner" aria-hidden="true"></span>{/if}
                 Сохранить
               </button>
-              <button class="settings-cancel" type="button" onclick={onClose} disabled={saving}>Отмена</button>
             </div>
           {:else}
             <div class="settings-sound">

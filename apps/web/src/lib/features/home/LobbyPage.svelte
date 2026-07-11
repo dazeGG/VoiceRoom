@@ -310,13 +310,13 @@
       {:else if friendsState.mode === 'rooms' && selectedRoom && (!embeddedRoomId || !embeddedRoomVisible)}
         <RoomPreviewView {user} room={selectedRoom} onEnter={() => enterRoom(selectedRoom.roomId)} onBack={closeViewedRoom} {onToast} />
       {:else if friendsState.mode === 'rooms' && !embeddedRoomVisible}
-        <VoiceHome {user} {rooms} onOpenRoom={previewRoom} onCreateRoom={() => (createDialogOpen = true)} onJoinCode={handleJoin} />
+        <VoiceHome {rooms} onOpenRoom={previewRoom} onCreateRoom={() => (createDialogOpen = true)} onJoinCode={handleJoin} />
       {:else if friendsState.mode === 'friends' && friendsState.view === 'dm'}
         <DmView selfId={user.id} />
       {:else if friendsState.mode === 'friends' && friendsState.view === 'people'}
         <PeopleView {user} {onToast} onHome={goHome} />
       {:else if friendsState.mode === 'friends'}
-        <VoiceHome {user} {rooms} onOpenRoom={previewRoom} onCreateRoom={() => (createDialogOpen = true)} onJoinCode={handleJoin} />
+        <VoiceHome {rooms} onOpenRoom={previewRoom} onCreateRoom={() => (createDialogOpen = true)} onJoinCode={handleJoin} />
       {/if}
     </main>
   </div>

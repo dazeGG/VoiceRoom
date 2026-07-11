@@ -2,14 +2,13 @@
   import { ChevronRight, Plus, UserPlus } from '@lucide/svelte';
   import { Avatar, AvatarStack, Button, Ellipsis } from '$lib/shared/ui';
   import { iconMd, iconSm } from '$lib/shared/ui/icons';
-  import type { AuthUser, OwnedRoom } from '$lib/api/auth';
+  import type { OwnedRoom } from '$lib/api/auth';
   import { roomPresence } from '../../model/room-presence.svelte';
   import { roomPeerAvatarItems } from '../../model/room-avatars';
   import { roomDisplayName } from '../../model/rooms';
   import { friendsState, showPeople } from '../../model/friends.svelte';
 
-  let { user, rooms, onOpenRoom, onCreateRoom, onJoinCode } = $props<{
-    user: AuthUser;
+  let { rooms, onOpenRoom, onCreateRoom, onJoinCode } = $props<{
     rooms: OwnedRoom[];
     onOpenRoom: (roomId: string) => void;
     onCreateRoom: () => void;
@@ -18,7 +17,6 @@
 
   let joinCode = $state('');
 
-  const selfName = $derived(user.displayName?.trim() || user.login);
   const requestCount = $derived(friendsState.incomingRequestCount);
   const sortedRooms = $derived([...rooms].sort((a: OwnedRoom, b: OwnedRoom) => b.peers - a.peers));
 
@@ -35,8 +33,7 @@
 </script>
 
 <div class="lv-main-scroll">
-  <div class="lr-eyebrow">Главная</div>
-  <div class="lr-title">С возвращением, {selfName.split(' ')[0]} 👋</div>
+  <h1 class="lr-title">Комнаты</h1>
 
   {#if requestCount > 0}
     <button class="lr-callout" type="button" onclick={showPeople}>
@@ -53,8 +50,7 @@
     </button>
   {/if}
 
-  <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:16px;margin:34px 0 18px;">
-    <h2 class="lr-title" style="margin:0;font-size:22px;">Комнаты</h2>
+  <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:16px;margin:24px 0 18px;">
     <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;">
       <form class="lv-join" onsubmit={submitJoinCode} aria-describedby="roomAutoSaveHint">
         <input class="lv-join-input" placeholder="Код или ссылка" bind:value={joinCode} />

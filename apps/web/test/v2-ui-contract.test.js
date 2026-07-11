@@ -292,16 +292,16 @@ test('room chat keeps transport mounted and tracks unread state while closed', (
   assert.match(topbar, /Скопировать код/);
   assert.match(topbar, /keepContentMounted/);
   assert.match(topbar, /room-heading-popover-head/);
-  assert.match(topbar, /<Avatar name=\{heading\} src=\{state\.roomAvatarUrl\} shape="squircle" background="var\(--room-avatar-bg\)"/);
+  assert.match(topbar, /<Avatar name=\{heading\} src=\{roomClientState\.roomAvatarUrl\} shape="squircle" background="var\(--room-avatar-bg\)"/);
   assert.match(topbar, /room-heading-popover-info/);
   assert.doesNotMatch(topbar, /copyCodeButton|copyLinkButton|room-settings-button/);
 
   // Heading (title/code) is rendered reactively from room state, not written
   // imperatively by the vanilla client. The plain `.ellipsis` spans are gone.
-  assert.match(topbar, /import \{ state \} from '\.\.\/client\/core\/state\.svelte'/);
-  assert.match(topbar, /const heading = \$derived\(state\.roomName \|\| state\.roomId\)/);
+  assert.match(topbar, /import \{ state as roomClientState \} from '\.\.\/client\/core\/state\.svelte'/);
+  assert.match(topbar, /const heading = \$derived\(roomClientState\.roomName \|\| roomClientState\.roomId\)/);
   assert.match(topbar, /<Ellipsis text=\{heading\} title=\{heading\} class="room-heading-title"/);
-  assert.match(topbar, /<Ellipsis text=\{state\.roomId\}/);
+  assert.match(topbar, /<Ellipsis text=\{roomClientState\.roomId\}/);
   assert.doesNotMatch(topbar, /id="roomTitle"|id="roomCodeText"|class="[^"]*\bellipsis\b/);
 
   const roomView = read('src/lib/features/room/client/room/room.ts');
@@ -448,7 +448,7 @@ test('room and participant avatars preserve fallbacks while preferring uploaded 
   assert.match(roomsApi, /avatarColorKey: string/);
   assert.doesNotMatch(authApi, /roomIconKey|roomColorKey|roomPresetKey|emoji/);
   assert.doesNotMatch(roomsApi, /roomIconKey|roomColorKey|roomPresetKey|emoji/);
-  assert.match(settingsModal, /src=\{user\?\.avatarUrl\}/);
+  assert.match(settingsModal, /src=\{avatarPreviewUrl \|\| \(removeAvatarPending \? null : user\?\.avatarUrl\)\}/);
   assert.match(settingsModal, /background=\{user\?\.avatarAccent \|\| undefined\}/);
   assert.match(voiceHome, /<Avatar name=\{roomDisplayName\(room\)\} src=\{room\.avatarUrl\} shape="squircle" background="var\(--room-avatar-bg\)"/);
   assert.doesNotMatch(createDialog, /ROOM_PRESETS|roomPresetKey|roomIconKey|roomColorKey/);
@@ -456,7 +456,7 @@ test('room and participant avatars preserve fallbacks while preferring uploaded 
   assert.match(chat, /getAvatarPresentation\(\{/);
   assert.match(chat, /avatarUrl: message\.avatarUrl \|\| undefined/);
   assert.doesNotMatch(roomNet, /roomIconKey|roomColorKey|roomPresetKey|emoji/);
-  assert.match(roomTopbar, /<Avatar name=\{heading\} src=\{state\.roomAvatarUrl\} shape="squircle" background="var\(--room-avatar-bg\)"/);
+  assert.match(roomTopbar, /<Avatar name=\{heading\} src=\{roomClientState\.roomAvatarUrl\} shape="squircle" background="var\(--room-avatar-bg\)"/);
   assert.doesNotMatch(roomTopbar, /getRoomPreset|roomVisual|emoji/);
   assert.match(notificationRouter, /avatarAccent\?: string \| null/);
   assert.match(notificationRouter, /avatarUrl\?: string \| null/);
@@ -474,6 +474,8 @@ test('avatar crop and settings flows export a normalized bitmap and refresh live
   assert.match(crop, /output\.height = 256/);
   assert.match(crop, /output\.toBlob\(/);
   assert.match(crop, /onpointerdown=\{onPointerDown\}/);
+  assert.match(crop, /onwheel=\{onWheel\}/);
+  assert.match(crop, /event\.preventDefault\(\)[\s\S]*Math\.max\(1, Math\.min\(3, zoom/);
   assert.match(crop, /bind:value=\{zoom\}/);
   assert.match(crop, /shape === 'circle'/);
   assert.match(crop, /shape === 'squircle'/);
@@ -487,10 +489,16 @@ test('avatar crop and settings flows export a normalized bitmap and refresh live
   assert.match(authApi, /deleteUserAvatar/);
   assert.match(roomsApi, /uploadRoomAvatar/);
   assert.match(roomsApi, /deleteRoomAvatar/);
-  assert.match(settings, /const nextUser = await uploadUserAvatar\(blob\);[\s\S]*setUser\(nextUser\)/);
-  assert.match(settings, /const nextUser = await deleteUserAvatar\(\);[\s\S]*setUser\(nextUser\)/);
+  assert.match(settings, /import \{ untrack \} from 'svelte'/);
+  assert.match(settings, /untrack\(\(\) => \{[\s\S]*pendingAvatar = null/);
+  assert.match(settings, /pendingAvatar = blob/);
+  assert.match(settings, /const avatarBlob = pendingAvatar[\s\S]*if \(avatarBlob\)[\s\S]*await uploadUserAvatar\(avatarBlob\)/);
+  assert.match(settings, /removeAvatarPending = true/);
+  assert.match(settings, /const shouldRemoveAvatar = removeAvatarPending[\s\S]*else if \(shouldRemoveAvatar\)[\s\S]*await deleteUserAvatar\(\)/);
   assert.match(roomSettings, /applyRoomUpdated\(room\)/);
   assert.match(roomSettings, /voice-room:rooms-changed/);
+  assert.match(roomSettings, /settings-modal room-settings-modal/);
+  assert.match(roomSettings, /settings-content room-settings-content/);
 });
 
 test('connection status renders reactively from room state, not imperative DOM writes', () => {
@@ -505,7 +513,7 @@ test('connection status renders reactively from room state, not imperative DOM w
   // Pill (topbar) and signal bars (dock) both subscribe via $derived.
   assert.match(topbar, /const connection = \$derived\(getConnectionStatusView\(\)\)/);
   assert.match(topbar, /data-state=\{connection\.stateName\}/);
-  assert.match(topbar, /hidden=\{connection\.stateName === 'idle' \|\| state\.screen !== 'room'\}/);
+  assert.match(topbar, /hidden=\{connection\.stateName === 'idle' \|\| roomClientState\.screen !== 'room'\}/);
   assert.match(dock, /const connection = \$derived\(getConnectionStatusView\(\)\)/);
   assert.match(dock, /data-state=\{connection\.stateName\}/);
 
@@ -659,6 +667,18 @@ test('screen stream thumbnails show profile metadata instead of an action button
   assert.match(streamTile, /participant\.isLocal \? roomState\.localScreenProfileId : participant\.screenProfileId/);
   assert.match(streamTilesCss, /\.stream-tile-profile-meta/);
   assert.doesNotMatch(streamTilesCss, /stream-tile-action-disconnect/);
+});
+
+test('audio unlock fallback button defers to the stream watch gate', () => {
+  const playback = read('src/lib/features/room/client/services/media-playback-service.ts');
+  const roomMain = read('src/lib/features/room/client/main.ts');
+
+  // The "Смотреть стрим" click is the unlock gesture: while an unwatched
+  // remote stream is on screen, the fallback sound button must stay hidden.
+  assert.match(playback, /options\.showFallback && !hasPendingStreamWatchGate\(\)/);
+  assert.match(playback, /function hasPendingStreamWatchGate\(\)/);
+  assert.match(playback, /state\.viewedScreenPeerId === peer\.id \|\| state\.screenSubscribedPeerIds\.has\(peer\.id\)/);
+  assert.match(roomMain, /document\.addEventListener\('pointerdown', handleAudioUnlockGesture/);
 });
 
 test('screen stage and lobby room previews use shared AvatarStack for participant avatars', () => {
@@ -962,13 +982,13 @@ test('user and room avatars expose accessible edit overlays and conditional dele
   const roomSettings = read('src/lib/features/room/components/RoomSettingsDialog.svelte');
 
   assert.match(settings, /<button[\s\S]*?class="settings-avatar-edit"[\s\S]*?aria-label=\{user\?\.avatarUrl \? 'Изменить аватар' : 'Загрузить аватар'\}[\s\S]*?<Pencil/);
-  assert.match(settings, /\{#if user\?\.avatarUrl\}[\s\S]*?<button[\s\S]*?class="settings-avatar-remove"[\s\S]*?aria-label="Удалить аватар"[\s\S]*?<X/);
+  assert.match(settings, /\{#if avatarPreviewUrl \|\| \(user\?\.avatarUrl && !removeAvatarPending\)\}[\s\S]*?<button[\s\S]*?class="settings-avatar-remove"[\s\S]*?aria-label="Удалить аватар"[\s\S]*?<X/);
   assert.match(settingsCss, /\.settings-avatar-edit:not\(:disabled\):focus-visible \.settings-avatar-overlay\s*\{[^}]*opacity:\s*1/);
   assert.match(settingsCss, /\.settings-avatar-edit:focus-visible\s*\{[^}]*outline:/);
   assert.match(settingsCss, /\.settings-avatar-remove:focus-visible\s*\{[^}]*outline:/);
 
   assert.match(roomSettings, /<button[\s\S]*?class="room-avatar-edit"[\s\S]*?aria-label=\{roomClientState\.roomAvatarUrl \? 'Изменить аватар комнаты' : 'Загрузить аватар комнаты'\}[\s\S]*?<Pencil/);
-  assert.match(roomSettings, /\{#if roomClientState\.roomAvatarUrl\}[\s\S]*?<button[\s\S]*?class="room-avatar-remove"[\s\S]*?aria-label="Удалить аватар комнаты"[\s\S]*?<X/);
+  assert.match(roomSettings, /\{#if avatarPreviewUrl \|\| \(roomClientState\.roomAvatarUrl && !removeAvatarPending\)\}[\s\S]*?<button[\s\S]*?class="room-avatar-remove"[\s\S]*?aria-label="Удалить аватар комнаты"[\s\S]*?<X/);
   assert.match(roomSettings, /\.room-avatar-edit:not\(:disabled\):focus-visible \.room-avatar-overlay\s*\{[^}]*opacity:\s*1/);
   assert.match(roomSettings, /\.room-avatar-edit:focus-visible\s*\{[^}]*outline:/);
   assert.match(roomSettings, /\.room-avatar-remove:focus-visible\s*\{[^}]*outline:/);

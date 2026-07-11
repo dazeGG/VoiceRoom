@@ -300,7 +300,7 @@
    page scripts run, so the download control is hidden with no flash. */
 html.is-desktop .sidebar-download { display: none; }
 .sidebar-download-trigger.is-open { background: rgba(255, 255, 255, 0.11); color: var(--warm-ink); }
-.sidebar-download-popover { min-width: 212px; padding: 6px; }
+.sidebar-download-popover { width: max-content; min-width: 268px; padding: 6px; }
 .sidebar-download-head {
   padding: 6px 10px 8px;
   font-size: 11px;
@@ -529,7 +529,7 @@ html.is-desktop .sidebar-download { display: none; }
 }
 .lobby-roomview-trigger[aria-expanded='true'] .lobby-roomview-chevron { transform: rotate(180deg); }
 
-.lobby-roomview-popover { min-width: 252px; }
+.lobby-roomview-popover { width: 276px; }
 .lobby-roomview-popover-head {
   display: flex;
   align-items: center;
@@ -1111,3 +1111,5 @@ html.is-desktop .sidebar-download { display: none; }
 .lobby-handle-copy:hover { background: rgba(255, 255, 255, 0.11); }
 
 .lobby-error { font-size: 13px; color: var(--coral); margin-top: 10px; }
+
+.sidebar-download-popover [role="menuitem"], .lobby-roomview-popover [role="menuitem"] { white-space: nowrap; }

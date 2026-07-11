@@ -74,7 +74,7 @@
 
     {#snippet content({ close })}
       <div class="lobby-roomview-popover-head">
-        <Avatar name={name} src={room.avatarUrl} shape="squircle" background="var(--room-avatar-bg)" size={34} />
+        <Avatar name={name} src={room.avatarUrl} shape="squircle" background="var(--room-avatar-bg)" size={44} />
         <div class="lobby-roomview-popover-info">
           <Ellipsis class="lobby-roomview-popover-name" text={name} />
           <Ellipsis class="lobby-roomview-popover-code" text={room.roomId} />
@@ -89,17 +89,18 @@
         {/snippet}
       </PopoverMenuItem>
 
+      <PopoverMenuItem label="Скопировать ссылку" onclick={() => void copyValue(`${window.location.origin}/r/${encodeURIComponent(room.roomId)}`, 'Ссылка скопирована', close)}>
+        {#snippet icon()}
+          <Link {...iconMd} aria-hidden="true" />
+        {/snippet}
+      </PopoverMenuItem>
+
       <PopoverMenuItem label={roomMuted ? 'Включить уведомления' : 'Выключить уведомления'} onclick={() => void toggleRoomMute(close)} disabled={muteSaving}>
         {#snippet icon()}
           {#if roomMuted}<BellOff {...iconMd} aria-hidden="true" />{:else}<Bell {...iconMd} aria-hidden="true" />{/if}
         {/snippet}
       </PopoverMenuItem>
 
-      <PopoverMenuItem label="Скопировать ссылку" onclick={() => void copyValue(`${window.location.origin}/r/${encodeURIComponent(room.roomId)}`, 'Ссылка скопирована', close)}>
-        {#snippet icon()}
-          <Link {...iconMd} aria-hidden="true" />
-        {/snippet}
-      </PopoverMenuItem>
     {/snippet}
   </Popover>
 </div>

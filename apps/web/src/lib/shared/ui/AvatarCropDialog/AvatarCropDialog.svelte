@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ImagePlus, X } from '@lucide/svelte';
+  import { Check, X } from '@lucide/svelte';
   import { deriveAvatarAccent } from '@voice-room/shared/avatar-accent';
   import Avatar from '../Avatar/Avatar.svelte';
   import type { AvatarCropDialogProps } from './types';
@@ -125,6 +125,14 @@
     });
   }
 
+
+  function onWheel(event: WheelEvent): void {
+    if (!image) return;
+    event.preventDefault();
+    const direction = event.deltaY < 0 ? 1 : -1;
+    zoom = Math.max(1, Math.min(3, zoom + direction * 0.08));
+  }
+
   function onPointerDown(event: PointerEvent): void {
     if (!canvas || !image) return;
     dragging = true;
@@ -201,7 +209,7 @@
       <header class="crop-head">
         <div>
           <h2 id="avatarCropTitle">{title}</h2>
-          <p>Перетащите изображение и настройте масштаб</p>
+          <p>Перетащите изображение, масштабируйте ползунком или колесом</p>
         </div>
         <button type="button" aria-label="Закрыть" onclick={onClose} disabled={saving}><X size={18} /></button>
       </header>
@@ -218,6 +226,7 @@
               onpointermove={onPointerMove}
               onpointerup={endDrag}
               onpointercancel={endDrag}
+              onwheel={onWheel}
             ></canvas>
           </div>
           <label class="crop-zoom">
@@ -251,8 +260,8 @@
       <footer class="crop-actions">
         <button class="crop-cancel" type="button" onclick={onClose} disabled={saving}>Отмена</button>
         <button class="crop-save" type="button" onclick={save} disabled={saving || !image}>
-          <ImagePlus size={17} aria-hidden="true" />
-          {saving ? 'Сохраняем…' : 'Сохранить аватар'}
+          <Check size={17} aria-hidden="true" />
+          Готово
         </button>
       </footer>
     </div>
@@ -269,9 +278,8 @@
   .crop-body { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: 28px; padding: 24px; }
   .crop-editor { min-width: 0; }
   .crop-stage { position: relative; width: min(100%, 430px); aspect-ratio: 1; margin: auto; overflow: hidden; background: #0d0c0a; touch-action: none; }
-  .crop-stage::after { position: absolute; inset: 0; border: 2px solid rgb(255 255 255 / .88); box-shadow: 0 0 0 999px rgb(0 0 0 / .56); content: ''; pointer-events: none; }
-  .crop-stage--circle, .crop-stage--circle::after { border-radius: 50%; }
-  .crop-stage--squircle, .crop-stage--squircle::after { border-radius: 31%; }
+  .crop-stage--circle { border-radius: 50%; }
+  .crop-stage--squircle { border-radius: 31%; }
   canvas { display: block; width: 100%; height: 100%; cursor: grab; }
   canvas:active { cursor: grabbing; }
   .crop-zoom { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 14px; margin: 18px auto 0; max-width: 430px; color: var(--warm-muted, #aaa397); font-size: 12px; font-weight: 700; }

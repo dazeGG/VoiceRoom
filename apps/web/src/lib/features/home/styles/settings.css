@@ -227,7 +227,12 @@
   color: #fff;
   cursor: pointer;
   box-shadow: 0 2px 7px rgba(0, 0, 0, 0.34);
+  opacity: 0;
+  transition: opacity 0.16s ease, background 0.16s ease;
 }
+
+.settings-avatar-control:hover .settings-avatar-remove,
+.settings-avatar-control:focus-within .settings-avatar-remove { opacity: 1; }
 
 .settings-avatar-remove:not(:disabled):hover {
   background: #c94e3b;
@@ -305,6 +310,7 @@
 
 .settings-actions {
   display: flex;
+  justify-content: flex-end;
   gap: 10px;
   margin-top: 30px;
 }
