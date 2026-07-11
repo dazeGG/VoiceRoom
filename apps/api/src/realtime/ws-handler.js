@@ -11,7 +11,7 @@ function createWsHandler({
   isUserOnline,
   getClientIp = () => 'unknown'
 }) {
-  async function handleMessage(connection, sessionUser, envelope) {
+  async function handleMessage(connection, envelope, req) {
     if (envelope.type === 'hello') {
       registry.touch(connection);
       return;
@@ -46,7 +46,15 @@ function createWsHandler({
     }
 
     if (envelope.type === 'room.join') {
-      const result = await roomRuntime.joinVoiceRoom(connection, envelope.payload, sessionUser);
+      // A WebSocket can stay open while the account profile changes. Resolve the
+      // session again at join time so a newly uploaded/deleted avatar is not
+      // overwritten by the user snapshot captured when the socket first opened.
+      const currentSession = await resolveSessionUser(req);
+      const result = await roomRuntime.joinVoiceRoom(
+        connection,
+        envelope.payload,
+        currentSession?.user || null
+      );
       if (!result.ok && result.message) {
         registry.sendToConnection(
           connection,
@@ -128,7 +136,7 @@ function createWsHandler({
         );
         return;
       }
-      void handleMessage(connection, sessionUser, parsed.envelope);
+      void handleMessage(connection, parsed.envelope, req);
     });
 
     socket.on('close', () => {

@@ -275,10 +275,10 @@ async function openPreviewSession(socketPath, roomId, { cookie = '' } = {}) {
   return session;
 }
 
-async function startSocketServer(seed, { store = createFakeStore(seed) } = {}) {
+async function startSocketServer(seed, { store = createFakeStore(seed), users = createFakeUsers() } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'voice-room-crud-'));
   const socketPath = path.join(dir, 'api.sock');
-  const server = createApiServer({ store, users: createFakeUsers(), friends: createFakeFriends() });
+  const server = createApiServer({ store, users, friends: createFakeFriends() });
   await new Promise((resolve, reject) => {
     server.listen({ path: socketPath }, (error) => (error ? reject(error) : resolve()));
   });
@@ -355,6 +355,43 @@ test('authenticated room presence exposes only minimal account user id on peers'
   const ownerAsPeer = guestSnapshot?.peers?.find((peer) => peer.id === 'peer0001');
   assert.equal(ownerAsPeer.accountUserId, OWNER_ID);
   assert.equal('login' in ownerAsPeer, false);
+});
+
+test('room join refreshes avatar identity changed after the websocket opened', async (t) => {
+  const owner = {
+    id: OWNER_ID,
+    avatarAccent: null,
+    avatarColorKey: 'blurple',
+    avatarKey: null
+  };
+  const users = {
+    async getSessionUser(token) {
+      return token === OWNER_TOKEN ? { user: { ...owner } } : null;
+    }
+  };
+  const { dir, socketPath, server } = await startSocketServer(
+    { room1: staticRoom() },
+    { users }
+  );
+  const presence = openWs(socketPath, { cookie: `vr_session=${OWNER_TOKEN}` });
+  await presence.ready;
+
+  owner.avatarAccent = '#49303f';
+  owner.avatarKey = 'av_user-owner_deadbeef.webp';
+  await joinVoiceRoom(presence, {
+    roomId: 'room1',
+    peerId: 'peer0001',
+    sessionToken: OWNER_PEER_TOKEN,
+    name: 'Owner'
+  });
+  teardownSocketServer(t, { server, dir, sessions: [presence] });
+
+  const peer = presence.frames
+    .find((frame) => frame.type === 'room.snapshot')
+    ?.payload?.peers?.find((entry) => entry.id === 'peer0001');
+  assert.equal(peer.avatarAccent, '#49303f');
+  assert.equal(peer.avatarColorKey, 'blurple');
+  assert.equal(peer.avatarUrl, '/api/avatars/av_user-owner_deadbeef.webp');
 });
 
 test('an active peer receives room.updated over the voice stream', async (t) => {
