@@ -151,6 +151,7 @@ GitHub-аналог GitLab CI/CD variables находится здесь:
 | `ROOM_CHAT_MAX_MESSAGES` | `500` | Max chat messages per room. |
 | `ROOM_CHAT_RATE_LIMIT` | `60` | Room chat rate limit. |
 | `ROOM_CHAT_RATE_WINDOW_MS` | `60000` | Room chat rate window. |
+| `UPLOADS_DIR` | `apps/api/uploads` (host) / `/data/uploads` (compose) | Каталог нормализованных WebP-аватарок. В production должен находиться на persistent volume. |
 | `ROOM_CREATE_POW_DIFFICULTY` | `14` | Proof-of-work difficulty. Для dev/test можно `0`. |
 | `ROOM_CREATE_POW_TTL_MS` | `120000` | Proof-of-work TTL. |
 | `ROOM_CREATE_RATE_LIMIT` | `20` | Room create rate limit. |
@@ -163,6 +164,8 @@ GitHub-аналог GitLab CI/CD variables находится здесь:
 | `DM_RATE_WINDOW_MS` | `10000` | DM rate window. |
 | `FRIEND_REQUEST_RATE_LIMIT` | `20` | Friend request rate limit per user. |
 | `FRIEND_REQUEST_RATE_WINDOW_MS` | `60000` | Friend request rate window. |
+| `AVATAR_UPLOAD_RATE_LIMIT` | `10` | Максимум загрузок аватарок на аккаунт за окно. |
+| `AVATAR_UPLOAD_RATE_WINDOW_MS` | `60000` | Окно rate limit загрузки аватарок. |
 | `MAX_REALTIME_STREAMS_PER_USER` | `8` | Max concurrent WebSocket streams per authenticated user. |
 | `MAX_GUEST_STREAMS_PER_IP` | `8` | Max concurrent guest WebSocket streams per client IP. |
 | `MAX_ROOM_BANS` | reserved | Reserved for the planned static-room ban API; not enforced until moderation routes are shipped. |
@@ -255,7 +258,7 @@ npm --workspace @voice-room/api run db:rollback
 Production compose собирает runtime-образы из одного Dockerfile и поднимает durable services:
 
 - `postgres` — PostgreSQL с volume `postgres_data` и healthcheck;
-- `api` — Node.js API на `:3000`, ждёт healthy Postgres, применяет migrations и отвечает только на `/api/*`;
+- `api` — Node.js API на `:3000`, ждёт healthy Postgres, применяет migrations, хранит аватарки в volume `uploads` и отвечает только на `/api/*`;
 - `caddy` — frontend static build из `apps/web/dist`, reverse proxy для `/api/*` и отдельный reverse proxy для LiveKit domain;
 - `livekit` — LiveKit SFU.
 
@@ -285,7 +288,7 @@ npm run dev:down
 
 Для Docker/production используйте отдельный prod-like `.env`: `LIVEKIT_URL` должен быть публичным URL из браузера, обычно `wss://$LIVEKIT_DOMAIN`. Локальный dev `.env` с `LIVEKIT_URL=ws://127.0.0.1:7880` предназначен для host/dev compose сценария; в production контейнере такой URL будет неверен для внешних браузеров.
 
-В production приложение должно стоять за HTTPS, PostgreSQL volume нужно бэкапить, а LiveKit должен иметь публично доступные ICE/TCP и ICE/UDP порты. Если пользователи часто сидят за строгими корпоративными сетями, следующим шагом стоит добавить TURN/TLS в LiveKit deployment.
+В production приложение должно стоять за HTTPS, volumes `postgres_data` и `uploads` нужно бэкапить как единый согласованный набор, а LiveKit должен иметь публично доступные ICE/TCP и ICE/UDP порты. `postgres_data` содержит ключи аватарок, а `uploads` — соответствующие WebP-файлы; потеря одного из volumes делает резервную копию неполной. Если пользователи часто сидят за строгими корпоративными сетями, следующим шагом стоит добавить TURN/TLS в LiveKit deployment.
 
 
 ## Ручной release smoke: static room + chat persist after API restart
@@ -330,7 +333,7 @@ npm run desktop
 
 Постоянные комнаты больше не считаются в IP-квоту: создавать их могут только авторизованные пользователи, а владение ограничено `MAX_STATIC_ROOMS_PER_USER` (по умолчанию 3). Временные ownerless-комнаты остаются ограничены по IP через `MAX_TEMP_ROOMS_PER_IP` (legacy `MAX_EMPTY_ROOMS_PER_IP` используется только как fallback для старых env-файлов), чтобы один IP не заполнял `MAX_ROOMS` пустыми временными комнатами.
 
-История чата хранится в PostgreSQL до `ROOM_CHAT_TTL_MS`, но на комнату сохраняется не больше `ROOM_CHAT_MAX_MESSAGES` последних сообщений. Отправка чата ограничена `ROOM_CHAT_RATE_LIMIT` на пару IP+room за `ROOM_CHAT_RATE_WINDOW_MS`. Для production важно бэкапить PostgreSQL volume и не терять `DATABASE_URL`/credentials. Cleanup expired chat/idle dynamic rooms runs on a process-local `ROOM_PRUNE_INTERVAL_MS` timer; old soft-deleted rows are physically purged by `RETENTION_PURGE_INTERVAL_MS` after `RETENTION_KEEP_DELETED_MS`. API currently assumes exactly one running instance: presence, WebSocket registry, POW challenges, cleanup timers and non-durable rate-limit state are process-local. Durable rooms/messages/users live in PostgreSQL, and room quota/capacity enforcement is transactional in PostgreSQL at room creation time. Horizontal scaling requires sticky WebSocket routing and moving process-local state to shared storage such as Redis/pub-sub.
+История чата хранится в PostgreSQL до `ROOM_CHAT_TTL_MS`, но на комнату сохраняется не больше `ROOM_CHAT_MAX_MESSAGES` последних сообщений. Отправка чата ограничена `ROOM_CHAT_RATE_LIMIT` на пару IP+room за `ROOM_CHAT_RATE_WINDOW_MS`. Для production важно совместно бэкапить volumes `postgres_data` и `uploads` и не терять `DATABASE_URL`/credentials. Cleanup expired chat/idle dynamic rooms runs on a process-local `ROOM_PRUNE_INTERVAL_MS` timer; old soft-deleted rows are physically purged by `RETENTION_PURGE_INTERVAL_MS` after `RETENTION_KEEP_DELETED_MS`. API currently assumes exactly one running instance: presence, WebSocket registry, POW challenges, cleanup timers and non-durable rate-limit state are process-local. Durable rooms/messages/users live in PostgreSQL, avatar files live on the API `uploads` volume, and room quota/capacity enforcement is transactional in PostgreSQL at room creation time. Horizontal scaling requires sticky WebSocket routing, shared avatar storage such as S3 and moving other process-local state to shared storage such as Redis/pub-sub.
 
 LiveKit снимает mesh-нагрузку с браузеров: каждый участник публикует микрофон и экран один раз в SFU, а остальные клиенты подписываются на tracks через LiveKit.
 
