@@ -34,7 +34,7 @@
 
 ## Visual language
 - Color: dark olive/warm neutral surfaces with electric-lime primary CTA.
-- Typography: Archivo-like sans for UI; monospace only for codes/technical labels.
+- Typography: Comfortaa is reserved for intentional brand/display text at supported 400-700 weights. Nunito is the default functional UI face. JetBrains Mono is reserved for room codes, handles, timestamps, and technical text.
 - Spacing/layout rhythm: 4pt scale; common gaps 8/10/12/16px; action rails use 52px large height.
 - Shape/radius/elevation: 14px default interactive radius, pill only for deliberate pill affordances.
 - Motion: quick hover/focus transitions, no decorative motion required.
@@ -76,6 +76,7 @@
 - Design-token constraints: use existing `--space-*`, `--radius-*`, `--interactive-*` tokens.
 - Performance constraints: CSS-only standardization; no extra dependencies.
 - Compatibility constraints: no new package/browser APIs.
+- Font/runtime constraints: typography assets are self-hosted under `apps/web/static/fonts` with Cyrillic and Latin coverage. CSS must keep `font-src 'self'` compatibility and avoid remote font hosts. System fallbacks remain only after the local role fonts.
 - Test/screenshot expectations: run `npm --workspace @voice-room/web run check`; visual review should compare landing/lobby create/join rows.
 
 ## Open questions
