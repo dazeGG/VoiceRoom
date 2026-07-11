@@ -801,7 +801,7 @@ html.is-desktop .sidebar-download { display: none; }
   background: var(--paper-deep);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 13px;
-  padding: 15px 16px;
+  padding: 13px 16px;
   color: var(--warm-ink);
   font-family: var(--font-ui);
   font-size: 14px;
@@ -810,6 +810,7 @@ html.is-desktop .sidebar-download { display: none; }
   resize: none;
 }
 .lobby-dm-textarea {
+  height: 48px;
   min-height: 48px;
   max-height: 140px;
   overflow-y: auto;

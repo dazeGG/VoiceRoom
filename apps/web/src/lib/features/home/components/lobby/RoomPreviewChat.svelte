@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ChevronRight, MessageSquare, Send } from '@lucide/svelte';
+  import { ChevronRight, MessageSquare } from '@lucide/svelte';
   import type { AuthUser } from '$lib/api/auth';
   import { iconSm } from '$lib/shared/ui/icons';
   import { getAppRealtime } from '$lib/api/realtime';
@@ -9,6 +9,7 @@
   import { getAvatarPresentation } from '$lib/features/room/client/ui/avatar-presentation';
   import { friendName } from '../../model/lobby-format';
   import ChatText from '$lib/shared/components/ChatText.svelte';
+  import { tick } from 'svelte';
 
   let { roomId, user, onClose } = $props<{ roomId: string; user: AuthUser; onClose?: () => void }>();
 
@@ -28,12 +29,10 @@
   }
 
   function onComposeKeydown(e: KeyboardEvent) {
+    if (e.isComposing) return;
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       void sendMessage();
-      queueMicrotask(() => {
-        if (composeEl) composeEl.style.height = 'auto';
-      });
     } else {
       queueMicrotask(autoResize);
     }
@@ -123,19 +122,25 @@
 
     sending = true;
     error = '';
+    let sent = false;
     try {
       const message = await postRoomChat(roomId, { name: displayName, text });
-      draft = '';
       if (!messageIds.has(message.id) && !messages.some((item) => item.id === message.id)) {
         messageIds.add(message.id);
         messages = [...messages, message];
         queueMicrotask(scrollToBottom);
       }
+      draft = '';
+      sent = true;
     } catch (err) {
       error = err instanceof Error ? err.message : 'Не удалось отправить сообщение';
     } finally {
       sending = false;
     }
+    if (!sent) return;
+    await tick();
+    if (composeEl) composeEl.style.height = '';
+    composeEl?.focus();
   }
 
   function scrollToBottom(): void {
@@ -223,14 +228,12 @@
       class="chat-rail-input chat-rail-textarea"
       bind:this={composeEl}
       bind:value={draft}
+      rows="1"
       maxlength="500"
       placeholder="Написать в комнату…"
       onkeydown={onComposeKeydown}
       oninput={autoResize}
       disabled={sending}
     ></textarea>
-    <button class="chat-rail-send" type="submit" aria-label="Отправить" disabled={sending || !draft.trim()}>
-      <Send {...iconSm} aria-hidden="true" />
-    </button>
   </form>
 </aside>

@@ -247,8 +247,6 @@ button.chat-msg-author {
 
 .chat-rail-compose {
   display: flex;
-  align-items: center;
-  gap: 9px;
   padding: 14px 18px 18px;
 }
 
@@ -258,7 +256,7 @@ button.chat-msg-author {
   min-height: 0;
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 13px;
-  padding: 12px 14px;
+  padding: 10px 14px;
   background: #0c0b08;
   color: #ece7d9;
   font-family: var(--font-ui);
@@ -270,6 +268,7 @@ button.chat-msg-author {
 .chat-rail-textarea {
   resize: none;
   overflow-y: auto;
+  height: 42px;
   min-height: 42px;
   max-height: 140px;
   line-height: 1.35;
@@ -281,30 +280,6 @@ button.chat-msg-author {
 
 .chat-rail-input:focus {
   border-color: rgba(154, 143, 106, 0.65);
-}
-
-.chat-rail-send {
-  flex: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  border: none;
-  border-radius: 11px;
-  background: #d9d3c3;
-  color: #17150f;
-  cursor: pointer;
-  transition: background 0.15s ease;
-}
-
-.chat-rail-send:hover {
-  background: #e7e1d1;
-}
-
-.chat-rail-send:disabled {
-  cursor: default;
-  opacity: 0.5;
 }
 
 /* On narrow screens the rail overlays the room instead of squeezing the grid. */

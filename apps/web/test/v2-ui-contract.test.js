@@ -905,6 +905,82 @@ test('lobby v2 keeps dock in main area, preview chat, and people add-friend flow
   assert.match(lobby, /import '\$lib\/features\/room\/styles\/chat-rail\.css'/);
 });
 
+test('chat composers and add-friend control preserve compact keyboard-first behavior', () => {
+  const people = read('src/lib/features/home/components/lobby/PeopleView.svelte');
+  const dm = read('src/lib/features/home/components/lobby/DmView.svelte');
+  const lobbyV2 = read('src/lib/features/home/styles/lobby-v2.css');
+  const friends = read('src/lib/features/home/styles/friends.css');
+  const roomChat = read('src/lib/features/room/components/RoomChat.svelte');
+  const previewChat = read('src/lib/features/home/components/lobby/RoomPreviewChat.svelte');
+  const roomChatCss = read('src/lib/features/room/styles/chat-rail.css');
+  const dmSubmit = functionBody(dm, 'submit');
+  const roomSubmit = functionBody(roomChat, 'sendMessage');
+  const previewSubmit = functionBody(previewChat, 'sendMessage');
+
+  assert.match(people, /На главную/);
+  assert.doesNotMatch(dm, /На главную|ChevronLeft/);
+  assert.match(lobbyV2, /\.lr-add-field\s*\{[^}]*height:\s*var\(--interactive-lg, 52px\)/);
+  assert.match(lobbyV2, /\.lr-add-field input\s*\{[^}]*height:\s*100%[^}]*padding:\s*0/);
+
+  for (const composer of [dm, roomChat, previewChat]) {
+    assert.match(composer, /rows="1"/);
+    assert.match(composer, /\.isComposing\) return/);
+    assert.match(composer, /\.key === 'Enter' && !\w+\.shiftKey/);
+  }
+  assert.match(friends, /\.lobby-dm-textarea\s*\{[^}]*height:\s*48px[^}]*max-height:\s*140px/);
+  assert.match(friends, /\.lobby-dm-input\s*\{[^}]*padding:\s*13px 16px/);
+  assert.match(roomChatCss, /\.chat-rail-textarea\s*\{[^}]*height:\s*42px[^}]*max-height:\s*140px/);
+  assert.match(roomChatCss, /\.chat-rail-input\s*\{[^}]*padding:\s*10px 14px/);
+
+  assert.ok(dmSubmit.indexOf('await sendMessage(text)') < dmSubmit.indexOf("draft = ''"));
+  assert.ok(dmSubmit.indexOf("draft = ''") < dmSubmit.indexOf("inputEl.style.height = ''"));
+  assert.doesNotMatch(dmSubmit.slice(dmSubmit.indexOf('catch'), dmSubmit.indexOf('finally')), /draft\s*=/);
+  assert.ok(roomSubmit.indexOf('await postRoomChat') < roomSubmit.indexOf("draft = ''"));
+  assert.ok(roomSubmit.indexOf("draft = ''") < roomSubmit.indexOf("composeEl.style.height = ''"));
+  assert.doesNotMatch(roomSubmit.slice(roomSubmit.indexOf('catch'), roomSubmit.indexOf('finally')), /draft\s*=/);
+  assert.ok(previewSubmit.indexOf('await postRoomChat') < previewSubmit.indexOf("draft = ''"));
+  assert.ok(previewSubmit.indexOf("draft = ''") < previewSubmit.indexOf("composeEl.style.height = ''"));
+  assert.doesNotMatch(previewSubmit.slice(previewSubmit.indexOf('catch'), previewSubmit.indexOf('finally')), /draft\s*=/);
+
+  for (const [body, element] of [
+    [dmSubmit, 'inputEl'],
+    [roomSubmit, 'composeEl'],
+    [previewSubmit, 'composeEl']
+  ]) {
+    assert.match(body, /if \(!sent\) return;\s*await tick\(\)/);
+    assert.ok(body.indexOf('sending = false') < body.indexOf('await tick()'));
+    assert.ok(body.indexOf(`${element}.style.height = ''`) < body.indexOf(`${element}?.focus()`));
+  }
+
+  assert.doesNotMatch(`${roomChat}\n${previewChat}`, /\bSend\b|chat-rail-send/);
+  assert.doesNotMatch(roomChatCss, /\.chat-rail-send/);
+});
+
+test('user and room avatars expose accessible edit overlays and conditional delete controls', () => {
+  const settings = read('src/lib/features/home/components/SettingsModal.svelte');
+  const settingsCss = read('src/lib/features/home/styles/settings.css');
+  const roomSettings = read('src/lib/features/room/components/RoomSettingsDialog.svelte');
+
+  assert.match(settings, /<button[\s\S]*?class="settings-avatar-edit"[\s\S]*?aria-label=\{user\?\.avatarUrl \? 'Изменить аватар' : 'Загрузить аватар'\}[\s\S]*?<Pencil/);
+  assert.match(settings, /\{#if user\?\.avatarUrl\}[\s\S]*?<button[\s\S]*?class="settings-avatar-remove"[\s\S]*?aria-label="Удалить аватар"[\s\S]*?<X/);
+  assert.match(settingsCss, /\.settings-avatar-edit:not\(:disabled\):focus-visible \.settings-avatar-overlay\s*\{[^}]*opacity:\s*1/);
+  assert.match(settingsCss, /\.settings-avatar-edit:focus-visible\s*\{[^}]*outline:/);
+  assert.match(settingsCss, /\.settings-avatar-remove:focus-visible\s*\{[^}]*outline:/);
+
+  assert.match(roomSettings, /<button[\s\S]*?class="room-avatar-edit"[\s\S]*?aria-label=\{roomClientState\.roomAvatarUrl \? 'Изменить аватар комнаты' : 'Загрузить аватар комнаты'\}[\s\S]*?<Pencil/);
+  assert.match(roomSettings, /\{#if roomClientState\.roomAvatarUrl\}[\s\S]*?<button[\s\S]*?class="room-avatar-remove"[\s\S]*?aria-label="Удалить аватар комнаты"[\s\S]*?<X/);
+  assert.match(roomSettings, /\.room-avatar-edit:not\(:disabled\):focus-visible \.room-avatar-overlay\s*\{[^}]*opacity:\s*1/);
+  assert.match(roomSettings, /\.room-avatar-edit:focus-visible\s*\{[^}]*outline:/);
+  assert.match(roomSettings, /\.room-avatar-remove:focus-visible\s*\{[^}]*outline:/);
+
+  for (const source of [settings, settingsCss]) {
+    assert.doesNotMatch(source, /settings-avatar-(?:actions|upload|delete)/);
+  }
+  assert.doesNotMatch(settings, /\b(?:ImagePlus|Trash2)\b/);
+  assert.doesNotMatch(roomSettings, /room-avatar-(?:row|actions|upload|delete)/);
+  assert.doesNotMatch(roomSettings, /\b(?:ImagePlus|Trash2)\b/);
+});
+
 test('frontend visual catalog keeps only user avatar color contracts', () => {
   const shared = require('@voice-room/shared/validation');
   const tokens = read('src/lib/visual/tokens.ts');

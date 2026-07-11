@@ -144,8 +144,14 @@
   margin-bottom: 28px;
 }
 
-.settings-profile-avatar {
+.settings-avatar-control {
+  position: relative;
   flex: none;
+  width: 56px;
+  height: 56px;
+}
+
+.settings-profile-avatar {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -161,43 +167,79 @@
   border-radius: inherit;
 }
 
-.settings-avatar-actions {
-  display: flex;
-  gap: 9px;
-  margin: -14px 0 24px 72px;
-}
-
 .settings-avatar-input {
   display: none;
 }
 
-.settings-avatar-upload,
-.settings-avatar-delete {
-  display: inline-flex;
+.settings-avatar-edit {
+  position: relative;
+  display: flex;
   align-items: center;
-  gap: 7px;
-  padding: 8px 11px;
-  border-radius: 9px;
-  font-family: var(--font-ui);
-  font-size: 12px;
-  font-weight: 650;
-  cursor: pointer;
-}
-
-.settings-avatar-upload {
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--warm-ink-dim);
-}
-
-.settings-avatar-delete {
-  border: 1px solid rgba(239, 68, 68, 0.25);
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
   background: transparent;
-  color: #f87171;
+  color: #fff;
+  cursor: pointer;
+  overflow: hidden;
 }
 
-.settings-avatar-upload:disabled,
-.settings-avatar-delete:disabled {
+.settings-avatar-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: inherit;
+  background: rgba(20, 16, 14, 0.58);
+  opacity: 0;
+  transition: opacity 0.16s ease;
+  pointer-events: none;
+}
+
+.settings-avatar-edit:not(:disabled):hover .settings-avatar-overlay,
+.settings-avatar-edit:not(:disabled):focus-visible .settings-avatar-overlay {
+  opacity: 1;
+}
+
+.settings-avatar-edit:focus-visible {
+  outline: 2px solid var(--coral);
+  outline-offset: 3px;
+}
+
+.settings-avatar-remove {
+  position: absolute;
+  z-index: 1;
+  top: -5px;
+  right: -5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 2px solid var(--paper-deep);
+  border-radius: 50%;
+  background: #dc5f4b;
+  color: #fff;
+  cursor: pointer;
+  box-shadow: 0 2px 7px rgba(0, 0, 0, 0.34);
+}
+
+.settings-avatar-remove:not(:disabled):hover {
+  background: #c94e3b;
+}
+
+.settings-avatar-remove:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+.settings-avatar-edit:disabled,
+.settings-avatar-remove:disabled {
   cursor: default;
   opacity: 0.6;
 }

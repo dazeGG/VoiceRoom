@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ImagePlus, LogOut, Mic, Trash2, User, X } from '@lucide/svelte';
+  import { LogOut, Mic, Pencil, User, X } from '@lucide/svelte';
   import type { AuthUser } from '$lib/api/auth';
   import { iconMd, iconSm } from '$lib/shared/ui/icons';
   import { changePassword, deleteUserAvatar, updateDisplayName, uploadUserAvatar } from '$lib/api/auth';
@@ -364,25 +364,38 @@
         <div class="settings-content">
           {#if tab === 'profile'}
             <div class="settings-profile-head">
-              <Avatar name={label} src={user?.avatarUrl} colorKey={user?.avatarColorKey} background={user?.avatarAccent || undefined} size={56} class="settings-profile-avatar" />
+              <div class="settings-avatar-control">
+                <input bind:this={avatarInput} class="settings-avatar-input" type="file" accept="image/jpeg,image/png,image/webp" onchange={onAvatarFile} />
+                <button
+                  type="button"
+                  class="settings-avatar-edit"
+                  onclick={chooseAvatar}
+                  disabled={avatarSaving}
+                  aria-label={user?.avatarUrl ? 'Изменить аватар' : 'Загрузить аватар'}
+                  title={user?.avatarUrl ? 'Изменить аватар' : 'Загрузить аватар'}
+                >
+                  <Avatar name={label} src={user?.avatarUrl} colorKey={user?.avatarColorKey} background={user?.avatarAccent || undefined} size={56} class="settings-profile-avatar" />
+                  <span class="settings-avatar-overlay" aria-hidden="true">
+                    <Pencil {...iconSm} />
+                  </span>
+                </button>
+                {#if user?.avatarUrl}
+                  <button
+                    type="button"
+                    class="settings-avatar-remove"
+                    onclick={removeAvatar}
+                    disabled={avatarSaving}
+                    aria-label="Удалить аватар"
+                    title="Удалить аватар"
+                  >
+                    <X {...iconSm} aria-hidden="true" />
+                  </button>
+                {/if}
+              </div>
               <div>
                 <div class="settings-profile-name">{label}</div>
                 <div class="settings-profile-sub">@{user?.login}</div>
               </div>
-            </div>
-
-            <div class="settings-avatar-actions">
-              <input bind:this={avatarInput} class="settings-avatar-input" type="file" accept="image/jpeg,image/png,image/webp" onchange={onAvatarFile} />
-              <button type="button" class="settings-avatar-upload" onclick={chooseAvatar} disabled={avatarSaving}>
-                <ImagePlus {...iconSm} aria-hidden="true" />
-                {user?.avatarUrl ? 'Заменить аватар' : 'Загрузить аватар'}
-              </button>
-              {#if user?.avatarUrl}
-                <button type="button" class="settings-avatar-delete" onclick={removeAvatar} disabled={avatarSaving} aria-label="Удалить аватар">
-                  <Trash2 {...iconSm} aria-hidden="true" />
-                  Удалить
-                </button>
-              {/if}
             </div>
 
             <div class="settings-fields">

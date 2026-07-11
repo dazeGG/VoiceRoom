@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Bell, BellOff, ChevronLeft, User, X } from '@lucide/svelte';
+  import { Bell, BellOff, User, X } from '@lucide/svelte';
   import { iconMd, iconSm } from '$lib/shared/ui/icons';
   import { tick } from 'svelte';
   import type { DirectMessage } from '$lib/api/dm';
@@ -16,7 +16,7 @@
   } from '../../model/friends.svelte';
   import { isPeerNotificationsMuted, updatePeerNotificationsMuted } from '../../model/notification-preferences.svelte';
 
-  let { selfId, onHome } = $props<{ selfId: string; onHome: () => void }>();
+  let { selfId } = $props<{ selfId: string }>();
 
   let draft = $state('');
   let sending = $state(false);
@@ -31,12 +31,10 @@
   }
 
   function onKeydown(event: KeyboardEvent): void {
+    if (event.isComposing) return;
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault();
       void submit();
-      queueMicrotask(() => {
-        if (inputEl) inputEl.style.height = 'auto';
-      });
     } else {
       queueMicrotask(autoResize);
     }
@@ -100,17 +98,20 @@
     const text = draft.trim();
     if (!text || sending) return;
     sending = true;
-    const pending = text;
-    draft = '';
+    let sent = false;
     try {
-      await sendMessage(pending);
-      await tick();
-      inputEl?.focus();
+      await sendMessage(text);
+      draft = '';
+      sent = true;
     } catch {
-      draft = pending;
+      // Keep the draft intact so the message can be retried.
     } finally {
       sending = false;
     }
+    if (!sent) return;
+    await tick();
+    if (inputEl) inputEl.style.height = '';
+    inputEl?.focus();
   }
 
 
@@ -138,10 +139,6 @@
 
 <div class="lobby-dm">
   <div class="lobby-dm-col">
-    <button class="lr-section-link" type="button" style="margin:14px 0 0 14px;" onclick={onHome}>
-      <ChevronLeft {...iconSm} aria-hidden="true" />
-      На главную
-    </button>
     {#if peer}
       <button class="lobby-dm-head" type="button" onclick={toggleProfile}>
         <Avatar name={friendName(peer)} src={peer.avatarUrl} colorKey={peer.avatarColorKey} background={peer.avatarAccent || undefined} size={38} {online} showDot ring="var(--paper-deep)" />
@@ -197,6 +194,7 @@
         placeholder="Написать сообщение…"
         bind:this={inputEl}
         bind:value={draft}
+        rows="1"
         onkeydown={onKeydown}
         oninput={autoResize}
         disabled={sending}

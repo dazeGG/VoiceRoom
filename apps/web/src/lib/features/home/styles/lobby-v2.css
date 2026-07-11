@@ -554,7 +554,8 @@
   flex: 1;
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: var(--radius-md);
-  padding: 12px 14px;
+  height: var(--interactive-lg, 52px);
+  padding: 0 14px;
   background: rgba(255, 255, 255, 0.04);
 }
 
@@ -572,6 +573,8 @@
   color: var(--warm-ink);
   font-family: var(--font-mono);
   font-size: 14px;
+  height: 100%;
+  padding: 0;
 }
 
 .lr-add-field:focus-within {

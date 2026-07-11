@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ImagePlus, Trash2, X } from '@lucide/svelte';
+  import { Pencil, X } from '@lucide/svelte';
   import { iconSm } from '$lib/shared/ui/icons';
   import { Avatar, AvatarCropDialog } from '$lib/shared/ui';
   import { deleteRoom, deleteRoomAvatar, updateRoom, uploadRoomAvatar } from '$lib/api/rooms';
@@ -155,20 +155,33 @@
 
         <div class="room-avatar-field">
           <span class="dialog-label">Аватар комнаты</span>
-          <div class="room-avatar-row">
-            <Avatar name={name || roomClientState.roomId} src={roomClientState.roomAvatarUrl} shape="squircle" background="var(--room-avatar-bg)" size={58} />
-            <div class="room-avatar-actions">
-              <input bind:this={avatarInput} class="room-avatar-input" type="file" accept="image/jpeg,image/png,image/webp" onchange={onAvatarFile} />
-              <button class="room-avatar-upload" type="button" onclick={() => avatarInput?.click()} disabled={avatarSaving}>
-                <ImagePlus {...iconSm} aria-hidden="true" />
-                {roomClientState.roomAvatarUrl ? 'Заменить' : 'Загрузить'}
+          <div class="room-avatar-control">
+            <input bind:this={avatarInput} class="room-avatar-input" type="file" accept="image/jpeg,image/png,image/webp" onchange={onAvatarFile} />
+            <button
+              class="room-avatar-edit"
+              type="button"
+              onclick={() => avatarInput?.click()}
+              disabled={avatarSaving}
+              aria-label={roomClientState.roomAvatarUrl ? 'Изменить аватар комнаты' : 'Загрузить аватар комнаты'}
+              title={roomClientState.roomAvatarUrl ? 'Изменить аватар комнаты' : 'Загрузить аватар комнаты'}
+            >
+              <Avatar name={name || roomClientState.roomId} src={roomClientState.roomAvatarUrl} shape="squircle" background="var(--room-avatar-bg)" size={58} />
+              <span class="room-avatar-overlay" aria-hidden="true">
+                <Pencil {...iconSm} />
+              </span>
+            </button>
+            {#if roomClientState.roomAvatarUrl}
+              <button
+                class="room-avatar-remove"
+                type="button"
+                onclick={removeAvatar}
+                disabled={avatarSaving}
+                aria-label="Удалить аватар комнаты"
+                title="Удалить аватар комнаты"
+              >
+                <X {...iconSm} aria-hidden="true" />
               </button>
-              {#if roomClientState.roomAvatarUrl}
-                <button class="room-avatar-delete" type="button" onclick={removeAvatar} disabled={avatarSaving}>
-                  <Trash2 {...iconSm} aria-hidden="true" /> Удалить
-                </button>
-              {/if}
-            </div>
+            {/if}
           </div>
         </div>
 
@@ -228,44 +241,85 @@
     gap: 10px;
   }
 
-  .room-avatar-row,
-  .room-avatar-actions {
+  .room-avatar-control {
+    position: relative;
+    width: 58px;
+    height: 58px;
+  }
+
+  .room-avatar-edit {
+    position: relative;
     display: flex;
     align-items: center;
-    gap: 10px;
+    justify-content: center;
+    width: 58px;
+    height: 58px;
+    padding: 0;
+    overflow: hidden;
+    border: 0;
+    border-radius: 31%;
+    background: transparent;
+    color: #fff;
+    cursor: pointer;
   }
 
   .room-avatar-input {
     display: none;
   }
 
-  .room-avatar-upload,
-  .room-avatar-delete {
-    display: inline-flex;
+  .room-avatar-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
     align-items: center;
-    gap: 7px;
-    padding: 8px 11px;
-    border-radius: 9px;
-    font: inherit;
-    font-size: 12px;
-    font-weight: 650;
+    justify-content: center;
+    border-radius: inherit;
+    background: rgba(20, 16, 14, 0.58);
+    opacity: 0;
+    transition: opacity 0.16s ease;
+    pointer-events: none;
+  }
+
+  .room-avatar-edit:not(:disabled):hover .room-avatar-overlay,
+  .room-avatar-edit:not(:disabled):focus-visible .room-avatar-overlay {
+    opacity: 1;
+  }
+
+  .room-avatar-edit:focus-visible {
+    outline: 2px solid var(--coral);
+    outline-offset: 3px;
+  }
+
+  .room-avatar-remove {
+    position: absolute;
+    z-index: 1;
+    top: -5px;
+    right: -5px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: 2px solid var(--paper-deep);
+    border-radius: 50%;
+    background: #dc5f4b;
+    color: #fff;
     cursor: pointer;
+    box-shadow: 0 2px 7px rgba(0, 0, 0, 0.34);
   }
 
-  .room-avatar-upload {
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    background: rgba(255, 255, 255, 0.05);
-    color: var(--warm-ink-dim);
+  .room-avatar-remove:not(:disabled):hover {
+    background: #c94e3b;
   }
 
-  .room-avatar-delete {
-    border: 1px solid rgba(239, 68, 68, 0.28);
-    background: transparent;
-    color: #f87171;
+  .room-avatar-remove:focus-visible {
+    outline: 2px solid #fff;
+    outline-offset: 2px;
   }
 
-  .room-avatar-upload:disabled,
-  .room-avatar-delete:disabled {
+  .room-avatar-edit:disabled,
+  .room-avatar-remove:disabled {
     cursor: default;
     opacity: 0.6;
   }

@@ -312,7 +312,7 @@
       {:else if friendsState.mode === 'rooms' && !embeddedRoomVisible}
         <VoiceHome {user} {rooms} onOpenRoom={previewRoom} onCreateRoom={() => (createDialogOpen = true)} onJoinCode={handleJoin} />
       {:else if friendsState.mode === 'friends' && friendsState.view === 'dm'}
-        <DmView selfId={user.id} onHome={goHome} />
+        <DmView selfId={user.id} />
       {:else if friendsState.mode === 'friends' && friendsState.view === 'people'}
         <PeopleView {user} {onToast} onHome={goHome} />
       {:else if friendsState.mode === 'friends'}
