@@ -69,7 +69,7 @@ test('lobby join is the single room-code action and explains auto-save', () => {
   assert.match(voiceHome, /Постоянные комнаты сохраняются автоматически/);
 });
 
-test('active voice widget uses room visual header open and leave cue parity', () => {
+test('active voice widget uses the shared room fallback and leave cue parity', () => {
   const lobby = read('src/lib/features/home/LobbyPage.svelte');
   const sidebar = read('src/lib/features/home/components/lobby/Sidebar.svelte');
   const widget = read('src/lib/features/home/components/lobby/VoiceCallWidget.svelte');
@@ -79,24 +79,10 @@ test('active voice widget uses room visual header open and leave cue parity', ()
   const leaveWithCue = functionBody(voiceSession, 'leaveActiveVoiceRoomWithCue');
   const dockLeave = functionBody(roomView, 'handleLeaveButtonClick');
 
-  assert.match(lobby, /import \{ roomDisplayName, roomVisual \} from '\.\/model\/rooms'/);
-  assert.match(lobby, /const connectedVoiceRoomVisual = \$derived\(connectedVoiceRoom \? roomVisual\(connectedVoiceRoom\) : null\)/);
-  assert.match(lobby, /activeVoiceRoomVisual=\{connectedVoiceRoomVisual\}/);
-
-  assert.match(sidebar, /import type \{ RoomPresetToken \} from '\$lib\/visual\/tokens'/);
-  assert.match(sidebar, /activeVoiceRoomVisual\?: RoomPresetToken \| null/);
-  assert.match(sidebar, /roomVisual=\{activeVoiceRoomVisual\}/);
-
-  assert.match(widget, /import \{ getRoomPreset, type RoomPresetToken \} from '\$lib\/visual\/tokens'/);
-  assert.match(widget, /const visual = \$derived\(roomVisual \?\? getRoomPreset\(null\)\)/);
-  assert.match(widget, /<button class="voice-head" type="button" aria-label=\{openLabel\} title=\{openLabel\} onclick=\{onOpen\}>/);
-  assert.match(widget, /style=\{`background:\$\{visual\.background\};box-shadow:0 0 0 1px \$\{visual\.ring\}`\}/);
-  assert.match(widget, />\{visual\.emoji\}<\/span>/);
-  assert.doesNotMatch(widget, /class="voice-open"|\.voice-open|>Открыть<|iconLg/);
-
-  assert.match(widget, /onclick=\{onToggleMic\}/);
-  assert.match(widget, /onclick=\{onToggleDeafen\}/);
-  assert.match(widget, /onclick=\{onLeave\}/);
+  assert.match(lobby, /import \{ roomDisplayName \} from '\.\/model\/rooms'/);
+  assert.match(sidebar, /roomName=\{activeVoiceLabel\}/);
+  assert.match(widget, /<Avatar name=\{roomName\} shape="squircle" background="var\(--room-avatar-bg\)" size=\{42\} \/>/);
+  assert.doesNotMatch(widget, /RoomPresetToken|getRoomPreset|visual\.emoji/);
 
   assert.match(lobby, /leaveActiveVoiceRoomWithCue/);
   assert.match(leaveConnectedVoiceRoom, /await leaveActiveVoiceRoomWithCue\(\)/);
@@ -214,11 +200,11 @@ test('room chat keeps transport mounted and tracks unread state while closed', (
   assert.match(topbar, /Скопировать код/);
   assert.match(topbar, /keepContentMounted/);
   assert.match(topbar, /room-heading-popover-head/);
-  assert.match(topbar, /room-heading-popover-badge/);
+  assert.match(topbar, /<Avatar name=\{heading\} shape="squircle" background="var\(--room-avatar-bg\)"/);
   assert.match(topbar, /room-heading-popover-info/);
   assert.doesNotMatch(topbar, /copyCodeButton|copyLinkButton|room-settings-button/);
 
-  // Heading (title/code/emoji) is rendered reactively from room state, not written
+  // Heading (title/code) is rendered reactively from room state, not written
   // imperatively by the vanilla client. The plain `.ellipsis` spans are gone.
   assert.match(topbar, /import \{ state \} from '\.\.\/client\/core\/state\.svelte'/);
   assert.match(topbar, /const heading = \$derived\(state\.roomName \|\| state\.roomId\)/);
@@ -354,48 +340,29 @@ test('shared Popover primitive exposes trigger/content slots and dismiss behavio
   assert.match(sidebarDownload, /aria-haspopup="menu"/);
 });
 
-test('visual identity UI consumes backend keys and exposes only curated room presets', () => {
+test('room UI uses name-only squircle fallbacks while participant colors remain curated', () => {
   const authApi = read('src/lib/api/auth.ts');
   const roomsApi = read('src/lib/api/rooms.ts');
-  const tokens = read('src/lib/visual/tokens.ts');
   const settingsModal = read('src/lib/features/home/components/SettingsModal.svelte');
   const voiceHome = read('src/lib/features/home/components/lobby/VoiceHome.svelte');
   const createDialog = read('src/lib/features/home/components/CreateRoomDialog.svelte');
   const participantTile = read('src/lib/features/room/components/ParticipantTile.svelte');
   const chat = read('src/lib/features/room/components/RoomChat.svelte');
   const roomNet = read('src/lib/features/room/client/net/api.ts');
-  const roomView = read('src/lib/features/room/client/room/room.ts');
+  const roomTopbar = read('src/lib/features/room/components/RoomTopbar.svelte');
 
   assert.match(authApi, /avatarColorKey: string/);
-  assert.match(authApi, /roomIconKey: string/);
-  assert.match(authApi, /roomColorKey: string/);
   assert.match(roomsApi, /avatarColorKey: string/);
-  assert.match(roomsApi, /roomPresetKey\?: string/);
-  assert.match(tokens, /export const AVATAR_COLORS/);
-  assert.match(tokens, /export const ROOM_PRESETS/);
+  assert.doesNotMatch(authApi, /roomIconKey|roomColorKey|roomPresetKey|emoji/);
+  assert.doesNotMatch(roomsApi, /roomIconKey|roomColorKey|roomPresetKey|emoji/);
   assert.match(settingsModal, /getAvatarColor\(user\?\.avatarColorKey\)/);
-  assert.match(voiceHome, /roomVisual\(room\)/);
-  assert.match(createDialog, /ROOM_PRESETS/);
-  assert.match(createDialog, /roomPresetKey/);
-  assert.doesNotMatch(createDialog, /type="file"|upload|custom|contenteditable/i);
+  assert.match(voiceHome, /<Avatar name=\{roomDisplayName\(room\)\} shape="squircle" background="var\(--room-avatar-bg\)"/);
+  assert.doesNotMatch(createDialog, /ROOM_PRESETS|roomPresetKey|roomIconKey|roomColorKey/);
   assert.match(participantTile, /getAvatarPresentation\(participant\)/);
-  assert.doesNotMatch(participantTile, /hashStringToHue\(seed\)/);
   assert.match(chat, /getAvatarColor\(message\.avatarColorKey\)/);
-  assert.doesNotMatch(chat, /hashStringToHue/);
-  assert.match(roomNet, /status\?\.roomIconKey/);
-  // The room heading consumes the curated preset reactively in RoomTopbar now.
-  const roomTopbar = read('src/lib/features/room/components/RoomTopbar.svelte');
-  assert.match(roomTopbar, /getRoomPreset/);
-  assert.match(roomView, /import \{ session, setUser \} from '\$lib\/features\/auth\/session\.svelte'/);
-  assert.match(roomView, /avatarColorKey: session\.user\?\.avatarColorKey \|\| ''/);
-  assert.match(roomView, /updateParticipant\(event\.payload\.peer\)/);
-  assert.match(roomView, /updateParticipant\(\{ \.\.\.localPeer,[\s\S]*isLocal: true/);
-  assert.match(tokens, /ROOM_ICON_EMOJIS/);
-  assert.match(tokens, /ROOM_COLOR_TOKENS/);
-  assert.match(tokens, /key: '',/);
-  assert.doesNotMatch(voiceHome, /room\.emoji \|\| visual\.emoji/);
-  assert.doesNotMatch(roomView, /state\.roomEmoji \|\| roomVisual\.emoji/);
-  assert.ok(tokens.indexOf('if (hasIconKey || hasColorKey)') < tokens.indexOf('item.emoji === value.emoji'));
+  assert.doesNotMatch(roomNet, /roomIconKey|roomColorKey|roomPresetKey|emoji/);
+  assert.match(roomTopbar, /<Avatar name=\{heading\} shape="squircle" background="var\(--room-avatar-bg\)"/);
+  assert.doesNotMatch(roomTopbar, /getRoomPreset|roomVisual|emoji/);
 });
 
 test('connection status renders reactively from room state, not imperative DOM writes', () => {
@@ -810,20 +777,14 @@ test('lobby v2 keeps dock in main area, preview chat, and people add-friend flow
   assert.match(lobby, /import '\$lib\/features\/room\/styles\/chat-rail\.css'/);
 });
 
-test('frontend visual catalog stays aligned with shared backend key contracts', () => {
+test('frontend visual catalog keeps only user avatar color contracts', () => {
   const shared = require('@voice-room/shared/validation');
   const tokens = read('src/lib/visual/tokens.ts');
 
   for (const key of shared.AVATAR_COLOR_KEYS) {
     assert.ok(tokens.includes(`${key}: { key: '${key}'`));
   }
-  assert.match(tokens, /@voice-room\/shared\/visual-identity/);
-  assert.match(tokens, /visualIdentity\.ROOM_PRESETS\.map/);
-  assert.doesNotMatch(tokens, /key: 'voice-blue'/);
-  assert.doesNotMatch(tokens, /emoji: '🎧'/);
-  for (const key of shared.ROOM_COLOR_KEYS) {
-    assert.ok(tokens.includes(`${key}: { background:`));
-  }
+  assert.doesNotMatch(tokens, /ROOM_PRESETS|ROOM_COLOR_TOKENS|ROOM_ICON_EMOJIS/);
 });
 
 test('remote participant audio preferences persist volume and local mute separately', () => {

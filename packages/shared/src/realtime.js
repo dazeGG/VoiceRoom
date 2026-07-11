@@ -94,10 +94,6 @@ function buildRoomRealtimeSummary(room, peers, resolveAvatarColorKey) {
   return {
     roomId: room.roomId || room.id || '',
     name: room.name || '',
-    emoji: room.emoji || '',
-    roomColorKey: room.roomColorKey || 'blue',
-    roomIconKey: room.roomIconKey || 'headphones',
-    roomPresetKey: room.roomPresetKey || 'voice-blue',
     isStatic: Boolean(room.isStatic),
     relationship: room.relationship || 'owner',
     peers: peerCount,

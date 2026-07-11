@@ -1,7 +1,6 @@
 <script lang="ts">
   import { X } from '@lucide/svelte';
   import { iconSm } from '$lib/shared/ui/icons';
-  import { ROOM_PRESETS } from '$lib/visual/tokens';
   import { deleteRoom, updateRoom } from '$lib/api/rooms';
   import { state as roomClientState } from '../client/core/state.svelte';
   import { applyRoomUpdated } from '../client/room/lifecycle';
@@ -9,7 +8,6 @@
   import { roomSettingsUi, closeRoomSettings } from '../room-settings.svelte';
 
   let name = $state('');
-  let roomPresetKey = $state<string>(ROOM_PRESETS[0].key);
   let error = $state('');
   let saving = $state(false);
   let confirmingDelete = $state(false);
@@ -23,7 +21,6 @@
   $effect(() => {
     if (roomSettingsUi.open && !wasOpen) {
       name = roomClientState.roomName;
-      roomPresetKey = roomClientState.roomPresetKey || ROOM_PRESETS[0].key;
       error = '';
       confirmingDelete = false;
     }
@@ -42,7 +39,7 @@
     saving = true;
     error = '';
     try {
-      const room = await updateRoom(roomClientState.roomId, { name: trimmed, roomPresetKey });
+      const room = await updateRoom(roomClientState.roomId, { name: trimmed });
       applyRoomUpdated(room);
       closeRoomSettings();
       showToast('Комната обновлена');
@@ -101,23 +98,6 @@
         <div class="dialog-field">
           <div class="dialog-label">Название</div>
           <input class="dialog-input" maxlength="60" placeholder="Название комнаты" bind:value={name} />
-        </div>
-
-        <div class="dialog-field">
-          <div class="dialog-label">Иконка</div>
-          <div class="dialog-emoji-row" role="radiogroup" aria-label="Иконка комнаты">
-            {#each ROOM_PRESETS as preset (preset.key)}
-              <button
-                type="button"
-                class="dialog-emoji"
-                role="radio"
-                aria-checked={roomPresetKey === preset.key}
-                data-active={roomPresetKey === preset.key}
-                style={`background:${preset.background}`}
-                onclick={() => (roomPresetKey = preset.key)}
-              >{preset.emoji}</button>
-            {/each}
-          </div>
         </div>
 
         <div class="dialog-actions">

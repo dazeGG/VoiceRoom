@@ -35,12 +35,8 @@ export async function checkRoomExists(roomId: string): Promise<boolean> {
   if (!response.ok) throw new Error('Не удалось проверить комнату');
 
   const status = await response.json();
-  // Capture the room's display name/icon so the in-room top bar can show them
+  // Capture the room's display name so the in-room top bar can show it
   // instead of the bare code.
   state.roomName = typeof status?.name === 'string' ? status.name : '';
-  state.roomEmoji = typeof status?.emoji === 'string' ? status.emoji : '';
-  state.roomColorKey = typeof status?.roomColorKey === 'string' ? status.roomColorKey : '';
-  state.roomIconKey = typeof status?.roomIconKey === 'string' ? status.roomIconKey : '';
-  state.roomPresetKey = typeof status?.roomPresetKey === 'string' ? status.roomPresetKey : '';
   return Boolean(status?.exists);
 }

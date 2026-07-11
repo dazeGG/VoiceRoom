@@ -4,7 +4,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { createRoomStore, mapMessage, mapRoom, normalizeRoomVisuals } = require('../src/lib/room-store');
+const { createRoomStore, mapMessage, mapRoom } = require('../src/lib/room-store');
 
 function createFakePool(handler) {
   const calls = [];
@@ -52,30 +52,8 @@ test('mapRoom maps PostgreSQL row shape to API room shape with ephemeral peers m
   assert.equal(room.updatedAt, 2000);
   assert.equal(room.emptySince, null);
   assert.ok(room.peers instanceof Map);
-  assert.equal(room.roomIconKey, 'headphones');
-  assert.equal(room.roomColorKey, 'blue');
-  assert.equal(room.roomPresetKey, 'voice-blue');
-});
-
-test('normalizeRoomVisuals maps curated presets and rejects invalid legacy emoji', () => {
-  assert.deepEqual(normalizeRoomVisuals({ roomPresetKey: 'game-indigo' }), {
-    emoji: '🎮',
-    roomColorKey: 'indigo',
-    roomIconKey: 'gamepad',
-    roomPresetKey: 'game-indigo'
-  });
-  assert.deepEqual(normalizeRoomVisuals({ emoji: '🦄' }), {
-    emoji: '🎧',
-    roomColorKey: 'blue',
-    roomIconKey: 'headphones',
-    roomPresetKey: 'voice-blue'
-  });
-  assert.deepEqual(normalizeRoomVisuals({ emoji: '🎧', roomIconKey: 'coffee', roomColorKey: 'green' }), {
-    emoji: '☕',
-    roomColorKey: 'green',
-    roomIconKey: 'coffee',
-    roomPresetKey: ''
-  });
+  assert.equal(room.name, '');
+  assert.equal('emoji' in room, false);
 });
 
 test('createRoom inserts durable room row with parameterized SQL', async () => {
@@ -93,8 +71,7 @@ test('createRoom inserts durable room row with parameterized SQL', async () => {
   assert.equal(room.id, 'room1');
   assert.match(pool.calls[0].text, /INSERT INTO rooms/);
   assert.deepEqual(pool.calls[0].values.slice(0, 3), ['room1', 'ip', true]);
-  assert.match(pool.calls[0].text, /room_icon_key, room_color_key/);
-  assert.deepEqual(pool.calls[0].values.slice(6, 8), ['headphones', 'blue']);
+  assert.doesNotMatch(pool.calls[0].text, /room_icon_key|room_color_key|emoji/);
 });
 
 test('appendMessage uses a transaction, verifies room existence, inserts row, and enforces cap', async () => {
@@ -118,7 +95,8 @@ test('appendMessage uses a transaction, verifies room existence, inserts row, an
   }, 1000);
 
   assert.deepEqual(message, {
-    id: 'msg1', avatarColorKey: message.avatarColorKey, roomId: 'room1', peerId: 'peer1', name: 'Ada', text: 'hello', createdAt: 1000, expiresAt: 2000
+    id: 'msg1', avatarColorKey: message.avatarColorKey, roomId: 'room1', peerId: 'peer1', name: 'Ada', text: 'hello', createdAt: 1000, expiresAt: 2000,
+    authorUserId: null
   });
   assert.ok(pool.calls.some((call) => call.text === 'BEGIN'));
   assert.ok(pool.calls.some((call) => /INSERT INTO room_messages/.test(call.text)));
@@ -175,7 +153,6 @@ test('createRoomWithQuota enforces room limits inside one advisory-locked transa
     maxTempRoomsPerIp: 1,
     maxRooms: 10,
     roomId: 'room-quota',
-    roomPresetKey: 'game-indigo',
     now: 1000
   });
 
@@ -188,7 +165,7 @@ test('createRoomWithQuota enforces room limits inside one advisory-locked transa
   assert.ok(pool.calls.some((call) => /SELECT COUNT\(\*\)::int AS count FROM rooms/.test(call.text)));
   const insertCall = pool.calls.find((call) => /INSERT INTO rooms/.test(call.text));
   assert.ok(insertCall);
-  assert.deepEqual(insertCall.values.slice(6, 8), ['gamepad', 'indigo']);
+  assert.doesNotMatch(insertCall.text, /room_icon_key|room_color_key|emoji/);
   assert.ok(pool.calls.some((call) => call.text === 'COMMIT'));
 });
 

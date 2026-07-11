@@ -17,18 +17,14 @@ function createFakeStore() {
     async countRooms() {
       return rooms.size;
     },
-    async createRoom({ creatorIp, isStatic, roomId, name = '', emoji = '', roomColorKey = 'blue', roomIconKey = 'headphones', roomPresetKey = 'voice-blue', now = Date.now() }) {
+    async createRoom({ creatorIp, isStatic, roomId, name = '', now = Date.now() }) {
       const room = {
         createdAt: now,
         creatorIp,
         emptySince: now,
         id: roomId,
         isStatic,
-        emoji,
         name,
-        roomColorKey,
-        roomIconKey,
-        roomPresetKey,
         messages: [],
         peers: new Map(),
         updatedAt: now
@@ -75,16 +71,14 @@ test('createApiApp exposes a Fastify app with inject-based routes', async (t) =>
   assert.equal(created.statusCode, 201);
   assert.equal(created.json().ok, true);
 
-  const visualRoom = await app.inject({
+  const legacyVisualRoom = await app.inject({
     method: 'POST',
     url: '/api/rooms',
-    payload: { isStatic: false, roomPresetKey: 'game-indigo' }
+    payload: { isStatic: false, roomPresetKey: 'game-indigo', emoji: '🎮' }
   });
-  assert.equal(visualRoom.statusCode, 201);
-  assert.equal(visualRoom.json().emoji, '🎮');
-  assert.equal(visualRoom.json().roomIconKey, 'gamepad');
-  assert.equal(visualRoom.json().roomColorKey, 'indigo');
-  assert.equal(visualRoom.json().roomPresetKey, 'game-indigo');
+  assert.equal(legacyVisualRoom.statusCode, 201);
+  assert.equal('emoji' in legacyVisualRoom.json(), false);
+  assert.equal('roomPresetKey' in legacyVisualRoom.json(), false);
 });
 
 test('createApiServer keeps the legacy http server contract while exposing app/inject', async () => {

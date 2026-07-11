@@ -6,6 +6,8 @@
     name,
     colorKey = '',
     size = 36,
+    shape = 'circle',
+    background = null,
     online = null,
     showDot = false,
     ring = 'var(--paper-deep)',
@@ -23,10 +25,11 @@
 
 <span
   class="ui-avatar {className}"
+  class:ui-avatar--squircle={shape === 'squircle'}
   style:width={`${size}px`}
   style:height={`${size}px`}
   style:font-size={`${fontSize}px`}
-  style:background={getAvatarColor(colorKey).background}
+  style:background={background || getAvatarColor(colorKey).background}
   aria-hidden="true"
 >
   {initial}
@@ -53,6 +56,10 @@
     font-family: var(--font-sans);
     font-weight: 800;
     letter-spacing: -0.02em;
+  }
+
+  .ui-avatar--squircle {
+    border-radius: 31%;
   }
 
   .ui-avatar-dot {

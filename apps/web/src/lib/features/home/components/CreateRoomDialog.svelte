@@ -2,18 +2,16 @@
   import { Check, Clock } from '@lucide/svelte';
   import { Button, Dialog } from '$lib/shared/ui';
   import { iconSm } from '$lib/shared/ui/icons';
-  import { ROOM_PRESETS } from '../model/rooms';
 
   let { open, creating, onClose, onCreate } = $props<{
     open: boolean;
     creating: boolean;
     onClose: () => void;
-    onCreate: (payload: { name: string; roomPresetKey: string; isStatic: boolean }) => void;
+    onCreate: (payload: { name: string; isStatic: boolean }) => void;
   }>();
 
   let tab = $state<'permanent' | 'temp'>('permanent');
   let name = $state('');
-  let roomPresetKey = $state<string>(ROOM_PRESETS[0].key);
   let error = $state('');
 
   // Reset the form each time the dialog opens.
@@ -22,7 +20,6 @@
     if (open && !wasOpen) {
       tab = 'permanent';
       name = '';
-      roomPresetKey = ROOM_PRESETS[0].key;
       error = '';
     }
     wasOpen = open;
@@ -38,7 +35,6 @@
     }
     onCreate({
       name: trimmed,
-      roomPresetKey: tab === 'permanent' ? roomPresetKey : '',
       isStatic: tab === 'permanent'
     });
   }
@@ -82,23 +78,6 @@
     </div>
 
     {#if tab === 'permanent'}
-      <div class="lr-field">
-        <div class="lr-field-label">Иконка</div>
-        <div class="lr-emoji-grid" role="radiogroup" aria-label="Иконка комнаты">
-          {#each ROOM_PRESETS as preset (preset.key)}
-            <button
-              type="button"
-              class="lr-emoji-btn"
-              role="radio"
-              aria-checked={roomPresetKey === preset.key}
-              data-active={roomPresetKey === preset.key}
-              style={`background:${preset.background}`}
-              onclick={() => (roomPresetKey = preset.key)}
-            >{preset.emoji}</button>
-          {/each}
-        </div>
-      </div>
-
       <div class="lr-dialog-note lr-dialog-note--ok">
         <Check {...iconSm} aria-hidden="true" />
         <span>Всегда остаётся в вашем списке — заходите в любой момент.</span>

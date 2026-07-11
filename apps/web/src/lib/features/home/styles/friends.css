@@ -264,15 +264,6 @@
   border: 2.5px solid var(--paper-deep);
 }
 
-/* room emoji tile */
-.lobby-tile {
-  flex: none;
-  border-radius: 11px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
 .lobby-voices { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
 .lobby-live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); }
 
@@ -513,16 +504,6 @@ html.is-desktop .sidebar-download { display: none; }
 }
 .lobby-roomview-back:hover { background: rgba(255, 255, 255, 0.1); }
 
-.lobby-roomview-id-tile {
-  flex: none;
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 18px;
-}
 .lobby-roomview-name { font-family: var(--font-mono); font-size: 18px; font-weight: 500; color: var(--warm-ink); letter-spacing: -0.01em; min-width: 0; }
 
 .lobby-roomview-trigger {
@@ -554,16 +535,6 @@ html.is-desktop .sidebar-download { display: none; }
   align-items: center;
   gap: 11px;
   padding: 6px 8px 10px;
-}
-.lobby-roomview-popover-badge {
-  flex: none;
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 18px;
 }
 .lobby-roomview-popover-info { min-width: 0; display: flex; flex-direction: column; }
 .lobby-roomview-popover-name { font-size: 14px; font-weight: 700; color: var(--warm-ink); }

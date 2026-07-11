@@ -22,7 +22,6 @@ export type NotificationMessageBrief = {
 export type NotificationRoomContext = {
   roomId: string;
   name?: string;
-  emoji?: string;
   avatarColorKey?: string;
 };
 
@@ -340,9 +339,8 @@ export function buildNotificationPayload(
     }
     const senderName = actorLabel(event.payload.sender, 'Someone');
     const name = roomLabel(event.payload.room);
-    const emoji = event.payload.room?.emoji?.trim();
     return {
-      title: `${senderName} in ${emoji ? `${emoji} ` : ''}${name}`,
+      title: `${senderName} in ${name}`,
       body: privateNotifications ? PRIVATE_BODY : truncateNotificationBody(event.payload.message?.body || DEFAULT_BODY),
       tag: dedupeKey,
       dedupeKey,

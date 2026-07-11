@@ -1,9 +1,9 @@
 <script lang="ts">
   import { Bell, BellOff, ChevronDown, ChevronLeft, Copy, Link } from '@lucide/svelte';
   import type { OwnedRoom } from '$lib/api/auth';
-  import { Ellipsis, Popover, PopoverDivider, PopoverMenuItem } from '$lib/shared/ui';
+  import { Avatar, Ellipsis, Popover, PopoverDivider, PopoverMenuItem } from '$lib/shared/ui';
   import { iconMd, iconSm } from '$lib/shared/ui/icons';
-  import { roomDisplayName, roomVisual } from '../../model/rooms';
+  import { roomDisplayName } from '../../model/rooms';
   import { copyText } from '../../services/desktop-download';
   import { isRoomNotificationsMuted, updateRoomNotificationsMuted } from '../../model/notification-preferences.svelte';
 
@@ -13,7 +13,6 @@
     onToast?: (message: string) => void;
   }>();
 
-  const visual = $derived(roomVisual(room));
   const name = $derived(roomDisplayName(room));
   const roomMuted = $derived(isRoomNotificationsMuted(room.roomId));
   let muteSaving = $state(false);
@@ -63,7 +62,7 @@
         aria-controls={panelId}
         onclick={toggle}
       >
-        <span class="lobby-roomview-id-tile" style={`background:${visual.background};box-shadow:0 0 0 1px ${visual.ring}`}>{visual.emoji}</span>
+        <Avatar name={name} shape="squircle" background="var(--room-avatar-bg)" size={34} />
         <span class="lobby-roomview-name">
           <Ellipsis text={name} title={room.roomId} />
         </span>
@@ -75,7 +74,7 @@
 
     {#snippet content({ close })}
       <div class="lobby-roomview-popover-head">
-        <span class="lobby-roomview-popover-badge" style={`background:${visual.background};box-shadow:0 0 0 1px ${visual.ring}`} aria-hidden="true">{visual.emoji}</span>
+        <Avatar name={name} shape="squircle" background="var(--room-avatar-bg)" size={34} />
         <div class="lobby-roomview-popover-info">
           <Ellipsis class="lobby-roomview-popover-name" text={name} />
           <Ellipsis class="lobby-roomview-popover-code" text={room.roomId} />

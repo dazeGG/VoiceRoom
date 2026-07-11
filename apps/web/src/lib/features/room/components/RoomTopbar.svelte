@@ -2,8 +2,7 @@
   import { ChevronDown, Copy, Link, MessageSquare, Settings } from '@lucide/svelte';
   import Topbar from '$lib/shared/components/Topbar.svelte';
   import { iconMd, iconSm } from '$lib/shared/ui/icons';
-  import { Ellipsis, Popover, PopoverDivider, PopoverMenuItem } from '$lib/shared/ui';
-  import { getRoomPreset } from '$lib/visual/tokens';
+  import { Avatar, Ellipsis, Popover, PopoverDivider, PopoverMenuItem } from '$lib/shared/ui';
   import { state } from '../client/core/state.svelte';
   import { getConnectionStatusView } from '../client/ui/status';
   import { copyRoomCode, copyRoomLink } from '../client/room/room';
@@ -15,14 +14,6 @@
   // Heading content is derived from the reactive room state — the vanilla client
   // populates state.room* on join/rename, and these update without imperative DOM writes.
   const heading = $derived(state.roomName || state.roomId);
-  const visual = $derived(
-    getRoomPreset({
-      emoji: state.roomEmoji,
-      roomColorKey: state.roomColorKey,
-      roomIconKey: state.roomIconKey,
-      roomPresetKey: state.roomPresetKey
-    })
-  );
 
   async function handleCopyCode(close: () => void): Promise<void> {
     await copyRoomCode();
@@ -60,11 +51,7 @@
               aria-controls={panelId}
               onclick={toggle}
             >
-              <span
-                class="room-emoji-badge"
-                aria-hidden="true"
-                style="background: {visual.background}; box-shadow: 0 0 0 1px {visual.ring};"
-              >{visual.emoji}</span>
+              <Avatar name={heading} shape="squircle" background="var(--room-avatar-bg)" size={38} />
               <Ellipsis text={heading} title={heading} class="room-heading-title" />
               <span class="room-heading-trigger-chevron" aria-hidden="true">
                 <ChevronDown {...iconSm} aria-hidden="true" />
@@ -75,11 +62,7 @@
 
         {#snippet content({ close })}
           <div class="room-heading-popover-head">
-            <span
-              class="room-heading-popover-badge"
-              aria-hidden="true"
-              style="background: {visual.background}; box-shadow: 0 0 0 1px {visual.ring};"
-            >{visual.emoji}</span>
+            <Avatar name={heading} shape="squircle" background="var(--room-avatar-bg)" size={44} />
             <div class="room-heading-popover-info">
               <Ellipsis text={heading} title={heading} class="room-heading-popover-name" />
               <Ellipsis text={state.roomId} title={state.roomId} class="room-heading-popover-code" />

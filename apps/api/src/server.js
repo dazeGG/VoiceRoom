@@ -19,11 +19,6 @@ const {
   cleanName,
   cleanDisplayName,
   cleanRoomName,
-  cleanRoomColorKey,
-  cleanRoomEmoji,
-  cleanRoomIconKey,
-  cleanRoomPresetKey,
-  getRoomPreset,
   cleanStreamId,
   cleanScreenProfileId,
   cleanLiveKitUrl,
@@ -467,7 +462,7 @@ async function countRoomCreationQuotaRoomsForIp(clientIp) {
   return getRoomStore().countQuotaRoomsForIp(clientIp);
 }
 
-async function createRoomForRequest(creatorIp, { isStatic = false, ownerId = null, name = '', emoji = '', roomColorKey = '', roomIconKey = '', roomPresetKey = '' } = {}) {
+async function createRoomForRequest(creatorIp, { isStatic = false, ownerId = null, name = '' } = {}) {
   let roomId = createRoomId();
   while (getRoomStore().roomIdExists ? await getRoomStore().roomIdExists(roomId) : await getRoomStore().getRoom(roomId)) {
     roomId = createRoomId();
@@ -478,10 +473,6 @@ async function createRoomForRequest(creatorIp, { isStatic = false, ownerId = nul
     isStatic,
     ownerId,
     name,
-    emoji,
-    roomColorKey,
-    roomIconKey,
-    roomPresetKey,
     maxOwnedStaticRoomsPerUser: MAX_STATIC_ROOMS_PER_USER,
     maxRooms: MAX_ROOMS,
     maxTempRoomsPerIp: MAX_TEMP_ROOMS_PER_IP,
@@ -745,11 +736,6 @@ async function handleCreateRoom(req, res) {
   const clientIp = getClientIp(req, TRUST_PROXY);
   const isStatic = parseBoolean(body.isStatic);
   const name = cleanRoomName(body.name);
-  const requestedPresetKey = cleanRoomPresetKey(body.roomPresetKey || body.presetKey || body.roomPreset);
-  const requestedPreset = getRoomPreset(requestedPresetKey);
-  const emoji = requestedPreset?.emoji || cleanRoomEmoji(body.emoji);
-  const roomIconKey = requestedPreset?.iconKey || cleanRoomIconKey(body.roomIconKey);
-  const roomColorKey = requestedPreset?.colorKey || cleanRoomColorKey(body.roomColorKey);
   // Persistent rooms are tied to the account that creates them so they can be
   // listed back from any device; temporary rooms stay ownerless.
   const session = isStatic ? await resolveSessionUser(req) : null;
@@ -761,11 +747,7 @@ async function handleCreateRoom(req, res) {
   const created = await createRoomForRequest(clientIp, {
     isStatic,
     ownerId,
-    name,
-    emoji,
-    roomColorKey,
-    roomIconKey,
-    roomPresetKey: requestedPresetKey
+    name
   });
   if (created.status === 'auth_required') {
     sendJson(res, 401, { ok: false, error: 'Требуется вход для создания постоянной комнаты' });
@@ -789,10 +771,6 @@ async function handleCreateRoom(req, res) {
   sendJson(res, 201, {
     ok: true,
     createdAt: room.createdAt,
-    emoji: room.emoji,
-    roomColorKey: room.roomColorKey,
-    roomIconKey: room.roomIconKey,
-    roomPresetKey: room.roomPresetKey,
     maxRooms: MAX_ROOMS,
     maxRoomPeers: MAX_ROOM_PEERS,
     isStatic: room.isStatic,
@@ -828,43 +806,15 @@ async function handleUpdateRoom(req, res, roomId) {
 
   const body = await readJsonBody(req);
 
-  // Reject unknown icon/color/preset keys before touching the DB. The clean*
-  // helpers normalize a known key to itself and an unknown one to '', so a
-  // non-empty input that cleans to '' means the caller sent something the
-  // CHECK constraints would reject — return a clean 400 instead of an SQL error.
-  if (typeof body.roomPresetKey === 'string' && body.roomPresetKey && !cleanRoomPresetKey(body.roomPresetKey)) {
-    sendJson(res, 400, { ok: false, error: 'Неизвестный пресет комнаты' });
-    return;
-  }
-  if (typeof body.roomIconKey === 'string' && body.roomIconKey && !cleanRoomIconKey(body.roomIconKey)) {
-    sendJson(res, 400, { ok: false, error: 'Неизвестная иконка комнаты' });
-    return;
-  }
-  if (typeof body.roomColorKey === 'string' && body.roomColorKey && !cleanRoomColorKey(body.roomColorKey)) {
-    sendJson(res, 400, { ok: false, error: 'Неизвестный цвет комнаты' });
-    return;
-  }
-  if (typeof body.emoji === 'string' && body.emoji && !cleanRoomEmoji(body.emoji)) {
-    sendJson(res, 400, { ok: false, error: 'Неизвестный эмодзи комнаты' });
-    return;
-  }
-
-  // Merge with the authorized room so omitted fields keep their current values.
-  // A newly provided preset drives icon/color/emoji so the curated combination
-  // stays consistent. Without a new preset, explicit visual fields are partial
-  // updates over the stored room instead of being overwritten by the old preset.
+  // Legacy visual fields are intentionally ignored during the deployment
+  // transition; only the room name remains mutable.
   const nextName = body.name !== undefined ? cleanRoomName(body.name) : room.name;
   if (!nextName) {
     sendJson(res, 400, { ok: false, error: 'Дайте комнате название' });
     return;
   }
-  const requestedPreset = body.roomPresetKey !== undefined ? getRoomPreset(body.roomPresetKey) : null;
   const updated = await getRoomStore().updateRoom(roomId, {
-    name: nextName,
-    emoji: requestedPreset?.emoji || (body.emoji !== undefined ? cleanRoomEmoji(body.emoji) : room.emoji),
-    roomIconKey: requestedPreset?.iconKey || (body.roomIconKey !== undefined ? cleanRoomIconKey(body.roomIconKey) : room.roomIconKey),
-    roomColorKey: requestedPreset?.colorKey || (body.roomColorKey !== undefined ? cleanRoomColorKey(body.roomColorKey) : room.roomColorKey),
-    roomPresetKey: body.roomPresetKey !== undefined ? cleanRoomPresetKey(body.roomPresetKey) : cleanRoomPresetKey(room.roomPresetKey)
+    name: nextName
   });
   if (!updated) {
     // Lost a race with a concurrent delete (UPDATE matched 0 rows).
@@ -1074,10 +1024,6 @@ async function handleChangePassword(req, res) {
 function publicLobbyRoom(room) {
   return {
     createdAt: room.createdAt,
-    emoji: room.emoji,
-    roomColorKey: room.roomColorKey,
-    roomIconKey: room.roomIconKey,
-    roomPresetKey: room.roomPresetKey,
     emptySince: room.emptySince,
     isStatic: room.isStatic,
     name: room.name,
@@ -1147,10 +1093,6 @@ async function handleRoomStatus(res, url) {
   sendJson(res, 200, {
     ok: true,
     createdAt: room.createdAt,
-    emoji: room.emoji,
-    roomColorKey: room.roomColorKey,
-    roomIconKey: room.roomIconKey,
-    roomPresetKey: room.roomPresetKey,
     exists: true,
     emptySince: room.emptySince,
     isStatic: room.isStatic,

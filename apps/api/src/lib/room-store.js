@@ -4,49 +4,10 @@ const crypto = require('node:crypto');
 const { createDbPool, transaction } = require('./db');
 const {
   AVATAR_COLOR_KEYS,
-  ROOM_PRESETS,
-  cleanAvatarColorKey,
-  cleanRoomColorKey,
-  cleanRoomEmoji,
-  cleanRoomIconKey,
-  cleanRoomPresetKey,
-  getRoomPreset
+  cleanAvatarColorKey
 } = require('@voice-room/shared/validation');
 
 const DEFAULT_MESSAGE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-
-const DEFAULT_ROOM_PRESET = ROOM_PRESETS[0];
-
-function presetFromEmoji(emoji) {
-  return ROOM_PRESETS.find((preset) => preset.emoji === emoji) || null;
-}
-
-function presetFromVisualKeys(iconKey, colorKey) {
-  return ROOM_PRESETS.find((preset) => preset.iconKey === iconKey && preset.colorKey === colorKey) || null;
-}
-
-function emojiFromIconKey(iconKey) {
-  return ROOM_PRESETS.find((preset) => preset.iconKey === iconKey)?.emoji || DEFAULT_ROOM_PRESET.emoji;
-}
-
-function normalizeRoomVisuals({ emoji = '', roomColorKey = '', roomIconKey = '', roomPresetKey = '' } = {}) {
-  const legacyEmoji = cleanRoomEmoji(emoji);
-  const explicitIconKey = cleanRoomIconKey(roomIconKey);
-  const explicitColorKey = cleanRoomColorKey(roomColorKey);
-  const preset = getRoomPreset(cleanRoomPresetKey(roomPresetKey));
-  const legacyPreset = presetFromEmoji(legacyEmoji);
-  const iconKey = explicitIconKey || preset?.iconKey || legacyPreset?.iconKey || DEFAULT_ROOM_PRESET.iconKey;
-  const colorKey = explicitColorKey || preset?.colorKey || legacyPreset?.colorKey || DEFAULT_ROOM_PRESET.colorKey;
-  const matchedPreset = presetFromVisualKeys(iconKey, colorKey);
-  const hasExplicitVisualKey = Boolean(explicitIconKey || explicitColorKey || preset);
-  return {
-    emoji: matchedPreset?.emoji || (hasExplicitVisualKey ? emojiFromIconKey(iconKey) : legacyEmoji) || DEFAULT_ROOM_PRESET.emoji,
-    roomColorKey: colorKey,
-    roomIconKey: iconKey,
-    roomPresetKey: matchedPreset?.key || ''
-  };
-}
-
 
 function createRowId() {
   return crypto.randomUUID?.() || crypto.randomBytes(16).toString('hex');
@@ -79,15 +40,9 @@ function normalizeMessageLimit(value) {
 
 function mapRoom(row) {
   if (!row) return null;
-  const visuals = normalizeRoomVisuals({
-    emoji: row.emoji || '',
-    roomColorKey: row.room_color_key || '',
-    roomIconKey: row.room_icon_key || ''
-  });
   return {
     createdAt: toMillis(row.created_at),
     creatorIp: row.creator_ip || '',
-    emoji: visuals.emoji,
     emptySince: row.empty_since ? toMillis(row.empty_since) : null,
     id: row.id,
     isStatic: Boolean(row.is_static),
@@ -95,9 +50,6 @@ function mapRoom(row) {
     name: row.name || '',
     ownerId: row.owner_id || null,
     peers: new Map(),
-    roomColorKey: visuals.roomColorKey,
-    roomIconKey: visuals.roomIconKey,
-    roomPresetKey: visuals.roomPresetKey,
     updatedAt: toMillis(row.updated_at)
   };
 }
@@ -176,10 +128,6 @@ function createRoomStore({
     isStatic = false,
     ownerId = null,
     name = '',
-    emoji = '',
-    roomColorKey = '',
-    roomIconKey = '',
-    roomPresetKey = '',
     now = Date.now()
   }) {
     const id = String(roomId || '').trim();
@@ -187,10 +135,9 @@ function createRoomStore({
       throw new Error('Room id is required');
     }
 
-    const visuals = normalizeRoomVisuals({ emoji, roomColorKey, roomIconKey, roomPresetKey });
     const result = await getPool().query(
-      `INSERT INTO rooms (id, creator_ip, is_static, owner_id, name, emoji, room_icon_key, room_color_key, created_at, updated_at, empty_since)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $9, $9)
+      `INSERT INTO rooms (id, creator_ip, is_static, owner_id, name, created_at, updated_at, empty_since)
+       VALUES ($1, $2, $3, $4, $5, $6, $6, $6)
        RETURNING *`,
       [
         id,
@@ -198,9 +145,6 @@ function createRoomStore({
         Boolean(isStatic),
         ownerId || null,
         typeof name === 'string' ? name : '',
-        visuals.emoji,
-        visuals.roomIconKey,
-        visuals.roomColorKey,
         toDate(now)
       ]
     );
@@ -213,10 +157,6 @@ function createRoomStore({
     isStatic = false,
     ownerId = null,
     name = '',
-    emoji = '',
-    roomColorKey = '',
-    roomIconKey = '',
-    roomPresetKey = '',
     maxOwnedStaticRoomsPerUser = 3,
     maxQuotaRoomsPerIp = 0,
     maxRooms = 100,
@@ -269,10 +209,9 @@ function createRoomStore({
         return { room: null, status: 'capacity_exceeded' };
       }
 
-      const visuals = normalizeRoomVisuals({ emoji, roomColorKey, roomIconKey, roomPresetKey });
       const inserted = await client.query(
-        `INSERT INTO rooms (id, creator_ip, is_static, owner_id, name, emoji, room_icon_key, room_color_key, created_at, updated_at, empty_since)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $9, $9)
+        `INSERT INTO rooms (id, creator_ip, is_static, owner_id, name, created_at, updated_at, empty_since)
+         VALUES ($1, $2, $3, $4, $5, $6, $6, $6)
          RETURNING *`,
         [
           id,
@@ -280,9 +219,6 @@ function createRoomStore({
           Boolean(isStatic),
           ownerId || null,
           typeof name === 'string' ? name : '',
-          visuals.emoji,
-          visuals.roomIconKey,
-          visuals.roomColorKey,
           toDate(now)
         ]
       );
@@ -316,19 +252,15 @@ function createRoomStore({
     return result.rowCount > 0;
   }
 
-  async function updateRoom(roomId, { name = '', emoji = '', roomColorKey = '', roomIconKey = '', roomPresetKey = '' } = {}, now = Date.now()) {
-    const visuals = normalizeRoomVisuals({ emoji, roomColorKey, roomIconKey, roomPresetKey });
+  async function updateRoom(roomId, { name = '' } = {}, now = Date.now()) {
     const result = await getPool().query(
       `UPDATE rooms
-       SET name = $2, emoji = $3, room_icon_key = $4, room_color_key = $5, updated_at = $6
+       SET name = $2, updated_at = $3
        WHERE id = $1 AND deleted_at IS NULL
        RETURNING *`,
       [
         roomId,
         typeof name === 'string' ? name : '',
-        visuals.emoji,
-        visuals.roomIconKey,
-        visuals.roomColorKey,
         toDate(now)
       ]
     );
@@ -814,6 +746,5 @@ module.exports = {
   hashesMatch,
   mapMessage,
   mapPeerIdentity,
-  mapRoom,
-  normalizeRoomVisuals
+  mapRoom
 };

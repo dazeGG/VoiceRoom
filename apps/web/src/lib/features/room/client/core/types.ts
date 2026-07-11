@@ -130,10 +130,6 @@ export interface RoomSessionState {
   peerId: string;
   roomId: string;
   roomName: string;
-  roomEmoji: string;
-  roomColorKey: string;
-  roomIconKey: string;
-  roomPresetKey: string;
   roomRoute: boolean;
   /** Mirrors document.body.dataset.screen so Svelte components react to screen transitions. */
   screen: string;
@@ -215,10 +211,6 @@ export interface AppState
 // by both the PUT /api/rooms/:roomId response and the room-updated broadcast.
 export interface RoomLifecycleSummary {
   createdAt: number;
-  emoji: string;
-  roomColorKey: string;
-  roomIconKey: string;
-  roomPresetKey: string;
   emptySince: number | null;
   isStatic: boolean;
   name: string;

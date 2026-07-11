@@ -91,7 +91,7 @@ export async function showRoomRoute(): Promise<boolean> {
   return true;
 }
 
-// The room heading (title, code, emoji badge) is rendered reactively by
+// The room heading (title and code) is rendered reactively by
 // RoomTopbar.svelte from the room state. Only the document title — a side effect
 // outside the component tree — stays here; it runs on screen entry and rename.
 export function refreshRoomHeading(): void {

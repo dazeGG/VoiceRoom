@@ -36,10 +36,6 @@ test('buildRoomRealtimeSummary caps visible peers and sets hiddenPeerCount', () 
     {
       id: 'room1',
       name: 'Lobby',
-      emoji: '🎧',
-      roomColorKey: 'blue',
-      roomIconKey: 'headphones',
-      roomPresetKey: 'voice-blue',
       isStatic: true,
       relationship: 'owner'
     },
@@ -49,6 +45,8 @@ test('buildRoomRealtimeSummary caps visible peers and sets hiddenPeerCount', () 
   assert.equal(summary.peers, 8);
   assert.equal(summary.visiblePeers.length, MAX_VISIBLE_ROOM_PEERS);
   assert.equal(summary.hiddenPeerCount, 3);
+  assert.equal(summary.name, 'Lobby');
+  assert.equal('emoji' in summary, false);
 });
 
 test('validateClientCommand enforces ping payload', () => {

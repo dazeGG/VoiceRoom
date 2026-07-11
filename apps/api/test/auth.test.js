@@ -150,31 +150,24 @@ test('auth flow: register, session, owned rooms, logout', async (t) => {
   assert.equal(anonStatic.status, 401);
 
   // A static room created while authenticated is owned and listed back,
-  // carrying the name and emoji chosen at creation.
+  // carrying the normalized name chosen at creation.
   const room = await request(socketPath, {
     method: 'POST',
     pathname: '/api/rooms',
-    body: { isStatic: true, name: '  квартирник  ', roomPresetKey: 'game-indigo' },
+    body: { isStatic: true, name: '  квартирник  ' },
     cookie
   });
   assert.equal(room.status, 201);
   assert.equal(room.body.owned, true);
   assert.equal(room.body.name, 'квартирник');
-  assert.equal(room.body.emoji, '🎮');
-  assert.equal(room.body.roomIconKey, 'gamepad');
-  assert.equal(room.body.roomColorKey, 'indigo');
-  assert.equal(room.body.roomPresetKey, 'game-indigo');
 
-  // Unknown emoji is rejected, name is still kept; visual keys fall back to the default preset.
+  // Legacy visual fields from older clients are ignored while the name is kept.
   const fancyRoom = await request(socketPath, {
     method: 'POST',
     pathname: '/api/rooms',
     body: { isStatic: true, name: 'дейли', emoji: '🦄' },
     cookie
   });
-  assert.equal(fancyRoom.body.emoji, '🎧');
-  assert.equal(fancyRoom.body.roomIconKey, 'headphones');
-  assert.equal(fancyRoom.body.roomColorKey, 'blue');
   assert.equal(fancyRoom.body.name, 'дейли');
 
   const thirdRoom = await request(socketPath, {
@@ -212,10 +205,6 @@ test('auth flow: register, session, owned rooms, logout', async (t) => {
   );
   const listed = rooms.body.rooms.find((entry) => entry.roomId === room.body.roomId);
   assert.equal(listed.name, 'квартирник');
-  assert.equal(listed.emoji, '🎮');
-  assert.equal(listed.roomIconKey, 'gamepad');
-  assert.equal(listed.roomColorKey, 'indigo');
-  assert.equal(listed.roomPresetKey, 'game-indigo');
   assert.equal(listed.relationship, 'owner');
 
   // Adding an already owned room by code is idempotent and the lobby keeps the
