@@ -57,7 +57,7 @@
   let creating = $state(false);
   let createDialogOpen = $state(false);
   let settingsOpen = $state(false);
-  let settingsTab = $state<'profile' | 'sound'>('profile');
+  let settingsTab = $state<'profile' | 'sound' | 'notifications'>('profile');
   const selectedRoomId = $derived(roomNavigation.viewedRoomId);
   const embeddedRoomId = $derived(roomNavigation.embeddedRoomId);
   const autoJoinRoomId = $derived(roomNavigation.joinIntentRoomId);
@@ -100,7 +100,7 @@
 
   onMount(() => {
     void refreshRooms();
-    const teardownFriends = user ? initLobby(user.id) : () => {};
+    const teardownFriends = user ? initLobby(user.id, user.doNotDisturb) : () => {};
     const teardownRooms = user
       ? initLobbyRoomRealtime(
           (updater) => {
@@ -290,6 +290,7 @@
       onGoHome={goHome}
       onOpenPeople={openPeople}
       onOpenSettings={openSettings}
+      {onToast}
       activeVoiceRoomId={connectedVoiceRoomId}
       activeVoiceRoomName={connectedVoiceRoom ? roomDisplayName(connectedVoiceRoom) : connectedVoiceRoomId || ''}
       activeVoiceRoomAvatarUrl={connectedVoiceRoom?.avatarUrl ?? null}

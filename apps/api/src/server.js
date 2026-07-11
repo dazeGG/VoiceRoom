@@ -2029,6 +2029,32 @@ async function handleSetPrivateNotifications(req, res) {
   sendNotificationMutationResult(res, result);
 }
 
+async function handleSetNotificationSettings(req, res, request) {
+  const user = await requireSessionUser(req, res);
+  if (!user) return;
+
+  const body = await readJsonBody(req);
+  const dnd = readRequiredBoolean(body, 'dnd');
+  if (!dnd.ok) {
+    sendJson(res, 400, { ok: false, error: dnd.error });
+    return;
+  }
+
+  const result = await getNotificationStore().setDoNotDisturb({
+    userId: user.id,
+    doNotDisturb: dnd.value
+  });
+  if (result.status === 'updated') {
+    const updatedUser = { ...user, doNotDisturb: dnd.value };
+    broadcastToUser(user.id, {
+      type: 'notification-settings-updated',
+      preferences: result.preferences
+    });
+    await broadcastUserProfileToFriends(updatedUser, request);
+  }
+  sendNotificationMutationResult(res, result);
+}
+
 async function handleDeleteRoomChatMessage(req, res, roomId, messageId) {
   const room = await getRoom(roomId);
   if (!room) {
@@ -2454,6 +2480,9 @@ function createApiApp({ store = null, users = null, friends = null, notification
     return handleSetRoomMute(req, res, request.params.roomId);
   }));
   app.put('/api/notifications/privacy', (request, reply) => runLegacyHandler(request, reply, handleSetPrivateNotifications));
+  app.post('/api/notifications/settings', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
+    return handleSetNotificationSettings(req, res, request);
+  }));
   app.get('/api/push/config', (request, reply) => runLegacyHandler(request, reply, handlePushConfig));
   app.post('/api/push/subscriptions', (request, reply) => runLegacyHandler(request, reply, handleCreatePushSubscription));
   app.delete('/api/push/subscriptions', (request, reply) => runLegacyHandler(request, reply, handleDeletePushSubscription));

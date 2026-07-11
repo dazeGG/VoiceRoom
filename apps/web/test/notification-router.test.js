@@ -129,6 +129,7 @@ test('suppresses active exact DM and room targets, mutes, self, denied, and unav
   assert.equal(router.routeNotificationEvent(dmEvent(), { permission: 'denied' }).reason, 'notification-permission-not-granted');
   assert.equal(router.routeNotificationEvent(dmEvent(), { userId: 'alice-id' }).reason, 'self-event');
   assert.equal(router.routeNotificationEvent(dmEvent(), { mutedPeerIds: ['alice-id'] }).reason, 'muted-peer');
+  assert.equal(router.routeNotificationEvent(dmEvent(), { doNotDisturb: true }).reason, 'do-not-disturb');
   assert.equal(router.routeNotificationEvent(roomEvent(), { mutedRoomIds: new Set(['daily']) }).reason, 'muted-room');
   assert.equal(router.routeNotificationEvent(dmEvent(), { activeTarget: { kind: 'dm', peerId: 'alice-id' } }).reason, 'active-target');
 

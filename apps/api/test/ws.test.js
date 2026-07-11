@@ -184,6 +184,55 @@ test('ws accepts guest connections with guest ready payload', async (t) => {
   guest.ws.close();
 });
 
+test('DND settings update is broadcast to every open tab of the account', async (t) => {
+  const { dir, socketPath } = getSocketPath();
+  const { cleanup, databaseUrl } = await createTestDatabase(t);
+  const logs = { stdout: '', stderr: '' };
+  const child = startServer(socketPath, databaseUrl, logs);
+  t.after(() => {
+    child.kill('SIGTERM');
+    fs.rmSync(dir, { recursive: true, force: true });
+    return cleanup();
+  });
+
+  await waitForHealthz(socketPath);
+  const cookie = await register(socketPath, 'dnd-tabs');
+  const firstTab = openWs(socketPath, cookie);
+  const secondTab = openWs(socketPath, cookie);
+  await firstTab.ready;
+  await secondTab.ready;
+
+  const firstBefore = firstTab.frames.length;
+  const secondBefore = secondTab.frames.length;
+  const response = await request(socketPath, {
+    method: 'POST',
+    pathname: '/api/notifications/settings',
+    cookie,
+    body: { dnd: true }
+  });
+  assert.equal(response.status, 200);
+
+  const firstUpdate = await waitForWsType(
+    firstTab.frames,
+    'notification.settings.updated',
+    (frame) => frame.payload?.preferences?.doNotDisturb === true,
+    5000,
+    firstBefore
+  );
+  const secondUpdate = await waitForWsType(
+    secondTab.frames,
+    'notification.settings.updated',
+    (frame) => frame.payload?.preferences?.doNotDisturb === true,
+    5000,
+    secondBefore
+  );
+  assert.deepEqual(firstUpdate.payload.preferences, response.body.preferences);
+  assert.deepEqual(secondUpdate.payload.preferences, response.body.preferences);
+
+  firstTab.ws.close();
+  secondTab.ws.close();
+});
+
 test('ws pushes room summaries to authenticated users right after ready', async (t) => {
   const { dir, socketPath } = getSocketPath();
   const { cleanup, databaseUrl } = await createTestDatabase(t);

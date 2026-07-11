@@ -11,6 +11,7 @@ const friendsMigration = require('../src/migrations/20260627120000_create_friend
 const notificationMigration = require('../src/migrations/20260710140000_create_notification_preferences');
 const pushMigration = require('../src/migrations/20260711130000_create_push_subscriptions');
 const avatarMigration = require('../src/migrations/20260711120000_add_avatars');
+const dndMigration = require('../src/migrations/20260711140000_add_user_dnd');
 
 function createRecorder() {
   const calls = [];
@@ -348,4 +349,22 @@ test('notification preferences migration down drops mute tables before preferenc
     pgm.calls.filter((call) => call.type === 'dropTable').map((call) => call.name),
     ['notification_room_mutes', 'notification_dm_mutes', 'notification_preferences']
   );
+});
+
+test('DND migration adds a non-null disabled-by-default user flag', () => {
+  const pgm = createRecorder();
+  dndMigration.up(pgm);
+
+  const added = pgm.calls.find((call) => call.type === 'addColumns' && call.table === 'users');
+  assert.ok(added);
+  assert.equal(added.columns.dnd.default, false);
+  assert.equal(added.columns.dnd.notNull, true);
+
+  const down = createRecorder();
+  dndMigration.down(down);
+  assert.deepEqual(down.calls.find((call) => call.type === 'dropColumns'), {
+    type: 'dropColumns',
+    table: 'users',
+    columns: ['dnd']
+  });
 });

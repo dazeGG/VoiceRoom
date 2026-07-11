@@ -31,8 +31,11 @@ import {
 import { roomNavigation } from './room-navigation.svelte';
 import {
   areNotificationPreferencesLoadedFor,
+  applyRealtimeNotificationPreferences,
+  isPeerNotificationsMuted,
   loadNotificationPreferences,
   notificationPreferences,
+  prepareNotificationPreferences,
   resetNotificationPreferences,
   syncNotificationPermission
 } from './notification-preferences.svelte';
@@ -143,15 +146,17 @@ export async function refreshRequests(): Promise<void> {
 
 // Start the lobby: load the friend list and open the realtime stream. Returns a
 // teardown function for onMount cleanup.
-export function initLobby(currentUserId: string): () => void {
+export function initLobby(currentUserId: string, initialDoNotDisturb = false): () => void {
   selfId = currentUserId;
   presenceReady = false;
   onlineFriendIds = new Set();
+  if (!areNotificationPreferencesLoadedFor(currentUserId)) {
+    prepareNotificationPreferences(currentUserId, initialDoNotDisturb);
+  }
   realtime = connectRealtime(handleRealtimeEvent);
   void Promise.all([refreshFriends(), refreshRequests()]).catch(() => {
     friendsState.loaded = true;
   });
-  if (!areNotificationPreferencesLoadedFor(currentUserId)) resetNotificationPreferences();
   scheduleNotificationPreferencesLoad(currentUserId);
   return () => {
     realtime?.close();
@@ -163,6 +168,7 @@ export function initLobby(currentUserId: string): () => void {
       notificationPreferencesRetryTimer = null;
     }
     pendingNotificationEvents = [];
+    resetNotificationPreferences();
   };
 }
 
@@ -337,6 +343,7 @@ function handleNotificationRealtimeEvent(event: RealtimeEvent): boolean {
     mutedPeerIds: notificationPreferences.mutedPeerIds,
     mutedRoomIds: notificationPreferences.mutedRoomIds,
     privateNotifications: notificationPreferences.privateNotifications,
+    doNotDisturb: notificationPreferences.doNotDisturb,
     notificationsAvailable: canUseNotifications(),
     permission: getNotificationDeliveryPermission()
   });
@@ -367,6 +374,11 @@ function scheduleNotificationPreferencesLoad(userId = selfId): void {
 }
 
 function handleRealtimeEvent(event: RealtimeEvent): void {
+  if (event.type === 'notification.settings.updated') {
+    applyRealtimeNotificationPreferences(selfId, event.payload.preferences);
+    flushPendingNotificationEvents();
+    return;
+  }
   if (handleNotificationRealtimeEvent(event)) return;
   switch (event.type) {
     case 'ready': {
@@ -378,13 +390,13 @@ function handleRealtimeEvent(event: RealtimeEvent): void {
       break;
     }
     case 'friend.request': {
-      playFriendRequestCue();
+      if (areNotificationPreferencesLoadedFor(selfId)) playFriendRequestCue();
       void refreshFriends().catch(() => {});
       void refreshRequests().catch(() => {});
       break;
     }
     case 'friend.accepted': {
-      playFriendAcceptedCue();
+      if (areNotificationPreferencesLoadedFor(selfId)) playFriendAcceptedCue();
       void refreshFriends().catch(() => {});
       void refreshRequests().catch(() => {});
       break;
@@ -408,7 +420,7 @@ function handleRealtimeEvent(event: RealtimeEvent): void {
         // We're looking at it: keep it read.
         if (message.senderId !== selfId) void markThreadRead(peerId).catch(() => {});
       } else if (message.senderId !== selfId) {
-        playDirectMessageCue();
+        if (areNotificationPreferencesLoadedFor(selfId) && !isPeerNotificationsMuted(peerId)) playDirectMessageCue();
         const friend = findFriend(peerId);
         if (friend) friend.unreadCount += 1;
       }

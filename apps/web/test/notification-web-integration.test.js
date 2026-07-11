@@ -9,7 +9,7 @@ const read = (path) => readFileSync(resolve(root, path), 'utf8');
 test('notification API client uses required endpoints and credentialed helpers', () => {
   const api = read('src/lib/api/notifications.ts');
 
-  assert.match(api, /import \{ getJsonAuth, putJson \} from '\.\/http'/);
+  assert.match(api, /import \{ getJsonAuth, postJsonAuth, putJson \} from '\.\/http'/);
   assert.match(api, /getJsonAuth<NotificationPreferencesResponse>\('\/api\/notifications\/preferences'\)/);
   assert.match(api, /putJson<NotificationMuteResponse>\(`\/api\/notifications\/dm\/\$\{encodeURIComponent\(userId\)\}\/mute`, \{ muted \}\)/);
   assert.match(api, /putJson<NotificationMuteResponse>\(`\/api\/notifications\/rooms\/\$\{encodeURIComponent\(roomId\)\}\/mute`, \{ muted \}\)/);
@@ -17,6 +17,8 @@ test('notification API client uses required endpoints and credentialed helpers',
   assert.match(api, /mutedPeerIds: string\[\]/);
   assert.match(api, /mutedRoomIds: string\[\]/);
   assert.match(api, /privateNotifications: boolean/);
+  assert.match(api, /doNotDisturb: boolean/);
+  assert.match(api, /postJsonAuth<NotificationPreferencesResponse>\('\/api\/notifications\/settings', \{ dnd \}\)/);
 });
 
 test('lobby startup loads notification preferences and realtime notification events route through browser helper', () => {
@@ -27,6 +29,7 @@ test('lobby startup loads notification preferences and realtime notification eve
   assert.match(friends, /resetNotificationPreferences/);
   assert.match(friends, /Promise\.all\(\[refreshFriends\(\), refreshRequests\(\)\]\)/);
   assert.match(friends, /scheduleNotificationPreferencesLoad\(currentUserId\)/);
+  assert.match(friends, /prepareNotificationPreferences\(currentUserId, initialDoNotDisturb\)/);
   assert.match(friends, /function scheduleNotificationPreferencesLoad\(userId = selfId\)/);
   assert.match(friends, /loadNotificationPreferences\(userId\)/);
   assert.match(friends, /\.then\(flushPendingNotificationEvents\)/);
@@ -44,6 +47,7 @@ test('lobby startup loads notification preferences and realtime notification eve
   assert.match(friends, /mutedPeerIds: notificationPreferences\.mutedPeerIds/);
   assert.match(friends, /mutedRoomIds: notificationPreferences\.mutedRoomIds/);
   assert.match(friends, /privateNotifications: notificationPreferences\.privateNotifications/);
+  assert.match(friends, /doNotDisturb: notificationPreferences\.doNotDisturb/);
   assert.match(friends, /permission: getNotificationDeliveryPermission\(\)/);
   assert.match(friends, /showBrowserNotification\(routed\.payload\)/);
   assert.match(friends, /return \{ kind: 'dm', peerId: friendsState\.selectedFriendId \}/);
@@ -52,7 +56,10 @@ test('lobby startup loads notification preferences and realtime notification eve
   assert.match(friends, /case 'dm\.message': \{/);
   assert.match(friends, /markThreadRead\(peerId\)/);
   assert.match(friends, /playDirectMessageCue\(\)/);
+  assert.match(friends, /!isPeerNotificationsMuted\(peerId\)/);
   assert.match(friends, /friend\.unreadCount \+= 1/);
+  assert.match(friends, /areNotificationPreferencesLoadedFor\(selfId\) && !isPeerNotificationsMuted\(peerId\)/);
+  assert.match(friends, /if \(areNotificationPreferencesLoadedFor\(selfId\)\) playFriendRequestCue\(\)/);
 });
 
 test('notification permission request is isolated to explicit settings UI action', () => {
@@ -66,10 +73,14 @@ test('notification permission request is isolated to explicit settings UI action
   assert.match(prefs, /loadedForUserId: string \| null/);
   assert.match(prefs, /loadingForUserId: string \| null/);
   assert.match(prefs, /export function resetNotificationPreferences/);
+  assert.match(prefs, /preferenceGeneration \+= 1/);
+  assert.match(prefs, /activeUserId !== userId \|\| preferenceGeneration !== generation/);
   assert.match(prefs, /export function areNotificationPreferencesLoadedFor\(userId: string\)/);
   assert.match(prefs, /export async function loadNotificationPreferences\(userId: string\)/);
   assert.match(prefs, /notificationPreferences\.loadingForUserId === userId/);
   assert.match(prefs, /const preferences = await fetchNotificationPreferences\(\)/);
+  assert.match(prefs, /const generation = preferenceGeneration/);
+  assert.match(prefs, /activeUserId === userId &&\s+preferenceGeneration === generation &&\s+notificationPreferences\.loadingForUserId === userId/);
   assert.match(prefs, /applyPreferences\(preferences, userId\)/);
   assert.match(prefs, /deliveryPermission: NotificationPermissionState/);
   assert.match(prefs, /getNotificationDeliveryPermission\(\)/);
@@ -127,4 +138,27 @@ test('mute toggles call state helpers that call the correct API clients', () => 
   assert.match(roomHeader, /updateRoomNotificationsMuted\(room\.roomId, !roomMuted\)/);
   assert.match(roomHeader, /roomMuted \? 'Включить уведомления' : 'Выключить уведомления'/);
   assert.match(settings, /updatePrivateNotifications\(!notificationPreferences\.privateNotifications\)/);
+});
+
+test('DND is server-backed, visible on avatars, and suppresses all cue playback', () => {
+  const prefs = read('src/lib/features/home/model/notification-preferences.svelte.ts');
+  const sidebar = read('src/lib/features/home/components/lobby/Sidebar.svelte');
+  const settings = read('src/lib/features/home/components/SettingsModal.svelte');
+  const cues = read('src/lib/features/room/client/media/cues.ts');
+  const avatar = read('src/lib/shared/ui/Avatar/Avatar.svelte');
+  const lobby = read('src/lib/features/home/LobbyPage.svelte');
+  const friends = read('src/lib/features/home/model/friends.svelte.ts');
+
+  assert.match(prefs, /setDoNotDisturb\(doNotDisturb\)/);
+  assert.match(sidebar, /updateDoNotDisturb\(!notificationPreferences\.doNotDisturb\)/);
+  assert.match(sidebar, /ariaLabel="Меню пользователя"/);
+  assert.match(settings, /tab === 'notifications'/);
+  assert.match(settings, /Глушит push и звуковые сигналы/);
+  assert.match(settings, /Настроить громкость сигналов/);
+  assert.match(cues, /isDoNotDisturbEnabled\(\) \|\| isAppPlaybackMuted\(\)/);
+  assert.match(avatar, /ui-avatar-dot--dnd/);
+  assert.match(lobby, /initLobby\(user\.id, user\.doNotDisturb\)/);
+  assert.match(friends, /notification\.settings\.updated/);
+  assert.match(friends, /applyRealtimeNotificationPreferences\(selfId, event\.payload\.preferences\)/);
+  assert.match(prefs, /applyRealtimeNotificationPreferences[\s\S]*preferenceGeneration \+= 1;[\s\S]*notificationPreferences\.loadingForUserId = null/);
 });

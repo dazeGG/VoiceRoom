@@ -4,11 +4,16 @@ import {
   STREAM_VIEWER_CUE_DEDUPE_MS
 } from '../core/config';
 import { getNotificationVolumeMultiplier } from '../core/settings';
+import { isDoNotDisturbEnabled } from '$lib/features/home/model/notification-preferences.svelte';
 import { state } from '../core/state.svelte';
 import { getSharedAudioContext, isAppPlaybackMuted, isLocalAppAudioSuppressed, queueAudioUnlock } from '../services/media-playback-service';
 
 const peerJoinCueTimes = new Map<string, number>();
 const streamViewerCueTimes = new Map<string, number>();
+
+function isCuePlaybackSuppressed(): boolean {
+  return isDoNotDisturbEnabled() || isAppPlaybackMuted();
+}
 
 function getCueGain(value: number): number {
   return value * NOTIFICATION_VOLUME_BOOST * getNotificationVolumeMultiplier();
@@ -23,7 +28,7 @@ interface CueNote {
 }
 
 function playCueSequence(notes: CueNote[], label: string): void {
-  if (isAppPlaybackMuted()) return;
+  if (isCuePlaybackSuppressed()) return;
 
   try {
     const context = getSharedAudioContext();
@@ -91,7 +96,7 @@ export function playFriendAcceptedCue(): void {
 }
 
 export function playPeerJoinCue(peerId: string | undefined): void {
-  if (!peerId || peerId === state.peerId) return;
+  if (!peerId || peerId === state.peerId || isCuePlaybackSuppressed()) return;
 
   const now = Date.now();
   const lastPlayedAt = peerJoinCueTimes.get(peerId) || 0;
@@ -114,6 +119,7 @@ export function clearStreamViewerCues(): void {
 }
 
 function shouldPlayStreamViewerCue(type: 'join' | 'leave'): boolean {
+  if (isCuePlaybackSuppressed()) return false;
   const now = Date.now();
   const lastPlayedAt = streamViewerCueTimes.get(type) || 0;
   if (now - lastPlayedAt < STREAM_VIEWER_CUE_DEDUPE_MS) return false;
@@ -123,7 +129,7 @@ function shouldPlayStreamViewerCue(type: 'join' | 'leave'): boolean {
 }
 
 export function playPeerCue(type: 'join' | 'leave'): void {
-  if (isAppPlaybackMuted()) return;
+  if (isCuePlaybackSuppressed()) return;
 
   try {
     const context = getSharedAudioContext();
@@ -163,7 +169,7 @@ export function playPeerCue(type: 'join' | 'leave'): void {
 }
 
 export function playMicCue(muted: boolean): void {
-  if (isAppPlaybackMuted()) return;
+  if (isCuePlaybackSuppressed()) return;
 
   try {
     const context = getSharedAudioContext();
@@ -210,7 +216,7 @@ export function playMicCue(muted: boolean): void {
 }
 
 export function playOutputCue(muted: boolean): void {
-  if (isLocalAppAudioSuppressed()) return;
+  if (isDoNotDisturbEnabled() || isLocalAppAudioSuppressed()) return;
 
   try {
     const context = getSharedAudioContext();
@@ -249,7 +255,7 @@ export function playOutputCue(muted: boolean): void {
 }
 
 export function playStreamCue(type: 'start' | 'stop'): void {
-  if (isAppPlaybackMuted()) return;
+  if (isCuePlaybackSuppressed()) return;
 
   try {
     const context = getSharedAudioContext();
@@ -289,7 +295,7 @@ export function playStreamCue(type: 'start' | 'stop'): void {
 }
 
 export function playStreamViewerCue(type: 'join' | 'leave'): void {
-  if (isAppPlaybackMuted()) return;
+  if (isCuePlaybackSuppressed()) return;
   if (!shouldPlayStreamViewerCue(type)) return;
 
   try {
