@@ -74,7 +74,9 @@ let selfId = '';
 // snapshot so a later refreshFriends() still applies the correct online flags.
 let presenceReady = false;
 let onlineFriendIds = new Set<string>();
-let pendingNotificationEvents: RealtimeEvent[] = [];
+const MAX_PENDING_NOTIFICATION_EVENTS = 100;
+const PENDING_NOTIFICATION_TTL_MS = 60_000;
+let pendingNotificationEvents: Array<{ event: RealtimeEvent; receivedAt: number }> = [];
 let notificationPreferencesRetryTimer: ReturnType<typeof setTimeout> | null = null;
 
 function findFriend(userId: string): Friend | undefined {
@@ -304,7 +306,11 @@ function getActiveNotificationTarget(): NotificationActiveTarget | null {
 function handleNotificationRealtimeEvent(event: RealtimeEvent): boolean {
   if (!event.type.startsWith('notification.')) return false;
   if (!areNotificationPreferencesLoadedFor(selfId)) {
-    pendingNotificationEvents.push(event);
+    const now = Date.now();
+    pendingNotificationEvents = pendingNotificationEvents
+      .filter((entry) => now - entry.receivedAt <= PENDING_NOTIFICATION_TTL_MS)
+      .slice(-(MAX_PENDING_NOTIFICATION_EVENTS - 1));
+    pendingNotificationEvents.push({ event, receivedAt: now });
     return true;
   }
   syncNotificationPermission();
@@ -323,7 +329,10 @@ function handleNotificationRealtimeEvent(event: RealtimeEvent): boolean {
 
 function flushPendingNotificationEvents(): void {
   if (!areNotificationPreferencesLoadedFor(selfId) || pendingNotificationEvents.length === 0) return;
-  const events = pendingNotificationEvents;
+  const now = Date.now();
+  const events = pendingNotificationEvents
+    .filter((entry) => now - entry.receivedAt <= PENDING_NOTIFICATION_TTL_MS)
+    .map((entry) => entry.event);
   pendingNotificationEvents = [];
   for (const event of events) handleNotificationRealtimeEvent(event);
 }

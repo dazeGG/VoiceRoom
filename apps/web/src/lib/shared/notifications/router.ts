@@ -434,7 +434,7 @@ function shouldFallbackToBrowserNotification(result: DesktopNotificationBridgeRe
   return Boolean(result && typeof result === 'object' && result.ok === false);
 }
 
-export function showBrowserNotification(payload: BrowserNotificationPayload): Notification | Promise<Notification | null> | null {
+function deliverBrowserNotification(payload: BrowserNotificationPayload): Notification | Promise<Notification | null> | null {
   const bridge = getDesktopNotificationBridge();
   if (!bridge && (!canUseNotifications() || getNotificationPermission() !== 'granted')) return null;
   if (!consumeNotificationDedupeKey(payload.dedupeKey || payload.tag)) return null;
@@ -451,4 +451,14 @@ export function showBrowserNotification(payload: BrowserNotificationPayload): No
   } catch {
     return showPageNotification(payload);
   }
+}
+
+export function showBrowserNotification(payload: BrowserNotificationPayload): Notification | Promise<Notification | null> | null {
+  const locks = globalThis.navigator?.locks;
+  if (!locks) return deliverBrowserNotification(payload);
+  const key = payload.dedupeKey || payload.tag;
+  return locks.request(
+    `voice-room-notification:${key}`,
+    () => Promise.resolve(deliverBrowserNotification(payload))
+  ) as unknown as Promise<Notification | null>;
 }

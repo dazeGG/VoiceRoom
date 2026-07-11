@@ -357,6 +357,56 @@ test('desktop bridge unsupported result falls back to browser Notification', asy
   }
 });
 
+test('showBrowserNotification serializes dedupe through the Web Locks API', async () => {
+  const originalNotification = globalThis.Notification;
+  const originalNavigator = globalThis.navigator;
+  const originalBroadcastChannel = globalThis.BroadcastChannel;
+  const calls = [];
+  let tail = Promise.resolve();
+
+  class FakeNotification {
+    static permission = 'granted';
+    constructor(title) {
+      calls.push(title);
+    }
+  }
+
+  globalThis.Notification = FakeNotification;
+  globalThis.BroadcastChannel = undefined;
+  Object.defineProperty(globalThis, 'navigator', {
+    configurable: true,
+    value: {
+      locks: {
+        request(_name, callback) {
+          const result = tail.then(callback);
+          tail = result.catch(() => {});
+          return result;
+        }
+      }
+    }
+  });
+
+  try {
+    const router = await loadRouter();
+    router.resetNotificationDedupeForTests();
+    const payload = { title: 'locked', body: 'body', tag: 'lock-key', dedupeKey: 'lock-key' };
+    const [first, second] = await Promise.all([
+      router.showBrowserNotification(payload),
+      router.showBrowserNotification(payload)
+    ]);
+    assert.ok(first);
+    assert.equal(second, null);
+    assert.equal(calls.length, 1);
+  } finally {
+    if (originalNotification === undefined) delete globalThis.Notification;
+    else globalThis.Notification = originalNotification;
+    if (originalNavigator === undefined) delete globalThis.navigator;
+    else Object.defineProperty(globalThis, 'navigator', { configurable: true, value: originalNavigator });
+    if (originalBroadcastChannel === undefined) delete globalThis.BroadcastChannel;
+    else globalThis.BroadcastChannel = originalBroadcastChannel;
+  }
+});
+
 test('showBrowserNotification no-ops when denied or unavailable', async () => {
   const originalNotification = globalThis.Notification;
   const originalBridge = globalThis.voiceRoomDesktopNotifications;

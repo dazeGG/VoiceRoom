@@ -32,7 +32,10 @@ test('lobby startup loads notification preferences and realtime notification eve
   assert.match(friends, /\.then\(flushPendingNotificationEvents\)/);
   assert.match(friends, /notificationPreferencesRetryTimer = setTimeout/);
   assert.match(friends, /event\.type\.startsWith\('notification\.'\)/);
-  assert.match(friends, /pendingNotificationEvents\.push\(event\)/);
+  assert.match(friends, /MAX_PENDING_NOTIFICATION_EVENTS = 100/);
+  assert.match(friends, /PENDING_NOTIFICATION_TTL_MS = 60_000/);
+  assert.match(friends, /pendingNotificationEvents\.push\(\{ event, receivedAt: now \}\)/);
+  assert.match(friends, /slice\(-\(MAX_PENDING_NOTIFICATION_EVENTS - 1\)\)/);
   assert.match(friends, /!areNotificationPreferencesLoadedFor\(selfId\)/);
   assert.match(friends, /function flushPendingNotificationEvents\(\)/);
   assert.match(friends, /routeNotificationEvent\(event, \{/);

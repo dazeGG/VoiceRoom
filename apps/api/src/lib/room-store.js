@@ -700,7 +700,9 @@ function createRoomStore({
          JOIN rooms r ON r.id = rb.room_id
          WHERE rb.room_id = $1
            AND r.deleted_at IS NULL
-       ) recipients`,
+       )
+       SELECT DISTINCT user_id
+       FROM recipients`,
       [roomId]
     );
     return result.rows.map((row) => row.user_id).filter(Boolean);
