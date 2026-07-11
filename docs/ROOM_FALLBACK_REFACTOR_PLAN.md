@@ -67,7 +67,8 @@
 ### Фаза 4 — Тесты и финальная чистка
 - `room-crud.test.js`: удалить пресет-хелперы (`presetFromEmoji`, `presetFromVisualKeys`,
   `emojiFromIconKey`, локальный `normalizeRoomVisuals`), переписать ассерты.
-- Финальный grep по репо: `cleanRoomEmoji|ROOM_PRESETS|room_icon_key|roomIconKey|room_color_key|roomColorKey` — пусто.
+- Финальный grep по актуальному application-source: `cleanRoomEmoji|ROOM_PRESETS|roomIconKey|roomColorKey` — пусто.
+  SQL-имена `room_icon_key|room_color_key` до contract-фазы законно остаются в исторической миграции и schema-тестах.
 - `graphify update .`
 - **Verify:** `check` + `test` + `build` зелёные.
 
