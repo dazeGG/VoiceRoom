@@ -36,7 +36,7 @@ const { createUserStore, publicUser } = require('./lib/user-store');
 const { createFriendStore } = require('./lib/friend-store');
 const { createNotificationStore } = require('./lib/notification-store');
 const { createPushStore } = require('./lib/push-store');
-const { createPushService, shouldDeliverPush } = require('./lib/push-service');
+const { createPushService, resolvePushTtl, shouldDeliverPush } = require('./lib/push-service');
 const { cleanPushEndpoint } = require('./lib/push-endpoint');
 const { startApiListener } = require('./lib/listen');
 const { runMigrations } = require('./lib/migrate');
@@ -206,12 +206,9 @@ async function queuePush(userId, payload, context = {}) {
       ? payload.privateBody
       : payload.body;
     const { privateBody: _privateBody, ...publicPayload } = payload;
-    let deliveryContext = context;
-    if (Number.isFinite(context.expiresAt)) {
-      const remainingTtl = Math.ceil((context.expiresAt - Date.now()) / 1000);
-      if (remainingTtl <= 0) return;
-      deliveryContext = { ...context, ttl: remainingTtl };
-    }
+    const ttl = resolvePushTtl(context);
+    if (ttl === null) return;
+    const deliveryContext = ttl === undefined ? context : { ...context, ttl };
     await getPushService().sendToUser(userId, { ...publicPayload, body }, deliveryContext);
   } catch (error) {
     console.error('Failed to send push notification:', error);
