@@ -39,7 +39,7 @@ import {
   prepareNotificationPreferences,
   resetNotificationPreferences,
   syncNotificationPermission
-} from './notification-preferences.svelte';
+} from '$lib/shared/notifications/preferences.svelte';
 import { createDmThreadResyncCoordinator } from './dm-thread-resync';
 
 export type LobbyMode = 'friends' | 'rooms';

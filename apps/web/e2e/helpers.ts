@@ -39,14 +39,18 @@ export async function createPermanentRoom(page: Page, name: string): Promise<str
   await expect(dialog).toBeVisible();
   // "Постоянная" tab is the default, but click it to be explicit.
   await dialog.getByRole('tab', { name: 'Постоянная' }).click();
-  await dialog.locator('.dialog-input').fill(name);
+  await dialog.locator('.lr-dialog-input').fill(name);
+  const createdResponse = page.waitForResponse(
+    (response) => response.url().endsWith('/api/rooms') && response.request().method() === 'POST' && response.ok()
+  );
   await dialog.getByRole('button', { name: 'Создать комнату' }).click();
+  const created = (await (await createdResponse).json()) as { roomId?: string };
   await expect(dialog).toBeHidden({ timeout: 15_000 });
 
-  // The new room appears as a card in the lobby grid; grab its code.
-  const card = page.locator('article.room-card', { hasText: name }).first();
+  // The new room appears as a card in the lobby grid.
+  const card = page.locator('.lv-card', { hasText: name }).first();
   await expect(card).toBeVisible({ timeout: 15_000 });
-  const roomId = (await card.locator('.room-card-code').innerText()).trim();
+  const roomId = created.roomId?.trim() || '';
   expect(roomId).toMatch(/^[a-z0-9]+$/i);
   return roomId;
 }
@@ -72,14 +76,14 @@ export async function openRoomHeadingMenu(page: Page): Promise<void> {
   await roomHeadingMenuButton(page).click();
 }
 
-// Owner-only item inside the room heading popover menu.
-export function roomSettingsMenuItem(page: Page) {
-  return page.getByRole('menuitem', { name: 'Настройки комнаты' });
+// Owner-only settings action sits beside the shared room menu so preview and
+// active-room menus keep an identical action set.
+export function roomSettingsButton(page: Page) {
+  return page.getByRole('button', { name: 'Настройки', exact: true });
 }
 
 export async function openRoomSettings(page: Page): Promise<void> {
-  await openRoomHeadingMenu(page);
-  await roomSettingsMenuItem(page).click();
+  await roomSettingsButton(page).click();
 }
 
 export function settingsDialog(page: Page) {

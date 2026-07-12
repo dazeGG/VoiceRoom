@@ -1,5 +1,6 @@
 export * from './Select';
 export * from './Popover';
+export * from './ContextMenu';
 export * from './Ellipsis';
 export * from './Slider';
 export * from './HotkeyRecorder';

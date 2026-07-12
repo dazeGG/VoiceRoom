@@ -1,12 +1,13 @@
 <script lang="ts">
   import { Moon, Settings, UserPlus } from '@lucide/svelte';
   import type { AuthUser } from '$lib/api/auth';
-  import { Avatar, Badge, Popover, PopoverMenuItem } from '$lib/shared/ui';
+  import { Avatar, Badge, ContextMenu, Popover, PopoverMenuItem } from '$lib/shared/ui';
   import { iconSm } from '$lib/shared/ui/icons';
   import { friendName } from '../../model/lobby-format';
   import { friendsState, openDm } from '../../model/friends.svelte';
-  import { notificationPreferences, updateDoNotDisturb } from '../../model/notification-preferences.svelte';
+  import { notificationPreferences, updateDoNotDisturb } from '$lib/shared/notifications/preferences.svelte';
   import SidebarDownload from '../SidebarDownload.svelte';
+  import { FriendMenuContent } from '../friend-menu';
   import VoiceCallWidget from './VoiceCallWidget.svelte';
 
   let {
@@ -50,6 +51,36 @@
   const selfName = $derived(user.displayName?.trim() || user.login);
   const activeVoiceLabel = $derived(activeVoiceRoomName?.trim() || activeVoiceRoomId || '');
   let dndSaving = $state(false);
+  let contextFriendId = $state('');
+  let contextX = $state(0);
+  let contextY = $state(0);
+  let contextTrigger = $state<HTMLElement | null>(null);
+  const contextFriend = $derived(friendsState.friends.find((entry) => entry.user.id === contextFriendId));
+
+  function openFriendContextMenu(event: MouseEvent, userId: string): void {
+    event.preventDefault();
+    event.stopPropagation();
+    contextFriendId = userId;
+    contextX = event.clientX;
+    contextY = event.clientY;
+    contextTrigger = event.currentTarget instanceof HTMLElement ? event.currentTarget : null;
+  }
+
+  function handleFriendKeydown(event: KeyboardEvent, userId: string): void {
+    const isContextKey = event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey);
+    if (!isContextKey || !(event.currentTarget instanceof HTMLElement)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const rect = event.currentTarget.getBoundingClientRect();
+    contextFriendId = userId;
+    contextX = rect.left + Math.min(rect.width - 12, 48);
+    contextY = rect.top + Math.min(rect.height - 8, 36);
+    contextTrigger = event.currentTarget;
+  }
+
+  function closeFriendContextMenu(): void {
+    contextFriendId = '';
+  }
 
   async function toggleDnd(close: () => void): Promise<void> {
     if (dndSaving) return;
@@ -92,8 +123,12 @@
         <button
           class="lv-row"
           class:is-active={friendsState.selectedFriendId === entry.user.id && friendsState.view === 'dm'}
+          class:is-context={contextFriendId === entry.user.id}
           type="button"
           onclick={() => openDm(entry.user.id)}
+          oncontextmenu={(event) => openFriendContextMenu(event, entry.user.id)}
+          onkeydown={(event) => handleFriendKeydown(event, entry.user.id)}
+          aria-haspopup="menu"
         >
           <Avatar name={friendName(entry.user)} src={entry.user.avatarUrl} colorKey={entry.user.avatarColorKey} background={entry.user.avatarAccent || undefined} online={entry.online} dnd={entry.user.doNotDisturb} showDot={entry.online || entry.user.doNotDisturb} ring="var(--panel)" />
           <div style="min-width:0;flex:1;">
@@ -149,6 +184,28 @@
     </button>
   </div>
 </aside>
+
+{#if contextFriend}
+  <ContextMenu
+    open={Boolean(contextFriendId)}
+    x={contextX}
+    y={contextY}
+    ariaLabel={`Действия для ${friendName(contextFriend.user)}`}
+    restoreFocus={contextTrigger}
+    onClose={closeFriendContextMenu}
+  >
+    {#snippet content({ close })}
+      {#key contextFriend.user.id}
+        <FriendMenuContent
+          friend={contextFriend}
+          {close}
+          canClose={(userId) => contextFriendId === userId}
+          {onToast}
+        />
+      {/key}
+    {/snippet}
+  </ContextMenu>
+{/if}
 
 <style>
   .lv-profile-user {

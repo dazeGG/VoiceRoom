@@ -63,7 +63,7 @@ test('lobby startup loads notification preferences and realtime notification eve
 });
 
 test('notification permission request is isolated to explicit settings UI action', () => {
-  const prefs = read('src/lib/features/home/model/notification-preferences.svelte.ts');
+  const prefs = read('src/lib/shared/notifications/preferences.svelte.ts');
   const push = read('src/lib/features/home/model/push-notifications.svelte.ts');
   const settings = read('src/lib/features/home/components/SettingsModal.svelte');
   const friends = read('src/lib/features/home/model/friends.svelte.ts');
@@ -125,9 +125,9 @@ test('Web Push uses credentialed subscription endpoints and suppresses focused-w
 });
 
 test('DM mute is server-backed while room mute is current-device localStorage', () => {
-  const prefs = read('src/lib/features/home/model/notification-preferences.svelte.ts');
+  const prefs = read('src/lib/shared/notifications/preferences.svelte.ts');
   const dm = read('src/lib/features/home/components/lobby/DmView.svelte');
-  const roomHeader = read('src/lib/features/home/components/lobby/RoomViewHeader.svelte');
+  const roomMenu = read('src/lib/shared/components/room-menu/RoomMenuContent.svelte');
   const settings = read('src/lib/features/home/components/SettingsModal.svelte');
 
   assert.match(prefs, /setDmNotificationsMuted\(userId, muted\)/);
@@ -138,13 +138,15 @@ test('DM mute is server-backed while room mute is current-device localStorage', 
   assert.match(prefs, /setPrivateNotifications\(privateNotifications\)/);
   assert.match(dm, /updatePeerNotificationsMuted\(peer\.id, !peerMuted\)/);
   assert.match(dm, /data-notification-mute="dm"/);
-  assert.match(roomHeader, /updateRoomNotificationsMuted\(room\.roomId, !roomMuted\)/);
-  assert.match(roomHeader, /roomMuted \? 'Включить уведомления' : 'Выключить уведомления'/);
+  assert.match(roomMenu, /const nextMuted = !roomMuted/);
+  assert.match(roomMenu, /updateRoomNotificationsMuted\(targetRoomId, nextMuted\)/);
+  assert.match(roomMenu, /nextMuted \? 'Уведомления комнаты выключены' : 'Уведомления комнаты включены'/);
+  assert.match(roomMenu, /roomMuted \? 'Включить уведомления' : 'Выключить уведомления'/);
   assert.match(settings, /updatePrivateNotifications\(!notificationPreferences\.privateNotifications\)/);
 });
 
 test('DND is server-backed, visible on avatars, and suppresses all cue playback', () => {
-  const prefs = read('src/lib/features/home/model/notification-preferences.svelte.ts');
+  const prefs = read('src/lib/shared/notifications/preferences.svelte.ts');
   const sidebar = read('src/lib/features/home/components/lobby/Sidebar.svelte');
   const settings = read('src/lib/features/home/components/SettingsModal.svelte');
   const cues = read('src/lib/features/room/client/media/cues.ts');

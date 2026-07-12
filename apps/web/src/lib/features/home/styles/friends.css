@@ -529,17 +529,6 @@ html.is-desktop .sidebar-download { display: none; }
 }
 .lobby-roomview-trigger[aria-expanded='true'] .lobby-roomview-chevron { transform: rotate(180deg); }
 
-.lobby-roomview-popover { width: 276px; }
-.lobby-roomview-popover-head {
-  display: flex;
-  align-items: center;
-  gap: 11px;
-  padding: 6px 8px 10px;
-}
-.lobby-roomview-popover-info { min-width: 0; display: flex; flex-direction: column; }
-.lobby-roomview-popover-name { font-size: 14px; font-weight: 700; color: var(--warm-ink); }
-.lobby-roomview-popover-code { font-family: var(--font-mono); font-size: 12px; color: var(--warm-muted); margin-top: 1px; }
-
 .lobby-roomview-state {
   display: inline-flex;
   align-items: center;
@@ -1177,4 +1166,4 @@ html.is-desktop .sidebar-download { display: none; }
 
 .lobby-error { font-size: 13px; color: var(--coral); margin-top: 10px; }
 
-.sidebar-download-popover [role="menuitem"], .lobby-roomview-popover [role="menuitem"] { white-space: nowrap; }
+.sidebar-download-popover [role="menuitem"] { white-space: nowrap; }

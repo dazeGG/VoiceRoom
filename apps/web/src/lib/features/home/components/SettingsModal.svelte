@@ -52,7 +52,7 @@
     syncNotificationPermission,
     updateDoNotDisturb,
     updatePrivateNotifications
-  } from '../model/notification-preferences.svelte';
+  } from '$lib/shared/notifications/preferences.svelte';
   import {
     pushNotifications,
     setPushNotificationsEnabled,
