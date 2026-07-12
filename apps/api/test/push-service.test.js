@@ -60,7 +60,7 @@ test('push service derives ring TTL from expiry and skips expired invitations', 
   const store = {
     async listByUserId() {
       listCalls += 1;
-      return [{ endpoint: 'https://push.example/ring', keys: { p256dh: 'a', auth: 'b' } }];
+      return [{ endpoint: 'https://fcm.googleapis.com/fcm/send/ring', keys: { p256dh: 'a', auth: 'b' } }];
     },
     async markSuccess() {},
     async removeByEndpoint() {}
