@@ -136,7 +136,8 @@
   background: rgba(255, 255, 255, 0.055);
 }
 
-.lv-row.is-active {
+.lv-row.is-active,
+.lv-row.is-context {
   background: color-mix(in oklch, var(--accent), transparent 88%);
 }
 
@@ -211,6 +212,11 @@
 
 .lv-card.is-live {
   border-color: color-mix(in oklch, var(--green), transparent 68%);
+}
+
+.lv-card.is-context {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: color-mix(in oklch, var(--accent), transparent 58%);
 }
 
 .lv-card-foot {

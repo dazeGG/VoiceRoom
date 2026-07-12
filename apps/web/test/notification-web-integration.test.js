@@ -127,7 +127,7 @@ test('Web Push uses credentialed subscription endpoints and suppresses focused-w
 test('DM mute is server-backed while room mute is current-device localStorage', () => {
   const prefs = read('src/lib/features/home/model/notification-preferences.svelte.ts');
   const dm = read('src/lib/features/home/components/lobby/DmView.svelte');
-  const roomHeader = read('src/lib/features/home/components/lobby/RoomViewHeader.svelte');
+  const roomMenu = read('src/lib/features/home/components/room-menu/RoomMenuContent.svelte');
   const settings = read('src/lib/features/home/components/SettingsModal.svelte');
 
   assert.match(prefs, /setDmNotificationsMuted\(userId, muted\)/);
@@ -138,8 +138,10 @@ test('DM mute is server-backed while room mute is current-device localStorage', 
   assert.match(prefs, /setPrivateNotifications\(privateNotifications\)/);
   assert.match(dm, /updatePeerNotificationsMuted\(peer\.id, !peerMuted\)/);
   assert.match(dm, /data-notification-mute="dm"/);
-  assert.match(roomHeader, /updateRoomNotificationsMuted\(room\.roomId, !roomMuted\)/);
-  assert.match(roomHeader, /roomMuted \? 'Включить уведомления' : 'Выключить уведомления'/);
+  assert.match(roomMenu, /const nextMuted = !roomMuted/);
+  assert.match(roomMenu, /updateRoomNotificationsMuted\(roomId, nextMuted\)/);
+  assert.match(roomMenu, /nextMuted \? 'Уведомления комнаты выключены' : 'Уведомления комнаты включены'/);
+  assert.match(roomMenu, /roomMuted \? 'Включить уведомления' : 'Выключить уведомления'/);
   assert.match(settings, /updatePrivateNotifications\(!notificationPreferences\.privateNotifications\)/);
 });
 

@@ -8,5 +8,8 @@ export function triggerDesktopDownload(url: string): void {
 }
 
 export async function copyText(text: string): Promise<void> {
-  await navigator.clipboard?.writeText(text);
+  if (!navigator.clipboard?.writeText) {
+    throw new Error('Clipboard API is unavailable');
+  }
+  await navigator.clipboard.writeText(text);
 }
