@@ -1,8 +1,8 @@
 import { state } from '../core/state.svelte';
-import { OUTPUT_DEVICE_STORAGE_KEY } from '../core/config';
 import { getNotificationVolumeMultiplier, getStoredMasterVolume } from '../core/settings';
 import {
   createAudioOutputTransitionQueue,
+  initializeAudioOutput,
   transitionAudioOutput
 } from './audio-output-transition.js';
 
@@ -59,16 +59,7 @@ function createGraph(): AudioBusGraph {
   graph = { context, limiter, master, media, sfx, voice };
   syncAudioBusSettings();
   const initialSinkId = state.outputDeviceId || '';
-  void syncAudioBusOutput(initialSinkId).then(async (synced) => {
-    if (synced || !initialSinkId || state.outputDeviceId !== initialSinkId) return;
-    state.outputDeviceId = '';
-    try {
-      localStorage.removeItem(OUTPUT_DEVICE_STORAGE_KEY);
-    } catch {
-      // The runtime still recovers to system output when storage is unavailable.
-    }
-    await syncAudioBusOutput('');
-  });
+  void initializeAudioOutput(syncAudioBusOutput, initialSinkId);
   return graph;
 }
 

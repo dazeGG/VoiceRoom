@@ -22,8 +22,8 @@ test('audio bus owns one limited master graph and browser-specific sink strategi
   assert.match(bus, /connectDefaultOutput\(current\)/);
   assert.match(bus, /state\.audioUnlockPending = true/);
   assert.match(bus, /transitionAudioOutput\(\{/);
-  assert.match(bus, /localStorage\.removeItem\(OUTPUT_DEVICE_STORAGE_KEY\)/);
-  assert.match(bus, /await syncAudioBusOutput\(''\)/);
+  assert.match(bus, /initializeAudioOutput\(syncAudioBusOutput, initialSinkId\)/);
+  assert.doesNotMatch(bus, /syncAudioBusOutput\(''\)/);
 });
 
 test('remote voice, screen audio, and cues use the bus without a duplicate audible path', () => {

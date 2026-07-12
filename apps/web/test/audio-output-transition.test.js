@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   createAudioOutputTransitionQueue,
+  initializeAudioOutput,
   transitionAudioOutput
 } from '../src/lib/features/room/client/services/audio-output-transition.js';
 
@@ -70,4 +71,15 @@ test('sink transitions are serialized in request order', async () => {
   assert.equal(await firstResult, true);
   assert.equal(await secondResult, true);
   assert.deepEqual(events, ['first:start', 'first:end', 'second']);
+});
+
+test('failed initial custom sink never falls back to the default output', async () => {
+  const requested = [];
+  const selected = await initializeAudioOutput(async (sinkId) => {
+    requested.push(sinkId);
+    return false;
+  }, 'custom-speaker');
+
+  assert.equal(selected, false);
+  assert.deepEqual(requested, ['custom-speaker']);
 });

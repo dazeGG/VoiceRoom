@@ -22,3 +22,15 @@ export function createAudioOutputTransitionQueue() {
     return pending;
   };
 }
+
+/**
+ * Initial output selection deliberately has no automatic default fallback: a
+ * rejected persisted custom sink must remain silent until the user chooses a
+ * different output.
+ *
+ * @param {(sinkId: string) => Promise<boolean>} selectOutput
+ * @param {string} sinkId
+ */
+export function initializeAudioOutput(selectOutput, sinkId) {
+  return selectOutput(sinkId);
+}
