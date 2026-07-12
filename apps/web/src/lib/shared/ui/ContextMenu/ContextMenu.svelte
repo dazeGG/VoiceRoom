@@ -130,8 +130,12 @@
   .context-menu-panel {
     position: fixed;
     z-index: 140;
-    min-width: 244px;
+    box-sizing: border-box;
+    min-width: min(244px, calc(100vw - 16px));
     max-width: min(320px, calc(100vw - 16px));
+    max-height: calc(100vh - 16px);
+    max-height: calc(100dvh - 16px);
+    overflow-y: auto;
     padding: 6px;
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 18px;

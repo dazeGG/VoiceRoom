@@ -5,7 +5,7 @@
   import { iconSm } from '$lib/shared/ui/icons';
   import { friendName } from '../../model/lobby-format';
   import { friendsState, openDm } from '../../model/friends.svelte';
-  import { notificationPreferences, updateDoNotDisturb } from '../../model/notification-preferences.svelte';
+  import { notificationPreferences, updateDoNotDisturb } from '$lib/shared/notifications/preferences.svelte';
   import SidebarDownload from '../SidebarDownload.svelte';
   import { FriendMenuContent } from '../friend-menu';
   import VoiceCallWidget from './VoiceCallWidget.svelte';

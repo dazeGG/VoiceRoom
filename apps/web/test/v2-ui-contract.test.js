@@ -274,8 +274,8 @@ test('room chat keeps transport mounted and tracks unread state while closed', (
   const ui = read('src/lib/features/room/room-ui.svelte.ts');
   const chat = read('src/lib/features/room/components/RoomChat.svelte');
   const topbar = read('src/lib/features/room/components/RoomTopbar.svelte');
-  const roomMenu = read('src/lib/features/home/components/room-menu/RoomMenu.svelte');
-  const roomMenuContent = read('src/lib/features/home/components/room-menu/RoomMenuContent.svelte');
+  const roomMenu = read('src/lib/shared/components/room-menu/RoomMenu.svelte');
+  const roomMenuContent = read('src/lib/shared/components/room-menu/RoomMenuContent.svelte');
 
   assert.match(stage, /<RoomChat \/>/);
   assert.match(ui, /unreadChat: 0/);
@@ -289,7 +289,7 @@ test('room chat keeps transport mounted and tracks unread state while closed', (
   assert.doesNotMatch(chat, /draft\.replace\(\/\\s\+\/g, ' '\)/);
   assert.match(topbar, /room-chat-unread/);
   assert.match(topbar, /import \{[^}]*\bPopover\b[^}]*\} from '\$lib\/shared\/ui'/);
-  assert.match(topbar, /import \{ RoomMenu \} from '\$lib\/features\/home\/components\/room-menu'/);
+  assert.match(topbar, /import \{ RoomMenu \} from '\$lib\/shared\/components\/room-menu'/);
   assert.match(topbar, /<RoomMenu/);
   assert.match(topbar, /headingClass="room-heading-title-wrap"/);
   assert.match(topbar, /\bheading\b/);
@@ -298,7 +298,7 @@ test('room chat keeps transport mounted and tracks unread state while closed', (
   assert.match(topbar, /avatarUrl=\{roomClientState\.roomAvatarUrl\}/);
   assert.match(roomMenu, /<h1 class=\{headingClass\}>/);
   assert.match(roomMenu, /<Avatar \{name\} src=\{avatarUrl\} shape="squircle" background="var\(--room-avatar-bg\)"/);
-  assert.match(roomMenu, /<RoomMenuContent \{roomId\} \{name\} \{avatarUrl\}/);
+  assert.match(roomMenu, /<RoomMenuContent[\s\S]*\{roomId\}[\s\S]*\{name\}[\s\S]*\{avatarUrl\}/);
   assert.match(roomMenuContent, /Скопировать код/);
   assert.match(roomMenuContent, /room-menu-head/);
   assert.match(roomMenuContent, /room-menu-info/);
@@ -445,20 +445,25 @@ test('shared Popover primitive exposes trigger/content slots and dismiss behavio
 test('room menus share one implementation and room and friend rows expose accessible context menus', () => {
   const roomViewHeader = read('src/lib/features/home/components/lobby/RoomViewHeader.svelte');
   const roomTopbar = read('src/lib/features/room/components/RoomTopbar.svelte');
-  const roomMenu = read('src/lib/features/home/components/room-menu/RoomMenu.svelte');
-  const roomMenuContent = read('src/lib/features/home/components/room-menu/RoomMenuContent.svelte');
+  const roomMenu = read('src/lib/shared/components/room-menu/RoomMenu.svelte');
+  const roomMenuContent = read('src/lib/shared/components/room-menu/RoomMenuContent.svelte');
   const voiceHome = read('src/lib/features/home/components/lobby/VoiceHome.svelte');
   const sidebar = read('src/lib/features/home/components/lobby/Sidebar.svelte');
   const friendMenu = read('src/lib/features/home/components/friend-menu/FriendMenuContent.svelte');
   const contextMenu = read('src/lib/shared/ui/ContextMenu/ContextMenu.svelte');
-  const clipboard = read('src/lib/features/home/services/desktop-download.ts');
+  const clipboard = read('src/lib/shared/utils/clipboard.ts');
 
-  assert.match(roomViewHeader, /import \{ RoomMenu \} from '\.\.\/room-menu'/);
-  assert.match(roomTopbar, /import \{ RoomMenu \} from '\$lib\/features\/home\/components\/room-menu'/);
+  assert.match(roomViewHeader, /import \{ RoomMenu \} from '\$lib\/shared\/components\/room-menu'/);
+  assert.match(roomTopbar, /import \{ RoomMenu \} from '\$lib\/shared\/components\/room-menu'/);
   assert.match(roomViewHeader, /<RoomMenu[\s\S]*roomId=\{room\.roomId\}[\s\S]*avatarUrl=\{room\.avatarUrl\}/);
   assert.match(roomTopbar, /<RoomMenu[\s\S]*roomId=\{roomClientState\.roomId\}[\s\S]*avatarUrl=\{roomClientState\.roomAvatarUrl\}/);
   assert.match(roomMenu, /<Popover [^>]*role="menu"[^>]*ariaLabel="Меню комнаты"/);
-  assert.match(roomMenu, /<RoomMenuContent \{roomId\} \{name\} \{avatarUrl\}/);
+  assert.match(roomMenu, /<RoomMenuContent[\s\S]*\{roomId\}[\s\S]*\{name\}[\s\S]*\{avatarUrl\}/);
+  assert.match(roomMenu, /canClose=\{\(targetRoomId\) => targetRoomId === roomId\}/);
+  assert.doesNotMatch(roomMenuContent, /onOpenSettings|Настройки комнаты/);
+  assert.doesNotMatch(roomViewHeader, /onOpenSettings/);
+  assert.doesNotMatch(roomTopbar, /onOpenSettings/);
+  assert.match(roomTopbar, /title="Настройки комнаты" onclick=\{handleOpenSettings\}/);
   assert.match(roomMenuContent, /data-room-menu-content/);
 
   assert.match(voiceHome, /oncontextmenu=\{\(event\) => openRoomContextMenu\(event, room\.roomId\)\}/);
@@ -484,6 +489,8 @@ test('room menus share one implementation and room and friend rows expose access
   assert.match(contextMenu, /event\.key === 'ArrowDown'/);
   assert.match(contextMenu, /queueMicrotask\(\(\) => restoreFocus\?\.focus\(\)\)/);
   assert.match(contextMenu, /window\.addEventListener\('resize', handleViewportChange\)/);
+  assert.match(contextMenu, /max-height: calc\(100dvh - 16px\)/);
+  assert.match(contextMenu, /overflow-y: auto/);
 });
 
 test('room and participant avatars preserve fallbacks while preferring uploaded images and accents', () => {
@@ -496,7 +503,7 @@ test('room and participant avatars preserve fallbacks while preferring uploaded 
   const chat = read('src/lib/features/room/components/RoomChat.svelte');
   const roomNet = read('src/lib/features/room/client/net/api.ts');
   const roomTopbar = read('src/lib/features/room/components/RoomTopbar.svelte');
-  const roomMenu = read('src/lib/features/home/components/room-menu/RoomMenu.svelte');
+  const roomMenu = read('src/lib/shared/components/room-menu/RoomMenu.svelte');
   const notificationRouter = read('src/lib/shared/notifications/router.ts');
 
   assert.match(authApi, /avatarColorKey: string/);
@@ -1082,7 +1089,7 @@ test('shared typography uses CSP-safe local UI, display, and mono font roles', (
   const stageLayout = read('src/lib/features/room/styles/stage-layout.css');
   const roomControls = read('src/lib/features/room/styles/controls.css');
   const roomParticipants = read('src/lib/features/room/styles/participants.css');
-  const roomMenuContent = read('src/lib/features/home/components/room-menu/RoomMenuContent.svelte');
+  const roomMenuContent = read('src/lib/shared/components/room-menu/RoomMenuContent.svelte');
   const provenance = read('static/fonts/README.md');
   const appSourceFiles = readTreeFiles('src/lib', (path) => /\.(css|svelte)$/.test(path));
   const appSources = appSourceFiles.map(({ source }) => source).join('\n');

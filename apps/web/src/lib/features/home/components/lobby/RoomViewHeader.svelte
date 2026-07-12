@@ -3,7 +3,7 @@
   import type { OwnedRoom } from '$lib/api/auth';
   import { iconMd } from '$lib/shared/ui/icons';
   import { roomDisplayName } from '../../model/rooms';
-  import { RoomMenu } from '../room-menu';
+  import { RoomMenu } from '$lib/shared/components/room-menu';
 
   let { room, onBack, onToast } = $props<{
     room: OwnedRoom;

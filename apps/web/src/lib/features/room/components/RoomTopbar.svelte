@@ -1,9 +1,9 @@
 <script lang="ts">
-  import { MessageSquare, UserRoundPlus } from '@lucide/svelte';
+  import { MessageSquare, Settings, UserRoundPlus } from '@lucide/svelte';
   import Topbar from '$lib/shared/components/Topbar.svelte';
   import { iconMd } from '$lib/shared/ui/icons';
   import { Avatar, Popover } from '$lib/shared/ui';
-  import { RoomMenu } from '$lib/features/home/components/room-menu';
+  import { RoomMenu } from '$lib/shared/components/room-menu';
   import { state as roomClientState } from '../client/core/state.svelte';
   import { getConnectionStatusView } from '../client/ui/status';
   import { roomUi, toggleChat } from '../room-ui.svelte';
@@ -54,9 +54,15 @@
         headingClass="room-heading-title-wrap"
         keepContentMounted
         onToast={showToast}
-        onOpenSettings={roomSettingsUi.isOwner ? handleOpenSettings : undefined}
       />
     </div>
+
+    {#if roomSettingsUi.isOwner}
+      <button class="room-chat-toggle" type="button" title="Настройки комнаты" onclick={handleOpenSettings}>
+        <Settings {...iconMd} aria-hidden="true" />
+        <span>Настройки</span>
+      </button>
+    {/if}
 
     {#if roomClientState.self?.accountUserId}
       <Popover placement="bottom-end" role="menu" ariaLabel="Позвать друга">

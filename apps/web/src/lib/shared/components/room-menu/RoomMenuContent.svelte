@@ -1,12 +1,12 @@
 <script lang="ts">
-  import { Bell, BellOff, Copy, Link, Settings } from '@lucide/svelte';
+  import { Bell, BellOff, Copy, Link } from '@lucide/svelte';
   import { Avatar, Ellipsis, PopoverDivider, PopoverMenuItem } from '$lib/shared/ui';
   import { iconMd } from '$lib/shared/ui/icons';
-  import { copyText } from '../../services/desktop-download';
+  import { copyText } from '$lib/shared/utils/clipboard';
   import {
     isRoomNotificationsMuted,
     updateRoomNotificationsMuted
-  } from '../../model/notification-preferences.svelte';
+  } from '$lib/shared/notifications/preferences.svelte';
 
   let {
     roomId,
@@ -14,8 +14,7 @@
     avatarUrl = null,
     close,
     canClose,
-    onToast,
-    onOpenSettings
+    onToast
   } = $props<{
     roomId: string;
     name: string;
@@ -23,7 +22,6 @@
     close: (restoreFocus?: boolean) => void;
     canClose?: (roomId: string) => boolean;
     onToast?: (message: string) => void;
-    onOpenSettings?: () => void;
   }>();
 
   const roomMuted = $derived(isRoomNotificationsMuted(roomId));
@@ -33,11 +31,13 @@
     const targetRoomId = roomId;
     try {
       await copyText(value);
+      if (!(canClose?.(targetRoomId) ?? true)) return;
       onToast?.(successMessage);
     } catch {
+      if (!(canClose?.(targetRoomId) ?? true)) return;
       onToast?.('Не удалось скопировать');
     }
-    if (canClose?.(targetRoomId) ?? true) close();
+    close();
   }
 
   async function toggleRoomMute(): Promise<void> {
@@ -46,20 +46,18 @@
     const targetRoomId = roomId;
     const nextMuted = !roomMuted;
     try {
-      await updateRoomNotificationsMuted(roomId, nextMuted);
+      await updateRoomNotificationsMuted(targetRoomId, nextMuted);
+      if (!(canClose?.(targetRoomId) ?? true)) return;
       onToast?.(nextMuted ? 'Уведомления комнаты выключены' : 'Уведомления комнаты включены');
-      if (canClose?.(targetRoomId) ?? true) close();
+      close();
     } catch {
+      if (!(canClose?.(targetRoomId) ?? true)) return;
       onToast?.('Не удалось изменить уведомления');
     } finally {
       muteSaving = false;
     }
   }
 
-  function openSettings(): void {
-    onOpenSettings?.();
-    close(false);
-  }
 </script>
 
 <div class="room-menu-content" data-room-menu-content>
@@ -94,17 +92,12 @@
     {/snippet}
   </PopoverMenuItem>
 
-  {#if onOpenSettings}
-    <PopoverDivider tight />
-    <PopoverMenuItem label="Настройки комнаты" onclick={openSettings}>
-      {#snippet icon()}<Settings {...iconMd} aria-hidden="true" />{/snippet}
-    </PopoverMenuItem>
-  {/if}
 </div>
 
 <style>
   .room-menu-content {
-    width: 264px;
+    width: min(264px, calc(100vw - 28px));
+    max-width: 100%;
   }
 
   .room-menu-head {

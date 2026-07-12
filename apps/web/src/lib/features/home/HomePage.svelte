@@ -13,7 +13,8 @@
   import DesktopAppCard from './components/DesktopAppCard.svelte';
   import LandingHero from './components/LandingHero.svelte';
   import LobbyPage from './LobbyPage.svelte';
-  import { copyText, triggerDesktopDownload } from './services/desktop-download';
+  import { copyText } from '$lib/shared/utils/clipboard';
+  import { triggerDesktopDownload } from './services/desktop-download';
   import { dismissToast, pushToast, toastState } from './model/toasts.svelte';
   import { syncPushNotificationState } from './model/push-notifications.svelte';
   import {

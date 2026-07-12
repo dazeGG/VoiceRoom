@@ -8,7 +8,7 @@
   import {
     isPeerNotificationsMuted,
     updatePeerNotificationsMuted
-  } from '../../model/notification-preferences.svelte';
+  } from '$lib/shared/notifications/preferences.svelte';
 
   let { friend, close, canClose, onToast } = $props<{
     friend: Friend;
@@ -101,7 +101,8 @@
 
 <style>
   .friend-menu-content {
-    width: 252px;
+    width: min(252px, calc(100vw - 28px));
+    max-width: 100%;
   }
 
   .friend-menu-head {

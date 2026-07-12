@@ -17,8 +17,7 @@
     headingClass = '',
     placement = 'bottom-start',
     keepContentMounted = false,
-    onToast,
-    onOpenSettings
+    onToast
   } = $props<{
     roomId: string;
     name: string;
@@ -32,7 +31,6 @@
     placement?: PopoverPlacement;
     keepContentMounted?: boolean;
     onToast?: (message: string) => void;
-    onOpenSettings?: () => void;
   }>();
 </script>
 
@@ -63,7 +61,14 @@
   {/snippet}
 
   {#snippet content({ close })}
-    <RoomMenuContent {roomId} {name} {avatarUrl} {close} {onToast} {onOpenSettings} />
+    <RoomMenuContent
+      {roomId}
+      {name}
+      {avatarUrl}
+      {close}
+      canClose={(targetRoomId) => targetRoomId === roomId}
+      {onToast}
+    />
   {/snippet}
 </Popover>
 

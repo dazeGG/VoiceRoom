@@ -3,7 +3,7 @@
   import type { AuthUser } from '$lib/api/auth';
   import { Avatar, Button } from '$lib/shared/ui';
   import { iconMd, iconSm, iconXs } from '$lib/shared/ui/icons';
-  import { copyText } from '../../services/desktop-download';
+  import { copyText } from '$lib/shared/utils/clipboard';
   import { friendName } from '../../model/lobby-format';
   import {
     friendsState,

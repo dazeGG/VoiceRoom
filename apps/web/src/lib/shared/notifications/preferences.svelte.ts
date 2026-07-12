@@ -1,3 +1,4 @@
+/** Application-wide notification preferences shared by lobby and active-room UI. */
 import {
   fetchNotificationPreferences,
   setDoNotDisturb,

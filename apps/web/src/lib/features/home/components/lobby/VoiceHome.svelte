@@ -7,7 +7,7 @@
   import { roomPeerAvatarItems } from '../../model/room-avatars';
   import { roomDisplayName } from '../../model/rooms';
   import { friendsState, showPeople } from '../../model/friends.svelte';
-  import { RoomMenuContent } from '../room-menu';
+  import { RoomMenuContent } from '$lib/shared/components/room-menu';
 
   let { rooms, onOpenRoom, onCreateRoom, onJoinCode, onToast } = $props<{
     rooms: OwnedRoom[];

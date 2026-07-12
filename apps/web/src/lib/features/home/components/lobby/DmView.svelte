@@ -15,7 +15,7 @@
     sendMessage,
     toggleProfile
   } from '../../model/friends.svelte';
-  import { isPeerNotificationsMuted, updatePeerNotificationsMuted } from '../../model/notification-preferences.svelte';
+  import { isPeerNotificationsMuted, updatePeerNotificationsMuted } from '$lib/shared/notifications/preferences.svelte';
 
   let { selfId } = $props<{ selfId: string }>();
 
