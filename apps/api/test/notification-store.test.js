@@ -48,6 +48,7 @@ test('notification preferences default private notifications off and update expl
   const alice = await makeUser(users, 'alice');
 
   assert.deepEqual(await notifications.getPreferences(alice.id), {
+    doNotDisturb: false,
     mutedPeerIds: [],
     mutedRoomIds: [],
     privateNotifications: false
@@ -66,6 +67,15 @@ test('notification preferences default private notifications off and update expl
   });
   assert.equal(disabled.status, 'updated');
   assert.equal(disabled.preferences.privateNotifications, false);
+
+  const dndEnabled = await notifications.setDoNotDisturb({ userId: alice.id, doNotDisturb: true });
+  assert.equal(dndEnabled.status, 'updated');
+  assert.equal(dndEnabled.preferences.doNotDisturb, true);
+  assert.equal((await users.getUserById(alice.id)).doNotDisturb, true);
+
+  const dndDisabled = await notifications.setDoNotDisturb({ userId: alice.id, doNotDisturb: false });
+  assert.equal(dndDisabled.status, 'updated');
+  assert.equal(dndDisabled.preferences.doNotDisturb, false);
 });
 
 test('notification store mutes and unmutes friend DMs with validation', async (t) => {

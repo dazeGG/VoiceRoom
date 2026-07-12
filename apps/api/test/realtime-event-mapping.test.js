@@ -74,6 +74,19 @@ test('account realtime maps additive notification envelopes', () => {
   assert.equal(accepted.payload.context.relationship, 'friend');
 });
 
+test('account realtime maps notification settings updates for same-account tabs', () => {
+  const preferences = {
+    doNotDisturb: true,
+    mutedPeerIds: ['user-2'],
+    mutedRoomIds: [],
+    privateNotifications: false
+  };
+  const event = toWsAccountEvent({ type: 'notification-settings-updated', preferences });
+
+  assert.equal(event.type, 'notification.settings.updated');
+  assert.deepEqual(event.payload.preferences, preferences);
+});
+
 test('room chat delete is not treated as a legacy peer event', () => {
   assert.equal(
     legacyPeerMessageToWs({ type: 'room.chat.deleted', payload: { roomId: 'room-1', messageId: 'msg-1' } }, 'room-1'),

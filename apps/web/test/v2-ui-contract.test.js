@@ -870,7 +870,7 @@ test('lobby v2 keeps dock in main area, preview chat, and people add-friend flow
   const controls = read('src/lib/features/room/styles/controls.css');
   const lobby = read('src/lib/features/home/LobbyPage.svelte');
   const sidebar = read('src/lib/features/home/components/lobby/Sidebar.svelte');
-  assert.match(sidebar, /import \{ Avatar, Badge \} from '\$lib\/shared\/ui'/);
+  assert.match(sidebar, /import \{ Avatar, Badge, Popover, PopoverMenuItem \} from '\$lib\/shared\/ui'/);
   assert.match(sidebar, /onOpenPeople/);
   assert.doesNotMatch(sidebar, /lastMessagePreview/);
   assert.doesNotMatch(sidebar, /entry\.lastMessage\.body/);

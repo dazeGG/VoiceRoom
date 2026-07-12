@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { LogOut, Mic, Pencil, User, X } from '@lucide/svelte';
+  import { Bell, LogOut, Mic, Pencil, User, X } from '@lucide/svelte';
   import { untrack } from 'svelte';
   import type { AuthUser } from '$lib/api/auth';
   import { iconMd, iconSm } from '$lib/shared/ui/icons';
@@ -32,6 +32,7 @@
     notificationPreferences,
     requestNotificationsFromUiAction,
     syncNotificationPermission,
+    updateDoNotDisturb,
     updatePrivateNotifications
   } from '../model/notification-preferences.svelte';
   import {
@@ -50,7 +51,7 @@
     onLogout
   } = $props<{
     open: boolean;
-    tab: 'profile' | 'sound';
+    tab: 'profile' | 'sound' | 'notifications';
     user: AuthUser | null;
     loggingOut?: boolean;
     onClose: () => void;
@@ -341,6 +342,19 @@
     }
   }
 
+  async function toggleDoNotDisturb(): Promise<void> {
+    if (notificationSaving) return;
+    notificationSaving = true;
+    try {
+      await updateDoNotDisturb(!notificationPreferences.doNotDisturb);
+      onToast(notificationPreferences.doNotDisturb ? 'Режим «Не беспокоить» включён' : 'Режим «Не беспокоить» выключен');
+    } catch {
+      onToast('Не удалось сохранить режим «Не беспокоить»');
+    } finally {
+      notificationSaving = false;
+    }
+  }
+
   function previewNotificationSound(): void {
     playPeerCue('join');
     window.setTimeout(() => playDirectMessageCue(), 180);
@@ -384,6 +398,10 @@
             <button class="settings-nav-item" type="button" data-active={tab === 'sound'} onclick={() => (tab = 'sound')}>
               <Mic {...iconMd} aria-hidden="true" />
               Звук
+            </button>
+            <button class="settings-nav-item" type="button" data-active={tab === 'notifications'} onclick={() => (tab = 'notifications')}>
+              <Bell {...iconMd} aria-hidden="true" />
+              Уведомления
             </button>
           </div>
           <button class="settings-nav-item settings-nav-item--danger" type="button" disabled={loggingOut} onclick={onLogout}>
@@ -454,7 +472,7 @@
                 Сохранить
               </button>
             </div>
-          {:else}
+          {:else if tab === 'sound'}
             <div class="settings-sound">
               <div>
                 <span class="settings-field-label">Микрофон</span>
@@ -529,52 +547,6 @@
                   </div>
                 </div>
               </div>
-
-
-              <div>
-                <div class="settings-gate-head">
-                  <span class="settings-field-label">Системные уведомления</span>
-                  <button
-                    class="settings-switch"
-                    type="button"
-                    role="switch"
-                    aria-checked={pushNotifications.supported ? pushNotifications.active : notificationPreferences.deliveryPermission === 'granted'}
-                    aria-label="Системные уведомления"
-                    disabled={pushNotifications.busy}
-                    onclick={() => void toggleBrowserNotifications()}
-                  >
-                    <span class="settings-switch-knob" aria-hidden="true"></span>
-                  </button>
-                </div>
-                <div class="settings-gate-hint">
-                  {#if pushNotifications.supported && pushNotifications.active}Включены. Новые ЛС и события друзей будут доставляться, даже когда вкладка закрыта.
-                  {:else if pushNotifications.supported && pushNotifications.loaded && !pushNotifications.serverEnabled}Отключены на сервере: настройте VAPID-ключи.
-                  {:else if notificationPreferences.deliveryPermission === 'granted'}Включены для открытой вкладки.
-                  {:else if notificationPreferences.browserPermission === 'denied'}Запрещены браузером — измените разрешение сайта в настройках браузера.
-                  {:else}Нажмите переключатель, чтобы запросить разрешение. Запрос выполняется только по вашему действию.{/if}
-                </div>
-              </div>
-
-              <div>
-                <div class="settings-gate-head">
-                  <span class="settings-field-label">Приватный текст уведомлений</span>
-                  <button
-                    class="settings-switch"
-                    type="button"
-                    role="switch"
-                    aria-checked={notificationPreferences.privateNotifications}
-                    aria-label="Приватный текст уведомлений"
-                    disabled={notificationSaving}
-                    onclick={() => void togglePrivateNotifications()}
-                  >
-                    <span class="settings-switch-knob" aria-hidden="true"></span>
-                  </button>
-                </div>
-                <div class="settings-gate-hint">
-                  Скрывает текст сообщений в системных уведомлениях.
-                </div>
-              </div>
-
               <div>
                 <div class="settings-sound-head">
                   <span class="settings-field-label">Звуки интерфейса</span>
@@ -609,6 +581,72 @@
                   <button type="button" onclick={() => previewCue('friend-accepted')}>Приняли</button>
                 </div>
               </div>
+            </div>
+          {:else}
+            <div class="settings-sound">
+              <div>
+                <div class="settings-gate-head">
+                  <span class="settings-field-label">Push этого браузера</span>
+                  <button
+                    class="settings-switch"
+                    type="button"
+                    role="switch"
+                    aria-checked={pushNotifications.supported ? pushNotifications.active : notificationPreferences.deliveryPermission === 'granted'}
+                    aria-label="Push этого браузера"
+                    disabled={pushNotifications.busy}
+                    onclick={() => void toggleBrowserNotifications()}
+                  >
+                    <span class="settings-switch-knob" aria-hidden="true"></span>
+                  </button>
+                </div>
+                <div class="settings-gate-hint">
+                  {#if pushNotifications.supported && pushNotifications.active}Включены. События будут доставляться, когда вкладка закрыта.
+                  {:else if pushNotifications.supported && pushNotifications.loaded && !pushNotifications.serverEnabled}Отключены на сервере: настройте VAPID-ключи.
+                  {:else if notificationPreferences.deliveryPermission === 'granted'}Включены для открытой вкладки.
+                  {:else if notificationPreferences.browserPermission === 'denied'}Запрещены браузером — измените разрешение сайта.
+                  {:else}Нажмите переключатель, чтобы включить. Запрос выполняется только по вашему действию.{/if}
+                </div>
+              </div>
+
+              <div>
+                <div class="settings-gate-head">
+                  <span class="settings-field-label">Не беспокоить</span>
+                  <button
+                    class="settings-switch"
+                    type="button"
+                    role="switch"
+                    aria-checked={notificationPreferences.doNotDisturb}
+                    aria-label="Не беспокоить"
+                    disabled={notificationSaving}
+                    onclick={() => void toggleDoNotDisturb()}
+                  >
+                    <span class="settings-switch-knob" aria-hidden="true"></span>
+                  </button>
+                </div>
+                <div class="settings-gate-hint">Глушит push и звуковые сигналы, пока режим включён.</div>
+              </div>
+
+              <div>
+                <div class="settings-gate-head">
+                  <span class="settings-field-label">Приватный текст уведомлений</span>
+                  <button
+                    class="settings-switch"
+                    type="button"
+                    role="switch"
+                    aria-checked={notificationPreferences.privateNotifications}
+                    aria-label="Приватный текст уведомлений"
+                    disabled={notificationSaving}
+                    onclick={() => void togglePrivateNotifications()}
+                  >
+                    <span class="settings-switch-knob" aria-hidden="true"></span>
+                  </button>
+                </div>
+                <div class="settings-gate-hint">Скрывает текст сообщений в системных уведомлениях.</div>
+              </div>
+
+              <button class="settings-sound-preview" type="button" onclick={() => (tab = 'sound')}>
+                Настроить громкость сигналов
+              </button>
             </div>
           {/if}
         </div>

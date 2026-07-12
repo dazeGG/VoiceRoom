@@ -365,7 +365,7 @@ test('notification preference routes require auth and expose defaults', async (t
     notifications: {
       async getPreferences(userId) {
         assert.equal(userId, '11111111-1111-4111-8111-111111111111');
-        return { mutedPeerIds: [], mutedRoomIds: [], privateNotifications: false };
+        return { doNotDisturb: false, mutedPeerIds: [], mutedRoomIds: [], privateNotifications: false };
       }
     }
   });
@@ -381,6 +381,7 @@ test('notification preference routes require auth and expose defaults', async (t
   });
   assert.equal(response.statusCode, 200);
   assert.deepEqual(response.json().preferences, {
+    doNotDisturb: false,
     mutedPeerIds: [],
     mutedRoomIds: [],
     privateNotifications: false
@@ -390,6 +391,7 @@ test('notification preference routes require auth and expose defaults', async (t
 test('notification mute and privacy routes call notification store and map statuses', async (t) => {
   const calls = [];
   const preferences = {
+    doNotDisturb: true,
     mutedPeerIds: ['22222222-2222-4222-8222-222222222222'],
     mutedRoomIds: ['room-1'],
     privateNotifications: true
@@ -416,6 +418,10 @@ test('notification mute and privacy routes call notification store and map statu
       },
       async setPrivateNotifications(input) {
         calls.push(['privacy', input]);
+        return { status: 'updated', preferences };
+      },
+      async setDoNotDisturb(input) {
+        calls.push(['dnd', input]);
         return { status: 'updated', preferences };
       }
     }
@@ -486,6 +492,23 @@ test('notification mute and privacy routes call notification store and map statu
     userId: '11111111-1111-4111-8111-111111111111',
     privateNotifications: true
   }]);
+
+  const dnd = await app.inject({
+    method: 'POST',
+    url: '/api/notifications/settings',
+    headers: {
+      cookie: 'vr_session=session-token',
+      host: 'voice.local',
+      origin: 'http://voice.local'
+    },
+    payload: { dnd: true }
+  });
+  assert.equal(dnd.statusCode, 200);
+  assert.equal(dnd.json().preferences.doNotDisturb, true);
+  assert.deepEqual(calls[4], ['dnd', {
+    userId: '11111111-1111-4111-8111-111111111111',
+    doNotDisturb: true
+  }]);
 });
 
 
@@ -516,6 +539,10 @@ test('notification mutation routes reject invalid booleans and targets before st
       async setPrivateNotifications(input) {
         calls.push(['privacy', input]);
         return { status: 'updated', preferences: { mutedPeerIds: [], mutedRoomIds: [], privateNotifications: false } };
+      },
+      async setDoNotDisturb(input) {
+        calls.push(['dnd', input]);
+        return { status: 'updated', preferences: { doNotDisturb: false, mutedPeerIds: [], mutedRoomIds: [], privateNotifications: false } };
       }
     }
   });
@@ -581,6 +608,15 @@ test('notification mutation routes reject invalid booleans and targets before st
   });
   assert.equal(invalidPrivacy.statusCode, 400);
   assert.deepEqual(invalidPrivacy.json(), { ok: false, error: 'privateNotifications must be a boolean' });
+
+  const invalidDnd = await app.inject({
+    method: 'POST',
+    url: '/api/notifications/settings',
+    headers,
+    payload: { dnd: 'true' }
+  });
+  assert.equal(invalidDnd.statusCode, 400);
+  assert.deepEqual(invalidDnd.json(), { ok: false, error: 'dnd must be a boolean' });
 
   assert.deepEqual(calls, []);
 });
