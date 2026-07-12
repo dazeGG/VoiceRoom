@@ -2434,10 +2434,9 @@ async function handleDeleteDmMessage(req, res, peerIdParam, messageId) {
     return;
   }
 
-  // Notify both sides so they can remove from UI and adjust unread if needed
-  const delEvent = { type: 'dm.message.deleted', messageId, peerUserId: peerId };
-  broadcastToUser(peerId, delEvent);
-  broadcastToUser(user.id, delEvent);
+  // Each side indexes the event by the other participant's id.
+  broadcastToUser(peerId, { type: 'dm.message.deleted', messageId, peerUserId: user.id });
+  broadcastToUser(user.id, { type: 'dm.message.deleted', messageId, peerUserId: peerId });
 
   // If the deleted msg was unread for the other side, they may recalc, we can also send dm-read like bump?
   // For simplicity, let client re-fetch count on delete event if needed.

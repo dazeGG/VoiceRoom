@@ -11,9 +11,10 @@ type ThreadMutation =
   | { type: 'delete'; peerId: string; messageId: string }
   | { type: 'read'; peerId: string; readAt: number };
 
-type MutationBatch = {
-  activeRequests: number;
+type ActiveResync = {
+  peerId: string;
   mutations: ThreadMutation[];
+  promise: Promise<void>;
 };
 
 type ThreadResyncOptions = {
@@ -23,11 +24,30 @@ type ThreadResyncOptions = {
   isOwnMessage: (message: DirectMessage) => boolean;
 };
 
-function upsertMessage(messages: DirectMessage[], message: DirectMessage): DirectMessage[] {
-  const index = messages.findIndex((existing) => existing.id === message.id);
-  if (index === -1) return [...messages, message];
+function newestTimestamp(left: number | null, right: number | null): number | null {
+  if (left == null) return right;
+  if (right == null) return left;
+  return Math.max(left, right);
+}
+
+function contentVersion(message: DirectMessage): number {
+  return message.editedAt ?? message.createdAt;
+}
+
+function mergeMessage(existing: DirectMessage, incoming: DirectMessage): DirectMessage {
+  // The HTTP snapshot can already contain a later edit than an event buffered
+  // while that request was in flight. Keep the snapshot on version ties and
+  // merge read state independently because it advances on a separate timeline.
+  const content = contentVersion(incoming) > contentVersion(existing) ? incoming : existing;
+  const readAt = newestTimestamp(existing.readAt, incoming.readAt);
+  return content.readAt === readAt ? content : { ...content, readAt };
+}
+
+function upsertMessage(messages: DirectMessage[], incoming: DirectMessage): DirectMessage[] {
+  const index = messages.findIndex((existing) => existing.id === incoming.id);
+  if (index === -1) return [...messages, incoming];
   const next = [...messages];
-  next[index] = message;
+  next[index] = mergeMessage(messages[index], incoming);
   return next;
 }
 
@@ -43,41 +63,50 @@ function replayMutations(
     } else if (mutation.type === 'delete') {
       messages = messages.filter((message) => message.id !== mutation.messageId);
     } else {
-      messages = messages.map((message) =>
-        isOwnMessage(message) && message.readAt == null ? { ...message, readAt: mutation.readAt } : message
-      );
+      messages = messages.map((message) => {
+        if (!isOwnMessage(message)) return message;
+        const readAt = newestTimestamp(message.readAt, mutation.readAt);
+        return message.readAt === readAt ? message : { ...message, readAt };
+      });
     }
   }
   return messages;
 }
 
 export function createDmThreadResyncCoordinator(options: ThreadResyncOptions) {
-  let latestRequestId = 0;
-  let mutationBatch: MutationBatch | null = null;
+  let activeResync: ActiveResync | null = null;
 
   function record(mutation: ThreadMutation): void {
-    mutationBatch?.mutations.push(mutation);
+    if (activeResync?.peerId === mutation.peerId) activeResync.mutations.push(mutation);
+  }
+
+  async function runResync(request: ActiveResync): Promise<void> {
+    try {
+      const snapshot = await options.fetchSnapshot(request.peerId);
+      if (activeResync !== request || !options.isCurrent(request.peerId)) return;
+      options.applySnapshot(request.peerId, {
+        peer: snapshot.peer,
+        messages: replayMutations(snapshot.messages, request.mutations, options.isOwnMessage)
+      });
+    } finally {
+      if (activeResync === request) activeResync = null;
+    }
   }
 
   return {
-    async resync(peerId: string): Promise<void> {
-      const requestId = ++latestRequestId;
-      const batch = mutationBatch ?? { activeRequests: 0, mutations: [] };
-      mutationBatch = batch;
-      batch.activeRequests += 1;
+    resync(peerId: string): Promise<void> {
+      if (activeResync?.peerId === peerId) return activeResync.promise;
 
-      try {
-        const snapshot = await options.fetchSnapshot(peerId);
-        if (requestId !== latestRequestId || !options.isCurrent(peerId)) return;
-        const mutations = batch.mutations.filter((mutation) => mutation.peerId === peerId);
-        options.applySnapshot(peerId, {
-          peer: snapshot.peer,
-          messages: replayMutations(snapshot.messages, mutations, options.isOwnMessage)
-        });
-      } finally {
-        batch.activeRequests -= 1;
-        if (mutationBatch === batch && batch.activeRequests === 0) mutationBatch = null;
-      }
+      let resolveRequest!: () => void;
+      let rejectRequest!: (reason?: unknown) => void;
+      const promise = new Promise<void>((resolve, reject) => {
+        resolveRequest = resolve;
+        rejectRequest = reject;
+      });
+      const request: ActiveResync = { peerId, mutations: [], promise };
+      activeResync = request;
+      void runResync(request).then(resolveRequest, rejectRequest);
+      return promise;
     },
 
     recordUpsert(peerId: string, message: DirectMessage): void {
@@ -93,8 +122,7 @@ export function createDmThreadResyncCoordinator(options: ThreadResyncOptions) {
     },
 
     invalidate(): void {
-      latestRequestId += 1;
-      mutationBatch = null;
+      activeResync = null;
     }
   };
 }

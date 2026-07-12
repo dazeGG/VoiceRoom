@@ -86,33 +86,99 @@ test('replays realtime message, edit, delete, and read mutations over a delayed 
   assert.equal(applied.messages.find((entry) => entry.id === 'own-unread').readAt, 9);
 });
 
-test('only the newest overlapping resync may replace the open thread', async () => {
+test('keeps a newer HTTP message version and independently preserves the newest read marker', async () => {
   const { createDmThreadResyncCoordinator } = await loadCoordinator();
-  const firstRequest = deferred();
-  const secondRequest = deferred();
-  const requests = [firstRequest, secondRequest];
+  const request = deferred();
+  let applied;
+  const coordinator = createDmThreadResyncCoordinator({
+    fetchSnapshot: () => request.promise,
+    isCurrent: () => true,
+    applySnapshot: (_peerId, snapshot) => {
+      applied = snapshot;
+    },
+    isOwnMessage: (entry) => entry.senderId === 'self'
+  });
+
+  const resync = coordinator.resync('peer');
+  coordinator.recordUpsert(
+    'peer',
+    message('server-newer', { body: 'stale buffered body', editedAt: 5, readAt: 7 })
+  );
+  coordinator.recordUpsert(
+    'peer',
+    message('event-newer', { body: 'new realtime body', editedAt: 6, readAt: 10 })
+  );
+  request.resolve({
+    peer: peer(),
+    messages: [
+      message('server-newer', { body: 'new HTTP body', editedAt: 10, readAt: 20 }),
+      message('event-newer', { body: 'old HTTP body', editedAt: 4, readAt: 20 })
+    ]
+  });
+  await resync;
+
+  const serverNewer = applied.messages.find((entry) => entry.id === 'server-newer');
+  assert.equal(serverNewer.body, 'new HTTP body');
+  assert.equal(serverNewer.editedAt, 10);
+  assert.equal(serverNewer.readAt, 20);
+  const eventNewer = applied.messages.find((entry) => entry.id === 'event-newer');
+  assert.equal(eventNewer.body, 'new realtime body');
+  assert.equal(eventNewer.editedAt, 6);
+  assert.equal(eventNewer.readAt, 20);
+});
+
+test('coalesces overlapping same-peer resync calls onto one successful request', async () => {
+  const { createDmThreadResyncCoordinator } = await loadCoordinator();
+  const request = deferred();
+  let fetchCount = 0;
   const applied = [];
   const coordinator = createDmThreadResyncCoordinator({
-    fetchSnapshot: () => requests.shift().promise,
+    fetchSnapshot: () => {
+      fetchCount += 1;
+      if (fetchCount > 1) return Promise.reject(new Error('newer overlapping fetch failed'));
+      return request.promise;
+    },
     isCurrent: () => true,
     applySnapshot: (_peerId, snapshot) => applied.push(snapshot.messages.map((entry) => entry.id)),
     isOwnMessage: (entry) => entry.senderId === 'self'
   });
 
   const first = coordinator.resync('peer');
-  coordinator.recordDelete('peer', 'deleted-before-overlap');
   const second = coordinator.resync('peer');
   coordinator.recordUpsert('peer', message('during-overlap'));
 
-  secondRequest.resolve({
-    peer: peer(),
-    messages: [message('newest-http'), message('deleted-before-overlap')]
-  });
-  await second;
-  firstRequest.resolve({ peer: peer(), messages: [message('stale-http')] });
-  await first;
+  assert.equal(first, second);
+  assert.equal(fetchCount, 1);
+  request.resolve({ peer: peer(), messages: [message('http')] });
+  await Promise.all([first, second]);
 
-  assert.deepEqual(applied, [['newest-http', 'during-overlap']]);
+  assert.deepEqual(applied, [['http', 'during-overlap']]);
+});
+
+test('a different-peer request invalidates an older response even if its peer becomes current again', async () => {
+  const { createDmThreadResyncCoordinator } = await loadCoordinator();
+  const firstRequest = deferred();
+  const secondRequest = deferred();
+  let activePeerId = 'first';
+  const applied = [];
+  const coordinator = createDmThreadResyncCoordinator({
+    fetchSnapshot: (peerId) => (peerId === 'first' ? firstRequest.promise : secondRequest.promise),
+    isCurrent: (peerId) => activePeerId === peerId,
+    applySnapshot: (peerId) => applied.push(peerId),
+    isOwnMessage: (entry) => entry.senderId === 'self'
+  });
+
+  const first = coordinator.resync('first');
+  activePeerId = 'second';
+  const second = coordinator.resync('second');
+  activePeerId = 'first';
+  firstRequest.resolve({ peer: peer('first'), messages: [message('stale')] });
+  await first;
+  activePeerId = 'second';
+  secondRequest.resolve({ peer: peer('second'), messages: [message('current')] });
+  await second;
+
+  assert.deepEqual(applied, ['second']);
 });
 
 test('ignores a delayed initial load after the active peer changes', async () => {
@@ -133,6 +199,27 @@ test('ignores a delayed initial load after the active peer changes', async () =>
   activePeerId = 'other-peer';
   request.resolve({ peer: peer(), messages: [message('stale')] });
   await initialLoad;
+
+  assert.equal(applied, false);
+});
+
+test('invalidate prevents a delayed request from applying', async () => {
+  const { createDmThreadResyncCoordinator } = await loadCoordinator();
+  const request = deferred();
+  let applied = false;
+  const coordinator = createDmThreadResyncCoordinator({
+    fetchSnapshot: () => request.promise,
+    isCurrent: () => true,
+    applySnapshot: () => {
+      applied = true;
+    },
+    isOwnMessage: (entry) => entry.senderId === 'self'
+  });
+
+  const resync = coordinator.resync('peer');
+  coordinator.invalidate();
+  request.resolve({ peer: peer(), messages: [message('stale')] });
+  await resync;
 
   assert.equal(applied, false);
 });
