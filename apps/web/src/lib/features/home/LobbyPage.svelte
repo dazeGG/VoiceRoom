@@ -21,7 +21,7 @@
   import PeopleView from './components/lobby/PeopleView.svelte';
   import RoomBrowseView from './components/lobby/RoomBrowseView.svelte';
   import RoomPreviewView from './components/lobby/RoomPreviewView.svelte';
-  import { friendsState, initLobby, showHome, showPeople } from './model/friends.svelte';
+  import { friendsState, initLobby, openDm, showHome, showPeople } from './model/friends.svelte';
   import {
     getActiveVoiceRoomId,
     clearDisconnectedHiddenEmbed,
@@ -144,6 +144,11 @@
     if (initialRoomId) {
       selectRoomForVoiceEntry(initialRoomId);
       friendsState.mode = 'rooms';
+    }
+    const initialDmId = new URLSearchParams(window.location.search).get('dm');
+    if (!initialRoomId && initialDmId) {
+      history.replaceState(null, '', '/');
+      void openDm(initialDmId).catch(() => onToast('Не удалось открыть диалог'));
     }
 
     window.addEventListener('voice-room:embedded-leave', onEmbeddedLeave);

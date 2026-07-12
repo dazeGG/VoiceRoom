@@ -57,6 +57,7 @@ test('lobby startup loads notification preferences and realtime notification eve
 
 test('notification permission request is isolated to explicit settings UI action', () => {
   const prefs = read('src/lib/features/home/model/notification-preferences.svelte.ts');
+  const push = read('src/lib/features/home/model/push-notifications.svelte.ts');
   const settings = read('src/lib/features/home/components/SettingsModal.svelte');
   const friends = read('src/lib/features/home/model/friends.svelte.ts');
 
@@ -73,11 +74,43 @@ test('notification permission request is isolated to explicit settings UI action
   assert.match(prefs, /deliveryPermission: NotificationPermissionState/);
   assert.match(prefs, /getNotificationDeliveryPermission\(\)/);
   assert.match(prefs, /export async function requestNotificationsFromUiAction/);
-  assert.match(settings, /onclick=\{\(\) => void requestBrowserNotifications\(\)\}/);
+  assert.match(settings, /onclick=\{\(\) => void toggleBrowserNotifications\(\)\}/);
+  assert.match(settings, /setPushNotificationsEnabled\(!pushNotifications\.active\)/);
+  assert.match(push, /Notification\.requestPermission\(\)/);
+  assert.match(push, /pushManager\.subscribe\(\{/);
   assert.match(settings, /notificationPreferences\.deliveryPermission === 'granted'/);
   assert.match(settings, /notificationPreferences\.browserPermission === 'denied'/);
   assert.match(settings, /Запрос выполняется только по вашему действию/);
   assert.doesNotMatch(friends, /requestNotificationPermissionFromUserAction|requestNotificationsFromUiAction/);
+});
+
+test('Web Push uses credentialed subscription endpoints and suppresses focused-window notifications', () => {
+  const api = read('src/lib/api/push.ts');
+  const worker = read('src/service-worker.ts');
+  const push = read('src/lib/features/home/model/push-notifications.svelte.ts');
+  const signOut = read('src/lib/features/home/model/sign-out.ts');
+  const home = read('src/lib/features/home/HomePage.svelte');
+  const roomRoute = read('src/routes/r/[roomId]/+page.svelte');
+
+  assert.match(api, /fetchJson<PushConfig>\('\/api\/push\/config'\)/);
+  assert.match(api, /postJsonAuth\('\/api\/push\/subscriptions', \{ subscription \}\)/);
+  assert.match(api, /del\('\/api\/push\/subscriptions', \{ endpoint \}\)/);
+  assert.match(push, /serviceWorker\.register\('\/service-worker\.js'/);
+  assert.match(push, /savePushSubscription\(subscription\.toJSON\(\)\)/);
+  assert.match(push, /detachPushSubscription/);
+  assert.match(push, /syncGeneration/);
+  assert.match(signOut, /detachPushSubscription\(\)\.catch/);
+  assert.match(signOut, /await logout\(\)/);
+  assert.match(home, /await signOut\(\)/);
+  assert.match(roomRoute, /await signOut\(\)/);
+  assert.match(worker, /client\.visibilityState === 'visible' && client\.focused/);
+  assert.match(worker, /showNotification/);
+  assert.match(worker, /notificationclick/);
+  assert.match(worker, /openWindow\(target\.href\)/);
+  assert.match(worker, /target\.origin !== self\.location\.origin/);
+  const lobby = read('src/lib/features/home/LobbyPage.svelte');
+  assert.match(lobby, /new URLSearchParams\(window\.location\.search\)\.get\('dm'\)/);
+  assert.match(lobby, /openDm\(initialDmId\)/);
 });
 
 test('mute toggles call state helpers that call the correct API clients', () => {

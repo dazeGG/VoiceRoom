@@ -35,6 +35,9 @@ const { avatarColorForPeerId, createRoomStore } = require('./lib/room-store');
 const { createUserStore, publicUser } = require('./lib/user-store');
 const { createFriendStore } = require('./lib/friend-store');
 const { createNotificationStore } = require('./lib/notification-store');
+const { createPushStore } = require('./lib/push-store');
+const { createPushService, shouldDeliverPush } = require('./lib/push-service');
+const { cleanPushEndpoint } = require('./lib/push-endpoint');
 const { startApiListener } = require('./lib/listen');
 const { runMigrations } = require('./lib/migrate');
 const {
@@ -81,6 +84,9 @@ const FRIEND_REQUEST_RATE_LIMIT = readEnvInt('FRIEND_REQUEST_RATE_LIMIT', 20, 0)
 const FRIEND_REQUEST_RATE_WINDOW_MS = readEnvInt('FRIEND_REQUEST_RATE_WINDOW_MS', 60000, 1000);
 const AVATAR_UPLOAD_RATE_LIMIT = readEnvInt('AVATAR_UPLOAD_RATE_LIMIT', 10, 0);
 const AVATAR_UPLOAD_RATE_WINDOW_MS = readEnvInt('AVATAR_UPLOAD_RATE_WINDOW_MS', 60000, 1000);
+const PUSH_SUBSCRIPTION_RATE_LIMIT = readEnvInt('PUSH_SUBSCRIPTION_RATE_LIMIT', 20, 0);
+const PUSH_SUBSCRIPTION_RATE_WINDOW_MS = readEnvInt('PUSH_SUBSCRIPTION_RATE_WINDOW_MS', 60000, 1000);
+const MAX_PUSH_SUBSCRIPTIONS_PER_USER = readEnvInt('MAX_PUSH_SUBSCRIPTIONS_PER_USER', 10, 1);
 // Cap concurrent realtime (WebSocket) connections per user so a single account
 // cannot pin an unbounded number of keep-alive connections.
 const MAX_REALTIME_STREAMS_PER_USER = readEnvInt('MAX_REALTIME_STREAMS_PER_USER', 8, 1);
@@ -98,6 +104,8 @@ let roomStore = null;
 let userStore = null;
 let friendStore = null;
 let notificationStore = null;
+let pushStore = null;
+let pushService = null;
 let avatarStorage = null;
 
 const presenceRooms = new Map();
@@ -149,6 +157,16 @@ function getNotificationStore() {
   return notificationStore;
 }
 
+function getPushStore() {
+  if (!pushStore) pushStore = createPushStore({ maxSubscriptionsPerUser: MAX_PUSH_SUBSCRIPTIONS_PER_USER });
+  return pushStore;
+}
+
+function getPushService() {
+  if (!pushService) pushService = createPushService({ store: getPushStore() });
+  return pushService;
+}
+
 function getAvatarStorage() {
   if (!avatarStorage) avatarStorage = createAvatarStorage();
   return avatarStorage;
@@ -176,11 +194,39 @@ function notificationActor(user) {
   };
 }
 
+async function queuePush(userId, payload, context = {}) {
+  try {
+    if (!getPushService().config.enabled) return;
+    const preferences = await getNotificationStore().getPreferences(userId);
+    if (!shouldDeliverPush(preferences, context)) return;
+    const body = preferences.privateNotifications && payload.privateBody
+      ? payload.privateBody
+      : payload.body;
+    const { privateBody: _privateBody, ...publicPayload } = payload;
+    await getPushService().sendToUser(userId, { ...publicPayload, body }, context);
+  } catch (error) {
+    console.error('Failed to send push notification:', error);
+  }
+}
+
+function sendFriendPush(userId, type, actor, dedupeKey) {
+  void queuePush(userId, {
+      type,
+      title: type === 'friend.accepted' ? 'Заявка принята' : 'Новая заявка в друзья',
+      body: actor.displayName || actor.login || 'VoiceRoom',
+      privateBody: 'Откройте VoiceRoom, чтобы посмотреть событие.',
+      tag: type,
+      dedupeKey,
+      url: '/'
+    });
+}
+
 async function broadcastDmNotification(recipientUserId, sender, message) {
   if (!recipientUserId || recipientUserId === sender?.id) return 0;
   try {
-    if (await getNotificationStore().isDmMuted({ userId: recipientUserId, peerUserId: sender.id })) return 0;
-    return broadcastToUser(recipientUserId, {
+    const preferences = await getNotificationStore().getPreferences(recipientUserId);
+    if (preferences.mutedPeerIds.includes(sender.id)) return 0;
+    const notification = {
       type: 'notification.dm.message',
       dedupeKey: `dm:${message.id}`,
       peer: notificationActor(sender),
@@ -189,7 +235,18 @@ async function broadcastDmNotification(recipientUserId, sender, message) {
         body: message.body,
         createdAt: message.createdAt
       }
-    });
+    };
+    const broadcastCount = broadcastToUser(recipientUserId, notification);
+    void queuePush(recipientUserId, {
+      type: 'dm.message',
+      title: sender.displayName || sender.login || 'Новое сообщение',
+      body: message.body,
+      privateBody: 'Откройте VoiceRoom, чтобы прочитать сообщение.',
+      tag: `dm:${sender.id}`,
+      dedupeKey: notification.dedupeKey,
+      url: `/?dm=${encodeURIComponent(sender.id)}`
+    }, { peerUserId: sender.id });
+    return broadcastCount;
   } catch (error) {
     console.error('Failed to broadcast DM notification:', error);
     return 0;
@@ -242,6 +299,10 @@ const friendRequestLimiter = createRateLimiter({
 const avatarUploadLimiter = createRateLimiter({
   limit: AVATAR_UPLOAD_RATE_LIMIT,
   windowMs: AVATAR_UPLOAD_RATE_WINDOW_MS
+});
+const pushSubscriptionLimiter = createRateLimiter({
+  limit: PUSH_SUBSCRIPTION_RATE_LIMIT,
+  windowMs: PUSH_SUBSCRIPTION_RATE_WINDOW_MS
 });
 
 function getLiveKitConnectSources() {
@@ -1777,6 +1838,7 @@ async function handleSendFriendRequest(req, res) {
         user: notificationActor(user),
         context: { userId: user.id, relationship: 'friend' }
       });
+      void sendFriendPush(result.user.id, 'friend.accepted', user, `friend-accepted:${result.user.id}:${user.id}`);
       sendJson(res, 200, { ok: true, status: 'accepted', user: result.user });
       return;
     default:
@@ -1787,6 +1849,7 @@ async function handleSendFriendRequest(req, res) {
         requester: notificationActor(user),
         requestId: result.requestId
       });
+      void sendFriendPush(result.user.id, 'friend.request', user, `friend-request:${result.requestId}`);
       sendJson(res, 201, { ok: true, status: 'sent', user: result.user });
   }
 }
@@ -1814,6 +1877,7 @@ async function handleRespondFriendRequest(req, res, requestId, action) {
       user: notificationActor(user),
       context: { userId: user.id, relationship: 'friend', requestId: id }
     });
+    void sendFriendPush(result.requesterId, 'friend.accepted', user, `friend-accepted:${result.requesterId}:${user.id}`);
     sendJson(res, 200, { ok: true, status: 'accepted', user: result.user });
     return;
   }
@@ -1948,6 +2012,70 @@ async function handleMarkDmRead(req, res, peerId) {
 }
 
 // --- Notification preferences -------------------------------------------
+
+function handlePushConfig(_req, res) {
+  sendJson(res, 200, getPushService().config);
+}
+
+function cleanPushSubscription(value) {
+  const endpoint = cleanPushEndpoint(value?.endpoint);
+  const p256dh = String(value?.keys?.p256dh || '').trim();
+  const auth = String(value?.keys?.auth || '').trim();
+  if (!endpoint || endpoint.length > 4096 || !p256dh || p256dh.length > 1024 || !auth || auth.length > 1024) return null;
+  return { endpoint, keys: { p256dh, auth } };
+}
+
+function checkPushSubscriptionRate(res, userId) {
+  const rate = pushSubscriptionLimiter.check(`push-subscription:${userId}`);
+  if (rate.allowed) return true;
+  sendJson(
+    res,
+    429,
+    { ok: false, error: 'Too many push subscription changes', retryAfterSeconds: rate.retryAfterSeconds },
+    { 'Retry-After': String(rate.retryAfterSeconds) }
+  );
+  return false;
+}
+
+async function handleCreatePushSubscription(req, res) {
+  const user = await requireSessionUser(req, res);
+  if (!user) return;
+  if (!getPushService().config.enabled) {
+    sendJson(res, 503, { ok: false, error: 'Push notifications are disabled' });
+    return;
+  }
+  const body = await readJsonBody(req);
+  const subscription = cleanPushSubscription(body.subscription);
+  if (!subscription) {
+    sendJson(res, 400, { ok: false, error: 'Invalid push subscription' });
+    return;
+  }
+  if (!checkPushSubscriptionRate(res, user.id)) return;
+  const stored = await getPushStore().upsert({
+    userId: user.id,
+    subscription,
+    metadata: { userAgent: String(req.headers?.['user-agent'] || '').slice(0, 512) }
+  });
+  if (!stored) {
+    sendJson(res, 409, { ok: false, error: 'Push endpoint belongs to another subscription' });
+    return;
+  }
+  sendJson(res, 201, { ok: true });
+}
+
+async function handleDeletePushSubscription(req, res) {
+  const user = await requireSessionUser(req, res);
+  if (!user) return;
+  const body = await readJsonBody(req);
+  const endpoint = cleanPushEndpoint(body.endpoint);
+  if (!endpoint) {
+    sendJson(res, 400, { ok: false, error: 'Invalid push endpoint' });
+    return;
+  }
+  if (!checkPushSubscriptionRate(res, user.id)) return;
+  await getPushStore().remove({ userId: user.id, endpoint });
+  sendJson(res, 200, { ok: true });
+}
 
 async function handleNotificationPreferences(req, res) {
   const user = await requireSessionUser(req, res);
@@ -2294,11 +2422,13 @@ function getActiveGuestWsCount() {
   return count;
 }
 
-function createApiApp({ store = null, users = null, friends = null, notifications = null, avatars = null } = {}) {
+function createApiApp({ store = null, users = null, friends = null, notifications = null, pushes = null, push = null, avatars = null } = {}) {
   if (store) roomStore = store;
   if (users) userStore = users;
   if (friends) friendStore = friends;
   if (notifications) notificationStore = notifications;
+  pushStore = pushes || null;
+  pushService = push || null;
   if (avatars) avatarStorage = avatars;
 
   const app = fastify({
@@ -2480,6 +2610,9 @@ function createApiApp({ store = null, users = null, friends = null, notification
     return handleSetRoomMute(req, res, request.params.roomId);
   }));
   app.put('/api/notifications/privacy', (request, reply) => runLegacyHandler(request, reply, handleSetPrivateNotifications));
+  app.get('/api/push/config', (request, reply) => runLegacyHandler(request, reply, handlePushConfig));
+  app.post('/api/push/subscriptions', (request, reply) => runLegacyHandler(request, reply, handleCreatePushSubscription));
+  app.delete('/api/push/subscriptions', (request, reply) => runLegacyHandler(request, reply, handleDeletePushSubscription));
 
   // Register after plugins finish loading so @fastify/websocket can wrap the handler.
   app.after(() => {
@@ -2522,7 +2655,8 @@ async function closeStores(logger = console) {
     roomStore?.close?.(),
     userStore?.close?.(),
     friendStore?.close?.(),
-    notificationStore?.close?.()
+    notificationStore?.close?.(),
+    pushStore?.close?.()
   ]).then((results) => {
     for (const result of results) {
       if (result.status === 'rejected') logger.error('Failed to close store:', result.reason);
@@ -2581,6 +2715,12 @@ async function bootstrap({ env = process.env, logger = console, exit = process.e
     userStore = createUserStore({ databaseUrl: database.url, logger, sessionTtlMs: SESSION_TTL_MS });
     friendStore = createFriendStore({ databaseUrl: database.url, logger });
     notificationStore = createNotificationStore({ databaseUrl: database.url, logger });
+    pushStore = createPushStore({
+      databaseUrl: database.url,
+      logger,
+      maxSubscriptionsPerUser: readEnvInt('MAX_PUSH_SUBSCRIPTIONS_PER_USER', 10, 1, env)
+    });
+    pushService = createPushService({ store: pushStore, env, logger });
     avatarStorage = createAvatarStorage({ uploadsDir: readUploadsDir(env) });
     const reconciliation = await reconcileAvatarStorage({
       storage: avatarStorage,
@@ -2595,6 +2735,8 @@ async function bootstrap({ env = process.env, logger = console, exit = process.e
       users: userStore,
       friends: friendStore,
       notifications: notificationStore,
+      pushes: pushStore,
+      push: pushService,
       avatars: avatarStorage
     });
     await server.app.ready();

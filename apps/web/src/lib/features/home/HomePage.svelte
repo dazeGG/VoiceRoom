@@ -2,8 +2,8 @@
   import { onMount } from 'svelte';
   import { createRoom } from '$lib/api/rooms';
   import { fetchDesktopRelease, type DesktopRelease } from '$lib/api/desktop';
-  import { logout } from '$lib/api/auth';
-  import { clearSession, loadSession, session } from '$lib/features/auth/session.svelte';
+  import { loadSession, session } from '$lib/features/auth/session.svelte';
+  import { signOut } from './model/sign-out';
   import Topbar from '$lib/shared/components/Topbar.svelte';
   import '$lib/shared/styles/typography.css';
   import '$lib/shared/styles/app.css';
@@ -15,6 +15,7 @@
   import LobbyPage from './LobbyPage.svelte';
   import { copyText, triggerDesktopDownload } from './services/desktop-download';
   import { dismissToast, pushToast, toastState } from './model/toasts.svelte';
+  import { syncPushNotificationState } from './model/push-notifications.svelte';
   import {
     DESKTOP_BUILDS,
     QUARANTINE_CMD,
@@ -48,6 +49,10 @@
   const selectedAsset = $derived(release?.assets[selectedBuildId] ?? null);
   const appMeta = $derived(formatDesktopReleaseMeta(selectedBuild, selectedAsset, release, releaseLoading, releaseError));
   const downloadLabel = $derived(desktopDownloadLabel(appDownloadState));
+
+  $effect(() => {
+    void syncPushNotificationState(user?.id ?? null);
+  });
 
   onMount(() => {
     document.body.dataset.screen = 'start';
@@ -106,8 +111,7 @@
     if (loggingOut) return;
     loggingOut = true;
     try {
-      await logout();
-      clearSession();
+      await signOut();
       showToast('Вы вышли из аккаунта');
     } catch (error) {
       showToast(error instanceof Error && error.message ? error.message : 'Не удалось выйти из аккаунта');
