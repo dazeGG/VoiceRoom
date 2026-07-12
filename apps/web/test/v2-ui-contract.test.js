@@ -1137,7 +1137,7 @@ test('remote participant audio preferences persist volume and local mute separat
   assert.match(audioBus, /createMediaStreamSource\(stream\)/);
   assert.match(audioBus, /Math\.min\(2, Math\.max\(0, options\.volume\)\)/);
   assert.match(audioBus, /createMediaStreamDestination\(\)/);
-  assert.match(audioBus, /sinkElement\.setSinkId\(sinkId\)/);
+  assert.match(audioBus, /sinkElement!\.setSinkId\(sinkId\)/);
   assert.doesNotMatch(playback, /createMediaElementSource|rebuildActiveVoiceAudioElementsForOutputSwitch|applyVoiceMediaElementVolume/);
 
   assert.match(participants, /applyRemoteParticipantAudioPreferences\(peer\)/);

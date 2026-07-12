@@ -1,6 +1,10 @@
 import { state } from '../core/state.svelte';
 import { OUTPUT_DEVICE_STORAGE_KEY } from '../core/config';
 import { getNotificationVolumeMultiplier, getStoredMasterVolume } from '../core/settings';
+import {
+  createAudioOutputTransitionQueue,
+  transitionAudioOutput
+} from './audio-output-transition.js';
 
 type AudioBusKind = 'voice' | 'media' | 'sfx';
 
@@ -24,7 +28,7 @@ const routedSources = new WeakMap<HTMLMediaElement, RoutedSource>();
 let graph: AudioBusGraph | null = null;
 let sinkDestination: MediaStreamAudioDestinationNode | null = null;
 let sinkElement: HTMLAudioElement | null = null;
-let outputSyncPromise: Promise<boolean> = Promise.resolve(true);
+const queueAudioOutputTransition = createAudioOutputTransitionQueue();
 
 function supportsContextSink(): boolean {
   return typeof AudioContext !== 'undefined' && 'setSinkId' in AudioContext.prototype;
@@ -51,7 +55,6 @@ function createGraph(): AudioBusGraph {
   media.connect(master);
   sfx.connect(master);
   master.connect(limiter);
-  limiter.connect(context.destination);
 
   graph = { context, limiter, master, media, sfx, voice };
   syncAudioBusSettings();
@@ -114,39 +117,38 @@ async function applyAudioBusOutput(sinkId: string): Promise<boolean> {
   const current = getAudioBusGraph();
 
   if (supportsContextSink()) {
-    connectDefaultOutput(current);
-    try {
-      await (current.context as AudioContext & { setSinkId: (id: string) => Promise<void> }).setSinkId(sinkId);
-      return true;
-    } catch (error) {
-      console.warn('Audio context output device unavailable', error);
-      if (sinkId) {
-        current.limiter.disconnect();
-        removeSinkElement();
-      }
-      return false;
-    }
+    removeSinkElement();
+    const contextWithSink = current.context as AudioContext & { setSinkId: (id: string) => Promise<void> };
+    const selected = await transitionAudioOutput({
+      disconnect: () => current.limiter.disconnect(),
+      select: () => contextWithSink.setSinkId(sinkId),
+      connect: () => current.limiter.connect(current.context.destination)
+    });
+    if (!selected) console.warn('Audio context output device unavailable');
+    return selected;
   }
 
   if (supportsElementSink()) {
+    if (!sinkId) {
+      connectDefaultOutput(current);
+      return true;
+    }
     sinkDestination ||= current.context.createMediaStreamDestination();
     sinkElement ||= document.createElement('audio');
     sinkElement.autoplay = true;
     (sinkElement as HTMLAudioElement & { playsInline: boolean }).playsInline = true;
-    sinkElement.srcObject = sinkDestination.stream;
-    if (!sinkElement.isConnected) document.body.append(sinkElement);
-    current.limiter.disconnect();
-    current.limiter.connect(sinkDestination);
-    try {
-      await sinkElement.setSinkId(sinkId);
-    } catch (error) {
-      console.warn('Audio element output device unavailable', error);
-      if (sinkId) {
-        current.limiter.disconnect();
-        removeSinkElement();
-      } else {
-        connectDefaultOutput(current);
+    const selected = await transitionAudioOutput({
+      disconnect: () => current.limiter.disconnect(),
+      select: () => sinkElement!.setSinkId(sinkId),
+      connect: () => {
+        sinkElement!.srcObject = sinkDestination!.stream;
+        if (!sinkElement!.isConnected) document.body.append(sinkElement!);
+        current.limiter.connect(sinkDestination!);
       }
+    });
+    if (!selected) {
+      console.warn('Audio element output device unavailable');
+      removeSinkElement();
       return false;
     }
 
@@ -159,14 +161,18 @@ async function applyAudioBusOutput(sinkId: string): Promise<boolean> {
     return true;
   }
 
+  if (sinkId) {
+    current.limiter.disconnect();
+    removeSinkElement();
+    return false;
+  }
   connectDefaultOutput(current);
-  return !sinkId;
+  return true;
 }
 
 export function syncAudioBusOutput(requestedId = state.outputDeviceId || ''): Promise<boolean> {
   const applyRequestedOutput = () => applyAudioBusOutput(requestedId);
-  outputSyncPromise = outputSyncPromise.then(applyRequestedOutput, applyRequestedOutput);
-  return outputSyncPromise;
+  return queueAudioOutputTransition(applyRequestedOutput);
 }
 
 function busNode(current: AudioBusGraph, kind: AudioBusKind): GainNode {

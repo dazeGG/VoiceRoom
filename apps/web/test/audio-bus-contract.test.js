@@ -16,12 +16,12 @@ test('audio bus owns one limited master graph and browser-specific sink strategi
   assert.match(bus, /limiter\.threshold\.value = -3/);
   assert.match(bus, /setSinkId\(sinkId\)/);
   assert.match(bus, /createMediaStreamDestination\(\)/);
-  assert.match(bus, /sinkElement\.srcObject = sinkDestination\.stream/);
-  assert.match(bus, /outputSyncPromise = outputSyncPromise\.then/);
+  assert.match(bus, /sinkElement!\.srcObject = sinkDestination!\.stream/);
+  assert.match(bus, /queueAudioOutputTransition\(applyRequestedOutput\)/);
   assert.match(bus, /applyAudioBusOutput\(requestedId\)/);
   assert.match(bus, /connectDefaultOutput\(current\)/);
   assert.match(bus, /state\.audioUnlockPending = true/);
-  assert.match(bus, /if \(sinkId\) \{\s*current\.limiter\.disconnect\(\);\s*removeSinkElement\(\)/);
+  assert.match(bus, /transitionAudioOutput\(\{/);
   assert.match(bus, /localStorage\.removeItem\(OUTPUT_DEVICE_STORAGE_KEY\)/);
   assert.match(bus, /await syncAudioBusOutput\(''\)/);
 });
