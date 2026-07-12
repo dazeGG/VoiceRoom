@@ -12,6 +12,10 @@ import {
   requestNotificationPermissionFromUserAction,
   type NotificationPermissionState
 } from '$lib/shared/notifications/router';
+import {
+  isDoNotDisturbPlaybackSuppressed,
+  setDoNotDisturbPlaybackSuppressed
+} from '$lib/shared/audio/playback-policy.svelte';
 
 export const notificationPreferences = $state<{
   loaded: boolean;
@@ -45,6 +49,7 @@ function applyPreferenceFields(preferences: NotificationPreferences): void {
   notificationPreferences.mutedRoomIds = [...preferences.mutedRoomIds];
   notificationPreferences.privateNotifications = preferences.privateNotifications;
   notificationPreferences.doNotDisturb = preferences.doNotDisturb;
+  setDoNotDisturbPlaybackSuppressed(preferences.doNotDisturb);
 }
 
 function applyPreferences(preferences: NotificationPreferences, userId: string): void {
@@ -73,6 +78,7 @@ export function resetNotificationPreferences(): void {
   notificationPreferences.mutedRoomIds = [];
   notificationPreferences.privateNotifications = false;
   notificationPreferences.doNotDisturb = false;
+  setDoNotDisturbPlaybackSuppressed(false);
   syncNotificationPermission();
 }
 
@@ -80,6 +86,7 @@ export function prepareNotificationPreferences(userId: string, doNotDisturb: boo
   resetNotificationPreferences();
   activeUserId = userId;
   notificationPreferences.doNotDisturb = Boolean(doNotDisturb);
+  setDoNotDisturbPlaybackSuppressed(doNotDisturb);
 }
 
 export function applyRealtimeNotificationPreferences(
@@ -171,7 +178,7 @@ export async function updateDoNotDisturb(doNotDisturb: boolean): Promise<void> {
 }
 
 export function isDoNotDisturbEnabled(): boolean {
-  return notificationPreferences.doNotDisturb;
+  return isDoNotDisturbPlaybackSuppressed();
 }
 
 export async function requestNotificationsFromUiAction(): Promise<NotificationPermissionState> {

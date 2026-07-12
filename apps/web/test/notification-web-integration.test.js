@@ -155,7 +155,7 @@ test('DND is server-backed, visible on avatars, and suppresses all cue playback'
   assert.match(settings, /tab === 'notifications'/);
   assert.match(settings, /Глушит push и звуковые сигналы/);
   assert.match(settings, /Настроить громкость сигналов/);
-  assert.match(cues, /isDoNotDisturbEnabled\(\) \|\| isAppPlaybackMuted\(\)/);
+  assert.match(cues, /isDoNotDisturbPlaybackSuppressed\(\) \|\| isAppPlaybackMuted\(\)/);
   assert.match(avatar, /ui-avatar-dot--dnd/);
   assert.match(lobby, /initLobby\(user\.id, user\.doNotDisturb\)/);
   assert.match(friends, /notification\.settings\.updated/);

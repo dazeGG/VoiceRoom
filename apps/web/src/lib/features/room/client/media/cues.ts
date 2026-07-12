@@ -4,7 +4,7 @@ import {
   STREAM_VIEWER_CUE_DEDUPE_MS
 } from '../core/config';
 import { getNotificationVolumeMultiplier } from '../core/settings';
-import { isDoNotDisturbEnabled } from '$lib/features/home/model/notification-preferences.svelte';
+import { isDoNotDisturbPlaybackSuppressed } from '$lib/shared/audio/playback-policy.svelte';
 import { state } from '../core/state.svelte';
 import { getSharedAudioContext, isAppPlaybackMuted, isLocalAppAudioSuppressed, queueAudioUnlock } from '../services/media-playback-service';
 
@@ -12,7 +12,7 @@ const peerJoinCueTimes = new Map<string, number>();
 const streamViewerCueTimes = new Map<string, number>();
 
 function isCuePlaybackSuppressed(): boolean {
-  return isDoNotDisturbEnabled() || isAppPlaybackMuted();
+  return isDoNotDisturbPlaybackSuppressed() || isAppPlaybackMuted();
 }
 
 function getCueGain(value: number): number {
@@ -225,7 +225,7 @@ export function playMicCue(muted: boolean): void {
 }
 
 export function playOutputCue(muted: boolean): void {
-  if (isDoNotDisturbEnabled() || isLocalAppAudioSuppressed()) return;
+  if (isDoNotDisturbPlaybackSuppressed() || isLocalAppAudioSuppressed()) return;
 
   try {
     const context = getSharedAudioContext();
