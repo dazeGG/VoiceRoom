@@ -157,7 +157,7 @@ test('coalesces overlapping same-peer resync calls onto one successful request',
   assert.deepEqual(applied, [['http', 'during-overlap']]);
 });
 
-test('forced reconnect starts a fresh fetch and ignores a stale same-peer response', async () => {
+test('queues a forced reconnect behind an active fetch and keeps one logical promise', async () => {
   const { createDmThreadResyncCoordinator } = await loadCoordinator();
   const firstRequest = deferred();
   const reconnectRequest = deferred();
@@ -177,19 +177,32 @@ test('forced reconnect starts a fresh fetch and ignores a stale same-peer respon
   const initial = coordinator.resync('peer');
   coordinator.recordUpsert('peer', message('buffered-before-reconnect', { createdAt: 3 }));
   const reconnect = coordinator.resync('peer', { force: true });
+  let settled = false;
+  void initial.then(
+    () => {
+      settled = true;
+    },
+    () => {
+      settled = true;
+    }
+  );
 
-  assert.notEqual(initial, reconnect);
-  assert.equal(fetchCount, 2);
+  assert.equal(initial, reconnect);
+  assert.equal(fetchCount, 1);
   firstRequest.resolve({ peer: peer(), messages: [message('stale-http')] });
-  await initial;
-  assert.deepEqual(applied, []);
-  reconnectRequest.resolve({ peer: peer(), messages: [message('fresh-http')] });
-  await reconnect;
+  await new Promise(setImmediate);
 
+  assert.equal(fetchCount, 2);
+  assert.deepEqual(applied, []);
+  assert.equal(settled, false);
+  reconnectRequest.resolve({ peer: peer(), messages: [message('fresh-http')] });
+  await initial;
+
+  assert.equal(settled, true);
   assert.deepEqual(applied, [['fresh-http', 'buffered-before-reconnect']]);
 });
 
-test('forced reconnect applies a fresh fetch when the superseded request rejects', async () => {
+test('queued reconnect recovers when the initial request rejects', async () => {
   const { createDmThreadResyncCoordinator } = await loadCoordinator();
   const firstRequest = deferred();
   const reconnectRequest = deferred();
@@ -208,14 +221,50 @@ test('forced reconnect applies a fresh fetch when the superseded request rejects
 
   const initial = coordinator.resync('peer');
   const reconnect = coordinator.resync('peer', { force: true });
-  const initialRejected = assert.rejects(initial, /initial fetch failed/);
+  assert.equal(initial, reconnect);
   firstRequest.reject(new Error('initial fetch failed'));
-  await initialRejected;
-  reconnectRequest.resolve({ peer: peer(), messages: [message('fresh-after-failure')] });
-  await reconnect;
+  await new Promise(setImmediate);
 
   assert.equal(fetchCount, 2);
+  reconnectRequest.resolve({ peer: peer(), messages: [message('fresh-after-failure')] });
+  await initial;
+
   assert.deepEqual(applied, [['fresh-after-failure']]);
+});
+
+test('uses a successful initial snapshot as fallback when the queued reconnect fails', async () => {
+  const { createDmThreadResyncCoordinator } = await loadCoordinator();
+  const firstRequest = deferred();
+  const reconnectRequest = deferred();
+  const requests = [firstRequest, reconnectRequest];
+  let fetchCount = 0;
+  const applied = [];
+  const coordinator = createDmThreadResyncCoordinator({
+    fetchSnapshot: () => {
+      fetchCount += 1;
+      return requests.shift().promise;
+    },
+    isCurrent: () => true,
+    applySnapshot: (_peerId, snapshot) => applied.push(snapshot.messages.map((entry) => entry.id)),
+    isOwnMessage: (entry) => entry.senderId === 'self'
+  });
+
+  const initial = coordinator.resync('peer');
+  coordinator.recordDelete('peer', 'deleted-before-reconnect');
+  const reconnect = coordinator.resync('peer', { force: true });
+  firstRequest.resolve({
+    peer: peer(),
+    messages: [message('fallback-http'), message('deleted-before-reconnect')]
+  });
+  await new Promise(setImmediate);
+
+  assert.equal(initial, reconnect);
+  assert.equal(fetchCount, 2);
+  assert.deepEqual(applied, []);
+  reconnectRequest.reject(new Error('reconnect fetch failed'));
+  await initial;
+
+  assert.deepEqual(applied, [['fallback-http']]);
 });
 
 test('a different-peer request invalidates an older response even if its peer becomes current again', async () => {

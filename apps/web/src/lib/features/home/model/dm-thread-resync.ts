@@ -14,6 +14,7 @@ type ThreadMutation =
 type ActiveResync = {
   peerId: string;
   mutations: ThreadMutation[];
+  forceRequested: boolean;
   promise: Promise<void>;
 };
 
@@ -85,13 +86,29 @@ export function createDmThreadResyncCoordinator(options: ThreadResyncOptions) {
   }
 
   async function runResync(request: ActiveResync): Promise<void> {
+    let latestSnapshot: ThreadSnapshot | null = null;
+    let lastError: unknown;
+
     try {
-      const snapshot = await options.fetchSnapshot(request.peerId);
-      if (activeResync !== request || !options.isCurrent(request.peerId)) return;
-      options.applySnapshot(request.peerId, {
-        peer: snapshot.peer,
-        messages: replayMutations(snapshot.messages, request.mutations, options.isOwnMessage)
-      });
+      while (activeResync === request) {
+        request.forceRequested = false;
+        try {
+          latestSnapshot = await options.fetchSnapshot(request.peerId);
+          lastError = undefined;
+        } catch (error) {
+          lastError = error;
+        }
+
+        if (activeResync !== request || !options.isCurrent(request.peerId)) return;
+        if (request.forceRequested) continue;
+        if (!latestSnapshot) throw lastError;
+
+        options.applySnapshot(request.peerId, {
+          peer: latestSnapshot.peer,
+          messages: replayMutations(latestSnapshot.messages, request.mutations, options.isOwnMessage)
+        });
+        return;
+      }
     } finally {
       if (activeResync === request) activeResync = null;
     }
@@ -99,12 +116,13 @@ export function createDmThreadResyncCoordinator(options: ThreadResyncOptions) {
 
   return {
     resync(peerId: string, requestOptions: ResyncRequestOptions = {}): Promise<void> {
-      if (activeResync?.peerId === peerId && !requestOptions.force) return activeResync.promise;
-
-      // A reconnect starts a new synchronization epoch even when an ordinary
-      // initial load is still pending. Carry its mutation log forward so events
-      // already observed by this client cannot disappear between the epochs.
-      const mutations = activeResync?.peerId === peerId ? [...activeResync.mutations] : [];
+      if (activeResync?.peerId === peerId) {
+        // Reconnect is one logical operation with an initial load. Queue a
+        // fresh snapshot without detaching the original caller or discarding a
+        // successful fallback when the refresh itself fails.
+        if (requestOptions.force) activeResync.forceRequested = true;
+        return activeResync.promise;
+      }
 
       let resolveRequest!: () => void;
       let rejectRequest!: (reason?: unknown) => void;
@@ -112,7 +130,7 @@ export function createDmThreadResyncCoordinator(options: ThreadResyncOptions) {
         resolveRequest = resolve;
         rejectRequest = reject;
       });
-      const request: ActiveResync = { peerId, mutations, promise };
+      const request: ActiveResync = { peerId, mutations: [], forceRequested: false, promise };
       activeResync = request;
       void runResync(request).then(resolveRequest, rejectRequest);
       return promise;
