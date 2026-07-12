@@ -2381,6 +2381,17 @@ async function handleEditRoomChatMessage(req, res, roomId, messageId) {
     return;
   }
 
+  const rate = roomChatLimiter.check(`${clientIp}:${roomId}`);
+  if (!rate.allowed) {
+    sendJson(
+      res,
+      429,
+      { ok: false, error: 'Too many chat messages', retryAfterSeconds: rate.retryAfterSeconds },
+      { 'Retry-After': String(rate.retryAfterSeconds) }
+    );
+    return;
+  }
+
   const message = await getRoomStore().editMessage(roomId, messageId, text);
   if (!message) {
     sendJson(res, 404, { ok: false, error: 'Message not found' });
@@ -2458,6 +2469,17 @@ async function handleEditDmMessage(req, res, peerIdParam, messageId) {
   }
   if (current.senderId !== user.id) {
     sendJson(res, 403, { ok: false, error: 'Можно редактировать только свои сообщения' });
+    return;
+  }
+
+  const rate = dmLimiter.check(user.id);
+  if (!rate.allowed) {
+    sendJson(
+      res,
+      429,
+      { ok: false, error: 'Слишком много сообщений, попробуйте позже', retryAfterSeconds: rate.retryAfterSeconds },
+      { 'Retry-After': String(rate.retryAfterSeconds) }
+    );
     return;
   }
 

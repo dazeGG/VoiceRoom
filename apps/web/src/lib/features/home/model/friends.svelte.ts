@@ -40,6 +40,7 @@ import {
   resetNotificationPreferences,
   syncNotificationPermission
 } from './notification-preferences.svelte';
+import { createDmThreadResyncCoordinator } from './dm-thread-resync';
 
 export type LobbyMode = 'friends' | 'rooms';
 export type LobbyView = 'home' | 'dm' | 'people';
@@ -78,6 +79,21 @@ let selfId = '';
 // snapshot so a later refreshFriends() still applies the correct online flags.
 let presenceReady = false;
 let onlineFriendIds = new Set<string>();
+const threadResync = createDmThreadResyncCoordinator({
+  fetchSnapshot: fetchThread,
+  isCurrent: (peerId) => friendsState.view === 'dm' && friendsState.selectedFriendId === peerId,
+  applySnapshot: (peerId, { peer, messages }) => {
+    friendsState.threadPeer = peer;
+    friendsState.thread = messages;
+    const friend = findFriend(peerId);
+    if (friend) {
+      friend.unreadCount = 0;
+      const last = messages.at(-1);
+      if (last) bumpLastMessage(peerId, last);
+    }
+  },
+  isOwnMessage: (message) => message.senderId === selfId
+});
 const MAX_PENDING_NOTIFICATION_EVENTS = 100;
 const PENDING_NOTIFICATION_TTL_MS = 60_000;
 let pendingNotificationEvents: Array<{ event: RealtimeEvent; receivedAt: number }> = [];
@@ -175,6 +191,7 @@ export function initLobby(currentUserId: string, initialDoNotDisturb = false): (
       notificationPreferencesRetryTimer = null;
     }
     pendingNotificationEvents = [];
+    threadResync.invalidate();
     for (const toastId of ringToastIds) dismissToast(toastId);
     ringToastIds.clear();
     resetNotificationPreferences();
@@ -206,10 +223,7 @@ export async function openDm(userId: string): Promise<void> {
   const friend = findFriend(userId);
   if (friend) friend.unreadCount = 0;
   try {
-    const { peer, messages } = await fetchThread(userId);
-    if (friendsState.selectedFriendId !== userId) return;
-    friendsState.threadPeer = peer;
-    friendsState.thread = messages;
+    await threadResync.resync(userId);
   } finally {
     if (friendsState.selectedFriendId === userId) friendsState.threadLoading = false;
   }
@@ -218,16 +232,7 @@ export async function openDm(userId: string): Promise<void> {
 async function resyncOpenThread(): Promise<void> {
   const peerId = friendsState.selectedFriendId;
   if (friendsState.view !== 'dm' || !peerId) return;
-  const { peer, messages } = await fetchThread(peerId);
-  if (friendsState.view !== 'dm' || friendsState.selectedFriendId !== peerId) return;
-  friendsState.threadPeer = peer;
-  friendsState.thread = messages;
-  const friend = findFriend(peerId);
-  if (friend) {
-    friend.unreadCount = 0;
-    const last = messages.at(-1);
-    if (last) bumpLastMessage(peerId, last);
-  }
+  await threadResync.resync(peerId);
 }
 
 export function toggleProfile(): void {
@@ -245,6 +250,7 @@ export async function sendMessage(text: string): Promise<void> {
   const body = text.trim();
   if (!peerId || !body) return;
   const message = await sendDirectMessage(peerId, body);
+  threadResync.recordUpsert(peerId, message);
   appendToThread(message);
   bumpLastMessage(peerId, message);
 }
@@ -253,6 +259,7 @@ export async function deleteMessage(messageId: string): Promise<void> {
   const peerId = friendsState.selectedFriendId;
   if (!peerId || !messageId) return;
   await deleteDirectMessage(peerId, messageId);
+  threadResync.recordDelete(peerId, messageId);
   // Remove locally; realtime delete will also arrive for other tabs. Refresh the
   // summary so last-message ordering and unread badges reflect soft-deletes.
   friendsState.thread = friendsState.thread.filter((m) => m.id !== messageId);
@@ -264,6 +271,7 @@ export async function editMessage(messageId: string, text: string): Promise<void
   const body = text.trim();
   if (!peerId || !messageId || !body) return;
   const message = await editDirectMessage(peerId, messageId, body);
+  threadResync.recordUpsert(peerId, message);
   applyEditedMessage(message);
 }
 
@@ -479,6 +487,7 @@ function handleRealtimeEvent(event: RealtimeEvent): void {
     case 'dm.message': {
       const { message } = event.payload;
       const peerId = message.senderId === selfId ? message.recipientId : message.senderId;
+      threadResync.recordUpsert(peerId, message);
       bumpLastMessage(peerId, message);
       const isOpenThread = friendsState.view === 'dm' && friendsState.selectedFriendId === peerId;
       if (isOpenThread) {
@@ -496,6 +505,7 @@ function handleRealtimeEvent(event: RealtimeEvent): void {
       // The peer read our messages: flip readAt on our sent bubbles.
       if (friendsState.view === 'dm' && friendsState.selectedFriendId === event.payload.userId) {
         const now = Date.now();
+        threadResync.recordRead(event.payload.userId, now);
         friendsState.thread = friendsState.thread.map((message) =>
           message.senderId === selfId && message.readAt == null ? { ...message, readAt: now } : message
         );
@@ -505,13 +515,18 @@ function handleRealtimeEvent(event: RealtimeEvent): void {
     case 'dm.message.deleted': {
       const mid = event.payload?.messageId;
       if (mid) {
+        const peerId = event.payload.peerUserId ?? friendsState.selectedFriendId;
+        if (peerId) threadResync.recordDelete(peerId, mid);
         friendsState.thread = friendsState.thread.filter((m) => m.id !== mid);
         void refreshFriends().catch(() => {});
       }
       break;
     }
     case 'dm.message.edited': {
-      applyEditedMessage(event.payload.message);
+      const { message } = event.payload;
+      const peerId = message.senderId === selfId ? message.recipientId : message.senderId;
+      threadResync.recordUpsert(peerId, message);
+      applyEditedMessage(message);
       break;
     }
     default:
