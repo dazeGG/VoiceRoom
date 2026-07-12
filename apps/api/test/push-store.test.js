@@ -56,3 +56,36 @@ test('push subscription CRUD upserts endpoints and isolates deletion by user', a
   })).status, 'updated');
   assert.deepEqual(await pushes.listByUserId(alice.id), []);
 });
+
+test('push subscriptions transactionally prune the oldest entries above the per-user cap', async (t) => {
+  const { cleanup, databaseUrl } = await createTestDatabase(t);
+  await runMigrations({ databaseUrl, logger: SILENT });
+  const users = createUserStore({ databaseUrl, logger: SILENT });
+  const pushes = createPushStore({ databaseUrl, logger: SILENT, maxSubscriptionsPerUser: 2 });
+  t.after(async () => { await pushes.close(); await users.close(); await cleanup(); });
+
+  const user = (await users.createUser({ login: 'push-limit', displayName: 'Push Limit', password: 'password123' })).user;
+  for (const token of ['one', 'two', 'three']) {
+    await pushes.upsert({
+      userId: user.id,
+      subscription: {
+        endpoint: `https://fcm.googleapis.com/fcm/send/${token}`,
+        keys: { p256dh: `key-${token}`, auth: `auth-${token}` }
+      }
+    });
+  }
+
+  assert.deepEqual(
+    (await pushes.listByUserId(user.id)).map((item) => item.endpoint),
+    ['https://fcm.googleapis.com/fcm/send/two', 'https://fcm.googleapis.com/fcm/send/three']
+  );
+
+  await Promise.all(['four', 'five', 'six', 'seven'].map((token) => pushes.upsert({
+    userId: user.id,
+    subscription: {
+      endpoint: `https://fcm.googleapis.com/fcm/send/${token}`,
+      keys: { p256dh: `key-${token}`, auth: `auth-${token}` }
+    }
+  })));
+  assert.equal((await pushes.listByUserId(user.id)).length, 2);
+});

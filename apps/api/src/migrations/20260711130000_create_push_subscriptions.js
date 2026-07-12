@@ -22,6 +22,9 @@ exports.up = (pgm) => {
   pgm.createIndex('push_subscriptions', ['user_id'], {
     name: 'push_subscriptions_user_idx'
   });
+  pgm.createIndex('push_subscriptions', ['user_id', 'created_at', 'id'], {
+    name: 'push_subscriptions_user_created_idx'
+  });
 };
 
 exports.down = (pgm) => {

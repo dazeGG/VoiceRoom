@@ -1,6 +1,15 @@
 'use strict';
 
 const webPush = require('web-push');
+const { cleanPushEndpoint, describePushEndpoint } = require('./push-endpoint');
+
+function describePushError(error) {
+  return {
+    errorName: String(error?.name || 'Error').slice(0, 80),
+    errorCode: String(error?.code || '').slice(0, 80),
+    statusCode: Number.isInteger(error?.statusCode) ? error.statusCode : undefined
+  };
+}
 
 function readPushConfig(env = process.env) {
   const vapidPublicKey = String(env.VAPID_PUBLIC_KEY || '').trim();
@@ -36,25 +45,35 @@ function createPushService({ store, env = process.env, client = webPush, logger 
     let sent = 0;
     let removed = 0;
     await Promise.all(subscriptions.map(async (subscription) => {
+      const endpoint = cleanPushEndpoint(subscription.endpoint);
+      if (!endpoint) {
+        try {
+          await store.removeByEndpoint(subscription.endpoint);
+          removed += 1;
+        } catch (cleanupError) {
+          logger.warn?.({ ...describePushError(cleanupError), ...describePushEndpoint(subscription.endpoint) }, 'Failed to remove invalid push subscription');
+        }
+        return;
+      }
       try {
         await client.sendNotification(
-          { endpoint: subscription.endpoint, keys: subscription.keys },
+          { endpoint, keys: subscription.keys },
           JSON.stringify(payload),
           Number.isFinite(ttl) ? { TTL: Math.max(0, Math.floor(ttl)) } : undefined
         );
         sent += 1;
-        await store.markSuccess(subscription.endpoint);
+        await store.markSuccess(endpoint);
       } catch (error) {
         if (error?.statusCode === 404 || error?.statusCode === 410) {
           try {
-            await store.removeByEndpoint(subscription.endpoint);
+            await store.removeByEndpoint(endpoint);
             removed += 1;
           } catch (cleanupError) {
-            logger.warn?.({ err: cleanupError, endpoint: subscription.endpoint }, 'Failed to remove expired push subscription');
+            logger.warn?.({ ...describePushError(cleanupError), ...describePushEndpoint(endpoint) }, 'Failed to remove expired push subscription');
           }
           return;
         }
-        logger.warn?.({ err: error, endpoint: subscription.endpoint }, 'Push delivery failed');
+        logger.warn?.({ ...describePushError(error), ...describePushEndpoint(endpoint) }, 'Push delivery failed');
       }
     }));
     return { enabled: true, sent, removed };

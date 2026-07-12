@@ -98,7 +98,9 @@ test('push subscription routes require auth and validate subscription payloads',
     store: createFakeStore(),
     users: {
       async getSessionUser(token) {
-        return token === 'push-session' ? { user: { id: 'user-1' } } : null;
+        if (token === 'push-session') return { user: { id: 'user-1' } };
+        if (token === 'push-rate-session') return { user: { id: 'user-rate-limit' } };
+        return null;
       }
     },
     pushes: {
@@ -123,7 +125,7 @@ test('push subscription routes require auth and validate subscription payloads',
     method: 'POST',
     url: '/api/push/subscriptions',
     headers: { cookie: 'vr_session=push-session', 'user-agent': 'test-browser' },
-    payload: { subscription: { endpoint: 'https://push.example/device', keys: { p256dh: 'key', auth: 'auth' } } }
+    payload: { subscription: { endpoint: 'https://fcm.googleapis.com/fcm/send/device', keys: { p256dh: 'key', auth: 'auth' } } }
   });
   assert.equal(created.statusCode, 201);
   assert.equal(writes[0].userId, 'user-1');
@@ -133,10 +135,37 @@ test('push subscription routes require auth and validate subscription payloads',
     method: 'DELETE',
     url: '/api/push/subscriptions',
     headers: { cookie: 'vr_session=push-session' },
-    payload: { endpoint: 'https://push.example/device' }
+    payload: { endpoint: 'https://fcm.googleapis.com/fcm/send/device' }
   });
   assert.equal(removed.statusCode, 200);
-  assert.deepEqual(removals[0], { userId: 'user-1', endpoint: 'https://push.example/device' });
+  assert.deepEqual(removals[0], { userId: 'user-1', endpoint: 'https://fcm.googleapis.com/fcm/send/device' });
+
+  for (const endpoint of ['https://127.0.0.1/private', 'https://fcm.googleapis.com.evil.example/device']) {
+    const rejected = await app.inject({
+      method: 'POST',
+      url: '/api/push/subscriptions',
+      headers: { cookie: 'vr_session=push-session' },
+      payload: { subscription: { endpoint, keys: { p256dh: 'key', auth: 'auth' } } }
+    });
+    assert.equal(rejected.statusCode, 400);
+  }
+
+  let limited;
+  for (let index = 0; index < 21; index += 1) {
+    limited = await app.inject({
+      method: 'POST',
+      url: '/api/push/subscriptions',
+      headers: { cookie: 'vr_session=push-rate-session' },
+      payload: {
+        subscription: {
+          endpoint: `https://fcm.googleapis.com/fcm/send/rate-${index}`,
+          keys: { p256dh: 'key', auth: 'auth' }
+        }
+      }
+    });
+  }
+  assert.equal(limited.statusCode, 429);
+  assert.equal(limited.headers['retry-after'], '60');
 });
 
 test('api metrics expose prometheus counters and runtime gauges', async (t) => {

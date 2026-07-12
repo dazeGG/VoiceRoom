@@ -56,6 +56,9 @@ test('push subscriptions migration defines durable endpoint ownership and cleanu
   assert.equal(table.columns.user_id.onDelete, 'CASCADE');
   assert.equal(table.columns.endpoint.unique, true);
   for (const column of ['p256dh', 'auth', 'created_at', 'last_success_at', 'metadata']) assert.ok(table.columns[column]);
+  assert.ok(pgm.calls.some((call) => call.type === 'createIndex'
+    && call.options.name === 'push_subscriptions_user_created_idx'
+    && call.columns.join(',') === 'user_id,created_at,id'));
 
   const down = createRecorder();
   pushMigration.down(down);

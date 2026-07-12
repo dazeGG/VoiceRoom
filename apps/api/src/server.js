@@ -37,6 +37,7 @@ const { createFriendStore } = require('./lib/friend-store');
 const { createNotificationStore } = require('./lib/notification-store');
 const { createPushStore } = require('./lib/push-store');
 const { createPushService, shouldDeliverPush } = require('./lib/push-service');
+const { cleanPushEndpoint } = require('./lib/push-endpoint');
 const { startApiListener } = require('./lib/listen');
 const { runMigrations } = require('./lib/migrate');
 const {
@@ -83,6 +84,9 @@ const FRIEND_REQUEST_RATE_LIMIT = readEnvInt('FRIEND_REQUEST_RATE_LIMIT', 20, 0)
 const FRIEND_REQUEST_RATE_WINDOW_MS = readEnvInt('FRIEND_REQUEST_RATE_WINDOW_MS', 60000, 1000);
 const AVATAR_UPLOAD_RATE_LIMIT = readEnvInt('AVATAR_UPLOAD_RATE_LIMIT', 10, 0);
 const AVATAR_UPLOAD_RATE_WINDOW_MS = readEnvInt('AVATAR_UPLOAD_RATE_WINDOW_MS', 60000, 1000);
+const PUSH_SUBSCRIPTION_RATE_LIMIT = readEnvInt('PUSH_SUBSCRIPTION_RATE_LIMIT', 20, 0);
+const PUSH_SUBSCRIPTION_RATE_WINDOW_MS = readEnvInt('PUSH_SUBSCRIPTION_RATE_WINDOW_MS', 60000, 1000);
+const MAX_PUSH_SUBSCRIPTIONS_PER_USER = readEnvInt('MAX_PUSH_SUBSCRIPTIONS_PER_USER', 10, 1);
 // Cap concurrent realtime (WebSocket) connections per user so a single account
 // cannot pin an unbounded number of keep-alive connections.
 const MAX_REALTIME_STREAMS_PER_USER = readEnvInt('MAX_REALTIME_STREAMS_PER_USER', 8, 1);
@@ -154,7 +158,7 @@ function getNotificationStore() {
 }
 
 function getPushStore() {
-  if (!pushStore) pushStore = createPushStore({});
+  if (!pushStore) pushStore = createPushStore({ maxSubscriptionsPerUser: MAX_PUSH_SUBSCRIPTIONS_PER_USER });
   return pushStore;
 }
 
@@ -295,6 +299,10 @@ const friendRequestLimiter = createRateLimiter({
 const avatarUploadLimiter = createRateLimiter({
   limit: AVATAR_UPLOAD_RATE_LIMIT,
   windowMs: AVATAR_UPLOAD_RATE_WINDOW_MS
+});
+const pushSubscriptionLimiter = createRateLimiter({
+  limit: PUSH_SUBSCRIPTION_RATE_LIMIT,
+  windowMs: PUSH_SUBSCRIPTION_RATE_WINDOW_MS
 });
 
 function getLiveKitConnectSources() {
@@ -2010,17 +2018,23 @@ function handlePushConfig(_req, res) {
 }
 
 function cleanPushSubscription(value) {
-  const endpoint = String(value?.endpoint || '').trim();
+  const endpoint = cleanPushEndpoint(value?.endpoint);
   const p256dh = String(value?.keys?.p256dh || '').trim();
   const auth = String(value?.keys?.auth || '').trim();
   if (!endpoint || endpoint.length > 4096 || !p256dh || p256dh.length > 1024 || !auth || auth.length > 1024) return null;
-  try {
-    const url = new URL(endpoint);
-    if (url.protocol !== 'https:') return null;
-  } catch {
-    return null;
-  }
   return { endpoint, keys: { p256dh, auth } };
+}
+
+function checkPushSubscriptionRate(res, userId) {
+  const rate = pushSubscriptionLimiter.check(`push-subscription:${userId}`);
+  if (rate.allowed) return true;
+  sendJson(
+    res,
+    429,
+    { ok: false, error: 'Too many push subscription changes', retryAfterSeconds: rate.retryAfterSeconds },
+    { 'Retry-After': String(rate.retryAfterSeconds) }
+  );
+  return false;
 }
 
 async function handleCreatePushSubscription(req, res) {
@@ -2036,6 +2050,7 @@ async function handleCreatePushSubscription(req, res) {
     sendJson(res, 400, { ok: false, error: 'Invalid push subscription' });
     return;
   }
+  if (!checkPushSubscriptionRate(res, user.id)) return;
   const stored = await getPushStore().upsert({
     userId: user.id,
     subscription,
@@ -2052,11 +2067,12 @@ async function handleDeletePushSubscription(req, res) {
   const user = await requireSessionUser(req, res);
   if (!user) return;
   const body = await readJsonBody(req);
-  const endpoint = String(body.endpoint || '').trim();
-  if (!endpoint || endpoint.length > 4096) {
+  const endpoint = cleanPushEndpoint(body.endpoint);
+  if (!endpoint) {
     sendJson(res, 400, { ok: false, error: 'Invalid push endpoint' });
     return;
   }
+  if (!checkPushSubscriptionRate(res, user.id)) return;
   await getPushStore().remove({ userId: user.id, endpoint });
   sendJson(res, 200, { ok: true });
 }
@@ -2699,7 +2715,11 @@ async function bootstrap({ env = process.env, logger = console, exit = process.e
     userStore = createUserStore({ databaseUrl: database.url, logger, sessionTtlMs: SESSION_TTL_MS });
     friendStore = createFriendStore({ databaseUrl: database.url, logger });
     notificationStore = createNotificationStore({ databaseUrl: database.url, logger });
-    pushStore = createPushStore({ databaseUrl: database.url, logger });
+    pushStore = createPushStore({
+      databaseUrl: database.url,
+      logger,
+      maxSubscriptionsPerUser: readEnvInt('MAX_PUSH_SUBSCRIPTIONS_PER_USER', 10, 1, env)
+    });
     pushService = createPushService({ store: pushStore, env, logger });
     avatarStorage = createAvatarStorage({ uploadsDir: readUploadsDir(env) });
     const reconciliation = await reconcileAvatarStorage({

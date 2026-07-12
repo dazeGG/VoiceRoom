@@ -1,7 +1,7 @@
 'use strict';
 
 const crypto = require('node:crypto');
-const { createDbPool } = require('./db');
+const { createDbPool, transaction } = require('./db');
 
 function createRowId() {
   return crypto.randomUUID?.() || crypto.randomBytes(16).toString('hex');
@@ -20,7 +20,8 @@ function mapSubscription(row) {
   };
 }
 
-function createPushStore({ databaseUrl, logger = console, pool } = {}) {
+function createPushStore({ databaseUrl, logger = console, pool, maxSubscriptionsPerUser = 10 } = {}) {
+  const subscriptionLimit = Math.max(1, Math.floor(Number(maxSubscriptionsPerUser) || 10));
   let activePool = pool || null;
   function getPool() {
     if (!activePool) activePool = createDbPool({ databaseUrl, logger });
@@ -32,21 +33,38 @@ function createPushStore({ databaseUrl, logger = console, pool } = {}) {
     const p256dh = String(subscription?.keys?.p256dh || '').trim();
     const auth = String(subscription?.keys?.auth || '').trim();
     if (!userId || !endpoint || !p256dh || !auth) return null;
-    const result = await getPool().query(
-      `INSERT INTO push_subscriptions (id, user_id, endpoint, p256dh, auth, created_at, metadata)
-       VALUES ($1, $2, $3, $4, $5, current_timestamp, $6::jsonb)
-       ON CONFLICT (endpoint) DO UPDATE
-       SET user_id = EXCLUDED.user_id,
-           p256dh = EXCLUDED.p256dh,
-           auth = EXCLUDED.auth,
-           metadata = EXCLUDED.metadata
-       WHERE push_subscriptions.user_id = EXCLUDED.user_id
-          OR (push_subscriptions.p256dh = EXCLUDED.p256dh
-              AND push_subscriptions.auth = EXCLUDED.auth)
-       RETURNING *`,
-      [createRowId(), userId, endpoint, p256dh, auth, JSON.stringify(metadata || {})]
-    );
-    return mapSubscription(result.rows[0]);
+    return transaction(getPool(), async (client) => {
+      await client.query(`SELECT id FROM users WHERE id = $1 FOR UPDATE`, [userId]);
+      const result = await client.query(
+        `INSERT INTO push_subscriptions (id, user_id, endpoint, p256dh, auth, created_at, metadata)
+         VALUES ($1, $2, $3, $4, $5, current_timestamp, $6::jsonb)
+         ON CONFLICT (endpoint) DO UPDATE
+         SET user_id = EXCLUDED.user_id,
+             p256dh = EXCLUDED.p256dh,
+             auth = EXCLUDED.auth,
+             created_at = current_timestamp,
+             metadata = EXCLUDED.metadata
+         WHERE push_subscriptions.user_id = EXCLUDED.user_id
+            OR (push_subscriptions.p256dh = EXCLUDED.p256dh
+                AND push_subscriptions.auth = EXCLUDED.auth)
+         RETURNING *`,
+        [createRowId(), userId, endpoint, p256dh, auth, JSON.stringify(metadata || {})]
+      );
+      const stored = result.rows[0];
+      if (!stored) return null;
+      await client.query(
+        `DELETE FROM push_subscriptions
+         WHERE id IN (
+           SELECT id
+           FROM push_subscriptions
+           WHERE user_id = $1
+           ORDER BY CASE WHEN endpoint = $2 THEN 0 ELSE 1 END, created_at DESC, id DESC
+           OFFSET $3
+         )`,
+        [userId, endpoint, subscriptionLimit]
+      );
+      return mapSubscription(stored);
+    });
   }
 
   async function remove({ userId, endpoint }) {

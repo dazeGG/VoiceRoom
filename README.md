@@ -170,6 +170,9 @@ GitHub-аналог GitLab CI/CD variables находится здесь:
 | `MAX_GUEST_STREAMS_PER_IP` | `8` | Max concurrent guest WebSocket streams per client IP. |
 | `MAX_ROOM_BANS` | `100` | Максимум активных блокировок на постоянную комнату. |
 | `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` | empty | Web Push VAPID credentials; when any value is missing, push degrades to disabled without failing API startup. |
+| `MAX_PUSH_SUBSCRIPTIONS_PER_USER` | `10` | Maximum retained Web Push subscriptions per account; older entries are pruned transactionally. |
+| `PUSH_SUBSCRIPTION_RATE_LIMIT` | `20` | Maximum Web Push subscription create/delete mutations per account per window. |
+| `PUSH_SUBSCRIPTION_RATE_WINDOW_MS` | `60000` | Web Push subscription mutation rate-limit window. |
 | `RING_RATE_LIMIT` / `RING_RATE_WINDOW_MS` | reserved | Reserved for planned Ring support. |
 | `RING_TTL_MS` | reserved | Reserved for planned Ring support. |
 | `WS_MAX_PAYLOAD_BYTES` | `65536` | Max inbound WebSocket frame payload. |

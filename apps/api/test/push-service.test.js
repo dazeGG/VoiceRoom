@@ -32,8 +32,8 @@ test('push service delivers to all subscriptions and records successes', async (
   const store = {
     async listByUserId() {
       return [
-        { endpoint: 'https://push.example/one', keys: { p256dh: 'a', auth: 'b' } },
-        { endpoint: 'https://push.example/two', keys: { p256dh: 'c', auth: 'd' } }
+        { endpoint: 'https://fcm.googleapis.com/fcm/send/one', keys: { p256dh: 'a', auth: 'b' } },
+        { endpoint: 'https://fcm.googleapis.com/fcm/send/two', keys: { p256dh: 'c', auth: 'd' } }
       ];
     },
     async markSuccess(endpoint) { marked.push(endpoint); },
@@ -49,7 +49,7 @@ test('push service delivers to all subscriptions and records successes', async (
   const result = await service.sendToUser('user-1', { type: 'ring' }, { ttl: 30 });
 
   assert.deepEqual(result, { enabled: true, sent: 2, removed: 0 });
-  assert.deepEqual(marked.sort(), ['https://push.example/one', 'https://push.example/two']);
+  assert.deepEqual(marked.sort(), ['https://fcm.googleapis.com/fcm/send/one', 'https://fcm.googleapis.com/fcm/send/two']);
   assert.equal(deliveries[0].payload.type, 'ring');
   assert.deepEqual(deliveries[0].options, { TTL: 30 });
 });
@@ -58,7 +58,7 @@ test('push service removes expired endpoints on 404/410 and tolerates other fail
   const removed = [];
   const store = {
     async listByUserId() {
-      return [410, 404, 500].map((status) => ({ endpoint: `https://push.example/${status}`, keys: { p256dh: 'a', auth: 'b' } }));
+      return [410, 404, 500].map((status) => ({ endpoint: `https://fcm.googleapis.com/fcm/send/${status}`, keys: { p256dh: 'a', auth: 'b' } }));
     },
     async markSuccess() {},
     async removeByEndpoint(endpoint) { removed.push(endpoint); }
@@ -75,7 +75,52 @@ test('push service removes expired endpoints on 404/410 and tolerates other fail
   const result = await service.sendToUser('user-1', { type: 'dm.message' });
 
   assert.deepEqual(result, { enabled: true, sent: 0, removed: 2 });
-  assert.deepEqual(removed.sort(), ['https://push.example/404', 'https://push.example/410']);
+  assert.deepEqual(removed.sort(), ['https://fcm.googleapis.com/fcm/send/404', 'https://fcm.googleapis.com/fcm/send/410']);
+});
+
+test('push service drops invalid stored endpoints without sending or leaking capability URLs', async () => {
+  const endpoint = 'https://internal.example/secret-capability-token';
+  const removed = [];
+  const logs = [];
+  const store = {
+    async listByUserId() { return [{ endpoint, keys: { p256dh: 'a', auth: 'b' } }]; },
+    async removeByEndpoint(value) { removed.push(value); }
+  };
+  const client = {
+    setVapidDetails() {},
+    async sendNotification() { assert.fail('invalid endpoint must not be contacted'); }
+  };
+  const logger = { warn(...items) { logs.push(items); } };
+  const service = createPushService({ store, env: ENABLED_ENV, client, logger });
+
+  assert.deepEqual(await service.sendToUser('user-1', { type: 'ring' }), { enabled: true, sent: 0, removed: 1 });
+  assert.deepEqual(removed, [endpoint]);
+  assert.doesNotMatch(JSON.stringify(logs), /secret-capability-token/);
+});
+
+test('push delivery failures log only a safe host and endpoint hash', async () => {
+  const endpoint = 'https://fcm.googleapis.com/fcm/send/secret-capability-token';
+  const logs = [];
+  const store = {
+    async listByUserId() { return [{ endpoint, keys: { p256dh: 'a', auth: 'b' } }]; },
+    async markSuccess() {},
+    async removeByEndpoint() {}
+  };
+  const client = {
+    setVapidDetails() {},
+    async sendNotification() {
+      const error = new Error(`failed to deliver ${endpoint}`);
+      error.statusCode = 500;
+      throw error;
+    }
+  };
+  const logger = { warn(...items) { logs.push(items); } };
+  const service = createPushService({ store, env: ENABLED_ENV, client, logger });
+
+  await service.sendToUser('user-1', { type: 'ring' });
+  assert.equal(logs[0][0].pushHost, 'fcm.googleapis.com');
+  assert.match(logs[0][0].pushEndpointHash, /^[a-f0-9]{16}$/);
+  assert.doesNotMatch(JSON.stringify(logs), /secret-capability-token/);
 });
 
 test('push service degrades cleanly when subscription storage is unavailable', async () => {
