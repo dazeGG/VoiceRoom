@@ -1,11 +1,10 @@
 import { state } from '../core/state.svelte';
 import { showToast } from './toast';
 import { clampStreamVolume, normalizeStoredStreamVolume, storeStreamVolume } from '../core/settings';
+import { MAX_STREAM_VOLUME } from '../core/config';
 import {
   isAppPlaybackMuted,
-  applyAudioOutputDevice,
-  applyScreenMediaElementVolume,
-  getAvailableScreenMediaElementVolumeMax
+  applyScreenMediaElementVolume
 } from '../services/media-playback-service';
 import {
   bumpScreenUiRevision,
@@ -44,7 +43,7 @@ export function syncScreenVideoAudio(): void {
   const peer = getActiveScreenPeer();
   const isLocalStream = Boolean(peer?.isLocal);
   const isRemoteStreamActive = Boolean(peer && !peer.isLocal && video.srcObject);
-  const maxStreamVolume = getAvailableScreenMediaElementVolumeMax();
+  const maxStreamVolume = MAX_STREAM_VOLUME;
   const streamVolume = clampStreamVolume(state.screenVolume, maxStreamVolume);
   if (state.screenVolume !== streamVolume) {
     state.screenVolume = normalizeStoredStreamVolume(state.screenVolume, maxStreamVolume);
@@ -55,8 +54,6 @@ export function syncScreenVideoAudio(): void {
     muted,
     volume: isLocalStream ? 0 : streamVolume
   });
-  applyAudioOutputDevice(video).catch(() => {});
-
   const slider = getStreamVolumeSlider();
   if (!isLocalStream && slider) {
     slider.max = String(maxStreamVolume * 100);
@@ -69,7 +66,7 @@ export function toggleScreenMute(): void {
   if (state.screenMuted || state.screenVolume <= 0) {
     state.screenMuted = false;
     if (state.screenVolume <= 0) state.screenVolume = 1;
-    state.screenVolume = storeStreamVolume(state.screenVolume, getAvailableScreenMediaElementVolumeMax());
+    state.screenVolume = storeStreamVolume(state.screenVolume, MAX_STREAM_VOLUME);
   } else {
     state.screenMuted = true;
   }
@@ -80,7 +77,7 @@ export function updateScreenVolumeFromSlider(): void {
   const slider = getStreamVolumeSlider();
   if (!slider) return;
   const nextVolume = Number(slider.value) / 100;
-  state.screenVolume = storeStreamVolume(nextVolume, getAvailableScreenMediaElementVolumeMax());
+  state.screenVolume = storeStreamVolume(nextVolume, MAX_STREAM_VOLUME);
   state.screenMuted = state.screenVolume <= 0;
   syncScreenVideoAudio();
 }

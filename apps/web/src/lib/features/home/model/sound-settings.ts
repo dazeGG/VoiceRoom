@@ -7,6 +7,7 @@
 // threshold means «off», there is no separate toggle).
 import {
   DEFAULT_GATE_THRESHOLD_DB,
+  DEFAULT_MASTER_VOLUME,
   DEFAULT_NOISE_MODE,
   DEFAULT_NOTIFICATION_VOLUME,
   GATE_THRESHOLD_DB_STORAGE_KEY,
@@ -23,12 +24,17 @@ import {
   clampGateThresholdDb,
   getDbMeterPosition,
   getNoiseMode,
+  getStoredMasterVolume,
   getStoredGateThresholdDb,
   getStoredNoiseMode,
   getStoredNotificationVolume
 } from '$lib/features/room/client/core/settings';
 
-export { getNotificationVolumeMultiplier, persistNotificationVolume } from '$lib/features/room/client/core/settings';
+export {
+  getNotificationVolumeMultiplier,
+  persistMasterVolume,
+  persistNotificationVolume
+} from '$lib/features/room/client/core/settings';
 
 export { GATE_THRESHOLD_MAX_DB, GATE_THRESHOLD_MIN_DB };
 
@@ -52,6 +58,7 @@ export interface SoundSettings {
   outputDeviceId: string;
   noiseMode: NoiseMode;
   gateThresholdDb: number;
+  masterVolume: number;
   notificationVolume: number;
 }
 
@@ -83,6 +90,7 @@ export function readSoundSettings(): SoundSettings {
   try {
     return {
       gateThresholdDb: getStoredGateThresholdDb(),
+      masterVolume: getStoredMasterVolume(),
       microphoneDeviceId: readDeviceId(MICROPHONE_DEVICE_STORAGE_KEY),
       noiseMode: getStoredNoiseMode(),
       outputDeviceId: readDeviceId(OUTPUT_DEVICE_STORAGE_KEY),
@@ -91,6 +99,7 @@ export function readSoundSettings(): SoundSettings {
   } catch {
     return {
       gateThresholdDb: DEFAULT_GATE_THRESHOLD_DB,
+      masterVolume: DEFAULT_MASTER_VOLUME,
       microphoneDeviceId: '',
       noiseMode: DEFAULT_NOISE_MODE,
       outputDeviceId: '',
