@@ -8,7 +8,14 @@
   import { clearSession, setUser } from '$lib/features/auth/session.svelte';
   import { state as roomClientState } from '$lib/features/room/client/core/state.svelte';
   import { playPeerCue, playDirectMessageCue, playFriendAcceptedCue, playFriendRequestCue, playMicCue, playRoomChatMessageCue, playStreamCue, playStreamViewerCue } from '$lib/features/room/client/media/cues';
-  import { Avatar, AvatarCropDialog, Select, Slider } from '$lib/shared/ui';
+  import {
+    Avatar,
+    AvatarCropDialog,
+    HotkeyRecorder,
+    Select,
+    Slider,
+    type HotkeyBinding
+  } from '$lib/shared/ui';
   import {
     enumerateMicrophones,
     enumerateSpeakers,
@@ -30,6 +37,15 @@
     type MicMeter
   } from '../model/sound-settings';
   import { syncAudioBusOutput, syncAudioBusSettings } from '$lib/features/room/client/services/audio-bus';
+  import { setMicrophoneVolume } from '$lib/features/room/client/services/microphone-service';
+  import { setMicrophoneMode } from '$lib/features/room/client/ui/controls';
+  import {
+    getDefaultHotkeyBinding,
+    readHotkeyBinding,
+    writeHotkeyBinding,
+    type HotkeyAction
+  } from '$lib/features/room/client/core/hotkeys';
+  import type { MicrophoneMode } from '$lib/features/room/client/core/config';
   import {
     notificationPreferences,
     requestNotificationsFromUiAction,
@@ -86,11 +102,18 @@
   let gateOn = $state(false);
   let gateDb = $state(GATE_DEFAULT_DB);
   let micLevelDb = $state(GATE_THRESHOLD_MIN_DB);
+  let micVolume = $state(100);
+  let microphoneMode = $state<MicrophoneMode>('open');
+  let micMuteHotkey = $state<HotkeyBinding | null>(null);
+  let outputMuteHotkey = $state<HotkeyBinding | null>(null);
+  let pushToTalkHotkey = $state<HotkeyBinding | null>(null);
   let masterVolume = $state(100);
   let notificationVolume = $state(100);
   let notificationSaving = $state(false);
   let confirmedSpeakerId = '';
   let speakerChangeGeneration = 0;
+  let activeMicMeter: MicMeter | null = null;
+  let latestMicVolume = 100;
 
   const label = $derived(user?.displayName?.trim() || user?.login || '');
 
@@ -135,6 +158,12 @@
     noiseMode = sound.noiseMode;
     gateOn = !isGateDisabled(sound.gateThresholdDb);
     gateDb = gateOn ? sound.gateThresholdDb : GATE_DEFAULT_DB;
+    micVolume = sound.microphoneVolume;
+    latestMicVolume = sound.microphoneVolume;
+    microphoneMode = sound.microphoneMode;
+    micMuteHotkey = readHotkeyBinding('mic-mute');
+    outputMuteHotkey = readHotkeyBinding('output-mute');
+    pushToTalkHotkey = readHotkeyBinding('push-to-talk');
     masterVolume = sound.masterVolume;
     notificationVolume = sound.notificationVolume;
     void enumerateMicrophones().then((list) => (microphones = list));
@@ -147,10 +176,12 @@
   $effect(() => {
     if (!(open && tab === 'sound' && gateOn)) return;
     const id = micId;
+    const inputVolume = untrack(() => micVolume);
+    latestMicVolume = inputVolume;
     let active = true;
     let meter: MicMeter | null = null;
 
-    void startMicMeter(id, (db) => {
+    void startMicMeter(id, inputVolume, (db) => {
       if (active) micLevelDb = db;
     }).then((started) => {
       if (!active) {
@@ -158,7 +189,9 @@
         return;
       }
       meter = started;
+      activeMicMeter = started;
       if (started) {
+        started.setVolume(latestMicVolume);
         // Permission granted: device labels are now readable, so refresh the lists.
         void enumerateMicrophones().then((list) => {
           if (active) microphones = list;
@@ -171,6 +204,7 @@
 
     return () => {
       active = false;
+      if (activeMicMeter === meter) activeMicMeter = null;
       meter?.stop();
       micLevelDb = GATE_THRESHOLD_MIN_DB;
     };
@@ -181,6 +215,7 @@
   }
 
   function onKeydown(event: KeyboardEvent): void {
+    if ((event.target as HTMLElement | null)?.closest?.('[data-hotkey-recorder-recording="true"]')) return;
     if (open && !cropOpen && event.key === 'Escape') onClose();
   }
 
@@ -335,6 +370,33 @@
   function onMasterVolumeChange(value: number): void {
     masterVolume = persistMasterVolume(value);
     syncAudioBusSettings();
+  }
+
+  function onMicrophoneVolumeChange(value: number): void {
+    micVolume = setMicrophoneVolume(value);
+    latestMicVolume = micVolume;
+    activeMicMeter?.setVolume(latestMicVolume);
+  }
+
+  function changeMicrophoneMode(mode: MicrophoneMode): void {
+    if (mode === 'push-to-talk' && !pushToTalkHotkey) {
+      onToast('Сначала назначьте клавишу Push-to-talk');
+      return;
+    }
+    microphoneMode = setMicrophoneMode(mode);
+  }
+
+  function changeHotkey(action: HotkeyAction, binding: HotkeyBinding | null): void {
+    writeHotkeyBinding(action, binding);
+    if (action === 'mic-mute') micMuteHotkey = binding;
+    if (action === 'output-mute') outputMuteHotkey = binding;
+    if (action === 'push-to-talk') {
+      pushToTalkHotkey = binding;
+      if (!binding && microphoneMode === 'push-to-talk') {
+        microphoneMode = setMicrophoneMode('open');
+        onToast('Push-to-talk выключен: клавиша не назначена');
+      }
+    }
   }
 
   async function toggleBrowserNotifications(): Promise<void> {
@@ -513,6 +575,24 @@
               </div>
 
               <div>
+                <div class="settings-sound-head">
+                  <span class="settings-field-label">Громкость микрофона</span>
+                  <output class="settings-sound-value">{Math.round(micVolume)}%</output>
+                </div>
+                <Slider
+                  bind:value={micVolume}
+                  min={0}
+                  max={200}
+                  defaultValue={100}
+                  step={1}
+                  ariaLabel="Громкость микрофона"
+                  ariaValueText={`${Math.round(micVolume)}%`}
+                  onValueChange={onMicrophoneVolumeChange}
+                />
+                <div class="settings-gate-hint">Усиление применяется после шумодава и гейта. Уровень выше 100% защищён лимитером.</div>
+              </div>
+
+              <div>
                 <span class="settings-field-label">Динамик</span>
                 <Select
                   bind:value={speakerId}
@@ -624,6 +704,67 @@
                   <button type="button" onclick={() => previewCue('friend-request')}>Заявка</button>
                   <button type="button" onclick={() => previewCue('friend-accepted')}>Приняли</button>
                 </div>
+              </div>
+
+              <div class="settings-hotkeys">
+                <div>
+                  <span class="settings-section-title">Режим микрофона</span>
+                  <div class="settings-mode-toggle" role="radiogroup" aria-label="Режим микрофона">
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={microphoneMode === 'open'}
+                      onclick={() => changeMicrophoneMode('open')}
+                    >Открытый микрофон</button>
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={microphoneMode === 'push-to-talk'}
+                      onclick={() => changeMicrophoneMode('push-to-talk')}
+                    >Push-to-talk</button>
+                  </div>
+                  <div class="settings-gate-hint">В Push-to-talk микрофон открыт, пока вы удерживаете назначенную клавишу.</div>
+                </div>
+
+                <div class="settings-hotkey-list">
+                  <div class="settings-hotkey-row">
+                    <div>
+                      <span class="settings-hotkey-label">Мьют микрофона</span>
+                      <span class="settings-hotkey-description">Включить или выключить микрофон</span>
+                    </div>
+                    <HotkeyRecorder
+                      bind:value={micMuteHotkey}
+                      defaultValue={getDefaultHotkeyBinding('mic-mute')}
+                      ariaLabel="Хоткей мьюта микрофона"
+                      onValueChange={(value) => changeHotkey('mic-mute', value)}
+                    />
+                  </div>
+                  <div class="settings-hotkey-row">
+                    <div>
+                      <span class="settings-hotkey-label">Мьют звука</span>
+                      <span class="settings-hotkey-description">Заглушить весь вывод и микрофон</span>
+                    </div>
+                    <HotkeyRecorder
+                      bind:value={outputMuteHotkey}
+                      defaultValue={getDefaultHotkeyBinding('output-mute')}
+                      ariaLabel="Хоткей мьюта звука"
+                      onValueChange={(value) => changeHotkey('output-mute', value)}
+                    />
+                  </div>
+                  <div class="settings-hotkey-row">
+                    <div>
+                      <span class="settings-hotkey-label">Push-to-talk</span>
+                      <span class="settings-hotkey-description">Удерживайте, чтобы открыть микрофон</span>
+                    </div>
+                    <HotkeyRecorder
+                      bind:value={pushToTalkHotkey}
+                      defaultValue={getDefaultHotkeyBinding('push-to-talk')}
+                      ariaLabel="Клавиша Push-to-talk"
+                      onValueChange={(value) => changeHotkey('push-to-talk', value)}
+                    />
+                  </div>
+                </div>
+                <div class="settings-hotkey-window-note">Горячие клавиши работают, только пока окно VoiceRoom активно.</div>
               </div>
             </div>
           {:else}

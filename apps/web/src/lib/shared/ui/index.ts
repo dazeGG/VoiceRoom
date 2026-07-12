@@ -2,6 +2,7 @@ export * from './Select';
 export * from './Popover';
 export * from './Ellipsis';
 export * from './Slider';
+export * from './HotkeyRecorder';
 export { AvatarStack } from './AvatarStack';
 export type { AvatarStackItem, AvatarStackProps } from './AvatarStack';
 export { Avatar } from './Avatar';

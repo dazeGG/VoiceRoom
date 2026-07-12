@@ -14,13 +14,15 @@ Voice Room - голосовая комната по ссылке с демонс
 - Демонстрация экрана без ручных настроек в вебе: старт по умолчанию `720p 30 FPS`, дальше приложение само снижает/возвращает качество по sender stats и состоянию соединения.
 - Внутренние профили стрима для автоадаптации (`540p`, `720p`, `1080p` при `15/30 FPS`) без UI выбора качества в браузере.
 - Просмотр стрима на основной сцене или сворачивание обратно в плитку.
-- Noise suppression, mic gate, выбор input/output устройств и локальный meter микрофона.
+- Noise suppression, mic gate, выбор input/output устройств, локальный meter и входной gain микрофона `0–200%` после шумодава/гейта с защитой от клиппинга.
+- Единый WebAudio-микшер для голосов, демонстрации экрана и сигналов: индивидуальная и мастер-громкость `0–200%`, limiter и переключение устройства вывода там, где это поддерживает браузер.
 - Защита создания комнат: rate limit, proof-of-work challenge и лимит пустых комнат.
-- Удаление сообщений: свои — везде; сервер также поддерживает soft-delete сообщений комнаты владельцем статичной комнаты.
-- Задел 2.4.x для модерации/Web Push/Ring/DND: миграции и часть контрактов могут присутствовать в коде, но end-to-end UI/API enforcement ещё не считается shipped-функциональностью.
-- Уведомления, пока приложение открыто: browser notification в вебе и native OS notification в desktop-оболочке для ЛС, сообщений в доступных комнатах, заявок в друзья и принятия заявки; можно выключить уведомления по человеку или комнате.
+- Модерация постоянной комнаты владельцем: kick, ban по аккаунту/IP и быстрое снятие только что созданного бана.
+- Удаление сообщений: свои — везде; владелец постоянной комнаты также может удалить сообщение комнаты. Свои сообщения комнаты и ЛС можно редактировать без ограничения по времени, с realtime-обновлением и отметкой «изменено».
+- Ring друзьям из комнаты с realtime-тостом, звуковым сигналом и переходом в комнату.
+- Уведомления в открытом приложении и Web Push для Ring, ЛС, заявок в друзья и их принятия. Поддерживаются DND, серверный mute ЛС, локальный mute комнат и отдельное включение push для текущего браузера.
 - Многострочный чат + кликабельные ссылки (http/https/www) в чате комнаты и ЛС.
-- Хоткей ⌘⇧M / Ctrl+Shift+M для мьюта микрофона в комнате.
+- Настраиваемые хоткеи для микрофона, звука приложения и Push-to-talk. Веб-PTT работает, пока вкладка активна, и отпускает микрофон с короткой задержкой, чтобы не обрезать конец фразы.
 
 ## Архитектура
 
@@ -318,7 +320,7 @@ npm run dev:down
 
 Desktop-оболочка живет в соседнем проекте `VoiceRoomDesktop`. Это веб-приложение остается основным продуктом, а desktop-проект отвечает за нативный выбор окна/экрана, desktop capture audio, управление fullscreen-окном и packaging.
 
-Когда VoiceRoom открыт внутри desktop-оболочки, web-клиент отправляет уведомления через узкий preload bridge `window.voiceRoomDesktopNotifications.show(...)`. Electron main process валидирует payload и показывает native OS notification; если bridge недоступен или сообщает `unsupported`, web-клиент откатывается к обычному browser `Notification`. Это **не** offline/Web Push доставка: уведомления приходят только пока web/desktop приложение открыто и подключено к account realtime stream.
+Когда VoiceRoom открыт внутри desktop-оболочки, web-клиент отправляет open-app уведомления через узкий preload bridge `window.voiceRoomDesktopNotifications.show(...)`. Electron main process валидирует payload и показывает native OS notification; если bridge недоступен или сообщает `unsupported`, web-клиент откатывается к обычному browser `Notification`. Этот bridge сам по себе не является offline-доставкой. Для залогиненных пользователей веб-клиент отдельно поддерживает Web Push через service worker и VAPID, если push включён для браузера и сервер настроен соответствующими ключами.
 
 ```bash
 cd ../VoiceRoomDesktop
@@ -332,11 +334,13 @@ npm run desktop
 
 Аккаунты служат для владения постоянными комнатами, а не для контроля доступа к ним. Пароли хешируются `scrypt` (встроенный `node:crypto`), сессия живёт в HttpOnly + SameSite=Lax cookie (`vr_session`) до `SESSION_TTL_MS`; попытки входа/регистрации ограничены `AUTH_RATE_LIMIT` на IP. Логин нормализуется в нижний регистр и уникален. При создании постоянной комнаты залогиненным пользователем она получает `owner_id`, и список «Мои комнаты» приходит с сервера (`GET /api/auth/rooms`). Временные комнаты остаются ownerless.
 
-Модерация/Web Push/Ring/DND в ветке 2.4.x находятся в staged-состоянии: схема `room_bans` и документация плана есть, но публичные kick/ban/ring/push/DND маршруты и UI enforcement не считаются shipped до отдельной end-to-end реализации и тестов. Shipped уведомления в текущей ветке — только open-app browser/native desktop notifications от account realtime stream; закрытое приложение, service-worker push и VAPID-доставка не поддерживаются. Текущая shipped-модель безопасности — ссылка/код комнаты, owner_id для постоянных комнат и серверная проверка удаления сообщений.
+Владелец постоянной комнаты может исключить участника или создать бан. Бан сопоставляется с аккаунтом участника, если он залогинен, и с IP текущей peer-сессии; он проверяется при входе, получении LiveKit-токена, отправке сообщения и подписке на preview. Kick/ban инвалидирует peer-сессию и удаляет участника из LiveKit. Это инструмент модерации, а не режим приватной комнаты: любой не заблокированный пользователь со ссылкой или кодом по-прежнему может войти.
+
+Web Push доступен только залогиненным пользователям и выключен без полного набора VAPID-ключей. Подписки хранятся на сервере; DND глушит push целиком, а mute треда ЛС — push только этого диалога. Mute комнаты остаётся локальной настройкой текущего устройства и влияет на open-app уведомления комнаты.
 
 Постоянные комнаты больше не считаются в IP-квоту: создавать их могут только авторизованные пользователи, а владение ограничено `MAX_STATIC_ROOMS_PER_USER` (по умолчанию 3). Временные ownerless-комнаты остаются ограничены по IP через `MAX_TEMP_ROOMS_PER_IP` (legacy `MAX_EMPTY_ROOMS_PER_IP` используется только как fallback для старых env-файлов), чтобы один IP не заполнял `MAX_ROOMS` пустыми временными комнатами.
 
-История чата хранится в PostgreSQL до `ROOM_CHAT_TTL_MS`, но на комнату сохраняется не больше `ROOM_CHAT_MAX_MESSAGES` последних сообщений. Отправка чата ограничена `ROOM_CHAT_RATE_LIMIT` на пару IP+room за `ROOM_CHAT_RATE_WINDOW_MS`. Для production важно совместно бэкапить volumes `postgres_data` и `uploads` и не терять `DATABASE_URL`/credentials. Cleanup expired chat/idle dynamic rooms runs on a process-local `ROOM_PRUNE_INTERVAL_MS` timer; old soft-deleted rows are physically purged by `RETENTION_PURGE_INTERVAL_MS` after `RETENTION_KEEP_DELETED_MS`. API currently assumes exactly one running instance: presence, WebSocket registry, POW challenges, cleanup timers and non-durable rate-limit state are process-local. Durable rooms/messages/users live in PostgreSQL, avatar files live on the API `uploads` volume, and room quota/capacity enforcement is transactional in PostgreSQL at room creation time. Horizontal scaling requires sticky WebSocket routing, shared avatar storage such as S3 and moving other process-local state to shared storage such as Redis/pub-sub.
+История чата хранится в PostgreSQL до `ROOM_CHAT_TTL_MS`, но на комнату сохраняется не больше `ROOM_CHAT_MAX_MESSAGES` последних сообщений. Отправка чата ограничена `ROOM_CHAT_RATE_LIMIT` на пару IP+room за `ROOM_CHAT_RATE_WINDOW_MS`. Для production важно совместно бэкапить volumes `postgres_data` и `uploads` и не терять `DATABASE_URL`/credentials. Cleanup expired chat/idle dynamic rooms runs on a process-local `ROOM_PRUNE_INTERVAL_MS` timer; old soft-deleted rows are physically purged by `RETENTION_PURGE_INTERVAL_MS` after `RETENTION_KEEP_DELETED_MS`. API currently assumes exactly one running instance: presence (including peer IP for moderation), WebSocket registry, Ring, POW challenges, cleanup timers and non-durable rate-limit state are process-local. Durable rooms/messages/users, bans and push subscriptions live in PostgreSQL, avatar files live on the API `uploads` volume, and room quota/capacity enforcement is transactional in PostgreSQL at room creation time. Horizontal scaling requires sticky WebSocket routing, shared avatar storage such as S3 and moving other process-local state to shared storage such as Redis/pub-sub.
 
 LiveKit снимает mesh-нагрузку с браузеров: каждый участник публикует микрофон и экран один раз в SFU, а остальные клиенты подписываются на tracks через LiveKit.
 

@@ -1,6 +1,6 @@
 // Direct (one-to-one) messages. Mirrors the /api/dm/:userId routes.
 
-import { del, getJsonAuth, postJsonAuth } from './http';
+import { del, getJsonAuth, patchJson, postJsonAuth } from './http';
 import type { PublicUser } from './friends';
 
 export interface DirectMessage {
@@ -9,17 +9,19 @@ export interface DirectMessage {
   recipientId: string;
   body: string;
   createdAt: number;
+  editedAt: number | null;
   readAt: number | null;
 }
 
 // Opening a thread also clears its unread badge server-side.
-export async function fetchThread(userId: string): Promise<{ peer: PublicUser; messages: DirectMessage[] }> {
-  const payload = await getJsonAuth<{ peer: PublicUser; messages?: DirectMessage[] }>(
+export async function fetchThread(userId: string): Promise<{ peer: PublicUser; messages: DirectMessage[]; muted: boolean }> {
+  const payload = await getJsonAuth<{ peer: PublicUser; messages?: DirectMessage[]; muted?: boolean }>(
     `/api/dm/${encodeURIComponent(userId)}`
   );
   return {
     peer: payload.peer,
-    messages: Array.isArray(payload.messages) ? payload.messages : []
+    messages: Array.isArray(payload.messages) ? payload.messages : [],
+    muted: Boolean(payload.muted)
   };
 }
 
@@ -38,4 +40,12 @@ export async function markThreadRead(userId: string): Promise<number> {
 export async function deleteDirectMessage(userId: string, messageId: string): Promise<{ ok: boolean; deleted?: boolean }> {
   const payload = await del<{ ok: boolean; deleted?: boolean }>(`/api/dm/${encodeURIComponent(userId)}/messages/${encodeURIComponent(messageId)}`);
   return payload;
+}
+
+export async function editDirectMessage(userId: string, messageId: string, text: string): Promise<DirectMessage> {
+  const payload = await patchJson<{ message: DirectMessage }>(
+    `/api/dm/${encodeURIComponent(userId)}/messages/${encodeURIComponent(messageId)}`,
+    { text }
+  );
+  return payload.message;
 }

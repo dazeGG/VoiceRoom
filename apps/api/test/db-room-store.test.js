@@ -151,12 +151,48 @@ test('appendMessage uses a transaction, verifies room existence, inserts row, an
   assert.deepEqual(message, {
     id: 'msg1', avatarAccent: null, avatarColorKey: message.avatarColorKey, avatarKey: null,
     roomId: 'room1', peerId: 'peer1', name: 'Ada', text: 'hello', createdAt: 1000, expiresAt: 2000,
-    authorUserId: null
+    authorUserId: null, editedAt: null
   });
   assert.ok(pool.calls.some((call) => call.text === 'BEGIN'));
   assert.ok(pool.calls.some((call) => /INSERT INTO room_messages/.test(call.text)));
   assert.ok(pool.calls.some((call) => /row_number\(\) OVER/.test(call.text)));
   assert.ok(pool.calls.some((call) => call.text === 'COMMIT'));
+});
+
+test('editMessage updates active room message text and maps its edit timestamp', async () => {
+  const pool = createFakePool((text, values) => {
+    assert.match(text, /UPDATE room_messages/);
+    assert.match(text, /edited_at = current_timestamp/);
+    assert.match(text, /deleted_at IS NULL/);
+    assert.deepEqual(values, ['room1', 'msg1', 'updated']);
+    return {
+      rows: [{
+        id: 'msg1', room_id: 'room1', peer_id: 'peer1', name: 'Ada', text: 'updated',
+        created_at: new Date(1000), edited_at: new Date(3000), expires_at: new Date(5000)
+      }],
+      rowCount: 1
+    };
+  });
+
+  const message = await createRoomStore({ pool }).editMessage('room1', 'msg1', 'updated');
+  assert.equal(message.text, 'updated');
+  assert.equal(message.editedAt, 3000);
+});
+
+test('room notification recipients ignore legacy server-side room mute rows', async () => {
+  const pool = createFakePool((text, values) => {
+    assert.match(text, /FROM room_memberships/);
+    assert.match(text, /FROM room_bookmarks/);
+    assert.doesNotMatch(text, /notification_room_mutes/);
+    assert.deepEqual(values, ['room1']);
+    return {
+      rows: [{ user_id: 'owner-user' }, { user_id: 'bookmark-user' }],
+      rowCount: 2
+    };
+  });
+
+  const recipients = await createRoomStore({ pool }).listNotificationRecipientUserIds('room1');
+  assert.deepEqual(recipients, ['owner-user', 'bookmark-user']);
 });
 
 test('listMessages soft-deletes expired messages before selecting active rows', async () => {

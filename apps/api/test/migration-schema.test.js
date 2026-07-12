@@ -13,6 +13,7 @@ const roomBansMigration = require('../src/migrations/20260710130000_add_room_ban
 const pushMigration = require('../src/migrations/20260711130000_create_push_subscriptions');
 const avatarMigration = require('../src/migrations/20260711120000_add_avatars');
 const dndMigration = require('../src/migrations/20260711140000_add_user_dnd');
+const messageEditingMigration = require('../src/migrations/20260712120000_add_message_editing');
 
 function createRecorder() {
   const calls = [];
@@ -64,6 +65,28 @@ test('push subscriptions migration defines durable endpoint ownership and cleanu
   const down = createRecorder();
   pushMigration.down(down);
   assert.ok(down.calls.some((call) => call.type === 'dropTable' && call.name === 'push_subscriptions'));
+});
+
+test('message editing migration adds reversible timestamps to room and direct messages', () => {
+  const pgm = createRecorder();
+  messageEditingMigration.up(pgm);
+  assert.deepEqual(
+    pgm.calls.filter((call) => call.type === 'addColumns').map((call) => [call.table, call.columns]),
+    [
+      ['room_messages', { edited_at: { type: 'timestamptz' } }],
+      ['direct_messages', { edited_at: { type: 'timestamptz' } }]
+    ]
+  );
+
+  const down = createRecorder();
+  messageEditingMigration.down(down);
+  assert.deepEqual(
+    down.calls.filter((call) => call.type === 'dropColumns').map((call) => [call.table, call.columns]),
+    [
+      ['direct_messages', ['edited_at']],
+      ['room_messages', ['edited_at']]
+    ]
+  );
 });
 
 test('rooms and room_messages migration captures durable schema contract', () => {

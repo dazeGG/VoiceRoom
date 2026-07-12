@@ -231,6 +231,36 @@ test('direct messages thread, unread counts, and read receipts', async (t) => {
   assert.equal((await friends.getUnreadCounts(bob.id))[alice.id], undefined);
 });
 
+test('direct messages can only be edited atomically by their original sender', async (t) => {
+  const { users, friends } = await createStores(t);
+  const alice = await makeUser(users, 'edit-alice');
+  const bob = await makeUser(users, 'edit-bob');
+
+  const sent = await friends.sendMessage({ senderId: alice.id, recipientId: bob.id, body: 'before' });
+  assert.equal(sent.editedAt, null);
+
+  const forbidden = await friends.editMessage({
+    messageId: sent.id,
+    senderId: bob.id,
+    recipientId: alice.id,
+    body: 'hijacked'
+  });
+  assert.equal(forbidden, null);
+
+  const edited = await friends.editMessage({
+    messageId: sent.id,
+    senderId: alice.id,
+    recipientId: bob.id,
+    body: 'after'
+  });
+  assert.equal(edited.body, 'after');
+  assert.equal(typeof edited.editedAt, 'number');
+
+  const thread = await friends.listThread({ userId: bob.id, peerId: alice.id });
+  assert.equal(thread[0].body, 'after');
+  assert.equal(thread[0].editedAt, edited.editedAt);
+});
+
 test('searchUsers matches login and display name, excludes self', async (t) => {
   const { users, friends } = await createStores(t);
   const alice = await makeUser(users, 'alice');

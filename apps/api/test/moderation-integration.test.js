@@ -23,6 +23,7 @@ const OWNER_COOKIE = 'vr_session=owner-session';
 const TARGET_COOKIE = 'vr_session=target-session';
 const OWNER_IP = '198.51.100.10';
 const TARGET_IP = '203.0.113.20';
+const GUEST_IP = '192.0.2.44';
 const ROOM_ID = 'moderation-room';
 const OWNER_PEER_ID = 'owner-peer';
 const TARGET_PEER_ID = 'target-peer';
@@ -260,6 +261,14 @@ test('kick and ban lifecycle enforces join, token, chat, preview, and undo', asy
   assert.match(ban.body.banId, /^[0-9a-f-]{36}$/i);
   await waitForWsType(target.frames, 'room.banned', (frame) => frame.payload.roomId === ROOM_ID, 5000, banStart);
 
+  const bannedState = await requestJson(fixture.socketPath, 'POST', '/api/state', {
+    body: { roomId: ROOM_ID, peerId: freshPeerId, sessionToken: freshPeerToken, muted: true },
+    cookie: TARGET_COOKIE,
+    ip: TARGET_IP
+  });
+  assert.equal(bannedState.status, 403);
+  assert.equal(bannedState.body.code, 'room_banned');
+
   const bannedJoinStart = target.frames.length;
   sendWs(target.ws, 'room.join', {
     roomId: ROOM_ID,
@@ -268,6 +277,24 @@ test('kick and ban lifecycle enforces join, token, chat, preview, and undo', asy
     name: 'Target'
   });
   await waitForWsType(target.frames, 'room.banned', (frame) => frame.payload.roomId === ROOM_ID, 5000, bannedJoinStart);
+
+  const sameIpGuest = openSession(fixture.socketPath, '', TARGET_IP);
+  sessions.push(sameIpGuest);
+  await sameIpGuest.ready;
+  const sameIpGuestStart = sameIpGuest.frames.length;
+  sendWs(sameIpGuest.ws, 'room.join', {
+    roomId: ROOM_ID,
+    peerId: 'same-ip-guest',
+    sessionToken: 's'.repeat(32),
+    name: 'Same IP guest'
+  });
+  await waitForWsType(
+    sameIpGuest.frames,
+    'room.banned',
+    (frame) => frame.payload.roomId === ROOM_ID,
+    5000,
+    sameIpGuestStart
+  );
 
   const token = await requestJson(fixture.socketPath, 'POST', '/api/livekit-token', {
     body: { roomId: ROOM_ID, peerId: 'target-after-ban', sessionToken: 'b'.repeat(32), name: 'Target' },
@@ -325,4 +352,51 @@ test('kick and ban lifecycle enforces join, token, chat, preview, and undo', asy
     sessionToken: 'u'.repeat(32),
     name: 'Target'
   });
+
+  const guest = openSession(fixture.socketPath, '', GUEST_IP);
+  sessions.push(guest);
+  await guest.ready;
+  const guestPeerId = 'guest-peer';
+  const guestPeerToken = 'g'.repeat(32);
+  await joinVoiceRoom(guest, {
+    roomId: ROOM_ID,
+    peerId: guestPeerId,
+    sessionToken: guestPeerToken,
+    name: 'Guest'
+  });
+
+  const guestBan = await requestJson(fixture.socketPath, 'POST', `/api/rooms/${ROOM_ID}/ban`, {
+    body: { peerId: guestPeerId },
+    cookie: OWNER_COOKIE,
+    ip: OWNER_IP
+  });
+  assert.equal(guestBan.status, 201);
+  const storedGuestBan = fixture.store.bans.get(guestBan.body.banId);
+  assert.equal(storedGuestBan.userId, null);
+  assert.equal(storedGuestBan.ip, GUEST_IP);
+
+  const guestState = await requestJson(fixture.socketPath, 'POST', '/api/state', {
+    body: { roomId: ROOM_ID, peerId: guestPeerId, sessionToken: guestPeerToken, muted: true },
+    ip: GUEST_IP
+  });
+  assert.equal(guestState.status, 403);
+  assert.equal(guestState.body.code, 'room_banned');
+
+  const returningGuest = openSession(fixture.socketPath, '', GUEST_IP);
+  sessions.push(returningGuest);
+  await returningGuest.ready;
+  const returningGuestStart = returningGuest.frames.length;
+  sendWs(returningGuest.ws, 'room.join', {
+    roomId: ROOM_ID,
+    peerId: 'returning-guest',
+    sessionToken: 'r'.repeat(32),
+    name: 'Returning guest'
+  });
+  await waitForWsType(
+    returningGuest.frames,
+    'room.banned',
+    (frame) => frame.payload.roomId === ROOM_ID,
+    5000,
+    returningGuestStart
+  );
 });

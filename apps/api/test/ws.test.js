@@ -405,6 +405,12 @@ test('ws sends additive account notification envelopes without regressing legacy
     body: { muted: true }
   });
   assert.equal(muted.status, 200);
+  const mutedThread = await request(socketPath, {
+    pathname: `/api/dm/${encodeURIComponent(aliceId)}`,
+    cookie: bobCookie
+  });
+  assert.equal(mutedThread.status, 200);
+  assert.equal(mutedThread.body.muted, true);
   const bobBeforeMutedDm = bob.frames.length;
   const mutedSent = await request(socketPath, {
     method: 'POST',
@@ -520,7 +526,7 @@ test('ring requires an active friend and delivers one expiring invitation per co
   bob.ws.close();
 });
 
-test('ws sends saved-room message notifications with room mutes and sender exclusion', async (t) => {
+test('ws sends saved-room message notifications with sender exclusion', async (t) => {
   const { dir, socketPath } = getSocketPath();
   const { cleanup, databaseUrl } = await createTestDatabase(t);
   const logs = { stdout: '', stderr: '' };
@@ -602,25 +608,6 @@ test('ws sends saved-room message notifications with room mutes and sender exclu
   assert.equal(notification.payload.sender.login, 'room-poster-notify');
   await delay(150);
   assert.equal(poster.frames.slice(posterBefore).some((frame) => frame.type === 'notification.room.message'), false);
-
-  const muted = await request(socketPath, {
-    method: 'PUT',
-    pathname: `/api/notifications/rooms/${encodeURIComponent(roomId)}/mute`,
-    cookie: ownerCookie,
-    body: { muted: true }
-  });
-  assert.equal(muted.status, 200);
-  const ownerBeforeMuted = owner.frames.length;
-  const mutedPost = await request(socketPath, {
-    method: 'POST',
-    pathname: `/api/rooms/${encodeURIComponent(roomId)}/chat`,
-    cookie: posterCookie,
-    body: { text: 'muted standup' }
-  });
-  assert.equal(mutedPost.status, 201);
-  await waitForWsType(owner.frames, 'room.chat.message', (frame) => frame.payload?.message?.id === mutedPost.body.message.id, 5000, ownerBeforeMuted);
-  await delay(150);
-  assert.equal(owner.frames.slice(ownerBeforeMuted).some((frame) => frame.type === 'notification.room.message'), false);
 
   owner.ws.close();
   poster.ws.close();

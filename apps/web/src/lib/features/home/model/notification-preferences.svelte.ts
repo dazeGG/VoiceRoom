@@ -3,7 +3,6 @@ import {
   setDoNotDisturb,
   setDmNotificationsMuted,
   setPrivateNotifications,
-  setRoomNotificationsMuted,
   type NotificationPreferences
 } from '$lib/api/notifications';
 import {
@@ -16,6 +15,33 @@ import {
   isDoNotDisturbPlaybackSuppressed,
   setDoNotDisturbPlaybackSuppressed
 } from '$lib/shared/audio/playback-policy.svelte';
+
+export const MUTED_ROOM_NOTIFICATIONS_STORAGE_KEY = 'voice-room:muted-room-notifications';
+
+function getLocalStorage(): Storage | null {
+  try {
+    return typeof globalThis.localStorage === 'undefined' ? null : globalThis.localStorage;
+  } catch {
+    return null;
+  }
+}
+
+function readMutedRoomIds(): string[] {
+  try {
+    const parsed = JSON.parse(getLocalStorage()?.getItem(MUTED_ROOM_NOTIFICATIONS_STORAGE_KEY) || '[]');
+    if (!Array.isArray(parsed)) return [];
+    return [...new Set(parsed.filter((value): value is string => typeof value === 'string' && value.length > 0))].sort();
+  } catch {
+    return [];
+  }
+}
+
+function persistMutedRoomIds(roomIds: string[]): void {
+  const storage = getLocalStorage();
+  if (!storage) return;
+  if (roomIds.length > 0) storage.setItem(MUTED_ROOM_NOTIFICATIONS_STORAGE_KEY, JSON.stringify(roomIds));
+  else storage.removeItem(MUTED_ROOM_NOTIFICATIONS_STORAGE_KEY);
+}
 
 export const notificationPreferences = $state<{
   loaded: boolean;
@@ -34,7 +60,7 @@ export const notificationPreferences = $state<{
   loading: false,
   loadingForUserId: null,
   mutedPeerIds: [],
-  mutedRoomIds: [],
+  mutedRoomIds: readMutedRoomIds(),
   privateNotifications: false,
   doNotDisturb: false,
   browserPermission: 'unsupported',
@@ -46,7 +72,6 @@ let preferenceGeneration = 0;
 
 function applyPreferenceFields(preferences: NotificationPreferences): void {
   notificationPreferences.mutedPeerIds = [...preferences.mutedPeerIds];
-  notificationPreferences.mutedRoomIds = [...preferences.mutedRoomIds];
   notificationPreferences.privateNotifications = preferences.privateNotifications;
   notificationPreferences.doNotDisturb = preferences.doNotDisturb;
   setDoNotDisturbPlaybackSuppressed(preferences.doNotDisturb);
@@ -75,7 +100,7 @@ export function resetNotificationPreferences(): void {
   notificationPreferences.loading = false;
   notificationPreferences.loadingForUserId = null;
   notificationPreferences.mutedPeerIds = [];
-  notificationPreferences.mutedRoomIds = [];
+  notificationPreferences.mutedRoomIds = readMutedRoomIds();
   notificationPreferences.privateNotifications = false;
   notificationPreferences.doNotDisturb = false;
   setDoNotDisturbPlaybackSuppressed(false);
@@ -157,10 +182,12 @@ export async function updatePeerNotificationsMuted(userId: string, muted: boolea
 }
 
 export async function updateRoomNotificationsMuted(roomId: string, muted: boolean): Promise<void> {
-  const accountUserId = activeUserId;
-  const generation = preferenceGeneration;
-  const payload = await setRoomNotificationsMuted(roomId, muted);
-  applyMutationPreferences(payload.preferences, accountUserId, generation);
+  if (!roomId) return;
+  const next = new Set(notificationPreferences.mutedRoomIds);
+  if (muted) next.add(roomId);
+  else next.delete(roomId);
+  notificationPreferences.mutedRoomIds = [...next].sort();
+  persistMutedRoomIds(notificationPreferences.mutedRoomIds);
 }
 
 export async function updatePrivateNotifications(privateNotifications: boolean): Promise<void> {

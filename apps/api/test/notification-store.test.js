@@ -6,7 +6,6 @@ const crypto = require('node:crypto');
 
 const { createFriendStore } = require('../src/lib/friend-store');
 const { createNotificationStore } = require('../src/lib/notification-store');
-const { createRoomStore } = require('../src/lib/room-store');
 const { createUserStore } = require('../src/lib/user-store');
 const { runMigrations } = require('../src/lib/migrate');
 const { createTestDatabase } = require('./db-harness');
@@ -18,16 +17,14 @@ async function createStores(t) {
   await runMigrations({ databaseUrl, logger: SILENT });
   const users = createUserStore({ databaseUrl, logger: SILENT });
   const friends = createFriendStore({ databaseUrl, logger: SILENT });
-  const rooms = createRoomStore({ databaseUrl, logger: SILENT });
   const notifications = createNotificationStore({ databaseUrl, logger: SILENT });
   t.after(async () => {
     await notifications.close();
-    await rooms.close();
     await friends.close();
     await users.close();
     await cleanup();
   });
-  return { users, friends, rooms, notifications };
+  return { users, friends, notifications };
 }
 
 async function makeUser(users, login) {
@@ -50,7 +47,6 @@ test('notification preferences default private notifications off and update expl
   assert.deepEqual(await notifications.getPreferences(alice.id), {
     doNotDisturb: false,
     mutedPeerIds: [],
-    mutedRoomIds: [],
     privateNotifications: false
   });
 
@@ -98,30 +94,4 @@ test('notification store mutes and unmutes friend DMs with validation', async (t
   assert.equal(unmuted.status, 'unmuted');
   assert.deepEqual(unmuted.preferences.mutedPeerIds, []);
   assert.equal(await notifications.isDmMuted({ userId: alice.id, peerUserId: bob.id }), false);
-});
-
-test('notification store mutes and unmutes visible saved rooms only', async (t) => {
-  const { users, rooms, notifications } = await createStores(t);
-  const alice = await makeUser(users, 'alice');
-  const bob = await makeUser(users, 'bob');
-  const created = await rooms.createRoomWithQuota({
-    creatorIp: '127.0.0.1',
-    isStatic: true,
-    ownerId: alice.id,
-    roomId: 'saved-room'
-  });
-  assert.equal(created.status, 'created');
-
-  assert.equal((await notifications.setRoomMute({ userId: bob.id, roomId: 'saved-room', muted: true })).status, 'not_found');
-  assert.equal((await notifications.setRoomMute({ userId: alice.id, roomId: 'missing-room', muted: true })).status, 'not_found');
-
-  const muted = await notifications.setRoomMute({ userId: alice.id, roomId: 'saved-room', muted: true });
-  assert.equal(muted.status, 'muted');
-  assert.deepEqual(muted.preferences.mutedRoomIds, ['saved-room']);
-  assert.equal(await notifications.isRoomMuted({ userId: alice.id, roomId: 'saved-room' }), true);
-
-  const unmuted = await notifications.setRoomMute({ userId: alice.id, roomId: 'saved-room', muted: false });
-  assert.equal(unmuted.status, 'unmuted');
-  assert.deepEqual(unmuted.preferences.mutedRoomIds, []);
-  assert.equal(await notifications.isRoomMuted({ userId: alice.id, roomId: 'saved-room' }), false);
 });

@@ -548,6 +548,95 @@
   line-height: 1.5;
 }
 
+.settings-section-title {
+  display: block;
+  margin-bottom: 10px;
+  color: var(--warm-ink);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.settings-hotkeys {
+  display: grid;
+  gap: 18px;
+  border-top: 1px solid rgba(255, 255, 255, 0.09);
+  padding-top: 22px;
+}
+
+.settings-mode-toggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 4px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.settings-mode-toggle button {
+  min-height: 36px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--warm-muted);
+  font-family: var(--font-ui);
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.settings-mode-toggle button[aria-checked='true'] {
+  background: rgba(52, 201, 138, 0.16);
+  color: var(--warm-ink);
+  box-shadow: inset 0 0 0 1px rgba(52, 201, 138, 0.28);
+}
+
+.settings-hotkey-list {
+  display: grid;
+  gap: 14px;
+}
+
+.settings-hotkey-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 210px);
+  align-items: center;
+  gap: 16px;
+}
+
+.settings-hotkey-label,
+.settings-hotkey-description {
+  display: block;
+}
+
+.settings-hotkey-label {
+  color: var(--warm-ink);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.settings-hotkey-description,
+.settings-hotkey-window-note {
+  margin-top: 3px;
+  color: var(--warm-faint);
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+
+.settings-hotkey-window-note {
+  margin-top: 0;
+  border-radius: 9px;
+  padding: 9px 11px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+@media (max-width: 600px) {
+  .settings-hotkey-row {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+}
+
 @media (max-width: 600px) {
   .settings-overlay {
     padding: 16px;

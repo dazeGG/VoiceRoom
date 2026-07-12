@@ -108,6 +108,7 @@ function mapMessage(row) {
     id: row.id,
     avatarKey: row.avatar_key || null,
     avatarColorKey: row.avatar_color_key || avatarColorForPeerId(row.peer_id),
+    editedAt: row.edited_at ? toMillis(row.edited_at) : null,
     name: row.name || '',
     peerId: row.peer_id || '',
     roomId: row.room_id,
@@ -719,6 +720,28 @@ function createRoomStore({
     return result.rowCount > 0;
   }
 
+  async function editMessage(roomId, messageId, text) {
+    const result = await getPool().query(
+      `WITH updated AS (
+         UPDATE room_messages
+         SET text = $3, edited_at = current_timestamp
+         WHERE room_id = $1 AND id = $2 AND deleted_at IS NULL
+         RETURNING *
+       )
+       SELECT updated.*,
+              COALESCE(u.avatar_color_key, rpi.avatar_color_key) AS avatar_color_key,
+              u.avatar_key,
+              u.avatar_accent
+       FROM updated
+       LEFT JOIN room_peer_identities rpi
+         ON rpi.room_id = updated.room_id AND rpi.peer_id = updated.peer_id
+       LEFT JOIN users u
+         ON u.id = updated.author_user_id`,
+      [roomId, messageId, text]
+    );
+    return mapMessage(result.rows[0] || null);
+  }
+
   async function listRoomsForOwner(ownerId) {
     if (!ownerId) return [];
     const result = await getPool().query(
@@ -808,11 +831,7 @@ function createRoomStore({
            AND r.deleted_at IS NULL
        )
        SELECT DISTINCT recipients.user_id
-       FROM recipients
-       LEFT JOIN notification_room_mutes nrm
-         ON nrm.room_id = $1
-        AND nrm.user_id = recipients.user_id
-       WHERE nrm.user_id IS NULL`,
+       FROM recipients`,
       [roomId]
     );
     return result.rows.map((row) => row.user_id).filter(Boolean);
@@ -868,6 +887,7 @@ function createRoomStore({
     createRoomWithQuota,
     deleteRoomBan,
     deleteRoom,
+    editMessage,
     findActiveRoomBan,
     getOrCreatePeerIdentity,
     getRoom,

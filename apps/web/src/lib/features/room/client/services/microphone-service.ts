@@ -16,7 +16,7 @@ import {
 } from '../core/config';
 import { roomDeviceUi } from '$lib/features/room/room-device-ui.svelte';
 import { state } from '../core/state.svelte';
-import { dbToAmplitude, getNoiseMode } from '../core/settings';
+import { dbToAmplitude, getNoiseMode, persistMicrophoneVolume } from '../core/settings';
 import { showToast } from '../ui/toast';
 import { disconnectAudioNode, stopStream } from '../core/utils';
 import type { MicProcessor, MicrophoneCapture } from '../core/types';
@@ -80,29 +80,97 @@ export async function openLocalMicrophone(): Promise<MicrophoneCapture> {
   const rawStream = await openMicrophone(mode);
 
   if (mode !== 'rnnoise') {
-    return applyNoiseGateToCapture({
+    return applyInputGainToCapture(await applyNoiseGateToCapture({
       mode,
       processor: null,
       rawStream,
       stream: rawStream
-    });
+    }));
   }
 
+  let capture: MicrophoneCapture;
   try {
-    return await applyNoiseGateToCapture(await createNoiseSuppressedStream(rawStream));
+    capture = await applyNoiseGateToCapture(await createNoiseSuppressedStream(rawStream));
   } catch (error) {
     console.warn('RNNoise unavailable', error);
     stopStream(rawStream);
     setNoiseMode('browser');
     showToast('RNNoise недоступен, включен браузерный шумодав');
     const fallbackStream = await openMicrophone('browser');
-    return applyNoiseGateToCapture({
+    capture = await applyNoiseGateToCapture({
       mode: 'browser',
       processor: null,
       rawStream: fallbackStream,
       stream: fallbackStream
     });
   }
+
+  return applyInputGainToCapture(capture);
+}
+
+async function applyInputGainToCapture(capture: MicrophoneCapture): Promise<MicrophoneCapture> {
+  if (!capture.stream) return capture;
+
+  const context = createProcessingAudioContext();
+  try {
+    const source = context.createMediaStreamSource(capture.stream);
+    const gain = context.createGain();
+    const limiter = context.createDynamicsCompressor();
+    const destination = context.createMediaStreamDestination();
+
+    gain.gain.value = state.microphoneVolume / 100;
+    limiter.threshold.value = -3;
+    limiter.knee.value = 0;
+    limiter.ratio.value = 20;
+    limiter.attack.value = 0.003;
+    limiter.release.value = 0.08;
+
+    source.connect(gain);
+    gain.connect(limiter);
+    limiter.connect(destination);
+    await context.resume();
+
+    const [inputTrack] = capture.stream.getAudioTracks();
+    const [outputTrack] = destination.stream.getAudioTracks();
+    if (!outputTrack) throw new Error('Регулятор микрофона не вернул аудио-трек');
+    outputTrack.enabled = inputTrack?.enabled ?? true;
+    if ('contentHint' in outputTrack) outputTrack.contentHint = 'speech';
+
+    const inputGainProcessor: MicProcessor = {
+      context,
+      destination,
+      node: gain,
+      nodes: [gain, limiter],
+      setGain: (value: number) => {
+        const now = context.currentTime;
+        gain.gain.cancelScheduledValues(now);
+        gain.gain.setTargetAtTime(value, now, 0.01);
+      },
+      source,
+      type: 'input-gain'
+    };
+
+    return {
+      ...capture,
+      processor: combineMicrophoneProcessors(capture.processor, inputGainProcessor),
+      stream: destination.stream
+    };
+  } catch (error) {
+    context.close().catch(() => {});
+    stopMicrophoneCapture(capture);
+    throw error;
+  }
+}
+
+export function setMicrophoneVolume(volume: number): number {
+  const nextVolume = persistMicrophoneVolume(volume);
+  state.microphoneVolume = nextVolume;
+  roomDeviceUi.microphoneVolume = nextVolume;
+  const gain = nextVolume / 100;
+  for (const processor of getMicrophoneProcessors(state.micProcessor)) {
+    if (processor.type === 'input-gain') processor.setGain?.(gain);
+  }
+  return nextVolume;
 }
 
 async function applyNoiseGateToCapture(capture: MicrophoneCapture): Promise<MicrophoneCapture> {
@@ -370,6 +438,7 @@ export function setLocalMicrophoneCapture(capture: MicrophoneCapture): void {
   state.localStream = capture.stream;
   state.localRawStream = capture.rawStream;
   state.micProcessor = capture.processor;
+  roomDeviceUi.microphoneVolume = state.microphoneVolume;
   setMicrophoneCaptureEnabled(capture, !state.muted);
 }
 
@@ -388,6 +457,7 @@ export function stopMicrophoneCapture(capture: MicrophoneCapture): void {
   for (const processor of processors) {
     disconnectAudioNode(processor.source);
     disconnectAudioNode(processor.node);
+    for (const node of processor.nodes || []) disconnectAudioNode(node);
     disconnectAudioNode(processor.destination);
     processor.context?.close().catch(() => {});
   }

@@ -1339,3 +1339,34 @@ test('delete realtime contracts avoid stale chat and false room affordances', ()
   assert.match(friends, /case 'dm\.message\.deleted'[\s\S]*refreshFriends\(\)/);
   assert.match(roomChat, /\{#if group\.self\}[\s\S]*class="chat-msg-delete"/);
 });
+
+test('message editing is author-only in UI and applies realtime replacements', () => {
+  const roomChat = read('src/lib/features/room/components/RoomChat.svelte');
+  const previewChat = read('src/lib/features/home/components/lobby/RoomPreviewChat.svelte');
+  const dmView = read('src/lib/features/home/components/lobby/DmView.svelte');
+  const friends = read('src/lib/features/home/model/friends.svelte.ts');
+  const realtime = read('src/lib/api/realtime.ts');
+  const roomsApi = read('src/lib/api/rooms.ts');
+  const server = read('../api/src/server.js');
+  const roomOwnership = functionBody(roomChat, 'isOwnMessage');
+  const previewOwnership = functionBody(previewChat, 'isOwnMessage');
+
+  assert.match(server, /buildServerEnvelope\('room\.chat\.edited'/);
+  assert.match(server, /type: 'dm\.message\.edited'/);
+  assert.match(server, /Deliberately no owner\/moderator override/);
+  assert.match(server, /authorUserId: message\.authorUserId \|\| null/);
+  assert.match(roomsApi, /authorUserId: string \| null/);
+  assert.match(realtime, /type: 'room\.chat\.edited'/);
+  assert.match(realtime, /type: 'dm\.message\.edited'/);
+  assert.match(roomChat, /event\.type === 'room\.chat\.edited'[\s\S]*messages = messages\.map/);
+  assert.match(previewChat, /event\.type === 'room\.chat\.edited'[\s\S]*messages = messages\.map/);
+  assert.match(friends, /case 'dm\.message\.edited'[\s\S]*applyEditedMessage/);
+  assert.match(friends, /case 'ready'[\s\S]*resyncOpenThread\(\{ force: true \}\)/);
+  assert.match(roomChat, /\{#if group\.self\}[\s\S]*startEditing\(message\)/);
+  assert.match(roomOwnership, /message\.authorUserId === accountUserId/);
+  assert.match(roomOwnership, /message\.peerId === peerId/);
+  assert.match(previewOwnership, /message\.authorUserId === user\.id/);
+  assert.match(previewOwnership, /message\.peerId === accountPeerId/);
+  assert.match(dmView, /\{#if group\.fromMe\}[\s\S]*startEditing\(bubble\)/);
+  for (const source of [roomChat, previewChat, dmView]) assert.match(source, /\(изменено\)/);
+});

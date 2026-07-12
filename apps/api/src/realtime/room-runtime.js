@@ -30,7 +30,7 @@ function createRoomRealtimeRuntime(deps) {
     MAX_ROOM_PEERS,
     tokensMatch,
     sessionAvatarColorKey,
-    roomEmptyQueue = new Map(),
+    queueRoomOccupancyTransition = async (roomId) => getRoomStore().markRoomActive(roomId),
     findRoomBan = async () => null
   } = deps;
 
@@ -264,9 +264,6 @@ function createRoomRealtimeRuntime(deps) {
       return { ok: false, code: 'invalid_join', message: 'Invalid room, peer, or session token' };
     }
 
-    const pendingEmpty = roomEmptyQueue.get(roomId);
-    if (pendingEmpty) await pendingEmpty;
-
     const room = await getRoom(roomId);
     if (!room) {
       wsRegistry.sendToConnection(connection, buildServerEnvelope('room.not_found', { roomId }));
@@ -339,7 +336,7 @@ function createRoomRealtimeRuntime(deps) {
     };
     room.peers.set(peerId, peer);
     room.updatedAt = peer.joinedAt;
-    await getRoomStore().markRoomActive(roomId, peer.joinedAt);
+    await queueRoomOccupancyTransition(roomId);
 
     const snapshot = await buildRoomSnapshot(roomId, 'active');
     if (snapshot) {

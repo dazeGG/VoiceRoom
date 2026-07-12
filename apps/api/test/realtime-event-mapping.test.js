@@ -17,6 +17,14 @@ test('account realtime maps DM delete events to the public websocket contract', 
   assert.equal(event.payload.peerUserId, 'user-2');
 });
 
+test('account realtime maps DM edit events with the updated message', () => {
+  const message = { id: 'msg-1', senderId: 'user-1', recipientId: 'user-2', body: 'updated', editedAt: 123 };
+  const event = toWsAccountEvent({ type: 'dm.message.edited', message });
+
+  assert.equal(event.type, 'dm.message.edited');
+  assert.deepEqual(event.payload.message, message);
+});
+
 test('account realtime maps ring invitations with their expiry', () => {
   const event = toWsAccountEvent({
     type: 'ring.incoming',
@@ -78,7 +86,6 @@ test('account realtime maps notification settings updates for same-account tabs'
   const preferences = {
     doNotDisturb: true,
     mutedPeerIds: ['user-2'],
-    mutedRoomIds: [],
     privateNotifications: false
   };
   const event = toWsAccountEvent({ type: 'notification-settings-updated', preferences });

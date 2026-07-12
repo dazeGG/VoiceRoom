@@ -203,6 +203,86 @@ button.chat-msg-author {
   margin-top: 3px;
 }
 
+.chat-msg-edited {
+  margin-left: 5px;
+  color: #777164;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  white-space: nowrap;
+}
+
+.chat-msg-actions {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+}
+
+.chat-msg-edit-button,
+.chat-msg-delete {
+  border: none;
+  background: transparent;
+  color: #8e897b;
+  cursor: pointer;
+  opacity: 0.6;
+}
+
+.chat-msg-edit-button {
+  width: 20px;
+  height: 20px;
+  margin-left: 5px;
+  padding: 3px;
+}
+
+.chat-msg-edit-button:hover {
+  color: #c4bdac;
+  opacity: 1;
+}
+
+.chat-msg-edit {
+  display: grid;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.chat-msg-edit-input {
+  width: 100%;
+  min-height: 54px;
+  resize: vertical;
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 8px;
+  outline: none;
+  background: rgba(0, 0, 0, 0.18);
+  color: #d8d1c0;
+  font: inherit;
+  line-height: 1.45;
+  padding: 7px 9px;
+}
+
+.chat-msg-edit-input:focus {
+  border-color: rgba(184, 166, 120, 0.58);
+}
+
+.chat-msg-edit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.chat-msg-edit-actions button {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  color: #aaa393;
+  cursor: pointer;
+  font-size: 10px;
+  padding: 4px 7px;
+}
+
+.chat-msg-edit-actions button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
 .chat-msg-text a,
 .lobby-dm-bubble a {
   color: inherit;
@@ -218,12 +298,7 @@ button.chat-msg-author {
   margin-left: 6px;
   font-size: 11px;
   line-height: 1;
-  border: none;
-  background: transparent;
-  color: #8e897b;
-  cursor: pointer;
   padding: 0 2px;
-  opacity: 0.6;
 }
 .chat-msg-delete:hover {
   color: #c66;

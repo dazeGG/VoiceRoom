@@ -47,6 +47,7 @@ function publicUser(user) {
     avatarColorKey: user.avatarColorKey || 'blurple',
     avatarUrl: user.avatarKey ? `/api/avatars/${encodeURIComponent(user.avatarKey)}` : null,
     displayName: user.displayName || '',
+    dnd: Boolean(user.doNotDisturb),
     doNotDisturb: Boolean(user.doNotDisturb),
     id: user.id,
     login: user.login

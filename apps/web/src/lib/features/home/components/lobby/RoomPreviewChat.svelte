@@ -1,9 +1,9 @@
 <script lang="ts">
-  import { ChevronRight, MessageSquare } from '@lucide/svelte';
+  import { ChevronRight, MessageSquare, Pencil } from '@lucide/svelte';
   import type { AuthUser } from '$lib/api/auth';
   import { iconSm } from '$lib/shared/ui/icons';
   import { getAppRealtime } from '$lib/api/realtime';
-  import { fetchRoomChat, postRoomChat, type ChatMessage } from '$lib/api/rooms';
+  import { editRoomChatMessage, fetchRoomChat, postRoomChat, type ChatMessage } from '$lib/api/rooms';
   import { playRoomChatMessageCue } from '$lib/features/room/client/media/cues';
   import { Avatar } from '$lib/shared/ui';
   import { getAvatarPresentation } from '$lib/features/room/client/ui/avatar-presentation';
@@ -17,9 +17,13 @@
   let messages = $state<ChatMessage[]>([]);
   let loading = $state(true);
   let sending = $state(false);
+  let editingMessageId = $state('');
+  let editDraft = $state('');
+  let editSaving = $state(false);
   let error = $state('');
   let chatBody: HTMLDivElement | null = null;
   let composeEl: HTMLTextAreaElement | null = null;
+  let editEl = $state<HTMLTextAreaElement | null>(null);
 
   function autoResize() {
     if (!composeEl) return;
@@ -56,6 +60,10 @@
   const groups = $derived(buildGroups(messages));
   const messageIds = new Set<string>();
 
+  function isOwnMessage(message: ChatMessage): boolean {
+    return message.authorUserId === user.id || message.peerId === accountPeerId;
+  }
+
   function buildGroups(items: ChatMessage[]): ChatGroup[] {
     const result: ChatGroup[] = [];
     for (const message of items) {
@@ -71,14 +79,14 @@
         avatarAccent: message.avatarAccent || undefined,
         avatarColorKey: message.avatarColorKey,
         avatarUrl: message.avatarUrl || undefined,
-        isLocal: message.peerId === accountPeerId,
+        isLocal: isOwnMessage(message),
         name: author
       });
       result.push({
         key: message.id,
         name: author,
         peerId: message.peerId,
-        self: message.peerId === accountPeerId,
+        self: isOwnMessage(message),
         avatarBackground: avatar.background,
         avatarForeground: avatar.foreground,
         avatarShadow: avatar.shadow,
@@ -148,6 +156,51 @@
     chatBody.scrollTop = chatBody.scrollHeight;
   }
 
+  function startEditing(message: ChatMessage): void {
+    editingMessageId = message.id;
+    editDraft = message.text;
+    error = '';
+    void tick().then(() => {
+      editEl?.focus();
+      editEl?.setSelectionRange(editEl.value.length, editEl.value.length);
+    });
+  }
+
+  function cancelEditing(): void {
+    editingMessageId = '';
+    editDraft = '';
+    editSaving = false;
+  }
+
+  function onEditKeydown(event: KeyboardEvent): void {
+    if (event.isComposing) return;
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      cancelEditing();
+      return;
+    }
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      void saveEdit();
+    }
+  }
+
+  async function saveEdit(): Promise<void> {
+    const messageId = editingMessageId;
+    const text = editDraft.trim();
+    if (!roomId || !messageId || !text || editSaving) return;
+    editSaving = true;
+    error = '';
+    try {
+      const edited = await editRoomChatMessage(roomId, messageId, { text });
+      messages = messages.map((message) => message.id === edited.id ? edited : message);
+      cancelEditing();
+    } catch (err) {
+      error = err instanceof Error ? err.message : 'Не удалось изменить сообщение';
+      editSaving = false;
+    }
+  }
+
   $effect(() => {
     const activeRoomId = roomId;
     if (!activeRoomId) return;
@@ -160,11 +213,29 @@
     const controller = new AbortController();
     void refreshMessages(controller.signal);
     const unsubscribe = getAppRealtime().subscribe((event) => {
+      if (event.type === 'room.snapshot' && event.payload.roomId === activeRoomId) {
+        const recent = event.payload.recentMessages;
+        if (Array.isArray(recent)) {
+          messages = recent;
+          messageIds.clear();
+          for (const message of recent) messageIds.add(message.id);
+          loading = false;
+          queueMicrotask(scrollToBottom);
+        }
+        return;
+      }
       if (event.type === 'room.chat.deleted' && event.payload.roomId === activeRoomId) {
         const messageId = event.payload.messageId;
         if (messageId) {
           messages = messages.filter((message) => message.id !== messageId);
           messageIds.delete(messageId);
+        }
+        return;
+      }
+      if (event.type === 'room.chat.edited' && event.payload.roomId === activeRoomId) {
+        const edited = event.payload.message;
+        if (edited?.id) {
+          messages = messages.map((message) => message.id === edited.id ? edited : message);
         }
         return;
       }
@@ -209,7 +280,38 @@
               <time class="chat-msg-time" datetime={new Date(group.messages[0].createdAt).toISOString()}>{group.time}</time>
             </div>
             {#each group.messages as message (message.id)}
-              <p class="chat-msg-text"><ChatText text={message.text} /></p>
+              <div class="chat-msg-text">
+                {#if editingMessageId === message.id}
+                  <div class="chat-msg-edit">
+                    <textarea
+                      class="chat-msg-edit-input"
+                      bind:this={editEl}
+                      bind:value={editDraft}
+                      rows="2"
+                      maxlength="500"
+                      aria-label="Текст сообщения"
+                      onkeydown={onEditKeydown}
+                      disabled={editSaving}
+                    ></textarea>
+                    <div class="chat-msg-edit-actions">
+                      <button type="button" onclick={cancelEditing} disabled={editSaving}>Отмена</button>
+                      <button type="button" onclick={saveEdit} disabled={editSaving || !editDraft.trim()}>Сохранить</button>
+                    </div>
+                  </div>
+                {:else}
+                  <ChatText text={message.text} />
+                  {#if message.editedAt}<span class="chat-msg-edited">(изменено)</span>{/if}
+                  {#if group.self}
+                    <button
+                      type="button"
+                      class="chat-msg-edit-button"
+                      aria-label="Редактировать сообщение"
+                      title="Редактировать"
+                      onclick={() => startEditing(message)}
+                    ><Pencil {...iconSm} aria-hidden="true" /></button>
+                  {/if}
+                {/if}
+              </div>
             {/each}
           </div>
         </div>
