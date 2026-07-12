@@ -1361,7 +1361,7 @@ test('message editing is author-only in UI and applies realtime replacements', (
   assert.match(roomChat, /event\.type === 'room\.chat\.edited'[\s\S]*messages = messages\.map/);
   assert.match(previewChat, /event\.type === 'room\.chat\.edited'[\s\S]*messages = messages\.map/);
   assert.match(friends, /case 'dm\.message\.edited'[\s\S]*applyEditedMessage/);
-  assert.match(friends, /case 'ready'[\s\S]*resyncOpenThread\(\)/);
+  assert.match(friends, /case 'ready'[\s\S]*resyncOpenThread\(\{ force: true \}\)/);
   assert.match(roomChat, /\{#if group\.self\}[\s\S]*startEditing\(message\)/);
   assert.match(roomOwnership, /message\.authorUserId === accountUserId/);
   assert.match(roomOwnership, /message\.peerId === peerId/);

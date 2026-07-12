@@ -229,10 +229,10 @@ export async function openDm(userId: string): Promise<void> {
   }
 }
 
-async function resyncOpenThread(): Promise<void> {
+async function resyncOpenThread(options: { force?: boolean } = {}): Promise<void> {
   const peerId = friendsState.selectedFriendId;
   if (friendsState.view !== 'dm' || !peerId) return;
-  await threadResync.resync(peerId);
+  await threadResync.resync(peerId, options);
 }
 
 export function toggleProfile(): void {
@@ -436,7 +436,7 @@ function handleRealtimeEvent(event: RealtimeEvent): void {
       setOnlineSnapshot(event.payload.onlineFriendIds ?? []);
       // A reconnect can miss edits while the socket is down. Re-fetch only the
       // currently visible thread so its bodies and editedAt markers converge.
-      void resyncOpenThread().catch(() => {});
+      void resyncOpenThread({ force: true }).catch(() => {});
       break;
     }
     case 'friend.presence': {

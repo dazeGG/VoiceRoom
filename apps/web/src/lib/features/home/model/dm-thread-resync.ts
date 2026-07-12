@@ -24,6 +24,10 @@ type ThreadResyncOptions = {
   isOwnMessage: (message: DirectMessage) => boolean;
 };
 
+type ResyncRequestOptions = {
+  force?: boolean;
+};
+
 function newestTimestamp(left: number | null, right: number | null): number | null {
   if (left == null) return right;
   if (right == null) return left;
@@ -94,8 +98,13 @@ export function createDmThreadResyncCoordinator(options: ThreadResyncOptions) {
   }
 
   return {
-    resync(peerId: string): Promise<void> {
-      if (activeResync?.peerId === peerId) return activeResync.promise;
+    resync(peerId: string, requestOptions: ResyncRequestOptions = {}): Promise<void> {
+      if (activeResync?.peerId === peerId && !requestOptions.force) return activeResync.promise;
+
+      // A reconnect starts a new synchronization epoch even when an ordinary
+      // initial load is still pending. Carry its mutation log forward so events
+      // already observed by this client cannot disappear between the epochs.
+      const mutations = activeResync?.peerId === peerId ? [...activeResync.mutations] : [];
 
       let resolveRequest!: () => void;
       let rejectRequest!: (reason?: unknown) => void;
@@ -103,7 +112,7 @@ export function createDmThreadResyncCoordinator(options: ThreadResyncOptions) {
         resolveRequest = resolve;
         rejectRequest = reject;
       });
-      const request: ActiveResync = { peerId, mutations: [], promise };
+      const request: ActiveResync = { peerId, mutations, promise };
       activeResync = request;
       void runResync(request).then(resolveRequest, rejectRequest);
       return promise;

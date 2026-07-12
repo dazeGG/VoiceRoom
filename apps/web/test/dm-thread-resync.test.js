@@ -31,10 +31,12 @@ async function loadCoordinator() {
 
 function deferred() {
   let resolve;
-  const promise = new Promise((resolvePromise) => {
+  let reject;
+  const promise = new Promise((resolvePromise, rejectPromise) => {
     resolve = resolvePromise;
+    reject = rejectPromise;
   });
-  return { promise, resolve };
+  return { promise, resolve, reject };
 }
 
 function message(id, overrides = {}) {
@@ -155,6 +157,67 @@ test('coalesces overlapping same-peer resync calls onto one successful request',
   assert.deepEqual(applied, [['http', 'during-overlap']]);
 });
 
+test('forced reconnect starts a fresh fetch and ignores a stale same-peer response', async () => {
+  const { createDmThreadResyncCoordinator } = await loadCoordinator();
+  const firstRequest = deferred();
+  const reconnectRequest = deferred();
+  const requests = [firstRequest, reconnectRequest];
+  let fetchCount = 0;
+  const applied = [];
+  const coordinator = createDmThreadResyncCoordinator({
+    fetchSnapshot: () => {
+      fetchCount += 1;
+      return requests.shift().promise;
+    },
+    isCurrent: () => true,
+    applySnapshot: (_peerId, snapshot) => applied.push(snapshot.messages.map((entry) => entry.id)),
+    isOwnMessage: (entry) => entry.senderId === 'self'
+  });
+
+  const initial = coordinator.resync('peer');
+  coordinator.recordUpsert('peer', message('buffered-before-reconnect', { createdAt: 3 }));
+  const reconnect = coordinator.resync('peer', { force: true });
+
+  assert.notEqual(initial, reconnect);
+  assert.equal(fetchCount, 2);
+  firstRequest.resolve({ peer: peer(), messages: [message('stale-http')] });
+  await initial;
+  assert.deepEqual(applied, []);
+  reconnectRequest.resolve({ peer: peer(), messages: [message('fresh-http')] });
+  await reconnect;
+
+  assert.deepEqual(applied, [['fresh-http', 'buffered-before-reconnect']]);
+});
+
+test('forced reconnect applies a fresh fetch when the superseded request rejects', async () => {
+  const { createDmThreadResyncCoordinator } = await loadCoordinator();
+  const firstRequest = deferred();
+  const reconnectRequest = deferred();
+  const requests = [firstRequest, reconnectRequest];
+  let fetchCount = 0;
+  const applied = [];
+  const coordinator = createDmThreadResyncCoordinator({
+    fetchSnapshot: () => {
+      fetchCount += 1;
+      return requests.shift().promise;
+    },
+    isCurrent: () => true,
+    applySnapshot: (_peerId, snapshot) => applied.push(snapshot.messages.map((entry) => entry.id)),
+    isOwnMessage: (entry) => entry.senderId === 'self'
+  });
+
+  const initial = coordinator.resync('peer');
+  const reconnect = coordinator.resync('peer', { force: true });
+  const initialRejected = assert.rejects(initial, /initial fetch failed/);
+  firstRequest.reject(new Error('initial fetch failed'));
+  await initialRejected;
+  reconnectRequest.resolve({ peer: peer(), messages: [message('fresh-after-failure')] });
+  await reconnect;
+
+  assert.equal(fetchCount, 2);
+  assert.deepEqual(applied, [['fresh-after-failure']]);
+});
+
 test('a different-peer request invalidates an older response even if its peer becomes current again', async () => {
   const { createDmThreadResyncCoordinator } = await loadCoordinator();
   const firstRequest = deferred();
@@ -233,6 +296,8 @@ test('lobby forwards DM realtime mutations to the active resync buffer', () => {
   assert.match(openDm, /await threadResync\.resync\(userId\)/);
   assert.doesNotMatch(openDm, /fetchThread\(/);
   assert.match(openDm, /finally \{[\s\S]*friendsState\.selectedFriendId === userId[\s\S]*threadLoading = false/);
+
+  assert.match(friends, /case 'ready': \{[\s\S]*?resyncOpenThread\(\{ force: true \}\)/);
 
   assert.match(friends, /case 'dm\.message': \{[\s\S]*?threadResync\.recordUpsert\(peerId, message\)/);
   assert.match(friends, /case 'dm\.read': \{[\s\S]*?threadResync\.recordRead\(event\.payload\.userId, now\)/);
