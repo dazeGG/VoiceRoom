@@ -64,6 +64,11 @@ function toWsAccountEvent(message) {
         messageId: message.messageId,
         peerUserId: message.peerUserId
       });
+    case 'dm.message.edited':
+    case 'dm-message-edited':
+      return buildServerEnvelope('dm.message.edited', {
+        message: message.message
+      });
     case 'room.kicked':
     case 'room.banned':
       return buildServerEnvelope(message.type, { roomId: message.roomId, peerId: message.peerId });

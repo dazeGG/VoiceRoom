@@ -167,6 +167,10 @@ button:focus-visible {
   color: #d7d1c2;
 }
 
+.mic-button {
+  position: relative;
+}
+
 .mic-button:hover,
 .output-button:hover {
   background: rgba(255, 255, 255, 0.11);
@@ -213,12 +217,14 @@ button:focus-visible {
 
 /* Muted / deafened toggles turn coral, matching VoiceDock. */
 .mic-button[data-state="muted"],
+.mic-button[data-state="ptt"],
 .output-button[data-state="muted"] {
   background: rgba(216, 99, 74, 0.16);
   color: #e8a094;
 }
 
 .mic-button[data-state="muted"]:hover,
+.mic-button[data-state="ptt"]:hover,
 .output-button[data-state="muted"]:hover {
   background: rgba(216, 99, 74, 0.24);
 }
@@ -253,6 +259,7 @@ button:focus-visible {
 .dock-icon-output-muted,
 .dock-icon-screen-stop,
 .mic-button[data-state="muted"] .dock-icon-mic,
+.mic-button[data-state="ptt"] .dock-icon-mic,
 .output-button[data-state="muted"] .dock-icon-output,
 .screen-button[data-state="live"] .dock-icon-screen {
   display: none;
@@ -260,6 +267,34 @@ button:focus-visible {
 
 .mic-button[data-state="muted"] .dock-icon-muted {
   display: grid;
+}
+
+.mic-button[data-state="ptt"] .dock-icon-muted {
+  display: grid;
+}
+
+.mic-button[data-state="ptt-active"] {
+  background: rgba(52, 201, 138, 0.16);
+  color: #a8e2c5;
+}
+
+.dock-ptt-badge {
+  position: absolute;
+  right: 3px;
+  bottom: 2px;
+  border-radius: 4px;
+  padding: 1px 3px;
+  background: rgba(216, 99, 74, 0.24);
+  color: #efb1a7;
+  font-size: 7px;
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: 0.04em;
+}
+
+.dock-ptt-badge[data-active='true'] {
+  background: rgba(52, 201, 138, 0.28);
+  color: #c4efd9;
 }
 
 .output-button[data-state="muted"] .dock-icon-output-muted {
@@ -473,6 +508,21 @@ body[data-lobby-embedded="true"] .room-dock {
 .device-popover .select-root,
 .device-popover .select-trigger {
   max-width: 100%;
+}
+
+.dock-volume-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-xs);
+}
+
+.dock-volume-head output {
+  color: oklch(96% 0.008 92);
+  font-size: 0.78rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
 }
 
 

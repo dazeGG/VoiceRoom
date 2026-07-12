@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Bell, BellOff, User, X } from '@lucide/svelte';
+  import { Bell, BellOff, Pencil, User, X } from '@lucide/svelte';
   import { iconMd, iconSm } from '$lib/shared/ui/icons';
   import { tick } from 'svelte';
   import type { DirectMessage } from '$lib/api/dm';
@@ -10,6 +10,7 @@
     friendsState,
     closeProfile,
     deleteMessage,
+    editMessage as editDmMessage,
     removeFriend,
     sendMessage,
     toggleProfile
@@ -20,8 +21,12 @@
 
   let draft = $state('');
   let sending = $state(false);
+  let editingMessageId = $state('');
+  let editDraft = $state('');
+  let editSaving = $state(false);
   let scrollEl = $state<HTMLDivElement | null>(null);
   let inputEl = $state<HTMLTextAreaElement | null>(null);
+  let editEl = $state<HTMLTextAreaElement | null>(null);
 
   function autoResize() {
     if (!inputEl) return;
@@ -90,6 +95,7 @@
   // Focus the compose field when opening or switching DM threads.
   $effect(() => {
     const peerId = friendsState.selectedFriendId;
+    cancelEditing();
     if (friendsState.view !== 'dm' || !peerId) return;
     void tick().then(() => inputEl?.focus());
   });
@@ -135,6 +141,47 @@
       await deleteMessage(mid);
     } catch {}
   }
+
+  function startEditing(message: DirectMessage): void {
+    editingMessageId = message.id;
+    editDraft = message.body;
+    void tick().then(() => {
+      editEl?.focus();
+      editEl?.setSelectionRange(editEl.value.length, editEl.value.length);
+    });
+  }
+
+  function cancelEditing(): void {
+    editingMessageId = '';
+    editDraft = '';
+    editSaving = false;
+  }
+
+  function onEditKeydown(event: KeyboardEvent): void {
+    if (event.isComposing) return;
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      cancelEditing();
+      return;
+    }
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      void saveEdit();
+    }
+  }
+
+  async function saveEdit(): Promise<void> {
+    const messageId = editingMessageId;
+    const text = editDraft.trim();
+    if (!messageId || !text || editSaving) return;
+    editSaving = true;
+    try {
+      await editDmMessage(messageId, text);
+      cancelEditing();
+    } catch {
+      editSaving = false;
+    }
+  }
 </script>
 
 <div class="lobby-dm">
@@ -174,9 +221,34 @@
               <div class="lobby-dm-bubbles">
                 {#each group.bubbles as bubble (bubble.id)}
                   <div class="lobby-dm-bubble" class:lobby-dm-bubble--me={group.fromMe} class:lobby-dm-bubble--them={!group.fromMe}>
-                    <ChatText text={bubble.body} />
-                    {#if group.fromMe}
-                      <button type="button" class="dm-msg-delete" aria-label="Удалить" onclick={() => onDelete(bubble.id)}>×</button>
+                    {#if editingMessageId === bubble.id}
+                      <div class="dm-msg-edit">
+                        <textarea
+                          class="dm-msg-edit-input"
+                          bind:this={editEl}
+                          bind:value={editDraft}
+                          rows="2"
+                          maxlength="2000"
+                          aria-label="Текст сообщения"
+                          onkeydown={onEditKeydown}
+                          disabled={editSaving}
+                        ></textarea>
+                        <div class="dm-msg-edit-actions">
+                          <button type="button" onclick={cancelEditing} disabled={editSaving}>Отмена</button>
+                          <button type="button" onclick={saveEdit} disabled={editSaving || !editDraft.trim()}>Сохранить</button>
+                        </div>
+                      </div>
+                    {:else}
+                      <ChatText text={bubble.body} />
+                      {#if bubble.editedAt}<span class="dm-msg-edited">(изменено)</span>{/if}
+                      {#if group.fromMe}
+                        <span class="dm-msg-actions">
+                          <button type="button" class="dm-msg-edit-button" aria-label="Редактировать" title="Редактировать" onclick={() => startEditing(bubble)}>
+                            <Pencil {...iconSm} aria-hidden="true" />
+                          </button>
+                          <button type="button" class="dm-msg-delete" aria-label="Удалить" title="Удалить" onclick={() => onDelete(bubble.id)}>×</button>
+                        </span>
+                      {/if}
                     {/if}
                   </div>
                 {/each}

@@ -16,6 +16,7 @@ export type RealtimeAccountEvent =
   | { type: 'ring.incoming'; payload: { fromUser: PublicUser; room: { id: string; name: string; emoji: string }; expiresAt: number } }
   | { type: 'notification.settings.updated'; payload: { preferences: import('./notifications').NotificationPreferences } }
   | { type: 'dm.message'; payload: { message: DirectMessage } }
+  | { type: 'dm.message.edited'; payload: { message: DirectMessage } }
   | { type: 'dm.read'; payload: { userId: string } }
   | { type: 'dm.message.deleted'; payload: { messageId: string; peerUserId?: string } };
 
@@ -41,6 +42,7 @@ export type RealtimeRoomEvent =
   | { type: 'room.peer.left'; payload: { roomId: string; peerId: string; reason: string } }
   | { type: 'room.peer.updated'; payload: { roomId: string; peer: RoomPeer } }
   | { type: 'room.chat.message'; payload: { roomId: string; message: ChatMessage } }
+  | { type: 'room.chat.edited'; payload: { roomId: string; message: ChatMessage } }
   | { type: 'room.chat.deleted'; payload: { roomId: string; messageId: string } }
   | { type: 'room.updated'; payload: { room: RoomSummary } }
   | { type: 'room.deleted'; payload: { roomId: string } }

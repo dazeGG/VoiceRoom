@@ -131,6 +131,7 @@ test('publicUser never leaks the password hash', async (t) => {
     'avatarUrl',
     'createdAt',
     'displayName',
+    'dnd',
     'doNotDisturb',
     'id',
     'login'

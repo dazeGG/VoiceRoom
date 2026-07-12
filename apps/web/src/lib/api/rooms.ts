@@ -1,4 +1,4 @@
-import { del, fetchJson, postJson, postJsonAuth, putJson } from './http';
+import { del, fetchJson, patchJson, postJson, postJsonAuth, putJson } from './http';
 import { createRoomProof } from './pow';
 
 export interface CreateRoomOptions {
@@ -48,10 +48,12 @@ export const uploadRoomAvatar = (roomId: string, file: Blob): Promise<RoomSummar
 export const deleteRoomAvatar = (roomId: string): Promise<RoomSummary> => roomAvatarRequest(roomId, 'DELETE');
 
 export interface ChatMessage {
+  authorUserId: string | null;
   avatarAccent: string | null;
   avatarColorKey: string;
   avatarUrl: string | null;
   createdAt: number;
+  editedAt: number | null;
   expiresAt: number;
   id: string;
   name: string;
@@ -164,4 +166,16 @@ export async function deleteRoomChatMessage(
     body ?? {}
   );
   return payload;
+}
+
+export async function editRoomChatMessage(
+  roomId: string,
+  messageId: string,
+  body: { text: string; peerId?: string; sessionToken?: string }
+): Promise<ChatMessage> {
+  const payload = await patchJson<{ message: ChatMessage }>(
+    `/api/rooms/${encodeURIComponent(roomId)}/chat/${encodeURIComponent(messageId)}`,
+    body
+  );
+  return payload.message;
 }

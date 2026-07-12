@@ -18,7 +18,7 @@ import {
   type SendRequestStatus,
   type Relationship
 } from '$lib/api/friends';
-import { deleteDirectMessage, fetchThread, markThreadRead, sendDirectMessage, type DirectMessage } from '$lib/api/dm';
+import { deleteDirectMessage, editDirectMessage, fetchThread, markThreadRead, sendDirectMessage, type DirectMessage } from '$lib/api/dm';
 import { connectRealtime, type RealtimeEvent, type RealtimeHandle } from '$lib/api/realtime';
 import { playDirectMessageCue, playFriendAcceptedCue, playFriendRequestCue, playRingCue } from '$lib/features/room/client/media/cues';
 import {
@@ -215,6 +215,21 @@ export async function openDm(userId: string): Promise<void> {
   }
 }
 
+async function resyncOpenThread(): Promise<void> {
+  const peerId = friendsState.selectedFriendId;
+  if (friendsState.view !== 'dm' || !peerId) return;
+  const { peer, messages } = await fetchThread(peerId);
+  if (friendsState.view !== 'dm' || friendsState.selectedFriendId !== peerId) return;
+  friendsState.threadPeer = peer;
+  friendsState.thread = messages;
+  const friend = findFriend(peerId);
+  if (friend) {
+    friend.unreadCount = 0;
+    const last = messages.at(-1);
+    if (last) bumpLastMessage(peerId, last);
+  }
+}
+
 export function toggleProfile(): void {
   friendsState.profileOpen = !friendsState.profileOpen;
 }
@@ -244,6 +259,14 @@ export async function deleteMessage(messageId: string): Promise<void> {
   await refreshFriends().catch(() => {});
 }
 
+export async function editMessage(messageId: string, text: string): Promise<void> {
+  const peerId = friendsState.selectedFriendId;
+  const body = text.trim();
+  if (!peerId || !messageId || !body) return;
+  const message = await editDirectMessage(peerId, messageId, body);
+  applyEditedMessage(message);
+}
+
 function appendToThread(message: DirectMessage): void {
   if (friendsState.thread.some((existing) => existing.id === message.id)) return;
   friendsState.thread = [...friendsState.thread, message];
@@ -258,6 +281,17 @@ function bumpLastMessage(peerId: string, message: DirectMessage): void {
     createdAt: message.createdAt,
     fromMe: message.senderId === selfId
   };
+}
+
+function applyEditedMessage(message: DirectMessage): void {
+  friendsState.thread = friendsState.thread.map((existing) =>
+    existing.id === message.id ? message : existing
+  );
+  const peerId = message.senderId === selfId ? message.recipientId : message.senderId;
+  const friend = findFriend(peerId);
+  if (friend?.lastMessage?.id === message.id) {
+    friend.lastMessage = { ...friend.lastMessage, body: message.body };
+  }
 }
 
 // --- Friend request actions --------------------------------------------
@@ -392,6 +426,9 @@ function handleRealtimeEvent(event: RealtimeEvent): void {
   switch (event.type) {
     case 'ready': {
       setOnlineSnapshot(event.payload.onlineFriendIds ?? []);
+      // A reconnect can miss edits while the socket is down. Re-fetch only the
+      // currently visible thread so its bodies and editedAt markers converge.
+      void resyncOpenThread().catch(() => {});
       break;
     }
     case 'friend.presence': {
@@ -471,6 +508,10 @@ function handleRealtimeEvent(event: RealtimeEvent): void {
         friendsState.thread = friendsState.thread.filter((m) => m.id !== mid);
         void refreshFriends().catch(() => {});
       }
+      break;
+    }
+    case 'dm.message.edited': {
+      applyEditedMessage(event.payload.message);
       break;
     }
     default:

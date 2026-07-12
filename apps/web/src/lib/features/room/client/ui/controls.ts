@@ -11,9 +11,12 @@ import { getLocalMicrophoneCapture, setMicrophoneCaptureEnabled } from '../servi
 import { syncLiveKitVoiceSubscriptions, syncLocalMicrophonePublicationMuted } from '../services/livekit-service';
 import { getDisplayName } from './names';
 import { updateParticipant } from '../room/participants';
-import { persistOutputMuted } from '../core/settings';
+import { persistMicrophoneMode, persistOutputMuted } from '../core/settings';
 import { showToast } from './toast';
 import { setVoiceControlsState } from '$lib/features/room/voice-session.svelte';
+import { PUSH_TO_TALK_RELEASE_HOLD_MS, type MicrophoneMode } from '../core/config';
+
+let pushToTalkReleaseTimer = 0;
 
 /** Mirror the current mic/output mute state to the lobby voice-session store. */
 function syncVoiceSessionControls(): void {
@@ -24,7 +27,7 @@ export interface CallControlsView {
   label: string;
   ariaPressed: boolean;
   disabled: boolean;
-  stateName: 'idle' | 'connecting' | 'muted' | 'live';
+  stateName: 'idle' | 'connecting' | 'muted' | 'live' | 'ptt' | 'ptt-active';
 }
 
 export interface OutputControlsView {
@@ -45,6 +48,10 @@ export function getCallControlsView(): CallControlsView {
     ? state.connecting
       ? 'Подключение'
       : 'Подключить микрофон'
+    : state.microphoneMode === 'push-to-talk'
+      ? state.pushToTalkActive
+        ? 'Push-to-talk: микрофон открыт'
+        : 'Push-to-talk: микрофон закрыт'
     : state.muted
       ? 'Включить микрофон'
       : 'Выключить микрофон';
@@ -53,7 +60,13 @@ export function getCallControlsView(): CallControlsView {
     label,
     ariaPressed: Boolean(state.joined && state.muted),
     disabled: state.connecting,
-    stateName: state.connecting ? 'connecting' : !state.joined ? 'idle' : state.muted ? 'muted' : 'live'
+    stateName: state.connecting
+      ? 'connecting'
+      : !state.joined
+        ? 'idle'
+        : state.microphoneMode === 'push-to-talk'
+          ? state.pushToTalkActive ? 'ptt-active' : 'ptt'
+          : state.muted ? 'muted' : 'live'
   };
 }
 
@@ -89,6 +102,12 @@ export function setMicrophoneMuted(muted: boolean, options: { playCue?: boolean;
   const nextMuted = Boolean(muted);
   if (state.muted === nextMuted) return;
 
+  if (nextMuted && state.pushToTalkActive) {
+    state.pushToTalkActive = false;
+    window.clearTimeout(pushToTalkReleaseTimer);
+    pushToTalkReleaseTimer = 0;
+  }
+
   state.muted = nextMuted;
   setMicrophoneCaptureEnabled(getLocalMicrophoneCapture(), !state.muted);
   syncLocalMicrophonePublicationMuted().catch((error) => console.warn('LiveKit microphone mute failed', error));
@@ -110,7 +129,66 @@ function toggleMute(): void {
     return;
   }
 
+  if (state.microphoneMode === 'push-to-talk') {
+    showToast('В режиме Push-to-talk удерживайте назначенную клавишу');
+    return;
+  }
+
   setMicrophoneMuted(!state.muted);
+}
+
+export function setMicrophoneMode(mode: MicrophoneMode): MicrophoneMode {
+  const nextMode = persistMicrophoneMode(mode);
+  state.microphoneMode = nextMode;
+  resetPushToTalkState();
+  if (state.outputMuted) state.micMutedBeforeOutputMute = nextMode === 'push-to-talk';
+
+  if (state.localStream) {
+    const shouldMute = nextMode === 'push-to-talk' || state.outputMuted;
+    setMicrophoneMuted(shouldMute, { playCue: false });
+  }
+  return nextMode;
+}
+
+export function beginPushToTalk(): boolean {
+  if (
+    state.microphoneMode !== 'push-to-talk'
+    || !state.joined
+    || !state.localStream
+    || state.outputMuted
+  ) return false;
+
+  window.clearTimeout(pushToTalkReleaseTimer);
+  pushToTalkReleaseTimer = 0;
+  if (state.pushToTalkActive) return true;
+
+  state.pushToTalkActive = true;
+  setMicrophoneMuted(false, { playCue: false });
+  return true;
+}
+
+export function endPushToTalk(options: { immediate?: boolean } = {}): void {
+  if (!state.pushToTalkActive) return;
+  window.clearTimeout(pushToTalkReleaseTimer);
+
+  const close = () => {
+    pushToTalkReleaseTimer = 0;
+    state.pushToTalkActive = false;
+    setMicrophoneMuted(true, { playCue: false });
+  };
+
+  if (options.immediate) {
+    close();
+    return;
+  }
+
+  pushToTalkReleaseTimer = window.setTimeout(close, PUSH_TO_TALK_RELEASE_HOLD_MS);
+}
+
+export function resetPushToTalkState(): void {
+  window.clearTimeout(pushToTalkReleaseTimer);
+  pushToTalkReleaseTimer = 0;
+  state.pushToTalkActive = false;
 }
 
 export async function handleMicButtonClick(event: Event): Promise<void> {
@@ -142,7 +220,7 @@ export function toggleOutputMute(): void {
   if (state.localStream) {
     if (state.outputMuted) {
       setMicrophoneMuted(true, { playCue: false, post: false });
-    } else if (!state.micMutedBeforeOutputMute) {
+    } else if (state.microphoneMode === 'open' && !state.micMutedBeforeOutputMute) {
       setMicrophoneMuted(false, { playCue: false, post: false });
     }
   }

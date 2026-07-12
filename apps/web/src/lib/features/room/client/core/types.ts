@@ -1,6 +1,6 @@
 import type { LocalTrackPublication, Room } from 'livekit-client';
 import type { SvelteMap } from 'svelte/reactivity';
-import type { NoiseMode } from './config';
+import type { MicrophoneMode, NoiseMode } from './config';
 import type { Participant, PeerInfo } from '../model/participants';
 export type { Participant, ParticipantViewRefs, PeerInfo } from '../model/participants';
 
@@ -28,9 +28,11 @@ export interface MicProcessor {
   context: AudioContext;
   destination: MediaStreamAudioDestinationNode;
   node: AudioNode;
+  nodes?: AudioNode[];
+  setGain?: (gain: number) => void;
   source: MediaStreamAudioSourceNode;
   setThreshold?: (threshold: number) => void;
-  type?: 'gate';
+  type?: 'gate' | 'input-gain';
 }
 
 export interface MicrophoneCapture {
@@ -165,12 +167,15 @@ export interface RoomAudioState {
   localStream: MediaStream | null;
   localAppAudioSuppressed: boolean;
   microphoneDeviceId: string;
+  microphoneMode: MicrophoneMode;
+  microphoneVolume: number;
   micMutedBeforeOutputMute: boolean;
   micProcessor: MicProcessor | MicProcessor[] | null;
   muted: boolean;
   noiseMode: NoiseMode;
   outputDeviceId: string;
   outputMuted: boolean;
+  pushToTalkActive: boolean;
 }
 
 export interface RoomScreenState {

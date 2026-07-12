@@ -12,10 +12,10 @@ test('notification API client uses required endpoints and credentialed helpers',
   assert.match(api, /import \{ getJsonAuth, postJsonAuth, putJson \} from '\.\/http'/);
   assert.match(api, /getJsonAuth<NotificationPreferencesResponse>\('\/api\/notifications\/preferences'\)/);
   assert.match(api, /putJson<NotificationMuteResponse>\(`\/api\/notifications\/dm\/\$\{encodeURIComponent\(userId\)\}\/mute`, \{ muted \}\)/);
-  assert.match(api, /putJson<NotificationMuteResponse>\(`\/api\/notifications\/rooms\/\$\{encodeURIComponent\(roomId\)\}\/mute`, \{ muted \}\)/);
+  assert.doesNotMatch(api, /notifications\/rooms/);
   assert.match(api, /putJson<NotificationPreferencesResponse>\('\/api\/notifications\/privacy', \{ privateNotifications \}\)/);
   assert.match(api, /mutedPeerIds: string\[\]/);
-  assert.match(api, /mutedRoomIds: string\[\]/);
+  assert.doesNotMatch(api, /mutedRoomIds/);
   assert.match(api, /privateNotifications: boolean/);
   assert.match(api, /doNotDisturb: boolean/);
   assert.match(api, /postJsonAuth<NotificationPreferencesResponse>\('\/api\/notifications\/settings', \{ dnd \}\)/);
@@ -124,14 +124,17 @@ test('Web Push uses credentialed subscription endpoints and suppresses focused-w
   assert.match(lobby, /openDm\(initialDmId\)/);
 });
 
-test('mute toggles call state helpers that call the correct API clients', () => {
+test('DM mute is server-backed while room mute is current-device localStorage', () => {
   const prefs = read('src/lib/features/home/model/notification-preferences.svelte.ts');
   const dm = read('src/lib/features/home/components/lobby/DmView.svelte');
   const roomHeader = read('src/lib/features/home/components/lobby/RoomViewHeader.svelte');
   const settings = read('src/lib/features/home/components/SettingsModal.svelte');
 
   assert.match(prefs, /setDmNotificationsMuted\(userId, muted\)/);
-  assert.match(prefs, /setRoomNotificationsMuted\(roomId, muted\)/);
+  assert.match(prefs, /MUTED_ROOM_NOTIFICATIONS_STORAGE_KEY = 'voice-room:muted-room-notifications'/);
+  assert.match(prefs, /persistMutedRoomIds\(notificationPreferences\.mutedRoomIds\)/);
+  assert.match(prefs, /storage\.setItem\(MUTED_ROOM_NOTIFICATIONS_STORAGE_KEY, JSON\.stringify\(roomIds\)\)/);
+  assert.doesNotMatch(prefs, /setRoomNotificationsMuted/);
   assert.match(prefs, /setPrivateNotifications\(privateNotifications\)/);
   assert.match(dm, /updatePeerNotificationsMuted\(peer\.id, !peerMuted\)/);
   assert.match(dm, /data-notification-mute="dm"/);

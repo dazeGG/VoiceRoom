@@ -35,6 +35,7 @@ function mapMessage(row) {
     recipientId: row.recipient_id,
     body: row.body,
     createdAt: toMillis(row.created_at),
+    editedAt: toMillis(row.edited_at),
     readAt: toMillis(row.read_at),
     // deletedAt kept internal; callers filter before map
     deletedAt: row.deleted_at ? toMillis(row.deleted_at) : null
@@ -367,6 +368,20 @@ function createFriendStore({ databaseUrl, logger = console, pool } = {}) {
     return result.rowCount > 0;
   }
 
+  async function editMessage({ messageId, senderId, recipientId, body }) {
+    const result = await getPool().query(
+      `UPDATE direct_messages
+       SET body = $4, edited_at = current_timestamp
+       WHERE id = $1
+         AND sender_id = $2
+         AND recipient_id = $3
+         AND deleted_at IS NULL
+       RETURNING *`,
+      [messageId, senderId, recipientId, body]
+    );
+    return mapMessage(result.rows[0] || null);
+  }
+
   async function sendMessage({ senderId, recipientId, body }) {
     const id = crypto.randomUUID();
     const result = await getPool().query(
@@ -414,6 +429,7 @@ function createFriendStore({ databaseUrl, logger = console, pool } = {}) {
     countIncomingRequests,
     getFriendIds,
     getUnreadCounts,
+    editMessage,
     listFriends,
     listRequests,
     listThread,

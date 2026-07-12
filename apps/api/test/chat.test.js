@@ -112,6 +112,35 @@ async function postJson(socketPath, pathname, body, { cookie } = {}) {
   };
 }
 
+async function patchJson(socketPath, pathname, body, { cookie } = {}) {
+  const payload = JSON.stringify(body);
+  const response = await new Promise((resolve, reject) => {
+    const req = http.request(
+      {
+        path: pathname,
+        method: 'PATCH',
+        socketPath,
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(payload),
+          ...(cookie ? { Cookie: cookie } : {})
+        }
+      },
+      resolve
+    );
+    req.on('error', reject);
+    req.end(payload);
+  });
+
+  const text = await new Promise((resolve, reject) => {
+    let data = '';
+    response.on('data', (chunk) => { data += chunk; });
+    response.on('end', () => resolve(data));
+    response.on('error', reject);
+  });
+  return { status: response.statusCode, body: text ? JSON.parse(text) : null };
+}
+
 async function getJson(socketPath, pathname) {
   const response = await new Promise((resolve, reject) => {
     http
@@ -188,10 +217,35 @@ test('chat API persists, streams, and respects room auth', async (t) => {
     );
     assert.equal(streamed.payload.message.text, 'Привет, чат!');
 
+    const rejectedEdit = await patchJson(
+      socketPath,
+      `/api/rooms/${created.body.roomId}/chat/${posted.body.message.id}`,
+      { peerId: PEER_ID, sessionToken: 'x'.repeat(32), text: 'spoofed edit' }
+    );
+    assert.equal(rejectedEdit.status, 403);
+
+    const edited = await patchJson(
+      socketPath,
+      `/api/rooms/${created.body.roomId}/chat/${posted.body.message.id}`,
+      { peerId: PEER_ID, sessionToken: TOKEN, text: '  Изменено\n\n\nс сохранением строк  ' }
+    );
+    assert.equal(edited.status, 200);
+    assert.equal(edited.body.message.text, 'Изменено\n\nс сохранением строк');
+    assert.equal(typeof edited.body.message.editedAt, 'number');
+
+    const streamedEdit = await waitForWsType(
+      voice.frames,
+      'room.chat.edited',
+      (frame) => frame.payload?.message?.id === posted.body.message.id
+    );
+    assert.equal(streamedEdit.payload.message.text, 'Изменено\n\nс сохранением строк');
+    assert.equal(streamedEdit.payload.message.editedAt, edited.body.message.editedAt);
+
     const after = await getJson(socketPath, `/api/rooms/${created.body.roomId}/chat`);
     assert.equal(after.status, 200);
     assert.equal(after.body.messages.length, 1);
-    assert.equal(after.body.messages[0].text, 'Привет, чат!');
+    assert.equal(after.body.messages[0].text, 'Изменено\n\nс сохранением строк');
+    assert.equal(after.body.messages[0].editedAt, edited.body.message.editedAt);
 
     // 2.4.0: multiline preserved (newlines, limited blank lines, line count cap)
     const multi = await postJson(socketPath, `/api/rooms/${created.body.roomId}/chat`, {

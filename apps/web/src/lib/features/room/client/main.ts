@@ -9,7 +9,14 @@ import { cleanDisplayName } from './core/utils';
 import { showToast } from './ui/toast';
 import { handleAudioUnlockGesture } from './services/media-playback-service';
 import { refreshDevices, refreshMicrophoneLevelMeter } from './ui/devices';
-import { syncOutputDeviceUiState, toggleMicrophoneMuted, toggleOutputMute } from './ui/controls';
+import {
+  beginPushToTalk,
+  endPushToTalk,
+  syncOutputDeviceUiState,
+  toggleMicrophoneMuted,
+  toggleOutputMute
+} from './ui/controls';
+import { eventMatchesHotkey, isTypingTarget } from './core/hotkeys';
 import { resetGuestNameDialog, updateNameStatuses } from './ui/names';
 import {
   joinRoom,
@@ -44,18 +51,49 @@ export function mountRoomClient(_root: ParentNode = document, options: { roomId?
     toggleDeafen: toggleOutputMute
   });
 
-  // 2.4.0: global mic mute hotkey (Ctrl/Cmd+Shift+M), ignore when typing
-  function onMicHotkey(ev: KeyboardEvent) {
-    const isMac = /Mac|iPod|iPhone|iPad/.test(navigator.platform);
-    const mod = isMac ? ev.metaKey : ev.ctrlKey;
-    if (mod && ev.shiftKey && ev.key.toLowerCase() === 'm') {
-      const t = ev.target as HTMLElement | null;
-      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
-      ev.preventDefault();
+  let activePushToTalkCode = '';
+
+  function onVoiceHotkeyDown(event: KeyboardEvent): void {
+    if (isTypingTarget(event.target)) return;
+
+    if (state.microphoneMode === 'push-to-talk' && eventMatchesHotkey('push-to-talk', event)) {
+      event.preventDefault();
+      activePushToTalkCode = event.code;
+      if (!event.repeat) beginPushToTalk();
+      return;
+    }
+
+    if (event.repeat) return;
+    if (eventMatchesHotkey('mic-mute', event)) {
+      event.preventDefault();
       toggleMicrophoneMuted();
+      return;
+    }
+    if (state.joined && eventMatchesHotkey('output-mute', event)) {
+      event.preventDefault();
+      toggleOutputMute();
     }
   }
-  window.addEventListener('keydown', onMicHotkey, { signal: listenerSignal });
+
+  function onVoiceHotkeyUp(event: KeyboardEvent): void {
+    if (!activePushToTalkCode || event.code !== activePushToTalkCode) return;
+    event.preventDefault();
+    activePushToTalkCode = '';
+    endPushToTalk();
+  }
+
+  function releasePushToTalkImmediately(): void {
+    if (!activePushToTalkCode && !state.pushToTalkActive) return;
+    activePushToTalkCode = '';
+    endPushToTalk({ immediate: true });
+  }
+
+  window.addEventListener('keydown', onVoiceHotkeyDown, { signal: listenerSignal });
+  window.addEventListener('keyup', onVoiceHotkeyUp, { signal: listenerSignal });
+  window.addEventListener('blur', releasePushToTalkImmediately, { signal: listenerSignal });
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) releasePushToTalkImmediately();
+  }, { signal: listenerSignal });
 
   const mountedRoomId = options.roomId || options.embeddedRoomId || '';
   if (mountedRoomId) {
@@ -81,6 +119,7 @@ export function mountRoomClient(_root: ParentNode = document, options: { roomId?
   startUi.nameInput = savedName;
   updateNameStatuses(savedName);
   roomDeviceUi.noiseMode = state.noiseMode;
+  roomDeviceUi.microphoneVolume = state.microphoneVolume;
   refreshMicrophoneLevelMeter(GATE_THRESHOLD_MIN_DB);
 
   syncScreenVideoAudio();

@@ -782,17 +782,82 @@ html.is-desktop .sidebar-download { display: none; }
   opacity: 0.85;
 }
 
+.dm-msg-edited {
+  margin-left: 5px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  opacity: 0.64;
+  white-space: nowrap;
+}
+
+.dm-msg-actions {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+}
+
+.dm-msg-edit-button,
 .dm-msg-delete {
-  margin-left: 4px;
-  font-size: 10px;
   border: none;
   background: transparent;
   color: inherit;
   opacity: 0.5;
   cursor: pointer;
+}
+
+.dm-msg-edit-button {
+  width: 18px;
+  height: 18px;
+  margin-left: 4px;
+  padding: 3px;
+}
+.dm-msg-edit-button:hover { opacity: 1; }
+
+.dm-msg-delete {
+  font-size: 10px;
   padding: 0 1px;
 }
 .dm-msg-delete:hover { opacity: 1; color: #c66; }
+
+.dm-msg-edit {
+  display: grid;
+  gap: 6px;
+  min-width: min(320px, 55vw);
+}
+
+.dm-msg-edit-input {
+  width: 100%;
+  min-height: 56px;
+  resize: vertical;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 9px;
+  outline: none;
+  background: rgba(0, 0, 0, 0.14);
+  color: inherit;
+  font: inherit;
+  line-height: 1.4;
+  padding: 7px 9px;
+}
+
+.dm-msg-edit-input:focus { border-color: rgba(255, 255, 255, 0.42); }
+
+.dm-msg-edit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.dm-msg-edit-actions button {
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.1);
+  color: inherit;
+  cursor: pointer;
+  font-size: 10px;
+  padding: 4px 7px;
+}
+
+.dm-msg-edit-actions button:disabled { cursor: default; opacity: 0.45; }
 .lobby-dm-time { font-family: var(--font-mono); font-size: 10px; color: var(--warm-faint); margin-top: 2px; padding: 0 4px; }
 
 .lobby-dm-compose { flex: none; padding: 14px 24px 20px; }

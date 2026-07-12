@@ -18,7 +18,7 @@ import {
   setServerConnectionStatus,
   setVoiceConnectionStatus
 } from '../ui/status';
-import { refreshCallControls } from '../ui/controls';
+import { refreshCallControls, resetPushToTalkState } from '../ui/controls';
 import { refreshScreenControls, stopLocalScreenStream } from '../services/screen-share-service';
 import { closeScreenView, refreshScreenStage } from '../ui/screen-view';
 import {
@@ -255,6 +255,7 @@ export async function joinRoom(event?: Event): Promise<void> {
       state.micMutedBeforeOutputMute = state.muted;
       state.muted = true;
     }
+    if (state.microphoneMode === 'push-to-talk') state.muted = true;
 
     setLocalMicrophoneCapture(await openLocalMicrophone());
     await refreshDevices();
@@ -487,6 +488,7 @@ export function leaveRoom(): void {
   stopSpeakingStats();
 
   state.muted = false;
+  resetPushToTalkState();
   clearAllPeerJoinCues();
   clearStreamViewerCues();
   refreshCallControls();

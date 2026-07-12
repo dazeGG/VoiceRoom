@@ -114,7 +114,7 @@ let avatarStorage = null;
 const presenceRooms = new Map();
 let wsRegistry = null;
 let roomRuntime = null;
-const roomEmptyQueue = new Map();
+const roomOccupancyQueue = new Map();
 
 function getLogLevel(env = process.env) {
   const configured = (env.LOG_LEVEL || '').trim();
@@ -619,6 +619,31 @@ function sendRoomBanned(res, roomId) {
   sendJson(res, 403, { ok: false, code: 'room_banned', error: 'Вы заблокированы в этой комнате', roomId });
 }
 
+function queueRoomOccupancyTransition(roomId) {
+  const previous = roomOccupancyQueue.get(roomId) || Promise.resolve();
+  const transition = previous
+    .catch(() => {})
+    .then(async () => {
+      const room = presenceRooms.get(roomId);
+      if (room?.peers.size > 0) {
+        await getRoomStore().markRoomActive(roomId, room.updatedAt || Date.now());
+        return;
+      }
+      await getRoomStore().markRoomEmpty(roomId);
+    });
+
+  roomOccupancyQueue.set(roomId, transition);
+  void transition.then(
+    () => {
+      if (roomOccupancyQueue.get(roomId) === transition) roomOccupancyQueue.delete(roomId);
+    },
+    () => {
+      if (roomOccupancyQueue.get(roomId) === transition) roomOccupancyQueue.delete(roomId);
+    }
+  );
+  return transition;
+}
+
 function sendEvent(peer, message) {
   const sent = peer?.transport?.send(message) ?? false;
   if (!sent && peer) peer.closed = true;
@@ -661,17 +686,9 @@ function closePeer(roomId, peerId, transportId, reason = 'left') {
   }
 
   if (room.peers.size === 0) {
-    const markEmpty = Promise.resolve()
-      .then(async () => {
-        if (room.peers.size === 0) await getRoomStore().markRoomEmpty(roomId);
-      })
-      .catch((error) => {
-        console.error('Failed to mark room empty:', error);
-      })
-      .finally(() => {
-        if (roomEmptyQueue.get(roomId) === markEmpty) roomEmptyQueue.delete(roomId);
-      });
-    roomEmptyQueue.set(roomId, markEmpty);
+    void queueRoomOccupancyTransition(roomId).catch((error) => {
+      console.error('Failed to persist room occupancy:', error);
+    });
   } else {
     room.updatedAt = Date.now();
   }
@@ -698,19 +715,20 @@ function cleanChatText(value) {
 
 function publicChatMessage(message) {
   return {
+    authorUserId: message.authorUserId || null,
     avatarAccent: message.avatarAccent || null,
     avatarColorKey: message.avatarColorKey || avatarColorForPeerId(message.peerId),
     avatarUrl: message.avatarUrl || (message.avatarKey
       ? `/api/avatars/${encodeURIComponent(message.avatarKey)}`
       : null),
     createdAt: message.createdAt,
+    editedAt: message.editedAt || null,
     expiresAt: message.expiresAt,
     id: message.id,
     name: message.name,
     peerId: message.peerId,
     roomId: message.roomId,
     text: message.text
-    // authorUserId intentionally not exposed to clients
   };
 }
 
@@ -1460,6 +1478,17 @@ async function handleState(req, res) {
   const roomId = normalizeRoomId(body.roomId);
   const peerId = normalizePeerId(body.peerId);
   const sessionToken = normalizeSessionToken(body.sessionToken);
+  const sessionUser = await resolveOptionalSessionUser(req);
+  const clientIp = getClientIp(req, TRUST_PROXY);
+
+  // Moderation invalidates and removes the peer before its next state write.
+  // Check request identity first so the client still receives the stable ban
+  // contract instead of the generic invalid-session response.
+  if (await findRoomBan(roomId, sessionUser?.id, clientIp)) {
+    sendRoomBanned(res, roomId);
+    return;
+  }
+
   const authorized = getAuthorizedPeer(roomId, peerId, sessionToken);
 
   if (!authorized) {
@@ -1957,7 +1986,11 @@ async function handleDmThread(req, res, peerId) {
     broadcastToUser(id, { type: 'dm-read', userId: user.id });
   }
 
-  sendJson(res, 200, { ok: true, peer: publicUser(peer), messages });
+  const notifications = getNotificationStore();
+  const muted = typeof notifications.isDmMuted === 'function'
+    ? await notifications.isDmMuted({ userId: user.id, peerUserId: id })
+    : false;
+  sendJson(res, 200, { ok: true, peer: publicUser(peer), messages, muted });
 }
 
 async function handleSendDm(req, res, peerId) {
@@ -2195,27 +2228,6 @@ async function handleSetDmMute(req, res, peerId) {
   sendNotificationMutationResult(res, result, { muted: muted.value });
 }
 
-async function handleSetRoomMute(req, res, roomId) {
-  const user = await requireSessionUser(req, res);
-  if (!user) return;
-
-  const id = normalizeRoomId(roomId);
-  if (!id) {
-    sendJson(res, 404, { ok: false, error: 'Room not found' });
-    return;
-  }
-
-  const body = await readJsonBody(req);
-  const muted = readRequiredBoolean(body, 'muted');
-  if (!muted.ok) {
-    sendJson(res, 400, { ok: false, error: muted.error });
-    return;
-  }
-
-  const result = await getNotificationStore().setRoomMute({ userId: user.id, roomId: id, muted: muted.value });
-  sendNotificationMutationResult(res, result, { muted: muted.value });
-}
-
 async function handleSetPrivateNotifications(req, res) {
   const user = await requireSessionUser(req, res);
   if (!user) return;
@@ -2318,6 +2330,71 @@ async function handleDeleteRoomChatMessage(req, res, roomId, messageId) {
   sendJson(res, 200, { ok: true, deleted: true });
 }
 
+async function handleEditRoomChatMessage(req, res, roomId, messageId) {
+  const room = await getRoom(roomId);
+  if (!room) {
+    sendJson(res, 404, { ok: false, error: 'Room not found', roomId });
+    return;
+  }
+
+  const clientIp = getClientIp(req, TRUST_PROXY);
+  const body = await readJsonBody(req);
+  const sessionUser = await resolveOptionalSessionUser(req);
+  if (await findRoomBan(roomId, sessionUser?.id, clientIp)) {
+    sendRoomBanned(res, roomId);
+    return;
+  }
+
+  const text = cleanChatText(body.text);
+  if (!text) {
+    sendJson(res, 400, { ok: false, error: 'Invalid chat message' });
+    return;
+  }
+
+  const requestedPeerId = normalizePeerId(body.peerId);
+  const sessionToken = normalizeSessionToken(body.sessionToken);
+  const current = await getRoomStore().getMessage(roomId, messageId);
+  if (!current) {
+    sendJson(res, 404, { ok: false, error: 'Message not found' });
+    return;
+  }
+
+  const isPeerAuthor = Boolean(requestedPeerId && requestedPeerId === current.peerId);
+  const isAccountAuthor = Boolean(sessionUser && current.authorUserId && sessionUser.id === current.authorUserId);
+  if (isAccountAuthor) {
+    // The account id is durable ownership. It also lets a signed-in author edit
+    // after their transient room peer session has disconnected or rotated.
+  } else if (isPeerAuthor) {
+    const activePeer = room.peers.get(requestedPeerId);
+    if (!activePeer || !tokensMatch(activePeer.sessionToken, sessionToken)) {
+      sendJson(res, 403, { ok: false, error: 'Invalid peer session' });
+      return;
+    }
+    if (await findRoomBan(roomId, activePeer.accountUserId, activePeer.ip || clientIp)) {
+      sendRoomBanned(res, roomId);
+      return;
+    }
+  } else {
+    // Deliberately no owner/moderator override: editing always belongs to the
+    // original author, even in a static room.
+    sendJson(res, 403, { ok: false, error: 'Not allowed to edit this message' });
+    return;
+  }
+
+  const message = await getRoomStore().editMessage(roomId, messageId, text);
+  if (!message) {
+    sendJson(res, 404, { ok: false, error: 'Message not found' });
+    return;
+  }
+
+  const publicMessage = publicChatMessage(message);
+  roomRuntime?.broadcastRoomDetail?.(
+    roomId,
+    buildServerEnvelope('room.chat.edited', { roomId, message: publicMessage })
+  );
+  sendJson(res, 200, { ok: true, message: publicMessage });
+}
+
 async function handleDeleteDmMessage(req, res, peerIdParam, messageId) {
   const user = await requireSessionUser(req, res);
   if (!user) return;
@@ -2355,6 +2432,50 @@ async function handleDeleteDmMessage(req, res, peerIdParam, messageId) {
   // For simplicity, let client re-fetch count on delete event if needed.
 
   sendJson(res, 200, { ok: true, deleted: true });
+}
+
+async function handleEditDmMessage(req, res, peerIdParam, messageId) {
+  const user = await requireSessionUser(req, res);
+  if (!user) return;
+
+  const peerId = cleanUuid(peerIdParam);
+  if (!peerId) {
+    sendJson(res, 404, { ok: false, error: 'Диалог не найден' });
+    return;
+  }
+
+  const body = await readJsonBody(req);
+  const text = cleanDmText(body.text);
+  if (!text) {
+    sendJson(res, 400, { ok: false, error: 'Пустое сообщение' });
+    return;
+  }
+
+  const current = await getFriendStore().getMessage(user.id, peerId, messageId);
+  if (!current) {
+    sendJson(res, 404, { ok: false, error: 'Сообщение не найдено' });
+    return;
+  }
+  if (current.senderId !== user.id) {
+    sendJson(res, 403, { ok: false, error: 'Можно редактировать только свои сообщения' });
+    return;
+  }
+
+  const message = await getFriendStore().editMessage({
+    messageId,
+    senderId: user.id,
+    recipientId: peerId,
+    body: text
+  });
+  if (!message) {
+    sendJson(res, 404, { ok: false, error: 'Сообщение не найдено' });
+    return;
+  }
+
+  const event = { type: 'dm.message.edited', message };
+  broadcastToUser(peerId, event);
+  broadcastToUser(user.id, event);
+  sendJson(res, 200, { ok: true, message });
 }
 
 function pickReleaseAsset(assets, patterns) {
@@ -2559,7 +2680,7 @@ function createApiApp({ store = null, users = null, friends = null, notification
     MAX_ROOM_PEERS,
     tokensMatch,
     sessionAvatarColorKey,
-    roomEmptyQueue,
+    queueRoomOccupancyTransition,
     findRoomBan
   });
 
@@ -2650,6 +2771,9 @@ function createApiApp({ store = null, users = null, friends = null, notification
   app.post('/api/rooms/:roomId/chat', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
     return handleRoomChatPost(req, res, normalizeRoomId(request.params.roomId));
   }));
+  app.patch('/api/rooms/:roomId/chat/:messageId', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
+    return handleEditRoomChatMessage(req, res, normalizeRoomId(request.params.roomId), request.params.messageId);
+  }));
   app.delete('/api/rooms/:roomId/chat/:messageId', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
     return handleDeleteRoomChatMessage(req, res, normalizeRoomId(request.params.roomId), request.params.messageId);
   }));
@@ -2687,15 +2811,15 @@ function createApiApp({ store = null, users = null, friends = null, notification
   app.post('/api/rooms/:roomId/ring', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
     return handleRingRoom(req, res, request.params.roomId);
   }));
+  app.patch('/api/dm/:userId/messages/:messageId', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
+    return handleEditDmMessage(req, res, request.params.userId, request.params.messageId);
+  }));
   app.delete('/api/dm/:userId/messages/:messageId', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
     return handleDeleteDmMessage(req, res, request.params.userId, request.params.messageId);
   }));
   app.get('/api/notifications/preferences', (request, reply) => runLegacyHandler(request, reply, handleNotificationPreferences));
   app.put('/api/notifications/dm/:userId/mute', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
     return handleSetDmMute(req, res, request.params.userId);
-  }));
-  app.put('/api/notifications/rooms/:roomId/mute', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
-    return handleSetRoomMute(req, res, request.params.roomId);
   }));
   app.put('/api/notifications/privacy', (request, reply) => runLegacyHandler(request, reply, handleSetPrivateNotifications));
   app.post('/api/notifications/settings', (request, reply) => runLegacyHandler(request, reply, (req, res) => {

@@ -9,7 +9,13 @@ import {
   OUTPUT_MUTED_STORAGE_KEY
 } from '../core/config';
 import { getRoomIdFromPath, getStoredPeerSession } from '../core/session';
-import { getStoredGateThresholdDb, getStoredNoiseMode, getStoredStreamVolume } from '../core/settings';
+import {
+  getStoredGateThresholdDb,
+  getStoredMicrophoneMode,
+  getStoredMicrophoneVolume,
+  getStoredNoiseMode,
+  getStoredStreamVolume
+} from '../core/settings';
 import type { AppState } from '../core/types';
 
 export function createInitialRoomState(): AppState {
@@ -48,12 +54,15 @@ export function createInitialRoomState(): AppState {
     localStream: null,
     localAppAudioSuppressed: false,
     microphoneDeviceId: localStorage.getItem(MICROPHONE_DEVICE_STORAGE_KEY) || '',
+    microphoneMode: getStoredMicrophoneMode(),
+    microphoneVolume: getStoredMicrophoneVolume(),
     micMutedBeforeOutputMute: false,
     micProcessor: null,
     muted: false,
     noiseMode: getStoredNoiseMode(),
     outputDeviceId: localStorage.getItem(OUTPUT_DEVICE_STORAGE_KEY) || '',
     outputMuted: localStorage.getItem(OUTPUT_MUTED_STORAGE_KEY) === 'true',
+    pushToTalkActive: false,
     peers: new SvelteMap(),
     peerId: peerSession.peerId,
     roomId,

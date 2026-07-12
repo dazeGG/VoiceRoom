@@ -301,6 +301,107 @@ test('moderation routes require the owner of a static room', async (t) => {
   assert.equal((await temporaryApp.inject(request('/api/rooms/room-2/ban'))).statusCode, 403);
 });
 
+test('message edit routes reuse send validation and never grant room owners an author override', async (t) => {
+  const ownerId = '11111111-1111-4111-8111-111111111111';
+  const authorId = '22222222-2222-4222-8222-222222222222';
+  const peerId = '33333333-3333-4333-8333-333333333333';
+  const roomId = 'room-edit1';
+  let roomEdit = null;
+  let dmEdit = null;
+  let bannedUserId = null;
+  const store = {
+    ...createFakeStore(),
+    async findActiveRoomBan({ userId }) {
+      return userId === bannedUserId ? { id: 'ban-1' } : null;
+    },
+    async getRoom() {
+      return { id: roomId, isStatic: true, ownerId, peers: new Map() };
+    },
+    async getMessage() {
+      return {
+        authorUserId: authorId,
+        avatarColorKey: 'blurple',
+        createdAt: 100,
+        editedAt: null,
+        expiresAt: 10_000,
+        id: 'room-message-1',
+        name: 'Author',
+        peerId: `auth-${authorId}`,
+        roomId,
+        text: 'before'
+      };
+    },
+    async editMessage(nextRoomId, messageId, text) {
+      roomEdit = { roomId: nextRoomId, messageId, text };
+      return { ...(await this.getMessage()), text, editedAt: 200 };
+    }
+  };
+  const friends = {
+    async getMessage() {
+      return { id: 'dm-message-1', senderId: authorId, recipientId: peerId, body: 'before' };
+    },
+    async editMessage(input) {
+      dmEdit = input;
+      return { id: input.messageId, senderId: input.senderId, recipientId: input.recipientId, body: input.body, createdAt: 100, editedAt: 200, readAt: null };
+    }
+  };
+  const app = createApiApp({
+    store,
+    friends,
+    users: {
+      async getSessionUser(token) {
+        if (token === 'owner-session') return { user: { id: ownerId } };
+        if (token === 'author-session') return { user: { id: authorId } };
+        return null;
+      }
+    }
+  });
+  t.after(() => app.close());
+
+  const request = (url, cookie, payload = { text: ' updated \n\n\n line ' }) => app.inject({
+    method: 'PATCH',
+    url,
+    headers: { cookie: `vr_session=${cookie}`, host: 'voice.local', origin: 'http://voice.local' },
+    payload
+  });
+
+  const ownerRoomEdit = await request(`/api/rooms/${roomId}/chat/room-message-1`, 'owner-session');
+  assert.equal(ownerRoomEdit.statusCode, 403);
+  assert.equal(roomEdit, null);
+
+  const authorRoomEdit = await request(
+    `/api/rooms/${roomId}/chat/room-message-1`,
+    'author-session',
+    { peerId: `auth-${authorId}`, text: ' updated \n\n\n line ' }
+  );
+  assert.equal(authorRoomEdit.statusCode, 200);
+  assert.deepEqual(roomEdit, { roomId, messageId: 'room-message-1', text: 'updated\n\nline' });
+  assert.equal(authorRoomEdit.json().message.editedAt, 200);
+  assert.equal(authorRoomEdit.json().message.authorUserId, authorId);
+
+  bannedUserId = authorId;
+  roomEdit = null;
+  const bannedRoomEdit = await request(`/api/rooms/${roomId}/chat/room-message-1`, 'author-session');
+  assert.equal(bannedRoomEdit.statusCode, 403);
+  assert.equal(bannedRoomEdit.json().code, 'room_banned');
+  assert.equal(roomEdit, null);
+  bannedUserId = null;
+
+  const forbiddenDmEdit = await request(`/api/dm/${peerId}/messages/dm-message-1`, 'owner-session');
+  assert.equal(forbiddenDmEdit.statusCode, 403);
+  assert.equal(dmEdit, null);
+
+  const authorDmEdit = await request(`/api/dm/${peerId}/messages/dm-message-1`, 'author-session');
+  assert.equal(authorDmEdit.statusCode, 200);
+  assert.deepEqual(dmEdit, {
+    messageId: 'dm-message-1',
+    senderId: authorId,
+    recipientId: peerId,
+    body: 'updated\n\nline'
+  });
+  assert.equal(authorDmEdit.json().message.editedAt, 200);
+});
+
 
 
 
@@ -365,7 +466,7 @@ test('notification preference routes require auth and expose defaults', async (t
     notifications: {
       async getPreferences(userId) {
         assert.equal(userId, '11111111-1111-4111-8111-111111111111');
-        return { doNotDisturb: false, mutedPeerIds: [], mutedRoomIds: [], privateNotifications: false };
+        return { doNotDisturb: false, mutedPeerIds: [], privateNotifications: false };
       }
     }
   });
@@ -383,7 +484,6 @@ test('notification preference routes require auth and expose defaults', async (t
   assert.deepEqual(response.json().preferences, {
     doNotDisturb: false,
     mutedPeerIds: [],
-    mutedRoomIds: [],
     privateNotifications: false
   });
 });
@@ -393,7 +493,6 @@ test('notification mute and privacy routes call notification store and map statu
   const preferences = {
     doNotDisturb: true,
     mutedPeerIds: ['22222222-2222-4222-8222-222222222222'],
-    mutedRoomIds: ['room-1'],
     privateNotifications: true
   };
   const app = createApiApp({
@@ -409,11 +508,6 @@ test('notification mute and privacy routes call notification store and map statu
         if (input.peerUserId === '33333333-3333-4333-8333-333333333333') {
           return { status: 'not_friends', preferences: { ...preferences, mutedPeerIds: [] } };
         }
-        return { status: input.muted ? 'muted' : 'unmuted', preferences };
-      },
-      async setRoomMute(input) {
-        calls.push(['room', input]);
-        if (input.roomId === 'missing-room') return { status: 'not_found', preferences };
         return { status: input.muted ? 'muted' : 'unmuted', preferences };
       },
       async setPrivateNotifications(input) {
@@ -458,24 +552,6 @@ test('notification mute and privacy routes call notification store and map statu
   });
   assert.equal(notFriends.statusCode, 403);
 
-  const room = await app.inject({
-    method: 'PUT',
-    url: '/api/notifications/rooms/room-1/mute',
-    headers: {
-      cookie: 'vr_session=session-token',
-      host: 'voice.local',
-      origin: 'http://voice.local'
-    },
-    payload: { muted: false }
-  });
-  assert.equal(room.statusCode, 200);
-  assert.equal(room.json().muted, false);
-  assert.deepEqual(calls[2], ['room', {
-    userId: '11111111-1111-4111-8111-111111111111',
-    roomId: 'room-1',
-    muted: false
-  }]);
-
   const privacy = await app.inject({
     method: 'PUT',
     url: '/api/notifications/privacy',
@@ -488,7 +564,7 @@ test('notification mute and privacy routes call notification store and map statu
   });
   assert.equal(privacy.statusCode, 200);
   assert.equal(privacy.json().preferences.privateNotifications, true);
-  assert.deepEqual(calls[3], ['privacy', {
+  assert.deepEqual(calls[2], ['privacy', {
     userId: '11111111-1111-4111-8111-111111111111',
     privateNotifications: true
   }]);
@@ -505,7 +581,7 @@ test('notification mute and privacy routes call notification store and map statu
   });
   assert.equal(dnd.statusCode, 200);
   assert.equal(dnd.json().preferences.doNotDisturb, true);
-  assert.deepEqual(calls[4], ['dnd', {
+  assert.deepEqual(calls[3], ['dnd', {
     userId: '11111111-1111-4111-8111-111111111111',
     doNotDisturb: true
   }]);
@@ -530,19 +606,15 @@ test('notification mutation routes reject invalid booleans and targets before st
     notifications: {
       async setDmMute(input) {
         calls.push(['dm', input]);
-        return { status: 'muted', preferences: { mutedPeerIds: [], mutedRoomIds: [], privateNotifications: false } };
-      },
-      async setRoomMute(input) {
-        calls.push(['room', input]);
-        return { status: 'muted', preferences: { mutedPeerIds: [], mutedRoomIds: [], privateNotifications: false } };
+        return { status: 'muted', preferences: { mutedPeerIds: [], privateNotifications: false } };
       },
       async setPrivateNotifications(input) {
         calls.push(['privacy', input]);
-        return { status: 'updated', preferences: { mutedPeerIds: [], mutedRoomIds: [], privateNotifications: false } };
+        return { status: 'updated', preferences: { mutedPeerIds: [], privateNotifications: false } };
       },
       async setDoNotDisturb(input) {
         calls.push(['dnd', input]);
-        return { status: 'updated', preferences: { doNotDisturb: false, mutedPeerIds: [], mutedRoomIds: [], privateNotifications: false } };
+        return { status: 'updated', preferences: { doNotDisturb: false, mutedPeerIds: [], privateNotifications: false } };
       }
     }
   });
@@ -581,24 +653,6 @@ test('notification mutation routes reject invalid booleans and targets before st
   });
   assert.equal(invalidPeer.statusCode, 404);
   assert.equal(invalidPeer.json().ok, false);
-
-  const invalidRoomPayload = await app.inject({
-    method: 'PUT',
-    url: '/api/notifications/rooms/room-1/mute',
-    headers,
-    payload: { muted: 'false' }
-  });
-  assert.equal(invalidRoomPayload.statusCode, 400);
-  assert.deepEqual(invalidRoomPayload.json(), { ok: false, error: 'muted must be a boolean' });
-
-  const invalidRoom = await app.inject({
-    method: 'PUT',
-    url: '/api/notifications/rooms/%20/mute',
-    headers,
-    payload: { muted: true }
-  });
-  assert.equal(invalidRoom.statusCode, 404);
-  assert.equal(invalidRoom.json().ok, false);
 
   const invalidPrivacy = await app.inject({
     method: 'PUT',
