@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { Check, MessageSquare, MicOff, UserPlus, Volume2 } from '@lucide/svelte';
+  import { Ban, Check, MessageSquare, MicOff, UserMinus, UserPlus, Volume2 } from '@lucide/svelte';
+  import { banRoomPeer, kickRoomPeer, undoRoomBan } from '$lib/api/rooms';
   import { iconMd, iconSm } from '$lib/shared/ui/icons';
   import { onMount } from 'svelte';
   import { session } from '$lib/features/auth/session.svelte';
@@ -25,6 +26,8 @@
     closeParticipantContextMenu,
     participantContextMenu
   } from '../participant-context-ui.svelte';
+  import { roomSettingsUi } from '../room-settings.svelte';
+  import { state as roomState } from '../client/core/state.svelte';
 
   const MENU_WIDTH = 272;
   const MENU_EDGE_GAP = 10;
@@ -40,6 +43,7 @@
   const canUseSocialActions = $derived(
     Boolean(peer && session.user && peer.accountUserId && peer.accountUserId !== session.user?.id)
   );
+  const canModerate = $derived(Boolean(peer && roomSettingsUi.isOwner && !peer.isLocal));
   const relationship = $derived(
     canUseSocialActions && peer?.accountUserId ? getFriendRelationship(peer.accountUserId) : 'none'
   );
@@ -135,6 +139,42 @@
     } catch (error) {
       console.error(error);
       showToast(errorToastMessage(error, 'Не удалось принять заявку в друзья'), { variant: 'error' });
+    }
+  }
+
+  async function kickParticipant(): Promise<void> {
+    if (!peer) return;
+    const peerId = peer.id;
+    closeParticipantContextMenu(peerId);
+    try {
+      await kickRoomPeer(roomState.roomId, peerId);
+      showToast(`${peer.name} исключён из комнаты`);
+    } catch (error) {
+      showToast(errorToastMessage(error, 'Не удалось исключить участника'), { variant: 'error' });
+    }
+  }
+
+  async function banParticipant(): Promise<void> {
+    if (!peer) return;
+    const peerId = peer.id;
+    const peerName = peer.name;
+    closeParticipantContextMenu(peerId);
+    try {
+      const banId = await banRoomPeer(roomState.roomId, peerId);
+      showToast(`${peerName} заблокирован`, {
+        actionLabel: 'Отменить',
+        duration: 10000,
+        action: async () => {
+          try {
+            await undoRoomBan(roomState.roomId, banId);
+            showToast('Блокировка отменена');
+          } catch (error) {
+            showToast(errorToastMessage(error, 'Не удалось отменить блокировку'), { variant: 'error' });
+          }
+        }
+      });
+    } catch (error) {
+      showToast(errorToastMessage(error, 'Не удалось заблокировать участника'), { variant: 'error' });
     }
   }
 
@@ -259,6 +299,18 @@
     {:else if !peer.accountUserId}
       <span class="participant-context-menu-divider" aria-hidden="true"></span>
       <p class="participant-context-menu-note">Гость: доступны только локальные настройки звука.</p>
+    {/if}
+
+    {#if canModerate}
+      <span class="participant-context-menu-divider" aria-hidden="true"></span>
+      <button class="pcm-item" type="button" onclick={kickParticipant}>
+        <UserMinus class="pcm-item-icon" {...iconMd} aria-hidden="true" />
+        <span>Исключить</span>
+      </button>
+      <button class="pcm-item pcm-item--danger" type="button" onclick={banParticipant}>
+        <Ban class="pcm-item-icon" {...iconMd} aria-hidden="true" />
+        <span>Заблокировать</span>
+      </button>
     {/if}
 
     <span class="participant-context-menu-divider" aria-hidden="true"></span>

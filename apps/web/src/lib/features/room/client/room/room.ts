@@ -6,11 +6,11 @@ import { startUi } from '../../start-ui.svelte';
 import { clearConnectedVoiceRoom, setConnectedVoiceRoom, setVoiceControlsState } from '../../voice-session.svelte';
 import { state } from '../core/state.svelte';
 import { showToast } from '../ui/toast';
-import { checkRoomExists, postJson } from '../net/api';
+import { ApiRequestError, checkRoomExists, postJson } from '../net/api';
 import { postState } from './presence';
 import { createRoomProof } from '../net/pow';
 import { errorMessage, wait } from '../core/utils';
-import { extractRoomId } from '../core/session';
+import { extractRoomId, rotateStoredPeerSession } from '../core/session';
 import { isRoomEmbedded } from '../core/embed';
 import { getDisplayName, persistName, requestGuestNameForRoom, requireSavedName, updateNameStatuses } from '../ui/names';
 import {
@@ -125,6 +125,17 @@ export function showRoomNotFound(): void {
   state.screen = 'not-found';
   document.title = 'Комната не найдена · Voice Room';
   startUi.missingRoomCode = state.roomId || getMissingRoomLabel();
+}
+
+function showRoomModerationScreen(reason: 'banned' | 'kicked'): void {
+  leaveRoom();
+  const nextSession = rotateStoredPeerSession(state.roomId);
+  state.peerId = nextSession.peerId;
+  state.sessionToken = nextSession.sessionToken;
+  state.moderationReason = reason;
+  document.body.dataset.screen = 'moderation';
+  state.screen = 'moderation';
+  document.title = reason === 'banned' ? 'Доступ к комнате закрыт · Voice Room' : 'Вы исключены · Voice Room';
 }
 
 function getMissingRoomLabel(): string {
@@ -301,7 +312,8 @@ export async function joinRoom(event?: Event): Promise<void> {
     playPeerCue('join');
   } catch (error) {
     console.error(error);
-    showToast(formatJoinError(error));
+    const banned = error instanceof ApiRequestError && error.code === 'room_banned';
+    if (!banned) showToast(formatJoinError(error));
     setVoiceConnectionStatus(isVoiceRouteError(error) ? 'no-route' : 'error');
     if (voiceJoinSent && state.roomId && state.peerId && state.sessionToken) {
       sendVoiceLeave({ roomId: state.roomId, peerId: state.peerId, sessionToken: state.sessionToken });
@@ -315,6 +327,7 @@ export async function joinRoom(event?: Event): Promise<void> {
     state.self = null;
     stopLocalStream();
     refreshParticipantState();
+    if (banned) showRoomModerationScreen('banned');
   } finally {
     state.connecting = false;
     refreshCallControls();
@@ -366,6 +379,10 @@ async function handleVoiceRealtimeEvent(event: RealtimeEvent): Promise<void> {
   }
 
   if (event.type === 'error') {
+    if (event.payload.code === 'room_banned') {
+      showRoomModerationScreen('banned');
+      return;
+    }
     showToast(event.payload.message || 'Ошибка realtime-соединения');
     if (event.payload.code === 'invalid_session' || event.payload.code === 'join_failed' || event.payload.code === 'room_full') {
       leaveRoom();
@@ -376,6 +393,14 @@ async function handleVoiceRealtimeEvent(event: RealtimeEvent): Promise<void> {
 
   if (event.type === 'room.not_found') {
     showRoomNotFound();
+    return;
+  }
+
+
+  if (event.type === 'room.kicked' || event.type === 'room.banned') {
+    if (event.payload.roomId === state.roomId && (!event.payload.peerId || event.payload.peerId === state.peerId)) {
+      showRoomModerationScreen(event.type === 'room.banned' ? 'banned' : 'kicked');
+    }
     return;
   }
 

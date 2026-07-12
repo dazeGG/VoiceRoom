@@ -66,3 +66,17 @@ test('room chat delete is not treated as a legacy peer event', () => {
     null
   );
 });
+
+test('moderation terminal events map on both account and active room transports', () => {
+  for (const type of ['room.kicked', 'room.banned']) {
+    const account = toWsAccountEvent({ type, roomId: 'room-1', peerId: 'peer-1' });
+    assert.equal(account.type, type);
+    assert.equal(account.payload.roomId, 'room-1');
+    assert.equal(account.payload.peerId, 'peer-1');
+
+    const active = legacyPeerMessageToWs({ type, roomId: 'room-1', peerId: 'peer-1' }, 'room-1');
+    assert.equal(active.type, type);
+    assert.equal(active.payload.roomId, 'room-1');
+    assert.equal(active.payload.peerId, 'peer-1');
+  }
+});

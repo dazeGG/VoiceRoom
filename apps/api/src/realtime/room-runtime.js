@@ -30,7 +30,8 @@ function createRoomRealtimeRuntime(deps) {
     MAX_ROOM_PEERS,
     tokensMatch,
     sessionAvatarColorKey,
-    roomEmptyQueue = new Map()
+    roomEmptyQueue = new Map(),
+    findRoomBan = async () => null
   } = deps;
 
   const recipientCache = new Map();
@@ -221,6 +222,10 @@ function createRoomRealtimeRuntime(deps) {
   }
 
   async function subscribePreview(connection, roomId) {
+    if (await findRoomBan(roomId, connection.userId, connection.clientIp || connection.guestIp || '')) {
+      wsRegistry.sendToConnection(connection, buildServerEnvelope('room.banned', { roomId }));
+      return;
+    }
     connection.previewRoomIds.add(roomId);
     wsRegistry.registerConnectionForRoom(connection, roomId);
     const snapshot = await buildRoomSnapshot(roomId, 'preview');
@@ -249,7 +254,7 @@ function createRoomRealtimeRuntime(deps) {
     return transport;
   }
 
-  async function joinVoiceRoom(connection, payload, sessionUser) {
+  async function joinVoiceRoom(connection, payload, sessionUser, clientIp = '') {
     const roomId = normalizeRoomId(payload.roomId);
     const peerId = normalizePeerId(payload.peerId);
     const sessionToken = normalizeSessionToken(payload.sessionToken);
@@ -266,6 +271,10 @@ function createRoomRealtimeRuntime(deps) {
     if (!room) {
       wsRegistry.sendToConnection(connection, buildServerEnvelope('room.not_found', { roomId }));
       return { ok: false, code: 'room_not_found' };
+    }
+
+    if (await findRoomBan(roomId, sessionUser?.id, clientIp)) {
+      return { ok: false, code: 'room_banned', message: 'Вы заблокированы в этой комнате' };
     }
 
     const reconnecting = room.peers.has(peerId);
@@ -316,6 +325,7 @@ function createRoomRealtimeRuntime(deps) {
         ? `/api/avatars/${encodeURIComponent(sessionUser.avatarKey)}`
         : null,
       id: peerId,
+      ip: clientIp || '',
       joinedAt: previous?.joinedAt ?? Date.now(),
       muted: previous?.muted ?? false,
       name: reconnecting ? (previous?.name ?? name) : name,

@@ -168,7 +168,7 @@ GitHub-аналог GitLab CI/CD variables находится здесь:
 | `AVATAR_UPLOAD_RATE_WINDOW_MS` | `60000` | Окно rate limit загрузки аватарок. |
 | `MAX_REALTIME_STREAMS_PER_USER` | `8` | Max concurrent WebSocket streams per authenticated user. |
 | `MAX_GUEST_STREAMS_PER_IP` | `8` | Max concurrent guest WebSocket streams per client IP. |
-| `MAX_ROOM_BANS` | reserved | Reserved for the planned static-room ban API; not enforced until moderation routes are shipped. |
+| `MAX_ROOM_BANS` | `100` | Максимум активных блокировок на постоянную комнату. |
 | `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` | reserved | Reserved for planned Web Push support; current release does not send browser push notifications. |
 | `RING_RATE_LIMIT` / `RING_RATE_WINDOW_MS` | reserved | Reserved for planned Ring support. |
 | `RING_TTL_MS` | reserved | Reserved for planned Ring support. |

@@ -86,6 +86,19 @@ function mapPeerIdentity(row) {
   };
 }
 
+function mapRoomBan(row) {
+  if (!row) return null;
+  return {
+    createdAt: toMillis(row.created_at),
+    expiresAt: row.expires_at ? toMillis(row.expires_at) : null,
+    id: row.id,
+    ip: row.ip || '',
+    metadata: row.metadata || {},
+    roomId: row.room_id,
+    userId: row.user_id || null
+  };
+}
+
 function mapMessage(row) {
   if (!row) return null;
   return {
@@ -438,6 +451,86 @@ function createRoomStore({
     });
   }
 
+  async function invalidatePeerIdentity({ roomId, peerId, now = Date.now() } = {}) {
+    if (!roomId || !peerId) return false;
+    const invalidSessionTokenHash = hashPeerSessionToken(`invalidated:${createRowId()}`);
+    const result = await getPool().query(
+      `UPDATE room_peer_identities
+       SET session_token_hash = $3, last_seen_at = $4
+       WHERE room_id = $1 AND peer_id = $2`,
+      [roomId, peerId, invalidSessionTokenHash, toDate(now)]
+    );
+    return result.rowCount > 0;
+  }
+
+  async function createRoomBan({ roomId, userId = null, ip = '', maxBans = 100, metadata = {}, now = Date.now() } = {}) {
+    const normalizedUserId = typeof userId === 'string' && userId ? userId : null;
+    const normalizedIp = typeof ip === 'string' ? ip : '';
+    if (!roomId || (!normalizedUserId && !normalizedIp)) return { ban: null, status: 'invalid' };
+
+    return transaction(getPool(), async (client) => {
+      await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`voice-room:room-bans:${roomId}`]);
+
+      const room = await client.query(
+        `SELECT 1 FROM rooms WHERE id = $1 AND deleted_at IS NULL`,
+        [roomId]
+      );
+      if (room.rowCount === 0) return { ban: null, status: 'not_found' };
+
+      const limit = normalizePositiveInt(maxBans, 100);
+      if (limit > 0) {
+        const count = await client.query(
+          `SELECT COUNT(*)::int AS count FROM room_bans WHERE room_id = $1`,
+          [roomId]
+        );
+        if ((count.rows[0]?.count || 0) >= limit) {
+          return { ban: null, status: 'cap_exceeded' };
+        }
+      }
+
+      const inserted = await client.query(
+        `INSERT INTO room_bans (id, room_id, user_id, ip, created_at, metadata)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         RETURNING *`,
+        [
+          createRowId(),
+          roomId,
+          normalizedUserId,
+          normalizedIp,
+          toDate(now),
+          metadata && typeof metadata === 'object' && !Array.isArray(metadata) ? metadata : {}
+        ]
+      );
+      return { ban: mapRoomBan(inserted.rows[0]), status: 'created' };
+    });
+  }
+
+  async function deleteRoomBan({ roomId, banId } = {}) {
+    if (!roomId || !banId) return { ban: null, status: 'not_found' };
+    const result = await getPool().query(
+      `DELETE FROM room_bans WHERE room_id = $1 AND id = $2 RETURNING *`,
+      [roomId, banId]
+    );
+    const ban = mapRoomBan(result.rows[0]);
+    return { ban, status: ban ? 'deleted' : 'not_found' };
+  }
+
+  async function findActiveRoomBan({ roomId, userId = null, ip = '' } = {}) {
+    const normalizedUserId = typeof userId === 'string' && userId ? userId : null;
+    const normalizedIp = typeof ip === 'string' ? ip : '';
+    if (!roomId || (!normalizedUserId && !normalizedIp)) return null;
+    const result = await getPool().query(
+      `SELECT *
+       FROM room_bans
+       WHERE room_id = $1
+         AND (($2::text IS NOT NULL AND user_id = $2) OR ($3::text <> '' AND ip = $3))
+       ORDER BY created_at DESC, id DESC
+       LIMIT 1`,
+      [roomId, normalizedUserId, normalizedIp]
+    );
+    return mapRoomBan(result.rows[0]);
+  }
+
   async function pruneRooms(now = Date.now()) {
     const nowDate = toDate(now);
     const idleBefore = toDate(now - roomIdleTtlMs);
@@ -771,8 +864,11 @@ function createRoomStore({
     countQuotaRoomsForIp,
     countRooms,
     createRoom,
+    createRoomBan,
     createRoomWithQuota,
+    deleteRoomBan,
     deleteRoom,
+    findActiveRoomBan,
     getOrCreatePeerIdentity,
     getRoom,
     listMessages,
@@ -787,6 +883,7 @@ function createRoomStore({
     markActiveTemporaryRoomsEmpty,
     markRoomActive,
     markRoomEmpty,
+    invalidatePeerIdentity,
     pruneRooms,
     purgeDeleted,
     roomIdExists,

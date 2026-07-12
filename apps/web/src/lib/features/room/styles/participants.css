@@ -454,6 +454,16 @@ body[data-screen-view="true"][data-strip-collapsed="true"] .stage-strip {
   color: var(--green);
 }
 
+.pcm-item--danger,
+.pcm-item--danger .pcm-item-icon {
+  color: oklch(72% 0.18 28);
+}
+
+.pcm-item--danger:hover,
+.pcm-item--danger:focus-visible {
+  background: oklch(58% 0.19 28 / 0.14);
+}
+
 .pcm-item--mute[aria-pressed="true"],
 .pcm-item--mute[aria-pressed="true"] .pcm-item-icon {
   color: oklch(80% 0.12 32);

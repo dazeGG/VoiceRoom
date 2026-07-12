@@ -53,9 +53,14 @@ function createWsHandler({
       const result = await roomRuntime.joinVoiceRoom(
         connection,
         envelope.payload,
-        currentSession?.user || null
+        currentSession?.user || null,
+        getClientIp(req)
       );
-      if (!result.ok && result.message) {
+      if (!result.ok && result.code === 'room_banned') {
+        registry.sendToConnection(connection, buildServerEnvelope('room.banned', {
+          roomId: envelope.payload.roomId
+        }, envelope.id));
+      } else if (!result.ok && result.message) {
         registry.sendToConnection(
           connection,
           buildServerErrorEnvelope(result.code || 'join_failed', result.message, envelope.id)
@@ -107,8 +112,9 @@ function createWsHandler({
       return;
     }
 
+    const clientIp = getClientIp(req);
     const connection = sessionUser
-      ? registry.addConnection(sessionUser.id, socket)
+      ? registry.addConnection(sessionUser.id, socket, clientIp)
       : registry.addGuestConnection(socket, guestIp);
 
     if (sessionUser) {

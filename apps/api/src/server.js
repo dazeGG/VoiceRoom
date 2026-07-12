@@ -10,7 +10,7 @@ const { createWsHandler } = require('./realtime/ws-handler');
 const { createRoomRealtimeRuntime } = require('./realtime/room-runtime');
 const { buildServerEnvelope } = require('./realtime/envelope');
 const { URL } = require('node:url');
-const { AccessToken, TrackSource } = require('livekit-server-sdk');
+const { AccessToken, RoomServiceClient, TrackSource } = require('livekit-server-sdk');
 
 const { readEnvInt, readEnvBool, readDatabaseConfig, readUploadsDir } = require('./lib/config');
 const {
@@ -67,6 +67,7 @@ const MAX_TEMP_ROOMS_PER_IP = readEnvInt(
   0
 );
 const MAX_STATIC_ROOMS_PER_USER = readEnvInt('MAX_STATIC_ROOMS_PER_USER', 3, 0);
+const MAX_ROOM_BANS = readEnvInt('MAX_ROOM_BANS', 100, 1);
 const ROOM_CREATE_POW_DIFFICULTY = Math.min(readEnvInt('ROOM_CREATE_POW_DIFFICULTY', 14, 0), 32);
 const ROOM_CREATE_POW_TTL_MS = readEnvInt('ROOM_CREATE_POW_TTL_MS', 120000, 10000);
 const SESSION_TTL_MS = readEnvInt('SESSION_TTL_MS', 30 * 24 * 60 * 60 * 1000, 60000);
@@ -425,6 +426,10 @@ function getLiveKitConfig() {
   };
 }
 
+function getLiveKitHttpUrl(url) {
+  return String(url || '').replace(/^wss:/, 'https:').replace(/^ws:/, 'http:');
+}
+
 function createRoomId() {
   const alphabet = 'abcdefghijkmnpqrstuvwxyz23456789';
   const bytes = crypto.randomBytes(10);
@@ -535,6 +540,15 @@ function getAuthorizedPeer(roomId, peerId, sessionToken) {
   const peer = room?.peers.get(peerId);
   if (!room || !peer || !tokensMatch(peer.sessionToken, sessionToken)) return null;
   return { peer, room };
+}
+
+async function findRoomBan(roomId, userId, ip) {
+  if (!roomId || typeof getRoomStore().findActiveRoomBan !== 'function') return null;
+  return getRoomStore().findActiveRoomBan({ roomId, userId: userId || null, ip: ip || '' });
+}
+
+function sendRoomBanned(res, roomId) {
+  sendJson(res, 403, { ok: false, code: 'room_banned', error: 'Вы заблокированы в этой комнате', roomId });
 }
 
 function sendEvent(peer, message) {
@@ -681,6 +695,11 @@ async function handleLiveKitToken(req, res) {
   const room = await getRoom(roomId);
   if (!room) {
     sendJson(res, 404, { ok: false, error: 'Комната не найдена' });
+    return;
+  }
+
+  if (await findRoomBan(roomId, sessionUser?.id, getClientIp(req, TRUST_PROXY))) {
+    sendRoomBanned(res, roomId);
     return;
   }
 
@@ -1382,6 +1401,11 @@ async function handleState(req, res) {
 
   const { peer, room } = authorized;
 
+  if (await findRoomBan(roomId, peer.accountUserId, peer.ip)) {
+    sendRoomBanned(res, roomId);
+    return;
+  }
+
   if (Object.hasOwn(body, 'name')) {
     peer.name = cleanName(body.name);
   }
@@ -1442,6 +1466,11 @@ async function handleRoomChatPost(req, res, roomId) {
     return;
   }
 
+  if (await findRoomBan(roomId, sessionUser?.id, clientIp)) {
+    sendRoomBanned(res, roomId);
+    return;
+  }
+
   if (!text) {
     sendJson(res, 400, { ok: false, error: 'Invalid chat message' });
     return;
@@ -1465,6 +1494,10 @@ async function handleRoomChatPost(req, res, roomId) {
   if (activePeer) {
     if (!tokensMatch(activePeer.sessionToken, sessionToken)) {
       sendJson(res, 403, { ok: false, error: 'Invalid peer session' });
+      return;
+    }
+    if (await findRoomBan(roomId, activePeer.accountUserId, activePeer.ip || clientIp)) {
+      sendRoomBanned(res, roomId);
       return;
     }
     peerId = activePeer.id;
@@ -1502,6 +1535,103 @@ async function handleRoomChatPost(req, res, roomId) {
   };
   roomRuntime?.broadcastChatMessage(roomId, publicMessage);
   sendJson(res, 201, { ok: true, message: publicChatMessage(publicMessage) });
+}
+
+async function removeLiveKitParticipant(roomId, peerId) {
+  const livekit = getLiveKitConfig();
+  if (!livekit.enabled) return;
+  const service = new RoomServiceClient(getLiveKitHttpUrl(livekit.url), livekit.apiKey, livekit.apiSecret);
+  try {
+    await service.removeParticipant(getLiveKitRoomName(roomId), peerId);
+  } catch (error) {
+    if (!/not.?found/i.test(String(error?.message || ''))) {
+      console.error('Failed to remove moderated LiveKit participant:', error);
+    }
+  }
+}
+
+async function disconnectModeratedPeer(room, peer, type) {
+  const event = { type, roomId: room.id, peerId: peer.id };
+  sendEvent(peer, event);
+  if (peer.accountUserId) broadcastToUser(peer.accountUserId, event);
+  for (const connection of wsRegistry?.connections.values() || []) {
+    if (connection.activeVoice?.roomId !== room.id || connection.activeVoice?.peerId !== peer.id) continue;
+    connection.activeVoice = null;
+    connection.previewRoomIds.delete(room.id);
+    wsRegistry.unregisterConnectionForRoom(connection, room.id);
+  }
+  closePeer(room.id, peer.id, peer.transport?.id, type === 'room.banned' ? 'banned' : 'kicked');
+  if (typeof getRoomStore().invalidatePeerIdentity === 'function') {
+    await getRoomStore().invalidatePeerIdentity({ roomId: room.id, peerId: peer.id });
+  }
+  await removeLiveKitParticipant(room.id, peer.id);
+}
+
+async function handleKickRoomPeer(req, res, roomId) {
+  const room = await authorizeRoomMutation(req, res, roomId);
+  if (!room) return;
+  const body = await readJsonBody(req);
+  const peerId = normalizePeerId(body.peerId);
+  const peer = peerId ? room.peers.get(peerId) : null;
+  if (!peer) {
+    sendJson(res, 404, { ok: false, error: 'Участник не найден' });
+    return;
+  }
+  if (peer.accountUserId && peer.accountUserId === room.ownerId) {
+    sendJson(res, 400, { ok: false, error: 'Нельзя исключить владельца комнаты' });
+    return;
+  }
+  await disconnectModeratedPeer(room, peer, 'room.kicked');
+  sendJson(res, 200, { ok: true });
+}
+
+async function handleBanRoomPeer(req, res, roomId) {
+  const room = await authorizeRoomMutation(req, res, roomId);
+  if (!room) return;
+  const body = await readJsonBody(req);
+  const peerId = normalizePeerId(body.peerId);
+  const peer = peerId ? room.peers.get(peerId) : null;
+  if (!peer) {
+    sendJson(res, 404, { ok: false, error: 'Участник не найден' });
+    return;
+  }
+  if (peer.accountUserId && peer.accountUserId === room.ownerId) {
+    sendJson(res, 400, { ok: false, error: 'Нельзя заблокировать владельца комнаты' });
+    return;
+  }
+  const result = await getRoomStore().createRoomBan({
+    roomId,
+    userId: peer.accountUserId || null,
+    ip: peer.ip || '',
+    maxBans: MAX_ROOM_BANS
+  });
+  if (result.status === 'cap_exceeded') {
+    sendJson(res, 409, { ok: false, code: 'room_ban_limit', error: 'Достигнут лимит блокировок комнаты' });
+    return;
+  }
+  if (!result.ban) {
+    sendJson(res, 409, { ok: false, error: 'Не удалось сохранить блокировку' });
+    return;
+  }
+  const matchingPeers = [...room.peers.values()].filter((candidate) =>
+    (peer.accountUserId && candidate.accountUserId === peer.accountUserId) ||
+    (peer.ip && candidate.ip === peer.ip)
+  );
+  for (const candidate of matchingPeers) {
+    await disconnectModeratedPeer(room, candidate, 'room.banned');
+  }
+  sendJson(res, 201, { ok: true, banId: result.ban.id });
+}
+
+async function handleUndoRoomBan(req, res, roomId, banId) {
+  const room = await authorizeRoomMutation(req, res, roomId);
+  if (!room) return;
+  const deleted = await getRoomStore().deleteRoomBan({ roomId, banId });
+  if (deleted.status !== 'deleted') {
+    sendJson(res, 404, { ok: false, error: 'Блокировка не найдена' });
+    return;
+  }
+  sendJson(res, 200, { ok: true });
 }
 
 // --- Friends, requests, and direct messages -----------------------------
@@ -2214,7 +2344,8 @@ function createApiApp({ store = null, users = null, friends = null, notification
     MAX_ROOM_PEERS,
     tokensMatch,
     sessionAvatarColorKey,
-    roomEmptyQueue
+    roomEmptyQueue,
+    findRoomBan
   });
 
   const wsHandler = createWsHandler({
@@ -2278,6 +2409,15 @@ function createApiApp({ store = null, users = null, friends = null, notification
   }));
   app.delete('/api/rooms/:roomId/avatar', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
     return handleDeleteRoomAvatar(req, res, normalizeRoomId(request.params.roomId), request);
+  }));
+  app.post('/api/rooms/:roomId/kick', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
+    return handleKickRoomPeer(req, res, normalizeRoomId(request.params.roomId));
+  }));
+  app.post('/api/rooms/:roomId/ban', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
+    return handleBanRoomPeer(req, res, normalizeRoomId(request.params.roomId));
+  }));
+  app.delete('/api/rooms/:roomId/bans/:banId', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
+    return handleUndoRoomBan(req, res, normalizeRoomId(request.params.roomId), request.params.banId);
   }));
   app.get('/api/avatars/:key', (request, reply) => runLegacyHandler(request, reply, (_req, res) => {
     return handleGetAvatar(res, request.params.key);
