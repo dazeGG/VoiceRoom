@@ -489,6 +489,8 @@ test('room menus share one implementation and room and friend rows expose access
   assert.match(contextMenu, /event\.key === 'ArrowDown'/);
   assert.match(contextMenu, /queueMicrotask\(\(\) => restoreFocus\?\.focus\(\)\)/);
   assert.match(contextMenu, /window\.addEventListener\('resize', handleViewportChange\)/);
+  assert.match(contextMenu, /window\.addEventListener\('scroll', handleViewportScroll/);
+  assert.match(contextMenu, /panel\.contains\(event\.target\)/);
   assert.match(contextMenu, /max-height: calc\(100dvh - 16px\)/);
   assert.match(contextMenu, /overflow-y: auto/);
 });

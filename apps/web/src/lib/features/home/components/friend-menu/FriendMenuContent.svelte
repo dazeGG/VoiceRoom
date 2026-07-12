@@ -36,10 +36,12 @@
     const targetUserId = friend.user.id;
     const nextMuted = !muted;
     try {
-      await updatePeerNotificationsMuted(friend.user.id, nextMuted);
+      await updatePeerNotificationsMuted(targetUserId, nextMuted);
+      if (!(canClose?.(targetUserId) ?? true)) return;
       onToast?.(nextMuted ? 'Уведомления друга выключены' : 'Уведомления друга включены');
-      if (canClose?.(targetUserId) ?? true) close();
+      close();
     } catch {
+      if (!(canClose?.(targetUserId) ?? true)) return;
       onToast?.('Не удалось изменить уведомления');
     } finally {
       muteSaving = false;

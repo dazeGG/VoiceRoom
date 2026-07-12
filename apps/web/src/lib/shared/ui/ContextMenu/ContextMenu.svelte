@@ -88,16 +88,21 @@
     if (open) close();
   }
 
+  function handleViewportScroll(event: Event): void {
+    if (panel && event.target instanceof Node && panel.contains(event.target)) return;
+    handleViewportChange();
+  }
+
   onMount(() => {
     window.addEventListener('keydown', handleKeydown);
     window.addEventListener('pointerdown', handlePointerDown, { capture: true });
     window.addEventListener('resize', handleViewportChange);
-    window.addEventListener('scroll', handleViewportChange, { capture: true });
+    window.addEventListener('scroll', handleViewportScroll, { capture: true });
     return () => {
       window.removeEventListener('keydown', handleKeydown);
       window.removeEventListener('pointerdown', handlePointerDown, { capture: true });
       window.removeEventListener('resize', handleViewportChange);
-      window.removeEventListener('scroll', handleViewportChange, { capture: true });
+      window.removeEventListener('scroll', handleViewportScroll, { capture: true });
     };
   });
 
