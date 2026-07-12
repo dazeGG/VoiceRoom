@@ -17,6 +17,12 @@ function toWsAccountEvent(message) {
       return buildServerEnvelope('friend.accepted', { userId: message.userId });
     case 'friend-removed':
       return buildServerEnvelope('friend.removed', { userId: message.userId });
+    case 'ring.incoming':
+      return buildServerEnvelope('ring.incoming', {
+        fromUser: message.fromUser,
+        room: message.room,
+        expiresAt: message.expiresAt
+      });
     case 'user-updated':
       return buildServerEnvelope('friend.updated', { user: message.user });
     case 'dm-message':

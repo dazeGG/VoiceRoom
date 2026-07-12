@@ -173,8 +173,8 @@ GitHub-аналог GitLab CI/CD variables находится здесь:
 | `MAX_PUSH_SUBSCRIPTIONS_PER_USER` | `10` | Maximum retained Web Push subscriptions per account; older entries are pruned transactionally. |
 | `PUSH_SUBSCRIPTION_RATE_LIMIT` | `20` | Maximum Web Push subscription create/delete mutations per account per window. |
 | `PUSH_SUBSCRIPTION_RATE_WINDOW_MS` | `60000` | Web Push subscription mutation rate-limit window. |
-| `RING_RATE_LIMIT` / `RING_RATE_WINDOW_MS` | reserved | Reserved for planned Ring support. |
-| `RING_TTL_MS` | reserved | Reserved for planned Ring support. |
+| `RING_RATE_LIMIT` / `RING_RATE_WINDOW_MS` | `1` / `30000` | Лимит Ring-приглашений от одного пользователя другому за окно. |
+| `RING_TTL_MS` | `30000` | Время жизни Ring-приглашения в realtime, toast и Web Push. |
 | `WS_MAX_PAYLOAD_BYTES` | `65536` | Max inbound WebSocket frame payload. |
 | `HOST` | `127.0.0.1` | Host for host-only API. Compose sets `0.0.0.0`. |
 | `PORT` | `3000` | API port. |

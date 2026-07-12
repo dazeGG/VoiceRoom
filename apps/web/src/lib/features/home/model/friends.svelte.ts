@@ -20,7 +20,7 @@ import {
 } from '$lib/api/friends';
 import { deleteDirectMessage, fetchThread, markThreadRead, sendDirectMessage, type DirectMessage } from '$lib/api/dm';
 import { connectRealtime, type RealtimeEvent, type RealtimeHandle } from '$lib/api/realtime';
-import { playDirectMessageCue, playFriendAcceptedCue, playFriendRequestCue } from '$lib/features/room/client/media/cues';
+import { playDirectMessageCue, playFriendAcceptedCue, playFriendRequestCue, playRingCue } from '$lib/features/room/client/media/cues';
 import {
   canUseNotifications,
   getNotificationDeliveryPermission,
@@ -29,6 +29,7 @@ import {
   type NotificationActiveTarget
 } from '$lib/shared/notifications/router';
 import { roomNavigation } from './room-navigation.svelte';
+import { dismissToast, pushToast } from './toasts.svelte';
 import {
   areNotificationPreferencesLoadedFor,
   loadNotificationPreferences,
@@ -78,6 +79,12 @@ const MAX_PENDING_NOTIFICATION_EVENTS = 100;
 const PENDING_NOTIFICATION_TTL_MS = 60_000;
 let pendingNotificationEvents: Array<{ event: RealtimeEvent; receivedAt: number }> = [];
 let notificationPreferencesRetryTimer: ReturnType<typeof setTimeout> | null = null;
+const ringToastIds = new Set<string>();
+
+function dismissRingToast(id: string): void {
+  ringToastIds.delete(id);
+  dismissToast(id);
+}
 
 function findFriend(userId: string): Friend | undefined {
   return friendsState.friends.find((entry) => entry.user.id === userId);
@@ -163,6 +170,8 @@ export function initLobby(currentUserId: string): () => void {
       notificationPreferencesRetryTimer = null;
     }
     pendingNotificationEvents = [];
+    for (const toastId of ringToastIds) dismissToast(toastId);
+    ringToastIds.clear();
   };
 }
 
@@ -396,6 +405,26 @@ function handleRealtimeEvent(event: RealtimeEvent): void {
     }
     case 'friend.updated': {
       applyFriendProfile(event.payload.user);
+      break;
+    }
+    case 'ring.incoming': {
+      const remainingMs = event.payload.expiresAt - Date.now();
+      if (remainingMs <= 0) break;
+      playRingCue();
+      const senderName = event.payload.fromUser.displayName || event.payload.fromUser.login;
+      const roomName = event.payload.room.name || event.payload.room.id;
+      const toastId = pushToast(`${senderName} зовёт вас в комнату «${roomName}»`, remainingMs, [
+        {
+          label: 'Войти',
+          onClick: (id) => {
+            dismissRingToast(id);
+            window.location.assign(`/r/${encodeURIComponent(event.payload.room.id)}`);
+          }
+        },
+        { label: 'Отклонить', onClick: dismissRingToast }
+      ]);
+      ringToastIds.add(toastId);
+      window.setTimeout(() => ringToastIds.delete(toastId), remainingMs);
       break;
     }
     case 'dm.message': {

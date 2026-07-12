@@ -13,6 +13,7 @@ export type RealtimeAccountEvent =
   | { type: 'friend.accepted'; payload: { userId: string } }
   | { type: 'friend.removed'; payload: { userId: string } }
   | { type: 'friend.updated'; payload: { user: PublicUser } }
+  | { type: 'ring.incoming'; payload: { fromUser: PublicUser; room: { id: string; name: string; emoji: string }; expiresAt: number } }
   | { type: 'dm.message'; payload: { message: DirectMessage } }
   | { type: 'dm.read'; payload: { userId: string } }
   | { type: 'dm.message.deleted'; payload: { messageId: string; peerUserId?: string } };

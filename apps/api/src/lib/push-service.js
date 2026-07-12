@@ -29,12 +29,24 @@ function shouldDeliverPush(preferences, { peerUserId } = {}) {
   return true;
 }
 
-function createPushService({ store, env = process.env, client = webPush, logger = console } = {}) {
+function resolvePushTtl({ expiresAt, ttl } = {}, now = Date.now()) {
+  let resolvedTtl = Number.isFinite(ttl) ? Math.max(0, Math.floor(ttl)) : undefined;
+  if (Number.isFinite(expiresAt)) {
+    const remainingTtl = Math.ceil((expiresAt - now) / 1000);
+    if (remainingTtl <= 0) return null;
+    resolvedTtl = resolvedTtl === undefined ? remainingTtl : Math.min(resolvedTtl, remainingTtl);
+  }
+  return resolvedTtl;
+}
+
+function createPushService({ store, env = process.env, client = webPush, logger = console, now = Date.now } = {}) {
   const config = readPushConfig(env);
   if (config.enabled) client.setVapidDetails(config.subject, config.vapidPublicKey, config.privateKey);
 
-  async function sendToUser(userId, payload, { ttl } = {}) {
+  async function sendToUser(userId, payload, context = {}) {
     if (!config.enabled || !userId) return { enabled: config.enabled, sent: 0, removed: 0 };
+    const ttl = resolvePushTtl(context, now());
+    if (ttl === null) return { enabled: true, sent: 0, removed: 0 };
     let subscriptions;
     try {
       subscriptions = await store.listByUserId(userId);
@@ -85,4 +97,4 @@ function createPushService({ store, env = process.env, client = webPush, logger 
   };
 }
 
-module.exports = { createPushService, readPushConfig, shouldDeliverPush };
+module.exports = { createPushService, readPushConfig, resolvePushTtl, shouldDeliverPush };

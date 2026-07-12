@@ -36,7 +36,7 @@ const { createUserStore, publicUser } = require('./lib/user-store');
 const { createFriendStore } = require('./lib/friend-store');
 const { createNotificationStore } = require('./lib/notification-store');
 const { createPushStore } = require('./lib/push-store');
-const { createPushService, shouldDeliverPush } = require('./lib/push-service');
+const { createPushService, resolvePushTtl, shouldDeliverPush } = require('./lib/push-service');
 const { cleanPushEndpoint } = require('./lib/push-endpoint');
 const { startApiListener } = require('./lib/listen');
 const { runMigrations } = require('./lib/migrate');
@@ -82,6 +82,9 @@ const DM_RATE_LIMIT = readEnvInt('DM_RATE_LIMIT', 30, 0);
 const DM_RATE_WINDOW_MS = readEnvInt('DM_RATE_WINDOW_MS', 10000, 1000);
 const FRIEND_REQUEST_RATE_LIMIT = readEnvInt('FRIEND_REQUEST_RATE_LIMIT', 20, 0);
 const FRIEND_REQUEST_RATE_WINDOW_MS = readEnvInt('FRIEND_REQUEST_RATE_WINDOW_MS', 60000, 1000);
+const RING_RATE_LIMIT = readEnvInt('RING_RATE_LIMIT', 1, 0);
+const RING_RATE_WINDOW_MS = readEnvInt('RING_RATE_WINDOW_MS', 30000, 1000);
+const RING_TTL_MS = readEnvInt('RING_TTL_MS', 30000, 1000);
 const AVATAR_UPLOAD_RATE_LIMIT = readEnvInt('AVATAR_UPLOAD_RATE_LIMIT', 10, 0);
 const AVATAR_UPLOAD_RATE_WINDOW_MS = readEnvInt('AVATAR_UPLOAD_RATE_WINDOW_MS', 60000, 1000);
 const PUSH_SUBSCRIPTION_RATE_LIMIT = readEnvInt('PUSH_SUBSCRIPTION_RATE_LIMIT', 20, 0);
@@ -203,7 +206,10 @@ async function queuePush(userId, payload, context = {}) {
       ? payload.privateBody
       : payload.body;
     const { privateBody: _privateBody, ...publicPayload } = payload;
-    await getPushService().sendToUser(userId, { ...publicPayload, body }, context);
+    const ttl = resolvePushTtl(context);
+    if (ttl === null) return;
+    const deliveryContext = ttl === undefined ? context : { ...context, ttl };
+    await getPushService().sendToUser(userId, { ...publicPayload, body }, deliveryContext);
   } catch (error) {
     console.error('Failed to send push notification:', error);
   }
@@ -284,6 +290,7 @@ const roomChatLimiter = createRateLimiter({
   limit: ROOM_CHAT_RATE_LIMIT,
   windowMs: ROOM_CHAT_RATE_WINDOW_MS
 });
+const ringLimiter = createRateLimiter({ limit: RING_RATE_LIMIT, windowMs: RING_RATE_WINDOW_MS });
 const authLimiter = createRateLimiter({
   limit: AUTH_RATE_LIMIT,
   windowMs: AUTH_RATE_WINDOW_MS
@@ -2011,6 +2018,58 @@ async function handleMarkDmRead(req, res, peerId) {
   sendJson(res, 200, { ok: true, count: result.count });
 }
 
+async function handleRingRoom(req, res, rawRoomId) {
+  const user = await requireSessionUser(req, res);
+  if (!user) return;
+  const roomId = normalizeRoomId(rawRoomId);
+  const body = await readJsonBody(req);
+  const targetUserId = cleanUuid(body.userId);
+  if (!roomId || !targetUserId || targetUserId === user.id) {
+    sendJson(res, 400, { ok: false, error: 'Invalid ring target' });
+    return;
+  }
+
+  const presence = presenceRooms.get(roomId);
+  const senderIsActive = Boolean(presence && Array.from(presence.peers.values()).some((peer) => peer.accountUserId === user.id));
+  if (!senderIsActive) {
+    sendJson(res, 403, { ok: false, error: 'Join the room before inviting friends' });
+    return;
+  }
+  if (!(await getFriendStore().areFriends(user.id, targetUserId))) {
+    sendJson(res, 403, { ok: false, error: 'You are not friends' });
+    return;
+  }
+
+  const rate = ringLimiter.check(`${user.id}:${targetUserId}`);
+  if (!rate.allowed) {
+    sendJson(res, 429, { ok: false, error: 'Invite cooldown', retryAfterSeconds: rate.retryAfterSeconds }, {
+      'Retry-After': String(rate.retryAfterSeconds)
+    });
+    return;
+  }
+
+  const room = await getRoomStore().getRoom(roomId);
+  if (!room) {
+    sendJson(res, 404, { ok: false, error: 'Room not found' });
+    return;
+  }
+  const expiresAt = Date.now() + RING_TTL_MS;
+  const fromUser = notificationActor(user);
+  const ringRoom = { id: room.id, name: room.name || '', emoji: room.emoji || '' };
+  broadcastToUser(targetUserId, { type: 'ring.incoming', fromUser, room: ringRoom, expiresAt });
+  void queuePush(targetUserId, {
+    type: 'ring',
+    title: `${user.displayName || user.login || 'Друг'} зовёт вас`,
+    body: room.name ? `Комната «${room.name}»` : 'Присоединиться к комнате',
+    privateBody: 'Вас зовут в голосовую комнату.',
+    tag: `ring:${user.id}:${roomId}`,
+    dedupeKey: `ring:${user.id}:${roomId}:${expiresAt}`,
+    url: `/r/${encodeURIComponent(roomId)}`,
+    expiresAt
+  }, { expiresAt });
+  sendJson(res, 200, { ok: true });
+}
+
 // --- Notification preferences -------------------------------------------
 
 function handlePushConfig(_req, res) {
@@ -2598,6 +2657,9 @@ function createApiApp({ store = null, users = null, friends = null, notification
   }));
   app.post('/api/dm/:userId/read', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
     return handleMarkDmRead(req, res, request.params.userId);
+  }));
+  app.post('/api/rooms/:roomId/ring', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
+    return handleRingRoom(req, res, request.params.roomId);
   }));
   app.delete('/api/dm/:userId/messages/:messageId', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
     return handleDeleteDmMessage(req, res, request.params.userId, request.params.messageId);

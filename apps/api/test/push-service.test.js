@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createPushService, readPushConfig, shouldDeliverPush } = require('../src/lib/push-service');
+const { createPushService, readPushConfig, resolvePushTtl, shouldDeliverPush } = require('../src/lib/push-service');
 
 const ENABLED_ENV = {
   VAPID_PUBLIC_KEY: 'public-key',
@@ -52,6 +52,40 @@ test('push service delivers to all subscriptions and records successes', async (
   assert.deepEqual(marked.sort(), ['https://fcm.googleapis.com/fcm/send/one', 'https://fcm.googleapis.com/fcm/send/two']);
   assert.equal(deliveries[0].payload.type, 'ring');
   assert.deepEqual(deliveries[0].options, { TTL: 30 });
+});
+
+test('push service derives ring TTL from expiry and skips expired invitations', async () => {
+  const deliveries = [];
+  let listCalls = 0;
+  const store = {
+    async listByUserId() {
+      listCalls += 1;
+      return [{ endpoint: 'https://fcm.googleapis.com/fcm/send/ring', keys: { p256dh: 'a', auth: 'b' } }];
+    },
+    async markSuccess() {},
+    async removeByEndpoint() {}
+  };
+  const client = {
+    setVapidDetails() {},
+    async sendNotification(_subscription, _payload, options) {
+      deliveries.push(options);
+    }
+  };
+  const service = createPushService({ store, env: ENABLED_ENV, client, now: () => 100_000 });
+
+  assert.deepEqual(
+    await service.sendToUser('user-1', { type: 'ring' }, { expiresAt: 130_000 }),
+    { enabled: true, sent: 1, removed: 0 }
+  );
+  assert.deepEqual(deliveries, [{ TTL: 30 }]);
+  assert.equal(resolvePushTtl({ expiresAt: 129_001, ttl: 60 }, 100_000), 30);
+
+  assert.deepEqual(
+    await service.sendToUser('user-1', { type: 'ring' }, { expiresAt: 99_999 }),
+    { enabled: true, sent: 0, removed: 0 }
+  );
+  assert.equal(listCalls, 1);
+  assert.equal(deliveries.length, 1);
 });
 
 test('push service removes expired endpoints on 404/410 and tolerates other failures', async () => {
