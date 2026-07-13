@@ -2,6 +2,7 @@
   import { HeadphoneOff, Headphones, LogOut, Mic, MicOff } from '@lucide/svelte';
   import { Avatar } from '$lib/shared/ui';
   import { iconMd, iconSm } from '$lib/shared/ui/icons';
+  import { voiceSession } from '$lib/features/room/voice-session.svelte';
 
   let {
     roomName = '',
@@ -24,6 +25,29 @@
   }>();
 
   const openLabel = $derived(`Открыть комнату ${roomName || 'активного голоса'}`);
+
+  // Both timers derive from server timestamps and a shared 1s tick.
+  let now = $state(Date.now());
+  $effect(() => {
+    const timer = setInterval(() => {
+      now = Date.now();
+    }, 1000);
+    return () => clearInterval(timer);
+  });
+
+  function formatElapsed(since: number | null): string {
+    if (!since) return '';
+    const total = Math.max(0, Math.floor((now - since) / 1000));
+    const hours = Math.floor(total / 3600);
+    const minutes = Math.floor((total % 3600) / 60);
+    const seconds = total % 60;
+    const mm = hours > 0 ? String(minutes).padStart(2, '0') : String(minutes);
+    const ss = String(seconds).padStart(2, '0');
+    return hours > 0 ? `${hours}:${mm}:${ss}` : `${mm}:${ss}`;
+  }
+
+  const myElapsed = $derived(formatElapsed(voiceSession.joinedAt));
+  const roomElapsed = $derived(formatElapsed(voiceSession.roomActiveSince));
 </script>
 
 <div class="voice-widget" aria-label="Активный голос">
@@ -50,6 +74,15 @@
 
   <!-- actions -->
   <div class="voice-actions">
+    {#if myElapsed}
+      <div class="voice-timers" aria-label="Время подключения">
+        <span class="voice-timer" title="Ваше время в звонке"><span class="voice-timer-label">вы</span>{myElapsed}</span>
+        {#if roomElapsed}
+          <span class="voice-timer" title="Длительность звонка в комнате"><span class="voice-timer-label">звонок</span>{roomElapsed}</span>
+        {/if}
+      </div>
+    {/if}
+
     <!-- mic toggle -->
     <button
       class="voice-icon-btn"
@@ -172,6 +205,39 @@
     align-items: center;
     justify-content: flex-end;
     gap: 8px;
+  }
+
+  /* connection timers fill the empty bottom-left corner */
+  .voice-timers {
+    flex: 1;
+    min-width: 0;
+    display: grid;
+    gap: 2px;
+    align-self: center;
+  }
+
+  .voice-timer {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    color: var(--warm-ink-dim);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.2;
+    white-space: nowrap;
+  }
+
+  .voice-timer-label {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--warm-muted);
+    font-family: var(--font-ui);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-overflow: ellipsis;
+    text-transform: uppercase;
   }
 
   .voice-icon-btn,

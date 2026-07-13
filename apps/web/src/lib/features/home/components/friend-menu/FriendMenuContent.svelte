@@ -70,7 +70,7 @@
       size={42}
       online={friend.online}
       dnd={friend.user.doNotDisturb}
-      showDot={friend.online || friend.user.doNotDisturb}
+      showDot
       ring="#16140f"
     />
     <div class="friend-menu-info">

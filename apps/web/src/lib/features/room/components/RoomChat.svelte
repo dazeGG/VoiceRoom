@@ -46,9 +46,25 @@
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       void sendMessage();
-    } else {
-      queueMicrotask(autoResize);
+      return;
     }
+    // ArrowUp in an empty composer edits the last own message, like Discord.
+    if (e.key === 'ArrowUp' && !draft.trim() && !editingMessageId) {
+      const lastOwn = findLastOwnMessage();
+      if (lastOwn) {
+        e.preventDefault();
+        startEditing(lastOwn);
+      }
+      return;
+    }
+    queueMicrotask(autoResize);
+  }
+
+  function findLastOwnMessage(): ChatMessage | null {
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+      if (isOwnMessage(messages[index])) return messages[index];
+    }
+    return null;
   }
 
   // Group consecutive messages from the same author (within 5 minutes) so the
@@ -194,6 +210,30 @@
         if (edited?.id) {
           messages = messages.map((message) => message.id === edited.id ? edited : message);
         }
+        return;
+      }
+      // Messages carry an avatar snapshot taken at send time, so a profile
+      // change would leave stale avatars in the rail. Re-stamp the author's
+      // messages when the room broadcasts the refreshed peer.
+      if (event.type === 'room.peer.updated') {
+        const peer = event.payload.peer;
+        if (!peer?.id) return;
+        const authored = (message: ChatMessage) =>
+          message.peerId === peer.id
+          || Boolean(peer.accountUserId && message.authorUserId === peer.accountUserId);
+        const stale = (message: ChatMessage) =>
+          message.avatarUrl !== peer.avatarUrl
+          || message.avatarAccent !== peer.avatarAccent
+          || (Boolean(peer.avatarColorKey) && message.avatarColorKey !== peer.avatarColorKey);
+        if (!messages.some((message) => authored(message) && stale(message))) return;
+        messages = messages.map((message) => authored(message)
+          ? {
+              ...message,
+              avatarAccent: peer.avatarAccent,
+              avatarColorKey: peer.avatarColorKey || message.avatarColorKey,
+              avatarUrl: peer.avatarUrl
+            }
+          : message);
         return;
       }
       if (event.type !== 'room.chat.message') return;
@@ -399,11 +439,12 @@
       <p class="chat-rail-note">Загружаем сообщения…</p>
     {:else if days.length}
       {#each days as day (day.key)}
-        <div class="chat-day-divider" role="separator" aria-label={day.label}>
-          <span>{day.label}</span>
-        </div>
-        {#each day.groups as group (group.key)}
-        <div class="chat-msg" data-self={group.self}>
+        <section class="chat-day-section" aria-label={day.label}>
+          <div class="chat-day-divider" role="separator" aria-label={day.label}>
+            <span>{day.label}</span>
+          </div>
+          {#each day.groups as group (group.key)}
+          <div class="chat-msg" data-self={group.self}>
           {#if group.self}
             <Avatar class="chat-msg-avatar" name={group.name} src={group.avatarUrl} background={group.avatarBackground} size={34} />
           {:else}
@@ -466,8 +507,9 @@
               </div>
             {/each}
           </div>
-        </div>
-        {/each}
+          </div>
+          {/each}
+        </section>
       {/each}
     {:else}
       <p class="chat-rail-note">Пока пусто. Напишите первое сообщение.</p>

@@ -4,7 +4,8 @@ export interface ChatSegment {
   href?: string;
 }
 
-const URL_RE = /\b((?:https?:\/\/|www\.)[^\s<>"'`(){}[\]]+?)(?=[.,;:!?)\]}\s>]|$)/gi;
+const URL_RE = /\b(?:https?:\/\/|www\.)[^\s<>"'`(){}[\]]+/gi;
+const TRAILING_PUNCTUATION_RE = /[.,;:!?]+$/;
 
 /**
  * Split chat text into safe text and link segments.
@@ -29,7 +30,9 @@ export function parseChatLinks(input: string): ChatSegment[] {
       parts.push({ kind: 'text', text: src.slice(lastIndex, start) });
     }
 
-    let raw = match[1];
+    const matched = match[0];
+    const trailing = matched.match(TRAILING_PUNCTUATION_RE)?.[0] ?? '';
+    const raw = trailing ? matched.slice(0, -trailing.length) : matched;
     let href = raw;
     if (/^www\./i.test(raw)) {
       href = 'https://' + raw;
@@ -40,6 +43,7 @@ export function parseChatLinks(input: string): ChatSegment[] {
     } else {
       parts.push({ kind: 'text', text: raw });
     }
+    if (trailing) parts.push({ kind: 'text', text: trailing });
     lastIndex = URL_RE.lastIndex;
   }
 

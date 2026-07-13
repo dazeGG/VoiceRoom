@@ -48,7 +48,7 @@
             {#each ringFriends as friend (friend.user.id)}
               {@const alreadyInRoom = roomAccountIds.has(friend.user.id)}
               <button type="button" class="room-ring-friend" disabled={Boolean(ringingUserId) || alreadyInRoom} title={alreadyInRoom ? 'Уже в комнате' : undefined} onclick={() => void ringFriend(friend.user.id, close)}>
-                <Avatar name={friend.user.displayName || friend.user.login} src={friend.user.avatarUrl} background={friend.user.avatarAccent || undefined} colorKey={friend.user.avatarColorKey} size={28} online={friend.online} showDot />
+                <Avatar name={friend.user.displayName || friend.user.login} src={friend.user.avatarUrl} background={friend.user.avatarAccent || undefined} colorKey={friend.user.avatarColorKey} size={28} online={friend.online} dnd={friend.user.doNotDisturb} showDot />
                 <span>{friend.user.displayName || friend.user.login}</span>
                 {#if alreadyInRoom}<small>В комнате</small>{/if}
               </button>

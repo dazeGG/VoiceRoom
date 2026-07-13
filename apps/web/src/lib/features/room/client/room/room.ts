@@ -3,7 +3,7 @@ import { session, setUser } from '$lib/features/auth/session.svelte';
 import { roomNameFor } from '$lib/features/auth/account';
 import { roomSettingsUi } from '../../room-settings.svelte';
 import { startUi } from '../../start-ui.svelte';
-import { clearConnectedVoiceRoom, setConnectedVoiceRoom, setVoiceControlsState } from '../../voice-session.svelte';
+import { clearConnectedVoiceRoom, setConnectedVoiceRoom, setVoiceControlsState, setVoiceSessionTiming } from '../../voice-session.svelte';
 import { state } from '../core/state.svelte';
 import { showToast } from '../ui/toast';
 import { ApiRequestError, checkRoomExists, postJson } from '../net/api';
@@ -303,6 +303,7 @@ export async function joinRoom(event?: Event): Promise<void> {
     await connectLiveKitRoom(name);
     state.joined = true;
     setConnectedVoiceRoom(state.roomId);
+    setVoiceSessionTiming({ joinedAt: state.self?.joinedAt ?? Date.now() });
     setVoiceControlsState({ muted: state.muted, deafened: state.outputMuted });
     if (state.muted || state.outputMuted) postState().catch(() => {});
     refreshCallControls();
@@ -363,6 +364,12 @@ async function handleVoiceRealtimeEvent(event: RealtimeEvent): Promise<void> {
     const remotePeers = peers.filter((peer) => peer.id !== state.peerId);
     state.serverPeerIds = new Set(remotePeers.map((peer) => peer.id).filter(Boolean));
     state.serverPeerSyncReady = true;
+    // Prefer the server clock for the call widget timers: my joinedAt from the
+    // authoritative peer record, the shared call start from the room snapshot.
+    setVoiceSessionTiming({
+      joinedAt: localPeer?.joinedAt ?? state.self?.joinedAt ?? null,
+      roomActiveSince: snapshot.voiceActiveSince ?? null
+    });
     setServerConnectionStatus('connected');
     syncPeers([...state.serverPeerIds]);
     if (localPeer) {

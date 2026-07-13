@@ -529,19 +529,6 @@ html.is-desktop .sidebar-download { display: none; }
 }
 .lobby-roomview-trigger[aria-expanded='true'] .lobby-roomview-chevron { transform: rotate(180deg); }
 
-.lobby-roomview-state {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  border-radius: 999px;
-  padding: 7px 12px;
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--warm-muted);
-  font-size: 12.5px;
-  font-weight: 700;
-}
-.lobby-roomview-state[data-live='true'] { color: var(--green); }
-
 .lobby-roomview-content {
   flex: 1;
   min-height: 0;
@@ -713,6 +700,10 @@ html.is-desktop .sidebar-download { display: none; }
 .lobby-dm-head:hover { background: rgba(255, 255, 255, 0.025); }
 .lobby-dm-head-name { font-size: 15.5px; font-weight: 700; color: var(--warm-ink); letter-spacing: -0.01em; }
 .lobby-dm-head-status { font-size: 12px; margin-top: 2px; }
+.lobby-dm-head-status[data-presence='dnd'] { color: var(--coral); }
+.lobby-dm-head-status[data-presence='afk'] { color: var(--amber); }
+.lobby-dm-head-status[data-presence='online'] { color: var(--green); }
+.lobby-dm-head-status[data-presence='offline'] { color: var(--warm-faint); }
 .lobby-dm-scroll { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; }
 .lobby-dm-thread { margin-top: auto; display: flex; flex-direction: column; gap: 14px; padding: 22px 24px; }
 
@@ -761,6 +752,7 @@ html.is-desktop .sidebar-download { display: none; }
 .lobby-room-invitation-dismiss { border: 1px solid rgba(255,255,255,.1); background: transparent; color: var(--warm-muted); }
 .lobby-room-invitation-join { border: 0; background: var(--green); color: oklch(14% .02 130); }
 .lobby-dm-bubble {
+  position: relative;
   border-radius: 16px;
   padding: 9px 13px;
   font-size: 14px;
@@ -797,34 +789,29 @@ html.is-desktop .sidebar-download { display: none; }
   white-space: nowrap;
 }
 
+.dm-msg-content { min-width: 0; }
 .dm-msg-actions {
-  display: inline-flex;
-  align-items: center;
-  vertical-align: middle;
+  position: absolute;
+  bottom: calc(100% - 4px);
+  right: 4px;
+  z-index: 4;
+  display: flex;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 7px;
+  background: #1b1914;
+  opacity: 0;
+  transform: translateY(2px);
+  pointer-events: none;
+  transition: opacity 120ms ease, transform 120ms ease;
 }
-
-.dm-msg-edit-button,
-.dm-msg-delete {
-  border: none;
-  background: transparent;
-  color: inherit;
-  opacity: 0.5;
-  cursor: pointer;
-}
-
-.dm-msg-edit-button {
-  width: 18px;
-  height: 18px;
-  margin-left: 4px;
-  padding: 3px;
-}
-.dm-msg-edit-button:hover { opacity: 1; }
-
-.dm-msg-delete {
-  font-size: 10px;
-  padding: 0 1px;
-}
-.dm-msg-delete:hover { opacity: 1; color: #c66; }
+.lobby-dm-bubble:hover .dm-msg-actions,
+.lobby-dm-bubble:focus-within .dm-msg-actions { opacity: 1; transform: translateY(0); pointer-events: auto; }
+.dm-msg-actions button { display: grid; width: 30px; height: 28px; place-items: center; border: 0; border-radius: 0; padding: 0; background: transparent; color: var(--warm-muted); cursor: pointer; }
+.dm-msg-actions button:hover,
+.dm-msg-actions button:focus-visible { background: rgba(255, 255, 255, 0.07); color: var(--warm-ink); outline: none; }
+.dm-msg-actions .dm-msg-action-danger:hover,
+.dm-msg-actions .dm-msg-action-danger:focus-visible { color: oklch(72% 0.18 28); }
 
 .dm-msg-edit {
   display: grid;

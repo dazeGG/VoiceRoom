@@ -88,24 +88,34 @@
   margin-top: auto;
 }
 
-.chat-day-divider {
+.chat-day-section {
+  position: relative;
   display: flex;
-  align-items: center;
-  gap: 10px;
-  margin: 3px 0;
-  color: #6f6a5c;
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  flex-direction: column;
+  gap: 15px;
 }
 
-.chat-day-divider::before,
-.chat-day-divider::after {
-  content: '';
-  flex: 1;
-  height: 1px;
-  background: rgba(255, 255, 255, 0.07);
+.chat-day-divider {
+  position: sticky;
+  top: 8px;
+  z-index: 5;
+  display: flex;
+  justify-content: center;
+  margin: 3px 0;
+  pointer-events: none;
+}
+
+.chat-day-divider span {
+  flex: none;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  padding: 5px 13px;
+  background: rgba(24, 22, 17, 0.92);
+  color: var(--warm-ink-dim);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  backdrop-filter: blur(8px);
 }
 
 .chat-msg {
@@ -212,7 +222,10 @@ button.chat-msg-author {
 }
 
 .chat-msg-content { min-width: 0; flex: 1; }
-.chat-msg-actions { position: absolute; top: -12px; right: 4px; z-index: 2; display: flex; overflow: hidden; border: 1px solid rgba(255,255,255,.1); border-radius: 7px; background: #1b1914; opacity: 0; transform: translateY(2px); pointer-events: none; transition: opacity 120ms ease, transform 120ms ease; }
+.chat-msg-actions { position: absolute; bottom: calc(100% - 4px); right: -16px; z-index: 2; display: flex; overflow: hidden; border: 1px solid rgba(255,255,255,.1); border-radius: 7px; background: #1b1914; opacity: 0; transform: translateY(2px); pointer-events: none; transition: opacity 120ms ease, transform 120ms ease; }
+/* A hovered message must rise above the sticky day divider so its toolbar,
+   lifted above the message body, is not covered by the pinned date bubble. */
+.chat-msg:has(.chat-msg-text:hover), .chat-msg:has(.chat-msg-text:focus-within) { z-index: 6; }
 .chat-msg-text:hover .chat-msg-actions, .chat-msg-text:focus-within .chat-msg-actions { opacity: 1; transform: translateY(0); pointer-events: auto; }
 .chat-msg-actions button { display: grid; width: 30px; height: 28px; place-items: center; border: 0; border-radius: 0; background: transparent; color: var(--warm-muted); cursor: pointer; }
 .chat-msg-actions button:hover, .chat-msg-actions button:focus-visible { background: rgba(255,255,255,.07); color: var(--warm-ink); outline: none; }

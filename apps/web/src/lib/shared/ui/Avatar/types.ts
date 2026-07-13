@@ -8,6 +8,7 @@ export interface AvatarProps {
   online?: boolean | null;
   showDot?: boolean;
   dnd?: boolean;
+  afk?: boolean;
   ring?: string;
   class?: string;
 }

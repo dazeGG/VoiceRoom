@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Bell, BellOff, DoorOpen, Pencil, User, X } from '@lucide/svelte';
+  import { Bell, BellOff, Copy, DoorOpen, Pencil, Trash2, User, X } from '@lucide/svelte';
   import { iconMd, iconSm } from '$lib/shared/ui/icons';
   import { tick } from 'svelte';
   import type { DirectMessage } from '$lib/api/dm';
@@ -10,14 +10,15 @@
     friendsState,
     closeProfile,
     deleteMessage,
-    dismissRoomInvitation,
     editMessage as editDmMessage,
-    joinRoomInvitation,
     removeFriend,
+    respondRoomInvitation,
     sendMessage,
     toggleProfile
   } from '../../model/friends.svelte';
   import { isPeerNotificationsMuted, updatePeerNotificationsMuted } from '$lib/shared/notifications/preferences.svelte';
+  import { copyText } from '$lib/shared/utils/clipboard';
+  import { pushToast } from '../../model/toasts.svelte';
 
   let { selfId } = $props<{ selfId: string }>();
 
@@ -42,9 +43,26 @@
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault();
       void submit();
-    } else {
-      queueMicrotask(autoResize);
+      return;
     }
+    // ArrowUp in an empty composer edits the last own message, like Discord.
+    if (event.key === 'ArrowUp' && !draft.trim() && !editingMessageId) {
+      const lastOwn = findLastOwnMessage();
+      if (lastOwn) {
+        event.preventDefault();
+        startEditing(lastOwn);
+      }
+      return;
+    }
+    queueMicrotask(autoResize);
+  }
+
+  function findLastOwnMessage(): DirectMessage | null {
+    for (let index = friendsState.thread.length - 1; index >= 0; index -= 1) {
+      const message = friendsState.thread[index];
+      if (message.senderId === selfId && !message.invite) return message;
+    }
+    return null;
   }
 
   const peer = $derived(friendsState.threadPeer);
@@ -52,11 +70,11 @@
     friendsState.friends.find((entry) => entry.user.id === friendsState.selectedFriendId)
   );
   const online = $derived(friendEntry?.online ?? false);
+  const presence = $derived(peer?.doNotDisturb ? 'dnd' : online ? 'online' : 'offline');
+  const presenceLabel = $derived(presence === 'dnd' ? 'не беспокоить' : presence === 'online' ? 'в сети' : 'не в сети');
   const peerMuted = $derived(isPeerNotificationsMuted(peer?.id));
-  const roomInvitations = $derived(
-    friendsState.roomInvitations.filter((invite) => invite.fromUserId === friendsState.selectedFriendId)
-  );
   let muteSaving = $state(false);
+  let inviteResponding = $state('');
   const profileAccent = $derived(peer?.avatarAccent || '');
 
   interface Group {
@@ -148,6 +166,42 @@
     } catch {}
   }
 
+  async function copyMessageText(message: DirectMessage): Promise<void> {
+    try {
+      await copyText(message.body);
+      pushToast('Сообщение скопировано');
+    } catch {
+      pushToast('Не удалось скопировать');
+    }
+  }
+
+  function inviteTitle(message: DirectMessage, fromMe: boolean): string {
+    const invite = message.invite;
+    if (!invite) return '';
+    if (invite.status === 'accepted') return 'Принял приглашение';
+    if (invite.status === 'declined') return 'Отклонил предложение';
+    if (invite.expiresAt && invite.expiresAt <= Date.now()) return 'Приглашение истекло';
+    return fromMe ? 'Приглашение отправлено' : 'Приглашение в комнату';
+  }
+
+  function inviteActionable(message: DirectMessage, fromMe: boolean): boolean {
+    const invite = message.invite;
+    if (!invite || fromMe) return false;
+    return invite.status === 'pending' && (!invite.expiresAt || invite.expiresAt > Date.now());
+  }
+
+  async function onInviteRespond(message: DirectMessage, action: 'accept' | 'decline'): Promise<void> {
+    if (inviteResponding) return;
+    inviteResponding = message.id;
+    try {
+      await respondRoomInvitation(message, action);
+    } catch {
+      pushToast('Не удалось ответить на приглашение');
+    } finally {
+      inviteResponding = '';
+    }
+  }
+
   function startEditing(message: DirectMessage): void {
     editingMessageId = message.id;
     editDraft = message.body;
@@ -194,12 +248,10 @@
   <div class="lobby-dm-col">
     {#if peer}
       <button class="lobby-dm-head" type="button" onclick={toggleProfile}>
-        <Avatar name={friendName(peer)} src={peer.avatarUrl} colorKey={peer.avatarColorKey} background={peer.avatarAccent || undefined} size={38} {online} showDot ring="var(--paper-deep)" />
+        <Avatar name={friendName(peer)} src={peer.avatarUrl} colorKey={peer.avatarColorKey} background={peer.avatarAccent || undefined} size={38} {online} dnd={peer.doNotDisturb} showDot ring="var(--paper-deep)" />
         <div style="flex:1;min-width:0;">
           <div class="lobby-dm-head-name">{friendName(peer)}</div>
-          <div class="lobby-dm-head-status" style={`color:${online ? '#8fa888' : '#8a8475'}`}>
-            {online ? 'в сети' : 'не в сети'}
-          </div>
+          <div class="lobby-dm-head-status" data-presence={presence}>{presenceLabel}</div>
         </div>
         <span style="flex:none;width:34px;height:34px;display:flex;align-items:center;justify-content:center;color:#9a9484;">
           <User {...iconMd} aria-hidden="true" />
@@ -210,7 +262,7 @@
     <div class="lobby-dm-scroll lobby-scroll" bind:this={scrollEl}>
       {#if friendsState.threadLoading}
         <div class="lobby-dm-empty">Загружаем переписку…</div>
-      {:else if groups.length === 0 && roomInvitations.length === 0}
+      {:else if groups.length === 0}
         <div class="lobby-dm-empty">Здесь пока пусто. Напишите первым!</div>
       {:else}
         <div class="lobby-dm-thread">
@@ -226,6 +278,21 @@
               {/if}
               <div class="lobby-dm-bubbles">
                 {#each group.bubbles as bubble (bubble.id)}
+                  {#if bubble.invite}
+                    <article class="lobby-room-invitation" data-status={bubble.invite.status}>
+                      <span class="lobby-room-invitation-icon"><DoorOpen {...iconMd} aria-hidden="true" /></span>
+                      <div class="lobby-room-invitation-copy">
+                        <strong>{inviteTitle(bubble, group.fromMe)}</strong>
+                        <span>{bubble.invite.roomName || bubble.invite.roomId}</span>
+                      </div>
+                      {#if inviteActionable(bubble, group.fromMe)}
+                        <div class="lobby-room-invitation-actions">
+                          <button type="button" class="lobby-room-invitation-dismiss" disabled={inviteResponding === bubble.id} onclick={() => void onInviteRespond(bubble, 'decline')}>Не сейчас</button>
+                          <button type="button" class="lobby-room-invitation-join" disabled={inviteResponding === bubble.id} onclick={() => void onInviteRespond(bubble, 'accept')}>Войти</button>
+                        </div>
+                      {/if}
+                    </article>
+                  {:else}
                   <div class="lobby-dm-bubble" class:lobby-dm-bubble--me={group.fromMe} class:lobby-dm-bubble--them={!group.fromMe}>
                     {#if editingMessageId === bubble.id}
                       <div class="dm-msg-edit">
@@ -245,41 +312,20 @@
                         </div>
                       </div>
                     {:else}
-                      <ChatText text={bubble.body} />
-                      {#if bubble.editedAt}<span class="dm-msg-edited">(изменено)</span>{/if}
-                      {#if group.fromMe}
-                        <span class="dm-msg-actions">
-                          <button type="button" class="dm-msg-edit-button" aria-label="Редактировать" title="Редактировать" onclick={() => startEditing(bubble)}>
-                            <Pencil {...iconSm} aria-hidden="true" />
-                          </button>
-                          <button type="button" class="dm-msg-delete" aria-label="Удалить" title="Удалить" onclick={() => onDelete(bubble.id)}>×</button>
-                        </span>
-                      {/if}
+                      <span class="dm-msg-content"><ChatText text={bubble.body} />{#if bubble.editedAt}<span class="dm-msg-edited">(изменено)</span>{/if}</span>
+                      <div class="dm-msg-actions" role="toolbar" aria-label="Действия с сообщением">
+                        <button type="button" aria-label="Копировать текст" title="Копировать текст" onclick={() => void copyMessageText(bubble)}><Copy {...iconSm} aria-hidden="true" /></button>
+                        {#if group.fromMe}
+                          <button type="button" aria-label="Редактировать" title="Редактировать" onclick={() => startEditing(bubble)}><Pencil {...iconSm} aria-hidden="true" /></button>
+                          <button type="button" class="dm-msg-action-danger" aria-label="Удалить" title="Удалить" onclick={() => void onDelete(bubble.id)}><Trash2 {...iconSm} aria-hidden="true" /></button>
+                        {/if}
+                      </div>
                     {/if}
                   </div>
+                  {/if}
                 {/each}
                 <div class="lobby-dm-time">{formatTime(group.bubbles[group.bubbles.length - 1].createdAt)}</div>
               </div>
-            </div>
-          {/each}
-          {#each roomInvitations as invitation (invitation.id)}
-            <div class="lobby-dm-group">
-              {#if peer}
-                <Avatar name={friendName(peer)} src={peer.avatarUrl} colorKey={peer.avatarColorKey} background={peer.avatarAccent || undefined} size={32} />
-              {/if}
-              <article class="lobby-room-invitation">
-                <span class="lobby-room-invitation-icon"><DoorOpen {...iconMd} aria-hidden="true" /></span>
-                <div class="lobby-room-invitation-copy">
-                  <strong>{invitation.status === 'accepted' ? 'Принял приглашение' : invitation.status === 'declined' ? 'Отклонил предложение' : 'Приглашение в комнату'}</strong>
-                  <span>{invitation.roomName}</span>
-                </div>
-                {#if invitation.status === 'pending'}
-                  <div class="lobby-room-invitation-actions">
-                    <button type="button" class="lobby-room-invitation-dismiss" onclick={() => dismissRoomInvitation(invitation.id)}>Не сейчас</button>
-                    <button type="button" class="lobby-room-invitation-join" onclick={() => joinRoomInvitation(invitation)}>Войти</button>
-                  </div>
-                {/if}
-              </article>
             </div>
           {/each}
         </div>
@@ -308,7 +354,7 @@
         </button>
       </div>
       <div class="lobby-profile-body">
-        <Avatar name={friendName(peer)} src={peer.avatarUrl} colorKey={peer.avatarColorKey} background={peer.avatarAccent || undefined} size={76} {online} showDot ring="var(--paper-deep)" />
+        <Avatar name={friendName(peer)} src={peer.avatarUrl} colorKey={peer.avatarColorKey} background={peer.avatarAccent || undefined} size={76} {online} dnd={peer.doNotDisturb} showDot ring="var(--paper-deep)" />
         <div class="lobby-profile-panel-name">{friendName(peer)}</div>
         <div class="lobby-profile-panel-handle">@{peer.login}</div>
 

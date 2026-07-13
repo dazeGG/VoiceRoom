@@ -27,6 +27,18 @@ function mapPublicUser(row) {
   };
 }
 
+// Room invitations ride inside a regular direct message's metadata so they
+// live in the shared thread history without any schema change.
+function mapInvite(metadata) {
+  if (!metadata || metadata.kind !== 'room-invite') return null;
+  return {
+    roomId: String(metadata.roomId || ''),
+    roomName: String(metadata.roomName || ''),
+    status: metadata.status === 'accepted' || metadata.status === 'declined' ? metadata.status : 'pending',
+    expiresAt: Number(metadata.expiresAt) || null
+  };
+}
+
 function mapMessage(row) {
   if (!row) return null;
   return {
@@ -37,6 +49,7 @@ function mapMessage(row) {
     createdAt: toMillis(row.created_at),
     editedAt: toMillis(row.edited_at),
     readAt: toMillis(row.read_at),
+    invite: mapInvite(row.metadata),
     // deletedAt kept internal; callers filter before map
     deletedAt: row.deleted_at ? toMillis(row.deleted_at) : null
   };
@@ -382,15 +395,32 @@ function createFriendStore({ databaseUrl, logger = console, pool } = {}) {
     return mapMessage(result.rows[0] || null);
   }
 
-  async function sendMessage({ senderId, recipientId, body }) {
+  async function sendMessage({ senderId, recipientId, body, metadata = null }) {
     const id = crypto.randomUUID();
     const result = await getPool().query(
-      `INSERT INTO direct_messages (id, sender_id, recipient_id, body, created_at)
-       VALUES ($1, $2, $3, $4, current_timestamp)
+      `INSERT INTO direct_messages (id, sender_id, recipient_id, body, created_at, metadata)
+       VALUES ($1, $2, $3, $4, current_timestamp, $5)
        RETURNING *`,
-      [id, senderId, recipientId, body]
+      [id, senderId, recipientId, body, metadata ? JSON.stringify(metadata) : '{}']
     );
     return mapMessage(result.rows[0]);
+  }
+
+  // Only the invited recipient may resolve a pending room invitation; the
+  // update is idempotent-safe (a second respond finds no pending row).
+  async function respondInvite({ messageId, recipientId, status }) {
+    const result = await getPool().query(
+      `UPDATE direct_messages
+       SET metadata = jsonb_set(metadata, '{status}', to_jsonb($3::text))
+       WHERE id = $1
+         AND recipient_id = $2
+         AND metadata->>'kind' = 'room-invite'
+         AND metadata->>'status' = 'pending'
+         AND deleted_at IS NULL
+       RETURNING *`,
+      [messageId, recipientId, status]
+    );
+    return mapMessage(result.rows[0] || null);
   }
 
   // Mark every message from peer -> user as read. Returns the number marked so
@@ -437,6 +467,7 @@ function createFriendStore({ databaseUrl, logger = console, pool } = {}) {
     softDeleteMessage,
     markRead,
     removeFriend,
+    respondInvite,
     respondRequest,
     searchUsers,
     sendMessage,

@@ -686,6 +686,8 @@ function closePeer(roomId, peerId, transportId, reason = 'left') {
   }
 
   if (room.peers.size === 0) {
+    // The call ended: reset the in-memory call clock (never persisted).
+    room.voiceActiveSince = null;
     void queueRoomOccupancyTransition(roomId).catch((error) => {
       console.error('Failed to persist room occupancy:', error);
     });
@@ -2040,6 +2042,47 @@ async function handleSendDm(req, res, peerId) {
   sendJson(res, 201, { ok: true, message });
 }
 
+// The invited recipient accepts or declines a room invitation stored as a DM.
+// The updated message fans out as a regular edit so both timelines converge.
+async function handleRespondDmInvite(req, res, peerIdParam, messageId) {
+  const user = await requireSessionUser(req, res);
+  if (!user) return;
+
+  const peerId = cleanUuid(peerIdParam);
+  if (!peerId) {
+    sendJson(res, 404, { ok: false, error: 'Диалог не найден' });
+    return;
+  }
+
+  const body = await readJsonBody(req);
+  const action = body.action === 'accept' ? 'accepted' : body.action === 'decline' ? 'declined' : '';
+  if (!action) {
+    sendJson(res, 400, { ok: false, error: 'Неверное действие' });
+    return;
+  }
+
+  const current = await getFriendStore().getMessage(user.id, peerId, messageId);
+  if (!current || !current.invite) {
+    sendJson(res, 404, { ok: false, error: 'Приглашение не найдено' });
+    return;
+  }
+  if (current.recipientId !== user.id) {
+    sendJson(res, 403, { ok: false, error: 'Отвечать может только приглашённый' });
+    return;
+  }
+
+  const message = await getFriendStore().respondInvite({ messageId, recipientId: user.id, status: action });
+  if (!message) {
+    sendJson(res, 409, { ok: false, error: 'Приглашение уже обработано' });
+    return;
+  }
+
+  const event = { type: 'dm.message.edited', message };
+  broadcastToUser(peerId, event);
+  broadcastToUser(user.id, event);
+  sendJson(res, 200, { ok: true, message });
+}
+
 async function handleMarkDmRead(req, res, peerId) {
   const user = await requireSessionUser(req, res);
   if (!user) return;
@@ -2096,6 +2139,16 @@ async function handleRingRoom(req, res, rawRoomId) {
   const fromUser = notificationActor(user);
   const ringRoom = { id: room.id, name: room.name || '', emoji: room.emoji || '' };
   broadcastToUser(targetUserId, { type: 'ring.incoming', fromUser, room: ringRoom, expiresAt });
+  // Persist the invitation as a regular DM so both sides share one timeline
+  // entry (with live status) instead of per-device local copies.
+  const inviteMessage = await getFriendStore().sendMessage({
+    senderId: user.id,
+    recipientId: targetUserId,
+    body: room.name ? `Приглашение в комнату «${room.name}»` : 'Приглашение в комнату',
+    metadata: { kind: 'room-invite', roomId: room.id, roomName: room.name || '', status: 'pending', expiresAt }
+  });
+  broadcastToUser(targetUserId, { type: 'dm-message', message: inviteMessage });
+  broadcastToUser(user.id, { type: 'dm-message', message: inviteMessage });
   void queuePush(targetUserId, {
     type: 'ring',
     title: `${user.displayName || user.login || 'Друг'} зовёт вас`,
@@ -2476,6 +2529,10 @@ async function handleEditDmMessage(req, res, peerIdParam, messageId) {
     sendJson(res, 403, { ok: false, error: 'Можно редактировать только свои сообщения' });
     return;
   }
+  if (current.invite) {
+    sendJson(res, 403, { ok: false, error: 'Приглашение нельзя редактировать' });
+    return;
+  }
 
   const rate = dmLimiter.check(user.id);
   if (!rate.allowed) {
@@ -2831,6 +2888,9 @@ function createApiApp({ store = null, users = null, friends = null, notification
   }));
   app.post('/api/dm/:userId', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
     return handleSendDm(req, res, request.params.userId);
+  }));
+  app.post('/api/dm/:userId/invites/:messageId/respond', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
+    return handleRespondDmInvite(req, res, request.params.userId, request.params.messageId);
   }));
   app.post('/api/dm/:userId/read', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
     return handleMarkDmRead(req, res, request.params.userId);

@@ -18,7 +18,7 @@ import {
   type SendRequestStatus,
   type Relationship
 } from '$lib/api/friends';
-import { deleteDirectMessage, editDirectMessage, fetchThread, markThreadRead, sendDirectMessage, type DirectMessage } from '$lib/api/dm';
+import { deleteDirectMessage, editDirectMessage, fetchThread, markThreadRead, respondRoomInvite, sendDirectMessage, type DirectMessage } from '$lib/api/dm';
 import { connectRealtime, type RealtimeEvent, type RealtimeHandle } from '$lib/api/realtime';
 import { playDirectMessageCue, playFriendAcceptedCue, playFriendRequestCue, playRingCue } from '$lib/features/room/client/media/cues';
 import {
@@ -44,16 +44,6 @@ import { createDmThreadResyncCoordinator } from './dm-thread-resync';
 export type LobbyMode = 'friends' | 'rooms';
 export type LobbyView = 'home' | 'dm' | 'people';
 
-export interface RoomInvitation {
-  id: string;
-  fromUserId: string;
-  roomId: string;
-  roomName: string;
-  createdAt: number;
-  expiresAt: number;
-  status: 'pending' | 'accepted' | 'declined';
-}
-
 interface FriendsState {
   loaded: boolean;
   friends: Friend[];
@@ -66,7 +56,6 @@ interface FriendsState {
   thread: DirectMessage[];
   threadLoading: boolean;
   profileOpen: boolean;
-  roomInvitations: RoomInvitation[];
 }
 
 export const friendsState = $state<FriendsState>({
@@ -80,8 +69,7 @@ export const friendsState = $state<FriendsState>({
   threadPeer: null,
   thread: [],
   threadLoading: false,
-  profileOpen: false,
-  roomInvitations: []
+  profileOpen: false
 });
 
 let realtime: RealtimeHandle | null = null;
@@ -109,20 +97,13 @@ const MAX_PENDING_NOTIFICATION_EVENTS = 100;
 const PENDING_NOTIFICATION_TTL_MS = 60_000;
 let pendingNotificationEvents: Array<{ event: RealtimeEvent; receivedAt: number }> = [];
 let notificationPreferencesRetryTimer: ReturnType<typeof setTimeout> | null = null;
+// Invitations used to be mirrored per device in localStorage; they now live in
+// the DM thread itself, so stale local copies are just cleaned up.
 const RESOLVED_ROOM_INVITATIONS_KEY = 'voice-room:resolved-invitations';
-const resolvedRoomInvitationsKey = () => `${RESOLVED_ROOM_INVITATIONS_KEY}:${selfId}`;
 
-function readResolvedRoomInvitations(): RoomInvitation[] {
+function clearLegacyResolvedRoomInvitations(): void {
   try {
-    const value = JSON.parse(localStorage.getItem(resolvedRoomInvitationsKey()) || '[]');
-    return Array.isArray(value) ? value.filter((item) => item?.status === 'accepted' || item?.status === 'declined') : [];
-  } catch { return []; }
-}
-
-function persistResolvedRoomInvitations(): void {
-  try {
-    const resolved = friendsState.roomInvitations.filter((item) => item.status !== 'pending').slice(-100);
-    localStorage.setItem(resolvedRoomInvitationsKey(), JSON.stringify(resolved));
+    localStorage.removeItem(`${RESOLVED_ROOM_INVITATIONS_KEY}:${selfId}`);
   } catch {}
 }
 
@@ -194,7 +175,7 @@ export function initLobby(currentUserId: string, initialDoNotDisturb = false): (
   selfId = currentUserId;
   presenceReady = false;
   onlineFriendIds = new Set();
-  friendsState.roomInvitations = readResolvedRoomInvitations();
+  clearLegacyResolvedRoomInvitations();
   if (!areNotificationPreferencesLoadedFor(currentUserId)) {
     prepareNotificationPreferences(currentUserId, initialDoNotDisturb);
   }
@@ -214,7 +195,6 @@ export function initLobby(currentUserId: string, initialDoNotDisturb = false): (
     }
     pendingNotificationEvents = [];
     threadResync.invalidate();
-    friendsState.roomInvitations = friendsState.roomInvitations.filter((invite) => invite.status !== 'pending');
     resetNotificationPreferences();
   };
 }
@@ -264,19 +244,19 @@ export function closeProfile(): void {
   friendsState.profileOpen = false;
 }
 
-export function dismissRoomInvitation(id: string): void {
-  friendsState.roomInvitations = friendsState.roomInvitations.map((invite) =>
-    invite.id === id ? { ...invite, status: 'declined' } : invite
-  );
-  persistResolvedRoomInvitations();
-}
-
-export function joinRoomInvitation(invitation: RoomInvitation): void {
-  friendsState.roomInvitations = friendsState.roomInvitations.map((item) =>
-    item.id === invitation.id ? { ...item, status: 'accepted' } : item
-  );
-  persistResolvedRoomInvitations();
-  window.setTimeout(() => window.location.assign(`/r/${encodeURIComponent(invitation.roomId)}`), 120);
+// Accept or decline a room invitation carried by a DM. The server flips the
+// invite status and fans the edited message out to both participants, so the
+// local update here is just the immediate echo.
+export async function respondRoomInvitation(message: DirectMessage, action: 'accept' | 'decline'): Promise<void> {
+  if (!message.invite) return;
+  const peerId = message.senderId === selfId ? message.recipientId : message.senderId;
+  const updated = await respondRoomInvite(peerId, message.id, action);
+  threadResync.recordUpsert(peerId, updated);
+  applyEditedMessage(updated);
+  if (action === 'accept') {
+    const roomId = updated.invite?.roomId || message.invite.roomId;
+    window.setTimeout(() => window.location.assign(`/r/${encodeURIComponent(roomId)}`), 120);
+  }
 }
 
 // --- DM -----------------------------------------------------------------
@@ -501,31 +481,10 @@ function handleRealtimeEvent(event: RealtimeEvent): void {
       break;
     }
     case 'ring.incoming': {
-      const remainingMs = event.payload.expiresAt - Date.now();
-      if (remainingMs <= 0) break;
+      // The invitation itself arrives as a DM (with an invite payload); the
+      // ring event only drives the call cue so it still feels like a ring.
+      if (event.payload.expiresAt - Date.now() <= 0) break;
       playRingCue();
-      const roomName = event.payload.room.name || event.payload.room.id;
-      const invitation: RoomInvitation = {
-        id: `ring-${event.payload.fromUser.id}-${event.payload.room.id}-${event.payload.expiresAt}`,
-        fromUserId: event.payload.fromUser.id,
-        roomId: event.payload.room.id,
-        roomName,
-        createdAt: Date.now(),
-        expiresAt: event.payload.expiresAt,
-        status: 'pending'
-      };
-      friendsState.roomInvitations = [
-        ...friendsState.roomInvitations.filter((item) => item.id !== invitation.id),
-        invitation
-      ];
-      const friend = findFriend(event.payload.fromUser.id);
-      if (friend && !(friendsState.view === 'dm' && friendsState.selectedFriendId === friend.user.id)) {
-        friend.unreadCount += 1;
-        friend.lastMessage = { id: invitation.id, body: `Зовёт в комнату «${roomName}»`, createdAt: invitation.createdAt, fromMe: false };
-      }
-      window.setTimeout(() => {
-        friendsState.roomInvitations = friendsState.roomInvitations.filter((item) => item.id !== invitation.id || item.status !== 'pending');
-      }, remainingMs);
       break;
     }
     case 'dm.message': {
@@ -539,7 +498,8 @@ function handleRealtimeEvent(event: RealtimeEvent): void {
         // We're looking at it: keep it read.
         if (message.senderId !== selfId) void markThreadRead(peerId).catch(() => {});
       } else if (message.senderId !== selfId) {
-        if (areNotificationPreferencesLoadedFor(selfId) && !isPeerNotificationsMuted(peerId)) playDirectMessageCue();
+        // Invites already announced themselves with the ring cue.
+        if (!message.invite && areNotificationPreferencesLoadedFor(selfId) && !isPeerNotificationsMuted(peerId)) playDirectMessageCue();
         const friend = findFriend(peerId);
         if (friend) friend.unreadCount += 1;
       }

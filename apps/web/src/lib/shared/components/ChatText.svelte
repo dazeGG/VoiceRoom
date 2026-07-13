@@ -13,3 +13,10 @@
     {seg.text}
   {/if}
 {/each}
+
+<style>
+  a {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+</style>

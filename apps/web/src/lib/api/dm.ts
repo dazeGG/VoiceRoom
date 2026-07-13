@@ -3,6 +3,15 @@
 import { del, getJsonAuth, patchJson, postJsonAuth } from './http';
 import type { PublicUser } from './friends';
 
+// A room invitation embedded in a message: rendered as an actionable card in
+// the thread instead of a text bubble. Status changes arrive as message edits.
+export interface DirectMessageInvite {
+  roomId: string;
+  roomName: string;
+  status: 'pending' | 'accepted' | 'declined';
+  expiresAt: number | null;
+}
+
 export interface DirectMessage {
   id: string;
   senderId: string;
@@ -11,6 +20,7 @@ export interface DirectMessage {
   createdAt: number;
   editedAt: number | null;
   readAt: number | null;
+  invite?: DirectMessageInvite | null;
 }
 
 // Opening a thread also clears its unread badge server-side.
@@ -46,6 +56,18 @@ export async function editDirectMessage(userId: string, messageId: string, text:
   const payload = await patchJson<{ message: DirectMessage }>(
     `/api/dm/${encodeURIComponent(userId)}/messages/${encodeURIComponent(messageId)}`,
     { text }
+  );
+  return payload.message;
+}
+
+export async function respondRoomInvite(
+  userId: string,
+  messageId: string,
+  action: 'accept' | 'decline'
+): Promise<DirectMessage> {
+  const payload = await postJsonAuth<{ message: DirectMessage }>(
+    `/api/dm/${encodeURIComponent(userId)}/invites/${encodeURIComponent(messageId)}/respond`,
+    { action }
   );
   return payload.message;
 }

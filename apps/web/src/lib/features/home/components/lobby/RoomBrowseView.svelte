@@ -1,6 +1,5 @@
 <script lang="ts">
   import { LogIn, MessageSquare, MicOff } from '@lucide/svelte';
-  import { AvatarStack } from '$lib/shared/ui';
   import { iconMd, iconSm } from '$lib/shared/ui/icons';
   import type { AuthUser, OwnedRoom } from '$lib/api/auth';
   import type { RoomPeer } from '$lib/api/rooms';
@@ -11,7 +10,6 @@
   import RoomPreviewChat from './RoomPreviewChat.svelte';
   import RoomViewHeader from './RoomViewHeader.svelte';
   import LobbyStreamTile from './LobbyStreamTile.svelte';
-  import { roomPeerAvatarItems } from '../../model/room-avatars';
   import { subscribeRoomPreview } from '../../model/room-realtime';
 
   let { room, user, onEnter, onBack, onOpenSettings, onToast } = $props<{
@@ -30,7 +28,6 @@
 
   let previewChatOpen = $state(false);
   let loadError = $state('');
-  const peerAvatars = $derived(roomPeerAvatarItems(peers));
   const screenPeers = $derived(peers.filter((peer) => peer.screen));
   const tileCount = $derived(peers.length + screenPeers.length);
 
@@ -90,13 +87,6 @@
   <header class="lobby-browse-topbar">
     <RoomViewHeader {room} {onBack} {onOpenSettings} {onToast} />
     <div class="lobby-roomview-actions">
-      {#if peers.length > 0}
-        <span class="lobby-roomview-state" data-live="true">
-          <span class="lobby-live-dot"></span>
-          <AvatarStack items={peerAvatars} maxAvatars={5} size={24} ariaLabel="В комнате" />
-          <span>{peers.length} в эфире</span>
-        </span>
-      {/if}
       {#if !previewChatOpen}
         <button class="room-chat-toggle" type="button" onclick={() => (previewChatOpen = true)}>
           <MessageSquare {...iconSm} aria-hidden="true" />

@@ -3,6 +3,7 @@ import { state } from '../core/state.svelte';
 import { postState } from '../room/presence';
 
 import { bumpScreenUiRevision, screenUi } from '../../screen-ui.svelte';
+import { clearParticipantFocus } from '../../participants-ui.svelte';
 import {
   detachRemoteScreen,
   getAllParticipants,
@@ -72,6 +73,9 @@ export async function enterScreenView(peerId: string): Promise<void> {
     await leaveScreenView({ quiet: true, keepPreview: true });
   }
 
+  // The screen spotlight replaces a focused participant tile: both render into
+  // the same stage slot, so they must never be active at the same time.
+  clearParticipantFocus();
   setViewedScreenPeerId(peerId);
   state.screenCollapsedPeerIds.delete(peerId);
   state.screenSubscribedPeerIds.add(peerId);

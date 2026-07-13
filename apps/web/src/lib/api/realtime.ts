@@ -32,6 +32,9 @@ export type RoomSnapshot = {
   room: RoomSummary;
   peers: RoomPeer[];
   recentMessages?: ChatMessage[];
+  // Server-side in-memory call clock: when the current voice session started
+  // (first live peer), or null while the room is empty. Never persisted.
+  voiceActiveSince?: number | null;
   mode: 'preview' | 'active';
 };
 

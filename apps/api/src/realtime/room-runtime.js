@@ -217,6 +217,7 @@ function createRoomRealtimeRuntime(deps) {
       room: publicLobbyRoom(dbRoom),
       peers,
       recentMessages,
+      voiceActiveSince: presence?.voiceActiveSince || null,
       mode
     };
   }
@@ -336,6 +337,11 @@ function createRoomRealtimeRuntime(deps) {
     };
     room.peers.set(peerId, peer);
     room.updatedAt = peer.joinedAt;
+    // In-memory call clock on the presence record (room here is the DB room
+    // with attached peers): starts with the first live peer, cleared when the
+    // room empties (closePeer). Deliberately never persisted to the database.
+    const presence = presenceRooms.get(roomId);
+    if (presence && !presence.voiceActiveSince) presence.voiceActiveSince = Date.now();
     await queueRoomOccupancyTransition(roomId);
 
     const snapshot = await buildRoomSnapshot(roomId, 'active');

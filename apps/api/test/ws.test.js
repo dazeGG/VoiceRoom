@@ -482,12 +482,14 @@ test('ring requires an active friend and delivers one expiring invitation per co
   const bob = openWs(socketPath, bobCookie);
   await alice.ready;
   await bob.ready;
-  await joinVoiceRoom(alice, {
+  const aliceSnapshot = await joinVoiceRoom(alice, {
     roomId,
     peerId: 'alice-ring-peer',
     sessionToken: 'r'.repeat(32),
     name: 'Alice Ring'
   });
+  // The active snapshot carries the in-memory call clock for the timers.
+  assert.ok(Number(aliceSnapshot.payload.voiceActiveSince) > 0);
 
   const nonFriend = await request(socketPath, {
     method: 'POST',
@@ -512,6 +514,47 @@ test('ring requires an active friend and delivers one expiring invitation per co
   assert.deepEqual(incoming.payload.room, { id: roomId, name: 'Ring Room', emoji: '' });
   assert.ok(incoming.payload.expiresAt >= sentAt + 4500);
   assert.ok(incoming.payload.expiresAt <= Date.now() + 5000);
+
+  // The ring also lands in the shared DM thread as an invitation message.
+  const inviteEvent = await waitForWsType(bob.frames, 'dm.message');
+  const inviteMessage = inviteEvent.payload.message;
+  assert.ok(inviteMessage.id);
+  assert.equal(inviteMessage.invite.roomId, roomId);
+  assert.equal(inviteMessage.invite.roomName, 'Ring Room');
+  assert.equal(inviteMessage.invite.status, 'pending');
+  assert.match(inviteMessage.body, /Ring Room/);
+
+  // Only the invited recipient may respond; the sender gets a 403.
+  const bySender = await request(socketPath, {
+    method: 'POST',
+    pathname: `/api/dm/${encodeURIComponent(bobId)}/invites/${encodeURIComponent(inviteMessage.id)}/respond`,
+    cookie: aliceCookie,
+    body: { action: 'accept' }
+  });
+  assert.equal(bySender.status, 403);
+
+  // Bob accepts: both sides converge through a dm.message.edited fan-out.
+  const responded = await request(socketPath, {
+    method: 'POST',
+    pathname: `/api/dm/${encodeURIComponent(inviteMessage.senderId)}/invites/${encodeURIComponent(inviteMessage.id)}/respond`,
+    cookie: bobCookie,
+    body: { action: 'accept' }
+  });
+  assert.equal(responded.status, 200);
+  assert.equal(responded.body.message.invite.status, 'accepted');
+
+  const edited = await waitForWsType(alice.frames, 'dm.message.edited');
+  assert.equal(edited.payload.message.id, inviteMessage.id);
+  assert.equal(edited.payload.message.invite.status, 'accepted');
+
+  // Responding twice is a conflict: the invite is no longer pending.
+  const again = await request(socketPath, {
+    method: 'POST',
+    pathname: `/api/dm/${encodeURIComponent(inviteMessage.senderId)}/invites/${encodeURIComponent(inviteMessage.id)}/respond`,
+    cookie: bobCookie,
+    body: { action: 'decline' }
+  });
+  assert.equal(again.status, 409);
 
   const repeated = await request(socketPath, {
     method: 'POST',

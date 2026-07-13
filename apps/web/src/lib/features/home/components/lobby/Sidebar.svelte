@@ -130,7 +130,7 @@
           onkeydown={(event) => handleFriendKeydown(event, entry.user.id)}
           aria-haspopup="menu"
         >
-          <Avatar name={friendName(entry.user)} src={entry.user.avatarUrl} colorKey={entry.user.avatarColorKey} background={entry.user.avatarAccent || undefined} online={entry.online} dnd={entry.user.doNotDisturb} showDot={entry.online || entry.user.doNotDisturb} ring="var(--panel)" />
+          <Avatar name={friendName(entry.user)} src={entry.user.avatarUrl} colorKey={entry.user.avatarColorKey} background={entry.user.avatarAccent || undefined} online={entry.online} dnd={entry.user.doNotDisturb} showDot ring="var(--panel)" />
           <div style="min-width:0;flex:1;">
             <div class="lv-row-name" style={`font-weight:${entry.unreadCount > 0 ? 750 : 650}`}>{friendName(entry.user)}</div>
           </div>
