@@ -466,7 +466,7 @@ test('notification preference routes require auth and expose defaults', async (t
     notifications: {
       async getPreferences(userId) {
         assert.equal(userId, '11111111-1111-4111-8111-111111111111');
-        return { doNotDisturb: false, mutedPeerIds: [], privateNotifications: false };
+        return { doNotDisturb: false, mutedPeerIds: [], presenceStatus: 'online', privateNotifications: false };
       }
     }
   });
@@ -484,6 +484,7 @@ test('notification preference routes require auth and expose defaults', async (t
   assert.deepEqual(response.json().preferences, {
     doNotDisturb: false,
     mutedPeerIds: [],
+    presenceStatus: 'online',
     privateNotifications: false
   });
 });
@@ -493,6 +494,7 @@ test('notification mute and privacy routes call notification store and map statu
   const preferences = {
     doNotDisturb: true,
     mutedPeerIds: ['22222222-2222-4222-8222-222222222222'],
+    presenceStatus: 'dnd',
     privateNotifications: true
   };
   const app = createApiApp({
@@ -587,6 +589,91 @@ test('notification mute and privacy routes call notification store and map statu
   }]);
 });
 
+test('presence status route requires auth, validates canonical values, and syncs DND', async (t) => {
+  const calls = [];
+  const currentUserId = '11111111-1111-4111-8111-111111111111';
+  const app = createApiApp({
+    store: createFakeStore(),
+    users: {
+      async getSessionUser(token) {
+        if (token !== 'session-token') return null;
+        return {
+          user: {
+            id: currentUserId,
+            login: 'alice',
+            presenceStatus: 'online',
+            doNotDisturb: false
+          }
+        };
+      }
+    },
+    friends: {
+      async getFriendIds(userId) {
+        assert.equal(userId, currentUserId);
+        return [];
+      }
+    },
+    notifications: {
+      async setPresenceStatus(input) {
+        calls.push(input);
+        return {
+          status: 'updated',
+          preferences: {
+            doNotDisturb: input.presenceStatus === 'dnd',
+            mutedPeerIds: [],
+            presenceStatus: input.presenceStatus,
+            privateNotifications: false
+          }
+        };
+      }
+    }
+  });
+  t.after(() => app.close());
+
+  const unauthenticated = await app.inject({
+    method: 'POST',
+    url: '/api/presence/status',
+    payload: { status: 'away' }
+  });
+  assert.equal(unauthenticated.statusCode, 401);
+
+  const headers = {
+    cookie: 'vr_session=session-token',
+    host: 'voice.local',
+    origin: 'http://voice.local'
+  };
+  for (const status of ['online', 'away', 'dnd', 'offline']) {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/presence/status',
+      headers,
+      payload: { status }
+    });
+    assert.equal(response.statusCode, 200);
+    assert.equal(response.json().preferences.presenceStatus, status);
+    assert.equal(response.json().preferences.doNotDisturb, status === 'dnd');
+  }
+  assert.deepEqual(calls, ['online', 'away', 'dnd', 'offline'].map((presenceStatus) => ({
+    userId: currentUserId,
+    presenceStatus
+  })));
+
+  for (const payload of [{}, { status: 'busy' }, { status: ' online ' }, { status: null }]) {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/presence/status',
+      headers,
+      payload
+    });
+    assert.equal(response.statusCode, 400);
+    assert.deepEqual(response.json(), {
+      ok: false,
+      error: 'status must be one of: online, away, dnd, offline'
+    });
+  }
+  assert.equal(calls.length, 4);
+});
+
 
 test('notification mutation routes reject invalid booleans and targets before store calls', async (t) => {
   const calls = [];
@@ -614,7 +701,7 @@ test('notification mutation routes reject invalid booleans and targets before st
       },
       async setDoNotDisturb(input) {
         calls.push(['dnd', input]);
-        return { status: 'updated', preferences: { doNotDisturb: false, mutedPeerIds: [], privateNotifications: false } };
+        return { status: 'updated', preferences: { doNotDisturb: false, mutedPeerIds: [], presenceStatus: 'online', privateNotifications: false } };
       }
     }
   });

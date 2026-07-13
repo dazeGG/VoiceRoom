@@ -2,7 +2,7 @@
 
 const crypto = require('node:crypto');
 const { createDbPool, transaction } = require('./db');
-const { cleanAvatarColorKey } = require('@voice-room/shared/validation');
+const { cleanAvatarColorKey, cleanPresenceStatus } = require('@voice-room/shared/validation');
 
 function toMillis(value) {
   if (value == null) return null;
@@ -15,15 +15,17 @@ function toMillis(value) {
 // leaks the password hash; mirrors user-store's publicUser fields.
 function mapPublicUser(row) {
   if (!row) return null;
+  const presenceStatus = cleanPresenceStatus(row.presence_status) || (row.dnd ? 'dnd' : 'online');
   return {
     avatarAccent: row.avatar_accent || null,
     avatarColorKey: cleanAvatarColorKey(row.avatar_color_key) || 'blurple',
     avatarUrl: row.avatar_key ? `/api/avatars/${encodeURIComponent(row.avatar_key)}` : null,
     createdAt: toMillis(row.created_at),
     displayName: row.display_name || '',
-    doNotDisturb: Boolean(row.dnd),
+    doNotDisturb: presenceStatus === 'dnd',
     id: row.id,
-    login: row.login
+    login: row.login,
+    presenceStatus
   };
 }
 

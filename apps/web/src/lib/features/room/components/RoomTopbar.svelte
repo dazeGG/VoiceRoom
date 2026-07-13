@@ -3,6 +3,7 @@
   import Topbar from '$lib/shared/components/Topbar.svelte';
   import { iconMd } from '$lib/shared/ui/icons';
   import { Avatar } from '$lib/shared/ui';
+  import { effectivePresenceStatus } from '$lib/shared/presence';
   import { RoomMenu } from '$lib/shared/components/room-menu';
   import { state as roomClientState } from '../client/core/state.svelte';
   import { getConnectionStatusView } from '../client/ui/status';
@@ -47,8 +48,19 @@
           {:else}
             {#each ringFriends as friend (friend.user.id)}
               {@const alreadyInRoom = roomAccountIds.has(friend.user.id)}
+              {@const presence = effectivePresenceStatus(friend.online, friend.user.presenceStatus, friend.user.doNotDisturb)}
               <button type="button" class="room-ring-friend" disabled={Boolean(ringingUserId) || alreadyInRoom} title={alreadyInRoom ? 'Уже в комнате' : undefined} onclick={() => void ringFriend(friend.user.id, close)}>
-                <Avatar name={friend.user.displayName || friend.user.login} src={friend.user.avatarUrl} background={friend.user.avatarAccent || undefined} colorKey={friend.user.avatarColorKey} size={28} online={friend.online} dnd={friend.user.doNotDisturb} showDot />
+                <Avatar
+                  name={friend.user.displayName || friend.user.login}
+                  src={friend.user.avatarUrl}
+                  background={friend.user.avatarAccent || undefined}
+                  colorKey={friend.user.avatarColorKey}
+                  size={28}
+                  online={presence === 'online'}
+                  afk={presence === 'away'}
+                  dnd={presence === 'dnd'}
+                  showDot
+                />
                 <span>{friend.user.displayName || friend.user.login}</span>
                 {#if alreadyInRoom}<small>В комнате</small>{/if}
               </button>

@@ -50,7 +50,7 @@
     notificationPreferences,
     requestNotificationsFromUiAction,
     syncNotificationPermission,
-    updateDoNotDisturb,
+    updatePresenceStatus,
     updatePrivateNotifications
   } from '$lib/shared/notifications/preferences.svelte';
   import {
@@ -434,11 +434,12 @@
   async function toggleDoNotDisturb(): Promise<void> {
     if (notificationSaving) return;
     notificationSaving = true;
+    const nextStatus = notificationPreferences.doNotDisturb ? 'online' : 'dnd';
     try {
-      await updateDoNotDisturb(!notificationPreferences.doNotDisturb);
-      onToast(notificationPreferences.doNotDisturb ? 'Режим «Не беспокоить» включён' : 'Режим «Не беспокоить» выключен');
+      await updatePresenceStatus(nextStatus);
+      onToast(nextStatus === 'dnd' ? 'Статус: Не беспокоить' : 'Статус: В сети');
     } catch {
-      onToast('Не удалось сохранить режим «Не беспокоить»');
+      onToast('Не удалось изменить статус');
     } finally {
       notificationSaving = false;
     }
@@ -808,7 +809,7 @@
                     <span class="settings-switch-knob" aria-hidden="true"></span>
                   </button>
                 </div>
-                <div class="settings-gate-hint">Глушит push и звуковые сигналы, пока режим включён.</div>
+                <div class="settings-gate-hint">При статусе «Не беспокоить» push-уведомления и звуковые сигналы не воспроизводятся.</div>
               </div>
 
               <div>

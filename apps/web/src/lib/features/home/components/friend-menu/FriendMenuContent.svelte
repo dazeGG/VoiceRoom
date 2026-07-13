@@ -3,6 +3,7 @@
   import type { Friend } from '$lib/api/friends';
   import { Avatar, Ellipsis, PopoverDivider, PopoverMenuItem } from '$lib/shared/ui';
   import { iconMd } from '$lib/shared/ui/icons';
+  import { effectivePresenceStatus } from '$lib/shared/presence';
   import { friendName } from '../../model/lobby-format';
   import { openDm, removeFriend } from '../../model/friends.svelte';
   import {
@@ -19,6 +20,9 @@
 
   const name = $derived(friendName(friend.user));
   const muted = $derived(isPeerNotificationsMuted(friend.user.id));
+  const presence = $derived(
+    effectivePresenceStatus(friend.online, friend.user.presenceStatus, friend.user.doNotDisturb)
+  );
   let muteSaving = $state(false);
 
   async function openConversation(): Promise<void> {
@@ -68,8 +72,9 @@
       colorKey={friend.user.avatarColorKey}
       background={friend.user.avatarAccent || undefined}
       size={42}
-      online={friend.online}
-      dnd={friend.user.doNotDisturb}
+      online={presence === 'online'}
+      afk={presence === 'away'}
+      dnd={presence === 'dnd'}
       showDot
       ring="#16140f"
     />

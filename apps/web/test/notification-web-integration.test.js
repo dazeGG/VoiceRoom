@@ -18,7 +18,9 @@ test('notification API client uses required endpoints and credentialed helpers',
   assert.doesNotMatch(api, /mutedRoomIds/);
   assert.match(api, /privateNotifications: boolean/);
   assert.match(api, /doNotDisturb: boolean/);
+  assert.match(api, /presenceStatus: PresenceStatus/);
   assert.match(api, /postJsonAuth<NotificationPreferencesResponse>\('\/api\/notifications\/settings', \{ dnd \}\)/);
+  assert.match(api, /postJsonAuth<NotificationPreferencesResponse>\('\/api\/presence\/status', \{ status \}\)/);
 });
 
 test('lobby startup loads notification preferences and realtime notification events route through browser helper', () => {
@@ -29,7 +31,7 @@ test('lobby startup loads notification preferences and realtime notification eve
   assert.match(friends, /resetNotificationPreferences/);
   assert.match(friends, /Promise\.all\(\[refreshFriends\(\), refreshRequests\(\)\]\)/);
   assert.match(friends, /scheduleNotificationPreferencesLoad\(currentUserId\)/);
-  assert.match(friends, /prepareNotificationPreferences\(currentUserId, initialDoNotDisturb\)/);
+  assert.match(friends, /prepareNotificationPreferences\(currentUserId, initialDoNotDisturb, initialPresenceStatus\)/);
   assert.match(friends, /function scheduleNotificationPreferencesLoad\(userId = selfId\)/);
   assert.match(friends, /loadNotificationPreferences\(userId\)/);
   assert.match(friends, /\.then\(flushPendingNotificationEvents\)/);
@@ -145,7 +147,7 @@ test('DM mute is server-backed while room mute is current-device localStorage', 
   assert.match(settings, /updatePrivateNotifications\(!notificationPreferences\.privateNotifications\)/);
 });
 
-test('DND is server-backed, visible on avatars, and suppresses all cue playback', () => {
+test('presence status is server-backed while DND suppresses notifications and cue playback', () => {
   const prefs = read('src/lib/shared/notifications/preferences.svelte.ts');
   const sidebar = read('src/lib/features/home/components/lobby/Sidebar.svelte');
   const settings = read('src/lib/features/home/components/SettingsModal.svelte');
@@ -154,17 +156,40 @@ test('DND is server-backed, visible on avatars, and suppresses all cue playback'
   const lobby = read('src/lib/features/home/LobbyPage.svelte');
   const friends = read('src/lib/features/home/model/friends.svelte.ts');
 
-  assert.match(prefs, /setDoNotDisturb\(doNotDisturb\)/);
-  assert.match(sidebar, /updateDoNotDisturb\(!notificationPreferences\.doNotDisturb\)/);
-  assert.match(sidebar, /ariaLabel="Меню пользователя"/);
+  assert.match(prefs, /presenceStatus: PresenceStatus/);
+  assert.match(prefs, /setPresenceStatus\(status\)/);
+  assert.match(sidebar, /updatePresenceStatus\(status\)/);
+  assert.match(sidebar, /role="listbox"/);
+  assert.match(sidebar, /role="option"/);
+  assert.match(sidebar, /aria-selected=\{selected\}/);
+  assert.match(sidebar, /bind:open=\{statusPopoverOpen\}/);
+  assert.match(sidebar, /use:registerStatusOption=\{index\}/);
+  assert.match(sidebar, /tabindex=\{index === activeStatusIndex \? 0 : -1\}/);
+  assert.match(sidebar, /onkeydown=\{handleStatusTriggerKeydown\}/);
+  assert.match(sidebar, /handleStatusOptionKeydown\(event, option\.value, close\)/);
+  assert.match(sidebar, /event\.key === 'ArrowDown'/);
+  assert.match(sidebar, /event\.key === 'ArrowUp'/);
+  assert.match(sidebar, /event\.key === 'Home'/);
+  assert.match(sidebar, /event\.key === 'End'/);
+  assert.match(sidebar, /statusOptionRefs\[nextIndex\]\?\.focus\(\)/);
+  assert.match(sidebar, /statusTypeaheadTimer = setTimeout\([\s\S]*700\)/);
+  assert.match(sidebar, /option\.label\.toLocaleLowerCase\(\)\.startsWith\(statusTypeahead\)/);
+  assert.match(sidebar, /event\.key\.length === 1[\s\S]*matchStatusTypeahead\(event\.key\)/);
+  assert.match(sidebar, /В сети/);
+  assert.match(sidebar, /Отошёл/);
+  assert.match(sidebar, /Не беспокоить/);
+  assert.match(sidebar, /Не в сети/);
+  assert.match(sidebar, /Уведомления и звуковые сигналы будут отключены/);
+  assert.doesNotMatch(sidebar, /Включить «Не беспокоить»|Выключить «Не беспокоить»/);
   assert.match(settings, /tab === 'notifications'/);
-  assert.match(settings, /Глушит push и звуковые сигналы/);
+  assert.match(settings, /При статусе «Не беспокоить» push-уведомления и звуковые сигналы не воспроизводятся/);
+  assert.doesNotMatch(settings, /Режим «Не беспокоить» включён|Режим «Не беспокоить» выключен/);
   assert.match(settings, /Настроить громкость сигналов/);
   assert.match(cues, /isDoNotDisturbPlaybackSuppressed\(\) \|\| isAppPlaybackMuted\(\)/);
   assert.match(avatar, /data-status=\{presence\}/);
   assert.match(avatar, /dnd: 'var\(--coral\)'/);
   assert.doesNotMatch(avatar, /ui-avatar-dot--dnd::after/);
-  assert.match(lobby, /initLobby\(user\.id, user\.doNotDisturb\)/);
+  assert.match(lobby, /initLobby\(user\.id, user\.doNotDisturb, user\.presenceStatus\)/);
   assert.match(friends, /notification\.settings\.updated/);
   assert.match(friends, /applyRealtimeNotificationPreferences\(selfId, event\.payload\.preferences\)/);
   assert.match(prefs, /applyRealtimeNotificationPreferences[\s\S]*preferenceGeneration \+= 1;[\s\S]*notificationPreferences\.loadingForUserId = null/);

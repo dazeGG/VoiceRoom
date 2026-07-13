@@ -14,6 +14,7 @@ const pushMigration = require('../src/migrations/20260711130000_create_push_subs
 const avatarMigration = require('../src/migrations/20260711120000_add_avatars');
 const dndMigration = require('../src/migrations/20260711140000_add_user_dnd');
 const messageEditingMigration = require('../src/migrations/20260712120000_add_message_editing');
+const presenceStatusMigration = require('../src/migrations/20260713120000_add_user_presence_status');
 
 function createRecorder() {
   const calls = [];
@@ -420,4 +421,22 @@ test('DND migration adds a non-null disabled-by-default user flag', () => {
     table: 'users',
     columns: ['dnd']
   });
+});
+
+test('presence status migration adds a constrained default, backfills DND, and is reversible', () => {
+  const pgm = createRecorder();
+  presenceStatusMigration.up(pgm);
+
+  const added = pgm.calls.find((call) => call.type === 'addColumns' && call.table === 'users');
+  assert.deepEqual(added.columns.presence_status, { type: 'text', notNull: true, default: 'online' });
+  assert.ok(pgm.calls.some((call) => call.type === 'sql' && /presence_status = 'dnd' WHERE dnd = true/.test(call.text)));
+  const constraint = pgm.calls.find((call) => call.type === 'addConstraint' && call.name === 'users_presence_status_check');
+  assert.match(constraint.options.check, /'online'.*'away'.*'dnd'.*'offline'/);
+
+  const down = createRecorder();
+  presenceStatusMigration.down(down);
+  assert.deepEqual(down.calls, [
+    { type: 'dropConstraint', table: 'users', name: 'users_presence_status_check' },
+    { type: 'dropColumns', table: 'users', columns: ['presence_status'] }
+  ]);
 });

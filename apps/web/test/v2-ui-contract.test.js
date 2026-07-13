@@ -981,7 +981,7 @@ test('lobby v2 keeps dock in main area, preview chat, and people add-friend flow
   const controls = read('src/lib/features/room/styles/controls.css');
   const lobby = read('src/lib/features/home/LobbyPage.svelte');
   const sidebar = read('src/lib/features/home/components/lobby/Sidebar.svelte');
-  assert.match(sidebar, /import \{[^}]*\bAvatar\b[^}]*\bBadge\b[^}]*\bContextMenu\b[^}]*\bPopover\b[^}]*\bPopoverMenuItem\b[^}]*\} from '\$lib\/shared\/ui'/);
+  assert.match(sidebar, /import \{[^}]*\bAvatar\b[^}]*\bBadge\b[^}]*\bContextMenu\b[^}]*\bPopover\b[^}]*\} from '\$lib\/shared\/ui'/);
   assert.match(sidebar, /onOpenPeople/);
   assert.doesNotMatch(sidebar, /lastMessagePreview/);
   assert.doesNotMatch(sidebar, /entry\.lastMessage\.body/);
@@ -1436,7 +1436,11 @@ test('chat linkify keeps full URLs with hosts, paths, and query strings clickabl
 
 test('avatar presence colors are solid and cover dnd, afk, online, and offline states', () => {
   const avatar = read('src/lib/shared/ui/Avatar/Avatar.svelte');
+  const presence = read('src/lib/shared/presence.ts');
   const sidebar = read('src/lib/features/home/components/lobby/Sidebar.svelte');
+  const dmView = read('src/lib/features/home/components/lobby/DmView.svelte');
+  const friendMenu = read('src/lib/features/home/components/friend-menu/FriendMenuContent.svelte');
+  const roomTopbar = read('src/lib/features/room/components/RoomTopbar.svelte');
 
   assert.match(avatar, /dnd \? 'dnd' : afk \? 'afk' : online \? 'online' : 'offline'/);
   assert.match(avatar, /dnd: 'var\(--coral\)'/);
@@ -1444,7 +1448,27 @@ test('avatar presence colors are solid and cover dnd, afk, online, and offline s
   assert.match(avatar, /online: 'var\(--green\)'/);
   assert.match(avatar, /offline: 'var\(--warm-faint\)'/);
   assert.doesNotMatch(avatar, /ui-avatar-dot--dnd::after/);
-  assert.match(sidebar, /dnd=\{entry\.user\.doNotDisturb\}[\s\S]*showDot/);
+  assert.match(presence, /import type \{ PresenceStatus \} from '@voice-room\/shared\/validation'/);
+  assert.match(presence, /export type \{ PresenceStatus \}/);
+  assert.match(presence, /if \(!online\) return 'offline'/);
+  assert.match(presence, /doNotDisturb \? 'dnd' : 'online'/);
+  assert.match(sidebar, /effectivePresenceStatus\(entry\.online, entry\.user\.presenceStatus, entry\.user\.doNotDisturb\)/);
+  assert.match(sidebar, /afk=\{selfPresence === 'away'\}/);
+  assert.match(dmView, /effectivePresenceStatus\(online, peer\?\.presenceStatus, peer\?\.doNotDisturb\)/);
+  assert.match(friendMenu, /effectivePresenceStatus\(friend\.online, friend\.user\.presenceStatus, friend\.user\.doNotDisturb\)/);
+  assert.match(roomTopbar, /effectivePresenceStatus\(friend\.online, friend\.user\.presenceStatus, friend\.user\.doNotDisturb\)/);
+});
+
+test('effective presence gives physical offline priority and safely supports legacy payloads', async () => {
+  const { effectivePresenceStatus } = await import('../src/lib/shared/presence.ts');
+
+  assert.equal(effectivePresenceStatus(false, 'dnd', true), 'offline');
+  assert.equal(effectivePresenceStatus(true, 'online'), 'online');
+  assert.equal(effectivePresenceStatus(true, 'away'), 'away');
+  assert.equal(effectivePresenceStatus(true, 'dnd'), 'dnd');
+  assert.equal(effectivePresenceStatus(true, 'offline'), 'offline');
+  assert.equal(effectivePresenceStatus(true, undefined, true), 'dnd');
+  assert.equal(effectivePresenceStatus(true, 'unexpected', false), 'online');
 });
 
 test('delete realtime contracts avoid stale chat and false room affordances', () => {

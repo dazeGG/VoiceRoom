@@ -2,6 +2,8 @@
 // cookie set by the API rides along automatically (including on /api/rooms,
 // which is how a logged-in user's persistent rooms get an owner).
 
+import type { PresenceStatus } from '$lib/shared/presence';
+
 export interface AuthUser {
   avatarAccent: string | null;
   avatarColorKey: string;
@@ -12,6 +14,7 @@ export interface AuthUser {
   doNotDisturb: boolean;
   id: string;
   login: string;
+  presenceStatus: PresenceStatus;
 }
 
 export type RoomRelationship = 'owner' | 'bookmarked';

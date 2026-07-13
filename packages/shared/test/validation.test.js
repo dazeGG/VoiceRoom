@@ -13,9 +13,11 @@ const {
   cleanLiveKitUrl,
   cleanRoomName,
   cleanAvatarColorKey,
+  cleanPresenceStatus,
   isValidPassword,
   normalizeLogin,
-  AVATAR_COLOR_KEYS
+  AVATAR_COLOR_KEYS,
+  PRESENCE_STATUSES
 } = require('../src/validation');
 
 test('normalizeRoomId accepts valid ids and trims', () => {
@@ -142,4 +144,13 @@ test('avatar color keys are curated tokens only', () => {
   assert.equal(cleanAvatarColorKey(' blurple '), '');
   assert.equal(cleanAvatarColorKey(AVATAR_COLOR_KEYS[0].toUpperCase()), '');
   assert.equal(cleanAvatarColorKey(null), '');
+});
+
+test('presence statuses expose and accept only the canonical vocabulary', () => {
+  assert.deepEqual(PRESENCE_STATUSES, ['online', 'away', 'dnd', 'offline']);
+  for (const status of PRESENCE_STATUSES) assert.equal(cleanPresenceStatus(status), status);
+  assert.equal(cleanPresenceStatus(''), '');
+  assert.equal(cleanPresenceStatus('Online'), '');
+  assert.equal(cleanPresenceStatus(' away '), '');
+  assert.equal(cleanPresenceStatus(null), '');
 });

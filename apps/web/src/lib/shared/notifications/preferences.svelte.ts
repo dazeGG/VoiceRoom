@@ -3,9 +3,11 @@ import {
   fetchNotificationPreferences,
   setDoNotDisturb,
   setDmNotificationsMuted,
+  setPresenceStatus,
   setPrivateNotifications,
   type NotificationPreferences
 } from '$lib/api/notifications';
+import { normalizePresenceStatus, type PresenceStatus } from '$lib/shared/presence';
 import {
   getNotificationDeliveryPermission,
   getNotificationPermission,
@@ -51,6 +53,7 @@ export const notificationPreferences = $state<{
   loadingForUserId: string | null;
   mutedPeerIds: string[];
   mutedRoomIds: string[];
+  presenceStatus: PresenceStatus;
   privateNotifications: boolean;
   doNotDisturb: boolean;
   browserPermission: NotificationPermissionState;
@@ -62,6 +65,7 @@ export const notificationPreferences = $state<{
   loadingForUserId: null,
   mutedPeerIds: [],
   mutedRoomIds: readMutedRoomIds(),
+  presenceStatus: 'online',
   privateNotifications: false,
   doNotDisturb: false,
   browserPermission: 'unsupported',
@@ -73,6 +77,10 @@ let preferenceGeneration = 0;
 
 function applyPreferenceFields(preferences: NotificationPreferences): void {
   notificationPreferences.mutedPeerIds = [...preferences.mutedPeerIds];
+  notificationPreferences.presenceStatus = normalizePresenceStatus(
+    preferences.presenceStatus,
+    preferences.doNotDisturb ? 'dnd' : 'online'
+  );
   notificationPreferences.privateNotifications = preferences.privateNotifications;
   notificationPreferences.doNotDisturb = preferences.doNotDisturb;
   setDoNotDisturbPlaybackSuppressed(preferences.doNotDisturb);
@@ -102,15 +110,24 @@ export function resetNotificationPreferences(): void {
   notificationPreferences.loadingForUserId = null;
   notificationPreferences.mutedPeerIds = [];
   notificationPreferences.mutedRoomIds = readMutedRoomIds();
+  notificationPreferences.presenceStatus = 'online';
   notificationPreferences.privateNotifications = false;
   notificationPreferences.doNotDisturb = false;
   setDoNotDisturbPlaybackSuppressed(false);
   syncNotificationPermission();
 }
 
-export function prepareNotificationPreferences(userId: string, doNotDisturb: boolean): void {
+export function prepareNotificationPreferences(
+  userId: string,
+  doNotDisturb: boolean,
+  presenceStatus?: unknown
+): void {
   resetNotificationPreferences();
   activeUserId = userId;
+  notificationPreferences.presenceStatus = normalizePresenceStatus(
+    presenceStatus,
+    doNotDisturb ? 'dnd' : 'online'
+  );
   notificationPreferences.doNotDisturb = Boolean(doNotDisturb);
   setDoNotDisturbPlaybackSuppressed(doNotDisturb);
 }
@@ -202,6 +219,13 @@ export async function updateDoNotDisturb(doNotDisturb: boolean): Promise<void> {
   const accountUserId = activeUserId;
   const generation = preferenceGeneration;
   const payload = await setDoNotDisturb(doNotDisturb);
+  applyMutationPreferences(payload.preferences, accountUserId, generation);
+}
+
+export async function updatePresenceStatus(status: PresenceStatus): Promise<void> {
+  const accountUserId = activeUserId;
+  const generation = preferenceGeneration;
+  const payload = await setPresenceStatus(status);
   applyMutationPreferences(payload.preferences, accountUserId, generation);
 }
 

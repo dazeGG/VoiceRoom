@@ -47,6 +47,7 @@ test('notification preferences default private notifications off and update expl
   assert.deepEqual(await notifications.getPreferences(alice.id), {
     doNotDisturb: false,
     mutedPeerIds: [],
+    presenceStatus: 'online',
     privateNotifications: false
   });
 
@@ -67,11 +68,23 @@ test('notification preferences default private notifications off and update expl
   const dndEnabled = await notifications.setDoNotDisturb({ userId: alice.id, doNotDisturb: true });
   assert.equal(dndEnabled.status, 'updated');
   assert.equal(dndEnabled.preferences.doNotDisturb, true);
+  assert.equal(dndEnabled.preferences.presenceStatus, 'dnd');
   assert.equal((await users.getUserById(alice.id)).doNotDisturb, true);
 
   const dndDisabled = await notifications.setDoNotDisturb({ userId: alice.id, doNotDisturb: false });
   assert.equal(dndDisabled.status, 'updated');
   assert.equal(dndDisabled.preferences.doNotDisturb, false);
+  assert.equal(dndDisabled.preferences.presenceStatus, 'online');
+
+  const away = await notifications.setPresenceStatus({ userId: alice.id, presenceStatus: 'away' });
+  assert.equal(away.status, 'updated');
+  assert.equal(away.preferences.presenceStatus, 'away');
+  assert.equal(away.preferences.doNotDisturb, false);
+
+  const dndStatus = await notifications.setPresenceStatus({ userId: alice.id, presenceStatus: 'dnd' });
+  assert.equal(dndStatus.preferences.presenceStatus, 'dnd');
+  assert.equal(dndStatus.preferences.doNotDisturb, true);
+  assert.equal((await users.getUserById(alice.id)).presenceStatus, 'dnd');
 });
 
 test('notification store mutes and unmutes friend DMs with validation', async (t) => {

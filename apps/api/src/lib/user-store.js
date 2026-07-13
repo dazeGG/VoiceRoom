@@ -3,7 +3,7 @@
 const crypto = require('node:crypto');
 const { createDbPool, transaction } = require('./db');
 const { hashPassword, verifyPassword } = require('./password');
-const { AVATAR_COLOR_KEYS, cleanAvatarColorKey } = require('@voice-room/shared/validation');
+const { AVATAR_COLOR_KEYS, cleanAvatarColorKey, cleanPresenceStatus } = require('@voice-room/shared/validation');
 
 const DEFAULT_SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const UNIQUE_VIOLATION = '23505';
@@ -25,32 +25,36 @@ function randomAvatarColorKey() {
 
 function mapUser(row) {
   if (!row) return null;
+  const presenceStatus = cleanPresenceStatus(row.presence_status) || (row.dnd ? 'dnd' : 'online');
   return {
     avatarAccent: row.avatar_accent || null,
     avatarColorKey: cleanAvatarColorKey(row.avatar_color_key) || 'blurple',
     avatarKey: row.avatar_key || null,
     createdAt: toMillis(row.created_at),
     displayName: row.display_name || '',
-    doNotDisturb: Boolean(row.dnd),
+    doNotDisturb: presenceStatus === 'dnd',
     id: row.id,
     login: row.login,
-    passwordHash: row.password_hash
+    passwordHash: row.password_hash,
+    presenceStatus
   };
 }
 
 // What we ever send back to a client: never the password hash.
 function publicUser(user) {
   if (!user) return null;
+  const presenceStatus = cleanPresenceStatus(user.presenceStatus) || (user.doNotDisturb ? 'dnd' : 'online');
   return {
     avatarAccent: user.avatarAccent || null,
     createdAt: user.createdAt,
     avatarColorKey: user.avatarColorKey || 'blurple',
     avatarUrl: user.avatarKey ? `/api/avatars/${encodeURIComponent(user.avatarKey)}` : null,
     displayName: user.displayName || '',
-    dnd: Boolean(user.doNotDisturb),
-    doNotDisturb: Boolean(user.doNotDisturb),
+    dnd: presenceStatus === 'dnd',
+    doNotDisturb: presenceStatus === 'dnd',
     id: user.id,
-    login: user.login
+    login: user.login,
+    presenceStatus
   };
 }
 

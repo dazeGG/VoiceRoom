@@ -20,6 +20,7 @@ import {
 } from '$lib/api/friends';
 import { deleteDirectMessage, editDirectMessage, fetchThread, markThreadRead, respondRoomInvite, sendDirectMessage, type DirectMessage } from '$lib/api/dm';
 import { connectRealtime, type RealtimeEvent, type RealtimeHandle } from '$lib/api/realtime';
+import type { PresenceStatus } from '$lib/shared/presence';
 import { playDirectMessageCue, playFriendAcceptedCue, playFriendRequestCue, playRingCue } from '$lib/features/room/client/media/cues';
 import {
   canUseNotifications,
@@ -171,13 +172,17 @@ export async function refreshRequests(): Promise<void> {
 
 // Start the lobby: load the friend list and open the realtime stream. Returns a
 // teardown function for onMount cleanup.
-export function initLobby(currentUserId: string, initialDoNotDisturb = false): () => void {
+export function initLobby(
+  currentUserId: string,
+  initialDoNotDisturb = false,
+  initialPresenceStatus?: PresenceStatus
+): () => void {
   selfId = currentUserId;
   presenceReady = false;
   onlineFriendIds = new Set();
   clearLegacyResolvedRoomInvitations();
   if (!areNotificationPreferencesLoadedFor(currentUserId)) {
-    prepareNotificationPreferences(currentUserId, initialDoNotDisturb);
+    prepareNotificationPreferences(currentUserId, initialDoNotDisturb, initialPresenceStatus);
   }
   realtime = connectRealtime(handleRealtimeEvent);
   void Promise.all([refreshFriends(), refreshRequests()]).catch(() => {

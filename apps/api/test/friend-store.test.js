@@ -134,6 +134,7 @@ test('accept turns a request into a mutual friendship', async (t) => {
   assert.equal(aliceFriends.length, 1);
   assert.equal(aliceFriends[0].user.id, bob.id);
   assert.equal(aliceFriends[0].user.doNotDisturb, false);
+  assert.equal(aliceFriends[0].user.presenceStatus, 'online');
 });
 
 test('listRequests surfaces the request id (not the joined user id) so accept works', async (t) => {

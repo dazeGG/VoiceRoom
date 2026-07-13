@@ -86,6 +86,7 @@ test('account realtime maps notification settings updates for same-account tabs'
   const preferences = {
     doNotDisturb: true,
     mutedPeerIds: ['user-2'],
+    presenceStatus: 'dnd',
     privateNotifications: false
   };
   const event = toWsAccountEvent({ type: 'notification-settings-updated', preferences });

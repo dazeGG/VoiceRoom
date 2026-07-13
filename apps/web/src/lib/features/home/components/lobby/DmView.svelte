@@ -4,6 +4,7 @@
   import { tick } from 'svelte';
   import type { DirectMessage } from '$lib/api/dm';
   import { Avatar } from '$lib/shared/ui';
+  import { effectivePresenceStatus } from '$lib/shared/presence';
   import ChatText from '$lib/shared/components/ChatText.svelte';
   import { friendName, formatDayLabel, formatTime, isSameDay } from '../../model/lobby-format';
   import {
@@ -70,8 +71,16 @@
     friendsState.friends.find((entry) => entry.user.id === friendsState.selectedFriendId)
   );
   const online = $derived(friendEntry?.online ?? false);
-  const presence = $derived(peer?.doNotDisturb ? 'dnd' : online ? 'online' : 'offline');
-  const presenceLabel = $derived(presence === 'dnd' ? 'не беспокоить' : presence === 'online' ? 'в сети' : 'не в сети');
+  const presence = $derived(effectivePresenceStatus(online, peer?.presenceStatus, peer?.doNotDisturb));
+  const presenceLabel = $derived(
+    presence === 'dnd'
+      ? 'не беспокоить'
+      : presence === 'away'
+        ? 'отошёл'
+        : presence === 'online'
+          ? 'в сети'
+          : 'не в сети'
+  );
   const peerMuted = $derived(isPeerNotificationsMuted(peer?.id));
   let muteSaving = $state(false);
   let inviteResponding = $state('');
@@ -248,7 +257,18 @@
   <div class="lobby-dm-col">
     {#if peer}
       <button class="lobby-dm-head" type="button" onclick={toggleProfile}>
-        <Avatar name={friendName(peer)} src={peer.avatarUrl} colorKey={peer.avatarColorKey} background={peer.avatarAccent || undefined} size={38} {online} dnd={peer.doNotDisturb} showDot ring="var(--paper-deep)" />
+        <Avatar
+          name={friendName(peer)}
+          src={peer.avatarUrl}
+          colorKey={peer.avatarColorKey}
+          background={peer.avatarAccent || undefined}
+          size={38}
+          online={presence === 'online'}
+          afk={presence === 'away'}
+          dnd={presence === 'dnd'}
+          showDot
+          ring="var(--paper-deep)"
+        />
         <div style="flex:1;min-width:0;">
           <div class="lobby-dm-head-name">{friendName(peer)}</div>
           <div class="lobby-dm-head-status" data-presence={presence}>{presenceLabel}</div>
@@ -354,7 +374,18 @@
         </button>
       </div>
       <div class="lobby-profile-body">
-        <Avatar name={friendName(peer)} src={peer.avatarUrl} colorKey={peer.avatarColorKey} background={peer.avatarAccent || undefined} size={76} {online} dnd={peer.doNotDisturb} showDot ring="var(--paper-deep)" />
+        <Avatar
+          name={friendName(peer)}
+          src={peer.avatarUrl}
+          colorKey={peer.avatarColorKey}
+          background={peer.avatarAccent || undefined}
+          size={76}
+          online={presence === 'online'}
+          afk={presence === 'away'}
+          dnd={presence === 'dnd'}
+          showDot
+          ring="var(--paper-deep)"
+        />
         <div class="lobby-profile-panel-name">{friendName(peer)}</div>
         <div class="lobby-profile-panel-handle">@{peer.login}</div>
 

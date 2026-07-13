@@ -92,11 +92,21 @@ test('publicUser exposes avatar URL and accent without leaking the storage key',
     avatarColorKey: 'rose',
     avatarKey: 'av_123e4567-e89b-12d3-a456-426614174000_deadbeef.webp',
     avatarAccent: '#49303f',
-    createdAt: 1000
+    createdAt: 1000,
+    presenceStatus: 'away'
   });
   assert.equal(user.avatarUrl, '/api/avatars/av_123e4567-e89b-12d3-a456-426614174000_deadbeef.webp');
   assert.equal(user.avatarAccent, '#49303f');
+  assert.equal(user.presenceStatus, 'away');
+  assert.equal(user.doNotDisturb, false);
   assert.equal('avatarKey' in user, false);
+});
+
+test('publicUser derives legacy DND flags from the canonical presence status', () => {
+  const user = publicUser({ id: 'user-1', login: 'ada', presenceStatus: 'dnd' });
+  assert.equal(user.presenceStatus, 'dnd');
+  assert.equal(user.dnd, true);
+  assert.equal(user.doNotDisturb, true);
 });
 
 test('updateAvatar persists the storage key and server-derived accent', async () => {

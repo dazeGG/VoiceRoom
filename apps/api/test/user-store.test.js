@@ -134,8 +134,10 @@ test('publicUser never leaks the password hash', async (t) => {
     'dnd',
     'doNotDisturb',
     'id',
-    'login'
+    'login',
+    'presenceStatus'
   ]);
+  assert.equal(exposed.presenceStatus, 'online');
   assert.ok(AVATAR_COLOR_KEYS.includes(exposed.avatarColorKey));
 });
 

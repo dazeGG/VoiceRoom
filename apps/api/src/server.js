@@ -23,6 +23,7 @@ const {
   cleanStreamId,
   cleanScreenProfileId,
   cleanLiveKitUrl,
+  cleanPresenceStatus,
   isValidPassword,
   normalizeLogin
 } = require('@voice-room/shared/validation');
@@ -176,7 +177,7 @@ function getAvatarStorage() {
 }
 
 function isUserOnline(userId) {
-  return Boolean(wsRegistry && wsRegistry.connectionCount(userId) > 0);
+  return Boolean(wsRegistry?.isUserOnline(userId));
 }
 
 function broadcastToUser(userId, message) {
@@ -2305,6 +2306,28 @@ async function handleSetPrivateNotifications(req, res) {
   sendNotificationMutationResult(res, result);
 }
 
+async function publishPresenceStatusUpdate(user, result, request) {
+  if (result.status !== 'updated') return;
+  const presenceStatus = cleanPresenceStatus(result.preferences?.presenceStatus)
+    || (result.preferences?.doNotDisturb ? 'dnd' : 'online');
+  result.preferences = {
+    ...result.preferences,
+    doNotDisturb: presenceStatus === 'dnd',
+    presenceStatus
+  };
+  wsRegistry?.setUserPresenceStatus(user.id, presenceStatus);
+  const updatedUser = {
+    ...user,
+    doNotDisturb: presenceStatus === 'dnd',
+    presenceStatus
+  };
+  broadcastToUser(user.id, {
+    type: 'notification-settings-updated',
+    preferences: result.preferences
+  });
+  await broadcastUserProfileToFriends(updatedUser, request);
+}
+
 async function handleSetNotificationSettings(req, res, request) {
   const user = await requireSessionUser(req, res);
   if (!user) return;
@@ -2320,14 +2343,26 @@ async function handleSetNotificationSettings(req, res, request) {
     userId: user.id,
     doNotDisturb: dnd.value
   });
-  if (result.status === 'updated') {
-    const updatedUser = { ...user, doNotDisturb: dnd.value };
-    broadcastToUser(user.id, {
-      type: 'notification-settings-updated',
-      preferences: result.preferences
-    });
-    await broadcastUserProfileToFriends(updatedUser, request);
+  await publishPresenceStatusUpdate(user, result, request);
+  sendNotificationMutationResult(res, result);
+}
+
+async function handleSetPresenceStatus(req, res, request) {
+  const user = await requireSessionUser(req, res);
+  if (!user) return;
+
+  const body = await readJsonBody(req);
+  const presenceStatus = cleanPresenceStatus(body?.status);
+  if (!presenceStatus) {
+    sendJson(res, 400, { ok: false, error: 'status must be one of: online, away, dnd, offline' });
+    return;
   }
+
+  const result = await getNotificationStore().setPresenceStatus({
+    userId: user.id,
+    presenceStatus
+  });
+  await publishPresenceStatusUpdate(user, result, request);
   sendNotificationMutationResult(res, result);
 }
 
@@ -2738,7 +2773,6 @@ function createApiApp({ store = null, users = null, friends = null, notification
     maxConnectionsPerUser: MAX_REALTIME_STREAMS_PER_USER,
     maxGuestConnectionsPerIp: MAX_GUEST_STREAMS_PER_IP,
     keepaliveMs: KEEPALIVE_MS,
-    isUserOnline,
     onPresenceChange: (friendId, userId, online) => {
       broadcastToUser(friendId, { type: 'presence', userId, online });
     },
@@ -2911,6 +2945,9 @@ function createApiApp({ store = null, users = null, friends = null, notification
   app.put('/api/notifications/privacy', (request, reply) => runLegacyHandler(request, reply, handleSetPrivateNotifications));
   app.post('/api/notifications/settings', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
     return handleSetNotificationSettings(req, res, request);
+  }));
+  app.post('/api/presence/status', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
+    return handleSetPresenceStatus(req, res, request);
   }));
   app.get('/api/push/config', (request, reply) => runLegacyHandler(request, reply, handlePushConfig));
   app.post('/api/push/subscriptions', (request, reply) => runLegacyHandler(request, reply, handleCreatePushSubscription));

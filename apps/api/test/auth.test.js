@@ -133,6 +133,7 @@ test('auth flow: register, session, owned rooms, logout', async (t) => {
   assert.ok(me.body.user.avatarColorKey);
   assert.equal(me.body.user.dnd, false);
   assert.equal(me.body.user.doNotDisturb, false);
+  assert.equal(me.body.user.presenceStatus, 'online');
 
   const dnd = await request(socketPath, {
     method: 'POST',
@@ -142,9 +143,11 @@ test('auth flow: register, session, owned rooms, logout', async (t) => {
   });
   assert.equal(dnd.status, 200);
   assert.equal(dnd.body.preferences.doNotDisturb, true);
+  assert.equal(dnd.body.preferences.presenceStatus, 'dnd');
   const meWithDnd = await request(socketPath, { pathname: '/api/auth/me', cookie });
   assert.equal(meWithDnd.body.user.dnd, true);
   assert.equal(meWithDnd.body.user.doNotDisturb, true);
+  assert.equal(meWithDnd.body.user.presenceStatus, 'dnd');
 
   // Without the cookie there is no session.
   const anon = await request(socketPath, { pathname: '/api/auth/me' });

@@ -12,6 +12,14 @@ const SCREEN_PROFILE_IDS = new Set([
   'low-30'
 ]);
 
+const PRESENCE_STATUSES = Object.freeze([
+  'online',
+  'away',
+  'dnd',
+  'offline'
+]);
+const PRESENCE_STATUS_SET = new Set(PRESENCE_STATUSES);
+
 function normalizeRoomId(value) {
   if (typeof value !== 'string') return '';
   const roomId = value.trim();
@@ -78,6 +86,10 @@ function cleanAvatarColorKey(value) {
   return typeof value === 'string' && AVATAR_COLOR_KEY_SET.has(value) ? value : '';
 }
 
+function cleanPresenceStatus(value) {
+  return typeof value === 'string' && PRESENCE_STATUS_SET.has(value) ? value : '';
+}
+
 function cleanStreamId(value) {
   if (typeof value !== 'string') return '';
   const streamId = value.trim();
@@ -100,11 +112,13 @@ module.exports = {
   AVATAR_COLOR_KEYS,
   PASSWORD_MAX_LENGTH,
   PASSWORD_MIN_LENGTH,
+  PRESENCE_STATUSES,
   SCREEN_PROFILE_IDS,
   cleanAvatarColorKey,
   cleanDisplayName,
   cleanLiveKitUrl,
   cleanName,
+  cleanPresenceStatus,
   cleanRoomName,
   cleanScreenProfileId,
   cleanStreamId,

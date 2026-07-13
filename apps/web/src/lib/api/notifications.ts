@@ -1,8 +1,10 @@
 import { getJsonAuth, postJsonAuth, putJson } from './http';
+import { normalizePresenceStatus, type PresenceStatus } from '$lib/shared/presence';
 
 export interface NotificationPreferences {
   doNotDisturb: boolean;
   mutedPeerIds: string[];
+  presenceStatus: PresenceStatus;
   privateNotifications: boolean;
 }
 
@@ -37,10 +39,17 @@ export async function setDoNotDisturb(dnd: boolean): Promise<NotificationPrefere
   return { ...payload, preferences: normalizePreferences(payload.preferences) };
 }
 
+export async function setPresenceStatus(status: PresenceStatus): Promise<NotificationPreferencesResponse> {
+  const payload = await postJsonAuth<NotificationPreferencesResponse>('/api/presence/status', { status });
+  return { ...payload, preferences: normalizePreferences(payload.preferences) };
+}
+
 function normalizePreferences(preferences: Partial<NotificationPreferences> | null | undefined): NotificationPreferences {
+  const doNotDisturb = Boolean(preferences?.doNotDisturb);
   return {
-    doNotDisturb: Boolean(preferences?.doNotDisturb),
+    doNotDisturb,
     mutedPeerIds: Array.isArray(preferences?.mutedPeerIds) ? preferences.mutedPeerIds : [],
+    presenceStatus: normalizePresenceStatus(preferences?.presenceStatus, doNotDisturb ? 'dnd' : 'online'),
     privateNotifications: Boolean(preferences?.privateNotifications)
   };
 }

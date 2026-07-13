@@ -103,7 +103,7 @@
 
   onMount(() => {
     void refreshRooms();
-    const teardownFriends = user ? initLobby(user.id, user.doNotDisturb) : () => {};
+    const teardownFriends = user ? initLobby(user.id, user.doNotDisturb, user.presenceStatus) : () => {};
     const teardownRooms = user
       ? initLobbyRoomRealtime(
           (updater) => {
