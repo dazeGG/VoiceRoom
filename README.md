@@ -125,6 +125,7 @@ GitHub-аналог GitLab CI/CD variables находится здесь:
 | `SSH_HOST` / `SSH_USER` / `SSH_KEY` / `SSH_PORT` | CD (deploy job) | Доступ к серверу для SSH-деплоя. `SSH_PORT` опционален (по умолчанию `22`). |
 | `LIVEKIT_API_KEY` | API / LiveKit | Ключ LiveKit. |
 | `LIVEKIT_API_SECRET` | API / LiveKit | Секрет LiveKit. Сгенерировать случайным значением. |
+| `VAPID_PRIVATE_KEY` | API / Web Push | Приватная часть стабильной VAPID-пары. Никогда не публиковать и не хранить в Git. |
 | `GITHUB_TOKEN` | API desktop release endpoint, optional | Нужен только если хочется повысить лимит GitHub API. |
 | `POW_SECRET` | API production/staging, optional | Стабильный secret для proof-of-work challenge; если не задан, генерируется на процесс и challenge'и инвалидируются при рестарте. |
 
@@ -171,7 +172,7 @@ GitHub-аналог GitLab CI/CD variables находится здесь:
 | `MAX_REALTIME_STREAMS_PER_USER` | `8` | Max concurrent WebSocket streams per authenticated user. |
 | `MAX_GUEST_STREAMS_PER_IP` | `8` | Max concurrent guest WebSocket streams per client IP. |
 | `MAX_ROOM_BANS` | `100` | Максимум активных блокировок на постоянную комнату. |
-| `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` | empty | Web Push VAPID credentials; when any value is missing, push degrades to disabled without failing API startup. |
+| `VAPID_PUBLIC_KEY` / `VAPID_SUBJECT` | empty | Публичная часть и контакт Web Push; вместе с secret `VAPID_PRIVATE_KEY` образуют полный VAPID-конфиг. Если любое значение отсутствует, push выключается без остановки API. |
 | `MAX_PUSH_SUBSCRIPTIONS_PER_USER` | `10` | Maximum retained Web Push subscriptions per account; older entries are pruned transactionally. |
 | `PUSH_SUBSCRIPTION_RATE_LIMIT` | `20` | Maximum Web Push subscription create/delete mutations per account per window. |
 | `PUSH_SUBSCRIPTION_RATE_WINDOW_MS` | `60000` | Web Push subscription mutation rate-limit window. |
