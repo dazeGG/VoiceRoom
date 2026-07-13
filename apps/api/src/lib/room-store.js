@@ -466,7 +466,9 @@ function createRoomStore({
 
   async function createRoomBan({ roomId, userId = null, ip = '', maxBans = 100, metadata = {}, now = Date.now() } = {}) {
     const normalizedUserId = typeof userId === 'string' && userId ? userId : null;
-    const normalizedIp = typeof ip === 'string' ? ip : '';
+    // Account and IP bans are intentionally exclusive. Persisting both turns
+    // an account moderation action into a shared-network ban.
+    const normalizedIp = normalizedUserId ? '' : (typeof ip === 'string' ? ip : '');
     if (!roomId || (!normalizedUserId && !normalizedIp)) return { ban: null, status: 'invalid' };
 
     return transaction(getPool(), async (client) => {
@@ -524,7 +526,10 @@ function createRoomStore({
       `SELECT *
        FROM room_bans
        WHERE room_id = $1
-         AND (($2::text IS NOT NULL AND user_id = $2) OR ($3::text <> '' AND ip = $3))
+         AND (
+           ($2::text IS NOT NULL AND user_id = $2)
+           OR (user_id IS NULL AND $3::text <> '' AND ip = $3)
+         )
        ORDER BY created_at DESC, id DESC
        LIMIT 1`,
       [roomId, normalizedUserId, normalizedIp]

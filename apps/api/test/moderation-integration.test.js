@@ -21,8 +21,10 @@ const OWNER_ID = '11111111-1111-4111-8111-111111111111';
 const TARGET_ID = '22222222-2222-4222-8222-222222222222';
 const OWNER_COOKIE = 'vr_session=owner-session';
 const TARGET_COOKIE = 'vr_session=target-session';
+// Account bans must stay account-scoped even when several participants share
+// one public address behind NAT (or run locally during development).
 const OWNER_IP = '198.51.100.10';
-const TARGET_IP = '203.0.113.20';
+const TARGET_IP = OWNER_IP;
 const GUEST_IP = '192.0.2.44';
 const ROOM_ID = 'moderation-room';
 const OWNER_PEER_ID = 'owner-peer';
@@ -75,7 +77,10 @@ function createModerationStore() {
     },
     async findActiveRoomBan({ roomId, userId, ip }) {
       return [...bans.values()].find((ban) =>
-        ban.roomId === roomId && ((userId && ban.userId === userId) || (ip && ban.ip === ip))
+        ban.roomId === roomId && (
+          (userId && ban.userId === userId) ||
+          (!ban.userId && ip && ban.ip === ip)
+        )
       ) || null;
     },
     async getOrCreatePeerIdentity({ roomId, peerId, sessionToken }) {
@@ -252,6 +257,7 @@ test('kick and ban lifecycle enforces join, token, chat, preview, and undo', asy
   });
 
   const banStart = target.frames.length;
+  const ownerFramesBeforeBan = owner.frames.length;
   const ban = await requestJson(fixture.socketPath, 'POST', `/api/rooms/${ROOM_ID}/ban`, {
     body: { peerId: freshPeerId },
     cookie: OWNER_COOKIE,
@@ -259,7 +265,18 @@ test('kick and ban lifecycle enforces join, token, chat, preview, and undo', asy
   });
   assert.equal(ban.status, 201);
   assert.match(ban.body.banId, /^[0-9a-f-]{36}$/i);
+  const storedAccountBan = fixture.store.bans.get(ban.body.banId);
+  assert.equal(storedAccountBan.userId, TARGET_ID);
+  assert.equal(storedAccountBan.ip, '');
   await waitForWsType(target.frames, 'room.banned', (frame) => frame.payload.roomId === ROOM_ID, 5000, banStart);
+  assert.equal(owner.frames.slice(ownerFramesBeforeBan).some((frame) => frame.type === 'room.banned'), false);
+
+  const ownerState = await requestJson(fixture.socketPath, 'POST', '/api/state', {
+    body: { roomId: ROOM_ID, peerId: OWNER_PEER_ID, sessionToken: OWNER_PEER_TOKEN, muted: false },
+    cookie: OWNER_COOKIE,
+    ip: OWNER_IP
+  });
+  assert.equal(ownerState.status, 200);
 
   const bannedState = await requestJson(fixture.socketPath, 'POST', '/api/state', {
     body: { roomId: ROOM_ID, peerId: freshPeerId, sessionToken: freshPeerToken, muted: true },
@@ -281,20 +298,13 @@ test('kick and ban lifecycle enforces join, token, chat, preview, and undo', asy
   const sameIpGuest = openSession(fixture.socketPath, '', TARGET_IP);
   sessions.push(sameIpGuest);
   await sameIpGuest.ready;
-  const sameIpGuestStart = sameIpGuest.frames.length;
-  sendWs(sameIpGuest.ws, 'room.join', {
+  await joinVoiceRoom(sameIpGuest, {
     roomId: ROOM_ID,
     peerId: 'same-ip-guest',
     sessionToken: 's'.repeat(32),
     name: 'Same IP guest'
   });
-  await waitForWsType(
-    sameIpGuest.frames,
-    'room.banned',
-    (frame) => frame.payload.roomId === ROOM_ID,
-    5000,
-    sameIpGuestStart
-  );
+  assert.equal(sameIpGuest.frames.some((frame) => frame.type === 'room.banned'), false);
 
   const token = await requestJson(fixture.socketPath, 'POST', '/api/livekit-token', {
     body: { roomId: ROOM_ID, peerId: 'target-after-ban', sessionToken: 'b'.repeat(32), name: 'Target' },

@@ -1696,10 +1696,16 @@ async function handleBanRoomPeer(req, res, roomId) {
     sendJson(res, 400, { ok: false, error: 'Нельзя заблокировать владельца комнаты' });
     return;
   }
+  // An authenticated participant is a durable account identity. Do not also
+  // attach their current IP to the ban: users behind the same NAT (including
+  // the room owner) would otherwise be blocked and disconnected as collateral.
+  // Guests have no account identity, so their ban remains IP-scoped.
+  const bannedUserId = peer.accountUserId || null;
+  const bannedIp = bannedUserId ? '' : (peer.ip || '');
   const result = await getRoomStore().createRoomBan({
     roomId,
-    userId: peer.accountUserId || null,
-    ip: peer.ip || '',
+    userId: bannedUserId,
+    ip: bannedIp,
     maxBans: MAX_ROOM_BANS
   });
   if (result.status === 'cap_exceeded') {
@@ -1710,9 +1716,9 @@ async function handleBanRoomPeer(req, res, roomId) {
     sendJson(res, 409, { ok: false, error: 'Не удалось сохранить блокировку' });
     return;
   }
-  const matchingPeers = [...room.peers.values()].filter((candidate) =>
-    (peer.accountUserId && candidate.accountUserId === peer.accountUserId) ||
-    (peer.ip && candidate.ip === peer.ip)
+  const matchingPeers = [...room.peers.values()].filter((candidate) => bannedUserId
+    ? candidate.accountUserId === bannedUserId
+    : Boolean(bannedIp && candidate.ip === bannedIp)
   );
   for (const candidate of matchingPeers) {
     await disconnectModeratedPeer(room, candidate, 'room.banned');

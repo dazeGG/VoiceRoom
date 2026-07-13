@@ -143,10 +143,11 @@ test('PostgreSQL room bans match account or IP and undo stays scoped to its room
   });
   assert.equal(accountBan.status, 'created');
   assert.equal(accountBan.ban.userId, user.id);
+  assert.equal(accountBan.ban.ip, '');
   assert.deepEqual(accountBan.ban.metadata, { peerId: 'peer-banned' });
 
   assert.equal((await store.findActiveRoomBan({ roomId: 'ban-room-one', userId: user.id, ip: '198.51.100.1' })).id, accountBan.ban.id);
-  assert.equal((await store.findActiveRoomBan({ roomId: 'ban-room-one', ip: '203.0.113.8' })).id, accountBan.ban.id);
+  assert.equal(await store.findActiveRoomBan({ roomId: 'ban-room-one', ip: '203.0.113.8' }), null);
   assert.equal(await store.findActiveRoomBan({ roomId: 'ban-room-two', userId: user.id, ip: '203.0.113.8' }), null);
 
   assert.equal((await store.deleteRoomBan({ roomId: 'ban-room-two', banId: accountBan.ban.id })).status, 'not_found');
