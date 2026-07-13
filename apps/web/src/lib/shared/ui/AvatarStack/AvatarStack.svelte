@@ -76,7 +76,7 @@
   }
 
   .avatar-stack-item {
-    background: var(--avatar-bg, oklch(54% 0.22 276));
+    background: var(--avatar-bg, var(--room-avatar-bg));
     color: var(--avatar-fg, #fff);
     box-shadow: var(--avatar-shadow, none);
   }
@@ -86,7 +86,7 @@
   }
 
   .avatar-stack-rest {
-    background: #27241d;
+    background: var(--panel-strong);
     color: #e8e1d2;
     box-shadow: 0 8px 18px rgb(0 0 0 / 0.22);
   }

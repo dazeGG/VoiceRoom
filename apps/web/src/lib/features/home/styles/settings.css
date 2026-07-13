@@ -9,7 +9,7 @@
   align-items: center;
   justify-content: center;
   padding: 32px;
-  background: rgba(8, 7, 5, 0.55);
+  background: color-mix(in srgb, var(--warm-950) 55%, transparent);
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
 }
@@ -22,7 +22,7 @@
   max-height: 90vh;
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 20px;
-  background: var(--paper-deep);
+  background: var(--warm-800);
   box-shadow: 0 40px 90px rgba(0, 0, 0, 0.6);
   overflow: hidden;
 }
@@ -50,14 +50,14 @@
   height: 32px;
   border: 1px solid rgba(255, 255, 255, 0.09);
   border-radius: 9px;
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--control);
   color: var(--warm-muted);
   cursor: pointer;
   transition: background 0.15s ease;
 }
 
 .settings-close:hover {
-  background: rgba(255, 255, 255, 0.09);
+  background: var(--control-hover);
   color: var(--warm-ink);
 }
 
@@ -110,7 +110,7 @@
 }
 
 .settings-nav-item[data-active='true'] {
-  background: rgba(255, 255, 255, 0.07);
+  background: var(--control);
   color: var(--warm-ink);
 }
 
@@ -120,7 +120,7 @@
 }
 
 .settings-nav-item--danger:hover {
-  background: rgba(216, 99, 74, 0.09);
+  background: color-mix(in oklch, var(--coral) 9%, transparent);
   color: var(--coral);
 }
 
@@ -194,7 +194,7 @@
   align-items: center;
   justify-content: center;
   border-radius: inherit;
-  background: rgba(20, 16, 14, 0.58);
+  background: color-mix(in srgb, var(--warm-950) 58%, transparent);
   opacity: 0;
   transition: opacity 0.16s ease;
   pointer-events: none;
@@ -223,7 +223,7 @@
   padding: 0;
   border: 2px solid var(--paper-deep);
   border-radius: 50%;
-  background: #dc5f4b;
+  background: var(--coral);
   color: #fff;
   cursor: pointer;
   box-shadow: 0 2px 7px rgba(0, 0, 0, 0.34);
@@ -235,7 +235,7 @@
 .settings-avatar-control:focus-within .settings-avatar-remove { opacity: 1; }
 
 .settings-avatar-remove:not(:disabled):hover {
-  background: #c94e3b;
+  background: color-mix(in oklch, var(--coral), var(--warm-950) 16%);
 }
 
 .settings-avatar-remove:focus-visible {
@@ -285,7 +285,7 @@
   padding: 13px 15px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 12px;
-  background: var(--paper-deep);
+  background: var(--warm-900);
   color: var(--warm-ink);
   font-family: var(--font-ui);
   font-size: 15px;
@@ -305,7 +305,7 @@
 
 .settings-divider {
   height: 1px;
-  background: rgba(255, 255, 255, 0.07);
+  background: var(--control-line);
 }
 
 .settings-actions {
@@ -359,7 +359,7 @@
 }
 
 .settings-cancel:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--control);
 }
 
 .settings-cancel:disabled {
@@ -387,7 +387,7 @@
   padding: 13px 40px 13px 15px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 12px;
-  background: var(--paper-deep);
+  background: var(--warm-900);
   color: var(--warm-ink);
   font-family: var(--font-ui);
   font-size: 14.5px;
@@ -397,7 +397,7 @@
 }
 
 .settings-select option {
-  background: var(--paper-deep);
+  background: var(--warm-800);
   color: var(--warm-ink);
 }
 
@@ -433,14 +433,14 @@
   padding: 0;
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--control);
   cursor: pointer;
   transition: background 0.16s ease, border-color 0.16s ease;
 }
 
 .settings-switch[aria-checked='true'] {
   border-color: rgba(52, 201, 138, 0.55);
-  background: rgba(52, 201, 138, 0.3);
+  background: color-mix(in oklch, var(--green) 30%, transparent);
 }
 
 .settings-switch-knob {
@@ -478,14 +478,14 @@
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background: linear-gradient(90deg, color-mix(in oklch, var(--green), black 15%), var(--green));
+  background: linear-gradient(90deg, color-mix(in oklch, var(--green), var(--warm-950) 15%), var(--green));
   transform: scaleX(0);
   transform-origin: left center;
   transition: transform 80ms linear, background 120ms ease;
 }
 
 .settings-gate-fill[data-state='closed'] {
-  background: linear-gradient(90deg, color-mix(in oklch, var(--warm-faint), black 25%), var(--warm-faint));
+  background: linear-gradient(90deg, color-mix(in oklch, var(--warm-faint), var(--warm-950) 25%), var(--warm-faint));
 }
 
 .settings-sound-head {
@@ -518,7 +518,7 @@
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 10px;
   padding: 8px 12px;
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--control);
   color: var(--warm-ink);
   font-family: var(--font-ui);
   font-size: 12.5px;
@@ -528,7 +528,7 @@
 }
 
 .settings-sound-preview:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--control-hover);
   border-color: rgba(255, 255, 255, 0.22);
 }
 
@@ -571,7 +571,7 @@
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 12px;
   padding: 4px;
-  background: rgba(255, 255, 255, 0.035);
+  background: var(--warm-900);
 }
 
 .settings-mode-toggle button {
@@ -587,7 +587,7 @@
 }
 
 .settings-mode-toggle button[aria-checked='true'] {
-  background: rgba(52, 201, 138, 0.16);
+  background: color-mix(in oklch, var(--green) 16%, transparent);
   color: var(--warm-ink);
   box-shadow: inset 0 0 0 1px rgba(52, 201, 138, 0.28);
 }
@@ -627,7 +627,7 @@
   margin-top: 0;
   border-radius: 9px;
   padding: 9px 11px;
-  background: rgba(255, 255, 255, 0.035);
+  background: var(--panel);
 }
 
 @media (max-width: 600px) {
@@ -681,7 +681,7 @@
 .settings-cue-grid button {
   border: 1px solid var(--line);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.035);
+  background: var(--control);
   color: var(--ink);
   cursor: pointer;
   font: 700 12px var(--font-ui, sans-serif);

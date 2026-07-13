@@ -255,11 +255,11 @@
 
   .voice-icon-btn {
     border: 1px solid rgba(255, 255, 255, 0.12);
-    background: rgba(255, 255, 255, 0.06);
+    background: var(--control);
     color: var(--warm-ink-dim);
   }
 
-  .voice-icon-btn:hover { background: rgba(255, 255, 255, 0.13); }
+  .voice-icon-btn:hover { background: var(--control-hover); }
 
   .voice-icon-btn.is-off {
     border-color: color-mix(in oklch, var(--coral), transparent 50%);
@@ -275,5 +275,5 @@
     color: #fff;
   }
 
-  .voice-leave:hover { background: color-mix(in oklch, var(--coral), black 12%); }
+  .voice-leave:hover { background: color-mix(in oklch, var(--coral), var(--warm-950) 12%); }
 </style>

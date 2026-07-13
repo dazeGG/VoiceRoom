@@ -10,8 +10,8 @@
   font-family: var(--font-ui);
   color: var(--warm-ink);
   background:
-    radial-gradient(55% 60% at 80% 6%, rgba(96, 54, 28, 0.22), transparent 55%),
-    radial-gradient(50% 60% at 0% 100%, rgba(46, 74, 49, 0.16), transparent 55%),
+    radial-gradient(55% 60% at 80% 6%, color-mix(in oklch, var(--panel-strong), transparent 78%), transparent 55%),
+    radial-gradient(50% 60% at 0% 100%, color-mix(in oklch, var(--panel), transparent 84%), transparent 55%),
     var(--paper-deep);
 }
 
@@ -20,7 +20,7 @@
   scrollbar-color: rgba(255, 255, 255, 0.08) transparent;
 }
 .lobby-scroll::-webkit-scrollbar { width: 8px; }
-.lobby-scroll::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.08); border-radius: 4px; }
+.lobby-scroll::-webkit-scrollbar-thumb { background: var(--control-line); border-radius: 4px; }
 
 .lobby-mono {
   font-family: var(--font-ui);
@@ -39,7 +39,7 @@
   display: flex;
   flex-direction: column;
   border-right: 1px solid rgba(255, 255, 255, 0.07);
-  background: rgba(0, 0, 0, 0.24);
+  background: var(--paper-deep);
 }
 
 .lobby-brand {
@@ -78,7 +78,7 @@
   cursor: pointer;
   transition: background 0.15s ease, color 0.15s ease;
 }
-.lobby-mini-btn:hover { background: rgba(255, 255, 255, 0.08); color: var(--warm-ink-dim); }
+.lobby-mini-btn:hover { background: var(--control-hover); color: var(--warm-ink-dim); }
 .lobby-mini-btn-dot {
   position: absolute;
   top: 2px;
@@ -94,7 +94,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  background: var(--paper-deep);
+  background: var(--warm-900);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 11px;
   padding: 0 12px;
@@ -127,7 +127,7 @@
   align-self: center;
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--control);
   color: var(--warm-ink);
   padding: 6px 10px;
   font-family: var(--font-ui);
@@ -140,7 +140,7 @@
 
 .lobby-join-code-button:hover {
   border-color: rgba(255, 255, 255, 0.16);
-  background: rgba(255, 255, 255, 0.11);
+  background: var(--control-hover);
 }
 
 /* cream primary button (create room / send request / accept) */
@@ -193,7 +193,7 @@
   height: 24px;
   border-radius: 7px;
   border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--control);
   color: var(--warm-muted);
   display: flex;
   align-items: center;
@@ -201,7 +201,7 @@
   cursor: pointer;
   transition: background 0.15s ease, color 0.15s ease;
 }
-.lobby-icon-btn:hover { background: rgba(255, 255, 255, 0.1); color: var(--warm-ink-dim); }
+.lobby-icon-btn:hover { background: var(--control-hover); color: var(--warm-ink-dim); }
 
 /* friend / room row in sidebar */
 .lobby-row {
@@ -218,8 +218,8 @@
   text-align: left;
   color: inherit;
 }
-.lobby-row:hover { background: rgba(255, 255, 255, 0.05); }
-.lobby-row.is-active { background: rgba(255, 255, 255, 0.07); }
+.lobby-row:hover { background: var(--control); }
+.lobby-row.is-active { background: var(--control-hover); }
 .lobby-row--offline { opacity: 0.62; }
 .lobby-row--room { padding: 9px 8px; }
 .lobby-row-body { min-width: 0; flex: 1; }
@@ -275,7 +275,7 @@
   gap: 10px;
   padding: 12px 16px;
   border-top: 1px solid rgba(255, 255, 255, 0.07);
-  background: rgba(0, 0, 0, 0.2);
+  background: var(--paper-deep);
 }
 .lobby-profile-name { font-size: 13.5px; font-weight: 700; color: var(--warm-ink); }
 .lobby-profile-handle { font-family: var(--font-mono); font-size: 11px; color: var(--warm-faint); }
@@ -285,7 +285,7 @@
   height: 32px;
   border-radius: 9px;
   border: none;
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--control);
   color: var(--warm-muted);
   display: flex;
   align-items: center;
@@ -293,13 +293,13 @@
   cursor: pointer;
   transition: background 0.15s ease;
 }
-.lobby-gear:hover { background: rgba(255, 255, 255, 0.11); }
+.lobby-gear:hover { background: var(--control-hover); }
 
 .sidebar-download { flex: none; display: inline-flex; }
 /* Inside the Electron shell the preload tags <html> with .is-desktop before
    page scripts run, so the download control is hidden with no flash. */
 html.is-desktop .sidebar-download { display: none; }
-.sidebar-download-trigger.is-open { background: rgba(255, 255, 255, 0.11); color: var(--warm-ink); }
+.sidebar-download-trigger.is-open { background: var(--control-hover); color: var(--warm-ink); }
 .sidebar-download-popover { width: max-content; min-width: 268px; padding: 6px; }
 .sidebar-download-head {
   padding: 6px 10px 8px;
@@ -336,7 +336,7 @@ html.is-desktop .sidebar-download { display: none; }
   display: flex;
   align-items: center;
   gap: 13px;
-  background: rgba(79, 174, 116, 0.08);
+  background: color-mix(in oklch, var(--green) 8%, transparent);
   border: 1px solid rgba(79, 174, 116, 0.26);
   border-radius: 15px;
   padding: 15px 17px;
@@ -351,7 +351,7 @@ html.is-desktop .sidebar-download { display: none; }
   width: 40px;
   height: 40px;
   border-radius: 12px;
-  background: rgba(79, 174, 116, 0.16);
+  background: color-mix(in oklch, var(--green) 16%, transparent);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -393,7 +393,7 @@ html.is-desktop .sidebar-download { display: none; }
 .lobby-friend-card {
   position: relative;
   border-radius: 16px;
-  background: rgba(255, 255, 255, 0.035);
+  background: var(--panel);
   border: 1px solid rgba(255, 255, 255, 0.08);
   padding: 18px;
   display: flex;
@@ -404,7 +404,7 @@ html.is-desktop .sidebar-download { display: none; }
   transition: background 0.15s ease, border-color 0.15s ease;
   color: inherit;
 }
-.lobby-friend-card:hover { background: rgba(255, 255, 255, 0.06); border-color: rgba(255, 255, 255, 0.14); }
+.lobby-friend-card:hover { background: var(--panel-strong); border-color: rgba(255, 255, 255, 0.14); }
 .lobby-friend-card-badge {
   position: absolute;
   top: 12px;
@@ -416,7 +416,7 @@ html.is-desktop .sidebar-download { display: none; }
   margin-top: 14px;
   width: 100%;
   border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--control);
   color: var(--warm-ink);
   border-radius: 10px;
   padding: 8px 0;
@@ -428,7 +428,7 @@ html.is-desktop .sidebar-download { display: none; }
 .lobby-room-card {
   position: relative;
   border-radius: 16px;
-  background: rgba(255, 255, 255, 0.035);
+  background: var(--panel);
   border: 1px solid rgba(255, 255, 255, 0.08);
   padding: 18px;
   cursor: pointer;
@@ -437,7 +437,7 @@ html.is-desktop .sidebar-download { display: none; }
   width: 100%;
   color: inherit;
 }
-.lobby-room-card:hover { background: rgba(255, 255, 255, 0.06); border-color: rgba(255, 255, 255, 0.14); }
+.lobby-room-card:hover { background: var(--panel-strong); border-color: rgba(255, 255, 255, 0.14); }
 .lobby-room-card-head { display: flex; align-items: center; gap: 12px; }
 .lobby-room-card-name { display: block; min-width: 0; max-width: 100%; font-size: 15px; font-weight: 700; color: var(--warm-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lobby-room-card-meta { font-size: 11.5px; color: var(--warm-muted); margin-top: 3px; }
@@ -450,7 +450,7 @@ html.is-desktop .sidebar-download { display: none; }
   align-items: center;
   gap: 13px;
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.025);
+  background: var(--panel);
   border: 1px solid rgba(255, 255, 255, 0.07);
   padding: 14px 16px;
   cursor: pointer;
@@ -460,7 +460,7 @@ html.is-desktop .sidebar-download { display: none; }
   text-align: left;
   color: inherit;
 }
-.lobby-room-row:hover { background: rgba(255, 255, 255, 0.05); border-color: rgba(255, 255, 255, 0.13); }
+.lobby-room-row:hover { background: var(--panel-strong); border-color: rgba(255, 255, 255, 0.13); }
 
 /* room preview — mirrors the real in-room stage, read-only before joining */
 .lobby-roomview {
@@ -494,7 +494,7 @@ html.is-desktop .sidebar-download { display: none; }
   height: 40px;
   border-radius: 11px;
   border: 1px solid rgba(255, 255, 255, 0.09);
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--control);
   color: var(--warm-ink-dim);
   display: flex;
   align-items: center;
@@ -502,7 +502,7 @@ html.is-desktop .sidebar-download { display: none; }
   cursor: pointer;
   transition: background 0.15s ease;
 }
-.lobby-roomview-back:hover { background: rgba(255, 255, 255, 0.1); }
+.lobby-roomview-back:hover { background: var(--control-hover); }
 
 .lobby-roomview-name { font-family: var(--font-ui); font-size: 18px; font-weight: 500; color: var(--warm-ink); letter-spacing: -0.01em; min-width: 0; }
 
@@ -520,7 +520,7 @@ html.is-desktop .sidebar-download { display: none; }
   transition: background 0.15s ease;
 }
 .lobby-roomview-trigger:hover,
-.lobby-roomview-trigger[aria-expanded='true'] { background: rgba(255, 255, 255, 0.06); }
+.lobby-roomview-trigger[aria-expanded='true'] { background: var(--control); }
 .lobby-roomview-chevron {
   flex: none;
   display: inline-flex;
@@ -564,7 +564,7 @@ html.is-desktop .sidebar-download { display: none; }
   min-height: 0;
   border-left: 1px solid rgba(255, 255, 255, 0.07);
   background:
-    linear-gradient(180deg, rgba(17, 14, 11, 0.96), rgba(8, 7, 6, 0.98)),
+    linear-gradient(180deg, color-mix(in oklch, var(--warm-800), transparent 4%), color-mix(in oklch, var(--warm-950), transparent 2%)),
     var(--paper-deep);
   box-shadow: -22px 0 54px rgba(0, 0, 0, 0.28);
 }
@@ -612,7 +612,7 @@ html.is-desktop .sidebar-download { display: none; }
   margin: 0;
   border: 1px solid rgba(232, 160, 148, 0.24);
   border-radius: 999px;
-  background: rgba(54, 21, 18, 0.72);
+  background: color-mix(in oklch, var(--coral) 18%, var(--warm-950));
   color: var(--coral);
   padding: 8px 13px;
   font-size: 12.5px;
@@ -697,7 +697,7 @@ html.is-desktop .sidebar-download { display: none; }
   text-align: left;
   color: inherit;
 }
-.lobby-dm-head:hover { background: rgba(255, 255, 255, 0.025); }
+.lobby-dm-head:hover { background: var(--control); }
 .lobby-dm-head-name { font-size: 15.5px; font-weight: 700; color: var(--warm-ink); letter-spacing: -0.01em; }
 .lobby-dm-head-status { font-size: 12px; margin-top: 2px; }
 .lobby-dm-head-status[data-presence='dnd'] { color: var(--coral); }
@@ -722,7 +722,7 @@ html.is-desktop .sidebar-download { display: none; }
   letter-spacing: 0.08em;
   font-size: 11px;
   color: var(--warm-ink-dim);
-  background: rgba(24, 22, 17, 0.92);
+  background: var(--warm-800);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 999px;
   padding: 5px 13px;
@@ -761,7 +761,7 @@ html.is-desktop .sidebar-download { display: none; }
   white-space: pre-wrap;
 }
 .lobby-dm-bubble--them {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--panel);
   color: var(--warm-ink);
   border: 1px solid rgba(255, 255, 255, 0.07);
   border-bottom-left-radius: 5px;
@@ -799,7 +799,7 @@ html.is-desktop .sidebar-download { display: none; }
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 7px;
-  background: #1b1914;
+  background: var(--warm-800);
   opacity: 0;
   transform: translateY(2px);
   pointer-events: none;
@@ -809,7 +809,7 @@ html.is-desktop .sidebar-download { display: none; }
 .lobby-dm-bubble:focus-within .dm-msg-actions { opacity: 1; transform: translateY(0); pointer-events: auto; }
 .dm-msg-actions button { display: grid; width: 30px; height: 28px; place-items: center; border: 0; border-radius: 0; padding: 0; background: transparent; color: var(--warm-muted); cursor: pointer; }
 .dm-msg-actions button:hover,
-.dm-msg-actions button:focus-visible { background: rgba(255, 255, 255, 0.07); color: var(--warm-ink); outline: none; }
+.dm-msg-actions button:focus-visible { background: var(--control-hover); color: var(--warm-ink); outline: none; }
 .dm-msg-actions .dm-msg-action-danger:hover,
 .dm-msg-actions .dm-msg-action-danger:focus-visible { color: oklch(72% 0.18 28); }
 
@@ -826,7 +826,7 @@ html.is-desktop .sidebar-download { display: none; }
   border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 9px;
   outline: none;
-  background: rgba(0, 0, 0, 0.14);
+  background: var(--warm-900);
   color: inherit;
   font: inherit;
   line-height: 1.4;
@@ -844,7 +844,7 @@ html.is-desktop .sidebar-download { display: none; }
 .dm-msg-edit-actions button {
   border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: 6px;
-  background: rgba(0, 0, 0, 0.1);
+  background: var(--control);
   color: inherit;
   cursor: pointer;
   font-size: 10px;
@@ -857,7 +857,7 @@ html.is-desktop .sidebar-download { display: none; }
 .lobby-dm-compose { flex: none; padding: 14px 24px 20px; }
 .lobby-dm-input {
   width: 100%;
-  background: var(--paper-deep);
+  background: var(--warm-900);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 13px;
   padding: 13px 16px;
@@ -891,12 +891,12 @@ html.is-desktop .sidebar-download { display: none; }
   height: 100%;
   overflow-y: auto;
   border-left: 1px solid rgba(255, 255, 255, 0.07);
-  background: rgba(0, 0, 0, 0.16);
+  background: var(--panel);
 }
 .lobby-profile-cover {
   position: relative;
   height: 84px;
-  background: var(--profile-cover-accent, oklch(28% 0.025 55));
+  background: var(--profile-cover-accent, var(--panel-strong));
 }
 .lobby-profile-close {
   position: absolute;
@@ -906,7 +906,7 @@ html.is-desktop .sidebar-download { display: none; }
   height: 30px;
   border-radius: 9px;
   border: none;
-  background: rgba(8, 7, 5, 0.5);
+  background: color-mix(in srgb, var(--warm-950) 50%, transparent);
   color: var(--warm-ink-dim);
   display: flex;
   align-items: center;
@@ -914,13 +914,13 @@ html.is-desktop .sidebar-download { display: none; }
   cursor: pointer;
   transition: background 0.15s ease;
 }
-.lobby-profile-close:hover { background: rgba(8, 7, 5, 0.75); }
+.lobby-profile-close:hover { background: color-mix(in srgb, var(--warm-950) 75%, transparent); }
 .lobby-profile-body { padding: 0 20px 24px; margin-top: -38px; }
 .lobby-profile-panel-name { font-size: 20px; font-weight: 800; color: var(--warm-ink); letter-spacing: -0.02em; margin-top: 12px; }
 .lobby-profile-panel-handle { font-family: var(--font-mono); font-size: 12.5px; color: var(--warm-muted); margin-top: 2px; }
 .lobby-profile-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 18px; }
 .lobby-profile-stat {
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--panel-strong);
   border: 1px solid rgba(255, 255, 255, 0.07);
   border-radius: 13px;
   padding: 13px 14px;
@@ -931,7 +931,7 @@ html.is-desktop .sidebar-download { display: none; }
   width: 100%;
   margin-top: 14px;
   border: 1px solid rgba(216, 99, 74, 0.4);
-  background: rgba(216, 99, 74, 0.1);
+  background: color-mix(in oklch, var(--coral) 10%, transparent);
   color: var(--coral);
   border-radius: 12px;
   padding: 11px 0;
@@ -941,7 +941,7 @@ html.is-desktop .sidebar-download { display: none; }
   cursor: pointer;
   transition: background 0.15s ease;
 }
-.lobby-profile-remove:hover { background: rgba(216, 99, 74, 0.2); }
+.lobby-profile-remove:hover { background: color-mix(in oklch, var(--coral) 20%, transparent); }
 
 /* ============ REQUESTS / ADD ============ */
 
@@ -959,7 +959,7 @@ html.is-desktop .sidebar-download { display: none; }
   display: flex;
   align-items: center;
   gap: 13px;
-  background: rgba(255, 255, 255, 0.035);
+  background: var(--panel);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 14px;
   padding: 13px 16px;
@@ -988,7 +988,7 @@ html.is-desktop .sidebar-download { display: none; }
   height: 38px;
   border-radius: 11px;
   border: 1px solid rgba(216, 99, 74, 0.4);
-  background: rgba(216, 99, 74, 0.1);
+  background: color-mix(in oklch, var(--coral) 10%, transparent);
   color: var(--coral);
   display: flex;
   align-items: center;
@@ -996,7 +996,7 @@ html.is-desktop .sidebar-download { display: none; }
   cursor: pointer;
   transition: background 0.15s ease;
 }
-.lobby-req-decline:hover { background: rgba(216, 99, 74, 0.2); }
+.lobby-req-decline:hover { background: color-mix(in oklch, var(--coral) 20%, transparent); }
 .lobby-req-pending { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--amber); margin-top: 3px; }
 .lobby-req-pending-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--amber); animation: lobby-pulse 1.8s ease-in-out infinite; }
 .lobby-req-cancel {
@@ -1012,7 +1012,7 @@ html.is-desktop .sidebar-download { display: none; }
   cursor: pointer;
   transition: background 0.15s ease;
 }
-.lobby-req-cancel:hover { background: rgba(255, 255, 255, 0.06); }
+.lobby-req-cancel:hover { background: var(--control); }
 
 @keyframes lobby-pulse {
   0%, 100% { opacity: 1; transform: scale(1); }
@@ -1046,7 +1046,7 @@ html.is-desktop .sidebar-download { display: none; }
   border-radius: 6px;
   transition: background 0.15s ease;
 }
-.lobby-add-copy:hover { background: rgba(255, 255, 255, 0.08); }
+.lobby-add-copy:hover { background: var(--control-hover); }
 
 .lobby-add-form { display: flex; gap: 9px; }
 .lobby-add-field {
@@ -1054,7 +1054,7 @@ html.is-desktop .sidebar-download { display: none; }
   display: flex;
   align-items: center;
   gap: 8px;
-  background: var(--paper-deep);
+  background: var(--warm-900);
   border: 1px solid rgba(154, 143, 106, 0.5);
   border-radius: 12px;
   padding: 0 14px;
@@ -1087,13 +1087,13 @@ html.is-desktop .sidebar-download { display: none; }
 .lobby-add-send:hover { background: var(--accent-hover); }
 .lobby-add-send:disabled { opacity: 0.6; cursor: default; }
 
-.lobby-divider { height: 1px; background: rgba(255, 255, 255, 0.07); margin: 26px 0 20px; }
+.lobby-divider { height: 1px; background: var(--control-line); margin: 26px 0 20px; }
 
 .lobby-result-card {
   display: flex;
   align-items: center;
   gap: 13px;
-  background: rgba(255, 255, 255, 0.035);
+  background: var(--panel);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 14px;
   padding: 12px 15px;
@@ -1103,7 +1103,7 @@ html.is-desktop .sidebar-download { display: none; }
 .lobby-result-add {
   flex: none;
   border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--control);
   color: var(--warm-ink);
   border-radius: 10px;
   padding: 9px 15px;
@@ -1113,11 +1113,11 @@ html.is-desktop .sidebar-download { display: none; }
   cursor: pointer;
   transition: background 0.15s ease;
 }
-.lobby-result-add:hover { background: rgba(255, 255, 255, 0.11); }
+.lobby-result-add:hover { background: var(--control-hover); }
 .lobby-result-add:disabled { opacity: 0.55; cursor: default; }
 
 .lobby-info-card {
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--panel);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 16px;
   padding: 22px;
@@ -1130,7 +1130,7 @@ html.is-desktop .sidebar-download { display: none; }
   width: 22px;
   height: 22px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--control);
   border: 1px solid rgba(255, 255, 255, 0.12);
   display: flex;
   align-items: center;
@@ -1145,7 +1145,7 @@ html.is-desktop .sidebar-download { display: none; }
   display: flex;
   align-items: center;
   gap: 8px;
-  background: var(--paper-deep);
+  background: var(--warm-900);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 11px;
   padding: 10px 12px;
@@ -1157,7 +1157,7 @@ html.is-desktop .sidebar-download { display: none; }
   align-items: center;
   gap: 6px;
   border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--control);
   color: var(--warm-ink);
   border-radius: 9px;
   padding: 7px 11px;
@@ -1167,7 +1167,7 @@ html.is-desktop .sidebar-download { display: none; }
   cursor: pointer;
   transition: background 0.15s ease;
 }
-.lobby-handle-copy:hover { background: rgba(255, 255, 255, 0.11); }
+.lobby-handle-copy:hover { background: var(--control-hover); }
 
 .lobby-error { font-size: 13px; color: var(--coral); margin-top: 10px; }
 

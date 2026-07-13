@@ -11,13 +11,13 @@
   border-radius: var(--radius-xl);
   padding: 0;
   overflow: hidden;
-  background: var(--paper-deep);
+  background: var(--warm-800);
   color: var(--warm-ink);
   box-shadow: 0 32px 96px rgba(0, 0, 0, 0.62);
 }
 
 .auth-dialog::backdrop {
-  background: rgba(8, 7, 5, 0.74);
+  background: color-mix(in srgb, var(--warm-950) 74%, transparent);
   backdrop-filter: blur(5px);
   -webkit-backdrop-filter: blur(5px);
 }
@@ -42,7 +42,7 @@
   justify-content: center;
   border: 1px solid color-mix(in oklch, var(--warm-ink), transparent 90%);
   border-radius: var(--radius-sm);
-  background: color-mix(in oklch, var(--warm-ink), transparent 95%);
+  background: var(--control);
   color: var(--warm-muted);
   cursor: pointer;
   transition:
@@ -54,7 +54,7 @@
 
 .auth-dialog-close:hover {
   border-color: color-mix(in oklch, var(--warm-ink), transparent 80%);
-  background: color-mix(in oklch, var(--warm-ink), transparent 90%);
+  background: var(--control-hover);
   color: var(--warm-ink);
   transform: rotate(3deg);
 }
@@ -129,7 +129,7 @@
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 12px;
   padding: 13px 15px;
-  background: #0c0b08;
+  background: var(--warm-900);
   color: #ece7d9;
   font-family: var(--font-ui);
   font-size: 15px;
@@ -143,7 +143,7 @@
 
 .auth-input:hover {
   border-color: rgba(255, 255, 255, 0.16);
-  background: #0c0b08;
+  background: var(--warm-900);
 }
 
 .auth-input:focus {
@@ -159,7 +159,7 @@
   padding: 0 8px 0 15px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 12px;
-  background: #0c0b08;
+  background: var(--warm-900);
   transition: border-color 0.15s ease;
 }
 
@@ -237,7 +237,7 @@
   border: 1px solid rgba(214, 109, 92, 0.4);
   border-radius: 11px;
   padding: 10px 13px;
-  background: rgba(214, 109, 92, 0.12);
+  background: color-mix(in oklch, var(--coral) 12%, transparent);
   color: #e8b3a8;
   font-size: 13px;
   line-height: 1.45;

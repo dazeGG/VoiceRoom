@@ -257,7 +257,7 @@ body[data-screen-view="true"][data-strip-collapsed="true"] .stage-strip {
   overflow: hidden;
   border-radius: 7px;
   padding: 5px 8px;
-  background: oklch(9% 0.012 92 / 0.84);
+  background: color-mix(in oklch, var(--warm-950), transparent 16%);
   color: oklch(98% 0.006 92);
   font-size: 0.9rem;
   font-weight: 800;
@@ -302,7 +302,7 @@ body[data-screen-view="true"][data-strip-collapsed="true"] .stage-strip {
   overflow: hidden;
   border-radius: 999px;
   padding: 3px 7px;
-  background: oklch(9% 0.012 92 / 0.78);
+  background: color-mix(in oklch, var(--warm-950), transparent 22%);
   color: oklch(86% 0.035 86);
   font-size: 0.76rem;
   font-weight: 800;
@@ -320,7 +320,7 @@ body[data-screen-view="true"][data-strip-collapsed="true"] .stage-strip {
   border: 1px solid color-mix(in oklch, var(--control-line), var(--ink) 12%);
   border-radius: 999px;
   padding: 0 10px;
-  background: oklch(84% 0.012 92);
+  background: var(--control-active);
   color: oklch(9% 0.012 92);
   font-size: 0.76rem;
   font-weight: 800;
@@ -349,9 +349,7 @@ body[data-screen-view="true"][data-strip-collapsed="true"] .stage-strip {
   padding: 6px;
   border: 1px solid color-mix(in oklch, var(--line), var(--ink) 8%);
   border-radius: 16px;
-  background:
-    radial-gradient(120% 90% at 28% 0%, oklch(100% 0 0 / 0.04), transparent 55%),
-    oklch(12% 0.012 92 / 0.98);
+  background: var(--warm-800);
   color: var(--ink);
   box-shadow: 0 24px 70px oklch(0% 0 0 / 0.5), inset 0 1px 0 oklch(100% 0 0 / 0.05);
   backdrop-filter: blur(18px);
@@ -451,7 +449,7 @@ body[data-screen-view="true"][data-strip-collapsed="true"] .stage-strip {
 
 .pcm-item:hover,
 .pcm-item:focus-visible {
-  background: oklch(100% 0 0 / 0.06);
+  background: var(--control);
   outline: none;
 }
 
@@ -488,7 +486,7 @@ body[data-screen-view="true"][data-strip-collapsed="true"] .stage-strip {
 
 .pcm-item--danger:hover,
 .pcm-item--danger:focus-visible {
-  background: oklch(58% 0.19 28 / 0.14);
+  background: color-mix(in oklch, var(--coral) 14%, transparent);
 }
 
 .pcm-item--mute[aria-pressed="true"],

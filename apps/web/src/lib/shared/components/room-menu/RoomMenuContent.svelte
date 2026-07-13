@@ -156,7 +156,7 @@
     border: 1px solid rgba(255,255,255,.1);
     border-radius: 16px;
     padding: 6px;
-    background: #16140f;
+    background: var(--warm-800);
     box-shadow: 0 24px 60px rgba(0,0,0,.48);
   }
   .room-menu-invite::before {
@@ -168,7 +168,7 @@
     height: 9px;
     border-bottom: 1px solid rgba(255,255,255,.1);
     border-left: 1px solid rgba(255,255,255,.1);
-    background: #16140f;
+    background: var(--warm-800);
     transform: rotate(45deg);
   }
 

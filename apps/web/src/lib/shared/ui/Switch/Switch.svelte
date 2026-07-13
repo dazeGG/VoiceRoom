@@ -25,7 +25,7 @@
     padding: 3px;
     border: none;
     border-radius: var(--radius-pill);
-    background: rgba(255, 255, 255, 0.14);
+    background: var(--control);
     cursor: pointer;
     transition: background 0.15s ease;
   }

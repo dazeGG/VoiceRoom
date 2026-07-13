@@ -11,7 +11,7 @@
   align-items: center;
   justify-content: center;
   padding: 24px;
-  background: rgba(8, 7, 5, 0.62);
+  background: color-mix(in srgb, var(--warm-950) 62%, transparent);
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
 }
@@ -20,7 +20,7 @@
   width: min(430px, 100%);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 20px;
-  background: #16140f;
+  background: var(--warm-800);
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
   overflow: hidden;
 }
@@ -48,14 +48,14 @@
   height: 30px;
   border: none;
   border-radius: 9px;
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--control);
   color: #9a9484;
   cursor: pointer;
   transition: background 0.15s ease, color 0.15s ease;
 }
 
 .dialog-close:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--control-hover);
   color: #ece7d9;
 }
 
@@ -66,7 +66,7 @@
   padding: 4px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 12px;
-  background: #0c0b08;
+  background: var(--warm-900);
 }
 
 .dialog-tab {
@@ -84,13 +84,13 @@
 }
 
 .dialog-tab[data-active='true'] {
-  background: #d9d3c3;
+  background: var(--control-active);
   color: #17150f;
   font-weight: 700;
 }
 
 .dialog-tab--temp[data-active='true'] {
-  background: #c79350;
+  background: var(--amber);
   color: #1a1206;
 }
 
@@ -106,7 +106,7 @@
   border: 1px solid rgba(214, 109, 92, 0.4);
   border-radius: 11px;
   padding: 9px 12px;
-  background: rgba(214, 109, 92, 0.12);
+  background: color-mix(in oklch, var(--coral) 12%, transparent);
   color: #e8b3a8;
   font-size: 12.5px;
 }
@@ -135,7 +135,7 @@
   border: 1px solid rgba(154, 143, 106, 0.5);
   border-radius: 12px;
   padding: 13px 15px;
-  background: #0c0b08;
+  background: var(--warm-900);
   color: #ece7d9;
   font-family: var(--font-ui);
   font-size: 15px;
@@ -174,7 +174,7 @@
 
 .dialog-note--ok {
   border: 1px solid rgba(79, 174, 116, 0.22);
-  background: rgba(79, 174, 116, 0.08);
+  background: color-mix(in oklch, var(--green) 8%, transparent);
   color: #a9c9b6;
 }
 
@@ -184,7 +184,7 @@
 
 .dialog-note--warn {
   border: 1px solid rgba(199, 140, 62, 0.28);
-  background: rgba(199, 140, 62, 0.1);
+  background: color-mix(in oklch, var(--amber) 10%, transparent);
   color: #e3b780;
 }
 
@@ -212,7 +212,7 @@
 }
 
 .dialog-cancel:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--control);
 }
 
 .dialog-submit {
@@ -224,7 +224,7 @@
   border: none;
   border-radius: 12px;
   padding: 13px 0;
-  background: #d9d3c3;
+  background: var(--control-active);
   color: #17150f;
   font-family: var(--font-ui);
   font-size: 14.5px;
@@ -234,7 +234,7 @@
 }
 
 .dialog-submit:hover {
-  background: #e7e1d1;
+  background: var(--control-active-hover);
 }
 
 .dialog-submit:disabled {

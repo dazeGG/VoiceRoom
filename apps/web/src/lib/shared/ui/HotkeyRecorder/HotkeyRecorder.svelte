@@ -102,7 +102,7 @@
     min-height: 38px;
     border: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: 10px;
-    background: rgba(255, 255, 255, 0.045);
+    background: var(--control);
     color: var(--warm-ink, #f1ecdf);
     cursor: pointer;
     transition: border-color 150ms ease, background 150ms ease;
@@ -117,7 +117,7 @@
   .hotkey-recorder-field:hover,
   .hotkey-recorder-reset:hover {
     border-color: rgba(255, 255, 255, 0.22);
-    background: rgba(255, 255, 255, 0.08);
+    background: var(--control-hover);
   }
 
   .hotkey-recorder-field:focus-visible,

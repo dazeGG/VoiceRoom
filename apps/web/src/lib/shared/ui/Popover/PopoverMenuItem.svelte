@@ -52,7 +52,7 @@
   }
 
   .popover-menu-item:hover {
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--control);
   }
 
   .popover-menu-item:disabled {
@@ -80,7 +80,7 @@
   }
 
   .popover-menu-item--danger:hover {
-    background: rgba(214, 118, 90, 0.12);
+    background: color-mix(in oklch, var(--coral) 12%, transparent);
   }
 
   .popover-menu-item--danger .popover-menu-item-icon {

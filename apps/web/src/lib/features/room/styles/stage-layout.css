@@ -126,7 +126,7 @@ body[data-stage-summary="hidden"] .stage-strip-bar {
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   padding: 0;
-  background: oklch(14% 0.013 92 / 0.92);
+  background: var(--warm-900);
   color: var(--muted);
   transition: background 140ms var(--ease-out), border-color 140ms var(--ease-out), color 140ms var(--ease-out);
 }

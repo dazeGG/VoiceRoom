@@ -115,7 +115,7 @@
 <style>
   .room-ring-list { display: flex; min-width: 220px; max-height: 280px; flex-direction: column; gap: 4px; overflow-y: auto; padding: 6px; }
   .room-ring-friend { display: flex; align-items: center; gap: 9px; border: 0; border-radius: 8px; padding: 7px 8px; background: transparent; color: var(--warm-ink); cursor: pointer; text-align: left; }
-  .room-ring-friend:hover { background: rgba(255, 255, 255, 0.07); }
+  .room-ring-friend:hover { background: var(--control); }
   .room-ring-friend:disabled { opacity: 0.48; cursor: not-allowed; }
   .room-ring-friend small { margin-left: auto; color: var(--warm-faint); font-size: 10px; }
   .room-ring-empty { max-width: 230px; padding: 10px; color: var(--warm-faint); font-size: 13px; }

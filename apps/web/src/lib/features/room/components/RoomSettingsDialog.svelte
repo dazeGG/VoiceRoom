@@ -270,7 +270,7 @@
     align-items: center;
     justify-content: center;
     border-radius: inherit;
-    background: rgba(20, 16, 14, 0.58);
+    background: color-mix(in srgb, var(--warm-950) 58%, transparent);
     opacity: 0;
     transition: opacity 0.16s ease;
     pointer-events: none;
@@ -299,7 +299,7 @@
     padding: 0;
     border: 2px solid var(--paper-deep);
     border-radius: 50%;
-    background: #dc5f4b;
+    background: var(--coral);
     color: #fff;
     cursor: pointer;
     box-shadow: 0 2px 7px rgba(0, 0, 0, 0.34);
@@ -311,7 +311,7 @@
   .room-avatar-control:focus-within .room-avatar-remove { opacity: 1; }
 
   .room-avatar-remove:not(:disabled):hover {
-    background: #c94e3b;
+    background: color-mix(in oklch, var(--coral), var(--warm-950) 16%);
   }
 
   .room-avatar-remove:focus-visible {
@@ -344,7 +344,7 @@
   }
 
   .dialog-danger-trigger:hover {
-    background: rgba(239, 68, 68, 0.1);
+    background: color-mix(in oklch, var(--coral) 10%, transparent);
     border-color: rgba(239, 68, 68, 0.6);
   }
 
@@ -363,7 +363,7 @@
 
   .dialog-danger-confirm {
     align-items: center;
-    background: #ef4444;
+    background: var(--coral);
     border: none;
     border-radius: 10px;
     color: #fff;
@@ -377,7 +377,7 @@
   }
 
   .dialog-danger-confirm:hover {
-    background: #dc2626;
+    background: color-mix(in oklch, var(--coral), var(--warm-950) 20%);
   }
 
   .dialog-danger-confirm:disabled,

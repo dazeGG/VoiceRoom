@@ -100,7 +100,7 @@
     position: relative;
     height: var(--slider-track-h);
     border-radius: 999px;
-    background: oklch(15% 0.014 92);
+    background: var(--warm-900);
   }
 
   .vr-slider-fill {
@@ -108,7 +108,7 @@
     inset: 0 auto 0 0;
     width: calc(var(--slider-thumb) / 2 + (100% - var(--slider-thumb)) * var(--slider-fraction));
     border-radius: inherit;
-    background: var(--slider-fill, var(--green, oklch(72% 0.16 164)));
+    background: var(--slider-fill, var(--green));
   }
 
   .vr-slider-thumb {
@@ -118,7 +118,7 @@
     width: var(--slider-thumb);
     height: var(--slider-thumb);
     border-radius: 50%;
-    background: #fff;
+    background: var(--control-active);
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
     transform: translate(-50%, -50%);
   }
@@ -172,7 +172,7 @@
   }
 
   .vr-slider-control:focus-within .vr-slider-track {
-    background: color-mix(in oklch, var(--focus-border, rgba(255, 255, 255, 0.72)) 28%, oklch(15% 0.014 92));
+    background: color-mix(in oklch, var(--focus-border) 28%, var(--warm-900));
   }
 
   .vr-slider-control:focus-within .vr-slider-thumb {

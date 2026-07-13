@@ -61,7 +61,7 @@
     border-radius: 16px;
     padding: 13px 42px 15px 14px;
     overflow: hidden;
-    background: color-mix(in oklch, var(--paper-deep), black 7%);
+    background: var(--warm-800);
     box-shadow: 0 16px 44px oklch(4% 0.01 92 / 0.38);
     color: var(--warm-ink);
     font-family: var(--font-ui);
@@ -85,7 +85,7 @@
     white-space: pre-line;
   }
   .ui-toast-description { color: var(--warm-muted); font-size: 12.5px; font-weight: 550; }
-  .ui-toast-queue { border: 1px solid rgba(255,255,255,.1); border-radius: 999px; padding: 5px 10px; background: var(--paper-deep); color: var(--warm-muted); font: 500 11px var(--font-mono); }
+  .ui-toast-queue { border: 1px solid rgba(255,255,255,.1); border-radius: 999px; padding: 5px 10px; background: var(--warm-900); color: var(--warm-muted); font: 500 11px var(--font-mono); }
 
   .ui-toast-actions {
     display: flex;
@@ -97,7 +97,7 @@
     border: 1px solid rgba(255, 255, 255, 0.13);
     border-radius: 7px;
     padding: 4px 7px;
-    background: rgba(255, 255, 255, 0.07);
+    background: var(--control);
     color: var(--warm-ink);
     font: inherit;
     font-size: 12px;
@@ -105,7 +105,7 @@
   }
 
   .ui-toast-action:hover {
-    background: rgba(255, 255, 255, 0.12);
+    background: var(--control-hover);
   }
 
   .ui-toast-close {
@@ -128,7 +128,7 @@
   .ui-toast-progress { position: absolute; right: 14px; bottom: 0; left: 14px; height: 3px; border-radius: 999px 999px 0 0; background: var(--toast-accent); transform-origin: left; animation: ui-toast-progress var(--toast-duration) linear forwards; }
 
   .ui-toast-close:hover {
-    background: rgba(255, 255, 255, 0.08);
+    background: var(--control);
     color: var(--warm-ink);
   }
 

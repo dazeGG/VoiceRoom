@@ -5,7 +5,7 @@
     border: 1px solid rgba(255, 255, 255, 0.09);
     border-radius: 20px;
     padding: 6px 24px 24px;
-    background: rgba(255, 255, 255, 0.04);
+    background: var(--panel);
   }
 
   .home-input {
@@ -15,7 +15,7 @@
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 12px;
     padding: 13px 15px;
-    background: #0c0b08;
+    background: var(--warm-900);
     color: #ece7d9;
     font-family: var(--font-ui);
     font-size: 15px;
@@ -29,7 +29,7 @@
 
   .home-input:hover {
     border-color: rgba(255, 255, 255, 0.16);
-    background: #0c0b08;
+    background: var(--warm-900);
   }
 
   .home-input:focus {
@@ -52,7 +52,7 @@
     border: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: 12px;
     padding: 0 16px;
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--control);
     color: #ece7d9;
     font-family: var(--font-ui);
     font-size: 14px;
@@ -62,7 +62,7 @@
   }
 
   .home-ghost-button:hover {
-    background: rgba(255, 255, 255, 0.1);
+    background: var(--control-hover);
   }
 
   .home-or {
@@ -78,7 +78,7 @@
     content: '';
     flex: 1;
     height: 1px;
-    background: rgba(255, 255, 255, 0.07);
+    background: var(--control-line);
   }
 
   .home-ghost-button--small {
@@ -98,7 +98,7 @@
     border: 1px solid rgba(255, 255, 255, 0.07);
     border-radius: 20px;
     padding: 20px 24px 22px;
-    background: rgba(255, 255, 255, 0.02);
+    background: var(--panel);
   }
 
   .home-list-head {
@@ -130,7 +130,7 @@
     flex: none;
     padding: 3px 8px;
     border-radius: 999px;
-    background: rgba(255, 255, 255, 0.06);
+    background: var(--control);
     color: #b7b0a0;
     font-family: var(--font-ui);
     font-size: 12px;
@@ -151,7 +151,7 @@
     border: 1px solid rgba(255, 255, 255, 0.07);
     border-radius: 14px;
     padding: 12px 14px;
-    background: rgba(255, 255, 255, 0.03);
+    background: var(--panel-strong);
   }
 
   .home-room-row-main {
@@ -165,7 +165,7 @@
     flex: none;
     padding: 3px 7px;
     border-radius: 999px;
-    background: rgba(126, 201, 154, 0.12);
+    background: color-mix(in oklch, var(--green) 12%, transparent);
     color: #7ec99a;
     font-family: var(--font-ui);
     font-size: 10px;
@@ -221,7 +221,7 @@
     border: 1px solid rgba(255, 255, 255, 0.07);
     border-radius: 20px;
     padding: 20px 24px 22px;
-    background: rgba(255, 255, 255, 0.02);
+    background: var(--panel);
   }
 
   /* Inside the Electron shell the preload tags <html> with .is-desktop before
@@ -305,7 +305,7 @@
     border: 1px solid rgba(154, 143, 106, 0.55);
     border-radius: 12px;
     padding: 13px 40px 13px 15px;
-    background: #0c0b08;
+    background: var(--warm-900);
     color: #ece7d9;
     font-family: var(--font-ui);
     font-size: 14px;
@@ -316,11 +316,11 @@
 
   .home-select:hover {
     border-color: rgba(154, 143, 106, 0.7);
-    background: #0c0b08;
+    background: var(--warm-900);
   }
 
   .home-select option {
-    background: #16140f;
+    background: var(--warm-800);
     color: #ece7d9;
   }
 
@@ -343,7 +343,7 @@
     border: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: 12px;
     padding: 14px;
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--control);
     color: #ece7d9;
     font-family: var(--font-ui);
     font-size: 14px;
@@ -359,7 +359,7 @@
   }
 
   .home-dl:hover {
-    background: rgba(255, 255, 255, 0.1);
+    background: var(--control-hover);
   }
 
   .home-app-meta {
@@ -391,7 +391,7 @@
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 11px;
     padding: 10px 11px;
-    background: #0c0b08;
+    background: var(--warm-900);
   }
 
   .home-cmd code {
@@ -414,7 +414,7 @@
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 8px;
     padding: 6px 10px;
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--control);
     color: #cfc9ba;
     font-family: var(--font-ui);
     font-size: 11px;
@@ -424,7 +424,7 @@
   }
 
   .home-cmd-copy:hover {
-    background: rgba(255, 255, 255, 0.1);
+    background: var(--control-hover);
   }
 
   .home-room-row-presence {
@@ -456,7 +456,7 @@
   padding: 34px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 24px;
-  background: radial-gradient(circle at 50% 0%, rgba(217, 211, 195, 0.11), transparent 58%), rgba(255, 255, 255, 0.035);
+  background: radial-gradient(circle at 50% 0%, color-mix(in oklch, var(--control-active) 11%, transparent), transparent 58%), var(--panel);
   text-align: center;
   box-shadow: 0 24px 70px rgba(0, 0, 0, 0.28);
 }
@@ -497,7 +497,7 @@
 .auth-loader-lines span {
   height: 10px;
   border-radius: 999px;
-  background: linear-gradient(90deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.06));
+  background: linear-gradient(90deg, var(--control), var(--control-hover), var(--control));
   animation: auth-loader-shimmer 1.4s ease-in-out infinite;
 }
 
@@ -533,7 +533,7 @@
   width: min(520px, 100%);
   border: 1px solid rgba(244, 114, 182, 0.22);
   border-radius: 28px;
-  background: rgba(19, 15, 31, 0.82);
+  background: var(--warm-800);
   box-shadow: 0 24px 80px rgba(8, 6, 18, 0.34);
   padding: 28px;
   text-align: center;
@@ -596,13 +596,13 @@
 
 .landing-header-auth-link--login {
   border: 1px solid color-mix(in oklch, var(--warm-ink-dim), transparent 76%);
-  background: color-mix(in oklch, var(--warm-ink-dim), transparent 94%);
+  background: var(--control);
   color: var(--warm-ink-dim, #ece7d9);
 }
 
 .landing-header-auth-link--login:hover {
   border-color: color-mix(in oklch, var(--warm-ink-dim), transparent 56%);
-  background: color-mix(in oklch, var(--warm-ink-dim), transparent 88%);
+  background: var(--control-hover);
   color: var(--warm-ink, #f6f1e6);
 }
 
@@ -718,7 +718,7 @@
   height: var(--interactive-lg);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: var(--interactive-radius);
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--warm-900);
   overflow: hidden;
   transition: border-color 0.15s ease;
 }
@@ -752,7 +752,7 @@
   flex: none;
   border: none;
   border-left: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--control);
   color: var(--warm-ink, #ece7d9);
   font-family: var(--font-ui);
   font-size: 14px;
@@ -763,7 +763,7 @@
 }
 
 .lv-join-btn:hover {
-  background: rgba(255, 255, 255, 0.12);
+  background: var(--control-hover);
 }
 
 .lv-join-btn:disabled {
@@ -788,12 +788,12 @@
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 16px;
   padding: 18px 18px 20px;
-  background: rgba(255, 255, 255, 0.035);
+  background: var(--panel);
   transition: background 0.15s ease, border-color 0.15s ease;
 }
 
 .landing-feature:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--panel-strong);
   border-color: rgba(255, 255, 255, 0.14);
 }
 
@@ -811,7 +811,7 @@
   width: 38px;
   height: 38px;
   border-radius: 11px;
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--control);
   border: 1px solid rgba(255, 255, 255, 0.09);
   color: var(--accent);
 }

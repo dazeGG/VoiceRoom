@@ -40,7 +40,7 @@ select {
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   padding: 0 12px;
-  background: oklch(14% 0.013 92);
+  background: var(--warm-900);
   color: var(--ink);
   outline: none;
   transition: background 150ms var(--ease-out), border-color 150ms var(--ease-out), box-shadow 150ms var(--ease-out);
@@ -53,7 +53,7 @@ input::placeholder {
 input:hover,
 select:hover {
   border-color: color-mix(in oklch, var(--control-line), var(--ink) 16%);
-  background: oklch(16% 0.014 92);
+  background: var(--warm-800);
 }
 
 input:focus,
@@ -116,7 +116,7 @@ button:focus-visible {
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 18px;
   padding: 10px 11px;
-  background: rgba(18, 16, 12, 0.9);
+  background: color-mix(in oklch, var(--warm-800), transparent 10%);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
@@ -163,7 +163,7 @@ button:focus-visible {
 .output-button {
   width: 46px;
   height: 46px;
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--control);
   color: #d7d1c2;
 }
 
@@ -173,7 +173,7 @@ button:focus-visible {
 
 .mic-button:hover,
 .output-button:hover {
-  background: rgba(255, 255, 255, 0.11);
+  background: var(--control-hover);
 }
 
 /* Settings-chevron half. */
@@ -181,12 +181,12 @@ button:focus-visible {
   width: 26px;
   height: 46px;
   border-left: 1px solid rgba(255, 255, 255, 0.09);
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--control);
   color: #8c8676;
 }
 
 .dock-menu-button:hover {
-  background: rgba(255, 255, 255, 0.09);
+  background: var(--control-hover);
 }
 
 /* Standalone square buttons (screen / leave / connection). */
@@ -219,24 +219,24 @@ button:focus-visible {
 .mic-button[data-state="muted"],
 .mic-button[data-state="ptt"],
 .output-button[data-state="muted"] {
-  background: rgba(216, 99, 74, 0.16);
+  background: color-mix(in oklch, var(--coral) 16%, transparent);
   color: #e8a094;
 }
 
 .mic-button[data-state="muted"]:hover,
 .mic-button[data-state="ptt"]:hover,
 .output-button[data-state="muted"]:hover {
-  background: rgba(216, 99, 74, 0.24);
+  background: color-mix(in oklch, var(--coral) 24%, transparent);
 }
 
 .screen-button {
   border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--control);
   color: #d7d1c2;
 }
 
 .screen-button:hover {
-  background: rgba(255, 255, 255, 0.11);
+  background: var(--control-hover);
 }
 
 .screen-button:disabled {
@@ -274,7 +274,7 @@ button:focus-visible {
 }
 
 .mic-button[data-state="ptt-active"] {
-  background: rgba(52, 201, 138, 0.16);
+  background: color-mix(in oklch, var(--green) 16%, transparent);
   color: #a8e2c5;
 }
 
@@ -284,7 +284,7 @@ button:focus-visible {
   bottom: 2px;
   border-radius: 4px;
   padding: 1px 3px;
-  background: rgba(216, 99, 74, 0.24);
+  background: color-mix(in oklch, var(--coral) 24%, transparent);
   color: #efb1a7;
   font-size: 7px;
   font-weight: 800;
@@ -293,7 +293,7 @@ button:focus-visible {
 }
 
 .dock-ptt-badge[data-active='true'] {
-  background: rgba(52, 201, 138, 0.28);
+  background: color-mix(in oklch, var(--green) 28%, transparent);
   color: #c4efd9;
 }
 
@@ -310,7 +310,7 @@ button:focus-visible {
   height: 28px;
   flex: 0 0 auto;
   margin: 0 2px;
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--line);
   pointer-events: none;
 }
 
@@ -328,19 +328,19 @@ button:focus-visible {
   gap: 2.5px;
   padding: 14px 0;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--control);
   pointer-events: auto;
   cursor: default;
 }
 
 .dock-connection:hover {
-  background: rgba(255, 255, 255, 0.11);
+  background: var(--control-hover);
 }
 
 .dock-bar {
   width: 3px;
   border-radius: 1.5px;
-  background: oklch(52% 0.018 92);
+  background: var(--control-line);
 }
 
 .dock-bar:nth-child(1) {
@@ -356,7 +356,7 @@ button:focus-visible {
 }
 
 .dock-connection[data-state="connected"] .dock-bar {
-  background: #9fd4b4;
+  background: var(--green);
 }
 
 .dock-connection[data-state="connecting"] .dock-bar {
@@ -383,7 +383,7 @@ button:focus-visible {
   border: 1px solid rgba(255, 255, 255, 0.11);
   border-radius: 10px;
   padding: 8px 12px;
-  background: rgba(18, 16, 12, 0.97);
+  background: var(--warm-800);
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
 }
 
@@ -400,7 +400,7 @@ button:focus-visible {
   height: 0;
   transform: translateX(-50%);
   border: 5px solid transparent;
-  border-top-color: rgba(18, 16, 12, 0.97);
+  border-top-color: var(--warm-800);
 }
 
 .dock-connection-dot {
@@ -424,7 +424,7 @@ button:focus-visible {
 }
 
 .dock-connection[data-state="idle"] + .dock-connection-popover .dock-connection-dot {
-  background: oklch(52% 0.018 92);
+  background: var(--control-line);
 }
 
 .dock-connection-label {
@@ -452,24 +452,24 @@ body[data-lobby-embedded="true"] .room-dock {
 
 .leave-button {
   border: 1px solid rgba(216, 99, 74, 0.5);
-  background: rgba(216, 99, 74, 0.92);
+  background: var(--coral);
   color: #fff;
   pointer-events: auto;
 }
 
 .leave-button:hover {
-  background: #c8543c;
+  background: color-mix(in oklch, var(--coral), var(--warm-950) 16%);
 }
 
 .screen-exit-button {
   border: 1px solid rgba(216, 99, 74, 0.5);
-  background: rgba(216, 99, 74, 0.92);
+  background: var(--coral);
   color: #fff;
   pointer-events: auto;
 }
 
 .screen-exit-button:hover {
-  background: #c8543c;
+  background: color-mix(in oklch, var(--coral), var(--warm-950) 16%);
 }
 
 /* .dock-anchor prefix bumps specificity above Popover's own scoped
@@ -492,7 +492,7 @@ body[data-lobby-embedded="true"] .room-dock {
   border: 1px solid oklch(34% 0.02 92);
   border-radius: var(--radius-md);
   padding: var(--space-lg);
-  background: oklch(11% 0.012 92);
+  background: var(--warm-800);
   color: oklch(96% 0.008 92);
   box-shadow: 0 22px 54px oklch(6% 0.02 92 / 0.46);
 }
@@ -540,14 +540,14 @@ body[data-lobby-embedded="true"] .room-dock {
   padding: 0;
   border: 1px solid oklch(100% 0 0 / 0.12);
   border-radius: 10px;
-  background: oklch(100% 0 0 / 0.06);
+  background: var(--control);
   cursor: pointer;
   transition: background 0.16s ease, border-color 0.16s ease;
 }
 
 .gate-switch[aria-checked='true'] {
   border-color: oklch(72% 0.14 164 / 0.55);
-  background: oklch(72% 0.14 164 / 0.3);
+  background: color-mix(in oklch, var(--green) 30%, transparent);
 }
 
 .gate-switch-knob {
@@ -591,14 +591,14 @@ body[data-lobby-embedded="true"] .room-dock {
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background: linear-gradient(90deg, oklch(55% 0.13 164), var(--green));
+  background: linear-gradient(90deg, color-mix(in oklch, var(--green), var(--warm-950) 22%), var(--green));
   transform: scaleX(0);
   transform-origin: left center;
   transition: transform 80ms linear, background 120ms ease;
 }
 
 .mic-level-fill[data-state="closed"] {
-  background: linear-gradient(90deg, oklch(38% 0.036 92), oklch(48% 0.055 92));
+  background: linear-gradient(90deg, var(--panel-strong), var(--control-hover));
 }
 
 .sound-button {
@@ -625,7 +625,7 @@ body[data-lobby-embedded="true"] .room-dock {
   margin-left: 2px;
   padding: 0 5px;
   border-radius: 999px;
-  background: #d9d3c3;
+  background: var(--control-active);
   color: #17150f;
   font-family: var(--font-ui);
   font-size: 10px;

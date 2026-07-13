@@ -10,7 +10,7 @@
   .popover-divider {
     height: 1px;
     margin: 2px 8px 6px;
-    background: rgba(255, 255, 255, 0.07);
+    background: var(--control-line);
   }
 
   .popover-divider--tight {
