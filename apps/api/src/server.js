@@ -2357,8 +2357,18 @@ async function handleSetPresenceStatus(req, res, request) {
     sendJson(res, 400, { ok: false, error: 'status must be one of: online, away, dnd, offline' });
     return;
   }
+  if (body?.automatic !== undefined && typeof body.automatic !== 'boolean') {
+    sendJson(res, 400, { ok: false, error: 'automatic must be a boolean' });
+    return;
+  }
+  const automatic = body?.automatic === true;
+  if (automatic && presenceStatus !== 'away' && presenceStatus !== 'online') {
+    sendJson(res, 400, { ok: false, error: 'automatic presence can only transition between online and away' });
+    return;
+  }
 
   const result = await getNotificationStore().setPresenceStatus({
+    automatic,
     userId: user.id,
     presenceStatus
   });

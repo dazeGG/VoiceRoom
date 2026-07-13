@@ -15,6 +15,7 @@ const avatarMigration = require('../src/migrations/20260711120000_add_avatars');
 const dndMigration = require('../src/migrations/20260711140000_add_user_dnd');
 const messageEditingMigration = require('../src/migrations/20260712120000_add_message_editing');
 const presenceStatusMigration = require('../src/migrations/20260713120000_add_user_presence_status');
+const automaticPresenceMigration = require('../src/migrations/20260713220000_add_automatic_presence_source');
 
 function createRecorder() {
   const calls = [];
@@ -439,4 +440,27 @@ test('presence status migration adds a constrained default, backfills DND, and i
     { type: 'dropConstraint', table: 'users', name: 'users_presence_status_check' },
     { type: 'dropColumns', table: 'users', columns: ['presence_status'] }
   ]);
+});
+
+test('automatic presence migration records whether away was idle-driven', () => {
+  const pgm = createRecorder();
+  automaticPresenceMigration.up(pgm);
+
+  const added = pgm.calls.find((call) => call.type === 'addColumns' && call.table === 'users');
+  assert.deepEqual(added.columns.presence_status_automatic, {
+    type: 'boolean',
+    notNull: true,
+    default: false
+  });
+  assert.deepEqual(added.columns.presence_active_until, {
+    type: 'timestamp with time zone'
+  });
+
+  const down = createRecorder();
+  automaticPresenceMigration.down(down);
+  assert.deepEqual(down.calls, [{
+    type: 'dropColumns',
+    table: 'users',
+    columns: ['presence_status_automatic', 'presence_active_until']
+  }]);
 });

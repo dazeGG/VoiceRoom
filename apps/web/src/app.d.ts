@@ -5,6 +5,12 @@ declare module '*?raw' {
 
 declare global {
   namespace App {}
+
+  interface Window {
+    voiceRoomDesktopIdle?: {
+      getSystemIdleTime: () => Promise<number>;
+    };
+  }
 }
 
 export {};

@@ -69,7 +69,7 @@
     note?: string;
   }> = [
     { value: 'online', label: 'В сети' },
-    { value: 'away', label: 'Отошёл' },
+    { value: 'away', label: 'Отошёл', note: 'Автоматически после 5 минут бездействия' },
     {
       value: 'dnd',
       label: 'Не беспокоить',
@@ -217,7 +217,7 @@
 
   async function selectStatus(status: PresenceStatus, close: () => void): Promise<void> {
     if (statusSaving) return;
-    if (status === selfPresence) {
+    if (status === selfPresence && !notificationPreferences.presenceStatusAutomatic) {
       close();
       return;
     }

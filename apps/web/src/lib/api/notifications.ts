@@ -5,6 +5,7 @@ export interface NotificationPreferences {
   doNotDisturb: boolean;
   mutedPeerIds: string[];
   presenceStatus: PresenceStatus;
+  presenceStatusAutomatic: boolean;
   privateNotifications: boolean;
 }
 
@@ -39,8 +40,11 @@ export async function setDoNotDisturb(dnd: boolean): Promise<NotificationPrefere
   return { ...payload, preferences: normalizePreferences(payload.preferences) };
 }
 
-export async function setPresenceStatus(status: PresenceStatus): Promise<NotificationPreferencesResponse> {
-  const payload = await postJsonAuth<NotificationPreferencesResponse>('/api/presence/status', { status });
+export async function setPresenceStatus(
+  status: PresenceStatus,
+  automatic = false
+): Promise<NotificationPreferencesResponse> {
+  const payload = await postJsonAuth<NotificationPreferencesResponse>('/api/presence/status', { automatic, status });
   return { ...payload, preferences: normalizePreferences(payload.preferences) };
 }
 
@@ -50,6 +54,8 @@ function normalizePreferences(preferences: Partial<NotificationPreferences> | nu
     doNotDisturb,
     mutedPeerIds: Array.isArray(preferences?.mutedPeerIds) ? preferences.mutedPeerIds : [],
     presenceStatus: normalizePresenceStatus(preferences?.presenceStatus, doNotDisturb ? 'dnd' : 'online'),
+    presenceStatusAutomatic:
+      preferences?.presenceStatus === 'away' && Boolean(preferences?.presenceStatusAutomatic),
     privateNotifications: Boolean(preferences?.privateNotifications)
   };
 }

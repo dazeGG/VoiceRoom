@@ -19,18 +19,24 @@ test('notification API client uses required endpoints and credentialed helpers',
   assert.match(api, /privateNotifications: boolean/);
   assert.match(api, /doNotDisturb: boolean/);
   assert.match(api, /presenceStatus: PresenceStatus/);
+  assert.match(api, /presenceStatusAutomatic: boolean/);
   assert.match(api, /postJsonAuth<NotificationPreferencesResponse>\('\/api\/notifications\/settings', \{ dnd \}\)/);
-  assert.match(api, /postJsonAuth<NotificationPreferencesResponse>\('\/api\/presence\/status', \{ status \}\)/);
+  assert.match(api, /postJsonAuth<NotificationPreferencesResponse>\('\/api\/presence\/status', \{ automatic, status \}\)/);
 });
 
 test('lobby startup loads notification preferences and realtime notification events route through browser helper', () => {
   const friends = read('src/lib/features/home/model/friends.svelte.ts');
+  const idle = read('src/lib/shared/presence-idle.ts');
 
   assert.match(friends, /loadNotificationPreferences/);
   assert.match(friends, /areNotificationPreferencesLoadedFor/);
   assert.match(friends, /resetNotificationPreferences/);
   assert.match(friends, /Promise\.all\(\[refreshFriends\(\), refreshRequests\(\)\]\)/);
   assert.match(friends, /scheduleNotificationPreferencesLoad\(currentUserId\)/);
+  assert.match(friends, /startSystemPresenceIdleTracking/);
+  assert.match(friends, /stopPresenceIdleTracking\(\)/);
+  assert.match(idle, /PRESENCE_IDLE_THRESHOLD_SECONDS = 5 \* 60/);
+  assert.match(idle, /voiceRoomDesktopIdle/);
   assert.match(friends, /prepareNotificationPreferences\(currentUserId, initialDoNotDisturb, initialPresenceStatus\)/);
   assert.match(friends, /function scheduleNotificationPreferencesLoad\(userId = selfId\)/);
   assert.match(friends, /loadNotificationPreferences\(userId\)/);
@@ -157,8 +163,11 @@ test('presence status is server-backed while DND suppresses notifications and cu
   const friends = read('src/lib/features/home/model/friends.svelte.ts');
 
   assert.match(prefs, /presenceStatus: PresenceStatus/);
+  assert.match(prefs, /presenceStatusAutomatic: boolean/);
   assert.match(prefs, /setPresenceStatus\(status\)/);
+  assert.match(prefs, /setPresenceStatus\(status, true\)/);
   assert.match(sidebar, /updatePresenceStatus\(status\)/);
+  assert.match(sidebar, /status === selfPresence && !notificationPreferences\.presenceStatusAutomatic/);
   assert.match(sidebar, /role="listbox"/);
   assert.match(sidebar, /role="option"/);
   assert.match(sidebar, /aria-selected=\{selected\}/);

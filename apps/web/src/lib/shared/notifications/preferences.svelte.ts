@@ -54,6 +54,7 @@ export const notificationPreferences = $state<{
   mutedPeerIds: string[];
   mutedRoomIds: string[];
   presenceStatus: PresenceStatus;
+  presenceStatusAutomatic: boolean;
   privateNotifications: boolean;
   doNotDisturb: boolean;
   browserPermission: NotificationPermissionState;
@@ -66,6 +67,7 @@ export const notificationPreferences = $state<{
   mutedPeerIds: [],
   mutedRoomIds: readMutedRoomIds(),
   presenceStatus: 'online',
+  presenceStatusAutomatic: false,
   privateNotifications: false,
   doNotDisturb: false,
   browserPermission: 'unsupported',
@@ -81,6 +83,8 @@ function applyPreferenceFields(preferences: NotificationPreferences): void {
     preferences.presenceStatus,
     preferences.doNotDisturb ? 'dnd' : 'online'
   );
+  notificationPreferences.presenceStatusAutomatic =
+    notificationPreferences.presenceStatus === 'away' && Boolean(preferences.presenceStatusAutomatic);
   notificationPreferences.privateNotifications = preferences.privateNotifications;
   notificationPreferences.doNotDisturb = preferences.doNotDisturb;
   setDoNotDisturbPlaybackSuppressed(preferences.doNotDisturb);
@@ -111,6 +115,7 @@ export function resetNotificationPreferences(): void {
   notificationPreferences.mutedPeerIds = [];
   notificationPreferences.mutedRoomIds = readMutedRoomIds();
   notificationPreferences.presenceStatus = 'online';
+  notificationPreferences.presenceStatusAutomatic = false;
   notificationPreferences.privateNotifications = false;
   notificationPreferences.doNotDisturb = false;
   setDoNotDisturbPlaybackSuppressed(false);
@@ -128,6 +133,7 @@ export function prepareNotificationPreferences(
     presenceStatus,
     doNotDisturb ? 'dnd' : 'online'
   );
+  notificationPreferences.presenceStatusAutomatic = false;
   notificationPreferences.doNotDisturb = Boolean(doNotDisturb);
   setDoNotDisturbPlaybackSuppressed(doNotDisturb);
 }
@@ -226,6 +232,13 @@ export async function updatePresenceStatus(status: PresenceStatus): Promise<void
   const accountUserId = activeUserId;
   const generation = preferenceGeneration;
   const payload = await setPresenceStatus(status);
+  applyMutationPreferences(payload.preferences, accountUserId, generation);
+}
+
+export async function updateAutomaticPresenceStatus(status: 'online' | 'away'): Promise<void> {
+  const accountUserId = activeUserId;
+  const generation = preferenceGeneration;
+  const payload = await setPresenceStatus(status, true);
   applyMutationPreferences(payload.preferences, accountUserId, generation);
 }
 

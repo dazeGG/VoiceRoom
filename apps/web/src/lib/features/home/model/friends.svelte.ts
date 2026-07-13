@@ -38,8 +38,10 @@ import {
   notificationPreferences,
   prepareNotificationPreferences,
   resetNotificationPreferences,
-  syncNotificationPermission
+  syncNotificationPermission,
+  updateAutomaticPresenceStatus
 } from '$lib/shared/notifications/preferences.svelte';
+import { startSystemPresenceIdleTracking } from '$lib/shared/presence-idle';
 import { createDmThreadResyncCoordinator } from './dm-thread-resync';
 
 export type LobbyMode = 'friends' | 'rooms';
@@ -189,7 +191,16 @@ export function initLobby(
     friendsState.loaded = true;
   });
   scheduleNotificationPreferencesLoad(currentUserId);
+  const stopPresenceIdleTracking = startSystemPresenceIdleTracking({
+    getPresence: () => ({
+      loaded: areNotificationPreferencesLoadedFor(currentUserId),
+      presenceStatus: notificationPreferences.presenceStatus,
+      presenceStatusAutomatic: notificationPreferences.presenceStatusAutomatic
+    }),
+    updatePresence: updateAutomaticPresenceStatus
+  });
   return () => {
+    stopPresenceIdleTracking();
     realtime?.close();
     realtime = null;
     presenceReady = false;

@@ -622,6 +622,7 @@ test('presence status route requires auth, validates canonical values, and syncs
             doNotDisturb: input.presenceStatus === 'dnd',
             mutedPeerIds: [],
             presenceStatus: input.presenceStatus,
+            presenceStatusAutomatic: Boolean(input.automatic && input.presenceStatus === 'away'),
             privateNotifications: false
           }
         };
@@ -654,11 +655,34 @@ test('presence status route requires auth, validates canonical values, and syncs
     assert.equal(response.json().preferences.doNotDisturb, status === 'dnd');
   }
   assert.deepEqual(calls, ['online', 'away', 'dnd', 'offline'].map((presenceStatus) => ({
+    automatic: false,
     userId: currentUserId,
     presenceStatus
   })));
 
-  for (const payload of [{}, { status: 'busy' }, { status: ' online ' }, { status: null }]) {
+  const automaticAway = await app.inject({
+    method: 'POST',
+    url: '/api/presence/status',
+    headers,
+    payload: { status: 'away', automatic: true }
+  });
+  assert.equal(automaticAway.statusCode, 200);
+  assert.equal(automaticAway.json().preferences.presenceStatus, 'away');
+  assert.equal(automaticAway.json().preferences.presenceStatusAutomatic, true);
+  assert.deepEqual(calls.at(-1), {
+    automatic: true,
+    userId: currentUserId,
+    presenceStatus: 'away'
+  });
+
+  for (const [payload, error] of [
+    [{}, 'status must be one of: online, away, dnd, offline'],
+    [{ status: 'busy' }, 'status must be one of: online, away, dnd, offline'],
+    [{ status: ' online ' }, 'status must be one of: online, away, dnd, offline'],
+    [{ status: null }, 'status must be one of: online, away, dnd, offline'],
+    [{ status: 'away', automatic: 'yes' }, 'automatic must be a boolean'],
+    [{ status: 'dnd', automatic: true }, 'automatic presence can only transition between online and away']
+  ]) {
     const response = await app.inject({
       method: 'POST',
       url: '/api/presence/status',
@@ -666,12 +690,9 @@ test('presence status route requires auth, validates canonical values, and syncs
       payload
     });
     assert.equal(response.statusCode, 400);
-    assert.deepEqual(response.json(), {
-      ok: false,
-      error: 'status must be one of: online, away, dnd, offline'
-    });
+    assert.deepEqual(response.json(), { ok: false, error });
   }
-  assert.equal(calls.length, 4);
+  assert.equal(calls.length, 5);
 });
 
 

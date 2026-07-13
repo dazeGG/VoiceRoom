@@ -3,6 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
+const { setTimeout: delay } = require('node:timers/promises');
 
 const { createFriendStore } = require('../src/lib/friend-store');
 const { createNotificationStore } = require('../src/lib/notification-store');
@@ -12,12 +13,12 @@ const { createTestDatabase } = require('./db-harness');
 
 const SILENT = { log() {}, info() {}, warn() {}, error() {} };
 
-async function createStores(t) {
+async function createStores(t, notificationOptions = {}) {
   const { cleanup, databaseUrl } = await createTestDatabase(t);
   await runMigrations({ databaseUrl, logger: SILENT });
   const users = createUserStore({ databaseUrl, logger: SILENT });
   const friends = createFriendStore({ databaseUrl, logger: SILENT });
-  const notifications = createNotificationStore({ databaseUrl, logger: SILENT });
+  const notifications = createNotificationStore({ databaseUrl, logger: SILENT, ...notificationOptions });
   t.after(async () => {
     await notifications.close();
     await friends.close();
@@ -41,13 +42,15 @@ async function makeFriends(friends, alice, bob) {
 }
 
 test('notification preferences default private notifications off and update explicitly', async (t) => {
-  const { users, notifications } = await createStores(t);
+  const automaticPresenceLeaseMs = 25;
+  const { users, notifications } = await createStores(t, { automaticPresenceLeaseMs });
   const alice = await makeUser(users, 'alice');
 
   assert.deepEqual(await notifications.getPreferences(alice.id), {
     doNotDisturb: false,
     mutedPeerIds: [],
     presenceStatus: 'online',
+    presenceStatusAutomatic: false,
     privateNotifications: false
   });
 
@@ -79,7 +82,62 @@ test('notification preferences default private notifications off and update expl
   const away = await notifications.setPresenceStatus({ userId: alice.id, presenceStatus: 'away' });
   assert.equal(away.status, 'updated');
   assert.equal(away.preferences.presenceStatus, 'away');
+  assert.equal(away.preferences.presenceStatusAutomatic, false);
   assert.equal(away.preferences.doNotDisturb, false);
+
+  const manualAwayIgnoresAutomaticResume = await notifications.setPresenceStatus({
+    userId: alice.id,
+    presenceStatus: 'online',
+    automatic: true
+  });
+  assert.equal(manualAwayIgnoresAutomaticResume.status, 'unchanged');
+  assert.equal(manualAwayIgnoresAutomaticResume.preferences.presenceStatus, 'away');
+  assert.equal(manualAwayIgnoresAutomaticResume.preferences.presenceStatusAutomatic, false);
+
+  await notifications.setPresenceStatus({ userId: alice.id, presenceStatus: 'online' });
+  const activeHeartbeat = await notifications.setPresenceStatus({
+    userId: alice.id,
+    presenceStatus: 'online',
+    automatic: true
+  });
+  assert.equal(activeHeartbeat.status, 'unchanged');
+  const blockedByActiveSession = await notifications.setPresenceStatus({
+    userId: alice.id,
+    presenceStatus: 'away',
+    automatic: true
+  });
+  assert.equal(blockedByActiveSession.status, 'unchanged');
+  assert.equal(blockedByActiveSession.preferences.presenceStatus, 'online');
+
+  await delay(automaticPresenceLeaseMs * 3);
+  const automaticAway = await notifications.setPresenceStatus({
+    userId: alice.id,
+    presenceStatus: 'away',
+    automatic: true
+  });
+  assert.equal(automaticAway.status, 'updated');
+  assert.equal(automaticAway.preferences.presenceStatus, 'away');
+  assert.equal(automaticAway.preferences.presenceStatusAutomatic, true);
+
+  const automaticOnline = await notifications.setPresenceStatus({
+    userId: alice.id,
+    presenceStatus: 'online',
+    automatic: true
+  });
+  assert.equal(automaticOnline.status, 'updated');
+  assert.equal(automaticOnline.preferences.presenceStatus, 'online');
+  assert.equal(automaticOnline.preferences.presenceStatusAutomatic, false);
+
+  await delay(automaticPresenceLeaseMs * 3);
+  await notifications.setPresenceStatus({
+    userId: alice.id,
+    presenceStatus: 'away',
+    automatic: true
+  });
+  const pinnedAway = await notifications.setPresenceStatus({ userId: alice.id, presenceStatus: 'away' });
+  assert.equal(pinnedAway.status, 'updated');
+  assert.equal(pinnedAway.preferences.presenceStatus, 'away');
+  assert.equal(pinnedAway.preferences.presenceStatusAutomatic, false);
 
   const dndStatus = await notifications.setPresenceStatus({ userId: alice.id, presenceStatus: 'dnd' });
   assert.equal(dndStatus.preferences.presenceStatus, 'dnd');

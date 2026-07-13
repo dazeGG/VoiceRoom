@@ -4,22 +4,39 @@ const crypto = require('node:crypto');
 const { cleanPresenceStatus } = require('@voice-room/shared/validation');
 const { createDbPool, transaction } = require('./db');
 
+const DEFAULT_AUTOMATIC_PRESENCE_LEASE_MS = 3 * 60 * 1000;
+
 function createRowId() {
   return crypto.randomUUID?.() || crypto.randomBytes(16).toString('hex');
 }
 
-function mapPreferences({ doNotDisturb = false, presenceStatus = '', privateNotifications = false, mutedPeerIds = [] } = {}) {
+function mapPreferences({
+  doNotDisturb = false,
+  presenceStatus = '',
+  presenceStatusAutomatic = false,
+  privateNotifications = false,
+  mutedPeerIds = []
+} = {}) {
   const normalizedPresenceStatus = cleanPresenceStatus(presenceStatus) || (doNotDisturb ? 'dnd' : 'online');
   return {
     doNotDisturb: normalizedPresenceStatus === 'dnd',
     mutedPeerIds: [...new Set(mutedPeerIds)].sort(),
     presenceStatus: normalizedPresenceStatus,
+    presenceStatusAutomatic: normalizedPresenceStatus === 'away' && Boolean(presenceStatusAutomatic),
     privateNotifications: Boolean(privateNotifications)
   };
 }
 
-function createNotificationStore({ databaseUrl, logger = console, pool } = {}) {
+function createNotificationStore({
+  automaticPresenceLeaseMs = DEFAULT_AUTOMATIC_PRESENCE_LEASE_MS,
+  databaseUrl,
+  logger = console,
+  pool
+} = {}) {
   let activePool = pool || null;
+  const activeLeaseMs = Number.isFinite(automaticPresenceLeaseMs) && automaticPresenceLeaseMs > 0
+    ? Math.floor(automaticPresenceLeaseMs)
+    : DEFAULT_AUTOMATIC_PRESENCE_LEASE_MS;
   function getPool() {
     if (!activePool) {
       activePool = createDbPool({ databaseUrl, logger });
@@ -30,7 +47,7 @@ function createNotificationStore({ databaseUrl, logger = console, pool } = {}) {
   async function getPreferences(userId, client = getPool()) {
     if (!userId) return mapPreferences();
     const preferences = await client.query(
-      `SELECT u.dnd, u.presence_status, np.private_notifications
+      `SELECT u.dnd, u.presence_status, u.presence_status_automatic, np.private_notifications
        FROM users u
        LEFT JOIN notification_preferences np ON np.user_id = u.id
        WHERE u.id = $1`,
@@ -46,6 +63,7 @@ function createNotificationStore({ databaseUrl, logger = console, pool } = {}) {
     return mapPreferences({
       doNotDisturb: preferences.rows[0]?.dnd || false,
       presenceStatus: preferences.rows[0]?.presence_status,
+      presenceStatusAutomatic: preferences.rows[0]?.presence_status_automatic,
       privateNotifications: preferences.rows[0]?.private_notifications || false,
       mutedPeerIds: dmMutes.rows.map((row) => row.peer_user_id)
     });
@@ -92,27 +110,93 @@ function createNotificationStore({ databaseUrl, logger = console, pool } = {}) {
         `UPDATE users
          SET dnd = $2,
              presence_status = $3,
+             presence_status_automatic = false,
+             presence_active_until = CASE
+               WHEN $2 THEN NULL
+               ELSE current_timestamp + ($4 * interval '1 millisecond')
+             END,
              updated_at = current_timestamp
          WHERE id = $1`,
-        [userId, Boolean(doNotDisturb), doNotDisturb ? 'dnd' : 'online']
+        [userId, Boolean(doNotDisturb), doNotDisturb ? 'dnd' : 'online', activeLeaseMs]
       );
       if (updated.rowCount === 0) return { status: 'not_found', preferences: mapPreferences() };
       return { status: 'updated', preferences: await getPreferences(userId, client) };
     });
   }
 
-  async function setPresenceStatus({ userId, presenceStatus }) {
+  async function setPresenceStatus({ userId, presenceStatus, automatic = false }) {
     const normalizedPresenceStatus = cleanPresenceStatus(presenceStatus);
     if (!userId) return { status: 'not_found', preferences: mapPreferences() };
     if (!normalizedPresenceStatus) return { status: 'invalid', preferences: mapPreferences() };
+    if (typeof automatic !== 'boolean') return { status: 'invalid', preferences: mapPreferences() };
+    if (automatic && normalizedPresenceStatus !== 'away' && normalizedPresenceStatus !== 'online') {
+      return { status: 'invalid', preferences: mapPreferences() };
+    }
     return transaction(getPool(), async (client) => {
+      const current = await client.query(
+        `SELECT presence_status,
+                presence_status_automatic,
+                presence_active_until > current_timestamp AS presence_has_active_lease
+         FROM users
+         WHERE id = $1
+         FOR UPDATE`,
+        [userId]
+      );
+      if (current.rowCount === 0) return { status: 'not_found', preferences: mapPreferences() };
+
+      const currentStatus = cleanPresenceStatus(current.rows[0]?.presence_status) || 'online';
+      const currentAutomatic = currentStatus === 'away' && Boolean(current.rows[0]?.presence_status_automatic);
+      const hasActiveLease = Boolean(current.rows[0]?.presence_has_active_lease);
+      let nextStatus = normalizedPresenceStatus;
+      let nextAutomatic = false;
+
+      if (automatic) {
+        const shouldEnterAway = normalizedPresenceStatus === 'away'
+          && currentStatus === 'online'
+          && !hasActiveLease;
+        const shouldRenewOnline = normalizedPresenceStatus === 'online' && currentStatus === 'online';
+        const shouldResumeOnline = normalizedPresenceStatus === 'online'
+          && currentStatus === 'away'
+          && currentAutomatic;
+        if (shouldRenewOnline) {
+          await client.query(
+            `UPDATE users
+             SET presence_active_until = current_timestamp + ($2 * interval '1 millisecond')
+             WHERE id = $1`,
+            [userId, activeLeaseMs]
+          );
+          return { status: 'unchanged', preferences: await getPreferences(userId, client) };
+        }
+        if (!shouldEnterAway && !shouldResumeOnline) {
+          return { status: 'unchanged', preferences: await getPreferences(userId, client) };
+        }
+        nextAutomatic = shouldEnterAway;
+      }
+
+      if (currentStatus === nextStatus && currentAutomatic === nextAutomatic) {
+        if (nextStatus === 'online') {
+          await client.query(
+            `UPDATE users
+             SET presence_active_until = current_timestamp + ($2 * interval '1 millisecond')
+             WHERE id = $1`,
+            [userId, activeLeaseMs]
+          );
+        }
+        return { status: 'unchanged', preferences: await getPreferences(userId, client) };
+      }
+
       const updated = await client.query(
         `UPDATE users
          SET presence_status = $2,
              dnd = $3,
+             presence_status_automatic = $4,
+             presence_active_until = CASE
+               WHEN $2 = 'online' THEN current_timestamp + ($5 * interval '1 millisecond')
+               ELSE NULL
+             END,
              updated_at = current_timestamp
          WHERE id = $1`,
-        [userId, normalizedPresenceStatus, normalizedPresenceStatus === 'dnd']
+        [userId, nextStatus, nextStatus === 'dnd', nextAutomatic, activeLeaseMs]
       );
       if (updated.rowCount === 0) return { status: 'not_found', preferences: mapPreferences() };
       return { status: 'updated', preferences: await getPreferences(userId, client) };
