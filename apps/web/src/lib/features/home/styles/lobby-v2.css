@@ -325,10 +325,17 @@
   color: var(--warm-ink);
 }
 
+.lr-empty-state {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 4px;
+}
+
 .lr-empty {
   color: var(--warm-faint);
   font-size: 13.5px;
-  margin: 4px 0 0;
+  margin: 0;
 }
 
 .lr-icon-btn {

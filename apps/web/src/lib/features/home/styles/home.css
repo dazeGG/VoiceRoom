@@ -462,14 +462,8 @@
 }
 
 .auth-loader-orb {
-  display: inline-block;
-  width: 52px;
-  height: 52px;
+  display: inline-flex;
   margin-bottom: 18px;
-  border: 2px solid rgba(217, 211, 195, 0.18);
-  border-top-color: #d9d3c3;
-  border-radius: 999px;
-  animation: auth-loader-spin 0.9s linear infinite;
 }
 
 .auth-loader-kicker {
@@ -511,10 +505,6 @@
   width: 58%;
   margin-inline: auto;
   animation-delay: 0.24s;
-}
-
-@keyframes auth-loader-spin {
-  to { transform: rotate(360deg); }
 }
 
 @keyframes auth-loader-shimmer {

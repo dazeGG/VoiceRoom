@@ -11,7 +11,7 @@
   import '$lib/shared/styles/app.css';
   import './styles/home.css';
   import { extractRoomId } from '$lib/shared/utils/room';
-  import { ToastStack } from '$lib/shared/ui';
+  import { MascotIcon, ToastStack } from '$lib/shared/ui';
   import DesktopAppCard from './components/DesktopAppCard.svelte';
   import LandingHero from './components/LandingHero.svelte';
   import AuthDialog, { type AuthMode } from '$lib/features/auth/AuthDialog.svelte';
@@ -207,7 +207,7 @@
     <Topbar label="Voice Room" />
     <main class="auth-loader" aria-label="Загрузка аккаунта" aria-busy="true">
       <div class="auth-loader-card">
-        <span class="auth-loader-orb" aria-hidden="true"></span>
+        <span class="auth-loader-orb"><MascotIcon variant="blink" size={52} /></span>
         <p class="auth-loader-kicker">Проверяем сессию</p>
         <h1>Готовим ваши комнаты</h1>
         <div class="auth-loader-lines" aria-hidden="true">

@@ -20,3 +20,5 @@ export { Dialog } from './Dialog';
 export type { DialogProps } from './Dialog';
 export { ToastStack } from './ToastStack';
 export type { ToastItem, ToastStackProps } from './ToastStack';
+export { MascotIcon } from './MascotIcon';
+export type { MascotIconProps, MascotVariant } from './MascotIcon';

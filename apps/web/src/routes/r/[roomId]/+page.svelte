@@ -7,7 +7,7 @@
   import { dismissToast, pushToast, toastState } from '$lib/features/home/model/toasts.svelte';
   import '$lib/features/home/styles/home.css';
   import RoomPage from '$lib/features/room/RoomPage.svelte';
-  import { ToastStack } from '$lib/shared/ui';
+  import { MascotIcon, ToastStack } from '$lib/shared/ui';
 
   let loggingOut = $state(false);
   let authLoadError = $state(false);
@@ -55,7 +55,7 @@
   <div class="app-shell">
     <main class="auth-loader" aria-label="Загрузка аккаунта" aria-busy="true">
       <div class="auth-loader-card">
-        <span class="auth-loader-orb" aria-hidden="true"></span>
+        <span class="auth-loader-orb"><MascotIcon variant="look" size={52} /></span>
         <p class="auth-loader-kicker">Проверяем сессию</p>
         <h1>Открываем комнату</h1>
       </div>

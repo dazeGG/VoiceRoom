@@ -237,6 +237,11 @@ body[data-screen="not-found"] {
   width: 100%;
 }
 
+.not-found-mascot {
+  display: inline-flex;
+  margin-bottom: 22px;
+}
+
 .start-panel {
   display: grid;
   gap: var(--space-lg);

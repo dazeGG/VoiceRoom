@@ -1,6 +1,6 @@
 <script lang="ts">
   import { ChevronRight, Plus, UserPlus } from '@lucide/svelte';
-  import { Avatar, AvatarStack, Button, ContextMenu, Ellipsis } from '$lib/shared/ui';
+  import { Avatar, AvatarStack, Button, ContextMenu, Ellipsis, MascotIcon } from '$lib/shared/ui';
   import { iconMd, iconSm } from '$lib/shared/ui/icons';
   import type { OwnedRoom } from '$lib/api/auth';
   import { roomPresence } from '../../model/room-presence.svelte';
@@ -102,7 +102,10 @@
   </div>
 
   {#if rooms.length === 0}
-    <p class="lr-empty">У вас пока нет комнат — создайте первую кнопкой выше.</p>
+    <div class="lr-empty-state">
+      <MascotIcon variant="blink" size={32} />
+      <p class="lr-empty">У вас пока нет комнат — создайте первую кнопкой выше.</p>
+    </div>
   {:else}
     <div class="lv-cards">
       {#each sortedRooms as room (room.roomId)}
