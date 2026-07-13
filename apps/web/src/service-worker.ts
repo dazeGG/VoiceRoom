@@ -26,7 +26,7 @@ self.addEventListener('push', (event) => {
     await self.registration.showNotification(payload.title || 'VoiceRoom', {
       body: payload.body || '',
       data: { url: payload.url || '/', dedupeKey: payload.dedupeKey, type: payload.type },
-      icon: '/icon.svg',
+      icon: '/voiceroom-icon.svg',
       tag: payload.tag || payload.dedupeKey || 'voice-room'
     });
   })());

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs>
+    <mask id="band">
+      <rect width="100" height="100" fill="white"></rect>
+      <rect x="10" y="44" width="80" height="22" fill="black"></rect>
+    </mask>
+  </defs>
+  <path d="M20 38 L20 10 L41 29 L59 29 L80 10 L80 38 Q85 46 85 56 Q85 86 50 86 Q15 86 15 56 Q15 46 20 38 Z" fill="#c1f100" mask="url(#band)"></path>
+  <circle cx="38" cy="55" r="6.5" fill="#c1f100"></circle>
+  <circle cx="62" cy="55" r="6.5" fill="#c1f100"></circle>
+</svg>
