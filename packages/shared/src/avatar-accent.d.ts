@@ -10,4 +10,10 @@ export interface AvatarAccentPresentation {
   shadow: string;
 }
 
-export function deriveAvatarAccent(rgb: AvatarAccentRgb): AvatarAccentPresentation;
+export function deriveAvatarAccent(rgb: AvatarAccentRgb | null): AvatarAccentPresentation;
+
+export function dominantAvatarColor(
+  pixels: Uint8Array | Uint8ClampedArray,
+  width: number,
+  height: number
+): AvatarAccentRgb | null;

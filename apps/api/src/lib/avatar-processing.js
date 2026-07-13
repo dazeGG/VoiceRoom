@@ -2,7 +2,7 @@
 
 const crypto = require('node:crypto');
 const sharp = require('sharp');
-const { deriveAvatarAccent } = require('@voice-room/shared/avatar-accent');
+const { deriveAvatarAccent, dominantAvatarColor } = require('@voice-room/shared/avatar-accent');
 
 const AVATAR_SIZE = 256;
 const MAX_AVATAR_BYTES = 5 * 1024 * 1024;
@@ -46,8 +46,8 @@ async function processAvatar(buffer) {
     throw error;
   }
 
-  const { dominant } = await sharp(output).stats();
-  const presentation = deriveAvatarAccent(dominant);
+  const { data, info } = await sharp(output).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  const presentation = deriveAvatarAccent(dominantAvatarColor(data, info.width, info.height));
   return {
     accent: presentation.background,
     buffer: output,

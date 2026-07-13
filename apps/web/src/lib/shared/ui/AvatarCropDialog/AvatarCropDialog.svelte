@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Check, X } from '@lucide/svelte';
-  import { deriveAvatarAccent } from '@voice-room/shared/avatar-accent';
+  import { deriveAvatarAccent, dominantAvatarColor } from '@voice-room/shared/avatar-accent';
   import Avatar from '../Avatar/Avatar.svelte';
   import type { AvatarCropDialogProps } from './types';
 
@@ -99,30 +99,8 @@
 
   function deriveCanvasAccent(context: CanvasRenderingContext2D, width: number, height: number) {
     const pixels = context.getImageData(0, 0, width, height).data;
-    const buckets = new Map<string, { count: number; r: number; g: number; b: number }>();
-    for (let y = 8; y < height; y += 16) {
-      for (let x = 8; x < width; x += 16) {
-        const index = (y * width + x) * 4;
-        if (pixels[index + 3] < 200) continue;
-        const r = pixels[index];
-        const g = pixels[index + 1];
-        const b = pixels[index + 2];
-        const key = `${r >> 5}:${g >> 5}:${b >> 5}`;
-        const bucket = buckets.get(key) ?? { count: 0, r: 0, g: 0, b: 0 };
-        bucket.count += 1;
-        bucket.r += r;
-        bucket.g += g;
-        bucket.b += b;
-        buckets.set(key, bucket);
-      }
-    }
-    const dominant = [...buckets.values()].sort((a, b) => b.count - a.count)[0];
-    if (!dominant) return accent;
-    return deriveAvatarAccent({
-      r: Math.round(dominant.r / dominant.count),
-      g: Math.round(dominant.g / dominant.count),
-      b: Math.round(dominant.b / dominant.count)
-    });
+    const dominant = dominantAvatarColor(pixels, width, height);
+    return dominant ? deriveAvatarAccent(dominant) : accent;
   }
 
 

@@ -2,7 +2,7 @@
 
 const ACCENT_LIGHTNESS = 0.36;
 const MAX_ACCENT_CHROMA = 0.1;
-const NEUTRAL_CHROMA_THRESHOLD = 0.025;
+const NEUTRAL_CHROMA_THRESHOLD = 0.004;
 const SHADOW_ALPHA_HEX = '52';
 
 function clamp(value, min, max) {
@@ -94,6 +94,51 @@ function oklchToHex(lightness, chroma, hue) {
 }
 
 /**
+ * Picks the dominant color of an RGBA bitmap, sampling only the inscribed
+ * circle — the region actually visible under the circular avatar mask.
+ * Both the server (sharp raw buffer) and the crop-dialog preview (canvas
+ * ImageData) use this so their accents agree. Returns null when no opaque
+ * pixel falls inside the circle.
+ */
+function dominantAvatarColor(pixels, width, height) {
+  if (!pixels || !(width > 0) || !(height > 0)) return null;
+  const stride = Math.max(1, Math.round(Math.min(width, height) / 64));
+  const centerX = width / 2;
+  const centerY = height / 2;
+  const radiusSquared = (Math.min(width, height) / 2) ** 2;
+  const buckets = new Map();
+
+  for (let y = Math.floor(stride / 2); y < height; y += stride) {
+    for (let x = Math.floor(stride / 2); x < width; x += stride) {
+      if ((x + 0.5 - centerX) ** 2 + (y + 0.5 - centerY) ** 2 > radiusSquared) continue;
+      const index = (y * width + x) * 4;
+      if (pixels[index + 3] < 200) continue;
+      const r = pixels[index];
+      const g = pixels[index + 1];
+      const b = pixels[index + 2];
+      const key = ((r >> 5) << 6) | ((g >> 5) << 3) | (b >> 5);
+      const bucket = buckets.get(key) ?? { count: 0, r: 0, g: 0, b: 0 };
+      bucket.count += 1;
+      bucket.r += r;
+      bucket.g += g;
+      bucket.b += b;
+      buckets.set(key, bucket);
+    }
+  }
+
+  let dominant = null;
+  for (const bucket of buckets.values()) {
+    if (!dominant || bucket.count > dominant.count) dominant = bucket;
+  }
+  if (!dominant) return null;
+  return {
+    r: Math.round(dominant.r / dominant.count),
+    g: Math.round(dominant.g / dominant.count),
+    b: Math.round(dominant.b / dominant.count)
+  };
+}
+
+/**
  * Derives the dark, hue-preserving presentation used behind a user avatar.
  * Invalid channels are treated as zero so untrusted image metadata cannot
  * produce NaN or malformed CSS values.
@@ -113,5 +158,6 @@ function deriveAvatarAccent(rgb) {
 }
 
 module.exports = {
-  deriveAvatarAccent
+  deriveAvatarAccent,
+  dominantAvatarColor
 };
