@@ -23,6 +23,7 @@
   import RoomPreviewView from './components/lobby/RoomPreviewView.svelte';
   import LobbyRoomSettingsDialog from './components/lobby/LobbyRoomSettingsDialog.svelte';
   import { friendsState, initLobby, openDm, showHome, showPeople } from './model/friends.svelte';
+  import type { ToastOptions } from './model/toasts.svelte';
   import {
     getActiveVoiceRoomId,
     clearDisconnectedHiddenEmbed,
@@ -51,7 +52,7 @@
     user: AuthUser | null;
     loggingOut: boolean;
     onLogout: () => void;
-    onToast: (message: string) => void;
+    onToast: (message: string, options?: ToastOptions) => void;
   }>();
 
   let rooms = $state<OwnedRoom[]>([]);

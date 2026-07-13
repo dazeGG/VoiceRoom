@@ -18,7 +18,7 @@
   import LobbyPage from './LobbyPage.svelte';
   import { copyText } from '$lib/shared/utils/clipboard';
   import { triggerDesktopDownload } from './services/desktop-download';
-  import { dismissToast, pushToast, toastState } from './model/toasts.svelte';
+  import { dismissToast, pushToast, toastState, type ToastOptions } from './model/toasts.svelte';
   import { syncPushNotificationState } from './model/push-notifications.svelte';
   import {
     DESKTOP_BUILDS,
@@ -189,8 +189,8 @@
     if (appOpen) void ensureRelease();
   }
 
-  function showToast(message: string): void {
-    pushToast(message);
+  function showToast(message: string, options?: ToastOptions): void {
+    pushToast(message, options);
   }
 
   function closeAuthDialog(): void {

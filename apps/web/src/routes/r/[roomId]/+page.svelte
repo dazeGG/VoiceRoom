@@ -4,7 +4,7 @@
   import { loadSession, session } from '$lib/features/auth/session.svelte';
   import { signOut } from '$lib/features/home/model/sign-out';
   import LobbyPage from '$lib/features/home/LobbyPage.svelte';
-  import { dismissToast, pushToast, toastState } from '$lib/features/home/model/toasts.svelte';
+  import { dismissToast, pushToast, toastState, type ToastOptions } from '$lib/features/home/model/toasts.svelte';
   import '$lib/features/home/styles/home.css';
   import RoomPage from '$lib/features/room/RoomPage.svelte';
   import { MascotIcon, ToastStack } from '$lib/shared/ui';
@@ -19,8 +19,8 @@
     });
   });
 
-  function showToast(message: string): void {
-    pushToast(message);
+  function showToast(message: string, options?: ToastOptions): void {
+    pushToast(message, options);
   }
 
   function retrySessionLoad(): void {

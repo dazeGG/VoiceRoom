@@ -58,6 +58,7 @@
     setPushNotificationsEnabled,
     syncPushNotificationState
   } from '../model/push-notifications.svelte';
+  import type { ToastOptions } from '../model/toasts.svelte';
 
   let {
     open,
@@ -73,7 +74,7 @@
     user: AuthUser | null;
     loggingOut?: boolean;
     onClose: () => void;
-    onToast: (message: string) => void;
+    onToast: (message: string, options?: ToastOptions) => void;
     onLogout: () => void;
   }>();
 
@@ -414,7 +415,7 @@
     } catch {
       onToast(pushNotifications.serverEnabled
         ? 'Не удалось изменить push-уведомления'
-        : 'Push-уведомления не настроены на сервере');
+        : 'Push-уведомления не настроены на сервере', { variant: 'error' });
     }
   }
 

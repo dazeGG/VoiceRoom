@@ -8,9 +8,12 @@ export const toastState = $state<{ items: ToastItem[] }>({ items: [] });
 
 let counter = 0;
 
-export function pushToast(message: string, duration = 3200, actions?: ToastItem['actions']): string {
+export type ToastOptions = Omit<ToastItem, 'id' | 'message'>;
+
+export function pushToast(message: string, options: ToastOptions = {}): string {
   const id = `toast-${Date.now()}-${counter++}`;
-  toastState.items = [...toastState.items, { id, message, duration, actions }];
+  const duration = options.duration ?? 3200;
+  toastState.items = [...toastState.items, { ...options, id, message, duration }];
   if (duration > 0) window.setTimeout(() => dismissToast(id), duration);
   return id;
 }

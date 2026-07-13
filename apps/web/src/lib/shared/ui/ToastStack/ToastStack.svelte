@@ -74,6 +74,9 @@
 
   .ui-toast[data-variant='error'] {
     --toast-accent: var(--coral);
+    border-color: color-mix(in oklch, var(--coral), transparent 48%);
+    background: color-mix(in oklch, var(--coral) 14%, var(--warm-800));
+    box-shadow: 0 16px 44px color-mix(in oklch, var(--coral), transparent 78%);
   }
   .ui-toast[data-variant='success'] { --toast-accent: var(--green); }
   .ui-toast[data-variant='warning'] { --toast-accent: oklch(78% 0.15 83); }

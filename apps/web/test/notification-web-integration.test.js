@@ -103,6 +103,21 @@ test('notification permission request is isolated to explicit settings UI action
   assert.doesNotMatch(friends, /requestNotificationPermissionFromUserAction|requestNotificationsFromUiAction/);
 });
 
+test('push configuration failures use the red error toast variant', () => {
+  const settings = read('src/lib/features/home/components/SettingsModal.svelte');
+  const toastModel = read('src/lib/features/home/model/toasts.svelte.ts');
+  const home = read('src/lib/features/home/HomePage.svelte');
+  const roomRoute = read('src/routes/r/[roomId]/+page.svelte');
+  const stack = read('src/lib/shared/ui/ToastStack/ToastStack.svelte');
+
+  assert.match(toastModel, /export type ToastOptions = Omit<ToastItem, 'id' \| 'message'>/);
+  assert.match(toastModel, /toastState\.items = \[\.\.\.toastState\.items, \{ \.\.\.options, id, message, duration \}\]/);
+  assert.match(home, /function showToast\(message: string, options\?: ToastOptions\)[\s\S]*pushToast\(message, options\)/);
+  assert.match(roomRoute, /function showToast\(message: string, options\?: ToastOptions\)[\s\S]*pushToast\(message, options\)/);
+  assert.match(settings, /Push-уведомления не настроены на сервере', \{ variant: 'error' \}/);
+  assert.match(stack, /\.ui-toast\[data-variant='error'\][\s\S]*--toast-accent: var\(--coral\)[\s\S]*border-color:[\s\S]*background:/);
+});
+
 test('Web Push uses credentialed subscription endpoints and suppresses focused-window notifications', () => {
   const api = read('src/lib/api/push.ts');
   const worker = read('src/service-worker.ts');
