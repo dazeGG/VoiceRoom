@@ -117,6 +117,9 @@ function functionBody(source, name) {
 test('home auth flow is loader-first and has no localStorage session oracle', () => {
   const session = read('src/lib/features/auth/session.svelte.ts');
   const home = read('src/lib/features/home/HomePage.svelte');
+  const authDialog = read('src/lib/features/auth/AuthDialog.svelte');
+  const loginRoute = read('src/routes/login/+page.svelte');
+  const registerRoute = read('src/routes/register/+page.svelte');
   const sources = `${session}\n${home}`;
 
   assert.doesNotMatch(sources, /SESSION_HINT_KEY|hasSessionHint|setSessionHint|voice-room:has-session/);
@@ -129,6 +132,17 @@ test('home auth flow is loader-first and has no localStorage session oracle', ()
   assert.match(home, /auth-session-error/);
   assert.match(home, /Не удалось проверить аккаунт/);
   assert.match(home, /retrySessionLoad/);
+  assert.match(home, /<AuthDialog mode=\{authMode\}/);
+  assert.match(home, /href="\/\?auth=login"/);
+  assert.match(home, /href="\/\?auth=register"/);
+  assert.match(authDialog, /dialog\.showModal\(\)/);
+  assert.match(authDialog, /oncancel=\{handleCancel\}/);
+  assert.match(authDialog, /event\.target === dialog/);
+  assert.match(loginRoute, /<HomePage initialAuthMode="login"/);
+  assert.match(registerRoute, /<HomePage initialAuthMode="register"/);
+  assert.equal(existsSync(resolve(root, 'src/lib/features/auth/LoginPage.svelte')), false);
+  assert.equal(existsSync(resolve(root, 'src/lib/features/auth/RegisterPage.svelte')), false);
+  assert.equal(existsSync(resolve(root, 'src/lib/features/auth/AuthShell.svelte')), false);
 });
 
 test('page CSP narrows websocket connect sources to configured LiveKit origins', () => {
@@ -1173,7 +1187,6 @@ test('shared typography uses CSP-safe local UI, display, and mono font roles', (
   assertSupportedFontWeights(appSourceFiles, typography);
 
   assertRuleFont(topbar, '.brand', '--font-display');
-  assertRuleFont(auth, '.auth-brand', '--font-display');
   assertRuleFont(typography, '.hero-title', '--font-display');
   assertRuleFont(home, '.landing-title', '--font-display');
   assertRuleFont(stageLayout, 'h1', '--font-display');

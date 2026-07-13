@@ -555,16 +555,75 @@
    instead of the old two-column split. Kept separate from the shared
    .start-layout/.start-copy classes, which the room reconnect screen
    (StartRoomScreen.svelte) still uses as-is. */
-.landing-header-login {
+.landing-header-auth {
   flex: none;
-  color: var(--warm-ink-dim, #ece7d9);
-  font-size: 14px;
-  font-weight: 600;
-  text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
-.landing-header-login:hover {
-  color: var(--accent);
+.landing-header-auth-link {
+  display: inline-flex;
+  height: var(--interactive-md);
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: var(--interactive-radius);
+  padding-inline: 16px;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+  text-decoration: none;
+  transition:
+    color 160ms var(--ease-out),
+    background 160ms var(--ease-out),
+    border-color 160ms var(--ease-out),
+    transform 160ms var(--ease-out);
+}
+
+.landing-header-auth-link:hover {
+  transform: translateY(-1px);
+}
+
+.landing-header-auth-link:active {
+  transform: translateY(0);
+}
+
+.landing-header-auth-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.landing-header-auth-link--login {
+  border: 1px solid color-mix(in oklch, var(--warm-ink-dim), transparent 76%);
+  background: color-mix(in oklch, var(--warm-ink-dim), transparent 94%);
+  color: var(--warm-ink-dim, #ece7d9);
+}
+
+.landing-header-auth-link--login:hover {
+  border-color: color-mix(in oklch, var(--warm-ink-dim), transparent 56%);
+  background: color-mix(in oklch, var(--warm-ink-dim), transparent 88%);
+  color: var(--warm-ink, #f6f1e6);
+}
+
+.landing-header-auth-link--register {
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.landing-header-auth-link--register:hover {
+  border-color: var(--accent-hover);
+  background: var(--accent-hover);
+}
+
+.landing-header-auth-link--register span {
+  font-size: 17px;
+  transition: transform 160ms var(--ease-out);
+}
+
+.landing-header-auth-link--register:hover span {
+  transform: translateX(2px);
 }
 
 .landing-layout {
@@ -792,6 +851,16 @@
 }
 
 @media (max-width: 560px) {
+  .landing-header-auth {
+    gap: 6px;
+  }
+
+  .landing-header-auth-link {
+    height: var(--interactive-sm);
+    padding-inline: 12px;
+    font-size: 13px;
+  }
+
   .landing-cta-row {
     flex-direction: column;
     align-items: stretch;
@@ -803,5 +872,24 @@
 
   .landing-features {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 440px) {
+  .topbar:has(.landing-header-auth) .brand span {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-header-auth-link,
+  .landing-header-auth-link--register span {
+    transition: none;
+  }
+
+  .landing-header-auth-link:hover,
+  .landing-header-auth-link:active,
+  .landing-header-auth-link--register:hover span {
+    transform: none;
   }
 }

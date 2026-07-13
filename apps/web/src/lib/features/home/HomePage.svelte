@@ -1,5 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { goto } from '$app/navigation';
+  import { page } from '$app/state';
   import { createRoom } from '$lib/api/rooms';
   import { fetchDesktopRelease, type DesktopRelease } from '$lib/api/desktop';
   import { loadSession, session } from '$lib/features/auth/session.svelte';
@@ -12,6 +14,7 @@
   import { ToastStack } from '$lib/shared/ui';
   import DesktopAppCard from './components/DesktopAppCard.svelte';
   import LandingHero from './components/LandingHero.svelte';
+  import AuthDialog, { type AuthMode } from '$lib/features/auth/AuthDialog.svelte';
   import LobbyPage from './LobbyPage.svelte';
   import { copyText } from '$lib/shared/utils/clipboard';
   import { triggerDesktopDownload } from './services/desktop-download';
@@ -24,6 +27,8 @@
     detectDesktopBuildId,
     formatDesktopReleaseMeta
   } from './model/desktop-builds';
+
+  let { initialAuthMode = null }: { initialAuthMode?: AuthMode | null } = $props();
 
   let roomCode = $state('');
   let creatingTemp = $state(false);
@@ -45,6 +50,11 @@
 
   const user = $derived(session.user);
   const showLobby = $derived(session.loaded && Boolean(user));
+  const authMode = $derived.by<AuthMode | null>(() => {
+    const requestedMode = page.url.searchParams.get('auth');
+    if (requestedMode === 'login' || requestedMode === 'register') return requestedMode;
+    return initialAuthMode;
+  });
 
   const selectedBuild = $derived(DESKTOP_BUILDS.find((build) => build.id === selectedBuildId) ?? DESKTOP_BUILDS[0]);
   const selectedAsset = $derived(release?.assets[selectedBuildId] ?? null);
@@ -182,6 +192,14 @@
   function showToast(message: string): void {
     pushToast(message);
   }
+
+  function closeAuthDialog(): void {
+    void goto('/', { replaceState: true, noScroll: true });
+  }
+
+  function switchAuthMode(mode: AuthMode): void {
+    void goto(`/?auth=${mode}`, { replaceState: true, noScroll: true });
+  }
 </script>
 
 {#if !session.loaded}
@@ -215,7 +233,12 @@
 {:else}
   <div class="app-shell">
     <Topbar label="Новая голосовая комната">
-      <a class="landing-header-login" href="/login">Войти →</a>
+      <nav class="landing-header-auth" aria-label="Аккаунт">
+        <a class="landing-header-auth-link landing-header-auth-link--login" href="/?auth=login">Войти</a>
+        <a class="landing-header-auth-link landing-header-auth-link--register" href="/?auth=register">
+          Регистрация <span aria-hidden="true">→</span>
+        </a>
+      </nav>
     </Topbar>
 
     <main class="landing-layout" id="startScreen" aria-label="Стартовый экран">
@@ -246,6 +269,12 @@
       </div>
     </main>
   </div>
+{/if}
+
+{#if session.loaded && !user && authMode}
+  {#key authMode}
+    <AuthDialog mode={authMode} onClose={closeAuthDialog} onModeChange={switchAuthMode} />
+  {/key}
 {/if}
 
 <ToastStack toasts={toastState.items} onDismiss={dismissToast} />

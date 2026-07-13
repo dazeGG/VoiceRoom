@@ -1,5 +1,10 @@
 <script lang="ts">
-  import LoginPage from '$lib/features/auth/LoginPage.svelte';
+  import HomePage from '$lib/features/home/HomePage.svelte';
 </script>
 
-<LoginPage />
+<svelte:head>
+  <title>Вход · Voice Room</title>
+  <meta name="theme-color" content="#10110f">
+</svelte:head>
+
+<HomePage initialAuthMode="login" />
