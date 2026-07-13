@@ -1,7 +1,9 @@
 export interface ToastItem {
   id: string;
   message: string;
-  variant?: 'default' | 'error';
+  description?: string;
+  duration?: number;
+  variant?: 'default' | 'success' | 'error' | 'warning' | 'info';
   actions?: Array<{
     label: string;
     onClick: (toastId: string) => void;
