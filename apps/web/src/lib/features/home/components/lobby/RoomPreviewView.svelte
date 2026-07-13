@@ -9,14 +9,16 @@
   import '$lib/features/room/styles/room.css';
   import RoomPreviewChat from './RoomPreviewChat.svelte';
   import RoomViewHeader from './RoomViewHeader.svelte';
+  import LobbyStreamTile from './LobbyStreamTile.svelte';
   import { roomPeerAvatarItems } from '../../model/room-avatars';
   import { subscribeRoomPreview } from '../../model/room-realtime';
 
-  let { room, user, onEnter, onBack, onToast } = $props<{
+  let { room, user, onEnter, onBack, onOpenSettings, onToast } = $props<{
     room: OwnedRoom;
     user: AuthUser;
     onEnter: () => void;
     onBack: () => void;
+    onOpenSettings?: () => void;
     onToast?: (message: string) => void;
   }>();
 
@@ -25,6 +27,8 @@
 
   let previewChatOpen = $state(false);
   const peerAvatars = $derived(roomPeerAvatarItems(peers));
+  const screenPeers = $derived(peers.filter((peer) => peer.screen));
+  const tileCount = $derived(peers.length + screenPeers.length);
 
   function applySnapshot(peerList: RoomPeer[]): void {
     peers = peerList;
@@ -77,7 +81,7 @@
 
 <div class="lobby-roomview">
   <div class="lobby-roomview-top">
-    <RoomViewHeader {room} {onBack} {onToast} />
+    <RoomViewHeader {room} {onBack} {onOpenSettings} {onToast} />
     <div class="lobby-roomview-actions">
       {#if peers.length > 0}
         <span class="lobby-roomview-state" data-live="true">
@@ -99,14 +103,17 @@
     <div class="lobby-roomview-stage-pane">
       <section class="stage lobby-preview-stage" aria-label="Участники комнаты">
         <div class="stage-strip" aria-label="Плитки комнаты">
-          <div class="tile-grid" data-count={Math.min(peers.length, 8)} data-streams="0">
+          <div class="tile-grid" data-count={Math.min(tileCount, 9)} data-streams={Math.min(screenPeers.length, 9)}>
+            {#each screenPeers as peer (`screen-${peer.id}`)}
+              <LobbyStreamTile {peer} {onEnter} />
+            {/each}
             {#each peers as peer (peer.id)}
               {@const avatar = peerAvatar(peer)}
               <div
                 class="participant lobby-preview-participant"
                 data-peer-id={peer.id}
                 data-muted={String(peer.muted)}
-                data-screen="false"
+                data-screen={String(peer.screen)}
                 data-speaking="false"
                 style:--level="0"
                 style:--participant-pastel={avatar.background}

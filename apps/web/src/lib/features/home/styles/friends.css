@@ -742,6 +742,24 @@ html.is-desktop .sidebar-download { display: none; }
 .lobby-dm-group--me { flex-direction: row-reverse; }
 .lobby-dm-bubbles { max-width: 64%; display: flex; flex-direction: column; align-items: flex-start; gap: 3px; }
 .lobby-dm-group--me .lobby-dm-bubbles { align-items: flex-end; }
+.lobby-room-invitation {
+  display: grid;
+  width: min(390px, 72%);
+  grid-template-columns: 38px minmax(0, 1fr);
+  gap: 10px 12px;
+  border: 1px solid color-mix(in oklch, var(--green), transparent 72%);
+  border-radius: 14px;
+  padding: 13px;
+  background: color-mix(in oklch, var(--paper-deep), var(--green) 5%);
+}
+.lobby-room-invitation-icon { display: grid; width: 38px; height: 38px; place-items: center; border-radius: 50%; background: color-mix(in oklch, var(--green), transparent 82%); color: var(--green); }
+.lobby-room-invitation-copy { display: grid; align-content: center; gap: 2px; min-width: 0; }
+.lobby-room-invitation-copy strong { color: var(--warm-ink); font-size: 13.5px; }
+.lobby-room-invitation-copy span { overflow: hidden; color: var(--warm-muted); font-size: 12.5px; text-overflow: ellipsis; white-space: nowrap; }
+.lobby-room-invitation-actions { display: flex; grid-column: 2; justify-content: flex-end; gap: 7px; }
+.lobby-room-invitation-actions button { min-height: 32px; border-radius: 8px; padding: 0 11px; font: inherit; font-size: 12px; font-weight: 750; cursor: pointer; }
+.lobby-room-invitation-dismiss { border: 1px solid rgba(255,255,255,.1); background: transparent; color: var(--warm-muted); }
+.lobby-room-invitation-join { border: 0; background: var(--green); color: oklch(14% .02 130); }
 .lobby-dm-bubble {
   border-radius: 16px;
   padding: 9px 13px;
@@ -891,7 +909,7 @@ html.is-desktop .sidebar-download { display: none; }
 .lobby-profile-cover {
   position: relative;
   height: 84px;
-  background: radial-gradient(80% 120% at 30% 0%, rgba(124, 79, 74, 0.4), transparent 70%), rgba(255, 255, 255, 0.03);
+  background: var(--profile-cover-accent, oklch(28% 0.025 55));
 }
 .lobby-profile-close {
   position: absolute;

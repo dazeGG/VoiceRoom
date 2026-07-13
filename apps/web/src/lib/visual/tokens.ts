@@ -30,7 +30,8 @@ export const AVATAR_COLORS: Record<AvatarColorKey, AvatarColorToken> = {
 };
 
 export function getAvatarColor(key: string | null | undefined): AvatarColorToken {
-  return AVATAR_COLORS[(key || '') as AvatarColorKey] || AVATAR_COLORS.blurple;
+  const color = AVATAR_COLORS[(key || '') as AvatarColorKey] || AVATAR_COLORS.blurple;
+  return { ...color, shadow: 'none' };
 }
 
 for (const key of visualIdentity.AVATAR_COLOR_KEYS) {

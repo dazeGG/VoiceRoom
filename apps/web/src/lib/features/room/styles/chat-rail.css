@@ -109,9 +109,14 @@
 }
 
 .chat-msg {
+  position: relative;
   display: flex;
   gap: 11px;
+  isolation: isolate;
 }
+
+.chat-msg::before { content: ''; position: absolute; z-index: -1; inset: -4px -20px; background: transparent; transition: background 120ms ease; }
+.chat-msg:has(.chat-msg-text:hover)::before, .chat-msg:has(.chat-msg-text:focus-within)::before { background: oklch(100% 0 0 / 0.035); }
 
 .chat-msg-avatar {
   flex: none;
@@ -137,6 +142,7 @@
 }
 
 .chat-msg-main {
+  flex: 1;
   min-width: 0;
 }
 
@@ -191,13 +197,26 @@ button.chat-msg-author {
 }
 
 .chat-msg-text {
-  margin: 2px 0 0;
+  position: relative;
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  width: calc(100% + 45px);
+  margin: 2px 0 0 -45px;
+  padding: 3px 38px 3px 45px;
   color: #c4bdac;
   font-size: 13.5px;
   line-height: 1.5;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+
+.chat-msg-content { min-width: 0; flex: 1; }
+.chat-msg-actions { position: absolute; top: -12px; right: 4px; z-index: 2; display: flex; overflow: hidden; border: 1px solid rgba(255,255,255,.1); border-radius: 7px; background: #1b1914; opacity: 0; transform: translateY(2px); pointer-events: none; transition: opacity 120ms ease, transform 120ms ease; }
+.chat-msg-text:hover .chat-msg-actions, .chat-msg-text:focus-within .chat-msg-actions { opacity: 1; transform: translateY(0); pointer-events: auto; }
+.chat-msg-actions button { display: grid; width: 30px; height: 28px; place-items: center; border: 0; border-radius: 0; background: transparent; color: var(--warm-muted); cursor: pointer; }
+.chat-msg-actions button:hover, .chat-msg-actions button:focus-visible { background: rgba(255,255,255,.07); color: var(--warm-ink); outline: none; }
+.chat-msg-actions .chat-msg-action-danger:hover, .chat-msg-actions .chat-msg-action-danger:focus-visible { color: oklch(72% .18 28); }
 
 .chat-msg-text + .chat-msg-text {
   margin-top: 3px;
@@ -211,32 +230,6 @@ button.chat-msg-author {
   white-space: nowrap;
 }
 
-.chat-msg-actions {
-  display: inline-flex;
-  align-items: center;
-  vertical-align: middle;
-}
-
-.chat-msg-edit-button,
-.chat-msg-delete {
-  border: none;
-  background: transparent;
-  color: #8e897b;
-  cursor: pointer;
-  opacity: 0.6;
-}
-
-.chat-msg-edit-button {
-  width: 20px;
-  height: 20px;
-  margin-left: 5px;
-  padding: 3px;
-}
-
-.chat-msg-edit-button:hover {
-  color: #c4bdac;
-  opacity: 1;
-}
 
 .chat-msg-edit {
   display: grid;

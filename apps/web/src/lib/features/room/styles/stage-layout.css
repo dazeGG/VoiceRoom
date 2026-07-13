@@ -72,6 +72,7 @@ h1 {
   grid-template-rows: auto minmax(0, 1fr);
   min-height: 0;
   gap: var(--space-sm);
+  container-type: size;
 }
 
 /* When the summary bar is hidden the grid is the only row. */

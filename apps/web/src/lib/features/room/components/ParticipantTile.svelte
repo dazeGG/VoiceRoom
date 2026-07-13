@@ -5,9 +5,10 @@
   import { state as roomState } from '../client/core/state.svelte';
   import { enterScreenView } from '../client/ui/screen-view';
   import { openParticipantContextMenu } from '../participant-context-ui.svelte';
+  import { toggleParticipantFocus } from '../participants-ui.svelte';
   import type { Participant } from '../client/core/types';
 
-  let { participant }: { participant: Participant } = $props();
+  let { participant, variant = 'grid' }: { participant: Participant; variant?: 'grid' | 'focus' | 'strip' } = $props();
 
   let tile = $state<HTMLElement>();
   let imageFailed = $state(false);
@@ -22,10 +23,17 @@
   const canWatch = $derived(!participant.isLocal && participant.screen && !viewing);
   const screenActionLabel = $derived(roomState.screenRequesting ? 'Подключение' : 'Смотреть экран');
 
+  function activateParticipant(): void {
+    if (participant.screen && !participant.isLocal && roomState.viewedScreenPeerId !== participant.id) {
+      void enterScreenView(participant.id).catch((error) => console.error(error));
+      return;
+    }
+    toggleParticipantFocus(participant.id);
+  }
+
   function handleTileClick(event: MouseEvent): void {
-    if (!participant.screen || participant.isLocal || roomState.viewedScreenPeerId === participant.id) return;
     if ((event.target as HTMLElement | null)?.closest('button, select, input, a')) return;
-    void enterScreenView(participant.id).catch((error) => console.error(error));
+    activateParticipant();
   }
 
   function handleScreenAction(event: MouseEvent): void {
@@ -41,6 +49,11 @@
   }
 
   function handleKeydown(event: KeyboardEvent): void {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      activateParticipant();
+      return;
+    }
     if (participant.isLocal) return;
     const isContextKey = event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey);
     if (!isContextKey || !tile) return;
@@ -55,6 +68,7 @@
   bind:this={tile}
   role="button"
   class="participant"
+  data-variant={variant}
   data-peer-id={participant.id}
   data-local={participant.isLocal ? 'true' : undefined}
   data-account-user-id={participant.accountUserId || undefined}
@@ -62,7 +76,7 @@
   data-muted={String(participant.muted)}
   data-screen={String(participant.screen)}
   data-speaking={String(participant.speaking)}
-  tabindex={participant.isLocal ? undefined : 0}
+  tabindex="0"
   aria-haspopup={participant.isLocal ? undefined : 'dialog'}
   aria-label={participant.isLocal
     ? undefined

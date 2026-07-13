@@ -29,7 +29,6 @@ import {
   type NotificationActiveTarget
 } from '$lib/shared/notifications/router';
 import { roomNavigation } from './room-navigation.svelte';
-import { dismissToast, pushToast } from './toasts.svelte';
 import {
   areNotificationPreferencesLoadedFor,
   applyRealtimeNotificationPreferences,
@@ -45,6 +44,16 @@ import { createDmThreadResyncCoordinator } from './dm-thread-resync';
 export type LobbyMode = 'friends' | 'rooms';
 export type LobbyView = 'home' | 'dm' | 'people';
 
+export interface RoomInvitation {
+  id: string;
+  fromUserId: string;
+  roomId: string;
+  roomName: string;
+  createdAt: number;
+  expiresAt: number;
+  status: 'pending' | 'accepted' | 'declined';
+}
+
 interface FriendsState {
   loaded: boolean;
   friends: Friend[];
@@ -57,6 +66,7 @@ interface FriendsState {
   thread: DirectMessage[];
   threadLoading: boolean;
   profileOpen: boolean;
+  roomInvitations: RoomInvitation[];
 }
 
 export const friendsState = $state<FriendsState>({
@@ -70,7 +80,8 @@ export const friendsState = $state<FriendsState>({
   threadPeer: null,
   thread: [],
   threadLoading: false,
-  profileOpen: false
+  profileOpen: false,
+  roomInvitations: []
 });
 
 let realtime: RealtimeHandle | null = null;
@@ -98,11 +109,21 @@ const MAX_PENDING_NOTIFICATION_EVENTS = 100;
 const PENDING_NOTIFICATION_TTL_MS = 60_000;
 let pendingNotificationEvents: Array<{ event: RealtimeEvent; receivedAt: number }> = [];
 let notificationPreferencesRetryTimer: ReturnType<typeof setTimeout> | null = null;
-const ringToastIds = new Set<string>();
+const RESOLVED_ROOM_INVITATIONS_KEY = 'voice-room:resolved-invitations';
+const resolvedRoomInvitationsKey = () => `${RESOLVED_ROOM_INVITATIONS_KEY}:${selfId}`;
 
-function dismissRingToast(id: string): void {
-  ringToastIds.delete(id);
-  dismissToast(id);
+function readResolvedRoomInvitations(): RoomInvitation[] {
+  try {
+    const value = JSON.parse(localStorage.getItem(resolvedRoomInvitationsKey()) || '[]');
+    return Array.isArray(value) ? value.filter((item) => item?.status === 'accepted' || item?.status === 'declined') : [];
+  } catch { return []; }
+}
+
+function persistResolvedRoomInvitations(): void {
+  try {
+    const resolved = friendsState.roomInvitations.filter((item) => item.status !== 'pending').slice(-100);
+    localStorage.setItem(resolvedRoomInvitationsKey(), JSON.stringify(resolved));
+  } catch {}
 }
 
 function findFriend(userId: string): Friend | undefined {
@@ -173,6 +194,7 @@ export function initLobby(currentUserId: string, initialDoNotDisturb = false): (
   selfId = currentUserId;
   presenceReady = false;
   onlineFriendIds = new Set();
+  friendsState.roomInvitations = readResolvedRoomInvitations();
   if (!areNotificationPreferencesLoadedFor(currentUserId)) {
     prepareNotificationPreferences(currentUserId, initialDoNotDisturb);
   }
@@ -192,8 +214,7 @@ export function initLobby(currentUserId: string, initialDoNotDisturb = false): (
     }
     pendingNotificationEvents = [];
     threadResync.invalidate();
-    for (const toastId of ringToastIds) dismissToast(toastId);
-    ringToastIds.clear();
+    friendsState.roomInvitations = friendsState.roomInvitations.filter((invite) => invite.status !== 'pending');
     resetNotificationPreferences();
   };
 }
@@ -241,6 +262,21 @@ export function toggleProfile(): void {
 
 export function closeProfile(): void {
   friendsState.profileOpen = false;
+}
+
+export function dismissRoomInvitation(id: string): void {
+  friendsState.roomInvitations = friendsState.roomInvitations.map((invite) =>
+    invite.id === id ? { ...invite, status: 'declined' } : invite
+  );
+  persistResolvedRoomInvitations();
+}
+
+export function joinRoomInvitation(invitation: RoomInvitation): void {
+  friendsState.roomInvitations = friendsState.roomInvitations.map((item) =>
+    item.id === invitation.id ? { ...item, status: 'accepted' } : item
+  );
+  persistResolvedRoomInvitations();
+  window.setTimeout(() => window.location.assign(`/r/${encodeURIComponent(invitation.roomId)}`), 120);
 }
 
 // --- DM -----------------------------------------------------------------
@@ -468,20 +504,28 @@ function handleRealtimeEvent(event: RealtimeEvent): void {
       const remainingMs = event.payload.expiresAt - Date.now();
       if (remainingMs <= 0) break;
       playRingCue();
-      const senderName = event.payload.fromUser.displayName || event.payload.fromUser.login;
       const roomName = event.payload.room.name || event.payload.room.id;
-      const toastId = pushToast(`${senderName} зовёт вас в комнату «${roomName}»`, remainingMs, [
-        {
-          label: 'Войти',
-          onClick: (id) => {
-            dismissRingToast(id);
-            window.location.assign(`/r/${encodeURIComponent(event.payload.room.id)}`);
-          }
-        },
-        { label: 'Отклонить', onClick: dismissRingToast }
-      ]);
-      ringToastIds.add(toastId);
-      window.setTimeout(() => ringToastIds.delete(toastId), remainingMs);
+      const invitation: RoomInvitation = {
+        id: `ring-${event.payload.fromUser.id}-${event.payload.room.id}-${event.payload.expiresAt}`,
+        fromUserId: event.payload.fromUser.id,
+        roomId: event.payload.room.id,
+        roomName,
+        createdAt: Date.now(),
+        expiresAt: event.payload.expiresAt,
+        status: 'pending'
+      };
+      friendsState.roomInvitations = [
+        ...friendsState.roomInvitations.filter((item) => item.id !== invitation.id),
+        invitation
+      ];
+      const friend = findFriend(event.payload.fromUser.id);
+      if (friend && !(friendsState.view === 'dm' && friendsState.selectedFriendId === friend.user.id)) {
+        friend.unreadCount += 1;
+        friend.lastMessage = { id: invitation.id, body: `Зовёт в комнату «${roomName}»`, createdAt: invitation.createdAt, fromMe: false };
+      }
+      window.setTimeout(() => {
+        friendsState.roomInvitations = friendsState.roomInvitations.filter((item) => item.id !== invitation.id || item.status !== 'pending');
+      }, remainingMs);
       break;
     }
     case 'dm.message': {

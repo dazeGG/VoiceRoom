@@ -17,6 +17,8 @@
     headingClass = '',
     placement = 'bottom-start',
     keepContentMounted = false,
+    onOpenSettings,
+    inviteContent,
     onToast
   } = $props<{
     roomId: string;
@@ -30,6 +32,8 @@
     headingClass?: string;
     placement?: PopoverPlacement;
     keepContentMounted?: boolean;
+    onOpenSettings?: () => void;
+    inviteContent?: import('svelte').Snippet<[close: () => void]>;
     onToast?: (message: string) => void;
   }>();
 </script>
@@ -67,6 +71,8 @@
       {avatarUrl}
       {close}
       canClose={(targetRoomId) => targetRoomId === roomId}
+      {onOpenSettings}
+      {inviteContent}
       {onToast}
     />
   {/snippet}

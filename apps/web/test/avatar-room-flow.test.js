@@ -15,7 +15,8 @@ test('room and preview participant tiles use the persisted avatar accent as thei
   assert.match(roomTile, /style:--participant-pastel=\{avatar\.background\}/);
   assert.match(preview, /style:--participant-pastel=\{avatar\.background\}/);
   assert.match(browse, /style:--participant-pastel=\{avatar\.background\}/);
-  assert.match(css, /linear-gradient\([\s\S]*var\(--participant-pastel\)/);
+  assert.match(css, /background: color-mix\(in oklch, var\(--participant-pastel\)/);
+  assert.match(css, /\.avatar\s*\{[\s\S]*box-shadow: none/);
   assert.doesNotMatch(css, /linear-gradient\(160deg, oklch\(12%/);
 });
 

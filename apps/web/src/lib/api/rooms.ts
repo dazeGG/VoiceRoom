@@ -101,8 +101,15 @@ export interface RoomPeer {
   avatarColorKey: string;
   avatarUrl: string | null;
   id: string;
+  deafened?: boolean;
+  joinedAt?: number;
   muted: boolean;
   name: string;
+  screen?: boolean;
+  screenAudio?: boolean;
+  screenProfileId?: string;
+  screenStreamId?: string;
+  viewedScreenPeerId?: string;
 }
 
 export async function kickRoomPeer(roomId: string, peerId: string): Promise<void> {

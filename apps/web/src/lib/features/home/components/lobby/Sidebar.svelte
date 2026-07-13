@@ -172,16 +172,18 @@
         </PopoverMenuItem>
       {/snippet}
     </Popover>
-    <SidebarDownload />
-    <button
-      class="lobby-gear"
-      type="button"
-      title="Настройки"
-      aria-label="Открыть настройки"
-      onclick={onOpenSettings}
-    >
-      <Settings {...iconSm} aria-hidden="true" />
-    </button>
+    <div class="lv-profile-actions">
+      <SidebarDownload />
+      <button
+        class="lobby-gear"
+        type="button"
+        title="Настройки"
+        aria-label="Открыть настройки"
+        onclick={onOpenSettings}
+      >
+        <Settings {...iconSm} aria-hidden="true" />
+      </button>
+    </div>
   </div>
 </aside>
 
@@ -219,5 +221,14 @@
     background: transparent;
     color: inherit;
     cursor: pointer;
+  }
+
+  .lv-profile-actions {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-left: auto;
   }
 </style>

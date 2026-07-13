@@ -5,9 +5,10 @@
   import { roomDisplayName } from '../../model/rooms';
   import { RoomMenu } from '$lib/shared/components/room-menu';
 
-  let { room, onBack, onToast } = $props<{
+  let { room, onBack, onOpenSettings, onToast } = $props<{
     room: OwnedRoom;
     onBack: () => void;
+    onOpenSettings?: () => void;
     onToast?: (message: string) => void;
   }>();
 
@@ -27,6 +28,7 @@
     triggerClass="lobby-roomview-trigger"
     titleClass="lobby-roomview-name"
     chevronClass="lobby-roomview-chevron"
+    {onOpenSettings}
     {onToast}
   />
 </div>

@@ -14,12 +14,15 @@ test('Ring UI is authenticated, online-first, expiring, actionable, and teardown
 
   assert.match(topbar, /roomClientState\.self\?\.accountUserId/);
   assert.match(topbar, /Number\(b\.online\) - Number\(a\.online\)/);
-  assert.match(topbar, />Позвать</);
+  assert.match(topbar, /inviteContent=/);
   assert.match(friends, /const remainingMs = event\.payload\.expiresAt - Date\.now\(\)/);
   assert.match(friends, /if \(remainingMs <= 0\) break/);
-  assert.match(friends, /label: 'Войти'/);
-  assert.match(friends, /label: 'Отклонить'/);
-  assert.match(friends, /for \(const toastId of ringToastIds\) dismissToast\(toastId\)/);
-  assert.match(friends, /ringToastIds\.clear\(\)/);
+  assert.match(friends, /roomInvitations = \[/);
+  assert.match(friends, /item\.id !== invitation\.id \|\| item\.status !== 'pending'/);
+  assert.match(friends, /status: 'accepted'/);
+  assert.match(friends, /status: 'declined'/);
+  assert.match(friends, /RESOLVED_ROOM_INVITATIONS_KEY/);
+  assert.match(friends, /persistResolvedRoomInvitations\(\)/);
+  assert.match(friends, /invite\.status !== 'pending'/);
   assert.match(serviceWorker, /Number\(payload\.expiresAt\) <= Date\.now\(\)/);
 });

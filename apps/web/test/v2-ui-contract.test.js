@@ -288,7 +288,7 @@ test('room chat keeps transport mounted and tracks unread state while closed', (
   assert.match(chat, /onComposeKeydown|onkeydown=\{onComposeKeydown\}/);
   assert.doesNotMatch(chat, /draft\.replace\(\/\\s\+\/g, ' '\)/);
   assert.match(topbar, /room-chat-unread/);
-  assert.match(topbar, /import \{[^}]*\bPopover\b[^}]*\} from '\$lib\/shared\/ui'/);
+  assert.match(topbar, /inviteContent=/);
   assert.match(topbar, /import \{ RoomMenu \} from '\$lib\/shared\/components\/room-menu'/);
   assert.match(topbar, /<RoomMenu/);
   assert.match(topbar, /headingClass="room-heading-title-wrap"/);
@@ -460,10 +460,10 @@ test('room menus share one implementation and room and friend rows expose access
   assert.match(roomMenu, /<Popover [^>]*role="menu"[^>]*ariaLabel="Меню комнаты"/);
   assert.match(roomMenu, /<RoomMenuContent[\s\S]*\{roomId\}[\s\S]*\{name\}[\s\S]*\{avatarUrl\}/);
   assert.match(roomMenu, /canClose=\{\(targetRoomId\) => targetRoomId === roomId\}/);
-  assert.doesNotMatch(roomMenuContent, /onOpenSettings|Настройки комнаты/);
-  assert.doesNotMatch(roomViewHeader, /onOpenSettings/);
-  assert.doesNotMatch(roomTopbar, /onOpenSettings/);
-  assert.match(roomTopbar, /title="Настройки комнаты" onclick=\{handleOpenSettings\}/);
+  assert.match(roomMenuContent, /onOpenSettings|Настройки комнаты/);
+  assert.match(roomViewHeader, /onOpenSettings/);
+  assert.match(roomTopbar, /onOpenSettings=\{roomSettingsUi\.isOwner \? openRoomSettings : undefined\}/);
+  assert.doesNotMatch(roomTopbar, /title="Настройки комнаты" onclick=\{handleOpenSettings\}/);
   assert.match(roomMenuContent, /data-room-menu-content/);
 
   assert.match(voiceHome, /oncontextmenu=\{\(event\) => openRoomContextMenu\(event, room\.roomId\)\}/);
@@ -526,6 +526,31 @@ test('room and participant avatars preserve fallbacks while preferring uploaded 
   assert.match(notificationRouter, /avatarAccent\?: string \| null/);
   assert.match(notificationRouter, /avatarUrl\?: string \| null/);
   assert.doesNotMatch(notificationRouter, /NotificationRoomContext[\s\S]*avatarColorKey/);
+});
+
+test('release 2.4 follow-up keeps room actions in the room menu and fits call tiles to the stage', () => {
+  const topbar = read('src/lib/features/room/components/RoomTopbar.svelte');
+  const roomMenu = read('src/lib/shared/components/room-menu/RoomMenuContent.svelte');
+  const stageLayout = read('src/lib/features/room/styles/stage-layout.css') + read('src/lib/features/room/styles/participants.css');
+  const sidebar = read('src/lib/features/home/components/lobby/Sidebar.svelte');
+
+  assert.doesNotMatch(topbar, /class="room-chat-toggle"[^>]*title="Настройки комнаты"/);
+  assert.match(roomMenu, /label="Настройки комнаты"/);
+  assert.match(roomMenu, /label="Позвать друга"/);
+  assert.match(stageLayout, /--grid-aspect:/);
+  assert.match(stageLayout, /100cqh/);
+  assert.match(sidebar, /class="lv-profile-actions"/);
+});
+
+test('room rings render as conversation invitations instead of toast actions', () => {
+  const friends = read('src/lib/features/home/model/friends.svelte.ts');
+  const dmView = read('src/lib/features/home/components/lobby/DmView.svelte');
+
+  assert.match(friends, /roomInvitations: RoomInvitation\[\]/);
+  assert.doesNotMatch(friends, /const ringToastIds/);
+  assert.doesNotMatch(friends, /pushToast\(`\$\{senderName\} зовёт/);
+  assert.match(dmView, /lobby-room-invitation/);
+  assert.match(dmView, />Войти<\/button>/);
 });
 
 test('avatar crop and settings flows export a normalized bitmap and refresh live user and room state', () => {
@@ -1240,7 +1265,7 @@ test('participant context menu is remote-only and exposes relationship-aware loc
   assert.match(tile, /event\.preventDefault\(\)/);
   assert.match(tile, /event\.key === 'ContextMenu'/);
   assert.match(tile, /event\.key === 'F10' && event\.shiftKey/);
-  assert.match(tile, /tabindex=\{participant\.isLocal \? undefined : 0\}/);
+  assert.match(tile, /tabindex="0"/);
   assert.match(tile, /aria-haspopup=\{participant\.isLocal \? undefined : 'dialog'\}/);
   assert.match(tile, /openParticipantContextMenu\(participant\.id/);
 
@@ -1401,7 +1426,7 @@ test('delete realtime contracts avoid stale chat and false room affordances', ()
   assert.match(accountEvents, /case 'dm\.message\.deleted'/);
   assert.match(previewChat, /event\.type === 'room\.chat\.deleted'[\s\S]*messages = messages\.filter/);
   assert.match(friends, /case 'dm\.message\.deleted'[\s\S]*refreshFriends\(\)/);
-  assert.match(roomChat, /\{#if group\.self\}[\s\S]*class="chat-msg-delete"/);
+  assert.match(roomChat, /\{#if group\.self\}[\s\S]*label="Удалить"/);
 });
 
 test('message editing is author-only in UI and applies realtime replacements', () => {
@@ -1426,11 +1451,97 @@ test('message editing is author-only in UI and applies realtime replacements', (
   assert.match(previewChat, /event\.type === 'room\.chat\.edited'[\s\S]*messages = messages\.map/);
   assert.match(friends, /case 'dm\.message\.edited'[\s\S]*applyEditedMessage/);
   assert.match(friends, /case 'ready'[\s\S]*resyncOpenThread\(\{ force: true \}\)/);
-  assert.match(roomChat, /\{#if group\.self\}[\s\S]*startEditing\(message\)/);
+  assert.match(roomChat, /\{#if group\.self\}[\s\S]*label="Редактировать"[\s\S]*startEditing\(message\)/);
   assert.match(roomOwnership, /message\.authorUserId === accountUserId/);
   assert.match(roomOwnership, /message\.peerId === peerId/);
   assert.match(previewOwnership, /message\.authorUserId === user\.id/);
   assert.match(previewOwnership, /message\.peerId === accountPeerId/);
   assert.match(dmView, /\{#if group\.fromMe\}[\s\S]*startEditing\(bubble\)/);
   for (const source of [roomChat, previewChat, dmView]) assert.match(source, /\(изменено\)/);
+});
+
+test('room menus share semantic groups and expose invite as a right-hand submenu only in voice', () => {
+  const content = read('src/lib/shared/components/room-menu/RoomMenuContent.svelte');
+  const topbar = read('src/lib/features/room/components/RoomTopbar.svelte');
+  const header = read('src/lib/features/home/components/lobby/RoomViewHeader.svelte');
+
+  assert.match(content, /label="Позвать друга" showChevron/);
+  assert.match(content, /onpointerenter=\{\(\) => \(inviteOpen = true\)\}/);
+  assert.match(content, /onpointerleave=\{\(\) => \(inviteOpen = false\)\}/);
+  assert.match(content, /\.room-menu-submenu::after[\s\S]*width: 10px/);
+  assert.match(content, /\.room-menu-invite[\s\S]*left: calc\(100% \+ 10px\)/);
+  assert.match(content, /label="Скопировать код"[\s\S]*label="Скопировать ссылку"[\s\S]*Выключить уведомления[\s\S]*label="Настройки комнаты"/);
+  assert.match(topbar, /inviteContent/);
+  assert.match(topbar, /В комнате/);
+  assert.match(topbar, /disabled=\{Boolean\(ringingUserId\) \|\| alreadyInRoom\}/);
+  assert.doesNotMatch(header, /inviteContent/);
+});
+
+test('room invitation decisions replace the actions with a durable result in the thread', () => {
+  const friends = read('src/lib/features/home/model/friends.svelte.ts');
+  const dm = read('src/lib/features/home/components/lobby/DmView.svelte');
+
+  assert.match(friends, /status: 'pending' \| 'accepted' \| 'declined'/);
+  assert.match(friends, /status: 'accepted'/);
+  assert.match(friends, /status: 'declined'/);
+  assert.match(dm, /Принял приглашение/);
+  assert.match(dm, /Отклонил предложение/);
+  assert.match(dm, /\{#if invitation\.status === 'pending'\}/);
+});
+
+test('room preview includes screen-share tiles and the API preserves screen metadata', () => {
+  const api = read('src/lib/api/rooms.ts');
+  const preview = read('src/lib/features/home/components/lobby/RoomPreviewView.svelte');
+  const browse = read('src/lib/features/home/components/lobby/RoomBrowseView.svelte');
+  const streamTile = read('src/lib/features/home/components/lobby/LobbyStreamTile.svelte');
+
+  assert.match(api, /screen\?: boolean/);
+  for (const source of [preview, browse]) {
+    assert.match(source, /screenPeers/);
+    assert.match(source, /<LobbyStreamTile/);
+  }
+  assert.match(streamTile, /data-screen="true"/);
+});
+
+test('participant focus uses a centered stage and a bounded carousel strip', () => {
+  const state = read('src/lib/features/room/participants-ui.svelte.ts');
+  const tile = read('src/lib/features/room/components/ParticipantTile.svelte');
+  const stage = read('src/lib/features/room/components/StageTiles.svelte');
+  const css = read('src/lib/features/room/styles/participants.css');
+
+  assert.match(state, /focusedParticipantId/);
+  assert.match(tile, /toggleParticipantFocus/);
+  assert.match(tile, /event\.key === 'Enter' \|\| event\.key === ' '/);
+  assert.match(stage, /participant-focus-stage/);
+  assert.match(stage, /participant-carousel/);
+  assert.match(stage, /carousel\?\.scrollBy/);
+  assert.match(css, /\.tile-grid\[data-count\]:not\(\[data-count="0"\]\)[\s\S]*align-self: center/);
+  assert.match(css, /\.participant-carousel-shell[\s\S]*width: min\(100%, 790px\)/);
+  assert.match(css, /\.participant[\s\S]*cursor: pointer/);
+});
+
+test('chat message actions use a stable icon toolbar and nickname clicks open participant actions', () => {
+  const chat = read('src/lib/features/room/components/RoomChat.svelte');
+  const css = read('src/lib/features/room/styles/chat-rail.css');
+
+  assert.match(chat, /class="chat-msg-actions" role="toolbar"/);
+  assert.match(chat, /aria-label="Копировать текст"/);
+  assert.match(chat, /aria-label="Редактировать"/);
+  assert.match(chat, /aria-label="Удалить"/);
+  assert.doesNotMatch(chat, /rootClass="chat-msg-menu-root"/);
+  assert.match(chat, /queueMicrotask\(\(\) => openParticipantContextMenu/);
+  assert.match(css, /\.chat-msg-text[\s\S]*width: calc\(100% \+ 45px\)/);
+  assert.match(css, /\.chat-msg:has\(\.chat-msg-text:hover\)::before/);
+  assert.match(css, /\.chat-msg-actions[\s\S]*opacity: 0/);
+  assert.match(css, /\.chat-msg-text:hover \.chat-msg-actions/);
+});
+
+test('profile cover accent reuses the server-derived avatarAccent, not a client recompute', () => {
+  const dm = read('src/lib/features/home/components/lobby/DmView.svelte');
+  const css = read('src/lib/features/home/styles/friends.css');
+
+  assert.doesNotMatch(dm, /extractProfileAccent/);
+  assert.match(dm, /profileAccent = \$derived\(peer\?\.avatarAccent \|\| ''\)/);
+  assert.match(dm, /style:--profile-cover-accent/);
+  assert.match(css, /background: var\(--profile-cover-accent/);
 });

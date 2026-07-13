@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Bell, BellOff, Pencil, User, X } from '@lucide/svelte';
+  import { Bell, BellOff, DoorOpen, Pencil, User, X } from '@lucide/svelte';
   import { iconMd, iconSm } from '$lib/shared/ui/icons';
   import { tick } from 'svelte';
   import type { DirectMessage } from '$lib/api/dm';
@@ -10,7 +10,9 @@
     friendsState,
     closeProfile,
     deleteMessage,
+    dismissRoomInvitation,
     editMessage as editDmMessage,
+    joinRoomInvitation,
     removeFriend,
     sendMessage,
     toggleProfile
@@ -51,7 +53,11 @@
   );
   const online = $derived(friendEntry?.online ?? false);
   const peerMuted = $derived(isPeerNotificationsMuted(peer?.id));
+  const roomInvitations = $derived(
+    friendsState.roomInvitations.filter((invite) => invite.fromUserId === friendsState.selectedFriendId)
+  );
   let muteSaving = $state(false);
+  const profileAccent = $derived(peer?.avatarAccent || '');
 
   interface Group {
     key: string;
@@ -204,7 +210,7 @@
     <div class="lobby-dm-scroll lobby-scroll" bind:this={scrollEl}>
       {#if friendsState.threadLoading}
         <div class="lobby-dm-empty">Загружаем переписку…</div>
-      {:else if groups.length === 0}
+      {:else if groups.length === 0 && roomInvitations.length === 0}
         <div class="lobby-dm-empty">Здесь пока пусто. Напишите первым!</div>
       {:else}
         <div class="lobby-dm-thread">
@@ -256,6 +262,26 @@
               </div>
             </div>
           {/each}
+          {#each roomInvitations as invitation (invitation.id)}
+            <div class="lobby-dm-group">
+              {#if peer}
+                <Avatar name={friendName(peer)} src={peer.avatarUrl} colorKey={peer.avatarColorKey} background={peer.avatarAccent || undefined} size={32} />
+              {/if}
+              <article class="lobby-room-invitation">
+                <span class="lobby-room-invitation-icon"><DoorOpen {...iconMd} aria-hidden="true" /></span>
+                <div class="lobby-room-invitation-copy">
+                  <strong>{invitation.status === 'accepted' ? 'Принял приглашение' : invitation.status === 'declined' ? 'Отклонил предложение' : 'Приглашение в комнату'}</strong>
+                  <span>{invitation.roomName}</span>
+                </div>
+                {#if invitation.status === 'pending'}
+                  <div class="lobby-room-invitation-actions">
+                    <button type="button" class="lobby-room-invitation-dismiss" onclick={() => dismissRoomInvitation(invitation.id)}>Не сейчас</button>
+                    <button type="button" class="lobby-room-invitation-join" onclick={() => joinRoomInvitation(invitation)}>Войти</button>
+                  </div>
+                {/if}
+              </article>
+            </div>
+          {/each}
         </div>
       {/if}
     </div>
@@ -276,7 +302,7 @@
 
   {#if friendsState.profileOpen && peer}
     <div class="lobby-profile-panel lobby-scroll">
-      <div class="lobby-profile-cover">
+      <div class="lobby-profile-cover" style:--profile-cover-accent={profileAccent || undefined}>
         <button class="lobby-profile-close" type="button" aria-label="Закрыть" onclick={closeProfile}>
           <X {...iconSm} aria-hidden="true" />
         </button>

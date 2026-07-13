@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ChevronRight, MessageSquare, Pencil } from '@lucide/svelte';
+  import { ChevronRight, Copy, MessageSquare, Pencil, Trash2 } from '@lucide/svelte';
   import { iconSm } from '$lib/shared/ui/icons';
   import { onMount, tick } from 'svelte';
   import { deleteRoomChatMessage, editRoomChatMessage, fetchRoomChat, postRoomChat, type ChatMessage } from '$lib/api/rooms';
@@ -9,6 +9,8 @@
   import { cleanDisplayName } from '$lib/shared/utils/text';
   import ChatText from '$lib/shared/components/ChatText.svelte';
   import { Avatar } from '$lib/shared/ui';
+  import { copyText } from '$lib/shared/utils/clipboard';
+  import { showToast } from '../client/ui/toast';
   import { getAvatarPresentation } from '../client/ui/avatar-presentation';
   import { getRoomIdFromPath, getStoredPeerSession } from '../client/core/session';
   import { playRoomChatMessageCue } from '../client/media/cues';
@@ -364,8 +366,20 @@
   // works for others who are still in the room; self and absent peers are inert.
   function openUserMenu(group: ChatGroup, event: MouseEvent): void {
     if (group.self) return;
+    event.preventDefault();
     event.stopPropagation();
-    openParticipantContextMenu(group.peerId, event.clientX, event.clientY);
+    const target = event.currentTarget as HTMLElement;
+    const rect = target.getBoundingClientRect();
+    queueMicrotask(() => openParticipantContextMenu(group.peerId, rect.left + rect.width / 2, rect.bottom + 6));
+  }
+
+  async function copyMessageText(message: ChatMessage): Promise<void> {
+    try {
+      await copyText(message.text);
+      showToast('Сообщение скопировано');
+    } catch {
+      showToast('Не удалось скопировать', { variant: 'error' });
+    }
   }
 </script>
 
@@ -440,26 +454,14 @@
                     </div>
                   </div>
                 {:else}
-                  <ChatText text={message.text} />
-                  {#if message.editedAt}<span class="chat-msg-edited">(изменено)</span>{/if}
-                  {#if group.self}
-                    <span class="chat-msg-actions">
-                      <button
-                        type="button"
-                        class="chat-msg-edit-button"
-                        aria-label="Редактировать сообщение"
-                        title="Редактировать"
-                        onclick={() => startEditing(message)}
-                      ><Pencil {...iconSm} aria-hidden="true" /></button>
-                      <button
-                        type="button"
-                        class="chat-msg-delete"
-                        aria-label="Удалить сообщение"
-                        title="Удалить"
-                        onclick={() => deleteMessage(message.id)}
-                      >×</button>
-                    </span>
-                  {/if}
+                  <span class="chat-msg-content"><ChatText text={message.text} />{#if message.editedAt}<span class="chat-msg-edited">(изменено)</span>{/if}</span>
+                  <div class="chat-msg-actions" role="toolbar" aria-label="Действия с сообщением">
+                    <button type="button" aria-label="Копировать текст" title="Копировать текст" onclick={() => void copyMessageText(message)}><Copy {...iconSm} /></button>
+                    {#if group.self}
+                      <button type="button" aria-label="Редактировать" title="Редактировать" onclick={() => startEditing(message)}><Pencil {...iconSm} /></button>
+                      <button class="chat-msg-action-danger" type="button" aria-label="Удалить" title="Удалить" onclick={() => void deleteMessage(message.id)}><Trash2 {...iconSm} /></button>
+                    {/if}
+                  </div>
                 {/if}
               </div>
             {/each}

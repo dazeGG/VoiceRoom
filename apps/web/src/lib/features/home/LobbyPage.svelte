@@ -21,6 +21,7 @@
   import PeopleView from './components/lobby/PeopleView.svelte';
   import RoomBrowseView from './components/lobby/RoomBrowseView.svelte';
   import RoomPreviewView from './components/lobby/RoomPreviewView.svelte';
+  import LobbyRoomSettingsDialog from './components/lobby/LobbyRoomSettingsDialog.svelte';
   import { friendsState, initLobby, openDm, showHome, showPeople } from './model/friends.svelte';
   import {
     getActiveVoiceRoomId,
@@ -58,11 +59,13 @@
   let createDialogOpen = $state(false);
   let settingsOpen = $state(false);
   let settingsTab = $state<'profile' | 'sound' | 'notifications'>('profile');
+  let previewSettingsRoomId = $state('');
   const selectedRoomId = $derived(roomNavigation.viewedRoomId);
   const embeddedRoomId = $derived(roomNavigation.embeddedRoomId);
   const autoJoinRoomId = $derived(roomNavigation.joinIntentRoomId);
   const connectedVoiceRoomId = $derived(getActiveVoiceRoomId());
   const selectedRoom = $derived(rooms.find((room) => room.roomId === selectedRoomId) ?? null);
+  const previewSettingsRoom = $derived(rooms.find((room) => room.roomId === previewSettingsRoomId) ?? null);
   const connectedVoiceRoom = $derived(rooms.find((room) => room.roomId === connectedVoiceRoomId) ?? null);
   const connectedRoomVisible = $derived(connectedRoomIsViewed(friendsState.mode));
   const embeddedRoomVisible = $derived(embeddedRoomIsVisible(friendsState.mode));
@@ -312,9 +315,9 @@
       {/if}
 
       {#if friendsState.mode === 'rooms' && selectedRoom && connectedVoiceRoomId && selectedRoom.roomId !== connectedVoiceRoomId}
-        <RoomBrowseView {user} room={selectedRoom} onEnter={() => enterRoom(selectedRoom.roomId)} onBack={closeViewedRoom} {onToast} />
+        <RoomBrowseView {user} room={selectedRoom} onEnter={() => enterRoom(selectedRoom.roomId)} onBack={closeViewedRoom} onOpenSettings={selectedRoom.relationship === 'owner' ? () => (previewSettingsRoomId = selectedRoom.roomId) : undefined} {onToast} />
       {:else if friendsState.mode === 'rooms' && selectedRoom && (!embeddedRoomId || !embeddedRoomVisible)}
-        <RoomPreviewView {user} room={selectedRoom} onEnter={() => enterRoom(selectedRoom.roomId)} onBack={closeViewedRoom} {onToast} />
+        <RoomPreviewView {user} room={selectedRoom} onEnter={() => enterRoom(selectedRoom.roomId)} onBack={closeViewedRoom} onOpenSettings={selectedRoom.relationship === 'owner' ? () => (previewSettingsRoomId = selectedRoom.roomId) : undefined} {onToast} />
       {:else if friendsState.mode === 'rooms' && !embeddedRoomVisible}
         <VoiceHome {rooms} onOpenRoom={previewRoom} onCreateRoom={() => (createDialogOpen = true)} onJoinCode={handleJoin} {onToast} />
       {:else if friendsState.mode === 'friends' && friendsState.view === 'dm'}
@@ -337,4 +340,5 @@
     {onToast}
     {onLogout}
   />
+  <LobbyRoomSettingsDialog room={previewSettingsRoom} onClose={() => (previewSettingsRoomId = '')} onSaved={refreshRooms} onDeleted={() => { previewSettingsRoomId = ''; closeViewedRoom(); void refreshRooms(); }} {onToast} />
 {/if}
