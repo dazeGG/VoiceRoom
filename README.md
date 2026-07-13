@@ -196,11 +196,18 @@ GitHub-аналог GitLab CI/CD variables находится здесь:
 # Любая из этих строк опциональна — задавайте только то, что меняете.
 LIVEKIT_API_KEY=devkey
 LIVEKIT_API_SECRET=devsecret
+VAPID_PUBLIC_KEY=<stable-public-key>
+VAPID_PRIVATE_KEY=<stable-private-key>
+VAPID_SUBJECT=mailto:admin@example.com
 POSTGRES_PASSWORD=<local-random-password>
 POSTGRES_PORT=5432
 WEB_PORT=5180
 API_PORT=3000
 ```
+
+Для Web Push нужны все три `VAPID_*` значения. Один раз создайте стабильную пару командой
+`npx web-push generate-vapid-keys --json`, сохраните её в защищённом источнике и используйте
+одинаковую пару после перезапусков и деплоев. Приватный ключ нельзя коммитить.
 
 Для host-only API добавьте `DATABASE_URL`, потому что вне compose она не собирается автоматически:
 
@@ -218,9 +225,14 @@ LIVEKIT_DOMAIN
 POSTGRES_PASSWORD
 LIVEKIT_API_KEY
 LIVEKIT_API_SECRET
+VAPID_PUBLIC_KEY
+VAPID_PRIVATE_KEY
+VAPID_SUBJECT
 ```
 
 `DATABASE_URL` в compose соберётся автоматически из `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` и service name `postgres`. Если деплой не через compose — задайте `DATABASE_URL` явно как secret.
+Если Web Push намеренно не используется, `VAPID_*` можно опустить — API продолжит работать,
+но `/api/push/config` вернёт `enabled: false` и клиент отключит переключатель push-уведомлений.
 
 ### CI/CD (GitHub Actions)
 
