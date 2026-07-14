@@ -3,7 +3,7 @@
   import { iconSm } from '$lib/shared/ui/icons';
   import { onMount, tick } from 'svelte';
   import { deleteRoomChatMessage, editRoomChatMessage, fetchRoomChat, markRoomChatRead, postRoomChat, type ChatMessage } from '$lib/api/rooms';
-  import { setRoomUnreadCount } from '$lib/features/home/model/room-presence.svelte';
+  import { beginRoomChatReadSession, setRoomUnreadCount } from '$lib/features/home/model/room-presence.svelte';
   import { session } from '$lib/features/auth/session.svelte';
   import { subscribeRoomPreview } from '$lib/features/home/model/room-realtime';
   import { formatChatDayLabel, isSameDay } from '$lib/shared/utils/chat-date';
@@ -104,13 +104,15 @@
   // Reflect chat state onto <body> so the room layout + dock can react in CSS.
   $effect(() => {
     document.body.dataset.chatOpen = roomUi.chatOpen ? 'true' : 'false';
+    let endReadSession = () => {};
     if (roomUi.chatOpen) {
       markChatRead();
-      setRoomUnreadCount(roomId, 0);
+      endReadSession = beginRoomChatReadSession(roomId);
       if (session.user?.id && roomId) void markRoomChatRead(roomId).catch(() => {});
       queueMicrotask(scrollToBottom);
     }
     return () => {
+      endReadSession();
       delete document.body.dataset.chatOpen;
     };
   });

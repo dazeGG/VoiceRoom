@@ -32,6 +32,10 @@
     return roomPeerAvatarItems(roomPresence.peersByRoomId[roomId] || []);
   }
 
+  function roomUnreadCount(room: OwnedRoom): number {
+    return roomPresence.unreadCountByRoomId[room.roomId] ?? room.unreadCount ?? 0;
+  }
+
   function submitJoinCode(event: Event): void {
     event.preventDefault();
     if (!joinCode.trim()) return;
@@ -111,6 +115,7 @@
     <div class="lv-cards">
       {#each sortedRooms as room (room.roomId)}
         {@const roomNotificationsMuted = notificationPreferences.mutedRoomIds.includes(room.roomId)}
+        {@const unreadCount = roomUnreadCount(room)}
         <button
           class="lv-card"
           class:is-live={room.peers > 0}
@@ -120,11 +125,11 @@
           oncontextmenu={(event) => openRoomContextMenu(event, room.roomId)}
           onkeydown={(event) => handleRoomKeydown(event, room.roomId)}
           aria-haspopup="menu"
-          class:has-unread={room.unreadCount > 0}
+          class:has-unread={unreadCount > 0}
         >
-          {#if room.unreadCount > 0}
+          {#if unreadCount > 0}
             <Badge class="lv-card-unread" tone={roomNotificationsMuted ? 'muted' : 'default'}>
-              {room.unreadCount > 99 ? '99+' : room.unreadCount}
+              {unreadCount > 99 ? '99+' : unreadCount}
             </Badge>
           {/if}
           <div class="lv-card-head" style="display:flex;align-items:center;gap:11px;min-width:0;">

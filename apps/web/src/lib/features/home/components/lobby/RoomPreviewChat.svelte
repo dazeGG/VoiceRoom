@@ -4,7 +4,7 @@
   import { iconSm } from '$lib/shared/ui/icons';
   import { getAppRealtime } from '$lib/api/realtime';
   import { deleteRoomChatMessage, editRoomChatMessage, fetchRoomChat, markRoomChatRead, postRoomChat, type ChatMessage } from '$lib/api/rooms';
-  import { setRoomUnreadCount } from '../../model/room-presence.svelte';
+  import { beginRoomChatReadSession, setRoomUnreadCount } from '../../model/room-presence.svelte';
   import { playRoomChatMessageCue } from '$lib/features/room/client/media/cues';
   import { Avatar } from '$lib/shared/ui';
   import { getAvatarPresentation } from '$lib/features/room/client/ui/avatar-presentation';
@@ -34,8 +34,9 @@
 
   $effect(() => {
     const activeRoomId = roomId;
-    setRoomUnreadCount(activeRoomId, 0);
+    const endReadSession = beginRoomChatReadSession(activeRoomId);
     void markRoomChatRead(activeRoomId).catch(() => {});
+    return endReadSession;
   });
 
   function autoResize() {

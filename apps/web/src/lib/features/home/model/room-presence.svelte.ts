@@ -12,6 +12,12 @@ export const roomPresence = $state<{
   unreadCountByRoomId: {}
 });
 
+const roomChatReadSessions = new Map<string, number>();
+
+function roomChatIsBeingRead(roomId: string): boolean {
+  return (roomChatReadSessions.get(roomId) ?? 0) > 0;
+}
+
 export function applyRoomSummary(summary: RoomRealtimeSummary): void {
   roomPresence.peersByRoomId = {
     ...roomPresence.peersByRoomId,
@@ -23,7 +29,7 @@ export function applyRoomSummary(summary: RoomRealtimeSummary): void {
   };
   roomPresence.unreadCountByRoomId = {
     ...roomPresence.unreadCountByRoomId,
-    [summary.roomId]: summary.unreadCount ?? 0
+    [summary.roomId]: roomChatIsBeingRead(summary.roomId) ? 0 : (summary.unreadCount ?? 0)
   };
 }
 
@@ -34,6 +40,21 @@ export function setRoomUnreadCount(roomId: string, unreadCount: number): void {
   roomPresence.unreadCountByRoomId = {
     ...current,
     [roomId]: nextUnreadCount
+  };
+}
+
+export function beginRoomChatReadSession(roomId: string): () => void {
+  if (!roomId) return () => {};
+  roomChatReadSessions.set(roomId, (roomChatReadSessions.get(roomId) ?? 0) + 1);
+  setRoomUnreadCount(roomId, 0);
+
+  let active = true;
+  return () => {
+    if (!active) return;
+    active = false;
+    const next = (roomChatReadSessions.get(roomId) ?? 1) - 1;
+    if (next > 0) roomChatReadSessions.set(roomId, next);
+    else roomChatReadSessions.delete(roomId);
   };
 }
 

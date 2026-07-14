@@ -198,6 +198,19 @@ test('clearing room unread state cannot subscribe its caller to the same reactiv
   assert.match(roomPresence, /if \(current\[roomId\] === nextUnreadCount\) return/);
 });
 
+test('reading a room clears the canonical lobby badge and rejects stale unread summaries', () => {
+  const roomPresence = read('src/lib/features/home/model/room-presence.svelte.ts');
+  const voiceHome = read('src/lib/features/home/components/lobby/VoiceHome.svelte');
+  const previewChat = read('src/lib/features/home/components/lobby/RoomPreviewChat.svelte');
+  const roomChat = read('src/lib/features/room/components/RoomChat.svelte');
+
+  assert.match(roomPresence, /beginRoomChatReadSession/);
+  assert.match(roomPresence, /roomChatIsBeingRead\(summary\.roomId\) \? 0/);
+  assert.match(voiceHome, /roomPresence\.unreadCountByRoomId\[room\.roomId\] \?\? room\.unreadCount \?\? 0/);
+  assert.match(previewChat, /beginRoomChatReadSession\(activeRoomId\)/);
+  assert.match(roomChat, /beginRoomChatReadSession\(roomId\)/);
+});
+
 test('Web Push uses credentialed subscription endpoints and suppresses focused-window notifications', () => {
   const api = read('src/lib/api/push.ts');
   const worker = read('src/service-worker.ts');
