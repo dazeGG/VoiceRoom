@@ -190,6 +190,14 @@ test('unread badges stay Volt unless their friend or room notifications are mute
   assert.match(roomControls, /\.room-chat-unread\[data-muted='true'\]\s*\{[^}]*background: var\(--control-hover\)/);
 });
 
+test('clearing room unread state cannot subscribe its caller to the same reactive map', () => {
+  const roomPresence = read('src/lib/features/home/model/room-presence.svelte.ts');
+
+  assert.match(roomPresence, /import \{ untrack \} from 'svelte'/);
+  assert.match(roomPresence, /const current = untrack\(\(\) => roomPresence\.unreadCountByRoomId\)/);
+  assert.match(roomPresence, /if \(current\[roomId\] === nextUnreadCount\) return/);
+});
+
 test('Web Push uses credentialed subscription endpoints and suppresses focused-window notifications', () => {
   const api = read('src/lib/api/push.ts');
   const worker = read('src/service-worker.ts');

@@ -1,5 +1,6 @@
 import type { RoomPeer } from '$lib/api/rooms';
 import type { RoomRealtimeSummary } from '$lib/api/realtime';
+import { untrack } from 'svelte';
 
 export const roomPresence = $state<{
   peersByRoomId: Record<string, RoomPeer[]>;
@@ -27,9 +28,12 @@ export function applyRoomSummary(summary: RoomRealtimeSummary): void {
 }
 
 export function setRoomUnreadCount(roomId: string, unreadCount: number): void {
+  const current = untrack(() => roomPresence.unreadCountByRoomId);
+  const nextUnreadCount = Math.max(0, unreadCount);
+  if (current[roomId] === nextUnreadCount) return;
   roomPresence.unreadCountByRoomId = {
-    ...roomPresence.unreadCountByRoomId,
-    [roomId]: Math.max(0, unreadCount)
+    ...current,
+    [roomId]: nextUnreadCount
   };
 }
 
