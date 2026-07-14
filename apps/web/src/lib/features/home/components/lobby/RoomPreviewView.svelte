@@ -24,6 +24,7 @@
   let loading = $state(true);
 
   let previewChatOpen = $state(false);
+  const previewRoomId = $derived(room.roomId);
   const screenPeers = $derived(peers.filter((peer) => peer.screen));
   const tileCount = $derived(peers.length + screenPeers.length);
 
@@ -53,7 +54,7 @@
   }
 
   $effect(() => {
-    const roomId = room.roomId;
+    const roomId = previewRoomId;
     loading = true;
     peers = [];
     previewChatOpen = false;
@@ -141,8 +142,8 @@
     </div>
 
     {#if previewChatOpen}
-      {#key room.roomId}
-        <RoomPreviewChat roomId={room.roomId} {user} {onToast} onClose={() => (previewChatOpen = false)} />
+      {#key previewRoomId}
+        <RoomPreviewChat roomId={previewRoomId} {user} {onToast} onClose={() => (previewChatOpen = false)} />
       {/key}
     {/if}
   </div>

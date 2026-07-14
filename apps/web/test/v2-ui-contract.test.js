@@ -262,7 +262,7 @@ test('lobby separates viewed room from connected voice room', () => {
   assert.match(lobby, /<RoomBrowseView \{user\} room=\{selectedRoom\} onEnter=\{\(\) => enterRoom\(selectedRoom\.roomId\)\}/);
   assert.match(lobby, /dataset\.lobbyEmbedded = 'true'/);
   assert.match(lobby, /delete document\.body\.dataset\.lobbyEmbedded/);
-  assert.match(browseView, /subscribeRoomPreview\(room\.roomId, handlePreviewEvent\)/);
+  assert.match(browseView, /subscribeRoomPreview\(roomId, handlePreviewEvent\)/);
   assert.match(browseView, /let loadError = \$state\(''\)/);
   assert.match(browseView, /event\.type === 'room\.not_found'/);
   assert.match(browseView, /Комната не найдена/);
@@ -1028,6 +1028,10 @@ test('lobby v2 keeps dock in main area, preview chat, and people add-friend flow
   assert.match(previewChat, /chat-rail-collapse/);
   assert.match(previewView, /let previewChatOpen = \$state\(false\)/);
   assert.match(browseView, /let previewChatOpen = \$state\(false\)/);
+  assert.match(previewView, /const previewRoomId = \$derived\(room\.roomId\)/);
+  assert.match(browseView, /const previewRoomId = \$derived\(room\.roomId\)/);
+  assert.match(previewView, /\$effect\(\(\) => \{\s*const roomId = previewRoomId;[\s\S]*subscribeRoomPreview\(roomId, handlePreviewEvent\)/);
+  assert.match(browseView, /\$effect\(\(\) => \{\s*const roomId = previewRoomId;[\s\S]*subscribeRoomPreview\(roomId, handlePreviewEvent\)/);
   assert.match(previewView, /previewChatOpen = false/);
   assert.match(browseView, /previewChatOpen = false/);
   assert.match(peopleView, /copyText\(user\.login\)/);

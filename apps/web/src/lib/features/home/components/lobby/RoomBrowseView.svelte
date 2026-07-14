@@ -22,6 +22,7 @@
   }>();
 
   const name = $derived(roomDisplayName(room));
+  const previewRoomId = $derived(room.roomId);
 
   let peers = $state<RoomPeer[]>([]);
   let loading = $state(true);
@@ -59,12 +60,12 @@
   }
 
   $effect(() => {
-    void room.roomId;
+    const roomId = previewRoomId;
     loading = true;
     peers = [];
     loadError = '';
     previewChatOpen = false;
-    const unsubscribe = subscribeRoomPreview(room.roomId, handlePreviewEvent);
+    const unsubscribe = subscribeRoomPreview(roomId, handlePreviewEvent);
     return unsubscribe;
   });
 
@@ -154,8 +155,8 @@
     </main>
 
     {#if previewChatOpen}
-      {#key room.roomId}
-        <RoomPreviewChat roomId={room.roomId} {user} {onToast} onClose={() => (previewChatOpen = false)} />
+      {#key previewRoomId}
+        <RoomPreviewChat roomId={previewRoomId} {user} {onToast} onClose={() => (previewChatOpen = false)} />
       {/key}
     {/if}
   </div>
