@@ -738,7 +738,6 @@
 }
 
 .settings-notification-name strong {
-  flex: 1;
   overflow: hidden;
   color: var(--warm-ink);
   font-size: 13px;

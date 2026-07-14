@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Check, Settings, UserPlus } from '@lucide/svelte';
+  import { BellOff, Check, Settings, UserPlus } from '@lucide/svelte';
   import { tick } from 'svelte';
   import type { AuthUser } from '$lib/api/auth';
   import { Avatar, Badge, ContextMenu, Popover } from '$lib/shared/ui';
@@ -258,6 +258,7 @@
     {:else}
       {#each sortedFriends as entry (entry.user.id)}
         {@const friendPresence = effectivePresenceStatus(entry.online, entry.user.presenceStatus, entry.user.doNotDisturb)}
+        {@const friendNotificationsMuted = notificationPreferences.mutedPeerIds.includes(entry.user.id)}
         <button
           class="lv-row"
           class:is-active={friendsState.selectedFriendId === entry.user.id && friendsState.view === 'dm'}
@@ -280,7 +281,14 @@
             ring="var(--panel)"
           />
           <div style="min-width:0;flex:1;">
-            <div class="lv-row-name" style={`font-weight:${entry.unreadCount > 0 ? 750 : 650}`}>{friendName(entry.user)}</div>
+            <div class="lv-notification-title">
+              <div class="lv-row-name" style={`font-weight:${entry.unreadCount > 0 ? 750 : 650}`}>{friendName(entry.user)}</div>
+              {#if friendNotificationsMuted}
+                <span class="lv-notification-muted" role="img" aria-label="Уведомления отключены" title="Уведомления отключены">
+                  <BellOff {...iconSm} aria-hidden="true" />
+                </span>
+              {/if}
+            </div>
           </div>
           {#if entry.unreadCount > 0}
             <Badge>{entry.unreadCount}</Badge>

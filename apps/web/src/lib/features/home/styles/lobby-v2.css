@@ -150,6 +150,24 @@
   white-space: nowrap;
 }
 
+.lv-notification-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.lv-notification-title .lv-row-name {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.lv-notification-muted {
+  display: inline-flex;
+  flex: none;
+  color: var(--warm-faint);
+}
+
 .lv-row-sub {
   font-size: var(--lv-sub);
   color: var(--warm-faint);

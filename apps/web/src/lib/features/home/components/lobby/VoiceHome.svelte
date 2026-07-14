@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ChevronRight, Plus, UserPlus } from '@lucide/svelte';
+  import { BellOff, ChevronRight, Plus, UserPlus } from '@lucide/svelte';
   import { Avatar, AvatarStack, Button, ContextMenu, Ellipsis, MascotIcon } from '$lib/shared/ui';
   import { iconMd, iconSm } from '$lib/shared/ui/icons';
   import type { OwnedRoom } from '$lib/api/auth';
@@ -7,6 +7,7 @@
   import { roomPeerAvatarItems } from '../../model/room-avatars';
   import { roomDisplayName } from '../../model/rooms';
   import { friendsState, showPeople } from '../../model/friends.svelte';
+  import { notificationPreferences } from '$lib/shared/notifications/preferences.svelte';
   import { RoomMenuContent } from '$lib/shared/components/room-menu';
 
   let { rooms, onOpenRoom, onCreateRoom, onJoinCode, onToast } = $props<{
@@ -109,6 +110,7 @@
   {:else}
     <div class="lv-cards">
       {#each sortedRooms as room (room.roomId)}
+        {@const roomNotificationsMuted = notificationPreferences.mutedRoomIds.includes(room.roomId)}
         <button
           class="lv-card"
           class:is-live={room.peers > 0}
@@ -122,7 +124,14 @@
           <div style="display:flex;align-items:center;gap:11px;min-width:0;">
             <Avatar name={roomDisplayName(room)} src={room.avatarUrl} shape="squircle" background="var(--room-avatar-bg)" size={42} />
             <div style="min-width:0;flex:1;">
-              <Ellipsis text={roomDisplayName(room)} class="lv-row-name" tag="div" />
+              <div class="lv-notification-title">
+                <Ellipsis text={roomDisplayName(room)} class="lv-row-name" tag="div" />
+                {#if roomNotificationsMuted}
+                  <span class="lv-notification-muted" role="img" aria-label="Уведомления отключены" title="Уведомления отключены">
+                    <BellOff {...iconSm} aria-hidden="true" />
+                  </span>
+                {/if}
+              </div>
             </div>
           </div>
           <div class="lv-card-foot">

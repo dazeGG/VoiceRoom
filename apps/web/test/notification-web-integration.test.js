@@ -147,7 +147,10 @@ test('notification settings stay quiet on success and toast only actionable fail
 
 test('muted notification targets show a bell-off indicator beside their names', () => {
   const settings = read('src/lib/features/home/components/SettingsModal.svelte');
+  const sidebar = read('src/lib/features/home/components/lobby/Sidebar.svelte');
+  const voiceHome = read('src/lib/features/home/components/lobby/VoiceHome.svelte');
   const css = read('src/lib/features/home/styles/settings.css');
+  const lobbyCss = read('src/lib/features/home/styles/lobby-v2.css');
 
   assert.match(settings, /import \{[^}]*\bBellOff\b[^}]*\} from '@lucide\/svelte'/);
   assert.match(settings, /\{#if peerMuted\}[\s\S]*class="settings-notification-muted"[\s\S]*<BellOff/);
@@ -155,6 +158,13 @@ test('muted notification targets show a bell-off indicator beside their names', 
   assert.match(settings, /aria-label="Уведомления отключены"/);
   assert.match(css, /\.settings-notification-title\s*\{[\s\S]*display:\s*flex[\s\S]*min-width:\s*0/);
   assert.match(css, /\.settings-notification-muted\s*\{[\s\S]*flex:\s*none/);
+  assert.doesNotMatch(css, /\.settings-notification-name strong\s*\{[^}]*flex:\s*1/);
+  assert.match(sidebar, /friendNotificationsMuted = notificationPreferences\.mutedPeerIds\.includes\(entry\.user\.id\)/);
+  assert.match(sidebar, /\{#if friendNotificationsMuted\}[\s\S]*class="lv-notification-muted"[\s\S]*<BellOff/);
+  assert.match(voiceHome, /roomNotificationsMuted = notificationPreferences\.mutedRoomIds\.includes\(room\.roomId\)/);
+  assert.match(voiceHome, /\{#if roomNotificationsMuted\}[\s\S]*class="lv-notification-muted"[\s\S]*<BellOff/);
+  assert.match(lobbyCss, /\.lv-notification-title\s*\{[^}]*display:\s*flex[^}]*min-width:\s*0/);
+  assert.match(lobbyCss, /\.lv-notification-muted\s*\{[^}]*flex:\s*none/);
 });
 
 test('Web Push uses credentialed subscription endpoints and suppresses focused-window notifications', () => {
