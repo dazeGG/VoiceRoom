@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Bell, BellOff, Copy, DoorOpen, Pencil, Trash2, User, X } from '@lucide/svelte';
+  import { Bell, BellOff, Copy, DoorOpen, Pencil, Trash2, User, UserMinus, X } from '@lucide/svelte';
   import { iconMd, iconSm } from '$lib/shared/ui/icons';
   import { tick } from 'svelte';
   import type { DirectMessage } from '$lib/api/dm';
@@ -400,10 +400,21 @@
           </div>
         </div>
 
-        <button class="lobby-profile-remove" type="button" onclick={togglePeerMute} disabled={muteSaving} data-notification-mute="dm">
-          {#if peerMuted}<BellOff {...iconSm} aria-hidden="true" /> Уведомления выключены{:else}<Bell {...iconSm} aria-hidden="true" /> Выключить уведомления{/if}
+        <button
+          class="lobby-profile-action"
+          class:is-muted={peerMuted}
+          type="button"
+          onclick={togglePeerMute}
+          disabled={muteSaving}
+          data-notification-mute="dm"
+        >
+          {#if peerMuted}<BellOff {...iconMd} aria-hidden="true" />{:else}<Bell {...iconMd} aria-hidden="true" />{/if}
+          <span>{peerMuted ? 'Уведомления выключены' : 'Выключить уведомления'}</span>
         </button>
-        <button class="lobby-profile-remove" type="button" onclick={handleRemove}>Удалить из друзей</button>
+        <button class="lobby-profile-action lobby-profile-action--danger" type="button" onclick={handleRemove}>
+          <UserMinus {...iconMd} aria-hidden="true" />
+          <span>Удалить из друзей</span>
+        </button>
       </div>
     </div>
   {/if}

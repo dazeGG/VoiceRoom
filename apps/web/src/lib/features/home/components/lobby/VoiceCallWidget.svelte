@@ -46,7 +46,6 @@
     return hours > 0 ? `${hours}:${mm}:${ss}` : `${mm}:${ss}`;
   }
 
-  const myElapsed = $derived(formatElapsed(voiceSession.joinedAt));
   const roomElapsed = $derived(formatElapsed(voiceSession.roomActiveSince));
 </script>
 
@@ -74,12 +73,12 @@
 
   <!-- actions -->
   <div class="voice-actions">
-    {#if myElapsed}
-      <div class="voice-timers" aria-label="Время подключения">
-        <span class="voice-timer" title="Ваше время в звонке"><span class="voice-timer-label">вы</span>{myElapsed}</span>
-        {#if roomElapsed}
-          <span class="voice-timer" title="Длительность звонка в комнате"><span class="voice-timer-label">звонок</span>{roomElapsed}</span>
-        {/if}
+    {#if roomElapsed}
+      <div class="voice-timers" aria-label="Длительность звонка">
+        <span class="voice-timer" title="Длительность звонка в комнате">
+          <span class="voice-timer-label">звонок</span>
+          <span class="voice-timer-value">{roomElapsed}</span>
+        </span>
       </div>
     {/if}
 
@@ -211,8 +210,8 @@
   .voice-timers {
     flex: 1;
     min-width: 0;
-    display: grid;
-    gap: 2px;
+    display: flex;
+    align-items: center;
     align-self: center;
   }
 
@@ -220,24 +219,30 @@
     display: flex;
     align-items: baseline;
     gap: 6px;
-    color: var(--warm-ink-dim);
-    font-family: var(--font-mono);
-    font-size: 11px;
+    color: var(--accent);
+    font-family: var(--font-ui);
+    font-size: 13px;
+    font-weight: 800;
     font-variant-numeric: tabular-nums;
-    line-height: 1.2;
+    line-height: 1;
     white-space: nowrap;
   }
 
   .voice-timer-label {
     min-width: 0;
     overflow: hidden;
-    color: var(--warm-muted);
+    color: var(--accent);
     font-family: var(--font-ui);
-    font-size: 10px;
-    font-weight: 700;
-    letter-spacing: 0.04em;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.06em;
     text-overflow: ellipsis;
     text-transform: uppercase;
+  }
+
+  .voice-timer-value {
+    font-size: 14px;
+    letter-spacing: 0.01em;
   }
 
   .voice-icon-btn,

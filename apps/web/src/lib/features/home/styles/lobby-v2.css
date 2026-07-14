@@ -50,8 +50,26 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 16px 16px 10px;
+  min-height: 48px;
+  margin: 8px;
+  padding: 10px 8px;
   flex: none;
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s ease;
+}
+
+.lv-side-head:hover {
+  background: var(--control-hover);
+}
+
+.lv-side-head:focus-visible {
+  outline: 2px solid var(--focus-border, rgba(255, 255, 255, 0.72));
+  outline-offset: -2px;
 }
 
 .lv-brand-name {
@@ -224,14 +242,16 @@
   transition: background 0.15s ease, border-color 0.15s ease;
 }
 
-.lv-card-unread {
-  position: absolute;
-  top: 10px;
-  right: 10px;
+.lv-card-head {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-width: 0;
 }
 
-.lv-card.has-unread .lv-card-head {
-  padding-right: 24px;
+.lv-card-unread {
+  flex: none;
+  margin-left: auto;
 }
 
 .lv-card:hover {

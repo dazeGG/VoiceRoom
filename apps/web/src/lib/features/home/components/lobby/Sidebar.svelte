@@ -233,7 +233,7 @@
 </script>
 
 <aside class="lv-side">
-  <button class="lv-side-head" type="button" title="Главная" onclick={onGoHome} style="border:none;background:transparent;cursor:pointer;text-align:left;">
+  <button class="lv-side-head" type="button" title="Главная" onclick={onGoHome}>
     <img src="/voiceroom-mascot.svg" width="26" height="26" alt="Voice Room" />
     <span class="lv-brand-name">Voice Room</span>
   </button>

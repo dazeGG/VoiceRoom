@@ -1649,7 +1649,7 @@ test('composer ArrowUp edits the latest own message in both chats', () => {
   }
 });
 
-test('sidebar call widget shows my and the room call timers from server clocks', () => {
+test('sidebar call widget shows only the room call timer from the server clock', () => {
   const widget = read('src/lib/features/home/components/lobby/VoiceCallWidget.svelte');
   const session = read('src/lib/features/room/voice-session.svelte.ts');
   const room = read('src/lib/features/room/client/room/room.ts');
@@ -1657,6 +1657,8 @@ test('sidebar call widget shows my and the room call timers from server clocks',
 
   assert.match(widget, /voice-timers/);
   assert.match(widget, /formatElapsed/);
+  assert.match(widget, /voiceSession\.roomActiveSince/);
+  assert.doesNotMatch(widget, /voiceSession\.joinedAt|Ваше время в звонке/);
   assert.match(session, /roomActiveSince: number \| null/);
   assert.match(room, /setVoiceSessionTiming\(\{\s*joinedAt: localPeer\?\.joinedAt/);
   assert.match(realtime, /voiceActiveSince\?: number \| null/);
