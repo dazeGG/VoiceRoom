@@ -2,7 +2,7 @@
   import { HeadphoneOff, Headphones, LogOut, Mic, MicOff } from '@lucide/svelte';
   import { Avatar } from '$lib/shared/ui';
   import { iconMd, iconSm } from '$lib/shared/ui/icons';
-  import { voiceSession } from '$lib/features/room/voice-session.svelte';
+  import RoomCallTimer from '$lib/features/room/components/RoomCallTimer.svelte';
 
   let {
     roomName = '',
@@ -26,27 +26,6 @@
 
   const openLabel = $derived(`Открыть комнату ${roomName || 'активного голоса'}`);
 
-  // Both timers derive from server timestamps and a shared 1s tick.
-  let now = $state(Date.now());
-  $effect(() => {
-    const timer = setInterval(() => {
-      now = Date.now();
-    }, 1000);
-    return () => clearInterval(timer);
-  });
-
-  function formatElapsed(since: number | null): string {
-    if (!since) return '';
-    const total = Math.max(0, Math.floor((now - since) / 1000));
-    const hours = Math.floor(total / 3600);
-    const minutes = Math.floor((total % 3600) / 60);
-    const seconds = total % 60;
-    const mm = hours > 0 ? String(minutes).padStart(2, '0') : String(minutes);
-    const ss = String(seconds).padStart(2, '0');
-    return hours > 0 ? `${hours}:${mm}:${ss}` : `${mm}:${ss}`;
-  }
-
-  const roomElapsed = $derived(formatElapsed(voiceSession.roomActiveSince));
 </script>
 
 <div class="voice-widget" aria-label="Активный голос">
@@ -73,14 +52,9 @@
 
   <!-- actions -->
   <div class="voice-actions">
-    {#if roomElapsed}
-      <div class="voice-timers" aria-label="Длительность звонка">
-        <span class="voice-timer" title="Длительность звонка в комнате">
-          <span class="voice-timer-label">звонок</span>
-          <span class="voice-timer-value">{roomElapsed}</span>
-        </span>
-      </div>
-    {/if}
+    <div class="voice-timers">
+      <RoomCallTimer variant="sidebar" />
+    </div>
 
     <!-- mic toggle -->
     <button
@@ -213,36 +187,6 @@
     display: flex;
     align-items: center;
     align-self: center;
-  }
-
-  .voice-timer {
-    display: flex;
-    align-items: baseline;
-    gap: 6px;
-    color: var(--accent);
-    font-family: var(--font-ui);
-    font-size: 13px;
-    font-weight: 800;
-    font-variant-numeric: tabular-nums;
-    line-height: 1;
-    white-space: nowrap;
-  }
-
-  .voice-timer-label {
-    min-width: 0;
-    overflow: hidden;
-    color: var(--accent);
-    font-family: var(--font-ui);
-    font-size: 11px;
-    font-weight: 800;
-    letter-spacing: 0.06em;
-    text-overflow: ellipsis;
-    text-transform: uppercase;
-  }
-
-  .voice-timer-value {
-    font-size: 14px;
-    letter-spacing: 0.01em;
   }
 
   .voice-icon-btn,

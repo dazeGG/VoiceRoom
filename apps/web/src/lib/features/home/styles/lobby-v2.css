@@ -250,8 +250,13 @@
 }
 
 .lv-card-unread {
-  flex: none;
-  margin-left: auto;
+  position: absolute;
+  top: 16px;
+  right: 16px;
+}
+
+.lv-card.has-unread .lv-card-head {
+  padding-right: 40px;
 }
 
 .lv-card:hover {

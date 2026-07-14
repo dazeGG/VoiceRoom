@@ -15,6 +15,7 @@
   import { markRoomChatRead, ringRoomFriend } from '$lib/api/rooms';
   import { notificationPreferences } from '$lib/shared/notifications/preferences.svelte';
   import { roomPresence, setRoomUnreadCount } from '$lib/features/home/model/room-presence.svelte';
+  import RoomCallTimer from './RoomCallTimer.svelte';
 
   const connection = $derived(getConnectionStatusView());
 
@@ -96,20 +97,23 @@
       />
     </div>
 
-    <button
-      class="room-chat-toggle"
-      type="button"
-      aria-pressed={roomUi.chatOpen}
-      data-active={roomUi.chatOpen}
-      onclick={openRoomChat}
-      hidden={roomUi.chatOpen}
-    >
-      <MessageSquare {...iconMd} aria-hidden="true" />
-      <span>Чат</span>
-      {#if roomUnreadCount > 0}
-        <span class="room-chat-unread" data-muted={roomNotificationsMuted} aria-label={`${roomUnreadCount} новых сообщений`}>{roomUnreadCount > 99 ? '99+' : roomUnreadCount}</span>
-      {/if}
-    </button>
+    <div class="room-heading-actions">
+      <RoomCallTimer />
+      <button
+        class="room-chat-toggle"
+        type="button"
+        aria-pressed={roomUi.chatOpen}
+        data-active={roomUi.chatOpen}
+        onclick={openRoomChat}
+        hidden={roomUi.chatOpen}
+      >
+        <MessageSquare {...iconMd} aria-hidden="true" />
+        <span>Чат</span>
+        {#if roomUnreadCount > 0}
+          <span class="room-chat-unread" data-muted={roomNotificationsMuted} aria-label={`${roomUnreadCount} новых сообщений`}>{roomUnreadCount > 99 ? '99+' : roomUnreadCount}</span>
+        {/if}
+      </button>
+    </div>
   </div>
 
   <div
@@ -130,4 +134,5 @@
   .room-ring-friend:disabled { opacity: 0.48; cursor: not-allowed; }
   .room-ring-friend small { margin-left: auto; color: var(--warm-faint); font-size: 10px; }
   .room-ring-empty { max-width: 230px; padding: 10px; color: var(--warm-faint); font-size: 13px; }
+  .room-heading-actions { display: flex; flex: none; align-items: center; gap: 12px; }
 </style>

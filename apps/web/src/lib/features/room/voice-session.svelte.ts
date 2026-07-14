@@ -8,7 +8,7 @@ export const voiceSession = $state<{
   roomId: string | null;
   muted: boolean;
   deafened: boolean;
-  // Server timestamps for the sidebar call widget: when I joined the call and
+  // Server timestamps for call-duration surfaces: when I joined the call and
   // when the room's current call started (RoomSnapshot.voiceActiveSince).
   joinedAt: number | null;
   roomActiveSince: number | null;

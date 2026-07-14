@@ -125,6 +125,7 @@
           oncontextmenu={(event) => openRoomContextMenu(event, room.roomId)}
           onkeydown={(event) => handleRoomKeydown(event, room.roomId)}
           aria-haspopup="menu"
+          class:has-unread={unreadCount > 0}
         >
           <div class="lv-card-head">
             <Avatar name={roomDisplayName(room)} src={room.avatarUrl} shape="squircle" background="var(--room-avatar-bg)" size={42} />
@@ -138,12 +139,12 @@
                 {/if}
               </div>
             </div>
-            {#if unreadCount > 0}
-              <Badge class="lv-card-unread" tone={roomNotificationsMuted ? 'muted' : 'default'}>
-                {unreadCount > 99 ? '99+' : unreadCount}
-              </Badge>
-            {/if}
           </div>
+          {#if unreadCount > 0}
+            <Badge class="lv-card-unread" tone={roomNotificationsMuted ? 'muted' : 'default'}>
+              {unreadCount > 99 ? '99+' : unreadCount}
+            </Badge>
+          {/if}
           <div class="lv-card-foot">
             {#if room.peers > 0}
               <span style="display:flex;align-items:center;gap:8px;"><span class="lr-livedot"></span><AvatarStack items={roomAvatars(room.roomId)} maxAvatars={5} size={24} ariaLabel="В комнате" /></span>
