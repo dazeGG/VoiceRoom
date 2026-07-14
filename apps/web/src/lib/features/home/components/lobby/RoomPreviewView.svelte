@@ -9,7 +9,9 @@
   import RoomPreviewChat from './RoomPreviewChat.svelte';
   import RoomViewHeader from './RoomViewHeader.svelte';
   import LobbyStreamTile from './LobbyStreamTile.svelte';
+  import { roomPresence } from '../../model/room-presence.svelte';
   import { subscribeRoomPreview } from '../../model/room-realtime';
+  import { notificationPreferences } from '$lib/shared/notifications/preferences.svelte';
 
   let { room, user, onEnter, onBack, onOpenSettings, onToast } = $props<{
     room: OwnedRoom;
@@ -25,6 +27,8 @@
 
   let previewChatOpen = $state(false);
   const previewRoomId = $derived(room.roomId);
+  const roomNotificationsMuted = $derived(notificationPreferences.mutedRoomIds.includes(previewRoomId));
+  const roomUnreadCount = $derived(roomPresence.unreadCountByRoomId[previewRoomId] ?? room.unreadCount ?? 0);
   const screenPeers = $derived(peers.filter((peer) => peer.screen));
   const tileCount = $derived(peers.length + screenPeers.length);
 
@@ -85,6 +89,9 @@
         <button class="room-chat-toggle" type="button" onclick={() => (previewChatOpen = true)}>
           <MessageSquare {...iconSm} aria-hidden="true" />
           <span>Чат</span>
+          {#if roomUnreadCount > 0}
+            <span class="room-chat-unread" data-muted={roomNotificationsMuted} aria-label={`${roomUnreadCount} новых сообщений`}>{roomUnreadCount > 99 ? '99+' : roomUnreadCount}</span>
+          {/if}
         </button>
       {/if}
     </div>
