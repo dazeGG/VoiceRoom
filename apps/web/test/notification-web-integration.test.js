@@ -132,6 +132,19 @@ test('push configuration failures use the red error toast variant', () => {
   assert.match(stack, /\.ui-toast\[data-variant='error'\][\s\S]*--toast-accent: var\(--coral\)[\s\S]*border-color:[\s\S]*background:/);
 });
 
+test('notification settings stay quiet on success and toast only actionable failures', () => {
+  const settings = read('src/lib/features/home/components/SettingsModal.svelte');
+
+  assert.doesNotMatch(settings, /Настройки уведомлений сохранены/);
+  assert.doesNotMatch(settings, /Push-уведомления (?:включены|выключены)/);
+  assert.doesNotMatch(settings, /Системные уведомления (?:включены|выключены)/);
+  assert.doesNotMatch(settings, /Уведомления (?:пользователя|комнаты) (?:отключены|включены)/);
+  assert.match(settings, /Не удалось сохранить настройки уведомлений/);
+  assert.match(settings, /Не удалось изменить уведомления пользователя/);
+  assert.match(settings, /Не удалось изменить уведомления комнаты/);
+  assert.match(settings, /Разрешите уведомления в настройках браузера/);
+});
+
 test('Web Push uses credentialed subscription endpoints and suppresses focused-window notifications', () => {
   const api = read('src/lib/api/push.ts');
   const worker = read('src/service-worker.ts');

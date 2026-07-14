@@ -445,19 +445,16 @@
   async function toggleBrowserNotifications(): Promise<void> {
     try {
       if (pushNotifications.supported) {
-        const active = await setPushNotificationsEnabled(!pushNotifications.active);
+        await setPushNotificationsEnabled(!pushNotifications.active);
         syncNotificationPermission();
-        onToast(active ? 'Push-уведомления включены' : 'Push-уведомления выключены');
         return;
       }
       if (browserNotificationsEnabled) {
         setNotificationsEnabled(false);
-        onToast(desktopApp ? 'Уведомления приложения выключены' : 'Системные уведомления выключены');
         return;
       }
       const permission = await requestNotificationsFromUiAction();
       if (permission === 'granted') {
-        onToast('Системные уведомления включены');
         if (desktopApp) {
           void showBrowserNotification({
             body: 'Voice Room сможет показывать уведомления, пока приложение открыто.',
@@ -481,7 +478,6 @@
     notificationSaving = true;
     try {
       await updatePrivateNotifications(!notificationPreferences.privateNotifications);
-      onToast('Настройки уведомлений сохранены');
     } catch {
       onToast('Не удалось сохранить настройки уведомлений');
     } finally {
@@ -495,7 +491,6 @@
     try {
       const muted = !notificationPreferences.mutedPeerIds.includes(userId);
       await updatePeerNotificationsMuted(userId, muted);
-      onToast(muted ? 'Уведомления пользователя отключены' : 'Уведомления пользователя включены');
     } catch {
       onToast('Не удалось изменить уведомления пользователя');
     } finally {
@@ -509,7 +504,6 @@
     try {
       const muted = !notificationPreferences.mutedRoomIds.includes(roomId);
       await updateRoomNotificationsMuted(roomId, muted);
-      onToast(muted ? 'Уведомления комнаты отключены' : 'Уведомления комнаты включены');
     } catch {
       onToast('Не удалось изменить уведомления комнаты');
     } finally {
