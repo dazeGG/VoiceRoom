@@ -81,6 +81,7 @@ let selfId = '';
 // snapshot so a later refreshFriends() still applies the correct online flags.
 let presenceReady = false;
 let onlineFriendIds = new Set<string>();
+let presenceKnownFriendIds = new Set<string>();
 const threadResync = createDmThreadResyncCoordinator({
   fetchSnapshot: fetchThread,
   isCurrent: (peerId) => friendsState.view === 'dm' && friendsState.selectedFriendId === peerId,
@@ -115,7 +116,7 @@ function findFriend(userId: string): Friend | undefined {
 }
 
 function friendOnlineFromPresence(userId: string, fallback = false): boolean {
-  return presenceReady ? onlineFriendIds.has(userId) : fallback;
+  return presenceReady && presenceKnownFriendIds.has(userId) ? onlineFriendIds.has(userId) : fallback;
 }
 
 function applyOnlineToFriends(): void {
@@ -127,11 +128,14 @@ function applyOnlineToFriends(): void {
 
 function setOnlineSnapshot(ids: Iterable<string>): void {
   onlineFriendIds = new Set(ids);
+  presenceKnownFriendIds = new Set(friendsState.friends.map((friend) => friend.user.id));
+  for (const userId of onlineFriendIds) presenceKnownFriendIds.add(userId);
   presenceReady = true;
   applyOnlineToFriends();
 }
 
 function setFriendOnline(userId: string, online: boolean): void {
+  presenceKnownFriendIds.add(userId);
   if (online) onlineFriendIds.add(userId);
   else onlineFriendIds.delete(userId);
   const friend = findFriend(userId);
@@ -159,6 +163,17 @@ function applyFriendProfile(user: PublicUser | undefined): void {
 
 export async function refreshFriends(): Promise<void> {
   const { friends, incomingRequestCount } = await fetchFriends();
+  // A friend created after the last `ready` snapshot is not represented in the
+  // presence cache yet. Seed that one relationship from the fresh HTTP result;
+  // subsequent presence events remain authoritative.
+  if (presenceReady) {
+    for (const friend of friends) {
+      if (presenceKnownFriendIds.has(friend.user.id)) continue;
+      presenceKnownFriendIds.add(friend.user.id);
+      if (friend.online) onlineFriendIds.add(friend.user.id);
+      else onlineFriendIds.delete(friend.user.id);
+    }
+  }
   friendsState.friends = friends.map((friend) => ({
     ...friend,
     online: friendOnlineFromPresence(friend.user.id, friend.online)
@@ -182,6 +197,7 @@ export function initLobby(
   selfId = currentUserId;
   presenceReady = false;
   onlineFriendIds = new Set();
+  presenceKnownFriendIds = new Set();
   clearLegacyResolvedRoomInvitations();
   if (!areNotificationPreferencesLoadedFor(currentUserId)) {
     prepareNotificationPreferences(currentUserId, initialDoNotDisturb, initialPresenceStatus);
@@ -205,6 +221,7 @@ export function initLobby(
     realtime = null;
     presenceReady = false;
     onlineFriendIds = new Set();
+    presenceKnownFriendIds = new Set();
     if (notificationPreferencesRetryTimer) {
       clearTimeout(notificationPreferencesRetryTimer);
       notificationPreferencesRetryTimer = null;

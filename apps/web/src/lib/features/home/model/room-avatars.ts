@@ -5,9 +5,11 @@ import { getAvatarPresentation } from '$lib/features/room/client/ui/avatar-prese
 export function roomPeerAvatarItems(peers: RoomPeer[]): AvatarStackItem[] {
   return peers.map((peer) => {
     const avatar = getAvatarPresentation({
+      accountUserId: peer.accountUserId,
       avatarAccent: peer.avatarAccent || undefined,
       avatarColorKey: peer.avatarColorKey,
       avatarUrl: peer.avatarUrl || undefined,
+      id: peer.id,
       isLocal: false,
       name: peer.name?.trim() || 'Гость'
     });

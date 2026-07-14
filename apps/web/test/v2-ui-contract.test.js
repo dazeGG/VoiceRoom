@@ -1344,6 +1344,13 @@ test('participant context menu is remote-only and exposes relationship-aware loc
   assert.match(functionBody(friends, 'initLobby'), /Promise\.all\(\[refreshFriends\(\), refreshRequests\(\)\]\)/);
   assert.match(functionBody(friends, 'refreshFriends'), /friendOnlineFromPresence\(friend\.user\.id, friend\.online\)/);
   assert.match(functionBody(friends, 'handleRealtimeEvent'), /setOnlineSnapshot\(event\.payload\.onlineFriendIds(?: \?\? \[\])?\)/);
+  assert.match(
+    functionBody(friends, 'friendOnlineFromPresence'),
+    /presenceReady && presenceKnownFriendIds\.has\(userId\)/
+  );
+  const refreshFriendsBody = functionBody(friends, 'refreshFriends');
+  assert.match(refreshFriendsBody, /presenceKnownFriendIds\.add\(friend\.user\.id\)/);
+  assert.match(refreshFriendsBody, /if \(friend\.online\) onlineFriendIds\.add\(friend\.user\.id\)/);
   assert.match(functionBody(friends, 'handleRealtimeEvent'), /setFriendOnline\(event\.payload\.userId, event\.payload\.online\)/);
   const realtime = read('src/lib/api/realtime.ts');
   assert.match(realtime, /new WebSocket\(wsUrl\(\)\)/);
