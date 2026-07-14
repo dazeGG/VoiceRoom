@@ -48,6 +48,7 @@ export type LobbyMode = 'friends' | 'rooms';
 export type LobbyView = 'home' | 'dm' | 'people';
 
 interface FriendsState {
+  automaticPresenceIdleAvailable: boolean;
   loaded: boolean;
   friends: Friend[];
   incomingRequestCount: number;
@@ -62,6 +63,7 @@ interface FriendsState {
 }
 
 export const friendsState = $state<FriendsState>({
+  automaticPresenceIdleAvailable: false,
   loaded: false,
   friends: [],
   incomingRequestCount: 0,
@@ -207,13 +209,17 @@ export function initLobby(
     friendsState.loaded = true;
   });
   scheduleNotificationPreferencesLoad(currentUserId);
+  friendsState.automaticPresenceIdleAvailable = false;
   const stopPresenceIdleTracking = startSystemPresenceIdleTracking({
     getPresence: () => ({
       loaded: areNotificationPreferencesLoadedFor(currentUserId),
       presenceStatus: notificationPreferences.presenceStatus,
       presenceStatusAutomatic: notificationPreferences.presenceStatusAutomatic
     }),
-    updatePresence: updateAutomaticPresenceStatus
+    updatePresence: updateAutomaticPresenceStatus,
+    onAvailabilityChange: (available) => {
+      friendsState.automaticPresenceIdleAvailable = available;
+    }
   });
   return () => {
     stopPresenceIdleTracking();

@@ -2,7 +2,11 @@ import type { PresenceStatus } from '$lib/shared/presence';
 
 export const PRESENCE_IDLE_THRESHOLD_SECONDS = 5 * 60;
 export const PRESENCE_ACTIVE_LEASE_SECONDS = 3 * 60;
-const PRESENCE_IDLE_POLL_INTERVAL_MS = 15_000;
+const PRESENCE_LEASE_RENEWAL_TARGET_SECONDS = PRESENCE_IDLE_THRESHOLD_SECONDS
+  - PRESENCE_ACTIVE_LEASE_SECONDS
+  - 15;
+const PRESENCE_IDLE_RETRY_INTERVAL_MS = 2_000;
+const PRESENCE_IDLE_INACTIVE_STATUS_INTERVAL_MS = 60_000;
 
 export interface PresenceIdleSnapshot {
   loaded?: boolean;
@@ -15,6 +19,25 @@ interface PresenceIdleControllerOptions {
   getPresence: () => PresenceIdleSnapshot;
   updatePresence: (status: 'online' | 'away') => Promise<void>;
 }
+
+interface BrowserIdleDetector extends EventTarget {
+  screenState: 'locked' | 'unlocked' | null;
+  userState: 'active' | 'idle' | null;
+  start: (options: { signal: AbortSignal; threshold: number }) => Promise<void>;
+}
+
+interface BrowserIdleDetectorConstructor {
+  new (): BrowserIdleDetector;
+}
+
+type IdleDetectionScope = {
+  IdleDetector?: BrowserIdleDetectorConstructor;
+  navigator?: {
+    permissions?: {
+      query: (descriptor: { name: string }) => Promise<{ state: PermissionState }>;
+    };
+  };
+};
 
 interface DesktopIdleBridge {
   getSystemIdleTime: () => Promise<number>;
@@ -42,24 +65,26 @@ export function createPresenceIdleController({
   getIdleSeconds,
   getPresence,
   updatePresence
-}: PresenceIdleControllerOptions): { evaluate: () => Promise<void>; stop: () => void } {
+}: PresenceIdleControllerOptions): { evaluate: () => Promise<number | null>; stop: () => void } {
   let stopped = false;
-  let currentEvaluation: Promise<void> | null = null;
+  let currentEvaluation: Promise<number | null> | null = null;
   let evaluateAgain = false;
 
-  async function runEvaluation(): Promise<void> {
+  async function runEvaluation(): Promise<number | null> {
+    let lastIdleSeconds: number | null = null;
     do {
       evaluateAgain = false;
       const idleSeconds = await getIdleSeconds();
-      if (stopped) return;
+      lastIdleSeconds = idleSeconds;
+      if (stopped) return lastIdleSeconds;
       const presence = getPresence();
       const nextStatus = getAutomaticPresenceTransition({
         ...presence,
         idleSeconds
       });
-      // Stop renewing this client's lease early enough for it to expire exactly
-      // when the same client reaches the away threshold. Another active desktop
-      // keeps renewing its own lease and therefore still prevents account-wide AFK.
+      // Stop renewing this client's lease early enough for it to expire near the
+      // away threshold. Another active desktop keeps renewing its own lease and
+      // therefore still prevents account-wide AFK.
       const shouldRenewOnline = presence.loaded !== false
         && presence.presenceStatus === 'online'
         && idleSeconds !== null
@@ -68,20 +93,22 @@ export function createPresenceIdleController({
         && idleSeconds < PRESENCE_IDLE_THRESHOLD_SECONDS - PRESENCE_ACTIVE_LEASE_SECONDS;
       if (nextStatus || shouldRenewOnline) await updatePresence(nextStatus || 'online');
     } while (evaluateAgain && !stopped);
+    return lastIdleSeconds;
   }
 
-  function evaluate(): Promise<void> {
-    if (stopped) return Promise.resolve();
+  function evaluate(): Promise<number | null> {
+    if (stopped) return Promise.resolve(null);
     if (currentEvaluation) {
       evaluateAgain = true;
       return currentEvaluation;
     }
-    currentEvaluation = runEvaluation()
-      .catch(() => {})
+    const evaluation = runEvaluation()
+      .catch(() => null)
       .finally(() => {
         currentEvaluation = null;
       });
-    return currentEvaluation;
+    currentEvaluation = evaluation;
+    return evaluation;
   }
 
   return {
@@ -91,6 +118,29 @@ export function createPresenceIdleController({
       evaluateAgain = false;
     }
   };
+}
+
+export function getNextPresenceIdleCheckDelayMs({
+  idleSeconds,
+  loaded = true,
+  presenceStatus,
+  presenceStatusAutomatic
+}: PresenceIdleSnapshot & { idleSeconds: number | null }): number {
+  if (!loaded || idleSeconds === null || !Number.isSafeInteger(idleSeconds) || idleSeconds < 0) {
+    return PRESENCE_IDLE_RETRY_INTERVAL_MS;
+  }
+  if (presenceStatus === 'away' && presenceStatusAutomatic) return PRESENCE_IDLE_RETRY_INTERVAL_MS;
+  if (presenceStatus !== 'online') return PRESENCE_IDLE_INACTIVE_STATUS_INTERVAL_MS;
+
+  const remainingSeconds = Math.max(0, PRESENCE_IDLE_THRESHOLD_SECONDS - idleSeconds);
+  if (remainingSeconds === 0) return PRESENCE_IDLE_RETRY_INTERVAL_MS;
+  if (idleSeconds < PRESENCE_LEASE_RENEWAL_TARGET_SECONDS) {
+    return Math.max(
+      PRESENCE_IDLE_RETRY_INTERVAL_MS,
+      (PRESENCE_LEASE_RENEWAL_TARGET_SECONDS - idleSeconds) * 1_000
+    );
+  }
+  return Math.max(PRESENCE_IDLE_RETRY_INTERVAL_MS, remainingSeconds * 1_000);
 }
 
 export function getDesktopIdleSecondsReader(
@@ -108,24 +158,148 @@ export function getDesktopIdleSecondsReader(
   };
 }
 
-export function startSystemPresenceIdleTracking({
+export async function hasGrantedBrowserIdlePermission(
+  scope: IdleDetectionScope = globalThis as IdleDetectionScope
+): Promise<boolean> {
+  if (typeof scope.IdleDetector !== 'function' || typeof scope.navigator?.permissions?.query !== 'function') {
+    return false;
+  }
+  try {
+    const permission = await scope.navigator.permissions.query({ name: 'idle-detection' });
+    return permission.state === 'granted';
+  } catch {
+    return false;
+  }
+}
+
+export async function startGrantedBrowserPresenceIdleTracking({
   getPresence,
   updatePresence,
-  pollIntervalMs = PRESENCE_IDLE_POLL_INTERVAL_MS
+  signal,
+  scope = globalThis as IdleDetectionScope
 }: {
   getPresence: () => PresenceIdleSnapshot;
   updatePresence: (status: 'online' | 'away') => Promise<void>;
-  pollIntervalMs?: number;
-}): () => void {
-  const getIdleSeconds = getDesktopIdleSecondsReader();
-  if (!getIdleSeconds) return () => {};
+  signal: AbortSignal;
+  scope?: IdleDetectionScope;
+}): Promise<(() => void) | null> {
+  if (!(await hasGrantedBrowserIdlePermission(scope)) || signal.aborted || !scope.IdleDetector) return null;
 
-  const controller = createPresenceIdleController({ getIdleSeconds, getPresence, updatePresence });
-  const timer = globalThis.setInterval(() => void controller.evaluate(), pollIntervalMs);
-  void controller.evaluate();
+  const detector = new scope.IdleDetector();
+  let stopped = false;
+  let currentEvaluation: Promise<void> | null = null;
+  let evaluateAgain = false;
+
+  async function runEvaluation(): Promise<void> {
+    do {
+      evaluateAgain = false;
+      if (stopped || signal.aborted) return;
+      const isIdle = detector.userState === 'idle' || detector.screenState === 'locked';
+      if (detector.userState === null && detector.screenState === null) return;
+      const nextStatus = getAutomaticPresenceTransition({
+        ...getPresence(),
+        idleSeconds: isIdle ? PRESENCE_IDLE_THRESHOLD_SECONDS : 0
+      });
+      if (nextStatus) await updatePresence(nextStatus);
+    } while (evaluateAgain && !stopped && !signal.aborted);
+  }
+
+  function evaluate(): void {
+    if (stopped || signal.aborted) return;
+    if (currentEvaluation) {
+      evaluateAgain = true;
+      return;
+    }
+    currentEvaluation = runEvaluation()
+      .catch(() => {})
+      .finally(() => {
+        currentEvaluation = null;
+        if (evaluateAgain && !stopped && !signal.aborted) {
+          evaluateAgain = false;
+          evaluate();
+        }
+      });
+  }
+
+  detector.addEventListener('change', evaluate);
+  try {
+    await detector.start({
+      signal,
+      threshold: PRESENCE_IDLE_THRESHOLD_SECONDS * 1_000
+    });
+  } catch {
+    detector.removeEventListener('change', evaluate);
+    return null;
+  }
+  if (signal.aborted) {
+    detector.removeEventListener('change', evaluate);
+    return null;
+  }
+  evaluate();
 
   return () => {
-    globalThis.clearInterval(timer);
-    controller.stop();
+    stopped = true;
+    evaluateAgain = false;
+    detector.removeEventListener('change', evaluate);
+  };
+}
+
+export function startSystemPresenceIdleTracking({
+  getPresence,
+  updatePresence,
+  onAvailabilityChange = () => {}
+}: {
+  getPresence: () => PresenceIdleSnapshot;
+  updatePresence: (status: 'online' | 'away') => Promise<void>;
+  onAvailabilityChange?: (available: boolean) => void;
+}): () => void {
+  const getIdleSeconds = getDesktopIdleSecondsReader();
+  onAvailabilityChange(false);
+
+  if (getIdleSeconds) {
+    const controller = createPresenceIdleController({ getIdleSeconds, getPresence, updatePresence });
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    onAvailabilityChange(true);
+
+    async function evaluateAndSchedule(): Promise<void> {
+      const idleSeconds = await controller.evaluate();
+      if (stopped) return;
+      timer = globalThis.setTimeout(
+        () => void evaluateAndSchedule(),
+        getNextPresenceIdleCheckDelayMs({ ...getPresence(), idleSeconds })
+      );
+    }
+    void evaluateAndSchedule();
+
+    return () => {
+      stopped = true;
+      if (timer) globalThis.clearTimeout(timer);
+      controller.stop();
+      onAvailabilityChange(false);
+    };
+  }
+
+  const abortController = new AbortController();
+  let stopped = false;
+  let stopBrowserTracking: (() => void) | null = null;
+  void startGrantedBrowserPresenceIdleTracking({
+    getPresence,
+    updatePresence,
+    signal: abortController.signal
+  }).then((stop) => {
+    if (stopped) {
+      stop?.();
+      return;
+    }
+    stopBrowserTracking = stop;
+    onAvailabilityChange(Boolean(stop));
+  });
+
+  return () => {
+    stopped = true;
+    abortController.abort();
+    stopBrowserTracking?.();
+    onAvailabilityChange(false);
   };
 }

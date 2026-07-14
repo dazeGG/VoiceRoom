@@ -37,6 +37,10 @@ test('lobby startup loads notification preferences and realtime notification eve
   assert.match(friends, /stopPresenceIdleTracking\(\)/);
   assert.match(idle, /PRESENCE_IDLE_THRESHOLD_SECONDS = 5 \* 60/);
   assert.match(idle, /voiceRoomDesktopIdle/);
+  assert.match(idle, /permissions\.query\(\{ name: 'idle-detection' \}\)/);
+  assert.doesNotMatch(idle, /IdleDetector\.requestPermission/);
+  assert.match(friends, /automaticPresenceIdleAvailable/);
+  assert.match(friends, /onAvailabilityChange/);
   assert.match(friends, /prepareNotificationPreferences\(currentUserId, initialDoNotDisturb, initialPresenceStatus\)/);
   assert.match(friends, /function scheduleNotificationPreferencesLoad\(userId = selfId\)/);
   assert.match(friends, /loadNotificationPreferences\(userId\)/);
@@ -310,6 +314,7 @@ test('presence status is server-backed while DND suppresses notifications and cu
   assert.match(sidebar, /event\.key\.length === 1[\s\S]*matchStatusTypeahead\(event\.key\)/);
   assert.match(sidebar, /В сети/);
   assert.match(sidebar, /Отошёл/);
+  assert.match(sidebar, /friendsState\.automaticPresenceIdleAvailable/);
   assert.match(sidebar, /Не беспокоить/);
   assert.match(sidebar, /Не в сети/);
   assert.match(sidebar, /Уведомления и звуковые сигналы будут отключены/);

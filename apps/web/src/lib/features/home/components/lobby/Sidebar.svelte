@@ -62,20 +62,26 @@
       notificationPreferences.doNotDisturb ? 'dnd' : 'online'
     )
   );
-  const statusOptions: ReadonlyArray<{
+  const statusOptions = $derived<ReadonlyArray<{
     value: PresenceStatus;
     label: string;
     note?: string;
-  }> = [
+  }>>([
     { value: 'online', label: 'В сети' },
-    { value: 'away', label: 'Отошёл', note: 'Автоматически после 5 минут бездействия' },
+    {
+      value: 'away',
+      label: 'Отошёл',
+      note: friendsState.automaticPresenceIdleAvailable
+        ? 'Автоматически после 5 минут бездействия'
+        : undefined
+    },
     {
       value: 'dnd',
       label: 'Не беспокоить',
       note: 'Уведомления и звуковые сигналы будут отключены'
     },
     { value: 'offline', label: 'Не в сети' }
-  ];
+  ]);
   let statusSaving = $state<PresenceStatus | null>(null);
   let statusPopoverOpen = $state(false);
   let activeStatusIndex = $state(0);

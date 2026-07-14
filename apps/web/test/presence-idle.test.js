@@ -123,3 +123,143 @@ test('desktop idle reader fails closed when the bridge is absent or invalid', as
   });
   assert.equal(await reader(), 301);
 });
+
+test('desktop idle checks adapt to the remaining threshold and poll quickly only after automatic away', async () => {
+  const {
+    getNextPresenceIdleCheckDelayMs,
+    PRESENCE_IDLE_THRESHOLD_SECONDS
+  } = await loadPresenceIdle();
+
+  assert.equal(getNextPresenceIdleCheckDelayMs({
+    idleSeconds: 0,
+    presenceStatus: 'online',
+    presenceStatusAutomatic: false
+  }), 105_000);
+  assert.equal(getNextPresenceIdleCheckDelayMs({
+    idleSeconds: 105,
+    presenceStatus: 'online',
+    presenceStatusAutomatic: false
+  }), (PRESENCE_IDLE_THRESHOLD_SECONDS - 105) * 1_000);
+  assert.equal(getNextPresenceIdleCheckDelayMs({
+    idleSeconds: PRESENCE_IDLE_THRESHOLD_SECONDS,
+    presenceStatus: 'online',
+    presenceStatusAutomatic: false
+  }), 2_000);
+  assert.equal(getNextPresenceIdleCheckDelayMs({
+    idleSeconds: PRESENCE_IDLE_THRESHOLD_SECONDS,
+    presenceStatus: 'away',
+    presenceStatusAutomatic: true
+  }), 2_000);
+  assert.equal(getNextPresenceIdleCheckDelayMs({
+    idleSeconds: 0,
+    presenceStatus: 'away',
+    presenceStatusAutomatic: false
+  }), 60_000);
+});
+
+test('browser idle tracking starts only for an already granted permission and never requests it', async () => {
+  const {
+    hasGrantedBrowserIdlePermission,
+    startGrantedBrowserPresenceIdleTracking
+  } = await loadPresenceIdle();
+  let detector;
+  let queriedPermission = '';
+  class FakeIdleDetector extends EventTarget {
+    userState = 'active';
+    screenState = 'unlocked';
+    threshold = 0;
+
+    constructor() {
+      super();
+      detector = this;
+    }
+
+    async start({ threshold }) {
+      this.threshold = threshold;
+    }
+  }
+  const scope = {
+    IdleDetector: FakeIdleDetector,
+    navigator: {
+      permissions: {
+        query: async ({ name }) => {
+          queriedPermission = name;
+          return { state: 'granted' };
+        }
+      }
+    }
+  };
+  const presence = {
+    loaded: true,
+    presenceStatus: 'online',
+    presenceStatusAutomatic: false
+  };
+  const updates = [];
+  const abortController = new AbortController();
+
+  assert.equal(await hasGrantedBrowserIdlePermission(scope), true);
+  const stop = await startGrantedBrowserPresenceIdleTracking({
+    scope,
+    signal: abortController.signal,
+    getPresence: () => presence,
+    updatePresence: async (status) => {
+      updates.push(status);
+      presence.presenceStatus = status;
+      presence.presenceStatusAutomatic = status === 'away';
+    }
+  });
+  assert.equal(queriedPermission, 'idle-detection');
+  assert.equal(typeof stop, 'function');
+  assert.equal(detector.threshold, 5 * 60 * 1_000);
+  assert.deepEqual(updates, []);
+
+  detector.userState = 'idle';
+  detector.dispatchEvent(new Event('change'));
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(updates, ['away']);
+
+  detector.userState = 'active';
+  detector.dispatchEvent(new Event('change'));
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(updates, ['away', 'online']);
+
+  stop();
+  detector.userState = 'idle';
+  detector.dispatchEvent(new Event('change'));
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(updates, ['away', 'online']);
+});
+
+test('browser idle tracking stays disabled for prompt, denied, unsupported, or failed permission checks', async () => {
+  const {
+    hasGrantedBrowserIdlePermission,
+    startGrantedBrowserPresenceIdleTracking
+  } = await loadPresenceIdle();
+  class FakeIdleDetector extends EventTarget {
+    userState = 'active';
+    screenState = 'unlocked';
+    async start() {}
+  }
+  for (const state of ['prompt', 'denied']) {
+    const scope = {
+      IdleDetector: FakeIdleDetector,
+      navigator: { permissions: { query: async () => ({ state }) } }
+    };
+    assert.equal(await hasGrantedBrowserIdlePermission(scope), false);
+    assert.equal(await startGrantedBrowserPresenceIdleTracking({
+      scope,
+      signal: new AbortController().signal,
+      getPresence: () => ({
+        loaded: true,
+        presenceStatus: 'online',
+        presenceStatusAutomatic: false
+      }),
+      updatePresence: async () => {}
+    }), null);
+  }
+  assert.equal(await hasGrantedBrowserIdlePermission({}), false);
+  assert.equal(await hasGrantedBrowserIdlePermission({
+    IdleDetector: FakeIdleDetector,
+    navigator: { permissions: { query: async () => { throw new Error('blocked'); } } }
+  }), false);
+});
