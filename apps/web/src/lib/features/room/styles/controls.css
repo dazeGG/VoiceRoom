@@ -629,10 +629,15 @@ body[data-lobby-embedded="true"] .room-dock {
   margin-left: 2px;
   padding: 0 5px;
   border-radius: 999px;
-  background: var(--control-active);
-  color: #17150f;
+  background: var(--accent);
+  color: var(--accent-ink);
   font-family: var(--font-ui);
   font-size: 10px;
   font-weight: 800;
   line-height: 1;
+}
+
+.room-chat-unread[data-muted='true'] {
+  background: var(--control-hover);
+  color: var(--warm-muted);
 }

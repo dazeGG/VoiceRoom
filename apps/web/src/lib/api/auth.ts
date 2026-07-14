@@ -28,6 +28,7 @@ export interface OwnedRoom {
   peers: number;
   relationship: RoomRelationship;
   roomId: string;
+  unreadCount?: number;
 }
 
 async function avatarRequest(path: string, method: 'POST' | 'DELETE', file?: Blob): Promise<AuthUser> {

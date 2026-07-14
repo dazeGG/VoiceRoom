@@ -64,17 +64,35 @@ function createRoomRealtimeRuntime(deps) {
     if (roomId) recipientCache.delete(roomId);
   }
 
+  async function resolveRoomUnreadCount(roomId, userId, fallback = 0) {
+    const getUnreadCount = getRoomStore().getRoomUnreadCount;
+    if (typeof getUnreadCount !== 'function') return fallback;
+    return getUnreadCount.call(getRoomStore(), roomId, userId);
+  }
+
   async function flushSummary(roomId) {
     const dbRoom = await getRoomStore().getRoom(roomId);
     if (!dbRoom) return;
     const presence = presenceRooms.get(roomId);
     const peers = presence ? Array.from(presence.peers.values()).map(publicPeer) : [];
-    const summary = buildRoomRealtimeSummaryFromLobbyRoom(publicLobbyRoom(dbRoom), peers, avatarColorForPeerId);
-    const envelope = buildServerEnvelope('room.summary', { room: summary });
     const recipients = await resolveSummaryRecipients(roomId);
-    for (const userId of recipients) {
-      wsRegistry.sendToUser(userId, envelope);
-    }
+    await Promise.all(recipients.map((userId) => sendRoomSummaryToUser(roomId, userId, dbRoom, peers)));
+  }
+
+  async function sendRoomSummaryToUser(roomId, userId, room = null, roomPeers = null) {
+    if (!roomId || !userId) return false;
+    const dbRoom = room || await getRoomStore().getRoom(roomId);
+    if (!dbRoom) return false;
+    const presence = presenceRooms.get(roomId);
+    const peers = roomPeers || (presence ? Array.from(presence.peers.values()).map(publicPeer) : []);
+    const unreadCount = await resolveRoomUnreadCount(roomId, userId);
+    const summary = buildRoomRealtimeSummaryFromLobbyRoom(
+      publicLobbyRoom({ ...dbRoom, unreadCount }),
+      peers,
+      avatarColorForPeerId
+    );
+    wsRegistry.sendToUser(userId, buildServerEnvelope('room.summary', { room: summary }));
+    return true;
   }
 
   const summaryCoalescer = createSummaryCoalescer({
@@ -119,6 +137,7 @@ function createRoomRealtimeRuntime(deps) {
       message: publicChatMessage(message)
     });
     broadcastRoomDetail(roomId, envelope);
+    scheduleSummaryBroadcast(roomId);
     void broadcastRoomMessageNotification(roomId, message);
   }
 
@@ -426,7 +445,14 @@ function createRoomRealtimeRuntime(deps) {
     for (const dbRoom of rooms) {
       const presence = presenceRooms.get(dbRoom.id);
       const peers = presence ? Array.from(presence.peers.values()).map(publicPeer) : [];
-      const summary = buildRoomRealtimeSummaryFromLobbyRoom(publicLobbyRoom(dbRoom), peers, avatarColorForPeerId);
+      const unreadCount = Number.isFinite(dbRoom.unreadCount)
+        ? dbRoom.unreadCount
+        : await resolveRoomUnreadCount(dbRoom.id, userId);
+      const summary = buildRoomRealtimeSummaryFromLobbyRoom(
+        publicLobbyRoom({ ...dbRoom, unreadCount }),
+        peers,
+        avatarColorForPeerId
+      );
       wsRegistry.sendToConnection(connection, buildServerEnvelope('room.summary', { room: summary }));
     }
   }
@@ -450,6 +476,7 @@ function createRoomRealtimeRuntime(deps) {
     leaveVoiceRoom,
     mirrorLegacyRoomEvent,
     scheduleSummaryBroadcast,
+    sendRoomSummaryToUser,
     sendAccountSummaries,
     subscribePreview,
     unsubscribePreview,

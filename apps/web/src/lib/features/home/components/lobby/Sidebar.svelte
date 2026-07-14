@@ -291,7 +291,7 @@
             </div>
           </div>
           {#if entry.unreadCount > 0}
-            <Badge>{entry.unreadCount}</Badge>
+            <Badge tone={friendNotificationsMuted ? 'muted' : 'default'}>{entry.unreadCount}</Badge>
           {/if}
         </button>
       {/each}

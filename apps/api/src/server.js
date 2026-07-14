@@ -1299,7 +1299,7 @@ async function handleChangePassword(req, res) {
 }
 
 function publicLobbyRoom(room) {
-  return {
+  const result = {
     avatarUrl: room.avatarKey ? `/api/avatars/${encodeURIComponent(room.avatarKey)}` : null,
     createdAt: room.createdAt,
     emptySince: room.emptySince,
@@ -1309,6 +1309,9 @@ function publicLobbyRoom(room) {
     relationship: room.relationship || 'owner',
     roomId: room.id
   };
+  if (room.lastMessageAt !== undefined) result.lastMessageAt = room.lastMessageAt;
+  if (Number.isFinite(room.unreadCount)) result.unreadCount = Math.max(0, room.unreadCount);
+  return result;
 }
 
 function broadcastRoomUpdate(roomId, room) {
@@ -1430,6 +1433,24 @@ async function handleAddAuthRoom(req, res) {
 
   roomRuntime?.invalidateRecipientCache(roomId);
   sendJson(res, 200, { ok: true, room: publicLobbyRoom(added.room) });
+}
+
+async function handleMarkRoomChatRead(req, res, rawRoomId) {
+  const user = await requireSessionUser(req, res);
+  if (!user) return;
+  const roomId = normalizeRoomId(rawRoomId);
+  if (!roomId) {
+    sendJson(res, 404, { ok: false, error: 'Комната не найдена' });
+    return;
+  }
+
+  const lastReadAt = await getRoomStore().markRoomChatRead(roomId, user.id);
+  if (lastReadAt == null) {
+    sendJson(res, 404, { ok: false, error: 'Комната не найдена' });
+    return;
+  }
+  await roomRuntime?.sendRoomSummaryToUser(roomId, user.id);
+  sendJson(res, 200, { ok: true, lastReadAt, unreadCount: 0 });
 }
 
 async function handleRoomStatus(res, url) {
@@ -2919,6 +2940,9 @@ function createApiApp({ store = null, users = null, friends = null, notification
   }));
   app.post('/api/rooms/:roomId/chat', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
     return handleRoomChatPost(req, res, normalizeRoomId(request.params.roomId));
+  }));
+  app.post('/api/rooms/:roomId/read', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
+    return handleMarkRoomChatRead(req, res, request.params.roomId);
   }));
   app.patch('/api/rooms/:roomId/chat/:messageId', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
     return handleEditRoomChatMessage(req, res, normalizeRoomId(request.params.roomId), request.params.messageId);

@@ -56,7 +56,19 @@ function createFakeStore(seed = {}) {
       return [];
     },
     async listVisibleRoomsForUser() {
-      return [];
+      return [...rooms.values()]
+        .filter((room) => !room.deletedAt && room.isStatic)
+        .map((room) => ({ ...room, peers: new Map(), relationship: 'owner', unreadCount: room.unreadCount || 0 }));
+    },
+    async getRoomUnreadCount(roomId) {
+      return rooms.get(roomId)?.unreadCount || 0;
+    },
+    async markRoomChatRead(roomId, userId, now = Date.now()) {
+      const room = rooms.get(roomId);
+      if (!room || room.deletedAt || room.ownerId !== userId) return null;
+      room.unreadCount = 0;
+      room.lastReadAt = now;
+      return now;
     },
     async listMessages() {
       return [];
@@ -117,6 +129,43 @@ test('PUT /api/rooms/:roomId lets the owner rename the room', async (t) => {
   assert.equal(body.room.roomId, 'room1');
   // Persisted, not just echoed.
   assert.equal(store.rooms.get('room1').name, 'Renamed');
+});
+
+test('room unread count is returned by auth rooms and cleared by the read endpoint', async (t) => {
+  const { app, store } = buildApp({ room1: staticRoom({ unreadCount: 3 }) });
+  t.after(() => app.close());
+
+  const listed = await app.inject({
+    method: 'GET',
+    url: '/api/auth/rooms',
+    headers: { cookie: `vr_session=${OWNER_TOKEN}` }
+  });
+  assert.equal(listed.statusCode, 200);
+  assert.equal(listed.json().rooms[0].unreadCount, 3);
+
+  const read = await app.inject({
+    method: 'POST',
+    url: '/api/rooms/room1/read',
+    headers: { cookie: `vr_session=${OWNER_TOKEN}` }
+  });
+  assert.equal(read.statusCode, 200);
+  assert.equal(read.json().unreadCount, 0);
+  assert.equal(store.rooms.get('room1').unreadCount, 0);
+});
+
+test('room read endpoint requires auth and room visibility', async (t) => {
+  const { app } = buildApp({ room1: staticRoom() });
+  t.after(() => app.close());
+
+  const anonymous = await app.inject({ method: 'POST', url: '/api/rooms/room1/read' });
+  assert.equal(anonymous.statusCode, 401);
+
+  const hidden = await app.inject({
+    method: 'POST',
+    url: '/api/rooms/room1/read',
+    headers: { cookie: `vr_session=${OTHER_TOKEN}` }
+  });
+  assert.equal(hidden.statusCode, 404);
 });
 
 test('PUT rejects a non-owner with 403', async (t) => {

@@ -155,6 +155,10 @@ export async function fetchRoomChat(roomId: string): Promise<ChatMessage[]> {
   return Array.isArray(payload?.messages) ? (payload.messages as ChatMessage[]) : [];
 }
 
+export async function markRoomChatRead(roomId: string): Promise<void> {
+  await postJsonAuth(`/api/rooms/${encodeURIComponent(roomId)}/read`, {});
+}
+
 export async function postRoomChat(
   roomId: string,
   body: { name: string; peerId?: string; sessionToken?: string; text: string }

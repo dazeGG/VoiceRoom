@@ -1,6 +1,6 @@
 <script lang="ts">
   import { BellOff, ChevronRight, Plus, UserPlus } from '@lucide/svelte';
-  import { Avatar, AvatarStack, Button, ContextMenu, Ellipsis, MascotIcon } from '$lib/shared/ui';
+  import { Avatar, AvatarStack, Badge, Button, ContextMenu, Ellipsis, MascotIcon } from '$lib/shared/ui';
   import { iconMd, iconSm } from '$lib/shared/ui/icons';
   import type { OwnedRoom } from '$lib/api/auth';
   import { roomPresence } from '../../model/room-presence.svelte';
@@ -120,8 +120,14 @@
           oncontextmenu={(event) => openRoomContextMenu(event, room.roomId)}
           onkeydown={(event) => handleRoomKeydown(event, room.roomId)}
           aria-haspopup="menu"
+          class:has-unread={room.unreadCount > 0}
         >
-          <div style="display:flex;align-items:center;gap:11px;min-width:0;">
+          {#if room.unreadCount > 0}
+            <Badge class="lv-card-unread" tone={roomNotificationsMuted ? 'muted' : 'default'}>
+              {room.unreadCount > 99 ? '99+' : room.unreadCount}
+            </Badge>
+          {/if}
+          <div class="lv-card-head" style="display:flex;align-items:center;gap:11px;min-width:0;">
             <Avatar name={roomDisplayName(room)} src={room.avatarUrl} shape="squircle" background="var(--room-avatar-bg)" size={42} />
             <div style="min-width:0;flex:1;">
               <div class="lv-notification-title">

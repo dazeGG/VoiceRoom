@@ -28,6 +28,11 @@
     color: var(--accent-ink);
   }
 
+  .ui-badge--muted {
+    background: var(--control-hover);
+    color: var(--warm-muted);
+  }
+
   .ui-badge--warning {
     background: color-mix(in oklch, var(--amber), transparent 78%);
     color: var(--amber);

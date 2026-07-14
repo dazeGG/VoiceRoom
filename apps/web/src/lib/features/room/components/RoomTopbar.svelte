@@ -12,7 +12,9 @@
   import { showToast } from '../client/ui/toast';
   import { friendsState } from '$lib/features/home/model/friends.svelte';
   import { getSortedParticipants } from '../participants-ui.svelte';
-  import { ringRoomFriend } from '$lib/api/rooms';
+  import { markRoomChatRead, ringRoomFriend } from '$lib/api/rooms';
+  import { notificationPreferences } from '$lib/shared/notifications/preferences.svelte';
+  import { roomPresence, setRoomUnreadCount } from '$lib/features/home/model/room-presence.svelte';
 
   const connection = $derived(getConnectionStatusView());
 
@@ -22,6 +24,15 @@
   let ringingUserId = $state('');
   const ringFriends = $derived([...friendsState.friends].sort((a, b) => Number(b.online) - Number(a.online)));
   const roomAccountIds = $derived(new Set(getSortedParticipants().map((participant) => participant.accountUserId).filter(Boolean)));
+  const roomNotificationsMuted = $derived(notificationPreferences.mutedRoomIds.includes(roomClientState.roomId));
+  const roomUnreadCount = $derived(Math.max(roomUi.unreadChat, roomPresence.unreadCountByRoomId[roomClientState.roomId] ?? 0));
+
+  function openRoomChat(): void {
+    toggleChat();
+    if (!roomUi.chatOpen) return;
+    setRoomUnreadCount(roomClientState.roomId, 0);
+    if (roomClientState.self?.accountUserId) void markRoomChatRead(roomClientState.roomId).catch(() => {});
+  }
 
   async function ringFriend(userId: string, close: () => void): Promise<void> {
     if (ringingUserId) return;
@@ -90,13 +101,13 @@
       type="button"
       aria-pressed={roomUi.chatOpen}
       data-active={roomUi.chatOpen}
-      onclick={toggleChat}
+      onclick={openRoomChat}
       hidden={roomUi.chatOpen}
     >
       <MessageSquare {...iconMd} aria-hidden="true" />
       <span>Чат</span>
-      {#if roomUi.unreadChat > 0}
-        <span class="room-chat-unread" aria-label={`${roomUi.unreadChat} новых сообщений`}>{roomUi.unreadChat > 99 ? '99+' : roomUi.unreadChat}</span>
+      {#if roomUnreadCount > 0}
+        <span class="room-chat-unread" data-muted={roomNotificationsMuted} aria-label={`${roomUnreadCount} новых сообщений`}>{roomUnreadCount > 99 ? '99+' : roomUnreadCount}</span>
       {/if}
     </button>
   </div>

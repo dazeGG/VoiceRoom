@@ -2,7 +2,8 @@
   import { ChevronRight, Copy, MessageSquare, Pencil, Trash2 } from '@lucide/svelte';
   import { iconSm } from '$lib/shared/ui/icons';
   import { onMount, tick } from 'svelte';
-  import { deleteRoomChatMessage, editRoomChatMessage, fetchRoomChat, postRoomChat, type ChatMessage } from '$lib/api/rooms';
+  import { deleteRoomChatMessage, editRoomChatMessage, fetchRoomChat, markRoomChatRead, postRoomChat, type ChatMessage } from '$lib/api/rooms';
+  import { setRoomUnreadCount } from '$lib/features/home/model/room-presence.svelte';
   import { session } from '$lib/features/auth/session.svelte';
   import { subscribeRoomPreview } from '$lib/features/home/model/room-realtime';
   import { formatChatDayLabel, isSameDay } from '$lib/shared/utils/chat-date';
@@ -105,6 +106,8 @@
     document.body.dataset.chatOpen = roomUi.chatOpen ? 'true' : 'false';
     if (roomUi.chatOpen) {
       markChatRead();
+      setRoomUnreadCount(roomId, 0);
+      if (session.user?.id && roomId) void markRoomChatRead(roomId).catch(() => {});
       queueMicrotask(scrollToBottom);
     }
     return () => {
@@ -245,6 +248,8 @@
       if (message.peerId !== peerId) playRoomChatMessageCue();
       if (roomUi.chatOpen) {
         markChatRead();
+        setRoomUnreadCount(roomId, 0);
+        if (session.user?.id) void markRoomChatRead(roomId).catch(() => {});
         queueMicrotask(scrollToBottom);
       } else {
         incrementUnreadChat();

@@ -16,6 +16,7 @@ const dndMigration = require('../src/migrations/20260711140000_add_user_dnd');
 const messageEditingMigration = require('../src/migrations/20260712120000_add_message_editing');
 const presenceStatusMigration = require('../src/migrations/20260713120000_add_user_presence_status');
 const automaticPresenceMigration = require('../src/migrations/20260713220000_add_automatic_presence_source');
+const roomChatReadsMigration = require('../src/migrations/20260714120000_create_room_chat_reads');
 
 function createRecorder() {
   const calls = [];
@@ -89,6 +90,30 @@ test('message editing migration adds reversible timestamps to room and direct me
       ['room_messages', ['edited_at']]
     ]
   );
+});
+
+test('room chat reads migration stores one durable read cursor per room and user', () => {
+  const pgm = createRecorder();
+  roomChatReadsMigration.up(pgm);
+
+  const table = pgm.calls.find((call) => call.type === 'createTable' && call.name === 'room_chat_reads');
+  assert.ok(table);
+  assert.equal(table.columns.room_id.references, 'rooms(id)');
+  assert.equal(table.columns.room_id.onDelete, 'CASCADE');
+  assert.equal(table.columns.user_id.references, 'users(id)');
+  assert.equal(table.columns.user_id.onDelete, 'CASCADE');
+  assert.equal(table.columns.last_read_at.type, 'timestamptz');
+
+  const indexes = new Map(
+    pgm.calls.filter((call) => call.type === 'createIndex').map((call) => [call.options.name, call])
+  );
+  assert.deepEqual(indexes.get('room_chat_reads_room_user_unique_idx').columns, ['room_id', 'user_id']);
+  assert.equal(indexes.get('room_chat_reads_room_user_unique_idx').options.unique, true);
+  assert.deepEqual(indexes.get('room_chat_reads_user_idx').columns, ['user_id']);
+
+  const down = createRecorder();
+  roomChatReadsMigration.down(down);
+  assert.deepEqual(down.calls.filter((call) => call.type === 'dropTable').map((call) => call.name), ['room_chat_reads']);
 });
 
 test('rooms and room_messages migration captures durable schema contract', () => {

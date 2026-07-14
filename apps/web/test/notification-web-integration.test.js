@@ -167,6 +167,29 @@ test('muted notification targets show a bell-off indicator beside their names', 
   assert.match(lobbyCss, /\.lv-notification-muted\s*\{[^}]*flex:\s*none/);
 });
 
+test('unread badges stay Volt unless their friend or room notifications are muted', () => {
+  const badge = read('src/lib/shared/ui/Badge/Badge.svelte');
+  const badgeTypes = read('src/lib/shared/ui/Badge/types.ts');
+  const sidebar = read('src/lib/features/home/components/lobby/Sidebar.svelte');
+  const voiceHome = read('src/lib/features/home/components/lobby/VoiceHome.svelte');
+  const previewChat = read('src/lib/features/home/components/lobby/RoomPreviewChat.svelte');
+  const roomChat = read('src/lib/features/room/components/RoomChat.svelte');
+  const roomTopbar = read('src/lib/features/room/components/RoomTopbar.svelte');
+  const roomControls = read('src/lib/features/room/styles/controls.css');
+
+  assert.match(badgeTypes, /'default' \| 'muted' \| 'warning'/);
+  assert.match(badge, /\.ui-badge--default\s*\{[^}]*background: var\(--accent\)/);
+  assert.match(badge, /\.ui-badge--muted\s*\{[^}]*background: var\(--control-hover\)/);
+  assert.match(sidebar, /tone=\{friendNotificationsMuted \? 'muted' : 'default'\}/);
+  assert.match(voiceHome, /class="lv-card-unread" tone=\{roomNotificationsMuted \? 'muted' : 'default'\}/);
+  assert.match(previewChat, /markRoomChatRead\(activeRoomId\)/);
+  assert.match(roomChat, /roomUi\.chatOpen[\s\S]*markRoomChatRead\(roomId\)/);
+  assert.match(roomTopbar, /roomNotificationsMuted = \$derived\(notificationPreferences\.mutedRoomIds\.includes\(roomClientState\.roomId\)\)/);
+  assert.match(roomTopbar, /data-muted=\{roomNotificationsMuted\}/);
+  assert.match(roomControls, /\.room-chat-unread\s*\{[^}]*background: var\(--accent\)/);
+  assert.match(roomControls, /\.room-chat-unread\[data-muted='true'\]\s*\{[^}]*background: var\(--control-hover\)/);
+});
+
 test('Web Push uses credentialed subscription endpoints and suppresses focused-window notifications', () => {
   const api = read('src/lib/api/push.ts');
   const worker = read('src/service-worker.ts');

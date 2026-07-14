@@ -195,6 +195,55 @@ test('room notification recipients ignore legacy server-side room mute rows', as
   assert.deepEqual(recipients, ['owner-user', 'bookmark-user']);
 });
 
+test('getRoomUnreadCount counts active messages after the user read cursor and excludes own posts', async () => {
+  const pool = createFakePool((text, values) => {
+    assert.match(text, /LEFT JOIN room_chat_reads/);
+    assert.match(text, /m\.created_at > COALESCE\(rcr\.last_read_at/);
+    assert.match(text, /m\.author_user_id IS DISTINCT FROM \$2/);
+    assert.deepEqual(values.slice(0, 2), ['room1', 'user1']);
+    return { rows: [{ unread_count: 4 }], rowCount: 1 };
+  });
+
+  const count = await createRoomStore({ pool }).getRoomUnreadCount('room1', 'user1', 5000);
+  assert.equal(count, 4);
+  assert.equal(pool.calls[0].values[2].getTime(), 5000);
+});
+
+test('markRoomChatRead upserts a monotonic cursor only for visible rooms', async () => {
+  const pool = createFakePool((text, values) => {
+    assert.match(text, /INSERT INTO room_chat_reads/);
+    assert.match(text, /FROM room_memberships/);
+    assert.match(text, /FROM room_bookmarks/);
+    assert.match(text, /ON CONFLICT \(room_id, user_id\) DO UPDATE/);
+    assert.match(text, /GREATEST\(room_chat_reads\.last_read_at, EXCLUDED\.last_read_at\)/);
+    assert.deepEqual(values.slice(0, 2), ['room1', 'user1']);
+    return { rows: [{ last_read_at: new Date(5000) }], rowCount: 1 };
+  });
+
+  const lastReadAt = await createRoomStore({ pool }).markRoomChatRead('room1', 'user1', 5000);
+  assert.equal(lastReadAt, 5000);
+});
+
+test('listVisibleRoomsForUser returns per-user unread metadata', async () => {
+  const pool = createFakePool((text, values) => {
+    assert.match(text, /LEFT JOIN room_chat_reads/);
+    assert.match(text, /AS unread_count/);
+    assert.match(text, /AS last_message_at/);
+    assert.deepEqual(values, ['user1']);
+    return {
+      rows: [{
+        id: 'room1', is_static: true, relationship: 'owner', unread_count: 3,
+        last_message_at: new Date(4000), created_at: new Date(1000), updated_at: new Date(2000)
+      }],
+      rowCount: 1
+    };
+  });
+
+  const rooms = await createRoomStore({ pool }).listVisibleRoomsForUser('user1');
+  assert.equal(rooms[0].unreadCount, 3);
+  assert.equal(rooms[0].lastMessageAt, 4000);
+});
+
 test('listMessages soft-deletes expired messages before selecting active rows', async () => {
   const pool = createFakePool((text) => {
     if (/SELECT \*/.test(text)) {

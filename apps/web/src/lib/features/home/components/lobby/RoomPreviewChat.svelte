@@ -3,7 +3,8 @@
   import type { AuthUser } from '$lib/api/auth';
   import { iconSm } from '$lib/shared/ui/icons';
   import { getAppRealtime } from '$lib/api/realtime';
-  import { deleteRoomChatMessage, editRoomChatMessage, fetchRoomChat, postRoomChat, type ChatMessage } from '$lib/api/rooms';
+  import { deleteRoomChatMessage, editRoomChatMessage, fetchRoomChat, markRoomChatRead, postRoomChat, type ChatMessage } from '$lib/api/rooms';
+  import { setRoomUnreadCount } from '../../model/room-presence.svelte';
   import { playRoomChatMessageCue } from '$lib/features/room/client/media/cues';
   import { Avatar } from '$lib/shared/ui';
   import { getAvatarPresentation } from '$lib/features/room/client/ui/avatar-presentation';
@@ -30,6 +31,12 @@
   let chatBody: HTMLDivElement | null = null;
   let composeEl: HTMLTextAreaElement | null = null;
   let editEl = $state<HTMLTextAreaElement | null>(null);
+
+  $effect(() => {
+    const activeRoomId = roomId;
+    setRoomUnreadCount(activeRoomId, 0);
+    void markRoomChatRead(activeRoomId).catch(() => {});
+  });
 
   function autoResize() {
     if (!composeEl) return;
@@ -273,6 +280,8 @@
       error = '';
       messages = [...messages, message];
       if (message.peerId !== accountPeerId) playRoomChatMessageCue();
+      setRoomUnreadCount(activeRoomId, 0);
+      void markRoomChatRead(activeRoomId).catch(() => {});
       queueMicrotask(scrollToBottom);
     });
 

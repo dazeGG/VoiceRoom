@@ -47,10 +47,14 @@ function mapRoom(row) {
     emptySince: row.empty_since ? toMillis(row.empty_since) : null,
     id: row.id,
     isStatic: Boolean(row.is_static),
+    lastMessageAt: Object.hasOwn(row, 'last_message_at')
+      ? (row.last_message_at ? toMillis(row.last_message_at) : null)
+      : undefined,
     messages: [],
     name: row.name || '',
     ownerId: row.owner_id || null,
     peers: new Map(),
+    unreadCount: Object.hasOwn(row, 'unread_count') ? normalizePositiveInt(row.unread_count, 0) : undefined,
     updatedAt: toMillis(row.updated_at)
   };
 }
@@ -785,11 +789,73 @@ function createRoomStore({
          FROM visible
          ORDER BY id, priority ASC, created_at DESC
        )
-       SELECT * FROM deduped
+       SELECT deduped.*,
+              (
+                SELECT MAX(m.created_at)
+                FROM room_messages m
+                WHERE m.room_id = deduped.id
+                  AND m.deleted_at IS NULL
+                  AND (m.expires_at IS NULL OR m.expires_at > current_timestamp)
+              ) AS last_message_at,
+              (
+                SELECT COUNT(*)::int
+                FROM room_messages m
+                LEFT JOIN room_chat_reads rcr
+                  ON rcr.room_id = m.room_id AND rcr.user_id = $1
+                WHERE m.room_id = deduped.id
+                  AND m.deleted_at IS NULL
+                  AND (m.expires_at IS NULL OR m.expires_at > current_timestamp)
+                  AND m.created_at > COALESCE(rcr.last_read_at, '-infinity'::timestamptz)
+                  AND m.author_user_id IS DISTINCT FROM $1
+              ) AS unread_count
+       FROM deduped
        ORDER BY created_at DESC, id ASC`,
       [userId]
     );
     return result.rows.map((row) => withRelationship(mapRoom(row), row.relationship));
+  }
+
+  async function getRoomUnreadCount(roomId, userId, now = Date.now()) {
+    if (!roomId || !userId) return 0;
+    const result = await getPool().query(
+      `SELECT COUNT(*)::int AS unread_count
+       FROM room_messages m
+       LEFT JOIN room_chat_reads rcr
+         ON rcr.room_id = m.room_id AND rcr.user_id = $2
+       WHERE m.room_id = $1
+         AND m.deleted_at IS NULL
+         AND (m.expires_at IS NULL OR m.expires_at > $3)
+         AND m.created_at > COALESCE(rcr.last_read_at, '-infinity'::timestamptz)
+         AND m.author_user_id IS DISTINCT FROM $2`,
+      [roomId, userId, toDate(now)]
+    );
+    return normalizePositiveInt(result.rows[0]?.unread_count, 0);
+  }
+
+  async function markRoomChatRead(roomId, userId, now = Date.now()) {
+    if (!roomId || !userId) return null;
+    const result = await getPool().query(
+      `INSERT INTO room_chat_reads (room_id, user_id, last_read_at)
+       SELECT r.id, $2, $3
+       FROM rooms r
+       WHERE r.id = $1
+         AND r.deleted_at IS NULL
+         AND (
+           EXISTS (
+             SELECT 1 FROM room_memberships rm
+             WHERE rm.room_id = r.id AND rm.user_id = $2 AND rm.role = 'owner'
+           )
+           OR EXISTS (
+             SELECT 1 FROM room_bookmarks rb
+             WHERE rb.room_id = r.id AND rb.user_id = $2
+           )
+         )
+       ON CONFLICT (room_id, user_id) DO UPDATE
+       SET last_read_at = GREATEST(room_chat_reads.last_read_at, EXCLUDED.last_read_at)
+       RETURNING last_read_at`,
+      [roomId, userId, toDate(now)]
+    );
+    return result.rows[0]?.last_read_at ? toMillis(result.rows[0].last_read_at) : null;
   }
 
   async function listSummaryRecipientUserIds(roomId) {
@@ -899,6 +965,7 @@ function createRoomStore({
     listMessages,
     listAvatarKeys,
     getMessage,
+    getRoomUnreadCount,
     softDeleteMessage,
     listRoomsForOwner,
     listVisibleRoomsForUser,
@@ -907,6 +974,7 @@ function createRoomStore({
     addRoomBookmarkForUser,
     markActiveTemporaryRoomsEmpty,
     markRoomActive,
+    markRoomChatRead,
     markRoomEmpty,
     invalidatePeerIdentity,
     pruneRooms,
