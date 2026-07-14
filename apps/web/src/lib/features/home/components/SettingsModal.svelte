@@ -426,10 +426,6 @@
   }
 
   function changeMicrophoneMode(mode: MicrophoneMode): void {
-    if (mode === 'push-to-talk' && !pushToTalkHotkey) {
-      onToast('Сначала назначьте клавишу Push-to-talk');
-      return;
-    }
     microphoneMode = setMicrophoneMode(mode);
   }
 

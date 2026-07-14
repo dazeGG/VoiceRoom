@@ -155,6 +155,7 @@ test('configurable hotkeys and push-to-talk cover hold, release, and focus loss'
   assert.match(modal, /tab: 'profile' \| 'sound' \| 'hotkeys' \| 'notifications'/);
   assert.match(modal, /\{#if desktopApp\}[\s\S]*Режим микрофона[\s\S]*data-disabled=\{microphoneMode !== 'push-to-talk'\}[\s\S]*disabled=\{microphoneMode !== 'push-to-talk'\}/);
   assert.match(modal, /\{:else if tab === 'hotkeys' && desktopApp\}[\s\S]*Мьют микрофона[\s\S]*changeHotkey\('mic-mute', value\)[\s\S]*Мьют звука[\s\S]*changeHotkey\('output-mute', value\)[\s\S]*Push-to-talk[\s\S]*changeHotkey\('push-to-talk', value\)/);
+  assert.doesNotMatch(modal, /Сначала назначьте клавишу Push-to-talk/);
   assert.doesNotMatch(modal, /В браузере горячие клавиши работают/);
   assert.match(settings, /if \(!window\.voiceRoomRuntime\?\.isDesktop\) return DEFAULT_MICROPHONE_MODE/);
   assert.match(main, /isDesktopGlobalHotkeyRegistered\('push-to-talk'\)/);
