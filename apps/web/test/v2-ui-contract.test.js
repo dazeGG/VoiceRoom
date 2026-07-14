@@ -1697,10 +1697,13 @@ test('profile cover accent reuses the server-derived avatarAccent, not a client 
 test('settings keep profile identity and sound columns free of decorative card surfaces', () => {
   const settings = read('src/lib/features/home/components/SettingsModal.svelte');
   const css = read('src/lib/features/home/styles/settings.css');
+  const notificationListRule = css.match(/\.settings-notification-list\s*\{(?<body>[^}]*)\}/);
 
   assert.match(settings, /class="settings-profile-head"/);
   assert.doesNotMatch(settings, /settings-profile-(?:summary|cover|identity)/);
   assert.doesNotMatch(css, /\.settings-sound-device\s*\{[^}]*(?:background|border|padding):/);
+  assert.ok(notificationListRule?.groups?.body);
+  assert.doesNotMatch(notificationListRule.groups.body, /(?:background|border|padding)\s*:/);
 });
 
 test('settings sound columns cannot widen the modal content area', () => {

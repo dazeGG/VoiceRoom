@@ -711,12 +711,8 @@
 
 .settings-notification-list {
   display: grid;
-  gap: 2px;
+  gap: 4px;
   max-height: 176px;
-  padding: 4px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 12px;
-  background: var(--warm-900);
   overflow-y: auto;
 }
 
