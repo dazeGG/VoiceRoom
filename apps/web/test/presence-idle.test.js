@@ -144,12 +144,12 @@ test('desktop idle checks adapt to the remaining threshold and poll quickly only
     idleSeconds: PRESENCE_IDLE_THRESHOLD_SECONDS,
     presenceStatus: 'online',
     presenceStatusAutomatic: false
-  }), 2_000);
+  }), 5_000);
   assert.equal(getNextPresenceIdleCheckDelayMs({
     idleSeconds: PRESENCE_IDLE_THRESHOLD_SECONDS,
     presenceStatus: 'away',
     presenceStatusAutomatic: true
-  }), 2_000);
+  }), 5_000);
   assert.equal(getNextPresenceIdleCheckDelayMs({
     idleSeconds: 0,
     presenceStatus: 'away',
