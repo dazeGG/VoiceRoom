@@ -15,12 +15,14 @@ function mapPreferences({
   presenceStatus = '',
   presenceStatusAutomatic = false,
   privateNotifications = false,
-  mutedPeerIds = []
+  mutedPeerIds = [],
+  mutedRoomIds = []
 } = {}) {
   const normalizedPresenceStatus = cleanPresenceStatus(presenceStatus) || (doNotDisturb ? 'dnd' : 'online');
   return {
     doNotDisturb: normalizedPresenceStatus === 'dnd',
     mutedPeerIds: [...new Set(mutedPeerIds)].sort(),
+    mutedRoomIds: [...new Set(mutedRoomIds)].sort(),
     presenceStatus: normalizedPresenceStatus,
     presenceStatusAutomatic: normalizedPresenceStatus === 'away' && Boolean(presenceStatusAutomatic),
     privateNotifications: Boolean(privateNotifications)
@@ -60,28 +62,25 @@ function createNotificationStore({
        ORDER BY peer_user_id`,
       [userId]
     );
+    const roomMutes = await client.query(
+      `SELECT room_id
+       FROM notification_room_mutes
+       WHERE user_id = $1
+       ORDER BY room_id`,
+      [userId]
+    );
     return mapPreferences({
       doNotDisturb: preferences.rows[0]?.dnd || false,
       presenceStatus: preferences.rows[0]?.presence_status,
       presenceStatusAutomatic: preferences.rows[0]?.presence_status_automatic,
       privateNotifications: preferences.rows[0]?.private_notifications || false,
-      mutedPeerIds: dmMutes.rows.map((row) => row.peer_user_id)
+      mutedPeerIds: dmMutes.rows.map((row) => row.peer_user_id),
+      mutedRoomIds: roomMutes.rows.map((row) => row.room_id)
     });
   }
 
   async function userExists(userId, client) {
     const result = await client.query(`SELECT 1 FROM users WHERE id = $1`, [userId]);
-    return result.rowCount > 0;
-  }
-
-  async function areFriends(userId, peerUserId, client) {
-    const result = await client.query(
-      `SELECT 1
-       FROM friendships
-       WHERE (user_a_id = $1 AND user_b_id = $2)
-          OR (user_a_id = $2 AND user_b_id = $1)`,
-      [userId, peerUserId]
-    );
     return result.rowCount > 0;
   }
 
@@ -214,10 +213,6 @@ function createNotificationStore({
       if (!(await userExists(peerUserId, client))) {
         return { status: 'not_found', preferences: await getPreferences(userId, client) };
       }
-      if (!(await areFriends(userId, peerUserId, client))) {
-        return { status: 'not_friends', preferences: await getPreferences(userId, client) };
-      }
-
       if (muted) {
         await client.query(
           `INSERT INTO notification_dm_mutes (id, user_id, peer_user_id, created_at, updated_at)
@@ -249,6 +244,71 @@ function createNotificationStore({
     return result.rowCount > 0;
   }
 
+  async function setRoomMute({ userId, roomId, muted }) {
+    if (!userId || !roomId) return { status: 'not_found', preferences: mapPreferences() };
+
+    return transaction(getPool(), async (client) => {
+      if (!(await userExists(userId, client))) {
+        return { status: 'not_found', preferences: mapPreferences() };
+      }
+      const room = await client.query(
+        `SELECT is_static
+         FROM rooms
+         WHERE id = $1 AND deleted_at IS NULL`,
+        [roomId]
+      );
+      if (room.rowCount === 0) {
+        return { status: 'not_found', preferences: await getPreferences(userId, client) };
+      }
+      if (!room.rows[0]?.is_static) {
+        return { status: 'temporary_room', preferences: await getPreferences(userId, client) };
+      }
+      const saved = await client.query(
+        `SELECT 1
+         FROM (
+           SELECT user_id FROM room_memberships WHERE room_id = $1 AND role = 'owner'
+           UNION ALL
+           SELECT user_id FROM room_bookmarks WHERE room_id = $1
+         ) saved_rooms
+         WHERE user_id = $2
+         LIMIT 1`,
+        [roomId, userId]
+      );
+      if (saved.rowCount === 0) {
+        return { status: 'not_saved_room', preferences: await getPreferences(userId, client) };
+      }
+
+      if (muted) {
+        await client.query(
+          `INSERT INTO notification_room_mutes (id, user_id, room_id, created_at, updated_at)
+           VALUES ($1, $2, $3, current_timestamp, current_timestamp)
+           ON CONFLICT (user_id, room_id) DO UPDATE
+           SET updated_at = current_timestamp`,
+          [createRowId(), userId, roomId]
+        );
+      } else {
+        await client.query(
+          `DELETE FROM notification_room_mutes
+           WHERE user_id = $1 AND room_id = $2`,
+          [userId, roomId]
+        );
+      }
+
+      return { status: muted ? 'muted' : 'unmuted', preferences: await getPreferences(userId, client) };
+    });
+  }
+
+  async function isRoomMuted({ userId, roomId }) {
+    if (!userId || !roomId) return false;
+    const result = await getPool().query(
+      `SELECT 1
+       FROM notification_room_mutes
+       WHERE user_id = $1 AND room_id = $2`,
+      [userId, roomId]
+    );
+    return result.rowCount > 0;
+  }
+
   async function close() {
     if (activePool) {
       await activePool.end();
@@ -259,7 +319,9 @@ function createNotificationStore({
     close,
     getPreferences,
     isDmMuted,
+    isRoomMuted,
     setDmMute,
+    setRoomMute,
     setDoNotDisturb,
     setPresenceStatus,
     setPrivateNotifications

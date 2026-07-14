@@ -57,8 +57,9 @@ export function mountRoomClient(_root: ParentNode = document, options: { roomId?
     toggleMic: toggleMicrophoneMuted,
     toggleDeafen: toggleOutputMute
   });
+  const desktopRuntime = Boolean(window.voiceRoomRuntime?.isDesktop);
   let lastDesktopHotkeyFailure = '';
-  desktopHotkeysTeardown = bindDesktopGlobalHotkeys(
+  desktopHotkeysTeardown = desktopRuntime ? bindDesktopGlobalHotkeys(
     (action, phase, options) => {
       if (!state.joined) return;
       if (action === 'push-to-talk') {
@@ -98,7 +99,7 @@ export function mountRoomClient(_root: ParentNode = document, options: { roomId?
             : 'Возможно, сочетание занято другим приложением.';
       showToast(`Системное сочетание недоступно: ${labels.join(', ')}. ${explanation}`);
     }
-  );
+  ) : null;
 
   let activePushToTalkCode = '';
   let localPushToTalkOwned = false;
@@ -145,12 +146,14 @@ export function mountRoomClient(_root: ParentNode = document, options: { roomId?
     endPushToTalk({ immediate: true });
   }
 
-  window.addEventListener('keydown', onVoiceHotkeyDown, { signal: listenerSignal });
-  window.addEventListener('keyup', onVoiceHotkeyUp, { signal: listenerSignal });
-  window.addEventListener('blur', releasePushToTalkImmediately, { signal: listenerSignal });
-  document.addEventListener('visibilitychange', () => {
-    if (document.hidden) releasePushToTalkImmediately();
-  }, { signal: listenerSignal });
+  if (desktopRuntime) {
+    window.addEventListener('keydown', onVoiceHotkeyDown, { signal: listenerSignal });
+    window.addEventListener('keyup', onVoiceHotkeyUp, { signal: listenerSignal });
+    window.addEventListener('blur', releasePushToTalkImmediately, { signal: listenerSignal });
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) releasePushToTalkImmediately();
+    }, { signal: listenerSignal });
+  }
 
   const mountedRoomId = options.roomId || options.embeddedRoomId || '';
   if (mountedRoomId) {

@@ -409,6 +409,9 @@ test('shared Select primitive wraps Popover listbox slots for site-wide dropdown
   assert.match(settingsModal, /<Slider[\s\S]*onValueChange=\{onGateChange\}/);
   assert.match(settingsModal, /<span class="settings-field-label">Звуки интерфейса<\/span>[\s\S]*<Slider[\s\S]*onValueChange=\{onNotificationVolumeChange\}/);
   assert.match(settingsModal, /playPeerCue\('join'\)/);
+  assert.match(settingsModal, /class="settings-sound-devices"[\s\S]*id="microphoneSettingsTitle"[\s\S]*id="speakerSettingsTitle"/);
+  assert.match(settingsModal, /id="microphoneSettingsTitle"[\s\S]*Шумоподавление[\s\S]*Гейт[\s\S]*<\/section>[\s\S]*id="speakerSettingsTitle"[\s\S]*Звуки интерфейса/);
+  assert.doesNotMatch(settingsModal, /settings-sound-processing/);
   assert.match(roomDock, /import \{[^}]*\bSelect\b[^}]*\} from '\$lib\/shared\/ui'/);
   assert.match(roomDock, /import \{[^}]*\bPopover\b[^}]*\} from '\$lib\/shared\/ui'/);
   assert.doesNotMatch(sidebarDownload, /<select\b/);
@@ -602,7 +605,7 @@ test('avatar crop and settings flows export a normalized bitmap and refresh live
   assert.match(authApi, /deleteUserAvatar/);
   assert.match(roomsApi, /uploadRoomAvatar/);
   assert.match(roomsApi, /deleteRoomAvatar/);
-  assert.match(settings, /import \{ untrack \} from 'svelte'/);
+  assert.match(settings, /import \{[^}]*\buntrack\b[^}]*\} from 'svelte'/);
   assert.match(settings, /untrack\(\(\) => \{[\s\S]*pendingAvatar = null/);
   assert.match(settings, /pendingAvatar = blob/);
   assert.match(settings, /const avatarBlob = pendingAvatar[\s\S]*if \(avatarBlob\)[\s\S]*await uploadUserAvatar\(avatarBlob\)/);
@@ -1375,9 +1378,9 @@ test('sound cue layer covers direct messages and friend request events', () => {
   assert.match(friends, /case 'dm\.message'[\s\S]*playDirectMessageCue\(\)/);
   assert.match(roomChat, /event\.type !== 'room\.chat\.message'[\s\S]*message\.peerId !== peerId[\s\S]*playRoomChatMessageCue\(\)/);
   assert.match(previewChat, /event\.type !== 'room\.chat\.message'[\s\S]*message\.peerId !== accountPeerId[\s\S]*playRoomChatMessageCue\(\)/);
-  assert.match(settingsModal, /settings-cue-grid/);
-  assert.match(settingsModal, /previewCue\('room-chat'\)/);
-  assert.match(settingsModal, /previewCue\('friend-request'\)/);
+  assert.doesNotMatch(settingsModal, /settings-cue-grid|previewCue/);
+  assert.match(settingsModal, /const cues = \[[\s\S]*playPeerCue\('join'\)[\s\S]*playRoomChatMessageCue\(\)[\s\S]*playFriendAcceptedCue\(\)/);
+  assert.match(settingsModal, /disabled=\{previewingSoundSet\}/);
 });
 
 test('shared slider component supports custom track backgrounds and backs volume UI', () => {
@@ -1676,4 +1679,13 @@ test('profile cover accent reuses the server-derived avatarAccent, not a client 
   assert.match(dm, /profileAccent = \$derived\(peer\?\.avatarAccent \|\| ''\)/);
   assert.match(dm, /style:--profile-cover-accent/);
   assert.match(css, /background: var\(--profile-cover-accent/);
+});
+
+test('settings keep profile identity and sound columns free of decorative card surfaces', () => {
+  const settings = read('src/lib/features/home/components/SettingsModal.svelte');
+  const css = read('src/lib/features/home/styles/settings.css');
+
+  assert.match(settings, /class="settings-profile-head"/);
+  assert.doesNotMatch(settings, /settings-profile-(?:summary|cover|identity)/);
+  assert.doesNotMatch(css, /\.settings-sound-device\s*\{[^}]*(?:background|border|padding):/);
 });

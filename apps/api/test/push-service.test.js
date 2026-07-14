@@ -20,10 +20,12 @@ test('push config is disabled unless every VAPID value is present', () => {
   assert.equal(readPushConfig(ENABLED_ENV).enabled, true);
 });
 
-test('push policy centralizes DND and DM mute filtering', () => {
-  assert.equal(shouldDeliverPush({ doNotDisturb: true, mutedPeerIds: [] }, {}), false);
-  assert.equal(shouldDeliverPush({ doNotDisturb: false, mutedPeerIds: ['peer-1'] }, { peerUserId: 'peer-1' }), false);
-  assert.equal(shouldDeliverPush({ doNotDisturb: false, mutedPeerIds: [] }, { peerUserId: 'peer-1' }), true);
+test('push policy centralizes DND, user, and room mute filtering', () => {
+  assert.equal(shouldDeliverPush({ doNotDisturb: true, mutedPeerIds: [], mutedRoomIds: [] }, {}), false);
+  assert.equal(shouldDeliverPush({ doNotDisturb: false, mutedPeerIds: ['peer-1'], mutedRoomIds: [] }, { peerUserId: 'peer-1' }), false);
+  assert.equal(shouldDeliverPush({ doNotDisturb: false, mutedPeerIds: [], mutedRoomIds: ['room-1'] }, { roomId: 'room-1' }), false);
+  assert.equal(shouldDeliverPush({ doNotDisturb: false, mutedPeerIds: [], mutedRoomIds: [] }, { peerUserId: 'peer-1' }), true);
+  assert.equal(shouldDeliverPush({ doNotDisturb: false, mutedPeerIds: [], mutedRoomIds: [] }, { roomId: 'room-1' }), true);
 });
 
 test('push service delivers to all subscriptions and records successes', async () => {

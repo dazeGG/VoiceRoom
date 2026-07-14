@@ -88,6 +88,7 @@ test('configurable hotkeys and push-to-talk cover hold, release, and focus loss'
   const room = read('src/lib/features/room/client/room/room.ts');
   const livekit = read('src/lib/features/room/client/services/livekit-service.ts');
   const controls = read('src/lib/features/room/client/ui/controls.ts');
+  const settings = read('src/lib/features/room/client/core/settings.ts');
   const modal = read('src/lib/features/home/components/SettingsModal.svelte');
   const dock = read('src/lib/features/room/components/RoomDock.svelte');
 
@@ -111,6 +112,8 @@ test('configurable hotkeys and push-to-talk cover hold, release, and focus loss'
   assert.match(main, /window\.addEventListener\('blur', releasePushToTalkImmediately/);
   assert.match(main, /document\.hidden/);
   assert.match(main, /bindDesktopGlobalHotkeys/);
+  assert.match(main, /const desktopRuntime = Boolean\(window\.voiceRoomRuntime\?\.isDesktop\)/);
+  assert.match(main, /if \(desktopRuntime\) \{[\s\S]*window\.addEventListener\('keydown'/);
   assert.match(main, /isDesktopGlobalHotkeyRegistered\('mic-mute'\)/);
   assert.match(main, /isDesktopGlobalHotkeyRegistered\('output-mute'\)/);
 
@@ -147,7 +150,9 @@ test('configurable hotkeys and push-to-talk cover hold, release, and focus loss'
   assert.match(controls, /setMicrophoneMuted\(true, \{ playCue: false \}\)/);
   assert.match(modal, /успешно зарегистрированные сочетания работают поверх других окон/);
   assert.match(modal, /Мониторинг ввода/);
-  assert.match(modal, /В браузере горячие клавиши работают только в активной вкладке/);
+  assert.match(modal, /\{#if desktopApp\}[\s\S]*class="settings-hotkeys"/);
+  assert.doesNotMatch(modal, /В браузере горячие клавиши работают/);
+  assert.match(settings, /if \(!window\.voiceRoomRuntime\?\.isDesktop\) return DEFAULT_MICROPHONE_MODE/);
   assert.match(main, /isDesktopGlobalHotkeyRegistered\('push-to-talk'\)/);
   assert.match(main, /localPushToTalkOwned/);
   assert.match(main, /if \(!localPushToTalkOwned \|\| !activePushToTalkCode/);

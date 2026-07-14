@@ -70,6 +70,7 @@ export function persistMicrophoneVolume(volume: number): number {
 }
 
 export function getStoredMicrophoneMode(): MicrophoneMode {
+  if (!window.voiceRoomRuntime?.isDesktop) return DEFAULT_MICROPHONE_MODE;
   return localStorage.getItem(MICROPHONE_MODE_STORAGE_KEY) === 'push-to-talk'
     ? 'push-to-talk'
     : DEFAULT_MICROPHONE_MODE;

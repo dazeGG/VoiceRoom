@@ -466,7 +466,7 @@ test('notification preference routes require auth and expose defaults', async (t
     notifications: {
       async getPreferences(userId) {
         assert.equal(userId, '11111111-1111-4111-8111-111111111111');
-        return { doNotDisturb: false, mutedPeerIds: [], presenceStatus: 'online', privateNotifications: false };
+        return { doNotDisturb: false, mutedPeerIds: [], mutedRoomIds: [], presenceStatus: 'online', privateNotifications: false };
       }
     }
   });
@@ -484,6 +484,7 @@ test('notification preference routes require auth and expose defaults', async (t
   assert.deepEqual(response.json().preferences, {
     doNotDisturb: false,
     mutedPeerIds: [],
+    mutedRoomIds: [],
     presenceStatus: 'online',
     privateNotifications: false
   });
@@ -494,6 +495,7 @@ test('notification mute and privacy routes call notification store and map statu
   const preferences = {
     doNotDisturb: true,
     mutedPeerIds: ['22222222-2222-4222-8222-222222222222'],
+    mutedRoomIds: ['saved-room'],
     presenceStatus: 'dnd',
     privateNotifications: true
   };
@@ -507,9 +509,10 @@ test('notification mute and privacy routes call notification store and map statu
     notifications: {
       async setDmMute(input) {
         calls.push(['dm', input]);
-        if (input.peerUserId === '33333333-3333-4333-8333-333333333333') {
-          return { status: 'not_friends', preferences: { ...preferences, mutedPeerIds: [] } };
-        }
+        return { status: input.muted ? 'muted' : 'unmuted', preferences };
+      },
+      async setRoomMute(input) {
+        calls.push(['room', input]);
         return { status: input.muted ? 'muted' : 'unmuted', preferences };
       },
       async setPrivateNotifications(input) {
@@ -542,9 +545,9 @@ test('notification mute and privacy routes call notification store and map statu
     muted: true
   }]);
 
-  const notFriends = await app.inject({
+  const room = await app.inject({
     method: 'PUT',
-    url: '/api/notifications/dm/33333333-3333-4333-8333-333333333333/mute',
+    url: '/api/notifications/room/saved-room/mute',
     headers: {
       cookie: 'vr_session=session-token',
       host: 'voice.local',
@@ -552,7 +555,12 @@ test('notification mute and privacy routes call notification store and map statu
     },
     payload: { muted: true }
   });
-  assert.equal(notFriends.statusCode, 403);
+  assert.equal(room.statusCode, 200);
+  assert.deepEqual(calls[1], ['room', {
+    userId: '11111111-1111-4111-8111-111111111111',
+    roomId: 'saved-room',
+    muted: true
+  }]);
 
   const privacy = await app.inject({
     method: 'PUT',
@@ -716,6 +724,10 @@ test('notification mutation routes reject invalid booleans and targets before st
         calls.push(['dm', input]);
         return { status: 'muted', preferences: { mutedPeerIds: [], privateNotifications: false } };
       },
+      async setRoomMute(input) {
+        calls.push(['room', input]);
+        return { status: 'muted', preferences: { mutedPeerIds: [], mutedRoomIds: [], privateNotifications: false } };
+      },
       async setPrivateNotifications(input) {
         calls.push(['privacy', input]);
         return { status: 'updated', preferences: { mutedPeerIds: [], privateNotifications: false } };
@@ -761,6 +773,24 @@ test('notification mutation routes reject invalid booleans and targets before st
   });
   assert.equal(invalidPeer.statusCode, 404);
   assert.equal(invalidPeer.json().ok, false);
+
+  const invalidRoomPayload = await app.inject({
+    method: 'PUT',
+    url: '/api/notifications/room/saved-room/mute',
+    headers,
+    payload: { muted: 'true' }
+  });
+  assert.equal(invalidRoomPayload.statusCode, 400);
+  assert.deepEqual(invalidRoomPayload.json(), { ok: false, error: 'muted must be a boolean' });
+
+  const invalidRoom = await app.inject({
+    method: 'PUT',
+    url: '/api/notifications/room/not%20a%20room/mute',
+    headers,
+    payload: { muted: true }
+  });
+  assert.equal(invalidRoom.statusCode, 404);
+  assert.equal(invalidRoom.json().ok, false);
 
   const invalidPrivacy = await app.inject({
     method: 'PUT',

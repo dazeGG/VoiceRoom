@@ -68,6 +68,11 @@
   const selectedRoom = $derived(rooms.find((room) => room.roomId === selectedRoomId) ?? null);
   const previewSettingsRoom = $derived(rooms.find((room) => room.roomId === previewSettingsRoomId) ?? null);
   const connectedVoiceRoom = $derived(rooms.find((room) => room.roomId === connectedVoiceRoomId) ?? null);
+  const notificationUsers = $derived(
+    [...friendsState.friends]
+      .sort((a, b) => (b.lastMessage?.createdAt ?? 0) - (a.lastMessage?.createdAt ?? 0))
+      .map((entry) => entry.user)
+  );
   const connectedRoomVisible = $derived(connectedRoomIsViewed(friendsState.mode));
   const embeddedRoomVisible = $derived(embeddedRoomIsVisible(friendsState.mode));
 
@@ -336,6 +341,8 @@
     open={settingsOpen}
     bind:tab={settingsTab}
     {user}
+    {notificationUsers}
+    notificationRooms={rooms}
     {loggingOut}
     onClose={() => (settingsOpen = false)}
     {onToast}

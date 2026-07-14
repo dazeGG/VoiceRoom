@@ -23,9 +23,10 @@ function readPushConfig(env = process.env) {
   };
 }
 
-function shouldDeliverPush(preferences, { peerUserId } = {}) {
+function shouldDeliverPush(preferences, { peerUserId, roomId } = {}) {
   if (preferences?.doNotDisturb) return false;
   if (peerUserId && preferences?.mutedPeerIds?.includes(peerUserId)) return false;
+  if (roomId && preferences?.mutedRoomIds?.includes(roomId)) return false;
   return true;
 }
 

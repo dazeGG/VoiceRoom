@@ -12,10 +12,10 @@ test('notification API client uses required endpoints and credentialed helpers',
   assert.match(api, /import \{ getJsonAuth, postJsonAuth, putJson \} from '\.\/http'/);
   assert.match(api, /getJsonAuth<NotificationPreferencesResponse>\('\/api\/notifications\/preferences'\)/);
   assert.match(api, /putJson<NotificationMuteResponse>\(`\/api\/notifications\/dm\/\$\{encodeURIComponent\(userId\)\}\/mute`, \{ muted \}\)/);
-  assert.doesNotMatch(api, /notifications\/rooms/);
+  assert.match(api, /putJson<NotificationMuteResponse>\(`\/api\/notifications\/room\/\$\{encodeURIComponent\(roomId\)\}\/mute`, \{ muted \}\)/);
   assert.match(api, /putJson<NotificationPreferencesResponse>\('\/api\/notifications\/privacy', \{ privateNotifications \}\)/);
   assert.match(api, /mutedPeerIds: string\[\]/);
-  assert.doesNotMatch(api, /mutedRoomIds/);
+  assert.match(api, /mutedRoomIds: string\[\]/);
   assert.match(api, /privateNotifications: boolean/);
   assert.match(api, /doNotDisturb: boolean/);
   assert.match(api, /presenceStatus: PresenceStatus/);
@@ -147,17 +147,16 @@ test('Web Push uses credentialed subscription endpoints and suppresses focused-w
   assert.match(lobby, /openDm\(initialDmId\)/);
 });
 
-test('DM mute is server-backed while room mute is current-device localStorage', () => {
+test('DM and room mutes are server-backed and exposed from settings targets', () => {
   const prefs = read('src/lib/shared/notifications/preferences.svelte.ts');
   const dm = read('src/lib/features/home/components/lobby/DmView.svelte');
   const roomMenu = read('src/lib/shared/components/room-menu/RoomMenuContent.svelte');
   const settings = read('src/lib/features/home/components/SettingsModal.svelte');
 
   assert.match(prefs, /setDmNotificationsMuted\(userId, muted\)/);
-  assert.match(prefs, /MUTED_ROOM_NOTIFICATIONS_STORAGE_KEY = 'voice-room:muted-room-notifications'/);
-  assert.match(prefs, /persistMutedRoomIds\(notificationPreferences\.mutedRoomIds\)/);
-  assert.match(prefs, /storage\.setItem\(MUTED_ROOM_NOTIFICATIONS_STORAGE_KEY, JSON\.stringify\(roomIds\)\)/);
-  assert.doesNotMatch(prefs, /setRoomNotificationsMuted/);
+  assert.match(prefs, /setRoomNotificationsMuted\(roomId, muted\)/);
+  assert.match(prefs, /notificationPreferences\.mutedRoomIds = \[\.\.\.preferences\.mutedRoomIds\]/);
+  assert.doesNotMatch(prefs, /MUTED_ROOM_NOTIFICATIONS_STORAGE_KEY|persistMutedRoomIds/);
   assert.match(prefs, /setPrivateNotifications\(privateNotifications\)/);
   assert.match(dm, /updatePeerNotificationsMuted\(peer\.id, !peerMuted\)/);
   assert.match(dm, /data-notification-mute="dm"/);
@@ -166,6 +165,14 @@ test('DM mute is server-backed while room mute is current-device localStorage', 
   assert.match(roomMenu, /nextMuted \? 'Уведомления комнаты выключены' : 'Уведомления комнаты включены'/);
   assert.match(roomMenu, /roomMuted \? 'Включить уведомления' : 'Выключить уведомления'/);
   assert.match(settings, /updatePrivateNotifications\(!notificationPreferences\.privateNotifications\)/);
+  assert.match(settings, /id="notificationUsersTitle">Пользователи</);
+  assert.match(settings, /class="settings-notification-targets"/);
+  assert.match(settings, /shape="squircle" background="var\(--room-avatar-bg\)"/);
+  assert.match(settings, /Получать уведомления комнаты/);
+  assert.match(settings, /aria-checked=\{!peerMuted\}/);
+  assert.match(settings, /aria-checked=\{!roomMuted\}/);
+  assert.match(settings, /disabled=\{notificationSaving \|\| !browserNotificationsEnabled\}/);
+  assert.doesNotMatch(settings, /toggleDoNotDisturb/);
 });
 
 test('presence status is server-backed while DND suppresses notifications and cue playback', () => {
@@ -206,9 +213,10 @@ test('presence status is server-backed while DND suppresses notifications and cu
   assert.match(sidebar, /Уведомления и звуковые сигналы будут отключены/);
   assert.doesNotMatch(sidebar, /Включить «Не беспокоить»|Выключить «Не беспокоить»/);
   assert.match(settings, /tab === 'notifications'/);
-  assert.match(settings, /При статусе «Не беспокоить» push-уведомления и звуковые сигналы не воспроизводятся/);
+  assert.doesNotMatch(settings, /При статусе «Не беспокоить» push-уведомления и звуковые сигналы не воспроизводятся/);
+  assert.match(settings, /Получать уведомления/);
   assert.doesNotMatch(settings, /Режим «Не беспокоить» включён|Режим «Не беспокоить» выключен/);
-  assert.match(settings, /Настроить громкость сигналов/);
+  assert.doesNotMatch(settings, /Настроить громкость сигналов/);
   assert.match(cues, /isDoNotDisturbPlaybackSuppressed\(\) \|\| isAppPlaybackMuted\(\)/);
   assert.match(avatar, /data-status=\{presence\}/);
   assert.match(avatar, /dnd: 'var\(--coral\)'/);

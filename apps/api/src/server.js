@@ -2245,11 +2245,11 @@ function sendNotificationMutationResult(res, result, { muted = null } = {}) {
     case 'self':
       sendJson(res, 400, { ok: false, error: 'Invalid notification target' });
       return;
-    case 'not_friends':
-      sendJson(res, 403, { ok: false, error: 'You are not friends' });
-      return;
     case 'temporary_room':
       sendJson(res, 403, { ok: false, error: 'Only saved rooms can be muted' });
+      return;
+    case 'not_saved_room':
+      sendJson(res, 403, { ok: false, error: 'Room is not saved' });
       return;
     default:
       sendJson(res, 200, {
@@ -2285,6 +2285,27 @@ async function handleSetDmMute(req, res, peerId) {
   }
 
   const result = await getNotificationStore().setDmMute({ userId: user.id, peerUserId: id, muted: muted.value });
+  sendNotificationMutationResult(res, result, { muted: muted.value });
+}
+
+async function handleSetRoomMute(req, res, rawRoomId) {
+  const user = await requireSessionUser(req, res);
+  if (!user) return;
+
+  const roomId = normalizeRoomId(rawRoomId);
+  if (!roomId) {
+    sendJson(res, 404, { ok: false, error: 'Invalid notification target' });
+    return;
+  }
+
+  const body = await readJsonBody(req);
+  const muted = readRequiredBoolean(body, 'muted');
+  if (!muted.ok) {
+    sendJson(res, 400, { ok: false, error: muted.error });
+    return;
+  }
+
+  const result = await getNotificationStore().setRoomMute({ userId: user.id, roomId, muted: muted.value });
   sendNotificationMutationResult(res, result, { muted: muted.value });
 }
 
@@ -2951,6 +2972,9 @@ function createApiApp({ store = null, users = null, friends = null, notification
   app.get('/api/notifications/preferences', (request, reply) => runLegacyHandler(request, reply, handleNotificationPreferences));
   app.put('/api/notifications/dm/:userId/mute', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
     return handleSetDmMute(req, res, request.params.userId);
+  }));
+  app.put('/api/notifications/room/:roomId/mute', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
+    return handleSetRoomMute(req, res, request.params.roomId);
   }));
   app.put('/api/notifications/privacy', (request, reply) => runLegacyHandler(request, reply, handleSetPrivateNotifications));
   app.post('/api/notifications/settings', (request, reply) => runLegacyHandler(request, reply, (req, res) => {

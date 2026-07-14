@@ -4,6 +4,7 @@ import { normalizePresenceStatus, type PresenceStatus } from '$lib/shared/presen
 export interface NotificationPreferences {
   doNotDisturb: boolean;
   mutedPeerIds: string[];
+  mutedRoomIds: string[];
   presenceStatus: PresenceStatus;
   presenceStatusAutomatic: boolean;
   privateNotifications: boolean;
@@ -30,6 +31,11 @@ export async function setDmNotificationsMuted(userId: string, muted: boolean): P
   return { ...payload, preferences: normalizePreferences(payload.preferences) };
 }
 
+export async function setRoomNotificationsMuted(roomId: string, muted: boolean): Promise<NotificationMuteResponse> {
+  const payload = await putJson<NotificationMuteResponse>(`/api/notifications/room/${encodeURIComponent(roomId)}/mute`, { muted });
+  return { ...payload, preferences: normalizePreferences(payload.preferences) };
+}
+
 export async function setPrivateNotifications(privateNotifications: boolean): Promise<NotificationPreferencesResponse> {
   const payload = await putJson<NotificationPreferencesResponse>('/api/notifications/privacy', { privateNotifications });
   return { ...payload, preferences: normalizePreferences(payload.preferences) };
@@ -53,6 +59,7 @@ function normalizePreferences(preferences: Partial<NotificationPreferences> | nu
   return {
     doNotDisturb,
     mutedPeerIds: Array.isArray(preferences?.mutedPeerIds) ? preferences.mutedPeerIds : [],
+    mutedRoomIds: Array.isArray(preferences?.mutedRoomIds) ? preferences.mutedRoomIds : [],
     presenceStatus: normalizePresenceStatus(preferences?.presenceStatus, doNotDisturb ? 'dnd' : 'online'),
     presenceStatusAutomatic:
       preferences?.presenceStatus === 'away' && Boolean(preferences?.presenceStatusAutomatic),
