@@ -1702,3 +1702,21 @@ test('settings keep profile identity and sound columns free of decorative card s
   assert.doesNotMatch(settings, /settings-profile-(?:summary|cover|identity)/);
   assert.doesNotMatch(css, /\.settings-sound-device\s*\{[^}]*(?:background|border|padding):/);
 });
+
+test('settings sound columns cannot widen the modal content area', () => {
+  const css = read('src/lib/features/home/styles/settings.css');
+  const contentRule = css.match(/\.settings-content\s*\{(?<body>[^}]*)\}/);
+  const soundRule = css.match(/\.settings-sound\s*\{(?<body>[^}]*)\}/);
+  const devicesRule = css.match(/\.settings-sound-devices\s*\{(?<body>[^}]*)\}/);
+
+  assert.ok(contentRule?.groups?.body);
+  assert.match(contentRule.groups.body, /overflow-x:\s*hidden/);
+  assert.ok(soundRule?.groups?.body);
+  assert.match(soundRule.groups.body, /min-width:\s*0/);
+  assert.match(soundRule.groups.body, /max-width:\s*100%/);
+  assert.ok(devicesRule?.groups?.body);
+  assert.match(devicesRule.groups.body, /grid-template-columns:\s*minmax\(0,\s*1fr\)\s+minmax\(0,\s*1fr\)/);
+  assert.match(devicesRule.groups.body, /min-width:\s*0/);
+  assert.match(devicesRule.groups.body, /max-width:\s*100%/);
+  assert.match(css, /\.settings-sound-device \.popover-root[\s\S]*width:\s*100%[\s\S]*max-width:\s*100%/);
+});

@@ -133,6 +133,7 @@
   flex: 1;
   min-width: 0;
   padding: 28px 30px 30px;
+  overflow-x: hidden;
   overflow-y: auto;
 }
 
@@ -379,12 +380,16 @@
   flex-direction: column;
   gap: 24px;
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .settings-sound-devices {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 16px;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .settings-sound-device {
@@ -392,6 +397,16 @@
   align-content: start;
   gap: 22px;
   min-width: 0;
+}
+
+.settings-sound-device > *,
+.settings-sound-device .select-root,
+.settings-sound-device .popover-root,
+.settings-sound-device .select-trigger,
+.settings-sound-device .vr-slider {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .settings-sound-device-section {
