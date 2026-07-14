@@ -20,14 +20,12 @@ test('room and preview participant tiles use the persisted avatar accent as thei
   assert.doesNotMatch(css, /linear-gradient\(160deg, oklch\(12%/);
 });
 
-test('room preview and avatar stacks use the same stable participant identity as the connected room', () => {
-  const preview = read('src/lib/features/home/components/lobby/RoomPreviewView.svelte');
-  const roomAvatars = read('src/lib/features/home/model/room-avatars.ts');
+test('avatar presentation uses server-provided colors without client-side identity mixing', () => {
+  const presentation = read('src/lib/features/room/client/ui/avatar-presentation.ts');
 
-  for (const source of [preview, roomAvatars]) {
-    assert.match(source, /accountUserId: peer\.accountUserId/);
-    assert.match(source, /id: peer\.id/);
-  }
+  assert.match(presentation, /background = accent/);
+  assert.match(presentation, /background = palette\.background/);
+  assert.doesNotMatch(presentation, /Math\.imul|uniqueAccent|color-mix/);
 });
 
 test('preview avatar images cover the initials without displacing them from the avatar grid', () => {

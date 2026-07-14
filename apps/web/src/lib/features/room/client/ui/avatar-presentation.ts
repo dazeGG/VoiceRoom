@@ -4,7 +4,7 @@ import type { Participant } from '../core/types';
 
 export function getAvatarPresentation(
   participant: Pick<Participant, 'avatarColorKey' | 'name' | 'isLocal'> &
-    Partial<Pick<Participant, 'accountUserId' | 'avatarAccent' | 'avatarUrl' | 'id'>>
+    Partial<Pick<Participant, 'avatarAccent' | 'avatarUrl'>>
 ): {
   background: string;
   foreground: string;
@@ -24,14 +24,7 @@ export function getAvatarPresentation(
     foreground = '#ffffff';
   } else {
     const palette = getAvatarColor(participant.avatarColorKey);
-    const identity = participant.accountUserId || participant.id || `${participant.avatarColorKey}:${participant.name}`;
-    let hash = 2166136261;
-    for (const character of identity) hash = Math.imul(hash ^ character.charCodeAt(0), 16777619);
-    const hue = Math.abs(hash >>> 0) % 360;
-    const lightness = 48 + ((hash >>> 9) % 9);
-    const chroma = 0.13 + ((hash >>> 17) % 5) * 0.012;
-    const uniqueAccent = `oklch(${lightness}% ${chroma.toFixed(3)} ${hue})`;
-    background = `color-mix(in oklch, ${palette.background} 54%, ${uniqueAccent})`;
+    background = palette.background;
     foreground = palette.foreground;
   }
 

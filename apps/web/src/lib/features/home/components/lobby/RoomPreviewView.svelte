@@ -67,11 +67,9 @@
 
   function peerAvatar(peer: RoomPeer): ReturnType<typeof getAvatarPresentation> {
     return getAvatarPresentation({
-      accountUserId: peer.accountUserId,
       avatarAccent: peer.avatarAccent || undefined,
       avatarColorKey: peer.avatarColorKey,
       avatarUrl: peer.avatarUrl || undefined,
-      id: peer.id,
       isLocal: false,
       name: peerName(peer)
     });
