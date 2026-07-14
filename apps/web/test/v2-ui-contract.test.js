@@ -500,7 +500,8 @@ test('room menus share one implementation and room and friend rows expose access
   assert.match(friendMenu, /Открыть сообщения/);
   assert.match(friendMenu, /Удалить из друзей/);
   assert.match(friendMenu, /const nextMuted = !muted/);
-  assert.match(friendMenu, /nextMuted \? 'Уведомления друга выключены' : 'Уведомления друга включены'/);
+  assert.doesNotMatch(friendMenu, /Уведомления друга (?:выключены|включены)/);
+  assert.match(friendMenu, /Не удалось изменить уведомления/);
   assert.match(clipboard, /if \(!navigator\.clipboard\?\.writeText\)/);
   assert.match(clipboard, /throw new Error\('Clipboard API is unavailable'\)/);
 

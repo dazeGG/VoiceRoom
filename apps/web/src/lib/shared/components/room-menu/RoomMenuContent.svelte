@@ -58,7 +58,6 @@
     try {
       await updateRoomNotificationsMuted(targetRoomId, nextMuted);
       if (!(canClose?.(targetRoomId) ?? true)) return;
-      onToast?.(nextMuted ? 'Уведомления комнаты выключены' : 'Уведомления комнаты включены');
       close();
     } catch {
       if (!(canClose?.(targetRoomId) ?? true)) return;

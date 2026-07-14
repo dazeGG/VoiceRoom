@@ -42,7 +42,6 @@
     try {
       await updatePeerNotificationsMuted(targetUserId, nextMuted);
       if (!(canClose?.(targetUserId) ?? true)) return;
-      onToast?.(nextMuted ? 'Уведомления друга выключены' : 'Уведомления друга включены');
       close();
     } catch {
       if (!(canClose?.(targetUserId) ?? true)) return;

@@ -7,7 +7,6 @@
   import {
     effectivePresenceStatus,
     normalizePresenceStatus,
-    presenceStatusLabel,
     type PresenceStatus
   } from '$lib/shared/presence';
   import { friendName } from '../../model/lobby-format';
@@ -224,7 +223,6 @@
     statusSaving = status;
     try {
       await updatePresenceStatus(status);
-      onToast(`Статус: ${presenceStatusLabel(status)}`);
       close();
     } catch {
       onToast('Не удалось изменить статус');

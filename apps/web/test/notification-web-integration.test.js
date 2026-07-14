@@ -255,7 +255,8 @@ test('DM and room mutes are server-backed and exposed from settings targets', ()
   assert.match(dm, /data-notification-mute="dm"/);
   assert.match(roomMenu, /const nextMuted = !roomMuted/);
   assert.match(roomMenu, /updateRoomNotificationsMuted\(targetRoomId, nextMuted\)/);
-  assert.match(roomMenu, /nextMuted \? 'Уведомления комнаты выключены' : 'Уведомления комнаты включены'/);
+  assert.doesNotMatch(roomMenu, /Уведомления комнаты (?:выключены|включены)/);
+  assert.match(roomMenu, /Не удалось изменить уведомления/);
   assert.match(roomMenu, /roomMuted \? 'Включить уведомления' : 'Выключить уведомления'/);
   assert.match(settings, /updatePrivateNotifications\(!notificationPreferences\.privateNotifications\)/);
   assert.match(settings, /id="notificationUsersTitle">Пользователи</);
@@ -283,6 +284,8 @@ test('presence status is server-backed while DND suppresses notifications and cu
   assert.match(prefs, /setPresenceStatus\(status, true\)/);
   assert.match(sidebar, /updatePresenceStatus\(status\)/);
   assert.match(sidebar, /status === selfPresence && !notificationPreferences\.presenceStatusAutomatic/);
+  assert.doesNotMatch(sidebar, /onToast\(`Статус:/);
+  assert.match(sidebar, /Не удалось изменить статус/);
   assert.match(sidebar, /role="listbox"/);
   assert.match(sidebar, /role="option"/);
   assert.match(sidebar, /aria-selected=\{selected\}/);
