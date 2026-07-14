@@ -145,6 +145,18 @@ test('notification settings stay quiet on success and toast only actionable fail
   assert.match(settings, /Разрешите уведомления в настройках браузера/);
 });
 
+test('muted notification targets show a bell-off indicator beside their names', () => {
+  const settings = read('src/lib/features/home/components/SettingsModal.svelte');
+  const css = read('src/lib/features/home/styles/settings.css');
+
+  assert.match(settings, /import \{[^}]*\bBellOff\b[^}]*\} from '@lucide\/svelte'/);
+  assert.match(settings, /\{#if peerMuted\}[\s\S]*class="settings-notification-muted"[\s\S]*<BellOff/);
+  assert.match(settings, /\{#if roomMuted\}[\s\S]*class="settings-notification-muted"[\s\S]*<BellOff/);
+  assert.match(settings, /aria-label="Уведомления отключены"/);
+  assert.match(css, /\.settings-notification-title\s*\{[\s\S]*display:\s*flex[\s\S]*min-width:\s*0/);
+  assert.match(css, /\.settings-notification-muted\s*\{[\s\S]*flex:\s*none/);
+});
+
 test('Web Push uses credentialed subscription endpoints and suppresses focused-window notifications', () => {
   const api = read('src/lib/api/push.ts');
   const worker = read('src/service-worker.ts');

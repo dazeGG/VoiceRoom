@@ -738,11 +738,25 @@
 }
 
 .settings-notification-name strong {
+  flex: 1;
   overflow: hidden;
   color: var(--warm-ink);
   font-size: 13px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.settings-notification-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.settings-notification-muted {
+  display: inline-flex;
+  flex: none;
+  color: var(--warm-faint);
 }
 
 .settings-notification-name small {

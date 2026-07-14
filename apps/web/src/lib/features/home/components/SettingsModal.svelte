@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Bell, Keyboard, LogOut, Mic, Pencil, User, X } from '@lucide/svelte';
+  import { Bell, BellOff, Keyboard, LogOut, Mic, Pencil, User, X } from '@lucide/svelte';
   import { onDestroy, untrack } from 'svelte';
   import type { AuthUser, OwnedRoom } from '$lib/api/auth';
   import type { PublicUser } from '$lib/api/friends';
@@ -935,7 +935,14 @@
                             size={32}
                           />
                           <span class="settings-notification-name">
-                            <strong>{peer.displayName?.trim() || peer.login}</strong>
+                            <span class="settings-notification-title">
+                              <strong>{peer.displayName?.trim() || peer.login}</strong>
+                              {#if peerMuted}
+                                <span class="settings-notification-muted" role="img" aria-label="Уведомления отключены" title="Уведомления отключены">
+                                  <BellOff {...iconSm} aria-hidden="true" />
+                                </span>
+                              {/if}
+                            </span>
                             <small>@{peer.login}</small>
                           </span>
                           <button
@@ -966,7 +973,14 @@
                         <div class="settings-notification-row">
                           <Avatar name={room.name?.trim() || room.roomId} src={room.avatarUrl} shape="squircle" background="var(--room-avatar-bg)" size={32} />
                           <span class="settings-notification-name">
-                            <strong>{room.name?.trim() || 'Комната'}</strong>
+                            <span class="settings-notification-title">
+                              <strong>{room.name?.trim() || 'Комната'}</strong>
+                              {#if roomMuted}
+                                <span class="settings-notification-muted" role="img" aria-label="Уведомления отключены" title="Уведомления отключены">
+                                  <BellOff {...iconSm} aria-hidden="true" />
+                                </span>
+                              {/if}
+                            </span>
                             <small>{room.roomId}</small>
                           </span>
                           <button

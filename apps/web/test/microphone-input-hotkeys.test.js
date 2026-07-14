@@ -150,7 +150,7 @@ test('configurable hotkeys and push-to-talk cover hold, release, and focus loss'
   assert.match(controls, /setMicrophoneMuted\(true, \{ playCue: false \}\)/);
   assert.match(modal, /успешно зарегистрированные сочетания работают поверх других окон/);
   assert.match(modal, /Мониторинг ввода/);
-  assert.match(modal, /import \{ Bell, Keyboard, LogOut, Mic, Pencil, User, X \} from '@lucide\/svelte'/);
+  assert.match(modal, /import \{[^}]*\bKeyboard\b[^}]*\} from '@lucide\/svelte'/);
   assert.match(modal, /\{#if desktopApp\}[\s\S]*data-active=\{tab === 'hotkeys'\}[\s\S]*Хоткеи[\s\S]*\{\/if\}/);
   assert.match(modal, /tab: 'profile' \| 'sound' \| 'hotkeys' \| 'notifications'/);
   assert.match(modal, /\{#if desktopApp\}[\s\S]*Режим микрофона[\s\S]*data-disabled=\{microphoneMode !== 'push-to-talk'\}[\s\S]*disabled=\{microphoneMode !== 'push-to-talk'\}/);
