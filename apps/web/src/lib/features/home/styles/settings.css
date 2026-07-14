@@ -593,6 +593,11 @@
   padding-top: 22px;
 }
 
+.settings-content > .settings-hotkeys {
+  border-top: 0;
+  padding-top: 0;
+}
+
 .settings-mode-toggle {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -631,6 +636,10 @@
   grid-template-columns: minmax(0, 1fr) minmax(180px, 210px);
   align-items: center;
   gap: 16px;
+}
+
+.settings-hotkey-row[data-disabled='true'] {
+  opacity: 0.62;
 }
 
 .settings-hotkey-label,

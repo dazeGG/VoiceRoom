@@ -59,7 +59,7 @@
   let creating = $state(false);
   let createDialogOpen = $state(false);
   let settingsOpen = $state(false);
-  let settingsTab = $state<'profile' | 'sound' | 'notifications'>('profile');
+  let settingsTab = $state<'profile' | 'sound' | 'hotkeys' | 'notifications'>('profile');
   let previewSettingsRoomId = $state('');
   const selectedRoomId = $derived(roomNavigation.viewedRoomId);
   const embeddedRoomId = $derived(roomNavigation.embeddedRoomId);

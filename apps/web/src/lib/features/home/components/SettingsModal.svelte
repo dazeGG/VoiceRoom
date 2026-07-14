@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Bell, LogOut, Mic, Pencil, User, X } from '@lucide/svelte';
+  import { Bell, Keyboard, LogOut, Mic, Pencil, User, X } from '@lucide/svelte';
   import { onDestroy, untrack } from 'svelte';
   import type { AuthUser, OwnedRoom } from '$lib/api/auth';
   import type { PublicUser } from '$lib/api/friends';
@@ -80,7 +80,7 @@
     onLogout
   } = $props<{
     open: boolean;
-    tab: 'profile' | 'sound' | 'notifications';
+    tab: 'profile' | 'sound' | 'hotkeys' | 'notifications';
     user: AuthUser | null;
     notificationUsers?: PublicUser[];
     notificationRooms?: OwnedRoom[];
@@ -563,6 +563,12 @@
               <Mic {...iconMd} aria-hidden="true" />
               Звук
             </button>
+            {#if desktopApp}
+              <button class="settings-nav-item" type="button" data-active={tab === 'hotkeys'} onclick={() => (tab = 'hotkeys')}>
+                <Keyboard {...iconMd} aria-hidden="true" />
+                Хоткеи
+              </button>
+            {/if}
             <button class="settings-nav-item" type="button" data-active={tab === 'notifications'} onclick={() => (tab = 'notifications')}>
               <Bell {...iconMd} aria-hidden="true" />
               Уведомления
@@ -777,54 +783,27 @@
               </div>
 
               {#if desktopApp}
-              <div class="settings-hotkeys">
-                <div>
-                  <span class="settings-section-title">Режим микрофона</span>
-                  <div class="settings-mode-toggle" role="radiogroup" aria-label="Режим микрофона">
-                    <button
-                      type="button"
-                      role="radio"
-                      aria-checked={microphoneMode === 'open'}
-                      onclick={() => changeMicrophoneMode('open')}
-                    >Открытый микрофон</button>
-                    <button
-                      type="button"
-                      role="radio"
-                      aria-checked={microphoneMode === 'push-to-talk'}
-                      onclick={() => changeMicrophoneMode('push-to-talk')}
-                    >Push-to-talk</button>
+                <div class="settings-hotkeys">
+                  <div>
+                    <span class="settings-section-title">Режим микрофона</span>
+                    <div class="settings-mode-toggle" role="radiogroup" aria-label="Режим микрофона">
+                      <button
+                        type="button"
+                        role="radio"
+                        aria-checked={microphoneMode === 'open'}
+                        onclick={() => changeMicrophoneMode('open')}
+                      >Открытый микрофон</button>
+                      <button
+                        type="button"
+                        role="radio"
+                        aria-checked={microphoneMode === 'push-to-talk'}
+                        onclick={() => changeMicrophoneMode('push-to-talk')}
+                      >Push-to-talk</button>
+                    </div>
+                    <div class="settings-gate-hint">В Push-to-talk микрофон открыт, пока вы удерживаете назначенную клавишу.</div>
                   </div>
-                  <div class="settings-gate-hint">В Push-to-talk микрофон открыт, пока вы удерживаете назначенную клавишу.</div>
-                </div>
 
-                <div class="settings-hotkey-list">
-                  <div class="settings-hotkey-row">
-                    <div>
-                      <span class="settings-hotkey-label">Мьют микрофона</span>
-                      <span class="settings-hotkey-description">Включить или выключить микрофон</span>
-                    </div>
-                    <HotkeyRecorder
-                      bind:value={micMuteHotkey}
-                      defaultValue={getDefaultHotkeyBinding('mic-mute')}
-                      ariaLabel="Хоткей мьюта микрофона"
-                      onRecordingChange={(recording) => void setDesktopGlobalHotkeysSuspended(recording)}
-                      onValueChange={(value) => changeHotkey('mic-mute', value)}
-                    />
-                  </div>
-                  <div class="settings-hotkey-row">
-                    <div>
-                      <span class="settings-hotkey-label">Мьют звука</span>
-                      <span class="settings-hotkey-description">Заглушить весь вывод и микрофон</span>
-                    </div>
-                    <HotkeyRecorder
-                      bind:value={outputMuteHotkey}
-                      defaultValue={getDefaultHotkeyBinding('output-mute')}
-                      ariaLabel="Хоткей мьюта звука"
-                      onRecordingChange={(recording) => void setDesktopGlobalHotkeysSuspended(recording)}
-                      onValueChange={(value) => changeHotkey('output-mute', value)}
-                    />
-                  </div>
-                  <div class="settings-hotkey-row">
+                  <div class="settings-hotkey-row" data-disabled={microphoneMode !== 'push-to-talk'}>
                     <div>
                       <span class="settings-hotkey-label">Push-to-talk</span>
                       <span class="settings-hotkey-description">Удерживайте, чтобы открыть микрофон</span>
@@ -832,21 +811,70 @@
                     <HotkeyRecorder
                       bind:value={pushToTalkHotkey}
                       defaultValue={getDefaultHotkeyBinding('push-to-talk')}
+                      disabled={microphoneMode !== 'push-to-talk'}
                       ariaLabel="Клавиша Push-to-talk"
                       onRecordingChange={(recording) => void setDesktopGlobalHotkeysSuspended(recording)}
                       onValueChange={(value) => changeHotkey('push-to-talk', value)}
                     />
                   </div>
                 </div>
-                <div class="settings-hotkey-window-note">
-                  {#if globalHotkeysAvailable}
-                    В приложении VoiceRoom успешно зарегистрированные сочетания работают поверх других окон, пока вы подключены к голосу. На macOS может потребоваться разрешение «Мониторинг ввода».
-                  {:else}
-                    Системные сочетания недоступны в этой сборке приложения.
-                  {/if}
+              {/if}
+            </div>
+          {:else if tab === 'hotkeys' && desktopApp}
+            <div class="settings-hotkeys">
+              <div>
+                <span class="settings-section-title">Горячие клавиши</span>
+                <div class="settings-gate-hint">Назначенные сочетания работают глобально в desktop-приложении, пока вы подключены к голосу.</div>
+              </div>
+
+              <div class="settings-hotkey-list">
+                <div class="settings-hotkey-row">
+                  <div>
+                    <span class="settings-hotkey-label">Мьют микрофона</span>
+                    <span class="settings-hotkey-description">Включить или выключить микрофон</span>
+                  </div>
+                  <HotkeyRecorder
+                    bind:value={micMuteHotkey}
+                    defaultValue={getDefaultHotkeyBinding('mic-mute')}
+                    ariaLabel="Хоткей мьюта микрофона"
+                    onRecordingChange={(recording) => void setDesktopGlobalHotkeysSuspended(recording)}
+                    onValueChange={(value) => changeHotkey('mic-mute', value)}
+                  />
+                </div>
+                <div class="settings-hotkey-row">
+                  <div>
+                    <span class="settings-hotkey-label">Мьют звука</span>
+                    <span class="settings-hotkey-description">Заглушить весь вывод и микрофон</span>
+                  </div>
+                  <HotkeyRecorder
+                    bind:value={outputMuteHotkey}
+                    defaultValue={getDefaultHotkeyBinding('output-mute')}
+                    ariaLabel="Хоткей мьюта звука"
+                    onRecordingChange={(recording) => void setDesktopGlobalHotkeysSuspended(recording)}
+                    onValueChange={(value) => changeHotkey('output-mute', value)}
+                  />
+                </div>
+                <div class="settings-hotkey-row">
+                  <div>
+                    <span class="settings-hotkey-label">Push-to-talk</span>
+                    <span class="settings-hotkey-description">Удерживайте, чтобы открыть микрофон</span>
+                  </div>
+                  <HotkeyRecorder
+                    bind:value={pushToTalkHotkey}
+                    defaultValue={getDefaultHotkeyBinding('push-to-talk')}
+                    ariaLabel="Клавиша Push-to-talk"
+                    onRecordingChange={(recording) => void setDesktopGlobalHotkeysSuspended(recording)}
+                    onValueChange={(value) => changeHotkey('push-to-talk', value)}
+                  />
                 </div>
               </div>
-              {/if}
+              <div class="settings-hotkey-window-note">
+                {#if globalHotkeysAvailable}
+                  В приложении VoiceRoom успешно зарегистрированные сочетания работают поверх других окон, пока вы подключены к голосу. На macOS может потребоваться разрешение «Мониторинг ввода».
+                {:else}
+                  Системные сочетания недоступны в этой сборке приложения.
+                {/if}
+              </div>
             </div>
           {:else}
             <div class="settings-sound">
