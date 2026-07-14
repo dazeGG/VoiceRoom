@@ -212,6 +212,7 @@ test('lobby separates viewed room from connected voice room', () => {
   const leaveConnectedVoiceRoom = functionBody(lobby, 'leaveConnectedVoiceRoom');
   const closeViewedRoom = functionBody(lobby, 'closeViewedRoom');
   const onEmbeddedLeave = functionBody(lobby, 'onEmbeddedLeave');
+  const replaceUrlWithActiveVoiceRoom = functionBody(lobby, 'replaceUrlWithActiveVoiceRoom');
 
   assert.match(lobby, /roomNavigation\.viewedRoomId/);
   assert.match(lobby, /connectedRoomIsViewed\(friendsState\.mode\)/);
@@ -221,7 +222,8 @@ test('lobby separates viewed room from connected voice room', () => {
   assert.match(roomNavigation, /joinIntentRoomId: string \| null/);
   assert.match(roomNavigation, /export function getActiveVoiceRoomId/);
   assert.match(roomNavigation, /Room-navigation state machine/);
-  assert.match(roomNavigation, /viewedRoomId mirrors the URL-level room preview/);
+  assert.match(roomNavigation, /viewedRoomId is the room rendered by the app shell and may be a URL-free preview/);
+  assert.match(roomNavigation, /browser \/r\/:roomId route mirrors active voice membership, not preview selection/);
   assert.match(roomNavigation, /embeddedRoomId is the mounted room client/);
   assert.match(roomNavigation, /browsing\n\/\/   never creates it/);
   assert.match(roomNavigation, /joinIntentRoomId is set only by an explicit Enter action/);
@@ -232,6 +234,10 @@ test('lobby separates viewed room from connected voice room', () => {
   assert.doesNotMatch(functionBody(roomNavigation, 'routeToRoom'), /roomNavigation\.embeddedRoomId = roomId/);
   assert.match(previewRoom, /selectRoomPreview\(roomId\)/);
   assert.doesNotMatch(previewRoom, /leaveActiveVoiceRoom|setConnectedVoiceRoom|clearConnectedVoiceRoom/);
+  assert.doesNotMatch(previewRoom, /history\.(?:push|replace)State/);
+  assert.match(previewRoom, /replaceUrlWithActiveVoiceRoom\(\)/);
+  assert.match(replaceUrlWithActiveVoiceRoom, /roomId \? `\/r\/\$\{encodeURIComponent\(roomId\)\}` : '\/'/);
+  assert.match(replaceUrlWithActiveVoiceRoom, /history\.replaceState\(null, '', target\)/);
   assert.match(enterRoom, /selectRoomForVoiceEntry\(roomId\)/);
   assert.match(roomNavigation, /roomNavigation\.embeddedRoomId = roomId/);
   assert.match(roomNavigation, /roomNavigation\.joinIntentRoomId = roomId/);
@@ -242,10 +248,9 @@ test('lobby separates viewed room from connected voice room', () => {
   );
   assert.match(closeViewedRoom, /const transition = routeToHome\(\)/);
   assert.match(closeViewedRoom, /if \(transition\.closeEmbeddedRoom\) closeEmbeddedRoom\(\{ replaceUrl: false \}\)/);
-  assert.match(closeViewedRoom, /history\.pushState\(null, '', '\/'\)/);
+  assert.match(closeViewedRoom, /replaceUrlWithActiveVoiceRoom\(\)/);
   assert.match(lobby, /function closeEmbeddedRoom\(\{ replaceUrl = true, closedRoomId = embeddedRoomId \}/);
-  assert.match(lobby, /replaceUrl && closedRoomId && selectedRoomId === closedRoomId/);
-  assert.doesNotMatch(lobby, /!closedRoomId \|\| selectedRoomId === closedRoomId/);
+  assert.match(lobby, /replaceUrl && closedRoomId && extractRoomId\(window\.location\.pathname\) === closedRoomId/);
   assert.match(onEmbeddedLeave, /event instanceof CustomEvent/);
   assert.match(onEmbeddedLeave, /event\.detail\?\.roomId/);
   assert.match(onEmbeddedLeave, /const closedViewedRoom = Boolean\(closedRoomId && selectedRoomId === closedRoomId\)/);
@@ -255,6 +260,7 @@ test('lobby separates viewed room from connected voice room', () => {
   assert.match(leaveConnectedVoiceRoom, /leaveActiveVoiceRoomWithCue\(\)/);
   assert.match(leaveConnectedVoiceRoom, /resolveLeaveViewedConnectedRoom\(leavingRoomId\)/);
   assert.match(leaveConnectedVoiceRoom, /closeEmbeddedRoom\(\)/);
+  assert.match(leaveConnectedVoiceRoom, /replaceUrlWithActiveVoiceRoom\(null\)/);
   assert.ok(
     leaveConnectedVoiceRoom.indexOf('closeEmbeddedRoom()') < leaveConnectedVoiceRoom.indexOf('clearViewedRoom()'),
     'sidebar leave restores URL before clearing the viewed room'

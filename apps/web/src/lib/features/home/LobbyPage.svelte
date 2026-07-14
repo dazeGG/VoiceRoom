@@ -98,12 +98,18 @@
     document.title = 'Voice Room';
   }
 
+  function replaceUrlWithActiveVoiceRoom(roomId: string | null = connectedVoiceRoomId): void {
+    const target = roomId ? `/r/${encodeURIComponent(roomId)}` : '/';
+    if (`${window.location.pathname}${window.location.search}` === target) return;
+    history.replaceState(null, '', target);
+  }
+
   function closeEmbeddedRoom({ replaceUrl = true, closedRoomId = embeddedRoomId }: { replaceUrl?: boolean; closedRoomId?: string | null } = {}): void {
-    const shouldReplaceUrl = Boolean(replaceUrl && closedRoomId && selectedRoomId === closedRoomId);
+    const shouldReplaceUrl = Boolean(replaceUrl && closedRoomId && extractRoomId(window.location.pathname) === closedRoomId);
     clearEmbeddedRoomState();
     restoreLobbyDocumentState();
     if (shouldReplaceUrl) {
-      history.replaceState(null, '', '/');
+      replaceUrlWithActiveVoiceRoom(connectedVoiceRoomId === closedRoomId ? null : connectedVoiceRoomId);
     }
   }
 
@@ -134,10 +140,12 @@
       if (roomId) {
         setViewedRoomFromRoute(roomId);
         friendsState.mode = 'rooms';
+        replaceUrlWithActiveVoiceRoom();
         return;
       }
       const transition = routeToHome();
       if (transition.closeEmbeddedRoom) closeEmbeddedRoom({ replaceUrl: false });
+      replaceUrlWithActiveVoiceRoom();
     }
 
     function onRoomsChanged(): void {
@@ -220,13 +228,13 @@
   function previewRoom(roomId: string): void {
     selectRoomPreview(roomId);
     friendsState.mode = 'rooms';
-    history.pushState(null, '', `/r/${encodeURIComponent(roomId)}`);
+    replaceUrlWithActiveVoiceRoom();
   }
 
   function closeViewedRoom(): void {
     const transition = routeToHome();
     if (transition.closeEmbeddedRoom) closeEmbeddedRoom({ replaceUrl: false });
-    history.pushState(null, '', '/');
+    replaceUrlWithActiveVoiceRoom();
   }
 
   function openConnectedVoiceRoom(): void {
@@ -245,6 +253,7 @@
       closeEmbeddedRoom();
       clearViewedRoom();
     }
+    replaceUrlWithActiveVoiceRoom(null);
   }
 
   function handleJoin(code: string): void {
