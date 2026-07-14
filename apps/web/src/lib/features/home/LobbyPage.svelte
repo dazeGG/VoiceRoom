@@ -261,13 +261,10 @@
     creating = true;
     try {
       const roomId = await createRoom(payload);
-      if (payload.isStatic) {
-        createDialogOpen = false;
-        await refreshRooms();
-        onToast('Комната создана');
-      } else {
-        enterRoom(roomId);
-      }
+      createDialogOpen = false;
+      enterRoom(roomId);
+      if (payload.isStatic) void refreshRooms();
+      onToast('Комната создана');
     } catch (error) {
       onToast(error instanceof Error && error.message ? error.message : 'Не удалось создать комнату');
     } finally {

@@ -236,6 +236,10 @@ test('lobby separates viewed room from connected voice room', () => {
   assert.match(roomNavigation, /roomNavigation\.embeddedRoomId = roomId/);
   assert.match(roomNavigation, /roomNavigation\.joinIntentRoomId = roomId/);
   assert.match(enterRoom, /friendsState\.mode = 'rooms'/);
+  assert.match(
+    lobby,
+    /async function handleCreate[\s\S]*const roomId = await createRoom\(payload\);[\s\S]*createDialogOpen = false;[\s\S]*enterRoom\(roomId\);[\s\S]*if \(payload\.isStatic\) void refreshRooms\(\)/
+  );
   assert.match(closeViewedRoom, /const transition = routeToHome\(\)/);
   assert.match(closeViewedRoom, /if \(transition\.closeEmbeddedRoom\) closeEmbeddedRoom\(\{ replaceUrl: false \}\)/);
   assert.match(closeViewedRoom, /history\.pushState\(null, '', '\/'\)/);
