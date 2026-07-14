@@ -54,11 +54,13 @@
   import {
     notificationPreferences,
     requestNotificationsFromUiAction,
+    setNotificationsEnabled,
     syncNotificationPermission,
     updatePeerNotificationsMuted,
     updatePrivateNotifications,
     updateRoomNotificationsMuted
   } from '$lib/shared/notifications/preferences.svelte';
+  import { showBrowserNotification } from '$lib/shared/notifications/router';
   import {
     pushNotifications,
     setPushNotificationsEnabled,
@@ -139,7 +141,9 @@
   const levelScale = $derived(gateOn ? gateMeterPosition(micLevelDb).toFixed(3) : '0');
   const gateLabel = $derived(gateOn ? gateValueLabel(gateDb) : 'Выкл');
   const browserNotificationsEnabled = $derived(
-    pushNotifications.supported
+    !notificationPreferences.notificationsEnabled
+      ? false
+      : pushNotifications.supported
       ? pushNotifications.active
       : notificationPreferences.deliveryPermission === 'granted'
   );
@@ -447,8 +451,23 @@
         onToast(active ? 'Push-уведомления включены' : 'Push-уведомления выключены');
         return;
       }
+      if (browserNotificationsEnabled) {
+        setNotificationsEnabled(false);
+        onToast(desktopApp ? 'Уведомления приложения выключены' : 'Системные уведомления выключены');
+        return;
+      }
       const permission = await requestNotificationsFromUiAction();
-      if (permission === 'granted') onToast('Системные уведомления включены');
+      if (permission === 'granted') {
+        onToast('Системные уведомления включены');
+        if (desktopApp) {
+          void showBrowserNotification({
+            body: 'Voice Room сможет показывать уведомления, пока приложение открыто.',
+            dedupeKey: `settings-notifications-enabled:${Date.now()}`,
+            tag: 'settings-notifications-enabled',
+            title: 'Уведомления Voice Room включены'
+          });
+        }
+      }
       else if (permission === 'denied') onToast('Разрешите уведомления в настройках браузера');
       else onToast('Системные уведомления недоступны');
     } catch {
@@ -835,7 +854,7 @@
                     class="settings-switch"
                     type="button"
                     role="switch"
-                    aria-checked={pushNotifications.supported ? pushNotifications.active : notificationPreferences.deliveryPermission === 'granted'}
+                    aria-checked={browserNotificationsEnabled}
                     aria-label={notificationToggleLabel}
                     disabled={pushNotifications.busy}
                     onclick={() => void toggleBrowserNotifications()}

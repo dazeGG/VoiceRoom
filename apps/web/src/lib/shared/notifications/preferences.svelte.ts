@@ -27,6 +27,7 @@ export const notificationPreferences = $state<{
   loadingForUserId: string | null;
   mutedPeerIds: string[];
   mutedRoomIds: string[];
+  notificationsEnabled: boolean;
   presenceStatus: PresenceStatus;
   presenceStatusAutomatic: boolean;
   privateNotifications: boolean;
@@ -40,6 +41,7 @@ export const notificationPreferences = $state<{
   loadingForUserId: null,
   mutedPeerIds: [],
   mutedRoomIds: [],
+  notificationsEnabled: true,
   presenceStatus: 'online',
   presenceStatusAutomatic: false,
   privateNotifications: false,
@@ -50,6 +52,26 @@ export const notificationPreferences = $state<{
 
 let activeUserId: string | null = null;
 let preferenceGeneration = 0;
+const NOTIFICATIONS_ENABLED_STORAGE_KEY = 'voice-room:notifications-enabled';
+
+function readNotificationsEnabled(): boolean {
+  try {
+    return localStorage.getItem(NOTIFICATIONS_ENABLED_STORAGE_KEY) !== 'false';
+  } catch {
+    return true;
+  }
+}
+
+export function setNotificationsEnabled(enabled: boolean): boolean {
+  const value = Boolean(enabled);
+  try {
+    localStorage.setItem(NOTIFICATIONS_ENABLED_STORAGE_KEY, String(value));
+  } catch {
+    // Keep the in-memory state even when storage is unavailable.
+  }
+  notificationPreferences.notificationsEnabled = value;
+  return value;
+}
 
 function applyPreferenceFields(preferences: NotificationPreferences): void {
   notificationPreferences.mutedPeerIds = [...preferences.mutedPeerIds];
@@ -131,6 +153,7 @@ export function areNotificationPreferencesLoadedFor(userId: string): boolean {
 export function syncNotificationPermission(): void {
   notificationPreferences.browserPermission = getNotificationPermission();
   notificationPreferences.deliveryPermission = getNotificationDeliveryPermission();
+  notificationPreferences.notificationsEnabled = readNotificationsEnabled();
 }
 
 export async function loadNotificationPreferences(userId: string): Promise<void> {
@@ -223,5 +246,6 @@ export function isDoNotDisturbEnabled(): boolean {
 export async function requestNotificationsFromUiAction(): Promise<NotificationPermissionState> {
   await requestNotificationPermissionFromUserAction();
   syncNotificationPermission();
+  if (notificationPreferences.deliveryPermission === 'granted') setNotificationsEnabled(true);
   return notificationPreferences.deliveryPermission;
 }

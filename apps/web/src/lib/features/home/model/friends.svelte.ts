@@ -427,7 +427,7 @@ function handleNotificationRealtimeEvent(event: RealtimeEvent): boolean {
     mutedRoomIds: notificationPreferences.mutedRoomIds,
     privateNotifications: notificationPreferences.privateNotifications,
     doNotDisturb: notificationPreferences.doNotDisturb,
-    notificationsAvailable: canUseNotifications(),
+    notificationsAvailable: canUseNotifications() && notificationPreferences.notificationsEnabled,
     permission: getNotificationDeliveryPermission()
   });
   if (routed.notify) showBrowserNotification(routed.payload);

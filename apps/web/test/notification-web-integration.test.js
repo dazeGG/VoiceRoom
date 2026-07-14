@@ -56,6 +56,7 @@ test('lobby startup loads notification preferences and realtime notification eve
   assert.match(friends, /mutedRoomIds: notificationPreferences\.mutedRoomIds/);
   assert.match(friends, /privateNotifications: notificationPreferences\.privateNotifications/);
   assert.match(friends, /doNotDisturb: notificationPreferences\.doNotDisturb/);
+  assert.match(friends, /notificationsAvailable: canUseNotifications\(\) && notificationPreferences\.notificationsEnabled/);
   assert.match(friends, /permission: getNotificationDeliveryPermission\(\)/);
   assert.match(friends, /showBrowserNotification\(routed\.payload\)/);
   assert.match(friends, /return \{ kind: 'dm', peerId: friendsState\.selectedFriendId \}/);
@@ -78,6 +79,9 @@ test('notification permission request is isolated to explicit settings UI action
 
   assert.match(prefs, /requestNotificationPermissionFromUserAction/);
   assert.match(prefs, /browserPermission: NotificationPermissionState/);
+  assert.match(prefs, /notificationsEnabled: boolean/);
+  assert.match(prefs, /NOTIFICATIONS_ENABLED_STORAGE_KEY = 'voice-room:notifications-enabled'/);
+  assert.match(prefs, /export function setNotificationsEnabled\(enabled: boolean\): boolean/);
   assert.match(prefs, /loadedForUserId: string \| null/);
   assert.match(prefs, /loadingForUserId: string \| null/);
   assert.match(prefs, /export function resetNotificationPreferences/);
@@ -95,13 +99,15 @@ test('notification permission request is isolated to explicit settings UI action
   assert.match(prefs, /export async function requestNotificationsFromUiAction/);
   assert.match(settings, /onclick=\{\(\) => void toggleBrowserNotifications\(\)\}/);
   assert.match(settings, /setPushNotificationsEnabled\(!pushNotifications\.active\)/);
+  assert.match(settings, /setNotificationsEnabled\(false\)/);
+  assert.match(settings, /showBrowserNotification\(\{/);
   assert.match(settings, /const notificationToggleLabel = \$derived\(desktopApp \? 'Уведомления приложения' : 'Push этого браузера'\)/);
   assert.match(settings, /Включены для открытого приложения/);
   assert.match(push, /function isDesktopRuntime\(\): boolean/);
   assert.match(push, /if \(isDesktopRuntime\(\)\) \{[\s\S]*pushNotifications\.supported = false/);
   assert.match(push, /Notification\.requestPermission\(\)/);
   assert.match(push, /pushManager\.subscribe\(\{/);
-  assert.match(settings, /notificationPreferences\.deliveryPermission === 'granted'/);
+  assert.match(settings, /aria-checked=\{browserNotificationsEnabled\}/);
   assert.match(settings, /notificationPreferences\.browserPermission === 'denied'/);
   assert.match(settings, /Запрос выполняется только по вашему действию/);
   assert.doesNotMatch(friends, /requestNotificationPermissionFromUserAction|requestNotificationsFromUiAction/);
