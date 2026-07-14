@@ -212,6 +212,8 @@ test('getRoomUnreadCount counts active messages after the user read cursor and e
 test('markRoomChatRead upserts a monotonic cursor only for visible rooms', async () => {
   const pool = createFakePool((text, values) => {
     assert.match(text, /INSERT INTO room_chat_reads/);
+    assert.match(text, /\$2::varchar\(36\)/);
+    assert.match(text, /\$3::timestamptz/);
     assert.match(text, /FROM room_memberships/);
     assert.match(text, /FROM room_bookmarks/);
     assert.match(text, /ON CONFLICT \(room_id, user_id\) DO UPDATE/);

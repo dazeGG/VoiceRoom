@@ -268,6 +268,39 @@ test('auth flow: register, session, owned rooms, logout', async (t) => {
     [room.body.roomId, 'bookmarked']
   ]);
 
+  // Room unread state is a durable server cursor: reading three messages must
+  // make the next message start a fresh count at one, not resume at four.
+  for (const text of ['один', 'два', 'три']) {
+    const sent = await request(socketPath, {
+      method: 'POST',
+      pathname: `/api/rooms/${room.body.roomId}/chat`,
+      body: { text },
+      cookie
+    });
+    assert.equal(sent.status, 201);
+  }
+  const unreadBeforeRead = await request(socketPath, { pathname: '/api/auth/rooms', cookie: secondCookie });
+  assert.equal(unreadBeforeRead.body.rooms[0].unreadCount, 3);
+
+  const markedRead = await request(socketPath, {
+    method: 'POST',
+    pathname: `/api/rooms/${room.body.roomId}/read`,
+    cookie: secondCookie
+  });
+  assert.equal(markedRead.status, 200, JSON.stringify(markedRead.body));
+  const unreadAfterRead = await request(socketPath, { pathname: '/api/auth/rooms', cookie: secondCookie });
+  assert.equal(unreadAfterRead.body.rooms[0].unreadCount, 0);
+
+  const nextMessage = await request(socketPath, {
+    method: 'POST',
+    pathname: `/api/rooms/${room.body.roomId}/chat`,
+    body: { text: 'четыре' },
+    cookie
+  });
+  assert.equal(nextMessage.status, 201);
+  const unreadAfterNextMessage = await request(socketPath, { pathname: '/api/auth/rooms', cookie: secondCookie });
+  assert.equal(unreadAfterNextMessage.body.rooms[0].unreadCount, 1);
+
   const tempBookmark = await request(socketPath, {
     method: 'POST',
     pathname: '/api/auth/rooms',

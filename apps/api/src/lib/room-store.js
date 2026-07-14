@@ -836,18 +836,18 @@ function createRoomStore({
     if (!roomId || !userId) return null;
     const result = await getPool().query(
       `INSERT INTO room_chat_reads (room_id, user_id, last_read_at)
-       SELECT r.id, $2, $3
+       SELECT r.id, $2::varchar(36), $3::timestamptz
        FROM rooms r
-       WHERE r.id = $1
+       WHERE r.id = $1::varchar(48)
          AND r.deleted_at IS NULL
          AND (
            EXISTS (
              SELECT 1 FROM room_memberships rm
-             WHERE rm.room_id = r.id AND rm.user_id = $2 AND rm.role = 'owner'
+             WHERE rm.room_id = r.id AND rm.user_id = $2::varchar(36) AND rm.role = 'owner'
            )
            OR EXISTS (
              SELECT 1 FROM room_bookmarks rb
-             WHERE rb.room_id = r.id AND rb.user_id = $2
+             WHERE rb.room_id = r.id AND rb.user_id = $2::varchar(36)
            )
          )
        ON CONFLICT (room_id, user_id) DO UPDATE
