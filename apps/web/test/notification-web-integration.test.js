@@ -101,6 +101,10 @@ test('notification permission request is isolated to explicit settings UI action
   assert.match(settings, /setPushNotificationsEnabled\(!pushNotifications\.active\)/);
   assert.match(settings, /setNotificationsEnabled\(false\)/);
   assert.match(settings, /showBrowserNotification\(\{/);
+  assert.match(settings, /let desktopPlatform = \$state\(''\)/);
+  assert.match(settings, /desktopPlatform = window\.voiceRoomRuntime\?\.platform \|\| ''/);
+  assert.match(settings, /const macDesktopApp = \$derived\(desktopApp && desktopPlatform === 'darwin'\)/);
+  assert.match(settings, /\{#if !macDesktopApp\}[\s\S]*\{notificationToggleLabel\}[\s\S]*Приватный текст уведомлений[\s\S]*\{\/if\}/);
   assert.match(settings, /const notificationToggleLabel = \$derived\(desktopApp \? 'Уведомления приложения' : 'Push этого браузера'\)/);
   assert.match(settings, /Включены для открытого приложения/);
   assert.match(push, /function isDesktopRuntime\(\): boolean/);

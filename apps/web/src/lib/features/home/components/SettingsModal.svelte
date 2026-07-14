@@ -122,6 +122,7 @@
   let pushToTalkHotkey = $state<HotkeyBinding | null>(null);
   let globalHotkeysAvailable = $state(false);
   let desktopApp = $state(false);
+  let desktopPlatform = $state('');
   let masterVolume = $state(100);
   let notificationVolume = $state(100);
   let notificationSaving = $state(false);
@@ -147,6 +148,7 @@
       ? pushNotifications.active
       : notificationPreferences.deliveryPermission === 'granted'
   );
+  const macDesktopApp = $derived(desktopApp && desktopPlatform === 'darwin');
   const notificationToggleLabel = $derived(desktopApp ? 'Уведомления приложения' : 'Push этого браузера');
   const microphoneOptions = $derived([
     { value: '', label: 'Системный' },
@@ -163,6 +165,7 @@
   $effect(() => {
     if (!open) return;
     desktopApp = Boolean(window.voiceRoomRuntime?.isDesktop);
+    desktopPlatform = window.voiceRoomRuntime?.platform || '';
     globalHotkeysAvailable = desktopApp && desktopGlobalHotkeysAvailable();
   });
 
@@ -847,48 +850,50 @@
             </div>
           {:else}
             <div class="settings-sound">
-              <div>
-                <div class="settings-gate-head">
-                  <span class="settings-field-label">{notificationToggleLabel}</span>
-                  <button
-                    class="settings-switch"
-                    type="button"
-                    role="switch"
-                    aria-checked={browserNotificationsEnabled}
-                    aria-label={notificationToggleLabel}
-                    disabled={pushNotifications.busy}
-                    onclick={() => void toggleBrowserNotifications()}
-                  >
-                    <span class="settings-switch-knob" aria-hidden="true"></span>
-                  </button>
+              {#if !macDesktopApp}
+                <div>
+                  <div class="settings-gate-head">
+                    <span class="settings-field-label">{notificationToggleLabel}</span>
+                    <button
+                      class="settings-switch"
+                      type="button"
+                      role="switch"
+                      aria-checked={browserNotificationsEnabled}
+                      aria-label={notificationToggleLabel}
+                      disabled={pushNotifications.busy}
+                      onclick={() => void toggleBrowserNotifications()}
+                    >
+                      <span class="settings-switch-knob" aria-hidden="true"></span>
+                    </button>
+                  </div>
+                  <div class="settings-gate-hint">
+                    {#if pushNotifications.supported && pushNotifications.active}Включены. События будут доставляться, когда вкладка закрыта.
+                    {:else if pushNotifications.supported && pushNotifications.loaded && !pushNotifications.serverEnabled}Отключены на сервере: настройте VAPID-ключи.
+                    {:else if desktopApp && notificationPreferences.deliveryPermission === 'granted'}Включены для открытого приложения.
+                    {:else if notificationPreferences.deliveryPermission === 'granted'}Включены для открытой вкладки.
+                    {:else if notificationPreferences.browserPermission === 'denied'}Запрещены браузером — измените разрешение сайта.
+                    {:else}Нажмите переключатель, чтобы включить. Запрос выполняется только по вашему действию.{/if}
+                  </div>
                 </div>
-                <div class="settings-gate-hint">
-                  {#if pushNotifications.supported && pushNotifications.active}Включены. События будут доставляться, когда вкладка закрыта.
-                  {:else if pushNotifications.supported && pushNotifications.loaded && !pushNotifications.serverEnabled}Отключены на сервере: настройте VAPID-ключи.
-                  {:else if desktopApp && notificationPreferences.deliveryPermission === 'granted'}Включены для открытого приложения.
-                  {:else if notificationPreferences.deliveryPermission === 'granted'}Включены для открытой вкладки.
-                  {:else if notificationPreferences.browserPermission === 'denied'}Запрещены браузером — измените разрешение сайта.
-                  {:else}Нажмите переключатель, чтобы включить. Запрос выполняется только по вашему действию.{/if}
-                </div>
-              </div>
 
-              <div class="settings-notification-dependent" data-disabled={!browserNotificationsEnabled}>
-                <div class="settings-gate-head">
-                  <span class="settings-field-label">Приватный текст уведомлений</span>
-                  <button
-                    class="settings-switch"
-                    type="button"
-                    role="switch"
-                    aria-checked={notificationPreferences.privateNotifications}
-                    aria-label="Приватный текст уведомлений"
-                    disabled={notificationSaving || !browserNotificationsEnabled}
-                    onclick={() => void togglePrivateNotifications()}
-                  >
-                    <span class="settings-switch-knob" aria-hidden="true"></span>
-                  </button>
+                <div class="settings-notification-dependent" data-disabled={!browserNotificationsEnabled}>
+                  <div class="settings-gate-head">
+                    <span class="settings-field-label">Приватный текст уведомлений</span>
+                    <button
+                      class="settings-switch"
+                      type="button"
+                      role="switch"
+                      aria-checked={notificationPreferences.privateNotifications}
+                      aria-label="Приватный текст уведомлений"
+                      disabled={notificationSaving || !browserNotificationsEnabled}
+                      onclick={() => void togglePrivateNotifications()}
+                    >
+                      <span class="settings-switch-knob" aria-hidden="true"></span>
+                    </button>
+                  </div>
+                  <div class="settings-gate-hint">Скрывает текст сообщений в системных уведомлениях.</div>
                 </div>
-                <div class="settings-gate-hint">Скрывает текст сообщений в системных уведомлениях.</div>
-              </div>
+              {/if}
 
               <div class="settings-notification-ignore">
                 <div>
