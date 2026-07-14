@@ -1,5 +1,6 @@
 <script lang="ts">
   import { RotateCcw } from '@lucide/svelte';
+  import { onDestroy } from 'svelte';
   import { iconSm } from '$lib/shared/ui/icons';
   import {
     formatHotkeyBinding,
@@ -13,6 +14,7 @@
     defaultValue = null,
     disabled = false,
     ariaLabel = 'Горячая клавиша',
+    onRecordingChange,
     onValueChange
   }: HotkeyRecorderProps = $props();
 
@@ -21,13 +23,17 @@
 
   function startRecording(): void {
     if (disabled) return;
+    if (!recording) onRecordingChange?.(true);
     recording = true;
     recorderButton?.focus();
   }
 
   function stopRecording(): void {
+    if (recording) onRecordingChange?.(false);
     recording = false;
   }
+
+  onDestroy(stopRecording);
 
   function captureKey(event: KeyboardEvent): void {
     if (!recording) return;

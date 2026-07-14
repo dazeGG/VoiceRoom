@@ -40,6 +40,10 @@
   import { setMicrophoneVolume } from '$lib/features/room/client/services/microphone-service';
   import { setMicrophoneMode } from '$lib/features/room/client/ui/controls';
   import {
+    desktopGlobalHotkeysAvailable,
+    setDesktopGlobalHotkeysSuspended
+  } from '$lib/features/room/client/services/desktop-hotkey-service';
+  import {
     getDefaultHotkeyBinding,
     readHotkeyBinding,
     writeHotkeyBinding,
@@ -108,6 +112,7 @@
   let micMuteHotkey = $state<HotkeyBinding | null>(null);
   let outputMuteHotkey = $state<HotkeyBinding | null>(null);
   let pushToTalkHotkey = $state<HotkeyBinding | null>(null);
+  let globalHotkeysAvailable = $state(false);
   let masterVolume = $state(100);
   let notificationVolume = $state(100);
   let notificationSaving = $state(false);
@@ -134,6 +139,10 @@
   const noiseOptions = $derived(
     NOISE_OPTIONS.map((option) => ({ value: option.value, label: option.label }))
   );
+
+  $effect(() => {
+    if (open) globalHotkeysAvailable = desktopGlobalHotkeysAvailable();
+  });
 
   // Reset both forms whenever the modal (re)opens or the account changes.
   $effect(() => {
@@ -738,6 +747,7 @@
                       bind:value={micMuteHotkey}
                       defaultValue={getDefaultHotkeyBinding('mic-mute')}
                       ariaLabel="Хоткей мьюта микрофона"
+                      onRecordingChange={(recording) => void setDesktopGlobalHotkeysSuspended(recording)}
                       onValueChange={(value) => changeHotkey('mic-mute', value)}
                     />
                   </div>
@@ -750,6 +760,7 @@
                       bind:value={outputMuteHotkey}
                       defaultValue={getDefaultHotkeyBinding('output-mute')}
                       ariaLabel="Хоткей мьюта звука"
+                      onRecordingChange={(recording) => void setDesktopGlobalHotkeysSuspended(recording)}
                       onValueChange={(value) => changeHotkey('output-mute', value)}
                     />
                   </div>
@@ -762,11 +773,18 @@
                       bind:value={pushToTalkHotkey}
                       defaultValue={getDefaultHotkeyBinding('push-to-talk')}
                       ariaLabel="Клавиша Push-to-talk"
+                      onRecordingChange={(recording) => void setDesktopGlobalHotkeysSuspended(recording)}
                       onValueChange={(value) => changeHotkey('push-to-talk', value)}
                     />
                   </div>
                 </div>
-                <div class="settings-hotkey-window-note">Горячие клавиши работают, только пока окно VoiceRoom активно.</div>
+                <div class="settings-hotkey-window-note">
+                  {#if globalHotkeysAvailable}
+                    В приложении VoiceRoom успешно зарегистрированные сочетания работают поверх других окон, пока вы подключены к голосу. На macOS может потребоваться разрешение «Мониторинг ввода».
+                  {:else}
+                    В браузере горячие клавиши работают только в активной вкладке. Системные сочетания доступны в приложении VoiceRoom.
+                  {/if}
+                </div>
               </div>
             </div>
           {:else}

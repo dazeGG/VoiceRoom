@@ -8,6 +8,12 @@ import { getStoredPeerSession } from './core/session';
 import { cleanDisplayName } from './core/utils';
 import { showToast } from './ui/toast';
 import { handleAudioUnlockGesture } from './services/media-playback-service';
+import {
+  bindDesktopGlobalHotkeys,
+  isDesktopGlobalHotkeyRegistered,
+  syncDesktopGlobalHotkeys,
+  type DesktopHotkeyRegistrationResult
+} from './services/desktop-hotkey-service';
 import { refreshDevices, refreshMicrophoneLevelMeter } from './ui/devices';
 import {
   beginPushToTalk,
@@ -39,6 +45,7 @@ let mounted = false;
 let mountAbortController: AbortController | null = null;
 let activeVoiceLeaveTeardown: (() => void) | null = null;
 let activeVoiceControlsTeardown: (() => void) | null = null;
+let desktopHotkeysTeardown: (() => void) | null = null;
 
 export function mountRoomClient(_root: ParentNode = document, options: { roomId?: string; embeddedRoomId?: string; autoJoin?: boolean } = {}): () => void {
   if (mounted) return unmountRoomClient;
@@ -50,41 +57,91 @@ export function mountRoomClient(_root: ParentNode = document, options: { roomId?
     toggleMic: toggleMicrophoneMuted,
     toggleDeafen: toggleOutputMute
   });
+  let lastDesktopHotkeyFailure = '';
+  desktopHotkeysTeardown = bindDesktopGlobalHotkeys(
+    (action, phase, options) => {
+      if (!state.joined) return;
+      if (action === 'push-to-talk') {
+        if (phase === 'pressed') beginPushToTalk();
+        else endPushToTalk({ immediate: options?.immediate });
+        return;
+      }
+      if (phase !== 'pressed') return;
+      if (action === 'mic-mute') toggleMicrophoneMuted();
+      if (action === 'output-mute') toggleOutputMute();
+    },
+    (result: DesktopHotkeyRegistrationResult) => {
+      if (!state.joined || result.failed.length === 0) {
+        lastDesktopHotkeyFailure = '';
+        return;
+      }
+
+      const failureKey = result.failed.map(({ action, reason }) => `${action}:${reason}`).join('|');
+      if (failureKey === lastDesktopHotkeyFailure) return;
+      lastDesktopHotkeyFailure = failureKey;
+      const labels = [...new Set(result.failed.map(({ action }) => action === 'mic-mute'
+        ? 'мьют микрофона'
+        : action === 'output-mute'
+          ? 'мьют звука'
+          : 'push-to-talk'))];
+      const reasons = new Set(result.failed.map(({ reason }) => reason));
+      const explanation = reasons.has('modifier-required')
+        ? 'Для букв и цифр добавьте Ctrl, ⌘, Alt или Shift.'
+        : reasons.has('input-monitoring-required')
+          ? 'Разрешите Voice Room «Мониторинг ввода» в системных настройках macOS и переподключитесь к голосу.'
+        : reasons.has('duplicate-binding')
+          ? 'Назначьте действиям разные сочетания.'
+          : reasons.has('unsupported-key')
+            ? 'Выберите другую клавишу.'
+            : [...reasons].some((reason) => reason.startsWith('helper-') || reason === 'platform-unsupported')
+              ? 'Native-компонент системных клавиш недоступен.'
+            : 'Возможно, сочетание занято другим приложением.';
+      showToast(`Системное сочетание недоступно: ${labels.join(', ')}. ${explanation}`);
+    }
+  );
 
   let activePushToTalkCode = '';
+  let localPushToTalkOwned = false;
 
   function onVoiceHotkeyDown(event: KeyboardEvent): void {
     if (isTypingTarget(event.target)) return;
 
     if (state.microphoneMode === 'push-to-talk' && eventMatchesHotkey('push-to-talk', event)) {
       event.preventDefault();
-      activePushToTalkCode = event.code;
-      if (!event.repeat) beginPushToTalk();
+      if (isDesktopGlobalHotkeyRegistered('push-to-talk')) return;
+      if (!event.repeat) {
+        localPushToTalkOwned = beginPushToTalk();
+        activePushToTalkCode = localPushToTalkOwned ? event.code : '';
+      }
       return;
     }
 
     if (event.repeat) return;
     if (eventMatchesHotkey('mic-mute', event)) {
       event.preventDefault();
+      if (isDesktopGlobalHotkeyRegistered('mic-mute')) return;
       toggleMicrophoneMuted();
       return;
     }
     if (state.joined && eventMatchesHotkey('output-mute', event)) {
       event.preventDefault();
+      if (isDesktopGlobalHotkeyRegistered('output-mute')) return;
       toggleOutputMute();
     }
   }
 
   function onVoiceHotkeyUp(event: KeyboardEvent): void {
-    if (!activePushToTalkCode || event.code !== activePushToTalkCode) return;
+    if (!localPushToTalkOwned || !activePushToTalkCode || event.code !== activePushToTalkCode) return;
     event.preventDefault();
     activePushToTalkCode = '';
+    localPushToTalkOwned = false;
     endPushToTalk();
   }
 
   function releasePushToTalkImmediately(): void {
-    if (!activePushToTalkCode && !state.pushToTalkActive) return;
+    if (!localPushToTalkOwned) return;
     activePushToTalkCode = '';
+    localPushToTalkOwned = false;
     endPushToTalk({ immediate: true });
   }
 
@@ -159,6 +216,9 @@ export function mountRoomClient(_root: ParentNode = document, options: { roomId?
 
 function unmountRoomClient(): void {
   leaveRoom();
+  void syncDesktopGlobalHotkeys(false);
+  desktopHotkeysTeardown?.();
+  desktopHotkeysTeardown = null;
   activeVoiceLeaveTeardown?.();
   activeVoiceLeaveTeardown = null;
   activeVoiceControlsTeardown?.();

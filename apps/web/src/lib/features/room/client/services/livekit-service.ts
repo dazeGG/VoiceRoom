@@ -37,7 +37,10 @@ import {
 import { refreshScreenAction, refreshScreenStage, refreshScreenTiles } from '../ui/screen-view';
 import type { Participant } from '../core/types';
 
-export async function connectLiveKitRoom(name: string): Promise<void> {
+export async function connectLiveKitRoom(
+  name: string,
+  isCurrent: () => boolean = () => true
+): Promise<boolean> {
   setVoiceConnectionStatus('connecting');
 
   const credentials = await postJson('/api/livekit-token', {
@@ -46,38 +49,77 @@ export async function connectLiveKitRoom(name: string): Promise<void> {
     roomId: state.roomId,
     sessionToken: state.sessionToken
   });
+  if (!isCurrent()) return false;
 
-  const room = await connectLiveKitWithFallback(credentials);
+  const room = await connectLiveKitWithFallback(credentials, isCurrent);
+  if (!room || !isCurrent()) return false;
 
-  await publishLocalMicrophone();
+  state.livekitRoom = room;
+  const eventsBound = await bindLiveKitRoomEvents(room, isCurrent);
+  if (!eventsBound || !isCurrent() || state.livekitRoom !== room) {
+    await disconnectLiveKitRoomInstance(room);
+    return false;
+  }
+
+  const stream = state.localStream;
+  try {
+    const published = await publishLocalMicrophoneForRoom(
+      room,
+      stream,
+      () => isCurrent() && state.livekitRoom === room && state.localStream === stream
+    );
+    if (!published) {
+      await disconnectLiveKitRoomInstance(room);
+      return false;
+    }
+  } catch (error) {
+    if (!isCurrent() || state.livekitRoom !== room) {
+      await disconnectLiveKitRoomInstance(room);
+      return false;
+    }
+    throw error;
+  }
+
+  if (!isCurrent() || state.livekitRoom !== room) {
+    await disconnectLiveKitRoomInstance(room);
+    return false;
+  }
   syncLiveKitParticipants(room);
   setVoiceConnectionStatus('connected');
+  return true;
 }
 
-async function connectLiveKitWithFallback(credentials: { url: string; token: string }): Promise<Room> {
+async function connectLiveKitWithFallback(
+  credentials: { url: string; token: string },
+  isCurrent: () => boolean
+): Promise<Room | null> {
   const { Room } = await loadLiveKitClient();
+  if (!isCurrent()) return null;
   const urls = getLiveKitConnectUrls(credentials.url);
   let lastError: unknown = null;
 
   for (const url of urls) {
+    if (!isCurrent()) return null;
     const room = new Room({
       adaptiveStream: false,
       dynacast: true
     });
-    state.livekitRoom = room;
-    await bindLiveKitRoomEvents(room);
 
     try {
       await room.connect(url, credentials.token, {
         autoSubscribe: false
       });
+      if (!isCurrent()) {
+        await disconnectLiveKitRoomInstance(room);
+        return null;
+      }
       logLocalLiveKitDebug('info', `LiveKit connected to ${url}`);
       return room;
     } catch (error) {
       lastError = error;
       logLocalLiveKitDebug('warn', `LiveKit connect failed for ${url}`, error);
-      state.livekitRoom = null;
       await room.disconnect(false).catch(() => {});
+      if (!isCurrent()) return null;
     }
   }
 
@@ -106,8 +148,9 @@ function logLocalLiveKitDebug(level: 'info' | 'warn', ...args: unknown[]): void 
   console[level](...args);
 }
 
-async function bindLiveKitRoomEvents(room: Room): Promise<void> {
+async function bindLiveKitRoomEvents(room: Room, isCurrent: () => boolean): Promise<boolean> {
   const { RoomEvent } = await loadLiveKitClient();
+  if (!isCurrent() || state.livekitRoom !== room) return false;
 
   room.on(RoomEvent.Connected, () => {
     if (state.voiceConnection !== 'connected') setVoiceConnectionStatus('connecting');
@@ -201,6 +244,7 @@ async function bindLiveKitRoomEvents(room: Room): Promise<void> {
   room.on(RoomEvent.ParticipantNameChanged, (name, participant) => {
     updateParticipant({ id: participant.identity, name: name || participant.identity });
   });
+  return true;
 }
 
 export function syncLiveKitParticipants(room: Room | null): void {
@@ -271,18 +315,39 @@ function prunePeersOutsideServerList(): void {
 
 
 export async function publishLocalMicrophone(): Promise<void> {
-  if (!state.livekitRoom || !state.localStream) return;
-  const [track] = state.localStream.getAudioTracks();
+  const room = state.livekitRoom;
+  const stream = state.localStream;
+  if (!room || !stream) return;
+  await publishLocalMicrophoneForRoom(
+    room,
+    stream,
+    () => state.livekitRoom === room && state.localStream === stream
+  );
+}
+
+async function publishLocalMicrophoneForRoom(
+  room: Room,
+  stream: MediaStream | null,
+  isCurrent: () => boolean
+): Promise<boolean> {
+  if (!stream || !isCurrent()) return false;
+  const [track] = stream.getAudioTracks();
   if (!track) throw new Error('Браузер не отдал аудио-трек');
 
-  state.localMicPublication = await state.livekitRoom.localParticipant.publishTrack(track, {
+  const publication = await room.localParticipant.publishTrack(track, {
     audioPreset: { maxBitrate: MICROPHONE_AUDIO_BITRATE },
     dtx: true,
     name: 'microphone',
     red: true,
     source: TRACK_SOURCE.Microphone as Track.Source
   });
-  await syncLocalMicrophonePublicationMuted();
+  if (!isCurrent()) {
+    await room.localParticipant.unpublishTrack(publication.track ?? track, false).catch(() => {});
+    return false;
+  }
+  state.localMicPublication = publication;
+  await syncMicrophonePublicationMuted(publication);
+  return isCurrent();
 }
 
 export async function unpublishLocalMicrophone(stopOnUnpublish = false): Promise<void> {
@@ -299,6 +364,10 @@ export async function syncLocalMicrophonePublicationMuted(): Promise<void> {
   const publication = state.localMicPublication;
   if (!publication) return;
 
+  await syncMicrophonePublicationMuted(publication);
+}
+
+async function syncMicrophonePublicationMuted(publication: LocalTrackPublication): Promise<void> {
   if (state.muted) {
     await publication.mute();
   } else {
@@ -344,10 +413,21 @@ export async function unpublishLocalScreenTracks(stopOnUnpublish = false): Promi
 
 export async function disconnectLiveKitRoom(): Promise<void> {
   const room = state.livekitRoom;
-  state.livekitRoom = null;
-  state.localMicPublication = null;
-  state.localScreenPublications.clear();
-  if (!room) return;
+  if (!room) {
+    state.localMicPublication = null;
+    state.localScreenPublications.clear();
+    return;
+  }
+
+  await disconnectLiveKitRoomInstance(room);
+}
+
+async function disconnectLiveKitRoomInstance(room: Room): Promise<void> {
+  if (state.livekitRoom === room) {
+    state.livekitRoom = null;
+    state.localMicPublication = null;
+    state.localScreenPublications.clear();
+  }
 
   try {
     room.removeAllListeners?.();

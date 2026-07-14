@@ -1,5 +1,6 @@
 import type { LocalTrackPublication, Room } from 'livekit-client';
 import type { SvelteMap } from 'svelte/reactivity';
+import type { HotkeyBinding } from '$lib/shared/ui/HotkeyRecorder/types';
 import type { MicrophoneMode, NoiseMode } from './config';
 import type { Participant, PeerInfo } from '../model/participants';
 export type { Participant, ParticipantViewRefs, PeerInfo } from '../model/participants';
@@ -290,6 +291,38 @@ declare global {
       onEvent: (
         callback: (payload: { sessionId: string; event: DesktopAudioFormatEvent }) => void
       ) => () => void;
+    };
+    voiceRoomDesktopHotkeys?: {
+      configure: (payload: {
+        active: boolean;
+        configurationId: number;
+        bindings: Partial<Record<'mic-mute' | 'output-mute' | 'push-to-talk', HotkeyBinding | null>>;
+      }) => Promise<{
+        active: boolean;
+        backend: 'native' | 'electron-fallback' | 'none';
+        configurationId?: number;
+        failed: Array<{ action: 'mic-mute' | 'output-mute' | 'push-to-talk'; reason: string }>;
+        registered: Array<'mic-mute' | 'output-mute' | 'push-to-talk'>;
+        unsupported: Array<'mic-mute' | 'output-mute' | 'push-to-talk'>;
+      }>;
+      onAction: (
+        callback: (payload: {
+          action: 'mic-mute' | 'output-mute' | 'push-to-talk';
+          configurationId?: number;
+          phase: 'pressed' | 'released';
+        }) => void
+      ) => () => void;
+      onStatus: (
+        callback: (result: {
+          active: boolean;
+          backend: 'native' | 'electron-fallback' | 'none';
+          configurationId?: number;
+          failed: Array<{ action: 'mic-mute' | 'output-mute' | 'push-to-talk'; reason: string }>;
+          registered: Array<'mic-mute' | 'output-mute' | 'push-to-talk'>;
+          unsupported: Array<'mic-mute' | 'output-mute' | 'push-to-talk'>;
+        }) => void
+      ) => () => void;
+      setSuspended: (suspended: boolean) => Promise<boolean>;
     };
     voiceRoomRuntime?: {
       isDesktop?: boolean;

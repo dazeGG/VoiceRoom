@@ -4,6 +4,8 @@ import type { HotkeyBinding } from '$lib/shared/ui/HotkeyRecorder/types';
 export type HotkeyAction = 'mic-mute' | 'output-mute' | 'push-to-talk';
 
 export const HOTKEY_STORAGE_PREFIX = 'voice-room:hotkey:';
+export const HOTKEY_BINDINGS_CHANGED_EVENT = 'voice-room:hotkey-bindings-changed';
+const DISABLED_HOTKEY_VALUE = 'null';
 
 export function getHotkeyStorageKey(action: HotkeyAction): string {
   return `${HOTKEY_STORAGE_PREFIX}${action}`;
@@ -27,6 +29,7 @@ export function readHotkeyBinding(action: HotkeyAction): HotkeyBinding | null {
   try {
     const stored = localStorage.getItem(getHotkeyStorageKey(action));
     if (stored === null) return getDefaultHotkeyBinding(action);
+    if (stored === DISABLED_HOTKEY_VALUE) return null;
     return parseHotkeyBinding(stored) ?? getDefaultHotkeyBinding(action);
   } catch {
     return getDefaultHotkeyBinding(action);
@@ -37,9 +40,13 @@ export function writeHotkeyBinding(action: HotkeyAction, binding: HotkeyBinding 
   try {
     const key = getHotkeyStorageKey(action);
     if (binding) localStorage.setItem(key, JSON.stringify(binding));
-    else localStorage.removeItem(key);
+    else localStorage.setItem(key, DISABLED_HOTKEY_VALUE);
   } catch {
     // Hotkeys remain available for this settings session if storage is blocked.
+  }
+
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(HOTKEY_BINDINGS_CHANGED_EVENT, { detail: { action } }));
   }
 }
 

@@ -82,8 +82,11 @@ test('microphone volume is available in settings and the room dock', () => {
 
 test('configurable hotkeys and push-to-talk cover hold, release, and focus loss', () => {
   const hotkeys = read('src/lib/features/room/client/core/hotkeys.ts');
+  const desktopHotkeys = read('src/lib/features/room/client/services/desktop-hotkey-service.ts');
   const recorder = read('src/lib/shared/ui/HotkeyRecorder/HotkeyRecorder.svelte');
   const main = read('src/lib/features/room/client/main.ts');
+  const room = read('src/lib/features/room/client/room/room.ts');
+  const livekit = read('src/lib/features/room/client/services/livekit-service.ts');
   const controls = read('src/lib/features/room/client/ui/controls.ts');
   const modal = read('src/lib/features/home/components/SettingsModal.svelte');
   const dock = read('src/lib/features/room/components/RoomDock.svelte');
@@ -92,10 +95,14 @@ test('configurable hotkeys and push-to-talk cover hold, release, and focus loss'
   assert.match(hotkeys, /code: 'KeyM'/);
   assert.match(hotkeys, /ctrlKey: !applePlatform/);
   assert.match(hotkeys, /metaKey: applePlatform/);
+  assert.match(hotkeys, /DISABLED_HOTKEY_VALUE = 'null'/);
+  assert.match(hotkeys, /HOTKEY_BINDINGS_CHANGED_EVENT/);
   assert.match(hotkeys, /target\.closest\('input, textarea, select/);
 
   assert.match(recorder, /Нажмите клавиши…/);
   assert.match(recorder, /event\.key === 'Escape'/);
+  assert.match(recorder, /onRecordingChange\?\.\(true\)/);
+  assert.match(recorder, /onDestroy\(stopRecording\)/);
   assert.match(recorder, /onValueChange\?\.\(defaultValue\)/);
   assert.match(main, /eventMatchesHotkey\('mic-mute', event\)/);
   assert.match(main, /eventMatchesHotkey\('output-mute', event\)/);
@@ -103,12 +110,47 @@ test('configurable hotkeys and push-to-talk cover hold, release, and focus loss'
   assert.match(main, /window\.addEventListener\('keyup', onVoiceHotkeyUp/);
   assert.match(main, /window\.addEventListener\('blur', releasePushToTalkImmediately/);
   assert.match(main, /document\.hidden/);
+  assert.match(main, /bindDesktopGlobalHotkeys/);
+  assert.match(main, /isDesktopGlobalHotkeyRegistered\('mic-mute'\)/);
+  assert.match(main, /isDesktopGlobalHotkeyRegistered\('output-mute'\)/);
+
+  assert.match(desktopHotkeys, /bridge\.configure\(\{/);
+  assert.match(desktopHotkeys, /active: voiceActive/);
+  assert.match(desktopHotkeys, /readHotkeyBinding\('mic-mute'\)/);
+  assert.match(desktopHotkeys, /readHotkeyBinding\('output-mute'\)/);
+  assert.match(desktopHotkeys, /readHotkeyBinding\('push-to-talk'\)/);
+  assert.match(desktopHotkeys, /bridge\?\.onStatus/);
+  assert.match(desktopHotkeys, /pendingRegistrationActions/);
+  assert.match(desktopHotkeys, /pendingActionEvents\.push/);
+  assert.match(desktopHotkeys, /pendingRegistrationStatus = result/);
+  assert.match(desktopHotkeys, /activeConfigurationId/);
+  assert.match(desktopHotkeys, /configurationMatches/);
+  assert.match(desktopHotkeys, /finalPushToTalk\?\.phase === 'pressed'/);
+  assert.match(desktopHotkeys, /setDesktopGlobalHotkeysSuspended/);
+  assert.match(room, /syncDesktopGlobalHotkeys\(true\)/);
+  assert.match(room, /syncDesktopGlobalHotkeys\(false\)/);
+  assert.match(room, /joinAttemptGeneration/);
+  assert.match(room, /activeJoinAttempt/);
+  assert.doesNotMatch(room, /if \(activeJoinAttempt\) \{\s*await activeJoinAttempt/);
+  assert.match(room, /stopMicrophoneCapture\(microphoneCapture\)/);
+  assert.match(room, /await disconnectLiveKitRoom\(\)/);
+  assert.match(room, /if \(isCurrent\(\)\) state\.connecting = false/);
+  assert.match(livekit, /connectLiveKitRoom\(\s*name: string,\s*isCurrent:/);
+  assert.match(livekit, /connectLiveKitWithFallback\(credentials, isCurrent\)/);
+  assert.match(livekit, /disconnectLiveKitRoomInstance\(room\)/);
+  assert.match(livekit, /publishLocalMicrophoneForRoom/);
 
   assert.match(controls, /beginPushToTalk/);
   assert.match(controls, /endPushToTalk/);
   assert.match(controls, /PUSH_TO_TALK_RELEASE_HOLD_MS/);
   assert.match(controls, /setMicrophoneMuted\(false, \{ playCue: false \}\)/);
   assert.match(controls, /setMicrophoneMuted\(true, \{ playCue: false \}\)/);
-  assert.match(modal, /Горячие клавиши работают, только пока окно VoiceRoom активно/);
+  assert.match(modal, /успешно зарегистрированные сочетания работают поверх других окон/);
+  assert.match(modal, /Мониторинг ввода/);
+  assert.match(modal, /В браузере горячие клавиши работают только в активной вкладке/);
+  assert.match(main, /isDesktopGlobalHotkeyRegistered\('push-to-talk'\)/);
+  assert.match(main, /localPushToTalkOwned/);
+  assert.match(main, /if \(!localPushToTalkOwned \|\| !activePushToTalkCode/);
+  assert.match(main, /phase === 'pressed'/);
   assert.match(dock, /data-active=\{roomClientState\.pushToTalkActive\}/);
 });

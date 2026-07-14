@@ -41,6 +41,7 @@ import { attachMeter, startMeters, stopMeters } from '../media/meters';
 import { startPeerLatencyStats, startSpeakingStats, stopPeerLatencyStats, stopSpeakingStats } from './stats';
 import { clearAllPeerJoinCues, clearPeerJoinCue, clearStreamViewerCues, playPeerCue, playPeerJoinCue } from '../media/cues';
 import { cancelScreenSourcePicker } from '../ui/screen-source-picker';
+import { syncDesktopGlobalHotkeys } from '../services/desktop-hotkey-service';
 import { closeParticipantContextMenu } from '../../participant-context-ui.svelte';
 import {
   clearGateSwitchTimer,
@@ -62,6 +63,12 @@ import { applyRoomDeleted, applyRoomUpdated } from './lifecycle';
 type RoomEntryGateResult = 'authenticated' | 'anonymous' | 'failure';
 
 let voiceJoinSent = false;
+let joinAttemptGeneration = 0;
+let activeJoinAttempt: Promise<void> | null = null;
+
+function isCurrentJoinAttempt(generation: number): boolean {
+  return generation === joinAttemptGeneration;
+}
 
 export function showStartScreen(): void {
   document.body.dataset.screen = 'start';
@@ -236,6 +243,19 @@ export async function joinRoom(event?: Event): Promise<void> {
   event?.preventDefault();
   if (state.joined || state.connecting) return;
 
+  const generation = ++joinAttemptGeneration;
+  const attempt = performJoinRoom(generation);
+  activeJoinAttempt = attempt;
+  try {
+    await attempt;
+  } finally {
+    if (activeJoinAttempt === attempt) activeJoinAttempt = null;
+  }
+}
+
+async function performJoinRoom(generation: number): Promise<void> {
+  const isCurrent = (): boolean => isCurrentJoinAttempt(generation);
+
   state.connecting = true;
   state.localConnectionQuality = 'unknown';
   state.localPingMs = null;
@@ -246,6 +266,7 @@ export async function joinRoom(event?: Event): Promise<void> {
 
   try {
     const exists = await checkRoomExists(state.roomId);
+    if (!isCurrent()) return;
     if (!exists) {
       showRoomNotFound();
       return;
@@ -257,8 +278,14 @@ export async function joinRoom(event?: Event): Promise<void> {
     }
     if (state.microphoneMode === 'push-to-talk') state.muted = true;
 
-    setLocalMicrophoneCapture(await openLocalMicrophone());
+    const microphoneCapture = await openLocalMicrophone();
+    if (!isCurrent()) {
+      stopMicrophoneCapture(microphoneCapture);
+      return;
+    }
+    setLocalMicrophoneCapture(microphoneCapture);
     await refreshDevices();
+    if (!isCurrent()) return;
 
     const name = getDisplayName();
     state.self = createParticipant({
@@ -300,9 +327,11 @@ export async function joinRoom(event?: Event): Promise<void> {
     voiceJoinSent = true;
     setServerConnectionStatus('connecting');
 
-    await connectLiveKitRoom(name);
+    const connected = await connectLiveKitRoom(name, isCurrent);
+    if (!connected || !isCurrent()) return;
     state.joined = true;
     setConnectedVoiceRoom(state.roomId);
+    void syncDesktopGlobalHotkeys(true);
     setVoiceSessionTiming({ joinedAt: state.self?.joinedAt ?? Date.now() });
     setVoiceControlsState({ muted: state.muted, deafened: state.outputMuted });
     if (state.muted || state.outputMuted) postState().catch(() => {});
@@ -313,6 +342,11 @@ export async function joinRoom(event?: Event): Promise<void> {
     startSpeakingStats();
     playPeerCue('join');
   } catch (error) {
+    if (!isCurrent()) {
+      // leaveRoom already cleaned this attempt's published state. Async capture,
+      // token and LiveKit work self-disposes through the generation predicate.
+      return;
+    }
     console.error(error);
     const banned = error instanceof ApiRequestError && error.code === 'room_banned';
     if (!banned) showToast(formatJoinError(error));
@@ -331,7 +365,7 @@ export async function joinRoom(event?: Event): Promise<void> {
     refreshParticipantState();
     if (banned) showRoomModerationScreen('banned');
   } finally {
-    state.connecting = false;
+    if (isCurrent()) state.connecting = false;
     refreshCallControls();
     refreshScreenControls();
   }
@@ -454,6 +488,8 @@ async function handleVoiceRealtimeEvent(event: RealtimeEvent): Promise<void> {
 }
 
 export function leaveRoom(): void {
+  joinAttemptGeneration += 1;
+  void syncDesktopGlobalHotkeys(false);
   if (!state.joined && !state.localStream && !state.localScreenStream && !state.connecting && !voiceJoinSent && !state.voiceRealtimeTeardown) return;
 
   const disconnectedRoomId = state.roomId;
