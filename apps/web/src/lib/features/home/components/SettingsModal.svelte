@@ -143,6 +143,7 @@
       ? pushNotifications.active
       : notificationPreferences.deliveryPermission === 'granted'
   );
+  const notificationToggleLabel = $derived(desktopApp ? 'Уведомления приложения' : 'Push этого браузера');
   const microphoneOptions = $derived([
     { value: '', label: 'Системный' },
     ...microphones.map((mic) => ({ value: mic.deviceId, label: mic.label }))
@@ -829,13 +830,13 @@
             <div class="settings-sound">
               <div>
                 <div class="settings-gate-head">
-                  <span class="settings-field-label">Push этого браузера</span>
+                  <span class="settings-field-label">{notificationToggleLabel}</span>
                   <button
                     class="settings-switch"
                     type="button"
                     role="switch"
                     aria-checked={pushNotifications.supported ? pushNotifications.active : notificationPreferences.deliveryPermission === 'granted'}
-                    aria-label="Push этого браузера"
+                    aria-label={notificationToggleLabel}
                     disabled={pushNotifications.busy}
                     onclick={() => void toggleBrowserNotifications()}
                   >
@@ -845,6 +846,7 @@
                 <div class="settings-gate-hint">
                   {#if pushNotifications.supported && pushNotifications.active}Включены. События будут доставляться, когда вкладка закрыта.
                   {:else if pushNotifications.supported && pushNotifications.loaded && !pushNotifications.serverEnabled}Отключены на сервере: настройте VAPID-ключи.
+                  {:else if desktopApp && notificationPreferences.deliveryPermission === 'granted'}Включены для открытого приложения.
                   {:else if notificationPreferences.deliveryPermission === 'granted'}Включены для открытой вкладки.
                   {:else if notificationPreferences.browserPermission === 'denied'}Запрещены браузером — измените разрешение сайта.
                   {:else}Нажмите переключатель, чтобы включить. Запрос выполняется только по вашему действию.{/if}

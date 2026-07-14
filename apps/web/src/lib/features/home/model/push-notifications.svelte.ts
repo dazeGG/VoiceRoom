@@ -26,6 +26,10 @@ async function getRegistration(): Promise<ServiceWorkerRegistration | null> {
   return navigator.serviceWorker.register('/service-worker.js', { type: 'module' });
 }
 
+function isDesktopRuntime(): boolean {
+  return browser && Boolean(window.voiceRoomRuntime?.isDesktop);
+}
+
 export function syncPushNotificationState(userId: string | null): Promise<void> {
   const generation = ++syncGeneration;
   syncQueue = syncQueue.catch(() => {}).then(() => syncPushNotificationStateNow(userId, generation));
@@ -40,6 +44,13 @@ async function syncPushNotificationStateNow(userId: string | null, generation: n
     pushNotifications.userId = userId;
   }
   if (!userId) return;
+  if (isDesktopRuntime()) {
+    pushNotifications.supported = false;
+    pushNotifications.serverEnabled = false;
+    pushNotifications.active = false;
+    pushNotifications.loaded = true;
+    return;
+  }
   pushNotifications.supported = Boolean(
     browser && 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window
   );
@@ -92,6 +103,10 @@ export async function detachPushSubscription(): Promise<void> {
 }
 
 export async function setPushNotificationsEnabled(enabled: boolean): Promise<boolean> {
+  if (isDesktopRuntime()) {
+    pushNotifications.active = false;
+    return false;
+  }
   if (pushNotifications.busy) return pushNotifications.active;
   pushNotifications.busy = true;
   try {

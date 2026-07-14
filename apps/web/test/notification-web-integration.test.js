@@ -95,6 +95,10 @@ test('notification permission request is isolated to explicit settings UI action
   assert.match(prefs, /export async function requestNotificationsFromUiAction/);
   assert.match(settings, /onclick=\{\(\) => void toggleBrowserNotifications\(\)\}/);
   assert.match(settings, /setPushNotificationsEnabled\(!pushNotifications\.active\)/);
+  assert.match(settings, /const notificationToggleLabel = \$derived\(desktopApp \? 'Уведомления приложения' : 'Push этого браузера'\)/);
+  assert.match(settings, /Включены для открытого приложения/);
+  assert.match(push, /function isDesktopRuntime\(\): boolean/);
+  assert.match(push, /if \(isDesktopRuntime\(\)\) \{[\s\S]*pushNotifications\.supported = false/);
   assert.match(push, /Notification\.requestPermission\(\)/);
   assert.match(push, /pushManager\.subscribe\(\{/);
   assert.match(settings, /notificationPreferences\.deliveryPermission === 'granted'/);
