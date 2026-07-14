@@ -155,7 +155,7 @@
 
     {#if previewChatOpen}
       {#key room.roomId}
-        <RoomPreviewChat roomId={room.roomId} {user} onClose={() => (previewChatOpen = false)} />
+        <RoomPreviewChat roomId={room.roomId} {user} {onToast} onClose={() => (previewChatOpen = false)} />
       {/key}
     {/if}
   </div>

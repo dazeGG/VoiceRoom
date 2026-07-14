@@ -58,8 +58,10 @@ body[data-screen="room"] .status-pill {
 }
 
 .room-heading-title-wrap {
+  display: flex;
   margin: 0;
   min-width: 0;
+  align-items: center;
 }
 
 .room-heading-trigger:hover,

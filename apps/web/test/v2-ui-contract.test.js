@@ -310,7 +310,8 @@ test('room chat keeps transport mounted and tracks unread state while closed', (
   assert.match(topbar, /room-heading-trigger/);
   assert.match(topbar, /keepContentMounted/);
   assert.match(topbar, /avatarUrl=\{roomClientState\.roomAvatarUrl\}/);
-  assert.match(roomMenu, /<h1 class=\{headingClass\}>/);
+  assert.match(roomMenu, /<div class=\{headingClass\} role="heading" aria-level="1">/);
+  assert.doesNotMatch(roomMenu, /<h1 class=\{headingClass\}>/);
   assert.match(roomMenu, /<Avatar \{name\} src=\{avatarUrl\} shape="squircle" background="var\(--room-avatar-bg\)"/);
   assert.match(roomMenu, /<RoomMenuContent[\s\S]*\{roomId\}[\s\S]*\{name\}[\s\S]*\{avatarUrl\}/);
   assert.match(roomMenuContent, /Скопировать код/);
@@ -1585,16 +1586,20 @@ test('participant focus uses a centered stage and a bounded carousel strip', () 
   assert.match(css, /\.participant[\s\S]*cursor: pointer/);
 });
 
-test('room and direct chats use a stable top-right message action toolbar', () => {
+test('room preview, room, and direct chats use a stable top-right message action toolbar', () => {
   const chat = read('src/lib/features/room/components/RoomChat.svelte');
+  const previewChat = read('src/lib/features/home/components/lobby/RoomPreviewChat.svelte');
   const dm = read('src/lib/features/home/components/lobby/DmView.svelte');
   const roomCss = read('src/lib/features/room/styles/chat-rail.css');
   const dmCss = read('src/lib/features/home/styles/friends.css');
 
-  assert.match(chat, /class="chat-msg-actions" role="toolbar"/);
-  assert.match(chat, /aria-label="Копировать текст"/);
-  assert.match(chat, /aria-label="Редактировать"/);
-  assert.match(chat, /aria-label="Удалить"/);
+  for (const source of [chat, previewChat]) {
+    assert.match(source, /class="chat-msg-actions" role="toolbar"/);
+    assert.match(source, /aria-label="Копировать текст"/);
+    assert.match(source, /aria-label="Редактировать"/);
+    assert.match(source, /aria-label="Удалить"/);
+  }
+  assert.doesNotMatch(previewChat, /chat-msg-edit-button/);
   assert.doesNotMatch(chat, /rootClass="chat-msg-menu-root"/);
   assert.match(chat, /queueMicrotask\(\(\) => openParticipantContextMenu/);
   assert.match(dm, /class="dm-msg-actions" role="toolbar"/);

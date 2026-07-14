@@ -1,17 +1,23 @@
 <script lang="ts">
-  import { ChevronRight, MessageSquare, Pencil } from '@lucide/svelte';
+  import { ChevronRight, Copy, MessageSquare, Pencil, Trash2 } from '@lucide/svelte';
   import type { AuthUser } from '$lib/api/auth';
   import { iconSm } from '$lib/shared/ui/icons';
   import { getAppRealtime } from '$lib/api/realtime';
-  import { editRoomChatMessage, fetchRoomChat, postRoomChat, type ChatMessage } from '$lib/api/rooms';
+  import { deleteRoomChatMessage, editRoomChatMessage, fetchRoomChat, postRoomChat, type ChatMessage } from '$lib/api/rooms';
   import { playRoomChatMessageCue } from '$lib/features/room/client/media/cues';
   import { Avatar } from '$lib/shared/ui';
   import { getAvatarPresentation } from '$lib/features/room/client/ui/avatar-presentation';
   import { friendName } from '../../model/lobby-format';
   import ChatText from '$lib/shared/components/ChatText.svelte';
+  import { copyText } from '$lib/shared/utils/clipboard';
   import { tick } from 'svelte';
 
-  let { roomId, user, onClose } = $props<{ roomId: string; user: AuthUser; onClose?: () => void }>();
+  let { roomId, user, onClose, onToast } = $props<{
+    roomId: string;
+    user: AuthUser;
+    onClose?: () => void;
+    onToast?: (message: string) => void;
+  }>();
 
   let draft = $state('');
   let messages = $state<ChatMessage[]>([]);
@@ -154,6 +160,27 @@
   function scrollToBottom(): void {
     if (!chatBody) return;
     chatBody.scrollTop = chatBody.scrollHeight;
+  }
+
+  async function deleteMessage(messageId: string): Promise<void> {
+    if (!roomId) return;
+    try {
+      await deleteRoomChatMessage(roomId, messageId);
+      messages = messages.filter((message) => message.id !== messageId);
+      messageIds.delete(messageId);
+    } catch {
+      error = 'Не удалось удалить сообщение';
+      setTimeout(() => (error = ''), 1600);
+    }
+  }
+
+  async function copyMessageText(message: ChatMessage): Promise<void> {
+    try {
+      await copyText(message.text);
+      onToast?.('Сообщение скопировано');
+    } catch {
+      onToast?.('Не удалось скопировать');
+    }
   }
 
   function startEditing(message: ChatMessage): void {
@@ -299,17 +326,14 @@
                     </div>
                   </div>
                 {:else}
-                  <ChatText text={message.text} />
-                  {#if message.editedAt}<span class="chat-msg-edited">(изменено)</span>{/if}
-                  {#if group.self}
-                    <button
-                      type="button"
-                      class="chat-msg-edit-button"
-                      aria-label="Редактировать сообщение"
-                      title="Редактировать"
-                      onclick={() => startEditing(message)}
-                    ><Pencil {...iconSm} aria-hidden="true" /></button>
-                  {/if}
+                  <span class="chat-msg-content"><ChatText text={message.text} />{#if message.editedAt}<span class="chat-msg-edited">(изменено)</span>{/if}</span>
+                  <div class="chat-msg-actions" role="toolbar" aria-label="Действия с сообщением">
+                    <button type="button" aria-label="Копировать текст" title="Копировать текст" onclick={() => void copyMessageText(message)}><Copy {...iconSm} /></button>
+                    {#if group.self}
+                      <button type="button" aria-label="Редактировать" title="Редактировать" onclick={() => startEditing(message)}><Pencil {...iconSm} /></button>
+                      <button class="chat-msg-action-danger" type="button" aria-label="Удалить" title="Удалить" onclick={() => void deleteMessage(message.id)}><Trash2 {...iconSm} /></button>
+                    {/if}
+                  </div>
                 {/if}
               </div>
             {/each}

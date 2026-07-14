@@ -58,7 +58,7 @@
 <Popover {placement} role="menu" ariaLabel="Меню комнаты" panelClass="room-menu-popover" {keepContentMounted}>
   {#snippet trigger({ open, toggle, panelId })}
     {#if heading}
-      <h1 class={headingClass}>{@render menuButton(open, toggle, panelId)}</h1>
+      <div class={headingClass} role="heading" aria-level="1">{@render menuButton(open, toggle, panelId)}</div>
     {:else}
       {@render menuButton(open, toggle, panelId)}
     {/if}
