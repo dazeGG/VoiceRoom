@@ -1101,6 +1101,7 @@ test('user and room avatars expose accessible edit overlays and conditional dele
   const settings = read('src/lib/features/home/components/SettingsModal.svelte');
   const settingsCss = read('src/lib/features/home/styles/settings.css');
   const roomSettings = read('src/lib/features/room/components/RoomSettingsDialog.svelte');
+  const lobbyRoomSettings = read('src/lib/features/home/components/lobby/LobbyRoomSettingsDialog.svelte');
 
   assert.match(settings, /<button[\s\S]*?class="settings-avatar-edit"[\s\S]*?aria-label=\{user\?\.avatarUrl \? 'Изменить аватар' : 'Загрузить аватар'\}[\s\S]*?<Pencil/);
   assert.match(settings, /\{#if avatarPreviewUrl \|\| \(user\?\.avatarUrl && !removeAvatarPending\)\}[\s\S]*?<button[\s\S]*?class="settings-avatar-remove"[\s\S]*?aria-label="Удалить аватар"[\s\S]*?<X/);
@@ -1120,6 +1121,14 @@ test('user and room avatars expose accessible edit overlays and conditional dele
   assert.doesNotMatch(settings, /\b(?:ImagePlus|Trash2)\b/);
   assert.doesNotMatch(roomSettings, /room-avatar-(?:row|actions|upload|delete)/);
   assert.doesNotMatch(roomSettings, /\b(?:ImagePlus|Trash2)\b/);
+
+  assert.match(lobbyRoomSettings, /uploadRoomAvatar/);
+  assert.match(lobbyRoomSettings, /deleteRoomAvatar/);
+  assert.match(lobbyRoomSettings, /<button[\s\S]*?class="room-avatar-edit"[\s\S]*?aria-label=\{room\.avatarUrl \? 'Изменить аватар комнаты' : 'Загрузить аватар комнаты'\}[\s\S]*?<Pencil/);
+  assert.match(lobbyRoomSettings, /\{#if avatarPreviewUrl \|\| \(room\.avatarUrl && !removeAvatarPending\)\}[\s\S]*?<button[\s\S]*?class="room-avatar-remove"[\s\S]*?aria-label="Удалить аватар комнаты"[\s\S]*?<X/);
+  assert.match(lobbyRoomSettings, /<AvatarCropDialog[\s\S]*?shape="squircle"[\s\S]*?kind="room"/);
+  assert.match(lobbyRoomSettings, /\.dialog-danger-trigger\s*\{[^}]*border:\s*1px solid rgba\(239, 68, 68, 0\.4\)[^}]*color:\s*#f87171/);
+  assert.match(lobbyRoomSettings, /\.dialog-danger-confirm\s*\{[^}]*background:\s*var\(--coral\)[^}]*color:\s*#fff/);
 });
 
 test('frontend visual catalog keeps only user avatar color contracts', () => {

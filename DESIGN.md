@@ -35,6 +35,7 @@
 - Paired settings use equal-width columns: password fields, microphone/speaker devices, and noise suppression/gate should align on the same 50/50 grid.
 - Boolean switches use positive semantics: an active switch means the named capability is enabled or notifications are received.
 - Audio processing must stay visually attached to its source: noise suppression and gate belong to the microphone column; interface sounds belong to the speaker/output column.
+- Room settings opened from the lobby and from an active room must expose the same avatar edit/remove behavior and the same destructive-action hierarchy.
 
 ## Visual language
 - Color: dark olive/warm neutral surfaces with electric-lime primary CTA.
@@ -46,7 +47,7 @@
 
 ## Components
 - Existing components to reuse: shared `Button`, shared app tokens, room dock controls, Select/Popover primitives.
-- New/changed components: interaction sizing tokens in `app.css`; shared Button now defaults to large action sizing; settings notification-target rows, a compact profile identity row, and a single sequential sound-set preview action.
+- New/changed components: interaction sizing tokens in `app.css`; shared Button now defaults to large action sizing; settings notification-target rows, a compact profile identity row, room-avatar editing in every room-settings entry point, and a single sequential sound-set preview action.
 - Variants and states: 36px small, 40px medium, 52px large; 46px reserved for dock; disabled/hover/focus must be visible.
 - Token/component ownership: `apps/web/src/lib/shared/styles/app.css` owns sizing tokens; shared primitives consume them.
 
