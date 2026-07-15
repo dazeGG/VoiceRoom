@@ -2,6 +2,11 @@
 
 Статус: рабочий source of truth для релиза 2.6.0. Обновлён 2026-07-16.
 
+> Этот документ задаёт target state и release gates, а не подтверждает их
+> текущую реализацию. Фактический branch/commit/release процесс определяется
+> [`GIT_FLOW.md`](./GIT_FLOW.md); каждый gate считается незавершённым без свежего
+> CI, configuration или runtime evidence.
+
 Цель релиза — добавить адресное взаимодействие поверх стабильных contracts
 2.5.0: `@mentions`, уведомления на replies, durable inbox/outbox, навигацию по
 непрочитанному и emoji reactions. Все возможности являются additive и не

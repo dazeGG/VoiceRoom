@@ -237,8 +237,9 @@ VAPID_SUBJECT
 
 ### CI/CD (GitHub Actions)
 
-Пайплайн описан в `.github/workflows/ci.yml` и триггерится на pull request в `main` и push в `main`:
+Пайплайн описан в `.github/workflows/ci.yml`. Проверки запускаются для pull request и push в `develop`/`main`; deploy запускается только для push в `main`. Ветки, PR, коммиты, hotfix и релизы ведутся по [`docs/GIT_FLOW.md`](./docs/GIT_FLOW.md):
 
+- **policy** — проверяет допустимый Git Flow маршрут PR и Conventional Commit формат PR title.
 - **check** — `npm ci`, `npm run check` (shared+api+web: `node --check`, `svelte-kit sync`, `tsc --noEmit`), `npm run build` (Vite).
 - **test** — `npm test` против эфемерного PostgreSQL service-контейнера. `TEST_DATABASE_URL` задаётся прямо в workflow одноразовым значением — секрет для этого **не нужен** (test harness создаёт/удаляет временную БД на каждый тест).
 - **deploy** — только на push в `main` и только после зелёных `check`+`test`. По SSH делает `git reset --hard origin/main` и `docker compose up -d --build` в каталоге деплоя. Миграции применяются API на bootstrap, отдельного шага нет.
@@ -258,7 +259,7 @@ VAPID_SUBJECT
 
 Прочие рекомендации:
 
-- Для protected production включите Environment protection rules и required reviewers; в Settings → Branches сделайте `check` и `test` обязательными проверками для merge в `main`.
+- Для protected branches включите required reviewers; сделайте `policy`, `check` и `test` обязательными проверками для PR в `develop` и `main`, а для production Environment включите protection rules.
 - Не печатайте secrets в workflow logs; передавайте их через `with:`/`env:` только в нужные jobs/steps.
 - Для supply-chain harden можно запинить `appleboy/ssh-action` на commit SHA вместо тега `v1.2.5`.
 
