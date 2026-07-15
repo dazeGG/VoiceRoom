@@ -6,7 +6,20 @@ import { resolve } from 'node:path';
 
 const root = resolve(import.meta.dirname, '..');
 const require = createRequire(import.meta.url);
+const ts = require('typescript');
 const read = (path) => readFileSync(resolve(root, path), 'utf8');
+
+async function importTypeScript(path) {
+  const output = ts.transpileModule(read(path), {
+    compilerOptions: {
+      module: ts.ModuleKind.ES2022,
+      target: ts.ScriptTarget.ES2022,
+      verbatimModuleSyntax: true
+    },
+    fileName: path
+  }).outputText;
+  return import(`data:text/javascript;base64,${Buffer.from(output).toString('base64')}`);
+}
 
 function readTree(path, matcher) {
   const absolute = resolve(root, path);
@@ -1458,7 +1471,7 @@ test('desktop shell layout stays in shared web styles, not electron overrides', 
 });
 
 test('chat linkify keeps full URLs with hosts, paths, and query strings clickable', async () => {
-  const { parseChatLinks } = await import('../src/lib/shared/utils/linkify.ts');
+  const { parseChatLinks } = await importTypeScript('src/lib/shared/utils/linkify.ts');
   const url = 'https://spb.hh.ru/vacancy/134530018?nhtmFrom=chat';
 
   assert.deepEqual(parseChatLinks(url), [{ kind: 'link', text: url, href: url }]);
@@ -1495,7 +1508,7 @@ test('avatar presence colors are solid and cover dnd, afk, online, and offline s
 });
 
 test('effective presence gives physical offline priority and safely supports legacy payloads', async () => {
-  const { effectivePresenceStatus } = await import('../src/lib/shared/presence.ts');
+  const { effectivePresenceStatus } = await importTypeScript('src/lib/shared/presence.ts');
 
   assert.equal(effectivePresenceStatus(false, 'dnd', true), 'offline');
   assert.equal(effectivePresenceStatus(true, 'online'), 'online');

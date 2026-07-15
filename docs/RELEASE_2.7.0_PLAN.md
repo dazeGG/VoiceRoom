@@ -2,6 +2,11 @@
 
 Статус: рабочий source of truth для релиза 2.7.0. Обновлён 2026-07-16.
 
+> Этот документ задаёт target state и release gates, а не подтверждает их
+> текущую реализацию. Фактический branch/commit/release процесс определяется
+> [`GIT_FLOW.md`](./GIT_FLOW.md); каждый gate считается незавершённым без свежего
+> CI, configuration или runtime evidence.
+
 Цель релиза — безопасно добавить изображения в room chat и DM. Media
 выпускается только вместе с полным lifecycle файлов, quotas, восстановлением
 worker, backup/restore и минимально необходимыми owner moderation tools.
