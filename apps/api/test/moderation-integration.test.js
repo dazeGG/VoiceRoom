@@ -12,6 +12,7 @@ const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const http = require('node:http');
+const os = require('node:os');
 const path = require('node:path');
 
 const { createApiServer } = require('../src/server');
@@ -172,7 +173,7 @@ async function requestJson(socketPath, method, pathname, { body, cookie = '', ip
 }
 
 async function startServer() {
-  const dir = fs.mkdtempSync(path.join('/private/tmp', 'voice-room-moderation-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'voice-room-moderation-'));
   const socketPath = path.join(dir, 'api.sock');
   const store = createModerationStore();
   const server = createApiServer({ store, users: createUsers(), friends: createFriends() });
