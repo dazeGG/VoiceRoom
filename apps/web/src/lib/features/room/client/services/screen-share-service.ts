@@ -467,7 +467,7 @@ function getLocalScreenStatsHealth(stats: NonNullable<typeof state.localScreenSt
   return 'fair';
 }
 
-async function setLocalScreenProfile(profileId: string, options: { toast?: string } = {}): Promise<void> {
+async function setLocalScreenProfile(profileId: string): Promise<void> {
   if (!state.localScreenStream) return;
 
   let profile = getScreenProfile(profileId);
@@ -497,7 +497,6 @@ async function setLocalScreenProfile(profileId: string, options: { toast?: strin
   refreshScreenControls();
   refreshScreenStage();
   await postState();
-  if (options.toast) showToast(options.toast);
 }
 
 async function applyLocalScreenEncodingProfile(profile: ScreenProfile): Promise<void> {
