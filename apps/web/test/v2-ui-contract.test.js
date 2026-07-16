@@ -1329,6 +1329,21 @@ ${livekit}`, /подключает голос/);
   assert.match(livekit, /detachLiveKitParticipant\(peer, 'голос переподключается'\)/);
 });
 
+test('stream viewer presence follows attendance instead of spotlight layout', () => {
+  const participants = read('src/lib/features/room/client/room/participants.ts');
+  const presence = read('src/lib/features/room/client/room/presence.ts');
+  const screenView = read('src/lib/features/room/client/ui/screen-view.ts');
+  const dock = read('src/lib/features/room/components/RoomDock.svelte');
+
+  assert.doesNotMatch(participants, /экран в эфире|показывает экран/);
+  assert.match(presence, /viewedScreenPeerId: state\.self\?\.viewedScreenPeerId \|\| ''/);
+  assert.match(screenView, /if \(!peer\.isLocal\) setScreenAttendance\(peerId\)/);
+  assert.match(screenView, /if \(keepPreview\)[\s\S]*screenSubscribedPeerIds\.add\(peerId\)[\s\S]*else \{[\s\S]*clearScreenAttendance\(peerId\)/);
+  assert.match(screenView, /function clearScreenAttendance\(peerId: string\)[\s\S]*state\.self\?\.viewedScreenPeerId === peerId/);
+  assert.match(screenView, /handleScreenStageClick[\s\S]*leaveScreenView\(\{ keepPreview: true \}\)/);
+  assert.match(dock, /aria-label="Выйти со стрима"[\s\S]*leaveScreenView\(\{ keepPreview: false \}\)/);
+});
+
 test('participant context menu is remote-only and exposes relationship-aware local audio controls', () => {
   const menu = read('src/lib/features/room/components/ParticipantContextMenu.svelte');
   const contextUi = read('src/lib/features/room/participant-context-ui.svelte.ts');

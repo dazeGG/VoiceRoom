@@ -79,6 +79,7 @@ export async function enterScreenView(peerId: string): Promise<void> {
   setViewedScreenPeerId(peerId);
   state.screenCollapsedPeerIds.delete(peerId);
   state.screenSubscribedPeerIds.add(peerId);
+  if (!peer.isLocal) setScreenAttendance(peerId);
   state.screenRequesting = !peer.isLocal && !peer.screenStream;
   refreshAllScreenActions();
   refreshScreenTiles();
@@ -109,6 +110,7 @@ export async function leaveScreenView(options: { quiet?: boolean; keepPreview?: 
   } else {
     state.screenCollapsedPeerIds.delete(peerId);
     state.screenSubscribedPeerIds.delete(peerId);
+    clearScreenAttendance(peerId);
     if (peer && !peer.isLocal) detachRemoteScreen(peer);
   }
 
@@ -121,6 +123,7 @@ export async function leaveScreenView(options: { quiet?: boolean; keepPreview?: 
 export function disconnectScreen(peerId: string): void {
   state.screenCollapsedPeerIds.delete(peerId);
   state.screenSubscribedPeerIds.delete(peerId);
+  clearScreenAttendance(peerId);
 
   if (state.viewedScreenPeerId === peerId) {
     void leaveScreenView({ quiet: true, keepPreview: false });
@@ -147,6 +150,7 @@ export function closeScreenView(): string {
   state.stripCollapsed = false;
   state.screenCollapsedPeerIds.delete(peerId);
   state.screenSubscribedPeerIds.delete(peerId);
+  clearScreenAttendance(peerId);
   hideScreenStage();
 
   const peer = getParticipantById(peerId);
@@ -272,7 +276,14 @@ export function getScreenStreamForParticipant(participant: Participant | null): 
 
 function setViewedScreenPeerId(peerId: string): void {
   state.viewedScreenPeerId = peerId || '';
-  if (state.self) state.self.viewedScreenPeerId = state.viewedScreenPeerId;
+}
+
+function setScreenAttendance(peerId: string): void {
+  if (state.self) state.self.viewedScreenPeerId = peerId;
+}
+
+function clearScreenAttendance(peerId: string): void {
+  if (state.self?.viewedScreenPeerId === peerId) state.self.viewedScreenPeerId = '';
 }
 
 export function refreshScreenTiles(): void {

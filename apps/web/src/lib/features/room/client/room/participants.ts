@@ -477,7 +477,7 @@ export function updatePeerStatus(peer: Participant): void {
   }
 
   if (peer.screen) {
-    setParticipantStatus(peer, peer.isLocal ? 'экран в эфире' : 'показывает экран');
+    setParticipantStatus(peer, '');
     return;
   }
 
