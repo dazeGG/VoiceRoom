@@ -11,6 +11,19 @@ function createWsHandler({
   isUserOnline,
   getClientIp = () => 'unknown'
 }) {
+  function reportMessageError(error) {
+    console.error('WS message handler failed:', error);
+  }
+
+  function enqueueMessage(connection, task) {
+    connection.inboundMessageQueue = (connection.inboundMessageQueue || Promise.resolve())
+      .then(() => {
+        if (connection.closed) return;
+        return task();
+      })
+      .catch(reportMessageError);
+  }
+
   async function handleMessage(connection, envelope, req) {
     if (envelope.type === 'hello') {
       registry.touch(connection);
@@ -50,6 +63,7 @@ function createWsHandler({
       // session again at join time so a newly uploaded/deleted avatar is not
       // overwritten by the user snapshot captured when the socket first opened.
       const currentSession = await resolveSessionUser(req);
+      if (connection.closed) return;
       const result = await roomRuntime.joinVoiceRoom(
         connection,
         envelope.payload,
@@ -134,6 +148,7 @@ function createWsHandler({
     }
 
     socket.on('message', (raw) => {
+      if (connection.closed) return;
       const parsed = parseInboundMessage(String(raw));
       if (!parsed.ok) {
         registry.sendToConnection(
@@ -142,7 +157,16 @@ function createWsHandler({
         );
         return;
       }
-      void handleMessage(connection, parsed.envelope, req);
+      if (parsed.envelope.type === 'hello' || parsed.envelope.type === 'ping') {
+        // Heartbeats do not mutate room intent and must not wait behind storage.
+        void handleMessage(connection, parsed.envelope, req).catch(reportMessageError);
+        return;
+      }
+
+      // Preserve wire order across stateful handlers that await authorization
+      // or storage. Without this queue, JOIN→LEAVE and JOIN1→JOIN2 can execute
+      // in reverse before the room runtime registers their intent.
+      enqueueMessage(connection, () => handleMessage(connection, parsed.envelope, req));
     });
 
     socket.on('close', () => {

@@ -14,6 +14,23 @@ const { buildRoomRealtimeSummaryFromLobbyRoom, createSummaryCoalescer } = requir
 const { createWsTransport } = require('./peer-transport');
 const { legacyPeerMessageToWs } = require('./legacy-events');
 
+function resolveViewedScreenPeerId(room, viewerPeerId, value) {
+  const ownerPeerId = normalizePeerId(value);
+  if (!ownerPeerId || ownerPeerId === viewerPeerId) return '';
+  return room?.peers.get(ownerPeerId)?.screen ? ownerPeerId : '';
+}
+
+function clearViewedScreenPeerReferences(room, ownerPeerId) {
+  if (!room?.peers || !ownerPeerId) return [];
+  const clearedViewers = [];
+  for (const viewer of room.peers.values()) {
+    if (viewer.viewedScreenPeerId !== ownerPeerId) continue;
+    viewer.viewedScreenPeerId = '';
+    clearedViewers.push(viewer);
+  }
+  return clearedViewers;
+}
+
 function createRoomRealtimeRuntime(deps) {
   const {
     presenceRooms,
@@ -35,6 +52,8 @@ function createRoomRealtimeRuntime(deps) {
   } = deps;
 
   const recipientCache = new Map();
+  const voiceJoinStates = new Map();
+  let voiceJoinRequestSequence = 0;
 
   async function resolveSummaryRecipients(roomId) {
     const cached = recipientCache.get(roomId);
@@ -228,9 +247,11 @@ function createRoomRealtimeRuntime(deps) {
   async function buildRoomSnapshot(roomId, mode = 'preview') {
     const dbRoom = await getRoomStore().getRoom(roomId);
     if (!dbRoom) return null;
+    const recentMessages = (await getRoomStore().listMessages(roomId, { limit: 100 })).map(publicChatMessage);
+    // Presence is the last synchronous read: no awaited work may let this
+    // snapshot overwrite a newer peer update that was already broadcast.
     const presence = presenceRooms.get(roomId);
     const peers = presence ? Array.from(presence.peers.values()).map(publicPeer) : [];
-    const recentMessages = (await getRoomStore().listMessages(roomId, { limit: 100 })).map(publicChatMessage);
     return {
       roomId,
       room: publicLobbyRoom(dbRoom),
@@ -242,17 +263,33 @@ function createRoomRealtimeRuntime(deps) {
   }
 
   async function subscribePreview(connection, roomId) {
-    if (await findRoomBan(roomId, connection.userId, connection.clientIp || connection.guestIp || '')) {
+    if (connection.closed) return;
+    const roomBan = await findRoomBan(
+      roomId,
+      connection.userId,
+      connection.clientIp || connection.guestIp || ''
+    );
+    if (connection.closed) return;
+    if (roomBan) {
       wsRegistry.sendToConnection(connection, buildServerEnvelope('room.banned', { roomId }));
       return;
     }
     connection.previewRoomIds.add(roomId);
     wsRegistry.registerConnectionForRoom(connection, roomId);
-    const snapshot = await buildRoomSnapshot(roomId, 'preview');
+    let snapshot;
+    try {
+      snapshot = await buildRoomSnapshot(roomId, 'preview');
+    } catch (error) {
+      unsubscribePreview(connection, roomId);
+      throw error;
+    }
+    if (connection.closed) {
+      unsubscribePreview(connection, roomId);
+      return;
+    }
     if (!snapshot) {
       wsRegistry.sendToConnection(connection, buildServerEnvelope('room.not_found', { roomId }));
-      connection.previewRoomIds.delete(roomId);
-      wsRegistry.unregisterConnectionForRoom(connection, roomId);
+      unsubscribePreview(connection, roomId);
       return;
     }
     wsRegistry.sendToConnection(connection, buildServerEnvelope('room.snapshot', snapshot));
@@ -274,7 +311,66 @@ function createRoomRealtimeRuntime(deps) {
     return transport;
   }
 
+  function beginVoiceJoin(joinKey) {
+    const joinState = voiceJoinStates.get(joinKey) || { latestAuthorized: 0, pending: 0 };
+    joinState.pending += 1;
+    voiceJoinStates.set(joinKey, joinState);
+    return joinState;
+  }
+
+  function authorizeVoiceJoin(joinState, joinRequestSequence) {
+    if (joinRequestSequence < joinState.latestAuthorized) return false;
+    joinState.latestAuthorized = joinRequestSequence;
+    return true;
+  }
+
+  function finishVoiceJoin(joinKey, joinState) {
+    joinState.pending -= 1;
+    if (joinState.pending === 0 && voiceJoinStates.get(joinKey) === joinState) {
+      voiceJoinStates.delete(joinKey);
+    }
+  }
+
+  function beginConnectionVoiceJoin(connection, roomId, peerId) {
+    const intent = { roomId, peerId };
+    connection.pendingVoiceJoin = intent;
+    return intent;
+  }
+
+  function isCurrentConnectionVoiceJoin(connection, intent) {
+    return !connection.closed && connection.pendingVoiceJoin === intent;
+  }
+
+  function finishConnectionVoiceJoin(connection, intent) {
+    if (connection.pendingVoiceJoin === intent) connection.pendingVoiceJoin = null;
+  }
+
+  function cancelConnectionVoiceJoin(connection, payload = null) {
+    const pending = connection.pendingVoiceJoin;
+    if (!pending) return;
+    if (
+      payload
+      && (
+        normalizeRoomId(payload.roomId) !== pending.roomId
+        || normalizePeerId(payload.peerId) !== pending.peerId
+      )
+    ) {
+      return;
+    }
+    connection.pendingVoiceJoin = null;
+  }
+
+  function supersededVoiceJoin(connection, roomId, transportId = '') {
+    if (transportId && connection.activeVoice?.transportId === transportId) {
+      closePeer(roomId, connection.activeVoice.peerId, transportId, 'replaced');
+      connection.activeVoice = null;
+      if (!connection.previewRoomIds.has(roomId)) wsRegistry.unregisterConnectionForRoom(connection, roomId);
+    }
+    return { ok: false, code: 'superseded_join', message: 'Join replaced by a newer connection' };
+  }
+
   async function joinVoiceRoom(connection, payload, sessionUser, clientIp = '') {
+    const joinRequestSequence = ++voiceJoinRequestSequence;
     const roomId = normalizeRoomId(payload.roomId);
     const peerId = normalizePeerId(payload.peerId);
     const sessionToken = normalizeSessionToken(payload.sessionToken);
@@ -284,103 +380,167 @@ function createRoomRealtimeRuntime(deps) {
       return { ok: false, code: 'invalid_join', message: 'Invalid room, peer, or session token' };
     }
 
-    const room = await getRoom(roomId);
-    if (!room) {
-      wsRegistry.sendToConnection(connection, buildServerEnvelope('room.not_found', { roomId }));
-      return { ok: false, code: 'room_not_found' };
+    const joinKey = `${roomId}:${peerId}`;
+    const joinState = beginVoiceJoin(joinKey);
+    const connectionJoinIntent = beginConnectionVoiceJoin(connection, roomId, peerId);
+    try {
+      // Register the request before the first await. Otherwise an older join
+      // delayed in room/ban lookup could start a fresh generation after a newer
+      // request has already completed and incorrectly replace it.
+      const room = await getRoom(roomId);
+      if (!isCurrentConnectionVoiceJoin(connection, connectionJoinIntent)) {
+        return supersededVoiceJoin(connection, roomId);
+      }
+      if (!room) {
+        wsRegistry.sendToConnection(connection, buildServerEnvelope('room.not_found', { roomId }));
+        return { ok: false, code: 'room_not_found' };
+      }
+
+      const roomBan = await findRoomBan(roomId, sessionUser?.id, clientIp);
+      if (!isCurrentConnectionVoiceJoin(connection, connectionJoinIntent)) {
+        return supersededVoiceJoin(connection, roomId);
+      }
+      if (roomBan) {
+        return { ok: false, code: 'room_banned', message: 'Вы заблокированы в этой комнате' };
+      }
+
+      const initialPeer = room.peers.get(peerId);
+      if (initialPeer && !tokensMatch(initialPeer.sessionToken, sessionToken)) {
+        return { ok: false, code: 'invalid_session', message: 'Invalid peer session' };
+      }
+
+      const identityResult = await getRoomStore().getOrCreatePeerIdentity({
+        roomId,
+        peerId,
+        sessionToken,
+        displayName: name,
+        avatarColorKey: sessionAvatarColorKey(sessionUser)
+      });
+      if (!isCurrentConnectionVoiceJoin(connection, connectionJoinIntent)) {
+        return supersededVoiceJoin(connection, roomId);
+      }
+      if (identityResult.status === 'token_mismatch') {
+        return { ok: false, code: 'invalid_session', message: 'Invalid peer session' };
+      }
+      const avatarColorKey = identityResult.identity?.avatarColorKey || avatarColorForPeerId(peerId);
+      if (!authorizeVoiceJoin(joinState, joinRequestSequence)) {
+        return supersededVoiceJoin(connection, roomId);
+      }
+
+      if (
+        connection.activeVoice
+        && (
+          connection.activeVoice.roomId !== roomId
+          || connection.activeVoice.peerId !== peerId
+        )
+      ) {
+        await leaveVoiceRoom(connection, connection.activeVoice, { cancelPendingJoin: false });
+      }
+
+      if (
+        !isCurrentConnectionVoiceJoin(connection, connectionJoinIntent)
+        || joinState.latestAuthorized !== joinRequestSequence
+      ) {
+        return supersededVoiceJoin(connection, roomId);
+      }
+
+      // Re-read after every asynchronous authorization step. Concurrent joins for
+      // the same peer must replace the latest live transport, not a stale snapshot.
+      const previous = room.peers.get(peerId);
+      if (previous && !tokensMatch(previous.sessionToken, sessionToken)) {
+        return { ok: false, code: 'invalid_session', message: 'Invalid peer session' };
+      }
+      const reconnecting = Boolean(previous);
+
+      if (!reconnecting && room.peers.size >= MAX_ROOM_PEERS) {
+        wsRegistry.sendToConnection(
+          connection,
+          buildServerEnvelope('room.full', { roomId, maxRoomPeers: MAX_ROOM_PEERS })
+        );
+        return { ok: false, code: 'room_full' };
+      }
+
+      if (previous) {
+        previous.closed = true;
+        previous.replaced = true;
+        previous.transport?.close();
+      }
+
+      const transport = attachVoiceTransport(connection, roomId, peerId, sessionToken);
+      const peer = {
+        closed: false,
+        replaced: false,
+        deafened: previous?.deafened ?? false,
+        accountUserId: sessionUser?.id || '',
+        avatarAccent: sessionUser?.avatarAccent || null,
+        avatarColorKey,
+        avatarUrl: sessionUser?.avatarKey
+          ? `/api/avatars/${encodeURIComponent(sessionUser.avatarKey)}`
+          : null,
+        id: peerId,
+        ip: clientIp || '',
+        joinedAt: previous?.joinedAt ?? Date.now(),
+        muted: previous?.muted ?? false,
+        name: reconnecting ? (previous?.name ?? name) : name,
+        screen: previous?.screen ?? false,
+        screenAudio: previous?.screenAudio ?? false,
+        screenProfileId: previous?.screenProfileId ?? '',
+        screenStreamId: previous?.screenStreamId ?? '',
+        viewedScreenPeerId: previous?.viewedScreenPeerId ?? '',
+        sessionToken,
+        transport
+      };
+      room.peers.set(peerId, peer);
+      room.updatedAt = peer.joinedAt;
+      // In-memory call clock on the presence record (room here is the DB room
+      // with attached peers): starts with the first live peer, cleared when the
+      // room empties (closePeer). Deliberately never persisted to the database.
+      const presence = presenceRooms.get(roomId);
+      if (presence && !presence.voiceActiveSince) presence.voiceActiveSince = Date.now();
+
+      if (!reconnecting) {
+        // Announce synchronously with the initial insert. A reconnect may replace
+        // this transport while occupancy persistence is pending; deferring the
+        // announcement until afterward could leave a real peer undiscoverable.
+        invalidateRecipientCache(roomId);
+        broadcast(room, { type: 'peer-joined', peer: publicPeer(peer) }, peerId);
+        mirrorLegacyRoomEvent(roomId, { type: 'peer-joined', peer: publicPeer(peer) });
+        scheduleSummaryBroadcast(roomId);
+      }
+
+      await queueRoomOccupancyTransition(roomId);
+
+      if (
+        !isCurrentConnectionVoiceJoin(connection, connectionJoinIntent)
+        || room.peers.get(peerId)?.transport?.id !== transport.id
+      ) {
+        return supersededVoiceJoin(connection, roomId, transport.id);
+      }
+
+      const snapshot = await buildRoomSnapshot(roomId, 'active');
+      if (
+        !isCurrentConnectionVoiceJoin(connection, connectionJoinIntent)
+        || room.peers.get(peerId)?.transport?.id !== transport.id
+      ) {
+        return supersededVoiceJoin(connection, roomId, transport.id);
+      }
+      if (snapshot) {
+        wsRegistry.sendToConnection(connection, buildServerEnvelope('room.snapshot', snapshot));
+      }
+
+      return { ok: true, reconnecting };
+    } finally {
+      finishConnectionVoiceJoin(connection, connectionJoinIntent);
+      finishVoiceJoin(joinKey, joinState);
     }
-
-    if (await findRoomBan(roomId, sessionUser?.id, clientIp)) {
-      return { ok: false, code: 'room_banned', message: 'Вы заблокированы в этой комнате' };
-    }
-
-    const reconnecting = room.peers.has(peerId);
-    const previous = room.peers.get(peerId);
-    if (previous && !tokensMatch(previous.sessionToken, sessionToken)) {
-      return { ok: false, code: 'invalid_session', message: 'Invalid peer session' };
-    }
-
-    const identityResult = await getRoomStore().getOrCreatePeerIdentity({
-      roomId,
-      peerId,
-      sessionToken,
-      displayName: name,
-      avatarColorKey: sessionAvatarColorKey(sessionUser)
-    });
-    if (identityResult.status === 'token_mismatch') {
-      return { ok: false, code: 'invalid_session', message: 'Invalid peer session' };
-    }
-    const avatarColorKey = identityResult.identity?.avatarColorKey || avatarColorForPeerId(peerId);
-
-    if (!reconnecting && room.peers.size >= MAX_ROOM_PEERS) {
-      wsRegistry.sendToConnection(
-        connection,
-        buildServerEnvelope('room.full', { roomId, maxRoomPeers: MAX_ROOM_PEERS })
-      );
-      return { ok: false, code: 'room_full' };
-    }
-
-    if (connection.activeVoice?.roomId && connection.activeVoice.roomId !== roomId) {
-      await leaveVoiceRoom(connection, connection.activeVoice);
-    }
-
-    if (previous) {
-      previous.closed = true;
-      previous.replaced = true;
-      previous.transport?.close();
-    }
-
-    const transport = attachVoiceTransport(connection, roomId, peerId, sessionToken);
-    const peer = {
-      closed: false,
-      replaced: false,
-      deafened: previous?.deafened ?? false,
-      accountUserId: sessionUser?.id || '',
-      avatarAccent: sessionUser?.avatarAccent || null,
-      avatarColorKey,
-      avatarUrl: sessionUser?.avatarKey
-        ? `/api/avatars/${encodeURIComponent(sessionUser.avatarKey)}`
-        : null,
-      id: peerId,
-      ip: clientIp || '',
-      joinedAt: previous?.joinedAt ?? Date.now(),
-      muted: previous?.muted ?? false,
-      name: reconnecting ? (previous?.name ?? name) : name,
-      screen: previous?.screen ?? false,
-      screenAudio: previous?.screenAudio ?? false,
-      screenProfileId: previous?.screenProfileId ?? '',
-      screenStreamId: previous?.screenStreamId ?? '',
-      viewedScreenPeerId: previous?.viewedScreenPeerId ?? '',
-      sessionToken,
-      transport
-    };
-    room.peers.set(peerId, peer);
-    room.updatedAt = peer.joinedAt;
-    // In-memory call clock on the presence record (room here is the DB room
-    // with attached peers): starts with the first live peer, cleared when the
-    // room empties (closePeer). Deliberately never persisted to the database.
-    const presence = presenceRooms.get(roomId);
-    if (presence && !presence.voiceActiveSince) presence.voiceActiveSince = Date.now();
-    await queueRoomOccupancyTransition(roomId);
-
-    const snapshot = await buildRoomSnapshot(roomId, 'active');
-    if (snapshot) {
-      wsRegistry.sendToConnection(connection, buildServerEnvelope('room.snapshot', snapshot));
-    }
-
-    if (!reconnecting) {
-      // A new account member must be part of the summary audience right away,
-      // not after the 30s recipient cache expires.
-      invalidateRecipientCache(roomId);
-      broadcast(room, { type: 'peer-joined', peer: publicPeer(peer) }, peerId);
-      mirrorLegacyRoomEvent(roomId, { type: 'peer-joined', peer: publicPeer(peer) });
-      scheduleSummaryBroadcast(roomId);
-    }
-
-    return { ok: true, reconnecting };
   }
 
-  async function leaveVoiceRoom(connection, payload = connection.activeVoice) {
+  async function leaveVoiceRoom(
+    connection,
+    payload = connection.activeVoice,
+    { cancelPendingJoin = true } = {}
+  ) {
+    if (cancelPendingJoin) cancelConnectionVoiceJoin(connection, payload);
     if (!payload?.roomId || !payload.peerId) return;
     // Close using the transport this connection owns, not whatever peer happens
     // to hold the id now. After a same-peer reconnect the superseded connection
@@ -408,9 +568,15 @@ function createRoomRealtimeRuntime(deps) {
     if (!room || !peer || !tokensMatch(peer.sessionToken, sessionToken)) {
       return { ok: false, code: 'invalid_session' };
     }
-    if (connection.activeVoice?.roomId !== roomId || connection.activeVoice?.peerId !== peerId) {
+    if (
+      connection.activeVoice?.roomId !== roomId
+      || connection.activeVoice?.peerId !== peerId
+      || connection.activeVoice?.transportId !== peer.transport?.id
+    ) {
       return { ok: false, code: 'not_active_peer' };
     }
+
+    const stoppedScreen = Object.hasOwn(patch, 'screen') && peer.screen && !Boolean(patch.screen);
 
     if (Object.hasOwn(patch, 'name')) peer.name = cleanName(patch.name);
     if (Object.hasOwn(patch, 'muted')) peer.muted = Boolean(patch.muted);
@@ -420,7 +586,14 @@ function createRoomRealtimeRuntime(deps) {
     if (Object.hasOwn(patch, 'screenProfileId')) peer.screenProfileId = cleanScreenProfileId(patch.screenProfileId);
     if (Object.hasOwn(patch, 'screenStreamId')) peer.screenStreamId = cleanStreamId(patch.screenStreamId);
     if (Object.hasOwn(patch, 'viewedScreenPeerId')) {
-      peer.viewedScreenPeerId = normalizePeerId(patch.viewedScreenPeerId) || '';
+      peer.viewedScreenPeerId = resolveViewedScreenPeerId(room, peer.id, patch.viewedScreenPeerId);
+    }
+
+    if (stoppedScreen) {
+      for (const viewer of clearViewedScreenPeerReferences(room, peer.id)) {
+        broadcast(room, { type: 'peer-updated', peer: publicPeer(viewer) });
+        mirrorLegacyRoomEvent(roomId, { type: 'peer-updated', peer: publicPeer(viewer) });
+      }
     }
 
     broadcast(room, { type: 'peer-updated', peer: publicPeer(peer) });
@@ -458,8 +631,9 @@ function createRoomRealtimeRuntime(deps) {
   }
 
   function cleanupConnection(connection) {
+    cancelConnectionVoiceJoin(connection);
     if (connection.activeVoice) {
-      void leaveVoiceRoom(connection, connection.activeVoice);
+      void leaveVoiceRoom(connection, connection.activeVoice, { cancelPendingJoin: false });
     }
     wsRegistry.unregisterConnectionFromAllRooms(connection);
     connection.previewRoomIds.clear();
@@ -485,5 +659,7 @@ function createRoomRealtimeRuntime(deps) {
 }
 
 module.exports = {
-  createRoomRealtimeRuntime
+  clearViewedScreenPeerReferences,
+  createRoomRealtimeRuntime,
+  resolveViewedScreenPeerId
 };

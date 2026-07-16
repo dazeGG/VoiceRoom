@@ -44,6 +44,8 @@ function createConnectionRegistry({
       presenceStatus: cleanPresenceStatus(presenceStatus) || 'online',
       previewRoomIds: new Set(),
       activeVoice: null,
+      pendingVoiceJoin: null,
+      inboundMessageQueue: Promise.resolve(),
       lastHeartbeatAt: Date.now(),
       closed: false
     };

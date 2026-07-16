@@ -273,7 +273,7 @@ test('kick and ban lifecycle enforces join, token, chat, preview, and undo', asy
   assert.equal(owner.frames.slice(ownerFramesBeforeBan).some((frame) => frame.type === 'room.banned'), false);
 
   const ownerState = await requestJson(fixture.socketPath, 'POST', '/api/state', {
-    body: { roomId: ROOM_ID, peerId: OWNER_PEER_ID, sessionToken: OWNER_PEER_TOKEN, muted: false },
+    body: { roomId: ROOM_ID, peerId: OWNER_PEER_ID, sessionToken: OWNER_PEER_TOKEN },
     cookie: OWNER_COOKIE,
     ip: OWNER_IP
   });

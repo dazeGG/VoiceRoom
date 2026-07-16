@@ -7,7 +7,11 @@ const fastifyMultipart = require('@fastify/multipart');
 const fastifyWebsocket = require('@fastify/websocket');
 const { createConnectionRegistry } = require('./realtime/registry');
 const { createWsHandler } = require('./realtime/ws-handler');
-const { createRoomRealtimeRuntime } = require('./realtime/room-runtime');
+const {
+  clearViewedScreenPeerReferences,
+  createRoomRealtimeRuntime,
+  resolveViewedScreenPeerId
+} = require('./realtime/room-runtime');
 const { buildServerEnvelope } = require('./realtime/envelope');
 const { URL } = require('node:url');
 const { AccessToken, RoomServiceClient, TrackSource } = require('livekit-server-sdk');
@@ -671,6 +675,14 @@ function broadcast(room, message, exceptPeerId = '') {
   }
 }
 
+function publishClearedScreenViewers(room, ownerPeerId) {
+  for (const viewer of clearViewedScreenPeerReferences(room, ownerPeerId)) {
+    const message = { type: 'peer-updated', peer: publicPeer(viewer) };
+    broadcast(room, message);
+    roomRuntime?.mirrorLegacyRoomEvent(room.id, message);
+  }
+}
+
 function closePeer(roomId, peerId, transportId, reason = 'left') {
   const room = presenceRooms.get(roomId);
   if (!room) return;
@@ -681,6 +693,7 @@ function closePeer(roomId, peerId, transportId, reason = 'left') {
   current.closed = true;
   room.peers.delete(peerId);
   if (!current.replaced) {
+    publishClearedScreenViewers(room, peerId);
     broadcast(room, { type: 'peer-left', peerId, reason });
     roomRuntime?.mirrorLegacyRoomEvent(roomId, { type: 'peer-left', peerId, reason });
     roomRuntime?.scheduleSummaryBroadcast(roomId);
@@ -1497,6 +1510,17 @@ async function handleRoomPeers(res, roomId) {
   });
 }
 
+const LEGACY_STATE_MUTATION_FIELDS = [
+  'name',
+  'muted',
+  'deafened',
+  'screen',
+  'screenAudio',
+  'screenProfileId',
+  'screenStreamId',
+  'viewedScreenPeerId'
+];
+
 async function handleState(req, res) {
   const body = await readJsonBody(req);
   const roomId = normalizeRoomId(body.roomId);
@@ -1520,41 +1544,26 @@ async function handleState(req, res) {
     return;
   }
 
-  const { peer, room } = authorized;
+  const { peer } = authorized;
 
   if (await findRoomBan(roomId, peer.accountUserId, peer.ip)) {
     sendRoomBanned(res, roomId);
     return;
   }
 
-  if (Object.hasOwn(body, 'name')) {
-    peer.name = cleanName(body.name);
-  }
-  if (Object.hasOwn(body, 'muted')) {
-    peer.muted = Boolean(body.muted);
-  }
-  if (Object.hasOwn(body, 'deafened')) {
-    peer.deafened = Boolean(body.deafened);
-  }
-  if (Object.hasOwn(body, 'screen')) {
-    peer.screen = Boolean(body.screen);
-  }
-  if (Object.hasOwn(body, 'screenAudio')) {
-    peer.screenAudio = Boolean(body.screenAudio);
-  }
-  if (Object.hasOwn(body, 'screenProfileId')) {
-    peer.screenProfileId = cleanScreenProfileId(body.screenProfileId);
-  }
-  if (Object.hasOwn(body, 'screenStreamId')) {
-    peer.screenStreamId = cleanStreamId(body.screenStreamId);
-  }
-  if (Object.hasOwn(body, 'viewedScreenPeerId')) {
-    peer.viewedScreenPeerId = normalizePeerId(body.viewedScreenPeerId) || '';
+  // A session token identifies the logical peer, not the current transport.
+  // Keeping HTTP writes would let a superseded tab mutate the replacement
+  // peer. WebSocket updates carry the active connection lease; this legacy
+  // route remains read-only for compatibility and introspection.
+  if (LEGACY_STATE_MUTATION_FIELDS.some((field) => Object.hasOwn(body, field))) {
+    sendJson(res, 409, {
+      ok: false,
+      code: 'state_updates_require_websocket',
+      error: 'Peer state updates require the active WebSocket connection'
+    });
+    return;
   }
 
-  broadcast(room, { type: 'peer-updated', peer: publicPeer(peer) });
-  roomRuntime?.mirrorLegacyRoomEvent(roomId, { type: 'peer-updated', peer: publicPeer(peer) });
-  roomRuntime?.scheduleSummaryBroadcast(roomId);
   sendJson(res, 200, { ok: true, peer: publicPeer(peer) });
 }
 

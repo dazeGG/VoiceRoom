@@ -407,9 +407,15 @@ async function handleVoiceRealtimeEvent(event: RealtimeEvent): Promise<void> {
     setServerConnectionStatus('connected');
     syncPeers([...state.serverPeerIds]);
     if (localPeer) {
-      // Local mute/deafen state is owned by this client; the snapshot may carry a
-      // stale server copy (e.g. toggled while reconnecting), so keep the local values.
-      updateParticipant({ ...localPeer, deafened: state.outputMuted, isLocal: true, muted: state.muted });
+      // Local controls and stream attendance are owned by this client; the snapshot
+      // may carry a stale server copy (e.g. changed while reconnecting), so keep them.
+      updateParticipant({
+        ...localPeer,
+        deafened: state.outputMuted,
+        isLocal: true,
+        muted: state.muted,
+        viewedScreenPeerId: state.self?.viewedScreenPeerId ?? localPeer.viewedScreenPeerId
+      });
     }
     for (const peer of remotePeers) {
       createParticipant(peer);

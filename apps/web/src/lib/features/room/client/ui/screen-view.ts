@@ -1,6 +1,7 @@
 import { showToast } from './toast';
 import { state } from '../core/state.svelte';
 import { postState } from '../room/presence';
+import { clearScreenAttendance, setScreenAttendance } from '../model/screen-attendance';
 
 import { bumpScreenUiRevision, screenUi } from '../../screen-ui.svelte';
 import { clearParticipantFocus } from '../../participants-ui.svelte';
@@ -79,6 +80,7 @@ export async function enterScreenView(peerId: string): Promise<void> {
   setViewedScreenPeerId(peerId);
   state.screenCollapsedPeerIds.delete(peerId);
   state.screenSubscribedPeerIds.add(peerId);
+  if (!peer.isLocal) setScreenAttendance(state.self, peerId);
   state.screenRequesting = !peer.isLocal && !peer.screenStream;
   refreshAllScreenActions();
   refreshScreenTiles();
@@ -109,6 +111,7 @@ export async function leaveScreenView(options: { quiet?: boolean; keepPreview?: 
   } else {
     state.screenCollapsedPeerIds.delete(peerId);
     state.screenSubscribedPeerIds.delete(peerId);
+    clearScreenAttendance(state.self, peerId);
     if (peer && !peer.isLocal) detachRemoteScreen(peer);
   }
 
@@ -121,6 +124,7 @@ export async function leaveScreenView(options: { quiet?: boolean; keepPreview?: 
 export function disconnectScreen(peerId: string): void {
   state.screenCollapsedPeerIds.delete(peerId);
   state.screenSubscribedPeerIds.delete(peerId);
+  clearScreenAttendance(state.self, peerId);
 
   if (state.viewedScreenPeerId === peerId) {
     void leaveScreenView({ quiet: true, keepPreview: false });
@@ -147,6 +151,7 @@ export function closeScreenView(): string {
   state.stripCollapsed = false;
   state.screenCollapsedPeerIds.delete(peerId);
   state.screenSubscribedPeerIds.delete(peerId);
+  const attendanceCleared = clearScreenAttendance(state.self, peerId);
   hideScreenStage();
 
   const peer = getParticipantById(peerId);
@@ -157,6 +162,7 @@ export function closeScreenView(): string {
 
   refreshAllScreenActions();
   refreshScreenTiles();
+  if (attendanceCleared) postState().catch(() => {});
   return peerId;
 }
 
@@ -272,7 +278,6 @@ export function getScreenStreamForParticipant(participant: Participant | null): 
 
 function setViewedScreenPeerId(peerId: string): void {
   state.viewedScreenPeerId = peerId || '';
-  if (state.self) state.self.viewedScreenPeerId = state.viewedScreenPeerId;
 }
 
 export function refreshScreenTiles(): void {
