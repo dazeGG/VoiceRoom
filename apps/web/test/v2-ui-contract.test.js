@@ -1348,6 +1348,9 @@ test('stream viewer presence follows attendance instead of spotlight layout', as
 
   assert.doesNotMatch(participants, /экран в эфире|показывает экран/);
   assert.match(presence, /viewedScreenPeerId: state\.self\?\.viewedScreenPeerId \|\| ''/);
+  assert.match(participants, /if \(state\.localScreenStream && state\.peerId\) ownerIds\.add\(state\.peerId\)/);
+  assert.match(participants, /const attendedPeerId = state\.self\?\.viewedScreenPeerId \|\| ''/);
+  assert.doesNotMatch(participants, /const ownerIds = new Set\(state\.screenSubscribedPeerIds\)/);
   assert.match(screenView, /if \(!peer\.isLocal\) setScreenAttendance\(state\.self, peerId\)/);
   assert.match(screenView, /if \(keepPreview\)[\s\S]*screenSubscribedPeerIds\.add\(peerId\)[\s\S]*else \{[\s\S]*clearScreenAttendance\(state\.self, peerId\)/);
   assert.match(screenView, /const attendanceCleared = clearScreenAttendance\(state\.self, peerId\)[\s\S]*if \(attendanceCleared\) postState\(\)/);

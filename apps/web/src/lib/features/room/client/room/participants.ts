@@ -95,8 +95,10 @@ export function clearRemoteScreenCue(peerId: string | undefined): void {
 }
 
 function getAttendedStreamOwnerIds(): Set<string> {
-  const ownerIds = new Set(state.screenSubscribedPeerIds);
-  if (state.viewedScreenPeerId) ownerIds.add(state.viewedScreenPeerId);
+  const ownerIds = new Set<string>();
+  if (state.localScreenStream && state.peerId) ownerIds.add(state.peerId);
+  const attendedPeerId = state.self?.viewedScreenPeerId || '';
+  if (attendedPeerId) ownerIds.add(attendedPeerId);
   return ownerIds;
 }
 
