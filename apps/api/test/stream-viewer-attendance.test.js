@@ -62,7 +62,7 @@ function createRuntime(room, broadcasts, overrides = {}) {
     tokensMatch: (expected, actual) => expected === actual,
     sessionAvatarColorKey: () => 'blue',
     queueRoomOccupancyTransition: overrides.queueRoomOccupancyTransition || (async () => {}),
-    findRoomBan: async () => null
+    findRoomBan: overrides.findRoomBan || (async () => null)
   });
 }
 
@@ -397,6 +397,64 @@ test('same connection cannot leave an orphan when it changes peer id in one room
   assert.equal(secondResult.ok, true);
   assert.deepEqual([...room.peers.keys()], [secondPeerId]);
   assert.equal(connection.activeVoice.peerId, secondPeerId);
+});
+
+test('closed connection cannot subscribe after a delayed ban lookup', async () => {
+  const room = { id: ROOM_ID, peers: new Map() };
+  const subscribers = new Set();
+  let releaseBanLookup;
+  const runtime = createRuntime(room, [], {
+    findRoomBan: async () => new Promise((resolve) => { releaseBanLookup = resolve; }),
+    wsRegistry: {
+      registerConnectionForRoom(connection) { subscribers.add(connection); },
+      unregisterConnectionForRoom(connection) { subscribers.delete(connection); },
+      unregisterConnectionFromAllRooms(connection) { subscribers.delete(connection); }
+    }
+  });
+  const connection = { activeVoice: null, closed: false, previewRoomIds: new Set() };
+
+  const subscription = runtime.subscribePreview(connection, ROOM_ID);
+  while (!releaseBanLookup) await Promise.resolve();
+  connection.closed = true;
+  runtime.cleanupConnection(connection);
+  releaseBanLookup(null);
+  await subscription;
+
+  assert.deepEqual([...connection.previewRoomIds], []);
+  assert.equal(subscribers.has(connection), false);
+});
+
+test('closed connection rolls back preview subscription during snapshot build', async () => {
+  const room = { id: ROOM_ID, peers: new Map() };
+  const subscribers = new Set();
+  const sentEnvelopes = [];
+  let releaseRoomLookup;
+  const runtime = createRuntime(room, [], {
+    store: {
+      async getRoom() {
+        return new Promise((resolve) => { releaseRoomLookup = resolve; });
+      }
+    },
+    wsRegistry: {
+      registerConnectionForRoom(connection) { subscribers.add(connection); },
+      sendToConnection(_connection, envelope) { sentEnvelopes.push(envelope); },
+      unregisterConnectionForRoom(connection) { subscribers.delete(connection); },
+      unregisterConnectionFromAllRooms(connection) { subscribers.delete(connection); }
+    }
+  });
+  const connection = { activeVoice: null, closed: false, previewRoomIds: new Set() };
+
+  const subscription = runtime.subscribePreview(connection, ROOM_ID);
+  while (!releaseRoomLookup) await Promise.resolve();
+  assert.equal(subscribers.has(connection), true);
+  connection.closed = true;
+  runtime.cleanupConnection(connection);
+  releaseRoomLookup({ id: ROOM_ID, name: 'Room' });
+  await subscription;
+
+  assert.deepEqual([...connection.previewRoomIds], []);
+  assert.equal(subscribers.has(connection), false);
+  assert.deepEqual(sentEnvelopes, []);
 });
 
 test('snapshot reads presence after awaited message history', async () => {

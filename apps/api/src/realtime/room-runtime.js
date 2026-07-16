@@ -263,17 +263,33 @@ function createRoomRealtimeRuntime(deps) {
   }
 
   async function subscribePreview(connection, roomId) {
-    if (await findRoomBan(roomId, connection.userId, connection.clientIp || connection.guestIp || '')) {
+    if (connection.closed) return;
+    const roomBan = await findRoomBan(
+      roomId,
+      connection.userId,
+      connection.clientIp || connection.guestIp || ''
+    );
+    if (connection.closed) return;
+    if (roomBan) {
       wsRegistry.sendToConnection(connection, buildServerEnvelope('room.banned', { roomId }));
       return;
     }
     connection.previewRoomIds.add(roomId);
     wsRegistry.registerConnectionForRoom(connection, roomId);
-    const snapshot = await buildRoomSnapshot(roomId, 'preview');
+    let snapshot;
+    try {
+      snapshot = await buildRoomSnapshot(roomId, 'preview');
+    } catch (error) {
+      unsubscribePreview(connection, roomId);
+      throw error;
+    }
+    if (connection.closed) {
+      unsubscribePreview(connection, roomId);
+      return;
+    }
     if (!snapshot) {
       wsRegistry.sendToConnection(connection, buildServerEnvelope('room.not_found', { roomId }));
-      connection.previewRoomIds.delete(roomId);
-      wsRegistry.unregisterConnectionForRoom(connection, roomId);
+      unsubscribePreview(connection, roomId);
       return;
     }
     wsRegistry.sendToConnection(connection, buildServerEnvelope('room.snapshot', snapshot));
