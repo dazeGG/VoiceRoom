@@ -14,6 +14,23 @@ const { buildRoomRealtimeSummaryFromLobbyRoom, createSummaryCoalescer } = requir
 const { createWsTransport } = require('./peer-transport');
 const { legacyPeerMessageToWs } = require('./legacy-events');
 
+function resolveViewedScreenPeerId(room, viewerPeerId, value) {
+  const ownerPeerId = normalizePeerId(value);
+  if (!ownerPeerId || ownerPeerId === viewerPeerId) return '';
+  return room?.peers.get(ownerPeerId)?.screen ? ownerPeerId : '';
+}
+
+function clearViewedScreenPeerReferences(room, ownerPeerId) {
+  if (!room?.peers || !ownerPeerId) return [];
+  const clearedViewers = [];
+  for (const viewer of room.peers.values()) {
+    if (viewer.viewedScreenPeerId !== ownerPeerId) continue;
+    viewer.viewedScreenPeerId = '';
+    clearedViewers.push(viewer);
+  }
+  return clearedViewers;
+}
+
 function createRoomRealtimeRuntime(deps) {
   const {
     presenceRooms,
@@ -412,6 +429,8 @@ function createRoomRealtimeRuntime(deps) {
       return { ok: false, code: 'not_active_peer' };
     }
 
+    const stoppedScreen = Object.hasOwn(patch, 'screen') && peer.screen && !Boolean(patch.screen);
+
     if (Object.hasOwn(patch, 'name')) peer.name = cleanName(patch.name);
     if (Object.hasOwn(patch, 'muted')) peer.muted = Boolean(patch.muted);
     if (Object.hasOwn(patch, 'deafened')) peer.deafened = Boolean(patch.deafened);
@@ -420,7 +439,14 @@ function createRoomRealtimeRuntime(deps) {
     if (Object.hasOwn(patch, 'screenProfileId')) peer.screenProfileId = cleanScreenProfileId(patch.screenProfileId);
     if (Object.hasOwn(patch, 'screenStreamId')) peer.screenStreamId = cleanStreamId(patch.screenStreamId);
     if (Object.hasOwn(patch, 'viewedScreenPeerId')) {
-      peer.viewedScreenPeerId = normalizePeerId(patch.viewedScreenPeerId) || '';
+      peer.viewedScreenPeerId = resolveViewedScreenPeerId(room, peer.id, patch.viewedScreenPeerId);
+    }
+
+    if (stoppedScreen) {
+      for (const viewer of clearViewedScreenPeerReferences(room, peer.id)) {
+        broadcast(room, { type: 'peer-updated', peer: publicPeer(viewer) });
+        mirrorLegacyRoomEvent(roomId, { type: 'peer-updated', peer: publicPeer(viewer) });
+      }
     }
 
     broadcast(room, { type: 'peer-updated', peer: publicPeer(peer) });
@@ -485,5 +511,7 @@ function createRoomRealtimeRuntime(deps) {
 }
 
 module.exports = {
-  createRoomRealtimeRuntime
+  clearViewedScreenPeerReferences,
+  createRoomRealtimeRuntime,
+  resolveViewedScreenPeerId
 };

@@ -1329,19 +1329,33 @@ ${livekit}`, /подключает голос/);
   assert.match(livekit, /detachLiveKitParticipant\(peer, 'голос переподключается'\)/);
 });
 
-test('stream viewer presence follows attendance instead of spotlight layout', () => {
+test('stream viewer presence follows attendance instead of spotlight layout', async () => {
   const participants = read('src/lib/features/room/client/room/participants.ts');
   const presence = read('src/lib/features/room/client/room/presence.ts');
+  const room = read('src/lib/features/room/client/room/room.ts');
   const screenView = read('src/lib/features/room/client/ui/screen-view.ts');
   const dock = read('src/lib/features/room/components/RoomDock.svelte');
+  const attendance = await importTypeScript('src/lib/features/room/client/model/screen-attendance.ts');
+
+  const self = { viewedScreenPeerId: '' };
+  assert.equal(attendance.setScreenAttendance(self, 'screen-a'), true);
+  assert.equal(self.viewedScreenPeerId, 'screen-a');
+  assert.equal(attendance.setScreenAttendance(self, 'screen-a'), false);
+  assert.equal(attendance.setScreenAttendance(self, 'screen-b'), true);
+  assert.equal(attendance.clearScreenAttendance(self, 'screen-a'), false);
+  assert.equal(attendance.clearScreenAttendance(self, 'screen-b'), true);
+  assert.equal(self.viewedScreenPeerId, '');
 
   assert.doesNotMatch(participants, /экран в эфире|показывает экран/);
   assert.match(presence, /viewedScreenPeerId: state\.self\?\.viewedScreenPeerId \|\| ''/);
-  assert.match(screenView, /if \(!peer\.isLocal\) setScreenAttendance\(peerId\)/);
-  assert.match(screenView, /if \(keepPreview\)[\s\S]*screenSubscribedPeerIds\.add\(peerId\)[\s\S]*else \{[\s\S]*clearScreenAttendance\(peerId\)/);
-  assert.match(screenView, /function clearScreenAttendance\(peerId: string\)[\s\S]*state\.self\?\.viewedScreenPeerId === peerId/);
+  assert.match(screenView, /if \(!peer\.isLocal\) setScreenAttendance\(state\.self, peerId\)/);
+  assert.match(screenView, /if \(keepPreview\)[\s\S]*screenSubscribedPeerIds\.add\(peerId\)[\s\S]*else \{[\s\S]*clearScreenAttendance\(state\.self, peerId\)/);
+  assert.match(screenView, /const attendanceCleared = clearScreenAttendance\(state\.self, peerId\)[\s\S]*if \(attendanceCleared\) postState\(\)/);
   assert.match(screenView, /handleScreenStageClick[\s\S]*leaveScreenView\(\{ keepPreview: true \}\)/);
   assert.match(dock, /aria-label="Выйти со стрима"[\s\S]*leaveScreenView\(\{ keepPreview: false \}\)/);
+  assert.match(participants, /state\.self\?\.viewedScreenPeerId === participant\.id[\s\S]*disconnectScreenSoon\(participant\.id\)/);
+  assert.match(participants, /state\.self\?\.viewedScreenPeerId === peerId[\s\S]*disconnectScreenSoon\(peerId\)/);
+  assert.match(room, /viewedScreenPeerId: state\.self\?\.viewedScreenPeerId \?\? localPeer\.viewedScreenPeerId/);
 });
 
 test('participant context menu is remote-only and exposes relationship-aware local audio controls', () => {

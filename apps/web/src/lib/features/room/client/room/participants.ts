@@ -22,8 +22,8 @@ function syncLiveKitScreenSubscriptionsSoon(peer: Participant): void {
   void import('../services/livekit-service').then((module) => module.syncLiveKitScreenSubscriptions(peer));
 }
 
-function closeScreenViewSoon(): void {
-  void import('../ui/screen-view').then((module) => module.closeScreenView());
+function disconnectScreenSoon(peerId: string): void {
+  void import('../ui/screen-view').then((module) => module.disconnectScreen(peerId));
 }
 
 function hideScreenStageSoon(): void {
@@ -200,11 +200,13 @@ export function updateParticipant(peerInfo: PeerInfo): void {
     applyRemoteScreenCue(participant, hadScreen, participant.screen);
   }
   if (!participant.screen) {
+    const attendedEndedScreen =
+      state.viewedScreenPeerId === participant.id
+      || state.screenSubscribedPeerIds.has(participant.id)
+      || state.self?.viewedScreenPeerId === participant.id;
     state.screenCollapsedPeerIds.delete(participant.id);
     state.screenSubscribedPeerIds.delete(participant.id);
-    if (state.viewedScreenPeerId === participant.id) {
-      closeScreenViewSoon();
-    }
+    if (attendedEndedScreen) disconnectScreenSoon(participant.id);
   }
   if (!participant.screen && state.sharedScreenPeerId === participant.id) {
     detachRemoteScreen(participant);
@@ -257,15 +259,18 @@ export function removePeer(peerId: string): void {
   if (!peer) return;
   closeParticipantContextMenu(peerId);
 
+  const attendedRemovedScreen =
+    state.viewedScreenPeerId === peerId
+    || state.screenSubscribedPeerIds.has(peerId)
+    || state.self?.viewedScreenPeerId === peerId;
+
   applyStreamViewerCue(peer, peer.viewedScreenPeerId, '');
   clearPeerJoinCue(peerId);
   clearRemoteScreenCue(peerId);
   removeAudioElements(peer);
   state.screenCollapsedPeerIds.delete(peerId);
   state.screenSubscribedPeerIds.delete(peerId);
-  if (state.viewedScreenPeerId === peer.id) {
-    closeScreenViewSoon();
-  }
+  if (attendedRemovedScreen) disconnectScreenSoon(peerId);
   if (state.sharedScreenPeerId === peer.id) {
     hideScreenStageSoon();
   }
