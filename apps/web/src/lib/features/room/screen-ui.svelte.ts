@@ -58,13 +58,10 @@ export interface ScreenMetaView {
   title: string;
   qualityLabel: string;
   fpsLabel: string;
-  captureLabel: string;
   showQuality: boolean;
   showFps: boolean;
-  showCapture: boolean;
   showSepProfile: boolean;
   showSepFps: boolean;
-  showSepCapture: boolean;
   showViewers: boolean;
   showSepViewers: boolean;
   viewerAvatars: AvatarStackItem[];
@@ -72,41 +69,25 @@ export interface ScreenMetaView {
 
 export function getScreenMetaView(): ScreenMetaView | null {
   void screenUi.revision;
-  void state.localScreenStats;
   const participant = getActiveScreenPeer();
   if (!participant || !screenUi.showMeta) return null;
 
   const profileId = participant.isLocal ? state.localScreenProfileId : participant.screenProfileId;
   const { qualityLabel, fpsLabel } = getScreenProfileLabels(profileId);
   const viewers = getScreenViewers(participant.id);
-  const captureStats = participant.isLocal ? state.localScreenStats : null;
-  const captureLabel = getScreenCaptureLabel(captureStats);
 
   return {
     title: participant.isLocal ? 'Ваш стрим' : `Стрим ${participant.name}`,
     qualityLabel,
     fpsLabel,
-    captureLabel,
     showQuality: Boolean(qualityLabel),
     showFps: Boolean(fpsLabel),
-    showCapture: Boolean(captureLabel),
     showSepProfile: Boolean(qualityLabel),
     showSepFps: Boolean(qualityLabel && fpsLabel),
-    showSepCapture: Boolean(qualityLabel || fpsLabel || captureLabel),
     showViewers: true,
-    showSepViewers: Boolean(qualityLabel || fpsLabel || captureLabel),
+    showSepViewers: Boolean(qualityLabel || fpsLabel),
     viewerAvatars: viewers.map(getViewerAvatarItem)
   };
-}
-
-function getScreenCaptureLabel(captureStats: typeof state.localScreenStats): string {
-  if (!captureStats) return '';
-  const parts: string[] = [];
-  if (captureStats.encoderImplementation) parts.push(`энкодер: ${captureStats.encoderImplementation}`);
-  if (captureStats.captureFramesReceived !== undefined) {
-    parts.push(`захват: ${captureStats.captureFramesReceived}/${captureStats.captureFramesWritten ?? 0}/${captureStats.captureDropsBackpressure ?? 0}`);
-  }
-  return parts.join(' · ');
 }
 
 function getScreenViewers(ownerPeerId: string): Participant[] {

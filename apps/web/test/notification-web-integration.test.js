@@ -254,6 +254,7 @@ test('DM and room mutes are server-backed and exposed from settings targets', ()
   const prefs = read('src/lib/shared/notifications/preferences.svelte.ts');
   const dm = read('src/lib/features/home/components/lobby/DmView.svelte');
   const roomMenu = read('src/lib/shared/components/room-menu/RoomMenuContent.svelte');
+  const roomMenuTrigger = read('src/lib/shared/components/room-menu/RoomMenu.svelte');
   const settings = read('src/lib/features/home/components/SettingsModal.svelte');
 
   assert.match(prefs, /setDmNotificationsMuted\(userId, muted\)/);
@@ -268,6 +269,8 @@ test('DM and room mutes are server-backed and exposed from settings targets', ()
   assert.doesNotMatch(roomMenu, /Уведомления комнаты (?:выключены|включены)/);
   assert.match(roomMenu, /Не удалось изменить уведомления/);
   assert.match(roomMenu, /roomMuted \? 'Включить уведомления' : 'Выключить уведомления'/);
+  assert.match(roomMenuTrigger, /isRoomNotificationsMuted\(roomId\)/);
+  assert.match(roomMenuTrigger, /\{#if roomMuted\}[\s\S]*<BellOff/);
   assert.match(settings, /updatePrivateNotifications\(!notificationPreferences\.privateNotifications\)/);
   assert.match(settings, /id="notificationUsersTitle">Пользователи</);
   assert.match(settings, /class="settings-notification-targets"/);

@@ -427,9 +427,7 @@ async function adaptLocalScreenProfile(): Promise<void> {
   if (state.localScreenAdaptPoorSamples >= SCREEN_ADAPT_POOR_SAMPLE_TARGET) {
     const nextProfileId = getLowerScreenProfileId(state.localScreenProfileId, state.localScreenMode || DEFAULT_SCREEN_STREAM_MODE);
     if (nextProfileId) {
-      await setLocalScreenProfile(nextProfileId, {
-        toast: 'Сеть просела, снизили качество стрима'
-      });
+      await setLocalScreenProfile(nextProfileId);
       return;
     }
   }
@@ -441,9 +439,7 @@ async function adaptLocalScreenProfile(): Promise<void> {
       state.localScreenMode || DEFAULT_SCREEN_STREAM_MODE
     );
     if (nextProfileId) {
-      await setLocalScreenProfile(nextProfileId, {
-        toast: 'Сеть стабильна, вернули качество стрима'
-      });
+      await setLocalScreenProfile(nextProfileId);
     }
   }
 }
