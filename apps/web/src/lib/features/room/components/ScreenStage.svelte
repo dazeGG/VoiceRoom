@@ -79,12 +79,6 @@
       {#if meta.showFps}
         <span class="screen-meta-detail" id="screenMetaFps">{meta.fpsLabel}</span>
       {/if}
-      {#if meta.showCapture}
-        {#if meta.showSepCapture}
-          <span class="screen-meta-sep" id="screenMetaSepCapture" aria-hidden="true">·</span>
-        {/if}
-        <span class="screen-meta-detail" id="screenMetaCapture">{meta.captureLabel}</span>
-      {/if}
       {#if meta.showSepViewers}
         <span class="screen-meta-sep" id="screenMetaSepViewers" aria-hidden="true">·</span>
       {/if}

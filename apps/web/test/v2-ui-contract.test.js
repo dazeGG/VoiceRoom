@@ -717,6 +717,9 @@ test('screen share publish tuning applies codec, bitrate, degradation and conten
   assert.match(screenShare, /primaryEncoding\.degradationPreference = degradationPreference/);
   assert.match(screenShare, /parameters\.degradationPreference = degradationPreference/);
   assert.match(screenShare, /encoderImplementation/);
+  assert.doesNotMatch(screenShare, /Сеть просела|Сеть стабильна/);
+  assert.match(screenShare, /async function setLocalScreenProfile\(profileId: string\): Promise<void>/);
+  assert.doesNotMatch(screenShare, /options\.toast/);
   assert.match(livekit, /adaptiveStream: false/);
 });
 
@@ -807,6 +810,19 @@ test('screen stream thumbnails show profile metadata instead of an action button
   assert.match(streamTile, /participant\.isLocal \? roomState\.localScreenProfileId : participant\.screenProfileId/);
   assert.match(streamTilesCss, /\.stream-tile-profile-meta/);
   assert.doesNotMatch(streamTilesCss, /stream-tile-action-disconnect/);
+});
+
+test('participant audio controls precede moderation actions and screen metadata stays user-facing', () => {
+  const participantMenu = read('src/lib/features/room/components/ParticipantContextMenu.svelte');
+  const screenUi = read('src/lib/features/room/screen-ui.svelte.ts');
+  const screenStage = read('src/lib/features/room/components/ScreenStage.svelte');
+
+  assert.match(participantMenu, /<span>Громкость<\/span>[\s\S]*Заглушить[\s\S]*Исключить[\s\S]*Заблокировать/);
+  assert.match(screenUi, /const \{ qualityLabel, fpsLabel \} = getScreenProfileLabels\(profileId\)/);
+  assert.doesNotMatch(screenUi, /captureLabel|getScreenCaptureLabel|энкодер:/);
+  assert.match(screenStage, /id="screenMetaQuality">\{meta\.qualityLabel\}/);
+  assert.match(screenStage, /id="screenMetaFps">\{meta\.fpsLabel\}/);
+  assert.doesNotMatch(screenStage, /screenMetaCapture|showCapture/);
 });
 
 test('audio unlock fallback button defers to the stream watch gate', () => {

@@ -301,18 +301,6 @@
       <p class="participant-context-menu-note">Гость: доступны только локальные настройки звука.</p>
     {/if}
 
-    {#if canModerate}
-      <span class="participant-context-menu-divider" aria-hidden="true"></span>
-      <button class="pcm-item" type="button" onclick={kickParticipant}>
-        <UserMinus class="pcm-item-icon" {...iconMd} aria-hidden="true" />
-        <span>Исключить</span>
-      </button>
-      <button class="pcm-item pcm-item--danger" type="button" onclick={banParticipant}>
-        <Ban class="pcm-item-icon" {...iconMd} aria-hidden="true" />
-        <span>Заблокировать</span>
-      </button>
-    {/if}
-
     <span class="participant-context-menu-divider" aria-hidden="true"></span>
 
     <div class="pcm-volume">
@@ -353,5 +341,17 @@
       <MicOff class="pcm-item-icon" {...iconMd} aria-hidden="true" />
       <span>{localMuted ? 'Включить локально' : 'Заглушить'}</span>
     </button>
+
+    {#if canModerate}
+      <span class="participant-context-menu-divider" aria-hidden="true"></span>
+      <button class="pcm-item" type="button" onclick={kickParticipant}>
+        <UserMinus class="pcm-item-icon" {...iconMd} aria-hidden="true" />
+        <span>Исключить</span>
+      </button>
+      <button class="pcm-item pcm-item--danger" type="button" onclick={banParticipant}>
+        <Ban class="pcm-item-icon" {...iconMd} aria-hidden="true" />
+        <span>Заблокировать</span>
+      </button>
+    {/if}
   </div>
 {/if}
