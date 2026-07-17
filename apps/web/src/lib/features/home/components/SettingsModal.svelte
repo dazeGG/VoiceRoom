@@ -142,11 +142,10 @@
   const levelScale = $derived(gateOn ? gateMeterPosition(micLevelDb).toFixed(3) : '0');
   const gateLabel = $derived(gateOn ? gateValueLabel(gateDb) : 'Выкл');
   const browserNotificationsEnabled = $derived(
-    !notificationPreferences.notificationsEnabled
-      ? false
-      : pushNotifications.supported
+    pushNotifications.supported
       ? pushNotifications.active
-      : notificationPreferences.deliveryPermission === 'granted'
+      : notificationPreferences.notificationsEnabled
+        && notificationPreferences.deliveryPermission === 'granted'
   );
   const macDesktopApp = $derived(desktopApp && desktopPlatform === 'darwin');
   const notificationToggleLabel = $derived(desktopApp ? 'Уведомления приложения' : 'Push этого браузера');

@@ -104,6 +104,7 @@ test('notification permission request is isolated to explicit settings UI action
   assert.match(settings, /onclick=\{\(\) => void toggleBrowserNotifications\(\)\}/);
   assert.match(settings, /setPushNotificationsEnabled\(!pushNotifications\.active\)/);
   assert.match(settings, /setNotificationsEnabled\(false\)/);
+  assert.match(settings, /pushNotifications\.supported\s*\?\s*pushNotifications\.active\s*:\s*notificationPreferences\.notificationsEnabled\s*&& notificationPreferences\.deliveryPermission === 'granted'/);
   assert.match(settings, /showBrowserNotification\(\{/);
   assert.match(settings, /let desktopPlatform = \$state\(''\)/);
   assert.match(settings, /desktopPlatform = window\.voiceRoomRuntime\?\.platform \|\| ''/);
@@ -255,6 +256,9 @@ test('DM and room mutes are server-backed and exposed from settings targets', ()
   const dm = read('src/lib/features/home/components/lobby/DmView.svelte');
   const roomMenu = read('src/lib/shared/components/room-menu/RoomMenuContent.svelte');
   const roomMenuTrigger = read('src/lib/shared/components/room-menu/RoomMenu.svelte');
+  const previewChat = read('src/lib/features/home/components/lobby/RoomPreviewChat.svelte');
+  const roomChat = read('src/lib/features/room/components/RoomChat.svelte');
+  const roomTopbar = read('src/lib/features/room/components/RoomTopbar.svelte');
   const settings = read('src/lib/features/home/components/SettingsModal.svelte');
 
   assert.match(prefs, /setDmNotificationsMuted\(userId, muted\)/);
@@ -265,12 +269,23 @@ test('DM and room mutes are server-backed and exposed from settings targets', ()
   assert.match(dm, /updatePeerNotificationsMuted\(peer\.id, !peerMuted\)/);
   assert.match(dm, /data-notification-mute="dm"/);
   assert.match(roomMenu, /const nextMuted = !roomMuted/);
+  assert.match(roomMenu, /showNotificationControls = true/);
+  assert.match(roomMenu, /if \(!showNotificationControls\) return/);
+  assert.match(roomMenu, /\{#if showNotificationControls\}[\s\S]*roomMuted \? 'Включить уведомления' : 'Выключить уведомления'[\s\S]*toggleRoomMute/);
   assert.match(roomMenu, /updateRoomNotificationsMuted\(targetRoomId, nextMuted\)/);
   assert.doesNotMatch(roomMenu, /Уведомления комнаты (?:выключены|включены)/);
   assert.match(roomMenu, /Не удалось изменить уведомления/);
   assert.match(roomMenu, /roomMuted \? 'Включить уведомления' : 'Выключить уведомления'/);
+  assert.match(roomMenuTrigger, /showNotificationControls = true/);
+  assert.match(roomMenuTrigger, /showNotificationControls && isRoomNotificationsMuted\(roomId\)/);
   assert.match(roomMenuTrigger, /isRoomNotificationsMuted\(roomId\)/);
   assert.match(roomMenuTrigger, /\{#if roomMuted\}[\s\S]*<BellOff/);
+  assert.match(roomMenuTrigger, /\{showNotificationControls\}/);
+  assert.match(roomTopbar, /showNotificationControls=\{Boolean\(roomClientState\.self\?\.accountUserId\)\}/);
+  assert.match(previewChat, /isRoomNotificationsMuted\(activeRoomId\)/);
+  assert.match(previewChat, /message\.peerId !== accountPeerId && !isRoomNotificationsMuted\(activeRoomId\)[\s\S]*playRoomChatMessageCue\(\)/);
+  assert.match(roomChat, /isRoomNotificationsMuted\(roomId\)/);
+  assert.match(roomChat, /message\.peerId !== peerId && !isRoomNotificationsMuted\(roomId\)[\s\S]*playRoomChatMessageCue\(\)/);
   assert.match(settings, /updatePrivateNotifications\(!notificationPreferences\.privateNotifications\)/);
   assert.match(settings, /id="notificationUsersTitle">Пользователи</);
   assert.match(settings, /class="settings-notification-targets"/);

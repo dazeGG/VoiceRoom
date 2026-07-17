@@ -20,7 +20,8 @@
     keepContentMounted = false,
     onOpenSettings,
     inviteContent,
-    onToast
+    onToast,
+    showNotificationControls = true
   } = $props<{
     roomId: string;
     name: string;
@@ -36,9 +37,10 @@
     onOpenSettings?: () => void;
     inviteContent?: import('svelte').Snippet<[close: () => void]>;
     onToast?: (message: string) => void;
+    showNotificationControls?: boolean;
   }>();
 
-  const roomMuted = $derived(isRoomNotificationsMuted(roomId));
+  const roomMuted = $derived(showNotificationControls && isRoomNotificationsMuted(roomId));
 </script>
 
 {#snippet menuButton(open: boolean, toggle: () => void, panelId: string)}
@@ -82,6 +84,7 @@
       {onOpenSettings}
       {inviteContent}
       {onToast}
+      {showNotificationControls}
     />
   {/snippet}
 </Popover>

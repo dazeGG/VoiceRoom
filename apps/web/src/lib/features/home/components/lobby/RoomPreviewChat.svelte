@@ -11,6 +11,7 @@
   import { friendName } from '../../model/lobby-format';
   import ChatText from '$lib/shared/components/ChatText.svelte';
   import { copyText } from '$lib/shared/utils/clipboard';
+  import { isRoomNotificationsMuted } from '$lib/shared/notifications/preferences.svelte';
   import { tick } from 'svelte';
 
   let { roomId, user, onClose, onToast } = $props<{
@@ -280,7 +281,7 @@
       messageIds.add(message.id);
       error = '';
       messages = [...messages, message];
-      if (message.peerId !== accountPeerId) playRoomChatMessageCue();
+      if (message.peerId !== accountPeerId && !isRoomNotificationsMuted(activeRoomId)) playRoomChatMessageCue();
       setRoomUnreadCount(activeRoomId, 0);
       void markRoomChatRead(activeRoomId).catch(() => {});
       queueMicrotask(scrollToBottom);
