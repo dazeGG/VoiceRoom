@@ -94,6 +94,7 @@
         onOpenSettings={roomSettingsUi.isOwner ? openRoomSettings : undefined}
         inviteContent={roomClientState.self?.accountUserId ? roomInviteContent : undefined}
         onToast={showToast}
+        showNotificationControls={Boolean(roomClientState.self?.accountUserId)}
       />
     </div>
 
