@@ -638,7 +638,9 @@ function createRoomStore({
           id,
           roomId,
           typeof message?.peerId === 'string' ? message.peerId : '',
-          typeof message?.name === 'string' ? message.name : '',
+          typeof message?.authorUserId === 'string'
+            ? ''
+            : (typeof message?.name === 'string' ? message.name : ''),
           typeof message?.text === 'string' ? message.text : '',
           toDate(createdAt),
           toDate(expiresAt),
@@ -678,6 +680,7 @@ function createRoomStore({
 
     const result = await getPool().query(
       `SELECT recent.*,
+              COALESCE(NULLIF(u.display_name, ''), u.login, recent.name) AS name,
               COALESCE(u.avatar_color_key, rpi.avatar_color_key) AS avatar_color_key,
               u.avatar_key,
               u.avatar_accent
@@ -704,6 +707,7 @@ function createRoomStore({
   async function getMessage(roomId, messageId) {
     const result = await getPool().query(
       `SELECT m.*,
+              COALESCE(NULLIF(u.display_name, ''), u.login, m.name) AS name,
               COALESCE(u.avatar_color_key, rpi.avatar_color_key) AS avatar_color_key,
               u.avatar_key,
               u.avatar_accent
@@ -738,6 +742,7 @@ function createRoomStore({
          RETURNING *
        )
        SELECT updated.*,
+              COALESCE(NULLIF(u.display_name, ''), u.login, updated.name) AS name,
               COALESCE(u.avatar_color_key, rpi.avatar_color_key) AS avatar_color_key,
               u.avatar_key,
               u.avatar_accent

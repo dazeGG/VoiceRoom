@@ -159,6 +159,32 @@ test('appendMessage uses a transaction, verifies room existence, inserts row, an
   assert.ok(pool.calls.some((call) => call.text === 'COMMIT'));
 });
 
+test('appendMessage does not persist a profile-name snapshot for account messages', async () => {
+  let insertedValues;
+  const pool = createFakePool((text, values) => {
+    if (/SELECT id FROM rooms/.test(text)) return { rows: [{ id: 'room1' }], rowCount: 1 };
+    if (/INSERT INTO room_messages/.test(text)) {
+      insertedValues = values;
+      return {
+        rows: [{
+          id: 'msg1', room_id: 'room1', peer_id: 'peer1', name: '', text: 'hello',
+          created_at: new Date(1000), expires_at: new Date(2000), author_user_id: 'user1'
+        }],
+        rowCount: 1
+      };
+    }
+    return { rows: [], rowCount: 1 };
+  });
+
+  await createRoomStore({ pool }).appendMessage('room1', {
+    id: 'msg1', peerId: 'peer1', name: 'Outdated profile', text: 'hello',
+    createdAt: 1000, expiresAt: 2000, authorUserId: 'user1'
+  }, 1000);
+
+  assert.equal(insertedValues[3], '');
+  assert.equal(insertedValues[7], 'user1');
+});
+
 test('editMessage updates active room message text and maps its edit timestamp', async () => {
   const pool = createFakePool((text, values) => {
     assert.match(text, /UPDATE room_messages/);
@@ -274,6 +300,7 @@ test('listMessages soft-deletes expired messages before selecting active rows', 
   assert.match(pool.calls[0].text, /UPDATE room_messages/);
   assert.match(pool.calls[1].text, /LEFT JOIN room_peer_identities/);
   assert.match(pool.calls[1].text, /LEFT JOIN users/);
+  assert.match(pool.calls[1].text, /COALESCE\(NULLIF\(u\.display_name, ''\), u\.login, recent\.name\) AS name/);
   assert.equal(messages[0].avatarAccent, '#49303f');
   assert.match(messages[0].avatarKey, /^av_/);
   assert.match(pool.calls[1].text, /ORDER BY recent.created_at ASC, recent.id ASC/);
