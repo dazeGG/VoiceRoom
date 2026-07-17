@@ -712,8 +712,6 @@
 .settings-notification-list {
   display: grid;
   gap: 4px;
-  max-height: 176px;
-  overflow-y: auto;
 }
 
 .settings-notification-row {
