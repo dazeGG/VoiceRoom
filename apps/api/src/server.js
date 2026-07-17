@@ -1642,8 +1642,17 @@ async function handleRoomChatPost(req, res, roomId) {
     return;
   }
 
-  const name = sessionDisplayName(sessionUser) || activePeer?.name || requestedName;
-  const authorUserId = sessionUser?.id || activePeer?.accountUserId || null;
+  let authorUser = sessionUser;
+  if (!authorUser && activePeer?.accountUserId) {
+    try {
+      authorUser = await getUserStore().getUserById(activePeer.accountUserId);
+    } catch (error) {
+      console.error('Failed to resolve room chat author profile:', error);
+    }
+  }
+
+  const name = sessionDisplayName(authorUser) || activePeer?.name || requestedName;
+  const authorUserId = authorUser?.id || activePeer?.accountUserId || null;
   const now = Date.now();
   const message = await getRoomStore().appendMessage(roomId, {
     createdAt: now,
@@ -1664,10 +1673,10 @@ async function handleRoomChatPost(req, res, roomId) {
   const publicMessage = {
     ...message,
     name,
-    avatarAccent: sessionUser?.avatarAccent || activePeer?.avatarAccent || null,
+    avatarAccent: authorUser?.avatarAccent || activePeer?.avatarAccent || null,
     avatarColorKey,
-    avatarUrl: sessionUser?.avatarKey
-      ? `/api/avatars/${encodeURIComponent(sessionUser.avatarKey)}`
+    avatarUrl: authorUser?.avatarKey
+      ? `/api/avatars/${encodeURIComponent(authorUser.avatarKey)}`
       : activePeer?.avatarUrl || null
   };
   roomRuntime?.broadcastChatMessage(roomId, publicMessage);
