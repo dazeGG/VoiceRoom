@@ -1,4 +1,4 @@
-FROM node:20.20.2-alpine3.23 AS deps
+FROM node:24.18.0-alpine3.23 AS deps
 
 WORKDIR /app
 
@@ -21,7 +21,7 @@ COPY apps/web ./apps/web
 COPY packages ./packages
 RUN npm run build
 
-FROM node:20.20.2-alpine3.23 AS api
+FROM node:24.18.0-alpine3.23 AS api
 
 ENV NODE_ENV=production
 WORKDIR /app

@@ -199,8 +199,8 @@ test('browser helpers dedupe by tag/key and never request permission outside exp
     assert.equal(router.routeNotificationEvent(dmEvent({ dedupeKey: 'dm:dedupe' }), { permission: 'granted' }).notify, true);
     assert.equal(requestPermissionCalls, 0, 'routing does not request permission');
 
-    const first = router.showBrowserNotification(payload);
-    const second = router.showBrowserNotification(payload);
+    const first = await router.showBrowserNotification(payload);
+    const second = await router.showBrowserNotification(payload);
     assert.ok(first);
     assert.equal(second, null);
     assert.equal(calls.length, 1);
@@ -268,7 +268,7 @@ test('desktop bridge is preferred over page Notification and does not request pe
       true
     );
 
-    const result = router.showBrowserNotification(payload);
+    const result = await router.showBrowserNotification(payload);
     assert.equal(result, null);
     assert.deepEqual(bridgeCalls, [
       {
@@ -418,7 +418,7 @@ test('showBrowserNotification no-ops when denied or unavailable', async () => {
     delete globalThis.Notification;
     assert.equal(router.getNotificationPermission(), 'unsupported');
     assert.equal(router.canUseNotifications(), false);
-    assert.equal(router.showBrowserNotification({ title: 'x', body: 'y', tag: 'z', dedupeKey: 'z' }), null);
+    assert.equal(await router.showBrowserNotification({ title: 'x', body: 'y', tag: 'z', dedupeKey: 'z' }), null);
 
     class DeniedNotification {
       static permission = 'denied';
@@ -427,7 +427,7 @@ test('showBrowserNotification no-ops when denied or unavailable', async () => {
       }
     }
     globalThis.Notification = DeniedNotification;
-    assert.equal(router.showBrowserNotification({ title: 'x', body: 'y', tag: 'z2', dedupeKey: 'z2' }), null);
+    assert.equal(await router.showBrowserNotification({ title: 'x', body: 'y', tag: 'z2', dedupeKey: 'z2' }), null);
   } finally {
     if (originalNotification === undefined) delete globalThis.Notification;
     else globalThis.Notification = originalNotification;

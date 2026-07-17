@@ -53,8 +53,8 @@ packages/
 
 ## Требования
 
-- Node.js `20.20.2`
-- npm `10.8.2`
+- Node.js `24.18.0`
+- npm `11.16.0`
 - Docker, если нужно локально поднять PostgreSQL/LiveKit или собрать production image
 
 ## Локальный запуск
