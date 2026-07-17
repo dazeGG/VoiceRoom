@@ -406,9 +406,11 @@ test('authenticated room presence exposes only minimal account user id on peers'
   assert.equal('login' in ownerAsPeer, false);
 });
 
-test('room join refreshes avatar identity changed after the websocket opened', async (t) => {
+test('room join refreshes profile identity changed after the websocket opened', async (t) => {
   const owner = {
     id: OWNER_ID,
+    displayName: 'Original Profile',
+    login: 'owner',
     avatarAccent: null,
     avatarColorKey: 'blurple',
     avatarKey: null
@@ -425,19 +427,21 @@ test('room join refreshes avatar identity changed after the websocket opened', a
   const presence = openWs(socketPath, { cookie: `vr_session=${OWNER_TOKEN}` });
   await presence.ready;
 
+  owner.displayName = 'Current Profile';
   owner.avatarAccent = '#49303f';
   owner.avatarKey = 'av_user-owner_deadbeef.webp';
   await joinVoiceRoom(presence, {
     roomId: 'room1',
     peerId: 'peer0001',
     sessionToken: OWNER_PEER_TOKEN,
-    name: 'Owner'
+    name: 'Ignored client name'
   });
   teardownSocketServer(t, { server, dir, sessions: [presence] });
 
   const peer = presence.frames
     .find((frame) => frame.type === 'room.snapshot')
     ?.payload?.peers?.find((entry) => entry.id === 'peer0001');
+  assert.equal(peer.name, 'Current Profile');
   assert.equal(peer.avatarAccent, '#49303f');
   assert.equal(peer.avatarColorKey, 'blurple');
   assert.equal(peer.avatarUrl, '/api/avatars/av_user-owner_deadbeef.webp');

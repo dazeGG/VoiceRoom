@@ -338,12 +338,16 @@ test('account chat uses the current profile and refreshes active room peers afte
 
     const voice = openWs(socketPath, { cookie: sessionCookie });
     await voice.ready;
-    await joinVoiceRoom(voice, {
+    const joined = await joinVoiceRoom(voice, {
       roomId: created.body.roomId,
       peerId: 'preview-voice-user',
       sessionToken: TOKEN,
       name: 'Ignored client name'
     });
+    assert.equal(
+      joined.payload.peers.find((peer) => peer.id === 'preview-voice-user')?.name,
+      'Preview User'
+    );
 
     const first = await postJson(socketPath, `/api/rooms/${created.body.roomId}/chat`, {
       name: 'Spoofed Name',

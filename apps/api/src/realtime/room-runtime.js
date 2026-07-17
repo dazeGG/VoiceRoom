@@ -374,7 +374,7 @@ function createRoomRealtimeRuntime(deps) {
     const roomId = normalizeRoomId(payload.roomId);
     const peerId = normalizePeerId(payload.peerId);
     const sessionToken = normalizeSessionToken(payload.sessionToken);
-    const name = cleanName(payload.name);
+    const name = cleanName(sessionUser?.displayName || sessionUser?.login || payload.name);
 
     if (!roomId || !peerId || !sessionToken) {
       return { ok: false, code: 'invalid_join', message: 'Invalid room, peer, or session token' };
@@ -481,7 +481,7 @@ function createRoomRealtimeRuntime(deps) {
         ip: clientIp || '',
         joinedAt: previous?.joinedAt ?? Date.now(),
         muted: previous?.muted ?? false,
-        name: reconnecting ? (previous?.name ?? name) : name,
+        name: reconnecting && !sessionUser ? (previous?.name ?? name) : name,
         screen: previous?.screen ?? false,
         screenAudio: previous?.screenAudio ?? false,
         screenProfileId: previous?.screenProfileId ?? '',
