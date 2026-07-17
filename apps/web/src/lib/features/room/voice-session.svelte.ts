@@ -8,10 +8,16 @@ export const voiceSession = $state<{
   roomId: string | null;
   muted: boolean;
   deafened: boolean;
+  // Server timestamps for call-duration surfaces: when I joined the call and
+  // when the room's current call started (RoomSnapshot.voiceActiveSince).
+  joinedAt: number | null;
+  roomActiveSince: number | null;
 }>({
   roomId: null,
   muted: false,
-  deafened: false
+  deafened: false,
+  joinedAt: null,
+  roomActiveSince: null
 });
 
 let activeLeaveHandler: LeaveHandler | null = null;
@@ -22,11 +28,18 @@ export function setConnectedVoiceRoom(roomId: string): void {
   voiceSession.roomId = roomId || null;
 }
 
+export function setVoiceSessionTiming(next: { joinedAt?: number | null; roomActiveSince?: number | null }): void {
+  if ('joinedAt' in next) voiceSession.joinedAt = next.joinedAt ?? null;
+  if ('roomActiveSince' in next) voiceSession.roomActiveSince = next.roomActiveSince ?? null;
+}
+
 export function clearConnectedVoiceRoom(roomId?: string): void {
   if (!roomId || voiceSession.roomId === roomId) {
     voiceSession.roomId = null;
     voiceSession.muted = false;
     voiceSession.deafened = false;
+    voiceSession.joinedAt = null;
+    voiceSession.roomActiveSince = null;
   }
 }
 

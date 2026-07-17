@@ -2,29 +2,46 @@
 // cookie set by the API rides along automatically (including on /api/rooms,
 // which is how a logged-in user's persistent rooms get an owner).
 
+import type { PresenceStatus } from '$lib/shared/presence';
+
 export interface AuthUser {
+  avatarAccent: string | null;
   avatarColorKey: string;
+  avatarUrl: string | null;
   createdAt: number;
   displayName: string;
+  dnd: boolean;
+  doNotDisturb: boolean;
   id: string;
   login: string;
+  presenceStatus: PresenceStatus;
 }
 
 export type RoomRelationship = 'owner' | 'bookmarked';
 
 export interface OwnedRoom {
+  avatarUrl: string | null;
   createdAt: number;
-  emoji: string;
-  roomColorKey: string;
-  roomIconKey: string;
-  roomPresetKey: string;
   emptySince: number | null;
   isStatic: boolean;
   name: string;
   peers: number;
   relationship: RoomRelationship;
   roomId: string;
+  unreadCount?: number;
 }
+
+async function avatarRequest(path: string, method: 'POST' | 'DELETE', file?: Blob): Promise<AuthUser> {
+  const body = file ? new FormData() : undefined;
+  if (body && file) body.append('avatar', file, 'avatar.webp');
+  const response = await fetch(`/api${path}`, { method, body, credentials: 'same-origin' });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload.error || 'Не удалось обновить аватар');
+  return payload.user;
+}
+
+export const uploadUserAvatar = (file: Blob): Promise<AuthUser> => avatarRequest('/auth/avatar', 'POST', file);
+export const deleteUserAvatar = (): Promise<AuthUser> => avatarRequest('/auth/avatar', 'DELETE');
 
 export interface Credentials {
   login: string;

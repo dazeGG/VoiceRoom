@@ -1,0 +1,353 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+
+const root = resolve(import.meta.dirname, '..');
+const read = (path) => readFileSync(resolve(root, path), 'utf8');
+
+test('notification API client uses required endpoints and credentialed helpers', () => {
+  const api = read('src/lib/api/notifications.ts');
+
+  assert.match(api, /import \{ getJsonAuth, postJsonAuth, putJson \} from '\.\/http'/);
+  assert.match(api, /getJsonAuth<NotificationPreferencesResponse>\('\/api\/notifications\/preferences'\)/);
+  assert.match(api, /putJson<NotificationMuteResponse>\(`\/api\/notifications\/dm\/\$\{encodeURIComponent\(userId\)\}\/mute`, \{ muted \}\)/);
+  assert.match(api, /putJson<NotificationMuteResponse>\(`\/api\/notifications\/room\/\$\{encodeURIComponent\(roomId\)\}\/mute`, \{ muted \}\)/);
+  assert.match(api, /putJson<NotificationPreferencesResponse>\('\/api\/notifications\/privacy', \{ privateNotifications \}\)/);
+  assert.match(api, /mutedPeerIds: string\[\]/);
+  assert.match(api, /mutedRoomIds: string\[\]/);
+  assert.match(api, /privateNotifications: boolean/);
+  assert.match(api, /doNotDisturb: boolean/);
+  assert.match(api, /presenceStatus: PresenceStatus/);
+  assert.match(api, /presenceStatusAutomatic: boolean/);
+  assert.match(api, /postJsonAuth<NotificationPreferencesResponse>\('\/api\/notifications\/settings', \{ dnd \}\)/);
+  assert.match(api, /postJsonAuth<NotificationPreferencesResponse>\('\/api\/presence\/status', \{ automatic, status \}\)/);
+});
+
+test('lobby startup loads notification preferences and realtime notification events route through browser helper', () => {
+  const friends = read('src/lib/features/home/model/friends.svelte.ts');
+  const idle = read('src/lib/shared/presence-idle.ts');
+
+  assert.match(friends, /loadNotificationPreferences/);
+  assert.match(friends, /areNotificationPreferencesLoadedFor/);
+  assert.match(friends, /resetNotificationPreferences/);
+  assert.match(friends, /Promise\.all\(\[refreshFriends\(\), refreshRequests\(\)\]\)/);
+  assert.match(friends, /scheduleNotificationPreferencesLoad\(currentUserId\)/);
+  assert.match(friends, /startSystemPresenceIdleTracking/);
+  assert.match(friends, /stopPresenceIdleTracking\(\)/);
+  assert.match(idle, /PRESENCE_IDLE_THRESHOLD_SECONDS = 5 \* 60/);
+  assert.match(idle, /voiceRoomDesktopIdle/);
+  assert.match(idle, /permissions\.query\(\{ name: 'idle-detection' \}\)/);
+  assert.doesNotMatch(idle, /IdleDetector\.requestPermission/);
+  assert.match(friends, /automaticPresenceIdleAvailable/);
+  assert.match(friends, /onAvailabilityChange/);
+  assert.match(friends, /prepareNotificationPreferences\(currentUserId, initialDoNotDisturb, initialPresenceStatus\)/);
+  assert.match(friends, /function scheduleNotificationPreferencesLoad\(userId = selfId\)/);
+  assert.match(friends, /loadNotificationPreferences\(userId\)/);
+  assert.match(friends, /\.then\(flushPendingNotificationEvents\)/);
+  assert.match(friends, /notificationPreferencesRetryTimer = setTimeout/);
+  assert.match(friends, /event\.type\.startsWith\('notification\.'\)/);
+  assert.match(friends, /MAX_PENDING_NOTIFICATION_EVENTS = 100/);
+  assert.match(friends, /PENDING_NOTIFICATION_TTL_MS = 60_000/);
+  assert.match(friends, /pendingNotificationEvents\.push\(\{ event, receivedAt: now \}\)/);
+  assert.match(friends, /slice\(-\(MAX_PENDING_NOTIFICATION_EVENTS - 1\)\)/);
+  assert.match(friends, /!areNotificationPreferencesLoadedFor\(selfId\)/);
+  assert.match(friends, /function flushPendingNotificationEvents\(\)/);
+  assert.match(friends, /routeNotificationEvent\(event, \{/);
+  assert.match(friends, /userId: selfId/);
+  assert.match(friends, /activeTarget: getActiveNotificationTarget\(\)/);
+  assert.match(friends, /mutedPeerIds: notificationPreferences\.mutedPeerIds/);
+  assert.match(friends, /mutedRoomIds: notificationPreferences\.mutedRoomIds/);
+  assert.match(friends, /privateNotifications: notificationPreferences\.privateNotifications/);
+  assert.match(friends, /doNotDisturb: notificationPreferences\.doNotDisturb/);
+  assert.match(friends, /notificationsAvailable: canUseNotifications\(\) && notificationPreferences\.notificationsEnabled/);
+  assert.match(friends, /permission: getNotificationDeliveryPermission\(\)/);
+  assert.match(friends, /showBrowserNotification\(routed\.payload\)/);
+  assert.match(friends, /return \{ kind: 'dm', peerId: friendsState\.selectedFriendId \}/);
+  assert.match(friends, /return \{ kind: 'room-preview', roomId: roomNavigation\.viewedRoomId \}/);
+
+  assert.match(friends, /case 'dm\.message': \{/);
+  assert.match(friends, /markThreadRead\(peerId\)/);
+  assert.match(friends, /playDirectMessageCue\(\)/);
+  assert.match(friends, /!isPeerNotificationsMuted\(peerId\)/);
+  assert.match(friends, /friend\.unreadCount \+= 1/);
+  assert.match(friends, /areNotificationPreferencesLoadedFor\(selfId\) && !isPeerNotificationsMuted\(peerId\)/);
+  assert.match(friends, /if \(areNotificationPreferencesLoadedFor\(selfId\)\) playFriendRequestCue\(\)/);
+});
+
+test('notification permission request is isolated to explicit settings UI action', () => {
+  const prefs = read('src/lib/shared/notifications/preferences.svelte.ts');
+  const push = read('src/lib/features/home/model/push-notifications.svelte.ts');
+  const settings = read('src/lib/features/home/components/SettingsModal.svelte');
+  const friends = read('src/lib/features/home/model/friends.svelte.ts');
+
+  assert.match(prefs, /requestNotificationPermissionFromUserAction/);
+  assert.match(prefs, /browserPermission: NotificationPermissionState/);
+  assert.match(prefs, /notificationsEnabled: boolean/);
+  assert.match(prefs, /NOTIFICATIONS_ENABLED_STORAGE_KEY = 'voice-room:notifications-enabled'/);
+  assert.match(prefs, /export function setNotificationsEnabled\(enabled: boolean\): boolean/);
+  assert.match(prefs, /loadedForUserId: string \| null/);
+  assert.match(prefs, /loadingForUserId: string \| null/);
+  assert.match(prefs, /export function resetNotificationPreferences/);
+  assert.match(prefs, /preferenceGeneration \+= 1/);
+  assert.match(prefs, /activeUserId !== userId \|\| preferenceGeneration !== generation/);
+  assert.match(prefs, /export function areNotificationPreferencesLoadedFor\(userId: string\)/);
+  assert.match(prefs, /export async function loadNotificationPreferences\(userId: string\)/);
+  assert.match(prefs, /notificationPreferences\.loadingForUserId === userId/);
+  assert.match(prefs, /const preferences = await fetchNotificationPreferences\(\)/);
+  assert.match(prefs, /const generation = preferenceGeneration/);
+  assert.match(prefs, /activeUserId === userId &&\s+preferenceGeneration === generation &&\s+notificationPreferences\.loadingForUserId === userId/);
+  assert.match(prefs, /applyPreferences\(preferences, userId\)/);
+  assert.match(prefs, /deliveryPermission: NotificationPermissionState/);
+  assert.match(prefs, /getNotificationDeliveryPermission\(\)/);
+  assert.match(prefs, /export async function requestNotificationsFromUiAction/);
+  assert.match(settings, /onclick=\{\(\) => void toggleBrowserNotifications\(\)\}/);
+  assert.match(settings, /setPushNotificationsEnabled\(!pushNotifications\.active\)/);
+  assert.match(settings, /setNotificationsEnabled\(false\)/);
+  assert.match(settings, /pushNotifications\.supported\s*\?\s*pushNotifications\.active\s*:\s*notificationPreferences\.notificationsEnabled\s*&& notificationPreferences\.deliveryPermission === 'granted'/);
+  assert.match(settings, /showBrowserNotification\(\{/);
+  assert.match(settings, /let desktopPlatform = \$state\(''\)/);
+  assert.match(settings, /desktopPlatform = window\.voiceRoomRuntime\?\.platform \|\| ''/);
+  assert.match(settings, /const macDesktopApp = \$derived\(desktopApp && desktopPlatform === 'darwin'\)/);
+  assert.match(settings, /\{#if !macDesktopApp\}[\s\S]*\{notificationToggleLabel\}[\s\S]*Приватный текст уведомлений[\s\S]*\{\/if\}/);
+  assert.match(settings, /const notificationToggleLabel = \$derived\(desktopApp \? 'Уведомления приложения' : 'Push этого браузера'\)/);
+  assert.match(settings, /Включены для открытого приложения/);
+  assert.match(push, /function isDesktopRuntime\(\): boolean/);
+  assert.match(push, /if \(isDesktopRuntime\(\)\) \{[\s\S]*pushNotifications\.supported = false/);
+  assert.match(push, /Notification\.requestPermission\(\)/);
+  assert.match(push, /pushManager\.subscribe\(\{/);
+  assert.match(settings, /aria-checked=\{browserNotificationsEnabled\}/);
+  assert.match(settings, /notificationPreferences\.browserPermission === 'denied'/);
+  assert.match(settings, /Запрос выполняется только по вашему действию/);
+  assert.doesNotMatch(friends, /requestNotificationPermissionFromUserAction|requestNotificationsFromUiAction/);
+});
+
+test('push configuration failures use the red error toast variant', () => {
+  const settings = read('src/lib/features/home/components/SettingsModal.svelte');
+  const toastModel = read('src/lib/features/home/model/toasts.svelte.ts');
+  const home = read('src/lib/features/home/HomePage.svelte');
+  const roomRoute = read('src/routes/r/[roomId]/+page.svelte');
+  const stack = read('src/lib/shared/ui/ToastStack/ToastStack.svelte');
+
+  assert.match(toastModel, /export type ToastOptions = Omit<ToastItem, 'id' \| 'message'>/);
+  assert.match(toastModel, /toastState\.items = \[\.\.\.toastState\.items, \{ \.\.\.options, id, message, duration \}\]/);
+  assert.match(home, /function showToast\(message: string, options\?: ToastOptions\)[\s\S]*pushToast\(message, options\)/);
+  assert.match(roomRoute, /function showToast\(message: string, options\?: ToastOptions\)[\s\S]*pushToast\(message, options\)/);
+  assert.match(settings, /Push-уведомления не настроены на сервере', \{ variant: 'error' \}/);
+  assert.match(stack, /\.ui-toast\[data-variant='error'\][\s\S]*--toast-accent: var\(--coral\)[\s\S]*border-color:[\s\S]*background:/);
+});
+
+test('notification settings stay quiet on success and toast only actionable failures', () => {
+  const settings = read('src/lib/features/home/components/SettingsModal.svelte');
+
+  assert.doesNotMatch(settings, /Настройки уведомлений сохранены/);
+  assert.doesNotMatch(settings, /Push-уведомления (?:включены|выключены)/);
+  assert.doesNotMatch(settings, /Системные уведомления (?:включены|выключены)/);
+  assert.doesNotMatch(settings, /Уведомления (?:пользователя|комнаты) (?:отключены|включены)/);
+  assert.match(settings, /Не удалось сохранить настройки уведомлений/);
+  assert.match(settings, /Не удалось изменить уведомления пользователя/);
+  assert.match(settings, /Не удалось изменить уведомления комнаты/);
+  assert.match(settings, /Разрешите уведомления в настройках браузера/);
+});
+
+test('muted notification targets show a bell-off indicator beside their names', () => {
+  const settings = read('src/lib/features/home/components/SettingsModal.svelte');
+  const sidebar = read('src/lib/features/home/components/lobby/Sidebar.svelte');
+  const voiceHome = read('src/lib/features/home/components/lobby/VoiceHome.svelte');
+  const css = read('src/lib/features/home/styles/settings.css');
+  const lobbyCss = read('src/lib/features/home/styles/lobby-v2.css');
+
+  assert.match(settings, /import \{[^}]*\bBellOff\b[^}]*\} from '@lucide\/svelte'/);
+  assert.match(settings, /\{#if peerMuted\}[\s\S]*class="settings-notification-muted"[\s\S]*<BellOff/);
+  assert.match(settings, /\{#if roomMuted\}[\s\S]*class="settings-notification-muted"[\s\S]*<BellOff/);
+  assert.match(settings, /aria-label="Уведомления отключены"/);
+  assert.match(css, /\.settings-notification-title\s*\{[\s\S]*display:\s*flex[\s\S]*min-width:\s*0/);
+  assert.match(css, /\.settings-notification-muted\s*\{[\s\S]*flex:\s*none/);
+  assert.doesNotMatch(css, /\.settings-notification-name strong\s*\{[^}]*flex:\s*1/);
+  assert.match(sidebar, /friendNotificationsMuted = notificationPreferences\.mutedPeerIds\.includes\(entry\.user\.id\)/);
+  assert.match(sidebar, /\{#if friendNotificationsMuted\}[\s\S]*class="lv-notification-muted"[\s\S]*<BellOff/);
+  assert.match(voiceHome, /roomNotificationsMuted = notificationPreferences\.mutedRoomIds\.includes\(room\.roomId\)/);
+  assert.match(voiceHome, /\{#if roomNotificationsMuted\}[\s\S]*class="lv-notification-muted"[\s\S]*<BellOff/);
+  assert.match(lobbyCss, /\.lv-notification-title\s*\{[^}]*display:\s*flex[^}]*min-width:\s*0/);
+  assert.match(lobbyCss, /\.lv-notification-muted\s*\{[^}]*flex:\s*none/);
+});
+
+test('unread badges stay Volt unless their friend or room notifications are muted', () => {
+  const badge = read('src/lib/shared/ui/Badge/Badge.svelte');
+  const badgeTypes = read('src/lib/shared/ui/Badge/types.ts');
+  const sidebar = read('src/lib/features/home/components/lobby/Sidebar.svelte');
+  const voiceHome = read('src/lib/features/home/components/lobby/VoiceHome.svelte');
+  const roomPreview = read('src/lib/features/home/components/lobby/RoomPreviewView.svelte');
+  const roomBrowse = read('src/lib/features/home/components/lobby/RoomBrowseView.svelte');
+  const previewChat = read('src/lib/features/home/components/lobby/RoomPreviewChat.svelte');
+  const roomChat = read('src/lib/features/room/components/RoomChat.svelte');
+  const roomTopbar = read('src/lib/features/room/components/RoomTopbar.svelte');
+  const roomControls = read('src/lib/features/room/styles/controls.css');
+
+  assert.match(badgeTypes, /'default' \| 'muted' \| 'warning'/);
+  assert.match(badge, /\.ui-badge--default\s*\{[^}]*background: var\(--accent\)/);
+  assert.match(badge, /\.ui-badge--muted\s*\{[^}]*background: var\(--control-hover\)/);
+  assert.match(sidebar, /tone=\{friendNotificationsMuted \? 'muted' : 'default'\}/);
+  assert.match(voiceHome, /class="lv-card-unread" tone=\{roomNotificationsMuted \? 'muted' : 'default'\}/);
+  for (const preview of [roomPreview, roomBrowse]) {
+    assert.match(preview, /roomPresence\.unreadCountByRoomId\[previewRoomId\] \?\? room\.unreadCount \?\? 0/);
+    assert.match(preview, /class="room-chat-unread" data-muted=\{roomNotificationsMuted\}/);
+  }
+  assert.match(previewChat, /markRoomChatRead\(activeRoomId\)/);
+  assert.match(roomChat, /roomUi\.chatOpen[\s\S]*markRoomChatRead\(roomId\)/);
+  assert.match(roomTopbar, /roomNotificationsMuted = \$derived\(notificationPreferences\.mutedRoomIds\.includes\(roomClientState\.roomId\)\)/);
+  assert.match(roomTopbar, /data-muted=\{roomNotificationsMuted\}/);
+  assert.match(roomControls, /\.room-chat-unread\s*\{[^}]*background: var\(--accent\)/);
+  assert.match(roomControls, /\.room-chat-unread\[data-muted='true'\]\s*\{[^}]*background: var\(--control-hover\)/);
+});
+
+test('clearing room unread state cannot subscribe its caller to the same reactive map', () => {
+  const roomPresence = read('src/lib/features/home/model/room-presence.svelte.ts');
+
+  assert.match(roomPresence, /import \{ untrack \} from 'svelte'/);
+  assert.match(roomPresence, /const current = untrack\(\(\) => roomPresence\.unreadCountByRoomId\)/);
+  assert.match(roomPresence, /if \(current\[roomId\] === nextUnreadCount\) return/);
+});
+
+test('reading a room clears the canonical lobby badge and rejects stale unread summaries', () => {
+  const roomPresence = read('src/lib/features/home/model/room-presence.svelte.ts');
+  const voiceHome = read('src/lib/features/home/components/lobby/VoiceHome.svelte');
+  const previewChat = read('src/lib/features/home/components/lobby/RoomPreviewChat.svelte');
+  const roomChat = read('src/lib/features/room/components/RoomChat.svelte');
+
+  assert.match(roomPresence, /beginRoomChatReadSession/);
+  assert.match(roomPresence, /roomChatIsBeingRead\(summary\.roomId\) \? 0/);
+  assert.match(voiceHome, /roomPresence\.unreadCountByRoomId\[room\.roomId\] \?\? room\.unreadCount \?\? 0/);
+  assert.match(previewChat, /beginRoomChatReadSession\(activeRoomId\)/);
+  assert.match(roomChat, /beginRoomChatReadSession\(roomId\)/);
+});
+
+test('Web Push uses credentialed subscription endpoints and suppresses focused-window notifications', () => {
+  const api = read('src/lib/api/push.ts');
+  const worker = read('src/service-worker.ts');
+  const push = read('src/lib/features/home/model/push-notifications.svelte.ts');
+  const signOut = read('src/lib/features/home/model/sign-out.ts');
+  const home = read('src/lib/features/home/HomePage.svelte');
+  const roomRoute = read('src/routes/r/[roomId]/+page.svelte');
+
+  assert.match(api, /fetchJson<PushConfig>\('\/api\/push\/config'\)/);
+  assert.match(api, /postJsonAuth\('\/api\/push\/subscriptions', \{ subscription \}\)/);
+  assert.match(api, /del\('\/api\/push\/subscriptions', \{ endpoint \}\)/);
+  assert.match(push, /serviceWorker\.register\('\/service-worker\.js'/);
+  assert.match(push, /savePushSubscription\(subscription\.toJSON\(\)\)/);
+  assert.match(push, /detachPushSubscription/);
+  assert.match(push, /syncGeneration/);
+  assert.match(signOut, /detachPushSubscription\(\)\.catch/);
+  assert.match(signOut, /await logout\(\)/);
+  assert.match(home, /await signOut\(\)/);
+  assert.match(roomRoute, /await signOut\(\)/);
+  assert.match(worker, /client\.visibilityState === 'visible' && client\.focused/);
+  assert.match(worker, /showNotification/);
+  assert.match(worker, /notificationclick/);
+  assert.match(worker, /openWindow\(target\.href\)/);
+  assert.match(worker, /target\.origin !== self\.location\.origin/);
+  const lobby = read('src/lib/features/home/LobbyPage.svelte');
+  assert.match(lobby, /new URLSearchParams\(window\.location\.search\)\.get\('dm'\)/);
+  assert.match(lobby, /openDm\(initialDmId\)/);
+});
+
+test('DM and room mutes are server-backed and exposed from settings targets', () => {
+  const prefs = read('src/lib/shared/notifications/preferences.svelte.ts');
+  const dm = read('src/lib/features/home/components/lobby/DmView.svelte');
+  const roomMenu = read('src/lib/shared/components/room-menu/RoomMenuContent.svelte');
+  const roomMenuTrigger = read('src/lib/shared/components/room-menu/RoomMenu.svelte');
+  const previewChat = read('src/lib/features/home/components/lobby/RoomPreviewChat.svelte');
+  const roomChat = read('src/lib/features/room/components/RoomChat.svelte');
+  const roomTopbar = read('src/lib/features/room/components/RoomTopbar.svelte');
+  const settings = read('src/lib/features/home/components/SettingsModal.svelte');
+
+  assert.match(prefs, /setDmNotificationsMuted\(userId, muted\)/);
+  assert.match(prefs, /setRoomNotificationsMuted\(roomId, muted\)/);
+  assert.match(prefs, /notificationPreferences\.mutedRoomIds = \[\.\.\.preferences\.mutedRoomIds\]/);
+  assert.doesNotMatch(prefs, /MUTED_ROOM_NOTIFICATIONS_STORAGE_KEY|persistMutedRoomIds/);
+  assert.match(prefs, /setPrivateNotifications\(privateNotifications\)/);
+  assert.match(dm, /updatePeerNotificationsMuted\(peer\.id, !peerMuted\)/);
+  assert.match(dm, /data-notification-mute="dm"/);
+  assert.match(roomMenu, /const nextMuted = !roomMuted/);
+  assert.match(roomMenu, /showNotificationControls = true/);
+  assert.match(roomMenu, /if \(!showNotificationControls\) return/);
+  assert.match(roomMenu, /\{#if showNotificationControls\}[\s\S]*roomMuted \? 'Включить уведомления' : 'Выключить уведомления'[\s\S]*toggleRoomMute/);
+  assert.match(roomMenu, /updateRoomNotificationsMuted\(targetRoomId, nextMuted\)/);
+  assert.doesNotMatch(roomMenu, /Уведомления комнаты (?:выключены|включены)/);
+  assert.match(roomMenu, /Не удалось изменить уведомления/);
+  assert.match(roomMenu, /roomMuted \? 'Включить уведомления' : 'Выключить уведомления'/);
+  assert.match(roomMenuTrigger, /showNotificationControls = true/);
+  assert.match(roomMenuTrigger, /showNotificationControls && isRoomNotificationsMuted\(roomId\)/);
+  assert.match(roomMenuTrigger, /isRoomNotificationsMuted\(roomId\)/);
+  assert.match(roomMenuTrigger, /\{#if roomMuted\}[\s\S]*<BellOff/);
+  assert.match(roomMenuTrigger, /\{showNotificationControls\}/);
+  assert.match(roomTopbar, /showNotificationControls=\{Boolean\(roomClientState\.self\?\.accountUserId\)\}/);
+  assert.match(previewChat, /isRoomNotificationsMuted\(activeRoomId\)/);
+  assert.match(previewChat, /message\.peerId !== accountPeerId && !isRoomNotificationsMuted\(activeRoomId\)[\s\S]*playRoomChatMessageCue\(\)/);
+  assert.match(roomChat, /isRoomNotificationsMuted\(roomId\)/);
+  assert.match(roomChat, /message\.peerId !== peerId && !isRoomNotificationsMuted\(roomId\)[\s\S]*playRoomChatMessageCue\(\)/);
+  assert.match(settings, /updatePrivateNotifications\(!notificationPreferences\.privateNotifications\)/);
+  assert.match(settings, /id="notificationUsersTitle">Пользователи</);
+  assert.match(settings, /class="settings-notification-targets"/);
+  assert.match(settings, /shape="squircle" background="var\(--room-avatar-bg\)"/);
+  assert.match(settings, /Получать уведомления комнаты/);
+  assert.match(settings, /aria-checked=\{!peerMuted\}/);
+  assert.match(settings, /aria-checked=\{!roomMuted\}/);
+  assert.match(settings, /disabled=\{notificationSaving \|\| !browserNotificationsEnabled\}/);
+  assert.doesNotMatch(settings, /toggleDoNotDisturb/);
+});
+
+test('presence status is server-backed while DND suppresses notifications and cue playback', () => {
+  const prefs = read('src/lib/shared/notifications/preferences.svelte.ts');
+  const sidebar = read('src/lib/features/home/components/lobby/Sidebar.svelte');
+  const settings = read('src/lib/features/home/components/SettingsModal.svelte');
+  const cues = read('src/lib/features/room/client/media/cues.ts');
+  const avatar = read('src/lib/shared/ui/Avatar/Avatar.svelte');
+  const lobby = read('src/lib/features/home/LobbyPage.svelte');
+  const friends = read('src/lib/features/home/model/friends.svelte.ts');
+
+  assert.match(prefs, /presenceStatus: PresenceStatus/);
+  assert.match(prefs, /presenceStatusAutomatic: boolean/);
+  assert.match(prefs, /setPresenceStatus\(status\)/);
+  assert.match(prefs, /setPresenceStatus\(status, true\)/);
+  assert.match(sidebar, /updatePresenceStatus\(status\)/);
+  assert.match(sidebar, /status === selfPresence && !notificationPreferences\.presenceStatusAutomatic/);
+  assert.doesNotMatch(sidebar, /onToast\(`Статус:/);
+  assert.match(sidebar, /Не удалось изменить статус/);
+  assert.match(sidebar, /role="listbox"/);
+  assert.match(sidebar, /role="option"/);
+  assert.match(sidebar, /aria-selected=\{selected\}/);
+  assert.match(sidebar, /bind:open=\{statusPopoverOpen\}/);
+  assert.match(sidebar, /use:registerStatusOption=\{index\}/);
+  assert.match(sidebar, /tabindex=\{index === activeStatusIndex \? 0 : -1\}/);
+  assert.match(sidebar, /onkeydown=\{handleStatusTriggerKeydown\}/);
+  assert.match(sidebar, /handleStatusOptionKeydown\(event, option\.value, close\)/);
+  assert.match(sidebar, /event\.key === 'ArrowDown'/);
+  assert.match(sidebar, /event\.key === 'ArrowUp'/);
+  assert.match(sidebar, /event\.key === 'Home'/);
+  assert.match(sidebar, /event\.key === 'End'/);
+  assert.match(sidebar, /statusOptionRefs\[nextIndex\]\?\.focus\(\)/);
+  assert.match(sidebar, /statusTypeaheadTimer = setTimeout\([\s\S]*700\)/);
+  assert.match(sidebar, /option\.label\.toLocaleLowerCase\(\)\.startsWith\(statusTypeahead\)/);
+  assert.match(sidebar, /event\.key\.length === 1[\s\S]*matchStatusTypeahead\(event\.key\)/);
+  assert.match(sidebar, /В сети/);
+  assert.match(sidebar, /Отошёл/);
+  assert.match(sidebar, /friendsState\.automaticPresenceIdleAvailable/);
+  assert.match(sidebar, /Не беспокоить/);
+  assert.match(sidebar, /Не в сети/);
+  assert.match(sidebar, /Уведомления и звуковые сигналы будут отключены/);
+  assert.doesNotMatch(sidebar, /Включить «Не беспокоить»|Выключить «Не беспокоить»/);
+  assert.match(settings, /tab === 'notifications'/);
+  assert.doesNotMatch(settings, /При статусе «Не беспокоить» push-уведомления и звуковые сигналы не воспроизводятся/);
+  assert.match(settings, /Получать уведомления/);
+  assert.doesNotMatch(settings, /Режим «Не беспокоить» включён|Режим «Не беспокоить» выключен/);
+  assert.doesNotMatch(settings, /Настроить громкость сигналов/);
+  assert.match(cues, /isDoNotDisturbPlaybackSuppressed\(\) \|\| isAppPlaybackMuted\(\)/);
+  assert.match(avatar, /data-status=\{presence\}/);
+  assert.match(avatar, /dnd: 'var\(--coral\)'/);
+  assert.doesNotMatch(avatar, /ui-avatar-dot--dnd::after/);
+  assert.match(lobby, /initLobby\(user\.id, user\.doNotDisturb, user\.presenceStatus\)/);
+  assert.match(friends, /notification\.settings\.updated/);
+  assert.match(friends, /applyRealtimeNotificationPreferences\(selfId, event\.payload\.preferences\)/);
+  assert.match(prefs, /applyRealtimeNotificationPreferences[\s\S]*preferenceGeneration \+= 1;[\s\S]*notificationPreferences\.loadingForUserId = null/);
+});

@@ -3,7 +3,6 @@ import { bumpParticipantsRevision, participantsUi } from '../../participants-ui.
 import { reactiveParticipant, state } from '../core/state.svelte';
 import { getScreenProfile } from '../media/profiles';
 import {
-  applyAudioOutputDevice,
   applyRemoteParticipantAudioPreferences,
   playMediaElement,
   releaseRemoteAudioElement
@@ -23,8 +22,8 @@ function syncLiveKitScreenSubscriptionsSoon(peer: Participant): void {
   void import('../services/livekit-service').then((module) => module.syncLiveKitScreenSubscriptions(peer));
 }
 
-function closeScreenViewSoon(): void {
-  void import('../ui/screen-view').then((module) => module.closeScreenView());
+function disconnectScreenSoon(peerId: string): void {
+  void import('../ui/screen-view').then((module) => module.disconnectScreen(peerId));
 }
 
 function hideScreenStageSoon(): void {
@@ -49,7 +48,9 @@ function createParticipantModel(peerInfo: PeerInfo, isLocal: boolean): Participa
     accountUserId: peerInfo.accountUserId || '',
     analyser: null,
     audioElements: new Map(),
+    avatarAccent: peerInfo.avatarAccent || '',
     avatarColorKey: peerInfo.avatarColorKey || '',
+    avatarUrl: peerInfo.avatarUrl || '',
     deafened: Boolean(peerInfo.deafened),
     id: peerInfo.id,
     incomingVoiceActive: false,
@@ -94,8 +95,10 @@ export function clearRemoteScreenCue(peerId: string | undefined): void {
 }
 
 function getAttendedStreamOwnerIds(): Set<string> {
-  const ownerIds = new Set(state.screenSubscribedPeerIds);
-  if (state.viewedScreenPeerId) ownerIds.add(state.viewedScreenPeerId);
+  const ownerIds = new Set<string>();
+  if (state.localScreenStream && state.peerId) ownerIds.add(state.peerId);
+  const attendedPeerId = state.self?.viewedScreenPeerId || '';
+  if (attendedPeerId) ownerIds.add(attendedPeerId);
   return ownerIds;
 }
 
@@ -176,7 +179,9 @@ export function updateParticipant(peerInfo: PeerInfo): void {
   const hadAccountUserId = participant.accountUserId;
   const hasScreenUpdate = Object.hasOwn(peerInfo, 'screen');
   if (Object.hasOwn(peerInfo, 'accountUserId')) participant.accountUserId = peerInfo.accountUserId || '';
+  if (Object.hasOwn(peerInfo, 'avatarAccent')) participant.avatarAccent = peerInfo.avatarAccent || '';
   if (Object.hasOwn(peerInfo, 'avatarColorKey')) participant.avatarColorKey = peerInfo.avatarColorKey || participant.avatarColorKey;
+  if (Object.hasOwn(peerInfo, 'avatarUrl')) participant.avatarUrl = peerInfo.avatarUrl || '';
   if (Object.hasOwn(peerInfo, 'name')) participant.name = peerInfo.name || participant.name;
   if (Object.hasOwn(peerInfo, 'deafened')) participant.deafened = Boolean(peerInfo.deafened);
   if (Object.hasOwn(peerInfo, 'muted')) participant.muted = Boolean(peerInfo.muted);
@@ -197,11 +202,13 @@ export function updateParticipant(peerInfo: PeerInfo): void {
     applyRemoteScreenCue(participant, hadScreen, participant.screen);
   }
   if (!participant.screen) {
+    const attendedEndedScreen =
+      state.viewedScreenPeerId === participant.id
+      || state.screenSubscribedPeerIds.has(participant.id)
+      || state.self?.viewedScreenPeerId === participant.id;
     state.screenCollapsedPeerIds.delete(participant.id);
     state.screenSubscribedPeerIds.delete(participant.id);
-    if (state.viewedScreenPeerId === participant.id) {
-      closeScreenViewSoon();
-    }
+    if (attendedEndedScreen) disconnectScreenSoon(participant.id);
   }
   if (!participant.screen && state.sharedScreenPeerId === participant.id) {
     detachRemoteScreen(participant);
@@ -254,15 +261,18 @@ export function removePeer(peerId: string): void {
   if (!peer) return;
   closeParticipantContextMenu(peerId);
 
+  const attendedRemovedScreen =
+    state.viewedScreenPeerId === peerId
+    || state.screenSubscribedPeerIds.has(peerId)
+    || state.self?.viewedScreenPeerId === peerId;
+
   applyStreamViewerCue(peer, peer.viewedScreenPeerId, '');
   clearPeerJoinCue(peerId);
   clearRemoteScreenCue(peerId);
   removeAudioElements(peer);
   state.screenCollapsedPeerIds.delete(peerId);
   state.screenSubscribedPeerIds.delete(peerId);
-  if (state.viewedScreenPeerId === peer.id) {
-    closeScreenViewSoon();
-  }
+  if (attendedRemovedScreen) disconnectScreenSoon(peerId);
   if (state.sharedScreenPeerId === peer.id) {
     hideScreenStageSoon();
   }
@@ -418,11 +428,12 @@ function attachRemoteAudioTrack(
   audio.autoplay = true;
   audio.muted = true;
   (audio as HTMLAudioElement & { playsInline: boolean }).playsInline = true;
-  audio.srcObject = stream || new MediaStream([track]);
+  // The activator and WebAudio source must contain exactly this microphone
+  // track; a LiveKit stream can also carry screen audio.
+  audio.srcObject = new MediaStream([track]);
   peer.audioElements.set(track.id, audio);
   document.body.append(audio);
   applyRemoteParticipantAudioPreferences(peer);
-  applyAudioOutputDevice(audio).catch(() => {});
   playMediaElement(audio);
 
   track.addEventListener(
@@ -473,7 +484,7 @@ export function updatePeerStatus(peer: Participant): void {
   }
 
   if (peer.screen) {
-    setParticipantStatus(peer, peer.isLocal ? 'экран в эфире' : 'показывает экран');
+    setParticipantStatus(peer, '');
     return;
   }
 

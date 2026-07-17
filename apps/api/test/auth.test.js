@@ -131,6 +131,23 @@ test('auth flow: register, session, owned rooms, logout', async (t) => {
   assert.equal(me.status, 200);
   assert.equal(me.body.user.login, 'vovosh');
   assert.ok(me.body.user.avatarColorKey);
+  assert.equal(me.body.user.dnd, false);
+  assert.equal(me.body.user.doNotDisturb, false);
+  assert.equal(me.body.user.presenceStatus, 'online');
+
+  const dnd = await request(socketPath, {
+    method: 'POST',
+    pathname: '/api/notifications/settings',
+    body: { dnd: true },
+    cookie
+  });
+  assert.equal(dnd.status, 200);
+  assert.equal(dnd.body.preferences.doNotDisturb, true);
+  assert.equal(dnd.body.preferences.presenceStatus, 'dnd');
+  const meWithDnd = await request(socketPath, { pathname: '/api/auth/me', cookie });
+  assert.equal(meWithDnd.body.user.dnd, true);
+  assert.equal(meWithDnd.body.user.doNotDisturb, true);
+  assert.equal(meWithDnd.body.user.presenceStatus, 'dnd');
 
   // Without the cookie there is no session.
   const anon = await request(socketPath, { pathname: '/api/auth/me' });
@@ -150,31 +167,24 @@ test('auth flow: register, session, owned rooms, logout', async (t) => {
   assert.equal(anonStatic.status, 401);
 
   // A static room created while authenticated is owned and listed back,
-  // carrying the name and emoji chosen at creation.
+  // carrying the normalized name chosen at creation.
   const room = await request(socketPath, {
     method: 'POST',
     pathname: '/api/rooms',
-    body: { isStatic: true, name: '  квартирник  ', roomPresetKey: 'game-indigo' },
+    body: { isStatic: true, name: '  квартирник  ' },
     cookie
   });
   assert.equal(room.status, 201);
   assert.equal(room.body.owned, true);
   assert.equal(room.body.name, 'квартирник');
-  assert.equal(room.body.emoji, '🎮');
-  assert.equal(room.body.roomIconKey, 'gamepad');
-  assert.equal(room.body.roomColorKey, 'indigo');
-  assert.equal(room.body.roomPresetKey, 'game-indigo');
 
-  // Unknown emoji is rejected, name is still kept; visual keys fall back to the default preset.
+  // Legacy visual fields from older clients are ignored while the name is kept.
   const fancyRoom = await request(socketPath, {
     method: 'POST',
     pathname: '/api/rooms',
     body: { isStatic: true, name: 'дейли', emoji: '🦄' },
     cookie
   });
-  assert.equal(fancyRoom.body.emoji, '🎧');
-  assert.equal(fancyRoom.body.roomIconKey, 'headphones');
-  assert.equal(fancyRoom.body.roomColorKey, 'blue');
   assert.equal(fancyRoom.body.name, 'дейли');
 
   const thirdRoom = await request(socketPath, {
@@ -212,10 +222,6 @@ test('auth flow: register, session, owned rooms, logout', async (t) => {
   );
   const listed = rooms.body.rooms.find((entry) => entry.roomId === room.body.roomId);
   assert.equal(listed.name, 'квартирник');
-  assert.equal(listed.emoji, '🎮');
-  assert.equal(listed.roomIconKey, 'gamepad');
-  assert.equal(listed.roomColorKey, 'indigo');
-  assert.equal(listed.roomPresetKey, 'game-indigo');
   assert.equal(listed.relationship, 'owner');
 
   // Adding an already owned room by code is idempotent and the lobby keeps the
@@ -261,6 +267,39 @@ test('auth flow: register, session, owned rooms, logout', async (t) => {
   assert.deepEqual(secondRooms.body.rooms.map((entry) => [entry.roomId, entry.relationship]), [
     [room.body.roomId, 'bookmarked']
   ]);
+
+  // Room unread state is a durable server cursor: reading three messages must
+  // make the next message start a fresh count at one, not resume at four.
+  for (const text of ['один', 'два', 'три']) {
+    const sent = await request(socketPath, {
+      method: 'POST',
+      pathname: `/api/rooms/${room.body.roomId}/chat`,
+      body: { text },
+      cookie
+    });
+    assert.equal(sent.status, 201);
+  }
+  const unreadBeforeRead = await request(socketPath, { pathname: '/api/auth/rooms', cookie: secondCookie });
+  assert.equal(unreadBeforeRead.body.rooms[0].unreadCount, 3);
+
+  const markedRead = await request(socketPath, {
+    method: 'POST',
+    pathname: `/api/rooms/${room.body.roomId}/read`,
+    cookie: secondCookie
+  });
+  assert.equal(markedRead.status, 200, JSON.stringify(markedRead.body));
+  const unreadAfterRead = await request(socketPath, { pathname: '/api/auth/rooms', cookie: secondCookie });
+  assert.equal(unreadAfterRead.body.rooms[0].unreadCount, 0);
+
+  const nextMessage = await request(socketPath, {
+    method: 'POST',
+    pathname: `/api/rooms/${room.body.roomId}/chat`,
+    body: { text: 'четыре' },
+    cookie
+  });
+  assert.equal(nextMessage.status, 201);
+  const unreadAfterNextMessage = await request(socketPath, { pathname: '/api/auth/rooms', cookie: secondCookie });
+  assert.equal(unreadAfterNextMessage.body.rooms[0].unreadCount, 1);
 
   const tempBookmark = await request(socketPath, {
     method: 'POST',

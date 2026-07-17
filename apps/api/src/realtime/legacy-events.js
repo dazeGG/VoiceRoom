@@ -26,6 +26,9 @@ function legacyPeerMessageToWs(message, roomId) {
       return buildServerEnvelope('room.not_found', { roomId: message.roomId || roomId });
     case 'room-full':
       return buildServerEnvelope('room.full', { roomId, maxRoomPeers: message.maxRoomPeers });
+    case 'room.kicked':
+    case 'room.banned':
+      return buildServerEnvelope(message.type, { roomId: message.roomId || roomId, peerId: message.peerId });
     case 'chat-message':
       return buildServerEnvelope('room.chat.message', {
         roomId,

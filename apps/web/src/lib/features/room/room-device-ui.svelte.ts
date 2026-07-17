@@ -16,5 +16,6 @@ export const roomDeviceUi = $state({
   outputDisabled: false,
   devicePopoverOpen: false,
   outputPopoverOpen: false,
+  microphoneVolume: 100,
   micLevelDb: GATE_THRESHOLD_MIN_DB
 });

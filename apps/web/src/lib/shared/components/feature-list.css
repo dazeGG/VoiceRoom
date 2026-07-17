@@ -19,7 +19,7 @@
   flex: none;
   width: 20px;
   padding-top: 2px;
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: 12px;
   color: var(--feature-num-ink, #6f6a5c);
 }

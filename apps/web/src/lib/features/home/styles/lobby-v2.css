@@ -2,8 +2,8 @@
    sidebar with friends only, rooms as living cards on the main pane.
    Ported from the claude.ai/design "Лобби VoiceRoom - редизайн v2" prototype
    (lobby-redesign/lobby.css + voice.css) and adapted to the project's real
-   tokens (--font-body in the prototype → --font-sans here, this project has
-   no Aptos fallback chain). */
+   tokens (--font-body in the prototype -> --font-ui here, with shared
+   self-hosted font roles). */
 
 .lv {
   display: flex;
@@ -14,12 +14,11 @@
      height instead of the viewport. Do not add height here. */
   background: var(--paper);
   color: var(--ink);
-  font-family: var(--font-sans);
+  font-family: var(--font-ui);
   --lv-side-w: 312px;
   --lv-row-pad: 9px 10px;
   --lv-name: 13.5px;
   --lv-sub: 11.5px;
-  --lv-tile: 34px;
   --lv-gap: 16px;
 }
 
@@ -51,12 +50,31 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 16px 16px 10px;
+  min-height: 48px;
+  margin: 8px;
+  padding: 10px 8px;
   flex: none;
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s ease;
+}
+
+.lv-side-head:hover {
+  background: var(--control-hover);
+}
+
+.lv-side-head:focus-visible {
+  outline: 2px solid var(--focus-border, rgba(255, 255, 255, 0.72));
+  outline-offset: -2px;
 }
 
 .lv-brand-name {
-  font-weight: 800;
+  font-family: var(--font-display);
+  font-weight: 700;
   font-size: 14.5px;
   color: var(--warm-ink);
   flex: 1;
@@ -74,7 +92,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 14px 8px 6px;
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: 10.5px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -101,7 +119,7 @@
 }
 
 .lv-mini-btn:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--control-hover);
   color: var(--warm-ink);
 }
 
@@ -128,15 +146,16 @@
   color: inherit;
   border-radius: 12px;
   padding: var(--lv-row-pad);
-  font-family: var(--font-sans);
+  font-family: var(--font-ui);
   transition: background 0.13s ease;
 }
 
 .lv-row:hover {
-  background: rgba(255, 255, 255, 0.055);
+  background: var(--control-hover);
 }
 
-.lv-row.is-active {
+.lv-row.is-active,
+.lv-row.is-context {
   background: color-mix(in oklch, var(--accent), transparent 88%);
 }
 
@@ -149,6 +168,24 @@
   white-space: nowrap;
 }
 
+.lv-notification-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.lv-notification-title .lv-row-name {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.lv-notification-muted {
+  display: inline-flex;
+  flex: none;
+  color: var(--warm-faint);
+}
+
 .lv-row-sub {
   font-size: var(--lv-sub);
   color: var(--warm-faint);
@@ -159,17 +196,6 @@
 
 .lv-row-sub--muted {
   opacity: 0.85;
-}
-
-.lv-tile {
-  flex: none;
-  width: var(--lv-tile);
-  height: var(--lv-tile);
-  border-radius: 31%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: calc(var(--lv-tile) * 0.5);
 }
 
 .lv-profile {
@@ -201,13 +227,14 @@
 }
 
 .lv-card {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 14px;
   padding: 16px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: var(--radius-lg);
-  background: rgba(255, 255, 255, 0.035);
+  background: var(--panel);
   cursor: pointer;
   text-align: left;
   font: inherit;
@@ -215,13 +242,35 @@
   transition: background 0.15s ease, border-color 0.15s ease;
 }
 
+.lv-card-head {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-width: 0;
+}
+
+.lv-card-unread {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+}
+
+.lv-card.has-unread .lv-card-head {
+  padding-right: 40px;
+}
+
 .lv-card:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--panel-strong);
   border-color: rgba(255, 255, 255, 0.14);
 }
 
 .lv-card.is-live {
   border-color: color-mix(in oklch, var(--green), transparent 68%);
+}
+
+.lv-card.is-context {
+  background: var(--panel-strong);
+  border-color: color-mix(in oklch, var(--accent), transparent 58%);
 }
 
 .lv-card-foot {
@@ -237,7 +286,7 @@
   align-items: stretch;
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: var(--interactive-radius, var(--radius-md));
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--warm-900);
   overflow: hidden;
   height: var(--interactive-lg, 52px);
 }
@@ -276,7 +325,7 @@
   border-radius: 999px;
   color: var(--warm-muted);
   cursor: help;
-  font-family: var(--font-serif);
+  font-family: var(--font-ui);
   font-size: 12px;
   font-style: italic;
   line-height: 1;
@@ -297,9 +346,9 @@
 .lv-join-btn {
   border: none;
   border-left: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--control);
   color: var(--warm-ink);
-  font-family: var(--font-sans);
+  font-family: var(--font-ui);
   font-size: 15px;
   font-weight: 760;
   line-height: 1;
@@ -310,12 +359,12 @@
 }
 
 .lv-join-btn:hover {
-  background: rgba(255, 255, 255, 0.12);
+  background: var(--control-hover);
 }
 
 /* ---- shared "lr" text/utility classes ---- */
 .lr-eyebrow {
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: 11px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -330,10 +379,17 @@
   color: var(--warm-ink);
 }
 
+.lr-empty-state {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 4px;
+}
+
 .lr-empty {
   color: var(--warm-faint);
   font-size: 13.5px;
-  margin: 4px 0 0;
+  margin: 0;
 }
 
 .lr-icon-btn {
@@ -351,7 +407,7 @@
 }
 
 .lr-icon-btn:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--control-hover);
   color: var(--warm-ink);
 }
 
@@ -359,7 +415,7 @@
   border: none;
   background: transparent;
   color: var(--warm-muted);
-  font-family: var(--font-sans);
+  font-family: var(--font-ui);
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
@@ -435,7 +491,7 @@
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: var(--radius-md);
   padding: 9px 12px;
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--warm-900);
   color: var(--warm-muted);
 }
 
@@ -445,7 +501,7 @@
   background: transparent;
   outline: none;
   color: var(--warm-ink);
-  font-family: var(--font-sans);
+  font-family: var(--font-ui);
   font-size: 13.5px;
 }
 
@@ -471,7 +527,7 @@
   padding: 12px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: var(--radius-lg);
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--panel);
   margin-bottom: 10px;
 }
 
@@ -526,12 +582,12 @@
   justify-content: center;
   cursor: pointer;
   border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--control);
   color: var(--warm-ink);
 }
 
 .lr-req-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--control-hover);
 }
 
 .lr-req-btn.accept {
@@ -565,14 +621,15 @@
   flex: 1;
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: var(--radius-md);
-  padding: 12px 14px;
-  background: rgba(255, 255, 255, 0.04);
+  height: var(--interactive-lg, 52px);
+  padding: 0 14px;
+  background: var(--warm-900);
 }
 
 .lr-add-field .at {
   color: var(--warm-faint);
   font-family: var(--font-mono);
-  font-weight: 700;
+  font-weight: 500;
 }
 
 .lr-add-field input {
@@ -583,6 +640,8 @@
   color: var(--warm-ink);
   font-family: var(--font-mono);
   font-size: 14px;
+  height: 100%;
+  padding: 0;
 }
 
 .lr-add-field:focus-within {
@@ -613,7 +672,7 @@
   background: transparent;
   cursor: pointer;
   color: var(--accent);
-  font-family: var(--font-sans);
+  font-family: var(--font-ui);
   font-size: 12px;
   font-weight: 600;
   padding: 2px 4px;
@@ -646,9 +705,9 @@
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: var(--radius-md);
   padding: 13px 15px;
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--warm-900);
   color: var(--warm-ink);
-  font-family: var(--font-sans);
+  font-family: var(--font-ui);
   font-size: 15px;
   outline: none;
   transition: border-color 0.15s ease;
@@ -668,7 +727,7 @@
   padding: 4px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: var(--radius-md);
-  background: var(--warm-950, rgba(0, 0, 0, 0.3));
+  background: var(--warm-950);
 }
 
 .lr-dialog-tab {
@@ -678,7 +737,7 @@
   padding: 9px 0;
   background: transparent;
   color: var(--warm-muted);
-  font-family: var(--font-sans);
+  font-family: var(--font-ui);
   font-size: 13.5px;
   font-weight: 600;
   cursor: pointer;
@@ -689,34 +748,6 @@
   background: var(--accent);
   color: var(--accent-ink);
   font-weight: 700;
-}
-
-.lr-emoji-grid {
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 8px;
-  margin-top: 2px;
-}
-
-.lr-emoji-btn {
-  aspect-ratio: 1;
-  border-radius: var(--radius-md);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.04);
-  font-size: 19px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-}
-
-.lr-emoji-btn:hover {
-  background: rgba(255, 255, 255, 0.09);
-}
-
-.lr-emoji-btn[data-active='true'] {
-  border-color: var(--accent);
-  background: color-mix(in oklch, var(--accent), transparent 84%);
 }
 
 .lr-dialog-note {

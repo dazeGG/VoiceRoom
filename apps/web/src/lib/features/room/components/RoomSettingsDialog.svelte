@@ -1,19 +1,26 @@
 <script lang="ts">
-  import { X } from '@lucide/svelte';
+  import { Pencil, X } from '@lucide/svelte';
+  import '$lib/features/home/styles/settings.css';
   import { iconSm } from '$lib/shared/ui/icons';
-  import { ROOM_PRESETS } from '$lib/visual/tokens';
-  import { deleteRoom, updateRoom } from '$lib/api/rooms';
+  import { Avatar, AvatarCropDialog } from '$lib/shared/ui';
+  import { deleteRoom, deleteRoomAvatar, updateRoom, uploadRoomAvatar } from '$lib/api/rooms';
   import { state as roomClientState } from '../client/core/state.svelte';
   import { applyRoomUpdated } from '../client/room/lifecycle';
   import { showToast } from '../client/ui/toast';
   import { roomSettingsUi, closeRoomSettings } from '../room-settings.svelte';
 
   let name = $state('');
-  let roomPresetKey = $state<string>(ROOM_PRESETS[0].key);
   let error = $state('');
   let saving = $state(false);
   let confirmingDelete = $state(false);
   let deleting = $state(false);
+  let avatarInput = $state<HTMLInputElement>();
+  let avatarFile = $state<File | null>(null);
+  let cropOpen = $state(false);
+  let avatarSaving = $state(false);
+  let pendingAvatar = $state<Blob | null>(null);
+  let avatarPreviewUrl = $state('');
+  let removeAvatarPending = $state(false);
 
   // Reset the form from the live room state each time the dialog opens —
   // roomClientState (the vanilla room client's store, aliased to avoid
@@ -23,9 +30,12 @@
   $effect(() => {
     if (roomSettingsUi.open && !wasOpen) {
       name = roomClientState.roomName;
-      roomPresetKey = roomClientState.roomPresetKey || ROOM_PRESETS[0].key;
       error = '';
       confirmingDelete = false;
+      if (avatarPreviewUrl) URL.revokeObjectURL(avatarPreviewUrl);
+      avatarPreviewUrl = '';
+      pendingAvatar = null;
+      removeAvatarPending = false;
     }
     wasOpen = roomSettingsUi.open;
   });
@@ -42,8 +52,11 @@
     saving = true;
     error = '';
     try {
-      const room = await updateRoom(roomClientState.roomId, { name: trimmed, roomPresetKey });
+      let room = await updateRoom(roomClientState.roomId, { name: trimmed });
+      if (pendingAvatar) room = await uploadRoomAvatar(roomClientState.roomId, pendingAvatar);
+      else if (removeAvatarPending) room = await deleteRoomAvatar(roomClientState.roomId);
       applyRoomUpdated(room);
+      window.dispatchEvent(new CustomEvent('voice-room:rooms-changed', { detail: { roomId: room.roomId } }));
       closeRoomSettings();
       showToast('Комната обновлена');
     } catch (err) {
@@ -67,8 +80,41 @@
     }
   }
 
+  function onAvatarFile(event: Event): void {
+    const input = event.currentTarget as HTMLInputElement;
+    const selected = input.files?.[0] ?? null;
+    input.value = '';
+    if (!selected) return;
+    if (!selected.type.startsWith('image/')) {
+      error = 'Выберите изображение JPEG, PNG или WebP';
+      return;
+    }
+    if (selected.size > 5 * 1024 * 1024) {
+      error = 'Изображение должно быть меньше 5 МБ';
+      return;
+    }
+    avatarFile = selected;
+    cropOpen = true;
+  }
+
+  async function saveAvatar(blob: Blob): Promise<void> {
+    if (avatarPreviewUrl) URL.revokeObjectURL(avatarPreviewUrl);
+    pendingAvatar = blob;
+    avatarPreviewUrl = URL.createObjectURL(blob);
+    removeAvatarPending = false;
+    cropOpen = false;
+    avatarFile = null;
+  }
+
+  function removeAvatar(): void {
+    if (avatarPreviewUrl) URL.revokeObjectURL(avatarPreviewUrl);
+    avatarPreviewUrl = '';
+    pendingAvatar = null;
+    removeAvatarPending = true;
+  }
+
   function onClose(): void {
-    if (saving || deleting) return;
+    if (saving || deleting || avatarSaving || cropOpen) return;
     closeRoomSettings();
   }
 
@@ -77,52 +123,67 @@
   }
 
   function onKeydown(event: KeyboardEvent): void {
-    if (roomSettingsUi.open && event.key === 'Escape') onClose();
+    if (roomSettingsUi.open && !cropOpen && event.key === 'Escape') onClose();
   }
 </script>
 
 <svelte:window onkeydown={onKeydown} />
 
 {#if roomSettingsUi.open}
-  <div class="dialog-overlay" role="presentation" onclick={onOverlayClick}>
-    <div class="dialog-card" role="dialog" aria-modal="true" aria-labelledby="roomSettingsTitle">
-      <div class="dialog-head">
-        <span class="dialog-title" id="roomSettingsTitle">Настройки комнаты</span>
-        <button class="dialog-close" type="button" aria-label="Закрыть" onclick={onClose}>
+  <div class="settings-overlay" role="presentation" onclick={onOverlayClick}>
+    <div class="settings-modal room-settings-modal" role="dialog" aria-modal="true" aria-labelledby="roomSettingsTitle">
+      <div class="settings-head">
+        <span class="settings-title" id="roomSettingsTitle">Настройки комнаты</span>
+        <button class="settings-close" type="button" aria-label="Закрыть" onclick={onClose}>
           <X {...iconSm} aria-hidden="true" />
         </button>
       </div>
 
-      <form class="dialog-body" onsubmit={save}>
+      <form class="settings-content room-settings-content" onsubmit={save}>
         {#if error}
           <p class="dialog-error" role="alert">{error}</p>
         {/if}
 
-        <div class="dialog-field">
-          <div class="dialog-label">Название</div>
-          <input class="dialog-input" maxlength="60" placeholder="Название комнаты" bind:value={name} />
-        </div>
-
-        <div class="dialog-field">
-          <div class="dialog-label">Иконка</div>
-          <div class="dialog-emoji-row" role="radiogroup" aria-label="Иконка комнаты">
-            {#each ROOM_PRESETS as preset (preset.key)}
+        <div class="room-profile-head">
+        <div class="room-avatar-field">
+          <div class="room-avatar-control">
+            <input bind:this={avatarInput} class="room-avatar-input" type="file" accept="image/jpeg,image/png,image/webp" onchange={onAvatarFile} />
+            <button
+              class="room-avatar-edit"
+              type="button"
+              onclick={() => avatarInput?.click()}
+              disabled={avatarSaving}
+              aria-label={roomClientState.roomAvatarUrl ? 'Изменить аватар комнаты' : 'Загрузить аватар комнаты'}
+              title={roomClientState.roomAvatarUrl ? 'Изменить аватар комнаты' : 'Загрузить аватар комнаты'}
+            >
+              <Avatar name={name || roomClientState.roomId} src={avatarPreviewUrl || (removeAvatarPending ? null : roomClientState.roomAvatarUrl)} shape="squircle" background="var(--room-avatar-bg)" size={58} />
+              <span class="room-avatar-overlay" aria-hidden="true">
+                <Pencil {...iconSm} />
+              </span>
+            </button>
+            {#if avatarPreviewUrl || (roomClientState.roomAvatarUrl && !removeAvatarPending)}
               <button
+                class="room-avatar-remove"
                 type="button"
-                class="dialog-emoji"
-                role="radio"
-                aria-checked={roomPresetKey === preset.key}
-                data-active={roomPresetKey === preset.key}
-                style={`background:${preset.background}`}
-                onclick={() => (roomPresetKey = preset.key)}
-              >{preset.emoji}</button>
-            {/each}
+                onclick={removeAvatar}
+                disabled={avatarSaving}
+                aria-label="Удалить аватар комнаты"
+                title="Удалить аватар комнаты"
+              >
+                <X {...iconSm} aria-hidden="true" />
+              </button>
+            {/if}
           </div>
         </div>
+        <div class="room-name-field">
+          <span class="settings-field-label">Название</span>
+          <input class="settings-input" maxlength="60" placeholder="Название комнаты" bind:value={name} />
+        </div>
+        </div>
 
-        <div class="dialog-actions">
-          <button class="dialog-cancel" type="button" onclick={onClose}>Отмена</button>
-          <button class="dialog-submit" type="submit" disabled={saving}>
+        <div class="settings-actions">
+          <button class="settings-cancel" type="button" onclick={onClose}>Отмена</button>
+          <button class="settings-save" type="submit" disabled={saving}>
             {#if saving}
               <span class="home-spinner" aria-hidden="true"></span>
             {/if}
@@ -134,7 +195,7 @@
           {#if confirmingDelete}
             <p class="dialog-danger-note">Комната будет удалена для всех участников. Это действие нельзя отменить.</p>
             <div class="dialog-danger-actions">
-              <button class="dialog-cancel" type="button" onclick={() => (confirmingDelete = false)} disabled={deleting}>Отмена</button>
+              <button class="settings-cancel" type="button" onclick={() => (confirmingDelete = false)} disabled={deleting}>Отмена</button>
               <button class="dialog-danger-confirm" type="button" onclick={confirmDelete} disabled={deleting}>
                 {#if deleting}
                   <span class="home-spinner" aria-hidden="true"></span>
@@ -153,7 +214,117 @@
   </div>
 {/if}
 
+<AvatarCropDialog
+  open={cropOpen}
+  file={avatarFile}
+  name={name || roomClientState.roomName || roomClientState.roomId}
+  shape="squircle"
+  kind="room"
+  title="Аватар комнаты"
+  onClose={() => {
+    if (!avatarSaving) {
+      cropOpen = false;
+      avatarFile = null;
+    }
+  }}
+  onSave={saveAvatar}
+/>
+
 <style>
+  .room-settings-modal { width: 620px; }
+  .room-settings-content { display: flex; flex-direction: column; gap: 28px; padding: 28px 30px 30px; }
+  .room-profile-head { display: flex; align-items: center; gap: 16px; }
+  .room-name-field { flex: 1; min-width: 0; }
+  .room-avatar-field { flex: none; }
+
+  .room-avatar-control {
+    position: relative;
+    width: 58px;
+    height: 58px;
+  }
+
+  .room-avatar-edit {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 58px;
+    height: 58px;
+    padding: 0;
+    overflow: hidden;
+    border: 0;
+    border-radius: 31%;
+    background: transparent;
+    color: #fff;
+    cursor: pointer;
+  }
+
+  .room-avatar-input {
+    display: none;
+  }
+
+  .room-avatar-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: inherit;
+    background: color-mix(in srgb, var(--warm-950) 58%, transparent);
+    opacity: 0;
+    transition: opacity 0.16s ease;
+    pointer-events: none;
+  }
+
+  .room-avatar-edit:not(:disabled):hover .room-avatar-overlay,
+  .room-avatar-edit:not(:disabled):focus-visible .room-avatar-overlay {
+    opacity: 1;
+  }
+
+  .room-avatar-edit:focus-visible {
+    outline: 2px solid var(--coral);
+    outline-offset: 3px;
+  }
+
+  .room-avatar-remove {
+    position: absolute;
+    z-index: 1;
+    top: -5px;
+    right: -5px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: 2px solid var(--paper-deep);
+    border-radius: 50%;
+    background: var(--coral);
+    color: #fff;
+    cursor: pointer;
+    box-shadow: 0 2px 7px rgba(0, 0, 0, 0.34);
+    opacity: 0;
+    transition: opacity 0.16s ease, background 0.16s ease;
+  }
+
+  .room-avatar-control:hover .room-avatar-remove,
+  .room-avatar-control:focus-within .room-avatar-remove { opacity: 1; }
+
+  .room-avatar-remove:not(:disabled):hover {
+    background: color-mix(in oklch, var(--coral), var(--warm-950) 16%);
+  }
+
+  .room-avatar-remove:focus-visible {
+    outline: 2px solid #fff;
+    outline-offset: 2px;
+  }
+
+  .room-avatar-edit:disabled,
+  .room-avatar-remove:disabled {
+    cursor: default;
+    opacity: 0.6;
+  }
+
   .dialog-danger-zone {
     border-top: 1px solid rgba(255, 255, 255, 0.08);
     margin-top: 4px;
@@ -173,7 +344,7 @@
   }
 
   .dialog-danger-trigger:hover {
-    background: rgba(239, 68, 68, 0.1);
+    background: color-mix(in oklch, var(--coral) 10%, transparent);
     border-color: rgba(239, 68, 68, 0.6);
   }
 
@@ -192,7 +363,7 @@
 
   .dialog-danger-confirm {
     align-items: center;
-    background: #ef4444;
+    background: var(--coral);
     border: none;
     border-radius: 10px;
     color: #fff;
@@ -206,7 +377,7 @@
   }
 
   .dialog-danger-confirm:hover {
-    background: #dc2626;
+    background: color-mix(in oklch, var(--coral), var(--warm-950) 20%);
   }
 
   .dialog-danger-confirm:disabled,

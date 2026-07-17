@@ -20,7 +20,7 @@ export async function postState(): Promise<void> {
       screenAudio: hasLocalScreenAudio(),
       screenProfileId: state.localScreenStream ? state.localScreenProfileId : '',
       screenStreamId: state.localScreenStream?.id || '',
-      viewedScreenPeerId: state.viewedScreenPeerId || ''
+      viewedScreenPeerId: state.self?.viewedScreenPeerId || ''
     }
   });
 }

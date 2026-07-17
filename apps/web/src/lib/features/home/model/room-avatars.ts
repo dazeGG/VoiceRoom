@@ -5,7 +5,9 @@ import { getAvatarPresentation } from '$lib/features/room/client/ui/avatar-prese
 export function roomPeerAvatarItems(peers: RoomPeer[]): AvatarStackItem[] {
   return peers.map((peer) => {
     const avatar = getAvatarPresentation({
+      avatarAccent: peer.avatarAccent || undefined,
       avatarColorKey: peer.avatarColorKey,
+      avatarUrl: peer.avatarUrl || undefined,
       isLocal: false,
       name: peer.name?.trim() || 'Гость'
     });
@@ -15,7 +17,8 @@ export function roomPeerAvatarItems(peers: RoomPeer[]): AvatarStackItem[] {
       id: peer.id,
       initials: avatar.initials,
       label: avatar.label,
-      shadow: avatar.shadow
+      shadow: avatar.shadow,
+      src: avatar.src
     };
   });
 }

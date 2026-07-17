@@ -4,35 +4,59 @@
 
   let {
     name,
+    src = null,
     colorKey = '',
     size = 36,
+    shape = 'circle',
+    background = null,
     online = null,
     showDot = false,
+    dnd = false,
+    afk = false,
     ring = 'var(--paper-deep)',
     class: className = ''
   }: AvatarProps = $props();
 
   const fontSize = $derived(Math.round(size * 0.39));
   const dotSize = $derived(Math.max(10, Math.round(size * 0.3)));
-  const dotColor = $derived(online ? 'var(--green)' : 'var(--warm-faint)');
+  const presence = $derived(dnd ? 'dnd' : afk ? 'afk' : online ? 'online' : 'offline');
+  const presenceColors = {
+    dnd: 'var(--coral)',
+    afk: 'var(--amber)',
+    online: 'var(--green)',
+    offline: 'var(--warm-faint)'
+  } as const;
+  const dotColor = $derived(presenceColors[presence]);
   const initial = $derived.by(() => {
     const trimmed = name.trim();
     return trimmed ? trimmed.charAt(0).toUpperCase() : '?';
+  });
+  let imageFailed = $state(false);
+
+  $effect(() => {
+    src;
+    imageFailed = false;
   });
 </script>
 
 <span
   class="ui-avatar {className}"
+  class:ui-avatar--squircle={shape === 'squircle'}
   style:width={`${size}px`}
   style:height={`${size}px`}
   style:font-size={`${fontSize}px`}
-  style:background={getAvatarColor(colorKey).background}
+  style:background={background || getAvatarColor(colorKey).background}
   aria-hidden="true"
 >
-  {initial}
+  {#if src && !imageFailed}
+    <img src={src} alt="" onerror={() => (imageFailed = true)} />
+  {:else}
+    {initial}
+  {/if}
   {#if showDot}
     <span
       class="ui-avatar-dot"
+      data-status={presence}
       style:width={`${dotSize}px`}
       style:height={`${dotSize}px`}
       style:background={dotColor}
@@ -50,9 +74,20 @@
     justify-content: center;
     border-radius: 50%;
     color: #fff;
-    font-family: var(--font-sans);
+    font-family: var(--font-ui);
     font-weight: 800;
     letter-spacing: -0.02em;
+  }
+
+  .ui-avatar--squircle {
+    border-radius: 31%;
+  }
+
+  .ui-avatar > img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: inherit;
   }
 
   .ui-avatar-dot {

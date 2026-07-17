@@ -4,7 +4,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { createRoomStore, mapMessage, mapRoom, normalizeRoomVisuals } = require('../src/lib/room-store');
+const { createRoomStore, mapMessage, mapRoom } = require('../src/lib/room-store');
 
 function createFakePool(handler) {
   const calls = [];
@@ -37,6 +37,7 @@ function createFakePool(handler) {
 
 test('mapRoom maps PostgreSQL row shape to API room shape with ephemeral peers map', () => {
   const room = mapRoom({
+    avatar_key: 'room_abcdefghij_deadbeef.webp',
     id: 'abc123',
     creator_ip: '127.0.0.1',
     is_static: true,
@@ -46,36 +47,15 @@ test('mapRoom maps PostgreSQL row shape to API room shape with ephemeral peers m
   });
 
   assert.equal(room.id, 'abc123');
+  assert.equal(room.avatarKey, 'room_abcdefghij_deadbeef.webp');
   assert.equal(room.creatorIp, '127.0.0.1');
   assert.equal(room.isStatic, true);
   assert.equal(room.createdAt, 1000);
   assert.equal(room.updatedAt, 2000);
   assert.equal(room.emptySince, null);
   assert.ok(room.peers instanceof Map);
-  assert.equal(room.roomIconKey, 'headphones');
-  assert.equal(room.roomColorKey, 'blue');
-  assert.equal(room.roomPresetKey, 'voice-blue');
-});
-
-test('normalizeRoomVisuals maps curated presets and rejects invalid legacy emoji', () => {
-  assert.deepEqual(normalizeRoomVisuals({ roomPresetKey: 'game-indigo' }), {
-    emoji: '🎮',
-    roomColorKey: 'indigo',
-    roomIconKey: 'gamepad',
-    roomPresetKey: 'game-indigo'
-  });
-  assert.deepEqual(normalizeRoomVisuals({ emoji: '🦄' }), {
-    emoji: '🎧',
-    roomColorKey: 'blue',
-    roomIconKey: 'headphones',
-    roomPresetKey: 'voice-blue'
-  });
-  assert.deepEqual(normalizeRoomVisuals({ emoji: '🎧', roomIconKey: 'coffee', roomColorKey: 'green' }), {
-    emoji: '☕',
-    roomColorKey: 'green',
-    roomIconKey: 'coffee',
-    roomPresetKey: ''
-  });
+  assert.equal(room.name, '');
+  assert.equal('emoji' in room, false);
 });
 
 test('createRoom inserts durable room row with parameterized SQL', async () => {
@@ -93,8 +73,59 @@ test('createRoom inserts durable room row with parameterized SQL', async () => {
   assert.equal(room.id, 'room1');
   assert.match(pool.calls[0].text, /INSERT INTO rooms/);
   assert.deepEqual(pool.calls[0].values.slice(0, 3), ['room1', 'ip', true]);
-  assert.match(pool.calls[0].text, /room_icon_key, room_color_key/);
-  assert.deepEqual(pool.calls[0].values.slice(6, 8), ['headphones', 'blue']);
+  assert.doesNotMatch(pool.calls[0].text, /room_icon_key|room_color_key|emoji/);
+});
+
+test('updateRoomAvatar only updates active static rooms', async () => {
+  const pool = createFakePool((text, values) => {
+    assert.match(text, /is_static = true/);
+    assert.match(text, /deleted_at IS NULL/);
+    assert.equal(values[0], 'abcdefghij');
+    assert.equal(values[1], 'room_abcdefghij_deadbeef.webp');
+    return {
+      rows: [{
+        id: values[0], avatar_key: values[1], creator_ip: '', is_static: true,
+        created_at: new Date(1000), updated_at: values[2], empty_since: null
+      }],
+      rowCount: 1
+    };
+  });
+  const room = await createRoomStore({ pool }).updateRoomAvatar(
+    'abcdefghij',
+    'room_abcdefghij_deadbeef.webp',
+    2000
+  );
+  assert.equal(room.avatarKey, 'room_abcdefghij_deadbeef.webp');
+});
+
+test('swapRoomAvatar locks the room row and returns the exact key it replaced', async () => {
+  const oldKey = 'room_abcdefghij_0123abcd.webp';
+  const nextKey = 'room_abcdefghij_deadbeef.webp';
+  const pool = createFakePool((text, values) => {
+    if (/SELECT avatar_key/.test(text)) {
+      assert.match(text, /deleted_at IS NULL/);
+      assert.match(text, /is_static = true/);
+      assert.match(text, /FOR UPDATE/);
+      return { rows: [{ avatar_key: oldKey }], rowCount: 1 };
+    }
+    if (/UPDATE rooms SET avatar_key/.test(text)) {
+      return {
+        rows: [{
+          id: values[0], avatar_key: values[1], creator_ip: '', is_static: true,
+          created_at: new Date(1000), updated_at: values[2], empty_since: null
+        }],
+        rowCount: 1
+      };
+    }
+    throw new Error(`Unexpected query: ${text}`);
+  });
+
+  const result = await createRoomStore({ pool }).swapRoomAvatar('abcdefghij', nextKey, 2000);
+
+  assert.equal(result.previousAvatarKey, oldKey);
+  assert.equal(result.room.avatarKey, nextKey);
+  assert.ok(pool.calls.some(({ text }) => text === 'BEGIN'));
+  assert.ok(pool.calls.some(({ text }) => text === 'COMMIT'));
 });
 
 test('appendMessage uses a transaction, verifies room existence, inserts row, and enforces cap', async () => {
@@ -118,12 +149,101 @@ test('appendMessage uses a transaction, verifies room existence, inserts row, an
   }, 1000);
 
   assert.deepEqual(message, {
-    id: 'msg1', avatarColorKey: message.avatarColorKey, roomId: 'room1', peerId: 'peer1', name: 'Ada', text: 'hello', createdAt: 1000, expiresAt: 2000
+    id: 'msg1', avatarAccent: null, avatarColorKey: message.avatarColorKey, avatarKey: null,
+    roomId: 'room1', peerId: 'peer1', name: 'Ada', text: 'hello', createdAt: 1000, expiresAt: 2000,
+    authorUserId: null, editedAt: null
   });
   assert.ok(pool.calls.some((call) => call.text === 'BEGIN'));
   assert.ok(pool.calls.some((call) => /INSERT INTO room_messages/.test(call.text)));
   assert.ok(pool.calls.some((call) => /row_number\(\) OVER/.test(call.text)));
   assert.ok(pool.calls.some((call) => call.text === 'COMMIT'));
+});
+
+test('editMessage updates active room message text and maps its edit timestamp', async () => {
+  const pool = createFakePool((text, values) => {
+    assert.match(text, /UPDATE room_messages/);
+    assert.match(text, /edited_at = current_timestamp/);
+    assert.match(text, /deleted_at IS NULL/);
+    assert.deepEqual(values, ['room1', 'msg1', 'updated']);
+    return {
+      rows: [{
+        id: 'msg1', room_id: 'room1', peer_id: 'peer1', name: 'Ada', text: 'updated',
+        created_at: new Date(1000), edited_at: new Date(3000), expires_at: new Date(5000)
+      }],
+      rowCount: 1
+    };
+  });
+
+  const message = await createRoomStore({ pool }).editMessage('room1', 'msg1', 'updated');
+  assert.equal(message.text, 'updated');
+  assert.equal(message.editedAt, 3000);
+});
+
+test('room notification recipients ignore legacy server-side room mute rows', async () => {
+  const pool = createFakePool((text, values) => {
+    assert.match(text, /FROM room_memberships/);
+    assert.match(text, /FROM room_bookmarks/);
+    assert.doesNotMatch(text, /notification_room_mutes/);
+    assert.deepEqual(values, ['room1']);
+    return {
+      rows: [{ user_id: 'owner-user' }, { user_id: 'bookmark-user' }],
+      rowCount: 2
+    };
+  });
+
+  const recipients = await createRoomStore({ pool }).listNotificationRecipientUserIds('room1');
+  assert.deepEqual(recipients, ['owner-user', 'bookmark-user']);
+});
+
+test('getRoomUnreadCount counts active messages after the user read cursor and excludes own posts', async () => {
+  const pool = createFakePool((text, values) => {
+    assert.match(text, /LEFT JOIN room_chat_reads/);
+    assert.match(text, /m\.created_at > COALESCE\(rcr\.last_read_at/);
+    assert.match(text, /m\.author_user_id IS DISTINCT FROM \$2/);
+    assert.deepEqual(values.slice(0, 2), ['room1', 'user1']);
+    return { rows: [{ unread_count: 4 }], rowCount: 1 };
+  });
+
+  const count = await createRoomStore({ pool }).getRoomUnreadCount('room1', 'user1', 5000);
+  assert.equal(count, 4);
+  assert.equal(pool.calls[0].values[2].getTime(), 5000);
+});
+
+test('markRoomChatRead upserts a monotonic cursor only for visible rooms', async () => {
+  const pool = createFakePool((text, values) => {
+    assert.match(text, /INSERT INTO room_chat_reads/);
+    assert.match(text, /\$2::varchar\(36\)/);
+    assert.match(text, /\$3::timestamptz/);
+    assert.match(text, /FROM room_memberships/);
+    assert.match(text, /FROM room_bookmarks/);
+    assert.match(text, /ON CONFLICT \(room_id, user_id\) DO UPDATE/);
+    assert.match(text, /GREATEST\(room_chat_reads\.last_read_at, EXCLUDED\.last_read_at\)/);
+    assert.deepEqual(values.slice(0, 2), ['room1', 'user1']);
+    return { rows: [{ last_read_at: new Date(5000) }], rowCount: 1 };
+  });
+
+  const lastReadAt = await createRoomStore({ pool }).markRoomChatRead('room1', 'user1', 5000);
+  assert.equal(lastReadAt, 5000);
+});
+
+test('listVisibleRoomsForUser returns per-user unread metadata', async () => {
+  const pool = createFakePool((text, values) => {
+    assert.match(text, /LEFT JOIN room_chat_reads/);
+    assert.match(text, /AS unread_count/);
+    assert.match(text, /AS last_message_at/);
+    assert.deepEqual(values, ['user1']);
+    return {
+      rows: [{
+        id: 'room1', is_static: true, relationship: 'owner', unread_count: 3,
+        last_message_at: new Date(4000), created_at: new Date(1000), updated_at: new Date(2000)
+      }],
+      rowCount: 1
+    };
+  });
+
+  const rooms = await createRoomStore({ pool }).listVisibleRoomsForUser('user1');
+  assert.equal(rooms[0].unreadCount, 3);
+  assert.equal(rooms[0].lastMessageAt, 4000);
 });
 
 test('listMessages soft-deletes expired messages before selecting active rows', async () => {
@@ -132,6 +252,8 @@ test('listMessages soft-deletes expired messages before selecting active rows', 
       return {
         rows: [{
           id: 'msg1', room_id: 'room1', peer_id: '', name: '', text: 'hello',
+          avatar_key: 'av_123e4567-e89b-12d3-a456-426614174000_deadbeef.webp',
+          avatar_accent: '#49303f',
           created_at: new Date(1000), expires_at: new Date(2000)
         }],
         rowCount: 1
@@ -145,10 +267,15 @@ test('listMessages soft-deletes expired messages before selecting active rows', 
 
   assert.deepEqual(messages, [mapMessage({
     id: 'msg1', room_id: 'room1', peer_id: '', name: '', text: 'hello',
+    avatar_key: 'av_123e4567-e89b-12d3-a456-426614174000_deadbeef.webp',
+    avatar_accent: '#49303f',
     created_at: new Date(1000), expires_at: new Date(2000)
   })]);
   assert.match(pool.calls[0].text, /UPDATE room_messages/);
   assert.match(pool.calls[1].text, /LEFT JOIN room_peer_identities/);
+  assert.match(pool.calls[1].text, /LEFT JOIN users/);
+  assert.equal(messages[0].avatarAccent, '#49303f');
+  assert.match(messages[0].avatarKey, /^av_/);
   assert.match(pool.calls[1].text, /ORDER BY recent.created_at ASC, recent.id ASC/);
 });
 
@@ -175,7 +302,6 @@ test('createRoomWithQuota enforces room limits inside one advisory-locked transa
     maxTempRoomsPerIp: 1,
     maxRooms: 10,
     roomId: 'room-quota',
-    roomPresetKey: 'game-indigo',
     now: 1000
   });
 
@@ -188,7 +314,7 @@ test('createRoomWithQuota enforces room limits inside one advisory-locked transa
   assert.ok(pool.calls.some((call) => /SELECT COUNT\(\*\)::int AS count FROM rooms/.test(call.text)));
   const insertCall = pool.calls.find((call) => /INSERT INTO rooms/.test(call.text));
   assert.ok(insertCall);
-  assert.deepEqual(insertCall.values.slice(6, 8), ['gamepad', 'indigo']);
+  assert.doesNotMatch(insertCall.text, /room_icon_key|room_color_key|emoji/);
   assert.ok(pool.calls.some((call) => call.text === 'COMMIT'));
 });
 

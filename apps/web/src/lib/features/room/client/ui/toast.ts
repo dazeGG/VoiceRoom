@@ -1,6 +1,8 @@
 import { showToastUi } from '../../toast-ui.svelte';
 
 export interface ToastOptions {
+  action?: () => void | Promise<void>;
+  actionLabel?: string;
   duration?: number;
   variant?: 'info' | 'error';
 }

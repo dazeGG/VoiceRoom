@@ -2,15 +2,16 @@
 
 const WebSocket = require('ws');
 
-function openWs(target, { cookie, path = '/api/ws' } = {}) {
+function openWs(target, { cookie, headers = {}, path = '/api/ws' } = {}) {
   const frames = [];
   const isPort = typeof target === 'number';
+  const requestHeaders = { ...headers, ...(cookie ? { Cookie: cookie } : {}) };
   const ws = isPort
     ? new WebSocket(`ws://127.0.0.1:${target}${path}`, {
-        headers: cookie ? { Cookie: cookie } : undefined
+        headers: requestHeaders
       })
     : new WebSocket(`ws+unix://${target}:${path}`, {
-        headers: cookie ? { Cookie: cookie } : undefined
+        headers: requestHeaders
       });
 
   const ready = new Promise((resolve, reject) => {

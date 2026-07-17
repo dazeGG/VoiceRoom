@@ -12,6 +12,14 @@ const SCREEN_PROFILE_IDS = new Set([
   'low-30'
 ]);
 
+const PRESENCE_STATUSES = Object.freeze([
+  'online',
+  'away',
+  'dnd',
+  'offline'
+]);
+const PRESENCE_STATUS_SET = new Set(PRESENCE_STATUSES);
+
 function normalizeRoomId(value) {
   if (typeof value !== 'string') return '';
   const roomId = value.trim();
@@ -78,41 +86,8 @@ function cleanAvatarColorKey(value) {
   return typeof value === 'string' && AVATAR_COLOR_KEY_SET.has(value) ? value : '';
 }
 
-// Room visuals are architecturally split into an icon key and a background
-// color key. MVP creation may expose curated presets, but storage should keep
-// icon/color keys independent so later UI can edit either side.
-const ROOM_ICON_KEYS = visualIdentity.ROOM_ICON_KEYS;
-const ROOM_COLOR_KEYS = visualIdentity.ROOM_COLOR_KEYS;
-const ROOM_ICON_KEY_SET = new Set(ROOM_ICON_KEYS);
-const ROOM_COLOR_KEY_SET = new Set(ROOM_COLOR_KEYS);
-
-const ROOM_PRESETS = visualIdentity.ROOM_PRESETS;
-const ROOM_PRESET_KEYS = ROOM_PRESETS.map((preset) => preset.key);
-const ROOM_PRESET_KEY_SET = new Set(ROOM_PRESET_KEYS);
-
-// Legacy emoji palette remains exported during migration. It mirrors the room
-// presets that existed before icon/color keys were introduced.
-const ROOM_EMOJIS = ROOM_PRESETS.slice(0, 7).map((preset) => preset.emoji);
-
-function cleanRoomEmoji(value) {
-  return typeof value === 'string' && ROOM_EMOJIS.includes(value) ? value : '';
-}
-
-function cleanRoomIconKey(value) {
-  return typeof value === 'string' && ROOM_ICON_KEY_SET.has(value) ? value : '';
-}
-
-function cleanRoomColorKey(value) {
-  return typeof value === 'string' && ROOM_COLOR_KEY_SET.has(value) ? value : '';
-}
-
-function cleanRoomPresetKey(value) {
-  return typeof value === 'string' && ROOM_PRESET_KEY_SET.has(value) ? value : '';
-}
-
-function getRoomPreset(value) {
-  const key = cleanRoomPresetKey(value);
-  return key ? ROOM_PRESETS.find((preset) => preset.key === key) || null : null;
+function cleanPresenceStatus(value) {
+  return typeof value === 'string' && PRESENCE_STATUS_SET.has(value) ? value : '';
 }
 
 function cleanStreamId(value) {
@@ -137,24 +112,16 @@ module.exports = {
   AVATAR_COLOR_KEYS,
   PASSWORD_MAX_LENGTH,
   PASSWORD_MIN_LENGTH,
-  ROOM_EMOJIS,
-  ROOM_COLOR_KEYS,
-  ROOM_ICON_KEYS,
-  ROOM_PRESET_KEYS,
-  ROOM_PRESETS,
+  PRESENCE_STATUSES,
   SCREEN_PROFILE_IDS,
   cleanAvatarColorKey,
   cleanDisplayName,
   cleanLiveKitUrl,
   cleanName,
-  cleanRoomColorKey,
-  cleanRoomEmoji,
-  cleanRoomIconKey,
+  cleanPresenceStatus,
   cleanRoomName,
-  cleanRoomPresetKey,
   cleanScreenProfileId,
   cleanStreamId,
-  getRoomPreset,
   isValidPassword,
   normalizeLogin,
   normalizePeerId,

@@ -3,24 +3,38 @@
   import { iconSm } from '$lib/shared/ui/icons';
   import { getAvatarPresentation } from '../client/ui/avatar-presentation';
   import { state as roomState } from '../client/core/state.svelte';
-  import { enterScreenView } from '../client/ui/screen-view';
+  import { enterScreenView, leaveScreenView } from '../client/ui/screen-view';
   import { openParticipantContextMenu } from '../participant-context-ui.svelte';
+  import { toggleParticipantFocus } from '../participants-ui.svelte';
   import type { Participant } from '../client/core/types';
 
-  let { participant }: { participant: Participant } = $props();
+  let { participant, variant = 'grid' }: { participant: Participant; variant?: 'grid' | 'focus' | 'strip' } = $props();
 
   let tile = $state<HTMLElement>();
+  let imageFailed = $state(false);
 
   const avatar = $derived(getAvatarPresentation(participant));
-  const displayName = $derived(participant.isLocal ? `${participant.name} · вы` : participant.name);
+  $effect(() => {
+    participant.avatarUrl;
+    imageFailed = false;
+  });
   const viewing = $derived(roomState.viewedScreenPeerId === participant.id);
   const canWatch = $derived(!participant.isLocal && participant.screen && !viewing);
   const screenActionLabel = $derived(roomState.screenRequesting ? 'Подключение' : 'Смотреть экран');
 
+  // A participant tile always spotlights the person; their stream stays a
+  // separate tile (StreamTile) that spotlights the screen instead. The two
+  // spotlights are mutually exclusive, so entering one leaves the other.
+  function activateParticipant(): void {
+    if (roomState.viewedScreenPeerId) {
+      void leaveScreenView({ quiet: true, keepPreview: true }).catch((error) => console.error(error));
+    }
+    toggleParticipantFocus(participant.id);
+  }
+
   function handleTileClick(event: MouseEvent): void {
-    if (!participant.screen || participant.isLocal || roomState.viewedScreenPeerId === participant.id) return;
     if ((event.target as HTMLElement | null)?.closest('button, select, input, a')) return;
-    void enterScreenView(participant.id).catch((error) => console.error(error));
+    activateParticipant();
   }
 
   function handleScreenAction(event: MouseEvent): void {
@@ -36,6 +50,11 @@
   }
 
   function handleKeydown(event: KeyboardEvent): void {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      activateParticipant();
+      return;
+    }
     if (participant.isLocal) return;
     const isContextKey = event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey);
     if (!isContextKey || !tile) return;
@@ -50,6 +69,7 @@
   bind:this={tile}
   role="button"
   class="participant"
+  data-variant={variant}
   data-peer-id={participant.id}
   data-local={participant.isLocal ? 'true' : undefined}
   data-account-user-id={participant.accountUserId || undefined}
@@ -57,7 +77,7 @@
   data-muted={String(participant.muted)}
   data-screen={String(participant.screen)}
   data-speaking={String(participant.speaking)}
-  tabindex={participant.isLocal ? undefined : 0}
+  tabindex="0"
   aria-haspopup={participant.isLocal ? undefined : 'dialog'}
   aria-label={participant.isLocal
     ? undefined
@@ -71,11 +91,13 @@
   onkeydown={handleKeydown}
 >
   <div class="voice-ring" aria-hidden="true">
-    <span class="avatar">{avatar.initials}</span>
+    <span class="avatar">
+      {#if avatar.src && !imageFailed}<img src={avatar.src} alt="" onerror={() => (imageFailed = true)} />{:else}{avatar.initials}{/if}
+    </span>
   </div>
   <div class="participant-copy">
     <h2>
-      <span class="participant-name">{displayName}</span>
+      <span class="participant-name">{participant.name}</span>
       <span class="participant-muted-icon" aria-label="Микрофон выключен" title="Микрофон выключен"><MicOff {...iconSm} /></span>
       <span class="participant-deafened-icon" aria-label="Звук выключен" title="Звук выключен"><HeadphoneOff {...iconSm} /></span>
     </h2>

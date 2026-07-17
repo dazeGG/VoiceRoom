@@ -1,6 +1,7 @@
 'use strict';
 
 const crypto = require('node:crypto');
+const { cleanPresenceStatus } = require('@voice-room/shared/validation');
 const { buildServerEnvelope, sendWsEnvelope } = require('./envelope');
 const { toWsAccountEvent } = require('./account-events');
 
@@ -12,12 +13,12 @@ function createConnectionRegistry({
   maxConnectionsPerUser,
   maxGuestConnectionsPerIp = 0,
   keepaliveMs,
-  isUserOnline,
   onPresenceChange,
   onConnectionClose,
   getFriendIds
 }) {
   const userConnections = new Map();
+  const userPresenceStatuses = new Map();
   const guestConnectionsByIp = new Map();
   const roomDetailConnections = new Map();
   const connections = new Map();
@@ -28,33 +29,44 @@ function createConnectionRegistry({
     return set ? set.size : 0;
   }
 
-  function createConnectionRecord(userId, socket) {
+  function isUserOnline(userId) {
+    return connectionCount(userId) > 0 && userPresenceStatuses.get(userId) !== 'offline';
+  }
+
+  function createConnectionRecord(userId, socket, clientIp = '', presenceStatus = 'online') {
     return {
       id: createConnectionId(userId || 'guest'),
       userId: userId || null,
       guest: !userId,
+      clientIp: clientIp || '',
       guestIp: null,
       socket,
+      presenceStatus: cleanPresenceStatus(presenceStatus) || 'online',
       previewRoomIds: new Set(),
       activeVoice: null,
+      pendingVoiceJoin: null,
+      inboundMessageQueue: Promise.resolve(),
       lastHeartbeatAt: Date.now(),
       closed: false
     };
   }
 
-  function addConnection(userId, socket) {
-    const connection = createConnectionRecord(userId, socket);
-
+  function addConnection(userId, socket, clientIp = '', presenceStatus = 'online') {
     let set = userConnections.get(userId);
     const wasOffline = !isUserOnline(userId);
     if (!set) {
       set = new Set();
       userConnections.set(userId, set);
     }
+    if (!userPresenceStatuses.has(userId)) {
+      userPresenceStatuses.set(userId, cleanPresenceStatus(presenceStatus) || 'online');
+    }
+    const activePresenceStatus = userPresenceStatuses.get(userId);
+    const connection = createConnectionRecord(userId, socket, clientIp, activePresenceStatus);
     set.add(connection);
     connections.set(connection.id, connection);
 
-    if (wasOffline) {
+    if (wasOffline && isUserOnline(userId)) {
       void notifyFriendsPresence(userId, true);
     }
 
@@ -62,7 +74,7 @@ function createConnectionRegistry({
   }
 
   function addGuestConnection(socket, guestIp = 'unknown') {
-    const connection = createConnectionRecord(null, socket);
+    const connection = createConnectionRecord(null, socket, guestIp);
     connection.guestIp = guestIp || 'unknown';
     let set = guestConnectionsByIp.get(connection.guestIp);
     if (!set) {
@@ -88,6 +100,19 @@ function createConnectionRegistry({
     }
   }
 
+  function setUserPresenceStatus(userId, presenceStatus) {
+    const normalizedPresenceStatus = cleanPresenceStatus(presenceStatus);
+    const set = userConnections.get(userId);
+    if (!normalizedPresenceStatus || !set || set.size === 0) return false;
+
+    const wasOnline = isUserOnline(userId);
+    userPresenceStatuses.set(userId, normalizedPresenceStatus);
+    for (const connection of set) connection.presenceStatus = normalizedPresenceStatus;
+    const online = isUserOnline(userId);
+    if (online !== wasOnline) void notifyFriendsPresence(userId, online);
+    return online;
+  }
+
   function removeConnection(connection) {
     if (!connection || connection.closed) return;
     connection.closed = true;
@@ -99,15 +124,17 @@ function createConnectionRegistry({
     unregisterConnectionFromAllRooms(connection);
 
     if (connection.userId) {
+      const wasOnline = isUserOnline(connection.userId);
       const set = userConnections.get(connection.userId);
       if (set) {
         set.delete(connection);
         if (set.size === 0) userConnections.delete(connection.userId);
       }
       const stillOnline = isUserOnline(connection.userId);
-      if (!stillOnline) {
+      if (wasOnline && !stillOnline) {
         void notifyFriendsPresence(connection.userId, false);
       }
+      if (!userConnections.has(connection.userId)) userPresenceStatuses.delete(connection.userId);
     } else if (connection.guestIp) {
       const set = guestConnectionsByIp.get(connection.guestIp);
       if (set) {
@@ -221,6 +248,7 @@ function createConnectionRegistry({
     broadcastAccountEvent,
     connectionCount,
     connections,
+    isUserOnline,
     removeConnection,
     registerConnectionForRoom,
     rejectGuestOverLimit,
@@ -229,11 +257,13 @@ function createConnectionRegistry({
     sendReady,
     sendToConnection,
     sendToUser,
+    setUserPresenceStatus,
     touch,
     pruneStale,
     unregisterConnectionForRoom,
     unregisterConnectionFromAllRooms,
-    userConnections
+    userConnections,
+    userPresenceStatuses
   };
 }
 

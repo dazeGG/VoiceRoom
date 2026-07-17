@@ -11,7 +11,20 @@ function createWsHandler({
   isUserOnline,
   getClientIp = () => 'unknown'
 }) {
-  async function handleMessage(connection, sessionUser, envelope) {
+  function reportMessageError(error) {
+    console.error('WS message handler failed:', error);
+  }
+
+  function enqueueMessage(connection, task) {
+    connection.inboundMessageQueue = (connection.inboundMessageQueue || Promise.resolve())
+      .then(() => {
+        if (connection.closed) return;
+        return task();
+      })
+      .catch(reportMessageError);
+  }
+
+  async function handleMessage(connection, envelope, req) {
     if (envelope.type === 'hello') {
       registry.touch(connection);
       return;
@@ -46,8 +59,22 @@ function createWsHandler({
     }
 
     if (envelope.type === 'room.join') {
-      const result = await roomRuntime.joinVoiceRoom(connection, envelope.payload, sessionUser);
-      if (!result.ok && result.message) {
+      // A WebSocket can stay open while the account profile changes. Resolve the
+      // session again at join time so a newly uploaded/deleted avatar is not
+      // overwritten by the user snapshot captured when the socket first opened.
+      const currentSession = await resolveSessionUser(req);
+      if (connection.closed) return;
+      const result = await roomRuntime.joinVoiceRoom(
+        connection,
+        envelope.payload,
+        currentSession?.user || null,
+        getClientIp(req)
+      );
+      if (!result.ok && result.code === 'room_banned') {
+        registry.sendToConnection(connection, buildServerEnvelope('room.banned', {
+          roomId: envelope.payload.roomId
+        }, envelope.id));
+      } else if (!result.ok && result.message) {
         registry.sendToConnection(
           connection,
           buildServerErrorEnvelope(result.code || 'join_failed', result.message, envelope.id)
@@ -99,8 +126,9 @@ function createWsHandler({
       return;
     }
 
+    const clientIp = getClientIp(req);
     const connection = sessionUser
-      ? registry.addConnection(sessionUser.id, socket)
+      ? registry.addConnection(sessionUser.id, socket, clientIp, sessionUser.presenceStatus)
       : registry.addGuestConnection(socket, guestIp);
 
     if (sessionUser) {
@@ -120,6 +148,7 @@ function createWsHandler({
     }
 
     socket.on('message', (raw) => {
+      if (connection.closed) return;
       const parsed = parseInboundMessage(String(raw));
       if (!parsed.ok) {
         registry.sendToConnection(
@@ -128,7 +157,16 @@ function createWsHandler({
         );
         return;
       }
-      void handleMessage(connection, sessionUser, parsed.envelope);
+      if (parsed.envelope.type === 'hello' || parsed.envelope.type === 'ping') {
+        // Heartbeats do not mutate room intent and must not wait behind storage.
+        void handleMessage(connection, parsed.envelope, req).catch(reportMessageError);
+        return;
+      }
+
+      // Preserve wire order across stateful handlers that await authorization
+      // or storage. Without this queue, JOIN→LEAVE and JOIN1→JOIN2 can execute
+      // in reverse before the room runtime registers their intent.
+      enqueueMessage(connection, () => handleMessage(connection, parsed.envelope, req));
     });
 
     socket.on('close', () => {

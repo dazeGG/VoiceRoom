@@ -6,6 +6,7 @@ const {
   MAX_VISIBLE_ROOM_PEERS,
   parseClientEnvelope,
   buildServerEnvelope,
+  toRoomPeerSummary,
   buildRoomRealtimeSummary,
   validateClientCommand
 } = require('../src/realtime');
@@ -29,19 +30,18 @@ test('buildRoomRealtimeSummary caps visible peers and sets hiddenPeerCount', () 
     id: `peer-${index}`,
     name: `User ${index}`,
     muted: false,
-    avatarColorKey: 'blue'
+    avatarAccent: '#123456',
+    avatarColorKey: 'blue',
+    avatarUrl: `/api/avatars/av_${index}_deadbeef.webp`
   }));
 
   const summary = buildRoomRealtimeSummary(
     {
       id: 'room1',
       name: 'Lobby',
-      emoji: '🎧',
-      roomColorKey: 'blue',
-      roomIconKey: 'headphones',
-      roomPresetKey: 'voice-blue',
       isStatic: true,
-      relationship: 'owner'
+      relationship: 'owner',
+      avatarUrl: '/api/avatars/room_room1_deadbeef.webp'
     },
     peers
   );
@@ -49,6 +49,22 @@ test('buildRoomRealtimeSummary caps visible peers and sets hiddenPeerCount', () 
   assert.equal(summary.peers, 8);
   assert.equal(summary.visiblePeers.length, MAX_VISIBLE_ROOM_PEERS);
   assert.equal(summary.hiddenPeerCount, 3);
+  assert.equal(summary.name, 'Lobby');
+  assert.equal(summary.avatarUrl, '/api/avatars/room_room1_deadbeef.webp');
+  assert.equal(summary.visiblePeers[0].avatarAccent, '#123456');
+  assert.equal(summary.visiblePeers[0].avatarUrl, '/api/avatars/av_0_deadbeef.webp');
+  assert.equal('emoji' in summary, false);
+});
+
+test('realtime avatar fields remain nullable for legacy summaries', () => {
+  const peer = toRoomPeerSummary({ id: 'peer-1', name: 'Guest', muted: false });
+  const summary = buildRoomRealtimeSummary({ id: 'room1' }, [peer]);
+
+  assert.equal(peer.avatarAccent, null);
+  assert.equal(peer.avatarUrl, null);
+  assert.equal(summary.avatarUrl, null);
+  assert.equal(summary.visiblePeers[0].avatarAccent, null);
+  assert.equal(summary.visiblePeers[0].avatarUrl, null);
 });
 
 test('validateClientCommand enforces ping payload', () => {

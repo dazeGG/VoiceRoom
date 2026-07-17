@@ -17,7 +17,7 @@
     height: 18px;
     padding: 0 5px;
     border-radius: var(--radius-pill);
-    font-family: var(--font-mono);
+    font-family: var(--font-ui);
     font-size: 10.5px;
     font-weight: 700;
     line-height: 1;
@@ -28,11 +28,16 @@
     color: var(--accent-ink);
   }
 
+  .ui-badge--muted {
+    background: var(--control-hover);
+    color: var(--warm-muted);
+  }
+
   .ui-badge--warning {
     background: color-mix(in oklch, var(--amber), transparent 78%);
     color: var(--amber);
     border: 1px solid color-mix(in oklch, var(--amber), transparent 55%);
-    font-family: var(--font-mono);
+    font-family: var(--font-ui);
     text-transform: uppercase;
     letter-spacing: 0.08em;
   }

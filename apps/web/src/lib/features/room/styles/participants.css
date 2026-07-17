@@ -14,17 +14,17 @@ body[data-screen-view="true"][data-strip-collapsed="true"] .stage-strip {
    half-track so the short row sits centred under the row above. */
 .tile-grid[data-count="1"] {
   --tile-columns: 1;
-  max-width: min(600px, 100%);
+  --grid-aspect: 1.7778;
 }
 
 .tile-grid[data-count="2"] {
   --tile-columns: 2;
-  max-width: min(640px, 100%);
+  --grid-aspect: 3.5556;
 }
 
 .tile-grid[data-count="3"] {
   --tile-columns: 2;
-  max-width: min(640px, 100%);
+  --grid-aspect: 1.7778;
 }
 
 .tile-grid[data-count="3"] :is(.stream-tile, .participant):nth-child(3) {
@@ -33,12 +33,12 @@ body[data-screen-view="true"][data-strip-collapsed="true"] .stage-strip {
 
 .tile-grid[data-count="4"] {
   --tile-columns: 2;
-  max-width: min(680px, 100%);
+  --grid-aspect: 1.7778;
 }
 
 .tile-grid[data-count="5"] {
   --tile-columns: 3;
-  max-width: min(1000px, 100%);
+  --grid-aspect: 2.6667;
 }
 
 .tile-grid[data-count="5"] :is(.stream-tile, .participant):nth-child(4) {
@@ -47,12 +47,12 @@ body[data-screen-view="true"][data-strip-collapsed="true"] .stage-strip {
 
 .tile-grid[data-count="6"] {
   --tile-columns: 3;
-  max-width: min(1000px, 100%);
+  --grid-aspect: 2.6667;
 }
 
 .tile-grid[data-count="7"] {
   --tile-columns: 4;
-  max-width: min(1040px, 100%);
+  --grid-aspect: 3.5556;
 }
 
 .tile-grid[data-count="7"] :is(.stream-tile, .participant):nth-child(5) {
@@ -61,12 +61,19 @@ body[data-screen-view="true"][data-strip-collapsed="true"] .stage-strip {
 
 .tile-grid[data-count="8"] {
   --tile-columns: 4;
-  max-width: min(1040px, 100%);
+  --grid-aspect: 3.5556;
 }
 
 .tile-grid[data-count="9"] {
   --tile-columns: 3;
-  max-width: min(1000px, 100%);
+  --grid-aspect: 1.7778;
+}
+
+.tile-grid[data-count]:not([data-count="0"]) {
+  width: min(100%, calc(100cqh * var(--grid-aspect)));
+  height: auto;
+  aspect-ratio: var(--grid-aspect);
+  align-self: center;
 }
 
 .participant {
@@ -87,12 +94,41 @@ body[data-screen-view="true"][data-strip-collapsed="true"] .stage-strip {
   border-radius: var(--radius-sm);
   padding: clamp(var(--space-sm), 2.2vh, var(--space-lg)) var(--space-md);
   overflow: hidden;
-  background:
-    radial-gradient(circle at 50% 28%, oklch(22% 0.014 92 / 0.55), transparent 42%),
-    linear-gradient(160deg, oklch(12% 0.012 92), oklch(8.5% 0.01 92));
-  box-shadow: inset 0 1px 0 oklch(100% 0 0 / 0.04), 0 10px 30px oklch(0% 0 0 / 0.16);
+  background: color-mix(in oklch, var(--participant-pastel), var(--paper-deep) 30%);
+  box-shadow: none;
   transition: border-color 180ms ease, background 180ms ease, box-shadow 180ms ease, opacity 180ms ease;
 }
+
+.participant:not([data-local="true"]) { cursor: pointer; }
+.participant[data-local="true"] { cursor: pointer; }
+
+/* Spotlight («В центре внимания»): one 16:9 tile on the stage — a participant
+   tile or the screen stage — with everyone else in a paged carousel below.
+   Clicking the spotlighted tile again releases it, so there is no close X. */
+.participant-focus-layout { display: grid; width: 100%; height: 100%; min-height: 0; grid-template-rows: minmax(0, 1fr) auto; place-items: center; gap: var(--space-md); }
+.participant-focus-stage { position: relative; display: grid; width: min(100%, 980px); height: 100%; min-height: 0; place-items: center; }
+/* Fit the 16:9 spotlight tile into the stage: cap the width by both the stage
+   itself and the strip height (100cqh = .stage-strip) minus the carousel row,
+   so the tile keeps its aspect ratio instead of being squashed. */
+.participant-focus-stage > .participant { width: min(100%, calc((100cqh - 136px) * 1.7778)); }
+.participant-carousel-shell { display: grid; width: min(100%, 790px); grid-template-columns: 34px minmax(0, 1fr) 34px; align-items: center; gap: 8px; }
+.participant-carousel { min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.participant-carousel::-webkit-scrollbar { display: none; }
+.participant-focus-strip { display: flex; width: max-content; height: 112px; align-items: center; gap: 10px; margin-inline: auto; }
+.participant-focus-strip :is(.participant, .stream-tile) { width: 142px; height: 80px; flex: 0 0 142px; align-self: center; }
+/* Carousel tiles stay minimal: no watch/status chrome, just the tile itself. */
+.participant-focus-strip .stream-tile-actions,
+.participant-focus-strip .participant p,
+.participant-focus-strip .participant-screen-action { display: none; }
+.participant-focus-strip .participant { padding: var(--space-xs); }
+.participant-focus-strip .participant-copy { right: var(--space-xs); bottom: var(--space-xs); left: var(--space-xs); }
+.participant-focus-strip .participant h2 { max-width: calc(100% - 2px); padding: 3px 6px; font-size: 0.72rem; }
+.participant-focus-strip .stream-tile-copy { padding: var(--space-xs); }
+.participant-focus-strip .stream-tile-copy strong { font-size: 0.72rem; }
+.participant-focus-strip .stream-tile-icon svg { width: 24px; height: 24px; }
+.participant-carousel-nav { display: grid; width: 34px; height: 34px; place-items: center; border: 1px solid var(--line); border-radius: 50%; background: var(--panel); color: var(--warm-muted); cursor: pointer; }
+/* Arrows appear only when there is another page on that side. */
+.participant-carousel-nav[data-visible="false"] { visibility: hidden; pointer-events: none; }
 
 .participant[data-muted="true"] {
   opacity: 1;
@@ -104,10 +140,7 @@ body[data-screen-view="true"][data-strip-collapsed="true"] .stage-strip {
 
 .participant[data-speaking="true"] {
   border-color: var(--green);
-  box-shadow:
-    inset 0 1px 0 oklch(100% 0 0 / 0.05),
-    0 0 0 1px color-mix(in oklch, var(--green), transparent 34%),
-    0 18px 44px color-mix(in oklch, var(--green), transparent 82%);
+  box-shadow: inset 0 0 0 1px var(--green);
 }
 
 .voice-ring {
@@ -122,12 +155,11 @@ body[data-screen-view="true"][data-strip-collapsed="true"] .stage-strip {
 
 .participant[data-speaking="true"] .voice-ring {
   transform: scale(1.03);
-  box-shadow:
-    0 0 0 2.5px color-mix(in oklch, var(--green), transparent 10%),
-    0 0 28px color-mix(in oklch, var(--green), transparent 78%);
+  box-shadow: none;
 }
 
 .avatar {
+  position: relative;
   display: grid;
   width: 74px;
   height: 74px;
@@ -137,13 +169,23 @@ body[data-screen-view="true"][data-strip-collapsed="true"] .stage-strip {
   background: var(--participant-pastel);
   color: var(--participant-avatar-fg);
   font-size: 1.38rem;
-  font-weight: 850;
-  box-shadow: var(--participant-avatar-shadow);
+  font-weight: 800;
+  overflow: hidden;
+  box-shadow: none;
   transition: transform 160ms ease;
 }
 
+.avatar > img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  object-fit: cover;
+}
+
 .participant[data-speaking="true"] .avatar {
-  box-shadow: var(--participant-avatar-shadow);
+  box-shadow: none;
 }
 
 /* Scale the avatar/ring down as the tile gets shorter so it never clips. */
@@ -188,7 +230,7 @@ body[data-screen-view="true"][data-strip-collapsed="true"] .stage-strip {
 }
 
 .participant[data-screen="true"][data-local="true"] {
-  cursor: default;
+  cursor: pointer;
 }
 
 .participant[data-screen="true"] .participant-screen-action {
@@ -215,10 +257,10 @@ body[data-screen-view="true"][data-strip-collapsed="true"] .stage-strip {
   overflow: hidden;
   border-radius: 7px;
   padding: 5px 8px;
-  background: oklch(9% 0.012 92 / 0.84);
+  background: color-mix(in oklch, var(--warm-950), transparent 16%);
   color: oklch(98% 0.006 92);
   font-size: 0.9rem;
-  font-weight: 850;
+  font-weight: 800;
   line-height: 1.15;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -260,7 +302,7 @@ body[data-screen-view="true"][data-strip-collapsed="true"] .stage-strip {
   overflow: hidden;
   border-radius: 999px;
   padding: 3px 7px;
-  background: oklch(9% 0.012 92 / 0.78);
+  background: color-mix(in oklch, var(--warm-950), transparent 22%);
   color: oklch(86% 0.035 86);
   font-size: 0.76rem;
   font-weight: 800;
@@ -278,10 +320,10 @@ body[data-screen-view="true"][data-strip-collapsed="true"] .stage-strip {
   border: 1px solid color-mix(in oklch, var(--control-line), var(--ink) 12%);
   border-radius: 999px;
   padding: 0 10px;
-  background: oklch(84% 0.012 92);
+  background: var(--control-active);
   color: oklch(9% 0.012 92);
   font-size: 0.76rem;
-  font-weight: 850;
+  font-weight: 800;
   line-height: 1;
   white-space: nowrap;
   transition: background 160ms var(--ease-out), border-color 160ms var(--ease-out), transform 160ms var(--ease-out);
@@ -307,9 +349,7 @@ body[data-screen-view="true"][data-strip-collapsed="true"] .stage-strip {
   padding: 6px;
   border: 1px solid color-mix(in oklch, var(--line), var(--ink) 8%);
   border-radius: 16px;
-  background:
-    radial-gradient(120% 90% at 28% 0%, oklch(100% 0 0 / 0.04), transparent 55%),
-    oklch(12% 0.012 92 / 0.98);
+  background: var(--warm-800);
   color: var(--ink);
   box-shadow: 0 24px 70px oklch(0% 0 0 / 0.5), inset 0 1px 0 oklch(100% 0 0 / 0.05);
   backdrop-filter: blur(18px);
@@ -331,7 +371,7 @@ body[data-screen-view="true"][data-strip-collapsed="true"] .stage-strip {
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  font-family: var(--font-sans);
+  font-family: var(--font-ui);
   font-size: 16px;
   font-weight: 800;
   line-height: 1;
@@ -399,7 +439,7 @@ body[data-screen-view="true"][data-strip-collapsed="true"] .stage-strip {
   border-radius: 10px;
   background: transparent;
   color: var(--ink);
-  font-family: var(--font-sans);
+  font-family: var(--font-ui);
   font-size: 0.875rem;
   font-weight: 600;
   text-align: left;
@@ -409,7 +449,7 @@ body[data-screen-view="true"][data-strip-collapsed="true"] .stage-strip {
 
 .pcm-item:hover,
 .pcm-item:focus-visible {
-  background: oklch(100% 0 0 / 0.06);
+  background: var(--control);
   outline: none;
 }
 
@@ -439,6 +479,16 @@ body[data-screen-view="true"][data-strip-collapsed="true"] .stage-strip {
   color: var(--green);
 }
 
+.pcm-item--danger,
+.pcm-item--danger .pcm-item-icon {
+  color: oklch(72% 0.18 28);
+}
+
+.pcm-item--danger:hover,
+.pcm-item--danger:focus-visible {
+  background: color-mix(in oklch, var(--coral) 14%, transparent);
+}
+
 .pcm-item--mute[aria-pressed="true"],
 .pcm-item--mute[aria-pressed="true"] .pcm-item-icon {
   color: oklch(80% 0.12 32);
@@ -463,7 +513,7 @@ body[data-screen-view="true"][data-strip-collapsed="true"] .stage-strip {
   gap: 8px;
   min-width: 0;
   color: var(--ink, #ece7d9);
-  font-family: var(--font-sans, sans-serif);
+  font-family: var(--font-ui, sans-serif);
   font-size: 13.5px;
   font-weight: 700;
 }
@@ -476,7 +526,7 @@ body[data-screen-view="true"][data-strip-collapsed="true"] .stage-strip {
 .pcm-volume-value {
   flex: none;
   color: var(--ink, #ece7d9);
-  font-family: var(--font-sans, sans-serif);
+  font-family: var(--font-ui, sans-serif);
   font-size: 13.5px;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
@@ -487,7 +537,7 @@ body[data-screen-view="true"][data-strip-collapsed="true"] .stage-strip {
   align-items: center;
   justify-content: space-between;
   color: var(--muted, #9a9484);
-  font-family: var(--font-mono, monospace);
+  font-family: var(--font-ui, sans-serif);
   font-size: 11px;
   letter-spacing: 0.02em;
 }

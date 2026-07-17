@@ -1,11 +1,12 @@
 <script lang="ts">
   import { HeadphoneOff, Headphones, LogOut, Mic, MicOff } from '@lucide/svelte';
+  import { Avatar } from '$lib/shared/ui';
   import { iconMd, iconSm } from '$lib/shared/ui/icons';
-  import { getRoomPreset, type RoomPresetToken } from '$lib/visual/tokens';
+  import RoomCallTimer from '$lib/features/room/components/RoomCallTimer.svelte';
 
   let {
     roomName = '',
-    roomVisual = null,
+    avatarUrl = null,
     muted = false,
     deafened = false,
     onOpen,
@@ -14,7 +15,7 @@
     onLeave
   } = $props<{
     roomName?: string;
-    roomVisual?: RoomPresetToken | null;
+    avatarUrl?: string | null;
     muted?: boolean;
     deafened?: boolean;
     onOpen?: () => void;
@@ -23,18 +24,14 @@
     onLeave?: () => void;
   }>();
 
-  const visual = $derived(roomVisual ?? getRoomPreset(null));
   const openLabel = $derived(`Открыть комнату ${roomName || 'активного голоса'}`);
+
 </script>
 
 <div class="voice-widget" aria-label="Активный голос">
   <!-- header: room + status -->
   <button class="voice-head" type="button" aria-label={openLabel} title={openLabel} onclick={onOpen}>
-    <span
-      class="voice-tile"
-      style={`background:${visual.background};box-shadow:0 0 0 1px ${visual.ring}`}
-      aria-hidden="true"
-    >{visual.emoji}</span>
+    <Avatar name={roomName} src={avatarUrl} shape="squircle" background="var(--room-avatar-bg)" size={42} />
     <div class="voice-head-body">
       <div class="voice-room-name" title={roomName}>{roomName}</div>
       {#if muted}
@@ -55,6 +52,10 @@
 
   <!-- actions -->
   <div class="voice-actions">
+    <div class="voice-timers">
+      <RoomCallTimer variant="sidebar" />
+    </div>
+
     <!-- mic toggle -->
     <button
       class="voice-icon-btn"
@@ -106,7 +107,7 @@
       radial-gradient(120% 130% at 0% 0%, color-mix(in oklch, var(--green), transparent 84%), transparent 60%),
       color-mix(in oklch, var(--green), transparent 95%);
     box-shadow: 0 0 0 1px color-mix(in oklch, var(--green), transparent 94%), 0 14px 34px color-mix(in oklch, var(--green), transparent 86%);
-    font-family: var(--font-sans);
+    font-family: var(--font-ui);
   }
 
   /* header */
@@ -130,19 +131,6 @@
   .voice-head:focus-visible {
     outline: 2px solid color-mix(in oklch, var(--accent), transparent 20%);
     outline-offset: 4px;
-  }
-
-  .voice-tile {
-    flex: none;
-    width: 42px;
-    height: 42px;
-    border-radius: var(--radius-md);
-    color: var(--accent-ink);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 20px;
-    line-height: 1;
   }
 
   .voice-head-body {
@@ -192,6 +180,15 @@
     gap: 8px;
   }
 
+  /* connection timers fill the empty bottom-left corner */
+  .voice-timers {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    align-self: center;
+  }
+
   .voice-icon-btn,
   .voice-leave {
     flex: none;
@@ -207,11 +204,11 @@
 
   .voice-icon-btn {
     border: 1px solid rgba(255, 255, 255, 0.12);
-    background: rgba(255, 255, 255, 0.06);
+    background: var(--control);
     color: var(--warm-ink-dim);
   }
 
-  .voice-icon-btn:hover { background: rgba(255, 255, 255, 0.13); }
+  .voice-icon-btn:hover { background: var(--control-hover); }
 
   .voice-icon-btn.is-off {
     border-color: color-mix(in oklch, var(--coral), transparent 50%);
@@ -227,5 +224,5 @@
     color: #fff;
   }
 
-  .voice-leave:hover { background: color-mix(in oklch, var(--coral), black 12%); }
+  .voice-leave:hover { background: color-mix(in oklch, var(--coral), var(--warm-950) 12%); }
 </style>

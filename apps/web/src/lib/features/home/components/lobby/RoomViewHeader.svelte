@@ -1,29 +1,18 @@
 <script lang="ts">
-  import { ChevronDown, ChevronLeft, Copy, Link } from '@lucide/svelte';
+  import { ChevronLeft } from '@lucide/svelte';
   import type { OwnedRoom } from '$lib/api/auth';
-  import { Ellipsis, Popover, PopoverDivider, PopoverMenuItem } from '$lib/shared/ui';
-  import { iconMd, iconSm } from '$lib/shared/ui/icons';
-  import { roomDisplayName, roomVisual } from '../../model/rooms';
-  import { copyText } from '../../services/desktop-download';
+  import { iconMd } from '$lib/shared/ui/icons';
+  import { roomDisplayName } from '../../model/rooms';
+  import { RoomMenu } from '$lib/shared/components/room-menu';
 
-  let { room, onBack, onToast } = $props<{
+  let { room, onBack, onOpenSettings, onToast } = $props<{
     room: OwnedRoom;
     onBack: () => void;
+    onOpenSettings?: () => void;
     onToast?: (message: string) => void;
   }>();
 
-  const visual = $derived(roomVisual(room));
   const name = $derived(roomDisplayName(room));
-
-  async function copyValue(value: string, message: string, close: () => void): Promise<void> {
-    try {
-      await copyText(value);
-      onToast?.(message);
-    } catch {
-      onToast?.('Не удалось скопировать');
-    }
-    close();
-  }
 </script>
 
 <div class="lobby-roomview-head">
@@ -31,53 +20,15 @@
     <ChevronLeft {...iconMd} aria-hidden="true" />
   </button>
 
-  <Popover
-    placement="bottom-start"
-    role="menu"
-    ariaLabel="Меню комнаты"
-    panelClass="lobby-roomview-popover"
-  >
-    {#snippet trigger({ open, toggle, panelId })}
-      <button
-        class="lobby-roomview-trigger"
-        type="button"
-        aria-haspopup="menu"
-        aria-expanded={open}
-        aria-controls={panelId}
-        onclick={toggle}
-      >
-        <span class="lobby-roomview-id-tile" style={`background:${visual.background};box-shadow:0 0 0 1px ${visual.ring}`}>{visual.emoji}</span>
-        <span class="lobby-roomview-name">
-          <Ellipsis text={name} title={room.roomId} />
-        </span>
-        <span class="lobby-roomview-chevron" aria-hidden="true">
-          <ChevronDown {...iconSm} aria-hidden="true" />
-        </span>
-      </button>
-    {/snippet}
-
-    {#snippet content({ close })}
-      <div class="lobby-roomview-popover-head">
-        <span class="lobby-roomview-popover-badge" style={`background:${visual.background};box-shadow:0 0 0 1px ${visual.ring}`} aria-hidden="true">{visual.emoji}</span>
-        <div class="lobby-roomview-popover-info">
-          <Ellipsis class="lobby-roomview-popover-name" text={name} />
-          <Ellipsis class="lobby-roomview-popover-code" text={room.roomId} />
-        </div>
-      </div>
-
-      <PopoverDivider />
-
-      <PopoverMenuItem label="Скопировать код" onclick={() => void copyValue(room.roomId, 'Код скопирован', close)}>
-        {#snippet icon()}
-          <Copy {...iconMd} aria-hidden="true" />
-        {/snippet}
-      </PopoverMenuItem>
-
-      <PopoverMenuItem label="Скопировать ссылку" onclick={() => void copyValue(`${window.location.origin}/r/${encodeURIComponent(room.roomId)}`, 'Ссылка скопирована', close)}>
-        {#snippet icon()}
-          <Link {...iconMd} aria-hidden="true" />
-        {/snippet}
-      </PopoverMenuItem>
-    {/snippet}
-  </Popover>
+  <RoomMenu
+    roomId={room.roomId}
+    {name}
+    avatarUrl={room.avatarUrl}
+    avatarSize={34}
+    triggerClass="lobby-roomview-trigger"
+    titleClass="lobby-roomview-name"
+    chevronClass="lobby-roomview-chevron"
+    {onOpenSettings}
+    {onToast}
+  />
 </div>

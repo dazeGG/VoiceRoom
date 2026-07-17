@@ -2,9 +2,12 @@ name: CI/CD
 
 on:
   push:
-    branches: [main]
+    branches: [develop, main]
   pull_request:
-    branches: [main]
+    branches: [develop, main]
+
+permissions:
+  contents: read
 
 # Cancel superseded runs on PRs; never cancel a main run (it may be mid-deploy).
 concurrency:
@@ -12,6 +15,36 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  policy:
+    name: Git Flow policy
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate source branch and Conventional Commit PR title
+        env:
+          BASE_BRANCH: ${{ github.base_ref }}
+          HEAD_BRANCH: ${{ github.head_ref }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          title_pattern='^(feat|fix|docs|test|refactor|chore|perf|style|build|ci|revert)(\([a-z0-9._/-]+\))?!?: .+'
+
+          if [[ ! "$PR_TITLE" =~ $title_pattern ]]; then
+            echo "PR title must follow Conventional Commits, for example: feat(web): add room search"
+            exit 1
+          fi
+
+          case "$BASE_BRANCH:$HEAD_BRANCH" in
+            develop:feature/*|develop:release/*|develop:hotfix/*|develop:main|main:release/*|main:hotfix/*)
+              ;;
+            *)
+              echo "Invalid Git Flow route: $HEAD_BRANCH -> $BASE_BRANCH"
+              echo "Expected feature/* -> develop, release/* -> main, or hotfix/* -> main. Back-merges may target develop."
+              exit 1
+              ;;
+          esac
+
   check:
     name: Lint, typecheck & build
     runs-on: ubuntu-latest

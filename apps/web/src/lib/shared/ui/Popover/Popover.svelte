@@ -160,7 +160,7 @@
     padding: 6px;
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 18px;
-    background: #16140f;
+    background: var(--warm-800);
     box-shadow:
       0 24px 60px rgba(0, 0, 0, 0.55),
       0 2px 0 rgba(255, 255, 255, 0.04) inset;

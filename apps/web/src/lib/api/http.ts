@@ -105,12 +105,42 @@ export async function putJson<T>(url: string, body: unknown): Promise<T> {
   return payload as T;
 }
 
-export async function del<T>(url: string): Promise<T> {
+export async function patchJson<T>(url: string, body: unknown): Promise<T> {
   const response = await fetch(url, {
+    body: JSON.stringify(body),
+    credentials: 'same-origin',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json'
+    },
+    method: 'PATCH'
+  });
+
+  let payload: { error?: string } | null = null;
+  try {
+    payload = await response.json();
+  } catch {
+    // Non-JSON errors are handled by the generic message below.
+  }
+
+  if (!response.ok) {
+    throw new Error(payload?.error || 'Сервер недоступен');
+  }
+
+  return payload as T;
+}
+
+export async function del<T>(url: string, body?: unknown): Promise<T> {
+  const init: RequestInit = {
     credentials: 'same-origin',
     headers: { Accept: 'application/json' },
     method: 'DELETE'
-  });
+  };
+  if (body != null) {
+    init.headers = { ...init.headers, 'Content-Type': 'application/json' };
+    init.body = JSON.stringify(body);
+  }
+  const response = await fetch(url, init);
 
   let payload: { error?: string } | null = null;
   try {

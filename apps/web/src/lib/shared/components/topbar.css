@@ -14,9 +14,9 @@
   align-items: center;
   gap: 12px;
   color: inherit;
-  font-family: Aptos, "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  font-family: var(--font-display);
   font-size: 16px;
-  font-weight: 750;
+  font-weight: 700;
   letter-spacing: 0;
   text-decoration: none;
 }

@@ -1,5 +1,10 @@
 <script lang="ts">
-  import RegisterPage from '$lib/features/auth/RegisterPage.svelte';
+  import HomePage from '$lib/features/home/HomePage.svelte';
 </script>
 
-<RegisterPage />
+<svelte:head>
+  <title>Регистрация · Voice Room</title>
+  <meta name="theme-color" content="#10110f">
+</svelte:head>
+
+<HomePage initialAuthMode="register" />

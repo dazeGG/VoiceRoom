@@ -1,7 +1,9 @@
 // App-level WebSocket at /api/ws: account events, room summaries, preview/detail, voice.
 
 import type { DirectMessage } from './dm';
+import type { PublicUser } from './friends';
 import type { ChatMessage, RoomPeer, RoomSummary } from './rooms';
+import type { NotificationRealtimeEvent } from '../shared/notifications';
 
 export type RealtimeAccountEvent =
   | { type: 'ready'; payload: { userId?: string; guest?: boolean; onlineFriendIds?: string[] } }
@@ -10,8 +12,13 @@ export type RealtimeAccountEvent =
   | { type: 'friend.request'; payload: { direction: 'incoming' | 'outgoing' } }
   | { type: 'friend.accepted'; payload: { userId: string } }
   | { type: 'friend.removed'; payload: { userId: string } }
+  | { type: 'friend.updated'; payload: { user: PublicUser } }
+  | { type: 'ring.incoming'; payload: { fromUser: PublicUser; room: { id: string; name: string; emoji: string }; expiresAt: number } }
+  | { type: 'notification.settings.updated'; payload: { preferences: import('./notifications').NotificationPreferences } }
   | { type: 'dm.message'; payload: { message: DirectMessage } }
-  | { type: 'dm.read'; payload: { userId: string } };
+  | { type: 'dm.message.edited'; payload: { message: DirectMessage } }
+  | { type: 'dm.read'; payload: { userId: string } }
+  | { type: 'dm.message.deleted'; payload: { messageId: string; peerUserId?: string } };
 
 export type RoomRealtimeSummary = RoomSummary & {
   visiblePeers: RoomPeer[];
@@ -25,6 +32,9 @@ export type RoomSnapshot = {
   room: RoomSummary;
   peers: RoomPeer[];
   recentMessages?: ChatMessage[];
+  // Server-side in-memory call clock: when the current voice session started
+  // (first live peer), or null while the room is empty. Never persisted.
+  voiceActiveSince?: number | null;
   mode: 'preview' | 'active';
 };
 
@@ -35,14 +45,18 @@ export type RealtimeRoomEvent =
   | { type: 'room.peer.left'; payload: { roomId: string; peerId: string; reason: string } }
   | { type: 'room.peer.updated'; payload: { roomId: string; peer: RoomPeer } }
   | { type: 'room.chat.message'; payload: { roomId: string; message: ChatMessage } }
+  | { type: 'room.chat.edited'; payload: { roomId: string; message: ChatMessage } }
+  | { type: 'room.chat.deleted'; payload: { roomId: string; messageId: string } }
   | { type: 'room.updated'; payload: { room: RoomSummary } }
   | { type: 'room.deleted'; payload: { roomId: string } }
   | { type: 'room.not_found'; payload: { roomId: string } }
-  | { type: 'room.full'; payload: { roomId: string; maxRoomPeers: number } };
+  | { type: 'room.full'; payload: { roomId: string; maxRoomPeers: number } }
+  | { type: 'room.kicked'; payload: { roomId: string; peerId?: string } }
+  | { type: 'room.banned'; payload: { roomId: string; peerId?: string } };
 
 export type RealtimeErrorEvent = { type: 'error'; payload: { code: string; message: string; id?: string } };
 
-export type RealtimeEvent = RealtimeAccountEvent | RealtimeRoomEvent | RealtimeErrorEvent;
+export type RealtimeEvent = RealtimeAccountEvent | RealtimeRoomEvent | RealtimeErrorEvent | NotificationRealtimeEvent;
 
 /** @deprecated Use RealtimeEvent */
 export type { RealtimeEvent as RealtimeEventUnion };

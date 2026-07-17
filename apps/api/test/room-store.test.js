@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const { createRoomStore } = require('../src/lib/room-store');
+const { createUserStore } = require('../src/lib/user-store');
 const { runMigrations } = require('../src/lib/migrate');
 const { createTestDatabase } = require('./db-harness');
 
@@ -117,4 +118,70 @@ test('PostgreSQL room store can reconcile active temporary rooms after process r
   assert.equal(await store.pruneRooms(3500), true);
   assert.equal(await store.getRoom(temp.id), null);
   assert.ok(await store.getRoom(permanent.id));
+});
+
+test('PostgreSQL room bans match account or IP and undo stays scoped to its room', async (t) => {
+  const { cleanup, databaseUrl } = await createTestDatabase(t);
+  await runMigrations({ databaseUrl, logger: { log() {}, info() {}, warn() {}, error() {} } });
+  const store = createRoomStore({ databaseUrl });
+  const users = createUserStore({ databaseUrl, logger: { error() {} } });
+  t.after(async () => {
+    await Promise.all([store.close(), users.close()]);
+    await cleanup();
+  });
+
+  const { user } = await users.createUser({ login: 'room-ban-user', password: 'password123' });
+  await store.createRoom({ creatorIp: 'owner-ip', isStatic: true, roomId: 'ban-room-one', now: 1000 });
+  await store.createRoom({ creatorIp: 'owner-ip', isStatic: true, roomId: 'ban-room-two', now: 1000 });
+
+  const accountBan = await store.createRoomBan({
+    roomId: 'ban-room-one',
+    userId: user.id,
+    ip: '203.0.113.8',
+    metadata: { peerId: 'peer-banned' },
+    now: 2000
+  });
+  assert.equal(accountBan.status, 'created');
+  assert.equal(accountBan.ban.userId, user.id);
+  assert.equal(accountBan.ban.ip, '');
+  assert.deepEqual(accountBan.ban.metadata, { peerId: 'peer-banned' });
+
+  assert.equal((await store.findActiveRoomBan({ roomId: 'ban-room-one', userId: user.id, ip: '198.51.100.1' })).id, accountBan.ban.id);
+  assert.equal(await store.findActiveRoomBan({ roomId: 'ban-room-one', ip: '203.0.113.8' }), null);
+  assert.equal(await store.findActiveRoomBan({ roomId: 'ban-room-two', userId: user.id, ip: '203.0.113.8' }), null);
+
+  assert.equal((await store.deleteRoomBan({ roomId: 'ban-room-two', banId: accountBan.ban.id })).status, 'not_found');
+  assert.ok(await store.findActiveRoomBan({ roomId: 'ban-room-one', userId: user.id }));
+  assert.equal((await store.deleteRoomBan({ roomId: 'ban-room-one', banId: accountBan.ban.id })).status, 'deleted');
+  assert.equal(await store.findActiveRoomBan({ roomId: 'ban-room-one', userId: user.id, ip: '203.0.113.8' }), null);
+});
+
+test('PostgreSQL room ban cap is enforced per room and physical room purge cascades bans', async (t) => {
+  const store = await createMigratedStore(t);
+  await store.createRoom({ creatorIp: 'owner-ip', isStatic: true, roomId: 'ban-cap-room', now: 1000 });
+  await store.createRoom({ creatorIp: 'owner-ip', isStatic: true, roomId: 'ban-other-room', now: 1000 });
+
+  assert.equal((await store.createRoomBan({ roomId: 'ban-cap-room', ip: '192.0.2.1', maxBans: 1 })).status, 'created');
+  assert.equal((await store.createRoomBan({ roomId: 'ban-cap-room', ip: '192.0.2.2', maxBans: 1 })).status, 'cap_exceeded');
+  assert.equal((await store.createRoomBan({ roomId: 'ban-other-room', ip: '192.0.2.2', maxBans: 1 })).status, 'created');
+
+  await store.deleteRoom('ban-cap-room', 2000);
+  await store.purgeDeleted({ olderThanMs: 1, now: 3000 });
+  assert.equal(await store.findActiveRoomBan({ roomId: 'ban-cap-room', ip: '192.0.2.1' }), null);
+  assert.ok(await store.findActiveRoomBan({ roomId: 'ban-other-room', ip: '192.0.2.2' }));
+});
+
+test('PostgreSQL peer identity invalidation rejects the prior session token', async (t) => {
+  const store = await createMigratedStore(t);
+  await store.createRoom({ creatorIp: 'owner-ip', isStatic: true, roomId: 'peer-invalidate-room', now: 1000 });
+  const identity = {
+    roomId: 'peer-invalidate-room',
+    peerId: 'peer-invalidate',
+    sessionToken: 'peer-session-token-before-kick',
+    displayName: 'Guest',
+    now: 2000
+  };
+  assert.equal((await store.getOrCreatePeerIdentity(identity)).status, 'created');
+  assert.equal(await store.invalidatePeerIdentity({ roomId: identity.roomId, peerId: identity.peerId, now: 3000 }), true);
+  assert.equal((await store.getOrCreatePeerIdentity({ ...identity, now: 4000 })).status, 'token_mismatch');
 });

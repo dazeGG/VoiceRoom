@@ -1,9 +1,9 @@
 'use strict';
 
 const crypto = require('node:crypto');
-const { createDbPool } = require('./db');
+const { createDbPool, transaction } = require('./db');
 const { hashPassword, verifyPassword } = require('./password');
-const { AVATAR_COLOR_KEYS, cleanAvatarColorKey } = require('@voice-room/shared/validation');
+const { AVATAR_COLOR_KEYS, cleanAvatarColorKey, cleanPresenceStatus } = require('@voice-room/shared/validation');
 
 const DEFAULT_SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const UNIQUE_VIOLATION = '23505';
@@ -25,25 +25,36 @@ function randomAvatarColorKey() {
 
 function mapUser(row) {
   if (!row) return null;
+  const presenceStatus = cleanPresenceStatus(row.presence_status) || (row.dnd ? 'dnd' : 'online');
   return {
+    avatarAccent: row.avatar_accent || null,
     avatarColorKey: cleanAvatarColorKey(row.avatar_color_key) || 'blurple',
+    avatarKey: row.avatar_key || null,
     createdAt: toMillis(row.created_at),
     displayName: row.display_name || '',
+    doNotDisturb: presenceStatus === 'dnd',
     id: row.id,
     login: row.login,
-    passwordHash: row.password_hash
+    passwordHash: row.password_hash,
+    presenceStatus
   };
 }
 
 // What we ever send back to a client: never the password hash.
 function publicUser(user) {
   if (!user) return null;
+  const presenceStatus = cleanPresenceStatus(user.presenceStatus) || (user.doNotDisturb ? 'dnd' : 'online');
   return {
+    avatarAccent: user.avatarAccent || null,
     createdAt: user.createdAt,
     avatarColorKey: user.avatarColorKey || 'blurple',
+    avatarUrl: user.avatarKey ? `/api/avatars/${encodeURIComponent(user.avatarKey)}` : null,
     displayName: user.displayName || '',
+    dnd: presenceStatus === 'dnd',
+    doNotDisturb: presenceStatus === 'dnd',
     id: user.id,
-    login: user.login
+    login: user.login,
+    presenceStatus
   };
 }
 
@@ -107,6 +118,45 @@ function createUserStore({ databaseUrl, logger = console, pool, sessionTtlMs = D
     return mapUser(result.rows[0]);
   }
 
+  async function updateAvatar({ userId, avatarKey = null, avatarAccent = null, now = Date.now() }) {
+    const result = await getPool().query(
+      `UPDATE users
+       SET avatar_key = $2, avatar_accent = $3, updated_at = $4
+       WHERE id = $1
+       RETURNING *`,
+      [userId, avatarKey || null, avatarAccent || null, toDate(now)]
+    );
+    return mapUser(result.rows[0]);
+  }
+
+  async function swapAvatar({ userId, avatarKey = null, avatarAccent = null, now = Date.now() }) {
+    return transaction(getPool(), async (client) => {
+      const current = await client.query(
+        `SELECT avatar_key FROM users WHERE id = $1 FOR UPDATE`,
+        [userId]
+      );
+      if (current.rowCount === 0) return { previousAvatarKey: null, user: null };
+      const result = await client.query(
+        `UPDATE users
+         SET avatar_key = $2, avatar_accent = $3, updated_at = $4
+         WHERE id = $1
+         RETURNING *`,
+        [userId, avatarKey || null, avatarAccent || null, toDate(now)]
+      );
+      return {
+        previousAvatarKey: current.rows[0].avatar_key || null,
+        user: mapUser(result.rows[0])
+      };
+    });
+  }
+
+  async function listAvatarKeys() {
+    const result = await getPool().query(
+      `SELECT avatar_key FROM users WHERE avatar_key IS NOT NULL`
+    );
+    return result.rows.map((row) => row.avatar_key).filter(Boolean);
+  }
+
   // Password change always re-verifies the current password first so a leaked
   // session alone can't rotate the credential. Status mirrors the createUser
   // shape so the route layer can branch without inspecting errors.
@@ -134,6 +184,7 @@ function createUserStore({ databaseUrl, logger = console, pool, sessionTtlMs = D
         [userId, passwordHash, toDate(now)]
       );
       await client.query(`DELETE FROM sessions WHERE user_id = $1`, [userId]);
+      await client.query(`DELETE FROM push_subscriptions WHERE user_id = $1`, [userId]);
       await client.query('COMMIT');
       return { status: 'updated' };
     } catch (error) {
@@ -223,7 +274,10 @@ function createUserStore({ databaseUrl, logger = console, pool, sessionTtlMs = D
     getSessionUser,
     getUserById,
     getUserByLogin,
+    listAvatarKeys,
     pruneSessions,
+    swapAvatar,
+    updateAvatar,
     updateDisplayName,
     verifyCredentials
   };

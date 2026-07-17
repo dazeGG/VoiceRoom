@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { AvatarStackProps } from './types';
+  import Avatar from '../Avatar/Avatar.svelte';
 
   let {
     items,
@@ -34,7 +35,7 @@
         style:--avatar-bg={item.background}
         style:--avatar-fg={item.foreground || '#fff'}
         style:--avatar-shadow={item.shadow || 'none'}
-      >{item.initials}</span>
+      ><Avatar name={item.label} src={item.src} size={size - 4} background={item.background} class="avatar-stack-avatar" /></span>
     {/each}
     {#if rest > 0}
       <span class="avatar-stack-rest" aria-label={`Ещё ${rest}`}>+{rest}</span>
@@ -62,9 +63,9 @@
     margin-left: calc(var(--avatar-stack-size, 24px) * -0.28);
     border: 2px solid var(--avatar-stack-ring, #15130f);
     border-radius: 999px;
-    font-family: var(--font-sans, sans-serif);
+    font-family: var(--font-ui, sans-serif);
     font-size: var(--avatar-stack-font, 10px);
-    font-weight: 900;
+    font-weight: 800;
     line-height: 1;
     letter-spacing: -0.04em;
   }
@@ -75,13 +76,17 @@
   }
 
   .avatar-stack-item {
-    background: var(--avatar-bg, oklch(54% 0.22 276));
+    background: var(--avatar-bg, var(--room-avatar-bg));
     color: var(--avatar-fg, #fff);
     box-shadow: var(--avatar-shadow, none);
   }
 
+  .avatar-stack-item :global(.avatar-stack-avatar) {
+    box-shadow: none;
+  }
+
   .avatar-stack-rest {
-    background: #27241d;
+    background: var(--panel-strong);
     color: #e8e1d2;
     box-shadow: 0 8px 18px rgb(0 0 0 / 0.22);
   }

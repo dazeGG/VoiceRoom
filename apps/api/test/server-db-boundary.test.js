@@ -9,7 +9,17 @@ const assert = require('node:assert/strict');
 const http = require('node:http');
 
 const { createApiServer } = require('../src/server');
-const { openWs, joinVoiceRoom } = require('./ws-harness');
+const { openWs, joinVoiceRoom, sendWs, waitForWsType } = require('./ws-harness');
+
+function deferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((nextResolve, nextReject) => {
+    resolve = nextResolve;
+    reject = nextReject;
+  });
+  return { promise, reject, resolve };
+}
 
 function createFakeStore() {
   const rooms = new Map();
@@ -30,18 +40,14 @@ function createFakeStore() {
     async countRooms() {
       return rooms.size;
     },
-    async createRoom({ creatorIp, isStatic, roomId, name = '', emoji = '', roomColorKey = 'blue', roomIconKey = 'headphones', roomPresetKey = 'voice-blue', now = Date.now() }) {
+    async createRoom({ creatorIp, isStatic, roomId, name = '', now = Date.now() }) {
       const room = {
         createdAt: now,
         creatorIp,
         emptySince: now,
         id: roomId,
         isStatic,
-        emoji,
         name,
-        roomColorKey,
-        roomIconKey,
-        roomPresetKey,
         messages: [],
         peers: new Map(),
         updatedAt: now
@@ -183,10 +189,88 @@ test('server logs mark-empty failures instead of creating unhandled rejections',
   try {
     voice.ws.close();
     await new Promise((resolve) => setTimeout(resolve, 50));
-    assert.equal(errors.some((entry) => String(entry[0]).includes('Failed to mark room empty')), true);
+    assert.equal(errors.some((entry) => String(entry[0]).includes('Failed to persist room occupancy')), true);
   } finally {
     console.error = originalError;
     voice.ws.close();
+    await close(server);
+  }
+});
+
+test('server serializes a late empty write before the active write of a concurrent join', async () => {
+  const store = createFakeStore();
+  await store.createRoom({ creatorIp: 'test', isStatic: false, roomId: 'room-occupancy-race', now: Date.now() });
+
+  const identityStarted = deferred();
+  const releaseIdentity = deferred();
+  const emptyStarted = deferred();
+  const releaseEmpty = deferred();
+  const originalGetOrCreatePeerIdentity = store.getOrCreatePeerIdentity.bind(store);
+  store.getOrCreatePeerIdentity = async (input) => {
+    if (input.peerId === 'joining-peer') {
+      identityStarted.resolve();
+      await releaseIdentity.promise;
+    }
+    return originalGetOrCreatePeerIdentity(input);
+  };
+
+  const writes = [];
+  store.markRoomActive = async () => {
+    writes.push('active');
+  };
+  store.markRoomEmpty = async () => {
+    writes.push('empty:start');
+    emptyStarted.resolve();
+    await releaseEmpty.promise;
+    writes.push('empty:end');
+  };
+
+  const server = createApiServer({ store });
+  const port = await listen(server);
+  const leaving = openWs(port);
+  const joining = openWs(port);
+  await Promise.all([leaving.ready, joining.ready]);
+  await joinVoiceRoom(leaving, {
+    roomId: 'room-occupancy-race',
+    peerId: 'leaving-peer',
+    sessionToken: 'l'.repeat(32),
+    name: 'Leaving'
+  });
+  writes.length = 0;
+
+  try {
+    sendWs(joining.ws, 'room.join', {
+      roomId: 'room-occupancy-race',
+      peerId: 'joining-peer',
+      sessionToken: 'j'.repeat(32),
+      name: 'Joining'
+    });
+    await identityStarted.promise;
+
+    leaving.ws.close();
+    await emptyStarted.promise;
+    releaseIdentity.resolve();
+
+    const deadline = Date.now() + 5000;
+    while (true) {
+      const status = await request(port, '/api/rooms/room-occupancy-race');
+      if (status.json.peers === 1) break;
+      if (Date.now() >= deadline) throw new Error('joining peer was not installed while empty write was pending');
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+
+    releaseEmpty.resolve();
+    await waitForWsType(
+      joining.frames,
+      'room.snapshot',
+      (frame) => frame.payload?.roomId === 'room-occupancy-race'
+    );
+    assert.deepEqual(writes, ['empty:start', 'empty:end', 'active']);
+  } finally {
+    releaseIdentity.resolve();
+    releaseEmpty.resolve();
+    leaving.ws.close();
+    joining.ws.close();
     await close(server);
   }
 });

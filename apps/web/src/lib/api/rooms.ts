@@ -1,27 +1,20 @@
-import { del, fetchJson, postJson, putJson } from './http';
+import { del, fetchJson, patchJson, postJson, postJsonAuth, putJson } from './http';
 import { createRoomProof } from './pow';
 
 export interface CreateRoomOptions {
   isStatic?: boolean;
   name?: string;
-  emoji?: string;
-  roomPresetKey?: string;
 }
 
 export interface UpdateRoomOptions {
   name: string;
-  roomPresetKey: string;
-  emoji?: string;
 }
 
 // Mirrors the server's publicLobbyRoom() shape (server.js) — the same body the
 // PUT response and the room.updated WebSocket broadcast both carry.
 export interface RoomSummary {
+  avatarUrl: string | null;
   createdAt: number;
-  emoji: string;
-  roomColorKey: string;
-  roomIconKey: string;
-  roomPresetKey: string;
   emptySince: number | null;
   isStatic: boolean;
   name: string;
@@ -31,12 +24,9 @@ export interface RoomSummary {
 }
 
 export interface RoomStatus {
+  avatarUrl: string | null;
   createdAt: number;
-  emoji: string;
   name: string;
-  roomColorKey: string;
-  roomIconKey: string;
-  roomPresetKey: string;
   emptySince: number | null;
   exists: boolean;
   isStatic: boolean;
@@ -45,9 +35,25 @@ export interface RoomStatus {
   roomId: string;
 }
 
+async function roomAvatarRequest(roomId: string, method: 'POST' | 'DELETE', file?: Blob): Promise<RoomSummary> {
+  const body = file ? new FormData() : undefined;
+  if (body && file) body.append('avatar', file, 'avatar.webp');
+  const response = await fetch(`/api/rooms/${encodeURIComponent(roomId)}/avatar`, { method, body, credentials: 'same-origin' });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload.error || 'Не удалось обновить аватар комнаты');
+  return payload.room;
+}
+
+export const uploadRoomAvatar = (roomId: string, file: Blob): Promise<RoomSummary> => roomAvatarRequest(roomId, 'POST', file);
+export const deleteRoomAvatar = (roomId: string): Promise<RoomSummary> => roomAvatarRequest(roomId, 'DELETE');
+
 export interface ChatMessage {
+  authorUserId: string | null;
+  avatarAccent: string | null;
   avatarColorKey: string;
+  avatarUrl: string | null;
   createdAt: number;
+  editedAt: number | null;
   expiresAt: number;
   id: string;
   name: string;
@@ -58,10 +64,6 @@ export interface ChatMessage {
 
 interface CreateRoomResponse {
   createdAt: number;
-  emoji: string;
-  roomColorKey: string;
-  roomIconKey: string;
-  roomPresetKey: string;
   isStatic: boolean;
   name: string;
   roomId: string;
@@ -72,8 +74,6 @@ export async function createRoom(options: CreateRoomOptions = {}): Promise<strin
   const room = await postJson<CreateRoomResponse>('/api/rooms', {
     isStatic: Boolean(options.isStatic),
     name: options.name ?? '',
-    emoji: options.emoji ?? '',
-    roomPresetKey: options.roomPresetKey ?? '',
     proof
   });
   return room.roomId;
@@ -81,9 +81,7 @@ export async function createRoom(options: CreateRoomOptions = {}): Promise<strin
 
 export async function updateRoom(roomId: string, options: UpdateRoomOptions): Promise<RoomSummary> {
   const payload = await putJson<{ room: RoomSummary }>(`/api/rooms/${encodeURIComponent(roomId)}`, {
-    name: options.name,
-    roomPresetKey: options.roomPresetKey,
-    emoji: options.emoji ?? ''
+    name: options.name
   });
   return payload.room;
 }
@@ -92,12 +90,39 @@ export async function deleteRoom(roomId: string): Promise<void> {
   await del(`/api/rooms/${encodeURIComponent(roomId)}`);
 }
 
+export async function ringRoomFriend(roomId: string, userId: string): Promise<void> {
+  await postJsonAuth(`/api/rooms/${encodeURIComponent(roomId)}/ring`, { userId });
+}
+
 // A read-only view of a current room occupant (mirrors the server's publicPeer).
 export interface RoomPeer {
+  accountUserId?: string;
+  avatarAccent: string | null;
   avatarColorKey: string;
+  avatarUrl: string | null;
   id: string;
+  deafened?: boolean;
+  joinedAt?: number;
   muted: boolean;
   name: string;
+  screen?: boolean;
+  screenAudio?: boolean;
+  screenProfileId?: string;
+  screenStreamId?: string;
+  viewedScreenPeerId?: string;
+}
+
+export async function kickRoomPeer(roomId: string, peerId: string): Promise<void> {
+  await postJsonAuth(`/api/rooms/${encodeURIComponent(roomId)}/kick`, { peerId });
+}
+
+export async function banRoomPeer(roomId: string, peerId: string): Promise<string> {
+  const payload = await postJsonAuth<{ banId: string }>(`/api/rooms/${encodeURIComponent(roomId)}/ban`, { peerId });
+  return payload.banId;
+}
+
+export async function undoRoomBan(roomId: string, banId: string): Promise<void> {
+  await del(`/api/rooms/${encodeURIComponent(roomId)}/bans/${encodeURIComponent(banId)}`);
 }
 
 // Snapshot of who is in a room right now, without joining it — powers the lobby
@@ -130,10 +155,38 @@ export async function fetchRoomChat(roomId: string): Promise<ChatMessage[]> {
   return Array.isArray(payload?.messages) ? (payload.messages as ChatMessage[]) : [];
 }
 
+export async function markRoomChatRead(roomId: string): Promise<void> {
+  await postJsonAuth(`/api/rooms/${encodeURIComponent(roomId)}/read`, {});
+}
+
 export async function postRoomChat(
   roomId: string,
   body: { name: string; peerId?: string; sessionToken?: string; text: string }
 ): Promise<ChatMessage> {
   const payload = await postJson<{ message: ChatMessage }>(`/api/rooms/${encodeURIComponent(roomId)}/chat`, body);
+  return payload.message;
+}
+
+export async function deleteRoomChatMessage(
+  roomId: string,
+  messageId: string,
+  body?: { peerId?: string; sessionToken?: string }
+): Promise<{ ok: boolean; deleted?: boolean }> {
+  const payload = await del<{ ok: boolean; deleted?: boolean }>(
+    `/api/rooms/${encodeURIComponent(roomId)}/chat/${encodeURIComponent(messageId)}`,
+    body ?? {}
+  );
+  return payload;
+}
+
+export async function editRoomChatMessage(
+  roomId: string,
+  messageId: string,
+  body: { text: string; peerId?: string; sessionToken?: string }
+): Promise<ChatMessage> {
+  const payload = await patchJson<{ message: ChatMessage }>(
+    `/api/rooms/${encodeURIComponent(roomId)}/chat/${encodeURIComponent(messageId)}`,
+    body
+  );
   return payload.message;
 }

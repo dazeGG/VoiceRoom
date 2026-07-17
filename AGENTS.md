@@ -1,10 +1,10 @@
+<!-- OMX:AGENTS-INIT:MANAGED -->
 <!-- AUTONOMY DIRECTIVE — DO NOT REMOVE -->
 YOU ARE AN AUTONOMOUS CODING AGENT. EXECUTE TASKS TO COMPLETION WITHOUT ASKING FOR PERMISSION.
 DO NOT STOP TO ASK "SHOULD I PROCEED?" — PROCEED. DO NOT WAIT FOR CONFIRMATION ON OBVIOUS NEXT STEPS.
 IF BLOCKED, TRY AN ALTERNATIVE APPROACH. ONLY ASK WHEN TRULY AMBIGUOUS OR DESTRUCTIVE.
 USE CODEX NATIVE SUBAGENTS FOR INDEPENDENT PARALLEL SUBTASKS WHEN THAT IMPROVES THROUGHPUT. THIS IS COMPLEMENTARY TO OMX TEAM MODE.
 <!-- END AUTONOMY DIRECTIVE -->
-<!-- omx:generated:agents-md -->
 
 # oh-my-codex - Intelligent Multi-Agent Orchestration
 
@@ -14,7 +14,7 @@ Role prompts under `prompts/*.md` are narrower execution surfaces. They must fol
 When OMX is installed, load the installed prompt/skill/agent surfaces from `./.codex/prompts`, `./.codex/skills`, and `./.codex/agents` (or the project-local `./.codex/...` equivalents when project scope is active).
 
 <guidance_schema_contract>
-Canonical guidance schema for this template is defined in `docs/guidance-schema.md`.
+Canonical guidance schema belongs to the installed OMX distribution; do not assume a repo-local `docs/guidance-schema.md` exists.
 Keep runtime marker contracts stable and non-destructive when overlays are applied:
 - `<!-- OMX:RUNTIME:START --> ... <!-- OMX:RUNTIME:END -->`
 - `<!-- OMX:TEAM:WORKER:START --> ... <!-- OMX:TEAM:WORKER:END -->`
@@ -51,67 +51,7 @@ Keep runtime marker contracts stable and non-destructive when overlays are appli
 - For cleanup/refactor/deslop work, write a cleanup plan and lock behavior with regression tests before editing when coverage is missing.
 - Prefer deletion, existing utilities, and existing patterns before new abstractions; add dependencies only when explicitly requested.
 - Keep diffs small, reviewable, and reversible.
-- Use [Conventional Commits](https://www.conventionalcommits.org/) for **every** commit message in this repo.
-  - Format: `<type>(<scope>): <subject>` — imperative mood, lowercase subject, no trailing period.
-  - Common types: `feat`, `fix`, `refactor`, `test`, `chore`, `docs`, `style`, `perf`, `ci`.
-  - Scope: affected area (`web`, `api`, `shared`, …); omit only when truly repo-wide.
-  - Body (optional): explain *why* when the subject alone is not enough; reference issues/PRs when relevant.
-  - Breaking changes: append `!` after type/scope (`feat(api)!: …`) and describe migration in the body/footer.
-  - Split unrelated changes into separate commits; one logical change per commit.
-- Merge PRs into `develop` with squash merge and delete the source branch after a successful merge.
 - Verify with lint, typecheck, tests, and static analysis after changes; final reports include changed files, simplifications, and remaining risks.
-
-## graphify (codebase knowledge graph)
-
-Applies to **Codex CLI (OMX)** and **Grok in Cursor**. Same contract as `CLAUDE.md`.
-
-This repo has a navigable knowledge graph at `graphify-out/` (gitignored — each machine builds it locally). Prefer graphify over broad grep or reading many files when the question is structural.
-
-### Query graphify first
-
-Use graphify before wide repo search when the task involves:
-
-- architecture, data flow, or "how does X work?"
-- call chains, imports across modules, or cross-cutting dependencies
-- planning or implementing features that touch multiple areas
-- exploring unfamiliar parts of the codebase
-
-When `graphify-out/graph.json` exists, run:
-
-```bash
-graphify query "<question>"              # BFS subgraph (default)
-graphify query "<question>" --dfs        # trace a specific path
-graphify path "<concept A>" "<concept B>"
-graphify explain "<concept>"
-```
-
-Answer from the graph output; cite `source_location` when stating a specific fact. Then read only the files the subgraph points to.
-
-### When grep or direct reads are still fine
-
-- exact symbol lookup when the file or identifier is already known
-- implementation details inside a function after graphify narrowed the scope
-- configs, tests, or paths the graph does not cover
-
-### Navigation priority
-
-1. `graphify query` / `path` / `explain`
-2. `graphify-out/wiki/index.md` if it exists
-3. `graphify-out/GRAPH_REPORT.md` only for broad architecture review
-4. targeted reads using graph `source_file` / `source_location`
-5. broad grep only as fallback when graphify returns nothing useful
-
-### Keep the graph current
-
-- After code changes: `graphify update .` (AST-only, fast, no API key)
-- First-time setup or doc/image changes: `/graphify .` or `/graphify . --update`
-- If `graphify-out/` is missing, run `/graphify .` once before relying on query
-
-### Subagents (Codex OMX)
-
-When dispatching exploration subagents, instruct them to use `graphify query` first for codebase questions. Do not have parallel subagents each grep the full repo independently.
-
-Optional: MCP stdio server (`python -m graphify.serve graphify-out/graph.json`) for tool-native graph access in MCP-capable hosts.
 
 
 <delegation_rules>
@@ -171,7 +111,7 @@ Keyword routing is implemented primarily by native `UserPromptSubmit` hooks and 
 Fallback behavior when hook context is unavailable:
 - Explicit `$name` invocations run left-to-right and override implicit keywords.
 - Bare skill names do not activate skills by themselves; skill-name activation requires explicit `$skill` invocation. Natural-language routing phrases may still map to a workflow. Examples: `analyze` / `investigate` → `$analyze` for read-only deep analysis with ranked synthesis, explicit confidence, and concrete file references; `deep interview`, `interview`, `don't assume`, or `ouroboros` → `$deep-interview` for Socratic deep interview requirements clarification.
-- Keep the detailed keyword list in `src/hooks/keyword-registry.ts`; do not duplicate it here.
+- Keep the detailed keyword list in the installed OMX source; do not create a repo-local copy.
 
 Runtime workflows such as `autopilot`, `ralph`, `ultrawork`, `ultraqa`, `team`/`swarm`, and `ecomode` require OMX CLI runtime support. In Codex App, outside-tmux, or plain Codex sessions without OMX tmux runtime, explain that those workflows are not directly available there and continue with the nearest App-safe surface unless the user explicitly wants to launch OMX CLI from shell first.
 - When deep-interview is active in attached-tmux OMX CLI/runtime, ask each interview round via `omx question`; after launching `omx question` in a background terminal, wait for that terminal to finish and read the JSON answer before continuing; preserve the leader pane with `OMX_QUESTION_RETURN_PANE=$TMUX_PANE` when invoking it through Bash/tool paths. Outside tmux or native surfaces that cannot render `omx question` should use the native structured question path when available; otherwise ask exactly one concise plain-text question and wait for the answer.
@@ -195,37 +135,7 @@ Team/Swarm worker model precedence: explicit `OMX_TEAM_WORKER_LAUNCH_ARGS`, inhe
 </team_model_resolution>
 
 <!-- OMX:MODELS:START -->
-## Model Capability Table
-
-Auto-generated by `omx setup` from the current `config.toml` plus OMX model overrides.
-
-| Role | Model | Reasoning Effort | Use Case |
-| --- | --- | --- | --- |
-| Frontier (leader) | `gpt-5.5` | high | Primary leader/orchestrator for planning, coordination, and frontier-class reasoning. |
-| Spark (explorer/fast) | `gpt-5.6-luna` | low | Fast triage, explore, lightweight synthesis, and low-latency routing. |
-| Standard (subagent default) | `gpt-5.5` | high | Default standard-capability model for installable specialists and secondary worker lanes unless a role is explicitly frontier or spark. |
-| `explore` | `gpt-5.6-luna` | low | Fast codebase search and file/symbol mapping (fast-lane, fast) |
-| `analyst` | `gpt-5.5` | medium | Requirements clarity, acceptance criteria, hidden constraints (frontier-orchestrator, frontier) |
-| `planner` | `gpt-5.6-sol` | medium | Task sequencing, execution plans, risk flags (frontier-orchestrator, frontier) |
-| `architect` | `gpt-5.6-sol` | xhigh | System design, boundaries, interfaces, long-horizon tradeoffs (frontier-orchestrator, frontier) |
-| `debugger` | `gpt-5.5` | high | Root-cause analysis, regression isolation, failure diagnosis (deep-worker, standard) |
-| `executor` | `gpt-5.5` | medium | Code implementation, refactoring, feature work (deep-worker, standard) |
-| `team-executor` | `gpt-5.5` | medium | Supervised team execution for conservative delivery lanes (deep-worker, frontier) |
-| `verifier` | `gpt-5.5` | high | Completion evidence, claim validation, test adequacy (frontier-orchestrator, standard) |
-| `code-reviewer` | `gpt-5.5` | high | Comprehensive review across all concerns (frontier-orchestrator, frontier) |
-| `dependency-expert` | `gpt-5.5` | high | External SDK/API/package evaluation (frontier-orchestrator, standard) |
-| `test-engineer` | `gpt-5.5` | medium | Test strategy, coverage, flaky-test hardening (deep-worker, frontier) |
-| `designer` | `gpt-5.5` | high | UX/UI architecture, interaction design (deep-worker, standard) |
-| `writer` | `gpt-5.5` | high | Documentation, migration notes, user guidance (fast-lane, standard) |
-| `git-master` | `gpt-5.5` | high | Commit strategy, history hygiene, rebasing (deep-worker, standard) |
-| `code-simplifier` | `gpt-5.5` | high | Simplifies recently modified code for clarity and consistency without changing behavior (deep-worker, frontier) |
-| `researcher` | `gpt-5.6-terra` | high | External documentation and reference research (fast-lane, standard) |
-| `prometheus-strict-metis` | `gpt-5.5` | high | Prometheus Strict requirements interviewer and ambiguity mapper (frontier-orchestrator, frontier) |
-| `prometheus-strict-momus` | `gpt-5.5` | high | Prometheus Strict adversarial plan critic and risk challenger (frontier-orchestrator, frontier) |
-| `prometheus-strict-oracle` | `gpt-5.5` | high | Prometheus Strict implementation readiness verifier and handoff judge (frontier-orchestrator, standard) |
-| `critic` | `gpt-5.5` | high | Plan/design critical challenge and review (frontier-orchestrator, frontier) |
-| `scholastic` | `gpt-5.5` | high | Ontology-first reasoning reviewer: category mistakes, hidden assumptions, modality separation, scholastic critique, and minimal-repair proposals (frontier-orchestrator, frontier) |
-| `vision` | `gpt-5.5` | low | Image/screenshot/diagram analysis (fast-lane, frontier) |
+<!-- Auto-generated by omx setup -->
 <!-- OMX:MODELS:END -->
 
 <verification>
@@ -247,6 +157,12 @@ Command routing: use normal Codex repository inspection tools/subagents as the d
 When to use what:
 - Use normal Codex repository inspection tools/subagents for repository lookup and implementation context.
 - Use `omx sparkshell --tmux-pane` only as an explicit opt-in operator aid for shell-native tmux evidence or bounded verification; it does not replace raw evidence capture.
+
+Supervisor tmux handoff safety:
+- Never paste from tmux's implicit/current buffer. Load handoff text into a fresh named buffer with `tmux set-buffer -b <name> -- "$message"` or a temp-file-backed `tmux load-buffer -b <name> <file>`; never use `tmux load-buffer -- <message>`.
+- Verify the named buffer with `tmux show-buffer -b <name>` before any paste. A failed load or mismatched buffer is a blocker; do not run `paste-buffer` or submit keys after it.
+- Clear the pane composer with `tmux send-keys -t <pane> C-u` immediately before paste, then use bracketed paste (`tmux paste-buffer -t <pane> -b <name> -p -d`) and submit intentionally.
+- Recapture the pane after paste/Enter and verify the intended turn was accepted rather than leaving stale draft text visible.
 
 Leader vs worker: leaders choose mode, delegate bounded work, integrate, and own verification; workers execute their slice and escalate blockers, scope expansion, shared-file conflicts, or mode mismatch upward. Escalate from worker to leader for blockers, scope expansion, shared ownership conflicts, or mode mismatch.
 
@@ -271,9 +187,34 @@ Use the `cancel` skill to end active execution modes when work is done and verif
 
 <state_management>
 Hooks own normal skill-active and workflow-state persistence under `.omx/state/`. OMX runtime state lives under `.omx/`; do not manually duplicate hook-owned activation state unless recovering from missing or stale state.
-Keep OMX/OMC runtime artifacts rooted at the repository top: run manual `omx`/`omc` commands from the repository root, or explicitly set `OMX_ROOT=$REPO_ROOT` / `OMX_STATE_ROOT=$REPO_ROOT` / `OMC_STATE_DIR=$REPO_ROOT/.omc` before invoking them from subdirectories; do not let tools infer runtime state from a nested cwd.
 </state_management>
 
 ## Setup
 
 Execute `omx setup` to install all components. Execute `omx doctor` to verify installation.
+
+<!-- OMX:AGENTS-INIT:MANUAL:START -->
+## Local Notes
+### Repository map
+- `apps/api` is the Fastify/PostgreSQL/LiveKit backend.
+- `apps/web` is the Svelte/Vite frontend.
+- `packages/shared` owns contracts shared by API and Web. Update shared contracts before their consumers.
+- `docs/GIT_FLOW.md` is the source of truth for branches, commits, pull requests, hotfixes, and releases.
+- `docs/RELEASE_<version>_PLAN.md` files are release-specific target-state plans; do not describe an unmet gate as already implemented.
+
+### Mandatory Git Flow
+- Before changing files, run `git status --short --branch` and preserve unrelated user changes.
+- Normal work starts from `develop` on `feature/<short-name>` and returns through a pull request to `develop`.
+- Never put feature commits directly on `develop` or `main`.
+- Release stabilization uses `release/<version>` from `develop`; merge it into `main`, tag `v<version>`, then merge the release result back into `develop`.
+- Production-only urgent fixes use `hotfix/<short-name>` from `main`; merge them into `main`, tag when applicable, then back-merge or cherry-pick into `develop`.
+- Use Conventional Commit subjects: `feat:`, `fix:`, `docs:`, `test:`, `refactor:`, `chore:`, `perf:`, `style:`, `build:`, `ci:`, or `revert:`. Add a scope when useful, for example `fix(api): ...`.
+- Keep commits small and reviewable. Do not commit generated output, local secrets, screenshots, or debugging artifacts.
+- Do not push, merge, tag, publish a release, or deploy unless the user explicitly requests that external action.
+
+### Verification
+- Prefer a targeted workspace test first.
+- Repository gates are `npm run check`, `npm test`, and `npm run build`.
+- Web end-to-end coverage is `npm run e2e` and requires the full stack described in `README.md`.
+- Database changes must be checked against both migration and rollback paths.
+<!-- OMX:AGENTS-INIT:MANUAL:END -->

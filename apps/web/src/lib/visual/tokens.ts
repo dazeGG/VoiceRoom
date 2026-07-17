@@ -1,7 +1,7 @@
 import visualIdentity from '@voice-room/shared/visual-identity';
-import type { AvatarColorKey, RoomColorKey, RoomIconKey, RoomPresetKey } from '@voice-room/shared/validation';
+import type { AvatarColorKey } from '@voice-room/shared/validation';
 
-export type { AvatarColorKey, RoomColorKey, RoomIconKey, RoomPresetKey };
+export type { AvatarColorKey };
 
 export interface AvatarColorToken {
   key: AvatarColorKey;
@@ -30,82 +30,10 @@ export const AVATAR_COLORS: Record<AvatarColorKey, AvatarColorToken> = {
 };
 
 export function getAvatarColor(key: string | null | undefined): AvatarColorToken {
-  return AVATAR_COLORS[(key || '') as AvatarColorKey] || AVATAR_COLORS.blurple;
+  const color = AVATAR_COLORS[(key || '') as AvatarColorKey] || AVATAR_COLORS.blurple;
+  return { ...color, shadow: 'none' };
 }
-
-export interface RoomPresetToken {
-  key: string;
-  iconKey: RoomIconKey;
-  emoji: string;
-  colorKey: RoomColorKey;
-  background: string;
-  ring: string;
-}
-
-
-const ROOM_ICON_EMOJIS = Object.fromEntries(
-  visualIdentity.ROOM_PRESETS.map((preset) => [preset.iconKey, preset.emoji])
-) as Record<RoomIconKey, string>;
-
-const ROOM_COLOR_TOKENS: Record<RoomColorKey, Pick<RoomPresetToken, 'background' | 'ring'>> = {
-  blue: { background: 'linear-gradient(135deg, oklch(58% 0.22 258), oklch(44% 0.19 280))', ring: 'rgba(96, 130, 255, 0.4)' },
-  slate: { background: 'linear-gradient(135deg, oklch(46% 0.06 258), oklch(33% 0.05 253))', ring: 'rgba(168, 183, 204, 0.3)' },
-  violet: { background: 'linear-gradient(135deg, oklch(55% 0.25 302), oklch(39% 0.20 285))', ring: 'rgba(168, 112, 255, 0.38)' },
-  amber: { background: 'linear-gradient(135deg, oklch(68% 0.20 75), oklch(53% 0.19 52))', ring: 'rgba(255, 178, 36, 0.34)' },
-  indigo: { background: 'linear-gradient(135deg, oklch(54% 0.24 284), oklch(41% 0.21 266))', ring: 'rgba(129, 118, 255, 0.38)' },
-  rose: { background: 'linear-gradient(135deg, oklch(59% 0.25 16), oklch(46% 0.21 350))', ring: 'rgba(255, 87, 122, 0.36)' },
-  rust: { background: 'linear-gradient(135deg, oklch(56% 0.22 42), oklch(42% 0.18 33))', ring: 'rgba(255, 120, 62, 0.34)' },
-  green: { background: 'linear-gradient(135deg, oklch(53% 0.19 148), oklch(39% 0.14 168))', ring: 'rgba(64, 220, 130, 0.32)' }
-};
-
-function isRoomIconKey(value: string | null | undefined): value is RoomIconKey {
-  return Boolean(value && Object.hasOwn(ROOM_ICON_EMOJIS, value));
-}
-
-function isRoomColorKey(value: string | null | undefined): value is RoomColorKey {
-  return Boolean(value && Object.hasOwn(ROOM_COLOR_TOKENS, value));
-}
-
-export const ROOM_PRESETS: RoomPresetToken[] = visualIdentity.ROOM_PRESETS.map((preset) => ({
-  key: preset.key,
-  iconKey: preset.iconKey,
-  emoji: preset.emoji,
-  colorKey: preset.colorKey,
-  ...ROOM_COLOR_TOKENS[preset.colorKey]
-}));
-
-export const DEFAULT_ROOM_PRESET = ROOM_PRESETS[0];
 
 for (const key of visualIdentity.AVATAR_COLOR_KEYS) {
   if (!AVATAR_COLORS[key]) throw new Error(`Missing avatar color token: ${key}`);
-}
-for (const preset of visualIdentity.ROOM_PRESETS) {
-  if (!ROOM_COLOR_TOKENS[preset.colorKey]) throw new Error(`Missing room color token: ${preset.colorKey}`);
-  if (!ROOM_ICON_EMOJIS[preset.iconKey]) throw new Error(`Missing room icon token: ${preset.iconKey}`);
-}
-
-export function getRoomPreset(input: { roomPresetKey?: string; roomIconKey?: string; roomColorKey?: string; emoji?: string } | string | null | undefined): RoomPresetToken {
-  if (typeof input === 'string') return ROOM_PRESETS.find((preset) => preset.key === input) || DEFAULT_ROOM_PRESET;
-  const value = input || {};
-  const presetByKey = ROOM_PRESETS.find((item) => item.key === value.roomPresetKey);
-  if (presetByKey) return presetByKey;
-
-  const iconKey = isRoomIconKey(value.roomIconKey) ? value.roomIconKey : DEFAULT_ROOM_PRESET.iconKey;
-  const colorKey = isRoomColorKey(value.roomColorKey) ? value.roomColorKey : DEFAULT_ROOM_PRESET.colorKey;
-  const hasIconKey = isRoomIconKey(value.roomIconKey);
-  const hasColorKey = isRoomColorKey(value.roomColorKey);
-  const presetByKeys = ROOM_PRESETS.find((item) => item.iconKey === iconKey && item.colorKey === colorKey);
-  if (presetByKeys) return presetByKeys;
-
-  if (hasIconKey || hasColorKey) {
-    return {
-      key: '',
-      iconKey,
-      emoji: ROOM_ICON_EMOJIS[iconKey],
-      colorKey,
-      ...ROOM_COLOR_TOKENS[colorKey]
-    };
-  }
-
-  return ROOM_PRESETS.find((item) => item.emoji === value.emoji) || DEFAULT_ROOM_PRESET;
 }

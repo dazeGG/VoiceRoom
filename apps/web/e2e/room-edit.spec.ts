@@ -4,8 +4,7 @@ import {
   enterRoom,
   registerViaUi,
   roomHeading,
-  roomSettingsMenuItem,
-  openRoomHeadingMenu,
+  roomSettingsButton,
   settingsDialog,
   uniqueLogin
 } from './helpers';
@@ -21,9 +20,8 @@ test('owner can rename a room and change its preset, reflected in-room and in th
   await enterRoom(page, roomId);
   await expect(roomHeading(page)).toHaveText(originalName);
 
-  await openRoomHeadingMenu(page);
-  await expect(roomSettingsMenuItem(page)).toBeVisible();
-  await roomSettingsMenuItem(page).click();
+  await expect(roomSettingsButton(page)).toBeVisible();
+  await roomSettingsButton(page).click();
   const dialog = settingsDialog(page);
   await expect(dialog).toBeVisible();
 

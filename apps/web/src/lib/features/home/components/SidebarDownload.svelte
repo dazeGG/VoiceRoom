@@ -1,8 +1,10 @@
 <script lang="ts">
-  import { Apple, Download, Monitor } from '@lucide/svelte';
+  import { Download } from '@lucide/svelte';
+  import Fa from 'svelte-fa';
+  import { faApple, faWindows } from '@fortawesome/free-brands-svg-icons';
   import { fetchDesktopRelease, type DesktopRelease } from '$lib/api/desktop';
   import { Popover, PopoverMenuItem } from '$lib/shared/ui';
-  import { iconMd, iconSm } from '$lib/shared/ui/icons';
+  import { iconSm } from '$lib/shared/ui/icons';
   import { DESKTOP_BUILDS, RELEASES_URL } from '../model/desktop-builds';
   import { triggerDesktopDownload } from '../services/desktop-download';
 
@@ -68,7 +70,7 @@
       aria-controls={panelId}
       onclick={toggle}
     >
-      <Download {...iconSm} aria-hidden="true" />
+      <Download {...iconSm} />
     </button>
   {/snippet}
 
@@ -84,9 +86,9 @@
           {#if downloadingId === build.id}
             <span class="home-spinner" aria-hidden="true"></span>
           {:else if build.mac}
-            <Apple {...iconMd} aria-hidden="true" />
+            <Fa icon={faApple} size="lg" />
           {:else}
-            <Monitor {...iconMd} aria-hidden="true" />
+            <Fa icon={faWindows} size="lg" />
           {/if}
         {/snippet}
       </PopoverMenuItem>

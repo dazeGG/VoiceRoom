@@ -7,6 +7,9 @@
 // threshold means «off», there is no separate toggle).
 import {
   DEFAULT_GATE_THRESHOLD_DB,
+  DEFAULT_MASTER_VOLUME,
+  DEFAULT_MICROPHONE_MODE,
+  DEFAULT_MICROPHONE_VOLUME,
   DEFAULT_NOISE_MODE,
   DEFAULT_NOTIFICATION_VOLUME,
   GATE_THRESHOLD_DB_STORAGE_KEY,
@@ -16,6 +19,7 @@ import {
   NOISE_MODES,
   NOISE_MODE_STORAGE_KEY,
   OUTPUT_DEVICE_STORAGE_KEY,
+  type MicrophoneMode,
   type NoiseMode
 } from '$lib/features/room/client/core/config';
 import {
@@ -23,12 +27,19 @@ import {
   clampGateThresholdDb,
   getDbMeterPosition,
   getNoiseMode,
+  getStoredMasterVolume,
   getStoredGateThresholdDb,
+  getStoredMicrophoneMode,
+  getStoredMicrophoneVolume,
   getStoredNoiseMode,
   getStoredNotificationVolume
 } from '$lib/features/room/client/core/settings';
 
-export { getNotificationVolumeMultiplier, persistNotificationVolume } from '$lib/features/room/client/core/settings';
+export {
+  getNotificationVolumeMultiplier,
+  persistMasterVolume,
+  persistNotificationVolume
+} from '$lib/features/room/client/core/settings';
 
 export { GATE_THRESHOLD_MAX_DB, GATE_THRESHOLD_MIN_DB };
 
@@ -52,6 +63,9 @@ export interface SoundSettings {
   outputDeviceId: string;
   noiseMode: NoiseMode;
   gateThresholdDb: number;
+  masterVolume: number;
+  microphoneMode: MicrophoneMode;
+  microphoneVolume: number;
   notificationVolume: number;
 }
 
@@ -83,6 +97,9 @@ export function readSoundSettings(): SoundSettings {
   try {
     return {
       gateThresholdDb: getStoredGateThresholdDb(),
+      masterVolume: getStoredMasterVolume(),
+      microphoneMode: getStoredMicrophoneMode(),
+      microphoneVolume: getStoredMicrophoneVolume(),
       microphoneDeviceId: readDeviceId(MICROPHONE_DEVICE_STORAGE_KEY),
       noiseMode: getStoredNoiseMode(),
       outputDeviceId: readDeviceId(OUTPUT_DEVICE_STORAGE_KEY),
@@ -91,6 +108,9 @@ export function readSoundSettings(): SoundSettings {
   } catch {
     return {
       gateThresholdDb: DEFAULT_GATE_THRESHOLD_DB,
+      masterVolume: DEFAULT_MASTER_VOLUME,
+      microphoneMode: DEFAULT_MICROPHONE_MODE,
+      microphoneVolume: DEFAULT_MICROPHONE_VOLUME,
       microphoneDeviceId: '',
       noiseMode: DEFAULT_NOISE_MODE,
       outputDeviceId: '',
@@ -160,6 +180,7 @@ export function enumerateSpeakers(): Promise<DeviceOption[]> {
 }
 
 export interface MicMeter {
+  setVolume(volume: number): void;
   stop(): void;
 }
 
@@ -169,12 +190,14 @@ export interface MicMeter {
 // Returns null (and holds nothing open) when capture is unavailable or denied.
 export async function startMicMeter(
   deviceId: string,
+  microphoneVolume: number,
   onLevelDb: (db: number) => void
 ): Promise<MicMeter | null> {
   if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) return null;
 
   let stream: MediaStream | null = null;
   let context: AudioContext | null = null;
+  let inputGain: GainNode | null = null;
   let frame = 0;
   let stopped = false;
 
@@ -201,9 +224,20 @@ export async function startMicMeter(
     context = new AudioContext();
     await context.resume().catch(() => {});
     const source = context.createMediaStreamSource(stream);
+    const gain = context.createGain();
+    inputGain = gain;
+    const limiter = context.createDynamicsCompressor();
     const analyser = context.createAnalyser();
+    gain.gain.value = Math.min(2, Math.max(0, microphoneVolume / 100));
+    limiter.threshold.value = -3;
+    limiter.knee.value = 0;
+    limiter.ratio.value = 20;
+    limiter.attack.value = 0.003;
+    limiter.release.value = 0.08;
     analyser.fftSize = 512;
-    source.connect(analyser);
+    source.connect(gain);
+    gain.connect(limiter);
+    limiter.connect(analyser);
     const data = new Uint8Array(analyser.frequencyBinCount);
 
     const tick = (): void => {
@@ -223,5 +257,13 @@ export async function startMicMeter(
     return null;
   }
 
-  return { stop: cleanup };
+  return {
+    setVolume(volume: number): void {
+      if (!inputGain || !context) return;
+      const now = context.currentTime;
+      inputGain.gain.cancelScheduledValues(now);
+      inputGain.gain.setTargetAtTime(Math.min(2, Math.max(0, volume / 100)), now, 0.01);
+    },
+    stop: cleanup
+  };
 }

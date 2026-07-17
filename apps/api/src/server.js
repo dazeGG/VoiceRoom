@@ -3,14 +3,20 @@
 const crypto = require('node:crypto');
 const fastify = require('fastify');
 const fastifyCookie = require('@fastify/cookie');
+const fastifyMultipart = require('@fastify/multipart');
 const fastifyWebsocket = require('@fastify/websocket');
 const { createConnectionRegistry } = require('./realtime/registry');
 const { createWsHandler } = require('./realtime/ws-handler');
-const { createRoomRealtimeRuntime } = require('./realtime/room-runtime');
+const {
+  clearViewedScreenPeerReferences,
+  createRoomRealtimeRuntime,
+  resolveViewedScreenPeerId
+} = require('./realtime/room-runtime');
+const { buildServerEnvelope } = require('./realtime/envelope');
 const { URL } = require('node:url');
-const { AccessToken, TrackSource } = require('livekit-server-sdk');
+const { AccessToken, RoomServiceClient, TrackSource } = require('livekit-server-sdk');
 
-const { readEnvInt, readEnvBool, readDatabaseConfig } = require('./lib/config');
+const { readEnvInt, readEnvBool, readDatabaseConfig, readUploadsDir } = require('./lib/config');
 const {
   normalizeRoomId,
   normalizePeerId,
@@ -18,22 +24,25 @@ const {
   cleanName,
   cleanDisplayName,
   cleanRoomName,
-  cleanRoomColorKey,
-  cleanRoomEmoji,
-  cleanRoomIconKey,
-  cleanRoomPresetKey,
-  getRoomPreset,
   cleanStreamId,
   cleanScreenProfileId,
   cleanLiveKitUrl,
+  cleanPresenceStatus,
   isValidPassword,
   normalizeLogin
 } = require('@voice-room/shared/validation');
 const { createProofOfWork } = require('./lib/pow');
 const { getClientIp, createRateLimiter } = require('./lib/rate-limit');
+const { MAX_AVATAR_BYTES, createAvatarKey, processAvatar } = require('./lib/avatar-processing');
+const { reconcileAvatarStorage } = require('./lib/avatar-reconciliation');
+const { createAvatarStorage, validateAvatarKey } = require('./lib/avatar-storage');
 const { avatarColorForPeerId, createRoomStore } = require('./lib/room-store');
 const { createUserStore, publicUser } = require('./lib/user-store');
 const { createFriendStore } = require('./lib/friend-store');
+const { createNotificationStore } = require('./lib/notification-store');
+const { createPushStore } = require('./lib/push-store');
+const { createPushService, resolvePushTtl, shouldDeliverPush } = require('./lib/push-service');
+const { cleanPushEndpoint } = require('./lib/push-endpoint');
 const { startApiListener } = require('./lib/listen');
 const { runMigrations } = require('./lib/migrate');
 const {
@@ -66,6 +75,7 @@ const MAX_TEMP_ROOMS_PER_IP = readEnvInt(
   0
 );
 const MAX_STATIC_ROOMS_PER_USER = readEnvInt('MAX_STATIC_ROOMS_PER_USER', 3, 0);
+const MAX_ROOM_BANS = readEnvInt('MAX_ROOM_BANS', 100, 1);
 const ROOM_CREATE_POW_DIFFICULTY = Math.min(readEnvInt('ROOM_CREATE_POW_DIFFICULTY', 14, 0), 32);
 const ROOM_CREATE_POW_TTL_MS = readEnvInt('ROOM_CREATE_POW_TTL_MS', 120000, 10000);
 const SESSION_TTL_MS = readEnvInt('SESSION_TTL_MS', 30 * 24 * 60 * 60 * 1000, 60000);
@@ -77,6 +87,14 @@ const DM_RATE_LIMIT = readEnvInt('DM_RATE_LIMIT', 30, 0);
 const DM_RATE_WINDOW_MS = readEnvInt('DM_RATE_WINDOW_MS', 10000, 1000);
 const FRIEND_REQUEST_RATE_LIMIT = readEnvInt('FRIEND_REQUEST_RATE_LIMIT', 20, 0);
 const FRIEND_REQUEST_RATE_WINDOW_MS = readEnvInt('FRIEND_REQUEST_RATE_WINDOW_MS', 60000, 1000);
+const RING_RATE_LIMIT = readEnvInt('RING_RATE_LIMIT', 1, 0);
+const RING_RATE_WINDOW_MS = readEnvInt('RING_RATE_WINDOW_MS', 30000, 1000);
+const RING_TTL_MS = readEnvInt('RING_TTL_MS', 30000, 1000);
+const AVATAR_UPLOAD_RATE_LIMIT = readEnvInt('AVATAR_UPLOAD_RATE_LIMIT', 10, 0);
+const AVATAR_UPLOAD_RATE_WINDOW_MS = readEnvInt('AVATAR_UPLOAD_RATE_WINDOW_MS', 60000, 1000);
+const PUSH_SUBSCRIPTION_RATE_LIMIT = readEnvInt('PUSH_SUBSCRIPTION_RATE_LIMIT', 20, 0);
+const PUSH_SUBSCRIPTION_RATE_WINDOW_MS = readEnvInt('PUSH_SUBSCRIPTION_RATE_WINDOW_MS', 60000, 1000);
+const MAX_PUSH_SUBSCRIPTIONS_PER_USER = readEnvInt('MAX_PUSH_SUBSCRIPTIONS_PER_USER', 10, 1);
 // Cap concurrent realtime (WebSocket) connections per user so a single account
 // cannot pin an unbounded number of keep-alive connections.
 const MAX_REALTIME_STREAMS_PER_USER = readEnvInt('MAX_REALTIME_STREAMS_PER_USER', 8, 1);
@@ -93,11 +111,15 @@ const DESKTOP_RELEASE_TIMEOUT_MS = readEnvInt('DESKTOP_RELEASE_TIMEOUT_MS', 6000
 let roomStore = null;
 let userStore = null;
 let friendStore = null;
+let notificationStore = null;
+let pushStore = null;
+let pushService = null;
+let avatarStorage = null;
 
 const presenceRooms = new Map();
 let wsRegistry = null;
 let roomRuntime = null;
-const roomEmptyQueue = new Map();
+const roomOccupancyQueue = new Map();
 
 function getLogLevel(env = process.env) {
   const configured = (env.LOG_LEVEL || '').trim();
@@ -136,13 +158,110 @@ function getFriendStore() {
   return friendStore;
 }
 
+function getNotificationStore() {
+  if (!notificationStore) {
+    notificationStore = createNotificationStore({});
+  }
+  return notificationStore;
+}
+
+function getPushStore() {
+  if (!pushStore) pushStore = createPushStore({ maxSubscriptionsPerUser: MAX_PUSH_SUBSCRIPTIONS_PER_USER });
+  return pushStore;
+}
+
+function getPushService() {
+  if (!pushService) pushService = createPushService({ store: getPushStore() });
+  return pushService;
+}
+
+function getAvatarStorage() {
+  if (!avatarStorage) avatarStorage = createAvatarStorage();
+  return avatarStorage;
+}
+
 function isUserOnline(userId) {
-  return Boolean(wsRegistry && wsRegistry.connectionCount(userId) > 0);
+  return Boolean(wsRegistry?.isUserOnline(userId));
 }
 
 function broadcastToUser(userId, message) {
   if (!wsRegistry) return 0;
   return wsRegistry.broadcastAccountEvent(userId, message);
+}
+
+function notificationActor(user) {
+  const actor = publicUser(user);
+  if (!actor) return null;
+  return {
+    id: actor.id,
+    displayName: actor.displayName,
+    login: actor.login,
+    avatarAccent: actor.avatarAccent,
+    avatarColorKey: actor.avatarColorKey,
+    avatarUrl: actor.avatarUrl
+  };
+}
+
+async function queuePush(userId, payload, context = {}) {
+  try {
+    if (!getPushService().config.enabled) return;
+    const preferences = await getNotificationStore().getPreferences(userId);
+    if (!shouldDeliverPush(preferences, context)) return;
+    const body = preferences.privateNotifications && payload.privateBody
+      ? payload.privateBody
+      : payload.body;
+    const { privateBody: _privateBody, ...publicPayload } = payload;
+    const ttl = resolvePushTtl(context);
+    if (ttl === null) return;
+    const deliveryContext = ttl === undefined ? context : { ...context, ttl };
+    await getPushService().sendToUser(userId, { ...publicPayload, body }, deliveryContext);
+  } catch (error) {
+    console.error('Failed to send push notification:', error);
+  }
+}
+
+function sendFriendPush(userId, type, actor, dedupeKey) {
+  void queuePush(userId, {
+      type,
+      title: type === 'friend.accepted' ? 'Заявка принята' : 'Новая заявка в друзья',
+      body: actor.displayName || actor.login || 'VoiceRoom',
+      privateBody: 'Откройте VoiceRoom, чтобы посмотреть событие.',
+      tag: type,
+      dedupeKey,
+      url: '/'
+    });
+}
+
+async function broadcastDmNotification(recipientUserId, sender, message) {
+  if (!recipientUserId || recipientUserId === sender?.id) return 0;
+  try {
+    const preferences = await getNotificationStore().getPreferences(recipientUserId);
+    if (preferences.mutedPeerIds.includes(sender.id)) return 0;
+    const notification = {
+      type: 'notification.dm.message',
+      dedupeKey: `dm:${message.id}`,
+      peer: notificationActor(sender),
+      message: {
+        id: message.id,
+        body: message.body,
+        createdAt: message.createdAt
+      }
+    };
+    const broadcastCount = broadcastToUser(recipientUserId, notification);
+    void queuePush(recipientUserId, {
+      type: 'dm.message',
+      title: sender.displayName || sender.login || 'Новое сообщение',
+      body: message.body,
+      privateBody: 'Откройте VoiceRoom, чтобы прочитать сообщение.',
+      tag: `dm:${sender.id}`,
+      dedupeKey: notification.dedupeKey,
+      url: `/?dm=${encodeURIComponent(sender.id)}`
+    }, { peerUserId: sender.id });
+    return broadcastCount;
+  } catch (error) {
+    console.error('Failed to broadcast DM notification:', error);
+    return 0;
+  }
 }
 
 function getPresenceRoom(roomId) {
@@ -176,6 +295,7 @@ const roomChatLimiter = createRateLimiter({
   limit: ROOM_CHAT_RATE_LIMIT,
   windowMs: ROOM_CHAT_RATE_WINDOW_MS
 });
+const ringLimiter = createRateLimiter({ limit: RING_RATE_LIMIT, windowMs: RING_RATE_WINDOW_MS });
 const authLimiter = createRateLimiter({
   limit: AUTH_RATE_LIMIT,
   windowMs: AUTH_RATE_WINDOW_MS
@@ -187,6 +307,14 @@ const dmLimiter = createRateLimiter({
 const friendRequestLimiter = createRateLimiter({
   limit: FRIEND_REQUEST_RATE_LIMIT,
   windowMs: FRIEND_REQUEST_RATE_WINDOW_MS
+});
+const avatarUploadLimiter = createRateLimiter({
+  limit: AVATAR_UPLOAD_RATE_LIMIT,
+  windowMs: AVATAR_UPLOAD_RATE_WINDOW_MS
+});
+const pushSubscriptionLimiter = createRateLimiter({
+  limit: PUSH_SUBSCRIPTION_RATE_LIMIT,
+  windowMs: PUSH_SUBSCRIPTION_RATE_WINDOW_MS
 });
 
 function getLiveKitConnectSources() {
@@ -228,7 +356,8 @@ function baseHeaders() {
       "font-src 'self'",
       "form-action 'none'",
       "frame-ancestors 'none'",
-      "img-src 'self' data:",
+      // blob: serves local-only previews (avatar crop) rendered via object URLs.
+      "img-src 'self' data: blob:",
       "media-src 'self' blob:",
       "object-src 'none'",
       "script-src 'self' 'wasm-unsafe-eval'",
@@ -370,6 +499,10 @@ function getLiveKitConfig() {
   };
 }
 
+function getLiveKitHttpUrl(url) {
+  return String(url || '').replace(/^wss:/, 'https:').replace(/^ws:/, 'http:');
+}
+
 function createRoomId() {
   const alphabet = 'abcdefghijkmnpqrstuvwxyz23456789';
   const bytes = crypto.randomBytes(10);
@@ -426,7 +559,7 @@ async function countRoomCreationQuotaRoomsForIp(clientIp) {
   return getRoomStore().countQuotaRoomsForIp(clientIp);
 }
 
-async function createRoomForRequest(creatorIp, { isStatic = false, ownerId = null, name = '', emoji = '', roomColorKey = '', roomIconKey = '', roomPresetKey = '' } = {}) {
+async function createRoomForRequest(creatorIp, { isStatic = false, ownerId = null, name = '' } = {}) {
   let roomId = createRoomId();
   while (getRoomStore().roomIdExists ? await getRoomStore().roomIdExists(roomId) : await getRoomStore().getRoom(roomId)) {
     roomId = createRoomId();
@@ -437,10 +570,6 @@ async function createRoomForRequest(creatorIp, { isStatic = false, ownerId = nul
     isStatic,
     ownerId,
     name,
-    emoji,
-    roomColorKey,
-    roomIconKey,
-    roomPresetKey,
     maxOwnedStaticRoomsPerUser: MAX_STATIC_ROOMS_PER_USER,
     maxRooms: MAX_ROOMS,
     maxTempRoomsPerIp: MAX_TEMP_ROOMS_PER_IP,
@@ -458,7 +587,9 @@ async function getRoom(roomId) {
 function publicPeer(peer) {
   return {
     accountUserId: peer.accountUserId || '',
+    avatarAccent: peer.avatarAccent || null,
     avatarColorKey: peer.avatarColorKey || avatarColorForPeerId(peer.id),
+    avatarUrl: peer.avatarUrl || null,
     deafened: peer.deafened,
     id: peer.id,
     joinedAt: peer.joinedAt,
@@ -482,6 +613,40 @@ function getAuthorizedPeer(roomId, peerId, sessionToken) {
   const peer = room?.peers.get(peerId);
   if (!room || !peer || !tokensMatch(peer.sessionToken, sessionToken)) return null;
   return { peer, room };
+}
+
+async function findRoomBan(roomId, userId, ip) {
+  if (!roomId || typeof getRoomStore().findActiveRoomBan !== 'function') return null;
+  return getRoomStore().findActiveRoomBan({ roomId, userId: userId || null, ip: ip || '' });
+}
+
+function sendRoomBanned(res, roomId) {
+  sendJson(res, 403, { ok: false, code: 'room_banned', error: 'Вы заблокированы в этой комнате', roomId });
+}
+
+function queueRoomOccupancyTransition(roomId) {
+  const previous = roomOccupancyQueue.get(roomId) || Promise.resolve();
+  const transition = previous
+    .catch(() => {})
+    .then(async () => {
+      const room = presenceRooms.get(roomId);
+      if (room?.peers.size > 0) {
+        await getRoomStore().markRoomActive(roomId, room.updatedAt || Date.now());
+        return;
+      }
+      await getRoomStore().markRoomEmpty(roomId);
+    });
+
+  roomOccupancyQueue.set(roomId, transition);
+  void transition.then(
+    () => {
+      if (roomOccupancyQueue.get(roomId) === transition) roomOccupancyQueue.delete(roomId);
+    },
+    () => {
+      if (roomOccupancyQueue.get(roomId) === transition) roomOccupancyQueue.delete(roomId);
+    }
+  );
+  return transition;
 }
 
 function sendEvent(peer, message) {
@@ -510,6 +675,14 @@ function broadcast(room, message, exceptPeerId = '') {
   }
 }
 
+function publishClearedScreenViewers(room, ownerPeerId) {
+  for (const viewer of clearViewedScreenPeerReferences(room, ownerPeerId)) {
+    const message = { type: 'peer-updated', peer: publicPeer(viewer) };
+    broadcast(room, message);
+    roomRuntime?.mirrorLegacyRoomEvent(room.id, message);
+  }
+}
+
 function closePeer(roomId, peerId, transportId, reason = 'left') {
   const room = presenceRooms.get(roomId);
   if (!room) return;
@@ -520,23 +693,18 @@ function closePeer(roomId, peerId, transportId, reason = 'left') {
   current.closed = true;
   room.peers.delete(peerId);
   if (!current.replaced) {
+    publishClearedScreenViewers(room, peerId);
     broadcast(room, { type: 'peer-left', peerId, reason });
     roomRuntime?.mirrorLegacyRoomEvent(roomId, { type: 'peer-left', peerId, reason });
     roomRuntime?.scheduleSummaryBroadcast(roomId);
   }
 
   if (room.peers.size === 0) {
-    const markEmpty = Promise.resolve()
-      .then(async () => {
-        if (room.peers.size === 0) await getRoomStore().markRoomEmpty(roomId);
-      })
-      .catch((error) => {
-        console.error('Failed to mark room empty:', error);
-      })
-      .finally(() => {
-        if (roomEmptyQueue.get(roomId) === markEmpty) roomEmptyQueue.delete(roomId);
-      });
-    roomEmptyQueue.set(roomId, markEmpty);
+    // The call ended: reset the in-memory call clock (never persisted).
+    room.voiceActiveSince = null;
+    void queueRoomOccupancyTransition(roomId).catch((error) => {
+      console.error('Failed to persist room occupancy:', error);
+    });
   } else {
     room.updatedAt = Date.now();
   }
@@ -547,16 +715,30 @@ function parseBoolean(value) {
 }
 
 function cleanChatText(value) {
-  return String(value || '')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, 500);
+  // Preserve newlines for multiline chat (2.4.0); collapse only horizontal runs.
+  // Cap consecutive blank lines and total lines; length cap remains.
+  let text = String(value || '')
+    .replace(/[^\S\n]+/g, ' ')
+    .replace(/ *\n */g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+  const lines = text.split('\n');
+  if (lines.length > 20) {
+    text = lines.slice(0, 20).join('\n');
+  }
+  return text.slice(0, 500);
 }
 
 function publicChatMessage(message) {
   return {
+    authorUserId: message.authorUserId || null,
+    avatarAccent: message.avatarAccent || null,
     avatarColorKey: message.avatarColorKey || avatarColorForPeerId(message.peerId),
+    avatarUrl: message.avatarUrl || (message.avatarKey
+      ? `/api/avatars/${encodeURIComponent(message.avatarKey)}`
+      : null),
     createdAt: message.createdAt,
+    editedAt: message.editedAt || null,
     expiresAt: message.expiresAt,
     id: message.id,
     name: message.name,
@@ -615,6 +797,11 @@ async function handleLiveKitToken(req, res) {
   const room = await getRoom(roomId);
   if (!room) {
     sendJson(res, 404, { ok: false, error: 'Комната не найдена' });
+    return;
+  }
+
+  if (await findRoomBan(roomId, sessionUser?.id, getClientIp(req, TRUST_PROXY))) {
+    sendRoomBanned(res, roomId);
     return;
   }
 
@@ -695,11 +882,6 @@ async function handleCreateRoom(req, res) {
   const clientIp = getClientIp(req, TRUST_PROXY);
   const isStatic = parseBoolean(body.isStatic);
   const name = cleanRoomName(body.name);
-  const requestedPresetKey = cleanRoomPresetKey(body.roomPresetKey || body.presetKey || body.roomPreset);
-  const requestedPreset = getRoomPreset(requestedPresetKey);
-  const emoji = requestedPreset?.emoji || cleanRoomEmoji(body.emoji);
-  const roomIconKey = requestedPreset?.iconKey || cleanRoomIconKey(body.roomIconKey);
-  const roomColorKey = requestedPreset?.colorKey || cleanRoomColorKey(body.roomColorKey);
   // Persistent rooms are tied to the account that creates them so they can be
   // listed back from any device; temporary rooms stay ownerless.
   const session = isStatic ? await resolveSessionUser(req) : null;
@@ -711,11 +893,7 @@ async function handleCreateRoom(req, res) {
   const created = await createRoomForRequest(clientIp, {
     isStatic,
     ownerId,
-    name,
-    emoji,
-    roomColorKey,
-    roomIconKey,
-    roomPresetKey: requestedPresetKey
+    name
   });
   if (created.status === 'auth_required') {
     sendJson(res, 401, { ok: false, error: 'Требуется вход для создания постоянной комнаты' });
@@ -738,11 +916,8 @@ async function handleCreateRoom(req, res) {
   const room = created.room;
   sendJson(res, 201, {
     ok: true,
+    avatarUrl: null,
     createdAt: room.createdAt,
-    emoji: room.emoji,
-    roomColorKey: room.roomColorKey,
-    roomIconKey: room.roomIconKey,
-    roomPresetKey: room.roomPresetKey,
     maxRooms: MAX_ROOMS,
     maxRoomPeers: MAX_ROOM_PEERS,
     isStatic: room.isStatic,
@@ -778,43 +953,15 @@ async function handleUpdateRoom(req, res, roomId) {
 
   const body = await readJsonBody(req);
 
-  // Reject unknown icon/color/preset keys before touching the DB. The clean*
-  // helpers normalize a known key to itself and an unknown one to '', so a
-  // non-empty input that cleans to '' means the caller sent something the
-  // CHECK constraints would reject — return a clean 400 instead of an SQL error.
-  if (typeof body.roomPresetKey === 'string' && body.roomPresetKey && !cleanRoomPresetKey(body.roomPresetKey)) {
-    sendJson(res, 400, { ok: false, error: 'Неизвестный пресет комнаты' });
-    return;
-  }
-  if (typeof body.roomIconKey === 'string' && body.roomIconKey && !cleanRoomIconKey(body.roomIconKey)) {
-    sendJson(res, 400, { ok: false, error: 'Неизвестная иконка комнаты' });
-    return;
-  }
-  if (typeof body.roomColorKey === 'string' && body.roomColorKey && !cleanRoomColorKey(body.roomColorKey)) {
-    sendJson(res, 400, { ok: false, error: 'Неизвестный цвет комнаты' });
-    return;
-  }
-  if (typeof body.emoji === 'string' && body.emoji && !cleanRoomEmoji(body.emoji)) {
-    sendJson(res, 400, { ok: false, error: 'Неизвестный эмодзи комнаты' });
-    return;
-  }
-
-  // Merge with the authorized room so omitted fields keep their current values.
-  // A newly provided preset drives icon/color/emoji so the curated combination
-  // stays consistent. Without a new preset, explicit visual fields are partial
-  // updates over the stored room instead of being overwritten by the old preset.
+  // Legacy visual fields are intentionally ignored during the deployment
+  // transition; only the room name remains mutable.
   const nextName = body.name !== undefined ? cleanRoomName(body.name) : room.name;
   if (!nextName) {
     sendJson(res, 400, { ok: false, error: 'Дайте комнате название' });
     return;
   }
-  const requestedPreset = body.roomPresetKey !== undefined ? getRoomPreset(body.roomPresetKey) : null;
   const updated = await getRoomStore().updateRoom(roomId, {
-    name: nextName,
-    emoji: requestedPreset?.emoji || (body.emoji !== undefined ? cleanRoomEmoji(body.emoji) : room.emoji),
-    roomIconKey: requestedPreset?.iconKey || (body.roomIconKey !== undefined ? cleanRoomIconKey(body.roomIconKey) : room.roomIconKey),
-    roomColorKey: requestedPreset?.colorKey || (body.roomColorKey !== undefined ? cleanRoomColorKey(body.roomColorKey) : room.roomColorKey),
-    roomPresetKey: body.roomPresetKey !== undefined ? cleanRoomPresetKey(body.roomPresetKey) : cleanRoomPresetKey(room.roomPresetKey)
+    name: nextName
   });
   if (!updated) {
     // Lost a race with a concurrent delete (UPDATE matched 0 rows).
@@ -832,7 +979,7 @@ async function handleUpdateRoom(req, res, roomId) {
   sendJson(res, 200, { ok: true, room: payload });
 }
 
-async function handleDeleteRoom(req, res, roomId) {
+async function handleDeleteRoom(req, res, roomId, request) {
   const room = await authorizeRoomMutation(req, res, roomId);
   if (!room) return;
 
@@ -842,6 +989,7 @@ async function handleDeleteRoom(req, res, roomId) {
     sendJson(res, 404, { ok: false, error: 'Комната не найдена' });
     return;
   }
+  await removeAvatarBestEffort(deleted.avatarKey, request);
 
   // Broadcast after durable soft-delete, before presence teardown so the WS
   // writes are not racing socket close.
@@ -976,6 +1124,148 @@ async function handleUpdateProfile(req, res) {
   sendJson(res, 200, { ok: true, user: publicUser(user) });
 }
 
+function checkAvatarUploadRate(res, userId) {
+  const rate = avatarUploadLimiter.check(`avatar:${userId}`);
+  if (rate.allowed) return true;
+  sendJson(
+    res,
+    429,
+    { ok: false, error: 'Слишком много загрузок, попробуйте позже' },
+    { 'Retry-After': String(rate.retryAfterSeconds) }
+  );
+  return false;
+}
+
+async function readAvatarUpload(request) {
+  let part;
+  try {
+    part = await request.file({ limits: { fileSize: MAX_AVATAR_BYTES, files: 1 } });
+  } catch (cause) {
+    if (cause?.code === 'FST_REQ_FILE_TOO_LARGE' || cause?.statusCode === 413) {
+      const error = new Error('Avatar file must be at most 5 MB');
+      error.statusCode = 413;
+      throw error;
+    }
+    throw cause;
+  }
+  if (!part || part.fieldname !== 'avatar') {
+    part?.file?.resume?.();
+    const error = new Error('Multipart field "avatar" is required');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  try {
+    const buffer = await part.toBuffer();
+    if (part.file?.truncated) {
+      const error = new Error('Avatar file must be at most 5 MB');
+      error.statusCode = 413;
+      throw error;
+    }
+    return buffer;
+  } catch (cause) {
+    if (cause?.code === 'FST_REQ_FILE_TOO_LARGE' || cause?.statusCode === 413) {
+      const error = new Error('Avatar file must be at most 5 MB');
+      error.statusCode = 413;
+      throw error;
+    }
+    throw cause;
+  }
+}
+
+async function removeAvatarBestEffort(key, request) {
+  if (!key) return;
+  try {
+    await getAvatarStorage().remove(key);
+  } catch (error) {
+    request?.log?.error?.({ err: error, avatarKey: key }, 'failed to remove old avatar');
+  }
+}
+
+function refreshActiveUserAvatar(user) {
+  if (!user?.id) return;
+  const avatarUrl = user.avatarKey ? `/api/avatars/${encodeURIComponent(user.avatarKey)}` : null;
+  for (const [roomId, room] of presenceRooms) {
+    for (const peer of room.peers.values()) {
+      if (peer.accountUserId !== user.id) continue;
+      peer.avatarAccent = user.avatarAccent || null;
+      peer.avatarUrl = avatarUrl;
+      const message = { type: 'peer-updated', peer: publicPeer(peer) };
+      broadcast(room, message);
+      roomRuntime?.mirrorLegacyRoomEvent(roomId, message);
+      roomRuntime?.scheduleSummaryBroadcast(roomId);
+    }
+  }
+}
+
+// Push the refreshed public profile (avatar, display name) to everyone whose UI
+// caches it outside a live room: the friend list, DM threads, and pending
+// requests. Best-effort — a failed lookup must not fail the profile mutation.
+async function broadcastUserProfileToFriends(user, request) {
+  if (!user?.id) return;
+  try {
+    const friendIds = await getFriendStore().getFriendIds(user.id);
+    const message = { type: 'user-updated', user: publicUser(user) };
+    for (const friendId of friendIds) broadcastToUser(friendId, message);
+  } catch (error) {
+    request?.log?.error?.({ err: error, userId: user.id }, 'failed to broadcast profile update to friends');
+  }
+}
+
+async function handleUploadUserAvatar(req, res, request) {
+  const session = await resolveSessionUser(req);
+  if (!session) {
+    sendJson(res, 401, { ok: false, error: 'Требуется вход' });
+    return;
+  }
+  if (!checkAvatarUploadRate(res, session.user.id)) return;
+
+  const processed = await processAvatar(await readAvatarUpload(request));
+  const avatarKey = createAvatarKey('user', session.user.id, processed.hash);
+  await getAvatarStorage().save(avatarKey, processed.buffer);
+
+  let result;
+  try {
+    result = await getUserStore().swapAvatar({
+      userId: session.user.id,
+      avatarKey,
+      avatarAccent: processed.accent
+    });
+  } catch (error) {
+    // Another request may already have committed the same content-addressed key.
+    // Reconciliation removes a truly orphaned write without risking that live file.
+    throw error;
+  }
+  if (!result.user) {
+    if (session.user.avatarKey !== avatarKey) await removeAvatarBestEffort(avatarKey, request);
+    sendJson(res, 404, { ok: false, error: 'Аккаунт не найден' });
+    return;
+  }
+  if (result.previousAvatarKey !== avatarKey) {
+    await removeAvatarBestEffort(result.previousAvatarKey, request);
+  }
+  refreshActiveUserAvatar(result.user);
+  await broadcastUserProfileToFriends(result.user, request);
+  sendJson(res, 200, { ok: true, user: publicUser(result.user) });
+}
+
+async function handleDeleteUserAvatar(req, res, request) {
+  const session = await resolveSessionUser(req);
+  if (!session) {
+    sendJson(res, 401, { ok: false, error: 'Требуется вход' });
+    return;
+  }
+  const result = await getUserStore().swapAvatar({ userId: session.user.id });
+  if (!result.user) {
+    sendJson(res, 404, { ok: false, error: 'Аккаунт не найден' });
+    return;
+  }
+  await removeAvatarBestEffort(result.previousAvatarKey, request);
+  refreshActiveUserAvatar(result.user);
+  await broadcastUserProfileToFriends(result.user, request);
+  sendJson(res, 200, { ok: true, user: publicUser(result.user) });
+}
+
 async function handleChangePassword(req, res) {
   const session = await resolveSessionUser(req);
   if (!session) {
@@ -1022,12 +1312,9 @@ async function handleChangePassword(req, res) {
 }
 
 function publicLobbyRoom(room) {
-  return {
+  const result = {
+    avatarUrl: room.avatarKey ? `/api/avatars/${encodeURIComponent(room.avatarKey)}` : null,
     createdAt: room.createdAt,
-    emoji: room.emoji,
-    roomColorKey: room.roomColorKey,
-    roomIconKey: room.roomIconKey,
-    roomPresetKey: room.roomPresetKey,
     emptySince: room.emptySince,
     isStatic: room.isStatic,
     name: room.name,
@@ -1035,6 +1322,88 @@ function publicLobbyRoom(room) {
     relationship: room.relationship || 'owner',
     roomId: room.id
   };
+  if (room.lastMessageAt !== undefined) result.lastMessageAt = room.lastMessageAt;
+  if (Number.isFinite(room.unreadCount)) result.unreadCount = Math.max(0, room.unreadCount);
+  return result;
+}
+
+function broadcastRoomUpdate(roomId, room) {
+  const payload = publicLobbyRoom(room);
+  const presence = presenceRooms.get(roomId);
+  if (presence) broadcast(presence, { type: 'room-updated', room: payload });
+  roomRuntime?.mirrorLegacyRoomEvent(roomId, { type: 'room-updated', room: payload });
+  roomRuntime?.invalidateRecipientCache(roomId);
+  roomRuntime?.scheduleSummaryBroadcast(roomId);
+  return payload;
+}
+
+async function handleUploadRoomAvatar(req, res, roomId, request) {
+  const room = await authorizeRoomMutation(req, res, roomId);
+  if (!room) return;
+  if (!checkAvatarUploadRate(res, room.ownerId)) return;
+
+  const processed = await processAvatar(await readAvatarUpload(request));
+  const avatarKey = createAvatarKey('room', room.id, processed.hash);
+  await getAvatarStorage().save(avatarKey, processed.buffer);
+
+  let result;
+  try {
+    result = await getRoomStore().swapRoomAvatar(roomId, avatarKey);
+  } catch (error) {
+    // Another request may already have committed the same content-addressed key.
+    // Reconciliation removes a truly orphaned write without risking that live file.
+    throw error;
+  }
+  if (!result.room) {
+    if (room.avatarKey !== avatarKey) await removeAvatarBestEffort(avatarKey, request);
+    sendJson(res, 404, { ok: false, error: 'Комната не найдена' });
+    return;
+  }
+  if (result.previousAvatarKey !== avatarKey) {
+    await removeAvatarBestEffort(result.previousAvatarKey, request);
+  }
+  sendJson(res, 200, { ok: true, room: broadcastRoomUpdate(roomId, result.room) });
+}
+
+async function handleDeleteRoomAvatar(req, res, roomId, request) {
+  const room = await authorizeRoomMutation(req, res, roomId);
+  if (!room) return;
+  const result = await getRoomStore().swapRoomAvatar(roomId, null);
+  if (!result.room) {
+    sendJson(res, 404, { ok: false, error: 'Комната не найдена' });
+    return;
+  }
+  await removeAvatarBestEffort(result.previousAvatarKey, request);
+  sendJson(res, 200, { ok: true, room: broadcastRoomUpdate(roomId, result.room) });
+}
+
+async function openAvatarStream(key) {
+  validateAvatarKey(key);
+  const stream = getAvatarStorage().createReadStream(key);
+  await new Promise((resolve, reject) => {
+    stream.once('open', resolve);
+    stream.once('error', reject);
+  });
+  return stream;
+}
+
+async function handleGetAvatar(res, key) {
+  let stream;
+  try {
+    stream = await openAvatarStream(key);
+  } catch (error) {
+    if (error instanceof TypeError || error?.code === 'ENOENT') {
+      sendJson(res, 404, { ok: false, error: 'Avatar not found' });
+      return;
+    }
+    throw error;
+  }
+  res.writeHead(200, {
+    ...baseHeaders(),
+    'Cache-Control': 'public, max-age=31536000, immutable',
+    'Content-Type': 'image/webp'
+  });
+  stream.pipe(res);
 }
 
 async function handleAuthRooms(req, res) {
@@ -1079,6 +1448,24 @@ async function handleAddAuthRoom(req, res) {
   sendJson(res, 200, { ok: true, room: publicLobbyRoom(added.room) });
 }
 
+async function handleMarkRoomChatRead(req, res, rawRoomId) {
+  const user = await requireSessionUser(req, res);
+  if (!user) return;
+  const roomId = normalizeRoomId(rawRoomId);
+  if (!roomId) {
+    sendJson(res, 404, { ok: false, error: 'Комната не найдена' });
+    return;
+  }
+
+  const lastReadAt = await getRoomStore().markRoomChatRead(roomId, user.id);
+  if (lastReadAt == null) {
+    sendJson(res, 404, { ok: false, error: 'Комната не найдена' });
+    return;
+  }
+  await roomRuntime?.sendRoomSummaryToUser(roomId, user.id);
+  sendJson(res, 200, { ok: true, lastReadAt, unreadCount: 0 });
+}
+
 async function handleRoomStatus(res, url) {
   const match = url.pathname.match(/^\/rooms\/([A-Za-z0-9_-]{3,48})$/);
   const roomId = match ? normalizeRoomId(match[1]) : '';
@@ -1096,11 +1483,8 @@ async function handleRoomStatus(res, url) {
 
   sendJson(res, 200, {
     ok: true,
+    avatarUrl: room.avatarKey ? `/api/avatars/${encodeURIComponent(room.avatarKey)}` : null,
     createdAt: room.createdAt,
-    emoji: room.emoji,
-    roomColorKey: room.roomColorKey,
-    roomIconKey: room.roomIconKey,
-    roomPresetKey: room.roomPresetKey,
     exists: true,
     emptySince: room.emptySince,
     isStatic: room.isStatic,
@@ -1126,11 +1510,33 @@ async function handleRoomPeers(res, roomId) {
   });
 }
 
+const LEGACY_STATE_MUTATION_FIELDS = [
+  'name',
+  'muted',
+  'deafened',
+  'screen',
+  'screenAudio',
+  'screenProfileId',
+  'screenStreamId',
+  'viewedScreenPeerId'
+];
+
 async function handleState(req, res) {
   const body = await readJsonBody(req);
   const roomId = normalizeRoomId(body.roomId);
   const peerId = normalizePeerId(body.peerId);
   const sessionToken = normalizeSessionToken(body.sessionToken);
+  const sessionUser = await resolveOptionalSessionUser(req);
+  const clientIp = getClientIp(req, TRUST_PROXY);
+
+  // Moderation invalidates and removes the peer before its next state write.
+  // Check request identity first so the client still receives the stable ban
+  // contract instead of the generic invalid-session response.
+  if (await findRoomBan(roomId, sessionUser?.id, clientIp)) {
+    sendRoomBanned(res, roomId);
+    return;
+  }
+
   const authorized = getAuthorizedPeer(roomId, peerId, sessionToken);
 
   if (!authorized) {
@@ -1138,36 +1544,26 @@ async function handleState(req, res) {
     return;
   }
 
-  const { peer, room } = authorized;
+  const { peer } = authorized;
 
-  if (Object.hasOwn(body, 'name')) {
-    peer.name = cleanName(body.name);
-  }
-  if (Object.hasOwn(body, 'muted')) {
-    peer.muted = Boolean(body.muted);
-  }
-  if (Object.hasOwn(body, 'deafened')) {
-    peer.deafened = Boolean(body.deafened);
-  }
-  if (Object.hasOwn(body, 'screen')) {
-    peer.screen = Boolean(body.screen);
-  }
-  if (Object.hasOwn(body, 'screenAudio')) {
-    peer.screenAudio = Boolean(body.screenAudio);
-  }
-  if (Object.hasOwn(body, 'screenProfileId')) {
-    peer.screenProfileId = cleanScreenProfileId(body.screenProfileId);
-  }
-  if (Object.hasOwn(body, 'screenStreamId')) {
-    peer.screenStreamId = cleanStreamId(body.screenStreamId);
-  }
-  if (Object.hasOwn(body, 'viewedScreenPeerId')) {
-    peer.viewedScreenPeerId = normalizePeerId(body.viewedScreenPeerId) || '';
+  if (await findRoomBan(roomId, peer.accountUserId, peer.ip)) {
+    sendRoomBanned(res, roomId);
+    return;
   }
 
-  broadcast(room, { type: 'peer-updated', peer: publicPeer(peer) });
-  roomRuntime?.mirrorLegacyRoomEvent(roomId, { type: 'peer-updated', peer: publicPeer(peer) });
-  roomRuntime?.scheduleSummaryBroadcast(roomId);
+  // A session token identifies the logical peer, not the current transport.
+  // Keeping HTTP writes would let a superseded tab mutate the replacement
+  // peer. WebSocket updates carry the active connection lease; this legacy
+  // route remains read-only for compatibility and introspection.
+  if (LEGACY_STATE_MUTATION_FIELDS.some((field) => Object.hasOwn(body, field))) {
+    sendJson(res, 409, {
+      ok: false,
+      code: 'state_updates_require_websocket',
+      error: 'Peer state updates require the active WebSocket connection'
+    });
+    return;
+  }
+
   sendJson(res, 200, { ok: true, peer: publicPeer(peer) });
 }
 
@@ -1200,6 +1596,11 @@ async function handleRoomChatPost(req, res, roomId) {
     return;
   }
 
+  if (await findRoomBan(roomId, sessionUser?.id, clientIp)) {
+    sendRoomBanned(res, roomId);
+    return;
+  }
+
   if (!text) {
     sendJson(res, 400, { ok: false, error: 'Invalid chat message' });
     return;
@@ -1225,6 +1626,10 @@ async function handleRoomChatPost(req, res, roomId) {
       sendJson(res, 403, { ok: false, error: 'Invalid peer session' });
       return;
     }
+    if (await findRoomBan(roomId, activePeer.accountUserId, activePeer.ip || clientIp)) {
+      sendRoomBanned(res, roomId);
+      return;
+    }
     peerId = activePeer.id;
     if (sessionAvatarColorKey(sessionUser)) activePeer.avatarColorKey = sessionAvatarColorKey(sessionUser);
     avatarColorKey = activePeer.avatarColorKey || avatarColorForPeerId(peerId);
@@ -1241,7 +1646,8 @@ async function handleRoomChatPost(req, res, roomId) {
     avatarColorKey,
     name,
     peerId,
-    text
+    text,
+    authorUserId: sessionUser ? sessionUser.id : (activePeer?.accountUserId || null)
   });
 
   if (!message) {
@@ -1249,9 +1655,119 @@ async function handleRoomChatPost(req, res, roomId) {
     return;
   }
 
-  const publicMessage = { ...message, avatarColorKey };
+  const publicMessage = {
+    ...message,
+    avatarAccent: sessionUser?.avatarAccent || activePeer?.avatarAccent || null,
+    avatarColorKey,
+    avatarUrl: sessionUser?.avatarKey
+      ? `/api/avatars/${encodeURIComponent(sessionUser.avatarKey)}`
+      : activePeer?.avatarUrl || null
+  };
   roomRuntime?.broadcastChatMessage(roomId, publicMessage);
   sendJson(res, 201, { ok: true, message: publicChatMessage(publicMessage) });
+}
+
+async function removeLiveKitParticipant(roomId, peerId) {
+  const livekit = getLiveKitConfig();
+  if (!livekit.enabled) return;
+  const service = new RoomServiceClient(getLiveKitHttpUrl(livekit.url), livekit.apiKey, livekit.apiSecret);
+  try {
+    await service.removeParticipant(getLiveKitRoomName(roomId), peerId);
+  } catch (error) {
+    if (!/not.?found/i.test(String(error?.message || ''))) {
+      console.error('Failed to remove moderated LiveKit participant:', error);
+    }
+  }
+}
+
+async function disconnectModeratedPeer(room, peer, type) {
+  const event = { type, roomId: room.id, peerId: peer.id };
+  sendEvent(peer, event);
+  if (peer.accountUserId) broadcastToUser(peer.accountUserId, event);
+  for (const connection of wsRegistry?.connections.values() || []) {
+    if (connection.activeVoice?.roomId !== room.id || connection.activeVoice?.peerId !== peer.id) continue;
+    connection.activeVoice = null;
+    connection.previewRoomIds.delete(room.id);
+    wsRegistry.unregisterConnectionForRoom(connection, room.id);
+  }
+  closePeer(room.id, peer.id, peer.transport?.id, type === 'room.banned' ? 'banned' : 'kicked');
+  if (typeof getRoomStore().invalidatePeerIdentity === 'function') {
+    await getRoomStore().invalidatePeerIdentity({ roomId: room.id, peerId: peer.id });
+  }
+  await removeLiveKitParticipant(room.id, peer.id);
+}
+
+async function handleKickRoomPeer(req, res, roomId) {
+  const room = await authorizeRoomMutation(req, res, roomId);
+  if (!room) return;
+  const body = await readJsonBody(req);
+  const peerId = normalizePeerId(body.peerId);
+  const peer = peerId ? room.peers.get(peerId) : null;
+  if (!peer) {
+    sendJson(res, 404, { ok: false, error: 'Участник не найден' });
+    return;
+  }
+  if (peer.accountUserId && peer.accountUserId === room.ownerId) {
+    sendJson(res, 400, { ok: false, error: 'Нельзя исключить владельца комнаты' });
+    return;
+  }
+  await disconnectModeratedPeer(room, peer, 'room.kicked');
+  sendJson(res, 200, { ok: true });
+}
+
+async function handleBanRoomPeer(req, res, roomId) {
+  const room = await authorizeRoomMutation(req, res, roomId);
+  if (!room) return;
+  const body = await readJsonBody(req);
+  const peerId = normalizePeerId(body.peerId);
+  const peer = peerId ? room.peers.get(peerId) : null;
+  if (!peer) {
+    sendJson(res, 404, { ok: false, error: 'Участник не найден' });
+    return;
+  }
+  if (peer.accountUserId && peer.accountUserId === room.ownerId) {
+    sendJson(res, 400, { ok: false, error: 'Нельзя заблокировать владельца комнаты' });
+    return;
+  }
+  // An authenticated participant is a durable account identity. Do not also
+  // attach their current IP to the ban: users behind the same NAT (including
+  // the room owner) would otherwise be blocked and disconnected as collateral.
+  // Guests have no account identity, so their ban remains IP-scoped.
+  const bannedUserId = peer.accountUserId || null;
+  const bannedIp = bannedUserId ? '' : (peer.ip || '');
+  const result = await getRoomStore().createRoomBan({
+    roomId,
+    userId: bannedUserId,
+    ip: bannedIp,
+    maxBans: MAX_ROOM_BANS
+  });
+  if (result.status === 'cap_exceeded') {
+    sendJson(res, 409, { ok: false, code: 'room_ban_limit', error: 'Достигнут лимит блокировок комнаты' });
+    return;
+  }
+  if (!result.ban) {
+    sendJson(res, 409, { ok: false, error: 'Не удалось сохранить блокировку' });
+    return;
+  }
+  const matchingPeers = [...room.peers.values()].filter((candidate) => bannedUserId
+    ? candidate.accountUserId === bannedUserId
+    : Boolean(bannedIp && candidate.ip === bannedIp)
+  );
+  for (const candidate of matchingPeers) {
+    await disconnectModeratedPeer(room, candidate, 'room.banned');
+  }
+  sendJson(res, 201, { ok: true, banId: result.ban.id });
+}
+
+async function handleUndoRoomBan(req, res, roomId, banId) {
+  const room = await authorizeRoomMutation(req, res, roomId);
+  if (!room) return;
+  const deleted = await getRoomStore().deleteRoomBan({ roomId, banId });
+  if (deleted.status !== 'deleted') {
+    sendJson(res, 404, { ok: false, error: 'Блокировка не найдена' });
+    return;
+  }
+  sendJson(res, 200, { ok: true });
 }
 
 // --- Friends, requests, and direct messages -----------------------------
@@ -1391,10 +1907,24 @@ async function handleSendFriendRequest(req, res) {
     case 'accepted':
       // Reverse request existed: both sides are now friends.
       broadcastToUser(result.user.id, { type: 'friend-accepted', userId: user.id });
+      broadcastToUser(result.user.id, {
+        type: 'notification.friend.accepted',
+        dedupeKey: `friend-accepted:${result.user.id}:${user.id}`,
+        user: notificationActor(user),
+        context: { userId: user.id, relationship: 'friend' }
+      });
+      void sendFriendPush(result.user.id, 'friend.accepted', user, `friend-accepted:${result.user.id}:${user.id}`);
       sendJson(res, 200, { ok: true, status: 'accepted', user: result.user });
       return;
     default:
       broadcastToUser(result.user.id, { type: 'friend-request' });
+      broadcastToUser(result.user.id, {
+        type: 'notification.friend.request',
+        dedupeKey: `friend-request:${result.requestId}`,
+        requester: notificationActor(user),
+        requestId: result.requestId
+      });
+      void sendFriendPush(result.user.id, 'friend.request', user, `friend-request:${result.requestId}`);
       sendJson(res, 201, { ok: true, status: 'sent', user: result.user });
   }
 }
@@ -1416,6 +1946,13 @@ async function handleRespondFriendRequest(req, res, requestId, action) {
   }
   if (result.status === 'accepted') {
     broadcastToUser(result.requesterId, { type: 'friend-accepted', userId: user.id });
+    broadcastToUser(result.requesterId, {
+      type: 'notification.friend.accepted',
+      dedupeKey: `friend-accepted:${result.requesterId}:${user.id}`,
+      user: notificationActor(user),
+      context: { userId: user.id, relationship: 'friend', requestId: id }
+    });
+    void sendFriendPush(result.requesterId, 'friend.accepted', user, `friend-accepted:${result.requesterId}:${user.id}`);
     sendJson(res, 200, { ok: true, status: 'accepted', user: result.user });
     return;
   }
@@ -1488,7 +2025,11 @@ async function handleDmThread(req, res, peerId) {
     broadcastToUser(id, { type: 'dm-read', userId: user.id });
   }
 
-  sendJson(res, 200, { ok: true, peer: publicUser(peer), messages });
+  const notifications = getNotificationStore();
+  const muted = typeof notifications.isDmMuted === 'function'
+    ? await notifications.isDmMuted({ userId: user.id, peerUserId: id })
+    : false;
+  sendJson(res, 200, { ok: true, peer: publicUser(peer), messages, muted });
 }
 
 async function handleSendDm(req, res, peerId) {
@@ -1527,8 +2068,50 @@ async function handleSendDm(req, res, peerId) {
   const message = await getFriendStore().sendMessage({ senderId: user.id, recipientId: id, body: text });
   // Deliver to the recipient and the sender's other tabs; clients dedupe by id.
   broadcastToUser(id, { type: 'dm-message', message });
+  await broadcastDmNotification(id, user, message);
   broadcastToUser(user.id, { type: 'dm-message', message });
   sendJson(res, 201, { ok: true, message });
+}
+
+// The invited recipient accepts or declines a room invitation stored as a DM.
+// The updated message fans out as a regular edit so both timelines converge.
+async function handleRespondDmInvite(req, res, peerIdParam, messageId) {
+  const user = await requireSessionUser(req, res);
+  if (!user) return;
+
+  const peerId = cleanUuid(peerIdParam);
+  if (!peerId) {
+    sendJson(res, 404, { ok: false, error: 'Диалог не найден' });
+    return;
+  }
+
+  const body = await readJsonBody(req);
+  const action = body.action === 'accept' ? 'accepted' : body.action === 'decline' ? 'declined' : '';
+  if (!action) {
+    sendJson(res, 400, { ok: false, error: 'Неверное действие' });
+    return;
+  }
+
+  const current = await getFriendStore().getMessage(user.id, peerId, messageId);
+  if (!current || !current.invite) {
+    sendJson(res, 404, { ok: false, error: 'Приглашение не найдено' });
+    return;
+  }
+  if (current.recipientId !== user.id) {
+    sendJson(res, 403, { ok: false, error: 'Отвечать может только приглашённый' });
+    return;
+  }
+
+  const message = await getFriendStore().respondInvite({ messageId, recipientId: user.id, status: action });
+  if (!message) {
+    sendJson(res, 409, { ok: false, error: 'Приглашение уже обработано' });
+    return;
+  }
+
+  const event = { type: 'dm.message.edited', message };
+  broadcastToUser(peerId, event);
+  broadcastToUser(user.id, event);
+  sendJson(res, 200, { ok: true, message });
 }
 
 async function handleMarkDmRead(req, res, peerId) {
@@ -1546,6 +2129,533 @@ async function handleMarkDmRead(req, res, peerId) {
     broadcastToUser(id, { type: 'dm-read', userId: user.id });
   }
   sendJson(res, 200, { ok: true, count: result.count });
+}
+
+async function handleRingRoom(req, res, rawRoomId) {
+  const user = await requireSessionUser(req, res);
+  if (!user) return;
+  const roomId = normalizeRoomId(rawRoomId);
+  const body = await readJsonBody(req);
+  const targetUserId = cleanUuid(body.userId);
+  if (!roomId || !targetUserId || targetUserId === user.id) {
+    sendJson(res, 400, { ok: false, error: 'Invalid ring target' });
+    return;
+  }
+
+  const presence = presenceRooms.get(roomId);
+  const senderIsActive = Boolean(presence && Array.from(presence.peers.values()).some((peer) => peer.accountUserId === user.id));
+  if (!senderIsActive) {
+    sendJson(res, 403, { ok: false, error: 'Join the room before inviting friends' });
+    return;
+  }
+  if (!(await getFriendStore().areFriends(user.id, targetUserId))) {
+    sendJson(res, 403, { ok: false, error: 'You are not friends' });
+    return;
+  }
+
+  const rate = ringLimiter.check(`${user.id}:${targetUserId}`);
+  if (!rate.allowed) {
+    sendJson(res, 429, { ok: false, error: 'Invite cooldown', retryAfterSeconds: rate.retryAfterSeconds }, {
+      'Retry-After': String(rate.retryAfterSeconds)
+    });
+    return;
+  }
+
+  const room = await getRoomStore().getRoom(roomId);
+  if (!room) {
+    sendJson(res, 404, { ok: false, error: 'Room not found' });
+    return;
+  }
+  const expiresAt = Date.now() + RING_TTL_MS;
+  const fromUser = notificationActor(user);
+  const ringRoom = { id: room.id, name: room.name || '', emoji: room.emoji || '' };
+  broadcastToUser(targetUserId, { type: 'ring.incoming', fromUser, room: ringRoom, expiresAt });
+  // Persist the invitation as a regular DM so both sides share one timeline
+  // entry (with live status) instead of per-device local copies.
+  const inviteMessage = await getFriendStore().sendMessage({
+    senderId: user.id,
+    recipientId: targetUserId,
+    body: room.name ? `Приглашение в комнату «${room.name}»` : 'Приглашение в комнату',
+    metadata: { kind: 'room-invite', roomId: room.id, roomName: room.name || '', status: 'pending', expiresAt }
+  });
+  broadcastToUser(targetUserId, { type: 'dm-message', message: inviteMessage });
+  broadcastToUser(user.id, { type: 'dm-message', message: inviteMessage });
+  void queuePush(targetUserId, {
+    type: 'ring',
+    title: `${user.displayName || user.login || 'Друг'} зовёт вас`,
+    body: room.name ? `Комната «${room.name}»` : 'Присоединиться к комнате',
+    privateBody: 'Вас зовут в голосовую комнату.',
+    tag: `ring:${user.id}:${roomId}`,
+    dedupeKey: `ring:${user.id}:${roomId}:${expiresAt}`,
+    url: `/r/${encodeURIComponent(roomId)}`,
+    expiresAt
+  }, { expiresAt });
+  sendJson(res, 200, { ok: true });
+}
+
+// --- Notification preferences -------------------------------------------
+
+function handlePushConfig(_req, res) {
+  sendJson(res, 200, getPushService().config);
+}
+
+function cleanPushSubscription(value) {
+  const endpoint = cleanPushEndpoint(value?.endpoint);
+  const p256dh = String(value?.keys?.p256dh || '').trim();
+  const auth = String(value?.keys?.auth || '').trim();
+  if (!endpoint || endpoint.length > 4096 || !p256dh || p256dh.length > 1024 || !auth || auth.length > 1024) return null;
+  return { endpoint, keys: { p256dh, auth } };
+}
+
+function checkPushSubscriptionRate(res, userId) {
+  const rate = pushSubscriptionLimiter.check(`push-subscription:${userId}`);
+  if (rate.allowed) return true;
+  sendJson(
+    res,
+    429,
+    { ok: false, error: 'Too many push subscription changes', retryAfterSeconds: rate.retryAfterSeconds },
+    { 'Retry-After': String(rate.retryAfterSeconds) }
+  );
+  return false;
+}
+
+async function handleCreatePushSubscription(req, res) {
+  const user = await requireSessionUser(req, res);
+  if (!user) return;
+  if (!getPushService().config.enabled) {
+    sendJson(res, 503, { ok: false, error: 'Push notifications are disabled' });
+    return;
+  }
+  const body = await readJsonBody(req);
+  const subscription = cleanPushSubscription(body.subscription);
+  if (!subscription) {
+    sendJson(res, 400, { ok: false, error: 'Invalid push subscription' });
+    return;
+  }
+  if (!checkPushSubscriptionRate(res, user.id)) return;
+  const stored = await getPushStore().upsert({
+    userId: user.id,
+    subscription,
+    metadata: { userAgent: String(req.headers?.['user-agent'] || '').slice(0, 512) }
+  });
+  if (!stored) {
+    sendJson(res, 409, { ok: false, error: 'Push endpoint belongs to another subscription' });
+    return;
+  }
+  sendJson(res, 201, { ok: true });
+}
+
+async function handleDeletePushSubscription(req, res) {
+  const user = await requireSessionUser(req, res);
+  if (!user) return;
+  const body = await readJsonBody(req);
+  const endpoint = cleanPushEndpoint(body.endpoint);
+  if (!endpoint) {
+    sendJson(res, 400, { ok: false, error: 'Invalid push endpoint' });
+    return;
+  }
+  if (!checkPushSubscriptionRate(res, user.id)) return;
+  await getPushStore().remove({ userId: user.id, endpoint });
+  sendJson(res, 200, { ok: true });
+}
+
+async function handleNotificationPreferences(req, res) {
+  const user = await requireSessionUser(req, res);
+  if (!user) return;
+
+  const preferences = await getNotificationStore().getPreferences(user.id);
+  sendJson(res, 200, { ok: true, preferences });
+}
+
+function sendNotificationMutationResult(res, result, { muted = null } = {}) {
+  switch (result.status) {
+    case 'not_found':
+      sendJson(res, 404, { ok: false, error: 'Not found' });
+      return;
+    case 'self':
+      sendJson(res, 400, { ok: false, error: 'Invalid notification target' });
+      return;
+    case 'temporary_room':
+      sendJson(res, 403, { ok: false, error: 'Only saved rooms can be muted' });
+      return;
+    case 'not_saved_room':
+      sendJson(res, 403, { ok: false, error: 'Room is not saved' });
+      return;
+    default:
+      sendJson(res, 200, {
+        ok: true,
+        ...(muted === null ? {} : { muted }),
+        preferences: result.preferences
+      });
+  }
+}
+
+function readRequiredBoolean(body, fieldName) {
+  if (!body || typeof body[fieldName] !== 'boolean') {
+    return { ok: false, error: `${fieldName} must be a boolean` };
+  }
+  return { ok: true, value: body[fieldName] };
+}
+
+async function handleSetDmMute(req, res, peerId) {
+  const user = await requireSessionUser(req, res);
+  if (!user) return;
+
+  const id = cleanUuid(peerId);
+  if (!id || id === user.id) {
+    sendJson(res, id === user.id ? 400 : 404, { ok: false, error: 'Invalid notification target' });
+    return;
+  }
+
+  const body = await readJsonBody(req);
+  const muted = readRequiredBoolean(body, 'muted');
+  if (!muted.ok) {
+    sendJson(res, 400, { ok: false, error: muted.error });
+    return;
+  }
+
+  const result = await getNotificationStore().setDmMute({ userId: user.id, peerUserId: id, muted: muted.value });
+  sendNotificationMutationResult(res, result, { muted: muted.value });
+}
+
+async function handleSetRoomMute(req, res, rawRoomId) {
+  const user = await requireSessionUser(req, res);
+  if (!user) return;
+
+  const roomId = normalizeRoomId(rawRoomId);
+  if (!roomId) {
+    sendJson(res, 404, { ok: false, error: 'Invalid notification target' });
+    return;
+  }
+
+  const body = await readJsonBody(req);
+  const muted = readRequiredBoolean(body, 'muted');
+  if (!muted.ok) {
+    sendJson(res, 400, { ok: false, error: muted.error });
+    return;
+  }
+
+  const result = await getNotificationStore().setRoomMute({ userId: user.id, roomId, muted: muted.value });
+  sendNotificationMutationResult(res, result, { muted: muted.value });
+}
+
+async function handleSetPrivateNotifications(req, res) {
+  const user = await requireSessionUser(req, res);
+  if (!user) return;
+
+  const body = await readJsonBody(req);
+  const privateNotifications = readRequiredBoolean(body, 'privateNotifications');
+  if (!privateNotifications.ok) {
+    sendJson(res, 400, { ok: false, error: privateNotifications.error });
+    return;
+  }
+
+  const result = await getNotificationStore().setPrivateNotifications({
+    userId: user.id,
+    privateNotifications: privateNotifications.value
+  });
+  sendNotificationMutationResult(res, result);
+}
+
+async function publishPresenceStatusUpdate(user, result, request) {
+  if (result.status !== 'updated') return;
+  const presenceStatus = cleanPresenceStatus(result.preferences?.presenceStatus)
+    || (result.preferences?.doNotDisturb ? 'dnd' : 'online');
+  result.preferences = {
+    ...result.preferences,
+    doNotDisturb: presenceStatus === 'dnd',
+    presenceStatus
+  };
+  wsRegistry?.setUserPresenceStatus(user.id, presenceStatus);
+  const updatedUser = {
+    ...user,
+    doNotDisturb: presenceStatus === 'dnd',
+    presenceStatus
+  };
+  broadcastToUser(user.id, {
+    type: 'notification-settings-updated',
+    preferences: result.preferences
+  });
+  await broadcastUserProfileToFriends(updatedUser, request);
+}
+
+async function handleSetNotificationSettings(req, res, request) {
+  const user = await requireSessionUser(req, res);
+  if (!user) return;
+
+  const body = await readJsonBody(req);
+  const dnd = readRequiredBoolean(body, 'dnd');
+  if (!dnd.ok) {
+    sendJson(res, 400, { ok: false, error: dnd.error });
+    return;
+  }
+
+  const result = await getNotificationStore().setDoNotDisturb({
+    userId: user.id,
+    doNotDisturb: dnd.value
+  });
+  await publishPresenceStatusUpdate(user, result, request);
+  sendNotificationMutationResult(res, result);
+}
+
+async function handleSetPresenceStatus(req, res, request) {
+  const user = await requireSessionUser(req, res);
+  if (!user) return;
+
+  const body = await readJsonBody(req);
+  const presenceStatus = cleanPresenceStatus(body?.status);
+  if (!presenceStatus) {
+    sendJson(res, 400, { ok: false, error: 'status must be one of: online, away, dnd, offline' });
+    return;
+  }
+  if (body?.automatic !== undefined && typeof body.automatic !== 'boolean') {
+    sendJson(res, 400, { ok: false, error: 'automatic must be a boolean' });
+    return;
+  }
+  const automatic = body?.automatic === true;
+  if (automatic && presenceStatus !== 'away' && presenceStatus !== 'online') {
+    sendJson(res, 400, { ok: false, error: 'automatic presence can only transition between online and away' });
+    return;
+  }
+
+  const result = await getNotificationStore().setPresenceStatus({
+    automatic,
+    userId: user.id,
+    presenceStatus
+  });
+  await publishPresenceStatusUpdate(user, result, request);
+  sendNotificationMutationResult(res, result);
+}
+
+async function handleDeleteRoomChatMessage(req, res, roomId, messageId) {
+  const room = await getRoom(roomId);
+  if (!room) {
+    sendJson(res, 404, { ok: false, error: 'Room not found', roomId });
+    return;
+  }
+  const body = await readJsonBody(req);
+  const requestedPeerId = normalizePeerId(body.peerId);
+  const sessionToken = normalizeSessionToken(body.sessionToken);
+  const sessionUser = await resolveOptionalSessionUser(req);
+
+  // Load the message (must not be deleted)
+  const msg = await getRoomStore().getMessage(roomId, messageId);
+  if (!msg) {
+    sendJson(res, 404, { ok: false, error: 'Message not found' });
+    return;
+  }
+
+  // Permission:
+  // - guest peer session matches the message peerId, or
+  // - logged in authorUserId matches current, or
+  // - current user is owner of static room
+  const isPeerAuthor = requestedPeerId && requestedPeerId === msg.peerId;
+  const isAccountAuthor = sessionUser && msg.authorUserId && sessionUser.id === msg.authorUserId;
+  const isRoomOwner = sessionUser && room.isStatic && room.ownerId === sessionUser.id;
+
+  if (isPeerAuthor) {
+    // verify guest token
+    const activePeer = room.peers.get(requestedPeerId);
+    if (!activePeer || !tokensMatch(activePeer.sessionToken, sessionToken)) {
+      sendJson(res, 403, { ok: false, error: 'Invalid peer session' });
+      return;
+    }
+  } else if (!isAccountAuthor && !isRoomOwner) {
+    sendJson(res, 403, { ok: false, error: 'Not allowed to delete this message' });
+    return;
+  }
+  // Only owners allowed on non-static? Per plan: only static have moderation.
+  if (isRoomOwner && !room.isStatic) {
+    sendJson(res, 403, { ok: false, error: 'Moderation only for static rooms' });
+    return;
+  }
+
+  const deleted = await getRoomStore().softDeleteMessage(roomId, messageId);
+  if (!deleted) {
+    sendJson(res, 404, { ok: false, error: 'Message not found' });
+    return;
+  }
+
+  // Realtime delete notification to both voice peers and preview subscribers.
+  // Use the room-detail WS envelope directly: legacy peer broadcast only accepts
+  // legacy event names and treats unknown events as transport failures.
+  const delEvent = buildServerEnvelope('room.chat.deleted', { roomId, messageId });
+  roomRuntime?.broadcastRoomDetail?.(roomId, delEvent);
+
+  sendJson(res, 200, { ok: true, deleted: true });
+}
+
+async function handleEditRoomChatMessage(req, res, roomId, messageId) {
+  const room = await getRoom(roomId);
+  if (!room) {
+    sendJson(res, 404, { ok: false, error: 'Room not found', roomId });
+    return;
+  }
+
+  const clientIp = getClientIp(req, TRUST_PROXY);
+  const body = await readJsonBody(req);
+  const sessionUser = await resolveOptionalSessionUser(req);
+  if (await findRoomBan(roomId, sessionUser?.id, clientIp)) {
+    sendRoomBanned(res, roomId);
+    return;
+  }
+
+  const text = cleanChatText(body.text);
+  if (!text) {
+    sendJson(res, 400, { ok: false, error: 'Invalid chat message' });
+    return;
+  }
+
+  const requestedPeerId = normalizePeerId(body.peerId);
+  const sessionToken = normalizeSessionToken(body.sessionToken);
+  const current = await getRoomStore().getMessage(roomId, messageId);
+  if (!current) {
+    sendJson(res, 404, { ok: false, error: 'Message not found' });
+    return;
+  }
+
+  const isPeerAuthor = Boolean(requestedPeerId && requestedPeerId === current.peerId);
+  const isAccountAuthor = Boolean(sessionUser && current.authorUserId && sessionUser.id === current.authorUserId);
+  if (isAccountAuthor) {
+    // The account id is durable ownership. It also lets a signed-in author edit
+    // after their transient room peer session has disconnected or rotated.
+  } else if (isPeerAuthor) {
+    const activePeer = room.peers.get(requestedPeerId);
+    if (!activePeer || !tokensMatch(activePeer.sessionToken, sessionToken)) {
+      sendJson(res, 403, { ok: false, error: 'Invalid peer session' });
+      return;
+    }
+    if (await findRoomBan(roomId, activePeer.accountUserId, activePeer.ip || clientIp)) {
+      sendRoomBanned(res, roomId);
+      return;
+    }
+  } else {
+    // Deliberately no owner/moderator override: editing always belongs to the
+    // original author, even in a static room.
+    sendJson(res, 403, { ok: false, error: 'Not allowed to edit this message' });
+    return;
+  }
+
+  const rate = roomChatLimiter.check(`${clientIp}:${roomId}`);
+  if (!rate.allowed) {
+    sendJson(
+      res,
+      429,
+      { ok: false, error: 'Too many chat messages', retryAfterSeconds: rate.retryAfterSeconds },
+      { 'Retry-After': String(rate.retryAfterSeconds) }
+    );
+    return;
+  }
+
+  const message = await getRoomStore().editMessage(roomId, messageId, text);
+  if (!message) {
+    sendJson(res, 404, { ok: false, error: 'Message not found' });
+    return;
+  }
+
+  const publicMessage = publicChatMessage(message);
+  roomRuntime?.broadcastRoomDetail?.(
+    roomId,
+    buildServerEnvelope('room.chat.edited', { roomId, message: publicMessage })
+  );
+  sendJson(res, 200, { ok: true, message: publicMessage });
+}
+
+async function handleDeleteDmMessage(req, res, peerIdParam, messageId) {
+  const user = await requireSessionUser(req, res);
+  if (!user) return;
+
+  const peerId = cleanUuid(peerIdParam);
+  if (!peerId) {
+    sendJson(res, 404, { ok: false, error: 'Диалог не найден' });
+    return;
+  }
+
+  const msg = await getFriendStore().getMessage(user.id, peerId, messageId);
+  if (!msg) {
+    sendJson(res, 404, { ok: false, error: 'Сообщение не найдено' });
+    return;
+  }
+
+  // Only sender can delete own message (deletes for both)
+  if (msg.senderId !== user.id) {
+    sendJson(res, 403, { ok: false, error: 'Можно удалять только свои сообщения' });
+    return;
+  }
+
+  const deleted = await getFriendStore().softDeleteMessage(messageId);
+  if (!deleted) {
+    sendJson(res, 404, { ok: false, error: 'Сообщение не найдено' });
+    return;
+  }
+
+  // Each side indexes the event by the other participant's id.
+  broadcastToUser(peerId, { type: 'dm.message.deleted', messageId, peerUserId: user.id });
+  broadcastToUser(user.id, { type: 'dm.message.deleted', messageId, peerUserId: peerId });
+
+  // If the deleted msg was unread for the other side, they may recalc, we can also send dm-read like bump?
+  // For simplicity, let client re-fetch count on delete event if needed.
+
+  sendJson(res, 200, { ok: true, deleted: true });
+}
+
+async function handleEditDmMessage(req, res, peerIdParam, messageId) {
+  const user = await requireSessionUser(req, res);
+  if (!user) return;
+
+  const peerId = cleanUuid(peerIdParam);
+  if (!peerId) {
+    sendJson(res, 404, { ok: false, error: 'Диалог не найден' });
+    return;
+  }
+
+  const body = await readJsonBody(req);
+  const text = cleanDmText(body.text);
+  if (!text) {
+    sendJson(res, 400, { ok: false, error: 'Пустое сообщение' });
+    return;
+  }
+
+  const current = await getFriendStore().getMessage(user.id, peerId, messageId);
+  if (!current) {
+    sendJson(res, 404, { ok: false, error: 'Сообщение не найдено' });
+    return;
+  }
+  if (current.senderId !== user.id) {
+    sendJson(res, 403, { ok: false, error: 'Можно редактировать только свои сообщения' });
+    return;
+  }
+  if (current.invite) {
+    sendJson(res, 403, { ok: false, error: 'Приглашение нельзя редактировать' });
+    return;
+  }
+
+  const rate = dmLimiter.check(user.id);
+  if (!rate.allowed) {
+    sendJson(
+      res,
+      429,
+      { ok: false, error: 'Слишком много сообщений, попробуйте позже', retryAfterSeconds: rate.retryAfterSeconds },
+      { 'Retry-After': String(rate.retryAfterSeconds) }
+    );
+    return;
+  }
+
+  const message = await getFriendStore().editMessage({
+    messageId,
+    senderId: user.id,
+    recipientId: peerId,
+    body: text
+  });
+  if (!message) {
+    sendJson(res, 404, { ok: false, error: 'Сообщение не найдено' });
+    return;
+  }
+
+  const event = { type: 'dm.message.edited', message };
+  broadcastToUser(peerId, event);
+  broadcastToUser(user.id, event);
+  sendJson(res, 200, { ok: true, message });
 }
 
 function pickReleaseAsset(assets, patterns) {
@@ -1698,10 +2808,14 @@ function getActiveGuestWsCount() {
   return count;
 }
 
-function createApiApp({ store = null, users = null, friends = null } = {}) {
+function createApiApp({ store = null, users = null, friends = null, notifications = null, pushes = null, push = null, avatars = null } = {}) {
   if (store) roomStore = store;
   if (users) userStore = users;
   if (friends) friendStore = friends;
+  if (notifications) notificationStore = notifications;
+  pushStore = pushes || null;
+  pushService = push || null;
+  if (avatars) avatarStorage = avatars;
 
   const app = fastify({
     bodyLimit: BODY_LIMIT_BYTES,
@@ -1711,13 +2825,15 @@ function createApiApp({ store = null, users = null, friends = null } = {}) {
   });
 
   app.register(fastifyCookie, { hook: 'onRequest' });
+  app.register(fastifyMultipart, {
+    limits: { fileSize: MAX_AVATAR_BYTES, files: 1, parts: 2 }
+  });
   app.register(fastifyWebsocket, { options: { maxPayload: WS_MAX_PAYLOAD_BYTES } });
 
   wsRegistry = createConnectionRegistry({
     maxConnectionsPerUser: MAX_REALTIME_STREAMS_PER_USER,
     maxGuestConnectionsPerIp: MAX_GUEST_STREAMS_PER_IP,
     keepaliveMs: KEEPALIVE_MS,
-    isUserOnline,
     onPresenceChange: (friendId, userId, online) => {
       broadcastToUser(friendId, { type: 'presence', userId, online });
     },
@@ -1735,13 +2851,16 @@ function createApiApp({ store = null, users = null, friends = null } = {}) {
     publicPeer,
     publicLobbyRoom,
     publicChatMessage,
+    getNotificationStore,
+    getUserStore,
     broadcast,
     closePeer,
     avatarColorForPeerId,
     MAX_ROOM_PEERS,
     tokensMatch,
     sessionAvatarColorKey,
-    roomEmptyQueue
+    queueRoomOccupancyTransition,
+    findRoomBan
   });
 
   const wsHandler = createWsHandler({
@@ -1788,6 +2907,8 @@ function createApiApp({ store = null, users = null, friends = null } = {}) {
   app.post('/api/auth/logout', (request, reply) => runLegacyHandler(request, reply, handleLogout));
   app.get('/api/auth/me', (request, reply) => runLegacyHandler(request, reply, handleMe));
   app.post('/api/auth/profile', (request, reply) => runLegacyHandler(request, reply, handleUpdateProfile));
+  app.post('/api/auth/avatar', (request, reply) => runLegacyHandler(request, reply, handleUploadUserAvatar));
+  app.delete('/api/auth/avatar', (request, reply) => runLegacyHandler(request, reply, handleDeleteUserAvatar));
   app.post('/api/auth/password', (request, reply) => runLegacyHandler(request, reply, handleChangePassword));
   app.get('/api/auth/rooms', (request, reply) => runLegacyHandler(request, reply, handleAuthRooms));
   app.post('/api/auth/rooms', (request, reply) => runLegacyHandler(request, reply, handleAddAuthRoom));
@@ -1796,7 +2917,25 @@ function createApiApp({ store = null, users = null, friends = null } = {}) {
     return handleUpdateRoom(req, res, normalizeRoomId(request.params.roomId));
   }));
   app.delete('/api/rooms/:roomId', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
-    return handleDeleteRoom(req, res, normalizeRoomId(request.params.roomId));
+    return handleDeleteRoom(req, res, normalizeRoomId(request.params.roomId), request);
+  }));
+  app.post('/api/rooms/:roomId/avatar', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
+    return handleUploadRoomAvatar(req, res, normalizeRoomId(request.params.roomId), request);
+  }));
+  app.delete('/api/rooms/:roomId/avatar', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
+    return handleDeleteRoomAvatar(req, res, normalizeRoomId(request.params.roomId), request);
+  }));
+  app.post('/api/rooms/:roomId/kick', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
+    return handleKickRoomPeer(req, res, normalizeRoomId(request.params.roomId));
+  }));
+  app.post('/api/rooms/:roomId/ban', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
+    return handleBanRoomPeer(req, res, normalizeRoomId(request.params.roomId));
+  }));
+  app.delete('/api/rooms/:roomId/bans/:banId', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
+    return handleUndoRoomBan(req, res, normalizeRoomId(request.params.roomId), request.params.banId);
+  }));
+  app.get('/api/avatars/:key', (request, reply) => runLegacyHandler(request, reply, (_req, res) => {
+    return handleGetAvatar(res, request.params.key);
   }));
   app.get('/api/rooms/:roomId', (request, reply) => runLegacyHandler(request, reply, (_req, res) => {
     const roomId = normalizeRoomId(request.params.roomId);
@@ -1810,6 +2949,15 @@ function createApiApp({ store = null, users = null, friends = null } = {}) {
   }));
   app.post('/api/rooms/:roomId/chat', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
     return handleRoomChatPost(req, res, normalizeRoomId(request.params.roomId));
+  }));
+  app.post('/api/rooms/:roomId/read', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
+    return handleMarkRoomChatRead(req, res, request.params.roomId);
+  }));
+  app.patch('/api/rooms/:roomId/chat/:messageId', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
+    return handleEditRoomChatMessage(req, res, normalizeRoomId(request.params.roomId), request.params.messageId);
+  }));
+  app.delete('/api/rooms/:roomId/chat/:messageId', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
+    return handleDeleteRoomChatMessage(req, res, normalizeRoomId(request.params.roomId), request.params.messageId);
   }));
   app.post('/api/livekit-token', (request, reply) => runLegacyHandler(request, reply, handleLiveKitToken));
   app.post('/api/state', (request, reply) => runLegacyHandler(request, reply, handleState));
@@ -1839,9 +2987,38 @@ function createApiApp({ store = null, users = null, friends = null } = {}) {
   app.post('/api/dm/:userId', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
     return handleSendDm(req, res, request.params.userId);
   }));
+  app.post('/api/dm/:userId/invites/:messageId/respond', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
+    return handleRespondDmInvite(req, res, request.params.userId, request.params.messageId);
+  }));
   app.post('/api/dm/:userId/read', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
     return handleMarkDmRead(req, res, request.params.userId);
   }));
+  app.post('/api/rooms/:roomId/ring', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
+    return handleRingRoom(req, res, request.params.roomId);
+  }));
+  app.patch('/api/dm/:userId/messages/:messageId', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
+    return handleEditDmMessage(req, res, request.params.userId, request.params.messageId);
+  }));
+  app.delete('/api/dm/:userId/messages/:messageId', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
+    return handleDeleteDmMessage(req, res, request.params.userId, request.params.messageId);
+  }));
+  app.get('/api/notifications/preferences', (request, reply) => runLegacyHandler(request, reply, handleNotificationPreferences));
+  app.put('/api/notifications/dm/:userId/mute', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
+    return handleSetDmMute(req, res, request.params.userId);
+  }));
+  app.put('/api/notifications/room/:roomId/mute', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
+    return handleSetRoomMute(req, res, request.params.roomId);
+  }));
+  app.put('/api/notifications/privacy', (request, reply) => runLegacyHandler(request, reply, handleSetPrivateNotifications));
+  app.post('/api/notifications/settings', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
+    return handleSetNotificationSettings(req, res, request);
+  }));
+  app.post('/api/presence/status', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
+    return handleSetPresenceStatus(req, res, request);
+  }));
+  app.get('/api/push/config', (request, reply) => runLegacyHandler(request, reply, handlePushConfig));
+  app.post('/api/push/subscriptions', (request, reply) => runLegacyHandler(request, reply, handleCreatePushSubscription));
+  app.delete('/api/push/subscriptions', (request, reply) => runLegacyHandler(request, reply, handleDeletePushSubscription));
 
   // Register after plugins finish loading so @fastify/websocket can wrap the handler.
   app.after(() => {
@@ -1883,7 +3060,9 @@ async function closeStores(logger = console) {
   await Promise.allSettled([
     roomStore?.close?.(),
     userStore?.close?.(),
-    friendStore?.close?.()
+    friendStore?.close?.(),
+    notificationStore?.close?.(),
+    pushStore?.close?.()
   ]).then((results) => {
     for (const result of results) {
       if (result.status === 'rejected') logger.error('Failed to close store:', result.reason);
@@ -1941,7 +3120,31 @@ async function bootstrap({ env = process.env, logger = console, exit = process.e
     await roomStore.pruneRooms();
     userStore = createUserStore({ databaseUrl: database.url, logger, sessionTtlMs: SESSION_TTL_MS });
     friendStore = createFriendStore({ databaseUrl: database.url, logger });
-    const server = createApiServer({ store: roomStore, users: userStore, friends: friendStore });
+    notificationStore = createNotificationStore({ databaseUrl: database.url, logger });
+    pushStore = createPushStore({
+      databaseUrl: database.url,
+      logger,
+      maxSubscriptionsPerUser: readEnvInt('MAX_PUSH_SUBSCRIPTIONS_PER_USER', 10, 1, env)
+    });
+    pushService = createPushService({ store: pushStore, env, logger });
+    avatarStorage = createAvatarStorage({ uploadsDir: readUploadsDir(env) });
+    const reconciliation = await reconcileAvatarStorage({
+      storage: avatarStorage,
+      userStore,
+      roomStore
+    });
+    if (reconciliation.removed > 0) {
+      logger.info?.(`Removed ${reconciliation.removed} orphaned avatar file(s)`);
+    }
+    const server = createApiServer({
+      store: roomStore,
+      users: userStore,
+      friends: friendStore,
+      notifications: notificationStore,
+      pushes: pushStore,
+      push: pushService,
+      avatars: avatarStorage
+    });
     await server.app.ready();
     startPruneTimer(server, logger);
     startApiListener({

@@ -41,7 +41,7 @@
     align-items: center;
     justify-content: center;
     padding: 24px;
-    background: rgba(8, 7, 5, 0.62);
+    background: color-mix(in srgb, var(--warm-950) 62%, transparent);
     backdrop-filter: blur(4px);
     -webkit-backdrop-filter: blur(4px);
   }
@@ -49,7 +49,7 @@
   .ui-dialog-card {
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: var(--radius-xl);
-    background: var(--paper-deep);
+    background: var(--warm-800);
     box-shadow: var(--shadow);
     overflow: hidden;
   }
@@ -63,7 +63,7 @@
 
   .ui-dialog-title {
     color: var(--warm-ink);
-    font-family: var(--font-sans);
+    font-family: var(--font-ui);
     font-size: 17px;
     font-weight: 700;
     letter-spacing: -0.01em;
@@ -77,14 +77,14 @@
     height: 30px;
     border: none;
     border-radius: var(--radius-sm);
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--control);
     color: var(--warm-muted);
     cursor: pointer;
     transition: background 0.15s ease, color 0.15s ease;
   }
 
   .ui-dialog-close:hover {
-    background: rgba(255, 255, 255, 0.1);
+    background: var(--control-hover);
     color: var(--warm-ink);
   }
 

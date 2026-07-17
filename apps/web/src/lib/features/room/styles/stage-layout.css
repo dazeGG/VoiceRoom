@@ -18,7 +18,7 @@ h1 {
   max-width: 18ch;
   margin: 0;
   overflow-wrap: anywhere;
-  font-family: "Arial Narrow", Aptos, "Segoe UI", sans-serif;
+  font-family: var(--font-display);
   font-size: 3.75rem;
   line-height: 0.92;
   letter-spacing: 0;
@@ -72,6 +72,7 @@ h1 {
   grid-template-rows: auto minmax(0, 1fr);
   min-height: 0;
   gap: var(--space-sm);
+  container-type: size;
 }
 
 /* When the summary bar is hidden the grid is the only row. */
@@ -100,7 +101,7 @@ body[data-stage-summary="hidden"] .stage-strip-bar {
 .stage-strip-kicker {
   color: var(--muted);
   font-size: 0.72rem;
-  font-weight: 850;
+  font-weight: 800;
   letter-spacing: 0.06em;
   line-height: 1;
   text-transform: uppercase;
@@ -110,7 +111,7 @@ body[data-stage-summary="hidden"] .stage-strip-bar {
   overflow: hidden;
   color: oklch(94% 0.012 92);
   font-size: 0.92rem;
-  font-weight: 850;
+  font-weight: 800;
   line-height: 1.1;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -125,7 +126,7 @@ body[data-stage-summary="hidden"] .stage-strip-bar {
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   padding: 0;
-  background: oklch(14% 0.013 92 / 0.92);
+  background: var(--warm-900);
   color: var(--muted);
   transition: background 140ms var(--ease-out), border-color 140ms var(--ease-out), color 140ms var(--ease-out);
 }

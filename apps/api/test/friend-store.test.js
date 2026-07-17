@@ -133,6 +133,8 @@ test('accept turns a request into a mutual friendship', async (t) => {
   const aliceFriends = await friends.listFriends(alice.id);
   assert.equal(aliceFriends.length, 1);
   assert.equal(aliceFriends[0].user.id, bob.id);
+  assert.equal(aliceFriends[0].user.doNotDisturb, false);
+  assert.equal(aliceFriends[0].user.presenceStatus, 'online');
 });
 
 test('listRequests surfaces the request id (not the joined user id) so accept works', async (t) => {
@@ -228,6 +230,36 @@ test('direct messages thread, unread counts, and read receipts', async (t) => {
   const read = await friends.markRead({ userId: bob.id, peerId: alice.id });
   assert.equal(read.count, 2);
   assert.equal((await friends.getUnreadCounts(bob.id))[alice.id], undefined);
+});
+
+test('direct messages can only be edited atomically by their original sender', async (t) => {
+  const { users, friends } = await createStores(t);
+  const alice = await makeUser(users, 'edit-alice');
+  const bob = await makeUser(users, 'edit-bob');
+
+  const sent = await friends.sendMessage({ senderId: alice.id, recipientId: bob.id, body: 'before' });
+  assert.equal(sent.editedAt, null);
+
+  const forbidden = await friends.editMessage({
+    messageId: sent.id,
+    senderId: bob.id,
+    recipientId: alice.id,
+    body: 'hijacked'
+  });
+  assert.equal(forbidden, null);
+
+  const edited = await friends.editMessage({
+    messageId: sent.id,
+    senderId: alice.id,
+    recipientId: bob.id,
+    body: 'after'
+  });
+  assert.equal(edited.body, 'after');
+  assert.equal(typeof edited.editedAt, 'number');
+
+  const thread = await friends.listThread({ userId: bob.id, peerId: alice.id });
+  assert.equal(thread[0].body, 'after');
+  assert.equal(thread[0].editedAt, edited.editedAt);
 });
 
 test('searchUsers matches login and display name, excludes self', async (t) => {

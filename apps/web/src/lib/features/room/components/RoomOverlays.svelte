@@ -10,7 +10,7 @@
   } from '../client/ui/screen-source-picker';
   import { guestNameUi } from '../guest-name-ui.svelte';
   import { screenSourceUi } from '../screen-source-ui.svelte';
-  import { toastUi } from '../toast-ui.svelte';
+  import { invokeToastAction, toastUi } from '../toast-ui.svelte';
   import { startUi } from '../start-ui.svelte';
   import { unlockAudio } from '../client/services/media-playback-service';
   import {
@@ -46,7 +46,10 @@
 </script>
 
 <div class="toast" id="toast" role="status" aria-live="polite" data-variant={toastUi.variant} data-visible={String(toastUi.visible)}>
-  {toastUi.message}
+  <span>{toastUi.message}</span>
+  {#if toastUi.action && toastUi.actionLabel}
+    <button type="button" onclick={() => void invokeToastAction()}>{toastUi.actionLabel}</button>
+  {/if}
 </div>
 
 <div

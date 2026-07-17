@@ -18,14 +18,37 @@ import {
   type SendRequestStatus,
   type Relationship
 } from '$lib/api/friends';
-import { fetchThread, markThreadRead, sendDirectMessage, type DirectMessage } from '$lib/api/dm';
+import { deleteDirectMessage, editDirectMessage, fetchThread, markThreadRead, respondRoomInvite, sendDirectMessage, type DirectMessage } from '$lib/api/dm';
 import { connectRealtime, type RealtimeEvent, type RealtimeHandle } from '$lib/api/realtime';
-import { playDirectMessageCue, playFriendAcceptedCue, playFriendRequestCue } from '$lib/features/room/client/media/cues';
+import type { PresenceStatus } from '$lib/shared/presence';
+import { playDirectMessageCue, playFriendAcceptedCue, playFriendRequestCue, playRingCue } from '$lib/features/room/client/media/cues';
+import {
+  canUseNotifications,
+  getNotificationDeliveryPermission,
+  routeNotificationEvent,
+  showBrowserNotification,
+  type NotificationActiveTarget
+} from '$lib/shared/notifications/router';
+import { roomNavigation } from './room-navigation.svelte';
+import {
+  areNotificationPreferencesLoadedFor,
+  applyRealtimeNotificationPreferences,
+  isPeerNotificationsMuted,
+  loadNotificationPreferences,
+  notificationPreferences,
+  prepareNotificationPreferences,
+  resetNotificationPreferences,
+  syncNotificationPermission,
+  updateAutomaticPresenceStatus
+} from '$lib/shared/notifications/preferences.svelte';
+import { startSystemPresenceIdleTracking } from '$lib/shared/presence-idle';
+import { createDmThreadResyncCoordinator } from './dm-thread-resync';
 
 export type LobbyMode = 'friends' | 'rooms';
 export type LobbyView = 'home' | 'dm' | 'people';
 
 interface FriendsState {
+  automaticPresenceIdleAvailable: boolean;
   loaded: boolean;
   friends: Friend[];
   incomingRequestCount: number;
@@ -40,6 +63,7 @@ interface FriendsState {
 }
 
 export const friendsState = $state<FriendsState>({
+  automaticPresenceIdleAvailable: false,
   loaded: false,
   friends: [],
   incomingRequestCount: 0,
@@ -59,13 +83,42 @@ let selfId = '';
 // snapshot so a later refreshFriends() still applies the correct online flags.
 let presenceReady = false;
 let onlineFriendIds = new Set<string>();
+let presenceKnownFriendIds = new Set<string>();
+const threadResync = createDmThreadResyncCoordinator({
+  fetchSnapshot: fetchThread,
+  isCurrent: (peerId) => friendsState.view === 'dm' && friendsState.selectedFriendId === peerId,
+  applySnapshot: (peerId, { peer, messages }) => {
+    friendsState.threadPeer = peer;
+    friendsState.thread = messages;
+    const friend = findFriend(peerId);
+    if (friend) {
+      friend.unreadCount = 0;
+      const last = messages.at(-1);
+      if (last) bumpLastMessage(peerId, last);
+    }
+  },
+  isOwnMessage: (message) => message.senderId === selfId
+});
+const MAX_PENDING_NOTIFICATION_EVENTS = 100;
+const PENDING_NOTIFICATION_TTL_MS = 60_000;
+let pendingNotificationEvents: Array<{ event: RealtimeEvent; receivedAt: number }> = [];
+let notificationPreferencesRetryTimer: ReturnType<typeof setTimeout> | null = null;
+// Invitations used to be mirrored per device in localStorage; they now live in
+// the DM thread itself, so stale local copies are just cleaned up.
+const RESOLVED_ROOM_INVITATIONS_KEY = 'voice-room:resolved-invitations';
+
+function clearLegacyResolvedRoomInvitations(): void {
+  try {
+    localStorage.removeItem(`${RESOLVED_ROOM_INVITATIONS_KEY}:${selfId}`);
+  } catch {}
+}
 
 function findFriend(userId: string): Friend | undefined {
   return friendsState.friends.find((entry) => entry.user.id === userId);
 }
 
 function friendOnlineFromPresence(userId: string, fallback = false): boolean {
-  return presenceReady ? onlineFriendIds.has(userId) : fallback;
+  return presenceReady && presenceKnownFriendIds.has(userId) ? onlineFriendIds.has(userId) : fallback;
 }
 
 function applyOnlineToFriends(): void {
@@ -77,21 +130,52 @@ function applyOnlineToFriends(): void {
 
 function setOnlineSnapshot(ids: Iterable<string>): void {
   onlineFriendIds = new Set(ids);
+  presenceKnownFriendIds = new Set(friendsState.friends.map((friend) => friend.user.id));
+  for (const userId of onlineFriendIds) presenceKnownFriendIds.add(userId);
   presenceReady = true;
   applyOnlineToFriends();
 }
 
 function setFriendOnline(userId: string, online: boolean): void {
+  presenceKnownFriendIds.add(userId);
   if (online) onlineFriendIds.add(userId);
   else onlineFriendIds.delete(userId);
   const friend = findFriend(userId);
   if (friend) friend.online = online;
 }
 
+// A friend changed their public profile (avatar, name): refresh every cached
+// copy — the friend list, pending requests, and the open DM header.
+function applyFriendProfile(user: PublicUser | undefined): void {
+  if (!user?.id) return;
+  const friend = findFriend(user.id);
+  if (friend) friend.user = { ...friend.user, ...user };
+  friendsState.requests.incoming = friendsState.requests.incoming.map((request) =>
+    request.user.id === user.id ? { ...request, user: { ...request.user, ...user } } : request
+  );
+  friendsState.requests.outgoing = friendsState.requests.outgoing.map((request) =>
+    request.user.id === user.id ? { ...request, user: { ...request.user, ...user } } : request
+  );
+  if (friendsState.threadPeer?.id === user.id) {
+    friendsState.threadPeer = { ...friendsState.threadPeer, ...user };
+  }
+}
+
 // --- Loading ------------------------------------------------------------
 
 export async function refreshFriends(): Promise<void> {
   const { friends, incomingRequestCount } = await fetchFriends();
+  // A friend created after the last `ready` snapshot is not represented in the
+  // presence cache yet. Seed that one relationship from the fresh HTTP result;
+  // subsequent presence events remain authoritative.
+  if (presenceReady) {
+    for (const friend of friends) {
+      if (presenceKnownFriendIds.has(friend.user.id)) continue;
+      presenceKnownFriendIds.add(friend.user.id);
+      if (friend.online) onlineFriendIds.add(friend.user.id);
+      else onlineFriendIds.delete(friend.user.id);
+    }
+  }
   friendsState.friends = friends.map((friend) => ({
     ...friend,
     online: friendOnlineFromPresence(friend.user.id, friend.online)
@@ -107,19 +191,50 @@ export async function refreshRequests(): Promise<void> {
 
 // Start the lobby: load the friend list and open the realtime stream. Returns a
 // teardown function for onMount cleanup.
-export function initLobby(currentUserId: string): () => void {
+export function initLobby(
+  currentUserId: string,
+  initialDoNotDisturb = false,
+  initialPresenceStatus?: PresenceStatus
+): () => void {
   selfId = currentUserId;
   presenceReady = false;
   onlineFriendIds = new Set();
+  presenceKnownFriendIds = new Set();
+  clearLegacyResolvedRoomInvitations();
+  if (!areNotificationPreferencesLoadedFor(currentUserId)) {
+    prepareNotificationPreferences(currentUserId, initialDoNotDisturb, initialPresenceStatus);
+  }
   realtime = connectRealtime(handleRealtimeEvent);
   void Promise.all([refreshFriends(), refreshRequests()]).catch(() => {
     friendsState.loaded = true;
   });
+  scheduleNotificationPreferencesLoad(currentUserId);
+  friendsState.automaticPresenceIdleAvailable = false;
+  const stopPresenceIdleTracking = startSystemPresenceIdleTracking({
+    getPresence: () => ({
+      loaded: areNotificationPreferencesLoadedFor(currentUserId),
+      presenceStatus: notificationPreferences.presenceStatus,
+      presenceStatusAutomatic: notificationPreferences.presenceStatusAutomatic
+    }),
+    updatePresence: updateAutomaticPresenceStatus,
+    onAvailabilityChange: (available) => {
+      friendsState.automaticPresenceIdleAvailable = available;
+    }
+  });
   return () => {
+    stopPresenceIdleTracking();
     realtime?.close();
     realtime = null;
     presenceReady = false;
     onlineFriendIds = new Set();
+    presenceKnownFriendIds = new Set();
+    if (notificationPreferencesRetryTimer) {
+      clearTimeout(notificationPreferencesRetryTimer);
+      notificationPreferencesRetryTimer = null;
+    }
+    pendingNotificationEvents = [];
+    threadResync.invalidate();
+    resetNotificationPreferences();
   };
 }
 
@@ -148,13 +263,16 @@ export async function openDm(userId: string): Promise<void> {
   const friend = findFriend(userId);
   if (friend) friend.unreadCount = 0;
   try {
-    const { peer, messages } = await fetchThread(userId);
-    if (friendsState.selectedFriendId !== userId) return;
-    friendsState.threadPeer = peer;
-    friendsState.thread = messages;
+    await threadResync.resync(userId);
   } finally {
     if (friendsState.selectedFriendId === userId) friendsState.threadLoading = false;
   }
+}
+
+async function resyncOpenThread(options: { force?: boolean } = {}): Promise<void> {
+  const peerId = friendsState.selectedFriendId;
+  if (friendsState.view !== 'dm' || !peerId) return;
+  await threadResync.resync(peerId, options);
 }
 
 export function toggleProfile(): void {
@@ -165,6 +283,21 @@ export function closeProfile(): void {
   friendsState.profileOpen = false;
 }
 
+// Accept or decline a room invitation carried by a DM. The server flips the
+// invite status and fans the edited message out to both participants, so the
+// local update here is just the immediate echo.
+export async function respondRoomInvitation(message: DirectMessage, action: 'accept' | 'decline'): Promise<void> {
+  if (!message.invite) return;
+  const peerId = message.senderId === selfId ? message.recipientId : message.senderId;
+  const updated = await respondRoomInvite(peerId, message.id, action);
+  threadResync.recordUpsert(peerId, updated);
+  applyEditedMessage(updated);
+  if (action === 'accept') {
+    const roomId = updated.invite?.roomId || message.invite.roomId;
+    window.setTimeout(() => window.location.assign(`/r/${encodeURIComponent(roomId)}`), 120);
+  }
+}
+
 // --- DM -----------------------------------------------------------------
 
 export async function sendMessage(text: string): Promise<void> {
@@ -172,8 +305,29 @@ export async function sendMessage(text: string): Promise<void> {
   const body = text.trim();
   if (!peerId || !body) return;
   const message = await sendDirectMessage(peerId, body);
+  threadResync.recordUpsert(peerId, message);
   appendToThread(message);
   bumpLastMessage(peerId, message);
+}
+
+export async function deleteMessage(messageId: string): Promise<void> {
+  const peerId = friendsState.selectedFriendId;
+  if (!peerId || !messageId) return;
+  await deleteDirectMessage(peerId, messageId);
+  threadResync.recordDelete(peerId, messageId);
+  // Remove locally; realtime delete will also arrive for other tabs. Refresh the
+  // summary so last-message ordering and unread badges reflect soft-deletes.
+  friendsState.thread = friendsState.thread.filter((m) => m.id !== messageId);
+  await refreshFriends().catch(() => {});
+}
+
+export async function editMessage(messageId: string, text: string): Promise<void> {
+  const peerId = friendsState.selectedFriendId;
+  const body = text.trim();
+  if (!peerId || !messageId || !body) return;
+  const message = await editDirectMessage(peerId, messageId, body);
+  threadResync.recordUpsert(peerId, message);
+  applyEditedMessage(message);
 }
 
 function appendToThread(message: DirectMessage): void {
@@ -190,6 +344,17 @@ function bumpLastMessage(peerId: string, message: DirectMessage): void {
     createdAt: message.createdAt,
     fromMe: message.senderId === selfId
   };
+}
+
+function applyEditedMessage(message: DirectMessage): void {
+  friendsState.thread = friendsState.thread.map((existing) =>
+    existing.id === message.id ? message : existing
+  );
+  const peerId = message.senderId === selfId ? message.recipientId : message.senderId;
+  const friend = findFriend(peerId);
+  if (friend?.lastMessage?.id === message.id) {
+    friend.lastMessage = { ...friend.lastMessage, body: message.body };
+  }
 }
 
 // --- Friend request actions --------------------------------------------
@@ -257,10 +422,76 @@ export async function removeFriend(userId: string): Promise<void> {
 
 // --- Realtime -----------------------------------------------------------
 
+function getActiveNotificationTarget(): NotificationActiveTarget | null {
+  if (friendsState.view === 'dm' && friendsState.selectedFriendId) {
+    return { kind: 'dm', peerId: friendsState.selectedFriendId };
+  }
+  if (friendsState.mode === 'rooms' && roomNavigation.viewedRoomId) {
+    return { kind: 'room-preview', roomId: roomNavigation.viewedRoomId };
+  }
+  return null;
+}
+
+function handleNotificationRealtimeEvent(event: RealtimeEvent): boolean {
+  if (!event.type.startsWith('notification.')) return false;
+  if (!areNotificationPreferencesLoadedFor(selfId)) {
+    const now = Date.now();
+    pendingNotificationEvents = pendingNotificationEvents
+      .filter((entry) => now - entry.receivedAt <= PENDING_NOTIFICATION_TTL_MS)
+      .slice(-(MAX_PENDING_NOTIFICATION_EVENTS - 1));
+    pendingNotificationEvents.push({ event, receivedAt: now });
+    return true;
+  }
+  syncNotificationPermission();
+  const routed = routeNotificationEvent(event, {
+    userId: selfId,
+    activeTarget: getActiveNotificationTarget(),
+    mutedPeerIds: notificationPreferences.mutedPeerIds,
+    mutedRoomIds: notificationPreferences.mutedRoomIds,
+    privateNotifications: notificationPreferences.privateNotifications,
+    doNotDisturb: notificationPreferences.doNotDisturb,
+    notificationsAvailable: canUseNotifications() && notificationPreferences.notificationsEnabled,
+    permission: getNotificationDeliveryPermission()
+  });
+  if (routed.notify) showBrowserNotification(routed.payload);
+  return true;
+}
+
+function flushPendingNotificationEvents(): void {
+  if (!areNotificationPreferencesLoadedFor(selfId) || pendingNotificationEvents.length === 0) return;
+  const now = Date.now();
+  const events = pendingNotificationEvents
+    .filter((entry) => now - entry.receivedAt <= PENDING_NOTIFICATION_TTL_MS)
+    .map((entry) => entry.event);
+  pendingNotificationEvents = [];
+  for (const event of events) handleNotificationRealtimeEvent(event);
+}
+
+function scheduleNotificationPreferencesLoad(userId = selfId): void {
+  if (areNotificationPreferencesLoadedFor(userId) || notificationPreferencesRetryTimer) return;
+  void loadNotificationPreferences(userId)
+    .then(flushPendingNotificationEvents)
+    .catch(() => {
+      notificationPreferencesRetryTimer = setTimeout(() => {
+        notificationPreferencesRetryTimer = null;
+        scheduleNotificationPreferencesLoad(userId);
+      }, 5000);
+    });
+}
+
 function handleRealtimeEvent(event: RealtimeEvent): void {
+  if (event.type === 'notification.settings.updated') {
+    applyRealtimeNotificationPreferences(selfId, event.payload.preferences);
+    flushPendingNotificationEvents();
+    return;
+  }
+  if (handleNotificationRealtimeEvent(event)) return;
   switch (event.type) {
     case 'ready': {
       setOnlineSnapshot(event.payload.onlineFriendIds ?? []);
+      // A reconnect can miss edits while the socket is down. Re-fetch only the
+      // currently visible thread so its bodies and editedAt markers converge.
+      void resyncOpenThread({ force: true }).catch(() => {});
       break;
     }
     case 'friend.presence': {
@@ -268,13 +499,13 @@ function handleRealtimeEvent(event: RealtimeEvent): void {
       break;
     }
     case 'friend.request': {
-      playFriendRequestCue();
+      if (areNotificationPreferencesLoadedFor(selfId)) playFriendRequestCue();
       void refreshFriends().catch(() => {});
       void refreshRequests().catch(() => {});
       break;
     }
     case 'friend.accepted': {
-      playFriendAcceptedCue();
+      if (areNotificationPreferencesLoadedFor(selfId)) playFriendAcceptedCue();
       void refreshFriends().catch(() => {});
       void refreshRequests().catch(() => {});
       break;
@@ -284,9 +515,21 @@ function handleRealtimeEvent(event: RealtimeEvent): void {
       void refreshRequests().catch(() => {});
       break;
     }
+    case 'friend.updated': {
+      applyFriendProfile(event.payload.user);
+      break;
+    }
+    case 'ring.incoming': {
+      // The invitation itself arrives as a DM (with an invite payload); the
+      // ring event only drives the call cue so it still feels like a ring.
+      if (event.payload.expiresAt - Date.now() <= 0) break;
+      playRingCue();
+      break;
+    }
     case 'dm.message': {
       const { message } = event.payload;
       const peerId = message.senderId === selfId ? message.recipientId : message.senderId;
+      threadResync.recordUpsert(peerId, message);
       bumpLastMessage(peerId, message);
       const isOpenThread = friendsState.view === 'dm' && friendsState.selectedFriendId === peerId;
       if (isOpenThread) {
@@ -294,7 +537,8 @@ function handleRealtimeEvent(event: RealtimeEvent): void {
         // We're looking at it: keep it read.
         if (message.senderId !== selfId) void markThreadRead(peerId).catch(() => {});
       } else if (message.senderId !== selfId) {
-        playDirectMessageCue();
+        // Invites already announced themselves with the ring cue.
+        if (!message.invite && areNotificationPreferencesLoadedFor(selfId) && !isPeerNotificationsMuted(peerId)) playDirectMessageCue();
         const friend = findFriend(peerId);
         if (friend) friend.unreadCount += 1;
       }
@@ -304,10 +548,28 @@ function handleRealtimeEvent(event: RealtimeEvent): void {
       // The peer read our messages: flip readAt on our sent bubbles.
       if (friendsState.view === 'dm' && friendsState.selectedFriendId === event.payload.userId) {
         const now = Date.now();
+        threadResync.recordRead(event.payload.userId, now);
         friendsState.thread = friendsState.thread.map((message) =>
           message.senderId === selfId && message.readAt == null ? { ...message, readAt: now } : message
         );
       }
+      break;
+    }
+    case 'dm.message.deleted': {
+      const mid = event.payload?.messageId;
+      if (mid) {
+        const peerId = event.payload.peerUserId ?? friendsState.selectedFriendId;
+        if (peerId) threadResync.recordDelete(peerId, mid);
+        friendsState.thread = friendsState.thread.filter((m) => m.id !== mid);
+        void refreshFriends().catch(() => {});
+      }
+      break;
+    }
+    case 'dm.message.edited': {
+      const { message } = event.payload;
+      const peerId = message.senderId === selfId ? message.recipientId : message.senderId;
+      threadResync.recordUpsert(peerId, message);
+      applyEditedMessage(message);
       break;
     }
     default:

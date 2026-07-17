@@ -11,53 +11,14 @@ const path = require('node:path');
 
 const { createApiApp, createApiServer } = require('../src/server');
 const { openWs, joinVoiceRoom, subscribeRoomPreview, waitForWsType } = require('./ws-harness');
-const {
-  ROOM_PRESETS,
-  cleanRoomColorKey,
-  cleanRoomEmoji,
-  cleanRoomIconKey,
-  cleanRoomPresetKey,
-  getRoomPreset
-} = require('@voice-room/shared/validation');
 
 const OWNER_ID = 'user-owner';
 const OWNER_TOKEN = 'session-owner';
 const OTHER_TOKEN = 'session-other';
-const DEFAULT_ROOM_PRESET = ROOM_PRESETS[0];
-
-function presetFromEmoji(emoji) {
-  return ROOM_PRESETS.find((preset) => preset.emoji === emoji) || null;
-}
-
-function presetFromVisualKeys(iconKey, colorKey) {
-  return ROOM_PRESETS.find((preset) => preset.iconKey === iconKey && preset.colorKey === colorKey) || null;
-}
-
-function emojiFromIconKey(iconKey) {
-  return ROOM_PRESETS.find((preset) => preset.iconKey === iconKey)?.emoji || DEFAULT_ROOM_PRESET.emoji;
-}
-
-function normalizeRoomVisuals({ emoji = '', roomColorKey = '', roomIconKey = '', roomPresetKey = '' } = {}) {
-  const legacyEmoji = cleanRoomEmoji(emoji);
-  const explicitIconKey = cleanRoomIconKey(roomIconKey);
-  const explicitColorKey = cleanRoomColorKey(roomColorKey);
-  const preset = getRoomPreset(cleanRoomPresetKey(roomPresetKey));
-  const legacyPreset = presetFromEmoji(legacyEmoji);
-  const iconKey = explicitIconKey || preset?.iconKey || legacyPreset?.iconKey || DEFAULT_ROOM_PRESET.iconKey;
-  const colorKey = explicitColorKey || preset?.colorKey || legacyPreset?.colorKey || DEFAULT_ROOM_PRESET.colorKey;
-  const matchedPreset = presetFromVisualKeys(iconKey, colorKey);
-  const hasExplicitVisualKey = Boolean(explicitIconKey || explicitColorKey || preset);
-  return {
-    emoji: matchedPreset?.emoji || (hasExplicitVisualKey ? emojiFromIconKey(iconKey) : legacyEmoji) || DEFAULT_ROOM_PRESET.emoji,
-    roomColorKey: colorKey,
-    roomIconKey: iconKey,
-    roomPresetKey: matchedPreset?.key || ''
-  };
-}
 
 // In-memory room store covering only the surface the CRUD handlers touch. It
 // mirrors the real store's contract: getRoom filters soft-deleted rows, and
-// updateRoom/deleteRoom return null / 0-rows once a room is gone.
+// updateRoom/deleteRoom return null once a room is gone.
 function createFakeStore(seed = {}) {
   const rooms = new Map();
   for (const [id, room] of Object.entries(seed)) {
@@ -79,20 +40,35 @@ function createFakeStore(seed = {}) {
     async updateRoom(roomId, patch) {
       const room = rooms.get(roomId);
       if (!room || room.deletedAt) return null;
-      Object.assign(room, patch, normalizeRoomVisuals(patch), { updatedAt: Date.now() });
+      Object.assign(room, patch, { updatedAt: Date.now() });
       return { ...room, peers: new Map() };
     },
     async deleteRoom(roomId, now = Date.now()) {
       const room = rooms.get(roomId);
-      if (!room || room.deletedAt) return false;
+      if (!room || room.deletedAt) return null;
       room.deletedAt = now;
-      return true;
+      return { ...room, peers: new Map() };
     },
     async markRoomActive() {},
     async markRoomEmpty() {},
     async pruneRooms() {},
     async listSummaryRecipientUserIds() {
       return [];
+    },
+    async listVisibleRoomsForUser() {
+      return [...rooms.values()]
+        .filter((room) => !room.deletedAt && room.isStatic)
+        .map((room) => ({ ...room, peers: new Map(), relationship: 'owner', unreadCount: room.unreadCount || 0 }));
+    },
+    async getRoomUnreadCount(roomId) {
+      return rooms.get(roomId)?.unreadCount || 0;
+    },
+    async markRoomChatRead(roomId, userId, now = Date.now()) {
+      const room = rooms.get(roomId);
+      if (!room || room.deletedAt || room.ownerId !== userId) return null;
+      room.unreadCount = 0;
+      room.lastReadAt = now;
+      return now;
     },
     async listMessages() {
       return [];
@@ -121,13 +97,9 @@ function createFakeUsers() {
 function staticRoom(overrides = {}) {
   return {
     createdAt: Date.now(),
-    emoji: '🎮',
     isStatic: true,
     name: 'Original',
     ownerId: OWNER_ID,
-    roomColorKey: 'indigo',
-    roomIconKey: 'gamepad',
-    roomPresetKey: 'game-indigo',
     emptySince: null,
     ...overrides
   };
@@ -139,7 +111,7 @@ function buildApp(seed) {
   return { app, store };
 }
 
-test('PUT /api/rooms/:roomId lets the owner rename and re-skin the room', async (t) => {
+test('PUT /api/rooms/:roomId lets the owner rename the room', async (t) => {
   const { app, store } = buildApp({ room1: staticRoom() });
   t.after(() => app.close());
 
@@ -147,20 +119,53 @@ test('PUT /api/rooms/:roomId lets the owner rename and re-skin the room', async 
     method: 'PUT',
     url: '/api/rooms/room1',
     headers: { cookie: `vr_session=${OWNER_TOKEN}` },
-    payload: { name: 'Renamed', roomPresetKey: 'voice-blue' }
+    payload: { name: 'Renamed' }
   });
 
   assert.equal(response.statusCode, 200);
   const body = response.json();
   assert.equal(body.ok, true);
   assert.equal(body.room.name, 'Renamed');
-  assert.equal(body.room.roomPresetKey, 'voice-blue');
-  assert.equal(body.room.roomIconKey, 'headphones');
-  assert.equal(body.room.roomColorKey, 'blue');
   assert.equal(body.room.roomId, 'room1');
   // Persisted, not just echoed.
   assert.equal(store.rooms.get('room1').name, 'Renamed');
-  assert.equal(store.rooms.get('room1').roomColorKey, 'blue');
+});
+
+test('room unread count is returned by auth rooms and cleared by the read endpoint', async (t) => {
+  const { app, store } = buildApp({ room1: staticRoom({ unreadCount: 3 }) });
+  t.after(() => app.close());
+
+  const listed = await app.inject({
+    method: 'GET',
+    url: '/api/auth/rooms',
+    headers: { cookie: `vr_session=${OWNER_TOKEN}` }
+  });
+  assert.equal(listed.statusCode, 200);
+  assert.equal(listed.json().rooms[0].unreadCount, 3);
+
+  const read = await app.inject({
+    method: 'POST',
+    url: '/api/rooms/room1/read',
+    headers: { cookie: `vr_session=${OWNER_TOKEN}` }
+  });
+  assert.equal(read.statusCode, 200);
+  assert.equal(read.json().unreadCount, 0);
+  assert.equal(store.rooms.get('room1').unreadCount, 0);
+});
+
+test('room read endpoint requires auth and room visibility', async (t) => {
+  const { app } = buildApp({ room1: staticRoom() });
+  t.after(() => app.close());
+
+  const anonymous = await app.inject({ method: 'POST', url: '/api/rooms/room1/read' });
+  assert.equal(anonymous.statusCode, 401);
+
+  const hidden = await app.inject({
+    method: 'POST',
+    url: '/api/rooms/room1/read',
+    headers: { cookie: `vr_session=${OTHER_TOKEN}` }
+  });
+  assert.equal(hidden.statusCode, 404);
 });
 
 test('PUT rejects a non-owner with 403', async (t) => {
@@ -220,44 +225,6 @@ test('PUT on a soft-deleted room returns 404', async (t) => {
   assert.equal(response.statusCode, 404);
 });
 
-test('PUT with only a name preserves existing visuals', async (t) => {
-  const { app, store } = buildApp({ room1: staticRoom() });
-  t.after(() => app.close());
-
-  const response = await app.inject({
-    method: 'PUT',
-    url: '/api/rooms/room1',
-    headers: { cookie: `vr_session=${OWNER_TOKEN}` },
-    payload: { name: 'Renamed only' }
-  });
-
-  assert.equal(response.statusCode, 200);
-  assert.equal(response.json().room.name, 'Renamed only');
-  assert.equal(response.json().room.roomPresetKey, 'game-indigo');
-  assert.equal(response.json().room.roomIconKey, 'gamepad');
-  assert.equal(response.json().room.roomColorKey, 'indigo');
-  assert.equal(store.rooms.get('room1').roomColorKey, 'indigo');
-});
-
-test('PUT with only a visual field applies it over the existing preset', async (t) => {
-  const { app, store } = buildApp({ room1: staticRoom() });
-  t.after(() => app.close());
-
-  const response = await app.inject({
-    method: 'PUT',
-    url: '/api/rooms/room1',
-    headers: { cookie: `vr_session=${OWNER_TOKEN}` },
-    payload: { roomColorKey: 'blue' }
-  });
-
-  assert.equal(response.statusCode, 200);
-  assert.equal(response.json().room.name, 'Original');
-  assert.equal(response.json().room.roomPresetKey, '');
-  assert.equal(response.json().room.roomIconKey, 'gamepad');
-  assert.equal(response.json().room.roomColorKey, 'blue');
-  assert.equal(store.rooms.get('room1').roomColorKey, 'blue');
-});
-
 test('PUT rejects an empty name for static rooms', async (t) => {
   const { app, store } = buildApp({ room1: staticRoom() });
   t.after(() => app.close());
@@ -271,22 +238,6 @@ test('PUT rejects an empty name for static rooms', async (t) => {
 
   assert.equal(response.statusCode, 400);
   assert.equal(response.json().error, 'Дайте комнате название');
-  assert.equal(store.rooms.get('room1').name, 'Original');
-});
-
-test('PUT rejects an unknown visual key before persisting', async (t) => {
-  const { app, store } = buildApp({ room1: staticRoom() });
-  t.after(() => app.close());
-
-  const response = await app.inject({
-    method: 'PUT',
-    url: '/api/rooms/room1',
-    headers: { cookie: `vr_session=${OWNER_TOKEN}` },
-    payload: { name: 'Renamed', roomColorKey: 'not-a-real-color' }
-  });
-
-  assert.equal(response.statusCode, 400);
-  // Nothing written.
   assert.equal(store.rooms.get('room1').name, 'Original');
 });
 
@@ -373,10 +324,10 @@ async function openPreviewSession(socketPath, roomId, { cookie = '' } = {}) {
   return session;
 }
 
-async function startSocketServer(seed, { store = createFakeStore(seed) } = {}) {
+async function startSocketServer(seed, { store = createFakeStore(seed), users = createFakeUsers() } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'voice-room-crud-'));
   const socketPath = path.join(dir, 'api.sock');
-  const server = createApiServer({ store, users: createFakeUsers(), friends: createFakeFriends() });
+  const server = createApiServer({ store, users, friends: createFakeFriends() });
   await new Promise((resolve, reject) => {
     server.listen({ path: socketPath }, (error) => (error ? reject(error) : resolve()));
   });
@@ -455,6 +406,43 @@ test('authenticated room presence exposes only minimal account user id on peers'
   assert.equal('login' in ownerAsPeer, false);
 });
 
+test('room join refreshes avatar identity changed after the websocket opened', async (t) => {
+  const owner = {
+    id: OWNER_ID,
+    avatarAccent: null,
+    avatarColorKey: 'blurple',
+    avatarKey: null
+  };
+  const users = {
+    async getSessionUser(token) {
+      return token === OWNER_TOKEN ? { user: { ...owner } } : null;
+    }
+  };
+  const { dir, socketPath, server } = await startSocketServer(
+    { room1: staticRoom() },
+    { users }
+  );
+  const presence = openWs(socketPath, { cookie: `vr_session=${OWNER_TOKEN}` });
+  await presence.ready;
+
+  owner.avatarAccent = '#49303f';
+  owner.avatarKey = 'av_user-owner_deadbeef.webp';
+  await joinVoiceRoom(presence, {
+    roomId: 'room1',
+    peerId: 'peer0001',
+    sessionToken: OWNER_PEER_TOKEN,
+    name: 'Owner'
+  });
+  teardownSocketServer(t, { server, dir, sessions: [presence] });
+
+  const peer = presence.frames
+    .find((frame) => frame.type === 'room.snapshot')
+    ?.payload?.peers?.find((entry) => entry.id === 'peer0001');
+  assert.equal(peer.avatarAccent, '#49303f');
+  assert.equal(peer.avatarColorKey, 'blurple');
+  assert.equal(peer.avatarUrl, '/api/avatars/av_user-owner_deadbeef.webp');
+});
+
 test('an active peer receives room.updated over the voice stream', async (t) => {
   const { dir, socketPath, server } = await startSocketServer({ room1: staticRoom() });
   const presence = await openVoiceSession(socketPath, {
@@ -469,13 +457,13 @@ test('an active peer receives room.updated over the voice stream', async (t) => 
     method: 'PUT',
     path: '/api/rooms/room1',
     cookie: `vr_session=${OWNER_TOKEN}`,
-    body: { name: 'Live Rename', roomPresetKey: 'voice-blue' }
+    body: { name: 'Live Rename' }
   });
   assert.equal(updateStatus, 200);
 
   const updated = await waitForWsType(presence.frames, 'room.updated');
   assert.equal(updated.payload.room.name, 'Live Rename');
-  assert.equal(updated.payload.room.roomColorKey, 'blue');
+  assert.equal('emoji' in updated.payload.room, false);
   assert.equal(updated.payload.room.roomId, 'room1');
 });
 
@@ -509,7 +497,7 @@ test('a preview subscriber receives room.updated and room.deleted lifecycle fram
     method: 'PUT',
     path: '/api/rooms/room1',
     cookie: `vr_session=${OWNER_TOKEN}`,
-    body: { name: 'Chat Rename', roomPresetKey: 'voice-blue' }
+    body: { name: 'Chat Rename' }
   });
   assert.equal(updateStatus, 200);
 

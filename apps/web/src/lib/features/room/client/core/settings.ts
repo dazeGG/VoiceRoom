@@ -1,5 +1,8 @@
 import {
   DEFAULT_GATE_THRESHOLD_DB,
+  DEFAULT_MASTER_VOLUME,
+  DEFAULT_MICROPHONE_MODE,
+  DEFAULT_MICROPHONE_VOLUME,
   DEFAULT_NOISE_MODE,
   DEFAULT_NOTIFICATION_VOLUME,
   DEFAULT_PARTICIPANT_VOLUME,
@@ -7,11 +10,16 @@ import {
   GATE_THRESHOLD_DB_STORAGE_KEY,
   GATE_THRESHOLD_MAX_DB,
   GATE_THRESHOLD_MIN_DB,
+  MASTER_VOLUME_STORAGE_KEY,
+  MAX_MASTER_VOLUME,
+  MAX_MICROPHONE_VOLUME,
   MAX_NOTIFICATION_VOLUME,
   MAX_PARTICIPANT_VOLUME,
   MAX_STREAM_VOLUME,
   NOISE_MODES,
   NOISE_MODE_STORAGE_KEY,
+  MICROPHONE_MODE_STORAGE_KEY,
+  MICROPHONE_VOLUME_STORAGE_KEY,
   NOTIFICATION_VOLUME_STORAGE_KEY,
   OUTPUT_MUTED_STORAGE_KEY,
   PARTICIPANT_AUDIO_PREFERENCES_STORAGE_KEY,
@@ -19,6 +27,7 @@ import {
   PREVIOUS_GATE_MIN_AMPLITUDE,
   PREVIOUS_GATE_THRESHOLD_STORAGE_KEY,
   STREAM_VOLUME_STORAGE_KEY,
+  type MicrophoneMode,
   type NoiseMode
 } from './config';
 
@@ -42,6 +51,37 @@ export function getNotificationVolumeMultiplier(): number {
   return getStoredNotificationVolume() / 100;
 }
 
+export function getStoredMasterVolume(): number {
+  const parsed = Number.parseInt(localStorage.getItem(MASTER_VOLUME_STORAGE_KEY) || '', 10);
+  if (!Number.isFinite(parsed)) return DEFAULT_MASTER_VOLUME;
+  return Math.min(MAX_MASTER_VOLUME, Math.max(0, parsed));
+}
+
+export function getStoredMicrophoneVolume(): number {
+  const parsed = Number.parseInt(localStorage.getItem(MICROPHONE_VOLUME_STORAGE_KEY) || '', 10);
+  if (!Number.isFinite(parsed)) return DEFAULT_MICROPHONE_VOLUME;
+  return Math.min(MAX_MICROPHONE_VOLUME, Math.max(0, parsed));
+}
+
+export function persistMicrophoneVolume(volume: number): number {
+  const value = Math.min(MAX_MICROPHONE_VOLUME, Math.max(0, Math.round(volume)));
+  localStorage.setItem(MICROPHONE_VOLUME_STORAGE_KEY, String(value));
+  return value;
+}
+
+export function getStoredMicrophoneMode(): MicrophoneMode {
+  if (!window.voiceRoomRuntime?.isDesktop) return DEFAULT_MICROPHONE_MODE;
+  return localStorage.getItem(MICROPHONE_MODE_STORAGE_KEY) === 'push-to-talk'
+    ? 'push-to-talk'
+    : DEFAULT_MICROPHONE_MODE;
+}
+
+export function persistMicrophoneMode(mode: MicrophoneMode): MicrophoneMode {
+  const value = mode === 'push-to-talk' ? mode : DEFAULT_MICROPHONE_MODE;
+  localStorage.setItem(MICROPHONE_MODE_STORAGE_KEY, value);
+  return value;
+}
+
 
 export function persistOutputMuted(muted: boolean): void {
   localStorage.setItem(OUTPUT_MUTED_STORAGE_KEY, String(Boolean(muted)));
@@ -50,6 +90,12 @@ export function persistOutputMuted(muted: boolean): void {
 export function persistNotificationVolume(volume: number): number {
   const value = Math.min(MAX_NOTIFICATION_VOLUME, Math.max(0, Math.round(volume)));
   localStorage.setItem(NOTIFICATION_VOLUME_STORAGE_KEY, String(value));
+  return value;
+}
+
+export function persistMasterVolume(volume: number): number {
+  const value = Math.min(MAX_MASTER_VOLUME, Math.max(0, Math.round(volume)));
+  localStorage.setItem(MASTER_VOLUME_STORAGE_KEY, String(value));
   return value;
 }
 

@@ -28,6 +28,8 @@ import { setParticipantSpeaking } from '../room/participants';
 import type { MicrophoneCapture } from '../core/types';
 
 let gateSwitchTimer = 0;
+let confirmedOutputDeviceId: string | null = null;
+let outputSwitchGeneration = 0;
 // Same on-default as SettingsModal's GATE_DEFAULT_DB, used when there's no prior
 // threshold to restore (gate has never been turned on in this session).
 const GATE_TOGGLE_DEFAULT_DB = -40;
@@ -134,8 +136,10 @@ export async function refreshDevices(): Promise<void> {
   if (currentOutputId && !hasOptionValue(roomDeviceUi.outputOptions, currentOutputId)) {
     persistOutputDeviceId('');
     roomDeviceUi.outputDeviceId = '';
+    confirmedOutputDeviceId = '';
   } else if (hasOptionValue(roomDeviceUi.outputOptions, currentOutputId)) {
     roomDeviceUi.outputDeviceId = currentOutputId;
+    confirmedOutputDeviceId = currentOutputId;
   }
 
   syncOutputDeviceUiStateSoon();
@@ -265,19 +269,23 @@ export async function switchOutputDevice(): Promise<void> {
     return;
   }
 
-  const previousDeviceId = state.outputDeviceId;
-  persistOutputDeviceId(roomDeviceUi.outputDeviceId);
+  const generation = ++outputSwitchGeneration;
+  confirmedOutputDeviceId ??= state.outputDeviceId;
+  const requestedDeviceId = roomDeviceUi.outputDeviceId;
+  persistOutputDeviceId(requestedDeviceId);
   const synced = await syncAudioOutputDevices();
+  if (generation !== outputSwitchGeneration) return;
   if (!synced) {
-    persistOutputDeviceId(previousDeviceId);
-    if (hasOptionValue(roomDeviceUi.outputOptions, previousDeviceId)) {
-      roomDeviceUi.outputDeviceId = previousDeviceId;
+    persistOutputDeviceId(confirmedOutputDeviceId);
+    if (hasOptionValue(roomDeviceUi.outputOptions, confirmedOutputDeviceId)) {
+      roomDeviceUi.outputDeviceId = confirmedOutputDeviceId;
     }
     await syncAudioOutputDevices();
     showToast('Не удалось переключить динамик');
     return;
   }
 
+  confirmedOutputDeviceId = requestedDeviceId;
   showToast('Динамик переключен');
 }
 

@@ -14,8 +14,15 @@ Voice Room - голосовая комната по ссылке с демонс
 - Демонстрация экрана без ручных настроек в вебе: старт по умолчанию `720p 30 FPS`, дальше приложение само снижает/возвращает качество по sender stats и состоянию соединения.
 - Внутренние профили стрима для автоадаптации (`540p`, `720p`, `1080p` при `15/30 FPS`) без UI выбора качества в браузере.
 - Просмотр стрима на основной сцене или сворачивание обратно в плитку.
-- Noise suppression, mic gate, выбор input/output устройств и локальный meter микрофона.
+- Noise suppression, mic gate, выбор input/output устройств, локальный meter и входной gain микрофона `0–200%` после шумодава/гейта с защитой от клиппинга.
+- Единый WebAudio-микшер для голосов, демонстрации экрана и сигналов: индивидуальная и мастер-громкость `0–200%`, limiter и переключение устройства вывода там, где это поддерживает браузер.
 - Защита создания комнат: rate limit, proof-of-work challenge и лимит пустых комнат.
+- Модерация постоянной комнаты владельцем: kick, ban по аккаунту/IP и быстрое снятие только что созданного бана.
+- Удаление сообщений: свои — везде; владелец постоянной комнаты также может удалить сообщение комнаты. Свои сообщения комнаты и ЛС можно редактировать без ограничения по времени, с realtime-обновлением и отметкой «изменено».
+- Ring друзьям из комнаты с realtime-тостом, звуковым сигналом и переходом в комнату.
+- Уведомления в открытом приложении и Web Push для Ring, ЛС, заявок в друзья и их принятия. Поддерживаются DND, серверный mute ЛС, локальный mute комнат и отдельное включение push для текущего браузера.
+- Многострочный чат + кликабельные ссылки (http/https/www) в чате комнаты и ЛС.
+- Настраиваемые хоткеи для микрофона, звука приложения и Push-to-talk. Веб-PTT работает, пока вкладка активна, и отпускает микрофон с короткой задержкой, чтобы не обрезать конец фразы.
 
 ## Архитектура
 
@@ -118,6 +125,7 @@ GitHub-аналог GitLab CI/CD variables находится здесь:
 | `SSH_HOST` / `SSH_USER` / `SSH_KEY` / `SSH_PORT` | CD (deploy job) | Доступ к серверу для SSH-деплоя. `SSH_PORT` опционален (по умолчанию `22`). |
 | `LIVEKIT_API_KEY` | API / LiveKit | Ключ LiveKit. |
 | `LIVEKIT_API_SECRET` | API / LiveKit | Секрет LiveKit. Сгенерировать случайным значением. |
+| `VAPID_PRIVATE_KEY` | API / Web Push | Приватная часть стабильной VAPID-пары. Никогда не публиковать и не хранить в Git. |
 | `GITHUB_TOKEN` | API desktop release endpoint, optional | Нужен только если хочется повысить лимит GitHub API. |
 | `POW_SECRET` | API production/staging, optional | Стабильный secret для proof-of-work challenge; если не задан, генерируется на процесс и challenge'и инвалидируются при рестарте. |
 
@@ -146,6 +154,7 @@ GitHub-аналог GitLab CI/CD variables находится здесь:
 | `ROOM_CHAT_MAX_MESSAGES` | `500` | Max chat messages per room. |
 | `ROOM_CHAT_RATE_LIMIT` | `60` | Room chat rate limit. |
 | `ROOM_CHAT_RATE_WINDOW_MS` | `60000` | Room chat rate window. |
+| `UPLOADS_DIR` | `apps/api/uploads` (host) / `/data/uploads` (compose) | Каталог нормализованных WebP-аватарок. В production должен находиться на persistent volume. |
 | `ROOM_CREATE_POW_DIFFICULTY` | `14` | Proof-of-work difficulty. Для dev/test можно `0`. |
 | `ROOM_CREATE_POW_TTL_MS` | `120000` | Proof-of-work TTL. |
 | `ROOM_CREATE_RATE_LIMIT` | `20` | Room create rate limit. |
@@ -158,8 +167,17 @@ GitHub-аналог GitLab CI/CD variables находится здесь:
 | `DM_RATE_WINDOW_MS` | `10000` | DM rate window. |
 | `FRIEND_REQUEST_RATE_LIMIT` | `20` | Friend request rate limit per user. |
 | `FRIEND_REQUEST_RATE_WINDOW_MS` | `60000` | Friend request rate window. |
+| `AVATAR_UPLOAD_RATE_LIMIT` | `10` | Максимум загрузок аватарок на аккаунт за окно. |
+| `AVATAR_UPLOAD_RATE_WINDOW_MS` | `60000` | Окно rate limit загрузки аватарок. |
 | `MAX_REALTIME_STREAMS_PER_USER` | `8` | Max concurrent WebSocket streams per authenticated user. |
 | `MAX_GUEST_STREAMS_PER_IP` | `8` | Max concurrent guest WebSocket streams per client IP. |
+| `MAX_ROOM_BANS` | `100` | Максимум активных блокировок на постоянную комнату. |
+| `VAPID_PUBLIC_KEY` / `VAPID_SUBJECT` | empty | Публичная часть и контакт Web Push; вместе с secret `VAPID_PRIVATE_KEY` образуют полный VAPID-конфиг. Если любое значение отсутствует, push выключается без остановки API. |
+| `MAX_PUSH_SUBSCRIPTIONS_PER_USER` | `10` | Maximum retained Web Push subscriptions per account; older entries are pruned transactionally. |
+| `PUSH_SUBSCRIPTION_RATE_LIMIT` | `20` | Maximum Web Push subscription create/delete mutations per account per window. |
+| `PUSH_SUBSCRIPTION_RATE_WINDOW_MS` | `60000` | Web Push subscription mutation rate-limit window. |
+| `RING_RATE_LIMIT` / `RING_RATE_WINDOW_MS` | `1` / `30000` | Лимит Ring-приглашений от одного пользователя другому за окно. |
+| `RING_TTL_MS` | `30000` | Время жизни Ring-приглашения в realtime, toast и Web Push. |
 | `WS_MAX_PAYLOAD_BYTES` | `65536` | Max inbound WebSocket frame payload. |
 | `HOST` | `127.0.0.1` | Host for host-only API. Compose sets `0.0.0.0`. |
 | `PORT` | `3000` | API port. |
@@ -179,11 +197,18 @@ GitHub-аналог GitLab CI/CD variables находится здесь:
 # Любая из этих строк опциональна — задавайте только то, что меняете.
 LIVEKIT_API_KEY=devkey
 LIVEKIT_API_SECRET=devsecret
+VAPID_PUBLIC_KEY=<stable-public-key>
+VAPID_PRIVATE_KEY=<stable-private-key>
+VAPID_SUBJECT=mailto:admin@example.com
 POSTGRES_PASSWORD=<local-random-password>
 POSTGRES_PORT=5432
 WEB_PORT=5180
 API_PORT=3000
 ```
+
+Для Web Push нужны все три `VAPID_*` значения. Один раз создайте стабильную пару командой
+`npx web-push generate-vapid-keys --json`, сохраните её в защищённом источнике и используйте
+одинаковую пару после перезапусков и деплоев. Приватный ключ нельзя коммитить.
 
 Для host-only API добавьте `DATABASE_URL`, потому что вне compose она не собирается автоматически:
 
@@ -201,14 +226,20 @@ LIVEKIT_DOMAIN
 POSTGRES_PASSWORD
 LIVEKIT_API_KEY
 LIVEKIT_API_SECRET
+VAPID_PUBLIC_KEY
+VAPID_PRIVATE_KEY
+VAPID_SUBJECT
 ```
 
 `DATABASE_URL` в compose соберётся автоматически из `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` и service name `postgres`. Если деплой не через compose — задайте `DATABASE_URL` явно как secret.
+Если Web Push намеренно не используется, `VAPID_*` можно опустить — API продолжит работать,
+но `/api/push/config` вернёт `enabled: false` и клиент отключит переключатель push-уведомлений.
 
 ### CI/CD (GitHub Actions)
 
-Пайплайн описан в `.github/workflows/ci.yml` и триггерится на pull request в `main` и push в `main`:
+Пайплайн описан в `.github/workflows/ci.yml`. Проверки запускаются для pull request и push в `develop`/`main`; deploy запускается только для push в `main`. Ветки, PR, коммиты, hotfix и релизы ведутся по [`docs/GIT_FLOW.md`](./docs/GIT_FLOW.md):
 
+- **policy** — проверяет допустимый Git Flow маршрут PR и Conventional Commit формат PR title.
 - **check** — `npm ci`, `npm run check` (shared+api+web: `node --check`, `svelte-kit sync`, `tsc --noEmit`), `npm run build` (Vite).
 - **test** — `npm test` против эфемерного PostgreSQL service-контейнера. `TEST_DATABASE_URL` задаётся прямо в workflow одноразовым значением — секрет для этого **не нужен** (test harness создаёт/удаляет временную БД на каждый тест).
 - **deploy** — только на push в `main` и только после зелёных `check`+`test`. По SSH делает `git reset --hard origin/main` и `docker compose up -d --build` в каталоге деплоя. Миграции применяются API на bootstrap, отдельного шага нет.
@@ -228,7 +259,7 @@ LIVEKIT_API_SECRET
 
 Прочие рекомендации:
 
-- Для protected production включите Environment protection rules и required reviewers; в Settings → Branches сделайте `check` и `test` обязательными проверками для merge в `main`.
+- Для protected branches включите required reviewers; сделайте `policy`, `check` и `test` обязательными проверками для PR в `develop` и `main`, а для production Environment включите protection rules.
 - Не печатайте secrets в workflow logs; передавайте их через `with:`/`env:` только в нужные jobs/steps.
 - Для supply-chain harden можно запинить `appleboy/ssh-action` на commit SHA вместо тега `v1.2.5`.
 
@@ -246,7 +277,7 @@ npm --workspace @voice-room/api run db:rollback
 Production compose собирает runtime-образы из одного Dockerfile и поднимает durable services:
 
 - `postgres` — PostgreSQL с volume `postgres_data` и healthcheck;
-- `api` — Node.js API на `:3000`, ждёт healthy Postgres, применяет migrations и отвечает только на `/api/*`;
+- `api` — Node.js API на `:3000`, ждёт healthy Postgres, применяет migrations, хранит аватарки в volume `uploads` и отвечает только на `/api/*`;
 - `caddy` — frontend static build из `apps/web/dist`, reverse proxy для `/api/*` и отдельный reverse proxy для LiveKit domain;
 - `livekit` — LiveKit SFU.
 
@@ -276,7 +307,7 @@ npm run dev:down
 
 Для Docker/production используйте отдельный prod-like `.env`: `LIVEKIT_URL` должен быть публичным URL из браузера, обычно `wss://$LIVEKIT_DOMAIN`. Локальный dev `.env` с `LIVEKIT_URL=ws://127.0.0.1:7880` предназначен для host/dev compose сценария; в production контейнере такой URL будет неверен для внешних браузеров.
 
-В production приложение должно стоять за HTTPS, PostgreSQL volume нужно бэкапить, а LiveKit должен иметь публично доступные ICE/TCP и ICE/UDP порты. Если пользователи часто сидят за строгими корпоративными сетями, следующим шагом стоит добавить TURN/TLS в LiveKit deployment.
+В production приложение должно стоять за HTTPS, volumes `postgres_data` и `uploads` нужно бэкапить как единый согласованный набор, а LiveKit должен иметь публично доступные ICE/TCP и ICE/UDP порты. `postgres_data` содержит ключи аватарок, а `uploads` — соответствующие WebP-файлы; потеря одного из volumes делает резервную копию неполной. Для файловой копии volumes остановите оба изменяющих их сервиса (`docker compose stop api postgres`), сохраните `postgres_data` и `uploads`, затем запустите Postgres, дождитесь healthy-состояния и запустите API. Если Postgres останавливать нельзя, остановите API, сделайте согласованный `pg_dump`/`pg_basebackup`, отдельно заархивируйте неизменяемый в этот момент `uploads` и только после этого верните API. Альтернатива — атомарный snapshot обоих volumes на уровне хранилища. Если пользователи часто сидят за строгими корпоративными сетями, следующим шагом стоит добавить TURN/TLS в LiveKit deployment.
 
 
 ## Ручной release smoke: static room + chat persist after API restart
@@ -303,6 +334,10 @@ npm run dev:down
 
 Desktop-оболочка живет в соседнем проекте `VoiceRoomDesktop`. Это веб-приложение остается основным продуктом, а desktop-проект отвечает за нативный выбор окна/экрана, desktop capture audio, управление fullscreen-окном и packaging.
 
+Когда VoiceRoom открыт внутри desktop-оболочки, web-клиент отправляет open-app уведомления через узкий preload bridge `window.voiceRoomDesktopNotifications.show(...)`. Electron main process валидирует payload и показывает native OS notification; если bridge недоступен или сообщает `unsupported`, web-клиент откатывается к обычному browser `Notification`. Этот bridge сам по себе не является offline-доставкой. Для залогиненных пользователей веб-клиент отдельно поддерживает Web Push через service worker и VAPID, если push включён для браузера и сервер настроен соответствующими ключами.
+
+Мьют микрофона, мьют всего звука и push-to-talk синхронизируются с `window.voiceRoomDesktopHotkeys`: desktop-оболочка запускает native listener только после подключения к голосу и снимает его при выходе, завершённой навигации, падении renderer или завершении приложения. Listener работает с физическими кодами клавиш, поэтому сочетания не зависят от активной раскладки, а push-to-talk получает настоящие события нажатия и отпускания поверх других вкладок и приложений. На macOS при первом использовании может понадобиться разрешить Voice Room «Мониторинг ввода» и переподключиться к голосу. При блокировке экрана или сне desktop отпускает push-to-talk и безопасно перезапускает listener после возврата. Если native helper не запустился, desktop временно откатывает мьют микрофона и звука на Electron `globalShortcut`, а push-to-talk безопасно остаётся локальным. В обычной браузерной вкладке все сочетания остаются локальными, поскольку страница не получает клавиатурные события вне фокуса.
+
 ```bash
 cd ../VoiceRoomDesktop
 # Создайте .env для desktop по документации VoiceRoomDesktop
@@ -315,9 +350,13 @@ npm run desktop
 
 Аккаунты служат для владения постоянными комнатами, а не для контроля доступа к ним. Пароли хешируются `scrypt` (встроенный `node:crypto`), сессия живёт в HttpOnly + SameSite=Lax cookie (`vr_session`) до `SESSION_TTL_MS`; попытки входа/регистрации ограничены `AUTH_RATE_LIMIT` на IP. Логин нормализуется в нижний регистр и уникален. При создании постоянной комнаты залогиненным пользователем она получает `owner_id`, и список «Мои комнаты» приходит с сервера (`GET /api/auth/rooms`). Временные комнаты остаются ownerless.
 
+Владелец постоянной комнаты может исключить участника или создать бан. Бан сопоставляется с аккаунтом участника, если он залогинен, и с IP текущей peer-сессии; он проверяется при входе, получении LiveKit-токена, отправке сообщения и подписке на preview. Kick/ban инвалидирует peer-сессию и удаляет участника из LiveKit. Это инструмент модерации, а не режим приватной комнаты: любой не заблокированный пользователь со ссылкой или кодом по-прежнему может войти.
+
+Web Push доступен только залогиненным пользователям и выключен без полного набора VAPID-ключей. Подписки хранятся на сервере; DND глушит push целиком, а mute треда ЛС — push только этого диалога. Mute комнаты хранится в серверных настройках аккаунта, синхронизируется между его устройствами и глушит системные уведомления и звуковые сигналы этой комнаты.
+
 Постоянные комнаты больше не считаются в IP-квоту: создавать их могут только авторизованные пользователи, а владение ограничено `MAX_STATIC_ROOMS_PER_USER` (по умолчанию 3). Временные ownerless-комнаты остаются ограничены по IP через `MAX_TEMP_ROOMS_PER_IP` (legacy `MAX_EMPTY_ROOMS_PER_IP` используется только как fallback для старых env-файлов), чтобы один IP не заполнял `MAX_ROOMS` пустыми временными комнатами.
 
-История чата хранится в PostgreSQL до `ROOM_CHAT_TTL_MS`, но на комнату сохраняется не больше `ROOM_CHAT_MAX_MESSAGES` последних сообщений. Отправка чата ограничена `ROOM_CHAT_RATE_LIMIT` на пару IP+room за `ROOM_CHAT_RATE_WINDOW_MS`. Для production важно бэкапить PostgreSQL volume и не терять `DATABASE_URL`/credentials. Cleanup expired chat/idle dynamic rooms runs on a process-local `ROOM_PRUNE_INTERVAL_MS` timer; old soft-deleted rows are physically purged by `RETENTION_PURGE_INTERVAL_MS` after `RETENTION_KEEP_DELETED_MS`. API currently assumes exactly one running instance: presence, WebSocket registry, POW challenges, cleanup timers and non-durable rate-limit state are process-local. Durable rooms/messages/users live in PostgreSQL, and room quota/capacity enforcement is transactional in PostgreSQL at room creation time. Horizontal scaling requires sticky WebSocket routing and moving process-local state to shared storage such as Redis/pub-sub.
+История чата хранится в PostgreSQL до `ROOM_CHAT_TTL_MS`, но на комнату сохраняется не больше `ROOM_CHAT_MAX_MESSAGES` последних сообщений. Отправка чата ограничена `ROOM_CHAT_RATE_LIMIT` на пару IP+room за `ROOM_CHAT_RATE_WINDOW_MS`. Для production важно совместно бэкапить volumes `postgres_data` и `uploads` и не терять `DATABASE_URL`/credentials. Cleanup expired chat/idle dynamic rooms runs on a process-local `ROOM_PRUNE_INTERVAL_MS` timer; old soft-deleted rows are physically purged by `RETENTION_PURGE_INTERVAL_MS` after `RETENTION_KEEP_DELETED_MS`. API currently assumes exactly one running instance: presence (including peer IP for moderation), WebSocket registry, Ring, POW challenges, cleanup timers and non-durable rate-limit state are process-local. Durable rooms/messages/users, bans and push subscriptions live in PostgreSQL, avatar files live on the API `uploads` volume, and room quota/capacity enforcement is transactional in PostgreSQL at room creation time. Horizontal scaling requires sticky WebSocket routing, shared avatar storage such as S3 and moving other process-local state to shared storage such as Redis/pub-sub.
 
 LiveKit снимает mesh-нагрузку с браузеров: каждый участник публикует микрофон и экран один раз в SFU, а остальные клиенты подписываются на tracks через LiveKit.
 

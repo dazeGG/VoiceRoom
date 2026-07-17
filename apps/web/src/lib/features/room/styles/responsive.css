@@ -122,14 +122,6 @@
     padding: var(--space-sm) var(--space-sm) 88px;
   }
 
-  body[data-screen-view="true"] .stage-strip {
-    max-height: 218px;
-  }
-
-  body[data-screen-view="true"] .participant {
-    width: 100%;
-  }
-
   .screen-meta {
     max-width: calc(100% - 16px);
     gap: 5px;

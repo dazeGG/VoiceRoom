@@ -1,6 +1,5 @@
 <script lang="ts">
   import { LogIn, MessageSquare, MicOff } from '@lucide/svelte';
-  import { AvatarStack } from '$lib/shared/ui';
   import { iconMd, iconSm } from '$lib/shared/ui/icons';
   import type { AuthUser, OwnedRoom } from '$lib/api/auth';
   import type { RoomPeer } from '$lib/api/rooms';
@@ -10,25 +9,32 @@
   import '$lib/features/room/styles/room.css';
   import RoomPreviewChat from './RoomPreviewChat.svelte';
   import RoomViewHeader from './RoomViewHeader.svelte';
-  import { roomPeerAvatarItems } from '../../model/room-avatars';
+  import LobbyStreamTile from './LobbyStreamTile.svelte';
+  import { roomPresence } from '../../model/room-presence.svelte';
   import { subscribeRoomPreview } from '../../model/room-realtime';
+  import { notificationPreferences } from '$lib/shared/notifications/preferences.svelte';
 
-  let { room, user, onEnter, onBack, onToast } = $props<{
+  let { room, user, onEnter, onBack, onOpenSettings, onToast } = $props<{
     room: OwnedRoom;
     user: AuthUser;
     onEnter: () => void;
     onBack: () => void;
+    onOpenSettings?: () => void;
     onToast?: (message: string) => void;
   }>();
 
   const name = $derived(roomDisplayName(room));
+  const previewRoomId = $derived(room.roomId);
+  const roomNotificationsMuted = $derived(notificationPreferences.mutedRoomIds.includes(previewRoomId));
+  const roomUnreadCount = $derived(roomPresence.unreadCountByRoomId[previewRoomId] ?? room.unreadCount ?? 0);
 
   let peers = $state<RoomPeer[]>([]);
   let loading = $state(true);
 
   let previewChatOpen = $state(false);
   let loadError = $state('');
-  const peerAvatars = $derived(roomPeerAvatarItems(peers));
+  const screenPeers = $derived(peers.filter((peer) => peer.screen));
+  const tileCount = $derived(peers.length + screenPeers.length);
 
   function handlePreviewEvent(event: RealtimeEvent): void {
     if (event.type === 'room.snapshot' && event.payload.roomId === room.roomId) {
@@ -58,12 +64,12 @@
   }
 
   $effect(() => {
-    void room.roomId;
+    const roomId = previewRoomId;
     loading = true;
     peers = [];
     loadError = '';
     previewChatOpen = false;
-    const unsubscribe = subscribeRoomPreview(room.roomId, handlePreviewEvent);
+    const unsubscribe = subscribeRoomPreview(roomId, handlePreviewEvent);
     return unsubscribe;
   });
 
@@ -73,7 +79,9 @@
 
   function peerAvatar(peer: RoomPeer): ReturnType<typeof getAvatarPresentation> {
     return getAvatarPresentation({
+      avatarAccent: peer.avatarAccent || undefined,
       avatarColorKey: peer.avatarColorKey,
+      avatarUrl: peer.avatarUrl || undefined,
       isLocal: false,
       name: peerName(peer)
     });
@@ -82,19 +90,15 @@
 
 <div class="lobby-browse-room" aria-label={`Комната ${name}`}>
   <header class="lobby-browse-topbar">
-    <RoomViewHeader {room} {onBack} {onToast} />
+    <RoomViewHeader {room} {onBack} {onOpenSettings} {onToast} />
     <div class="lobby-roomview-actions">
-      {#if peers.length > 0}
-        <span class="lobby-roomview-state" data-live="true">
-          <span class="lobby-live-dot"></span>
-          <AvatarStack items={peerAvatars} maxAvatars={5} size={24} ariaLabel="В комнате" />
-          <span>{peers.length} в эфире</span>
-        </span>
-      {/if}
       {#if !previewChatOpen}
         <button class="room-chat-toggle" type="button" onclick={() => (previewChatOpen = true)}>
           <MessageSquare {...iconSm} aria-hidden="true" />
           <span>Чат</span>
+          {#if roomUnreadCount > 0}
+            <span class="room-chat-unread" data-muted={roomNotificationsMuted} aria-label={`${roomUnreadCount} новых сообщений`}>{roomUnreadCount > 99 ? '99+' : roomUnreadCount}</span>
+          {/if}
         </button>
       {/if}
     </div>
@@ -106,16 +110,19 @@
         <div class="stage-strip" aria-label="Плитки комнаты">
           <div
             class="tile-grid"
-            data-count={Math.min(peers.length, 8)}
-            data-streams="0"
+            data-count={Math.min(tileCount, 9)}
+            data-streams={Math.min(screenPeers.length, 9)}
           >
+            {#each screenPeers as peer (`screen-${peer.id}`)}
+              <LobbyStreamTile {peer} {onEnter} />
+            {/each}
             {#each peers as peer (peer.id)}
               {@const avatar = peerAvatar(peer)}
               <div
                 class="participant lobby-preview-participant"
                 data-peer-id={peer.id}
                 data-muted={String(peer.muted)}
-                data-screen="false"
+                data-screen={String(peer.screen)}
                 data-speaking="false"
                 style:--level="0"
                 style:--participant-pastel={avatar.background}
@@ -123,7 +130,7 @@
                 style:--participant-avatar-shadow={avatar.shadow}
               >
                 <div class="voice-ring" aria-hidden="true">
-                  <span class="avatar">{avatar.initials}</span>
+                  <span class="avatar">{avatar.initials}{#if avatar.src}<img src={avatar.src} alt="" onerror={(event) => event.currentTarget.remove()} />{/if}</span>
                 </div>
                 <div class="participant-copy">
                   <h2>
@@ -155,8 +162,8 @@
     </main>
 
     {#if previewChatOpen}
-      {#key room.roomId}
-        <RoomPreviewChat roomId={room.roomId} {user} onClose={() => (previewChatOpen = false)} />
+      {#key previewRoomId}
+        <RoomPreviewChat roomId={previewRoomId} {user} {onToast} onClose={() => (previewChatOpen = false)} />
       {/key}
     {/if}
   </div>

@@ -27,6 +27,7 @@ dist/
 apps/web/build/
 apps/web/dist/
 apps/web/.svelte-kit/
+apps/api/uploads/
 
 # Docker/Caddy local state
 caddy_data/

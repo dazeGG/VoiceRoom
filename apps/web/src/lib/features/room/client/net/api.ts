@@ -1,5 +1,17 @@
 import { state } from '../core/state.svelte';
 
+export class ApiRequestError extends Error {
+  code: string;
+  roomId: string;
+
+  constructor(message: string, code = '', roomId = '') {
+    super(message);
+    this.name = 'ApiRequestError';
+    this.code = code;
+    this.roomId = roomId;
+  }
+}
+
 export async function fetchJson(url: string): Promise<any> {
   const response = await fetch(url, { headers: { Accept: 'application/json' } });
   if (!response.ok) throw new Error('Сервер недоступен');
@@ -22,7 +34,7 @@ export async function postJson(url: string, body: unknown): Promise<any> {
     // Non-JSON errors are handled by the generic message below.
   }
   if (!response.ok) {
-    throw new Error(payload?.error || 'Сервер недоступен');
+    throw new ApiRequestError(payload?.error || 'Сервер недоступен', payload?.code, payload?.roomId);
   }
   return payload;
 }
@@ -35,12 +47,9 @@ export async function checkRoomExists(roomId: string): Promise<boolean> {
   if (!response.ok) throw new Error('Не удалось проверить комнату');
 
   const status = await response.json();
-  // Capture the room's display name/icon so the in-room top bar can show them
+  // Capture the room's display name so the in-room top bar can show it
   // instead of the bare code.
   state.roomName = typeof status?.name === 'string' ? status.name : '';
-  state.roomEmoji = typeof status?.emoji === 'string' ? status.emoji : '';
-  state.roomColorKey = typeof status?.roomColorKey === 'string' ? status.roomColorKey : '';
-  state.roomIconKey = typeof status?.roomIconKey === 'string' ? status.roomIconKey : '';
-  state.roomPresetKey = typeof status?.roomPresetKey === 'string' ? status.roomPresetKey : '';
+  state.roomAvatarUrl = typeof status?.avatarUrl === 'string' ? status.avatarUrl : '';
   return Boolean(status?.exists);
 }

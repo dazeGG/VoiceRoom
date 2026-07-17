@@ -40,6 +40,8 @@
   import { handleScreenButtonClick } from '../client/services/screen-share-service';
   import { handleLeaveButtonClick } from '../client/room/room';
   import { leaveScreenView } from '../client/ui/screen-view';
+  import { state as roomClientState } from '../client/core/state.svelte';
+  import { setMicrophoneVolume } from '../client/services/microphone-service';
 
   import { screenUi } from '../screen-ui.svelte';
 
@@ -94,6 +96,9 @@
             >
               <span class="dock-icon dock-icon-mic" aria-hidden="true"><Mic /></span>
               <span class="dock-icon dock-icon-muted" aria-hidden="true"><MicOff /></span>
+              {#if roomClientState.microphoneMode === 'push-to-talk'}
+                <span class="dock-ptt-badge" data-active={roomClientState.pushToTalkActive} aria-hidden="true">PTT</span>
+              {/if}
               <span class="sr-only" id="muteText">{callControls.label}</span>
             </button>
             <button
@@ -122,6 +127,22 @@
               onValueChange={() => void switchMicrophone()}
             />
           </label>
+          <div class="field">
+            <div class="dock-volume-head">
+              <span>Громкость микрофона</span>
+              <output>{Math.round(roomDeviceUi.microphoneVolume)}%</output>
+            </div>
+            <Slider
+              bind:value={roomDeviceUi.microphoneVolume}
+              min={0}
+              max={200}
+              step={1}
+              defaultValue={100}
+              ariaLabel="Громкость микрофона"
+              ariaValueText={`${Math.round(roomDeviceUi.microphoneVolume)}%`}
+              onValueChange={setMicrophoneVolume}
+            />
+          </div>
           <label class="field">
             <span>Шумоподавление</span>
             <Select

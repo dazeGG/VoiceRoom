@@ -3,14 +3,14 @@ import { session, setUser } from '$lib/features/auth/session.svelte';
 import { roomNameFor } from '$lib/features/auth/account';
 import { roomSettingsUi } from '../../room-settings.svelte';
 import { startUi } from '../../start-ui.svelte';
-import { clearConnectedVoiceRoom, setConnectedVoiceRoom, setVoiceControlsState } from '../../voice-session.svelte';
+import { clearConnectedVoiceRoom, setConnectedVoiceRoom, setVoiceControlsState, setVoiceSessionTiming } from '../../voice-session.svelte';
 import { state } from '../core/state.svelte';
 import { showToast } from '../ui/toast';
-import { checkRoomExists, postJson } from '../net/api';
+import { ApiRequestError, checkRoomExists, postJson } from '../net/api';
 import { postState } from './presence';
 import { createRoomProof } from '../net/pow';
 import { errorMessage, wait } from '../core/utils';
-import { extractRoomId } from '../core/session';
+import { extractRoomId, rotateStoredPeerSession } from '../core/session';
 import { isRoomEmbedded } from '../core/embed';
 import { getDisplayName, persistName, requestGuestNameForRoom, requireSavedName, updateNameStatuses } from '../ui/names';
 import {
@@ -18,7 +18,7 @@ import {
   setServerConnectionStatus,
   setVoiceConnectionStatus
 } from '../ui/status';
-import { refreshCallControls } from '../ui/controls';
+import { refreshCallControls, resetPushToTalkState } from '../ui/controls';
 import { refreshScreenControls, stopLocalScreenStream } from '../services/screen-share-service';
 import { closeScreenView, refreshScreenStage } from '../ui/screen-view';
 import {
@@ -41,6 +41,7 @@ import { attachMeter, startMeters, stopMeters } from '../media/meters';
 import { startPeerLatencyStats, startSpeakingStats, stopPeerLatencyStats, stopSpeakingStats } from './stats';
 import { clearAllPeerJoinCues, clearPeerJoinCue, clearStreamViewerCues, playPeerCue, playPeerJoinCue } from '../media/cues';
 import { cancelScreenSourcePicker } from '../ui/screen-source-picker';
+import { syncDesktopGlobalHotkeys } from '../services/desktop-hotkey-service';
 import { closeParticipantContextMenu } from '../../participant-context-ui.svelte';
 import {
   clearGateSwitchTimer,
@@ -62,6 +63,12 @@ import { applyRoomDeleted, applyRoomUpdated } from './lifecycle';
 type RoomEntryGateResult = 'authenticated' | 'anonymous' | 'failure';
 
 let voiceJoinSent = false;
+let joinAttemptGeneration = 0;
+let activeJoinAttempt: Promise<void> | null = null;
+
+function isCurrentJoinAttempt(generation: number): boolean {
+  return generation === joinAttemptGeneration;
+}
 
 export function showStartScreen(): void {
   document.body.dataset.screen = 'start';
@@ -91,7 +98,7 @@ export async function showRoomRoute(): Promise<boolean> {
   return true;
 }
 
-// The room heading (title, code, emoji badge) is rendered reactively by
+// The room heading (title and code) is rendered reactively by
 // RoomTopbar.svelte from the room state. Only the document title — a side effect
 // outside the component tree — stays here; it runs on screen entry and rename.
 export function refreshRoomHeading(): void {
@@ -125,6 +132,17 @@ export function showRoomNotFound(): void {
   state.screen = 'not-found';
   document.title = 'Комната не найдена · Voice Room';
   startUi.missingRoomCode = state.roomId || getMissingRoomLabel();
+}
+
+function showRoomModerationScreen(reason: 'banned' | 'kicked'): void {
+  leaveRoom();
+  const nextSession = rotateStoredPeerSession(state.roomId);
+  state.peerId = nextSession.peerId;
+  state.sessionToken = nextSession.sessionToken;
+  state.moderationReason = reason;
+  document.body.dataset.screen = 'moderation';
+  state.screen = 'moderation';
+  document.title = reason === 'banned' ? 'Доступ к комнате закрыт · Voice Room' : 'Вы исключены · Voice Room';
 }
 
 function getMissingRoomLabel(): string {
@@ -225,6 +243,19 @@ export async function joinRoom(event?: Event): Promise<void> {
   event?.preventDefault();
   if (state.joined || state.connecting) return;
 
+  const generation = ++joinAttemptGeneration;
+  const attempt = performJoinRoom(generation);
+  activeJoinAttempt = attempt;
+  try {
+    await attempt;
+  } finally {
+    if (activeJoinAttempt === attempt) activeJoinAttempt = null;
+  }
+}
+
+async function performJoinRoom(generation: number): Promise<void> {
+  const isCurrent = (): boolean => isCurrentJoinAttempt(generation);
+
   state.connecting = true;
   state.localConnectionQuality = 'unknown';
   state.localPingMs = null;
@@ -235,6 +266,7 @@ export async function joinRoom(event?: Event): Promise<void> {
 
   try {
     const exists = await checkRoomExists(state.roomId);
+    if (!isCurrent()) return;
     if (!exists) {
       showRoomNotFound();
       return;
@@ -244,9 +276,16 @@ export async function joinRoom(event?: Event): Promise<void> {
       state.micMutedBeforeOutputMute = state.muted;
       state.muted = true;
     }
+    if (state.microphoneMode === 'push-to-talk') state.muted = true;
 
-    setLocalMicrophoneCapture(await openLocalMicrophone());
+    const microphoneCapture = await openLocalMicrophone();
+    if (!isCurrent()) {
+      stopMicrophoneCapture(microphoneCapture);
+      return;
+    }
+    setLocalMicrophoneCapture(microphoneCapture);
     await refreshDevices();
+    if (!isCurrent()) return;
 
     const name = getDisplayName();
     state.self = createParticipant({
@@ -256,7 +295,9 @@ export async function joinRoom(event?: Event): Promise<void> {
       joinedAt: Date.now(),
       muted: state.muted,
       name,
-      avatarColorKey: session.user?.avatarColorKey || ''
+      avatarAccent: session.user?.avatarAccent || '',
+      avatarColorKey: session.user?.avatarColorKey || '',
+      avatarUrl: session.user?.avatarUrl || ''
     });
     attachMeter(state.self, state.localStream);
     updatePeerStatus(state.self);
@@ -286,9 +327,12 @@ export async function joinRoom(event?: Event): Promise<void> {
     voiceJoinSent = true;
     setServerConnectionStatus('connecting');
 
-    await connectLiveKitRoom(name);
+    const connected = await connectLiveKitRoom(name, isCurrent);
+    if (!connected || !isCurrent()) return;
     state.joined = true;
     setConnectedVoiceRoom(state.roomId);
+    void syncDesktopGlobalHotkeys(true);
+    setVoiceSessionTiming({ joinedAt: state.self?.joinedAt ?? Date.now() });
     setVoiceControlsState({ muted: state.muted, deafened: state.outputMuted });
     if (state.muted || state.outputMuted) postState().catch(() => {});
     refreshCallControls();
@@ -298,8 +342,14 @@ export async function joinRoom(event?: Event): Promise<void> {
     startSpeakingStats();
     playPeerCue('join');
   } catch (error) {
+    if (!isCurrent()) {
+      // leaveRoom already cleaned this attempt's published state. Async capture,
+      // token and LiveKit work self-disposes through the generation predicate.
+      return;
+    }
     console.error(error);
-    showToast(formatJoinError(error));
+    const banned = error instanceof ApiRequestError && error.code === 'room_banned';
+    if (!banned) showToast(formatJoinError(error));
     setVoiceConnectionStatus(isVoiceRouteError(error) ? 'no-route' : 'error');
     if (voiceJoinSent && state.roomId && state.peerId && state.sessionToken) {
       sendVoiceLeave({ roomId: state.roomId, peerId: state.peerId, sessionToken: state.sessionToken });
@@ -313,8 +363,9 @@ export async function joinRoom(event?: Event): Promise<void> {
     state.self = null;
     stopLocalStream();
     refreshParticipantState();
+    if (banned) showRoomModerationScreen('banned');
   } finally {
-    state.connecting = false;
+    if (isCurrent()) state.connecting = false;
     refreshCallControls();
     refreshScreenControls();
   }
@@ -347,12 +398,24 @@ async function handleVoiceRealtimeEvent(event: RealtimeEvent): Promise<void> {
     const remotePeers = peers.filter((peer) => peer.id !== state.peerId);
     state.serverPeerIds = new Set(remotePeers.map((peer) => peer.id).filter(Boolean));
     state.serverPeerSyncReady = true;
+    // Prefer the server clock for the call widget timers: my joinedAt from the
+    // authoritative peer record, the shared call start from the room snapshot.
+    setVoiceSessionTiming({
+      joinedAt: localPeer?.joinedAt ?? state.self?.joinedAt ?? null,
+      roomActiveSince: snapshot.voiceActiveSince ?? null
+    });
     setServerConnectionStatus('connected');
     syncPeers([...state.serverPeerIds]);
     if (localPeer) {
-      // Local mute/deafen state is owned by this client; the snapshot may carry a
-      // stale server copy (e.g. toggled while reconnecting), so keep the local values.
-      updateParticipant({ ...localPeer, deafened: state.outputMuted, isLocal: true, muted: state.muted });
+      // Local controls and stream attendance are owned by this client; the snapshot
+      // may carry a stale server copy (e.g. changed while reconnecting), so keep them.
+      updateParticipant({
+        ...localPeer,
+        deafened: state.outputMuted,
+        isLocal: true,
+        muted: state.muted,
+        viewedScreenPeerId: state.self?.viewedScreenPeerId ?? localPeer.viewedScreenPeerId
+      });
     }
     for (const peer of remotePeers) {
       createParticipant(peer);
@@ -364,6 +427,10 @@ async function handleVoiceRealtimeEvent(event: RealtimeEvent): Promise<void> {
   }
 
   if (event.type === 'error') {
+    if (event.payload.code === 'room_banned') {
+      showRoomModerationScreen('banned');
+      return;
+    }
     showToast(event.payload.message || 'Ошибка realtime-соединения');
     if (event.payload.code === 'invalid_session' || event.payload.code === 'join_failed' || event.payload.code === 'room_full') {
       leaveRoom();
@@ -374,6 +441,14 @@ async function handleVoiceRealtimeEvent(event: RealtimeEvent): Promise<void> {
 
   if (event.type === 'room.not_found') {
     showRoomNotFound();
+    return;
+  }
+
+
+  if (event.type === 'room.kicked' || event.type === 'room.banned') {
+    if (event.payload.roomId === state.roomId && (!event.payload.peerId || event.payload.peerId === state.peerId)) {
+      showRoomModerationScreen(event.type === 'room.banned' ? 'banned' : 'kicked');
+    }
     return;
   }
 
@@ -419,6 +494,8 @@ async function handleVoiceRealtimeEvent(event: RealtimeEvent): Promise<void> {
 }
 
 export function leaveRoom(): void {
+  joinAttemptGeneration += 1;
+  void syncDesktopGlobalHotkeys(false);
   if (!state.joined && !state.localStream && !state.localScreenStream && !state.connecting && !voiceJoinSent && !state.voiceRealtimeTeardown) return;
 
   const disconnectedRoomId = state.roomId;
@@ -460,6 +537,7 @@ export function leaveRoom(): void {
   stopSpeakingStats();
 
   state.muted = false;
+  resetPushToTalkState();
   clearAllPeerJoinCues();
   clearStreamViewerCues();
   refreshCallControls();

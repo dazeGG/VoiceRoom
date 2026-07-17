@@ -1,20 +1,25 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { goto } from '$app/navigation';
+  import { page } from '$app/state';
   import { createRoom } from '$lib/api/rooms';
   import { fetchDesktopRelease, type DesktopRelease } from '$lib/api/desktop';
-  import { logout } from '$lib/api/auth';
-  import { clearSession, loadSession, session } from '$lib/features/auth/session.svelte';
+  import { loadSession, session } from '$lib/features/auth/session.svelte';
+  import { signOut } from './model/sign-out';
   import Topbar from '$lib/shared/components/Topbar.svelte';
   import '$lib/shared/styles/typography.css';
   import '$lib/shared/styles/app.css';
   import './styles/home.css';
   import { extractRoomId } from '$lib/shared/utils/room';
-  import { ToastStack } from '$lib/shared/ui';
+  import { MascotIcon, ToastStack } from '$lib/shared/ui';
   import DesktopAppCard from './components/DesktopAppCard.svelte';
   import LandingHero from './components/LandingHero.svelte';
+  import AuthDialog, { type AuthMode } from '$lib/features/auth/AuthDialog.svelte';
   import LobbyPage from './LobbyPage.svelte';
-  import { copyText, triggerDesktopDownload } from './services/desktop-download';
-  import { dismissToast, pushToast, toastState } from './model/toasts.svelte';
+  import { copyText } from '$lib/shared/utils/clipboard';
+  import { triggerDesktopDownload } from './services/desktop-download';
+  import { dismissToast, pushToast, toastState, type ToastOptions } from './model/toasts.svelte';
+  import { syncPushNotificationState } from './model/push-notifications.svelte';
   import {
     DESKTOP_BUILDS,
     QUARANTINE_CMD,
@@ -22,6 +27,8 @@
     detectDesktopBuildId,
     formatDesktopReleaseMeta
   } from './model/desktop-builds';
+
+  let { initialAuthMode = null }: { initialAuthMode?: AuthMode | null } = $props();
 
   let roomCode = $state('');
   let creatingTemp = $state(false);
@@ -43,11 +50,20 @@
 
   const user = $derived(session.user);
   const showLobby = $derived(session.loaded && Boolean(user));
+  const authMode = $derived.by<AuthMode | null>(() => {
+    const requestedMode = page.url.searchParams.get('auth');
+    if (requestedMode === 'login' || requestedMode === 'register') return requestedMode;
+    return initialAuthMode;
+  });
 
   const selectedBuild = $derived(DESKTOP_BUILDS.find((build) => build.id === selectedBuildId) ?? DESKTOP_BUILDS[0]);
   const selectedAsset = $derived(release?.assets[selectedBuildId] ?? null);
   const appMeta = $derived(formatDesktopReleaseMeta(selectedBuild, selectedAsset, release, releaseLoading, releaseError));
   const downloadLabel = $derived(desktopDownloadLabel(appDownloadState));
+
+  $effect(() => {
+    void syncPushNotificationState(user?.id ?? null);
+  });
 
   onMount(() => {
     document.body.dataset.screen = 'start';
@@ -106,8 +122,7 @@
     if (loggingOut) return;
     loggingOut = true;
     try {
-      await logout();
-      clearSession();
+      await signOut();
       showToast('Вы вышли из аккаунта');
     } catch (error) {
       showToast(error instanceof Error && error.message ? error.message : 'Не удалось выйти из аккаунта');
@@ -174,8 +189,16 @@
     if (appOpen) void ensureRelease();
   }
 
-  function showToast(message: string): void {
-    pushToast(message);
+  function showToast(message: string, options?: ToastOptions): void {
+    pushToast(message, options);
+  }
+
+  function closeAuthDialog(): void {
+    void goto('/', { replaceState: true, noScroll: true });
+  }
+
+  function switchAuthMode(mode: AuthMode): void {
+    void goto(`/?auth=${mode}`, { replaceState: true, noScroll: true });
   }
 </script>
 
@@ -184,7 +207,7 @@
     <Topbar label="Voice Room" />
     <main class="auth-loader" aria-label="Загрузка аккаунта" aria-busy="true">
       <div class="auth-loader-card">
-        <span class="auth-loader-orb" aria-hidden="true"></span>
+        <span class="auth-loader-orb"><MascotIcon variant="blink" size={52} /></span>
         <p class="auth-loader-kicker">Проверяем сессию</p>
         <h1>Готовим ваши комнаты</h1>
         <div class="auth-loader-lines" aria-hidden="true">
@@ -210,7 +233,12 @@
 {:else}
   <div class="app-shell">
     <Topbar label="Новая голосовая комната">
-      <a class="landing-header-login" href="/login">Войти →</a>
+      <nav class="landing-header-auth" aria-label="Аккаунт">
+        <a class="landing-header-auth-link landing-header-auth-link--login" href="/?auth=login">Войти</a>
+        <a class="landing-header-auth-link landing-header-auth-link--register" href="/?auth=register">
+          Регистрация <span aria-hidden="true">→</span>
+        </a>
+      </nav>
     </Topbar>
 
     <main class="landing-layout" id="startScreen" aria-label="Стартовый экран">
@@ -241,6 +269,12 @@
       </div>
     </main>
   </div>
+{/if}
+
+{#if session.loaded && !user && authMode}
+  {#key authMode}
+    <AuthDialog mode={authMode} onClose={closeAuthDialog} onModeChange={switchAuthMode} />
+  {/key}
 {/if}
 
 <ToastStack toasts={toastState.items} onDismiss={dismissToast} />

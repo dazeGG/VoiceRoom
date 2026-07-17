@@ -4,12 +4,12 @@ export type RoomShellMode = 'friends' | 'rooms';
 
 // Room-navigation state machine for the logged-in app shell.
 // Invariants:
-// - viewedRoomId mirrors the URL-level room preview (/r/:roomId) in the app shell.
+// - viewedRoomId is the room rendered by the app shell and may be a URL-free preview.
 // - embeddedRoomId is the mounted room client that owns voice/dock side effects; browsing
 //   never creates it. It is created by explicit Enter or by opening the active voice room.
 // - joinIntentRoomId is set only by an explicit Enter action and is consumed by RoomPage autoJoin.
-// - Route/history and document.body mutations are outside this model; transition helpers return
-//   small side-effect instructions so LobbyPage can apply browser/UI effects consistently.
+// - The browser /r/:roomId route mirrors active voice membership, not preview selection.
+//   Route/history and document.body mutations stay in LobbyPage.
 export const roomNavigation = $state<{
   viewedRoomId: string | null;
   embeddedRoomId: string | null;

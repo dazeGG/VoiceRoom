@@ -33,7 +33,7 @@
     padding: 0 var(--interactive-pad-x, 22px);
     border: none;
     border-radius: var(--radius-md);
-    font-family: var(--font-sans);
+    font-family: var(--font-ui);
     font-size: 15px;
     font-weight: 760;
     line-height: 1;
@@ -72,12 +72,12 @@
 
   .ui-button--ghost {
     border: 1px solid rgba(255, 255, 255, 0.1);
-    background: rgba(255, 255, 255, 0.04);
+    background: var(--control);
     color: var(--warm-ink);
   }
 
   .ui-button--ghost:hover:not(:disabled) {
-    background: rgba(255, 255, 255, 0.09);
+    background: var(--control-hover);
   }
 
   .ui-button:disabled {

@@ -19,7 +19,16 @@ export const GATE_RELEASE_MS = 160;
 export const NOTIFICATION_VOLUME_BOOST = 5;
 export const NOTIFICATION_VOLUME_STORAGE_KEY = 'voice-room:notification-volume';
 export const DEFAULT_NOTIFICATION_VOLUME = 100;
-export const MAX_NOTIFICATION_VOLUME = 100;
+export const MAX_NOTIFICATION_VOLUME = 200;
+export const MASTER_VOLUME_STORAGE_KEY = 'voice-room:master-volume';
+export const DEFAULT_MASTER_VOLUME = 100;
+export const MAX_MASTER_VOLUME = 200;
+export const MICROPHONE_VOLUME_STORAGE_KEY = 'voice-room:mic-volume';
+export const DEFAULT_MICROPHONE_VOLUME = 100;
+export const MAX_MICROPHONE_VOLUME = 200;
+export const MICROPHONE_MODE_STORAGE_KEY = 'voice-room:microphone-mode';
+export const DEFAULT_MICROPHONE_MODE = 'open';
+export const PUSH_TO_TALK_RELEASE_HOLD_MS = 200;
 export const MICROPHONE_DEVICE_STORAGE_KEY = 'voice-room:microphone-device-id';
 export const NOISE_MODE_STORAGE_KEY = 'voice-room:noise-mode';
 export const OUTPUT_DEVICE_STORAGE_KEY = 'voice-room:output-device-id';
@@ -41,6 +50,7 @@ export const LOCAL_GATE_DISABLED_SPEAKING_DB = -42;
 export const SPEAKING_STATS_INTERVAL_MS = 200;
 
 export type NoiseMode = 'browser' | 'off' | 'rnnoise';
+export type MicrophoneMode = 'open' | 'push-to-talk';
 
 export interface NoiseModeOption {
   label: string;

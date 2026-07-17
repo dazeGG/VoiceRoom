@@ -8,6 +8,15 @@ const migration = require('../src/migrations/20260614144500_create_rooms_and_roo
 const membershipMigration = require('../src/migrations/20260615140000_create_room_memberships_and_bookmarks');
 const visualIdentityMigration = require('../src/migrations/20260615150000_add_visual_identity_keys');
 const friendsMigration = require('../src/migrations/20260627120000_create_friends_and_direct_messages');
+const notificationMigration = require('../src/migrations/20260710140000_create_notification_preferences');
+const roomBansMigration = require('../src/migrations/20260710130000_add_room_bans');
+const pushMigration = require('../src/migrations/20260711130000_create_push_subscriptions');
+const avatarMigration = require('../src/migrations/20260711120000_add_avatars');
+const dndMigration = require('../src/migrations/20260711140000_add_user_dnd');
+const messageEditingMigration = require('../src/migrations/20260712120000_add_message_editing');
+const presenceStatusMigration = require('../src/migrations/20260713120000_add_user_presence_status');
+const automaticPresenceMigration = require('../src/migrations/20260713220000_add_automatic_presence_source');
+const roomChatReadsMigration = require('../src/migrations/20260714120000_create_room_chat_reads');
 
 function createRecorder() {
   const calls = [];
@@ -43,6 +52,70 @@ function createRecorder() {
   };
 }
 
+test('push subscriptions migration defines durable endpoint ownership and cleanup', () => {
+  const pgm = createRecorder();
+  pushMigration.up(pgm);
+  const table = pgm.calls.find((call) => call.type === 'createTable' && call.name === 'push_subscriptions');
+  assert.ok(table);
+  assert.equal(table.columns.user_id.references, 'users(id)');
+  assert.equal(table.columns.user_id.onDelete, 'CASCADE');
+  assert.equal(table.columns.endpoint.unique, true);
+  for (const column of ['p256dh', 'auth', 'created_at', 'last_success_at', 'metadata']) assert.ok(table.columns[column]);
+  assert.ok(pgm.calls.some((call) => call.type === 'createIndex'
+    && call.options.name === 'push_subscriptions_user_created_idx'
+    && call.columns.join(',') === 'user_id,created_at,id'));
+
+  const down = createRecorder();
+  pushMigration.down(down);
+  assert.ok(down.calls.some((call) => call.type === 'dropTable' && call.name === 'push_subscriptions'));
+});
+
+test('message editing migration adds reversible timestamps to room and direct messages', () => {
+  const pgm = createRecorder();
+  messageEditingMigration.up(pgm);
+  assert.deepEqual(
+    pgm.calls.filter((call) => call.type === 'addColumns').map((call) => [call.table, call.columns]),
+    [
+      ['room_messages', { edited_at: { type: 'timestamptz' } }],
+      ['direct_messages', { edited_at: { type: 'timestamptz' } }]
+    ]
+  );
+
+  const down = createRecorder();
+  messageEditingMigration.down(down);
+  assert.deepEqual(
+    down.calls.filter((call) => call.type === 'dropColumns').map((call) => [call.table, call.columns]),
+    [
+      ['direct_messages', ['edited_at']],
+      ['room_messages', ['edited_at']]
+    ]
+  );
+});
+
+test('room chat reads migration stores one durable read cursor per room and user', () => {
+  const pgm = createRecorder();
+  roomChatReadsMigration.up(pgm);
+
+  const table = pgm.calls.find((call) => call.type === 'createTable' && call.name === 'room_chat_reads');
+  assert.ok(table);
+  assert.equal(table.columns.room_id.references, 'rooms(id)');
+  assert.equal(table.columns.room_id.onDelete, 'CASCADE');
+  assert.equal(table.columns.user_id.references, 'users(id)');
+  assert.equal(table.columns.user_id.onDelete, 'CASCADE');
+  assert.equal(table.columns.last_read_at.type, 'timestamptz');
+
+  const indexes = new Map(
+    pgm.calls.filter((call) => call.type === 'createIndex').map((call) => [call.options.name, call])
+  );
+  assert.deepEqual(indexes.get('room_chat_reads_room_user_unique_idx').columns, ['room_id', 'user_id']);
+  assert.equal(indexes.get('room_chat_reads_room_user_unique_idx').options.unique, true);
+  assert.deepEqual(indexes.get('room_chat_reads_user_idx').columns, ['user_id']);
+
+  const down = createRecorder();
+  roomChatReadsMigration.down(down);
+  assert.deepEqual(down.calls.filter((call) => call.type === 'dropTable').map((call) => call.name), ['room_chat_reads']);
+});
+
 test('rooms and room_messages migration captures durable schema contract', () => {
   const pgm = createRecorder();
   migration.up(pgm);
@@ -63,6 +136,55 @@ test('rooms and room_messages migration captures durable schema contract', () =>
   assert.equal(messages.columns.metadata.type, 'jsonb');
   assert.equal(messages.columns.room_id.references, 'rooms(id)');
   assert.equal(messages.columns.room_id.onDelete, 'CASCADE');
+});
+
+test('avatar migration adds reversible user and room avatar columns', () => {
+  const pgm = createRecorder();
+  avatarMigration.up(pgm);
+
+  const users = pgm.calls.find((call) => call.type === 'addColumns' && call.table === 'users');
+  const rooms = pgm.calls.find((call) => call.type === 'addColumns' && call.table === 'rooms');
+  const accentConstraint = pgm.calls.find(
+    (call) => call.type === 'addConstraint' && call.name === 'users_avatar_accent_check'
+  );
+  assert.equal(users.columns.avatar_key.type, 'text');
+  assert.equal(users.columns.avatar_accent.type, 'varchar(7)');
+  assert.equal(rooms.columns.avatar_key.type, 'text');
+  assert.match(accentConstraint.options.check, /^avatar_accent IS NULL OR avatar_accent/);
+
+  const down = createRecorder();
+  avatarMigration.down(down);
+  assert.deepEqual(
+    down.calls.filter((call) => call.type === 'dropColumns').map((call) => [call.table, call.columns]),
+    [['rooms', ['avatar_key']], ['users', ['avatar_key', 'avatar_accent']]]
+  );
+  assert.ok(down.calls.some((call) => call.type === 'dropConstraint' && call.name === 'users_avatar_accent_check'));
+});
+
+test('room bans migration defines scoped user and IP enforcement with room cascade', () => {
+  const pgm = createRecorder();
+  roomBansMigration.up(pgm);
+
+  const bans = pgm.calls.find((call) => call.type === 'createTable' && call.name === 'room_bans');
+  assert.ok(bans, 'room_bans table is created');
+  assert.equal(bans.columns.room_id.references, 'rooms(id)');
+  assert.equal(bans.columns.room_id.onDelete, 'CASCADE');
+  assert.equal(bans.columns.user_id.references, 'users(id)');
+  assert.equal(bans.columns.user_id.onDelete, 'CASCADE');
+  assert.equal(bans.columns.user_id.notNull, undefined);
+  assert.equal(bans.columns.ip.notNull, true);
+  assert.equal(bans.columns.expires_at.notNull, undefined);
+  assert.equal(bans.columns.metadata.type, 'jsonb');
+
+  const indexes = new Map(
+    pgm.calls.filter((call) => call.type === 'createIndex').map((call) => [call.options.name, call])
+  );
+  assert.deepEqual(indexes.get('room_bans_room_user_idx').columns, ['room_id', 'user_id']);
+  assert.deepEqual(indexes.get('room_bans_room_ip_idx').columns, ['room_id', 'ip']);
+
+  const down = createRecorder();
+  roomBansMigration.down(down);
+  assert.deepEqual(down.calls.filter((call) => call.type === 'dropTable').map((call) => call.name), ['room_bans']);
 });
 
 test('rooms and room_messages migration defines lookup, quota, idle, listing, and expiry indexes', () => {
@@ -263,4 +385,107 @@ test('visual identity migration down removes peer identities before visual colum
       ['users', ['avatar_color_key']]
     ]
   );
+});
+
+test('notification preferences migration captures user defaults and mute tables', () => {
+  const pgm = createRecorder();
+  notificationMigration.up(pgm);
+
+  const preferences = pgm.calls.find((call) => call.type === 'createTable' && call.name === 'notification_preferences');
+  const dmMutes = pgm.calls.find((call) => call.type === 'createTable' && call.name === 'notification_dm_mutes');
+  const roomMutes = pgm.calls.find((call) => call.type === 'createTable' && call.name === 'notification_room_mutes');
+
+  assert.ok(preferences, 'notification_preferences table is created');
+  assert.ok(dmMutes, 'notification_dm_mutes table is created');
+  assert.ok(roomMutes, 'notification_room_mutes table is created');
+  assert.equal(preferences.columns.user_id.references, 'users(id)');
+  assert.equal(preferences.columns.user_id.onDelete, 'CASCADE');
+  assert.equal(preferences.columns.private_notifications.default, false);
+  assert.equal(preferences.columns.private_notifications.notNull, true);
+  assert.equal(dmMutes.columns.peer_user_id.references, 'users(id)');
+  assert.equal(dmMutes.columns.peer_user_id.onDelete, 'CASCADE');
+  assert.equal(roomMutes.columns.room_id.references, 'rooms(id)');
+  assert.equal(roomMutes.columns.room_id.onDelete, 'CASCADE');
+
+  const constraints = new Map(
+    pgm.calls.filter((call) => call.type === 'addConstraint').map((call) => [call.name, call])
+  );
+  assert.match(constraints.get('notification_dm_mutes_no_self_check').options.check, /user_id <> peer_user_id/);
+
+  const indexes = new Map(
+    pgm.calls.filter((call) => call.type === 'createIndex').map((call) => [call.options.name, call])
+  );
+  assert.equal(indexes.get('notification_dm_mutes_user_peer_unique_idx').options.unique, true);
+  assert.deepEqual(indexes.get('notification_dm_mutes_user_peer_unique_idx').columns, ['user_id', 'peer_user_id']);
+  assert.equal(indexes.get('notification_room_mutes_user_room_unique_idx').options.unique, true);
+  assert.deepEqual(indexes.get('notification_room_mutes_user_room_unique_idx').columns, ['user_id', 'room_id']);
+});
+
+test('notification preferences migration down drops mute tables before preferences', () => {
+  const pgm = createRecorder();
+  notificationMigration.down(pgm);
+
+  assert.deepEqual(
+    pgm.calls.filter((call) => call.type === 'dropTable').map((call) => call.name),
+    ['notification_room_mutes', 'notification_dm_mutes', 'notification_preferences']
+  );
+});
+
+test('DND migration adds a non-null disabled-by-default user flag', () => {
+  const pgm = createRecorder();
+  dndMigration.up(pgm);
+
+  const added = pgm.calls.find((call) => call.type === 'addColumns' && call.table === 'users');
+  assert.ok(added);
+  assert.equal(added.columns.dnd.default, false);
+  assert.equal(added.columns.dnd.notNull, true);
+
+  const down = createRecorder();
+  dndMigration.down(down);
+  assert.deepEqual(down.calls.find((call) => call.type === 'dropColumns'), {
+    type: 'dropColumns',
+    table: 'users',
+    columns: ['dnd']
+  });
+});
+
+test('presence status migration adds a constrained default, backfills DND, and is reversible', () => {
+  const pgm = createRecorder();
+  presenceStatusMigration.up(pgm);
+
+  const added = pgm.calls.find((call) => call.type === 'addColumns' && call.table === 'users');
+  assert.deepEqual(added.columns.presence_status, { type: 'text', notNull: true, default: 'online' });
+  assert.ok(pgm.calls.some((call) => call.type === 'sql' && /presence_status = 'dnd' WHERE dnd = true/.test(call.text)));
+  const constraint = pgm.calls.find((call) => call.type === 'addConstraint' && call.name === 'users_presence_status_check');
+  assert.match(constraint.options.check, /'online'.*'away'.*'dnd'.*'offline'/);
+
+  const down = createRecorder();
+  presenceStatusMigration.down(down);
+  assert.deepEqual(down.calls, [
+    { type: 'dropConstraint', table: 'users', name: 'users_presence_status_check' },
+    { type: 'dropColumns', table: 'users', columns: ['presence_status'] }
+  ]);
+});
+
+test('automatic presence migration records whether away was idle-driven', () => {
+  const pgm = createRecorder();
+  automaticPresenceMigration.up(pgm);
+
+  const added = pgm.calls.find((call) => call.type === 'addColumns' && call.table === 'users');
+  assert.deepEqual(added.columns.presence_status_automatic, {
+    type: 'boolean',
+    notNull: true,
+    default: false
+  });
+  assert.deepEqual(added.columns.presence_active_until, {
+    type: 'timestamp with time zone'
+  });
+
+  const down = createRecorder();
+  automaticPresenceMigration.down(down);
+  assert.deepEqual(down.calls, [{
+    type: 'dropColumns',
+    table: 'users',
+    columns: ['presence_status_automatic', 'presence_active_until']
+  }]);
 });

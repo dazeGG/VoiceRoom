@@ -1,6 +1,7 @@
 import type { LocalTrackPublication, Room } from 'livekit-client';
 import type { SvelteMap } from 'svelte/reactivity';
-import type { NoiseMode } from './config';
+import type { HotkeyBinding } from '$lib/shared/ui/HotkeyRecorder/types';
+import type { MicrophoneMode, NoiseMode } from './config';
 import type { Participant, PeerInfo } from '../model/participants';
 export type { Participant, ParticipantViewRefs, PeerInfo } from '../model/participants';
 
@@ -28,9 +29,11 @@ export interface MicProcessor {
   context: AudioContext;
   destination: MediaStreamAudioDestinationNode;
   node: AudioNode;
+  nodes?: AudioNode[];
+  setGain?: (gain: number) => void;
   source: MediaStreamAudioSourceNode;
   setThreshold?: (threshold: number) => void;
-  type?: 'gate';
+  type?: 'gate' | 'input-gain';
 }
 
 export interface MicrophoneCapture {
@@ -129,11 +132,9 @@ export interface RoomSessionState {
   joined: boolean;
   peerId: string;
   roomId: string;
+  roomAvatarUrl: string;
   roomName: string;
-  roomEmoji: string;
-  roomColorKey: string;
-  roomIconKey: string;
-  roomPresetKey: string;
+  moderationReason: 'banned' | 'kicked' | '';
   roomRoute: boolean;
   /** Mirrors document.body.dataset.screen so Svelte components react to screen transitions. */
   screen: string;
@@ -167,12 +168,15 @@ export interface RoomAudioState {
   localStream: MediaStream | null;
   localAppAudioSuppressed: boolean;
   microphoneDeviceId: string;
+  microphoneMode: MicrophoneMode;
+  microphoneVolume: number;
   micMutedBeforeOutputMute: boolean;
   micProcessor: MicProcessor | MicProcessor[] | null;
   muted: boolean;
   noiseMode: NoiseMode;
   outputDeviceId: string;
   outputMuted: boolean;
+  pushToTalkActive: boolean;
 }
 
 export interface RoomScreenState {
@@ -214,11 +218,8 @@ export interface AppState
 // Mirrors the server's publicLobbyRoom() shape (server.js) — the body carried
 // by both the PUT /api/rooms/:roomId response and the room-updated broadcast.
 export interface RoomLifecycleSummary {
+  avatarUrl: string | null;
   createdAt: number;
-  emoji: string;
-  roomColorKey: string;
-  roomIconKey: string;
-  roomPresetKey: string;
   emptySince: number | null;
   isStatic: boolean;
   name: string;
@@ -290,6 +291,38 @@ declare global {
       onEvent: (
         callback: (payload: { sessionId: string; event: DesktopAudioFormatEvent }) => void
       ) => () => void;
+    };
+    voiceRoomDesktopHotkeys?: {
+      configure: (payload: {
+        active: boolean;
+        configurationId: number;
+        bindings: Partial<Record<'mic-mute' | 'output-mute' | 'push-to-talk', HotkeyBinding | null>>;
+      }) => Promise<{
+        active: boolean;
+        backend: 'native' | 'electron-fallback' | 'none';
+        configurationId?: number;
+        failed: Array<{ action: 'mic-mute' | 'output-mute' | 'push-to-talk'; reason: string }>;
+        registered: Array<'mic-mute' | 'output-mute' | 'push-to-talk'>;
+        unsupported: Array<'mic-mute' | 'output-mute' | 'push-to-talk'>;
+      }>;
+      onAction: (
+        callback: (payload: {
+          action: 'mic-mute' | 'output-mute' | 'push-to-talk';
+          configurationId?: number;
+          phase: 'pressed' | 'released';
+        }) => void
+      ) => () => void;
+      onStatus: (
+        callback: (result: {
+          active: boolean;
+          backend: 'native' | 'electron-fallback' | 'none';
+          configurationId?: number;
+          failed: Array<{ action: 'mic-mute' | 'output-mute' | 'push-to-talk'; reason: string }>;
+          registered: Array<'mic-mute' | 'output-mute' | 'push-to-talk'>;
+          unsupported: Array<'mic-mute' | 'output-mute' | 'push-to-talk'>;
+        }) => void
+      ) => () => void;
+      setSuspended: (suspended: boolean) => Promise<boolean>;
     };
     voiceRoomRuntime?: {
       isDesktop?: boolean;

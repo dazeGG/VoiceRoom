@@ -51,7 +51,8 @@ const config = {
         'font-src': ['self'],
         'form-action': ['none'],
         'frame-ancestors': ['none'],
-        'img-src': ['self', 'data:'],
+        // blob: serves local-only previews (avatar crop) rendered via object URLs.
+        'img-src': ['self', 'data:', 'blob:'],
         'media-src': ['self', 'blob:'],
         'object-src': ['none'],
         'script-src': ['self', 'wasm-unsafe-eval'],

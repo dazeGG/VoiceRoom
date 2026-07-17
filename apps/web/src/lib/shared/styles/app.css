@@ -13,6 +13,10 @@
   --control-active: oklch(90% 0.02 112);
   --control-active-hover: oklch(95% 0.015 112);
   --control-line: oklch(44% 0.04 112);
+  --warm-800: #16140f;
+  --warm-900: #0c0b08;
+  --warm-950: #0a0907;
+  --room-avatar-bg: oklch(24% 0.05 112);
   --ink: oklch(94% 0.012 92);
   --muted: oklch(69% 0.028 88);
   --line: oklch(40% 0.045 112);
@@ -46,7 +50,7 @@
   --space-xl: 32px;
   --space-2xl: 48px;
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
-  font-family: Aptos, "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  font-family: var(--font-ui);
 
   /* ---- Volt accent + warm-neutral scale ----
      Signature electric-lime highlight for primary CTAs, focus rings and
@@ -79,9 +83,9 @@ body {
   min-height: 100dvh;
   margin: 0;
   background:
-    radial-gradient(circle at 12% 14%, oklch(37% 0.09 158 / 0.18), transparent 30%),
-    radial-gradient(circle at 84% 10%, oklch(42% 0.11 31 / 0.14), transparent 28%),
-    linear-gradient(135deg, var(--paper-deep), var(--paper) 48%, oklch(13% 0.018 76)),
+    radial-gradient(circle at 12% 14%, color-mix(in oklch, var(--panel), transparent 72%), transparent 30%),
+    radial-gradient(circle at 84% 10%, color-mix(in oklch, var(--panel-strong), transparent 82%), transparent 28%),
+    linear-gradient(135deg, var(--paper-deep), var(--paper) 48%, var(--paper-deep)),
     var(--paper);
   color: var(--ink);
   font-size: 16px;
@@ -155,7 +159,7 @@ body:not([data-screen="room"]) .topbar {
   border: 1px solid color-mix(in oklch, var(--control-line), var(--ink) 18%);
   border-radius: var(--radius-sm);
   padding: 12px 14px;
-  background: oklch(10% 0.012 92);
+  background: var(--warm-800);
   color: var(--ink);
   font-weight: 750;
   line-height: 1.35;
@@ -176,6 +180,18 @@ body:not([data-screen="room"]) .topbar {
   max-width: min(720px, calc(100vw - 32px));
   border-color: color-mix(in oklch, var(--coral), var(--ink) 20%);
   font-size: 0.86rem;
+}
+
+.toast button {
+  margin-left: 10px;
+  border: 0;
+  border-radius: 8px;
+  padding: 5px 9px;
+  background: var(--control);
+  color: inherit;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
 }
 
 @keyframes blink {

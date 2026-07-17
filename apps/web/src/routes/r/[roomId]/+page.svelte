@@ -1,13 +1,13 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { page } from '$app/state';
-  import { logout } from '$lib/api/auth';
-  import { clearSession, loadSession, session } from '$lib/features/auth/session.svelte';
+  import { loadSession, session } from '$lib/features/auth/session.svelte';
+  import { signOut } from '$lib/features/home/model/sign-out';
   import LobbyPage from '$lib/features/home/LobbyPage.svelte';
-  import { dismissToast, pushToast, toastState } from '$lib/features/home/model/toasts.svelte';
+  import { dismissToast, pushToast, toastState, type ToastOptions } from '$lib/features/home/model/toasts.svelte';
   import '$lib/features/home/styles/home.css';
   import RoomPage from '$lib/features/room/RoomPage.svelte';
-  import { ToastStack } from '$lib/shared/ui';
+  import { MascotIcon, ToastStack } from '$lib/shared/ui';
 
   let loggingOut = $state(false);
   let authLoadError = $state(false);
@@ -19,8 +19,8 @@
     });
   });
 
-  function showToast(message: string): void {
-    pushToast(message);
+  function showToast(message: string, options?: ToastOptions): void {
+    pushToast(message, options);
   }
 
   function retrySessionLoad(): void {
@@ -36,8 +36,7 @@
     if (loggingOut) return;
     loggingOut = true;
     try {
-      await logout();
-      clearSession();
+      await signOut();
       showToast('Вы вышли из аккаунта');
     } catch (error) {
       showToast(error instanceof Error && error.message ? error.message : 'Не удалось выйти');
@@ -56,7 +55,7 @@
   <div class="app-shell">
     <main class="auth-loader" aria-label="Загрузка аккаунта" aria-busy="true">
       <div class="auth-loader-card">
-        <span class="auth-loader-orb" aria-hidden="true"></span>
+        <span class="auth-loader-orb"><MascotIcon variant="look" size={52} /></span>
         <p class="auth-loader-kicker">Проверяем сессию</p>
         <h1>Открываем комнату</h1>
       </div>

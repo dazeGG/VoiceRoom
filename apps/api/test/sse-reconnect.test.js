@@ -8,7 +8,7 @@ const { spawn } = require('node:child_process');
 const path = require('node:path');
 const os = require('node:os');
 const { createTestDatabase } = require('./db-harness');
-const { openWs, joinVoiceRoom, waitForWsType } = require('./ws-harness');
+const { openWs, joinVoiceRoom, sendWs, waitForWsType } = require('./ws-harness');
 
 const PEER_A = 'peer-alice1';
 const PEER_B = 'peer-bobbb1';
@@ -148,16 +148,38 @@ test('WS reconnect preserves presence and avoids spurious join/leave events', as
     await joinVoiceRoom(peerB, { roomId, peerId: PEER_B, sessionToken: TOKEN_B, name: 'Bob' });
     await wait(100);
 
-    await postJson(socketPath, '/api/state', {
+    const updateStart = peerB.frames.length;
+    sendWs(peerA.ws, 'room.peer.update', {
       roomId,
       peerId: PEER_A,
       sessionToken: TOKEN_A,
-      muted: true,
-      deafened: true
+      patch: { muted: true, deafened: true, screen: true }
     });
-    const updated = await waitForWsType(peerB.frames, 'room.peer.updated', (frame) => frame.payload?.peer?.id === PEER_A);
+    const updated = await waitForWsType(
+      peerB.frames,
+      'room.peer.updated',
+      (frame) => frame.payload?.peer?.id === PEER_A,
+      5000,
+      updateStart
+    );
     assert.equal(updated.payload.peer.muted, true);
     assert.equal(updated.payload.peer.deafened, true);
+    assert.equal(updated.payload.peer.screen, true);
+
+    const attendanceStart = peerA.frames.length;
+    sendWs(peerB.ws, 'room.peer.update', {
+      roomId,
+      peerId: PEER_B,
+      sessionToken: TOKEN_B,
+      patch: { viewedScreenPeerId: PEER_A }
+    });
+    await waitForWsType(
+      peerA.frames,
+      'room.peer.updated',
+      (frame) => frame.payload?.peer?.id === PEER_B && frame.payload.peer.viewedScreenPeerId === PEER_A,
+      5000,
+      attendanceStart
+    );
     const beforeReconnect = peerB.frames.length;
 
     const peerA2 = openWs(socketPath);
@@ -171,6 +193,18 @@ test('WS reconnect preserves presence and avoids spurious join/leave events', as
     );
     assert.equal(reconnectEvents.length, 0);
 
+    const beforeStaleWrite = peerB.frames.length;
+    const staleWrite = await postJson(socketPath, '/api/state', {
+      roomId,
+      peerId: PEER_A,
+      sessionToken: TOKEN_A,
+      muted: false,
+      deafened: false,
+      screen: false
+    });
+    assert.equal(staleWrite.status, 409);
+    assert.equal(staleWrite.body.code, 'state_updates_require_websocket');
+
     const state = await postJson(socketPath, '/api/state', {
       roomId,
       peerId: PEER_A,
@@ -180,6 +214,19 @@ test('WS reconnect preserves presence and avoids spurious join/leave events', as
     assert.equal(state.body.peer.name, 'Alice');
     assert.equal(state.body.peer.muted, true);
     assert.equal(state.body.peer.deafened, true);
+    assert.equal(state.body.peer.screen, true);
+
+    const viewerState = await postJson(socketPath, '/api/state', {
+      roomId,
+      peerId: PEER_B,
+      sessionToken: TOKEN_B
+    });
+    assert.equal(viewerState.status, 200);
+    assert.equal(viewerState.body.peer.viewedScreenPeerId, PEER_A);
+    assert.equal(
+      peerB.frames.slice(beforeStaleWrite).some((frame) => frame.type === 'room.peer.updated'),
+      false
+    );
 
     peerA2.ws.close();
     peerB.ws.close();

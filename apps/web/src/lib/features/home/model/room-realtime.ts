@@ -91,10 +91,7 @@ export function initLobbyRoomRealtime(
                 ...room,
                 peers: summary.peers,
                 name: summary.name || room.name,
-                emoji: summary.emoji || room.emoji,
-                roomColorKey: summary.roomColorKey || room.roomColorKey,
-                roomIconKey: summary.roomIconKey || room.roomIconKey,
-                roomPresetKey: summary.roomPresetKey || room.roomPresetKey
+                unreadCount: summary.unreadCount ?? room.unreadCount
               }
             : room
         )

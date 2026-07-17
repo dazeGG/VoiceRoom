@@ -42,19 +42,6 @@ body[data-screen="room"] .status-pill {
   gap: var(--space-sm);
 }
 
-.room-emoji-badge {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 38px;
-  height: 38px;
-  border-radius: 11px;
-  background: oklch(84% 0.012 92 / 0.1);
-  font-size: 20px;
-  line-height: 1;
-}
-
 .room-heading-trigger {
   display: inline-flex;
   min-width: 0;
@@ -71,19 +58,21 @@ body[data-screen="room"] .status-pill {
 }
 
 .room-heading-title-wrap {
+  display: flex;
   margin: 0;
   min-width: 0;
+  align-items: center;
 }
 
 .room-heading-trigger:hover,
 .room-heading-trigger[aria-expanded='true'] {
   border-color: rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--control);
 }
 
 .room-heading-title {
   max-width: min(46vw, 22ch);
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: 1.35rem;
   font-weight: 500;
   letter-spacing: -0.01em;
@@ -101,52 +90,6 @@ body[data-screen="room"] .status-pill {
   transform: rotate(180deg);
 }
 
-.room-heading-popover {
-  width: 276px;
-}
-
-.room-heading-popover-head {
-  display: flex;
-  align-items: flex-start;
-  gap: 13px;
-  padding: 14px;
-}
-
-.room-heading-popover-badge {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 44px;
-  height: 44px;
-  border-radius: 11px;
-  font-size: 22px;
-  line-height: 1;
-}
-
-.room-heading-popover-info {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-}
-
-.room-heading-popover-name {
-  color: #ece7d9;
-  font-family: var(--font-sans);
-  font-size: 16px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-}
-
-.room-heading-popover-code {
-  font-family: var(--font-mono);
-  font-size: 13px;
-  color: #9a9484;
-  letter-spacing: 0.02em;
-}
-
 .room-chat-toggle {
   display: inline-flex;
   flex: none;
@@ -156,9 +99,9 @@ body[data-screen="room"] .status-pill {
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 11px;
   padding: 0 14px;
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--control);
   color: #cfc9ba;
-  font-family: var(--font-sans);
+  font-family: var(--font-ui);
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
@@ -166,12 +109,12 @@ body[data-screen="room"] .status-pill {
 }
 
 .room-chat-toggle:hover {
-  background: rgba(255, 255, 255, 0.11);
+  background: var(--control-hover);
 }
 
 .room-chat-toggle[data-active="true"] {
   border-color: rgba(217, 211, 195, 0.5);
-  background: rgba(217, 211, 195, 0.14);
+  background: var(--panel-strong);
   color: #ece7d9;
 }
 
@@ -190,7 +133,7 @@ body[data-screen="room"] .status-pill {
   border: 1px solid var(--line);
   border-radius: 999px;
   padding: 8px 12px;
-  background: oklch(18% 0.014 92 / 0.72);
+  background: var(--warm-800);
   color: var(--muted);
   font-size: 0.875rem;
   font-weight: 700;
@@ -257,14 +200,12 @@ body[data-lobby-embedded="true"] .room-embedded-shell .topbar {
 
 /* 404 — "room not found". A full-bleed editorial surface (per the Claude
    Design handoff): warm-dark backdrop with a giant bleeding "404" watermark,
-   a left-aligned headline, a mono code chip and a single home CTA — no card.
-   The warm palette (#0e0d0a / #ece7d9 / #9a9484 / #cfc9ba) is specific to this
-   screen, so it uses literal values rather than the app tokens. */
+   a left-aligned headline, a mono code chip and a single home CTA — no card. */
 body[data-screen="not-found"] {
   background:
-    radial-gradient(58% 64% at 88% 14%, rgba(96, 54, 28, 0.34), transparent 56%),
-    radial-gradient(52% 60% at 4% 92%, rgba(46, 74, 49, 0.2), transparent 54%),
-    #0e0d0a;
+    radial-gradient(58% 64% at 88% 14%, color-mix(in oklch, var(--warm-800), transparent 66%), transparent 56%),
+    radial-gradient(52% 60% at 4% 92%, color-mix(in oklch, var(--panel), transparent 80%), transparent 54%),
+    var(--warm-950);
 }
 
 .not-found-layout {
@@ -283,8 +224,8 @@ body[data-screen="not-found"] {
   right: -3vw;
   bottom: -12vh;
   z-index: -1;
-  font-family: var(--font-sans);
-  font-weight: 800;
+  font-family: var(--font-display);
+  font-weight: 700;
   font-size: 46vw;
   line-height: 0.8;
   letter-spacing: -0.05em;
@@ -298,6 +239,11 @@ body[data-screen="not-found"] {
   width: 100%;
 }
 
+.not-found-mascot {
+  display: inline-flex;
+  margin-bottom: 22px;
+}
+
 .start-panel {
   display: grid;
   gap: var(--space-lg);
@@ -305,7 +251,7 @@ body[data-screen="not-found"] {
   border-radius: var(--radius-md);
   padding: var(--space-xl);
   background:
-    linear-gradient(180deg, oklch(22% 0.018 92 / 0.96), oklch(17% 0.014 92 / 0.96)),
+    linear-gradient(180deg, var(--panel-strong), var(--panel)),
     var(--panel);
   box-shadow: var(--shadow);
 }
@@ -313,9 +259,9 @@ body[data-screen="not-found"] {
 .not-found-title {
   margin: 0;
   max-width: 560px;
-  font-family: var(--font-sans);
+  font-family: var(--font-display);
   font-size: clamp(2.5rem, 5vw, 3.625rem); /* tops out at 58px, like the home hero */
-  font-weight: 800;
+  font-weight: 700;
   line-height: 1.04;
   letter-spacing: -0.03em;
   color: #ece7d9;
@@ -337,7 +283,7 @@ body[data-screen="not-found"] {
   padding: 4px 10px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--control);
   font-family: var(--font-mono);
   font-size: 14.5px;
   letter-spacing: 0.04em;
@@ -351,7 +297,7 @@ body[data-screen="not-found"] {
   height: 6px;
   flex: 0 0 auto;
   border-radius: 50%;
-  background: #8a5236;
+  background: var(--coral);
 }
 
 .not-found-actions {
@@ -365,9 +311,9 @@ body[data-screen="not-found"] {
   border: none;
   border-radius: 13px;
   padding: 14px 22px;
-  background: #ece7d9;
+  background: var(--control-active);
   color: #1a1813;
-  font-family: var(--font-sans);
+  font-family: var(--font-ui);
   font-size: 15px;
   font-weight: 700;
   letter-spacing: -0.01em;
@@ -377,7 +323,7 @@ body[data-screen="not-found"] {
 }
 
 .not-found-home:hover {
-  background: #fff;
+  background: var(--control-active-hover);
   transform: translateY(-1px);
 }
 
@@ -401,7 +347,7 @@ body[data-screen="not-found"] {
   gap: var(--space-sm);
   color: var(--muted);
   font-size: 0.78rem;
-  font-weight: 850;
+  font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }

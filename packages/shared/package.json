@@ -1,6 +1,6 @@
 {
   "name": "@voice-room/shared",
-  "version": "2.3.4",
+  "version": "2.4.0",
   "private": true,
   "type": "commonjs",
   "exports": {
@@ -12,6 +12,11 @@
       "types": "./src/realtime.d.ts",
       "require": "./src/realtime.js"
     },
+    "./avatar-accent": {
+      "types": "./src/avatar-accent.d.ts",
+      "import": "./src/avatar-accent.mjs",
+      "require": "./src/avatar-accent.js"
+    },
     "./visual-identity": {
       "types": "./src/visual-identity.d.ts",
       "import": "./src/visual-identity.mjs",
@@ -19,7 +24,7 @@
     }
   },
   "scripts": {
-    "check": "node --check src/validation.js && node --check src/realtime.js",
+    "check": "node --check src/validation.js && node --check src/realtime.js && node --check src/avatar-accent.js && node --check src/avatar-accent.mjs",
     "test": "node --test test/*.test.js"
   }
 }

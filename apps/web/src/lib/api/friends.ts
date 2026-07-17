@@ -2,14 +2,19 @@
 // carry the HttpOnly session cookie (see http.ts credentialed helpers).
 
 import { del, getJsonAuth, postJsonAuth } from './http';
+import type { PresenceStatus } from '$lib/shared/presence';
 
 // Mirrors the server's publicUser() shape (user-store.js).
 export interface PublicUser {
+  avatarAccent: string | null;
   avatarColorKey: string;
+  avatarUrl: string | null;
   createdAt: number;
   displayName: string;
+  doNotDisturb: boolean;
   id: string;
   login: string;
+  presenceStatus: PresenceStatus;
 }
 
 export interface FriendLastMessage {

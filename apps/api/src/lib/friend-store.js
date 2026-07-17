@@ -2,7 +2,7 @@
 
 const crypto = require('node:crypto');
 const { createDbPool, transaction } = require('./db');
-const { cleanAvatarColorKey } = require('@voice-room/shared/validation');
+const { cleanAvatarColorKey, cleanPresenceStatus } = require('@voice-room/shared/validation');
 
 function toMillis(value) {
   if (value == null) return null;
@@ -15,12 +15,29 @@ function toMillis(value) {
 // leaks the password hash; mirrors user-store's publicUser fields.
 function mapPublicUser(row) {
   if (!row) return null;
+  const presenceStatus = cleanPresenceStatus(row.presence_status) || (row.dnd ? 'dnd' : 'online');
   return {
+    avatarAccent: row.avatar_accent || null,
     avatarColorKey: cleanAvatarColorKey(row.avatar_color_key) || 'blurple',
+    avatarUrl: row.avatar_key ? `/api/avatars/${encodeURIComponent(row.avatar_key)}` : null,
     createdAt: toMillis(row.created_at),
     displayName: row.display_name || '',
+    doNotDisturb: presenceStatus === 'dnd',
     id: row.id,
-    login: row.login
+    login: row.login,
+    presenceStatus
+  };
+}
+
+// Room invitations ride inside a regular direct message's metadata so they
+// live in the shared thread history without any schema change.
+function mapInvite(metadata) {
+  if (!metadata || metadata.kind !== 'room-invite') return null;
+  return {
+    roomId: String(metadata.roomId || ''),
+    roomName: String(metadata.roomName || ''),
+    status: metadata.status === 'accepted' || metadata.status === 'declined' ? metadata.status : 'pending',
+    expiresAt: Number(metadata.expiresAt) || null
   };
 }
 
@@ -32,7 +49,11 @@ function mapMessage(row) {
     recipientId: row.recipient_id,
     body: row.body,
     createdAt: toMillis(row.created_at),
-    readAt: toMillis(row.read_at)
+    editedAt: toMillis(row.edited_at),
+    readAt: toMillis(row.read_at),
+    invite: mapInvite(row.metadata),
+    // deletedAt kept internal; callers filter before map
+    deletedAt: row.deleted_at ? toMillis(row.deleted_at) : null
   };
 }
 
@@ -93,7 +114,7 @@ function createFriendStore({ databaseUrl, logger = console, pool } = {}) {
     const unreadResult = await pool.query(
       `SELECT sender_id, COUNT(*)::int AS count
        FROM direct_messages
-       WHERE recipient_id = $1 AND read_at IS NULL
+       WHERE recipient_id = $1 AND read_at IS NULL AND deleted_at IS NULL
        GROUP BY sender_id`,
       [userId]
     );
@@ -105,7 +126,7 @@ function createFriendStore({ databaseUrl, logger = console, pool } = {}) {
          SELECT CASE WHEN sender_id = $1 THEN recipient_id ELSE sender_id END AS peer,
                 id, body, created_at, sender_id
          FROM direct_messages
-         WHERE sender_id = $1 OR recipient_id = $1
+         WHERE (sender_id = $1 OR recipient_id = $1) AND deleted_at IS NULL
        ) t
        ORDER BY peer, created_at DESC, id DESC`,
       [userId]
@@ -330,8 +351,9 @@ function createFriendStore({ databaseUrl, logger = console, pool } = {}) {
   async function listThread({ userId, peerId, limit = 100 }) {
     const result = await getPool().query(
       `SELECT * FROM direct_messages
-       WHERE (sender_id = $1 AND recipient_id = $2)
-          OR (sender_id = $2 AND recipient_id = $1)
+       WHERE ((sender_id = $1 AND recipient_id = $2)
+          OR (sender_id = $2 AND recipient_id = $1))
+         AND deleted_at IS NULL
        ORDER BY created_at ASC, id ASC
        LIMIT $3`,
       [userId, peerId, limit]
@@ -339,15 +361,68 @@ function createFriendStore({ databaseUrl, logger = console, pool } = {}) {
     return result.rows.map(mapMessage);
   }
 
-  async function sendMessage({ senderId, recipientId, body }) {
+  async function getMessage(userId, peerId, messageId) {
+    const result = await getPool().query(
+      `SELECT * FROM direct_messages
+       WHERE id = $1
+         AND ((sender_id = $2 AND recipient_id = $3) OR (sender_id = $3 AND recipient_id = $2))
+         AND deleted_at IS NULL
+       LIMIT 1`,
+      [messageId, userId, peerId]
+    );
+    return mapMessage(result.rows[0] || null);
+  }
+
+  async function softDeleteMessage(messageId) {
+    const result = await getPool().query(
+      `UPDATE direct_messages
+       SET deleted_at = now()
+       WHERE id = $1 AND deleted_at IS NULL`,
+      [messageId]
+    );
+    return result.rowCount > 0;
+  }
+
+  async function editMessage({ messageId, senderId, recipientId, body }) {
+    const result = await getPool().query(
+      `UPDATE direct_messages
+       SET body = $4, edited_at = current_timestamp
+       WHERE id = $1
+         AND sender_id = $2
+         AND recipient_id = $3
+         AND deleted_at IS NULL
+       RETURNING *`,
+      [messageId, senderId, recipientId, body]
+    );
+    return mapMessage(result.rows[0] || null);
+  }
+
+  async function sendMessage({ senderId, recipientId, body, metadata = null }) {
     const id = crypto.randomUUID();
     const result = await getPool().query(
-      `INSERT INTO direct_messages (id, sender_id, recipient_id, body, created_at)
-       VALUES ($1, $2, $3, $4, current_timestamp)
+      `INSERT INTO direct_messages (id, sender_id, recipient_id, body, created_at, metadata)
+       VALUES ($1, $2, $3, $4, current_timestamp, $5)
        RETURNING *`,
-      [id, senderId, recipientId, body]
+      [id, senderId, recipientId, body, metadata ? JSON.stringify(metadata) : '{}']
     );
     return mapMessage(result.rows[0]);
+  }
+
+  // Only the invited recipient may resolve a pending room invitation; the
+  // update is idempotent-safe (a second respond finds no pending row).
+  async function respondInvite({ messageId, recipientId, status }) {
+    const result = await getPool().query(
+      `UPDATE direct_messages
+       SET metadata = jsonb_set(metadata, '{status}', to_jsonb($3::text))
+       WHERE id = $1
+         AND recipient_id = $2
+         AND metadata->>'kind' = 'room-invite'
+         AND metadata->>'status' = 'pending'
+         AND deleted_at IS NULL
+       RETURNING *`,
+      [messageId, recipientId, status]
+    );
+    return mapMessage(result.rows[0] || null);
   }
 
   // Mark every message from peer -> user as read. Returns the number marked so
@@ -356,7 +431,7 @@ function createFriendStore({ databaseUrl, logger = console, pool } = {}) {
     const result = await getPool().query(
       `UPDATE direct_messages
        SET read_at = current_timestamp
-       WHERE recipient_id = $1 AND sender_id = $2 AND read_at IS NULL`,
+       WHERE recipient_id = $1 AND sender_id = $2 AND read_at IS NULL AND deleted_at IS NULL`,
       [userId, peerId]
     );
     return { count: result.rowCount };
@@ -366,7 +441,7 @@ function createFriendStore({ databaseUrl, logger = console, pool } = {}) {
     const result = await getPool().query(
       `SELECT sender_id, COUNT(*)::int AS count
        FROM direct_messages
-       WHERE recipient_id = $1 AND read_at IS NULL
+       WHERE recipient_id = $1 AND read_at IS NULL AND deleted_at IS NULL
        GROUP BY sender_id`,
       [userId]
     );
@@ -386,11 +461,15 @@ function createFriendStore({ databaseUrl, logger = console, pool } = {}) {
     countIncomingRequests,
     getFriendIds,
     getUnreadCounts,
+    editMessage,
     listFriends,
     listRequests,
     listThread,
+    getMessage,
+    softDeleteMessage,
     markRead,
     removeFriend,
+    respondInvite,
     respondRequest,
     searchUsers,
     sendMessage,
