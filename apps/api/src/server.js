@@ -1592,7 +1592,7 @@ async function handleRoomChatPost(req, res, roomId) {
   const requestedPeerId = normalizePeerId(body.peerId);
   const sessionToken = normalizeSessionToken(body.sessionToken);
   const sessionUser = await resolveOptionalSessionUser(req);
-  const name = sessionDisplayName(sessionUser) || cleanName(body.name);
+  const requestedName = cleanName(body.name);
   const text = cleanChatText(body.text);
 
   if (!room) {
@@ -1642,6 +1642,8 @@ async function handleRoomChatPost(req, res, roomId) {
     return;
   }
 
+  const name = sessionDisplayName(sessionUser) || activePeer?.name || requestedName;
+  const authorUserId = sessionUser?.id || activePeer?.accountUserId || null;
   const now = Date.now();
   const message = await getRoomStore().appendMessage(roomId, {
     createdAt: now,
@@ -1651,7 +1653,7 @@ async function handleRoomChatPost(req, res, roomId) {
     name,
     peerId,
     text,
-    authorUserId: sessionUser ? sessionUser.id : (activePeer?.accountUserId || null)
+    authorUserId
   });
 
   if (!message) {

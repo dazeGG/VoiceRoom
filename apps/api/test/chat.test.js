@@ -363,6 +363,27 @@ test('account chat uses the current profile and refreshes active room peers afte
     assert.equal(second.body.message.name, 'Preview User');
     assert.equal(second.body.message.avatarColorKey, first.body.message.avatarColorKey);
 
+    // An account-backed active peer remains authoritative even if its HTTP
+    // session cookie is absent; the request body cannot spoof the live name.
+    const beforeActivePeerPost = voice.frames.length;
+    const activePeerPost = await postJson(socketPath, `/api/rooms/${created.body.roomId}/chat`, {
+      name: 'Spoofed Active Name',
+      peerId: 'preview-voice-user',
+      sessionToken: TOKEN,
+      text: 'Сообщение из активной комнаты без cookie'
+    });
+    assert.equal(activePeerPost.status, 201);
+    assert.equal(activePeerPost.body.message.name, 'Preview User');
+    assert.equal(activePeerPost.body.message.authorUserId, registered.body.user.id);
+    const activePeerBroadcast = await waitForWsType(
+      voice.frames,
+      'room.chat.message',
+      (frame) => frame.payload?.message?.id === activePeerPost.body.message.id,
+      5000,
+      beforeActivePeerPost
+    );
+    assert.equal(activePeerBroadcast.payload.message.name, 'Preview User');
+
     const beforeRename = voice.frames.length;
     const renamed = await postJson(socketPath, '/api/auth/profile', {
       displayName: 'Current Profile'
@@ -381,6 +402,7 @@ test('account chat uses the current profile and refreshes active room peers afte
     const history = await getJson(socketPath, `/api/rooms/${created.body.roomId}/chat`);
     assert.equal(history.status, 200);
     assert.deepEqual(history.body.messages.map((message) => message.name), [
+      'Current Profile',
       'Current Profile',
       'Current Profile'
     ]);
