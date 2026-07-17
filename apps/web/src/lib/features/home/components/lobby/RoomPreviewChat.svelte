@@ -275,6 +275,22 @@
         }
         return;
       }
+      if (event.type === 'room.peer.updated' && event.payload.roomId === activeRoomId) {
+        const peer = event.payload.peer;
+        const authored = (message: ChatMessage) =>
+          message.peerId === peer.id
+          || Boolean(peer.accountUserId && message.authorUserId === peer.accountUserId);
+        messages = messages.map((message) => authored(message)
+          ? {
+              ...message,
+              name: peer.name || message.name,
+              avatarAccent: peer.avatarAccent,
+              avatarColorKey: peer.avatarColorKey || message.avatarColorKey,
+              avatarUrl: peer.avatarUrl
+            }
+          : message);
+        return;
+      }
       if (event.type !== 'room.chat.message' || event.payload.roomId !== activeRoomId) return;
       const message = event.payload.message;
       if (!message?.id || messageIds.has(message.id) || messages.some((item) => item.id === message.id)) return;

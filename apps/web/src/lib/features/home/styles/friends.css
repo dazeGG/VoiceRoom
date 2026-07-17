@@ -591,6 +591,12 @@ html.is-desktop .sidebar-download { display: none; }
   min-height: 100%;
 }
 
+/* Lobby previews omit the in-room summary bar, so the tile grid must own the
+   only stage-strip row instead of landing in the reserved auto row at the top. */
+.lobby-preview-stage .stage-strip {
+  grid-template-rows: minmax(0, 1fr);
+}
+
 .lobby-stage-empty {
   position: absolute;
   inset: 0 28px 108px;

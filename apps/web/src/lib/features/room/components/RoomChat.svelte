@@ -218,9 +218,8 @@
         }
         return;
       }
-      // Messages carry an avatar snapshot taken at send time, so a profile
-      // change would leave stale avatars in the rail. Re-stamp the author's
-      // messages when the room broadcasts the refreshed peer.
+      // Account-backed messages render the current profile. Keep the open rail
+      // in sync immediately when the room broadcasts a refreshed peer.
       if (event.type === 'room.peer.updated') {
         const peer = event.payload.peer;
         if (!peer?.id) return;
@@ -228,13 +227,15 @@
           message.peerId === peer.id
           || Boolean(peer.accountUserId && message.authorUserId === peer.accountUserId);
         const stale = (message: ChatMessage) =>
-          message.avatarUrl !== peer.avatarUrl
+          message.name !== peer.name
+          || message.avatarUrl !== peer.avatarUrl
           || message.avatarAccent !== peer.avatarAccent
           || (Boolean(peer.avatarColorKey) && message.avatarColorKey !== peer.avatarColorKey);
         if (!messages.some((message) => authored(message) && stale(message))) return;
         messages = messages.map((message) => authored(message)
           ? {
               ...message,
+              name: peer.name || message.name,
               avatarAccent: peer.avatarAccent,
               avatarColorKey: peer.avatarColorKey || message.avatarColorKey,
               avatarUrl: peer.avatarUrl
