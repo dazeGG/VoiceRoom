@@ -16,7 +16,8 @@
     canClose,
     onOpenSettings,
     inviteContent,
-    onToast
+    onToast,
+    showNotificationControls = true
   } = $props<{
     roomId: string;
     name: string;
@@ -26,6 +27,7 @@
     onOpenSettings?: () => void;
     inviteContent?: import('svelte').Snippet<[close: () => void]>;
     onToast?: (message: string) => void;
+    showNotificationControls?: boolean;
   }>();
 
   const roomMuted = $derived(isRoomNotificationsMuted(roomId));
@@ -51,6 +53,7 @@
   }
 
   async function toggleRoomMute(): Promise<void> {
+    if (!showNotificationControls) return;
     if (muteSaving) return;
     muteSaving = true;
     const targetRoomId = roomId;
@@ -102,17 +105,19 @@
     {#snippet icon()}<Link {...iconMd} aria-hidden="true" />{/snippet}
   </PopoverMenuItem>
 
-  <PopoverDivider />
+  {#if showNotificationControls}
+    <PopoverDivider />
 
-  <PopoverMenuItem
-    label={roomMuted ? 'Включить уведомления' : 'Выключить уведомления'}
-    onclick={() => void toggleRoomMute()}
-    disabled={muteSaving}
-  >
-    {#snippet icon()}
-      {#if roomMuted}<BellOff {...iconMd} aria-hidden="true" />{:else}<Bell {...iconMd} aria-hidden="true" />{/if}
-    {/snippet}
-  </PopoverMenuItem>
+    <PopoverMenuItem
+      label={roomMuted ? 'Включить уведомления' : 'Выключить уведомления'}
+      onclick={() => void toggleRoomMute()}
+      disabled={muteSaving}
+    >
+      {#snippet icon()}
+        {#if roomMuted}<BellOff {...iconMd} aria-hidden="true" />{:else}<Bell {...iconMd} aria-hidden="true" />{/if}
+      {/snippet}
+    </PopoverMenuItem>
+  {/if}
 
   {#if onOpenSettings}
     <PopoverDivider />

@@ -18,6 +18,7 @@
   import { applyRoomDeleted, applyRoomNotFound, applyRoomUpdated } from '../client/room/lifecycle';
   import { openParticipantContextMenu } from '../participant-context-ui.svelte';
   import { roomUi, closeChat, incrementUnreadChat, markChatRead } from '../room-ui.svelte';
+  import { isRoomNotificationsMuted } from '$lib/shared/notifications/preferences.svelte';
 
   let roomId = $state('');
   let peerId = $state('');
@@ -247,7 +248,7 @@
       messageIds.add(message.id);
       error = '';
       messages = [...messages, message];
-      if (message.peerId !== peerId) playRoomChatMessageCue();
+      if (message.peerId !== peerId && !isRoomNotificationsMuted(roomId)) playRoomChatMessageCue();
       if (roomUi.chatOpen) {
         markChatRead();
         setRoomUnreadCount(roomId, 0);
