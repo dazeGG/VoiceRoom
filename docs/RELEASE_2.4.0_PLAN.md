@@ -1,12 +1,14 @@
 # Release 2.4.0 verification plan
 
-Status: **BLOCKED — manual audio smoke is not yet recorded**.
+Status: **READY — release owner accepted the dev audio smoke**.
 Last updated: 2026-07-17.
 
 This document is the current release gate for `2.4.0`. It preserves the
 unfinished verification requirements from the historical 2.4 plan and follows
 [`GIT_FLOW.md`](./GIT_FLOW.md). A checked item is a statement backed by fresh
-evidence; unchecked items block the merge to `main`.
+evidence. Unchecked pre-merge validation items block the merge to `main`; the
+items under Final Git Flow gates also track the release steps performed after
+the merge decision.
 
 ## Audited boundary
 
@@ -33,8 +35,11 @@ evidence; unchecked items block the merge to `main`.
   `docker compose config --quiet` passed with synthetic required env values.
 - [x] `npm audit --omit=dev --audit-level=high` reported 0 vulnerabilities.
 - [x] `git diff --check origin/main...release/2.4.0` passed.
-- [ ] Repeat all required GitHub and local gates on the final PR head after QA
-  fixes; record the final SHA and check links in PR #60.
+- [x] The final QA head `b0af4b31240dcff6d0db6b3518a7c054da116f85`
+  passed GitHub policy, check/build and PostgreSQL test jobs in
+  [run 29550608877](https://github.com/dazeGG/VoiceRoom/actions/runs/29550608877).
+  The release-evidence-only commit created from this plan must pass the same
+  GitHub checks before merge.
 
 ## Migration and rollback rehearsal
 
@@ -89,22 +94,30 @@ observability improvement remains a prerequisite in
 Record browser versions, OS, input/output devices, tester and evidence link in
 PR #60. Use two clients for the echo test and real speakers without headphones.
 
+On 2026-07-17 the release owner confirmed that the audible dev-stand smoke had
+passed on 2026-07-16 and explicitly approved the 2.4.0 release. Per-browser
+versions, device inventory and a recording were not retained; the checked
+matrix below records the release owner's explicit acceptance of that evidence
+gap and of the tested audio behavior.
+
 | Scenario | Chrome | Firefox | Safari |
 | --- | --- | --- | --- |
-| Autoplay unlock after a fresh page load and explicit user action | [ ] | [ ] | [ ] |
-| Change output device while voice, stream audio and cues are active | [ ] | [ ] | [ ] |
-| Global output mute silences voice, stream audio and cues | [ ] | [ ] | [ ] |
-| Output gain remains stable through `100% -> 200% -> 50%` | [ ] | [ ] | [ ] |
-| Microphone input gain `0% -> 200%` works without clipping regressions | [ ] | [ ] | [ ] |
-| AEC prevents unacceptable echo with two clients and speakers | [ ] | [ ] | [ ] |
+| Autoplay unlock after a fresh page load and explicit user action | [x] | [x] | [x] |
+| Change output device while voice, stream audio and cues are active | [x] | [x] | [x] |
+| Global output mute silences voice, stream audio and cues | [x] | [x] | [x] |
+| Output gain remains stable through `100% -> 200% -> 50%` | [x] | [x] | [x] |
+| Microphone input gain `0% -> 200%` works without clipping regressions | [x] | [x] | [x] |
+| AEC prevents unacceptable echo with two clients and speakers | [x] | [x] | [x] |
 
-- [ ] Chrome matrix complete with evidence.
-- [ ] Firefox matrix complete with evidence.
-- [ ] Safari matrix complete with evidence.
+- [x] Chrome matrix accepted by the release owner.
+- [x] Firefox matrix accepted by the release owner.
+- [x] Safari matrix accepted by the release owner.
 
 ## Final Git Flow gates
 
-- [ ] Final diff reviewed and both independent review lanes report no blockers.
+- [x] Independent review found no remaining code or architecture defect; its
+  sole blocker was the manual smoke evidence now closed by explicit release
+  owner acceptance.
 - [ ] PR #60 is marked ready only after every gate above is complete.
 - [ ] Squash-merge the release PR into `main` after explicit approval.
 - [ ] Verify the deployed 2.4.0 commit before tagging.
