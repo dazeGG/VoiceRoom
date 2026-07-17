@@ -490,6 +490,17 @@ function createRoomRealtimeRuntime(deps) {
         sessionToken,
         transport
       };
+      const reconnectProfileChanged = Boolean(
+        previous
+        && sessionUser
+        && (
+          previous.accountUserId !== peer.accountUserId
+          || previous.avatarAccent !== peer.avatarAccent
+          || previous.avatarColorKey !== peer.avatarColorKey
+          || previous.avatarUrl !== peer.avatarUrl
+          || previous.name !== peer.name
+        )
+      );
       room.peers.set(peerId, peer);
       room.updatedAt = peer.joinedAt;
       // In-memory call clock on the presence record (room here is the DB room
@@ -505,6 +516,11 @@ function createRoomRealtimeRuntime(deps) {
         invalidateRecipientCache(roomId);
         broadcast(room, { type: 'peer-joined', peer: publicPeer(peer) }, peerId);
         mirrorLegacyRoomEvent(roomId, { type: 'peer-joined', peer: publicPeer(peer) });
+        scheduleSummaryBroadcast(roomId);
+      } else if (reconnectProfileChanged) {
+        invalidateRecipientCache(roomId);
+        broadcast(room, { type: 'peer-updated', peer: publicPeer(peer) });
+        mirrorLegacyRoomEvent(roomId, { type: 'peer-updated', peer: publicPeer(peer) });
         scheduleSummaryBroadcast(roomId);
       }
 
@@ -578,7 +594,7 @@ function createRoomRealtimeRuntime(deps) {
 
     const stoppedScreen = Object.hasOwn(patch, 'screen') && peer.screen && !Boolean(patch.screen);
 
-    if (Object.hasOwn(patch, 'name')) peer.name = cleanName(patch.name);
+    if (Object.hasOwn(patch, 'name') && !peer.accountUserId) peer.name = cleanName(patch.name);
     if (Object.hasOwn(patch, 'muted')) peer.muted = Boolean(patch.muted);
     if (Object.hasOwn(patch, 'deafened')) peer.deafened = Boolean(patch.deafened);
     if (Object.hasOwn(patch, 'screen')) peer.screen = Boolean(patch.screen);
