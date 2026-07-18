@@ -44,9 +44,6 @@
     "ordinal": {
       "minimum": 1,
       "type": "integer"
-    },
-    "prepared": {
-      "const": true
     }
   },
   "required": [

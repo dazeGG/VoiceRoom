@@ -290,6 +290,13 @@ export function validateBootstrapFailure(failure) {
   assert.ok(Number.isInteger(failure.runId) && failure.runId > 0); assert.ok(Number.isInteger(failure.runAttempt) && failure.runAttempt > 0); instant(failure.createdAt, "bootstrap failure createdAt"); assert.ok(typeof failure.reason === "string" && failure.reason.length > 0);
   assert.ok(Array.isArray(failure.recoveryLineage), "bootstrap failure must carry authenticated recovery lineage");
   failure.recoveryLineage.forEach(validateRecoveryLineageEntry);
+  const ordinals = failure.recoveryLineage.map((entry) => Number(entry.attemptId.match(/[0-9]+$/)?.[0]));
+  assert.equal(new Set(ordinals).size, ordinals.length, "bootstrap failure recovery lineage ordinals must be unique");
+  assert.deepEqual(ordinals, [...ordinals].sort((a, b) => a - b), "bootstrap failure recovery lineage must be ordered");
+  if (failure.attemptId.startsWith("g01-recovery-")) {
+    assert.ok(failure.recoveryLineage.length > 0, "recovery failure must carry a nonempty complete lineage");
+    assert.equal(failure.recoveryLineage.at(-1).attemptId, failure.attemptId, "recovery failure lineage must end at the failed recovery attempt");
+  } else assert.equal(failure.recoveryLineage.length, 0, "direct failure cannot claim recovery lineage");
   return failure;
 }
 
@@ -300,6 +307,20 @@ function validateRecoveryLineageEntry(entry, index) {
   for (const key of ["baseSha", "parentSha", "headSha"]) assert.match(entry[key], SHA);
   for (const key of ["authorityDigest", "planSpecPairDigest", "priorFailureDigest"]) assert.match(entry[key], DIGEST);
   assert.equal(entry.parentSha, entry.baseSha); assert.equal(entry.priorFailureId.startsWith("bootstrap-failure."), true);
+}
+
+export function buildAuthenticatedEarlyFailure({ pr, currentRun, f7, f9, candidateReport, f7Artifact, f9Artifact, failedPhase, createdAt, reason, repository }) {
+  const envelope = validateEnvelope(f7, "F7"); validateFallbackCandidatePair(envelope, f9, candidateReport, { repository, observedAt: createdAt, f7Artifact, f9Artifact });
+  assert.equal(pr?.merged_at !== null, true, "early recorder requires an authenticated merged PR");
+  assert.equal(pr?.merge_commit_sha, currentRun?.head_sha, "early recorder merge/run substitution");
+  assert.equal(pr?.base?.ref, "develop"); assert.equal(pr?.base?.repo?.full_name, repository); assert.equal(pr?.head?.repo?.full_name, repository);
+  assert.equal(currentRun?.event, "push"); assert.equal(currentRun?.head_branch, "develop"); assert.equal(currentRun?.path, WORKFLOW_PATH); assert.equal(currentRun?.repository?.full_name, repository);
+  assert.ok(Number.isInteger(currentRun?.id) && currentRun.id > 0); assert.ok(Number.isInteger(currentRun?.run_attempt) && currentRun.run_attempt > 0);
+  const named = new Map(candidateReport.registries.map(({ name, candidate }) => [name, candidate]));
+  const recovery = named.get("bootstrap-landed-recoveries.json");
+  const lineage = envelope.attemptId.startsWith("g01-recovery-") ? structuredClone(recovery?.landedAncestors ?? []) : [];
+  const failure = { schemaVersion: 1, release: "2.5.0", status: "G01_LANDED_UNSEALED", attemptId: envelope.attemptId, evidenceId: `bootstrap-failure.${envelope.attemptId}.json`, failedPhase, baseSha: pr.base.sha, parentSha: pr.base.sha, terminalDevelopSha: currentRun.head_sha, headSha: pr.head.sha, runId: currentRun.id, runAttempt: currentRun.run_attempt, createdAt, reason, recoveryLineage: lineage };
+  return validateBootstrapFailure(failure);
 }
 
 export function selectCanonicalFailure(records, ordinal, terminalDevelopSha) {

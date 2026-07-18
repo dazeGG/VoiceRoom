@@ -7,7 +7,7 @@ import crypto from "node:crypto";
 import { execFileSync } from "node:child_process";
 import Ajv2020 from "ajv/dist/2020.js";
 import addFormats from "ajv-formats";
-import { artifactName, buildF9Envelope, buildF11Envelope, buildSelection, envelopePayloadDigest, selectCanonicalFailure, validateFallbackCandidatePair } from "../evidence/emit-bootstrap-selection.mjs";
+import { artifactName, buildAuthenticatedEarlyFailure, buildF9Envelope, buildF11Envelope, buildSelection, envelopePayloadDigest, selectCanonicalFailure, validateBootstrapFailure, validateFallbackCandidatePair } from "../evidence/emit-bootstrap-selection.mjs";
 import { activateCandidateReport, buildActivationCapture, buildCandidateReport, buildF7Envelope, prepareAndCreateBootstrapBranch, prepareBootstrapAuthority, reconstructNextOrdinal, validateRegistry } from "../evidence/bootstrap-export.mjs";
 
 const read = (file) => fs.readFileSync(file, "utf8");
@@ -140,19 +140,35 @@ test("live pre-branch orchestration cleans provisional refs, rescans complete hi
   const api = {
     async get(endpoint) { calls.push(["get", endpoint]); if (endpoint.endsWith("git/ref/heads/develop")) return { ref: "refs/heads/develop", object: { sha: develop } }; if (endpoint.includes("matching-refs")) return structuredClone(refs); if (endpoint.includes("git/commits/")) return { sha: develop, tree: { sha: "5".repeat(40) } }; throw Error(`unexpected GET ${endpoint}`); },
     async paginate(endpoint, variables) { calls.push(["paginate", endpoint, variables]); if (endpoint.endsWith("/pulls")) return [[]]; if (endpoint.includes("/runs")) return [{ workflow_runs: [] }]; return [{ artifacts: [] }]; },
-    async deleteRef(ref) { calls.push(["deleteRef", ref]); refs = []; },
+    async deleteRef(ref, sha) { calls.push(["deleteRef", ref, sha]); refs = []; },
     async createBlob(body) { calls.push(["createBlob", body]); return { sha: crypto.createHash("sha1").update(body.content).digest("hex") }; },
     async createTree(body) { calls.push(["createTree", body]); return { sha: treeSha }; },
     async createCommit(body) { calls.push(["createCommit", body]); return { sha: commitSha }; },
     async createRef(body) { calls.push(["createRef", body]); return { ref: body.ref, object: { sha: body.sha } }; },
   };
-  const result = await prepareAndCreateBootstrapBranch({ api, repository: REPOSITORY, registries, planBytes: Buffer.from("plan"), specBytes: Buffer.from("spec"), observedAt: () => "2026-07-18T00:00:00.000Z" });
-  assert.equal(result.prepared.attemptId, "g01-a01"); assert.equal(result.registries.attempts.state, "G01_PREMERGE_ACTIVE"); assert.equal(result.registries.attempts.currentAttempt, "g01-a01"); validateRegistry(result.registries.attempts, "bootstrap-attempts.json"); validateRegistry(result.registries.recoveries, "bootstrap-landed-recoveries.json");
+  let tick = 0; const result = await prepareAndCreateBootstrapBranch({ api, repository: REPOSITORY, registries, planBytes: Buffer.from("plan"), specBytes: Buffer.from("spec"), observedAt: () => `2026-07-18T00:00:0${tick++}.000Z` });
+  assert.equal(result.prepared.attemptId, "g01-a01"); assert.equal(result.registries.attempts.state, "G01_PRE_BRANCH"); assert.equal(result.registries.attempts.currentAttempt, null); assert.equal(result.registries.attempts.attempts.length, 0); assert.equal(result.registries.attempts.ordinalReconstruction.nextOrdinal, null); validateRegistry(result.registries.attempts, "bootstrap-attempts.json"); validateRegistry(result.registries.recoveries, "bootstrap-landed-recoveries.json");
   assert.equal(result.registries.attempts.preparedAuthority.authorityDigest, result.prepared.authorityDigest);
-  assert.deepEqual(calls.filter(([name]) => name === "deleteRef").map(([, ref]) => ref), [`heads/${BRANCH}`]);
+  assert.deepEqual(calls.filter(([name]) => name === "deleteRef").map(([, ref, sha]) => [ref, sha]), [[`heads/${BRANCH}`, "6".repeat(40)]]);
   assert.equal(calls.filter(([name]) => name === "createRef").length, 1); assert.deepEqual(calls.find(([name]) => name === "createRef")[1], { ref: `refs/heads/${BRANCH}`, sha: commitSha });
   const tree = calls.find(([name]) => name === "createTree")[1]; assert.ok(tree.tree.some(({ path }) => path.endsWith("bootstrap-attempts.json"))); assert.ok(tree.tree.some(({ path }) => path.endsWith("bootstrap-landed-recoveries.json")));
   assert.ok(calls.filter(([name]) => name === "paginate").length >= 6, "cleanup must force a complete rescan before creation");
+});
+
+test("live preparation creates a provisional recovery branch with complete authenticated lineage and next ordinal", async () => {
+  const registries = ["bootstrap-attempts.json", "bootstrap-landed-recoveries.json"].map((name) => ({ filename: `docs/releases/2.5.0/evidence/${name}`, bytes: fs.readFileSync(`docs/releases/2.5.0/evidence/${name}`) }));
+  const terminal = "b".repeat(40), prior = { attemptId: "g01-recovery-a02", branch: "feature/2.5.0-g01-postmerge-bootstrap-a02", baseSha: "9".repeat(40), parentSha: "9".repeat(40), headSha: "a".repeat(40), authorityDigest: digest("1"), planSpecPairDigest: digest("2"), firstAuthoritativeId: 2, priorFailureId: "bootstrap-failure.g01-a01.json", priorFailureDigest: digest("3") };
+  const api = { async get(endpoint) { if (endpoint.endsWith("git/ref/heads/develop")) return { object: { sha: terminal } }; if (endpoint.includes("matching-refs")) return []; return { tree: { sha: "5".repeat(40) } }; }, async paginate(endpoint) { if (endpoint.endsWith("/pulls")) return [[{ ...pr({ state: "closed" }), id: 1, number: 1, node_id: "P1" }, { ...pr({ state: "closed" }), id: 2, number: 2, node_id: "P2", head: { ...pr().head, ref: prior.branch, sha: prior.headSha } }]]; if (endpoint.includes("/runs")) return [{ workflow_runs: [run(1, pr().head.sha, BRANCH, "pull_request"), run(2, prior.headSha, prior.branch, "pull_request")] }]; return [{ artifacts: [{ id: 1, name: `g01-candidate-g01-a01-run-1-attempt-1-head-${pr().head.sha}`, expired: false, workflow_run: { id: 1 } }, { id: 2, name: `g01-bootstrap-failure-g01-recovery-a02-run-2-attempt-1-head-${prior.headSha}-phase-f11`, expired: false, workflow_run: { id: 2 } }] }]; }, async createBlob() { return { sha: "4".repeat(40) }; }, async createTree() { return { sha: "3".repeat(40) }; }, async createCommit() { return { sha: "2".repeat(40) }; }, async createRef() {} };
+  const priorFailure = { evidenceId: "bootstrap-failure.g01-recovery-a02.json", digest: digest("4"), terminalDevelopSha: terminal, recoveryLineage: [prior] };
+  const result = await prepareAndCreateBootstrapBranch({ api, repository: REPOSITORY, registries, planBytes: Buffer.from("p"), specBytes: Buffer.from("s"), priorFailure, observedAt: "2026-07-18T00:00:00.000Z" });
+  assert.equal(result.prepared.attemptId, "g01-recovery-a03"); assert.equal(result.registries.attempts.state, "G01_PRE_BRANCH"); assert.equal(result.registries.recoveries.currentRecovery, null); assert.deepEqual(result.registries.recoveries.landedAncestors, [prior]);
+});
+
+test("cleanup ref deletion is compare-and-delete and a SHA race aborts WAITING before branch creation", async () => {
+  const registries = ["bootstrap-attempts.json", "bootstrap-landed-recoveries.json"].map((name) => ({ filename: `docs/releases/2.5.0/evidence/${name}`, bytes: fs.readFileSync(`docs/releases/2.5.0/evidence/${name}`) })); let created = false;
+  const abandoned = { ...pr({ state: "closed" }), id: 9, number: 9, node_id: "P9", merged_at: null, merge_commit_sha: null, head: { ...pr().head, ref: BRANCH } };
+  const api = { async get(endpoint) { if (endpoint.endsWith("git/ref/heads/develop")) return { object: { sha: "9".repeat(40) } }; if (endpoint.includes("matching-refs")) return [{ ref: `refs/heads/${BRANCH}`, object: { sha: "6".repeat(40) } }]; return { tree: { sha: "5".repeat(40) } }; }, async paginate(endpoint) { if (endpoint.endsWith("/pulls")) return [[abandoned]]; if (endpoint.includes("/runs")) return [{ workflow_runs: [] }]; return [{ artifacts: [] }]; }, async deleteRef(ref, sha) { assert.equal(sha, "6".repeat(40)); throw Error("cleanup ref changed or was recreated; WAITING"); }, async createRef() { created = true; } };
+  await assert.rejects(() => prepareAndCreateBootstrapBranch({ api, repository: REPOSITORY, registries, planBytes: Buffer.from("p"), specBytes: Buffer.from("s"), observedAt: "2026-07-18T00:00:00.000Z" }), /WAITING/); assert.equal(created, false);
 });
 
 test("live pre-branch orchestration rejects consumed direct history and ref-create races without publishing a consumed ordinal", async () => {
@@ -162,7 +178,7 @@ test("live pre-branch orchestration rejects consumed direct history and ref-crea
     async paginate(endpoint) { if (endpoint.endsWith("/pulls")) return [[]]; if (endpoint.includes("/runs")) return [{ workflow_runs: [] }]; return [{ artifacts: consumed ? [{ id: 1, name: `g01-selection-a01-run-1-attempt-1-head-${"a".repeat(40)}`, expired: false }] : [] }]; },
     async deleteRef(ref) { calls.push(["deleteRef", ref]); }, async createBlob() { return { sha: "4".repeat(40) }; }, async createTree() { return { sha: "3".repeat(40) }; }, async createCommit() { return { sha: "2".repeat(40) }; }, async createRef(body) { calls.push(["createRef", body]); if (failCreate) throw Error("422 reference already exists"); return body; },
   }; };
-  const consumed = makeApi({ consumed: true }); await assert.rejects(() => prepareAndCreateBootstrapBranch({ api: consumed, repository: REPOSITORY, registries, planBytes: Buffer.from("p"), specBytes: Buffer.from("s"), observedAt: "2026-07-18T00:00:00.000Z" }), /prepared authority|WAITING|READY/); assert.equal(consumed.calls.some(([name]) => name === "createRef"), false);
+  let consumedTick = 0; const consumed = makeApi({ consumed: true }); await assert.rejects(() => prepareAndCreateBootstrapBranch({ api: consumed, repository: REPOSITORY, registries, planBytes: Buffer.from("p"), specBytes: Buffer.from("s"), observedAt: () => `2026-07-18T00:00:0${consumedTick++}.000Z` }), /prepared authority|WAITING|READY/); assert.equal(consumed.calls.some(([name]) => name === "createRef"), false);
   const raced = makeApi({ failCreate: true }); await assert.rejects(() => prepareAndCreateBootstrapBranch({ api: raced, repository: REPOSITORY, registries, planBytes: Buffer.from("p"), specBytes: Buffer.from("s"), observedAt: "2026-07-18T00:00:00.000Z" }), /ordinal was not consumed/); assert.equal(raced.calls.filter(([name]) => name === "createRef").length, 1);
 });
 
@@ -226,6 +242,26 @@ test("same-ordinal failed reruns select one authenticated canonical terminal and
   const older = record({ ...base, runId: 39, runAttempt: 1, createdAt: "2026-07-17T23:59:00.000Z" }, 1);
   assert.equal(selectCanonicalFailure([older, record(base, 2)], 8, terminal).artifactId, 2);
   assert.throws(() => selectCanonicalFailure([record(base, 2), record(base, 3, digest("3"))], 8, terminal), /conflicting terminal artifacts/);
+});
+
+test("recovery failure validation and checkout-free recorder preserve complete authenticated provenance and lineage", () => {
+  const head = "a".repeat(40), report = candidateReport(head), branch = "feature/2.5.0-g01-postmerge-bootstrap-a02", recovery = { attemptId: "g01-recovery-a02", branch, baseSha: "9".repeat(40), parentSha: "9".repeat(40), headSha: head, authorityDigest: report.activationAuthority.preparedAuthority.authorityDigest, planSpecPairDigest: digest("2"), firstAuthoritativeId: 2, priorFailureId: "bootstrap-failure.g01-a01.json", priorFailureDigest: digest("3") };
+  report.registries[0].candidate.currentAttempt = null; report.registries[0].candidate.attempts = [];
+  report.registries[1].candidate.currentRecovery = recovery.attemptId; report.registries[1].candidate.landedAncestors = [recovery];
+  const f7 = buildF7Envelope(report, head, branch, "2026-07-18T00:00:00.000Z"), producer = artifactAuthority(77, artifactName("candidate", f7, 10, 1), head, branch, "pull_request", { runId: 10, payload: f7 });
+  const currentPr = pr(); currentPr.head.ref = branch; const reviews = [review("code-reviewer", 11, "2026-07-18T00:00:10.000Z"), review("architect", 12, "2026-07-18T00:00:20.000Z"), review("verifier", 13, "2026-07-18T00:00:30.000Z")];
+  const ancestor = { evidenceId: "bootstrap-failure.g01-a01.json", attemptId: "g01-a01", payloadDigest: digest("3"), artifactId: 91, artifactName: `g01-bootstrap-failure-g01-a01-run-80-attempt-1-head-${"9".repeat(40)}-phase-f11`, archiveDigest: digest("4"), downloadDigest: digest("4"), runId: 80, runAttempt: 1, headSha: "8".repeat(40), terminalDevelopSha: "9".repeat(40) };
+  const f9 = buildF9Envelope(f7, { pr: currentPr, reviews, reviewAuthority: { "code-reviewer": 11, architect: 12, verifier: 13 }, observedAt: "2026-07-18T00:01:00.000Z", repository: REPOSITORY, f7Artifact: producer, candidateReport: report, premergeAncestorArtifacts: [ancestor] });
+  const approval = artifactAuthority(78, artifactName("approval", f9, 10, 1), head, branch, "pull_request", { runId: 10, payload: f9 });
+  producer.run.status = "completed"; producer.run.conclusion = "success";
+  approval.run.status = "completed"; approval.run.conclusion = "success";
+  const mergedPr = pr({ state: "closed" }); mergedPr.head.ref = branch;
+  const currentRun = run(90, mergedPr.merge_commit_sha, "develop", "push", "in_progress", null, 2);
+  const failure = buildAuthenticatedEarlyFailure({ pr: mergedPr, currentRun, f7, f9, candidateReport: report, f7Artifact: producer, f9Artifact: approval, failedPhase: "F11", createdAt: "2026-07-18T00:05:00.000Z", reason: "checkout-free failure", repository: REPOSITORY });
+  assert.deepEqual(failure.recoveryLineage, [recovery]); assert.equal(failure.runId, 90); assert.equal(failure.runAttempt, 2);
+  assert.throws(() => validateBootstrapFailure({ ...failure, recoveryLineage: [] }), /nonempty/);
+  assert.throws(() => validateBootstrapFailure({ ...failure, recoveryLineage: [{ ...recovery, attemptId: "g01-recovery-a03", branch: "feature/2.5.0-g01-postmerge-bootstrap-a03" }] }), /end at/);
+  assert.throws(() => buildAuthenticatedEarlyFailure({ pr: mergedPr, currentRun, f7, f9, candidateReport: report, f7Artifact: { ...producer, run: { ...producer.run, repository: { full_name: "evil/repo" } } }, f9Artifact: approval, failedPhase: "F11", createdAt: "2026-07-18T00:05:00.000Z", reason: "forged", repository: REPOSITORY }));
 });
 
 test("artifact authentication rejects name, digest, expiry, uniqueness, producer workflow/event/repository/head/run attempt substitutions", () => {
@@ -331,6 +367,7 @@ test("workflow has reachable bounded premerge F9 and automatic merged-commit F11
   const post = workflow.slice(workflow.indexOf("  bootstrap-postmerge:"), workflow.indexOf("\n  deploy:"));
   for (const token of ["github.ref == 'refs/heads/develop'", "commits/$GITHUB_SHA/pulls", "merge_commit_sha===process.env.GITHUB_SHA", "actions/runs/$GITHUB_RUN_ID/jobs", "Lint, typecheck & build", "Tests", "workflowPath", "download-digest", "g01-merge-", "bootstrap-selection:", "bootstrap-failure.", "github.run_attempt", "bootstrap-selection.$ATTEMPT_ID.json", "artifact-digest", "selection_sha256", "recoveryLineage", "always() &&", "fallback-prs.json", "fallback-artifacts.json"]) assert.ok(post.includes(token), `missing lifecycle proof: ${token}`);
   for (const token of ["id: postmerge_checkout", "steps.postmerge_checkout.outcome == 'failure'", "id: selection_checkout", "steps.selection_checkout.outcome == 'failure'", "test -f pr.json || gh api", "hashFiles('bootstrap-failure.*.json')"]) assert.ok(post.includes(token), `missing early-failure fallback proof: ${token}`);
+  for (const token of ["early-f7.zip", "early-f9.zip", "selection-early-f7.zip", "selection-early-f9.zip", "early-producer-run.json", "buildAuthenticatedEarlyFailure", "candidate-registry-report.g01.json"]) assert.ok(post.includes(token), `checkout-free recorders must authenticate exact F7/F9 provenance: ${token}`);
   assert.match(post, /needs: \[check, test\][\s\S]*if: always\(\) && github\.event_name == 'push'/, "failed/cancelled dependencies must still run the landed-unsealed recorder");
   for (const token of ["premerge-ancestor-authorities.json", "premerge-ancestor-expected.json", "f9-ancestor.zip", "buildActivationCapture"]) assert.ok(workflow.includes(token), `missing premerge/replay proof: ${token}`);
   for (const token of ["validateFallbackCandidatePair", "fallback-$label-metadata.json", "fallback-$label-run.json", "fallback-$label.zip"]) assert.ok(workflow.includes(token), `missing authenticated fallback proof: ${token}`);
