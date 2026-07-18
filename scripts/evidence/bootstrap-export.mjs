@@ -123,10 +123,43 @@ function observedOrdinals(value, found = new Set()) {
 function ordinalId(ordinal) { return String(ordinal).padStart(2, "0"); }
 
 export function reconstructNextOrdinal(candidateReport, authority) {
-  exactKeys(authority, ["repository", "pr", "currentRun", "headCommit", "prPages", "runPages", "artifactPages", "paginationComplete", "observedAt", "priorFailure"], "bootstrap activation authority");
+  exactKeys(authority, ["repository", "pr", "currentRun", "headCommit", "prPages", "runPages", "artifactPages", "paginationComplete", "capture", "observedAt", "priorFailure"], "bootstrap activation authority");
   assert.equal(authority.paginationComplete, true, "all PR/run/artifact pages must be completely consumed");
-  const ordinals = observedOrdinals({ candidateReport, prPages: authority.prPages, runPages: authority.runPages, artifactPages: authority.artifactPages });
+  validateActivationCapture(authority);
+  const currentPrIds = new Set([authority.pr.id, authority.pr.number, authority.pr.node_id]);
+  const historicalPrPages = authority.prPages.map((page) => Array.isArray(page)
+    ? page.filter((pr) => !currentPrIds.has(pr.id) && !currentPrIds.has(pr.number) && !currentPrIds.has(pr.node_id))
+    : page);
+  const currentCandidateRunIds = new Set([authority.currentRun.id]);
+  for (const page of authority.runPages) for (const run of page.workflow_runs ?? []) {
+    if (run.head_sha === authority.pr.head.sha && run.head_branch === authority.pr.head.ref) currentCandidateRunIds.add(run.id);
+  }
+  const historicalRunPages = authority.runPages.map((page) => ({ ...page, workflow_runs: (page.workflow_runs ?? []).filter((run) => !currentCandidateRunIds.has(run.id)) }));
+  const historicalArtifactPages = authority.artifactPages.map((page) => ({ ...page, artifacts: (page.artifacts ?? []).filter((artifact) => !currentCandidateRunIds.has(artifact.workflow_run?.id)) }));
+  const ordinals = observedOrdinals({ candidateReport, prPages: historicalPrPages, runPages: historicalRunPages, artifactPages: historicalArtifactPages });
   return Math.max(0, ...ordinals) + 1;
+}
+
+function validateActivationCapture(authority) {
+  exactKeys(authority.capture, ["responses", "pages", "facts"], "activation capture");
+  exactKeys(authority.capture.responses, ["pr", "currentRun", "headCommit"], "activation response hashes");
+  exactKeys(authority.capture.pages, ["prs", "runs", "artifacts"], "activation page hashes");
+  exactKeys(authority.capture.facts, ["prNumber", "prId", "prNodeId", "runId", "runAttempt", "headSha", "headBranch"], "activation facts");
+  for (const value of Object.values(authority.capture.responses)) assert.match(value, DIGEST);
+  assert.equal(authority.capture.responses.pr, `sha256:${crypto.createHash("sha256").update(JSON.stringify(authority.pr)).digest("hex")}`);
+  assert.equal(authority.capture.responses.currentRun, `sha256:${crypto.createHash("sha256").update(JSON.stringify(authority.currentRun)).digest("hex")}`);
+  assert.equal(authority.capture.responses.headCommit, `sha256:${crypto.createHash("sha256").update(JSON.stringify(authority.headCommit)).digest("hex")}`);
+  for (const [name, pages] of Object.entries(authority.capture.pages)) {
+    assert.ok(Array.isArray(pages) && pages.length > 0, `${name} page hashes must be nonempty`);
+    for (const [index, page] of pages.entries()) {
+      exactKeys(page, ["index", "sha256"], `${name} page hash ${index}`); assert.equal(page.index, index); assert.match(page.sha256, DIGEST);
+    }
+  }
+  for (const [name, values] of [["prs", authority.prPages], ["runs", authority.runPages], ["artifacts", authority.artifactPages]]) {
+    assert.equal(authority.capture.pages[name].length, values.length, `${name} page hash count mismatch`);
+    values.forEach((value, index) => assert.equal(authority.capture.pages[name][index].sha256, `sha256:${crypto.createHash("sha256").update(JSON.stringify(value)).digest("hex")}`, `${name} page hash mismatch at ${index}`));
+  }
+  assert.deepEqual(authority.capture.facts, { prNumber: authority.pr.number, prId: authority.pr.id, prNodeId: authority.pr.node_id, runId: authority.currentRun.id, runAttempt: authority.currentRun.run_attempt, headSha: authority.pr.head.sha, headBranch: authority.pr.head.ref });
 }
 
 export function activateCandidateReport(candidateReport, authority, planBytes, specBytes) {
@@ -163,15 +196,29 @@ export function activateCandidateReport(candidateReport, authority, planBytes, s
   } else {
     const branchOrdinal = authority.pr.head.ref.match(/^feature\/2\.5\.0-g01-postmerge-bootstrap-a([0-9]{2,})$/)?.[1];
     assert.ok(branchOrdinal, "bootstrap branch is not canonical"); assert.equal(Number(branchOrdinal), ordinal, "recovery branch must use 1+max observed/consumed ordinal");
-    exactKeys(authority.priorFailure, ["evidenceId", "digest", "terminalDevelopSha"], "prior failure authority");
+    exactKeys(authority.priorFailure, ["evidenceId", "digest", "terminalDevelopSha", "recoveryLineage"], "prior failure authority");
     assert.match(authority.priorFailure.evidenceId, /^bootstrap-failure\.g01-(?:a|recovery-a)[0-9]{2,}\.json$/); assert.match(authority.priorFailure.digest, DIGEST); assert.match(authority.priorFailure.terminalDevelopSha, SHA);
     assert.equal(authority.pr.base.sha, authority.priorFailure.terminalDevelopSha, "recovery must base on the frozen failed develop SHA");
+    assert.ok(Array.isArray(authority.priorFailure.recoveryLineage), "prior failure recovery lineage must be present");
+    const priorAttemptId = authority.priorFailure.evidenceId.slice("bootstrap-failure.".length, -".json".length);
+    const lineageOrdinals = authority.priorFailure.recoveryLineage.map((entry) => Number(entry.attemptId.match(/[0-9]+$/)?.[0]));
+    assert.equal(new Set(lineageOrdinals).size, lineageOrdinals.length, "prior recovery lineage ordinals must be unique");
+    assert.deepEqual(lineageOrdinals, [...lineageOrdinals].sort((a, b) => a - b), "prior recovery lineage must preserve immutable ordinal order");
+    assert.ok(lineageOrdinals.every((value) => value < ordinal), "prior recovery lineage cannot contain the current/future attempt");
+    if (priorAttemptId.startsWith("g01-recovery-")) {
+      assert.ok(authority.priorFailure.recoveryLineage.length > 0, "recovery-after-recovery requires the complete prior lineage");
+      assert.equal(authority.priorFailure.recoveryLineage.at(-1).attemptId, priorAttemptId, "prior recovery failure must terminate the carried lineage");
+    } else assert.equal(authority.priorFailure.recoveryLineage.length, 0, "direct failure cannot claim recovery ancestry");
+    if (recoveries.landedAncestors.length === 0 && authority.priorFailure.recoveryLineage.length > 0) recoveries.landedAncestors = structuredClone(authority.priorFailure.recoveryLineage);
+    else assert.deepEqual(recoveries.landedAncestors, authority.priorFailure.recoveryLineage, "tracked and authenticated recovery lineage disagree");
+    recoveries.landedAncestors.forEach(validateRecovery);
     const attemptId = `g01-recovery-a${suffix}`;
     recoveries.landedAncestors.push({ attemptId, branch: authority.pr.head.ref, ...common, priorFailureId: authority.priorFailure.evidenceId, priorFailureDigest: authority.priorFailure.digest }); recoveries.currentRecovery = attemptId;
   }
   attempts.state = "G01_PREMERGE_ACTIVE"; recoveries.state = "G01_PREMERGE_ACTIVE";
   attempts.ordinalReconstruction = { complete: true, nextOrdinal: ordinal + 1, reason: "1+max over complete authenticated PR/run/artifact history and tracked consumed ordinals" };
   activated.registries = activated.registries.map((entry) => ({ ...entry, candidate: named.get(entry.name) }));
+  activated.activationAuthority = structuredClone(authority.capture);
   return { report: activated, identity: activeIdentity(activated, authority.pr.head.sha, authority.pr.head.ref), ordinal };
 }
 

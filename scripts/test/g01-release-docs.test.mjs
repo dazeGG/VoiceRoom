@@ -7,7 +7,7 @@ import crypto from "node:crypto";
 import { execFileSync } from "node:child_process";
 import Ajv2020 from "ajv/dist/2020.js";
 import addFormats from "ajv-formats";
-import { artifactName, buildF9Envelope, buildF11Envelope, buildSelection, envelopePayloadDigest } from "../evidence/emit-bootstrap-selection.mjs";
+import { artifactName, buildF9Envelope, buildF11Envelope, buildSelection, envelopePayloadDigest, selectCanonicalFailure } from "../evidence/emit-bootstrap-selection.mjs";
 import { activateCandidateReport, buildCandidateReport, buildF7Envelope, reconstructNextOrdinal, validateRegistry } from "../evidence/bootstrap-export.mjs";
 
 const read = (file) => fs.readFileSync(file, "utf8");
@@ -38,6 +38,11 @@ function postMergeRun(merge = "b".repeat(40)) {
 }
 function pr({ head = "a".repeat(40), merge = "b".repeat(40), state = "open" } = {}) {
   return { id: 700, node_id: "PR_node_7", number: 7, state, merged: state === "closed", merged_at: state === "closed" ? "2026-07-18T00:02:00.000Z" : null, merge_commit_sha: state === "closed" ? merge : null, base: { ref: "develop", sha: "9".repeat(40), repo: { full_name: REPOSITORY } }, head: { ref: BRANCH, sha: head, repo: { full_name: REPOSITORY } } };
+}
+function capture(authority) {
+  const hash = (value) => `sha256:${crypto.createHash("sha256").update(JSON.stringify(value)).digest("hex")}`;
+  const pages = (values) => values.map((value, index) => ({ index, sha256: hash(value) }));
+  return { responses: { pr: hash(authority.pr), currentRun: hash(authority.currentRun), headCommit: hash(authority.headCommit) }, pages: { prs: pages(authority.prPages), runs: pages(authority.runPages), artifacts: pages(authority.artifactPages) }, facts: { prNumber: authority.pr.number, prId: authority.pr.id, prNodeId: authority.pr.node_id, runId: authority.currentRun.id, runAttempt: authority.currentRun.run_attempt, headSha: authority.pr.head.sha, headBranch: authority.pr.head.ref } };
 }
 function review(role, actorId, submittedAt, overrides = {}) {
   const verdict = role === "architect" ? "CLEAR" : "APPROVE";
@@ -83,12 +88,30 @@ test("candidate identity binds reconstructed current ordinal, registry, branch a
 test("tracked PRE_BRANCH registries atomically derive executable F7 identity from authenticated current PR/run and 1+max observed ordinal", () => {
   const inputs = ["bootstrap-attempts.json", "bootstrap-landed-recoveries.json"].map((name) => ({ filename: name, bytes: fs.readFileSync(`docs/releases/2.5.0/evidence/${name}`) }));
   const tracked = buildCandidateReport(inputs); const currentPr = pr();
-  const authority = { repository: REPOSITORY, pr: currentPr, currentRun: run(901, currentPr.head.sha, currentPr.head.ref, "pull_request", "in_progress", null, 3), headCommit: { sha: currentPr.head.sha, parents: [{ sha: "8".repeat(40) }] }, prPages: [{ id: 1, head: { ref: "feature/2.5.0-g01-postmerge-bootstrap-a04" } }], runPages: [{ workflow_runs: [{ id: 2, name: "historical" }] }], artifactPages: [{ artifacts: [{ id: 3, name: "g01-bootstrap-failure-g01-recovery-a07-run-2-attempt-1-head-${'7'.repeat(40)}-phase-f11" }] }], paginationComplete: true, observedAt: "2026-07-18T00:00:00.000Z", priorFailure: null };
+  const authority = { repository: REPOSITORY, pr: currentPr, currentRun: run(901, currentPr.head.sha, currentPr.head.ref, "pull_request", "in_progress", null, 3), headCommit: { sha: currentPr.head.sha, parents: [{ sha: "8".repeat(40) }] }, prPages: [[{ id: 1, head: { ref: "feature/2.5.0-g01-postmerge-bootstrap-a04" } }, currentPr]], runPages: [{ workflow_runs: [{ id: 2, name: "historical" }, run(901, currentPr.head.sha, "feature/2.5.0-g01-postmerge-bootstrap-a99", "pull_request", "in_progress", null, 3)] }], artifactPages: [{ artifacts: [{ id: 3, name: `g01-bootstrap-failure-g01-recovery-a07-run-2-attempt-1-head-${"7".repeat(40)}-phase-f11` }, { id: 4, name: "g01-candidate-g01-recovery-a99-run-901-attempt-3-head-current", workflow_run: { id: 901 } }] }], paginationComplete: true, observedAt: "2026-07-18T00:00:00.000Z", priorFailure: null };
+  authority.capture = capture(authority);
   assert.equal(reconstructNextOrdinal(tracked, authority), 8);
   const activated = activateCandidateReport(tracked, authority, Buffer.from("plan"), Buffer.from("spec"));
   assert.equal(activated.identity.attemptId, "g01-a08"); assert.equal(activated.ordinal, 8);
   const f7 = buildF7Envelope(activated.report, currentPr.head.sha, currentPr.head.ref, authority.observedAt); assert.equal(f7.attemptId, "g01-a08");
   assert.throws(() => activateCandidateReport(tracked, { ...authority, paginationComplete: false }, Buffer.from("plan"), Buffer.from("spec")), /completely consumed/);
+  const forgedCapture = structuredClone(authority); forgedCapture.capture.pages.prs[0].sha256 = digest("f");
+  assert.throws(() => reconstructNextOrdinal(tracked, forgedCapture), /page hash mismatch/);
+});
+
+test("PRE_BRANCH recovery activation excludes its current suffix and preserves the complete authenticated prior recovery chain", () => {
+  const inputs = ["bootstrap-attempts.json", "bootstrap-landed-recoveries.json"].map((name) => ({ filename: name, bytes: fs.readFileSync(`docs/releases/2.5.0/evidence/${name}`) }));
+  const tracked = buildCandidateReport(inputs), terminal = "b".repeat(40), head = "c".repeat(40), branch = "feature/2.5.0-g01-postmerge-bootstrap-a03";
+  const currentPr = { ...pr({ head }), base: { ...pr().base, sha: terminal }, head: { ...pr().head, ref: branch, sha: head } };
+  const lineage = [{ attemptId: "g01-recovery-a02", branch: "feature/2.5.0-g01-postmerge-bootstrap-a02", baseSha: "9".repeat(40), parentSha: "9".repeat(40), headSha: "a".repeat(40), authorityDigest: digest("1"), planSpecPairDigest: digest("2"), firstAuthoritativeId: 1, priorFailureId: "bootstrap-failure.g01-a01.json", priorFailureDigest: digest("3") }];
+  const authority = { repository: REPOSITORY, pr: currentPr, currentRun: run(903, head, branch, "pull_request", "in_progress", null, 2), headCommit: { sha: head, parents: [{ sha: terminal }] }, prPages: [[currentPr, { id: 2, head: { ref: "feature/2.5.0-g01-postmerge-bootstrap-a02" } }]], runPages: [{ workflow_runs: [run(903, head, branch, "pull_request", "in_progress", null, 2), run(902, head, branch, "pull_request", "completed", "failure", 1)] }], artifactPages: [{ artifacts: [{ id: 3, name: `g01-candidate-g01-recovery-a03-run-903-attempt-2-head-${head}`, workflow_run: { id: 903 } }, { id: 4, name: `g01-bootstrap-failure-g01-recovery-a03-run-902-attempt-1-head-${head}-phase-f11`, workflow_run: { id: 902 } }] }], paginationComplete: true, observedAt: "2026-07-18T00:00:00.000Z", priorFailure: { evidenceId: "bootstrap-failure.g01-recovery-a02.json", digest: digest("4"), terminalDevelopSha: terminal, recoveryLineage: lineage } };
+  authority.capture = capture(authority);
+  assert.equal(reconstructNextOrdinal(tracked, authority), 3, "current a03 candidate must not consume its own suffix");
+  const activated = activateCandidateReport(tracked, authority, Buffer.from("plan"), Buffer.from("spec"));
+  const recovery = activated.report.registries.find((entry) => entry.name === "bootstrap-landed-recoveries.json").candidate;
+  assert.deepEqual(recovery.landedAncestors.slice(0, -1), lineage); assert.deepEqual(activated.report.activationAuthority, authority.capture); assert.equal(recovery.currentRecovery, "g01-recovery-a03"); assert.equal(recovery.landedAncestors.length, 2);
+  const truncated = structuredClone(authority); truncated.priorFailure.recoveryLineage = [];
+  assert.throws(() => activateCandidateReport(tracked, truncated, Buffer.from("plan"), Buffer.from("spec")), /complete prior lineage/);
 });
 
 test("candidate export rejects recursive future facts and forged registry fields", () => {
@@ -106,9 +129,18 @@ test("F9 requires three distinct configured trusted actors and effective exact-h
     { ...base.approvalAuthority, reviews: base.reviews.map((r, i) => i === 1 ? { ...r, submitted_at: "2026-07-17T23:59:59.000Z" } : r) },
     { ...base.approvalAuthority, reviews: [...base.reviews, { ...base.reviews[0], id: 99, node_id: "R99", state: "CHANGES_REQUESTED", submitted_at: "2026-07-18T00:00:40.000Z" }] },
     { ...base.approvalAuthority, reviews: base.reviews.map((r, i) => i === 0 ? { ...r, body: `${r.body} [omx-role:architect verdict:CLEAR]` } : r) },
+    { ...base.approvalAuthority, reviews: base.reviews.map((r, i) => i === 2 ? { ...r, submitted_at: "2026-07-18T00:00:15.000Z" } : r) },
     { ...base.approvalAuthority, pr: { ...base.approvalAuthority.pr, head: { ...base.approvalAuthority.pr.head, repo: { full_name: "fork/VoiceRoom" } } } },
   ];
   for (const authority of hostile) assert.throws(() => buildF9Envelope(base.f7, authority));
+});
+
+test("same-ordinal failed reruns select one authenticated canonical terminal and reject exact-order conflicts", () => {
+  const terminal = "b".repeat(40), base = { schemaVersion: 1, release: "2.5.0", status: "G01_LANDED_UNSEALED", attemptId: "g01-a08", evidenceId: "bootstrap-failure.g01-a08.json", failedPhase: "F11", baseSha: "9".repeat(40), parentSha: "9".repeat(40), terminalDevelopSha: terminal, headSha: "a".repeat(40), runId: 40, runAttempt: 2, createdAt: "2026-07-18T00:00:00.000Z", reason: "failed closed", recoveryLineage: [] };
+  const record = (failure, artifactId, payloadDigest = digest("1")) => ({ failure, artifactId, artifactName: `g01-bootstrap-failure-${failure.attemptId}-run-${failure.runId}-attempt-${failure.runAttempt}-head-${terminal}-phase-f11`, artifactCreatedAt: "2026-07-18T00:00:10.000Z", archiveDigest: digest("2"), payloadDigest, run: run(failure.runId, terminal, "develop", "push", "completed", "failure", failure.runAttempt) });
+  const older = record({ ...base, runId: 39, runAttempt: 1, createdAt: "2026-07-17T23:59:00.000Z" }, 1);
+  assert.equal(selectCanonicalFailure([older, record(base, 2)], 8, terminal).artifactId, 2);
+  assert.throws(() => selectCanonicalFailure([record(base, 2), record(base, 3, digest("3"))], 8, terminal), /conflicting terminal artifacts/);
 });
 
 test("artifact authentication rejects name, digest, expiry, uniqueness, producer workflow/event/repository/head/run attempt substitutions", () => {
@@ -179,8 +211,11 @@ test("selection CLI emits compact JSON with one real LF", () => {
 test("workflow has reachable bounded premerge F9 and automatic merged-commit F11/selection with authenticated provenance", () => {
   const workflow = read(".github/workflows/ci.yml"); const block = workflow.slice(workflow.indexOf("  bootstrap-plan:"), workflow.indexOf("\n  bootstrap-postmerge:"));
   assert.match(block, /github\.event_name == 'pull_request'/); assert.match(block, /head\.repo\.full_name == github\.repository/); assert.match(block, /environment: g01-bootstrap-approval-authority/); assert.match(block, /timeout-minutes: 45/); assert.match(block, /sleep 20/); assert.match(block, /--source-branch "\$SOURCE_BRANCH"/); assert.match(block, /OMX_G01_CODE_REVIEWER_ID/);
+  for (const token of ["activation-authority.json", "prior-records.ndjson", "selectCanonicalFailure", "recoveryLineage"]) assert.ok(block.includes(token), `missing activation proof: ${token}`);
+  assert.match(block, /path:\s*\|[\s\S]*activation-authority\.json/, "F7 artifact must persist replayable activation authority");
   const post = workflow.slice(workflow.indexOf("  bootstrap-postmerge:"), workflow.indexOf("\n  deploy:"));
-  for (const token of ["github.ref == 'refs/heads/develop'", "commits/$GITHUB_SHA/pulls", "merge_commit_sha===process.env.GITHUB_SHA", "actions/runs/$GITHUB_RUN_ID/jobs", "Lint, typecheck & build", "Tests", "workflowPath", "download-digest", "g01-merge-", "bootstrap-selection:", "bootstrap-failure.", "github.run_attempt", "bootstrap-selection.$ATTEMPT_ID.json", "artifact-digest", "selection_sha256"]) assert.ok(post.includes(token), `missing lifecycle proof: ${token}`);
+  for (const token of ["github.ref == 'refs/heads/develop'", "commits/$GITHUB_SHA/pulls", "merge_commit_sha===process.env.GITHUB_SHA", "actions/runs/$GITHUB_RUN_ID/jobs", "Lint, typecheck & build", "Tests", "workflowPath", "download-digest", "g01-merge-", "bootstrap-selection:", "bootstrap-failure.", "github.run_attempt", "bootstrap-selection.$ATTEMPT_ID.json", "artifact-digest", "selection_sha256", "recoveryLineage", "always() &&", "fallback-prs.json", "fallback-artifacts.json"]) assert.ok(post.includes(token), `missing lifecycle proof: ${token}`);
+  for (const token of ["id: postmerge_checkout", "steps.postmerge_checkout.outcome == 'failure'", "id: selection_checkout", "steps.selection_checkout.outcome == 'failure'", "test -f pr.json || gh api", "hashFiles('bootstrap-failure.*.json')"]) assert.ok(post.includes(token), `missing early-failure fallback proof: ${token}`);
   assert.doesNotMatch(workflow, /workflow_dispatch|bootstrap_phase|bootstrap_f7_artifact_id|find \. -maxdepth 1 -name/);
   assert.doesNotMatch(post, /ghcr\.io|docker push|packages:\s*write/);
   const deploy = workflow.slice(workflow.indexOf("  deploy:")); assert.match(deploy, /needs: \[check, test\]/);

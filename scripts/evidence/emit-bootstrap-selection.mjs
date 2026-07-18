@@ -129,7 +129,7 @@ function normalizeReviews(authority, sourceSha, f7CreatedAt) {
     const previous = latestByActor.get(review.user.id);
     if (!previous || instant(previous.submitted_at, "previous review submitted_at") < instant(review.submitted_at, "review submitted_at")) latestByActor.set(review.user.id, review);
   }
-  return ROLE_MARKERS.map(([role, verdict, marker]) => {
+  const normalized = ROLE_MARKERS.map(([role, verdict, marker]) => {
     const matches = [...latestByActor.values()].filter((review) => review.state === "APPROVED"
       && review.commit_id === sourceSha
       && review.user?.id === authorized.get(role)
@@ -144,6 +144,11 @@ function normalizeReviews(authority, sourceSha, f7CreatedAt) {
     assert.ok(instant(f7CreatedAt, "F7.createdAt") < instant(review.submitted_at, `${role} review submitted_at`), `${role} review must follow F7`);
     return { role, verdict, reviewId: review.id, nodeId: review.node_id, actorId: review.user.id, commitId: review.commit_id, submittedAt: review.submitted_at };
   });
+  const byRole = new Map(normalized.map((review) => [review.role, review]));
+  const verifierAt = instant(byRole.get("verifier").submittedAt, "verifier review submitted_at");
+  assert.ok(instant(byRole.get("code-reviewer").submittedAt, "code-reviewer review submitted_at") < verifierAt, "verifier approval must follow code-reviewer approval");
+  assert.ok(instant(byRole.get("architect").submittedAt, "architect review submitted_at") < verifierAt, "verifier approval must follow architect clearance");
+  return normalized;
 }
 
 export function buildF9Envelope(f7, authority) {
@@ -246,12 +251,46 @@ function bindAncestorArtifacts(ancestorFailures, artifacts, repository, observed
 }
 
 export function validateBootstrapFailure(failure) {
-  exactKeys(failure, ["schemaVersion", "release", "status", "attemptId", "evidenceId", "failedPhase", "baseSha", "parentSha", "terminalDevelopSha", "headSha", "runId", "runAttempt", "createdAt", "reason"], "bootstrap failure");
+  exactKeys(failure, ["schemaVersion", "release", "status", "attemptId", "evidenceId", "failedPhase", "baseSha", "parentSha", "terminalDevelopSha", "headSha", "runId", "runAttempt", "createdAt", "reason", "recoveryLineage"], "bootstrap failure");
   assert.equal(failure.schemaVersion, 1); assert.equal(failure.release, "2.5.0"); assert.equal(failure.status, "G01_LANDED_UNSEALED");
   assert.match(failure.attemptId, /^g01-(?:a|recovery-a)[0-9]{2,}$/); assert.equal(failure.evidenceId, `bootstrap-failure.${failure.attemptId}.json`); assert.ok(["F11", "SELECTION"].includes(failure.failedPhase));
   for (const key of ["baseSha", "parentSha", "terminalDevelopSha", "headSha"]) assert.match(failure[key], SHA); assert.equal(failure.baseSha, failure.parentSha);
   assert.ok(Number.isInteger(failure.runId) && failure.runId > 0); assert.ok(Number.isInteger(failure.runAttempt) && failure.runAttempt > 0); instant(failure.createdAt, "bootstrap failure createdAt"); assert.ok(typeof failure.reason === "string" && failure.reason.length > 0);
+  assert.ok(Array.isArray(failure.recoveryLineage), "bootstrap failure must carry authenticated recovery lineage");
+  failure.recoveryLineage.forEach(validateRecoveryLineageEntry);
   return failure;
+}
+
+function validateRecoveryLineageEntry(entry, index) {
+  exactKeys(entry, ["attemptId", "branch", "baseSha", "parentSha", "headSha", "authorityDigest", "planSpecPairDigest", "firstAuthoritativeId", "priorFailureId", "priorFailureDigest"], `recoveryLineage[${index}]`);
+  const suffix = entry.attemptId.match(/^g01-recovery-a([0-9]{2,})$/)?.[1]; assert.ok(suffix && Number(suffix) >= 2);
+  assert.equal(entry.branch, `feature/2.5.0-g01-postmerge-bootstrap-a${suffix}`);
+  for (const key of ["baseSha", "parentSha", "headSha"]) assert.match(entry[key], SHA);
+  for (const key of ["authorityDigest", "planSpecPairDigest", "priorFailureDigest"]) assert.match(entry[key], DIGEST);
+  assert.equal(entry.parentSha, entry.baseSha); assert.equal(entry.priorFailureId.startsWith("bootstrap-failure."), true);
+}
+
+export function selectCanonicalFailure(records, ordinal, terminalDevelopSha) {
+  assert.ok(Array.isArray(records) && records.length > 0, "historical failure records are required");
+  const expected = Number(ordinal);
+  const authenticated = records.map((record) => {
+    exactKeys(record, ["failure", "artifactId", "artifactName", "artifactCreatedAt", "archiveDigest", "payloadDigest", "run"], "failure record");
+    const failure = validateBootstrapFailure(record.failure);
+    assert.equal(Number(failure.attemptId.match(/[0-9]+$/)[0]), expected, "failure ordinal mismatch");
+    assert.equal(failure.terminalDevelopSha, terminalDevelopSha, "failure terminal SHA mismatch");
+    assert.match(record.archiveDigest, DIGEST); assert.match(record.payloadDigest, DIGEST);
+    assert.ok(Number.isInteger(record.artifactId) && record.artifactId > 0);
+    const artifactCreatedAt = instant(record.artifactCreatedAt, "failure artifact created_at"); assert.ok(instant(failure.createdAt, "failure createdAt") <= artifactCreatedAt, "failure artifact cannot predate its payload");
+    assert.equal(record.run.id, failure.runId); assert.equal(record.run.run_attempt, failure.runAttempt);
+    assert.equal(record.run.head_sha, terminalDevelopSha); assert.equal(record.run.event, "push"); assert.equal(record.run.status, "completed"); assert.notEqual(record.run.conclusion, "success");
+    assert.equal(record.artifactName, `g01-bootstrap-failure-${failure.attemptId}-run-${failure.runId}-attempt-${failure.runAttempt}-head-${terminalDevelopSha}-phase-${failure.failedPhase.toLowerCase()}`);
+    return record;
+  });
+  authenticated.sort((a, b) => b.failure.runAttempt - a.failure.runAttempt || b.failure.runId - a.failure.runId || instant(b.failure.createdAt, "failure createdAt") - instant(a.failure.createdAt, "failure createdAt") || instant(b.artifactCreatedAt, "artifact createdAt") - instant(a.artifactCreatedAt, "artifact createdAt") || b.artifactId - a.artifactId);
+  const winner = authenticated[0];
+  const ties = authenticated.filter((record) => record.failure.runAttempt === winner.failure.runAttempt && record.failure.runId === winner.failure.runId && record.failure.createdAt === winner.failure.createdAt);
+  assert.ok(ties.every((record) => record.payloadDigest === winner.payloadDigest && record.archiveDigest === winner.archiveDigest), "conflicting terminal artifacts for the canonical failed rerun");
+  return winner;
 }
 
 function artifactBinding(authority) {

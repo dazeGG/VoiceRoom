@@ -33,7 +33,7 @@ test("catalog mutations fail closed", () => {
 });
 
 test("landed-unsealed failure payload is exact, rerun-bound and rejects relabel/base/status mutations", () => {
-  const failure = { schemaVersion: 1, release: "2.5.0", status: "G01_LANDED_UNSEALED", attemptId: "g01-a08", evidenceId: "bootstrap-failure.g01-a08.json", failedPhase: "F11", baseSha: "9".repeat(40), parentSha: "9".repeat(40), terminalDevelopSha: "b".repeat(40), headSha: "a".repeat(40), runId: 40, runAttempt: 2, createdAt: "2026-07-18T00:00:00.000Z", reason: "failed closed" };
+  const failure = { schemaVersion: 1, release: "2.5.0", status: "G01_LANDED_UNSEALED", attemptId: "g01-a08", evidenceId: "bootstrap-failure.g01-a08.json", failedPhase: "F11", baseSha: "9".repeat(40), parentSha: "9".repeat(40), terminalDevelopSha: "b".repeat(40), headSha: "a".repeat(40), runId: 40, runAttempt: 2, createdAt: "2026-07-18T00:00:00.000Z", reason: "failed closed", recoveryLineage: [] };
   validateBootstrapFailure(failure);
   for (const mutate of [(x) => { x.evidenceId = "bootstrap-failure.g01-a09.json"; }, (x) => { x.parentSha = "8".repeat(40); }, (x) => { x.status = "SELECTED_GREEN"; }, (x) => { x.runAttempt = 0; }, (x) => { x.failedPhase = "F9"; }]) { const copy = structuredClone(failure); mutate(copy); assert.throws(() => validateBootstrapFailure(copy)); }
 });
