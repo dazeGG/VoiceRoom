@@ -9,14 +9,23 @@ export function uniqueLogin(prefix = 'e2e'): string {
 
 export const PASSWORD = 'e2e-password-123';
 
+function authDialog(page: Page, name: 'Вход' | 'Создать аккаунт') {
+  return page.getByRole('dialog', { name });
+}
+
 // Register a fresh account through the UI. On success the app redirects to
 // the lobby ("/"), where the create-room button is visible.
 export async function registerViaUi(page: Page, login: string): Promise<void> {
   await page.goto('/register');
-  await page.locator('#loginInput').fill(login);
-  await page.locator('#passwordInput').fill(PASSWORD);
-  await page.locator('#passwordConfirmInput').fill(PASSWORD);
-  await page.getByRole('button', { name: 'Создать аккаунт' }).click();
+  const dialog = authDialog(page, 'Создать аккаунт');
+  await expect(dialog).toBeVisible();
+  await dialog.getByLabel('Логин').fill(login);
+  await dialog.getByLabel('Пароль', { exact: true }).fill(PASSWORD);
+  await dialog.getByLabel('Повторите пароль').fill(PASSWORD);
+  await Promise.all([
+    page.waitForURL((url) => url.pathname === '/' && url.search === ''),
+    dialog.getByRole('button', { name: 'Создать аккаунт', exact: true }).click()
+  ]);
   // Lobby create button confirms we landed authenticated.
   await expect(page.getByRole('button', { name: 'Создать комнату' })).toBeVisible({ timeout: 15_000 });
 }
@@ -25,29 +34,38 @@ export async function registerViaUi(page: Page, login: string): Promise<void> {
 // existing account.
 export async function loginViaUi(page: Page, login: string): Promise<void> {
   await page.goto('/login');
-  await page.locator('#loginInput').fill(login);
-  await page.locator('#passwordInput').fill(PASSWORD);
-  await page.getByRole('button', { name: 'Войти', exact: true }).click();
+  const dialog = authDialog(page, 'Вход');
+  await expect(dialog).toBeVisible();
+  await dialog.getByLabel('Логин').fill(login);
+  await dialog.getByLabel('Пароль', { exact: true }).fill(PASSWORD);
+  await Promise.all([
+    page.waitForURL((url) => url.pathname === '/' && url.search === ''),
+    dialog.getByRole('button', { name: 'Войти', exact: true }).click()
+  ]);
   await expect(page.getByRole('button', { name: 'Создать комнату' })).toBeVisible({ timeout: 15_000 });
 }
 
 // Create a permanent ("Постоянная") room from the lobby via the create dialog.
-// Returns the roomId read off the resulting room card.
+// Creation now enters the room immediately, so return to the lobby before
+// handing control back to callers that assert against the room card.
 export async function createPermanentRoom(page: Page, name: string): Promise<string> {
   await page.getByRole('button', { name: 'Создать комнату' }).click();
   const dialog = page.getByRole('dialog', { name: 'Новая комната' });
   await expect(dialog).toBeVisible();
-  // "Постоянная" tab is the default, but click it to be explicit.
-  await dialog.getByRole('tab', { name: 'Постоянная' }).click();
-  await dialog.locator('.lr-dialog-input').fill(name);
-  const createdResponse = page.waitForResponse(
-    (response) => response.url().endsWith('/api/rooms') && response.request().method() === 'POST' && response.ok()
-  );
-  await dialog.getByRole('button', { name: 'Создать комнату' }).click();
-  const created = (await (await createdResponse).json()) as { roomId?: string };
+  await expect(dialog.getByRole('tab', { name: 'Постоянная' })).toHaveAttribute('aria-selected', 'true');
+  await dialog.getByPlaceholder('Название комнаты').fill(name);
+  const [createdResponse] = await Promise.all([
+    page.waitForResponse(
+      (response) => response.url().endsWith('/api/rooms') && response.request().method() === 'POST'
+    ),
+    dialog.getByRole('button', { name: 'Создать комнату' }).click()
+  ]);
+  const created = (await createdResponse.json()) as { roomId?: string; error?: string };
+  expect(createdResponse.ok(), created.error || `Room creation failed with ${createdResponse.status()}`).toBe(true);
   await expect(dialog).toBeHidden({ timeout: 15_000 });
 
-  // The new room appears as a card in the lobby grid.
+  await page.goto('/');
+  await expect(page.getByRole('button', { name: 'Создать комнату' })).toBeVisible({ timeout: 15_000 });
   const card = page.locator('.lv-card', { hasText: name }).first();
   await expect(card).toBeVisible({ timeout: 15_000 });
   const roomId = created.roomId?.trim() || '';
@@ -61,11 +79,11 @@ export async function createPermanentRoom(page: Page, name: string): Promise<str
 export async function enterRoom(page: Page, roomId: string): Promise<void> {
   await page.goto(`/r/${roomId}`);
   await expect(page.locator('body')).toHaveAttribute('data-screen', 'room', { timeout: 20_000 });
-  await expect(page.locator('#roomTitle')).toBeVisible({ timeout: 20_000 });
+  await expect(roomHeading(page)).toBeVisible({ timeout: 20_000 });
 }
 
 export function roomHeading(page: Page) {
-  return page.locator('#roomTitle');
+  return page.locator('.room-heading-title');
 }
 
 export function roomHeadingMenuButton(page: Page) {
@@ -79,11 +97,14 @@ export async function openRoomHeadingMenu(page: Page): Promise<void> {
 // Owner-only settings action sits beside the shared room menu so preview and
 // active-room menus keep an identical action set.
 export function roomSettingsButton(page: Page) {
-  return page.getByRole('button', { name: 'Настройки', exact: true });
+  return page.getByRole('menuitem', { name: 'Настройки комнаты', exact: true });
 }
 
 export async function openRoomSettings(page: Page): Promise<void> {
-  await roomSettingsButton(page).click();
+  await openRoomHeadingMenu(page);
+  const button = roomSettingsButton(page);
+  await expect(button).toBeVisible();
+  await button.click();
 }
 
 export function settingsDialog(page: Page) {

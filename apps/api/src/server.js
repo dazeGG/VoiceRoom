@@ -1106,7 +1106,7 @@ async function handleMe(req, res) {
   sendJson(res, 200, { ok: true, user: session ? publicUser(session.user) : null });
 }
 
-async function handleUpdateProfile(req, res) {
+async function handleUpdateProfile(req, res, request) {
   const session = await resolveSessionUser(req);
   if (!session) {
     sendJson(res, 401, { ok: false, error: 'Требуется вход' });
@@ -1121,6 +1121,8 @@ async function handleUpdateProfile(req, res) {
     return;
   }
 
+  refreshActiveUserProfile(user);
+  await broadcastUserProfileToFriends(user, request);
   sendJson(res, 200, { ok: true, user: publicUser(user) });
 }
 
@@ -1182,13 +1184,15 @@ async function removeAvatarBestEffort(key, request) {
   }
 }
 
-function refreshActiveUserAvatar(user) {
+function refreshActiveUserProfile(user) {
   if (!user?.id) return;
   const avatarUrl = user.avatarKey ? `/api/avatars/${encodeURIComponent(user.avatarKey)}` : null;
   for (const [roomId, room] of presenceRooms) {
     for (const peer of room.peers.values()) {
       if (peer.accountUserId !== user.id) continue;
+      peer.name = sessionDisplayName(user);
       peer.avatarAccent = user.avatarAccent || null;
+      peer.avatarColorKey = user.avatarColorKey || peer.avatarColorKey;
       peer.avatarUrl = avatarUrl;
       const message = { type: 'peer-updated', peer: publicPeer(peer) };
       broadcast(room, message);
@@ -1244,7 +1248,7 @@ async function handleUploadUserAvatar(req, res, request) {
   if (result.previousAvatarKey !== avatarKey) {
     await removeAvatarBestEffort(result.previousAvatarKey, request);
   }
-  refreshActiveUserAvatar(result.user);
+  refreshActiveUserProfile(result.user);
   await broadcastUserProfileToFriends(result.user, request);
   sendJson(res, 200, { ok: true, user: publicUser(result.user) });
 }
@@ -1261,7 +1265,7 @@ async function handleDeleteUserAvatar(req, res, request) {
     return;
   }
   await removeAvatarBestEffort(result.previousAvatarKey, request);
-  refreshActiveUserAvatar(result.user);
+  refreshActiveUserProfile(result.user);
   await broadcastUserProfileToFriends(result.user, request);
   sendJson(res, 200, { ok: true, user: publicUser(result.user) });
 }
@@ -1588,7 +1592,7 @@ async function handleRoomChatPost(req, res, roomId) {
   const requestedPeerId = normalizePeerId(body.peerId);
   const sessionToken = normalizeSessionToken(body.sessionToken);
   const sessionUser = await resolveOptionalSessionUser(req);
-  const name = sessionDisplayName(sessionUser) || cleanName(body.name);
+  const requestedName = cleanName(body.name);
   const text = cleanChatText(body.text);
 
   if (!room) {
@@ -1638,6 +1642,17 @@ async function handleRoomChatPost(req, res, roomId) {
     return;
   }
 
+  let authorUser = sessionUser;
+  if (!authorUser && activePeer?.accountUserId) {
+    try {
+      authorUser = await getUserStore().getUserById(activePeer.accountUserId);
+    } catch (error) {
+      console.error('Failed to resolve room chat author profile:', error);
+    }
+  }
+
+  const name = sessionDisplayName(authorUser) || activePeer?.name || requestedName;
+  const authorUserId = authorUser?.id || activePeer?.accountUserId || null;
   const now = Date.now();
   const message = await getRoomStore().appendMessage(roomId, {
     createdAt: now,
@@ -1647,7 +1662,7 @@ async function handleRoomChatPost(req, res, roomId) {
     name,
     peerId,
     text,
-    authorUserId: sessionUser ? sessionUser.id : (activePeer?.accountUserId || null)
+    authorUserId
   });
 
   if (!message) {
@@ -1657,10 +1672,11 @@ async function handleRoomChatPost(req, res, roomId) {
 
   const publicMessage = {
     ...message,
-    avatarAccent: sessionUser?.avatarAccent || activePeer?.avatarAccent || null,
+    name,
+    avatarAccent: authorUser?.avatarAccent || activePeer?.avatarAccent || null,
     avatarColorKey,
-    avatarUrl: sessionUser?.avatarKey
-      ? `/api/avatars/${encodeURIComponent(sessionUser.avatarKey)}`
+    avatarUrl: authorUser?.avatarKey
+      ? `/api/avatars/${encodeURIComponent(authorUser.avatarKey)}`
       : activePeer?.avatarUrl || null
   };
   roomRuntime?.broadcastChatMessage(roomId, publicMessage);

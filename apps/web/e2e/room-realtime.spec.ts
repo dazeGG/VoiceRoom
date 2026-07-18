@@ -36,7 +36,7 @@ test('a rename by the owner propagates live to another participant without reloa
   await openRoomSettings(ownerPage);
   const dialog = settingsDialog(ownerPage);
   await expect(dialog).toBeVisible();
-  await dialog.locator('input.dialog-input').fill(newName);
+  await dialog.getByPlaceholder('Название комнаты').fill(newName);
   await dialog.getByRole('button', { name: 'Сохранить' }).click();
   await expect(dialog).toBeHidden({ timeout: 15_000 });
   await expect(roomHeading(ownerPage)).toHaveText(newName, { timeout: 15_000 });

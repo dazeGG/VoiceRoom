@@ -309,7 +309,7 @@ test('chat API rejects anonymous room-link posting without active presence', asy
   }
 });
 
-test('authenticated room-link chat reuses stable account identity without joining voice', async (t) => {
+test('account chat uses the current profile and refreshes active room peers after rename', async (t) => {
   const { dir, socketPath } = getSocketPath();
   const { cleanup, databaseUrl } = await createTestDatabase(t);
   const logs = { stdout: '', stderr: '' };
@@ -336,6 +336,19 @@ test('authenticated room-link chat reuses stable account identity without joinin
     const created = await postJson(socketPath, '/api/rooms', { isStatic: false });
     assert.equal(created.status, 201);
 
+    const voice = openWs(socketPath, { cookie: sessionCookie });
+    await voice.ready;
+    const joined = await joinVoiceRoom(voice, {
+      roomId: created.body.roomId,
+      peerId: 'preview-voice-user',
+      sessionToken: TOKEN,
+      name: 'Ignored client name'
+    });
+    assert.equal(
+      joined.payload.peers.find((peer) => peer.id === 'preview-voice-user')?.name,
+      'Preview User'
+    );
+
     const first = await postJson(socketPath, `/api/rooms/${created.body.roomId}/chat`, {
       name: 'Spoofed Name',
       text: 'Первое сообщение из превью'
@@ -353,6 +366,52 @@ test('authenticated room-link chat reuses stable account identity without joinin
     assert.equal(second.body.message.peerId, accountPeerId);
     assert.equal(second.body.message.name, 'Preview User');
     assert.equal(second.body.message.avatarColorKey, first.body.message.avatarColorKey);
+
+    // An account-backed active peer remains authoritative even if its HTTP
+    // session cookie is absent; the request body cannot spoof the live name.
+    const beforeActivePeerPost = voice.frames.length;
+    const activePeerPost = await postJson(socketPath, `/api/rooms/${created.body.roomId}/chat`, {
+      name: 'Spoofed Active Name',
+      peerId: 'preview-voice-user',
+      sessionToken: TOKEN,
+      text: 'Сообщение из активной комнаты без cookie'
+    });
+    assert.equal(activePeerPost.status, 201);
+    assert.equal(activePeerPost.body.message.name, 'Preview User');
+    assert.equal(activePeerPost.body.message.authorUserId, registered.body.user.id);
+    const activePeerBroadcast = await waitForWsType(
+      voice.frames,
+      'room.chat.message',
+      (frame) => frame.payload?.message?.id === activePeerPost.body.message.id,
+      5000,
+      beforeActivePeerPost
+    );
+    assert.equal(activePeerBroadcast.payload.message.name, 'Preview User');
+
+    const beforeRename = voice.frames.length;
+    const renamed = await postJson(socketPath, '/api/auth/profile', {
+      displayName: 'Current Profile'
+    }, { cookie: sessionCookie });
+    assert.equal(renamed.status, 200);
+
+    const peerUpdated = await waitForWsType(
+      voice.frames,
+      'room.peer.updated',
+      (frame) => frame.payload?.peer?.id === 'preview-voice-user',
+      5000,
+      beforeRename
+    );
+    assert.equal(peerUpdated.payload.peer.name, 'Current Profile');
+
+    const history = await getJson(socketPath, `/api/rooms/${created.body.roomId}/chat`);
+    assert.equal(history.status, 200);
+    assert.deepEqual(history.body.messages.map((message) => message.name), [
+      'Current Profile',
+      'Current Profile',
+      'Current Profile'
+    ]);
+
+    voice.ws.close();
   } catch (error) {
     if (logs.stderr.trim()) {
       console.error('Server stderr:\n', logs.stderr.trimEnd());

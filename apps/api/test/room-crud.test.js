@@ -10,7 +10,7 @@ const os = require('node:os');
 const path = require('node:path');
 
 const { createApiApp, createApiServer } = require('../src/server');
-const { openWs, joinVoiceRoom, subscribeRoomPreview, waitForWsType } = require('./ws-harness');
+const { openWs, sendWs, joinVoiceRoom, subscribeRoomPreview, waitForWsType } = require('./ws-harness');
 
 const OWNER_ID = 'user-owner';
 const OWNER_TOKEN = 'session-owner';
@@ -406,9 +406,11 @@ test('authenticated room presence exposes only minimal account user id on peers'
   assert.equal('login' in ownerAsPeer, false);
 });
 
-test('room join refreshes avatar identity changed after the websocket opened', async (t) => {
+test('room join refreshes profile identity changed after the websocket opened', async (t) => {
   const owner = {
     id: OWNER_ID,
+    displayName: 'Original Profile',
+    login: 'owner',
     avatarAccent: null,
     avatarColorKey: 'blurple',
     avatarKey: null
@@ -424,23 +426,90 @@ test('room join refreshes avatar identity changed after the websocket opened', a
   );
   const presence = openWs(socketPath, { cookie: `vr_session=${OWNER_TOKEN}` });
   await presence.ready;
-
-  owner.avatarAccent = '#49303f';
-  owner.avatarKey = 'av_user-owner_deadbeef.webp';
-  await joinVoiceRoom(presence, {
+  const initialSnapshot = await joinVoiceRoom(presence, {
     roomId: 'room1',
     peerId: 'peer0001',
     sessionToken: OWNER_PEER_TOKEN,
-    name: 'Owner'
+    name: 'Ignored initial client name'
   });
-  teardownSocketServer(t, { server, dir, sessions: [presence] });
+  assert.equal(
+    initialSnapshot.payload.peers.find((entry) => entry.id === 'peer0001')?.name,
+    'Original Profile'
+  );
 
-  const peer = presence.frames
-    .find((frame) => frame.type === 'room.snapshot')
-    ?.payload?.peers?.find((entry) => entry.id === 'peer0001');
+  const observer = openWs(socketPath);
+  await observer.ready;
+  await joinVoiceRoom(observer, {
+    roomId: 'room1',
+    peerId: 'peer0002',
+    sessionToken: GUEST_PEER_TOKEN,
+    name: 'Observer'
+  });
+
+  const replacement = openWs(socketPath, { cookie: `vr_session=${OWNER_TOKEN}` });
+  await replacement.ready;
+
+  owner.displayName = 'Current Profile';
+  owner.avatarAccent = '#49303f';
+  owner.avatarKey = 'av_user-owner_deadbeef.webp';
+  const observerSince = observer.frames.length;
+  const replacementSnapshot = await joinVoiceRoom(replacement, {
+    roomId: 'room1',
+    peerId: 'peer0001',
+    sessionToken: OWNER_PEER_TOKEN,
+    name: 'Ignored client name'
+  });
+  const profileUpdate = await waitForWsType(
+    observer.frames,
+    'room.peer.updated',
+    (frame) => frame.payload?.peer?.id === 'peer0001',
+    5000,
+    observerSince
+  );
+  assert.equal(profileUpdate.payload.peer.name, 'Current Profile');
+  assert.equal(profileUpdate.payload.peer.avatarUrl, '/api/avatars/av_user-owner_deadbeef.webp');
+
+  const peer = replacementSnapshot.payload.peers.find((entry) => entry.id === 'peer0001');
+  assert.equal(peer.name, 'Current Profile');
   assert.equal(peer.avatarAccent, '#49303f');
   assert.equal(peer.avatarColorKey, 'blurple');
   assert.equal(peer.avatarUrl, '/api/avatars/av_user-owner_deadbeef.webp');
+
+  const spoofSince = observer.frames.length;
+  sendWs(replacement.ws, 'room.peer.update', {
+    roomId: 'room1',
+    peerId: 'peer0001',
+    sessionToken: OWNER_PEER_TOKEN,
+    patch: { muted: true, name: 'Spoofed account name' }
+  });
+  const spoofUpdate = await waitForWsType(
+    observer.frames,
+    'room.peer.updated',
+    (frame) => frame.payload?.peer?.id === 'peer0001',
+    5000,
+    spoofSince
+  );
+  assert.equal(spoofUpdate.payload.peer.muted, true);
+  assert.equal(spoofUpdate.payload.peer.name, 'Current Profile');
+
+  const guestReplacement = openWs(socketPath);
+  await guestReplacement.ready;
+  const guestSnapshot = await joinVoiceRoom(guestReplacement, {
+    roomId: 'room1',
+    peerId: 'peer0002',
+    sessionToken: GUEST_PEER_TOKEN,
+    name: 'Attempted guest reconnect rename'
+  });
+  assert.equal(
+    guestSnapshot.payload.peers.find((entry) => entry.id === 'peer0002')?.name,
+    'Observer'
+  );
+
+  teardownSocketServer(t, {
+    server,
+    dir,
+    sessions: [presence, observer, replacement, guestReplacement]
+  });
 });
 
 test('an active peer receives room.updated over the voice stream', async (t) => {

@@ -1750,12 +1750,19 @@ test('room preview header drops the live badge — the stage already shows who i
   assert.doesNotMatch(css, /lobby-roomview-state/);
 });
 
-test('room chat re-stamps message avatars when the room broadcasts a peer update', () => {
+test('room chats re-stamp the current profile when the room broadcasts a peer update', () => {
   const chat = read('src/lib/features/room/components/RoomChat.svelte');
+  const previewChat = read('src/lib/features/home/components/lobby/RoomPreviewChat.svelte');
+  const previewCss = read('src/lib/features/home/styles/friends.css');
 
   assert.match(chat, /event\.type === 'room\.peer\.updated'/);
   assert.match(chat, /authorUserId === peer\.accountUserId/);
+  assert.match(chat, /name: peer\.name \|\| message\.name/);
   assert.match(chat, /avatarUrl: peer\.avatarUrl/);
+  assert.match(previewChat, /event\.type === 'room\.peer\.updated'/);
+  assert.match(previewChat, /authorUserId === peer\.accountUserId/);
+  assert.match(previewChat, /name: peer\.name \|\| message\.name/);
+  assert.match(previewCss, /\.lobby-preview-stage \.stage-strip\s*\{\s*grid-template-rows: minmax\(0, 1fr\)/);
 });
 
 test('room chat date bubbles stay pinned per day section and replace each other while scrolling', () => {
@@ -1790,6 +1797,7 @@ test('settings keep profile identity and sound columns free of decorative card s
   assert.doesNotMatch(css, /\.settings-sound-device\s*\{[^}]*(?:background|border|padding):/);
   assert.ok(notificationListRule?.groups?.body);
   assert.doesNotMatch(notificationListRule.groups.body, /(?:background|border|padding)\s*:/);
+  assert.doesNotMatch(notificationListRule.groups.body, /max-height|overflow-y/);
 });
 
 test('settings sound columns cannot widen the modal content area', () => {
