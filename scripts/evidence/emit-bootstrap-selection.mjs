@@ -27,7 +27,7 @@ function validateAncestorFailures(value) {
   for (const [index, ancestor] of value.entries()) {
     exactKeys(ancestor, ["attemptId", "evidenceId", "digest", "terminalDevelopSha", "createdAt"], `ancestorFailures[${index}]`);
     assert.match(ancestor.attemptId, /^g01-(?:a|recovery-a)[0-9]{2,}$/);
-    assert.match(ancestor.evidenceId, /^bootstrap-failure\.g01-(?:a|recovery-a)[0-9]{2,}\.json$/);
+    assert.equal(ancestor.evidenceId, `bootstrap-failure.${ancestor.attemptId}.json`, "ancestor evidenceId must bind its attemptId");
     assert.match(ancestor.digest, DIGEST);
     assert.match(ancestor.terminalDevelopSha, SHA);
     const timestamp = Date.parse(ancestor.createdAt);
@@ -40,10 +40,13 @@ function validateAncestorFailures(value) {
 }
 
 export function buildSelection(metadata, f7, f9, f11) {
-  exactKeys(metadata, ["attemptId", "terminalKind", "ancestorFailures"], "selection metadata");
+  exactKeys(metadata, ["attemptId", "terminalKind", "createdAt", "ancestorFailures"], "selection metadata");
   assert.ok(["direct-canonical", "landed-recovery"].includes(metadata.terminalKind), "invalid terminalKind");
   const ancestors = validateAncestorFailures(metadata.ancestorFailures);
   const { terminalDevelopSha, lineageSuffix } = validateEnvelopeChain(f7, f9, f11);
+  const selectionTime = Date.parse(metadata.createdAt);
+  assert.ok(Number.isFinite(selectionTime) && new Date(selectionTime).toISOString() === metadata.createdAt, "selection createdAt must be canonical ISO-8601 UTC");
+  assert.ok(Date.parse(f11.createdAt) < selectionTime, "selection must be emitted strictly after F11");
   if (metadata.terminalKind === "direct-canonical") {
     assert.match(metadata.attemptId, /^g01-a[0-9]{2,}$/);
     assert.equal(lineageSuffix, "g01.json");
@@ -68,6 +71,7 @@ export function buildSelection(metadata, f7, f9, f11) {
     f11Id: f11.evidenceId,
     f11Digest: f11.digest,
     terminalDevelopSha,
+    createdAt: metadata.createdAt,
     remoteDeleted: true,
     status: "SELECTED_GREEN",
     ancestorFailures: ancestors,

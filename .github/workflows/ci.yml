@@ -5,6 +5,24 @@ on:
     branches: [develop, main]
   pull_request:
     branches: [develop, main]
+  workflow_dispatch:
+    inputs:
+      bootstrap_metadata_b64:
+        description: Base64-encoded post-F11 bootstrap selection metadata JSON
+        required: false
+        type: string
+      bootstrap_f7_b64:
+        description: Base64-encoded immutable G01 F7 envelope JSON
+        required: false
+        type: string
+      bootstrap_f9_b64:
+        description: Base64-encoded immutable G01 F9 envelope JSON
+        required: false
+        type: string
+      bootstrap_f11_b64:
+        description: Base64-encoded immutable G01 F11 envelope JSON
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -109,13 +127,54 @@ jobs:
           node scripts/evidence/validate-envelope.mjs --fixture bootstrap
           scripts/ci/run-actionlint.sh .github/workflows/ci.yml
           scripts/ci/run-oras.sh version
-      - name: Export candidate-only G01 evidence bundle
-        run: node scripts/evidence/bootstrap-export.mjs docs/releases/2.5.0/evidence/bootstrap-attempts.json docs/releases/2.5.0/evidence/bootstrap-landed-recoveries.json > ci-bundle.g01.json
-      - name: Persist G01 F7 candidate evidence
+      - name: Export candidate-only G01 report and F7 envelope
+        run: |
+          node scripts/evidence/bootstrap-export.mjs docs/releases/2.5.0/evidence/bootstrap-attempts.json docs/releases/2.5.0/evidence/bootstrap-landed-recoveries.json > candidate-registry-report.g01.json
+          node scripts/evidence/bootstrap-export.mjs --f7 --source-sha "$GITHUB_SHA" --created-at "$(date -u +%Y-%m-%dT%H:%M:%S.000Z)" docs/releases/2.5.0/evidence/bootstrap-attempts.json docs/releases/2.5.0/evidence/bootstrap-landed-recoveries.json > ci-bundle.g01.json
+      - name: Persist G01 F7 evidence
         uses: actions/upload-artifact@v4
         with:
           name: g01-candidate-evidence
-          path: ci-bundle.g01.json
+          path: |
+            ci-bundle.g01.json
+            candidate-registry-report.g01.json
+          if-no-files-found: error
+          retention-days: 90
+
+  bootstrap-selection:
+    name: G01 post-F11 selection handoff
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - name: Decode and validate immutable lifecycle envelopes
+        env:
+          METADATA_B64: ${{ inputs.bootstrap_metadata_b64 }}
+          F7_B64: ${{ inputs.bootstrap_f7_b64 }}
+          F9_B64: ${{ inputs.bootstrap_f9_b64 }}
+          F11_B64: ${{ inputs.bootstrap_f11_b64 }}
+        run: |
+          set -euo pipefail
+          for name in METADATA_B64 F7_B64 F9_B64 F11_B64; do
+            test -n "${!name}" || { echo "missing $name" >&2; exit 1; }
+          done
+          printf '%s' "$METADATA_B64" | base64 --decode > bootstrap-metadata.json
+          printf '%s' "$F7_B64" | base64 --decode > ci-bundle.g01.json
+          printf '%s' "$F9_B64" | base64 --decode > approval-envelope.g01.json
+          printf '%s' "$F11_B64" | base64 --decode > merge-envelope.g01.json
+          attempt_id="$(node -e 'const fs=require("node:fs"); const x=JSON.parse(fs.readFileSync("bootstrap-metadata.json")); if(!/^g01-(a|recovery-a)[0-9]{2,}$/.test(x.attemptId)) process.exit(1); process.stdout.write(x.attemptId)')"
+          node scripts/evidence/emit-bootstrap-selection.mjs --metadata bootstrap-metadata.json --f7 ci-bundle.g01.json --f9 approval-envelope.g01.json --f11 merge-envelope.g01.json > "bootstrap-selection.${attempt_id}.json"
+          printf '%s' "bootstrap-selection.${attempt_id}.json" > bootstrap-selection-path.txt
+      - name: Persist post-F11 bootstrap selection
+        uses: actions/upload-artifact@v4
+        with:
+          name: g01-bootstrap-selection
+          path: |
+            bootstrap-selection.g01-*.json
+            bootstrap-selection-path.txt
           if-no-files-found: error
           retention-days: 90
 

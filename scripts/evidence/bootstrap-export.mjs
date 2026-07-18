@@ -4,6 +4,7 @@ import path from "node:path";
 import crypto from "node:crypto";
 import assert from "node:assert/strict";
 import { pathToFileURL } from "node:url";
+import { validateEnvelope } from "./validate-envelope.mjs";
 
 const SHA = /^[0-9a-f]{40}$/;
 const DIGEST = /^sha256:[0-9a-f]{64}$/;
@@ -89,14 +90,45 @@ export function validateRegistry(registry, filename) {
   return registry;
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const files = process.argv.slice(2);
-  if (files.length === 0) throw new Error("usage: bootstrap-export.mjs REGISTRY.json [REGISTRY.json]");
-  const exports = files.map((file) => {
-    const bytes = fs.readFileSync(file);
-    const candidate = validateRegistry(JSON.parse(bytes), path.basename(file));
-    return { name: path.basename(file), sha256: crypto.createHash("sha256").update(bytes).digest("hex"), candidate };
+export function buildCandidateReport(inputs) {
+  assert.ok(Array.isArray(inputs) && inputs.length > 0, "at least one bootstrap registry is required");
+  const registries = inputs.map(({ filename, bytes }) => {
+    const candidate = validateRegistry(JSON.parse(bytes), path.basename(filename));
+    return { name: path.basename(filename), sha256: crypto.createHash("sha256").update(bytes).digest("hex"), candidate };
   });
-  if (exports.length === 2) assert.equal(exports[0].candidate.state, exports[1].candidate.state, "bootstrap registries must agree on current state");
-  process.stdout.write(`${JSON.stringify({ schemaVersion: 1, release: "2.5.0", registries: exports })}\n`);
+  if (registries.length === 2) assert.equal(registries[0].candidate.state, registries[1].candidate.state, "bootstrap registries must agree on current state");
+  return { schemaVersion: 1, release: "2.5.0", registries };
+}
+
+export function buildF7Envelope(candidateReport, sourceSha, createdAt) {
+  assert.match(sourceSha, SHA);
+  const timestamp = Date.parse(createdAt);
+  assert.ok(Number.isFinite(timestamp) && new Date(timestamp).toISOString() === createdAt, "F7 createdAt must be canonical ISO-8601 UTC");
+  const reportBytes = Buffer.from(JSON.stringify(candidateReport));
+  return validateEnvelope({
+    schemaVersion: 1,
+    goal: "G01",
+    phase: "F7",
+    status: "GREEN",
+    evidenceId: "ci-bundle.g01.json",
+    sourceSha,
+    digest: `sha256:${crypto.createHash("sha256").update(reportBytes).digest("hex")}`,
+    createdAt,
+  }, "F7");
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const args = process.argv.slice(2);
+  const f7 = args.includes("--f7");
+  const option = (name) => {
+    const index = args.indexOf(name);
+    if (index < 0 || !args[index + 1]) throw new Error(`missing ${name}`);
+    return args[index + 1];
+  };
+  const excluded = new Set(["--f7", "--source-sha", "--created-at", ...(args.includes("--source-sha") ? [option("--source-sha")] : []), ...(args.includes("--created-at") ? [option("--created-at")] : [])]);
+  const files = args.filter((value) => !excluded.has(value));
+  if (files.length === 0) throw new Error("usage: bootstrap-export.mjs REGISTRY.json [REGISTRY.json]");
+  const report = buildCandidateReport(files.map((filename) => ({ filename, bytes: fs.readFileSync(filename) })));
+  const output = f7 ? buildF7Envelope(report, option("--source-sha"), option("--created-at")) : report;
+  process.stdout.write(`${JSON.stringify(output)}\n`);
 }

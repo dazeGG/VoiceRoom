@@ -19,6 +19,7 @@
     "ancestorFailures": { "items": { "$ref": "#/$defs/ancestorFailure" }, "type": "array" },
     "attemptId": { "pattern": "^g01-(a|recovery-a)[0-9]{2,}$", "type": "string" },
     "bootstrapSupersessionChainDigest": { "pattern": "^sha256:[0-9a-f]{64}$", "type": "string" },
+    "createdAt": { "format": "date-time", "type": "string" },
     "f11Digest": { "pattern": "^sha256:[0-9a-f]{64}$", "type": "string" },
     "f11Id": { "pattern": "^merge-envelope\\.(g01|bootstrap-recovery-a[0-9]{2,})\\.json$", "type": "string" },
     "f7Digest": { "pattern": "^sha256:[0-9a-f]{64}$", "type": "string" },
@@ -32,6 +33,6 @@
     "terminalDevelopSha": { "pattern": "^[0-9a-f]{40}$", "type": "string" },
     "terminalKind": { "enum": ["direct-canonical", "landed-recovery"] }
   },
-  "required": ["schemaVersion", "release", "attemptId", "terminalKind", "f7Id", "f7Digest", "f9Id", "f9Digest", "f11Id", "f11Digest", "terminalDevelopSha", "remoteDeleted", "status", "ancestorFailures", "bootstrapSupersessionChainDigest"],
+  "required": ["schemaVersion", "release", "attemptId", "terminalKind", "f7Id", "f7Digest", "f9Id", "f9Digest", "f11Id", "f11Digest", "terminalDevelopSha", "createdAt", "remoteDeleted", "status", "ancestorFailures", "bootstrapSupersessionChainDigest"],
   "type": "object"
 }

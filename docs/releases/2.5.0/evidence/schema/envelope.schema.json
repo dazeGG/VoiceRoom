@@ -6,6 +6,7 @@
       "if": { "properties": { "phase": { "const": "F7" } }, "required": ["phase"] },
       "then": {
         "properties": {
+          "evidenceId": { "pattern": "^ci-bundle\\.(g01|bootstrap-recovery-a[0-9]{2,})\\.json$", "type": "string" },
           "f7Digest": false,
           "f9Digest": false,
           "mergeSha": false,
@@ -20,6 +21,7 @@
       "if": { "properties": { "phase": { "const": "F9" } }, "required": ["phase"] },
       "then": {
         "properties": {
+          "evidenceId": { "pattern": "^approval-envelope\\.(g01|bootstrap-recovery-a[0-9]{2,})\\.json$", "type": "string" },
           "f9Digest": false,
           "mergeSha": false,
           "mergedAt": false,
@@ -33,7 +35,10 @@
     {
       "if": { "properties": { "phase": { "const": "F11" } }, "required": ["phase"] },
       "then": {
-        "properties": { "remoteDeleted": { "const": true } },
+        "properties": {
+          "evidenceId": { "pattern": "^merge-envelope\\.(g01|bootstrap-recovery-a[0-9]{2,})\\.json$", "type": "string" },
+          "remoteDeleted": { "const": true }
+        },
         "required": ["f7Digest", "f9Digest", "mergeSha", "terminalDevelopSha", "remoteDeleted", "mergedAt", "remoteDeletionObservedAt"]
       }
     }
