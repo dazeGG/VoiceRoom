@@ -18,6 +18,25 @@
       "pattern": "^[0-9a-f]{40}$",
       "type": "string"
     },
+    "parentSha": {
+      "pattern": "^[0-9a-f]{40}$",
+      "type": "string"
+    },
+    "authorityDigest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "planSpecPairDigest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "firstAuthoritativeId": {
+      "type": ["string", "integer"]
+    },
+    "priorFailureId": {
+      "minLength": 1,
+      "type": "string"
+    },
     "priorFailureDigest": {
       "pattern": "^sha256:[0-9a-f]{64}$",
       "type": "string"
@@ -27,7 +46,12 @@
     "attemptId",
     "branch",
     "baseSha",
+    "parentSha",
     "headSha",
+    "authorityDigest",
+    "planSpecPairDigest",
+    "firstAuthoritativeId",
+    "priorFailureId",
     "priorFailureDigest"
   ],
   "type": "object"

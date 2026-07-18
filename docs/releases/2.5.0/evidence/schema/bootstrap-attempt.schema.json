@@ -27,6 +27,14 @@
       "pattern": "^[0-9a-f]{40}$",
       "type": "string"
     },
+    "parentSha": {
+      "pattern": "^[0-9a-f]{40}$",
+      "type": "string"
+    },
+    "planSpecPairDigest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
     "ordinal": {
       "minimum": 1,
       "type": "integer"
@@ -38,7 +46,9 @@
     "branch",
     "headSha",
     "baseSha",
+    "parentSha",
     "authorityDigest",
+    "planSpecPairDigest",
     "firstAuthoritativeId"
   ],
   "type": "object"

@@ -1,68 +1,339 @@
 {
   "cases": [
     {
+      "name": "first",
       "expected": "G01_PRE_BRANCH",
-      "facts": {},
-      "name": "first"
+      "facts": {}
     },
     {
+      "name": "historical-abandoned-premerge",
+      "expected": "G01_PRE_BRANCH",
+      "facts": {
+        "history": [
+          {
+            "status": "ABANDONED_PREMERGE"
+          }
+        ]
+      }
+    },
+    {
+      "name": "lost-preparation",
+      "expected": "G01_PRE_BRANCH",
+      "facts": {
+        "localPreparation": true
+      }
+    },
+    {
+      "name": "active",
       "expected": "G01_PREMERGE_ACTIVE",
       "facts": {
         "firstAuthoritativeId": 1
-      },
-      "name": "active"
+      }
     },
     {
+      "name": "landed",
       "expected": "G01_LANDED_UNSEALED",
       "facts": {
         "firstAuthoritativeId": 1,
-        "mergeSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-      },
-      "name": "landed"
+        "mergeSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      }
     },
     {
+      "name": "post-f11-pre-selection",
+      "expected": "G01_LANDED_UNSEALED",
+      "facts": {
+        "firstAuthoritativeId": 1,
+        "mergeSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "developSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "baseSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "originSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "f7At": "2026-07-18T00:00:00.000Z",
+        "f9At": "2026-07-18T00:01:00.000Z",
+        "mergeAt": "2026-07-18T00:02:00.000Z",
+        "deletionAt": "2026-07-18T00:03:00.000Z",
+        "f11At": "2026-07-18T00:04:00.000Z",
+        "f11Status": "GREEN",
+        "remoteDeleted": true,
+        "ancestors": [],
+        "selection": null
+      }
+    },
+    {
+      "name": "direct-selected",
       "expected": "G01_SELECTED_GREEN",
       "facts": {
         "firstAuthoritativeId": 1,
-        "mergeSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "mergeSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "developSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "baseSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "originSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "f7At": "2026-07-18T00:00:00.000Z",
+        "f9At": "2026-07-18T00:01:00.000Z",
+        "mergeAt": "2026-07-18T00:02:00.000Z",
+        "deletionAt": "2026-07-18T00:03:00.000Z",
+        "f11At": "2026-07-18T00:04:00.000Z",
+        "f11Status": "GREEN",
+        "remoteDeleted": true,
+        "ancestors": [],
         "selection": {
           "status": "SELECTED_GREEN",
-          "terminalDevelopSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          "terminalKind": "direct-canonical",
+          "terminalDevelopSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "createdAt": "2026-07-18T00:05:00.000Z"
         }
-      },
-      "name": "selected"
+      }
     },
     {
+      "name": "selection-before-f11",
       "expected": "G01_LANDED_UNSEALED",
       "facts": {
         "firstAuthoritativeId": 1,
-        "mergeSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "mergeSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "developSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "baseSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "originSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "f7At": "2026-07-18T00:00:00.000Z",
+        "f9At": "2026-07-18T00:01:00.000Z",
+        "mergeAt": "2026-07-18T00:02:00.000Z",
+        "deletionAt": "2026-07-18T00:03:00.000Z",
+        "f11At": "2026-07-18T00:04:00.000Z",
+        "f11Status": "GREEN",
+        "remoteDeleted": true,
+        "ancestors": [],
         "selection": {
           "status": "SELECTED_GREEN",
-          "terminalDevelopSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          "terminalKind": "direct-canonical",
+          "terminalDevelopSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "createdAt": "2026-07-18T00:03:30.000Z"
         }
-      },
-      "name": "forged"
+      }
+    },
+    {
+      "name": "terminal-sha-drift",
+      "expected": "G01_LANDED_UNSEALED",
+      "facts": {
+        "firstAuthoritativeId": 1,
+        "mergeSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "developSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "baseSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "originSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "f7At": "2026-07-18T00:00:00.000Z",
+        "f9At": "2026-07-18T00:01:00.000Z",
+        "mergeAt": "2026-07-18T00:02:00.000Z",
+        "deletionAt": "2026-07-18T00:03:00.000Z",
+        "f11At": "2026-07-18T00:04:00.000Z",
+        "f11Status": "GREEN",
+        "remoteDeleted": true,
+        "ancestors": [],
+        "selection": {
+          "status": "SELECTED_GREEN",
+          "terminalKind": "direct-canonical",
+          "terminalDevelopSha": "cccccccccccccccccccccccccccccccccccccccc",
+          "createdAt": "2026-07-18T00:05:00.000Z"
+        }
+      }
+    },
+    {
+      "name": "develop-drift",
+      "expected": "G01_LANDED_UNSEALED",
+      "facts": {
+        "firstAuthoritativeId": 1,
+        "mergeSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "developSha": "cccccccccccccccccccccccccccccccccccccccc",
+        "baseSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "originSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "f7At": "2026-07-18T00:00:00.000Z",
+        "f9At": "2026-07-18T00:01:00.000Z",
+        "mergeAt": "2026-07-18T00:02:00.000Z",
+        "deletionAt": "2026-07-18T00:03:00.000Z",
+        "f11At": "2026-07-18T00:04:00.000Z",
+        "f11Status": "GREEN",
+        "remoteDeleted": true,
+        "ancestors": [],
+        "selection": {
+          "status": "SELECTED_GREEN",
+          "terminalKind": "direct-canonical",
+          "terminalDevelopSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "createdAt": "2026-07-18T00:05:00.000Z"
+        }
+      }
+    },
+    {
+      "name": "red-f11",
+      "expected": "G01_LANDED_UNSEALED",
+      "facts": {
+        "firstAuthoritativeId": 1,
+        "mergeSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "developSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "baseSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "originSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "f7At": "2026-07-18T00:00:00.000Z",
+        "f9At": "2026-07-18T00:01:00.000Z",
+        "mergeAt": "2026-07-18T00:02:00.000Z",
+        "deletionAt": "2026-07-18T00:03:00.000Z",
+        "f11At": "2026-07-18T00:04:00.000Z",
+        "f11Status": "RED",
+        "remoteDeleted": true,
+        "ancestors": [],
+        "selection": {
+          "status": "SELECTED_GREEN",
+          "terminalKind": "direct-canonical",
+          "terminalDevelopSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "createdAt": "2026-07-18T00:05:00.000Z"
+        }
+      }
+    },
+    {
+      "name": "deletion-before-merge",
+      "expected": "G01_LANDED_UNSEALED",
+      "facts": {
+        "firstAuthoritativeId": 1,
+        "mergeSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "developSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "baseSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "originSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "f7At": "2026-07-18T00:00:00.000Z",
+        "f9At": "2026-07-18T00:01:00.000Z",
+        "mergeAt": "2026-07-18T00:02:00.000Z",
+        "deletionAt": "2026-07-18T00:01:30.000Z",
+        "f11At": "2026-07-18T00:04:00.000Z",
+        "f11Status": "GREEN",
+        "remoteDeleted": true,
+        "ancestors": [],
+        "selection": {
+          "status": "SELECTED_GREEN",
+          "terminalKind": "direct-canonical",
+          "terminalDevelopSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "createdAt": "2026-07-18T00:05:00.000Z"
+        }
+      }
+    },
+    {
+      "name": "recovery-selected",
+      "expected": "G01_SELECTED_GREEN",
+      "facts": {
+        "firstAuthoritativeId": 1,
+        "mergeSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "developSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "baseSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "originSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "f7At": "2026-07-18T00:00:00.000Z",
+        "f9At": "2026-07-18T00:01:00.000Z",
+        "mergeAt": "2026-07-18T00:02:00.000Z",
+        "deletionAt": "2026-07-18T00:03:00.000Z",
+        "f11At": "2026-07-18T00:04:00.000Z",
+        "f11Status": "GREEN",
+        "remoteDeleted": true,
+        "ancestors": [
+          {
+            "terminalDevelopSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "failedAt": "2026-07-17T23:59:00.000Z"
+          }
+        ],
+        "selection": {
+          "status": "SELECTED_GREEN",
+          "terminalKind": "landed-recovery",
+          "terminalDevelopSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "createdAt": "2026-07-18T00:05:00.000Z"
+        },
+        "parentSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    },
+    {
+      "name": "recovery-missing-ancestry",
+      "expected": "G01_LANDED_UNSEALED",
+      "facts": {
+        "firstAuthoritativeId": 1,
+        "mergeSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "developSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "baseSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "originSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "f7At": "2026-07-18T00:00:00.000Z",
+        "f9At": "2026-07-18T00:01:00.000Z",
+        "mergeAt": "2026-07-18T00:02:00.000Z",
+        "deletionAt": "2026-07-18T00:03:00.000Z",
+        "f11At": "2026-07-18T00:04:00.000Z",
+        "f11Status": "GREEN",
+        "remoteDeleted": true,
+        "ancestors": [],
+        "selection": {
+          "status": "SELECTED_GREEN",
+          "terminalKind": "landed-recovery",
+          "terminalDevelopSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "createdAt": "2026-07-18T00:05:00.000Z"
+        },
+        "parentSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    },
+    {
+      "name": "recovery-parent-drift",
+      "expected": "G01_LANDED_UNSEALED",
+      "facts": {
+        "firstAuthoritativeId": 1,
+        "mergeSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "developSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "baseSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "originSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "f7At": "2026-07-18T00:00:00.000Z",
+        "f9At": "2026-07-18T00:01:00.000Z",
+        "mergeAt": "2026-07-18T00:02:00.000Z",
+        "deletionAt": "2026-07-18T00:03:00.000Z",
+        "f11At": "2026-07-18T00:04:00.000Z",
+        "f11Status": "GREEN",
+        "remoteDeleted": true,
+        "ancestors": [
+          {
+            "terminalDevelopSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "failedAt": "2026-07-17T23:59:00.000Z"
+          }
+        ],
+        "selection": {
+          "status": "SELECTED_GREEN",
+          "terminalKind": "landed-recovery",
+          "terminalDevelopSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "createdAt": "2026-07-18T00:05:00.000Z"
+        },
+        "parentSha": "cccccccccccccccccccccccccccccccccccccccc"
+      }
     }
   ],
   "g01Writable": [
     "docs/RELEASE_2.5.0_PLAN.md",
     "docs/RELEASE_2.5.0_TEST_SPEC.md",
+    "docs/RELEASE_2.6.0_PLAN.md",
+    "docs/RELEASE_2.7.0_PLAN.md",
+    "docs/releases/2.5.0/evidence/index.json",
     "docs/releases/2.5.0/evidence/bootstrap-attempts.json",
     "docs/releases/2.5.0/evidence/bootstrap-landed-recoveries.json",
+    "docs/releases/2.5.0/evidence/archive-authority.json",
+    "docs/releases/2.5.0/evidence/repair-ledger.json",
     "docs/releases/2.5.0/evidence/schema/envelope.schema.json",
+    "docs/releases/2.5.0/evidence/schema/bootstrap-lineage.schema.json",
     "docs/releases/2.5.0/evidence/schema/bootstrap-attempt.schema.json",
     "docs/releases/2.5.0/evidence/schema/bootstrap-landed-recovery.schema.json",
     "docs/releases/2.5.0/evidence/schema/bootstrap-selection.schema.json",
+    "docs/releases/2.5.0/evidence/schema/archive-authority.schema.json",
+    "docs/releases/2.5.0/evidence/schema/archive-map.schema.json",
+    "docs/releases/2.5.0/evidence/schema/archive-ledger.schema.json",
+    "docs/releases/2.5.0/evidence/schema/repair-ledger.schema.json",
+    "docs/releases/2.5.0/evidence/schema/repair-authorization.schema.json",
+    "docs/releases/2.5.0/evidence/schema/repair-authorization-envelope.schema.json",
+    "docs/releases/2.5.0/repairs/README.md",
+    "config/evidence/release-evidence-archive.v1.json",
     ".github/workflows/ci.yml",
     "scripts/test/validate_release_250_plan.py",
     "scripts/test/g01-release-docs.test.mjs",
+    "scripts/test/g01-oras-lock.test.mjs",
     "scripts/test/g01-landed-bootstrap-recovery.test.mjs",
     "scripts/test/fixtures/g01-landed-bootstrap-recovery.json",
     "scripts/evidence/bootstrap-export.mjs",
     "scripts/evidence/validate-envelope.mjs",
     "scripts/evidence/recover-landed-bootstrap.mjs",
-    "scripts/evidence/emit-bootstrap-selection.mjs"
+    "scripts/evidence/emit-bootstrap-selection.mjs",
+    "scripts/ci/run-actionlint.sh",
+    "config/tool-locks/actionlint-v1.7.12.json",
+    "scripts/ci/run-oras.sh",
+    "config/tool-locks/oras-v1.3.3.json"
   ],
   "recoveryWritable": [
     "docs/RELEASE_2.5.0_PLAN.md",
@@ -82,5 +353,29 @@
     "scripts/evidence/validate-envelope.mjs",
     "scripts/evidence/recover-landed-bootstrap.mjs",
     "scripts/evidence/emit-bootstrap-selection.mjs"
+  ],
+  "recoveryReadOnly": [
+    ".gitignore",
+    "docs/GIT_FLOW.md",
+    "docs/RELEASE_2.6.0_PLAN.md",
+    "docs/RELEASE_2.7.0_PLAN.md",
+    "docs/releases/2.5.0/evidence/index.json",
+    "docs/releases/2.5.0/evidence/archive-authority.json",
+    "docs/releases/2.5.0/evidence/repair-ledger.json",
+    "docs/releases/2.5.0/evidence/schema/bootstrap-lineage.schema.json",
+    "docs/releases/2.5.0/evidence/schema/archive-authority.schema.json",
+    "docs/releases/2.5.0/evidence/schema/archive-map.schema.json",
+    "docs/releases/2.5.0/evidence/schema/archive-ledger.schema.json",
+    "docs/releases/2.5.0/evidence/schema/repair-ledger.schema.json",
+    "docs/releases/2.5.0/evidence/schema/repair-authorization.schema.json",
+    "docs/releases/2.5.0/evidence/schema/repair-authorization-envelope.schema.json",
+    "docs/releases/2.5.0/repairs/README.md",
+    "config/evidence/release-evidence-archive.v1.json",
+    "scripts/test/g01-oras-lock.test.mjs",
+    "scripts/ci/run-actionlint.sh",
+    "config/tool-locks/actionlint-v1.7.12.json",
+    "scripts/ci/run-oras.sh",
+    "config/tool-locks/oras-v1.3.3.json",
+    ".omx/context/release-2-5-0-archive-authority.json"
   ]
 }

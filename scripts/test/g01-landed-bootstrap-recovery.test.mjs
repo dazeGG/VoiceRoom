@@ -1,5 +1,29 @@
-import test from "node:test"; import assert from "node:assert/strict"; import fs from "node:fs";
-const f=JSON.parse(fs.readFileSync("scripts/test/fixtures/g01-landed-bootstrap-recovery.json"));
-const classify=x=>!x.firstAuthoritativeId?"G01_PRE_BRANCH":!x.mergeSha?"G01_PREMERGE_ACTIVE":!x.selection?"G01_LANDED_UNSEALED":x.selection.status==="SELECTED_GREEN"&&x.selection.terminalDevelopSha===x.mergeSha?"G01_SELECTED_GREEN":"G01_LANDED_UNSEALED";
-test("four states are total and disjoint",()=>{for(const c of f.cases) assert.equal(classify(c.facts),c.expected)});
-test("recovery catalog is contained and lineage stays absent",()=>{assert.ok(f.recoveryWritable.every(p=>f.g01Writable.includes(p)));assert.ok(!f.recoveryWritable.includes("docs/releases/2.5.0/evidence/bootstrap-lineage.json"))});
+import test from "node:test";
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import { classifyBootstrap, validateRecoveryFixture, G01_WRITABLE, RECOVERY_WRITABLE, RECOVERY_READ_ONLY } from "../evidence/recover-landed-bootstrap.mjs";
+
+const fixture = JSON.parse(fs.readFileSync("scripts/test/fixtures/g01-landed-bootstrap-recovery.json", "utf8"));
+
+test("frozen recovery catalogs are exact, nonempty, unique and disjoint", () => {
+  validateRecoveryFixture(fixture);
+  assert.equal(G01_WRITABLE.length, 36);
+  assert.equal(RECOVERY_WRITABLE.length, 17);
+  assert.equal(RECOVERY_READ_ONLY.length, 22);
+});
+
+test("four-state classification rejects forged chronology and terminal SHAs", () => {
+  for (const fixtureCase of fixture.cases) assert.equal(classifyBootstrap(fixtureCase.facts), fixtureCase.expected, fixtureCase.name);
+});
+
+test("catalog mutations fail closed", () => {
+  for (const mutate of [
+    (copy) => { copy.recoveryWritable = []; },
+    (copy) => { copy.recoveryWritable.push(copy.recoveryWritable[0]); },
+    (copy) => { copy.recoveryWritable.push("docs/releases/2.5.0/evidence/bootstrap-lineage.json"); },
+    (copy) => { copy.recoveryReadOnly.reverse(); },
+  ]) {
+    const copy = structuredClone(fixture); mutate(copy);
+    assert.throws(() => validateRecoveryFixture(copy));
+  }
+});

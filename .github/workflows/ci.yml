@@ -91,6 +91,8 @@ jobs:
   bootstrap-plan:
     name: G01 bootstrap plan
     runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -107,6 +109,15 @@ jobs:
           node scripts/evidence/validate-envelope.mjs --fixture bootstrap
           scripts/ci/run-actionlint.sh .github/workflows/ci.yml
           scripts/ci/run-oras.sh version
+      - name: Export candidate-only G01 evidence bundle
+        run: node scripts/evidence/bootstrap-export.mjs docs/releases/2.5.0/evidence/bootstrap-attempts.json docs/releases/2.5.0/evidence/bootstrap-landed-recoveries.json > ci-bundle.g01.json
+      - name: Persist G01 F7 candidate evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: g01-candidate-evidence
+          path: ci-bundle.g01.json
+          if-no-files-found: error
+          retention-days: 90
 
   deploy:
     name: Deploy to server

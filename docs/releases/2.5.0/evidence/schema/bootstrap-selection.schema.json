@@ -1,64 +1,37 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "additionalProperties": false,
-  "properties": {
-    "ancestorFailures": {
-      "type": "array"
-    },
-    "attemptId": {
-      "type": "string"
-    },
-    "bootstrapSupersessionChainDigest": {
-      "pattern": "^sha256:[0-9a-f]{64}$",
-      "type": "string"
-    },
-    "f11Digest": {
-      "pattern": "^sha256:[0-9a-f]{64}$",
-      "type": "string"
-    },
-    "f7Digest": {
-      "pattern": "^sha256:[0-9a-f]{64}$",
-      "type": "string"
-    },
-    "f9Digest": {
-      "pattern": "^sha256:[0-9a-f]{64}$",
-      "type": "string"
-    },
-    "release": {
-      "const": "2.5.0"
-    },
-    "remoteDeleted": {
-      "const": true
-    },
-    "schemaVersion": {
-      "const": 1
-    },
-    "status": {
-      "const": "SELECTED_GREEN"
-    },
-    "terminalDevelopSha": {
-      "pattern": "^[0-9a-f]{40}$",
-      "type": "string"
-    },
-    "terminalKind": {
-      "enum": [
-        "DIRECT_CANONICAL",
-        "LANDED_RECOVERY"
-      ]
+  "$defs": {
+    "ancestorFailure": {
+      "additionalProperties": false,
+      "properties": {
+        "attemptId": { "pattern": "^g01-(a|recovery-a)[0-9]{2,}$", "type": "string" },
+        "createdAt": { "format": "date-time", "type": "string" },
+        "digest": { "pattern": "^sha256:[0-9a-f]{64}$", "type": "string" },
+        "evidenceId": { "pattern": "^bootstrap-failure\\.g01-(a|recovery-a)[0-9]{2,}\\.json$", "type": "string" },
+        "terminalDevelopSha": { "pattern": "^[0-9a-f]{40}$", "type": "string" }
+      },
+      "required": ["attemptId", "evidenceId", "digest", "terminalDevelopSha", "createdAt"],
+      "type": "object"
     }
   },
-  "required": [
-    "schemaVersion",
-    "release",
-    "attemptId",
-    "terminalKind",
-    "f7Digest",
-    "f9Digest",
-    "f11Digest",
-    "terminalDevelopSha",
-    "remoteDeleted",
-    "status",
-    "bootstrapSupersessionChainDigest"
-  ],
+  "additionalProperties": false,
+  "properties": {
+    "ancestorFailures": { "items": { "$ref": "#/$defs/ancestorFailure" }, "type": "array" },
+    "attemptId": { "pattern": "^g01-(a|recovery-a)[0-9]{2,}$", "type": "string" },
+    "bootstrapSupersessionChainDigest": { "pattern": "^sha256:[0-9a-f]{64}$", "type": "string" },
+    "f11Digest": { "pattern": "^sha256:[0-9a-f]{64}$", "type": "string" },
+    "f11Id": { "pattern": "^merge-envelope\\.(g01|bootstrap-recovery-a[0-9]{2,})\\.json$", "type": "string" },
+    "f7Digest": { "pattern": "^sha256:[0-9a-f]{64}$", "type": "string" },
+    "f7Id": { "pattern": "^ci-bundle\\.(g01|bootstrap-recovery-a[0-9]{2,})\\.json$", "type": "string" },
+    "f9Digest": { "pattern": "^sha256:[0-9a-f]{64}$", "type": "string" },
+    "f9Id": { "pattern": "^approval-envelope\\.(g01|bootstrap-recovery-a[0-9]{2,})\\.json$", "type": "string" },
+    "release": { "const": "2.5.0" },
+    "remoteDeleted": { "const": true },
+    "schemaVersion": { "const": 1 },
+    "status": { "const": "SELECTED_GREEN" },
+    "terminalDevelopSha": { "pattern": "^[0-9a-f]{40}$", "type": "string" },
+    "terminalKind": { "enum": ["direct-canonical", "landed-recovery"] }
+  },
+  "required": ["schemaVersion", "release", "attemptId", "terminalKind", "f7Id", "f7Digest", "f9Id", "f9Digest", "f11Id", "f11Digest", "terminalDevelopSha", "remoteDeleted", "status", "ancestorFailures", "bootstrapSupersessionChainDigest"],
   "type": "object"
 }
