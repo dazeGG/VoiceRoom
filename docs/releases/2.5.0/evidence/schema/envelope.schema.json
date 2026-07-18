@@ -41,6 +41,16 @@
     },
     "review": {
       "additionalProperties": false,
+      "allOf": [
+        {
+          "if": { "properties": { "role": { "const": "architect" } }, "required": ["role"] },
+          "then": { "properties": { "verdict": { "const": "CLEAR" } } }
+        },
+        {
+          "if": { "properties": { "role": { "enum": ["code-reviewer", "verifier"] } }, "required": ["role"] },
+          "then": { "properties": { "verdict": { "const": "APPROVE" } } }
+        }
+      ],
       "properties": {
         "actorId": { "minimum": 1, "type": "integer" },
         "commitId": { "pattern": "^[0-9a-f]{40}$", "type": "string" },
@@ -101,7 +111,14 @@
     "prNumber": { "minimum": 1, "type": "integer" },
     "remoteDeleted": { "const": true },
     "remoteDeletionObservedAt": { "format": "date-time", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$", "type": "string" },
-    "reviewObjects": { "items": { "$ref": "#/$defs/review" }, "maxItems": 3, "minItems": 3, "type": "array" },
+    "reviewObjects": {
+      "allOf": [
+        { "contains": { "properties": { "role": { "const": "code-reviewer" } }, "required": ["role"], "type": "object" }, "maxContains": 1, "minContains": 1 },
+        { "contains": { "properties": { "role": { "const": "architect" } }, "required": ["role"], "type": "object" }, "maxContains": 1, "minContains": 1 },
+        { "contains": { "properties": { "role": { "const": "verifier" } }, "required": ["role"], "type": "object" }, "maxContains": 1, "minContains": 1 }
+      ],
+      "items": { "$ref": "#/$defs/review" }, "maxItems": 3, "minItems": 3, "type": "array"
+    },
     "schemaVersion": { "const": 1 },
     "sourceBranch": { "pattern": "^feature/2\\.5\\.0-g01-(canonical-evidence-bootstrap|postmerge-bootstrap-a(?:0[2-9]|[1-9][0-9]+))$", "type": "string" },
     "sourceSha": { "pattern": "^[0-9a-f]{40}$", "type": "string" },

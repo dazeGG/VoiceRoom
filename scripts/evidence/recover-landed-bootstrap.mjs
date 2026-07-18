@@ -28,7 +28,7 @@ function validSelection(facts) {
   const selection = facts.selection;
   try {
     const { terminalDevelopSha, lineageSuffix } = validateEnvelopeChain(facts.f7, facts.f9, facts.f11);
-    assert.deepEqual(Object.keys(selection).sort(), ["ancestorFailures", "attemptId", "bootstrapSupersessionChainDigest", "createdAt", "f11Digest", "f11Id", "f7Digest", "f7Id", "f9Digest", "f9Id", "release", "remoteDeleted", "schemaVersion", "status", "terminalDevelopSha", "terminalKind"].sort());
+    assert.deepEqual(Object.keys(selection).sort(), ["ancestorFailures", "artifactBindings", "attemptId", "bootstrapSupersessionChainDigest", "createdAt", "evidenceId", "f11Digest", "f11Id", "f7Digest", "f7Id", "f9Digest", "f9Id", "release", "remoteDeleted", "schemaVersion", "selectionDigest", "status", "terminalDevelopSha", "terminalKind"].sort());
     assert.equal(selection.schemaVersion, 1); assert.equal(selection.release, "2.5.0");
     assert.equal(selection.status, "SELECTED_GREEN"); assert.equal(selection.remoteDeleted, true);
     assert.equal(selection.terminalDevelopSha, terminalDevelopSha);
@@ -36,6 +36,8 @@ function validSelection(facts) {
     assert.equal(selection.f9Id, facts.f9.evidenceId); assert.equal(selection.f9Digest, facts.f9.digest);
     assert.equal(selection.f11Id, facts.f11.evidenceId); assert.equal(selection.f11Digest, facts.f11.digest);
     assert.equal(selection.attemptId, facts.f7.attemptId); assert.equal(facts.f7.attemptId, facts.f9.attemptId); assert.equal(facts.f9.attemptId, facts.f11.attemptId);
+    assert.equal(selection.evidenceId, `bootstrap-selection.${selection.attemptId}.json`);
+    const selectionCore = { ...selection }; delete selectionCore.selectionDigest; assert.equal(selection.selectionDigest, `sha256:${crypto.createHash("sha256").update(JSON.stringify(selectionCore)).digest("hex")}`);
     assert.equal(facts.f7.sourceBranch, facts.f9.sourceBranch); assert.equal(facts.f9.sourceBranch, facts.f11.sourceBranch);
     assert.equal(selection.bootstrapSupersessionChainDigest, `sha256:${crypto.createHash("sha256").update(JSON.stringify(selection.ancestorFailures)).digest("hex")}`);
     assert.ok(Date.parse(facts.f11.createdAt) < Date.parse(selection.createdAt));

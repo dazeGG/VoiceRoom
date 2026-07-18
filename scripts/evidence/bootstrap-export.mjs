@@ -45,7 +45,7 @@ function validateRecovery(recovery, index) {
   exactKeys(recovery, ["attemptId", "branch", "baseSha", "parentSha", "headSha", "authorityDigest", "planSpecPairDigest", "firstAuthoritativeId", "priorFailureId", "priorFailureDigest"], `landedAncestors[${index}]`);
   const match = recovery.attemptId.match(/^g01-recovery-a([0-9]{2,})$/);
   assert.ok(match);
-  assert.equal(Number(match[1]), index + 2, "recovery attempts must continue the direct-attempt ordinal without gaps");
+  assert.ok(Number(match[1]) >= 2, "recovery attempts must follow the direct attempt");
   assert.equal(recovery.branch, `feature/2.5.0-g01-postmerge-bootstrap-a${match[1]}`);
   for (const key of ["baseSha", "parentSha", "headSha"]) assert.match(recovery[key], SHA);
   for (const key of ["authorityDigest", "planSpecPairDigest", "priorFailureDigest"]) assert.match(recovery[key], DIGEST);
@@ -108,6 +108,73 @@ export function buildCandidateReport(inputs) {
   return { schemaVersion: 1, release: "2.5.0", registries };
 }
 
+function observedOrdinals(value, found = new Set()) {
+  if (Array.isArray(value)) { for (const item of value) observedOrdinals(item, found); return found; }
+  if (!value || typeof value !== "object") return found;
+  for (const [key, child] of Object.entries(value)) {
+    if (typeof child === "string" && /^(?:attemptId|name|ref|head_ref|branch|evidenceId)$/i.test(key)) {
+      for (const match of child.matchAll(/(?:g01-(?:recovery-)?a|postmerge-bootstrap-a)([0-9]{2,})/g)) found.add(Number(match[1]));
+    }
+    observedOrdinals(child, found);
+  }
+  return found;
+}
+
+function ordinalId(ordinal) { return String(ordinal).padStart(2, "0"); }
+
+export function reconstructNextOrdinal(candidateReport, authority) {
+  exactKeys(authority, ["repository", "pr", "currentRun", "headCommit", "prPages", "runPages", "artifactPages", "paginationComplete", "observedAt", "priorFailure"], "bootstrap activation authority");
+  assert.equal(authority.paginationComplete, true, "all PR/run/artifact pages must be completely consumed");
+  const ordinals = observedOrdinals({ candidateReport, prPages: authority.prPages, runPages: authority.runPages, artifactPages: authority.artifactPages });
+  return Math.max(0, ...ordinals) + 1;
+}
+
+export function activateCandidateReport(candidateReport, authority, planBytes, specBytes) {
+  assert.equal(authority.pr?.state, "open", "active bootstrap PR must be open");
+  assert.equal(authority.pr?.base?.ref, "develop", "bootstrap PR must target develop");
+  assert.equal(authority.pr?.base?.repo?.full_name, authority.repository, "bootstrap base repository mismatch");
+  assert.equal(authority.pr?.head?.repo?.full_name, authority.repository, "fork bootstrap PR is forbidden");
+  assert.equal(authority.currentRun?.event, "pull_request", "bootstrap activation must come from a pull_request run");
+  assert.equal(authority.currentRun?.head_sha, authority.pr?.head?.sha, "run/PR head mismatch");
+  assert.equal(authority.currentRun?.head_branch, authority.pr?.head?.ref, "run/PR branch mismatch");
+  assert.ok(Number.isInteger(authority.currentRun?.id) && authority.currentRun.id > 0, "authoritative workflow run ID is required");
+  assert.ok(Number.isInteger(authority.currentRun?.run_attempt) && authority.currentRun.run_attempt > 0, "authoritative workflow run attempt is required");
+  assert.match(authority.pr.head.sha, SHA); assert.match(authority.pr.base.sha, SHA);
+  assert.equal(authority.headCommit?.sha, authority.pr.head.sha, "head commit substitution");
+  assert.ok(Array.isArray(authority.headCommit?.parents) && authority.headCommit.parents.length >= 1, "head commit parent is required");
+  assert.match(authority.headCommit.parents[0].sha, SHA);
+  const observedAt = Date.parse(authority.observedAt);
+  assert.ok(Number.isFinite(observedAt) && new Date(observedAt).toISOString() === authority.observedAt, "activation observation must be canonical UTC");
+
+  const activated = structuredClone(candidateReport);
+  const named = new Map(activated.registries.map((entry) => [entry.name, entry.candidate]));
+  const attempts = named.get("bootstrap-attempts.json"); const recoveries = named.get("bootstrap-landed-recoveries.json");
+  assert.equal(attempts.state, "G01_PRE_BRANCH", "tracked direct registry must be PRE_BRANCH before atomic activation");
+  assert.equal(recoveries.state, "G01_PRE_BRANCH", "tracked recovery registry must be PRE_BRANCH before atomic activation");
+  assert.equal(attempts.currentAttempt, null); assert.equal(recoveries.currentRecovery, null);
+  const ordinal = reconstructNextOrdinal(candidateReport, authority); const suffix = ordinalId(ordinal);
+  const authorityDigest = `sha256:${crypto.createHash("sha256").update(JSON.stringify({ repository: authority.repository, prId: authority.pr.id, prNodeId: authority.pr.node_id, prNumber: authority.pr.number, runId: authority.currentRun.id, runAttempt: authority.currentRun.run_attempt, headSha: authority.pr.head.sha, observedAt: authority.observedAt })).digest("hex")}`;
+  const planSpecPairDigest = `sha256:${crypto.createHash("sha256").update(Buffer.concat([Buffer.from(String(planBytes.length)), Buffer.from(":"), planBytes, Buffer.from(String(specBytes.length)), Buffer.from(":"), specBytes])).digest("hex")}`;
+  const common = { baseSha: authority.pr.base.sha, parentSha: authority.headCommit.parents[0].sha, headSha: authority.pr.head.sha, authorityDigest, planSpecPairDigest, firstAuthoritativeId: `pr:${authority.pr.node_id}:run:${authority.currentRun.id}:attempt:${authority.currentRun.run_attempt}` };
+  if (authority.pr.head.ref === "feature/2.5.0-g01-canonical-evidence-bootstrap") {
+    const attemptId = `g01-a${suffix}`;
+    assert.equal(attempts.attempts.some((entry) => entry.ordinal === ordinal || entry.attemptId === attemptId), false, "reconstructed direct ordinal is already consumed");
+    attempts.attempts.push({ attemptId, ordinal, branch: authority.pr.head.ref, ...common }); attempts.currentAttempt = attemptId;
+  } else {
+    const branchOrdinal = authority.pr.head.ref.match(/^feature\/2\.5\.0-g01-postmerge-bootstrap-a([0-9]{2,})$/)?.[1];
+    assert.ok(branchOrdinal, "bootstrap branch is not canonical"); assert.equal(Number(branchOrdinal), ordinal, "recovery branch must use 1+max observed/consumed ordinal");
+    exactKeys(authority.priorFailure, ["evidenceId", "digest", "terminalDevelopSha"], "prior failure authority");
+    assert.match(authority.priorFailure.evidenceId, /^bootstrap-failure\.g01-(?:a|recovery-a)[0-9]{2,}\.json$/); assert.match(authority.priorFailure.digest, DIGEST); assert.match(authority.priorFailure.terminalDevelopSha, SHA);
+    assert.equal(authority.pr.base.sha, authority.priorFailure.terminalDevelopSha, "recovery must base on the frozen failed develop SHA");
+    const attemptId = `g01-recovery-a${suffix}`;
+    recoveries.landedAncestors.push({ attemptId, branch: authority.pr.head.ref, ...common, priorFailureId: authority.priorFailure.evidenceId, priorFailureDigest: authority.priorFailure.digest }); recoveries.currentRecovery = attemptId;
+  }
+  attempts.state = "G01_PREMERGE_ACTIVE"; recoveries.state = "G01_PREMERGE_ACTIVE";
+  attempts.ordinalReconstruction = { complete: true, nextOrdinal: ordinal + 1, reason: "1+max over complete authenticated PR/run/artifact history and tracked consumed ordinals" };
+  activated.registries = activated.registries.map((entry) => ({ ...entry, candidate: named.get(entry.name) }));
+  return { report: activated, identity: activeIdentity(activated, authority.pr.head.sha, authority.pr.head.ref), ordinal };
+}
+
 function activeIdentity(candidateReport, sourceSha, sourceBranch) {
   const named = new Map(candidateReport.registries.map(({ name, candidate }) => [name, candidate]));
   if (sourceBranch === "feature/2.5.0-g01-canonical-evidence-bootstrap") {
@@ -161,10 +228,13 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     if (index < 0 || !args[index + 1]) throw new Error(`missing ${name}`);
     return args[index + 1];
   };
-  const excluded = new Set(["--f7", "--source-sha", "--source-branch", "--created-at", ...(args.includes("--source-sha") ? [option("--source-sha")] : []), ...(args.includes("--source-branch") ? [option("--source-branch")] : []), ...(args.includes("--created-at") ? [option("--created-at")] : [])]);
+  const activationPath = args.includes("--activate-authority") ? option("--activate-authority") : undefined;
+  const optionNames = ["--source-sha", "--source-branch", "--created-at", "--activate-authority", "--plan", "--spec"];
+  const excluded = new Set(["--f7", ...optionNames, ...optionNames.filter((name) => args.includes(name)).map(option)]);
   const files = args.filter((value) => !excluded.has(value));
   if (files.length === 0) throw new Error("usage: bootstrap-export.mjs REGISTRY.json [REGISTRY.json]");
-  const report = buildCandidateReport(files.map((filename) => ({ filename, bytes: fs.readFileSync(filename) })));
+  let report = buildCandidateReport(files.map((filename) => ({ filename, bytes: fs.readFileSync(filename) })));
+  if (activationPath) report = activateCandidateReport(report, JSON.parse(fs.readFileSync(activationPath, "utf8")), fs.readFileSync(option("--plan")), fs.readFileSync(option("--spec"))).report;
   const output = f7 ? buildF7Envelope(report, option("--source-sha"), option("--source-branch"), option("--created-at")) : report;
   process.stdout.write(`${JSON.stringify(output)}\n`);
 }

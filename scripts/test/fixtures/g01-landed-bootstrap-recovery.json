@@ -91,7 +91,38 @@
           "remoteDeleted": true,
           "status": "SELECTED_GREEN",
           "ancestorFailures": [],
-          "bootstrapSupersessionChainDigest": "sha256:4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          "bootstrapSupersessionChainDigest": "sha256:4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "evidenceId": "bootstrap-selection.g01-a02.json",
+          "artifactBindings": {
+            "f7": {
+              "artifactId": 1,
+              "artifactName": "fixture-1",
+              "runId": 10,
+              "runAttempt": 1,
+              "headSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "archiveDigest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+              "payloadDigest": "sha256:a5216e2302f28e9a71dae4e5745aed24cf328e0fad1ec9b049dc89f117317e9c"
+            },
+            "f9": {
+              "artifactId": 2,
+              "artifactName": "fixture-2",
+              "runId": 20,
+              "runAttempt": 1,
+              "headSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "archiveDigest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+              "payloadDigest": "sha256:9e0194a1f9becc865a175c9310a53b52877a5f9b8e4301dbae4569f0c807bd59"
+            },
+            "f11": {
+              "artifactId": 3,
+              "artifactName": "fixture-3",
+              "runId": 30,
+              "runAttempt": 1,
+              "headSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "archiveDigest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+              "payloadDigest": "sha256:5e2ca2aaba1a25e07166f8f537d63109c6e598d23788c374695087646c044cdd"
+            }
+          },
+          "selectionDigest": "sha256:adb288d3d8c30d436d2554f0ca272d35ca1db062b35b92471cdb3a8f02691865"
         },
         "f7": {
           "schemaVersion": 1,
@@ -373,10 +404,45 @@
               "baseSha": "9999999999999999999999999999999999999999",
               "parentSha": "9999999999999999999999999999999999999999",
               "terminalDevelopSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-              "createdAt": "2026-07-17T23:59:00.000Z"
+              "createdAt": "2026-07-17T23:59:00.000Z",
+              "artifactName": "g01-bootstrap-failure-g01-a01-run-40-attempt-1-head-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-phase-f11",
+              "archiveDigest": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+              "runAttempt": 1,
+              "headSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
             }
           ],
-          "bootstrapSupersessionChainDigest": "sha256:eed506a586559b4ffb180154ddc29ee6f6c19d442dbbddf5833b9258783fd28c"
+          "bootstrapSupersessionChainDigest": "sha256:4b002c197de9735a963938f87766de710d64973125e99b9690fe9e1b32c96bbb",
+          "evidenceId": "bootstrap-selection.g01-recovery-a02.json",
+          "artifactBindings": {
+            "f7": {
+              "artifactId": 1,
+              "artifactName": "fixture-1",
+              "runId": 10,
+              "runAttempt": 1,
+              "headSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "archiveDigest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+              "payloadDigest": "sha256:3523f20e61e1fd3498a775f21084844c90cb93eedba9a5c379dfc583e1af4f9d"
+            },
+            "f9": {
+              "artifactId": 2,
+              "artifactName": "fixture-2",
+              "runId": 20,
+              "runAttempt": 1,
+              "headSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "archiveDigest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+              "payloadDigest": "sha256:a64f39905a2261cd41bc06b0ed240822ea3629998172de28a69301c412a78a5b"
+            },
+            "f11": {
+              "artifactId": 3,
+              "artifactName": "fixture-3",
+              "runId": 30,
+              "runAttempt": 1,
+              "headSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "archiveDigest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+              "payloadDigest": "sha256:af6b428e87ece37b7d03e16f0bf23603bce8448f53f8140017b9340dd36708e0"
+            }
+          },
+          "selectionDigest": "sha256:ffaa7a02221000b611b16b9bdb620f06f4ac654aaf5042d23307f636cd3b640a"
         },
         "parentSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         "f7": {

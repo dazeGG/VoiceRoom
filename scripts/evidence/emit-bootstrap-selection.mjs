@@ -41,6 +41,16 @@ function compactDigest(value) {
   return `sha256:${crypto.createHash("sha256").update(JSON.stringify(value)).digest("hex")}`;
 }
 
+export function envelopePayloadDigest(envelope) {
+  return `sha256:${crypto.createHash("sha256").update(`${JSON.stringify(envelope)}\n`).digest("hex")}`;
+}
+
+export function artifactName(phase, envelope, runId, runAttempt, headSha = envelope.sourceSha) {
+  assert.ok(["candidate", "approval", "merge", "selection", "bootstrap-failure"].includes(phase));
+  assert.ok(Number.isInteger(runId) && runId > 0); assert.ok(Number.isInteger(runAttempt) && runAttempt > 0); assert.match(headSha, SHA);
+  return `g01-${phase}-${envelope.attemptId}-run-${runId}-attempt-${runAttempt}-head-${headSha}`;
+}
+
 function reportRegistry(report, name) {
   assert.ok(Array.isArray(report?.registries), "candidate report must contain registries");
   const matches = report.registries.filter((item) => item.name === name);
@@ -85,6 +95,7 @@ function validateArtifactAuthority(authority, expected, label) {
   assert.match(metadata.digest, DIGEST, `${label} GitHub digest missing`);
   assert.equal(authority.downloadDigest, metadata.digest, `${label} downloaded archive digest mismatch`);
   assert.match(authority.payloadDigest, DIGEST, `${label} payload digest missing`);
+  if (expected.payload !== undefined) assert.equal(authority.payloadDigest, envelopePayloadDigest(expected.payload), `${label} parsed envelope does not match downloaded payload bytes`);
   assert.ok(instant(metadata.expires_at, `${label} artifact expires_at`) > instant(expected.observedAt, `${label} observedAt`), `${label} artifact is not live at observation`);
   assert.ok(Number.isInteger(run.id) && run.id > 0); assert.ok(Number.isInteger(run.run_attempt) && run.run_attempt > 0);
   assert.equal(metadata.workflow_run?.id, run.id, `${label} producing run ID mismatch`);
@@ -145,7 +156,7 @@ export function buildF9Envelope(f7, authority) {
   const identity = resolveCandidateIdentity(authority.candidateReport, authority.pr.head?.ref, f7.sourceSha);
   assert.equal(f7.attemptId, identity.attemptId); assert.equal(f7.sourceBranch, authority.pr.head.ref);
   assert.equal(f7.evidenceId, `ci-bundle.${identity.suffix}`);
-  validateArtifactAuthority(authority.f7Artifact, { name: `g01-candidate-evidence-${f7.sourceSha}`, headSha: f7.sourceSha, headBranch: f7.sourceBranch, event: "pull_request", repository: authority.repository, observedAt: authority.observedAt }, "F7");
+  validateArtifactAuthority(authority.f7Artifact, { name: artifactName("candidate", f7, authority.f7Artifact.run.id, authority.f7Artifact.run.run_attempt), headSha: f7.sourceSha, headBranch: f7.sourceBranch, event: "pull_request", repository: authority.repository, observedAt: authority.observedAt, payload: f7 }, "F7");
   assert.equal(f7.digest, compactDigest(authority.candidateReport), "F7 digest must bind the candidate report bytes from the authenticated artifact");
   const reviewObjects = normalizeReviews(authority, f7.sourceSha, f7.createdAt);
   const createdAt = authority.observedAt; instant(createdAt, "approval observedAt");
@@ -189,9 +200,9 @@ export function buildF11Envelope(f7, f9, authority) {
   assert.equal(authority.sourceRefStatus, 404, "remote source branch must return GitHub API 404");
   const postMergeRun = validatePostMergeRun(authority.postMergeRun, { repository: authority.repository, mergeSha: authority.pr.merge_commit_sha });
   for (const [artifactAuthority, envelope, name, label] of [
-    [authority.f7Artifact, f7, `g01-candidate-evidence-${f7.sourceSha}`, "F7"],
-    [authority.f9Artifact, f9, `g01-approval-${authority.pr.number}`, "F9"],
-  ]) validateArtifactAuthority(artifactAuthority, { name, headSha: f7.sourceSha, headBranch: f7.sourceBranch, event: "pull_request", repository: authority.repository, observedAt: authority.observedAt, completed: true }, label);
+    [authority.f7Artifact, f7, artifactName("candidate", f7, authority.f7Artifact.run.id, authority.f7Artifact.run.run_attempt), "F7"],
+    [authority.f9Artifact, f9, artifactName("approval", f9, authority.f9Artifact.run.id, authority.f9Artifact.run.run_attempt), "F9"],
+  ]) validateArtifactAuthority(artifactAuthority, { name, headSha: f7.sourceSha, headBranch: f7.sourceBranch, event: "pull_request", repository: authority.repository, observedAt: authority.observedAt, completed: true, payload: envelope }, label);
   assert.equal(authority.f7Artifact.run.id, authority.f9Artifact.run.id, "F7/F9 must come from one premerge workflow run");
   assert.equal(authority.f7Artifact.run.run_attempt, authority.f9Artifact.run.run_attempt, "F7/F9 run attempt mismatch");
   const mergedAt = authority.pr.merged_at; const createdAt = authority.observedAt;
@@ -205,11 +216,12 @@ function validateAncestorFailures(value) {
   assert.ok(Array.isArray(value), "ancestorFailures must be an array");
   let previousTime = -Infinity; let previousTerminal; const ids = new Set();
   for (const [index, ancestor] of value.entries()) {
-    exactKeys(ancestor, ["attemptId", "evidenceId", "digest", "artifactId", "runId", "baseSha", "parentSha", "terminalDevelopSha", "createdAt"], `ancestorFailures[${index}]`);
+    exactKeys(ancestor, ["attemptId", "evidenceId", "digest", "artifactId", "artifactName", "archiveDigest", "runId", "runAttempt", "headSha", "baseSha", "parentSha", "terminalDevelopSha", "createdAt"], `ancestorFailures[${index}]`);
     assert.match(ancestor.attemptId, /^g01-(?:a|recovery-a)[0-9]{2,}$/);
     assert.equal(ancestor.evidenceId, `bootstrap-failure.${ancestor.attemptId}.json`);
-    assert.match(ancestor.digest, DIGEST); assert.ok(Number.isInteger(ancestor.artifactId) && ancestor.artifactId > 0); assert.ok(Number.isInteger(ancestor.runId) && ancestor.runId > 0);
-    for (const key of ["baseSha", "parentSha", "terminalDevelopSha"]) assert.match(ancestor[key], SHA);
+    assert.match(ancestor.digest, DIGEST); assert.match(ancestor.archiveDigest, DIGEST); assert.ok(Number.isInteger(ancestor.artifactId) && ancestor.artifactId > 0); assert.ok(Number.isInteger(ancestor.runId) && ancestor.runId > 0); assert.ok(Number.isInteger(ancestor.runAttempt) && ancestor.runAttempt > 0);
+    assert.equal(typeof ancestor.artifactName, "string"); assert.match(ancestor.artifactName, new RegExp(`^g01-bootstrap-failure-${ancestor.attemptId}-run-${ancestor.runId}-attempt-${ancestor.runAttempt}-head-${ancestor.terminalDevelopSha}-phase-(?:f11|selection)$`));
+    for (const key of ["headSha", "baseSha", "parentSha", "terminalDevelopSha"]) assert.match(ancestor[key], SHA);
     assert.equal(ancestor.baseSha, ancestor.parentSha, "ancestor candidate must base on its frozen parent");
     if (previousTerminal) assert.equal(ancestor.baseSha, previousTerminal, "ancestor failures must form an unbroken chain");
     const timestamp = instant(ancestor.createdAt, `ancestorFailures[${index}].createdAt`); assert.ok(timestamp > previousTime, "ancestor failures must be strictly chronological");
@@ -227,14 +239,34 @@ function bindAncestorArtifacts(ancestorFailures, artifacts, repository, observed
   }
   for (const ancestor of ancestorFailures) {
     const authority = byId.get(ancestor.artifactId); assert.ok(authority, "ancestor artifact ID has no fetched authority");
-    validateArtifactAuthority(authority, { name: `g01-bootstrap-failure-${ancestor.attemptId}`, headSha: ancestor.terminalDevelopSha, headBranch: "develop", event: "push", repository, observedAt, runId: ancestor.runId, completed: true, success: false }, "ancestor");
+    validateArtifactAuthority(authority, { name: ancestor.artifactName, headSha: ancestor.terminalDevelopSha, headBranch: "develop", event: "push", repository, observedAt, runId: ancestor.runId, runAttempt: ancestor.runAttempt, completed: true, success: false }, "ancestor");
+    assert.equal(ancestor.archiveDigest, authority.metadata.digest, "ancestor archive digest mismatch");
     assert.equal(ancestor.digest, authority.payloadDigest, "ancestor evidence object digest mismatch");
   }
 }
 
+export function validateBootstrapFailure(failure) {
+  exactKeys(failure, ["schemaVersion", "release", "status", "attemptId", "evidenceId", "failedPhase", "baseSha", "parentSha", "terminalDevelopSha", "headSha", "runId", "runAttempt", "createdAt", "reason"], "bootstrap failure");
+  assert.equal(failure.schemaVersion, 1); assert.equal(failure.release, "2.5.0"); assert.equal(failure.status, "G01_LANDED_UNSEALED");
+  assert.match(failure.attemptId, /^g01-(?:a|recovery-a)[0-9]{2,}$/); assert.equal(failure.evidenceId, `bootstrap-failure.${failure.attemptId}.json`); assert.ok(["F11", "SELECTION"].includes(failure.failedPhase));
+  for (const key of ["baseSha", "parentSha", "terminalDevelopSha", "headSha"]) assert.match(failure[key], SHA); assert.equal(failure.baseSha, failure.parentSha);
+  assert.ok(Number.isInteger(failure.runId) && failure.runId > 0); assert.ok(Number.isInteger(failure.runAttempt) && failure.runAttempt > 0); instant(failure.createdAt, "bootstrap failure createdAt"); assert.ok(typeof failure.reason === "string" && failure.reason.length > 0);
+  return failure;
+}
+
+function artifactBinding(authority) {
+  return { artifactId: authority.metadata.id, artifactName: authority.metadata.name, runId: authority.run.id, runAttempt: authority.run.run_attempt, headSha: authority.run.head_sha, archiveDigest: authority.metadata.digest, payloadDigest: authority.payloadDigest };
+}
+
+function validateSelectionRun(run, f11) {
+  assert.ok(run && typeof run === "object"); assert.equal(run.id, f11.postMergeRun.id); assert.equal(run.run_attempt, f11.postMergeRun.runAttempt);
+  assert.equal(run.head_sha, f11.terminalDevelopSha); assert.equal(run.head_branch, "develop"); assert.equal(run.event, "push");
+  assert.equal(run.name, WORKFLOW_NAME); assert.equal(run.path, WORKFLOW_PATH); assert.equal(run.repository?.full_name, f11.postMergeRun.repository);
+}
+
 export function buildSelection(f7, f9, f11, authority, ancestorFailures = [], ancestorArtifacts) {
   const { terminalDevelopSha, lineageSuffix } = validateEnvelopeChain(f7, f9, f11);
-  exactKeys(authority, ["pr", "developRef", "sourceRefStatus", "postMergeRun", "observedAt", "repository", "f7Artifact", "f9Artifact", "f11Artifact"], "selection authority");
+  exactKeys(authority, ["pr", "developRef", "sourceRefStatus", "postMergeRun", "selectionRun", "observedAt", "repository", "f7Artifact", "f9Artifact", "f11Artifact"], "selection authority");
   assert.equal(f7.attemptId, f9.attemptId); assert.equal(f9.attemptId, f11.attemptId); assert.equal(f7.sourceBranch, f11.sourceBranch);
   assert.equal(authority.pr.state, "closed"); assert.equal(authority.pr.merged, true); assert.equal(authority.pr.base?.ref, "develop");
   assert.equal(authority.pr.base?.repo?.full_name, authority.repository); assert.equal(authority.pr.head?.repo?.full_name, authority.repository);
@@ -242,11 +274,12 @@ export function buildSelection(f7, f9, f11, authority, ancestorFailures = [], an
   assert.equal(authority.developRef.object?.sha, terminalDevelopSha); assert.equal(authority.sourceRefStatus, 404);
   assert.deepEqual(authority.postMergeRun, f11.postMergeRun, "selection must re-fetch the exact F11 post-merge authority");
   validatePostMergeRun(authority.postMergeRun, { repository: authority.repository, mergeSha: terminalDevelopSha });
+  validateSelectionRun(authority.selectionRun, f11);
   for (const [artifactAuthority, envelope, name, headSha, branch, event, label] of [
-    [authority.f7Artifact, f7, `g01-candidate-evidence-${f7.sourceSha}`, f7.sourceSha, f7.sourceBranch, "pull_request", "F7"],
-    [authority.f9Artifact, f9, `g01-approval-${f11.prNumber}`, f7.sourceSha, f7.sourceBranch, "pull_request", "F9"],
-    [authority.f11Artifact, f11, `g01-merge-${f11.prNumber}`, terminalDevelopSha, "develop", "push", "F11"],
-  ]) validateArtifactAuthority(artifactAuthority, { name, headSha, headBranch: branch, event, repository: authority.repository, observedAt: authority.observedAt, runId: label === "F11" ? f11.postMergeRun.id : undefined, runAttempt: label === "F11" ? f11.postMergeRun.runAttempt : undefined, completed: label !== "F11" }, label);
+    [authority.f7Artifact, f7, artifactName("candidate", f7, authority.f7Artifact.run.id, authority.f7Artifact.run.run_attempt), f7.sourceSha, f7.sourceBranch, "pull_request", "F7"],
+    [authority.f9Artifact, f9, artifactName("approval", f9, authority.f9Artifact.run.id, authority.f9Artifact.run.run_attempt), f7.sourceSha, f7.sourceBranch, "pull_request", "F9"],
+    [authority.f11Artifact, f11, artifactName("merge", f11, f11.postMergeRun.id, f11.postMergeRun.runAttempt), terminalDevelopSha, "develop", "push", "F11"],
+  ]) validateArtifactAuthority(artifactAuthority, { name, headSha, headBranch: branch, event, repository: authority.repository, observedAt: authority.observedAt, runId: label === "F11" ? f11.postMergeRun.id : undefined, runAttempt: label === "F11" ? f11.postMergeRun.runAttempt : undefined, completed: label !== "F11", payload: envelope }, label);
   const ancestors = validateAncestorFailures(ancestorFailures); bindAncestorArtifacts(ancestors, ancestorArtifacts, authority.repository, authority.observedAt);
   if (f11.sourceBranch === "feature/2.5.0-g01-canonical-evidence-bootstrap") {
     assert.match(f11.attemptId, /^g01-a[0-9]{2,}$/); assert.equal(lineageSuffix, "g01.json"); assert.equal(ancestors.length, 0);
@@ -257,7 +290,8 @@ export function buildSelection(f7, f9, f11, authority, ancestorFailures = [], an
     assert.equal(authority.pr.base?.sha, ancestors.at(-1).terminalDevelopSha);
   }
   const createdAt = authority.observedAt; assert.ok(instant(f11.createdAt, "F11.createdAt") < instant(createdAt, "selection observedAt"));
-  return { schemaVersion: 1, release: "2.5.0", attemptId: f11.attemptId, terminalKind: f11.sourceBranch.includes("postmerge-bootstrap") ? "landed-recovery" : "direct-canonical", f7Id: f7.evidenceId, f7Digest: f7.digest, f9Id: f9.evidenceId, f9Digest: f9.digest, f11Id: f11.evidenceId, f11Digest: f11.digest, terminalDevelopSha, createdAt, remoteDeleted: true, status: "SELECTED_GREEN", ancestorFailures: ancestors, bootstrapSupersessionChainDigest: compactDigest(ancestors) };
+  const core = { schemaVersion: 1, release: "2.5.0", evidenceId: `bootstrap-selection.${f11.attemptId}.json`, attemptId: f11.attemptId, terminalKind: f11.sourceBranch.includes("postmerge-bootstrap") ? "landed-recovery" : "direct-canonical", f7Id: f7.evidenceId, f7Digest: f7.digest, f9Id: f9.evidenceId, f9Digest: f9.digest, f11Id: f11.evidenceId, f11Digest: f11.digest, terminalDevelopSha, createdAt, remoteDeleted: true, status: "SELECTED_GREEN", ancestorFailures: ancestors, bootstrapSupersessionChainDigest: compactDigest(ancestors), artifactBindings: { f7: artifactBinding(authority.f7Artifact), f9: artifactBinding(authority.f9Artifact), f11: artifactBinding(authority.f11Artifact) } };
+  return { ...core, selectionDigest: compactDigest(core) };
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
