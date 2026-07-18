@@ -28,7 +28,16 @@ test('room context menu supports pointer, keyboard navigation, focus restore, an
   await page.keyboard.press('Escape');
 
   await page.setViewportSize({ width: 360, height: 240 });
-  await card.click({ button: 'right', position: { x: 4, y: 4 } });
+  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  await card.dispatchEvent('contextmenu', {
+    bubbles: true,
+    button: 2,
+    buttons: 2,
+    cancelable: true,
+    clientX: 4,
+    clientY: 4
+  });
+  await expect(menu).toBeVisible();
   const box = await menu.boundingBox();
   expect(box).not.toBeNull();
   expect(box!.x).toBeGreaterThanOrEqual(8);
@@ -37,7 +46,15 @@ test('room context menu supports pointer, keyboard navigation, focus restore, an
   expect(box!.y + box!.height).toBeLessThanOrEqual(232);
 
   await page.setViewportSize({ width: 360, height: 120 });
-  await card.click({ button: 'right', position: { x: 4, y: 4 } });
+  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  await card.dispatchEvent('contextmenu', {
+    bubbles: true,
+    button: 2,
+    buttons: 2,
+    cancelable: true,
+    clientX: 4,
+    clientY: 4
+  });
   await menu.evaluate((element) => {
     element.scrollTop = element.scrollHeight;
     element.dispatchEvent(new Event('scroll'));
