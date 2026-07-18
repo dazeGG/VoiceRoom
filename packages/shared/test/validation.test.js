@@ -67,8 +67,13 @@ test('cleanStreamId validates the pattern', () => {
 });
 
 test('cleanScreenProfileId only allows known profiles', () => {
+  assert.equal(cleanScreenProfileId('balanced-5'), 'balanced-5');
   assert.equal(cleanScreenProfileId('balanced-30'), 'balanced-30');
+  assert.equal(cleanScreenProfileId('high-5'), 'high-5');
   assert.equal(cleanScreenProfileId('high'), 'high');
+  assert.equal(cleanScreenProfileId('source-5'), 'source-5');
+  assert.equal(cleanScreenProfileId('source-15'), 'source-15');
+  assert.equal(cleanScreenProfileId('source-30'), 'source-30');
   assert.equal(cleanScreenProfileId('ultra-120'), '');
   assert.equal(cleanScreenProfileId(''), '');
 });
