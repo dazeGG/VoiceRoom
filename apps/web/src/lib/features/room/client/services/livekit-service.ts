@@ -278,6 +278,12 @@ export function syncLiveKitParticipant(participant: RemoteParticipant | null | u
 function createLiveKitParticipant(participant: LiveKitParticipant): Participant | null {
   if (!isServerKnownRemotePeer(participant.identity)) return null;
 
+  const screenPresence = getScreenPublicationPresence(
+    participant.trackPublications.values(),
+    isScreenVideoPublication,
+    isScreenAudioPublication
+  );
+
   // muted/deafened intentionally omitted: presence (`room.peer.updated`) is the
   // single source of truth for them. LiveKit's isMicrophoneEnabled reflects track
   // publication state, not user intent (local mute only disables the capture track).
@@ -286,7 +292,8 @@ function createLiveKitParticipant(participant: LiveKitParticipant): Participant 
     isLocal: participant.isLocal || participant.identity === state.peerId,
     joinedAt: participant.joinedAt ? participant.joinedAt.getTime() : Date.now(),
     name: participant.name || participant.identity,
-    screen: participant.isScreenShareEnabled
+    screen: participant.isScreenShareEnabled || screenPresence.active,
+    screenAudio: screenPresence.hasAudio
   });
   peer.livekitParticipant = participant;
   peer.voiceIssue = '';
