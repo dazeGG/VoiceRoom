@@ -4,7 +4,8 @@ import { clampStreamVolume, normalizeStoredStreamVolume, storeStreamVolume } fro
 import { MAX_STREAM_VOLUME } from '../core/config';
 import {
   isAppPlaybackMuted,
-  applyScreenMediaElementVolume
+  applyScreenMediaElementVolume,
+  releaseScreenMediaElement
 } from '../services/media-playback-service';
 import {
   bumpScreenUiRevision,
@@ -20,6 +21,48 @@ const SCREEN_UI_IDLE_MS = 1000;
 let screenUiIdleTimer = 0;
 let screenStagePointerInside = false;
 let screenUiHoverBound = false;
+let screenAudioFallback: HTMLAudioElement | null = null;
+let screenAudioFallbackTrackId = '';
+
+function releaseScreenAudioFallback(): void {
+  if (!screenAudioFallback) return;
+  screenAudioFallback.pause();
+  releaseScreenMediaElement(screenAudioFallback);
+  screenAudioFallback.srcObject = null;
+  screenAudioFallback.remove();
+  screenAudioFallback = null;
+  screenAudioFallbackTrackId = '';
+}
+
+export function syncScreenAudioFallback(peer: Participant | null, hasVideoStream: boolean): void {
+  const audioTrack = !hasVideoStream && peer && !peer.isLocal
+    ? peer.screenStream?.getAudioTracks().find((track) => track.readyState !== 'ended') || null
+    : null;
+  if (!audioTrack) {
+    releaseScreenAudioFallback();
+    return;
+  }
+
+  if (!screenAudioFallback || screenAudioFallbackTrackId !== audioTrack.id) {
+    releaseScreenAudioFallback();
+    const audio = document.createElement('audio');
+    audio.autoplay = true;
+    audio.muted = true;
+    audio.srcObject = new MediaStream([audioTrack]);
+    document.body.append(audio);
+    screenAudioFallback = audio;
+    screenAudioFallbackTrackId = audioTrack.id;
+    audioTrack.addEventListener('ended', () => {
+      if (screenAudioFallbackTrackId === audioTrack.id) releaseScreenAudioFallback();
+    }, { once: true });
+  }
+
+  syncScreenVideoAudio();
+}
+
+export function stopScreenAudioFallback(): void {
+  releaseScreenAudioFallback();
+}
 
 export function refreshScreenMeta(participant: Participant | null): void {
   screenUi.showMeta = Boolean(participant);
@@ -38,22 +81,31 @@ export function refreshStageStripControls(): void {
 
 export function syncScreenVideoAudio(): void {
   const video = getScreenVideo();
-  if (!video) return;
+  if (!video && !screenAudioFallback) return;
 
   const peer = getActiveScreenPeer();
   const isLocalStream = Boolean(peer?.isLocal);
-  const isRemoteStreamActive = Boolean(peer && !peer.isLocal && video.srcObject);
+  const isRemoteStreamActive = Boolean(peer && !peer.isLocal && video?.srcObject);
   const maxStreamVolume = MAX_STREAM_VOLUME;
   const streamVolume = clampStreamVolume(state.screenVolume, maxStreamVolume);
   if (state.screenVolume !== streamVolume) {
     state.screenVolume = normalizeStoredStreamVolume(state.screenVolume, maxStreamVolume);
   }
   const muted = isLocalStream || state.screenMuted || streamVolume <= 0 || isAppPlaybackMuted();
-  applyScreenMediaElementVolume(video, {
-    boostAllowed: isRemoteStreamActive,
-    muted,
-    volume: isLocalStream ? 0 : streamVolume
-  });
+  if (video) {
+    applyScreenMediaElementVolume(video, {
+      boostAllowed: isRemoteStreamActive,
+      muted,
+      volume: isLocalStream ? 0 : streamVolume
+    });
+  }
+  if (screenAudioFallback) {
+    applyScreenMediaElementVolume(screenAudioFallback, {
+      boostAllowed: true,
+      muted,
+      volume: streamVolume
+    });
+  }
   const slider = getStreamVolumeSlider();
   if (!isLocalStream && slider) {
     slider.max = String(maxStreamVolume * 100);

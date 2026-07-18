@@ -329,7 +329,8 @@ function isRemoteScreenTrack(peer: Participant, track: MediaStreamTrack, stream:
 
 export function attachRemoteScreenStream(peer: Participant, stream: MediaStream): void {
   const screenStream = mergeRemoteScreenStream(peer, stream);
-  peer.screen = true;
+  const hasVideo = screenStream.getVideoTracks().some((track) => track.readyState !== 'ended');
+  peer.screen = peer.screen || hasVideo;
   peer.screenStream = screenStream;
   peer.screenAudio = peer.screenAudio || screenStream.getAudioTracks().some((track) => track.readyState !== 'ended');
   peer.screenStreamId ||= screenStream.id;
@@ -337,17 +338,14 @@ export function attachRemoteScreenStream(peer: Participant, stream: MediaStream)
   for (const track of screenStream.getVideoTracks()) {
     if (watchedRemoteScreenTracks.has(track)) continue;
     watchedRemoteScreenTracks.add(track);
-    track.addEventListener('ended', () => detachRemoteScreen(peer), { once: true });
+    track.addEventListener('ended', () => detachRemoteScreenVideoTrack(peer, track.id), { once: true });
   }
   for (const track of screenStream.getAudioTracks()) {
     if (watchedRemoteScreenTracks.has(track)) continue;
     watchedRemoteScreenTracks.add(track);
     track.addEventListener(
       'ended',
-      () => {
-        peer.screenAudio = false;
-        refreshScreenStageSoon();
-      },
+      () => detachRemoteScreenAudioTrack(peer, track.id),
       { once: true }
     );
   }
@@ -359,10 +357,17 @@ export function attachRemoteScreenStream(peer: Participant, stream: MediaStream)
     return;
   }
 
-  state.screenRequesting = false;
-  refreshAllScreenActionsSoon();
-  refreshScreenStageSoon();
-  refreshScreenTilesSoon();
+  if (hasVideo) state.screenRequesting = false;
+  if (hasVideo) {
+    refreshAllScreenActionsSoon();
+    refreshScreenStageSoon();
+    refreshScreenTilesSoon();
+  } else if (state.viewedScreenPeerId === peer.id) {
+    // Screen audio can arrive after a transient video unsubscribe. Refresh the
+    // already-open stage so its routed audio-only fallback starts immediately
+    // instead of waiting for a later video or unrelated UI update.
+    refreshScreenStageSoon();
+  }
   updatePeerStatus(peer);
   refreshParticipantState();
 }
@@ -376,6 +381,56 @@ function mergeRemoteScreenStream(peer: Participant, stream: MediaStream): MediaS
   }
 
   return peer.screenStream;
+}
+
+export function hasRemoteScreenVideo(peer: Participant | null | undefined): boolean {
+  return Boolean(peer?.screenStream?.getVideoTracks().some((track) => track.readyState !== 'ended'));
+}
+
+export function detachRemoteScreenVideoTrack(peer: Participant, trackId: string): void {
+  detachRemoteScreenVideoTracks(peer, trackId);
+}
+
+export function detachRemoteScreenVideoTracks(peer: Participant, trackId = ''): void {
+  const stream = peer.screenStream;
+  if (!stream) return;
+
+  let removed = false;
+  for (const track of stream.getVideoTracks()) {
+    if (trackId && track.id !== trackId) continue;
+    stream.removeTrack(track);
+    removed = true;
+  }
+  if (!removed) return;
+  if (stream.getTracks().length === 0) peer.screenStream = null;
+  if (!hasRemoteScreenVideo(peer)) {
+    if (state.viewedScreenPeerId === peer.id) state.screenRequesting = true;
+    if (!peer.screen && state.sharedScreenPeerId === peer.id) hideScreenStageSoon();
+  }
+
+  refreshScreenStageSoon();
+  refreshScreenTilesSoon();
+  updatePeerStatus(peer);
+  refreshParticipantState();
+}
+
+export function detachRemoteScreenAudioTrack(peer: Participant, trackId: string): void {
+  const stream = peer.screenStream;
+  if (!stream) return;
+
+  let removed = false;
+  for (const track of stream.getAudioTracks()) {
+    if (track.id !== trackId) continue;
+    stream.removeTrack(track);
+    removed = true;
+  }
+  if (!removed) return;
+  if (stream.getTracks().length === 0) peer.screenStream = null;
+
+  refreshScreenStageSoon();
+  refreshScreenTilesSoon();
+  updatePeerStatus(peer);
+  refreshParticipantState();
 }
 
 export function detachRemoteScreen(peer: Participant): void {

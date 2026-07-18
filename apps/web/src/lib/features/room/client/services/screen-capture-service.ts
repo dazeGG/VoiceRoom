@@ -231,7 +231,7 @@ function getDesktopPickerProfile(selection: DesktopPickerSelection, fallbackProf
 }
 
 async function openStagedDesktopScreenShare(profile: ScreenProfile, withAudio: boolean): Promise<MediaStream> {
-  const stream = await openStagedDesktopDisplayMedia();
+  const stream = await openStagedDesktopDisplayMedia(profile);
 
   if (!withAudio) return stream;
 
@@ -258,14 +258,22 @@ async function openStagedDesktopScreenShare(profile: ScreenProfile, withAudio: b
   return stream;
 }
 
-async function openStagedDesktopDisplayMedia(): Promise<MediaStream> {
+async function openStagedDesktopDisplayMedia(profile: ScreenProfile): Promise<MediaStream> {
   if (!navigator.mediaDevices?.getDisplayMedia) {
     throw new Error('Desktop-оболочка не поддерживает staged display media capture.');
   }
 
+  const video: MediaTrackConstraints = {
+    frameRate: { ideal: profile.frameRate, max: profile.frameRate }
+  };
+  if (!SCREEN_QUALITY_OPTIONS[profile.qualityId]?.source) {
+    video.height = { ideal: profile.height, max: profile.height };
+    video.width = { ideal: profile.width, max: profile.width };
+  }
+
   return navigator.mediaDevices.getDisplayMedia({
     audio: false,
-    video: true
+    video
   });
 }
 
@@ -503,7 +511,7 @@ function createDesktopCaptureAttempts(
   if (typeof navigator.mediaDevices?.getDisplayMedia === 'function' && window.voiceRoomDesktopCapture?.selectSource) {
     attempts.push({
       method: withAudio ? `getDisplayMedia-${audioMode}` : 'getDisplayMedia-video',
-      open: () => openDesktopDisplayMediaStream(sourceId, withAudio, audioMode)
+      open: () => openDesktopDisplayMediaStream(sourceId, withAudio, audioMode, profile)
     });
   }
 
@@ -520,7 +528,8 @@ function createDesktopCaptureAttempts(
 async function openDesktopDisplayMediaStream(
   sourceId: string,
   withAudio: boolean,
-  audioMode: string = withAudio ? 'loopback' : 'none'
+  audioMode: string = withAudio ? 'loopback' : 'none',
+  profile: ScreenProfile = getScreenProfile(DEFAULT_SCREEN_PROFILE_ID)
 ): Promise<MediaStream> {
   if (!navigator.mediaDevices?.getDisplayMedia) {
     throw new Error('Desktop-оболочка не поддерживает display media capture.');
@@ -534,6 +543,9 @@ async function openDesktopDisplayMediaStream(
     allowEchoFallback: false,
     enabled: withAudio,
     mode: audioMode
+  }, {
+    fpsId: profile.fpsId,
+    qualityId: profile.qualityId
   });
   return navigator.mediaDevices.getDisplayMedia({
     audio: withAudio,
@@ -597,11 +609,11 @@ export async function applyScreenCaptureProfile(stream: MediaStream, profile: Sc
 
   try {
     const constraints: MediaTrackConstraints = {
-      frameRate: { max: profile.frameRate }
+      frameRate: { ideal: profile.frameRate, max: profile.frameRate }
     };
     if (!SCREEN_QUALITY_OPTIONS[profile.qualityId]?.source) {
-      constraints.height = { max: profile.height };
-      constraints.width = { max: profile.width };
+      constraints.height = { ideal: profile.height, max: profile.height };
+      constraints.width = { ideal: profile.width, max: profile.width };
     }
     await videoTrack.applyConstraints(constraints);
   } catch (error) {

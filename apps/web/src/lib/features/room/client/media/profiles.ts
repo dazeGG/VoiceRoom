@@ -3,7 +3,6 @@ import {
   DEFAULT_SCREEN_FPS_ID,
   DEFAULT_SCREEN_PROFILE_ID,
   DEFAULT_SCREEN_QUALITY_ID,
-  SCREEN_ADAPT_PROFILE_ORDER_BY_MODE,
   SCREEN_STREAM_MODE_PROFILES,
   SCREEN_FPS_OPTIONS,
   SCREEN_QUALITY_OPTIONS,
@@ -88,29 +87,6 @@ function normalizeScreenFpsId(fpsId: string): string {
 
 export function createScreenProfileId(qualityId: string, fpsId: string): string {
   return `${normalizeScreenQualityId(qualityId)}-${normalizeScreenFpsId(fpsId)}`;
-}
-
-export function getScreenProfileRank(profileId: string, mode: ScreenStreamMode = getScreenModeForProfile(profileId)): number {
-  const order = getScreenAdaptProfileOrder(mode);
-  const rank = order.indexOf(getScreenProfile(profileId).id);
-  return rank >= 0 ? rank : order.indexOf(getScreenProfileForMode(mode).id);
-}
-
-export function getLowerScreenProfileId(profileId: string, mode: ScreenStreamMode = getScreenModeForProfile(profileId)): string {
-  const order = getScreenAdaptProfileOrder(mode);
-  const rank = getScreenProfileRank(profileId, mode);
-  return rank > 0 ? order[rank - 1] : '';
-}
-
-export function getHigherScreenProfileId(profileId: string, ceilingProfileId: string, mode: ScreenStreamMode = getScreenModeForProfile(profileId)): string {
-  const order = getScreenAdaptProfileOrder(mode);
-  const rank = getScreenProfileRank(profileId, mode);
-  const ceilingRank = getScreenProfileRank(ceilingProfileId, mode);
-  return rank < ceilingRank ? order[rank + 1] : '';
-}
-
-function getScreenAdaptProfileOrder(mode: ScreenStreamMode): readonly string[] {
-  return SCREEN_ADAPT_PROFILE_ORDER_BY_MODE[mode] || SCREEN_ADAPT_PROFILE_ORDER_BY_MODE.games;
 }
 
 export function getPreferredScreenVideoCodec(): 'h264' | 'vp9' | 'vp8' {

@@ -2,14 +2,20 @@
 
 const SCREEN_PROFILE_IDS = new Set([
   'balanced',
+  'balanced-5',
   'balanced-15',
   'balanced-30',
   'high',
+  'high-5',
   'high-15',
   'high-30',
   'low',
   'low-15',
-  'low-30'
+  'low-30',
+  'source',
+  'source-5',
+  'source-15',
+  'source-30'
 ]);
 
 const PRESENCE_STATUSES = Object.freeze([
