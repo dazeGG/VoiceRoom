@@ -335,29 +335,6 @@ jobs:
           path: merge-envelope.*.json
           if-no-files-found: error
           retention-days: 90
-      - name: Materialize landed-unsealed F11 failure after any failed postmerge step
-        if: always() && (failure() || steps.postmerge_checkout.outcome == 'failure' || steps.postmerge_node.outcome == 'failure')
-        run: |
-          set -euo pipefail
-          gh api -H 'Accept: application/vnd.github+json' "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/pulls" > fallback-prs.json
-          gh api --paginate "repos/$GITHUB_REPOSITORY/actions/artifacts?per_page=100" --slurp > fallback-artifacts.json
-          gh api --paginate "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?event=pull_request&per_page=100" --slurp > fallback-runs.json
-          node - <<'NODE'
-          const fs=require('node:fs'),prs=JSON.parse(fs.readFileSync('fallback-prs.json')).filter(p=>p.merged_at&&p.merge_commit_sha===process.env.GITHUB_SHA&&p.base?.ref==='develop'&&p.base?.repo?.full_name===process.env.GITHUB_REPOSITORY&&p.head?.repo?.full_name===process.env.GITHUB_REPOSITORY&&/^feature\/2\.5\.0-g01-(canonical-evidence-bootstrap|postmerge-bootstrap-a[0-9]{2,})$/.test(p.head?.ref));if(prs.length!==1)throw Error('failed postmerge run is not uniquely attributable to G01');const p=prs[0],all=JSON.parse(fs.readFileSync('fallback-artifacts.json')).flatMap(x=>x.artifacts),runs=JSON.parse(fs.readFileSync('fallback-runs.json')).flatMap(x=>x.workflow_runs),re=new RegExp(`^g01-candidate-(g01-(?:recovery-)?a[0-9]{2,})-run-([1-9][0-9]*)-attempt-([1-9][0-9]*)-head-${p.head.sha}$`),pairs=[];for(const f7 of all){const m=f7.name.match(re),run=m&&runs.find(r=>r.id===Number(m[2])&&r.run_attempt===Number(m[3])&&r.head_sha===p.head.sha&&r.head_branch===p.head.ref&&r.event==='pull_request'&&r.path==='.github/workflows/ci.yml'&&r.repository?.full_name===process.env.GITHUB_REPOSITORY&&r.status==='completed'&&r.conclusion==='success');if(!run||f7.expired||f7.workflow_run?.id!==run.id)continue;const matches=all.filter(a=>a.name===`g01-approval-${m[1]}-run-${m[2]}-attempt-${m[3]}-head-${p.head.sha}`&&!a.expired&&a.workflow_run?.id===run.id);if(matches.length===1)pairs.push({attempt:m[1],run,f7,f9:matches[0]});}const identities=[...new Set(pairs.map(x=>x.attempt))];if(identities.length!==1)throw Error(identities.length?'conflicting authenticated exact-head attempt identities':'authenticated exact-head F7/F9 identity absent');const selected=pairs.filter(x=>x.attempt===identities[0]).sort((a,b)=>b.run.run_attempt-a.run.run_attempt||b.run.id-a.run.id),top=selected[0];if(!top||(selected[1]&&selected[1].run.run_attempt===top.run.run_attempt&&selected[1].run.id===top.run.id))throw Error('fallback exact-head F7/F9 pair is absent or ambiguous');fs.writeFileSync('fallback-context.json',JSON.stringify({p,...top}));
-          NODE
-          for label in f7 f9; do id="$(LABEL="$label" node -p 'JSON.parse(require("node:fs").readFileSync("fallback-context.json"))[process.env.LABEL].id')"; gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$id" > "fallback-$label-metadata.json"; gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$id/zip" > "fallback-$label.zip"; run_id="$(node -p 'JSON.parse(require("node:fs").readFileSync("fallback-context.json")).run.id')"; gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id" > "fallback-$label-run.json"; rm -rf "/tmp/g01-fallback-$label"; mkdir "/tmp/g01-fallback-$label"; unzip -q "fallback-$label.zip" -d "/tmp/g01-fallback-$label"; done
-          f7_file="$(find /tmp/g01-fallback-f7 -maxdepth 1 -type f -name 'ci-bundle.*.json')"; f9_file="$(find /tmp/g01-fallback-f9 -maxdepth 1 -type f -name 'approval-envelope.*.json')"; test -f "$f7_file" && test -f "$f9_file" && test -f /tmp/g01-fallback-f7/candidate-registry-report.g01.json
-          F7_FILE="$f7_file" F9_FILE="$f9_file" node --input-type=module - <<'NODE'
-          import fs from 'node:fs';import crypto from 'node:crypto';import {validateEnvelope} from './scripts/evidence/validate-envelope.mjs';import {validateFallbackCandidatePair,envelopePayloadDigest} from './scripts/evidence/emit-bootstrap-selection.mjs';const read=p=>JSON.parse(fs.readFileSync(p)),context=read('fallback-context.json'),{p,attempt}=context,f7=validateEnvelope(read(process.env.F7_FILE),'F7'),f9=validateEnvelope(read(process.env.F9_FILE),'F9'),report=read('/tmp/g01-fallback-f7/candidate-registry-report.g01.json'),reportDigest=`sha256:${crypto.createHash('sha256').update(JSON.stringify(report)).digest('hex')}`;if(f7.attemptId!==attempt||f9.attemptId!==attempt||f9.f7Digest!==f7.digest||f7.digest!==reportDigest)throw Error('fallback report/F7/F9 lineage mismatch');for(const label of ['f7','f9']){const metadata=read(`fallback-${label}-metadata.json`),run=read(`fallback-${label}-run.json`),archiveDigest=`sha256:${crypto.createHash('sha256').update(fs.readFileSync(`fallback-${label}.zip`)).digest('hex')}`,expectedName=`g01-${label==='f7'?'candidate':'approval'}-${attempt}-run-${context.run.id}-attempt-${context.run.run_attempt}-head-${p.head.sha}`;if(metadata.name!==expectedName||metadata.digest!==archiveDigest||metadata.expired||metadata.workflow_run?.id!==run.id||run.id!==context.run.id||run.run_attempt!==context.run.run_attempt||run.head_sha!==p.head.sha||run.head_branch!==p.head.ref||run.event!=='pull_request'||run.path!=='.github/workflows/ci.yml'||run.repository?.full_name!==process.env.GITHUB_REPOSITORY||run.status!=='completed'||run.conclusion!=='success')throw Error('fallback producer provenance mismatch')}const fallbackArtifact=(label,envelope)=>{const metadata=read(`fallback-${label}-metadata.json`),run=read(`fallback-${label}-run.json`),downloadDigest=`sha256:${crypto.createHash('sha256').update(fs.readFileSync(`fallback-${label}.zip`)).digest('hex')}`;return{metadata,run,downloadDigest,payloadDigest:envelopePayloadDigest(envelope),matchCount:1}};validateFallbackCandidatePair(f7,f9,report,{repository:process.env.GITHUB_REPOSITORY,observedAt:new Date().toISOString(),f7Artifact:fallbackArtifact('f7',f7),f9Artifact:fallbackArtifact('f9',f9)});const recovery=report.registries.find(x=>x.name==='bootstrap-landed-recoveries.json')?.candidate,lineage=recovery?.landedAncestors??[];if(attempt.startsWith('g01-recovery-')&&!lineage.length)throw Error('recovery fallback cannot authenticate full lineage');const o={schemaVersion:1,release:'2.5.0',status:'G01_LANDED_UNSEALED',attemptId:attempt,evidenceId:`bootstrap-failure.${attempt}.json`,failedPhase:'F11',baseSha:p.base.sha,parentSha:p.base.sha,terminalDevelopSha:process.env.GITHUB_SHA,headSha:p.head.sha,runId:Number(process.env.GITHUB_RUN_ID),runAttempt:Number(process.env.GITHUB_RUN_ATTEMPT),createdAt:new Date().toISOString(),reason:'independent always-run fallback after postmerge checkout/setup/discovery/F11/upload failure',recoveryLineage:lineage};fs.writeFileSync(o.evidenceId,JSON.stringify(o)+'\n');fs.appendFileSync(process.env.GITHUB_ENV,`G01_ATTEMPT_ID=${attempt}\n`);
-          NODE
-      - name: Persist immutable landed-unsealed F11 failure
-        if: always() && hashFiles('bootstrap-failure.*.json') != ''
-        uses: actions/upload-artifact@v4
-        with:
-          name: g01-bootstrap-failure-${{ env.G01_ATTEMPT_ID }}-run-${{ github.run_id }}-attempt-${{ github.run_attempt }}-head-${{ github.sha }}-phase-f11
-          path: bootstrap-failure.*.json
-          if-no-files-found: error
-          retention-days: 90
 
   bootstrap-selection:
     name: G01 authenticated post-F11 terminal selection
@@ -449,39 +426,11 @@ jobs:
       - name: Publish externally consumable immutable selection metadata
         if: success()
         run: printf 'artifact_id=%s\nartifact_digest=%s\nselection_sha256=%s\n' '${{ steps.selection_upload.outputs.artifact-id }}' '${{ steps.selection_upload.outputs.artifact-digest }}' '${{ steps.selection.outputs.selection_sha256 }}' >> "$GITHUB_STEP_SUMMARY"
-      - name: Materialize landed-unsealed selection failure after any failed selection step
-        if: always() && (failure() || steps.selection_checkout.outcome == 'failure' || steps.selection_node.outcome == 'failure')
-        run: |
-          set -euo pipefail
-          test -f pr.json || gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" > pr.json
-          gh api --paginate "repos/$GITHUB_REPOSITORY/actions/artifacts?per_page=100" --slurp > fallback-artifacts.json
-          HEAD_SHA="$(node -p 'JSON.parse(require("node:fs").readFileSync("pr.json")).head.sha')" node - <<'NODE'
-          const fs=require('node:fs'),all=JSON.parse(fs.readFileSync('fallback-artifacts.json')).flatMap(x=>x.artifacts),prefix=`${process.env.ATTEMPT_ID}-run-${process.env.PREMERGE_RUN_ID}-attempt-${process.env.PREMERGE_RUN_ATTEMPT}-head-${process.env.HEAD_SHA}`,pick=(kind)=>{const name=`g01-${kind}-${prefix}`,rows=all.filter(a=>a.name===name&&!a.expired&&a.workflow_run?.id===Number(process.env.PREMERGE_RUN_ID));if(rows.length!==1)throw Error(`fallback ${kind} exact artifact absent or ambiguous`);return rows[0]};fs.writeFileSync('fallback-pair.json',JSON.stringify({f7:pick('candidate'),f9:pick('approval')}));
-          NODE
-          for label in f7 f9; do
-            id="$(LABEL="$label" node -p 'JSON.parse(require("node:fs").readFileSync("fallback-pair.json"))[process.env.LABEL].id')"
-            gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$id" > "fallback-$label-metadata.json"
-            gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$id/zip" > "fallback-$label.zip"
-            gh api "repos/$GITHUB_REPOSITORY/actions/runs/$PREMERGE_RUN_ID" > "fallback-$label-run.json"
-            rm -rf "/tmp/g01-selection-$label"; mkdir "/tmp/g01-selection-$label"; unzip -q "fallback-$label.zip" -d "/tmp/g01-selection-$label"
-          done
-          f7_file="$(find /tmp/g01-selection-f7 -maxdepth 1 -type f -name 'ci-bundle.*.json')"; f9_file="$(find /tmp/g01-selection-f9 -maxdepth 1 -type f -name 'approval-envelope.*.json')"; test -f "$f7_file" && test -f "$f9_file" && test -f /tmp/g01-selection-f7/candidate-registry-report.g01.json
-          F7_FILE="$f7_file" F9_FILE="$f9_file" node --input-type=module - <<'NODE'
-          import fs from 'node:fs';import crypto from 'node:crypto';import {validateEnvelope} from './scripts/evidence/validate-envelope.mjs';import {validateFallbackCandidatePair,envelopePayloadDigest} from './scripts/evidence/emit-bootstrap-selection.mjs';const read=p=>JSON.parse(fs.readFileSync(p)),f7=validateEnvelope(read(process.env.F7_FILE),'F7'),f9=validateEnvelope(read(process.env.F9_FILE),'F9'),report=read('/tmp/g01-selection-f7/candidate-registry-report.g01.json'),expected=`sha256:${crypto.createHash('sha256').update(JSON.stringify(report)).digest('hex')}`;if(f7.attemptId!==process.env.ATTEMPT_ID||f9.attemptId!==f7.attemptId||f9.f7Digest!==f7.digest||f7.digest!==expected)throw Error('fallback F7/F9/report lineage mismatch');for(const label of ['f7','f9']){const metadata=read(`fallback-${label}-metadata.json`),run=read(`fallback-${label}-run.json`),archive=fs.readFileSync(`fallback-${label}.zip`),download=`sha256:${crypto.createHash('sha256').update(archive).digest('hex')}`,expectedName=`g01-${label==='f7'?'candidate':'approval'}-${process.env.ATTEMPT_ID}-run-${process.env.PREMERGE_RUN_ID}-attempt-${process.env.PREMERGE_RUN_ATTEMPT}-head-${f7.sourceSha}`;if(metadata.name!==expectedName||metadata.digest!==download||metadata.expired||metadata.workflow_run?.id!==run.id||run.id!==Number(process.env.PREMERGE_RUN_ID)||run.run_attempt!==Number(process.env.PREMERGE_RUN_ATTEMPT)||run.head_sha!==f7.sourceSha||run.head_branch!==f7.sourceBranch||run.event!=='pull_request'||run.path!=='.github/workflows/ci.yml'||run.repository?.full_name!==process.env.GITHUB_REPOSITORY)throw Error('fallback artifact producer provenance mismatch')}const fallbackArtifact=(label,envelope)=>{const metadata=read(`fallback-${label}-metadata.json`),run=read(`fallback-${label}-run.json`),downloadDigest=`sha256:${crypto.createHash('sha256').update(fs.readFileSync(`fallback-${label}.zip`)).digest('hex')}`;return{metadata,run,downloadDigest,payloadDigest:envelopePayloadDigest(envelope),matchCount:1}};validateFallbackCandidatePair(f7,f9,report,{repository:process.env.GITHUB_REPOSITORY,observedAt:new Date().toISOString(),f7Artifact:fallbackArtifact('f7',f7),f9Artifact:fallbackArtifact('f9',f9)});const r=report.registries.find(x=>x.name==='bootstrap-landed-recoveries.json')?.candidate,lineage=r?.landedAncestors??[];if(f7.attemptId.startsWith('g01-recovery-')&&!lineage.length)throw Error('selection fallback cannot authenticate full recovery lineage');const p=read('pr.json'),o={schemaVersion:1,release:'2.5.0',status:'G01_LANDED_UNSEALED',attemptId:f7.attemptId,evidenceId:`bootstrap-failure.${f7.attemptId}.json`,failedPhase:'SELECTION',baseSha:p.base.sha,parentSha:p.base.sha,terminalDevelopSha:process.env.GITHUB_SHA,headSha:p.head.sha,runId:Number(process.env.GITHUB_RUN_ID),runAttempt:Number(process.env.GITHUB_RUN_ATTEMPT),createdAt:new Date().toISOString(),reason:'independent always-run fallback after selection checkout/setup/discovery/selection/upload failure',recoveryLineage:lineage};fs.writeFileSync(o.evidenceId,JSON.stringify(o)+'\n');
-          NODE
-      - name: Persist immutable landed-unsealed selection failure
-        if: always() && hashFiles('bootstrap-failure.*.json') != ''
-        uses: actions/upload-artifact@v4
-        with:
-          name: g01-bootstrap-failure-${{ env.ATTEMPT_ID }}-run-${{ github.run_id }}-attempt-${{ github.run_attempt }}-head-${{ github.sha }}-phase-selection
-          path: bootstrap-failure.*.json
-          if-no-files-found: error
-          retention-days: 90
 
 
   bootstrap-f11-early-recorder:
     name: G01 inline early F11 failure recorder
-    needs: [check, test]
+    needs: [check, test, bootstrap-postmerge]
     if: always() && github.event_name == 'push' && github.ref == 'refs/heads/develop'
     runs-on: ubuntu-latest
     permissions:
@@ -492,34 +441,67 @@ jobs:
       recorded: ${{ steps.record.outputs.recorded }}
     env:
       GH_TOKEN: ${{ github.token }}
-      CHECK_RESULT: ${{ needs.check.result }}
-      TEST_RESULT: ${{ needs.test.result }}
     steps:
       - id: record
-        name: Resolve G01 inline and record dependency failure before checkout
+        name: Self-contained checkout-free G01 failure recorder
         shell: bash
+        env:
+          CHECK_RESULT: ${{ needs.check.result }}
+          TEST_RESULT: ${{ needs.test.result }}
+          POSTMERGE_RESULT: ${{ needs.bootstrap-postmerge.result }}
         run: |
           set -euo pipefail
           echo 'recorded=false' >> "$GITHUB_OUTPUT"
+          if [[ "$POSTMERGE_RESULT" == success ]]; then exit 0; fi
           gh api -H 'Accept: application/vnd.github+json' "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/pulls" > early-prs.json
           gh api --paginate "repos/$GITHUB_REPOSITORY/actions/artifacts?per_page=100" --slurp > early-artifacts.json
-          node - <<'NODE'
-          const fs=require('node:fs'),prs=JSON.parse(fs.readFileSync('early-prs.json')).filter(p=>p.merged_at&&p.merge_commit_sha===process.env.GITHUB_SHA&&p.base?.ref==='develop'&&p.base?.repo?.full_name===process.env.GITHUB_REPOSITORY&&p.head?.repo?.full_name===process.env.GITHUB_REPOSITORY&&/^feature\/2\.5\.0-g01-(canonical-evidence-bootstrap|postmerge-bootstrap-a[0-9]{2,})$/.test(p.head?.ref));if(prs.length>1)throw Error('ambiguous G01 merge');if(!prs.length||process.env.CHECK_RESULT==='success'&&process.env.TEST_RESULT==='success')process.exit(0);const p=prs[0],all=JSON.parse(fs.readFileSync('early-artifacts.json')).flatMap(x=>x.artifacts),re=new RegExp(`^g01-candidate-(g01-(?:recovery-)?a[0-9]{2,})-run-([1-9][0-9]*)-attempt-([1-9][0-9]*)-head-${p.head.sha}$`),matches=all.filter(a=>!a.expired&&a.workflow_run?.id&&re.test(a.name));if(matches.length!==1)throw Error('inline F11 recorder requires one exact F7 artifact');const m=matches[0].name.match(re),f9=all.filter(a=>!a.expired&&a.workflow_run?.id===matches[0].workflow_run.id&&a.name===`g01-approval-${m[1]}-run-${m[2]}-attempt-${m[3]}-head-${p.head.sha}`);if(f9.length!==1)throw Error('inline F11 recorder requires one exact F9 artifact');fs.writeFileSync('early-context.json',JSON.stringify({p,f7Metadata:matches[0],f9Metadata:f9[0]}));
+          gh api --paginate "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?event=pull_request&per_page=100" --slurp > early-runs.json
+          G01_PREFIX=early node - <<'NODE'
+          const fs=require('node:fs'),prs=JSON.parse(fs.readFileSync(`${process.env.G01_PREFIX}-prs.json`)).filter(p=>p.merged_at&&p.merge_commit_sha===process.env.GITHUB_SHA&&p.base?.ref==='develop'&&p.base?.repo?.full_name===process.env.GITHUB_REPOSITORY&&p.head?.repo?.full_name===process.env.GITHUB_REPOSITORY&&/^feature\/2\.5\.0-g01-(canonical-evidence-bootstrap|postmerge-bootstrap-a[0-9]{2,})$/.test(p.head?.ref));if(prs.length>1)throw Error('ambiguous G01 merge');if(!prs.length)process.exit(0);const p=prs[0],all=JSON.parse(fs.readFileSync(`${process.env.G01_PREFIX}-artifacts.json`)).flatMap(x=>x.artifacts),runs=JSON.parse(fs.readFileSync(`${process.env.G01_PREFIX}-runs.json`)).flatMap(x=>x.workflow_runs),re=new RegExp(`^g01-candidate-(g01-(?:recovery-)?a[0-9]{2,})-run-([1-9][0-9]*)-attempt-([1-9][0-9]*)-head-${p.head.sha}$`),pairs=[];for(const a of all.filter(a=>!a.expired&&re.test(a.name||''))){const m=a.name.match(re),approval=`g01-approval-${m[1]}-run-${m[2]}-attempt-${m[3]}-head-${p.head.sha}`,f9=all.filter(x=>!x.expired&&x.name===approval&&x.workflow_run?.id===a.workflow_run?.id);if(f9.length>1)throw Error('ambiguous exact F9 artifact');const run=runs.find(x=>x.id===Number(m[2])&&x.run_attempt===Number(m[3])&&x.head_sha===p.head.sha&&x.head_branch===p.head.ref&&x.event==='pull_request'&&x.path==='.github/workflows/ci.yml'&&x.repository?.full_name===process.env.GITHUB_REPOSITORY&&x.status==='completed'&&x.conclusion==='success');if(f9.length===1&&run)pairs.push({a,f9:f9[0],runId:run.id,runAttempt:run.run_attempt})}pairs.sort((x,y)=>y.runAttempt-x.runAttempt||y.runId-x.runId||y.a.id-x.a.id);if(!pairs.length)throw Error('authenticated F7/F9 pair absent');const top=pairs[0],ties=pairs.filter(x=>x.runAttempt===top.runAttempt&&x.runId===top.runId);if(ties.length!==1)throw Error('ambiguous canonical F7/F9 pair');fs.writeFileSync(`${process.env.G01_PREFIX}-context.json`,JSON.stringify({p,f7Metadata:top.a,f9Metadata:top.f9,runId:top.runId,runAttempt:top.runAttempt}));
           NODE
+          test -f early-context.json || exit 0
           f7_artifact_id="$(node -p 'JSON.parse(require("node:fs").readFileSync("early-context.json")).f7Metadata.id')"
           f9_artifact_id="$(node -p 'JSON.parse(require("node:fs").readFileSync("early-context.json")).f9Metadata.id')"
-          producer_run_id="$(node -p 'JSON.parse(require("node:fs").readFileSync("early-context.json")).f7Metadata.workflow_run.id')"
+          producer_run_id="$(node -p 'JSON.parse(require("node:fs").readFileSync("early-context.json")).runId')"
           gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$f7_artifact_id" > early-metadata.json
           gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$f9_artifact_id" > early-f9-metadata.json
           gh api "repos/$GITHUB_REPOSITORY/actions/runs/$producer_run_id" > early-producer-run.json
           gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" > early-current-run.json
           gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$f7_artifact_id/zip" > early-f7.zip
           gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$f9_artifact_id/zip" > early-f9.zip
-          mkdir -p /tmp/g01-early-f7 /tmp/g01-early-f9 && unzip -q early-f7.zip -d /tmp/g01-early-f7 && unzip -q early-f9.zip -d /tmp/g01-early-f9
-          node --input-type=module - <<'NODE'
-          import fs from 'node:fs';import crypto from 'node:crypto';import {buildAuthenticatedEarlyFailure,envelopePayloadDigest} from './scripts/evidence/emit-bootstrap-selection.mjs';const read=p=>JSON.parse(fs.readFileSync(p)),context=read('early-context.json'),f7File=fs.readdirSync('/tmp/g01-early-f7').find(x=>/^ci-bundle\..+\.json$/.test(x));if(!f7File)throw Error('authenticated F7 payload missing');const f7=read(`/tmp/g01-early-f7/${f7File}`),candidateReport=read('/tmp/g01-early-f7/candidate-registry-report.g01.json'),f9File=fs.readdirSync('/tmp/g01-early-f9').find(x=>/^approval-envelope\..+\.json$/.test(x));if(!f9File)throw Error('authenticated F9 payload missing');const f9=read(`/tmp/g01-early-f9/${f9File}`),metadata=read('early-metadata.json'),f9Metadata=read('early-f9-metadata.json'),run=read('early-producer-run.json'),archiveDigest=`sha256:${crypto.createHash('sha256').update(fs.readFileSync('early-f7.zip')).digest('hex')}`,f9ArchiveDigest=`sha256:${crypto.createHash('sha256').update(fs.readFileSync('early-f9.zip')).digest('hex')}`,createdAt=new Date().toISOString(),failure=buildAuthenticatedEarlyFailure({pr:context.p,currentRun:read('early-current-run.json'),f7,f9,candidateReport,f7Artifact:{metadata,run,downloadDigest:archiveDigest,payloadDigest:envelopePayloadDigest(f7),matchCount:1},f9Artifact:{metadata:f9Metadata,run,downloadDigest:f9ArchiveDigest,payloadDigest:envelopePayloadDigest(f9),matchCount:1},failedPhase:'F11',createdAt,reason:`inline early recorder: check=${process.env.CHECK_RESULT}, test=${process.env.TEST_RESULT}`,repository:process.env.GITHUB_REPOSITORY});fs.writeFileSync(failure.evidenceId,JSON.stringify(failure)+'\n');fs.appendFileSync(process.env.GITHUB_OUTPUT,'recorded=true\n');fs.appendFileSync(process.env.GITHUB_ENV,`G01_EARLY_ATTEMPT_ID=${failure.attemptId}\n`);
+          rm -rf /tmp/g01-early-f7 /tmp/g01-early-f9
+          mkdir -p /tmp/g01-early-f7 /tmp/g01-early-f9
+          unzip -q early-f7.zip -d /tmp/g01-early-f7
+          unzip -q early-f9.zip -d /tmp/g01-early-f9
+          G01_RECORDER_PREFIX=early G01_FAILED_PHASE=F11 G01_REASON="inline early recorder: dependency job prevented postmerge F11" node <<'NODE'
+          // G01_INLINE_RECORDER_START
+          const fs=require('node:fs'),crypto=require('node:crypto'),assert=require('node:assert/strict');
+          const prefix=process.env.G01_RECORDER_PREFIX,phase=process.env.G01_FAILED_PHASE,repo=process.env.GITHUB_REPOSITORY;
+          const read=p=>JSON.parse(fs.readFileSync(p)),sha=/^[0-9a-f]{40}$/,dig=/^sha256:[0-9a-f]{64}$/;
+          const hash=b=>'sha256:'+crypto.createHash('sha256').update(b).digest('hex'),compact=x=>hash(Buffer.from(JSON.stringify(x))),exact=(x,keys,label)=>{assert.ok(x&&typeof x==='object'&&!Array.isArray(x),label);assert.deepEqual(Object.keys(x).sort(),[...keys].sort(),label+' keys')};
+          const context=read(`${prefix}-context.json`),f7dir=`/tmp/g01-${prefix}-f7`,f9dir=`/tmp/g01-${prefix}-f9`;
+          const one=(dir,re,label)=>{const names=fs.readdirSync(dir).filter(x=>re.test(x));assert.equal(names.length,1,label+' payload count');return {name:names[0],bytes:fs.readFileSync(`${dir}/${names[0]}`)}};
+          const f7payload=one(f7dir,/^ci-bundle\.(?:g01|bootstrap-recovery-a[0-9]{2,})\.json$/,'F7'),f9payload=one(f9dir,/^approval-envelope\.(?:g01|bootstrap-recovery-a[0-9]{2,})\.json$/,'F9'),reportPayload=one(f7dir,/^candidate-registry-report\.g01\.json$/,'report');
+          const f7=JSON.parse(f7payload.bytes),f9=JSON.parse(f9payload.bytes),report=JSON.parse(reportPayload.bytes),m7=read(`${prefix}-metadata.json`),m9=read(`${prefix}-f9-metadata.json`),run=read(`${prefix}-producer-run.json`),current=read(`${prefix}-current-run.json`),pr=context.p;
+          const common=['schemaVersion','goal','phase','status','evidenceId','attemptId','sourceBranch','sourceSha','digest','createdAt'];
+          exact(f7,common,'F7');exact(f9,[...common,'f7Digest','reviewObjects'],'F9');
+          for(const [e,p] of [[f7,'F7'],[f9,'F9']]){assert.equal(e.schemaVersion,1);assert.equal(e.goal,'G01');assert.equal(e.phase,p);assert.equal(e.status,'GREEN');assert.match(e.sourceSha,sha);assert.match(e.digest,dig);assert.ok(Number.isFinite(Date.parse(e.createdAt)));}
+          assert.equal(f7.sourceSha,pr.head.sha);assert.equal(f7.sourceBranch,pr.head.ref);assert.equal(f9.sourceSha,f7.sourceSha);assert.equal(f9.sourceBranch,f7.sourceBranch);assert.equal(f9.attemptId,f7.attemptId);assert.equal(f9.f7Digest,f7.digest);assert.equal(f7.digest,compact(report));
+          assert.ok(Array.isArray(f9.reviewObjects)&&f9.reviewObjects.length===3);assert.deepEqual(f9.reviewObjects.map(x=>x.role),['code-reviewer','architect','verifier']);assert.equal(f9.digest,compact(f9.reviewObjects));for(const x of f9.reviewObjects){assert.equal(x.commitId,f7.sourceSha);assert.equal(x.verdict,x.role==='architect'?'CLEAR':'APPROVE')}
+          exact(report,['schemaVersion','release','registries','activationAuthority'],'candidate report');assert.equal(report.schemaVersion,1);assert.equal(report.release,'2.5.0');assert.equal(report.registries.length,2);const regs=new Map(report.registries.map(x=>[x.name,x.candidate]));assert.deepEqual([...regs.keys()].sort(),['bootstrap-attempts.json','bootstrap-landed-recoveries.json']);
+          const attempts=regs.get('bootstrap-attempts.json'),recoveries=regs.get('bootstrap-landed-recoveries.json');assert.equal(attempts.state,'G01_PREMERGE_ACTIVE');assert.equal(recoveries.state,'G01_PREMERGE_ACTIVE');
+          const recovery=/^g01-recovery-a([0-9]{2,})$/.test(f7.attemptId),lineage=recovery?structuredClone(recoveries.landedAncestors):[];
+          if(recovery){assert.equal(recoveries.currentRecovery,f7.attemptId);assert.ok(lineage.length>0);assert.equal(lineage.at(-1).attemptId,f7.attemptId)}else{assert.match(f7.attemptId,/^g01-a[0-9]{2,}$/);assert.equal(attempts.currentAttempt,f7.attemptId);assert.equal(lineage.length,0)}
+          let previous=null;for(const [i,x] of lineage.entries()){exact(x,['attemptId','branch','baseSha','parentSha','headSha','authorityDigest','planSpecPairDigest','firstAuthoritativeId','priorFailureId','priorFailureDigest'],`lineage ${i}`);const n=x.attemptId.match(/^g01-recovery-a([0-9]{2,})$/);assert.ok(n);assert.equal(x.branch,`feature/2.5.0-g01-postmerge-bootstrap-a${n[1]}`);for(const k of ['baseSha','parentSha','headSha'])assert.match(x[k],sha);for(const k of ['authorityDigest','planSpecPairDigest','priorFailureDigest'])assert.match(x[k],dig);assert.equal(x.parentSha,x.baseSha);if(previous)assert.equal(x.priorFailureId,`bootstrap-failure.${previous.attemptId}.json`);previous=x}
+          const archive7=fs.readFileSync(`${prefix}-f7.zip`),archive9=fs.readFileSync(`${prefix}-f9.zip`);assert.equal(hash(archive7),m7.digest);assert.equal(hash(archive9),m9.digest);assert.match(m7.digest,dig);assert.match(m9.digest,dig);assert.equal(m7.expired,false);assert.equal(m9.expired,false);
+          assert.equal(m7.workflow_run.id,run.id);assert.equal(m9.workflow_run.id,run.id);assert.equal(run.id,context.runId);assert.equal(run.run_attempt,context.runAttempt);assert.equal(run.head_sha,f7.sourceSha);assert.equal(run.head_branch,f7.sourceBranch);assert.equal(run.event,'pull_request');assert.equal(run.path,'.github/workflows/ci.yml');assert.equal(run.name,'CI/CD');assert.equal(run.repository.full_name,repo);assert.equal(run.status,'completed');assert.equal(run.conclusion,'success');
+          assert.equal(m7.name,`g01-candidate-${f7.attemptId}-run-${run.id}-attempt-${run.run_attempt}-head-${f7.sourceSha}`);assert.equal(m9.name,`g01-approval-${f7.attemptId}-run-${run.id}-attempt-${run.run_attempt}-head-${f7.sourceSha}`);assert.equal(hash(f7payload.bytes),hash(Buffer.from(JSON.stringify(f7)+'\n')));assert.equal(hash(f9payload.bytes),hash(Buffer.from(JSON.stringify(f9)+'\n')));
+          assert.equal(pr.state,'closed');assert.equal(pr.merged,true);assert.equal(pr.merged_at!==null,true);assert.equal(pr.merge_commit_sha,current.head_sha);assert.equal(pr.base.ref,'develop');assert.equal(pr.base.repo.full_name,repo);assert.equal(pr.head.repo.full_name,repo);assert.equal(current.id,Number(process.env.GITHUB_RUN_ID));assert.equal(current.run_attempt,Number(process.env.GITHUB_RUN_ATTEMPT));assert.equal(current.head_sha,process.env.GITHUB_SHA);assert.equal(current.head_branch,'develop');assert.equal(current.event,'push');assert.equal(current.name,'CI/CD');assert.equal(current.path,'.github/workflows/ci.yml');assert.equal(current.repository.full_name,repo);
+          const createdAt=new Date().toISOString(),failure={schemaVersion:1,release:'2.5.0',status:'G01_LANDED_UNSEALED',attemptId:f7.attemptId,evidenceId:`bootstrap-failure.${f7.attemptId}.json`,failedPhase:phase,baseSha:pr.base.sha,parentSha:pr.base.sha,terminalDevelopSha:current.head_sha,headSha:pr.head.sha,runId:current.id,runAttempt:current.run_attempt,createdAt,reason:process.env.G01_REASON,recoveryLineage:lineage};
+          assert.ok(['F11','SELECTION'].includes(phase));assert.match(failure.baseSha,sha);assert.match(failure.terminalDevelopSha,sha);fs.writeFileSync(failure.evidenceId,JSON.stringify(failure)+'\n');fs.appendFileSync(process.env.GITHUB_OUTPUT,'recorded=true\n');fs.appendFileSync(process.env.GITHUB_ENV,`G01_EARLY_ATTEMPT_ID=${failure.attemptId}\n`);
+          // G01_INLINE_RECORDER_END
           NODE
-      - name: Persist inline early F11 failure
+      - name: Persist inline F11 failure
         if: steps.record.outputs.recorded == 'true'
         uses: actions/upload-artifact@v4
         with:
@@ -530,46 +512,81 @@ jobs:
 
   bootstrap-selection-early-recorder:
     name: G01 inline always-run selection failure recorder
-    needs: [check, test, bootstrap-postmerge, bootstrap-f11-early-recorder]
+    needs: [bootstrap-postmerge, bootstrap-selection]
     if: always() && github.event_name == 'push' && github.ref == 'refs/heads/develop'
     runs-on: ubuntu-latest
     permissions:
       actions: read
       contents: read
       pull-requests: read
+    outputs:
+      recorded: ${{ steps.record.outputs.recorded }}
     env:
       GH_TOKEN: ${{ github.token }}
-      POSTMERGE_RESULT: ${{ needs.bootstrap-postmerge.result }}
-      F11_RECORDED: ${{ needs.bootstrap-f11-early-recorder.outputs.recorded }}
     steps:
       - id: record
-        name: Independently resolve G01 and record unreachable selection
+        name: Self-contained checkout-free G01 failure recorder
         shell: bash
+        env:
+          POSTMERGE_RESULT: ${{ needs.bootstrap-postmerge.result }}
+          SELECTION_RESULT: ${{ needs.bootstrap-selection.result }}
         run: |
           set -euo pipefail
+          echo 'recorded=false' >> "$GITHUB_OUTPUT"
+          if [[ "$POSTMERGE_RESULT" != success ]] || [[ "$SELECTION_RESULT" == success ]]; then exit 0; fi
           gh api -H 'Accept: application/vnd.github+json' "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/pulls" > selection-early-prs.json
           gh api --paginate "repos/$GITHUB_REPOSITORY/actions/artifacts?per_page=100" --slurp > selection-early-artifacts.json
-          node - <<'NODE'
-          const fs=require('node:fs'),prs=JSON.parse(fs.readFileSync('selection-early-prs.json')).filter(p=>p.merged_at&&p.merge_commit_sha===process.env.GITHUB_SHA&&p.base?.ref==='develop'&&p.base?.repo?.full_name===process.env.GITHUB_REPOSITORY&&p.head?.repo?.full_name===process.env.GITHUB_REPOSITORY&&/^feature\/2\.5\.0-g01-(canonical-evidence-bootstrap|postmerge-bootstrap-a[0-9]{2,})$/.test(p.head?.ref));if(prs.length>1)throw Error('ambiguous G01 merge');if(!prs.length||process.env.POSTMERGE_RESULT==='success'||process.env.F11_RECORDED==='true')process.exit(0);const p=prs[0],all=JSON.parse(fs.readFileSync('selection-early-artifacts.json')).flatMap(x=>x.artifacts),re=new RegExp(`^g01-candidate-(g01-(?:recovery-)?a[0-9]{2,})-run-([1-9][0-9]*)-attempt-([1-9][0-9]*)-head-${p.head.sha}$`),matches=all.filter(a=>!a.expired&&a.workflow_run?.id&&re.test(a.name));if(matches.length!==1)throw Error('inline selection recorder requires one exact F7 artifact');const m=matches[0].name.match(re),f9=all.filter(a=>!a.expired&&a.workflow_run?.id===matches[0].workflow_run.id&&a.name===`g01-approval-${m[1]}-run-${m[2]}-attempt-${m[3]}-head-${p.head.sha}`);if(f9.length!==1)throw Error('inline selection recorder requires one exact F9 artifact');fs.writeFileSync('selection-early-context.json',JSON.stringify({p,f7Metadata:matches[0],f9Metadata:f9[0]}));
+          gh api --paginate "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?event=pull_request&per_page=100" --slurp > selection-early-runs.json
+          G01_PREFIX=selection-early node - <<'NODE'
+          const fs=require('node:fs'),prs=JSON.parse(fs.readFileSync(`${process.env.G01_PREFIX}-prs.json`)).filter(p=>p.merged_at&&p.merge_commit_sha===process.env.GITHUB_SHA&&p.base?.ref==='develop'&&p.base?.repo?.full_name===process.env.GITHUB_REPOSITORY&&p.head?.repo?.full_name===process.env.GITHUB_REPOSITORY&&/^feature\/2\.5\.0-g01-(canonical-evidence-bootstrap|postmerge-bootstrap-a[0-9]{2,})$/.test(p.head?.ref));if(prs.length>1)throw Error('ambiguous G01 merge');if(!prs.length)process.exit(0);const p=prs[0],all=JSON.parse(fs.readFileSync(`${process.env.G01_PREFIX}-artifacts.json`)).flatMap(x=>x.artifacts),runs=JSON.parse(fs.readFileSync(`${process.env.G01_PREFIX}-runs.json`)).flatMap(x=>x.workflow_runs),re=new RegExp(`^g01-candidate-(g01-(?:recovery-)?a[0-9]{2,})-run-([1-9][0-9]*)-attempt-([1-9][0-9]*)-head-${p.head.sha}$`),pairs=[];for(const a of all.filter(a=>!a.expired&&re.test(a.name||''))){const m=a.name.match(re),approval=`g01-approval-${m[1]}-run-${m[2]}-attempt-${m[3]}-head-${p.head.sha}`,f9=all.filter(x=>!x.expired&&x.name===approval&&x.workflow_run?.id===a.workflow_run?.id);if(f9.length>1)throw Error('ambiguous exact F9 artifact');const run=runs.find(x=>x.id===Number(m[2])&&x.run_attempt===Number(m[3])&&x.head_sha===p.head.sha&&x.head_branch===p.head.ref&&x.event==='pull_request'&&x.path==='.github/workflows/ci.yml'&&x.repository?.full_name===process.env.GITHUB_REPOSITORY&&x.status==='completed'&&x.conclusion==='success');if(f9.length===1&&run)pairs.push({a,f9:f9[0],runId:run.id,runAttempt:run.run_attempt})}pairs.sort((x,y)=>y.runAttempt-x.runAttempt||y.runId-x.runId||y.a.id-x.a.id);if(!pairs.length)throw Error('authenticated F7/F9 pair absent');const top=pairs[0],ties=pairs.filter(x=>x.runAttempt===top.runAttempt&&x.runId===top.runId);if(ties.length!==1)throw Error('ambiguous canonical F7/F9 pair');fs.writeFileSync(`${process.env.G01_PREFIX}-context.json`,JSON.stringify({p,f7Metadata:top.a,f9Metadata:top.f9,runId:top.runId,runAttempt:top.runAttempt}));
           NODE
+          test -f selection-early-context.json || exit 0
           f7_artifact_id="$(node -p 'JSON.parse(require("node:fs").readFileSync("selection-early-context.json")).f7Metadata.id')"
           f9_artifact_id="$(node -p 'JSON.parse(require("node:fs").readFileSync("selection-early-context.json")).f9Metadata.id')"
-          producer_run_id="$(node -p 'JSON.parse(require("node:fs").readFileSync("selection-early-context.json")).f7Metadata.workflow_run.id')"
+          producer_run_id="$(node -p 'JSON.parse(require("node:fs").readFileSync("selection-early-context.json")).runId')"
           gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$f7_artifact_id" > selection-early-metadata.json
           gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$f9_artifact_id" > selection-early-f9-metadata.json
           gh api "repos/$GITHUB_REPOSITORY/actions/runs/$producer_run_id" > selection-early-producer-run.json
           gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" > selection-early-current-run.json
           gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$f7_artifact_id/zip" > selection-early-f7.zip
           gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$f9_artifact_id/zip" > selection-early-f9.zip
-          mkdir -p /tmp/g01-selection-early-f7 /tmp/g01-selection-early-f9 && unzip -q selection-early-f7.zip -d /tmp/g01-selection-early-f7 && unzip -q selection-early-f9.zip -d /tmp/g01-selection-early-f9
-          node --input-type=module - <<'NODE'
-          import fs from 'node:fs';import crypto from 'node:crypto';import {buildAuthenticatedEarlyFailure,envelopePayloadDigest} from './scripts/evidence/emit-bootstrap-selection.mjs';const read=p=>JSON.parse(fs.readFileSync(p)),context=read('selection-early-context.json'),f7File=fs.readdirSync('/tmp/g01-selection-early-f7').find(x=>/^ci-bundle\..+\.json$/.test(x));if(!f7File)throw Error('authenticated F7 payload missing');const f7=read(`/tmp/g01-selection-early-f7/${f7File}`),candidateReport=read('/tmp/g01-selection-early-f7/candidate-registry-report.g01.json'),f9File=fs.readdirSync('/tmp/g01-selection-early-f9').find(x=>/^approval-envelope\..+\.json$/.test(x));if(!f9File)throw Error('authenticated F9 payload missing');const f9=read(`/tmp/g01-selection-early-f9/${f9File}`),metadata=read('selection-early-metadata.json'),f9Metadata=read('selection-early-f9-metadata.json'),run=read('selection-early-producer-run.json'),archiveDigest=`sha256:${crypto.createHash('sha256').update(fs.readFileSync('selection-early-f7.zip')).digest('hex')}`,f9ArchiveDigest=`sha256:${crypto.createHash('sha256').update(fs.readFileSync('selection-early-f9.zip')).digest('hex')}`,createdAt=new Date().toISOString(),failure=buildAuthenticatedEarlyFailure({pr:context.p,currentRun:read('selection-early-current-run.json'),f7,f9,candidateReport,f7Artifact:{metadata,run,downloadDigest:archiveDigest,payloadDigest:envelopePayloadDigest(f7),matchCount:1},f9Artifact:{metadata:f9Metadata,run,downloadDigest:f9ArchiveDigest,payloadDigest:envelopePayloadDigest(f9),matchCount:1},failedPhase:'SELECTION',createdAt,reason:`inline always-run selection recorder: postmerge=${process.env.POSTMERGE_RESULT}`,repository:process.env.GITHUB_REPOSITORY});fs.writeFileSync(failure.evidenceId,JSON.stringify(failure)+'\n');fs.appendFileSync(process.env.GITHUB_ENV,`G01_EARLY_SELECTION_ATTEMPT_ID=${failure.attemptId}\n`);
+          rm -rf /tmp/g01-selection-early-f7 /tmp/g01-selection-early-f9
+          mkdir -p /tmp/g01-selection-early-f7 /tmp/g01-selection-early-f9
+          unzip -q selection-early-f7.zip -d /tmp/g01-selection-early-f7
+          unzip -q selection-early-f9.zip -d /tmp/g01-selection-early-f9
+          G01_RECORDER_PREFIX=selection-early G01_FAILED_PHASE=SELECTION G01_REASON="inline always-run recorder: postmerge succeeded but selection failed or skipped" node <<'NODE'
+          // G01_INLINE_RECORDER_START
+          const fs=require('node:fs'),crypto=require('node:crypto'),assert=require('node:assert/strict');
+          const prefix=process.env.G01_RECORDER_PREFIX,phase=process.env.G01_FAILED_PHASE,repo=process.env.GITHUB_REPOSITORY;
+          const read=p=>JSON.parse(fs.readFileSync(p)),sha=/^[0-9a-f]{40}$/,dig=/^sha256:[0-9a-f]{64}$/;
+          const hash=b=>'sha256:'+crypto.createHash('sha256').update(b).digest('hex'),compact=x=>hash(Buffer.from(JSON.stringify(x))),exact=(x,keys,label)=>{assert.ok(x&&typeof x==='object'&&!Array.isArray(x),label);assert.deepEqual(Object.keys(x).sort(),[...keys].sort(),label+' keys')};
+          const context=read(`${prefix}-context.json`),f7dir=`/tmp/g01-${prefix}-f7`,f9dir=`/tmp/g01-${prefix}-f9`;
+          const one=(dir,re,label)=>{const names=fs.readdirSync(dir).filter(x=>re.test(x));assert.equal(names.length,1,label+' payload count');return {name:names[0],bytes:fs.readFileSync(`${dir}/${names[0]}`)}};
+          const f7payload=one(f7dir,/^ci-bundle\.(?:g01|bootstrap-recovery-a[0-9]{2,})\.json$/,'F7'),f9payload=one(f9dir,/^approval-envelope\.(?:g01|bootstrap-recovery-a[0-9]{2,})\.json$/,'F9'),reportPayload=one(f7dir,/^candidate-registry-report\.g01\.json$/,'report');
+          const f7=JSON.parse(f7payload.bytes),f9=JSON.parse(f9payload.bytes),report=JSON.parse(reportPayload.bytes),m7=read(`${prefix}-metadata.json`),m9=read(`${prefix}-f9-metadata.json`),run=read(`${prefix}-producer-run.json`),current=read(`${prefix}-current-run.json`),pr=context.p;
+          const common=['schemaVersion','goal','phase','status','evidenceId','attemptId','sourceBranch','sourceSha','digest','createdAt'];
+          exact(f7,common,'F7');exact(f9,[...common,'f7Digest','reviewObjects'],'F9');
+          for(const [e,p] of [[f7,'F7'],[f9,'F9']]){assert.equal(e.schemaVersion,1);assert.equal(e.goal,'G01');assert.equal(e.phase,p);assert.equal(e.status,'GREEN');assert.match(e.sourceSha,sha);assert.match(e.digest,dig);assert.ok(Number.isFinite(Date.parse(e.createdAt)));}
+          assert.equal(f7.sourceSha,pr.head.sha);assert.equal(f7.sourceBranch,pr.head.ref);assert.equal(f9.sourceSha,f7.sourceSha);assert.equal(f9.sourceBranch,f7.sourceBranch);assert.equal(f9.attemptId,f7.attemptId);assert.equal(f9.f7Digest,f7.digest);assert.equal(f7.digest,compact(report));
+          assert.ok(Array.isArray(f9.reviewObjects)&&f9.reviewObjects.length===3);assert.deepEqual(f9.reviewObjects.map(x=>x.role),['code-reviewer','architect','verifier']);assert.equal(f9.digest,compact(f9.reviewObjects));for(const x of f9.reviewObjects){assert.equal(x.commitId,f7.sourceSha);assert.equal(x.verdict,x.role==='architect'?'CLEAR':'APPROVE')}
+          exact(report,['schemaVersion','release','registries','activationAuthority'],'candidate report');assert.equal(report.schemaVersion,1);assert.equal(report.release,'2.5.0');assert.equal(report.registries.length,2);const regs=new Map(report.registries.map(x=>[x.name,x.candidate]));assert.deepEqual([...regs.keys()].sort(),['bootstrap-attempts.json','bootstrap-landed-recoveries.json']);
+          const attempts=regs.get('bootstrap-attempts.json'),recoveries=regs.get('bootstrap-landed-recoveries.json');assert.equal(attempts.state,'G01_PREMERGE_ACTIVE');assert.equal(recoveries.state,'G01_PREMERGE_ACTIVE');
+          const recovery=/^g01-recovery-a([0-9]{2,})$/.test(f7.attemptId),lineage=recovery?structuredClone(recoveries.landedAncestors):[];
+          if(recovery){assert.equal(recoveries.currentRecovery,f7.attemptId);assert.ok(lineage.length>0);assert.equal(lineage.at(-1).attemptId,f7.attemptId)}else{assert.match(f7.attemptId,/^g01-a[0-9]{2,}$/);assert.equal(attempts.currentAttempt,f7.attemptId);assert.equal(lineage.length,0)}
+          let previous=null;for(const [i,x] of lineage.entries()){exact(x,['attemptId','branch','baseSha','parentSha','headSha','authorityDigest','planSpecPairDigest','firstAuthoritativeId','priorFailureId','priorFailureDigest'],`lineage ${i}`);const n=x.attemptId.match(/^g01-recovery-a([0-9]{2,})$/);assert.ok(n);assert.equal(x.branch,`feature/2.5.0-g01-postmerge-bootstrap-a${n[1]}`);for(const k of ['baseSha','parentSha','headSha'])assert.match(x[k],sha);for(const k of ['authorityDigest','planSpecPairDigest','priorFailureDigest'])assert.match(x[k],dig);assert.equal(x.parentSha,x.baseSha);if(previous)assert.equal(x.priorFailureId,`bootstrap-failure.${previous.attemptId}.json`);previous=x}
+          const archive7=fs.readFileSync(`${prefix}-f7.zip`),archive9=fs.readFileSync(`${prefix}-f9.zip`);assert.equal(hash(archive7),m7.digest);assert.equal(hash(archive9),m9.digest);assert.match(m7.digest,dig);assert.match(m9.digest,dig);assert.equal(m7.expired,false);assert.equal(m9.expired,false);
+          assert.equal(m7.workflow_run.id,run.id);assert.equal(m9.workflow_run.id,run.id);assert.equal(run.id,context.runId);assert.equal(run.run_attempt,context.runAttempt);assert.equal(run.head_sha,f7.sourceSha);assert.equal(run.head_branch,f7.sourceBranch);assert.equal(run.event,'pull_request');assert.equal(run.path,'.github/workflows/ci.yml');assert.equal(run.name,'CI/CD');assert.equal(run.repository.full_name,repo);assert.equal(run.status,'completed');assert.equal(run.conclusion,'success');
+          assert.equal(m7.name,`g01-candidate-${f7.attemptId}-run-${run.id}-attempt-${run.run_attempt}-head-${f7.sourceSha}`);assert.equal(m9.name,`g01-approval-${f7.attemptId}-run-${run.id}-attempt-${run.run_attempt}-head-${f7.sourceSha}`);assert.equal(hash(f7payload.bytes),hash(Buffer.from(JSON.stringify(f7)+'\n')));assert.equal(hash(f9payload.bytes),hash(Buffer.from(JSON.stringify(f9)+'\n')));
+          assert.equal(pr.state,'closed');assert.equal(pr.merged,true);assert.equal(pr.merged_at!==null,true);assert.equal(pr.merge_commit_sha,current.head_sha);assert.equal(pr.base.ref,'develop');assert.equal(pr.base.repo.full_name,repo);assert.equal(pr.head.repo.full_name,repo);assert.equal(current.id,Number(process.env.GITHUB_RUN_ID));assert.equal(current.run_attempt,Number(process.env.GITHUB_RUN_ATTEMPT));assert.equal(current.head_sha,process.env.GITHUB_SHA);assert.equal(current.head_branch,'develop');assert.equal(current.event,'push');assert.equal(current.name,'CI/CD');assert.equal(current.path,'.github/workflows/ci.yml');assert.equal(current.repository.full_name,repo);
+          const createdAt=new Date().toISOString(),failure={schemaVersion:1,release:'2.5.0',status:'G01_LANDED_UNSEALED',attemptId:f7.attemptId,evidenceId:`bootstrap-failure.${f7.attemptId}.json`,failedPhase:phase,baseSha:pr.base.sha,parentSha:pr.base.sha,terminalDevelopSha:current.head_sha,headSha:pr.head.sha,runId:current.id,runAttempt:current.run_attempt,createdAt,reason:process.env.G01_REASON,recoveryLineage:lineage};
+          assert.ok(['F11','SELECTION'].includes(phase));assert.match(failure.baseSha,sha);assert.match(failure.terminalDevelopSha,sha);fs.writeFileSync(failure.evidenceId,JSON.stringify(failure)+'\n');fs.appendFileSync(process.env.GITHUB_OUTPUT,'recorded=true\n');fs.appendFileSync(process.env.GITHUB_ENV,`G01_EARLY_ATTEMPT_ID=${failure.attemptId}\n`);
+          // G01_INLINE_RECORDER_END
           NODE
-      - name: Persist inline unreachable-selection failure
-        if: hashFiles('bootstrap-failure.*.json') != ''
+      - name: Persist inline SELECTION failure
+        if: steps.record.outputs.recorded == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: g01-bootstrap-failure-${{ env.G01_EARLY_SELECTION_ATTEMPT_ID }}-run-${{ github.run_id }}-attempt-${{ github.run_attempt }}-head-${{ github.sha }}-phase-selection
+          name: g01-bootstrap-failure-${{ env.G01_EARLY_ATTEMPT_ID }}-run-${{ github.run_id }}-attempt-${{ github.run_attempt }}-head-${{ github.sha }}-phase-selection
           path: bootstrap-failure.*.json
           if-no-files-found: error
           retention-days: 90

@@ -5,7 +5,10 @@ import crypto from "node:crypto";
 import assert from "node:assert/strict";
 import { pathToFileURL } from "node:url";
 import { spawnSync } from "node:child_process";
+import os from "node:os";
 import { validateEnvelope } from "./validate-envelope.mjs";
+import { G01_WRITABLE } from "./recover-landed-bootstrap.mjs";
+import { selectCanonicalFailure, validateBootstrapFailure } from "./emit-bootstrap-selection.mjs";
 
 const SHA = /^[0-9a-f]{40}$/;
 const DIGEST = /^sha256:[0-9a-f]{64}$/;
@@ -110,7 +113,7 @@ export function buildCandidateReport(inputs) {
   return { schemaVersion: 1, release: "2.5.0", registries };
 }
 
-function canonicalHistoricalIdentities(authority, { preBranch = false } = {}) {
+function canonicalHistoricalIdentities(authority, { preBranch = false, unreconciled = [] } = {}) {
   const current = authority.pr ? new Set([authority.pr.id, authority.pr.number, authority.pr.node_id]) : new Set();
   const prs = authority.prPages.flatMap((page) => Array.isArray(page) ? page : []).filter((item) => !current.has(item.id) && !current.has(item.number) && !current.has(item.node_id));
   const runs = authority.runPages.flatMap((page) => page.workflow_runs ?? []);
@@ -138,8 +141,8 @@ function canonicalHistoricalIdentities(authority, { preBranch = false } = {}) {
       }
     }
     if (preBranch && authenticated.length === 0) {
-      const ordinal = branchMatch[2] ? Number(branchMatch[2]) : 1;
-      authenticated.push({ ordinal, attemptId: branchMatch[2] ? `g01-recovery-a${ordinalId(ordinal)}` : "g01-a01", prId: pr.id, prNumber: pr.number, prNodeId: pr.node_id, branch, headSha: pr.head.sha, runId: null, runAttempt: null, artifactId: null, artifactName: null, artifactExpired: null, prState: pr.state, mergedAt: pr.merged_at ?? null });
+      unreconciled.push({ prId: pr.id, prNumber: pr.number, prNodeId: pr.node_id, branch, headSha: pr.head.sha, state: pr.state, mergedAt: pr.merged_at ?? null });
+      continue;
     }
     assert.ok(authenticated.length > 0, `unreconciled canonical historical PR identity: ${pr.number ?? pr.id}`);
     rows.push(...authenticated);
@@ -164,7 +167,8 @@ export function prepareBootstrapAuthority(candidateReport, authority) {
   assert.match(authority.developRef?.object?.sha ?? "", SHA, "pre-branch develop ref is required");
   const observed = Date.parse(authority.observedAt);
   assert.ok(Number.isFinite(observed) && new Date(observed).toISOString() === authority.observedAt, "pre-branch observation must be canonical UTC");
-  const normalizedIdentities = canonicalHistoricalIdentities(authority, { preBranch: true });
+  const unreconciled = [];
+  const normalizedIdentities = canonicalHistoricalIdentities(authority, { preBranch: true, unreconciled });
   const tracked = candidateReport.registries.flatMap(({ candidate }) => [...(candidate.attempts ?? []), ...(candidate.landedAncestors ?? [])]).map((item) => Number(item.attemptId.match(/[0-9]+$/)?.[0])).filter(Number.isInteger);
   const artifactOrdinals = authority.artifactPages.flatMap((page) => page.artifacts ?? []).flatMap((artifact) => {
     const match = artifact.name?.match(/^g01-(?:candidate|approval|merge|bootstrap-failure|selection|bootstrap-preparation)-(?:g01-)?(?:recovery-)?a([0-9]{2,})-/);
@@ -206,12 +210,13 @@ export function prepareBootstrapAuthority(candidateReport, authority) {
     pages: Object.fromEntries([["prs", authority.prPages], ["runs", authority.runPages], ["artifacts", authority.artifactPages]].map(([name, pages]) => [name, pages.map((page, index) => ({ index, sha256: hashJson(page) }))])),
     pagination: Object.fromEntries([["prs", authority.prPages], ["runs", authority.runPages], ["artifacts", authority.artifactPages]].map(([name, pages]) => [name, { pageOrder: pages.map((_, index) => index), endMarker: "gh-api--paginate-completed-no-next-page" }])),
     normalizedIdentities,
+    unreconciled,
     expiredArtifactOrdinals: [...new Set(authority.artifactPages.flatMap((page) => page.artifacts ?? []).filter(({ expired }) => expired === true).flatMap((artifact) => artifact.name?.match(/a([0-9]{2,})/)?.[1] ? [Number(artifact.name.match(/a([0-9]{2,})/)[1])] : []))].sort((a, b) => a - b),
     observedMax,
     reconstructionDigest: hashJson({ normalizedIdentities, artifactOrdinals: [...artifactOrdinals].sort((a, b) => a - b), tracked: [...tracked].sort((a, b) => a - b), observedMax }),
   };
   const authorityDigest = hashJson(replayRecord);
-  const status = conflicts.length ? "WAITING_CONFLICT" : activeBranches.length ? "WAITING_ACTIVE_BRANCH" : "READY";
+  const status = conflicts.length ? "WAITING_CONFLICT" : activeBranches.length ? "WAITING_ACTIVE_BRANCH" : unreconciled.length ? "WAITING_UNRECONCILED" : "READY";
   return { schemaVersion: 1, release: "2.5.0", status, repository: authority.repository, observedAt: authority.observedAt, developSha: authority.developRef.object.sha, nextOrdinal, attemptId, branchName, cleanupBranches, activeBranches, conflicts: [...new Set(conflicts)].sort((a, b) => a - b), authorityDigest, replayRecord };
 }
 
@@ -226,9 +231,61 @@ function validatePreparedRecord(prepared) {
   return prepared;
 }
 
-export async function prepareAndCreateBootstrapBranch({ api, repository, registries, planBytes, specBytes, priorFailure = null, observedAt = () => new Date().toISOString(), sleep = async () => {}, maxRescans = 3 }) {
+function candidateTreeManifest(candidateFiles) {
+  assert.ok(Array.isArray(candidateFiles), "complete reviewed G01 candidate file map is required");
+  const names = candidateFiles.map(({ filename }) => filename);
+  assert.equal(new Set(names).size, names.length, "candidate file map contains duplicate paths");
+  assert.deepEqual([...names].sort(), [...G01_WRITABLE].sort(), "candidate file map must equal the literal 36-path G01 allowlist");
+  return candidateFiles.map(({ filename, bytes }) => {
+    assert.ok(Buffer.isBuffer(bytes), `candidate bytes are required: ${filename}`);
+    return { path: filename, sha256: `sha256:${crypto.createHash("sha256").update(bytes).digest("hex")}`, size: bytes.length };
+  }).sort((a, b) => a.path.localeCompare(b.path));
+}
+
+async function resolveAuthenticatedPriorFailure(api, repository, prepared, artifactPages) {
+  const ordinal = prepared.nextOrdinal - 1;
+  assert.ok(ordinal >= 1, "recovery requires a prior consumed ordinal");
+  const suffix = ordinalId(ordinal);
+  const pattern = new RegExp(`^g01-bootstrap-failure-(g01-(?:recovery-)?a${suffix})-run-([1-9][0-9]*)-attempt-([1-9][0-9]*)-head-${prepared.developSha}-phase-(f11|selection)$`);
+  const candidates = artifactPages.flatMap((page) => page.artifacts ?? []).filter((artifact) => !artifact.expired && pattern.test(artifact.name ?? ""));
+  assert.ok(candidates.length > 0, "WAITING: live authenticated prior failure artifact is absent");
+  const records = [];
+  for (const candidate of candidates) {
+    const metadata = await api.get(`repos/${repository}/actions/artifacts/${candidate.id}`);
+    const match = metadata.name?.match(pattern);
+    assert.ok(match && metadata.id === candidate.id && metadata.workflow_run?.id === Number(match[2]), "prior failure artifact metadata mismatch");
+    assert.match(metadata.digest ?? "", DIGEST, "prior failure artifact digest is required");
+    const run = await api.get(`repos/${repository}/actions/runs/${metadata.workflow_run.id}`);
+    assert.equal(run.id, Number(match[2])); assert.equal(run.run_attempt, Number(match[3]));
+    assert.equal(run.name, "CI/CD"); assert.equal(run.path, ".github/workflows/ci.yml"); assert.equal(run.repository?.full_name, repository);
+    assert.equal(run.event, "push"); assert.equal(run.head_branch, "develop"); assert.equal(run.head_sha, prepared.developSha); assert.equal(run.status, "completed"); assert.ok(run.conclusion && run.conclusion !== "success");
+    const archive = await api.readArtifact(metadata);
+    assert.ok(Buffer.isBuffer(archive.archiveBytes), "prior failure archive bytes are required");
+    const archiveDigest = `sha256:${crypto.createHash("sha256").update(archive.archiveBytes).digest("hex")}`;
+    assert.equal(archiveDigest, metadata.digest, "prior failure archive digest mismatch");
+    const entries = Object.entries(archive.files ?? {}).filter(([name]) => /^bootstrap-failure\.g01-(?:a|recovery-a)[0-9]{2,}\.json$/.test(path.basename(name)));
+    assert.equal(entries.length, 1, "prior failure archive must contain exactly one failure payload");
+    const bytes = Buffer.from(entries[0][1]);
+    const failure = validateBootstrapFailure(JSON.parse(bytes));
+    assert.equal(path.basename(entries[0][0]), failure.evidenceId, "prior failure archive payload name mismatch");
+    records.push({ failure, artifactId: metadata.id, artifactName: metadata.name, artifactCreatedAt: metadata.created_at, archiveDigest, payloadDigest: `sha256:${crypto.createHash("sha256").update(bytes).digest("hex")}`, run });
+  }
+  const winner = selectCanonicalFailure(records, ordinal, prepared.developSha);
+  return { evidenceId: winner.failure.evidenceId, digest: winner.payloadDigest, terminalDevelopSha: winner.failure.terminalDevelopSha, recoveryLineage: winner.failure.recoveryLineage, artifactId: winner.artifactId, artifactName: winner.artifactName, runId: winner.run.id, runAttempt: winner.run.run_attempt, archiveDigest: winner.archiveDigest };
+}
+
+export async function prepareAndCreateBootstrapBranch({ api, repository, registries, candidateFiles, reviewedBaseSha, reviewedHeadSha, observedAt = () => new Date().toISOString(), sleep = async () => {}, maxRescans = 3 }) {
   assert.ok(api && typeof api === "object", "authenticated GitHub API adapter is required");
   assert.match(repository, /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/);
+  assert.match(reviewedBaseSha ?? "", SHA, "reviewed develop base SHA is required");
+  assert.match(reviewedHeadSha ?? "", SHA, "reviewed candidate HEAD SHA is required");
+  const manifest = candidateTreeManifest(candidateFiles);
+  const reviewedByPath = new Map(candidateFiles.map(({ filename, bytes }) => [filename, bytes]));
+  for (const { filename, bytes } of registries) {
+    const canonicalPath = `docs/releases/2.5.0/evidence/${path.basename(filename)}`;
+    assert.ok(reviewedByPath.has(canonicalPath), `reviewed candidate is missing registry bytes: ${canonicalPath}`);
+    assert.ok(Buffer.from(bytes).equals(reviewedByPath.get(canonicalPath)), `registry input differs from reviewed candidate bytes: ${canonicalPath}`);
+  }
   const report = buildCandidateReport(registries);
   const now = () => typeof observedAt === "function" ? observedAt() : observedAt;
   let lastObserved = -Infinity;
@@ -245,22 +302,33 @@ export async function prepareAndCreateBootstrapBranch({ api, repository, registr
   };
   let authority = await snapshot();
   let prepared = prepareBootstrapAuthority(report, authority);
+  const cleanupAudit = [];
   for (let scan = 0; scan < maxRescans && prepared.cleanupBranches.length; scan += 1) {
+    const preSnapshot = { observedAt: authority.observedAt, refsDigest: hashJson(authority.refs), authorityDigest: prepared.authorityDigest };
     const refsByBranch = new Map(authority.refs.map((ref) => [ref.ref.slice("refs/heads/".length), ref.object?.sha]));
     for (const branch of prepared.cleanupBranches) {
       const observedSha = refsByBranch.get(branch); assert.match(observedSha ?? "", SHA, "cleanup ref must have an observed SHA");
-      await api.deleteRef(`heads/${branch}`, observedSha);
+      const deletedAt = now();
+      const result = await api.deleteRef(`heads/${branch}`, observedSha);
+      assert.ok(result && typeof result === "object", "cleanup compare-delete result must be persisted");
+      cleanupAudit.push({ branch, ref: `refs/heads/${branch}`, observedSha, preSnapshot, deleteResult: result ?? null, deletedAt, postRescan: null });
     }
     await sleep(scan + 1);
     authority = await snapshot();
     prepared = prepareBootstrapAuthority(report, authority);
+    const postRescan = { observedAt: authority.observedAt, refsDigest: hashJson(authority.refs), authorityDigest: prepared.authorityDigest };
+    for (const entry of cleanupAudit.filter((entry) => entry.postRescan === null)) entry.postRescan = postRescan;
   }
+  assert.equal(prepared.developSha, reviewedBaseSha, "reviewed candidate base is not the exact live develop SHA");
+  prepared.replayRecord.cleanupAudit = cleanupAudit;
+  prepared.replayRecord.candidateTree = { reviewedBaseSha, reviewedHeadSha, paths: manifest, treeDigest: hashJson(manifest) };
+  prepared.authorityDigest = hashJson(prepared.replayRecord);
   validatePreparedRecord(prepared);
   const attemptsEntry = report.registries.find(({ name }) => name === "bootstrap-attempts.json");
   const recoveryEntry = report.registries.find(({ name }) => name === "bootstrap-landed-recoveries.json");
   const attempts = structuredClone(attemptsEntry.candidate), recoveries = structuredClone(recoveryEntry.candidate);
   if (prepared.attemptId.startsWith("g01-recovery-")) {
-    assert.ok(priorFailure, "recovery branch creation requires authenticated landed failure authority");
+    const priorFailure = await resolveAuthenticatedPriorFailure(api, repository, prepared, authority.artifactPages);
     const priorId = priorFailure.evidenceId?.slice("bootstrap-failure.".length, -".json".length);
     assert.match(priorFailure.evidenceId ?? "", /^bootstrap-failure\.g01-(?:a|recovery-a)[0-9]{2,}\.json$/); assert.match(priorFailure.digest ?? "", DIGEST);
     assert.equal(priorFailure.terminalDevelopSha, prepared.developSha, "recovery must prepare from the failed terminal develop SHA");
@@ -269,22 +337,29 @@ export async function prepareAndCreateBootstrapBranch({ api, repository, registr
     if (priorId.startsWith("g01-recovery-")) { assert.ok(priorFailure.recoveryLineage.length > 0); assert.equal(priorFailure.recoveryLineage.at(-1).attemptId, priorId, "recovery lineage must end at the failed recovery"); }
     else assert.equal(priorFailure.recoveryLineage.length, 0, "direct failure has no recovery ancestors");
     recoveries.landedAncestors = structuredClone(priorFailure.recoveryLineage);
-  } else assert.equal(priorFailure, null, "direct preparation cannot carry landed recovery authority");
+  }
   attempts.state = recoveries.state = "G01_PRE_BRANCH";
   attempts.currentAttempt = null; recoveries.currentRecovery = null;
   attempts.preparedAuthority = structuredClone(prepared);
   attempts.ordinalReconstruction = { complete: false, nextOrdinal: null, reason: "prepared branch is provisional; first authenticated PR/run consumes the ordinal" };
-  const files = new Map(registries.map(({ filename, bytes }) => [path.basename(filename), { filename, bytes }]));
-  files.get(attemptsEntry.name).bytes = Buffer.from(`${JSON.stringify(attempts, null, 2)}\n`);
-  files.get(recoveryEntry.name).bytes = Buffer.from(`${JSON.stringify(recoveries, null, 2)}\n`);
+  const files = new Map(candidateFiles.map(({ filename, bytes }) => [filename, { filename, bytes }]));
+  files.get("docs/releases/2.5.0/evidence/bootstrap-attempts.json").bytes = Buffer.from(`${JSON.stringify(attempts, null, 2)}\n`);
+  files.get("docs/releases/2.5.0/evidence/bootstrap-landed-recoveries.json").bytes = Buffer.from(`${JSON.stringify(recoveries, null, 2)}\n`);
   const blobs = [];
-  for (const { filename, bytes } of files.values()) blobs.push({ path: filename, mode: "100644", type: "blob", sha: (await api.createBlob({ content: Buffer.from(bytes).toString("base64"), encoding: "base64" })).sha });
+  const publishedFiles = [];
+  for (const { filename, bytes } of files.values()) {
+    const blob = await api.createBlob({ content: Buffer.from(bytes).toString("base64"), encoding: "base64" });
+    blobs.push({ path: filename, mode: "100644", type: "blob", sha: blob.sha });
+    publishedFiles.push({ path: filename, blobSha: blob.sha, sha256: `sha256:${crypto.createHash("sha256").update(bytes).digest("hex")}`, size: bytes.length });
+  }
   const baseCommit = await api.get(`repos/${repository}/git/commits/${prepared.developSha}`);
   const tree = await api.createTree({ base_tree: baseCommit.tree.sha, tree: blobs });
   const commit = await api.createCommit({ message: `ci(release): prepare ${prepared.attemptId}`, tree: tree.sha, parents: [prepared.developSha] });
   try { await api.createRef({ ref: `refs/heads/${prepared.branchName}`, sha: commit.sha }); }
   catch (error) { error.message = `atomic branch creation failed; ordinal was not consumed: ${error.message}`; throw error; }
-  return { prepared, commit, tree, registries: { attempts, recoveries } };
+  const publicationAuthority = { preparedAuthorityDigest: prepared.authorityDigest, reviewedBaseSha, reviewedHeadSha, baseTreeSha: baseCommit.tree.sha, publishedTreeSha: tree.sha, commitSha: commit.sha, files: publishedFiles.sort((a, b) => a.path.localeCompare(b.path)) };
+  publicationAuthority.digest = hashJson(publicationAuthority);
+  return { prepared, publicationAuthority, commit, tree, registries: { attempts, recoveries } };
 }
 
 function validatePreparedAuthority(prepared, authority, ordinal) {
@@ -502,7 +577,21 @@ function githubCliAdapter(repository) {
       const fullRef = `refs/${ref}`;
       const result = spawnSync("git", ["push", `--force-with-lease=${fullRef}:${observedSha}`, "origin", `:${fullRef}`], { encoding: "utf8" });
       if (result.status !== 0) throw new Error(`cleanup ref changed or was recreated; WAITING: ${result.stderr || result.stdout}`);
-      return { deleted: fullRef, observedSha };
+      return { operation: "compare-and-delete", deleted: fullRef, observedSha, result: "deleted" };
+    },
+    readArtifact: (metadata) => {
+      const directory = fs.mkdtempSync(path.join(os.tmpdir(), "g01-prior-artifact-"));
+      try {
+        const archivePath = path.join(directory, "artifact.zip");
+        const downloaded = spawnSync("gh", ["api", `repos/${repository}/actions/artifacts/${metadata.id}/zip`], { encoding: null });
+        if (downloaded.status !== 0) throw new Error(Buffer.from(downloaded.stderr ?? "").toString("utf8") || "artifact download failed");
+        fs.writeFileSync(archivePath, downloaded.stdout);
+        const extract = path.join(directory, "extract"); fs.mkdirSync(extract);
+        const unzipped = spawnSync("unzip", ["-q", archivePath, "-d", extract], { encoding: "utf8" });
+        if (unzipped.status !== 0) throw new Error(unzipped.stderr || "artifact extraction failed");
+        const files = Object.fromEntries(fs.readdirSync(extract, { recursive: true }).filter((name) => fs.statSync(path.join(extract, name)).isFile()).map((name) => [name, fs.readFileSync(path.join(extract, name))]));
+        return { archiveBytes: Buffer.from(downloaded.stdout), files };
+      } finally { fs.rmSync(directory, { recursive: true, force: true }); }
     },
     createBlob: (body) => call(["--method", "POST", `repos/${repository}/git/blobs`, "--input", "-"], JSON.stringify(body)),
     createTree: (body) => call(["--method", "POST", `repos/${repository}/git/trees`, "--input", "-"], JSON.stringify(body)),
@@ -522,11 +611,21 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   };
   const activationPath = args.includes("--activate-authority") ? option("--activate-authority") : undefined;
   const preparePath = args.includes("--prepare") ? option("--prepare") : undefined;
-  const optionNames = ["--source-sha", "--source-branch", "--created-at", "--activate-authority", "--prepare", "--plan", "--spec", "--repository", "--observed-at", "--prior-failure"];
+  const optionNames = ["--source-sha", "--source-branch", "--created-at", "--activate-authority", "--prepare", "--plan", "--spec", "--repository", "--observed-at"];
   const excluded = new Set(["--f7", "--prepare-live", ...optionNames, ...optionNames.filter((name) => args.includes(name)).map(option)]);
   const files = args.filter((value) => !excluded.has(value));
   if (files.length === 0) throw new Error("usage: bootstrap-export.mjs REGISTRY.json [REGISTRY.json]");
-  if (prepareLive) { const repository = option("--repository"); const result = await prepareAndCreateBootstrapBranch({ api: githubCliAdapter(repository), repository, registries: files.map((filename) => ({ filename, bytes: fs.readFileSync(filename) })), planBytes: fs.readFileSync(option("--plan")), specBytes: fs.readFileSync(option("--spec")), priorFailure: args.includes("--prior-failure") ? JSON.parse(fs.readFileSync(option("--prior-failure"))) : null, observedAt: args.includes("--observed-at") ? option("--observed-at") : () => new Date().toISOString() }); process.stdout.write(`${JSON.stringify(result)}\n`); process.exit(0); }
+  if (prepareLive) {
+    const repository = option("--repository");
+    const git = (...command) => { const result = spawnSync("git", command, { encoding: "utf8" }); if (result.status !== 0) throw new Error(result.stderr || `git ${command.join(" ")} failed`); return result.stdout.trim(); };
+    assert.equal(git("status", "--porcelain"), "", "live preparation rejects a dirty candidate worktree");
+    const reviewedHeadSha = git("rev-parse", "HEAD"), reviewedBaseSha = git("rev-parse", "origin/develop");
+    const changed = git("diff", "--name-only", `${reviewedBaseSha}...${reviewedHeadSha}`).split("\n").filter(Boolean);
+    assert.ok(changed.every((name) => G01_WRITABLE.includes(name)), `live preparation rejects unallowlisted reviewed paths: ${changed.filter((name) => !G01_WRITABLE.includes(name)).join(",")}`);
+    const candidateFiles = G01_WRITABLE.map((filename) => ({ filename, bytes: fs.readFileSync(filename) }));
+    const result = await prepareAndCreateBootstrapBranch({ api: githubCliAdapter(repository), repository, registries: files.map((filename) => ({ filename, bytes: fs.readFileSync(filename) })), candidateFiles, reviewedBaseSha, reviewedHeadSha, observedAt: args.includes("--observed-at") ? option("--observed-at") : () => new Date().toISOString() });
+    process.stdout.write(`${JSON.stringify(result)}\n`); process.exit(0);
+  }
   let report = buildCandidateReport(files.map((filename) => ({ filename, bytes: fs.readFileSync(filename) })));
   if (activationPath) report = activateCandidateReport(report, JSON.parse(fs.readFileSync(activationPath, "utf8")), fs.readFileSync(option("--plan")), fs.readFileSync(option("--spec"))).report;
   const output = preparePath ? prepareBootstrapAuthority(report, JSON.parse(fs.readFileSync(preparePath, "utf8"))) : f7 ? buildF7Envelope(report, option("--source-sha"), option("--source-branch"), option("--created-at")) : report;
