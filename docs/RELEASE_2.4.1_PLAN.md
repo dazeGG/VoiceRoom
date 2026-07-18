@@ -43,8 +43,10 @@ candidate may close a gate.
   vulnerabilities.
 - [x] Production API and Web Docker targets build, and
   `docker compose config --quiet` passes with synthetic required values.
-- [ ] The release PR into `main` passes Git Flow policy, check/build and
-  PostgreSQL test jobs on its final head SHA.
+- [x] Release code candidate `3cc0b71ee4c8c2235adb2207838caa3e5bde5594`
+  passed Git Flow policy, check/build and PostgreSQL test jobs in
+  [run 29625667444](https://github.com/dazeGG/VoiceRoom/actions/runs/29625667444).
+  Any evidence-only follow-up commit must pass the same jobs before merge.
 
 ## Deployment and rollback
 
