@@ -5,38 +5,6 @@ on:
     branches: [develop, main]
   pull_request:
     branches: [develop, main]
-  workflow_dispatch:
-    inputs:
-      bootstrap_phase:
-        description: Authenticated lifecycle phase to emit
-        required: true
-        type: choice
-        options: [approval, merge, selection]
-      bootstrap_pr_number:
-        description: G01 pull request number (verified through GitHub API)
-        required: true
-        type: number
-      bootstrap_f7_artifact_id:
-        description: Immutable F7 Actions artifact ID
-        required: true
-        type: number
-      bootstrap_f9_artifact_id:
-        description: Immutable F9 Actions artifact ID (merge/selection only)
-        required: false
-        type: number
-      bootstrap_f11_artifact_id:
-        description: Immutable F11 Actions artifact ID (selection only)
-        required: false
-        type: number
-      bootstrap_postmerge_run_id:
-        description: Completed green develop run ID (merge/selection only)
-        required: false
-        type: number
-      bootstrap_ancestor_artifact_id:
-        description: Immutable ordered recovery-failure chain artifact ID
-        required: false
-        type: number
-
 permissions:
   contents: read
 
@@ -121,7 +89,9 @@ jobs:
 
   bootstrap-plan:
     name: G01 bootstrap plan
-    if: (github.event_name == 'pull_request' && (github.head_ref == 'feature/2.5.0-g01-canonical-evidence-bootstrap' || startsWith(github.head_ref, 'feature/2.5.0-g01-postmerge-bootstrap-a'))) || (github.event_name == 'push' && (github.ref_name == 'feature/2.5.0-g01-canonical-evidence-bootstrap' || startsWith(github.ref_name, 'feature/2.5.0-g01-postmerge-bootstrap-a')))
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && (github.head_ref == 'feature/2.5.0-g01-canonical-evidence-bootstrap' || startsWith(github.head_ref, 'feature/2.5.0-g01-postmerge-bootstrap-a'))
+    environment: g01-bootstrap-approval-authority
+    timeout-minutes: 45
     runs-on: ubuntu-latest
     permissions:
       actions: read
@@ -130,8 +100,11 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       PR_NUMBER: ${{ github.event.pull_request.number }}
-      SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-      SOURCE_BRANCH: ${{ github.head_ref || github.ref_name }}
+      SOURCE_SHA: ${{ github.event.pull_request.head.sha }}
+      SOURCE_BRANCH: ${{ github.head_ref }}
+      REVIEWER_CODE_ID: ${{ vars.OMX_G01_CODE_REVIEWER_ID }}
+      REVIEWER_ARCHITECT_ID: ${{ vars.OMX_G01_ARCHITECT_ID }}
+      REVIEWER_VERIFIER_ID: ${{ vars.OMX_G01_VERIFIER_ID }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -152,9 +125,11 @@ jobs:
           scripts/ci/run-oras.sh version
       - name: Export candidate-only G01 report and F7 envelope
         run: |
-          if test "$SOURCE_BRANCH" = feature/2.5.0-g01-canonical-evidence-bootstrap; then suffix=g01.json; else suffix="bootstrap-recovery-${SOURCE_BRANCH##*-bootstrap-}.json"; fi
+          set -euo pipefail
           node scripts/evidence/bootstrap-export.mjs docs/releases/2.5.0/evidence/bootstrap-attempts.json docs/releases/2.5.0/evidence/bootstrap-landed-recoveries.json > candidate-registry-report.g01.json
-          node scripts/evidence/bootstrap-export.mjs --f7 --source-sha "$SOURCE_SHA" --created-at "$(date -u +%Y-%m-%dT%H:%M:%S.000Z)" --lineage-suffix "$suffix" docs/releases/2.5.0/evidence/bootstrap-attempts.json docs/releases/2.5.0/evidence/bootstrap-landed-recoveries.json > "ci-bundle.$suffix"
+          node scripts/evidence/bootstrap-export.mjs --f7 --source-sha "$SOURCE_SHA" --source-branch "$SOURCE_BRANCH" --created-at "$(date -u +%Y-%m-%dT%H:%M:%S.000Z)" docs/releases/2.5.0/evidence/bootstrap-attempts.json docs/releases/2.5.0/evidence/bootstrap-landed-recoveries.json > f7.json
+          suffix="$(node -p 'JSON.parse(require("node:fs").readFileSync("f7.json")).evidenceId.slice("ci-bundle.".length)')"
+          mv f7.json "ci-bundle.$suffix"
       - name: Persist G01 F7 evidence
         uses: actions/upload-artifact@v4
         with:
@@ -168,34 +143,38 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          suffix=g01.json
-          if test "$SOURCE_BRANCH" != feature/2.5.0-g01-canonical-evidence-bootstrap; then suffix="bootstrap-recovery-${SOURCE_BRANCH##*-bootstrap-}.json"; fi
+          for value in "$REVIEWER_CODE_ID" "$REVIEWER_ARCHITECT_ID" "$REVIEWER_VERIFIER_ID"; do [[ "$value" =~ ^[1-9][0-9]*$ ]] || { echo 'protected reviewer actor IDs are required' >&2; exit 1; }; done
+          test "$REVIEWER_CODE_ID" != "$REVIEWER_ARCHITECT_ID" && test "$REVIEWER_CODE_ID" != "$REVIEWER_VERIFIER_ID" && test "$REVIEWER_ARCHITECT_ID" != "$REVIEWER_VERIFIER_ID"
           artifact_name="g01-candidate-evidence-${SOURCE_SHA}"
           for attempt in $(seq 1 90); do
-            gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts?name=$artifact_name" > run-artifacts.json
-            node - <<'NODE'
-          const fs = require('node:fs');
-          const response = JSON.parse(fs.readFileSync('run-artifacts.json'));
-          const matches = response.artifacts.filter((artifact) => artifact.name === process.env.ARTIFACT_NAME && artifact.expired === false);
-          if (matches.length === 0) process.exit(0);
-          if (matches.length !== 1) throw new Error('expected exactly one F7 artifact for this run');
-          fs.writeFileSync('f7-artifact.json', JSON.stringify(matches[0]));
+            gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts?name=$artifact_name" > f7-matches.json
+            if ARTIFACT_NAME="$artifact_name" node - <<'NODE'
+          const fs=require('node:fs'); const a=JSON.parse(fs.readFileSync('f7-matches.json')).artifacts.filter(x=>x.name===process.env.ARTIFACT_NAME&&!x.expired);
+          if (a.length===0) process.exit(2); if(a.length!==1) throw Error('F7 artifact lookup is not unique'); fs.writeFileSync('f7-metadata.json',JSON.stringify(a[0]));
           NODE
-            if test -s f7-artifact.json; then
+            then
+              id="$(node -p 'JSON.parse(require("node:fs").readFileSync("f7-metadata.json")).id')"
+              mkdir -p /tmp/g01-f7; gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$id/zip" > /tmp/g01-f7.zip
+              node -e 'const f=require("node:fs"),c=require("node:crypto"),m=JSON.parse(f.readFileSync("f7-metadata.json"));const d="sha256:"+c.createHash("sha256").update(f.readFileSync("/tmp/g01-f7.zip")).digest("hex");if(d!==m.digest)throw Error("F7 archive digest mismatch");f.writeFileSync("f7-download-digest.txt",d)'
+              test "$(unzip -Z1 /tmp/g01-f7.zip | LC_ALL=C sort | tr '\n' ' ')" = "candidate-registry-report.g01.json $(basename ci-bundle.*.json) "
+              unzip -q /tmp/g01-f7.zip -d /tmp/g01-f7
+              cmp candidate-registry-report.g01.json /tmp/g01-f7/candidate-registry-report.g01.json
+              cmp ci-bundle.*.json /tmp/g01-f7/ci-bundle.*.json
+              F7_FILE="$(find /tmp/g01-f7 -maxdepth 1 -type f -name 'ci-bundle.*.json')" node -e 'const f=require("node:fs"),c=require("node:crypto");f.writeFileSync("f7-payload-digest.txt","sha256:"+c.createHash("sha256").update(f.readFileSync(process.env.F7_FILE)).digest("hex"))'
+              gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" > f7-run.json
               gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" > pr.json
               gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/reviews?per_page=100" --slurp > review-pages.json
-              node - <<'NODE'
-          const fs=require('node:fs'); const read=(p)=>JSON.parse(fs.readFileSync(p));
-          fs.writeFileSync('approval-authority.json', JSON.stringify({pr:read('pr.json'),reviews:read('review-pages.json').flat(),observedAt:new Date().toISOString(),f7Artifact:read('f7-artifact.json'),candidateReport:read('candidate-registry-report.g01.json')}));
+              REVIEWER_CODE_ID="$REVIEWER_CODE_ID" REVIEWER_ARCHITECT_ID="$REVIEWER_ARCHITECT_ID" REVIEWER_VERIFIER_ID="$REVIEWER_VERIFIER_ID" node - <<'NODE'
+          const fs=require('node:fs');const read=p=>JSON.parse(fs.readFileSync(p));
+          fs.writeFileSync('approval-authority.json',JSON.stringify({pr:read('pr.json'),reviews:read('review-pages.json').flat(),reviewAuthority:{'code-reviewer':Number(process.env.REVIEWER_CODE_ID),architect:Number(process.env.REVIEWER_ARCHITECT_ID),verifier:Number(process.env.REVIEWER_VERIFIER_ID)},observedAt:new Date().toISOString(),repository:process.env.GITHUB_REPOSITORY,f7Artifact:{metadata:read('f7-metadata.json'),run:read('f7-run.json'),downloadDigest:fs.readFileSync('f7-download-digest.txt','utf8'),payloadDigest:fs.readFileSync('f7-payload-digest.txt','utf8'),matchCount:1},candidateReport:read('/tmp/g01-f7/candidate-registry-report.g01.json')}));
           NODE
-              if node scripts/evidence/emit-bootstrap-selection.mjs --emit-f9 --f7 "ci-bundle.$suffix" --authority approval-authority.json > "approval-envelope.$suffix"; then break; fi
+              if node scripts/evidence/emit-bootstrap-selection.mjs --emit-f9 --f7 /tmp/g01-f7/ci-bundle.*.json --authority approval-authority.json > approval-envelope.json; then break; fi
             fi
-            rm -f f7-artifact.json approval-authority.json "approval-envelope.$suffix"
-            if test "$attempt" = 90; then echo "Timed out waiting for exact-head OMX approvals" >&2; exit 1; fi
+            rm -rf /tmp/g01-f7 /tmp/g01-f7.zip f7-metadata.json approval-authority.json approval-envelope.json
+            if test "$attempt" = 90; then echo "Timed out waiting for exact-head authorized approvals" >&2; exit 1; fi
             sleep 20
           done
-        env:
-          ARTIFACT_NAME: g01-candidate-evidence-${{ env.SOURCE_SHA }}
+          suffix="$(node -p 'JSON.parse(require("node:fs").readFileSync("approval-envelope.json")).evidenceId.slice("approval-envelope.".length)')"; mv approval-envelope.json "approval-envelope.$suffix"
       - name: Persist immutable G01 F9 from candidate PR run
         uses: actions/upload-artifact@v4
         with:
@@ -204,102 +183,93 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
-  bootstrap-approval:
-    name: G01 authenticated F9 approval seal
-    if: github.event_name == 'workflow_dispatch' && inputs.bootstrap_phase == 'approval'
-    runs-on: ubuntu-latest
-    permissions:
-      actions: read
-      contents: read
-      pull-requests: read
-    env:
-      GH_TOKEN: ${{ github.token }}
-      PR_NUMBER: ${{ inputs.bootstrap_pr_number }}
-      F7_ARTIFACT_ID: ${{ inputs.bootstrap_f7_artifact_id }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version-file: .nvmrc
-      - name: Fetch immutable F7 and exact-head review authority
-        run: |
-          set -euo pipefail
-          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$F7_ARTIFACT_ID" > f7-artifact.json
-          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$F7_ARTIFACT_ID/zip" > f7.zip
-          unzip -q f7.zip
-          f7_file="$(find . -maxdepth 1 -name 'ci-bundle.*.json' -print -quit)"; test -n "$f7_file"
-          gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" > pr.json
-          gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/reviews?per_page=100" --slurp > review-pages.json
-          node - <<'NODE'
-          const fs=require('node:fs'); const read=(p)=>JSON.parse(fs.readFileSync(p));
-          const pages=read('review-pages.json');
-          fs.writeFileSync('approval-authority.json', JSON.stringify({pr:read('pr.json'),reviews:pages.flat(),observedAt:new Date().toISOString(),f7Artifact:read('f7-artifact.json'),candidateReport:read('candidate-registry-report.g01.json')}));
-          NODE
-          f9_file="${f7_file/ci-bundle/approval-envelope}"
-          node scripts/evidence/emit-bootstrap-selection.mjs --emit-f9 --f7 "$f7_file" --authority approval-authority.json > "$f9_file"
-      - name: Persist immutable G01 F9
-        uses: actions/upload-artifact@v4
-        with:
-          name: g01-approval-${{ inputs.bootstrap_pr_number }}
-          path: approval-envelope.*.json
-          if-no-files-found: error
-          retention-days: 90
-
-  bootstrap-merge:
+  bootstrap-postmerge:
     name: G01 authenticated post-merge F11
-    if: github.event_name == 'workflow_dispatch' && inputs.bootstrap_phase == 'merge'
+    needs: [check, test]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
     runs-on: ubuntu-latest
     permissions:
       actions: read
       contents: read
       pull-requests: read
+    outputs:
+      active: ${{ steps.discover.outputs.active }}
+      pr_number: ${{ steps.discover.outputs.pr_number }}
     env:
       GH_TOKEN: ${{ github.token }}
-      PR_NUMBER: ${{ inputs.bootstrap_pr_number }}
-      F7_ARTIFACT_ID: ${{ inputs.bootstrap_f7_artifact_id }}
-      F9_ARTIFACT_ID: ${{ inputs.bootstrap_f9_artifact_id }}
-      POSTMERGE_RUN_ID: ${{ inputs.bootstrap_postmerge_run_id }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
-      - name: Fetch immutable envelopes and actual GitHub merge authority
+      - id: discover
+        name: Locate the unique merged G01 PR from the pushed commit
         run: |
           set -euo pipefail
-          test -n "$F9_ARTIFACT_ID" && test -n "$POSTMERGE_RUN_ID"
-          for pair in "f7:$F7_ARTIFACT_ID" "f9:$F9_ARTIFACT_ID"; do
-            name="${pair%%:*}"; id="${pair#*:}"
-            gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$id" > "$name-artifact.json"
-            gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$id/zip" > "$name.zip"
-            unzip -q "$name.zip"
-          done
-          f7_file="$(find . -maxdepth 1 -name 'ci-bundle.*.json' -print -quit)"; f9_file="$(find . -maxdepth 1 -name 'approval-envelope.*.json' -print -quit)"
-          test -n "$f7_file" && test -n "$f9_file"
-          gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" > pr.json
-          gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/develop" > develop-ref.json
-          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$POSTMERGE_RUN_ID" > postmerge-run.json
-          branch="$(node -p 'JSON.parse(require("node:fs").readFileSync("pr.json")).head.ref')"
-          encoded="$(node -p 'encodeURIComponent(process.argv[1])' "$branch")"
-          status="$(curl --proto '=https' --tlsv1.2 -sS -o source-ref.json -w '%{http_code}' -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' "https://api.github.com/repos/$GITHUB_REPOSITORY/git/ref/heads/$encoded")"
-          test "$status" = 404
-          SOURCE_REF_STATUS="$status" node - <<'NODE'
-          const fs=require('node:fs'); const read=(p)=>JSON.parse(fs.readFileSync(p));
-          fs.writeFileSync('merge-authority.json', JSON.stringify({pr:read('pr.json'),developRef:read('develop-ref.json'),sourceRefStatus:Number(process.env.SOURCE_REF_STATUS),postMergeRun:read('postmerge-run.json'),observedAt:new Date().toISOString(),f7Artifact:read('f7-artifact.json'),f9Artifact:read('f9-artifact.json')}));
+          gh api -H 'Accept: application/vnd.github+json' "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/pulls" > commit-pulls.json
+          node - <<'NODE'
+          const fs=require('node:fs');const prs=JSON.parse(fs.readFileSync('commit-pulls.json')).filter(p=>p.merged_at&&p.merge_commit_sha===process.env.GITHUB_SHA&&p.base?.ref==='develop'&&p.base?.repo?.full_name===process.env.GITHUB_REPOSITORY&&p.head?.repo?.full_name===process.env.GITHUB_REPOSITORY&&/^feature\/2\.5\.0-g01-(canonical-evidence-bootstrap|postmerge-bootstrap-a[0-9]{2,})$/.test(p.head?.ref));
+          if(prs.length>1)throw Error('pushed commit maps to multiple G01 PRs');
+          fs.appendFileSync(process.env.GITHUB_OUTPUT,prs.length===0?'active=false\n':`active=true\npr_number=${prs[0].number}\n`);if(prs.length)fs.writeFileSync('pr.json',JSON.stringify(prs[0]));
           NODE
-          f11_file="${f7_file/ci-bundle/merge-envelope}"
-          node scripts/evidence/emit-bootstrap-selection.mjs --emit-f11 --f7 "$f7_file" --f9 "$f9_file" --authority merge-authority.json > "$f11_file"
+      - name: Authenticate F7/F9, current push workflow and required jobs; emit F11
+        if: steps.discover.outputs.active == 'true'
+        env:
+          PR_NUMBER: ${{ steps.discover.outputs.pr_number }}
+        run: |
+          set -euo pipefail
+          head_sha="$(node -p 'JSON.parse(require("node:fs").readFileSync("pr.json")).head.sha')"; branch="$(node -p 'JSON.parse(require("node:fs").readFileSync("pr.json")).head.ref')"
+          if test "$branch" = feature/2.5.0-g01-canonical-evidence-bootstrap; then suffix=g01.json; else suffix="bootstrap-recovery-${branch##*-bootstrap-}.json"; fi
+          fetch_artifact() {
+            label="$1"; expected="$2"; dir="/tmp/g01-$label"; mkdir -p "$dir"
+            gh api --paginate "repos/$GITHUB_REPOSITORY/actions/artifacts?name=$expected&per_page=100" --slurp > "$label-pages.json"
+            LABEL="$label" EXPECTED="$expected" node - <<'NODE'
+          const fs=require('node:fs');const a=JSON.parse(fs.readFileSync(`${process.env.LABEL}-pages.json`)).flatMap(p=>p.artifacts).filter(x=>x.name===process.env.EXPECTED&&!x.expired);if(a.length!==1)throw Error(`${process.env.LABEL} artifact lookup must be unique`);fs.writeFileSync(`${process.env.LABEL}-metadata.json`,JSON.stringify(a[0]));
+          NODE
+            id="$(LABEL="$label" node -p 'JSON.parse(require("node:fs").readFileSync(process.env.LABEL+"-metadata.json")).id')"
+            gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$id/zip" > "$dir.zip"
+            LABEL="$label" DIR="$dir" node - <<'NODE'
+          const fs=require('node:fs'),c=require('node:crypto');const m=JSON.parse(fs.readFileSync(`${process.env.LABEL}-metadata.json`)),b=fs.readFileSync(`${process.env.DIR}.zip`),d='sha256:'+c.createHash('sha256').update(b).digest('hex');if(d!==m.digest)throw Error(`${process.env.LABEL} archive digest mismatch`);fs.writeFileSync(`${process.env.LABEL}-download-digest.txt`,d);
+          NODE
+            case "$label" in f7) members="candidate-registry-report.g01.json,ci-bundle.$suffix";; f9) members="approval-envelope.$suffix";; esac
+            MEMBERS="$members" unzip -Z1 "$dir.zip" | MEMBERS="$members" node -e 'const fs=require("node:fs");const actual=fs.readFileSync(0,"utf8").trim().split("\n").sort(),expected=process.env.MEMBERS.split(",").sort();if(JSON.stringify(actual)!==JSON.stringify(expected))throw Error("artifact member allowlist mismatch")'
+            unzip -q "$dir.zip" -d "$dir"
+            run_id="$(LABEL="$label" node -p 'JSON.parse(require("node:fs").readFileSync(process.env.LABEL+"-metadata.json")).workflow_run.id')"; gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id" > "$label-run.json"
+          }
+          fetch_artifact f7 "g01-candidate-evidence-$head_sha"; fetch_artifact f9 "g01-approval-$PR_NUMBER"
+          test "$(find /tmp/g01-f7 -maxdepth 1 -type f -name 'ci-bundle.*.json' | wc -l | tr -d ' ')" = 1
+          test "$(find /tmp/g01-f9 -maxdepth 1 -type f -name 'approval-envelope.*.json' | wc -l | tr -d ' ')" = 1
+          f7_file="$(find /tmp/g01-f7 -maxdepth 1 -type f -name 'ci-bundle.*.json')"; f9_file="$(find /tmp/g01-f9 -maxdepth 1 -type f -name 'approval-envelope.*.json')"
+          F7_FILE="$f7_file" F9_FILE="$f9_file" node - <<'NODE'
+          const fs=require('node:fs'),c=require('node:crypto');for(const [label,key] of [['f7','F7_FILE'],['f9','F9_FILE']])fs.writeFileSync(`${label}-payload-digest.txt`,'sha256:'+c.createHash('sha256').update(fs.readFileSync(process.env[key])).digest('hex'));
+          NODE
+          gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/develop" > develop-ref.json
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" > postmerge-run-raw.json
+          gh api --paginate "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/jobs?per_page=100" --slurp > postmerge-job-pages.json
+          for attempt in $(seq 1 30); do encoded="$(node -p 'encodeURIComponent(process.argv[1])' "$branch")"; status="$(curl --proto '=https' --tlsv1.2 -sS -o source-ref.json -w '%{http_code}' -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' "https://api.github.com/repos/$GITHUB_REPOSITORY/git/ref/heads/$encoded")"; test "$status" = 404 && break; test "$attempt" = 30 && exit 1; sleep 10; done
+          SOURCE_REF_STATUS="$status" node - <<'NODE'
+          const fs=require('node:fs');const read=p=>JSON.parse(fs.readFileSync(p));const raw=read('postmerge-run-raw.json');const all=read('postmerge-job-pages.json').flatMap(p=>p.jobs);const names=['Lint, typecheck & build','Tests'];const requiredJobs=names.map(name=>{const m=all.filter(j=>j.name===name);if(m.length!==1||m[0].status!=='completed'||m[0].conclusion!=='success'||m[0].run_id!==raw.id||m[0].run_attempt!==raw.run_attempt||m[0].head_sha!==raw.head_sha)throw Error(`required job ${name} not uniquely green on the exact run attempt/head`);return {id:m[0].id,name,status:m[0].status,conclusion:m[0].conclusion,runId:m[0].run_id,runAttempt:m[0].run_attempt,headSha:m[0].head_sha}});
+          const postMergeRun={id:raw.id,runAttempt:raw.run_attempt,checkSuiteId:raw.check_suite_id,workflowId:raw.workflow_id,workflowName:raw.name,workflowPath:raw.path,repository:raw.repository.full_name,event:raw.event,headBranch:raw.head_branch,headSha:raw.head_sha,requiredJobs};
+          const artifact=l=>({metadata:read(`${l}-metadata.json`),run:read(`${l}-run.json`),downloadDigest:fs.readFileSync(`${l}-download-digest.txt`,'utf8'),payloadDigest:fs.readFileSync(`${l}-payload-digest.txt`,'utf8'),matchCount:1});
+          fs.writeFileSync('merge-authority.json',JSON.stringify({pr:read('pr.json'),developRef:read('develop-ref.json'),sourceRefStatus:Number(process.env.SOURCE_REF_STATUS),postMergeRun,observedAt:new Date().toISOString(),repository:process.env.GITHUB_REPOSITORY,f7Artifact:artifact('f7'),f9Artifact:artifact('f9')}));
+          NODE
+          node scripts/evidence/emit-bootstrap-selection.mjs --emit-f11 --f7 "$f7_file" --f9 "$f9_file" --authority merge-authority.json > merge-envelope.json
+          suffix="$(node -p 'JSON.parse(require("node:fs").readFileSync("merge-envelope.json")).evidenceId.slice("merge-envelope.".length)')"; mv merge-envelope.json "merge-envelope.$suffix"
       - name: Persist immutable G01 F11
+        if: steps.discover.outputs.active == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: g01-merge-${{ inputs.bootstrap_pr_number }}
+          name: g01-merge-${{ steps.discover.outputs.pr_number }}
           path: merge-envelope.*.json
           if-no-files-found: error
           retention-days: 90
 
   bootstrap-selection:
     name: G01 authenticated post-F11 terminal selection
-    if: github.event_name == 'workflow_dispatch' && inputs.bootstrap_phase == 'selection'
+    needs: [check, test, bootstrap-postmerge]
+    if: needs.bootstrap-postmerge.outputs.active == 'true'
     runs-on: ubuntu-latest
     permissions:
       actions: read
@@ -307,69 +277,80 @@ jobs:
       pull-requests: read
     env:
       GH_TOKEN: ${{ github.token }}
-      PR_NUMBER: ${{ inputs.bootstrap_pr_number }}
-      F7_ARTIFACT_ID: ${{ inputs.bootstrap_f7_artifact_id }}
-      F9_ARTIFACT_ID: ${{ inputs.bootstrap_f9_artifact_id }}
-      F11_ARTIFACT_ID: ${{ inputs.bootstrap_f11_artifact_id }}
-      POSTMERGE_RUN_ID: ${{ inputs.bootstrap_postmerge_run_id }}
-      ANCESTOR_ARTIFACT_ID: ${{ inputs.bootstrap_ancestor_artifact_id }}
+      PR_NUMBER: ${{ needs.bootstrap-postmerge.outputs.pr_number }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
-      - name: Re-fetch immutable artifacts and current terminal authority
+      - name: Re-fetch exact immutable artifacts and emit terminal selection
         run: |
           set -euo pipefail
-          test -n "$F9_ARTIFACT_ID" && test -n "$F11_ARTIFACT_ID" && test -n "$POSTMERGE_RUN_ID"
-          for pair in "f7:$F7_ARTIFACT_ID" "f9:$F9_ARTIFACT_ID" "f11:$F11_ARTIFACT_ID"; do
-            name="${pair%%:*}"; id="${pair#*:}"
-            gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$id" > "$name-artifact.json"
-            gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$id/zip" > "$name.zip"
-            unzip -q "$name.zip"
-          done
-          f7_file="$(find . -maxdepth 1 -name 'ci-bundle.*.json' -print -quit)"; f9_file="$(find . -maxdepth 1 -name 'approval-envelope.*.json' -print -quit)"; f11_file="$(find . -maxdepth 1 -name 'merge-envelope.*.json' -print -quit)"
-          test -n "$f7_file" && test -n "$f9_file" && test -n "$f11_file"
           gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" > pr.json
-          gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/develop" > develop-ref.json
-          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$POSTMERGE_RUN_ID" > postmerge-run.json
-          branch="$(node -p 'JSON.parse(require("node:fs").readFileSync("pr.json")).head.ref')"
-          encoded="$(node -p 'encodeURIComponent(process.argv[1])' "$branch")"
-          status="$(curl --proto '=https' --tlsv1.2 -sS -o source-ref.json -w '%{http_code}' -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' "https://api.github.com/repos/$GITHUB_REPOSITORY/git/ref/heads/$encoded")"
-          test "$status" = 404
-          SOURCE_REF_STATUS="$status" node - <<'NODE'
-          const fs=require('node:fs'); const read=(p)=>JSON.parse(fs.readFileSync(p));
-          fs.writeFileSync('selection-authority.json', JSON.stringify({pr:read('pr.json'),developRef:read('develop-ref.json'),sourceRefStatus:Number(process.env.SOURCE_REF_STATUS),postMergeRun:read('postmerge-run.json'),observedAt:new Date().toISOString(),f7Artifact:read('f7-artifact.json'),f9Artifact:read('f9-artifact.json'),f11Artifact:read('f11-artifact.json')}));
+          head_sha="$(node -p 'JSON.parse(require("node:fs").readFileSync("pr.json")).head.sha')"; branch="$(node -p 'JSON.parse(require("node:fs").readFileSync("pr.json")).head.ref')"
+          if test "$branch" = feature/2.5.0-g01-canonical-evidence-bootstrap; then suffix=g01.json; else suffix="bootstrap-recovery-${branch##*-bootstrap-}.json"; fi
+          fetch_artifact() {
+            label="$1"; expected="$2"; dir="/tmp/g01-selection-$label"; mkdir -p "$dir"
+            gh api --paginate "repos/$GITHUB_REPOSITORY/actions/artifacts?name=$expected&per_page=100" --slurp > "$label-pages.json"
+            LABEL="$label" EXPECTED="$expected" node - <<'NODE'
+          const fs=require('node:fs');const a=JSON.parse(fs.readFileSync(`${process.env.LABEL}-pages.json`)).flatMap(p=>p.artifacts).filter(x=>x.name===process.env.EXPECTED&&!x.expired);if(a.length!==1)throw Error(`${process.env.LABEL} artifact lookup must be unique`);fs.writeFileSync(`${process.env.LABEL}-metadata.json`,JSON.stringify(a[0]));
+          NODE
+            id="$(LABEL="$label" node -p 'JSON.parse(require("node:fs").readFileSync(process.env.LABEL+"-metadata.json")).id')"; gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$id/zip" > "$dir.zip"
+            LABEL="$label" DIR="$dir" node - <<'NODE'
+          const fs=require('node:fs'),c=require('node:crypto');const m=JSON.parse(fs.readFileSync(`${process.env.LABEL}-metadata.json`)),b=fs.readFileSync(`${process.env.DIR}.zip`),d='sha256:'+c.createHash('sha256').update(b).digest('hex');if(d!==m.digest)throw Error(`${process.env.LABEL} archive digest mismatch`);fs.writeFileSync(`${process.env.LABEL}-download-digest.txt`,d);
+          NODE
+            case "$label" in f7) members="candidate-registry-report.g01.json,ci-bundle.$suffix";; f9) members="approval-envelope.$suffix";; f11) members="merge-envelope.$suffix";; esac
+            MEMBERS="$members" unzip -Z1 "$dir.zip" | MEMBERS="$members" node -e 'const fs=require("node:fs");const actual=fs.readFileSync(0,"utf8").trim().split("\n").sort(),expected=process.env.MEMBERS.split(",").sort();if(JSON.stringify(actual)!==JSON.stringify(expected))throw Error("artifact member allowlist mismatch")'
+            unzip -q "$dir.zip" -d "$dir"; run_id="$(LABEL="$label" node -p 'JSON.parse(require("node:fs").readFileSync(process.env.LABEL+"-metadata.json")).workflow_run.id')"; gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id" > "$label-run.json"
+          }
+          fetch_artifact f7 "g01-candidate-evidence-$head_sha"; fetch_artifact f9 "g01-approval-$PR_NUMBER"; fetch_artifact f11 "g01-merge-$PR_NUMBER"
+          f7_file="$(find /tmp/g01-selection-f7 -maxdepth 1 -type f -name 'ci-bundle.*.json')"; f9_file="$(find /tmp/g01-selection-f9 -maxdepth 1 -type f -name 'approval-envelope.*.json')"; f11_file="$(find /tmp/g01-selection-f11 -maxdepth 1 -type f -name 'merge-envelope.*.json')"
+          test -f "$f7_file" && test -f "$f9_file" && test -f "$f11_file"
+          F7_FILE="$f7_file" F9_FILE="$f9_file" F11_FILE="$f11_file" node - <<'NODE'
+          const fs=require('node:fs'),c=require('node:crypto');for(const [label,key] of [['f7','F7_FILE'],['f9','F9_FILE'],['f11','F11_FILE']])fs.writeFileSync(`${label}-payload-digest.txt`,'sha256:'+c.createHash('sha256').update(fs.readFileSync(process.env[key])).digest('hex'));
           NODE
           extra=()
-          if test -n "$ANCESTOR_ARTIFACT_ID"; then
-            gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$ANCESTOR_ARTIFACT_ID" > ancestor-artifact.json
-            gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$ANCESTOR_ARTIFACT_ID/zip" > ancestors.zip
-            ANCESTOR_ARTIFACT_ID="$ANCESTOR_ARTIFACT_ID" node - <<'NODE'
-          const fs=require('node:fs'); const crypto=require('node:crypto');
-          const artifact=JSON.parse(fs.readFileSync('ancestor-artifact.json'));
-          if (artifact.id !== Number(process.env.ANCESTOR_ARTIFACT_ID) || artifact.expired !== false) throw new Error('ancestor chain artifact metadata mismatch');
-          const digest=`sha256:${crypto.createHash('sha256').update(fs.readFileSync('ancestors.zip')).digest('hex')}`;
-          if (artifact.digest !== digest) throw new Error('ancestor chain archive digest mismatch');
-          NODE
-            unzip -q ancestors.zip
-            : > ancestor-artifacts.ndjson
-            while read -r artifact_id; do
-              gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$artifact_id" >> ancestor-artifacts.ndjson
-              printf '\n' >> ancestor-artifacts.ndjson
-            done < <(node -e 'for (const item of JSON.parse(require("node:fs").readFileSync("bootstrap-ancestor-failures.json"))) console.log(item.artifactId)')
+          if [[ "$branch" == feature/2.5.0-g01-postmerge-bootstrap-a* ]]; then
             node - <<'NODE'
-          const fs=require('node:fs');
-          const artifacts=fs.readFileSync('ancestor-artifacts.ndjson','utf8').trim().split('\n').filter(Boolean).map(JSON.parse);
-          fs.writeFileSync('ancestor-artifacts.json', JSON.stringify(artifacts));
+          const fs=require('node:fs');const r=JSON.parse(fs.readFileSync('docs/releases/2.5.0/evidence/bootstrap-landed-recoveries.json'));const current=r.landedAncestors.findIndex(x=>x.attemptId===r.currentRecovery);if(current<0)throw Error('current recovery pointer does not resolve');const expected=r.landedAncestors.slice(0,current+1).map(x=>({attemptId:x.priorFailureId.match(/^bootstrap-failure\.(g01-(?:a|recovery-a)[0-9]{2,})\.json$/)?.[1],evidenceId:x.priorFailureId,digest:x.priorFailureDigest}));if(expected.some(x=>!x.attemptId)||expected.length===0)throw Error('recovery ancestor catalog is incomplete');fs.writeFileSync('ancestor-expected.json',JSON.stringify(expected));
           NODE
+            : > ancestor-authorities.ndjson; : > ancestor-failures.ndjson
+            count="$(node -p 'JSON.parse(require("node:fs").readFileSync("ancestor-expected.json")).length')"
+            for index in $(seq 0 $((count-1))); do
+              attempt_id="$(INDEX="$index" node -p 'JSON.parse(require("node:fs").readFileSync("ancestor-expected.json"))[Number(process.env.INDEX)].attemptId')"
+              evidence_id="bootstrap-failure.$attempt_id.json"; expected_name="g01-bootstrap-failure-$attempt_id"
+              gh api --paginate "repos/$GITHUB_REPOSITORY/actions/artifacts?name=$expected_name&per_page=100" --slurp > ancestor-pages.json
+              EXPECTED="$expected_name" node - <<'NODE'
+          const fs=require('node:fs');const a=JSON.parse(fs.readFileSync('ancestor-pages.json')).flatMap(p=>p.artifacts).filter(x=>x.name===process.env.EXPECTED&&!x.expired);if(a.length!==1)throw Error('ancestor artifact lookup must be unique');fs.writeFileSync('ancestor-metadata.json',JSON.stringify(a[0]));
+          NODE
+              artifact_id="$(node -p 'JSON.parse(require("node:fs").readFileSync("ancestor-metadata.json")).id')"; gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$artifact_id/zip" > ancestor.zip
+              test "$(unzip -Z1 ancestor.zip)" = "$evidence_id"; rm -rf /tmp/g01-ancestor; mkdir /tmp/g01-ancestor; unzip -q ancestor.zip -d /tmp/g01-ancestor
+              INDEX="$index" EVIDENCE="/tmp/g01-ancestor/$evidence_id" node - <<'NODE'
+          const fs=require('node:fs'),c=require('node:crypto');const expected=JSON.parse(fs.readFileSync('ancestor-expected.json'))[Number(process.env.INDEX)],bytes=fs.readFileSync(process.env.EVIDENCE),digest='sha256:'+c.createHash('sha256').update(bytes).digest('hex');if(digest!==expected.digest)throw Error('ancestor payload digest mismatch');const failure=JSON.parse(bytes);for(const key of ['baseSha','parentSha','terminalDevelopSha','createdAt'])if(typeof failure[key]!=='string')throw Error(`ancestor payload missing ${key}`);fs.writeFileSync('ancestor-payload-digest.txt',digest);fs.writeFileSync('ancestor-failure-row.json',JSON.stringify({...expected,artifactId:JSON.parse(fs.readFileSync('ancestor-metadata.json')).id,runId:JSON.parse(fs.readFileSync('ancestor-metadata.json')).workflow_run.id,baseSha:failure.baseSha,parentSha:failure.parentSha,terminalDevelopSha:failure.terminalDevelopSha,createdAt:failure.createdAt}));
+          NODE
+              node -e 'const f=require("node:fs"),c=require("node:crypto"),m=JSON.parse(f.readFileSync("ancestor-metadata.json")),b=f.readFileSync("ancestor.zip"),d="sha256:"+c.createHash("sha256").update(b).digest("hex");if(d!==m.digest)throw Error("ancestor archive digest mismatch");f.writeFileSync("ancestor-download-digest.txt",d)'
+              run_id="$(node -p 'JSON.parse(require("node:fs").readFileSync("ancestor-metadata.json")).workflow_run.id')"; gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id" > ancestor-run.json
+              node - <<'NODE' >> ancestor-authorities.ndjson
+          const fs=require('node:fs');const read=p=>JSON.parse(fs.readFileSync(p));process.stdout.write(JSON.stringify({metadata:read('ancestor-metadata.json'),run:read('ancestor-run.json'),downloadDigest:fs.readFileSync('ancestor-download-digest.txt','utf8'),payloadDigest:fs.readFileSync('ancestor-payload-digest.txt','utf8'),matchCount:1})+'\n');
+          NODE
+              cat ancestor-failure-row.json >> ancestor-failures.ndjson; printf '\n' >> ancestor-failures.ndjson
+            done
+            node -e 'const f=require("node:fs");for(const [i,o] of [["ancestor-failures.ndjson","bootstrap-ancestor-failures.json"],["ancestor-authorities.ndjson","ancestor-artifacts.json"]])f.writeFileSync(o,JSON.stringify(f.readFileSync(i,"utf8").trim().split("\n").map(JSON.parse)))'
             extra=(--ancestors bootstrap-ancestor-failures.json --ancestor-artifacts ancestor-artifacts.json)
           fi
+          gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/develop" > develop-ref.json; gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" > current-run.json
+          encoded="$(node -p 'encodeURIComponent(process.argv[1])' "$branch")"; status="$(curl --proto '=https' --tlsv1.2 -sS -o source-ref.json -w '%{http_code}' -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' "https://api.github.com/repos/$GITHUB_REPOSITORY/git/ref/heads/$encoded")"; test "$status" = 404
+          SOURCE_REF_STATUS="$status" F11_FILE="$f11_file" node - <<'NODE'
+          const fs=require('node:fs');const read=p=>JSON.parse(fs.readFileSync(p));const f11=read(process.env.F11_FILE);const artifact=l=>({metadata:read(`${l}-metadata.json`),run:read(`${l}-run.json`),downloadDigest:fs.readFileSync(`${l}-download-digest.txt`,'utf8'),payloadDigest:fs.readFileSync(`${l}-payload-digest.txt`,'utf8'),matchCount:1});
+          fs.writeFileSync('selection-authority.json',JSON.stringify({pr:read('pr.json'),developRef:read('develop-ref.json'),sourceRefStatus:Number(process.env.SOURCE_REF_STATUS),postMergeRun:f11.postMergeRun,observedAt:new Date().toISOString(),repository:process.env.GITHUB_REPOSITORY,f7Artifact:artifact('f7'),f9Artifact:artifact('f9'),f11Artifact:artifact('f11')}));
+          NODE
           node scripts/evidence/emit-bootstrap-selection.mjs --f7 "$f7_file" --f9 "$f9_file" --f11 "$f11_file" --authority selection-authority.json "${extra[@]}" > bootstrap-selection.json
       - name: Persist post-F11 bootstrap selection
         uses: actions/upload-artifact@v4
         with:
-          name: g01-bootstrap-selection-${{ inputs.bootstrap_pr_number }}
+          name: g01-bootstrap-selection-${{ env.PR_NUMBER }}
           path: bootstrap-selection.json
           if-no-files-found: error
           retention-days: 90

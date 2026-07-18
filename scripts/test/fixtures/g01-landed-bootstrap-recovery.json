@@ -78,14 +78,14 @@
         "selection": {
           "schemaVersion": 1,
           "release": "2.5.0",
-          "attemptId": "g01-a01",
+          "attemptId": "g01-a02",
           "terminalKind": "direct-canonical",
           "f7Id": "ci-bundle.g01.json",
           "f7Digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
           "f9Id": "approval-envelope.g01.json",
           "f9Digest": "sha256:21a2f91d4fd6cdc4bddda0e9d071e7641d9c62804b4f199af6f9bad58e848273",
           "f11Id": "merge-envelope.g01.json",
-          "f11Digest": "sha256:e890d67f4cd6361b226eebe6470540a27a527de1e2233c37e09fbd551d8fad46",
+          "f11Digest": "sha256:f1244d4bf965b3ecb7e2d720cbaab8e2d9a9b612e654fe13699ef7d4de4da62a",
           "terminalDevelopSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
           "createdAt": "2026-07-18T00:05:00.000Z",
           "remoteDeleted": true,
@@ -101,7 +101,9 @@
           "evidenceId": "ci-bundle.g01.json",
           "sourceSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
           "digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
-          "createdAt": "2026-07-18T00:00:00.000Z"
+          "createdAt": "2026-07-18T00:00:00.000Z",
+          "attemptId": "g01-a02",
+          "sourceBranch": "feature/2.5.0-g01-canonical-evidence-bootstrap"
         },
         "f9": {
           "schemaVersion": 1,
@@ -141,7 +143,9 @@
               "commitId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
               "submittedAt": "2026-07-18T00:00:30.000Z"
             }
-          ]
+          ],
+          "attemptId": "g01-a02",
+          "sourceBranch": "feature/2.5.0-g01-canonical-evidence-bootstrap"
         },
         "f11": {
           "schemaVersion": 1,
@@ -150,7 +154,7 @@
           "status": "GREEN",
           "evidenceId": "merge-envelope.g01.json",
           "sourceSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-          "digest": "sha256:e890d67f4cd6361b226eebe6470540a27a527de1e2233c37e09fbd551d8fad46",
+          "digest": "sha256:f1244d4bf965b3ecb7e2d720cbaab8e2d9a9b612e654fe13699ef7d4de4da62a",
           "createdAt": "2026-07-18T00:04:00.000Z",
           "f7Digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
           "f9Digest": "sha256:21a2f91d4fd6cdc4bddda0e9d071e7641d9c62804b4f199af6f9bad58e848273",
@@ -161,8 +165,39 @@
           "remoteDeletionObservedAt": "2026-07-18T00:03:00.000Z",
           "prNumber": 1,
           "sourceBranch": "feature/2.5.0-g01-canonical-evidence-bootstrap",
-          "postMergeRunId": 10,
-          "postMergeCheckSuiteId": 20
+          "attemptId": "g01-a02",
+          "postMergeRun": {
+            "id": 10,
+            "runAttempt": 1,
+            "checkSuiteId": 20,
+            "workflowId": 30,
+            "workflowName": "CI/CD",
+            "workflowPath": ".github/workflows/ci.yml",
+            "repository": "dazeGG/VoiceRoom",
+            "event": "push",
+            "headBranch": "develop",
+            "headSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "requiredJobs": [
+              {
+                "id": 801,
+                "name": "Lint, typecheck & build",
+                "status": "completed",
+                "conclusion": "success",
+                "runId": 10,
+                "runAttempt": 1,
+                "headSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+              },
+              {
+                "id": 802,
+                "name": "Tests",
+                "status": "completed",
+                "conclusion": "success",
+                "runId": 10,
+                "runAttempt": 1,
+                "headSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+              }
+            ]
+          }
         }
       }
     },
@@ -323,7 +358,7 @@
           "f9Id": "approval-envelope.bootstrap-recovery-a02.json",
           "f9Digest": "sha256:21a2f91d4fd6cdc4bddda0e9d071e7641d9c62804b4f199af6f9bad58e848273",
           "f11Id": "merge-envelope.bootstrap-recovery-a02.json",
-          "f11Digest": "sha256:e890d67f4cd6361b226eebe6470540a27a527de1e2233c37e09fbd551d8fad46",
+          "f11Digest": "sha256:f1244d4bf965b3ecb7e2d720cbaab8e2d9a9b612e654fe13699ef7d4de4da62a",
           "terminalDevelopSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
           "createdAt": "2026-07-18T00:05:00.000Z",
           "remoteDeleted": true,
@@ -352,7 +387,9 @@
           "evidenceId": "ci-bundle.bootstrap-recovery-a02.json",
           "sourceSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
           "digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
-          "createdAt": "2026-07-18T00:00:00.000Z"
+          "createdAt": "2026-07-18T00:00:00.000Z",
+          "attemptId": "g01-recovery-a02",
+          "sourceBranch": "feature/2.5.0-g01-postmerge-bootstrap-a02"
         },
         "f9": {
           "schemaVersion": 1,
@@ -392,7 +429,9 @@
               "commitId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
               "submittedAt": "2026-07-18T00:00:30.000Z"
             }
-          ]
+          ],
+          "attemptId": "g01-recovery-a02",
+          "sourceBranch": "feature/2.5.0-g01-postmerge-bootstrap-a02"
         },
         "f11": {
           "schemaVersion": 1,
@@ -401,7 +440,7 @@
           "status": "GREEN",
           "evidenceId": "merge-envelope.bootstrap-recovery-a02.json",
           "sourceSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-          "digest": "sha256:e890d67f4cd6361b226eebe6470540a27a527de1e2233c37e09fbd551d8fad46",
+          "digest": "sha256:f1244d4bf965b3ecb7e2d720cbaab8e2d9a9b612e654fe13699ef7d4de4da62a",
           "createdAt": "2026-07-18T00:04:00.000Z",
           "f7Digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
           "f9Digest": "sha256:21a2f91d4fd6cdc4bddda0e9d071e7641d9c62804b4f199af6f9bad58e848273",
@@ -412,8 +451,39 @@
           "remoteDeletionObservedAt": "2026-07-18T00:03:00.000Z",
           "prNumber": 1,
           "sourceBranch": "feature/2.5.0-g01-postmerge-bootstrap-a02",
-          "postMergeRunId": 10,
-          "postMergeCheckSuiteId": 20
+          "attemptId": "g01-recovery-a02",
+          "postMergeRun": {
+            "id": 10,
+            "runAttempt": 1,
+            "checkSuiteId": 20,
+            "workflowId": 30,
+            "workflowName": "CI/CD",
+            "workflowPath": ".github/workflows/ci.yml",
+            "repository": "dazeGG/VoiceRoom",
+            "event": "push",
+            "headBranch": "develop",
+            "headSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "requiredJobs": [
+              {
+                "id": 801,
+                "name": "Lint, typecheck & build",
+                "status": "completed",
+                "conclusion": "success",
+                "runId": 10,
+                "runAttempt": 1,
+                "headSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+              },
+              {
+                "id": 802,
+                "name": "Tests",
+                "status": "completed",
+                "conclusion": "success",
+                "runId": 10,
+                "runAttempt": 1,
+                "headSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+              }
+            ]
+          }
         }
       }
     },

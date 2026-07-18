@@ -7,6 +7,9 @@ import { validateEnvelope, validateEnvelopeChain } from "./validate-envelope.mjs
 
 const DIGEST = /^sha256:[0-9a-f]{64}$/;
 const SHA = /^[0-9a-f]{40}$/;
+const WORKFLOW_PATH = ".github/workflows/ci.yml";
+const WORKFLOW_NAME = "CI/CD";
+const TRUSTED_ASSOCIATIONS = new Set(["OWNER", "MEMBER", "COLLABORATOR"]);
 const ROLE_MARKERS = [
   ["code-reviewer", "APPROVE", "[omx-role:code-reviewer verdict:APPROVE]"],
   ["architect", "CLEAR", "[omx-role:architect verdict:CLEAR]"],
@@ -38,166 +41,233 @@ function compactDigest(value) {
   return `sha256:${crypto.createHash("sha256").update(JSON.stringify(value)).digest("hex")}`;
 }
 
-function branchIdentity(branch) {
-  if (branch === "feature/2.5.0-g01-canonical-evidence-bootstrap") return { attemptId: "g01-a01", terminalKind: "direct-canonical", suffix: "g01.json" };
-  const match = branch.match(/^feature\/2\.5\.0-g01-postmerge-bootstrap-a([0-9]{2,})$/);
-  assert.ok(match, "source branch is not a canonical G01 lifecycle branch");
-  return { attemptId: `g01-recovery-a${match[1]}`, terminalKind: "landed-recovery", suffix: `bootstrap-recovery-a${match[1]}.json` };
+function reportRegistry(report, name) {
+  assert.ok(Array.isArray(report?.registries), "candidate report must contain registries");
+  const matches = report.registries.filter((item) => item.name === name);
+  assert.equal(matches.length, 1, `candidate report must contain exactly one ${name}`);
+  return matches[0].candidate;
 }
 
-function normalizeReviews(authority, sourceSha) {
+export function resolveCandidateIdentity(candidateReport, branch, sourceSha) {
+  assert.match(sourceSha, SHA);
+  if (branch === "feature/2.5.0-g01-canonical-evidence-bootstrap") {
+    const registry = reportRegistry(candidateReport, "bootstrap-attempts.json");
+    assert.equal(registry.state, "G01_PREMERGE_ACTIVE", "direct candidate registry must be active");
+    const matches = registry.attempts.filter((entry) => entry.attemptId === registry.currentAttempt);
+    assert.equal(matches.length, 1, "direct current attempt must resolve exactly once");
+    const entry = matches[0];
+    assert.equal(entry.branch, branch); assert.equal(entry.headSha, sourceSha);
+    const ordinal = Number(entry.attemptId.match(/^g01-a([0-9]{2,})$/)?.[1]);
+    assert.ok(Number.isInteger(ordinal) && ordinal === entry.ordinal, "direct attempt ordinal must match its ID suffix");
+    return { attemptId: entry.attemptId, terminalKind: "direct-canonical", suffix: "g01.json", ordinal };
+  }
+  const branchMatch = branch.match(/^feature\/2\.5\.0-g01-postmerge-bootstrap-a([0-9]{2,})$/);
+  assert.ok(branchMatch, "source branch is not a canonical G01 lifecycle branch");
+  const registry = reportRegistry(candidateReport, "bootstrap-landed-recoveries.json");
+  assert.equal(registry.state, "G01_PREMERGE_ACTIVE", "recovery candidate registry must be active");
+  const matches = registry.landedAncestors.filter((entry) => entry.attemptId === registry.currentRecovery);
+  assert.equal(matches.length, 1, "recovery current attempt must resolve exactly once");
+  const entry = matches[0];
+  const ordinal = Number(branchMatch[1]);
+  assert.ok(ordinal >= 2, "recovery ordinal must follow the direct attempt");
+  assert.equal(entry.branch, branch); assert.equal(entry.headSha, sourceSha);
+  assert.equal(entry.attemptId, `g01-recovery-a${branchMatch[1]}`, "recovery ID/branch suffix mismatch");
+  return { attemptId: entry.attemptId, terminalKind: "landed-recovery", suffix: `bootstrap-recovery-a${branchMatch[1]}.json`, ordinal };
+}
+
+function validateArtifactAuthority(authority, expected, label) {
+  exactKeys(authority, ["metadata", "run", "downloadDigest", "payloadDigest", "matchCount"], `${label} artifact authority`);
+  const { metadata, run } = authority;
+  assert.equal(authority.matchCount, 1, `${label} artifact lookup must be unique`);
+  assert.ok(Number.isInteger(metadata.id) && metadata.id > 0, `${label} artifact ID is invalid`);
+  assert.equal(metadata.name, expected.name, `${label} artifact name mismatch`);
+  assert.equal(metadata.expired, false, `${label} artifact expired`);
+  assert.match(metadata.digest, DIGEST, `${label} GitHub digest missing`);
+  assert.equal(authority.downloadDigest, metadata.digest, `${label} downloaded archive digest mismatch`);
+  assert.match(authority.payloadDigest, DIGEST, `${label} payload digest missing`);
+  assert.ok(instant(metadata.expires_at, `${label} artifact expires_at`) > instant(expected.observedAt, `${label} observedAt`), `${label} artifact is not live at observation`);
+  assert.ok(Number.isInteger(run.id) && run.id > 0); assert.ok(Number.isInteger(run.run_attempt) && run.run_attempt > 0);
+  assert.equal(metadata.workflow_run?.id, run.id, `${label} producing run ID mismatch`);
+  assert.equal(metadata.workflow_run?.head_sha, expected.headSha, `${label} artifact abbreviated head mismatch`);
+  assert.equal(run.head_sha, expected.headSha, `${label} producing run head mismatch`);
+  assert.equal(run.head_branch, expected.headBranch, `${label} producing branch mismatch`);
+  assert.equal(run.event, expected.event, `${label} producing event mismatch`);
+  assert.equal(run.name, WORKFLOW_NAME, `${label} workflow name mismatch`);
+  assert.equal(run.path, WORKFLOW_PATH, `${label} workflow path mismatch`);
+  assert.equal(run.repository?.full_name, expected.repository, `${label} repository mismatch`);
+  if (expected.runId !== undefined) assert.equal(run.id, expected.runId, `${label} producing run substitution`);
+  if (expected.runAttempt !== undefined) assert.equal(run.run_attempt, expected.runAttempt, `${label} producing run attempt substitution`);
+  if (expected.completed) {
+    assert.equal(run.status, "completed", `${label} producing run is incomplete`);
+    if (expected.success !== false) assert.equal(run.conclusion, "success", `${label} producing run is not green`);
+  }
+  return authority;
+}
+
+function normalizeReviews(authority, sourceSha, f7CreatedAt) {
+  exactKeys(authority.reviewAuthority, ["code-reviewer", "architect", "verifier"], "review authority mapping");
+  const authorized = new Map(Object.entries(authority.reviewAuthority).map(([role, actorId]) => {
+    assert.ok(Number.isInteger(actorId) && actorId > 0, `${role} authorized actor ID must be configured`);
+    return [role, actorId];
+  }));
+  assert.equal(new Set(authorized.values()).size, 3, "approval roles require three distinct authorized actors");
   assert.ok(Array.isArray(authority.reviews), "GitHub reviews response must be an array");
+  const latestByActor = new Map();
+  for (const review of authority.reviews) {
+    if (!Number.isInteger(review.user?.id) || !review.submitted_at) continue;
+    const previous = latestByActor.get(review.user.id);
+    if (!previous || instant(previous.submitted_at, "previous review submitted_at") < instant(review.submitted_at, "review submitted_at")) latestByActor.set(review.user.id, review);
+  }
   return ROLE_MARKERS.map(([role, verdict, marker]) => {
-    const matches = authority.reviews.filter((review) => review.state === "APPROVED" && review.commit_id === sourceSha && typeof review.body === "string" && review.body.includes(marker));
-    assert.equal(matches.length, 1, `expected exactly one immutable ${role} review on the candidate head`);
+    const matches = [...latestByActor.values()].filter((review) => review.state === "APPROVED"
+      && review.commit_id === sourceSha
+      && review.user?.id === authorized.get(role)
+      && TRUSTED_ASSOCIATIONS.has(review.author_association)
+      && typeof review.body === "string" && review.body.includes(marker)
+      && ROLE_MARKERS.filter(([, , candidate]) => review.body.includes(candidate)).length === 1);
+    assert.equal(matches.length, 1, `expected exactly one authorized immutable ${role} review on the candidate head`);
     const review = matches[0];
     assert.ok(Number.isInteger(review.id) && review.id > 0);
-    assert.ok(Number.isInteger(review.user?.id) && review.user.id > 0);
     assert.equal(typeof review.node_id, "string"); assert.ok(review.node_id.length > 0);
     instant(review.submitted_at, `${role} review submitted_at`);
+    assert.ok(instant(f7CreatedAt, "F7.createdAt") < instant(review.submitted_at, `${role} review submitted_at`), `${role} review must follow F7`);
     return { role, verdict, reviewId: review.id, nodeId: review.node_id, actorId: review.user.id, commitId: review.commit_id, submittedAt: review.submitted_at };
   });
 }
 
 export function buildF9Envelope(f7, authority) {
   validateEnvelope(f7, "F7");
-  exactKeys(authority, ["pr", "reviews", "observedAt", "f7Artifact", "candidateReport"], "approval authority");
-  assert.equal(authority.pr.state, "open");
-  assert.equal(authority.pr.base?.ref, "develop");
+  exactKeys(authority, ["pr", "reviews", "reviewAuthority", "observedAt", "repository", "f7Artifact", "candidateReport"], "approval authority");
+  assert.equal(authority.pr.state, "open"); assert.equal(authority.pr.base?.ref, "develop");
+  assert.equal(authority.pr.base?.repo?.full_name, authority.repository, "PR base repository mismatch");
+  assert.equal(authority.pr.head?.repo?.full_name, authority.repository, "fork PR cannot provide bootstrap authority");
   assert.equal(authority.pr.head?.sha, f7.sourceSha, "GitHub PR head must equal F7 source SHA");
-  const identity = branchIdentity(authority.pr.head?.ref);
+  const identity = resolveCandidateIdentity(authority.candidateReport, authority.pr.head?.ref, f7.sourceSha);
+  assert.equal(f7.attemptId, identity.attemptId); assert.equal(f7.sourceBranch, authority.pr.head.ref);
   assert.equal(f7.evidenceId, `ci-bundle.${identity.suffix}`);
-  assert.equal(authority.f7Artifact.expired, false);
-  assert.ok(Number.isInteger(authority.f7Artifact.id) && authority.f7Artifact.id > 0);
-  assert.equal(authority.f7Artifact.workflow_run?.head_sha, f7.sourceSha, "F7 artifact must come from the exact candidate head");
-  assert.equal(f7.digest, compactDigest(authority.candidateReport), "F7 digest must bind the candidate report bytes from the same artifact");
-  const reviewObjects = normalizeReviews(authority, f7.sourceSha);
+  validateArtifactAuthority(authority.f7Artifact, { name: `g01-candidate-evidence-${f7.sourceSha}`, headSha: f7.sourceSha, headBranch: f7.sourceBranch, event: "pull_request", repository: authority.repository, observedAt: authority.observedAt }, "F7");
+  assert.equal(f7.digest, compactDigest(authority.candidateReport), "F7 digest must bind the candidate report bytes from the authenticated artifact");
+  const reviewObjects = normalizeReviews(authority, f7.sourceSha, f7.createdAt);
   const createdAt = authority.observedAt; instant(createdAt, "approval observedAt");
   assert.ok(instant(f7.createdAt, "F7.createdAt") < instant(createdAt, "approval observedAt"), "F9 must follow F7");
   assert.ok(reviewObjects.every(({ submittedAt }) => instant(submittedAt, "review submittedAt") < instant(createdAt, "approval observedAt")), "F9 must follow every review");
-  return validateEnvelope({ schemaVersion: 1, goal: "G01", phase: "F9", status: "GREEN", evidenceId: `approval-envelope.${identity.suffix}`, sourceSha: f7.sourceSha, digest: compactDigest(reviewObjects), createdAt, f7Digest: f7.digest, reviewObjects }, "F9");
+  return validateEnvelope({ schemaVersion: 1, goal: "G01", phase: "F9", status: "GREEN", evidenceId: `approval-envelope.${identity.suffix}`, attemptId: identity.attemptId, sourceBranch: f7.sourceBranch, sourceSha: f7.sourceSha, digest: compactDigest(reviewObjects), createdAt, f7Digest: f7.digest, reviewObjects }, "F9");
+}
+
+function validateRequiredJobs(jobs) {
+  assert.ok(Array.isArray(jobs) && jobs.length === 2, "F11 requires exactly check and test job conclusions");
+  assert.deepEqual(jobs.map(({ name }) => name), ["Lint, typecheck & build", "Tests"]);
+  for (const [index, job] of jobs.entries()) {
+    exactKeys(job, ["id", "name", "status", "conclusion", "runId", "runAttempt", "headSha"], `requiredJobs[${index}]`);
+    assert.ok(Number.isInteger(job.id) && job.id > 0); assert.equal(job.status, "completed"); assert.equal(job.conclusion, "success");
+  }
+  assert.equal(new Set(jobs.map(({ id }) => id)).size, 2, "required jobs must be unique");
+  return jobs;
+}
+
+function validatePostMergeRun(run, expected) {
+  exactKeys(run, ["id", "runAttempt", "checkSuiteId", "workflowId", "workflowName", "workflowPath", "repository", "event", "headBranch", "headSha", "requiredJobs"], "postMergeRun");
+  assert.ok(Number.isInteger(run.id) && run.id > 0); assert.ok(Number.isInteger(run.runAttempt) && run.runAttempt > 0);
+  assert.ok(Number.isInteger(run.checkSuiteId) && run.checkSuiteId > 0); assert.ok(Number.isInteger(run.workflowId) && run.workflowId > 0);
+  assert.equal(run.workflowName, WORKFLOW_NAME); assert.equal(run.workflowPath, WORKFLOW_PATH);
+  assert.equal(run.repository, expected.repository); assert.equal(run.event, "push"); assert.equal(run.headBranch, "develop"); assert.equal(run.headSha, expected.mergeSha);
+  const jobs = validateRequiredJobs(run.requiredJobs);
+  for (const job of jobs) {
+    assert.equal(job.runId, run.id); assert.equal(job.runAttempt, run.runAttempt); assert.equal(job.headSha, run.headSha);
+  }
+  return run;
 }
 
 export function buildF11Envelope(f7, f9, authority) {
   validateEnvelope(f7, "F7"); validateEnvelope(f9, "F9");
-  exactKeys(authority, ["pr", "developRef", "sourceRefStatus", "postMergeRun", "observedAt", "f7Artifact", "f9Artifact"], "merge authority");
-  const identity = branchIdentity(authority.pr.head?.ref);
-  assert.equal(f9.sourceSha, f7.sourceSha); assert.equal(f9.f7Digest, f7.digest);
-  assert.equal(f7.evidenceId, `ci-bundle.${identity.suffix}`); assert.equal(f9.evidenceId, `approval-envelope.${identity.suffix}`);
-  assert.equal(authority.pr.state, "closed"); assert.equal(authority.pr.merged, true);
-  assert.equal(authority.pr.base?.ref, "develop"); assert.equal(authority.pr.head?.sha, f7.sourceSha);
+  exactKeys(authority, ["pr", "developRef", "sourceRefStatus", "postMergeRun", "observedAt", "repository", "f7Artifact", "f9Artifact"], "merge authority");
+  assert.equal(f9.sourceSha, f7.sourceSha); assert.equal(f9.f7Digest, f7.digest); assert.equal(f9.attemptId, f7.attemptId); assert.equal(f9.sourceBranch, f7.sourceBranch);
+  assert.equal(authority.pr.state, "closed"); assert.equal(authority.pr.merged, true); assert.equal(authority.pr.base?.ref, "develop");
+  assert.equal(authority.pr.base?.repo?.full_name, authority.repository); assert.equal(authority.pr.head?.repo?.full_name, authority.repository);
+  assert.equal(authority.pr.head?.sha, f7.sourceSha); assert.equal(authority.pr.head?.ref, f7.sourceBranch);
   assert.equal(authority.pr.merge_commit_sha, authority.developRef.object?.sha, "develop must still equal the actual squash merge");
   assert.equal(authority.sourceRefStatus, 404, "remote source branch must return GitHub API 404");
-  assert.equal(authority.postMergeRun.head_sha, authority.pr.merge_commit_sha);
-  assert.equal(authority.postMergeRun.head_branch, "develop");
-  assert.equal(authority.postMergeRun.status, "completed"); assert.equal(authority.postMergeRun.conclusion, "success");
-  assert.ok(Number.isInteger(authority.postMergeRun.id) && authority.postMergeRun.id > 0);
-  assert.ok(Number.isInteger(authority.postMergeRun.check_suite_id) && authority.postMergeRun.check_suite_id > 0);
-  for (const [artifact, envelope, label] of [[authority.f7Artifact, f7, "F7"], [authority.f9Artifact, f9, "F9"]]) {
-    assert.equal(artifact.expired, false, `${label} artifact expired`);
-    assert.ok(Number.isInteger(artifact.id) && artifact.id > 0);
-    assert.equal(artifact.workflow_run?.head_sha, envelope.sourceSha, `${label} artifact head mismatch`);
-  }
+  const postMergeRun = validatePostMergeRun(authority.postMergeRun, { repository: authority.repository, mergeSha: authority.pr.merge_commit_sha });
+  for (const [artifactAuthority, envelope, name, label] of [
+    [authority.f7Artifact, f7, `g01-candidate-evidence-${f7.sourceSha}`, "F7"],
+    [authority.f9Artifact, f9, `g01-approval-${authority.pr.number}`, "F9"],
+  ]) validateArtifactAuthority(artifactAuthority, { name, headSha: f7.sourceSha, headBranch: f7.sourceBranch, event: "pull_request", repository: authority.repository, observedAt: authority.observedAt, completed: true }, label);
+  assert.equal(authority.f7Artifact.run.id, authority.f9Artifact.run.id, "F7/F9 must come from one premerge workflow run");
+  assert.equal(authority.f7Artifact.run.run_attempt, authority.f9Artifact.run.run_attempt, "F7/F9 run attempt mismatch");
   const mergedAt = authority.pr.merged_at; const createdAt = authority.observedAt;
   instant(mergedAt, "PR merged_at"); instant(createdAt, "merge observedAt");
   assert.ok(instant(f9.createdAt, "F9.createdAt") < instant(mergedAt, "PR merged_at"), "actual merge must follow F9");
-  const payload = { prNumber: authority.pr.number, mergeSha: authority.pr.merge_commit_sha, runId: authority.postMergeRun.id, checkSuiteId: authority.postMergeRun.check_suite_id };
-  return validateEnvelope({ schemaVersion: 1, goal: "G01", phase: "F11", status: "GREEN", evidenceId: `merge-envelope.${identity.suffix}`, sourceSha: authority.pr.merge_commit_sha, digest: compactDigest(payload), createdAt, f7Digest: f7.digest, f9Digest: f9.digest, mergeSha: authority.pr.merge_commit_sha, terminalDevelopSha: authority.pr.merge_commit_sha, remoteDeleted: true, mergedAt, remoteDeletionObservedAt: createdAt, prNumber: authority.pr.number, sourceBranch: authority.pr.head.ref, postMergeRunId: authority.postMergeRun.id, postMergeCheckSuiteId: authority.postMergeRun.check_suite_id }, "F11");
+  const payload = { prNumber: authority.pr.number, mergeSha: authority.pr.merge_commit_sha, postMergeRun };
+  return validateEnvelope({ schemaVersion: 1, goal: "G01", phase: "F11", status: "GREEN", evidenceId: f7.evidenceId.replace("ci-bundle", "merge-envelope"), attemptId: f7.attemptId, sourceBranch: f7.sourceBranch, sourceSha: authority.pr.merge_commit_sha, digest: compactDigest(payload), createdAt, f7Digest: f7.digest, f9Digest: f9.digest, mergeSha: authority.pr.merge_commit_sha, terminalDevelopSha: authority.pr.merge_commit_sha, remoteDeleted: true, mergedAt, remoteDeletionObservedAt: createdAt, prNumber: authority.pr.number, postMergeRun }, "F11");
 }
 
 function validateAncestorFailures(value) {
   assert.ok(Array.isArray(value), "ancestorFailures must be an array");
-  let previousTime = -Infinity; let previousTerminal;
-  const ids = new Set();
+  let previousTime = -Infinity; let previousTerminal; const ids = new Set();
   for (const [index, ancestor] of value.entries()) {
     exactKeys(ancestor, ["attemptId", "evidenceId", "digest", "artifactId", "runId", "baseSha", "parentSha", "terminalDevelopSha", "createdAt"], `ancestorFailures[${index}]`);
     assert.match(ancestor.attemptId, /^g01-(?:a|recovery-a)[0-9]{2,}$/);
     assert.equal(ancestor.evidenceId, `bootstrap-failure.${ancestor.attemptId}.json`);
-    assert.match(ancestor.digest, DIGEST);
-    assert.ok(Number.isInteger(ancestor.artifactId) && ancestor.artifactId > 0);
-    assert.ok(Number.isInteger(ancestor.runId) && ancestor.runId > 0);
+    assert.match(ancestor.digest, DIGEST); assert.ok(Number.isInteger(ancestor.artifactId) && ancestor.artifactId > 0); assert.ok(Number.isInteger(ancestor.runId) && ancestor.runId > 0);
     for (const key of ["baseSha", "parentSha", "terminalDevelopSha"]) assert.match(ancestor[key], SHA);
     assert.equal(ancestor.baseSha, ancestor.parentSha, "ancestor candidate must base on its frozen parent");
-    if (previousTerminal) assert.equal(ancestor.baseSha, previousTerminal, "ancestor external failures must form an unbroken parent/base chain");
-    const timestamp = instant(ancestor.createdAt, `ancestorFailures[${index}].createdAt`);
-    assert.ok(timestamp > previousTime, "ancestor failures must be strictly chronological");
-    assert.ok(!ids.has(ancestor.evidenceId), "ancestor evidence objects must be unique");
-    ids.add(ancestor.evidenceId); previousTime = timestamp; previousTerminal = ancestor.terminalDevelopSha;
+    if (previousTerminal) assert.equal(ancestor.baseSha, previousTerminal, "ancestor failures must form an unbroken chain");
+    const timestamp = instant(ancestor.createdAt, `ancestorFailures[${index}].createdAt`); assert.ok(timestamp > previousTime, "ancestor failures must be strictly chronological");
+    assert.ok(!ids.has(ancestor.evidenceId), "ancestor evidence objects must be unique"); ids.add(ancestor.evidenceId); previousTime = timestamp; previousTerminal = ancestor.terminalDevelopSha;
   }
   return value;
 }
 
-function bindAncestorArtifacts(ancestorFailures, artifacts) {
-  if (ancestorFailures.length === 0) {
-    assert.equal(artifacts, undefined, "direct canonical selection must not supply ancestor artifact authority");
-    return;
-  }
-  assert.ok(Array.isArray(artifacts), "ancestor artifact authorities must be an array");
-  assert.equal(artifacts.length, ancestorFailures.length, "each ancestor failure needs one fetched GitHub artifact authority");
+function bindAncestorArtifacts(ancestorFailures, artifacts, repository, observedAt) {
+  if (ancestorFailures.length === 0) { assert.equal(artifacts, undefined, "direct selection must not supply ancestor authority"); return; }
+  assert.ok(Array.isArray(artifacts)); assert.equal(artifacts.length, ancestorFailures.length);
   const byId = new Map();
-  for (const [index, artifact] of artifacts.entries()) {
-    exactKeys(artifact, ["id", "node_id", "name", "size_in_bytes", "url", "archive_download_url", "expired", "created_at", "expires_at", "updated_at", "digest", "workflow_run"], `ancestor artifact authority[${index}]`);
-    assert.equal(artifact.expired, false, "ancestor artifact expired");
-    assert.ok(Number.isInteger(artifact.id) && artifact.id > 0, "ancestor artifact ID is invalid");
-    assert.ok(!byId.has(artifact.id), "ancestor artifact authorities must be unique");
-    assert.match(artifact.digest, DIGEST, "ancestor artifact digest is invalid");
-    assert.ok(Number.isInteger(artifact.workflow_run?.id) && artifact.workflow_run.id > 0, "ancestor artifact run ID is invalid");
-    assert.match(artifact.workflow_run?.head_sha, SHA, "ancestor artifact head SHA is invalid");
-    byId.set(artifact.id, artifact);
+  for (const authority of artifacts) {
+    const id = authority.metadata?.id; assert.ok(!byId.has(id), "ancestor artifact authorities must be unique"); byId.set(id, authority);
   }
   for (const ancestor of ancestorFailures) {
-    const artifact = byId.get(ancestor.artifactId);
-    assert.ok(artifact, "ancestor self-asserted artifactId has no fetched GitHub metadata");
-    assert.equal(ancestor.artifactId, artifact.id, "ancestor self-asserted artifactId does not match fetched GitHub metadata");
-    assert.equal(ancestor.runId, artifact.workflow_run.id, "ancestor self-asserted runId does not match fetched GitHub metadata");
-    assert.equal(ancestor.digest, artifact.digest, "ancestor self-asserted digest does not match fetched GitHub metadata");
-    assert.equal(ancestor.terminalDevelopSha, artifact.workflow_run.head_sha, "ancestor terminal SHA does not match fetched GitHub artifact head");
+    const authority = byId.get(ancestor.artifactId); assert.ok(authority, "ancestor artifact ID has no fetched authority");
+    validateArtifactAuthority(authority, { name: `g01-bootstrap-failure-${ancestor.attemptId}`, headSha: ancestor.terminalDevelopSha, headBranch: "develop", event: "push", repository, observedAt, runId: ancestor.runId, completed: true, success: false }, "ancestor");
+    assert.equal(ancestor.digest, authority.payloadDigest, "ancestor evidence object digest mismatch");
   }
 }
 
 export function buildSelection(f7, f9, f11, authority, ancestorFailures = [], ancestorArtifacts) {
   const { terminalDevelopSha, lineageSuffix } = validateEnvelopeChain(f7, f9, f11);
-  exactKeys(authority, ["pr", "developRef", "sourceRefStatus", "postMergeRun", "observedAt", "f7Artifact", "f9Artifact", "f11Artifact"], "selection authority");
-  const identity = branchIdentity(f11.sourceBranch);
-  assert.equal(lineageSuffix, identity.suffix);
-  assert.equal(authority.pr.state, "closed"); assert.equal(authority.pr.merged, true);
-  assert.equal(authority.pr.base?.ref, "develop"); assert.equal(authority.pr.head?.ref, f11.sourceBranch);
-  assert.equal(authority.pr.head?.sha, f7.sourceSha);
-  assert.equal(authority.pr.number, f11.prNumber); assert.equal(authority.pr.merge_commit_sha, f11.mergeSha);
-  assert.equal(authority.developRef.object?.sha, terminalDevelopSha);
-  assert.equal(authority.sourceRefStatus, 404);
-  assert.equal(authority.postMergeRun.id, f11.postMergeRunId);
-  assert.equal(authority.postMergeRun.check_suite_id, f11.postMergeCheckSuiteId);
-  assert.equal(authority.postMergeRun.head_sha, terminalDevelopSha);
-  assert.equal(authority.postMergeRun.head_branch, "develop");
-  assert.equal(authority.postMergeRun.status, "completed"); assert.equal(authority.postMergeRun.conclusion, "success");
-  for (const [artifact, envelope] of [[authority.f7Artifact, f7], [authority.f9Artifact, f9], [authority.f11Artifact, f11]]) {
-    assert.equal(artifact.expired, false); assert.ok(Number.isInteger(artifact.id) && artifact.id > 0);
-    assert.equal(artifact.workflow_run?.head_sha, envelope.sourceSha);
-  }
-  const ancestors = validateAncestorFailures(ancestorFailures);
-  bindAncestorArtifacts(ancestors, ancestorArtifacts);
-  if (identity.terminalKind === "direct-canonical") assert.equal(ancestors.length, 0);
-  else {
-    assert.ok(ancestors.length > 0, "landed recovery requires immutable external ancestor failures");
-    assert.equal(authority.pr.base?.sha, ancestors.at(-1).terminalDevelopSha, "recovery base must bind the last landed ancestor");
+  exactKeys(authority, ["pr", "developRef", "sourceRefStatus", "postMergeRun", "observedAt", "repository", "f7Artifact", "f9Artifact", "f11Artifact"], "selection authority");
+  assert.equal(f7.attemptId, f9.attemptId); assert.equal(f9.attemptId, f11.attemptId); assert.equal(f7.sourceBranch, f11.sourceBranch);
+  assert.equal(authority.pr.state, "closed"); assert.equal(authority.pr.merged, true); assert.equal(authority.pr.base?.ref, "develop");
+  assert.equal(authority.pr.base?.repo?.full_name, authority.repository); assert.equal(authority.pr.head?.repo?.full_name, authority.repository);
+  assert.equal(authority.pr.head?.ref, f11.sourceBranch); assert.equal(authority.pr.head?.sha, f7.sourceSha); assert.equal(authority.pr.number, f11.prNumber); assert.equal(authority.pr.merge_commit_sha, f11.mergeSha);
+  assert.equal(authority.developRef.object?.sha, terminalDevelopSha); assert.equal(authority.sourceRefStatus, 404);
+  assert.deepEqual(authority.postMergeRun, f11.postMergeRun, "selection must re-fetch the exact F11 post-merge authority");
+  validatePostMergeRun(authority.postMergeRun, { repository: authority.repository, mergeSha: terminalDevelopSha });
+  for (const [artifactAuthority, envelope, name, headSha, branch, event, label] of [
+    [authority.f7Artifact, f7, `g01-candidate-evidence-${f7.sourceSha}`, f7.sourceSha, f7.sourceBranch, "pull_request", "F7"],
+    [authority.f9Artifact, f9, `g01-approval-${f11.prNumber}`, f7.sourceSha, f7.sourceBranch, "pull_request", "F9"],
+    [authority.f11Artifact, f11, `g01-merge-${f11.prNumber}`, terminalDevelopSha, "develop", "push", "F11"],
+  ]) validateArtifactAuthority(artifactAuthority, { name, headSha, headBranch: branch, event, repository: authority.repository, observedAt: authority.observedAt, runId: label === "F11" ? f11.postMergeRun.id : undefined, runAttempt: label === "F11" ? f11.postMergeRun.runAttempt : undefined, completed: label !== "F11" }, label);
+  const ancestors = validateAncestorFailures(ancestorFailures); bindAncestorArtifacts(ancestors, ancestorArtifacts, authority.repository, authority.observedAt);
+  if (f11.sourceBranch === "feature/2.5.0-g01-canonical-evidence-bootstrap") {
+    assert.match(f11.attemptId, /^g01-a[0-9]{2,}$/); assert.equal(lineageSuffix, "g01.json"); assert.equal(ancestors.length, 0);
+  } else {
+    const suffix = f11.sourceBranch.match(/-a([0-9]{2,})$/)?.[1];
+    assert.ok(Number(suffix) >= 2, "recovery ordinal must follow the direct attempt");
+    assert.equal(f11.attemptId, `g01-recovery-a${suffix}`); assert.equal(lineageSuffix, `bootstrap-recovery-a${suffix}.json`); assert.ok(ancestors.length > 0);
+    assert.equal(authority.pr.base?.sha, ancestors.at(-1).terminalDevelopSha);
   }
   const createdAt = authority.observedAt; assert.ok(instant(f11.createdAt, "F11.createdAt") < instant(createdAt, "selection observedAt"));
-  return { schemaVersion: 1, release: "2.5.0", attemptId: identity.attemptId, terminalKind: identity.terminalKind, f7Id: f7.evidenceId, f7Digest: f7.digest, f9Id: f9.evidenceId, f9Digest: f9.digest, f11Id: f11.evidenceId, f11Digest: f11.digest, terminalDevelopSha, createdAt, remoteDeleted: true, status: "SELECTED_GREEN", ancestorFailures: ancestors, bootstrapSupersessionChainDigest: compactDigest(ancestors) };
+  return { schemaVersion: 1, release: "2.5.0", attemptId: f11.attemptId, terminalKind: f11.sourceBranch.includes("postmerge-bootstrap") ? "landed-recovery" : "direct-canonical", f7Id: f7.evidenceId, f7Digest: f7.digest, f9Id: f9.evidenceId, f9Digest: f9.digest, f11Id: f11.evidenceId, f11Digest: f11.digest, terminalDevelopSha, createdAt, remoteDeleted: true, status: "SELECTED_GREEN", ancestorFailures: ancestors, bootstrapSupersessionChainDigest: compactDigest(ancestors) };
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const f7 = JSON.parse(fs.readFileSync(argument("--f7"), "utf8"));
-  const authority = JSON.parse(fs.readFileSync(argument("--authority"), "utf8"));
-  let output;
+  const f7 = JSON.parse(fs.readFileSync(argument("--f7"), "utf8")); const authority = JSON.parse(fs.readFileSync(argument("--authority"), "utf8")); let output;
   if (process.argv.includes("--emit-f9")) output = buildF9Envelope(f7, authority);
   else {
     const f9 = JSON.parse(fs.readFileSync(argument("--f9"), "utf8"));
     if (process.argv.includes("--emit-f11")) output = buildF11Envelope(f7, f9, authority);
     else {
-      const f11 = JSON.parse(fs.readFileSync(argument("--f11"), "utf8"));
-      const ancestorsPath = argument("--ancestors", true);
-      const ancestorArtifactsPath = argument("--ancestor-artifacts", true);
+      const f11 = JSON.parse(fs.readFileSync(argument("--f11"), "utf8")); const ancestorsPath = argument("--ancestors", true); const ancestorArtifactsPath = argument("--ancestor-artifacts", true);
       assert.equal(Boolean(ancestorsPath), Boolean(ancestorArtifactsPath), "--ancestors and --ancestor-artifacts must be supplied together");
       output = buildSelection(f7, f9, f11, authority, ancestorsPath ? JSON.parse(fs.readFileSync(ancestorsPath, "utf8")) : [], ancestorArtifactsPath ? JSON.parse(fs.readFileSync(ancestorArtifactsPath, "utf8")) : undefined);
     }

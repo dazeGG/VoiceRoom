@@ -25,7 +25,7 @@
       "then": {
         "properties": {
           "ancestorFailures": { "maxItems": 0, "type": "array" },
-          "attemptId": { "const": "g01-a01" },
+          "attemptId": { "pattern": "^g01-a[0-9]{2,}$", "type": "string" },
           "f11Id": { "const": "merge-envelope.g01.json" },
           "f7Id": { "const": "ci-bundle.g01.json" },
           "f9Id": { "const": "approval-envelope.g01.json" }
@@ -37,10 +37,10 @@
       "then": {
         "properties": {
           "ancestorFailures": { "minItems": 1, "type": "array" },
-          "attemptId": { "pattern": "^g01-recovery-a[0-9]{2,}$", "type": "string" },
-          "f11Id": { "pattern": "^merge-envelope\\.bootstrap-recovery-a[0-9]{2,}\\.json$", "type": "string" },
-          "f7Id": { "pattern": "^ci-bundle\\.bootstrap-recovery-a[0-9]{2,}\\.json$", "type": "string" },
-          "f9Id": { "pattern": "^approval-envelope\\.bootstrap-recovery-a[0-9]{2,}\\.json$", "type": "string" }
+          "attemptId": { "pattern": "^g01-recovery-a(?:0[2-9]|[1-9][0-9]+)$", "type": "string" },
+          "f11Id": { "pattern": "^merge-envelope\\.bootstrap-recovery-a(?:0[2-9]|[1-9][0-9]+)\\.json$", "type": "string" },
+          "f7Id": { "pattern": "^ci-bundle\\.bootstrap-recovery-a(?:0[2-9]|[1-9][0-9]+)\\.json$", "type": "string" },
+          "f9Id": { "pattern": "^approval-envelope\\.bootstrap-recovery-a(?:0[2-9]|[1-9][0-9]+)\\.json$", "type": "string" }
         }
       }
     }
@@ -51,11 +51,11 @@
     "bootstrapSupersessionChainDigest": { "pattern": "^sha256:[0-9a-f]{64}$", "type": "string" },
     "createdAt": { "format": "date-time", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$", "type": "string" },
     "f11Digest": { "pattern": "^sha256:[0-9a-f]{64}$", "type": "string" },
-    "f11Id": { "pattern": "^merge-envelope\\.(g01|bootstrap-recovery-a[0-9]{2,})\\.json$", "type": "string" },
+    "f11Id": { "pattern": "^merge-envelope\\.(g01|bootstrap-recovery-a(?:0[2-9]|[1-9][0-9]+))\\.json$", "type": "string" },
     "f7Digest": { "pattern": "^sha256:[0-9a-f]{64}$", "type": "string" },
-    "f7Id": { "pattern": "^ci-bundle\\.(g01|bootstrap-recovery-a[0-9]{2,})\\.json$", "type": "string" },
+    "f7Id": { "pattern": "^ci-bundle\\.(g01|bootstrap-recovery-a(?:0[2-9]|[1-9][0-9]+))\\.json$", "type": "string" },
     "f9Digest": { "pattern": "^sha256:[0-9a-f]{64}$", "type": "string" },
-    "f9Id": { "pattern": "^approval-envelope\\.(g01|bootstrap-recovery-a[0-9]{2,})\\.json$", "type": "string" },
+    "f9Id": { "pattern": "^approval-envelope\\.(g01|bootstrap-recovery-a(?:0[2-9]|[1-9][0-9]+))\\.json$", "type": "string" },
     "release": { "const": "2.5.0" },
     "remoteDeleted": { "const": true },
     "schemaVersion": { "const": 1 },

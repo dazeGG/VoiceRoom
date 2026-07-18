@@ -35,13 +35,16 @@ function validSelection(facts) {
     assert.equal(selection.f7Id, facts.f7.evidenceId); assert.equal(selection.f7Digest, facts.f7.digest);
     assert.equal(selection.f9Id, facts.f9.evidenceId); assert.equal(selection.f9Digest, facts.f9.digest);
     assert.equal(selection.f11Id, facts.f11.evidenceId); assert.equal(selection.f11Digest, facts.f11.digest);
+    assert.equal(selection.attemptId, facts.f7.attemptId); assert.equal(facts.f7.attemptId, facts.f9.attemptId); assert.equal(facts.f9.attemptId, facts.f11.attemptId);
+    assert.equal(facts.f7.sourceBranch, facts.f9.sourceBranch); assert.equal(facts.f9.sourceBranch, facts.f11.sourceBranch);
     assert.equal(selection.bootstrapSupersessionChainDigest, `sha256:${crypto.createHash("sha256").update(JSON.stringify(selection.ancestorFailures)).digest("hex")}`);
     assert.ok(Date.parse(facts.f11.createdAt) < Date.parse(selection.createdAt));
     assert.ok([facts.mergeSha, facts.developSha, facts.baseSha, facts.originSha, terminalDevelopSha].every((sha) => sha === facts.mergeSha));
     if (selection.terminalKind === "direct-canonical") {
-      assert.equal(selection.attemptId, "g01-a01"); assert.equal(lineageSuffix, "g01.json"); assert.equal(selection.ancestorFailures.length, 0);
+      assert.match(selection.attemptId, /^g01-a[0-9]{2,}$/); assert.equal(facts.f11.sourceBranch, "feature/2.5.0-g01-canonical-evidence-bootstrap"); assert.equal(lineageSuffix, "g01.json"); assert.equal(selection.ancestorFailures.length, 0);
     } else {
       const match = selection.attemptId.match(/^g01-recovery-a([0-9]{2,})$/); assert.ok(match);
+      assert.ok(Number(match[1]) >= 2);
       assert.equal(lineageSuffix, `bootstrap-recovery-a${match[1]}.json`); assert.ok(selection.ancestorFailures.length > 0);
       assert.equal(facts.parentSha, selection.ancestorFailures.at(-1).terminalDevelopSha);
     }
