@@ -1,0 +1,2 @@
+#!/usr/bin/env node
+import fs from "node:fs"; import assert from "node:assert/strict"; const a=process.argv; const p=a[a.indexOf("--fixture")+1]; if(!p||!a.includes("--validate-only")) throw new Error("recovery is validate-only during G01"); const f=JSON.parse(fs.readFileSync(p)); assert.ok(f.recoveryWritable.every(x=>f.g01Writable.includes(x))); assert.ok(!f.recoveryWritable.some(x=>x.includes("bootstrap-lineage.json"))); console.log("landed bootstrap recovery fixture: PASS");

@@ -1,0 +1,12 @@
+{
+  "attempts": [],
+  "currentAttempt": null,
+  "ordinalReconstruction": {
+    "complete": false,
+    "nextOrdinal": null,
+    "reason": "authoritative PR/workflow identity is not created during local preparation"
+  },
+  "release": "2.5.0",
+  "schemaVersion": 1,
+  "state": "G01_PRE_BRANCH"
+}

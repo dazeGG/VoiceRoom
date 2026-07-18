@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "attemptId": {
+      "pattern": "^g01-a[0-9]{2,}$",
+      "type": "string"
+    },
+    "authorityDigest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "baseSha": {
+      "pattern": "^[0-9a-f]{40}$",
+      "type": "string"
+    },
+    "branch": {
+      "const": "feature/2.5.0-g01-canonical-evidence-bootstrap"
+    },
+    "firstAuthoritativeId": {
+      "type": [
+        "string",
+        "integer"
+      ]
+    },
+    "headSha": {
+      "pattern": "^[0-9a-f]{40}$",
+      "type": "string"
+    },
+    "ordinal": {
+      "minimum": 1,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "attemptId",
+    "ordinal",
+    "branch",
+    "headSha",
+    "baseSha",
+    "authorityDigest",
+    "firstAuthoritativeId"
+  ],
+  "type": "object"
+}

@@ -88,9 +88,29 @@ jobs:
       - run: npm ci
       - run: npm test
 
+  bootstrap-plan:
+    name: G01 bootstrap plan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Validate canonical plan and bootstrap contracts
+        run: |
+          python3 scripts/test/validate_release_250_plan.py docs/RELEASE_2.5.0_PLAN.md docs/RELEASE_2.5.0_TEST_SPEC.md
+          node --test scripts/test/g01-release-docs.test.mjs scripts/test/g01-oras-lock.test.mjs
+          node --test scripts/test/g01-landed-bootstrap-recovery.test.mjs
+          node scripts/evidence/recover-landed-bootstrap.mjs --fixture scripts/test/fixtures/g01-landed-bootstrap-recovery.json --validate-only
+          node scripts/evidence/validate-envelope.mjs --fixture bootstrap
+          scripts/ci/run-actionlint.sh .github/workflows/ci.yml
+          scripts/ci/run-oras.sh version
+
   deploy:
     name: Deploy to server
-    needs: [check, test]
+    needs: [check, test, bootstrap-plan]
     # Only deploy real pushes to main, never PRs or forks.
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest

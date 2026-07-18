@@ -1,0 +1,86 @@
+{
+  "cases": [
+    {
+      "expected": "G01_PRE_BRANCH",
+      "facts": {},
+      "name": "first"
+    },
+    {
+      "expected": "G01_PREMERGE_ACTIVE",
+      "facts": {
+        "firstAuthoritativeId": 1
+      },
+      "name": "active"
+    },
+    {
+      "expected": "G01_LANDED_UNSEALED",
+      "facts": {
+        "firstAuthoritativeId": 1,
+        "mergeSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "name": "landed"
+    },
+    {
+      "expected": "G01_SELECTED_GREEN",
+      "facts": {
+        "firstAuthoritativeId": 1,
+        "mergeSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "selection": {
+          "status": "SELECTED_GREEN",
+          "terminalDevelopSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      },
+      "name": "selected"
+    },
+    {
+      "expected": "G01_LANDED_UNSEALED",
+      "facts": {
+        "firstAuthoritativeId": 1,
+        "mergeSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "selection": {
+          "status": "SELECTED_GREEN",
+          "terminalDevelopSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        }
+      },
+      "name": "forged"
+    }
+  ],
+  "g01Writable": [
+    "docs/RELEASE_2.5.0_PLAN.md",
+    "docs/RELEASE_2.5.0_TEST_SPEC.md",
+    "docs/releases/2.5.0/evidence/bootstrap-attempts.json",
+    "docs/releases/2.5.0/evidence/bootstrap-landed-recoveries.json",
+    "docs/releases/2.5.0/evidence/schema/envelope.schema.json",
+    "docs/releases/2.5.0/evidence/schema/bootstrap-attempt.schema.json",
+    "docs/releases/2.5.0/evidence/schema/bootstrap-landed-recovery.schema.json",
+    "docs/releases/2.5.0/evidence/schema/bootstrap-selection.schema.json",
+    ".github/workflows/ci.yml",
+    "scripts/test/validate_release_250_plan.py",
+    "scripts/test/g01-release-docs.test.mjs",
+    "scripts/test/g01-landed-bootstrap-recovery.test.mjs",
+    "scripts/test/fixtures/g01-landed-bootstrap-recovery.json",
+    "scripts/evidence/bootstrap-export.mjs",
+    "scripts/evidence/validate-envelope.mjs",
+    "scripts/evidence/recover-landed-bootstrap.mjs",
+    "scripts/evidence/emit-bootstrap-selection.mjs"
+  ],
+  "recoveryWritable": [
+    "docs/RELEASE_2.5.0_PLAN.md",
+    "docs/RELEASE_2.5.0_TEST_SPEC.md",
+    "docs/releases/2.5.0/evidence/bootstrap-attempts.json",
+    "docs/releases/2.5.0/evidence/bootstrap-landed-recoveries.json",
+    "docs/releases/2.5.0/evidence/schema/envelope.schema.json",
+    "docs/releases/2.5.0/evidence/schema/bootstrap-attempt.schema.json",
+    "docs/releases/2.5.0/evidence/schema/bootstrap-landed-recovery.schema.json",
+    "docs/releases/2.5.0/evidence/schema/bootstrap-selection.schema.json",
+    ".github/workflows/ci.yml",
+    "scripts/test/validate_release_250_plan.py",
+    "scripts/test/g01-release-docs.test.mjs",
+    "scripts/test/g01-landed-bootstrap-recovery.test.mjs",
+    "scripts/test/fixtures/g01-landed-bootstrap-recovery.json",
+    "scripts/evidence/bootstrap-export.mjs",
+    "scripts/evidence/validate-envelope.mjs",
+    "scripts/evidence/recover-landed-bootstrap.mjs",
+    "scripts/evidence/emit-bootstrap-selection.mjs"
+  ]
+}

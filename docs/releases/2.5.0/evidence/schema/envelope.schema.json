@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "digest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "goal": {
+      "pattern": "^G[0-9]{2}$",
+      "type": "string"
+    },
+    "phase": {
+      "enum": [
+        "F7",
+        "F9",
+        "F11"
+      ]
+    },
+    "schemaVersion": {
+      "const": 1
+    },
+    "sourceSha": {
+      "pattern": "^[0-9a-f]{40}$",
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "GREEN",
+        "RED"
+      ]
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "goal",
+    "phase",
+    "status",
+    "sourceSha",
+    "digest"
+  ],
+  "type": "object"
+}
