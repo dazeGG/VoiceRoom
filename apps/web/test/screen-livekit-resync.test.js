@@ -30,6 +30,9 @@ async function loadLiveKitService() {
       serverPeerSyncReady: false,
       viewedScreenPeerId: ''
     };
+    export const livekitClientState = {
+      resolvers: []
+    };
     export const startUi = () => {};
     export const setVoiceConnectionStatus = () => {};
     export const showToast = () => {};
@@ -40,11 +43,17 @@ async function loadLiveKitService() {
     export const errorMessage = (error) => String(error);
     export const getScreenProfile = () => ({ id: 'balanced-30' });
     export const getScreenPublishVideoOptions = () => ({});
-    export const loadLiveKitClient = async () => ({
-      SubscriptionError: { SE_CODEC_UNSUPPORTED: 1 },
-      VideoQuality: { HIGH: 2, LOW: 0 }
+    export const loadLiveKitClient = () => new Promise((resolve) => {
+      livekitClientState.resolvers.push(() => resolve({
+        SubscriptionError: { SE_CODEC_UNSUPPORTED: 1 },
+        VideoQuality: { HIGH: 2, LOW: 0 }
+      }));
     });
-    export const getScreenReceiverDemand = () => 'hidden';
+    export const getScreenReceiverDemand = (peerId, viewedScreenPeerId, subscribedPeerIds) => {
+      if (viewedScreenPeerId === peerId) return 'stage';
+      if (subscribedPeerIds.has(peerId)) return 'preview';
+      return 'hidden';
+    };
     export const getScreenPublicationPresence = (publications, isVideo, isAudio) => {
       let hasAudio = false;
       let hasVideo = false;
@@ -103,6 +112,7 @@ async function loadLiveKitService() {
   }).outputText;
   return {
     service: await import(moduleUrl(output)),
+    livekitClientState: (await import(stubUrl)).livekitClientState,
     state: (await import(stubUrl)).state
   };
 }
@@ -141,4 +151,45 @@ test('participant resync preserves screen demand while only screen audio remains
   assert.equal(existing.livekitParticipant, participant);
   assert.equal(state.viewedScreenPeerId, existing.id);
   assert.equal(state.screenSubscribedPeerIds.has(existing.id), true);
+});
+
+test('async quality demand ignores a screen publication replaced under the same SID', async () => {
+  const { livekitClientState, service, state } = await loadLiveKitService();
+  const qualityCalls = [];
+  const stalePublication = {
+    isDesired: false,
+    isSubscribed: false,
+    setSubscribed(subscribed) {
+      this.isDesired = subscribed;
+    },
+    setVideoQuality(quality) {
+      qualityCalls.push(quality);
+    },
+    source: 'screen-video',
+    trackSid: 'screen-video-sid'
+  };
+  const participant = {
+    identity: 'peer-republished',
+    isLocal: false,
+    isScreenShareEnabled: true,
+    joinedAt: new Date(0),
+    name: 'Republished sender',
+    trackPublications: new Map([[stalePublication.trackSid, stalePublication]])
+  };
+  state.viewedScreenPeerId = participant.identity;
+
+  const peer = service.syncLiveKitParticipant(participant);
+  assert.equal(livekitClientState.resolvers.length, 1);
+
+  participant.trackPublications.set(stalePublication.trackSid, {
+    ...stalePublication,
+    setVideoQuality() {
+      throw new Error('replacement quality is handled by its own demand sync');
+    }
+  });
+  livekitClientState.resolvers.shift()();
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(peer.livekitParticipant, participant);
+  assert.deepEqual(qualityCalls, []);
 });

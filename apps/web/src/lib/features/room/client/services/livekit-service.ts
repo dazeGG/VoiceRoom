@@ -525,6 +525,7 @@ async function applyRemoteScreenVideoDemand(
 
   const { VideoQuality } = await loadLiveKitClient();
   if (!shouldSubscribeToScreen(peer) || publication.isDesired === false) return;
+  if (peer.livekitParticipant?.trackPublications.get(publication.trackSid) !== publication) return;
 
   const quality = getRemoteScreenDemand(peer) === 'stage' ? VideoQuality.HIGH : VideoQuality.LOW;
   publication.setVideoQuality(quality);
