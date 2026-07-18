@@ -82,6 +82,7 @@ export interface ScreenStatsSnapshot {
   captureDropsBackpressureDelta?: number;
   captureFramesReceived?: number;
   captureFramesWritten?: number;
+  capturePixelFormat?: 'NV12' | 'BGRX';
   captureRelayRestarts?: number;
   codec: string;
   encoderImplementation: string;
@@ -181,16 +182,12 @@ export interface RoomAudioState {
 
 export interface RoomScreenState {
   localScreenPublications: Map<string, LocalTrackPublication>;
-  localScreenAdaptGoodSamples: number;
-  localScreenAdaptLastAt: number;
-  localScreenAdaptPoorSamples: number;
   localScreenAudioCapture: DesktopAudioCapture | null;
   localScreenStats: ScreenStatsSnapshot | null;
   localScreenStatsPrevious: ScreenStatsPrevious | null;
   localScreenStatsTimer: number;
   localScreenQualityId: string;
   localScreenFpsId: string;
-  localScreenTargetProfileId: string;
   localScreenStream: MediaStream | null;
   localScreenProfileId: string;
   localScreenMode: ScreenStreamMode;
@@ -255,6 +252,7 @@ declare global {
       }) => Promise<{
         fpsId?: string;
         maxHeight?: number;
+        maxWidth?: number;
         ok: boolean;
         qualityId?: string;
         reason?: string;
@@ -267,7 +265,8 @@ declare global {
       getSources?: () => Promise<DesktopCaptureSource[]>;
       selectSource?: (
         sourceId: string,
-        options: { allowEchoFallback?: boolean; enabled?: boolean; mode?: string }
+        options: { allowEchoFallback?: boolean; enabled?: boolean; mode?: string },
+        captureOptions?: { fpsId?: string; qualityId?: string }
       ) => Promise<void>;
     };
     __voiceRoomNativeCaptureStats?: () => {
@@ -275,7 +274,10 @@ declare global {
       framesDroppedCreate?: number;
       framesReceived?: number;
       framesWritten?: number;
+      pixelFormat?: 'NV12' | 'BGRX';
       relay?: {
+        framesDroppedBackpressure?: number;
+        framesInFlight?: number;
         framesParsed?: number;
         framesPosted?: number;
         restarts?: number;

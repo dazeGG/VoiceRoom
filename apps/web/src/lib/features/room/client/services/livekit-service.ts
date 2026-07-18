@@ -19,6 +19,9 @@ import { clearPeerJoinCue } from '../media/cues';
 import { errorMessage } from '../core/utils';
 import { getScreenProfile, getScreenPublishVideoOptions } from '../media/profiles';
 import { loadLiveKitClient, TRACK_SOURCE } from '../media/livekit-runtime';
+import { getScreenReceiverDemand } from '../media/screen-receiver-demand';
+import { getScreenPublicationPresence } from '../media/screen-publication-state';
+import { createScreenSubscriptionRetryController } from '../media/screen-subscription-retry';
 import {
   applyRemoteScreenCue,
   attachRemoteScreenStream,
@@ -28,6 +31,9 @@ import {
   detachLiveKitParticipant,
   detachRemoteAudioTrack,
   detachRemoteScreen,
+  detachRemoteScreenAudioTrack,
+  detachRemoteScreenVideoTrack,
+  detachRemoteScreenVideoTracks,
   refreshParticipantState,
   removePeer,
   setParticipantSpeaking,
@@ -36,6 +42,8 @@ import {
 } from '../room/participants';
 import { refreshScreenAction, refreshScreenStage, refreshScreenTiles } from '../ui/screen-view';
 import type { Participant } from '../core/types';
+
+const screenSubscriptionRetryController = createScreenSubscriptionRetryController();
 
 export async function connectLiveKitRoom(
   name: string,
@@ -190,13 +198,7 @@ async function bindLiveKitRoomEvents(room: Room, isCurrent: () => boolean): Prom
     state.localMicPublication = null;
     if (state.joined) setVoiceConnectionStatus('reconnecting');
   });
-  room.on(RoomEvent.TrackSubscriptionFailed, (_trackSid, participant) => {
-    if (!participant) return;
-    const peer = state.peers.get(participant.identity) || syncLiveKitParticipant(participant);
-    if (!peer) return;
-    peer.voiceIssue = 'голос не подключен';
-    updatePeerStatus(peer);
-  });
+  room.on(RoomEvent.TrackSubscriptionFailed, handleLiveKitTrackSubscriptionFailed);
   room.on(RoomEvent.AudioPlaybackStatusChanged, () => {
     if (room.canPlaybackAudio === false) {
       queueAudioUnlock({ showFallback: true });
@@ -276,6 +278,12 @@ export function syncLiveKitParticipant(participant: RemoteParticipant | null | u
 function createLiveKitParticipant(participant: LiveKitParticipant): Participant | null {
   if (!isServerKnownRemotePeer(participant.identity)) return null;
 
+  const screenPresence = getScreenPublicationPresence(
+    participant.trackPublications.values(),
+    isScreenVideoPublication,
+    isScreenAudioPublication
+  );
+
   // muted/deafened intentionally omitted: presence (`room.peer.updated`) is the
   // single source of truth for them. LiveKit's isMicrophoneEnabled reflects track
   // publication state, not user intent (local mute only disables the capture track).
@@ -284,7 +292,8 @@ function createLiveKitParticipant(participant: LiveKitParticipant): Participant 
     isLocal: participant.isLocal || participant.identity === state.peerId,
     joinedAt: participant.joinedAt ? participant.joinedAt.getTime() : Date.now(),
     name: participant.name || participant.identity,
-    screen: participant.isScreenShareEnabled
+    screen: participant.isScreenShareEnabled || screenPresence.active,
+    screenAudio: screenPresence.hasAudio
   });
   peer.livekitParticipant = participant;
   peer.voiceIssue = '';
@@ -423,6 +432,7 @@ export async function disconnectLiveKitRoom(): Promise<void> {
 }
 
 async function disconnectLiveKitRoomInstance(room: Room): Promise<void> {
+  clearAllScreenSubscriptionRetries();
   if (state.livekitRoom === room) {
     state.livekitRoom = null;
     state.localMicPublication = null;
@@ -438,14 +448,17 @@ async function disconnectLiveKitRoomInstance(room: Room): Promise<void> {
 }
 
 export function updateLiveKitPublicationState(peer: Participant, publication: TrackPublication): void {
-  if (isScreenPublication(publication)) {
+  if (isScreenVideoPublication(publication)) {
     const hadScreen = peer.screen;
     peer.screen = true;
-    peer.screenAudio = peer.screenAudio || isScreenAudioPublication(publication);
     applyRemoteScreenCue(peer, hadScreen, true);
     updatePeerStatus(peer);
     refreshScreenAction(peer);
     if (!hadScreen) refreshScreenTiles();
+  }
+  if (isScreenAudioPublication(publication)) {
+    peer.screenAudio = true;
+    updatePeerStatus(peer);
   }
   if (isMicrophonePublication(publication)) {
     peer.muted = publication.isMuted;
@@ -464,11 +477,115 @@ function syncLiveKitPublicationSubscription(peer: Participant, publication: Trac
   }
 
   if (isScreenPublication(publication)) {
-    setRemotePublicationSubscribed(
-      remotePublication,
-      state.viewedScreenPeerId === peer.id || state.screenSubscribedPeerIds.has(peer.id)
-    );
+    const subscribed = shouldSubscribeToScreen(peer);
+    if (!subscribed) clearScreenSubscriptionRetry(remotePublication);
+    setRemotePublicationSubscribed(remotePublication, subscribed);
+    if (subscribed && isScreenVideoPublication(publication)) {
+      void applyRemoteScreenVideoDemand(peer, remotePublication);
+    }
+    if (subscribed) {
+      const attached = attachSubscribedRemoteScreenTrack(peer, remotePublication);
+      if (!attached && remotePublication.isSubscribed && remotePublication.track) {
+        void scheduleScreenSubscriptionRetry(peer, remotePublication);
+      }
+    }
   }
+}
+
+function attachSubscribedRemoteScreenTrack(
+  peer: Participant,
+  publication: RemoteTrackPublication
+): boolean {
+  if (!isScreenPublication(publication) || publication.isSubscribed === false) return false;
+
+  const track = publication.track as RemoteTrack | null | undefined;
+  const mediaTrack = track?.mediaStreamTrack;
+  if (!track || !mediaTrack || mediaTrack.readyState === 'ended') return false;
+
+  attachRemoteScreenStream(peer, track.mediaStream || new MediaStream([mediaTrack]));
+  return Boolean(
+    peer.screenStream?.getTracks().some((candidate) => candidate === mediaTrack && candidate.readyState !== 'ended')
+  );
+}
+
+function shouldSubscribeToScreen(peer: Participant): boolean {
+  return getRemoteScreenDemand(peer) !== 'hidden';
+}
+
+function getRemoteScreenDemand(peer: Participant): ReturnType<typeof getScreenReceiverDemand> {
+  return getScreenReceiverDemand(peer.id, state.viewedScreenPeerId, state.screenSubscribedPeerIds);
+}
+
+async function applyRemoteScreenVideoDemand(
+  peer: Participant,
+  publication: RemoteTrackPublication
+): Promise<void> {
+  if (!isScreenVideoPublication(publication)) return;
+  if (!shouldSubscribeToScreen(peer)) return;
+
+  const { VideoQuality } = await loadLiveKitClient();
+  if (!shouldSubscribeToScreen(peer) || publication.isDesired === false) return;
+  if (peer.livekitParticipant?.trackPublications.get(publication.trackSid) !== publication) return;
+
+  const quality = getRemoteScreenDemand(peer) === 'stage' ? VideoQuality.HIGH : VideoQuality.LOW;
+  publication.setVideoQuality(quality);
+}
+
+function handleLiveKitTrackSubscriptionFailed(
+  trackSid: string,
+  participant?: RemoteParticipant,
+  error?: number
+): void {
+  if (!participant) return;
+  const peer = state.peers.get(participant.identity) || syncLiveKitParticipant(participant);
+  if (!peer) return;
+
+  const publication = participant.trackPublications.get(trackSid);
+  if (isScreenPublication(publication)) {
+    void scheduleScreenSubscriptionRetry(peer, publication as RemoteTrackPublication, error);
+    return;
+  }
+  if (!isMicrophonePublication(publication)) return;
+
+  peer.voiceIssue = 'голос не подключен';
+  updatePeerStatus(peer);
+}
+
+async function scheduleScreenSubscriptionRetry(
+  peer: Participant,
+  publication: RemoteTrackPublication,
+  error?: number
+): Promise<void> {
+  const { SubscriptionError } = await loadLiveKitClient();
+  if (error === SubscriptionError.SE_CODEC_UNSUPPORTED) {
+    clearScreenSubscriptionRetry(publication);
+    console.warn('LiveKit screen subscription codec is unsupported.', { trackSid: publication.trackSid });
+    return;
+  }
+  if (!shouldSubscribeToScreen(peer)) {
+    clearScreenSubscriptionRetry(publication);
+    return;
+  }
+
+  screenSubscriptionRetryController.schedule({
+    isAttached: () => attachSubscribedRemoteScreenTrack(peer, publication),
+    isCurrent: () => peer.livekitParticipant?.trackPublications.get(publication.trackSid) === publication,
+    isDemanded: () => shouldSubscribeToScreen(peer),
+    key: publication.trackSid,
+    retry: () => {
+      publication.setSubscribed(false);
+      publication.setSubscribed(true);
+      if (isScreenVideoPublication(publication)) void applyRemoteScreenVideoDemand(peer, publication);
+    }
+  });
+}
+
+function clearScreenSubscriptionRetry(publication: TrackPublication): void {
+  screenSubscriptionRetryController.clear(publication.trackSid);
+}
+
+function clearAllScreenSubscriptionRetries(): void {
+  screenSubscriptionRetryController.clearAll();
 }
 
 export function syncLiveKitScreenSubscriptions(peer: Participant | null): void {
@@ -499,16 +616,36 @@ export function syncLiveKitVoiceSubscriptions(): void {
 }
 
 function setRemotePublicationSubscribed(publication: RemoteTrackPublication, subscribed: boolean): void {
-  if (publication.isSubscribed === subscribed) return;
+  if (publication.isDesired === subscribed) return;
   publication.setSubscribed(subscribed);
 }
 
 async function recoverLiveKitRoom(room: Room): Promise<void> {
+  // A reconnect is a new transport epoch. A screen SID that exhausted its
+  // bounded retry budget on the previous connection must be eligible again;
+  // otherwise a transient outage longer than the retry window can strand the
+  // publication until the sender republishes it with a new SID.
+  clearAllScreenSubscriptionRetries();
   syncLiveKitParticipants(room);
+  retryDemandedScreenSubscriptions(room);
   await ensureLocalMicrophonePublished();
   syncLiveKitVoiceSubscriptions();
   syncRemoteAudioPlayback();
   refreshParticipantState();
+}
+
+function retryDemandedScreenSubscriptions(room: Room): void {
+  room.remoteParticipants.forEach((participant) => {
+    const peer = state.peers.get(participant.identity);
+    if (!peer) return;
+
+    participant.trackPublications.forEach((publication) => {
+      if (!isScreenPublication(publication) || !shouldSubscribeToScreen(peer)) return;
+      const remotePublication = publication as RemoteTrackPublication;
+      if (attachSubscribedRemoteScreenTrack(peer, remotePublication)) return;
+      void scheduleScreenSubscriptionRetry(peer, remotePublication);
+    });
+  });
 }
 
 function ensureRemoteMicrophonePlayback(peer: Participant, publication: TrackPublication): void {
@@ -559,8 +696,18 @@ function handleLiveKitTrackSubscribed(
 
   const mediaTrack = track.mediaStreamTrack;
   const stream = track.mediaStream || new MediaStream([mediaTrack]);
-  if (isScreenPublication(publication)) {
+  if (isScreenVideoPublication(publication)) {
+    void applyRemoteScreenVideoDemand(peer, publication);
     attachRemoteScreenStream(peer, stream);
+    if (mediaTrack.readyState !== 'ended') clearScreenSubscriptionRetry(publication);
+    else void scheduleScreenSubscriptionRetry(peer, publication);
+    return;
+  }
+
+  if (isScreenAudioPublication(publication)) {
+    attachRemoteScreenStream(peer, stream);
+    if (mediaTrack.readyState !== 'ended') clearScreenSubscriptionRetry(publication);
+    else void scheduleScreenSubscriptionRetry(peer, publication);
     return;
   }
 
@@ -579,8 +726,15 @@ function handleLiveKitTrackUnsubscribed(
   const peer = state.peers.get(participant.identity);
   if (!peer) return;
 
-  if (isScreenPublication(publication)) {
-    detachRemoteScreen(peer);
+  if (isScreenVideoPublication(publication)) {
+    detachRemoteScreenVideoTrack(peer, track.mediaStreamTrack.id);
+    if (shouldSubscribeToScreen(peer)) void scheduleScreenSubscriptionRetry(peer, publication);
+    return;
+  }
+
+  if (isScreenAudioPublication(publication)) {
+    detachRemoteScreenAudioTrack(peer, track.mediaStreamTrack.id);
+    if (shouldSubscribeToScreen(peer)) void scheduleScreenSubscriptionRetry(peer, publication);
     return;
   }
 
@@ -593,21 +747,45 @@ function handleLiveKitTrackUnsubscribed(
 }
 
 function handleLiveKitTrackUnpublished(publication: RemoteTrackPublication, participant: RemoteParticipant): void {
+  clearScreenSubscriptionRetry(publication);
   const peer = state.peers.get(participant.identity);
   if (!peer) return;
 
-  if (isScreenPublication(publication)) {
-    const hadScreen = peer.screen;
-    peer.screen = participant.isScreenShareEnabled;
-    peer.screenAudio = participant.trackPublications
-      ? [...participant.trackPublications.values()].some(isScreenAudioPublication)
-      : false;
+  const remainingPublications = participant.trackPublications
+    ? [...participant.trackPublications.values()].filter((candidate) => candidate.trackSid !== publication.trackSid)
+    : [];
+  const screenPresence = getScreenPublicationPresence(
+    remainingPublications,
+    isScreenVideoPublication,
+    isScreenAudioPublication
+  );
 
+  if (isScreenAudioPublication(publication)) {
+    const hadScreen = peer.screen;
+    peer.screen = screenPresence.active;
+    peer.screenAudio = screenPresence.hasAudio;
+    const audioTrackId = publication.track?.mediaStreamTrack?.id;
+    if (audioTrackId) detachRemoteScreenAudioTrack(peer, audioTrackId);
     applyRemoteScreenCue(peer, hadScreen, peer.screen);
     if (!peer.screen) detachRemoteScreen(peer);
     refreshScreenAction(peer);
     refreshScreenTiles();
-    if (!peer.screen) refreshScreenStage();
+    refreshScreenStage();
+    return;
+  }
+
+  if (isScreenVideoPublication(publication)) {
+    const hadScreen = peer.screen;
+    peer.screen = screenPresence.active;
+    peer.screenAudio = screenPresence.hasAudio;
+
+    applyRemoteScreenCue(peer, hadScreen, peer.screen);
+    const videoTrackId = publication.track?.mediaStreamTrack?.id;
+    if (videoTrackId) detachRemoteScreenVideoTrack(peer, videoTrackId);
+    if (!screenPresence.hasVideo) detachRemoteScreenVideoTracks(peer);
+    refreshScreenAction(peer);
+    refreshScreenTiles();
+    refreshScreenStage();
     return;
   }
 
@@ -623,7 +801,11 @@ export function isMicrophonePublication(publication: TrackPublication | null | u
 }
 
 export function isScreenPublication(publication: TrackPublication | null | undefined): boolean {
-  return publication?.source === TRACK_SOURCE.ScreenShare || publication?.source === TRACK_SOURCE.ScreenShareAudio;
+  return isScreenVideoPublication(publication) || isScreenAudioPublication(publication);
+}
+
+export function isScreenVideoPublication(publication: TrackPublication | null | undefined): boolean {
+  return publication?.source === TRACK_SOURCE.ScreenShare;
 }
 
 export function isScreenAudioPublication(publication: TrackPublication | null | undefined): boolean {

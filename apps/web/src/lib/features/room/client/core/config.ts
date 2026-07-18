@@ -83,13 +83,6 @@ export const SCREEN_STREAM_MODE_PROFILES = {
 } as const;
 export const MICROPHONE_AUDIO_BITRATE = 64_000;
 export const SCREEN_AUDIO_BITRATE = 192_000;
-export const SCREEN_ADAPT_GOOD_SAMPLE_TARGET = 16;
-export const SCREEN_ADAPT_MIN_INTERVAL_MS = 20_000;
-export const SCREEN_ADAPT_POOR_SAMPLE_TARGET = 3;
-export const SCREEN_ADAPT_PROFILE_ORDER_BY_MODE = {
-  games: ['balanced-15', 'balanced-30', 'high-30'],
-  text: ['balanced-5', 'source-5']
-} as const;
 export const SCREEN_STATS_INTERVAL_MS = 1500;
 export const SCREEN_VIDEO_BACKUP_CODEC: string = 'vp8';
 export const PEER_SESSION_STORAGE_PREFIX = 'voice-room:peer-session:';

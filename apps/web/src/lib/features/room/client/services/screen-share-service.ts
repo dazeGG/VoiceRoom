@@ -1,18 +1,10 @@
 import type { LocalTrackPublication } from 'livekit-client';
-import {
-  DEFAULT_SCREEN_STREAM_MODE,
-  SCREEN_ADAPT_GOOD_SAMPLE_TARGET,
-  SCREEN_ADAPT_MIN_INTERVAL_MS,
-  SCREEN_ADAPT_POOR_SAMPLE_TARGET,
-  SCREEN_STATS_INTERVAL_MS
-} from '../core/config';
+import { DEFAULT_SCREEN_STREAM_MODE, SCREEN_STATS_INTERVAL_MS } from '../core/config';
 import { state } from '../core/state.svelte';
 import { showToast } from '../ui/toast';
 import { errorMessage, isCaptureCancelled, isSafariBrowser, stopStream } from '../core/utils';
 import {
   createSourceScreenProfile,
-  getHigherScreenProfileId,
-  getLowerScreenProfileId,
   getPreferredScreenVideoCodec,
   getScreenDegradationPreference,
   getScreenModeForProfile,
@@ -24,7 +16,7 @@ import { setLocalAppAudioSuppressed } from './media-playback-service';
 import { playStreamCue } from '../media/cues';
 import { getDisplayName } from '../ui/names';
 import { publishLocalScreenTracks, unpublishLocalScreenTracks } from './livekit-service';
-import { applyScreenCaptureProfile, openScreenShare, stopLocalScreenAudioCapture } from './screen-capture-service';
+import { openScreenShare, stopLocalScreenAudioCapture } from './screen-capture-service';
 import { TRACK_SOURCE } from '../media/livekit-runtime';
 import { updateParticipant } from '../room/participants';
 import {
@@ -54,7 +46,6 @@ function applyLocalScreenProfileState(profile: ScreenProfile, mode: ScreenStream
   state.localScreenProfileId = profile.id;
   state.localScreenQualityId = profile.qualityId;
   state.localScreenFpsId = profile.fpsId;
-  state.localScreenTargetProfileId = profile.id;
 }
 
 export async function startScreenShare(profileId: string = getSelectedScreenProfileId()): Promise<void> {
@@ -83,7 +74,6 @@ export async function startScreenShare(profileId: string = getSelectedScreenProf
 
     state.localScreenStream = stream;
     applyLocalScreenProfileState(profile, mode);
-    resetLocalScreenAdaptation();
     state.screenStopping = false;
     setLocalAppAudioSuppressed(false);
     videoTrack.addEventListener('ended', () => {
@@ -135,7 +125,6 @@ export async function stopScreenShare(options: { notify?: boolean; quiet?: boole
     const previousStream = state.localScreenStream;
     state.localScreenStream = null;
     stopLocalScreenStatsMonitor({ refresh: false });
-    resetLocalScreenAdaptation();
 
     await unpublishLocalScreenTracks(false);
     stopLocalScreenAudioCapture();
@@ -212,12 +201,6 @@ function stopLocalScreenStatsMonitor(options: { refresh?: boolean } = {}): void 
   if (refresh) refreshScreenMeta(getActiveScreenPeer());
 }
 
-function resetLocalScreenAdaptation(): void {
-  state.localScreenAdaptGoodSamples = 0;
-  state.localScreenAdaptPoorSamples = 0;
-  state.localScreenAdaptLastAt = 0;
-}
-
 async function updateLocalScreenStats(): Promise<void> {
   if (!state.localScreenStream) {
     stopLocalScreenStatsMonitor();
@@ -239,6 +222,7 @@ async function updateLocalScreenStats(): Promise<void> {
     captureDropsBackpressureDelta: captureStats.captureDropsBackpressureDelta,
     captureFramesReceived: captureStats.captureFramesReceived,
     captureFramesWritten: captureStats.captureFramesWritten,
+    capturePixelFormat: captureStats.capturePixelFormat,
     captureRelayRestarts: captureStats.captureRelayRestarts,
     codec: parsed.codec || (track as { codec?: string } | undefined)?.codec || getPreferredScreenVideoCodec(),
     encoderImplementation: parsed.encoderImplementation || '',
@@ -267,7 +251,6 @@ async function updateLocalScreenStats(): Promise<void> {
 
   const peer = getActiveScreenPeer();
   if (peer?.isLocal) refreshScreenMeta(peer);
-  await adaptLocalScreenProfile();
 }
 
 function findLocalScreenVideoPublication(): LocalTrackPublication | null {
@@ -284,6 +267,7 @@ function readNativeCaptureStats(previous: ScreenStatsPrevious | null): {
   captureDropsBackpressureDelta?: number;
   captureFramesReceived?: number;
   captureFramesWritten?: number;
+  capturePixelFormat?: 'NV12' | 'BGRX';
   captureRelayRestarts?: number;
   previous: Partial<ScreenStatsPrevious>;
 } {
@@ -294,7 +278,11 @@ function readNativeCaptureStats(previous: ScreenStatsPrevious | null): {
   const snapshot = window.__voiceRoomNativeCaptureStats();
   const captureFramesReceived = Number(snapshot.framesReceived || 0);
   const captureFramesWritten = Number(snapshot.framesWritten || 0);
-  const captureDropsBackpressure = Number(snapshot.framesDroppedBackpressure || 0);
+  const capturePixelFormat = snapshot.pixelFormat === 'NV12' || snapshot.pixelFormat === 'BGRX'
+    ? snapshot.pixelFormat
+    : undefined;
+  const captureDropsBackpressure = Number(snapshot.framesDroppedBackpressure || 0)
+    + Number(snapshot.relay?.framesDroppedBackpressure || 0);
   const captureRelayRestarts = Number(snapshot.relay?.restarts || 0);
 
   return {
@@ -304,6 +292,7 @@ function readNativeCaptureStats(previous: ScreenStatsPrevious | null): {
       : Math.max(0, captureDropsBackpressure - Number(previous.captureDropsBackpressure || 0)),
     captureFramesReceived,
     captureFramesWritten,
+    capturePixelFormat,
     captureRelayRestarts,
     previous: {
       captureDropsBackpressure,
@@ -406,99 +395,6 @@ function getCodecNameFromStats(report: { codecId?: string }, codecs: Map<string,
   return mimeType.replace(/^video\//i, '').toUpperCase();
 }
 
-async function adaptLocalScreenProfile(): Promise<void> {
-  if (!state.localScreenStream || !state.localScreenStats) return;
-
-  const health = getLocalScreenStatsHealth(state.localScreenStats);
-  if (health === 'poor') {
-    state.localScreenAdaptPoorSamples += 1;
-    state.localScreenAdaptGoodSamples = 0;
-  } else if (health === 'good') {
-    state.localScreenAdaptGoodSamples += 1;
-    state.localScreenAdaptPoorSamples = Math.max(0, state.localScreenAdaptPoorSamples - 1);
-  } else {
-    state.localScreenAdaptGoodSamples = 0;
-    state.localScreenAdaptPoorSamples = Math.max(0, state.localScreenAdaptPoorSamples - 1);
-  }
-
-  const now = Date.now();
-  if (now - state.localScreenAdaptLastAt < SCREEN_ADAPT_MIN_INTERVAL_MS) return;
-
-  if (state.localScreenAdaptPoorSamples >= SCREEN_ADAPT_POOR_SAMPLE_TARGET) {
-    const nextProfileId = getLowerScreenProfileId(state.localScreenProfileId, state.localScreenMode || DEFAULT_SCREEN_STREAM_MODE);
-    if (nextProfileId) {
-      await setLocalScreenProfile(nextProfileId);
-      return;
-    }
-  }
-
-  if (state.localScreenAdaptGoodSamples >= SCREEN_ADAPT_GOOD_SAMPLE_TARGET) {
-    const nextProfileId = getHigherScreenProfileId(
-      state.localScreenProfileId,
-      state.localScreenTargetProfileId,
-      state.localScreenMode || DEFAULT_SCREEN_STREAM_MODE
-    );
-    if (nextProfileId) {
-      await setLocalScreenProfile(nextProfileId);
-    }
-  }
-}
-
-function getLocalScreenStatsHealth(stats: NonNullable<typeof state.localScreenStats>): 'poor' | 'good' | 'fair' {
-  const lossPct = Number(stats.lossPct || 0);
-  const rttMs = Number(stats.rttMs || 0);
-  const availableOutgoingBitrate = Number(stats.availableOutgoingBitrate || 0);
-  const [mediaTrack] = state.localScreenStream?.getVideoTracks() || [];
-  const profile = createSourceScreenProfile(getScreenProfile(state.localScreenProfileId), mediaTrack);
-  const bandwidthLimited = stats.qualityLimitationReason === 'bandwidth';
-  const bitrateConstrained = availableOutgoingBitrate > 0 && availableOutgoingBitrate < profile.videoBitrate * 0.72;
-  const receiverPressure = Number(stats.nackDelta || 0) >= 8 || Number(stats.pliDelta || 0) > 0 || Number(stats.firDelta || 0) > 0;
-  const captureBackpressure = Number(stats.captureDropsBackpressureDelta || 0) >= Math.max(2, Math.round(profile.frameRate * 0.2));
-  const encoderPressure = captureBackpressure
-    || Number(stats.framesDroppedDelta || 0) >= Math.max(3, Math.round(profile.frameRate * 0.25));
-  const poorLoss = lossPct >= 5;
-  const poorRtt = rttMs >= 650;
-  const goodLoss = !stats.lossPct || lossPct < 1;
-  const goodRtt = !stats.rttMs || rttMs < 260;
-  const goodBitrate = !availableOutgoingBitrate || availableOutgoingBitrate > profile.videoBitrate * 1.25;
-
-  if (bandwidthLimited || bitrateConstrained || receiverPressure || encoderPressure || poorLoss || poorRtt) return 'poor';
-  if (goodLoss && goodRtt && goodBitrate) return 'good';
-  return 'fair';
-}
-
-async function setLocalScreenProfile(profileId: string): Promise<void> {
-  if (!state.localScreenStream) return;
-
-  let profile = getScreenProfile(profileId);
-  const [videoTrack] = state.localScreenStream.getVideoTracks();
-  profile = createSourceScreenProfile(profile, videoTrack);
-  if (profile.id === state.localScreenProfileId) return;
-
-  state.localScreenProfileId = profile.id;
-  state.localScreenQualityId = profile.qualityId;
-  state.localScreenFpsId = profile.fpsId;
-  state.localScreenAdaptGoodSamples = 0;
-  state.localScreenAdaptPoorSamples = 0;
-  state.localScreenAdaptLastAt = Date.now();
-
-  await applyScreenCaptureProfile(state.localScreenStream, profile);
-  await applyLocalScreenEncodingProfile(profile);
-
-  updateParticipant({
-    id: state.peerId,
-    muted: state.muted,
-    name: getDisplayName(),
-    screen: true,
-    screenAudio: hasScreenAudio(),
-    screenProfileId: profile.id,
-    screenStreamId: state.localScreenStream.id
-  });
-  refreshScreenControls();
-  refreshScreenStage();
-  await postState();
-}
-
 async function applyLocalScreenEncodingProfile(profile: ScreenProfile): Promise<void> {
   const tasks: Promise<void>[] = [];
 
@@ -523,24 +419,17 @@ async function applyScreenSenderEncoding(sender: RTCRtpSender, profile: ScreenPr
   const primaryEncoding = getPrimaryScreenEncoding(parameters.encodings);
   primaryEncoding.maxBitrate = profile.videoBitrate;
   primaryEncoding.maxFramerate = profile.frameRate;
-  primaryEncoding.degradationPreference = degradationPreference;
   parameters.degradationPreference = degradationPreference;
 
   await sender.setParameters(parameters);
 }
 
-function getPrimaryScreenEncoding(encodings: RTCRtpEncodingParameters[]): RTCRtpEncodingParameters & {
-  degradationPreference?: RTCDegradationPreference;
-  maxFramerate?: number;
-} {
+function getPrimaryScreenEncoding(encodings: RTCRtpEncodingParameters[]): RTCRtpEncodingParameters {
   return encodings.reduce((primary, encoding) => {
     const primaryBitrate = Number(primary.maxBitrate || 0);
     const encodingBitrate = Number(encoding.maxBitrate || 0);
     if (encodingBitrate > primaryBitrate) return encoding;
     if (!primaryBitrate && !primary.rid) return primary;
     return primary;
-  }, encodings[0]) as RTCRtpEncodingParameters & {
-    degradationPreference?: RTCDegradationPreference;
-    maxFramerate?: number;
-  };
+  }, encodings[0]);
 }

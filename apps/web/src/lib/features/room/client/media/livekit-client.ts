@@ -1,1 +1,1 @@
-export { Room, RoomEvent, VideoPreset } from 'livekit-client';
+export { Room, RoomEvent, SubscriptionError, VideoPreset, VideoQuality } from 'livekit-client';
