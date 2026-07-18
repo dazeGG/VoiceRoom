@@ -3,8 +3,7 @@
   "additionalProperties": false,
   "properties": {
     "attemptId": {
-      "pattern": "^g01-a[0-9]{2,}$",
-      "type": "string"
+      "const": "g01-a01"
     },
     "authorityDigest": {
       "pattern": "^sha256:[0-9a-f]{64}$",

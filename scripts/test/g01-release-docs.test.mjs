@@ -31,6 +31,9 @@ function envelopes() {
 }
 
 function artifact(id, headSha) { return { id, expired: false, workflow_run: { head_sha: headSha } }; }
+function ancestorArtifact(id, runId, headSha, artifactDigest) {
+  return { id, node_id: `A${id}`, name: "g01-bootstrap-failure", size_in_bytes: 100, url: "https://api.github.test/artifact", archive_download_url: "https://api.github.test/artifact/zip", expired: false, created_at: "2026-07-17T23:00:01.000Z", expires_at: "2026-10-17T23:00:01.000Z", updated_at: "2026-07-17T23:00:02.000Z", digest: artifactDigest, workflow_run: { id: runId, head_sha: headSha } };
+}
 function selectionAuthority({ f7, f9, f11 }, overrides = {}) {
   return {
     pr: { number: 7, state: "closed", merged: true, merged_at: f11.mergedAt, merge_commit_sha: f11.mergeSha, base: { ref: "develop", sha: "9".repeat(40) }, head: { ref: f11.sourceBranch, sha: f7.sourceSha } },
@@ -123,11 +126,19 @@ test("selection consumes concrete F7/F9/F11 envelopes and validates schema", () 
   const rf9 = { ...f9, evidenceId: `approval-envelope.${recoverySuffix}` };
   const rf11 = { ...f11, evidenceId: `merge-envelope.${recoverySuffix}`, sourceBranch: "feature/2.5.0-g01-postmerge-bootstrap-a02" };
   const ancestors = [{ attemptId: "g01-a01", evidenceId: "bootstrap-failure.g01-a01.json", digest: digest("4"), artifactId: 4, runId: 5, baseSha: "9".repeat(40), parentSha: "9".repeat(40), terminalDevelopSha: ancestorSha, createdAt: "2026-07-17T23:00:00.000Z" }];
-  const recovery = buildSelection(rf7, rf9, rf11, selectionAuthority({ f7: rf7, f9: rf9, f11: rf11 }, { pr: { ...selectionAuthority({ f7: rf7, f9: rf9, f11: rf11 }).pr, base: { ref: "develop", sha: ancestorSha } } }), ancestors);
+  const recoveryAuthority = selectionAuthority({ f7: rf7, f9: rf9, f11: rf11 }, { pr: { ...selectionAuthority({ f7: rf7, f9: rf9, f11: rf11 }).pr, base: { ref: "develop", sha: ancestorSha } } });
+  const ancestorAuthority = ancestorArtifact(4, 5, ancestorSha, digest("4"));
+  const recovery = buildSelection(rf7, rf9, rf11, recoveryAuthority, ancestors, [ancestorAuthority]);
   assert.equal(validate(recovery), true, JSON.stringify(validate.errors));
   assert.equal(validate({ ...selection, f7Id: "ci-bundle.bootstrap-recovery-a99.json" }), false);
   assert.equal(validate({ ...selection, ancestorFailures: ancestors }), false);
   assert.equal(validate({ ...recovery, ancestorFailures: [] }), false);
+  for (const mutation of [
+    { artifactId: 99 },
+    { runId: 99 },
+    { digest: digest("9") },
+    { terminalDevelopSha: "d".repeat(40) },
+  ]) assert.throws(() => buildSelection(rf7, rf9, rf11, recoveryAuthority, [{ ...ancestors[0], ...mutation }], [ancestorAuthority]));
 
   for (const schemaName of ["bootstrap-attempt", "bootstrap-landed-recovery"]) {
     const schema = ajv.compile(json(`docs/releases/2.5.0/evidence/schema/${schemaName}.schema.json`));
@@ -137,6 +148,7 @@ test("selection consumes concrete F7/F9/F11 envelopes and validates schema", () 
     assert.equal(schema(baseRecord), true, JSON.stringify(schema.errors));
     assert.equal(schema({ ...baseRecord, firstAuthoritativeId: "" }), false);
     assert.equal(schema({ ...baseRecord, firstAuthoritativeId: 0 }), false);
+    if (schemaName === "bootstrap-attempt") assert.equal(schema({ ...baseRecord, attemptId: "g01-a99" }), false);
   }
 });
 
@@ -169,7 +181,7 @@ test("selection CLI emits compact JSON with one real LF", () => {
   } finally { fs.rmSync(directory, { recursive: true, force: true }); }
 });
 
-test("bootstrap-plan emits F7 and exposes a validated post-F11 selection handoff", () => {
+test("bootstrap-plan emits F7 and an executable pre-merge F9 before post-F11 selection", () => {
   const workflow = read(".github/workflows/ci.yml");
   const block = workflow.slice(workflow.indexOf("  bootstrap-plan:"), workflow.indexOf("\n  deploy:", workflow.indexOf("  bootstrap-plan:")));
   for (const command of [
@@ -182,6 +194,11 @@ test("bootstrap-plan emits F7 and exposes a validated post-F11 selection handoff
     "node scripts/evidence/bootstrap-export.mjs --f7 --source-sha \"$SOURCE_SHA\" --created-at",
   ]) assert.ok(block.includes(command), `missing CI command: ${command}`);
   assert.match(block, /actions\/upload-artifact@/);
+  assert.match(block, /Await exact-head independent approvals and emit F9/);
+  assert.match(block, /actions\/runs\/\$GITHUB_RUN_ID\/artifacts/);
+  assert.match(block, /pulls\/\$PR_NUMBER\/reviews/);
+  assert.match(block, /--emit-f9/);
+  assert.match(block, /sleep 20/);
   assert.match(block, /GH_TOKEN: \$\{\{ github\.token \}\}/);
   assert.doesNotMatch(block, /ghcr\.io|docker push|deploy|packages:\s*write/);
   const lifecycle = workflow.slice(workflow.indexOf("  bootstrap-approval:"), workflow.indexOf("\n  deploy:", workflow.indexOf("  bootstrap-selection:")));
@@ -189,6 +206,10 @@ test("bootstrap-plan emits F7 and exposes a validated post-F11 selection handoff
   assert.doesNotMatch(workflow, /bootstrap_(metadata|f7|f9|f11)_b64|base64 --decode/);
   assert.match(block, /github\.event\.pull_request\.head\.sha \|\| github\.sha/);
   assert.doesNotMatch(lifecycle, /ghcr\.io|docker push|packages:\s*write/);
+  assert.match(lifecycle, /--ancestor-artifacts ancestor-artifacts\.json/);
+  const deploy = workflow.slice(workflow.indexOf("  deploy:"));
+  assert.match(deploy, /needs: \[check, test\]/);
+  assert.doesNotMatch(deploy, /needs:.*bootstrap-plan/);
 });
 
 test("authority bytes match approved handoff digest", () => {

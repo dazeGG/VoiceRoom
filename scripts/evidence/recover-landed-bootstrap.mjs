@@ -39,7 +39,7 @@ function validSelection(facts) {
     assert.ok(Date.parse(facts.f11.createdAt) < Date.parse(selection.createdAt));
     assert.ok([facts.mergeSha, facts.developSha, facts.baseSha, facts.originSha, terminalDevelopSha].every((sha) => sha === facts.mergeSha));
     if (selection.terminalKind === "direct-canonical") {
-      assert.match(selection.attemptId, /^g01-a[0-9]{2,}$/); assert.equal(lineageSuffix, "g01.json"); assert.equal(selection.ancestorFailures.length, 0);
+      assert.equal(selection.attemptId, "g01-a01"); assert.equal(lineageSuffix, "g01.json"); assert.equal(selection.ancestorFailures.length, 0);
     } else {
       const match = selection.attemptId.match(/^g01-recovery-a([0-9]{2,})$/); assert.ok(match);
       assert.equal(lineageSuffix, `bootstrap-recovery-a${match[1]}.json`); assert.ok(selection.ancestorFailures.length > 0);

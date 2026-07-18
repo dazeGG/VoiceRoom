@@ -25,7 +25,7 @@
       "then": {
         "properties": {
           "ancestorFailures": { "maxItems": 0, "type": "array" },
-          "attemptId": { "pattern": "^g01-a[0-9]{2,}$", "type": "string" },
+          "attemptId": { "const": "g01-a01" },
           "f11Id": { "const": "merge-envelope.g01.json" },
           "f7Id": { "const": "ci-bundle.g01.json" },
           "f9Id": { "const": "approval-envelope.g01.json" }

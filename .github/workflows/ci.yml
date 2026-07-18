@@ -123,8 +123,13 @@ jobs:
     name: G01 bootstrap plan
     if: (github.event_name == 'pull_request' && (github.head_ref == 'feature/2.5.0-g01-canonical-evidence-bootstrap' || startsWith(github.head_ref, 'feature/2.5.0-g01-postmerge-bootstrap-a'))) || (github.event_name == 'push' && (github.ref_name == 'feature/2.5.0-g01-canonical-evidence-bootstrap' || startsWith(github.ref_name, 'feature/2.5.0-g01-postmerge-bootstrap-a')))
     runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: read
     env:
       GH_TOKEN: ${{ github.token }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
       SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       SOURCE_BRANCH: ${{ github.head_ref || github.ref_name }}
     steps:
@@ -157,6 +162,45 @@ jobs:
           path: |
             ci-bundle.*.json
             candidate-registry-report.g01.json
+          if-no-files-found: error
+          retention-days: 90
+      - name: Await exact-head independent approvals and emit F9
+        shell: bash
+        run: |
+          set -euo pipefail
+          suffix=g01.json
+          if test "$SOURCE_BRANCH" != feature/2.5.0-g01-canonical-evidence-bootstrap; then suffix="bootstrap-recovery-${SOURCE_BRANCH##*-bootstrap-}.json"; fi
+          artifact_name="g01-candidate-evidence-${SOURCE_SHA}"
+          for attempt in $(seq 1 90); do
+            gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts?name=$artifact_name" > run-artifacts.json
+            node - <<'NODE'
+          const fs = require('node:fs');
+          const response = JSON.parse(fs.readFileSync('run-artifacts.json'));
+          const matches = response.artifacts.filter((artifact) => artifact.name === process.env.ARTIFACT_NAME && artifact.expired === false);
+          if (matches.length === 0) process.exit(0);
+          if (matches.length !== 1) throw new Error('expected exactly one F7 artifact for this run');
+          fs.writeFileSync('f7-artifact.json', JSON.stringify(matches[0]));
+          NODE
+            if test -s f7-artifact.json; then
+              gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" > pr.json
+              gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/reviews?per_page=100" --slurp > review-pages.json
+              node - <<'NODE'
+          const fs=require('node:fs'); const read=(p)=>JSON.parse(fs.readFileSync(p));
+          fs.writeFileSync('approval-authority.json', JSON.stringify({pr:read('pr.json'),reviews:read('review-pages.json').flat(),observedAt:new Date().toISOString(),f7Artifact:read('f7-artifact.json'),candidateReport:read('candidate-registry-report.g01.json')}));
+          NODE
+              if node scripts/evidence/emit-bootstrap-selection.mjs --emit-f9 --f7 "ci-bundle.$suffix" --authority approval-authority.json > "approval-envelope.$suffix"; then break; fi
+            fi
+            rm -f f7-artifact.json approval-authority.json "approval-envelope.$suffix"
+            if test "$attempt" = 90; then echo "Timed out waiting for exact-head OMX approvals" >&2; exit 1; fi
+            sleep 20
+          done
+        env:
+          ARTIFACT_NAME: g01-candidate-evidence-${{ env.SOURCE_SHA }}
+      - name: Persist immutable G01 F9 from candidate PR run
+        uses: actions/upload-artifact@v4
+        with:
+          name: g01-approval-${{ env.PR_NUMBER }}
+          path: approval-envelope.*.json
           if-no-files-found: error
           retention-days: 90
 
@@ -299,9 +343,27 @@ jobs:
           NODE
           extra=()
           if test -n "$ANCESTOR_ARTIFACT_ID"; then
+            gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$ANCESTOR_ARTIFACT_ID" > ancestor-artifact.json
             gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$ANCESTOR_ARTIFACT_ID/zip" > ancestors.zip
+            ANCESTOR_ARTIFACT_ID="$ANCESTOR_ARTIFACT_ID" node - <<'NODE'
+          const fs=require('node:fs'); const crypto=require('node:crypto');
+          const artifact=JSON.parse(fs.readFileSync('ancestor-artifact.json'));
+          if (artifact.id !== Number(process.env.ANCESTOR_ARTIFACT_ID) || artifact.expired !== false) throw new Error('ancestor chain artifact metadata mismatch');
+          const digest=`sha256:${crypto.createHash('sha256').update(fs.readFileSync('ancestors.zip')).digest('hex')}`;
+          if (artifact.digest !== digest) throw new Error('ancestor chain archive digest mismatch');
+          NODE
             unzip -q ancestors.zip
-            extra=(--ancestors bootstrap-ancestor-failures.json)
+            : > ancestor-artifacts.ndjson
+            while read -r artifact_id; do
+              gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$artifact_id" >> ancestor-artifacts.ndjson
+              printf '\n' >> ancestor-artifacts.ndjson
+            done < <(node -e 'for (const item of JSON.parse(require("node:fs").readFileSync("bootstrap-ancestor-failures.json"))) console.log(item.artifactId)')
+            node - <<'NODE'
+          const fs=require('node:fs');
+          const artifacts=fs.readFileSync('ancestor-artifacts.ndjson','utf8').trim().split('\n').filter(Boolean).map(JSON.parse);
+          fs.writeFileSync('ancestor-artifacts.json', JSON.stringify(artifacts));
+          NODE
+            extra=(--ancestors bootstrap-ancestor-failures.json --ancestor-artifacts ancestor-artifacts.json)
           fi
           node scripts/evidence/emit-bootstrap-selection.mjs --f7 "$f7_file" --f9 "$f9_file" --f11 "$f11_file" --authority selection-authority.json "${extra[@]}" > bootstrap-selection.json
       - name: Persist post-F11 bootstrap selection
@@ -314,7 +376,7 @@ jobs:
 
   deploy:
     name: Deploy to server
-    needs: [check, test, bootstrap-plan]
+    needs: [check, test]
     # Only deploy real pushes to main, never PRs or forks.
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest

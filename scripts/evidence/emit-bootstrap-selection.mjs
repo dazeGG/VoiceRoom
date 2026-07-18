@@ -73,6 +73,7 @@ export function buildF9Envelope(f7, authority) {
   assert.equal(f7.digest, compactDigest(authority.candidateReport), "F7 digest must bind the candidate report bytes from the same artifact");
   const reviewObjects = normalizeReviews(authority, f7.sourceSha);
   const createdAt = authority.observedAt; instant(createdAt, "approval observedAt");
+  assert.ok(instant(f7.createdAt, "F7.createdAt") < instant(createdAt, "approval observedAt"), "F9 must follow F7");
   assert.ok(reviewObjects.every(({ submittedAt }) => instant(submittedAt, "review submittedAt") < instant(createdAt, "approval observedAt")), "F9 must follow every review");
   return validateEnvelope({ schemaVersion: 1, goal: "G01", phase: "F9", status: "GREEN", evidenceId: `approval-envelope.${identity.suffix}`, sourceSha: f7.sourceSha, digest: compactDigest(reviewObjects), createdAt, f7Digest: f7.digest, reviewObjects }, "F9");
 }
@@ -126,7 +127,35 @@ function validateAncestorFailures(value) {
   return value;
 }
 
-export function buildSelection(f7, f9, f11, authority, ancestorFailures = []) {
+function bindAncestorArtifacts(ancestorFailures, artifacts) {
+  if (ancestorFailures.length === 0) {
+    assert.equal(artifacts, undefined, "direct canonical selection must not supply ancestor artifact authority");
+    return;
+  }
+  assert.ok(Array.isArray(artifacts), "ancestor artifact authorities must be an array");
+  assert.equal(artifacts.length, ancestorFailures.length, "each ancestor failure needs one fetched GitHub artifact authority");
+  const byId = new Map();
+  for (const [index, artifact] of artifacts.entries()) {
+    exactKeys(artifact, ["id", "node_id", "name", "size_in_bytes", "url", "archive_download_url", "expired", "created_at", "expires_at", "updated_at", "digest", "workflow_run"], `ancestor artifact authority[${index}]`);
+    assert.equal(artifact.expired, false, "ancestor artifact expired");
+    assert.ok(Number.isInteger(artifact.id) && artifact.id > 0, "ancestor artifact ID is invalid");
+    assert.ok(!byId.has(artifact.id), "ancestor artifact authorities must be unique");
+    assert.match(artifact.digest, DIGEST, "ancestor artifact digest is invalid");
+    assert.ok(Number.isInteger(artifact.workflow_run?.id) && artifact.workflow_run.id > 0, "ancestor artifact run ID is invalid");
+    assert.match(artifact.workflow_run?.head_sha, SHA, "ancestor artifact head SHA is invalid");
+    byId.set(artifact.id, artifact);
+  }
+  for (const ancestor of ancestorFailures) {
+    const artifact = byId.get(ancestor.artifactId);
+    assert.ok(artifact, "ancestor self-asserted artifactId has no fetched GitHub metadata");
+    assert.equal(ancestor.artifactId, artifact.id, "ancestor self-asserted artifactId does not match fetched GitHub metadata");
+    assert.equal(ancestor.runId, artifact.workflow_run.id, "ancestor self-asserted runId does not match fetched GitHub metadata");
+    assert.equal(ancestor.digest, artifact.digest, "ancestor self-asserted digest does not match fetched GitHub metadata");
+    assert.equal(ancestor.terminalDevelopSha, artifact.workflow_run.head_sha, "ancestor terminal SHA does not match fetched GitHub artifact head");
+  }
+}
+
+export function buildSelection(f7, f9, f11, authority, ancestorFailures = [], ancestorArtifacts) {
   const { terminalDevelopSha, lineageSuffix } = validateEnvelopeChain(f7, f9, f11);
   exactKeys(authority, ["pr", "developRef", "sourceRefStatus", "postMergeRun", "observedAt", "f7Artifact", "f9Artifact", "f11Artifact"], "selection authority");
   const identity = branchIdentity(f11.sourceBranch);
@@ -147,6 +176,7 @@ export function buildSelection(f7, f9, f11, authority, ancestorFailures = []) {
     assert.equal(artifact.workflow_run?.head_sha, envelope.sourceSha);
   }
   const ancestors = validateAncestorFailures(ancestorFailures);
+  bindAncestorArtifacts(ancestors, ancestorArtifacts);
   if (identity.terminalKind === "direct-canonical") assert.equal(ancestors.length, 0);
   else {
     assert.ok(ancestors.length > 0, "landed recovery requires immutable external ancestor failures");
@@ -167,7 +197,9 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     else {
       const f11 = JSON.parse(fs.readFileSync(argument("--f11"), "utf8"));
       const ancestorsPath = argument("--ancestors", true);
-      output = buildSelection(f7, f9, f11, authority, ancestorsPath ? JSON.parse(fs.readFileSync(ancestorsPath, "utf8")) : []);
+      const ancestorArtifactsPath = argument("--ancestor-artifacts", true);
+      assert.equal(Boolean(ancestorsPath), Boolean(ancestorArtifactsPath), "--ancestors and --ancestor-artifacts must be supplied together");
+      output = buildSelection(f7, f9, f11, authority, ancestorsPath ? JSON.parse(fs.readFileSync(ancestorsPath, "utf8")) : [], ancestorArtifactsPath ? JSON.parse(fs.readFileSync(ancestorArtifactsPath, "utf8")) : undefined);
     }
   }
   process.stdout.write(`${JSON.stringify(output)}\n`);

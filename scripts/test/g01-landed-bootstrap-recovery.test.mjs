@@ -14,6 +14,9 @@ test("frozen recovery catalogs are exact, nonempty, unique and disjoint", () => 
 
 test("four-state classification rejects forged chronology and terminal SHAs", () => {
   for (const fixtureCase of fixture.cases) assert.equal(classifyBootstrap(fixtureCase.facts), fixtureCase.expected, fixtureCase.name);
+  const direct = structuredClone(fixture.cases.find((fixtureCase) => fixtureCase.name === "direct-selected").facts);
+  direct.selection.attemptId = "g01-a99";
+  assert.equal(classifyBootstrap(direct), "G01_LANDED_UNSEALED", "non-canonical direct attempt ID must fail closed");
 });
 
 test("catalog mutations fail closed", () => {
