@@ -711,16 +711,46 @@ test('screen share publish tuning applies codec, bitrate, degradation and conten
   assert.match(profiles, /getScreenDegradationPreference/);
   assert.match(capture, /videoTrack\.contentHint = profile\.contentHint/);
   assert.doesNotMatch(capture, /&& !videoTrack\.contentHint/);
+  assert.match(capture, /frameRate: \{ ideal: profile\.frameRate, max: profile\.frameRate \}/);
+  assert.match(capture, /constraints\.height = \{ ideal: profile\.height, max: profile\.height \}/);
+  assert.match(capture, /constraints\.width = \{ ideal: profile\.width, max: profile\.width \}/);
+  assert.match(capture, /openDesktopDisplayMediaStream\(sourceId, withAudio, audioMode, profile\)/);
+  assert.match(
+    capture,
+    /selectSource\(sourceId,[\s\S]*mode: audioMode[\s\S]*fpsId: profile\.fpsId,[\s\S]*qualityId: profile\.qualityId/
+  );
   assert.match(screenShare, /await publishLocalScreenTracks\(\);[\s\S]*await applyLocalScreenEncodingProfile\(profile\)/);
   assert.match(screenShare, /if \(!parameters\.encodings\?\.length\) parameters\.encodings = \[\{\}\]/);
   assert.match(screenShare, /primaryEncoding\.maxBitrate = profile\.videoBitrate/);
-  assert.match(screenShare, /primaryEncoding\.degradationPreference = degradationPreference/);
   assert.match(screenShare, /parameters\.degradationPreference = degradationPreference/);
   assert.match(screenShare, /encoderImplementation/);
+  assert.match(screenShare, /capturePixelFormat: captureStats\.capturePixelFormat/);
+  assert.match(screenShare, /snapshot\.pixelFormat === 'NV12'/);
+  assert.match(screenShare, /snapshot\.relay\?\.framesDroppedBackpressure/);
   assert.doesNotMatch(screenShare, /Сеть просела|Сеть стабильна/);
-  assert.match(screenShare, /async function setLocalScreenProfile\(profileId: string\): Promise<void>/);
+  assert.doesNotMatch(screenShare, /adaptLocalScreenProfile|setLocalScreenProfile|getLocalScreenStatsHealth/);
+  assert.doesNotMatch(screenShare, /applyScreenCaptureProfile/);
   assert.doesNotMatch(screenShare, /options\.toast/);
   assert.match(livekit, /adaptiveStream: false/);
+});
+
+test('screen share keeps the selected capture profile stable while libwebrtc owns congestion response', () => {
+  const config = read('src/lib/features/room/client/core/config.ts');
+  const profiles = read('src/lib/features/room/client/media/profiles.ts');
+  const state = read('src/lib/features/room/client/model/room-state.ts');
+  const screenShare = read('src/lib/features/room/client/services/screen-share-service.ts');
+  const types = read('src/lib/features/room/client/core/types.ts');
+  const updateStats = functionBody(screenShare, 'updateLocalScreenStats');
+
+  assert.doesNotMatch(config, /SCREEN_ADAPT_/);
+  assert.doesNotMatch(profiles, /getScreenProfileRank|getLowerScreenProfileId|getHigherScreenProfileId/);
+  assert.doesNotMatch(state, /localScreenAdapt|localScreenTargetProfileId/);
+  assert.doesNotMatch(types, /localScreenAdapt|localScreenTargetProfileId/);
+  assert.doesNotMatch(screenShare, /adaptLocalScreenProfile|setLocalScreenProfile|getLocalScreenStatsHealth/);
+  assert.doesNotMatch(updateStats, /applyScreenCaptureProfile|applyLocalScreenEncodingProfile/);
+  assert.match(screenShare, /startLocalScreenStatsMonitor\(\)/);
+  assert.match(screenShare, /primaryEncoding\.maxBitrate = profile\.videoBitrate/);
+  assert.match(screenShare, /primaryEncoding\.maxFramerate = profile\.frameRate/);
 });
 
 test('screen share quality contract exposes Discord-like source text and game modes', () => {
@@ -739,7 +769,6 @@ test('screen share quality contract exposes Discord-like source text and game mo
 
   assert.match(config, /DEFAULT_SCREEN_STREAM_MODE = 'games'/);
   assert.match(config, /SCREEN_STREAM_MODE_PROFILES = \{[\s\S]*games: 'balanced-30'[\s\S]*text: 'source-5'/);
-  assert.match(config, /SCREEN_ADAPT_PROFILE_ORDER_BY_MODE = \{[\s\S]*games: \['balanced-15', 'balanced-30', 'high-30'\][\s\S]*text: \['balanced-5', 'source-5'\]/);
   assert.match(config, /balanced:[\s\S]*5: 1_200_000[\s\S]*15: 3_000_000/);
   assert.match(config, /high:[\s\S]*5: 1_800_000[\s\S]*15: 4_000_000/);
   assert.match(config, /source:[\s\S]*5: 1_800_000[\s\S]*label: 'Источник'/);
@@ -752,7 +781,7 @@ test('screen share quality contract exposes Discord-like source text and game mo
   assert.doesNotMatch(screenShare, /export async function selectScreenStreamMode/);
   assert.doesNotMatch(screenShare, /export async function setCustomScreenQuality/);
   assert.doesNotMatch(screenShare, /export async function setCustomScreenFps/);
-  assert.match(screenShare, /state\.localScreenTargetProfileId = profile\.id/);
+  assert.match(screenShare, /state\.localScreenProfileId = profile\.id/);
   assert.doesNotMatch(dock, /screenMenuButton/);
   assert.match(sourceUi, /mode: 'games' as 'games' \| 'text'/);
   assert.match(sourceUi, /quality: 'balanced' as 'balanced' \| 'high'/);
@@ -766,7 +795,7 @@ test('screen share quality contract exposes Discord-like source text and game mo
   assert.match(picker, /mode: screenSourceUi\.mode/);
   assert.match(picker, /streamAudioEnabled: screenSourceUi\.audio/);
   assert.doesNotMatch(picker, /state\.localScreenMode = screenSourceUi\.mode/);
-  assert.doesNotMatch(picker, /state\.localScreenTargetProfileId = profileId/);
+  assert.doesNotMatch(picker, /state\.localScreenProfileId = profileId/);
   assert.match(screenShare, /const mode = capture\.mode \|\| getScreenModeForProfile\(profile\.id\)/);
   assert.match(capture, /const selectedProfile = getDesktopPickerProfile\(selection, profile\)/);
   assert.match(capture, /const withAudio = selection\.streamAudioEnabled === true/);
@@ -1008,7 +1037,7 @@ test('remote microphone playback has subscription and audio-element recovery hoo
   assert.match(syncVoiceSubscriptions, /syncLiveKitPublicationSubscription\(peer, publication\)/);
   assert.match(syncVoiceSubscriptions, /ensureRemoteMicrophonePlayback\(peer, publication\)/);
   assert.match(subscriptionSync, /setRemotePublicationSubscribed\(remotePublication, !state\.outputMuted\)/);
-  assert.match(subscriptionSetter, /publication\.isSubscribed === subscribed/);
+  assert.match(subscriptionSetter, /publication\.isDesired === subscribed/);
   assert.match(subscriptionSetter, /publication\.setSubscribed\(subscribed\)/);
   assert.match(recoverRoom, /syncLiveKitVoiceSubscriptions\(\)/);
   assert.doesNotMatch(recoverRoom, /ensureRemoteMicrophonePlaybackForRoom|ensureRemoteMicrophonePlayback\(/);
@@ -1019,6 +1048,85 @@ test('remote microphone playback has subscription and audio-element recovery hoo
   assert.match(audioRecovery, /audioTrack === track && audioTrack\.readyState !== 'ended'/);
   assert.match(audioRecovery, /audio\.isConnected/);
   assert.match(participants, /if \(peer\.micReceiver === receiver\) peer\.micReceiver = null/);
+});
+
+test('manual screen receiver demand is ordered, race-safe, and isolated from screen audio', () => {
+  const livekitClient = read('src/lib/features/room/client/media/livekit-client.ts');
+  const livekit = read('src/lib/features/room/client/services/livekit-service.ts');
+  const screenRetry = read('src/lib/features/room/client/media/screen-subscription-retry.ts');
+  const participants = read('src/lib/features/room/client/room/participants.ts');
+  const subscriptionSync = functionBody(livekit, 'syncLiveKitPublicationSubscription');
+  const subscriptionSetter = functionBody(livekit, 'setRemotePublicationSubscribed');
+  const videoDemand = functionBody(livekit, 'applyRemoteScreenVideoDemand');
+  const subscriptionFailure = functionBody(livekit, 'handleLiveKitTrackSubscriptionFailed');
+  const subscriptionRetry = functionBody(livekit, 'scheduleScreenSubscriptionRetry');
+  const trackUnsubscribed = functionBody(livekit, 'handleLiveKitTrackUnsubscribed');
+  const trackUnpublished = functionBody(livekit, 'handleLiveKitTrackUnpublished');
+  const attachSubscribedScreen = functionBody(livekit, 'attachSubscribedRemoteScreenTrack');
+  const recoverRoom = functionBody(livekit, 'recoverLiveKitRoom');
+  const retryDemandedScreens = functionBody(livekit, 'retryDemandedScreenSubscriptions');
+  const attachScreen = functionBody(participants, 'attachRemoteScreenStream');
+  const detachScreenVideo = functionBody(participants, 'detachRemoteScreenVideoTracks');
+
+  assert.match(livekitClient, /VideoQuality/);
+  assert.match(livekit, /function isScreenVideoPublication/);
+  assert.match(subscriptionSync, /const subscribed = shouldSubscribeToScreen\(peer\)/);
+  assert.match(subscriptionSync, /setRemotePublicationSubscribed\(remotePublication, subscribed\)/);
+  assert.match(subscriptionSync, /isScreenVideoPublication\(publication\)/);
+  assert.match(subscriptionSync, /void applyRemoteScreenVideoDemand\(peer, remotePublication\)/);
+  assert.match(subscriptionSync, /if \(subscribed\) \{[\s\S]*attachSubscribedRemoteScreenTrack\(peer, remotePublication\)/);
+  assert.ok(
+    subscriptionSync.indexOf('setRemotePublicationSubscribed(remotePublication, subscribed)')
+      < subscriptionSync.indexOf('applyRemoteScreenVideoDemand(peer, remotePublication)'),
+    'screen video subscribes before requesting a quality layer'
+  );
+  assert.match(subscriptionSetter, /publication\.isDesired === subscribed/);
+  assert.doesNotMatch(subscriptionSetter, /publication\.isSubscribed === subscribed/);
+  assert.match(videoDemand, /if \(!isScreenVideoPublication\(publication\)\) return/);
+  assert.match(videoDemand, /publication\.isDesired === false/);
+  assert.match(videoDemand, /VideoQuality\.HIGH/);
+  assert.match(videoDemand, /VideoQuality\.LOW/);
+  assert.match(videoDemand, /publication\.setVideoQuality/);
+  assert.match(subscriptionFailure, /participant\.trackPublications\.get\(trackSid\)/);
+  assert.match(subscriptionFailure, /isScreenPublication\(publication\)/);
+  assert.match(subscriptionFailure, /scheduleScreenSubscriptionRetry/);
+  assert.match(subscriptionFailure, /if \(!isMicrophonePublication\(publication\)\) return/);
+  assert.match(screenRetry, /SCREEN_SUBSCRIPTION_RETRY_DELAYS_MS = \[150, 600, 1500\]/);
+  assert.match(subscriptionRetry, /SubscriptionError\.SE_CODEC_UNSUPPORTED/);
+  assert.match(subscriptionRetry, /screenSubscriptionRetryController\.schedule/);
+  assert.match(subscriptionRetry, /publication\.setSubscribed\(false\)/);
+  assert.match(subscriptionRetry, /publication\.setSubscribed\(true\)/);
+  assert.match(recoverRoom, /clearAllScreenSubscriptionRetries\(\)/);
+  assert.match(recoverRoom, /retryDemandedScreenSubscriptions\(room\)/);
+  assert.ok(
+    recoverRoom.indexOf('clearAllScreenSubscriptionRetries()')
+      < recoverRoom.indexOf('syncLiveKitParticipants(room)'),
+    'reconnect starts a fresh retry epoch before publication reconciliation'
+  );
+  assert.match(retryDemandedScreens, /shouldSubscribeToScreen\(peer\)/);
+  assert.match(retryDemandedScreens, /attachSubscribedRemoteScreenTrack\(peer, remotePublication\)/);
+  assert.match(retryDemandedScreens, /scheduleScreenSubscriptionRetry\(peer, remotePublication\)/);
+  assert.match(trackUnsubscribed, /isScreenVideoPublication\(publication\)/);
+  assert.match(trackUnsubscribed, /isScreenAudioPublication\(publication\)/);
+  assert.match(trackUnsubscribed, /detachRemoteScreenVideoTrack\(peer, track\.mediaStreamTrack\.id\)/);
+  assert.match(trackUnsubscribed, /detachRemoteScreenAudioTrack\(peer, track\.mediaStreamTrack\.id\)/);
+  assert.match(trackUnsubscribed, /shouldSubscribeToScreen\(peer\)/);
+  assert.match(trackUnsubscribed, /scheduleScreenSubscriptionRetry\(peer, publication\)/);
+  assert.match(trackUnpublished, /detachRemoteScreenVideoTracks\(peer\)/);
+  assert.match(trackUnpublished, /peer\.screen = screenPresence\.active/);
+  assert.match(trackUnpublished, /if \(!screenPresence\.hasVideo\) detachRemoteScreenVideoTracks\(peer\)/);
+  assert.match(attachSubscribedScreen, /publication\.isSubscribed === false/);
+  assert.match(attachSubscribedScreen, /publication\.track as RemoteTrack/);
+  assert.match(attachSubscribedScreen, /mediaTrack\.readyState === 'ended'\) return false/);
+  assert.match(attachSubscribedScreen, /attachRemoteScreenStream/);
+  assert.match(attachSubscribedScreen, /return Boolean/);
+  assert.match(attachScreen, /const hasVideo = screenStream\.getVideoTracks\(\)/);
+  assert.match(attachScreen, /if \(hasVideo\) state\.screenRequesting = false/);
+  assert.match(attachScreen, /detachRemoteScreenVideoTrack\(peer, track\.id\)/);
+  assert.match(detachScreenVideo, /stream\.getVideoTracks\(\)/);
+  assert.match(detachScreenVideo, /if \(!removed\) return/);
+  assert.match(detachScreenVideo, /if \(!hasRemoteScreenVideo\(peer\)\)/);
+  assert.doesNotMatch(detachScreenVideo, /stream\.getAudioTracks\(\)/);
 });
 
 test('lobby v2 keeps dock in main area, preview chat, and people add-friend flow', () => {

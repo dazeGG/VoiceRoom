@@ -8,7 +8,8 @@ import { clearParticipantFocus } from '../../participants-ui.svelte';
 import {
   detachRemoteScreen,
   getAllParticipants,
-  getParticipantById
+  getParticipantById,
+  hasRemoteScreenVideo
 } from '../room/participants';
 import type { Participant } from '../core/types';
 import { playMediaElement, releaseScreenMediaElement } from '../services/media-playback-service';
@@ -18,6 +19,8 @@ import {
   refreshStageStripControls,
   setDesktopScreenFullscreen,
   stopScreenStageIdleUi,
+  stopScreenAudioFallback,
+  syncScreenAudioFallback,
   syncScreenStagePointerState,
   syncScreenVideoAudio
 } from './screen-stage-controls';
@@ -81,13 +84,13 @@ export async function enterScreenView(peerId: string): Promise<void> {
   state.screenCollapsedPeerIds.delete(peerId);
   state.screenSubscribedPeerIds.add(peerId);
   if (!peer.isLocal) setScreenAttendance(state.self, peerId);
-  state.screenRequesting = !peer.isLocal && !peer.screenStream;
+  state.screenRequesting = !peer.isLocal && !hasRemoteScreenVideo(peer);
   refreshAllScreenActions();
   refreshScreenTiles();
   refreshScreenStage();
 
   if (!peer.isLocal) syncLiveKitScreenSubscriptionsSoon(peer);
-  if (peer.isLocal || peer.screenStream) {
+  if (peer.isLocal || hasRemoteScreenVideo(peer)) {
     state.screenRequesting = false;
     refreshScreenStage();
   }
@@ -200,7 +203,7 @@ export function refreshScreenStage(): void {
 }
 
 function showScreenStage({ peer, stream }: { peer: Participant; stream: MediaStream | null }): void {
-  state.sharedScreenPeerId = stream ? peer.id : '';
+  state.sharedScreenPeerId = peer.id;
   document.body.dataset.screenView = 'true';
   screenUi.stageVisible = true;
   screenUi.hasStream = Boolean(stream);
@@ -214,6 +217,12 @@ function showScreenStage({ peer, stream }: { peer: Participant; stream: MediaStr
   syncScreenStagePointerState();
 
   const video = getScreenVideo();
+  if (!stream && video) {
+    video.pause();
+    releaseScreenMediaElement(video);
+    video.srcObject = null;
+  }
+  syncScreenAudioFallback(peer, Boolean(stream));
   if (stream && video) {
     syncScreenVideoAudio();
     playMediaElement(video);
@@ -234,6 +243,7 @@ export function hideScreenStage(): void {
   screenUi.activeStream = null;
   screenUi.hideLeaveButton = false;
   screenUi.showScreenExit = false;
+  stopScreenAudioFallback();
 
   const video = getScreenVideo();
   const stage = getScreenStage();
@@ -273,7 +283,8 @@ export function getScreenParticipants(): Participant[] {
 
 export function getScreenStreamForParticipant(participant: Participant | null): MediaStream | null {
   if (!participant?.screen) return null;
-  return participant.isLocal ? state.localScreenStream : participant.screenStream;
+  if (participant.isLocal) return state.localScreenStream;
+  return hasRemoteScreenVideo(participant) ? participant.screenStream : null;
 }
 
 function setViewedScreenPeerId(peerId: string): void {
