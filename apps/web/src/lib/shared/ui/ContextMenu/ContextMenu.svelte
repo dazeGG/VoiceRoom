@@ -167,7 +167,7 @@
   }
 
   @keyframes context-menu-enter {
-    from { opacity: 0; transform: translateY(-3px) scale(0.985); }
-    to { opacity: 1; transform: translateY(0) scale(1); }
+    from { opacity: 0; transform: scale(0.985); }
+    to { opacity: 1; transform: scale(1); }
   }
 </style>
