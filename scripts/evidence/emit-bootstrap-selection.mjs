@@ -323,8 +323,9 @@ export function buildAuthenticatedEarlyFailure({ pr, currentRun, f7, f9, candida
   return validateBootstrapFailure(failure);
 }
 
-export function selectCanonicalFailure(records, ordinal, terminalDevelopSha) {
+export function selectCanonicalFailure(records, ordinal, terminalDevelopSha, repository) {
   assert.ok(Array.isArray(records) && records.length > 0, "historical failure records are required");
+  assert.match(repository ?? "", /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/, "expected failure producer repository is required");
   const expected = Number(ordinal);
   const authenticated = records.map((record) => {
     exactKeys(record, ["failure", "artifactId", "artifactName", "artifactCreatedAt", "archiveDigest", "payloadDigest", "run"], "failure record");
@@ -335,7 +336,9 @@ export function selectCanonicalFailure(records, ordinal, terminalDevelopSha) {
     assert.ok(Number.isInteger(record.artifactId) && record.artifactId > 0);
     const artifactCreatedAt = instant(record.artifactCreatedAt, "failure artifact created_at"); assert.ok(instant(failure.createdAt, "failure createdAt") <= artifactCreatedAt, "failure artifact cannot predate its payload");
     assert.equal(record.run.id, failure.runId); assert.equal(record.run.run_attempt, failure.runAttempt);
-    assert.equal(record.run.head_sha, terminalDevelopSha); assert.equal(record.run.event, "push"); assert.equal(record.run.status, "completed"); assert.notEqual(record.run.conclusion, "success");
+    assert.equal(record.run.name, WORKFLOW_NAME); assert.equal(record.run.path, WORKFLOW_PATH);
+    assert.equal(record.run.repository?.full_name, repository, "failure producer repository mismatch");
+    assert.equal(record.run.head_sha, terminalDevelopSha); assert.equal(record.run.head_branch, "develop"); assert.equal(record.run.event, "push"); assert.equal(record.run.status, "completed"); assert.notEqual(record.run.conclusion, "success");
     assert.equal(record.artifactName, `g01-bootstrap-failure-${failure.attemptId}-run-${failure.runId}-attempt-${failure.runAttempt}-head-${terminalDevelopSha}-phase-${failure.failedPhase.toLowerCase()}`);
     return record;
   });

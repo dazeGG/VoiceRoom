@@ -131,6 +131,22 @@ jobs:
           gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" > pr.json
           gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" > current-run.json
           gh api "repos/$GITHUB_REPOSITORY/commits/$SOURCE_SHA" > head-commit.json
+          BASE_SHA="$(node -p 'JSON.parse(require("node:fs").readFileSync("pr.json")).base.sha')"
+          gh api "repos/$GITHUB_REPOSITORY/git/trees/$SOURCE_SHA?recursive=1" > head-tree.json
+          gh api "repos/$GITHUB_REPOSITORY/git/trees/$BASE_SHA?recursive=1" > base-tree.json
+          node -e 'const f=require("node:fs"),s=f.readFileSync("scripts/evidence/recover-landed-bootstrap.mjs","utf8"),m=s.match(/export const G01_WRITABLE = (\[[\s\S]*?\]);/);if(!m)throw Error("literal G01 manifest absent");for(const p of JSON.parse(m[1]))console.log(p)' > g01-head-blob-paths.txt
+          : > head-blobs.ndjson
+          while IFS= read -r path; do
+            blob_sha="$(PATH_NAME="$path" node -p 'JSON.parse(require("node:fs").readFileSync("head-tree.json")).tree.find(x=>x.path===process.env.PATH_NAME&&x.type==="blob")?.sha||""')"; test -n "$blob_sha"
+            gh api "repos/$GITHUB_REPOSITORY/git/blobs/$blob_sha" > head-blob.json
+            PATH_NAME="$path" BLOB_SHA="$blob_sha" node - <<'NODE' >> head-blobs.ndjson
+          const fs=require('node:fs'),c=require('node:crypto'),blob=JSON.parse(fs.readFileSync('head-blob.json')),content=String(blob.content).replace(/\s/g,''),bytes=Buffer.from(content,'base64');if(blob.sha!==process.env.BLOB_SHA)throw Error('blob SHA substitution');process.stdout.write(JSON.stringify({path:process.env.PATH_NAME,sha:blob.sha,sha256:'sha256:'+c.createHash('sha256').update(bytes).digest('hex'),size:bytes.length,encoding:'base64',content})+'\n');
+          NODE
+          done < g01-head-blob-paths.txt
+          node -e 'const f=require("node:fs"),s=f.readFileSync("head-blobs.ndjson","utf8").trim();f.writeFileSync("head-blobs.json",JSON.stringify(s?s.split("\n").map(JSON.parse):[]))'
+          attempt_id="$(node -p 'JSON.parse(require("node:fs").readFileSync("docs/releases/2.5.0/evidence/bootstrap-attempts.json")).preparedAuthority.attemptId')"
+          gh api "repos/$GITHUB_REPOSITORY/commits/$SOURCE_SHA/statuses" > publication-statuses.json
+          ATTEMPT_ID="$attempt_id" node -e 'const f=require("node:fs"),rows=JSON.parse(f.readFileSync("publication-statuses.json")),match=rows.filter(x=>x.context===`g01/PUBLICATION/${process.env.ATTEMPT_ID}`&&x.sha===process.env.SOURCE_SHA);if(match.length!==1)throw Error("unique immutable publication status absent");f.writeFileSync("publication-status.json",JSON.stringify(match[0]))'
           gh api --paginate "repos/$GITHUB_REPOSITORY/pulls?state=all&per_page=100" --slurp > pr-pages.json
           gh api --paginate "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?per_page=100" --slurp > run-pages.json
           gh api --paginate "repos/$GITHUB_REPOSITORY/actions/artifacts?per_page=100" --slurp > artifact-pages.json
@@ -150,9 +166,21 @@ jobs:
           NODE
             done
             BASE_SHA="$(node -p 'JSON.parse(require("node:fs").readFileSync("pr.json")).base.sha')" node --input-type=module - <<'NODE'
-          import fs from 'node:fs';import {selectCanonicalFailure} from './scripts/evidence/emit-bootstrap-selection.mjs';const input=JSON.parse(fs.readFileSync('prior-artifact-candidates.json')),records=fs.readFileSync('prior-records.ndjson','utf8').trim().split('\n').map(JSON.parse),winner=selectCanonicalFailure(records,input.ordinal,process.env.BASE_SHA),failure=winner.failure;fs.writeFileSync('prior-failure.json',JSON.stringify({evidenceId:failure.evidenceId,digest:winner.payloadDigest,terminalDevelopSha:failure.terminalDevelopSha,recoveryLineage:failure.recoveryLineage}));
+          import fs from 'node:fs';import {selectCanonicalFailure} from './scripts/evidence/emit-bootstrap-selection.mjs';const input=JSON.parse(fs.readFileSync('prior-artifact-candidates.json')),records=fs.readFileSync('prior-records.ndjson','utf8').trim().split('\n').map(JSON.parse),winner=selectCanonicalFailure(records,input.ordinal,process.env.BASE_SHA,process.env.GITHUB_REPOSITORY),failure=winner.failure,run=winner.run;fs.writeFileSync('prior-failure.json',JSON.stringify({evidenceId:failure.evidenceId,digest:winner.payloadDigest,artifactId:winner.artifactId,artifactName:winner.artifactName,artifactCreatedAt:winner.artifactCreatedAt,archiveDigest:winner.archiveDigest,runId:run.id,runAttempt:run.run_attempt,workflowName:run.name,workflowPath:run.path,repository:run.repository.full_name,event:run.event,headBranch:run.head_branch,headSha:run.head_sha,status:run.status,conclusion:run.conclusion,terminalDevelopSha:failure.terminalDevelopSha,payload:failure,recoveryLineage:failure.recoveryLineage}));
           NODE
           fi
+          node -e 'const f=require("node:fs"),a=JSON.parse(f.readFileSync("docs/releases/2.5.0/evidence/bootstrap-attempts.json")).preparedAuthority?.replayRecord?.abandonmentAuthorities??[];f.writeFileSync("prepared-abandonments.json",JSON.stringify(a))'
+          : > activation-abandonments.ndjson
+          abandonment_count="$(node -p 'JSON.parse(require("node:fs").readFileSync("prepared-abandonments.json")).length')"
+          if test "$abandonment_count" -gt 0; then
+            for index in $(seq 0 $((abandonment_count-1))); do
+              head_sha="$(INDEX="$index" node -p 'JSON.parse(require("node:fs").readFileSync("prepared-abandonments.json"))[Number(process.env.INDEX)].record.headSha')"; gh api "repos/$GITHUB_REPOSITORY/commits/$head_sha/statuses" > abandonment-statuses.json
+              INDEX="$index" node - <<'NODE' >> activation-abandonments.ndjson
+          const fs=require('node:fs'),expected=JSON.parse(fs.readFileSync('prepared-abandonments.json'))[Number(process.env.INDEX)],rows=JSON.parse(fs.readFileSync('abandonment-statuses.json')),status=rows.find(x=>x.id===expected.status.id);if(!status)throw Error('immutable abandonment status disappeared');process.stdout.write(JSON.stringify({record:expected.record,digest:expected.digest,status})+'\n');
+          NODE
+            done
+          fi
+          node -e 'const f=require("node:fs"),s=f.readFileSync("activation-abandonments.ndjson","utf8").trim();f.writeFileSync("activation-abandonments.json",JSON.stringify(s?s.split("\n").map(JSON.parse):[]))'
           printf '[]\n' > premerge-ancestor-authorities.json
           if [[ "$SOURCE_BRANCH" == feature/2.5.0-g01-postmerge-bootstrap-a* ]]; then
             node - <<'NODE'
@@ -180,7 +208,7 @@ jobs:
             node -e 'const f=require("node:fs"),s=f.readFileSync("premerge-ancestor-authorities.ndjson","utf8").trim();f.writeFileSync("premerge-ancestor-authorities.json",JSON.stringify(s?s.split("\n").map(JSON.parse):[]))'
           fi
           node --input-type=module - <<'NODE'
-          import fs from 'node:fs';import {buildActivationCapture,buildCandidateReport} from './scripts/evidence/bootstrap-export.mjs';const read=p=>JSON.parse(fs.readFileSync(p)),pr=read('pr.json'),currentRun=read('current-run.json'),headCommit=read('head-commit.json'),prPages=read('pr-pages.json'),runPages=read('run-pages.json'),artifactPages=read('artifact-pages.json'),report=buildCandidateReport(['bootstrap-attempts.json','bootstrap-landed-recoveries.json'].map(name=>({filename:name,bytes:fs.readFileSync(`docs/releases/2.5.0/evidence/${name}`)}))),preparedAuthority=report.registries.find(x=>x.name==='bootstrap-attempts.json')?.candidate.preparedAuthority;if(!preparedAuthority)throw Error('branch commit lacks embedded prepared authority');const authority={repository:process.env.GITHUB_REPOSITORY,pr,currentRun,headCommit,prPages,runPages,artifactPages,paginationComplete:true,observedAt:new Date().toISOString(),priorFailure:read('prior-failure.json'),preparedAuthority};authority.capture=buildActivationCapture(authority,report);fs.writeFileSync('activation-authority.json',JSON.stringify(authority));
+          import fs from 'node:fs';import {buildActivationCapture,buildCandidateReport} from './scripts/evidence/bootstrap-export.mjs';const read=p=>JSON.parse(fs.readFileSync(p)),pr=read('pr.json'),currentRun=read('current-run.json'),headCommit=read('head-commit.json'),headTree=read('head-tree.json'),baseTree=read('base-tree.json'),headBlobs=read('head-blobs.json'),publicationStatus=read('publication-status.json'),abandonmentAuthorities=read('activation-abandonments.json'),prPages=read('pr-pages.json'),runPages=read('run-pages.json'),artifactPages=read('artifact-pages.json'),report=buildCandidateReport(['bootstrap-attempts.json','bootstrap-landed-recoveries.json'].map(name=>({filename:name,bytes:fs.readFileSync(`docs/releases/2.5.0/evidence/${name}`)}))),preparedAuthority=report.registries.find(x=>x.name==='bootstrap-attempts.json')?.candidate.preparedAuthority;if(!preparedAuthority)throw Error('branch commit lacks embedded prepared authority');const authority={repository:process.env.GITHUB_REPOSITORY,pr,currentRun,headCommit,headTree,baseTree,headBlobs,publicationStatus,abandonmentAuthorities,prPages,runPages,artifactPages,paginationComplete:true,observedAt:new Date().toISOString(),priorFailure:read('prior-failure.json'),preparedAuthority};authority.capture=buildActivationCapture(authority,report);fs.writeFileSync('activation-authority.json',JSON.stringify(authority));
           NODE
           node scripts/evidence/bootstrap-export.mjs --activate-authority activation-authority.json --plan docs/RELEASE_2.5.0_PLAN.md --spec docs/RELEASE_2.5.0_TEST_SPEC.md docs/releases/2.5.0/evidence/bootstrap-attempts.json docs/releases/2.5.0/evidence/bootstrap-landed-recoveries.json > candidate-registry-report.g01.json
           created_at="$(node -p 'JSON.parse(require("node:fs").readFileSync("activation-authority.json")).observedAt')"

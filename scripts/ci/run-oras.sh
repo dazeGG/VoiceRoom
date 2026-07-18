@@ -3,8 +3,8 @@ set -euo pipefail
 
 host="$(uname -s)-$(uname -m)"
 case "$host" in
-Linux-x86_64) platform=linux_amd64; archive=oras_1.3.3_linux_amd64.tar.gz; sha=9ce999f8d2de03fc03968b29d743077a58783e545e5eaa53917ca177352d0e59;;
-Darwin-arm64) platform=darwin_arm64; archive=oras_1.3.3_darwin_arm64.tar.gz; sha=f33fc12753c54172b0d0d19eaa0318d3f90fe9b094d96e8b259c881713c92e1c;;
+Linux-x86_64) platform=linux_amd64; archive=oras_1.3.3_linux_amd64.tar.gz; sha=9ce999f8d2de03fc03968b29d743077a58783e545e5eaa53917ca177352d0e59; sig_sha=4b101042ee0b95b893de6f0ce6a4ec6ddfbff98df1ed23389de6c4e1ec1c1baf;;
+Darwin-arm64) platform=darwin_arm64; archive=oras_1.3.3_darwin_arm64.tar.gz; sha=f33fc12753c54172b0d0d19eaa0318d3f90fe9b094d96e8b259c881713c92e1c; sig_sha=06e9e1d88b4e7c1e972268a21bfc454dbce9683bd14bd080c078d6684c6a7e31;;
 *) echo "unsupported pinned ORAS platform" >&2; exit 1;;
 esac
 
@@ -35,13 +35,7 @@ sig="$cache/$archive.asc"; sums="$cache/oras_1.3.3_checksums.txt"; keys="$cache/
 [[ -f "$sig" ]] || download "https://github.com/oras-project/oras/releases/download/v1.3.3/$archive.asc" "$sig"
 [[ -f "$sums" ]] || download "https://github.com/oras-project/oras/releases/download/v1.3.3/oras_1.3.3_checksums.txt" "$sums"
 [[ -f "$keys" ]] || download "https://raw.githubusercontent.com/oras-project/oras/210747c29c1d38732b3194878dfd8b5a6b9ad7eb/KEYS" "$keys"
-if [[ "$host" == Linux-* ]]; then
-  hash_ok 4b101042ee0b95b893de6f0ce6a4ec6ddfbff98df1ed23389de6c4e1ec1c1baf "$sig" || { rm -f "$sig"; echo "ORAS signature digest mismatch" >&2; exit 1; }
-else
-  # The detached signature is platform-specific; its authenticity is established
-  # by the immutable signer fingerprint below and the archive entry in the locked sums.
-  [[ -s "$sig" ]] || { rm -f "$sig"; echo "ORAS signature missing" >&2; exit 1; }
-fi
+  hash_ok "$sig_sha" "$sig" || { rm -f "$sig"; echo "ORAS signature digest mismatch" >&2; exit 1; }
   hash_ok 5cf7ff102a941bdb35e8eabfc8cbe937c5387d20e7a2ee75dc4be90410e462cd "$sums" || { rm -f "$sums"; echo "ORAS checksums digest mismatch" >&2; exit 1; }
   hash_ok e901b09b9c6dbe6e068b4ca8dbd93dc761acbccc1439c032226981f0b476fa70 "$keys" || { rm -f "$keys"; echo "ORAS KEYS digest mismatch" >&2; exit 1; }
   grep -Fx "$sha  $archive" "$sums" >/dev/null
