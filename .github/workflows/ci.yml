@@ -105,7 +105,6 @@ jobs:
       REVIEWER_CODE_ID: ${{ vars.OMX_G01_CODE_REVIEWER_ID }}
       REVIEWER_ARCHITECT_ID: ${{ vars.OMX_G01_ARCHITECT_ID }}
       REVIEWER_VERIFIER_ID: ${{ vars.OMX_G01_VERIFIER_ID }}
-      PREPARED_AUTHORITY_JSON: ${{ vars.OMX_G01_PREPARED_AUTHORITY_JSON }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -129,8 +128,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test -n "$PREPARED_AUTHORITY_JSON"
-          printf '%s\n' "$PREPARED_AUTHORITY_JSON" > prepared-authority.json
           gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" > pr.json
           gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" > current-run.json
           gh api "repos/$GITHUB_REPOSITORY/commits/$SOURCE_SHA" > head-commit.json
@@ -183,7 +180,7 @@ jobs:
             node -e 'const f=require("node:fs"),s=f.readFileSync("premerge-ancestor-authorities.ndjson","utf8").trim();f.writeFileSync("premerge-ancestor-authorities.json",JSON.stringify(s?s.split("\n").map(JSON.parse):[]))'
           fi
           node --input-type=module - <<'NODE'
-          import fs from 'node:fs';import {buildActivationCapture,buildCandidateReport} from './scripts/evidence/bootstrap-export.mjs';const read=p=>JSON.parse(fs.readFileSync(p)),pr=read('pr.json'),currentRun=read('current-run.json'),headCommit=read('head-commit.json'),prPages=read('pr-pages.json'),runPages=read('run-pages.json'),artifactPages=read('artifact-pages.json');const authority={repository:process.env.GITHUB_REPOSITORY,pr,currentRun,headCommit,prPages,runPages,artifactPages,paginationComplete:true,observedAt:new Date().toISOString(),priorFailure:read('prior-failure.json'),preparedAuthority:read('prepared-authority.json')};const report=buildCandidateReport(['bootstrap-attempts.json','bootstrap-landed-recoveries.json'].map(name=>({filename:name,bytes:fs.readFileSync(`docs/releases/2.5.0/evidence/${name}`)})));authority.capture=buildActivationCapture(authority,report);fs.writeFileSync('activation-authority.json',JSON.stringify(authority));
+          import fs from 'node:fs';import {buildActivationCapture,buildCandidateReport} from './scripts/evidence/bootstrap-export.mjs';const read=p=>JSON.parse(fs.readFileSync(p)),pr=read('pr.json'),currentRun=read('current-run.json'),headCommit=read('head-commit.json'),prPages=read('pr-pages.json'),runPages=read('run-pages.json'),artifactPages=read('artifact-pages.json'),report=buildCandidateReport(['bootstrap-attempts.json','bootstrap-landed-recoveries.json'].map(name=>({filename:name,bytes:fs.readFileSync(`docs/releases/2.5.0/evidence/${name}`)}))),preparedAuthority=report.registries.find(x=>x.name==='bootstrap-attempts.json')?.candidate.preparedAuthority;if(!preparedAuthority)throw Error('branch commit lacks embedded prepared authority');const authority={repository:process.env.GITHUB_REPOSITORY,pr,currentRun,headCommit,prPages,runPages,artifactPages,paginationComplete:true,observedAt:new Date().toISOString(),priorFailure:read('prior-failure.json'),preparedAuthority};authority.capture=buildActivationCapture(authority,report);fs.writeFileSync('activation-authority.json',JSON.stringify(authority));
           NODE
           node scripts/evidence/bootstrap-export.mjs --activate-authority activation-authority.json --plan docs/RELEASE_2.5.0_PLAN.md --spec docs/RELEASE_2.5.0_TEST_SPEC.md docs/releases/2.5.0/evidence/bootstrap-attempts.json docs/releases/2.5.0/evidence/bootstrap-landed-recoveries.json > candidate-registry-report.g01.json
           created_at="$(node -p 'JSON.parse(require("node:fs").readFileSync("activation-authority.json")).observedAt')"
@@ -203,7 +200,6 @@ jobs:
             ci-bundle.*.json
             candidate-registry-report.g01.json
             activation-authority.json
-            prepared-authority.json
             premerge-ancestor-authorities.json
           if-no-files-found: error
           retention-days: 90
@@ -478,6 +474,76 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: g01-bootstrap-failure-${{ env.ATTEMPT_ID }}-run-${{ github.run_id }}-attempt-${{ github.run_attempt }}-head-${{ github.sha }}-phase-selection
+          path: bootstrap-failure.*.json
+          if-no-files-found: error
+          retention-days: 90
+
+
+  bootstrap-f11-early-recorder:
+    name: G01 inline early F11 failure recorder
+    needs: [check, test]
+    if: always() && github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: read
+    outputs:
+      recorded: ${{ steps.record.outputs.recorded }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      CHECK_RESULT: ${{ needs.check.result }}
+      TEST_RESULT: ${{ needs.test.result }}
+    steps:
+      - id: record
+        name: Resolve G01 inline and record dependency failure before checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo 'recorded=false' >> "$GITHUB_OUTPUT"
+          gh api -H 'Accept: application/vnd.github+json' "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/pulls" > early-prs.json
+          gh api --paginate "repos/$GITHUB_REPOSITORY/actions/artifacts?per_page=100" --slurp > early-artifacts.json
+          node - <<'NODE'
+          const fs=require('node:fs'),prs=JSON.parse(fs.readFileSync('early-prs.json')).filter(p=>p.merged_at&&p.merge_commit_sha===process.env.GITHUB_SHA&&p.base?.ref==='develop'&&p.base?.repo?.full_name===process.env.GITHUB_REPOSITORY&&p.head?.repo?.full_name===process.env.GITHUB_REPOSITORY&&/^feature\/2\.5\.0-g01-(canonical-evidence-bootstrap|postmerge-bootstrap-a[0-9]{2,})$/.test(p.head?.ref));if(prs.length>1)throw Error('ambiguous G01 merge');if(!prs.length||process.env.CHECK_RESULT==='success'&&process.env.TEST_RESULT==='success')process.exit(0);const p=prs[0],all=JSON.parse(fs.readFileSync('early-artifacts.json')).flatMap(x=>x.artifacts),re=new RegExp(`^g01-candidate-(g01-(?:recovery-)?a[0-9]{2,})-run-([1-9][0-9]*)-attempt-([1-9][0-9]*)-head-${p.head.sha}$`),ids=[...new Set(all.filter(a=>!a.expired&&a.workflow_run?.id&&re.test(a.name)).map(a=>a.name.match(re)[1]))];if(ids.length!==1)throw Error('inline F11 recorder cannot authenticate one attempt');const attemptId=ids[0],o={schemaVersion:1,release:'2.5.0',status:'G01_LANDED_UNSEALED',attemptId,evidenceId:`bootstrap-failure.${attemptId}.json`,failedPhase:'F11',baseSha:p.base.sha,parentSha:p.base.sha,terminalDevelopSha:process.env.GITHUB_SHA,headSha:p.head.sha,runId:Number(process.env.GITHUB_RUN_ID),runAttempt:Number(process.env.GITHUB_RUN_ATTEMPT),createdAt:new Date().toISOString(),reason:`inline early recorder: check=${process.env.CHECK_RESULT}, test=${process.env.TEST_RESULT}`,recoveryLineage:[]};fs.writeFileSync(o.evidenceId,JSON.stringify(o)+'\n');fs.appendFileSync(process.env.GITHUB_OUTPUT,'recorded=true\n');fs.appendFileSync(process.env.GITHUB_ENV,`G01_EARLY_ATTEMPT_ID=${attemptId}\n`);
+          NODE
+      - name: Persist inline early F11 failure
+        if: steps.record.outputs.recorded == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: g01-bootstrap-failure-${{ env.G01_EARLY_ATTEMPT_ID }}-run-${{ github.run_id }}-attempt-${{ github.run_attempt }}-head-${{ github.sha }}-phase-f11
+          path: bootstrap-failure.*.json
+          if-no-files-found: error
+          retention-days: 90
+
+  bootstrap-selection-early-recorder:
+    name: G01 inline always-run selection failure recorder
+    needs: [check, test, bootstrap-postmerge, bootstrap-f11-early-recorder]
+    if: always() && github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      POSTMERGE_RESULT: ${{ needs.bootstrap-postmerge.result }}
+      F11_RECORDED: ${{ needs.bootstrap-f11-early-recorder.outputs.recorded }}
+    steps:
+      - id: record
+        name: Independently resolve G01 and record unreachable selection
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api -H 'Accept: application/vnd.github+json' "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/pulls" > selection-early-prs.json
+          gh api --paginate "repos/$GITHUB_REPOSITORY/actions/artifacts?per_page=100" --slurp > selection-early-artifacts.json
+          node - <<'NODE'
+          const fs=require('node:fs'),prs=JSON.parse(fs.readFileSync('selection-early-prs.json')).filter(p=>p.merged_at&&p.merge_commit_sha===process.env.GITHUB_SHA&&p.base?.ref==='develop'&&p.base?.repo?.full_name===process.env.GITHUB_REPOSITORY&&p.head?.repo?.full_name===process.env.GITHUB_REPOSITORY&&/^feature\/2\.5\.0-g01-(canonical-evidence-bootstrap|postmerge-bootstrap-a[0-9]{2,})$/.test(p.head?.ref));if(prs.length>1)throw Error('ambiguous G01 merge');if(!prs.length||process.env.POSTMERGE_RESULT==='success'||process.env.F11_RECORDED==='true')process.exit(0);const p=prs[0],all=JSON.parse(fs.readFileSync('selection-early-artifacts.json')).flatMap(x=>x.artifacts),re=new RegExp(`^g01-candidate-(g01-(?:recovery-)?a[0-9]{2,})-run-([1-9][0-9]*)-attempt-([1-9][0-9]*)-head-${p.head.sha}$`),ids=[...new Set(all.filter(a=>!a.expired&&a.workflow_run?.id&&re.test(a.name)).map(a=>a.name.match(re)[1]))];if(ids.length!==1)throw Error('inline selection recorder cannot authenticate one attempt');const attemptId=ids[0],o={schemaVersion:1,release:'2.5.0',status:'G01_LANDED_UNSEALED',attemptId,evidenceId:`bootstrap-failure.${attemptId}.json`,failedPhase:'SELECTION',baseSha:p.base.sha,parentSha:p.base.sha,terminalDevelopSha:process.env.GITHUB_SHA,headSha:p.head.sha,runId:Number(process.env.GITHUB_RUN_ID),runAttempt:Number(process.env.GITHUB_RUN_ATTEMPT),createdAt:new Date().toISOString(),reason:`inline always-run selection recorder: postmerge=${process.env.POSTMERGE_RESULT}`,recoveryLineage:[]};fs.writeFileSync(o.evidenceId,JSON.stringify(o)+'\n');fs.appendFileSync(process.env.GITHUB_ENV,`G01_EARLY_SELECTION_ATTEMPT_ID=${attemptId}\n`);
+          NODE
+      - name: Persist inline unreachable-selection failure
+        if: hashFiles('bootstrap-failure.*.json') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: g01-bootstrap-failure-${{ env.G01_EARLY_SELECTION_ATTEMPT_ID }}-run-${{ github.run_id }}-attempt-${{ github.run_attempt }}-head-${{ github.sha }}-phase-selection
           path: bootstrap-failure.*.json
           if-no-files-found: error
           retention-days: 90

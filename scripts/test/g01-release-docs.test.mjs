@@ -8,7 +8,7 @@ import { execFileSync } from "node:child_process";
 import Ajv2020 from "ajv/dist/2020.js";
 import addFormats from "ajv-formats";
 import { artifactName, buildF9Envelope, buildF11Envelope, buildSelection, envelopePayloadDigest, selectCanonicalFailure, validateFallbackCandidatePair } from "../evidence/emit-bootstrap-selection.mjs";
-import { activateCandidateReport, buildActivationCapture, buildCandidateReport, buildF7Envelope, prepareBootstrapAuthority, reconstructNextOrdinal, validateRegistry } from "../evidence/bootstrap-export.mjs";
+import { activateCandidateReport, buildActivationCapture, buildCandidateReport, buildF7Envelope, prepareAndCreateBootstrapBranch, prepareBootstrapAuthority, reconstructNextOrdinal, validateRegistry } from "../evidence/bootstrap-export.mjs";
 
 const read = (file) => fs.readFileSync(file, "utf8");
 const json = (file) => JSON.parse(read(file));
@@ -131,6 +131,39 @@ test("pre-branch preparation reconstructs without consuming ordinals and fails c
   const conflict = structuredClone(history); const other = structuredClone(abandoned); other.id = 78; other.number = 78; other.node_id = "PR78"; other.head.sha = "6".repeat(40); conflict.prPages[0].push(other);
   const conflicted = prepareBootstrapAuthority(tracked, conflict); assert.equal(conflicted.status, "WAITING_CONFLICT"); assert.deepEqual(conflicted.conflicts, [7]);
   assert.throws(() => prepareBootstrapAuthority(tracked, { ...empty, paginationComplete: false }), /complete pagination/);
+});
+
+test("live pre-branch orchestration cleans provisional refs, rescans complete history, embeds authority and atomically creates one canonical ref", async () => {
+  const registries = ["bootstrap-attempts.json", "bootstrap-landed-recoveries.json"].map((name) => ({ filename: `docs/releases/2.5.0/evidence/${name}`, bytes: fs.readFileSync(`docs/releases/2.5.0/evidence/${name}`) }));
+  const calls = [], develop = "9".repeat(40), treeSha = "8".repeat(40), commitSha = "7".repeat(40);
+  let refs = [{ ref: `refs/heads/${BRANCH}`, object: { sha: "6".repeat(40) } }];
+  const api = {
+    async get(endpoint) { calls.push(["get", endpoint]); if (endpoint.endsWith("git/ref/heads/develop")) return { ref: "refs/heads/develop", object: { sha: develop } }; if (endpoint.includes("matching-refs")) return structuredClone(refs); if (endpoint.includes("git/commits/")) return { sha: develop, tree: { sha: "5".repeat(40) } }; throw Error(`unexpected GET ${endpoint}`); },
+    async paginate(endpoint, variables) { calls.push(["paginate", endpoint, variables]); if (endpoint.endsWith("/pulls")) return [[]]; if (endpoint.includes("/runs")) return [{ workflow_runs: [] }]; return [{ artifacts: [] }]; },
+    async deleteRef(ref) { calls.push(["deleteRef", ref]); refs = []; },
+    async createBlob(body) { calls.push(["createBlob", body]); return { sha: crypto.createHash("sha1").update(body.content).digest("hex") }; },
+    async createTree(body) { calls.push(["createTree", body]); return { sha: treeSha }; },
+    async createCommit(body) { calls.push(["createCommit", body]); return { sha: commitSha }; },
+    async createRef(body) { calls.push(["createRef", body]); return { ref: body.ref, object: { sha: body.sha } }; },
+  };
+  const result = await prepareAndCreateBootstrapBranch({ api, repository: REPOSITORY, registries, planBytes: Buffer.from("plan"), specBytes: Buffer.from("spec"), observedAt: () => "2026-07-18T00:00:00.000Z" });
+  assert.equal(result.prepared.attemptId, "g01-a01"); assert.equal(result.registries.attempts.state, "G01_PREMERGE_ACTIVE"); assert.equal(result.registries.attempts.currentAttempt, "g01-a01"); validateRegistry(result.registries.attempts, "bootstrap-attempts.json"); validateRegistry(result.registries.recoveries, "bootstrap-landed-recoveries.json");
+  assert.equal(result.registries.attempts.preparedAuthority.authorityDigest, result.prepared.authorityDigest);
+  assert.deepEqual(calls.filter(([name]) => name === "deleteRef").map(([, ref]) => ref), [`heads/${BRANCH}`]);
+  assert.equal(calls.filter(([name]) => name === "createRef").length, 1); assert.deepEqual(calls.find(([name]) => name === "createRef")[1], { ref: `refs/heads/${BRANCH}`, sha: commitSha });
+  const tree = calls.find(([name]) => name === "createTree")[1]; assert.ok(tree.tree.some(({ path }) => path.endsWith("bootstrap-attempts.json"))); assert.ok(tree.tree.some(({ path }) => path.endsWith("bootstrap-landed-recoveries.json")));
+  assert.ok(calls.filter(([name]) => name === "paginate").length >= 6, "cleanup must force a complete rescan before creation");
+});
+
+test("live pre-branch orchestration rejects consumed direct history and ref-create races without publishing a consumed ordinal", async () => {
+  const registries = ["bootstrap-attempts.json", "bootstrap-landed-recoveries.json"].map((name) => ({ filename: `docs/releases/2.5.0/evidence/${name}`, bytes: fs.readFileSync(`docs/releases/2.5.0/evidence/${name}`) }));
+  const makeApi = ({ consumed = false, failCreate = false } = {}) => { const calls = []; return { calls,
+    async get(endpoint) { if (endpoint.endsWith("git/ref/heads/develop")) return { object: { sha: "9".repeat(40) } }; if (endpoint.includes("matching-refs")) return consumed ? [{ ref: `refs/heads/${BRANCH}`, object: { sha: "6".repeat(40) } }] : []; return { tree: { sha: "5".repeat(40) } }; },
+    async paginate(endpoint) { if (endpoint.endsWith("/pulls")) return [[]]; if (endpoint.includes("/runs")) return [{ workflow_runs: [] }]; return [{ artifacts: consumed ? [{ id: 1, name: `g01-selection-a01-run-1-attempt-1-head-${"a".repeat(40)}`, expired: false }] : [] }]; },
+    async deleteRef(ref) { calls.push(["deleteRef", ref]); }, async createBlob() { return { sha: "4".repeat(40) }; }, async createTree() { return { sha: "3".repeat(40) }; }, async createCommit() { return { sha: "2".repeat(40) }; }, async createRef(body) { calls.push(["createRef", body]); if (failCreate) throw Error("422 reference already exists"); return body; },
+  }; };
+  const consumed = makeApi({ consumed: true }); await assert.rejects(() => prepareAndCreateBootstrapBranch({ api: consumed, repository: REPOSITORY, registries, planBytes: Buffer.from("p"), specBytes: Buffer.from("s"), observedAt: "2026-07-18T00:00:00.000Z" }), /prepared authority|WAITING|READY/); assert.equal(consumed.calls.some(([name]) => name === "createRef"), false);
+  const raced = makeApi({ failCreate: true }); await assert.rejects(() => prepareAndCreateBootstrapBranch({ api: raced, repository: REPOSITORY, registries, planBytes: Buffer.from("p"), specBytes: Buffer.from("s"), observedAt: "2026-07-18T00:00:00.000Z" }), /ordinal was not consumed/); assert.equal(raced.calls.filter(([name]) => name === "createRef").length, 1);
 });
 
 test("pre-branch preparation CLI emits compact JSON with one real LF", () => {
@@ -292,7 +325,8 @@ test("selection CLI emits compact JSON with one real LF", () => {
 test("workflow has reachable bounded premerge F9 and automatic merged-commit F11/selection with authenticated provenance", () => {
   const workflow = read(".github/workflows/ci.yml"); const block = workflow.slice(workflow.indexOf("  bootstrap-plan:"), workflow.indexOf("\n  bootstrap-postmerge:"));
   assert.match(block, /github\.event_name == 'pull_request'/); assert.match(block, /head\.repo\.full_name == github\.repository/); assert.match(block, /environment: g01-bootstrap-approval-authority/); assert.match(block, /timeout-minutes: 45/); assert.match(block, /sleep 20/); assert.match(block, /--source-branch "\$SOURCE_BRANCH"/); assert.match(block, /OMX_G01_CODE_REVIEWER_ID/);
-  for (const token of ["activation-authority.json", "prepared-authority.json", "OMX_G01_PREPARED_AUTHORITY_JSON", "prior-records.ndjson", "selectCanonicalFailure", "recoveryLineage"]) assert.ok(block.includes(token), `missing activation proof: ${token}`);
+  for (const token of ["activation-authority.json", "candidate.preparedAuthority", "prior-records.ndjson", "selectCanonicalFailure", "recoveryLineage"]) assert.ok(block.includes(token), `missing activation proof: ${token}`);
+  assert.ok(read("scripts/evidence/bootstrap-export.mjs").includes("--prepare-live"), "live preparation CLI must exist"); assert.doesNotMatch(workflow, /OMX_G01_PREPARED_AUTHORITY_JSON|PREPARED_AUTHORITY_JSON/, "mutable prepared-authority transport is forbidden");
   assert.match(block, /path:\s*\|[\s\S]*activation-authority\.json/, "F7 artifact must persist replayable activation authority");
   const post = workflow.slice(workflow.indexOf("  bootstrap-postmerge:"), workflow.indexOf("\n  deploy:"));
   for (const token of ["github.ref == 'refs/heads/develop'", "commits/$GITHUB_SHA/pulls", "merge_commit_sha===process.env.GITHUB_SHA", "actions/runs/$GITHUB_RUN_ID/jobs", "Lint, typecheck & build", "Tests", "workflowPath", "download-digest", "g01-merge-", "bootstrap-selection:", "bootstrap-failure.", "github.run_attempt", "bootstrap-selection.$ATTEMPT_ID.json", "artifact-digest", "selection_sha256", "recoveryLineage", "always() &&", "fallback-prs.json", "fallback-artifacts.json"]) assert.ok(post.includes(token), `missing lifecycle proof: ${token}`);
@@ -304,6 +338,19 @@ test("workflow has reachable bounded premerge F9 and automatic merged-commit F11
   assert.doesNotMatch(workflow, /workflow_dispatch|bootstrap_phase|bootstrap_f7_artifact_id|find \. -maxdepth 1 -name/);
   assert.doesNotMatch(post, /ghcr\.io|docker push|packages:\s*write/);
   const deploy = workflow.slice(workflow.indexOf("  deploy:")); assert.match(deploy, /needs: \[check, test\]/);
+});
+
+test("inline early recorders are checkout-free and executable across failed/skipped dependency states", () => {
+  const parsed = JSON.parse(execFileSync("python3", ["-c", "import json,yaml; print(json.dumps(yaml.safe_load(open('.github/workflows/ci.yml'))))"]).toString());
+  const f11 = parsed.jobs["bootstrap-f11-early-recorder"], selection = parsed.jobs["bootstrap-selection-early-recorder"];
+  assert.deepEqual(f11.needs, ["check", "test"]); assert.deepEqual(selection.needs, ["check", "test", "bootstrap-postmerge", "bootstrap-f11-early-recorder"]);
+  for (const job of [f11, selection]) { assert.match(job.if, /^always\(\)/); assert.equal(job.steps.some((step) => String(step.uses ?? "").startsWith("actions/checkout") || String(step.uses ?? "").startsWith("actions/setup-node")), false); assert.ok(job.steps.some((step) => step.uses === "actions/upload-artifact@v4")); }
+  const route = ({ check, test, postmerge }) => { const f11Recorded = check !== "success" || test !== "success"; const selectionRecorded = postmerge !== "success" && !f11Recorded; return { f11Recorded, selectionRecorded }; };
+  assert.deepEqual(route({ check: "failure", test: "success", postmerge: "skipped" }), { f11Recorded: true, selectionRecorded: false });
+  assert.deepEqual(route({ check: "success", test: "cancelled", postmerge: "skipped" }), { f11Recorded: true, selectionRecorded: false });
+  assert.deepEqual(route({ check: "success", test: "success", postmerge: "failure" }), { f11Recorded: false, selectionRecorded: true });
+  assert.deepEqual(route({ check: "success", test: "success", postmerge: "skipped" }), { f11Recorded: false, selectionRecorded: true });
+  assert.deepEqual(route({ check: "success", test: "success", postmerge: "success" }), { f11Recorded: false, selectionRecorded: false });
 });
 
 test("authority bytes match approved handoff digest", () => {
