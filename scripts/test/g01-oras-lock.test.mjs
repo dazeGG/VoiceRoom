@@ -23,9 +23,11 @@ test("ORAS bootstrap revalidates archive signature, checksums and immutable keys
   const wrapper = source("scripts/ci/run-oras.sh");
   assert.equal(lock.assets.linux_amd64.sha256, "9ce999f8d2de03fc03968b29d743077a58783e545e5eaa53917ca177352d0e59");
   assert.equal(lock.assets.linux_amd64.signatureSha256, "4b101042ee0b95b893de6f0ce6a4ec6ddfbff98df1ed23389de6c4e1ec1c1baf");
+  assert.equal(lock.assets.darwin_arm64.signatureSha256, "06e9e1d88b4e7c1e972268a21bfc454dbce9683bd14bd080c078d6684c6a7e31");
   assert.equal(lock.sourceCommit, "210747c29c1d38732b3194878dfd8b5a6b9ad7eb");
   assert.equal(lock.signerFingerprint, "2DA461D13B0C27845EDFA77FE462A3894CBAAA47");
-  for (const value of ["hash_ok \"$sha\" \"$file\"", "sig_sha=4b101042ee0b95b893de6f0ce6a4ec6ddfbff98df1ed23389de6c4e1ec1c1baf", "sig_sha=06e9e1d88b4e7c1e972268a21bfc454dbce9683bd14bd080c078d6684c6a7e31", "hash_ok \"$sig_sha\" \"$sig\"", "VALIDSIG 2DA461D13B0C27845EDFA77FE462A3894CBAAA47", "mktemp -d", "candidate=\"$extract/oras\"", "rm -f \"$bin\"", "mv \"$candidate\" \"$bin\""]) assert.ok(wrapper.includes(value), value);
+  for (const value of ["config/tool-locks/oras-v1.3.3.json", "asset.signatureSha256", "lock.downloadBase", "hash_ok \"$sha\" \"$file\"", "hash_ok \"$sig_sha\" \"$sig\"", "VALIDSIG $signer_fingerprint", "mktemp -d", "candidate=\"$extract/oras\"", "rm -f \"$bin\"", "mv \"$candidate\" \"$bin\""]) assert.ok(wrapper.includes(value), value);
+  for (const digest of [lock.assets.linux_amd64.signatureSha256, lock.assets.darwin_arm64.signatureSha256]) assert.equal(wrapper.includes(`sig_sha=${digest}`), false);
   assert.doesNotMatch(wrapper, /\[\[ -s \"\$sig\" \]\]/);
   assert.doesNotMatch(wrapper, /\$bin" version/);
   assert.doesNotMatch(wrapper, /latest|npx |npm |brew /);

@@ -3,12 +3,34 @@ set -euo pipefail
 
 host="$(uname -s)-$(uname -m)"
 case "$host" in
-Linux-x86_64) platform=linux_amd64; archive=oras_1.3.3_linux_amd64.tar.gz; sha=9ce999f8d2de03fc03968b29d743077a58783e545e5eaa53917ca177352d0e59; sig_sha=4b101042ee0b95b893de6f0ce6a4ec6ddfbff98df1ed23389de6c4e1ec1c1baf;;
-Darwin-arm64) platform=darwin_arm64; archive=oras_1.3.3_darwin_arm64.tar.gz; sha=f33fc12753c54172b0d0d19eaa0318d3f90fe9b094d96e8b259c881713c92e1c; sig_sha=06e9e1d88b4e7c1e972268a21bfc454dbce9683bd14bd080c078d6684c6a7e31;;
+Linux-x86_64) platform=linux_amd64;;
+Darwin-arm64) platform=darwin_arm64;;
 *) echo "unsupported pinned ORAS platform" >&2; exit 1;;
 esac
 
-cache="${XDG_CACHE_HOME:-$HOME/.cache}/voiceroom-tools/oras-v1.3.3/$platform"
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+lock_file="$repo_root/config/tool-locks/oras-v1.3.3.json"
+IFS=$'\t' read -r owner repository tag version tag_object source_commit signer_fingerprint archive sha sig_sha sums_name sums_sha keys_url keys_sha download_base < <(
+  node -e '
+    const fs = require("node:fs");
+    const lock = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+    const asset = lock.assets?.[process.argv[2]];
+    const hex = /^[0-9a-f]{64}$/;
+    const sha = /^[0-9a-f]{40}$/;
+    if (!asset || !hex.test(asset.sha256) || !hex.test(asset.signatureSha256) ||
+        !hex.test(lock.checksums?.sha256) || !hex.test(lock.keys?.sha256) ||
+        !sha.test(lock.tagObject) || !sha.test(lock.sourceCommit) ||
+        !/^[0-9A-F]{40}$/.test(lock.signerFingerprint)) process.exit(1);
+    const values = [lock.owner, lock.repository, lock.tag, lock.version, lock.tagObject,
+      lock.sourceCommit, lock.signerFingerprint, asset.name, asset.sha256,
+      asset.signatureSha256, lock.checksums.name, lock.checksums.sha256,
+      lock.keys.url, lock.keys.sha256, lock.downloadBase];
+    if (values.some((value) => typeof value !== "string" || !value || /[\t\r\n]/.test(value))) process.exit(1);
+    process.stdout.write(values.join("\t") + "\n");
+  ' "$lock_file" "$platform"
+)
+
+cache="${XDG_CACHE_HOME:-$HOME/.cache}/voiceroom-tools/oras-v${version}/$platform"
 mkdir -p "$cache"
 file="$cache/$archive"
 bin="$cache/oras"
@@ -27,25 +49,25 @@ download() {
 
 if ! hash_ok "$sha" "$file"; then
   rm -f "$file" "$bin"
-  download "https://github.com/oras-project/oras/releases/download/v1.3.3/$archive" "$file"
+  download "$download_base/$archive" "$file"
   hash_ok "$sha" "$file" || { rm -f "$file"; echo "ORAS archive digest mismatch" >&2; exit 1; }
 fi
 
-sig="$cache/$archive.asc"; sums="$cache/oras_1.3.3_checksums.txt"; keys="$cache/KEYS"
-[[ -f "$sig" ]] || download "https://github.com/oras-project/oras/releases/download/v1.3.3/$archive.asc" "$sig"
-[[ -f "$sums" ]] || download "https://github.com/oras-project/oras/releases/download/v1.3.3/oras_1.3.3_checksums.txt" "$sums"
-[[ -f "$keys" ]] || download "https://raw.githubusercontent.com/oras-project/oras/210747c29c1d38732b3194878dfd8b5a6b9ad7eb/KEYS" "$keys"
+sig="$cache/$archive.asc"; sums="$cache/$sums_name"; keys="$cache/KEYS"
+[[ -f "$sig" ]] || download "$download_base/$archive.asc" "$sig"
+[[ -f "$sums" ]] || download "$download_base/$sums_name" "$sums"
+[[ -f "$keys" ]] || download "$keys_url" "$keys"
   hash_ok "$sig_sha" "$sig" || { rm -f "$sig"; echo "ORAS signature digest mismatch" >&2; exit 1; }
-  hash_ok 5cf7ff102a941bdb35e8eabfc8cbe937c5387d20e7a2ee75dc4be90410e462cd "$sums" || { rm -f "$sums"; echo "ORAS checksums digest mismatch" >&2; exit 1; }
-  hash_ok e901b09b9c6dbe6e068b4ca8dbd93dc761acbccc1439c032226981f0b476fa70 "$keys" || { rm -f "$keys"; echo "ORAS KEYS digest mismatch" >&2; exit 1; }
+  hash_ok "$sums_sha" "$sums" || { rm -f "$sums"; echo "ORAS checksums digest mismatch" >&2; exit 1; }
+  hash_ok "$keys_sha" "$keys" || { rm -f "$keys"; echo "ORAS KEYS digest mismatch" >&2; exit 1; }
   grep -Fx "$sha  $archive" "$sums" >/dev/null
   gnupg="$(mktemp -d "$cache/gnupg.XXXXXX")"; chmod 700 "$gnupg"
   trap 'rm -rf "$gnupg"' EXIT
   gpg --batch --homedir "$gnupg" --import "$keys" >/dev/null 2>&1
-  gpg --batch --homedir "$gnupg" --status-fd 1 --verify "$sig" "$file" 2>/dev/null | grep -F 'VALIDSIG 2DA461D13B0C27845EDFA77FE462A3894CBAAA47 ' >/dev/null
+  gpg --batch --homedir "$gnupg" --status-fd 1 --verify "$sig" "$file" 2>/dev/null | grep -F "VALIDSIG $signer_fingerprint " >/dev/null
   rm -rf "$gnupg"; trap - EXIT
-curl --proto '=https' --tlsv1.2 -fsSL https://api.github.com/repos/oras-project/oras/git/ref/tags/v1.3.3 | grep -F 'd6f59b4e6615cadfc8343dc9a066d781300c5967' >/dev/null
-curl --proto '=https' --tlsv1.2 -fsSL https://api.github.com/repos/oras-project/oras/git/tags/d6f59b4e6615cadfc8343dc9a066d781300c5967 | grep -F '210747c29c1d38732b3194878dfd8b5a6b9ad7eb' >/dev/null
+curl --proto '=https' --tlsv1.2 -fsSL "https://api.github.com/repos/$owner/$repository/git/ref/tags/$tag" | grep -F "$tag_object" >/dev/null
+curl --proto '=https' --tlsv1.2 -fsSL "https://api.github.com/repos/$owner/$repository/git/tags/$tag_object" | grep -F "$source_commit" >/dev/null
 
 extract="$(mktemp -d "$cache/extract.XXXXXX")"
 trap 'rm -rf "$extract"' EXIT
@@ -54,8 +76,8 @@ candidate="$extract/oras"
 [[ -f "$candidate" && ! -L "$candidate" ]] || { echo "invalid ORAS archive member" >&2; exit 1; }
 chmod 0755 "$candidate"
 out="$("$candidate" version)"
-grep -Eq 'Version:[[:space:]]+1\.3\.3' <<<"$out"
-grep -Eq 'Git commit:[[:space:]]+210747c29c1d38732b3194878dfd8b5a6b9ad7eb' <<<"$out"
+grep -Eq "Version:[[:space:]]+${version//./\\.}" <<<"$out"
+grep -Eq "Git commit:[[:space:]]+$source_commit" <<<"$out"
 rm -f "$bin"
 mv "$candidate" "$bin"
 trap - EXIT
