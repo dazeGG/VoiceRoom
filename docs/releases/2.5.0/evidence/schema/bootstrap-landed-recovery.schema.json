@@ -31,10 +31,13 @@
       "type": "string"
     },
     "firstAuthoritativeId": {
-      "type": ["string", "integer"]
+      "oneOf": [
+        { "minLength": 1, "type": "string" },
+        { "minimum": 1, "type": "integer" }
+      ]
     },
     "priorFailureId": {
-      "minLength": 1,
+      "pattern": "^bootstrap-failure\\.g01-(a|recovery-a)[0-9]{2,}\\.json$",
       "type": "string"
     },
     "priorFailureDigest": {

@@ -7,22 +7,35 @@ on:
     branches: [develop, main]
   workflow_dispatch:
     inputs:
-      bootstrap_metadata_b64:
-        description: Base64-encoded post-F11 bootstrap selection metadata JSON
+      bootstrap_phase:
+        description: Authenticated lifecycle phase to emit
+        required: true
+        type: choice
+        options: [approval, merge, selection]
+      bootstrap_pr_number:
+        description: G01 pull request number (verified through GitHub API)
+        required: true
+        type: number
+      bootstrap_f7_artifact_id:
+        description: Immutable F7 Actions artifact ID
+        required: true
+        type: number
+      bootstrap_f9_artifact_id:
+        description: Immutable F9 Actions artifact ID (merge/selection only)
         required: false
-        type: string
-      bootstrap_f7_b64:
-        description: Base64-encoded immutable G01 F7 envelope JSON
+        type: number
+      bootstrap_f11_artifact_id:
+        description: Immutable F11 Actions artifact ID (selection only)
         required: false
-        type: string
-      bootstrap_f9_b64:
-        description: Base64-encoded immutable G01 F9 envelope JSON
+        type: number
+      bootstrap_postmerge_run_id:
+        description: Completed green develop run ID (merge/selection only)
         required: false
-        type: string
-      bootstrap_f11_b64:
-        description: Base64-encoded immutable G01 F11 envelope JSON
+        type: number
+      bootstrap_ancestor_artifact_id:
+        description: Immutable ordered recovery-failure chain artifact ID
         required: false
-        type: string
+        type: number
 
 permissions:
   contents: read
@@ -108,11 +121,16 @@ jobs:
 
   bootstrap-plan:
     name: G01 bootstrap plan
+    if: (github.event_name == 'pull_request' && (github.head_ref == 'feature/2.5.0-g01-canonical-evidence-bootstrap' || startsWith(github.head_ref, 'feature/2.5.0-g01-postmerge-bootstrap-a'))) || (github.event_name == 'push' && (github.ref_name == 'feature/2.5.0-g01-canonical-evidence-bootstrap' || startsWith(github.ref_name, 'feature/2.5.0-g01-postmerge-bootstrap-a')))
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ github.token }}
+      SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      SOURCE_BRANCH: ${{ github.head_ref || github.ref_name }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
@@ -129,52 +147,168 @@ jobs:
           scripts/ci/run-oras.sh version
       - name: Export candidate-only G01 report and F7 envelope
         run: |
+          if test "$SOURCE_BRANCH" = feature/2.5.0-g01-canonical-evidence-bootstrap; then suffix=g01.json; else suffix="bootstrap-recovery-${SOURCE_BRANCH##*-bootstrap-}.json"; fi
           node scripts/evidence/bootstrap-export.mjs docs/releases/2.5.0/evidence/bootstrap-attempts.json docs/releases/2.5.0/evidence/bootstrap-landed-recoveries.json > candidate-registry-report.g01.json
-          node scripts/evidence/bootstrap-export.mjs --f7 --source-sha "$GITHUB_SHA" --created-at "$(date -u +%Y-%m-%dT%H:%M:%S.000Z)" docs/releases/2.5.0/evidence/bootstrap-attempts.json docs/releases/2.5.0/evidence/bootstrap-landed-recoveries.json > ci-bundle.g01.json
+          node scripts/evidence/bootstrap-export.mjs --f7 --source-sha "$SOURCE_SHA" --created-at "$(date -u +%Y-%m-%dT%H:%M:%S.000Z)" --lineage-suffix "$suffix" docs/releases/2.5.0/evidence/bootstrap-attempts.json docs/releases/2.5.0/evidence/bootstrap-landed-recoveries.json > "ci-bundle.$suffix"
       - name: Persist G01 F7 evidence
         uses: actions/upload-artifact@v4
         with:
-          name: g01-candidate-evidence
+          name: g01-candidate-evidence-${{ env.SOURCE_SHA }}
           path: |
-            ci-bundle.g01.json
+            ci-bundle.*.json
             candidate-registry-report.g01.json
           if-no-files-found: error
           retention-days: 90
 
-  bootstrap-selection:
-    name: G01 post-F11 selection handoff
-    if: github.event_name == 'workflow_dispatch'
+  bootstrap-approval:
+    name: G01 authenticated F9 approval seal
+    if: github.event_name == 'workflow_dispatch' && inputs.bootstrap_phase == 'approval'
     runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PR_NUMBER: ${{ inputs.bootstrap_pr_number }}
+      F7_ARTIFACT_ID: ${{ inputs.bootstrap_f7_artifact_id }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
-      - name: Decode and validate immutable lifecycle envelopes
-        env:
-          METADATA_B64: ${{ inputs.bootstrap_metadata_b64 }}
-          F7_B64: ${{ inputs.bootstrap_f7_b64 }}
-          F9_B64: ${{ inputs.bootstrap_f9_b64 }}
-          F11_B64: ${{ inputs.bootstrap_f11_b64 }}
+      - name: Fetch immutable F7 and exact-head review authority
         run: |
           set -euo pipefail
-          for name in METADATA_B64 F7_B64 F9_B64 F11_B64; do
-            test -n "${!name}" || { echo "missing $name" >&2; exit 1; }
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$F7_ARTIFACT_ID" > f7-artifact.json
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$F7_ARTIFACT_ID/zip" > f7.zip
+          unzip -q f7.zip
+          f7_file="$(find . -maxdepth 1 -name 'ci-bundle.*.json' -print -quit)"; test -n "$f7_file"
+          gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" > pr.json
+          gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/reviews?per_page=100" --slurp > review-pages.json
+          node - <<'NODE'
+          const fs=require('node:fs'); const read=(p)=>JSON.parse(fs.readFileSync(p));
+          const pages=read('review-pages.json');
+          fs.writeFileSync('approval-authority.json', JSON.stringify({pr:read('pr.json'),reviews:pages.flat(),observedAt:new Date().toISOString(),f7Artifact:read('f7-artifact.json'),candidateReport:read('candidate-registry-report.g01.json')}));
+          NODE
+          f9_file="${f7_file/ci-bundle/approval-envelope}"
+          node scripts/evidence/emit-bootstrap-selection.mjs --emit-f9 --f7 "$f7_file" --authority approval-authority.json > "$f9_file"
+      - name: Persist immutable G01 F9
+        uses: actions/upload-artifact@v4
+        with:
+          name: g01-approval-${{ inputs.bootstrap_pr_number }}
+          path: approval-envelope.*.json
+          if-no-files-found: error
+          retention-days: 90
+
+  bootstrap-merge:
+    name: G01 authenticated post-merge F11
+    if: github.event_name == 'workflow_dispatch' && inputs.bootstrap_phase == 'merge'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PR_NUMBER: ${{ inputs.bootstrap_pr_number }}
+      F7_ARTIFACT_ID: ${{ inputs.bootstrap_f7_artifact_id }}
+      F9_ARTIFACT_ID: ${{ inputs.bootstrap_f9_artifact_id }}
+      POSTMERGE_RUN_ID: ${{ inputs.bootstrap_postmerge_run_id }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - name: Fetch immutable envelopes and actual GitHub merge authority
+        run: |
+          set -euo pipefail
+          test -n "$F9_ARTIFACT_ID" && test -n "$POSTMERGE_RUN_ID"
+          for pair in "f7:$F7_ARTIFACT_ID" "f9:$F9_ARTIFACT_ID"; do
+            name="${pair%%:*}"; id="${pair#*:}"
+            gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$id" > "$name-artifact.json"
+            gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$id/zip" > "$name.zip"
+            unzip -q "$name.zip"
           done
-          printf '%s' "$METADATA_B64" | base64 --decode > bootstrap-metadata.json
-          printf '%s' "$F7_B64" | base64 --decode > ci-bundle.g01.json
-          printf '%s' "$F9_B64" | base64 --decode > approval-envelope.g01.json
-          printf '%s' "$F11_B64" | base64 --decode > merge-envelope.g01.json
-          attempt_id="$(node -e 'const fs=require("node:fs"); const x=JSON.parse(fs.readFileSync("bootstrap-metadata.json")); if(!/^g01-(a|recovery-a)[0-9]{2,}$/.test(x.attemptId)) process.exit(1); process.stdout.write(x.attemptId)')"
-          node scripts/evidence/emit-bootstrap-selection.mjs --metadata bootstrap-metadata.json --f7 ci-bundle.g01.json --f9 approval-envelope.g01.json --f11 merge-envelope.g01.json > "bootstrap-selection.${attempt_id}.json"
-          printf '%s' "bootstrap-selection.${attempt_id}.json" > bootstrap-selection-path.txt
+          f7_file="$(find . -maxdepth 1 -name 'ci-bundle.*.json' -print -quit)"; f9_file="$(find . -maxdepth 1 -name 'approval-envelope.*.json' -print -quit)"
+          test -n "$f7_file" && test -n "$f9_file"
+          gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" > pr.json
+          gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/develop" > develop-ref.json
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$POSTMERGE_RUN_ID" > postmerge-run.json
+          branch="$(node -p 'JSON.parse(require("node:fs").readFileSync("pr.json")).head.ref')"
+          encoded="$(node -p 'encodeURIComponent(process.argv[1])' "$branch")"
+          status="$(curl --proto '=https' --tlsv1.2 -sS -o source-ref.json -w '%{http_code}' -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' "https://api.github.com/repos/$GITHUB_REPOSITORY/git/ref/heads/$encoded")"
+          test "$status" = 404
+          SOURCE_REF_STATUS="$status" node - <<'NODE'
+          const fs=require('node:fs'); const read=(p)=>JSON.parse(fs.readFileSync(p));
+          fs.writeFileSync('merge-authority.json', JSON.stringify({pr:read('pr.json'),developRef:read('develop-ref.json'),sourceRefStatus:Number(process.env.SOURCE_REF_STATUS),postMergeRun:read('postmerge-run.json'),observedAt:new Date().toISOString(),f7Artifact:read('f7-artifact.json'),f9Artifact:read('f9-artifact.json')}));
+          NODE
+          f11_file="${f7_file/ci-bundle/merge-envelope}"
+          node scripts/evidence/emit-bootstrap-selection.mjs --emit-f11 --f7 "$f7_file" --f9 "$f9_file" --authority merge-authority.json > "$f11_file"
+      - name: Persist immutable G01 F11
+        uses: actions/upload-artifact@v4
+        with:
+          name: g01-merge-${{ inputs.bootstrap_pr_number }}
+          path: merge-envelope.*.json
+          if-no-files-found: error
+          retention-days: 90
+
+  bootstrap-selection:
+    name: G01 authenticated post-F11 terminal selection
+    if: github.event_name == 'workflow_dispatch' && inputs.bootstrap_phase == 'selection'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PR_NUMBER: ${{ inputs.bootstrap_pr_number }}
+      F7_ARTIFACT_ID: ${{ inputs.bootstrap_f7_artifact_id }}
+      F9_ARTIFACT_ID: ${{ inputs.bootstrap_f9_artifact_id }}
+      F11_ARTIFACT_ID: ${{ inputs.bootstrap_f11_artifact_id }}
+      POSTMERGE_RUN_ID: ${{ inputs.bootstrap_postmerge_run_id }}
+      ANCESTOR_ARTIFACT_ID: ${{ inputs.bootstrap_ancestor_artifact_id }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - name: Re-fetch immutable artifacts and current terminal authority
+        run: |
+          set -euo pipefail
+          test -n "$F9_ARTIFACT_ID" && test -n "$F11_ARTIFACT_ID" && test -n "$POSTMERGE_RUN_ID"
+          for pair in "f7:$F7_ARTIFACT_ID" "f9:$F9_ARTIFACT_ID" "f11:$F11_ARTIFACT_ID"; do
+            name="${pair%%:*}"; id="${pair#*:}"
+            gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$id" > "$name-artifact.json"
+            gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$id/zip" > "$name.zip"
+            unzip -q "$name.zip"
+          done
+          f7_file="$(find . -maxdepth 1 -name 'ci-bundle.*.json' -print -quit)"; f9_file="$(find . -maxdepth 1 -name 'approval-envelope.*.json' -print -quit)"; f11_file="$(find . -maxdepth 1 -name 'merge-envelope.*.json' -print -quit)"
+          test -n "$f7_file" && test -n "$f9_file" && test -n "$f11_file"
+          gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" > pr.json
+          gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/develop" > develop-ref.json
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$POSTMERGE_RUN_ID" > postmerge-run.json
+          branch="$(node -p 'JSON.parse(require("node:fs").readFileSync("pr.json")).head.ref')"
+          encoded="$(node -p 'encodeURIComponent(process.argv[1])' "$branch")"
+          status="$(curl --proto '=https' --tlsv1.2 -sS -o source-ref.json -w '%{http_code}' -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' "https://api.github.com/repos/$GITHUB_REPOSITORY/git/ref/heads/$encoded")"
+          test "$status" = 404
+          SOURCE_REF_STATUS="$status" node - <<'NODE'
+          const fs=require('node:fs'); const read=(p)=>JSON.parse(fs.readFileSync(p));
+          fs.writeFileSync('selection-authority.json', JSON.stringify({pr:read('pr.json'),developRef:read('develop-ref.json'),sourceRefStatus:Number(process.env.SOURCE_REF_STATUS),postMergeRun:read('postmerge-run.json'),observedAt:new Date().toISOString(),f7Artifact:read('f7-artifact.json'),f9Artifact:read('f9-artifact.json'),f11Artifact:read('f11-artifact.json')}));
+          NODE
+          extra=()
+          if test -n "$ANCESTOR_ARTIFACT_ID"; then
+            gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$ANCESTOR_ARTIFACT_ID/zip" > ancestors.zip
+            unzip -q ancestors.zip
+            extra=(--ancestors bootstrap-ancestor-failures.json)
+          fi
+          node scripts/evidence/emit-bootstrap-selection.mjs --f7 "$f7_file" --f9 "$f9_file" --f11 "$f11_file" --authority selection-authority.json "${extra[@]}" > bootstrap-selection.json
       - name: Persist post-F11 bootstrap selection
         uses: actions/upload-artifact@v4
         with:
-          name: g01-bootstrap-selection
-          path: |
-            bootstrap-selection.g01-*.json
-            bootstrap-selection-path.txt
+          name: g01-bootstrap-selection-${{ inputs.bootstrap_pr_number }}
+          path: bootstrap-selection.json
           if-no-files-found: error
           retention-days: 90
 

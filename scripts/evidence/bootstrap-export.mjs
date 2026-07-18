@@ -35,6 +35,7 @@ function validateAttempt(attempt, index) {
   assert.match(attempt.attemptId, /^g01-a[0-9]{2,}$/);
   assert.equal(attempt.branch, "feature/2.5.0-g01-canonical-evidence-bootstrap");
   assert.ok(Number.isInteger(attempt.ordinal) && attempt.ordinal > 0);
+  assert.equal(Number(attempt.attemptId.match(/[0-9]+$/)[0]), attempt.ordinal, "attempt ID suffix must equal ordinal");
   for (const key of ["headSha", "baseSha", "parentSha"]) assert.match(attempt[key], SHA);
   for (const key of ["authorityDigest", "planSpecPairDigest"]) assert.match(attempt[key], DIGEST);
   assert.ok((typeof attempt.firstAuthoritativeId === "string" && attempt.firstAuthoritativeId.length > 0) || (Number.isInteger(attempt.firstAuthoritativeId) && attempt.firstAuthoritativeId > 0));
@@ -44,6 +45,7 @@ function validateRecovery(recovery, index) {
   exactKeys(recovery, ["attemptId", "branch", "baseSha", "parentSha", "headSha", "authorityDigest", "planSpecPairDigest", "firstAuthoritativeId", "priorFailureId", "priorFailureDigest"], `landedAncestors[${index}]`);
   const match = recovery.attemptId.match(/^g01-recovery-a([0-9]{2,})$/);
   assert.ok(match);
+  assert.equal(Number(match[1]), index + 1, "recovery attempts must be contiguous and ordered");
   assert.equal(recovery.branch, `feature/2.5.0-g01-postmerge-bootstrap-a${match[1]}`);
   for (const key of ["baseSha", "parentSha", "headSha"]) assert.match(recovery[key], SHA);
   for (const key of ["authorityDigest", "planSpecPairDigest", "priorFailureDigest"]) assert.match(recovery[key], DIGEST);
@@ -71,6 +73,11 @@ export function validateRegistry(registry, filename) {
     assert.equal(typeof registry.ordinalReconstruction.complete, "boolean");
     assert.ok(registry.ordinalReconstruction.nextOrdinal === null || (Number.isInteger(registry.ordinalReconstruction.nextOrdinal) && registry.ordinalReconstruction.nextOrdinal > 0));
     assert.equal(typeof registry.ordinalReconstruction.reason, "string");
+    assert.ok(registry.ordinalReconstruction.reason.length > 0, "ordinal reconstruction reason must be nonempty");
+    if (registry.state === "G01_PRE_BRANCH") assert.equal(registry.currentAttempt, null, "PRE_BRANCH cannot retain a canonical current pointer");
+    if (registry.state === "G01_PREMERGE_ACTIVE") assert.notEqual(registry.currentAttempt, null, "PREMERGE_ACTIVE requires a canonical current pointer");
+    if (registry.ordinalReconstruction.complete) assert.equal(registry.ordinalReconstruction.nextOrdinal, Math.max(0, ...ordinals) + 1, "complete reconstruction must name the next observed ordinal");
+    else assert.equal(registry.ordinalReconstruction.nextOrdinal, null, "incomplete reconstruction cannot predict an ordinal");
   } else if (filename === "bootstrap-landed-recoveries.json") {
     exactKeys(registry, ["currentRecovery", "landedAncestors", "release", "schemaVersion", "state"], filename);
     assert.ok(Array.isArray(registry.landedAncestors));
@@ -78,9 +85,9 @@ export function validateRegistry(registry, filename) {
     validatePointer(registry.currentRecovery, registry.landedAncestors, "currentRecovery");
     const ids = registry.landedAncestors.map(({ attemptId }) => attemptId);
     assert.equal(new Set(ids).size, ids.length, "recovery attempt IDs must be unique");
-    for (let index = 1; index < registry.landedAncestors.length; index++) {
-      assert.equal(registry.landedAncestors[index].parentSha, registry.landedAncestors[index - 1].baseSha, "recovery ancestry must remain ordered and frozen");
-    }
+    for (const recovery of registry.landedAncestors) assert.equal(recovery.parentSha, recovery.baseSha, "recovery parent must equal its frozen base");
+    if (registry.state === "G01_PRE_BRANCH") assert.equal(registry.currentRecovery, null, "PRE_BRANCH cannot retain a recovery pointer");
+    if (registry.state === "G01_PREMERGE_ACTIVE" && registry.landedAncestors.length > 0) assert.notEqual(registry.currentRecovery, null, "active recovery requires its current pointer");
   } else {
     throw new Error(`unsupported bootstrap registry: ${filename}`);
   }
@@ -91,17 +98,19 @@ export function validateRegistry(registry, filename) {
 }
 
 export function buildCandidateReport(inputs) {
-  assert.ok(Array.isArray(inputs) && inputs.length > 0, "at least one bootstrap registry is required");
+  assert.ok(Array.isArray(inputs) && inputs.length === 2, "exactly two bootstrap registries are required");
+  assert.deepEqual(inputs.map(({ filename }) => path.basename(filename)).sort(), ["bootstrap-attempts.json", "bootstrap-landed-recoveries.json"], "both canonical registry basenames are required exactly once");
   const registries = inputs.map(({ filename, bytes }) => {
     const candidate = validateRegistry(JSON.parse(bytes), path.basename(filename));
     return { name: path.basename(filename), sha256: crypto.createHash("sha256").update(bytes).digest("hex"), candidate };
   });
-  if (registries.length === 2) assert.equal(registries[0].candidate.state, registries[1].candidate.state, "bootstrap registries must agree on current state");
+  assert.equal(registries[0].candidate.state, registries[1].candidate.state, "bootstrap registries must agree on current state");
   return { schemaVersion: 1, release: "2.5.0", registries };
 }
 
-export function buildF7Envelope(candidateReport, sourceSha, createdAt) {
+export function buildF7Envelope(candidateReport, sourceSha, createdAt, lineageSuffix = "g01.json") {
   assert.match(sourceSha, SHA);
+  assert.match(lineageSuffix, /^(?:g01|bootstrap-recovery-a[0-9]{2,})\.json$/);
   const timestamp = Date.parse(createdAt);
   assert.ok(Number.isFinite(timestamp) && new Date(timestamp).toISOString() === createdAt, "F7 createdAt must be canonical ISO-8601 UTC");
   const reportBytes = Buffer.from(JSON.stringify(candidateReport));
@@ -110,7 +119,7 @@ export function buildF7Envelope(candidateReport, sourceSha, createdAt) {
     goal: "G01",
     phase: "F7",
     status: "GREEN",
-    evidenceId: "ci-bundle.g01.json",
+    evidenceId: `ci-bundle.${lineageSuffix}`,
     sourceSha,
     digest: `sha256:${crypto.createHash("sha256").update(reportBytes).digest("hex")}`,
     createdAt,
@@ -125,10 +134,10 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     if (index < 0 || !args[index + 1]) throw new Error(`missing ${name}`);
     return args[index + 1];
   };
-  const excluded = new Set(["--f7", "--source-sha", "--created-at", ...(args.includes("--source-sha") ? [option("--source-sha")] : []), ...(args.includes("--created-at") ? [option("--created-at")] : [])]);
+  const excluded = new Set(["--f7", "--source-sha", "--created-at", "--lineage-suffix", ...(args.includes("--source-sha") ? [option("--source-sha")] : []), ...(args.includes("--created-at") ? [option("--created-at")] : []), ...(args.includes("--lineage-suffix") ? [option("--lineage-suffix")] : [])]);
   const files = args.filter((value) => !excluded.has(value));
   if (files.length === 0) throw new Error("usage: bootstrap-export.mjs REGISTRY.json [REGISTRY.json]");
   const report = buildCandidateReport(files.map((filename) => ({ filename, bytes: fs.readFileSync(filename) })));
-  const output = f7 ? buildF7Envelope(report, option("--source-sha"), option("--created-at")) : report;
+  const output = f7 ? buildF7Envelope(report, option("--source-sha"), option("--created-at"), args.includes("--lineage-suffix") ? option("--lineage-suffix") : "g01.json") : report;
   process.stdout.write(`${JSON.stringify(output)}\n`);
 }

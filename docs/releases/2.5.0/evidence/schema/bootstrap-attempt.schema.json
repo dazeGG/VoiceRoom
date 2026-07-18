@@ -18,9 +18,9 @@
       "const": "feature/2.5.0-g01-canonical-evidence-bootstrap"
     },
     "firstAuthoritativeId": {
-      "type": [
-        "string",
-        "integer"
+      "oneOf": [
+        { "minLength": 1, "type": "string" },
+        { "minimum": 1, "type": "integer" }
       ]
     },
     "headSha": {

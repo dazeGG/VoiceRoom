@@ -2,6 +2,8 @@
 import fs from "node:fs";
 import assert from "node:assert/strict";
 import { pathToFileURL } from "node:url";
+import crypto from "node:crypto";
+import { validateEnvelopeChain } from "./validate-envelope.mjs";
 
 export const G01_WRITABLE = [
   "docs/RELEASE_2.5.0_PLAN.md", "docs/RELEASE_2.5.0_TEST_SPEC.md", "docs/RELEASE_2.6.0_PLAN.md", "docs/RELEASE_2.7.0_PLAN.md",
@@ -24,23 +26,27 @@ function exactArray(actual, expected, label) {
 
 function validSelection(facts) {
   const selection = facts.selection;
-  if (!selection || selection.status !== "SELECTED_GREEN" || facts.f11Status !== "GREEN" || facts.remoteDeleted !== true) return false;
-  if (![facts.mergeSha, facts.developSha, facts.baseSha, facts.originSha, selection.terminalDevelopSha].every((sha) => sha === facts.mergeSha)) return false;
-  const times = [facts.f7At, facts.f9At, facts.mergeAt, facts.deletionAt, facts.f11At, selection.createdAt].map(Date.parse);
-  if (times.some((time) => !Number.isFinite(time))) return false;
-  if (!(times[0] < times[1] && times[1] < times[2] && times[2] <= times[3] && times[3] <= times[4] && times[4] < times[5])) return false;
-  const ancestors = facts.ancestors ?? [];
-  if (selection.terminalKind === "direct-canonical") return ancestors.length === 0;
-  if (selection.terminalKind !== "landed-recovery" || ancestors.length === 0) return false;
-  if (facts.parentSha !== ancestors.at(-1).terminalDevelopSha) return false;
-  let previous = -Infinity;
-  const seen = new Set();
-  for (const ancestor of ancestors) {
-    const time = Date.parse(ancestor.failedAt);
-    if (!Number.isFinite(time) || time <= previous || time >= times[0] || seen.has(ancestor.terminalDevelopSha)) return false;
-    previous = time; seen.add(ancestor.terminalDevelopSha);
-  }
-  return true;
+  try {
+    const { terminalDevelopSha, lineageSuffix } = validateEnvelopeChain(facts.f7, facts.f9, facts.f11);
+    assert.deepEqual(Object.keys(selection).sort(), ["ancestorFailures", "attemptId", "bootstrapSupersessionChainDigest", "createdAt", "f11Digest", "f11Id", "f7Digest", "f7Id", "f9Digest", "f9Id", "release", "remoteDeleted", "schemaVersion", "status", "terminalDevelopSha", "terminalKind"].sort());
+    assert.equal(selection.schemaVersion, 1); assert.equal(selection.release, "2.5.0");
+    assert.equal(selection.status, "SELECTED_GREEN"); assert.equal(selection.remoteDeleted, true);
+    assert.equal(selection.terminalDevelopSha, terminalDevelopSha);
+    assert.equal(selection.f7Id, facts.f7.evidenceId); assert.equal(selection.f7Digest, facts.f7.digest);
+    assert.equal(selection.f9Id, facts.f9.evidenceId); assert.equal(selection.f9Digest, facts.f9.digest);
+    assert.equal(selection.f11Id, facts.f11.evidenceId); assert.equal(selection.f11Digest, facts.f11.digest);
+    assert.equal(selection.bootstrapSupersessionChainDigest, `sha256:${crypto.createHash("sha256").update(JSON.stringify(selection.ancestorFailures)).digest("hex")}`);
+    assert.ok(Date.parse(facts.f11.createdAt) < Date.parse(selection.createdAt));
+    assert.ok([facts.mergeSha, facts.developSha, facts.baseSha, facts.originSha, terminalDevelopSha].every((sha) => sha === facts.mergeSha));
+    if (selection.terminalKind === "direct-canonical") {
+      assert.match(selection.attemptId, /^g01-a[0-9]{2,}$/); assert.equal(lineageSuffix, "g01.json"); assert.equal(selection.ancestorFailures.length, 0);
+    } else {
+      const match = selection.attemptId.match(/^g01-recovery-a([0-9]{2,})$/); assert.ok(match);
+      assert.equal(lineageSuffix, `bootstrap-recovery-a${match[1]}.json`); assert.ok(selection.ancestorFailures.length > 0);
+      assert.equal(facts.parentSha, selection.ancestorFailures.at(-1).terminalDevelopSha);
+    }
+    return true;
+  } catch { return false; }
 }
 
 export function classifyBootstrap(facts) {

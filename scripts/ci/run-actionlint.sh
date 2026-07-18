@@ -34,14 +34,17 @@ fi
 
 command -v gh >/dev/null
 gh attestation verify "$file" -R rhysd/actionlint >/dev/null
+sums="$cache/actionlint_1.7.12_checksums.txt"
+[[ -f "$sums" ]] || download "https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_checksums.txt" "$sums"
+hash_ok 433028cf0ba3c42163ea1a668dedce30fcdbe84fe912b1a5e288c006eab8a4f5 "$sums" || { rm -f "$sums"; echo "actionlint checksums digest mismatch" >&2; exit 1; }
+grep -Fx "$sha  $archive" "$sums" >/dev/null
+release="$cache/release.json"; download https://api.github.com/repos/rhysd/actionlint/releases/303326868 "$release"
+grep -F '"tag_name": "v1.7.12"' "$release" >/dev/null
+grep -F "\"name\": \"$archive\"" "$release" >/dev/null
+tag="$cache/tag.json"; download https://api.github.com/repos/rhysd/actionlint/git/ref/tags/v1.7.12 "$tag"
+grep -F '914e7df21a07ef503a81201c76d2b11c789d3fca' "$tag" >/dev/null
 if [[ "$host" == Linux-* ]]; then
-  sums="$cache/actionlint_1.7.12_checksums.txt"
-  [[ -f "$sums" ]] || download "https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_checksums.txt" "$sums"
-  hash_ok 433028cf0ba3c42163ea1a668dedce30fcdbe84fe912b1a5e288c006eab8a4f5 "$sums" || { rm -f "$sums"; echo "actionlint checksums digest mismatch" >&2; exit 1; }
-  grep -Fx "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8  $archive" "$sums" >/dev/null
-  curl --proto '=https' --tlsv1.2 -fsSL https://api.github.com/repos/rhysd/actionlint/releases/303326868 | grep -F '"tag_name": "v1.7.12"' >/dev/null
   curl --proto '=https' --tlsv1.2 -fsSL https://api.github.com/repos/rhysd/actionlint/releases/assets/384924896 | grep -F '"size": 2353908' >/dev/null
-  curl --proto '=https' --tlsv1.2 -fsSL https://api.github.com/repos/rhysd/actionlint/git/ref/tags/v1.7.12 | grep -F '914e7df21a07ef503a81201c76d2b11c789d3fca' >/dev/null
 fi
 
 extract="$(mktemp -d "$cache/extract.XXXXXX")"

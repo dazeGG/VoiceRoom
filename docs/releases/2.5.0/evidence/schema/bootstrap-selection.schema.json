@@ -5,21 +5,51 @@
       "additionalProperties": false,
       "properties": {
         "attemptId": { "pattern": "^g01-(a|recovery-a)[0-9]{2,}$", "type": "string" },
-        "createdAt": { "format": "date-time", "type": "string" },
+        "artifactId": { "minimum": 1, "type": "integer" },
+        "baseSha": { "pattern": "^[0-9a-f]{40}$", "type": "string" },
+        "createdAt": { "format": "date-time", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$", "type": "string" },
         "digest": { "pattern": "^sha256:[0-9a-f]{64}$", "type": "string" },
         "evidenceId": { "pattern": "^bootstrap-failure\\.g01-(a|recovery-a)[0-9]{2,}\\.json$", "type": "string" },
+        "parentSha": { "pattern": "^[0-9a-f]{40}$", "type": "string" },
+        "runId": { "minimum": 1, "type": "integer" },
         "terminalDevelopSha": { "pattern": "^[0-9a-f]{40}$", "type": "string" }
       },
-      "required": ["attemptId", "evidenceId", "digest", "terminalDevelopSha", "createdAt"],
+      "required": ["attemptId", "evidenceId", "digest", "artifactId", "runId", "baseSha", "parentSha", "terminalDevelopSha", "createdAt"],
       "type": "object"
     }
   },
   "additionalProperties": false,
+  "allOf": [
+    {
+      "if": { "properties": { "terminalKind": { "const": "direct-canonical" } }, "required": ["terminalKind"] },
+      "then": {
+        "properties": {
+          "ancestorFailures": { "maxItems": 0, "type": "array" },
+          "attemptId": { "pattern": "^g01-a[0-9]{2,}$", "type": "string" },
+          "f11Id": { "const": "merge-envelope.g01.json" },
+          "f7Id": { "const": "ci-bundle.g01.json" },
+          "f9Id": { "const": "approval-envelope.g01.json" }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "terminalKind": { "const": "landed-recovery" } }, "required": ["terminalKind"] },
+      "then": {
+        "properties": {
+          "ancestorFailures": { "minItems": 1, "type": "array" },
+          "attemptId": { "pattern": "^g01-recovery-a[0-9]{2,}$", "type": "string" },
+          "f11Id": { "pattern": "^merge-envelope\\.bootstrap-recovery-a[0-9]{2,}\\.json$", "type": "string" },
+          "f7Id": { "pattern": "^ci-bundle\\.bootstrap-recovery-a[0-9]{2,}\\.json$", "type": "string" },
+          "f9Id": { "pattern": "^approval-envelope\\.bootstrap-recovery-a[0-9]{2,}\\.json$", "type": "string" }
+        }
+      }
+    }
+  ],
   "properties": {
     "ancestorFailures": { "items": { "$ref": "#/$defs/ancestorFailure" }, "type": "array" },
     "attemptId": { "pattern": "^g01-(a|recovery-a)[0-9]{2,}$", "type": "string" },
     "bootstrapSupersessionChainDigest": { "pattern": "^sha256:[0-9a-f]{64}$", "type": "string" },
-    "createdAt": { "format": "date-time", "type": "string" },
+    "createdAt": { "format": "date-time", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$", "type": "string" },
     "f11Digest": { "pattern": "^sha256:[0-9a-f]{64}$", "type": "string" },
     "f11Id": { "pattern": "^merge-envelope\\.(g01|bootstrap-recovery-a[0-9]{2,})\\.json$", "type": "string" },
     "f7Digest": { "pattern": "^sha256:[0-9a-f]{64}$", "type": "string" },

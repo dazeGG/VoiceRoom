@@ -22,14 +22,16 @@
       "then": {
         "properties": {
           "evidenceId": { "pattern": "^approval-envelope\\.(g01|bootstrap-recovery-a[0-9]{2,})\\.json$", "type": "string" },
+          "f7Digest": {},
           "f9Digest": false,
           "mergeSha": false,
           "mergedAt": false,
           "remoteDeleted": false,
           "remoteDeletionObservedAt": false,
-          "terminalDevelopSha": false
+          "terminalDevelopSha": false,
+          "reviewObjects": {}
         },
-        "required": ["f7Digest"]
+        "required": ["f7Digest", "reviewObjects"]
       }
     },
     {
@@ -37,27 +39,57 @@
       "then": {
         "properties": {
           "evidenceId": { "pattern": "^merge-envelope\\.(g01|bootstrap-recovery-a[0-9]{2,})\\.json$", "type": "string" },
-          "remoteDeleted": { "const": true }
+          "f7Digest": {}, "f9Digest": {}, "mergeSha": {}, "terminalDevelopSha": {},
+          "remoteDeleted": { "const": true }, "mergedAt": {}, "remoteDeletionObservedAt": {},
+          "prNumber": {}, "sourceBranch": {}, "postMergeRunId": {}, "postMergeCheckSuiteId": {}
         },
-        "required": ["f7Digest", "f9Digest", "mergeSha", "terminalDevelopSha", "remoteDeleted", "mergedAt", "remoteDeletionObservedAt"]
+        "required": ["f7Digest", "f9Digest", "mergeSha", "terminalDevelopSha", "remoteDeleted", "mergedAt", "remoteDeletionObservedAt", "prNumber", "sourceBranch", "postMergeRunId", "postMergeCheckSuiteId"]
       }
     }
   ],
   "properties": {
-    "createdAt": { "format": "date-time", "type": "string" },
+    "createdAt": { "format": "date-time", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$", "type": "string" },
     "digest": { "pattern": "^sha256:[0-9a-f]{64}$", "type": "string" },
     "evidenceId": { "pattern": "^(ci-bundle|approval-envelope|merge-envelope)\\.(g01|bootstrap-recovery-a[0-9]{2,})\\.json$", "type": "string" },
     "f7Digest": { "pattern": "^sha256:[0-9a-f]{64}$", "type": "string" },
     "f9Digest": { "pattern": "^sha256:[0-9a-f]{64}$", "type": "string" },
     "goal": { "const": "G01" },
-    "mergedAt": { "format": "date-time", "type": "string" },
+    "mergedAt": { "format": "date-time", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$", "type": "string" },
     "mergeSha": { "pattern": "^[0-9a-f]{40}$", "type": "string" },
     "phase": { "enum": ["F7", "F9", "F11"] },
     "remoteDeleted": { "type": "boolean" },
-    "remoteDeletionObservedAt": { "format": "date-time", "type": "string" },
+    "postMergeCheckSuiteId": { "minimum": 1, "type": "integer" },
+    "postMergeRunId": { "minimum": 1, "type": "integer" },
+    "prNumber": { "minimum": 1, "type": "integer" },
+    "remoteDeletionObservedAt": { "format": "date-time", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$", "type": "string" },
+    "reviewObjects": {
+      "allOf": [
+        { "contains": { "properties": { "role": { "const": "code-reviewer" }, "verdict": { "const": "APPROVE" } }, "required": ["role", "verdict"], "type": "object" }, "maxContains": 1, "minContains": 1 },
+        { "contains": { "properties": { "role": { "const": "architect" }, "verdict": { "const": "CLEAR" } }, "required": ["role", "verdict"], "type": "object" }, "maxContains": 1, "minContains": 1 },
+        { "contains": { "properties": { "role": { "const": "verifier" }, "verdict": { "const": "APPROVE" } }, "required": ["role", "verdict"], "type": "object" }, "maxContains": 1, "minContains": 1 }
+      ],
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "actorId": { "minimum": 1, "type": "integer" },
+          "commitId": { "pattern": "^[0-9a-f]{40}$", "type": "string" },
+          "nodeId": { "minLength": 1, "type": "string" },
+          "reviewId": { "minimum": 1, "type": "integer" },
+          "role": { "enum": ["code-reviewer", "architect", "verifier"] },
+          "submittedAt": { "format": "date-time", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$", "type": "string" },
+          "verdict": { "enum": ["APPROVE", "CLEAR"] }
+        },
+        "required": ["role", "verdict", "reviewId", "nodeId", "actorId", "commitId", "submittedAt"],
+        "type": "object"
+      },
+      "maxItems": 3,
+      "minItems": 3,
+      "type": "array"
+    },
     "schemaVersion": { "const": 1 },
     "sourceSha": { "pattern": "^[0-9a-f]{40}$", "type": "string" },
-    "status": { "enum": ["GREEN", "RED"] },
+    "sourceBranch": { "pattern": "^feature/2\\.5\\.0-g01-(canonical-evidence-bootstrap|postmerge-bootstrap-a[0-9]{2,})$", "type": "string" },
+    "status": { "const": "GREEN" },
     "terminalDevelopSha": { "pattern": "^[0-9a-f]{40}$", "type": "string" }
   },
   "required": ["schemaVersion", "goal", "phase", "status", "evidenceId", "sourceSha", "digest", "createdAt"],

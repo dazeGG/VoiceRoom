@@ -76,10 +76,93 @@
         "remoteDeleted": true,
         "ancestors": [],
         "selection": {
-          "status": "SELECTED_GREEN",
+          "schemaVersion": 1,
+          "release": "2.5.0",
+          "attemptId": "g01-a01",
           "terminalKind": "direct-canonical",
+          "f7Id": "ci-bundle.g01.json",
+          "f7Digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+          "f9Id": "approval-envelope.g01.json",
+          "f9Digest": "sha256:21a2f91d4fd6cdc4bddda0e9d071e7641d9c62804b4f199af6f9bad58e848273",
+          "f11Id": "merge-envelope.g01.json",
+          "f11Digest": "sha256:e890d67f4cd6361b226eebe6470540a27a527de1e2233c37e09fbd551d8fad46",
           "terminalDevelopSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-          "createdAt": "2026-07-18T00:05:00.000Z"
+          "createdAt": "2026-07-18T00:05:00.000Z",
+          "remoteDeleted": true,
+          "status": "SELECTED_GREEN",
+          "ancestorFailures": [],
+          "bootstrapSupersessionChainDigest": "sha256:4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        "f7": {
+          "schemaVersion": 1,
+          "goal": "G01",
+          "phase": "F7",
+          "status": "GREEN",
+          "evidenceId": "ci-bundle.g01.json",
+          "sourceSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+          "createdAt": "2026-07-18T00:00:00.000Z"
+        },
+        "f9": {
+          "schemaVersion": 1,
+          "goal": "G01",
+          "phase": "F9",
+          "status": "GREEN",
+          "evidenceId": "approval-envelope.g01.json",
+          "sourceSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "digest": "sha256:21a2f91d4fd6cdc4bddda0e9d071e7641d9c62804b4f199af6f9bad58e848273",
+          "createdAt": "2026-07-18T00:01:00.000Z",
+          "f7Digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+          "reviewObjects": [
+            {
+              "role": "code-reviewer",
+              "verdict": "APPROVE",
+              "reviewId": 1,
+              "nodeId": "R1",
+              "actorId": 11,
+              "commitId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "submittedAt": "2026-07-18T00:00:10.000Z"
+            },
+            {
+              "role": "architect",
+              "verdict": "CLEAR",
+              "reviewId": 2,
+              "nodeId": "R2",
+              "actorId": 12,
+              "commitId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "submittedAt": "2026-07-18T00:00:20.000Z"
+            },
+            {
+              "role": "verifier",
+              "verdict": "APPROVE",
+              "reviewId": 3,
+              "nodeId": "R3",
+              "actorId": 13,
+              "commitId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "submittedAt": "2026-07-18T00:00:30.000Z"
+            }
+          ]
+        },
+        "f11": {
+          "schemaVersion": 1,
+          "goal": "G01",
+          "phase": "F11",
+          "status": "GREEN",
+          "evidenceId": "merge-envelope.g01.json",
+          "sourceSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "digest": "sha256:e890d67f4cd6361b226eebe6470540a27a527de1e2233c37e09fbd551d8fad46",
+          "createdAt": "2026-07-18T00:04:00.000Z",
+          "f7Digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+          "f9Digest": "sha256:21a2f91d4fd6cdc4bddda0e9d071e7641d9c62804b4f199af6f9bad58e848273",
+          "mergeSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "terminalDevelopSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "remoteDeleted": true,
+          "mergedAt": "2026-07-18T00:02:00.000Z",
+          "remoteDeletionObservedAt": "2026-07-18T00:03:00.000Z",
+          "prNumber": 1,
+          "sourceBranch": "feature/2.5.0-g01-canonical-evidence-bootstrap",
+          "postMergeRunId": 10,
+          "postMergeCheckSuiteId": 20
         }
       }
     },
@@ -231,12 +314,107 @@
           }
         ],
         "selection": {
-          "status": "SELECTED_GREEN",
+          "schemaVersion": 1,
+          "release": "2.5.0",
+          "attemptId": "g01-recovery-a02",
           "terminalKind": "landed-recovery",
+          "f7Id": "ci-bundle.bootstrap-recovery-a02.json",
+          "f7Digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+          "f9Id": "approval-envelope.bootstrap-recovery-a02.json",
+          "f9Digest": "sha256:21a2f91d4fd6cdc4bddda0e9d071e7641d9c62804b4f199af6f9bad58e848273",
+          "f11Id": "merge-envelope.bootstrap-recovery-a02.json",
+          "f11Digest": "sha256:e890d67f4cd6361b226eebe6470540a27a527de1e2233c37e09fbd551d8fad46",
           "terminalDevelopSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-          "createdAt": "2026-07-18T00:05:00.000Z"
+          "createdAt": "2026-07-18T00:05:00.000Z",
+          "remoteDeleted": true,
+          "status": "SELECTED_GREEN",
+          "ancestorFailures": [
+            {
+              "attemptId": "g01-a01",
+              "evidenceId": "bootstrap-failure.g01-a01.json",
+              "digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+              "artifactId": 30,
+              "runId": 40,
+              "baseSha": "9999999999999999999999999999999999999999",
+              "parentSha": "9999999999999999999999999999999999999999",
+              "terminalDevelopSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "createdAt": "2026-07-17T23:59:00.000Z"
+            }
+          ],
+          "bootstrapSupersessionChainDigest": "sha256:eed506a586559b4ffb180154ddc29ee6f6c19d442dbbddf5833b9258783fd28c"
         },
-        "parentSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        "parentSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "f7": {
+          "schemaVersion": 1,
+          "goal": "G01",
+          "phase": "F7",
+          "status": "GREEN",
+          "evidenceId": "ci-bundle.bootstrap-recovery-a02.json",
+          "sourceSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+          "createdAt": "2026-07-18T00:00:00.000Z"
+        },
+        "f9": {
+          "schemaVersion": 1,
+          "goal": "G01",
+          "phase": "F9",
+          "status": "GREEN",
+          "evidenceId": "approval-envelope.bootstrap-recovery-a02.json",
+          "sourceSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "digest": "sha256:21a2f91d4fd6cdc4bddda0e9d071e7641d9c62804b4f199af6f9bad58e848273",
+          "createdAt": "2026-07-18T00:01:00.000Z",
+          "f7Digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+          "reviewObjects": [
+            {
+              "role": "code-reviewer",
+              "verdict": "APPROVE",
+              "reviewId": 1,
+              "nodeId": "R1",
+              "actorId": 11,
+              "commitId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "submittedAt": "2026-07-18T00:00:10.000Z"
+            },
+            {
+              "role": "architect",
+              "verdict": "CLEAR",
+              "reviewId": 2,
+              "nodeId": "R2",
+              "actorId": 12,
+              "commitId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "submittedAt": "2026-07-18T00:00:20.000Z"
+            },
+            {
+              "role": "verifier",
+              "verdict": "APPROVE",
+              "reviewId": 3,
+              "nodeId": "R3",
+              "actorId": 13,
+              "commitId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "submittedAt": "2026-07-18T00:00:30.000Z"
+            }
+          ]
+        },
+        "f11": {
+          "schemaVersion": 1,
+          "goal": "G01",
+          "phase": "F11",
+          "status": "GREEN",
+          "evidenceId": "merge-envelope.bootstrap-recovery-a02.json",
+          "sourceSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "digest": "sha256:e890d67f4cd6361b226eebe6470540a27a527de1e2233c37e09fbd551d8fad46",
+          "createdAt": "2026-07-18T00:04:00.000Z",
+          "f7Digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+          "f9Digest": "sha256:21a2f91d4fd6cdc4bddda0e9d071e7641d9c62804b4f199af6f9bad58e848273",
+          "mergeSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "terminalDevelopSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "remoteDeleted": true,
+          "mergedAt": "2026-07-18T00:02:00.000Z",
+          "remoteDeletionObservedAt": "2026-07-18T00:03:00.000Z",
+          "prNumber": 1,
+          "sourceBranch": "feature/2.5.0-g01-postmerge-bootstrap-a02",
+          "postMergeRunId": 10,
+          "postMergeCheckSuiteId": 20
+        }
       }
     },
     {
