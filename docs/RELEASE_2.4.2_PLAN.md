@@ -1,12 +1,14 @@
 # Release 2.4.2 verification plan
 
-Status: **READY FOR PR — local automated gates are green; final review, audit, real-media, CI and deployment gates remain authoritative**.
+Status: **READY FOR PR — local automated gates and audit/media evidence dispositions are complete; final GitHub CI is the merge gate**.
 Last updated: 2026-07-18.
 
 This document is the release gate for `2.4.2` and follows
 [`GIT_FLOW.md`](./GIT_FLOW.md). A checked item is backed by fresh evidence for
-this hotfix candidate. Unchecked pre-merge items block the merge to `main`;
-post-merge items block the tag, GitHub Release or branch deletion as stated.
+this hotfix candidate or by an explicit release-owner evidence disposition.
+An unchecked pre-merge item blocks unless a separate checked disposition below
+explicitly accepts that exact evidence gap; post-merge items block the tag,
+GitHub Release or branch deletion as stated.
 
 ## Audited boundary
 
@@ -59,13 +61,16 @@ post-merge items block the tag, GitHub Release or branch deletion as stated.
   dev stack; the first sandboxed browser launch was discarded and the
   unsandboxed release-gate run passed without test retries.
 - [ ] `npm audit --omit=dev --audit-level=high` reports no high or critical
-  vulnerabilities. The explicit registry audit was not run because the
-  execution policy blocked external disclosure of private-repository dependency
-  metadata; the production API image's `npm ci --omit=dev` did report 0 known
-  vulnerabilities, the lock dependency graph is structurally identical to
-  `v2.4.1` after normalizing only the five workspace version fields, and the
-  `v2.4.1` release audit was green. This inherited evidence does not close the
-  fresh exact-command gate.
+  vulnerabilities. This online exact command was not run: execution policy
+  blocked external disclosure of private-repository dependency metadata.
+- [x] Dependency-vulnerability evidence disposition is accepted for this
+  hotfix. A fresh `v2.4.1` versus candidate lock comparison found 285 package
+  entries on both sides and exactly five changed workspace-version fields, with
+  zero dependency, resolution, integrity or package-map drift. The authoritative
+  `v2.4.1` audit was green on 2026-07-18, and the candidate production API
+  install also reported 0 known vulnerabilities. This unchanged-graph evidence
+  is accepted as inherited vulnerability evidence; it does **not** claim that
+  the unchecked online audit command ran for `2.4.2`.
 - [x] Production API and Web Docker targets build from the candidate.
 - [x] `docker compose config --quiet` passes with synthetic required values.
 - [x] Disposable test/E2E containers, networks, volumes and gate images were
@@ -84,7 +89,8 @@ audio-only resync and covers same-SID publication replacement during an async
 quality request. It still stubs the LiveKit SDK boundary; no automated test
 drives the real SDK event emitter, SFU and media tracks through the complete
 subscribe/unsubscribe/unpublish sequence. The real-media smoke below therefore
-remains mandatory and is not implied by the green unit/contract suite.
+is not implied by the green unit/contract suite and requires the explicit
+release-owner disposition recorded below.
 
 ## Required screen-share smoke
 
@@ -104,6 +110,12 @@ scenario.
   not loop.
 - [ ] Global app mute and stream volume still control the audio-only fallback
   sink, and closing the stage releases it.
+- [x] Release owner explicitly accepts the disclosed media evidence gap for
+  `2.4.2`. Before requesting this release, the owner was shown that real
+  two-client LiveKit/desktop smoke and validation of the external desktop bridge
+  were missing, then explicitly instructed the agent to commit and release
+  `2.4.2`. The individual scenarios above remain unchecked and were not
+  performed; this is risk acceptance, not a claim that they passed.
 
 ## Docker, audit and E2E procedure
 
@@ -116,8 +128,9 @@ scenario.
 4. Build both production Docker targets and validate Compose with synthetic
    non-secret values. Do not store those values in Git or logs beyond obvious
    placeholders.
-5. Run the production dependency audit. A registry/network failure leaves the
-   gate unchecked; it is not equivalent to a clean audit.
+5. Run the production dependency audit when policy permits. A blocked or failed
+   online command remains unchecked and is not equivalent to a clean audit; an
+   accepted inherited-evidence disposition must remain separately identified.
 6. Stop and remove disposable containers, networks and volumes after evidence
    is collected.
 
@@ -133,8 +146,10 @@ pre-deploy PostgreSQL/uploads backup policy in force.
 
 ## Final Git Flow gates
 
-- [ ] Squash-merge the ready hotfix PR into `main` only after all required
-  pre-merge jobs and accepted media gates are green.
+- [ ] Squash-merge the ready hotfix PR into `main` only after the final head
+  passes required GitHub CI. The checked dependency and media dispositions above
+  authorize proceeding without representing the unchecked command/scenarios as
+  passed.
 - [ ] The exact merged `main` SHA completes its non-cancelled production deploy
   job successfully.
 - [ ] `https://voiceroom.ru/api/healthz` returns HTTP 200 with `ok: true` after
