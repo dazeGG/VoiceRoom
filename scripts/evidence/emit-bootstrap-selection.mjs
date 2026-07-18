@@ -110,7 +110,8 @@ function validateArtifactAuthority(authority, expected, label) {
   if (expected.runAttempt !== undefined) assert.equal(run.run_attempt, expected.runAttempt, `${label} producing run attempt substitution`);
   if (expected.completed) {
     assert.equal(run.status, "completed", `${label} producing run is incomplete`);
-    if (expected.success !== false) assert.equal(run.conclusion, "success", `${label} producing run is not green`);
+    if (expected.success === false) { assert.equal(typeof run.conclusion, "string", `${label} failure conclusion is absent`); assert.notEqual(run.conclusion, "success", `${label} failure ancestor cannot come from a green run`); }
+    else assert.equal(run.conclusion, "success", `${label} producing run is not green`);
   }
   return authority;
 }
@@ -185,6 +186,20 @@ export function buildF9Envelope(f7, authority) {
   assert.ok(instant(f7.createdAt, "F7.createdAt") < instant(createdAt, "approval observedAt"), "F9 must follow F7");
   assert.ok(reviewObjects.every(({ submittedAt }) => instant(submittedAt, "review submittedAt") < instant(createdAt, "approval observedAt")), "F9 must follow every review");
   return validateEnvelope({ schemaVersion: 1, goal: "G01", phase: "F9", status: "GREEN", evidenceId: `approval-envelope.${identity.suffix}`, attemptId: identity.attemptId, sourceBranch: f7.sourceBranch, sourceSha: f7.sourceSha, digest: compactDigest(reviewObjects), createdAt, f7Digest: f7.digest, reviewObjects }, "F9");
+}
+
+export function validateFallbackCandidatePair(f7, f9, candidateReport, authority) {
+  validateEnvelope(f7, "F7"); validateEnvelope(f9, "F9");
+  exactKeys(authority, ["repository", "observedAt", "f7Artifact", "f9Artifact"], "fallback candidate authority");
+  const identity = resolveCandidateIdentity(candidateReport, f7.sourceBranch, f7.sourceSha);
+  assert.equal(identity.attemptId, f7.attemptId); assert.equal(f9.attemptId, f7.attemptId); assert.equal(f9.sourceBranch, f7.sourceBranch); assert.equal(f9.sourceSha, f7.sourceSha); assert.equal(f9.f7Digest, f7.digest);
+  assert.equal(f7.digest, compactDigest(candidateReport), "fallback F7 must bind the authenticated candidate report");
+  for (const [artifact, envelope, kind, label] of [[authority.f7Artifact, f7, "candidate", "F7"], [authority.f9Artifact, f9, "approval", "F9"]]) {
+    validateArtifactAuthority(artifact, { name: artifactName(kind, envelope, artifact.run.id, artifact.run.run_attempt), headSha: f7.sourceSha, headBranch: f7.sourceBranch, event: "pull_request", repository: authority.repository, observedAt: authority.observedAt, completed: true, payload: envelope }, label);
+  }
+  assert.equal(authority.f7Artifact.run.id, authority.f9Artifact.run.id, "fallback F7/F9 must come from one run");
+  assert.equal(authority.f7Artifact.run.run_attempt, authority.f9Artifact.run.run_attempt, "fallback F7/F9 run attempt mismatch");
+  return identity;
 }
 
 function validateRequiredJobs(jobs) {
@@ -336,6 +351,8 @@ export function buildSelection(f7, f9, f11, authority, ancestorFailures = [], an
     [authority.f9Artifact, f9, artifactName("approval", f9, authority.f9Artifact.run.id, authority.f9Artifact.run.run_attempt), f7.sourceSha, f7.sourceBranch, "pull_request", "F9"],
     [authority.f11Artifact, f11, artifactName("merge", f11, f11.postMergeRun.id, f11.postMergeRun.runAttempt), terminalDevelopSha, "develop", "push", "F11"],
   ]) validateArtifactAuthority(artifactAuthority, { name, headSha, headBranch: branch, event, repository: authority.repository, observedAt: authority.observedAt, runId: label === "F11" ? f11.postMergeRun.id : undefined, runAttempt: label === "F11" ? f11.postMergeRun.runAttempt : undefined, completed: label !== "F11", payload: envelope }, label);
+  assert.equal(authority.f7Artifact.run.id, authority.f9Artifact.run.id, "F7/F9 must come from one premerge workflow run");
+  assert.equal(authority.f7Artifact.run.run_attempt, authority.f9Artifact.run.run_attempt, "F7/F9 run attempt mismatch");
   const ancestors = validateAncestorFailures(ancestorFailures); bindAncestorArtifacts(ancestors, ancestorArtifacts, authority.repository, authority.observedAt);
   if (f11.sourceBranch === "feature/2.5.0-g01-canonical-evidence-bootstrap") {
     assert.match(f11.attemptId, /^g01-a[0-9]{2,}$/); assert.equal(lineageSuffix, "g01.json"); assert.equal(ancestors.length, 0);

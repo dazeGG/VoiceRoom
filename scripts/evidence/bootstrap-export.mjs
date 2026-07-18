@@ -108,8 +108,8 @@ export function buildCandidateReport(inputs) {
   return { schemaVersion: 1, release: "2.5.0", registries };
 }
 
-function canonicalHistoricalIdentities(authority) {
-  const current = new Set([authority.pr.id, authority.pr.number, authority.pr.node_id]);
+function canonicalHistoricalIdentities(authority, { preBranch = false } = {}) {
+  const current = authority.pr ? new Set([authority.pr.id, authority.pr.number, authority.pr.node_id]) : new Set();
   const prs = authority.prPages.flatMap((page) => Array.isArray(page) ? page : []).filter((item) => !current.has(item.id) && !current.has(item.number) && !current.has(item.node_id));
   const runs = authority.runPages.flatMap((page) => page.workflow_runs ?? []);
   const artifacts = authority.artifactPages.flatMap((page) => page.artifacts ?? []);
@@ -128,12 +128,16 @@ function canonicalHistoricalIdentities(authority) {
       const pattern = new RegExp(`^g01-(?:candidate|approval|bootstrap-failure)-(g01-(?:recovery-)?a([0-9]{2,}))-run-${run.id}-attempt-${run.run_attempt}-head-${pr.head.sha}(?:-phase-(?:f11|selection))?$`);
       for (const artifact of artifacts) {
         const match = artifact.name?.match(pattern);
-        if (!match || artifact.expired || artifact.workflow_run?.id !== run.id) continue;
+        if (!match || artifact.workflow_run?.id !== run.id) continue;
         const ordinal = Number(match[2]);
         if (branchMatch[2]) assert.equal(ordinal, Number(branchMatch[2]), "historical recovery PR/artifact suffix conflict");
         else assert.match(match[1], /^g01-a[0-9]{2,}$/, "direct PR cannot authenticate a recovery identity");
-        authenticated.push({ ordinal, attemptId: match[1], prId: pr.id, prNumber: pr.number, prNodeId: pr.node_id, branch, headSha: pr.head.sha, runId: run.id, runAttempt: run.run_attempt, artifactId: artifact.id, artifactName: artifact.name });
+        authenticated.push({ ordinal, attemptId: match[1], prId: pr.id, prNumber: pr.number, prNodeId: pr.node_id, branch, headSha: pr.head.sha, runId: run.id, runAttempt: run.run_attempt, artifactId: artifact.id, artifactName: artifact.name, artifactExpired: artifact.expired === true });
       }
+    }
+    if (preBranch && authenticated.length === 0) {
+      const ordinal = branchMatch[2] ? Number(branchMatch[2]) : 1;
+      authenticated.push({ ordinal, attemptId: branchMatch[2] ? `g01-recovery-a${ordinalId(ordinal)}` : "g01-a01", prId: pr.id, prNumber: pr.number, prNodeId: pr.node_id, branch, headSha: pr.head.sha, runId: null, runAttempt: null, artifactId: null, artifactName: null, artifactExpired: null, prState: pr.state, mergedAt: pr.merged_at ?? null });
     }
     assert.ok(authenticated.length > 0, `unreconciled canonical historical PR identity: ${pr.number ?? pr.id}`);
     rows.push(...authenticated);
@@ -142,7 +146,7 @@ function canonicalHistoricalIdentities(authority) {
   for (const row of rows) {
     const identity = JSON.stringify({ attemptId: row.attemptId, prId: row.prId, prNumber: row.prNumber, prNodeId: row.prNodeId, branch: row.branch, headSha: row.headSha });
     const prior = byOrdinal.get(row.ordinal);
-    if (prior && prior !== identity) throw new Error(`conflicting canonical historical PR identity for ordinal ${row.ordinal}`);
+    if (prior && prior !== identity && !preBranch) throw new Error(`conflicting canonical historical PR identity for ordinal ${row.ordinal}`);
     byOrdinal.set(row.ordinal, identity);
   }
   return rows.sort((a, b) => a.ordinal - b.ordinal || a.runId - b.runId || a.artifactId - b.artifactId);
@@ -150,8 +154,68 @@ function canonicalHistoricalIdentities(authority) {
 
 function ordinalId(ordinal) { return String(ordinal).padStart(2, "0"); }
 
+function hashJson(value) { return `sha256:${crypto.createHash("sha256").update(JSON.stringify(value)).digest("hex")}`; }
+
+export function prepareBootstrapAuthority(candidateReport, authority) {
+  exactKeys(authority, ["repository", "developRef", "prPages", "runPages", "artifactPages", "paginationComplete", "observedAt"], "pre-branch authority");
+  assert.equal(authority.paginationComplete, true, "pre-branch preparation requires complete pagination");
+  assert.match(authority.developRef?.object?.sha ?? "", SHA, "pre-branch develop ref is required");
+  const observed = Date.parse(authority.observedAt);
+  assert.ok(Number.isFinite(observed) && new Date(observed).toISOString() === authority.observedAt, "pre-branch observation must be canonical UTC");
+  const normalizedIdentities = canonicalHistoricalIdentities(authority, { preBranch: true });
+  const tracked = candidateReport.registries.flatMap(({ candidate }) => [...(candidate.attempts ?? []), ...(candidate.landedAncestors ?? [])]).map((item) => Number(item.attemptId.match(/[0-9]+$/)?.[0])).filter(Number.isInteger);
+  const artifactOrdinals = authority.artifactPages.flatMap((page) => page.artifacts ?? []).flatMap((artifact) => {
+    const match = artifact.name?.match(/^g01-(?:candidate|approval|merge|bootstrap-failure|selection|bootstrap-preparation)-(?:g01-)?(?:recovery-)?a([0-9]{2,})-/);
+    return match ? [Number(match[1])] : [];
+  });
+  const conflicts = [];
+  const byOrdinal = new Map();
+  for (const row of normalizedIdentities) {
+    const identity = JSON.stringify({ prId: row.prId, branch: row.branch, headSha: row.headSha });
+    if (byOrdinal.has(row.ordinal) && byOrdinal.get(row.ordinal) !== identity) conflicts.push(row.ordinal);
+    else byOrdinal.set(row.ordinal, identity);
+  }
+  const canonicalPrs = authority.prPages.flatMap((page) => Array.isArray(page) ? page : []).filter((pr) => /^feature\/2\.5\.0-g01-(?:canonical-evidence-bootstrap|postmerge-bootstrap-a[0-9]{2,})$/.test(pr.head?.ref ?? ""));
+  const activeBranches = canonicalPrs.filter((pr) => pr.state === "open").map((pr) => pr.head.ref).sort();
+  const cleanupBranches = canonicalPrs.filter((pr) => pr.state === "closed" && !pr.merged_at).map((pr) => pr.head.ref).sort();
+  const observedMax = Math.max(0, ...tracked, ...artifactOrdinals, ...normalizedIdentities.map(({ ordinal }) => ordinal));
+  const nextOrdinal = observedMax + 1;
+  const suffix = ordinalId(nextOrdinal);
+  const directConsumed = observedMax > 0;
+  const attemptId = directConsumed ? `g01-recovery-a${suffix}` : `g01-a${suffix}`;
+  const branchName = directConsumed ? `feature/2.5.0-g01-postmerge-bootstrap-a${suffix}` : "feature/2.5.0-g01-canonical-evidence-bootstrap";
+  const replayRecord = {
+    queries: {
+      developRef: { endpoint: `repos/${authority.repository}/git/ref/heads/develop`, variables: {} },
+      prs: { endpoint: `repos/${authority.repository}/pulls`, variables: { state: "all", per_page: 100 } },
+      runs: { endpoint: `repos/${authority.repository}/actions/workflows/ci.yml/runs`, variables: { per_page: 100 } },
+      artifacts: { endpoint: `repos/${authority.repository}/actions/artifacts`, variables: { per_page: 100 }, includesExpiredMetadata: true },
+    },
+    responses: { developRef: hashJson(authority.developRef) },
+    snapshots: { developRef: structuredClone(authority.developRef), prPages: structuredClone(authority.prPages), runPages: structuredClone(authority.runPages), artifactPages: structuredClone(authority.artifactPages) },
+    pages: Object.fromEntries([["prs", authority.prPages], ["runs", authority.runPages], ["artifacts", authority.artifactPages]].map(([name, pages]) => [name, pages.map((page, index) => ({ index, sha256: hashJson(page) }))])),
+    pagination: Object.fromEntries([["prs", authority.prPages], ["runs", authority.runPages], ["artifacts", authority.artifactPages]].map(([name, pages]) => [name, { pageOrder: pages.map((_, index) => index), endMarker: "gh-api--paginate-completed-no-next-page" }])),
+    normalizedIdentities,
+    expiredArtifactOrdinals: [...new Set(authority.artifactPages.flatMap((page) => page.artifacts ?? []).filter(({ expired }) => expired === true).flatMap((artifact) => artifact.name?.match(/a([0-9]{2,})/)?.[1] ? [Number(artifact.name.match(/a([0-9]{2,})/)[1])] : []))].sort((a, b) => a - b),
+    observedMax,
+    reconstructionDigest: hashJson({ normalizedIdentities, artifactOrdinals: [...artifactOrdinals].sort((a, b) => a - b), tracked: [...tracked].sort((a, b) => a - b), observedMax }),
+  };
+  const authorityDigest = hashJson(replayRecord);
+  const status = conflicts.length ? "WAITING_CONFLICT" : activeBranches.length ? "WAITING_ACTIVE_BRANCH" : "READY";
+  return { schemaVersion: 1, release: "2.5.0", status, repository: authority.repository, observedAt: authority.observedAt, developSha: authority.developRef.object.sha, nextOrdinal, attemptId, branchName, cleanupBranches, activeBranches, conflicts: [...new Set(conflicts)].sort((a, b) => a - b), authorityDigest, replayRecord };
+}
+
+function validatePreparedAuthority(prepared, authority, ordinal) {
+  exactKeys(prepared, ["schemaVersion", "release", "status", "repository", "observedAt", "developSha", "nextOrdinal", "attemptId", "branchName", "cleanupBranches", "activeBranches", "conflicts", "authorityDigest", "replayRecord"], "prepared authority");
+  assert.equal(prepared.schemaVersion, 1); assert.equal(prepared.release, "2.5.0"); assert.equal(prepared.status, "READY", "pre-branch preparation is not ready");
+  assert.equal(prepared.repository, authority.repository); assert.equal(prepared.developSha, authority.pr.base.sha); assert.equal(prepared.nextOrdinal, ordinal);
+  assert.equal(prepared.branchName, authority.pr.head.ref, "CI branch is not the branch authorized before creation");
+  assert.equal(prepared.authorityDigest, hashJson(prepared.replayRecord), "prepared authority digest must bind the full canonical replay record");
+  assert.equal(prepared.replayRecord.observedMax + 1, ordinal); assert.deepEqual(prepared.activeBranches, []); assert.deepEqual(prepared.conflicts, []);
+}
+
 export function reconstructNextOrdinal(candidateReport, authority) {
-  exactKeys(authority, ["repository", "pr", "currentRun", "headCommit", "prPages", "runPages", "artifactPages", "paginationComplete", "capture", "observedAt", "priorFailure"], "bootstrap activation authority");
+  exactKeys(authority, ["repository", "pr", "currentRun", "headCommit", "prPages", "runPages", "artifactPages", "paginationComplete", "capture", "observedAt", "priorFailure", "preparedAuthority"], "bootstrap activation authority");
   assert.equal(authority.paginationComplete, true, "all PR/run/artifact pages must be completely consumed");
   validateActivationCapture(authority);
   const tracked = candidateReport.registries.flatMap(({ candidate }) => [...(candidate.attempts ?? []), ...(candidate.landedAncestors ?? [])]).map((item) => Number(item.attemptId.match(/[0-9]+$/)?.[0])).filter(Number.isInteger);
@@ -251,7 +315,8 @@ export function activateCandidateReport(candidateReport, authority, planBytes, s
   assert.equal(recoveries.state, "G01_PRE_BRANCH", "tracked recovery registry must be PRE_BRANCH before atomic activation");
   assert.equal(attempts.currentAttempt, null); assert.equal(recoveries.currentRecovery, null);
   const ordinal = reconstructNextOrdinal(candidateReport, authority); const suffix = ordinalId(ordinal);
-  const authorityDigest = `sha256:${crypto.createHash("sha256").update(JSON.stringify({ repository: authority.repository, prId: authority.pr.id, prNodeId: authority.pr.node_id, prNumber: authority.pr.number, runId: authority.currentRun.id, runAttempt: authority.currentRun.run_attempt, headSha: authority.pr.head.sha, observedAt: authority.observedAt })).digest("hex")}`;
+  validatePreparedAuthority(authority.preparedAuthority, authority, ordinal);
+  const authorityDigest = authority.preparedAuthority.authorityDigest;
   const planSpecPairDigest = `sha256:${crypto.createHash("sha256").update(Buffer.concat([Buffer.from(String(planBytes.length)), Buffer.from(":"), planBytes, Buffer.from(String(specBytes.length)), Buffer.from(":"), specBytes])).digest("hex")}`;
   const common = { baseSha: authority.pr.base.sha, parentSha: authority.headCommit.parents[0].sha, headSha: authority.pr.head.sha, authorityDigest, planSpecPairDigest, firstAuthoritativeId: `pr:${authority.pr.node_id}:run:${authority.currentRun.id}:attempt:${authority.currentRun.run_attempt}` };
   if (authority.pr.head.ref === "feature/2.5.0-g01-canonical-evidence-bootstrap") {
@@ -283,11 +348,14 @@ export function activateCandidateReport(candidateReport, authority, planBytes, s
   attempts.state = "G01_PREMERGE_ACTIVE"; recoveries.state = "G01_PREMERGE_ACTIVE";
   attempts.ordinalReconstruction = { complete: true, nextOrdinal: ordinal + 1, reason: "1+max over complete authenticated PR/run/artifact history and tracked consumed ordinals" };
   activated.registries = activated.registries.map((entry) => ({ ...entry, candidate: named.get(entry.name) }));
-  activated.activationAuthority = structuredClone(authority.capture);
+  activated.activationAuthority = { preparedAuthority: structuredClone(authority.preparedAuthority), activationCapture: structuredClone(authority.capture) };
   return { report: activated, identity: activeIdentity(activated, authority.pr.head.sha, authority.pr.head.ref), ordinal };
 }
 
 function activeIdentity(candidateReport, sourceSha, sourceBranch) {
+  exactKeys(candidateReport.activationAuthority, ["preparedAuthority", "activationCapture"], "candidate activation authority");
+  const prepared = candidateReport.activationAuthority.preparedAuthority;
+  assert.equal(prepared.authorityDigest, hashJson(prepared.replayRecord), "candidate preparation replay digest mismatch");
   const named = new Map(candidateReport.registries.map(({ name, candidate }) => [name, candidate]));
   if (sourceBranch === "feature/2.5.0-g01-canonical-evidence-bootstrap") {
     const registry = named.get("bootstrap-attempts.json");
@@ -295,6 +363,7 @@ function activeIdentity(candidateReport, sourceSha, sourceBranch) {
     const matches = registry.attempts.filter(({ attemptId }) => attemptId === registry.currentAttempt);
     assert.equal(matches.length, 1, "direct current attempt must resolve exactly once");
     const current = matches[0];
+    assert.equal(current.authorityDigest, prepared.authorityDigest, "direct attempt is not bound to its prepared replay");
     assert.equal(current.branch, sourceBranch); assert.equal(current.headSha, sourceSha);
     assert.equal(Number(current.attemptId.match(/^g01-a([0-9]{2,})$/)?.[1]), current.ordinal, "direct attempt ID must bind its reconstructed ordinal");
     return { attemptId: current.attemptId, suffix: "g01.json" };
@@ -307,6 +376,7 @@ function activeIdentity(candidateReport, sourceSha, sourceBranch) {
   const matches = registry.landedAncestors.filter(({ attemptId }) => attemptId === registry.currentRecovery);
   assert.equal(matches.length, 1, "recovery current attempt must resolve exactly once");
   const current = matches[0];
+  assert.equal(current.authorityDigest, prepared.authorityDigest, "recovery attempt is not bound to its prepared replay");
   assert.equal(current.branch, sourceBranch); assert.equal(current.headSha, sourceSha);
   assert.equal(current.attemptId, `g01-recovery-a${suffix}`, "recovery attempt/branch suffix mismatch");
   return { attemptId: current.attemptId, suffix: `bootstrap-recovery-a${suffix}.json` };
@@ -341,12 +411,13 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     return args[index + 1];
   };
   const activationPath = args.includes("--activate-authority") ? option("--activate-authority") : undefined;
-  const optionNames = ["--source-sha", "--source-branch", "--created-at", "--activate-authority", "--plan", "--spec"];
+  const preparePath = args.includes("--prepare") ? option("--prepare") : undefined;
+  const optionNames = ["--source-sha", "--source-branch", "--created-at", "--activate-authority", "--prepare", "--plan", "--spec"];
   const excluded = new Set(["--f7", ...optionNames, ...optionNames.filter((name) => args.includes(name)).map(option)]);
   const files = args.filter((value) => !excluded.has(value));
   if (files.length === 0) throw new Error("usage: bootstrap-export.mjs REGISTRY.json [REGISTRY.json]");
   let report = buildCandidateReport(files.map((filename) => ({ filename, bytes: fs.readFileSync(filename) })));
   if (activationPath) report = activateCandidateReport(report, JSON.parse(fs.readFileSync(activationPath, "utf8")), fs.readFileSync(option("--plan")), fs.readFileSync(option("--spec"))).report;
-  const output = f7 ? buildF7Envelope(report, option("--source-sha"), option("--source-branch"), option("--created-at")) : report;
+  const output = preparePath ? prepareBootstrapAuthority(report, JSON.parse(fs.readFileSync(preparePath, "utf8"))) : f7 ? buildF7Envelope(report, option("--source-sha"), option("--source-branch"), option("--created-at")) : report;
   process.stdout.write(`${JSON.stringify(output)}\n`);
 }
