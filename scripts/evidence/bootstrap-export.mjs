@@ -108,16 +108,44 @@ export function buildCandidateReport(inputs) {
   return { schemaVersion: 1, release: "2.5.0", registries };
 }
 
-function observedOrdinals(value, found = new Set()) {
-  if (Array.isArray(value)) { for (const item of value) observedOrdinals(item, found); return found; }
-  if (!value || typeof value !== "object") return found;
-  for (const [key, child] of Object.entries(value)) {
-    if (typeof child === "string" && /^(?:attemptId|name|ref|head_ref|branch|evidenceId)$/i.test(key)) {
-      for (const match of child.matchAll(/(?:g01-(?:recovery-)?a|postmerge-bootstrap-a)([0-9]{2,})/g)) found.add(Number(match[1]));
+function canonicalHistoricalIdentities(authority) {
+  const current = new Set([authority.pr.id, authority.pr.number, authority.pr.node_id]);
+  const prs = authority.prPages.flatMap((page) => Array.isArray(page) ? page : []).filter((item) => !current.has(item.id) && !current.has(item.number) && !current.has(item.node_id));
+  const runs = authority.runPages.flatMap((page) => page.workflow_runs ?? []);
+  const artifacts = authority.artifactPages.flatMap((page) => page.artifacts ?? []);
+  const rows = [];
+  for (const pr of prs) {
+    const branch = pr.head?.ref;
+    const branchMatch = branch?.match(/^feature\/2\.5\.0-g01-(canonical-evidence-bootstrap|postmerge-bootstrap-a([0-9]{2,}))$/);
+    if (!branchMatch) continue;
+    assert.match(pr.head?.sha ?? "", SHA, "canonical historical PR head is required");
+    assert.equal(pr.head?.repo?.full_name, authority.repository, "canonical historical PR repository mismatch");
+    assert.equal(pr.base?.repo?.full_name, authority.repository, "canonical historical PR base repository mismatch");
+    assert.equal(pr.base?.ref, "develop", "canonical historical PR base mismatch");
+    const exactRuns = runs.filter((run) => run.event === "pull_request" && run.path === ".github/workflows/ci.yml" && run.repository?.full_name === authority.repository && run.head_sha === pr.head.sha && run.head_branch === branch);
+    const authenticated = [];
+    for (const run of exactRuns) {
+      const pattern = new RegExp(`^g01-(?:candidate|approval|bootstrap-failure)-(g01-(?:recovery-)?a([0-9]{2,}))-run-${run.id}-attempt-${run.run_attempt}-head-${pr.head.sha}(?:-phase-(?:f11|selection))?$`);
+      for (const artifact of artifacts) {
+        const match = artifact.name?.match(pattern);
+        if (!match || artifact.expired || artifact.workflow_run?.id !== run.id) continue;
+        const ordinal = Number(match[2]);
+        if (branchMatch[2]) assert.equal(ordinal, Number(branchMatch[2]), "historical recovery PR/artifact suffix conflict");
+        else assert.match(match[1], /^g01-a[0-9]{2,}$/, "direct PR cannot authenticate a recovery identity");
+        authenticated.push({ ordinal, attemptId: match[1], prId: pr.id, prNumber: pr.number, prNodeId: pr.node_id, branch, headSha: pr.head.sha, runId: run.id, runAttempt: run.run_attempt, artifactId: artifact.id, artifactName: artifact.name });
+      }
     }
-    observedOrdinals(child, found);
+    assert.ok(authenticated.length > 0, `unreconciled canonical historical PR identity: ${pr.number ?? pr.id}`);
+    rows.push(...authenticated);
   }
-  return found;
+  const byOrdinal = new Map();
+  for (const row of rows) {
+    const identity = JSON.stringify({ attemptId: row.attemptId, prId: row.prId, prNumber: row.prNumber, prNodeId: row.prNodeId, branch: row.branch, headSha: row.headSha });
+    const prior = byOrdinal.get(row.ordinal);
+    if (prior && prior !== identity) throw new Error(`conflicting canonical historical PR identity for ordinal ${row.ordinal}`);
+    byOrdinal.set(row.ordinal, identity);
+  }
+  return rows.sort((a, b) => a.ordinal - b.ordinal || a.runId - b.runId || a.artifactId - b.artifactId);
 }
 
 function ordinalId(ordinal) { return String(ordinal).padStart(2, "0"); }
@@ -126,24 +154,58 @@ export function reconstructNextOrdinal(candidateReport, authority) {
   exactKeys(authority, ["repository", "pr", "currentRun", "headCommit", "prPages", "runPages", "artifactPages", "paginationComplete", "capture", "observedAt", "priorFailure"], "bootstrap activation authority");
   assert.equal(authority.paginationComplete, true, "all PR/run/artifact pages must be completely consumed");
   validateActivationCapture(authority);
-  const currentPrIds = new Set([authority.pr.id, authority.pr.number, authority.pr.node_id]);
-  const historicalPrPages = authority.prPages.map((page) => Array.isArray(page)
-    ? page.filter((pr) => !currentPrIds.has(pr.id) && !currentPrIds.has(pr.number) && !currentPrIds.has(pr.node_id))
-    : page);
-  const currentCandidateRunIds = new Set([authority.currentRun.id]);
-  for (const page of authority.runPages) for (const run of page.workflow_runs ?? []) {
-    if (run.head_sha === authority.pr.head.sha && run.head_branch === authority.pr.head.ref) currentCandidateRunIds.add(run.id);
-  }
-  const historicalRunPages = authority.runPages.map((page) => ({ ...page, workflow_runs: (page.workflow_runs ?? []).filter((run) => !currentCandidateRunIds.has(run.id)) }));
-  const historicalArtifactPages = authority.artifactPages.map((page) => ({ ...page, artifacts: (page.artifacts ?? []).filter((artifact) => !currentCandidateRunIds.has(artifact.workflow_run?.id)) }));
-  const ordinals = observedOrdinals({ candidateReport, prPages: historicalPrPages, runPages: historicalRunPages, artifactPages: historicalArtifactPages });
-  return Math.max(0, ...ordinals) + 1;
+  const tracked = candidateReport.registries.flatMap(({ candidate }) => [...(candidate.attempts ?? []), ...(candidate.landedAncestors ?? [])]).map((item) => Number(item.attemptId.match(/[0-9]+$/)?.[0])).filter(Number.isInteger);
+  const identities = canonicalHistoricalIdentities(authority);
+  assert.deepEqual(authority.capture.normalizedIdentities, identities, "persisted normalized historical identities mismatch");
+  const observedMax = Math.max(0, ...tracked, ...identities.map(({ ordinal }) => ordinal));
+  assert.equal(authority.capture.observedMax, observedMax, "persisted observed maximum mismatch");
+  return observedMax + 1;
+}
+
+function captureDigest(capture) {
+  const core = structuredClone(capture); delete core.reconstructionDigest;
+  return `sha256:${crypto.createHash("sha256").update(JSON.stringify(core)).digest("hex")}`;
+}
+
+export function buildActivationCapture(authority, candidateReport) {
+  const hash = (value) => `sha256:${crypto.createHash("sha256").update(JSON.stringify(value)).digest("hex")}`;
+  const pageHashes = (values) => values.map((value, index) => ({ index, sha256: hash(value) }));
+  const normalizedIdentities = canonicalHistoricalIdentities(authority);
+  const tracked = candidateReport.registries.flatMap(({ candidate }) => [...(candidate.attempts ?? []), ...(candidate.landedAncestors ?? [])]).map((item) => Number(item.attemptId.match(/[0-9]+$/)?.[0])).filter(Number.isInteger);
+  const capture = {
+    queries: {
+      pr: { endpoint: `repos/${authority.repository}/pulls/${authority.pr.number}`, variables: { prNumber: authority.pr.number } },
+      currentRun: { endpoint: `repos/${authority.repository}/actions/runs/${authority.currentRun.id}`, variables: { runId: authority.currentRun.id } },
+      headCommit: { endpoint: `repos/${authority.repository}/commits/${authority.pr.head.sha}`, variables: { sha: authority.pr.head.sha } },
+      prs: { endpoint: `repos/${authority.repository}/pulls`, variables: { state: "all", per_page: 100 } },
+      runs: { endpoint: `repos/${authority.repository}/actions/workflows/ci.yml/runs`, variables: { per_page: 100 } },
+      artifacts: { endpoint: `repos/${authority.repository}/actions/artifacts`, variables: { per_page: 100 } },
+    },
+    responses: { pr: hash(authority.pr), currentRun: hash(authority.currentRun), headCommit: hash(authority.headCommit) },
+    pages: { prs: pageHashes(authority.prPages), runs: pageHashes(authority.runPages), artifacts: pageHashes(authority.artifactPages) },
+    pagination: Object.fromEntries([["prs", authority.prPages], ["runs", authority.runPages], ["artifacts", authority.artifactPages]].map(([name, values]) => [name, { pageOrder: values.map((_, index) => index), endMarker: "gh-api--paginate-completed-no-next-page" }])),
+    facts: { prNumber: authority.pr.number, prId: authority.pr.id, prNodeId: authority.pr.node_id, runId: authority.currentRun.id, runAttempt: authority.currentRun.run_attempt, headSha: authority.pr.head.sha, headBranch: authority.pr.head.ref },
+    normalizedIdentities,
+    observedMax: Math.max(0, ...tracked, ...normalizedIdentities.map(({ ordinal }) => ordinal)),
+  };
+  capture.reconstructionDigest = captureDigest(capture);
+  return capture;
 }
 
 function validateActivationCapture(authority) {
-  exactKeys(authority.capture, ["responses", "pages", "facts"], "activation capture");
+  exactKeys(authority.capture, ["queries", "responses", "pages", "pagination", "facts", "normalizedIdentities", "observedMax", "reconstructionDigest"], "activation capture");
+  exactKeys(authority.capture.queries, ["pr", "currentRun", "headCommit", "prs", "runs", "artifacts"], "activation queries");
+  assert.deepEqual(authority.capture.queries, {
+    pr: { endpoint: `repos/${authority.repository}/pulls/${authority.pr.number}`, variables: { prNumber: authority.pr.number } },
+    currentRun: { endpoint: `repos/${authority.repository}/actions/runs/${authority.currentRun.id}`, variables: { runId: authority.currentRun.id } },
+    headCommit: { endpoint: `repos/${authority.repository}/commits/${authority.pr.head.sha}`, variables: { sha: authority.pr.head.sha } },
+    prs: { endpoint: `repos/${authority.repository}/pulls`, variables: { state: "all", per_page: 100 } },
+    runs: { endpoint: `repos/${authority.repository}/actions/workflows/ci.yml/runs`, variables: { per_page: 100 } },
+    artifacts: { endpoint: `repos/${authority.repository}/actions/artifacts`, variables: { per_page: 100 } },
+  }, "activation query variables mismatch");
   exactKeys(authority.capture.responses, ["pr", "currentRun", "headCommit"], "activation response hashes");
   exactKeys(authority.capture.pages, ["prs", "runs", "artifacts"], "activation page hashes");
+  exactKeys(authority.capture.pagination, ["prs", "runs", "artifacts"], "activation pagination");
   exactKeys(authority.capture.facts, ["prNumber", "prId", "prNodeId", "runId", "runAttempt", "headSha", "headBranch"], "activation facts");
   for (const value of Object.values(authority.capture.responses)) assert.match(value, DIGEST);
   assert.equal(authority.capture.responses.pr, `sha256:${crypto.createHash("sha256").update(JSON.stringify(authority.pr)).digest("hex")}`);
@@ -158,8 +220,11 @@ function validateActivationCapture(authority) {
   for (const [name, values] of [["prs", authority.prPages], ["runs", authority.runPages], ["artifacts", authority.artifactPages]]) {
     assert.equal(authority.capture.pages[name].length, values.length, `${name} page hash count mismatch`);
     values.forEach((value, index) => assert.equal(authority.capture.pages[name][index].sha256, `sha256:${crypto.createHash("sha256").update(JSON.stringify(value)).digest("hex")}`, `${name} page hash mismatch at ${index}`));
+    assert.deepEqual(authority.capture.pagination[name], { pageOrder: values.map((_, index) => index), endMarker: "gh-api--paginate-completed-no-next-page" }, `${name} pagination proof mismatch`);
   }
   assert.deepEqual(authority.capture.facts, { prNumber: authority.pr.number, prId: authority.pr.id, prNodeId: authority.pr.node_id, runId: authority.currentRun.id, runAttempt: authority.currentRun.run_attempt, headSha: authority.pr.head.sha, headBranch: authority.pr.head.ref });
+  assert.match(authority.capture.reconstructionDigest, DIGEST);
+  assert.equal(authority.capture.reconstructionDigest, captureDigest(authority.capture), "activation reconstruction digest mismatch");
 }
 
 export function activateCandidateReport(candidateReport, authority, planBytes, specBytes) {

@@ -96,7 +96,7 @@
           "artifactBindings": {
             "f7": {
               "artifactId": 1,
-              "artifactName": "fixture-1",
+              "artifactName": "g01-candidate-g01-a02-run-10-attempt-1-head-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
               "runId": 10,
               "runAttempt": 1,
               "headSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -105,7 +105,7 @@
             },
             "f9": {
               "artifactId": 2,
-              "artifactName": "fixture-2",
+              "artifactName": "g01-approval-g01-a02-run-20-attempt-1-head-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
               "runId": 20,
               "runAttempt": 1,
               "headSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -114,7 +114,7 @@
             },
             "f11": {
               "artifactId": 3,
-              "artifactName": "fixture-3",
+              "artifactName": "g01-merge-g01-a02-run-30-attempt-1-head-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
               "runId": 30,
               "runAttempt": 1,
               "headSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
@@ -122,7 +122,7 @@
               "payloadDigest": "sha256:5e2ca2aaba1a25e07166f8f537d63109c6e598d23788c374695087646c044cdd"
             }
           },
-          "selectionDigest": "sha256:adb288d3d8c30d436d2554f0ca272d35ca1db062b35b92471cdb3a8f02691865"
+          "selectionDigest": "sha256:3964eb66802880c954b123b8e77671dd2447073a6f7c597cf52a93fd70178160"
         },
         "f7": {
           "schemaVersion": 1,
@@ -416,7 +416,7 @@
           "artifactBindings": {
             "f7": {
               "artifactId": 1,
-              "artifactName": "fixture-1",
+              "artifactName": "g01-candidate-g01-recovery-a02-run-10-attempt-1-head-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
               "runId": 10,
               "runAttempt": 1,
               "headSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -425,7 +425,7 @@
             },
             "f9": {
               "artifactId": 2,
-              "artifactName": "fixture-2",
+              "artifactName": "g01-approval-g01-recovery-a02-run-20-attempt-1-head-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
               "runId": 20,
               "runAttempt": 1,
               "headSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -434,7 +434,7 @@
             },
             "f11": {
               "artifactId": 3,
-              "artifactName": "fixture-3",
+              "artifactName": "g01-merge-g01-recovery-a02-run-30-attempt-1-head-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
               "runId": 30,
               "runAttempt": 1,
               "headSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
@@ -442,7 +442,7 @@
               "payloadDigest": "sha256:af6b428e87ece37b7d03e16f0bf23603bce8448f53f8140017b9340dd36708e0"
             }
           },
-          "selectionDigest": "sha256:ffaa7a02221000b611b16b9bdb620f06f4ac654aaf5042d23307f636cd3b640a"
+          "selectionDigest": "sha256:93f1a75976a3f1baa34ded1e05915ae25ca1a5e3f6a1fb6408750f5615a03d00"
         },
         "parentSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         "f7": {

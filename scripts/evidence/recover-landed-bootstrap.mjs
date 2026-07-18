@@ -39,9 +39,19 @@ function validSelection(facts) {
     assert.equal(selection.evidenceId, `bootstrap-selection.${selection.attemptId}.json`);
     const selectionCore = { ...selection }; delete selectionCore.selectionDigest; assert.equal(selection.selectionDigest, `sha256:${crypto.createHash("sha256").update(JSON.stringify(selectionCore)).digest("hex")}`);
     assert.equal(facts.f7.sourceBranch, facts.f9.sourceBranch); assert.equal(facts.f9.sourceBranch, facts.f11.sourceBranch);
+    assert.deepEqual(Object.keys(selection.artifactBindings).sort(), ["f11", "f7", "f9"]);
+    const payloadDigest = (envelope) => `sha256:${crypto.createHash("sha256").update(`${JSON.stringify(envelope)}\n`).digest("hex")}`;
+    for (const [label, envelope, phase, headSha] of [["f7", facts.f7, "candidate", facts.f7.sourceSha], ["f9", facts.f9, "approval", facts.f7.sourceSha], ["f11", facts.f11, "merge", terminalDevelopSha]]) {
+      const binding = selection.artifactBindings[label];
+      assert.deepEqual(Object.keys(binding).sort(), ["archiveDigest", "artifactId", "artifactName", "headSha", "payloadDigest", "runAttempt", "runId"].sort());
+      assert.ok(Number.isInteger(binding.artifactId) && binding.artifactId > 0); assert.ok(Number.isInteger(binding.runId) && binding.runId > 0); assert.ok(Number.isInteger(binding.runAttempt) && binding.runAttempt > 0);
+      assert.equal(binding.artifactName, `g01-${phase}-${selection.attemptId}-run-${binding.runId}-attempt-${binding.runAttempt}-head-${headSha}`);
+      assert.equal(binding.headSha, headSha); assert.match(binding.archiveDigest, /^sha256:[0-9a-f]{64}$/); assert.equal(binding.payloadDigest, payloadDigest(envelope));
+    }
     assert.equal(selection.bootstrapSupersessionChainDigest, `sha256:${crypto.createHash("sha256").update(JSON.stringify(selection.ancestorFailures)).digest("hex")}`);
     assert.ok(Date.parse(facts.f11.createdAt) < Date.parse(selection.createdAt));
     assert.ok([facts.mergeSha, facts.developSha, facts.baseSha, facts.originSha, terminalDevelopSha].every((sha) => sha === facts.mergeSha));
+    assert.ok(["direct-canonical", "landed-recovery"].includes(selection.terminalKind));
     if (selection.terminalKind === "direct-canonical") {
       assert.match(selection.attemptId, /^g01-a[0-9]{2,}$/); assert.equal(facts.f11.sourceBranch, "feature/2.5.0-g01-canonical-evidence-bootstrap"); assert.equal(lineageSuffix, "g01.json"); assert.equal(selection.ancestorFailures.length, 0);
     } else {

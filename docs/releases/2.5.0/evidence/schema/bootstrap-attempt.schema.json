@@ -19,8 +19,14 @@
     },
     "firstAuthoritativeId": {
       "oneOf": [
-        { "minLength": 1, "type": "string" },
-        { "minimum": 1, "type": "integer" }
+        {
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "minimum": 1,
+          "type": "integer"
+        }
       ]
     },
     "headSha": {
@@ -37,7 +43,8 @@
     },
     "ordinal": {
       "minimum": 1,
-      "type": "integer"
+      "type": "integer",
+      "maximum": 99
     }
   },
   "required": [
@@ -51,5 +58,1002 @@
     "planSpecPairDigest",
     "firstAuthoritativeId"
   ],
-  "type": "object"
+  "type": "object",
+  "allOf": [
+    {
+      "oneOf": [
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a01"
+            },
+            "ordinal": {
+              "const": 1
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a02"
+            },
+            "ordinal": {
+              "const": 2
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a03"
+            },
+            "ordinal": {
+              "const": 3
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a04"
+            },
+            "ordinal": {
+              "const": 4
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a05"
+            },
+            "ordinal": {
+              "const": 5
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a06"
+            },
+            "ordinal": {
+              "const": 6
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a07"
+            },
+            "ordinal": {
+              "const": 7
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a08"
+            },
+            "ordinal": {
+              "const": 8
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a09"
+            },
+            "ordinal": {
+              "const": 9
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a10"
+            },
+            "ordinal": {
+              "const": 10
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a11"
+            },
+            "ordinal": {
+              "const": 11
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a12"
+            },
+            "ordinal": {
+              "const": 12
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a13"
+            },
+            "ordinal": {
+              "const": 13
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a14"
+            },
+            "ordinal": {
+              "const": 14
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a15"
+            },
+            "ordinal": {
+              "const": 15
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a16"
+            },
+            "ordinal": {
+              "const": 16
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a17"
+            },
+            "ordinal": {
+              "const": 17
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a18"
+            },
+            "ordinal": {
+              "const": 18
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a19"
+            },
+            "ordinal": {
+              "const": 19
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a20"
+            },
+            "ordinal": {
+              "const": 20
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a21"
+            },
+            "ordinal": {
+              "const": 21
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a22"
+            },
+            "ordinal": {
+              "const": 22
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a23"
+            },
+            "ordinal": {
+              "const": 23
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a24"
+            },
+            "ordinal": {
+              "const": 24
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a25"
+            },
+            "ordinal": {
+              "const": 25
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a26"
+            },
+            "ordinal": {
+              "const": 26
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a27"
+            },
+            "ordinal": {
+              "const": 27
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a28"
+            },
+            "ordinal": {
+              "const": 28
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a29"
+            },
+            "ordinal": {
+              "const": 29
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a30"
+            },
+            "ordinal": {
+              "const": 30
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a31"
+            },
+            "ordinal": {
+              "const": 31
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a32"
+            },
+            "ordinal": {
+              "const": 32
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a33"
+            },
+            "ordinal": {
+              "const": 33
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a34"
+            },
+            "ordinal": {
+              "const": 34
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a35"
+            },
+            "ordinal": {
+              "const": 35
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a36"
+            },
+            "ordinal": {
+              "const": 36
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a37"
+            },
+            "ordinal": {
+              "const": 37
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a38"
+            },
+            "ordinal": {
+              "const": 38
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a39"
+            },
+            "ordinal": {
+              "const": 39
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a40"
+            },
+            "ordinal": {
+              "const": 40
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a41"
+            },
+            "ordinal": {
+              "const": 41
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a42"
+            },
+            "ordinal": {
+              "const": 42
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a43"
+            },
+            "ordinal": {
+              "const": 43
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a44"
+            },
+            "ordinal": {
+              "const": 44
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a45"
+            },
+            "ordinal": {
+              "const": 45
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a46"
+            },
+            "ordinal": {
+              "const": 46
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a47"
+            },
+            "ordinal": {
+              "const": 47
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a48"
+            },
+            "ordinal": {
+              "const": 48
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a49"
+            },
+            "ordinal": {
+              "const": 49
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a50"
+            },
+            "ordinal": {
+              "const": 50
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a51"
+            },
+            "ordinal": {
+              "const": 51
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a52"
+            },
+            "ordinal": {
+              "const": 52
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a53"
+            },
+            "ordinal": {
+              "const": 53
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a54"
+            },
+            "ordinal": {
+              "const": 54
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a55"
+            },
+            "ordinal": {
+              "const": 55
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a56"
+            },
+            "ordinal": {
+              "const": 56
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a57"
+            },
+            "ordinal": {
+              "const": 57
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a58"
+            },
+            "ordinal": {
+              "const": 58
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a59"
+            },
+            "ordinal": {
+              "const": 59
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a60"
+            },
+            "ordinal": {
+              "const": 60
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a61"
+            },
+            "ordinal": {
+              "const": 61
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a62"
+            },
+            "ordinal": {
+              "const": 62
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a63"
+            },
+            "ordinal": {
+              "const": 63
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a64"
+            },
+            "ordinal": {
+              "const": 64
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a65"
+            },
+            "ordinal": {
+              "const": 65
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a66"
+            },
+            "ordinal": {
+              "const": 66
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a67"
+            },
+            "ordinal": {
+              "const": 67
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a68"
+            },
+            "ordinal": {
+              "const": 68
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a69"
+            },
+            "ordinal": {
+              "const": 69
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a70"
+            },
+            "ordinal": {
+              "const": 70
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a71"
+            },
+            "ordinal": {
+              "const": 71
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a72"
+            },
+            "ordinal": {
+              "const": 72
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a73"
+            },
+            "ordinal": {
+              "const": 73
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a74"
+            },
+            "ordinal": {
+              "const": 74
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a75"
+            },
+            "ordinal": {
+              "const": 75
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a76"
+            },
+            "ordinal": {
+              "const": 76
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a77"
+            },
+            "ordinal": {
+              "const": 77
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a78"
+            },
+            "ordinal": {
+              "const": 78
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a79"
+            },
+            "ordinal": {
+              "const": 79
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a80"
+            },
+            "ordinal": {
+              "const": 80
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a81"
+            },
+            "ordinal": {
+              "const": 81
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a82"
+            },
+            "ordinal": {
+              "const": 82
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a83"
+            },
+            "ordinal": {
+              "const": 83
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a84"
+            },
+            "ordinal": {
+              "const": 84
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a85"
+            },
+            "ordinal": {
+              "const": 85
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a86"
+            },
+            "ordinal": {
+              "const": 86
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a87"
+            },
+            "ordinal": {
+              "const": 87
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a88"
+            },
+            "ordinal": {
+              "const": 88
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a89"
+            },
+            "ordinal": {
+              "const": 89
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a90"
+            },
+            "ordinal": {
+              "const": 90
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a91"
+            },
+            "ordinal": {
+              "const": 91
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a92"
+            },
+            "ordinal": {
+              "const": 92
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a93"
+            },
+            "ordinal": {
+              "const": 93
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a94"
+            },
+            "ordinal": {
+              "const": 94
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a95"
+            },
+            "ordinal": {
+              "const": 95
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a96"
+            },
+            "ordinal": {
+              "const": 96
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a97"
+            },
+            "ordinal": {
+              "const": 97
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a98"
+            },
+            "ordinal": {
+              "const": 98
+            }
+          }
+        },
+        {
+          "properties": {
+            "attemptId": {
+              "const": "g01-a99"
+            },
+            "ordinal": {
+              "const": 99
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "$comment": "Deterministically generated structural suffix-parity cases for zero-padded G01 ordinals 01..99; update via the parity generator contract in scripts/test/g01-release-docs.test.mjs."
 }

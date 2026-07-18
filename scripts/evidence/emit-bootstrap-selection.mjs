@@ -153,7 +153,24 @@ function normalizeReviews(authority, sourceSha, f7CreatedAt) {
 
 export function buildF9Envelope(f7, authority) {
   validateEnvelope(f7, "F7");
-  exactKeys(authority, ["pr", "reviews", "reviewAuthority", "observedAt", "repository", "f7Artifact", "candidateReport"], "approval authority");
+  exactKeys(authority, ["pr", "reviews", "reviewAuthority", "observedAt", "repository", "f7Artifact", "candidateReport", "premergeAncestorArtifacts"], "approval authority");
+  assert.ok(Array.isArray(authority.premergeAncestorArtifacts), "F9 requires the premerge ancestor authentication catalog");
+  for (const [index, ancestor] of authority.premergeAncestorArtifacts.entries()) {
+    exactKeys(ancestor, ["evidenceId", "attemptId", "payloadDigest", "artifactId", "artifactName", "archiveDigest", "downloadDigest", "runId", "runAttempt", "headSha", "terminalDevelopSha"], `premerge ancestor ${index}`);
+    assert.equal(ancestor.archiveDigest, ancestor.downloadDigest, "premerge ancestor archive digest mismatch");
+    assert.match(ancestor.evidenceId, /^bootstrap-failure\.g01-(?:a|recovery-a)[0-9]{2,}\.json$/);
+    assert.equal(ancestor.evidenceId, `bootstrap-failure.${ancestor.attemptId}.json`);
+    assert.match(ancestor.payloadDigest, DIGEST); assert.match(ancestor.archiveDigest, DIGEST);
+  }
+  const candidateIdentity = resolveCandidateIdentity(authority.candidateReport, f7.sourceBranch, f7.sourceSha);
+  if (candidateIdentity.terminalKind === "direct-canonical") assert.equal(authority.premergeAncestorArtifacts.length, 0, "direct F9 cannot import recovery ancestors");
+  else {
+    const registry = reportRegistry(authority.candidateReport, "bootstrap-landed-recoveries.json");
+    const currentIndex = registry.landedAncestors.findIndex(({ attemptId }) => attemptId === registry.currentRecovery);
+    assert.ok(currentIndex >= 0, "recovery F9 current pointer is unresolved");
+    const expected = registry.landedAncestors.slice(0, currentIndex + 1).map(({ priorFailureId, priorFailureDigest }) => ({ evidenceId: priorFailureId, payloadDigest: priorFailureDigest }));
+    assert.deepEqual(authority.premergeAncestorArtifacts.map(({ evidenceId, payloadDigest }) => ({ evidenceId, payloadDigest })), expected, "recovery F9 must authenticate every ordered ancestor before approval");
+  }
   assert.equal(authority.pr.state, "open"); assert.equal(authority.pr.base?.ref, "develop");
   assert.equal(authority.pr.base?.repo?.full_name, authority.repository, "PR base repository mismatch");
   assert.equal(authority.pr.head?.repo?.full_name, authority.repository, "fork PR cannot provide bootstrap authority");

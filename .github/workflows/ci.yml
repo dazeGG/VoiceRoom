@@ -153,8 +153,34 @@ jobs:
           import fs from 'node:fs';import {selectCanonicalFailure} from './scripts/evidence/emit-bootstrap-selection.mjs';const input=JSON.parse(fs.readFileSync('prior-artifact-candidates.json')),records=fs.readFileSync('prior-records.ndjson','utf8').trim().split('\n').map(JSON.parse),winner=selectCanonicalFailure(records,input.ordinal,process.env.BASE_SHA),failure=winner.failure;fs.writeFileSync('prior-failure.json',JSON.stringify({evidenceId:failure.evidenceId,digest:winner.payloadDigest,terminalDevelopSha:failure.terminalDevelopSha,recoveryLineage:failure.recoveryLineage}));
           NODE
           fi
-          node - <<'NODE'
-          const fs=require('node:fs'),c=require('node:crypto');const read=p=>JSON.parse(fs.readFileSync(p)),hash=x=>'sha256:'+c.createHash('sha256').update(JSON.stringify(x)).digest('hex'),pr=read('pr.json'),currentRun=read('current-run.json'),headCommit=read('head-commit.json'),prPages=read('pr-pages.json'),runPages=read('run-pages.json'),artifactPages=read('artifact-pages.json'),pages=x=>x.map((v,index)=>({index,sha256:hash(v)}));const capture={responses:{pr:hash(pr),currentRun:hash(currentRun),headCommit:hash(headCommit)},pages:{prs:pages(prPages),runs:pages(runPages),artifacts:pages(artifactPages)},facts:{prNumber:pr.number,prId:pr.id,prNodeId:pr.node_id,runId:currentRun.id,runAttempt:currentRun.run_attempt,headSha:pr.head.sha,headBranch:pr.head.ref}};fs.writeFileSync('activation-authority.json',JSON.stringify({repository:process.env.GITHUB_REPOSITORY,pr,currentRun,headCommit,prPages,runPages,artifactPages,paginationComplete:true,capture,observedAt:new Date().toISOString(),priorFailure:read('prior-failure.json')}));
+          printf '[]\n' > premerge-ancestor-authorities.json
+          if [[ "$SOURCE_BRANCH" == feature/2.5.0-g01-postmerge-bootstrap-a* ]]; then
+            node - <<'NODE'
+          const fs=require('node:fs'),prior=JSON.parse(fs.readFileSync('prior-failure.json')),rows=[...prior.recoveryLineage.map(x=>({evidenceId:x.priorFailureId,digest:x.priorFailureDigest})),{evidenceId:prior.evidenceId,digest:prior.digest}],unique=[];for(const row of rows)if(!unique.some(x=>x.evidenceId===row.evidenceId)){if(!/^bootstrap-failure\.g01-(?:a|recovery-a)[0-9]{2,}\.json$/.test(row.evidenceId)||!/^sha256:[0-9a-f]{64}$/.test(row.digest))throw Error('ancestor identity is malformed');unique.push(row)}fs.writeFileSync('premerge-ancestor-expected.json',JSON.stringify(unique));
+          NODE
+            : > premerge-ancestor-authorities.ndjson
+            ancestor_count="$(node -p 'JSON.parse(require("node:fs").readFileSync("premerge-ancestor-expected.json")).length')"
+            for index in $(seq 0 $((ancestor_count-1))); do
+              INDEX="$index" node - <<'NODE'
+          const fs=require('node:fs'),all=JSON.parse(fs.readFileSync('artifact-pages.json')).flatMap(p=>p.artifacts),e=JSON.parse(fs.readFileSync('premerge-ancestor-expected.json'))[Number(process.env.INDEX)],attempt=e.evidenceId.slice('bootstrap-failure.'.length,-'.json'.length),re=new RegExp(`^g01-bootstrap-failure-${attempt}-run-([1-9][0-9]*)-attempt-([1-9][0-9]*)-head-([0-9a-f]{40})-phase-(f11|selection)$`),rows=all.filter(a=>re.test(a.name)&&!a.expired);if(!rows.length)throw Error(`premerge ancestor artifact absent: ${e.evidenceId}`);fs.writeFileSync('premerge-ancestor-candidates.json',JSON.stringify(rows));
+          NODE
+              matched=false; candidates="$(node -p 'JSON.parse(require("node:fs").readFileSync("premerge-ancestor-candidates.json")).length')"
+              for candidate in $(seq 0 $((candidates-1))); do
+                artifact_id="$(INDEX="$candidate" node -p 'JSON.parse(require("node:fs").readFileSync("premerge-ancestor-candidates.json"))[Number(process.env.INDEX)].id')"; gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$artifact_id/zip" > premerge-ancestor.zip; rm -rf /tmp/g01-premerge-ancestor; mkdir /tmp/g01-premerge-ancestor; unzip -q premerge-ancestor.zip -d /tmp/g01-premerge-ancestor
+                evidence="$(INDEX="$index" node -p 'JSON.parse(require("node:fs").readFileSync("premerge-ancestor-expected.json"))[Number(process.env.INDEX)].evidenceId')"; test -f "/tmp/g01-premerge-ancestor/$evidence" || continue
+                expected="$(INDEX="$index" node -p 'JSON.parse(require("node:fs").readFileSync("premerge-ancestor-expected.json"))[Number(process.env.INDEX)].digest')"; actual="sha256:$(sha256sum "/tmp/g01-premerge-ancestor/$evidence" | cut -d' ' -f1)"; test "$actual" = "$expected" || continue
+                INDEX="$candidate" node -e 'const f=require("node:fs");f.writeFileSync("premerge-ancestor-metadata.json",JSON.stringify(JSON.parse(f.readFileSync("premerge-ancestor-candidates.json"))[Number(process.env.INDEX)]))'; run_id="$(node -p 'JSON.parse(require("node:fs").readFileSync("premerge-ancestor-metadata.json")).workflow_run.id')"; gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id" > premerge-ancestor-run.json
+                EVIDENCE="/tmp/g01-premerge-ancestor/$evidence" EXPECTED_DIGEST="$expected" node --input-type=module - <<'NODE' >> premerge-ancestor-authorities.ndjson
+          import fs from 'node:fs';import crypto from 'node:crypto';import {validateBootstrapFailure} from './scripts/evidence/emit-bootstrap-selection.mjs';const bytes=fs.readFileSync(process.env.EVIDENCE),failure=validateBootstrapFailure(JSON.parse(bytes)),metadata=JSON.parse(fs.readFileSync('premerge-ancestor-metadata.json')),run=JSON.parse(fs.readFileSync('premerge-ancestor-run.json')),archive=fs.readFileSync('premerge-ancestor.zip'),downloadDigest='sha256:'+crypto.createHash('sha256').update(archive).digest('hex');if(downloadDigest!==metadata.digest||run.id!==metadata.workflow_run.id||run.path!=='.github/workflows/ci.yml'||run.repository?.full_name!==process.env.GITHUB_REPOSITORY)throw Error('premerge ancestor provenance mismatch');process.stdout.write(JSON.stringify({evidenceId:failure.evidenceId,attemptId:failure.attemptId,payloadDigest:process.env.EXPECTED_DIGEST,artifactId:metadata.id,artifactName:metadata.name,archiveDigest:metadata.digest,downloadDigest,runId:run.id,runAttempt:run.run_attempt,headSha:failure.headSha,terminalDevelopSha:failure.terminalDevelopSha})+'\n');
+          NODE
+                matched=true; break
+              done
+              test "$matched" = true
+            done
+            node -e 'const f=require("node:fs"),s=f.readFileSync("premerge-ancestor-authorities.ndjson","utf8").trim();f.writeFileSync("premerge-ancestor-authorities.json",JSON.stringify(s?s.split("\n").map(JSON.parse):[]))'
+          fi
+          node --input-type=module - <<'NODE'
+          import fs from 'node:fs';import {buildActivationCapture,buildCandidateReport} from './scripts/evidence/bootstrap-export.mjs';const read=p=>JSON.parse(fs.readFileSync(p)),pr=read('pr.json'),currentRun=read('current-run.json'),headCommit=read('head-commit.json'),prPages=read('pr-pages.json'),runPages=read('run-pages.json'),artifactPages=read('artifact-pages.json');const authority={repository:process.env.GITHUB_REPOSITORY,pr,currentRun,headCommit,prPages,runPages,artifactPages,paginationComplete:true,observedAt:new Date().toISOString(),priorFailure:read('prior-failure.json')};const report=buildCandidateReport(['bootstrap-attempts.json','bootstrap-landed-recoveries.json'].map(name=>({filename:name,bytes:fs.readFileSync(`docs/releases/2.5.0/evidence/${name}`)})));authority.capture=buildActivationCapture(authority,report);fs.writeFileSync('activation-authority.json',JSON.stringify(authority));
           NODE
           node scripts/evidence/bootstrap-export.mjs --activate-authority activation-authority.json --plan docs/RELEASE_2.5.0_PLAN.md --spec docs/RELEASE_2.5.0_TEST_SPEC.md docs/releases/2.5.0/evidence/bootstrap-attempts.json docs/releases/2.5.0/evidence/bootstrap-landed-recoveries.json > candidate-registry-report.g01.json
           created_at="$(node -p 'JSON.parse(require("node:fs").readFileSync("activation-authority.json")).observedAt')"
@@ -174,6 +200,7 @@ jobs:
             ci-bundle.*.json
             candidate-registry-report.g01.json
             activation-authority.json
+            premerge-ancestor-authorities.json
           if-no-files-found: error
           retention-days: 90
       - name: Await exact-head independent approvals and emit F9
@@ -191,10 +218,20 @@ jobs:
               test "$(find /tmp/g01-f7 -maxdepth 1 -type f -name 'ci-bundle.*.json' | wc -l | tr -d ' ')" = 1
               f7_file="$(find /tmp/g01-f7 -maxdepth 1 -type f -name 'ci-bundle.*.json')"
               F7_FILE="$f7_file" node -e 'const f=require("node:fs"),c=require("node:crypto");f.writeFileSync("f7-payload-digest.txt","sha256:"+c.createHash("sha256").update(f.readFileSync(process.env.F7_FILE)).digest("hex"))'
+              test -f /tmp/g01-f7/premerge-ancestor-authorities.json
+              node - <<'NODE'
+          const fs=require('node:fs'),c=require('node:crypto'),rows=JSON.parse(fs.readFileSync('/tmp/g01-f7/premerge-ancestor-authorities.json'));for(const row of rows){if(!/^bootstrap-failure\.g01-(?:a|recovery-a)[0-9]{2,}\.json$/.test(row.evidenceId))throw Error('premerge ancestor relabel');fs.writeFileSync('f9-ancestor-metadata.json','');}
+          NODE
+              f9_ancestor_count="$(node -p 'JSON.parse(require("node:fs").readFileSync("/tmp/g01-f7/premerge-ancestor-authorities.json")).length')"
+              if test "$f9_ancestor_count" -gt 0; then
+                for index in $(seq 0 $((f9_ancestor_count-1))); do
+                  artifact_id="$(INDEX="$index" node -p 'JSON.parse(require("node:fs").readFileSync("/tmp/g01-f7/premerge-ancestor-authorities.json"))[Number(process.env.INDEX)].artifactId')"; expected_archive="$(INDEX="$index" node -p 'JSON.parse(require("node:fs").readFileSync("/tmp/g01-f7/premerge-ancestor-authorities.json"))[Number(process.env.INDEX)].archiveDigest')"; expected_payload="$(INDEX="$index" node -p 'JSON.parse(require("node:fs").readFileSync("/tmp/g01-f7/premerge-ancestor-authorities.json"))[Number(process.env.INDEX)].payloadDigest')"; evidence="$(INDEX="$index" node -p 'JSON.parse(require("node:fs").readFileSync("/tmp/g01-f7/premerge-ancestor-authorities.json"))[Number(process.env.INDEX)].evidenceId')"; run_id="$(INDEX="$index" node -p 'JSON.parse(require("node:fs").readFileSync("/tmp/g01-f7/premerge-ancestor-authorities.json"))[Number(process.env.INDEX)].runId')"; gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$artifact_id" > f9-ancestor-metadata.json; gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$artifact_id/zip" > f9-ancestor.zip; gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id" > f9-ancestor-run.json; actual_archive="sha256:$(sha256sum f9-ancestor.zip | cut -d' ' -f1)"; test "$actual_archive" = "$expected_archive"; test "$(node -p 'JSON.parse(require("node:fs").readFileSync("f9-ancestor-metadata.json")).digest')" = "$expected_archive"; rm -rf /tmp/g01-f9-ancestor; mkdir /tmp/g01-f9-ancestor; unzip -q f9-ancestor.zip -d /tmp/g01-f9-ancestor; test -f "/tmp/g01-f9-ancestor/$evidence"; test "sha256:$(sha256sum "/tmp/g01-f9-ancestor/$evidence" | cut -d' ' -f1)" = "$expected_payload"; test "$(node -p 'JSON.parse(require("node:fs").readFileSync("f9-ancestor-run.json")).path')" = ".github/workflows/ci.yml"
+                done
+              fi
               gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" > f7-run.json
               gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/reviews?per_page=100" --slurp > review-pages.json
               REVIEWER_CODE_ID="$REVIEWER_CODE_ID" REVIEWER_ARCHITECT_ID="$REVIEWER_ARCHITECT_ID" REVIEWER_VERIFIER_ID="$REVIEWER_VERIFIER_ID" node - <<'NODE'
-          const fs=require('node:fs');const read=p=>JSON.parse(fs.readFileSync(p));fs.writeFileSync('approval-authority.json',JSON.stringify({pr:read('pr.json'),reviews:read('review-pages.json').flat(),reviewAuthority:{'code-reviewer':Number(process.env.REVIEWER_CODE_ID),architect:Number(process.env.REVIEWER_ARCHITECT_ID),verifier:Number(process.env.REVIEWER_VERIFIER_ID)},observedAt:new Date().toISOString(),repository:process.env.GITHUB_REPOSITORY,f7Artifact:{metadata:read('f7-metadata.json'),run:read('f7-run.json'),downloadDigest:fs.readFileSync('f7-download-digest.txt','utf8'),payloadDigest:fs.readFileSync('f7-payload-digest.txt','utf8'),matchCount:1},candidateReport:read('/tmp/g01-f7/candidate-registry-report.g01.json')}));
+          const fs=require('node:fs');const read=p=>JSON.parse(fs.readFileSync(p));fs.writeFileSync('approval-authority.json',JSON.stringify({pr:read('pr.json'),reviews:read('review-pages.json').flat(),reviewAuthority:{'code-reviewer':Number(process.env.REVIEWER_CODE_ID),architect:Number(process.env.REVIEWER_ARCHITECT_ID),verifier:Number(process.env.REVIEWER_VERIFIER_ID)},observedAt:new Date().toISOString(),repository:process.env.GITHUB_REPOSITORY,f7Artifact:{metadata:read('f7-metadata.json'),run:read('f7-run.json'),downloadDigest:fs.readFileSync('f7-download-digest.txt','utf8'),payloadDigest:fs.readFileSync('f7-payload-digest.txt','utf8'),matchCount:1},candidateReport:read('/tmp/g01-f7/candidate-registry-report.g01.json'),premergeAncestorArtifacts:read('/tmp/g01-f7/premerge-ancestor-authorities.json')}));
           NODE
               if node scripts/evidence/emit-bootstrap-selection.mjs --emit-f9 --f7 "$f7_file" --authority approval-authority.json > approval-envelope.json; then break; fi
             fi
@@ -209,14 +246,18 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.G01_F9_ARTIFACT_NAME }}
-          path: approval-envelope.*.json
+          path: |
+            approval-envelope.*.json
+            approval-authority.json
           if-no-files-found: error
           retention-days: 90
 
   bootstrap-postmerge:
     name: G01 authenticated post-merge F11
     needs: [check, test]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    # This job is the immutable failure recorder too: dependency failure/cancellation
+    # must not skip the G01 landed-unsealed evidence path.
+    if: always() && github.event_name == 'push' && github.ref == 'refs/heads/develop'
     runs-on: ubuntu-latest
     permissions:
       actions: read
@@ -258,7 +299,7 @@ jobs:
           gh api --paginate "repos/$GITHUB_REPOSITORY/actions/artifacts?per_page=100" --slurp > artifact-pages.json
           gh api --paginate "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?event=pull_request&per_page=100" --slurp > premerge-run-pages.json
           HEAD_SHA="$head_sha" BRANCH="$branch" node - <<'NODE'
-          const fs=require('node:fs');const a=JSON.parse(fs.readFileSync('artifact-pages.json')).flatMap(p=>p.artifacts),head=process.env.HEAD_SHA,branch=process.env.BRANCH;const ids=a.map(x=>x.name.match(/g01-(?:candidate|approval|merge|selection|bootstrap-failure)-(g01-(?:recovery-)?a[0-9]{2,})-run-[0-9]+-attempt-[0-9]+-head-([0-9a-f]{40})/)?.slice(1)).filter(Boolean);const exact=[...new Set(ids.filter(x=>x[1]===head).map(x=>x[0]))];let attempt;if(exact.length===1)attempt=exact[0];else if(exact.length>1)throw Error('conflicting attempt identities for landed head');else{const recovery=branch.match(/postmerge-bootstrap-a([0-9]{2,})$/);if(recovery)attempt=`g01-recovery-a${recovery[1]}`;else{const max=Math.max(0,...ids.map(x=>Number(x[0].match(/[0-9]+$/)[0])));attempt=`g01-a${String(max+1).padStart(2,'0')}`;}}fs.writeFileSync('fallback-attempt.txt',attempt);
+          const fs=require('node:fs'),artifacts=JSON.parse(fs.readFileSync('artifact-pages.json')).flatMap(p=>p.artifacts),runs=JSON.parse(fs.readFileSync('premerge-run-pages.json')).flatMap(p=>p.workflow_runs),head=process.env.HEAD_SHA,branch=process.env.BRANCH,esc=s=>s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),re=new RegExp(`^g01-candidate-(g01-(?:recovery-)?a[0-9]{2,})-run-([1-9][0-9]*)-attempt-([1-9][0-9]*)-head-${esc(head)}$`),ids=[];for(const a of artifacts){const m=a.name.match(re),run=m&&runs.find(r=>r.id===Number(m[2])&&r.run_attempt===Number(m[3])&&r.head_sha===head&&r.head_branch===branch&&r.event==='pull_request'&&r.path==='.github/workflows/ci.yml'&&r.repository?.full_name===process.env.GITHUB_REPOSITORY&&r.status==='completed'&&r.conclusion==='success');if(!run||a.expired||a.workflow_run?.id!==run.id)continue;const approval=`g01-approval-${m[1]}-run-${m[2]}-attempt-${m[3]}-head-${head}`,f9=artifacts.filter(x=>x.name===approval&&!x.expired&&x.workflow_run?.id===run.id);if(f9.length===1)ids.push(m[1]);}const exact=[...new Set(ids)];if(exact.length!==1)throw Error(exact.length?'conflicting authenticated exact-head attempt identities':'authenticated exact-head F7/F9 identity absent');fs.writeFileSync('fallback-attempt.txt',exact[0]);
           NODE
           fallback_attempt="$(cat fallback-attempt.txt)"; printf 'G01_ATTEMPT_ID=%s\nG01_FAILURE_PHASE=F11\n' "$fallback_attempt" >> "$GITHUB_ENV"
           emit_failure() { ATTEMPT_ID="$fallback_attempt" node - <<'NODE'
@@ -297,8 +338,9 @@ jobs:
           set -euo pipefail
           gh api -H 'Accept: application/vnd.github+json' "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/pulls" > fallback-prs.json
           gh api --paginate "repos/$GITHUB_REPOSITORY/actions/artifacts?per_page=100" --slurp > fallback-artifacts.json
+          gh api --paginate "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?event=pull_request&per_page=100" --slurp > fallback-runs.json
           node - <<'NODE'
-          const fs=require('node:fs'),prs=JSON.parse(fs.readFileSync('fallback-prs.json')).filter(p=>p.merged_at&&p.merge_commit_sha===process.env.GITHUB_SHA&&p.base?.ref==='develop'&&p.base?.repo?.full_name===process.env.GITHUB_REPOSITORY&&p.head?.repo?.full_name===process.env.GITHUB_REPOSITORY&&/^feature\/2\.5\.0-g01-(canonical-evidence-bootstrap|postmerge-bootstrap-a[0-9]{2,})$/.test(p.head?.ref));if(prs.length!==1)throw Error('failed postmerge run is not uniquely attributable to G01');const p=prs[0],all=JSON.parse(fs.readFileSync('fallback-artifacts.json')).flatMap(x=>x.artifacts),ids=[...new Set(all.map(a=>a.name.match(/^g01-candidate-(g01-(?:recovery-)?a[0-9]{2,})-run-[0-9]+-attempt-[0-9]+-head-([0-9a-f]{40})$/)?.slice(1)).filter(x=>x&&x[1]===p.head.sha).map(x=>x[0]))];let attempt;if(ids.length===1)attempt=ids[0];else if(ids.length)throw Error('conflicting exact-head attempt identities');else{const suffix=p.head.ref.match(/postmerge-bootstrap-a([0-9]{2,})$/)?.[1];if(!suffix)throw Error('direct attempt identity has no authenticated F7');attempt=`g01-recovery-a${suffix}`;}const f7=all.filter(a=>a.name.startsWith(`g01-candidate-${attempt}-`)&&a.name.endsWith(`-head-${p.head.sha}`)&&!a.expired).sort((a,b)=>b.id-a.id)[0];fs.writeFileSync('fallback-context.json',JSON.stringify({p,attempt,f7}));
+          const fs=require('node:fs'),prs=JSON.parse(fs.readFileSync('fallback-prs.json')).filter(p=>p.merged_at&&p.merge_commit_sha===process.env.GITHUB_SHA&&p.base?.ref==='develop'&&p.base?.repo?.full_name===process.env.GITHUB_REPOSITORY&&p.head?.repo?.full_name===process.env.GITHUB_REPOSITORY&&/^feature\/2\.5\.0-g01-(canonical-evidence-bootstrap|postmerge-bootstrap-a[0-9]{2,})$/.test(p.head?.ref));if(prs.length!==1)throw Error('failed postmerge run is not uniquely attributable to G01');const p=prs[0],all=JSON.parse(fs.readFileSync('fallback-artifacts.json')).flatMap(x=>x.artifacts),runs=JSON.parse(fs.readFileSync('fallback-runs.json')).flatMap(x=>x.workflow_runs),re=new RegExp(`^g01-candidate-(g01-(?:recovery-)?a[0-9]{2,})-run-([1-9][0-9]*)-attempt-([1-9][0-9]*)-head-${p.head.sha}$`),pairs=[];for(const f7 of all){const m=f7.name.match(re),run=m&&runs.find(r=>r.id===Number(m[2])&&r.run_attempt===Number(m[3])&&r.head_sha===p.head.sha&&r.head_branch===p.head.ref&&r.event==='pull_request'&&r.path==='.github/workflows/ci.yml'&&r.repository?.full_name===process.env.GITHUB_REPOSITORY&&r.status==='completed'&&r.conclusion==='success');if(!run||f7.expired||f7.workflow_run?.id!==run.id)continue;const f9=all.filter(a=>a.name===`g01-approval-${m[1]}-run-${m[2]}-attempt-${m[3]}-head-${p.head.sha}`&&!a.expired&&a.workflow_run?.id===run.id);if(f9.length===1)pairs.push({attempt:m[1],f7});}const identities=[...new Set(pairs.map(x=>x.attempt))];if(identities.length!==1)throw Error(identities.length?'conflicting authenticated exact-head attempt identities':'authenticated exact-head F7/F9 identity absent');const selected=pairs.filter(x=>x.attempt===identities[0]).sort((a,b)=>b.f7.id-a.f7.id)[0];fs.writeFileSync('fallback-context.json',JSON.stringify({p,attempt:identities[0],f7:selected.f7}));
           NODE
           if test -n "$(node -p 'JSON.parse(require("node:fs").readFileSync("fallback-context.json")).f7?.id??""')"; then id="$(node -p 'JSON.parse(require("node:fs").readFileSync("fallback-context.json")).f7.id')"; gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$id/zip" > fallback-f7.zip; rm -rf /tmp/g01-fallback-f7; mkdir /tmp/g01-fallback-f7; unzip -q fallback-f7.zip -d /tmp/g01-fallback-f7; fi
           node - <<'NODE'

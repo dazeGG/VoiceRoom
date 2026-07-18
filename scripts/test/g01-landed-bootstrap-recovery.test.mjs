@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import crypto from "node:crypto";
 import { classifyBootstrap, validateRecoveryFixture, G01_WRITABLE, RECOVERY_WRITABLE, RECOVERY_READ_ONLY } from "../evidence/recover-landed-bootstrap.mjs";
 import { validateBootstrapFailure } from "../evidence/emit-bootstrap-selection.mjs";
 
@@ -18,6 +19,12 @@ test("four-state classification rejects forged chronology and terminal SHAs", ()
   const direct = structuredClone(fixture.cases.find((fixtureCase) => fixtureCase.name === "direct-selected").facts);
   direct.selection.attemptId = "g01-a99";
   assert.equal(classifyBootstrap(direct), "G01_LANDED_UNSEALED", "non-canonical direct attempt ID must fail closed");
+  const redigest = (facts, mutate) => { const copy = structuredClone(facts); mutate(copy.selection); const core = { ...copy.selection }; delete core.selectionDigest; copy.selection.selectionDigest = `sha256:${crypto.createHash("sha256").update(JSON.stringify(core)).digest("hex")}`; return copy; };
+  for (const hostile of [
+    redigest(fixture.cases.find((item) => item.name === "direct-selected").facts, (selection) => { selection.artifactBindings.f7.artifactName = "g01-approval-g01-a02-run-10-attempt-1-head-" + "a".repeat(40); }),
+    redigest(fixture.cases.find((item) => item.name === "direct-selected").facts, (selection) => { [selection.artifactBindings.f7, selection.artifactBindings.f9] = [selection.artifactBindings.f9, selection.artifactBindings.f7]; }),
+    redigest(fixture.cases.find((item) => item.name === "recovery-selected").facts, (selection) => { selection.terminalKind = "direct-canonical"; }),
+  ]) assert.equal(classifyBootstrap(hostile), "G01_LANDED_UNSEALED", "artifact/terminal relabel must fail closed");
 });
 
 test("catalog mutations fail closed", () => {
