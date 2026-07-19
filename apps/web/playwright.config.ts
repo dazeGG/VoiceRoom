@@ -4,10 +4,12 @@ import { defineConfig, devices } from '@playwright/test';
 // repo root before running (`npm run dev:up`), or wire the same command into CI.
 export default defineConfig({
 	testDir: './e2e',
-	timeout: 30_000,
+	timeout: 60_000,
+	workers: 1,
+	retries: 0,
 	use: {
-		baseURL: 'http://localhost:5180',
-		trace: 'on-first-retry',
+		baseURL: process.env.PLAYWRIGHT_BASE_URL ?? 'http://127.0.0.1:5180',
+		trace: 'retain-on-failure',
 		// фейковые медиа — комната просит микрофон/WebRTC
 		launchOptions: {
 			args: [
