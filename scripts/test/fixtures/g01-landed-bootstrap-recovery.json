@@ -101,7 +101,7 @@
               "runAttempt": 1,
               "headSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
               "archiveDigest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
-              "payloadDigest": "sha256:2f7736fd8609a4d1ea77eb1df56896b238ed7fe08f0eadcf543a938cc4cf40e9"
+              "payloadDigest": "sha256:a51c99308eecdcee8e5b1da6aee55e743de8afef7e15564dab5457dee49715b6"
             },
             "f9": {
               "artifactId": 2,
@@ -122,7 +122,7 @@
               "payloadDigest": "sha256:f57b86bf97f760951e8fba499aa97a26825dc63fd1bb41dd501648a364a12d3b"
             }
           },
-          "selectionDigest": "sha256:7aeff1c5c2a98afe8fdadf6795de20898dc6519f8c27296932776fd12b68e5b0"
+          "selectionDigest": "sha256:16186d4fcb057e06649a1797483d977bf0646a0284e2e7b800facfec4892a94d"
         },
         "f7": {
           "schemaVersion": 1,
@@ -336,8 +336,8 @@
             "inputs": [
               {
                 "path": ".github/workflows/ci.yml",
-                "size": 101527,
-                "sha256": "sha256:666388c9c908e38d7e38ce1e506204ef5baeec8f87efdf4ba064418253b6974c"
+                "size": 101566,
+                "sha256": "sha256:f5c831bd9432d17fba0070eda02d6d042eb871f7ea823c150a984a0cd13aac57"
               },
               {
                 "path": "config/evidence/release-evidence-archive.v1.json",
@@ -703,7 +703,7 @@
               "runAttempt": 1,
               "headSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
               "archiveDigest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
-              "payloadDigest": "sha256:d40c4fe44d3621a5a6031d7b6cf504c1c2498dee803279c139e075e9adfe80e1"
+              "payloadDigest": "sha256:5fc87a5aa65352238ab96359273004a75c9337ec86a6760de371d0992210d7c1"
             },
             "f9": {
               "artifactId": 2,
@@ -724,7 +724,7 @@
               "payloadDigest": "sha256:0b9cfcedff4edb911cdd4c2e3563499b1e7eede0716fea74acf1f79cc232a540"
             }
           },
-          "selectionDigest": "sha256:464405cfffd0f8a92bebca0f33c36b9afe4de9e5c55b32aa6bd5ac37ffd1cc00"
+          "selectionDigest": "sha256:7ad89c455c956cf74db0ea210d44664bd1f1f4e66e8c0789716a8c1dea765259"
         },
         "parentSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         "f7": {
@@ -939,8 +939,8 @@
             "inputs": [
               {
                 "path": ".github/workflows/ci.yml",
-                "size": 101527,
-                "sha256": "sha256:666388c9c908e38d7e38ce1e506204ef5baeec8f87efdf4ba064418253b6974c"
+                "size": 101566,
+                "sha256": "sha256:f5c831bd9432d17fba0070eda02d6d042eb871f7ea823c150a984a0cd13aac57"
               },
               {
                 "path": "config/evidence/release-evidence-archive.v1.json",
