@@ -715,6 +715,200 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
+  goal-g02:
+    name: G02 autonomous clean-stack verification
+    if: github.event_name == 'pull_request' && github.base_ref == 'develop' && github.head_ref == 'feature/2.5.0-g02-autonomous-ci-foundation' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      actions: read
+      contents: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SOURCE_SHA: ${{ github.event.pull_request.head.sha }}
+      SOURCE_BRANCH: ${{ github.head_ref }}
+      BASE_SHA: ${{ github.event.pull_request.base.sha }}
+      SELECTION_ARTIFACT_ID: 8442115507
+      SELECTION_FILE: bootstrap-selection.g01-recovery-a27.json
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Authenticate exact terminal bootstrap selection and G01 envelope bytes
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p g02-authority
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$SELECTION_ARTIFACT_ID" > g02-authority/selection-metadata.json
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$SELECTION_ARTIFACT_ID/zip" > g02-authority/selection.zip
+          unzip -q g02-authority/selection.zip -d g02-authority/selection
+          test -f "g02-authority/selection/$SELECTION_FILE"
+          git fetch --no-tags origin develop
+          test "$(git rev-parse origin/develop)" = "$BASE_SHA"
+          for phase in f7 f9 f11; do
+            artifact_id="$(PHASE="$phase" node -p 'JSON.parse(require("node:fs").readFileSync(`g02-authority/selection/${process.env.SELECTION_FILE}`)).artifactBindings[process.env.PHASE].artifactId')"
+            gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$artifact_id" > "g02-authority/$phase-metadata.json"
+            gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$artifact_id/zip" > "g02-authority/$phase.zip"
+            run_id="$(node -p "JSON.parse(require('node:fs').readFileSync('g02-authority/$phase-metadata.json')).workflow_run.id")"
+            gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id" > "g02-authority/$phase-run.json"
+            mkdir "g02-authority/$phase"
+            unzip -q "g02-authority/$phase.zip" -d "g02-authority/$phase"
+          done
+          f7_id="$(node -p 'JSON.parse(require("node:fs").readFileSync(`g02-authority/selection/${process.env.SELECTION_FILE}`)).f7Id')"
+          f9_id="$(node -p 'JSON.parse(require("node:fs").readFileSync(`g02-authority/selection/${process.env.SELECTION_FILE}`)).f9Id')"
+          f11_id="$(node -p 'JSON.parse(require("node:fs").readFileSync(`g02-authority/selection/${process.env.SELECTION_FILE}`)).f11Id')"
+          node scripts/evidence/export-goal-evidence.mjs --validate-selection \
+            --selection "g02-authority/selection/$SELECTION_FILE" \
+            --selection-artifact-id "$SELECTION_ARTIFACT_ID" \
+            --head-sha "$BASE_SHA" --origin-develop-sha "$(git rev-parse origin/develop)" \
+            --repository "$GITHUB_REPOSITORY" \
+            --f7 "g02-authority/f7/$f7_id" --f7-metadata g02-authority/f7-metadata.json --f7-run g02-authority/f7-run.json --f7-archive g02-authority/f7.zip --f7-report g02-authority/f7/candidate-registry-report.g01.json \
+            --f9 "g02-authority/f9/$f9_id" --f9-metadata g02-authority/f9-metadata.json --f9-run g02-authority/f9-run.json --f9-archive g02-authority/f9.zip \
+            --f11 "g02-authority/f11/$f11_id" --f11-metadata g02-authority/f11-metadata.json --f11-run g02-authority/f11-run.json --f11-archive g02-authority/f11.zip
+      - name: Install baseline Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Start clean stack, run Chromium twice without retry, and prove teardown
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p g02-reports
+          cleanup() { docker compose -f docker-compose.ci.yml down --volumes --remove-orphans; }
+          trap cleanup EXIT
+          docker compose -f docker-compose.ci.yml up -d --build --wait --wait-timeout 180
+          npm --workspace @voice-room/web run e2e -- --project=chromium --retries=0 2>&1 | tee g02-reports/chromium-run-1.log
+          npm --workspace @voice-room/web run e2e -- --project=chromium --retries=0 2>&1 | tee g02-reports/chromium-run-2.log
+          cleanup
+          trap - EXIT
+          printf 'passed\n' > g02-reports/teardown.txt
+      - name: Emit immutable G02 F7 candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          report_digest="sha256:$(cat g02-reports/chromium-run-1.log g02-reports/chromium-run-2.log g02-reports/teardown.txt | sha256sum | cut -d' ' -f1)"
+          SELECTION="g02-authority/selection/$SELECTION_FILE" REPORT_DIGEST="$report_digest" node - <<'NODE'
+          const fs=require('node:fs'),selection=JSON.parse(fs.readFileSync(process.env.SELECTION));const input={selection,selectionArtifactId:Number(process.env.SELECTION_ARTIFACT_ID),sourceBranch:process.env.SOURCE_BRANCH,sourceSha:process.env.SOURCE_SHA,baseSha:selection.terminalDevelopSha,producerRun:{id:Number(process.env.GITHUB_RUN_ID),runAttempt:Number(process.env.GITHUB_RUN_ATTEMPT),repository:process.env.GITHUB_REPOSITORY,event:'pull_request',headSha:process.env.SOURCE_SHA},requiredGates:['Lint, typecheck & build','Tests','G02 autonomous clean-stack verification'],verification:{chromiumRuns:2,retries:0,teardown:'passed',reportDigest:process.env.REPORT_DIGEST},createdAt:new Date().toISOString()};fs.writeFileSync('g02-f7-input.json',JSON.stringify(input));
+          NODE
+          node scripts/evidence/export-goal-evidence.mjs --emit-f7 --input g02-f7-input.json --output ci-bundle.g02.json
+          echo "G02_F7_NAME=g02-candidate-g02-run-$GITHUB_RUN_ID-attempt-$GITHUB_RUN_ATTEMPT-head-$SOURCE_SHA" >> "$GITHUB_ENV"
+      - name: Persist G02 F7 and clean-stack reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.G02_F7_NAME }}
+          path: |
+            ci-bundle.g02.json
+            g02-reports/
+          if-no-files-found: error
+          retention-days: 90
+      - name: Always tear down the isolated stack
+        if: always()
+        run: docker compose -f docker-compose.ci.yml down --volumes --remove-orphans
+
+  goal-g02-seal:
+    name: G02 authenticated F9 approval seal
+    needs: [policy, check, test, goal-g02]
+    if: github.event_name == 'pull_request' && github.head_ref == 'feature/2.5.0-g02-autonomous-ci-foundation' && github.event.pull_request.head.repo.full_name == github.repository
+    environment: g02-approval-authority
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      issues: read
+      pull-requests: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SOURCE_SHA: ${{ github.event.pull_request.head.sha }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      REVIEW_TRANSPORT_ACTOR_ID: ${{ vars.OMX_G02_REVIEW_TRANSPORT_ACTOR_ID }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+      - name: Authenticate exact-head review comments and emit F9
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$REVIEW_TRANSPORT_ACTOR_ID" =~ ^[1-9][0-9]*$ ]] || exit 1
+          f7_name="g02-candidate-g02-run-$GITHUB_RUN_ID-attempt-$GITHUB_RUN_ATTEMPT-head-$SOURCE_SHA"
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=$f7_name" > f7-artifacts.json
+          F7_NAME="$f7_name" node - <<'NODE'
+          const fs=require('node:fs'),rows=JSON.parse(fs.readFileSync('f7-artifacts.json')).artifacts.filter(x=>!x.expired&&x.name===process.env.F7_NAME&&x.workflow_run?.id===Number(process.env.GITHUB_RUN_ID));if(rows.length!==1)throw Error('exact current-run G02 F7 artifact absent or ambiguous');fs.writeFileSync('f7-metadata.json',JSON.stringify(rows[0]));
+          NODE
+          f7_id="$(node -p 'JSON.parse(require("node:fs").readFileSync("f7-metadata.json")).id')"
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$f7_id/zip" > f7.zip
+          test "sha256:$(sha256sum f7.zip | cut -d' ' -f1)" = "$(node -p 'JSON.parse(require("node:fs").readFileSync("f7-metadata.json")).digest')"
+          mkdir g02-f7 && unzip -q f7.zip -d g02-f7
+          test -f g02-f7/ci-bundle.g02.json
+          gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" > pr.json
+          gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments?per_page=100" --slurp > comment-pages.json
+          node - <<'NODE'
+          const fs=require('node:fs'),c=require('node:crypto'),f7=JSON.parse(fs.readFileSync('g02-f7/ci-bundle.g02.json')),m=JSON.parse(fs.readFileSync('f7-metadata.json')),hash=b=>'sha256:'+c.createHash('sha256').update(b).digest('hex');const authority={repository:process.env.GITHUB_REPOSITORY,pr:JSON.parse(fs.readFileSync('pr.json')),comments:JSON.parse(fs.readFileSync('comment-pages.json')).flat(),transportActorId:Number(process.env.REVIEW_TRANSPORT_ACTOR_ID),f7Artifact:{id:m.id,name:m.name,archiveDigest:m.digest,payloadDigest:hash(fs.readFileSync('g02-f7/ci-bundle.g02.json'))},observedAt:new Date().toISOString()};fs.writeFileSync('g02-approval-authority.json',JSON.stringify(authority));
+          NODE
+          node scripts/evidence/seal-approval-envelope.mjs --f7 g02-f7/ci-bundle.g02.json --authority g02-approval-authority.json --output approval-envelope.g02.json
+          echo "G02_F9_NAME=g02-approval-g02-run-$GITHUB_RUN_ID-attempt-$GITHUB_RUN_ATTEMPT-head-$SOURCE_SHA" >> "$GITHUB_ENV"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.G02_F9_NAME }}
+          path: approval-envelope.g02.json
+          if-no-files-found: error
+          retention-days: 90
+
+  goal-g02-postmerge:
+    name: G02 authenticated post-merge F11
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - name: Resolve G02 merge and exact premerge evidence
+        id: resolve
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api -H 'Accept: application/vnd.github+json' "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/pulls" > g02-prs.json
+          node - <<'NODE'
+          const fs=require('node:fs'),rows=JSON.parse(fs.readFileSync('g02-prs.json')).filter(p=>p.merged_at&&p.merge_commit_sha===process.env.GITHUB_SHA&&p.base?.ref==='develop'&&p.head?.ref==='feature/2.5.0-g02-autonomous-ci-foundation');if(rows.length>1)throw Error('ambiguous G02 merge');if(!rows.length)process.exit(0);fs.writeFileSync('g02-pr.json',JSON.stringify(rows[0]));fs.appendFileSync(process.env.GITHUB_OUTPUT,'matched=true\n');
+          NODE
+      - name: Authenticate F7/F9, source deletion and emit F11
+        if: steps.resolve.outputs.matched == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          head_sha="$(node -p 'JSON.parse(require("node:fs").readFileSync("g02-pr.json")).head.sha')"
+          pr_number="$(node -p 'JSON.parse(require("node:fs").readFileSync("g02-pr.json")).number')"
+          merged_at="$(node -p 'new Date(JSON.parse(require("node:fs").readFileSync("g02-pr.json")).merged_at).toISOString()')"
+          gh api --paginate "repos/$GITHUB_REPOSITORY/actions/artifacts?per_page=100" --slurp > g02-artifacts.json
+          HEAD_SHA="$head_sha" node - <<'NODE'
+          const fs=require('node:fs'),all=JSON.parse(fs.readFileSync('g02-artifacts.json')).flatMap(x=>x.artifacts??[]),head=process.env.HEAD_SHA,f7=all.filter(x=>!x.expired&&new RegExp(`^g02-candidate-g02-run-[1-9][0-9]*-attempt-[1-9][0-9]*-head-${head}$`).test(x.name)),f9=all.filter(x=>!x.expired&&new RegExp(`^g02-approval-g02-run-[1-9][0-9]*-attempt-[1-9][0-9]*-head-${head}$`).test(x.name));if(f7.length!==1||f9.length!==1)throw Error('exact G02 F7/F9 absent or ambiguous');fs.writeFileSync('g02-artifact-selection.json',JSON.stringify({f7:f7[0],f9:f9[0]}));
+          NODE
+          for phase in f7 f9; do id="$(PHASE="$phase" node -p 'JSON.parse(require("node:fs").readFileSync("g02-artifact-selection.json"))[process.env.PHASE].id')"; mkdir "$phase"; gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$id/zip" > "$phase.zip"; unzip -q "$phase.zip" -d "$phase"; done
+          deleted_at="$(date -u +%Y-%m-%dT%H:%M:%S.000Z)"
+          test "$(gh api -i "repos/$GITHUB_REPOSITORY/git/ref/heads/feature/2.5.0-g02-autonomous-ci-foundation" 2>&1 | head -1 || true)" = 'HTTP/2.0 404 Not Found'
+          PR_NUMBER="$pr_number" MERGED_AT="$merged_at" DELETED_AT="$deleted_at" node - <<'NODE'
+          const fs=require('node:fs'),a={mergeSha:process.env.GITHUB_SHA,terminalDevelopSha:process.env.GITHUB_SHA,remoteDeleted:true,prNumber:Number(process.env.PR_NUMBER),mergedAt:process.env.MERGED_AT,remoteDeletionObservedAt:process.env.DELETED_AT,postMergeRun:{id:Number(process.env.GITHUB_RUN_ID),runAttempt:Number(process.env.GITHUB_RUN_ATTEMPT),repository:process.env.GITHUB_REPOSITORY,event:'push',headSha:process.env.GITHUB_SHA},createdAt:new Date().toISOString()};fs.writeFileSync('g02-merge-authority.json',JSON.stringify(a));
+          NODE
+          node scripts/evidence/emit-merge-envelope.mjs --f7 f7/ci-bundle.g02.json --f9 f9/approval-envelope.g02.json --authority g02-merge-authority.json --output merge-envelope.g02.json
+          echo "G02_F11_NAME=g02-merge-g02-run-$GITHUB_RUN_ID-attempt-$GITHUB_RUN_ATTEMPT-head-$GITHUB_SHA" >> "$GITHUB_ENV"
+      - name: Persist immutable G02 F11
+        if: steps.resolve.outputs.matched == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.G02_F11_NAME }}
+          path: merge-envelope.g02.json
+          if-no-files-found: error
+          retention-days: 90
+
   deploy:
     name: Deploy to server
     needs: [check, test]
