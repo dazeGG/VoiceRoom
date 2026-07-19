@@ -79,7 +79,9 @@ function gitBlobSha(bytes) { return crypto.createHash("sha1").update(Buffer.conc
 function hydratePublication(authority) {
   const headBlobs = reviewedFiles().map(({ filename, bytes }) => ({ path: filename, sha: gitBlobSha(bytes), sha256: `sha256:${crypto.createHash("sha256").update(bytes).digest("hex")}`, size: bytes.length, encoding: "base64", content: bytes.toString("base64") }));
   const modes = new Map(reviewedFiles().map(({ filename, mode }) => [filename, mode])); authority.headBlobs = headBlobs; authority.headTree = { sha: "4".repeat(40), truncated: false, tree: [{ path: "README.md", type: "blob", mode: "100644", sha: "1".repeat(40) }, ...headBlobs.map(({ path: name, sha }) => ({ path: name, type: "blob", mode: modes.get(name), sha }))] };
-  authority.baseTree = { sha: "5".repeat(40), truncated: false, tree: [{ path: "README.md", type: "blob", mode: "100644", sha: "1".repeat(40) }, ...headBlobs.map(({ path: name }) => ({ path: name, type: "blob", mode: "100644", sha: "2".repeat(40) }))] };
+  const recovery = /^feature\/2\.5\.0-g01-postmerge-bootstrap-a[0-9]{2,}$/.test(authority.pr.head.ref ?? "");
+  const generated = new Set(["docs/releases/2.5.0/evidence/bootstrap-attempts.json", "docs/releases/2.5.0/evidence/bootstrap-landed-recoveries.json"]);
+  authority.baseTree = { sha: "5".repeat(40), truncated: false, tree: [{ path: "README.md", type: "blob", mode: "100644", sha: "1".repeat(40) }, ...headBlobs.map(({ path: name, sha }) => ({ path: name, type: "blob", mode: modes.get(name), sha: recovery && !generated.has(name) ? sha : "2".repeat(40) }))] };
   authority.headCommit.commit = { tree: { sha: authority.headTree.sha } };
   authority.baseCommit = { sha: authority.pr.base.sha, commit: { tree: { sha: authority.baseTree.sha } } };
 }
