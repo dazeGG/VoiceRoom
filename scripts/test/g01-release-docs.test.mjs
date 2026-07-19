@@ -321,6 +321,20 @@ test("F9 requires canonical same-actor native exact-head comments, distinct outp
   buildF9Envelope(rf7, recoveryAuthority); assert.throws(() => buildF9Envelope(rf7, { ...recoveryAuthority, premergeAncestorArtifacts: [] }), /every ordered ancestor/); assert.throws(() => buildF9Envelope(rf7, { ...recoveryAuthority, premergeAncestorArtifacts: [{ ...ancestor, payloadDigest: digest("9") }] }), /every ordered ancestor/);
 });
 
+test("F9 ignores unauthenticated marker comments before parsing and keeps trusted malformed comments fail-closed", () => {
+  const base = chain();
+  const malformedBody = "<!-- voiceroom:g01-native-review:v1 -->\n{";
+  const outsiderMalformed = { ...base.comments[0], id: 90, node_id: "C90", body: malformedBody, user: { id: 100 } };
+  const outsiderExactCurrent = { ...base.comments[0], id: 91, node_id: "C91", user: { id: 100 } };
+  const untrustedExactCurrent = { ...base.comments[1], id: 92, node_id: "C92", author_association: "NONE" };
+  for (const comment of [outsiderMalformed, outsiderExactCurrent, untrustedExactCurrent]) {
+    const f9 = buildF9Envelope(base.f7, { ...base.approvalAuthority, comments: [...base.comments, comment] });
+    assert.deepEqual(f9.reviewObjects.map(({ commentId }) => commentId), [11, 12, 13]);
+  }
+  const trustedMalformed = { ...base.comments[0], id: 93, node_id: "C93", body: malformedBody };
+  assert.throws(() => buildF9Envelope(base.f7, { ...base.approvalAuthority, comments: [...base.comments, trustedMalformed] }));
+});
+
 test("F9 live reruns ignore prior-F7 comment triplets and require a current triplet", () => {
   const base = chain();
   const priorComments = base.comments.map((comment, index) => {

@@ -182,6 +182,7 @@ function normalizeReviews(authority, f7) {
   const candidates = [];
   for (const comment of authority.comments) {
     if (typeof comment.body !== "string" || !comment.body.startsWith(REVIEW_COMMENT_MARKER)) continue;
+    if (comment.user?.id !== authority.transportActorId || !TRUSTED_ASSOCIATIONS.has(comment.author_association)) continue;
     const payload = parseReviewComment(comment.body);
     if (payload.repository !== authority.repository || payload.prNumber !== authority.pr.number || payload.headSha !== f7.sourceSha || payload.attemptId !== f7.attemptId) continue;
     if (Object.entries(expectedIdentity).some(([key, expected]) => payload[key] !== expected)) continue;
