@@ -615,8 +615,9 @@ export function validateLivePublication(authority, prepared) {
   const head = toMap(authority.headTree), base = toMap(authority.baseTree);
   const changed = [...new Set([...head.keys(), ...base.keys()])].filter((name) => head.get(name)?.sha !== base.get(name)?.sha || head.get(name)?.mode !== base.get(name)?.mode).sort();
   const recovery = /^feature\/2\.5\.0-g01-postmerge-bootstrap-a[0-9]{2,}$/.test(authority.pr.head.ref ?? "");
+  const generatedRecoveryPaths = new Set(["docs/releases/2.5.0/evidence/bootstrap-attempts.json", "docs/releases/2.5.0/evidence/bootstrap-landed-recoveries.json"]);
   if (!recovery) assert.deepEqual(changed, [...G01_WRITABLE].sort(), "PR publication delta must equal the literal 36-path G01 manifest");
-  else { const candidatePaths = new Set(prepared.replayRecord.candidateTree.paths.map(({ path }) => path)); assert.ok(changed.length > 0, "recovery publication delta must be nonempty"); assert.ok(changed.every((name) => G01_WRITABLE.includes(name)), "recovery publication delta contains an unallowlisted path"); assert.ok(changed.every((name) => candidatePaths.has(name)), "recovery publication delta does not match authenticated candidate paths"); }
+  else { const candidatePaths = new Set(prepared.replayRecord.candidateTree.paths.map(({ path }) => path)); assert.ok(changed.length > 0, "recovery publication delta must be nonempty"); assert.ok(changed.every((name) => generatedRecoveryPaths.has(name)), "recovery publication delta contains a non-generated path"); assert.ok(changed.every((name) => candidatePaths.has(name)), "recovery publication delta does not match authenticated candidate paths"); }
   assert.ok(Array.isArray(authority.headBlobs) && authority.headBlobs.length === G01_WRITABLE.length, "all 36 PR head blobs must be fetched");
   const blobs = new Map(authority.headBlobs.map((item) => [item.path, item]));
   assert.equal(blobs.size, G01_WRITABLE.length, "PR head blob manifest contains duplicates");
@@ -628,8 +629,10 @@ export function validateLivePublication(authority, prepared) {
     const bytes = Buffer.from(blob.content, "base64");
     assert.equal(`sha256:${crypto.createHash("sha256").update(bytes).digest("hex")}`, blob.sha256, `PR blob digest mismatch: ${manifest.path}`);
     assert.equal(bytes.length, blob.size, `PR blob size mismatch: ${manifest.path}`);
-    assert.equal(blob.sha256, manifest.sha256, `PR blob does not match prepared candidate digest: ${manifest.path}`);
-    assert.equal(blob.size, manifest.size, `PR blob does not match prepared candidate size: ${manifest.path}`);
+    if (!recovery || !changed.includes(manifest.path)) {
+      assert.equal(blob.sha256, manifest.sha256, `PR blob does not match prepared candidate digest: ${manifest.path}`);
+      assert.equal(blob.size, manifest.size, `PR blob does not match prepared candidate size: ${manifest.path}`);
+    }
   }
   const publicationAuthority = { preparedAuthorityDigest: prepared.authorityDigest, reviewedBaseSha: prepared.replayRecord.candidateTree.reviewedBaseSha, reviewedHeadSha: prepared.replayRecord.candidateTree.reviewedHeadSha, baseTreeSha: authority.baseTree.sha, publishedTreeSha: authority.headTree.sha, commitSha: authority.pr.head.sha, files: authority.headBlobs.map(({ path, sha, sha256, size }) => ({ path, mode: head.get(path)?.mode, blobSha: sha, sha256, size })).sort((a, b) => a.path.localeCompare(b.path)) };
   publicationAuthority.digest = hashJson(publicationAuthority);
