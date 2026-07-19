@@ -283,9 +283,10 @@ function candidateTreeManifest(candidateFiles) {
   const names = candidateFiles.map(({ filename }) => filename);
   assert.equal(new Set(names).size, names.length, "candidate file map contains duplicate paths");
   assert.deepEqual([...names].sort(), [...G01_WRITABLE].sort(), "candidate file map must equal the literal 36-path G01 allowlist");
-  return candidateFiles.map(({ filename, bytes }) => {
+  return candidateFiles.map(({ filename, bytes, mode }) => {
     assert.ok(Buffer.isBuffer(bytes), `candidate bytes are required: ${filename}`);
-    return { path: filename, sha256: `sha256:${crypto.createHash("sha256").update(bytes).digest("hex")}`, size: bytes.length };
+    assert.match(mode ?? "", /^100(?:644|755)$/, `candidate Git mode is required: ${filename}`);
+    return { path: filename, mode, sha256: `sha256:${crypto.createHash("sha256").update(bytes).digest("hex")}`, size: bytes.length };
   }).sort((a, b) => a.path.localeCompare(b.path));
 }
 
@@ -460,10 +461,12 @@ export async function prepareAndCreateBootstrapBranch({ api, repository, registr
   files.get("docs/releases/2.5.0/evidence/bootstrap-landed-recoveries.json").bytes = Buffer.from(`${JSON.stringify(recoveries, null, 2)}\n`);
   const blobs = [];
   const publishedFiles = [];
+  const modeByPath = new Map(manifest.map(({ path: filename, mode }) => [filename, mode]));
   for (const { filename, bytes } of files.values()) {
     const blob = await api.createBlob({ content: Buffer.from(bytes).toString("base64"), encoding: "base64" });
-    blobs.push({ path: filename, mode: "100644", type: "blob", sha: blob.sha });
-    publishedFiles.push({ path: filename, blobSha: blob.sha, sha256: `sha256:${crypto.createHash("sha256").update(bytes).digest("hex")}`, size: bytes.length });
+    const mode = modeByPath.get(filename);
+    blobs.push({ path: filename, mode, type: "blob", sha: blob.sha });
+    publishedFiles.push({ path: filename, mode, blobSha: blob.sha, sha256: `sha256:${crypto.createHash("sha256").update(bytes).digest("hex")}`, size: bytes.length });
   }
   const baseCommit = await api.get(`repos/${repository}/git/commits/${prepared.developSha}`);
   const tree = await api.createTree({ base_tree: baseCommit.tree.sha, tree: blobs });
@@ -589,7 +592,7 @@ function validateLivePublication(authority, prepared) {
   assert.equal(authority.headTree.sha, commitTreeSha, "PR head recursive tree SHA does not match the authenticated commit");
   const toMap = (tree) => new Map(tree.tree.filter((entry) => entry.type === "blob").map((entry) => [entry.path, entry]));
   const head = toMap(authority.headTree), base = toMap(authority.baseTree);
-  const changed = [...new Set([...head.keys(), ...base.keys()])].filter((name) => head.get(name)?.sha !== base.get(name)?.sha).sort();
+  const changed = [...new Set([...head.keys(), ...base.keys()])].filter((name) => head.get(name)?.sha !== base.get(name)?.sha || head.get(name)?.mode !== base.get(name)?.mode).sort();
   assert.deepEqual(changed, [...G01_WRITABLE].sort(), "PR publication delta must equal the literal 36-path G01 manifest");
   assert.ok(Array.isArray(authority.headBlobs) && authority.headBlobs.length === G01_WRITABLE.length, "all 36 PR head blobs must be fetched");
   const blobs = new Map(authority.headBlobs.map((item) => [item.path, item]));
@@ -597,12 +600,13 @@ function validateLivePublication(authority, prepared) {
   for (const manifest of prepared.replayRecord.candidateTree.paths) {
     const blob = blobs.get(manifest.path); assert.ok(blob, `missing fetched PR head blob: ${manifest.path}`);
     assert.equal(blob.sha, head.get(manifest.path)?.sha, `PR tree/blob SHA mismatch: ${manifest.path}`);
+    assert.equal(head.get(manifest.path)?.mode, manifest.mode, `PR tree mode mismatch: ${manifest.path}`);
     assert.equal(blob.encoding, "base64", `PR blob encoding mismatch: ${manifest.path}`);
     const bytes = Buffer.from(blob.content, "base64");
     assert.equal(`sha256:${crypto.createHash("sha256").update(bytes).digest("hex")}`, blob.sha256, `PR blob digest mismatch: ${manifest.path}`);
     assert.equal(bytes.length, blob.size, `PR blob size mismatch: ${manifest.path}`);
   }
-  const publicationAuthority = { preparedAuthorityDigest: prepared.authorityDigest, reviewedBaseSha: prepared.replayRecord.candidateTree.reviewedBaseSha, reviewedHeadSha: prepared.replayRecord.candidateTree.reviewedHeadSha, baseTreeSha: authority.baseTree.sha, publishedTreeSha: authority.headTree.sha, commitSha: authority.pr.head.sha, files: authority.headBlobs.map(({ path, sha, sha256, size }) => ({ path, blobSha: sha, sha256, size })).sort((a, b) => a.path.localeCompare(b.path)) };
+  const publicationAuthority = { preparedAuthorityDigest: prepared.authorityDigest, reviewedBaseSha: prepared.replayRecord.candidateTree.reviewedBaseSha, reviewedHeadSha: prepared.replayRecord.candidateTree.reviewedHeadSha, baseTreeSha: authority.baseTree.sha, publishedTreeSha: authority.headTree.sha, commitSha: authority.pr.head.sha, files: authority.headBlobs.map(({ path, sha, sha256, size }) => ({ path, mode: head.get(path)?.mode, blobSha: sha, sha256, size })).sort((a, b) => a.path.localeCompare(b.path)) };
   publicationAuthority.digest = hashJson(publicationAuthority);
   const status = authority.publicationStatus;
   assert.ok(Number.isInteger(status?.id) && status.id > 0, "immutable publication status ID is required"); assert.equal(status.headSha, authority.pr.head.sha); assert.equal(status.state, "success");
@@ -795,7 +799,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     const reviewedHeadSha = git("rev-parse", "HEAD"), reviewedBaseSha = git("rev-parse", "origin/develop");
     const changed = git("diff", "--name-only", `${reviewedBaseSha}...${reviewedHeadSha}`).split("\n").filter(Boolean);
     assert.ok(changed.every((name) => G01_WRITABLE.includes(name)), `live preparation rejects unallowlisted reviewed paths: ${changed.filter((name) => !G01_WRITABLE.includes(name)).join(",")}`);
-    const candidateFiles = G01_WRITABLE.map((filename) => ({ filename, bytes: fs.readFileSync(filename) }));
+    const indexModes = new Map(git("ls-files", "--stage", "--", ...G01_WRITABLE).split("\n").filter(Boolean).map((line) => { const match = line.match(/^(100(?:644|755)) [0-9a-f]{40} [0-3]\t(.+)$/); assert.ok(match, `unsupported G01 index entry: ${line}`); return [match[2], match[1]]; }));
+    const candidateFiles = G01_WRITABLE.map((filename) => ({ filename, mode: indexModes.get(filename), bytes: fs.readFileSync(filename) }));
     const result = await prepareAndCreateBootstrapBranch({ api: githubCliAdapter(repository), repository, registries: files.map((filename) => ({ filename, bytes: fs.readFileSync(filename) })), candidateFiles, reviewedBaseSha, reviewedHeadSha, observedAt: args.includes("--observed-at") ? option("--observed-at") : () => new Date().toISOString() });
     process.stdout.write(`${JSON.stringify(result)}\n`); process.exit(0);
   }
