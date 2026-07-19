@@ -96,15 +96,14 @@ jobs:
     permissions:
       actions: read
       contents: read
+      issues: read
       pull-requests: read
     env:
       GH_TOKEN: ${{ github.token }}
       PR_NUMBER: ${{ github.event.pull_request.number }}
       SOURCE_SHA: ${{ github.event.pull_request.head.sha }}
       SOURCE_BRANCH: ${{ github.head_ref }}
-      REVIEWER_CODE_ID: ${{ vars.OMX_G01_CODE_REVIEWER_ID }}
-      REVIEWER_ARCHITECT_ID: ${{ vars.OMX_G01_ARCHITECT_ID }}
-      REVIEWER_VERIFIER_ID: ${{ vars.OMX_G01_VERIFIER_ID }}
+      REVIEW_TRANSPORT_ACTOR_ID: ${{ vars.OMX_G01_REVIEW_TRANSPORT_ACTOR_ID }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -238,8 +237,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for value in "$REVIEWER_CODE_ID" "$REVIEWER_ARCHITECT_ID" "$REVIEWER_VERIFIER_ID"; do [[ "$value" =~ ^[1-9][0-9]*$ ]] || exit 1; done
-          test "$REVIEWER_CODE_ID" != "$REVIEWER_ARCHITECT_ID" && test "$REVIEWER_CODE_ID" != "$REVIEWER_VERIFIER_ID" && test "$REVIEWER_ARCHITECT_ID" != "$REVIEWER_VERIFIER_ID"
+          [[ "$REVIEW_TRANSPORT_ACTOR_ID" =~ ^[1-9][0-9]*$ ]] || exit 1
           for poll in $(seq 1 90); do
             gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/${{ steps.f7_upload.outputs.artifact-id }}" > f7-metadata.json
             if test "$(node -p 'JSON.parse(require("node:fs").readFileSync("f7-metadata.json")).expired')" = false; then
@@ -263,9 +261,9 @@ jobs:
                 done
               fi
               gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" > f7-run.json
-              gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/reviews?per_page=100" --slurp > review-pages.json
-              REVIEWER_CODE_ID="$REVIEWER_CODE_ID" REVIEWER_ARCHITECT_ID="$REVIEWER_ARCHITECT_ID" REVIEWER_VERIFIER_ID="$REVIEWER_VERIFIER_ID" node - <<'NODE'
-          const fs=require('node:fs');const read=p=>JSON.parse(fs.readFileSync(p));fs.writeFileSync('approval-authority.json',JSON.stringify({pr:read('pr.json'),reviews:read('review-pages.json').flat(),reviewAuthority:{'code-reviewer':Number(process.env.REVIEWER_CODE_ID),architect:Number(process.env.REVIEWER_ARCHITECT_ID),verifier:Number(process.env.REVIEWER_VERIFIER_ID)},observedAt:new Date().toISOString(),repository:process.env.GITHUB_REPOSITORY,f7Artifact:{metadata:read('f7-metadata.json'),run:read('f7-run.json'),downloadDigest:fs.readFileSync('f7-download-digest.txt','utf8'),payloadDigest:fs.readFileSync('f7-payload-digest.txt','utf8'),matchCount:1},candidateReport:read('/tmp/g01-f7/candidate-registry-report.g01.json'),premergeAncestorArtifacts:read('/tmp/g01-f7/premerge-ancestor-authorities.json')}));
+              gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments?per_page=100" --slurp > comment-pages.json
+              REVIEW_TRANSPORT_ACTOR_ID="$REVIEW_TRANSPORT_ACTOR_ID" node - <<'NODE'
+          const fs=require('node:fs');const read=p=>JSON.parse(fs.readFileSync(p));fs.writeFileSync('approval-authority.json',JSON.stringify({pr:read('pr.json'),comments:read('comment-pages.json').flat(),transportActorId:Number(process.env.REVIEW_TRANSPORT_ACTOR_ID),observedAt:new Date().toISOString(),repository:process.env.GITHUB_REPOSITORY,f7Artifact:{metadata:read('f7-metadata.json'),run:read('f7-run.json'),downloadDigest:fs.readFileSync('f7-download-digest.txt','utf8'),payloadDigest:fs.readFileSync('f7-payload-digest.txt','utf8'),matchCount:1},candidateReport:read('/tmp/g01-f7/candidate-registry-report.g01.json'),premergeAncestorArtifacts:read('/tmp/g01-f7/premerge-ancestor-authorities.json')}));
           NODE
               if node scripts/evidence/emit-bootstrap-selection.mjs --emit-f9 --f7 "$f7_file" --authority approval-authority.json > approval-envelope.json; then break; fi
             fi
@@ -518,7 +516,7 @@ jobs:
           exact(f7,common,'F7');exact(f9,[...common,'f7Digest','reviewObjects'],'F9');
           for(const [e,p] of [[f7,'F7'],[f9,'F9']]){assert.equal(e.schemaVersion,1);assert.equal(e.goal,'G01');assert.equal(e.phase,p);assert.equal(e.status,'GREEN');assert.match(e.sourceSha,sha);assert.match(e.digest,dig);assert.ok(Number.isFinite(Date.parse(e.createdAt)));}
           assert.equal(f7.sourceSha,pr.head.sha);assert.equal(f7.sourceBranch,pr.head.ref);assert.equal(f9.sourceSha,f7.sourceSha);assert.equal(f9.sourceBranch,f7.sourceBranch);assert.equal(f9.attemptId,f7.attemptId);assert.equal(f9.f7Digest,f7.digest);assert.equal(f7.digest,compact(report));
-          assert.ok(Array.isArray(f9.reviewObjects)&&f9.reviewObjects.length===3);assert.deepEqual(f9.reviewObjects.map(x=>x.role),['code-reviewer','architect','verifier']);assert.equal(f9.digest,compact(f9.reviewObjects));for(const x of f9.reviewObjects){assert.equal(x.commitId,f7.sourceSha);assert.equal(x.verdict,x.role==='architect'?'CLEAR':'APPROVE')}
+          assert.ok(Array.isArray(f9.reviewObjects)&&f9.reviewObjects.length===3);assert.deepEqual(f9.reviewObjects.map(x=>x.role),['code-reviewer','architect','verifier']);assert.equal(f9.digest,compact(f9.reviewObjects));const reviewKeys=['schemaVersion','kind','role','verdict','repository','prNumber','headSha','attemptId','f7ArtifactId','f7ArtifactName','f7ArchiveDigest','f7PayloadDigest','f7Digest','laneId','output','outputDigest','parentReferences','commentId','nodeId','actorId','authorAssociation','createdAt'],trusted=new Set(['OWNER','MEMBER','COLLABORATOR']),ids=new Set(),nodes=new Set(),lanes=new Set(),outputs=new Set(),actors=new Set();for(const x of f9.reviewObjects){exact(x,reviewKeys,'F9 review');assert.equal(x.schemaVersion,1);assert.equal(x.kind,'g01-native-review');assert.equal(x.headSha,f7.sourceSha);assert.equal(x.attemptId,f7.attemptId);assert.equal(x.repository,repo);assert.equal(x.prNumber,pr.number);assert.equal(x.f7ArtifactId,m7.id);assert.equal(x.f7ArtifactName,m7.name);assert.equal(x.f7ArchiveDigest,m7.digest);assert.equal(x.f7PayloadDigest,hash(f7payload.bytes));assert.equal(x.f7Digest,f7.digest);assert.equal(x.verdict,x.role==='architect'?'CLEAR':'APPROVE');assert.equal(x.outputDigest,hash(Buffer.from(x.output)));assert.ok(Date.parse(x.createdAt)<Date.parse(f9.createdAt));assert.ok(trusted.has(x.authorAssociation));assert.ok(!ids.has(x.commentId)&&!nodes.has(x.nodeId)&&!lanes.has(x.laneId)&&!outputs.has(x.outputDigest));ids.add(x.commentId);nodes.add(x.nodeId);lanes.add(x.laneId);outputs.add(x.outputDigest);actors.add(x.actorId)}assert.equal(actors.size,1);const parents=f9.reviewObjects.slice(0,2);for(const x of parents)assert.deepEqual(x.parentReferences,[]);assert.deepEqual(f9.reviewObjects[2].parentReferences,parents.map(({role,commentId,outputDigest})=>({role,commentId,outputDigest})));assert.ok(parents.every(x=>Date.parse(x.createdAt)<Date.parse(f9.reviewObjects[2].createdAt)))
           exact(report,['schemaVersion','release','registries','activationAuthority'],'candidate report');assert.equal(report.schemaVersion,1);assert.equal(report.release,'2.5.0');assert.equal(report.registries.length,2);const regs=new Map(report.registries.map(x=>[x.name,x.candidate]));assert.deepEqual([...regs.keys()].sort(),['bootstrap-attempts.json','bootstrap-landed-recoveries.json']);
           const attempts=regs.get('bootstrap-attempts.json'),recoveries=regs.get('bootstrap-landed-recoveries.json');assert.equal(attempts.state,'G01_PREMERGE_ACTIVE');assert.equal(recoveries.state,'G01_PREMERGE_ACTIVE');
           const recovery=/^g01-recovery-a([0-9]{2,})$/.test(f7.attemptId),lineage=recovery?structuredClone(recoveries.landedAncestors):[];
@@ -599,7 +597,7 @@ jobs:
           exact(f7,common,'F7');exact(f9,[...common,'f7Digest','reviewObjects'],'F9');
           for(const [e,p] of [[f7,'F7'],[f9,'F9']]){assert.equal(e.schemaVersion,1);assert.equal(e.goal,'G01');assert.equal(e.phase,p);assert.equal(e.status,'GREEN');assert.match(e.sourceSha,sha);assert.match(e.digest,dig);assert.ok(Number.isFinite(Date.parse(e.createdAt)));}
           assert.equal(f7.sourceSha,pr.head.sha);assert.equal(f7.sourceBranch,pr.head.ref);assert.equal(f9.sourceSha,f7.sourceSha);assert.equal(f9.sourceBranch,f7.sourceBranch);assert.equal(f9.attemptId,f7.attemptId);assert.equal(f9.f7Digest,f7.digest);assert.equal(f7.digest,compact(report));
-          assert.ok(Array.isArray(f9.reviewObjects)&&f9.reviewObjects.length===3);assert.deepEqual(f9.reviewObjects.map(x=>x.role),['code-reviewer','architect','verifier']);assert.equal(f9.digest,compact(f9.reviewObjects));for(const x of f9.reviewObjects){assert.equal(x.commitId,f7.sourceSha);assert.equal(x.verdict,x.role==='architect'?'CLEAR':'APPROVE')}
+          assert.ok(Array.isArray(f9.reviewObjects)&&f9.reviewObjects.length===3);assert.deepEqual(f9.reviewObjects.map(x=>x.role),['code-reviewer','architect','verifier']);assert.equal(f9.digest,compact(f9.reviewObjects));const reviewKeys=['schemaVersion','kind','role','verdict','repository','prNumber','headSha','attemptId','f7ArtifactId','f7ArtifactName','f7ArchiveDigest','f7PayloadDigest','f7Digest','laneId','output','outputDigest','parentReferences','commentId','nodeId','actorId','authorAssociation','createdAt'],trusted=new Set(['OWNER','MEMBER','COLLABORATOR']),ids=new Set(),nodes=new Set(),lanes=new Set(),outputs=new Set(),actors=new Set();for(const x of f9.reviewObjects){exact(x,reviewKeys,'F9 review');assert.equal(x.schemaVersion,1);assert.equal(x.kind,'g01-native-review');assert.equal(x.headSha,f7.sourceSha);assert.equal(x.attemptId,f7.attemptId);assert.equal(x.repository,repo);assert.equal(x.prNumber,pr.number);assert.equal(x.f7ArtifactId,m7.id);assert.equal(x.f7ArtifactName,m7.name);assert.equal(x.f7ArchiveDigest,m7.digest);assert.equal(x.f7PayloadDigest,hash(f7payload.bytes));assert.equal(x.f7Digest,f7.digest);assert.equal(x.verdict,x.role==='architect'?'CLEAR':'APPROVE');assert.equal(x.outputDigest,hash(Buffer.from(x.output)));assert.ok(Date.parse(x.createdAt)<Date.parse(f9.createdAt));assert.ok(trusted.has(x.authorAssociation));assert.ok(!ids.has(x.commentId)&&!nodes.has(x.nodeId)&&!lanes.has(x.laneId)&&!outputs.has(x.outputDigest));ids.add(x.commentId);nodes.add(x.nodeId);lanes.add(x.laneId);outputs.add(x.outputDigest);actors.add(x.actorId)}assert.equal(actors.size,1);const parents=f9.reviewObjects.slice(0,2);for(const x of parents)assert.deepEqual(x.parentReferences,[]);assert.deepEqual(f9.reviewObjects[2].parentReferences,parents.map(({role,commentId,outputDigest})=>({role,commentId,outputDigest})));assert.ok(parents.every(x=>Date.parse(x.createdAt)<Date.parse(f9.reviewObjects[2].createdAt)))
           exact(report,['schemaVersion','release','registries','activationAuthority'],'candidate report');assert.equal(report.schemaVersion,1);assert.equal(report.release,'2.5.0');assert.equal(report.registries.length,2);const regs=new Map(report.registries.map(x=>[x.name,x.candidate]));assert.deepEqual([...regs.keys()].sort(),['bootstrap-attempts.json','bootstrap-landed-recoveries.json']);
           const attempts=regs.get('bootstrap-attempts.json'),recoveries=regs.get('bootstrap-landed-recoveries.json');assert.equal(attempts.state,'G01_PREMERGE_ACTIVE');assert.equal(recoveries.state,'G01_PREMERGE_ACTIVE');
           const recovery=/^g01-recovery-a([0-9]{2,})$/.test(f7.attemptId),lineage=recovery?structuredClone(recoveries.landedAncestors):[];

@@ -10,11 +10,13 @@ const SHA = /^[0-9a-f]{40}$/;
 const WORKFLOW_PATH = ".github/workflows/ci.yml";
 const WORKFLOW_NAME = "CI/CD";
 const TRUSTED_ASSOCIATIONS = new Set(["OWNER", "MEMBER", "COLLABORATOR"]);
-const ROLE_MARKERS = [
-  ["code-reviewer", "APPROVE", "[omx-role:code-reviewer verdict:APPROVE]"],
-  ["architect", "CLEAR", "[omx-role:architect verdict:CLEAR]"],
-  ["verifier", "APPROVE", "[omx-role:verifier verdict:APPROVE]"],
-];
+const REVIEW_LANES = [["code-reviewer", "APPROVE"], ["architect", "CLEAR"], ["verifier", "APPROVE"]];
+const REVIEW_COMMENT_MARKER = "<!-- voiceroom:g01-native-review:v1 -->";
+const MAX_REVIEW_OUTPUT_BYTES = 48000;
+const MAX_GITHUB_COMMENT_BYTES = 65536;
+const REVIEW_IDENTITY_FIELDS = ["repository", "prNumber", "headSha", "attemptId", "f7ArtifactId", "f7ArtifactName", "f7ArchiveDigest", "f7PayloadDigest", "f7Digest"];
+const REVIEW_INPUT_FIELDS = ["schemaVersion", "kind", "role", "verdict", "repository", "prNumber", "headSha", "attemptId", "f7ArtifactId", "f7ArtifactName", "f7ArchiveDigest", "f7PayloadDigest", "f7Digest", "laneId", "output", "parentReferences"];
+const REVIEW_PAYLOAD_FIELDS = [...REVIEW_INPUT_FIELDS.slice(0, -1), "outputDigest", "parentReferences"];
 
 function argument(name, optional = false) {
   const index = process.argv.indexOf(name);
@@ -39,6 +41,63 @@ function instant(value, label) {
 
 function compactDigest(value) {
   return `sha256:${crypto.createHash("sha256").update(JSON.stringify(value)).digest("hex")}`;
+}
+
+function nativeOutputDigest(value) { return `sha256:${crypto.createHash("sha256").update(value).digest("hex")}`; }
+
+function validateParentReferences(role, references) {
+  assert.ok(Array.isArray(references), "native review parentReferences must be an array");
+  if (role !== "verifier") { assert.deepEqual(references, [], `${role} cannot declare parent references`); return references; }
+  assert.equal(references.length, 2, "verifier must bind both native parent lanes");
+  assert.deepEqual(references.map(({ role: parentRole }) => parentRole), ["code-reviewer", "architect"], "verifier parent references must be ordered");
+  for (const [index, reference] of references.entries()) {
+    exactKeys(reference, ["role", "commentId", "outputDigest"], `verifier parent reference ${index}`);
+    assert.ok(Number.isInteger(reference.commentId) && reference.commentId > 0, "verifier parent comment ID is invalid");
+    assert.match(reference.outputDigest, DIGEST, "verifier parent output digest is invalid");
+  }
+  return references;
+}
+
+function validateReviewPayload(payload) {
+  exactKeys(payload, REVIEW_PAYLOAD_FIELDS, "native review comment payload");
+  assert.equal(payload.schemaVersion, 1); assert.equal(payload.kind, "g01-native-review");
+  assert.equal(REVIEW_LANES.find(([role]) => role === payload.role)?.[1], payload.verdict, "native review lane/verdict mismatch");
+  assert.match(payload.repository, /^[^/]+\/[^/]+$/); assert.ok(Number.isInteger(payload.prNumber) && payload.prNumber > 0);
+  assert.match(payload.headSha, SHA); assert.match(payload.attemptId, /^g01-(?:a|recovery-a)[0-9]{2,}$/);
+  assert.ok(Number.isInteger(payload.f7ArtifactId) && payload.f7ArtifactId > 0); assert.ok(typeof payload.f7ArtifactName === "string" && payload.f7ArtifactName.length > 0);
+  for (const key of ["f7ArchiveDigest", "f7PayloadDigest", "f7Digest", "outputDigest"]) assert.match(payload[key], DIGEST, `${key} is invalid`);
+  assert.match(payload.laneId, /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/, "native review laneId is invalid");
+  assert.ok(typeof payload.output === "string" && payload.output.length > 0 && Buffer.byteLength(payload.output) <= MAX_REVIEW_OUTPUT_BYTES, "native review output is invalid");
+  assert.equal(payload.outputDigest, nativeOutputDigest(payload.output), "native review output digest mismatch");
+  validateParentReferences(payload.role, payload.parentReferences);
+  return payload;
+}
+
+export function buildReviewComment(input) {
+  exactKeys(input, REVIEW_INPUT_FIELDS, "native review comment input");
+  const payload = validateReviewPayload({ ...Object.fromEntries(REVIEW_INPUT_FIELDS.slice(0, -1).map((key) => [key, input[key]])), outputDigest: nativeOutputDigest(input.output), parentReferences: input.parentReferences });
+  const body = `${REVIEW_COMMENT_MARKER}\n${JSON.stringify(payload)}`;
+  assert.ok(Buffer.byteLength(body) <= MAX_GITHUB_COMMENT_BYTES, "serialized native review comment exceeds GitHub limit");
+  return body;
+}
+
+export function parseReviewComment(body) {
+  assert.equal(typeof body, "string", "native review comment body must be a string");
+  const prefix = `${REVIEW_COMMENT_MARKER}\n`; assert.ok(body.startsWith(prefix), "native review comment marker mismatch");
+  assert.equal(body.indexOf("\n", prefix.length), -1, "native review comment must contain one canonical JSON line");
+  const payload = validateReviewPayload(JSON.parse(body.slice(prefix.length)));
+  const input = Object.fromEntries(REVIEW_INPUT_FIELDS.map((key) => [key, payload[key]]));
+  assert.equal(buildReviewComment(input), body, "native review comment body is not canonical");
+  return payload;
+}
+
+export function buildReviewCommentFromFiles({ identityPath, role, laneId, reportPath, parentsPath }) {
+  const identity = JSON.parse(fs.readFileSync(identityPath, "utf8")); exactKeys(identity, REVIEW_IDENTITY_FIELDS, "native review F7 identity");
+  const verdict = REVIEW_LANES.find(([candidate]) => candidate === role)?.[1]; assert.ok(verdict, "native review role is invalid");
+  const reportBytes = fs.readFileSync(reportPath); assert.ok(reportBytes.length > 0 && reportBytes.length <= MAX_REVIEW_OUTPUT_BYTES, "native review report size is invalid");
+  const output = new TextDecoder("utf-8", { fatal: true }).decode(reportBytes);
+  const parentReferences = parentsPath ? JSON.parse(fs.readFileSync(parentsPath, "utf8")) : [];
+  return buildReviewComment({ schemaVersion: 1, kind: "g01-native-review", role, verdict, ...identity, laneId, output, parentReferences });
 }
 
 export function envelopePayloadDigest(envelope) {
@@ -116,45 +175,47 @@ function validateArtifactAuthority(authority, expected, label) {
   return authority;
 }
 
-function normalizeReviews(authority, sourceSha, f7CreatedAt) {
-  exactKeys(authority.reviewAuthority, ["code-reviewer", "architect", "verifier"], "review authority mapping");
-  const authorized = new Map(Object.entries(authority.reviewAuthority).map(([role, actorId]) => {
-    assert.ok(Number.isInteger(actorId) && actorId > 0, `${role} authorized actor ID must be configured`);
-    return [role, actorId];
-  }));
-  assert.equal(new Set(authorized.values()).size, 3, "approval roles require three distinct authorized actors");
-  assert.ok(Array.isArray(authority.reviews), "GitHub reviews response must be an array");
-  const latestByActor = new Map();
-  for (const review of authority.reviews) {
-    if (!Number.isInteger(review.user?.id) || !review.submitted_at) continue;
-    const previous = latestByActor.get(review.user.id);
-    if (!previous || instant(previous.submitted_at, "previous review submitted_at") < instant(review.submitted_at, "review submitted_at")) latestByActor.set(review.user.id, review);
+function normalizeReviews(authority, f7) {
+  assert.ok(Number.isInteger(authority.transportActorId) && authority.transportActorId > 0, "configured review transport actor ID is invalid");
+  assert.ok(Array.isArray(authority.comments), "GitHub issue comments response must be an array");
+  const expectedIdentity = { repository: authority.repository, prNumber: authority.pr.number, headSha: f7.sourceSha, attemptId: f7.attemptId, f7ArtifactId: authority.f7Artifact.metadata.id, f7ArtifactName: authority.f7Artifact.metadata.name, f7ArchiveDigest: authority.f7Artifact.metadata.digest, f7PayloadDigest: authority.f7Artifact.payloadDigest, f7Digest: f7.digest };
+  const candidates = [];
+  for (const comment of authority.comments) {
+    if (typeof comment.body !== "string" || !comment.body.startsWith(REVIEW_COMMENT_MARKER)) continue;
+    const payload = parseReviewComment(comment.body);
+    if (payload.repository !== authority.repository || payload.prNumber !== authority.pr.number || payload.headSha !== f7.sourceSha || payload.attemptId !== f7.attemptId) continue;
+    if (Object.entries(expectedIdentity).some(([key, expected]) => payload[key] !== expected)) continue;
+    assert.equal(comment.user?.id, authority.transportActorId, `${payload.role} comment actor is not the configured transport actor`);
+    assert.ok(TRUSTED_ASSOCIATIONS.has(comment.author_association), `${payload.role} comment actor association is untrusted`);
+    assert.equal(comment.created_at, comment.updated_at, `${payload.role} comment must remain immutable`);
+    assert.ok(Number.isInteger(comment.id) && comment.id > 0, `${payload.role} comment ID is invalid`);
+    assert.ok(typeof comment.node_id === "string" && comment.node_id.length > 0, `${payload.role} comment node ID is invalid`);
+    instant(comment.created_at, `${payload.role} comment created_at`);
+    candidates.push({ comment, payload });
   }
-  const normalized = ROLE_MARKERS.map(([role, verdict, marker]) => {
-    const matches = [...latestByActor.values()].filter((review) => review.state === "APPROVED"
-      && review.commit_id === sourceSha
-      && review.user?.id === authorized.get(role)
-      && TRUSTED_ASSOCIATIONS.has(review.author_association)
-      && typeof review.body === "string" && review.body.includes(marker)
-      && ROLE_MARKERS.filter(([, , candidate]) => review.body.includes(candidate)).length === 1);
-    assert.equal(matches.length, 1, `expected exactly one authorized immutable ${role} review on the candidate head`);
-    const review = matches[0];
-    assert.ok(Number.isInteger(review.id) && review.id > 0);
-    assert.equal(typeof review.node_id, "string"); assert.ok(review.node_id.length > 0);
-    instant(review.submitted_at, `${role} review submitted_at`);
-    assert.ok(instant(f7CreatedAt, "F7.createdAt") < instant(review.submitted_at, `${role} review submitted_at`), `${role} review must follow F7`);
-    return { role, verdict, reviewId: review.id, nodeId: review.node_id, actorId: review.user.id, commitId: review.commit_id, submittedAt: review.submitted_at };
+  const normalized = REVIEW_LANES.map(([role, verdict]) => {
+    const matches = candidates.filter(({ payload }) => payload.role === role && payload.verdict === verdict);
+    assert.equal(matches.length, 1, `expected exactly one valid current-head comment for native ${role} lane`);
+    const { comment, payload } = matches[0];
+    assert.ok(instant(f7.createdAt, "F7.createdAt") < instant(comment.created_at, `${role} comment created_at`), `${role} comment must follow F7`);
+    return { ...payload, commentId: comment.id, nodeId: comment.node_id, actorId: comment.user.id, authorAssociation: comment.author_association, createdAt: comment.created_at };
   });
+  assert.equal(new Set(normalized.map(({ commentId }) => commentId)).size, 3, "native review comment IDs must be distinct");
+  assert.equal(new Set(normalized.map(({ nodeId }) => nodeId)).size, 3, "native review comment node IDs must be distinct");
+  assert.equal(new Set(normalized.map(({ actorId }) => actorId)).size, 1, "native review comments must use one configured transport actor");
+  assert.equal(new Set(normalized.map(({ laneId }) => laneId)).size, 3, "native review lane IDs must be distinct");
+  assert.equal(new Set(normalized.map(({ outputDigest: digest }) => digest)).size, 3, "native review output digests must be distinct");
   const byRole = new Map(normalized.map((review) => [review.role, review]));
-  const verifierAt = instant(byRole.get("verifier").submittedAt, "verifier review submitted_at");
-  assert.ok(instant(byRole.get("code-reviewer").submittedAt, "code-reviewer review submitted_at") < verifierAt, "verifier approval must follow code-reviewer approval");
-  assert.ok(instant(byRole.get("architect").submittedAt, "architect review submitted_at") < verifierAt, "verifier approval must follow architect clearance");
+  const verifier = byRole.get("verifier"), verifierAt = instant(verifier.createdAt, "verifier comment created_at");
+  assert.ok(instant(byRole.get("code-reviewer").createdAt, "code-reviewer comment created_at") < verifierAt, "verifier approval must follow code-reviewer approval");
+  assert.ok(instant(byRole.get("architect").createdAt, "architect comment created_at") < verifierAt, "verifier approval must follow architect clearance");
+  assert.deepEqual(verifier.parentReferences, ["code-reviewer", "architect"].map((role) => ({ role, commentId: byRole.get(role).commentId, outputDigest: byRole.get(role).outputDigest })), "verifier parent references do not bind the exact native parent lanes");
   return normalized;
 }
 
 export function buildF9Envelope(f7, authority) {
   validateEnvelope(f7, "F7");
-  exactKeys(authority, ["pr", "reviews", "reviewAuthority", "observedAt", "repository", "f7Artifact", "candidateReport", "premergeAncestorArtifacts"], "approval authority");
+  exactKeys(authority, ["pr", "comments", "transportActorId", "observedAt", "repository", "f7Artifact", "candidateReport", "premergeAncestorArtifacts"], "approval authority");
   assert.ok(Array.isArray(authority.premergeAncestorArtifacts), "F9 requires the premerge ancestor authentication catalog");
   for (const [index, ancestor] of authority.premergeAncestorArtifacts.entries()) {
     exactKeys(ancestor, ["evidenceId", "attemptId", "payloadDigest", "artifactId", "artifactName", "archiveDigest", "downloadDigest", "runId", "runAttempt", "headSha", "terminalDevelopSha"], `premerge ancestor ${index}`);
@@ -181,10 +242,10 @@ export function buildF9Envelope(f7, authority) {
   assert.equal(f7.evidenceId, `ci-bundle.${identity.suffix}`);
   validateArtifactAuthority(authority.f7Artifact, { name: artifactName("candidate", f7, authority.f7Artifact.run.id, authority.f7Artifact.run.run_attempt), headSha: f7.sourceSha, headBranch: f7.sourceBranch, event: "pull_request", repository: authority.repository, observedAt: authority.observedAt, payload: f7 }, "F7");
   assert.equal(f7.digest, compactDigest(authority.candidateReport), "F7 digest must bind the candidate report bytes from the authenticated artifact");
-  const reviewObjects = normalizeReviews(authority, f7.sourceSha, f7.createdAt);
+  const reviewObjects = normalizeReviews(authority, f7);
   const createdAt = authority.observedAt; instant(createdAt, "approval observedAt");
   assert.ok(instant(f7.createdAt, "F7.createdAt") < instant(createdAt, "approval observedAt"), "F9 must follow F7");
-  assert.ok(reviewObjects.every(({ submittedAt }) => instant(submittedAt, "review submittedAt") < instant(createdAt, "approval observedAt")), "F9 must follow every review");
+  assert.ok(reviewObjects.every(({ createdAt: reviewedAt }) => instant(reviewedAt, "review createdAt") < instant(createdAt, "approval observedAt")), "F9 must follow every review");
   return validateEnvelope({ schemaVersion: 1, goal: "G01", phase: "F9", status: "GREEN", evidenceId: `approval-envelope.${identity.suffix}`, attemptId: identity.attemptId, sourceBranch: f7.sourceBranch, sourceSha: f7.sourceSha, digest: compactDigest(reviewObjects), createdAt, f7Digest: f7.digest, reviewObjects }, "F9");
 }
 
@@ -392,8 +453,15 @@ export function buildSelection(f7, f9, f11, authority, ancestorFailures = [], an
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const f7 = JSON.parse(fs.readFileSync(argument("--f7"), "utf8")); const authority = JSON.parse(fs.readFileSync(argument("--authority"), "utf8")); let output;
-  if (process.argv.includes("--emit-f9")) output = buildF9Envelope(f7, authority);
+  if (process.argv.includes("--build-review-comment")) {
+    const identityPath = argument("--identity", true);
+    const body = identityPath
+      ? buildReviewCommentFromFiles({ identityPath, role: argument("--role"), laneId: argument("--lane-id"), reportPath: argument("--report"), parentsPath: argument("--parents", true) })
+      : buildReviewComment(JSON.parse(fs.readFileSync(argument("--input"), "utf8")));
+    process.stdout.write(`${body}\n`);
+  } else {
+    const f7 = JSON.parse(fs.readFileSync(argument("--f7"), "utf8")); const authority = JSON.parse(fs.readFileSync(argument("--authority"), "utf8")); let output;
+    if (process.argv.includes("--emit-f9")) output = buildF9Envelope(f7, authority);
   else {
     const f9 = JSON.parse(fs.readFileSync(argument("--f9"), "utf8"));
     if (process.argv.includes("--emit-f11")) output = buildF11Envelope(f7, f9, authority);
@@ -403,5 +471,6 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       output = buildSelection(f7, f9, f11, authority, ancestorsPath ? JSON.parse(fs.readFileSync(ancestorsPath, "utf8")) : [], ancestorArtifactsPath ? JSON.parse(fs.readFileSync(ancestorArtifactsPath, "utf8")) : undefined);
     }
   }
-  process.stdout.write(`${JSON.stringify(output)}\n`);
+    process.stdout.write(`${JSON.stringify(output)}\n`);
+  }
 }

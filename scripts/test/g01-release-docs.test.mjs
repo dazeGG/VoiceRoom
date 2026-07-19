@@ -7,7 +7,7 @@ import crypto from "node:crypto";
 import { execFileSync } from "node:child_process";
 import Ajv2020 from "ajv/dist/2020.js";
 import addFormats from "ajv-formats";
-import { artifactName, buildAuthenticatedEarlyFailure, buildF9Envelope, buildF11Envelope, buildSelection, envelopePayloadDigest, selectCanonicalFailure, validateBootstrapFailure, validateFallbackCandidatePair } from "../evidence/emit-bootstrap-selection.mjs";
+import { artifactName, buildAuthenticatedEarlyFailure, buildF9Envelope, buildF11Envelope, buildReviewComment, buildSelection, envelopePayloadDigest, parseReviewComment, selectCanonicalFailure, validateBootstrapFailure, validateFallbackCandidatePair } from "../evidence/emit-bootstrap-selection.mjs";
 import { activateCandidateReport, buildActivationCapture, buildCandidateReport, buildF7Envelope, prepareAndCreateBootstrapBranch, prepareBootstrapAuthority, reconstructNextOrdinal, validateRegistry } from "../evidence/bootstrap-export.mjs";
 import { G01_WRITABLE } from "../evidence/recover-landed-bootstrap.mjs";
 
@@ -62,23 +62,39 @@ function bindPrepared(authority, ordinal) {
   authority.publicationStatus = { id: 88, headSha: authority.pr.head.sha, state: "success", context: `g01/PUBLICATION/${authority.preparedAuthority.attemptId}`, description: `G01_PUBLICATION ${publication.digest}` };
   return authority;
 }
-function review(role, actorId, submittedAt, overrides = {}) {
-  const verdict = role === "architect" ? "CLEAR" : "APPROVE";
-  return { id: actorId, node_id: `R${actorId}`, state: "APPROVED", body: `[omx-role:${role} verdict:${verdict}]`, commit_id: "a".repeat(40), submitted_at: submittedAt, author_association: "MEMBER", user: { id: actorId }, ...overrides };
+function reviewInput(role, f7, f7Artifact, parentReferences = []) {
+  return { schemaVersion: 1, kind: "g01-native-review", role, verdict: role === "architect" ? "CLEAR" : "APPROVE", repository: REPOSITORY, prNumber: 7, headSha: f7.sourceSha, attemptId: f7.attemptId, f7ArtifactId: f7Artifact.metadata.id, f7ArtifactName: f7Artifact.metadata.name, f7ArchiveDigest: f7Artifact.metadata.digest, f7PayloadDigest: f7Artifact.payloadDigest, f7Digest: f7.digest, laneId: `native-${role}`, output: `${role} exact-head native output`, parentReferences };
+}
+function reviewComments(f7, f7Artifact) {
+  const roles = ["code-reviewer", "architect", "verifier"], ids = [11, 12, 13], inputs = roles.slice(0, 2).map((role) => reviewInput(role, f7, f7Artifact));
+  const parents = inputs.map((input, index) => ({ role: input.role, commentId: ids[index], outputDigest: `sha256:${crypto.createHash("sha256").update(input.output).digest("hex")}` })); inputs.push(reviewInput("verifier", f7, f7Artifact, parents));
+  return inputs.map((input, index) => ({ id: ids[index], node_id: `C${ids[index]}`, body: buildReviewComment(input), created_at: `2026-07-18T00:00:${index + 1}0.000Z`, updated_at: `2026-07-18T00:00:${index + 1}0.000Z`, author_association: "MEMBER", user: { id: 99 } }));
+}
+function mutateReviewBody(comment, mutate) {
+  const input = structuredClone(parseReviewComment(comment.body)); delete input.outputDigest; mutate(input);
+  return { ...comment, body: buildReviewComment(input) };
+}
+function mutateReviewBodyRaw(comment, mutate) {
+  const newline = comment.body.indexOf("\n"), payload = JSON.parse(comment.body.slice(newline + 1)); mutate(payload);
+  return { ...comment, body: `${comment.body.slice(0, newline)}\n${JSON.stringify(payload)}` };
+}
+function rebindF9ArtifactIdentity(f9, metadata, f7Bytes) {
+  const reviewObjects = f9.reviewObjects.map((review) => ({ ...review, f7ArtifactId: metadata.id, f7ArtifactName: metadata.name, f7ArchiveDigest: metadata.digest, f7PayloadDigest: `sha256:${crypto.createHash("sha256").update(f7Bytes).digest("hex")}` }));
+  return { ...f9, reviewObjects, digest: compactDigest(reviewObjects) };
 }
 function chain(attemptId = "g01-a02") {
   const head = "a".repeat(40), merge = "b".repeat(40), report = candidateReport(head, attemptId);
   const f7 = buildF7Envelope(report, head, BRANCH, "2026-07-18T00:00:00.000Z");
   const f7Artifact = artifactAuthority(1, artifactName("candidate", f7, 10, 1), head, BRANCH, "pull_request", { status: "in_progress", conclusion: null, runId: 10, payload: f7 });
-  const reviews = [review("code-reviewer", 11, "2026-07-18T00:00:10.000Z"), review("architect", 12, "2026-07-18T00:00:20.000Z"), review("verifier", 13, "2026-07-18T00:00:30.000Z")];
-  const approvalAuthority = { pr: pr(), reviews, reviewAuthority: { "code-reviewer": 11, architect: 12, verifier: 13 }, observedAt: "2026-07-18T00:01:00.000Z", repository: REPOSITORY, f7Artifact, candidateReport: report, premergeAncestorArtifacts: [] };
+  const comments = reviewComments(f7, f7Artifact);
+  const approvalAuthority = { pr: pr(), comments, transportActorId: 99, observedAt: "2026-07-18T00:01:00.000Z", repository: REPOSITORY, f7Artifact, candidateReport: report, premergeAncestorArtifacts: [] };
   const f9 = buildF9Envelope(f7, approvalAuthority);
   const f9Artifact = artifactAuthority(2, artifactName("approval", f9, 10, 1), head, BRANCH, "pull_request", { runId: 10, payload: f9 });
   const mergeAuthority = { pr: pr({ state: "closed" }), developRef: { object: { sha: merge } }, sourceRefStatus: 404, postMergeRun: postMergeRun(merge), observedAt: "2026-07-18T00:04:00.000Z", repository: REPOSITORY, f7Artifact: { ...f7Artifact, run: { ...f7Artifact.run, status: "completed", conclusion: "success" } }, f9Artifact };
   const f11 = buildF11Envelope(f7, f9, mergeAuthority);
   const f11Artifact = artifactAuthority(3, artifactName("merge", f11, 70, 2), merge, "develop", "push", { runId: 70, runAttempt: 2, status: "in_progress", conclusion: null, payload: f11 });
   const selectionAuthority = { ...mergeAuthority, observedAt: "2026-07-18T00:05:00.000Z", f11Artifact, selectionRun: f11Artifact.run };
-  return { head, merge, report, f7, f9, f11, reviews, approvalAuthority, mergeAuthority, selectionAuthority };
+  return { head, merge, report, f7, f9, f11, comments, approvalAuthority, mergeAuthority, selectionAuthority };
 }
 
 test("canonical docs and historical pointers are tracked", () => {
@@ -270,24 +286,72 @@ test("candidate export rejects recursive future facts and forged registry fields
   const extra = structuredClone(attempts); extra.forged = true; assert.throws(() => validateRegistry(extra, "bootstrap-attempts.json"), /unexpected field/);
 });
 
-test("F9 requires three distinct configured trusted actors and effective exact-head approvals after F7", () => {
+test("F9 requires canonical same-actor native exact-head comments, distinct outputs and verifier parent bindings after F7", () => {
   const base = chain(); buildF9Envelope(base.f7, base.approvalAuthority);
   const hostile = [
-    { ...base.approvalAuthority, reviewAuthority: { "code-reviewer": 11, architect: 11, verifier: 13 } },
-    { ...base.approvalAuthority, reviews: base.reviews.map((r, i) => i === 1 ? { ...r, user: { id: 11 } } : r) },
-    { ...base.approvalAuthority, reviews: base.reviews.map((r, i) => i === 1 ? { ...r, author_association: "NONE" } : r) },
-    { ...base.approvalAuthority, reviews: base.reviews.map((r, i) => i === 1 ? { ...r, submitted_at: "2026-07-17T23:59:59.000Z" } : r) },
-    { ...base.approvalAuthority, reviews: [...base.reviews, { ...base.reviews[0], id: 99, node_id: "R99", state: "CHANGES_REQUESTED", submitted_at: "2026-07-18T00:00:40.000Z" }] },
-    { ...base.approvalAuthority, reviews: base.reviews.map((r, i) => i === 0 ? { ...r, body: `${r.body} [omx-role:architect verdict:CLEAR]` } : r) },
-    { ...base.approvalAuthority, reviews: base.reviews.map((r, i) => i === 2 ? { ...r, submitted_at: "2026-07-18T00:00:15.000Z" } : r) },
+    { ...base.approvalAuthority, transportActorId: 100 },
+    { ...base.approvalAuthority, comments: base.comments.map((r, i) => i === 1 ? { ...r, user: { id: 100 } } : r) },
+    { ...base.approvalAuthority, comments: base.comments.map((r, i) => i === 1 ? { ...r, author_association: "NONE" } : r) },
+    { ...base.approvalAuthority, comments: base.comments.map((r, i) => i === 1 ? { ...r, created_at: "2026-07-17T23:59:59.000Z", updated_at: "2026-07-17T23:59:59.000Z" } : r) },
+    { ...base.approvalAuthority, comments: [...base.comments, { ...base.comments[0], id: 99, node_id: "C99" }] },
+    { ...base.approvalAuthority, comments: base.comments.map((r, i) => i === 0 ? { ...r, body: `${r.body} ` } : r) },
+    { ...base.approvalAuthority, comments: base.comments.map((r, i) => i === 2 ? { ...r, created_at: "2026-07-18T00:00:15.000Z", updated_at: "2026-07-18T00:00:15.000Z" } : r) },
+    { ...base.approvalAuthority, comments: base.comments.map((r, i) => i === 0 ? { ...r, updated_at: "2026-07-18T00:00:11.000Z" } : r) },
+    { ...base.approvalAuthority, comments: base.comments.map((r, i) => i === 0 ? mutateReviewBody(r, (input) => { input.f7Digest = digest("9"); }) : r) },
+    { ...base.approvalAuthority, comments: base.comments.map((r, i) => i === 2 ? mutateReviewBodyRaw(r, (payload) => { payload.parentReferences.reverse(); }) : r) },
     { ...base.approvalAuthority, pr: { ...base.approvalAuthority.pr, head: { ...base.approvalAuthority.pr.head, repo: { full_name: "fork/VoiceRoom" } } } },
   ];
   for (const authority of hostile) assert.throws(() => buildF9Envelope(base.f7, authority));
+  const duplicateLane = { ...base.approvalAuthority, comments: base.comments.map((comment, index) => index === 1 ? mutateReviewBody(comment, (input) => { input.laneId = parseReviewComment(base.comments[0].body).laneId; }) : comment) };
+  assert.throws(() => buildF9Envelope(base.f7, duplicateLane), /lane IDs must be distinct/);
+  const duplicateOutput = { ...base.approvalAuthority, comments: base.comments.map((comment, index) => index === 1 ? mutateReviewBody(comment, (input) => { input.output = parseReviewComment(base.comments[0].body).output; }) : comment) };
+  assert.throws(() => buildF9Envelope(base.f7, duplicateOutput), /output digests must be distinct/);
+  for (const mutateParent of [
+    (parent) => { parent.commentId += 100; },
+    (parent) => { parent.outputDigest = digest("9"); },
+  ]) {
+    const wrongParent = { ...base.approvalAuthority, comments: base.comments.map((comment, index) => index === 2 ? mutateReviewBody(comment, (input) => { mutateParent(input.parentReferences[0]); }) : comment) };
+    assert.throws(() => buildF9Envelope(base.f7, wrongParent), /do not bind the exact native parent lanes/);
+  }
   const recoveryBranch = "feature/2.5.0-g01-postmerge-bootstrap-a02", report = candidateReport();
   report.registries[1].candidate = { schemaVersion: 1, release: "2.5.0", state: "G01_PREMERGE_ACTIVE", currentRecovery: "g01-recovery-a02", landedAncestors: [{ attemptId: "g01-recovery-a02", branch: recoveryBranch, baseSha: "9".repeat(40), parentSha: "9".repeat(40), headSha: base.head, authorityDigest: report.activationAuthority.preparedAuthority.authorityDigest, planSpecPairDigest: digest("2"), firstAuthoritativeId: 1, priorFailureId: "bootstrap-failure.g01-a01.json", priorFailureDigest: digest("3") }] };
   const rf7 = buildF7Envelope(report, base.head, recoveryBranch, "2026-07-18T00:00:00.000Z"), ancestor = { evidenceId: "bootstrap-failure.g01-a01.json", attemptId: "g01-a01", payloadDigest: digest("3"), artifactId: 91, artifactName: `g01-bootstrap-failure-g01-a01-run-80-attempt-1-head-${"9".repeat(40)}-phase-f11`, archiveDigest: digest("4"), downloadDigest: digest("4"), runId: 80, runAttempt: 1, headSha: "8".repeat(40), terminalDevelopSha: "9".repeat(40) };
-  const recoveryAuthority = { ...base.approvalAuthority, pr: { ...base.approvalAuthority.pr, head: { ...base.approvalAuthority.pr.head, ref: recoveryBranch } }, candidateReport: report, f7Artifact: artifactAuthority(92, artifactName("candidate", rf7, 10, 1), base.head, recoveryBranch, "pull_request", { status: "in_progress", conclusion: null, runId: 10, payload: rf7 }), premergeAncestorArtifacts: [ancestor] };
+  const recoveryF7Artifact = artifactAuthority(92, artifactName("candidate", rf7, 10, 1), base.head, recoveryBranch, "pull_request", { status: "in_progress", conclusion: null, runId: 10, payload: rf7 });
+  const recoveryAuthority = { ...base.approvalAuthority, pr: { ...base.approvalAuthority.pr, head: { ...base.approvalAuthority.pr.head, ref: recoveryBranch } }, comments: reviewComments(rf7, recoveryF7Artifact), candidateReport: report, f7Artifact: recoveryF7Artifact, premergeAncestorArtifacts: [ancestor] };
   buildF9Envelope(rf7, recoveryAuthority); assert.throws(() => buildF9Envelope(rf7, { ...recoveryAuthority, premergeAncestorArtifacts: [] }), /every ordered ancestor/); assert.throws(() => buildF9Envelope(rf7, { ...recoveryAuthority, premergeAncestorArtifacts: [{ ...ancestor, payloadDigest: digest("9") }] }), /every ordered ancestor/);
+});
+
+test("F9 live reruns ignore prior-F7 comment triplets and require a current triplet", () => {
+  const base = chain();
+  const priorComments = base.comments.map((comment, index) => {
+    const prior = mutateReviewBody(comment, (input) => {
+      input.f7ArtifactId += 100;
+      input.f7ArtifactName = `${input.f7ArtifactName}-prior`;
+      input.f7ArchiveDigest = digest("6");
+      input.f7PayloadDigest = digest("7");
+      input.f7Digest = digest("8");
+    });
+    return { ...prior, id: comment.id + 100, node_id: `C${comment.id + 100}`, created_at: `2026-07-18T00:00:0${index + 1}.000Z`, updated_at: `2026-07-18T00:00:0${index + 1}.000Z` };
+  });
+  const rerun = buildF9Envelope(base.f7, { ...base.approvalAuthority, comments: [...priorComments, ...base.comments] });
+  assert.deepEqual(rerun.reviewObjects.map(({ commentId }) => commentId), [11, 12, 13]);
+  assert.throws(() => buildF9Envelope(base.f7, { ...base.approvalAuthority, comments: priorComments }), /expected exactly one valid current-head comment/);
+});
+
+test("native review comment builder CLI derives canonical output from exact F7 identity and native report bytes", () => {
+  const base = chain(), input = parseReviewComment(base.comments[0].body); delete input.outputDigest;
+  const identity = Object.fromEntries(["repository", "prNumber", "headSha", "attemptId", "f7ArtifactId", "f7ArtifactName", "f7ArchiveDigest", "f7PayloadDigest", "f7Digest"].map((key) => [key, input[key]]));
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "g01-review-comment-")), identityPath = path.join(directory, "identity.json"), reportPath = path.join(directory, "report.txt");
+  try {
+    fs.writeFileSync(identityPath, JSON.stringify(identity)); fs.writeFileSync(reportPath, input.output);
+    const args = ["scripts/evidence/emit-bootstrap-selection.mjs", "--build-review-comment", "--identity", identityPath, "--role", input.role, "--lane-id", input.laneId, "--report", reportPath];
+    const output = execFileSync(process.execPath, args, { encoding: "utf8" });
+    assert.equal(output, `${buildReviewComment(input)}\n`); assert.equal(output.trimEnd().split("\n").length, 2);
+    assert.equal(execFileSync(process.execPath, args, { encoding: "utf8" }), output, "same report bytes and identity must produce the same comment");
+    fs.writeFileSync(identityPath, JSON.stringify({ ...identity, forged: true })); assert.throws(() => execFileSync(process.execPath, args, { stdio: "pipe" }));
+    fs.writeFileSync(identityPath, JSON.stringify(identity)); fs.writeFileSync(reportPath, "x".repeat(48001)); assert.throws(() => execFileSync(process.execPath, args, { stdio: "pipe" }), /Command failed/, "oversized native report must fail");
+    fs.writeFileSync(reportPath, "\0".repeat(12000)); assert.throws(() => execFileSync(process.execPath, args, { stdio: "pipe" }), /Command failed/, "JSON expansion beyond the whole-comment limit must fail");
+  } finally { fs.rmSync(directory, { recursive: true, force: true }); }
 });
 
 test("same-ordinal failed reruns select one authenticated canonical terminal and reject exact-order conflicts", () => {
@@ -303,9 +367,9 @@ test("recovery failure validation and checkout-free recorder preserve complete a
   report.registries[0].candidate.currentAttempt = null; report.registries[0].candidate.attempts = [];
   report.registries[1].candidate.currentRecovery = recovery.attemptId; report.registries[1].candidate.landedAncestors = [recovery];
   const f7 = buildF7Envelope(report, head, branch, "2026-07-18T00:00:00.000Z"), producer = artifactAuthority(77, artifactName("candidate", f7, 10, 1), head, branch, "pull_request", { runId: 10, payload: f7 });
-  const currentPr = pr(); currentPr.head.ref = branch; const reviews = [review("code-reviewer", 11, "2026-07-18T00:00:10.000Z"), review("architect", 12, "2026-07-18T00:00:20.000Z"), review("verifier", 13, "2026-07-18T00:00:30.000Z")];
+  const currentPr = pr(); currentPr.head.ref = branch; const comments = reviewComments(f7, producer);
   const ancestor = { evidenceId: "bootstrap-failure.g01-a01.json", attemptId: "g01-a01", payloadDigest: digest("3"), artifactId: 91, artifactName: `g01-bootstrap-failure-g01-a01-run-80-attempt-1-head-${"9".repeat(40)}-phase-f11`, archiveDigest: digest("4"), downloadDigest: digest("4"), runId: 80, runAttempt: 1, headSha: "8".repeat(40), terminalDevelopSha: "9".repeat(40) };
-  const f9 = buildF9Envelope(f7, { pr: currentPr, reviews, reviewAuthority: { "code-reviewer": 11, architect: 12, verifier: 13 }, observedAt: "2026-07-18T00:01:00.000Z", repository: REPOSITORY, f7Artifact: producer, candidateReport: report, premergeAncestorArtifacts: [ancestor] });
+  const f9 = buildF9Envelope(f7, { pr: currentPr, comments, transportActorId: 99, observedAt: "2026-07-18T00:01:00.000Z", repository: REPOSITORY, f7Artifact: producer, candidateReport: report, premergeAncestorArtifacts: [ancestor] });
   const approval = artifactAuthority(78, artifactName("approval", f9, 10, 1), head, branch, "pull_request", { runId: 10, payload: f9 });
   producer.run.status = "completed"; producer.run.conclusion = "success";
   approval.run.status = "completed"; approval.run.conclusion = "success";
@@ -388,8 +452,9 @@ test("unbounded structural schemas accept a100 while runtime binds every externa
 test("recovery selection enforces ordinal/suffix parity and authenticates every ordered ancestor", () => {
   const base = chain(), recoveryBranch = "feature/2.5.0-g01-postmerge-bootstrap-a02", suffix = "bootstrap-recovery-a02.json", ancestorSha = "c".repeat(40);
   const rf7 = { ...base.f7, attemptId: "g01-recovery-a02", sourceBranch: recoveryBranch, evidenceId: `ci-bundle.${suffix}` };
-  const rf9 = { ...base.f9, attemptId: "g01-recovery-a02", sourceBranch: recoveryBranch, evidenceId: `approval-envelope.${suffix}` };
-  const rf11 = { ...base.f11, attemptId: "g01-recovery-a02", sourceBranch: recoveryBranch, evidenceId: `merge-envelope.${suffix}` };
+  const recoveryReviews = base.f9.reviewObjects.map((review) => ({ ...review, attemptId: rf7.attemptId }));
+  const rf9 = { ...base.f9, attemptId: rf7.attemptId, sourceBranch: recoveryBranch, evidenceId: `approval-envelope.${suffix}`, reviewObjects: recoveryReviews, digest: compactDigest(recoveryReviews) };
+  const rf11 = { ...base.f11, attemptId: rf7.attemptId, sourceBranch: recoveryBranch, evidenceId: `merge-envelope.${suffix}`, f9Digest: rf9.digest };
   const ancestorName = `g01-bootstrap-failure-g01-a01-run-40-attempt-1-head-${ancestorSha}-phase-f11`;
   const ancestor = { attemptId: "g01-a01", evidenceId: "bootstrap-failure.g01-a01.json", digest: digest("4"), artifactId: 30, artifactName: ancestorName, archiveDigest: digest("4"), runId: 40, runAttempt: 1, headSha: "a".repeat(40), baseSha: "9".repeat(40), parentSha: "9".repeat(40), terminalDevelopSha: ancestorSha, createdAt: "2026-07-17T23:59:00.000Z" };
   const authority = structuredClone(base.selectionAuthority);
@@ -426,7 +491,7 @@ test("CI executes the exported G01 writable manifest directly", () => {
 
 test("workflow has reachable bounded premerge F9 and automatic merged-commit F11/selection with authenticated provenance", () => {
   const workflow = read(".github/workflows/ci.yml"); const block = workflow.slice(workflow.indexOf("  bootstrap-plan:"), workflow.indexOf("\n  bootstrap-postmerge:"));
-  assert.match(block, /github\.event_name == 'pull_request'/); assert.match(block, /head\.repo\.full_name == github\.repository/); assert.match(block, /environment: g01-bootstrap-approval-authority/); assert.match(block, /timeout-minutes: 45/); assert.match(block, /sleep 20/); assert.match(block, /--source-branch "\$SOURCE_BRANCH"/); assert.match(block, /OMX_G01_CODE_REVIEWER_ID/);
+  assert.match(block, /github\.event_name == 'pull_request'/); assert.match(block, /head\.repo\.full_name == github\.repository/); assert.match(block, /environment: g01-bootstrap-approval-authority/); assert.match(block, /timeout-minutes: 45/); assert.match(block, /sleep 20/); assert.match(block, /--source-branch "\$SOURCE_BRANCH"/); assert.match(block, /OMX_G01_REVIEW_TRANSPORT_ACTOR_ID/); assert.match(block, /issues\/\$PR_NUMBER\/comments\?per_page=100/); assert.doesNotMatch(block, /OMX_G01_(?:CODE_REVIEWER|ARCHITECT|VERIFIER)_ID|pulls\/\$PR_NUMBER\/reviews/);
   for (const token of ["activation-authority.json", "candidate.preparedAuthority", "prior-records.ndjson", "selectCanonicalFailure", "recoveryLineage"]) assert.ok(block.includes(token), `missing activation proof: ${token}`);
   assert.ok(read("scripts/evidence/bootstrap-export.mjs").includes("--prepare-live"), "live preparation CLI must exist"); assert.match(read("scripts/evidence/bootstrap-export.mjs"), /maxBuffer = 128 \* 1024 \* 1024/, "live GitHub history and artifact reads need an explicit bounded buffer"); assert.doesNotMatch(read("scripts/evidence/bootstrap-export.mjs"), /--prior-failure/, "arbitrary prior-failure JSON input is forbidden"); assert.doesNotMatch(workflow, /OMX_G01_PREPARED_AUTHORITY_JSON|PREPARED_AUTHORITY_JSON/, "mutable prepared-authority transport is forbidden");
   assert.match(block, /path:\s*\|[\s\S]*activation-authority\.json/, "F7 artifact must persist replayable activation authority");
@@ -455,10 +520,11 @@ test("inline early recorders are checkout-free and executable across failed/skip
   try {
     fs.rmSync(f7dir, { recursive: true, force: true }); fs.rmSync(f9dir, { recursive: true, force: true }); fs.mkdirSync(f7dir); fs.mkdirSync(f9dir);
     const base = chain(), producerRun = { ...base.approvalAuthority.f7Artifact.run, status: "completed", conclusion: "success" }, currentRun = run(90, base.merge, "develop", "push", "in_progress", null, 2), mergedPr = pr({ state: "closed" });
-    const f7Bytes = Buffer.from(`${JSON.stringify(base.f7)}\n`), f9Bytes = Buffer.from(`${JSON.stringify(base.f9)}\n`), zip7 = Buffer.from("exact f7 archive"), zip9 = Buffer.from("exact f9 archive");
-    fs.writeFileSync(path.join(f7dir, base.f7.evidenceId), f7Bytes); fs.writeFileSync(path.join(f7dir, "candidate-registry-report.g01.json"), JSON.stringify(base.report)); fs.writeFileSync(path.join(f9dir, base.f9.evidenceId), f9Bytes);
+    const f7Bytes = Buffer.from(`${JSON.stringify(base.f7)}\n`), zip7 = Buffer.from("exact f7 archive"), zip9 = Buffer.from("exact f9 archive");
     const metadata = (id, name, bytes) => ({ id, name, expired: false, digest: `sha256:${crypto.createHash("sha256").update(bytes).digest("hex")}`, workflow_run: { id: producerRun.id } });
-    fs.writeFileSync(path.join(directory, "early-context.json"), JSON.stringify({ p: mergedPr, runId: producerRun.id, runAttempt: producerRun.run_attempt })); fs.writeFileSync(path.join(directory, "early-metadata.json"), JSON.stringify(metadata(1, artifactName("candidate", base.f7, producerRun.id, producerRun.run_attempt), zip7))); fs.writeFileSync(path.join(directory, "early-f9-metadata.json"), JSON.stringify(metadata(2, artifactName("approval", base.f9, producerRun.id, producerRun.run_attempt), zip9))); fs.writeFileSync(path.join(directory, "early-producer-run.json"), JSON.stringify(producerRun)); fs.writeFileSync(path.join(directory, "early-current-run.json"), JSON.stringify(currentRun)); fs.writeFileSync(path.join(directory, "early-f7.zip"), zip7); fs.writeFileSync(path.join(directory, "early-f9.zip"), zip9);
+    const f7Metadata = metadata(1, artifactName("candidate", base.f7, producerRun.id, producerRun.run_attempt), zip7), recorderF9 = rebindF9ArtifactIdentity(base.f9, f7Metadata, f7Bytes), f9Bytes = Buffer.from(`${JSON.stringify(recorderF9)}\n`);
+    fs.writeFileSync(path.join(f7dir, base.f7.evidenceId), f7Bytes); fs.writeFileSync(path.join(f7dir, "candidate-registry-report.g01.json"), JSON.stringify(base.report)); fs.writeFileSync(path.join(f9dir, recorderF9.evidenceId), f9Bytes);
+    fs.writeFileSync(path.join(directory, "early-context.json"), JSON.stringify({ p: mergedPr, runId: producerRun.id, runAttempt: producerRun.run_attempt })); fs.writeFileSync(path.join(directory, "early-metadata.json"), JSON.stringify(f7Metadata)); fs.writeFileSync(path.join(directory, "early-f9-metadata.json"), JSON.stringify(metadata(2, artifactName("approval", recorderF9, producerRun.id, producerRun.run_attempt), zip9))); fs.writeFileSync(path.join(directory, "early-producer-run.json"), JSON.stringify(producerRun)); fs.writeFileSync(path.join(directory, "early-current-run.json"), JSON.stringify(currentRun)); fs.writeFileSync(path.join(directory, "early-f7.zip"), zip7); fs.writeFileSync(path.join(directory, "early-f9.zip"), zip9);
     const output = path.join(directory, "output"), envFile = path.join(directory, "env"), env = { ...process.env, G01_RECORDER_PREFIX: "early", G01_FAILED_PHASE: "F11", G01_REASON: "fixture", GITHUB_REPOSITORY: REPOSITORY, GITHUB_RUN_ID: "90", GITHUB_RUN_ATTEMPT: "2", GITHUB_SHA: base.merge, GITHUB_OUTPUT: output, GITHUB_ENV: envFile };
     execFileSync(process.execPath, ["-e", script], { cwd: directory, env }); const failure = JSON.parse(fs.readFileSync(path.join(directory, `bootstrap-failure.${base.f7.attemptId}.json`))); assert.equal(failure.failedPhase, "F11"); assert.equal(failure.runId, 90); assert.deepEqual(failure.recoveryLineage, []); assert.match(fs.readFileSync(output, "utf8"), /recorded=true/);
     fs.writeFileSync(path.join(f7dir, "ci-bundle.bootstrap-recovery-a02.json"), f7Bytes); assert.throws(() => execFileSync(process.execPath, ["-e", script], { cwd: directory, env, stdio: "pipe" }), /Command failed/);
@@ -474,10 +540,12 @@ test("checkout-free recorder shell step executes no-op, discovers failure, downl
     const base = chain(), fixture = path.join(directory, "fixture"), bin = path.join(directory, "bin"); fs.mkdirSync(fixture); fs.mkdirSync(bin);
     const producer = { ...base.approvalAuthority.f7Artifact.run, status: "completed", conclusion: "success" }, current = run(90, base.merge, "develop", "push", "in_progress", null, 2), merged = pr({ state: "closed" });
     const f7dir = path.join(directory, "f7"), f9dir = path.join(directory, "f9"); fs.mkdirSync(f7dir); fs.mkdirSync(f9dir);
-    fs.writeFileSync(path.join(f7dir, base.f7.evidenceId), `${JSON.stringify(base.f7)}\n`); fs.writeFileSync(path.join(f7dir, "candidate-registry-report.g01.json"), JSON.stringify(base.report)); fs.writeFileSync(path.join(f9dir, base.f9.evidenceId), `${JSON.stringify(base.f9)}\n`);
-    execFileSync("zip", ["-q", path.join(fixture, "f7.zip"), base.f7.evidenceId, "candidate-registry-report.g01.json"], { cwd: f7dir }); execFileSync("zip", ["-q", path.join(fixture, "f9.zip"), base.f9.evidenceId], { cwd: f9dir });
-    const archiveDigest = (name) => `sha256:${crypto.createHash("sha256").update(fs.readFileSync(path.join(fixture, name))).digest("hex")}`, f7Name = artifactName("candidate", base.f7, producer.id, producer.run_attempt), f9Name = artifactName("approval", base.f9, producer.id, producer.run_attempt);
-    const f7m = { id: 1, name: f7Name, expired: false, digest: archiveDigest("f7.zip"), workflow_run: { id: producer.id } }, f9m = { id: 2, name: f9Name, expired: false, digest: archiveDigest("f9.zip"), workflow_run: { id: producer.id } };
+    fs.writeFileSync(path.join(f7dir, base.f7.evidenceId), `${JSON.stringify(base.f7)}\n`); fs.writeFileSync(path.join(f7dir, "candidate-registry-report.g01.json"), JSON.stringify(base.report));
+    execFileSync("zip", ["-q", path.join(fixture, "f7.zip"), base.f7.evidenceId, "candidate-registry-report.g01.json"], { cwd: f7dir });
+    const archiveDigest = (name) => `sha256:${crypto.createHash("sha256").update(fs.readFileSync(path.join(fixture, name))).digest("hex")}`, f7Name = artifactName("candidate", base.f7, producer.id, producer.run_attempt);
+    const f7m = { id: 1, name: f7Name, expired: false, digest: archiveDigest("f7.zip"), workflow_run: { id: producer.id } }, recorderF9 = rebindF9ArtifactIdentity(base.f9, f7m, fs.readFileSync(path.join(f7dir, base.f7.evidenceId)));
+    fs.writeFileSync(path.join(f9dir, recorderF9.evidenceId), `${JSON.stringify(recorderF9)}\n`); execFileSync("zip", ["-q", path.join(fixture, "f9.zip"), recorderF9.evidenceId], { cwd: f9dir });
+    const f9Name = artifactName("approval", recorderF9, producer.id, producer.run_attempt), f9m = { id: 2, name: f9Name, expired: false, digest: archiveDigest("f9.zip"), workflow_run: { id: producer.id } };
     for (const [name, value] of [["prs.json", [merged]], ["artifacts.json", [{ artifacts: [f7m, f9m] }]], ["runs.json", [{ workflow_runs: [producer] }]], ["f7-metadata.json", f7m], ["f9-metadata.json", f9m], ["producer.json", producer], ["current.json", current]]) fs.writeFileSync(path.join(fixture, name), JSON.stringify(value));
     fs.writeFileSync(path.join(bin, "gh"), `#!/usr/bin/env bash\nset -euo pipefail\na="$*"; echo "$a" >> "$FAKE_GH_LOG"\ncase "$a" in\n*"commits/$GITHUB_SHA/pulls"*) cat "$FIXTURE/prs.json";;\n*"actions/artifacts?"*) cat "$FIXTURE/artifacts.json";;\n*"workflows/ci.yml/runs?"*) cat "$FIXTURE/runs.json";;\n*"actions/artifacts/1/zip"*) cat "$FIXTURE/f7.zip";;\n*"actions/artifacts/2/zip"*) cat "$FIXTURE/f9.zip";;\n*"actions/artifacts/1"*) cat "$FIXTURE/f7-metadata.json";;\n*"actions/artifacts/2"*) cat "$FIXTURE/f9-metadata.json";;\n*"actions/runs/${producer.id}"*) cat "$FIXTURE/producer.json";;\n*"actions/runs/$GITHUB_RUN_ID"*) cat "$FIXTURE/current.json";;\n*) echo "unexpected gh: $a" >&2; exit 2;; esac\n`); fs.chmodSync(path.join(bin, "gh"), 0o755);
     const runShell = (script, postmerge, suffix, extra = {}) => { const cwd = path.join(directory, suffix); fs.mkdirSync(cwd); const output = path.join(cwd, "output"), envFile = path.join(cwd, "env"), log = path.join(cwd, "gh.log"); fs.writeFileSync(output, ""); fs.writeFileSync(envFile, ""); fs.writeFileSync(log, ""); const env = { ...process.env, PATH: `${bin}:${process.env.PATH}`, FIXTURE: fixture, FAKE_GH_LOG: log, POSTMERGE_RESULT: postmerge, CHECK_RESULT: "success", TEST_RESULT: "success", GITHUB_REPOSITORY: REPOSITORY, GITHUB_SHA: base.merge, GITHUB_RUN_ID: "90", GITHUB_RUN_ATTEMPT: "2", GITHUB_OUTPUT: output, GITHUB_ENV: envFile, ...extra }; execFileSync("bash", ["-c", script], { cwd, env }); return { cwd, output: fs.readFileSync(output, "utf8"), env: fs.readFileSync(envFile, "utf8"), log: fs.readFileSync(log, "utf8") }; };

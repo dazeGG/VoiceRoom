@@ -39,6 +39,16 @@
       "required": ["id", "runAttempt", "checkSuiteId", "workflowId", "workflowName", "workflowPath", "repository", "event", "headBranch", "headSha", "requiredJobs"],
       "type": "object"
     },
+    "parentReference": {
+      "additionalProperties": false,
+      "properties": {
+        "commentId": { "minimum": 1, "type": "integer" },
+        "outputDigest": { "pattern": "^sha256:[0-9a-f]{64}$", "type": "string" },
+        "role": { "enum": ["code-reviewer", "architect"] }
+      },
+      "required": ["role", "commentId", "outputDigest"],
+      "type": "object"
+    },
     "review": {
       "additionalProperties": false,
       "allOf": [
@@ -49,18 +59,41 @@
         {
           "if": { "properties": { "role": { "enum": ["code-reviewer", "verifier"] } }, "required": ["role"] },
           "then": { "properties": { "verdict": { "const": "APPROVE" } } }
+        },
+        {
+          "if": { "properties": { "role": { "const": "verifier" } }, "required": ["role"] },
+          "then": { "properties": { "parentReferences": { "items": false, "maxItems": 2, "minItems": 2, "prefixItems": [
+            { "allOf": [{ "$ref": "#/$defs/parentReference" }, { "properties": { "role": { "const": "code-reviewer" } }, "type": "object" }] },
+            { "allOf": [{ "$ref": "#/$defs/parentReference" }, { "properties": { "role": { "const": "architect" } }, "type": "object" }] }
+          ], "type": "array" } } },
+          "else": { "properties": { "parentReferences": { "maxItems": 0, "type": "array" } } }
         }
       ],
       "properties": {
         "actorId": { "minimum": 1, "type": "integer" },
-        "commitId": { "pattern": "^[0-9a-f]{40}$", "type": "string" },
+        "attemptId": { "pattern": "^g01-(a|recovery-a)[0-9]{2,}$", "type": "string" },
+        "authorAssociation": { "enum": ["OWNER", "MEMBER", "COLLABORATOR"] },
+        "commentId": { "minimum": 1, "type": "integer" },
+        "createdAt": { "format": "date-time", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$", "type": "string" },
+        "f7ArchiveDigest": { "pattern": "^sha256:[0-9a-f]{64}$", "type": "string" },
+        "f7ArtifactId": { "minimum": 1, "type": "integer" },
+        "f7ArtifactName": { "minLength": 1, "type": "string" },
+        "f7Digest": { "pattern": "^sha256:[0-9a-f]{64}$", "type": "string" },
+        "f7PayloadDigest": { "pattern": "^sha256:[0-9a-f]{64}$", "type": "string" },
+        "headSha": { "pattern": "^[0-9a-f]{40}$", "type": "string" },
+        "kind": { "const": "g01-native-review" },
+        "laneId": { "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$", "type": "string" },
         "nodeId": { "minLength": 1, "type": "string" },
-        "reviewId": { "minimum": 1, "type": "integer" },
+        "output": { "maxLength": 48000, "minLength": 1, "type": "string" },
+        "outputDigest": { "pattern": "^sha256:[0-9a-f]{64}$", "type": "string" },
+        "parentReferences": { "type": "array" },
+        "prNumber": { "minimum": 1, "type": "integer" },
+        "repository": { "pattern": "^[^/]+/[^/]+$", "type": "string" },
         "role": { "enum": ["code-reviewer", "architect", "verifier"] },
-        "submittedAt": { "format": "date-time", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$", "type": "string" },
+        "schemaVersion": { "const": 1 },
         "verdict": { "enum": ["APPROVE", "CLEAR"] }
       },
-      "required": ["role", "verdict", "reviewId", "nodeId", "actorId", "commitId", "submittedAt"],
+      "required": ["schemaVersion", "kind", "role", "verdict", "repository", "prNumber", "headSha", "attemptId", "f7ArtifactId", "f7ArtifactName", "f7ArchiveDigest", "f7PayloadDigest", "f7Digest", "laneId", "output", "outputDigest", "parentReferences", "commentId", "nodeId", "actorId", "authorAssociation", "createdAt"],
       "type": "object"
     }
   },

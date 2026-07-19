@@ -83,7 +83,7 @@
           "f7Id": "ci-bundle.g01.json",
           "f7Digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
           "f9Id": "approval-envelope.g01.json",
-          "f9Digest": "sha256:21a2f91d4fd6cdc4bddda0e9d071e7641d9c62804b4f199af6f9bad58e848273",
+          "f9Digest": "sha256:c5726dde6aebfc66527791002f2fcc31f12f733e18cfb47b65663f3640b2cf08",
           "f11Id": "merge-envelope.g01.json",
           "f11Digest": "sha256:f1244d4bf965b3ecb7e2d720cbaab8e2d9a9b612e654fe13699ef7d4de4da62a",
           "terminalDevelopSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
@@ -110,7 +110,7 @@
               "runAttempt": 1,
               "headSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
               "archiveDigest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
-              "payloadDigest": "sha256:9e0194a1f9becc865a175c9310a53b52877a5f9b8e4301dbae4569f0c807bd59"
+              "payloadDigest": "sha256:bb84cb0a5bcd5c9f714e41a323b897cda1289d7aa5b08f9c6431a0ed15fc0db2"
             },
             "f11": {
               "artifactId": 3,
@@ -119,10 +119,10 @@
               "runAttempt": 1,
               "headSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
               "archiveDigest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
-              "payloadDigest": "sha256:5e2ca2aaba1a25e07166f8f537d63109c6e598d23788c374695087646c044cdd"
+              "payloadDigest": "sha256:2d69623c27a326070c3f03b6742e2c76e755a72efe046e6c722ee4fb9b53b117"
             }
           },
-          "selectionDigest": "sha256:3964eb66802880c954b123b8e77671dd2447073a6f7c597cf52a93fd70178160"
+          "selectionDigest": "sha256:91dec3181ca610951c2394a67b6ec8ec4d042f99d54532d5f6d14e45d77a2f05"
         },
         "f7": {
           "schemaVersion": 1,
@@ -143,36 +143,92 @@
           "status": "GREEN",
           "evidenceId": "approval-envelope.g01.json",
           "sourceSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-          "digest": "sha256:21a2f91d4fd6cdc4bddda0e9d071e7641d9c62804b4f199af6f9bad58e848273",
+          "digest": "sha256:c5726dde6aebfc66527791002f2fcc31f12f733e18cfb47b65663f3640b2cf08",
           "createdAt": "2026-07-18T00:01:00.000Z",
           "f7Digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
           "reviewObjects": [
             {
+              "schemaVersion": 1,
+              "kind": "g01-native-review",
               "role": "code-reviewer",
               "verdict": "APPROVE",
-              "reviewId": 1,
-              "nodeId": "R1",
-              "actorId": 11,
-              "commitId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-              "submittedAt": "2026-07-18T00:00:10.000Z"
+              "repository": "dazeGG/VoiceRoom",
+              "prNumber": 1,
+              "headSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "attemptId": "g01-a02",
+              "f7ArtifactId": 1,
+              "f7ArtifactName": "g01-candidate-g01-a02-run-10-attempt-1-head-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "f7ArchiveDigest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+              "f7PayloadDigest": "sha256:a5216e2302f28e9a71dae4e5745aed24cf328e0fad1ec9b049dc89f117317e9c",
+              "f7Digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+              "laneId": "native-code-reviewer",
+              "output": "code-reviewer exact-head native output",
+              "outputDigest": "sha256:bb6dfa13cde7ce725fd8c97f43fdf2010ebb4c195b6350b99ea18ffb790977ce",
+              "parentReferences": [],
+              "commentId": 1,
+              "nodeId": "C1",
+              "actorId": 99,
+              "authorAssociation": "MEMBER",
+              "createdAt": "2026-07-18T00:00:10.000Z"
             },
             {
+              "schemaVersion": 1,
+              "kind": "g01-native-review",
               "role": "architect",
               "verdict": "CLEAR",
-              "reviewId": 2,
-              "nodeId": "R2",
-              "actorId": 12,
-              "commitId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-              "submittedAt": "2026-07-18T00:00:20.000Z"
+              "repository": "dazeGG/VoiceRoom",
+              "prNumber": 1,
+              "headSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "attemptId": "g01-a02",
+              "f7ArtifactId": 1,
+              "f7ArtifactName": "g01-candidate-g01-a02-run-10-attempt-1-head-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "f7ArchiveDigest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+              "f7PayloadDigest": "sha256:a5216e2302f28e9a71dae4e5745aed24cf328e0fad1ec9b049dc89f117317e9c",
+              "f7Digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+              "laneId": "native-architect",
+              "output": "architect exact-head native output",
+              "outputDigest": "sha256:e2285181c77a62e0c2d4e6bff4f7fc1d9e56cfd34814b28b9ebc2a6aef11724a",
+              "parentReferences": [],
+              "commentId": 2,
+              "nodeId": "C2",
+              "actorId": 99,
+              "authorAssociation": "MEMBER",
+              "createdAt": "2026-07-18T00:00:20.000Z"
             },
             {
+              "schemaVersion": 1,
+              "kind": "g01-native-review",
               "role": "verifier",
               "verdict": "APPROVE",
-              "reviewId": 3,
-              "nodeId": "R3",
-              "actorId": 13,
-              "commitId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-              "submittedAt": "2026-07-18T00:00:30.000Z"
+              "repository": "dazeGG/VoiceRoom",
+              "prNumber": 1,
+              "headSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "attemptId": "g01-a02",
+              "f7ArtifactId": 1,
+              "f7ArtifactName": "g01-candidate-g01-a02-run-10-attempt-1-head-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "f7ArchiveDigest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+              "f7PayloadDigest": "sha256:a5216e2302f28e9a71dae4e5745aed24cf328e0fad1ec9b049dc89f117317e9c",
+              "f7Digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+              "laneId": "native-verifier",
+              "output": "verifier exact-head native output",
+              "outputDigest": "sha256:af92b74e18b6308dd5f7bce2dcc9a7bdb3d35120e2c1a88192d18a03e49e829b",
+              "parentReferences": [
+                {
+                  "role": "code-reviewer",
+                  "commentId": 1,
+                  "outputDigest": "sha256:bb6dfa13cde7ce725fd8c97f43fdf2010ebb4c195b6350b99ea18ffb790977ce"
+                },
+                {
+                  "role": "architect",
+                  "commentId": 2,
+                  "outputDigest": "sha256:e2285181c77a62e0c2d4e6bff4f7fc1d9e56cfd34814b28b9ebc2a6aef11724a"
+                }
+              ],
+              "commentId": 3,
+              "nodeId": "C3",
+              "actorId": 99,
+              "authorAssociation": "MEMBER",
+              "createdAt": "2026-07-18T00:00:30.000Z"
             }
           ],
           "attemptId": "g01-a02",
@@ -188,7 +244,7 @@
           "digest": "sha256:f1244d4bf965b3ecb7e2d720cbaab8e2d9a9b612e654fe13699ef7d4de4da62a",
           "createdAt": "2026-07-18T00:04:00.000Z",
           "f7Digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
-          "f9Digest": "sha256:21a2f91d4fd6cdc4bddda0e9d071e7641d9c62804b4f199af6f9bad58e848273",
+          "f9Digest": "sha256:c5726dde6aebfc66527791002f2fcc31f12f733e18cfb47b65663f3640b2cf08",
           "mergeSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
           "terminalDevelopSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
           "remoteDeleted": true,
@@ -387,7 +443,7 @@
           "f7Id": "ci-bundle.bootstrap-recovery-a02.json",
           "f7Digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
           "f9Id": "approval-envelope.bootstrap-recovery-a02.json",
-          "f9Digest": "sha256:21a2f91d4fd6cdc4bddda0e9d071e7641d9c62804b4f199af6f9bad58e848273",
+          "f9Digest": "sha256:7855c9558556adb5d0f483983298b6d103e25c4eebe2a1a6bf575878b9b2170c",
           "f11Id": "merge-envelope.bootstrap-recovery-a02.json",
           "f11Digest": "sha256:f1244d4bf965b3ecb7e2d720cbaab8e2d9a9b612e654fe13699ef7d4de4da62a",
           "terminalDevelopSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
@@ -430,7 +486,7 @@
               "runAttempt": 1,
               "headSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
               "archiveDigest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
-              "payloadDigest": "sha256:a64f39905a2261cd41bc06b0ed240822ea3629998172de28a69301c412a78a5b"
+              "payloadDigest": "sha256:0ea77d806e78db66bc71555858352851077e5d8a06844b372e7685327d8bb668"
             },
             "f11": {
               "artifactId": 3,
@@ -439,10 +495,10 @@
               "runAttempt": 1,
               "headSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
               "archiveDigest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
-              "payloadDigest": "sha256:af6b428e87ece37b7d03e16f0bf23603bce8448f53f8140017b9340dd36708e0"
+              "payloadDigest": "sha256:903a8cf4dca1513ac3aec38f5d3d0862801fc138f6b0a3e7aef6392ecf26de4e"
             }
           },
-          "selectionDigest": "sha256:93f1a75976a3f1baa34ded1e05915ae25ca1a5e3f6a1fb6408750f5615a03d00"
+          "selectionDigest": "sha256:dd5ef71c3c9387c2e333aa54cdb344ae2bddbb01671aab16fc43f44cb38e67b4"
         },
         "parentSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         "f7": {
@@ -464,36 +520,92 @@
           "status": "GREEN",
           "evidenceId": "approval-envelope.bootstrap-recovery-a02.json",
           "sourceSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-          "digest": "sha256:21a2f91d4fd6cdc4bddda0e9d071e7641d9c62804b4f199af6f9bad58e848273",
+          "digest": "sha256:7855c9558556adb5d0f483983298b6d103e25c4eebe2a1a6bf575878b9b2170c",
           "createdAt": "2026-07-18T00:01:00.000Z",
           "f7Digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
           "reviewObjects": [
             {
+              "schemaVersion": 1,
+              "kind": "g01-native-review",
               "role": "code-reviewer",
               "verdict": "APPROVE",
-              "reviewId": 1,
-              "nodeId": "R1",
-              "actorId": 11,
-              "commitId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-              "submittedAt": "2026-07-18T00:00:10.000Z"
+              "repository": "dazeGG/VoiceRoom",
+              "prNumber": 1,
+              "headSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "attemptId": "g01-recovery-a02",
+              "f7ArtifactId": 1,
+              "f7ArtifactName": "g01-candidate-g01-recovery-a02-run-10-attempt-1-head-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "f7ArchiveDigest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+              "f7PayloadDigest": "sha256:3523f20e61e1fd3498a775f21084844c90cb93eedba9a5c379dfc583e1af4f9d",
+              "f7Digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+              "laneId": "native-code-reviewer",
+              "output": "code-reviewer exact-head native output",
+              "outputDigest": "sha256:bb6dfa13cde7ce725fd8c97f43fdf2010ebb4c195b6350b99ea18ffb790977ce",
+              "parentReferences": [],
+              "commentId": 1,
+              "nodeId": "C1",
+              "actorId": 99,
+              "authorAssociation": "MEMBER",
+              "createdAt": "2026-07-18T00:00:10.000Z"
             },
             {
+              "schemaVersion": 1,
+              "kind": "g01-native-review",
               "role": "architect",
               "verdict": "CLEAR",
-              "reviewId": 2,
-              "nodeId": "R2",
-              "actorId": 12,
-              "commitId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-              "submittedAt": "2026-07-18T00:00:20.000Z"
+              "repository": "dazeGG/VoiceRoom",
+              "prNumber": 1,
+              "headSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "attemptId": "g01-recovery-a02",
+              "f7ArtifactId": 1,
+              "f7ArtifactName": "g01-candidate-g01-recovery-a02-run-10-attempt-1-head-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "f7ArchiveDigest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+              "f7PayloadDigest": "sha256:3523f20e61e1fd3498a775f21084844c90cb93eedba9a5c379dfc583e1af4f9d",
+              "f7Digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+              "laneId": "native-architect",
+              "output": "architect exact-head native output",
+              "outputDigest": "sha256:e2285181c77a62e0c2d4e6bff4f7fc1d9e56cfd34814b28b9ebc2a6aef11724a",
+              "parentReferences": [],
+              "commentId": 2,
+              "nodeId": "C2",
+              "actorId": 99,
+              "authorAssociation": "MEMBER",
+              "createdAt": "2026-07-18T00:00:20.000Z"
             },
             {
+              "schemaVersion": 1,
+              "kind": "g01-native-review",
               "role": "verifier",
               "verdict": "APPROVE",
-              "reviewId": 3,
-              "nodeId": "R3",
-              "actorId": 13,
-              "commitId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-              "submittedAt": "2026-07-18T00:00:30.000Z"
+              "repository": "dazeGG/VoiceRoom",
+              "prNumber": 1,
+              "headSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "attemptId": "g01-recovery-a02",
+              "f7ArtifactId": 1,
+              "f7ArtifactName": "g01-candidate-g01-recovery-a02-run-10-attempt-1-head-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "f7ArchiveDigest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+              "f7PayloadDigest": "sha256:3523f20e61e1fd3498a775f21084844c90cb93eedba9a5c379dfc583e1af4f9d",
+              "f7Digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+              "laneId": "native-verifier",
+              "output": "verifier exact-head native output",
+              "outputDigest": "sha256:af92b74e18b6308dd5f7bce2dcc9a7bdb3d35120e2c1a88192d18a03e49e829b",
+              "parentReferences": [
+                {
+                  "role": "code-reviewer",
+                  "commentId": 1,
+                  "outputDigest": "sha256:bb6dfa13cde7ce725fd8c97f43fdf2010ebb4c195b6350b99ea18ffb790977ce"
+                },
+                {
+                  "role": "architect",
+                  "commentId": 2,
+                  "outputDigest": "sha256:e2285181c77a62e0c2d4e6bff4f7fc1d9e56cfd34814b28b9ebc2a6aef11724a"
+                }
+              ],
+              "commentId": 3,
+              "nodeId": "C3",
+              "actorId": 99,
+              "authorAssociation": "MEMBER",
+              "createdAt": "2026-07-18T00:00:30.000Z"
             }
           ],
           "attemptId": "g01-recovery-a02",
@@ -509,7 +621,7 @@
           "digest": "sha256:f1244d4bf965b3ecb7e2d720cbaab8e2d9a9b612e654fe13699ef7d4de4da62a",
           "createdAt": "2026-07-18T00:04:00.000Z",
           "f7Digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
-          "f9Digest": "sha256:21a2f91d4fd6cdc4bddda0e9d071e7641d9c62804b4f199af6f9bad58e848273",
+          "f9Digest": "sha256:7855c9558556adb5d0f483983298b6d103e25c4eebe2a1a6bf575878b9b2170c",
           "mergeSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
           "terminalDevelopSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
           "remoteDeleted": true,
