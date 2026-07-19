@@ -83,7 +83,7 @@
           "f7Id": "ci-bundle.g01.json",
           "f7Digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
           "f9Id": "approval-envelope.g01.json",
-          "f9Digest": "sha256:c57dba96f2af36cdfdd166cd34e5dcc133880136009fbf96f2b6f880ecc7f51a",
+          "f9Digest": "sha256:05aac2c07379cb7e9a481924ddba832490a0d1fb873a9d61c223f0b0a517beb9",
           "f11Id": "merge-envelope.g01.json",
           "f11Digest": "sha256:f1244d4bf965b3ecb7e2d720cbaab8e2d9a9b612e654fe13699ef7d4de4da62a",
           "terminalDevelopSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
@@ -101,7 +101,7 @@
               "runAttempt": 1,
               "headSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
               "archiveDigest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
-              "payloadDigest": "sha256:2f6a15fa0eea54df6dd65bea8825e92bab685599ccbbb369aae11387e1aeb044"
+              "payloadDigest": "sha256:2f7736fd8609a4d1ea77eb1df56896b238ed7fe08f0eadcf543a938cc4cf40e9"
             },
             "f9": {
               "artifactId": 2,
@@ -110,7 +110,7 @@
               "runAttempt": 1,
               "headSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
               "archiveDigest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
-              "payloadDigest": "sha256:2a39ebb6f1cff8dec95f63aa0d1ebcb4895cf8908f3735bad7f1c10a112b2de8"
+              "payloadDigest": "sha256:65afb921e37f851f589dc27fb1405c8eae33085fbb2a9c8cc9e0fa2c22cd86be"
             },
             "f11": {
               "artifactId": 3,
@@ -119,10 +119,10 @@
               "runAttempt": 1,
               "headSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
               "archiveDigest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
-              "payloadDigest": "sha256:737b34b7ee01a678bfef1c7173c3ff7f117d2b7f102523fe32a590d850be5ac0"
+              "payloadDigest": "sha256:f57b86bf97f760951e8fba499aa97a26825dc63fd1bb41dd501648a364a12d3b"
             }
           },
-          "selectionDigest": "sha256:e0e2c050a7aebb0338f64f0718eb682dad40494bf4ba0dedc21e21528d1555db"
+          "selectionDigest": "sha256:7aeff1c5c2a98afe8fdadf6795de20898dc6519f8c27296932776fd12b68e5b0"
         },
         "f7": {
           "schemaVersion": 1,
@@ -336,8 +336,8 @@
             "inputs": [
               {
                 "path": ".github/workflows/ci.yml",
-                "size": 87241,
-                "sha256": "sha256:6753301688529f05ba998b0111d6239af76a74f0f060236b0f9320a4afdd3ff1"
+                "size": 101527,
+                "sha256": "sha256:666388c9c908e38d7e38ce1e506204ef5baeec8f87efdf4ba064418253b6974c"
               },
               {
                 "path": "config/evidence/release-evidence-archive.v1.json",
@@ -369,7 +369,7 @@
           "status": "GREEN",
           "evidenceId": "approval-envelope.g01.json",
           "sourceSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-          "digest": "sha256:c57dba96f2af36cdfdd166cd34e5dcc133880136009fbf96f2b6f880ecc7f51a",
+          "digest": "sha256:05aac2c07379cb7e9a481924ddba832490a0d1fb873a9d61c223f0b0a517beb9",
           "createdAt": "2026-07-18T00:01:00.000Z",
           "f7Digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
           "reviewObjects": [
@@ -385,7 +385,7 @@
               "f7ArtifactId": 1,
               "f7ArtifactName": "g01-candidate-g01-a02-run-10-attempt-1-head-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
               "f7ArchiveDigest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
-              "f7PayloadDigest": "sha256:2f6a15fa0eea54df6dd65bea8825e92bab685599ccbbb369aae11387e1aeb044",
+              "f7PayloadDigest": "sha256:2f7736fd8609a4d1ea77eb1df56896b238ed7fe08f0eadcf543a938cc4cf40e9",
               "f7Digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
               "laneId": "native-code-reviewer",
               "output": "code-reviewer exact-head native output",
@@ -409,7 +409,7 @@
               "f7ArtifactId": 1,
               "f7ArtifactName": "g01-candidate-g01-a02-run-10-attempt-1-head-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
               "f7ArchiveDigest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
-              "f7PayloadDigest": "sha256:2f6a15fa0eea54df6dd65bea8825e92bab685599ccbbb369aae11387e1aeb044",
+              "f7PayloadDigest": "sha256:2f7736fd8609a4d1ea77eb1df56896b238ed7fe08f0eadcf543a938cc4cf40e9",
               "f7Digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
               "laneId": "native-architect",
               "output": "architect exact-head native output",
@@ -433,7 +433,7 @@
               "f7ArtifactId": 1,
               "f7ArtifactName": "g01-candidate-g01-a02-run-10-attempt-1-head-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
               "f7ArchiveDigest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
-              "f7PayloadDigest": "sha256:2f6a15fa0eea54df6dd65bea8825e92bab685599ccbbb369aae11387e1aeb044",
+              "f7PayloadDigest": "sha256:2f7736fd8609a4d1ea77eb1df56896b238ed7fe08f0eadcf543a938cc4cf40e9",
               "f7Digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
               "laneId": "native-verifier",
               "output": "verifier exact-head native output",
@@ -470,7 +470,7 @@
           "digest": "sha256:f1244d4bf965b3ecb7e2d720cbaab8e2d9a9b612e654fe13699ef7d4de4da62a",
           "createdAt": "2026-07-18T00:04:00.000Z",
           "f7Digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
-          "f9Digest": "sha256:c57dba96f2af36cdfdd166cd34e5dcc133880136009fbf96f2b6f880ecc7f51a",
+          "f9Digest": "sha256:05aac2c07379cb7e9a481924ddba832490a0d1fb873a9d61c223f0b0a517beb9",
           "mergeSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
           "terminalDevelopSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
           "remoteDeleted": true,
@@ -669,7 +669,7 @@
           "f7Id": "ci-bundle.bootstrap-recovery-a02.json",
           "f7Digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
           "f9Id": "approval-envelope.bootstrap-recovery-a02.json",
-          "f9Digest": "sha256:8e6f2f1ed677e1e310d1ecff96f22e7b8b5429810c58b6b8efbaa5d068ec5a95",
+          "f9Digest": "sha256:7fc3380e7a2c9289934a78c846aa7333e40219eb72f8c9e7ed579e43fd12ae42",
           "f11Id": "merge-envelope.bootstrap-recovery-a02.json",
           "f11Digest": "sha256:f1244d4bf965b3ecb7e2d720cbaab8e2d9a9b612e654fe13699ef7d4de4da62a",
           "terminalDevelopSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
@@ -703,7 +703,7 @@
               "runAttempt": 1,
               "headSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
               "archiveDigest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
-              "payloadDigest": "sha256:2e0e01c975e4ae73ee763a1461b04d7c32189c593ff2c166312ff4bc9223477e"
+              "payloadDigest": "sha256:d40c4fe44d3621a5a6031d7b6cf504c1c2498dee803279c139e075e9adfe80e1"
             },
             "f9": {
               "artifactId": 2,
@@ -712,7 +712,7 @@
               "runAttempt": 1,
               "headSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
               "archiveDigest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
-              "payloadDigest": "sha256:1a832ff1fbfffb4daf21f1625f8ac79274a0554001658a0c471110394db46d76"
+              "payloadDigest": "sha256:95c5b7d1a79e1895397a74029114f5a4955cdb1bffc0816f24d949907362e254"
             },
             "f11": {
               "artifactId": 3,
@@ -721,10 +721,10 @@
               "runAttempt": 1,
               "headSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
               "archiveDigest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
-              "payloadDigest": "sha256:e44e7d678f68cf9fc9fcc8380bc773adf6561ed14b2457c4bc73b6693769f2b3"
+              "payloadDigest": "sha256:0b9cfcedff4edb911cdd4c2e3563499b1e7eede0716fea74acf1f79cc232a540"
             }
           },
-          "selectionDigest": "sha256:a464c788bbab80cdfc400d2409f1912b945a0021c4b3a61b349c0c78529b41b8"
+          "selectionDigest": "sha256:464405cfffd0f8a92bebca0f33c36b9afe4de9e5c55b32aa6bd5ac37ffd1cc00"
         },
         "parentSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         "f7": {
@@ -939,8 +939,8 @@
             "inputs": [
               {
                 "path": ".github/workflows/ci.yml",
-                "size": 87241,
-                "sha256": "sha256:6753301688529f05ba998b0111d6239af76a74f0f060236b0f9320a4afdd3ff1"
+                "size": 101527,
+                "sha256": "sha256:666388c9c908e38d7e38ce1e506204ef5baeec8f87efdf4ba064418253b6974c"
               },
               {
                 "path": "config/evidence/release-evidence-archive.v1.json",
@@ -972,7 +972,7 @@
           "status": "GREEN",
           "evidenceId": "approval-envelope.bootstrap-recovery-a02.json",
           "sourceSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-          "digest": "sha256:8e6f2f1ed677e1e310d1ecff96f22e7b8b5429810c58b6b8efbaa5d068ec5a95",
+          "digest": "sha256:7fc3380e7a2c9289934a78c846aa7333e40219eb72f8c9e7ed579e43fd12ae42",
           "createdAt": "2026-07-18T00:01:00.000Z",
           "f7Digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
           "reviewObjects": [
@@ -988,7 +988,7 @@
               "f7ArtifactId": 1,
               "f7ArtifactName": "g01-candidate-g01-recovery-a02-run-10-attempt-1-head-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
               "f7ArchiveDigest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
-              "f7PayloadDigest": "sha256:2e0e01c975e4ae73ee763a1461b04d7c32189c593ff2c166312ff4bc9223477e",
+              "f7PayloadDigest": "sha256:d40c4fe44d3621a5a6031d7b6cf504c1c2498dee803279c139e075e9adfe80e1",
               "f7Digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
               "laneId": "native-code-reviewer",
               "output": "code-reviewer exact-head native output",
@@ -1012,7 +1012,7 @@
               "f7ArtifactId": 1,
               "f7ArtifactName": "g01-candidate-g01-recovery-a02-run-10-attempt-1-head-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
               "f7ArchiveDigest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
-              "f7PayloadDigest": "sha256:2e0e01c975e4ae73ee763a1461b04d7c32189c593ff2c166312ff4bc9223477e",
+              "f7PayloadDigest": "sha256:d40c4fe44d3621a5a6031d7b6cf504c1c2498dee803279c139e075e9adfe80e1",
               "f7Digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
               "laneId": "native-architect",
               "output": "architect exact-head native output",
@@ -1036,7 +1036,7 @@
               "f7ArtifactId": 1,
               "f7ArtifactName": "g01-candidate-g01-recovery-a02-run-10-attempt-1-head-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
               "f7ArchiveDigest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
-              "f7PayloadDigest": "sha256:2e0e01c975e4ae73ee763a1461b04d7c32189c593ff2c166312ff4bc9223477e",
+              "f7PayloadDigest": "sha256:d40c4fe44d3621a5a6031d7b6cf504c1c2498dee803279c139e075e9adfe80e1",
               "f7Digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
               "laneId": "native-verifier",
               "output": "verifier exact-head native output",
@@ -1073,7 +1073,7 @@
           "digest": "sha256:f1244d4bf965b3ecb7e2d720cbaab8e2d9a9b612e654fe13699ef7d4de4da62a",
           "createdAt": "2026-07-18T00:04:00.000Z",
           "f7Digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
-          "f9Digest": "sha256:8e6f2f1ed677e1e310d1ecff96f22e7b8b5429810c58b6b8efbaa5d068ec5a95",
+          "f9Digest": "sha256:7fc3380e7a2c9289934a78c846aa7333e40219eb72f8c9e7ed579e43fd12ae42",
           "mergeSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
           "terminalDevelopSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
           "remoteDeleted": true,
