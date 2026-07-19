@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "patternProperties": {
+    "^(observedAt|sourceArtifacts|authenticatedPrincipal|repository|actionsAuthority|apiEvidence|packageAuthority|g01State|requiredNextAuthorityAction)$": {}
+  },
+  "properties": {
+    "decision": {
+      "type": "object"
+    },
+    "recordType": {
+      "const": "release-2.5.0-pre-g01-archive-authority-handoff"
+    },
+    "release": {
+      "const": "2.5.0"
+    },
+    "schemaVersion": {
+      "const": 1
+    },
+    "status": {
+      "const": "ARCHIVE_AUTHORITY_GREEN"
+    },
+    "targetPackage": {
+      "const": "ghcr.io/dazegg/voiceroom-release-evidence"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "recordType",
+    "status",
+    "release",
+    "targetPackage",
+    "decision"
+  ],
+  "type": "object"
+}
