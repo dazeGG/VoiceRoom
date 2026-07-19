@@ -737,13 +737,14 @@ export function buildF7Envelope(candidateReport, sourceSha, sourceBranch, create
 
 
 function githubCliAdapter(repository) {
-  const call = (args, input) => { const result = spawnSync("gh", ["api", ...args], { encoding: "utf8", input }); if (result.status !== 0) throw new Error(result.stderr.trim() || `gh api failed (${result.status})`); return result.stdout.trim() ? JSON.parse(result.stdout) : null; };
+  const maxBuffer = 128 * 1024 * 1024;
+  const call = (args, input) => { const result = spawnSync("gh", ["api", ...args], { encoding: "utf8", input, maxBuffer }); if (result.status !== 0) throw new Error(result.error?.message || result.stderr.trim() || `gh api failed (${result.status})`); return result.stdout.trim() ? JSON.parse(result.stdout) : null; };
   return {
     get: (endpoint) => call([endpoint]),
     paginate: (endpoint, variables) => { const fields = Object.entries(variables).flatMap(([key, value]) => ["-f", `${key}=${value}`]); return call(["--method", "GET", "--paginate", "--slurp", endpoint, ...fields]); },
     deleteRef: (ref, observedSha) => {
       const fullRef = `refs/${ref}`;
-      const result = spawnSync("git", ["push", `--force-with-lease=${fullRef}:${observedSha}`, "origin", `:${fullRef}`], { encoding: "utf8" });
+      const result = spawnSync("git", ["push", `--force-with-lease=${fullRef}:${observedSha}`, "origin", `:${fullRef}`], { encoding: "utf8", maxBuffer });
       if (result.status !== 0) throw new Error(`cleanup ref changed or was recreated; WAITING: ${result.stderr || result.stdout}`);
       return { operation: "compare-and-delete", deleted: fullRef, observedSha, result: "deleted" };
     },
@@ -753,11 +754,11 @@ function githubCliAdapter(repository) {
       const directory = fs.mkdtempSync(path.join(os.tmpdir(), "g01-prior-artifact-"));
       try {
         const archivePath = path.join(directory, "artifact.zip");
-        const downloaded = spawnSync("gh", ["api", `repos/${repository}/actions/artifacts/${metadata.id}/zip`], { encoding: null });
+        const downloaded = spawnSync("gh", ["api", `repos/${repository}/actions/artifacts/${metadata.id}/zip`], { encoding: null, maxBuffer });
         if (downloaded.status !== 0) throw new Error(Buffer.from(downloaded.stderr ?? "").toString("utf8") || "artifact download failed");
         fs.writeFileSync(archivePath, downloaded.stdout);
         const extract = path.join(directory, "extract"); fs.mkdirSync(extract);
-        const unzipped = spawnSync("unzip", ["-q", archivePath, "-d", extract], { encoding: "utf8" });
+        const unzipped = spawnSync("unzip", ["-q", archivePath, "-d", extract], { encoding: "utf8", maxBuffer });
         if (unzipped.status !== 0) throw new Error(unzipped.stderr || "artifact extraction failed");
         const files = Object.fromEntries(fs.readdirSync(extract, { recursive: true }).filter((name) => fs.statSync(path.join(extract, name)).isFile()).map((name) => [name, fs.readFileSync(path.join(extract, name))]));
         return { archiveBytes: Buffer.from(downloaded.stdout), files };
@@ -787,7 +788,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   if (files.length === 0) throw new Error("usage: bootstrap-export.mjs REGISTRY.json [REGISTRY.json]");
   if (prepareLive) {
     const repository = option("--repository");
-    const git = (...command) => { const result = spawnSync("git", command, { encoding: "utf8" }); if (result.status !== 0) throw new Error(result.stderr || `git ${command.join(" ")} failed`); return result.stdout.trim(); };
+    const git = (...command) => { const result = spawnSync("git", command, { encoding: "utf8", maxBuffer: 128 * 1024 * 1024 }); if (result.status !== 0) throw new Error(result.error?.message || result.stderr || `git ${command.join(" ")} failed`); return result.stdout.trim(); };
     assert.equal(git("status", "--porcelain"), "", "live preparation rejects a dirty candidate worktree");
     const reviewedHeadSha = git("rev-parse", "HEAD"), reviewedBaseSha = git("rev-parse", "origin/develop");
     const changed = git("diff", "--name-only", `${reviewedBaseSha}...${reviewedHeadSha}`).split("\n").filter(Boolean);
