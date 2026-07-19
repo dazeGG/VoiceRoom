@@ -1,0 +1,18 @@
+{
+  "authoritativeSources": [
+    "docs/RELEASE_2.5.0_PLAN.md",
+    "docs/RELEASE_2.5.0_TEST_SPEC.md"
+  ],
+  "candidateRegistries": [
+    "bootstrap-attempts.json",
+    "bootstrap-landed-recoveries.json"
+  ],
+  "notes": [
+    "Candidate registries contain known facts only.",
+    "bootstrap-lineage.json is intentionally absent until G93."
+  ],
+  "release": "2.5.0",
+  "schemaVersion": 1,
+  "selectionAuthority": "external post-F11 bootstrap-selection.<attempt-id>.json",
+  "status": "BOOTSTRAP_PENDING"
+}

@@ -1,3 +1,7 @@
+# Superseded target plan
+
+> This historical plan is retained for rationale. Its confirmed scope is absorbed by [VoiceRoom 2.5.0 — unified messaging platform](./RELEASE_2.5.0_PLAN.md); no unmet gate below is implemented merely by that absorption.
+
 # План релиза 2.6.0 — Engagement & Notifications
 
 Статус: рабочий source of truth для релиза 2.6.0. Обновлён 2026-07-16.
