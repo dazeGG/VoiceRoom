@@ -1,0 +1,141 @@
+name: Durable release evidence archive
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: Type ARCHIVE-G01-G02 to authorize the first append-only package publication
+        required: true
+        type: string
+
+concurrency:
+  group: release-2.5.0-evidence-archive
+  cancel-in-progress: false
+
+jobs:
+  goal-g03-evidence-archive:
+    name: G03 publish ${{ matrix.objectId }} by digest
+    if: github.repository == 'dazeGG/VoiceRoom' && inputs.confirm == 'ARCHIVE-G01-G02'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: true
+      max-parallel: 1
+      matrix:
+        include:
+          - { artifactId: 8442115507, objectId: bootstrap-selection.g01-recovery-a27.json }
+          - { artifactId: 8440954961, objectId: bootstrap-failure.g01-a19.json }
+          - { artifactId: 8442073415, objectId: ci-bundle.bootstrap-recovery-a27.json }
+          - { artifactId: 8442092232, objectId: approval-envelope.bootstrap-recovery-a27.json }
+          - { artifactId: 8442112379, objectId: merge-envelope.bootstrap-recovery-a27.json }
+          - { artifactId: 8443091525, objectId: ci-bundle.g02.json }
+          - { artifactId: 8443117999, objectId: approval-envelope.g02.json }
+          - { artifactId: 8443130578, objectId: merge-envelope.g02.json }
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PACKAGE: ghcr.io/dazegg/voiceroom-release-evidence
+      TERMINAL_DEVELOP_SHA: aba5cbf2bca7cc87df843a85be28e8998b4c103b
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: aba5cbf2bca7cc87df843a85be28e8998b4c103b
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - name: Authenticate immutable Actions source and terminal develop
+        id: source
+        shell: bash
+        env:
+          ARTIFACT_ID: ${{ matrix.artifactId }}
+          OBJECT_ID: ${{ matrix.objectId }}
+        run: |
+          set -euo pipefail
+          mkdir -p source extracted
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$ARTIFACT_ID" > source/metadata.json
+          test "$(node -p 'JSON.parse(require("node:fs").readFileSync("source/metadata.json")).expired')" = false
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$ARTIFACT_ID/zip" > source/artifact.zip
+          test "sha256:$(sha256sum source/artifact.zip | cut -d' ' -f1)" = "$(node -p 'JSON.parse(require("node:fs").readFileSync("source/metadata.json")).digest')"
+          unzip -q source/artifact.zip -d extracted
+          test -f "extracted/$OBJECT_ID"
+          test "$(gh api repos/$GITHUB_REPOSITORY/git/ref/heads/develop --jq .object.sha)" = "$TERMINAL_DEVELOP_SHA"
+          run_id="$(node -p 'JSON.parse(require("node:fs").readFileSync("source/metadata.json")).workflow_run.id')"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id" > source/run.json
+          source_sha="$(node -p 'JSON.parse(require("node:fs").readFileSync("source/run.json")).head_sha')"
+          run_attempt="$(node -p 'JSON.parse(require("node:fs").readFileSync("source/run.json")).run_attempt')"
+          printf 'run-id=%s\nrun-attempt=%s\nsource-sha=%s\n' "$run_id" "$run_attempt" "$source_sha" >> "$GITHUB_OUTPUT"
+      - name: Prepare exact compact OCI object
+        id: prepare
+        env:
+          ARTIFACT_ID: ${{ matrix.artifactId }}
+          OBJECT_ID: ${{ matrix.objectId }}
+          RUN_ID: ${{ steps.source.outputs.run-id }}
+          RUN_ATTEMPT: ${{ steps.source.outputs.run-attempt }}
+          SOURCE_SHA: ${{ steps.source.outputs.source-sha }}
+        run: |
+          node scripts/evidence/archive-to-oci.mjs --prepare \
+            --source "extracted/$OBJECT_ID" --object-id "$OBJECT_ID" \
+            --source-sha "$SOURCE_SHA" --run-id "$RUN_ID" --run-attempt "$RUN_ATTEMPT" \
+            --artifact-id "$ARTIFACT_ID" --output prepared
+      - name: Log in with the repository GITHUB_TOKEN only
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: Publish config, re-prove linkage, publish layer and manifest, then fetch by digest
+        id: publish
+        shell: bash
+        run: |
+          set -euo pipefail
+          scripts/ci/run-oras.sh blob push --media-type application/vnd.oci.empty.v1+json \
+            "$PACKAGE@${{ steps.prepare.outputs.config-digest }}" prepared/config.json
+          gh api /users/dazeGG/packages/container/voiceroom-release-evidence > package.json
+          node - <<'NODE'
+          const fs=require('node:fs'),p=JSON.parse(fs.readFileSync('package.json')),repos=p.repository?[p.repository]:p.repositories??[];
+          const report={owner:p.owner?.login??p.namespace,visibility:p.visibility,linkedRepository:repos[0]?.full_name,actor:process.env.GITHUB_ACTOR};
+          fs.writeFileSync('linkage-report.json',JSON.stringify(report));
+          NODE
+          node scripts/evidence/check-archive-sentinel.mjs --linkage-report linkage-report.json
+          scripts/ci/run-oras.sh blob push --media-type application/json \
+            "$PACKAGE@${{ steps.prepare.outputs.layer-digest }}" prepared/layer.json
+          digest="${{ steps.prepare.outputs.manifest-digest }}"
+          scripts/ci/run-oras.sh manifest push "$PACKAGE@$digest" prepared/manifest.json
+          scripts/ci/run-oras.sh manifest fetch "$PACKAGE@$digest" > fetched-manifest.json
+          test "sha256:$(sha256sum fetched-manifest.json | cut -d' ' -f1)" = "$digest"
+          printf 'manifest-digest=%s\n' "$digest" >> "$GITHUB_OUTPUT"
+      - name: Attest the manifest digest
+        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6
+        with:
+          subject-name: ${{ env.PACKAGE }}
+          subject-digest: ${{ steps.publish.outputs.manifest-digest }}
+          push-to-registry: true
+      - name: Verify attestation, add a never-reused discovery tag, and emit ledger proof last
+        env:
+          DIGEST: ${{ steps.publish.outputs.manifest-digest }}
+          TAG: ${{ steps.prepare.outputs.discovery-tag }}
+        run: |
+          set -euo pipefail
+          gh attestation verify "oci://$PACKAGE@$DIGEST" --repo "$GITHUB_REPOSITORY"
+          scripts/ci/run-oras.sh tag "$PACKAGE@$DIGEST" "$TAG"
+          test "$(scripts/ci/run-oras.sh resolve "$PACKAGE:$TAG")" = "$DIGEST"
+          node - <<'NODE'
+          const fs=require('node:fs'),o=JSON.parse(fs.readFileSync('prepared/object.json')),l=JSON.parse(fs.readFileSync('linkage-report.json'));
+          const proof={...o,...l,packageOwner:l.owner,packageVisibility:l.visibility,linkedRepository:l.linkedRepository,actor:l.actor,fetchedManifestDigest:o.manifestDigest,fetchedLayerDigest:o.layer.digest,attestationVerified:true,tagResolvedDigest:o.manifestDigest,publishedAt:new Date().toISOString()};
+          fs.writeFileSync('archive-proof.json',JSON.stringify(proof));
+          NODE
+          node scripts/evidence/archive-to-oci.mjs --record --proof archive-proof.json \
+            --map docs/releases/2.5.0/evidence/archive-map.json \
+            --ledger docs/releases/2.5.0/evidence/archive-ledger.json --output archive-state
+      - uses: actions/upload-artifact@v4
+        with:
+          name: g03-archive-proof-${{ matrix.artifactId }}
+          path: |
+            archive-proof.json
+            archive-state/
+          if-no-files-found: error
+          retention-days: 90

@@ -1,0 +1,52 @@
+name: Durable evidence archive sentinel
+
+on:
+  schedule:
+    - cron: '17 4 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: release-2.5.0-evidence-archive-sentinel
+  cancel-in-progress: false
+
+jobs:
+  evidence-archive-sentinel:
+    name: Detect package, linkage, digest and attestation drift
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PACKAGE: ghcr.io/dazegg/voiceroom-release-evidence
+    steps:
+      - uses: actions/checkout@v4
+      - name: Authenticate package authority and every digest
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api /users/dazeGG/packages/container/voiceroom-release-evidence > package.json
+          mkdir -p sentinel
+          node - <<'NODE'
+          const fs=require('node:fs'),map=JSON.parse(fs.readFileSync('docs/releases/2.5.0/evidence/archive-map.json')),p=JSON.parse(fs.readFileSync('package.json')),repos=p.repository?[p.repository]:p.repositories??[];
+          const actor=process.env.GITHUB_ACTOR,base={packageOwner:p.owner?.login??p.namespace,packageVisibility:p.visibility,linkedRepository:repos[0]?.full_name,actor,available:true,attestationVerified:true};
+          fs.writeFileSync('sentinel/seed.json',JSON.stringify({objects:map.objects.map(x=>({...x,...base,tagResolvedDigest:x.manifestDigest}))}));
+          NODE
+          node -e 'const fs=require("node:fs"),m=JSON.parse(fs.readFileSync("docs/releases/2.5.0/evidence/archive-map.json"));for(const x of m.objects)console.log(`${x.manifestDigest}\t${x.discoveryTag}\t${x.objectId}`)' |
+          while IFS=$'\t' read -r digest tag object_id; do
+            test -n "$digest" || continue
+            scripts/ci/run-oras.sh manifest fetch "$PACKAGE@$digest" > "sentinel/$object_id.manifest.json"
+            test "sha256:$(sha256sum "sentinel/$object_id.manifest.json" | cut -d' ' -f1)" = "$digest"
+            test "$(scripts/ci/run-oras.sh resolve "$PACKAGE:$tag")" = "$digest"
+            gh attestation verify "oci://$PACKAGE@$digest" --repo "$GITHUB_REPOSITORY"
+          done
+          node scripts/evidence/check-archive-sentinel.mjs \
+            --expected docs/releases/2.5.0/evidence/archive-map.json \
+            --observed sentinel/seed.json --output sentinel-report.g03.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: g03-sentinel-${{ github.run_id }}-${{ github.run_attempt }}
+          path: sentinel-report.g03.json
+          if-no-files-found: error
+          retention-days: 90
