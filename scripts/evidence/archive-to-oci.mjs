@@ -12,6 +12,11 @@ export const PUBLICATION_SEQUENCE = Object.freeze([
   "prepare", "config-blob", "linkage", "layer-blob", "manifest-digest",
   "fetch-compare", "attest-verify", "discovery-tag", "ledger",
 ]);
+export const ARCHIVE_OBJECT_ORDER = Object.freeze([
+  "bootstrap-selection.g01-recovery-a27.json", "bootstrap-failure.g01-a19.json",
+  "ci-bundle.bootstrap-recovery-a27.json", "approval-envelope.bootstrap-recovery-a27.json", "merge-envelope.bootstrap-recovery-a27.json",
+  "ci-bundle.g02.json", "approval-envelope.g02.json", "merge-envelope.g02.json",
+]);
 
 const DIGEST = /^sha256:[0-9a-f]{64}$/;
 const SHA = /^[0-9a-f]{40}$/;
@@ -26,6 +31,7 @@ function exactCompactJson(bytes) {
   if (!Buffer.isBuffer(bytes)) throw new Error("bytes must be a Buffer");
   if (bytes.subarray(0, 3).equals(Buffer.from([0xef, 0xbb, 0xbf]))) throw new Error("evidence bytes contain a BOM");
   const text = bytes.toString("utf8");
+  if (Buffer.from(text).compare(bytes) !== 0) throw new Error("evidence bytes are not valid UTF-8");
   const jsonText = text.endsWith("\n") ? text.slice(0, -1) : text;
   if (jsonText.endsWith("\n") || jsonText.endsWith("\r")) throw new Error("evidence bytes contain non-canonical trailing bytes");
   let parsed;
@@ -64,6 +70,7 @@ export function buildArchiveObject(input) {
       "io.voiceroom.github.run-id": String(runId),
       "io.voiceroom.github.run-attempt": String(runAttempt),
       "io.voiceroom.evidence.id": objectId,
+      "org.opencontainers.image.title": objectId,
     },
   };
   const manifestBytes = Buffer.from(JSON.stringify(manifest));
@@ -113,7 +120,8 @@ function proofRecord(proof) {
 export function appendArchiveProof(map, ledger, proof) {
   if (map?.schemaVersion !== 1 || map.release !== "2.5.0" || !Array.isArray(map.objects)) throw new Error("invalid archive map");
   if (ledger?.schemaVersion !== 1 || ledger.release !== "2.5.0" || !Array.isArray(ledger.entries)) throw new Error("invalid archive ledger");
-  if (map.objects.some((entry) => entry.objectId === proof.objectId || entry.manifestDigest === proof.manifestDigest) ||
+  assertArchiveState(map, ledger);
+  if (map.objects.some((entry) => entry.objectId === proof.objectId || entry.manifestDigest === proof.manifestDigest || entry.layerDigest === proof.layer?.digest) ||
       ledger.entries.some((entry) => entry.objectId === proof.objectId || entry.manifestDigest === proof.manifestDigest))
     throw new Error("append-only archive entry already exists");
   const record = proofRecord(proof);
@@ -121,6 +129,81 @@ export function appendArchiveProof(map, ledger, proof) {
     map: { ...map, objects: [...map.objects, record] },
     ledger: { ...ledger, entries: [...ledger.entries, { ...record, sequence: ledger.entries.length + 1 }] },
   };
+}
+
+function comparableRecord(entry) {
+  const { sequence: _sequence, ...record } = entry;
+  return record;
+}
+
+export function assertArchiveState(map, ledger) {
+  if (map?.schemaVersion !== 1 || map.release !== "2.5.0" || !Array.isArray(map.objects)) throw new Error("invalid archive map");
+  if (ledger?.schemaVersion !== 1 || ledger.release !== "2.5.0" || !Array.isArray(ledger.entries)) throw new Error("invalid archive ledger");
+  if (map.objects.length !== ledger.entries.length) throw new Error("archive map and ledger diverge");
+  for (let index = 0; index < ledger.entries.length; index += 1) {
+    if (ledger.entries[index].sequence !== index + 1) throw new Error("archive ledger sequence is not contiguous");
+    if (JSON.stringify(map.objects[index]) !== JSON.stringify(comparableRecord(ledger.entries[index]))) throw new Error("archive map and ledger diverge");
+  }
+}
+
+export function aggregateArchiveProofs(map, ledger, proofs, expectedObjectIds) {
+  assertArchiveState(map, ledger);
+  if (!Array.isArray(proofs) || !Array.isArray(expectedObjectIds) || proofs.length !== expectedObjectIds.length)
+    throw new Error("archive aggregate is incomplete");
+  const byId = new Map(proofs.map((proof) => [proof.objectId, proof]));
+  if (byId.size !== proofs.length || expectedObjectIds.some((id) => !byId.has(id)) || proofs.some((proof) => !expectedObjectIds.includes(proof.objectId)))
+    throw new Error("archive aggregate has missing, duplicate, or unexpected objects");
+  let state = { map, ledger };
+  for (const objectId of expectedObjectIds) state = appendArchiveProof(state.map, state.ledger, byId.get(objectId));
+  return state;
+}
+
+function semanticDigest(value, field = "digest") {
+  const copy = structuredClone(value);
+  delete copy[field];
+  return sha256(Buffer.from(JSON.stringify(copy)));
+}
+
+export function validateArchiveSourceSet(sources, terminalDevelopSha) {
+  if (!Array.isArray(sources) || sources.length !== ARCHIVE_OBJECT_ORDER.length) throw new Error("complete eight-object source set required");
+  const rows = sources.map((source) => {
+    exactCompactJson(source.bytes);
+    const value = JSON.parse(source.bytes);
+    if (source.metadata?.expired !== false || source.metadata?.id !== source.artifactId || source.metadata?.workflow_run?.id !== source.run?.id ||
+        source.run?.run_attempt !== source.runAttempt || source.run?.head_sha !== source.metadata?.workflow_run?.head_sha || source.run?.repository?.full_name !== "dazeGG/VoiceRoom")
+      throw new Error(`unauthenticated artifact metadata for ${value.evidenceId}`);
+    return { ...source, value, rawDigest: sha256(source.bytes) };
+  });
+  const byId = new Map(rows.map((row) => [row.value.evidenceId, row]));
+  if (byId.size !== rows.length || ARCHIVE_OBJECT_ORDER.some((id) => !byId.has(id))) throw new Error("unexpected, missing, or duplicate archive source");
+  const selection = byId.get(ARCHIVE_OBJECT_ORDER[0]);
+  const s = selection.value;
+  if (s.status !== "SELECTED_GREEN" || s.terminalKind !== "landed-recovery" || s.terminalDevelopSha !== byId.get("ci-bundle.g02.json").value.baseSha ||
+      semanticDigest(s, "selectionDigest") !== s.selectionDigest) throw new Error("invalid external terminal selection");
+  if (s.ancestorFailures.length !== 1) throw new Error("ordered ancestor failure set mismatch");
+  const ancestor = byId.get(s.ancestorFailures[0].evidenceId);
+  const a = s.ancestorFailures[0];
+  if (ancestor.rawDigest !== a.digest || ancestor.artifactId !== a.artifactId || ancestor.metadata.name !== a.artifactName || ancestor.metadata.digest !== a.archiveDigest ||
+      ancestor.run.id !== a.provenance.producerRunId || ancestor.run.run_attempt !== a.provenance.producerRunAttempt || ancestor.run.head_sha !== a.provenance.producerHeadSha)
+    throw new Error("ancestor failure authority mismatch");
+  for (const [phase, id, digestField] of [["f7", s.f7Id, "f7Digest"], ["f9", s.f9Id, "f9Digest"], ["f11", s.f11Id, "f11Digest"]]) {
+    const row = byId.get(id), binding = s.artifactBindings[phase];
+    if (!row || row.rawDigest !== binding.payloadDigest || row.artifactId !== binding.artifactId || row.metadata.name !== binding.artifactName ||
+        row.metadata.digest !== binding.archiveDigest || row.run.id !== binding.runId || row.run.run_attempt !== binding.runAttempt || row.run.head_sha !== binding.headSha ||
+        row.value[digestField === "f7Digest" ? "digest" : "digest"] !== s[digestField] || row.value.status !== "GREEN")
+      throw new Error(`selected G01 ${phase} authority mismatch`);
+  }
+  const g02f7 = byId.get("ci-bundle.g02.json"), g02f9 = byId.get("approval-envelope.g02.json"), g02f11 = byId.get("merge-envelope.g02.json");
+  if (semanticDigest(g02f7.value) !== g02f7.value.digest || g02f7.value.selection?.artifactId !== selection.artifactId ||
+      g02f7.value.selection?.digest !== s.selectionDigest || g02f7.value.selection?.terminalDevelopSha !== s.terminalDevelopSha ||
+      g02f7.value.producerRun?.id !== g02f7.run.id || g02f7.value.producerRun?.runAttempt !== g02f7.runAttempt || g02f7.value.producerRun?.headSha !== g02f7.run.head_sha)
+    throw new Error("G02 F7 selection authority mismatch");
+  if (semanticDigest(g02f9.value) !== g02f9.value.digest || g02f9.value.f7Digest !== g02f7.value.digest || g02f9.value.sourceSha !== g02f7.value.sourceSha)
+    throw new Error("G02 F9 authority mismatch");
+  if (semanticDigest(g02f11.value) !== g02f11.value.digest || g02f11.value.f7Digest !== g02f7.value.digest || g02f11.value.f9Digest !== g02f9.value.digest ||
+      g02f11.value.terminalDevelopSha !== terminalDevelopSha || g02f11.value.mergeSha !== terminalDevelopSha || g02f11.run.head_sha !== terminalDevelopSha)
+    throw new Error("G02 F11 terminal authority mismatch");
+  return ARCHIVE_OBJECT_ORDER.map((id) => byId.get(id));
 }
 
 function args(argv) {
@@ -184,7 +267,25 @@ function cli(argv) {
     writeJson(path.join(options.output, "archive-ledger.json"), appended.ledger);
     return;
   }
-  throw new Error("use --prepare, --publish or --record");
+  if (options["record-batch"]) {
+    const proofs = JSON.parse(fs.readFileSync(options.proofs));
+    const expectedObjectIds = JSON.parse(fs.readFileSync(options.expected));
+    const map = JSON.parse(fs.readFileSync(options.map));
+    const ledger = JSON.parse(fs.readFileSync(options.ledger));
+    const appended = aggregateArchiveProofs(map, ledger, proofs, expectedObjectIds);
+    fs.mkdirSync(options.output, { recursive: true });
+    writeJson(path.join(options.output, "archive-map.json"), appended.map);
+    writeJson(path.join(options.output, "archive-ledger.json"), appended.ledger);
+    return;
+  }
+  if (options["validate-sources"]) {
+    const manifest = JSON.parse(fs.readFileSync(options.sources));
+    const sources = manifest.map((source) => ({ ...source, bytes: fs.readFileSync(source.path), metadata: JSON.parse(fs.readFileSync(source.metadataPath)), run: JSON.parse(fs.readFileSync(source.runPath)) }));
+    validateArchiveSourceSet(sources, options["terminal-develop-sha"]);
+    process.stdout.write(`${JSON.stringify({ status: "AUTHENTICATED", objects: ARCHIVE_OBJECT_ORDER })}\n`);
+    return;
+  }
+  throw new Error("use --prepare, --publish, --record, --record-batch or --validate-sources");
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

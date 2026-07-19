@@ -20,7 +20,9 @@ The archive workflow imports the exact external terminal selection, its ordered
 ancestor failure, and the selected G01/G02 F7, F9, and F11 compact JSON bytes.
 Tracked candidate registries are context only. Before upload, GitHub artifact
 metadata, the downloaded ZIP digest, the exact member name, producer run, and
-terminal remote `develop` SHA are authenticated.
+terminal remote `develop` SHA are authenticated. The workflow checks out the
+dispatched G03 implementation SHA; terminal `develop` is a separately queried
+lineage fact and is never used as the implementation checkout.
 
 Each JSON object becomes one standalone OCI image manifest with artifact type
 `application/vnd.voiceroom.release-evidence.v1+json`, an exact `{}` empty
@@ -41,19 +43,28 @@ Publication is fail-closed and ordered:
 8. create a never-reused discovery tag and resolve it once to the digest; and
 9. emit the append-only map/ledger proof last.
 
+Each publication leg emits only a measured proof. A final fan-in requires the
+exact ordered set of eight objects, rejects missing, duplicate, or unexpected
+proofs, and writes one map/ledger transaction with contiguous sequences 1–8.
+
 The manifest digest is the only recovery authority. Tags are discovery aids and
 must never select, authorize, or overwrite evidence.
 
 ## Recovery and sentinel
 
 `scripts/evidence/recover-from-oci.mjs` accepts only `package + manifest digest`.
-It fetches the manifest and layer, verifies media types, annotations, digests,
-and attestation, then writes the original bytes. Recovery remains valid after the
+It fetches the manifest to a file and fetches the layer with ORAS's immutable
+`blob fetch --output <file> <package>@<layer-digest>` form, verifies the live
+attestation plus every config/layer/media/annotation/size/digest binding, and
+only then writes the original bytes. Recovery remains valid after the
 90-day Actions copy is gone and never regenerates or relabels evidence.
 
-The scheduled sentinel checks package owner, private visibility, sole repository
-linkage, actor, every manifest/layer digest, attestation, availability, and tag
-resolution. Missing or deleted content is fatal; GHCR is deletion-capable and is
+The scheduled sentinel builds observations only from raw live manifest and layer
+bytes, the live package and run APIs, tag resolution, and attestation command
+output. It checks package owner, private visibility, exactly one repository
+linkage, actor, every manifest/layer digest, annotation/media descriptor,
+attestation, availability, and tag resolution. Expected map values cannot
+self-certify. Missing or deleted content is fatal; GHCR is deletion-capable and is
 not WORM or tamper-proof. Retention is at least 365 days and through the entire
 v2.5 support window.
 
