@@ -1,0 +1,130 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "job": {
+      "additionalProperties": false,
+      "properties": {
+        "conclusion": { "const": "success" },
+        "headSha": { "pattern": "^[0-9a-f]{40}$", "type": "string" },
+        "id": { "minimum": 1, "type": "integer" },
+        "name": { "enum": ["Lint, typecheck & build", "Tests"] },
+        "runAttempt": { "minimum": 1, "type": "integer" },
+        "runId": { "minimum": 1, "type": "integer" },
+        "status": { "const": "completed" }
+      },
+      "required": ["id", "name", "status", "conclusion", "runId", "runAttempt", "headSha"],
+      "type": "object"
+    },
+    "postMergeRun": {
+      "additionalProperties": false,
+      "properties": {
+        "checkSuiteId": { "minimum": 1, "type": "integer" },
+        "event": { "const": "push" },
+        "headBranch": { "const": "develop" },
+        "headSha": { "pattern": "^[0-9a-f]{40}$", "type": "string" },
+        "id": { "minimum": 1, "type": "integer" },
+        "repository": { "pattern": "^[^/]+/[^/]+$", "type": "string" },
+        "requiredJobs": {
+          "allOf": [
+            { "contains": { "properties": { "name": { "const": "Lint, typecheck & build" } }, "required": ["name"], "type": "object" }, "maxContains": 1, "minContains": 1 },
+            { "contains": { "properties": { "name": { "const": "Tests" } }, "required": ["name"], "type": "object" }, "maxContains": 1, "minContains": 1 }
+          ],
+          "items": { "$ref": "#/$defs/job" }, "maxItems": 2, "minItems": 2, "type": "array"
+        },
+        "runAttempt": { "minimum": 1, "type": "integer" },
+        "workflowId": { "minimum": 1, "type": "integer" },
+        "workflowName": { "const": "CI/CD" },
+        "workflowPath": { "const": ".github/workflows/ci.yml" }
+      },
+      "required": ["id", "runAttempt", "checkSuiteId", "workflowId", "workflowName", "workflowPath", "repository", "event", "headBranch", "headSha", "requiredJobs"],
+      "type": "object"
+    },
+    "review": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": { "properties": { "role": { "const": "architect" } }, "required": ["role"] },
+          "then": { "properties": { "verdict": { "const": "CLEAR" } } }
+        },
+        {
+          "if": { "properties": { "role": { "enum": ["code-reviewer", "verifier"] } }, "required": ["role"] },
+          "then": { "properties": { "verdict": { "const": "APPROVE" } } }
+        }
+      ],
+      "properties": {
+        "actorId": { "minimum": 1, "type": "integer" },
+        "commitId": { "pattern": "^[0-9a-f]{40}$", "type": "string" },
+        "nodeId": { "minLength": 1, "type": "string" },
+        "reviewId": { "minimum": 1, "type": "integer" },
+        "role": { "enum": ["code-reviewer", "architect", "verifier"] },
+        "submittedAt": { "format": "date-time", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$", "type": "string" },
+        "verdict": { "enum": ["APPROVE", "CLEAR"] }
+      },
+      "required": ["role", "verdict", "reviewId", "nodeId", "actorId", "commitId", "submittedAt"],
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": { "properties": { "phase": { "const": "F7" } }, "required": ["phase"] },
+      "then": {
+        "properties": {
+          "evidenceId": { "pattern": "^ci-bundle\\.(g01|bootstrap-recovery-a(?:0[2-9]|[1-9][0-9]+))\\.json$", "type": "string" },
+          "f7Digest": false, "f9Digest": false, "mergeSha": false, "terminalDevelopSha": false, "remoteDeleted": false, "mergedAt": false, "remoteDeletionObservedAt": false, "prNumber": false, "postMergeRun": false, "reviewObjects": false
+        }
+      }
+    },
+    {
+      "if": { "properties": { "phase": { "const": "F9" } }, "required": ["phase"] },
+      "then": {
+        "properties": {
+          "evidenceId": { "pattern": "^approval-envelope\\.(g01|bootstrap-recovery-a(?:0[2-9]|[1-9][0-9]+))\\.json$", "type": "string" },
+          "f9Digest": false, "mergeSha": false, "terminalDevelopSha": false, "remoteDeleted": false, "mergedAt": false, "remoteDeletionObservedAt": false, "prNumber": false, "postMergeRun": false
+        },
+        "required": ["f7Digest", "reviewObjects"]
+      }
+    },
+    {
+      "if": { "properties": { "phase": { "const": "F11" } }, "required": ["phase"] },
+      "then": {
+        "properties": {
+          "evidenceId": { "pattern": "^merge-envelope\\.(g01|bootstrap-recovery-a(?:0[2-9]|[1-9][0-9]+))\\.json$", "type": "string" },
+          "reviewObjects": false
+        },
+        "required": ["f7Digest", "f9Digest", "mergeSha", "terminalDevelopSha", "remoteDeleted", "mergedAt", "remoteDeletionObservedAt", "prNumber", "postMergeRun"]
+      }
+    }
+  ],
+  "properties": {
+    "attemptId": { "pattern": "^g01-(a|recovery-a)[0-9]{2,}$", "type": "string" },
+    "createdAt": { "format": "date-time", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$", "type": "string" },
+    "digest": { "pattern": "^sha256:[0-9a-f]{64}$", "type": "string" },
+    "evidenceId": { "pattern": "^(ci-bundle|approval-envelope|merge-envelope)\\.(g01|bootstrap-recovery-a(?:0[2-9]|[1-9][0-9]+))\\.json$", "type": "string" },
+    "f7Digest": { "pattern": "^sha256:[0-9a-f]{64}$", "type": "string" },
+    "f9Digest": { "pattern": "^sha256:[0-9a-f]{64}$", "type": "string" },
+    "goal": { "const": "G01" },
+    "mergedAt": { "format": "date-time", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$", "type": "string" },
+    "mergeSha": { "pattern": "^[0-9a-f]{40}$", "type": "string" },
+    "phase": { "enum": ["F7", "F9", "F11"] },
+    "postMergeRun": { "$ref": "#/$defs/postMergeRun" },
+    "prNumber": { "minimum": 1, "type": "integer" },
+    "remoteDeleted": { "const": true },
+    "remoteDeletionObservedAt": { "format": "date-time", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$", "type": "string" },
+    "reviewObjects": {
+      "allOf": [
+        { "contains": { "properties": { "role": { "const": "code-reviewer" } }, "required": ["role"], "type": "object" }, "maxContains": 1, "minContains": 1 },
+        { "contains": { "properties": { "role": { "const": "architect" } }, "required": ["role"], "type": "object" }, "maxContains": 1, "minContains": 1 },
+        { "contains": { "properties": { "role": { "const": "verifier" } }, "required": ["role"], "type": "object" }, "maxContains": 1, "minContains": 1 }
+      ],
+      "items": { "$ref": "#/$defs/review" }, "maxItems": 3, "minItems": 3, "type": "array"
+    },
+    "schemaVersion": { "const": 1 },
+    "sourceBranch": { "pattern": "^feature/2\\.5\\.0-g01-(canonical-evidence-bootstrap|postmerge-bootstrap-a(?:0[2-9]|[1-9][0-9]+))$", "type": "string" },
+    "sourceSha": { "pattern": "^[0-9a-f]{40}$", "type": "string" },
+    "status": { "const": "GREEN" },
+    "terminalDevelopSha": { "pattern": "^[0-9a-f]{40}$", "type": "string" }
+  },
+  "required": ["schemaVersion", "goal", "phase", "status", "evidenceId", "attemptId", "sourceBranch", "sourceSha", "digest", "createdAt"],
+  "type": "object"
+}
