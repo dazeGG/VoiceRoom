@@ -19,6 +19,7 @@ const REPOSITORY = "dazeGG/VoiceRoom";
 const BRANCH = "feature/2.5.0-g01-canonical-evidence-bootstrap";
 const reviewedFiles = () => G01_WRITABLE.map((filename) => ({ filename, mode: fs.statSync(filename).mode & 0o111 ? "100755" : "100644", bytes: fs.readFileSync(filename) }));
 const reviewedTree = (reviewedBaseSha = "9".repeat(40), reviewedHeadSha = "a".repeat(40)) => ({ candidateFiles: reviewedFiles(), reviewedBaseSha, reviewedHeadSha });
+const syntheticPreBranchInputs = () => ["bootstrap-attempts.json", "bootstrap-landed-recoveries.json"].map((name) => { const candidate = json(`docs/releases/2.5.0/evidence/${name}`); if (name === "bootstrap-attempts.json") delete candidate.preparedAuthority; return { filename: name, bytes: Buffer.from(JSON.stringify(candidate)) }; });
 
 function candidateReport(head = "a".repeat(40), attemptId = "g01-a02") {
   const ordinal = Number(attemptId.match(/[0-9]+$/)[0]);
@@ -102,7 +103,7 @@ test("candidate identity binds reconstructed current ordinal, registry, branch a
 });
 
 test("tracked PRE_BRANCH registries atomically derive executable F7 identity from authenticated current PR/run and 1+max observed ordinal", () => {
-  const inputs = ["bootstrap-attempts.json", "bootstrap-landed-recoveries.json"].map((name) => ({ filename: name, bytes: fs.readFileSync(`docs/releases/2.5.0/evidence/${name}`) }));
+  const inputs = syntheticPreBranchInputs();
   const tracked = buildCandidateReport(inputs); const currentPr = pr();
   const historicalHead = "7".repeat(40), historicalBranch = "feature/2.5.0-g01-postmerge-bootstrap-a07";
   const historicalPr = { ...pr({ head: historicalHead }), id: 701, node_id: "PR_node_701", number: 701, head: { ref: historicalBranch, sha: historicalHead, repo: { full_name: REPOSITORY } } };
@@ -123,7 +124,7 @@ test("tracked PRE_BRANCH registries atomically derive executable F7 identity fro
 });
 
 test("pre-branch preparation reconstructs without consuming ordinals and fails closed for active/conflicting history", () => {
-  const inputs = ["bootstrap-attempts.json", "bootstrap-landed-recoveries.json"].map((name) => ({ filename: name, bytes: fs.readFileSync(`docs/releases/2.5.0/evidence/${name}`) }));
+  const inputs = syntheticPreBranchInputs();
   const tracked = buildCandidateReport(inputs), before = JSON.stringify(tracked), developRef = { object: { sha: "9".repeat(40) } };
   const empty = { repository: REPOSITORY, developRef, prPages: [[]], runPages: [{ workflow_runs: [] }], artifactPages: [{ artifacts: [] }], paginationComplete: true, observedAt: "2026-07-17T23:00:00.000Z" };
   const first = prepareBootstrapAuthority(tracked, empty);
