@@ -8,7 +8,8 @@ import { execFileSync } from "node:child_process";
 import Ajv2020 from "ajv/dist/2020.js";
 import addFormats from "ajv-formats";
 import { artifactName, buildAuthenticatedEarlyFailure, buildF9Envelope, buildF11Envelope, buildReviewComment, buildSelection, envelopePayloadDigest, parseReviewComment, selectCanonicalFailure, validateBootstrapFailure, validateFallbackCandidatePair } from "../evidence/emit-bootstrap-selection.mjs";
-import { activateCandidateReport, buildActivationCapture, buildCandidateReport, buildF7Envelope, prepareAndCreateBootstrapBranch, prepareBootstrapAuthority, reconstructNextOrdinal, validateRegistry } from "../evidence/bootstrap-export.mjs";
+import { activateCandidateReport, buildActivationCapture, buildCandidateReport, buildF7Envelope as buildAuthenticatedF7Envelope, buildF7RepositoryGates, buildG01VerificationCatalog, prepareAndCreateBootstrapBranch, prepareBootstrapAuthority, reconstructNextOrdinal, validateRegistry } from "../evidence/bootstrap-export.mjs";
+import { validateEnvelope } from "../evidence/validate-envelope.mjs";
 import { G01_WRITABLE } from "../evidence/recover-landed-bootstrap.mjs";
 
 const read = (file) => fs.readFileSync(file, "utf8");
@@ -31,6 +32,25 @@ function candidateReport(head = "a".repeat(40), attemptId = "g01-a02") {
 
 function run(id, headSha, headBranch, event, status = "completed", conclusion = "success", runAttempt = 1) {
   return { id, run_attempt: runAttempt, name: "CI/CD", path: ".github/workflows/ci.yml", event, head_sha: headSha, head_branch: headBranch, status, conclusion, repository: { full_name: REPOSITORY } };
+}
+const F7_GATE_NAMES = ["Git Flow policy", "Lint, typecheck & build", "Tests", "G01 targeted bootstrap gate"];
+const F7_REPORT_PATHS = ["reports/actionlint.log", "reports/envelope-schema.log", "reports/g01-landed-bootstrap-recovery.tap", "reports/g01-release-docs.tap", "reports/oras.log", "reports/recovery-command.log", "reports/validate-release-plan.log"];
+function f7Authority(headSha = "a".repeat(40), branch = BRANCH, createdAt = "2026-07-18T00:00:00.000Z") {
+  const currentRun = { ...run(901, headSha, branch, "pull_request", "in_progress", null, 3), check_suite_id: 801, workflow_id: 802 };
+  const jobs = F7_GATE_NAMES.map((name, index) => ({ id: 910 + index, run_id: currentRun.id, run_attempt: currentRun.run_attempt, head_sha: headSha, name, status: "completed", conclusion: "success", started_at: "2026-07-17T23:58:00.000Z", completed_at: `2026-07-17T23:59:0${index}.000Z` }));
+  const check_runs = jobs.map((job) => ({ id: job.id, name: job.name, head_sha: headSha, status: job.status, conclusion: job.conclusion, details_url: `https://github.com/${REPOSITORY}/actions/runs/${currentRun.id}/job/${job.id}`, check_suite: { id: currentRun.check_suite_id } }));
+  const currentPr = pr({ head: headSha }); currentPr.head.ref = branch;
+  return { repository: REPOSITORY, expectedRunId: currentRun.id, expectedRunAttempt: currentRun.run_attempt, run: currentRun, pr: currentPr, checkSuite: { id: currentRun.check_suite_id, head_sha: headSha, status: "in_progress", conclusion: null, app: { slug: "github-actions" } }, jobPages: [{ total_count: jobs.length, jobs }], checkRunPages: [{ total_count: check_runs.length, check_runs }], paginationComplete: true, observedAt: createdAt };
+}
+function f7Files(headSha = "a".repeat(40)) {
+  const reports = Object.fromEntries(F7_REPORT_PATHS.map((path, index) => [path, Buffer.from(`report-${index}`)]));
+  const manifest = { schemaVersion: 1, producer: { jobName: "G01 targeted bootstrap gate", runId: 901, runAttempt: 3, headSha, producedAt: "2026-07-17T23:58:30.000Z" }, files: Object.entries(reports).map(([path, bytes]) => ({ path, size: bytes.length, sha256: `sha256:${crypto.createHash("sha256").update(bytes).digest("hex")}` })) };
+  const paths = [".github/workflows/ci.yml", "config/evidence/release-evidence-archive.v1.json", "docs/RELEASE_2.5.0_PLAN.md", "docs/RELEASE_2.5.0_TEST_SPEC.md", "docs/releases/2.5.0/evidence/schema/envelope.schema.json"];
+  const inputs = Object.fromEntries(paths.map((path) => [path, fs.readFileSync(path)]));
+  return { plan: inputs["docs/RELEASE_2.5.0_PLAN.md"], spec: inputs["docs/RELEASE_2.5.0_TEST_SPEC.md"], inputs, reports, reportManifest: manifest };
+}
+function buildF7Envelope(report, headSha, branch, createdAt) {
+  return buildAuthenticatedF7Envelope(report, headSha, branch, createdAt, f7Authority(headSha, branch, createdAt), f7Files(headSha));
 }
 function artifactAuthority(id, name, headSha, headBranch, event, options = {}) {
   const archiveDigest = options.archiveDigest ?? digest(String((id % 9) + 1));
@@ -128,6 +148,39 @@ test("candidate identity binds reconstructed current ordinal, registry, branch a
   assert.throws(() => buildF7Envelope(relabeled, "a".repeat(40), BRANCH, "2026-07-18T00:00:00.000Z"), /ordinal/);
   const inactive = candidateReport(); inactive.registries[0].candidate.state = "G01_PRE_BRANCH";
   assert.throws(() => buildF7Envelope(inactive, "a".repeat(40), BRANCH, "2026-07-18T00:00:00.000Z"), /active/);
+});
+
+test("F7 seals four authenticated Actions jobs/check-runs only after completion", () => {
+  const head = "a".repeat(40), createdAt = "2026-07-18T00:00:00.000Z", report = candidateReport(head), authority = f7Authority(head, BRANCH, createdAt);
+  const f7 = buildAuthenticatedF7Envelope(report, head, BRANCH, createdAt, authority, f7Files(head));
+  assert.deepEqual(f7.requiredGates.map(({ name }) => name), F7_GATE_NAMES); assert.equal(f7.producerRun.baseSha, "9".repeat(40)); assert.equal(f7.verification.reports.length, 7);
+  const mutators = [
+    (a) => { a.jobPages[0].jobs.pop(); },
+    (a) => { a.jobPages[0].jobs.push(structuredClone(a.jobPages[0].jobs[0])); a.jobPages[0].total_count++; },
+    (a) => { a.jobPages[0].jobs[0].name = "wrong"; }, (a) => { a.jobPages[0].jobs[0].status = "in_progress"; }, (a) => { a.jobPages[0].jobs[0].conclusion = "failure"; },
+    (a) => { a.jobPages[0].jobs[0].run_id++; }, (a) => { a.jobPages[0].jobs[0].run_attempt++; }, (a) => { a.jobPages[0].jobs[0].head_sha = "b".repeat(40); },
+    (a) => { a.checkRunPages[0].check_runs[0].id++; }, (a) => { a.checkRunPages[0].check_runs[0].check_suite.id++; }, (a) => { a.checkRunPages[0].check_runs[0].details_url += "/forged"; },
+    (a) => { a.run.repository.full_name = "evil/repo"; }, (a) => { a.run.name = "Other"; }, (a) => { a.run.path = ".github/workflows/other.yml"; }, (a) => { a.run.event = "push"; },
+    (a) => { a.expectedRunId++; }, (a) => { a.expectedRunAttempt++; }, (a) => { a.run.head_sha = "b".repeat(40); }, (a) => { a.pr.base.sha = "b".repeat(40); },
+    (a) => { a.checkSuite.head_sha = "b".repeat(40); }, (a) => { a.jobPages[0].total_count++; }, (a) => { a.paginationComplete = false; },
+    (a) => { a.jobPages[0].jobs[3].completed_at = createdAt; },
+  ];
+  for (const mutate of mutators) { const hostile = structuredClone(authority); mutate(hostile); assert.throws(() => buildAuthenticatedF7Envelope(report, head, BRANCH, createdAt, hostile, f7Files(head))); }
+});
+
+test("F7 binds exact command/case/fixture/report and input bytes with schema/runtime parity", () => {
+  const head = "a".repeat(40), createdAt = "2026-07-18T00:00:00.000Z", report = candidateReport(head), files = f7Files(head), f7 = buildAuthenticatedF7Envelope(report, head, BRANCH, createdAt, f7Authority(head, BRANCH, createdAt), files);
+  const ajv = new Ajv2020({ allErrors: true, strict: true }); addFormats(ajv); const schema = ajv.compile(json("docs/releases/2.5.0/evidence/schema/envelope.schema.json")); assert.equal(schema(f7), true, JSON.stringify(schema.errors));
+  const mutators = [
+    (x) => { x.requiredGates.pop(); }, (x) => { x.requiredGates[3].name = "Tests"; },
+    (x) => { x.verification.targetedCommand += " && true"; }, (x) => { x.verification.caseIds[1] = "G01-A03"; }, (x) => { x.verification.fixturePaths[0] = "evil.json"; }, (x) => { x.verification.proofLevel = "P2"; },
+    (x) => { x.verification.reports[0].path = "reports/evil.log"; }, (x) => { x.verification.inputs[0].path = "README.md"; },
+  ];
+  for (const mutate of mutators) { const hostile = structuredClone(f7); mutate(hostile); assert.throws(() => validateEnvelope(hostile, "F7")); assert.equal(schema(hostile), false); }
+  for (const mutate of [(x) => { x.requiredGates[3].checkRunId++; }, (x) => { x.verification.reports[0].producer.jobId++; }]) { const hostile = structuredClone(f7); mutate(hostile); assert.throws(() => validateEnvelope(hostile, "F7")); }
+  const reportSubstitution = f7Files(head); reportSubstitution.reports[F7_REPORT_PATHS[0]] = Buffer.from("substituted"); assert.throws(() => buildAuthenticatedF7Envelope(report, head, BRANCH, createdAt, f7Authority(head, BRANCH, createdAt), reportSubstitution), /report bytes substituted/);
+  const inputSubstitution = f7Files(head); inputSubstitution.inputs[".github/workflows/ci.yml"] = Buffer.from("substituted"); assert.throws(() => buildAuthenticatedF7Envelope(report, head, BRANCH, createdAt, f7Authority(head, BRANCH, createdAt), inputSubstitution));
+  const changed = f7Authority(head, BRANCH, createdAt); changed.jobPages[0].jobs[0].id += 100; changed.checkRunPages[0].check_runs[0].id += 100; changed.checkRunPages[0].check_runs[0].details_url = `https://github.com/${REPOSITORY}/actions/runs/901/job/${changed.jobPages[0].jobs[0].id}`; const rebound = buildAuthenticatedF7Envelope(report, head, BRANCH, createdAt, changed, f7Files(head)); assert.notEqual(rebound.digest, f7.digest);
 });
 
 test("tracked PRE_BRANCH registries atomically derive executable F7 identity from authenticated current PR/run and 1+max observed ordinal", () => {
@@ -465,7 +518,7 @@ test("unbounded structural schemas accept a100 while runtime binds every externa
 
 test("recovery selection enforces ordinal/suffix parity and authenticates every ordered ancestor", () => {
   const base = chain(), recoveryBranch = "feature/2.5.0-g01-postmerge-bootstrap-a02", suffix = "bootstrap-recovery-a02.json", ancestorSha = "c".repeat(40);
-  const rf7 = { ...base.f7, attemptId: "g01-recovery-a02", sourceBranch: recoveryBranch, evidenceId: `ci-bundle.${suffix}` };
+  const rf7 = { ...base.f7, attemptId: "g01-recovery-a02", sourceBranch: recoveryBranch, producerRun: { ...base.f7.producerRun, headBranch: recoveryBranch }, evidenceId: `ci-bundle.${suffix}` };
   const recoveryReviews = base.f9.reviewObjects.map((review) => ({ ...review, attemptId: rf7.attemptId }));
   const rf9 = { ...base.f9, attemptId: rf7.attemptId, sourceBranch: recoveryBranch, evidenceId: `approval-envelope.${suffix}`, reviewObjects: recoveryReviews, digest: compactDigest(recoveryReviews) };
   const rf11 = { ...base.f11, attemptId: rf7.attemptId, sourceBranch: recoveryBranch, evidenceId: `merge-envelope.${suffix}`, f9Digest: rf9.digest };
@@ -493,7 +546,7 @@ test("selection CLI emits compact JSON with one real LF", () => {
 
 test("CI executes the exported G01 writable manifest directly", () => {
   const workflow = JSON.parse(execFileSync("python3", ["-c", "import json,yaml; print(json.dumps(yaml.safe_load(open('.github/workflows/ci.yml'))))"]));
-  const script = workflow.jobs["bootstrap-plan"].steps.find((step) => step.name === "Atomically derive current attempt from complete GitHub history and emit F7")?.run;
+  const script = workflow.jobs["bootstrap-seal"].steps.find((step) => step.name === "Atomically derive current attempt from complete GitHub history and emit F7")?.run;
   assert.ok(script, "G01 F7 workflow step must exist");
   const line = script.split("\n").map((entry) => entry.trim()).find((entry) => entry.endsWith("> g01-head-blob-paths.txt"));
   assert.ok(line, "CI G01 manifest command must exist");
@@ -504,9 +557,14 @@ test("CI executes the exported G01 writable manifest directly", () => {
 });
 
 test("workflow has reachable bounded premerge F9 and automatic merged-commit F11/selection with authenticated provenance", () => {
-  const workflow = read(".github/workflows/ci.yml"); const block = workflow.slice(workflow.indexOf("  bootstrap-plan:"), workflow.indexOf("\n  bootstrap-postmerge:"));
+  const workflow = read(".github/workflows/ci.yml"); const parsed = JSON.parse(execFileSync("python3", ["-c", "import json,yaml; print(json.dumps(yaml.safe_load(open('.github/workflows/ci.yml'))))"]));
+  assert.equal(parsed.jobs["bootstrap-plan"].name, "G01 targeted bootstrap gate"); assert.equal(parsed.jobs["bootstrap-plan"].needs, undefined);
+  assert.deepEqual(parsed.jobs["bootstrap-seal"].needs, ["policy", "check", "test", "bootstrap-plan"]); assert.doesNotMatch(parsed.jobs["bootstrap-seal"].if, /always\(\)/);
+  const block = workflow.slice(workflow.indexOf("  bootstrap-plan:"), workflow.indexOf("\n  bootstrap-postmerge:"));
+  assert.match(block, /check-runs\?filter=all&per_page=100/, "all check runs must remain visible so reruns and duplicate names fail closed");
+  assert.doesNotMatch(block, /check-runs\?filter=latest/, "latest-only filtering can hide duplicate or rerun check runs");
   assert.match(block, /github\.event_name == 'pull_request'/); assert.match(block, /head\.repo\.full_name == github\.repository/); assert.match(block, /environment: g01-bootstrap-approval-authority/); assert.match(block, /timeout-minutes: 45/); assert.match(block, /sleep 20/); assert.match(block, /--source-branch "\$SOURCE_BRANCH"/); assert.match(block, /OMX_G01_REVIEW_TRANSPORT_ACTOR_ID/); assert.match(block, /issues\/\$PR_NUMBER\/comments\?per_page=100/); assert.doesNotMatch(block, /OMX_G01_(?:CODE_REVIEWER|ARCHITECT|VERIFIER)_ID|pulls\/\$PR_NUMBER\/reviews/);
-  for (const token of ["activation-authority.json", "candidate.preparedAuthority", "prior-records.ndjson", "selectCanonicalFailure", "recoveryLineage"]) assert.ok(block.includes(token), `missing activation proof: ${token}`);
+  for (const token of ["activation-authority.json", "candidate.preparedAuthority", "prior-records.ndjson", "selectCanonicalFailure", "recoveryLineage", "current-check-suite.json", "current-check-run-pages.json", "targeted-evidence/report-manifest.json"]) assert.ok(block.includes(token), `missing activation proof: ${token}`);
   assert.ok(read("scripts/evidence/bootstrap-export.mjs").includes("--prepare-live"), "live preparation CLI must exist"); assert.match(read("scripts/evidence/bootstrap-export.mjs"), /maxBuffer = 128 \* 1024 \* 1024/, "live GitHub history and artifact reads need an explicit bounded buffer"); assert.doesNotMatch(read("scripts/evidence/bootstrap-export.mjs"), /--prior-failure/, "arbitrary prior-failure JSON input is forbidden"); assert.doesNotMatch(workflow, /OMX_G01_PREPARED_AUTHORITY_JSON|PREPARED_AUTHORITY_JSON/, "mutable prepared-authority transport is forbidden");
   assert.match(block, /path:\s*\|[\s\S]*activation-authority\.json/, "F7 artifact must persist replayable activation authority");
   const post = workflow.slice(workflow.indexOf("  bootstrap-postmerge:"), workflow.indexOf("\n  deploy:"));

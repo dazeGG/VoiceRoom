@@ -88,7 +88,49 @@ jobs:
       - run: npm test
 
   bootstrap-plan:
-    name: G01 bootstrap plan
+    name: G01 targeted bootstrap gate
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && (github.head_ref == 'feature/2.5.0-g01-canonical-evidence-bootstrap' || startsWith(github.head_ref, 'feature/2.5.0-g01-postmerge-bootstrap-a'))
+    timeout-minutes: 20
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      SOURCE_SHA: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Run exact targeted G01 command catalog and produce reports
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir reports
+          python3 scripts/test/validate_release_250_plan.py docs/RELEASE_2.5.0_PLAN.md docs/RELEASE_2.5.0_TEST_SPEC.md > reports/validate-release-plan.log 2>&1
+          node --test scripts/test/g01-release-docs.test.mjs scripts/test/g01-oras-lock.test.mjs > reports/g01-release-docs.tap 2>&1
+          node --test scripts/test/g01-landed-bootstrap-recovery.test.mjs > reports/g01-landed-bootstrap-recovery.tap 2>&1
+          node scripts/evidence/recover-landed-bootstrap.mjs --fixture scripts/test/fixtures/g01-landed-bootstrap-recovery.json --validate-only > reports/recovery-command.log 2>&1
+          node scripts/evidence/validate-envelope.mjs --fixture bootstrap > reports/envelope-schema.log 2>&1
+          scripts/ci/run-actionlint.sh .github/workflows/ci.yml > reports/actionlint.log 2>&1
+          scripts/ci/run-oras.sh version > reports/oras.log 2>&1
+          node - <<'NODE'
+          const fs=require('node:fs'),c=require('node:crypto'),producedAt=new Date().toISOString(),files=fs.readdirSync('reports').sort().map(name=>{const path=`reports/${name}`,bytes=fs.readFileSync(path);return{path,size:bytes.length,sha256:'sha256:'+c.createHash('sha256').update(bytes).digest('hex')}});fs.writeFileSync('reports/report-manifest.json',JSON.stringify({schemaVersion:1,producer:{jobName:'G01 targeted bootstrap gate',runId:Number(process.env.GITHUB_RUN_ID),runAttempt:Number(process.env.GITHUB_RUN_ATTEMPT),headSha:process.env.SOURCE_SHA,producedAt},files}));
+          NODE
+      - name: Persist targeted G01 reports for the seal
+        uses: actions/upload-artifact@v4
+        with:
+          name: g01-targeted-reports-run-${{ github.run_id }}-attempt-${{ github.run_attempt }}-head-${{ env.SOURCE_SHA }}
+          path: reports/
+          if-no-files-found: error
+          retention-days: 90
+
+  bootstrap-seal:
+    name: G01 authenticated F7/F8/F9 seal
+    needs: [policy, check, test, bootstrap-plan]
     if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && (github.head_ref == 'feature/2.5.0-g01-canonical-evidence-bootstrap' || startsWith(github.head_ref, 'feature/2.5.0-g01-postmerge-bootstrap-a'))
     environment: g01-bootstrap-approval-authority
     timeout-minutes: 45
@@ -113,15 +155,11 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
-      - name: Validate canonical plan and bootstrap contracts
-        run: |
-          python3 scripts/test/validate_release_250_plan.py docs/RELEASE_2.5.0_PLAN.md docs/RELEASE_2.5.0_TEST_SPEC.md
-          node --test scripts/test/g01-release-docs.test.mjs scripts/test/g01-oras-lock.test.mjs
-          node --test scripts/test/g01-landed-bootstrap-recovery.test.mjs
-          node scripts/evidence/recover-landed-bootstrap.mjs --fixture scripts/test/fixtures/g01-landed-bootstrap-recovery.json --validate-only
-          node scripts/evidence/validate-envelope.mjs --fixture bootstrap
-          scripts/ci/run-actionlint.sh .github/workflows/ci.yml
-          scripts/ci/run-oras.sh version
+      - name: Download exact targeted G01 reports
+        uses: actions/download-artifact@v4
+        with:
+          name: g01-targeted-reports-run-${{ github.run_id }}-attempt-${{ github.run_attempt }}-head-${{ env.SOURCE_SHA }}
+          path: targeted-evidence
       - name: Atomically derive current attempt from complete GitHub history and emit F7
         id: f7
         shell: bash
@@ -129,6 +167,10 @@ jobs:
           set -euo pipefail
           gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" > pr.json
           gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" > current-run.json
+          gh api --paginate "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT/jobs?per_page=100" --slurp > current-job-pages.json
+          check_suite_id="$(node -p 'JSON.parse(require("node:fs").readFileSync("current-run.json")).check_suite_id')"
+          gh api "repos/$GITHUB_REPOSITORY/check-suites/$check_suite_id" > current-check-suite.json
+          gh api --paginate "repos/$GITHUB_REPOSITORY/check-suites/$check_suite_id/check-runs?filter=all&per_page=100" --slurp > current-check-run-pages.json
           gh api "repos/$GITHUB_REPOSITORY/commits/$SOURCE_SHA" > head-commit.json
           BASE_SHA="$(node -p 'JSON.parse(require("node:fs").readFileSync("pr.json")).base.sha')"
           gh api "repos/$GITHUB_REPOSITORY/commits/$BASE_SHA" > base-commit.json
@@ -213,8 +255,11 @@ jobs:
           import fs from 'node:fs';import {buildActivationCapture,buildCandidateReport} from './scripts/evidence/bootstrap-export.mjs';const read=p=>JSON.parse(fs.readFileSync(p)),pr=read('pr.json'),currentRun=read('current-run.json'),headCommit=read('head-commit.json'),baseCommit=read('base-commit.json'),headTree=read('head-tree.json'),baseTree=read('base-tree.json'),headBlobs=read('head-blobs.json'),publicationStatus=read('publication-status.json'),abandonmentAuthorities=read('activation-abandonments.json'),prPages=read('pr-pages.json'),runPages=read('run-pages.json'),artifactPages=read('artifact-pages.json'),report=buildCandidateReport(['bootstrap-attempts.json','bootstrap-landed-recoveries.json'].map(name=>({filename:name,bytes:fs.readFileSync(`docs/releases/2.5.0/evidence/${name}`)}))),preparedAuthority=report.registries.find(x=>x.name==='bootstrap-attempts.json')?.candidate.preparedAuthority;if(!preparedAuthority)throw Error('branch commit lacks embedded prepared authority');const authority={repository:process.env.GITHUB_REPOSITORY,pr,currentRun,headCommit,baseCommit,headTree,baseTree,headBlobs,publicationStatus,abandonmentAuthorities,prPages,runPages,artifactPages,paginationComplete:true,observedAt:new Date().toISOString(),priorFailure:read('prior-failure.json'),preparedAuthority};authority.capture=buildActivationCapture(authority,report);fs.writeFileSync('activation-authority.json',JSON.stringify(authority));
           NODE
           node scripts/evidence/bootstrap-export.mjs --activate-authority activation-authority.json --plan docs/RELEASE_2.5.0_PLAN.md --spec docs/RELEASE_2.5.0_TEST_SPEC.md docs/releases/2.5.0/evidence/bootstrap-attempts.json docs/releases/2.5.0/evidence/bootstrap-landed-recoveries.json > candidate-registry-report.g01.json
-          created_at="$(node -p 'JSON.parse(require("node:fs").readFileSync("activation-authority.json")).observedAt')"
-          node scripts/evidence/bootstrap-export.mjs --f7 --activate-authority activation-authority.json --plan docs/RELEASE_2.5.0_PLAN.md --spec docs/RELEASE_2.5.0_TEST_SPEC.md --source-sha "$SOURCE_SHA" --source-branch "$SOURCE_BRANCH" --created-at "$created_at" docs/releases/2.5.0/evidence/bootstrap-attempts.json docs/releases/2.5.0/evidence/bootstrap-landed-recoveries.json > f7.json
+          created_at="$(node -p 'new Date().toISOString()')"
+          CREATED_AT="$created_at" node - <<'NODE'
+          const fs=require('node:fs'),read=p=>JSON.parse(fs.readFileSync(p));fs.writeFileSync('f7-repository-gates.json',JSON.stringify({repository:process.env.GITHUB_REPOSITORY,expectedRunId:Number(process.env.GITHUB_RUN_ID),expectedRunAttempt:Number(process.env.GITHUB_RUN_ATTEMPT),run:read('current-run.json'),pr:read('pr.json'),checkSuite:read('current-check-suite.json'),jobPages:read('current-job-pages.json'),checkRunPages:read('current-check-run-pages.json'),paginationComplete:true,observedAt:process.env.CREATED_AT}));
+          NODE
+          node scripts/evidence/bootstrap-export.mjs --f7 --activate-authority activation-authority.json --f7-authority f7-repository-gates.json --report-dir targeted-evidence --report-manifest targeted-evidence/report-manifest.json --plan docs/RELEASE_2.5.0_PLAN.md --spec docs/RELEASE_2.5.0_TEST_SPEC.md --schema docs/releases/2.5.0/evidence/schema/envelope.schema.json --config config/evidence/release-evidence-archive.v1.json --workflow .github/workflows/ci.yml --source-sha "$SOURCE_SHA" --source-branch "$SOURCE_BRANCH" --created-at "$created_at" docs/releases/2.5.0/evidence/bootstrap-attempts.json docs/releases/2.5.0/evidence/bootstrap-landed-recoveries.json > f7.json
           attempt_id="$(node -p 'JSON.parse(require("node:fs").readFileSync("f7.json")).attemptId')"
           suffix="$(node -p 'JSON.parse(require("node:fs").readFileSync("f7.json")).evidenceId.slice("ci-bundle.".length)')"
           mv f7.json "ci-bundle.$suffix"
@@ -230,7 +275,9 @@ jobs:
             ci-bundle.*.json
             candidate-registry-report.g01.json
             activation-authority.json
+            f7-repository-gates.json
             premerge-ancestor-authorities.json
+            targeted-evidence/
           if-no-files-found: error
           retention-days: 90
       - name: Await exact-head independent approvals and emit F9
@@ -513,9 +560,9 @@ jobs:
           const f7payload=one(f7dir,/^ci-bundle\.(?:g01|bootstrap-recovery-a[0-9]{2,})\.json$/,'F7'),f9payload=one(f9dir,/^approval-envelope\.(?:g01|bootstrap-recovery-a[0-9]{2,})\.json$/,'F9'),reportPayload=one(f7dir,/^candidate-registry-report\.g01\.json$/,'report');
           const f7=JSON.parse(f7payload.bytes),f9=JSON.parse(f9payload.bytes),report=JSON.parse(reportPayload.bytes),m7=read(`${prefix}-metadata.json`),m9=read(`${prefix}-f9-metadata.json`),run=read(`${prefix}-producer-run.json`),current=read(`${prefix}-current-run.json`),pr=context.p;
           const common=['schemaVersion','goal','phase','status','evidenceId','attemptId','sourceBranch','sourceSha','digest','createdAt'];
-          exact(f7,common,'F7');exact(f9,[...common,'f7Digest','reviewObjects'],'F9');
+          exact(f7,[...common,'baseSha','producerRun','requiredGates','verification'],'F7');exact(f9,[...common,'f7Digest','reviewObjects'],'F9');
           for(const [e,p] of [[f7,'F7'],[f9,'F9']]){assert.equal(e.schemaVersion,1);assert.equal(e.goal,'G01');assert.equal(e.phase,p);assert.equal(e.status,'GREEN');assert.match(e.sourceSha,sha);assert.match(e.digest,dig);assert.ok(Number.isFinite(Date.parse(e.createdAt)));}
-          assert.equal(f7.sourceSha,pr.head.sha);assert.equal(f7.sourceBranch,pr.head.ref);assert.equal(f9.sourceSha,f7.sourceSha);assert.equal(f9.sourceBranch,f7.sourceBranch);assert.equal(f9.attemptId,f7.attemptId);assert.equal(f9.f7Digest,f7.digest);assert.equal(f7.digest,compact(report));
+          assert.equal(f7.sourceSha,pr.head.sha);assert.equal(f7.sourceBranch,pr.head.ref);assert.equal(f9.sourceSha,f7.sourceSha);assert.equal(f9.sourceBranch,f7.sourceBranch);assert.equal(f9.attemptId,f7.attemptId);assert.equal(f9.f7Digest,f7.digest);assert.equal(f7.digest,compact({candidateReport:report,baseSha:f7.baseSha,sourceSha:f7.sourceSha,producerRun:f7.producerRun,requiredGates:f7.requiredGates,verification:f7.verification}));
           assert.ok(Array.isArray(f9.reviewObjects)&&f9.reviewObjects.length===3);assert.deepEqual(f9.reviewObjects.map(x=>x.role),['code-reviewer','architect','verifier']);assert.equal(f9.digest,compact(f9.reviewObjects));const reviewKeys=['schemaVersion','kind','role','verdict','repository','prNumber','headSha','attemptId','f7ArtifactId','f7ArtifactName','f7ArchiveDigest','f7PayloadDigest','f7Digest','laneId','output','outputDigest','parentReferences','commentId','nodeId','actorId','authorAssociation','createdAt'],trusted=new Set(['OWNER','MEMBER','COLLABORATOR']),ids=new Set(),nodes=new Set(),lanes=new Set(),outputs=new Set(),actors=new Set();for(const x of f9.reviewObjects){exact(x,reviewKeys,'F9 review');assert.equal(x.schemaVersion,1);assert.equal(x.kind,'g01-native-review');assert.equal(x.headSha,f7.sourceSha);assert.equal(x.attemptId,f7.attemptId);assert.equal(x.repository,repo);assert.equal(x.prNumber,pr.number);assert.equal(x.f7ArtifactId,m7.id);assert.equal(x.f7ArtifactName,m7.name);assert.equal(x.f7ArchiveDigest,m7.digest);assert.equal(x.f7PayloadDigest,hash(f7payload.bytes));assert.equal(x.f7Digest,f7.digest);assert.equal(x.verdict,x.role==='architect'?'CLEAR':'APPROVE');assert.equal(x.outputDigest,hash(Buffer.from(x.output)));assert.ok(Date.parse(x.createdAt)<Date.parse(f9.createdAt));assert.ok(trusted.has(x.authorAssociation));assert.ok(!ids.has(x.commentId)&&!nodes.has(x.nodeId)&&!lanes.has(x.laneId)&&!outputs.has(x.outputDigest));ids.add(x.commentId);nodes.add(x.nodeId);lanes.add(x.laneId);outputs.add(x.outputDigest);actors.add(x.actorId)}assert.equal(actors.size,1);const parents=f9.reviewObjects.slice(0,2);for(const x of parents)assert.deepEqual(x.parentReferences,[]);assert.deepEqual(f9.reviewObjects[2].parentReferences,parents.map(({role,commentId,outputDigest})=>({role,commentId,outputDigest})));assert.ok(parents.every(x=>Date.parse(x.createdAt)<Date.parse(f9.reviewObjects[2].createdAt)))
           exact(report,['schemaVersion','release','registries','activationAuthority'],'candidate report');assert.equal(report.schemaVersion,1);assert.equal(report.release,'2.5.0');assert.equal(report.registries.length,2);const regs=new Map(report.registries.map(x=>[x.name,x.candidate]));assert.deepEqual([...regs.keys()].sort(),['bootstrap-attempts.json','bootstrap-landed-recoveries.json']);
           const attempts=regs.get('bootstrap-attempts.json'),recoveries=regs.get('bootstrap-landed-recoveries.json');assert.equal(attempts.state,'G01_PREMERGE_ACTIVE');assert.equal(recoveries.state,'G01_PREMERGE_ACTIVE');
@@ -594,9 +641,9 @@ jobs:
           const f7payload=one(f7dir,/^ci-bundle\.(?:g01|bootstrap-recovery-a[0-9]{2,})\.json$/,'F7'),f9payload=one(f9dir,/^approval-envelope\.(?:g01|bootstrap-recovery-a[0-9]{2,})\.json$/,'F9'),reportPayload=one(f7dir,/^candidate-registry-report\.g01\.json$/,'report');
           const f7=JSON.parse(f7payload.bytes),f9=JSON.parse(f9payload.bytes),report=JSON.parse(reportPayload.bytes),m7=read(`${prefix}-metadata.json`),m9=read(`${prefix}-f9-metadata.json`),run=read(`${prefix}-producer-run.json`),current=read(`${prefix}-current-run.json`),pr=context.p;
           const common=['schemaVersion','goal','phase','status','evidenceId','attemptId','sourceBranch','sourceSha','digest','createdAt'];
-          exact(f7,common,'F7');exact(f9,[...common,'f7Digest','reviewObjects'],'F9');
+          exact(f7,[...common,'baseSha','producerRun','requiredGates','verification'],'F7');exact(f9,[...common,'f7Digest','reviewObjects'],'F9');
           for(const [e,p] of [[f7,'F7'],[f9,'F9']]){assert.equal(e.schemaVersion,1);assert.equal(e.goal,'G01');assert.equal(e.phase,p);assert.equal(e.status,'GREEN');assert.match(e.sourceSha,sha);assert.match(e.digest,dig);assert.ok(Number.isFinite(Date.parse(e.createdAt)));}
-          assert.equal(f7.sourceSha,pr.head.sha);assert.equal(f7.sourceBranch,pr.head.ref);assert.equal(f9.sourceSha,f7.sourceSha);assert.equal(f9.sourceBranch,f7.sourceBranch);assert.equal(f9.attemptId,f7.attemptId);assert.equal(f9.f7Digest,f7.digest);assert.equal(f7.digest,compact(report));
+          assert.equal(f7.sourceSha,pr.head.sha);assert.equal(f7.sourceBranch,pr.head.ref);assert.equal(f9.sourceSha,f7.sourceSha);assert.equal(f9.sourceBranch,f7.sourceBranch);assert.equal(f9.attemptId,f7.attemptId);assert.equal(f9.f7Digest,f7.digest);assert.equal(f7.digest,compact({candidateReport:report,baseSha:f7.baseSha,sourceSha:f7.sourceSha,producerRun:f7.producerRun,requiredGates:f7.requiredGates,verification:f7.verification}));
           assert.ok(Array.isArray(f9.reviewObjects)&&f9.reviewObjects.length===3);assert.deepEqual(f9.reviewObjects.map(x=>x.role),['code-reviewer','architect','verifier']);assert.equal(f9.digest,compact(f9.reviewObjects));const reviewKeys=['schemaVersion','kind','role','verdict','repository','prNumber','headSha','attemptId','f7ArtifactId','f7ArtifactName','f7ArchiveDigest','f7PayloadDigest','f7Digest','laneId','output','outputDigest','parentReferences','commentId','nodeId','actorId','authorAssociation','createdAt'],trusted=new Set(['OWNER','MEMBER','COLLABORATOR']),ids=new Set(),nodes=new Set(),lanes=new Set(),outputs=new Set(),actors=new Set();for(const x of f9.reviewObjects){exact(x,reviewKeys,'F9 review');assert.equal(x.schemaVersion,1);assert.equal(x.kind,'g01-native-review');assert.equal(x.headSha,f7.sourceSha);assert.equal(x.attemptId,f7.attemptId);assert.equal(x.repository,repo);assert.equal(x.prNumber,pr.number);assert.equal(x.f7ArtifactId,m7.id);assert.equal(x.f7ArtifactName,m7.name);assert.equal(x.f7ArchiveDigest,m7.digest);assert.equal(x.f7PayloadDigest,hash(f7payload.bytes));assert.equal(x.f7Digest,f7.digest);assert.equal(x.verdict,x.role==='architect'?'CLEAR':'APPROVE');assert.equal(x.outputDigest,hash(Buffer.from(x.output)));assert.ok(Date.parse(x.createdAt)<Date.parse(f9.createdAt));assert.ok(trusted.has(x.authorAssociation));assert.ok(!ids.has(x.commentId)&&!nodes.has(x.nodeId)&&!lanes.has(x.laneId)&&!outputs.has(x.outputDigest));ids.add(x.commentId);nodes.add(x.nodeId);lanes.add(x.laneId);outputs.add(x.outputDigest);actors.add(x.actorId)}assert.equal(actors.size,1);const parents=f9.reviewObjects.slice(0,2);for(const x of parents)assert.deepEqual(x.parentReferences,[]);assert.deepEqual(f9.reviewObjects[2].parentReferences,parents.map(({role,commentId,outputDigest})=>({role,commentId,outputDigest})));assert.ok(parents.every(x=>Date.parse(x.createdAt)<Date.parse(f9.reviewObjects[2].createdAt)))
           exact(report,['schemaVersion','release','registries','activationAuthority'],'candidate report');assert.equal(report.schemaVersion,1);assert.equal(report.release,'2.5.0');assert.equal(report.registries.length,2);const regs=new Map(report.registries.map(x=>[x.name,x.candidate]));assert.deepEqual([...regs.keys()].sort(),['bootstrap-attempts.json','bootstrap-landed-recoveries.json']);
           const attempts=regs.get('bootstrap-attempts.json'),recoveries=regs.get('bootstrap-landed-recoveries.json');assert.equal(attempts.state,'G01_PREMERGE_ACTIVE');assert.equal(recoveries.state,'G01_PREMERGE_ACTIVE');

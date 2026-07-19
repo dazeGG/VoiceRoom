@@ -42,6 +42,9 @@ function instant(value, label) {
 function compactDigest(value) {
   return `sha256:${crypto.createHash("sha256").update(JSON.stringify(value)).digest("hex")}`;
 }
+function f7AuthorityDigest(f7, candidateReport) {
+  return compactDigest({ candidateReport, baseSha: f7.baseSha, sourceSha: f7.sourceSha, producerRun: f7.producerRun, requiredGates: f7.requiredGates, verification: f7.verification });
+}
 
 function nativeOutputDigest(value) { return `sha256:${crypto.createHash("sha256").update(value).digest("hex")}`; }
 
@@ -242,7 +245,7 @@ export function buildF9Envelope(f7, authority) {
   assert.equal(f7.attemptId, identity.attemptId); assert.equal(f7.sourceBranch, authority.pr.head.ref);
   assert.equal(f7.evidenceId, `ci-bundle.${identity.suffix}`);
   validateArtifactAuthority(authority.f7Artifact, { name: artifactName("candidate", f7, authority.f7Artifact.run.id, authority.f7Artifact.run.run_attempt), headSha: f7.sourceSha, headBranch: f7.sourceBranch, event: "pull_request", repository: authority.repository, observedAt: authority.observedAt, payload: f7 }, "F7");
-  assert.equal(f7.digest, compactDigest(authority.candidateReport), "F7 digest must bind the candidate report bytes from the authenticated artifact");
+  assert.equal(f7.digest, f7AuthorityDigest(f7, authority.candidateReport), "F7 digest must bind the authenticated candidate report, repository gates and verification catalog");
   const reviewObjects = normalizeReviews(authority, f7);
   const createdAt = authority.observedAt; instant(createdAt, "approval observedAt");
   assert.ok(instant(f7.createdAt, "F7.createdAt") < instant(createdAt, "approval observedAt"), "F9 must follow F7");
@@ -255,7 +258,7 @@ export function validateFallbackCandidatePair(f7, f9, candidateReport, authority
   exactKeys(authority, ["repository", "observedAt", "f7Artifact", "f9Artifact"], "fallback candidate authority");
   const identity = resolveCandidateIdentity(candidateReport, f7.sourceBranch, f7.sourceSha);
   assert.equal(identity.attemptId, f7.attemptId); assert.equal(f9.attemptId, f7.attemptId); assert.equal(f9.sourceBranch, f7.sourceBranch); assert.equal(f9.sourceSha, f7.sourceSha); assert.equal(f9.f7Digest, f7.digest);
-  assert.equal(f7.digest, compactDigest(candidateReport), "fallback F7 must bind the authenticated candidate report");
+  assert.equal(f7.digest, f7AuthorityDigest(f7, candidateReport), "fallback F7 must bind the authenticated candidate report, repository gates and verification catalog");
   for (const [artifact, envelope, kind, label] of [[authority.f7Artifact, f7, "candidate", "F7"], [authority.f9Artifact, f9, "approval", "F9"]]) {
     validateArtifactAuthority(artifact, { name: artifactName(kind, envelope, artifact.run.id, artifact.run.run_attempt), headSha: f7.sourceSha, headBranch: f7.sourceBranch, event: "pull_request", repository: authority.repository, observedAt: authority.observedAt, completed: true, payload: envelope }, label);
   }

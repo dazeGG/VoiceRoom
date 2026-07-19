@@ -726,26 +726,67 @@ function activeIdentity(candidateReport, sourceSha, sourceBranch) {
   return { attemptId: current.attemptId, suffix: `bootstrap-recovery-a${suffix}.json` };
 }
 
-export function buildF7Envelope(candidateReport, sourceSha, sourceBranch, createdAt) {
-  assert.match(sourceSha, SHA);
-  const identity = activeIdentity(candidateReport, sourceSha, sourceBranch);
-  const timestamp = Date.parse(createdAt);
-  assert.ok(Number.isFinite(timestamp) && new Date(timestamp).toISOString() === createdAt, "F7 createdAt must be canonical ISO-8601 UTC");
-  const reportBytes = Buffer.from(JSON.stringify(candidateReport));
-  return validateEnvelope({
-    schemaVersion: 1,
-    goal: "G01",
-    phase: "F7",
-    status: "GREEN",
-    evidenceId: `ci-bundle.${identity.suffix}`,
-    attemptId: identity.attemptId,
-    sourceBranch,
-    sourceSha,
-    digest: `sha256:${crypto.createHash("sha256").update(reportBytes).digest("hex")}`,
-    createdAt,
-  }, "F7");
+const F7_REQUIRED_GATES = ["Git Flow policy", "Lint, typecheck & build", "Tests", "G01 targeted bootstrap gate"];
+const F7_FIXTURES = ["scripts/test/fixtures/g01-landed-bootstrap-recovery.json"];
+const F7_INPUT_PATHS = [".github/workflows/ci.yml", "config/evidence/release-evidence-archive.v1.json", "docs/RELEASE_2.5.0_PLAN.md", "docs/RELEASE_2.5.0_TEST_SPEC.md", "docs/releases/2.5.0/evidence/schema/envelope.schema.json"];
+
+function canonicalInstant(value, label) {
+  assert.equal(typeof value, "string", `${label} must be an ISO timestamp`);
+  const time = Date.parse(value); assert.ok(Number.isFinite(time), `${label} must be an ISO timestamp`); return time;
+}
+function fileRecord(path, bytes) {
+  const body = Buffer.from(bytes); return { path, size: body.length, sha256: `sha256:${crypto.createHash("sha256").update(body).digest("hex")}` };
 }
 
+export function buildG01VerificationCatalog(planBytes, specBytes, inputFiles, reportFiles, manifest, producerGate) {
+  const plan = Buffer.from(planBytes).toString("utf8");
+  const section = plan.match(/### G01 — canonical unified plan[\s\S]*?(?=\n### G02 —)/)?.[0]; assert.ok(section, "G01 plan card is absent");
+  const targeted = section.match(/^- \*\*Targeted verification:\*\* (.+)$/m)?.[1]; assert.ok(targeted, "G01 targeted verification catalog is absent");
+  const targetedCommand = targeted.match(/exact command: `([^`]+)`/)?.[1], requiredJob = targeted.match(/required job: `([^`]+)`/)?.[1], caseIds = targeted.match(/case IDs `([^`]+)`, `([^`]+)`/i)?.slice(1), proofLevel = targeted.match(/highest proof \*\*(P[0-9]+)\*\*/)?.[1];
+  assert.ok(targetedCommand && requiredJob && caseIds?.length === 2 && proofLevel, "G01 targeted verification catalog is malformed"); assert.equal(requiredJob, "bootstrap-plan"); assert.deepEqual(caseIds, ["G01-A01", "G01-A02"]); assert.equal(proofLevel, "P3");
+  const repositoryLine = plan.match(/^- \*\*F5 repository:\*\* (.+)$/m)?.[1]; assert.ok(repositoryLine, "F5 repository catalog is absent");
+  const repositoryCommands = [...repositoryLine.matchAll(/`([^`]+)`/g)].map((match) => match[1]).slice(0, 3); assert.deepEqual(repositoryCommands, ["npm run check", "TEST_DATABASE_URL=... npm test", "npm run build"]);
+  assert.deepEqual(Object.keys(inputFiles).sort(), F7_INPUT_PATHS, "F7 input digest paths must be exact");
+  const inputs = Object.entries(inputFiles).map(([path, bytes]) => fileRecord(path, bytes)).sort((a, b) => a.path.localeCompare(b.path));
+  exactKeys(manifest, ["schemaVersion", "producer", "files"], "F7 report manifest"); assert.equal(manifest.schemaVersion, 1);
+  exactKeys(manifest.producer, ["jobName", "runId", "runAttempt", "headSha", "producedAt"], "F7 report producer");
+  assert.equal(manifest.producer.jobName, producerGate.name); assert.equal(manifest.producer.runId, producerGate.runId); assert.equal(manifest.producer.runAttempt, producerGate.runAttempt); assert.equal(manifest.producer.headSha, producerGate.headSha);
+  const producedAt = canonicalInstant(manifest.producer.producedAt, "report producer producedAt"); assert.ok(producedAt <= canonicalInstant(producerGate.completedAt, "report producer completedAt"));
+  assert.ok(Array.isArray(manifest.files) && manifest.files.length > 0); assert.deepEqual(manifest.files.map(({ path }) => path), [...manifest.files.map(({ path }) => path)].sort(), "F7 reports must be path-sorted");
+  assert.deepEqual(Object.keys(reportFiles).sort(), manifest.files.map(({ path }) => path), "F7 report files/manifest mismatch");
+  const reports = manifest.files.map((expected) => {
+    exactKeys(expected, ["path", "size", "sha256"], `F7 report ${expected.path}`); const actual = fileRecord(expected.path, reportFiles[expected.path]); assert.deepEqual(actual, expected, `F7 report bytes substituted: ${expected.path}`);
+    return { ...actual, producer: { jobId: producerGate.jobId, checkRunId: producerGate.checkRunId, name: producerGate.name, runId: producerGate.runId, runAttempt: producerGate.runAttempt, headSha: producerGate.headSha, producedAt: manifest.producer.producedAt, completedAt: producerGate.completedAt } };
+  });
+  return { targetedCommand, requiredJob, caseIds, fixturePaths: F7_FIXTURES, proofLevel, repositoryCommands, reports, inputs };
+}
+
+export function buildF7RepositoryGates(authority, sourceSha, sourceBranch, baseSha, createdAt) {
+  exactKeys(authority, ["repository", "expectedRunId", "expectedRunAttempt", "run", "pr", "checkSuite", "jobPages", "checkRunPages", "paginationComplete", "observedAt"], "F7 repository gate authority");
+  assert.equal(authority.paginationComplete, true); assert.equal(authority.observedAt, createdAt); const run = authority.run, pr = authority.pr, suite = authority.checkSuite;
+  assert.equal(run.id, authority.expectedRunId); assert.equal(run.run_attempt, authority.expectedRunAttempt); assert.equal(run.repository?.full_name, authority.repository); assert.equal(run.name, "CI/CD"); assert.equal(run.path, ".github/workflows/ci.yml"); assert.equal(run.event, "pull_request"); assert.equal(run.head_branch, sourceBranch); assert.equal(run.head_sha, sourceSha); assert.equal(run.status, "in_progress"); assert.equal(run.conclusion, null);
+  for (const key of ["id", "run_attempt", "check_suite_id", "workflow_id"]) assert.ok(Number.isInteger(run[key]) && run[key] > 0, `F7 run ${key} invalid`);
+  assert.ok(Number.isInteger(pr.number) && pr.number > 0); assert.equal(pr.head?.sha, sourceSha); assert.equal(pr.head?.ref, sourceBranch); assert.equal(pr.head?.repo?.full_name, authority.repository); assert.equal(pr.base?.sha, baseSha); assert.equal(pr.base?.ref, "develop"); assert.equal(pr.base?.repo?.full_name, authority.repository);
+  assert.equal(suite.id, run.check_suite_id); assert.equal(suite.head_sha, sourceSha); assert.equal(suite.status, "in_progress"); assert.equal(suite.conclusion, null); assert.equal(suite.app?.slug, "github-actions");
+  const flatten = (pages, key, label) => { assert.ok(Array.isArray(pages) && pages.length > 0, `${label} pages absent`); const rows=pages.flatMap(page=>{assert.ok(Array.isArray(page[key]), `${label} page malformed`);return page[key]}); assert.equal(rows.length, pages[0].total_count, `${label} pagination incomplete`); return rows; };
+  const jobs = flatten(authority.jobPages, "jobs", "job"), checks = flatten(authority.checkRunPages, "check_runs", "check-run");
+  const requiredGates = F7_REQUIRED_GATES.map((name) => {
+    const jobMatches=jobs.filter(row=>row.name===name), checkMatches=checks.filter(row=>row.name===name); assert.equal(jobMatches.length,1,`required job ${name} must resolve exactly once`); assert.equal(checkMatches.length,1,`required check-run ${name} must resolve exactly once`);
+    const job=jobMatches[0], check=checkMatches[0]; assert.equal(job.id,check.id,`${name} job/check-run identity mismatch`); assert.equal(check.check_suite?.id,suite.id); assert.equal(job.run_id,run.id); assert.equal(job.run_attempt,run.run_attempt); assert.equal(job.head_sha,sourceSha); assert.equal(check.head_sha,sourceSha); assert.equal(job.status,"completed"); assert.equal(check.status,"completed"); assert.equal(job.conclusion,"success"); assert.equal(check.conclusion,"success"); assert.equal(check.details_url,`https://github.com/${authority.repository}/actions/runs/${run.id}/job/${job.id}`);
+    const startedAt=canonicalInstant(job.started_at,`${name}.startedAt`),completedAt=canonicalInstant(job.completed_at,`${name}.completedAt`); assert.ok(startedAt<=completedAt); assert.ok(completedAt<canonicalInstant(createdAt,"F7.createdAt"),`F7 must follow ${name}`);
+    return { jobId:job.id, checkRunId:check.id, checkSuiteId:suite.id, name, status:job.status, conclusion:job.conclusion, runId:job.run_id, runAttempt:job.run_attempt, headSha:job.head_sha, startedAt:job.started_at, completedAt:job.completed_at, detailsUrl:check.details_url };
+  });
+  return { producerRun: { id:run.id, runAttempt:run.run_attempt, checkSuiteId:run.check_suite_id, workflowId:run.workflow_id, workflowName:run.name, workflowPath:run.path, repository:authority.repository, event:run.event, prNumber:pr.number, baseSha, headBranch:run.head_branch, headSha:run.head_sha, status:run.status, conclusion:run.conclusion }, requiredGates };
+}
+
+export function buildF7Envelope(candidateReport, sourceSha, sourceBranch, createdAt, authority, files) {
+  assert.match(sourceSha, SHA); const identity=activeIdentity(candidateReport,sourceSha,sourceBranch); const timestamp=Date.parse(createdAt); assert.ok(Number.isFinite(timestamp)&&new Date(timestamp).toISOString()===createdAt,"F7 createdAt must be canonical ISO-8601 UTC");
+  const baseSha=candidateReport.registries.flatMap(({candidate})=>candidate.attempts??candidate.landedAncestors??[]).find(({attemptId})=>attemptId===identity.attemptId)?.baseSha; assert.match(baseSha,SHA,"F7 base SHA is absent");
+  const {producerRun,requiredGates}=buildF7RepositoryGates(authority,sourceSha,sourceBranch,baseSha,createdAt), targetedGate=requiredGates.at(-1);
+  const verification=buildG01VerificationCatalog(files.plan,files.spec,files.inputs,files.reports,files.reportManifest,targetedGate);
+  const digestAuthority={candidateReport,baseSha,sourceSha,producerRun,requiredGates,verification};
+  return validateEnvelope({schemaVersion:1,goal:"G01",phase:"F7",status:"GREEN",evidenceId:`ci-bundle.${identity.suffix}`,attemptId:identity.attemptId,sourceBranch,baseSha,sourceSha,producerRun,requiredGates,verification,digest:`sha256:${crypto.createHash("sha256").update(JSON.stringify(digestAuthority)).digest("hex")}`,createdAt},"F7");
+}
 
 function githubCliAdapter(repository) {
   const maxBuffer = 128 * 1024 * 1024;
@@ -793,7 +834,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   };
   const activationPath = args.includes("--activate-authority") ? option("--activate-authority") : undefined;
   const preparePath = args.includes("--prepare") ? option("--prepare") : undefined;
-  const optionNames = ["--source-sha", "--source-branch", "--created-at", "--activate-authority", "--prepare", "--plan", "--spec", "--repository", "--observed-at"];
+  const optionNames = ["--source-sha", "--source-branch", "--created-at", "--activate-authority", "--f7-authority", "--report-dir", "--report-manifest", "--schema", "--config", "--workflow", "--prepare", "--plan", "--spec", "--repository", "--observed-at"];
   const excluded = new Set(["--f7", "--prepare-live", ...optionNames, ...optionNames.filter((name) => args.includes(name)).map(option)]);
   const files = args.filter((value) => !excluded.has(value));
   if (files.length === 0) throw new Error("usage: bootstrap-export.mjs REGISTRY.json [REGISTRY.json]");
@@ -811,6 +852,12 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   }
   let report = buildCandidateReport(files.map((filename) => ({ filename, bytes: fs.readFileSync(filename) })));
   if (activationPath) report = activateCandidateReport(report, JSON.parse(fs.readFileSync(activationPath, "utf8")), fs.readFileSync(option("--plan")), fs.readFileSync(option("--spec"))).report;
-  const output = preparePath ? prepareBootstrapAuthority(report, JSON.parse(fs.readFileSync(preparePath, "utf8"))) : f7 ? buildF7Envelope(report, option("--source-sha"), option("--source-branch"), option("--created-at")) : report;
+  let f7Files;
+  if (f7) {
+    const planPath = option("--plan"), specPath = option("--spec"), schemaPath = option("--schema"), configPath = option("--config"), workflowPath = option("--workflow"), manifest = JSON.parse(fs.readFileSync(option("--report-manifest"), "utf8")), reportDir = option("--report-dir");
+    const reports = Object.fromEntries(manifest.files.map(({ path: reportPath }) => [reportPath, fs.readFileSync(path.join(reportDir, path.basename(reportPath)))]));
+    f7Files = { plan: fs.readFileSync(planPath), spec: fs.readFileSync(specPath), reportManifest: manifest, reports, inputs: { [planPath]: fs.readFileSync(planPath), [specPath]: fs.readFileSync(specPath), [schemaPath]: fs.readFileSync(schemaPath), [configPath]: fs.readFileSync(configPath), [workflowPath]: fs.readFileSync(workflowPath) } };
+  }
+  const output = preparePath ? prepareBootstrapAuthority(report, JSON.parse(fs.readFileSync(preparePath, "utf8"))) : f7 ? buildF7Envelope(report, option("--source-sha"), option("--source-branch"), option("--created-at"), JSON.parse(fs.readFileSync(option("--f7-authority"), "utf8")), f7Files) : report;
   process.stdout.write(`${JSON.stringify(output)}\n`);
 }

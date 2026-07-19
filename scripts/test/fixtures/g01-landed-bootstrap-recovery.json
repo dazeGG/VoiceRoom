@@ -101,7 +101,7 @@
               "runAttempt": 1,
               "headSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
               "archiveDigest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
-              "payloadDigest": "sha256:a5216e2302f28e9a71dae4e5745aed24cf328e0fad1ec9b049dc89f117317e9c"
+              "payloadDigest": "sha256:64a2050f698a841bb37b1df96bbb5451ed7a9fe0b1685ec171975543e2184297"
             },
             "f9": {
               "artifactId": 2,
@@ -122,7 +122,7 @@
               "payloadDigest": "sha256:2d69623c27a326070c3f03b6742e2c76e755a72efe046e6c722ee4fb9b53b117"
             }
           },
-          "selectionDigest": "sha256:91dec3181ca610951c2394a67b6ec8ec4d042f99d54532d5f6d14e45d77a2f05"
+          "selectionDigest": "sha256:1bab8b54142a25291366561ad8771bdb65d6e593303bd083e2e96fc8c8c14321"
         },
         "f7": {
           "schemaVersion": 1,
@@ -134,7 +134,233 @@
           "digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
           "createdAt": "2026-07-18T00:00:00.000Z",
           "attemptId": "g01-a02",
-          "sourceBranch": "feature/2.5.0-g01-canonical-evidence-bootstrap"
+          "sourceBranch": "feature/2.5.0-g01-canonical-evidence-bootstrap",
+          "baseSha": "9999999999999999999999999999999999999999",
+          "producerRun": {
+            "id": 10,
+            "runAttempt": 1,
+            "checkSuiteId": 11,
+            "workflowId": 12,
+            "workflowName": "CI/CD",
+            "workflowPath": ".github/workflows/ci.yml",
+            "repository": "dazeGG/VoiceRoom",
+            "event": "pull_request",
+            "prNumber": 7,
+            "baseSha": "9999999999999999999999999999999999999999",
+            "headBranch": "feature/2.5.0-g01-canonical-evidence-bootstrap",
+            "headSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "status": "in_progress",
+            "conclusion": null
+          },
+          "requiredGates": [
+            {
+              "jobId": 100,
+              "checkRunId": 100,
+              "checkSuiteId": 11,
+              "name": "Git Flow policy",
+              "status": "completed",
+              "conclusion": "success",
+              "runId": 10,
+              "runAttempt": 1,
+              "headSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "startedAt": "2026-07-17T23:58:00.000Z",
+              "completedAt": "2026-07-17T23:59:00.000Z",
+              "detailsUrl": "https://github.com/dazeGG/VoiceRoom/actions/runs/10/job/100"
+            },
+            {
+              "jobId": 101,
+              "checkRunId": 101,
+              "checkSuiteId": 11,
+              "name": "Lint, typecheck & build",
+              "status": "completed",
+              "conclusion": "success",
+              "runId": 10,
+              "runAttempt": 1,
+              "headSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "startedAt": "2026-07-17T23:58:00.000Z",
+              "completedAt": "2026-07-17T23:59:01.000Z",
+              "detailsUrl": "https://github.com/dazeGG/VoiceRoom/actions/runs/10/job/101"
+            },
+            {
+              "jobId": 102,
+              "checkRunId": 102,
+              "checkSuiteId": 11,
+              "name": "Tests",
+              "status": "completed",
+              "conclusion": "success",
+              "runId": 10,
+              "runAttempt": 1,
+              "headSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "startedAt": "2026-07-17T23:58:00.000Z",
+              "completedAt": "2026-07-17T23:59:02.000Z",
+              "detailsUrl": "https://github.com/dazeGG/VoiceRoom/actions/runs/10/job/102"
+            },
+            {
+              "jobId": 103,
+              "checkRunId": 103,
+              "checkSuiteId": 11,
+              "name": "G01 targeted bootstrap gate",
+              "status": "completed",
+              "conclusion": "success",
+              "runId": 10,
+              "runAttempt": 1,
+              "headSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "startedAt": "2026-07-17T23:58:00.000Z",
+              "completedAt": "2026-07-17T23:59:03.000Z",
+              "detailsUrl": "https://github.com/dazeGG/VoiceRoom/actions/runs/10/job/103"
+            }
+          ],
+          "verification": {
+            "targetedCommand": "python3 scripts/test/validate_release_250_plan.py docs/RELEASE_2.5.0_PLAN.md docs/RELEASE_2.5.0_TEST_SPEC.md && node --test scripts/test/g01-release-docs.test.mjs scripts/test/g01-oras-lock.test.mjs && node --test scripts/test/g01-landed-bootstrap-recovery.test.mjs && node scripts/evidence/recover-landed-bootstrap.mjs --fixture scripts/test/fixtures/g01-landed-bootstrap-recovery.json --validate-only && node scripts/evidence/validate-envelope.mjs --fixture bootstrap && scripts/ci/run-actionlint.sh .github/workflows/ci.yml && scripts/ci/run-oras.sh version",
+            "requiredJob": "bootstrap-plan",
+            "caseIds": [
+              "G01-A01",
+              "G01-A02"
+            ],
+            "fixturePaths": [
+              "scripts/test/fixtures/g01-landed-bootstrap-recovery.json"
+            ],
+            "proofLevel": "P3",
+            "repositoryCommands": [
+              "npm run check",
+              "TEST_DATABASE_URL=... npm test",
+              "npm run build"
+            ],
+            "reports": [
+              {
+                "path": "reports/actionlint.log",
+                "size": 1,
+                "sha256": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+                "producer": {
+                  "jobId": 103,
+                  "checkRunId": 103,
+                  "name": "G01 targeted bootstrap gate",
+                  "runId": 10,
+                  "runAttempt": 1,
+                  "headSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "producedAt": "2026-07-17T23:58:30.000Z",
+                  "completedAt": "2026-07-17T23:59:03.000Z"
+                }
+              },
+              {
+                "path": "reports/envelope-schema.log",
+                "size": 2,
+                "sha256": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+                "producer": {
+                  "jobId": 103,
+                  "checkRunId": 103,
+                  "name": "G01 targeted bootstrap gate",
+                  "runId": 10,
+                  "runAttempt": 1,
+                  "headSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "producedAt": "2026-07-17T23:58:30.000Z",
+                  "completedAt": "2026-07-17T23:59:03.000Z"
+                }
+              },
+              {
+                "path": "reports/g01-landed-bootstrap-recovery.tap",
+                "size": 3,
+                "sha256": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+                "producer": {
+                  "jobId": 103,
+                  "checkRunId": 103,
+                  "name": "G01 targeted bootstrap gate",
+                  "runId": 10,
+                  "runAttempt": 1,
+                  "headSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "producedAt": "2026-07-17T23:58:30.000Z",
+                  "completedAt": "2026-07-17T23:59:03.000Z"
+                }
+              },
+              {
+                "path": "reports/g01-release-docs.tap",
+                "size": 4,
+                "sha256": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+                "producer": {
+                  "jobId": 103,
+                  "checkRunId": 103,
+                  "name": "G01 targeted bootstrap gate",
+                  "runId": 10,
+                  "runAttempt": 1,
+                  "headSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "producedAt": "2026-07-17T23:58:30.000Z",
+                  "completedAt": "2026-07-17T23:59:03.000Z"
+                }
+              },
+              {
+                "path": "reports/oras.log",
+                "size": 5,
+                "sha256": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+                "producer": {
+                  "jobId": 103,
+                  "checkRunId": 103,
+                  "name": "G01 targeted bootstrap gate",
+                  "runId": 10,
+                  "runAttempt": 1,
+                  "headSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "producedAt": "2026-07-17T23:58:30.000Z",
+                  "completedAt": "2026-07-17T23:59:03.000Z"
+                }
+              },
+              {
+                "path": "reports/recovery-command.log",
+                "size": 6,
+                "sha256": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+                "producer": {
+                  "jobId": 103,
+                  "checkRunId": 103,
+                  "name": "G01 targeted bootstrap gate",
+                  "runId": 10,
+                  "runAttempt": 1,
+                  "headSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "producedAt": "2026-07-17T23:58:30.000Z",
+                  "completedAt": "2026-07-17T23:59:03.000Z"
+                }
+              },
+              {
+                "path": "reports/validate-release-plan.log",
+                "size": 7,
+                "sha256": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
+                "producer": {
+                  "jobId": 103,
+                  "checkRunId": 103,
+                  "name": "G01 targeted bootstrap gate",
+                  "runId": 10,
+                  "runAttempt": 1,
+                  "headSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "producedAt": "2026-07-17T23:58:30.000Z",
+                  "completedAt": "2026-07-17T23:59:03.000Z"
+                }
+              }
+            ],
+            "inputs": [
+              {
+                "path": ".github/workflows/ci.yml",
+                "size": 87191,
+                "sha256": "sha256:c2f84c72ba6e915e947a224bb481d7c1ebe1c6611ffc0dc78c850f9b56a4ea0c"
+              },
+              {
+                "path": "config/evidence/release-evidence-archive.v1.json",
+                "size": 501,
+                "sha256": "sha256:600a3b1a7fbb5752377192ff033d28ec6eefbea64199e1940055429e6576476f"
+              },
+              {
+                "path": "docs/RELEASE_2.5.0_PLAN.md",
+                "size": 319405,
+                "sha256": "sha256:8cf4559e71eae1f566fd880b29025317c1bae66547ca3dd67dfa310b56343375"
+              },
+              {
+                "path": "docs/RELEASE_2.5.0_TEST_SPEC.md",
+                "size": 195411,
+                "sha256": "sha256:d1df10539a16a3e4631c88ebf5f69dc1b119fae3b93bbf18b6fcd6dda2e9c32d"
+              },
+              {
+                "path": "docs/releases/2.5.0/evidence/schema/envelope.schema.json",
+                "size": 28640,
+                "sha256": "sha256:28442e30cdeffe5ef6b63a79c725104383b3c08b2aa4e05ee8f7fe7eb96de9ed"
+              }
+            ]
+          }
         },
         "f9": {
           "schemaVersion": 1,
@@ -477,7 +703,7 @@
               "runAttempt": 1,
               "headSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
               "archiveDigest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
-              "payloadDigest": "sha256:3523f20e61e1fd3498a775f21084844c90cb93eedba9a5c379dfc583e1af4f9d"
+              "payloadDigest": "sha256:dd94ddf8f2bbae3fd4086fb373522ea9b5fb05ae0b9daa355b7ea26fb8a23953"
             },
             "f9": {
               "artifactId": 2,
@@ -498,7 +724,7 @@
               "payloadDigest": "sha256:903a8cf4dca1513ac3aec38f5d3d0862801fc138f6b0a3e7aef6392ecf26de4e"
             }
           },
-          "selectionDigest": "sha256:dd5ef71c3c9387c2e333aa54cdb344ae2bddbb01671aab16fc43f44cb38e67b4"
+          "selectionDigest": "sha256:1d62684910ceeb9ed0e98c91881dcffe7e1741b88c7c1bff664f027fb3e91fd5"
         },
         "parentSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         "f7": {
@@ -511,7 +737,233 @@
           "digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
           "createdAt": "2026-07-18T00:00:00.000Z",
           "attemptId": "g01-recovery-a02",
-          "sourceBranch": "feature/2.5.0-g01-postmerge-bootstrap-a02"
+          "sourceBranch": "feature/2.5.0-g01-postmerge-bootstrap-a02",
+          "baseSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "producerRun": {
+            "id": 10,
+            "runAttempt": 1,
+            "checkSuiteId": 11,
+            "workflowId": 12,
+            "workflowName": "CI/CD",
+            "workflowPath": ".github/workflows/ci.yml",
+            "repository": "dazeGG/VoiceRoom",
+            "event": "pull_request",
+            "prNumber": 7,
+            "baseSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "headBranch": "feature/2.5.0-g01-postmerge-bootstrap-a02",
+            "headSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "status": "in_progress",
+            "conclusion": null
+          },
+          "requiredGates": [
+            {
+              "jobId": 100,
+              "checkRunId": 100,
+              "checkSuiteId": 11,
+              "name": "Git Flow policy",
+              "status": "completed",
+              "conclusion": "success",
+              "runId": 10,
+              "runAttempt": 1,
+              "headSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "startedAt": "2026-07-17T23:58:00.000Z",
+              "completedAt": "2026-07-17T23:59:00.000Z",
+              "detailsUrl": "https://github.com/dazeGG/VoiceRoom/actions/runs/10/job/100"
+            },
+            {
+              "jobId": 101,
+              "checkRunId": 101,
+              "checkSuiteId": 11,
+              "name": "Lint, typecheck & build",
+              "status": "completed",
+              "conclusion": "success",
+              "runId": 10,
+              "runAttempt": 1,
+              "headSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "startedAt": "2026-07-17T23:58:00.000Z",
+              "completedAt": "2026-07-17T23:59:01.000Z",
+              "detailsUrl": "https://github.com/dazeGG/VoiceRoom/actions/runs/10/job/101"
+            },
+            {
+              "jobId": 102,
+              "checkRunId": 102,
+              "checkSuiteId": 11,
+              "name": "Tests",
+              "status": "completed",
+              "conclusion": "success",
+              "runId": 10,
+              "runAttempt": 1,
+              "headSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "startedAt": "2026-07-17T23:58:00.000Z",
+              "completedAt": "2026-07-17T23:59:02.000Z",
+              "detailsUrl": "https://github.com/dazeGG/VoiceRoom/actions/runs/10/job/102"
+            },
+            {
+              "jobId": 103,
+              "checkRunId": 103,
+              "checkSuiteId": 11,
+              "name": "G01 targeted bootstrap gate",
+              "status": "completed",
+              "conclusion": "success",
+              "runId": 10,
+              "runAttempt": 1,
+              "headSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "startedAt": "2026-07-17T23:58:00.000Z",
+              "completedAt": "2026-07-17T23:59:03.000Z",
+              "detailsUrl": "https://github.com/dazeGG/VoiceRoom/actions/runs/10/job/103"
+            }
+          ],
+          "verification": {
+            "targetedCommand": "python3 scripts/test/validate_release_250_plan.py docs/RELEASE_2.5.0_PLAN.md docs/RELEASE_2.5.0_TEST_SPEC.md && node --test scripts/test/g01-release-docs.test.mjs scripts/test/g01-oras-lock.test.mjs && node --test scripts/test/g01-landed-bootstrap-recovery.test.mjs && node scripts/evidence/recover-landed-bootstrap.mjs --fixture scripts/test/fixtures/g01-landed-bootstrap-recovery.json --validate-only && node scripts/evidence/validate-envelope.mjs --fixture bootstrap && scripts/ci/run-actionlint.sh .github/workflows/ci.yml && scripts/ci/run-oras.sh version",
+            "requiredJob": "bootstrap-plan",
+            "caseIds": [
+              "G01-A01",
+              "G01-A02"
+            ],
+            "fixturePaths": [
+              "scripts/test/fixtures/g01-landed-bootstrap-recovery.json"
+            ],
+            "proofLevel": "P3",
+            "repositoryCommands": [
+              "npm run check",
+              "TEST_DATABASE_URL=... npm test",
+              "npm run build"
+            ],
+            "reports": [
+              {
+                "path": "reports/actionlint.log",
+                "size": 1,
+                "sha256": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+                "producer": {
+                  "jobId": 103,
+                  "checkRunId": 103,
+                  "name": "G01 targeted bootstrap gate",
+                  "runId": 10,
+                  "runAttempt": 1,
+                  "headSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "producedAt": "2026-07-17T23:58:30.000Z",
+                  "completedAt": "2026-07-17T23:59:03.000Z"
+                }
+              },
+              {
+                "path": "reports/envelope-schema.log",
+                "size": 2,
+                "sha256": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+                "producer": {
+                  "jobId": 103,
+                  "checkRunId": 103,
+                  "name": "G01 targeted bootstrap gate",
+                  "runId": 10,
+                  "runAttempt": 1,
+                  "headSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "producedAt": "2026-07-17T23:58:30.000Z",
+                  "completedAt": "2026-07-17T23:59:03.000Z"
+                }
+              },
+              {
+                "path": "reports/g01-landed-bootstrap-recovery.tap",
+                "size": 3,
+                "sha256": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+                "producer": {
+                  "jobId": 103,
+                  "checkRunId": 103,
+                  "name": "G01 targeted bootstrap gate",
+                  "runId": 10,
+                  "runAttempt": 1,
+                  "headSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "producedAt": "2026-07-17T23:58:30.000Z",
+                  "completedAt": "2026-07-17T23:59:03.000Z"
+                }
+              },
+              {
+                "path": "reports/g01-release-docs.tap",
+                "size": 4,
+                "sha256": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+                "producer": {
+                  "jobId": 103,
+                  "checkRunId": 103,
+                  "name": "G01 targeted bootstrap gate",
+                  "runId": 10,
+                  "runAttempt": 1,
+                  "headSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "producedAt": "2026-07-17T23:58:30.000Z",
+                  "completedAt": "2026-07-17T23:59:03.000Z"
+                }
+              },
+              {
+                "path": "reports/oras.log",
+                "size": 5,
+                "sha256": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+                "producer": {
+                  "jobId": 103,
+                  "checkRunId": 103,
+                  "name": "G01 targeted bootstrap gate",
+                  "runId": 10,
+                  "runAttempt": 1,
+                  "headSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "producedAt": "2026-07-17T23:58:30.000Z",
+                  "completedAt": "2026-07-17T23:59:03.000Z"
+                }
+              },
+              {
+                "path": "reports/recovery-command.log",
+                "size": 6,
+                "sha256": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+                "producer": {
+                  "jobId": 103,
+                  "checkRunId": 103,
+                  "name": "G01 targeted bootstrap gate",
+                  "runId": 10,
+                  "runAttempt": 1,
+                  "headSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "producedAt": "2026-07-17T23:58:30.000Z",
+                  "completedAt": "2026-07-17T23:59:03.000Z"
+                }
+              },
+              {
+                "path": "reports/validate-release-plan.log",
+                "size": 7,
+                "sha256": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
+                "producer": {
+                  "jobId": 103,
+                  "checkRunId": 103,
+                  "name": "G01 targeted bootstrap gate",
+                  "runId": 10,
+                  "runAttempt": 1,
+                  "headSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "producedAt": "2026-07-17T23:58:30.000Z",
+                  "completedAt": "2026-07-17T23:59:03.000Z"
+                }
+              }
+            ],
+            "inputs": [
+              {
+                "path": ".github/workflows/ci.yml",
+                "size": 87191,
+                "sha256": "sha256:c2f84c72ba6e915e947a224bb481d7c1ebe1c6611ffc0dc78c850f9b56a4ea0c"
+              },
+              {
+                "path": "config/evidence/release-evidence-archive.v1.json",
+                "size": 501,
+                "sha256": "sha256:600a3b1a7fbb5752377192ff033d28ec6eefbea64199e1940055429e6576476f"
+              },
+              {
+                "path": "docs/RELEASE_2.5.0_PLAN.md",
+                "size": 319405,
+                "sha256": "sha256:8cf4559e71eae1f566fd880b29025317c1bae66547ca3dd67dfa310b56343375"
+              },
+              {
+                "path": "docs/RELEASE_2.5.0_TEST_SPEC.md",
+                "size": 195411,
+                "sha256": "sha256:d1df10539a16a3e4631c88ebf5f69dc1b119fae3b93bbf18b6fcd6dda2e9c32d"
+              },
+              {
+                "path": "docs/releases/2.5.0/evidence/schema/envelope.schema.json",
+                "size": 28640,
+                "sha256": "sha256:28442e30cdeffe5ef6b63a79c725104383b3c08b2aa4e05ee8f7fe7eb96de9ed"
+              }
+            ]
+          }
         },
         "f9": {
           "schemaVersion": 1,
