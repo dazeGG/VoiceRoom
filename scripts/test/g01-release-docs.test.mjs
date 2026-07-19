@@ -722,6 +722,7 @@ test("workflow has reachable bounded premerge F9 and automatic merged-commit F11
   for (const token of ["early-f7.zip", "early-f9.zip", "selection-early-f7.zip", "selection-early-f9.zip", "early-producer-run.json", "G01_INLINE_RECORDER_START", "candidate-registry-report.g01.json", "payload count", "archive digest", "run_attempt", "recoveryLineage"]) assert.ok(post.includes(token), `checkout-free recorders must authenticate exact F7/F9 provenance: ${token}`);
   assert.match(post, /needs: \[check, test\][\s\S]*if: always\(\) && github\.event_name == 'push'/, "failed/cancelled dependencies must still run the landed-unsealed recorder");
   for (const token of ["premerge-ancestor-authorities.json", "premerge-ancestor-expected.json", "f9-ancestor.zip", "buildActivationCapture"]) assert.ok(workflow.includes(token), `missing premerge/replay proof: ${token}`);
+  assert.match(block, /r\.provenance\?\.producerRunId\?\?r\.runId/, "F9 must inspect a backfill ancestor through its authenticated producer run");
   assert.doesNotMatch(post, /Materialize landed-unsealed|fallback-prs\.json/, "checkout-dependent duplicate failure recorders are forbidden");
   for (const token of ["normalizedIdentities", "observedMax", "reconstructionDigest", "gh-api--paginate-completed-no-next-page"]) assert.ok(read("scripts/evidence/bootstrap-export.mjs").includes(token), `missing replayable activation field: ${token}`);
   assert.doesNotMatch(workflow, /workflow_dispatch|bootstrap_phase|bootstrap_f7_artifact_id|find \. -maxdepth 1 -name/);
