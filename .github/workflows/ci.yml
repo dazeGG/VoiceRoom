@@ -146,7 +146,7 @@ jobs:
           node -e 'const f=require("node:fs"),s=f.readFileSync("head-blobs.ndjson","utf8").trim();f.writeFileSync("head-blobs.json",JSON.stringify(s?s.split("\n").map(JSON.parse):[]))'
           attempt_id="$(node -p 'JSON.parse(require("node:fs").readFileSync("docs/releases/2.5.0/evidence/bootstrap-attempts.json")).preparedAuthority.attemptId')"
           gh api "repos/$GITHUB_REPOSITORY/commits/$SOURCE_SHA/statuses" > publication-statuses.json
-          ATTEMPT_ID="$attempt_id" node -e 'const f=require("node:fs"),rows=JSON.parse(f.readFileSync("publication-statuses.json")),match=rows.filter(x=>x.context===`g01/PUBLICATION/${process.env.ATTEMPT_ID}`&&x.sha===process.env.SOURCE_SHA);if(match.length!==1)throw Error("unique immutable publication status absent");f.writeFileSync("publication-status.json",JSON.stringify(match[0]))'
+          ATTEMPT_ID="$attempt_id" node -e 'const f=require("node:fs"),rows=JSON.parse(f.readFileSync("publication-statuses.json")),context="g01/PUBLICATION/"+process.env.ATTEMPT_ID,match=rows.filter(x=>x.context===context&&x.sha===process.env.SOURCE_SHA);if(match.length!==1)throw Error("unique immutable publication status absent");f.writeFileSync("publication-status.json",JSON.stringify(match[0]))'
           gh api --paginate "repos/$GITHUB_REPOSITORY/pulls?state=all&per_page=100" --slurp > pr-pages.json
           gh api --paginate "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?per_page=100" --slurp > run-pages.json
           gh api --paginate "repos/$GITHUB_REPOSITORY/actions/artifacts?per_page=100" --slurp > artifact-pages.json
