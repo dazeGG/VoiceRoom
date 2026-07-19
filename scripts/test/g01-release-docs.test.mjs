@@ -8,7 +8,7 @@ import { execFileSync } from "node:child_process";
 import Ajv2020 from "ajv/dist/2020.js";
 import addFormats from "ajv-formats";
 import { artifactName, buildAuthenticatedEarlyFailure, buildF9Envelope, buildF11Envelope, buildReviewComment, buildSelection, envelopePayloadDigest, parseReviewComment, selectCanonicalFailure, validateArtifactlessBackfillAuthority, validateBootstrapFailure, validateFallbackCandidatePair } from "../evidence/emit-bootstrap-selection.mjs";
-import { activateCandidateReport, buildActivationCapture, buildCandidateReport, buildF7Envelope as buildAuthenticatedF7Envelope, buildF7RepositoryGates, buildG01VerificationCatalog, prepareAndCreateBootstrapBranch, prepareBootstrapAuthority, reconstructNextOrdinal, validateRegistry } from "../evidence/bootstrap-export.mjs";
+import { activateCandidateReport, buildActivationCapture, buildCandidateReport, buildF7Envelope as buildAuthenticatedF7Envelope, buildF7RepositoryGates, buildG01VerificationCatalog, prepareAndCreateBootstrapBranch, prepareBootstrapAuthority, reconstructNextOrdinal, validateLivePublication, validateRegistry } from "../evidence/bootstrap-export.mjs";
 import { validateEnvelope } from "../evidence/validate-envelope.mjs";
 import { G01_WRITABLE } from "../evidence/recover-landed-bootstrap.mjs";
 
@@ -731,4 +731,17 @@ test("checkout-free recorder shell step executes no-op, discovers failure, downl
 
 test("authority bytes match approved handoff digest", () => {
   const hash = crypto.createHash("sha256").update(fs.readFileSync("docs/releases/2.5.0/evidence/archive-authority.json")).digest("hex"); assert.equal(hash, "553190685993cebd114b4ab13402085f053914fd4c2c26e793b466e0ebe3670f");
+});
+
+test("recovery publication accepts authenticated one-file delta and rejects hostile variants", () => {
+  const files = reviewedFiles(), HEAD = "a".repeat(40), BASE = "b".repeat(40), recovery = "feature/2.5.0-g01-postmerge-bootstrap-a20";
+  const entries = files.map(({ filename, mode, bytes }) => ({ path: filename, mode, sha: "c".repeat(40), sha256: `sha256:${crypto.createHash("sha256").update(bytes).digest("hex")}`, size: bytes.length }));
+  const headTree = { sha: "d".repeat(40), truncated: false, tree: entries.map(({ path, mode, sha }) => ({ path, mode, sha, type: "blob" })) }, baseTree = structuredClone(headTree); baseTree.sha = "e".repeat(40); baseTree.tree[0].sha = "f".repeat(40);
+  const prepared = { attemptId: "g01-recovery-a20", authorityDigest: digest("a"), replayRecord: { candidateTree: { reviewedBaseSha: BASE, reviewedHeadSha: HEAD, paths: entries } } };
+  const authority = { headTree, baseTree, headCommit: { sha: HEAD, commit: { tree: { sha: headTree.sha } } }, baseCommit: { sha: BASE, commit: { tree: { sha: baseTree.sha } } }, pr: { head: { sha: HEAD, ref: recovery }, base: { sha: BASE } }, headBlobs: entries.map(({ path, mode, sha, sha256, size }) => ({ path, mode, sha, sha256, size, encoding: "base64", content: Buffer.from(files.find((f) => f.filename === path).bytes).toString("base64") })) };
+  const bindStatus = (a) => { const head = new Map(a.headTree.tree.map((x) => [x.path, x])); const publication = { preparedAuthorityDigest: prepared.authorityDigest, reviewedBaseSha: BASE, reviewedHeadSha: HEAD, baseTreeSha: a.baseTree.sha, publishedTreeSha: a.headTree.sha, commitSha: HEAD, files: a.headBlobs.map(({ path, sha, sha256, size }) => ({ path, mode: head.get(path).mode, blobSha: sha, sha256, size })).sort((x, y) => x.path.localeCompare(y.path)) }; a.publicationStatus = { id: 1, headSha: HEAD, state: "success", context: `g01/PUBLICATION/g01-recovery-a20`, description: `G01_PUBLICATION ${compactDigest(publication)}` }; return a; };
+  assert.doesNotThrow(() => validateLivePublication(bindStatus(authority), prepared));
+  assert.throws(() => validateLivePublication(bindStatus({ ...structuredClone(authority), pr: { ...authority.pr, head: { ...authority.pr.head, ref: BRANCH } } }), prepared));
+  const hostilePath = structuredClone(authority); hostilePath.headTree.tree.push({ path: "README.md", mode: "100644", sha: "1".repeat(40), type: "blob" }); hostilePath.baseTree.tree.push({ path: "README.md", mode: "100644", sha: "2".repeat(40), type: "blob" }); hostilePath.headBlobs.push({ path: "README.md", mode: "100644", sha: "1".repeat(40), sha256: digest("1"), size: 1, encoding: "base64", content: "MQ==" }); assert.throws(() => validateLivePublication(bindStatus(hostilePath), prepared));
+  const mismatch = structuredClone(authority), mutated = Buffer.from("mutated-reviewed-file"), mutatedSha256 = `sha256:${crypto.createHash("sha256").update(mutated).digest("hex")}`, mutatedGitSha = crypto.createHash("sha1").update(`blob ${mutated.length}\0`).update(mutated).digest("hex"); mismatch.headBlobs[0].content = mutated.toString("base64"); mismatch.headBlobs[0].sha256 = mutatedSha256; mismatch.headBlobs[0].size = mutated.length; mismatch.headBlobs[0].sha = mutatedGitSha; mismatch.headTree.tree[0].sha = mutatedGitSha; assert.throws(() => validateLivePublication(bindStatus(mismatch), prepared), /prepared candidate (?:digest|size)/);
 });
