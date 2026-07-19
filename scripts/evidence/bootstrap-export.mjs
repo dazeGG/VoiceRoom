@@ -182,7 +182,7 @@ function validateAbandonmentAuthority(repository, authority) {
   assert.match(authority.record.attemptId, /^g01-(?:recovery-)?a[0-9]{2,}$/); assert.match(authority.record.headSha, SHA); assert.match(authority.digest, DIGEST);
   assert.equal(authority.digest, hashJson(authority.record), "abandonment record digest mismatch");
   assert.ok(Number.isInteger(authority.status?.id) && authority.status.id > 0, "immutable abandonment status ID is required");
-  assert.equal(authority.status.sha, authority.record.headSha); assert.equal(authority.status.state, "error");
+  assert.equal(authority.status.headSha, authority.record.headSha); assert.equal(authority.status.state, "error");
   assert.equal(authority.status.context, `g01/ABANDONED_PREMERGE/${authority.record.attemptId}`);
   assert.equal(authority.status.description, `ABANDONED_PREMERGE ${authority.digest}`);
   return authority;
@@ -382,7 +382,7 @@ export async function prepareAndCreateBootstrapBranch({ api, repository, registr
           const attemptId = status.context?.match(/^g01\/ABANDONED_PREMERGE\/(g01-(?:recovery-)?a[0-9]{2,})$/)?.[1];
           if (!attemptId) continue;
           const record = abandonmentCore(repository, pr, attemptId), digest = hashJson(record);
-          if (status.description === `ABANDONED_PREMERGE ${digest}`) abandonmentAuthorities.push({ record, digest, status });
+          if (status.description === `ABANDONED_PREMERGE ${digest}`) abandonmentAuthorities.push({ record, digest, status: { ...status, headSha: pr.head.sha } });
         }
       }
     }
@@ -406,7 +406,8 @@ export async function prepareAndCreateBootstrapBranch({ api, repository, registr
       const created = await api.createCommitStatus(pr.head.sha, { state: "error", context: `g01/ABANDONED_PREMERGE/${attemptId}`, description: `ABANDONED_PREMERGE ${digest}`, target_url: pr.html_url });
       assert.ok(Number.isInteger(created?.id) && created.id > 0, "ABANDONED_PREMERGE status creation must return an immutable ID");
       const reread = await api.listCommitStatuses(pr.head.sha);
-      const persisted = reread.find((status) => status.id === created.id);
+      const persistedRaw = reread.find((status) => status.id === created.id);
+      const persisted = persistedRaw && { ...persistedRaw, headSha: pr.head.sha };
       assert.ok(persisted, "ABANDONED_PREMERGE status must be re-read before cleanup");
       validateAbandonmentAuthority(repository, { record, digest, status: persisted });
     }
@@ -473,9 +474,10 @@ export async function prepareAndCreateBootstrapBranch({ api, repository, registr
   publicationAuthority.digest = hashJson(publicationAuthority);
   assert.equal(typeof api.createCommitStatus, "function", "immutable publication status writer is required");
   const createdPublicationStatus = await api.createCommitStatus(commit.sha, { state: "success", context: `g01/PUBLICATION/${prepared.attemptId}`, description: `G01_PUBLICATION ${publicationAuthority.digest}` });
-  const publicationStatus = (await api.listCommitStatuses(commit.sha)).find((status) => status.id === createdPublicationStatus.id);
+  const publicationStatusRaw = (await api.listCommitStatuses(commit.sha)).find((status) => status.id === createdPublicationStatus.id);
+  const publicationStatus = publicationStatusRaw && { ...publicationStatusRaw, headSha: commit.sha };
   assert.ok(publicationStatus, "immutable publication status must be re-read before preparation completes");
-  assert.equal(publicationStatus.sha, commit.sha); assert.equal(publicationStatus.context, `g01/PUBLICATION/${prepared.attemptId}`); assert.equal(publicationStatus.description, `G01_PUBLICATION ${publicationAuthority.digest}`);
+  assert.equal(publicationStatus.headSha, commit.sha); assert.equal(publicationStatus.context, `g01/PUBLICATION/${prepared.attemptId}`); assert.equal(publicationStatus.description, `G01_PUBLICATION ${publicationAuthority.digest}`);
   publicationAuthority.status = publicationStatus;
   return { prepared, publicationAuthority, commit, tree, registries: { attempts, recoveries } };
 }
@@ -603,7 +605,7 @@ function validateLivePublication(authority, prepared) {
   const publicationAuthority = { preparedAuthorityDigest: prepared.authorityDigest, reviewedBaseSha: prepared.replayRecord.candidateTree.reviewedBaseSha, reviewedHeadSha: prepared.replayRecord.candidateTree.reviewedHeadSha, baseTreeSha: authority.baseTree.sha, publishedTreeSha: authority.headTree.sha, commitSha: authority.pr.head.sha, files: authority.headBlobs.map(({ path, sha, sha256, size }) => ({ path, blobSha: sha, sha256, size })).sort((a, b) => a.path.localeCompare(b.path)) };
   publicationAuthority.digest = hashJson(publicationAuthority);
   const status = authority.publicationStatus;
-  assert.ok(Number.isInteger(status?.id) && status.id > 0, "immutable publication status ID is required"); assert.equal(status.sha, authority.pr.head.sha); assert.equal(status.state, "success");
+  assert.ok(Number.isInteger(status?.id) && status.id > 0, "immutable publication status ID is required"); assert.equal(status.headSha, authority.pr.head.sha); assert.equal(status.state, "success");
   assert.equal(status.context, `g01/PUBLICATION/${prepared.attemptId}`); assert.equal(status.description, `G01_PUBLICATION ${publicationAuthority.digest}`, "live publication authority digest mismatch");
 }
 
