@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "attemptId": {
+      "pattern": "^g01-a[0-9]{2,}$",
+      "type": "string"
+    },
+    "authorityDigest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "baseSha": {
+      "pattern": "^[0-9a-f]{40}$",
+      "type": "string"
+    },
+    "branch": {
+      "const": "feature/2.5.0-g01-canonical-evidence-bootstrap"
+    },
+    "firstAuthoritativeId": {
+      "oneOf": [
+        {
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "minimum": 1,
+          "type": "integer"
+        }
+      ]
+    },
+    "headSha": {
+      "pattern": "^[0-9a-f]{40}$",
+      "type": "string"
+    },
+    "parentSha": {
+      "pattern": "^[0-9a-f]{40}$",
+      "type": "string"
+    },
+    "planSpecPairDigest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "ordinal": {
+      "minimum": 1,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "attemptId",
+    "ordinal",
+    "branch",
+    "headSha",
+    "baseSha",
+    "parentSha",
+    "authorityDigest",
+    "planSpecPairDigest",
+    "firstAuthoritativeId"
+  ],
+  "type": "object",
+  "$comment": "Deterministically generated structural suffix-parity cases for zero-padded G01 ordinals 01..99; update via the parity generator contract in scripts/test/g01-release-docs.test.mjs."
+}
