@@ -232,10 +232,17 @@ export function prepareBootstrapAuthority(candidateReport, authority) {
   const finalObservedMax = Math.max(observedMax, ...abandonmentAuthorities.map((item) => Number(item.record.attemptId.match(/[0-9]+$/)[0])));
   const nextOrdinal = finalObservedMax + 1;
   const suffix = ordinalId(nextOrdinal);
-  const recoveryRequired = authority.artifactPages.flatMap((page) => page.artifacts ?? []).some((artifact) => {
+  const artifacts = authority.artifactPages.flatMap((page) => page.artifacts ?? []);
+  const landedCanonicalShas = new Set(canonicalPrs.filter((pr) => pr.merged_at).map((pr) => pr.merge_commit_sha));
+  const latestFailureOrdinal = Math.max(0, ...artifacts.flatMap((artifact) => {
     const match = artifact.name?.match(/^g01-bootstrap-failure-g01-(?:recovery-)?a([0-9]{2,})-run-[0-9]+-attempt-[0-9]+-head-([0-9a-f]{40})-phase-(?:f11|selection)$/);
-    return match && Number(match[1]) === finalObservedMax && artifact.expired !== true;
-  });
+    return match && artifact.expired !== true && landedCanonicalShas.has(match[2]) ? [Number(match[1])] : [];
+  }));
+  const latestSelectionOrdinal = Math.max(0, ...artifacts.flatMap((artifact) => {
+    const match = artifact.name?.match(/^g01-selection-(?:g01-)?(?:recovery-)?a([0-9]{2,})-run-[0-9]+-attempt-[0-9]+-head-([0-9a-f]{40})$/);
+    return match && landedCanonicalShas.has(match[2]) ? [Number(match[1])] : [];
+  }));
+  const recoveryRequired = latestFailureOrdinal > latestSelectionOrdinal;
   const illegalDirect = recoveryRequired && refBranches.includes("feature/2.5.0-g01-canonical-evidence-bootstrap");
   if (illegalDirect) conflicts.push(1);
   const attemptId = recoveryRequired ? `g01-recovery-a${suffix}` : `g01-a${suffix}`;
