@@ -1,0 +1,226 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "f7Gate": {
+      "additionalProperties": false,
+      "properties": {
+        "jobId": { "minimum": 1, "type": "integer" }, "checkRunId": { "minimum": 1, "type": "integer" }, "checkSuiteId": { "minimum": 1, "type": "integer" },
+        "name": { "enum": ["Git Flow policy", "Lint, typecheck & build", "Tests", "G01 targeted bootstrap gate"] }, "status": { "const": "completed" }, "conclusion": { "const": "success" },
+        "runId": { "minimum": 1, "type": "integer" }, "runAttempt": { "minimum": 1, "type": "integer" }, "headSha": { "pattern": "^[0-9a-f]{40}$", "type": "string" },
+        "startedAt": { "format": "date-time", "type": "string" }, "completedAt": { "format": "date-time", "type": "string" }, "detailsUrl": { "format": "uri", "type": "string" }
+      },
+      "required": ["jobId", "checkRunId", "checkSuiteId", "name", "status", "conclusion", "runId", "runAttempt", "headSha", "startedAt", "completedAt", "detailsUrl"], "type": "object"
+    },
+    "f7ProducerRun": {
+      "additionalProperties": false,
+      "properties": {
+        "id": { "minimum": 1, "type": "integer" }, "runAttempt": { "minimum": 1, "type": "integer" }, "checkSuiteId": { "minimum": 1, "type": "integer" }, "workflowId": { "minimum": 1, "type": "integer" },
+        "workflowName": { "const": "CI/CD" }, "workflowPath": { "const": ".github/workflows/ci.yml" }, "repository": { "pattern": "^[^/]+/[^/]+$", "type": "string" }, "event": { "const": "pull_request" },
+        "prNumber": { "minimum": 1, "type": "integer" }, "baseSha": { "pattern": "^[0-9a-f]{40}$", "type": "string" }, "headBranch": { "pattern": "^feature/2\\.5\\.0-g01-(canonical-evidence-bootstrap|postmerge-bootstrap-a(?:0[2-9]|[1-9][0-9]+))$", "type": "string" }, "headSha": { "pattern": "^[0-9a-f]{40}$", "type": "string" },
+        "status": { "const": "in_progress" }, "conclusion": { "const": null }
+      },
+      "required": ["id", "runAttempt", "checkSuiteId", "workflowId", "workflowName", "workflowPath", "repository", "event", "prNumber", "baseSha", "headBranch", "headSha", "status", "conclusion"], "type": "object"
+    },
+    "f7File": {
+      "additionalProperties": false,
+      "properties": { "path": { "minLength": 1, "type": "string" }, "size": { "minimum": 0, "type": "integer" }, "sha256": { "pattern": "^sha256:[0-9a-f]{64}$", "type": "string" } },
+      "required": ["path", "size", "sha256"], "type": "object"
+    },
+    "f7Report": {
+      "additionalProperties": false,
+      "properties": {
+        "path": { "minLength": 1, "type": "string" }, "size": { "minimum": 0, "type": "integer" }, "sha256": { "pattern": "^sha256:[0-9a-f]{64}$", "type": "string" },
+        "producer": { "additionalProperties": false, "properties": { "jobId": { "minimum": 1, "type": "integer" }, "checkRunId": { "minimum": 1, "type": "integer" }, "name": { "const": "G01 targeted bootstrap gate" }, "runId": { "minimum": 1, "type": "integer" }, "runAttempt": { "minimum": 1, "type": "integer" }, "headSha": { "pattern": "^[0-9a-f]{40}$", "type": "string" }, "producedAt": { "format": "date-time", "type": "string" }, "completedAt": { "format": "date-time", "type": "string" } }, "required": ["jobId", "checkRunId", "name", "runId", "runAttempt", "headSha", "producedAt", "completedAt"], "type": "object" }
+      },
+      "required": ["path", "size", "sha256", "producer"], "type": "object"
+    },
+    "f7Verification": {
+      "additionalProperties": false,
+      "properties": {
+        "targetedCommand": { "const": "python3 scripts/test/validate_release_250_plan.py docs/RELEASE_2.5.0_PLAN.md docs/RELEASE_2.5.0_TEST_SPEC.md && node --test scripts/test/g01-release-docs.test.mjs scripts/test/g01-oras-lock.test.mjs && node --test scripts/test/g01-landed-bootstrap-recovery.test.mjs && node scripts/evidence/recover-landed-bootstrap.mjs --fixture scripts/test/fixtures/g01-landed-bootstrap-recovery.json --validate-only && node scripts/evidence/validate-envelope.mjs --fixture bootstrap && scripts/ci/run-actionlint.sh .github/workflows/ci.yml && scripts/ci/run-oras.sh version" },
+        "requiredJob": { "const": "bootstrap-plan" }, "caseIds": { "const": ["G01-A01", "G01-A02"] }, "fixturePaths": { "const": ["scripts/test/fixtures/g01-landed-bootstrap-recovery.json"] }, "proofLevel": { "const": "P3" },
+        "repositoryCommands": { "const": ["npm run check", "TEST_DATABASE_URL=... npm test", "npm run build"] },
+        "reports": { "items": false, "minItems": 7, "maxItems": 7, "prefixItems": [
+          { "allOf": [{ "$ref": "#/$defs/f7Report" }, { "properties": { "path": { "const": "reports/actionlint.log" } }, "type": "object" }] }, { "allOf": [{ "$ref": "#/$defs/f7Report" }, { "properties": { "path": { "const": "reports/envelope-schema.log" } }, "type": "object" }] },
+          { "allOf": [{ "$ref": "#/$defs/f7Report" }, { "properties": { "path": { "const": "reports/g01-landed-bootstrap-recovery.tap" } }, "type": "object" }] }, { "allOf": [{ "$ref": "#/$defs/f7Report" }, { "properties": { "path": { "const": "reports/g01-release-docs.tap" } }, "type": "object" }] },
+          { "allOf": [{ "$ref": "#/$defs/f7Report" }, { "properties": { "path": { "const": "reports/oras.log" } }, "type": "object" }] }, { "allOf": [{ "$ref": "#/$defs/f7Report" }, { "properties": { "path": { "const": "reports/recovery-command.log" } }, "type": "object" }] },
+          { "allOf": [{ "$ref": "#/$defs/f7Report" }, { "properties": { "path": { "const": "reports/validate-release-plan.log" } }, "type": "object" }] }
+        ], "type": "array" },
+        "inputs": { "items": false, "minItems": 5, "maxItems": 5, "prefixItems": [
+          { "allOf": [{ "$ref": "#/$defs/f7File" }, { "properties": { "path": { "const": ".github/workflows/ci.yml" } }, "type": "object" }] }, { "allOf": [{ "$ref": "#/$defs/f7File" }, { "properties": { "path": { "const": "config/evidence/release-evidence-archive.v1.json" } }, "type": "object" }] },
+          { "allOf": [{ "$ref": "#/$defs/f7File" }, { "properties": { "path": { "const": "docs/RELEASE_2.5.0_PLAN.md" } }, "type": "object" }] }, { "allOf": [{ "$ref": "#/$defs/f7File" }, { "properties": { "path": { "const": "docs/RELEASE_2.5.0_TEST_SPEC.md" } }, "type": "object" }] },
+          { "allOf": [{ "$ref": "#/$defs/f7File" }, { "properties": { "path": { "const": "docs/releases/2.5.0/evidence/schema/envelope.schema.json" } }, "type": "object" }] }
+        ], "type": "array" }
+      },
+      "required": ["targetedCommand", "requiredJob", "caseIds", "fixturePaths", "proofLevel", "repositoryCommands", "reports", "inputs"], "type": "object"
+    },
+    "job": {
+      "additionalProperties": false,
+      "properties": {
+        "conclusion": { "const": "success" },
+        "headSha": { "pattern": "^[0-9a-f]{40}$", "type": "string" },
+        "id": { "minimum": 1, "type": "integer" },
+        "name": { "enum": ["Lint, typecheck & build", "Tests"] },
+        "runAttempt": { "minimum": 1, "type": "integer" },
+        "runId": { "minimum": 1, "type": "integer" },
+        "status": { "const": "completed" }
+      },
+      "required": ["id", "name", "status", "conclusion", "runId", "runAttempt", "headSha"],
+      "type": "object"
+    },
+    "postMergeRun": {
+      "additionalProperties": false,
+      "properties": {
+        "checkSuiteId": { "minimum": 1, "type": "integer" },
+        "event": { "const": "push" },
+        "headBranch": { "const": "develop" },
+        "headSha": { "pattern": "^[0-9a-f]{40}$", "type": "string" },
+        "id": { "minimum": 1, "type": "integer" },
+        "repository": { "pattern": "^[^/]+/[^/]+$", "type": "string" },
+        "requiredJobs": {
+          "allOf": [
+            { "contains": { "properties": { "name": { "const": "Lint, typecheck & build" } }, "required": ["name"], "type": "object" }, "maxContains": 1, "minContains": 1 },
+            { "contains": { "properties": { "name": { "const": "Tests" } }, "required": ["name"], "type": "object" }, "maxContains": 1, "minContains": 1 }
+          ],
+          "items": { "$ref": "#/$defs/job" }, "maxItems": 2, "minItems": 2, "type": "array"
+        },
+        "runAttempt": { "minimum": 1, "type": "integer" },
+        "workflowId": { "minimum": 1, "type": "integer" },
+        "workflowName": { "const": "CI/CD" },
+        "workflowPath": { "const": ".github/workflows/ci.yml" }
+      },
+      "required": ["id", "runAttempt", "checkSuiteId", "workflowId", "workflowName", "workflowPath", "repository", "event", "headBranch", "headSha", "requiredJobs"],
+      "type": "object"
+    },
+    "parentReference": {
+      "additionalProperties": false,
+      "properties": {
+        "commentId": { "minimum": 1, "type": "integer" },
+        "outputDigest": { "pattern": "^sha256:[0-9a-f]{64}$", "type": "string" },
+        "role": { "enum": ["code-reviewer", "architect"] }
+      },
+      "required": ["role", "commentId", "outputDigest"],
+      "type": "object"
+    },
+    "review": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": { "properties": { "role": { "const": "architect" } }, "required": ["role"] },
+          "then": { "properties": { "verdict": { "const": "CLEAR" } } }
+        },
+        {
+          "if": { "properties": { "role": { "enum": ["code-reviewer", "verifier"] } }, "required": ["role"] },
+          "then": { "properties": { "verdict": { "const": "APPROVE" } } }
+        },
+        {
+          "if": { "properties": { "role": { "const": "verifier" } }, "required": ["role"] },
+          "then": { "properties": { "parentReferences": { "items": false, "maxItems": 2, "minItems": 2, "prefixItems": [
+            { "allOf": [{ "$ref": "#/$defs/parentReference" }, { "properties": { "role": { "const": "code-reviewer" } }, "type": "object" }] },
+            { "allOf": [{ "$ref": "#/$defs/parentReference" }, { "properties": { "role": { "const": "architect" } }, "type": "object" }] }
+          ], "type": "array" } } },
+          "else": { "properties": { "parentReferences": { "maxItems": 0, "type": "array" } } }
+        }
+      ],
+      "properties": {
+        "actorId": { "minimum": 1, "type": "integer" },
+        "attemptId": { "pattern": "^g01-(a|recovery-a)[0-9]{2,}$", "type": "string" },
+        "authorAssociation": { "enum": ["OWNER", "MEMBER", "COLLABORATOR"] },
+        "commentId": { "minimum": 1, "type": "integer" },
+        "createdAt": { "format": "date-time", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$", "type": "string" },
+        "f7ArchiveDigest": { "pattern": "^sha256:[0-9a-f]{64}$", "type": "string" },
+        "f7ArtifactId": { "minimum": 1, "type": "integer" },
+        "f7ArtifactName": { "minLength": 1, "type": "string" },
+        "f7Digest": { "pattern": "^sha256:[0-9a-f]{64}$", "type": "string" },
+        "f7PayloadDigest": { "pattern": "^sha256:[0-9a-f]{64}$", "type": "string" },
+        "headSha": { "pattern": "^[0-9a-f]{40}$", "type": "string" },
+        "kind": { "const": "g01-native-review" },
+        "laneId": { "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$", "type": "string" },
+        "nodeId": { "minLength": 1, "type": "string" },
+        "output": { "maxLength": 48000, "minLength": 1, "type": "string" },
+        "outputDigest": { "pattern": "^sha256:[0-9a-f]{64}$", "type": "string" },
+        "parentReferences": { "type": "array" },
+        "prNumber": { "minimum": 1, "type": "integer" },
+        "repository": { "pattern": "^[^/]+/[^/]+$", "type": "string" },
+        "role": { "enum": ["code-reviewer", "architect", "verifier"] },
+        "schemaVersion": { "const": 1 },
+        "verdict": { "enum": ["APPROVE", "CLEAR"] }
+      },
+      "required": ["schemaVersion", "kind", "role", "verdict", "repository", "prNumber", "headSha", "attemptId", "f7ArtifactId", "f7ArtifactName", "f7ArchiveDigest", "f7PayloadDigest", "f7Digest", "laneId", "output", "outputDigest", "parentReferences", "commentId", "nodeId", "actorId", "authorAssociation", "createdAt"],
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": { "properties": { "phase": { "const": "F7" } }, "required": ["phase"] },
+      "then": {
+        "properties": {
+          "evidenceId": { "pattern": "^ci-bundle\\.(g01|bootstrap-recovery-a(?:0[2-9]|[1-9][0-9]+))\\.json$", "type": "string" },
+          "baseSha": {}, "producerRun": {}, "requiredGates": {}, "verification": {},
+          "f7Digest": false, "f9Digest": false, "mergeSha": false, "terminalDevelopSha": false, "remoteDeleted": false, "mergedAt": false, "remoteDeletionObservedAt": false, "prNumber": false, "postMergeRun": false, "reviewObjects": false
+        },
+        "required": ["baseSha", "producerRun", "requiredGates", "verification"]
+      }
+    },
+    {
+      "if": { "properties": { "phase": { "const": "F9" } }, "required": ["phase"] },
+      "then": {
+        "properties": {
+          "evidenceId": { "pattern": "^approval-envelope\\.(g01|bootstrap-recovery-a(?:0[2-9]|[1-9][0-9]+))\\.json$", "type": "string" },
+          "baseSha": false, "producerRun": false, "requiredGates": false, "verification": false,
+          "f9Digest": false, "mergeSha": false, "terminalDevelopSha": false, "remoteDeleted": false, "mergedAt": false, "remoteDeletionObservedAt": false, "prNumber": false, "postMergeRun": false
+        },
+        "required": ["f7Digest", "reviewObjects"]
+      }
+    },
+    {
+      "if": { "properties": { "phase": { "const": "F11" } }, "required": ["phase"] },
+      "then": {
+        "properties": {
+          "evidenceId": { "pattern": "^merge-envelope\\.(g01|bootstrap-recovery-a(?:0[2-9]|[1-9][0-9]+))\\.json$", "type": "string" },
+          "baseSha": false, "producerRun": false, "requiredGates": false, "verification": false, "reviewObjects": false
+        },
+        "required": ["f7Digest", "f9Digest", "mergeSha", "terminalDevelopSha", "remoteDeleted", "mergedAt", "remoteDeletionObservedAt", "prNumber", "postMergeRun"]
+      }
+    }
+  ],
+  "properties": {
+    "attemptId": { "pattern": "^g01-(a|recovery-a)[0-9]{2,}$", "type": "string" },
+    "baseSha": { "pattern": "^[0-9a-f]{40}$", "type": "string" },
+    "createdAt": { "format": "date-time", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$", "type": "string" },
+    "digest": { "pattern": "^sha256:[0-9a-f]{64}$", "type": "string" },
+    "evidenceId": { "pattern": "^(ci-bundle|approval-envelope|merge-envelope)\\.(g01|bootstrap-recovery-a(?:0[2-9]|[1-9][0-9]+))\\.json$", "type": "string" },
+    "f7Digest": { "pattern": "^sha256:[0-9a-f]{64}$", "type": "string" },
+    "f9Digest": { "pattern": "^sha256:[0-9a-f]{64}$", "type": "string" },
+    "goal": { "const": "G01" },
+    "mergedAt": { "format": "date-time", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$", "type": "string" },
+    "mergeSha": { "pattern": "^[0-9a-f]{40}$", "type": "string" },
+    "phase": { "enum": ["F7", "F9", "F11"] },
+    "postMergeRun": { "$ref": "#/$defs/postMergeRun" },
+    "producerRun": { "$ref": "#/$defs/f7ProducerRun" },
+    "prNumber": { "minimum": 1, "type": "integer" },
+    "remoteDeleted": { "const": true },
+    "remoteDeletionObservedAt": { "format": "date-time", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$", "type": "string" },
+    "reviewObjects": {
+      "allOf": [
+        { "contains": { "properties": { "role": { "const": "code-reviewer" } }, "required": ["role"], "type": "object" }, "maxContains": 1, "minContains": 1 },
+        { "contains": { "properties": { "role": { "const": "architect" } }, "required": ["role"], "type": "object" }, "maxContains": 1, "minContains": 1 },
+        { "contains": { "properties": { "role": { "const": "verifier" } }, "required": ["role"], "type": "object" }, "maxContains": 1, "minContains": 1 }
+      ],
+      "items": { "$ref": "#/$defs/review" }, "maxItems": 3, "minItems": 3, "type": "array"
+    },
+    "requiredGates": { "items": false, "minItems": 4, "maxItems": 4, "prefixItems": [
+      { "allOf": [{ "$ref": "#/$defs/f7Gate" }, { "properties": { "name": { "const": "Git Flow policy" } }, "type": "object" }] }, { "allOf": [{ "$ref": "#/$defs/f7Gate" }, { "properties": { "name": { "const": "Lint, typecheck & build" } }, "type": "object" }] },
+      { "allOf": [{ "$ref": "#/$defs/f7Gate" }, { "properties": { "name": { "const": "Tests" } }, "type": "object" }] }, { "allOf": [{ "$ref": "#/$defs/f7Gate" }, { "properties": { "name": { "const": "G01 targeted bootstrap gate" } }, "type": "object" }] }
+    ], "type": "array" },
+    "schemaVersion": { "const": 1 },
+    "sourceBranch": { "pattern": "^feature/2\\.5\\.0-g01-(canonical-evidence-bootstrap|postmerge-bootstrap-a(?:0[2-9]|[1-9][0-9]+))$", "type": "string" },
+    "sourceSha": { "pattern": "^[0-9a-f]{40}$", "type": "string" },
+    "status": { "const": "GREEN" },
+    "terminalDevelopSha": { "pattern": "^[0-9a-f]{40}$", "type": "string" },
+    "verification": { "$ref": "#/$defs/f7Verification" }
+  },
+  "required": ["schemaVersion", "goal", "phase", "status", "evidenceId", "attemptId", "sourceBranch", "sourceSha", "digest", "createdAt"],
+  "type": "object"
+}
