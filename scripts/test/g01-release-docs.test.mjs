@@ -398,6 +398,18 @@ test("selection CLI emits compact JSON with one real LF", () => {
   } finally { fs.rmSync(directory, { recursive: true, force: true }); }
 });
 
+test("CI executes the exported G01 writable manifest directly", () => {
+  const workflow = JSON.parse(execFileSync("python3", ["-c", "import json,yaml; print(json.dumps(yaml.safe_load(open('.github/workflows/ci.yml'))))"]));
+  const script = workflow.jobs["bootstrap-plan"].steps.find((step) => step.name === "Atomically derive current attempt from complete GitHub history and emit F7")?.run;
+  assert.ok(script, "G01 F7 workflow step must exist");
+  const line = script.split("\n").map((entry) => entry.trim()).find((entry) => entry.endsWith("> g01-head-blob-paths.txt"));
+  assert.ok(line, "CI G01 manifest command must exist");
+  const command = line.match(/^(node .+?) > g01-head-blob-paths\.txt$/)?.[1];
+  assert.ok(command, "CI G01 manifest command must be extractable without rewriting it");
+  const output = execFileSync("bash", ["-c", command], { encoding: "utf8" }).trimEnd().split("\n");
+  assert.deepEqual(output, G01_WRITABLE);
+});
+
 test("workflow has reachable bounded premerge F9 and automatic merged-commit F11/selection with authenticated provenance", () => {
   const workflow = read(".github/workflows/ci.yml"); const block = workflow.slice(workflow.indexOf("  bootstrap-plan:"), workflow.indexOf("\n  bootstrap-postmerge:"));
   assert.match(block, /github\.event_name == 'pull_request'/); assert.match(block, /head\.repo\.full_name == github\.repository/); assert.match(block, /environment: g01-bootstrap-approval-authority/); assert.match(block, /timeout-minutes: 45/); assert.match(block, /sleep 20/); assert.match(block, /--source-branch "\$SOURCE_BRANCH"/); assert.match(block, /OMX_G01_CODE_REVIEWER_ID/);

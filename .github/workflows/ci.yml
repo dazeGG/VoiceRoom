@@ -134,7 +134,7 @@ jobs:
           BASE_SHA="$(node -p 'JSON.parse(require("node:fs").readFileSync("pr.json")).base.sha')"
           gh api "repos/$GITHUB_REPOSITORY/git/trees/$SOURCE_SHA?recursive=1" > head-tree.json
           gh api "repos/$GITHUB_REPOSITORY/git/trees/$BASE_SHA?recursive=1" > base-tree.json
-          node -e 'const f=require("node:fs"),s=f.readFileSync("scripts/evidence/recover-landed-bootstrap.mjs","utf8"),m=s.match(/export const G01_WRITABLE = (\[[\s\S]*?\]);/);if(!m)throw Error("literal G01 manifest absent");for(const p of JSON.parse(m[1]))console.log(p)' > g01-head-blob-paths.txt
+          node --input-type=module -e 'import { G01_WRITABLE } from "./scripts/evidence/recover-landed-bootstrap.mjs"; for (const path of G01_WRITABLE) console.log(path)' > g01-head-blob-paths.txt
           : > head-blobs.ndjson
           while IFS= read -r path; do
             blob_sha="$(PATH_NAME="$path" node -p 'JSON.parse(require("node:fs").readFileSync("head-tree.json")).tree.find(x=>x.path===process.env.PATH_NAME&&x.type==="blob")?.sha||""')"; test -n "$blob_sha"
