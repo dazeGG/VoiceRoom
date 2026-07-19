@@ -265,6 +265,43 @@ test("pre-branch preparation reconstructs without consuming ordinals and fails c
   const afterLost = prepareBootstrapAuthority(tracked, lost);
   assert.equal(afterLost.nextOrdinal, 13); assert.deepEqual(afterLost.replayRecord.expiredArtifactOrdinals, [12]);
 
+  const landedUnsealed = structuredClone(empty);
+  const landedHead = "e".repeat(40), landedMerge = "a".repeat(40), landedPr = { ...pr({ head: landedHead, merge: landedMerge, state: "closed" }), id: 19, number: 19, node_id: "PR19" };
+  landedUnsealed.prPages = [[landedPr]];
+  landedUnsealed.runPages[0].workflow_runs.push(run(19, landedHead, BRANCH, "pull_request", "completed", "success", 1));
+  landedUnsealed.artifactPages[0].artifacts.push(
+    { id: 18, name: `g01-candidate-g01-a19-run-19-attempt-1-head-${landedHead}`, expired: false, workflow_run: { id: 19 } },
+    { id: 19, name: `g01-bootstrap-failure-g01-a19-run-119-attempt-1-head-${landedMerge}-phase-f11`, expired: false, workflow_run: { id: 119 } },
+    { id: 20, name: `g01-bootstrap-preparation-g01-recovery-a20-run-20-attempt-1-head-${"b".repeat(40)}`, expired: false, workflow_run: { id: 20 } },
+    { id: 21, name: `g01-bootstrap-preparation-g01-recovery-a21-run-21-attempt-1-head-${"c".repeat(40)}`, expired: false, workflow_run: { id: 21 } },
+  );
+  const recoveryAfterInterveningAttempts = prepareBootstrapAuthority(tracked, landedUnsealed);
+  assert.equal(recoveryAfterInterveningAttempts.nextOrdinal, 22);
+  assert.equal(recoveryAfterInterveningAttempts.attemptId, "g01-recovery-a22");
+  assert.equal(recoveryAfterInterveningAttempts.branchName, "feature/2.5.0-g01-postmerge-bootstrap-a22");
+
+  const unrelatedFailure = structuredClone(landedUnsealed);
+  unrelatedFailure.artifactPages[0].artifacts[1].name = `g01-bootstrap-failure-g01-a19-run-119-attempt-1-head-${"f".repeat(40)}-phase-f11`;
+  assert.equal(prepareBootstrapAuthority(tracked, unrelatedFailure).attemptId, "g01-a22");
+
+  const sealed = structuredClone(landedUnsealed);
+  const recoveryHead = "f".repeat(40), recoveryMerge = "d".repeat(40), recoveryBranch = "feature/2.5.0-g01-postmerge-bootstrap-a22";
+  const recoveryPr = { ...pr({ head: recoveryHead, merge: recoveryMerge, state: "closed" }), id: 22, number: 22, node_id: "PR22", head: { ...pr().head, ref: recoveryBranch, sha: recoveryHead } };
+  sealed.prPages[0].push(recoveryPr);
+  sealed.runPages[0].workflow_runs.push(run(22, recoveryHead, recoveryBranch, "pull_request", "completed", "success", 1));
+  sealed.artifactPages[0].artifacts.push(
+    { id: 22, name: `g01-candidate-g01-recovery-a22-run-22-attempt-1-head-${recoveryHead}`, expired: false, workflow_run: { id: 22 } },
+    { id: 23, name: `g01-selection-g01-recovery-a22-run-122-attempt-1-head-${recoveryMerge}`, expired: true, workflow_run: { id: 122 } },
+  );
+  const directAfterSelection = prepareBootstrapAuthority(tracked, sealed);
+  assert.equal(directAfterSelection.nextOrdinal, 23);
+  assert.equal(directAfterSelection.attemptId, "g01-a23");
+  assert.equal(directAfterSelection.branchName, BRANCH);
+
+  const unrelatedSelection = structuredClone(landedUnsealed);
+  unrelatedSelection.artifactPages[0].artifacts.push({ id: 24, name: `g01-selection-g01-recovery-a22-run-122-attempt-1-head-${recoveryMerge}`, expired: false, workflow_run: { id: 122 } });
+  assert.equal(prepareBootstrapAuthority(tracked, unrelatedSelection).attemptId, "g01-recovery-a23");
+
   const active = structuredClone(history); active.prPages[0][0].state = "open";
   assert.equal(prepareBootstrapAuthority(tracked, active).status, "WAITING_ACTIVE_BRANCH");
   const conflict = structuredClone(history); const other = structuredClone(abandoned); other.id = 78; other.number = 78; other.node_id = "PR78"; other.head.sha = "6".repeat(40); conflict.prPages[0].push(other);
