@@ -497,7 +497,7 @@ function validatePreparedAuthority(prepared, authority, ordinal) {
 }
 
 export function reconstructNextOrdinal(candidateReport, authority) {
-  exactKeys(authority, ["repository", "pr", "currentRun", "headCommit", "headTree", "baseTree", "headBlobs", "publicationStatus", "abandonmentAuthorities", "prPages", "runPages", "artifactPages", "paginationComplete", "capture", "observedAt", "priorFailure", "preparedAuthority"], "bootstrap activation authority");
+  exactKeys(authority, ["repository", "pr", "currentRun", "headCommit", "baseCommit", "headTree", "baseTree", "headBlobs", "publicationStatus", "abandonmentAuthorities", "prPages", "runPages", "artifactPages", "paginationComplete", "capture", "observedAt", "priorFailure", "preparedAuthority"], "bootstrap activation authority");
   assert.equal(authority.paginationComplete, true, "all PR/run/artifact pages must be completely consumed");
   validateActivationCapture(authority);
   const tracked = candidateReport.registries.flatMap(({ candidate }) => [...(candidate.attempts ?? []), ...(candidate.landedAncestors ?? [])]).map((item) => Number(item.attemptId.match(/[0-9]+$/)?.[0])).filter(Number.isInteger);
@@ -523,13 +523,14 @@ export function buildActivationCapture(authority, candidateReport) {
       pr: { endpoint: `repos/${authority.repository}/pulls/${authority.pr.number}`, variables: { prNumber: authority.pr.number } },
       currentRun: { endpoint: `repos/${authority.repository}/actions/runs/${authority.currentRun.id}`, variables: { runId: authority.currentRun.id } },
       headCommit: { endpoint: `repos/${authority.repository}/commits/${authority.pr.head.sha}`, variables: { sha: authority.pr.head.sha } },
-      headTree: { endpoint: `repos/${authority.repository}/git/trees/${authority.pr.head.sha}`, variables: { recursive: 1 } },
-      baseTree: { endpoint: `repos/${authority.repository}/git/trees/${authority.pr.base.sha}`, variables: { recursive: 1 } },
+      baseCommit: { endpoint: `repos/${authority.repository}/commits/${authority.pr.base.sha}`, variables: { sha: authority.pr.base.sha } },
+      headTree: { endpoint: `repos/${authority.repository}/git/trees/${authority.headCommit.commit.tree.sha}`, variables: { recursive: 1 } },
+      baseTree: { endpoint: `repos/${authority.repository}/git/trees/${authority.baseCommit.commit.tree.sha}`, variables: { recursive: 1 } },
       prs: { endpoint: `repos/${authority.repository}/pulls`, variables: { state: "all", per_page: 100 } },
       runs: { endpoint: `repos/${authority.repository}/actions/workflows/ci.yml/runs`, variables: { per_page: 100 } },
       artifacts: { endpoint: `repos/${authority.repository}/actions/artifacts`, variables: { per_page: 100 } },
     },
-    responses: { pr: hash(authority.pr), currentRun: hash(authority.currentRun), headCommit: hash(authority.headCommit), headTree: hash(authority.headTree), baseTree: hash(authority.baseTree), headBlobs: hash(authority.headBlobs), abandonmentAuthorities: hash(authority.abandonmentAuthorities ?? []) },
+    responses: { pr: hash(authority.pr), currentRun: hash(authority.currentRun), headCommit: hash(authority.headCommit), baseCommit: hash(authority.baseCommit), headTree: hash(authority.headTree), baseTree: hash(authority.baseTree), headBlobs: hash(authority.headBlobs), abandonmentAuthorities: hash(authority.abandonmentAuthorities ?? []) },
     pages: { prs: pageHashes(authority.prPages), runs: pageHashes(authority.runPages), artifacts: pageHashes(authority.artifactPages) },
     pagination: Object.fromEntries([["prs", authority.prPages], ["runs", authority.runPages], ["artifacts", authority.artifactPages]].map(([name, values]) => [name, { pageOrder: values.map((_, index) => index), endMarker: "gh-api--paginate-completed-no-next-page" }])),
     facts: { prNumber: authority.pr.number, prId: authority.pr.id, prNodeId: authority.pr.node_id, runId: authority.currentRun.id, runAttempt: authority.currentRun.run_attempt, headSha: authority.pr.head.sha, headBranch: authority.pr.head.ref },
@@ -543,18 +544,19 @@ export function buildActivationCapture(authority, candidateReport) {
 
 function validateActivationCapture(authority) {
   exactKeys(authority.capture, ["queries", "responses", "pages", "pagination", "facts", "normalizedIdentities", "observedMax", "prepared", "reconstructionDigest"], "activation capture");
-  exactKeys(authority.capture.queries, ["pr", "currentRun", "headCommit", "headTree", "baseTree", "prs", "runs", "artifacts"], "activation queries");
+  exactKeys(authority.capture.queries, ["pr", "currentRun", "headCommit", "baseCommit", "headTree", "baseTree", "prs", "runs", "artifacts"], "activation queries");
   assert.deepEqual(authority.capture.queries, {
     pr: { endpoint: `repos/${authority.repository}/pulls/${authority.pr.number}`, variables: { prNumber: authority.pr.number } },
     currentRun: { endpoint: `repos/${authority.repository}/actions/runs/${authority.currentRun.id}`, variables: { runId: authority.currentRun.id } },
     headCommit: { endpoint: `repos/${authority.repository}/commits/${authority.pr.head.sha}`, variables: { sha: authority.pr.head.sha } },
-    headTree: { endpoint: `repos/${authority.repository}/git/trees/${authority.pr.head.sha}`, variables: { recursive: 1 } },
-    baseTree: { endpoint: `repos/${authority.repository}/git/trees/${authority.pr.base.sha}`, variables: { recursive: 1 } },
+    baseCommit: { endpoint: `repos/${authority.repository}/commits/${authority.pr.base.sha}`, variables: { sha: authority.pr.base.sha } },
+    headTree: { endpoint: `repos/${authority.repository}/git/trees/${authority.headCommit.commit.tree.sha}`, variables: { recursive: 1 } },
+    baseTree: { endpoint: `repos/${authority.repository}/git/trees/${authority.baseCommit.commit.tree.sha}`, variables: { recursive: 1 } },
     prs: { endpoint: `repos/${authority.repository}/pulls`, variables: { state: "all", per_page: 100 } },
     runs: { endpoint: `repos/${authority.repository}/actions/workflows/ci.yml/runs`, variables: { per_page: 100 } },
     artifacts: { endpoint: `repos/${authority.repository}/actions/artifacts`, variables: { per_page: 100 } },
   }, "activation query variables mismatch");
-  exactKeys(authority.capture.responses, ["pr", "currentRun", "headCommit", "headTree", "baseTree", "headBlobs", "abandonmentAuthorities"], "activation response hashes");
+  exactKeys(authority.capture.responses, ["pr", "currentRun", "headCommit", "baseCommit", "headTree", "baseTree", "headBlobs", "abandonmentAuthorities"], "activation response hashes");
   exactKeys(authority.capture.pages, ["prs", "runs", "artifacts"], "activation page hashes");
   exactKeys(authority.capture.pagination, ["prs", "runs", "artifacts"], "activation pagination");
   exactKeys(authority.capture.facts, ["prNumber", "prId", "prNodeId", "runId", "runAttempt", "headSha", "headBranch"], "activation facts");
@@ -562,6 +564,7 @@ function validateActivationCapture(authority) {
   assert.equal(authority.capture.responses.pr, `sha256:${crypto.createHash("sha256").update(JSON.stringify(authority.pr)).digest("hex")}`);
   assert.equal(authority.capture.responses.currentRun, `sha256:${crypto.createHash("sha256").update(JSON.stringify(authority.currentRun)).digest("hex")}`);
   assert.equal(authority.capture.responses.headCommit, `sha256:${crypto.createHash("sha256").update(JSON.stringify(authority.headCommit)).digest("hex")}`);
+  assert.equal(authority.capture.responses.baseCommit, `sha256:${crypto.createHash("sha256").update(JSON.stringify(authority.baseCommit)).digest("hex")}`);
   assert.equal(authority.capture.responses.headTree, `sha256:${crypto.createHash("sha256").update(JSON.stringify(authority.headTree)).digest("hex")}`);
   assert.equal(authority.capture.responses.baseTree, `sha256:${crypto.createHash("sha256").update(JSON.stringify(authority.baseTree)).digest("hex")}`);
   assert.equal(authority.capture.responses.headBlobs, `sha256:${crypto.createHash("sha256").update(JSON.stringify(authority.headBlobs)).digest("hex")}`);
@@ -588,8 +591,10 @@ function validateLivePublication(authority, prepared) {
   assert.equal(authority.headTree?.truncated, false, "PR head recursive tree must be complete");
   assert.equal(authority.baseTree?.truncated, false, "develop base recursive tree must be complete");
   assert.match(authority.headTree?.sha ?? "", SHA); assert.match(authority.baseTree?.sha ?? "", SHA);
-  const commitTreeSha = authority.headCommit?.commit?.tree?.sha ?? authority.headCommit?.tree?.sha;
-  assert.equal(authority.headTree.sha, commitTreeSha, "PR head recursive tree SHA does not match the authenticated commit");
+  assert.equal(authority.headCommit?.sha, authority.pr.head.sha, "authenticated head commit does not match PR head");
+  assert.equal(authority.baseCommit?.sha, authority.pr.base.sha, "authenticated base commit does not match PR base");
+  assert.equal(authority.headTree.sha, authority.headCommit?.commit?.tree?.sha, "PR head recursive tree SHA does not match the authenticated commit");
+  assert.equal(authority.baseTree.sha, authority.baseCommit?.commit?.tree?.sha, "develop base recursive tree SHA does not match the authenticated commit");
   const toMap = (tree) => new Map(tree.tree.filter((entry) => entry.type === "blob").map((entry) => [entry.path, entry]));
   const head = toMap(authority.headTree), base = toMap(authority.baseTree);
   const changed = [...new Set([...head.keys(), ...base.keys()])].filter((name) => head.get(name)?.sha !== base.get(name)?.sha || head.get(name)?.mode !== base.get(name)?.mode).sort();
@@ -614,7 +619,7 @@ function validateLivePublication(authority, prepared) {
 }
 
 export function activateCandidateReport(candidateReport, authority, planBytes, specBytes) {
-  exactKeys(authority, ["repository", "pr", "currentRun", "headCommit", "headTree", "baseTree", "headBlobs", "publicationStatus", "abandonmentAuthorities", "prPages", "runPages", "artifactPages", "paginationComplete", "capture", "observedAt", "priorFailure", "preparedAuthority"], "bootstrap activation authority");
+  exactKeys(authority, ["repository", "pr", "currentRun", "headCommit", "baseCommit", "headTree", "baseTree", "headBlobs", "publicationStatus", "abandonmentAuthorities", "prPages", "runPages", "artifactPages", "paginationComplete", "capture", "observedAt", "priorFailure", "preparedAuthority"], "bootstrap activation authority");
   assert.equal(authority.pr?.state, "open", "active bootstrap PR must be open");
   assert.equal(authority.pr?.base?.ref, "develop", "bootstrap PR must target develop");
   assert.equal(authority.pr?.base?.repo?.full_name, authority.repository, "bootstrap base repository mismatch");

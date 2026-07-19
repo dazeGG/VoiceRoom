@@ -50,6 +50,7 @@ function hydratePublication(authority) {
   const modes = new Map(reviewedFiles().map(({ filename, mode }) => [filename, mode])); authority.headBlobs = headBlobs; authority.headTree = { sha: "4".repeat(40), truncated: false, tree: [{ path: "README.md", type: "blob", mode: "100644", sha: "1".repeat(40) }, ...headBlobs.map(({ path: name, sha }) => ({ path: name, type: "blob", mode: modes.get(name), sha }))] };
   authority.baseTree = { sha: "5".repeat(40), truncated: false, tree: [{ path: "README.md", type: "blob", mode: "100644", sha: "1".repeat(40) }, ...headBlobs.map(({ path: name }) => ({ path: name, type: "blob", mode: "100644", sha: "2".repeat(40) }))] };
   authority.headCommit.commit = { tree: { sha: authority.headTree.sha } };
+  authority.baseCommit = { sha: authority.pr.base.sha, commit: { tree: { sha: authority.baseTree.sha } } };
 }
 function capture(authority, report) { hydratePublication(authority); return buildActivationCapture(authority, report); }
 function bindPrepared(authority, ordinal) {
@@ -86,6 +87,17 @@ test("canonical docs and historical pointers are tracked", () => {
   for (const version of ["2.6.0", "2.7.0"]) assert.match(read(`docs/RELEASE_${version}_PLAN.md`), /^# Superseded target plan/);
 });
 
+test("G01 workflow resolves recursive trees from authenticated commit tree identities", () => {
+  const workflow = read(".github/workflows/ci.yml");
+  assert.match(workflow, /gh api "repos\/\$GITHUB_REPOSITORY\/commits\/\$SOURCE_SHA" > head-commit\.json/);
+  assert.match(workflow, /gh api "repos\/\$GITHUB_REPOSITORY\/commits\/\$BASE_SHA" > base-commit\.json/);
+  assert.match(workflow, /git\/trees\/\$HEAD_TREE_SHA\?recursive=1/);
+  assert.match(workflow, /git\/trees\/\$BASE_TREE_SHA\?recursive=1/);
+  assert.doesNotMatch(workflow, /git\/trees\/\$(?:SOURCE|BASE)_SHA\?recursive=1/);
+  assert.match(workflow, /x\.sha!==process\.env\.SOURCE_SHA/);
+  assert.match(workflow, /x\.sha!==process\.env\.BASE_SHA/);
+});
+
 test("authority and candidate registries are truthful and structurally validated", () => {
   const authority = json("docs/releases/2.5.0/evidence/archive-authority.json"); assert.equal(authority.decision.startG01, true); assert.equal(authority.status, "ARCHIVE_AUTHORITY_GREEN");
   const attempts = json("docs/releases/2.5.0/evidence/bootstrap-attempts.json"), recoveries = json("docs/releases/2.5.0/evidence/bootstrap-landed-recoveries.json");
@@ -112,6 +124,8 @@ test("tracked PRE_BRANCH registries atomically derive executable F7 identity fro
   authority.capture = capture(authority, tracked);
   assert.equal(reconstructNextOrdinal(tracked, authority), 8);
   bindPrepared(authority, 8);
+  const forgedBaseTree = structuredClone(authority); forgedBaseTree.baseTree.sha = "6".repeat(40); forgedBaseTree.capture = buildActivationCapture(forgedBaseTree, tracked);
+  assert.throws(() => activateCandidateReport(tracked, forgedBaseTree, Buffer.from("plan"), Buffer.from("spec")), /base recursive tree SHA does not match the authenticated commit/);
   const activated = activateCandidateReport(tracked, authority, Buffer.from("plan"), Buffer.from("spec"));
   assert.equal(activated.identity.attemptId, "g01-a08"); assert.equal(activated.ordinal, 8);
   const f7 = buildF7Envelope(activated.report, currentPr.head.sha, currentPr.head.ref, authority.observedAt); assert.equal(f7.attemptId, "g01-a08");
