@@ -8,7 +8,7 @@ import { spawnSync } from "node:child_process";
 import os from "node:os";
 import { validateEnvelope } from "./validate-envelope.mjs";
 import { G01_WRITABLE } from "./recover-landed-bootstrap.mjs";
-import { selectCanonicalFailure, validateBootstrapFailure } from "./emit-bootstrap-selection.mjs";
+import { selectCanonicalFailure, validateArtifactlessBackfillAuthority, validateBootstrapFailure } from "./emit-bootstrap-selection.mjs";
 
 const SHA = /^[0-9a-f]{40}$/;
 const DIGEST = /^sha256:[0-9a-f]{64}$/;
@@ -234,7 +234,7 @@ export function prepareBootstrapAuthority(candidateReport, authority) {
   const suffix = ordinalId(nextOrdinal);
   const recoveryRequired = authority.artifactPages.flatMap((page) => page.artifacts ?? []).some((artifact) => {
     const match = artifact.name?.match(/^g01-bootstrap-failure-g01-(?:recovery-)?a([0-9]{2,})-run-[0-9]+-attempt-[0-9]+-head-([0-9a-f]{40})-phase-(?:f11|selection)$/);
-    return match && Number(match[1]) === finalObservedMax && match[2] === authority.developRef.object.sha && artifact.expired !== true;
+    return match && Number(match[1]) === finalObservedMax && artifact.expired !== true;
   });
   const illegalDirect = recoveryRequired && refBranches.includes("feature/2.5.0-g01-canonical-evidence-bootstrap");
   if (illegalDirect) conflicts.push(1);
@@ -290,33 +290,32 @@ function candidateTreeManifest(candidateFiles) {
   }).sort((a, b) => a.path.localeCompare(b.path));
 }
 
-async function resolveAuthenticatedPriorFailure(api, repository, prepared, artifactPages) {
+async function resolveAuthenticatedPriorFailure(api, repository, prepared, artifactPages, prPages) {
   const ordinal = prepared.nextOrdinal - 1;
   assert.ok(ordinal >= 1, "recovery requires a prior consumed ordinal");
   const suffix = ordinalId(ordinal);
-  const pattern = new RegExp(`^g01-bootstrap-failure-(g01-(?:recovery-)?a${suffix})-run-([1-9][0-9]*)-attempt-([1-9][0-9]*)-head-${prepared.developSha}-phase-(f11|selection)$`);
+  const pattern = new RegExp(`^g01-bootstrap-failure-(g01-(?:recovery-)?a${suffix})-run-([1-9][0-9]*)-attempt-([1-9][0-9]*)-head-([0-9a-f]{40})-phase-(f11|selection)$`);
   const candidates = artifactPages.flatMap((page) => page.artifacts ?? []).filter((artifact) => !artifact.expired && pattern.test(artifact.name ?? ""));
   assert.ok(candidates.length > 0, "WAITING: live authenticated prior failure artifact is absent");
   const records = [];
   for (const candidate of candidates) {
     const metadata = await api.get(`repos/${repository}/actions/artifacts/${candidate.id}`);
     const match = metadata.name?.match(pattern);
-    assert.ok(match && metadata.id === candidate.id && metadata.workflow_run?.id === Number(match[2]), "prior failure artifact metadata mismatch");
+    assert.ok(match && metadata.id === candidate.id, "prior failure artifact metadata mismatch");
     assert.match(metadata.digest ?? "", DIGEST, "prior failure artifact digest is required");
-    const run = await api.get(`repos/${repository}/actions/runs/${metadata.workflow_run.id}`);
-    assert.equal(run.id, Number(match[2])); assert.equal(run.run_attempt, Number(match[3]));
-    assert.equal(run.name, "CI/CD"); assert.equal(run.path, ".github/workflows/ci.yml"); assert.equal(run.repository?.full_name, repository);
-    assert.equal(run.event, "push"); assert.equal(run.head_branch, "develop"); assert.equal(run.head_sha, prepared.developSha); assert.equal(run.status, "completed"); assert.ok(run.conclusion && run.conclusion !== "success");
     const archive = await api.readArtifact(metadata);
     assert.ok(Buffer.isBuffer(archive.archiveBytes), "prior failure archive bytes are required");
     const archiveDigest = `sha256:${crypto.createHash("sha256").update(archive.archiveBytes).digest("hex")}`;
     assert.equal(archiveDigest, metadata.digest, "prior failure archive digest mismatch");
-    const entries = Object.entries(archive.files ?? {}).filter(([name]) => /^bootstrap-failure\.g01-(?:a|recovery-a)[0-9]{2,}\.json$/.test(path.basename(name)));
+    const allEntries=Object.entries(archive.files??{}),entries = allEntries.filter(([name]) => /^bootstrap-failure\.g01-(?:a|recovery-a)[0-9]{2,}\.json$/.test(path.basename(name)));
     assert.equal(entries.length, 1, "prior failure archive must contain exactly one failure payload");
     const bytes = Buffer.from(entries[0][1]);
     const failure = validateBootstrapFailure(JSON.parse(bytes));
     assert.equal(path.basename(entries[0][0]), failure.evidenceId, "prior failure archive payload name mismatch");
-    records.push({ failure, artifactId: metadata.id, artifactName: metadata.name, artifactCreatedAt: metadata.created_at, archiveDigest, payloadDigest: `sha256:${crypto.createHash("sha256").update(bytes).digest("hex")}`, run });
+    const sidecars=allEntries.filter(([name])=>path.basename(name)===`bootstrap-failure-backfill-authority.${failure.attemptId}.json`);let provenance;
+    let run=await api.get(`repos/${repository}/actions/runs/${failure.runId}`);assert.equal(run.id,failure.runId);assert.equal(run.run_attempt,failure.runAttempt);assert.equal(run.name,"CI/CD");assert.equal(run.path,".github/workflows/ci.yml");assert.equal(run.repository?.full_name,repository);assert.equal(run.event,"push");assert.equal(run.head_branch,"develop");assert.equal(run.head_sha,failure.terminalDevelopSha);assert.equal(run.status,"completed");assert.ok(run.conclusion&&run.conclusion!=="success");
+    if(sidecars.length){assert.equal(sidecars.length,1);const sidecar=validateArtifactlessBackfillAuthority(JSON.parse(Buffer.from(sidecars[0][1])),failure);assert.equal(sidecar.repository,repository);const producer=await api.get(`repos/${repository}/actions/runs/${metadata.workflow_run.id}`);assert.equal(producer.id,sidecar.producer.runId);assert.equal(producer.run_attempt,sidecar.producer.runAttempt);assert.equal(producer.head_sha,sidecar.producer.headSha);assert.equal(producer.head_branch,sidecar.producer.headBranch);assert.equal(producer.event,"pull_request");assert.equal(producer.status,"completed");assert.equal(producer.conclusion,"success");const amendment=(prPages??[]).flatMap(page=>Array.isArray(page)?page:[]).filter(pr=>pr.state==="closed"&&pr.merged_at&&pr.head?.sha===producer.head_sha&&pr.base?.sha===failure.terminalDevelopSha&&pr.merge_commit_sha===prepared.developSha);assert.equal(amendment.length,1,"backfill producer PR must be the unique amendment merged to live develop");const native=artifactPages.flatMap(page=>page.artifacts??[]).filter(a=>a.name===metadata.name&&a.workflow_run?.id===failure.runId);assert.deepEqual(native.map(({id})=>id),sidecar.absenceCapture.matchingArtifactIds,"backfill absence proof changed");for(const [expected,pattern] of [[sidecar.f7Artifact,/^ci-bundle\..+\.json$/],[sidecar.f9Artifact,/^approval-envelope\..+\.json$/]]){const m=await api.get(`repos/${repository}/actions/artifacts/${expected.id}`);assert.equal(m.name,expected.name);assert.equal(m.digest,expected.archiveDigest);assert.equal(m.workflow_run?.id,expected.runId);const artifactRun=await api.get(`repos/${repository}/actions/runs/${expected.runId}`);assert.equal(artifactRun.run_attempt,expected.runAttempt);assert.equal(artifactRun.head_sha,expected.headSha);assert.equal(artifactRun.event,"pull_request");assert.equal(artifactRun.path,".github/workflows/ci.yml");assert.equal(artifactRun.repository?.full_name,repository);assert.equal(artifactRun.status,"completed");assert.equal(artifactRun.conclusion,"success");const downloaded=await api.readArtifact(m);assert.equal(`sha256:${crypto.createHash("sha256").update(downloaded.archiveBytes).digest("hex")}`,expected.archiveDigest);const payloads=Object.entries(downloaded.files??{}).filter(([name])=>pattern.test(path.basename(name)));assert.equal(payloads.length,1,"backfill F7/F9 payload file mismatch");assert.equal(`sha256:${crypto.createHash("sha256").update(Buffer.from(payloads[0][1])).digest("hex")}`,expected.payloadDigest,"backfill F7/F9 payload digest mismatch")}provenance={kind:"artifactless-run-backfill",authorityDigest:sidecar.digest,producerRunId:producer.id,producerRunAttempt:producer.run_attempt,producerHeadSha:producer.head_sha,recoveryTerminalDevelopSha:prepared.developSha,subjectTerminalDevelopSha:failure.terminalDevelopSha};}else{assert.equal(metadata.workflow_run?.id,failure.runId);assert.equal(failure.terminalDevelopSha,prepared.developSha)}
+    records.push({ failure, artifactId: metadata.id, artifactName: metadata.name, artifactCreatedAt: metadata.created_at, archiveDigest, payloadDigest: `sha256:${crypto.createHash("sha256").update(bytes).digest("hex")}`, run, ...(provenance?{provenance}:{}) });
   }
   const winner = selectCanonicalFailure(records, ordinal, prepared.developSha, repository);
   return {
@@ -336,19 +335,20 @@ async function resolveAuthenticatedPriorFailure(api, repository, prepared, artif
     headSha: winner.run.head_sha,
     status: winner.run.status,
     conclusion: winner.run.conclusion,
-    terminalDevelopSha: winner.failure.terminalDevelopSha,
+    terminalDevelopSha: winner.provenance?.recoveryTerminalDevelopSha ?? winner.failure.terminalDevelopSha,
     payload: structuredClone(winner.failure),
     recoveryLineage: structuredClone(winner.failure.recoveryLineage),
+    ...(winner.provenance ? { provenance: structuredClone(winner.provenance) } : {}),
   };
 }
 
 function validatePriorFailureAuthority(value, repository) {
-  exactKeys(value, ["evidenceId", "digest", "artifactId", "artifactName", "artifactCreatedAt", "archiveDigest", "runId", "runAttempt", "workflowName", "workflowPath", "repository", "event", "headBranch", "headSha", "status", "conclusion", "terminalDevelopSha", "payload", "recoveryLineage"], "prior failure authority");
+  exactKeys(value, ["evidenceId", "digest", "artifactId", "artifactName", "artifactCreatedAt", "archiveDigest", "runId", "runAttempt", "workflowName", "workflowPath", "repository", "event", "headBranch", "headSha", "status", "conclusion", "terminalDevelopSha", "payload", "recoveryLineage", ...(value.provenance?["provenance"]:[])], "prior failure authority");
   const payload = validateBootstrapFailure(value.payload);
   assert.equal(value.evidenceId, payload.evidenceId);
   assert.match(value.digest, DIGEST); assert.match(value.archiveDigest, DIGEST); assert.ok(Number.isInteger(value.artifactId) && value.artifactId > 0);
   assert.equal(value.runId, payload.runId); assert.equal(value.runAttempt, payload.runAttempt); assert.equal(value.workflowName, "CI/CD"); assert.equal(value.workflowPath, ".github/workflows/ci.yml");
-  assert.equal(value.repository, repository); assert.equal(value.event, "push"); assert.equal(value.headBranch, "develop"); assert.equal(value.headSha, payload.terminalDevelopSha); assert.equal(value.terminalDevelopSha, payload.terminalDevelopSha);
+  assert.equal(value.repository, repository); assert.equal(value.event, "push"); assert.equal(value.headBranch, "develop"); assert.equal(value.headSha, payload.terminalDevelopSha); if(!value.provenance)assert.equal(value.terminalDevelopSha,payload.terminalDevelopSha);else{exactKeys(value.provenance,["kind","authorityDigest","producerRunId","producerRunAttempt","producerHeadSha","recoveryTerminalDevelopSha","subjectTerminalDevelopSha"],"prior failure provenance");assert.equal(value.provenance.kind,"artifactless-run-backfill");assert.equal(value.terminalDevelopSha,value.provenance.recoveryTerminalDevelopSha);assert.equal(value.provenance.subjectTerminalDevelopSha,payload.terminalDevelopSha);assert.notEqual(value.provenance.producerRunId,payload.runId)}
   assert.equal(value.status, "completed"); assert.ok(value.conclusion && value.conclusion !== "success"); assert.deepEqual(value.recoveryLineage, payload.recoveryLineage);
   return value;
 }
@@ -439,7 +439,7 @@ export async function prepareAndCreateBootstrapBranch({ api, repository, registr
   const recoveryEntry = report.registries.find(({ name }) => name === "bootstrap-landed-recoveries.json");
   const attempts = structuredClone(attemptsEntry.candidate), recoveries = structuredClone(recoveryEntry.candidate);
   if (prepared.attemptId.startsWith("g01-recovery-")) {
-    const priorFailure = await resolveAuthenticatedPriorFailure(api, repository, prepared, authority.artifactPages);
+    const priorFailure = await resolveAuthenticatedPriorFailure(api, repository, prepared, authority.artifactPages, authority.prPages);
     validatePriorFailureAuthority(priorFailure, repository);
     prepared.replayRecord.priorFailureAuthority = structuredClone(priorFailure);
     prepared.authorityDigest = hashJson(prepared.replayRecord);

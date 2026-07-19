@@ -84,6 +84,20 @@
           "pattern": "^[0-9a-f]{40}$",
           "type": "string"
         },
+        "provenance": {
+          "additionalProperties": false,
+          "properties": {
+            "authorityDigest": { "pattern": "^sha256:[0-9a-f]{64}$", "type": "string" },
+            "kind": { "const": "artifactless-run-backfill" },
+            "producerHeadSha": { "pattern": "^[0-9a-f]{40}$", "type": "string" },
+            "producerRunAttempt": { "minimum": 1, "type": "integer" },
+            "producerRunId": { "minimum": 1, "type": "integer" },
+            "recoveryTerminalDevelopSha": { "pattern": "^[0-9a-f]{40}$", "type": "string" },
+            "subjectTerminalDevelopSha": { "pattern": "^[0-9a-f]{40}$", "type": "string" }
+          },
+          "required": ["kind", "authorityDigest", "producerRunId", "producerRunAttempt", "producerHeadSha", "recoveryTerminalDevelopSha", "subjectTerminalDevelopSha"],
+          "type": "object"
+        },
         "runId": {
           "minimum": 1,
           "type": "integer"
