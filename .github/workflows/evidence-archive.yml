@@ -1,6 +1,9 @@
 name: Durable release evidence archive
 
 on:
+  push:
+    branches:
+      - feature/2.5.0-g03-durable-evidence-archive
   workflow_dispatch:
     inputs:
       confirm:
@@ -15,6 +18,7 @@ concurrency:
 jobs:
   authenticate-external-lineage:
     name: Authenticate selection, ancestor and G01/G02 phase chain
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.repository == 'dazeGG/VoiceRoom' && github.ref == 'refs/heads/feature/2.5.0-g03-durable-evidence-archive' && github.actor == 'dazeGG')
     runs-on: ubuntu-latest
     permissions:
       actions: read
@@ -70,7 +74,7 @@ jobs:
   goal-g03-evidence-archive:
     needs: authenticate-external-lineage
     name: G03 publish ${{ matrix.objectId }} by digest
-    if: github.repository == 'dazeGG/VoiceRoom' && inputs.confirm == 'ARCHIVE-G01-G02'
+    if: github.event_name == 'workflow_dispatch' && github.repository == 'dazeGG/VoiceRoom' && inputs.confirm == 'ARCHIVE-G01-G02'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:

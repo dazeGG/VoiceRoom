@@ -4,6 +4,10 @@ import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
 
 const FIELDS = ["objectId", "manifestDigest", "layerDigest", "discoveryTag", "packageOwner", "packageVisibility", "linkedRepository", "actor", "attestationVerified"];
+const ANNOTATIONS = [
+  "io.voiceroom.evidence.id", "io.voiceroom.github.run-attempt", "io.voiceroom.github.run-id",
+  "org.opencontainers.image.revision", "org.opencontainers.image.source",
+].sort();
 const digest = (bytes) => `sha256:${crypto.createHash("sha256").update(bytes).digest("hex")}`;
 
 export function deriveLiveObservation(raw) {
@@ -19,7 +23,12 @@ export function deriveLiveObservation(raw) {
       manifest.config?.mediaType !== "application/vnd.oci.empty.v1+json" || manifest.config.digest !== "sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a" || manifest.config.size !== 2 ||
       Object.hasOwn(manifest, "subject")) throw new Error("archive sentinel: live manifest or layer drift");
   const objectId = manifest.annotations?.["io.voiceroom.evidence.id"];
-  if (!objectId || manifest.annotations?.["org.opencontainers.image.title"] !== objectId) throw new Error("archive sentinel: live annotation drift");
+  if (!objectId || JSON.stringify(Object.keys(manifest.annotations ?? {}).sort()) !== JSON.stringify(ANNOTATIONS) ||
+      manifest.annotations["org.opencontainers.image.source"] !== "https://github.com/dazeGG/VoiceRoom" ||
+      !/^[0-9a-f]{40}$/.test(manifest.annotations["org.opencontainers.image.revision"] ?? "") ||
+      !/^[1-9][0-9]*$/.test(manifest.annotations["io.voiceroom.github.run-id"] ?? "") ||
+      !/^[1-9][0-9]*$/.test(manifest.annotations["io.voiceroom.github.run-attempt"] ?? ""))
+    throw new Error("archive sentinel: live annotation drift");
   return {
     objectId, manifestDigest: digest(raw.manifestBytes), layerDigest: digest(raw.layerBytes),
     discoveryTag: raw.discoveryTag, packageOwner: raw.package?.owner?.login ?? raw.package?.namespace,

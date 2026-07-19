@@ -22,6 +22,12 @@ jobs:
       PACKAGE: ghcr.io/dazegg/voiceroom-release-evidence
     steps:
       - uses: actions/checkout@v4
+      - name: Log in to the private evidence package with the repository token
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
       - name: Derive every observation from the live package
         shell: bash
         run: |

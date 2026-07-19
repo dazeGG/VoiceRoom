@@ -29,6 +29,11 @@ Each JSON object becomes one standalone OCI image manifest with artifact type
 config, and one `application/json` layer containing the original bytes. Source,
 revision, run, attempt, and evidence ID are manifest annotations.
 
+Before the workflow exists on the default branch, an exact same-repository push
+to `feature/2.5.0-g03-durable-evidence-archive` by `dazeGG` may run only the
+read-only lineage-authentication job. Package publication remains restricted to
+an explicitly confirmed `workflow_dispatch` run.
+
 ## Publication order
 
 Publication is fail-closed and ordered:
@@ -61,7 +66,8 @@ only then writes the original bytes. Recovery remains valid after the
 
 The scheduled sentinel builds observations only from raw live manifest and layer
 bytes, the live package and run APIs, tag resolution, and attestation command
-output. It checks package owner, private visibility, exactly one repository
+output. It authenticates ORAS to private GHCR with the read-only repository
+`GITHUB_TOKEN`, then checks package owner, private visibility, exactly one repository
 linkage, actor, every manifest/layer digest, annotation/media descriptor,
 attestation, availability, and tag resolution. Expected map values cannot
 self-certify. Missing or deleted content is fatal; GHCR is deletion-capable and is

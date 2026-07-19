@@ -22,6 +22,21 @@ const DIGEST = /^sha256:[0-9a-f]{64}$/;
 const SHA = /^[0-9a-f]{40}$/;
 const POSITIVE = /^[1-9][0-9]*$/;
 const OBJECT_ID = /^[a-z0-9][a-z0-9._-]{0,159}$/;
+const SELECTION_KEYS = [
+  "schemaVersion", "release", "evidenceId", "attemptId", "terminalKind",
+  "f7Id", "f7Digest", "f9Id", "f9Digest", "f11Id", "f11Digest",
+  "terminalDevelopSha", "createdAt", "remoteDeleted", "status",
+  "ancestorFailures", "bootstrapSupersessionChainDigest", "artifactBindings", "selectionDigest",
+];
+const ARTIFACT_BINDING_KEYS = ["artifactId", "artifactName", "runId", "runAttempt", "headSha", "archiveDigest", "payloadDigest"];
+const ANCESTOR_KEYS = [
+  "attemptId", "evidenceId", "digest", "artifactId", "artifactName", "archiveDigest",
+  "runId", "runAttempt", "headSha", "baseSha", "parentSha", "terminalDevelopSha", "createdAt", "provenance",
+];
+const PROVENANCE_KEYS = [
+  "kind", "authorityDigest", "producerRunId", "producerRunAttempt", "producerHeadSha",
+  "recoveryTerminalDevelopSha", "subjectTerminalDevelopSha",
+];
 
 export function sha256(value) {
   return `sha256:${crypto.createHash("sha256").update(value).digest("hex")}`;
@@ -70,7 +85,6 @@ export function buildArchiveObject(input) {
       "io.voiceroom.github.run-id": String(runId),
       "io.voiceroom.github.run-attempt": String(runAttempt),
       "io.voiceroom.evidence.id": objectId,
-      "org.opencontainers.image.title": objectId,
     },
   };
   const manifestBytes = Buffer.from(JSON.stringify(manifest));
@@ -164,6 +178,58 @@ function semanticDigest(value, field = "digest") {
   return sha256(Buffer.from(JSON.stringify(copy)));
 }
 
+function exactKeys(value, expected, label) {
+  if (!value || typeof value !== "object" || Array.isArray(value) ||
+      JSON.stringify(Object.keys(value).sort()) !== JSON.stringify([...expected].sort()))
+    throw new Error(`${label} keys must match the bootstrap selection schema exactly`);
+}
+
+function canonicalInstant(value, label) {
+  const time = typeof value === "string" ? Date.parse(value) : NaN;
+  if (!Number.isFinite(time) || new Date(time).toISOString() !== value) throw new Error(`${label} must be canonical UTC`);
+}
+
+function validateSelectionSchema(selection) {
+  exactKeys(selection, SELECTION_KEYS, "bootstrap selection");
+  if (selection.schemaVersion !== 1 || selection.release !== "2.5.0" || selection.status !== "SELECTED_GREEN" ||
+      selection.remoteDeleted !== true || selection.terminalKind !== "landed-recovery" ||
+      selection.evidenceId !== ARCHIVE_OBJECT_ORDER[0] || selection.attemptId !== "g01-recovery-a27" ||
+      selection.f7Id !== ARCHIVE_OBJECT_ORDER[2] || selection.f9Id !== ARCHIVE_OBJECT_ORDER[3] || selection.f11Id !== ARCHIVE_OBJECT_ORDER[4] ||
+      !DIGEST.test(selection.f7Digest ?? "") || !DIGEST.test(selection.f9Digest ?? "") || !DIGEST.test(selection.f11Digest ?? "") ||
+      !SHA.test(selection.terminalDevelopSha ?? "") || !DIGEST.test(selection.bootstrapSupersessionChainDigest ?? "") || !DIGEST.test(selection.selectionDigest ?? ""))
+    throw new Error("bootstrap selection schema values are invalid");
+  canonicalInstant(selection.createdAt, "bootstrap selection createdAt");
+  exactKeys(selection.artifactBindings, ["f7", "f9", "f11"], "bootstrap selection artifactBindings");
+  for (const phase of ["f7", "f9", "f11"]) {
+    const binding = selection.artifactBindings[phase];
+    exactKeys(binding, ARTIFACT_BINDING_KEYS, `bootstrap selection ${phase} binding`);
+    if (!Number.isInteger(binding.artifactId) || binding.artifactId < 1 || !Number.isInteger(binding.runId) || binding.runId < 1 ||
+        !Number.isInteger(binding.runAttempt) || binding.runAttempt < 1 ||
+        !new RegExp(`^g01-${phase === "f7" ? "candidate" : phase === "f9" ? "approval" : "merge"}-g01-(?:a|recovery-a)[0-9]{2,}-run-[1-9][0-9]*-attempt-[1-9][0-9]*-head-[0-9a-f]{40}$`).test(binding.artifactName ?? "") ||
+        !SHA.test(binding.headSha ?? "") ||
+        !DIGEST.test(binding.archiveDigest ?? "") || !DIGEST.test(binding.payloadDigest ?? ""))
+      throw new Error(`bootstrap selection ${phase} binding schema values are invalid`);
+  }
+  if (!Array.isArray(selection.ancestorFailures) || selection.ancestorFailures.length !== 1)
+    throw new Error("ordered ancestor failure set mismatch");
+  for (const ancestor of selection.ancestorFailures) {
+    exactKeys(ancestor, ANCESTOR_KEYS, "bootstrap selection ancestor failure");
+    exactKeys(ancestor.provenance, PROVENANCE_KEYS, "bootstrap selection ancestor provenance");
+    if (ancestor.attemptId !== "g01-a19" || ancestor.evidenceId !== ARCHIVE_OBJECT_ORDER[1] ||
+        !DIGEST.test(ancestor.digest ?? "") || !Number.isInteger(ancestor.artifactId) || ancestor.artifactId < 1 ||
+        !/^g01-bootstrap-failure-g01-(?:a|recovery-a)[0-9]{2,}-run-[1-9][0-9]*-attempt-[1-9][0-9]*-head-[0-9a-f]{40}-phase-(?:f11|selection)$/.test(ancestor.artifactName ?? "") ||
+        !DIGEST.test(ancestor.archiveDigest ?? "") || !Number.isInteger(ancestor.runId) || ancestor.runId < 1 ||
+        !Number.isInteger(ancestor.runAttempt) || ancestor.runAttempt < 1 ||
+        !SHA.test(ancestor.headSha ?? "") || !SHA.test(ancestor.baseSha ?? "") || !SHA.test(ancestor.parentSha ?? "") ||
+        !SHA.test(ancestor.terminalDevelopSha ?? "") || ancestor.provenance.kind !== "artifactless-run-backfill" ||
+        !DIGEST.test(ancestor.provenance.authorityDigest ?? "") || !Number.isInteger(ancestor.provenance.producerRunId) || ancestor.provenance.producerRunId < 1 ||
+        !Number.isInteger(ancestor.provenance.producerRunAttempt) || ancestor.provenance.producerRunAttempt < 1 || !SHA.test(ancestor.provenance.producerHeadSha ?? "") ||
+        !SHA.test(ancestor.provenance.recoveryTerminalDevelopSha ?? "") || !SHA.test(ancestor.provenance.subjectTerminalDevelopSha ?? ""))
+      throw new Error("bootstrap selection ancestor schema values are invalid");
+    canonicalInstant(ancestor.createdAt, "bootstrap selection ancestor createdAt");
+  }
+}
+
 export function validateArchiveSourceSet(sources, terminalDevelopSha) {
   if (!Array.isArray(sources) || sources.length !== ARCHIVE_OBJECT_ORDER.length) throw new Error("complete eight-object source set required");
   const rows = sources.map((source) => {
@@ -178,12 +244,15 @@ export function validateArchiveSourceSet(sources, terminalDevelopSha) {
   if (byId.size !== rows.length || ARCHIVE_OBJECT_ORDER.some((id) => !byId.has(id))) throw new Error("unexpected, missing, or duplicate archive source");
   const selection = byId.get(ARCHIVE_OBJECT_ORDER[0]);
   const s = selection.value;
+  validateSelectionSchema(s);
   if (s.status !== "SELECTED_GREEN" || s.terminalKind !== "landed-recovery" || s.terminalDevelopSha !== byId.get("ci-bundle.g02.json").value.baseSha ||
       semanticDigest(s, "selectionDigest") !== s.selectionDigest) throw new Error("invalid external terminal selection");
-  if (s.ancestorFailures.length !== 1) throw new Error("ordered ancestor failure set mismatch");
+  if (s.bootstrapSupersessionChainDigest !== sha256(Buffer.from(JSON.stringify(s.ancestorFailures))))
+    throw new Error("bootstrap supersession chain digest mismatch");
   const ancestor = byId.get(s.ancestorFailures[0].evidenceId);
   const a = s.ancestorFailures[0];
   if (ancestor.rawDigest !== a.digest || ancestor.artifactId !== a.artifactId || ancestor.metadata.name !== a.artifactName || ancestor.metadata.digest !== a.archiveDigest ||
+      ancestor.run.id !== a.runId || ancestor.run.run_attempt !== a.runAttempt || ancestor.run.head_sha !== a.headSha ||
       ancestor.run.id !== a.provenance.producerRunId || ancestor.run.run_attempt !== a.provenance.producerRunAttempt || ancestor.run.head_sha !== a.provenance.producerHeadSha)
     throw new Error("ancestor failure authority mismatch");
   for (const [phase, id, digestField] of [["f7", s.f7Id, "f7Digest"], ["f9", s.f9Id, "f9Digest"], ["f11", s.f11Id, "f11Digest"]]) {

@@ -12,7 +12,7 @@ const SHA = /^[0-9a-f]{40}$/;
 const POSITIVE = /^[1-9][0-9]*$/;
 const ANNOTATIONS = [
   "io.voiceroom.evidence.id", "io.voiceroom.github.run-attempt", "io.voiceroom.github.run-id",
-  "org.opencontainers.image.revision", "org.opencontainers.image.source", "org.opencontainers.image.title",
+  "org.opencontainers.image.revision", "org.opencontainers.image.source",
 ].sort();
 
 export function verifyRecoveredObject(input) {
@@ -27,7 +27,7 @@ export function verifyRecoveredObject(input) {
   if (manifest.config?.mediaType !== "application/vnd.oci.empty.v1+json" || manifest.config.digest !== "sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a" || manifest.config.size !== 2)
     throw new Error("invalid empty config descriptor");
   if (JSON.stringify(Object.keys(manifest.annotations ?? {}).sort()) !== JSON.stringify(ANNOTATIONS) ||
-      manifest.annotations["io.voiceroom.evidence.id"] !== expectedObjectId || manifest.annotations["org.opencontainers.image.title"] !== expectedObjectId ||
+      manifest.annotations["io.voiceroom.evidence.id"] !== expectedObjectId ||
       manifest.annotations["org.opencontainers.image.source"] !== "https://github.com/dazeGG/VoiceRoom" ||
       !SHA.test(manifest.annotations["org.opencontainers.image.revision"] ?? "") ||
       !POSITIVE.test(manifest.annotations["io.voiceroom.github.run-id"] ?? "") || !POSITIVE.test(manifest.annotations["io.voiceroom.github.run-attempt"] ?? ""))

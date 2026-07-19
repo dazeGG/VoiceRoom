@@ -54,7 +54,6 @@ test("G03-A01 builds a standalone digest-authoritative object from exact source 
     "io.voiceroom.github.run-id",
     "org.opencontainers.image.revision",
     "org.opencontainers.image.source",
-    "org.opencontainers.image.title",
   ]);
 });
 
@@ -120,7 +119,7 @@ test("G03-A02 recovers purged Actions evidence solely by OCI manifest digest", (
   for (const mutate of [
     (manifest) => { manifest.config.size = 3; },
     (manifest) => { manifest.layers[0].size += 1; },
-    (manifest) => { manifest.annotations["org.opencontainers.image.title"] = "other.json"; },
+    (manifest) => { manifest.annotations["org.opencontainers.image.title"] = object.objectId; },
     (manifest) => { manifest.annotations.extra = "forbidden"; },
     (manifest) => { manifest.subject = { digest: object.manifestDigest }; },
   ]) {
@@ -171,10 +170,19 @@ test("workflows use exact token permissions, pinned attestation, scheduled senti
   assert.match(archive, /--record-batch/);
   assert.match(archive, /blob fetch --output fetched-layer\.json/);
   assert.match(sentinel, /^  schedule:/m);
+  assert.match(sentinel, /^      packages: read$/m);
+  const sentinelLogin = sentinel.indexOf("uses: docker/login-action@v3");
+  const sentinelFetch = sentinel.indexOf("run-oras.sh manifest fetch");
+  assert.ok(sentinelLogin > 0 && sentinelLogin < sentinelFetch, "private GHCR login must precede ORAS fetch");
+  assert.match(sentinel, /username: \$\{\{ github\.actor \}\}/);
+  assert.match(sentinel, /password: \$\{\{ github\.token \}\}/);
   assert.match(sentinel, /check-archive-sentinel\.mjs/);
   assert.match(sentinel, /manifest fetch --output/);
   assert.match(sentinel, /blob fetch --output/);
   assert.doesNotMatch(sentinel, /available:true|attestationVerified:true,tagResolvedDigest:x\.manifestDigest/);
+  assert.match(archive, /^  push:\n    branches:\n      - feature\/2\.5\.0-g03-durable-evidence-archive$/m);
+  assert.match(archive, /github\.event_name == 'push' && github\.repository == 'dazeGG\/VoiceRoom' && github\.ref == 'refs\/heads\/feature\/2\.5\.0-g03-durable-evidence-archive' && github\.actor == 'dazeGG'/);
+  assert.match(archive, /^    if: github\.event_name == 'workflow_dispatch' && github\.repository == 'dazeGG\/VoiceRoom' && inputs\.confirm == 'ARCHIVE-G01-G02'$/m);
   assert.doesNotMatch(`${archive}\n${sentinel}`, /\bPAT\b|packages\/.*DELETE|delete-package|oras\s+push|^\s+subject:\s/im);
 });
 
@@ -202,22 +210,32 @@ function authenticatedSources() {
       run: { id: runId, run_attempt: runAttempt, head_sha: headSha, repository: { full_name: "dazeGG/VoiceRoom" } } };
   };
   const ancestorValue = { evidenceId: "bootstrap-failure.g01-a19.json" };
-  const ancestor = descriptor(2, ancestorValue, { runId: 20, headSha: ancestorHead, name: "ancestor", archiveDigest: `sha256:${"2".repeat(64)}` });
+  const ancestor = descriptor(2, ancestorValue, { runId: 20, headSha: ancestorHead,
+    name: `g01-bootstrap-failure-g01-a19-run-20-attempt-1-head-${ancestorHead}-phase-f11`, archiveDigest: `sha256:${"2".repeat(64)}` });
   const g1f7Value = { evidenceId: ARCHIVE_OBJECT_ORDER[2], status: "GREEN", digest: `sha256:${"3".repeat(64)}` };
   const g1f9Value = { evidenceId: ARCHIVE_OBJECT_ORDER[3], status: "GREEN", digest: `sha256:${"4".repeat(64)}` };
   const g1f11Value = { evidenceId: ARCHIVE_OBJECT_ORDER[4], status: "GREEN", digest: `sha256:${"5".repeat(64)}` };
-  const g1f7 = descriptor(3, g1f7Value, { runId: 30, headSha: g01Head, name: "g1f7", archiveDigest: `sha256:${"6".repeat(64)}` });
-  const g1f9 = descriptor(4, g1f9Value, { runId: 30, headSha: g01Head, name: "g1f9", archiveDigest: `sha256:${"7".repeat(64)}` });
-  const g1f11 = descriptor(5, g1f11Value, { runId: 31, headSha: terminalG01, name: "g1f11", archiveDigest: `sha256:${"8".repeat(64)}` });
-  const selectionValue = { evidenceId: ARCHIVE_OBJECT_ORDER[0], status: "SELECTED_GREEN", terminalKind: "landed-recovery", terminalDevelopSha: terminalG01,
+  const g1f7 = descriptor(3, g1f7Value, { runId: 30, headSha: g01Head,
+    name: `g01-candidate-g01-recovery-a27-run-30-attempt-1-head-${g01Head}`, archiveDigest: `sha256:${"6".repeat(64)}` });
+  const g1f9 = descriptor(4, g1f9Value, { runId: 30, headSha: g01Head,
+    name: `g01-approval-g01-recovery-a27-run-30-attempt-1-head-${g01Head}`, archiveDigest: `sha256:${"7".repeat(64)}` });
+  const g1f11 = descriptor(5, g1f11Value, { runId: 31, headSha: terminalG01,
+    name: `g01-merge-g01-recovery-a27-run-31-attempt-1-head-${terminalG01}`, archiveDigest: `sha256:${"8".repeat(64)}` });
+  const ancestorFailure = { attemptId: "g01-a19", evidenceId: ARCHIVE_OBJECT_ORDER[1], digest: sha256(ancestor.bytes), artifactId: ancestor.artifactId,
+    artifactName: ancestor.metadata.name, archiveDigest: ancestor.metadata.digest, runId: ancestor.run.id, runAttempt: ancestor.run.run_attempt,
+    headSha: ancestor.run.head_sha, baseSha: SHA("1"), parentSha: SHA("1"), terminalDevelopSha: ancestorHead,
+    createdAt: "2026-07-18T00:00:00.000Z", provenance: { kind: "artifactless-run-backfill", authorityDigest: `sha256:${"a".repeat(64)}`,
+      producerRunId: ancestor.run.id, producerRunAttempt: ancestor.run.run_attempt, producerHeadSha: ancestor.run.head_sha,
+      recoveryTerminalDevelopSha: terminalG01, subjectTerminalDevelopSha: ancestorHead } };
+  const selectionValue = { schemaVersion: 1, release: "2.5.0", evidenceId: ARCHIVE_OBJECT_ORDER[0], attemptId: "g01-recovery-a27",
+    status: "SELECTED_GREEN", terminalKind: "landed-recovery", terminalDevelopSha: terminalG01, createdAt: "2026-07-19T00:00:00.000Z", remoteDeleted: true,
     f7Id: ARCHIVE_OBJECT_ORDER[2], f7Digest: g1f7Value.digest, f9Id: ARCHIVE_OBJECT_ORDER[3], f9Digest: g1f9Value.digest, f11Id: ARCHIVE_OBJECT_ORDER[4], f11Digest: g1f11Value.digest,
-    ancestorFailures: [{ evidenceId: ARCHIVE_OBJECT_ORDER[1], digest: ancestor.rawDigest ?? sha256(ancestor.bytes), artifactId: ancestor.artifactId, artifactName: ancestor.metadata.name,
-      archiveDigest: ancestor.metadata.digest, provenance: { producerRunId: ancestor.run.id, producerRunAttempt: ancestor.run.run_attempt, producerHeadSha: ancestor.run.head_sha } }],
+    ancestorFailures: [ancestorFailure],
     artifactBindings: {
       f7: { artifactId: g1f7.artifactId, artifactName: g1f7.metadata.name, archiveDigest: g1f7.metadata.digest, payloadDigest: sha256(g1f7.bytes), runId: g1f7.run.id, runAttempt: 1, headSha: g1f7.run.head_sha },
       f9: { artifactId: g1f9.artifactId, artifactName: g1f9.metadata.name, archiveDigest: g1f9.metadata.digest, payloadDigest: sha256(g1f9.bytes), runId: g1f9.run.id, runAttempt: 1, headSha: g1f9.run.head_sha },
       f11: { artifactId: g1f11.artifactId, artifactName: g1f11.metadata.name, archiveDigest: g1f11.metadata.digest, payloadDigest: sha256(g1f11.bytes), runId: g1f11.run.id, runAttempt: 1, headSha: g1f11.run.head_sha },
-    }, bootstrapSupersessionChainDigest: `sha256:${"9".repeat(64)}` };
+    }, bootstrapSupersessionChainDigest: sha256(Buffer.from(JSON.stringify([ancestorFailure]))) };
   selectionValue.selectionDigest = semantic(selectionValue, "selectionDigest");
   const selection = descriptor(1, selectionValue, { runId: 10, headSha: terminalG01, name: "selection", archiveDigest: `sha256:${"1".repeat(64)}` });
   const g2f7Value = { evidenceId: ARCHIVE_OBJECT_ORDER[5], status: "GREEN", baseSha: terminalG01, sourceSha: g02Head,
@@ -239,6 +257,19 @@ test("G03-A01 authenticates the complete external selection, ancestor and G01/G0
   tampered[2].bytes = Buffer.from('{"evidenceId":"ci-bundle.bootstrap-recovery-a27.json","status":"GREEN","digest":"sha256:tampered"}');
   assert.throws(() => validateArchiveSourceSet(tampered, terminalG02), /G01 f7 authority/);
   assert.throws(() => validateArchiveSourceSet(sources.slice(1), terminalG02), /eight-object/);
+
+  const mutateSelection = (mutate, refreshSelectionDigest = false) => {
+    const changed = sources.map((source) => ({ ...source, bytes: Buffer.from(source.bytes) }));
+    const value = JSON.parse(changed[0].bytes); mutate(value);
+    if (refreshSelectionDigest) value.selectionDigest = semantic(value, "selectionDigest");
+    changed[0].bytes = Buffer.from(JSON.stringify(value));
+    return changed;
+  };
+  assert.throws(() => validateArchiveSourceSet(mutateSelection((value) => { value.extra = true; }), terminalG02), /keys.*exactly/);
+  assert.throws(() => validateArchiveSourceSet(mutateSelection((value) => { delete value.createdAt; }), terminalG02), /keys.*exactly/);
+  assert.throws(() => validateArchiveSourceSet(mutateSelection((value) => { value.artifactBindings.f7.extra = true; }), terminalG02), /keys.*exactly/);
+  assert.throws(() => validateArchiveSourceSet(mutateSelection((value) => { delete value.artifactBindings.f7.payloadDigest; }), terminalG02), /keys.*exactly/);
+  assert.throws(() => validateArchiveSourceSet(mutateSelection((value) => { value.ancestorFailures[0].terminalDevelopSha = SHA("0"); }, true), terminalG02), /supersession chain digest/);
 });
 
 test("G03-A01 aggregates all eight proofs once with contiguous append-only sequences", () => {
