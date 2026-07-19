@@ -1,0 +1,695 @@
+{
+  "cases": [
+    {
+      "name": "first",
+      "expected": "G01_PRE_BRANCH",
+      "facts": {}
+    },
+    {
+      "name": "historical-abandoned-premerge",
+      "expected": "G01_PRE_BRANCH",
+      "facts": {
+        "history": [
+          {
+            "status": "ABANDONED_PREMERGE"
+          }
+        ]
+      }
+    },
+    {
+      "name": "lost-preparation",
+      "expected": "G01_PRE_BRANCH",
+      "facts": {
+        "localPreparation": true
+      }
+    },
+    {
+      "name": "active",
+      "expected": "G01_PREMERGE_ACTIVE",
+      "facts": {
+        "firstAuthoritativeId": 1
+      }
+    },
+    {
+      "name": "landed",
+      "expected": "G01_LANDED_UNSEALED",
+      "facts": {
+        "firstAuthoritativeId": 1,
+        "mergeSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      }
+    },
+    {
+      "name": "post-f11-pre-selection",
+      "expected": "G01_LANDED_UNSEALED",
+      "facts": {
+        "firstAuthoritativeId": 1,
+        "mergeSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "developSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "baseSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "originSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "f7At": "2026-07-18T00:00:00.000Z",
+        "f9At": "2026-07-18T00:01:00.000Z",
+        "mergeAt": "2026-07-18T00:02:00.000Z",
+        "deletionAt": "2026-07-18T00:03:00.000Z",
+        "f11At": "2026-07-18T00:04:00.000Z",
+        "f11Status": "GREEN",
+        "remoteDeleted": true,
+        "ancestors": [],
+        "selection": null
+      }
+    },
+    {
+      "name": "direct-selected",
+      "expected": "G01_SELECTED_GREEN",
+      "facts": {
+        "firstAuthoritativeId": 1,
+        "mergeSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "developSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "baseSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "originSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "f7At": "2026-07-18T00:00:00.000Z",
+        "f9At": "2026-07-18T00:01:00.000Z",
+        "mergeAt": "2026-07-18T00:02:00.000Z",
+        "deletionAt": "2026-07-18T00:03:00.000Z",
+        "f11At": "2026-07-18T00:04:00.000Z",
+        "f11Status": "GREEN",
+        "remoteDeleted": true,
+        "ancestors": [],
+        "selection": {
+          "schemaVersion": 1,
+          "release": "2.5.0",
+          "attemptId": "g01-a02",
+          "terminalKind": "direct-canonical",
+          "f7Id": "ci-bundle.g01.json",
+          "f7Digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+          "f9Id": "approval-envelope.g01.json",
+          "f9Digest": "sha256:21a2f91d4fd6cdc4bddda0e9d071e7641d9c62804b4f199af6f9bad58e848273",
+          "f11Id": "merge-envelope.g01.json",
+          "f11Digest": "sha256:f1244d4bf965b3ecb7e2d720cbaab8e2d9a9b612e654fe13699ef7d4de4da62a",
+          "terminalDevelopSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "createdAt": "2026-07-18T00:05:00.000Z",
+          "remoteDeleted": true,
+          "status": "SELECTED_GREEN",
+          "ancestorFailures": [],
+          "bootstrapSupersessionChainDigest": "sha256:4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "evidenceId": "bootstrap-selection.g01-a02.json",
+          "artifactBindings": {
+            "f7": {
+              "artifactId": 1,
+              "artifactName": "g01-candidate-g01-a02-run-10-attempt-1-head-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "runId": 10,
+              "runAttempt": 1,
+              "headSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "archiveDigest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+              "payloadDigest": "sha256:a5216e2302f28e9a71dae4e5745aed24cf328e0fad1ec9b049dc89f117317e9c"
+            },
+            "f9": {
+              "artifactId": 2,
+              "artifactName": "g01-approval-g01-a02-run-20-attempt-1-head-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "runId": 20,
+              "runAttempt": 1,
+              "headSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "archiveDigest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+              "payloadDigest": "sha256:9e0194a1f9becc865a175c9310a53b52877a5f9b8e4301dbae4569f0c807bd59"
+            },
+            "f11": {
+              "artifactId": 3,
+              "artifactName": "g01-merge-g01-a02-run-30-attempt-1-head-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "runId": 30,
+              "runAttempt": 1,
+              "headSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "archiveDigest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+              "payloadDigest": "sha256:5e2ca2aaba1a25e07166f8f537d63109c6e598d23788c374695087646c044cdd"
+            }
+          },
+          "selectionDigest": "sha256:3964eb66802880c954b123b8e77671dd2447073a6f7c597cf52a93fd70178160"
+        },
+        "f7": {
+          "schemaVersion": 1,
+          "goal": "G01",
+          "phase": "F7",
+          "status": "GREEN",
+          "evidenceId": "ci-bundle.g01.json",
+          "sourceSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+          "createdAt": "2026-07-18T00:00:00.000Z",
+          "attemptId": "g01-a02",
+          "sourceBranch": "feature/2.5.0-g01-canonical-evidence-bootstrap"
+        },
+        "f9": {
+          "schemaVersion": 1,
+          "goal": "G01",
+          "phase": "F9",
+          "status": "GREEN",
+          "evidenceId": "approval-envelope.g01.json",
+          "sourceSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "digest": "sha256:21a2f91d4fd6cdc4bddda0e9d071e7641d9c62804b4f199af6f9bad58e848273",
+          "createdAt": "2026-07-18T00:01:00.000Z",
+          "f7Digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+          "reviewObjects": [
+            {
+              "role": "code-reviewer",
+              "verdict": "APPROVE",
+              "reviewId": 1,
+              "nodeId": "R1",
+              "actorId": 11,
+              "commitId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "submittedAt": "2026-07-18T00:00:10.000Z"
+            },
+            {
+              "role": "architect",
+              "verdict": "CLEAR",
+              "reviewId": 2,
+              "nodeId": "R2",
+              "actorId": 12,
+              "commitId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "submittedAt": "2026-07-18T00:00:20.000Z"
+            },
+            {
+              "role": "verifier",
+              "verdict": "APPROVE",
+              "reviewId": 3,
+              "nodeId": "R3",
+              "actorId": 13,
+              "commitId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "submittedAt": "2026-07-18T00:00:30.000Z"
+            }
+          ],
+          "attemptId": "g01-a02",
+          "sourceBranch": "feature/2.5.0-g01-canonical-evidence-bootstrap"
+        },
+        "f11": {
+          "schemaVersion": 1,
+          "goal": "G01",
+          "phase": "F11",
+          "status": "GREEN",
+          "evidenceId": "merge-envelope.g01.json",
+          "sourceSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "digest": "sha256:f1244d4bf965b3ecb7e2d720cbaab8e2d9a9b612e654fe13699ef7d4de4da62a",
+          "createdAt": "2026-07-18T00:04:00.000Z",
+          "f7Digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+          "f9Digest": "sha256:21a2f91d4fd6cdc4bddda0e9d071e7641d9c62804b4f199af6f9bad58e848273",
+          "mergeSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "terminalDevelopSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "remoteDeleted": true,
+          "mergedAt": "2026-07-18T00:02:00.000Z",
+          "remoteDeletionObservedAt": "2026-07-18T00:03:00.000Z",
+          "prNumber": 1,
+          "sourceBranch": "feature/2.5.0-g01-canonical-evidence-bootstrap",
+          "attemptId": "g01-a02",
+          "postMergeRun": {
+            "id": 10,
+            "runAttempt": 1,
+            "checkSuiteId": 20,
+            "workflowId": 30,
+            "workflowName": "CI/CD",
+            "workflowPath": ".github/workflows/ci.yml",
+            "repository": "dazeGG/VoiceRoom",
+            "event": "push",
+            "headBranch": "develop",
+            "headSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "requiredJobs": [
+              {
+                "id": 801,
+                "name": "Lint, typecheck & build",
+                "status": "completed",
+                "conclusion": "success",
+                "runId": 10,
+                "runAttempt": 1,
+                "headSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+              },
+              {
+                "id": 802,
+                "name": "Tests",
+                "status": "completed",
+                "conclusion": "success",
+                "runId": 10,
+                "runAttempt": 1,
+                "headSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "selection-before-f11",
+      "expected": "G01_LANDED_UNSEALED",
+      "facts": {
+        "firstAuthoritativeId": 1,
+        "mergeSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "developSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "baseSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "originSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "f7At": "2026-07-18T00:00:00.000Z",
+        "f9At": "2026-07-18T00:01:00.000Z",
+        "mergeAt": "2026-07-18T00:02:00.000Z",
+        "deletionAt": "2026-07-18T00:03:00.000Z",
+        "f11At": "2026-07-18T00:04:00.000Z",
+        "f11Status": "GREEN",
+        "remoteDeleted": true,
+        "ancestors": [],
+        "selection": {
+          "status": "SELECTED_GREEN",
+          "terminalKind": "direct-canonical",
+          "terminalDevelopSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "createdAt": "2026-07-18T00:03:30.000Z"
+        }
+      }
+    },
+    {
+      "name": "terminal-sha-drift",
+      "expected": "G01_LANDED_UNSEALED",
+      "facts": {
+        "firstAuthoritativeId": 1,
+        "mergeSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "developSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "baseSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "originSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "f7At": "2026-07-18T00:00:00.000Z",
+        "f9At": "2026-07-18T00:01:00.000Z",
+        "mergeAt": "2026-07-18T00:02:00.000Z",
+        "deletionAt": "2026-07-18T00:03:00.000Z",
+        "f11At": "2026-07-18T00:04:00.000Z",
+        "f11Status": "GREEN",
+        "remoteDeleted": true,
+        "ancestors": [],
+        "selection": {
+          "status": "SELECTED_GREEN",
+          "terminalKind": "direct-canonical",
+          "terminalDevelopSha": "cccccccccccccccccccccccccccccccccccccccc",
+          "createdAt": "2026-07-18T00:05:00.000Z"
+        }
+      }
+    },
+    {
+      "name": "develop-drift",
+      "expected": "G01_LANDED_UNSEALED",
+      "facts": {
+        "firstAuthoritativeId": 1,
+        "mergeSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "developSha": "cccccccccccccccccccccccccccccccccccccccc",
+        "baseSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "originSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "f7At": "2026-07-18T00:00:00.000Z",
+        "f9At": "2026-07-18T00:01:00.000Z",
+        "mergeAt": "2026-07-18T00:02:00.000Z",
+        "deletionAt": "2026-07-18T00:03:00.000Z",
+        "f11At": "2026-07-18T00:04:00.000Z",
+        "f11Status": "GREEN",
+        "remoteDeleted": true,
+        "ancestors": [],
+        "selection": {
+          "status": "SELECTED_GREEN",
+          "terminalKind": "direct-canonical",
+          "terminalDevelopSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "createdAt": "2026-07-18T00:05:00.000Z"
+        }
+      }
+    },
+    {
+      "name": "red-f11",
+      "expected": "G01_LANDED_UNSEALED",
+      "facts": {
+        "firstAuthoritativeId": 1,
+        "mergeSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "developSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "baseSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "originSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "f7At": "2026-07-18T00:00:00.000Z",
+        "f9At": "2026-07-18T00:01:00.000Z",
+        "mergeAt": "2026-07-18T00:02:00.000Z",
+        "deletionAt": "2026-07-18T00:03:00.000Z",
+        "f11At": "2026-07-18T00:04:00.000Z",
+        "f11Status": "RED",
+        "remoteDeleted": true,
+        "ancestors": [],
+        "selection": {
+          "status": "SELECTED_GREEN",
+          "terminalKind": "direct-canonical",
+          "terminalDevelopSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "createdAt": "2026-07-18T00:05:00.000Z"
+        }
+      }
+    },
+    {
+      "name": "deletion-before-merge",
+      "expected": "G01_LANDED_UNSEALED",
+      "facts": {
+        "firstAuthoritativeId": 1,
+        "mergeSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "developSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "baseSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "originSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "f7At": "2026-07-18T00:00:00.000Z",
+        "f9At": "2026-07-18T00:01:00.000Z",
+        "mergeAt": "2026-07-18T00:02:00.000Z",
+        "deletionAt": "2026-07-18T00:01:30.000Z",
+        "f11At": "2026-07-18T00:04:00.000Z",
+        "f11Status": "GREEN",
+        "remoteDeleted": true,
+        "ancestors": [],
+        "selection": {
+          "status": "SELECTED_GREEN",
+          "terminalKind": "direct-canonical",
+          "terminalDevelopSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "createdAt": "2026-07-18T00:05:00.000Z"
+        }
+      }
+    },
+    {
+      "name": "recovery-selected",
+      "expected": "G01_SELECTED_GREEN",
+      "facts": {
+        "firstAuthoritativeId": 1,
+        "mergeSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "developSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "baseSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "originSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "f7At": "2026-07-18T00:00:00.000Z",
+        "f9At": "2026-07-18T00:01:00.000Z",
+        "mergeAt": "2026-07-18T00:02:00.000Z",
+        "deletionAt": "2026-07-18T00:03:00.000Z",
+        "f11At": "2026-07-18T00:04:00.000Z",
+        "f11Status": "GREEN",
+        "remoteDeleted": true,
+        "ancestors": [
+          {
+            "terminalDevelopSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "failedAt": "2026-07-17T23:59:00.000Z"
+          }
+        ],
+        "selection": {
+          "schemaVersion": 1,
+          "release": "2.5.0",
+          "attemptId": "g01-recovery-a02",
+          "terminalKind": "landed-recovery",
+          "f7Id": "ci-bundle.bootstrap-recovery-a02.json",
+          "f7Digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+          "f9Id": "approval-envelope.bootstrap-recovery-a02.json",
+          "f9Digest": "sha256:21a2f91d4fd6cdc4bddda0e9d071e7641d9c62804b4f199af6f9bad58e848273",
+          "f11Id": "merge-envelope.bootstrap-recovery-a02.json",
+          "f11Digest": "sha256:f1244d4bf965b3ecb7e2d720cbaab8e2d9a9b612e654fe13699ef7d4de4da62a",
+          "terminalDevelopSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "createdAt": "2026-07-18T00:05:00.000Z",
+          "remoteDeleted": true,
+          "status": "SELECTED_GREEN",
+          "ancestorFailures": [
+            {
+              "attemptId": "g01-a01",
+              "evidenceId": "bootstrap-failure.g01-a01.json",
+              "digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+              "artifactId": 30,
+              "runId": 40,
+              "baseSha": "9999999999999999999999999999999999999999",
+              "parentSha": "9999999999999999999999999999999999999999",
+              "terminalDevelopSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "createdAt": "2026-07-17T23:59:00.000Z",
+              "artifactName": "g01-bootstrap-failure-g01-a01-run-40-attempt-1-head-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-phase-f11",
+              "archiveDigest": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+              "runAttempt": 1,
+              "headSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            }
+          ],
+          "bootstrapSupersessionChainDigest": "sha256:4b002c197de9735a963938f87766de710d64973125e99b9690fe9e1b32c96bbb",
+          "evidenceId": "bootstrap-selection.g01-recovery-a02.json",
+          "artifactBindings": {
+            "f7": {
+              "artifactId": 1,
+              "artifactName": "g01-candidate-g01-recovery-a02-run-10-attempt-1-head-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "runId": 10,
+              "runAttempt": 1,
+              "headSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "archiveDigest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+              "payloadDigest": "sha256:3523f20e61e1fd3498a775f21084844c90cb93eedba9a5c379dfc583e1af4f9d"
+            },
+            "f9": {
+              "artifactId": 2,
+              "artifactName": "g01-approval-g01-recovery-a02-run-20-attempt-1-head-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "runId": 20,
+              "runAttempt": 1,
+              "headSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "archiveDigest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+              "payloadDigest": "sha256:a64f39905a2261cd41bc06b0ed240822ea3629998172de28a69301c412a78a5b"
+            },
+            "f11": {
+              "artifactId": 3,
+              "artifactName": "g01-merge-g01-recovery-a02-run-30-attempt-1-head-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "runId": 30,
+              "runAttempt": 1,
+              "headSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "archiveDigest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+              "payloadDigest": "sha256:af6b428e87ece37b7d03e16f0bf23603bce8448f53f8140017b9340dd36708e0"
+            }
+          },
+          "selectionDigest": "sha256:93f1a75976a3f1baa34ded1e05915ae25ca1a5e3f6a1fb6408750f5615a03d00"
+        },
+        "parentSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "f7": {
+          "schemaVersion": 1,
+          "goal": "G01",
+          "phase": "F7",
+          "status": "GREEN",
+          "evidenceId": "ci-bundle.bootstrap-recovery-a02.json",
+          "sourceSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+          "createdAt": "2026-07-18T00:00:00.000Z",
+          "attemptId": "g01-recovery-a02",
+          "sourceBranch": "feature/2.5.0-g01-postmerge-bootstrap-a02"
+        },
+        "f9": {
+          "schemaVersion": 1,
+          "goal": "G01",
+          "phase": "F9",
+          "status": "GREEN",
+          "evidenceId": "approval-envelope.bootstrap-recovery-a02.json",
+          "sourceSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "digest": "sha256:21a2f91d4fd6cdc4bddda0e9d071e7641d9c62804b4f199af6f9bad58e848273",
+          "createdAt": "2026-07-18T00:01:00.000Z",
+          "f7Digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+          "reviewObjects": [
+            {
+              "role": "code-reviewer",
+              "verdict": "APPROVE",
+              "reviewId": 1,
+              "nodeId": "R1",
+              "actorId": 11,
+              "commitId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "submittedAt": "2026-07-18T00:00:10.000Z"
+            },
+            {
+              "role": "architect",
+              "verdict": "CLEAR",
+              "reviewId": 2,
+              "nodeId": "R2",
+              "actorId": 12,
+              "commitId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "submittedAt": "2026-07-18T00:00:20.000Z"
+            },
+            {
+              "role": "verifier",
+              "verdict": "APPROVE",
+              "reviewId": 3,
+              "nodeId": "R3",
+              "actorId": 13,
+              "commitId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "submittedAt": "2026-07-18T00:00:30.000Z"
+            }
+          ],
+          "attemptId": "g01-recovery-a02",
+          "sourceBranch": "feature/2.5.0-g01-postmerge-bootstrap-a02"
+        },
+        "f11": {
+          "schemaVersion": 1,
+          "goal": "G01",
+          "phase": "F11",
+          "status": "GREEN",
+          "evidenceId": "merge-envelope.bootstrap-recovery-a02.json",
+          "sourceSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "digest": "sha256:f1244d4bf965b3ecb7e2d720cbaab8e2d9a9b612e654fe13699ef7d4de4da62a",
+          "createdAt": "2026-07-18T00:04:00.000Z",
+          "f7Digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+          "f9Digest": "sha256:21a2f91d4fd6cdc4bddda0e9d071e7641d9c62804b4f199af6f9bad58e848273",
+          "mergeSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "terminalDevelopSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "remoteDeleted": true,
+          "mergedAt": "2026-07-18T00:02:00.000Z",
+          "remoteDeletionObservedAt": "2026-07-18T00:03:00.000Z",
+          "prNumber": 1,
+          "sourceBranch": "feature/2.5.0-g01-postmerge-bootstrap-a02",
+          "attemptId": "g01-recovery-a02",
+          "postMergeRun": {
+            "id": 10,
+            "runAttempt": 1,
+            "checkSuiteId": 20,
+            "workflowId": 30,
+            "workflowName": "CI/CD",
+            "workflowPath": ".github/workflows/ci.yml",
+            "repository": "dazeGG/VoiceRoom",
+            "event": "push",
+            "headBranch": "develop",
+            "headSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "requiredJobs": [
+              {
+                "id": 801,
+                "name": "Lint, typecheck & build",
+                "status": "completed",
+                "conclusion": "success",
+                "runId": 10,
+                "runAttempt": 1,
+                "headSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+              },
+              {
+                "id": 802,
+                "name": "Tests",
+                "status": "completed",
+                "conclusion": "success",
+                "runId": 10,
+                "runAttempt": 1,
+                "headSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "recovery-missing-ancestry",
+      "expected": "G01_LANDED_UNSEALED",
+      "facts": {
+        "firstAuthoritativeId": 1,
+        "mergeSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "developSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "baseSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "originSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "f7At": "2026-07-18T00:00:00.000Z",
+        "f9At": "2026-07-18T00:01:00.000Z",
+        "mergeAt": "2026-07-18T00:02:00.000Z",
+        "deletionAt": "2026-07-18T00:03:00.000Z",
+        "f11At": "2026-07-18T00:04:00.000Z",
+        "f11Status": "GREEN",
+        "remoteDeleted": true,
+        "ancestors": [],
+        "selection": {
+          "status": "SELECTED_GREEN",
+          "terminalKind": "landed-recovery",
+          "terminalDevelopSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "createdAt": "2026-07-18T00:05:00.000Z"
+        },
+        "parentSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    },
+    {
+      "name": "recovery-parent-drift",
+      "expected": "G01_LANDED_UNSEALED",
+      "facts": {
+        "firstAuthoritativeId": 1,
+        "mergeSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "developSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "baseSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "originSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "f7At": "2026-07-18T00:00:00.000Z",
+        "f9At": "2026-07-18T00:01:00.000Z",
+        "mergeAt": "2026-07-18T00:02:00.000Z",
+        "deletionAt": "2026-07-18T00:03:00.000Z",
+        "f11At": "2026-07-18T00:04:00.000Z",
+        "f11Status": "GREEN",
+        "remoteDeleted": true,
+        "ancestors": [
+          {
+            "terminalDevelopSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "failedAt": "2026-07-17T23:59:00.000Z"
+          }
+        ],
+        "selection": {
+          "status": "SELECTED_GREEN",
+          "terminalKind": "landed-recovery",
+          "terminalDevelopSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "createdAt": "2026-07-18T00:05:00.000Z"
+        },
+        "parentSha": "cccccccccccccccccccccccccccccccccccccccc"
+      }
+    }
+  ],
+  "g01Writable": [
+    "docs/RELEASE_2.5.0_PLAN.md",
+    "docs/RELEASE_2.5.0_TEST_SPEC.md",
+    "docs/RELEASE_2.6.0_PLAN.md",
+    "docs/RELEASE_2.7.0_PLAN.md",
+    "docs/releases/2.5.0/evidence/index.json",
+    "docs/releases/2.5.0/evidence/bootstrap-attempts.json",
+    "docs/releases/2.5.0/evidence/bootstrap-landed-recoveries.json",
+    "docs/releases/2.5.0/evidence/archive-authority.json",
+    "docs/releases/2.5.0/evidence/repair-ledger.json",
+    "docs/releases/2.5.0/evidence/schema/envelope.schema.json",
+    "docs/releases/2.5.0/evidence/schema/bootstrap-lineage.schema.json",
+    "docs/releases/2.5.0/evidence/schema/bootstrap-attempt.schema.json",
+    "docs/releases/2.5.0/evidence/schema/bootstrap-landed-recovery.schema.json",
+    "docs/releases/2.5.0/evidence/schema/bootstrap-selection.schema.json",
+    "docs/releases/2.5.0/evidence/schema/archive-authority.schema.json",
+    "docs/releases/2.5.0/evidence/schema/archive-map.schema.json",
+    "docs/releases/2.5.0/evidence/schema/archive-ledger.schema.json",
+    "docs/releases/2.5.0/evidence/schema/repair-ledger.schema.json",
+    "docs/releases/2.5.0/evidence/schema/repair-authorization.schema.json",
+    "docs/releases/2.5.0/evidence/schema/repair-authorization-envelope.schema.json",
+    "docs/releases/2.5.0/repairs/README.md",
+    "config/evidence/release-evidence-archive.v1.json",
+    ".github/workflows/ci.yml",
+    "scripts/test/validate_release_250_plan.py",
+    "scripts/test/g01-release-docs.test.mjs",
+    "scripts/test/g01-oras-lock.test.mjs",
+    "scripts/test/g01-landed-bootstrap-recovery.test.mjs",
+    "scripts/test/fixtures/g01-landed-bootstrap-recovery.json",
+    "scripts/evidence/bootstrap-export.mjs",
+    "scripts/evidence/validate-envelope.mjs",
+    "scripts/evidence/recover-landed-bootstrap.mjs",
+    "scripts/evidence/emit-bootstrap-selection.mjs",
+    "scripts/ci/run-actionlint.sh",
+    "config/tool-locks/actionlint-v1.7.12.json",
+    "scripts/ci/run-oras.sh",
+    "config/tool-locks/oras-v1.3.3.json"
+  ],
+  "recoveryWritable": [
+    "docs/RELEASE_2.5.0_PLAN.md",
+    "docs/RELEASE_2.5.0_TEST_SPEC.md",
+    "docs/releases/2.5.0/evidence/bootstrap-attempts.json",
+    "docs/releases/2.5.0/evidence/bootstrap-landed-recoveries.json",
+    "docs/releases/2.5.0/evidence/schema/envelope.schema.json",
+    "docs/releases/2.5.0/evidence/schema/bootstrap-attempt.schema.json",
+    "docs/releases/2.5.0/evidence/schema/bootstrap-landed-recovery.schema.json",
+    "docs/releases/2.5.0/evidence/schema/bootstrap-selection.schema.json",
+    ".github/workflows/ci.yml",
+    "scripts/test/validate_release_250_plan.py",
+    "scripts/test/g01-release-docs.test.mjs",
+    "scripts/test/g01-landed-bootstrap-recovery.test.mjs",
+    "scripts/test/fixtures/g01-landed-bootstrap-recovery.json",
+    "scripts/evidence/bootstrap-export.mjs",
+    "scripts/evidence/validate-envelope.mjs",
+    "scripts/evidence/recover-landed-bootstrap.mjs",
+    "scripts/evidence/emit-bootstrap-selection.mjs"
+  ],
+  "recoveryReadOnly": [
+    ".gitignore",
+    "docs/GIT_FLOW.md",
+    "docs/RELEASE_2.6.0_PLAN.md",
+    "docs/RELEASE_2.7.0_PLAN.md",
+    "docs/releases/2.5.0/evidence/index.json",
+    "docs/releases/2.5.0/evidence/archive-authority.json",
+    "docs/releases/2.5.0/evidence/repair-ledger.json",
+    "docs/releases/2.5.0/evidence/schema/bootstrap-lineage.schema.json",
+    "docs/releases/2.5.0/evidence/schema/archive-authority.schema.json",
+    "docs/releases/2.5.0/evidence/schema/archive-map.schema.json",
+    "docs/releases/2.5.0/evidence/schema/archive-ledger.schema.json",
+    "docs/releases/2.5.0/evidence/schema/repair-ledger.schema.json",
+    "docs/releases/2.5.0/evidence/schema/repair-authorization.schema.json",
+    "docs/releases/2.5.0/evidence/schema/repair-authorization-envelope.schema.json",
+    "docs/releases/2.5.0/repairs/README.md",
+    "config/evidence/release-evidence-archive.v1.json",
+    "scripts/test/g01-oras-lock.test.mjs",
+    "scripts/ci/run-actionlint.sh",
+    "config/tool-locks/actionlint-v1.7.12.json",
+    "scripts/ci/run-oras.sh",
+    "config/tool-locks/oras-v1.3.3.json",
+    ".omx/context/release-2-5-0-archive-authority.json"
+  ]
+}
