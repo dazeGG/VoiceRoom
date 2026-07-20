@@ -1,0 +1,23 @@
+name: voiceroom-lkv-replay
+
+services:
+  livekit:
+    image: livekit/livekit-server:v1.13.2
+    command: ["--dev", "--bind", "0.0.0.0"]
+    environment:
+      LIVEKIT_KEYS: "devkey: devsecret"
+    ports:
+      - "7880:7880"
+      - "7881:7881"
+      - "7882:7882/udp"
+
+  partition-proxy:
+    image: node:24-alpine
+    working_dir: /work
+    command: ["node", "scripts/lkv/partition-proxy.mjs", "--listen", "17880", "--target-host", "livekit", "--target-port", "7880"]
+    volumes:
+      - ./:/work:ro
+    ports:
+      - "17880:17880"
+    depends_on:
+      - livekit
