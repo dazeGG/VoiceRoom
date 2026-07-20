@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "release": "2.5.0",
+  "baseline": {
+    "artifact": "coverage/release-250-summary.json",
+    "measuredAt": "2026-07-20T00:00:00.000Z",
+    "total": {
+      "lines": 0,
+      "branches": 0
+    }
+  },
+  "changedBusinessCode": {
+    "line": 90,
+    "branch": 85
+  },
+  "strictBranchPaths": [
+    "apps/api/src/server.js",
+    "apps/api/src/lib/rate-limit.js",
+    "apps/api/src/lib/room-store.js",
+    "apps/api/src/lib/user-store.js",
+    "apps/api/src/lib/avatar-storage.js",
+    "apps/api/src/lib/avatar-processing.js",
+    "apps/api/src/lib/push-service.js",
+    "apps/api/src/lib/push-store.js",
+    "packages/shared/src/validation.js",
+    "packages/shared/src/realtime.js",
+    "apps/web/src/lib/api/http.ts",
+    "apps/web/src/lib/api/realtime.ts"
+  ],
+  "businessPathPatterns": [
+    "apps/api/src/",
+    "apps/web/src/",
+    "packages/shared/src/"
+  ],
+  "ignoredPathPatterns": [
+    "/test/",
+    "/e2e/",
+    "/migrations/",
+    ".d.ts"
+  ]
+}
