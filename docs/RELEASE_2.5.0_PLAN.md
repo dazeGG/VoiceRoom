@@ -6,9 +6,11 @@
 **Tracked execution sources after G01:** `docs/RELEASE_2.5.0_PLAN.md` and `docs/RELEASE_2.5.0_TEST_SPEC.md`. `.omx/` is ignored (`.gitignore:47`) and is never the sole execution source of truth.  
 **Authority:** no source implementation, branch, push, PR, merge, deletion, tag, release, deploy, provider/topology purchase, or dependency addition is authorized by this planning revision.
 
+> **Execution amendment (2026-07-20):** the 93 cards in §8 remain the detailed requirements and verification checklist, but they no longer require 93 branches or 93 PRs. Branch, predecessor-envelope, per-goal F7/F9/F11, and one-goal-at-a-time instructions are superseded by `docs/RELEASE_2.5.0_EXECUTION_PLAN.md`. The approved delivery shape is nine subsystem branches, with one review/evidence chain per branch and the existing four subsystem checkpoints retained.
+
 ## 1. Outcome, scope and stop condition
 
-One backwards-compatible product minor, **VoiceRoom 2.5.0 — Messaging Platform**, absorbs the confirmed targets previously split across 2.5.0, 2.6.0 and 2.7.0. Delivery uses the maximum meaningful sequence of independently safe, flag-off goals derived from schema/contract/transaction/deployment boundaries; there is no numerical goal cap. Atomic Unit-of-Work changes are deliberately not split.
+One backwards-compatible product minor, **VoiceRoom 2.5.0 — Messaging Platform**, absorbs the confirmed targets previously split across 2.5.0, 2.6.0 and 2.7.0. G01–G93 remain independently verifiable, flag-off slices derived from schema/contract/transaction/deployment boundaries, but delivery groups them into the nine subsystem branches defined by `docs/RELEASE_2.5.0_EXECUTION_PLAN.md`. Atomic Unit-of-Work changes are deliberately not split.
 
 ### 1.1 Included outcome
 
@@ -97,7 +99,7 @@ G06 compares at least two viable RGI data/renderer candidates for license, maint
 
 ### Fair alternatives
 
-- **A — one umbrella with sequential goals and four immutable staging checkpoints (chosen).** Coherent product and shared foundations; longest lead time and largest final state-space, mitigated by internal messaging/membership/engagement/media checkpoints.
+- **A — one umbrella with nine subsystem branches and four immutable staging checkpoints (chosen).** Coherent product and shared foundations; bounded parallelism with branch-level review/evidence and slice-level targeted tests.
 - **B — retain separate 2.5/2.6/2.7 releases.** Earlier learning and smaller public blast radius; repeated release overhead and unwanted intermediate product seams.
 - **C — one umbrella with subsystem mega-PRs.** Fewer GitHub operations; unsafe review, repair and rollback. Rejected.
 - **D — publicly enable completed waves before v2.5.0.** Earlier feedback; creates unversioned partial releases and contradicts the requested release. Rejected. Internal immutable staging cohorts are allowed.
@@ -106,7 +108,7 @@ G06 compares at least two viable RGI data/renderer candidates for license, maint
 
 ### Decision
 
-Use one marketed 2.5.0, 93 canonical strictly ordered feature PRs plus deterministically ordered two-step repair authorization/fix PR pairs, the dedicated landed-unsealed G01 recovery lineage, and four immutable staging checkpoints. All schema is additive; public features default false; operator writes/workers default false; checkpoints enable only completed prerequisite-closed sets. `release/2.5.0` begins only after the develop-to-release entry goal.
+Use one marketed 2.5.0, 93 stable requirement/test slices grouped into nine subsystem feature PRs, the dedicated landed-unsealed G01 recovery lineage, and four immutable staging checkpoints. Ordinary pre-merge defects are repaired on the same subsystem branch; material security, persistence, public-contract or production-boundary changes require a scoped amendment. All schema is additive; public features default false; operator writes/workers default false; checkpoints enable only completed prerequisite-closed sets. `release/2.5.0` begins only after the develop-to-release entry goal.
 
 ### Drivers
 
@@ -122,7 +124,7 @@ Separate trains remain the strongest antithesis but conflict with requested pack
 - Strict LKV feasibility can force an amended architecture and new consensus review.
 - Literal v2.4.2 binary rollback narrows after temporary-ban activation to an expiry-aware rescue digest; this is disclosed and tested.
 - v2.4.2 wall-clock reads retain known false-read limitations; only 2.5 cursor state has the conservative guarantee.
-- More PRs and four checkpoint holds increase execution cost but recover learning boundaries.
+- Larger subsystem PRs reduce repeated CI/review/evidence cost but require G-numbered commits and explicit slice-to-test checklists; four checkpoint holds preserve the primary learning boundaries.
 - `.omx` artifacts are planning inputs; tracked docs and externally addressable immutable bundles/envelopes are authoritative during execution.
 - Release publication and production promotion are distinct authorities: G12 makes PR/develop/main/release flows side-effect-free, while any later production promotion is manual, environment-gated and immutable-digest-only.
 
@@ -2367,6 +2369,8 @@ Each card includes current brownfield integration files and executable planned e
 
 ### 9.0 Deterministic two-step repair authorization and fix protocol
 
+**Execution amendment:** this protocol remains historical authority for already published G01/G02 evidence and remains available for a material scope/security/persistence/public-contract/production-boundary amendment. It no longer applies to ordinary defects found before a B01–B09 delivery branch merges; those defects are repaired and reverified on the same branch under `docs/RELEASE_2.5.0_EXECUTION_PLAN.md`.
+
 The 93 canonical cards never renumber, and repair authorization/fix branches are not canonical goals. This protocol is unavailable in `G01_PRE_BRANCH`, `G01_PREMERGE_ACTIVE` and `G01_LANDED_UNSEALED`; none permits `R-G01-MM`. It activates only after terminal `G01_SELECTED_GREEN`. Thereafter every eligible G02–G93/checkpoint failure uses this exact sequence; no fix edit is permitted first. Bootstrap recovery remains a separate fresh-consensus lineage, never a normal repair. G05 material architecture discovery uses its stricter literal amendment/re-entry path, not a shortcut repair. The protocol distinguishes a pre-merge failure from an F11/post-merge/checkpoint failure: the card always records the last green predecessor SHA and failing head; when code already landed it additionally records the actual failing merge/develop SHA and never rewrites history.
 
 1. Preserve immutable failure evidence. If failure is pre-merge, close/delete the failed active branch without merge; if it is F11/post-merge/checkpoint, retain current failing `develop` and never reset it. Read the tracked ledger without writing and compute the next unused zero-padded ordinal `MM` for blocked `GNN`; ID is `R-GNN-MM`, and ordinals may never be reused or skipped.
@@ -2380,19 +2384,17 @@ G93 computes the terminal chain in canonical goal order; for each repair it sort
 
 G93 separately validates abandoned pre-bootstrap G01 attempt references and excludes them from the canonical/repair checksum chain; only post-bootstrap `R-G01-MM` phases may enter that chain.
 
-### 9.1 One-goal-at-a-time law
+### 9.1 Consolidated delivery-branch law
 
-The requested execution order is a hard invariant, not a suggestion:
+The execution unit is one of B01–B09 from `docs/RELEASE_2.5.0_EXECUTION_PLAN.md`:
 
-1. there is at most one implementation goal branch and one implementation PR open at a time;
-2. the active branch is created from the latest green `develop` after the predecessor's F11 merge envelope;
-3. the active PR is never stacked on an unmerged predecessor;
-4. its exact head completes targeted proof, repository gates, parallel code-reviewer/architect review and the final verifier;
-5. it is squash-merged to `develop`, the remote branch is deleted and the resulting `develop` SHA receives external F11 proof; the executor deletes the local branch but F11 does not attest it;
-6. only after the next F0/F1 independently proves the predecessor local branch absent may F2 create the next numbered branch;
-7. except a pre-merge G01 failure governed by the exceptional bootstrap law and a G05 material change governed by the literal amendment/re-entry path, every post-green-G01 failure executes §9.0 authorization then fix, closes/deletes both dynamic branches and reruns every declared gate before resuming; it never permits self-expansion, skipping, waiver or silent scope reduction.
-
-Parallelism is permitted only inside the active goal for independent inspection, test authoring or clean-context review. It may not create another goal branch. Atomic invariants such as G57 and G87 remain one PR even when internal work has several files.
+1. G01–G93 remain stable acceptance/test identifiers; G03–G93 belong to exactly one delivery branch;
+2. within a branch, slices execute in dependency order and receive targeted verification before later dependent slices proceed;
+3. the final branch head completes every assigned slice test, repository gates, parallel code-reviewer/architect review and the final verifier;
+4. each delivery branch receives one F7/F9/F11 chain, one PR to `develop` and one remote-deletion proof;
+5. ordinary defects remain on the open delivery branch; material boundary changes use a scoped plan amendment;
+6. B02 may overlap early B03 work after B01; B05/B06/B07 may use bounded parallel lanes after their prerequisites; B08 follows B07 and B09 waits for every subsystem merge/checkpoint;
+7. atomic invariants such as G57 and G87 remain indivisible even when several agents or commits contribute inside their owning branch.
 
 ### 9.2 Gate ledger
 

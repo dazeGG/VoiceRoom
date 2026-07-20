@@ -6,9 +6,11 @@
 **Baseline:** `develop` `02d78bcf06e364aed0e72ed7216b4f12aa8809ad`; production `v2.4.2` `6cd4b30ceea044fa9c0d0e279c82f4e5cd5668bd`.  
 **Evidence rule:** a green command without exact SHA, environment, artifact checksum, review identities and prerequisite state is diagnostic, not a merge or release gate.
 
+> **Execution amendment (2026-07-20):** G01–G93 remain named verification slices, not separate PRs. `docs/RELEASE_2.5.0_EXECUTION_PLAN.md` groups them into nine delivery branches. Targeted tests still run at their named slice; exact-head review, repository gates and merge evidence close once per delivery branch, with the existing G42/G50/G71/G90 and final release gates retained.
+
 ## 1. Verification outcome and non-negotiable truths
 
-This specification closes **93 strictly sequential canonical feature goals (G01–G93)**, any exact post-bootstrap two-step repair authorization/fix pairs, the four-state G01 bootstrap and landed-unsealed recovery path, and one separately built final release candidate for unified VoiceRoom 2.5.0. Planning artifacts are not implementation evidence.
+This specification covers **93 named verification slices (G01–G93)** grouped into nine delivery branches, any scoped repair commits required before a branch can merge, the four-state G01 bootstrap and landed-unsealed recovery path, and one separately built final release candidate for unified VoiceRoom 2.5.0. Planning artifacts are not implementation evidence.
 
 The following are fixed oracles:
 
@@ -109,16 +111,18 @@ The only valid publication sequence is: authenticate/calculate; config `oras blo
 
 Lineage abandonment is mandatory for missing/expired/tampered/reserialized source, inability to close before expiry, owner/visibility/linkage/actor/token drift, wrong/reused tag, remote blob/manifest mismatch/unavailability/deletion, wrong media/annotation/object binding, conflicting authoritative ledger, mismatched present attestation or post-green sentinel/retention drift; none enters normal repair. Fixtures distinguish incomplete exact upload from mismatch, missing from mismatched attestation and transient API recovery before/after expiry.
 
-### 4.3 G02–G93 F0–F11 graph
+### 4.3 Consolidated delivery-branch F0–F11 graph
 
-1. **F0:** explicit handoff; clean tree; latest policy/auth/archive snapshot; one active branch; for every G02+ canonical/repair phase prove predecessor local branch absence; record unprotected branches as `PROCESS_ENFORCED`. G02 additionally requires exactly one valid external direct/recovery selection and rejects every unsealed predecessor before any edit/run.
-2. **F1/F2:** fast-forward latest green `develop`, bind predecessor F11 and independently re-prove predecessor local absence, then create only the exact canonical branch. For G02, that F11 must be the terminal envelope named by the selection and base/origin/develop must equal `terminal_develop_sha`; a tracked summary or ancestor SHA is invalid.
-3. **F3/F4:** edit only literal card paths; run exact test/command/job/cases/fixtures/proof. Current-integration anchors confer no write permission.
-4. **F5/F6:** targeted proof, `npm run check`, database tests, `npm test`, `npm run build`, required E2E/migration/security/media/restore/perf; ready PR to `develop` with exact title.
-5. **F7:** immutable evidence bundle bound to base/head and reports; no review/verifier/merge fields.
-6. **F8:** code-reviewer and architect in parallel on same implementation head; require `APPROVE` + `CLEAR`; mutation/nonapproval restarts both.
-7. **F9:** verifier validates unchanged head and both review objects; seal emits immutable approval envelope.
-8. **F10/F11:** squash merge and delete the remote branch; F11 proves actual merge SHA, post-merge checks and remote deletion only. Local deletion is an executor action and the next F0/F1—not F11—proves it before another branch starts.
+The graph below applies once per B01–B09 delivery branch from `docs/RELEASE_2.5.0_EXECUTION_PLAN.md`, not once per G-slice. G02 retains its already-completed historical chain.
+
+1. **F0:** explicit branch handoff; clean tree; latest policy/auth/archive snapshot; assigned G-range and shared-file ownership recorded.
+2. **F1/F2:** fast-forward latest green `develop`, bind required predecessor branch/checkpoint evidence, then create or resume the exact B01–B09 branch.
+3. **F3/F4:** implement assigned G-slices in dependency order; edit only their combined literal paths and run every slice's exact test/command/job/cases/fixtures/proof.
+4. **F5/F6:** all slice-targeted proof, `npm run check`, database tests, `npm test`, `npm run build`, required E2E/migration/security/media/restore/perf; ready subsystem PR to `develop`.
+5. **F7:** one immutable evidence bundle for the final branch head, containing the result of every assigned G-slice test; no future review/verifier/merge fields.
+6. **F8:** code-reviewer and architect in parallel on the same final branch head; require `APPROVE` + `CLEAR`; mutation/nonapproval restarts both.
+7. **F9:** verifier validates the unchanged branch head, slice coverage and both review objects; seal emits one immutable branch approval envelope.
+8. **F10/F11:** merge and delete the remote delivery branch; F11 proves actual merge SHA, post-merge checks and remote deletion once for that branch.
 
 ### 4.4 Deterministic actionlint and ORAS locks
 
@@ -448,6 +452,8 @@ No environment, reviewer policy or secret is created/configured by release execu
 
 ## 16. Goal-to-test traceability (G01–G93)
 
+Branch names shown in the first column are stable historical slice identifiers used for traceability. They are not instructions to create 93 Git branches; the B01–B09 mapping in `docs/RELEASE_2.5.0_EXECUTION_PLAN.md` is authoritative.
+
 Each row is a merge contract generated from the companion PRD. All 93 rows carry the exact ordered writable/read-only file catalog plus branch, test, command, job, cases, fixtures, proof, acceptance and artifacts; no pending or inferred path exists.
 
 | Goal / branch | Literal paths | Planned test | Exact command / job | Case IDs / fixtures | Proof | Acceptance / expected artifacts |
@@ -550,7 +556,7 @@ Each row is a merge contract generated from the companion PRD. All 93 rows carry
 
 Final Planner validation must prove:
 
-- exactly 93 canonical cards and trace rows with unique branch/test/job identities and immediate-predecessor order;
+- exactly 93 canonical cards and trace rows with unique slice/test/job identities, plus exactly nine delivery-branch mappings covering G03–G93 without gaps or overlap;
 - for G01–G93, both card path fields and the matching trace cell contain the same nonempty ordered exact repository file lists; no line suffix, glob, brace, directory alias, fuzzy noun or inferred sibling is accepted; every planned test is writable;
 - every repository path named by objective, non-goal, acceptance, targeted command/fixture, capability or review-exit prose is present in the owning writable/read-only union; secondary-path mismatch count is zero;
 - exactly four total/disjoint G01 states validate across first attempt, historical abandonment, lost local preparation, closed PR, first authoritative ID, merge/F11/selection intervals and conflict-to-`WAITING_EXTERNAL_BOOTSTRAP_ORDINAL`;
@@ -569,7 +575,7 @@ The mutation suite must additionally reject a state gap/overlap, historical-atte
 ### Go requires
 
 - authenticated pre-G01 archive authority, exactly one immutable external terminal bootstrap selection, exclusion of unsealed/abandoned nodes from selection and `G01_SELECTED_GREEN` before any normal repair;
-- all 93 canonical goals plus every authorized post-bootstrap repair execute sequentially with exact F7/F9/F11 chains, remote deletion and next-F0/F1 local-absence proof;
+- all 93 named slices execute in dependency order inside the nine delivery branches; every slice test is represented in its final branch bundle, and each delivery branch has one exact F7/F9/F11 chain and remote-deletion proof;
 - exact GHCR/ORAS archive/archive-signature/separate-checksums/immutable-commit-KEYS/tag-object/source-commit/media/permissions/attestation/ledger/sentinel contract and >90-day digest-only recovery; strict LKV and any required G05 amendment; Unicode authority; active-only compatibility; legacy-read disclosure; expiry-aware rescue;
 - exact 9/10/15 DAG and G92 coverage; G73 migration fixtures; numerical budgets/stops; no skip/retry-masked flake;
 - G12/G93/pretag RC live promotion disabled, synthetic exact-source routing only, ordinary/release zero calls and no committed secret expression/read/use; no promotion executed;
@@ -595,4 +601,3 @@ Missing/unprovable pre-G01 authority (before lineage); fabricated/relabelled boo
 - **Revision 6 checkpoint 3/final Planner pass — 2026-07-18:** completed all 93 literal card/trace catalogs, removed pending markers, closed G43 conditional-schema ambiguity, bound G47 mechanism shape to exact files and retained G93 supersession ancestry. The pair requires and records exhaustive secondary-path, mutation and deterministic-regeneration proof before Architect review.
 - **Revision 7 Architect-blocker repair — 2026-07-18:** made the four G01 states a total current-attempt partition; placed historical abandonment and unconsumed preparation in PRE_BRANCH with deterministic cleanup; made first PR/run ID the atomic active transition; removed predicted future fields from tracked candidates; added strictly post-F11 external selection, exact recovery catalogs/commands, G02 terminal disjunction, G03 archive and late G93 summary semantics while retaining exactly 93 canonical cards/traces, their literal-catalog guarantee and the 9/10/15 DAG.
 - **Pending consensus:** a fresh role-specific Architect must approve this PRD/spec pair; only afterward may a sequential role-specific Critic return `APPROVE`. This file authorizes no implementation, branch, PR, merge, tag, release or deployment.
-
