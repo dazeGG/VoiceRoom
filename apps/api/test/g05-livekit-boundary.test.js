@@ -79,7 +79,9 @@ function createGateAwareStore() {
     },
     normalizeGatePrincipal({ accountUserId, guestPrincipalId, roomId }) {
       if (accountUserId) return { principalType: 'account', principalId: accountUserId };
-      return { principalType: 'guest', principalId: `${roomId}:${guestPrincipalId}` };
+      const guest = String(guestPrincipalId || '').trim();
+      if (!roomId || !guest) return null;
+      return { principalType: 'guest', principalId: `${roomId}:${guest}` };
     },
     async getLiveKitGatePrincipalEpoch({ principal, roomId }) {
       const key = principalKey({ roomId, ...principal });
@@ -120,8 +122,18 @@ function createGateAwareStore() {
       revoked.push({ roomId, peerId, principal });
       return { status: 'revoked', epoch: epochs.get(key) };
     },
+    async createRoomBan() {
+      throw new Error('legacy createRoomBan fallback must not be used for LiveKit gate bans');
+    },
     async createRoomBanWithLiveKitGateRevocations({ roomId, ip, principals }) {
       if (failBanTransaction) throw new Error('simulated ban transaction failure');
+      if (!Array.isArray(principals) || principals.length === 0 || principals.some((principal) => {
+        return (principal?.principalType !== 'account' && principal?.principalType !== 'guest')
+          || typeof principal.principalId !== 'string'
+          || principal.principalId.trim().length === 0;
+      })) {
+        return { status: 'invalid', ban: null, revocations: [] };
+      }
       for (const principal of principals) {
         const key = principalKey({ roomId, ...principal });
         epochs.set(key, (epochs.get(key) || 0) + 1);
@@ -136,6 +148,10 @@ function createGateAwareStore() {
     },
     failNextBanTransaction() {
       failBanTransaction = true;
+    },
+    clearPeerGateGuestPrincipalId(peerId = PEER_ID) {
+      const peer = room.peers.get(peerId);
+      if (peer) peer.gateGuestPrincipalId = '';
     },
     async listSummaryRecipientUserIds() {
       return [];
@@ -357,5 +373,53 @@ test('G05 ban reports no success when ban+gate revocation transaction fails', as
     principalType: principal.principalType,
     roomId: 'room-g05'
   })).status, 'allowed');
+  assert.deepEqual(store.revoked, []);
+});
+
+test('G05 ban fails closed when transactional gate revoke helper is unavailable', async (t) => {
+  const store = createGateAwareStore();
+  delete store.createRoomBanWithLiveKitGateRevocations;
+  const app = createApiApp({
+    store,
+    users: {
+      async getSessionUser(token) {
+        return token === 'owner-session' ? { user: { id: 'owner-1', login: 'owner' } } : null;
+      }
+    }
+  });
+  t.after(() => app.close());
+
+  const response = await app.inject({
+    method: 'POST',
+    url: '/api/rooms/room-g05/ban',
+    headers: { cookie: 'vr_session=owner-session' },
+    payload: { peerId: PEER_ID }
+  });
+  assert.equal(response.statusCode, 500, response.body);
+  assert.equal(response.json().code, 'livekit_gate_revoke_unavailable');
+  assert.deepEqual(store.revoked, []);
+});
+
+test('G05 ban fails closed before writing when a targeted guest has no gate principal', async (t) => {
+  const store = createGateAwareStore();
+  store.clearPeerGateGuestPrincipalId();
+  const app = createApiApp({
+    store,
+    users: {
+      async getSessionUser(token) {
+        return token === 'owner-session' ? { user: { id: 'owner-1', login: 'owner' } } : null;
+      }
+    }
+  });
+  t.after(() => app.close());
+
+  const response = await app.inject({
+    method: 'POST',
+    url: '/api/rooms/room-g05/ban',
+    headers: { cookie: 'vr_session=owner-session' },
+    payload: { peerId: PEER_ID }
+  });
+  assert.equal(response.statusCode, 500, response.body);
+  assert.equal(response.json().code, 'livekit_gate_principal_missing');
   assert.deepEqual(store.revoked, []);
 });

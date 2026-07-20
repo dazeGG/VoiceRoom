@@ -1760,6 +1760,12 @@ function liveKitGatePrincipalForPeer(roomId, peer) {
   });
 }
 
+function isLiveKitGatePrincipal(principal) {
+  return (principal?.principalType === 'account' || principal?.principalType === 'guest')
+    && typeof principal.principalId === 'string'
+    && principal.principalId.trim().length > 0;
+}
+
 async function disconnectModeratedPeer(room, peer, type, { gateAlreadyRevoked = false } = {}) {
   if (!gateAlreadyRevoked && typeof getRoomStore().revokeLiveKitGatePeer === 'function') {
     await getRoomStore().revokeLiveKitGatePeer({
@@ -1827,26 +1833,31 @@ async function handleBanRoomPeer(req, res, roomId) {
     ? candidate.accountUserId === bannedUserId
     : Boolean(bannedIp && candidate.ip === bannedIp)
   );
-  const principals = matchingPeers.map((candidate) => liveKitGatePrincipalForPeer(roomId, candidate)).filter(Boolean);
-  const result = typeof getRoomStore().createRoomBanWithLiveKitGateRevocations === 'function'
-    ? await getRoomStore().createRoomBanWithLiveKitGateRevocations({
-      roomId,
-      userId: bannedUserId,
-      ip: bannedIp,
-      maxBans: MAX_ROOM_BANS,
-      principals
-    })
-    : await getRoomStore().createRoomBan({
+  const principals = [];
+  for (const candidate of matchingPeers) {
+    const principal = liveKitGatePrincipalForPeer(roomId, candidate);
+    if (!isLiveKitGatePrincipal(principal)) {
+      sendJson(res, 500, { ok: false, code: 'livekit_gate_principal_missing', error: 'Не удалось отозвать доступ участника' });
+      return;
+    }
+    principals.push(principal);
+  }
+  if (principals.length === 0 || typeof getRoomStore().createRoomBanWithLiveKitGateRevocations !== 'function') {
+    sendJson(res, 500, { ok: false, code: 'livekit_gate_revoke_unavailable', error: 'Не удалось отозвать доступ участника' });
+    return;
+  }
+  const result = await getRoomStore().createRoomBanWithLiveKitGateRevocations({
     roomId,
     userId: bannedUserId,
     ip: bannedIp,
-    maxBans: MAX_ROOM_BANS
+    maxBans: MAX_ROOM_BANS,
+    principals
   });
   if (result.status === 'cap_exceeded') {
     sendJson(res, 409, { ok: false, code: 'room_ban_limit', error: 'Достигнут лимит блокировок комнаты' });
     return;
   }
-  if (!result.ban) {
+  if (!result.ban || !Array.isArray(result.revocations) || result.revocations.length === 0) {
     sendJson(res, 409, { ok: false, error: 'Не удалось сохранить блокировку' });
     return;
   }

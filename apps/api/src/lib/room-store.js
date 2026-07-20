@@ -476,6 +476,12 @@ function createRoomStore({
     return { principalType: 'guest', principalId: `${roomId}:${guest}` };
   }
 
+  function isValidGatePrincipal(principal) {
+    return (principal?.principalType === 'account' || principal?.principalType === 'guest')
+      && typeof principal.principalId === 'string'
+      && principal.principalId.trim().length > 0;
+  }
+
   async function createLiveKitGateCredential({
     credentialHash,
     credentialId = createRowId(),
@@ -624,6 +630,9 @@ function createRoomStore({
     const normalizedUserId = typeof userId === 'string' && userId ? userId : null;
     const normalizedIp = normalizedUserId ? '' : (typeof ip === 'string' ? ip : '');
     if (!roomId || (!normalizedUserId && !normalizedIp)) return { ban: null, revocations: [], status: 'invalid' };
+    if (!Array.isArray(principals) || principals.length === 0 || principals.some((principal) => !isValidGatePrincipal(principal))) {
+      return { ban: null, revocations: [], status: 'invalid' };
+    }
 
     return transaction(getPool(), async (client) => {
       await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`voice-room:room-bans:${roomId}`]);
@@ -660,7 +669,6 @@ function createRoomStore({
       const revocations = [];
       const seen = new Set();
       for (const principal of principals) {
-        if (!principal?.principalType || !principal?.principalId) continue;
         const key = `${principal.principalType}:${principal.principalId}`;
         if (seen.has(key)) continue;
         seen.add(key);
