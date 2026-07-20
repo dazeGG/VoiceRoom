@@ -37,7 +37,7 @@ function buildUpstreamUpgradeRequest({ request, strippedPath, upstream }) {
   delete headers['vr_gate_credential'];
   delete headers['x-vr-gate-credential'];
   headers.host = upstream.host;
-  const lines = [`GET ${strippedPath} HTTP/1.1`];
+  const lines = [`GET ${strippedPath || DEFAULT_GATE_PATH} HTTP/1.1`];
   for (const [key, value] of Object.entries(headers)) {
     if (Array.isArray(value)) {
       for (const item of value) lines.push(`${key}: ${item}`);

@@ -9,7 +9,7 @@ function base64urlJson(value) {
 }
 
 function parseBase64urlJson(value) {
-  return JSON.parse(Buffer.from(String(value), 'base64url').toString('utf8'));
+  return JSON.parse(Buffer.from(String(value || ''), 'base64url').toString('utf8'));
 }
 
 function hashGateCredential(credential) {
@@ -17,7 +17,7 @@ function hashGateCredential(credential) {
 }
 
 function signPayload(payload, secret) {
-  return crypto.createHmac('sha256', secret).update(payload).digest('base64url');
+  return crypto.createHmac('sha256', String(secret || '')).update(payload).digest('base64url');
 }
 
 function normalizeGateSecret(secret) {

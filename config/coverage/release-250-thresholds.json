@@ -14,33 +14,15 @@
   },
   "baseline": {
     "artifact": "coverage/release-250-summary.json",
-    "measuredAt": "2026-07-20T08:54:12.053Z",
+    "measuredAt": "2026-07-20T09:26:55.358Z",
     "total": {
-      "lines": 5.88,
-      "branches": 48.09
+      "lines": 9.17,
+      "branches": 53.9
     }
   },
   "changedBusinessCode": {
     "line": 90,
-    "branch": 85,
-    "pathPatterns": [
-      "apps/api/src/domains/auth/",
-      "apps/api/src/domains/admission/",
-      "apps/api/src/domains/permissions/",
-      "apps/api/src/domains/cursor/",
-      "apps/api/src/domains/idempotency/",
-      "apps/api/src/domains/media/",
-      "apps/web/src/lib/features/auth/",
-      "apps/web/src/lib/features/permissions/",
-      "apps/web/src/lib/features/cursor/",
-      "apps/web/src/lib/features/idempotency/",
-      "apps/web/src/lib/features/room/client/media/",
-      "apps/web/src/lib/features/room/client/services/media-playback-service.ts",
-      "packages/shared/src/permissions/",
-      "packages/shared/src/cursor/",
-      "packages/shared/src/idempotency/",
-      "packages/shared/src/media/"
-    ]
+    "branch": 85
   },
   "strictBranchPaths": [],
   "strictBranchGroups": [
@@ -49,7 +31,8 @@
       "enforcement": "on-changed",
       "paths": [
         "apps/api/src/domains/admission/gate-credential-signer.js",
-        "apps/api/src/domains/admission/livekit-auth-gate-service.js"
+        "apps/api/src/domains/admission/livekit-auth-gate-service.js",
+        "apps/web/src/lib/api/auth.ts"
       ],
       "pathPatterns": [
         "apps/api/src/domains/auth/",
@@ -63,14 +46,17 @@
       "paths": [],
       "pathPatterns": [
         "apps/api/src/domains/permissions/",
-        "apps/web/src/lib/features/permissions/",
+        "apps/api/src/domains/messaging/message-visibility-service.js",
+        "apps/api/src/domains/membership/",
         "packages/shared/src/permissions/"
       ]
     },
     {
       "name": "cursor",
       "enforcement": "on-changed",
-      "paths": [],
+      "paths": [
+        "apps/api/src/platform/cursor-codec.js"
+      ],
       "pathPatterns": [
         "apps/api/src/domains/cursor/",
         "apps/web/src/lib/features/cursor/",
@@ -80,7 +66,9 @@
     {
       "name": "idempotency",
       "enforcement": "on-changed",
-      "paths": [],
+      "paths": [
+        "apps/api/src/domains/messaging/message-idempotency-repository.js"
+      ],
       "pathPatterns": [
         "apps/api/src/domains/idempotency/",
         "apps/web/src/lib/features/idempotency/",
@@ -90,12 +78,17 @@
     {
       "name": "media",
       "enforcement": "on-changed",
-      "paths": [],
+      "paths": [
+        "packages/shared/src/attachments.js",
+        "apps/web/src/lib/api/attachments.ts",
+        "apps/web/src/lib/shared/chat/attachment-compose.svelte.ts"
+      ],
       "pathPatterns": [
         "apps/api/src/domains/media/",
         "apps/web/src/lib/features/room/client/media/",
         "apps/web/src/lib/features/room/client/services/media-playback-service.ts",
-        "packages/shared/src/media/"
+        "apps/web/src/lib/shared/chat/Attachment",
+        "packages/shared/src/attachments"
       ]
     }
   ],
@@ -108,6 +101,8 @@
     "/test/",
     "/e2e/",
     "/migrations/",
+    "packages/shared/src/emoji.js",
+    "packages/shared/src/emoji.mjs",
     ".d.ts"
   ]
 }
