@@ -163,14 +163,22 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
-      - name: Capture changed files for business coverage gate
+      - name: Capture protected-base coverage policy and changed files
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p coverage
           git diff --name-only "${{ github.event.pull_request.base.sha }}" "${{ github.event.pull_request.head.sha }}" > coverage/release-250-changed-files.txt
+          if git cat-file -e "${{ github.event.pull_request.base.sha }}:config/coverage/release-250-thresholds.json"; then
+            git show "${{ github.event.pull_request.base.sha }}:config/coverage/release-250-thresholds.json" > coverage/release-250-base-thresholds.json
+            echo "G08_BASELINE_ARGS=--base-thresholds coverage/release-250-base-thresholds.json" >> "$GITHUB_ENV"
+          else
+            echo "G08_BASELINE_ARGS=--base-thresholds-absent" >> "$GITHUB_ENV"
+          fi
       - run: npm run coverage:g08
-      - run: node scripts/coverage/check-release-250-coverage.mjs --coverage coverage/release-250-summary.json --changed-files coverage/release-250-changed-files.txt
+      - name: Enforce G08 coverage and protected-base ratchet
+        shell: bash
+        run: node scripts/coverage/check-release-250-coverage.mjs --coverage coverage/release-250-summary.json --changed-files coverage/release-250-changed-files.txt $G08_BASELINE_ARGS
       - name: Persist G08 measured coverage artifact
         uses: actions/upload-artifact@v4
         with:
@@ -178,6 +186,7 @@ jobs:
           path: |
             coverage/release-250-summary.json
             coverage/release-250-changed-files.txt
+            coverage/release-250-base-thresholds.json
           if-no-files-found: error
           retention-days: 90
 

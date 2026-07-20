@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 
 const DEFAULT_THRESHOLDS = "config/coverage/release-250-thresholds.json";
 const BUSINESS_EXTENSIONS = /\.(?:js|mjs|cjs|ts|svelte)$/;
+const BRANCH_METRIC = "node-v8-branch";
 
 function readJson(filePath, label) {
   try {
@@ -29,6 +30,8 @@ function parseArgs(argv) {
     v8Dir: "",
     out: "",
     changedFiles: "",
+    baseThresholds: "",
+    baseThresholdsAbsent: false,
     root: process.cwd()
   };
   for (let index = 0; index < argv.length; index += 1) {
@@ -38,12 +41,14 @@ function parseArgs(argv) {
     else if (arg === "--v8-dir") args.v8Dir = argv[++index];
     else if (arg === "--out") args.out = argv[++index];
     else if (arg === "--changed-files") args.changedFiles = argv[++index];
+    else if (arg === "--base-thresholds") args.baseThresholds = argv[++index];
+    else if (arg === "--base-thresholds-absent") args.baseThresholdsAbsent = true;
     else if (arg === "--root") args.root = argv[++index];
     else if (arg === "--help" || arg === "-h") {
       console.log([
         "Usage:",
-        "  node scripts/coverage/check-release-250-coverage.mjs --coverage <summary.json> [--changed-files <paths.txt>]",
-        "  node scripts/coverage/check-release-250-coverage.mjs --v8-dir <NODE_V8_COVERAGE dir> --out <summary.json> [--changed-files <paths.txt>]"
+        "  node scripts/coverage/check-release-250-coverage.mjs --coverage <summary.json> [--changed-files <paths.txt>] [--base-thresholds <base.json>|--base-thresholds-absent]",
+        "  node scripts/coverage/check-release-250-coverage.mjs --v8-dir <NODE_V8_COVERAGE dir> --out <summary.json>"
       ].join("\n"));
       process.exit(0);
     } else {
@@ -53,44 +58,33 @@ function parseArgs(argv) {
   if (!args.coverage && !args.v8Dir) throw new Error("--coverage or --v8-dir is required");
   if (args.coverage && args.v8Dir) throw new Error("--coverage and --v8-dir are mutually exclusive");
   if (args.v8Dir && !args.out) throw new Error("--out is required with --v8-dir");
+  if (args.baseThresholds && args.baseThresholdsAbsent) {
+    throw new Error("--base-thresholds and --base-thresholds-absent are mutually exclusive");
+  }
   return args;
 }
 
 function normalizePath(value) {
-  return String(value || "")
-    .split(path.sep)
-    .join("/")
-    .replace(/^\.\//, "")
-    .replace(/\/+/g, "/");
-}
-
-function normalizeRoot(root) {
-  return path.resolve(root);
+  return String(value || "").split(path.sep).join("/").replace(/^\.\//, "").replace(/\/+/g, "/");
 }
 
 function toRepoPath(filePath, root) {
-  const absolute = path.resolve(filePath);
-  const relative = path.relative(root, absolute);
+  const relative = path.relative(root, path.resolve(filePath));
   if (relative.startsWith("..") || path.isAbsolute(relative)) return "";
   return normalizePath(relative);
 }
 
-function pct(metric, label) {
-  const value = typeof metric === "number" ? metric : metric?.pct;
-  if (!Number.isFinite(value)) throw new Error(`Coverage metric ${label} must provide a numeric percentage`);
-  return value;
-}
-
-function ratio(covered, total) {
-  if (total === 0) return 100;
-  return Number(((covered / total) * 100).toFixed(2));
+function pct(value, label) {
+  const percentage = typeof value === "number" ? value : value?.pct;
+  if (!Number.isFinite(percentage)) throw new Error(`Coverage metric ${label} must provide a numeric percentage`);
+  return percentage;
 }
 
 function metric(covered, total) {
-  return { total, covered, skipped: 0, pct: ratio(covered, total) };
+  return { total, covered, skipped: 0, pct: total === 0 ? 100 : Number(((covered / total) * 100).toFixed(2)) };
 }
 
-function assertArray(value, label) {
+function assertStringArray(value, label) {
   assert.ok(Array.isArray(value), `${label} must be an array`);
   for (const item of value) assert.equal(typeof item, "string", `${label} entries must be strings`);
 }
@@ -98,34 +92,41 @@ function assertArray(value, label) {
 function validateThresholds(thresholds) {
   assert.equal(thresholds.schemaVersion, 1, "threshold schemaVersion must be 1");
   assert.equal(thresholds.release, "2.5.0", "threshold release must be 2.5.0");
-  assertArray(thresholds.businessPathPatterns, "businessPathPatterns");
-  assertArray(thresholds.ignoredPathPatterns, "ignoredPathPatterns");
-  assertArray(thresholds.strictBranchPaths, "strictBranchPaths");
-  assertArray(thresholds.strictBranchPathPatterns ?? [], "strictBranchPathPatterns");
+  assert.equal(thresholds.branchMetric, BRANCH_METRIC, `branchMetric must be ${BRANCH_METRIC}`);
+  assertStringArray(thresholds.businessPathPatterns, "businessPathPatterns");
+  assertStringArray(thresholds.ignoredPathPatterns, "ignoredPathPatterns");
+  assertStringArray(thresholds.strictBranchPaths ?? [], "strictBranchPaths");
+  assert.ok(Array.isArray(thresholds.strictBranchGroups), "strictBranchGroups must be an array");
+  for (const group of thresholds.strictBranchGroups) {
+    assert.equal(typeof group.name, "string", "strictBranchGroups[].name is required");
+    assert.equal(group.enforcement, "on-changed", "strict branch groups must use on-changed enforcement");
+    assertStringArray(group.paths ?? [], `${group.name}.paths`);
+    assertStringArray(group.pathPatterns ?? [], `${group.name}.pathPatterns`);
+  }
   assert.equal(typeof thresholds.baseline?.artifact, "string", "baseline.artifact is required");
-  assert.equal(typeof thresholds.baseline?.measuredAt, "string", "baseline.measuredAt is required");
-  assert.ok(Number.isFinite(Date.parse(thresholds.baseline.measuredAt)), "baseline.measuredAt must be an ISO timestamp");
+  assert.ok(Number.isFinite(Date.parse(thresholds.baseline?.measuredAt)), "baseline.measuredAt must be an ISO timestamp");
   pct(thresholds.baseline.total?.lines, "baseline.total.lines");
   pct(thresholds.baseline.total?.branches, "baseline.total.branches");
   pct(thresholds.changedBusinessCode?.line, "changedBusinessCode.line");
   pct(thresholds.changedBusinessCode?.branch, "changedBusinessCode.branch");
+  assertStringArray(thresholds.changedBusinessCode?.pathPatterns ?? [], "changedBusinessCode.pathPatterns");
 }
 
 function isBusinessFile(filePath, thresholds) {
   const normalized = normalizePath(filePath);
-  const included = thresholds.businessPathPatterns.some((pattern) => normalized.startsWith(normalizePath(pattern)));
-  const ignored = thresholds.ignoredPathPatterns.some((pattern) => normalized.includes(normalizePath(pattern)));
-  return included && !ignored && BUSINESS_EXTENSIONS.test(normalized);
+  return thresholds.businessPathPatterns.some((prefix) => normalized.startsWith(normalizePath(prefix)))
+    && !thresholds.ignoredPathPatterns.some((pattern) => normalized.includes(normalizePath(pattern)))
+    && BUSINESS_EXTENSIONS.test(normalized);
 }
 
 function listBusinessSourceFiles(root, thresholds) {
   const results = [];
-  const startDirs = [...new Set(thresholds.businessPathPatterns.map((pattern) => normalizePath(pattern).split("/")[0]).filter(Boolean))];
-  const visit = (dir) => {
-    if (!fs.existsSync(dir)) return;
-    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-      if (entry.name === "node_modules" || entry.name === ".svelte-kit" || entry.name === "dist" || entry.name === "build") continue;
-      const absolute = path.join(dir, entry.name);
+  const roots = [...new Set(thresholds.businessPathPatterns.map((value) => normalizePath(value).split("/")[0]).filter(Boolean))];
+  const visit = (directory) => {
+    if (!fs.existsSync(directory)) return;
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+      if (["node_modules", ".svelte-kit", "dist", "build"].includes(entry.name)) continue;
+      const absolute = path.join(directory, entry.name);
       if (entry.isDirectory()) visit(absolute);
       else {
         const repoPath = toRepoPath(absolute, root);
@@ -133,39 +134,29 @@ function listBusinessSourceFiles(root, thresholds) {
       }
     }
   };
-  for (const startDir of startDirs) visit(path.join(root, startDir));
+  for (const directory of roots) visit(path.join(root, directory));
   return [...new Set(results)].sort();
 }
 
 function normalizeFileCoverage(summary) {
-  const raw = summary.files ?? summary;
   const files = new Map();
-  for (const [filePath, coverage] of Object.entries(raw)) {
+  for (const [filePath, coverage] of Object.entries(summary.files ?? summary)) {
     if (filePath === "total" || filePath === "meta") continue;
-    const lines = pct(coverage.lines, `${filePath}.lines`);
-    const branches = pct(coverage.branches, `${filePath}.branches`);
-    files.set(normalizePath(filePath), { lines, branches });
+    files.set(normalizePath(filePath), {
+      lines: pct(coverage.lines, `${filePath}.lines`),
+      branches: pct(coverage.branches, `${filePath}.branches`)
+    });
   }
   return files;
 }
 
 function totalCoverage(summary, files) {
-  if (summary.total) {
-    return {
-      lines: pct(summary.total.lines, "total.lines"),
-      branches: pct(summary.total.branches, "total.branches")
-    };
-  }
+  if (summary.total) return { lines: pct(summary.total.lines, "total.lines"), branches: pct(summary.total.branches, "total.branches") };
   if (!files.size) throw new Error("Coverage summary contains no files");
-  let lines = 0;
-  let branches = 0;
-  for (const file of files.values()) {
-    lines += file.lines;
-    branches += file.branches;
-  }
+  const values = [...files.values()];
   return {
-    lines: Number((lines / files.size).toFixed(2)),
-    branches: Number((branches / files.size).toFixed(2))
+    lines: Number((values.reduce((sum, file) => sum + file.lines, 0) / values.length).toFixed(2)),
+    branches: Number((values.reduce((sum, file) => sum + file.branches, 0) / values.length).toFixed(2))
   };
 }
 
@@ -177,38 +168,58 @@ function configuredBaseline(thresholds) {
   };
 }
 
+function enforceBaselineRatchet(thresholds, { baseThresholds, baseThresholdsAbsent }) {
+  if (baseThresholds) {
+    validateThresholds(baseThresholds);
+    const current = configuredBaseline(thresholds);
+    const base = configuredBaseline(baseThresholds);
+    if (current.lines < base.lines) throw new Error(`Configured line baseline decreased from protected base ${base.lines}% to ${current.lines}%`);
+    if (current.branches < base.branches) throw new Error(`Configured ${BRANCH_METRIC} baseline decreased from protected base ${base.branches}% to ${current.branches}%`);
+    return "protected-base-ratchet";
+  }
+  if (baseThresholdsAbsent) {
+    const adoption = thresholds.baselinePolicy?.initialAdoption;
+    if (adoption?.baseConfigAbsent !== true || typeof adoption.reason !== "string" || adoption.reason.trim().length < 12) {
+      throw new Error("Initial coverage baseline adoption requires explicit baseConfigAbsent metadata and a reason");
+    }
+    return "explicit-initial-adoption";
+  }
+  return "not-requested";
+}
+
 function readChangedFiles(filePath) {
   if (!filePath) return [];
   return fs.readFileSync(filePath, "utf8").split(/\r?\n/).map((line) => normalizePath(line.trim())).filter(Boolean);
 }
 
-function strictBranchFiles(files, thresholds) {
-  const exact = new Set((thresholds.strictBranchPaths ?? []).map(normalizePath));
-  const patterns = (thresholds.strictBranchPathPatterns ?? []).map(normalizePath);
-  for (const filePath of files.keys()) {
-    if (patterns.some((pattern) => filePath.includes(pattern))) exact.add(filePath);
+function matchesStrictGroup(filePath, group) {
+  const normalized = normalizePath(filePath);
+  return (group.paths ?? []).map(normalizePath).includes(normalized)
+    || (group.pathPatterns ?? []).map(normalizePath).some((pattern) => normalized.includes(pattern));
+}
+
+function strictBranchFiles(changedFiles, thresholds) {
+  const strict = new Set((thresholds.strictBranchPaths ?? []).map(normalizePath));
+  for (const filePath of changedFiles.map(normalizePath)) {
+    if (thresholds.strictBranchGroups.some((group) => matchesStrictGroup(filePath, group))) strict.add(filePath);
   }
-  return [...exact].sort();
+  return [...strict].sort();
 }
 
 function checkFileThreshold(filePath, coverage, minimums) {
   if (!coverage) throw new Error(`Changed business file is missing from coverage summary: ${filePath}`);
-  if (coverage.lines < minimums.line) {
-    throw new Error(`${filePath} line coverage ${coverage.lines.toFixed(2)}% is below ${minimums.line}%`);
-  }
-  if (coverage.branches < minimums.branch) {
-    throw new Error(`${filePath} branch coverage ${coverage.branches.toFixed(2)}% is below ${minimums.branch}%`);
-  }
+  if (coverage.lines < minimums.line) throw new Error(`${filePath} line coverage ${coverage.lines.toFixed(2)}% is below ${minimums.line}%`);
+  if (coverage.branches < minimums.branch) throw new Error(`${filePath} ${BRANCH_METRIC} coverage ${coverage.branches.toFixed(2)}% is below ${minimums.branch}%`);
 }
 
-function lineRanges(source) {
-  const ranges = [];
+function sourceLines(source) {
+  const lines = [];
   let offset = 0;
-  for (const line of source.split(/\n/)) {
-    ranges.push({ start: offset, end: offset + line.length, source: line });
-    offset += line.length + 1;
+  for (const text of source.split(/\n/)) {
+    lines.push({ start: offset, end: offset + text.length, text });
+    offset += text.length + 1;
   }
-  return ranges;
+  return lines;
 }
 
 function isRelevantLine(line) {
@@ -216,144 +227,150 @@ function isRelevantLine(line) {
   return Boolean(trimmed && trimmed !== "{" && trimmed !== "}" && !trimmed.startsWith("//") && !trimmed.startsWith("*"));
 }
 
-function coverageForScript(script, root) {
-  const absolutePath = fileURLToPath(script.url);
-  const repoPath = toRepoPath(absolutePath, root);
-  if (!repoPath || !fs.existsSync(absolutePath)) return null;
-  const source = fs.readFileSync(absolutePath, "utf8");
-  const executedOffsets = new Uint8Array(source.length + 1);
-  const branchRanges = [];
-  for (const fn of script.functions ?? []) {
-    for (const range of fn.ranges ?? []) {
-      if (range.count > 0) {
-        for (let index = range.startOffset; index < range.endOffset; index += 1) executedOffsets[index] = 1;
-      }
-      if (!(range.startOffset === 0 && range.endOffset === source.length)) branchRanges.push(range);
-    }
-  }
-
-  let totalLines = 0;
-  let coveredLines = 0;
-  for (const line of lineRanges(source)) {
-    if (!isRelevantLine(line.source)) continue;
-    totalLines += 1;
-    const end = Math.max(line.start + 1, line.end);
-    for (let index = line.start; index < end; index += 1) {
-      if (executedOffsets[index]) {
-        coveredLines += 1;
-        break;
-      }
-    }
-  }
-  const coveredBranches = branchRanges.filter((range) => range.count > 0).length;
-  return {
-    repoPath,
-    lines: metric(coveredLines, totalLines),
-    branches: metric(coveredBranches, branchRanges.length)
-  };
+function createAccumulator(repoPath, source) {
+  return { repoPath, source, ranges: new Map(), functions: new Map(), seenInCoverage: false };
 }
 
-function mergeCoverageEntry(left, right) {
-  if (!left) return right;
+function mergeScriptCoverage(accumulator, script) {
+  accumulator.seenInCoverage = true;
+  for (const fn of script.functions ?? []) {
+    const ranges = fn.ranges ?? [];
+    const functionRoot = ranges[0];
+    if (!functionRoot) continue;
+    const functionId = `${fn.functionName || "<anonymous>"}:${functionRoot.startOffset}:${functionRoot.endOffset}`;
+    const functionState = accumulator.functions.get(functionId) ?? { executedSamples: 0, rangeKeys: new Set() };
+    const currentRangeKeys = new Set(ranges.map((range) => `${functionId}:${range.startOffset}:${range.endOffset}`));
+    if (functionRoot.count > 0) {
+      for (const key of functionState.rangeKeys) {
+        if (!currentRangeKeys.has(key)) accumulator.ranges.get(key).covered = true;
+      }
+    }
+    for (let index = 0; index < ranges.length; index += 1) {
+      const range = ranges[index];
+      const key = `${functionId}:${range.startOffset}:${range.endOffset}`;
+      const previous = accumulator.ranges.get(key);
+      accumulator.ranges.set(key, {
+        startOffset: range.startOffset,
+        endOffset: range.endOffset,
+        isFunctionRoot: index === 0,
+        covered: Boolean(previous?.covered || range.count > 0 || (!previous && functionState.executedSamples > 0))
+      });
+      functionState.rangeKeys.add(key);
+    }
+    if (functionRoot.count > 0) functionState.executedSamples += 1;
+    accumulator.functions.set(functionId, functionState);
+  }
+}
+
+function serializeAccumulator(accumulator) {
+  const ranges = [...accumulator.ranges.values()];
+  let lineTotal = 0;
+  let lineCovered = 0;
+  for (const line of sourceLines(accumulator.source)) {
+    if (!isRelevantLine(line.text)) continue;
+    lineTotal += 1;
+    const end = Math.max(line.start + 1, line.end);
+    const candidates = ranges.filter((range) => range.startOffset < end && range.endOffset > line.start);
+    if (candidates.length) {
+      const shortest = Math.min(...candidates.map((range) => range.endOffset - range.startOffset));
+      if (candidates.some((range) => range.covered && range.endOffset - range.startOffset === shortest)) lineCovered += 1;
+    }
+  }
+  const branchRanges = ranges.filter((range) => !range.isFunctionRoot);
   return {
-    lines: metric(
-      Math.max(left.lines.covered, right.lines.covered),
-      Math.max(left.lines.total, right.lines.total)
-    ),
-    branches: metric(
-      Math.max(left.branches.covered, right.branches.covered),
-      Math.max(left.branches.total, right.branches.total)
-    )
+    lines: metric(lineCovered, lineTotal),
+    branches: branchRanges.length
+      ? metric(branchRanges.filter((range) => range.covered).length, branchRanges.length)
+      : metric(accumulator.seenInCoverage ? 0 : 0, accumulator.seenInCoverage ? 0 : 1)
   };
 }
 
 export function collectRelease250V8Coverage({ v8Dir, thresholds, root = process.cwd(), measuredAt = new Date().toISOString() }) {
   validateThresholds(thresholds);
-  const absoluteRoot = normalizeRoot(root);
-  const files = new Map();
+  const absoluteRoot = path.resolve(root);
+  const accumulators = new Map();
   for (const repoPath of listBusinessSourceFiles(absoluteRoot, thresholds)) {
-    files.set(repoPath, { lines: metric(0, 1), branches: metric(0, 1) });
+    accumulators.set(repoPath, createAccumulator(repoPath, fs.readFileSync(path.join(absoluteRoot, repoPath), "utf8")));
   }
   if (!fs.existsSync(v8Dir)) throw new Error(`V8 coverage directory does not exist: ${v8Dir}`);
-  for (const entry of fs.readdirSync(v8Dir)) {
-    if (!entry.endsWith(".json")) continue;
+  for (const entry of fs.readdirSync(v8Dir).filter((name) => name.endsWith(".json")).sort()) {
     const payload = readJson(path.join(v8Dir, entry), "V8 coverage");
     for (const script of payload.result ?? []) {
       if (typeof script.url !== "string" || !script.url.startsWith("file://")) continue;
-      const coverage = coverageForScript(script, absoluteRoot);
-      if (!coverage || !isBusinessFile(coverage.repoPath, thresholds)) continue;
-      files.set(coverage.repoPath, mergeCoverageEntry(files.get(coverage.repoPath), {
-        lines: coverage.lines,
-        branches: coverage.branches
-      }));
+      const absolute = fileURLToPath(script.url);
+      const repoPath = toRepoPath(absolute, absoluteRoot);
+      if (!repoPath || !isBusinessFile(repoPath, thresholds) || !fs.existsSync(absolute)) continue;
+      const accumulator = accumulators.get(repoPath) ?? createAccumulator(repoPath, fs.readFileSync(absolute, "utf8"));
+      mergeScriptCoverage(accumulator, script);
+      accumulators.set(repoPath, accumulator);
     }
   }
-
-  const serializedFiles = Object.fromEntries([...files.entries()].sort(([a], [b]) => a.localeCompare(b)));
-  let totalLineCovered = 0;
-  let totalLineCount = 0;
-  let totalBranchCovered = 0;
-  let totalBranchCount = 0;
-  for (const coverage of Object.values(serializedFiles)) {
-    totalLineCovered += coverage.lines.covered;
-    totalLineCount += coverage.lines.total;
-    totalBranchCovered += coverage.branches.covered;
-    totalBranchCount += coverage.branches.total;
-  }
+  const files = Object.fromEntries([...accumulators.entries()].sort(([left], [right]) => left.localeCompare(right)).map(([repoPath, accumulator]) => [repoPath, serializeAccumulator(accumulator)]));
+  const totals = Object.values(files).reduce((result, coverage) => ({
+    lineCovered: result.lineCovered + coverage.lines.covered,
+    lineTotal: result.lineTotal + coverage.lines.total,
+    branchCovered: result.branchCovered + coverage.branches.covered,
+    branchTotal: result.branchTotal + coverage.branches.total
+  }), { lineCovered: 0, lineTotal: 0, branchCovered: 0, branchTotal: 0 });
   return {
     schemaVersion: 1,
     release: "2.5.0",
     meta: {
       measured: true,
       engine: "node-v8-coverage",
+      branchMetric: BRANCH_METRIC,
+      branchMetricLabel: "V8 block branch coverage",
+      semantics: "branches is deduplicated V8 function/block range coverage from NODE_V8_COVERAGE, not Istanbul AST branch coverage",
+      documentation: "https://nodejs.org/api/cli.html#node_v8_coveragedir",
       root: absoluteRoot,
       measuredAt,
-      sourceFileCount: Object.keys(serializedFiles).length
+      sourceFileCount: Object.keys(files).length
     },
-    total: {
-      lines: metric(totalLineCovered, totalLineCount),
-      branches: metric(totalBranchCovered, totalBranchCount)
-    },
-    files: serializedFiles
+    total: { lines: metric(totals.lineCovered, totals.lineTotal), branches: metric(totals.branchCovered, totals.branchTotal) },
+    files
   };
 }
 
-export function checkRelease250Coverage({ coverageSummary, thresholds, changedFiles = [], coveragePath = "" }) {
+export function checkRelease250Coverage({
+  coverageSummary,
+  thresholds,
+  changedFiles = [],
+  coveragePath = "",
+  baseThresholds,
+  baseThresholdsAbsent = false
+}) {
   validateThresholds(thresholds);
   assert.equal(coverageSummary.schemaVersion, 1, "coverage summary schemaVersion must be 1");
   assert.equal(coverageSummary.release, "2.5.0", "coverage summary release must be 2.5.0");
   assert.equal(coverageSummary.meta?.measured, true, "coverage summary must be produced from measured coverage");
   assert.equal(coverageSummary.meta?.engine, "node-v8-coverage", "coverage summary must use node-v8-coverage");
+  assert.equal(coverageSummary.meta?.branchMetric, BRANCH_METRIC, `coverage summary branchMetric must be ${BRANCH_METRIC}`);
+  const ratchetMode = enforceBaselineRatchet(thresholds, { baseThresholds, baseThresholdsAbsent });
   const files = normalizeFileCoverage(coverageSummary);
   const total = totalCoverage(coverageSummary, files);
   const baseline = configuredBaseline(thresholds);
-  if (coveragePath && normalizePath(coveragePath) !== baseline.artifact) {
-    throw new Error(`Coverage artifact path ${normalizePath(coveragePath)} does not match baseline artifact ${baseline.artifact}`);
-  }
-  if (total.lines < baseline.lines) {
-    throw new Error(`Total line coverage regressed from ${baseline.lines}% to ${total.lines.toFixed(2)}%`);
-  }
-  if (total.branches < baseline.branches) {
-    throw new Error(`Total branch coverage regressed from ${baseline.branches}% to ${total.branches.toFixed(2)}%`);
-  }
+  if (coveragePath && normalizePath(coveragePath) !== baseline.artifact) throw new Error(`Coverage artifact path ${normalizePath(coveragePath)} does not match baseline artifact ${baseline.artifact}`);
+  if (total.lines < baseline.lines) throw new Error(`Total line coverage regressed from ${baseline.lines}% to ${total.lines.toFixed(2)}%`);
+  if (total.branches < baseline.branches) throw new Error(`Total ${BRANCH_METRIC} coverage regressed from ${baseline.branches}% to ${total.branches.toFixed(2)}%`);
 
-  const checkedChangedFiles = changedFiles.filter((filePath) => isBusinessFile(filePath, thresholds));
-  for (const changedFile of checkedChangedFiles) {
-    checkFileThreshold(changedFile, files.get(changedFile), thresholds.changedBusinessCode);
-  }
+  const changedGatePatterns = (thresholds.changedBusinessCode.pathPatterns ?? []).map(normalizePath);
+  const checkedChangedFiles = changedFiles.map(normalizePath).filter((filePath) => {
+    return isBusinessFile(filePath, thresholds)
+      && (!changedGatePatterns.length || changedGatePatterns.some((pattern) => filePath.includes(pattern)));
+  });
+  for (const changedFile of checkedChangedFiles) checkFileThreshold(changedFile, files.get(changedFile), thresholds.changedBusinessCode);
 
-  const checkedStrictPaths = strictBranchFiles(files, thresholds);
+  const checkedStrictPaths = strictBranchFiles(changedFiles, thresholds);
   for (const strictPath of checkedStrictPaths) {
     const file = files.get(strictPath);
-    if (!file) throw new Error(`${strictPath} is configured for strict branch coverage but is missing from coverage summary`);
-    if (file.branches < 100) {
-      throw new Error(`${strictPath} requires 100% branch coverage, saw ${file.branches.toFixed(2)}%`);
-    }
+    if (!file) throw new Error(`Changed strict file is missing from coverage summary: ${strictPath}`);
+    if (file.branches < 100) throw new Error(`${strictPath} requires 100% ${BRANCH_METRIC} coverage, saw ${file.branches.toFixed(2)}%`);
   }
 
   return {
     release: thresholds.release,
     total,
+    ratchetMode,
     checkedChangedFiles: checkedChangedFiles.length,
     strictBranchPaths: checkedStrictPaths.length,
     coverageDigest: `sha256:${crypto.createHash("sha256").update(JSON.stringify(coverageSummary)).digest("hex")}`
@@ -377,7 +394,9 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       coverageSummary,
       thresholds,
       changedFiles: readChangedFiles(args.changedFiles),
-      coveragePath
+      coveragePath,
+      baseThresholds: args.baseThresholds ? readJson(args.baseThresholds, "protected base thresholds") : undefined,
+      baseThresholdsAbsent: args.baseThresholdsAbsent
     });
     console.log(JSON.stringify({ ok: true, ...result }, null, 2));
   } catch (error) {

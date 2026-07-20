@@ -1,28 +1,103 @@
 {
   "schemaVersion": 1,
   "release": "2.5.0",
+  "branchMetric": "node-v8-branch",
+  "branchMetricLabel": "V8 block branch coverage",
+  "branchMetricSemantics": "The branches field is deduplicated V8 function/block range coverage emitted by NODE_V8_COVERAGE, not Istanbul AST branch coverage.",
+  "branchMetricDocumentation": "https://nodejs.org/api/cli.html#node_v8_coveragedir",
+  "baselinePolicy": {
+    "mode": "protected-base-ratchet",
+    "initialAdoption": {
+      "baseConfigAbsent": true,
+      "reason": "G08 introduces the release 2.5.0 measured coverage configuration on a protected base that has no coverage threshold file."
+    }
+  },
   "baseline": {
     "artifact": "coverage/release-250-summary.json",
-    "measuredAt": "2026-07-20T00:00:00.000Z",
+    "measuredAt": "2026-07-20T08:54:12.053Z",
     "total": {
-      "lines": 96.99,
-      "branches": 37.75
+      "lines": 5.88,
+      "branches": 48.09
     }
   },
   "changedBusinessCode": {
     "line": 90,
-    "branch": 85
+    "branch": 85,
+    "pathPatterns": [
+      "apps/api/src/domains/auth/",
+      "apps/api/src/domains/admission/",
+      "apps/api/src/domains/permissions/",
+      "apps/api/src/domains/cursor/",
+      "apps/api/src/domains/idempotency/",
+      "apps/api/src/domains/media/",
+      "apps/web/src/lib/features/auth/",
+      "apps/web/src/lib/features/permissions/",
+      "apps/web/src/lib/features/cursor/",
+      "apps/web/src/lib/features/idempotency/",
+      "apps/web/src/lib/features/room/client/media/",
+      "apps/web/src/lib/features/room/client/services/media-playback-service.ts",
+      "packages/shared/src/permissions/",
+      "packages/shared/src/cursor/",
+      "packages/shared/src/idempotency/",
+      "packages/shared/src/media/"
+    ]
   },
   "strictBranchPaths": [],
-  "strictBranchPathPatterns": [
-    "apps/api/src/domains/permissions/",
-    "apps/api/src/domains/cursor/",
-    "apps/api/src/domains/idempotency/",
-    "apps/api/src/domains/media/",
-    "packages/shared/src/permissions/",
-    "packages/shared/src/cursor/",
-    "packages/shared/src/idempotency/",
-    "packages/shared/src/media/"
+  "strictBranchGroups": [
+    {
+      "name": "auth-admission",
+      "enforcement": "on-changed",
+      "paths": [
+        "apps/api/src/domains/admission/gate-credential-signer.js",
+        "apps/api/src/domains/admission/livekit-auth-gate-service.js"
+      ],
+      "pathPatterns": [
+        "apps/api/src/domains/auth/",
+        "apps/api/src/domains/admission/",
+        "apps/web/src/lib/features/auth/"
+      ]
+    },
+    {
+      "name": "permissions",
+      "enforcement": "on-changed",
+      "paths": [],
+      "pathPatterns": [
+        "apps/api/src/domains/permissions/",
+        "apps/web/src/lib/features/permissions/",
+        "packages/shared/src/permissions/"
+      ]
+    },
+    {
+      "name": "cursor",
+      "enforcement": "on-changed",
+      "paths": [],
+      "pathPatterns": [
+        "apps/api/src/domains/cursor/",
+        "apps/web/src/lib/features/cursor/",
+        "packages/shared/src/cursor/"
+      ]
+    },
+    {
+      "name": "idempotency",
+      "enforcement": "on-changed",
+      "paths": [],
+      "pathPatterns": [
+        "apps/api/src/domains/idempotency/",
+        "apps/web/src/lib/features/idempotency/",
+        "packages/shared/src/idempotency/"
+      ]
+    },
+    {
+      "name": "media",
+      "enforcement": "on-changed",
+      "paths": [],
+      "pathPatterns": [
+        "apps/api/src/domains/media/",
+        "apps/web/src/lib/features/room/client/media/",
+        "apps/web/src/lib/features/room/client/services/media-playback-service.ts",
+        "packages/shared/src/media/"
+      ]
+    }
   ],
   "businessPathPatterns": [
     "apps/api/src/",
