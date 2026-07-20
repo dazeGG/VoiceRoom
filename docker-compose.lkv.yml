@@ -44,3 +44,22 @@ services:
       POSTGRES_PASSWORD: voice_room
     ports:
       - "15432:5432"
+
+  physical-replay:
+    build:
+      context: .
+      target: api
+    working_dir: /work
+    command: ["node", "scripts/lkv/run-auth-gate-physical-replay.mjs", "--json", "--fail-on-blocked"]
+    environment:
+      DATABASE_URL: "postgres://voice_room:voice_room@postgres:5432/voice_room"
+      LIVEKIT_GATE_SECRET: "dev-g05-livekit-gate-secret-32-bytes-minimum"
+      LIVEKIT_INTERNAL_URL: "ws://livekit:7880"
+      LIVEKIT_API_KEY: "devkey"
+      LIVEKIT_API_SECRET: "devsecret"
+      NODE_PATH: "/app/node_modules:/work/node_modules"
+    volumes:
+      - ./:/work:ro
+    depends_on:
+      - livekit
+      - postgres
