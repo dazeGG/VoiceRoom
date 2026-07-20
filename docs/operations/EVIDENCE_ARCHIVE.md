@@ -30,9 +30,9 @@ config, and one `application/json` layer containing the original bytes. Source,
 revision, run, attempt, and evidence ID are manifest annotations.
 
 Before the workflow exists on the default branch, an exact same-repository push
-to `feature/2.5.0-g03-durable-evidence-archive` by `dazeGG` may run only the
-read-only lineage-authentication job. Package publication remains restricted to
-an explicitly confirmed `workflow_dispatch` run.
+to `feature/2.5.0-foundation` by `dazeGG` may run only the read-only
+lineage-authentication job. Package publication remains restricted to an
+explicitly confirmed `workflow_dispatch` run.
 
 ## Publication order
 

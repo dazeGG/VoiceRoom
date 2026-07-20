@@ -180,8 +180,8 @@ test("workflows use exact token permissions, pinned attestation, scheduled senti
   assert.match(sentinel, /manifest fetch --output/);
   assert.match(sentinel, /blob fetch --output/);
   assert.doesNotMatch(sentinel, /available:true|attestationVerified:true,tagResolvedDigest:x\.manifestDigest/);
-  assert.match(archive, /^  push:\n    branches:\n      - feature\/2\.5\.0-g03-durable-evidence-archive$/m);
-  assert.match(archive, /github\.event_name == 'push' && github\.repository == 'dazeGG\/VoiceRoom' && github\.ref == 'refs\/heads\/feature\/2\.5\.0-g03-durable-evidence-archive' && github\.actor == 'dazeGG'/);
+  assert.match(archive, /^  push:\n    branches:\n      - feature\/2\.5\.0-foundation$/m);
+  assert.match(archive, /github\.event_name == 'push' && github\.repository == 'dazeGG\/VoiceRoom' && github\.ref == 'refs\/heads\/feature\/2\.5\.0-foundation' && github\.actor == 'dazeGG'/);
   assert.match(archive, /^    if: github\.event_name == 'workflow_dispatch' && github\.repository == 'dazeGG\/VoiceRoom' && inputs\.confirm == 'ARCHIVE-G01-G02'$/m);
   assert.doesNotMatch(`${archive}\n${sentinel}`, /\bPAT\b|packages\/.*DELETE|delete-package|oras\s+push|^\s+subject:\s/im);
 });
