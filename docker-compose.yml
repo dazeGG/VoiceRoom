@@ -16,9 +16,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
 
   api:
-    build:
-      context: .
-      target: api
+    image: ${VOICEROOM_API_IMAGE:?set immutable VOICEROOM_API_IMAGE digest}
     restart: unless-stopped
     depends_on:
       postgres:
@@ -81,13 +79,7 @@ services:
       start_period: 15s
 
   caddy:
-    build:
-      context: .
-      target: web
-      args:
-        DOMAIN: ${DOMAIN:?set DOMAIN in .env}
-        LIVEKIT_DOMAIN: ${LIVEKIT_DOMAIN:-livekit.${DOMAIN}}
-        LIVEKIT_URL: ${LIVEKIT_URL:-wss://${LIVEKIT_DOMAIN:-livekit.${DOMAIN}}}
+    image: ${VOICEROOM_WEB_IMAGE:?set immutable VOICEROOM_WEB_IMAGE digest}
     restart: unless-stopped
     depends_on:
       api:

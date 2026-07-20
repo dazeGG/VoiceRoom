@@ -909,29 +909,38 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
-  deploy:
-    name: Deploy to server
-    needs: [check, test]
-    # Only deploy real pushes to main, never PRs or forks.
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+  goal-g11-runtime-images:
+    name: G11 immutable runtime image publication foundation
+    if: github.event_name == 'pull_request' && github.base_ref == 'develop' && github.head_ref == 'feature/2.5.0-foundation' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
-    # Serialize deploys so two pushes can't rebuild the stack concurrently.
-    concurrency:
-      group: deploy-production
-      cancel-in-progress: false
+    permissions:
+      contents: read
     steps:
-      - name: Deploy over SSH
-        uses: appleboy/ssh-action@v1.2.5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_KEY }}
-          port: ${{ secrets.SSH_PORT || '22' }}
-          script: |
-            set -euo pipefail
-            cd "${{ vars.DEPLOY_PATH || '/srv/voiceroom' }}"
-            git fetch --all --prune
-            git reset --hard origin/main
-            # API applies PostgreSQL migrations on bootstrap before it listens.
-            docker compose up -d --build
-            docker image prune -f
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Verify immutable runtime package contracts
+        run: |
+          node --test scripts/test/g11-runtime-image-publication.test.mjs
+          node scripts/oci/build-publish.mjs --verify-config
+
+  goal-g12-deploy-boundary:
+    name: G12 release deploy boundary foundation
+    if: github.event_name == 'pull_request' && github.base_ref == 'develop' && github.head_ref == 'feature/2.5.0-foundation' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Verify production promotion stays disabled without external authority
+        run: |
+          node --test scripts/test/g12-release-deploy-boundary.test.mjs
+          scripts/ci/run-actionlint.sh .github/workflows/ci.yml .github/workflows/promote-production-digests.yml

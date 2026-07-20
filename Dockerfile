@@ -42,6 +42,13 @@ EXPOSE 3000
 
 CMD ["node", "apps/api/src/server.js"]
 
+FROM api AS worker
+
+# The worker runtime is packaged separately from the API image. The executable
+# entrypoint is intentionally a placeholder until a dedicated worker process is
+# introduced by a later release slice.
+CMD ["node", "apps/api/src/server.js"]
+
 FROM caddy:2.11.3-alpine AS web
 
 COPY Caddyfile /etc/caddy/Caddyfile
