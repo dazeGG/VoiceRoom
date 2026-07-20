@@ -148,6 +148,39 @@ jobs:
       - run: npm --workspace @voice-room/api run test:g05
       - run: G05_SELECTED_MECHANISM=external-auth-gate node scripts/lkv/run-strict-boundary-proof.mjs --json --fail-on-blocked
 
+  goal-g08:
+    name: G08 measured coverage gate
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Capture changed files for business coverage gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p coverage
+          git diff --name-only "${{ github.event.pull_request.base.sha }}" "${{ github.event.pull_request.head.sha }}" > coverage/release-250-changed-files.txt
+      - run: npm run coverage:g08
+      - run: node scripts/coverage/check-release-250-coverage.mjs --coverage coverage/release-250-summary.json --changed-files coverage/release-250-changed-files.txt
+      - name: Persist G08 measured coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: g08-release-250-coverage-run-${{ github.run_id }}-attempt-${{ github.run_attempt }}-head-${{ github.event.pull_request.head.sha }}
+          path: |
+            coverage/release-250-summary.json
+            coverage/release-250-changed-files.txt
+          if-no-files-found: error
+          retention-days: 90
+
   bootstrap-plan:
     name: G01 targeted bootstrap gate
     if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && (github.head_ref == 'feature/2.5.0-g01-canonical-evidence-bootstrap' || startsWith(github.head_ref, 'feature/2.5.0-g01-postmerge-bootstrap-a'))

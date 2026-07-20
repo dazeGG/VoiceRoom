@@ -5,27 +5,24 @@
     "artifact": "coverage/release-250-summary.json",
     "measuredAt": "2026-07-20T00:00:00.000Z",
     "total": {
-      "lines": 0,
-      "branches": 0
+      "lines": 96.99,
+      "branches": 37.75
     }
   },
   "changedBusinessCode": {
     "line": 90,
     "branch": 85
   },
-  "strictBranchPaths": [
-    "apps/api/src/server.js",
-    "apps/api/src/lib/rate-limit.js",
-    "apps/api/src/lib/room-store.js",
-    "apps/api/src/lib/user-store.js",
-    "apps/api/src/lib/avatar-storage.js",
-    "apps/api/src/lib/avatar-processing.js",
-    "apps/api/src/lib/push-service.js",
-    "apps/api/src/lib/push-store.js",
-    "packages/shared/src/validation.js",
-    "packages/shared/src/realtime.js",
-    "apps/web/src/lib/api/http.ts",
-    "apps/web/src/lib/api/realtime.ts"
+  "strictBranchPaths": [],
+  "strictBranchPathPatterns": [
+    "apps/api/src/domains/permissions/",
+    "apps/api/src/domains/cursor/",
+    "apps/api/src/domains/idempotency/",
+    "apps/api/src/domains/media/",
+    "packages/shared/src/permissions/",
+    "packages/shared/src/cursor/",
+    "packages/shared/src/idempotency/",
+    "packages/shared/src/media/"
   ],
   "businessPathPatterns": [
     "apps/api/src/",

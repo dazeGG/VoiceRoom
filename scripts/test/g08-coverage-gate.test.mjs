@@ -13,11 +13,15 @@ const thresholds = {
   },
   changedBusinessCode: { line: 90, branch: 85 },
   strictBranchPaths: ["apps/api/src/server.js", "packages/shared/src/validation.js"],
+  strictBranchPathPatterns: [],
   businessPathPatterns: ["apps/api/src/", "apps/web/src/", "packages/shared/src/"],
   ignoredPathPatterns: ["/test/", "/migrations/", ".d.ts"]
 };
 
 const greenSummary = {
+  schemaVersion: 1,
+  release: "2.5.0",
+  meta: { measured: true, engine: "node-v8-coverage" },
   total: { lines: { pct: 82 }, branches: { pct: 72 } },
   files: {
     "apps/api/src/server.js": { lines: { pct: 94 }, branches: { pct: 100 } },
@@ -36,9 +40,20 @@ test("G08-A01 accepts measured baseline, total non-regression, and changed busin
   assert.equal(result.release, "2.5.0");
   assert.deepEqual(result.total, { lines: 82, branches: 72 });
   assert.equal(result.checkedChangedFiles, 1);
+  assert.equal(result.strictBranchPaths, 2);
+  assert.match(result.coverageDigest, /^sha256:[a-f0-9]{64}$/);
 });
 
-test("G08-A02 rejects total regression, under-covered changed business code, and strict-path branch gaps", () => {
+test("G08-A02 rejects unmeasured summaries, total regression, under-covered changed business code, and strict-path branch gaps", () => {
+  assert.throws(
+    () => checkRelease250Coverage({
+      coverageSummary: { ...greenSummary, meta: { measured: false, engine: "node-v8-coverage" } },
+      thresholds,
+      changedFiles: []
+    }),
+    /must be produced from measured coverage/i
+  );
+
   assert.throws(
     () => checkRelease250Coverage({
       coverageSummary: { ...greenSummary, total: { lines: { pct: 79 }, branches: { pct: 72 } } },
@@ -85,5 +100,32 @@ test("G08-A02 rejects total regression, under-covered changed business code, and
       changedFiles: []
     }),
     /requires 100% branch coverage/i
+  );
+});
+
+test("G08-A03 rejects artifact path drift and fail-closed strict path omissions", () => {
+  assert.throws(
+    () => checkRelease250Coverage({
+      coverageSummary: greenSummary,
+      thresholds,
+      changedFiles: [],
+      coveragePath: "coverage/other-summary.json"
+    }),
+    /does not match baseline artifact/i
+  );
+
+  assert.throws(
+    () => checkRelease250Coverage({
+      coverageSummary: {
+        ...greenSummary,
+        files: {
+          "apps/api/src/server.js": { lines: { pct: 94 }, branches: { pct: 100 } },
+          "apps/web/src/lib/api/http.ts": { lines: { pct: 91 }, branches: { pct: 86 } }
+        }
+      },
+      thresholds,
+      changedFiles: []
+    }),
+    /configured for strict branch coverage but is missing/i
   );
 });
