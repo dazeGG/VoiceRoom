@@ -39,12 +39,45 @@ test('G05-A02 proof distinguishes approved-shape failures from material architec
   assert.equal(proof.amendmentPath, 'docs/releases/2.5.0/amendments/G05-STRICT-LKV.json');
 });
 
-test('G05 ADR records blocked status and no successor start before amendment', () => {
+test('G05 ADR records accepted external auth-gate amendment and no successor start before restarted proof', () => {
   const adr = fs.readFileSync('docs/ADR_LIVEKIT_CREDENTIAL_BOUNDARY.md', 'utf8');
-  assert.match(adr, /Blocked for amendment under G05/);
-  assert.match(adr, /cannot make the same unexpired JWT fail/);
+  assert.match(adr, /Accepted G05 amendment: external auth-gate selected/);
+  assert.match(adr, /sole public WSS gate/);
+  assert.match(adr, /LiveKit `7880` is internal-only/);
+  assert.match(adr, /separate signed gate credential/);
+  assert.match(adr, /PostgreSQL room credential epochs/);
   assert.match(adr, /G06 and later successors remain blocked/);
-  assert.match(adr, /does not invalidate the credential/);
+});
+
+test('G05 amendment artifact binds exact gate invariants and canonical digests', () => {
+  const amendment = JSON.parse(fs.readFileSync('docs/releases/2.5.0/amendments/G05-STRICT-LKV.json', 'utf8'));
+
+  assert.equal(amendment.status, 'APPROVED_AMENDMENT');
+  assert.equal(amendment.selectedMechanism, 'external-auth-gate');
+  assert.equal(amendment.boundedReplayAccepted, false);
+  assert.equal(amendment.successorStartAllowedBeforeGreenG05, false);
+  assert.deepEqual(
+    amendment.approvals.map((approval) => `${approval.role}:${approval.verdict}`),
+    ['Planner:APPROVE', 'Architect:APPROVE', 'Critic:APPROVE']
+  );
+  assert.equal(amendment.invariants.publicWssBoundary, 'sole public WSS gate');
+  assert.equal(amendment.invariants.livekitInternalPort, '7880 internal');
+  assert.equal(amendment.invariants.guestIdentity, 'account id/room-scoped guest UUID/IP ban-only');
+  assert.equal(amendment.invariants.gateCredential, 'separate signed gate credential');
+  assert.equal(amendment.invariants.linearization, 'PostgreSQL linearization with epoch/no positive cache');
+  assert.equal(amendment.invariants.availabilityPolicy, 'security>availability');
+  assert.equal(amendment.invariants.revokeOrdering, 'revoke commit before RemoveParticipant/success');
+  assert.deepEqual(amendment.hostileTestMatrix, [
+    'stolen-token',
+    'restart',
+    'partition',
+    'clock-skew',
+    'concurrent-mint-revoke',
+    'leave',
+    'ban',
+    'explicit-revoke',
+    'guest-ip-ban-only'
+  ]);
 });
 
 test('G05 strict proof CLI can fail closed for release gating', () => {
