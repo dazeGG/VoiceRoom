@@ -45,7 +45,7 @@
 
 {$LIVEKIT_DOMAIN} {
   encode zstd gzip
-  reverse_proxy livekit:7880
+  reverse_proxy livekit-gate:3080
 
   header {
     Strict-Transport-Security "max-age=31536000; includeSubDomains"

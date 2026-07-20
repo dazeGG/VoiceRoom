@@ -133,6 +133,21 @@ jobs:
       - run: npm ci
       - run: npm test
 
+  goal-g05:
+    name: G05 strict LiveKit gate proof
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm --workspace @voice-room/api run test:g05
+      - run: G05_SELECTED_MECHANISM=external-auth-gate node scripts/lkv/run-strict-boundary-proof.mjs --json --fail-on-blocked
+
   bootstrap-plan:
     name: G01 targeted bootstrap gate
     if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && (github.head_ref == 'feature/2.5.0-g01-canonical-evidence-bootstrap' || startsWith(github.head_ref, 'feature/2.5.0-g01-postmerge-bootstrap-a'))

@@ -50,6 +50,7 @@ const {
   recordHttpRequest,
   renderPrometheus
 } = require('./lib/metrics');
+const { createGateCredentialSigner } = require('./domains/admission/gate-credential-signer');
 
 const API_PREFIX = '/api';
 const HOST = (process.env.HOST || '127.0.0.1').trim();
@@ -61,6 +62,8 @@ const KEEPALIVE_MS = readEnvInt('SSE_KEEPALIVE_MS', 15000, 1000);
 const BODY_LIMIT_BYTES = readEnvInt('BODY_LIMIT_BYTES', 65536, 1024);
 const TRUST_PROXY = readEnvBool('TRUST_PROXY', false);
 const LIVEKIT_TOKEN_TTL_SECONDS = readEnvInt('LIVEKIT_TOKEN_TTL_SECONDS', 21600, 60);
+const LIVEKIT_GATE_PUBLIC_URL = cleanLiveKitUrl(process.env.LIVEKIT_GATE_PUBLIC_URL || process.env.LIVEKIT_URL || '');
+const LIVEKIT_GATE_SECRET = (process.env.LIVEKIT_GATE_SECRET || '').trim();
 const ROOM_IDLE_TTL_MS = readEnvInt('ROOM_IDLE_TTL_MS', 900000, 1000);
 const ROOM_PRUNE_INTERVAL_MS = readEnvInt('ROOM_PRUNE_INTERVAL_MS', 60000, 0);
 const ROOM_CHAT_TTL_MS = readEnvInt('ROOM_CHAT_TTL_MS', 7 * 24 * 60 * 60 * 1000, 1000);
@@ -318,7 +321,7 @@ const pushSubscriptionLimiter = createRateLimiter({
 });
 
 function getLiveKitConnectSources() {
-  const url = cleanLiveKitUrl(process.env.LIVEKIT_URL || '');
+  const url = cleanLiveKitUrl(LIVEKIT_GATE_PUBLIC_URL || process.env.LIVEKIT_URL || '');
   if (!url) return [];
 
   const sources = new Set();
@@ -489,12 +492,15 @@ function getLiveKitRoomName(roomId) {
 
 function getLiveKitConfig() {
   const url = cleanLiveKitUrl(process.env.LIVEKIT_URL || '');
+  const gateUrl = cleanLiveKitUrl(LIVEKIT_GATE_PUBLIC_URL || url);
   const apiKey = process.env.LIVEKIT_API_KEY && process.env.LIVEKIT_API_KEY.trim();
   const apiSecret = process.env.LIVEKIT_API_SECRET && process.env.LIVEKIT_API_SECRET.trim();
   return {
     apiKey,
     apiSecret,
-    enabled: Boolean(url && apiKey && apiSecret),
+    enabled: Boolean(url && gateUrl && apiKey && apiSecret),
+    gateSecret: LIVEKIT_GATE_SECRET,
+    gateUrl,
     url
   };
 }
@@ -781,6 +787,14 @@ async function handleLiveKitToken(req, res) {
     });
     return;
   }
+  if (!livekit.gateSecret || livekit.gateSecret.length < 32) {
+    sendJson(res, 503, {
+      ok: false,
+      code: 'livekit_gate_unavailable',
+      error: 'LiveKit gate is not configured'
+    });
+    return;
+  }
 
   const body = await readJsonBody(req);
   const roomId = normalizeRoomId(body.roomId);
@@ -815,6 +829,20 @@ async function handleLiveKitToken(req, res) {
     sendJson(res, 403, { ok: false, error: 'Сессия участника недействительна' });
     return;
   }
+  const principal = getRoomStore().normalizeGatePrincipal({
+    accountUserId: sessionUser?.id || null,
+    guestPrincipalId: identityResult.identity?.id || '',
+    roomId
+  });
+  if (!principal) {
+    sendJson(res, 503, { ok: false, code: 'livekit_gate_principal_unavailable', error: 'LiveKit gate principal unavailable' });
+    return;
+  }
+  const epochResult = await getRoomStore().getLiveKitGatePrincipalEpoch({ principal, roomId });
+  if (epochResult.status !== 'ready') {
+    sendJson(res, 503, { ok: false, code: 'livekit_gate_epoch_unavailable', error: 'LiveKit gate unavailable' });
+    return;
+  }
 
   const livekitRoom = getLiveKitRoomName(roomId);
   const token = new AccessToken(livekit.apiKey, livekit.apiSecret, {
@@ -831,13 +859,38 @@ async function handleLiveKitToken(req, res) {
     room: livekitRoom,
     roomJoin: true
   });
+  const gateSigner = createGateCredentialSigner({ secret: livekit.gateSecret });
+  const expiresAt = Date.now() + LIVEKIT_TOKEN_TTL_SECONDS * 1000;
+  const gateCredential = gateSigner.sign({
+    expiresAt,
+    peerId,
+    principalEpoch: epochResult.epoch,
+    principalId: principal.principalId,
+    principalType: principal.principalType,
+    roomId
+  });
+  const storedGateCredential = await getRoomStore().createLiveKitGateCredential({
+    credentialHash: gateSigner.hash(gateCredential),
+    expiresAt,
+    peerId,
+    principal,
+    principalEpoch: epochResult.epoch,
+    roomId
+  });
+  if (storedGateCredential.status !== 'created') {
+    sendJson(res, 503, { ok: false, code: 'livekit_gate_credential_unavailable', error: 'LiveKit gate unavailable' });
+    return;
+  }
+  const gateUrl = new URL(livekit.gateUrl);
+  gateUrl.searchParams.set('vr_gate_credential', gateCredential);
 
   sendJson(res, 200, {
     ok: true,
+    gateCredentialId: storedGateCredential.credential.id,
     room: livekitRoom,
     token: await token.toJwt(),
     ttlSeconds: LIVEKIT_TOKEN_TTL_SECONDS,
-    url: livekit.url
+    url: gateUrl.toString()
   });
 }
 
@@ -1707,6 +1760,14 @@ async function disconnectModeratedPeer(room, peer, type) {
     wsRegistry.unregisterConnectionForRoom(connection, room.id);
   }
   closePeer(room.id, peer.id, peer.transport?.id, type === 'room.banned' ? 'banned' : 'kicked');
+  if (typeof getRoomStore().revokeLiveKitGatePeer === 'function') {
+    await getRoomStore().revokeLiveKitGatePeer({
+      roomId: room.id,
+      peerId: peer.id,
+      accountUserId: peer.accountUserId || null,
+      guestPrincipalId: peer.gateGuestPrincipalId || ''
+    });
+  }
   if (typeof getRoomStore().invalidatePeerIdentity === 'function') {
     await getRoomStore().invalidatePeerIdentity({ roomId: room.id, peerId: peer.id });
   }

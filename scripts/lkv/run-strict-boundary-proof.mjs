@@ -2,6 +2,7 @@
 
 import crypto from 'node:crypto';
 import { parseArgs } from 'node:util';
+import { runAuthGateProof } from './run-auth-gate-proof.mjs';
 import { runReplayScenario } from './run-replay-scenario.mjs';
 
 const APPROVED_SHAPE = Object.freeze({
@@ -43,7 +44,10 @@ const ATTEMPTS = Object.freeze([
   }
 ]);
 
-export function runStrictBoundaryProof(options = {}) {
+export async function runStrictBoundaryProof(options = {}) {
+  if (options.mechanism === 'external-auth-gate' || process.env.G05_SELECTED_MECHANISM === 'external-auth-gate') {
+    return runAuthGateProof();
+  }
   const replay = options.replay ?? runReplayScenario();
   const sameTokenAccepted = replay.summary.sameTokenReconnectAccepted === true;
   const inShapeAttempts = ATTEMPTS.filter((attempt) => !attempt.materialChangeRequired);
@@ -72,7 +76,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       'fail-on-blocked': { type: 'boolean', default: false }
     }
   });
-  const report = runStrictBoundaryProof();
+  const report = await runStrictBoundaryProof({ mechanism: process.env.G05_SELECTED_MECHANISM });
   process.stdout.write(values.json ? `${JSON.stringify(report, null, 2)}\n` : `${JSON.stringify(report)}\n`);
   if (values['fail-on-blocked'] && report.status !== 'STRICT_BOUNDARY_PROVEN') process.exitCode = 2;
 }

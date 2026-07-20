@@ -478,6 +478,7 @@ function createRoomRealtimeRuntime(deps) {
           ? `/api/avatars/${encodeURIComponent(sessionUser.avatarKey)}`
           : null,
         id: peerId,
+        gateGuestPrincipalId: identityResult.identity?.id || '',
         ip: clientIp || '',
         joinedAt: previous?.joinedAt ?? Date.now(),
         muted: previous?.muted ?? false,
@@ -558,6 +559,17 @@ function createRoomRealtimeRuntime(deps) {
   ) {
     if (cancelPendingJoin) cancelConnectionVoiceJoin(connection, payload);
     if (!payload?.roomId || !payload.peerId) return;
+    const room = presenceRooms.get(payload.roomId);
+    const peer = room?.peers?.get(payload.peerId);
+    if (peer && typeof getRoomStore().revokeLiveKitGatePeer === 'function') {
+      await getRoomStore().revokeLiveKitGatePeer({
+        roomId: payload.roomId,
+        peerId: payload.peerId,
+        accountUserId: peer.accountUserId || null,
+        guestPrincipalId: peer.gateGuestPrincipalId || '',
+        now: Date.now()
+      });
+    }
     // Close using the transport this connection owns, not whatever peer happens
     // to hold the id now. After a same-peer reconnect the superseded connection
     // must not evict the peer that replaced it — closePeer's guard rejects the

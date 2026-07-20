@@ -83,6 +83,7 @@ function mapPeerIdentity(row) {
     avatarColorKey: row.avatar_color_key || avatarColorForPeerId(row.peer_id),
     createdAt: toMillis(row.created_at),
     displayName: row.display_name || '',
+    id: row.id || '',
     lastSeenAt: toMillis(row.last_seen_at),
     peerId: row.peer_id || '',
     roomId: row.room_id,
@@ -466,6 +467,158 @@ function createRoomStore({
       [roomId, peerId, invalidSessionTokenHash, toDate(now)]
     );
     return result.rowCount > 0;
+  }
+
+  function normalizeGatePrincipal({ accountUserId, guestPrincipalId, roomId } = {}) {
+    if (accountUserId) return { principalType: 'account', principalId: String(accountUserId) };
+    const guest = String(guestPrincipalId || '').trim();
+    if (!roomId || !guest) return null;
+    return { principalType: 'guest', principalId: `${roomId}:${guest}` };
+  }
+
+  async function createLiveKitGateCredential({
+    credentialHash,
+    credentialId = createRowId(),
+    expiresAt,
+    peerId,
+    principal,
+    principalEpoch = null,
+    roomId,
+    now = Date.now()
+  } = {}) {
+    if (!roomId || !peerId || !credentialHash || !principal?.principalType || !principal?.principalId) {
+      return { status: 'invalid', credential: null };
+    }
+    return transaction(getPool(), async (client) => {
+      await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`voice-room:livekit-gate:${roomId}:${principal.principalType}:${principal.principalId}`]);
+      const epoch = await client.query(
+        `INSERT INTO livekit_gate_principal_epochs (room_id, principal_type, principal_id, epoch, updated_at)
+         VALUES ($1, $2, $3, 0, $4)
+         ON CONFLICT (room_id, principal_type, principal_id) DO UPDATE
+         SET updated_at = EXCLUDED.updated_at
+         RETURNING epoch`,
+        [roomId, principal.principalType, principal.principalId, toDate(now)]
+      );
+      const storedPrincipalEpoch = Number(epoch.rows[0]?.epoch || 0);
+      const credentialEpoch = principalEpoch === null ? storedPrincipalEpoch : Number(principalEpoch);
+      if (credentialEpoch !== storedPrincipalEpoch) return { status: 'epoch_mismatch', credential: null };
+      const inserted = await client.query(
+        `INSERT INTO livekit_gate_credentials
+          (id, room_id, peer_id, principal_type, principal_id, principal_epoch, credential_hash, created_at, expires_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+         RETURNING *`,
+        [
+          credentialId,
+          roomId,
+          peerId,
+          principal.principalType,
+          principal.principalId,
+          credentialEpoch,
+          credentialHash,
+          toDate(now),
+          toDate(expiresAt)
+        ]
+      );
+      return {
+        credential: {
+          id: inserted.rows[0].id,
+          principalEpoch: credentialEpoch,
+          principalId: principal.principalId,
+          principalType: principal.principalType
+        },
+        status: 'created'
+      };
+    });
+  }
+
+  async function getLiveKitGatePrincipalEpoch({ principal, roomId, now = Date.now() } = {}) {
+    if (!roomId || !principal?.principalType || !principal?.principalId) return { status: 'invalid', epoch: null };
+    return transaction(getPool(), async (client) => {
+      await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`voice-room:livekit-gate:${roomId}:${principal.principalType}:${principal.principalId}`]);
+      const result = await client.query(
+        `INSERT INTO livekit_gate_principal_epochs (room_id, principal_type, principal_id, epoch, updated_at)
+         VALUES ($1, $2, $3, 0, $4)
+         ON CONFLICT (room_id, principal_type, principal_id) DO UPDATE
+         SET updated_at = EXCLUDED.updated_at
+         RETURNING epoch`,
+        [roomId, principal.principalType, principal.principalId, toDate(now)]
+      );
+      return { status: 'ready', epoch: Number(result.rows[0]?.epoch || 0) };
+    });
+  }
+
+  async function verifyLiveKitGateCredential({
+    credentialHash,
+    peerId,
+    principalEpoch,
+    principalId,
+    principalType,
+    roomId,
+    now = Date.now()
+  } = {}) {
+    if (!roomId || !peerId || !credentialHash || !principalType || !principalId) return { status: 'invalid' };
+    const result = await getPool().query(
+      `SELECT c.id
+       FROM livekit_gate_credentials c
+       JOIN livekit_gate_principal_epochs e
+         ON e.room_id = c.room_id
+        AND e.principal_type = c.principal_type
+        AND e.principal_id = c.principal_id
+       WHERE c.credential_hash = $1
+         AND c.room_id = $2
+         AND c.peer_id = $3
+         AND c.principal_type = $4
+         AND c.principal_id = $5
+         AND c.principal_epoch = $6
+         AND e.epoch = $6
+         AND c.revoked_at IS NULL
+         AND c.expires_at > $7
+       LIMIT 1`,
+      [credentialHash, roomId, peerId, principalType, principalId, Number(principalEpoch), toDate(now)]
+    );
+    return { status: result.rowCount === 1 ? 'allowed' : 'denied' };
+  }
+
+  async function revokeLiveKitGatePrincipal({ principal, roomId, now = Date.now() } = {}) {
+    if (!roomId || !principal?.principalType || !principal?.principalId) return { status: 'invalid', epoch: null };
+    return transaction(getPool(), async (client) => {
+      await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`voice-room:livekit-gate:${roomId}:${principal.principalType}:${principal.principalId}`]);
+      const epoch = await client.query(
+        `INSERT INTO livekit_gate_principal_epochs (room_id, principal_type, principal_id, epoch, updated_at)
+         VALUES ($1, $2, $3, 1, $4)
+         ON CONFLICT (room_id, principal_type, principal_id) DO UPDATE
+         SET epoch = livekit_gate_principal_epochs.epoch + 1,
+             updated_at = EXCLUDED.updated_at
+         RETURNING epoch`,
+        [roomId, principal.principalType, principal.principalId, toDate(now)]
+      );
+      await client.query(
+        `UPDATE livekit_gate_credentials
+         SET revoked_at = COALESCE(revoked_at, $4)
+         WHERE room_id = $1 AND principal_type = $2 AND principal_id = $3 AND revoked_at IS NULL`,
+        [roomId, principal.principalType, principal.principalId, toDate(now)]
+      );
+      return { status: 'revoked', epoch: Number(epoch.rows[0]?.epoch || 0) };
+    });
+  }
+
+  async function revokeLiveKitGatePeer({ roomId, peerId, accountUserId = null, guestPrincipalId = '', now = Date.now() } = {}) {
+    const principal = normalizeGatePrincipal({ accountUserId, guestPrincipalId, roomId });
+    if (!principal) return { status: 'invalid', epoch: null };
+    return revokeLiveKitGatePrincipal({ principal, roomId, now });
+  }
+
+  async function assertLiveKitGateReady() {
+    await getPool().query(
+      `SELECT c.id
+       FROM livekit_gate_credentials c
+       JOIN livekit_gate_principal_epochs e
+         ON e.room_id = c.room_id
+        AND e.principal_type = c.principal_type
+        AND e.principal_id = c.principal_id
+       LIMIT 0`
+    );
+    return true;
   }
 
   async function createRoomBan({ roomId, userId = null, ip = '', maxBans = 100, metadata = {}, now = Date.now() } = {}) {
@@ -959,12 +1112,15 @@ function createRoomStore({
     countQuotaRoomsForIp,
     countRooms,
     createRoom,
+    assertLiveKitGateReady,
+    createLiveKitGateCredential,
     createRoomBan,
     createRoomWithQuota,
     deleteRoomBan,
     deleteRoom,
     editMessage,
     findActiveRoomBan,
+    getLiveKitGatePrincipalEpoch,
     getOrCreatePeerIdentity,
     getRoom,
     listMessages,
@@ -982,6 +1138,10 @@ function createRoomStore({
     markRoomChatRead,
     markRoomEmpty,
     invalidatePeerIdentity,
+    normalizeGatePrincipal,
+    revokeLiveKitGatePeer,
+    revokeLiveKitGatePrincipal,
+    verifyLiveKitGateCredential,
     pruneRooms,
     purgeDeleted,
     roomIdExists,
