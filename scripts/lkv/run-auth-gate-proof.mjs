@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { createRequire } from 'node:module';
+import fs from 'node:fs';
 import { parseArgs } from 'node:util';
 
 const require = createRequire(import.meta.url);
@@ -32,6 +33,8 @@ function createMemoryGateStore() {
     },
     async createLiveKitGateCredential({ credentialHash, peerId, principal, principalEpoch, roomId }) {
       if (!available) throw new Error('database unavailable');
+      const currentEpoch = epochs.get(key({ roomId, ...principal }));
+      if (principalEpoch !== currentEpoch) return { status: 'epoch_mismatch', credential: null };
       credentials.set(credentialHash, {
         peerId,
         principalEpoch,
@@ -67,6 +70,26 @@ function createMemoryGateStore() {
       }
       return { status: 'revoked', epoch: epochs.get(principalKey) };
     }
+  };
+}
+
+function readTopologyEvidence() {
+  const compose = fs.readFileSync('docker-compose.yml', 'utf8');
+  const lkv = fs.readFileSync('docker-compose.lkv.yml', 'utf8');
+  const caddy = fs.readFileSync('Caddyfile', 'utf8');
+  const config = JSON.parse(fs.readFileSync('config/livekit/external-auth-gate.v1.json', 'utf8'));
+  const productionGateCommandOk = /command:\s*\["node",\s*"apps\/api\/src\/domains\/admission\/livekit-auth-gate-service\.js"\]/.test(compose);
+  const internalLiveKitDefaultOk = /LIVEKIT_URL:\s*\$\{LIVEKIT_URL:-ws:\/\/livekit:7880\}/.test(compose);
+  const caddyTargetsGate = /reverse_proxy\s+livekit-gate:3080/.test(caddy) && !/reverse_proxy\s+livekit:7880/.test(caddy);
+  const noProductionHostBind7880 = !/"7880:7880"/.test(compose);
+  const lkvRunnable = /postgres:/.test(lkv) && /target:\s*api/.test(lkv) && /apps\/api\/src\/domains\/admission\/livekit-auth-gate-service\.js/.test(lkv);
+  return {
+    caddyTargetsGate,
+    config,
+    internalLiveKitDefaultOk,
+    lkvRunnable,
+    noProductionHostBind7880,
+    productionGateCommandOk
   };
 }
 
@@ -116,6 +139,22 @@ export async function runAuthGateProof() {
   const accountAllowed = await authorize({ credential: accountCredential, signer, store });
   await store.revokeLiveKitGatePrincipal({ principal: accountPrincipal, roomId });
   const accountDeniedAfterRevoke = await authorize({ credential: accountCredential, signer, store });
+  const staleRaceCredential = signer.sign({
+    expiresAt: Date.now() + 600_000,
+    peerId: 'peer-a',
+    principalEpoch: 0,
+    principalId: accountPrincipal.principalId,
+    principalType: accountPrincipal.principalType,
+    roomId
+  });
+  const staleRaceStore = await store.createLiveKitGateCredential({
+    credentialHash: signer.hash(staleRaceCredential),
+    peerId: 'peer-a',
+    principal: accountPrincipal,
+    principalEpoch: 0,
+    roomId
+  });
+  const staleRaceDenied = await authorize({ credential: staleRaceCredential, signer, store });
   const refreshed = await mint({ principal: accountPrincipal, roomId, signer, store });
   const refreshedAllowed = await authorize({ credential: refreshed, signer, store });
 
@@ -144,14 +183,24 @@ export async function runAuthGateProof() {
     dbOutageDenied = true;
   }
 
+  const topology = readTopologyEvidence();
   const cases = [
     { id: 'G05-A01-same-token-after-revoke', denied: accountDeniedAfterRevoke === 'denied' },
     { id: 'G05-A01-same-token-after-leave', denied: accountDeniedAfterRevoke === 'denied' },
     { id: 'G05-A01-same-token-after-ban', denied: guestDenied === 'denied' },
-    { id: 'G05-A02-public-bypass-7880', denied: true, reason: 'compose exposes gate only; livekit 7880 has no production host bind' },
+    {
+      id: 'G05-A02-public-bypass-7880',
+      denied: topology.productionGateCommandOk
+        && topology.internalLiveKitDefaultOk
+        && topology.caddyTargetsGate
+        && topology.noProductionHostBind7880
+        && topology.config.publicSignaling?.fallbackAllowed === false
+        && topology.lkvRunnable,
+      reason: 'parsed production compose/Caddy/config route public signaling to gate and keep LiveKit 7880 internal'
+    },
     { id: 'G05-A03-db-outage', denied: dbOutageDenied },
     { id: 'G05-A03-gate-restart', denied: accountDeniedAfterRevoke === 'denied', reason: 'authorization is row/epoch backed, not process memory backed' },
-    { id: 'G05-A04-mint-vs-revoke-race', denied: accountDeniedAfterRevoke === 'denied' },
+    { id: 'G05-A04-mint-vs-revoke-race', denied: staleRaceStore.status === 'epoch_mismatch' && staleRaceDenied === 'denied' },
     { id: 'G05-A05-refreshed-known-credential', allowed: refreshedAllowed === 'allowed' },
     { id: 'G05-A05-missing-credential', denied: missing !== 'allowed' },
     { id: 'G05-A05-wrong-room-or-peer-or-epoch', denied: wrongRoom !== 'allowed' },
@@ -168,6 +217,7 @@ export async function runAuthGateProof() {
       : 'STRICT_BOUNDARY_FAILED',
     selectedMechanism: 'external-auth-gate',
     establishedSessionSemantics: 'existing WebSocket/LiveKit sessions are removed best-effort; strict guarantee applies to every new LiveKit signaling upgrade/reconnect',
+    topology,
     successorStartAllowed: true,
     greenF11Allowed: true,
     cases

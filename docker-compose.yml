@@ -28,7 +28,7 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-info}
       TRUST_PROXY: ${TRUST_PROXY:-true}
       DATABASE_URL: ${DATABASE_URL:-postgres://${POSTGRES_USER:-voice_room}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-voice_room}}
-      LIVEKIT_URL: ${LIVEKIT_URL:-wss://${LIVEKIT_DOMAIN:-livekit.${DOMAIN}}}
+      LIVEKIT_URL: ${LIVEKIT_URL:-ws://livekit:7880}
       LIVEKIT_GATE_PUBLIC_URL: ${LIVEKIT_GATE_PUBLIC_URL:-wss://${LIVEKIT_DOMAIN:-livekit.${DOMAIN}}/rtc}
       LIVEKIT_GATE_SECRET: ${LIVEKIT_GATE_SECRET:?set LIVEKIT_GATE_SECRET in .env}
       LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:?set LIVEKIT_API_KEY in .env}
@@ -126,7 +126,7 @@ services:
   livekit-gate:
     image: ${VOICEROOM_API_IMAGE:?set immutable VOICEROOM_API_IMAGE digest}
     restart: unless-stopped
-    command: ["node", "src/domains/admission/livekit-auth-gate-service.js"]
+    command: ["node", "apps/api/src/domains/admission/livekit-auth-gate-service.js"]
     depends_on:
       postgres:
         condition: service_healthy

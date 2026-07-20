@@ -21,16 +21,26 @@ services:
       - livekit
 
   livekit-gate:
-    image: node:24-alpine
-    working_dir: /work/apps/api
-    command: ["node", "src/domains/admission/livekit-auth-gate-service.js"]
+    build:
+      context: .
+      target: api
+    working_dir: /app
+    command: ["node", "apps/api/src/domains/admission/livekit-auth-gate-service.js"]
     environment:
       LIVEKIT_GATE_SECRET: "dev-g05-livekit-gate-secret-32-bytes-minimum"
       LIVEKIT_INTERNAL_URL: "ws://livekit:7880"
       DATABASE_URL: "postgres://voice_room:voice_room@postgres:5432/voice_room"
-    volumes:
-      - ./:/work:ro
     ports:
       - "17881:3080"
     depends_on:
       - livekit
+      - postgres
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: voice_room
+      POSTGRES_USER: voice_room
+      POSTGRES_PASSWORD: voice_room
+    ports:
+      - "15432:5432"

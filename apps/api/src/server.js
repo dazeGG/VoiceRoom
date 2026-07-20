@@ -279,7 +279,7 @@ function getPresenceRoom(roomId) {
 function attachPresence(dbRoom) {
   if (!dbRoom) return null;
   const presence = getPresenceRoom(dbRoom.id);
-  dbRoom.peers = presence.peers;
+  dbRoom.peers = presence.peers.size > 0 ? presence.peers : (dbRoom.peers || presence.peers);
   return dbRoom;
 }
 
@@ -491,14 +491,17 @@ function getLiveKitRoomName(roomId) {
 }
 
 function getLiveKitConfig() {
-  const url = cleanLiveKitUrl(process.env.LIVEKIT_URL || '');
+  const url = cleanLiveKitUrl(process.env.LIVEKIT_INTERNAL_URL || process.env.LIVEKIT_URL || '');
   const gateUrl = cleanLiveKitUrl(LIVEKIT_GATE_PUBLIC_URL || url);
   const apiKey = process.env.LIVEKIT_API_KEY && process.env.LIVEKIT_API_KEY.trim();
   const apiSecret = process.env.LIVEKIT_API_SECRET && process.env.LIVEKIT_API_SECRET.trim();
+  const adminUrl = getLiveKitHttpUrl(url);
+  const publicGateHttpUrl = getLiveKitHttpUrl(gateUrl);
   return {
+    adminUrl,
     apiKey,
     apiSecret,
-    enabled: Boolean(url && gateUrl && apiKey && apiSecret),
+    enabled: Boolean(url && gateUrl && apiKey && apiSecret && adminUrl !== publicGateHttpUrl),
     gateSecret: LIVEKIT_GATE_SECRET,
     gateUrl,
     url
@@ -1739,7 +1742,7 @@ async function handleRoomChatPost(req, res, roomId) {
 async function removeLiveKitParticipant(roomId, peerId) {
   const livekit = getLiveKitConfig();
   if (!livekit.enabled) return;
-  const service = new RoomServiceClient(getLiveKitHttpUrl(livekit.url), livekit.apiKey, livekit.apiSecret);
+  const service = new RoomServiceClient(livekit.adminUrl, livekit.apiKey, livekit.apiSecret);
   try {
     await service.removeParticipant(getLiveKitRoomName(roomId), peerId);
   } catch (error) {
@@ -1749,7 +1752,23 @@ async function removeLiveKitParticipant(roomId, peerId) {
   }
 }
 
-async function disconnectModeratedPeer(room, peer, type) {
+function liveKitGatePrincipalForPeer(roomId, peer) {
+  return getRoomStore().normalizeGatePrincipal({
+    accountUserId: peer.accountUserId || null,
+    guestPrincipalId: peer.gateGuestPrincipalId || '',
+    roomId
+  });
+}
+
+async function disconnectModeratedPeer(room, peer, type, { gateAlreadyRevoked = false } = {}) {
+  if (!gateAlreadyRevoked && typeof getRoomStore().revokeLiveKitGatePeer === 'function') {
+    await getRoomStore().revokeLiveKitGatePeer({
+      roomId: room.id,
+      peerId: peer.id,
+      accountUserId: peer.accountUserId || null,
+      guestPrincipalId: peer.gateGuestPrincipalId || ''
+    });
+  }
   const event = { type, roomId: room.id, peerId: peer.id };
   sendEvent(peer, event);
   if (peer.accountUserId) broadcastToUser(peer.accountUserId, event);
@@ -1760,14 +1779,6 @@ async function disconnectModeratedPeer(room, peer, type) {
     wsRegistry.unregisterConnectionForRoom(connection, room.id);
   }
   closePeer(room.id, peer.id, peer.transport?.id, type === 'room.banned' ? 'banned' : 'kicked');
-  if (typeof getRoomStore().revokeLiveKitGatePeer === 'function') {
-    await getRoomStore().revokeLiveKitGatePeer({
-      roomId: room.id,
-      peerId: peer.id,
-      accountUserId: peer.accountUserId || null,
-      guestPrincipalId: peer.gateGuestPrincipalId || ''
-    });
-  }
   if (typeof getRoomStore().invalidatePeerIdentity === 'function') {
     await getRoomStore().invalidatePeerIdentity({ roomId: room.id, peerId: peer.id });
   }
@@ -1812,7 +1823,20 @@ async function handleBanRoomPeer(req, res, roomId) {
   // Guests have no account identity, so their ban remains IP-scoped.
   const bannedUserId = peer.accountUserId || null;
   const bannedIp = bannedUserId ? '' : (peer.ip || '');
-  const result = await getRoomStore().createRoomBan({
+  const matchingPeers = [...room.peers.values()].filter((candidate) => bannedUserId
+    ? candidate.accountUserId === bannedUserId
+    : Boolean(bannedIp && candidate.ip === bannedIp)
+  );
+  const principals = matchingPeers.map((candidate) => liveKitGatePrincipalForPeer(roomId, candidate)).filter(Boolean);
+  const result = typeof getRoomStore().createRoomBanWithLiveKitGateRevocations === 'function'
+    ? await getRoomStore().createRoomBanWithLiveKitGateRevocations({
+      roomId,
+      userId: bannedUserId,
+      ip: bannedIp,
+      maxBans: MAX_ROOM_BANS,
+      principals
+    })
+    : await getRoomStore().createRoomBan({
     roomId,
     userId: bannedUserId,
     ip: bannedIp,
@@ -1826,12 +1850,8 @@ async function handleBanRoomPeer(req, res, roomId) {
     sendJson(res, 409, { ok: false, error: 'Не удалось сохранить блокировку' });
     return;
   }
-  const matchingPeers = [...room.peers.values()].filter((candidate) => bannedUserId
-    ? candidate.accountUserId === bannedUserId
-    : Boolean(bannedIp && candidate.ip === bannedIp)
-  );
   for (const candidate of matchingPeers) {
-    await disconnectModeratedPeer(room, candidate, 'room.banned');
+    await disconnectModeratedPeer(room, candidate, 'room.banned', { gateAlreadyRevoked: true });
   }
   sendJson(res, 201, { ok: true, banId: result.ban.id });
 }

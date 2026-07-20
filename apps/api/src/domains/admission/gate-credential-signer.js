@@ -28,7 +28,7 @@ function normalizeGateSecret(secret) {
   return value;
 }
 
-function createGateCredentialSigner({ secret, now = () => Date.now } = {}) {
+function createGateCredentialSigner({ secret, now = Date.now } = {}) {
   const signingSecret = normalizeGateSecret(secret);
   const nowMs = typeof now === 'function' ? now : () => Date.now();
 
@@ -55,8 +55,14 @@ function createGateCredentialSigner({ secret, now = () => Date.now } = {}) {
     if (!body.cid || !body.room || !body.peer || !body.pId || !['account', 'guest'].includes(body.pType)) {
       throw new Error('Invalid gate credential payload');
     }
-    if (!Number.isSafeInteger(body.pEpoch) || body.pEpoch < 0 || !Number.isFinite(body.exp)) {
-      throw new Error('Invalid gate credential epoch or expiration');
+    if (
+      !Number.isSafeInteger(body.pEpoch)
+      || body.pEpoch < 0
+      || !Number.isFinite(body.iat)
+      || !Number.isFinite(body.exp)
+      || body.exp <= body.iat
+    ) {
+      throw new Error('Invalid gate credential epoch or time claims');
     }
     const payload = base64urlJson(body);
     const signature = signPayload(payload, signingSecret);
@@ -80,7 +86,16 @@ function createGateCredentialSigner({ secret, now = () => Date.now } = {}) {
     } catch {
       return { ok: false, code: 'malformed_payload' };
     }
-    if (!Number.isFinite(claims.exp) || claims.exp <= nowMs()) return { ok: false, code: 'expired', claims };
+    if (
+      !Number.isFinite(claims.iat)
+      || !Number.isFinite(claims.exp)
+      || !Number.isSafeInteger(Number(claims.pEpoch))
+      || Number(claims.pEpoch) < 0
+      || claims.exp <= claims.iat
+    ) {
+      return { ok: false, code: 'invalid_claims', claims };
+    }
+    if (claims.exp <= nowMs()) return { ok: false, code: 'expired', claims };
     return { ok: true, claims };
   }
 

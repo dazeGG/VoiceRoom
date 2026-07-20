@@ -61,7 +61,7 @@ function createLiveKitAuthGateService({
   const path = normalizeGatePath(gatePath);
   const upstream = cleanUpstreamUrl(upstreamUrl);
   const signer = createGateCredentialSigner({ secret });
-  const activePool = pool || createDbPool({ databaseUrl, logger });
+  const activePool = roomStore ? null : (pool || createDbPool({ databaseUrl, logger }));
   const store = roomStore || createRoomStore({ pool: activePool, logger });
 
   async function authorize(requestUrl) {
