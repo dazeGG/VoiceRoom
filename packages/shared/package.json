@@ -17,6 +17,11 @@
       "import": "./src/avatar-accent.mjs",
       "require": "./src/avatar-accent.js"
     },
+    "./emoji": {
+      "types": "./src/emoji.d.ts",
+      "import": "./src/emoji.mjs",
+      "require": "./src/emoji.js"
+    },
     "./visual-identity": {
       "types": "./src/visual-identity.d.ts",
       "import": "./src/visual-identity.mjs",
@@ -24,7 +29,7 @@
     }
   },
   "scripts": {
-    "check": "node --check src/validation.js && node --check src/realtime.js && node --check src/avatar-accent.js && node --check src/avatar-accent.mjs",
+    "check": "node --check src/validation.js && node --check src/realtime.js && node --check src/avatar-accent.js && node --check src/avatar-accent.mjs && node --check src/emoji.js && node --check src/emoji.mjs",
     "test": "node --test test/*.test.js"
   }
 }
