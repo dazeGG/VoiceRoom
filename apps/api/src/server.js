@@ -45,7 +45,7 @@ const { createPushService, resolvePushTtl, shouldDeliverPush } = require('./lib/
 const { cleanPushEndpoint } = require('./lib/push-endpoint');
 const { startApiListener } = require('./lib/listen');
 const { runMigrations } = require('./lib/migrate');
-const { createDbPool } = require('./lib/db');
+const { createRelease250Pool } = require('./lib/release-250-pool');
 const {
   observeMaintenance,
   recordHttpRequest,
@@ -321,6 +321,7 @@ function getHistoryServices() {
         visibilityPolicy
       }),
       read: createMessageReadService({
+        authorizeRoomRead: ({ roomId, userId }) => getRoomStore().canUserReadRoomChat(roomId, userId),
         cursorCodec,
         repository: createMessageReadRepository()
       })
@@ -340,7 +341,7 @@ function release250FeatureEnabled(name) {
 function getRelease250Pool() {
   const databaseUrl = typeof process.env.DATABASE_URL === 'string' ? process.env.DATABASE_URL.trim() : '';
   if (!databaseUrl) return null;
-  release250Pool = release250Pool || createDbPool({ databaseUrl });
+  release250Pool = release250Pool || createRelease250Pool({ databaseUrl });
   return release250Pool;
 }
 
@@ -364,7 +365,7 @@ function getReactionServices() {
     requireVisible: async ({ conversation, messageId, viewer }) => {
       if (!viewer?.id) return false;
       if (conversation.type === 'room') {
-        if (!await getRoom(conversation.id)) return false;
+        if (!await getRoomStore().canUserReactInRoom(conversation.id, viewer.id)) return false;
         return Boolean(await getMessageService().room.getMessage(conversation.id, messageId));
       }
       return Boolean(await getMessageService().direct.getMessage(viewer.id, conversation.id, messageId));
@@ -476,8 +477,37 @@ function getModerationServices() {
   if (moderationServices) return moderationServices;
   const pool = getRelease250Pool();
   if (!pool) return null;
-  const repository = createModerationRepository({ pool });
-  const service = createModerationService({ pool, repository, maxActiveBans: MAX_ROOM_BANS });
+  const repository = createModerationRepository({ cursorCodec: getHistoryServices().cursorCodec, pool });
+  const service = createModerationService({
+    pool,
+    repository,
+    maxActiveBans: MAX_ROOM_BANS,
+    resolvePrincipals: async ({ roomId, userId, guestIp }) => {
+      if (userId) {
+        const principal = getRoomStore().normalizeGatePrincipal({ accountUserId: userId, roomId });
+        return isLiveKitGatePrincipal(principal) ? [principal] : [];
+      }
+      const room = await getRoom(roomId);
+      if (!room || !guestIp) return [];
+      return [...room.peers.values()]
+        .filter((peer) => !peer.accountUserId && peer.ip === guestIp)
+        .map((peer) => liveKitGatePrincipalForPeer(roomId, peer))
+        .filter(isLiveKitGatePrincipal);
+    },
+    revokePrincipalInTransaction: ({ client, principal, roomId, now }) => (
+      getRoomStore().revokeLiveKitGatePrincipalInTransaction(client, { principal, roomId, now })
+    ),
+    afterBanCommitted: async ({ roomId, userId, guestIp }) => {
+      const room = await getRoom(roomId);
+      if (!room) return;
+      const peers = [...room.peers.values()].filter((peer) => userId
+        ? peer.accountUserId === userId
+        : Boolean(guestIp && !peer.accountUserId && peer.ip === guestIp));
+      for (const peer of peers) {
+        await disconnectModeratedPeer(room, peer, 'room.banned', { gateAlreadyRevoked: true });
+      }
+    }
+  });
   const messageService = createMessageModerationService({
     pool,
     moderationService: service,
@@ -663,7 +693,7 @@ function getMembershipServices() {
   if (membershipServices) return membershipServices;
   const databaseUrl = typeof process.env.DATABASE_URL === 'string' ? process.env.DATABASE_URL.trim() : '';
   if (!databaseUrl) return null;
-  membershipPool = membershipPool || createDbPool({ databaseUrl });
+  membershipPool = membershipPool || createRelease250Pool({ databaseUrl });
   const repository = createMembershipRepository({ pool: membershipPool });
   const service = createMembershipService({
     pool: membershipPool,
@@ -3859,7 +3889,12 @@ function createApiApp({ store = null, users = null, friends = null, notification
   registerRoomHistoryRoutes({
     app,
     historyService: getHistoryServices().room,
-    resolveRoomAccess: async ({ roomId }) => ({ authorized: Boolean(await getRoom(roomId)) })
+    resolveRoomAccess: async ({ request, roomId }) => {
+      const session = await resolveSessionUser(request);
+      const authorized = Boolean(session?.user?.id)
+        && await getRoomStore().canUserReadRoomChat(roomId, session.user.id);
+      return { authorized, statusCode: session ? 403 : 401 };
+    }
   });
   registerDmHistoryRoutes({
     app,

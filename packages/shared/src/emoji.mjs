@@ -5,4 +5,3 @@ export const assertReactionEmoji = emoji.assertReactionEmoji;
 export const cleanReactionEmoji = emoji.cleanReactionEmoji;
 export const isReactionEmoji = emoji.isReactionEmoji;
 export const listReactionEmojis = emoji.listReactionEmojis;
-

@@ -18,17 +18,36 @@
   "writeRules": {
     "allowedOwners": {
       "rooms": ["apps/api/src/lib/room-store.js"],
-      "room_memberships": ["apps/api/src/lib/room-store.js"],
+      "room_memberships": [
+        "apps/api/src/lib/room-store.js",
+        "apps/api/src/domains/membership/membership-repository.js"
+      ],
       "room_bookmarks": ["apps/api/src/lib/room-store.js"],
       "room_peer_identities": ["apps/api/src/lib/room-store.js"],
-      "room_messages": ["apps/api/src/lib/room-store.js"],
-      "room_bans": ["apps/api/src/lib/room-store.js"],
-      "room_chat_reads": ["apps/api/src/lib/room-store.js"],
+      "room_messages": [
+        "apps/api/src/lib/room-store.js",
+        "apps/api/src/domains/messaging/content-repository.js",
+        "apps/api/src/domains/messaging/reply-repository.js",
+        "apps/api/src/domains/moderation/message-moderation-service.js"
+      ],
+      "room_bans": [
+        "apps/api/src/lib/room-store.js",
+        "apps/api/src/domains/moderation/active-ban-repository.js",
+        "apps/api/src/domains/moderation/moderation-repository.js"
+      ],
+      "room_chat_reads": [
+        "apps/api/src/lib/room-store.js",
+        "apps/api/src/domains/messaging/message-read-repository.js"
+      ],
       "users": ["apps/api/src/lib/user-store.js", "apps/api/src/lib/notification-store.js"],
       "sessions": ["apps/api/src/lib/user-store.js"],
       "friend_requests": ["apps/api/src/lib/friend-store.js"],
       "friendships": ["apps/api/src/lib/friend-store.js"],
-      "direct_messages": ["apps/api/src/lib/friend-store.js"],
+      "direct_messages": [
+        "apps/api/src/lib/friend-store.js",
+        "apps/api/src/domains/messaging/message-read-repository.js",
+        "apps/api/src/domains/messaging/reply-repository.js"
+      ],
       "notification_preferences": ["apps/api/src/lib/notification-store.js"],
       "notification_dm_mutes": ["apps/api/src/lib/notification-store.js"],
       "notification_room_mutes": ["apps/api/src/lib/notification-store.js"],
@@ -37,7 +56,7 @@
     "ownerPathPrefixes": ["apps/api/src/migrations/"]
   },
   "timerRules": {
-    "forbiddenSources": ["apps/api/src/app.js", "apps/api/src/workers/**/*.js"],
+    "forbiddenSources": ["apps/api/src/app.js"],
     "allowedCurrentSources": ["apps/api/src/server.js", "apps/api/src/lib/listen.js"]
   }
 }

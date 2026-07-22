@@ -100,9 +100,8 @@ services:
       start_period: 15s
 
   message-delivery:
-    image: ${VOICEROOM_API_IMAGE:?set immutable VOICEROOM_API_IMAGE digest}
+    image: ${VOICEROOM_WORKER_IMAGE:?set immutable VOICEROOM_WORKER_IMAGE digest}
     restart: on-failure
-    command: ["node", "apps/api/src/workers/message-delivery.js"]
     depends_on:
       postgres:
         condition: service_healthy
@@ -110,15 +109,15 @@ services:
         condition: service_completed_successfully
     environment:
       NODE_ENV: production
+      VOICE_ROOM_WORKER: message-delivery
       DATABASE_URL: ${DATABASE_URL:-postgres://${POSTGRES_USER:-voice_room}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-voice_room}}
       MESSAGE_DELIVERY_CLAIM_ENABLED: ${MESSAGE_DELIVERY_CLAIM_ENABLED:-false}
       MESSAGE_DELIVERY_BATCH_SIZE: ${MESSAGE_DELIVERY_BATCH_SIZE:-50}
       MESSAGE_DELIVERY_LEASE_MS: ${MESSAGE_DELIVERY_LEASE_MS:-120000}
 
   notification-delivery:
-    image: ${VOICEROOM_API_IMAGE:?set immutable VOICEROOM_API_IMAGE digest}
+    image: ${VOICEROOM_WORKER_IMAGE:?set immutable VOICEROOM_WORKER_IMAGE digest}
     restart: on-failure
-    command: ["node", "apps/api/src/workers/notification-delivery.js"]
     depends_on:
       postgres:
         condition: service_healthy
@@ -126,6 +125,7 @@ services:
         condition: service_completed_successfully
     environment:
       NODE_ENV: production
+      VOICE_ROOM_WORKER: notification-delivery
       DATABASE_URL: ${DATABASE_URL:-postgres://${POSTGRES_USER:-voice_room}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-voice_room}}
       NOTIFICATION_DELIVERY_CLAIM_ENABLED: ${NOTIFICATION_DELIVERY_CLAIM_ENABLED:-false}
       NOTIFICATION_DELIVERY_BATCH_SIZE: ${NOTIFICATION_DELIVERY_BATCH_SIZE:-50}
@@ -135,9 +135,8 @@ services:
       VAPID_SUBJECT: ${VAPID_SUBJECT:-}
 
   media-processing:
-    image: ${VOICEROOM_API_IMAGE:?set immutable VOICEROOM_API_IMAGE digest}
+    image: ${VOICEROOM_WORKER_IMAGE:?set immutable VOICEROOM_WORKER_IMAGE digest}
     restart: on-failure
-    command: ["node", "apps/api/src/workers/media-processing.js"]
     depends_on:
       postgres:
         condition: service_healthy
@@ -145,6 +144,7 @@ services:
         condition: service_completed_successfully
     environment:
       NODE_ENV: production
+      VOICE_ROOM_WORKER: media-processing
       DATABASE_URL: ${DATABASE_URL:-postgres://${POSTGRES_USER:-voice_room}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-voice_room}}
       MEDIA_STORAGE_DIR: /data/media
       MEDIA_PROCESSING_CLAIM_ENABLED: ${MEDIA_PROCESSING_CLAIM_ENABLED:-false}
@@ -152,9 +152,8 @@ services:
       - media:/data/media
 
   media-maintenance:
-    image: ${VOICEROOM_API_IMAGE:?set immutable VOICEROOM_API_IMAGE digest}
+    image: ${VOICEROOM_WORKER_IMAGE:?set immutable VOICEROOM_WORKER_IMAGE digest}
     restart: on-failure
-    command: ["node", "apps/api/src/workers/media-maintenance.js"]
     depends_on:
       postgres:
         condition: service_healthy
@@ -162,6 +161,7 @@ services:
         condition: service_completed_successfully
     environment:
       NODE_ENV: production
+      VOICE_ROOM_WORKER: media-maintenance
       DATABASE_URL: ${DATABASE_URL:-postgres://${POSTGRES_USER:-voice_room}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-voice_room}}
       MEDIA_STORAGE_DIR: /data/media
       MEDIA_MAINTENANCE_CLAIM_ENABLED: ${MEDIA_MAINTENANCE_CLAIM_ENABLED:-false}
@@ -169,9 +169,8 @@ services:
       - media:/data/media
 
   media-reconciliation:
-    image: ${VOICEROOM_API_IMAGE:?set immutable VOICEROOM_API_IMAGE digest}
+    image: ${VOICEROOM_WORKER_IMAGE:?set immutable VOICEROOM_WORKER_IMAGE digest}
     restart: on-failure
-    command: ["node", "apps/api/src/workers/media-reconciliation.js"]
     depends_on:
       postgres:
         condition: service_healthy
@@ -179,6 +178,7 @@ services:
         condition: service_completed_successfully
     environment:
       NODE_ENV: production
+      VOICE_ROOM_WORKER: media-reconciliation
       DATABASE_URL: ${DATABASE_URL:-postgres://${POSTGRES_USER:-voice_room}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-voice_room}}
       MEDIA_STORAGE_DIR: /data/media
       MEDIA_RECONCILIATION_CLAIM_ENABLED: ${MEDIA_RECONCILIATION_CLAIM_ENABLED:-false}

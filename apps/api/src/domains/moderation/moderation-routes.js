@@ -52,6 +52,7 @@ function registerModerationRoutes({ app, moderationService, messageModerationSer
     if (result.status === 'invalid') return send(reply, 400, { ok: false, error: 'Invalid ban request' });
     if (result.status === 'forbidden') return send(reply, 403, { ok: false, error: 'Owner access required' });
     if (result.status === 'cap_exceeded') return send(reply, 409, { ok: false, error: 'Active ban limit reached' });
+    if (result.status === 'revocation_unavailable') return send(reply, 503, { ok: false, error: 'Credential revocation unavailable' });
     return send(reply, result.status === 'created' ? 201 : 200, {
       contractVersion: 1,
       status: result.status,

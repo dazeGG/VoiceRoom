@@ -1,9 +1,9 @@
 # VoiceRoom 2.5.0 — consolidated execution plan
 
-**Status:** approved execution-shape amendment; planning only.  
-**Scope source:** `docs/RELEASE_2.5.0_PLAN.md`.  
-**Verification source:** `docs/RELEASE_2.5.0_TEST_SPEC.md`.  
-**Constraint:** preserve G01–G93 requirements while delivering them through no more than ten feature branches.  
+**Status:** approved execution-shape amendment; planning only.
+**Scope source:** `docs/RELEASE_2.5.0_PLAN.md`.
+**Verification source:** `docs/RELEASE_2.5.0_TEST_SPEC.md`.
+**Constraint:** preserve G01–G93 requirements while delivering them through no more than ten feature branches.
 **Current branch:** `feature/2.5.0-foundation`, renamed from `feature/2.5.0-g03-durable-evidence-archive` without changing its commits.
 
 ## 1. Outcome

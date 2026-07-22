@@ -10,7 +10,16 @@ const {
 const { transaction } = require('../../lib/db');
 const { createModerationRepository } = require('./moderation-repository');
 
-function createModerationService({ pool, repository = createModerationRepository({ pool }), now = Date.now, maxActiveBans = 100 } = {}) {
+function createModerationService({
+  pool,
+  cursorCodec,
+  repository = createModerationRepository({ cursorCodec, pool }),
+  now = Date.now,
+  maxActiveBans = 100,
+  resolvePrincipals,
+  revokePrincipalInTransaction,
+  afterBanCommitted
+} = {}) {
   async function authorizeOwner(roomId, actorUserId, options) {
     return repository.isRoomOwner(roomId, actorUserId, options);
   }
@@ -28,8 +37,13 @@ function createModerationService({ pool, repository = createModerationRepository
   async function putBan({ roomId, actorUserId, input, idempotencyKey } = {}) {
     const mutation = normalizeBanMutation(input);
     const key = normalizeIdempotencyKey(idempotencyKey);
-    if (!mutation || !key) return { status: 'invalid', ban: null };
-    return transaction(pool, async (client) => {
+    if (!mutation || !key || mutation.userId === actorUserId) return { status: 'invalid', ban: null };
+    const principals = typeof resolvePrincipals === 'function'
+      ? await resolvePrincipals({ roomId, ...mutation })
+      : [];
+    if (mutation.userId && principals.length === 0) return { status: 'revocation_unavailable', ban: null };
+
+    const result = await transaction(pool, async (client) => {
       if (!await authorizeOwner(roomId, actorUserId, { client })) return { status: 'forbidden', ban: null };
       await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`voice-room:room-bans:${roomId}`]);
       const replay = await repository.findByIdempotencyKey(roomId, key, { client });
@@ -48,6 +62,7 @@ function createModerationService({ pool, repository = createModerationRepository
           at,
           client
         });
+        await revokeAll(client, roomId, principals, at);
         return { status: 'updated', ban };
       }
 
@@ -62,8 +77,26 @@ function createModerationService({ pool, repository = createModerationRepository
         at,
         client
       });
+      await revokeAll(client, roomId, principals, at);
       return { status: 'created', ban };
     });
+    if (result.ban && typeof afterBanCommitted === 'function') {
+      await afterBanCommitted({ roomId, ...mutation, principals, result });
+    }
+    return result;
+  }
+
+  async function revokeAll(client, roomId, principals, at) {
+    if (principals.length === 0) return;
+    if (typeof revokePrincipalInTransaction !== 'function') throw new Error('Credential revocation is unavailable');
+    const seen = new Set();
+    for (const principal of principals) {
+      const key = `${principal.principalType}:${principal.principalId}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const revoked = await revokePrincipalInTransaction({ client, principal, roomId, now: at });
+      if (revoked?.status !== 'revoked') throw new Error('Credential revocation failed');
+    }
   }
 
   async function unban({ roomId, actorUserId, banId } = {}) {

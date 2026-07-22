@@ -9,7 +9,7 @@ class MessageReadError extends Error {
   }
 }
 
-function createMessageReadService({ cursorCodec, repository } = {}) {
+function createMessageReadService({ authorizeRoomRead, cursorCodec, repository } = {}) {
   if (!cursorCodec?.decode) throw new TypeError('Cursor codec is required');
   if (!repository) throw new TypeError('Message read repository is required');
 
@@ -22,6 +22,9 @@ function createMessageReadService({ cursorCodec, repository } = {}) {
   }
 
   async function advanceRoom({ cursor, roomId, userId }) {
+    if (typeof authorizeRoomRead !== 'function' || await authorizeRoomRead({ roomId, userId }) !== true) {
+      throw new MessageReadError('room_forbidden', 403);
+    }
     const tuple = decode(cursor, 'room-read', `room:${roomId}`);
     const state = await repository.advanceRoom({ roomId, userId, tuple });
     if (!state) throw new MessageReadError('message_not_visible', 409);

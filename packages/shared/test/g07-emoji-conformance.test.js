@@ -121,4 +121,3 @@ test('CommonJS, ESM, package exports, and d.ts surfaces agree', async () => {
   assert.match(TYPES, /export function assertReactionEmoji\(value: unknown\): string;/);
   assert.match(TYPES, /export function listReactionEmojis\(\): string\[\];/);
 });
-

@@ -30,27 +30,34 @@ function mapModerationBan(row) {
   };
 }
 
-function encodeCursor(row) {
-  if (!row?.created_at || !row?.id) return undefined;
-  return Buffer.from(JSON.stringify({ createdAt: new Date(row.created_at).toISOString(), id: row.id }))
-    .toString('base64url');
-}
-
-function decodeCursor(value) {
-  if (!value) return null;
-  try {
-    const parsed = JSON.parse(Buffer.from(String(value), 'base64url').toString('utf8'));
-    const createdAt = new Date(parsed.createdAt);
-    if (!parsed.id || Number.isNaN(createdAt.getTime())) return null;
-    return { createdAt, id: String(parsed.id) };
-  } catch {
-    return null;
-  }
-}
-
-function createModerationRepository({ pool } = {}) {
+function createModerationRepository({ cursorCodec, pool } = {}) {
   if (!pool?.query) throw new TypeError('A PostgreSQL pool is required');
+  if (!cursorCodec?.encode || !cursorCodec?.decode) throw new TypeError('Cursor codec is required');
   const executor = (client) => client?.query ? client : pool;
+
+  function encodeCursor(roomId, row) {
+    if (!row?.created_at || !row?.id) return undefined;
+    return cursorCodec.encode({
+      purpose: 'moderation-bans',
+      context: `room:${roomId}`,
+      tuple: {
+        createdAtMicros: (BigInt(new Date(row.created_at).getTime()) * 1000n).toString(),
+        id: row.id
+      }
+    });
+  }
+
+  function decodeCursor(roomId, value) {
+    if (!value) return null;
+    try {
+      return cursorCodec.decode(value, {
+        purpose: 'moderation-bans',
+        context: `room:${roomId}`
+      });
+    } catch {
+      return null;
+    }
+  }
 
   async function isRoomOwner(roomId, userId, { client } = {}) {
     if (!roomId || !userId) return false;
@@ -125,7 +132,7 @@ function createModerationRepository({ pool } = {}) {
   }
 
   async function listActive({ roomId, cursor = null, limit = 50, at = Date.now(), client } = {}) {
-    const after = cursor ? decodeCursor(cursor) : null;
+    const after = cursor ? decodeCursor(roomId, cursor) : null;
     if (cursor && !after) {
       const error = new Error('Invalid moderation cursor');
       error.code = 'invalid_cursor';
@@ -137,17 +144,19 @@ function createModerationRepository({ pool } = {}) {
        WHERE room_id = $1
          AND revoked_at IS NULL
          AND (expires_at IS NULL OR expires_at > $2)
-         AND ($3::timestamptz IS NULL OR (created_at, id) < ($3, $4::varchar(36)))
+         AND ($3::bigint IS NULL OR (created_at, id) < (
+           TIMESTAMPTZ 'epoch' + $3::bigint * INTERVAL '1 microsecond', $4::varchar(36)
+         ))
        ORDER BY created_at DESC, id DESC
        LIMIT $5`,
-      [roomId, asDate(at), after?.createdAt || null, after?.id || null, limit + 1]
+      [roomId, asDate(at), after?.createdAtMicros || null, after?.id || null, limit + 1]
     );
     const hasMore = result.rows.length > limit;
     const rows = hasMore ? result.rows.slice(0, limit) : result.rows;
     return {
       bans: rows.map(mapModerationBan),
       hasMore,
-      nextCursor: hasMore ? encodeCursor(rows.at(-1)) : undefined
+      nextCursor: hasMore ? encodeCursor(roomId, rows.at(-1)) : undefined
     };
   }
 
@@ -178,4 +187,4 @@ function createModerationRepository({ pool } = {}) {
   });
 }
 
-module.exports = { createModerationRepository, decodeCursor, encodeCursor, mapModerationBan };
+module.exports = { createModerationRepository, mapModerationBan };

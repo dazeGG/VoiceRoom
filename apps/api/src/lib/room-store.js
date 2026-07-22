@@ -1099,6 +1099,57 @@ function createRoomStore({
     return result.rows[0]?.last_read_at ? toMillis(result.rows[0].last_read_at) : null;
   }
 
+  async function canUserReadRoomChat(roomId, userId) {
+    if (!roomId || !userId) return false;
+    const result = await getPool().query(
+      `SELECT 1
+       FROM rooms r
+       WHERE r.id = $1
+         AND r.deleted_at IS NULL
+         AND (
+           EXISTS (
+             SELECT 1 FROM room_memberships rm
+             WHERE rm.room_id = r.id AND rm.user_id = $2
+           )
+           OR EXISTS (
+             SELECT 1 FROM room_bookmarks rb
+             WHERE rb.room_id = r.id AND rb.user_id = $2
+           )
+         )
+         AND NOT EXISTS (
+           SELECT 1 FROM room_bans ban
+           WHERE ban.room_id = r.id
+             AND ban.user_id = $2
+             AND ban.revoked_at IS NULL
+             AND (ban.expires_at IS NULL OR ban.expires_at > current_timestamp)
+         )
+       LIMIT 1`,
+      [roomId, userId]
+    );
+    return result.rowCount === 1;
+  }
+
+  async function canUserReactInRoom(roomId, userId) {
+    if (!roomId || !userId) return false;
+    const result = await getPool().query(
+      `SELECT 1
+       FROM rooms r
+       JOIN room_memberships rm ON rm.room_id = r.id AND rm.user_id = $2
+       WHERE r.id = $1
+         AND r.deleted_at IS NULL
+         AND NOT EXISTS (
+           SELECT 1 FROM room_bans ban
+           WHERE ban.room_id = r.id
+             AND ban.user_id = $2
+             AND ban.revoked_at IS NULL
+             AND (ban.expires_at IS NULL OR ban.expires_at > current_timestamp)
+         )
+       LIMIT 1`,
+      [roomId, userId]
+    );
+    return result.rowCount === 1;
+  }
+
   async function listSummaryRecipientUserIds(roomId) {
     if (!roomId) return [];
     const result = await getPool().query(
@@ -1189,6 +1240,8 @@ function createRoomStore({
 
   return {
     appendMessage,
+    canUserReactInRoom,
+    canUserReadRoomChat,
     close,
     countEmptyRoomsForIp,
     countOwnedStaticRoomsForUser,
@@ -1225,6 +1278,7 @@ function createRoomStore({
     normalizeGatePrincipal,
     revokeLiveKitGatePeer,
     revokeLiveKitGatePrincipal,
+    revokeLiveKitGatePrincipalInTransaction,
     verifyLiveKitGateCredential,
     pruneRooms,
     purgeDeleted,

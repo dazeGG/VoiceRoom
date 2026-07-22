@@ -38,4 +38,3 @@ export function cleanReactionEmoji(value: unknown): string;
 export function assertReactionEmoji(value: unknown): string;
 
 export function listReactionEmojis(): string[];
-
