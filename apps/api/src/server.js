@@ -830,7 +830,12 @@ function getPresenceRoom(roomId) {
 function attachPresence(dbRoom) {
   if (!dbRoom) return null;
   const presence = getPresenceRoom(dbRoom.id);
-  dbRoom.peers = presence.peers.size > 0 ? presence.peers : (dbRoom.peers || presence.peers);
+  if (dbRoom.peers instanceof Map && dbRoom.peers !== presence.peers) {
+    for (const [peerId, peer] of dbRoom.peers) {
+      if (!presence.peers.has(peerId)) presence.peers.set(peerId, peer);
+    }
+  }
+  dbRoom.peers = presence.peers;
   return dbRoom;
 }
 
@@ -1341,22 +1346,6 @@ async function readJsonBody(req) {
 
 async function handleLiveKitToken(req, res) {
   const livekit = getLiveKitConfig();
-  if (!livekit.enabled) {
-    sendJson(res, 503, {
-      ok: false,
-      error: 'LiveKit не настроен: проверьте LIVEKIT_URL, LIVEKIT_API_KEY и LIVEKIT_API_SECRET'
-    });
-    return;
-  }
-  if (!livekit.gateSecret || livekit.gateSecret.length < 32) {
-    sendJson(res, 503, {
-      ok: false,
-      code: 'livekit_gate_unavailable',
-      error: 'LiveKit gate is not configured'
-    });
-    return;
-  }
-
   const body = await readJsonBody(req);
   const roomId = normalizeRoomId(body.roomId);
   const peerId = normalizePeerId(body.peerId);
@@ -1377,6 +1366,22 @@ async function handleLiveKitToken(req, res) {
 
   if (await findRoomBan(roomId, sessionUser?.id, getClientIp(req, TRUST_PROXY))) {
     sendRoomBanned(res, roomId);
+    return;
+  }
+
+  if (!livekit.enabled) {
+    sendJson(res, 503, {
+      ok: false,
+      error: 'LiveKit не настроен: проверьте LIVEKIT_URL, LIVEKIT_API_KEY и LIVEKIT_API_SECRET'
+    });
+    return;
+  }
+  if (!livekit.gateSecret || livekit.gateSecret.length < 32) {
+    sendJson(res, 503, {
+      ok: false,
+      code: 'livekit_gate_unavailable',
+      error: 'LiveKit gate is not configured'
+    });
     return;
   }
 
@@ -2553,6 +2558,29 @@ async function handleBanRoomPeer(req, res, roomId) {
     ? candidate.accountUserId === bannedUserId
     : Boolean(bannedIp && candidate.ip === bannedIp)
   );
+  const livekit = getLiveKitConfig();
+  const strictGateConfigured = livekit.enabled && livekit.gateSecret?.length >= 32;
+  if (!strictGateConfigured) {
+    const result = await getRoomStore().createRoomBan({
+      roomId,
+      userId: bannedUserId,
+      ip: bannedIp,
+      maxBans: MAX_ROOM_BANS
+    });
+    if (result.status === 'cap_exceeded') {
+      sendJson(res, 409, { ok: false, code: 'room_ban_limit', error: 'Достигнут лимит блокировок комнаты' });
+      return;
+    }
+    if (!result.ban) {
+      sendJson(res, 409, { ok: false, error: 'Не удалось сохранить блокировку' });
+      return;
+    }
+    for (const candidate of matchingPeers) {
+      await disconnectModeratedPeer(room, candidate, 'room.banned');
+    }
+    sendJson(res, 201, { ok: true, banId: result.ban.id });
+    return;
+  }
   const principals = [];
   for (const candidate of matchingPeers) {
     const principal = liveKitGatePrincipalForPeer(roomId, candidate);
