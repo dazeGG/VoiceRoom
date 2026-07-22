@@ -152,8 +152,24 @@ jobs:
     name: G08 measured coverage gate
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     permissions:
       contents: read
+    env:
+      TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
     steps:
       - uses: actions/checkout@v4
         with:
@@ -179,7 +195,13 @@ jobs:
       - run: npm run coverage:g08
       - name: Enforce G08 coverage and protected-base ratchet
         shell: bash
-        run: node scripts/coverage/check-release-250-coverage.mjs --coverage coverage/release-250-summary.json --changed-files coverage/release-250-changed-files.txt --changed-diff coverage/release-250-changed.diff $G08_BASELINE_ARGS
+        run: |
+          read -r -a baseline_args <<< "$G08_BASELINE_ARGS"
+          node scripts/coverage/check-release-250-coverage.mjs \
+            --coverage coverage/release-250-summary.json \
+            --changed-files coverage/release-250-changed-files.txt \
+            --changed-diff coverage/release-250-changed.diff \
+            "${baseline_args[@]}"
       - name: Persist G08 measured coverage artifact
         uses: actions/upload-artifact@v4
         with:
@@ -810,7 +832,7 @@ jobs:
           git fetch --no-tags origin develop
           test "$(git rev-parse origin/develop)" = "$BASE_SHA"
           for phase in f7 f9 f11; do
-            artifact_id="$(PHASE="$phase" node -p 'JSON.parse(require("node:fs").readFileSync(`g02-authority/selection/${process.env.SELECTION_FILE}`)).artifactBindings[process.env.PHASE].artifactId')"
+            artifact_id="$(PHASE="$phase" node -p 'JSON.parse(require("node:fs").readFileSync("g02-authority/selection/" + process.env.SELECTION_FILE)).artifactBindings[process.env.PHASE].artifactId')"
             gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$artifact_id" > "g02-authority/$phase-metadata.json"
             gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$artifact_id/zip" > "g02-authority/$phase.zip"
             run_id="$(node -p "JSON.parse(require('node:fs').readFileSync('g02-authority/$phase-metadata.json')).workflow_run.id")"
@@ -818,9 +840,9 @@ jobs:
             mkdir "g02-authority/$phase"
             unzip -q "g02-authority/$phase.zip" -d "g02-authority/$phase"
           done
-          f7_id="$(node -p 'JSON.parse(require("node:fs").readFileSync(`g02-authority/selection/${process.env.SELECTION_FILE}`)).f7Id')"
-          f9_id="$(node -p 'JSON.parse(require("node:fs").readFileSync(`g02-authority/selection/${process.env.SELECTION_FILE}`)).f9Id')"
-          f11_id="$(node -p 'JSON.parse(require("node:fs").readFileSync(`g02-authority/selection/${process.env.SELECTION_FILE}`)).f11Id')"
+          f7_id="$(node -p 'JSON.parse(require("node:fs").readFileSync("g02-authority/selection/" + process.env.SELECTION_FILE)).f7Id')"
+          f9_id="$(node -p 'JSON.parse(require("node:fs").readFileSync("g02-authority/selection/" + process.env.SELECTION_FILE)).f9Id')"
+          f11_id="$(node -p 'JSON.parse(require("node:fs").readFileSync("g02-authority/selection/" + process.env.SELECTION_FILE)).f11Id')"
           node scripts/evidence/export-goal-evidence.mjs --validate-selection \
             --selection "g02-authority/selection/$SELECTION_FILE" \
             --selection-artifact-id "$SELECTION_ARTIFACT_ID" \
