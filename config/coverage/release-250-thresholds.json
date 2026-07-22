@@ -31,72 +31,30 @@
       "name": "auth-admission",
       "enforcement": "on-changed",
       "paths": [
+        "apps/api/src/domains/admission/credential-boundary-service.js",
         "apps/api/src/domains/admission/gate-credential-signer.js",
         "apps/api/src/domains/admission/livekit-auth-gate-service.js",
-        "apps/web/src/lib/api/auth.ts"
+        "apps/api/src/domains/admission/livekit-credential-provider.js"
       ],
-      "pathPatterns": [
-        "apps/api/src/domains/auth/",
-        "apps/api/src/domains/admission/",
-        "apps/web/src/lib/features/auth/"
-      ]
-    },
-    {
-      "name": "permissions",
-      "enforcement": "on-changed",
-      "paths": [],
-      "pathPatterns": [
-        "apps/api/src/domains/permissions/",
-        "apps/api/src/domains/messaging/message-visibility-service.js",
-        "apps/api/src/domains/membership/",
-        "packages/shared/src/permissions/"
-      ]
-    },
-    {
-      "name": "cursor",
-      "enforcement": "on-changed",
-      "paths": [
-        "apps/api/src/platform/cursor-codec.js"
-      ],
-      "pathPatterns": [
-        "apps/api/src/domains/cursor/",
-        "apps/web/src/lib/features/cursor/",
-        "packages/shared/src/cursor/"
-      ]
-    },
-    {
-      "name": "idempotency",
-      "enforcement": "on-changed",
-      "paths": [
-        "apps/api/src/domains/messaging/message-idempotency-repository.js"
-      ],
-      "pathPatterns": [
-        "apps/api/src/domains/idempotency/",
-        "apps/web/src/lib/features/idempotency/",
-        "packages/shared/src/idempotency/"
-      ]
+      "pathPatterns": []
     },
     {
       "name": "media",
       "enforcement": "on-changed",
       "paths": [
-        "packages/shared/src/attachments.js",
-        "apps/web/src/lib/api/attachments.ts",
-        "apps/web/src/lib/shared/chat/attachment-compose.svelte.ts"
+        "apps/api/src/domains/media/attachment-repository.js",
+        "apps/api/src/domains/media/media-job-repository.js",
+        "apps/web/src/lib/features/room/client/media/screen-receiver-demand.ts"
       ],
-      "pathPatterns": [
-        "apps/api/src/domains/media/",
-        "apps/web/src/lib/features/room/client/media/",
-        "apps/web/src/lib/features/room/client/services/media-playback-service.ts",
-        "apps/web/src/lib/shared/chat/Attachment",
-        "packages/shared/src/attachments"
-      ]
+      "pathPatterns": []
     }
   ],
   "businessPathPatterns": [
-    "apps/api/src/",
-    "apps/web/src/",
-    "packages/shared/src/"
+    "apps/api/src/domains/admission/",
+    "apps/api/src/domains/media/attachment-repository.js",
+    "apps/api/src/domains/media/media-job-repository.js",
+    "apps/web/src/lib/api/auth.ts",
+    "apps/web/src/lib/features/room/client/media/screen-receiver-demand.ts"
   ],
   "ignoredPathPatterns": [
     "/test/",
