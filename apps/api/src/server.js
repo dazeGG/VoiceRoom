@@ -3761,6 +3761,7 @@ function getActiveGuestWsCount() {
 }
 
 function createApiApp({ store = null, users = null, friends = null, notifications = null, pushes = null, push = null, avatars = null } = {}) {
+  if (store && store !== roomStore) presenceRooms.clear();
   if (store) roomStore = store;
   if (users) userStore = users;
   if (friends) friendStore = friends;
