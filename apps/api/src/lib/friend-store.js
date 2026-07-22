@@ -52,6 +52,7 @@ function mapMessage(row) {
     editedAt: toMillis(row.edited_at),
     readAt: toMillis(row.read_at),
     invite: mapInvite(row.metadata),
+    replyTo: row.reply_to_message_id ? { messageId: row.reply_to_message_id } : undefined,
     // deletedAt kept internal; callers filter before map
     deletedAt: row.deleted_at ? toMillis(row.deleted_at) : null
   };
@@ -397,15 +398,23 @@ function createFriendStore({ databaseUrl, logger = console, pool } = {}) {
     return mapMessage(result.rows[0] || null);
   }
 
-  async function sendMessage({ senderId, recipientId, body, metadata = null }) {
+  async function sendMessage({ senderId, recipientId, body, metadata = null, replyToMessageId = null, beforeUnitOfWork = null, unitOfWork = null }) {
     const id = crypto.randomUUID();
-    const result = await getPool().query(
-      `INSERT INTO direct_messages (id, sender_id, recipient_id, body, created_at, metadata)
-       VALUES ($1, $2, $3, $4, current_timestamp, $5)
-       RETURNING *`,
-      [id, senderId, recipientId, body, metadata ? JSON.stringify(metadata) : '{}']
-    );
-    return mapMessage(result.rows[0]);
+    return transaction(getPool(), async (client) => {
+      if (typeof beforeUnitOfWork === 'function') {
+        const prepared = await beforeUnitOfWork(client);
+        if (prepared?.replay) return { ...prepared.message, idempotencyReplay: true };
+      }
+      const result = await client.query(
+        `INSERT INTO direct_messages (id, sender_id, recipient_id, body, created_at, metadata, reply_to_message_id)
+         VALUES ($1, $2, $3, $4, current_timestamp, $5, $6)
+         RETURNING *`,
+        [id, senderId, recipientId, body, metadata ? JSON.stringify(metadata) : '{}', replyToMessageId]
+      );
+      const message = mapMessage(result.rows[0]);
+      if (typeof unitOfWork === 'function') await unitOfWork(client, message);
+      return message;
+    });
   }
 
   // Only the invited recipient may resolve a pending room invitation; the

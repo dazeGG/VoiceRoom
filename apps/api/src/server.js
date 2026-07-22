@@ -14,7 +14,7 @@ const {
 } = require('./realtime/room-runtime');
 const { buildServerEnvelope } = require('./realtime/envelope');
 const { URL } = require('node:url');
-const { AccessToken, RoomServiceClient, TrackSource } = require('livekit-server-sdk');
+const { RoomServiceClient } = require('livekit-server-sdk');
 
 const { readEnvInt, readEnvBool, readDatabaseConfig, readUploadsDir } = require('./lib/config');
 const {
@@ -45,12 +45,63 @@ const { createPushService, resolvePushTtl, shouldDeliverPush } = require('./lib/
 const { cleanPushEndpoint } = require('./lib/push-endpoint');
 const { startApiListener } = require('./lib/listen');
 const { runMigrations } = require('./lib/migrate');
+const { createDbPool } = require('./lib/db');
 const {
   observeMaintenance,
   recordHttpRequest,
   renderPrometheus
 } = require('./lib/metrics');
-const { createGateCredentialSigner } = require('./domains/admission/gate-credential-signer');
+const { createCredentialBoundaryService } = require('./domains/admission/credential-boundary-service');
+const { createLiveKitCredentialProvider } = require('./domains/admission/livekit-credential-provider');
+const { createMembershipRepository } = require('./domains/membership/membership-repository');
+const { createMembershipService } = require('./domains/membership/membership-service');
+const { createMemberDirectoryService } = require('./domains/membership/member-directory-service');
+const { registerMembershipRoutes } = require('./domains/membership/membership-routes');
+const { createDirectMessageRepository } = require('./domains/messaging/direct-message-repository');
+const { createDmHistoryRepository } = require('./domains/messaging/dm-history-repository');
+const { createDmHistoryService } = require('./domains/messaging/dm-history-service');
+const { registerDmHistoryRoutes } = require('./domains/messaging/dm-history-routes');
+const { createMessageService } = require('./domains/messaging/message-service');
+const { createMessageReadRepository } = require('./domains/messaging/message-read-repository');
+const { createMessageReadService } = require('./domains/messaging/message-read-service');
+const { createMessageIdempotencyRepository } = require('./domains/messaging/message-idempotency-repository');
+const { createMessageOutboxRepository } = require('./domains/messaging/message-outbox-repository');
+const { createMessageVisibilityService } = require('./domains/messaging/message-visibility-service');
+const { createRoomHistoryRepository } = require('./domains/messaging/room-history-repository');
+const { createRoomHistoryService } = require('./domains/messaging/room-history-service');
+const { registerRoomHistoryRoutes } = require('./domains/messaging/room-history-routes');
+const { createRoomMessageRepository } = require('./domains/messaging/room-message-repository');
+const { createContentRepository } = require('./domains/messaging/content-repository');
+const { createReplyRepository } = require('./domains/messaging/reply-repository');
+const { requireReplyTarget } = require('./domains/messaging/reply-projector');
+const { createReactionRepository } = require('./domains/messaging/reaction-repository');
+const { createReactionService } = require('./domains/messaging/reaction-service');
+const { createReactionRealtimeAdapter } = require('./domains/messaging/reaction-realtime-adapter');
+const { registerReactionRoutes } = require('./domains/messaging/reaction-routes');
+const { createInboxRepository } = require('./domains/notifications/inbox-repository');
+const { createMentionRepository } = require('./domains/notifications/mention-repository');
+const { createMentionEligibilityService } = require('./domains/notifications/mention-eligibility-service');
+const { createNotificationOutboxRepository } = require('./domains/notifications/notification-outbox-repository');
+const { createNotificationService } = require('./domains/notifications/notification-service');
+const { registerNotificationRoutes } = require('./domains/notifications/notification-routes');
+const { createModerationRepository } = require('./domains/moderation/moderation-repository');
+const { createActiveBanService } = require('./domains/moderation/active-ban-service');
+const { createModerationService } = require('./domains/moderation/moderation-service');
+const { createMessageModerationService } = require('./domains/moderation/message-moderation-service');
+const { registerModerationRoutes } = require('./domains/moderation/moderation-routes');
+const { createAttachmentRepository } = require('./domains/media/attachment-repository');
+const { createMediaJobRepository } = require('./domains/media/media-job-repository');
+const { createMediaStorage } = require('./domains/media/storage');
+const { createMediaPressureService } = require('./domains/media/media-pressure-service');
+const { createMediaQuotaRepository } = require('./domains/media/media-quota-repository');
+const { createMediaQuotaService } = require('./domains/media/media-quota-service');
+const { createMediaService, MAX_UPLOAD_BYTES } = require('./domains/media/media-service');
+const { createMediaVisibilityService } = require('./domains/media/media-visibility-service');
+const { registerMediaRoutes } = require('./domains/media/media-routes');
+const { createCursorCodec } = require('./platform/cursor-codec');
+const { createReadinessProvider } = require('./platform/readiness');
+const { registerCapabilityRoutes } = require('./platform/capability-routes');
+const { mentionUserIdsFromContent } = require('@voice-room/shared/mentions');
 
 const API_PREFIX = '/api';
 const HOST = (process.env.HOST || '127.0.0.1').trim();
@@ -84,6 +135,37 @@ const ROOM_CREATE_POW_TTL_MS = readEnvInt('ROOM_CREATE_POW_TTL_MS', 120000, 1000
 const SESSION_TTL_MS = readEnvInt('SESSION_TTL_MS', 30 * 24 * 60 * 60 * 1000, 60000);
 const SESSION_COOKIE_NAME = 'vr_session';
 const SESSION_COOKIE_SECURE = readEnvBool('SESSION_COOKIE_SECURE', process.env.NODE_ENV === 'production');
+const CAPABILITY_DAG_PATH = (process.env.CAPABILITY_DAG_PATH || 'config/capability-dag.v1.json').trim();
+const CAPABILITY_DESIRED = (() => {
+  try {
+    const parsed = JSON.parse(process.env.CAPABILITY_DESIRED || '{}');
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+})();
+
+function readinessReadySetFromEnv(name) {
+  const raw = (process.env[name] || '').trim();
+  if (!raw) return new Set();
+  return new Set(raw.split(',').map((item) => item.trim()).filter(Boolean));
+}
+
+const readinessProvider = createReadinessProvider({
+  manifestPath: CAPABILITY_DAG_PATH,
+  getReadinessOptions: () => ({
+    desired: CAPABILITY_DESIRED,
+    binaryReady: readinessReadySetFromEnv('CAPABILITY_READY_BINARY'),
+    schemaReady: readinessReadySetFromEnv('CAPABILITY_READY_SCHEMA'),
+    indexReady: readinessReadySetFromEnv('CAPABILITY_READY_INDEX'),
+    configReady: readinessReadySetFromEnv('CAPABILITY_READY_CONFIG'),
+    apiReady: readinessReadySetFromEnv('CAPABILITY_READY_API'),
+    webReady: readinessReadySetFromEnv('CAPABILITY_READY_WEB'),
+    visibilityReady: readinessReadySetFromEnv('CAPABILITY_READY_VISIBILITY'),
+    workerReady: readinessReadySetFromEnv('CAPABILITY_READY_WORKER'),
+    internalReady: readinessReadySetFromEnv('CAPABILITY_READY_INTERNAL')
+  })
+});
 const AUTH_RATE_LIMIT = readEnvInt('AUTH_RATE_LIMIT', 30, 0);
 const AUTH_RATE_WINDOW_MS = readEnvInt('AUTH_RATE_WINDOW_MS', 60000, 1000);
 const DM_RATE_LIMIT = readEnvInt('DM_RATE_LIMIT', 30, 0);
@@ -105,6 +187,8 @@ const MAX_GUEST_STREAMS_PER_IP = readEnvInt('MAX_GUEST_STREAMS_PER_IP', 8, 1);
 const WS_MAX_PAYLOAD_BYTES = readEnvInt('WS_MAX_PAYLOAD_BYTES', 64 * 1024, 1024);
 const RETENTION_PURGE_INTERVAL_MS = readEnvInt('RETENTION_PURGE_INTERVAL_MS', 60 * 60 * 1000, 0);
 const RETENTION_KEEP_DELETED_MS = readEnvInt('RETENTION_KEEP_DELETED_MS', 30 * 24 * 60 * 60 * 1000, 60000);
+const MESSAGE_DIRECT_EMIT_ENABLED = readEnvBool('MESSAGE_DIRECT_EMIT_ENABLED', true);
+const MESSAGE_DELIVERY_LISTEN_ENABLED = readEnvBool('MESSAGE_DELIVERY_LISTEN_ENABLED', true);
 // Desktop app downloads are served from the latest GitHub release of this repo.
 // Metadata is cached server-side so visitors never hit GitHub's per-IP rate limit.
 const DESKTOP_RELEASE_REPO = (process.env.DESKTOP_RELEASE_REPO || 'dazeGG/VoiceRoomDesktop').trim();
@@ -118,6 +202,20 @@ let notificationStore = null;
 let pushStore = null;
 let pushService = null;
 let avatarStorage = null;
+let messageService = null;
+let historyServices = null;
+let credentialBoundary = null;
+let liveKitCredentialProvider = null;
+let membershipPool = null;
+let membershipServices = null;
+let release250Pool = null;
+let reactionServices = null;
+let notificationServices = null;
+let moderationServices = null;
+let mediaServices = null;
+let activeBanService = null;
+let messageDeliveryServices = null;
+let messageDeliveryListener = null;
 
 const presenceRooms = new Map();
 let wsRegistry = null;
@@ -159,6 +257,429 @@ function getFriendStore() {
     friendStore = createFriendStore({});
   }
   return friendStore;
+}
+
+function getMessageService() {
+  if (!messageService) {
+    messageService = createMessageService({
+      directMessages: createDirectMessageRepository({ store: getFriendStore() }),
+      roomMessages: createRoomMessageRepository({ store: getRoomStore() }),
+      visibility: createMessageVisibilityService()
+    });
+  }
+  return messageService;
+}
+
+function getHistoryServices() {
+  if (!historyServices) {
+    const configuredKeys = process.env.VOICE_ROOM_CURSOR_HMAC_KEYS
+      || process.env.CURSOR_HMAC_KEYS
+      || process.env.CURSOR_HMAC_KEY;
+    if (process.env.NODE_ENV === 'production' && !configuredKeys && LIVEKIT_GATE_SECRET.length < 32) {
+      throw new Error('VOICE_ROOM_CURSOR_HMAC_KEYS is required in production');
+    }
+    const fallbackKey = LIVEKIT_GATE_SECRET.length >= 32
+      ? `${LIVEKIT_GATE_SECRET}:history-cursors`
+      : crypto.createHash('sha256').update(String(process.env.POW_SECRET || 'voice-room-development-cursors')).digest('hex');
+    const cursorCodec = createCursorCodec({ keys: configuredKeys || fallbackKey });
+    const visibilityPolicy = createMessageVisibilityService();
+    historyServices = {
+      cursorCodec,
+      dm: createDmHistoryService({
+        cursorCodec,
+        repository: createDmHistoryRepository(),
+        projectMessage: async ({ message, peerId, userId }) => {
+          const projected = await attachMediaProjection('dm', message);
+          if (!projected.replyTo?.messageId) return projected;
+          const replies = createReplyRepository({ client: getRelease250Pool() });
+          return {
+            ...projected,
+            replyPreview: await replies.getDirectPreview({
+              userId,
+              peerId,
+              messageId: projected.replyTo.messageId
+            })
+          };
+        },
+        visibilityPolicy
+      }),
+      room: createRoomHistoryService({
+        cursorCodec,
+        repository: createRoomHistoryRepository(),
+        projectMessage: async ({ message, roomId }) => {
+          const projected = await attachMediaProjection('room', message);
+          if (!projected.replyTo?.messageId) return projected;
+          const replies = createReplyRepository({ client: getRelease250Pool() });
+          return {
+            ...projected,
+            replyPreview: await replies.getRoomPreview({
+              roomId,
+              messageId: projected.replyTo.messageId
+            })
+          };
+        },
+        visibilityPolicy
+      }),
+      read: createMessageReadService({
+        cursorCodec,
+        repository: createMessageReadRepository()
+      })
+    };
+  }
+  return historyServices;
+}
+
+function release250FeatureEnabled(name) {
+  try {
+    return readinessProvider.getSnapshot()?.features?.[name] === true;
+  } catch {
+    return false;
+  }
+}
+
+function getRelease250Pool() {
+  const databaseUrl = typeof process.env.DATABASE_URL === 'string' ? process.env.DATABASE_URL.trim() : '';
+  if (!databaseUrl) return null;
+  release250Pool = release250Pool || createDbPool({ databaseUrl });
+  return release250Pool;
+}
+
+function getReactionServices() {
+  if (reactionServices) return reactionServices;
+  const pool = getRelease250Pool();
+  if (!pool) return null;
+  const realtime = createReactionRealtimeAdapter({
+    broadcastRoom: async (roomId, event) => {
+      const room = await getRoom(roomId);
+      if (!room) return false;
+      broadcast(room, event);
+      return true;
+    },
+    broadcastAccount: broadcastToUser,
+    resolveDirectRecipients: ({ actorUserId, conversation }) => [actorUserId, conversation.id]
+  });
+  const service = createReactionService({
+    repository: createReactionRepository({ client: pool }),
+    cursorCodec: getHistoryServices().cursorCodec,
+    requireVisible: async ({ conversation, messageId, viewer }) => {
+      if (!viewer?.id) return false;
+      if (conversation.type === 'room') {
+        if (!await getRoom(conversation.id)) return false;
+        return Boolean(await getMessageService().room.getMessage(conversation.id, messageId));
+      }
+      return Boolean(await getMessageService().direct.getMessage(viewer.id, conversation.id, messageId));
+    },
+    writesEnabled: () => release250FeatureEnabled('reactions'),
+    publish: realtime.publish
+  });
+  reactionServices = { realtime, service };
+  return reactionServices;
+}
+
+function getMessageDeliveryServices() {
+  if (messageDeliveryServices) return messageDeliveryServices;
+  const pool = getRelease250Pool();
+  if (!pool) return null;
+  messageDeliveryServices = {
+    idempotency: createMessageIdempotencyRepository(),
+    outbox: createMessageOutboxRepository({ pool })
+  };
+  return messageDeliveryServices;
+}
+
+function requestIdempotencyKey(req, body) {
+  const value = req?.headers?.['idempotency-key'] ?? body?.idempotencyKey;
+  const key = typeof value === 'string' ? value.trim() : '';
+  return key.length >= 8 && key.length <= 160 ? key : '';
+}
+
+function messageFingerprint(value) {
+  return crypto.createHash('sha256').update(JSON.stringify(value)).digest('hex');
+}
+
+async function dispatchMessageDeliveryEvent(event) {
+  if (!event || event.type !== 'message.created' || !event.message) return;
+  if (event.conversation?.type === 'room') {
+    const roomId = event.conversation.id;
+    const projected = await attachReplyProjection(
+      'room',
+      await attachMediaProjection('room', event.message),
+      { roomId }
+    );
+    roomRuntime?.broadcastChatMessage(roomId, publicChatMessage(projected));
+    return;
+  }
+  if (event.conversation?.type === 'dm') {
+    const message = event.message;
+    const peerId = message.senderId === event.conversation.id ? message.recipientId : event.conversation.id;
+    const projected = await attachReplyProjection(
+      'dm',
+      await attachMediaProjection('dm', message),
+      { userId: message.senderId, peerId }
+    );
+    broadcastToUser(message.senderId, { type: 'dm-message', message: projected });
+    broadcastToUser(message.recipientId, { type: 'dm-message', message: projected });
+  }
+}
+
+async function startMessageDeliveryListener() {
+  if (!MESSAGE_DELIVERY_LISTEN_ENABLED || messageDeliveryListener) return;
+  const pool = getRelease250Pool();
+  const delivery = getMessageDeliveryServices();
+  if (!pool || !delivery) return;
+  const client = await pool.connect();
+  const onNotification = (notification) => {
+    if (notification.channel !== 'voice_room_message_delivery') return;
+    void (async () => {
+      const parsed = JSON.parse(notification.payload || '{}');
+      const row = parsed.eventId ? await delivery.outbox.getEvent(parsed.eventId) : null;
+      if (row?.payload) await dispatchMessageDeliveryEvent(row.payload);
+    })().catch((error) => console.error('Failed to dispatch durable message event:', error));
+  };
+  client.on('notification', onNotification);
+  client.on('error', (error) => console.error('Message delivery listener failed:', error));
+  await client.query('LISTEN voice_room_message_delivery');
+  messageDeliveryListener = { client, onNotification };
+}
+
+async function stopMessageDeliveryListener() {
+  const listener = messageDeliveryListener;
+  messageDeliveryListener = null;
+  if (!listener) return;
+  listener.client.off('notification', listener.onNotification);
+  await listener.client.query('UNLISTEN voice_room_message_delivery').catch(() => {});
+  listener.client.release();
+}
+
+function getNotificationServices() {
+  if (notificationServices) return notificationServices;
+  const pool = getRelease250Pool();
+  if (!pool) return null;
+  const inbox = createInboxRepository({ pool });
+  const mentions = createMentionRepository({ pool });
+  const eligibility = createMentionEligibilityService({ pool });
+  const outbox = createNotificationOutboxRepository({ pool });
+  const service = createNotificationService({
+    pool,
+    inbox,
+    mentions,
+    eligibility,
+    outbox,
+    cursorCodec: getHistoryServices().cursorCodec,
+    notificationStore: getNotificationStore()
+  });
+  notificationServices = { eligibility, inbox, mentions, outbox, service };
+  return notificationServices;
+}
+
+function getModerationServices() {
+  if (moderationServices) return moderationServices;
+  const pool = getRelease250Pool();
+  if (!pool) return null;
+  const repository = createModerationRepository({ pool });
+  const service = createModerationService({ pool, repository, maxActiveBans: MAX_ROOM_BANS });
+  const messageService = createMessageModerationService({
+    pool,
+    moderationService: service,
+    attachmentRepository: createAttachmentRepository({ pool }),
+    mediaJobRepository: createMediaJobRepository({ pool }),
+    publishMessageDeleted: async ({ roomId, messageId, deletedAt }) => {
+      const room = await getRoom(roomId);
+      if (!room) return;
+      broadcast(room, { type: 'chat-message-deleted', messageId, deletedAt });
+    }
+  });
+  moderationServices = { messageService, repository, service };
+  return moderationServices;
+}
+
+function getActiveBanService() {
+  if (activeBanService) return activeBanService;
+  const pool = getRelease250Pool();
+  if (!pool) return null;
+  activeBanService = createActiveBanService({ pool });
+  return activeBanService;
+}
+
+function getMediaServices() {
+  if (mediaServices) return mediaServices;
+  const pool = getRelease250Pool();
+  if (!pool) return null;
+  const storage = createMediaStorage({ rootDir: process.env.MEDIA_STORAGE_DIR || '/data/media' });
+  const pressure = createMediaPressureService({
+    storagePath: storage.root,
+    minFreeBytes: readEnvInt('MEDIA_MIN_FREE_BYTES', 2 * 1024 * 1024 * 1024, 1)
+  });
+  const attachments = createAttachmentRepository({ pool });
+  const jobs = createMediaJobRepository({ pool });
+  const quotaRepository = createMediaQuotaRepository({ attachmentRepository: attachments, pool });
+  const quota = createMediaQuotaService({ attachmentRepository: attachments, quotaRepository });
+  const service = createMediaService({
+    attachmentRepository: attachments,
+    jobRepository: jobs,
+    pressureService: pressure,
+    quotaService: quota,
+    storage
+  });
+  const visibility = createMediaVisibilityService({
+    attachmentRepository: attachments,
+    storage,
+    authorizeRoomAttachment: async ({ attachment, viewerId }) => {
+      if (!attachment.roomMessageId) return false;
+      const result = await pool.query(
+        `SELECT 1
+         FROM room_messages message
+         JOIN rooms room ON room.id = message.room_id AND room.deleted_at IS NULL
+         JOIN room_memberships membership ON membership.room_id = room.id AND membership.user_id = $2
+         WHERE message.id = $1 AND message.deleted_at IS NULL
+           AND (message.expires_at IS NULL OR message.expires_at > current_timestamp)
+           AND NOT EXISTS (
+             SELECT 1 FROM room_bans ban
+             WHERE ban.room_id = room.id AND ban.user_id = $2 AND ban.revoked_at IS NULL
+               AND (ban.expires_at IS NULL OR ban.expires_at > current_timestamp)
+           )
+         LIMIT 1`,
+        [attachment.roomMessageId, viewerId]
+      );
+      return result.rowCount === 1;
+    },
+    authorizeDirectAttachment: async ({ attachment, viewerId }) => {
+      if (!attachment.directMessageId) return false;
+      const result = await pool.query(
+        `SELECT 1 FROM direct_messages
+         WHERE id = $1 AND deleted_at IS NULL
+           AND (sender_id = $2 OR recipient_id = $2)
+         LIMIT 1`,
+        [attachment.directMessageId, viewerId]
+      );
+      return result.rowCount === 1;
+    }
+  });
+  mediaServices = { attachments, jobs, pressure, quota, service, storage, visibility };
+  return mediaServices;
+}
+
+function normalizeAttachmentIds(value) {
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || value.length > 4) return null;
+  const ids = value.map((id) => cleanUuid(id));
+  return ids.every(Boolean) && new Set(ids).size === ids.length ? ids : null;
+}
+
+function publicAttachment(attachment) {
+  return {
+    id: attachment.id,
+    context: attachment.context,
+    ownerId: attachment.ownerId,
+    order: attachment.order,
+    mimeType: attachment.mimeType,
+    bytes: attachment.processedBytes || attachment.originalBytes,
+    width: attachment.width,
+    height: attachment.height,
+    state: attachment.state,
+    url: attachment.state === 'ready' ? `/api/media/attachments/${encodeURIComponent(attachment.id)}/preview` : null
+  };
+}
+
+async function attachMediaProjection(context, message) {
+  const media = getMediaServices();
+  if (!media || !message?.id) return { ...message, attachments: [] };
+  const attachments = await media.attachments.listForMessage(context, message.id);
+  return { ...message, attachments: attachments.map(publicAttachment) };
+}
+
+async function attachReplyProjection(context, message, { roomId, userId, peerId } = {}) {
+  if (!message?.replyTo?.messageId) return message;
+  const pool = getRelease250Pool();
+  if (!pool) return message;
+  const replies = createReplyRepository({ client: pool });
+  const replyPreview = context === 'room'
+    ? await replies.getRoomPreview({ roomId, messageId: message.replyTo.messageId })
+    : await replies.getDirectPreview({ userId, peerId, messageId: message.replyTo.messageId });
+  return { ...message, replyPreview };
+}
+
+function getCredentialBoundary() {
+  if (credentialBoundary) return credentialBoundary;
+  if (LIVEKIT_GATE_SECRET.length < 32) return null;
+  const store = getRoomStore();
+  if (
+    typeof store.getLiveKitGatePrincipalEpoch !== 'function'
+    || typeof store.createLiveKitGateCredential !== 'function'
+    || typeof store.verifyLiveKitGateCredential !== 'function'
+    || (
+      typeof store.revokeLiveKitGatePrincipal !== 'function'
+      && typeof store.revokeLiveKitGatePeer !== 'function'
+    )
+  ) {
+    return null;
+  }
+  credentialBoundary = createCredentialBoundaryService({
+    roomStore: store,
+    secret: LIVEKIT_GATE_SECRET,
+    credentialTtlMs: LIVEKIT_TOKEN_TTL_SECONDS * 1000
+  });
+  return credentialBoundary;
+}
+
+function getLiveKitCredentialProvider() {
+  if (liveKitCredentialProvider) return liveKitCredentialProvider;
+  const boundary = getCredentialBoundary();
+  const livekit = getLiveKitConfig();
+  if (!boundary || !livekit.enabled) return null;
+  liveKitCredentialProvider = createLiveKitCredentialProvider({
+    apiKey: livekit.apiKey,
+    apiSecret: livekit.apiSecret,
+    boundary,
+    gateUrl: livekit.gateUrl,
+    tokenTtlSeconds: LIVEKIT_TOKEN_TTL_SECONDS
+  });
+  return liveKitCredentialProvider;
+}
+
+function membershipCursorCodec() {
+  const configured = process.env.VOICE_ROOM_CURSOR_HMAC_KEYS
+    || process.env.CURSOR_HMAC_KEYS
+    || process.env.CURSOR_HMAC_KEY;
+  const fallback = LIVEKIT_GATE_SECRET.length >= 32
+    ? `${LIVEKIT_GATE_SECRET}:membership-cursors`
+    : crypto.createHash('sha256').update(String(process.env.POW_SECRET || 'voice-room-development-membership')).digest('hex');
+  return createCursorCodec({ keys: configured || fallback });
+}
+
+function roomMembershipPresenceSnapshot(roomId) {
+  const room = presenceRooms.get(roomId);
+  const byUserId = new Map();
+  for (const peer of room?.peers?.values?.() || []) {
+    if (!peer.accountUserId) continue;
+    const entries = byUserId.get(peer.accountUserId) || [];
+    entries.push({ inVoice: true, roomId, presenceStatus: 'online' });
+    byUserId.set(peer.accountUserId, entries);
+  }
+  return { byUserId, revision: Number(room?.updatedAt) || 0 };
+}
+
+function getMembershipServices() {
+  if (membershipServices) return membershipServices;
+  const databaseUrl = typeof process.env.DATABASE_URL === 'string' ? process.env.DATABASE_URL.trim() : '';
+  if (!databaseUrl) return null;
+  membershipPool = membershipPool || createDbPool({ databaseUrl });
+  const repository = createMembershipRepository({ pool: membershipPool });
+  const service = createMembershipService({
+    pool: membershipPool,
+    repository,
+    activeBanService: {
+      isBanned: ({ roomId, userId, ip }) => findRoomBan(roomId, userId, ip)
+    }
+  });
+  const directory = createMemberDirectoryService({
+    membershipService: service,
+    repository,
+    cursorCodec: membershipCursorCodec(),
+    getPresenceSnapshot: roomMembershipPresenceSnapshot
+  });
+  membershipServices = { directory, repository, service };
+  return membershipServices;
 }
 
 function getNotificationStore() {
@@ -625,7 +1146,10 @@ function getAuthorizedPeer(roomId, peerId, sessionToken) {
 }
 
 async function findRoomBan(roomId, userId, ip) {
-  if (!roomId || typeof getRoomStore().findActiveRoomBan !== 'function') return null;
+  if (!roomId) return null;
+  const service = getActiveBanService();
+  if (service) return service.getActiveBan({ roomId, userId: userId || null, ip: ip || '' });
+  if (typeof getRoomStore().findActiveRoomBan !== 'function') return null;
   return getRoomStore().findActiveRoomBan({ roomId, userId: userId || null, ip: ip || '' });
 }
 
@@ -753,7 +1277,11 @@ function publicChatMessage(message) {
     name: message.name,
     peerId: message.peerId,
     roomId: message.roomId,
-    text: message.text
+    text: message.text,
+    content: message.content,
+    attachments: Array.isArray(message.attachments) ? message.attachments : [],
+    replyTo: message.replyTo,
+    replyPreview: message.replyPreview
   };
 }
 
@@ -841,59 +1369,77 @@ async function handleLiveKitToken(req, res) {
     sendJson(res, 503, { ok: false, code: 'livekit_gate_principal_unavailable', error: 'LiveKit gate principal unavailable' });
     return;
   }
-  const epochResult = await getRoomStore().getLiveKitGatePrincipalEpoch({ principal, roomId });
-  if (epochResult.status !== 'ready') {
-    sendJson(res, 503, { ok: false, code: 'livekit_gate_epoch_unavailable', error: 'LiveKit gate unavailable' });
-    return;
+  const livekitRoom = getLiveKitRoomName(roomId);
+  let persistedMembership = null;
+  let memberships = null;
+  if (sessionUser?.id) {
+    memberships = getMembershipServices();
+    if (!memberships) {
+      sendJson(res, 503, { ok: false, code: 'membership_unavailable', error: 'Membership service unavailable' });
+      return;
+    }
+    persistedMembership = await memberships.service.persistSuccessfulAdmission({
+      roomId,
+      userId: sessionUser.id,
+      ip: getClientIp(req, TRUST_PROXY),
+      admissionSucceeded: true
+    });
+    if (persistedMembership.status !== 'active') {
+      if (persistedMembership.status === 'banned') {
+        sendRoomBanned(res, roomId);
+      } else {
+        sendJson(res, 503, { ok: false, code: 'membership_persist_failed', error: 'Membership unavailable' });
+      }
+      return;
+    }
   }
 
-  const livekitRoom = getLiveKitRoomName(roomId);
-  const token = new AccessToken(livekit.apiKey, livekit.apiSecret, {
-    identity: peerId,
-    metadata: JSON.stringify({ roomId }),
-    name,
-    ttl: LIVEKIT_TOKEN_TTL_SECONDS
-  });
-  token.addGrant({
-    canPublish: true,
-    canPublishData: true,
-    canPublishSources: [TrackSource.MICROPHONE, TrackSource.SCREEN_SHARE, TrackSource.SCREEN_SHARE_AUDIO],
-    canSubscribe: true,
-    room: livekitRoom,
-    roomJoin: true
-  });
-  const gateSigner = createGateCredentialSigner({ secret: livekit.gateSecret });
-  const expiresAt = Date.now() + LIVEKIT_TOKEN_TTL_SECONDS * 1000;
-  const gateCredential = gateSigner.sign({
-    expiresAt,
-    peerId,
-    principalEpoch: epochResult.epoch,
-    principalId: principal.principalId,
-    principalType: principal.principalType,
-    roomId
-  });
-  const storedGateCredential = await getRoomStore().createLiveKitGateCredential({
-    credentialHash: gateSigner.hash(gateCredential),
-    expiresAt,
-    peerId,
-    principal,
-    principalEpoch: epochResult.epoch,
-    roomId
-  });
-  if (storedGateCredential.status !== 'created') {
+  const provider = getLiveKitCredentialProvider();
+  if (!provider) {
+    if (persistedMembership?.created) {
+      await memberships.service.rollbackSuccessfulAdmission({
+        roomId,
+        userId: sessionUser.id,
+        membershipId: persistedMembership.membership.id
+      });
+    }
+    sendJson(res, 503, { ok: false, code: 'livekit_gate_unavailable', error: 'LiveKit gate unavailable' });
+    return;
+  }
+  let issued;
+  try {
+    issued = await provider.issueAdmission({ livekitRoom, name, peerId, principal, roomId });
+  } catch (error) {
+    if (persistedMembership?.created) {
+      await memberships.service.rollbackSuccessfulAdmission({
+        roomId,
+        userId: sessionUser.id,
+        membershipId: persistedMembership.membership.id
+      });
+    }
+    throw error;
+  }
+  if (issued.status !== 'issued') {
+    if (persistedMembership?.created) {
+      await memberships.service.rollbackSuccessfulAdmission({
+        roomId,
+        userId: sessionUser.id,
+        membershipId: persistedMembership.membership.id
+      });
+    }
     sendJson(res, 503, { ok: false, code: 'livekit_gate_credential_unavailable', error: 'LiveKit gate unavailable' });
     return;
   }
-  const gateUrl = new URL(livekit.gateUrl);
-  gateUrl.searchParams.set('vr_gate_credential', gateCredential);
+
+  if (await findRoomBan(roomId, sessionUser?.id, getClientIp(req, TRUST_PROXY))) {
+    await getCredentialBoundary().revokePrincipal({ roomId, principal });
+    sendRoomBanned(res, roomId);
+    return;
+  }
 
   sendJson(res, 200, {
     ok: true,
-    gateCredentialId: storedGateCredential.credential.id,
-    room: livekitRoom,
-    token: await token.toJwt(),
-    ttlSeconds: LIVEKIT_TOKEN_TTL_SECONDS,
-    url: gateUrl.toString()
+    ...issued.admission
   });
 }
 
@@ -1517,7 +2063,19 @@ async function handleMarkRoomChatRead(req, res, rawRoomId) {
     return;
   }
 
-  const lastReadAt = await getRoomStore().markRoomChatRead(roomId, user.id);
+  const body = await readJsonBody(req);
+  if (typeof body.cursor === 'string' && body.cursor) {
+    try {
+      const result = await getHistoryServices().read.advanceRoom({ cursor: body.cursor, roomId, userId: user.id });
+      await roomRuntime?.sendRoomSummaryToUser(roomId, user.id);
+      sendJson(res, 200, { ok: true, ...result });
+    } catch (error) {
+      sendJson(res, error.statusCode || 400, { ok: false, code: error.code || 'invalid_read_cursor', error: error.message });
+    }
+    return;
+  }
+
+  const lastReadAt = await getMessageService().room.markRoomChatRead(roomId, user.id);
   if (lastReadAt == null) {
     sendJson(res, 404, { ok: false, error: 'Комната не найдена' });
     return;
@@ -1634,9 +2192,15 @@ async function handleRoomChatList(res, roomId) {
     return;
   }
 
+  const storedMessages = await getMessageService().room.listMessages(roomId, { limit: 100 });
+  const messages = await Promise.all(storedMessages.map(async (message) => attachReplyProjection(
+    'room',
+    await attachMediaProjection('room', message),
+    { roomId }
+  )));
   sendJson(res, 200, {
     ok: true,
-    messages: (await getRoomStore().listMessages(roomId, { limit: 100 })).map(publicChatMessage),
+    messages: messages.map(publicChatMessage),
     roomId
   });
 }
@@ -1649,7 +2213,32 @@ async function handleRoomChatPost(req, res, roomId) {
   const sessionToken = normalizeSessionToken(body.sessionToken);
   const sessionUser = await resolveOptionalSessionUser(req);
   const requestedName = cleanName(body.name);
-  const text = cleanChatText(body.text);
+  let text = cleanChatText(body.text);
+  let content;
+  let mentionUserIds = [];
+  if (body.content != null) {
+    if (!release250FeatureEnabled('engagement')) {
+      sendJson(res, 409, { ok: false, error: 'Structured messages are unavailable' });
+      return;
+    }
+    try {
+      const prepared = createContentRepository().prepareWrite({ content: body.content, text });
+      content = prepared.content;
+      text = prepared.text;
+      const mentions = mentionUserIdsFromContent(content, { creatorUserId: sessionUser?.id || '' });
+      if (!mentions.ok) {
+        sendJson(res, 422, { ok: false, code: mentions.code, error: 'Invalid mention target' });
+        return;
+      }
+      mentionUserIds = mentions.userIds;
+    } catch {
+      sendJson(res, 400, { ok: false, code: 'invalid_message_content', error: 'Invalid message content' });
+      return;
+    }
+  }
+  const attachmentIds = normalizeAttachmentIds(body.attachmentIds);
+  const replyToMessageId = body.replyTo == null ? '' : cleanUuid(body.replyTo?.messageId);
+  const idempotencyKey = requestIdempotencyKey(req, body);
 
   if (!room) {
     sendJson(res, 404, { ok: false, error: 'Room not found', roomId });
@@ -1661,7 +2250,16 @@ async function handleRoomChatPost(req, res, roomId) {
     return;
   }
 
-  if (!text) {
+  if (attachmentIds === null) {
+    sendJson(res, 400, { ok: false, error: 'Invalid attachments' });
+    return;
+  }
+  if (body.replyTo != null && (!replyToMessageId || !release250FeatureEnabled('replies'))) {
+    sendJson(res, 409, { ok: false, error: 'Reply target is unavailable' });
+    return;
+  }
+
+  if (!text && attachmentIds.length === 0) {
     sendJson(res, 400, { ok: false, error: 'Invalid chat message' });
     return;
   }
@@ -1709,8 +2307,19 @@ async function handleRoomChatPost(req, res, roomId) {
 
   const name = sessionDisplayName(authorUser) || activePeer?.name || requestedName;
   const authorUserId = authorUser?.id || activePeer?.accountUserId || null;
+  const media = attachmentIds.length > 0 ? getMediaServices() : null;
+  const replies = replyToMessageId ? createReplyRepository({ client: getRelease250Pool() }) : null;
+  const notifications = getNotificationServices();
+  const delivery = getMessageDeliveryServices();
+  let idempotencyLedgerKey = '';
+  let replyPreview;
+  let replyTargetUserId = null;
+  if (attachmentIds.length > 0 && (!authorUserId || !media || !release250FeatureEnabled('mediaUploads'))) {
+    sendJson(res, 503, { ok: false, error: 'Media uploads are unavailable' });
+    return;
+  }
   const now = Date.now();
-  const message = await getRoomStore().appendMessage(roomId, {
+  const message = await getMessageService().room.appendMessage(roomId, {
     createdAt: now,
     expiresAt: now + ROOM_CHAT_TTL_MS,
     id: crypto.randomUUID?.() || crypto.randomBytes(16).toString('hex'),
@@ -1718,7 +2327,84 @@ async function handleRoomChatPost(req, res, roomId) {
     name,
     peerId,
     text,
-    authorUserId
+    content,
+    authorUserId,
+    replyToMessageId: replyToMessageId || null,
+    beforeUnitOfWork: idempotencyKey && delivery
+      ? async (client) => {
+          const reservation = await delivery.idempotency.reserve(client, {
+            actorType: authorUserId ? 'account' : 'guest',
+            actorId: authorUserId || peerId,
+            conversation: { type: 'room', id: roomId },
+            key: idempotencyKey,
+            fingerprint: messageFingerprint({ text, content, attachmentIds, replyToMessageId })
+          });
+          if (reservation.kind === 'replay') {
+            return { replay: true, message: reservation.response.body?.message };
+          }
+          idempotencyLedgerKey = reservation.ledgerKey;
+          return null;
+        }
+      : null,
+    unitOfWork: attachmentIds.length > 0 || replyToMessageId || mentionUserIds.length > 0 || delivery
+      ? async (client, inserted) => {
+          if (replyToMessageId) {
+            const target = await replies.lockRoomTarget({ roomId, messageId: replyToMessageId, client });
+            replyPreview = await requireReplyTarget({ message: target, visibility: true });
+            replyTargetUserId = target?.authorUserId || null;
+          }
+          if (attachmentIds.length > 0) {
+            await media.attachments.bindReady({
+              ownerId: authorUserId,
+              context: 'room',
+              messageId: inserted.id,
+              attachmentIds
+            }, client);
+          }
+          if (
+            authorUserId
+            && notifications
+            && release250FeatureEnabled('engagement')
+            && (mentionUserIds.length > 0 || replyTargetUserId)
+          ) {
+            await notifications.service.createAddressedForMessage({
+              roomId,
+              messageId: inserted.id,
+              creatorUserId: authorUserId,
+              targetUserIds: mentionUserIds,
+              replyTargetUserId,
+              body: text,
+              client
+            });
+          }
+          if (delivery) {
+            const deliveryMessage = {
+              ...inserted,
+              name,
+              avatarAccent: authorUser?.avatarAccent || activePeer?.avatarAccent || null,
+              avatarColorKey,
+              avatarKey: authorUser?.avatarKey || null,
+              avatarUrl: authorUser?.avatarKey
+                ? `/api/avatars/${encodeURIComponent(authorUser.avatarKey)}`
+                : activePeer?.avatarUrl || null
+            };
+            await delivery.outbox.enqueue(client, {
+              eventId: crypto.randomUUID(),
+              type: 'message.created',
+              conversation: { type: 'room', id: roomId },
+              messageId: inserted.id,
+              message: deliveryMessage
+            });
+          }
+          if (idempotencyLedgerKey) {
+            await delivery.idempotency.complete(client, idempotencyLedgerKey, {
+              body: { message: inserted },
+              messageId: inserted.id,
+              statusCode: 201
+            });
+          }
+        }
+      : null
   });
 
   if (!message) {
@@ -1726,8 +2412,12 @@ async function handleRoomChatPost(req, res, roomId) {
     return;
   }
 
+  const projectedBase = await attachMediaProjection('room', message);
+  const projectedMessage = message.idempotencyReplay
+    ? await attachReplyProjection('room', projectedBase, { roomId })
+    : { ...projectedBase, replyPreview };
   const publicMessage = {
-    ...message,
+    ...projectedMessage,
     name,
     avatarAccent: authorUser?.avatarAccent || activePeer?.avatarAccent || null,
     avatarColorKey,
@@ -1735,7 +2425,7 @@ async function handleRoomChatPost(req, res, roomId) {
       ? `/api/avatars/${encodeURIComponent(authorUser.avatarKey)}`
       : activePeer?.avatarUrl || null
   };
-  roomRuntime?.broadcastChatMessage(roomId, publicMessage);
+  if (!message.idempotencyReplay && MESSAGE_DIRECT_EMIT_ENABLED) roomRuntime?.broadcastChatMessage(roomId, publicMessage);
   sendJson(res, 201, { ok: true, message: publicChatMessage(publicMessage) });
 }
 
@@ -2126,9 +2816,14 @@ async function handleDmThread(req, res, peerId) {
     return;
   }
 
-  const messages = await getFriendStore().listThread({ userId: user.id, peerId: id });
+  const storedMessages = await getMessageService().direct.listThread({ userId: user.id, peerId: id });
+  const messages = await Promise.all(storedMessages.map(async (message) => attachReplyProjection(
+    'dm',
+    await attachMediaProjection('dm', message),
+    { userId: user.id, peerId: id }
+  )));
   // Opening the thread clears the unread badge and lets the peer see the read.
-  const read = await getFriendStore().markRead({ userId: user.id, peerId: id });
+  const read = await getMessageService().direct.markRead({ userId: user.id, peerId: id });
   if (read.count > 0) {
     broadcastToUser(id, { type: 'dm-read', userId: user.id });
   }
@@ -2168,16 +2863,95 @@ async function handleSendDm(req, res, peerId) {
 
   const body = await readJsonBody(req);
   const text = cleanDmText(body.text);
-  if (!text) {
+  const attachmentIds = normalizeAttachmentIds(body.attachmentIds);
+  const replyToMessageId = body.replyTo == null ? '' : cleanUuid(body.replyTo?.messageId);
+  const idempotencyKey = requestIdempotencyKey(req, body);
+  if (attachmentIds === null) {
+    sendJson(res, 400, { ok: false, error: 'Invalid attachments' });
+    return;
+  }
+  if (body.replyTo != null && (!replyToMessageId || !release250FeatureEnabled('replies'))) {
+    sendJson(res, 409, { ok: false, error: 'Reply target is unavailable' });
+    return;
+  }
+  if (!text && attachmentIds.length === 0) {
     sendJson(res, 400, { ok: false, error: 'Пустое сообщение' });
     return;
   }
 
-  const message = await getFriendStore().sendMessage({ senderId: user.id, recipientId: id, body: text });
+  const media = attachmentIds.length > 0 ? getMediaServices() : null;
+  const replies = replyToMessageId ? createReplyRepository({ client: getRelease250Pool() }) : null;
+  const delivery = getMessageDeliveryServices();
+  let idempotencyLedgerKey = '';
+  let replyPreview;
+  if (attachmentIds.length > 0 && (!media || !release250FeatureEnabled('mediaUploads'))) {
+    sendJson(res, 503, { ok: false, error: 'Media uploads are unavailable' });
+    return;
+  }
+  const storedMessage = await getMessageService().direct.sendMessage({
+    senderId: user.id,
+    recipientId: id,
+    body: text,
+    replyToMessageId: replyToMessageId || null,
+    beforeUnitOfWork: idempotencyKey && delivery
+      ? async (client) => {
+          const reservation = await delivery.idempotency.reserve(client, {
+            actorType: 'account',
+            actorId: user.id,
+            conversation: { type: 'dm', id },
+            key: idempotencyKey,
+            fingerprint: messageFingerprint({ text, attachmentIds, replyToMessageId })
+          });
+          if (reservation.kind === 'replay') {
+            return { replay: true, message: reservation.response.body?.message };
+          }
+          idempotencyLedgerKey = reservation.ledgerKey;
+          return null;
+        }
+      : null,
+    unitOfWork: attachmentIds.length > 0 || replyToMessageId || delivery
+      ? async (client, inserted) => {
+          if (replyToMessageId) {
+            const target = await replies.lockDirectTarget({ userId: user.id, peerId: id, messageId: replyToMessageId, client });
+            replyPreview = await requireReplyTarget({ message: target, visibility: true });
+          }
+          if (attachmentIds.length > 0) {
+            await media.attachments.bindReady({
+              ownerId: user.id,
+              context: 'dm',
+              messageId: inserted.id,
+              attachmentIds
+            }, client);
+          }
+          if (delivery) {
+            await delivery.outbox.enqueue(client, {
+              eventId: crypto.randomUUID(),
+              type: 'message.created',
+              conversation: { type: 'dm', id },
+              messageId: inserted.id,
+              message: inserted
+            });
+          }
+          if (idempotencyLedgerKey) {
+            await delivery.idempotency.complete(client, idempotencyLedgerKey, {
+              body: { message: inserted },
+              messageId: inserted.id,
+              statusCode: 201
+            });
+          }
+        }
+      : null
+  });
+  const projectedBase = await attachMediaProjection('dm', storedMessage);
+  const message = storedMessage.idempotencyReplay
+    ? await attachReplyProjection('dm', projectedBase, { userId: user.id, peerId: id })
+    : { ...projectedBase, replyPreview };
   // Deliver to the recipient and the sender's other tabs; clients dedupe by id.
-  broadcastToUser(id, { type: 'dm-message', message });
-  await broadcastDmNotification(id, user, message);
-  broadcastToUser(user.id, { type: 'dm-message', message });
+  if (!storedMessage.idempotencyReplay && MESSAGE_DIRECT_EMIT_ENABLED) {
+    broadcastToUser(id, { type: 'dm-message', message });
+    await broadcastDmNotification(id, user, message);
+    broadcastToUser(user.id, { type: 'dm-message', message });
+  }
   sendJson(res, 201, { ok: true, message });
 }
 
@@ -2200,7 +2974,7 @@ async function handleRespondDmInvite(req, res, peerIdParam, messageId) {
     return;
   }
 
-  const current = await getFriendStore().getMessage(user.id, peerId, messageId);
+  const current = await getMessageService().direct.getMessage(user.id, peerId, messageId);
   if (!current || !current.invite) {
     sendJson(res, 404, { ok: false, error: 'Приглашение не найдено' });
     return;
@@ -2210,7 +2984,7 @@ async function handleRespondDmInvite(req, res, peerIdParam, messageId) {
     return;
   }
 
-  const message = await getFriendStore().respondInvite({ messageId, recipientId: user.id, status: action });
+  const message = await getMessageService().direct.respondInvite({ messageId, recipientId: user.id, status: action });
   if (!message) {
     sendJson(res, 409, { ok: false, error: 'Приглашение уже обработано' });
     return;
@@ -2232,7 +3006,19 @@ async function handleMarkDmRead(req, res, peerId) {
     return;
   }
 
-  const result = await getFriendStore().markRead({ userId: user.id, peerId: id });
+  const body = await readJsonBody(req);
+  if (typeof body.cursor === 'string' && body.cursor) {
+    try {
+      const result = await getHistoryServices().read.advanceDm({ cursor: body.cursor, peerId: id, userId: user.id });
+      broadcastToUser(id, { type: 'dm-read', userId: user.id, cursor: body.cursor });
+      sendJson(res, 200, { ok: true, ...result });
+    } catch (error) {
+      sendJson(res, error.statusCode || 400, { ok: false, code: error.code || 'invalid_read_cursor', error: error.message });
+    }
+    return;
+  }
+
+  const result = await getMessageService().direct.markRead({ userId: user.id, peerId: id });
   if (result.count > 0) {
     broadcastToUser(id, { type: 'dm-read', userId: user.id });
   }
@@ -2280,7 +3066,7 @@ async function handleRingRoom(req, res, rawRoomId) {
   broadcastToUser(targetUserId, { type: 'ring.incoming', fromUser, room: ringRoom, expiresAt });
   // Persist the invitation as a regular DM so both sides share one timeline
   // entry (with live status) instead of per-device local copies.
-  const inviteMessage = await getFriendStore().sendMessage({
+  const inviteMessage = await getMessageService().direct.sendMessage({
     senderId: user.id,
     recipientId: targetUserId,
     body: room.name ? `Приглашение в комнату «${room.name}»` : 'Приглашение в комнату',
@@ -2547,7 +3333,7 @@ async function handleDeleteRoomChatMessage(req, res, roomId, messageId) {
   const sessionUser = await resolveOptionalSessionUser(req);
 
   // Load the message (must not be deleted)
-  const msg = await getRoomStore().getMessage(roomId, messageId);
+  const msg = await getMessageService().room.getMessage(roomId, messageId);
   if (!msg) {
     sendJson(res, 404, { ok: false, error: 'Message not found' });
     return;
@@ -2578,7 +3364,7 @@ async function handleDeleteRoomChatMessage(req, res, roomId, messageId) {
     return;
   }
 
-  const deleted = await getRoomStore().softDeleteMessage(roomId, messageId);
+  const deleted = await getMessageService().room.softDeleteMessage(roomId, messageId);
   if (!deleted) {
     sendJson(res, 404, { ok: false, error: 'Message not found' });
     return;
@@ -2616,7 +3402,7 @@ async function handleEditRoomChatMessage(req, res, roomId, messageId) {
 
   const requestedPeerId = normalizePeerId(body.peerId);
   const sessionToken = normalizeSessionToken(body.sessionToken);
-  const current = await getRoomStore().getMessage(roomId, messageId);
+  const current = await getMessageService().room.getMessage(roomId, messageId);
   if (!current) {
     sendJson(res, 404, { ok: false, error: 'Message not found' });
     return;
@@ -2655,7 +3441,7 @@ async function handleEditRoomChatMessage(req, res, roomId, messageId) {
     return;
   }
 
-  const message = await getRoomStore().editMessage(roomId, messageId, text);
+  const message = await getMessageService().room.editMessage(roomId, messageId, text);
   if (!message) {
     sendJson(res, 404, { ok: false, error: 'Message not found' });
     return;
@@ -2679,7 +3465,7 @@ async function handleDeleteDmMessage(req, res, peerIdParam, messageId) {
     return;
   }
 
-  const msg = await getFriendStore().getMessage(user.id, peerId, messageId);
+  const msg = await getMessageService().direct.getMessage(user.id, peerId, messageId);
   if (!msg) {
     sendJson(res, 404, { ok: false, error: 'Сообщение не найдено' });
     return;
@@ -2691,7 +3477,7 @@ async function handleDeleteDmMessage(req, res, peerIdParam, messageId) {
     return;
   }
 
-  const deleted = await getFriendStore().softDeleteMessage(messageId);
+  const deleted = await getMessageService().direct.softDeleteMessage(messageId);
   if (!deleted) {
     sendJson(res, 404, { ok: false, error: 'Сообщение не найдено' });
     return;
@@ -2724,7 +3510,7 @@ async function handleEditDmMessage(req, res, peerIdParam, messageId) {
     return;
   }
 
-  const current = await getFriendStore().getMessage(user.id, peerId, messageId);
+  const current = await getMessageService().direct.getMessage(user.id, peerId, messageId);
   if (!current) {
     sendJson(res, 404, { ok: false, error: 'Сообщение не найдено' });
     return;
@@ -2749,7 +3535,7 @@ async function handleEditDmMessage(req, res, peerIdParam, messageId) {
     return;
   }
 
-  const message = await getFriendStore().editMessage({
+  const message = await getMessageService().direct.editMessage({
     messageId,
     senderId: user.id,
     recipientId: peerId,
@@ -2920,6 +3706,17 @@ function createApiApp({ store = null, users = null, friends = null, notification
   if (store) roomStore = store;
   if (users) userStore = users;
   if (friends) friendStore = friends;
+  messageService = null;
+  historyServices = null;
+  credentialBoundary = null;
+  liveKitCredentialProvider = null;
+  membershipServices = null;
+  reactionServices = null;
+  notificationServices = null;
+  moderationServices = null;
+  mediaServices = null;
+  activeBanService = null;
+  messageDeliveryServices = null;
   if (notifications) notificationStore = notifications;
   pushStore = pushes || null;
   pushService = push || null;
@@ -2934,9 +3731,11 @@ function createApiApp({ store = null, users = null, friends = null, notification
 
   app.register(fastifyCookie, { hook: 'onRequest' });
   app.register(fastifyMultipart, {
-    limits: { fileSize: MAX_AVATAR_BYTES, files: 1, parts: 2 }
+    limits: { fileSize: MAX_UPLOAD_BYTES, files: 1, parts: 2 }
   });
   app.register(fastifyWebsocket, { options: { maxPayload: WS_MAX_PAYLOAD_BYTES } });
+  app.addHook('onReady', startMessageDeliveryListener);
+  app.addHook('onClose', stopMessageDeliveryListener);
 
   wsRegistry = createConnectionRegistry({
     maxConnectionsPerUser: MAX_REALTIME_STREAMS_PER_USER,
@@ -2968,7 +3767,9 @@ function createApiApp({ store = null, users = null, friends = null, notification
     tokensMatch,
     sessionAvatarColorKey,
     queueRoomOccupancyTransition,
-    findRoomBan
+    findRoomBan,
+    credentialBoundary: getCredentialBoundary(),
+    removeLiveKitParticipant
   });
 
   const wsHandler = createWsHandler({
@@ -2985,11 +3786,26 @@ function createApiApp({ store = null, users = null, friends = null, notification
   });
 
   app.get('/api/healthz', (request, reply) => runLegacyHandler(request, reply, async (req, res) => {
+    const readiness = (() => {
+      try {
+        return readinessProvider.getSnapshot();
+      } catch {
+        return null;
+      }
+    })();
     const livekit = getLiveKitConfig();
     sendJson(res, 200, {
       livekit: livekit.enabled,
       livekitUrl: livekit.url || null,
       ok: true,
+      capabilityManifest: {
+        contractVersion: readiness?.manifest?.contractVersion || null,
+        schemaVersion: readiness?.manifest?.schemaVersion || null,
+        digest: readiness?.manifest?.digest || null,
+        path: readiness?.manifest?.path || null,
+        replicaConsensus: readiness?.replica?.reason || (readiness?.replicaConsensus ? 'agree' : 'disagree'),
+        manifestRawSha256: readiness?.manifest?.digest || null
+      },
       maxRooms: MAX_ROOMS,
       rooms: await getRoomStore().countRooms(),
       peers: getPresencePeerCount()
@@ -2997,16 +3813,101 @@ function createApiApp({ store = null, users = null, friends = null, notification
   }));
 
   app.get('/api/metrics', (request, reply) => {
+    const readiness = (() => {
+      try {
+        return readinessProvider.getSnapshot();
+      } catch {
+        return null;
+      }
+    })();
     const body = renderPrometheus({
       activeWs: wsRegistry?.connections?.size || 0,
       activeGuestWs: getActiveGuestWsCount(),
       presenceRooms: presenceRooms.size,
-      presencePeers: getPresencePeerCount()
+      presencePeers: getPresencePeerCount(),
+      capabilityReadiness: readiness?.features || {}
     });
     reply
       .header('Content-Type', 'text/plain; version=0.0.4; charset=utf-8')
       .send(body);
   });
+
+  registerCapabilityRoutes({
+    app,
+    readinessProvider,
+    runLegacyHandler
+  });
+
+  const memberships = getMembershipServices();
+  if (memberships) {
+    registerMembershipRoutes({
+      app,
+      directoryService: memberships.directory,
+      membershipService: memberships.service,
+      resolveUser: resolveSessionUser,
+      membershipEnabled: () => {
+        try {
+          return readinessProvider.getSnapshot()?.features?.membership === true;
+        } catch {
+          return false;
+        }
+      },
+      prepareLeave: ({ roomId, user }) => roomRuntime.disconnectAccountFromRoom({ roomId, userId: user.id })
+    });
+  }
+
+  registerRoomHistoryRoutes({
+    app,
+    historyService: getHistoryServices().room,
+    resolveRoomAccess: async ({ roomId }) => ({ authorized: Boolean(await getRoom(roomId)) })
+  });
+  registerDmHistoryRoutes({
+    app,
+    historyService: getHistoryServices().dm,
+    resolveUser: resolveSessionUser
+  });
+
+  const reactions = getReactionServices();
+  if (reactions) {
+    registerReactionRoutes({
+      app,
+      reactionService: reactions.service,
+      resolveUser: resolveSessionUser
+    });
+  }
+
+  const notificationDomain = getNotificationServices();
+  if (notificationDomain) {
+    registerNotificationRoutes({
+      app,
+      service: notificationDomain.service,
+      resolveUser: async (request) => (await resolveSessionUser(request))?.user || null,
+      enabled: () => release250FeatureEnabled('engagement')
+    });
+  }
+
+  const moderation = getModerationServices();
+  if (moderation) {
+    registerModerationRoutes({
+      app,
+      moderationService: moderation.service,
+      messageModerationService: moderation.messageService,
+      resolveUser: async (request) => (await resolveSessionUser(request))?.user || null,
+      enabled: () => release250FeatureEnabled('moderationCenter')
+    });
+  }
+
+  const media = getMediaServices();
+  if (media) {
+    registerMediaRoutes({
+      app,
+      mediaService: media.service,
+      mediaVisibilityService: media.visibility,
+      resolveUser: resolveSessionUser,
+      uploadsEnabled: () => release250FeatureEnabled('mediaUploads'),
+      readsEnabled: () => release250FeatureEnabled('mediaRead')
+    });
+  }
 
   app.get('/api/pow-challenge', (request, reply) => runLegacyHandler(request, reply, handlePowChallenge));
   app.get('/api/desktop/latest', (request, reply) => runLegacyHandler(request, reply, (_req, res) => handleDesktopLatest(res)));
@@ -3170,12 +4071,15 @@ async function closeStores(logger = console) {
     userStore?.close?.(),
     friendStore?.close?.(),
     notificationStore?.close?.(),
-    pushStore?.close?.()
+    pushStore?.close?.(),
+    membershipPool?.end?.()
   ]).then((results) => {
     for (const result of results) {
       if (result.status === 'rejected') logger.error('Failed to close store:', result.reason);
     }
   });
+  membershipPool = null;
+  membershipServices = null;
 }
 
 function installGracefulShutdown(server, { logger = console, exit = process.exit, timeoutMs = 8000 } = {}) {
@@ -3216,7 +4120,9 @@ function installGracefulShutdown(server, { logger = console, exit = process.exit
 async function bootstrap({ env = process.env, logger = console, exit = process.exit } = {}) {
   try {
     const database = readDatabaseConfig(env);
-    await runMigrations({ databaseUrl: database.url, logger });
+    if (readEnvBool('MIGRATE_ON_START', env.NODE_ENV !== 'production', env)) {
+      await runMigrations({ databaseUrl: database.url, logger });
+    }
     roomStore = createRoomStore({
       databaseUrl: database.url,
       logger,
@@ -3228,6 +4134,7 @@ async function bootstrap({ env = process.env, logger = console, exit = process.e
     await roomStore.pruneRooms();
     userStore = createUserStore({ databaseUrl: database.url, logger, sessionTtlMs: SESSION_TTL_MS });
     friendStore = createFriendStore({ databaseUrl: database.url, logger });
+    messageService = null;
     notificationStore = createNotificationStore({ databaseUrl: database.url, logger });
     pushStore = createPushStore({
       databaseUrl: database.url,

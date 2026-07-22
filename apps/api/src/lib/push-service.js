@@ -1,6 +1,7 @@
 'use strict';
 
 const webPush = require('web-push');
+const { PLATFORM_CLASSES } = require('@voice-room/shared/platform-class');
 const { cleanPushEndpoint, describePushEndpoint } = require('./push-endpoint');
 
 function describePushError(error) {
@@ -58,6 +59,7 @@ function createPushService({ store, env = process.env, client = webPush, logger 
     let sent = 0;
     let removed = 0;
     await Promise.all(subscriptions.map(async (subscription) => {
+      if (subscription.platformClass === PLATFORM_CLASSES.mobile) return;
       const endpoint = cleanPushEndpoint(subscription.endpoint);
       if (!endpoint) {
         try {

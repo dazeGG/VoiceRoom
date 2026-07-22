@@ -18,7 +18,7 @@ import {
   type SendRequestStatus,
   type Relationship
 } from '$lib/api/friends';
-import { deleteDirectMessage, editDirectMessage, fetchThread, markThreadRead, respondRoomInvite, sendDirectMessage, type DirectMessage } from '$lib/api/dm';
+import { deleteDirectMessage, editDirectMessage, fetchThread, fetchThreadPage, markThreadRead, respondRoomInvite, sendDirectMessage, type DirectMessage } from '$lib/api/dm';
 import { connectRealtime, type RealtimeEvent, type RealtimeHandle } from '$lib/api/realtime';
 import type { PresenceStatus } from '$lib/shared/presence';
 import { playDirectMessageCue, playFriendAcceptedCue, playFriendRequestCue, playRingCue } from '$lib/features/room/client/media/cues';
@@ -43,6 +43,8 @@ import {
 } from '$lib/shared/notifications/preferences.svelte';
 import { startSystemPresenceIdleTracking } from '$lib/shared/presence-idle';
 import { createDmThreadResyncCoordinator } from './dm-thread-resync';
+import { getCapabilityFeature } from '$lib/platform/capability-state.svelte';
+import { createAnchoredHistory } from '$lib/features/room/room-history.svelte';
 
 export type LobbyMode = 'friends' | 'rooms';
 export type LobbyView = 'home' | 'dm' | 'people';
@@ -59,6 +61,13 @@ interface FriendsState {
   threadPeer: PublicUser | null;
   thread: DirectMessage[];
   threadLoading: boolean;
+  threadLoadingOlder: boolean;
+  threadHasMoreBefore: boolean;
+  threadHistoryEnabled: boolean;
+  threadReadCursorEnabled: boolean;
+  threadReadCandidate: string | null;
+  threadReadRevision: number;
+  threadHistoryError: string;
   profileOpen: boolean;
 }
 
@@ -74,6 +83,13 @@ export const friendsState = $state<FriendsState>({
   threadPeer: null,
   thread: [],
   threadLoading: false,
+  threadLoadingOlder: false,
+  threadHasMoreBefore: false,
+  threadHistoryEnabled: false,
+  threadReadCursorEnabled: false,
+  threadReadCandidate: null,
+  threadReadRevision: 0,
+  threadHistoryError: '',
   profileOpen: false
 });
 
@@ -84,6 +100,19 @@ let selfId = '';
 let presenceReady = false;
 let onlineFriendIds = new Set<string>();
 let presenceKnownFriendIds = new Set<string>();
+const dmHistory = createAnchoredHistory<DirectMessage>({
+  loadPage: async (peerId, request) => {
+    return fetchThreadPage(peerId, request);
+  },
+  compare: (left, right) => left.createdAt - right.createdAt || left.id.localeCompare(right.id),
+  onChange: (state) => {
+    friendsState.thread = state.messages;
+    friendsState.threadLoading = state.loading;
+    friendsState.threadLoadingOlder = state.loadingOlder;
+    friendsState.threadHasMoreBefore = state.hasMoreBefore;
+    friendsState.threadHistoryError = state.error;
+  }
+});
 const threadResync = createDmThreadResyncCoordinator({
   fetchSnapshot: fetchThread,
   isCurrent: (peerId) => friendsState.view === 'dm' && friendsState.selectedFriendId === peerId,
@@ -234,6 +263,7 @@ export function initLobby(
     }
     pendingNotificationEvents = [];
     threadResync.invalidate();
+    dmHistory.close();
     resetNotificationPreferences();
   };
 }
@@ -254,16 +284,37 @@ export function showPeople(): void {
 }
 
 export async function openDm(userId: string): Promise<void> {
+  dmHistory.close();
+  threadResync.invalidate();
   friendsState.mode = 'friends';
   friendsState.selectedFriendId = userId;
   friendsState.view = 'dm';
   friendsState.threadLoading = true;
   friendsState.thread = [];
+  friendsState.threadReadCandidate = null;
+  friendsState.threadHistoryError = '';
   // Locally clear the unread badge; the GET also marks read server-side.
   const friend = findFriend(userId);
-  if (friend) friend.unreadCount = 0;
+  if (friend) {
+    friend.unreadCount = 0;
+    friendsState.threadPeer = friend.user;
+  }
   try {
-    await threadResync.resync(userId);
+    const [historyEnabled, readCursorEnabled] = await Promise.all([
+      getCapabilityFeature('historyCursor'),
+      getCapabilityFeature('readCursor')
+    ]).catch(() => [false, false] as const);
+    if (friendsState.selectedFriendId !== userId) return;
+    friendsState.threadHistoryEnabled = historyEnabled;
+    friendsState.threadReadCursorEnabled = readCursorEnabled;
+    if (historyEnabled) {
+      await dmHistory.open(userId);
+      if (friendsState.selectedFriendId === userId) noteLatestThreadRendered();
+    } else {
+      dmHistory.close();
+      await threadResync.resync(userId);
+      if (friendsState.selectedFriendId === userId) noteLatestThreadRendered();
+    }
   } finally {
     if (friendsState.selectedFriendId === userId) friendsState.threadLoading = false;
   }
@@ -272,7 +323,36 @@ export async function openDm(userId: string): Promise<void> {
 async function resyncOpenThread(options: { force?: boolean } = {}): Promise<void> {
   const peerId = friendsState.selectedFriendId;
   if (friendsState.view !== 'dm' || !peerId) return;
+  if (friendsState.threadHistoryEnabled) {
+    const page = await fetchThreadPage(peerId, { mode: 'latest' });
+    if (friendsState.selectedFriendId !== peerId) return;
+    const firstCreatedAt = page.messages[0]?.createdAt;
+    dmHistory.reconcileLatest(page.messages, (message) => firstCreatedAt == null || message.createdAt >= firstCreatedAt);
+    noteLatestThreadRendered();
+    return;
+  }
   await threadResync.resync(peerId, options);
+  noteLatestThreadRendered();
+}
+
+export function loadOlderThread(scrollElement: HTMLElement | null): Promise<void> {
+  if (!friendsState.threadHistoryEnabled) return Promise.resolve();
+  return dmHistory.loadOlder(scrollElement);
+}
+
+function noteLatestThreadRendered(cursor?: string): void {
+  const candidate = cursor || [...friendsState.thread].reverse().find((message) => message.readCursor)?.readCursor;
+  friendsState.threadReadCandidate = friendsState.threadReadCursorEnabled ? candidate ?? null : '__legacy__';
+  friendsState.threadReadRevision += 1;
+}
+
+async function noteRealtimeThreadRendered(peerId: string, message: DirectMessage): Promise<void> {
+  if (message.readCursor || !friendsState.threadReadCursorEnabled) {
+    noteLatestThreadRendered(message.readCursor);
+    return;
+  }
+  if (friendsState.selectedFriendId !== peerId) return;
+  await resyncOpenThread({ force: true }).catch(() => {});
 }
 
 export function toggleProfile(): void {
@@ -300,11 +380,11 @@ export async function respondRoomInvitation(message: DirectMessage, action: 'acc
 
 // --- DM -----------------------------------------------------------------
 
-export async function sendMessage(text: string): Promise<void> {
+export async function sendMessage(text: string, attachmentIds: string[] = [], replyTo?: { messageId: string }, idempotencyKey?: string): Promise<void> {
   const peerId = friendsState.selectedFriendId;
   const body = text.trim();
-  if (!peerId || !body) return;
-  const message = await sendDirectMessage(peerId, body);
+  if (!peerId || (!body && attachmentIds.length === 0)) return;
+  const message = await sendDirectMessage(peerId, body, attachmentIds, replyTo, idempotencyKey);
   threadResync.recordUpsert(peerId, message);
   appendToThread(message);
   bumpLastMessage(peerId, message);
@@ -317,7 +397,8 @@ export async function deleteMessage(messageId: string): Promise<void> {
   threadResync.recordDelete(peerId, messageId);
   // Remove locally; realtime delete will also arrive for other tabs. Refresh the
   // summary so last-message ordering and unread badges reflect soft-deletes.
-  friendsState.thread = friendsState.thread.filter((m) => m.id !== messageId);
+  if (friendsState.threadHistoryEnabled) dmHistory.remove(messageId);
+  else friendsState.thread = friendsState.thread.filter((m) => m.id !== messageId);
   await refreshFriends().catch(() => {});
 }
 
@@ -331,8 +412,11 @@ export async function editMessage(messageId: string, text: string): Promise<void
 }
 
 function appendToThread(message: DirectMessage): void {
-  if (friendsState.thread.some((existing) => existing.id === message.id)) return;
-  friendsState.thread = [...friendsState.thread, message];
+  if (friendsState.threadHistoryEnabled) dmHistory.upsert(message);
+  else {
+    if (friendsState.thread.some((existing) => existing.id === message.id)) return;
+    friendsState.thread = [...friendsState.thread, message];
+  }
 }
 
 function bumpLastMessage(peerId: string, message: DirectMessage): void {
@@ -347,9 +431,12 @@ function bumpLastMessage(peerId: string, message: DirectMessage): void {
 }
 
 function applyEditedMessage(message: DirectMessage): void {
-  friendsState.thread = friendsState.thread.map((existing) =>
-    existing.id === message.id ? message : existing
-  );
+  if (friendsState.threadHistoryEnabled) dmHistory.upsert(message);
+  else {
+    friendsState.thread = friendsState.thread.map((existing) =>
+      existing.id === message.id ? message : existing
+    );
+  }
   const peerId = message.senderId === selfId ? message.recipientId : message.senderId;
   const friend = findFriend(peerId);
   if (friend?.lastMessage?.id === message.id) {
@@ -534,8 +621,10 @@ function handleRealtimeEvent(event: RealtimeEvent): void {
       const isOpenThread = friendsState.view === 'dm' && friendsState.selectedFriendId === peerId;
       if (isOpenThread) {
         appendToThread(message);
-        // We're looking at it: keep it read.
-        if (message.senderId !== selfId) void markThreadRead(peerId).catch(() => {});
+        if (message.senderId !== selfId) {
+          if (friendsState.threadReadCursorEnabled) void noteRealtimeThreadRendered(peerId, message);
+          else void markThreadRead(peerId);
+        }
       } else if (message.senderId !== selfId) {
         // Invites already announced themselves with the ring cue.
         if (!message.invite && areNotificationPreferencesLoadedFor(selfId) && !isPeerNotificationsMuted(peerId)) playDirectMessageCue();
@@ -560,7 +649,8 @@ function handleRealtimeEvent(event: RealtimeEvent): void {
       if (mid) {
         const peerId = event.payload.peerUserId ?? friendsState.selectedFriendId;
         if (peerId) threadResync.recordDelete(peerId, mid);
-        friendsState.thread = friendsState.thread.filter((m) => m.id !== mid);
+        if (friendsState.threadHistoryEnabled) dmHistory.remove(mid);
+        else friendsState.thread = friendsState.thread.filter((m) => m.id !== mid);
         void refreshFriends().catch(() => {});
       }
       break;

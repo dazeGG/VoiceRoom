@@ -5,6 +5,8 @@
   import { deleteRoom, deleteRoomAvatar, updateRoom, uploadRoomAvatar } from '$lib/api/rooms';
   import { Avatar, AvatarCropDialog } from '$lib/shared/ui';
   import { iconSm } from '$lib/shared/ui/icons';
+  import ModerationCenter from './ModerationCenter.svelte';
+  import { getCapabilityFeature } from '$lib/platform/capability-state.svelte';
 
   let { room, onClose, onSaved, onDeleted, onToast }: {
     room: OwnedRoom | null;
@@ -25,6 +27,7 @@
   let pendingAvatar = $state<Blob | null>(null);
   let avatarPreviewUrl = $state('');
   let removeAvatarPending = $state(false);
+  let moderationEnabled = $state(false);
 
   $effect(() => {
     const activeRoom = room;
@@ -38,6 +41,7 @@
       avatarPreviewUrl = '';
       pendingAvatar = null;
       removeAvatarPending = false;
+      if (activeRoom) void getCapabilityFeature('moderationCenter').then((enabled) => { moderationEnabled = enabled; });
     });
   });
 
@@ -150,6 +154,7 @@
           {:else}<button class="dialog-danger-trigger" type="button" onclick={() => (confirmDelete = true)}>Удалить комнату</button>{/if}
         </div>
       </form>
+      {#if moderationEnabled}<div class="room-settings-moderation"><ModerationCenter roomId={room.roomId} /></div>{/if}
     </div>
   </div>
 {/if}
@@ -171,6 +176,7 @@
 <style>
   .room-settings-modal { width: min(560px, calc(100vw - 28px)); }
   .room-settings-content { display: flex; flex-direction: column; gap: 24px; padding: 26px; }
+  .room-settings-moderation { padding: 0 26px 26px; }
   .room-profile-head { display: flex; align-items: center; gap: 16px; }
   .room-name-field { display: grid; flex: 1; gap: 7px; }
 

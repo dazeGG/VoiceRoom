@@ -48,7 +48,9 @@ function createRoomRealtimeRuntime(deps) {
     tokensMatch,
     sessionAvatarColorKey,
     queueRoomOccupancyTransition = async (roomId) => getRoomStore().markRoomActive(roomId),
-    findRoomBan = async () => null
+    findRoomBan = async () => null,
+    credentialBoundary = null,
+    removeLiveKitParticipant = async () => {}
   } = deps;
 
   const recipientCache = new Map();
@@ -561,7 +563,13 @@ function createRoomRealtimeRuntime(deps) {
     if (!payload?.roomId || !payload.peerId) return;
     const room = presenceRooms.get(payload.roomId);
     const peer = room?.peers?.get(payload.peerId);
-    if (peer && typeof getRoomStore().revokeLiveKitGatePeer === 'function') {
+    if (peer && credentialBoundary?.revokePeer) {
+      await credentialBoundary.revokePeer({
+        roomId: payload.roomId,
+        accountUserId: peer.accountUserId || null,
+        guestPrincipalId: peer.gateGuestPrincipalId || ''
+      });
+    } else if (peer && typeof getRoomStore().revokeLiveKitGatePeer === 'function') {
       await getRoomStore().revokeLiveKitGatePeer({
         roomId: payload.roomId,
         peerId: payload.peerId,
@@ -583,6 +591,34 @@ function createRoomRealtimeRuntime(deps) {
       if (!connection.previewRoomIds.has(payload.roomId)) wsRegistry.unregisterConnectionForRoom(connection, payload.roomId);
     }
     scheduleSummaryBroadcast(payload.roomId);
+  }
+
+  async function disconnectAccountFromRoom({ roomId, userId, reason = 'left-room' } = {}) {
+    if (!roomId || !userId || !credentialBoundary?.resolvePrincipal || !credentialBoundary?.revokePrincipal) {
+      return { ok: false, code: 'credential_boundary_unavailable', disconnected: 0 };
+    }
+    const principal = credentialBoundary.resolvePrincipal({ roomId, accountUserId: userId });
+    if (!principal) return { ok: false, code: 'principal_unavailable', disconnected: 0 };
+    const revoked = await credentialBoundary.revokePrincipal({ roomId, principal });
+    if (revoked?.status !== 'revoked') return { ok: false, code: revoked?.status || 'revoke_failed', disconnected: 0 };
+
+    const room = presenceRooms.get(roomId);
+    const peers = [...(room?.peers?.values?.() || [])].filter((peer) => peer.accountUserId === userId);
+    for (const peer of peers) {
+      const event = { type: 'room.left', roomId, peerId: peer.id, reason };
+      peer.transport?.send?.(event);
+      wsRegistry.sendToUser(userId, buildServerEnvelope('room.left', { roomId, peerId: peer.id, reason }));
+      for (const connection of wsRegistry.connections?.values?.() || []) {
+        if (connection.activeVoice?.roomId !== roomId || connection.activeVoice?.peerId !== peer.id) continue;
+        connection.activeVoice = null;
+        connection.previewRoomIds.delete(roomId);
+        wsRegistry.unregisterConnectionForRoom(connection, roomId);
+      }
+      closePeer(roomId, peer.id, peer.transport?.id, reason);
+      await removeLiveKitParticipant(roomId, peer.id);
+    }
+    scheduleSummaryBroadcast(roomId);
+    return { ok: true, disconnected: peers.length };
   }
 
   async function updatePeerState(connection, payload) {
@@ -672,6 +708,7 @@ function createRoomRealtimeRuntime(deps) {
     broadcastRoomDetail,
     buildRoomSnapshot,
     cleanupConnection,
+    disconnectAccountFromRoom,
     flushSummary,
     invalidateRecipientCache,
     joinVoiceRoom,

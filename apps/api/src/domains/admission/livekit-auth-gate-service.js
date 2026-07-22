@@ -5,6 +5,7 @@ const net = require('node:net');
 const { URL } = require('node:url');
 const { createDbPool } = require('../../lib/db');
 const { createGateCredentialSigner } = require('./gate-credential-signer');
+const { createCredentialBoundaryService } = require('./credential-boundary-service');
 const { createRoomStore } = require('../../lib/room-store');
 
 const DEFAULT_GATE_PATH = '/rtc';
@@ -50,6 +51,7 @@ function buildUpstreamUpgradeRequest({ request, strippedPath, upstream }) {
 }
 
 function createLiveKitAuthGateService({
+  boundary,
   databaseUrl,
   gatePath = DEFAULT_GATE_PATH,
   logger = console,
@@ -60,31 +62,25 @@ function createLiveKitAuthGateService({
 } = {}) {
   const path = normalizeGatePath(gatePath);
   const upstream = cleanUpstreamUrl(upstreamUrl);
-  const signer = createGateCredentialSigner({ secret });
   const activePool = roomStore ? null : (pool || createDbPool({ databaseUrl, logger }));
   const store = roomStore || createRoomStore({ pool: activePool, logger });
+  const credentialBoundary = boundary || createCredentialBoundaryService({
+    roomStore: store,
+    signer: createGateCredentialSigner({ secret })
+  });
 
   async function authorize(requestUrl) {
     const { credential, strippedPath } = extractCredential(requestUrl);
-    const verified = signer.verify(credential);
-    if (!verified.ok) return { ok: false, code: verified.code, strippedPath };
-    const result = await store.verifyLiveKitGateCredential({
-      credentialHash: signer.hash(credential),
-      peerId: verified.claims.peer,
-      principalEpoch: verified.claims.pEpoch,
-      principalId: verified.claims.pId,
-      principalType: verified.claims.pType,
-      roomId: verified.claims.room
-    });
-    return result.status === 'allowed'
-      ? { ok: true, claims: verified.claims, strippedPath }
-      : { ok: false, code: result.status, strippedPath };
+    const result = await credentialBoundary.authorizeCredential(credential);
+    return result.ok
+      ? { ok: true, claims: result.claims, strippedPath }
+      : { ok: false, code: result.code, strippedPath };
   }
 
   function createServer() {
     const server = http.createServer((req, res) => {
       if (req.url === '/readyz') {
-        store.assertLiveKitGateReady()
+        credentialBoundary.assertReady()
           .then(() => {
             res.writeHead(200, { 'content-type': 'application/json' });
             res.end(JSON.stringify({ ok: true }));

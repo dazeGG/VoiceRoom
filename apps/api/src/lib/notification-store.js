@@ -16,13 +16,15 @@ function mapPreferences({
   presenceStatusAutomatic = false,
   privateNotifications = false,
   mutedPeerIds = [],
-  mutedRoomIds = []
+  mutedRoomIds = [],
+  roomLevels = {}
 } = {}) {
   const normalizedPresenceStatus = cleanPresenceStatus(presenceStatus) || (doNotDisturb ? 'dnd' : 'online');
   return {
     doNotDisturb: normalizedPresenceStatus === 'dnd',
     mutedPeerIds: [...new Set(mutedPeerIds)].sort(),
     mutedRoomIds: [...new Set(mutedRoomIds)].sort(),
+    roomLevels: { ...roomLevels },
     presenceStatus: normalizedPresenceStatus,
     presenceStatusAutomatic: normalizedPresenceStatus === 'away' && Boolean(presenceStatusAutomatic),
     privateNotifications: Boolean(privateNotifications)
@@ -63,7 +65,7 @@ function createNotificationStore({
       [userId]
     );
     const roomMutes = await client.query(
-      `SELECT room_id
+      `SELECT room_id, level
        FROM notification_room_mutes
        WHERE user_id = $1
        ORDER BY room_id`,
@@ -76,6 +78,8 @@ function createNotificationStore({
       privateNotifications: preferences.rows[0]?.private_notifications || false,
       mutedPeerIds: dmMutes.rows.map((row) => row.peer_user_id),
       mutedRoomIds: roomMutes.rows.map((row) => row.room_id)
+        .filter((roomId) => roomMutes.rows.find((row) => row.room_id === roomId)?.level === 'none'),
+      roomLevels: Object.fromEntries(roomMutes.rows.map((row) => [row.room_id, row.level || 'none']))
     });
   }
 
@@ -298,6 +302,28 @@ function createNotificationStore({
     });
   }
 
+  async function setRoomLevel({ userId, roomId, level }) {
+    if (!userId || !roomId || !['all', 'mentions', 'none'].includes(level)) {
+      return { ok: false, code: 'invalid_level' };
+    }
+    return transaction(getPool(), async (client) => {
+      if (!(await userExists(userId, client))) return { ok: false, code: 'not_found' };
+      const room = await client.query(
+        'SELECT 1 FROM rooms WHERE id = $1 AND deleted_at IS NULL LIMIT 1',
+        [roomId]
+      );
+      if (room.rowCount === 0) return { ok: false, code: 'not_found' };
+      await client.query(
+        `INSERT INTO notification_room_mutes (id, user_id, room_id, level, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, current_timestamp, current_timestamp)
+         ON CONFLICT (user_id, room_id) DO UPDATE
+         SET level = EXCLUDED.level, updated_at = current_timestamp`,
+        [createRowId(), userId, roomId, level]
+      );
+      return { ok: true, level };
+    });
+  }
+
   async function isRoomMuted({ userId, roomId }) {
     if (!userId || !roomId) return false;
     const result = await getPool().query(
@@ -322,6 +348,7 @@ function createNotificationStore({
     isRoomMuted,
     setDmMute,
     setRoomMute,
+    setRoomLevel,
     setDoNotDisturb,
     setPresenceStatus,
     setPrivateNotifications

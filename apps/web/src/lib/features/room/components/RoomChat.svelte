@@ -2,7 +2,7 @@
   import { ChevronRight, Copy, MessageSquare, Pencil, Trash2 } from '@lucide/svelte';
   import { iconSm } from '$lib/shared/ui/icons';
   import { onMount, tick } from 'svelte';
-  import { deleteRoomChatMessage, editRoomChatMessage, fetchRoomChat, markRoomChatRead, postRoomChat, type ChatMessage } from '$lib/api/rooms';
+  import { deleteRoomChatMessage, editRoomChatMessage, fetchRoomChat, fetchRoomChatPage, markRoomChatRead, postRoomChat, type ChatMessage } from '$lib/api/rooms';
   import { beginRoomChatReadSession, setRoomUnreadCount } from '$lib/features/home/model/room-presence.svelte';
   import { session } from '$lib/features/auth/session.svelte';
   import { subscribeRoomPreview } from '$lib/features/home/model/room-realtime';
@@ -19,6 +19,22 @@
   import { openParticipantContextMenu } from '../participant-context-ui.svelte';
   import { roomUi, closeChat, incrementUnreadChat, markChatRead } from '../room-ui.svelte';
   import { isRoomNotificationsMuted } from '$lib/shared/notifications/preferences.svelte';
+  import { getCapabilityFeature } from '$lib/platform/capability-state.svelte';
+  import { createAnchoredHistory } from '../room-history.svelte';
+  import { createReadReconciliation } from '$lib/shared/chat/read-reconciliation.svelte';
+  import { createReactionStore } from '$lib/shared/chat/reaction-store.svelte';
+  import ReactionPicker from '$lib/shared/chat/ReactionPicker.svelte';
+  import ReactionSummary from '$lib/shared/chat/ReactionSummary.svelte';
+  import { getAttachmentComposeStore, type AttachmentComposeStore } from '$lib/shared/chat/attachment-compose.svelte';
+  import AttachmentComposer from '$lib/shared/chat/AttachmentComposer.svelte';
+  import AttachmentMosaic from '$lib/shared/chat/AttachmentMosaic.svelte';
+  import ReplyPreview from '$lib/shared/chat/ReplyPreview.svelte';
+  import StructuredMessageContent from '$lib/shared/chat/StructuredMessageContent.svelte';
+  import { contentFromLegacyText } from '@voice-room/shared/room-message-content';
+  import { createMentionComposer } from '$lib/shared/chat/mention-composer.svelte';
+  import MentionAutocomplete from '$lib/shared/chat/MentionAutocomplete.svelte';
+  import { getRoomMembership, loadRoomMembership } from '$lib/features/home/model/room-membership.svelte';
+  import type { MembershipMember } from '@voice-room/shared/membership';
 
   let roomId = $state('');
   let peerId = $state('');
@@ -35,6 +51,33 @@
   let chatBody: HTMLDivElement | null = null;
   let composeEl: HTMLTextAreaElement | null = null;
   let editEl = $state<HTMLTextAreaElement | null>(null);
+  let historyEnabled = $state(false);
+  let hasMoreBefore = $state(false);
+  let loadingOlder = $state(false);
+  let readCursorEnabled = $state(false);
+  let readReconciliation: ReturnType<typeof createReadReconciliation> | null = null;
+  let reactionsEnabled = $state(false);
+  const reactions = createReactionStore();
+  let media = $state<AttachmentComposeStore | null>(null);
+  let repliesEnabled = $state(false);
+  let engagementEnabled = $state(false);
+  let replyTarget = $state<ChatMessage | null>(null);
+  let sendAttemptKey = '';
+  let sendAttemptFingerprint = '';
+  const mentionComposer = createMentionComposer();
+  const history = createAnchoredHistory<ChatMessage>({
+    loadPage: fetchRoomChatPage,
+    compare: (left, right) => left.createdAt - right.createdAt || left.id.localeCompare(right.id),
+    onChange: (state) => {
+      messages = state.messages;
+      loading = state.loading;
+      loadingOlder = state.loadingOlder;
+      hasMoreBefore = state.hasMoreBefore;
+      error = state.error;
+      messageIds.clear();
+      for (const message of state.messages) messageIds.add(message.id);
+    }
+  });
 
   function autoResize() {
     if (!composeEl) return;
@@ -43,8 +86,34 @@
     composeEl.style.height = `${next}px`;
   }
 
+  function idempotencyKeyFor(value: unknown): string {
+    const fingerprint = JSON.stringify(value);
+    if (!sendAttemptKey || sendAttemptFingerprint !== fingerprint) {
+      sendAttemptKey = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      sendAttemptFingerprint = fingerprint;
+    }
+    return sendAttemptKey;
+  }
+
   function onComposeKeydown(e: KeyboardEvent) {
     if (e.isComposing) return;
+    if (mentionComposer.isOpen) {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        mentionComposer.move(e.key === 'ArrowDown' ? 1 : -1);
+        return;
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault();
+        chooseMention(mentionComposer.candidates[mentionComposer.activeIndex]);
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        mentionComposer.close();
+        return;
+      }
+    }
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       void sendMessage();
@@ -60,6 +129,29 @@
       return;
     }
     queueMicrotask(autoResize);
+  }
+
+  async function updateMentionCandidates(): Promise<void> {
+    if (!engagementEnabled || !session.user?.id || !composeEl) {
+      mentionComposer.close();
+      return;
+    }
+    const query = mentionComposer.update(draft, composeEl.selectionStart ?? draft.length);
+    if (!query && !draft.slice(0, composeEl.selectionStart ?? draft.length).endsWith('@')) return;
+    await loadRoomMembership(roomId, { query });
+    mentionComposer.setCandidates(getRoomMembership(roomId).members.filter((member) => member.userId !== session.user?.id));
+  }
+
+  function chooseMention(member: MembershipMember): void {
+    if (!composeEl) return;
+    const selected = mentionComposer.choose(draft, composeEl.selectionStart ?? draft.length, member);
+    if (!selected) return;
+    draft = selected.text;
+    void tick().then(() => {
+      composeEl?.focus();
+      composeEl?.setSelectionRange(selected.caret, selected.caret);
+      autoResize();
+    });
   }
 
   function findLastOwnMessage(): ChatMessage | null {
@@ -94,6 +186,11 @@
   const days = $derived(buildDays(messages));
   const messageIds = new Set<string>();
 
+  $effect(() => {
+    if (!reactionsEnabled) return;
+    for (const message of messages) void reactions.load(message.id);
+  });
+
   function isOwnMessage(message: ChatMessage): boolean {
     const accountUserId = session.user?.id;
     return Boolean(
@@ -109,8 +206,10 @@
     if (roomUi.chatOpen) {
       markChatRead();
       endReadSession = beginRoomChatReadSession(roomId);
-      if (session.user?.id && roomId) void markRoomChatRead(roomId).catch(() => {});
-      queueMicrotask(scrollToBottom);
+      void tick().then(() => {
+        scrollToBottom();
+        void markLatestRenderedRead();
+      });
     }
     return () => {
       endReadSession();
@@ -174,9 +273,14 @@
     peerId = peerSession.peerId;
     sessionToken = peerSession.sessionToken;
     displayName = cleanDisplayName(localStorage.getItem('voice-room:name')) || 'Гость';
+    reactions.setConversation({ type: 'room', id: roomId });
+    media = getAttachmentComposeStore('room', roomId);
+    void getCapabilityFeature('reactions').then((enabled) => { reactionsEnabled = enabled; });
+    void getCapabilityFeature('replies').then((enabled) => { repliesEnabled = enabled; });
+    void getCapabilityFeature('engagement').then((enabled) => { engagementEnabled = enabled; });
 
     const controller = new AbortController();
-    void refreshMessages(controller.signal);
+    void initializeHistory(controller.signal);
     // Server-side preview subscription: without it the API only routes room
     // events (chat included) to active voice peers, so a user who opened the
     // room page but had not joined voice never received realtime messages.
@@ -206,15 +310,22 @@
       if (event.type === 'room.chat.deleted') {
         const mid = event.payload?.messageId;
         if (mid) {
-          messages = messages.filter((m) => m.id !== mid);
+          if (historyEnabled) history.remove(mid);
+          else messages = messages.filter((m) => m.id !== mid);
           messageIds.delete(mid);
+          reactions.markDeleted(mid);
         }
+        return;
+      }
+      if (event.type === 'reaction.updated') {
+        reactions.applyServer(event.payload.messageId, event.payload.summary);
         return;
       }
       if (event.type === 'room.chat.edited') {
         const edited = event.payload.message;
         if (edited?.id) {
-          messages = messages.map((message) => message.id === edited.id ? edited : message);
+          if (historyEnabled) history.upsert(edited);
+          else messages = messages.map((message) => message.id === edited.id ? edited : message);
         }
         return;
       }
@@ -248,13 +359,16 @@
       if (!message?.id || messageIds.has(message.id) || messages.some((item) => item.id === message.id)) return;
       messageIds.add(message.id);
       error = '';
-      messages = [...messages, message];
+      if (historyEnabled) history.upsert(message);
+      else messages = [...messages, message];
       if (message.peerId !== peerId && !isRoomNotificationsMuted(roomId)) playRoomChatMessageCue();
       if (roomUi.chatOpen) {
         markChatRead();
         setRoomUnreadCount(roomId, 0);
-        if (session.user?.id) void markRoomChatRead(roomId).catch(() => {});
-        queueMicrotask(scrollToBottom);
+        void tick().then(() => {
+          scrollToBottom();
+          void markRealtimeRenderedRead(message);
+        });
       } else {
         incrementUnreadChat();
       }
@@ -262,6 +376,8 @@
 
     return () => {
       controller.abort();
+      history.close();
+      readReconciliation?.dispose();
       unsubscribe();
     };
   });
@@ -270,6 +386,12 @@
   // known ids are replaced so edits missed while disconnected still appear,
   // while locally-appended messages outside the window remain intact.
   function mergeMessages(recent: ChatMessage[]): void {
+    if (historyEnabled) {
+      const firstCreatedAt = recent[0]?.createdAt;
+      history.reconcileLatest(recent, (message) => firstCreatedAt == null || message.createdAt >= firstCreatedAt);
+      if (roomUi.chatOpen) void tick().then(() => markLatestRenderedRead());
+      return;
+    }
     const known = new Set(messages.map((item) => item.id));
     const recentById = new Map(recent.map((item) => [item.id, item]));
     const incoming = recent.filter((item) => item?.id && !known.has(item.id));
@@ -283,6 +405,68 @@
       markChatRead();
       queueMicrotask(scrollToBottom);
     }
+  }
+
+  async function initializeHistory(signal: AbortSignal): Promise<void> {
+    const [canPage, canRead] = await Promise.all([
+      getCapabilityFeature('historyCursor'),
+      getCapabilityFeature('readCursor')
+    ]).catch(() => [false, false] as const);
+    if (signal.aborted) return;
+    historyEnabled = canPage;
+    readCursorEnabled = canRead;
+    readReconciliation?.dispose();
+    readReconciliation = session.user?.id
+      ? createReadReconciliation({
+          scope: `room:${roomId}`,
+          legacy: !canRead,
+          commit: (cursor) => markRoomChatRead(roomId, cursor)
+        })
+      : null;
+    const aroundMessageId = new URL(window.location.href).searchParams.get('around') || undefined;
+    if (historyEnabled) await history.open(roomId, aroundMessageId);
+    else await refreshMessages(signal);
+    if (aroundMessageId && !signal.aborted) {
+      await tick();
+      document.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(aroundMessageId)}"]`)?.scrollIntoView({ block: 'center' });
+    }
+    if (!signal.aborted && roomUi.chatOpen) {
+      if (canRead) await tick().then(() => markLatestRenderedRead());
+      else await markRoomChatRead(roomId);
+    }
+  }
+
+  function latestReadCursor(): string | undefined {
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+      if (messages[index].readCursor) return messages[index].readCursor;
+    }
+    return undefined;
+  }
+
+  async function markLatestRenderedRead(cursor = latestReadCursor()): Promise<void> {
+    if (!roomUi.chatOpen || !session.user?.id || !roomId || !readReconciliation) return;
+    await readReconciliation.advanceAfterRender(cursor);
+  }
+
+  async function markRealtimeRenderedRead(message: ChatMessage): Promise<void> {
+    if (message.readCursor || !readCursorEnabled) {
+      await markLatestRenderedRead(message.readCursor);
+      return;
+    }
+    try {
+      const targetRoomId = roomId;
+      const page = await fetchRoomChatPage(targetRoomId, { mode: 'latest' });
+      if (!historyEnabled || roomId !== targetRoomId || !page.messages.some((item) => item.id === message.id)) return;
+      const firstCreatedAt = page.messages[0]?.createdAt;
+      history.reconcileLatest(page.messages, (item) => firstCreatedAt == null || item.createdAt >= firstCreatedAt);
+      await tick();
+      await markLatestRenderedRead();
+    } catch {}
+  }
+
+  function onHistoryScroll(): void {
+    if (!historyEnabled || !chatBody || chatBody.scrollTop > 32) return;
+    void history.loadOlder(chatBody);
   }
 
   async function refreshMessages(signal?: AbortSignal): Promise<void> {
@@ -312,7 +496,8 @@
 
     // Do not collapse whitespace; newlines are intentional (2.4.0).
     const text = draft.trim();
-    if (!text) return;
+    if (!text && !media?.canSend) return;
+    if (media?.drafts.length && !media.canSend) return;
 
     sending = true;
     error = '';
@@ -322,21 +507,36 @@
       // name after this component mounted, so the value captured in onMount may be
       // stale (showing "Гость" even though the user entered a name).
       displayName = cleanDisplayName(localStorage.getItem('voice-room:name')) || 'Гость';
-      const message = await postRoomChat(roomId, {
+      const sendPayload = {
         name: displayName,
         peerId,
         sessionToken,
-        text
+        text,
+        content: engagementEnabled
+          ? (mentionComposer.selected.length ? mentionComposer.toContent(text) : contentFromLegacyText(text) ?? undefined)
+          : undefined,
+        attachmentIds: media?.readyIds ?? [],
+        replyTo: replyTarget ? { messageId: replyTarget.id } : undefined
+      };
+      const message = await postRoomChat(roomId, {
+        ...sendPayload,
+        idempotencyKey: idempotencyKeyFor(sendPayload)
       });
       if (!messageIds.has(message.id) && !messages.some((item) => item.id === message.id)) {
         messageIds.add(message.id);
-        messages = [...messages, message];
+        if (historyEnabled) history.upsert(message);
+        else messages = [...messages, message];
         if (roomUi.chatOpen) {
           markChatRead();
           queueMicrotask(scrollToBottom);
         }
       }
       draft = '';
+      media?.clearBound();
+      replyTarget = null;
+      sendAttemptKey = '';
+      sendAttemptFingerprint = '';
+      mentionComposer.reset();
       sent = true;
     } catch (err) {
       error = err instanceof Error ? err.message : 'Не удалось отправить сообщение';
@@ -358,7 +558,8 @@
     if (!roomId) return;
     try {
       await deleteRoomChatMessage(roomId, messageId, { peerId, sessionToken });
-      messages = messages.filter((m) => m.id !== messageId);
+      if (historyEnabled) history.remove(messageId);
+      else messages = messages.filter((m) => m.id !== messageId);
       messageIds.delete(messageId);
     } catch {
       error = 'Не удалось удалить сообщение';
@@ -403,7 +604,8 @@
     error = '';
     try {
       const edited = await editRoomChatMessage(roomId, messageId, { peerId, sessionToken, text });
-      messages = messages.map((message) => message.id === edited.id ? edited : message);
+      if (historyEnabled) history.upsert(edited);
+      else messages = messages.map((message) => message.id === edited.id ? edited : message);
       cancelEditing();
     } catch (err) {
       error = err instanceof Error ? err.message : 'Не удалось изменить сообщение';
@@ -443,10 +645,15 @@
     </button>
   </header>
 
-  <div class="chat-rail-body" bind:this={chatBody}>
+  <div class="chat-rail-body" bind:this={chatBody} onscroll={onHistoryScroll}>
     {#if loading}
       <p class="chat-rail-note">Загружаем сообщения…</p>
     {:else if days.length}
+      {#if historyEnabled && (loadingOlder || hasMoreBefore)}
+        <button class="chat-rail-note" type="button" disabled={loadingOlder} onclick={() => void history.loadOlder(chatBody)}>
+          {loadingOlder ? 'Загружаем…' : 'Показать предыдущие'}
+        </button>
+      {/if}
       {#each days as day (day.key)}
         <section class="chat-day-section" aria-label={day.label}>
           <div class="chat-day-divider" role="separator" aria-label={day.label}>
@@ -485,7 +692,7 @@
               <time class="chat-msg-time" datetime={new Date(group.messages[0].createdAt).toISOString()}>{group.time}</time>
             </div>
             {#each group.messages as message (message.id)}
-              <div class="chat-msg-text">
+              <div class="chat-msg-text" data-message-id={message.id}>
                 {#if editingMessageId === message.id}
                   <div class="chat-msg-edit">
                     <textarea
@@ -504,14 +711,19 @@
                     </div>
                   </div>
                 {:else}
-                  <span class="chat-msg-content"><ChatText text={message.text} />{#if message.editedAt}<span class="chat-msg-edited">(изменено)</span>{/if}</span>
+                  {#if message.replyPreview}<ReplyPreview preview={message.replyPreview} />{/if}
+                  <span class="chat-msg-content">{#if message.content}<StructuredMessageContent content={message.content} fallback={message.text} />{:else}<ChatText text={message.text} />{/if}{#if message.editedAt}<span class="chat-msg-edited">(изменено)</span>{/if}</span>
+                  {#if message.attachments?.length}<AttachmentMosaic attachments={message.attachments} />{/if}
                   <div class="chat-msg-actions" role="toolbar" aria-label="Действия с сообщением">
+                    {#if repliesEnabled}<button type="button" aria-label="Ответить" title="Ответить" onclick={() => { replyTarget = message; composeEl?.focus(); }}><MessageSquare {...iconSm} /></button>{/if}
+                    {#if reactionsEnabled}<ReactionPicker store={reactions} messageId={message.id} disabled={!session.user?.id} />{/if}
                     <button type="button" aria-label="Копировать текст" title="Копировать текст" onclick={() => void copyMessageText(message)}><Copy {...iconSm} /></button>
                     {#if group.self}
                       <button type="button" aria-label="Редактировать" title="Редактировать" onclick={() => startEditing(message)}><Pencil {...iconSm} /></button>
                       <button class="chat-msg-action-danger" type="button" aria-label="Удалить" title="Удалить" onclick={() => void deleteMessage(message.id)}><Trash2 {...iconSm} /></button>
                     {/if}
                   </div>
+                  {#if reactionsEnabled}<ReactionSummary store={reactions} messageId={message.id} canMutate={Boolean(session.user?.id)} />{/if}
                 {/if}
               </div>
             {/each}
@@ -530,6 +742,10 @@
   {/if}
 
   <form class="chat-rail-compose" onsubmit={sendMessage}>
+    {#if replyTarget}
+      <div class="chat-reply-target"><ReplyPreview preview={{ messageId: replyTarget.id, deleted: false, author: { id: replyTarget.authorUserId || replyTarget.peerId, name: replyTarget.name }, text: replyTarget.text }} /><button type="button" onclick={() => (replyTarget = null)}>Отмена</button></div>
+    {/if}
+    {#if media}<AttachmentComposer store={media} disabled={sending} />{/if}
     <textarea
       class="chat-rail-input chat-rail-textarea"
       bind:this={composeEl}
@@ -538,8 +754,13 @@
       maxlength="500"
       placeholder="Написать в комнату…"
       onkeydown={onComposeKeydown}
-      oninput={autoResize}
+      oninput={() => { autoResize(); void updateMentionCandidates(); }}
+      oncompositionstart={() => mentionComposer.setComposing(true)}
+      oncompositionend={() => { mentionComposer.setComposing(false); void updateMentionCandidates(); }}
       disabled={sending}
     ></textarea>
+    {#if mentionComposer.isOpen}
+      <MentionAutocomplete candidates={mentionComposer.candidates} activeIndex={mentionComposer.activeIndex} onselect={chooseMention} />
+    {/if}
   </form>
 </aside>

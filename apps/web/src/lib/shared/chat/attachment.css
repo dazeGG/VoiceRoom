@@ -1,0 +1,53 @@
+.attachment-composer {
+  border: 1px dashed color-mix(in srgb, currentColor 28%, transparent);
+  border-radius: 12px;
+  padding: 8px;
+}
+
+.attachment-composer.dragging { background: color-mix(in oklch, var(--paper), var(--ink) 8%); }
+.attachment-file-input { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.attachment-add { min-height: 36px; }
+.attachment-error { margin: 6px 0 0; color: var(--coral); }
+.attachment-draft-list { display: grid; gap: 6px; margin: 8px 0 0; padding: 0; list-style: none; }
+.attachment-draft-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; align-items: center; }
+.attachment-draft-list li > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.attachment-actions { display: flex; flex-wrap: wrap; gap: 4px; grid-column: 1 / -1; }
+
+.attachment-mosaic {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: minmax(120px, 220px);
+  gap: 3px;
+  max-width: 560px;
+  overflow: hidden;
+  border-radius: 14px;
+}
+
+.attachment-mosaic.single { grid-template-columns: minmax(0, 1fr); grid-auto-rows: auto; }
+.attachment-mosaic[data-count='3'] .attachment-tile:first-child { grid-row: span 2; }
+.attachment-tile { min-width: 0; padding: 0; border: 0; background: color-mix(in oklch, var(--paper), var(--ink) 10%); overflow: hidden; }
+.attachment-tile img { display: block; width: 100%; height: 100%; min-height: 120px; object-fit: cover; aspect-ratio: var(--attachment-aspect); }
+.attachment-mosaic.single .attachment-tile img { height: auto; max-height: 520px; object-fit: contain; }
+.attachment-unavailable { display: grid; place-items: center; min-height: 120px; padding: 16px; color: color-mix(in srgb, currentColor 70%, transparent); }
+
+.attachment-lightbox-backdrop { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 20px; background: color-mix(in oklch, var(--paper-deep), transparent 6%); }
+.attachment-lightbox { position: relative; display: grid; width: min(96vw, 1200px); height: min(92vh, 900px); color: white; }
+.attachment-lightbox header { z-index: 2; display: flex; align-items: center; justify-content: flex-end; gap: 16px; padding: 8px; }
+.attachment-lightbox header span { margin-right: auto; }
+.attachment-lightbox a { color: inherit; }
+.attachment-lightbox-image { display: grid; place-items: center; min-height: 0; border: 0; background: transparent; cursor: zoom-in; overflow: auto; }
+.attachment-lightbox-image.zoomed { cursor: zoom-out; place-items: start center; }
+.attachment-lightbox-image img { display: block; max-width: 100%; max-height: 100%; object-fit: contain; }
+.attachment-lightbox-image.zoomed img { max-width: none; max-height: none; }
+.attachment-previous, .attachment-next { position: absolute; top: 50%; width: 48px; height: 64px; border: 0; border-radius: 10px; font-size: 38px; color: var(--ink); background: color-mix(in oklch, var(--paper-deep), transparent 45%); }
+.attachment-previous { left: 8px; }
+.attachment-next { right: 8px; }
+
+@media (max-width: 520px) {
+  .attachment-lightbox-backdrop { padding: 8px; }
+  .attachment-mosaic { grid-auto-rows: minmax(96px, 160px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .attachment-lightbox *, .attachment-mosaic * { scroll-behavior: auto !important; }
+}

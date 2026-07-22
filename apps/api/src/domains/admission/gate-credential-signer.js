@@ -28,7 +28,7 @@ function normalizeGateSecret(secret) {
   return value;
 }
 
-function createGateCredentialSigner({ secret, now = Date.now } = {}) {
+function createGateCredentialSigner({ secret, now = Date.now, maxFutureSkewMs = 30_000 } = {}) {
   const signingSecret = normalizeGateSecret(secret);
   const nowMs = typeof now === 'function' ? now : () => Date.now();
 
@@ -87,6 +87,16 @@ function createGateCredentialSigner({ secret, now = Date.now } = {}) {
       return { ok: false, code: 'malformed_payload' };
     }
     if (
+      typeof claims.cid !== 'string'
+      || !claims.cid
+      || typeof claims.room !== 'string'
+      || !claims.room
+      || typeof claims.peer !== 'string'
+      || !claims.peer
+      || typeof claims.pId !== 'string'
+      || !claims.pId
+      || !['account', 'guest'].includes(claims.pType)
+      ||
       !Number.isFinite(claims.iat)
       || !Number.isFinite(claims.exp)
       || !Number.isSafeInteger(Number(claims.pEpoch))
@@ -94,6 +104,9 @@ function createGateCredentialSigner({ secret, now = Date.now } = {}) {
       || claims.exp <= claims.iat
     ) {
       return { ok: false, code: 'invalid_claims', claims };
+    }
+    if (claims.iat > nowMs() + Math.max(0, Number(maxFutureSkewMs) || 0)) {
+      return { ok: false, code: 'issued_in_future', claims };
     }
     if (claims.exp <= nowMs()) return { ok: false, code: 'expired', claims };
     return { ok: true, claims };

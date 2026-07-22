@@ -118,6 +118,8 @@ function mapMessage(row) {
     peerId: row.peer_id || '',
     roomId: row.room_id,
     text: row.text || '',
+    content: row.content || undefined,
+    replyTo: row.reply_to_message_id ? { messageId: row.reply_to_message_id } : undefined,
     // 2.4.0: author for ownership (nullable for guests/legacy)
     authorUserId: row.author_user_id || null
   };
@@ -853,9 +855,14 @@ function createRoomStore({
       );
       if (room.rowCount === 0) return null;
 
+      if (typeof message?.beforeUnitOfWork === 'function') {
+        const prepared = await message.beforeUnitOfWork(client);
+        if (prepared?.replay) return { ...prepared.message, idempotencyReplay: true };
+      }
+
       const inserted = await client.query(
-        `INSERT INTO room_messages (id, room_id, peer_id, name, text, created_at, expires_at, author_user_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        `INSERT INTO room_messages (id, room_id, peer_id, name, text, created_at, expires_at, author_user_id, reply_to_message_id, content)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb)
          RETURNING *`,
         [
           id,
@@ -867,9 +874,15 @@ function createRoomStore({
           typeof message?.text === 'string' ? message.text : '',
           toDate(createdAt),
           toDate(expiresAt),
-          typeof message?.authorUserId === 'string' ? message.authorUserId : null
+          typeof message?.authorUserId === 'string' ? message.authorUserId : null,
+          typeof message?.replyToMessageId === 'string' ? message.replyToMessageId : null,
+          message?.content ? JSON.stringify(message.content) : null
         ]
       );
+
+      if (typeof message?.unitOfWork === 'function') {
+        await message.unitOfWork(client, mapMessage(inserted.rows[0]));
+      }
 
       await client.query(`UPDATE rooms SET updated_at = $2 WHERE id = $1`, [roomId, toDate(now)]);
 

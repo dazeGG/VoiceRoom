@@ -1,5 +1,9 @@
 import { del, fetchJson, patchJson, postJson, postJsonAuth, putJson } from './http';
 import { createRoomProof } from './pow';
+import type { MessageAttachment } from '@voice-room/shared/attachments';
+import type { ReplyTarget } from '$lib/shared/chat/reply-store.svelte';
+import type { RoomMessageContentV1 } from '@voice-room/shared/room-message-content';
+import { projectRoomMessageContent } from '@voice-room/shared/room-message-content';
 
 export interface CreateRoomOptions {
   isStatic?: boolean;
@@ -60,6 +64,47 @@ export interface ChatMessage {
   peerId: string;
   roomId: string;
   text: string;
+  content?: RoomMessageContentV1;
+  cursor?: string;
+  readCursor?: string;
+  attachments?: MessageAttachment[];
+  replyTo?: { messageId: string };
+  replyPreview?: ReplyTarget;
+}
+
+export interface RoomChatHistoryPage {
+  contractVersion: 1;
+  mode: 'latest' | 'before' | 'after' | 'around';
+  messages: ChatMessage[];
+  pageInfo: {
+    before?: string;
+    after?: string;
+    around?: string;
+    hasMoreBefore: boolean;
+    hasMoreAfter: boolean;
+  };
+}
+
+interface HistoryMessageDto {
+  id: string;
+  createdAt: unknown;
+  author?: Record<string, unknown>;
+  content?: unknown;
+  cursor?: string;
+  readCursor?: string;
+  attachments?: MessageAttachment[];
+  replyTo?: { messageId: string };
+  replyPreview?: ReplyTarget;
+  editedAt?: unknown;
+  expiresAt?: unknown;
+}
+
+export interface HistoryPageRequest {
+  mode?: 'latest' | 'before' | 'after' | 'around';
+  cursor?: string;
+  limit?: number;
+  signal?: AbortSignal;
+  messageId?: string;
 }
 
 interface CreateRoomResponse {
@@ -155,13 +200,64 @@ export async function fetchRoomChat(roomId: string): Promise<ChatMessage[]> {
   return Array.isArray(payload?.messages) ? (payload.messages as ChatMessage[]) : [];
 }
 
-export async function markRoomChatRead(roomId: string): Promise<void> {
-  await postJsonAuth(`/api/rooms/${encodeURIComponent(roomId)}/read`, {});
+export async function fetchRoomChatPage(roomId: string, request: HistoryPageRequest = {}): Promise<RoomChatHistoryPage> {
+  const params = new URLSearchParams({
+    mode: request.mode ?? 'latest',
+    limit: String(request.limit ?? 50)
+  });
+  if (request.cursor) params.set('cursor', request.cursor);
+  if (request.messageId) params.set('messageId', request.messageId);
+  const response = await fetch(`/api/rooms/${encodeURIComponent(roomId)}/chat/history?${params}`, {
+    headers: { Accept: 'application/json' },
+    signal: request.signal
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload.error || 'Не удалось загрузить историю комнаты');
+  const page = payload as Omit<RoomChatHistoryPage, 'messages'> & { messages?: HistoryMessageDto[] };
+  return {
+    ...page,
+    messages: Array.isArray(page.messages) ? page.messages.map((message) => roomMessageFromHistory(roomId, message)) : []
+  };
+}
+
+function roomMessageFromHistory(roomId: string, message: HistoryMessageDto): ChatMessage {
+  const author = message.author ?? {};
+  const content = typeof message.content === 'object' && message.content !== null
+    ? message.content as Record<string, unknown>
+    : {};
+  const createdAt = typeof message.createdAt === 'number'
+    ? message.createdAt
+    : Date.parse(String(message.createdAt ?? ''));
+  return {
+    id: message.id,
+    roomId,
+    authorUserId: typeof author.userId === 'string' ? author.userId : null,
+    peerId: typeof author.peerId === 'string' ? author.peerId : '',
+    name: typeof author.name === 'string' ? author.name : 'Гость',
+    avatarColorKey: typeof author.avatarColorKey === 'string' ? author.avatarColorKey : '',
+    avatarUrl: typeof author.avatarUrl === 'string' ? author.avatarUrl : null,
+    avatarAccent: typeof author.avatarAccent === 'string' ? author.avatarAccent : null,
+    text: projectRoomMessageContent(content, typeof content.text === 'string' ? content.text : ''),
+    content: content.version === 1 ? content as unknown as RoomMessageContentV1 : undefined,
+    createdAt: Number.isFinite(createdAt) ? createdAt : Date.now(),
+    editedAt: message.editedAt == null ? null : Number(message.editedAt),
+    expiresAt: message.expiresAt == null ? Number.MAX_SAFE_INTEGER : Number(message.expiresAt),
+    cursor: message.cursor,
+    readCursor: message.readCursor,
+    attachments: message.attachments,
+    replyTo: message.replyTo,
+    replyPreview: message.replyPreview
+  };
+}
+
+export async function markRoomChatRead(roomId: string, cursor?: string): Promise<string | undefined> {
+  const payload = await postJsonAuth<{ cursor?: string; readCursor?: string }>(`/api/rooms/${encodeURIComponent(roomId)}/read`, cursor ? { cursor } : {});
+  return payload?.readCursor ?? payload?.cursor;
 }
 
 export async function postRoomChat(
   roomId: string,
-  body: { name: string; peerId?: string; sessionToken?: string; text: string }
+  body: { name: string; peerId?: string; sessionToken?: string; text: string; content?: RoomMessageContentV1; attachmentIds?: string[]; replyTo?: { messageId: string }; idempotencyKey?: string }
 ): Promise<ChatMessage> {
   const payload = await postJson<{ message: ChatMessage }>(`/api/rooms/${encodeURIComponent(roomId)}/chat`, body);
   return payload.message;

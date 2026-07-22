@@ -5,15 +5,23 @@
   import { signOut } from '$lib/features/home/model/sign-out';
   import LobbyPage from '$lib/features/home/LobbyPage.svelte';
   import { dismissToast, pushToast, toastState, type ToastOptions } from '$lib/features/home/model/toasts.svelte';
+  import { applyDesktopBoundaryToDocument } from '$lib/platform/desktop-boundary';
   import '$lib/features/home/styles/home.css';
   import RoomPage from '$lib/features/room/RoomPage.svelte';
   import { MascotIcon, ToastStack } from '$lib/shared/ui';
 
+  let boundaryReady = $state(false);
+  let desktopAllowed = $state(false);
   let loggingOut = $state(false);
   let authLoadError = $state(false);
   const routeRoomId = $derived(page.params.roomId || '');
 
   onMount(() => {
+    const policy = applyDesktopBoundaryToDocument();
+    desktopAllowed = policy.desktopAllowed;
+    boundaryReady = true;
+    if (!policy.desktopAllowed) return;
+
     void loadSession().catch(() => {
       authLoadError = true;
     });
@@ -51,7 +59,27 @@
   <meta name="theme-color" content="#10110f">
 </svelte:head>
 
-{#if !session.loaded}
+{#if !boundaryReady}
+  <div class="app-shell">
+    <main class="auth-loader" aria-label="Проверка устройства" aria-busy="true">
+      <div class="auth-loader-card">
+        <span class="auth-loader-orb"><MascotIcon variant="look" size={52} /></span>
+        <p class="auth-loader-kicker">Проверяем устройство</p>
+        <h1>Voice Room запускается</h1>
+      </div>
+    </main>
+  </div>
+{:else if !desktopAllowed}
+  <div class="app-shell">
+    <main class="auth-session-error" aria-label="Неподдерживаемое устройство" aria-live="polite">
+      <div class="auth-session-error-card">
+        <p class="auth-loader-kicker">Desktop only</p>
+        <h1>Откройте комнату на компьютере</h1>
+        <p>Мобильные браузеры не подключаются к realtime, LiveKit, медиа и push-инфраструктуре Voice Room.</p>
+      </div>
+    </main>
+  </div>
+{:else if !session.loaded}
   <div class="app-shell">
     <main class="auth-loader" aria-label="Загрузка аккаунта" aria-busy="true">
       <div class="auth-loader-card">

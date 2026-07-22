@@ -12,6 +12,7 @@
   import RoomStage from './components/RoomStage.svelte';
   import RoomTopbar from './components/RoomTopbar.svelte';
   import StartRoomScreen from './components/StartRoomScreen.svelte';
+  import { applyDesktopBoundaryToDocument } from '$lib/platform/desktop-boundary';
   import { setRoomEmbedded } from './client/core/embed';
 
   let { embeddedRoomId = '', roomId = '', autoJoin = false } = $props<{
@@ -25,6 +26,9 @@
 
   onMount(() => {
     let cleanup: (() => void) | undefined;
+    const policy = applyDesktopBoundaryToDocument();
+    if (!policy.desktopAllowed) return;
+
     setRoomEmbedded(Boolean(embeddedRoomId));
 
     void import('./client/main').then(({ mountRoomClient }) => {

@@ -10,6 +10,10 @@ declare global {
     voiceRoomDesktopIdle?: {
       getSystemIdleTime: () => Promise<number>;
     };
+    voiceRoomRuntime?: {
+      isDesktop?: boolean;
+      platform?: string;
+    };
   }
 }
 

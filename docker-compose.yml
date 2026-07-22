@@ -15,12 +15,25 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
+  migrate:
+    image: ${VOICEROOM_API_IMAGE:?set immutable VOICEROOM_API_IMAGE digest}
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["node", "apps/api/src/scripts/migrate.js", "up"]
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL:-postgres://${POSTGRES_USER:-voice_room}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-voice_room}}
+
   api:
     image: ${VOICEROOM_API_IMAGE:?set immutable VOICEROOM_API_IMAGE digest}
     restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     environment:
       NODE_ENV: production
       HOST: 0.0.0.0
@@ -31,6 +44,7 @@ services:
       LIVEKIT_URL: ${LIVEKIT_URL:-ws://livekit:7880}
       LIVEKIT_GATE_PUBLIC_URL: ${LIVEKIT_GATE_PUBLIC_URL:-wss://${LIVEKIT_DOMAIN:-livekit.${DOMAIN}}/rtc}
       LIVEKIT_GATE_SECRET: ${LIVEKIT_GATE_SECRET:?set LIVEKIT_GATE_SECRET in .env}
+      VOICE_ROOM_CURSOR_HMAC_KEYS: ${VOICE_ROOM_CURSOR_HMAC_KEYS:?set VOICE_ROOM_CURSOR_HMAC_KEYS in .env}
       LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:?set LIVEKIT_API_KEY in .env}
       LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:?set LIVEKIT_API_SECRET in .env}
       LIVEKIT_TOKEN_TTL_SECONDS: ${LIVEKIT_TOKEN_TTL_SECONDS:-21600}
@@ -69,16 +83,107 @@ services:
       MAX_ROOM_BANS: ${MAX_ROOM_BANS:-100}
       POW_SECRET: ${POW_SECRET:-}
       UPLOADS_DIR: /data/uploads
+      MEDIA_STORAGE_DIR: /data/media
+      MEDIA_MIN_FREE_BYTES: ${MEDIA_MIN_FREE_BYTES:-2147483648}
+      MESSAGE_DELIVERY_LISTEN_ENABLED: ${MESSAGE_DELIVERY_LISTEN_ENABLED:-true}
+      MESSAGE_DIRECT_EMIT_ENABLED: ${MESSAGE_DIRECT_EMIT_ENABLED:-true}
     expose:
       - "3000"
     volumes:
       - uploads:/data/uploads
+      - media:/data/media
     healthcheck:
       test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000/api/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 15s
+
+  message-delivery:
+    image: ${VOICEROOM_API_IMAGE:?set immutable VOICEROOM_API_IMAGE digest}
+    restart: on-failure
+    command: ["node", "apps/api/src/workers/message-delivery.js"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL:-postgres://${POSTGRES_USER:-voice_room}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-voice_room}}
+      MESSAGE_DELIVERY_CLAIM_ENABLED: ${MESSAGE_DELIVERY_CLAIM_ENABLED:-false}
+      MESSAGE_DELIVERY_BATCH_SIZE: ${MESSAGE_DELIVERY_BATCH_SIZE:-50}
+      MESSAGE_DELIVERY_LEASE_MS: ${MESSAGE_DELIVERY_LEASE_MS:-120000}
+
+  notification-delivery:
+    image: ${VOICEROOM_API_IMAGE:?set immutable VOICEROOM_API_IMAGE digest}
+    restart: on-failure
+    command: ["node", "apps/api/src/workers/notification-delivery.js"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL:-postgres://${POSTGRES_USER:-voice_room}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-voice_room}}
+      NOTIFICATION_DELIVERY_CLAIM_ENABLED: ${NOTIFICATION_DELIVERY_CLAIM_ENABLED:-false}
+      NOTIFICATION_DELIVERY_BATCH_SIZE: ${NOTIFICATION_DELIVERY_BATCH_SIZE:-50}
+      NOTIFICATION_DELIVERY_LEASE_MS: ${NOTIFICATION_DELIVERY_LEASE_MS:-120000}
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-}
+
+  media-processing:
+    image: ${VOICEROOM_API_IMAGE:?set immutable VOICEROOM_API_IMAGE digest}
+    restart: on-failure
+    command: ["node", "apps/api/src/workers/media-processing.js"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL:-postgres://${POSTGRES_USER:-voice_room}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-voice_room}}
+      MEDIA_STORAGE_DIR: /data/media
+      MEDIA_PROCESSING_CLAIM_ENABLED: ${MEDIA_PROCESSING_CLAIM_ENABLED:-false}
+    volumes:
+      - media:/data/media
+
+  media-maintenance:
+    image: ${VOICEROOM_API_IMAGE:?set immutable VOICEROOM_API_IMAGE digest}
+    restart: on-failure
+    command: ["node", "apps/api/src/workers/media-maintenance.js"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL:-postgres://${POSTGRES_USER:-voice_room}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-voice_room}}
+      MEDIA_STORAGE_DIR: /data/media
+      MEDIA_MAINTENANCE_CLAIM_ENABLED: ${MEDIA_MAINTENANCE_CLAIM_ENABLED:-false}
+    volumes:
+      - media:/data/media
+
+  media-reconciliation:
+    image: ${VOICEROOM_API_IMAGE:?set immutable VOICEROOM_API_IMAGE digest}
+    restart: on-failure
+    command: ["node", "apps/api/src/workers/media-reconciliation.js"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL:-postgres://${POSTGRES_USER:-voice_room}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-voice_room}}
+      MEDIA_STORAGE_DIR: /data/media
+      MEDIA_RECONCILIATION_CLAIM_ENABLED: ${MEDIA_RECONCILIATION_CLAIM_ENABLED:-false}
+    volumes:
+      - media:/data/media
 
   caddy:
     image: ${VOICEROOM_WEB_IMAGE:?set immutable VOICEROOM_WEB_IMAGE digest}
@@ -91,6 +196,7 @@ services:
     environment:
       DOMAIN: ${DOMAIN:?set DOMAIN in .env}
       LIVEKIT_DOMAIN: ${LIVEKIT_DOMAIN:-livekit.${DOMAIN}}
+      LIVEKIT_GATE_PUBLIC_URL: ${LIVEKIT_GATE_PUBLIC_URL:-wss://${LIVEKIT_DOMAIN:-livekit.${DOMAIN}}/rtc}
       API_METRICS_ALLOWED_REMOTE: ${API_METRICS_ALLOWED_REMOTE:-127.0.0.1}
     ports:
       - "80:80"
@@ -130,6 +236,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
       livekit:
         condition: service_started
     environment:
@@ -151,3 +259,4 @@ volumes:
   caddy_config:
   postgres_data:
   uploads:
+  media:

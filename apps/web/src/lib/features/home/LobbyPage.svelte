@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { Bell, X } from '@lucide/svelte';
   import type { AuthUser, OwnedRoom } from '$lib/api/auth';
   import { fetchOwnedRooms } from '$lib/api/auth';
   import { createRoom } from '$lib/api/rooms';
@@ -22,6 +23,11 @@
   import RoomBrowseView from './components/lobby/RoomBrowseView.svelte';
   import RoomPreviewView from './components/lobby/RoomPreviewView.svelte';
   import LobbyRoomSettingsDialog from './components/lobby/LobbyRoomSettingsDialog.svelte';
+  import NotificationInbox from './components/NotificationInbox.svelte';
+  import { createNotificationInbox, notificationRoute } from '$lib/shared/notifications/inbox.svelte';
+  import { fetchNotificationInbox, markAllNotificationsRead, markNotificationRead } from '$lib/api/notifications';
+  import { getCapabilityFeature } from '$lib/platform/capability-state.svelte';
+  import { iconSm } from '$lib/shared/ui/icons';
   import { friendsState, initLobby, openDm, showHome, showPeople } from './model/friends.svelte';
   import type { ToastOptions } from './model/toasts.svelte';
   import {
@@ -61,6 +67,13 @@
   let settingsOpen = $state(false);
   let settingsTab = $state<'profile' | 'sound' | 'hotkeys' | 'notifications'>('profile');
   let previewSettingsRoomId = $state('');
+  let notificationInboxEnabled = $state(false);
+  let notificationInboxOpen = $state(false);
+  const notificationInbox = createNotificationInbox({
+    list: fetchNotificationInbox,
+    read: markNotificationRead,
+    readAll: markAllNotificationsRead
+  });
   const selectedRoomId = $derived(roomNavigation.viewedRoomId);
   const embeddedRoomId = $derived(roomNavigation.embeddedRoomId);
   const autoJoinRoomId = $derived(roomNavigation.joinIntentRoomId);
@@ -115,6 +128,10 @@
 
   onMount(() => {
     void refreshRooms();
+    void getCapabilityFeature('engagement').then((enabled) => {
+      notificationInboxEnabled = enabled;
+      if (enabled) void notificationInbox.load();
+    });
     const teardownFriends = user ? initLobby(user.id, user.doNotDisturb, user.presenceStatus) : () => {};
     const teardownRooms = user
       ? initLobbyRoomRealtime(
@@ -295,6 +312,11 @@
     showHome();
     if (selectedRoomId) closeViewedRoom();
   }
+
+  function openNotification(item: import('@voice-room/shared/notifications').NotificationItem): void {
+    notificationInboxOpen = false;
+    window.location.assign(notificationRoute(item));
+  }
 </script>
 
 
@@ -355,4 +377,33 @@
     {onLogout}
   />
   <LobbyRoomSettingsDialog room={previewSettingsRoom} onClose={() => (previewSettingsRoomId = '')} onSaved={refreshRooms} onDeleted={() => { previewSettingsRoomId = ''; closeViewedRoom(); void refreshRooms(); }} {onToast} />
+  {#if notificationInboxEnabled}
+    <button
+      class="notification-inbox-trigger"
+      type="button"
+      aria-label="Уведомления"
+      aria-expanded={notificationInboxOpen}
+      onclick={() => {
+        notificationInboxOpen = !notificationInboxOpen;
+        if (notificationInboxOpen) void notificationInbox.load();
+      }}
+    >
+      <Bell {...iconSm} />
+      {#if notificationInbox.unreadCount}<span>{notificationInbox.unreadCount > 99 ? '99+' : notificationInbox.unreadCount}</span>{/if}
+    </button>
+    {#if notificationInboxOpen}
+      <aside class="notification-inbox-panel" aria-label="Панель уведомлений">
+        <button class="notification-inbox-close" type="button" aria-label="Закрыть" onclick={() => (notificationInboxOpen = false)}><X {...iconSm} /></button>
+        <NotificationInbox inbox={notificationInbox} onopen={openNotification} />
+      </aside>
+    {/if}
+  {/if}
 {/if}
+
+<style>
+  .notification-inbox-trigger { position: fixed; z-index: 70; right: 22px; top: 18px; display: grid; place-items: center; width: 42px; height: 42px; border: 1px solid var(--line); border-radius: 13px; background: var(--paper); color: inherit; cursor: pointer; }
+  .notification-inbox-trigger span { position: absolute; right: -5px; top: -5px; min-width: 19px; height: 19px; border-radius: 999px; background: var(--coral); color: var(--ink); font-size: 11px; line-height: 19px; text-align: center; }
+  .notification-inbox-panel { position: fixed; z-index: 71; right: 22px; top: 68px; width: min(420px, calc(100vw - 32px)); max-height: min(620px, calc(100vh - 90px)); overflow: auto; border: 1px solid var(--line); border-radius: 16px; background: var(--paper); box-shadow: var(--shadow); }
+  .notification-inbox-panel :global(.notification-inbox) { margin: 18px; }
+  .notification-inbox-close { position: absolute; right: 10px; top: 10px; display: grid; place-items: center; width: 32px; height: 32px; border: 0; border-radius: 9px; background: transparent; color: inherit; cursor: pointer; }
+</style>

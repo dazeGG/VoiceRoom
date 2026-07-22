@@ -1,0 +1,71 @@
+'use strict';
+
+const fs = require('node:fs/promises');
+
+const DEFAULT_MIN_FREE_BYTES = 2 * 1024 * 1024 * 1024;
+const DEFAULT_RECOVERY_BYTES = 256 * 1024 * 1024;
+
+function createMediaPressureService({
+  checkIntervalMs = 5_000,
+  minFreeBytes = DEFAULT_MIN_FREE_BYTES,
+  recoveryBytes = DEFAULT_RECOVERY_BYTES,
+  statfs = fs.statfs,
+  storagePath
+} = {}) {
+  if (!storagePath) throw new TypeError('Media storage path is required');
+  let snapshot = Object.freeze({ checkedAt: 0, freeBytes: 0, healthy: false, reason: 'unchecked' });
+  let checking = null;
+
+  async function measure({ force = false } = {}) {
+    const now = Date.now();
+    if (!force && snapshot.checkedAt && now - snapshot.checkedAt < checkIntervalMs) return snapshot;
+    if (checking) return checking;
+    checking = (async () => {
+      try {
+        const stats = await statfs(storagePath);
+        const freeBytes = Number(stats.bavail) * Number(stats.bsize);
+        const threshold = snapshot.healthy ? minFreeBytes : minFreeBytes + recoveryBytes;
+        snapshot = Object.freeze({
+          checkedAt: Date.now(),
+          freeBytes,
+          healthy: Number.isFinite(freeBytes) && freeBytes >= threshold,
+          reason: Number.isFinite(freeBytes) && freeBytes >= threshold ? 'ready' : 'low_disk_space'
+        });
+      } catch {
+        snapshot = Object.freeze({ checkedAt: Date.now(), freeBytes: 0, healthy: false, reason: 'storage_unavailable' });
+      } finally {
+        checking = null;
+      }
+      return snapshot;
+    })();
+    return checking;
+  }
+
+  async function assertAcceptingUploads() {
+    const state = await measure();
+    if (!state.healthy) {
+      const error = new Error('Media uploads are temporarily unavailable');
+      error.code = 'MEDIA_PRESSURE';
+      error.statusCode = 503;
+      throw error;
+    }
+    return state;
+  }
+
+  async function canClaimWork() {
+    return (await measure()).healthy;
+  }
+
+  return Object.freeze({
+    assertAcceptingUploads,
+    canClaimWork,
+    getSnapshot: () => snapshot,
+    measure
+  });
+}
+
+module.exports = {
+  DEFAULT_MIN_FREE_BYTES,
+  DEFAULT_RECOVERY_BYTES,
+  createMediaPressureService
+};

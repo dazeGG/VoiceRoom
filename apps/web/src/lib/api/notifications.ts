@@ -54,6 +54,32 @@ export async function setPresenceStatus(
   return { ...payload, preferences: normalizePreferences(payload.preferences) };
 }
 
+export async function fetchNotificationInbox(cursor?: string): Promise<unknown> {
+  const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : '';
+  return getJsonAuth(`/api/notifications/inbox${query}`);
+}
+
+export async function markNotificationRead(notificationId: string): Promise<unknown> {
+  return postJsonAuth(`/api/notifications/inbox/${encodeURIComponent(notificationId)}/read`, {});
+}
+
+export async function markAllNotificationsRead(): Promise<unknown> {
+  return postJsonAuth('/api/notifications/inbox/read-all', {});
+}
+
+export type RoomNotificationLevel = 'all' | 'mentions' | 'none';
+
+export async function fetchRoomNotificationLevel(roomId: string): Promise<RoomNotificationLevel> {
+  const payload = await getJsonAuth<{ level?: RoomNotificationLevel }>(
+    `/api/notifications/room/${encodeURIComponent(roomId)}/level`
+  );
+  return payload.level === 'all' || payload.level === 'none' ? payload.level : 'mentions';
+}
+
+export async function setRoomNotificationLevel(roomId: string, level: RoomNotificationLevel): Promise<void> {
+  await putJson(`/api/notifications/room/${encodeURIComponent(roomId)}/level`, { level });
+}
+
 function normalizePreferences(preferences: Partial<NotificationPreferences> | null | undefined): NotificationPreferences {
   const doNotDisturb = Boolean(preferences?.doNotDisturb);
   return {
