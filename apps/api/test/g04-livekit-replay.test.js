@@ -3,10 +3,13 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
+const repositoryRoot = path.resolve(__dirname, '../../..');
+
 test('G04-A01 replay harness pins LiveKit v1.13.2 and records same-token baseline reconnects', async () => {
-  const compose = fs.readFileSync('docker-compose.lkv.yml', 'utf8');
+  const compose = fs.readFileSync(path.join(repositoryRoot, 'docker-compose.lkv.yml'), 'utf8');
   assert.match(compose, /livekit\/livekit-server:v1\.13\.2/);
   assert.match(compose, /partition-proxy/);
 
@@ -57,6 +60,7 @@ test('G04-A02 replay harness covers restart, partition and clock skew fixtures',
 
 test('G04 replay scenario CLI emits deterministic JSON', () => {
   const result = spawnSync(process.execPath, ['scripts/lkv/run-replay-scenario.mjs', '--json'], {
+    cwd: repositoryRoot,
     encoding: 'utf8'
   });
   assert.equal(result.status, 0, result.stderr);

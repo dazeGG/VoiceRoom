@@ -95,6 +95,11 @@ function createModerationStore() {
       identities.set(key, identity);
       return { identity, status: existing ? 'reused' : 'created' };
     },
+    normalizeGatePrincipal({ accountUserId, guestPrincipalId }) {
+      return accountUserId
+        ? { principalId: accountUserId, principalType: 'account' }
+        : { principalId: guestPrincipalId, principalType: 'guest' };
+    },
     async getRoom(roomId) {
       return roomId === ROOM_ID ? { ...room, peers: new Map() } : null;
     },
@@ -176,7 +181,23 @@ async function startServer() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'voice-room-moderation-'));
   const socketPath = path.join(dir, 'api.sock');
   const store = createModerationStore();
-  const server = createApiServer({ store, users: createUsers(), friends: createFriends() });
+  const server = createApiServer({
+    store,
+    users: createUsers(),
+    friends: createFriends(),
+    liveKitCredentials: {
+      async issueAdmission() {
+        return { status: 'issued', admission: { room: ROOM_ID, token: 'jwt', ttlSeconds: 60, url: 'ws://gate.test/rtc' } };
+      }
+    },
+    membershipServicesOverride: {
+      service: {
+        async persistSuccessfulAdmission() {
+          return { created: false, status: 'active' };
+        }
+      }
+    }
+  });
   await new Promise((resolve, reject) => {
     server.listen({ path: socketPath }, (error) => error ? reject(error) : resolve());
   });

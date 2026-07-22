@@ -118,8 +118,8 @@ function mapMessage(row) {
     peerId: row.peer_id || '',
     roomId: row.room_id,
     text: row.text || '',
-    content: row.content || undefined,
-    replyTo: row.reply_to_message_id ? { messageId: row.reply_to_message_id } : undefined,
+    ...(row.content ? { content: row.content } : {}),
+    ...(row.reply_to_message_id ? { replyTo: { messageId: row.reply_to_message_id } } : {}),
     // 2.4.0: author for ownership (nullable for guests/legacy)
     authorUserId: row.author_user_id || null
   };

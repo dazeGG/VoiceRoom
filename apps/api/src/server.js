@@ -1369,14 +1369,15 @@ async function handleLiveKitToken(req, res) {
     return;
   }
 
-  if (!livekit.enabled) {
+  const provider = getLiveKitCredentialProvider();
+  if (!provider && !livekit.enabled) {
     sendJson(res, 503, {
       ok: false,
       error: 'LiveKit не настроен: проверьте LIVEKIT_URL, LIVEKIT_API_KEY и LIVEKIT_API_SECRET'
     });
     return;
   }
-  if (!livekit.gateSecret || livekit.gateSecret.length < 32) {
+  if (!provider && (!livekit.gateSecret || livekit.gateSecret.length < 32)) {
     sendJson(res, 503, {
       ok: false,
       code: 'livekit_gate_unavailable',
@@ -1429,7 +1430,6 @@ async function handleLiveKitToken(req, res) {
     }
   }
 
-  const provider = getLiveKitCredentialProvider();
   if (!provider) {
     if (persistedMembership?.created) {
       await memberships.service.rollbackSuccessfulAdmission({
@@ -3760,7 +3760,17 @@ function getActiveGuestWsCount() {
   return count;
 }
 
-function createApiApp({ store = null, users = null, friends = null, notifications = null, pushes = null, push = null, avatars = null } = {}) {
+function createApiApp({
+  store = null,
+  users = null,
+  friends = null,
+  notifications = null,
+  pushes = null,
+  push = null,
+  avatars = null,
+  liveKitCredentials = null,
+  membershipServicesOverride = null
+} = {}) {
   if (store && store !== roomStore) presenceRooms.clear();
   if (store) roomStore = store;
   if (users) userStore = users;
@@ -3768,8 +3778,8 @@ function createApiApp({ store = null, users = null, friends = null, notification
   messageService = null;
   historyServices = null;
   credentialBoundary = null;
-  liveKitCredentialProvider = null;
-  membershipServices = null;
+  liveKitCredentialProvider = liveKitCredentials;
+  membershipServices = membershipServicesOverride;
   reactionServices = null;
   notificationServices = null;
   moderationServices = null;

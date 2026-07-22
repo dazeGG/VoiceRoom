@@ -43,6 +43,7 @@ test('notification preferences default private notifications off and update expl
     doNotDisturb: false,
     mutedPeerIds: [],
     mutedRoomIds: [],
+    roomLevels: {},
     presenceStatus: 'online',
     presenceStatusAutomatic: false,
     privateNotifications: false
