@@ -1,15 +1,21 @@
 'use strict';
 
+const { PUBLIC_CAPABILITY_KEYS } = require('@voice-room/shared/capabilities');
+
 const HEALTH_CAPABILITIES_LIMITS = {
   contractVersion: 1
 };
+
+function publicFeatureFlags(features = {}) {
+  return Object.fromEntries(PUBLIC_CAPABILITY_KEYS.map((key) => [key, features?.[key] === true]));
+}
 
 function formatCapabilityPayload(readiness) {
   const snapshot = readiness || {};
   return {
     contractVersion: HEALTH_CAPABILITIES_LIMITS.contractVersion,
     apiVersion: '2.5.0',
-    features: snapshot?.features || {}
+    features: publicFeatureFlags(snapshot?.features)
   };
 }
 
@@ -17,9 +23,15 @@ function registerCapabilityRoutes({ app, readinessProvider, runLegacyHandler }) 
   if (!app || typeof app.get !== 'function' || !readinessProvider) return;
 
   app.get('/api/capabilities', (request, reply) => {
-    const readiness = readinessProvider.getSnapshot
-      ? readinessProvider.getSnapshot()
-      : readinessProvider;
+    const readiness = (() => {
+      try {
+        return readinessProvider.getSnapshot
+          ? readinessProvider.getSnapshot()
+          : readinessProvider;
+      } catch {
+        return null;
+      }
+    })();
 
     if (typeof runLegacyHandler === 'function') {
       return runLegacyHandler(request, reply, (_req, res) => {
@@ -46,7 +58,7 @@ function createCapabilitySnapshot(readiness) {
     apiVersion: '2.5.0',
     manifestDigest: readiness?.manifest?.digest || null,
     manifestSchemaVersion: readiness?.manifest?.schemaVersion || 1,
-    features: readiness?.features || {},
+    features: publicFeatureFlags(readiness?.features),
     operatorFlags: readiness?.operatorFlags || {},
     replica: readiness?.replica || null,
     ready: readiness?.replica?.ready === true || readiness?.ready === true
@@ -55,5 +67,6 @@ function createCapabilitySnapshot(readiness) {
 
 module.exports = {
   createCapabilitySnapshot,
+  publicFeatureFlags,
   registerCapabilityRoutes
 };

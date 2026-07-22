@@ -4,6 +4,7 @@
   import type { OwnedRoom } from '$lib/api/auth';
   import { deleteRoom, deleteRoomAvatar, updateRoom, uploadRoomAvatar } from '$lib/api/rooms';
   import { Avatar, AvatarCropDialog } from '$lib/shared/ui';
+  import { dialogFocusTrap } from '$lib/shared/ui/focus-trap';
   import { iconSm } from '$lib/shared/ui/icons';
   import ModerationCenter from './ModerationCenter.svelte';
   import { getCapabilityFeature } from '$lib/platform/capability-state.svelte';
@@ -115,8 +116,15 @@
 
 {#if room}
   <div class="settings-overlay" role="presentation" onclick={(event) => event.target === event.currentTarget && onClose()}>
-    <div class="settings-modal room-settings-modal" role="dialog" aria-modal="true" aria-label="Настройки комнаты">
-      <div class="settings-head"><span class="settings-title">Настройки комнаты</span><button class="settings-close" type="button" aria-label="Закрыть" onclick={onClose}><X {...iconSm} /></button></div>
+    <div
+      class="settings-modal room-settings-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Настройки комнаты"
+      tabindex="-1"
+      use:dialogFocusTrap={{ enabled: Boolean(room) && !cropOpen }}
+    >
+      <div class="settings-head"><span class="settings-title">Настройки комнаты</span><button class="settings-close" type="button" aria-label="Закрыть" onclick={onClose} data-dialog-initial-focus><X {...iconSm} /></button></div>
       <form class="settings-content room-settings-content" onsubmit={save}>
         {#if error}<p class="dialog-error" role="alert">{error}</p>{/if}
         <div class="room-profile-head">

@@ -17,6 +17,7 @@
     Slider,
     type HotkeyBinding
   } from '$lib/shared/ui';
+  import { dialogFocusTrap } from '$lib/shared/ui/focus-trap';
   import {
     enumerateMicrophones,
     enumerateSpeakers,
@@ -533,10 +534,17 @@
 
 {#if open}
   <div class="settings-overlay" role="presentation" onclick={onOverlayClick}>
-    <div class="settings-modal" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+    <div
+      class="settings-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="settingsTitle"
+      tabindex="-1"
+      use:dialogFocusTrap={{ enabled: open && !cropOpen }}
+    >
       <div class="settings-head">
         <span class="settings-title" id="settingsTitle">Настройки</span>
-        <button class="settings-close" type="button" aria-label="Закрыть" onclick={onClose}>
+        <button class="settings-close" type="button" aria-label="Закрыть" onclick={onClose} data-dialog-initial-focus>
           <X {...iconSm} aria-hidden="true" />
         </button>
       </div>

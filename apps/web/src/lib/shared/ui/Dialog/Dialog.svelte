@@ -1,9 +1,17 @@
 <script lang="ts">
   import { X } from '@lucide/svelte';
   import { iconSm } from '$lib/shared/ui/icons';
+  import { dialogFocusTrap } from '$lib/shared/ui/focus-trap';
   import type { DialogProps } from './types';
 
-  let { open, title, onClose, width = 430, children }: DialogProps = $props();
+  let {
+    open,
+    title,
+    onClose,
+    width = 430,
+    initialFocus = '[data-dialog-initial-focus]',
+    children
+  }: DialogProps = $props();
 
   function onOverlayClick(event: MouseEvent): void {
     if (event.target === event.currentTarget) onClose();
@@ -18,10 +26,18 @@
 
 {#if open}
   <div class="ui-dialog-overlay" role="presentation" onclick={onOverlayClick}>
-    <div class="ui-dialog-card" style:width={`min(${width}px, 100%)`} role="dialog" aria-modal="true" aria-labelledby="uiDialogTitle">
+    <div
+      class="ui-dialog-card"
+      style:width={`min(${width}px, 100%)`}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="uiDialogTitle"
+      tabindex="-1"
+      use:dialogFocusTrap={{ enabled: open, initialFocus }}
+    >
       <div class="ui-dialog-head">
         <span class="ui-dialog-title" id="uiDialogTitle">{title}</span>
-        <button class="ui-dialog-close" type="button" aria-label="Закрыть" onclick={onClose}>
+        <button class="ui-dialog-close" type="button" aria-label="Закрыть" onclick={onClose} data-dialog-initial-focus>
           <X {...iconSm} aria-hidden="true" />
         </button>
       </div>

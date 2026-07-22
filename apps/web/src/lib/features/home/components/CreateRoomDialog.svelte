@@ -13,6 +13,8 @@
   let tab = $state<'permanent' | 'temp'>('permanent');
   let name = $state('');
   let error = $state('');
+  let permanentTab = $state<HTMLButtonElement>();
+  let tempTab = $state<HTMLButtonElement>();
 
   // Reset the form each time the dialog opens.
   let wasOpen = false;
@@ -38,29 +40,58 @@
       isStatic: tab === 'permanent'
     });
   }
+
+  function selectTab(nextTab: 'permanent' | 'temp', focus = false): void {
+    tab = nextTab;
+    if (focus) queueMicrotask(() => (nextTab === 'permanent' ? permanentTab : tempTab)?.focus());
+  }
+
+  function onTabsKeydown(event: KeyboardEvent): void {
+    if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      selectTab(tab === 'permanent' ? 'temp' : 'permanent', true);
+    } else if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
+      event.preventDefault();
+      selectTab(tab === 'permanent' ? 'temp' : 'permanent', true);
+    } else if (event.key === 'Home') {
+      event.preventDefault();
+      selectTab('permanent', true);
+    } else if (event.key === 'End') {
+      event.preventDefault();
+      selectTab('temp', true);
+    }
+  }
 </script>
 
-<Dialog {open} title="Новая комната" {onClose} width={430}>
-  <div class="lr-dialog-tabs" role="tablist">
+<Dialog {open} title="Новая комната" {onClose} width={430} initialFocus="#createRoomPermanentTab">
+  <div class="lr-dialog-tabs" role="tablist" aria-label="Тип комнаты" tabindex="-1" onkeydown={onTabsKeydown}>
     <button
+      bind:this={permanentTab}
+      id="createRoomPermanentTab"
       class="lr-dialog-tab"
       role="tab"
       aria-selected={tab === 'permanent'}
+      aria-controls="createRoomPermanentPanel"
       data-active={tab === 'permanent'}
       type="button"
-      onclick={() => (tab = 'permanent')}
+      tabindex={tab === 'permanent' ? 0 : -1}
+      onclick={() => selectTab('permanent')}
     >Постоянная</button>
     <button
+      bind:this={tempTab}
+      id="createRoomTempTab"
       class="lr-dialog-tab"
       role="tab"
       aria-selected={tab === 'temp'}
+      aria-controls="createRoomTempPanel"
       data-active={tab === 'temp'}
       type="button"
-      onclick={() => (tab = 'temp')}
+      tabindex={tab === 'temp' ? 0 : -1}
+      onclick={() => selectTab('temp')}
     >Временная</button>
   </div>
 
-  <form style="display:flex;flex-direction:column;gap:18px;" onsubmit={submit}>
+  <form class="lr-dialog-form" onsubmit={submit}>
     {#if error}
       <p class="lr-dialog-error" role="alert">{error}</p>
     {/if}
@@ -78,12 +109,22 @@
     </div>
 
     {#if tab === 'permanent'}
-      <div class="lr-dialog-note lr-dialog-note--ok">
+      <div
+        id="createRoomPermanentPanel"
+        class="lr-dialog-note lr-dialog-note--ok"
+        role="tabpanel"
+        aria-labelledby="createRoomPermanentTab"
+      >
         <Check {...iconSm} aria-hidden="true" />
         <span>Всегда остаётся в вашем списке — заходите в любой момент.</span>
       </div>
     {:else}
-      <div class="lr-dialog-note lr-dialog-note--warn">
+      <div
+        id="createRoomTempPanel"
+        class="lr-dialog-note lr-dialog-note--warn"
+        role="tabpanel"
+        aria-labelledby="createRoomTempTab"
+      >
         <Clock {...iconSm} aria-hidden="true" />
         <span>Код появится после создания. После выхода всех участников комната исчезнет примерно через 15 минут.</span>
       </div>

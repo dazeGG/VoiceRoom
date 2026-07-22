@@ -820,7 +820,7 @@ html.is-desktop .sidebar-download { display: none; }
 }
 .lobby-dm-bubble:hover .dm-msg-actions,
 .lobby-dm-bubble:focus-within .dm-msg-actions { opacity: 1; transform: translateY(0); pointer-events: auto; }
-.dm-msg-actions button { display: grid; width: 30px; height: 28px; place-items: center; border: 0; border-radius: 0; padding: 0; background: transparent; color: var(--warm-muted); cursor: pointer; }
+.dm-msg-actions button { display: grid; min-width: 40px; min-height: 36px; place-items: center; border: 0; border-radius: 0; padding: 0; background: transparent; color: var(--warm-muted); cursor: pointer; }
 .dm-msg-actions button:hover,
 .dm-msg-actions button:focus-visible { background: var(--control-hover); color: var(--warm-ink); outline: none; }
 .dm-msg-actions .dm-msg-action-danger:hover,

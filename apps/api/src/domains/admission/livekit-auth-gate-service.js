@@ -17,7 +17,7 @@ function normalizeGatePath(value) {
 
 function cleanUpstreamUrl(value) {
   const parsed = new URL(String(value || 'ws://127.0.0.1:7880'));
-  if (!['ws:', 'wss:'].includes(parsed.protocol)) throw new Error('LIVEKIT_INTERNAL_URL must be ws:// or wss://');
+  if (parsed.protocol !== 'ws:') throw new Error('LIVEKIT_INTERNAL_URL must be ws:// because the auth gate uses a raw TCP upstream');
   return parsed;
 }
 

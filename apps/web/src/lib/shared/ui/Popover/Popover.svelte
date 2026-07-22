@@ -33,12 +33,24 @@
 
   const panelId = `popover-panel-${++popoverPanelCounter}`;
   let root = $state<HTMLElement | null>(null);
+  let panel = $state<HTMLElement | null>(null);
   let resolvedPlacement = $state<PopoverPlacement>('bottom-end');
   let measureGeneration = 0;
 
   $effect(() => {
     if (!open) resolvedPlacement = placement;
   });
+
+  $effect(() => {
+    if (!open || role !== 'menu') return;
+    void focusMenuAfterOpen();
+  });
+
+  async function focusMenuAfterOpen(): Promise<void> {
+    await tick();
+    if (!open || role !== 'menu') return;
+    focusMenuItem(0);
+  }
 
   async function resolvePlacementAfterOpen(generation: number): Promise<void> {
     await tick();
@@ -112,6 +124,44 @@
     requestClose('escape');
   }
 
+  function menuItems(): HTMLElement[] {
+    if (!panel || role !== 'menu') return [];
+    return Array.from(panel.querySelectorAll<HTMLElement>('[role="menuitem"]')).filter((item) => {
+      if (item.hasAttribute('disabled')) return false;
+      if (item.getAttribute('aria-disabled') === 'true') return false;
+      return item.tabIndex >= 0;
+    });
+  }
+
+  function focusMenuItem(index: number): void {
+    const items = menuItems();
+    if (items.length === 0) {
+      panel?.focus();
+      return;
+    }
+    items[(index + items.length) % items.length]?.focus();
+  }
+
+  function onPanelKeydown(event: KeyboardEvent): void {
+    if (role !== 'menu') return;
+    const items = menuItems();
+    if (items.length === 0) return;
+    const currentIndex = items.findIndex((item) => item === document.activeElement);
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      focusMenuItem(currentIndex < 0 ? 0 : currentIndex + 1);
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      focusMenuItem(currentIndex < 0 ? items.length - 1 : currentIndex - 1);
+    } else if (event.key === 'Home') {
+      event.preventDefault();
+      focusMenuItem(0);
+    } else if (event.key === 'End') {
+      event.preventDefault();
+      focusMenuItem(items.length - 1);
+    }
+  }
+
   const triggerState = $derived({
     open,
     toggle,
@@ -133,6 +183,7 @@
   {#if open || keepContentMounted}
     <div
       id={panelId}
+      bind:this={panel}
       class={`popover-panel ${panelClass}`.trim()}
       class:popover-panel--closed={keepContentMounted && !open}
       data-placement={resolvedPlacement}
@@ -140,6 +191,7 @@
       aria-label={ariaLabel || undefined}
       aria-hidden={keepContentMounted && !open ? true : undefined}
       hidden={keepContentMounted && !open ? true : undefined}
+      onkeydown={onPanelKeydown}
     >
       {@render content(contentState)}
     </div>

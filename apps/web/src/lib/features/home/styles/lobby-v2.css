@@ -683,7 +683,44 @@
   background: color-mix(in oklch, var(--accent), transparent 88%);
 }
 
+.people-back {
+  margin-bottom: 18px;
+}
+
+.people-title {
+  margin-bottom: 4px;
+}
+
+.people-section-label--add {
+  margin: 24px 0 12px;
+}
+
+.people-section-label--requests {
+  margin: 32px 0 14px;
+}
+
+.people-column-label {
+  margin-bottom: 14px;
+}
+
+.people-request-copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.people-truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* ---- create room dialog ---- */
+.lr-dialog-form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
 .lr-field {
   margin-bottom: 4px;
 }
@@ -742,6 +779,11 @@
   font-weight: 600;
   cursor: pointer;
   transition: background 0.15s ease, color 0.15s ease;
+}
+
+.lr-dialog-tab:focus-visible {
+  outline: 2px solid var(--focus-border);
+  outline-offset: 2px;
 }
 
 .lr-dialog-tab[data-active='true'] {

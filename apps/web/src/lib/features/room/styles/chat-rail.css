@@ -231,7 +231,7 @@ button.chat-msg-author {
    lifted above the message body, is not covered by the pinned date bubble. */
 .chat-msg:has(.chat-msg-text:hover), .chat-msg:has(.chat-msg-text:focus-within) { z-index: 6; }
 .chat-msg-text:hover .chat-msg-actions, .chat-msg-text:focus-within .chat-msg-actions { opacity: 1; transform: translateY(0); pointer-events: auto; }
-.chat-msg-actions button { display: grid; width: 30px; height: 28px; place-items: center; border: 0; border-radius: 0; background: transparent; color: var(--warm-muted); cursor: pointer; }
+.chat-msg-actions button { display: grid; min-width: 40px; min-height: 36px; place-items: center; border: 0; border-radius: 0; background: transparent; color: var(--warm-muted); cursor: pointer; }
 .chat-msg-actions button:hover, .chat-msg-actions button:focus-visible { background: var(--control); color: var(--warm-ink); outline: none; }
 .chat-msg-actions .chat-msg-action-danger:hover, .chat-msg-actions .chat-msg-action-danger:focus-visible { color: oklch(72% .18 28); }
 

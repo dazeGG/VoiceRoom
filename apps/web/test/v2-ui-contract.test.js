@@ -1925,3 +1925,72 @@ test('settings sound columns cannot widen the modal content area', () => {
   assert.match(devicesRule.groups.body, /max-width:\s*100%/);
   assert.match(css, /\.settings-sound-device \.popover-root[\s\S]*width:\s*100%[\s\S]*max-width:\s*100%/);
 });
+
+test('release polish shares dialog focus trapping across modal surfaces', () => {
+  const focusTrap = read('src/lib/shared/ui/focus-trap.ts');
+  const dialog = read('src/lib/shared/ui/Dialog/Dialog.svelte');
+  const avatarCrop = read('src/lib/shared/ui/AvatarCropDialog/AvatarCropDialog.svelte');
+  const settings = read('src/lib/features/home/components/SettingsModal.svelte');
+  const lobbyRoomSettings = read('src/lib/features/home/components/lobby/LobbyRoomSettingsDialog.svelte');
+  const roomSettings = read('src/lib/features/room/components/RoomSettingsDialog.svelte');
+
+  assert.match(focusTrap, /FOCUSABLE_SELECTOR/);
+  assert.match(focusTrap, /event\.key !== 'Tab'/);
+  assert.match(focusTrap, /opener\?\.isConnected/);
+  assert.match(focusTrap, /function suspend\(\): void/);
+  assert.match(focusTrap, /!root\.contains\(activeElement\)/);
+  for (const source of [dialog, avatarCrop, settings, lobbyRoomSettings, roomSettings]) {
+    assert.match(source, /dialogFocusTrap/);
+    assert.match(source, /tabindex="-1"/);
+    assert.match(source, /data-dialog-initial-focus/);
+  }
+});
+
+test('popover menus and create-room tabs expose honest keyboard semantics', () => {
+  const popover = read('src/lib/shared/ui/Popover/Popover.svelte');
+  const createRoom = read('src/lib/features/home/components/CreateRoomDialog.svelte');
+  const lobbyCss = read('src/lib/features/home/styles/lobby-v2.css');
+
+  assert.match(popover, /role !== 'menu'/);
+  assert.match(popover, /if \(!open \|\| role !== 'menu'\) return;\s*focusMenuItem\(0\)/);
+  assert.match(popover, /querySelectorAll<HTMLElement>\('\[role="menuitem"\]'\)/);
+  for (const key of ['ArrowDown', 'ArrowUp', 'Home', 'End']) assert.match(popover, new RegExp(`event\\.key === '${key}'`));
+
+  assert.match(createRoom, /role="tablist" aria-label="Тип комнаты" tabindex="-1" onkeydown=\{onTabsKeydown\}/);
+  assert.match(createRoom, /initialFocus="#createRoomPermanentTab"/);
+  assert.match(createRoom, /aria-controls="createRoomPermanentPanel"/);
+  assert.match(createRoom, /aria-controls="createRoomTempPanel"/);
+  assert.match(createRoom, /role="tabpanel"/);
+  assert.match(createRoom, /tabindex=\{tab === 'permanent' \? 0 : -1\}/);
+  assert.match(createRoom, /tabindex=\{tab === 'temp' \? 0 : -1\}/);
+  assert.match(lobbyCss, /\.lr-dialog-form/);
+});
+
+test('release polish removes token drift, inline people styles, and adds reduced-motion and hit-area baselines', () => {
+  const layout = read('src/routes/+layout.svelte');
+  const appCss = read('src/lib/shared/styles/app.css');
+  const people = read('src/lib/features/home/components/lobby/PeopleView.svelte');
+  const lobbyCss = read('src/lib/features/home/styles/lobby-v2.css');
+  const switchCss = read('src/lib/shared/ui/Switch/Switch.svelte');
+  const sliderCss = read('src/lib/shared/ui/Slider/Slider.svelte');
+  const reactions = read('src/lib/shared/chat/ReactionPicker.svelte');
+  const chatCss = read('src/lib/features/room/styles/chat-rail.css');
+  const dmCss = read('src/lib/features/home/styles/friends.css');
+  const roomControlsCss = read('src/lib/features/room/styles/controls.css');
+  const settingsCss = read('src/lib/features/home/styles/settings.css');
+
+  assert.match(layout, /font-family: var\(--font-ui\)/);
+  assert.equal((appCss.match(/--focus-border:/g) || []).length, 1);
+  assert.match(appCss, /@media \(prefers-reduced-motion: reduce\)/);
+  assert.match(appCss, /transition-duration: 0\.001ms !important/);
+  assert.doesNotMatch(people, /\sstyle="/);
+  assert.match(lobbyCss, /\.people-request-copy/);
+  assert.match(lobbyCss, /\.people-truncate/);
+  assert.match(switchCss, /\.ui-switch::after[\s\S]*inset: -10px -4px/);
+  assert.match(sliderCss, /\.vr-slider-control[\s\S]*height: 36px/);
+  assert.match(reactions, /\.emoji-grid button[\s\S]*min-height: 40px/);
+  assert.match(chatCss, /\.chat-msg-actions button[\s\S]*min-height: 36px/);
+  assert.match(dmCss, /\.dm-msg-actions button[\s\S]*min-height: 36px/);
+  assert.match(roomControlsCss, /\.gate-switch::after[\s\S]*inset: -12px -6px/);
+  assert.match(settingsCss, /\.settings-switch::after[\s\S]*inset: -10px -4px/);
+});

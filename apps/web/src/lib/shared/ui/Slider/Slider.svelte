@@ -93,7 +93,7 @@
     display: grid;
     align-items: center;
     min-width: 0;
-    height: var(--slider-thumb);
+    height: 36px;
   }
 
   .vr-slider-track {
@@ -142,7 +142,7 @@
   }
 
   .vr-slider-input::-webkit-slider-runnable-track {
-    height: 100%;
+    height: 36px;
     background: transparent;
     border: 0;
   }
@@ -158,7 +158,7 @@
   }
 
   .vr-slider-input::-moz-range-track {
-    height: 100%;
+    height: 36px;
     background: transparent;
     border: 0;
   }

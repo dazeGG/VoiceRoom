@@ -19,6 +19,7 @@
 
 <style>
   .ui-switch {
+    position: relative;
     flex: none;
     width: 42px;
     height: 24px;
@@ -28,6 +29,13 @@
     background: var(--control);
     cursor: pointer;
     transition: background 0.15s ease;
+  }
+
+  .ui-switch::after {
+    content: '';
+    position: absolute;
+    inset: -10px -4px;
+    border-radius: inherit;
   }
 
   .ui-switch.is-on {

@@ -40,7 +40,7 @@
     padding: 24px;
     color: var(--ink);
     background: var(--paper-deep);
-    font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+    font-family: var(--font-ui);
   }
 
   .device-boundary__card {
