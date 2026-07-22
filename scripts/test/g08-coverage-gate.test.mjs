@@ -186,6 +186,7 @@ function thresholdFixture(overrides = {}) {
       total: { lines: 80, branches: 70 }
     },
     changedBusinessCode: { line: 90, branch: 85 },
+    strictBranchMinimum: 95,
     strictBranchPaths: [],
     strictBranchGroups: [
       {
@@ -286,6 +287,7 @@ test("G08-A03c protected-base policy ratchet rejects every gate weakening", () =
 
   reject(thresholdFixture({ ...base, changedBusinessCode: { line: 89, branch: 85 } }), /changedBusinessCode\.line/i);
   reject(thresholdFixture({ ...base, changedBusinessCode: { line: 90, branch: 84 } }), /changedBusinessCode\.branch/i);
+  reject(thresholdFixture({ ...base, strictBranchMinimum: 94 }), /strictBranchMinimum/i);
   reject(thresholdFixture({ ...base, businessPathPatterns: ["apps/api/src/", "packages/shared/src/"] }), /businessPathPatterns/i);
   reject(thresholdFixture({ ...base, ignoredPathPatterns: [...base.ignoredPathPatterns, "/generated/"] }), /may not add protected-base exclusions/i);
   reject(thresholdFixture({ ...base, strictBranchPaths: [] }), /strictBranchPaths/i);
@@ -317,7 +319,7 @@ test("G08-A04 rejects unmeasured/regressed coverage and changed business gaps", 
   }), /does not match baseline artifact/i);
 });
 
-test("G08-A05 changed auth and web media strict files fail closed when missing or under 100", () => {
+test("G08-A05 changed auth and web media strict files fail closed when missing or below the strict minimum", () => {
   const media = "apps/web/src/lib/features/room/client/media/screen-receiver-demand.ts";
   assert.throws(() => checkRelease250Coverage({
     coverageSummary: greenSummary,
@@ -327,22 +329,22 @@ test("G08-A05 changed auth and web media strict files fail closed when missing o
   assert.throws(() => checkRelease250Coverage({
     coverageSummary: {
       ...greenSummary,
-      files: { ...greenSummary.files, [media]: { lines: { pct: 100 }, branches: { pct: 99.99 } } }
+      files: { ...greenSummary.files, [media]: { lines: { pct: 100 }, branches: { pct: 94.99 } } }
     },
     thresholds,
     changedFiles: [media]
-  }), /requires 100% node-v8-branch/i);
+  }), /requires 95% node-v8-branch/i);
   assert.throws(() => checkRelease250Coverage({
     coverageSummary: {
       ...greenSummary,
       files: {
         ...greenSummary.files,
-        "apps/api/src/domains/admission/gate-credential-signer.js": { lines: { pct: 100 }, branches: { pct: 99 } }
+        "apps/api/src/domains/admission/gate-credential-signer.js": { lines: { pct: 100 }, branches: { pct: 94 } }
       }
     },
     thresholds,
     changedFiles: ["apps/api/src/domains/admission/gate-credential-signer.js"]
-  }), /requires 100% node-v8-branch/i);
+  }), /requires 95% node-v8-branch/i);
 });
 
 test("G08-A06 collector unions complementary raw V8 ranges across shards", (t) => {

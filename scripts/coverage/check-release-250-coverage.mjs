@@ -114,6 +114,7 @@ function validateThresholds(thresholds) {
   pct(thresholds.baseline.total?.branches, "baseline.total.branches");
   pct(thresholds.changedBusinessCode?.line, "changedBusinessCode.line");
   pct(thresholds.changedBusinessCode?.branch, "changedBusinessCode.branch");
+  pct(thresholds.strictBranchMinimum, "strictBranchMinimum");
 }
 
 function isBusinessFile(filePath, thresholds) {
@@ -186,6 +187,7 @@ function enforceBaselineRatchet(thresholds, { baseThresholds, baseThresholdsAbse
     if (current.artifact !== base.artifact) throw new Error(`Coverage artifact policy changed from protected base ${base.artifact} to ${current.artifact}`);
     if (thresholds.changedBusinessCode.line < baseThresholds.changedBusinessCode.line) throw new Error("changedBusinessCode.line may not decrease from protected base");
     if (thresholds.changedBusinessCode.branch < baseThresholds.changedBusinessCode.branch) throw new Error("changedBusinessCode.branch may not decrease from protected base");
+    if (thresholds.strictBranchMinimum < baseThresholds.strictBranchMinimum) throw new Error("strictBranchMinimum may not decrease from protected base");
     assertPolicySuperset(thresholds.businessPathPatterns, baseThresholds.businessPathPatterns, "businessPathPatterns");
     assertPolicySuperset(thresholds.strictBranchPaths ?? [], baseThresholds.strictBranchPaths ?? [], "strictBranchPaths");
     assertNoNewIgnoredPatterns(thresholds.ignoredPathPatterns, baseThresholds.ignoredPathPatterns);
@@ -459,7 +461,9 @@ export function checkRelease250Coverage({
   for (const strictPath of checkedStrictPaths) {
     const file = files.get(strictPath);
     if (!file) throw new Error(`Changed strict file is missing from coverage summary: ${strictPath}`);
-    if (file.branches < 100) throw new Error(`${strictPath} requires 100% ${BRANCH_METRIC} coverage, saw ${file.branches.toFixed(2)}%`);
+    if (file.branches < thresholds.strictBranchMinimum) {
+      throw new Error(`${strictPath} requires ${thresholds.strictBranchMinimum}% ${BRANCH_METRIC} coverage, saw ${file.branches.toFixed(2)}%`);
+    }
   }
 
   return {

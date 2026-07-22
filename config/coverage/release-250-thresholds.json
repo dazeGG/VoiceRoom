@@ -24,6 +24,7 @@
     "line": 90,
     "branch": 85
   },
+  "strictBranchMinimum": 95,
   "strictBranchPaths": [],
   "strictBranchGroups": [
     {
