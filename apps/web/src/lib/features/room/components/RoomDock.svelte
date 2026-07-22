@@ -282,7 +282,7 @@
       </span>
     </div>
 
-    <button class="dock-button leave-button" id="leaveButton" type="button" aria-label="Выйти из комнаты" hidden={screenUi.hideLeaveButton} onclick={handleLeaveButtonClick}>
+    <button class="dock-button leave-button" id="leaveButton" type="button" aria-label="Покинуть звонок" hidden={screenUi.hideLeaveButton} onclick={handleLeaveButtonClick}>
       <X aria-hidden="true" />
     </button>
     <button

@@ -98,12 +98,13 @@ export async function connectLiveKitRoom(
 }
 
 async function connectLiveKitWithFallback(
-  credentials: { url: string; token: string },
+  credentials: { url: string; urls?: string[]; token: string },
   isCurrent: () => boolean
 ): Promise<Room | null> {
   const { Room } = await loadLiveKitClient();
   if (!isCurrent()) return null;
-  const urls = getLiveKitConnectUrls(credentials.url);
+  const configuredUrls = credentials.urls?.length ? credentials.urls : [credentials.url];
+  const urls = [...new Set(configuredUrls.flatMap(getLiveKitConnectUrls))];
   let lastError: unknown = null;
 
   for (const url of urls) {

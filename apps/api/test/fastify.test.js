@@ -46,6 +46,11 @@ function createFakeStore() {
       }
       return { identity: { avatarColorKey: 'blurple', peerId }, status: 'created' };
     },
+    normalizeGatePrincipal({ accountUserId, guestPrincipalId }) {
+      return accountUserId
+        ? { principalId: accountUserId, principalType: 'account' }
+        : { principalId: guestPrincipalId, principalType: 'guest' };
+    },
     async markRoomActive() {},
     async markRoomEmpty() {},
     async pruneRooms() {},
@@ -832,6 +837,18 @@ test('livekit token uses authenticated user avatar color for room peer identity'
 
   const app = createApiApp({
     store,
+    liveKitCredentials: {
+      async issueAdmission() {
+        return { status: 'issued', admission: { room: 'voice-room-test', token: 'jwt', ttlSeconds: 60, url: 'ws://gate.test/rtc' } };
+      }
+    },
+    membershipServicesOverride: {
+      service: {
+        async persistSuccessfulAdmission() {
+          return { created: false, status: 'active' };
+        }
+      }
+    },
     users: {
       async getSessionUser(token) {
         assert.equal(token, 'session-token');
@@ -878,7 +895,14 @@ test('livekit token validates persisted anonymous peer identity before issuing v
   process.env.LIVEKIT_API_KEY = 'devkey';
   process.env.LIVEKIT_API_SECRET = 'devsecretdevsecretdevsecret';
 
-  const app = createApiApp({ store: createFakeStore() });
+  const app = createApiApp({
+    store: createFakeStore(),
+    liveKitCredentials: {
+      async issueAdmission() {
+        return { status: 'issued', admission: { room: 'voice-room-test', token: 'jwt', ttlSeconds: 60, url: 'ws://gate.test/rtc' } };
+      }
+    }
+  });
   t.after(async () => {
     await app.close();
     if (previous.url === undefined) delete process.env.LIVEKIT_URL;

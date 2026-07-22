@@ -6,8 +6,9 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
-    "check": "node --check src/server.js && node --check src/realtime/envelope.js && node --check src/realtime/summary.js && node --check src/realtime/account-events.js && node --check src/realtime/legacy-events.js && node --check src/realtime/room-runtime.js && node --check src/realtime/peer-transport.js && node --check src/realtime/registry.js && node --check src/realtime/ws-handler.js && node --check src/lib/config.js && node --check src/lib/avatar-processing.js && node --check src/lib/avatar-reconciliation.js && node --check src/lib/avatar-storage.js && node --check src/lib/db.js && node --check src/lib/metrics.js && node --check src/lib/migrate.js && node --check src/lib/password.js && node --check src/lib/room-store.js && node --check src/lib/user-store.js && node --check src/lib/friend-store.js && node --check src/lib/notification-store.js && node --check src/lib/push-endpoint.js && node --check src/lib/push-service.js && node --check src/lib/push-store.js && node --check src/scripts/migrate.js && node --check src/migrations/*.js && node --check test/db-harness.js && node --check test/require-test-database-url.js",
+    "check": "node --check src/server.js && node --check src/realtime/*.js && node --check src/domains/admission/*.js && node --check src/domains/media/*.js && node --check src/domains/membership/*.js && node --check src/domains/messaging/*.js && node --check src/domains/moderation/*.js && node --check src/domains/notifications/*.js && node --check src/platform/*.js && node --check src/workers/*.js && node --check src/lib/*.js && node --check src/scripts/*.js && node --check src/migrations/*.js && node --check test/db-harness.js && node --check test/require-test-database-url.js",
     "test": "node --test test/*.test.js",
+    "test:g05": "node --test test/g05-livekit-boundary.test.js",
     "db:migrate": "node src/scripts/migrate.js up",
     "db:rollback": "node src/scripts/migrate.js down",
     "pretest": "node test/require-test-database-url.js"

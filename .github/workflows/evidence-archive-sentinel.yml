@@ -1,0 +1,59 @@
+name: Durable evidence archive sentinel
+
+on:
+  schedule:
+    - cron: '17 4 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: release-2.5.0-evidence-archive-sentinel
+  cancel-in-progress: false
+
+jobs:
+  evidence-archive-sentinel:
+    name: Detect package, linkage, digest and attestation drift
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PACKAGE: ghcr.io/dazegg/voiceroom-release-evidence
+    steps:
+      - uses: actions/checkout@v4
+      - name: Log in to the private evidence package with the repository token
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: Derive every observation from the live package
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p sentinel
+          gh api /users/dazeGG/packages/container/voiceroom-release-evidence > sentinel/package.json
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" --jq '{login:.actor.login}' > sentinel/actor.json
+          printf '{"objects":[]}' > sentinel/observed.json
+          node -e 'const fs=require("node:fs"),m=JSON.parse(fs.readFileSync("docs/releases/2.5.0/evidence/archive-map.json"));for(const x of m.objects)console.log(`${x.manifestDigest}\t${x.discoveryTag}\t${x.objectId}`)' |
+          while IFS=$'\t' read -r manifest_digest tag object_id; do
+            test -n "$manifest_digest" || continue
+            scripts/ci/run-oras.sh manifest fetch --output "sentinel/$object_id.manifest.json" "$PACKAGE@$manifest_digest"
+            layer_digest="$(node -p 'JSON.parse(require("node:fs").readFileSync(process.argv[1])).layers[0].digest' "sentinel/$object_id.manifest.json")"
+            scripts/ci/run-oras.sh blob fetch --output "sentinel/$object_id.layer.json" "$PACKAGE@$layer_digest"
+            tag_digest="$(scripts/ci/run-oras.sh resolve "$PACKAGE:$tag")"
+            gh attestation verify "oci://$PACKAGE@$manifest_digest" --repo "$GITHUB_REPOSITORY" > "sentinel/$object_id.attestation.json"
+            OBJECT_ID="$object_id" TAG="$tag" TAG_DIGEST="$tag_digest" node - <<'NODE'
+          const fs=require('node:fs'),file='sentinel/observed.json',o=JSON.parse(fs.readFileSync(file));
+          o.objects.push({manifestPath:`sentinel/${process.env.OBJECT_ID}.manifest.json`,layerPath:`sentinel/${process.env.OBJECT_ID}.layer.json`,packagePath:'sentinel/package.json',actorPath:'sentinel/actor.json',attestationPath:`sentinel/${process.env.OBJECT_ID}.attestation.json`,attestationVerified:true,discoveryTag:process.env.TAG,tagResolvedDigest:process.env.TAG_DIGEST});
+          fs.writeFileSync(file,JSON.stringify(o));
+          NODE
+          done
+          node scripts/evidence/check-archive-sentinel.mjs --expected docs/releases/2.5.0/evidence/archive-map.json --observed sentinel/observed.json --output sentinel-report.g03.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: g03-sentinel-${{ github.run_id }}-${{ github.run_attempt }}
+          path: sentinel-report.g03.json
+          if-no-files-found: error
+          retention-days: 90

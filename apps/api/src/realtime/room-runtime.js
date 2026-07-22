@@ -48,7 +48,9 @@ function createRoomRealtimeRuntime(deps) {
     tokensMatch,
     sessionAvatarColorKey,
     queueRoomOccupancyTransition = async (roomId) => getRoomStore().markRoomActive(roomId),
-    findRoomBan = async () => null
+    findRoomBan = async () => null,
+    credentialBoundary = null,
+    removeLiveKitParticipant = async () => {}
   } = deps;
 
   const recipientCache = new Map();
@@ -478,6 +480,7 @@ function createRoomRealtimeRuntime(deps) {
           ? `/api/avatars/${encodeURIComponent(sessionUser.avatarKey)}`
           : null,
         id: peerId,
+        gateGuestPrincipalId: identityResult.identity?.id || '',
         ip: clientIp || '',
         joinedAt: previous?.joinedAt ?? Date.now(),
         muted: previous?.muted ?? false,
@@ -558,6 +561,23 @@ function createRoomRealtimeRuntime(deps) {
   ) {
     if (cancelPendingJoin) cancelConnectionVoiceJoin(connection, payload);
     if (!payload?.roomId || !payload.peerId) return;
+    const room = presenceRooms.get(payload.roomId);
+    const peer = room?.peers?.get(payload.peerId);
+    if (peer && credentialBoundary?.revokePeer) {
+      await credentialBoundary.revokePeer({
+        roomId: payload.roomId,
+        accountUserId: peer.accountUserId || null,
+        guestPrincipalId: peer.gateGuestPrincipalId || ''
+      });
+    } else if (peer && typeof getRoomStore().revokeLiveKitGatePeer === 'function') {
+      await getRoomStore().revokeLiveKitGatePeer({
+        roomId: payload.roomId,
+        peerId: payload.peerId,
+        accountUserId: peer.accountUserId || null,
+        guestPrincipalId: peer.gateGuestPrincipalId || '',
+        now: Date.now()
+      });
+    }
     // Close using the transport this connection owns, not whatever peer happens
     // to hold the id now. After a same-peer reconnect the superseded connection
     // must not evict the peer that replaced it — closePeer's guard rejects the
@@ -571,6 +591,34 @@ function createRoomRealtimeRuntime(deps) {
       if (!connection.previewRoomIds.has(payload.roomId)) wsRegistry.unregisterConnectionForRoom(connection, payload.roomId);
     }
     scheduleSummaryBroadcast(payload.roomId);
+  }
+
+  async function disconnectAccountFromRoom({ roomId, userId, reason = 'left-room' } = {}) {
+    if (!roomId || !userId || !credentialBoundary?.resolvePrincipal || !credentialBoundary?.revokePrincipal) {
+      return { ok: false, code: 'credential_boundary_unavailable', disconnected: 0 };
+    }
+    const principal = credentialBoundary.resolvePrincipal({ roomId, accountUserId: userId });
+    if (!principal) return { ok: false, code: 'principal_unavailable', disconnected: 0 };
+    const revoked = await credentialBoundary.revokePrincipal({ roomId, principal });
+    if (revoked?.status !== 'revoked') return { ok: false, code: revoked?.status || 'revoke_failed', disconnected: 0 };
+
+    const room = presenceRooms.get(roomId);
+    const peers = [...(room?.peers?.values?.() || [])].filter((peer) => peer.accountUserId === userId);
+    for (const peer of peers) {
+      const event = { type: 'room.left', roomId, peerId: peer.id, reason };
+      peer.transport?.send?.(event);
+      wsRegistry.sendToUser(userId, buildServerEnvelope('room.left', { roomId, peerId: peer.id, reason }));
+      for (const connection of wsRegistry.connections?.values?.() || []) {
+        if (connection.activeVoice?.roomId !== roomId || connection.activeVoice?.peerId !== peer.id) continue;
+        connection.activeVoice = null;
+        connection.previewRoomIds.delete(roomId);
+        wsRegistry.unregisterConnectionForRoom(connection, roomId);
+      }
+      closePeer(roomId, peer.id, peer.transport?.id, reason);
+      await removeLiveKitParticipant(roomId, peer.id);
+    }
+    scheduleSummaryBroadcast(roomId);
+    return { ok: true, disconnected: peers.length };
   }
 
   async function updatePeerState(connection, payload) {
@@ -660,6 +708,7 @@ function createRoomRealtimeRuntime(deps) {
     broadcastRoomDetail,
     buildRoomSnapshot,
     cleanupConnection,
+    disconnectAccountFromRoom,
     flushSummary,
     invalidateRecipientCache,
     joinVoiceRoom,

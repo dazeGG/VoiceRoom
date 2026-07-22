@@ -7,12 +7,16 @@
     "bootstrap-attempts.json",
     "bootstrap-landed-recoveries.json"
   ],
+  "archiveAuthority": "archive-authority.json",
+  "archiveMap": "archive-map.json",
+  "archiveLedger": "archive-ledger.json",
   "notes": [
     "Candidate registries contain known facts only.",
-    "bootstrap-lineage.json is intentionally absent until G93."
+    "bootstrap-lineage.json is intentionally absent until G93.",
+    "Archive map and ledger remain empty until the first authorized GITHUB_TOKEN publication proves package linkage, digest fetch, attestation, and the discovery tag."
   ],
   "release": "2.5.0",
   "schemaVersion": 1,
   "selectionAuthority": "external post-F11 bootstrap-selection.<attempt-id>.json",
-  "status": "BOOTSTRAP_PENDING"
+  "status": "G03_PRE_PUBLICATION"
 }

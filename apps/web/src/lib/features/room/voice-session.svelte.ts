@@ -1,5 +1,6 @@
 import { wait } from './client/core/utils';
 import { playPeerCue } from './client/media/cues';
+import { leaveActiveRoomMembership } from '$lib/features/home/model/room-membership.svelte';
 
 type LeaveHandler = () => void;
 type ControlHandler = () => void;
@@ -62,6 +63,18 @@ export async function leaveActiveVoiceRoomWithCue(): Promise<void> {
   playPeerCue('leave');
   await wait(180);
   activeLeaveHandler();
+}
+
+export async function leaveConnectedRoomMembership(): Promise<boolean> {
+  const roomId = voiceSession.roomId;
+  if (!roomId) return false;
+  const left = await leaveActiveRoomMembership(roomId);
+  if (activeLeaveHandler) {
+    playPeerCue('leave');
+    await wait(180);
+    activeLeaveHandler();
+  }
+  return left;
 }
 
 export function registerActiveVoiceControls(handlers: {

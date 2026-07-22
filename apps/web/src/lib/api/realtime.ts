@@ -4,6 +4,8 @@ import type { DirectMessage } from './dm';
 import type { PublicUser } from './friends';
 import type { ChatMessage, RoomPeer, RoomSummary } from './rooms';
 import type { NotificationRealtimeEvent } from '../shared/notifications';
+import type { ReactionSummary } from '@voice-room/shared/reactions';
+import { isDesktopBoundaryBlocked } from '$lib/platform/desktop-boundary';
 
 export type RealtimeAccountEvent =
   | { type: 'ready'; payload: { userId?: string; guest?: boolean; onlineFriendIds?: string[] } }
@@ -55,8 +57,17 @@ export type RealtimeRoomEvent =
   | { type: 'room.banned'; payload: { roomId: string; peerId?: string } };
 
 export type RealtimeErrorEvent = { type: 'error'; payload: { code: string; message: string; id?: string } };
+export type ReactionRealtimeEvent = {
+  type: 'reaction.updated';
+  payload: {
+    conversation: { type: 'room' | 'dm'; id: string };
+    roomId?: string;
+    messageId: string;
+    summary: ReactionSummary;
+  };
+};
 
-export type RealtimeEvent = RealtimeAccountEvent | RealtimeRoomEvent | RealtimeErrorEvent | NotificationRealtimeEvent;
+export type RealtimeEvent = RealtimeAccountEvent | RealtimeRoomEvent | RealtimeErrorEvent | NotificationRealtimeEvent | ReactionRealtimeEvent;
 
 /** @deprecated Use RealtimeEvent */
 export type { RealtimeEvent as RealtimeEventUnion };
@@ -114,6 +125,7 @@ class AppRealtimeConnection {
   private everConnected = false;
 
   subscribe(handler: (event: RealtimeEvent) => void): () => void {
+    if (isDesktopBoundaryBlocked()) return () => {};
     this.handlers.add(handler);
     this.refCount += 1;
     this.ensureConnected();
@@ -125,6 +137,7 @@ class AppRealtimeConnection {
   }
 
   send(type: string, payload: Record<string, unknown> = {}): void {
+    if (isDesktopBoundaryBlocked()) return;
     const frame = JSON.stringify({ type, payload });
     if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
       this.outboundQueue.push(frame);
@@ -231,6 +244,7 @@ class AppRealtimeConnection {
   }
 
   ensureConnected(): void {
+    if (isDesktopBoundaryBlocked()) return;
     if (this.socket && (this.socket.readyState === WebSocket.OPEN || this.socket.readyState === WebSocket.CONNECTING)) {
       return;
     }

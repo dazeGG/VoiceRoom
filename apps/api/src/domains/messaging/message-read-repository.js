@@ -1,0 +1,76 @@
+'use strict';
+
+const { createDbPool, transaction } = require('../../lib/db');
+
+function createMessageReadRepository({ databaseUrl, logger = console, pool } = {}) {
+  let activePool = pool || null;
+  const getPool = () => activePool || (activePool = createDbPool({ databaseUrl, logger }));
+
+  async function advanceRoom({ roomId, userId, tuple }) {
+    return transaction(getPool(), async (client) => {
+      const message = await client.query(
+        `SELECT created_at, id FROM room_messages
+         WHERE room_id = $1 AND id = $2 AND deleted_at IS NULL
+           AND (expires_at IS NULL OR expires_at > current_timestamp)
+           AND created_at = TIMESTAMPTZ 'epoch' + $3::bigint * INTERVAL '1 microsecond'
+         FOR SHARE`,
+        [roomId, tuple.id, tuple.createdAtMicros]
+      );
+      if (!message.rowCount) return null;
+      const result = await client.query(
+        `INSERT INTO room_chat_reads (
+           room_id, user_id, last_read_at, last_read_message_created_at, last_read_message_id, updated_at
+         ) VALUES ($1, $2, $3, $3, $4, current_timestamp)
+         ON CONFLICT (room_id, user_id) DO UPDATE SET
+           last_read_at = GREATEST(room_chat_reads.last_read_at, EXCLUDED.last_read_at),
+           last_read_message_created_at = EXCLUDED.last_read_message_created_at,
+           last_read_message_id = EXCLUDED.last_read_message_id,
+           updated_at = current_timestamp
+         WHERE room_chat_reads.last_read_message_created_at IS NULL
+            OR (room_chat_reads.last_read_message_created_at, room_chat_reads.last_read_message_id)
+               < (EXCLUDED.last_read_message_created_at, EXCLUDED.last_read_message_id)
+         RETURNING last_read_message_created_at, last_read_message_id`,
+        [roomId, userId, message.rows[0].created_at, message.rows[0].id]
+      );
+      return result.rows[0] || { unchanged: true };
+    });
+  }
+
+  async function advanceDm({ peerId, userId, tuple }) {
+    return transaction(getPool(), async (client) => {
+      const message = await client.query(
+        `SELECT created_at, id FROM direct_messages
+         WHERE id = $1 AND deleted_at IS NULL
+           AND ((sender_id = $2 AND recipient_id = $3) OR (sender_id = $3 AND recipient_id = $2))
+           AND created_at = TIMESTAMPTZ 'epoch' + $4::bigint * INTERVAL '1 microsecond'
+         FOR SHARE`,
+        [tuple.id, userId, peerId, tuple.createdAtMicros]
+      );
+      if (!message.rowCount) return null;
+      const result = await client.query(
+        `INSERT INTO direct_message_read_cursors (
+           user_id, peer_user_id, last_read_message_created_at, last_read_message_id, updated_at
+         ) VALUES ($1, $2, $3, $4, current_timestamp)
+         ON CONFLICT (user_id, peer_user_id) DO UPDATE SET
+           last_read_message_created_at = EXCLUDED.last_read_message_created_at,
+           last_read_message_id = EXCLUDED.last_read_message_id,
+           updated_at = current_timestamp
+         WHERE (direct_message_read_cursors.last_read_message_created_at, direct_message_read_cursors.last_read_message_id)
+            < (EXCLUDED.last_read_message_created_at, EXCLUDED.last_read_message_id)
+         RETURNING last_read_message_created_at, last_read_message_id`,
+        [userId, peerId, message.rows[0].created_at, message.rows[0].id]
+      );
+      await client.query(
+        `UPDATE direct_messages SET read_at = COALESCE(read_at, current_timestamp)
+         WHERE sender_id = $1 AND recipient_id = $2 AND deleted_at IS NULL
+           AND (created_at, id) <= ($3, $4)`,
+        [peerId, userId, message.rows[0].created_at, message.rows[0].id]
+      );
+      return result.rows[0] || { unchanged: true };
+    });
+  }
+
+  return Object.freeze({ advanceDm, advanceRoom });
+}
+
+module.exports = { createMessageReadRepository };

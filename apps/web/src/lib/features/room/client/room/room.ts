@@ -374,7 +374,7 @@ async function performJoinRoom(generation: number): Promise<void> {
 function formatJoinError(error: unknown): string {
   const message = errorMessage(error);
   if (/signal connection|failed to fetch/i.test(message)) {
-    return 'LiveKit недоступен: проверьте LIVEKIT_URL=ws://127.0.0.1:7880 и перезапустите VoiceRoom';
+    return 'LiveKit недоступен: проверьте LIVEKIT_GATE_PUBLIC_URL и перезапустите VoiceRoom';
   }
   return message || 'Не удалось подключиться';
 }

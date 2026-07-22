@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "release": "2.5.0",
+  "branchMetric": "node-v8-branch",
+  "branchMetricLabel": "V8 block branch coverage",
+  "branchMetricSemantics": "The branches field is deduplicated V8 function/block range coverage emitted by NODE_V8_COVERAGE, not Istanbul AST branch coverage.",
+  "branchMetricDocumentation": "https://nodejs.org/api/cli.html#node_v8_coveragedir",
+  "baselinePolicy": {
+    "mode": "protected-base-ratchet",
+    "initialAdoption": {
+      "baseConfigAbsent": true,
+      "reason": "G08 introduces the release 2.5.0 measured coverage configuration on a protected base that has no coverage threshold file."
+    }
+  },
+  "baseline": {
+    "artifact": "coverage/release-250-summary.json",
+    "measuredAt": "2026-07-20T09:26:55.358Z",
+    "total": {
+      "lines": 9.17,
+      "branches": 53.9
+    }
+  },
+  "changedBusinessCode": {
+    "line": 90,
+    "branch": 85
+  },
+  "strictBranchMinimum": 95,
+  "strictBranchPaths": [],
+  "strictBranchGroups": [
+    {
+      "name": "auth-admission",
+      "enforcement": "on-changed",
+      "paths": [
+        "apps/api/src/domains/admission/credential-boundary-service.js",
+        "apps/api/src/domains/admission/gate-credential-signer.js",
+        "apps/api/src/domains/admission/livekit-auth-gate-service.js",
+        "apps/api/src/domains/admission/livekit-credential-provider.js"
+      ],
+      "pathPatterns": []
+    },
+    {
+      "name": "media",
+      "enforcement": "on-changed",
+      "paths": [
+        "apps/api/src/domains/media/attachment-repository.js",
+        "apps/api/src/domains/media/media-job-repository.js",
+        "apps/web/src/lib/features/room/client/media/screen-receiver-demand.ts"
+      ],
+      "pathPatterns": []
+    }
+  ],
+  "businessPathPatterns": [
+    "apps/api/src/domains/admission/",
+    "apps/api/src/domains/media/attachment-repository.js",
+    "apps/api/src/domains/media/media-job-repository.js",
+    "apps/web/src/lib/api/auth.ts",
+    "apps/web/src/lib/features/room/client/media/screen-receiver-demand.ts"
+  ],
+  "ignoredPathPatterns": [
+    "/test/",
+    "/e2e/",
+    "/migrations/",
+    "packages/shared/src/emoji.js",
+    "packages/shared/src/emoji.mjs",
+    ".d.ts"
+  ]
+}

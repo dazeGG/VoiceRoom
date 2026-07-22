@@ -8,6 +8,10 @@
   import { applyRoomUpdated } from '../client/room/lifecycle';
   import { showToast } from '../client/ui/toast';
   import { roomSettingsUi, closeRoomSettings } from '../room-settings.svelte';
+  import ModerationCenter from '$lib/features/home/components/lobby/ModerationCenter.svelte';
+  import RoomMemberList from '$lib/features/home/components/lobby/RoomMemberList.svelte';
+  import { getCapabilityFeature } from '$lib/platform/capability-state.svelte';
+  import { fetchRoomNotificationLevel, setRoomNotificationLevel, type RoomNotificationLevel } from '$lib/api/notifications';
 
   let name = $state('');
   let error = $state('');
@@ -21,6 +25,11 @@
   let pendingAvatar = $state<Blob | null>(null);
   let avatarPreviewUrl = $state('');
   let removeAvatarPending = $state(false);
+  let moderationEnabled = $state(false);
+  let membershipEnabled = $state(false);
+  let engagementEnabled = $state(false);
+  let notificationLevel = $state<RoomNotificationLevel>('mentions');
+  let notificationSaving = $state(false);
 
   // Reset the form from the live room state each time the dialog opens —
   // roomClientState (the vanilla room client's store, aliased to avoid
@@ -29,6 +38,12 @@
   let wasOpen = false;
   $effect(() => {
     if (roomSettingsUi.open && !wasOpen) {
+      void getCapabilityFeature('moderationCenter').then((enabled) => { moderationEnabled = enabled; });
+      void getCapabilityFeature('membership').then((enabled) => { membershipEnabled = enabled; });
+      void getCapabilityFeature('engagement').then(async (enabled) => {
+        engagementEnabled = enabled;
+        if (enabled) notificationLevel = await fetchRoomNotificationLevel(roomClientState.roomId).catch(() => 'mentions');
+      });
       name = roomClientState.roomName;
       error = '';
       confirmingDelete = false;
@@ -111,6 +126,18 @@
     avatarPreviewUrl = '';
     pendingAvatar = null;
     removeAvatarPending = true;
+  }
+
+  async function saveNotificationLevel(event: Event): Promise<void> {
+    notificationLevel = (event.currentTarget as HTMLSelectElement).value as RoomNotificationLevel;
+    notificationSaving = true;
+    try {
+      await setRoomNotificationLevel(roomClientState.roomId, notificationLevel);
+    } catch (value) {
+      error = value instanceof Error ? value.message : 'Не удалось сохранить уведомления';
+    } finally {
+      notificationSaving = false;
+    }
   }
 
   function onClose(): void {
@@ -210,6 +237,22 @@
           {/if}
         </div>
       </form>
+      {#if engagementEnabled}
+        <label class="room-settings-notifications">
+          <span>Уведомления комнаты</span>
+          <select value={notificationLevel} onchange={saveNotificationLevel} disabled={notificationSaving}>
+            <option value="all">Все сообщения</option>
+            <option value="mentions">Упоминания и ответы</option>
+            <option value="none">Выключены</option>
+          </select>
+        </label>
+      {/if}
+      {#if membershipEnabled}
+        <div class="room-settings-members"><RoomMemberList roomId={roomClientState.roomId} /></div>
+      {/if}
+      {#if moderationEnabled}
+        <div class="room-settings-moderation"><ModerationCenter roomId={roomClientState.roomId} /></div>
+      {/if}
     </div>
   </div>
 {/if}
@@ -231,8 +274,11 @@
 />
 
 <style>
+  .room-settings-members, .room-settings-moderation { padding: 0 20px 20px; }
+  .room-settings-notifications { display: grid; gap: 8px; padding: 0 20px 20px; }
   .room-settings-modal { width: 620px; }
   .room-settings-content { display: flex; flex-direction: column; gap: 28px; padding: 28px 30px 30px; }
+  .room-settings-moderation { padding: 0 30px 30px; }
   .room-profile-head { display: flex; align-items: center; gap: 16px; }
   .room-name-field { flex: 1; min-width: 0; }
   .room-avatar-field { flex: none; }

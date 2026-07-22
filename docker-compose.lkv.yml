@@ -1,0 +1,65 @@
+name: voiceroom-lkv-replay
+
+services:
+  livekit:
+    image: livekit/livekit-server:v1.13.2
+    command: ["--dev", "--bind", "0.0.0.0"]
+    environment:
+      LIVEKIT_KEYS: "devkey: devsecret"
+    expose:
+      - "7880"
+
+  partition-proxy:
+    image: node:24-alpine
+    working_dir: /work
+    command: ["node", "scripts/lkv/partition-proxy.mjs", "--listen", "17880", "--target-host", "livekit", "--target-port", "7880"]
+    volumes:
+      - ./:/work:ro
+    ports:
+      - "17880:17880"
+    depends_on:
+      - livekit
+
+  livekit-gate:
+    build:
+      context: .
+      target: api
+    working_dir: /app
+    command: ["node", "apps/api/src/domains/admission/livekit-auth-gate-service.js"]
+    environment:
+      LIVEKIT_GATE_SECRET: "dev-g05-livekit-gate-secret-32-bytes-minimum"
+      LIVEKIT_INTERNAL_URL: "ws://livekit:7880"
+      DATABASE_URL: "postgres://voice_room:voice_room@postgres:5432/voice_room"
+    ports:
+      - "17881:3080"
+    depends_on:
+      - livekit
+      - postgres
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: voice_room
+      POSTGRES_USER: voice_room
+      POSTGRES_PASSWORD: voice_room
+    ports:
+      - "15432:5432"
+
+  physical-replay:
+    build:
+      context: .
+      target: api
+    working_dir: /work
+    command: ["node", "scripts/lkv/run-auth-gate-physical-replay.mjs", "--json", "--fail-on-blocked"]
+    environment:
+      DATABASE_URL: "postgres://voice_room:voice_room@postgres:5432/voice_room"
+      LIVEKIT_GATE_SECRET: "dev-g05-livekit-gate-secret-32-bytes-minimum"
+      LIVEKIT_INTERNAL_URL: "ws://livekit:7880"
+      LIVEKIT_API_KEY: "devkey"
+      LIVEKIT_API_SECRET: "devsecret"
+      NODE_PATH: "/app/node_modules:/work/node_modules"
+    volumes:
+      - ./:/work:ro
+    depends_on:
+      - livekit
+      - postgres

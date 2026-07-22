@@ -6,16 +6,83 @@
   "exports": {
     "./validation": {
       "types": "./src/validation.d.ts",
+      "import": "./src/validation.js",
       "require": "./src/validation.js"
+    },
+    "./capabilities": {
+      "types": "./src/capabilities.d.ts",
+      "import": "./src/capabilities.js",
+      "require": "./src/capabilities.js"
+    },
+    "./messaging-history": {
+      "types": "./src/messaging-history.d.ts",
+      "import": "./src/messaging-history.js",
+      "require": "./src/messaging-history.js"
+    },
+    "./messaging-send": {
+      "types": "./src/messaging-send.d.ts",
+      "import": "./src/messaging-send.js",
+      "require": "./src/messaging-send.js"
+    },
+    "./membership": {
+      "types": "./src/membership.d.ts",
+      "import": "./src/membership.js",
+      "require": "./src/membership.js"
+    },
+    "./room-message-content": {
+      "types": "./src/room-message-content.d.ts",
+      "import": "./src/room-message-content.js",
+      "require": "./src/room-message-content.js"
+    },
+    "./reactions": {
+      "types": "./src/reactions.d.ts",
+      "import": "./src/reactions.js",
+      "require": "./src/reactions.js"
+    },
+    "./attachments": {
+      "types": "./src/attachments.d.ts",
+      "import": "./src/attachments.js",
+      "require": "./src/attachments.js"
+    },
+    "./mentions": {
+      "types": "./src/mentions.d.ts",
+      "import": "./src/mentions.js",
+      "require": "./src/mentions.js"
+    },
+    "./notifications": {
+      "types": "./src/notifications.d.ts",
+      "import": "./src/notifications.js",
+      "require": "./src/notifications.js"
+    },
+    "./moderation": {
+      "types": "./src/moderation.d.ts",
+      "import": "./src/moderation.js",
+      "require": "./src/moderation.js"
     },
     "./realtime": {
       "types": "./src/realtime.d.ts",
+      "import": "./src/realtime.js",
       "require": "./src/realtime.js"
     },
     "./avatar-accent": {
       "types": "./src/avatar-accent.d.ts",
       "import": "./src/avatar-accent.mjs",
       "require": "./src/avatar-accent.js"
+    },
+    "./emoji": {
+      "types": "./src/emoji.d.ts",
+      "import": "./src/emoji.mjs",
+      "require": "./src/emoji.js"
+    },
+    "./runtime-config": {
+      "types": "./src/runtime-config.d.ts",
+      "import": "./src/runtime-config.js",
+      "require": "./src/runtime-config.js"
+    },
+    "./platform-class": {
+      "types": "./src/platform-class.d.ts",
+      "import": "./src/platform-class.js",
+      "require": "./src/platform-class.js"
     },
     "./visual-identity": {
       "types": "./src/visual-identity.d.ts",
@@ -24,7 +91,7 @@
     }
   },
   "scripts": {
-    "check": "node --check src/validation.js && node --check src/realtime.js && node --check src/avatar-accent.js && node --check src/avatar-accent.mjs",
+    "check": "node --check src/validation.js && node --check src/realtime.js && node --check src/avatar-accent.js && node --check src/avatar-accent.mjs && node --check src/emoji.js && node --check src/emoji.mjs && node --check src/runtime-config.js && node --check src/capabilities.js && node --check src/platform-class.js && node --check src/messaging-history.js && node --check src/messaging-send.js && node --check src/membership.js && node --check src/room-message-content.js && node --check src/reactions.js && node --check src/attachments.js && node --check src/mentions.js && node --check src/notifications.js && node --check src/moderation.js",
     "test": "node --test test/*.test.js"
   }
 }

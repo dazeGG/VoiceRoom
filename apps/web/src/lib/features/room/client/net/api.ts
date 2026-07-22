@@ -1,4 +1,5 @@
 import { state } from '../core/state.svelte';
+import { resolveLiveKitUrls } from '$lib/platform/runtime-config';
 
 export class ApiRequestError extends Error {
   code: string;
@@ -35,6 +36,9 @@ export async function postJson(url: string, body: unknown): Promise<any> {
   }
   if (!response.ok) {
     throw new ApiRequestError(payload?.error || 'Сервер недоступен', payload?.code, payload?.roomId);
+  }
+  if (url === '/api/livekit-token' && typeof payload?.url === 'string') {
+    return { ...payload, urls: await resolveLiveKitUrls(payload.url) };
   }
   return payload;
 }

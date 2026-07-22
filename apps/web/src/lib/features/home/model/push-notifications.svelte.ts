@@ -1,5 +1,6 @@
 import { browser } from '$app/environment';
 import { deletePushSubscription, fetchPushConfig, savePushSubscription } from '$lib/api/push';
+import { isDesktopBoundaryBlocked } from '$lib/platform/desktop-boundary';
 
 export const pushNotifications = $state({
   active: false,
@@ -30,6 +31,10 @@ function isDesktopRuntime(): boolean {
   return browser && Boolean(window.voiceRoomRuntime?.isDesktop);
 }
 
+function isPushSuppressedByPlatform(): boolean {
+  return !browser || isDesktopRuntime() || isDesktopBoundaryBlocked();
+}
+
 export function syncPushNotificationState(userId: string | null): Promise<void> {
   const generation = ++syncGeneration;
   syncQueue = syncQueue.catch(() => {}).then(() => syncPushNotificationStateNow(userId, generation));
@@ -45,6 +50,13 @@ async function syncPushNotificationStateNow(userId: string | null, generation: n
   }
   if (!userId) return;
   if (isDesktopRuntime()) {
+    pushNotifications.supported = false;
+    pushNotifications.serverEnabled = false;
+    pushNotifications.active = false;
+    pushNotifications.loaded = true;
+    return;
+  }
+  if (!browser || isDesktopBoundaryBlocked()) {
     pushNotifications.supported = false;
     pushNotifications.serverEnabled = false;
     pushNotifications.active = false;
@@ -103,7 +115,7 @@ export async function detachPushSubscription(): Promise<void> {
 }
 
 export async function setPushNotificationsEnabled(enabled: boolean): Promise<boolean> {
-  if (isDesktopRuntime()) {
+  if (isPushSuppressedByPlatform()) {
     pushNotifications.active = false;
     return false;
   }

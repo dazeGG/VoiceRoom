@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { Bell, BellOff, Copy, DoorOpen, Pencil, Trash2, User, UserMinus, X } from '@lucide/svelte';
+  import { Bell, BellOff, Copy, DoorOpen, MessageSquare, Pencil, Trash2, User, UserMinus, X } from '@lucide/svelte';
   import { iconMd, iconSm } from '$lib/shared/ui/icons';
-  import { tick } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import type { DirectMessage } from '$lib/api/dm';
   import { Avatar } from '$lib/shared/ui';
   import { effectivePresenceStatus } from '$lib/shared/presence';
@@ -15,11 +15,23 @@
     removeFriend,
     respondRoomInvitation,
     sendMessage,
+    loadOlderThread,
     toggleProfile
   } from '../../model/friends.svelte';
   import { isPeerNotificationsMuted, updatePeerNotificationsMuted } from '$lib/shared/notifications/preferences.svelte';
   import { copyText } from '$lib/shared/utils/clipboard';
   import { pushToast } from '../../model/toasts.svelte';
+  import { markThreadRead } from '$lib/api/dm';
+  import { createReadReconciliation } from '$lib/shared/chat/read-reconciliation.svelte';
+  import { getCapabilityFeature } from '$lib/platform/capability-state.svelte';
+  import { getAppRealtime } from '$lib/api/realtime';
+  import { createReactionStore } from '$lib/shared/chat/reaction-store.svelte';
+  import ReactionPicker from '$lib/shared/chat/ReactionPicker.svelte';
+  import ReactionSummary from '$lib/shared/chat/ReactionSummary.svelte';
+  import { getAttachmentComposeStore, type AttachmentComposeStore } from '$lib/shared/chat/attachment-compose.svelte';
+  import AttachmentComposer from '$lib/shared/chat/AttachmentComposer.svelte';
+  import AttachmentMosaic from '$lib/shared/chat/AttachmentMosaic.svelte';
+  import ReplyPreview from '$lib/shared/chat/ReplyPreview.svelte';
 
   let { selfId } = $props<{ selfId: string }>();
 
@@ -31,6 +43,23 @@
   let scrollEl = $state<HTMLDivElement | null>(null);
   let inputEl = $state<HTMLTextAreaElement | null>(null);
   let editEl = $state<HTMLTextAreaElement | null>(null);
+  let readReconciliation: ReturnType<typeof createReadReconciliation> | null = null;
+  let reactionsEnabled = $state(false);
+  const reactions = createReactionStore();
+  let media = $state<AttachmentComposeStore | null>(null);
+  let repliesEnabled = $state(false);
+  let replyTarget = $state<DirectMessage | null>(null);
+  let sendAttemptKey = '';
+  let sendAttemptFingerprint = '';
+
+  function idempotencyKeyFor(value: unknown): string {
+    const fingerprint = JSON.stringify(value);
+    if (!sendAttemptKey || sendAttemptFingerprint !== fingerprint) {
+      sendAttemptKey = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      sendAttemptFingerprint = fingerprint;
+    }
+    return sendAttemptKey;
+  }
 
   function autoResize() {
     if (!inputEl) return;
@@ -86,6 +115,33 @@
   let inviteResponding = $state('');
   const profileAccent = $derived(peer?.avatarAccent || '');
 
+  $effect(() => {
+    const peerId = friendsState.selectedFriendId;
+    if (!peerId) {
+      reactions.reset();
+      return;
+    }
+    reactions.setConversation({ type: 'dm', id: peerId });
+    media = getAttachmentComposeStore('dm', peerId);
+  });
+
+  $effect(() => {
+    if (!reactionsEnabled) return;
+    for (const message of friendsState.thread) {
+      if (!message.invite) void reactions.load(message.id);
+    }
+  });
+
+  onMount(() => {
+    void getCapabilityFeature('reactions').then((enabled) => { reactionsEnabled = enabled; });
+    void getCapabilityFeature('replies').then((enabled) => { repliesEnabled = enabled; });
+    return getAppRealtime().subscribe((event) => {
+      if (event.type !== 'reaction.updated' || event.payload.conversation.type !== 'dm') return;
+      if (event.payload.conversation.id !== friendsState.selectedFriendId) return;
+      reactions.applyServer(event.payload.messageId, event.payload.summary);
+    });
+  });
+
   interface Group {
     key: string;
     fromMe: boolean;
@@ -117,13 +173,52 @@
     return result;
   });
 
-  // Autoscroll to the newest message whenever the thread grows.
+  let lastAutoScrolledPeer = '';
+  let lastAutoScrolledMessage = '';
+
+  // Prepending older history keeps the same newest id, so it must not trigger
+  // this latest-message autoscroll and disturb the preserved anchor.
   $effect(() => {
-    void friendsState.thread.length;
+    const peerId = friendsState.selectedFriendId ?? '';
+    const newestId = friendsState.thread.at(-1)?.id ?? '';
+    if (peerId === lastAutoScrolledPeer && newestId === lastAutoScrolledMessage) return;
+    lastAutoScrolledPeer = peerId;
+    lastAutoScrolledMessage = newestId;
     void tick().then(() => {
       if (scrollEl) scrollEl.scrollTop = scrollEl.scrollHeight;
     });
   });
+
+  $effect(() => {
+    const peerId = friendsState.selectedFriendId;
+    const cursorEnabled = friendsState.threadReadCursorEnabled;
+    readReconciliation?.dispose();
+    readReconciliation = null;
+    if (friendsState.view !== 'dm' || !peerId) return;
+    readReconciliation = createReadReconciliation({
+      scope: `dm:${peerId}`,
+      legacy: !cursorEnabled,
+      commit: async (cursor) => {
+        await markThreadRead(peerId, cursor);
+      }
+    });
+    return () => {
+      readReconciliation?.dispose();
+      readReconciliation = null;
+    };
+  });
+
+  $effect(() => {
+    const revision = friendsState.threadReadRevision;
+    const candidate = friendsState.threadReadCandidate;
+    if (!revision || !candidate || !readReconciliation) return;
+    void tick().then(() => readReconciliation?.advanceAfterRender(candidate === '__legacy__' ? undefined : candidate));
+  });
+
+  function onThreadScroll(): void {
+    if (!scrollEl || scrollEl.scrollTop > 32) return;
+    void loadOlderThread(scrollEl);
+  }
 
   // Focus the compose field when opening or switching DM threads.
   $effect(() => {
@@ -135,12 +230,19 @@
 
   async function submit(): Promise<void> {
     const text = draft.trim();
-    if (!text || sending) return;
+    if ((!text && !media?.canSend) || sending) return;
+    if (media?.drafts.length && !media.canSend) return;
     sending = true;
     let sent = false;
     try {
-      await sendMessage(text);
+      const attachmentIds = media?.readyIds ?? [];
+      const replyTo = replyTarget ? { messageId: replyTarget.id } : undefined;
+      await sendMessage(text, attachmentIds, replyTo, idempotencyKeyFor({ text, attachmentIds, replyTo }));
       draft = '';
+      media?.clearBound();
+      replyTarget = null;
+      sendAttemptKey = '';
+      sendAttemptFingerprint = '';
       sent = true;
     } catch {
       // Keep the draft intact so the message can be retried.
@@ -172,6 +274,7 @@
   async function onDelete(mid: string): Promise<void> {
     try {
       await deleteMessage(mid);
+      reactions.markDeleted(mid);
     } catch {}
   }
 
@@ -279,13 +382,23 @@
       </button>
     {/if}
 
-    <div class="lobby-dm-scroll lobby-scroll" bind:this={scrollEl}>
+    <div class="lobby-dm-scroll lobby-scroll" bind:this={scrollEl} onscroll={onThreadScroll}>
       {#if friendsState.threadLoading}
         <div class="lobby-dm-empty">Загружаем переписку…</div>
+      {:else if friendsState.threadHistoryError && groups.length === 0}
+        <div class="lobby-dm-empty">{friendsState.threadHistoryError}</div>
       {:else if groups.length === 0}
         <div class="lobby-dm-empty">Здесь пока пусто. Напишите первым!</div>
       {:else}
         <div class="lobby-dm-thread">
+          {#if friendsState.threadHistoryError}
+            <div class="lobby-dm-empty">{friendsState.threadHistoryError}</div>
+          {/if}
+          {#if friendsState.threadHistoryEnabled && (friendsState.threadLoadingOlder || friendsState.threadHasMoreBefore)}
+            <button type="button" class="lobby-dm-empty" disabled={friendsState.threadLoadingOlder} onclick={() => void loadOlderThread(scrollEl)}>
+              {friendsState.threadLoadingOlder ? 'Загружаем…' : 'Показать предыдущие'}
+            </button>
+          {/if}
           {#each groups as group (group.key)}
             {#if group.dayLabel}
               <div class="lobby-dm-day">
@@ -332,14 +445,19 @@
                         </div>
                       </div>
                     {:else}
+                      {#if bubble.replyPreview}<ReplyPreview preview={bubble.replyPreview} />{/if}
                       <span class="dm-msg-content"><ChatText text={bubble.body} />{#if bubble.editedAt}<span class="dm-msg-edited">(изменено)</span>{/if}</span>
+                      {#if bubble.attachments?.length}<AttachmentMosaic attachments={bubble.attachments} />{/if}
                       <div class="dm-msg-actions" role="toolbar" aria-label="Действия с сообщением">
+                        {#if repliesEnabled}<button type="button" aria-label="Ответить" title="Ответить" onclick={() => { replyTarget = bubble; inputEl?.focus(); }}><MessageSquare {...iconSm} /></button>{/if}
+                        {#if reactionsEnabled}<ReactionPicker store={reactions} messageId={bubble.id} />{/if}
                         <button type="button" aria-label="Копировать текст" title="Копировать текст" onclick={() => void copyMessageText(bubble)}><Copy {...iconSm} aria-hidden="true" /></button>
                         {#if group.fromMe}
                           <button type="button" aria-label="Редактировать" title="Редактировать" onclick={() => startEditing(bubble)}><Pencil {...iconSm} aria-hidden="true" /></button>
                           <button type="button" class="dm-msg-action-danger" aria-label="Удалить" title="Удалить" onclick={() => void onDelete(bubble.id)}><Trash2 {...iconSm} aria-hidden="true" /></button>
                         {/if}
                       </div>
+                      {#if reactionsEnabled}<ReactionSummary store={reactions} messageId={bubble.id} />{/if}
                     {/if}
                   </div>
                   {/if}
@@ -353,6 +471,8 @@
     </div>
 
     <div class="lobby-dm-compose">
+      {#if replyTarget}<div class="dm-reply-target"><ReplyPreview preview={{ messageId: replyTarget.id, deleted: false, author: { id: replyTarget.senderId, name: replyTarget.senderId === selfId ? 'Вы' : friendName(peer!) }, text: replyTarget.body }} /><button type="button" onclick={() => (replyTarget = null)}>Отмена</button></div>{/if}
+      {#if media}<AttachmentComposer store={media} disabled={sending} />{/if}
       <textarea
         class="lobby-dm-input lobby-dm-textarea"
         placeholder="Написать сообщение…"

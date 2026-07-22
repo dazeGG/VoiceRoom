@@ -1,0 +1,43 @@
+name: Promote production digests
+
+on:
+  workflow_dispatch:
+    inputs:
+      authority:
+        description: Synthetic authority fixture path for preflight validation
+        required: false
+        type: string
+
+permissions: {}
+
+jobs:
+  promotion-preflight:
+    name: Credentialless promotion preflight
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      deployments: read
+      packages: read
+      id-token: none
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prove production promotion is externally disabled
+        shell: bash
+        run: |
+          set -euo pipefail
+          fixture="${{ inputs.authority }}"
+          if [[ -z "$fixture" ]]; then
+            printf '{"mode":"live-pretag"}\n' > promotion-authority.json
+            fixture=promotion-authority.json
+          fi
+          node scripts/deploy/check-production-environment.mjs --fixture "$fixture" > promotion-preflight.json
+          status="$(node -p 'JSON.parse(require("node:fs").readFileSync("promotion-preflight.json")).status')"
+          if [[ "$status" == "PROMOTION_READY_EXTERNAL_AUTHORITY" ]]; then
+            printf 'Synthetic ready routing validated; no live promotion occurs in this release plan.\n'
+          elif [[ "$status" == "PROMOTION_DISABLED_EXTERNAL_AUTHORITY" ]]; then
+            printf 'PROMOTION_DISABLED_EXTERNAL_AUTHORITY\n'
+          else
+            cat promotion-preflight.json >&2
+            exit 1
+          fi
