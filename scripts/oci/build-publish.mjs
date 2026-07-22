@@ -102,12 +102,25 @@ export function assertRuntimePublicationRecord(record, config = readRuntimeConfi
 }
 
 export function assertDeploymentComposeUsesDigests(composeText) {
-  for (const service of ["api", "caddy"]) {
+  const services = new Map([
+    ["api", { image: "API" }],
+    ["caddy", { image: "WEB" }],
+    ["message-delivery", { image: "WORKER", worker: "message-delivery" }],
+    ["notification-delivery", { image: "WORKER", worker: "notification-delivery" }],
+    ["media-processing", { image: "WORKER", worker: "media-processing" }],
+    ["media-maintenance", { image: "WORKER", worker: "media-maintenance" }],
+    ["media-reconciliation", { image: "WORKER", worker: "media-reconciliation" }],
+  ]);
+  for (const [service, expected] of services) {
     const block = composeText.match(new RegExp(`^  ${service}:\\n([\\s\\S]*?)(?=^  [a-zA-Z0-9_-]+:|^volumes:|\\z)`, "m"))?.[0] ?? "";
     if (!block) throw new Error(`${service} service is absent`);
     if (/^\s+build:/m.test(block)) throw new Error(`${service} service must not build on the deployment host`);
-    if (!/^\s+image:\s+\$\{VOICEROOM_(API|WEB)_IMAGE:\?set immutable VOICEROOM_(API|WEB)_IMAGE digest\}$/m.test(block))
+    const imageLine = 'image: ${VOICEROOM_' + expected.image +
+      '_IMAGE:?set immutable VOICEROOM_' + expected.image + '_IMAGE digest}';
+    if (!block.split("\n").some((line) => line.trim() === imageLine))
       throw new Error(`${service} service must consume an immutable digest variable`);
+    if (expected.worker && !block.split("\n").some((line) => line.trim() === `VOICE_ROOM_WORKER: ${expected.worker}`))
+      throw new Error(`${service} service must select its worker entrypoint`);
   }
 }
 

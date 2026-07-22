@@ -73,7 +73,7 @@ function createMediaStorage({ rootDir, mediaDir } = {}) {
     const id = validateAttachmentId(attachmentId);
     await ensureRoot();
     const directory = path.join(root, id);
-    await fs.promises.mkdir(directory, { mode: 0o700 });
+    await fs.promises.mkdir(directory, { recursive: true, mode: 0o700 });
     await assertDirectory(directory, path.join(canonicalRoot, id));
     await fs.promises.chmod(directory, 0o700);
     return directory;
