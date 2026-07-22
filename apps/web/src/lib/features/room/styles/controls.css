@@ -549,6 +549,13 @@ body[data-lobby-embedded="true"] .room-dock {
   transition: background 0.16s ease, border-color 0.16s ease;
 }
 
+.gate-switch::after {
+  content: '';
+  position: absolute;
+  inset: -12px -6px;
+  border-radius: var(--radius-pill);
+}
+
 .gate-switch[aria-checked='true'] {
   border-color: oklch(72% 0.14 164 / 0.55);
   background: color-mix(in oklch, var(--green) 30%, transparent);

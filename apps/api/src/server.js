@@ -270,18 +270,28 @@ function getMessageService() {
   return messageService;
 }
 
+function resolveCursorHmacKeys({ context, env = process.env } = {}) {
+  const configured = env.VOICE_ROOM_CURSOR_HMAC_KEYS
+    || env.CURSOR_HMAC_KEYS
+    || env.CURSOR_HMAC_KEY;
+  if (configured) return configured;
+
+  if (env.NODE_ENV === 'production') {
+    throw new Error('VOICE_ROOM_CURSOR_HMAC_KEYS is required in production');
+  }
+
+  const liveKitGateSecret = typeof env.LIVEKIT_GATE_SECRET === 'string'
+    ? env.LIVEKIT_GATE_SECRET.trim()
+    : LIVEKIT_GATE_SECRET;
+  if (liveKitGateSecret.length >= 32) return `${liveKitGateSecret}:${context}-cursors`;
+
+  const developmentSeed = context === 'membership' ? 'voice-room-development-membership' : 'voice-room-development-cursors';
+  return crypto.createHash('sha256').update(String(env.POW_SECRET || developmentSeed)).digest('hex');
+}
+
 function getHistoryServices() {
   if (!historyServices) {
-    const configuredKeys = process.env.VOICE_ROOM_CURSOR_HMAC_KEYS
-      || process.env.CURSOR_HMAC_KEYS
-      || process.env.CURSOR_HMAC_KEY;
-    if (process.env.NODE_ENV === 'production' && !configuredKeys && LIVEKIT_GATE_SECRET.length < 32) {
-      throw new Error('VOICE_ROOM_CURSOR_HMAC_KEYS is required in production');
-    }
-    const fallbackKey = LIVEKIT_GATE_SECRET.length >= 32
-      ? `${LIVEKIT_GATE_SECRET}:history-cursors`
-      : crypto.createHash('sha256').update(String(process.env.POW_SECRET || 'voice-room-development-cursors')).digest('hex');
-    const cursorCodec = createCursorCodec({ keys: configuredKeys || fallbackKey });
+    const cursorCodec = createCursorCodec({ keys: resolveCursorHmacKeys({ context: 'history' }) });
     const visibilityPolicy = createMessageVisibilityService();
     historyServices = {
       cursorCodec,
@@ -668,13 +678,7 @@ function getLiveKitCredentialProvider() {
 }
 
 function membershipCursorCodec() {
-  const configured = process.env.VOICE_ROOM_CURSOR_HMAC_KEYS
-    || process.env.CURSOR_HMAC_KEYS
-    || process.env.CURSOR_HMAC_KEY;
-  const fallback = LIVEKIT_GATE_SECRET.length >= 32
-    ? `${LIVEKIT_GATE_SECRET}:membership-cursors`
-    : crypto.createHash('sha256').update(String(process.env.POW_SECRET || 'voice-room-development-membership')).digest('hex');
-  return createCursorCodec({ keys: configured || fallback });
+  return createCursorCodec({ keys: resolveCursorHmacKeys({ context: 'membership' }) });
 }
 
 function roomMembershipPresenceSnapshot(roomId) {
@@ -3769,7 +3773,8 @@ function createApiApp({
   push = null,
   avatars = null,
   liveKitCredentials = null,
-  membershipServicesOverride = null
+  membershipServicesOverride = null,
+  readinessProviderOverride = null
 } = {}) {
   if (store && store !== roomStore) presenceRooms.clear();
   if (store) roomStore = store;
@@ -3803,6 +3808,7 @@ function createApiApp({
     limits: { fileSize: MAX_UPLOAD_BYTES, files: 1, parts: 2 }
   });
   app.register(fastifyWebsocket, { options: { maxPayload: WS_MAX_PAYLOAD_BYTES } });
+  const activeReadinessProvider = readinessProviderOverride || readinessProvider;
   app.addHook('onReady', startMessageDeliveryListener);
   app.addHook('onClose', stopMessageDeliveryListener);
 
@@ -3855,13 +3861,17 @@ function createApiApp({
   });
 
   app.get('/api/healthz', (request, reply) => runLegacyHandler(request, reply, async (req, res) => {
-    const readiness = (() => {
-      try {
-        return readinessProvider.getSnapshot();
-      } catch {
-        return null;
-      }
-    })();
+    let readiness;
+    try {
+      readiness = activeReadinessProvider.getSnapshot();
+    } catch {
+      sendJson(res, 503, {
+        ok: false,
+        code: 'readiness_unavailable',
+        error: 'Readiness snapshot unavailable'
+      });
+      return;
+    }
     const livekit = getLiveKitConfig();
     sendJson(res, 200, {
       livekit: livekit.enabled,
@@ -3884,7 +3894,7 @@ function createApiApp({
   app.get('/api/metrics', (request, reply) => {
     const readiness = (() => {
       try {
-        return readinessProvider.getSnapshot();
+        return activeReadinessProvider.getSnapshot();
       } catch {
         return null;
       }
@@ -3903,7 +3913,7 @@ function createApiApp({
 
   registerCapabilityRoutes({
     app,
-    readinessProvider,
+    readinessProvider: activeReadinessProvider,
     runLegacyHandler
   });
 
@@ -3916,7 +3926,7 @@ function createApiApp({
       resolveUser: resolveSessionUser,
       membershipEnabled: () => {
         try {
-          return readinessProvider.getSnapshot()?.features?.membership === true;
+          return activeReadinessProvider.getSnapshot()?.features?.membership === true;
         } catch {
           return false;
         }
@@ -4261,6 +4271,9 @@ if (require.main === module) {
 }
 
 module.exports = {
+  __private: {
+    resolveCursorHmacKeys
+  },
   bootstrap,
   closeStores,
   createApiApp,

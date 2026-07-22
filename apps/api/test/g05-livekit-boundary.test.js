@@ -327,6 +327,14 @@ test('G05 gate strips credential before upstream and fails closed on malformed c
   assert.equal(denied.code, 'malformed');
 });
 
+test('G05 gate rejects wss upstreams because upstream proxying is raw TCP only', () => {
+  assert.throws(() => createLiveKitAuthGateService({
+    roomStore: createGateAwareStore(),
+    secret: process.env.LIVEKIT_GATE_SECRET,
+    upstreamUrl: 'wss://livekit.example.test/rtc'
+  }), /must be ws:\/\/ because the auth gate uses a raw TCP upstream/);
+});
+
 test('G05 ban reports no success when ban+gate revocation transaction fails', async (t) => {
   const store = createGateAwareStore();
   const signer = createGateCredentialSigner({ secret: process.env.LIVEKIT_GATE_SECRET });

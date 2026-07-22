@@ -4,6 +4,10 @@ const crypto = require('node:crypto');
 
 const CONTEXTS = new Set(['room', 'dm']);
 const MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
+const CLEANUP_CANDIDATE_PREDICATE = `
+         (state = 'uploading' AND updated_at <= current_timestamp - interval '1 hour') OR
+         (state = 'failed' AND updated_at <= current_timestamp - interval '1 hour') OR
+         (state = 'ready' AND bound_at IS NULL AND updated_at <= current_timestamp - interval '24 hours')`;
 
 function requiredText(value, name, max = 256) {
   const normalized = typeof value === 'string' ? value.trim() : '';
@@ -243,9 +247,7 @@ function createAttachmentRepository({ pool } = {}) {
     const result = await executor(client).query(
       `SELECT * FROM message_attachments
        WHERE
-         (state = 'uploading' AND updated_at <= current_timestamp - interval '1 hour') OR
-         (state = 'failed' AND updated_at <= current_timestamp - interval '1 hour') OR
-         (state = 'ready' AND bound_at IS NULL AND updated_at <= current_timestamp - interval '24 hours') OR
+${CLEANUP_CANDIDATE_PREDICATE} OR
          (state = 'deleted' AND updated_at <= current_timestamp - interval '1 hour')
        ORDER BY updated_at ASC, id ASC LIMIT $1`,
       [Math.max(1, Math.min(Number(limit) || 500, 500))]
@@ -258,9 +260,7 @@ function createAttachmentRepository({ pool } = {}) {
       `UPDATE message_attachments SET state = 'deleted', deleted_at = current_timestamp,
          updated_at = current_timestamp
        WHERE id = $1 AND (
-         (state = 'uploading' AND updated_at <= current_timestamp - interval '1 hour') OR
-         (state = 'failed' AND updated_at <= current_timestamp - interval '1 hour') OR
-         (state = 'ready' AND bound_at IS NULL AND updated_at <= current_timestamp - interval '24 hours')
+${CLEANUP_CANDIDATE_PREDICATE}
        ) RETURNING *`,
       [id]
     );

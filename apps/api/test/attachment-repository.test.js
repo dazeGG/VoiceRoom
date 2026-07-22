@@ -192,6 +192,11 @@ test('attachment repository covers cleanup, storage inventory, quota, and owner 
   await repository.listCleanupCandidates({ limit: 1 });
   assert.equal(calls.at(-1).values[0], 1);
   assert.equal((await repository.markCleanupDeleted('attachment-1')).id, 'attachment-1');
+  const cleanupDeleteSql = calls.at(-1).text;
+  assert.equal((cleanupDeleteSql.match(/WHERE id = \$1/g) || []).length, 1);
+  assert.equal((cleanupDeleteSql.match(/state = 'uploading'/g) || []).length, 1);
+  assert.equal((cleanupDeleteSql.match(/state = 'failed'/g) || []).length, 1);
+  assert.equal((cleanupDeleteSql.match(/state = 'ready'/g) || []).length, 1);
   mode = 'fallback';
   assert.equal((await repository.markCleanupDeleted('attachment-1')).internalState, 'deleted');
   mode = 'missing';

@@ -91,13 +91,13 @@
 </script>
 
 <div class="lv-main-scroll">
-  <button class="lr-section-link" type="button" style="margin-bottom:18px;" onclick={onHome}>
+  <button class="lr-section-link people-back" type="button" onclick={onHome}>
     <ChevronLeft {...iconSm} aria-hidden="true" />
     На главную
   </button>
-  <div class="lr-title" style="margin-bottom:4px;">Друзья и заявки</div>
+  <div class="lr-title people-title">Друзья и заявки</div>
 
-  <div class="lr-eyebrow" style="margin:24px 0 12px;">Добавить друга</div>
+  <div class="lr-eyebrow people-section-label people-section-label--add">Добавить друга</div>
   <div class="lr-add-bar">
     <label class="lr-add-field">
       <span class="at">@</span>
@@ -122,20 +122,20 @@
     — поделитесь им, чтобы вас нашли.
   </div>
 
-  <div class="lr-eyebrow" style="margin:32px 0 14px;">Заявки</div>
+  <div class="lr-eyebrow people-section-label people-section-label--requests">Заявки</div>
   <div class="lr-grid-2">
     <div>
-      <div class="lr-eyebrow" style="margin-bottom:14px;">Входящие — {incoming.length}</div>
+      <div class="lr-eyebrow people-column-label">Входящие — {incoming.length}</div>
       {#if incoming.length === 0}
         <p class="lr-empty">Новых заявок нет.</p>
       {:else}
         {#each incoming as request (request.id)}
           <div class="lr-req-card">
             <Avatar name={friendName(request.user)} src={request.user.avatarUrl} colorKey={request.user.avatarColorKey} background={request.user.avatarAccent || undefined} size={44} />
-            <div style="flex:1;min-width:0;">
-              <div class="lr-req-name" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{friendName(request.user)}</div>
-              <div class="lr-req-handle" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">@{request.user.login}</div>
-              <div class="lr-req-meta" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{mutualLabel(request.mutualFriends)}</div>
+            <div class="people-request-copy">
+              <div class="lr-req-name people-truncate">{friendName(request.user)}</div>
+              <div class="lr-req-handle people-truncate">@{request.user.login}</div>
+              <div class="lr-req-meta people-truncate">{mutualLabel(request.mutualFriends)}</div>
             </div>
             <div class="lr-req-actions">
               <button class="lr-req-btn accept" type="button" title="Принять" disabled={busy[request.id]} onclick={() => run(request.id, () => acceptRequest(request.id), 'Заявка принята')}>
@@ -151,16 +151,16 @@
     </div>
 
     <div>
-      <div class="lr-eyebrow" style="margin-bottom:14px;">Исходящие — {outgoing.length}</div>
+      <div class="lr-eyebrow people-column-label">Исходящие — {outgoing.length}</div>
       {#if outgoing.length === 0}
         <p class="lr-empty">Вы пока никому не отправляли заявки.</p>
       {:else}
         {#each outgoing as request (request.id)}
           <div class="lr-req-card">
             <Avatar name={friendName(request.user)} src={request.user.avatarUrl} colorKey={request.user.avatarColorKey} background={request.user.avatarAccent || undefined} size={44} />
-            <div style="flex:1;min-width:0;">
-              <div class="lr-req-name" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{friendName(request.user)}</div>
-              <div class="lr-req-handle" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">@{request.user.login}</div>
+            <div class="people-request-copy">
+              <div class="lr-req-name people-truncate">{friendName(request.user)}</div>
+              <div class="lr-req-handle people-truncate">@{request.user.login}</div>
               <div class="lr-req-pending"><span class="lr-req-pending-dot"></span>заявка отправлена · ждём ответа</div>
             </div>
             <Button variant="ghost" disabled={busy[request.id]} onclick={() => run(request.id, () => cancelRequest(request.id), 'Заявка отменена')}>Отменить</Button>

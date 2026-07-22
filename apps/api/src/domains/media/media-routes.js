@@ -1,5 +1,12 @@
 'use strict';
 
+const ATTACHMENT_ID_PATTERN = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+
+function cleanAttachmentId(value) {
+  const id = String(value || '').trim();
+  return ATTACHMENT_ID_PATTERN.test(id) ? id : '';
+}
+
 function sendError(reply, error) {
   const status = Number.isInteger(error?.statusCode) ? error.statusCode : 500;
   return reply.code(status).send({
@@ -29,6 +36,15 @@ function registerMediaRoutes({
     return resolved;
   }
 
+  function attachmentId(request, reply) {
+    const id = cleanAttachmentId(request.params?.id);
+    if (!id) {
+      reply.code(400).send({ ok: false, code: 'media_attachment_id_invalid', error: 'Invalid attachment id' });
+      return '';
+    }
+    return id;
+  }
+
   app.post('/api/media/attachments', async (request, reply) => {
     const current = await user(request, reply); if (!current) return;
     if (!await uploadsEnabled(request)) return reply.code(503).send({ ok: false, code: 'media_uploads_disabled', error: 'Media uploads are unavailable' });
@@ -40,6 +56,7 @@ function registerMediaRoutes({
 
   app.put('/api/media/attachments/:id/content', async (request, reply) => {
     const current = await user(request, reply); if (!current) return;
+    const id = attachmentId(request, reply); if (!id) return;
     if (!await uploadsEnabled(request)) return reply.code(503).send({ ok: false, code: 'media_uploads_disabled', error: 'Media uploads are unavailable' });
     try {
       let stream = request.raw;
@@ -49,38 +66,42 @@ function registerMediaRoutes({
         stream = part?.file;
         mimeType = part?.mimetype || '';
       }
-      const attachment = await mediaService.upload({ id: request.params.id, ownerId: current.id, stream, mimeType });
+      const attachment = await mediaService.upload({ id, ownerId: current.id, stream, mimeType });
       return reply.header('Cache-Control', 'no-store').send({ ok: true, attachment });
     } catch (error) { return sendError(reply, error); }
   });
 
   app.get('/api/media/attachments/:id', async (request, reply) => {
     const current = await user(request, reply); if (!current) return;
+    const id = attachmentId(request, reply); if (!id) return;
     try {
-      const attachment = await mediaService.status({ id: request.params.id, ownerId: current.id });
+      const attachment = await mediaService.status({ id, ownerId: current.id });
       return reply.header('Cache-Control', 'no-store').send({ ok: true, attachment });
     } catch (error) { return sendError(reply, error); }
   });
 
   app.post('/api/media/attachments/:id/retry', async (request, reply) => {
     const current = await user(request, reply); if (!current) return;
+    const id = attachmentId(request, reply); if (!id) return;
     if (!await uploadsEnabled(request)) return reply.code(503).send({ ok: false, code: 'media_uploads_disabled', error: 'Media uploads are unavailable' });
-    try { return reply.send({ ok: true, attachment: await mediaService.retry({ id: request.params.id, ownerId: current.id }) }); }
+    try { return reply.send({ ok: true, attachment: await mediaService.retry({ id, ownerId: current.id }) }); }
     catch (error) { return sendError(reply, error); }
   });
 
   app.delete('/api/media/attachments/:id', async (request, reply) => {
     const current = await user(request, reply); if (!current) return;
-    try { return reply.send({ ok: true, attachment: await mediaService.remove({ id: request.params.id, ownerId: current.id }) }); }
+    const id = attachmentId(request, reply); if (!id) return;
+    try { return reply.send({ ok: true, attachment: await mediaService.remove({ id, ownerId: current.id }) }); }
     catch (error) { return sendError(reply, error); }
   });
 
   if (mediaVisibilityService?.open) {
     app.get('/api/media/attachments/:id/:variant', async (request, reply) => {
       const current = await user(request, reply); if (!current) return;
+      const id = attachmentId(request, reply); if (!id) return;
       if (!await readsEnabled(request)) return reply.code(404).send({ ok: false, code: 'media_not_found', error: 'Attachment not found' });
       try {
-        const media = await mediaVisibilityService.open({ attachmentId: request.params.id, variant: request.params.variant, viewerId: current.id });
+        const media = await mediaVisibilityService.open({ attachmentId: id, variant: request.params.variant, viewerId: current.id });
         return reply
           .header('Cache-Control', 'private, no-store')
           .header('Content-Disposition', `${request.query?.download === '1' ? 'attachment' : 'inline'}; filename="image.${media.extension}"`)
@@ -92,4 +113,4 @@ function registerMediaRoutes({
   }
 }
 
-module.exports = { registerMediaRoutes, sendError };
+module.exports = { cleanAttachmentId, registerMediaRoutes, sendError };

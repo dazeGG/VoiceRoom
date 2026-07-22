@@ -5,5 +5,6 @@ export interface DialogProps {
   title: string;
   onClose: () => void;
   width?: number;
+  initialFocus?: string;
   children?: Snippet;
 }

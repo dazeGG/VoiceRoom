@@ -3,6 +3,7 @@
   import '$lib/features/home/styles/settings.css';
   import { iconSm } from '$lib/shared/ui/icons';
   import { Avatar, AvatarCropDialog } from '$lib/shared/ui';
+  import { dialogFocusTrap } from '$lib/shared/ui/focus-trap';
   import { deleteRoom, deleteRoomAvatar, updateRoom, uploadRoomAvatar } from '$lib/api/rooms';
   import { state as roomClientState } from '../client/core/state.svelte';
   import { applyRoomUpdated } from '../client/room/lifecycle';
@@ -158,10 +159,17 @@
 
 {#if roomSettingsUi.open}
   <div class="settings-overlay" role="presentation" onclick={onOverlayClick}>
-    <div class="settings-modal room-settings-modal" role="dialog" aria-modal="true" aria-labelledby="roomSettingsTitle">
+    <div
+      class="settings-modal room-settings-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="roomSettingsTitle"
+      tabindex="-1"
+      use:dialogFocusTrap={{ enabled: roomSettingsUi.open && !cropOpen }}
+    >
       <div class="settings-head">
         <span class="settings-title" id="roomSettingsTitle">Настройки комнаты</span>
-        <button class="settings-close" type="button" aria-label="Закрыть" onclick={onClose}>
+        <button class="settings-close" type="button" aria-label="Закрыть" onclick={onClose} data-dialog-initial-focus>
           <X {...iconSm} aria-hidden="true" />
         </button>
       </div>
