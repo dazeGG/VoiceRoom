@@ -689,13 +689,10 @@ test("G08 admission gate service exported decisions and server paths are exercis
   assert.match(String(upstream.writes[0]), /^GET \/rtc HTTP\/1\.1/);
   assert.equal(upstream.writes[1].toString(), "head");
 
-  const secureGate = createLiveKitAuthGateService({ roomStore: store, secret: SECRET, upstreamUrl: "wss://secure-livekit.example" });
-  const secureServer = secureGate.createServer();
-  t.after(() => secureServer.close());
-  const secureUpstream = new FakeSocket();
-  net.connect = () => secureUpstream;
-  secureServer.emit("upgrade", { url: `/rtc?vr_gate_credential=${credential}`, headers: {} }, new FakeSocket(), Buffer.alloc(0));
-  await new Promise((resolve) => setImmediate(resolve));
+  assert.throws(
+    () => createLiveKitAuthGateService({ roomStore: store, secret: SECRET, upstreamUrl: "wss://secure-livekit.example" }),
+    /raw TCP upstream/
+  );
 
   const upstreamError = new FakeSocket();
   net.connect = () => upstreamError;
