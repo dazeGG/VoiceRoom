@@ -3,14 +3,13 @@
   import RoomMemberList from '$lib/features/home/components/lobby/RoomMemberList.svelte';
   import { state as roomClientState } from '../client/core/state.svelte';
   import { roomUi } from '../room-ui.svelte';
-  import { voiceSession } from '../voice-session.svelte';
   import RoomChat from './RoomChat.svelte';
   import RoomDock from './RoomDock.svelte';
   import ScreenStage from './ScreenStage.svelte';
   import StageTiles from './StageTiles.svelte';
 
+  let { roomId = '' }: { roomId?: string } = $props();
   let membershipEnabled = $state(false);
-  const activeRoomId = $derived(roomClientState.roomId || voiceSession.roomId || '');
 
   $effect(() => {
     let active = true;
@@ -34,9 +33,9 @@
     <StageTiles />
     <RoomDock />
   </section>
-  {#if membershipEnabled && !roomUi.chatOpen && activeRoomId}
+  {#if membershipEnabled && !roomUi.chatOpen && roomId}
     <aside class="room-members-rail" aria-label="Список участников комнаты">
-      <RoomMemberList roomId={activeRoomId} />
+      <RoomMemberList {roomId} />
     </aside>
   {/if}
   <RoomChat />

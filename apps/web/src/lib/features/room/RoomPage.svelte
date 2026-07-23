@@ -46,7 +46,7 @@
 <div class="app-shell" class:room-embedded-shell={embedded} bind:this={roomRoot}>
   <RoomTopbar />
   <StartRoomScreen />
-  <RoomStage />
+  <RoomStage roomId={embeddedRoomId || roomId} />
   <RoomEntryErrorScreen />
   <RoomModerationScreen />
   <NotFoundScreen />
