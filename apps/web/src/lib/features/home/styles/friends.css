@@ -786,6 +786,13 @@ html.is-desktop .sidebar-download { display: none; }
   border-bottom-right-radius: 5px;
 }
 
+.lobby-dm-bubble--attachment-only {
+  padding: 0;
+  border: 0;
+  border-radius: 14px;
+  background: transparent;
+}
+
 .lobby-dm-bubble a {
   color: inherit;
   text-decoration: underline;
@@ -871,7 +878,7 @@ html.is-desktop .sidebar-download { display: none; }
 .lobby-dm-compose { flex: none; padding: 14px 24px 20px; }
 .lobby-dm-compose-row {
   display: flex;
-  align-items: flex-end;
+  align-items: stretch;
 }
 .lobby-dm-input {
   flex: 1;

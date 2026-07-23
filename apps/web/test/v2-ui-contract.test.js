@@ -1635,6 +1635,8 @@ test('chat image attachments support picker, clipboard, and drag-and-drop behind
   const attachmentCss = read('src/lib/shared/chat/attachment.css');
   const roomChat = read('src/lib/features/room/components/RoomChat.svelte');
   const dmView = read('src/lib/features/home/components/lobby/DmView.svelte');
+  const friendsCss = read('src/lib/features/home/styles/friends.css');
+  const chatCss = read('src/lib/features/room/styles/chat-rail.css');
 
   assert.match(composer, /attachment-draft[\s\S]*attachment-draft-remove/);
   assert.doesNotMatch(composer, /Переместить раньше|Переместить позже|>Удалить</);
@@ -1650,6 +1652,10 @@ test('chat image attachments support picker, clipboard, and drag-and-drop behind
     /var\(--accent\)/
   );
   assert.match(attachmentCss, /\.attachment-draft-remove \{[\s\S]*background: var\(--coral\)/);
+  assert.match(chatCss, /\.chat-compose-row \{[\s\S]*align-items: stretch/);
+  assert.match(friendsCss, /\.lobby-dm-compose-row \{[\s\S]*align-items: stretch/);
+  assert.match(dmView, /lobby-dm-bubble--attachment-only[\s\S]*!bubble\.body\.trim\(\)[\s\S]*bubble\.attachments/);
+  assert.match(friendsCss, /\.lobby-dm-bubble--attachment-only \{[\s\S]*padding: 0;[\s\S]*background: transparent/);
   assert.match(composeStore, /imageFilesFromClipboard[\s\S]*clipboardData/);
   assert.match(composeStore, /imageFilesFromDataTransfer[\s\S]*data\.files/);
   for (const parent of [roomChat, dmView]) {

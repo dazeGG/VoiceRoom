@@ -55,6 +55,14 @@ test('image attachments support picker, removal, drag-and-drop, paste, and sendi
   });
   await expect(page.locator('.attachment-draft img')).toBeVisible();
   await expect(composeField.locator('.attachment-draft')).toBeVisible();
+  const [thumbnailBox, composeBox] = await Promise.all([
+    page.locator('.attachment-draft').boundingBox(),
+    composeField.boundingBox()
+  ]);
+  expect(thumbnailBox).not.toBeNull();
+  expect(composeBox).not.toBeNull();
+  expect(thumbnailBox!.x - composeBox!.x).toBeGreaterThanOrEqual(8);
+  expect(thumbnailBox!.x - composeBox!.x).toBeLessThanOrEqual(20);
   await expect(page.locator('.attachment-draft-loading')).toBeVisible();
   expect((await pickerUpload).ok()).toBe(true);
   await expect(page.locator('.attachment-draft')).toHaveAttribute('data-state', 'ready', { timeout: 30_000 });

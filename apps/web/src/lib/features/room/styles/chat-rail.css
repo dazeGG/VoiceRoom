@@ -339,7 +339,7 @@ button.chat-msg-author {
 
 .chat-compose-row {
   display: flex;
-  align-items: flex-end;
+  align-items: stretch;
 }
 
 .chat-rail-input {
