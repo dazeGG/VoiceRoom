@@ -57,7 +57,7 @@ jobs:
 
       - name: Verify the development SSH host key
         env:
-          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_HOST: ${{ vars.DEPLOY_HOST }}
           SSH_PORT: ${{ secrets.SSH_PORT || '22' }}
           EXPECTED_FINGERPRINT: ${{ vars.SSH_FINGERPRINT }}
         shell: bash
@@ -77,7 +77,7 @@ jobs:
         env:
           TARGET_SHA: ${{ github.sha }}
           DEPLOY_PATH: ${{ vars.DEPLOY_PATH || '/home/daze/VoiceRoom' }}
-          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_HOST: ${{ vars.DEPLOY_HOST }}
           SSH_USER: ${{ secrets.SSH_USER }}
           SSH_KEY: ${{ secrets.SSH_KEY }}
           SSH_PORT: ${{ secrets.SSH_PORT || '22' }}
