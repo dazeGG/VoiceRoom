@@ -1641,6 +1641,9 @@ test('chat image attachments support picker, clipboard, and drag-and-drop behind
   assert.match(uploadControl, /type="file"[\s\S]*Загрузить фото/);
   assert.match(dropOverlay, /Перетащите фото сюда/);
   assert.match(attachmentCss, /\.attachment-compose-field[\s\S]*border:[\s\S]*\.attachment-add-button[\s\S]*background: transparent/);
+  assert.match(attachmentCss, /\.attachment-compose-field[\s\S]*flex-direction: column/);
+  assert.match(attachmentCss, /\.attachment-compose-controls[\s\S]*align-items: flex-start/);
+  assert.match(attachmentCss, /\.attachment-upload-root[\s\S]*align-self: flex-start/);
   assert.match(attachmentCss, /\.attachment-draft-loading[\s\S]*background: color-mix\(in srgb, var\(--warm-950\)/);
   assert.doesNotMatch(
     attachmentCss.match(/\.attachment-draft-loading \{[\s\S]*?\n\}/)?.[0] || '',
@@ -1656,6 +1659,8 @@ test('chat image attachments support picker, clipboard, and drag-and-drop behind
     assert.match(parent, /ondragenter=\{onAttachmentDragEnter\}/);
     assert.match(parent, /ondrop=\{onAttachmentDrop\}/);
     assert.match(parent, /<AttachmentUploadControl/);
+    assert.match(parent, /attachment-compose-field[\s\S]*<AttachmentComposer[\s\S]*attachment-compose-controls/);
+    assert.match(parent, /PinnedToBottom[\s\S]*drafts\.length[\s\S]*tick\(\)/);
   }
 });
 

@@ -25,6 +25,7 @@ test('image attachments support picker, removal, drag-and-drop, paste, and sendi
   await expect(addButton).toBeVisible();
   const composeField = page.locator('.attachment-compose-field');
   await expect(composeField).toBeVisible();
+  await expect(composeField.locator('.attachment-compose-controls')).toBeVisible();
   const [fieldBox, addBox] = await Promise.all([composeField.boundingBox(), addButton.boundingBox()]);
   expect(fieldBox).not.toBeNull();
   expect(addBox).not.toBeNull();
@@ -53,6 +54,7 @@ test('image attachments support picker, removal, drag-and-drop, paste, and sendi
     buffer: Buffer.from(PNG_BASE64, 'base64')
   });
   await expect(page.locator('.attachment-draft img')).toBeVisible();
+  await expect(composeField.locator('.attachment-draft')).toBeVisible();
   await expect(page.locator('.attachment-draft-loading')).toBeVisible();
   expect((await pickerUpload).ok()).toBe(true);
   await expect(page.locator('.attachment-draft')).toHaveAttribute('data-state', 'ready', { timeout: 30_000 });
@@ -70,6 +72,15 @@ test('image attachments support picker, removal, drag-and-drop, paste, and sendi
   await expect(thumbnail).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Переместить раньше' })).toHaveCount(0);
   await expect(page.getByText('Удалить', { exact: true })).toHaveCount(0);
+
+  await input.fill('Первая строка\nВторая строка\nТретья строка');
+  await input.dispatchEvent('input');
+  const [multilineInputBox, multilineAddBox] = await Promise.all([input.boundingBox(), addButton.boundingBox()]);
+  expect(multilineInputBox).not.toBeNull();
+  expect(multilineAddBox).not.toBeNull();
+  expect(multilineAddBox!.y).toBeLessThan(multilineInputBox!.y + multilineInputBox!.height / 2);
+  await input.fill('');
+  await input.dispatchEvent('input');
 
   const slotResponse = page.waitForResponse((response) =>
     response.url().endsWith('/api/media/attachments')

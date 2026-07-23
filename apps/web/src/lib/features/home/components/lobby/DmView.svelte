@@ -50,6 +50,8 @@
   let editSaving = $state(false);
   let scrollEl = $state<HTMLDivElement | null>(null);
   let inputEl = $state<HTMLTextAreaElement | null>(null);
+  let threadPinnedToBottom = true;
+  let composerAttachmentCount = 0;
   let editEl = $state<HTMLTextAreaElement | null>(null);
   let readReconciliation: ReturnType<typeof createReadReconciliation> | null = null;
   let reactionsEnabled = $state(false);
@@ -190,6 +192,17 @@
     }
   });
 
+  $effect(() => {
+    const attachmentCount = media?.drafts.length ?? 0;
+    if (attachmentCount === composerAttachmentCount) return;
+    composerAttachmentCount = attachmentCount;
+    if (threadPinnedToBottom) {
+      void tick().then(() => {
+        if (scrollEl) scrollEl.scrollTop = scrollEl.scrollHeight;
+      });
+    }
+  });
+
   onMount(() => {
     void getCapabilityFeature('reactions').then((enabled) => { reactionsEnabled = enabled; });
     void getCapabilityFeature('replies').then((enabled) => { repliesEnabled = enabled; });
@@ -275,7 +288,9 @@
   });
 
   function onThreadScroll(): void {
-    if (!scrollEl || scrollEl.scrollTop > 32) return;
+    if (!scrollEl) return;
+    threadPinnedToBottom = scrollEl.scrollHeight - scrollEl.scrollTop - scrollEl.clientHeight <= 48;
+    if (scrollEl.scrollTop > 32) return;
     void loadOlderThread(scrollEl);
   }
 
@@ -540,19 +555,21 @@
 
     <div class="lobby-dm-compose" onpaste={onComposePaste}>
       {#if replyTarget}<div class="dm-reply-target"><ReplyPreview preview={{ messageId: replyTarget.id, deleted: false, author: { id: replyTarget.senderId, name: replyTarget.senderId === selfId ? 'Вы' : friendName(peer!) }, text: replyTarget.body }} /><button type="button" onclick={() => (replyTarget = null)}>Отмена</button></div>{/if}
-      {#if media}<AttachmentComposer store={media} disabled={sending} />{/if}
       <div class="lobby-dm-compose-row attachment-compose-field">
-        {#if media}<AttachmentUploadControl store={media} disabled={sending} onerror={showAttachmentError} />{/if}
-        <textarea
-          class="lobby-dm-input lobby-dm-textarea"
-          placeholder="Написать сообщение…"
-          bind:this={inputEl}
-          bind:value={draft}
-          rows="1"
-          onkeydown={onKeydown}
-          oninput={autoResize}
-          disabled={sending}
-        ></textarea>
+        {#if media}<AttachmentComposer store={media} disabled={sending} />{/if}
+        <div class="attachment-compose-controls">
+          {#if media}<AttachmentUploadControl store={media} disabled={sending} onerror={showAttachmentError} />{/if}
+          <textarea
+            class="lobby-dm-input lobby-dm-textarea"
+            placeholder="Написать сообщение…"
+            bind:this={inputEl}
+            bind:value={draft}
+            rows="1"
+            onkeydown={onKeydown}
+            oninput={autoResize}
+            disabled={sending}
+          ></textarea>
+        </div>
       </div>
     </div>
   </div>

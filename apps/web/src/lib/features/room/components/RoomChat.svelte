@@ -58,6 +58,8 @@
   let error = $state('');
   let chatBody: HTMLDivElement | null = null;
   let composeEl: HTMLTextAreaElement | null = null;
+  let chatPinnedToBottom = true;
+  let composerAttachmentCount = 0;
   let editEl = $state<HTMLTextAreaElement | null>(null);
   let historyEnabled = $state(false);
   let hasMoreBefore = $state(false);
@@ -86,6 +88,13 @@
       messageIds.clear();
       for (const message of state.messages) messageIds.add(message.id);
     }
+  });
+
+  $effect(() => {
+    const attachmentCount = media?.drafts.length ?? 0;
+    if (attachmentCount === composerAttachmentCount) return;
+    composerAttachmentCount = attachmentCount;
+    if (chatPinnedToBottom) void tick().then(scrollToBottom);
   });
 
   function autoResize() {
@@ -523,7 +532,9 @@
   }
 
   function onHistoryScroll(): void {
-    if (!historyEnabled || !chatBody || chatBody.scrollTop > 32) return;
+    if (!chatBody) return;
+    chatPinnedToBottom = chatBody.scrollHeight - chatBody.scrollTop - chatBody.clientHeight <= 48;
+    if (!historyEnabled || chatBody.scrollTop > 32) return;
     void history.loadOlder(chatBody);
   }
 
@@ -813,22 +824,24 @@
     {#if replyTarget}
       <div class="chat-reply-target"><ReplyPreview preview={{ messageId: replyTarget.id, deleted: false, author: { id: replyTarget.authorUserId || replyTarget.peerId, name: replyTarget.name }, text: replyTarget.text }} /><button type="button" onclick={() => (replyTarget = null)}>Отмена</button></div>
     {/if}
-    {#if media}<AttachmentComposer store={media} disabled={sending} />{/if}
     <div class="chat-compose-row attachment-compose-field">
-      {#if media}<AttachmentUploadControl store={media} disabled={sending} onerror={showAttachmentError} />{/if}
-      <textarea
-        class="chat-rail-input chat-rail-textarea"
-        bind:this={composeEl}
-        bind:value={draft}
-        rows="1"
-        maxlength="500"
-        placeholder="Написать в комнату…"
-        onkeydown={onComposeKeydown}
-        oninput={() => { autoResize(); void updateMentionCandidates(); }}
-        oncompositionstart={() => mentionComposer.setComposing(true)}
-        oncompositionend={() => { mentionComposer.setComposing(false); void updateMentionCandidates(); }}
-        disabled={sending}
-      ></textarea>
+      {#if media}<AttachmentComposer store={media} disabled={sending} />{/if}
+      <div class="attachment-compose-controls">
+        {#if media}<AttachmentUploadControl store={media} disabled={sending} onerror={showAttachmentError} />{/if}
+        <textarea
+          class="chat-rail-input chat-rail-textarea"
+          bind:this={composeEl}
+          bind:value={draft}
+          rows="1"
+          maxlength="500"
+          placeholder="Написать в комнату…"
+          onkeydown={onComposeKeydown}
+          oninput={() => { autoResize(); void updateMentionCandidates(); }}
+          oncompositionstart={() => mentionComposer.setComposing(true)}
+          oncompositionend={() => { mentionComposer.setComposing(false); void updateMentionCandidates(); }}
+          disabled={sending}
+        ></textarea>
+      </div>
     </div>
     {#if mentionComposer.isOpen}
       <MentionAutocomplete candidates={mentionComposer.candidates} activeIndex={mentionComposer.activeIndex} onselect={chooseMention} />

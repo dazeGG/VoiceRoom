@@ -1,12 +1,13 @@
 .attachment-composer {
   min-width: 0;
+  padding: 12px 12px 0;
 }
 
 .attachment-draft-list {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin: 0 0 10px;
+  margin: 0;
   padding: 0;
   list-style: none;
 }
@@ -117,13 +118,20 @@
 
 .attachment-compose-field {
   display: flex;
-  align-items: flex-end;
+  flex-direction: column;
+  align-items: stretch;
   gap: 0;
   min-width: 0;
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 13px;
   background: var(--warm-900);
   transition: border-color 0.15s ease;
+}
+
+.attachment-compose-controls {
+  display: flex;
+  align-items: flex-start;
+  min-width: 0;
 }
 
 .attachment-compose-field:focus-within {
@@ -167,8 +175,8 @@
 }
 
 .attachment-upload-root {
-  align-self: center;
-  margin-left: 4px;
+  align-self: flex-start;
+  margin: 2px 0 0 4px;
 }
 
 .attachment-upload-popover {
