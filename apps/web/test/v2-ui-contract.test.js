@@ -1206,7 +1206,8 @@ test('lobby v2 keeps dock in main area, preview chat, and people add-friend flow
   const memberList = read('src/lib/features/home/components/lobby/RoomMemberList.svelte');
   const membershipState = read('src/lib/features/home/model/room-membership.svelte.ts');
   assert.match(roomStage, /getCapabilityFeature\('membership'\)/);
-  assert.match(roomStage, /<RoomMemberList roomId=\{roomClientState\.roomId\} \/>/);
+  assert.match(roomStage, /roomClientState\.roomId \|\| voiceSession\.roomId/);
+  assert.match(roomStage, /<RoomMemberList roomId=\{activeRoomId\} \/>/);
   assert.match(roomStage, /membershipEnabled && !roomUi\.chatOpen/);
   assert.match(memberList, /В сети — \{onlineMembers\.length\}/);
   assert.match(memberList, /Не в сети — \{offlineMembers\.length\}/);
