@@ -1,6 +1,7 @@
 import {
   DEFAULT_RUNTIME_CONFIG,
   parseRuntimeConfig,
+  resolveLiveKitConnectUrls,
   type RuntimeConfigV1
 } from '@voice-room/shared/runtime-config';
 
@@ -98,8 +99,7 @@ export function loadRuntimeConfig(options: RuntimeConfigOptions = {}): Promise<R
 
 export async function resolveLiveKitUrls(apiUrl: string, options: RuntimeConfigOptions = {}): Promise<string[]> {
   const config = await loadRuntimeConfig(options);
-  const candidates = [config.livekit.wsUrl, apiUrl, ...config.livekit.connectFallbacks];
-  return [...new Set(candidates.filter(Boolean))];
+  return resolveLiveKitConnectUrls(config, apiUrl);
 }
 
 export function resetRuntimeConfig(): void {

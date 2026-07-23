@@ -27,6 +27,7 @@ RUN npm ci --omit=dev
 
 COPY apps/api ./apps/api
 COPY packages/shared ./packages/shared
+COPY config ./config
 
 RUN mkdir -p /data/uploads && chown node:node /data/uploads
 

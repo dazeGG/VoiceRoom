@@ -56,6 +56,7 @@ test("deployment compose consumes digests and does not build on the host", () =>
   assertDeploymentComposeUsesDigests(fs.readFileSync("docker-compose.yml", "utf8"));
   const dockerfile = fs.readFileSync("Dockerfile", "utf8");
   for (const target of ["api", "web", "worker"]) assert.match(dockerfile, new RegExp(` AS ${target}\\b`));
+  assert.match(dockerfile, /COPY config \.\/config/, "API runtime image must contain the capability manifest");
 });
 
 test("G11 workflow contract has no deployment-host build or evidence archive publication", () => {

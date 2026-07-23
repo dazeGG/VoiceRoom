@@ -22,6 +22,30 @@ function normalizeLiveKitUrl(value) {
   return /^wss?:\/\//i.test(url) ? url : '';
 }
 
+function inheritLiveKitGateCredential(targetUrl, credentialUrl) {
+  const target = normalizeLiveKitUrl(targetUrl);
+  const source = normalizeLiveKitUrl(credentialUrl);
+  if (!target || !source) return target;
+
+  try {
+    const credential = new URL(source).searchParams.get('vr_gate_credential');
+    if (!credential) return target;
+    const resolved = new URL(target);
+    resolved.searchParams.set('vr_gate_credential', credential);
+    return resolved.toString();
+  } catch {
+    return target;
+  }
+}
+
+function resolveLiveKitConnectUrls(runtimeConfig, apiUrl) {
+  const api = normalizeLiveKitUrl(apiUrl);
+  const configured = [runtimeConfig?.livekit?.wsUrl, ...(runtimeConfig?.livekit?.connectFallbacks || [])]
+    .map((url) => inheritLiveKitGateCredential(url, api))
+    .filter(Boolean);
+  return [...new Set([...configured, api].filter(Boolean))];
+}
+
 function normalizePayload(value) {
   if (!value || typeof value !== 'object') return null;
   const candidate = {
@@ -75,6 +99,8 @@ module.exports = {
   RUNTIME_CONFIG_CONTRACT,
   RUNTIME_SCHEMA_VERSION,
   getRuntimeConfig,
+  inheritLiveKitGateCredential,
   parseRuntimeConfig,
-  normalizeLiveKitUrl
+  normalizeLiveKitUrl,
+  resolveLiveKitConnectUrls
 };
