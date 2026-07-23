@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 import { registerViaUi, uniqueLogin } from './helpers';
 
 test('joining a room establishes voice through the public LiveKit gate', async ({ page }) => {
+  const expectedLiveKitHost = process.env.PLAYWRIGHT_EXPECTED_LIVEKIT_HOST ?? 'voice-gate.test:7890';
   const observedSockets: Array<{ host: string; path: string; hasGateCredential: boolean }> = [];
   page.on('websocket', (socket) => {
     const url = new URL(socket.url());
@@ -33,7 +34,7 @@ test('joining a room establishes voice through the public LiveKit gate', async (
   await expect(connection).toContainText('Голос подключен', { timeout: 30_000 });
   await expect(page.locator('#toast')).not.toContainText('LiveKit недоступен');
   await expect.poll(() => observedSockets.some((socket) => (
-    socket.host === 'voice-gate.test:7890'
+    socket.host === expectedLiveKitHost
       && socket.path.startsWith('/rtc')
       && socket.hasGateCredential
   ))).toBe(true);
