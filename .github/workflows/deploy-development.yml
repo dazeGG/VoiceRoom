@@ -177,10 +177,17 @@ jobs:
             docker exec "$deployed_web_id" grep -Fq \
               'wss://{$LIVEKIT_DOMAIN}' /etc/caddy/Caddyfile
 
-            curl --fail --silent --show-error --noproxy '*' \
-              --resolve dev.voiceroom.ru:443:127.0.0.1 \
-              --head https://dev.voiceroom.ru \
-              | grep --fixed-strings --quiet 'wss://livekit.dev.voiceroom.ru'
+            origin_headers=""
+            for _ in {1..30}; do
+              origin_headers="$(curl --fail --silent --show-error --noproxy '*' \
+                --resolve dev.voiceroom.ru:443:127.0.0.1 \
+                --head https://dev.voiceroom.ru || true)"
+              if grep --fixed-strings --quiet 'wss://livekit.dev.voiceroom.ru' <<<"$origin_headers"; then
+                break
+              fi
+              sleep 1
+            done
+            grep --fixed-strings --quiet 'wss://livekit.dev.voiceroom.ru' <<<"$origin_headers"
 
             trap - ERR
 
