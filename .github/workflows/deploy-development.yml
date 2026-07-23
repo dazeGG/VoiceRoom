@@ -174,7 +174,7 @@ jobs:
             echo "Expected Web image: $new_web_image"
             echo "Running Web image:  $deployed_web_image"
             test "$deployed_web_image" = "$new_web_image"
-            docker exec "$deployed_web_id" grep --fixed-strings --quiet \
+            docker exec "$deployed_web_id" grep -Fq \
               'wss://{$LIVEKIT_DOMAIN}' /etc/caddy/Caddyfile
 
             curl --fail --silent --show-error --noproxy '*' \
