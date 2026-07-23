@@ -55,6 +55,25 @@ jobs:
           fi
           gh run watch "$run_id" --repo "$GITHUB_REPOSITORY" --exit-status
 
+      - name: Verify the development SSH host key
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_PORT: ${{ secrets.SSH_PORT || '22' }}
+          EXPECTED_FINGERPRINT: ${{ vars.SSH_FINGERPRINT }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          known_host="$(mktemp)"
+          trap 'rm -f "$known_host"' EXIT
+          ssh-keyscan -t ed25519 -p "$SSH_PORT" "$SSH_HOST" 2>/dev/null >"$known_host"
+          observed_fingerprint="$(ssh-keygen -lf "$known_host" -E sha256 | awk '{print $2}')"
+          echo "Observed development SSH ED25519 fingerprint: $observed_fingerprint"
+          if [[ -z "$EXPECTED_FINGERPRINT" ]]; then
+            echo "Repository variable SSH_FINGERPRINT is not configured" >&2
+            exit 1
+          fi
+          test "$observed_fingerprint" = "$EXPECTED_FINGERPRINT"
+
       - name: Build and roll out the exact Web revision
         uses: appleboy/ssh-action@v1.2.5
         env:
@@ -65,7 +84,7 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEY }}
           port: ${{ secrets.SSH_PORT || '22' }}
-          fingerprint: SHA256:w4iMQ1OwPjO34Vb5ahvBxgfzYvY2/mdYKVCMuGKLbSw
+          fingerprint: ${{ vars.SSH_FINGERPRINT }}
           command_timeout: 30m
           envs: TARGET_SHA,DEPLOY_PATH
           script: |
