@@ -1,6 +1,8 @@
 <script lang="ts">
+  import { browser } from '$app/environment';
   import { getCapabilityFeature } from '$lib/platform/capability-state.svelte';
   import RoomMemberList from '$lib/features/home/components/lobby/RoomMemberList.svelte';
+  import { extractRoomId } from '$lib/shared/utils/room';
   import { state as roomClientState } from '../client/core/state.svelte';
   import { roomUi } from '../room-ui.svelte';
   import RoomChat from './RoomChat.svelte';
@@ -10,6 +12,7 @@
 
   let { roomId = '' }: { roomId?: string } = $props();
   let membershipEnabled = $state(false);
+  const activeRoomId = $derived(roomId || roomClientState.roomId || (browser ? extractRoomId(window.location.pathname) : ''));
 
   $effect(() => {
     let active = true;
@@ -33,9 +36,9 @@
     <StageTiles />
     <RoomDock />
   </section>
-  {#if membershipEnabled && !roomUi.chatOpen && roomId}
+  {#if membershipEnabled && !roomUi.chatOpen && activeRoomId}
     <aside class="room-members-rail" aria-label="Список участников комнаты">
-      <RoomMemberList {roomId} />
+      <RoomMemberList roomId={activeRoomId} />
     </aside>
   {/if}
   <RoomChat />

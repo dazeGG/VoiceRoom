@@ -1209,7 +1209,8 @@ test('lobby v2 keeps dock in main area, preview chat, and people add-friend flow
   assert.match(roomStage, /getCapabilityFeature\('membership'\)/);
   assert.match(roomPage, /<RoomStage roomId=\{embeddedRoomId \|\| roomId\} \/>/);
   assert.match(roomStage, /let \{ roomId = '' \}/);
-  assert.match(roomStage, /<RoomMemberList \{roomId\} \/>/);
+  assert.match(roomStage, /roomId \|\| roomClientState\.roomId \|\| \(browser \? extractRoomId\(window\.location\.pathname\) : ''\)/);
+  assert.match(roomStage, /<RoomMemberList roomId=\{activeRoomId\} \/>/);
   assert.match(roomStage, /membershipEnabled && !roomUi\.chatOpen/);
   assert.match(memberList, /В сети — \{onlineMembers\.length\}/);
   assert.match(memberList, /Не в сети — \{offlineMembers\.length\}/);
