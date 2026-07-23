@@ -3,7 +3,7 @@
 
   header {
     Strict-Transport-Security "max-age=31536000; includeSubDomains"
-    Content-Security-Policy "frame-ancestors 'none'"
+    Content-Security-Policy "frame-ancestors 'none'; connect-src 'self' wss://{$LIVEKIT_DOMAIN} https://{$LIVEKIT_DOMAIN} stun: turn: turns:"
     Cross-Origin-Opener-Policy "same-origin"
     X-Content-Type-Options "nosniff"
     Referrer-Policy "same-origin"

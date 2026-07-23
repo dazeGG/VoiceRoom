@@ -32,11 +32,44 @@ services:
 
   livekit:
     image: livekit/livekit-server:v1.13.2
-    command: --dev --bind 0.0.0.0
+    command: --dev --bind 0.0.0.0 --node-ip 127.0.0.1
     environment:
       LIVEKIT_KEYS: "devkey: devsecret"
     ports:
       - "127.0.0.1:7880:7880"
+      - "127.0.0.1:7881:7881"
+      - "127.0.0.1:7882:7882/udp"
+
+  livekit-gate:
+    build:
+      context: .
+      target: deps
+    command: node apps/api/src/domains/admission/livekit-auth-gate-service.js
+    working_dir: /app
+    depends_on:
+      deps:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      livekit:
+        condition: service_started
+    environment:
+      DATABASE_URL: postgres://voice_room:voice_room_ci@postgres:5432/voice_room_ci
+      LIVEKIT_GATE_SECRET: ci-livekit-gate-secret-at-least-32-bytes
+      LIVEKIT_INTERNAL_URL: ws://livekit:7880
+    ports:
+      - "127.0.0.1:7890:3080"
+    volumes:
+      - .:/app
+      - node_modules:/app/node_modules
+      - api_node_modules:/app/apps/api/node_modules
+      - web_node_modules:/app/apps/web/node_modules
+      - shared_node_modules:/app/packages/shared/node_modules
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3080/readyz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 2s
+      timeout: 3s
+      retries: 45
 
   api:
     build:
@@ -51,12 +84,17 @@ services:
         condition: service_healthy
       livekit:
         condition: service_started
+      livekit-gate:
+        condition: service_started
     environment:
       NODE_ENV: test
       HOST: 0.0.0.0
       PORT: 3000
       DATABASE_URL: postgres://voice_room:voice_room_ci@postgres:5432/voice_room_ci
-      LIVEKIT_URL: ws://localhost:7880
+      LIVEKIT_URL: ws://livekit:7880
+      LIVEKIT_INTERNAL_URL: ws://livekit:7880
+      LIVEKIT_GATE_PUBLIC_URL: ws://voice-gate.test:7890
+      LIVEKIT_GATE_SECRET: ci-livekit-gate-secret-at-least-32-bytes
       LIVEKIT_API_KEY: devkey
       LIVEKIT_API_SECRET: devsecret
       ROOM_CREATE_POW_DIFFICULTY: 0
@@ -82,7 +120,7 @@ services:
     build:
       context: .
       target: deps
-    command: sh -c "npx svelte-kit sync && npm run dev -- --host 0.0.0.0"
+    command: sh -c "npx svelte-kit sync && npm run build && npm run preview -- --host 0.0.0.0 --port 5180"
     working_dir: /app/apps/web
     depends_on:
       deps:

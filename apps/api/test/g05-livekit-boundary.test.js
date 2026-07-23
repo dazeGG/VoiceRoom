@@ -9,7 +9,9 @@ process.env.LIVEKIT_API_SECRET = 'devsecret';
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { EventEmitter } = require('node:events');
 const fs = require('node:fs');
+const net = require('node:net');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
@@ -337,6 +339,68 @@ test('G05 gate rejects wss upstreams because upstream proxying is raw TCP only',
     secret: process.env.LIVEKIT_GATE_SECRET,
     upstreamUrl: 'wss://livekit.example.test/rtc'
   }), /must be ws:\/\/ because the auth gate uses a raw TCP upstream/);
+});
+
+test('G05 gate survives a client cancellation followed by an upstream socket error', async (t) => {
+  class FakeSocket extends EventEmitter {
+    constructor() {
+      super();
+      this.destroyed = false;
+      this.writable = true;
+      this.writableEnded = false;
+      this.writes = [];
+    }
+
+    write(value) {
+      if (this.destroyed || this.writableEnded) {
+        const error = new Error('write after end');
+        error.code = 'ERR_STREAM_WRITE_AFTER_END';
+        this.emit('error', error);
+        return false;
+      }
+      this.writes.push(value);
+      return true;
+    }
+
+    destroy() {
+      if (this.destroyed) return;
+      this.destroyed = true;
+      this.writable = false;
+      this.emit('close');
+    }
+
+    pipe(target) {
+      return target;
+    }
+  }
+
+  const originalConnect = net.connect;
+  t.after(() => {
+    net.connect = originalConnect;
+  });
+  const upstream = new FakeSocket();
+  net.connect = () => upstream;
+  const gate = createLiveKitAuthGateService({
+    boundary: {
+      assertReady: async () => true,
+      authorizeCredential: async () => ({ ok: true, claims: {} })
+    },
+    roomStore: {},
+    upstreamUrl: 'ws://livekit:7880'
+  });
+  const server = gate.createServer();
+  t.after(() => server.close());
+  const client = new FakeSocket();
+
+  server.emit('upgrade', { url: '/rtc?vr_gate_credential=test', headers: {} }, client, Buffer.alloc(0));
+  await new Promise((resolve) => setImmediate(resolve));
+  upstream.emit('connect');
+  client.destroy();
+  const error = new Error('peer closed');
+  error.code = 'EPIPE';
+
+  assert.doesNotThrow(() => upstream.emit('error', error));
+  assert.equal(client.destroyed, true);
 });
 
 test('G05 ban reports no success when ban+gate revocation transaction fails', async (t) => {

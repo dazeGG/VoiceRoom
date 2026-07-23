@@ -28,9 +28,32 @@ function extractCredential(requestUrl) {
   return { credential, strippedPath: `${parsed.pathname}${parsed.search}` };
 }
 
+function isSocketWritable(socket) {
+  return Boolean(socket)
+    && !socket.destroyed
+    && socket.writable !== false
+    && !socket.writableEnded;
+}
+
+function destroySocket(socket) {
+  if (socket && !socket.destroyed) socket.destroy();
+}
+
 function deny(socket, code = 403, reason = 'Forbidden') {
-  socket.write(`HTTP/1.1 ${code} ${reason}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`);
-  socket.destroy();
+  if (!isSocketWritable(socket)) {
+    destroySocket(socket);
+    return;
+  }
+  const response = `HTTP/1.1 ${code} ${reason}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`;
+  try {
+    if (typeof socket.end === 'function') socket.end(response);
+    else {
+      socket.write(response);
+      destroySocket(socket);
+    }
+  } catch {
+    destroySocket(socket);
+  }
 }
 
 function buildUpstreamUpgradeRequest({ request, strippedPath, upstream }) {
@@ -96,6 +119,9 @@ function createLiveKitAuthGateService({
     });
 
     server.on('upgrade', (request, socket, head) => {
+      // Client cancellations are normal during navigation/reconnect. Without an
+      // error listener, a late write can terminate the whole gate process.
+      socket.on('error', () => {});
       if (!String(request.url || '').startsWith(path)) {
         deny(socket, 404, 'Not Found');
         return;
@@ -106,20 +132,42 @@ function createLiveKitAuthGateService({
             deny(socket, 403, 'Forbidden');
             return;
           }
+          if (!isSocketWritable(socket)) return;
           const upstreamSocket = net.connect({
             host: upstream.hostname,
             port: Number(upstream.port || (upstream.protocol === 'wss:' ? 443 : 80))
           });
+          let tunnelEstablished = false;
+          const closeUpstream = () => destroySocket(upstreamSocket);
+          socket.once('close', closeUpstream);
+          socket.once('end', closeUpstream);
           upstreamSocket.once('connect', () => {
-            upstreamSocket.write(buildUpstreamUpgradeRequest({ request, strippedPath: decision.strippedPath, upstream }));
-            if (head?.length) upstreamSocket.write(head);
-            socket.pipe(upstreamSocket);
-            upstreamSocket.pipe(socket);
+            if (!isSocketWritable(socket)) {
+              closeUpstream();
+              return;
+            }
+            try {
+              upstreamSocket.write(buildUpstreamUpgradeRequest({ request, strippedPath: decision.strippedPath, upstream }));
+              if (head?.length) upstreamSocket.write(head);
+              tunnelEstablished = true;
+              socket.pipe(upstreamSocket);
+              upstreamSocket.pipe(socket);
+            } catch (error) {
+              logger.error?.('LiveKit gate upstream connection failed:', error);
+              destroySocket(socket);
+              closeUpstream();
+            }
           });
           upstreamSocket.once('error', (error) => {
-            logger.error?.('LiveKit gate upstream connection failed:', error);
-            deny(socket, 503, 'Service Unavailable');
+            if (!tunnelEstablished) {
+              logger.error?.('LiveKit gate upstream connection failed:', error);
+              deny(socket, 503, 'Service Unavailable');
+            } else {
+              destroySocket(socket);
+            }
+            closeUpstream();
           });
+          upstreamSocket.once('close', () => destroySocket(socket));
         })
         .catch((error) => {
           logger.error?.('LiveKit gate authorization failed:', error);

@@ -158,16 +158,26 @@ test('home auth flow is loader-first and has no localStorage session oracle', ()
   assert.equal(existsSync(resolve(root, 'src/lib/features/auth/AuthShell.svelte')), false);
 });
 
-test('page CSP narrows websocket connect sources to configured LiveKit origins', () => {
+test('page CSP supports runtime LiveKit origins while production Caddy narrows them', () => {
   const config = read('svelte.config.js');
+  const caddy = read('../../Caddyfile');
+  const compose = read('../../docker-compose.yml');
+  const dockerfile = read('../../Dockerfile');
   const cspBlock = config.slice(config.indexOf("'connect-src'"), config.indexOf("'default-src'"));
 
   assert.match(config, /function liveKitConnectSources/);
   assert.ok(cspBlock.includes('...liveKitConnectSources()'));
+  for (const scheme of ["'http:'", "'https:'", "'ws:'", "'wss:'"]) {
+    assert.ok(cspBlock.includes(scheme), `missing runtime connect scheme ${scheme}`);
+  }
   assert.ok(cspBlock.includes("'ws://localhost:*'"));
   assert.ok(cspBlock.includes("'ws://127.0.0.1:*'"));
-  assert.doesNotMatch(cspBlock, /'ws:'\s*,/);
-  assert.doesNotMatch(cspBlock, /'wss:'\s*,/);
+  assert.match(
+    caddy,
+    /Content-Security-Policy "frame-ancestors 'none'; connect-src 'self' wss:\/\/\{\$LIVEKIT_DOMAIN\} https:\/\/\{\$LIVEKIT_DOMAIN\} stun: turn: turns:"/
+  );
+  assert.match(dockerfile, /FROM caddy:2\.11\.3-alpine AS web/);
+  assert.match(compose, /\n  caddy:\n[\s\S]*?image: \$\{VOICEROOM_WEB_IMAGE:\?set immutable VOICEROOM_WEB_IMAGE digest\}/);
   assert.ok(config.includes("'style-src': ['self', 'unsafe-inline']"));
   assert.match(config, /style attributes/);
 });

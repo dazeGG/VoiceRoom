@@ -14,7 +14,8 @@ export default defineConfig({
 		launchOptions: {
 			args: [
 				'--use-fake-device-for-media-stream',
-				'--use-fake-ui-for-media-stream'
+				'--use-fake-ui-for-media-stream',
+				'--host-resolver-rules=MAP voice-gate.test 127.0.0.1'
 			]
 		}
 	},

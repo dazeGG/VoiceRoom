@@ -41,6 +41,13 @@ const config = {
         'connect-src': [
           'self',
           ...liveKitConnectSources(),
+          // The immutable web image does not know the runtime LiveKit origin.
+          // Production Caddy adds a second, environment-specific CSP that
+          // narrows these schemes to LIVEKIT_DOMAIN.
+          'http:',
+          'https:',
+          'ws:',
+          'wss:',
           'ws://localhost:*',
           'ws://127.0.0.1:*',
           'stun:',
