@@ -361,6 +361,10 @@ button.chat-msg-author {
   padding-left: 8px;
 }
 
+.chat-rail-compose .attachment-upload-root {
+  margin-top: 5px;
+}
+
 .chat-rail-textarea {
   resize: none;
   overflow-y: auto;

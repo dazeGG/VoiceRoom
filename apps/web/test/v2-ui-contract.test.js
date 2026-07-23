@@ -1659,6 +1659,15 @@ test('chat image attachments support picker, clipboard, and drag-and-drop behind
   assert.match(friendsCss, /\.lobby-dm-compose-row \{[\s\S]*align-items: stretch/);
   assert.match(dmView, /lobby-dm-bubble--attachment-only[\s\S]*!bubble\.body\.trim\(\)[\s\S]*bubble\.attachments/);
   assert.match(friendsCss, /\.lobby-dm-bubble--attachment-only \{[\s\S]*padding: 0;[\s\S]*background: transparent/);
+  assert.match(dmView, /lobby-dm-bubble--has-attachments=\{Boolean\(bubble\.attachments\?\.length\)\}/);
+  assert.ok(
+    dmView.indexOf('<AttachmentMosaic attachments={bubble.attachments} />')
+      < dmView.indexOf('<span class="dm-msg-content">'),
+    'DM attachments render above their caption within one message'
+  );
+  assert.match(friendsCss, /\.lobby-dm-bubble--has-attachments \{[\s\S]*display: grid;[\s\S]*padding: 0;[\s\S]*background: transparent/);
+  assert.match(friendsCss, /\.lobby-dm-bubble--has-attachments \.dm-msg-content \{[\s\S]*padding: 9px 13px;[\s\S]*border-radius: 16px/);
+  assert.match(chatCss, /\.chat-rail-compose \.attachment-upload-root \{[\s\S]*margin-top: 5px/);
   assert.match(composeStore, /imageFilesFromClipboard[\s\S]*clipboardData/);
   assert.match(composeStore, /imageFilesFromDataTransfer[\s\S]*data\.files/);
   for (const parent of [roomChat, dmView]) {

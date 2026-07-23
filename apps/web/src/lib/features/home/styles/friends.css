@@ -793,6 +793,36 @@ html.is-desktop .sidebar-download { display: none; }
   background: transparent;
 }
 
+.lobby-dm-bubble--has-attachments {
+  display: grid;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.lobby-dm-bubble--has-attachments .dm-msg-content {
+  display: block;
+  width: fit-content;
+  max-width: 100%;
+  padding: 9px 13px;
+  border-radius: 16px;
+}
+
+.lobby-dm-bubble--has-attachments.lobby-dm-bubble--them .dm-msg-content {
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-bottom-left-radius: 5px;
+  background: var(--panel);
+  color: var(--warm-ink);
+}
+
+.lobby-dm-bubble--has-attachments.lobby-dm-bubble--me .dm-msg-content {
+  justify-self: end;
+  border-bottom-right-radius: 5px;
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
 .lobby-dm-bubble a {
   color: inherit;
   text-decoration: underline;

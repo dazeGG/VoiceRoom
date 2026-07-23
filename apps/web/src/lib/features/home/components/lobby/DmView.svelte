@@ -514,6 +514,7 @@
                     class="lobby-dm-bubble"
                     class:lobby-dm-bubble--me={group.fromMe}
                     class:lobby-dm-bubble--them={!group.fromMe}
+                    class:lobby-dm-bubble--has-attachments={Boolean(bubble.attachments?.length)}
                     class:lobby-dm-bubble--attachment-only={!bubble.body.trim() && Boolean(bubble.attachments?.length) && !bubble.replyPreview}
                   >
                     {#if editingMessageId === bubble.id}
@@ -535,8 +536,8 @@
                       </div>
                     {:else}
                       {#if bubble.replyPreview}<ReplyPreview preview={bubble.replyPreview} />{/if}
-                      {#if bubble.body.trim()}<span class="dm-msg-content"><ChatText text={bubble.body} />{#if bubble.editedAt}<span class="dm-msg-edited">(изменено)</span>{/if}</span>{/if}
                       {#if bubble.attachments?.length}<AttachmentMosaic attachments={bubble.attachments} />{/if}
+                      {#if bubble.body.trim()}<span class="dm-msg-content"><ChatText text={bubble.body} />{#if bubble.editedAt}<span class="dm-msg-edited">(изменено)</span>{/if}</span>{/if}
                       <div class="dm-msg-actions" role="toolbar" aria-label="Действия с сообщением">
                         {#if repliesEnabled}<button type="button" aria-label="Ответить" title="Ответить" onclick={() => { replyTarget = bubble; inputEl?.focus(); }}><MessageSquare {...iconSm} /></button>{/if}
                         {#if reactionsEnabled}<ReactionPicker store={reactions} messageId={bubble.id} />{/if}
