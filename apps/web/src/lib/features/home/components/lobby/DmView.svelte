@@ -366,6 +366,7 @@
     if (!invite) return '';
     if (invite.status === 'accepted') return 'Принял приглашение';
     if (invite.status === 'declined') return 'Отклонил предложение';
+    if (invite.status === 'expired') return 'Приглашение завершено';
     if (invite.expiresAt && invite.expiresAt <= Date.now()) return 'Приглашение истекло';
     return fromMe ? 'Приглашение отправлено' : 'Приглашение в комнату';
   }

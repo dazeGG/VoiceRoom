@@ -607,6 +607,7 @@ test('room rings render as shared timeline invitations carried by DMs', () => {
   assert.doesNotMatch(friends, /const ringToastIds/);
   assert.doesNotMatch(friends, /pushToast\(`\$\{senderName\} зовёт/);
   assert.match(dmApi, /invite\?: DirectMessageInvite \| null/);
+  assert.match(dmApi, /metadata\.kind === 'room-invite'/);
   assert.match(dmApi, /\/invites\/\$\{encodeURIComponent\(messageId\)\}\/respond/);
   assert.match(dmView, /bubble\.invite/);
   assert.match(dmView, /lobby-room-invitation/);
@@ -1646,6 +1647,8 @@ test('chat image attachments support picker, clipboard, and drag-and-drop behind
   assert.match(attachmentCss, /\.attachment-compose-field[\s\S]*flex-direction: column/);
   assert.match(attachmentCss, /\.attachment-compose-controls[\s\S]*align-items: flex-start/);
   assert.match(attachmentCss, /\.attachment-upload-root[\s\S]*align-self: flex-start/);
+  assert.match(attachmentCss, /\.attachment-add-button \{[\s\S]*width: 32px;[\s\S]*height: 32px/);
+  assert.match(attachmentCss, /\.attachment-upload-root \{[\s\S]*margin: 8px 0 0 8px/);
   assert.match(attachmentCss, /\.attachment-draft-loading[\s\S]*background: color-mix\(in srgb, var\(--warm-950\)/);
   assert.doesNotMatch(
     attachmentCss.match(/\.attachment-draft-loading \{[\s\S]*?\n\}/)?.[0] || '',
@@ -1797,9 +1800,10 @@ test('room invitation decisions replace the actions with a durable result in the
   const dmApi = read('src/lib/api/dm.ts');
   const dm = read('src/lib/features/home/components/lobby/DmView.svelte');
 
-  assert.match(dmApi, /status: 'pending' \| 'accepted' \| 'declined'/);
+  assert.match(dmApi, /status: 'pending' \| 'accepted' \| 'declined' \| 'expired'/);
   assert.match(dm, /Принял приглашение/);
   assert.match(dm, /Отклонил предложение/);
+  assert.match(dm, /Приглашение завершено/);
   assert.match(dm, /\{#if inviteActionable\(bubble, group\.fromMe\)\}/);
 });
 

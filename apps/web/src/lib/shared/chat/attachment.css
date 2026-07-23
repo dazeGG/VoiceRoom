@@ -146,12 +146,12 @@
 
 .attachment-add-button {
   display: grid;
-  width: 40px;
-  height: 40px;
+  width: 32px;
+  height: 32px;
   padding: 0;
   place-items: center;
   border: 0;
-  border-radius: 10px;
+  border-radius: 8px;
   background: transparent;
   color: var(--warm-muted);
   cursor: pointer;
@@ -176,7 +176,7 @@
 
 .attachment-upload-root {
   align-self: flex-start;
-  margin: 2px 0 0 4px;
+  margin: 8px 0 0 8px;
 }
 
 .attachment-upload-popover {

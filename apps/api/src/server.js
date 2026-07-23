@@ -1255,6 +1255,26 @@ function publishClearedScreenViewers(room, ownerPeerId) {
   }
 }
 
+function isAccountActiveInRoom(roomId, userId) {
+  const room = presenceRooms.get(roomId);
+  return Boolean(
+    room
+    && userId
+    && Array.from(room.peers.values()).some((peer) => peer.accountUserId === userId)
+  );
+}
+
+async function expireRoomInvitations(senderId, roomId) {
+  if (!senderId || !roomId) return [];
+  const messages = await getMessageService().direct.expirePendingInvites({ senderId, roomId });
+  for (const message of messages) {
+    const event = { type: 'dm.message.edited', message };
+    broadcastToUser(message.senderId, event);
+    broadcastToUser(message.recipientId, event);
+  }
+  return messages;
+}
+
 function closePeer(roomId, peerId, transportId, reason = 'left') {
   const room = presenceRooms.get(roomId);
   if (!room) return;
@@ -1264,6 +1284,11 @@ function closePeer(roomId, peerId, transportId, reason = 'left') {
 
   current.closed = true;
   room.peers.delete(peerId);
+  if (current.accountUserId && !isAccountActiveInRoom(roomId, current.accountUserId)) {
+    void expireRoomInvitations(current.accountUserId, roomId).catch((error) => {
+      console.error('Failed to expire room invitations:', error);
+    });
+  }
   if (!current.replaced) {
     publishClearedScreenViewers(room, peerId);
     broadcast(room, { type: 'peer-left', peerId, reason });
@@ -3045,6 +3070,11 @@ async function handleRespondDmInvite(req, res, peerIdParam, messageId) {
     sendJson(res, 403, { ok: false, error: 'Отвечать может только приглашённый' });
     return;
   }
+  if (action === 'accepted' && !isAccountActiveInRoom(current.invite.roomId, current.senderId)) {
+    await expireRoomInvitations(current.senderId, current.invite.roomId);
+    sendJson(res, 410, { ok: false, error: 'Приглашение больше не действует' });
+    return;
+  }
 
   const message = await getMessageService().direct.respondInvite({ messageId, recipientId: user.id, status: action });
   if (!message) {
@@ -3122,17 +3152,19 @@ async function handleRingRoom(req, res, rawRoomId) {
     sendJson(res, 404, { ok: false, error: 'Room not found' });
     return;
   }
-  const expiresAt = Date.now() + RING_TTL_MS;
+  const ringExpiresAt = Date.now() + RING_TTL_MS;
   const fromUser = notificationActor(user);
   const ringRoom = { id: room.id, name: room.name || '', emoji: room.emoji || '' };
-  broadcastToUser(targetUserId, { type: 'ring.incoming', fromUser, room: ringRoom, expiresAt });
+  broadcastToUser(targetUserId, { type: 'ring.incoming', fromUser, room: ringRoom, expiresAt: ringExpiresAt });
   // Persist the invitation as a regular DM so both sides share one timeline
-  // entry (with live status) instead of per-device local copies.
+  // entry (with live status) instead of per-device local copies. Its lifetime
+  // is tied to the sender's room presence; the shorter expiry only bounds the
+  // audible ring and its push notification.
   const inviteMessage = await getMessageService().direct.sendMessage({
     senderId: user.id,
     recipientId: targetUserId,
     body: room.name ? `Приглашение в комнату «${room.name}»` : 'Приглашение в комнату',
-    metadata: { kind: 'room-invite', roomId: room.id, roomName: room.name || '', status: 'pending', expiresAt }
+    metadata: { kind: 'room-invite', roomId: room.id, roomName: room.name || '', status: 'pending', expiresAt: null }
   });
   broadcastToUser(targetUserId, { type: 'dm-message', message: inviteMessage });
   broadcastToUser(user.id, { type: 'dm-message', message: inviteMessage });
@@ -3142,10 +3174,10 @@ async function handleRingRoom(req, res, rawRoomId) {
     body: room.name ? `Комната «${room.name}»` : 'Присоединиться к комнате',
     privateBody: 'Вас зовут в голосовую комнату.',
     tag: `ring:${user.id}:${roomId}`,
-    dedupeKey: `ring:${user.id}:${roomId}:${expiresAt}`,
+    dedupeKey: `ring:${user.id}:${roomId}:${ringExpiresAt}`,
     url: `/r/${encodeURIComponent(roomId)}`,
-    expiresAt
-  }, { expiresAt });
+    expiresAt: ringExpiresAt
+  }, { expiresAt: ringExpiresAt });
   sendJson(res, 200, { ok: true });
 }
 

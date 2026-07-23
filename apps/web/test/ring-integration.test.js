@@ -23,8 +23,15 @@ test('Ring UI is authenticated, online-first, expiring, actionable, and teardown
   assert.match(friends, /respondRoomInvitation/);
   assert.match(friends, /clearLegacyResolvedRoomInvitations/);
   assert.doesNotMatch(friends, /readResolvedRoomInvitations/);
-  // Invite cards gate their actions on pending status and expiry.
+  // History restores the invitation from message metadata instead of degrading
+  // it to a plain text bubble after a thread resync.
+  const dmApi = read('src/lib/api/dm.ts');
+  assert.match(dmApi, /metadata\.kind === 'room-invite'/);
+  assert.match(dmApi, /invite,/);
+  // Invite cards remain actionable while pending; presence-bound invitations
+  // use a null expiresAt and are expired by the server when the sender leaves.
   assert.match(dmView, /inviteActionable/);
   assert.match(dmView, /invite\.status === 'pending' && \(!invite\.expiresAt \|\| invite\.expiresAt > Date\.now\(\)\)/);
+  assert.match(dmView, /invite\.status === 'expired'/);
   assert.match(serviceWorker, /Number\(payload\.expiresAt\) <= Date\.now\(\)/);
 });

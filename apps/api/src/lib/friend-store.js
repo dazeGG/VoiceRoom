@@ -36,7 +36,7 @@ function mapInvite(metadata) {
   return {
     roomId: String(metadata.roomId || ''),
     roomName: String(metadata.roomName || ''),
-    status: metadata.status === 'accepted' || metadata.status === 'declined' ? metadata.status : 'pending',
+    status: ['accepted', 'declined', 'expired'].includes(metadata.status) ? metadata.status : 'pending',
     expiresAt: Number(metadata.expiresAt) || null
   };
 }
@@ -434,6 +434,21 @@ function createFriendStore({ databaseUrl, logger = console, pool } = {}) {
     return mapMessage(result.rows[0] || null);
   }
 
+  async function expirePendingInvites({ senderId, roomId }) {
+    const result = await getPool().query(
+      `UPDATE direct_messages
+       SET metadata = jsonb_set(metadata, '{status}', to_jsonb('expired'::text))
+       WHERE sender_id = $1
+         AND metadata->>'kind' = 'room-invite'
+         AND metadata->>'roomId' = $2
+         AND metadata->>'status' = 'pending'
+         AND deleted_at IS NULL
+       RETURNING *`,
+      [senderId, roomId]
+    );
+    return result.rows.map(mapMessage);
+  }
+
   // Mark every message from peer -> user as read. Returns the number marked so
   // the caller can decide whether to broadcast a read receipt.
   async function markRead({ userId, peerId }) {
@@ -468,6 +483,7 @@ function createFriendStore({ databaseUrl, logger = console, pool } = {}) {
     cancelRequest,
     close,
     countIncomingRequests,
+    expirePendingInvites,
     getFriendIds,
     getUnreadCounts,
     editMessage,

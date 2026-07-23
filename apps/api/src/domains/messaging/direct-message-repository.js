@@ -13,6 +13,7 @@ function createDirectMessageRepository({ store } = {}) {
 
   return Object.freeze({
     editMessage: delegate('editMessage'),
+    expirePendingInvites: delegate('expirePendingInvites'),
     getMessage: delegate('getMessage'),
     listThread: delegate('listThread'),
     markRead: delegate('markRead'),

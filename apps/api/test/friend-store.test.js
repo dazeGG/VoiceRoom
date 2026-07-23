@@ -232,6 +232,35 @@ test('direct messages thread, unread counts, and read receipts', async (t) => {
   assert.equal((await friends.getUnreadCounts(bob.id))[alice.id], undefined);
 });
 
+test('pending room invitations expire together when the sender leaves the room', async (t) => {
+  const { users, friends } = await createStores(t);
+  const alice = await makeUser(users, 'invite-alice');
+  const bob = await makeUser(users, 'invite-bob');
+  const roomId = 'presence-bound-room';
+
+  const invite = await friends.sendMessage({
+    senderId: alice.id,
+    recipientId: bob.id,
+    body: 'Приглашение в комнату',
+    metadata: {
+      kind: 'room-invite',
+      roomId,
+      roomName: 'Presence bound',
+      status: 'pending',
+      expiresAt: null
+    }
+  });
+  assert.equal(invite.invite.status, 'pending');
+  assert.equal(invite.invite.expiresAt, null);
+
+  const expired = await friends.expirePendingInvites({ senderId: alice.id, roomId });
+  assert.equal(expired.length, 1);
+  assert.equal(expired[0].id, invite.id);
+  assert.equal(expired[0].invite.status, 'expired');
+
+  assert.deepEqual(await friends.expirePendingInvites({ senderId: alice.id, roomId }), []);
+});
+
 test('direct messages can only be edited atomically by their original sender', async (t) => {
   const { users, friends } = await createStores(t);
   const alice = await makeUser(users, 'edit-alice');

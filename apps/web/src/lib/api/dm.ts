@@ -10,7 +10,7 @@ import type { ReplyTarget } from '$lib/shared/chat/reply-store.svelte';
 export interface DirectMessageInvite {
   roomId: string;
   roomName: string;
-  status: 'pending' | 'accepted' | 'declined';
+  status: 'pending' | 'accepted' | 'declined' | 'expired';
   expiresAt: number | null;
 }
 
@@ -56,6 +56,7 @@ interface HistoryMessageDto {
   editedAt?: unknown;
   readAt?: unknown;
   recipientId?: unknown;
+  metadata?: unknown;
 }
 
 // Opening a thread also clears its unread badge server-side.
@@ -102,6 +103,21 @@ function directMessageFromHistory(peerId: string, message: HistoryMessageDto): D
   const createdAt = typeof message.createdAt === 'number'
     ? message.createdAt
     : Date.parse(String(message.createdAt ?? ''));
+  const metadata = typeof message.metadata === 'object' && message.metadata !== null
+    ? message.metadata as Record<string, unknown>
+    : {};
+  const invite = metadata.kind === 'room-invite'
+    ? {
+        roomId: typeof metadata.roomId === 'string' ? metadata.roomId : '',
+        roomName: typeof metadata.roomName === 'string' ? metadata.roomName : '',
+        status: ['accepted', 'declined', 'expired'].includes(String(metadata.status))
+          ? metadata.status as DirectMessageInvite['status']
+          : 'pending' as const,
+        expiresAt: Number.isFinite(Number(metadata.expiresAt)) && metadata.expiresAt != null
+          ? Number(metadata.expiresAt)
+          : null
+      }
+    : null;
   return {
     id: message.id,
     senderId,
@@ -110,6 +126,7 @@ function directMessageFromHistory(peerId: string, message: HistoryMessageDto): D
     createdAt: Number.isFinite(createdAt) ? createdAt : Date.now(),
     editedAt: message.editedAt == null ? null : Number(message.editedAt),
     readAt: message.readAt == null ? null : Number(message.readAt),
+    invite,
     cursor: message.cursor,
     readCursor: message.readCursor,
     attachments: message.attachments,
