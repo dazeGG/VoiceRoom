@@ -541,7 +541,7 @@
     <div class="lobby-dm-compose" onpaste={onComposePaste}>
       {#if replyTarget}<div class="dm-reply-target"><ReplyPreview preview={{ messageId: replyTarget.id, deleted: false, author: { id: replyTarget.senderId, name: replyTarget.senderId === selfId ? 'Вы' : friendName(peer!) }, text: replyTarget.body }} /><button type="button" onclick={() => (replyTarget = null)}>Отмена</button></div>{/if}
       {#if media}<AttachmentComposer store={media} disabled={sending} />{/if}
-      <div class="lobby-dm-compose-row">
+      <div class="lobby-dm-compose-row attachment-compose-field">
         {#if media}<AttachmentUploadControl store={media} disabled={sending} onerror={showAttachmentError} />{/if}
         <textarea
           class="lobby-dm-input lobby-dm-textarea"

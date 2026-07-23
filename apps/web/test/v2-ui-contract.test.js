@@ -1632,6 +1632,7 @@ test('chat image attachments support picker, clipboard, and drag-and-drop behind
   const uploadControl = read('src/lib/shared/chat/AttachmentUploadControl.svelte');
   const dropOverlay = read('src/lib/shared/chat/AttachmentDropOverlay.svelte');
   const composeStore = read('src/lib/shared/chat/attachment-compose.svelte.ts');
+  const attachmentCss = read('src/lib/shared/chat/attachment.css');
   const roomChat = read('src/lib/features/room/components/RoomChat.svelte');
   const dmView = read('src/lib/features/home/components/lobby/DmView.svelte');
 
@@ -1639,6 +1640,13 @@ test('chat image attachments support picker, clipboard, and drag-and-drop behind
   assert.doesNotMatch(composer, /Переместить раньше|Переместить позже|>Удалить</);
   assert.match(uploadControl, /type="file"[\s\S]*Загрузить фото/);
   assert.match(dropOverlay, /Перетащите фото сюда/);
+  assert.match(attachmentCss, /\.attachment-compose-field[\s\S]*border:[\s\S]*\.attachment-add-button[\s\S]*background: transparent/);
+  assert.match(attachmentCss, /\.attachment-draft-loading[\s\S]*background: color-mix\(in srgb, var\(--warm-950\)/);
+  assert.doesNotMatch(
+    attachmentCss.match(/\.attachment-draft-loading \{[\s\S]*?\n\}/)?.[0] || '',
+    /var\(--accent\)/
+  );
+  assert.match(attachmentCss, /\.attachment-draft-remove \{[\s\S]*background: var\(--coral\)/);
   assert.match(composeStore, /imageFilesFromClipboard[\s\S]*clipboardData/);
   assert.match(composeStore, /imageFilesFromDataTransfer[\s\S]*data\.files/);
   for (const parent of [roomChat, dmView]) {

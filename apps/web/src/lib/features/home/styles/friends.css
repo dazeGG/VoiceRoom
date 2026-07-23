@@ -872,7 +872,6 @@ html.is-desktop .sidebar-download { display: none; }
 .lobby-dm-compose-row {
   display: flex;
   align-items: flex-end;
-  gap: 8px;
 }
 .lobby-dm-input {
   flex: 1;
@@ -888,6 +887,9 @@ html.is-desktop .sidebar-download { display: none; }
   outline: none;
   transition: border-color 0.15s ease;
   resize: none;
+}
+.lobby-dm-compose-row .lobby-dm-input {
+  padding-left: 8px;
 }
 .lobby-dm-textarea {
   height: 48px;

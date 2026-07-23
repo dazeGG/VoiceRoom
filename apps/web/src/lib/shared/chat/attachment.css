@@ -16,7 +16,6 @@
   width: 72px;
   height: 72px;
   flex: none;
-  overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 12px;
   background: var(--warm-900);
@@ -26,6 +25,7 @@
   display: block;
   width: 100%;
   height: 100%;
+  border-radius: inherit;
   object-fit: cover;
 }
 
@@ -34,6 +34,8 @@
   width: 100%;
   height: 100%;
   place-items: center;
+  overflow: hidden;
+  border-radius: inherit;
   color: var(--warm-muted);
 }
 
@@ -43,16 +45,17 @@
   display: grid;
   place-items: center;
   color: white;
-  background:
-    radial-gradient(circle at center, color-mix(in srgb, var(--warm-950) 82%, transparent) 0 16px, transparent 17px),
-    conic-gradient(color-mix(in srgb, var(--accent) 86%, transparent) var(--attachment-progress), color-mix(in srgb, var(--ink) 16%, transparent) 0);
-  background-size: 38px 38px, 38px 38px;
-  background-position: center;
-  background-repeat: no-repeat;
-  backdrop-filter: brightness(0.62);
+  overflow: hidden;
+  border-radius: inherit;
+  background: color-mix(in srgb, var(--warm-950) 56%, transparent);
+  backdrop-filter: brightness(0.68);
 }
 
 .attachment-draft-loading svg {
+  box-sizing: content-box;
+  padding: 8px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--warm-950) 82%, transparent);
   animation: attachment-spin 0.9s linear infinite;
 }
 
@@ -74,21 +77,29 @@
 }
 
 .attachment-draft-remove {
-  top: 5px;
-  right: 5px;
+  top: -6px;
+  right: -6px;
+  width: 22px;
+  height: 22px;
+  border: 2px solid var(--paper-deep);
+  color: white;
+  background: var(--coral);
+  box-shadow: 0 2px 7px color-mix(in srgb, var(--warm-950) 66%, transparent);
   opacity: 0;
-  transform: scale(0.86);
 }
 
 .attachment-draft:hover .attachment-draft-remove,
 .attachment-draft:focus-within .attachment-draft-remove {
   opacity: 1;
-  transform: scale(1);
 }
 
-.attachment-draft-remove:hover {
-  color: var(--warm-950);
-  background: var(--accent);
+.attachment-draft-remove:not(:disabled):hover {
+  background: color-mix(in oklch, var(--coral), var(--warm-950) 16%);
+}
+
+.attachment-draft-remove:focus-visible {
+  outline: 2px solid white;
+  outline-offset: 2px;
 }
 
 .attachment-draft-retry {
@@ -104,15 +115,36 @@
   pointer-events: none;
 }
 
+.attachment-compose-field {
+  display: flex;
+  align-items: flex-end;
+  gap: 0;
+  min-width: 0;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 13px;
+  background: var(--warm-900);
+  transition: border-color 0.15s ease;
+}
+
+.attachment-compose-field:focus-within {
+  border-color: var(--focus-border, rgba(255, 255, 255, 0.72));
+}
+
+.attachment-compose-field textarea {
+  border: 0 !important;
+  background: var(--warm-900) !important;
+  box-shadow: none !important;
+}
+
 .attachment-add-button {
   display: grid;
   width: 40px;
   height: 40px;
   padding: 0;
   place-items: center;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 12px;
-  background: var(--warm-900);
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
   color: var(--warm-muted);
   cursor: pointer;
   transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
@@ -120,7 +152,6 @@
 
 .attachment-add-button:hover,
 .attachment-add-button[aria-expanded='true'] {
-  border-color: rgba(255, 255, 255, 0.28);
   background: var(--control);
   color: var(--warm-ink);
 }
@@ -136,7 +167,8 @@
 }
 
 .attachment-upload-root {
-  align-self: flex-end;
+  align-self: center;
+  margin-left: 4px;
 }
 
 .attachment-upload-popover {

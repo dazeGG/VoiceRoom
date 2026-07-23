@@ -23,9 +23,16 @@ test('image attachments support picker, removal, drag-and-drop, paste, and sendi
   await expect(input).toBeVisible();
   const addButton = page.getByRole('button', { name: 'Добавить вложение' });
   await expect(addButton).toBeVisible();
+  const composeField = page.locator('.attachment-compose-field');
+  await expect(composeField).toBeVisible();
+  const [fieldBox, addBox] = await Promise.all([composeField.boundingBox(), addButton.boundingBox()]);
+  expect(fieldBox).not.toBeNull();
+  expect(addBox).not.toBeNull();
+  expect(addBox!.x).toBeGreaterThanOrEqual(fieldBox!.x);
+  expect(addBox!.x + addBox!.width).toBeLessThanOrEqual(fieldBox!.x + fieldBox!.width);
 
   await input.focus();
-  await expect.poll(() => input.evaluate((element) => getComputedStyle(element).borderColor))
+  await expect.poll(() => composeField.evaluate((element) => getComputedStyle(element).borderColor))
     .toBe('rgba(255, 255, 255, 0.72)');
 
   await page.route('**/api/media/attachments/*/content', async (route) => {

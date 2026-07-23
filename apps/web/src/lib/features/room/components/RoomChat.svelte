@@ -814,7 +814,7 @@
       <div class="chat-reply-target"><ReplyPreview preview={{ messageId: replyTarget.id, deleted: false, author: { id: replyTarget.authorUserId || replyTarget.peerId, name: replyTarget.name }, text: replyTarget.text }} /><button type="button" onclick={() => (replyTarget = null)}>Отмена</button></div>
     {/if}
     {#if media}<AttachmentComposer store={media} disabled={sending} />{/if}
-    <div class="chat-compose-row">
+    <div class="chat-compose-row attachment-compose-field">
       {#if media}<AttachmentUploadControl store={media} disabled={sending} onerror={showAttachmentError} />{/if}
       <textarea
         class="chat-rail-input chat-rail-textarea"
