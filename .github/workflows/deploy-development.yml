@@ -1,0 +1,131 @@
+name: Deploy development hotfix
+
+on:
+  push:
+    branches: [develop]
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: deploy-development-hotfix
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy tested LiveKit fix to dev
+    if: "${{ startsWith(github.event.head_commit.message, 'chore(dev): deploy ') }}"
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Wait for CI on the exact commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_id=""
+          for _ in {1..60}; do
+            run_id="$(gh run list \
+              --repo "$GITHUB_REPOSITORY" \
+              --workflow ci.yml \
+              --commit "$GITHUB_SHA" \
+              --event push \
+              --limit 10 \
+              --json databaseId \
+              --jq '.[0].databaseId // empty')"
+            if [[ -n "$run_id" ]]; then
+              break
+            fi
+            sleep 5
+          done
+          if [[ -z "$run_id" ]]; then
+            echo "CI run for $GITHUB_SHA was not found" >&2
+            exit 1
+          fi
+          gh run watch "$run_id" --repo "$GITHUB_REPOSITORY" --exit-status
+
+      - name: Build and roll out the exact API and Web revision
+        uses: appleboy/ssh-action@v1.2.5
+        env:
+          TARGET_SHA: ${{ github.sha }}
+          DEPLOY_PATH: ${{ vars.DEPLOY_PATH || '/home/daze/VoiceRoom' }}
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          port: ${{ secrets.SSH_PORT || '22' }}
+          fingerprint: SHA256:b6VntmgOzbrdl1PcKDUq9w+SyXZEVgxg1NR+a8Wwo7E
+          command_timeout: 30m
+          envs: TARGET_SHA,DEPLOY_PATH
+          script: |
+            set -euo pipefail
+            cd "$DEPLOY_PATH"
+
+            git fetch origin develop
+            fetched_sha="$(git rev-parse origin/develop)"
+            if [[ "$fetched_sha" != "$TARGET_SHA" ]]; then
+              echo "origin/develop is $fetched_sha, expected $TARGET_SHA" >&2
+              exit 1
+            fi
+
+            api_id="$(docker compose ps -q api)"
+            gate_id="$(docker compose ps -q livekit-gate)"
+            web_id="$(docker compose ps -q caddy)"
+            if [[ -z "$api_id" || -z "$gate_id" || -z "$web_id" ]]; then
+              echo "The current API, LiveKit gate, or Web container is missing" >&2
+              docker compose ps
+              exit 1
+            fi
+
+            old_api_image="$(docker inspect --format '{{.Config.Image}}' "$api_id")"
+            old_gate_image="$(docker inspect --format '{{.Config.Image}}' "$gate_id")"
+            old_web_image="$(docker inspect --format '{{.Config.Image}}' "$web_id")"
+            if [[ "$old_api_image" != "$old_gate_image" ]]; then
+              echo "API and LiveKit gate do not use the same rollback image" >&2
+              exit 1
+            fi
+
+            worktree_root="$(mktemp -d /tmp/voiceroom-livekit-deploy.XXXXXX)"
+            source_dir="$worktree_root/source"
+            cleanup() {
+              git worktree remove --force "$source_dir" >/dev/null 2>&1 || true
+              rmdir "$worktree_root" >/dev/null 2>&1 || true
+            }
+            trap cleanup EXIT
+            git worktree add --detach "$source_dir" "$TARGET_SHA"
+
+            new_api_image="voiceroom-api:dev-$TARGET_SHA"
+            new_web_image="voiceroom-web:dev-$TARGET_SHA"
+            docker build --target api --label "org.opencontainers.image.revision=$TARGET_SHA" --tag "$new_api_image" "$source_dir"
+            docker build --target web --label "org.opencontainers.image.revision=$TARGET_SHA" --tag "$new_web_image" "$source_dir"
+
+            rollback() {
+              echo "Deployment failed; restoring the previous API and Web images" >&2
+              VOICEROOM_API_IMAGE="$old_api_image" \
+              VOICEROOM_WEB_IMAGE="$old_web_image" \
+                docker compose up -d --no-deps --wait --wait-timeout 180 api livekit-gate caddy || true
+            }
+            trap rollback ERR
+
+            VOICEROOM_API_IMAGE="$new_api_image" \
+            VOICEROOM_WEB_IMAGE="$new_web_image" \
+              docker compose up -d --no-deps --wait --wait-timeout 180 api livekit-gate caddy
+
+            deployed_api_id="$(docker compose ps -q api)"
+            deployed_gate_id="$(docker compose ps -q livekit-gate)"
+            deployed_web_id="$(docker compose ps -q caddy)"
+            test "$(docker inspect --format '{{.Config.Image}}' "$deployed_api_id")" = "$new_api_image"
+            test "$(docker inspect --format '{{.Config.Image}}' "$deployed_gate_id")" = "$new_api_image"
+            test "$(docker inspect --format '{{.Config.Image}}' "$deployed_web_id")" = "$new_web_image"
+
+            curl --fail --silent --show-error --retry 12 --retry-delay 2 --retry-connrefused \
+              https://dev.voiceroom.ru/api/healthz >/dev/null
+            curl --fail --silent --show-error --retry 12 --retry-delay 2 --retry-connrefused \
+              https://livekit.dev.voiceroom.ru/readyz >/dev/null
+            curl --fail --silent --show-error --head https://dev.voiceroom.ru \
+              | grep --fixed-strings --quiet 'wss://livekit.dev.voiceroom.ru'
+
+            trap - ERR
+            echo "Deployed $TARGET_SHA to dev.voiceroom.ru"
