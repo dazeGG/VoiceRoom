@@ -123,6 +123,17 @@ export function getAttachmentComposeStore(context: AttachmentContext, contextId:
   return store;
 }
 
+export function imageFilesFromClipboard(event: ClipboardEvent): File[] {
+  const data = event.clipboardData;
+  if (!data) return [];
+  const files = Array.from(data.files).filter((file) => file.type.startsWith('image/'));
+  if (files.length) return files;
+  return Array.from(data.items)
+    .filter((item) => item.kind === 'file' && item.type.startsWith('image/'))
+    .map((item) => item.getAsFile())
+    .filter((file): file is File => file !== null);
+}
+
 export function clearAttachmentComposeStores(): void {
   stores.clear();
   if (typeof localStorage !== 'undefined') {

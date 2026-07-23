@@ -150,7 +150,7 @@ function evaluatePublicNode(manifest, nodeByKey, internalReady, options) {
       ['web', allCategoryReady(node, 'web', options)],
       ['visibility', allCategoryReady(node, 'visibility', options)],
       ['worker', allCategoryReady(node, 'worker', options)],
-      ['internal', allCategoryReady(node, 'internal', internalReady)]
+      ['internal', allCategoryReady(node, 'internal', { internal: internalReady })]
     ];
 
     inStack.delete(key);

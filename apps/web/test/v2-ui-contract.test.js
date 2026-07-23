@@ -1616,13 +1616,30 @@ test('focus styles use light border tokens instead of colored glow', () => {
   const appCss = read('src/lib/shared/styles/app.css');
   const controlsCss = read('src/lib/features/room/styles/controls.css');
   const friendsCss = read('src/lib/features/home/styles/friends.css');
+  const chatCss = read('src/lib/features/room/styles/chat-rail.css');
 
-  assert.match(appCss, /--focus-border/);
+  assert.match(appCss, /--focus-border: rgba\(255, 255, 255, 0\.72\)/);
   assert.match(appCss, /--focus-ring: color-mix\(in oklch, var\(--ink\)/);
   assert.match(controlsCss, /border-color: var\(--focus-border/);
   assert.doesNotMatch(controlsCss, /oklch\(70% 0\.14 82/);
   assert.doesNotMatch(controlsCss, /box-shadow: 0 0 0 3px var\(--focus-ring\)/);
   assert.match(friendsCss, /\.lobby-dm-input:focus[\s\S]*border-color: var\(--focus-border/);
+  assert.match(chatCss, /\.chat-rail-input:focus[\s\S]*border-color: var\(--focus-border/);
+});
+
+test('chat image attachments are clipboard-only and capability-gated', () => {
+  const composer = read('src/lib/shared/chat/AttachmentComposer.svelte');
+  const composeStore = read('src/lib/shared/chat/attachment-compose.svelte.ts');
+  const roomChat = read('src/lib/features/room/components/RoomChat.svelte');
+  const dmView = read('src/lib/features/home/components/lobby/DmView.svelte');
+
+  assert.doesNotMatch(composer, /Добавить изображения|type="file"|attachment-add/);
+  assert.match(composeStore, /imageFilesFromClipboard[\s\S]*clipboardData/);
+  for (const parent of [roomChat, dmView]) {
+    assert.match(parent, /getCapabilityFeature\('mediaUploads'\)/);
+    assert.match(parent, /onpaste=\{onComposePaste\}/);
+    assert.match(parent, /imageFilesFromClipboard\(event\)[\s\S]*media\.addFiles\(files\)/);
+  }
 });
 
 test('desktop shell layout stays in shared web styles, not electron overrides', () => {

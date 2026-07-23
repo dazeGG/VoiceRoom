@@ -1,14 +1,8 @@
 .attachment-composer {
-  border: 1px dashed color-mix(in srgb, currentColor 28%, transparent);
-  border-radius: 12px;
-  padding: 8px;
+  min-width: 0;
 }
 
-.attachment-composer.dragging { background: color-mix(in oklch, var(--paper), var(--ink) 8%); }
-.attachment-file-input { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
-.attachment-add { min-height: 36px; }
-.attachment-error { margin: 6px 0 0; color: var(--coral); }
-.attachment-draft-list { display: grid; gap: 6px; margin: 8px 0 0; padding: 0; list-style: none; }
+.attachment-draft-list { display: grid; gap: 6px; margin: 0 0 8px; padding: 0; list-style: none; }
 .attachment-draft-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; align-items: center; }
 .attachment-draft-list li > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .attachment-actions { display: flex; flex-wrap: wrap; gap: 4px; grid-column: 1 / -1; }

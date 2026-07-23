@@ -28,7 +28,7 @@
   import { createReactionStore } from '$lib/shared/chat/reaction-store.svelte';
   import ReactionPicker from '$lib/shared/chat/ReactionPicker.svelte';
   import ReactionSummary from '$lib/shared/chat/ReactionSummary.svelte';
-  import { getAttachmentComposeStore, type AttachmentComposeStore } from '$lib/shared/chat/attachment-compose.svelte';
+  import { getAttachmentComposeStore, imageFilesFromClipboard, type AttachmentComposeStore } from '$lib/shared/chat/attachment-compose.svelte';
   import AttachmentComposer from '$lib/shared/chat/AttachmentComposer.svelte';
   import AttachmentMosaic from '$lib/shared/chat/AttachmentMosaic.svelte';
   import ReplyPreview from '$lib/shared/chat/ReplyPreview.svelte';
@@ -47,6 +47,7 @@
   let reactionsEnabled = $state(false);
   const reactions = createReactionStore();
   let media = $state<AttachmentComposeStore | null>(null);
+  let mediaUploadsEnabled = $state(false);
   let repliesEnabled = $state(false);
   let replyTarget = $state<DirectMessage | null>(null);
   let sendAttemptKey = '';
@@ -87,6 +88,18 @@
     queueMicrotask(autoResize);
   }
 
+  async function onComposePaste(event: ClipboardEvent): Promise<void> {
+    if (!media) return;
+    const files = imageFilesFromClipboard(event);
+    if (!files.length) return;
+    event.preventDefault();
+    try {
+      await media.addFiles(files);
+    } catch (cause) {
+      pushToast(cause instanceof Error ? cause.message : 'Не удалось вставить изображение', { variant: 'error' });
+    }
+  }
+
   function findLastOwnMessage(): DirectMessage | null {
     for (let index = friendsState.thread.length - 1; index >= 0; index -= 1) {
       const message = friendsState.thread[index];
@@ -119,10 +132,11 @@
     const peerId = friendsState.selectedFriendId;
     if (!peerId) {
       reactions.reset();
+      media = null;
       return;
     }
     reactions.setConversation({ type: 'dm', id: peerId });
-    media = getAttachmentComposeStore('dm', peerId);
+    media = mediaUploadsEnabled ? getAttachmentComposeStore('dm', peerId) : null;
   });
 
   $effect(() => {
@@ -135,6 +149,7 @@
   onMount(() => {
     void getCapabilityFeature('reactions').then((enabled) => { reactionsEnabled = enabled; });
     void getCapabilityFeature('replies').then((enabled) => { repliesEnabled = enabled; });
+    void getCapabilityFeature('mediaUploads').then((enabled) => { mediaUploadsEnabled = enabled; });
     return getAppRealtime().subscribe((event) => {
       if (event.type !== 'reaction.updated' || event.payload.conversation.type !== 'dm') return;
       if (event.payload.conversation.id !== friendsState.selectedFriendId) return;
@@ -470,7 +485,7 @@
       {/if}
     </div>
 
-    <div class="lobby-dm-compose">
+    <div class="lobby-dm-compose" onpaste={onComposePaste}>
       {#if replyTarget}<div class="dm-reply-target"><ReplyPreview preview={{ messageId: replyTarget.id, deleted: false, author: { id: replyTarget.senderId, name: replyTarget.senderId === selfId ? 'Вы' : friendName(peer!) }, text: replyTarget.body }} /><button type="button" onclick={() => (replyTarget = null)}>Отмена</button></div>{/if}
       {#if media}<AttachmentComposer store={media} disabled={sending} />{/if}
       <textarea

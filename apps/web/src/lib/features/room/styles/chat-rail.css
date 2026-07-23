@@ -363,8 +363,10 @@ button.chat-msg-author {
   color: #6f6a5c;
 }
 
-.chat-rail-input:focus {
-  border-color: rgba(154, 143, 106, 0.65);
+.chat-rail-input:focus,
+.chat-rail-input:focus-visible {
+  border-color: var(--focus-border, rgba(255, 255, 255, 0.72));
+  box-shadow: none;
 }
 
 /* On narrow screens the rail overlays the room instead of squeezing the grid. */

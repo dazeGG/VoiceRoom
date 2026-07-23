@@ -25,7 +25,7 @@
   import { createReactionStore } from '$lib/shared/chat/reaction-store.svelte';
   import ReactionPicker from '$lib/shared/chat/ReactionPicker.svelte';
   import ReactionSummary from '$lib/shared/chat/ReactionSummary.svelte';
-  import { getAttachmentComposeStore, type AttachmentComposeStore } from '$lib/shared/chat/attachment-compose.svelte';
+  import { getAttachmentComposeStore, imageFilesFromClipboard, type AttachmentComposeStore } from '$lib/shared/chat/attachment-compose.svelte';
   import AttachmentComposer from '$lib/shared/chat/AttachmentComposer.svelte';
   import AttachmentMosaic from '$lib/shared/chat/AttachmentMosaic.svelte';
   import ReplyPreview from '$lib/shared/chat/ReplyPreview.svelte';
@@ -129,6 +129,18 @@
       return;
     }
     queueMicrotask(autoResize);
+  }
+
+  async function onComposePaste(event: ClipboardEvent): Promise<void> {
+    if (!media) return;
+    const files = imageFilesFromClipboard(event);
+    if (!files.length) return;
+    event.preventDefault();
+    try {
+      await media.addFiles(files);
+    } catch (cause) {
+      showToast(cause instanceof Error ? cause.message : 'Не удалось вставить изображение', { variant: 'error' });
+    }
   }
 
   async function updateMentionCandidates(): Promise<void> {
@@ -274,7 +286,9 @@
     sessionToken = peerSession.sessionToken;
     displayName = cleanDisplayName(localStorage.getItem('voice-room:name')) || 'Гость';
     reactions.setConversation({ type: 'room', id: roomId });
-    media = getAttachmentComposeStore('room', roomId);
+    void getCapabilityFeature('mediaUploads').then((enabled) => {
+      media = enabled ? getAttachmentComposeStore('room', roomId) : null;
+    });
     void getCapabilityFeature('reactions').then((enabled) => { reactionsEnabled = enabled; });
     void getCapabilityFeature('replies').then((enabled) => { repliesEnabled = enabled; });
     void getCapabilityFeature('engagement').then((enabled) => { engagementEnabled = enabled; });
@@ -741,7 +755,7 @@
     <p class="chat-rail-error">{error}</p>
   {/if}
 
-  <form class="chat-rail-compose" onsubmit={sendMessage}>
+  <form class="chat-rail-compose" onsubmit={sendMessage} onpaste={onComposePaste}>
     {#if replyTarget}
       <div class="chat-reply-target"><ReplyPreview preview={{ messageId: replyTarget.id, deleted: false, author: { id: replyTarget.authorUserId || replyTarget.peerId, name: replyTarget.name }, text: replyTarget.text }} /><button type="button" onclick={() => (replyTarget = null)}>Отмена</button></div>
     {/if}
