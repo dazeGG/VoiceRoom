@@ -2,6 +2,7 @@
 
 const { URL } = require('node:url');
 const { AccessToken, TrackSource } = require('livekit-server-sdk');
+const { normalizeLiveKitServerUrl } = require('@voice-room/shared/runtime-config');
 
 function createLiveKitCredentialProvider({
   apiKey,
@@ -34,7 +35,7 @@ function createLiveKitCredentialProvider({
       room: livekitRoom,
       roomJoin: true
     });
-    const publicUrl = new URL(gateUrl);
+    const publicUrl = new URL(normalizeLiveKitServerUrl(gateUrl));
     publicUrl.searchParams.set('vr_gate_credential', gate.credential.value);
     return {
       status: 'issued',

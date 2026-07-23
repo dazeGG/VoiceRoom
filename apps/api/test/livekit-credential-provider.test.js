@@ -86,6 +86,7 @@ test('livekit credential provider binds the signed gate credential to the public
   assert.equal(result.admission.gateCredentialId, 'credential-1');
   assert.equal(result.admission.room, 'voice-room-room-1');
   assert.equal(result.admission.ttlSeconds, 120);
+  assert.equal(new URL(result.admission.url).pathname, '/');
   assert.equal(new URL(result.admission.url).searchParams.get('vr_gate_credential'), 'signed-gate-value');
   assert.equal(typeof result.admission.token, 'string');
   assert.equal(result.admission.token.split('.').length, 3);

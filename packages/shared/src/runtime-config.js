@@ -22,9 +22,22 @@ function normalizeLiveKitUrl(value) {
   return /^wss?:\/\//i.test(url) ? url : '';
 }
 
+function normalizeLiveKitServerUrl(value) {
+  const normalized = normalizeLiveKitUrl(value);
+  if (!normalized) return '';
+
+  try {
+    const parsed = new URL(normalized);
+    if (/^\/rtc\/?$/i.test(parsed.pathname)) parsed.pathname = '/';
+    return parsed.toString();
+  } catch {
+    return normalized;
+  }
+}
+
 function inheritLiveKitGateCredential(targetUrl, credentialUrl) {
-  const target = normalizeLiveKitUrl(targetUrl);
-  const source = normalizeLiveKitUrl(credentialUrl);
+  const target = normalizeLiveKitServerUrl(targetUrl);
+  const source = normalizeLiveKitServerUrl(credentialUrl);
   if (!target || !source) return target;
 
   try {
@@ -39,7 +52,7 @@ function inheritLiveKitGateCredential(targetUrl, credentialUrl) {
 }
 
 function resolveLiveKitConnectUrls(runtimeConfig, apiUrl) {
-  const api = normalizeLiveKitUrl(apiUrl);
+  const api = normalizeLiveKitServerUrl(apiUrl);
   const configured = [runtimeConfig?.livekit?.wsUrl, ...(runtimeConfig?.livekit?.connectFallbacks || [])]
     .map((url) => inheritLiveKitGateCredential(url, api))
     .filter(Boolean);
@@ -52,10 +65,10 @@ function normalizePayload(value) {
     contractVersion: RUNTIME_CONFIG_CONTRACT,
     schemaVersion: RUNTIME_SCHEMA_VERSION,
     livekit: {
-      wsUrl: normalizeLiveKitUrl(value.livekit?.wsUrl),
+      wsUrl: normalizeLiveKitServerUrl(value.livekit?.wsUrl),
       connectFallbacks: Array.isArray(value.livekit?.connectFallbacks)
         ? value.livekit.connectFallbacks
-            .map((item) => normalizeLiveKitUrl(item))
+            .map((item) => normalizeLiveKitServerUrl(item))
             .filter(Boolean)
         : []
     }
@@ -88,7 +101,7 @@ function getRuntimeConfig(raw) {
     ...DEFAULT_RUNTIME_CONFIG,
     livekit: {
       ...DEFAULT_RUNTIME_CONFIG.livekit,
-      wsUrl: normalizeLiveKitUrl(DEFAULT_RUNTIME_CONFIG.livekit.wsUrl),
+      wsUrl: normalizeLiveKitServerUrl(DEFAULT_RUNTIME_CONFIG.livekit.wsUrl),
       connectFallbacks: DEFAULT_RUNTIME_CONFIG.livekit.connectFallbacks
     }
   };
@@ -102,5 +115,6 @@ module.exports = {
   inheritLiveKitGateCredential,
   parseRuntimeConfig,
   normalizeLiveKitUrl,
+  normalizeLiveKitServerUrl,
   resolveLiveKitConnectUrls
 };
