@@ -14,8 +14,8 @@ Runtime contract:
 
 Required production environment:
 
-- `LIVEKIT_URL=ws://livekit:7880` or another internal LiveKit URL reachable only by backend services;
-- `LIVEKIT_GATE_PUBLIC_URL=wss://<livekit-domain>/rtc`;
+- `LIVEKIT_INTERNAL_URL=ws://livekit:7880` or another internal LiveKit URL reachable only by backend services (production compose pins the service URL);
+- `LIVEKIT_GATE_PUBLIC_URL=wss://<livekit-domain>`;
 - `LIVEKIT_GATE_SECRET` with at least 32 characters, distinct from `LIVEKIT_API_SECRET`;
 - `LIVEKIT_API_KEY` and `LIVEKIT_API_SECRET` for LiveKit JWT minting and `RemoveParticipant`.
 

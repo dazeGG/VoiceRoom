@@ -268,6 +268,7 @@ test('G05-A01 same gate credential is denied after epoch revoke', async () => {
 
 test('G05-A02 topology exposes only the gate as public signaling boundary', () => {
   const compose = fs.readFileSync(path.join(ROOT, 'docker-compose.yml'), 'utf8');
+  const apiService = compose.match(/\n  api:\n[\s\S]*?(?=\n  [a-z][\w-]*:\n)/)?.[0] || '';
   const lkv = fs.readFileSync(path.join(ROOT, 'docker-compose.lkv.yml'), 'utf8');
   const caddy = fs.readFileSync(path.join(ROOT, 'Caddyfile'), 'utf8');
   const config = JSON.parse(fs.readFileSync(path.join(ROOT, 'config/livekit/external-auth-gate.v1.json'), 'utf8'));
@@ -277,6 +278,9 @@ test('G05-A02 topology exposes only the gate as public signaling boundary', () =
   assert.match(compose, /livekit-gate:/);
   assert.match(compose, /command:\s*\["node",\s*"apps\/api\/src\/domains\/admission\/livekit-auth-gate-service\.js"\]/);
   assert.match(compose, /LIVEKIT_URL:\s*\$\{LIVEKIT_URL:-ws:\/\/livekit:7880\}/);
+  assert.match(apiService, /LIVEKIT_INTERNAL_URL:\s*ws:\/\/livekit:7880/);
+  assert.doesNotMatch(apiService, /LIVEKIT_INTERNAL_URL:\s*\$\{LIVEKIT_URL\b/);
+  assert.doesNotMatch(apiService, /LIVEKIT_INTERNAL_URL:\s*\$\{LIVEKIT_GATE_PUBLIC_URL\b/);
   assert.match(compose, /LIVEKIT_GATE_PUBLIC_URL:\s*\$\{LIVEKIT_GATE_PUBLIC_URL:-wss:\/\/\$\{LIVEKIT_DOMAIN:-livekit\.\$\{DOMAIN\}\}\}/);
   assert.match(compose, /LIVEKIT_GATE_SECRET/);
   assert.doesNotMatch(compose, /"7880:7880"/);
