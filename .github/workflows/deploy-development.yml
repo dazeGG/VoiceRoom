@@ -55,7 +55,7 @@ jobs:
           fi
           gh run watch "$run_id" --repo "$GITHUB_REPOSITORY" --exit-status
 
-      - name: Build and roll out the exact API and Web revision
+      - name: Build and roll out the exact Web revision
         uses: appleboy/ssh-action@v1.2.5
         env:
           TARGET_SHA: ${{ github.sha }}
@@ -65,6 +65,7 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEY }}
           port: ${{ secrets.SSH_PORT || '22' }}
+          fingerprint: SHA256:w4iMQ1OwPjO34Vb5ahvBxgfzYvY2/mdYKVCMuGKLbSw
           command_timeout: 30m
           envs: TARGET_SHA,DEPLOY_PATH
           script: |
@@ -138,14 +139,49 @@ jobs:
               --filter 'label=com.docker.compose.service=caddy' \
               --quiet)"
             test -n "$deployed_web_id"
-            test "$(docker inspect --format '{{.Config.Image}}' "$deployed_web_id")" = "$new_web_image"
+            deployed_web_image="$(docker inspect --format '{{.Config.Image}}' "$deployed_web_id")"
+            echo "Expected Web image: $new_web_image"
+            echo "Running Web image:  $deployed_web_image"
+            test "$deployed_web_image" = "$new_web_image"
+            docker exec "$deployed_web_id" grep --fixed-strings --quiet \
+              'wss://{$LIVEKIT_DOMAIN}' /etc/caddy/Caddyfile
 
-            curl --fail --silent --show-error --retry 12 --retry-delay 2 --retry-connrefused \
-              https://dev.voiceroom.ru/api/healthz >/dev/null
-            curl --fail --silent --show-error --retry 12 --retry-delay 2 --retry-connrefused \
-              https://livekit.dev.voiceroom.ru/readyz >/dev/null
-            curl --fail --silent --show-error --head https://dev.voiceroom.ru \
+            curl --fail --silent --show-error --noproxy '*' \
+              --resolve dev.voiceroom.ru:443:127.0.0.1 \
+              --head https://dev.voiceroom.ru \
               | grep --fixed-strings --quiet 'wss://livekit.dev.voiceroom.ru'
 
             trap - ERR
+
+            next_env="$(mktemp "$DEPLOY_PATH/.env.next.XXXXXX")"
+            awk -v image="$new_web_image" '
+              BEGIN { updated = 0 }
+              /^VOICEROOM_WEB_IMAGE=/ {
+                print "VOICEROOM_WEB_IMAGE=" image
+                updated = 1
+                next
+              }
+              { print }
+              END {
+                if (!updated) print "VOICEROOM_WEB_IMAGE=" image
+              }
+            ' "$DEPLOY_PATH/.env" >"$next_env"
+            chmod --reference="$DEPLOY_PATH/.env" "$next_env"
+            mv "$next_env" "$DEPLOY_PATH/.env"
             echo "Deployed Web $TARGET_SHA to dev.voiceroom.ru"
+
+      - name: Verify the public dev endpoints
+        shell: bash
+        run: |
+          set -euo pipefail
+          headers=""
+          for _ in {1..30}; do
+            headers="$(curl --fail --silent --show-error --head https://dev.voiceroom.ru || true)"
+            if grep --fixed-strings --quiet 'wss://livekit.dev.voiceroom.ru' <<<"$headers"; then
+              break
+            fi
+            sleep 2
+          done
+          grep --fixed-strings 'wss://livekit.dev.voiceroom.ru' <<<"$headers"
+          curl --fail --silent --show-error https://dev.voiceroom.ru/api/healthz >/dev/null
+          curl --fail --silent --show-error https://livekit.dev.voiceroom.ru/readyz >/dev/null
