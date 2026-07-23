@@ -29,7 +29,7 @@ COPY apps/api ./apps/api
 COPY packages/shared ./packages/shared
 COPY config ./config
 
-RUN mkdir -p /data/uploads && chown node:node /data/uploads
+RUN mkdir -p /data/uploads /data/media && chown node:node /data/uploads /data/media
 
 USER node
 EXPOSE 3000

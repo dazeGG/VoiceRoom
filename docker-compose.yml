@@ -26,6 +26,14 @@ services:
       NODE_ENV: production
       DATABASE_URL: ${DATABASE_URL:-postgres://${POSTGRES_USER:-voice_room}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-voice_room}}
 
+  media-init:
+    image: ${VOICEROOM_API_IMAGE:?set immutable VOICEROOM_API_IMAGE digest}
+    user: root
+    restart: "no"
+    command: ["sh", "-c", "mkdir -p /data/media && chown node:node /data/media && chmod 0700 /data/media"]
+    volumes:
+      - media:/data/media
+
   api:
     image: ${VOICEROOM_API_IMAGE:?set immutable VOICEROOM_API_IMAGE digest}
     restart: unless-stopped
@@ -33,6 +41,8 @@ services:
       postgres:
         condition: service_healthy
       migrate:
+        condition: service_completed_successfully
+      media-init:
         condition: service_completed_successfully
     environment:
       NODE_ENV: production
@@ -153,6 +163,8 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
+      media-init:
+        condition: service_completed_successfully
     environment:
       NODE_ENV: production
       VOICE_ROOM_WORKER: media-processing
@@ -170,6 +182,8 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
+      media-init:
+        condition: service_completed_successfully
     environment:
       NODE_ENV: production
       VOICE_ROOM_WORKER: media-maintenance
@@ -186,6 +200,8 @@ services:
       postgres:
         condition: service_healthy
       migrate:
+        condition: service_completed_successfully
+      media-init:
         condition: service_completed_successfully
     environment:
       NODE_ENV: production

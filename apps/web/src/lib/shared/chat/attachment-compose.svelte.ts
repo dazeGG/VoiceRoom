@@ -55,8 +55,8 @@ export class AttachmentComposeStore {
         bytes: file.size,
         clientRequestId: crypto.randomUUID()
       });
-      draft = { ...slot, file, progress: 0, error: null };
-      this.drafts.push(draft);
+      this.drafts.push({ ...slot, file, progress: 0, error: null });
+      draft = this.drafts[this.drafts.length - 1];
       this.persist();
       Object.assign(draft, await uploadAttachmentContent(slot.id, file, (progress) => {
         if (draft) draft.progress = progress;
