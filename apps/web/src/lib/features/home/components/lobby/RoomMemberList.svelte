@@ -4,17 +4,20 @@
   import { iconSm } from '$lib/shared/ui/icons';
   import {
     getRoomMembership,
-    loadRoomMembership
+    loadRoomMembership,
+    roomMembershipState
   } from '../../model/room-membership.svelte';
+  import type { MembershipMember } from '$lib/api/memberships';
 
   let { roomId }: { roomId: string } = $props();
   let query = $state('');
-  const roster = $derived(getRoomMembership(roomId));
-  const onlineMembers = $derived(roster.members.filter((member) => member.presenceStatus !== 'offline'));
-  const offlineMembers = $derived(roster.members.filter((member) => member.presenceStatus === 'offline'));
+  const roster = $derived(roomMembershipState.byRoomId[roomId] ?? null);
+  const onlineMembers = $derived((roster?.members ?? []).filter((member) => member.presenceStatus !== 'offline'));
+  const offlineMembers = $derived((roster?.members ?? []).filter((member) => member.presenceStatus === 'offline'));
 
   $effect(() => {
     roomId;
+    getRoomMembership(roomId);
     query = '';
     void loadRoomMembership(roomId);
   });
@@ -26,7 +29,7 @@
     return () => window.clearTimeout(timer);
   });
 
-  function nameFor(member: (typeof roster.members)[number]): string {
+  function nameFor(member: MembershipMember): string {
     return member.displayName || member.login;
   }
 </script>
@@ -42,11 +45,11 @@
   </div>
 
   <div aria-live="polite" aria-atomic="true" class="sr-only">
-    {#if roster.loading}Загрузка участников{/if}
-    {#if roster.error}{roster.error}{/if}
+    {#if roster?.loading}Загрузка участников{/if}
+    {#if roster?.error}{roster.error}{/if}
   </div>
 
-  {#if roster.error && roster.members.length === 0}
+  {#if roster?.error && roster.members.length === 0}
     <div class="room-member-list__notice" role="alert">
       <p>{roster.error}</p>
       <button type="button" onclick={() => loadRoomMembership(roomId, { query })}>Повторить</button>
@@ -81,7 +84,7 @@
       {/each}
     </ul>
 
-    {#if roster.hasMore}
+    {#if roster?.hasMore}
       <button
         class="room-member-list__more"
         type="button"
@@ -90,7 +93,7 @@
       >
         {roster.loading ? 'Загрузка…' : 'Показать ещё'}
       </button>
-    {:else if roster.loaded && roster.members.length === 0}
+    {:else if roster?.loaded && roster.members.length === 0}
       <p class="room-member-list__empty">Никого не найдено</p>
     {/if}
   {/if}

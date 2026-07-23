@@ -1214,6 +1214,9 @@ test('lobby v2 keeps dock in main area, preview chat, and people add-friend flow
   assert.match(roomStage, /membershipEnabled && !roomUi\.chatOpen/);
   assert.match(memberList, /В сети — \{onlineMembers\.length\}/);
   assert.match(memberList, /Не в сети — \{offlineMembers\.length\}/);
+  assert.match(memberList, /roomMembershipState\.byRoomId\[roomId\] \?\? null/);
+  assert.match(memberList, /getRoomMembership\(roomId\);/);
+  assert.doesNotMatch(memberList, /\$derived\(getRoomMembership\(roomId\)\)/);
   assert.doesNotMatch(memberList, /В голосовом канале|Остальные/);
   assert.doesNotMatch(membershipState, /left\.inVoice !== right\.inVoice|left\.role !== right\.role|localeCompare/);
   assert.match(friendsCss, /\.lobby-dm-head[\s\S]*border: 0/);
