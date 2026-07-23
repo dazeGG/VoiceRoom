@@ -2,7 +2,7 @@
 
 process.env.ROOM_CREATE_POW_DIFFICULTY = '0';
 process.env.LIVEKIT_URL = 'ws://livekit:7880';
-process.env.LIVEKIT_GATE_PUBLIC_URL = 'ws://gate.example.test/rtc';
+process.env.LIVEKIT_GATE_PUBLIC_URL = 'ws://gate.example.test';
 process.env.LIVEKIT_GATE_SECRET = 'test-g05-livekit-gate-secret-32-bytes-minimum';
 process.env.LIVEKIT_API_KEY = 'devkey';
 process.env.LIVEKIT_API_SECRET = 'devsecret';
@@ -185,7 +185,7 @@ test('G05-A01 API mints LiveKit JWT plus separate exact gate credential', async 
   assert.equal(body.ok, true);
   assert.equal(body.room, 'voice-room-room-g05');
   assert.match(body.token, /^[^.]+\.[^.]+\.[^.]+$/);
-  assert.match(body.url, /^ws:\/\/gate\.example\.test\/rtc\?/);
+  assert.match(body.url, /^ws:\/\/gate\.example\.test\/\?/);
   const gateCredential = new URL(body.url).searchParams.get('vr_gate_credential');
   assert.ok(gateCredential);
 
@@ -277,7 +277,7 @@ test('G05-A02 topology exposes only the gate as public signaling boundary', () =
   assert.match(compose, /livekit-gate:/);
   assert.match(compose, /command:\s*\["node",\s*"apps\/api\/src\/domains\/admission\/livekit-auth-gate-service\.js"\]/);
   assert.match(compose, /LIVEKIT_URL:\s*\$\{LIVEKIT_URL:-ws:\/\/livekit:7880\}/);
-  assert.match(compose, /LIVEKIT_GATE_PUBLIC_URL:\s*\$\{LIVEKIT_GATE_PUBLIC_URL:-wss:\/\/\$\{LIVEKIT_DOMAIN:-livekit\.\$\{DOMAIN\}\}\/rtc\}/);
+  assert.match(compose, /LIVEKIT_GATE_PUBLIC_URL:\s*\$\{LIVEKIT_GATE_PUBLIC_URL:-wss:\/\/\$\{LIVEKIT_DOMAIN:-livekit\.\$\{DOMAIN\}\}\}/);
   assert.match(compose, /LIVEKIT_GATE_SECRET/);
   assert.doesNotMatch(compose, /"7880:7880"/);
   assert.match(caddy, /reverse_proxy livekit-gate:3080/);
