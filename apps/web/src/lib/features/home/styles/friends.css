@@ -795,10 +795,15 @@ html.is-desktop .sidebar-download { display: none; }
 
 .lobby-dm-bubble--has-attachments {
   display: grid;
+  width: min(560px, 100%);
   gap: 6px;
   padding: 0;
   border: 0;
   background: transparent;
+}
+
+.lobby-dm-bubble--has-attachments .attachment-mosaic {
+  width: 100%;
 }
 
 .lobby-dm-bubble--has-attachments .dm-msg-content {
