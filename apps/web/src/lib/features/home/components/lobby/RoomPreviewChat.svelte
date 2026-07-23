@@ -12,6 +12,18 @@
   import ChatText from '$lib/shared/components/ChatText.svelte';
   import { copyText } from '$lib/shared/utils/clipboard';
   import { isRoomNotificationsMuted } from '$lib/shared/notifications/preferences.svelte';
+  import { getCapabilityFeature } from '$lib/platform/capability-state.svelte';
+  import {
+    dataTransferHasImages,
+    getAttachmentComposeStore,
+    imageFilesFromClipboard,
+    imageFilesFromDataTransfer,
+    type AttachmentComposeStore
+  } from '$lib/shared/chat/attachment-compose.svelte';
+  import AttachmentComposer from '$lib/shared/chat/AttachmentComposer.svelte';
+  import AttachmentDropOverlay from '$lib/shared/chat/AttachmentDropOverlay.svelte';
+  import AttachmentMosaic from '$lib/shared/chat/AttachmentMosaic.svelte';
+  import AttachmentUploadControl from '$lib/shared/chat/AttachmentUploadControl.svelte';
   import { tick } from 'svelte';
 
   let { roomId, user, onClose, onToast } = $props<{
@@ -32,12 +44,38 @@
   let chatBody: HTMLDivElement | null = null;
   let composeEl: HTMLTextAreaElement | null = null;
   let editEl = $state<HTMLTextAreaElement | null>(null);
+  let media = $state<AttachmentComposeStore | null>(null);
+  let attachmentDragDepth = $state(0);
+  let chatPinnedToBottom = true;
+  let composerAttachmentCount = 0;
 
   $effect(() => {
     const activeRoomId = roomId;
     const endReadSession = beginRoomChatReadSession(activeRoomId);
     void markRoomChatRead(activeRoomId).catch(() => {});
     return endReadSession;
+  });
+
+  $effect(() => {
+    const activeRoomId = roomId;
+    media = null;
+    attachmentDragDepth = 0;
+    let cancelled = false;
+    void getCapabilityFeature('mediaUploads').then((enabled) => {
+      if (!cancelled && roomId === activeRoomId) {
+        media = enabled ? getAttachmentComposeStore('room', activeRoomId) : null;
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  });
+
+  $effect(() => {
+    const attachmentCount = media?.drafts.length ?? 0;
+    if (attachmentCount === composerAttachmentCount) return;
+    composerAttachmentCount = attachmentCount;
+    if (chatPinnedToBottom) void tick().then(scrollToBottom);
   });
 
   function autoResize() {
@@ -55,6 +93,54 @@
     } else {
       queueMicrotask(autoResize);
     }
+  }
+
+  async function onComposePaste(event: ClipboardEvent): Promise<void> {
+    if (!media) return;
+    const files = imageFilesFromClipboard(event);
+    if (!files.length) return;
+    event.preventDefault();
+    try {
+      await media.addFiles(files);
+    } catch (cause) {
+      showAttachmentError(cause instanceof Error ? cause.message : 'Не удалось вставить изображение');
+    }
+  }
+
+  function onAttachmentDragEnter(event: DragEvent): void {
+    if (!media || sending || !dataTransferHasImages(event.dataTransfer)) return;
+    event.preventDefault();
+    attachmentDragDepth += 1;
+  }
+
+  function onAttachmentDragOver(event: DragEvent): void {
+    if (!media || sending || !dataTransferHasImages(event.dataTransfer)) return;
+    event.preventDefault();
+    if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
+  }
+
+  function onAttachmentDragLeave(event: DragEvent): void {
+    if (!attachmentDragDepth) return;
+    event.preventDefault();
+    attachmentDragDepth = Math.max(0, attachmentDragDepth - 1);
+  }
+
+  async function onAttachmentDrop(event: DragEvent): Promise<void> {
+    if (!media) return;
+    const files = imageFilesFromDataTransfer(event.dataTransfer);
+    if (!files.length) return;
+    event.preventDefault();
+    attachmentDragDepth = 0;
+    try {
+      await media.addFiles(files);
+    } catch (cause) {
+      showAttachmentError(cause instanceof Error ? cause.message : 'Не удалось загрузить изображение');
+    }
+  }
+
+  function showAttachmentError(message: string): void {
+    if (onToast) onToast(message);
+    else error = message;
   }
 
   interface ChatGroup {
@@ -141,19 +227,25 @@
 
     // Do not collapse whitespace; newlines are intentional (2.4.0).
     const text = draft.trim();
-    if (!text) return;
+    if (!text && !media?.canSend) return;
+    if (media?.drafts.length && !media.canSend) return;
 
     sending = true;
     error = '';
     let sent = false;
     try {
-      const message = await postRoomChat(roomId, { name: displayName, text });
+      const message = await postRoomChat(roomId, {
+        name: displayName,
+        text,
+        attachmentIds: media?.readyIds ?? []
+      });
       if (!messageIds.has(message.id) && !messages.some((item) => item.id === message.id)) {
         messageIds.add(message.id);
         messages = [...messages, message];
         queueMicrotask(scrollToBottom);
       }
       draft = '';
+      media?.clearBound();
       sent = true;
     } catch (err) {
       error = err instanceof Error ? err.message : 'Не удалось отправить сообщение';
@@ -169,6 +261,11 @@
   function scrollToBottom(): void {
     if (!chatBody) return;
     chatBody.scrollTop = chatBody.scrollHeight;
+  }
+
+  function onChatScroll(): void {
+    if (!chatBody) return;
+    chatPinnedToBottom = chatBody.scrollHeight - chatBody.scrollTop - chatBody.clientHeight <= 48;
   }
 
   async function deleteMessage(messageId: string): Promise<void> {
@@ -310,7 +407,15 @@
   });
 </script>
 
-<aside class="lobby-preview-chat" aria-label="Чат комнаты">
+<aside
+  class="lobby-preview-chat"
+  aria-label="Чат комнаты"
+  ondragenter={onAttachmentDragEnter}
+  ondragover={onAttachmentDragOver}
+  ondragleave={onAttachmentDragLeave}
+  ondrop={onAttachmentDrop}
+>
+  {#if attachmentDragDepth > 0}<AttachmentDropOverlay />{/if}
   <header class="chat-rail-head">
     <div class="chat-rail-title">
       <MessageSquare {...iconSm} aria-hidden="true" />
@@ -321,7 +426,7 @@
     </button>
   </header>
 
-  <div class="chat-rail-body" bind:this={chatBody}>
+  <div class="chat-rail-body" bind:this={chatBody} onscroll={onChatScroll}>
     {#if loading}
       <p class="chat-rail-note">Загружаем сообщения…</p>
     {:else if groups.length}
@@ -353,7 +458,8 @@
                     </div>
                   </div>
                 {:else}
-                  <span class="chat-msg-content"><ChatText text={message.text} />{#if message.editedAt}<span class="chat-msg-edited">(изменено)</span>{/if}</span>
+                  {#if message.attachments?.length}<AttachmentMosaic attachments={message.attachments} />{/if}
+                  {#if message.text}<span class="chat-msg-content"><ChatText text={message.text} />{#if message.editedAt}<span class="chat-msg-edited">(изменено)</span>{/if}</span>{/if}
                   <div class="chat-msg-actions" role="toolbar" aria-label="Действия с сообщением">
                     <button type="button" aria-label="Копировать текст" title="Копировать текст" onclick={() => void copyMessageText(message)}><Copy {...iconSm} /></button>
                     {#if group.self}
@@ -376,17 +482,23 @@
     <p class="chat-rail-error">{error}</p>
   {/if}
 
-  <form class="chat-rail-compose" onsubmit={sendMessage}>
-    <textarea
-      class="chat-rail-input chat-rail-textarea"
-      bind:this={composeEl}
-      bind:value={draft}
-      rows="1"
-      maxlength="500"
-      placeholder="Написать в комнату…"
-      onkeydown={onComposeKeydown}
-      oninput={autoResize}
-      disabled={sending}
-    ></textarea>
+  <form class="chat-rail-compose" onsubmit={sendMessage} onpaste={onComposePaste}>
+    <div class="chat-compose-row attachment-compose-field">
+      {#if media}<AttachmentComposer store={media} disabled={sending} />{/if}
+      <div class="attachment-compose-controls">
+        {#if media}<AttachmentUploadControl store={media} disabled={sending} onerror={showAttachmentError} />{/if}
+        <textarea
+          class="chat-rail-input chat-rail-textarea"
+          bind:this={composeEl}
+          bind:value={draft}
+          rows="1"
+          maxlength="500"
+          placeholder="Написать в комнату…"
+          onkeydown={onComposeKeydown}
+          oninput={autoResize}
+          disabled={sending}
+        ></textarea>
+      </div>
+    </div>
   </form>
 </aside>

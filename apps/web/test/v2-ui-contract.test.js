@@ -1635,6 +1635,7 @@ test('chat image attachments support picker, clipboard, and drag-and-drop behind
   const composeStore = read('src/lib/shared/chat/attachment-compose.svelte.ts');
   const attachmentCss = read('src/lib/shared/chat/attachment.css');
   const roomChat = read('src/lib/features/room/components/RoomChat.svelte');
+  const previewChat = read('src/lib/features/home/components/lobby/RoomPreviewChat.svelte');
   const dmView = read('src/lib/features/home/components/lobby/DmView.svelte');
   const friendsCss = read('src/lib/features/home/styles/friends.css');
   const chatCss = read('src/lib/features/room/styles/chat-rail.css');
@@ -1675,7 +1676,7 @@ test('chat image attachments support picker, clipboard, and drag-and-drop behind
   assert.match(chatCss, /\.chat-rail-compose \.attachment-upload-root \{[\s\S]*margin-top: 5px/);
   assert.match(composeStore, /imageFilesFromClipboard[\s\S]*clipboardData/);
   assert.match(composeStore, /imageFilesFromDataTransfer[\s\S]*data\.files/);
-  for (const parent of [roomChat, dmView]) {
+  for (const parent of [roomChat, previewChat, dmView]) {
     assert.match(parent, /getCapabilityFeature\('mediaUploads'\)/);
     assert.match(parent, /onpaste=\{onComposePaste\}/);
     assert.match(parent, /imageFilesFromClipboard\(event\)[\s\S]*media\.addFiles\(files\)/);
@@ -1685,6 +1686,8 @@ test('chat image attachments support picker, clipboard, and drag-and-drop behind
     assert.match(parent, /attachment-compose-field[\s\S]*<AttachmentComposer[\s\S]*attachment-compose-controls/);
     assert.match(parent, /PinnedToBottom[\s\S]*drafts\.length[\s\S]*tick\(\)/);
   }
+  assert.match(previewChat, /attachmentIds: media\?\.readyIds \?\? \[\]/);
+  assert.match(previewChat, /\{#if message\.attachments\?\.length\}<AttachmentMosaic/);
 });
 
 test('desktop shell layout stays in shared web styles, not electron overrides', () => {
