@@ -1202,6 +1202,16 @@ test('lobby v2 keeps dock in main area, preview chat, and people add-friend flow
   assert.match(friendsCss, /data-preview-chat-open/);
   assert.match(friendsCss, /\.lobby-room-members/);
   assert.match(friendsCss, /data-members-open/);
+  const roomStage = read('src/lib/features/room/components/RoomStage.svelte');
+  const memberList = read('src/lib/features/home/components/lobby/RoomMemberList.svelte');
+  const membershipState = read('src/lib/features/home/model/room-membership.svelte.ts');
+  assert.match(roomStage, /getCapabilityFeature\('membership'\)/);
+  assert.match(roomStage, /<RoomMemberList roomId=\{roomClientState\.roomId\} \/>/);
+  assert.match(roomStage, /membershipEnabled && !roomUi\.chatOpen/);
+  assert.match(memberList, /В сети — \{onlineMembers\.length\}/);
+  assert.match(memberList, /Не в сети — \{offlineMembers\.length\}/);
+  assert.doesNotMatch(memberList, /В голосовом канале|Остальные/);
+  assert.doesNotMatch(membershipState, /left\.inVoice !== right\.inVoice|left\.role !== right\.role|localeCompare/);
   assert.match(friendsCss, /\.lobby-dm-head[\s\S]*border: 0/);
   const dmView = read('src/lib/features/home/components/lobby/DmView.svelte');
   assert.match(dmView, /bind:this=\{inputEl\}/);

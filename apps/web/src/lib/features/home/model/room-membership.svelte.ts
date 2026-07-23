@@ -76,13 +76,9 @@ export function getRoomMembership(roomId: string): RoomMembershipEntry {
 function mergeMembers(current: MembershipMember[], incoming: MembershipMember[]): MembershipMember[] {
   const byUserId = new Map(current.map((member) => [member.userId, member]));
   for (const member of incoming) byUserId.set(member.userId, { ...byUserId.get(member.userId), ...member });
-  return [...byUserId.values()].sort((left, right) => {
-    if (left.inVoice !== right.inVoice) return left.inVoice ? -1 : 1;
-    if (left.role !== right.role) return left.role === 'owner' ? -1 : 1;
-    const leftName = left.displayName || left.login;
-    const rightName = right.displayName || right.login;
-    return leftName.localeCompare(rightName, 'ru', { sensitivity: 'base' }) || left.userId.localeCompare(right.userId);
-  });
+  return [...byUserId.values()].sort(
+    (left, right) => Number(right.presenceStatus !== 'offline') - Number(left.presenceStatus !== 'offline')
+  );
 }
 
 export async function loadRoomMembership(

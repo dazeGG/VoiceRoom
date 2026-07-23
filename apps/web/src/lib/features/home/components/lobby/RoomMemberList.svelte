@@ -10,8 +10,8 @@
   let { roomId }: { roomId: string } = $props();
   let query = $state('');
   const roster = $derived(getRoomMembership(roomId));
-  const voiceMembers = $derived(roster.members.filter((member) => member.inVoice));
-  const otherMembers = $derived(roster.members.filter((member) => !member.inVoice));
+  const onlineMembers = $derived(roster.members.filter((member) => member.presenceStatus !== 'offline'));
+  const offlineMembers = $derived(roster.members.filter((member) => member.presenceStatus === 'offline'));
 
   $effect(() => {
     roomId;
@@ -52,21 +52,9 @@
       <button type="button" onclick={() => loadRoomMembership(roomId, { query })}>Повторить</button>
     </div>
   {:else}
-    {#if voiceMembers.length > 0}
-      <h3>В голосовом канале — {voiceMembers.length}</h3>
-      <ul aria-label="В голосовом канале">
-        {#each voiceMembers as member (member.userId)}
-          <li>
-            <Avatar name={nameFor(member)} src={member.avatarUrl} colorKey={member.avatarColorKey} size={32} showDot online />
-            <span><strong>{nameFor(member)}</strong><small>@{member.login}{member.role === 'owner' ? ' · Создатель' : ''}</small></span>
-          </li>
-        {/each}
-      </ul>
-    {/if}
-
-    <h3>Остальные — {otherMembers.length}</h3>
-    <ul aria-label="Остальные участники">
-      {#each otherMembers as member (member.userId)}
+    <h3>В сети — {onlineMembers.length}</h3>
+    <ul aria-label="Участники в сети">
+      {#each onlineMembers as member (member.userId)}
         <li>
           <Avatar
             name={nameFor(member)}
@@ -78,6 +66,16 @@
             dnd={member.presenceStatus === 'dnd'}
             afk={member.presenceStatus === 'afk'}
           />
+          <span><strong>{nameFor(member)}</strong><small>@{member.login}{member.role === 'owner' ? ' · Создатель' : ''}</small></span>
+        </li>
+      {/each}
+    </ul>
+
+    <h3>Не в сети — {offlineMembers.length}</h3>
+    <ul aria-label="Участники не в сети">
+      {#each offlineMembers as member (member.userId)}
+        <li>
+          <Avatar name={nameFor(member)} src={member.avatarUrl} colorKey={member.avatarColorKey} size={32} showDot />
           <span><strong>{nameFor(member)}</strong><small>@{member.login}{member.role === 'owner' ? ' · Создатель' : ''}</small></span>
         </li>
       {/each}

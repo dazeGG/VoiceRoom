@@ -594,10 +594,6 @@ html.is-desktop .sidebar-download { display: none; }
     padding-right: 0;
   }
 
-  .lobby-roomview-content[data-members-open='true'] {
-    padding-right: 0;
-  }
-
   .lobby-preview-chat {
     top: 12px;
     right: 12px;
@@ -606,18 +602,6 @@ html.is-desktop .sidebar-download { display: none; }
     width: auto;
     border: 1px solid rgba(255, 255, 255, 0.09);
     border-radius: 18px;
-  }
-
-  .lobby-room-members {
-    top: auto;
-    left: 12px;
-    right: 12px;
-    bottom: 92px;
-    width: auto;
-    max-height: min(52vh, 440px);
-    border: 1px solid rgba(255, 255, 255, 0.09);
-    border-radius: 18px;
-    box-shadow: 0 -18px 54px rgba(0, 0, 0, 0.3);
   }
 }
 
