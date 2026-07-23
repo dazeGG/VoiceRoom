@@ -79,19 +79,18 @@ jobs:
             fi
 
             api_id="$(docker compose ps -q api)"
-            gate_id="$(docker compose ps -q livekit-gate)"
             web_id="$(docker compose ps -q caddy)"
-            if [[ -z "$api_id" || -z "$gate_id" || -z "$web_id" ]]; then
-              echo "The current API, LiveKit gate, or Web container is missing" >&2
+            if [[ -z "$api_id" || -z "$web_id" ]]; then
+              echo "The current API or Web container is missing" >&2
               docker compose ps
               exit 1
             fi
 
             old_api_image="$(docker inspect --format '{{.Config.Image}}' "$api_id")"
-            old_gate_image="$(docker inspect --format '{{.Config.Image}}' "$gate_id")"
             old_web_image="$(docker inspect --format '{{.Config.Image}}' "$web_id")"
-            if [[ "$old_api_image" != "$old_gate_image" ]]; then
-              echo "API and LiveKit gate do not use the same rollback image" >&2
+            project_name="$(docker inspect --format '{{index .Config.Labels "com.docker.compose.project"}}' "$web_id")"
+            if [[ -z "$project_name" ]]; then
+              echo "The current Web container has no Compose project label" >&2
               exit 1
             fi
 
@@ -104,28 +103,41 @@ jobs:
             trap cleanup EXIT
             git worktree add --detach "$source_dir" "$TARGET_SHA"
 
-            new_api_image="voiceroom-api:dev-$TARGET_SHA"
             new_web_image="voiceroom-web:dev-$TARGET_SHA"
-            docker build --target api --label "org.opencontainers.image.revision=$TARGET_SHA" --tag "$new_api_image" "$source_dir"
             docker build --target web --label "org.opencontainers.image.revision=$TARGET_SHA" --tag "$new_web_image" "$source_dir"
 
+            compose_up_web() {
+              local web_image="$1"
+              env \
+                POSTGRES_PASSWORD=unused-for-web-only-rollout \
+                LIVEKIT_GATE_SECRET=unused-for-web-only-rollout \
+                VOICE_ROOM_CURSOR_HMAC_KEYS=unused-for-web-only-rollout \
+                LIVEKIT_API_KEY=unused-for-web-only-rollout \
+                LIVEKIT_API_SECRET=unused-for-web-only-rollout \
+                VOICEROOM_API_IMAGE="$old_api_image" \
+                VOICEROOM_WORKER_IMAGE="$old_api_image" \
+                VOICEROOM_WEB_IMAGE="$web_image" \
+                docker compose \
+                  --project-name "$project_name" \
+                  --project-directory "$DEPLOY_PATH" \
+                  --env-file "$DEPLOY_PATH/.env" \
+                  -f "$source_dir/docker-compose.yml" \
+                  up -d --no-deps --wait --wait-timeout 180 caddy
+            }
+
             rollback() {
-              echo "Deployment failed; restoring the previous API and Web images" >&2
-              VOICEROOM_API_IMAGE="$old_api_image" \
-              VOICEROOM_WEB_IMAGE="$old_web_image" \
-                docker compose up -d --no-deps --wait --wait-timeout 180 api livekit-gate caddy || true
+              echo "Deployment failed; restoring the previous Web image" >&2
+              compose_up_web "$old_web_image" || true
             }
             trap rollback ERR
 
-            VOICEROOM_API_IMAGE="$new_api_image" \
-            VOICEROOM_WEB_IMAGE="$new_web_image" \
-              docker compose up -d --no-deps --wait --wait-timeout 180 api livekit-gate caddy
+            compose_up_web "$new_web_image"
 
-            deployed_api_id="$(docker compose ps -q api)"
-            deployed_gate_id="$(docker compose ps -q livekit-gate)"
-            deployed_web_id="$(docker compose ps -q caddy)"
-            test "$(docker inspect --format '{{.Config.Image}}' "$deployed_api_id")" = "$new_api_image"
-            test "$(docker inspect --format '{{.Config.Image}}' "$deployed_gate_id")" = "$new_api_image"
+            deployed_web_id="$(docker ps \
+              --filter "label=com.docker.compose.project=$project_name" \
+              --filter 'label=com.docker.compose.service=caddy' \
+              --quiet)"
+            test -n "$deployed_web_id"
             test "$(docker inspect --format '{{.Config.Image}}' "$deployed_web_id")" = "$new_web_image"
 
             curl --fail --silent --show-error --retry 12 --retry-delay 2 --retry-connrefused \
@@ -136,4 +148,4 @@ jobs:
               | grep --fixed-strings --quiet 'wss://livekit.dev.voiceroom.ru'
 
             trap - ERR
-            echo "Deployed $TARGET_SHA to dev.voiceroom.ru"
+            echo "Deployed Web $TARGET_SHA to dev.voiceroom.ru"
