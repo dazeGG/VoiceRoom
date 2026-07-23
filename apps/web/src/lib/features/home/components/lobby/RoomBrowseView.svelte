@@ -8,11 +8,13 @@
   import { getAvatarPresentation } from '$lib/features/room/client/ui/avatar-presentation';
   import '$lib/features/room/styles/room.css';
   import RoomPreviewChat from './RoomPreviewChat.svelte';
+  import RoomMemberList from './RoomMemberList.svelte';
   import RoomViewHeader from './RoomViewHeader.svelte';
   import LobbyStreamTile from './LobbyStreamTile.svelte';
   import { roomPresence } from '../../model/room-presence.svelte';
   import { subscribeRoomPreview } from '../../model/room-realtime';
   import { notificationPreferences } from '$lib/shared/notifications/preferences.svelte';
+  import { getCapabilityFeature } from '$lib/platform/capability-state.svelte';
 
   let { room, user, onEnter, onBack, onOpenSettings, onToast } = $props<{
     room: OwnedRoom;
@@ -30,6 +32,7 @@
 
   let peers = $state<RoomPeer[]>([]);
   let loading = $state(true);
+  let membershipEnabled = $state(false);
 
   let previewChatOpen = $state(false);
   let loadError = $state('');
@@ -73,6 +76,16 @@
     return unsubscribe;
   });
 
+  $effect(() => {
+    let active = true;
+    void getCapabilityFeature('membership').then((enabled) => {
+      if (active) membershipEnabled = enabled;
+    });
+    return () => {
+      active = false;
+    };
+  });
+
   function peerName(peer: RoomPeer): string {
     return peer.name?.trim() || 'Гость';
   }
@@ -104,7 +117,11 @@
     </div>
   </header>
 
-  <div class="lobby-roomview-content lobby-browse-content" data-preview-chat-open={previewChatOpen}>
+  <div
+    class="lobby-roomview-content lobby-browse-content"
+    data-preview-chat-open={previewChatOpen}
+    data-members-open={membershipEnabled && !previewChatOpen}
+  >
     <main class="lobby-browse-stage lobby-roomview-stage-pane" aria-label="Просмотр комнаты без подключения к голосу">
       <section class="stage lobby-preview-stage" aria-label="Участники комнаты">
         <div class="stage-strip" aria-label="Плитки комнаты">
@@ -165,6 +182,10 @@
       {#key previewRoomId}
         <RoomPreviewChat roomId={previewRoomId} {user} {onToast} onClose={() => (previewChatOpen = false)} />
       {/key}
+    {:else if membershipEnabled}
+      <aside class="lobby-room-members" aria-label="Список участников комнаты">
+        <RoomMemberList roomId={previewRoomId} />
+      </aside>
     {/if}
   </div>
 </div>

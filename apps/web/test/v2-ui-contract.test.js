@@ -1163,6 +1163,12 @@ test('lobby v2 keeps dock in main area, preview chat, and people add-friend flow
   assert.match(sidebar, /<SidebarDownload \/>/);
   assert.match(previewView, /RoomPreviewChat/);
   assert.match(browseView, /RoomPreviewChat/);
+  assert.match(previewView, /getCapabilityFeature\('membership'\)/);
+  assert.match(browseView, /getCapabilityFeature\('membership'\)/);
+  assert.match(previewView, /<RoomMemberList roomId=\{previewRoomId\} \/>/);
+  assert.match(browseView, /<RoomMemberList roomId=\{previewRoomId\} \/>/);
+  assert.match(previewView, /data-members-open=\{membershipEnabled && !previewChatOpen\}/);
+  assert.match(browseView, /data-members-open=\{membershipEnabled && !previewChatOpen\}/);
   assert.match(previewView, /'\$lib\/features\/room\/styles\/room\.css'/);
   assert.match(browseView, /'\$lib\/features\/room\/styles\/room\.css'/);
   assert.match(previewView, /class="stage lobby-preview-stage"/);
@@ -1194,6 +1200,8 @@ test('lobby v2 keeps dock in main area, preview chat, and people add-friend flow
   assert.match(peopleView, /@\{user\.login\}/);
   assert.match(friendsCss, /\.lobby-preview-chat/);
   assert.match(friendsCss, /data-preview-chat-open/);
+  assert.match(friendsCss, /\.lobby-room-members/);
+  assert.match(friendsCss, /data-members-open/);
   assert.match(friendsCss, /\.lobby-dm-head[\s\S]*border: 0/);
   const dmView = read('src/lib/features/home/components/lobby/DmView.svelte');
   assert.match(dmView, /bind:this=\{inputEl\}/);
