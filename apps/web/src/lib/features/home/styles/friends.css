@@ -828,6 +828,38 @@ html.is-desktop .sidebar-download { display: none; }
   color: var(--accent-ink);
 }
 
+.lobby-dm-bubble--media-caption {
+  gap: 0;
+  overflow: hidden;
+  border-radius: 16px;
+}
+
+.lobby-dm-bubble--media-caption.lobby-dm-bubble--them {
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-bottom-left-radius: 5px;
+  background: var(--panel);
+}
+
+.lobby-dm-bubble--media-caption.lobby-dm-bubble--me {
+  border-bottom-right-radius: 5px;
+  background: var(--accent);
+}
+
+.lobby-dm-bubble--media-caption .attachment-mosaic {
+  border-radius: 0;
+}
+
+.lobby-dm-bubble--media-caption .dm-msg-content,
+.lobby-dm-bubble--media-caption.lobby-dm-bubble--them .dm-msg-content,
+.lobby-dm-bubble--media-caption.lobby-dm-bubble--me .dm-msg-content {
+  justify-self: stretch;
+  box-sizing: border-box;
+  width: 100%;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
 .lobby-dm-bubble a {
   color: inherit;
   text-decoration: underline;

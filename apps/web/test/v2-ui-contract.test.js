@@ -1660,6 +1660,7 @@ test('chat image attachments support picker, clipboard, and drag-and-drop behind
   assert.match(dmView, /lobby-dm-bubble--attachment-only[\s\S]*!bubble\.body\.trim\(\)[\s\S]*bubble\.attachments/);
   assert.match(friendsCss, /\.lobby-dm-bubble--attachment-only \{[\s\S]*padding: 0;[\s\S]*background: transparent/);
   assert.match(dmView, /lobby-dm-bubble--has-attachments=\{Boolean\(bubble\.attachments\?\.length\)\}/);
+  assert.match(dmView, /lobby-dm-bubble--media-caption=\{Boolean\(bubble\.body\.trim\(\) && bubble\.attachments\?\.length\)\}/);
   assert.ok(
     dmView.indexOf('<AttachmentMosaic attachments={bubble.attachments} />')
       < dmView.indexOf('<span class="dm-msg-content">'),
@@ -1668,6 +1669,9 @@ test('chat image attachments support picker, clipboard, and drag-and-drop behind
   assert.match(friendsCss, /\.lobby-dm-bubble--has-attachments \{[\s\S]*display: grid;[\s\S]*width: min\(560px, 100%\);[\s\S]*padding: 0;[\s\S]*background: transparent/);
   assert.match(friendsCss, /\.lobby-dm-bubble--has-attachments \.attachment-mosaic \{[\s\S]*width: 100%/);
   assert.match(friendsCss, /\.lobby-dm-bubble--has-attachments \.dm-msg-content \{[\s\S]*padding: 9px 13px;[\s\S]*border-radius: 16px/);
+  assert.match(friendsCss, /\.lobby-dm-bubble--media-caption \{[\s\S]*gap: 0;[\s\S]*overflow: hidden;[\s\S]*border-radius: 16px/);
+  assert.match(friendsCss, /\.lobby-dm-bubble--media-caption \.attachment-mosaic \{[\s\S]*border-radius: 0/);
+  assert.match(friendsCss, /\.lobby-dm-bubble--media-caption \.dm-msg-content,[\s\S]*width: 100%;[\s\S]*border: 0;[\s\S]*background: transparent/);
   assert.match(chatCss, /\.chat-rail-compose \.attachment-upload-root \{[\s\S]*margin-top: 5px/);
   assert.match(composeStore, /imageFilesFromClipboard[\s\S]*clipboardData/);
   assert.match(composeStore, /imageFilesFromDataTransfer[\s\S]*data\.files/);

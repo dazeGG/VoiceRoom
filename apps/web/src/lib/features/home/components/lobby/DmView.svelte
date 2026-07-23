@@ -515,6 +515,7 @@
                     class:lobby-dm-bubble--me={group.fromMe}
                     class:lobby-dm-bubble--them={!group.fromMe}
                     class:lobby-dm-bubble--has-attachments={Boolean(bubble.attachments?.length)}
+                    class:lobby-dm-bubble--media-caption={Boolean(bubble.body.trim() && bubble.attachments?.length)}
                     class:lobby-dm-bubble--attachment-only={!bubble.body.trim() && Boolean(bubble.attachments?.length) && !bubble.replyPreview}
                   >
                     {#if editingMessageId === bubble.id}
