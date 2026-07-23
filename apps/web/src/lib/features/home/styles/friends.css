@@ -688,6 +688,7 @@ html.is-desktop .sidebar-download { display: none; }
 
 .lobby-dm {
   --lobby-dm-head-height: 65px;
+  position: relative;
   flex: 1;
   min-height: 0;
   display: flex;
@@ -868,7 +869,14 @@ html.is-desktop .sidebar-download { display: none; }
 .lobby-dm-time { font-family: var(--font-mono); font-size: 10px; color: var(--warm-faint); margin-top: 2px; padding: 0 4px; }
 
 .lobby-dm-compose { flex: none; padding: 14px 24px 20px; }
+.lobby-dm-compose-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
 .lobby-dm-input {
+  flex: 1;
+  min-width: 0;
   width: 100%;
   background: var(--warm-900);
   border: 1px solid rgba(255, 255, 255, 0.1);

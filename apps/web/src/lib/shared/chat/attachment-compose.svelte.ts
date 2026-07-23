@@ -10,12 +10,17 @@ import {
 
 export interface ComposeDraft extends AttachmentDraft {
   file: File | null;
+  previewUrl: string | null;
   progress: number;
   error: string | null;
 }
 
 const stores = new Map<string, AttachmentComposeStore>();
 const allowedTypes = new Set(['image/jpeg', 'image/png', 'image/webp']);
+
+function disposePreview(draft: ComposeDraft): void {
+  if (draft.previewUrl?.startsWith('blob:')) URL.revokeObjectURL(draft.previewUrl);
+}
 
 export class AttachmentComposeStore {
   drafts = $state<ComposeDraft[]>([]);
@@ -55,7 +60,13 @@ export class AttachmentComposeStore {
         bytes: file.size,
         clientRequestId: crypto.randomUUID()
       });
-      this.drafts.push({ ...slot, file, progress: 0, error: null });
+      this.drafts.push({
+        ...slot,
+        file,
+        previewUrl: URL.createObjectURL(file),
+        progress: 0,
+        error: null
+      });
       draft = this.drafts[this.drafts.length - 1];
       this.persist();
       Object.assign(draft, await uploadAttachmentContent(slot.id, file, (progress) => {
@@ -80,7 +91,13 @@ export class AttachmentComposeStore {
   async resume(ids: string[]): Promise<void> {
     const statuses = await Promise.all(ids.slice(0, 4).map(getAttachmentStatus));
     this.drafts = statuses.filter((draft) => draft.context === this.context && draft.state !== 'deleted')
-      .map((draft) => ({ ...draft, file: null, progress: draft.state === 'ready' ? 1 : 0, error: null }));
+      .map((draft) => ({
+        ...draft,
+        file: null,
+        previewUrl: null,
+        progress: draft.state === 'ready' ? 1 : 0,
+        error: null
+      }));
     this.persist();
     await Promise.all(this.drafts.filter((draft) => draft.state === 'processing').map((draft) => this.waitUntilTerminal(draft)));
   }
@@ -100,6 +117,7 @@ export class AttachmentComposeStore {
 
   async remove(draft: ComposeDraft): Promise<void> {
     await deleteAttachment(draft.id);
+    disposePreview(draft);
     this.drafts = this.drafts.filter((item) => item.id !== draft.id);
     this.persist();
   }
@@ -110,7 +128,11 @@ export class AttachmentComposeStore {
     else localStorage.removeItem(this.storageKey);
   }
 
-  clearBound(): void { this.drafts = []; this.persist(); }
+  clearBound(): void {
+    this.drafts.forEach(disposePreview);
+    this.drafts = [];
+    this.persist();
+  }
 }
 
 export function getAttachmentComposeStore(context: AttachmentContext, contextId: string): AttachmentComposeStore {
@@ -132,6 +154,18 @@ export function imageFilesFromClipboard(event: ClipboardEvent): File[] {
     .filter((item) => item.kind === 'file' && item.type.startsWith('image/'))
     .map((item) => item.getAsFile())
     .filter((file): file is File => file !== null);
+}
+
+export function imageFilesFromDataTransfer(data: DataTransfer | null): File[] {
+  if (!data) return [];
+  return Array.from(data.files).filter((file) => allowedTypes.has(file.type));
+}
+
+export function dataTransferHasImages(data: DataTransfer | null): boolean {
+  if (!data) return false;
+  const fileItems = Array.from(data.items).filter((item) => item.kind === 'file');
+  if (fileItems.some((item) => allowedTypes.has(item.type))) return true;
+  return fileItems.length === 0 && Array.from(data.types).includes('Files');
 }
 
 export function clearAttachmentComposeStores(): void {

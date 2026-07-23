@@ -25,9 +25,17 @@
   import { createReactionStore } from '$lib/shared/chat/reaction-store.svelte';
   import ReactionPicker from '$lib/shared/chat/ReactionPicker.svelte';
   import ReactionSummary from '$lib/shared/chat/ReactionSummary.svelte';
-  import { getAttachmentComposeStore, imageFilesFromClipboard, type AttachmentComposeStore } from '$lib/shared/chat/attachment-compose.svelte';
+  import {
+    dataTransferHasImages,
+    getAttachmentComposeStore,
+    imageFilesFromClipboard,
+    imageFilesFromDataTransfer,
+    type AttachmentComposeStore
+  } from '$lib/shared/chat/attachment-compose.svelte';
   import AttachmentComposer from '$lib/shared/chat/AttachmentComposer.svelte';
+  import AttachmentDropOverlay from '$lib/shared/chat/AttachmentDropOverlay.svelte';
   import AttachmentMosaic from '$lib/shared/chat/AttachmentMosaic.svelte';
+  import AttachmentUploadControl from '$lib/shared/chat/AttachmentUploadControl.svelte';
   import ReplyPreview from '$lib/shared/chat/ReplyPreview.svelte';
   import StructuredMessageContent from '$lib/shared/chat/StructuredMessageContent.svelte';
   import { contentFromLegacyText } from '@voice-room/shared/room-message-content';
@@ -59,6 +67,7 @@
   let reactionsEnabled = $state(false);
   const reactions = createReactionStore();
   let media = $state<AttachmentComposeStore | null>(null);
+  let attachmentDragDepth = $state(0);
   let repliesEnabled = $state(false);
   let engagementEnabled = $state(false);
   let replyTarget = $state<ChatMessage | null>(null);
@@ -141,6 +150,41 @@
     } catch (cause) {
       showToast(cause instanceof Error ? cause.message : 'Не удалось вставить изображение', { variant: 'error' });
     }
+  }
+
+  function onAttachmentDragEnter(event: DragEvent): void {
+    if (!media || sending || !dataTransferHasImages(event.dataTransfer)) return;
+    event.preventDefault();
+    attachmentDragDepth += 1;
+  }
+
+  function onAttachmentDragOver(event: DragEvent): void {
+    if (!media || sending || !dataTransferHasImages(event.dataTransfer)) return;
+    event.preventDefault();
+    if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
+  }
+
+  function onAttachmentDragLeave(event: DragEvent): void {
+    if (!attachmentDragDepth) return;
+    event.preventDefault();
+    attachmentDragDepth = Math.max(0, attachmentDragDepth - 1);
+  }
+
+  async function onAttachmentDrop(event: DragEvent): Promise<void> {
+    if (!media) return;
+    const files = imageFilesFromDataTransfer(event.dataTransfer);
+    if (!files.length) return;
+    event.preventDefault();
+    attachmentDragDepth = 0;
+    try {
+      await media.addFiles(files);
+    } catch (cause) {
+      showToast(cause instanceof Error ? cause.message : 'Не удалось загрузить изображение', { variant: 'error' });
+    }
+  }
+
+  function showAttachmentError(message: string): void {
+    showToast(message, { variant: 'error' });
   }
 
   async function updateMentionCandidates(): Promise<void> {
@@ -648,7 +692,17 @@
   }
 </script>
 
-<aside class="room-chat-rail" aria-label="Чат комнаты" data-open={roomUi.chatOpen} hidden={!roomUi.chatOpen}>
+<aside
+  class="room-chat-rail"
+  aria-label="Чат комнаты"
+  data-open={roomUi.chatOpen}
+  hidden={!roomUi.chatOpen}
+  ondragenter={onAttachmentDragEnter}
+  ondragover={onAttachmentDragOver}
+  ondragleave={onAttachmentDragLeave}
+  ondrop={onAttachmentDrop}
+>
+  {#if attachmentDragDepth > 0}<AttachmentDropOverlay />{/if}
   <header class="chat-rail-head">
     <div class="chat-rail-title">
       <MessageSquare {...iconSm} aria-hidden="true" />
@@ -760,19 +814,22 @@
       <div class="chat-reply-target"><ReplyPreview preview={{ messageId: replyTarget.id, deleted: false, author: { id: replyTarget.authorUserId || replyTarget.peerId, name: replyTarget.name }, text: replyTarget.text }} /><button type="button" onclick={() => (replyTarget = null)}>Отмена</button></div>
     {/if}
     {#if media}<AttachmentComposer store={media} disabled={sending} />{/if}
-    <textarea
-      class="chat-rail-input chat-rail-textarea"
-      bind:this={composeEl}
-      bind:value={draft}
-      rows="1"
-      maxlength="500"
-      placeholder="Написать в комнату…"
-      onkeydown={onComposeKeydown}
-      oninput={() => { autoResize(); void updateMentionCandidates(); }}
-      oncompositionstart={() => mentionComposer.setComposing(true)}
-      oncompositionend={() => { mentionComposer.setComposing(false); void updateMentionCandidates(); }}
-      disabled={sending}
-    ></textarea>
+    <div class="chat-compose-row">
+      {#if media}<AttachmentUploadControl store={media} disabled={sending} onerror={showAttachmentError} />{/if}
+      <textarea
+        class="chat-rail-input chat-rail-textarea"
+        bind:this={composeEl}
+        bind:value={draft}
+        rows="1"
+        maxlength="500"
+        placeholder="Написать в комнату…"
+        onkeydown={onComposeKeydown}
+        oninput={() => { autoResize(); void updateMentionCandidates(); }}
+        oncompositionstart={() => mentionComposer.setComposing(true)}
+        oncompositionend={() => { mentionComposer.setComposing(false); void updateMentionCandidates(); }}
+        disabled={sending}
+      ></textarea>
+    </div>
     {#if mentionComposer.isOpen}
       <MentionAutocomplete candidates={mentionComposer.candidates} activeIndex={mentionComposer.activeIndex} onselect={chooseMention} />
     {/if}

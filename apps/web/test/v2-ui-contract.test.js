@@ -1627,18 +1627,27 @@ test('focus styles use light border tokens instead of colored glow', () => {
   assert.match(chatCss, /\.chat-rail-input:focus[\s\S]*border-color: var\(--focus-border/);
 });
 
-test('chat image attachments are clipboard-only and capability-gated', () => {
+test('chat image attachments support picker, clipboard, and drag-and-drop behind the media capability', () => {
   const composer = read('src/lib/shared/chat/AttachmentComposer.svelte');
+  const uploadControl = read('src/lib/shared/chat/AttachmentUploadControl.svelte');
+  const dropOverlay = read('src/lib/shared/chat/AttachmentDropOverlay.svelte');
   const composeStore = read('src/lib/shared/chat/attachment-compose.svelte.ts');
   const roomChat = read('src/lib/features/room/components/RoomChat.svelte');
   const dmView = read('src/lib/features/home/components/lobby/DmView.svelte');
 
-  assert.doesNotMatch(composer, /Добавить изображения|type="file"|attachment-add/);
+  assert.match(composer, /attachment-draft[\s\S]*attachment-draft-remove/);
+  assert.doesNotMatch(composer, /Переместить раньше|Переместить позже|>Удалить</);
+  assert.match(uploadControl, /type="file"[\s\S]*Загрузить фото/);
+  assert.match(dropOverlay, /Перетащите фото сюда/);
   assert.match(composeStore, /imageFilesFromClipboard[\s\S]*clipboardData/);
+  assert.match(composeStore, /imageFilesFromDataTransfer[\s\S]*data\.files/);
   for (const parent of [roomChat, dmView]) {
     assert.match(parent, /getCapabilityFeature\('mediaUploads'\)/);
     assert.match(parent, /onpaste=\{onComposePaste\}/);
     assert.match(parent, /imageFilesFromClipboard\(event\)[\s\S]*media\.addFiles\(files\)/);
+    assert.match(parent, /ondragenter=\{onAttachmentDragEnter\}/);
+    assert.match(parent, /ondrop=\{onAttachmentDrop\}/);
+    assert.match(parent, /<AttachmentUploadControl/);
   }
 });
 

@@ -2,10 +2,186 @@
   min-width: 0;
 }
 
-.attachment-draft-list { display: grid; gap: 6px; margin: 0 0 8px; padding: 0; list-style: none; }
-.attachment-draft-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; align-items: center; }
-.attachment-draft-list li > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.attachment-actions { display: flex; flex-wrap: wrap; gap: 4px; grid-column: 1 / -1; }
+.attachment-draft-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 10px;
+  padding: 0;
+  list-style: none;
+}
+
+.attachment-draft {
+  position: relative;
+  width: 72px;
+  height: 72px;
+  flex: none;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  background: var(--warm-900);
+}
+
+.attachment-draft > img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.attachment-draft-placeholder {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  place-items: center;
+  color: var(--warm-muted);
+}
+
+.attachment-draft-loading {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: white;
+  background:
+    radial-gradient(circle at center, color-mix(in srgb, var(--warm-950) 82%, transparent) 0 16px, transparent 17px),
+    conic-gradient(color-mix(in srgb, var(--accent) 86%, transparent) var(--attachment-progress), color-mix(in srgb, var(--ink) 16%, transparent) 0);
+  background-size: 38px 38px, 38px 38px;
+  background-position: center;
+  background-repeat: no-repeat;
+  backdrop-filter: brightness(0.62);
+}
+
+.attachment-draft-loading svg {
+  animation: attachment-spin 0.9s linear infinite;
+}
+
+.attachment-draft-remove,
+.attachment-draft-retry {
+  position: absolute;
+  z-index: 2;
+  display: grid;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  color: white;
+  background: color-mix(in srgb, var(--warm-950) 90%, transparent);
+  cursor: pointer;
+  transition: opacity 0.14s ease, transform 0.14s ease, background 0.14s ease;
+}
+
+.attachment-draft-remove {
+  top: 5px;
+  right: 5px;
+  opacity: 0;
+  transform: scale(0.86);
+}
+
+.attachment-draft:hover .attachment-draft-remove,
+.attachment-draft:focus-within .attachment-draft-remove {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.attachment-draft-remove:hover {
+  color: var(--warm-950);
+  background: var(--accent);
+}
+
+.attachment-draft-retry {
+  right: 5px;
+  bottom: 5px;
+}
+
+.attachment-file-input {
+  position: fixed;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.attachment-add-button {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  background: var(--warm-900);
+  color: var(--warm-muted);
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+
+.attachment-add-button:hover,
+.attachment-add-button[aria-expanded='true'] {
+  border-color: rgba(255, 255, 255, 0.28);
+  background: var(--control);
+  color: var(--warm-ink);
+}
+
+.attachment-add-button:focus-visible {
+  outline: 2px solid var(--focus-border, rgba(255, 255, 255, 0.72));
+  outline-offset: 2px;
+}
+
+.attachment-add-button:disabled {
+  cursor: default;
+  opacity: 0.42;
+}
+
+.attachment-upload-root {
+  align-self: flex-end;
+}
+
+.attachment-upload-popover {
+  width: 210px;
+  padding: 6px;
+}
+
+.attachment-drop-overlay {
+  position: absolute;
+  inset: 10px;
+  z-index: 80;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 8px;
+  border: 2px dashed color-mix(in oklch, var(--accent) 72%, white);
+  border-radius: 18px;
+  color: var(--warm-ink);
+  background: color-mix(in oklch, var(--warm-950), transparent 8%);
+  backdrop-filter: blur(12px);
+  pointer-events: none;
+}
+
+.attachment-drop-overlay strong {
+  font-size: 16px;
+}
+
+.attachment-drop-overlay > span:last-child {
+  color: var(--warm-muted);
+  font-size: 12px;
+}
+
+.attachment-drop-icon {
+  display: grid;
+  width: 54px;
+  height: 54px;
+  place-items: center;
+  border-radius: 16px;
+  color: var(--warm-950);
+  background: var(--accent);
+}
+
+@keyframes attachment-spin {
+  to { transform: rotate(360deg); }
+}
 
 .attachment-mosaic {
   display: grid;
