@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ChevronRight, Copy, MessageSquare, Pencil, Trash2 } from '@lucide/svelte';
+  import { ChevronRight, Copy, MessageSquare, Pencil, Trash2, Users } from '@lucide/svelte';
   import { iconSm } from '$lib/shared/ui/icons';
   import { onMount, tick } from 'svelte';
   import { deleteRoomChatMessage, editRoomChatMessage, fetchRoomChat, fetchRoomChatPage, markRoomChatRead, postRoomChat, type ChatMessage } from '$lib/api/rooms';
@@ -17,7 +17,7 @@
   import { playRoomChatMessageCue } from '../client/media/cues';
   import { applyRoomDeleted, applyRoomNotFound, applyRoomUpdated } from '../client/room/lifecycle';
   import { openParticipantContextMenu } from '../participant-context-ui.svelte';
-  import { roomUi, closeChat, incrementUnreadChat, markChatRead } from '../room-ui.svelte';
+  import { roomUi, closeChat, incrementUnreadChat, markChatRead, selectRoomPanel } from '../room-ui.svelte';
   import { isRoomNotificationsMuted } from '$lib/shared/notifications/preferences.svelte';
   import { getCapabilityFeature } from '$lib/platform/capability-state.svelte';
   import { createAnchoredHistory } from '../room-history.svelte';
@@ -43,6 +43,7 @@
   import MentionAutocomplete from '$lib/shared/chat/MentionAutocomplete.svelte';
   import { getRoomMembership, loadRoomMembership } from '$lib/features/home/model/room-membership.svelte';
   import type { MembershipMember } from '@voice-room/shared/membership';
+  import RoomMemberList from '$lib/features/home/components/lobby/RoomMemberList.svelte';
 
   let roomId = $state('');
   let peerId = $state('');
@@ -56,8 +57,8 @@
   let editDraft = $state('');
   let editSaving = $state(false);
   let error = $state('');
-  let chatBody: HTMLDivElement | null = null;
-  let composeEl: HTMLTextAreaElement | null = null;
+  let chatBody = $state<HTMLDivElement | null>(null);
+  let composeEl = $state<HTMLTextAreaElement | null>(null);
   let chatPinnedToBottom = true;
   let composerAttachmentCount = 0;
   let editEl = $state<HTMLTextAreaElement | null>(null);
@@ -75,6 +76,7 @@
   let replyTarget = $state<ChatMessage | null>(null);
   let sendAttemptKey = '';
   let sendAttemptFingerprint = '';
+  const chatVisible = $derived(roomUi.chatOpen && roomUi.activePanel === 'chat');
   const mentionComposer = createMentionComposer();
   const history = createAnchoredHistory<ChatMessage>({
     loadPage: fetchRoomChatPage,
@@ -268,7 +270,7 @@
   $effect(() => {
     document.body.dataset.chatOpen = roomUi.chatOpen ? 'true' : 'false';
     let endReadSession = () => {};
-    if (roomUi.chatOpen) {
+    if (chatVisible) {
       markChatRead();
       endReadSession = beginRoomChatReadSession(roomId);
       void tick().then(() => {
@@ -429,7 +431,7 @@
       if (historyEnabled) history.upsert(message);
       else messages = [...messages, message];
       if (message.peerId !== peerId && !isRoomNotificationsMuted(roomId)) playRoomChatMessageCue();
-      if (roomUi.chatOpen) {
+      if (chatVisible) {
         markChatRead();
         setRoomUnreadCount(roomId, 0);
         void tick().then(() => {
@@ -456,7 +458,7 @@
     if (historyEnabled) {
       const firstCreatedAt = recent[0]?.createdAt;
       history.reconcileLatest(recent, (message) => firstCreatedAt == null || message.createdAt >= firstCreatedAt);
-      if (roomUi.chatOpen) void tick().then(() => markLatestRenderedRead());
+      if (chatVisible) void tick().then(() => markLatestRenderedRead());
       return;
     }
     const known = new Set(messages.map((item) => item.id));
@@ -468,7 +470,7 @@
       ...messages.map((item) => recentById.get(item.id) ?? item),
       ...incoming
     ].sort((a, b) => a.createdAt - b.createdAt);
-    if (roomUi.chatOpen) {
+    if (chatVisible) {
       markChatRead();
       queueMicrotask(scrollToBottom);
     }
@@ -497,7 +499,7 @@
       await tick();
       document.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(aroundMessageId)}"]`)?.scrollIntoView({ block: 'center' });
     }
-    if (!signal.aborted && roomUi.chatOpen) {
+    if (!signal.aborted && chatVisible) {
       if (canRead) await tick().then(() => markLatestRenderedRead());
       else await markRoomChatRead(roomId);
     }
@@ -511,7 +513,7 @@
   }
 
   async function markLatestRenderedRead(cursor = latestReadCursor()): Promise<void> {
-    if (!roomUi.chatOpen || !session.user?.id || !roomId || !readReconciliation) return;
+    if (!chatVisible || !session.user?.id || !roomId || !readReconciliation) return;
     await readReconciliation.advanceAfterRender(cursor);
   }
 
@@ -547,7 +549,7 @@
       messageIds.clear();
       for (const message of nextMessages) messageIds.add(message.id);
       messages = nextMessages;
-      if (roomUi.chatOpen) {
+      if (chatVisible) {
         markChatRead();
         queueMicrotask(scrollToBottom);
       }
@@ -595,7 +597,7 @@
         messageIds.add(message.id);
         if (historyEnabled) history.upsert(message);
         else messages = [...messages, message];
-        if (roomUi.chatOpen) {
+        if (chatVisible) {
           markChatRead();
           queueMicrotask(scrollToBottom);
         }
@@ -705,7 +707,7 @@
 
 <aside
   class="room-chat-rail"
-  aria-label="Чат комнаты"
+  aria-label="Панель комнаты"
   data-open={roomUi.chatOpen}
   hidden={!roomUi.chatOpen}
   ondragenter={onAttachmentDragEnter}
@@ -713,18 +715,44 @@
   ondragleave={onAttachmentDragLeave}
   ondrop={onAttachmentDrop}
 >
-  {#if attachmentDragDepth > 0}<AttachmentDropOverlay />{/if}
+  {#if chatVisible && attachmentDragDepth > 0}<AttachmentDropOverlay />{/if}
   <header class="chat-rail-head">
-    <div class="chat-rail-title">
-      <MessageSquare {...iconSm} aria-hidden="true" />
-      <span>Чат комнаты</span>
+    <div class="room-panel-tabs" role="tablist" aria-label="Раздел панели комнаты">
+      <button
+        id="room-panel-chat-tab"
+        type="button"
+        role="tab"
+        aria-controls="room-panel-chat"
+        aria-label="Чат"
+        aria-selected={roomUi.activePanel === 'chat'}
+        data-active={roomUi.activePanel === 'chat'}
+        title="Чат"
+        onclick={() => selectRoomPanel('chat')}
+      >
+        <MessageSquare {...iconSm} aria-hidden="true" />
+        {#if roomUi.unreadChat > 0}<span class="room-panel-tab-unread" aria-hidden="true"></span>{/if}
+      </button>
+      <button
+        id="room-panel-participants-tab"
+        type="button"
+        role="tab"
+        aria-controls="room-panel-participants"
+        aria-label="Участники"
+        aria-selected={roomUi.activePanel === 'participants'}
+        data-active={roomUi.activePanel === 'participants'}
+        title="Участники"
+        onclick={() => selectRoomPanel('participants')}
+      >
+        <Users {...iconSm} aria-hidden="true" />
+      </button>
     </div>
-    <button class="chat-rail-collapse" type="button" aria-label="Свернуть чат" onclick={closeChat}>
+    <button class="chat-rail-collapse" type="button" aria-label="Свернуть панель" onclick={closeChat}>
       <ChevronRight {...iconSm} aria-hidden="true" />
     </button>
   </header>
 
-  <div class="chat-rail-body" bind:this={chatBody} onscroll={onHistoryScroll}>
+  {#if roomUi.activePanel === 'chat'}
+  <div class="chat-rail-body" id="room-panel-chat" role="tabpanel" aria-labelledby="room-panel-chat-tab" bind:this={chatBody} onscroll={onHistoryScroll}>
     {#if loading}
       <p class="chat-rail-note">Загружаем сообщения…</p>
     {:else if days.length}
@@ -847,4 +875,9 @@
       <MentionAutocomplete candidates={mentionComposer.candidates} activeIndex={mentionComposer.activeIndex} onselect={chooseMention} />
     {/if}
   </form>
+  {:else}
+    <div class="room-panel-members" id="room-panel-participants" role="tabpanel" aria-labelledby="room-panel-participants-tab">
+      <RoomMemberList {roomId} />
+    </div>
+  {/if}
 </aside>

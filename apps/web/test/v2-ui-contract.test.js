@@ -394,6 +394,36 @@ test('room chat terminal lifecycle frames leave the room screen', () => {
   assert.doesNotMatch(chat, /getAppRealtime\(\)\.subscribe/);
 });
 
+test('room side panel exposes chat and participant tabs backed by the authoritative roster', () => {
+  const chat = read('src/lib/features/room/components/RoomChat.svelte');
+  const memberList = read('src/lib/features/home/components/lobby/RoomMemberList.svelte');
+  const membershipApi = read('src/lib/api/memberships.ts');
+  const stage = read('src/lib/features/room/components/RoomStage.svelte');
+  const ui = read('src/lib/features/room/room-ui.svelte.ts');
+  const css = read('src/lib/features/room/styles/chat-rail.css');
+
+  assert.match(chat, /role="tablist"/);
+  assert.match(chat, /aria-label="Чат"/);
+  assert.match(chat, /title="Чат"/);
+  assert.match(chat, /<MessageSquare/);
+  assert.match(chat, /aria-label="Участники"/);
+  assert.match(chat, /title="Участники"/);
+  assert.match(chat, /<Users/);
+  assert.match(chat, /aria-selected=\{roomUi\.activePanel === 'chat'\}/);
+  assert.match(chat, /aria-selected=\{roomUi\.activePanel === 'participants'\}/);
+  assert.match(ui, /activePanel: 'chat'/);
+  assert.match(ui, /roomUi\.chatOpen && roomUi\.activePanel === 'chat'/);
+  assert.match(chat, /<RoomMemberList \{roomId\} \/>/);
+  assert.match(membershipApi, /fetchRoomMemberships/);
+  assert.match(membershipApi, /\/api\/rooms\/\$\{encodeURIComponent\(roomId\)\}\/members/);
+  assert.match(memberList, /В сети — \{onlineMembers\.length\}/);
+  assert.match(memberList, /Не в сети — \{offlineMembers\.length\}/);
+  assert.match(memberList, /member\.presenceStatus !== 'offline'/);
+  assert.match(memberList, /member\.presenceStatus === 'offline'/);
+  assert.doesNotMatch(stage, /room-members-rail|data-members-open/);
+  assert.match(css, /\.room-panel-tabs button\[data-active='true'\]/);
+});
+
 
 test('auth client does not mask unexpected backend failures as anonymous or empty state', () => {
   const authApi = read('src/lib/api/auth.ts');
@@ -1204,14 +1234,13 @@ test('lobby v2 keeps dock in main area, preview chat, and people add-friend flow
   assert.match(friendsCss, /data-members-open/);
   const roomStage = read('src/lib/features/room/components/RoomStage.svelte');
   const roomPage = read('src/lib/features/room/RoomPage.svelte');
+  const roomChat = read('src/lib/features/room/components/RoomChat.svelte');
   const memberList = read('src/lib/features/home/components/lobby/RoomMemberList.svelte');
   const membershipState = read('src/lib/features/home/model/room-membership.svelte.ts');
-  assert.match(roomStage, /getCapabilityFeature\('membership'\)/);
-  assert.match(roomPage, /<RoomStage roomId=\{embeddedRoomId \|\| roomId\} \/>/);
-  assert.match(roomStage, /let \{ roomId = '' \}/);
-  assert.match(roomStage, /roomId \|\| roomClientState\.roomId \|\| \(browser \? extractRoomId\(window\.location\.pathname\) : ''\)/);
-  assert.match(roomStage, /<RoomMemberList roomId=\{activeRoomId\} \/>/);
-  assert.match(roomStage, /membershipEnabled && !roomUi\.chatOpen/);
+  assert.match(roomPage, /<RoomStage \/>/);
+  assert.doesNotMatch(roomStage, /RoomMemberList|room-members-rail|data-members-open/);
+  assert.match(roomChat, /<RoomMemberList \{roomId\} \/>/);
+  assert.match(roomChat, /roomUi\.activePanel === 'participants'/);
   assert.match(memberList, /В сети — \{onlineMembers\.length\}/);
   assert.match(memberList, /Не в сети — \{offlineMembers\.length\}/);
   assert.match(memberList, /roomMembershipState\.byRoomId\[roomId\] \?\? null/);
