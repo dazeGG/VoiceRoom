@@ -334,7 +334,7 @@ test('room chat keeps transport mounted and tracks unread state while closed', (
   assert.match(chat, /chat-rail-textarea/);
   assert.match(chat, /onComposeKeydown|onkeydown=\{onComposeKeydown\}/);
   assert.doesNotMatch(chat, /draft\.replace\(\/\\s\+\/g, ' '\)/);
-  assert.match(topbar, /room-chat-unread/);
+  assert.match(topbar, /room-panel-tab-unread/);
   assert.match(topbar, /inviteContent=/);
   assert.match(topbar, /import \{ RoomMenu \} from '\$lib\/shared\/components\/room-menu'/);
   assert.match(topbar, /<RoomMenu/);
@@ -396,6 +396,7 @@ test('room chat terminal lifecycle frames leave the room screen', () => {
 
 test('room side panel exposes chat and participant tabs backed by the authoritative roster', () => {
   const chat = read('src/lib/features/room/components/RoomChat.svelte');
+  const topbar = read('src/lib/features/room/components/RoomTopbar.svelte');
   const memberList = read('src/lib/features/home/components/lobby/RoomMemberList.svelte');
   const membershipApi = read('src/lib/api/memberships.ts');
   const stage = read('src/lib/features/room/components/RoomStage.svelte');
@@ -411,6 +412,16 @@ test('room side panel exposes chat and participant tabs backed by the authoritat
   assert.match(chat, /<Users/);
   assert.match(chat, /aria-selected=\{roomUi\.activePanel === 'chat'\}/);
   assert.match(chat, /aria-selected=\{roomUi\.activePanel === 'participants'\}/);
+  assert.match(chat, /aria-label="Свернуть панель"/);
+  assert.match(chat, /onclick=\{closeChat\}/);
+  assert.match(topbar, /role="group" aria-label="Открыть раздел панели комнаты"/);
+  assert.match(topbar, /aria-label="Чат"/);
+  assert.match(topbar, /aria-label="Участники"/);
+  assert.match(topbar, /aria-pressed=\{roomUi\.chatOpen && roomUi\.activePanel === 'chat'\}/);
+  assert.match(topbar, /aria-pressed=\{roomUi\.chatOpen && roomUi\.activePanel === 'participants'\}/);
+  assert.match(topbar, /onclick=\{\(\) => openRoomPanel\('chat'\)\}/);
+  assert.match(topbar, /onclick=\{\(\) => openRoomPanel\('participants'\)\}/);
+  assert.doesNotMatch(topbar, /toggleChat|class="room-chat-toggle"/);
   assert.match(ui, /activePanel: 'chat'/);
   assert.match(ui, /roomUi\.chatOpen && roomUi\.activePanel === 'chat'/);
   assert.match(chat, /<RoomMemberList \{roomId\} \/>/);
@@ -1170,7 +1181,7 @@ test('manual screen receiver demand is ordered, race-safe, and isolated from scr
   assert.doesNotMatch(detachScreenVideo, /stream\.getAudioTracks\(\)/);
 });
 
-test('lobby v2 keeps dock in main area, preview chat, and people add-friend flow', () => {
+test('lobby v2 keeps dock in main area, roster-only previews, and people add-friend flow', () => {
   const controls = read('src/lib/features/room/styles/controls.css');
   const lobby = read('src/lib/features/home/LobbyPage.svelte');
   const sidebar = read('src/lib/features/home/components/lobby/Sidebar.svelte');
@@ -1180,7 +1191,6 @@ test('lobby v2 keeps dock in main area, preview chat, and people add-friend flow
   assert.doesNotMatch(sidebar, /entry\.lastMessage\.body/);
   const previewView = read('src/lib/features/home/components/lobby/RoomPreviewView.svelte');
   const browseView = read('src/lib/features/home/components/lobby/RoomBrowseView.svelte');
-  const previewChat = read('src/lib/features/home/components/lobby/RoomPreviewChat.svelte');
   const peopleView = read('src/lib/features/home/components/lobby/PeopleView.svelte');
   const friendsCss = read('src/lib/features/home/styles/friends.css');
 
@@ -1191,14 +1201,16 @@ test('lobby v2 keeps dock in main area, preview chat, and people add-friend flow
   assert.match(roomLayoutCss, /body\[data-lobby-embedded="true"\] \.room-embedded-shell \.topbar/);
   assert.match(sidebar, /import SidebarDownload from '\.\.\/SidebarDownload\.svelte'/);
   assert.match(sidebar, /<SidebarDownload \/>/);
-  assert.match(previewView, /RoomPreviewChat/);
-  assert.match(browseView, /RoomPreviewChat/);
+  assert.doesNotMatch(previewView, /RoomPreviewChat|previewChatOpen|room-chat-toggle|MessageSquare/);
+  assert.doesNotMatch(browseView, /RoomPreviewChat|previewChatOpen|room-chat-toggle|MessageSquare/);
   assert.match(previewView, /getCapabilityFeature\('membership'\)/);
   assert.match(browseView, /getCapabilityFeature\('membership'\)/);
-  assert.match(previewView, /<RoomMemberList roomId=\{previewRoomId\} \/>/);
-  assert.match(browseView, /<RoomMemberList roomId=\{previewRoomId\} \/>/);
-  assert.match(previewView, /data-members-open=\{membershipEnabled && !previewChatOpen\}/);
-  assert.match(browseView, /data-members-open=\{membershipEnabled && !previewChatOpen\}/);
+  assert.match(previewView, /<RoomMemberList roomId=\{previewRoomId\} searchable=\{false\} \/>/);
+  assert.match(browseView, /<RoomMemberList roomId=\{previewRoomId\} searchable=\{false\} \/>/);
+  assert.match(previewView, /data-members-open=\{membershipEnabled\}/);
+  assert.match(browseView, /data-members-open=\{membershipEnabled\}/);
+  assert.doesNotMatch(previewView, /data-preview-chat-open/);
+  assert.doesNotMatch(browseView, /data-preview-chat-open/);
   assert.match(previewView, /'\$lib\/features\/room\/styles\/room\.css'/);
   assert.match(browseView, /'\$lib\/features\/room\/styles\/room\.css'/);
   assert.match(previewView, /class="stage lobby-preview-stage"/);
@@ -1210,26 +1222,14 @@ test('lobby v2 keeps dock in main area, preview chat, and people add-friend flow
   assert.doesNotMatch(friendsCss, /lobby-stage-tile|lobby-stage-avatar|lobby-stage-grid/);
   assert.doesNotMatch(previewView, /тихо сейчас/);
   assert.doesNotMatch(browseView, /тихо сейчас/);
-  assert.match(previewChat, /fetchRoomChat\(roomId\)/);
-  assert.match(previewChat, /postRoomChat\(roomId/);
-  // 2.4.0 chat updates in preview too
-  assert.match(previewChat, /ChatText/);
-  assert.match(previewChat, /chat-rail-textarea/);
-  assert.match(previewChat, /chat-rail-collapse/);
-  assert.match(previewView, /let previewChatOpen = \$state\(false\)/);
-  assert.match(browseView, /let previewChatOpen = \$state\(false\)/);
   assert.match(previewView, /const previewRoomId = \$derived\(room\.roomId\)/);
   assert.match(browseView, /const previewRoomId = \$derived\(room\.roomId\)/);
   assert.match(previewView, /\$effect\(\(\) => \{\s*const roomId = previewRoomId;[\s\S]*subscribeRoomPreview\(roomId, handlePreviewEvent\)/);
   assert.match(browseView, /\$effect\(\(\) => \{\s*const roomId = previewRoomId;[\s\S]*subscribeRoomPreview\(roomId, handlePreviewEvent\)/);
-  assert.match(previewView, /previewChatOpen = false/);
-  assert.match(browseView, /previewChatOpen = false/);
   assert.match(peopleView, /copyText\(user\.login\)/);
   assert.doesNotMatch(peopleView, /searchUsers/);
   assert.doesNotMatch(peopleView, /oninput=\{onInput\}/);
   assert.match(peopleView, /@\{user\.login\}/);
-  assert.match(friendsCss, /\.lobby-preview-chat/);
-  assert.match(friendsCss, /data-preview-chat-open/);
   assert.match(friendsCss, /\.lobby-room-members/);
   assert.match(friendsCss, /data-members-open/);
   const roomStage = read('src/lib/features/room/components/RoomStage.svelte');
@@ -1243,6 +1243,8 @@ test('lobby v2 keeps dock in main area, preview chat, and people add-friend flow
   assert.match(roomChat, /roomUi\.activePanel === 'participants'/);
   assert.match(memberList, /В сети — \{onlineMembers\.length\}/);
   assert.match(memberList, /Не в сети — \{offlineMembers\.length\}/);
+  assert.match(memberList, /searchable = true/);
+  assert.match(memberList, /\{#if searchable\}[\s\S]*room-member-list__search/);
   assert.match(memberList, /roomMembershipState\.byRoomId\[roomId\] \?\? null/);
   assert.match(memberList, /getRoomMembership\(roomId\);/);
   assert.doesNotMatch(memberList, /\$derived\(getRoomMembership\(roomId\)\)/);
@@ -1968,7 +1970,7 @@ test('sidebar call widget shows only the room call timer from the server clock',
 
   assert.match(widget, /voice-timers/);
   assert.match(widget, /<RoomCallTimer variant="sidebar" \/>/);
-  assert.match(topbar, /<RoomCallTimer \/>[\s\S]*class="room-chat-toggle"/);
+  assert.match(topbar, /<RoomCallTimer \/>[\s\S]*class="room-panel-tabs room-panel-tabs--topbar"/);
   assert.match(timer, /formatElapsed/);
   assert.match(timer, /voiceSession\.roomActiveSince/);
   assert.doesNotMatch(timer, />звонок</);

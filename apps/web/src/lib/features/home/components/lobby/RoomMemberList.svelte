@@ -9,7 +9,7 @@
   } from '../../model/room-membership.svelte';
   import type { MembershipMember } from '$lib/api/memberships';
 
-  let { roomId }: { roomId: string } = $props();
+  let { roomId, searchable = true }: { roomId: string; searchable?: boolean } = $props();
   let query = $state('');
   const roster = $derived(roomMembershipState.byRoomId[roomId] ?? null);
   const onlineMembers = $derived((roster?.members ?? []).filter((member) => member.presenceStatus !== 'offline'));
@@ -23,6 +23,7 @@
   });
 
   $effect(() => {
+    if (!searchable) return;
     const room = roomId;
     const search = query.trim();
     const timer = window.setTimeout(() => void loadRoomMembership(room, { query: search }), 250);
@@ -37,11 +38,13 @@
 <section class="room-member-list" aria-labelledby="room-members-title">
   <div class="room-member-list__heading">
     <h2 id="room-members-title">Участники</h2>
-    <label class="room-member-list__search">
-      <span class="sr-only">Найти участника</span>
-      <Search {...iconSm} aria-hidden="true" />
-      <input bind:value={query} type="search" placeholder="Найти участника" autocomplete="off" />
-    </label>
+    {#if searchable}
+      <label class="room-member-list__search">
+        <span class="sr-only">Найти участника</span>
+        <Search {...iconSm} aria-hidden="true" />
+        <input bind:value={query} type="search" placeholder="Найти участника" autocomplete="off" />
+      </label>
+    {/if}
   </div>
 
   <div aria-live="polite" aria-atomic="true" class="sr-only">

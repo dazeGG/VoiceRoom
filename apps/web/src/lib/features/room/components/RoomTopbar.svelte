@@ -1,19 +1,18 @@
 <script lang="ts">
-  import { MessageSquare } from '@lucide/svelte';
+  import { MessageSquare, Users } from '@lucide/svelte';
   import Topbar from '$lib/shared/components/Topbar.svelte';
-  import { iconMd } from '$lib/shared/ui/icons';
+  import { iconSm } from '$lib/shared/ui/icons';
   import { Avatar } from '$lib/shared/ui';
   import { effectivePresenceStatus } from '$lib/shared/presence';
   import { RoomMenu } from '$lib/shared/components/room-menu';
   import { state as roomClientState } from '../client/core/state.svelte';
   import { getConnectionStatusView } from '../client/ui/status';
-  import { roomUi, toggleChat } from '../room-ui.svelte';
+  import { roomUi, selectRoomPanel, type RoomPanelTab } from '../room-ui.svelte';
   import { roomSettingsUi, openRoomSettings } from '../room-settings.svelte';
   import { showToast } from '../client/ui/toast';
   import { friendsState } from '$lib/features/home/model/friends.svelte';
   import { getSortedParticipants } from '../participants-ui.svelte';
   import { markRoomChatRead, ringRoomFriend } from '$lib/api/rooms';
-  import { notificationPreferences } from '$lib/shared/notifications/preferences.svelte';
   import { roomPresence, setRoomUnreadCount } from '$lib/features/home/model/room-presence.svelte';
   import RoomCallTimer from './RoomCallTimer.svelte';
 
@@ -25,12 +24,11 @@
   let ringingUserId = $state('');
   const ringFriends = $derived([...friendsState.friends].sort((a, b) => Number(b.online) - Number(a.online)));
   const roomAccountIds = $derived(new Set(getSortedParticipants().map((participant) => participant.accountUserId).filter(Boolean)));
-  const roomNotificationsMuted = $derived(notificationPreferences.mutedRoomIds.includes(roomClientState.roomId));
   const roomUnreadCount = $derived(Math.max(roomUi.unreadChat, roomPresence.unreadCountByRoomId[roomClientState.roomId] ?? 0));
 
-  function openRoomChat(): void {
-    toggleChat();
-    if (!roomUi.chatOpen) return;
+  function openRoomPanel(tab: RoomPanelTab): void {
+    selectRoomPanel(tab);
+    if (tab !== 'chat') return;
     setRoomUnreadCount(roomClientState.roomId, 0);
     if (roomClientState.self?.accountUserId) void markRoomChatRead(roomClientState.roomId).catch(() => {});
   }
@@ -100,20 +98,29 @@
 
     <div class="room-heading-actions">
       <RoomCallTimer />
-      <button
-        class="room-chat-toggle"
-        type="button"
-        aria-pressed={roomUi.chatOpen}
-        data-active={roomUi.chatOpen}
-        onclick={openRoomChat}
-        hidden={roomUi.chatOpen}
-      >
-        <MessageSquare {...iconMd} aria-hidden="true" />
-        <span>Чат</span>
-        {#if roomUnreadCount > 0}
-          <span class="room-chat-unread" data-muted={roomNotificationsMuted} aria-label={`${roomUnreadCount} новых сообщений`}>{roomUnreadCount > 99 ? '99+' : roomUnreadCount}</span>
-        {/if}
-      </button>
+      <div class="room-panel-tabs room-panel-tabs--topbar" role="group" aria-label="Открыть раздел панели комнаты">
+        <button
+          type="button"
+          aria-label="Чат"
+          aria-pressed={roomUi.chatOpen && roomUi.activePanel === 'chat'}
+          data-active={roomUi.chatOpen && roomUi.activePanel === 'chat'}
+          title="Чат"
+          onclick={() => openRoomPanel('chat')}
+        >
+          <MessageSquare {...iconSm} aria-hidden="true" />
+          {#if roomUnreadCount > 0}<span class="room-panel-tab-unread" aria-hidden="true"></span>{/if}
+        </button>
+        <button
+          type="button"
+          aria-label="Участники"
+          aria-pressed={roomUi.chatOpen && roomUi.activePanel === 'participants'}
+          data-active={roomUi.chatOpen && roomUi.activePanel === 'participants'}
+          title="Участники"
+          onclick={() => openRoomPanel('participants')}
+        >
+          <Users {...iconSm} aria-hidden="true" />
+        </button>
+      </div>
     </div>
   </div>
 
