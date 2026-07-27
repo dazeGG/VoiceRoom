@@ -536,11 +536,11 @@ html.is-desktop .sidebar-download { display: none; }
 }
 
 .lobby-roomview-content[data-preview-chat-open='true'] {
-  padding-right: var(--chat-rail-width, 360px);
+  padding-right: var(--room-panel-width);
 }
 
 .lobby-roomview-content[data-members-open='true'] {
-  padding-right: var(--members-rail-width, 300px);
+  padding-right: var(--room-panel-width);
 }
 
 .lobby-roomview-stage-pane {
@@ -562,7 +562,7 @@ html.is-desktop .sidebar-download { display: none; }
   bottom: 0;
   z-index: 18;
   flex: none;
-  width: var(--chat-rail-width, 360px);
+  width: var(--room-panel-width);
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -579,7 +579,7 @@ html.is-desktop .sidebar-download { display: none; }
   right: 0;
   bottom: 0;
   z-index: 17;
-  width: var(--members-rail-width, 300px);
+  width: var(--room-panel-width);
   box-sizing: border-box;
   overflow-y: auto;
   padding: 0;
@@ -594,11 +594,13 @@ html.is-desktop .sidebar-download { display: none; }
 }
 
 @media (max-width: 900px) {
-  .lobby-roomview-content[data-preview-chat-open='true'] {
+  .lobby-roomview-content[data-preview-chat-open='true'],
+  .lobby-roomview-content[data-members-open='true'] {
     padding-right: 0;
   }
 
-  .lobby-preview-chat {
+  .lobby-preview-chat,
+  .lobby-room-members {
     top: 12px;
     right: 12px;
     bottom: 12px;

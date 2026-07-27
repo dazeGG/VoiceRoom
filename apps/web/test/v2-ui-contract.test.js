@@ -402,6 +402,9 @@ test('room side panel exposes chat and participant tabs backed by the authoritat
   const stage = read('src/lib/features/room/components/RoomStage.svelte');
   const ui = read('src/lib/features/room/room-ui.svelte.ts');
   const css = read('src/lib/features/room/styles/chat-rail.css');
+  const layoutCss = read('src/lib/features/room/styles/layout.css');
+  const controlsCss = read('src/lib/features/room/styles/controls.css');
+  const friendsCss = read('src/lib/features/home/styles/friends.css');
 
   assert.match(chat, /role="tablist"/);
   assert.match(chat, /aria-label="Чат"/);
@@ -435,6 +438,15 @@ test('room side panel exposes chat and participant tabs backed by the authoritat
   assert.doesNotMatch(memberList, /<h2[^>]*>Участники<\/h2>|Создатель/);
   assert.doesNotMatch(stage, /room-members-rail|data-members-open/);
   assert.match(css, /\.room-panel-tabs button\[data-active='true'\]/);
+  assert.match(css, /--room-panel-width:\s*360px/);
+  assert.match(css, /\.room-chat-rail\s*\{[\s\S]*width:\s*var\(--room-panel-width\)/);
+  assert.match(friendsCss, /\.lobby-preview-chat\s*\{[\s\S]*width:\s*var\(--room-panel-width\)/);
+  assert.match(friendsCss, /\.lobby-room-members\s*\{[\s\S]*width:\s*var\(--room-panel-width\)/);
+  assert.match(friendsCss, /data-preview-chat-open='true'\][\s\S]*padding-right:\s*var\(--room-panel-width\)/);
+  assert.match(friendsCss, /data-members-open='true'\][\s\S]*padding-right:\s*var\(--room-panel-width\)/);
+  assert.match(layoutCss, /padding-right:\s*var\(--room-panel-width\)/);
+  assert.match(controlsCss, /right:\s*var\(--room-panel-width\)/);
+  assert.doesNotMatch(`${css}\n${layoutCss}\n${controlsCss}\n${friendsCss}`, /--(?:chat-rail|members-rail)-width/);
 });
 
 

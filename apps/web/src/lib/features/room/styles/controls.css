@@ -445,12 +445,12 @@ body[data-lobby-embedded="true"] .room-dock {
 /* Keep the floating dock centred in the voice area when the chat rail is open. */
 @media (min-width: 901px) {
   body[data-chat-open="true"] .room-dock {
-    right: var(--chat-rail-width);
+    right: var(--room-panel-width);
   }
 
   body[data-lobby-embedded="true"][data-chat-open="true"] .room-dock {
     left: var(--lobby-sidebar-width, 312px);
-    right: var(--chat-rail-width);
+    right: var(--room-panel-width);
   }
 }
 

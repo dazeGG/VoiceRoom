@@ -3,13 +3,13 @@
    «Чат» button in the top bar; when hidden it leaves no layout footprint. */
 
 :root {
-  --chat-rail-width: 360px;
+  --room-panel-width: 360px;
 }
 
 .room-chat-rail {
   position: relative;
   flex: none;
-  width: var(--chat-rail-width);
+  width: var(--room-panel-width);
   display: flex;
   flex-direction: column;
   min-height: 0;
