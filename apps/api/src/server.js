@@ -5,7 +5,7 @@ const fastify = require('fastify');
 const fastifyCookie = require('@fastify/cookie');
 const fastifyMultipart = require('@fastify/multipart');
 const fastifyWebsocket = require('@fastify/websocket');
-const { createConnectionRegistry } = require('./realtime/registry');
+const { buildRoomMembershipPresenceSnapshot, createConnectionRegistry } = require('./realtime/registry');
 const { createWsHandler } = require('./realtime/ws-handler');
 const {
   clearViewedScreenPeerReferences,
@@ -683,14 +683,7 @@ function membershipCursorCodec() {
 
 function roomMembershipPresenceSnapshot(roomId) {
   const room = presenceRooms.get(roomId);
-  const byUserId = new Map();
-  for (const peer of room?.peers?.values?.() || []) {
-    if (!peer.accountUserId) continue;
-    const entries = byUserId.get(peer.accountUserId) || [];
-    entries.push({ inVoice: true, roomId, presenceStatus: 'online' });
-    byUserId.set(peer.accountUserId, entries);
-  }
-  return { byUserId, revision: Number(room?.updatedAt) || 0 };
+  return buildRoomMembershipPresenceSnapshot(roomId, room, wsRegistry);
 }
 
 function getMembershipServices() {

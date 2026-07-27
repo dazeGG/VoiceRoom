@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ChevronRight, Copy, MessageSquare, Pencil, Trash2 } from '@lucide/svelte';
+  import { ChevronRight, Copy, MessageSquare, Pencil, Trash2, Users } from '@lucide/svelte';
   import type { AuthUser } from '$lib/api/auth';
   import { iconSm } from '$lib/shared/ui/icons';
   import { getAppRealtime } from '$lib/api/realtime';
@@ -26,10 +26,11 @@
   import AttachmentUploadControl from '$lib/shared/chat/AttachmentUploadControl.svelte';
   import { tick } from 'svelte';
 
-  let { roomId, user, onClose, onToast } = $props<{
+  let { roomId, user, onClose, onSelectParticipants, onToast } = $props<{
     roomId: string;
     user: AuthUser;
     onClose?: () => void;
+    onSelectParticipants?: () => void;
     onToast?: (message: string) => void;
   }>();
 
@@ -417,11 +418,15 @@
 >
   {#if attachmentDragDepth > 0}<AttachmentDropOverlay />{/if}
   <header class="chat-rail-head">
-    <div class="chat-rail-title">
-      <MessageSquare {...iconSm} aria-hidden="true" />
-      <span>Чат комнаты</span>
+    <div class="room-panel-tabs" role="tablist" aria-label="Раздел панели комнаты">
+      <button type="button" role="tab" aria-label="Чат" aria-selected="true" data-active="true" title="Чат">
+        <MessageSquare {...iconSm} aria-hidden="true" />
+      </button>
+      <button type="button" role="tab" aria-label="Участники" aria-selected="false" data-active="false" title="Участники" onclick={onSelectParticipants}>
+        <Users {...iconSm} aria-hidden="true" />
+      </button>
     </div>
-    <button class="chat-rail-collapse" type="button" aria-label="Свернуть чат" onclick={onClose}>
+    <button class="chat-rail-collapse" type="button" aria-label="Свернуть панель" onclick={onClose}>
       <ChevronRight {...iconSm} aria-hidden="true" />
     </button>
   </header>

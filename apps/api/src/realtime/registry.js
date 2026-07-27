@@ -9,6 +9,31 @@ function createConnectionId(prefix) {
   return `${prefix}:${Date.now()}:${crypto.randomBytes(4).toString('hex')}`;
 }
 
+function buildRoomMembershipPresenceSnapshot(roomId, room, registry) {
+  const byUserId = new Map();
+  for (const [userId, userConnections] of registry?.userConnections || []) {
+    const entries = [];
+    for (const connection of userConnections) {
+      entries.push({
+        inVoice: connection.activeVoice?.roomId === roomId,
+        roomId: connection.activeVoice?.roomId || null,
+        presenceStatus: connection.presenceStatus || registry.userPresenceStatuses.get(userId) || 'online'
+      });
+    }
+    if (entries.length) byUserId.set(userId, entries);
+  }
+  for (const peer of room?.peers?.values?.() || []) {
+    if (!peer.accountUserId) continue;
+    const entries = byUserId.get(peer.accountUserId) || [];
+    entries.push({ inVoice: true, roomId, presenceStatus: 'online' });
+    byUserId.set(peer.accountUserId, entries);
+  }
+  return {
+    byUserId,
+    revision: Math.max(Number(room?.updatedAt) || 0, registry?.getPresenceRevision?.() || 0)
+  };
+}
+
 function createConnectionRegistry({
   maxConnectionsPerUser,
   maxGuestConnectionsPerIp = 0,
@@ -22,6 +47,11 @@ function createConnectionRegistry({
   const guestConnectionsByIp = new Map();
   const roomDetailConnections = new Map();
   const connections = new Map();
+  let presenceRevision = 0;
+
+  function bumpPresenceRevision() {
+    presenceRevision = Math.max(Date.now(), presenceRevision + 1);
+  }
 
   function connectionCount(userId) {
     if (!userId) return 0;
@@ -65,6 +95,7 @@ function createConnectionRegistry({
     const connection = createConnectionRecord(userId, socket, clientIp, activePresenceStatus);
     set.add(connection);
     connections.set(connection.id, connection);
+    bumpPresenceRevision();
 
     if (wasOffline && isUserOnline(userId)) {
       void notifyFriendsPresence(userId, true);
@@ -106,8 +137,10 @@ function createConnectionRegistry({
     if (!normalizedPresenceStatus || !set || set.size === 0) return false;
 
     const wasOnline = isUserOnline(userId);
+    const previousPresenceStatus = userPresenceStatuses.get(userId);
     userPresenceStatuses.set(userId, normalizedPresenceStatus);
     for (const connection of set) connection.presenceStatus = normalizedPresenceStatus;
+    if (previousPresenceStatus !== normalizedPresenceStatus) bumpPresenceRevision();
     const online = isUserOnline(userId);
     if (online !== wasOnline) void notifyFriendsPresence(userId, online);
     return online;
@@ -130,6 +163,7 @@ function createConnectionRegistry({
         set.delete(connection);
         if (set.size === 0) userConnections.delete(connection.userId);
       }
+      bumpPresenceRevision();
       const stillOnline = isUserOnline(connection.userId);
       if (wasOnline && !stillOnline) {
         void notifyFriendsPresence(connection.userId, false);
@@ -248,6 +282,7 @@ function createConnectionRegistry({
     broadcastAccountEvent,
     connectionCount,
     connections,
+    getPresenceRevision: () => presenceRevision,
     isUserOnline,
     removeConnection,
     registerConnectionForRoom,
@@ -268,5 +303,6 @@ function createConnectionRegistry({
 }
 
 module.exports = {
+  buildRoomMembershipPresenceSnapshot,
   createConnectionRegistry
 };

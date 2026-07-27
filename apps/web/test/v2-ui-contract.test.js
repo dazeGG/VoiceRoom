@@ -431,6 +431,8 @@ test('room side panel exposes chat and participant tabs backed by the authoritat
   assert.match(memberList, /Не в сети — \{offlineMembers\.length\}/);
   assert.match(memberList, /member\.presenceStatus !== 'offline'/);
   assert.match(memberList, /member\.presenceStatus === 'offline'/);
+  assert.doesNotMatch(memberList, /Найти участника|room-member-list__search|Search/);
+  assert.doesNotMatch(memberList, /<h2[^>]*>Участники<\/h2>|Создатель/);
   assert.doesNotMatch(stage, /room-members-rail|data-members-open/);
   assert.match(css, /\.room-panel-tabs button\[data-active='true'\]/);
 });
@@ -1181,7 +1183,7 @@ test('manual screen receiver demand is ordered, race-safe, and isolated from scr
   assert.doesNotMatch(detachScreenVideo, /stream\.getAudioTracks\(\)/);
 });
 
-test('lobby v2 keeps dock in main area, roster-only previews, and people add-friend flow', () => {
+test('lobby v2 keeps dock in main area, switchable preview panels, and people add-friend flow', () => {
   const controls = read('src/lib/features/room/styles/controls.css');
   const lobby = read('src/lib/features/home/LobbyPage.svelte');
   const sidebar = read('src/lib/features/home/components/lobby/Sidebar.svelte');
@@ -1201,16 +1203,25 @@ test('lobby v2 keeps dock in main area, roster-only previews, and people add-fri
   assert.match(roomLayoutCss, /body\[data-lobby-embedded="true"\] \.room-embedded-shell \.topbar/);
   assert.match(sidebar, /import SidebarDownload from '\.\.\/SidebarDownload\.svelte'/);
   assert.match(sidebar, /<SidebarDownload \/>/);
-  assert.doesNotMatch(previewView, /RoomPreviewChat|previewChatOpen|room-chat-toggle|MessageSquare/);
-  assert.doesNotMatch(browseView, /RoomPreviewChat|previewChatOpen|room-chat-toggle|MessageSquare/);
+  for (const view of [previewView, browseView]) {
+    assert.match(view, /RoomPreviewChat/);
+    assert.match(view, /let activePanel = \$state<'chat' \| 'participants' \| null>\(null\)/);
+    assert.match(view, /aria-label="Чат"/);
+    assert.match(view, /aria-label="Участники"/);
+    assert.match(view, /<MessageSquare/);
+    assert.match(view, /<Users/);
+    assert.match(view, /aria-label="Свернуть панель"/);
+    assert.match(view, /onClose=\{\(\) => \(activePanel = null\)\}/);
+    assert.match(view, /onSelectParticipants=\{\(\) => selectPanel\('participants'\)\}/);
+  }
   assert.match(previewView, /getCapabilityFeature\('membership'\)/);
   assert.match(browseView, /getCapabilityFeature\('membership'\)/);
-  assert.match(previewView, /<RoomMemberList roomId=\{previewRoomId\} searchable=\{false\} \/>/);
-  assert.match(browseView, /<RoomMemberList roomId=\{previewRoomId\} searchable=\{false\} \/>/);
-  assert.match(previewView, /data-members-open=\{membershipEnabled\}/);
-  assert.match(browseView, /data-members-open=\{membershipEnabled\}/);
-  assert.doesNotMatch(previewView, /data-preview-chat-open/);
-  assert.doesNotMatch(browseView, /data-preview-chat-open/);
+  assert.match(previewView, /<RoomMemberList roomId=\{previewRoomId\} \/>/);
+  assert.match(browseView, /<RoomMemberList roomId=\{previewRoomId\} \/>/);
+  assert.match(previewView, /data-members-open=\{activePanel === 'participants'\}/);
+  assert.match(browseView, /data-members-open=\{activePanel === 'participants'\}/);
+  assert.match(previewView, /data-preview-chat-open=\{activePanel === 'chat'\}/);
+  assert.match(browseView, /data-preview-chat-open=\{activePanel === 'chat'\}/);
   assert.match(previewView, /'\$lib\/features\/room\/styles\/room\.css'/);
   assert.match(browseView, /'\$lib\/features\/room\/styles\/room\.css'/);
   assert.match(previewView, /class="stage lobby-preview-stage"/);
@@ -1243,8 +1254,8 @@ test('lobby v2 keeps dock in main area, roster-only previews, and people add-fri
   assert.match(roomChat, /roomUi\.activePanel === 'participants'/);
   assert.match(memberList, /В сети — \{onlineMembers\.length\}/);
   assert.match(memberList, /Не в сети — \{offlineMembers\.length\}/);
-  assert.match(memberList, /searchable = true/);
-  assert.match(memberList, /\{#if searchable\}[\s\S]*room-member-list__search/);
+  assert.doesNotMatch(memberList, /searchable|room-member-list__search|Найти участника/);
+  assert.doesNotMatch(memberList, /Создатель|<h2[^>]*>Участники<\/h2>/);
   assert.match(memberList, /roomMembershipState\.byRoomId\[roomId\] \?\? null/);
   assert.match(memberList, /getRoomMembership\(roomId\);/);
   assert.doesNotMatch(memberList, /\$derived\(getRoomMembership\(roomId\)\)/);

@@ -172,7 +172,7 @@ test('muted notification targets show a bell-off indicator beside their names', 
   assert.match(lobbyCss, /\.lv-notification-muted\s*\{[^}]*flex:\s*none/);
 });
 
-test('unread badges stay Volt unless their friend or room notifications are muted', () => {
+test('unread badges and compact room-panel indicators remain wired to canonical counts', () => {
   const badge = read('src/lib/shared/ui/Badge/Badge.svelte');
   const badgeTypes = read('src/lib/shared/ui/Badge/types.ts');
   const sidebar = read('src/lib/features/home/components/lobby/Sidebar.svelte');
@@ -191,12 +191,12 @@ test('unread badges stay Volt unless their friend or room notifications are mute
   assert.match(voiceHome, /class="lv-card-unread" tone=\{roomNotificationsMuted \? 'muted' : 'default'\}/);
   for (const preview of [roomPreview, roomBrowse]) {
     assert.match(preview, /roomPresence\.unreadCountByRoomId\[previewRoomId\] \?\? room\.unreadCount \?\? 0/);
-    assert.match(preview, /class="room-chat-unread" data-muted=\{roomNotificationsMuted\}/);
+    assert.match(preview, /\{#if roomUnreadCount > 0\}<span class="room-panel-tab-unread"/);
   }
   assert.match(previewChat, /markRoomChatRead\(activeRoomId\)/);
   assert.match(roomChat, /roomUi\.chatOpen[\s\S]*markRoomChatRead\(roomId\)/);
-  assert.match(roomTopbar, /roomNotificationsMuted = \$derived\(notificationPreferences\.mutedRoomIds\.includes\(roomClientState\.roomId\)\)/);
-  assert.match(roomTopbar, /data-muted=\{roomNotificationsMuted\}/);
+  assert.match(roomTopbar, /const roomUnreadCount = \$derived\(Math\.max\(roomUi\.unreadChat,/);
+  assert.match(roomTopbar, /\{#if roomUnreadCount > 0\}<span class="room-panel-tab-unread"/);
   assert.match(roomControls, /\.room-chat-unread\s*\{[^}]*background: var\(--accent\)/);
   assert.match(roomControls, /\.room-chat-unread\[data-muted='true'\]\s*\{[^}]*background: var\(--control-hover\)/);
 });

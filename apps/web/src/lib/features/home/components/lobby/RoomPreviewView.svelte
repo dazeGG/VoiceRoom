@@ -1,18 +1,20 @@
 <script lang="ts">
-  import { LogIn, MicOff } from '@lucide/svelte';
+  import { ChevronRight, LogIn, MessageSquare, MicOff, Users } from '@lucide/svelte';
   import { iconMd, iconSm } from '$lib/shared/ui/icons';
   import type { AuthUser, OwnedRoom } from '$lib/api/auth';
   import type { RoomPeer } from '$lib/api/rooms';
   import type { RealtimeEvent } from '$lib/api/realtime';
   import { getAvatarPresentation } from '$lib/features/room/client/ui/avatar-presentation';
   import '$lib/features/room/styles/room.css';
+  import RoomPreviewChat from './RoomPreviewChat.svelte';
   import RoomMemberList from './RoomMemberList.svelte';
   import RoomViewHeader from './RoomViewHeader.svelte';
   import LobbyStreamTile from './LobbyStreamTile.svelte';
   import { subscribeRoomPreview } from '../../model/room-realtime';
+  import { roomPresence } from '../../model/room-presence.svelte';
   import { getCapabilityFeature } from '$lib/platform/capability-state.svelte';
 
-  let { room, onEnter, onBack, onOpenSettings, onToast } = $props<{
+  let { room, user, onEnter, onBack, onOpenSettings, onToast } = $props<{
     room: OwnedRoom;
     user: AuthUser;
     onEnter: () => void;
@@ -24,8 +26,10 @@
   let peers = $state<RoomPeer[]>([]);
   let loading = $state(true);
   let membershipEnabled = $state(false);
+  let activePanel = $state<'chat' | 'participants' | null>(null);
 
   const previewRoomId = $derived(room.roomId);
+  const roomUnreadCount = $derived(roomPresence.unreadCountByRoomId[previewRoomId] ?? room.unreadCount ?? 0);
   const screenPeers = $derived(peers.filter((peer) => peer.screen));
   const tileCount = $derived(peers.length + screenPeers.length);
 
@@ -58,6 +62,7 @@
     const roomId = previewRoomId;
     loading = true;
     peers = [];
+    activePanel = null;
     const unsubscribe = subscribeRoomPreview(roomId, handlePreviewEvent);
     return unsubscribe;
   });
@@ -85,16 +90,48 @@
       name: peerName(peer)
     });
   }
+
+  function selectPanel(panel: 'chat' | 'participants'): void {
+    if (panel === 'participants' && !membershipEnabled) return;
+    activePanel = panel;
+  }
 </script>
 
 <div class="lobby-roomview">
   <div class="lobby-roomview-top">
     <RoomViewHeader {room} {onBack} {onOpenSettings} {onToast} />
+    <div class="lobby-roomview-actions">
+      <div class="room-panel-tabs room-panel-tabs--topbar" role="group" aria-label="Открыть раздел панели комнаты">
+        <button
+          type="button"
+          aria-label="Чат"
+          aria-pressed={activePanel === 'chat'}
+          data-active={activePanel === 'chat'}
+          title="Чат"
+          onclick={() => selectPanel('chat')}
+        >
+          <MessageSquare {...iconSm} aria-hidden="true" />
+          {#if roomUnreadCount > 0}<span class="room-panel-tab-unread" aria-hidden="true"></span>{/if}
+        </button>
+        <button
+          type="button"
+          aria-label="Участники"
+          aria-pressed={activePanel === 'participants'}
+          data-active={activePanel === 'participants'}
+          title="Участники"
+          disabled={!membershipEnabled}
+          onclick={() => selectPanel('participants')}
+        >
+          <Users {...iconSm} aria-hidden="true" />
+        </button>
+      </div>
+    </div>
   </div>
 
   <div
     class="lobby-roomview-content"
-    data-members-open={membershipEnabled}
+    data-preview-chat-open={activePanel === 'chat'}
+    data-members-open={activePanel === 'participants'}
   >
     <div class="lobby-roomview-stage-pane">
       <section class="stage lobby-preview-stage" aria-label="Участники комнаты">
@@ -146,9 +183,32 @@
       </button>
     </div>
 
-    {#if membershipEnabled}
+    {#if activePanel === 'chat'}
+      {#key previewRoomId}
+        <RoomPreviewChat
+          roomId={previewRoomId}
+          {user}
+          {onToast}
+          onClose={() => (activePanel = null)}
+          onSelectParticipants={() => selectPanel('participants')}
+        />
+      {/key}
+    {:else if activePanel === 'participants' && membershipEnabled}
       <aside class="lobby-room-members" aria-label="Список участников комнаты">
-        <RoomMemberList roomId={previewRoomId} searchable={false} />
+        <header class="chat-rail-head">
+          <div class="room-panel-tabs" role="tablist" aria-label="Раздел панели комнаты">
+            <button type="button" role="tab" aria-label="Чат" aria-selected="false" data-active="false" title="Чат" onclick={() => selectPanel('chat')}>
+              <MessageSquare {...iconSm} aria-hidden="true" />
+            </button>
+            <button type="button" role="tab" aria-label="Участники" aria-selected="true" data-active="true" title="Участники">
+              <Users {...iconSm} aria-hidden="true" />
+            </button>
+          </div>
+          <button class="chat-rail-collapse" type="button" aria-label="Свернуть панель" onclick={() => (activePanel = null)}>
+            <ChevronRight {...iconSm} aria-hidden="true" />
+          </button>
+        </header>
+        <div class="lobby-room-members-body"><RoomMemberList roomId={previewRoomId} /></div>
       </aside>
     {/if}
   </div>
