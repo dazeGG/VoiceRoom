@@ -540,8 +540,8 @@
                       {#if bubble.attachments?.length}<AttachmentMosaic attachments={bubble.attachments} />{/if}
                       {#if bubble.body.trim()}<span class="dm-msg-content"><ChatText text={bubble.body} />{#if bubble.editedAt}<span class="dm-msg-edited">(изменено)</span>{/if}</span>{/if}
                       <div class="dm-msg-actions" role="toolbar" aria-label="Действия с сообщением">
+                        {#if reactionsEnabled}<ReactionPicker store={reactions} messageId={bubble.id} userId={selfId} />{/if}
                         {#if repliesEnabled}<button type="button" aria-label="Ответить" title="Ответить" onclick={() => { replyTarget = bubble; inputEl?.focus(); }}><MessageSquare {...iconSm} /></button>{/if}
-                        {#if reactionsEnabled}<ReactionPicker store={reactions} messageId={bubble.id} />{/if}
                         <button type="button" aria-label="Копировать текст" title="Копировать текст" onclick={() => void copyMessageText(bubble)}><Copy {...iconSm} aria-hidden="true" /></button>
                         {#if group.fromMe}
                           <button type="button" aria-label="Редактировать" title="Редактировать" onclick={() => startEditing(bubble)}><Pencil {...iconSm} aria-hidden="true" /></button>

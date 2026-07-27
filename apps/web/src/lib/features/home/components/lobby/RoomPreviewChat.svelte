@@ -444,7 +444,7 @@
               <time class="chat-msg-time" datetime={new Date(group.messages[0].createdAt).toISOString()}>{group.time}</time>
             </div>
             {#each group.messages as message (message.id)}
-              <div class="chat-msg-text">
+              <div class="chat-msg-text" data-group-first={message.id === group.messages[0].id}>
                 {#if editingMessageId === message.id}
                   <div class="chat-msg-edit">
                     <textarea

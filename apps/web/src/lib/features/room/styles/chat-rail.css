@@ -180,9 +180,6 @@
   isolation: isolate;
 }
 
-.chat-msg::before { content: ''; position: absolute; z-index: -1; inset: -4px -20px; background: transparent; transition: background 120ms ease; }
-.chat-msg:has(.chat-msg-text:hover)::before, .chat-msg:has(.chat-msg-text:focus-within)::before { background: color-mix(in oklch, var(--control), transparent 65%); }
-
 .chat-msg-avatar {
   flex: none;
   display: flex;
@@ -263,6 +260,7 @@ button.chat-msg-author {
 
 .chat-msg-text {
   position: relative;
+  isolation: isolate;
   display: flex;
   min-width: 0;
   align-items: flex-start;
@@ -274,6 +272,25 @@ button.chat-msg-author {
   line-height: 1.5;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+.chat-msg-text::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: -3px -20px;
+  background: transparent;
+  transition: background 120ms ease;
+}
+
+.chat-msg-text[data-group-first='true']::before {
+  top: -25px;
+  left: -45px;
+}
+
+.chat-msg-text:hover::before,
+.chat-msg-text:focus-within::before {
+  background: color-mix(in oklch, var(--control), transparent 65%);
 }
 
 .chat-msg-content { min-width: 0; flex: 1; }

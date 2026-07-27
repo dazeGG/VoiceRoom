@@ -1965,7 +1965,13 @@ test('room preview, room, and direct chats use a stable top-right message action
   assert.match(dm, /aria-label="Редактировать"/);
   assert.match(dm, /aria-label="Удалить"/);
   assert.match(roomCss, /\.chat-msg-text[\s\S]*width: calc\(100% \+ 45px\)/);
-  assert.match(roomCss, /\.chat-msg:has\(\.chat-msg-text:hover\)::before/);
+  assert.doesNotMatch(roomCss, /\.chat-msg::before/);
+  assert.match(roomCss, /\.chat-msg-text::before[\s\S]*inset: -3px -20px/);
+  assert.match(roomCss, /\.chat-msg-text\[data-group-first='true'\]::before[\s\S]*top: -25px[\s\S]*left: -45px/);
+  assert.match(roomCss, /\.chat-msg-text:hover::before/);
+  for (const source of [chat, previewChat]) {
+    assert.match(source, /data-group-first=\{message\.id === group\.messages\[0\]\.id\}/);
+  }
   // The toolbar sits fully above the message body in both chats.
   assert.match(roomCss, /\.chat-msg-actions[\s\S]*bottom: calc\(100% - 4px\)[\s\S]*right: -16px[\s\S]*opacity: 0/);
   assert.match(roomCss, /\.chat-msg-text:hover \.chat-msg-actions/);
@@ -1981,6 +1987,43 @@ test('composer ArrowUp edits the latest own message in both chats', () => {
     assert.match(source, /key === 'ArrowUp' && !draft\.trim\(\) && !editingMessageId/);
     assert.match(source, /findLastOwnMessage/);
   }
+});
+
+test('message action toolbars expose persisted quick reactions and a separated full picker', () => {
+  const chat = read('src/lib/features/room/components/RoomChat.svelte');
+  const dm = read('src/lib/features/home/components/lobby/DmView.svelte');
+  const picker = read('src/lib/shared/chat/ReactionPicker.svelte');
+  const persistence = read('src/lib/shared/chat/frequent-reactions.ts');
+
+  assert.match(chat, /ReactionPicker store=\{reactions\} messageId=\{message\.id\} userId=\{session\.user\?\.id \|\| ''\}/);
+  assert.match(dm, /ReactionPicker store=\{reactions\} messageId=\{bubble\.id\} userId=\{selfId\}/);
+  assert.ok(chat.indexOf('ReactionPicker store={reactions} messageId={message.id}') < chat.indexOf('aria-label="Ответить"'));
+  assert.ok(dm.indexOf('ReactionPicker store={reactions} messageId={bubble.id}') < dm.indexOf('aria-label="Ответить"'));
+  assert.match(picker, /class="reaction-quick-actions" role="group" aria-label="Быстрые реакции"/);
+  assert.match(picker, /\{#each frequentEmoji as emoji/);
+  assert.match(picker, /SmilePlus/);
+  assert.match(picker, /placeholder="Найти эмодзи"/);
+  assert.match(picker, /if \(!query\) return ALL_EMOJI/);
+  assert.match(picker, /\.reaction-quick-actions[\s\S]*border-right:/);
+  assert.match(persistence, /indexedDB\.open\(DATABASE_NAME, DATABASE_VERSION\)/);
+  assert.match(persistence, /voice-room:frequent-reactions/);
+  assert.match(persistence, /frequentReactionKey\(namespace: string, userId: string\)/);
+  assert.match(persistence, /readLocalStorage\(key\)/);
+});
+
+test('frequent reaction ranking is user-scoped, deterministic, and limited to three choices', async () => {
+  const { frequentReactionKey, rankFrequentReactions } = await importTypeScript('src/lib/shared/chat/frequent-reactions.ts');
+
+  assert.equal(frequentReactionKey('chat', 'user-42'), 'chat:user-42');
+  assert.deepEqual(
+    rankFrequentReactions([
+      { emoji: '👍', count: 2, lastUsedAt: 10 },
+      { emoji: '😂', count: 4, lastUsedAt: 5 },
+      { emoji: '🔥', count: 4, lastUsedAt: 12 },
+      { emoji: '❤️', count: 1, lastUsedAt: 20 }
+    ]).map((entry) => entry.emoji),
+    ['🔥', '😂', '👍']
+  );
 });
 
 test('sidebar call widget shows only the room call timer from the server clock', () => {
