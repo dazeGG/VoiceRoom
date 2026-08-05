@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { pushState, replaceState } from '$app/navigation';
   import { Bell, X } from '@lucide/svelte';
   import type { AuthUser, OwnedRoom } from '$lib/api/auth';
   import { fetchOwnedRooms } from '$lib/api/auth';
@@ -114,7 +115,7 @@
   function replaceUrlWithActiveVoiceRoom(roomId: string | null = connectedVoiceRoomId): void {
     const target = roomId ? `/r/${encodeURIComponent(roomId)}` : '/';
     if (`${window.location.pathname}${window.location.search}` === target) return;
-    history.replaceState(null, '', target);
+    replaceState(target, {});
   }
 
   function closeEmbeddedRoom({ replaceUrl = true, closedRoomId = embeddedRoomId }: { replaceUrl?: boolean; closedRoomId?: string | null } = {}): void {
@@ -181,7 +182,7 @@
     }
     const initialDmId = new URLSearchParams(window.location.search).get('dm');
     if (!initialRoomId && initialDmId) {
-      history.replaceState(null, '', '/');
+      replaceState('/', {});
       void openDm(initialDmId).catch(() => onToast('Не удалось открыть диалог'));
     }
 
@@ -239,7 +240,7 @@
   function enterRoom(roomId: string): void {
     selectRoomForVoiceEntry(roomId);
     friendsState.mode = 'rooms';
-    history.pushState(null, '', `/r/${encodeURIComponent(roomId)}`);
+    pushState(`/r/${encodeURIComponent(roomId)}`, {});
   }
 
   function previewRoom(roomId: string): void {
@@ -258,7 +259,7 @@
     const openedRoomId = openActiveVoiceRoom();
     if (!openedRoomId) return;
     friendsState.mode = 'rooms';
-    history.pushState(null, '', `/r/${encodeURIComponent(openedRoomId)}`);
+    pushState(`/r/${encodeURIComponent(openedRoomId)}`, {});
   }
 
   async function leaveConnectedVoiceRoom(): Promise<void> {
