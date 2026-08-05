@@ -4,12 +4,14 @@ import { resolveLiveKitUrls } from '$lib/platform/runtime-config';
 export class ApiRequestError extends Error {
   code: string;
   roomId: string;
+  status: number;
 
-  constructor(message: string, code = '', roomId = '') {
+  constructor(message: string, code = '', roomId = '', status = 0) {
     super(message);
     this.name = 'ApiRequestError';
     this.code = code;
     this.roomId = roomId;
+    this.status = status;
   }
 }
 
@@ -35,7 +37,7 @@ export async function postJson(url: string, body: unknown): Promise<any> {
     // Non-JSON errors are handled by the generic message below.
   }
   if (!response.ok) {
-    throw new ApiRequestError(payload?.error || 'Сервер недоступен', payload?.code, payload?.roomId);
+    throw new ApiRequestError(payload?.error || 'Сервер недоступен', payload?.code, payload?.roomId, response.status);
   }
   if (url === '/api/livekit-token' && typeof payload?.url === 'string') {
     return { ...payload, urls: await resolveLiveKitUrls(payload.url) };

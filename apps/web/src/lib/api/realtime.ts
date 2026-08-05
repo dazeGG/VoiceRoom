@@ -122,9 +122,10 @@ class AppRealtimeConnection {
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private outboundQueue: string[] = [];
-  private restoreHandlers = new Set<() => void>();
-  private stateHandlers = new Set<(connected: boolean) => void>();
+  private restoreHandlers = new Set<(connectionEpoch: number) => void>();
+  private stateHandlers = new Set<(connected: boolean, connectionEpoch: number) => void>();
   private everConnected = false;
+  private connectionEpoch = 0;
   private heartbeatWatchdog = new RealtimeHeartbeatWatchdog({ timeoutMs: HEARTBEAT_TIMEOUT_MS });
 
   subscribe(handler: (event: RealtimeEvent) => void): () => void {
@@ -206,13 +207,14 @@ class AppRealtimeConnection {
     this.socket = socket;
     socket.onopen = () => {
       if (this.socket !== socket) return;
+      this.connectionEpoch += 1;
       this.reconnectAttempt = 0;
       this.send('hello', {});
       // Restore handlers replay subscriptions lost with the previous socket.
       // On the very first open the originals are still sitting in the
       // outbound queue, so replaying would double-send them.
       if (this.everConnected) {
-        for (const restore of this.restoreHandlers) restore();
+        for (const restore of this.restoreHandlers) restore(this.connectionEpoch);
       }
       this.everConnected = true;
       this.flushQueue();
@@ -243,7 +245,7 @@ class AppRealtimeConnection {
     };
   }
 
-  onRestore(handler: () => void): () => void {
+  onRestore(handler: (connectionEpoch: number) => void): () => void {
     this.restoreHandlers.add(handler);
     return () => {
       this.restoreHandlers.delete(handler);
@@ -251,7 +253,7 @@ class AppRealtimeConnection {
   }
 
   // Connection liveness for UI indicators: true on socket open, false on loss.
-  onStateChange(handler: (connected: boolean) => void): () => void {
+  onStateChange(handler: (connected: boolean, connectionEpoch: number) => void): () => void {
     this.stateHandlers.add(handler);
     return () => {
       this.stateHandlers.delete(handler);
@@ -259,7 +261,15 @@ class AppRealtimeConnection {
   }
 
   private emitState(connected: boolean): void {
-    for (const handler of this.stateHandlers) handler(connected);
+    for (const handler of this.stateHandlers) handler(connected, this.connectionEpoch);
+  }
+
+  getConnectionEpoch(): number {
+    return this.connectionEpoch;
+  }
+
+  isConnected(): boolean {
+    return this.socket?.readyState === WebSocket.OPEN;
   }
 
   ensureConnected(): void {

@@ -58,11 +58,16 @@ let activeVoiceJoin: {
   name: string;
 } | null = null;
 let restoreHooked = false;
+let lastRestoreEpoch = 0;
+let lastActiveResyncKey = '';
 
 function ensureReconnectRestore(): void {
   if (restoreHooked) return;
   restoreHooked = true;
-  getAppRealtime().onRestore(() => {
+  getAppRealtime().onRestore((connectionEpoch) => {
+    if (connectionEpoch <= lastRestoreEpoch) return;
+    lastRestoreEpoch = connectionEpoch;
+    lastActiveResyncKey = '';
     for (const roomId of previewSubscriptions.keys()) {
       getAppRealtime().send('room.preview.subscribe', { roomId });
     }
@@ -189,8 +194,19 @@ export function leaveVoiceRoom(payload: { roomId: string; peerId: string; sessio
     activeVoiceJoin.peerId === payload.peerId
   ) {
     activeVoiceJoin = null;
+    lastActiveResyncKey = '';
   }
   getAppRealtime().send('room.leave', payload);
+}
+
+export function requestActiveVoiceResync(recoveryEpoch: number, appEpoch: number): boolean {
+  const conn = getAppRealtime();
+  if (!activeVoiceJoin || !conn.isConnected() || conn.getConnectionEpoch() !== appEpoch) return false;
+  const key = `${recoveryEpoch}:${appEpoch}`;
+  if (lastActiveResyncKey === key) return false;
+  lastActiveResyncKey = key;
+  conn.send('room.join', activeVoiceJoin);
+  return true;
 }
 
 export function updateVoicePeer(payload: {
