@@ -313,6 +313,10 @@ test('development topology routes public signaling through the auth gate', () =>
     packageJson.scripts['dev:livekit'],
     'docker compose -f docker-compose.dev.yml up --build livekit-gate'
   );
+  assert.equal(
+    packageJson.scripts['dev:restart'],
+    'docker compose -f docker-compose.dev.yml restart livekit-gate api web'
+  );
 });
 
 test('G05-A03..A06 amended strict proof is green and fail-on-blocked exits zero', async () => {

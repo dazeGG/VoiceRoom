@@ -50,6 +50,79 @@ test('browser-facing shared modules expose named ESM exports', async () => {
   }
 });
 
+test('browser ESM and CommonJS contracts stay behaviorally aligned', async () => {
+  const moduleNames = [
+    'capabilities',
+    'emoji',
+    'membership',
+    'mentions',
+    'moderation',
+    'notifications',
+    'platform-class',
+    'reactions',
+    'room-message-content',
+    'runtime-config'
+  ];
+  const argumentCorpus = [
+    [],
+    [undefined],
+    [null],
+    [''],
+    ['x'],
+    [0],
+    [1],
+    [true],
+    [[]],
+    [['x', 'y']],
+    [{}],
+    [{ id: 'x', userId: 'u1', roomId: 'r1', text: 'hello', limit: 10 }],
+    ['1h', 1_700_000_000_000],
+    [{}, {}]
+  ];
+
+  function snapshot(value) {
+    if (value === undefined) return { type: 'undefined' };
+    if (typeof value === 'number' && !Number.isFinite(value)) return { type: 'number', value: String(value) };
+    if (value instanceof Set) return { type: 'set', value: [...value].map(snapshot) };
+    if (value instanceof Map) return { type: 'map', value: [...value].map(([key, entry]) => [snapshot(key), snapshot(entry)]) };
+    if (Array.isArray(value)) return value.map(snapshot);
+    if (value && typeof value === 'object') {
+      return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, snapshot(entry)]));
+    }
+    return value;
+  }
+
+  function invoke(fn, args) {
+    try {
+      return { returned: snapshot(fn(...structuredClone(args))) };
+    } catch (error) {
+      return { threw: { name: error?.name, message: error?.message } };
+    }
+  }
+
+  for (const moduleName of moduleNames) {
+    const cjs = require(`../src/${moduleName}.js`);
+    const esm = await import(pathToFileURL(path.join(__dirname, `../src/${moduleName}.mjs`)).href);
+    assert.deepEqual(Object.keys(esm).sort(), Object.keys(cjs).sort(), `${moduleName} export names drifted`);
+
+    for (const exportName of Object.keys(cjs)) {
+      assert.equal(typeof esm[exportName], typeof cjs[exportName], `${moduleName}.${exportName} type drifted`);
+      if (typeof cjs[exportName] !== 'function') {
+        assert.deepEqual(snapshot(esm[exportName]), snapshot(cjs[exportName]), `${moduleName}.${exportName} value drifted`);
+        continue;
+      }
+      assert.equal(esm[exportName].length, cjs[exportName].length, `${moduleName}.${exportName} arity drifted`);
+      for (const args of argumentCorpus) {
+        assert.deepEqual(
+          invoke(esm[exportName], args),
+          invoke(cjs[exportName], args),
+          `${moduleName}.${exportName} behavior drifted for ${JSON.stringify(args)}`
+        );
+      }
+    }
+  }
+});
+
 test('browser ESM modules never import CommonJS source files', () => {
   const sourceDirectory = path.join(__dirname, '../src');
   const violations = fs.readdirSync(sourceDirectory)
