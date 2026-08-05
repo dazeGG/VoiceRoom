@@ -260,7 +260,7 @@ test('lobby separates viewed room from connected voice room', () => {
   assert.doesNotMatch(previewRoom, /history\.(?:push|replace)State/);
   assert.match(previewRoom, /replaceUrlWithActiveVoiceRoom\(\)/);
   assert.match(replaceUrlWithActiveVoiceRoom, /roomId \? `\/r\/\$\{encodeURIComponent\(roomId\)\}` : '\/'/);
-  assert.match(replaceUrlWithActiveVoiceRoom, /history\.replaceState\(null, '', target\)/);
+  assert.match(replaceUrlWithActiveVoiceRoom, /replaceState\(target, \{\}\)/);
   assert.match(enterRoom, /selectRoomForVoiceEntry\(roomId\)/);
   assert.match(roomNavigation, /roomNavigation\.embeddedRoomId = roomId/);
   assert.match(roomNavigation, /roomNavigation\.joinIntentRoomId = roomId/);

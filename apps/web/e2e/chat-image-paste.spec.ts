@@ -99,7 +99,7 @@ test('image attachments support picker, removal, drag-and-drop, paste, and sendi
       && response.request().method() === 'PUT'
   );
 
-  const chat = page.getByRole('complementary', { name: 'Чат комнаты' });
+  const chat = page.getByRole('complementary', { name: 'Панель комнаты' });
   await chat.evaluate((element, encoded) => {
     const bytes = Uint8Array.from(atob(encoded), (character) => character.charCodeAt(0));
     const transfer = new DataTransfer();
