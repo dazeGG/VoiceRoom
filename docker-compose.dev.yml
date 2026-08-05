@@ -42,6 +42,8 @@ services:
         condition: service_healthy
       livekit:
         condition: service_started
+      livekit-gate:
+        condition: service_started
     environment:
       NODE_ENV: development
       HOST: 0.0.0.0

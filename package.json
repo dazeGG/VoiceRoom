@@ -18,7 +18,7 @@
     "dev:restart": "docker compose -f docker-compose.dev.yml restart api web",
     "dev:api": "docker compose -f docker-compose.dev.yml up --build api",
     "dev:web": "docker compose -f docker-compose.dev.yml up --build web",
-    "dev:livekit": "docker compose -f docker-compose.dev.yml up --build livekit",
+    "dev:livekit": "docker compose -f docker-compose.dev.yml up --build livekit-gate",
     "dev:host:api": "npm --workspace @voice-room/api run dev",
     "dev:host:web": "npm --workspace @voice-room/web run dev",
     "dev:host:livekit": "docker run --rm -e LIVEKIT_KEYS=\"devkey: devsecret\" -p 7880:7880 -p 7881:7881 -p 7882:7882/udp livekit/livekit-server:v1.13.2 --dev --bind 0.0.0.0",

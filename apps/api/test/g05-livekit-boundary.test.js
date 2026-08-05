@@ -297,6 +297,7 @@ test('G05-A02 topology exposes only the gate as public signaling boundary', () =
 
 test('development topology routes public signaling through the auth gate', () => {
   const compose = fs.readFileSync(path.join(ROOT, 'docker-compose.dev.yml'), 'utf8');
+  const packageJson = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
   const apiService = compose.match(/\n  api:\n[\s\S]*?(?=\n  [a-z][\w-]*:\n)/)?.[0] || '';
   const livekitService = compose.match(/\n  livekit:\n[\s\S]*?(?=\n  [a-z][\w-]*:\n)/)?.[0] || '';
   const gateService = compose.match(/\n  livekit-gate:\n[\s\S]*?(?=\n  [a-z][\w-]*:\n|\nvolumes:)/)?.[0] || '';
@@ -304,9 +305,14 @@ test('development topology routes public signaling through the auth gate', () =>
   assert.match(apiService, /LIVEKIT_INTERNAL_URL:\s*ws:\/\/livekit:7880/);
   assert.match(apiService, /LIVEKIT_GATE_PUBLIC_URL:\s*\$\{LIVEKIT_PUBLIC_URL:-ws:\/\/localhost:7880\}/);
   assert.match(apiService, /LIVEKIT_GATE_SECRET:/);
+  assert.match(apiService, /livekit-gate:\s*\n\s+condition: service_started/);
   assert.doesNotMatch(livekitService, /\$\{LIVEKIT_HTTP_PORT:-7880\}:7880/);
   assert.match(gateService, /livekit-auth-gate-service\.js/);
   assert.match(gateService, /\$\{LIVEKIT_HTTP_PORT:-7880\}:3080/);
+  assert.equal(
+    packageJson.scripts['dev:livekit'],
+    'docker compose -f docker-compose.dev.yml up --build livekit-gate'
+  );
 });
 
 test('G05-A03..A06 amended strict proof is green and fail-on-blocked exits zero', async () => {
