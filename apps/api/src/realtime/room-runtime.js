@@ -50,12 +50,381 @@ function createRoomRealtimeRuntime(deps) {
     queueRoomOccupancyTransition = async (roomId) => getRoomStore().markRoomActive(roomId),
     findRoomBan = async () => null,
     credentialBoundary = null,
-    removeLiveKitParticipant = async () => {}
+    removeLiveKitParticipant = async () => {},
+    now = Date.now,
+    setTimeout: scheduleTimeout = globalThis.setTimeout,
+    clearTimeout: cancelTimeout = globalThis.clearTimeout,
+    reconnectLeaseMs = 30000
   } = deps;
 
   const recipientCache = new Map();
   const voiceJoinStates = new Map();
+  const reconnectLeases = new Map();
+  const leaseDurationMs = Number.isInteger(reconnectLeaseMs)
+    && reconnectLeaseMs >= 1000
+    && reconnectLeaseMs <= 120000
+    ? reconnectLeaseMs
+    : 30000;
   let voiceJoinRequestSequence = 0;
+  let reconnectLeaseGeneration = 0;
+
+  function reconnectLeaseKey(roomId, peerId, sessionToken) {
+    return `${roomId}\u0000${peerId}\u0000${sessionToken}`;
+  }
+
+  function currentLeasePeer(record) {
+    const peer = presenceRooms.get(record.roomId)?.peers?.get(record.peerId);
+    if (
+      !peer
+      || !tokensMatch(peer.sessionToken, record.sessionToken)
+      || peer.transport?.id !== record.transportId
+    ) {
+      return null;
+    }
+    return peer;
+  }
+
+  async function defaultFinalizeLeasePeer({ record, peer, reason }) {
+    if (credentialBoundary?.revokePeer) {
+      await credentialBoundary.revokePeer({
+        roomId: record.roomId,
+        accountUserId: peer.accountUserId || null,
+        guestPrincipalId: peer.gateGuestPrincipalId || ''
+      });
+    } else if (typeof getRoomStore().revokeLiveKitGatePeer === 'function') {
+      await getRoomStore().revokeLiveKitGatePeer({
+        roomId: record.roomId,
+        peerId: record.peerId,
+        accountUserId: peer.accountUserId || null,
+        guestPrincipalId: peer.gateGuestPrincipalId || '',
+        now: now()
+      });
+    }
+
+    closePeer(record.roomId, record.peerId, record.transportId, reason);
+    try {
+      await removeLiveKitParticipant(record.roomId, record.peerId);
+    } catch (error) {
+      error.ownershipFinalized = true;
+      throw error;
+    }
+    scheduleSummaryBroadcast(record.roomId);
+    return { finalized: true };
+  }
+
+  function scheduleLeaseExpiry(record) {
+    const delay = Math.max(0, record.deadline - now());
+    record.timer = scheduleTimeout(() => {
+      if (reconnectLeases.get(record.key) !== record || record.state !== 'pending') return;
+      // This CAS must happen before the asynchronous credential/transport cleanup.
+      record.state = 'finalizing-expiry';
+      record.timer = null;
+      startLeaseFinalizer(record, 'lost');
+    }, delay);
+    record.timer?.unref?.();
+  }
+
+  async function runLeaseFinalizer(record, reason, finalizePeer) {
+    if (finalizePeer && !record.finalizeCallbacks.includes(finalizePeer)) {
+      record.finalizeCallbacks.push(finalizePeer);
+    }
+    if (record.finalizerPromise) return record.finalizerPromise;
+
+    record.finalizerPromise = (async () => {
+      let ownershipFinalized = false;
+      let failure = null;
+      const ownedPeer = currentLeasePeer(record);
+      if (ownedPeer) {
+        try {
+          const primaryCallback = record.terminalReason ? record.finalizeCallbacks.shift() : null;
+          if (primaryCallback) {
+            const result = await primaryCallback({
+              roomId: record.roomId,
+              peerId: record.peerId,
+              peer: record.peer,
+              reason: record.terminalReason,
+              ownershipFinalized: false
+            });
+            ownershipFinalized = result?.finalized !== false;
+          } else {
+            await defaultFinalizeLeasePeer({ record, peer: ownedPeer, reason });
+            ownershipFinalized = true;
+          }
+        } catch (error) {
+          failure = error;
+          ownershipFinalized = error?.ownershipFinalized === true;
+        }
+      }
+
+      for (let index = 0; index < record.finalizeCallbacks.length; index += 1) {
+        const callback = record.finalizeCallbacks[index];
+        try {
+          const result = await callback({
+            roomId: record.roomId,
+            peerId: record.peerId,
+            peer: record.peer,
+            reason: record.terminalReason || reason,
+            ownershipFinalized
+          });
+          if (!ownershipFinalized) ownershipFinalized = result?.finalized !== false;
+        } catch (error) {
+          failure ||= error;
+          if (!ownershipFinalized) ownershipFinalized = error?.ownershipFinalized === true;
+        }
+      }
+
+      if (failure?.rollbackTerminal === true && !ownershipFinalized) {
+        record.terminalReason = '';
+        record.terminalAtJoinSequence = 0;
+        record.finalizeCallbacks.length = 0;
+        record.finalizerErrorCode = '';
+        if (record.disconnected && now() < record.deadline && currentLeasePeer(record)) {
+          record.state = 'pending';
+          record.finalizerPromise = null;
+          scheduleLeaseExpiry(record);
+        } else if (reconnectLeases.get(record.key) === record) {
+          reconnectLeases.delete(record.key);
+        }
+      } else if (failure && !ownershipFinalized) {
+        record.state = record.terminalReason ? 'terminal-finalizer-failed' : 'finalizer-failed';
+        record.finalizerErrorCode = failure?.code || 'reconnect_finalize_failed';
+      } else if (record.terminalReason) {
+        record.state = 'terminal';
+        record.timer = scheduleTimeout(() => {
+          if (reconnectLeases.get(record.key) === record && record.state === 'terminal') {
+            reconnectLeases.delete(record.key);
+          }
+        }, leaseDurationMs);
+        record.timer?.unref?.();
+      } else if (reconnectLeases.get(record.key) === record) {
+        reconnectLeases.delete(record.key);
+      }
+      if (failure) throw failure;
+      return { ok: true, finalized: ownershipFinalized };
+    })();
+    return record.finalizerPromise;
+  }
+
+  function startLeaseFinalizer(record, reason) {
+    void runLeaseFinalizer(record, reason, null).catch(() => {
+      // The record remains in a typed failed-finalizer state. Replacement and
+      // terminal paths must explicitly retry/adopt it before admission proceeds.
+    });
+  }
+
+  async function retryFailedLeaseFinalizer(record, reason = 'lost') {
+    if (record.state !== 'finalizer-failed' && record.state !== 'terminal-finalizer-failed') {
+      return record.finalizerPromise;
+    }
+    record.state = record.terminalReason ? 'terminal-finalizing' : 'finalizing-expiry';
+    record.finalizerPromise = null;
+    record.finalizerErrorCode = '';
+    return runLeaseFinalizer(record, record.terminalReason || reason, null);
+  }
+
+  function createReconnectLease(activeVoice) {
+    const room = presenceRooms.get(activeVoice.roomId);
+    const peer = room?.peers?.get(activeVoice.peerId);
+    if (
+      !peer
+      || peer.transport?.id !== activeVoice.transportId
+      || !tokensMatch(peer.sessionToken, activeVoice.sessionToken)
+    ) {
+      return null;
+    }
+
+    const key = reconnectLeaseKey(activeVoice.roomId, activeVoice.peerId, activeVoice.sessionToken);
+    const existing = reconnectLeases.get(key);
+    if (existing && existing.transportId === activeVoice.transportId) {
+      return existing;
+    }
+    if (existing?.timer) cancelTimeout(existing.timer);
+
+    const record = {
+      key,
+      roomId: activeVoice.roomId,
+      peerId: activeVoice.peerId,
+      sessionToken: activeVoice.sessionToken,
+      transportId: activeVoice.transportId,
+      generation: ++reconnectLeaseGeneration,
+      deadline: now() + leaseDurationMs,
+      state: 'pending',
+      timer: null,
+      finalizerPromise: null,
+      finalizeCallbacks: [],
+      terminalReason: '',
+      terminalAtJoinSequence: 0,
+      claimRequestSequence: 0,
+      finalizerErrorCode: '',
+      disconnected: false,
+      peer
+    };
+    reconnectLeases.set(key, record);
+    scheduleLeaseExpiry(record);
+    return record;
+  }
+
+  function claimReconnectLease(roomId, peerId, sessionToken, joinRequestSequence) {
+    const record = reconnectLeases.get(reconnectLeaseKey(roomId, peerId, sessionToken));
+    if (!record) return { state: 'none', record: null };
+    if (record.state === 'pending') {
+      record.state = 'claimed-by-replacement';
+      if (record.timer) cancelTimeout(record.timer);
+      record.timer = null;
+      record.claimRequestSequence = joinRequestSequence;
+      return { state: 'claimed', record };
+    }
+    if (record.state === 'finalizing-expiry' || record.state === 'terminal-finalizing') {
+      return { state: 'finalizing', record };
+    }
+    if (record.state === 'claimed-by-replacement') return { state: 'busy', record };
+    if (record.state === 'finalizer-failed' || record.state === 'terminal-finalizer-failed') {
+      return { state: 'failed-finalizer', record };
+    }
+    if (record.state === 'terminal') {
+      const permitsNewJoinIntent = record.terminalReason === 'left';
+      if (permitsNewJoinIntent && joinRequestSequence > record.terminalAtJoinSequence) {
+        if (record.timer) cancelTimeout(record.timer);
+        reconnectLeases.delete(record.key);
+        return { state: 'none', record: null };
+      }
+      return { state: 'terminal', record };
+    }
+    return { state: record.state, record };
+  }
+
+  function restoreClaimedLease(record) {
+    if (
+      reconnectLeases.get(record.key) !== record
+      || record.state !== 'claimed-by-replacement'
+      || now() >= record.deadline
+      || !currentLeasePeer(record)
+    ) {
+      if (record.state === 'claimed-by-replacement') {
+        record.state = 'finalizing-expiry';
+        startLeaseFinalizer(record, 'lost');
+      }
+      return false;
+    }
+    record.state = 'pending';
+    scheduleLeaseExpiry(record);
+    return true;
+  }
+
+  function completeClaimedLease(record, transportId) {
+    if (reconnectLeases.get(record.key) !== record || record.state !== 'claimed-by-replacement') return false;
+    record.transportId = transportId;
+    reconnectLeases.delete(record.key);
+    return true;
+  }
+
+  function terminalClaimRecord(record, reason, finalizePeer) {
+    const adoptingFailedFinalizer = record.state === 'finalizer-failed'
+      || record.state === 'terminal-finalizer-failed';
+    record.terminalReason ||= reason;
+    if (record.timer) cancelTimeout(record.timer);
+    record.timer = null;
+    record.terminalAtJoinSequence ||= voiceJoinRequestSequence;
+    if (finalizePeer && !record.finalizeCallbacks.includes(finalizePeer)) {
+      record.finalizeCallbacks.push(finalizePeer);
+    }
+    if (adoptingFailedFinalizer) {
+      // The rejected promise belongs to the previous attempt. Clear it before
+      // the terminal caller queues its retry so its callback cannot be skipped.
+      record.finalizerPromise = null;
+      record.finalizerErrorCode = '';
+    }
+    if (record.state !== 'finalizing-expiry') record.state = 'terminal-finalizing';
+    return record;
+  }
+
+  function recordsForPeer(roomId, peerId, { expectedSessionToken = '', expectedTransportId = '' } = {}) {
+    const peer = presenceRooms.get(roomId)?.peers?.get(peerId) || null;
+    if (
+      peer
+      && (
+        (expectedSessionToken && !tokensMatch(peer.sessionToken, expectedSessionToken))
+        || (expectedTransportId && peer.transport?.id !== expectedTransportId)
+      )
+    ) {
+      return [];
+    }
+    let records = [...reconnectLeases.values()].filter((record) =>
+      record.roomId === roomId
+      && record.peerId === peerId
+      && record.state !== 'terminal'
+      && (!peer || (
+        tokensMatch(record.sessionToken, peer.sessionToken)
+        && record.transportId === peer.transport?.id
+      ))
+    );
+    if (peer && records.length === 0) {
+      const record = createReconnectLease({
+        roomId,
+        peerId,
+        sessionToken: peer.sessionToken,
+        transportId: peer.transport?.id
+      });
+      if (record) records.push(record);
+    }
+    return records;
+  }
+
+  async function settleLeaseFinalizers(records, reason) {
+    const settled = await Promise.allSettled(
+      records.map((record) => runLeaseFinalizer(record, reason, null))
+    );
+    const rejected = settled.find((result) => result.status === 'rejected');
+    if (rejected) throw rejected.reason;
+    return settled.map((result) => result.value);
+  }
+
+  async function finalizeReconnectLease({
+    roomId,
+    peerId,
+    reason = 'left',
+    finalizePeer = null,
+    expectedSessionToken = '',
+    expectedTransportId = ''
+  } = {}) {
+    const records = recordsForPeer(roomId, peerId, { expectedSessionToken, expectedTransportId });
+    // Claim every matching generation synchronously before the first await.
+    for (const record of records) terminalClaimRecord(record, reason, finalizePeer);
+    const results = await settleLeaseFinalizers(records, reason);
+    return { ok: true, finalized: results.some((result) => result.finalized) };
+  }
+
+  async function cancelRoomReconnectLeases({ roomId, reason = 'deleted', finalizePeer = null } = {}) {
+    const peerIds = new Set([
+      ...[...reconnectLeases.values()].filter((record) => record.roomId === roomId).map((record) => record.peerId),
+      ...[...(presenceRooms.get(roomId)?.peers?.keys?.() || [])]
+    ]);
+    const records = [...peerIds].flatMap((peerId) => recordsForPeer(roomId, peerId));
+    for (const record of records) terminalClaimRecord(record, reason, finalizePeer);
+    const results = await settleLeaseFinalizers(records, reason);
+    return { ok: true, finalized: results.filter((result) => result.finalized).length };
+  }
+
+  async function cancelAccountReconnectLeases({ roomId, userId, reason = 'membership-left', finalizePeer = null } = {}) {
+    const peerIds = new Set();
+    for (const record of reconnectLeases.values()) {
+      if (record.roomId === roomId && record.peer?.accountUserId === userId) peerIds.add(record.peerId);
+    }
+    for (const peer of presenceRooms.get(roomId)?.peers?.values?.() || []) {
+      if (peer.accountUserId === userId) peerIds.add(peer.id);
+    }
+    const records = [...peerIds].flatMap((peerId) => recordsForPeer(roomId, peerId));
+    for (const record of records) terminalClaimRecord(record, reason, finalizePeer);
+    const results = await settleLeaseFinalizers(records, reason);
+    return { ok: true, finalized: results.filter((result) => result.finalized).length };
+  }
+
+  async function finalizeReconnectPeers({ roomId, peerIds = [], reason, finalizePeer } = {}) {
+    const records = [...new Set(peerIds)].flatMap((peerId) => recordsForPeer(roomId, peerId));
+    for (const record of records) terminalClaimRecord(record, reason, finalizePeer);
+    const results = await settleLeaseFinalizers(records, reason);
+    return { ok: true, finalized: results.filter((result) => result.finalized).length };
+  }
 
   async function resolveSummaryRecipients(roomId) {
     const cached = recipientCache.get(roomId);
@@ -382,32 +751,82 @@ function createRoomRealtimeRuntime(deps) {
       return { ok: false, code: 'invalid_join', message: 'Invalid room, peer, or session token' };
     }
 
+    const currentPeer = presenceRooms.get(roomId)?.peers?.get(peerId);
+    if (currentPeer && !tokensMatch(currentPeer.sessionToken, sessionToken)) {
+      return { ok: false, code: 'invalid_session', message: 'Invalid peer session' };
+    }
+    let leaseClaim = claimReconnectLease(roomId, peerId, sessionToken, joinRequestSequence);
+    if (leaseClaim.state === 'busy') {
+      return { ok: false, code: 'superseded_join', message: 'Another replacement already owns recovery' };
+    }
+    if (leaseClaim.state === 'failed-finalizer') {
+      try {
+        await retryFailedLeaseFinalizer(leaseClaim.record);
+      } catch {
+        return { ok: false, code: 'reconnect_finalize_failed', message: 'Previous transport cleanup is incomplete' };
+      }
+      leaseClaim = claimReconnectLease(roomId, peerId, sessionToken, joinRequestSequence);
+    }
+    if (leaseClaim.state === 'terminal') {
+      return { ok: false, code: 'superseded_join', message: 'Peer session was terminated' };
+    }
+    if (leaseClaim.state === 'finalizing') {
+      try {
+        await leaseClaim.record.finalizerPromise;
+      } catch {
+        return { ok: false, code: 'reconnect_finalize_failed', message: 'Previous transport cleanup is incomplete' };
+      }
+      leaseClaim = claimReconnectLease(roomId, peerId, sessionToken, joinRequestSequence);
+      if (leaseClaim.state === 'terminal') {
+        return { ok: false, code: 'superseded_join', message: 'Peer session was terminated' };
+      }
+      if (leaseClaim.state !== 'none') {
+        return { ok: false, code: 'reconnect_finalize_failed', message: 'Previous transport cleanup is incomplete' };
+      }
+    }
+
     const joinKey = `${roomId}:${peerId}`;
     const joinState = beginVoiceJoin(joinKey);
     const connectionJoinIntent = beginConnectionVoiceJoin(connection, roomId, peerId);
+    let claimCompleted = false;
+    let terminalClaimFailure = false;
+    const claimedSessionWasTerminated = () => leaseClaim.state === 'claimed'
+      && (
+        reconnectLeases.get(leaseClaim.record.key) !== leaseClaim.record
+        || leaseClaim.record.state !== 'claimed-by-replacement'
+      );
     try {
       // Register the request before the first await. Otherwise an older join
       // delayed in room/ban lookup could start a fresh generation after a newer
       // request has already completed and incorrectly replace it.
       const room = await getRoom(roomId);
+      if (claimedSessionWasTerminated()) {
+        return { ok: false, code: 'superseded_join', message: 'Peer session was terminated' };
+      }
       if (!isCurrentConnectionVoiceJoin(connection, connectionJoinIntent)) {
         return supersededVoiceJoin(connection, roomId);
       }
       if (!room) {
+        terminalClaimFailure = true;
         wsRegistry.sendToConnection(connection, buildServerEnvelope('room.not_found', { roomId }));
         return { ok: false, code: 'room_not_found' };
       }
 
       const roomBan = await findRoomBan(roomId, sessionUser?.id, clientIp);
+      if (claimedSessionWasTerminated()) {
+        return { ok: false, code: 'superseded_join', message: 'Peer session was terminated' };
+      }
       if (!isCurrentConnectionVoiceJoin(connection, connectionJoinIntent)) {
         return supersededVoiceJoin(connection, roomId);
       }
       if (roomBan) {
+        terminalClaimFailure = true;
         return { ok: false, code: 'room_banned', message: 'Вы заблокированы в этой комнате' };
       }
 
       const initialPeer = room.peers.get(peerId);
       if (initialPeer && !tokensMatch(initialPeer.sessionToken, sessionToken)) {
+        terminalClaimFailure = true;
         return { ok: false, code: 'invalid_session', message: 'Invalid peer session' };
       }
 
@@ -418,10 +837,14 @@ function createRoomRealtimeRuntime(deps) {
         displayName: name,
         avatarColorKey: sessionAvatarColorKey(sessionUser)
       });
+      if (claimedSessionWasTerminated()) {
+        return { ok: false, code: 'superseded_join', message: 'Peer session was terminated' };
+      }
       if (!isCurrentConnectionVoiceJoin(connection, connectionJoinIntent)) {
         return supersededVoiceJoin(connection, roomId);
       }
       if (identityResult.status === 'token_mismatch') {
+        terminalClaimFailure = true;
         return { ok: false, code: 'invalid_session', message: 'Invalid peer session' };
       }
       const avatarColorKey = identityResult.identity?.avatarColorKey || avatarColorForPeerId(peerId);
@@ -442,6 +865,7 @@ function createRoomRealtimeRuntime(deps) {
       if (
         !isCurrentConnectionVoiceJoin(connection, connectionJoinIntent)
         || joinState.latestAuthorized !== joinRequestSequence
+        || claimedSessionWasTerminated()
       ) {
         return supersededVoiceJoin(connection, roomId);
       }
@@ -505,6 +929,9 @@ function createRoomRealtimeRuntime(deps) {
         )
       );
       room.peers.set(peerId, peer);
+      if (leaseClaim.state === 'claimed') {
+        claimCompleted = completeClaimedLease(leaseClaim.record, transport.id);
+      }
       room.updatedAt = peer.joinedAt;
       // In-memory call clock on the presence record (room here is the DB room
       // with attached peers): starts with the first live peer, cleared when the
@@ -549,6 +976,15 @@ function createRoomRealtimeRuntime(deps) {
 
       return { ok: true, reconnecting };
     } finally {
+      if (leaseClaim.state === 'claimed' && !claimCompleted) {
+        if (terminalClaimFailure) {
+          leaseClaim.record.terminalReason ||= 'join-rejected';
+          leaseClaim.record.state = 'terminal-finalizing';
+          startLeaseFinalizer(leaseClaim.record, leaseClaim.record.terminalReason);
+        } else {
+          restoreClaimedLease(leaseClaim.record);
+        }
+      }
       finishConnectionVoiceJoin(connection, connectionJoinIntent);
       finishVoiceJoin(joinKey, joinState);
     }
@@ -561,30 +997,24 @@ function createRoomRealtimeRuntime(deps) {
   ) {
     if (cancelPendingJoin) cancelConnectionVoiceJoin(connection, payload);
     if (!payload?.roomId || !payload.peerId) return;
-    const room = presenceRooms.get(payload.roomId);
-    const peer = room?.peers?.get(payload.peerId);
-    if (peer && credentialBoundary?.revokePeer) {
-      await credentialBoundary.revokePeer({
-        roomId: payload.roomId,
-        accountUserId: peer.accountUserId || null,
-        guestPrincipalId: peer.gateGuestPrincipalId || ''
-      });
-    } else if (peer && typeof getRoomStore().revokeLiveKitGatePeer === 'function') {
-      await getRoomStore().revokeLiveKitGatePeer({
+    const activeVoice = connection.activeVoice;
+    const sessionToken = normalizeSessionToken(payload.sessionToken || activeVoice?.sessionToken);
+    const ownsRequestedPeer = activeVoice?.roomId === payload.roomId
+      && activeVoice?.peerId === payload.peerId
+      && tokensMatch(activeVoice.sessionToken, sessionToken);
+    const peer = presenceRooms.get(payload.roomId)?.peers?.get(payload.peerId);
+    const ownsCurrentGeneration = ownsRequestedPeer
+      && peer
+      && tokensMatch(peer.sessionToken, sessionToken)
+      && peer.transport?.id === activeVoice.transportId;
+    if (ownsCurrentGeneration) {
+      await finalizeReconnectLease({
         roomId: payload.roomId,
         peerId: payload.peerId,
-        accountUserId: peer.accountUserId || null,
-        guestPrincipalId: peer.gateGuestPrincipalId || '',
-        now: Date.now()
+        reason: 'left',
+        expectedSessionToken: sessionToken,
+        expectedTransportId: activeVoice.transportId
       });
-    }
-    // Close using the transport this connection owns, not whatever peer happens
-    // to hold the id now. After a same-peer reconnect the superseded connection
-    // must not evict the peer that replaced it — closePeer's guard rejects the
-    // stale transport id, so no spurious peer-left is broadcast.
-    const transportId = connection.activeVoice?.transportId;
-    if (transportId) {
-      closePeer(payload.roomId, payload.peerId, transportId, 'left');
     }
     if (connection.activeVoice?.roomId === payload.roomId && connection.activeVoice?.peerId === payload.peerId) {
       connection.activeVoice = null;
@@ -599,11 +1029,39 @@ function createRoomRealtimeRuntime(deps) {
     }
     const principal = credentialBoundary.resolvePrincipal({ roomId, accountUserId: userId });
     if (!principal) return { ok: false, code: 'principal_unavailable', disconnected: 0 };
-    const revoked = await credentialBoundary.revokePrincipal({ roomId, principal });
-    if (revoked?.status !== 'revoked') return { ok: false, code: revoked?.status || 'revoke_failed', disconnected: 0 };
-
     const room = presenceRooms.get(roomId);
     const peers = [...(room?.peers?.values?.() || [])].filter((peer) => peer.accountUserId === userId);
+    let principalRevocationPromise = null;
+    const revokePrincipalOnce = () => {
+      principalRevocationPromise ||= credentialBoundary.revokePrincipal({ roomId, principal });
+      return principalRevocationPromise;
+    };
+    try {
+      await cancelAccountReconnectLeases({
+        roomId,
+        userId,
+        reason,
+        finalizePeer: async ({ peer, ownershipFinalized }) => {
+          if (!peer) return;
+          const revoked = await revokePrincipalOnce();
+          if (revoked?.status !== 'revoked') {
+            const error = new Error(revoked?.status || 'revoke_failed');
+            error.code = revoked?.status || 'revoke_failed';
+            throw error;
+          }
+          if (!ownershipFinalized) closePeer(roomId, peer.id, peer.transport?.id, reason);
+          if (!ownershipFinalized) await removeLiveKitParticipant(roomId, peer.id);
+        }
+      });
+    } catch (error) {
+      return { ok: false, code: error?.code || 'finalize_failed', disconnected: 0 };
+    }
+
+    if (peers.length === 0) {
+      const revoked = await revokePrincipalOnce();
+      if (revoked?.status !== 'revoked') return { ok: false, code: revoked?.status || 'revoke_failed', disconnected: 0 };
+    }
+
     for (const peer of peers) {
       const event = { type: 'room.left', roomId, peerId: peer.id, reason };
       peer.transport?.send?.(event);
@@ -614,8 +1072,6 @@ function createRoomRealtimeRuntime(deps) {
         connection.previewRoomIds.delete(roomId);
         wsRegistry.unregisterConnectionForRoom(connection, roomId);
       }
-      closePeer(roomId, peer.id, peer.transport?.id, reason);
-      await removeLiveKitParticipant(roomId, peer.id);
     }
     scheduleSummaryBroadcast(roomId);
     return { ok: true, disconnected: peers.length };
@@ -697,7 +1153,22 @@ function createRoomRealtimeRuntime(deps) {
   function cleanupConnection(connection) {
     cancelConnectionVoiceJoin(connection);
     if (connection.activeVoice) {
-      void leaveVoiceRoom(connection, connection.activeVoice, { cancelPendingJoin: false });
+      const activeVoice = connection.activeVoice;
+      const lease = createReconnectLease(activeVoice);
+      if (lease) {
+        lease.disconnected = true;
+        const peer = currentLeasePeer(lease);
+        if (peer) {
+          const capturedTransport = peer.transport;
+          peer.transport = {
+            id: capturedTransport.id,
+            send: () => true,
+            close: () => capturedTransport.close?.()
+          };
+          lease.peer = peer;
+        }
+      }
+      connection.activeVoice = null;
     }
     wsRegistry.unregisterConnectionFromAllRooms(connection);
     connection.previewRoomIds.clear();
@@ -707,8 +1178,12 @@ function createRoomRealtimeRuntime(deps) {
     broadcastChatMessage,
     broadcastRoomDetail,
     buildRoomSnapshot,
+    cancelAccountReconnectLeases,
+    cancelRoomReconnectLeases,
     cleanupConnection,
     disconnectAccountFromRoom,
+    finalizeReconnectLease,
+    finalizeReconnectPeers,
     flushSummary,
     invalidateRecipientCache,
     joinVoiceRoom,

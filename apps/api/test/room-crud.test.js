@@ -10,11 +10,21 @@ const os = require('node:os');
 const path = require('node:path');
 
 const { createApiApp, createApiServer } = require('../src/server');
+const { resolveRealtimeReconnectLeaseMs } = require('../src/server').__private;
 const { openWs, sendWs, joinVoiceRoom, subscribeRoomPreview, waitForWsType } = require('./ws-harness');
 
 const OWNER_ID = 'user-owner';
 const OWNER_TOKEN = 'session-owner';
 const OTHER_TOKEN = 'session-other';
+
+test('realtime reconnect lease timeout accepts only the documented bounded range', () => {
+  assert.equal(resolveRealtimeReconnectLeaseMs({}), 30000);
+  assert.equal(resolveRealtimeReconnectLeaseMs({ REALTIME_RECONNECT_LEASE_MS: '1000' }), 1000);
+  assert.equal(resolveRealtimeReconnectLeaseMs({ REALTIME_RECONNECT_LEASE_MS: '120000' }), 120000);
+  for (const value of ['0', '-1', '999', '120001', 'NaN', '1000.5', '']) {
+    assert.equal(resolveRealtimeReconnectLeaseMs({ REALTIME_RECONNECT_LEASE_MS: value }), 30000);
+  }
+});
 
 // In-memory room store covering only the surface the CRUD handlers touch. It
 // mirrors the real store's contract: getRoom filters soft-deleted rows, and

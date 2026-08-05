@@ -110,6 +110,7 @@ const SOCKET_PATH = (process.env.SOCKET_PATH || '').trim();
 const MAX_ROOM_PEERS = readEnvInt('MAX_ROOM_PEERS', 12, 1);
 const MAX_ROOMS = readEnvInt('MAX_ROOMS', 100, 1);
 const KEEPALIVE_MS = readEnvInt('SSE_KEEPALIVE_MS', 15000, 1000);
+const DEFAULT_REALTIME_RECONNECT_LEASE_MS = 30000;
 const BODY_LIMIT_BYTES = readEnvInt('BODY_LIMIT_BYTES', 65536, 1024);
 const TRUST_PROXY = readEnvBool('TRUST_PROXY', false);
 const LIVEKIT_TOKEN_TTL_SECONDS = readEnvInt('LIVEKIT_TOKEN_TTL_SECONDS', 21600, 60);
@@ -194,6 +195,13 @@ const MESSAGE_DELIVERY_LISTEN_ENABLED = readEnvBool('MESSAGE_DELIVERY_LISTEN_ENA
 const DESKTOP_RELEASE_REPO = (process.env.DESKTOP_RELEASE_REPO || 'dazeGG/VoiceRoomDesktop').trim();
 const DESKTOP_RELEASE_CACHE_MS = readEnvInt('DESKTOP_RELEASE_CACHE_MS', 600000, 1000);
 const DESKTOP_RELEASE_TIMEOUT_MS = readEnvInt('DESKTOP_RELEASE_TIMEOUT_MS', 6000, 1000);
+
+function resolveRealtimeReconnectLeaseMs(env = process.env) {
+  const value = Number(env.REALTIME_RECONNECT_LEASE_MS);
+  return Number.isInteger(value) && value >= 1000 && value <= 120000
+    ? value
+    : DEFAULT_REALTIME_RECONNECT_LEASE_MS;
+}
 
 let roomStore = null;
 let userStore = null;
@@ -1648,7 +1656,6 @@ async function handleDeleteRoom(req, res, roomId, request) {
     sendJson(res, 404, { ok: false, error: 'Комната не найдена' });
     return;
   }
-  await removeAvatarBestEffort(deleted.avatarKey, request);
 
   // Broadcast after durable soft-delete, before presence teardown so the WS
   // writes are not racing socket close.
@@ -1657,13 +1664,43 @@ async function handleDeleteRoom(req, res, roomId, request) {
   roomRuntime?.mirrorLegacyRoomEvent(roomId, { type: 'room-deleted', roomId });
   roomRuntime?.invalidateRecipientCache(roomId);
 
-  // Belt-and-suspenders: force-close active peers after the signal. Clients
-  // also self-exit on room-deleted, so this only matters for missed events.
-  if (presence) {
-    for (const peer of Array.from(presence.peers.values())) {
-      closePeer(roomId, peer.id, peer.transport?.id, 'deleted');
-    }
+  // Terminal-claim every active/leased peer before credential or transport
+  // teardown so a delayed replacement join cannot resurrect the deleted room.
+  try {
+    await roomRuntime?.cancelRoomReconnectLeases({
+      roomId,
+      reason: 'deleted',
+      finalizePeer: async ({ peer, ownershipFinalized }) => {
+        if (!peer || ownershipFinalized) return { finalized: ownershipFinalized };
+        let failure = null;
+        try {
+          await getCredentialBoundary().revokePeer({
+            roomId,
+            accountUserId: peer.accountUserId || null,
+            guestPrincipalId: peer.gateGuestPrincipalId || ''
+          });
+        } catch (error) {
+          failure = error;
+        }
+        closePeer(roomId, peer.id, peer.transport?.id, 'deleted');
+        try {
+          await removeLiveKitParticipant(roomId, peer.id);
+        } catch (error) {
+          failure ||= error;
+        }
+        if (failure) {
+          failure.ownershipFinalized = true;
+          throw failure;
+        }
+        return { finalized: true };
+      }
+    });
+  } catch {
+    // The room deletion is already durable and peer ownership is terminal.
+    // Cleanup callbacks continue close/remove even when credential revoke fails.
+    request?.log?.warn?.({ code: 'room_delete_peer_cleanup_failed' }, 'Room peer cleanup finished with errors');
   }
+  await removeAvatarBestEffort(deleted.avatarKey, request);
 
   sendJson(res, 200, { ok: true });
 }
@@ -2513,14 +2550,19 @@ function isLiveKitGatePrincipal(principal) {
     && principal.principalId.trim().length > 0;
 }
 
-async function disconnectModeratedPeer(room, peer, type, { gateAlreadyRevoked = false } = {}) {
-  if (!gateAlreadyRevoked && typeof getRoomStore().revokeLiveKitGatePeer === 'function') {
-    await getRoomStore().revokeLiveKitGatePeer({
-      roomId: room.id,
-      peerId: peer.id,
-      accountUserId: peer.accountUserId || null,
-      guestPrincipalId: peer.gateGuestPrincipalId || ''
-    });
+async function runModeratedPeerCleanup(room, peer, type, { gateAlreadyRevoked, ownershipFinalized }) {
+  let failure = null;
+  if (!ownershipFinalized && !gateAlreadyRevoked && typeof getRoomStore().revokeLiveKitGatePeer === 'function') {
+    try {
+      await getRoomStore().revokeLiveKitGatePeer({
+        roomId: room.id,
+        peerId: peer.id,
+        accountUserId: peer.accountUserId || null,
+        guestPrincipalId: peer.gateGuestPrincipalId || ''
+      });
+    } catch (error) {
+      failure = error;
+    }
   }
   const event = { type, roomId: room.id, peerId: peer.id };
   sendEvent(peer, event);
@@ -2531,11 +2573,60 @@ async function disconnectModeratedPeer(room, peer, type, { gateAlreadyRevoked = 
     connection.previewRoomIds.delete(room.id);
     wsRegistry.unregisterConnectionForRoom(connection, room.id);
   }
-  closePeer(room.id, peer.id, peer.transport?.id, type === 'room.banned' ? 'banned' : 'kicked');
-  if (typeof getRoomStore().invalidatePeerIdentity === 'function') {
-    await getRoomStore().invalidatePeerIdentity({ roomId: room.id, peerId: peer.id });
+  if (!ownershipFinalized) {
+    closePeer(room.id, peer.id, peer.transport?.id, type === 'room.banned' ? 'banned' : 'kicked');
   }
-  await removeLiveKitParticipant(room.id, peer.id);
+  if (typeof getRoomStore().invalidatePeerIdentity === 'function') {
+    try {
+      await getRoomStore().invalidatePeerIdentity({ roomId: room.id, peerId: peer.id });
+    } catch (error) {
+      failure ||= error;
+    }
+  }
+  if (!ownershipFinalized) {
+    try {
+      await removeLiveKitParticipant(room.id, peer.id);
+    } catch (error) {
+      failure ||= error;
+    }
+  }
+  if (failure) {
+    failure.ownershipFinalized = true;
+    throw failure;
+  }
+  return { finalized: true };
+}
+
+async function finalizeModeratedPeers(
+  room,
+  peers,
+  type,
+  { gateAlreadyRevoked = false, beforeFinalize = null } = {}
+) {
+  let prerequisitePromise = null;
+  let prerequisiteResult = null;
+  const peerById = new Map(peers.map((peer) => [peer.id, peer]));
+  const ensurePrerequisite = async () => {
+    if (!beforeFinalize) return null;
+    prerequisitePromise ||= Promise.resolve().then(beforeFinalize);
+    prerequisiteResult = await prerequisitePromise;
+    return prerequisiteResult;
+  };
+  await roomRuntime.finalizeReconnectPeers({
+    roomId: room.id,
+    peerIds: peers.map((peer) => peer.id),
+    reason: type,
+    finalizePeer: async ({ peerId, peer: ownedPeer, ownershipFinalized }) => {
+      await ensurePrerequisite();
+      const target = ownedPeer || peerById.get(peerId);
+      return runModeratedPeerCleanup(room, target, type, { gateAlreadyRevoked, ownershipFinalized });
+    }
+  });
+  return prerequisiteResult;
+}
+
+async function disconnectModeratedPeer(room, peer, type, { gateAlreadyRevoked = false } = {}) {
+  await finalizeModeratedPeers(room, [peer], type, { gateAlreadyRevoked });
 }
 
 async function handleKickRoomPeer(req, res, roomId) {
@@ -2583,22 +2674,48 @@ async function handleBanRoomPeer(req, res, roomId) {
   const livekit = getLiveKitConfig();
   const strictGateConfigured = livekit.enabled && livekit.gateSecret?.length >= 32;
   if (!strictGateConfigured) {
-    const result = await getRoomStore().createRoomBan({
-      roomId,
-      userId: bannedUserId,
-      ip: bannedIp,
-      maxBans: MAX_ROOM_BANS
-    });
-    if (result.status === 'cap_exceeded') {
-      sendJson(res, 409, { ok: false, code: 'room_ban_limit', error: 'Достигнут лимит блокировок комнаты' });
-      return;
-    }
-    if (!result.ban) {
-      sendJson(res, 409, { ok: false, error: 'Не удалось сохранить блокировку' });
-      return;
-    }
-    for (const candidate of matchingPeers) {
-      await disconnectModeratedPeer(room, candidate, 'room.banned');
+    let result = null;
+    try {
+      await finalizeModeratedPeers(room, matchingPeers, 'room.banned', {
+        beforeFinalize: async () => {
+          try {
+            result = await getRoomStore().createRoomBan({
+              roomId,
+              userId: bannedUserId,
+              ip: bannedIp,
+              maxBans: MAX_ROOM_BANS
+            });
+          } catch (error) {
+            error.rollbackTerminal = true;
+            throw error;
+          }
+          if (result.status === 'cap_exceeded') {
+            const error = new Error('room_ban_limit');
+            error.code = 'room_ban_limit';
+            error.rollbackTerminal = true;
+            throw error;
+          }
+          if (!result.ban) {
+            const error = new Error('room_ban_failed');
+            error.code = 'room_ban_failed';
+            error.rollbackTerminal = true;
+            throw error;
+          }
+          return result;
+        }
+      });
+    } catch (error) {
+      if (error?.code === 'room_ban_limit') {
+        sendJson(res, 409, { ok: false, code: 'room_ban_limit', error: 'Достигнут лимит блокировок комнаты' });
+        return;
+      }
+      if (!result?.ban) {
+        sendJson(res, 409, { ok: false, error: 'Не удалось сохранить блокировку' });
+        return;
+      }
+      // The ban is durable and peer teardown is best-effort but terminal. The
+      // cleanup routine continues close/invalidate/remove even if revoke fails.
+      req?.log?.warn?.({ code: 'room_ban_peer_cleanup_failed' }, 'Banned peer cleanup finished with errors');
     }
     sendJson(res, 201, { ok: true, banId: result.ban.id });
     return;
@@ -2616,23 +2733,48 @@ async function handleBanRoomPeer(req, res, roomId) {
     sendJson(res, 500, { ok: false, code: 'livekit_gate_revoke_unavailable', error: 'Не удалось отозвать доступ участника' });
     return;
   }
-  const result = await getRoomStore().createRoomBanWithLiveKitGateRevocations({
-    roomId,
-    userId: bannedUserId,
-    ip: bannedIp,
-    maxBans: MAX_ROOM_BANS,
-    principals
-  });
-  if (result.status === 'cap_exceeded') {
-    sendJson(res, 409, { ok: false, code: 'room_ban_limit', error: 'Достигнут лимит блокировок комнаты' });
-    return;
-  }
-  if (!result.ban || !Array.isArray(result.revocations) || result.revocations.length === 0) {
-    sendJson(res, 409, { ok: false, error: 'Не удалось сохранить блокировку' });
-    return;
-  }
-  for (const candidate of matchingPeers) {
-    await disconnectModeratedPeer(room, candidate, 'room.banned', { gateAlreadyRevoked: true });
+  let result = null;
+  try {
+    await finalizeModeratedPeers(room, matchingPeers, 'room.banned', {
+      gateAlreadyRevoked: true,
+      beforeFinalize: async () => {
+        try {
+          result = await getRoomStore().createRoomBanWithLiveKitGateRevocations({
+            roomId,
+            userId: bannedUserId,
+            ip: bannedIp,
+            maxBans: MAX_ROOM_BANS,
+            principals
+          });
+        } catch (error) {
+          error.rollbackTerminal = true;
+          throw error;
+        }
+        if (result.status === 'cap_exceeded') {
+          const error = new Error('room_ban_limit');
+          error.code = 'room_ban_limit';
+          error.rollbackTerminal = true;
+          throw error;
+        }
+        if (!result.ban || !Array.isArray(result.revocations) || result.revocations.length === 0) {
+          const error = new Error('room_ban_failed');
+          error.code = 'room_ban_failed';
+          error.rollbackTerminal = true;
+          throw error;
+        }
+        return result;
+      }
+    });
+  } catch (error) {
+    if (error?.code === 'room_ban_limit') {
+      sendJson(res, 409, { ok: false, code: 'room_ban_limit', error: 'Достигнут лимит блокировок комнаты' });
+      return;
+    }
+    if (!result?.ban) {
+      sendJson(res, 409, { ok: false, error: 'Не удалось сохранить блокировку' });
+      return;
+    }
+    req?.log?.warn?.({ code: 'room_ban_peer_cleanup_failed' }, 'Banned peer cleanup finished with errors');
   }
   sendJson(res, 201, { ok: true, banId: result.ban.id });
 }
@@ -3799,7 +3941,11 @@ function createApiApp({
   avatars = null,
   liveKitCredentials = null,
   membershipServicesOverride = null,
-  readinessProviderOverride = null
+  readinessProviderOverride = null,
+  realtimeReconnectLeaseMs = resolveRealtimeReconnectLeaseMs(process.env),
+  realtimeNow = Date.now,
+  realtimeSetTimeout = globalThis.setTimeout,
+  realtimeClearTimeout = globalThis.clearTimeout
 } = {}) {
   if (store && store !== roomStore) presenceRooms.clear();
   if (store) roomStore = store;
@@ -3869,7 +4015,11 @@ function createApiApp({
     queueRoomOccupancyTransition,
     findRoomBan,
     credentialBoundary: getCredentialBoundary(),
-    removeLiveKitParticipant
+    removeLiveKitParticipant,
+    reconnectLeaseMs: realtimeReconnectLeaseMs,
+    now: realtimeNow,
+    setTimeout: realtimeSetTimeout,
+    clearTimeout: realtimeClearTimeout
   });
 
   const wsHandler = createWsHandler({
@@ -4267,7 +4417,8 @@ async function bootstrap({ env = process.env, logger = console, exit = process.e
       notifications: notificationStore,
       pushes: pushStore,
       push: pushService,
-      avatars: avatarStorage
+      avatars: avatarStorage,
+      realtimeReconnectLeaseMs: resolveRealtimeReconnectLeaseMs(env)
     });
     await server.app.ready();
     startPruneTimer(server, logger);
@@ -4297,7 +4448,8 @@ if (require.main === module) {
 
 module.exports = {
   __private: {
-    resolveCursorHmacKeys
+    resolveCursorHmacKeys,
+    resolveRealtimeReconnectLeaseMs
   },
   bootstrap,
   closeStores,
