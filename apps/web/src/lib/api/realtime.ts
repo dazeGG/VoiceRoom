@@ -6,6 +6,7 @@ import type { ChatMessage, RoomPeer, RoomSummary } from './rooms';
 import type { NotificationRealtimeEvent } from '../shared/notifications';
 import type { ReactionSummary } from '@voice-room/shared/reactions';
 import { isDesktopBoundaryBlocked } from '$lib/platform/desktop-boundary';
+import { RealtimeHeartbeatWatchdog } from './realtime-heartbeat.js';
 
 export type RealtimeAccountEvent =
   | { type: 'ready'; payload: { userId?: string; guest?: boolean; onlineFriendIds?: string[] } }
@@ -87,6 +88,7 @@ export interface RealtimeHandle {
 const RECONNECT_BASE_MS = 500;
 const RECONNECT_MAX_MS = 8000;
 const HEARTBEAT_MS = 15000;
+const HEARTBEAT_TIMEOUT_MS = 30000;
 
 let shared: AppRealtimeConnection | null = null;
 
@@ -123,6 +125,7 @@ class AppRealtimeConnection {
   private restoreHandlers = new Set<() => void>();
   private stateHandlers = new Set<(connected: boolean) => void>();
   private everConnected = false;
+  private heartbeatWatchdog = new RealtimeHeartbeatWatchdog({ timeoutMs: HEARTBEAT_TIMEOUT_MS });
 
   subscribe(handler: (event: RealtimeEvent) => void): () => void {
     if (isDesktopBoundaryBlocked()) return () => {};
@@ -156,6 +159,7 @@ class AppRealtimeConnection {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
     }
+    this.heartbeatWatchdog.reset();
   }
 
   private emit(event: RealtimeEvent): void {
@@ -182,14 +186,26 @@ class AppRealtimeConnection {
   }
 
   private startHeartbeat(): void {
+    this.heartbeatWatchdog.reset();
     this.heartbeatTimer = setInterval(() => {
+      if (this.heartbeatWatchdog.isTimedOut()) {
+        if (this.heartbeatTimer) {
+          clearInterval(this.heartbeatTimer);
+          this.heartbeatTimer = null;
+        }
+        this.socket?.close(4000, 'heartbeat_timeout');
+        return;
+      }
+      this.heartbeatWatchdog.recordPing();
       this.send('ping', { at: Date.now() });
     }, HEARTBEAT_MS);
   }
 
   private openSocket(): void {
-    this.socket = new WebSocket(wsUrl());
-    this.socket.onopen = () => {
+    const socket = new WebSocket(wsUrl());
+    this.socket = socket;
+    socket.onopen = () => {
+      if (this.socket !== socket) return;
       this.reconnectAttempt = 0;
       this.send('hello', {});
       // Restore handlers replay subscriptions lost with the previous socket.
@@ -203,7 +219,8 @@ class AppRealtimeConnection {
       this.startHeartbeat();
       this.emitState(true);
     };
-    this.socket.onmessage = (event) => {
+    socket.onmessage = (event) => {
+      if (this.socket !== socket) return;
       let envelope: ServerEnvelope | null = null;
       try {
         envelope = JSON.parse(String(event.data)) as ServerEnvelope;
@@ -211,16 +228,18 @@ class AppRealtimeConnection {
         return;
       }
       const parsed = parseRealtimeEvent(envelope);
+      if (parsed?.type === 'pong') this.heartbeatWatchdog.recordPong();
       if (parsed) this.emit(parsed);
     };
-    this.socket.onclose = () => {
+    socket.onclose = () => {
+      if (this.socket !== socket) return;
       this.clearTimers();
       this.socket = null;
       this.emitState(false);
       this.scheduleReconnect();
     };
-    this.socket.onerror = () => {
-      this.socket?.close();
+    socket.onerror = () => {
+      socket.close();
     };
   }
 
