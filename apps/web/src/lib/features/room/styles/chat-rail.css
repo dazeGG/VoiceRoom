@@ -83,7 +83,7 @@
   height: 6px;
   border: 1px solid var(--warm-800);
   border-radius: 50%;
-  background: var(--volt);
+  background: var(--accent);
 }
 
 .room-panel-tabs button:hover {
