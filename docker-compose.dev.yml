@@ -48,6 +48,9 @@ services:
       PORT: 3000
       DATABASE_URL: ${DATABASE_URL:-postgres://${POSTGRES_USER:-voice_room}:${POSTGRES_PASSWORD:-voice_room_dev}@postgres:5432/${POSTGRES_DB:-voice_room_dev}}
       LIVEKIT_URL: ${LIVEKIT_PUBLIC_URL:-ws://localhost:7880}
+      LIVEKIT_INTERNAL_URL: ws://livekit:7880
+      LIVEKIT_GATE_PUBLIC_URL: ${LIVEKIT_PUBLIC_URL:-ws://localhost:7880}
+      LIVEKIT_GATE_SECRET: ${LIVEKIT_GATE_SECRET:-voice-room-dev-livekit-gate-secret-32-bytes}
       LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:-devkey}
       LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:-devsecret}
       VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
@@ -111,9 +114,34 @@ services:
       # devkey/secret and the API's devsecret tokens would be rejected.
       LIVEKIT_KEYS: "${LIVEKIT_API_KEY:-devkey}: ${LIVEKIT_API_SECRET:-devsecret}"
     ports:
-      - "${LIVEKIT_HTTP_PORT:-7880}:7880"
       - "${LIVEKIT_TCP_PORT:-7881}:7881"
       - "${LIVEKIT_UDP_PORT:-7882}:7882/udp"
+
+  livekit-gate:
+    build:
+      context: .
+      target: deps
+    command: ["node", "apps/api/src/domains/admission/livekit-auth-gate-service.js"]
+    working_dir: /app
+    depends_on:
+      deps:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      livekit:
+        condition: service_started
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: ${DATABASE_URL:-postgres://${POSTGRES_USER:-voice_room}:${POSTGRES_PASSWORD:-voice_room_dev}@postgres:5432/${POSTGRES_DB:-voice_room_dev}}
+      LIVEKIT_GATE_SECRET: ${LIVEKIT_GATE_SECRET:-voice-room-dev-livekit-gate-secret-32-bytes}
+      LIVEKIT_INTERNAL_URL: ws://livekit:7880
+    ports:
+      - "${LIVEKIT_HTTP_PORT:-7880}:3080"
+    volumes:
+      - .:/app
+      - node_modules:/app/node_modules
+      - api_node_modules:/app/apps/api/node_modules
+      - shared_node_modules:/app/packages/shared/node_modules
 
 volumes:
   postgres_dev_data:
