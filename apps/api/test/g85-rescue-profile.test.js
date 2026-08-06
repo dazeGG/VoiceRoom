@@ -3,8 +3,11 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const path = require('node:path');
 
-const profile = JSON.parse(fs.readFileSync('config/rescue/expiry-aware-v2.5.0.json', 'utf8'));
+const repositoryRoot = path.resolve(__dirname, '../../..');
+const fromRepositoryRoot = (...parts) => path.join(repositoryRoot, ...parts);
+const profile = JSON.parse(fs.readFileSync(fromRepositoryRoot('config', 'rescue', 'expiry-aware-v2.5.0.json'), 'utf8'));
 
 test('G85-A01 rescue profile is expiry-aware, read-compatible and write inert', () => {
   assert.equal(profile.contract, 'voice-room.expiry-aware-rescue/v1');
@@ -18,8 +21,8 @@ test('G85-A01 rescue profile is expiry-aware, read-compatible and write inert', 
 });
 
 test('G85-A02 rescue sources contain no fabricated immutable evidence', () => {
-  const workflow = fs.readFileSync('.github/workflows/build-rescue.yml', 'utf8');
-  const documentation = fs.readFileSync('docs/operations/EXPIRY_AWARE_RESCUE.md', 'utf8');
+  const workflow = fs.readFileSync(fromRepositoryRoot('.github', 'workflows', 'build-rescue.yml'), 'utf8');
+  const documentation = fs.readFileSync(fromRepositoryRoot('docs', 'operations', 'EXPIRY_AWARE_RESCUE.md'), 'utf8');
   assert.match(workflow, /steps\.build\.outputs\.digest/);
   assert.doesNotMatch(`${JSON.stringify(profile)}\n${documentation}`, /sha256:[a-f0-9]{64}/);
 });
