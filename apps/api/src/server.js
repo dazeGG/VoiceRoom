@@ -48,7 +48,9 @@ const { assertMigrationReady, runMigrations } = require('./lib/migrate');
 const { createRelease250Pool } = require('./lib/release-250-pool');
 const {
   observeMaintenance,
+  recordCredentialRevokeCleanupFailure,
   recordHttpRequest,
+  recordMediaAuthorizationDenialFailure,
   recordMediaPressure,
   renderPrometheus
 } = require('./lib/metrics');
@@ -609,7 +611,8 @@ function getMediaServices() {
         [attachment.directMessageId, viewerId]
       );
       return result.rowCount === 1;
-    }
+    },
+    onAuthorizationDenial: recordMediaAuthorizationDenialFailure
   });
   mediaServices = { attachments, jobs, pressure, quota, service, storage, visibility };
   return mediaServices;
@@ -1423,6 +1426,17 @@ async function readJsonBody(req) {
   }
 }
 
+async function revokeIssuedAdmission({ boundary = getCredentialBoundary(), cause, principal, recordFailure = recordCredentialRevokeCleanupFailure, req, roomId }) {
+  try {
+    await boundary.revokePrincipal({ roomId, principal });
+  } catch (cleanupError) {
+    recordFailure();
+    req?.log?.error?.({ cleanupError, code: 'credential_revoke_cleanup_failed', roomId }, 'Issued admission credential cleanup failed');
+    if (cause) throw new AggregateError([cause, cleanupError], 'Admission persistence and credential cleanup both failed', { cause });
+    throw cleanupError;
+  }
+}
+
 async function handleLiveKitToken(req, res) {
   const livekit = getLiveKitConfig();
   const body = await readJsonBody(req);
@@ -1505,7 +1519,7 @@ async function handleLiveKitToken(req, res) {
   }
 
   if (await findRoomBan(roomId, sessionUser?.id, getClientIp(req, TRUST_PROXY))) {
-    await getCredentialBoundary().revokePrincipal({ roomId, principal });
+    await revokeIssuedAdmission({ principal, req, roomId });
     sendRoomBanned(res, roomId);
     return;
   }
@@ -1520,11 +1534,11 @@ async function handleLiveKitToken(req, res) {
         admissionSucceeded: true
       });
     } catch (error) {
-      await getCredentialBoundary().revokePrincipal({ roomId, principal }).catch(() => {});
+      await revokeIssuedAdmission({ cause: error, principal, req, roomId });
       throw error;
     }
     if (persistedMembership.status !== 'active') {
-      await getCredentialBoundary().revokePrincipal({ roomId, principal }).catch(() => {});
+      await revokeIssuedAdmission({ principal, req, roomId });
       if (persistedMembership.status === 'banned') {
         sendRoomBanned(res, roomId);
       } else {
@@ -4497,6 +4511,7 @@ if (require.main === module) {
 module.exports = {
   __private: {
     pruneRooms,
+    revokeIssuedAdmission,
     resolveCursorHmacKeys,
     resolveRealtimeReconnectLeaseMs
   },

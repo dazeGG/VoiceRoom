@@ -16,41 +16,42 @@ function createMediaVisibilityService({
   messageVisibilityService,
   resolveRoomMessage,
   resolveDirectMessage,
-  storage
+  storage,
+  onAuthorizationDenial = () => {}
 } = {}) {
   if (!attachmentRepository || !storage) throw new TypeError('Media visibility dependencies are required');
 
   async function requireVisible(attachment, viewerId) {
-    if (!attachment || attachment.internalState !== 'ready' || attachment.deletedAt) throw new MediaVisibilityError();
+    if (!attachment || attachment.internalState !== 'ready' || attachment.deletedAt) { onAuthorizationDenial(); throw new MediaVisibilityError(); }
     if (!attachment.boundAt) {
-      if (attachment.ownerId !== viewerId) throw new MediaVisibilityError();
+      if (attachment.ownerId !== viewerId) { onAuthorizationDenial(); throw new MediaVisibilityError(); }
       return;
     }
     if (attachment.context === 'room') {
       if (authorizeRoomAttachment) {
-        if (await authorizeRoomAttachment({ attachment, viewerId }) !== true) throw new MediaVisibilityError();
+        if (await authorizeRoomAttachment({ attachment, viewerId }) !== true) { onAuthorizationDenial(); throw new MediaVisibilityError(); }
         return;
       }
       const message = await resolveRoomMessage?.(attachment.roomMessageId);
       const visible = await messageVisibilityService?.canViewRoomMessage({ attachment, message, viewerId });
-      if (!visible) throw new MediaVisibilityError();
+      if (!visible) { onAuthorizationDenial(); throw new MediaVisibilityError(); }
       return;
     }
     if (attachment.context === 'dm') {
       if (authorizeDirectAttachment) {
-        if (await authorizeDirectAttachment({ attachment, viewerId }) !== true) throw new MediaVisibilityError();
+        if (await authorizeDirectAttachment({ attachment, viewerId }) !== true) { onAuthorizationDenial(); throw new MediaVisibilityError(); }
         return;
       }
       const message = await resolveDirectMessage?.(attachment.directMessageId);
       const visible = await messageVisibilityService?.canViewDirectMessage({ attachment, message, viewerId });
-      if (!visible) throw new MediaVisibilityError();
+      if (!visible) { onAuthorizationDenial(); throw new MediaVisibilityError(); }
       return;
     }
-    throw new MediaVisibilityError();
+    onAuthorizationDenial(); throw new MediaVisibilityError();
   }
 
   async function open({ attachmentId, variant, viewerId }) {
-    if (variant !== 'preview' && variant !== 'processed') throw new MediaVisibilityError();
+    if (variant !== 'preview' && variant !== 'processed') { onAuthorizationDenial(); throw new MediaVisibilityError(); }
     const attachment = await attachmentRepository.findById(attachmentId);
     await requireVisible(attachment, viewerId);
     const opened = await storage.openRead(attachment.id, variant).catch(() => { throw new MediaVisibilityError(); });

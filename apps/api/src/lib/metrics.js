@@ -4,6 +4,10 @@ const httpRequests = new Map();
 const maintenanceTasks = new Map();
 let pgPoolErrors = 0;
 let mediaPressure = { freeBytes: 0, healthy: false, reason: 'unchecked' };
+let notificationOldestPendingSeconds = 0;
+let mediaOldestPendingSeconds = 0;
+let mediaAuthorizationDenialFailures = 0;
+let credentialRevokeCleanupFailures = 0;
 
 function labelValue(value) {
   return String(value).replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n');
@@ -64,6 +68,11 @@ function recordMediaPressure(snapshot = {}) {
     reason: String(snapshot.reason || 'unknown')
   };
 }
+
+function recordNotificationOldestPending(ageMs) { notificationOldestPendingSeconds = Math.max(0, Number(ageMs) || 0) / 1000; }
+function recordMediaOldestPending(ageMs) { mediaOldestPendingSeconds = Math.max(0, Number(ageMs) || 0) / 1000; }
+function recordMediaAuthorizationDenialFailure() { mediaAuthorizationDenialFailures += 1; }
+function recordCredentialRevokeCleanupFailure() { credentialRevokeCleanupFailures += 1; }
 
 async function observeMaintenance(task, callback) {
   const startedAt = process.hrtime.bigint();
@@ -129,6 +138,18 @@ function renderPrometheus({
     '# HELP voice_room_api_media_pressure_healthy Whether media uploads and claims are pressure-safe.',
     '# TYPE voice_room_api_media_pressure_healthy gauge',
     metricLine('voice_room_api_media_pressure_healthy', { reason: mediaPressure.reason }, Number(mediaPressure.healthy)),
+    '# HELP voice_room_notification_oldest_pending_seconds Age of the oldest claimed notification job.',
+    '# TYPE voice_room_notification_oldest_pending_seconds gauge',
+    `voice_room_notification_oldest_pending_seconds ${notificationOldestPendingSeconds}`,
+    '# HELP voice_room_media_oldest_pending_seconds Age of the oldest claimed media job.',
+    '# TYPE voice_room_media_oldest_pending_seconds gauge',
+    `voice_room_media_oldest_pending_seconds ${mediaOldestPendingSeconds}`,
+    '# HELP voice_room_media_authorization_denial_failures_total Media reads denied by the authorization boundary.',
+    '# TYPE voice_room_media_authorization_denial_failures_total counter',
+    `voice_room_media_authorization_denial_failures_total ${mediaAuthorizationDenialFailures}`,
+    '# HELP voice_room_credential_revoke_cleanup_failures_total Admission credential cleanup failures.',
+    '# TYPE voice_room_credential_revoke_cleanup_failures_total counter',
+    `voice_room_credential_revoke_cleanup_failures_total ${credentialRevokeCleanupFailures}`,
     '# HELP voice_room_api_maintenance_duration_seconds_sum Cumulative maintenance task duration.',
     '# TYPE voice_room_api_maintenance_duration_seconds_sum counter'
   );
@@ -166,6 +187,10 @@ function resetMetricsForTest() {
   maintenanceTasks.clear();
   pgPoolErrors = 0;
   mediaPressure = { freeBytes: 0, healthy: false, reason: 'unchecked' };
+  notificationOldestPendingSeconds = 0;
+  mediaOldestPendingSeconds = 0;
+  mediaAuthorizationDenialFailures = 0;
+  credentialRevokeCleanupFailures = 0;
 }
 
 module.exports = {
@@ -173,6 +198,10 @@ module.exports = {
   recordHttpRequest,
   recordMaintenanceDuration,
   recordMediaPressure,
+  recordNotificationOldestPending,
+  recordMediaOldestPending,
+  recordMediaAuthorizationDenialFailure,
+  recordCredentialRevokeCleanupFailure,
   recordPgPoolError,
   renderPrometheus,
   resetMetricsForTest

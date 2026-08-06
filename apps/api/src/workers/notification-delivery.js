@@ -6,12 +6,13 @@ const { createPushStore } = require('../lib/push-store');
 const { createNotificationOutboxRepository } = require('../domains/notifications/notification-outbox-repository');
 const { createNotificationPushProvider } = require('../domains/notifications/push-provider');
 const { boundedBackoff, createLeaseRuntime } = require('../platform/lease-runtime');
+const { recordNotificationOldestPending } = require('../lib/metrics');
 
 const LEASE_IDENTITY = 'notification-delivery.G63';
 
 function wait(ms, signal) { return new Promise((resolve,reject)=>{ if(signal.aborted) return reject(signal.reason); const timer=setTimeout(done,ms); function done(){signal.removeEventListener('abort',cancel);resolve();} function cancel(){clearTimeout(timer);reject(signal.reason);}; signal.addEventListener('abort',cancel,{once:true}); }); }
 
-function createNotificationDeliveryWorker({ outbox, provider, batchSize=50, leaseMs=120000, renewMs=30000, idleMs=250, maxAttempts=8, logger=console }={}) {
+function createNotificationDeliveryWorker({ outbox, provider, batchSize=50, leaseMs=120000, renewMs=30000, idleMs=250, maxAttempts=8, logger=console, observeOldestPending=recordNotificationOldestPending }={}) {
   if (!outbox || !provider) throw new TypeError('Notification outbox and provider are required');
   let disabledReason = '';
   const outcomes = [];
@@ -27,6 +28,7 @@ function createNotificationDeliveryWorker({ outbox, provider, batchSize=50, leas
       guard.assertOwned();
       if(disabledReason){await outbox.recordHeartbeat({...lease,ready:false});await wait(idleMs,guard.signal);continue;}
       const jobs=await outbox.claimBatch({...lease,limit:batchSize,staleClaimMs:leaseMs});
+      observeOldestPending(jobs.length ? Math.max(...jobs.map((job)=>Math.max(0,Date.now()-new Date(job.createdAt).getTime()))) : 0);
       if(!jobs.length){await wait(idleMs,guard.signal);continue;}
       for(const job of jobs){
         guard.assertOwned();

@@ -28,6 +28,6 @@ test('G44-A02 HTTP LiveKit admission persists only after credential issue and re
   const end = source.indexOf('\nfunction handlePowChallenge', start);
   const handler = source.slice(start, end);
   assert.ok(handler.indexOf('provider.issueAdmission') < handler.indexOf('persistSuccessfulAdmission'));
-  assert.match(handler, /persistSuccessfulAdmission[\s\S]*revokePrincipal/);
+  assert.match(handler, /persistSuccessfulAdmission[\s\S]*revokeIssuedAdmission/);
   assert.doesNotMatch(handler, /rollbackSuccessfulAdmission/);
 });

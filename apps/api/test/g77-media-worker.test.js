@@ -17,16 +17,17 @@ test('G77-A01 worker defaults, bounded exponential backoff and pressure claim-st
 });
 
 test('G77-A02 fencing loss cannot publish ready/failed state and processing owns both variants', async () => {
-  let failed = 0;
+  let failed = 0; let observedAge = 0;
   const worker = createMediaProcessingWorker({
     attachmentRepository: { async findById() { return { internalState: 'processing' }; }, async markFailed() { failed += 1; } },
     storage: { async openRead() { throw new MediaJobFenceError(); } },
     jobRepository: {
-      async claimBatch() { return [{ id: 'j', attachmentId: 'a', attempts: 1, fencingToken: 1 }]; },
+      async claimBatch() { return [{ id: 'j', attachmentId: 'a', attempts: 1, fencingToken: 1, createdAt: new Date(Date.now() - 20_000) }]; },
       async renew() { throw new MediaJobFenceError(); }, async fail() { throw new MediaJobFenceError(); }
-    }
+    }, observeOldestPending(age) { observedAge = age; }
   });
   assert.equal(await worker.runOnce(), 1); assert.equal(failed, 0);
+  assert.ok(observedAge >= 19_000);
   const source = fs.readFileSync(require.resolve('../src/workers/media-processing.js'), 'utf8');
   assert.match(source, /storage\.save\(job\.attachmentId, 'processed'/);
   assert.match(source, /storage\.save\(job\.attachmentId, 'preview'/);
