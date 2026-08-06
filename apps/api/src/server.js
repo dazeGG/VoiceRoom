@@ -1478,7 +1478,6 @@ async function handleLiveKitToken(req, res) {
     return;
   }
   const livekitRoom = getLiveKitRoomName(roomId);
-  let persistedMembership = null;
   let memberships = null;
   if (sessionUser?.id) {
     memberships = getMembershipServices();
@@ -1486,54 +1485,14 @@ async function handleLiveKitToken(req, res) {
       sendJson(res, 503, { ok: false, code: 'membership_unavailable', error: 'Membership service unavailable' });
       return;
     }
-    persistedMembership = await memberships.service.persistSuccessfulAdmission({
-      roomId,
-      userId: sessionUser.id,
-      ip: getClientIp(req, TRUST_PROXY),
-      admissionSucceeded: true
-    });
-    if (persistedMembership.status !== 'active') {
-      if (persistedMembership.status === 'banned') {
-        sendRoomBanned(res, roomId);
-      } else {
-        sendJson(res, 503, { ok: false, code: 'membership_persist_failed', error: 'Membership unavailable' });
-      }
-      return;
-    }
   }
 
   if (!provider) {
-    if (persistedMembership?.created) {
-      await memberships.service.rollbackSuccessfulAdmission({
-        roomId,
-        userId: sessionUser.id,
-        membershipId: persistedMembership.membership.id
-      });
-    }
     sendJson(res, 503, { ok: false, code: 'livekit_gate_unavailable', error: 'LiveKit gate unavailable' });
     return;
   }
-  let issued;
-  try {
-    issued = await provider.issueAdmission({ livekitRoom, name, peerId, principal, roomId });
-  } catch (error) {
-    if (persistedMembership?.created) {
-      await memberships.service.rollbackSuccessfulAdmission({
-        roomId,
-        userId: sessionUser.id,
-        membershipId: persistedMembership.membership.id
-      });
-    }
-    throw error;
-  }
+  const issued = await provider.issueAdmission({ livekitRoom, name, peerId, principal, roomId });
   if (issued.status !== 'issued') {
-    if (persistedMembership?.created) {
-      await memberships.service.rollbackSuccessfulAdmission({
-        roomId,
-        userId: sessionUser.id,
-        membershipId: persistedMembership.membership.id
-      });
-    }
     sendJson(res, 503, { ok: false, code: 'livekit_gate_credential_unavailable', error: 'LiveKit gate unavailable' });
     return;
   }
@@ -1542,6 +1501,30 @@ async function handleLiveKitToken(req, res) {
     await getCredentialBoundary().revokePrincipal({ roomId, principal });
     sendRoomBanned(res, roomId);
     return;
+  }
+
+  if (sessionUser?.id) {
+    let persistedMembership;
+    try {
+      persistedMembership = await memberships.service.persistSuccessfulAdmission({
+        roomId,
+        userId: sessionUser.id,
+        ip: getClientIp(req, TRUST_PROXY),
+        admissionSucceeded: true
+      });
+    } catch (error) {
+      await getCredentialBoundary().revokePrincipal({ roomId, principal }).catch(() => {});
+      throw error;
+    }
+    if (persistedMembership.status !== 'active') {
+      await getCredentialBoundary().revokePrincipal({ roomId, principal }).catch(() => {});
+      if (persistedMembership.status === 'banned') {
+        sendRoomBanned(res, roomId);
+      } else {
+        sendJson(res, 503, { ok: false, code: 'membership_persist_failed', error: 'Membership unavailable' });
+      }
+      return;
+    }
   }
 
   sendJson(res, 200, {
