@@ -47,6 +47,7 @@ jobs:
           echo "$GH_TOKEN" | oras login "${OCI_REPOSITORY%%/*}" -u "$GITHUB_ACTOR" --password-stdin
           gh attestation verify "oci://$OCI_REPOSITORY@$OCI_DIGEST" --repo "$GITHUB_REPOSITORY"
           oras pull "$OCI_REPOSITORY@$OCI_DIGEST" -o external-evidence
+          mv external-evidence.zip external-evidence/actions-archive.zip
           mv producer-metadata.json producer-run.json external-evidence/
       - run: node --test scripts/test/g94-rc-preflight.test.mjs
       - run: node scripts/release/verify-rc-candidate.mjs --external-root external-evidence --verify "$OBJECT_PATH" --sha256 "$OBJECT_SHA256"
