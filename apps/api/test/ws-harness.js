@@ -1,5 +1,6 @@
 'use strict';
 
+const net = require('node:net');
 const WebSocket = require('ws');
 
 function openWs(target, { cookie, headers = {}, path = '/api/ws' } = {}) {
@@ -10,7 +11,8 @@ function openWs(target, { cookie, headers = {}, path = '/api/ws' } = {}) {
     ? new WebSocket(`ws://127.0.0.1:${target}${path}`, {
         headers: requestHeaders
       })
-    : new WebSocket(`ws+unix://${target}:${path}`, {
+    : new WebSocket(`ws://localhost${path}`, {
+        createConnection: () => net.createConnection(target),
         headers: requestHeaders
       });
 

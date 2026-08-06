@@ -1,5 +1,6 @@
 'use strict';
 
+const { socketPathForDirectory } = require('./ipc-harness');
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -11,7 +12,7 @@ const { createTestDatabase } = require('./db-harness');
 
 function getSocketPath() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'voice-room-auth-'));
-  return { dir, socketPath: path.join(dir, 'api.sock') };
+  return { dir, socketPath: socketPathForDirectory(dir) };
 }
 
 function waitForHealthz(socketPath, timeoutMs = 5000) {

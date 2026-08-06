@@ -1,5 +1,6 @@
 'use strict';
 
+const { socketPathForDirectory } = require('./ipc-harness');
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -19,7 +20,7 @@ function getSocketPath() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'voice-room-sock-'));
   return {
     dir,
-    socketPath: path.join(dir, 'api.sock')
+    socketPath: socketPathForDirectory(dir)
   };
 }
 

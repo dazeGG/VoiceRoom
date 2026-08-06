@@ -1,9 +1,11 @@
 'use strict';
 
+const { socketPathForDirectory } = require('./ipc-harness');
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const http = require('node:http');
+const net = require('node:net');
 const { spawn } = require('node:child_process');
 const path = require('node:path');
 const os = require('node:os');
@@ -13,7 +15,7 @@ const { joinVoiceRoom, openWs: openHarnessWs, subscribeRoomPreview, waitForWsTyp
 
 function getSocketPath() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'voice-room-ws-'));
-  return { dir, socketPath: path.join(dir, 'api.sock') };
+  return { dir, socketPath: socketPathForDirectory(dir) };
 }
 
 function waitForHealthz(socketPath, timeoutMs = 5000) {
@@ -108,7 +110,8 @@ function delay(ms) {
 
 function openWs(socketPath, cookie) {
   const frames = [];
-  const ws = new WebSocket(`ws+unix://${socketPath}:/api/ws`, {
+  const ws = new WebSocket('ws://localhost/api/ws', {
+    createConnection: () => net.createConnection(socketPath),
     headers: cookie ? { Cookie: cookie } : undefined
   });
 

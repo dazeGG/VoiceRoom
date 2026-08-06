@@ -1,5 +1,6 @@
 'use strict';
 
+const { socketPathForDirectory } = require('./ipc-harness');
 // Integration coverage for the WS room surface that the plan calls out:
 //   - room.summary fan-out to visible/saved-room users with bounded visiblePeers
 //     and an explicit hiddenPeerCount;
@@ -26,7 +27,7 @@ const { createTestDatabase } = require('./db-harness');
 
 function getSocketPath() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'voice-room-rt-'));
-  return { dir, socketPath: path.join(dir, 'api.sock') };
+  return { dir, socketPath: socketPathForDirectory(dir) };
 }
 
 function waitForHealthz(socketPath, timeoutMs = 5000) {
