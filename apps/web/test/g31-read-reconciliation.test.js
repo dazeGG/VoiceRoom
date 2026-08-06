@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { loadMessagingModule } from './messaging-module-loader.js';
 
 test('G31-A01 multiple render advances coalesce to the newest pending cursor', async () => {
@@ -17,4 +18,10 @@ test('G31-A02 older or around loads alone cannot advance reads', async () => {
   const state = createReadReconciliation({ scope: 'room:r', legacy: false, commit: async () => { commits += 1; } });
   await state.advanceAfterRender(undefined);
   assert.equal(commits, 0); state.dispose();
+});
+
+test('G31 realtime reconciliation failures stay non-blocking but observable', () => {
+  const source = readFileSync(new URL('../src/lib/features/room/components/RoomChat.svelte', import.meta.url), 'utf8');
+  assert.match(source, /catch \(cause\) \{\s*console\.error\('Failed to reconcile realtime room read cursor', cause\);/);
+  assert.doesNotMatch(source, /markRealtimeRenderedRead[\s\S]*?catch \{\}/);
 });

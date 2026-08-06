@@ -530,7 +530,9 @@
       history.reconcileLatest(page.messages, (item) => firstCreatedAt == null || item.createdAt >= firstCreatedAt);
       await tick();
       await markLatestRenderedRead();
-    } catch {}
+    } catch (cause) {
+      console.error('Failed to reconcile realtime room read cursor', cause);
+    }
   }
 
   function onHistoryScroll(): void {

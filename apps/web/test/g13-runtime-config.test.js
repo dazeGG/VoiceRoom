@@ -73,12 +73,24 @@ async function startCaddyEdge(wsUrl) {
   if (!port) throw new Error(`missing Caddy port mapping: ${mapping.stderr}`);
   const origin = `http://127.0.0.1:${port}`;
 
+  let ready = false;
+  let lastReadinessError = new Error('Caddy runtime-config endpoint was not ready');
   for (let attempt = 0; attempt < 40; attempt += 1) {
     try {
       const response = await fetch(`${origin}/runtime-config.json`);
-      if (response.ok) break;
-    } catch {}
+      if (response.ok) {
+        ready = true;
+        break;
+      }
+      lastReadinessError = new Error(`Caddy runtime-config endpoint returned HTTP ${response.status}`);
+    } catch (error) {
+      lastReadinessError = error instanceof Error ? error : new Error(String(error));
+    }
     await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  if (!ready) {
+    spawnSync('docker', ['rm', '-f', name], { encoding: 'utf8' });
+    throw new Error(`Caddy edge did not become ready: ${lastReadinessError.message}`, { cause: lastReadinessError });
   }
 
   return {
