@@ -43,7 +43,7 @@ test('G68-A01 desired-state rows are unique, idempotent, monotonic and applicati
     throw new Error('rollback');
   }), /rollback/);
   assert.equal((await pool.query(`SELECT count(*)::int AS count FROM room_message_reactions WHERE emoji = '👩🏽‍💻'`)).rows[0].count, 0);
-  const migration = fs.readFileSync('apps/api/src/migrations/20260718135000_create_message_reactions.js', 'utf8');
+  const migration = fs.readFileSync(require.resolve('../src/migrations/20260718135000_create_message_reactions.js'), 'utf8');
   assert.match(migration, /lock_timeout = '5s'/);
 });
 
