@@ -51,5 +51,8 @@ test('G16-A02 declaration and runtime contracts expose the same normalized DTO',
   assert.match(declaration, /contractVersion: 'voice-room\.platform-class\/v1'/);
   assert.match(declaration, /platformClass: PlatformClass/);
   assert.match(declaration, /desktopAllowed: boolean/);
-  assert.doesNotMatch(declaration.match(/export interface PlatformPolicy \{[\s\S]*?\}/)?.[0] || '', /userAgent|platform|maxTouchPoints|desktopBridge/);
+  assert.doesNotMatch(
+    declaration.match(/export interface PlatformPolicy \{[\s\S]*?\}/)?.[0] || '',
+    /userAgent|\bplatform\??:|maxTouchPoints|desktopBridge/
+  );
 });
