@@ -1,0 +1,4 @@
+{
+  "apps/api/src/migrations/20260718120000_add_push_subscription_platform_class.js": "c1dd86eedb50fae17b70c9063805379b55a2f1977288dbe7f953cc9a62a75b3a",
+  "apps/api/src/migrations/20260718140000_create_message_attachments_and_media_jobs.js": "3818bf6f4deb9342355060a07954cffde71662ef5b612e2914903f101831c515"
+}
