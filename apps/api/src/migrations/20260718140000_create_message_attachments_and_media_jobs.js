@@ -3,6 +3,7 @@
 exports.shorthands = undefined;
 
 exports.up = (pgm) => {
+  pgm.sql("SET LOCAL lock_timeout = '5s'");
   pgm.createTable('message_attachments', {
     id: { type: 'uuid', primaryKey: true },
     owner_id: {
@@ -59,8 +60,8 @@ exports.up = (pgm) => {
   });
   pgm.addConstraint('message_attachments', 'message_attachments_bytes_check', {
     check: `
-      (original_bytes IS NULL OR original_bytes BETWEEN 1 AND 20971520) AND
-      (reserved_bytes IS NULL OR reserved_bytes BETWEEN 1 AND 20971520) AND
+      (original_bytes IS NULL OR original_bytes BETWEEN 1 AND 10485760) AND
+      (reserved_bytes IS NULL OR reserved_bytes BETWEEN 1 AND 10485760) AND
       (processed_bytes IS NULL OR processed_bytes > 0) AND
       (preview_bytes IS NULL OR preview_bytes > 0)
     `
