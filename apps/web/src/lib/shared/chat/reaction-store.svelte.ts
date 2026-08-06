@@ -5,6 +5,7 @@ import {
   setReactionDesired,
   type ReactionConversation
 } from '$lib/api/reactions';
+import { replaceReactionSnapshot } from './reaction-reconciliation';
 
 export type ReactionView = ReactionSummary & { pending: boolean; error: string };
 export type ReactorListState = {
@@ -87,7 +88,10 @@ export class ReactionStore {
 
   replace(messageId: string, summaries: ReactionSummary[]): void {
     if (this.isDeleted(messageId)) return;
-    for (const summary of summaries) this.applyServer(messageId, summary);
+    this.summaries = {
+      ...this.summaries,
+      [messageId]: replaceReactionSnapshot(this.forMessage(messageId), summaries)
+    };
   }
 
   applyServer(messageId: string, summary: ReactionSummary): void {
