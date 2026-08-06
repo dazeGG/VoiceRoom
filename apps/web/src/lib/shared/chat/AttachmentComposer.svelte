@@ -64,3 +64,4 @@
     </ol>
   </section>
 {/if}
+{#if store.lastError}<p class="attachment-compose-error" role="alert">{store.lastError}</p>{/if}
