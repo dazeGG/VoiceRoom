@@ -1,0 +1,17 @@
+name: Release 2.5.0 performance evidence
+on:
+  workflow_dispatch:
+    inputs:
+      evidence_file: { description: Repository-relative immutable performance evidence, required: true, type: string }
+permissions: { contents: read }
+jobs:
+  goal-g91-perf:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@v4
+        with: { node-version-file: .nvmrc, cache: npm }
+      - run: npm ci
+      - run: node scripts/perf/g91-release-budgets.mjs --profile rc --goal G91 --evidence "${{ inputs.evidence_file }}"
