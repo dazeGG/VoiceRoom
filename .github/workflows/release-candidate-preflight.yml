@@ -14,7 +14,6 @@ on:
 permissions: { contents: read, actions: read, packages: read, attestations: read }
 jobs:
   rc-preflight:
-    if: github.ref == 'refs/heads/release/2.5.0'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
@@ -32,6 +31,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with: { persist-credentials: false, fetch-depth: 0 }
+      - name: Validate required release branch
+        run: node scripts/release/validate-workflow-ref.mjs --expected refs/heads/release/2.5.0
       - uses: actions/setup-node@v4
         with: { node-version-file: .nvmrc, cache: npm }
       - run: npm ci
