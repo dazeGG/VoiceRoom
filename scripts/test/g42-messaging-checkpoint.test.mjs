@@ -9,7 +9,7 @@ const hash = (character) => `sha256:${character.repeat(64)}`;
 
 function fixture() {
   const value = {
-    contract: 'voice-room.messaging-checkpoint/v1', release: '2.5.0', gitSha: 'a'.repeat(40),
+    contract: 'voice-room.messaging-checkpoint/v1', release: '2.5.0', codeSha: 'a'.repeat(40),
     digests: { api: hash('a'), web: hash('b'), worker: hash('c') },
     seedManifest: { id: 'messaging-v1', sha256: hash('d') },
     predecessors: Array.from({ length: 41 }, (_, indexValue) => ({ goal: `G${String(indexValue + 1).padStart(2, '0')}`, sha256: hash(((indexValue % 6) + 1).toString()), verified: true })),
@@ -27,7 +27,7 @@ function fixture() {
 
 test('G42-A01 accepts only immutable complete predecessor and matrix evidence', () => {
   const result = verifyMessagingCheckpoint(fixture());
-  assert.equal(result.durationMs, 3_600_000); assert.equal(result.gitSha, 'a'.repeat(40));
+  assert.equal(result.durationMs, 3_600_000); assert.equal(result.codeSha, 'a'.repeat(40));
 });
 
 test('G42-A02 fails closed on mutable digests, missing predecessors, short observation, unsafe failures and stop defects', () => {

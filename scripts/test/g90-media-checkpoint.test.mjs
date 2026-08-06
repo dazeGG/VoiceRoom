@@ -8,7 +8,7 @@ const index = JSON.parse(fs.readFileSync('docs/releases/2.5.0/evidence/index.jso
 const hash = (character) => `sha256:${character.repeat(64)}`;
 function fixture() {
   const value = {
-    contract: 'voice-room.media-checkpoint/v1', release: '2.5.0', gitSha: 'a'.repeat(40),
+    contract: 'voice-room.media-checkpoint/v1', release: '2.5.0', codeSha: 'a'.repeat(40),
     digests: { api: hash('a'), web: hash('b'), worker: hash('c') },
     checkpoints: {
       messaging: { verified: true, sha256: hash('d') }, membership: { verified: true, sha256: hash('e') }, engagement: { verified: true, sha256: hash('f') }

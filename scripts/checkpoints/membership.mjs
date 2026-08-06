@@ -1,5 +1,5 @@
 import { pathToFileURL } from 'node:url';
-import { assertCheckpointArtifact, assertEvidenceIdentity, readRepositoryArtifact } from './immutable-evidence.mjs';
+import { assertCheckpointArtifact, assertEvidenceIdentity, readExternalCliArtifact } from './immutable-evidence.mjs';
 
 const SHA256 = /^sha256:[a-f0-9]{64}$/;
 const GIT_SHA = /^[a-f0-9]{40}$/;
@@ -14,7 +14,7 @@ function isoMillis(value) {
 
 export function verifyMembershipCheckpoint(value, { expectedSha, resolveArtifact } = {}) {
   if (!value || value.contract !== 'voice-room.membership-checkpoint/v1' || value.release !== '2.5.0') throw new Error('Invalid G50 checkpoint contract');
-  if (!GIT_SHA.test(value.gitSha || '')) throw new Error('G50 requires an immutable git SHA');
+  if (!GIT_SHA.test(value.codeSha || '')) throw new Error('G50 requires an immutable evaluated code SHA');
   for (const component of ['api', 'web', 'worker']) {
     if (!SHA256.test(value.digests?.[component] || '')) throw new Error(`G50 requires immutable ${component} digest`);
   }
@@ -38,7 +38,7 @@ export function verifyMembershipCheckpoint(value, { expectedSha, resolveArtifact
   if (!SHA256.test(value.evidenceChainSha256 || '')) throw new Error('G50 evidence chain checksum is missing');
   assertCheckpointArtifact(value, resolveArtifact);
   assertEvidenceIdentity(value, expectedSha);
-  return Object.freeze({ gitSha: value.gitSha, durationMs: endedAt - startedAt, profiles: [...profiles].sort() });
+  return Object.freeze({ codeSha: value.codeSha, durationMs: endedAt - startedAt, profiles: [...profiles].sort() });
 }
 
 function cli() {
@@ -46,7 +46,7 @@ function cli() {
   if (verifyIndex < 0) throw new Error('Usage: node scripts/checkpoints/membership.mjs --verify <checkpoint.json>');
   const file = process.argv[verifyIndex + 1] || process.env.G50_CHECKPOINT_FILE;
   if (!file) throw new Error('G50_CHECKPOINT_FILE or checkpoint path is required');
-  const result = verifyMembershipCheckpoint(readRepositoryArtifact(file).value, { expectedSha: process.env.GITHUB_SHA });
+  const result = verifyMembershipCheckpoint(readExternalCliArtifact(process.argv).value, { expectedSha: process.env.GITHUB_SHA });
   process.stdout.write(`${JSON.stringify({ ok: true, ...result })}\n`);
 }
 

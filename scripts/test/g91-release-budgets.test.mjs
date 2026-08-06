@@ -7,7 +7,7 @@ import { bindCheckpointFixture, evidenceChainSha256 } from '../checkpoints/immut
 const profile = JSON.parse(fs.readFileSync('scripts/perf/release-250-profile.v1.json', 'utf8'));
 function evidence() {
   const value = {
-    gitSha: 'a'.repeat(40), apiDigest: `sha256:${'a'.repeat(64)}`, webDigest: `sha256:${'b'.repeat(64)}`, workerDigest: `sha256:${'c'.repeat(64)}`,
+    codeSha: 'a'.repeat(40), apiDigest: `sha256:${'a'.repeat(64)}`, webDigest: `sha256:${'b'.repeat(64)}`, workerDigest: `sha256:${'c'.repeat(64)}`,
     hardware: { cpu: 'fixture', memoryBytes: 1 }, database: { engine: 'postgresql', version: 'fixture' }, concurrency: { clients: 1 },
     startedAt: '2026-08-06T10:00:00.000Z', endedAt: '2026-08-06T11:00:00.000Z', metricLabels: ['status', 'operation'], alertsVerified: true, autoDisableVerified: true,
     measurements: Object.fromEntries(Object.entries(profile.budgets).map(([surface, limits]) => [surface, { ...limits }])), evidenceChainSha256: ''

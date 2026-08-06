@@ -2,8 +2,13 @@ name: Release 2.5.0 develop entry
 on:
   workflow_dispatch:
     inputs:
-      selection_file: { description: Repository-relative immutable G01 selection artifact, required: true, type: string }
-permissions: { contents: read }
+      evidence_artifact_id: { description: Immutable GitHub Actions artifact id, required: true, type: string }
+      archive_sha256: { description: Artifact archive SHA256, required: true, type: string }
+      selection_path: { description: Selection object path, required: true, type: string }
+      selection_sha256: { description: Selection object SHA256, required: true, type: string }
+      envelope_path: { description: G93 envelope object path, required: true, type: string }
+      envelope_sha256: { description: G93 envelope object SHA256, required: true, type: string }
+permissions: { contents: read, actions: read }
 jobs:
   goal-g93:
     if: github.ref == 'refs/heads/develop'
@@ -11,12 +16,22 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-        with: { persist-credentials: false }
+        with: { persist-credentials: false, fetch-depth: 0 }
       - uses: actions/setup-node@v4
         with: { node-version-file: .nvmrc, cache: npm }
       - run: npm ci
+      - name: Resolve external immutable evidence
+        env: { GH_TOKEN: "${{ github.token }}", ARTIFACT_ID: "${{ inputs.evidence_artifact_id }}", ARCHIVE_SHA256: "${{ inputs.archive_sha256 }}" }
+        run: |
+          mkdir external-evidence
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$ARTIFACT_ID/zip" > external-evidence.zip
+          test "sha256:$(sha256sum external-evidence.zip | cut -d' ' -f1)" = "$ARCHIVE_SHA256"
+          unzip -q external-evidence.zip -d external-evidence
       - run: node --test scripts/test/g93-entry-gate.test.mjs
       - name: Fail closed until external release-entry evidence is complete
         env:
-          SELECTION_FILE: ${{ inputs.selection_file }}
-        run: node scripts/test/g93-entry-gate.test.mjs --gate --selection "$SELECTION_FILE"
+          SELECTION_PATH: ${{ inputs.selection_path }}
+          SELECTION_SHA256: ${{ inputs.selection_sha256 }}
+          ENVELOPE_PATH: ${{ inputs.envelope_path }}
+          ENVELOPE_SHA256: ${{ inputs.envelope_sha256 }}
+        run: node scripts/test/g93-entry-gate.test.mjs --gate --external-root external-evidence --selection "$SELECTION_PATH" --selection-sha256 "$SELECTION_SHA256" --envelope "$ENVELOPE_PATH" --envelope-sha256 "$ENVELOPE_SHA256"

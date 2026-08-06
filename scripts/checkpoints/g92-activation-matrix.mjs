@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import { pathToFileURL } from 'node:url';
-import { assertCheckpointArtifact, assertEvidenceIdentity, readRepositoryArtifact } from './immutable-evidence.mjs';
+import { assertCheckpointArtifact, assertEvidenceIdentity, readExternalCliArtifact, readRepositoryArtifact } from './immutable-evidence.mjs';
 
 const EXPECTED = { public: 9, internal: 10, operators: 15 };
 const SHA256 = /^sha256:[a-f0-9]{64}$/; const GIT_SHA = /^[a-f0-9]{40}$/;
@@ -30,7 +30,7 @@ export function buildActivationMatrix(manifest) {
 }
 export function verifyActivationEvidence(manifestBytes, evidence, { expectedSha, resolveArtifact } = {}) {
   const manifest = JSON.parse(manifestBytes); const matrix = buildActivationMatrix(manifest); const digest = manifestDigest(manifestBytes);
-  if (evidence?.contract !== 'voice-room.activation-matrix/v1' || evidence.release !== '2.5.0' || !GIT_SHA.test(evidence.gitSha || '') || evidence.manifestSha256 !== digest) throw new Error('G92 immutable identity is invalid');
+  if (evidence?.contract !== 'voice-room.activation-matrix/v1' || evidence.release !== '2.5.0' || !GIT_SHA.test(evidence.codeSha || '') || evidence.manifestSha256 !== digest) throw new Error('G92 immutable identity is invalid');
   const named = new Set(matrix.cases.map((item) => item.id)); const results = new Map((evidence.cases || []).map((item) => [item.id, item]));
   for (const expected of matrix.cases) {
     const actual = results.get(expected.id);
@@ -52,7 +52,7 @@ function cli() {
   const manifestIndex = process.argv.indexOf('--manifest'); const verifyIndex = process.argv.indexOf('--verify');
   if (manifestIndex < 0 || verifyIndex < 0) throw new Error('Usage: --manifest <manifest.json> --verify [evidence.json]');
   const bytes = readRepositoryArtifact(process.argv[manifestIndex + 1]).bytes; const matrix = buildActivationMatrix(JSON.parse(bytes)); const evidenceFile = process.argv[verifyIndex + 1];
-  const result = evidenceFile && !evidenceFile.startsWith('--') ? verifyActivationEvidence(bytes, readRepositoryArtifact(evidenceFile).value, { expectedSha: process.env.GITHUB_SHA }) : { status: 'PENDING_EXTERNAL_ACTIVATION_EVIDENCE', manifestSha256: manifestDigest(bytes), caseCount: matrix.cases.length, edgeCount: matrix.edges.length };
+  const result = evidenceFile && !evidenceFile.startsWith('--') ? verifyActivationEvidence(bytes, readExternalCliArtifact(process.argv).value, { expectedSha: process.env.GITHUB_SHA }) : { status: 'PENDING_EXTERNAL_ACTIVATION_EVIDENCE', manifestSha256: manifestDigest(bytes), caseCount: matrix.cases.length, edgeCount: matrix.edges.length };
   process.stdout.write(`${JSON.stringify({ ok: true, ...result })}\n`);
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) { try { cli(); } catch (error) { console.error(error.message); process.exitCode = 1; } }

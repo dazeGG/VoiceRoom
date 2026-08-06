@@ -8,13 +8,15 @@ on:
         required: true
         type: choice
         options: [messaging, membership, engagement, media, activation]
-      evidence_file:
-        description: Repository-relative immutable checkpoint JSON
+      evidence_artifact_id:
+        description: Immutable GitHub Actions artifact id
         required: true
         type: string
+      archive_sha256: { description: GitHub artifact archive SHA256, required: true, type: string }
+      object_path: { description: Evidence object path inside artifact, required: true, type: string }
+      object_sha256: { description: Evidence object SHA256, required: true, type: string }
 
-permissions:
-  contents: read
+permissions: { contents: read, actions: read }
 
 jobs:
   messaging:
@@ -30,9 +32,17 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
+      - &download
+        name: Resolve external immutable evidence
+        env: { GH_TOKEN: "${{ github.token }}", ARTIFACT_ID: "${{ inputs.evidence_artifact_id }}", ARCHIVE_SHA256: "${{ inputs.archive_sha256 }}" }
+        run: |
+          mkdir external-evidence
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$ARTIFACT_ID/zip" > external-evidence.zip
+          test "sha256:$(sha256sum external-evidence.zip | cut -d' ' -f1)" = "$ARCHIVE_SHA256"
+          unzip -q external-evidence.zip -d external-evidence
       - run: node scripts/test/g42-messaging-checkpoint.test.mjs --verify
-      - run: node scripts/checkpoints/messaging.mjs --verify "$EVIDENCE_FILE"
-        env: { EVIDENCE_FILE: "${{ inputs.evidence_file }}" }
+      - run: node scripts/checkpoints/messaging.mjs --external-root external-evidence --verify "$OBJECT_PATH" --sha256 "$OBJECT_SHA256"
+        env: { OBJECT_PATH: "${{ inputs.object_path }}", OBJECT_SHA256: "${{ inputs.object_sha256 }}" }
   membership:
     if: inputs.checkpoint == 'membership'
     runs-on: ubuntu-latest
@@ -46,9 +56,10 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
+      - *download
       - run: node scripts/test/g50-membership-checkpoint.test.mjs --verify
-      - run: node scripts/checkpoints/membership.mjs --verify "$EVIDENCE_FILE"
-        env: { EVIDENCE_FILE: "${{ inputs.evidence_file }}" }
+      - run: node scripts/checkpoints/membership.mjs --external-root external-evidence --verify "$OBJECT_PATH" --sha256 "$OBJECT_SHA256"
+        env: { OBJECT_PATH: "${{ inputs.object_path }}", OBJECT_SHA256: "${{ inputs.object_sha256 }}" }
   engagement:
     if: inputs.checkpoint == 'engagement'
     runs-on: ubuntu-latest
@@ -62,9 +73,10 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
+      - *download
       - run: node scripts/test/g71-engagement-checkpoint.test.mjs --verify
-      - run: node scripts/checkpoints/engagement.mjs --verify "$EVIDENCE_FILE"
-        env: { EVIDENCE_FILE: "${{ inputs.evidence_file }}" }
+      - run: node scripts/checkpoints/engagement.mjs --external-root external-evidence --verify "$OBJECT_PATH" --sha256 "$OBJECT_SHA256"
+        env: { OBJECT_PATH: "${{ inputs.object_path }}", OBJECT_SHA256: "${{ inputs.object_sha256 }}" }
   media:
     if: inputs.checkpoint == 'media'
     runs-on: ubuntu-latest
@@ -78,9 +90,10 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
+      - *download
       - run: node --test scripts/test/g89-restore.test.mjs scripts/test/g90-media-checkpoint.test.mjs
-      - run: node scripts/checkpoints/media.mjs --verify "$EVIDENCE_FILE"
-        env: { EVIDENCE_FILE: "${{ inputs.evidence_file }}" }
+      - run: node scripts/checkpoints/media.mjs --external-root external-evidence --verify "$OBJECT_PATH" --sha256 "$OBJECT_SHA256"
+        env: { OBJECT_PATH: "${{ inputs.object_path }}", OBJECT_SHA256: "${{ inputs.object_sha256 }}" }
   activation:
     if: inputs.checkpoint == 'activation'
     runs-on: ubuntu-latest
@@ -91,6 +104,7 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version-file: .nvmrc, cache: npm }
       - run: npm ci
+      - *download
       - run: node --test scripts/test/g92-activation-matrix.test.mjs
-      - run: node scripts/checkpoints/g92-activation-matrix.mjs --manifest config/capability-dag.v1.json --verify "$EVIDENCE_FILE"
-        env: { EVIDENCE_FILE: "${{ inputs.evidence_file }}" }
+      - run: node scripts/checkpoints/g92-activation-matrix.mjs --manifest config/capability-dag.v1.json --external-root external-evidence --verify "$OBJECT_PATH" --sha256 "$OBJECT_SHA256"
+        env: { OBJECT_PATH: "${{ inputs.object_path }}", OBJECT_SHA256: "${{ inputs.object_sha256 }}" }

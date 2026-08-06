@@ -2,8 +2,11 @@ name: Release 2.5.0 performance evidence
 on:
   workflow_dispatch:
     inputs:
-      evidence_file: { description: Repository-relative immutable performance evidence, required: true, type: string }
-permissions: { contents: read }
+      evidence_artifact_id: { description: Immutable GitHub Actions artifact id, required: true, type: string }
+      archive_sha256: { description: Artifact archive SHA256, required: true, type: string }
+      object_path: { description: Evidence object path, required: true, type: string }
+      object_sha256: { description: Evidence object SHA256, required: true, type: string }
+permissions: { contents: read, actions: read }
 jobs:
   goal-g91-perf:
     runs-on: ubuntu-latest
@@ -14,6 +17,14 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version-file: .nvmrc, cache: npm }
       - run: npm ci
-      - run: node scripts/perf/g91-release-budgets.mjs --profile rc --goal G91 --evidence "$EVIDENCE_FILE"
+      - name: Resolve external immutable evidence
+        env: { GH_TOKEN: "${{ github.token }}", ARTIFACT_ID: "${{ inputs.evidence_artifact_id }}", ARCHIVE_SHA256: "${{ inputs.archive_sha256 }}" }
+        run: |
+          mkdir external-evidence
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$ARTIFACT_ID/zip" > external-evidence.zip
+          test "sha256:$(sha256sum external-evidence.zip | cut -d' ' -f1)" = "$ARCHIVE_SHA256"
+          unzip -q external-evidence.zip -d external-evidence
+      - run: node scripts/perf/g91-release-budgets.mjs --profile rc --goal G91 --external-root external-evidence --evidence "$OBJECT_PATH" --verify "$OBJECT_PATH" --sha256 "$OBJECT_SHA256"
         env:
-          EVIDENCE_FILE: ${{ inputs.evidence_file }}
+          OBJECT_PATH: ${{ inputs.object_path }}
+          OBJECT_SHA256: ${{ inputs.object_sha256 }}

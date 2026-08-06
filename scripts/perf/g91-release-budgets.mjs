@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { assertCheckpointArtifact, assertEvidenceIdentity, readRepositoryArtifact } from '../checkpoints/immutable-evidence.mjs';
+import { assertCheckpointArtifact, assertEvidenceIdentity, readExternalCliArtifact } from '../checkpoints/immutable-evidence.mjs';
 
 const SHA256 = /^sha256:[a-f0-9]{64}$/; const GIT_SHA = /^[a-f0-9]{40}$/;
 export function verifyBudgetProfile(profile) {
@@ -15,7 +15,7 @@ export function verifyBudgetProfile(profile) {
 export function verifyBudgetEvidence(profile, evidence, { expectedSha, resolveArtifact } = {}) {
   verifyBudgetProfile(profile);
   for (const key of profile.requiredEvidence) if (evidence?.[key] == null || evidence[key] === '') throw new Error(`G91 evidence ${key} is missing`);
-  if (!GIT_SHA.test(evidence.gitSha) || !['apiDigest','webDigest','workerDigest'].every((key) => SHA256.test(evidence[key]))) throw new Error('G91 immutable source evidence is invalid');
+  if (!GIT_SHA.test(evidence.codeSha) || !['apiDigest','webDigest','workerDigest'].every((key) => SHA256.test(evidence[key]))) throw new Error('G91 immutable source evidence is invalid');
   for (const [surface, limits] of Object.entries(profile.budgets)) for (const [metric, limit] of Object.entries(limits)) {
     const actual = evidence.measurements?.[surface]?.[metric]; if (!Number.isFinite(actual)) throw new Error(`G91 measurement ${surface}.${metric} is missing`);
     if (metric.startsWith('minimum') ? actual < limit : actual > limit) throw new Error(`G91 budget ${surface}.${metric} failed`);
@@ -25,14 +25,14 @@ export function verifyBudgetEvidence(profile, evidence, { expectedSha, resolveAr
   if (evidence.alertsVerified !== true || evidence.autoDisableVerified !== true) throw new Error('G91 alerts and auto-disable proof are required');
   assertCheckpointArtifact(evidence, resolveArtifact);
   assertEvidenceIdentity(evidence, expectedSha);
-  return { status: 'VERIFIED', gitSha: evidence.gitSha };
+  return { status: 'VERIFIED', codeSha: evidence.codeSha };
 }
 function cli() {
   const profileName = process.argv[process.argv.indexOf('--profile') + 1]; const goal = process.argv[process.argv.indexOf('--goal') + 1];
   if (profileName !== 'rc' || goal !== 'G91') throw new Error('Usage: --profile rc --goal G91 [--evidence file]');
   const profile = JSON.parse(fs.readFileSync(path.resolve('scripts/perf/release-250-profile.v1.json'), 'utf8')); verifyBudgetProfile(profile);
   const evidenceIndex = process.argv.indexOf('--evidence');
-  const result = evidenceIndex > -1 ? verifyBudgetEvidence(profile, readRepositoryArtifact(process.argv[evidenceIndex + 1]).value, { expectedSha: process.env.GITHUB_SHA }) : { status: 'PENDING_EXTERNAL_PERFORMANCE_EVIDENCE' };
+  const result = evidenceIndex > -1 ? verifyBudgetEvidence(profile, readExternalCliArtifact(process.argv).value, { expectedSha: process.env.GITHUB_SHA }) : { status: 'PENDING_EXTERNAL_PERFORMANCE_EVIDENCE' };
   process.stdout.write(`${JSON.stringify({ ok: true, ...result })}\n`);
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) { try { cli(); } catch (error) { console.error(error.message); process.exitCode = 1; } }

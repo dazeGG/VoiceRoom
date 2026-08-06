@@ -2,8 +2,11 @@ name: Release 2.5.0 candidate preflight
 on:
   workflow_dispatch:
     inputs:
-      evidence_file: { description: Repository-relative immutable RC evidence, required: true, type: string }
-permissions: { contents: read }
+      evidence_artifact_id: { description: Immutable GitHub Actions artifact id, required: true, type: string }
+      archive_sha256: { description: Artifact archive SHA256, required: true, type: string }
+      object_path: { description: RC evidence object path, required: true, type: string }
+      object_sha256: { description: RC evidence object SHA256, required: true, type: string }
+permissions: { contents: read, actions: read }
 jobs:
   rc-preflight:
     if: github.ref == 'refs/heads/release/2.5.0'
@@ -15,7 +18,15 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version-file: .nvmrc, cache: npm }
       - run: npm ci
+      - name: Resolve external immutable RC evidence
+        env: { GH_TOKEN: "${{ github.token }}", ARTIFACT_ID: "${{ inputs.evidence_artifact_id }}", ARCHIVE_SHA256: "${{ inputs.archive_sha256 }}" }
+        run: |
+          mkdir external-evidence
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$ARTIFACT_ID/zip" > external-evidence.zip
+          test "sha256:$(sha256sum external-evidence.zip | cut -d' ' -f1)" = "$ARCHIVE_SHA256"
+          unzip -q external-evidence.zip -d external-evidence
       - run: node --test scripts/test/g94-rc-preflight.test.mjs
-      - run: node scripts/release/verify-rc-candidate.mjs --verify "$EVIDENCE_FILE"
+      - run: node scripts/release/verify-rc-candidate.mjs --external-root external-evidence --verify "$OBJECT_PATH" --sha256 "$OBJECT_SHA256"
         env:
-          EVIDENCE_FILE: ${{ inputs.evidence_file }}
+          OBJECT_PATH: ${{ inputs.object_path }}
+          OBJECT_SHA256: ${{ inputs.object_sha256 }}

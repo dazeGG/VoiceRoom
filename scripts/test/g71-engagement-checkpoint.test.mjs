@@ -9,7 +9,7 @@ const hash = (character) => `sha256:${character.repeat(64)}`;
 
 function fixture() {
   const value = {
-    contract: 'voice-room.engagement-checkpoint/v1', release: '2.5.0', gitSha: 'a'.repeat(40),
+    contract: 'voice-room.engagement-checkpoint/v1', release: '2.5.0', codeSha: 'a'.repeat(40),
     digests: { api: hash('a'), web: hash('b'), worker: hash('c') },
     messagingCheckpoint: { artifactId: 'g42', sha256: hash('d'), verified: true },
     membershipCheckpoint: { artifactId: 'g50', sha256: hash('e'), verified: true },
@@ -34,7 +34,7 @@ function fixture() {
 test('G71-A01 accepts only immutable complete engagement evidence', () => {
   const result = verifyEngagementCheckpoint(fixture());
   assert.equal(result.durationMs, 3_600_000);
-  assert.equal(result.gitSha, 'a'.repeat(40));
+  assert.equal(result.codeSha, 'a'.repeat(40));
 });
 
 test('G71-A02 fails closed on missing external matrices, budgets, failure thresholds or 60m proof', () => {
