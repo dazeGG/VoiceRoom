@@ -2,6 +2,7 @@
   "contract": "voice-room.rc-policy/v1",
   "release": "2.5.0",
   "branch": "release/2.5.0",
+  "releaseMerge": { "method": "merge", "requireNoFastForward": true, "firstParent": "g93-develop", "secondParent": "authorized-release-source" },
   "requiredMatrices": [
     "repository", "migration-fresh", "migration-upgrade", "migration-rollback", "n-1", "rescue",
     "e2e-chromium-run-1", "e2e-chromium-run-2", "e2e-firefox", "e2e-webkit", "physical-desktop",

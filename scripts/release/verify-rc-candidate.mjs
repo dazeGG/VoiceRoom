@@ -10,22 +10,28 @@ function readBoundArtifact(reference, resolveArtifact, label) {
   if (sha256(bytes) !== reference.sha256) throw new Error(`RC ${label} artifact digest mismatch`);
   try { return JSON.parse(bytes); } catch { throw new Error(`RC ${label} artifact is not JSON`); }
 }
-export function verifyRcCandidate(policy, evidence, { expectedSha, resolveArtifact = evidence?._resolveArtifact, resolveTreeSha = (sourceSha) => spawnSync('git', ['rev-parse', `${sourceSha}^{tree}`], { encoding: 'utf8' }).stdout.trim() } = {}) {
+function resolveGitCommit(sourceSha) {
+  const line = spawnSync('git', ['rev-list', '--parents', '-n', '1', sourceSha], { encoding: 'utf8' }).stdout.trim().split(/\s+/);
+  return { sha: line[0], parents: line.slice(1), treeSha: spawnSync('git', ['rev-parse', `${sourceSha}^{tree}`], { encoding: 'utf8' }).stdout.trim() };
+}
+export function verifyRcCandidate(policy, evidence, { expectedSha, resolveArtifact = evidence?._resolveArtifact, resolveCommit = resolveGitCommit } = {}) {
   if (policy?.contract !== 'voice-room.rc-policy/v1' || evidence?.contract !== 'voice-room.rc-candidate/v1' || evidence.release !== policy.release) throw new Error('Invalid RC policy or evidence contract');
   const authority = evidence.g93Authority;
   if (!GIT_SHA.test(authority?.developSha || '')) throw new Error('Green immutable G93 authority is required');
   const authorityArtifact = readBoundArtifact({ artifactPath: authority.artifactPath, sha256: authority.artifactSha256 }, resolveArtifact, 'G93 authority');
   if (authorityArtifact.status !== 'VERIFIED' || authorityArtifact.developSha !== authority.developSha || authorityArtifact.releaseBranchAllowed !== true) throw new Error('Green immutable G93 authority is required');
-  if (!authority.mergeMethodAuthority?.id || !authority.mergeMethodAuthority?.artifactPath || !SHA256.test(authority.mergeMethodAuthority.sha256 || '')) throw new Error('Release-only merge-method authority is required');
+  if (policy.releaseMerge?.method !== 'merge' || policy.releaseMerge?.requireNoFastForward !== true || !authority.mergeMethodAuthority?.id || !authority.mergeMethodAuthority?.artifactPath || !SHA256.test(authority.mergeMethodAuthority.sha256 || '')) throw new Error('Canonical release merge authority is required');
   const mergeAuthority = readBoundArtifact(authority.mergeMethodAuthority, resolveArtifact, 'merge-method authority');
-  if (mergeAuthority.id !== authority.mergeMethodAuthority.id || mergeAuthority.sourceSha !== expectedSha || mergeAuthority.method !== 'squash' || mergeAuthority.releaseOnly !== true) throw new Error('Release-only merge-method authority is stale or hostile');
+  if (mergeAuthority.id !== authority.mergeMethodAuthority.id || mergeAuthority.releaseHeadSha !== expectedSha || mergeAuthority.baseDevelopSha !== authority.developSha || !GIT_SHA.test(mergeAuthority.authorizedSourceSha || '') || mergeAuthority.method !== 'merge' || mergeAuthority.releaseOnly !== true) throw new Error('Canonical release merge authority is stale or hostile');
   if (evidence.branch !== policy.branch || evidence.version !== policy.release || evidence.baseDevelopSha !== authority.developSha) throw new Error('RC branch/version/base does not bind G93');
   const candidates = evidence.candidates || []; const active = candidates.filter((item) => item.status === 'active');
   if (active.length !== 1) throw new Error('Exactly one active RC candidate is required');
   const candidate = active[0];
   if (!candidate.id || !Number.isInteger(candidate.ordinal) || candidate.ordinal < 1 || !GIT_SHA.test(candidate.sourceSha || '') || !GIT_SHA.test(candidate.treeSha || '')) throw new Error('Active candidate identity is not immutable');
   if (expectedSha && candidate.sourceSha !== expectedSha) throw new Error('RC candidate source SHA does not match workflow HEAD');
-  if (resolveTreeSha(candidate.sourceSha) !== candidate.treeSha) throw new Error('RC candidate tree identity does not match the evaluated source');
+  const commit = resolveCommit(candidate.sourceSha);
+  if (commit.sha !== candidate.sourceSha || commit.treeSha !== candidate.treeSha) throw new Error('RC candidate tree identity does not match the evaluated source');
+  if (commit.parents?.length !== 2 || commit.parents[0] !== authority.developSha || commit.parents[1] !== mergeAuthority.authorizedSourceSha || JSON.stringify(commit.parents) !== JSON.stringify(mergeAuthority.parents)) throw new Error('RC release head is not the canonical authorized merge commit');
   exactKeys(Object.keys(candidate.digests || {}), policy.requiredDigests, 'digest');
   for (const [key, digest] of Object.entries(candidate.digests)) if (!SHA256.test(digest || '')) throw new Error(`RC ${key} digest is mutable`);
   const manifest = readBoundArtifact({ artifactPath: candidate.manifestArtifactPath, sha256: candidate.manifestSha256 }, resolveArtifact, 'candidate manifest');
