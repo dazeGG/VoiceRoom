@@ -1995,7 +1995,7 @@ test('message action toolbars expose persisted quick reactions and a separated f
   const picker = read('src/lib/shared/chat/ReactionPicker.svelte');
   const persistence = read('src/lib/shared/chat/frequent-reactions.ts');
 
-  assert.match(chat, /ReactionPicker store=\{reactions\} messageId=\{message\.id\} userId=\{session\.user\?\.id \|\| ''\}/);
+  assert.match(chat, /\{#if reactionsEnabled && session\.user\?\.id\}<ReactionPicker store=\{reactions\} messageId=\{message\.id\} userId=\{session\.user\.id\}/);
   assert.match(dm, /ReactionPicker store=\{reactions\} messageId=\{bubble\.id\} userId=\{selfId\}/);
   assert.ok(chat.indexOf('ReactionPicker store={reactions} messageId={message.id}') < chat.indexOf('aria-label="Ответить"'));
   assert.ok(dm.indexOf('ReactionPicker store={reactions} messageId={bubble.id}') < dm.indexOf('aria-label="Ответить"'));
