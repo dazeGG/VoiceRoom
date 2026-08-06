@@ -60,3 +60,17 @@ test('G89-A03 snapshot creation rejects symlinked uploads where supported', (t) 
   catch { t.skip('symlink creation is unavailable'); return; }
   assert.throws(() => createCoordinatedSnapshot({ databaseDump: database, uploads, catalog, output: path.join(root, 'snapshot'), namespace: 'test-run' }), /Symlinks/);
 });
+
+test('G89-A04 restore rejects manifest escapes and symlinks in every source component', (t) => {
+  const { allowedRoot, root, snapshot } = fixture(t);
+  const manifestFile = path.join(snapshot, 'manifest.json');
+  const manifest = JSON.parse(fs.readFileSync(manifestFile));
+  manifest.database.path = '../source.dump';
+  fs.writeFileSync(manifestFile, JSON.stringify(manifest));
+  assert.throws(() => restoreCoordinatedSnapshot({ snapshot, target: path.join(allowedRoot, 'escape'), allowedRoot, namespace: 'test-run' }), /Unsafe Database dump/);
+  manifest.database.path = 'database.dump'; fs.writeFileSync(manifestFile, JSON.stringify(manifest));
+  try { fs.symlinkSync(path.join(snapshot, 'uploads', 'objects'), path.join(snapshot, 'uploads', 'linked-objects'), 'junction'); }
+  catch { t.skip('symlink creation is unavailable'); return; }
+  manifest.uploads[0].path = 'linked-objects/asset.bin'; fs.writeFileSync(manifestFile, JSON.stringify(manifest));
+  assert.throws(() => restoreCoordinatedSnapshot({ snapshot, target: path.join(allowedRoot, 'linked'), allowedRoot, namespace: 'test-run' }), /symlink/);
+});
