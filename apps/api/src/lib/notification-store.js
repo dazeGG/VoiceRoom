@@ -313,13 +313,17 @@ function createNotificationStore({
         [roomId]
       );
       if (room.rowCount === 0) return { ok: false, code: 'not_found' };
-      await client.query(
-        `INSERT INTO notification_room_mutes (id, user_id, room_id, level, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, current_timestamp, current_timestamp)
-         ON CONFLICT (user_id, room_id) DO UPDATE
-         SET level = EXCLUDED.level, updated_at = current_timestamp`,
-        [createRowId(), userId, roomId, level]
-      );
+      if (level === 'all') {
+        await client.query('DELETE FROM notification_room_mutes WHERE user_id = $1 AND room_id = $2', [userId, roomId]);
+      } else {
+        await client.query(
+          `INSERT INTO notification_room_mutes (id, user_id, room_id, level, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, current_timestamp, current_timestamp)
+           ON CONFLICT (user_id, room_id) DO UPDATE
+           SET level = EXCLUDED.level, updated_at = current_timestamp`,
+          [createRowId(), userId, roomId, level]
+        );
+      }
       return { ok: true, level };
     });
   }
