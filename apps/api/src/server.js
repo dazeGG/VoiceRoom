@@ -2709,8 +2709,12 @@ async function handleBanRoomPeer(req, res, roomId) {
         sendJson(res, 409, { ok: false, code: 'room_ban_limit', error: 'Достигнут лимит блокировок комнаты' });
         return;
       }
-      if (!result?.ban) {
+      if (error?.code === 'room_ban_failed') {
         sendJson(res, 409, { ok: false, error: 'Не удалось сохранить блокировку' });
+        return;
+      }
+      if (!result?.ban) {
+        sendJson(res, 500, { ok: false, error: 'Не удалось сохранить блокировку' });
         return;
       }
       // The ban is durable and peer teardown is best-effort but terminal. The
@@ -2770,8 +2774,12 @@ async function handleBanRoomPeer(req, res, roomId) {
       sendJson(res, 409, { ok: false, code: 'room_ban_limit', error: 'Достигнут лимит блокировок комнаты' });
       return;
     }
-    if (!result?.ban) {
+    if (error?.code === 'room_ban_failed') {
       sendJson(res, 409, { ok: false, error: 'Не удалось сохранить блокировку' });
+      return;
+    }
+    if (!result?.ban) {
+      sendJson(res, 500, { ok: false, error: 'Не удалось сохранить блокировку' });
       return;
     }
     req?.log?.warn?.({ code: 'room_ban_peer_cleanup_failed' }, 'Banned peer cleanup finished with errors');
