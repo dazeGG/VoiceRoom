@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import crypto from 'node:crypto';
+import { pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
 
 export const LIVEKIT_REPLAY_VERSION = 'v1.13.2';
@@ -97,7 +98,7 @@ export function runReplayScenario(options = {}) {
   };
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const { values } = parseArgs({
     options: {
       json: { type: 'boolean', default: false }

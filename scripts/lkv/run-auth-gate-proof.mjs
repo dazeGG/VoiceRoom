@@ -2,6 +2,7 @@
 
 import { createRequire } from 'node:module';
 import fs from 'node:fs';
+import { pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
 
 const require = createRequire(import.meta.url);
@@ -224,7 +225,7 @@ export async function runAuthGateProof() {
   };
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const { values } = parseArgs({ options: { json: { type: 'boolean', default: false }, 'fail-on-blocked': { type: 'boolean', default: false } } });
   const report = await runAuthGateProof();
   process.stdout.write(values.json ? `${JSON.stringify(report, null, 2)}\n` : `${JSON.stringify(report)}\n`);

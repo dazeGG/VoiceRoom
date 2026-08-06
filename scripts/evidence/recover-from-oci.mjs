@@ -40,7 +40,11 @@ function parse(argv) { const out = {}; for (let i = 0; i < argv.length; i += 2) 
 
 function run(command, args, errorMessage) {
   const result = spawnSync(command, args, { stdio: ["ignore", "pipe", "pipe"] });
-  if (result.status !== 0) throw new Error(`${errorMessage}: ${result.stderr.toString().trim()}`);
+  if (result.status !== 0) {
+    const stderr = result.stderr?.toString().trim();
+    const detail = result.error?.message || stderr || `exit ${result.status}`;
+    throw new Error(`${errorMessage}: ${detail}`);
+  }
 }
 
 function cli(argv) {
