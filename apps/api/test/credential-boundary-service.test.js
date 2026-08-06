@@ -162,6 +162,21 @@ test('credential boundary revokes principals through current and legacy stores',
   ]);
 });
 
+test('credential boundary revokes only the requested issued credential', async () => {
+  const calls = [];
+  const boundary = createCredentialBoundaryService({
+    roomStore: {
+      async revokeLiveKitGateCredential(input) { calls.push(input); return { status: 'revoked' }; }
+    },
+    signer: createSigner(),
+    now: () => 4_500
+  });
+  assert.deepEqual(await boundary.revokeCredential({ credentialId: 'credential-1', roomId: 'room-1', principal: PRINCIPAL }), { status: 'revoked' });
+  assert.deepEqual(calls, [{ credentialId: 'credential-1', principal: PRINCIPAL, roomId: 'room-1', now: 4_500 }]);
+  assert.deepEqual(await boundary.revokeCredential(), { status: 'invalid' });
+  assert.deepEqual(await createCredentialBoundaryService({ roomStore: {}, signer: createSigner() }).revokeCredential({ credentialId: 'credential-1', roomId: 'room-1', principal: PRINCIPAL }), { status: 'unavailable' });
+});
+
 test('credential boundary falls back from peer revocation to normalized principal revocation', async () => {
   const calls = [];
   let normalized = PRINCIPAL;

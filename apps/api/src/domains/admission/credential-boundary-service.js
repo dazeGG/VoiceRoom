@@ -99,6 +99,12 @@ function createCredentialBoundaryService({
     return { status: 'unavailable', epoch: null };
   }
 
+  async function revokeCredential({ credentialId, roomId, principal } = {}) {
+    if (!credentialId || !roomId || !principal) return { status: 'invalid' };
+    if (typeof roomStore.revokeLiveKitGateCredential !== 'function') return { status: 'unavailable' };
+    return roomStore.revokeLiveKitGateCredential({ credentialId, principal, roomId, now: clock() });
+  }
+
   async function revokePeer({ roomId, accountUserId = null, guestPrincipalId = '' } = {}) {
     if (typeof roomStore.revokeLiveKitGatePeer === 'function') {
       return roomStore.revokeLiveKitGatePeer({ roomId, accountUserId, guestPrincipalId, now: clock() });
@@ -118,6 +124,7 @@ function createCredentialBoundaryService({
     authorizeCredential,
     issueCredential,
     resolvePrincipal,
+    revokeCredential,
     revokePeer,
     revokePrincipal
   });

@@ -29,5 +29,6 @@ test('G44-A02 HTTP LiveKit admission persists only after credential issue and re
   const handler = source.slice(start, end);
   assert.ok(handler.indexOf('provider.issueAdmission') < handler.indexOf('persistSuccessfulAdmission'));
   assert.match(handler, /persistSuccessfulAdmission[\s\S]*revokeIssuedAdmission/);
+  assert.match(handler, /revokeIssuedAdmission\(\{[\s\S]*credentialId: issued\.admission\.gateCredentialId/);
   assert.doesNotMatch(handler, /rollbackSuccessfulAdmission/);
 });

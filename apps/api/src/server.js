@@ -1426,9 +1426,14 @@ async function readJsonBody(req) {
   }
 }
 
-async function revokeIssuedAdmission({ boundary = getCredentialBoundary(), cause, principal, recordFailure = recordCredentialRevokeCleanupFailure, req, roomId }) {
+async function revokeIssuedAdmission({ boundary = getCredentialBoundary(), cause, credentialId, principal, recordFailure = recordCredentialRevokeCleanupFailure, req, roomId }) {
   try {
-    await boundary.revokePrincipal({ roomId, principal });
+    const revoked = await boundary.revokeCredential({ credentialId, roomId, principal });
+    if (revoked?.status !== 'revoked') {
+      const error = new Error('Issued admission credential cleanup was refused');
+      error.code = 'credential_revoke_cleanup_refused';
+      throw error;
+    }
   } catch (cleanupError) {
     recordFailure();
     req?.log?.error?.({ cleanupError, code: 'credential_revoke_cleanup_failed', roomId }, 'Issued admission credential cleanup failed');
@@ -1519,7 +1524,7 @@ async function handleLiveKitToken(req, res) {
   }
 
   if (await findRoomBan(roomId, sessionUser?.id, getClientIp(req, TRUST_PROXY))) {
-    await revokeIssuedAdmission({ principal, req, roomId });
+    await getCredentialBoundary().revokePrincipal({ principal, roomId });
     sendRoomBanned(res, roomId);
     return;
   }
@@ -1534,11 +1539,11 @@ async function handleLiveKitToken(req, res) {
         admissionSucceeded: true
       });
     } catch (error) {
-      await revokeIssuedAdmission({ cause: error, principal, req, roomId });
+      await revokeIssuedAdmission({ cause: error, credentialId: issued.admission.gateCredentialId, principal, req, roomId });
       throw error;
     }
     if (persistedMembership.status !== 'active') {
-      await revokeIssuedAdmission({ principal, req, roomId });
+      await revokeIssuedAdmission({ credentialId: issued.admission.gateCredentialId, principal, req, roomId });
       if (persistedMembership.status === 'banned') {
         sendRoomBanned(res, roomId);
       } else {

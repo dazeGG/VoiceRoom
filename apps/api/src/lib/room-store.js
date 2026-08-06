@@ -601,6 +601,21 @@ function createRoomStore({
     });
   }
 
+  async function revokeLiveKitGateCredential({ credentialId, principal, roomId, now = Date.now() } = {}) {
+    if (!credentialId || !roomId || !isValidGatePrincipal(principal)) return { status: 'invalid' };
+    return transaction(getPool(), async (client) => {
+      await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`voice-room:livekit-gate:${roomId}:${principal.principalType}:${principal.principalId}`]);
+      const result = await client.query(
+        `UPDATE livekit_gate_credentials
+         SET revoked_at = COALESCE(revoked_at, $5)
+         WHERE id = $1 AND room_id = $2 AND principal_type = $3 AND principal_id = $4
+         RETURNING id`,
+        [credentialId, roomId, principal.principalType, principal.principalId, toDate(now)]
+      );
+      return { status: result.rowCount === 1 ? 'revoked' : 'not_found' };
+    });
+  }
+
   async function revokeLiveKitGatePrincipalInTransaction(client, { principal, roomId, now = Date.now() } = {}) {
     await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`voice-room:livekit-gate:${roomId}:${principal.principalType}:${principal.principalId}`]);
     const epoch = await client.query(
@@ -1252,6 +1267,7 @@ function createRoomStore({
     markRoomEmpty,
     invalidatePeerIdentity,
     normalizeGatePrincipal,
+    revokeLiveKitGateCredential,
     revokeLiveKitGatePeer,
     revokeLiveKitGatePrincipal,
     revokeLiveKitGatePrincipalInTransaction,
