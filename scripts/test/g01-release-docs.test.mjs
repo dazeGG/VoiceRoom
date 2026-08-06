@@ -760,6 +760,17 @@ test("bootstrap-plan scopes the standard GitHub token to the attested catalog st
   assert.equal(failure.code, 4);
 });
 
+test("every PR executes the exact G01-G03 foundation contract suite on Ubuntu", () => {
+  const workflow = readWorkflow(), job = jobBlock(workflow, "foundation-contracts");
+  assert.ok(job, "foundation contract job must exist");
+  assert.equal(field(job, "name"), "G01-G03 foundation contracts");
+  assert.equal(field(job, "if"), "github.event_name == 'pull_request'");
+  assert.equal(field(job, "runs-on"), "ubuntu-latest");
+  const step = stepBlock(job, "Run exact G01-G03 contract suite");
+  assert.ok(step, "foundation contract step must exist");
+  assert.equal(field(step, "run"), "node --test scripts/test/g01*.test.mjs scripts/test/g02*.test.mjs scripts/test/g03*.test.mjs");
+});
+
 test("workflow has reachable bounded premerge F9 and automatic merged-commit F11/selection with authenticated provenance", () => {
   const workflow = readWorkflow(), planJob = jobBlock(workflow, "bootstrap-plan"), sealJob = jobBlock(workflow, "bootstrap-seal");
   assert.equal(field(planJob, "name"), "G01 targeted bootstrap gate"); assert.equal(field(planJob, "needs"), undefined);
