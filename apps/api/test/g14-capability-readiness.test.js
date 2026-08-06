@@ -14,7 +14,11 @@ const {
 const { createCapabilitySnapshot } = require('../src/platform/capability-routes');
 const { createReadinessReport, sha256Hex } = require('../src/platform/readiness');
 
-const manifestPath = path.resolve(process.env.CAPABILITY_DAG_PATH || 'config/capability-dag.v1.json');
+const repositoryRoot = path.resolve(__dirname, '../../..');
+const requestedManifestPath = process.env.CAPABILITY_DAG_PATH || 'config/capability-dag.v1.json';
+const manifestPath = path.isAbsolute(requestedManifestPath)
+  ? requestedManifestPath
+  : path.resolve(repositoryRoot, requestedManifestPath);
 
 function fullOptions(manifest) {
   const categories = ['binary', 'schema', 'index', 'config', 'api', 'web', 'visibility', 'worker', 'internal'];
