@@ -1,7 +1,7 @@
 'use strict';
 
 const { createDbPool } = require('../lib/db');
-const { readEnvBool, readEnvInt } = require('../lib/config');
+const { readEnvInt, readMessageDeliveryMode } = require('../lib/config');
 const { createMessageOutboxRepository } = require('../domains/messaging/message-outbox-repository');
 const { boundedBackoff, createLeaseRuntime } = require('../platform/lease-runtime');
 
@@ -120,7 +120,7 @@ function createMessageDeliveryWorker({
 }
 
 async function main(env = process.env) {
-  if (!readEnvBool('MESSAGE_DELIVERY_CLAIM_ENABLED', false, env)) {
+  if (!readMessageDeliveryMode(env).claimEnabled) {
     console.log('Message delivery claims are disabled');
     return;
   }

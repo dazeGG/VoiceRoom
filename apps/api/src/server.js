@@ -16,7 +16,7 @@ const { buildServerEnvelope } = require('./realtime/envelope');
 const { URL } = require('node:url');
 const { RoomServiceClient } = require('livekit-server-sdk');
 
-const { readEnvInt, readEnvBool, readDatabaseConfig, readUploadsDir } = require('./lib/config');
+const { readEnvInt, readEnvBool, readMessageDeliveryMode, readDatabaseConfig, readUploadsDir } = require('./lib/config');
 const {
   normalizeRoomId,
   normalizePeerId,
@@ -188,7 +188,8 @@ const MAX_GUEST_STREAMS_PER_IP = readEnvInt('MAX_GUEST_STREAMS_PER_IP', 8, 1);
 const WS_MAX_PAYLOAD_BYTES = readEnvInt('WS_MAX_PAYLOAD_BYTES', 64 * 1024, 1024);
 const RETENTION_PURGE_INTERVAL_MS = readEnvInt('RETENTION_PURGE_INTERVAL_MS', 60 * 60 * 1000, 0);
 const RETENTION_KEEP_DELETED_MS = readEnvInt('RETENTION_KEEP_DELETED_MS', 30 * 24 * 60 * 60 * 1000, 60000);
-const MESSAGE_DIRECT_EMIT_ENABLED = readEnvBool('MESSAGE_DIRECT_EMIT_ENABLED', true);
+const MESSAGE_DELIVERY_MODE = readMessageDeliveryMode();
+const MESSAGE_DIRECT_EMIT_ENABLED = MESSAGE_DELIVERY_MODE.directEmitEnabled;
 const MESSAGE_DELIVERY_LISTEN_ENABLED = readEnvBool('MESSAGE_DELIVERY_LISTEN_ENABLED', true);
 // Desktop app downloads are served from the latest GitHub release of this repo.
 // Metadata is cached server-side so visitors never hit GitHub's per-IP rate limit.
