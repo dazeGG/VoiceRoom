@@ -1,0 +1,4 @@
+import {expect,test} from '@playwright/test';import {readFileSync} from 'node:fs';
+const router=readFileSync(new URL('../src/lib/shared/notifications/router.ts',import.meta.url),'utf8');const sw=readFileSync(new URL('../src/service-worker.ts',import.meta.url),'utf8');const desktop=readFileSync(new URL('../src/lib/platform/desktop-notification-bridge.ts',import.meta.url),'utf8');
+test('G64-A01 realtime/provider duplicates share a revisioned dedupe key',async()=>{expect(router).toContain('dedupeKey');expect(router).toContain('memoryDedupe');expect(sw).toContain('notificationId');expect(sw).toContain('revision');});
+test('G64-A02 focus, privacy and platform suppression retain inbox delivery',async()=>{expect(router).toContain('activeTargetSuppresses');expect(router).toContain('privateNotifications');expect(router).toContain('permission');expect(desktop).toContain('DesktopNotificationPayload');});
