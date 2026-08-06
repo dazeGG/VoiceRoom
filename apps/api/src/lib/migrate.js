@@ -1,6 +1,7 @@
 'use strict';
 
 const { Client } = require('pg');
+const fs = require('node:fs');
 const path = require('node:path');
 const { PG_MIGRATE_LOCK_ID, runner } = require('node-pg-migrate');
 const { readDatabaseConfig } = require('./config');
@@ -15,6 +16,13 @@ const MIGRATION_GUARD_STATES = {
   dirty: 'dirty'
 };
 const LOCK_TIMEOUT_MS = 5000;
+
+function expectedMigrationCatalog(dir = DEFAULT_MIGRATIONS_DIR) {
+  return fs.readdirSync(dir, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && /\.(?:c?js|ts)$/.test(entry.name))
+    .map((entry) => entry.name.replace(/\.(?:c?js|ts)$/, ''))
+    .sort();
+}
 
 function migrationLogger(logger) {
   return {
@@ -124,13 +132,18 @@ async function assertMigrationLockHeld(client, lockValue) {
 
 async function assertMigrationReady({
   databaseUrl = readDatabaseConfig().url,
+  dir = DEFAULT_MIGRATIONS_DIR,
   clientFactory = (connectionString) => new Client({ connectionString })
 } = {}) {
   const client = clientFactory(databaseUrl);
   await client.connect();
   try {
-    const relation = await query(client, `SELECT to_regclass('public.${MIGRATION_GUARD_TABLE}') AS table_name`);
-    if (!relation[0]?.table_name) return true;
+    const relation = await query(client, `SELECT
+      to_regclass('public.${MIGRATION_GUARD_TABLE}') AS guard_table,
+      to_regclass('public.${DEFAULT_MIGRATIONS_TABLE}') AS migrations_table`);
+    if (!relation[0]?.guard_table || !relation[0]?.migrations_table) {
+      throw new Error('API rollout blocked because the migration guard or catalog is absent');
+    }
     const rows = await query(
       client,
       `SELECT state, marker FROM ${MIGRATION_GUARD_TABLE} WHERE id = $1`,
@@ -139,6 +152,12 @@ async function assertMigrationReady({
     const state = rows[0]?.state;
     if (state === MIGRATION_GUARD_STATES.running || state === MIGRATION_GUARD_STATES.dirty) {
       throw new Error(`API rollout blocked by migration guard state ${state}: ${rows[0]?.marker || 'unknown reason'}`);
+    }
+    if (state !== MIGRATION_GUARD_STATES.clean) throw new Error(`API rollout blocked by unknown migration guard state ${state || 'missing'}`);
+    const applied = (await query(client, `SELECT name FROM ${DEFAULT_MIGRATIONS_TABLE} ORDER BY name ASC`)).map((row) => row.name);
+    const expected = expectedMigrationCatalog(dir);
+    if (applied.length !== expected.length || applied.some((name, index) => name !== expected[index])) {
+      throw new Error(`API rollout blocked because migration catalog/head does not match this build (expected ${expected.at(-1) || 'none'}, got ${applied.at(-1) || 'none'})`);
     }
     return true;
   } finally {
@@ -227,6 +246,7 @@ async function runMigrations({
 
 module.exports = {
   DEFAULT_MIGRATIONS_DIR,
+  expectedMigrationCatalog,
   assertMigrationLockHeld,
   assertMigrationReady,
   advisoryLockParts,

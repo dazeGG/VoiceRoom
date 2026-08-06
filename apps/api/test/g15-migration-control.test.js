@@ -5,17 +5,21 @@ const { spawnSync } = require('node:child_process');
 const path = require('node:path');
 const { Client } = require('pg');
 const { test } = require('node:test');
+const { createTestDatabase } = require('./db-harness');
 const {
   LOCK_TIMEOUT_MS,
   MIGRATION_GUARD_STATES,
   advisoryLockParts,
   assertMigrationReady,
+  expectedMigrationCatalog,
   runMigrations
 } = require('../src/lib/migrate');
 
 class FakeClient {
-  constructor({ guardTable = true, guardState = 'clean', loseLock = false, lockTimeout = false } = {}) {
+  constructor({ guardTable = true, migrationsTable = true, migrationNames = expectedMigrationCatalog(), guardState = 'clean', loseLock = false, lockTimeout = false } = {}) {
     this.guardTable = guardTable;
+    this.migrationsTable = migrationsTable;
+    this.migrationNames = migrationNames;
     this.guardState = guardState;
     this.loseLock = loseLock;
     this.lockTimeout = lockTimeout;
@@ -50,11 +54,12 @@ class FakeClient {
       this.lockHeld = false;
       return { rows: [{ pg_advisory_unlock: held }] };
     }
-    if (sql.includes('to_regclass')) return { rows: [{ table_name: this.guardTable ? 'voiceroom_migration_guard' : null }] };
+    if (sql.includes('to_regclass')) return { rows: [{ guard_table: this.guardTable ? 'voiceroom_migration_guard' : null, migrations_table: this.migrationsTable ? 'pgmigrations' : null }] };
     if (sql.startsWith('CREATE TABLE')) { this.guardTable = true; return { rows: [] }; }
     if (sql.startsWith('SELECT state FROM')) return { rows: [{ state: this.guardState }] };
     if (sql.startsWith('SELECT marker FROM')) return { rows: [{ marker: 'fixture' }] };
     if (sql.startsWith('SELECT state, marker FROM')) return { rows: [{ state: this.guardState, marker: 'fixture' }] };
+    if (sql.startsWith('SELECT name FROM pgmigrations')) return { rows: this.migrationNames.map((name) => ({ name })) };
     if (sql.startsWith('INSERT INTO')) {
       this.guardState = values[1];
       return { rows: [] };
@@ -125,7 +130,7 @@ test('G15-A02 interrupted migration leaves a dirty rollout fence', async () => {
   assert.equal(client.guardState, MIGRATION_GUARD_STATES.dirty);
 });
 
-test('G15-A02 dirty/running state blocks rollout while an unchanged N-1 schema remains readable', async () => {
+test('G15-A02 rollout requires a clean guard and the exact migration catalog/head', async () => {
   for (const guardState of [MIGRATION_GUARD_STATES.running, MIGRATION_GUARD_STATES.dirty]) {
     await assert.rejects(
       assertMigrationReady({ databaseUrl: 'postgres://fixture', clientFactory: () => new FakeClient({ guardState }) }),
@@ -133,9 +138,11 @@ test('G15-A02 dirty/running state blocks rollout while an unchanged N-1 schema r
     );
   }
 
-  await assert.doesNotReject(
-    assertMigrationReady({ databaseUrl: 'postgres://fixture', clientFactory: () => new FakeClient({ guardTable: false }) })
-  );
+  await assert.rejects(assertMigrationReady({ databaseUrl: 'postgres://fixture', clientFactory: () => new FakeClient({ guardTable: false }) }), /guard or catalog is absent/);
+  await assert.rejects(assertMigrationReady({ databaseUrl: 'postgres://fixture', clientFactory: () => new FakeClient({ migrationsTable: false }) }), /guard or catalog is absent/);
+  const stale = expectedMigrationCatalog().slice(0, -1);
+  await assert.rejects(assertMigrationReady({ databaseUrl: 'postgres://fixture', clientFactory: () => new FakeClient({ migrationNames: stale }) }), /catalog\/head does not match/);
+  await assert.doesNotReject(assertMigrationReady({ databaseUrl: 'postgres://fixture', clientFactory: () => new FakeClient() }));
 });
 
 test('G15-A02 production rejects unfenced and down migration commands before database access', () => {
@@ -169,4 +176,11 @@ test('G15-A01 concurrent PostgreSQL runners serialize behind one advisory fence'
     runMigrations({ databaseUrl, clientFactory, migrationRunner, logger: { log() {} } })
   ]);
   assert.match(order.join(','), /^start:\d+,end:\d+,start:\d+,end:\d+$/);
+});
+
+test('G15-A03 an existing PostgreSQL database is unready until the exact guarded catalog reaches this build head', { skip:!process.env.TEST_DATABASE_URL }, async (t) => {
+  const db=await createTestDatabase(t); t.after(()=>db.cleanup());
+  await assert.rejects(assertMigrationReady({databaseUrl:db.databaseUrl}),/guard or catalog is absent/);
+  await runMigrations({databaseUrl:db.databaseUrl,logger:{log(){},info(){},warn(){},error(){}}});
+  await assert.doesNotReject(assertMigrationReady({databaseUrl:db.databaseUrl}));
 });
