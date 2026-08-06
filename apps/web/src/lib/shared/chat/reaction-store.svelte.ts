@@ -41,6 +41,18 @@ export class ReactionStore {
   reactors = $state<Record<string, ReactorListState>>({});
   deletedMessages = $state<Record<string, true>>({});
   loadingMessages = $state<Record<string, true>>({});
+  private requestSequence = 0;
+  private reactorRequests: Record<string, number> = {};
+
+  private conversationKey(): string {
+    return this.conversation ? `${this.conversation.type}:${this.conversation.id}` : '';
+  }
+
+  private invalidateReactors(messageId?: string): void {
+    for (const key of Object.keys(this.reactorRequests)) {
+      if (!messageId || key.startsWith(`${messageId}\u0000`)) delete this.reactorRequests[key];
+    }
+  }
 
   setConversation(conversation: ReactionConversation): void {
     if (this.conversation?.type === conversation.type && this.conversation.id === conversation.id) return;
@@ -49,6 +61,7 @@ export class ReactionStore {
     this.reactors = {};
     this.deletedMessages = {};
     this.loadingMessages = {};
+    this.invalidateReactors();
   }
 
   forMessage(messageId: string): ReactionView[] {
@@ -64,17 +77,17 @@ export class ReactionStore {
     const next = { ...this.summaries };
     delete next[messageId];
     this.summaries = next;
+    const reactorEntries = { ...this.reactors };
+    for (const key of Object.keys(reactorEntries)) {
+      if (key.startsWith(`${messageId}\u0000`)) delete reactorEntries[key];
+    }
+    this.reactors = reactorEntries;
+    this.invalidateReactors(messageId);
   }
 
   replace(messageId: string, summaries: ReactionSummary[]): void {
     if (this.isDeleted(messageId)) return;
-    const previous = new Map(this.forMessage(messageId).map((item) => [item.emoji, item]));
-    this.summaries = {
-      ...this.summaries,
-      [messageId]: summaries
-        .filter((summary) => summary.count > 0)
-        .map((summary) => cleanView(summary, previous.get(summary.emoji)))
-    };
+    for (const summary of summaries) this.applyServer(messageId, summary);
   }
 
   applyServer(messageId: string, summary: ReactionSummary): void {
@@ -129,6 +142,7 @@ export class ReactionStore {
 
     try {
       const authoritative = await setReactionDesired(conversation, messageId, emoji, desired);
+      if (this.isDeleted(messageId) || this.conversationKey() !== `${conversation.type}:${conversation.id}`) return false;
       const latest = [...this.forMessage(messageId)];
       const latestIndex = latest.findIndex((item) => item.emoji === emoji);
       if (latestIndex >= 0) latest[latestIndex] = { ...latest[latestIndex], pending: false };
@@ -136,6 +150,7 @@ export class ReactionStore {
       this.applyServer(messageId, authoritative);
       return true;
     } catch (error) {
+      if (this.isDeleted(messageId) || this.conversationKey() !== `${conversation.type}:${conversation.id}`) return false;
       const latest = [...this.forMessage(messageId)];
       const latestIndex = latest.findIndex((item) => item.emoji === emoji);
       if (current) {
@@ -166,18 +181,24 @@ export class ReactionStore {
     const key = reactorKey(messageId, emoji);
     const current = this.reactorState(messageId, emoji);
     if (current.loading || (append && !current.nextCursor)) return;
+    const requestId = ++this.requestSequence;
+    const conversationKey = this.conversationKey();
+    this.reactorRequests[key] = requestId;
     this.reactors = { ...this.reactors, [key]: { ...current, loading: true, error: '' } };
     try {
       const page = await fetchReactors(conversation, messageId, emoji, {
         cursor: append ? current.nextCursor : null,
         limit: 50
       });
-      const reactors = append ? [...current.reactors, ...page.reactors] : page.reactors;
+      if (this.reactorRequests[key] !== requestId || this.conversationKey() !== conversationKey || this.isDeleted(messageId)) return;
+      const candidates = append ? [...current.reactors, ...page.reactors] : page.reactors;
+      const reactors = [...new Map(candidates.map((reactor) => [reactor.userId, reactor])).values()];
       this.reactors = {
         ...this.reactors,
         [key]: { reactors, nextCursor: page.nextCursor, loading: false, error: '' }
       };
     } catch (error) {
+      if (this.reactorRequests[key] !== requestId || this.conversationKey() !== conversationKey || this.isDeleted(messageId)) return;
       this.reactors = {
         ...this.reactors,
         [key]: {
@@ -195,6 +216,7 @@ export class ReactionStore {
     this.reactors = {};
     this.deletedMessages = {};
     this.loadingMessages = {};
+    this.invalidateReactors();
   }
 }
 

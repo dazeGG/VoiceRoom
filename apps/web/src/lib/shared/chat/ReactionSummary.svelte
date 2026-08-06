@@ -21,14 +21,18 @@
   <div class="reaction-summary" aria-label="Реакции на сообщение">
     {#each summaries as summary (summary.emoji)}
       <div class="reaction-chip" class:reacted={summary.reactedByMe} class:pending={summary.pending}>
-        <button
-          class="reaction-toggle"
-          type="button"
-          disabled={!canMutate || summary.pending}
-          aria-pressed={summary.reactedByMe}
-          aria-label={`${summary.reactedByMe ? 'Убрать' : 'Добавить'} реакцию ${summary.emoji}`}
-          onclick={() => void store.toggle(messageId, summary.emoji)}
-        >{summary.emoji}</button>
+        {#if canMutate}
+          <button
+            class="reaction-toggle"
+            type="button"
+            disabled={summary.pending}
+            aria-pressed={summary.reactedByMe}
+            aria-label={`${summary.reactedByMe ? 'Убрать' : 'Добавить'} реакцию ${summary.emoji}`}
+            onclick={() => void store.toggle(messageId, summary.emoji)}
+          >{summary.emoji}</button>
+        {:else}
+          <span class="reaction-toggle" aria-hidden="true">{summary.emoji}</span>
+        {/if}
         <Popover
           open={openEmoji === summary.emoji}
           onBeforeClose={() => { openEmoji = ''; }}
@@ -67,7 +71,7 @@
   .reaction-chip.pending { opacity: .65; }
   button { min-width: 34px; border: 0; background: transparent; color: inherit; cursor: pointer; }
   button:disabled { cursor: default; }
-  .reaction-toggle { padding: 4px 5px 4px 9px; font-size: 1rem; }
+  .reaction-toggle { display: grid; place-items: center; padding: 4px 5px 4px 9px; font-size: 1rem; }
   .reaction-count { padding: 4px 9px 4px 4px; font-variant-numeric: tabular-nums; }
   .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 </style>

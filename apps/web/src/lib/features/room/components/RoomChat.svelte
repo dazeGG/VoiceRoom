@@ -822,7 +822,7 @@
                   <span class="chat-msg-content">{#if message.content}<StructuredMessageContent content={message.content} fallback={message.text} />{:else}<ChatText text={message.text} />{/if}{#if message.editedAt}<span class="chat-msg-edited">(изменено)</span>{/if}</span>
                   {#if message.attachments?.length}<AttachmentMosaic attachments={message.attachments} />{/if}
                   <div class="chat-msg-actions" role="toolbar" aria-label="Действия с сообщением">
-                    {#if reactionsEnabled}<ReactionPicker store={reactions} messageId={message.id} userId={session.user?.id || ''} disabled={!session.user?.id} />{/if}
+                    {#if reactionsEnabled && session.user?.id}<ReactionPicker store={reactions} messageId={message.id} userId={session.user.id} />{/if}
                     {#if repliesEnabled}<button type="button" aria-label="Ответить" title="Ответить" onclick={() => { replyTarget = message; composeEl?.focus(); }}><MessageSquare {...iconSm} /></button>{/if}
                     <button type="button" aria-label="Копировать текст" title="Копировать текст" onclick={() => void copyMessageText(message)}><Copy {...iconSm} /></button>
                     {#if group.self}
