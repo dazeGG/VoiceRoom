@@ -3,9 +3,12 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { Pool } = require('pg');
 const { test } = require('node:test');
 const { createActiveBanRepository, normalizePrincipal } = require('../src/domains/moderation/active-ban-repository');
 const { createActiveBanService } = require('../src/domains/moderation/active-ban-service');
+const { runMigrations } = require('../src/lib/migrate');
+const { createTestDatabase } = require('./db-harness');
 
 test('G41-A01 active-ban repository applies one expiry and revocation predicate', async () => {
   const queries = [];
@@ -63,4 +66,25 @@ test('G41-A02 named HTTP, media, membership, mention and room-store paths call t
   assert.doesNotMatch(mentions, /FROM room_bans/);
   assert.match(roomStore, /findActiveRoomBan[\s\S]*getActiveBanService\(\)\.getActiveBan/);
   assert.doesNotMatch(roomStore, /SELECT COUNT\(\*\)::int AS count FROM room_bans/);
+});
+
+test('G41-A02 exact expiry unblocks and one hundred expired rows consume zero active cap in PostgreSQL', { skip: !process.env.TEST_DATABASE_URL }, async (t) => {
+  const { cleanup, databaseUrl } = await createTestDatabase(t);
+  await runMigrations({ databaseUrl, logger: { log() {}, info() {}, warn() {}, error() {} }, noLock: true });
+  const pool = new Pool({ connectionString: databaseUrl, max: 2 });
+  t.after(async () => { await pool.end(); await cleanup(); });
+  const now = Date.parse('2026-08-06T12:00:00.000Z');
+  await pool.query(`INSERT INTO users (id, login, display_name, password_hash) VALUES ('g41-user', 'g41user', 'G41 User', 'fixture')`);
+  await pool.query(`INSERT INTO rooms (id, creator_ip) VALUES ('g41-room', '')`);
+  await pool.query(`
+    INSERT INTO room_bans (id, room_id, user_id, ip, created_at, expires_at, metadata)
+    SELECT 'g41-expired-' || value, 'g41-room', 'g41-user', '', $1::timestamptz - interval '2 seconds', $1::timestamptz - interval '1 second', '{}'::jsonb
+    FROM generate_series(1, 100) AS value
+  `, [new Date(now)]);
+  const service = createActiveBanService({ pool, now: () => now });
+  assert.equal(await service.getActiveBan({ roomId: 'g41-room', userId: 'g41-user' }), null);
+  const created = await service.createBan({ roomId: 'g41-room', userId: 'g41-user', expiresAt: now + 1_000, maxActiveBans: 1 });
+  assert.equal(created.status, 'created');
+  assert.equal((await service.getActiveBan({ roomId: 'g41-room', userId: 'g41-user' }))?.id, created.ban.id);
+  assert.equal(await service.getActiveBan({ roomId: 'g41-room', userId: 'g41-user', at: now + 1_000 }), null);
 });
