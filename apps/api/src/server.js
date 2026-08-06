@@ -44,7 +44,7 @@ const { createPushStore } = require('./lib/push-store');
 const { createPushService, resolvePushTtl, shouldDeliverPush } = require('./lib/push-service');
 const { cleanPushEndpoint } = require('./lib/push-endpoint');
 const { startApiListener } = require('./lib/listen');
-const { runMigrations } = require('./lib/migrate');
+const { assertMigrationReady, runMigrations } = require('./lib/migrate');
 const { createRelease250Pool } = require('./lib/release-250-pool');
 const {
   observeMaintenance,
@@ -4439,6 +4439,9 @@ async function bootstrap({ env = process.env, logger = console, exit = process.e
     const database = readDatabaseConfig(env);
     if (readEnvBool('MIGRATE_ON_START', env.NODE_ENV !== 'production', env)) {
       await runMigrations({ databaseUrl: database.url, logger });
+    }
+    if (env.NODE_ENV === 'production') {
+      await assertMigrationReady({ databaseUrl: database.url });
     }
     roomStore = createRoomStore({
       databaseUrl: database.url,
