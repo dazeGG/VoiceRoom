@@ -39,7 +39,10 @@ export function createReadReconciliation(options: ReadReconciliationOptions) {
 
   channel?.addEventListener('message', (event: MessageEvent<{ cursor?: unknown }>) => {
     const cursor = typeof event.data?.cursor === 'string' ? event.data.cursor : '';
-    if (!cursor || cursor === committed) return;
+    // Opaque cursors are intentionally not ordered in the browser. Once this
+    // tab has an acknowledged cursor, a foreign cursor cannot safely advance
+    // it; account realtime/resync remains the authority for cross-tab state.
+    if (!cursor || committed) return;
     void advanceAfterRender(cursor);
   });
 

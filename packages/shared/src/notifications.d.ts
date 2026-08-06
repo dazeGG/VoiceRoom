@@ -6,7 +6,7 @@ export const NOTIFICATION_REASONS: readonly ['mention', 'reply'];
 export type NotificationLevel = 'all' | 'mentions' | 'none';
 export type NotificationReason = 'mention' | 'reply';
 export interface NotificationItem { id: string; roomId: string; sourceMessageId: string; actorUserId: string; reasons: NotificationReason[]; revision: number; createdAt: unknown; updatedAt: unknown; readAt: unknown; retractedAt: unknown; body: string; cursor?: string }
-export interface NotificationEnvelope { contractVersion: 1; notifications: NotificationItem[]; pageInfo: { nextCursor?: string; hasMore: boolean }; unreadCount: number; revision: number }
+export interface NotificationEnvelope { contractVersion: 1; notifications: NotificationItem[]; pageInfo: { nextCursor?: string; hasMore: boolean }; unreadCount: number; revision: number; firstUnread: NotificationItem | null }
 export function normalizeNotificationLevel(value: unknown, fallback?: NotificationLevel): NotificationLevel;
 export function normalizeNotificationLimit(value: unknown, fallback?: number): number;
 export function normalizeNotificationItem(value: unknown): NotificationItem | null;
