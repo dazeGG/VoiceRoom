@@ -7,6 +7,22 @@
     "bootstrap-attempts.json",
     "bootstrap-landed-recoveries.json"
   ],
+  "g19PhysicalMatrix": {
+    "schema": "scripts/evidence/g19-physical-matrix.schema.json",
+    "procedure": "docs/operations/DESKTOP_SUPPORT_MATRIX.md",
+    "requiredPlatforms": [
+      "ios-safari",
+      "android-chrome",
+      "ipados-safari",
+      "desktop-chrome",
+      "desktop-firefox",
+      "desktop-safari",
+      "voiceroom-desktop"
+    ],
+    "status": "PENDING_EXTERNAL_PHYSICAL_CAPTURE",
+    "matrixArtifactId": null,
+    "verifiedAt": null
+  },
   "archiveAuthority": "archive-authority.json",
   "archiveMap": "archive-map.json",
   "archiveLedger": "archive-ledger.json",
