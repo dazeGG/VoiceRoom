@@ -1,0 +1,19 @@
+name: Release 2.5.0 candidate preflight
+on:
+  workflow_dispatch:
+    inputs:
+      evidence_file: { description: Repository-relative immutable RC evidence, required: true, type: string }
+permissions: { contents: read }
+jobs:
+  rc-preflight:
+    if: github.ref == 'refs/heads/release/2.5.0'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@v4
+        with: { node-version-file: .nvmrc, cache: npm }
+      - run: npm ci
+      - run: node --test scripts/test/g94-rc-preflight.test.mjs
+      - run: node scripts/release/verify-rc-candidate.mjs --verify "${{ inputs.evidence_file }}"
