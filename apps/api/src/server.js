@@ -479,7 +479,7 @@ function getNotificationServices() {
   if (!pool) return null;
   const inbox = createInboxRepository({ pool });
   const mentions = createMentionRepository({ pool });
-  const eligibility = createMentionEligibilityService({ pool });
+  const eligibility = createMentionEligibilityService({ activeBanService: getActiveBanService(), pool });
   const outbox = createNotificationOutboxRepository({ pool });
   const service = createNotificationService({
     pool,
@@ -578,21 +578,17 @@ function getMediaServices() {
     authorizeRoomAttachment: async ({ attachment, viewerId }) => {
       if (!attachment.roomMessageId) return false;
       const result = await pool.query(
-        `SELECT 1
+        `SELECT room.id AS room_id
          FROM room_messages message
          JOIN rooms room ON room.id = message.room_id AND room.deleted_at IS NULL
          JOIN room_memberships membership ON membership.room_id = room.id AND membership.user_id = $2
          WHERE message.id = $1 AND message.deleted_at IS NULL
            AND (message.expires_at IS NULL OR message.expires_at > current_timestamp)
-           AND NOT EXISTS (
-             SELECT 1 FROM room_bans ban
-             WHERE ban.room_id = room.id AND ban.user_id = $2 AND ban.revoked_at IS NULL
-               AND (ban.expires_at IS NULL OR ban.expires_at > current_timestamp)
-           )
          LIMIT 1`,
         [attachment.roomMessageId, viewerId]
       );
-      return result.rowCount === 1;
+      if (result.rowCount !== 1) return false;
+      return !await getActiveBanService().isBanned({ roomId: result.rows[0].room_id, userId: viewerId });
     },
     authorizeDirectAttachment: async ({ attachment, viewerId }) => {
       if (!attachment.directMessageId) return false;

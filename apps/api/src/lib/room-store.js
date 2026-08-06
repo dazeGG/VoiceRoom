@@ -2,6 +2,7 @@
 
 const crypto = require('node:crypto');
 const { createDbPool, transaction } = require('./db');
+const { createActiveBanService } = require('../domains/moderation/active-ban-service');
 const {
   AVATAR_COLOR_KEYS,
   cleanAvatarColorKey
@@ -138,12 +139,18 @@ function createRoomStore({
   roomIdleTtlMs = 15 * 60 * 1000
 } = {}) {
   let activePool = pool || null;
+  let activeBanService = null;
   const retainedMessageLimit = normalizeMessageLimit(maxMessagesPerRoom);
   function getPool() {
     if (!activePool) {
       activePool = createDbPool({ databaseUrl, logger });
     }
     return activePool;
+  }
+
+  function getActiveBanService() {
+    if (!activeBanService) activeBanService = createActiveBanService({ pool: getPool() });
+    return activeBanService;
   }
 
   async function createRoom({
@@ -645,11 +652,7 @@ function createRoomStore({
       if (room.rowCount === 0) return { ban: null, revocations: [], status: 'not_found' };
 
       if (maxBans > 0) {
-        const count = await client.query(
-          `SELECT COUNT(*)::int AS count FROM room_bans WHERE room_id = $1`,
-          [roomId]
-        );
-        if ((count.rows[0]?.count || 0) >= maxBans) {
+        if (await getActiveBanService().repository.countActive(roomId, { at: now, client }) >= maxBans) {
           return { ban: null, revocations: [], status: 'cap_exceeded' };
         }
       }
@@ -711,11 +714,7 @@ function createRoomStore({
 
       const limit = normalizePositiveInt(maxBans, 100);
       if (limit > 0) {
-        const count = await client.query(
-          `SELECT COUNT(*)::int AS count FROM room_bans WHERE room_id = $1`,
-          [roomId]
-        );
-        if ((count.rows[0]?.count || 0) >= limit) {
+        if (await getActiveBanService().repository.countActive(roomId, { at: now, client }) >= limit) {
           return { ban: null, status: 'cap_exceeded' };
         }
       }
@@ -748,22 +747,7 @@ function createRoomStore({
   }
 
   async function findActiveRoomBan({ roomId, userId = null, ip = '' } = {}) {
-    const normalizedUserId = typeof userId === 'string' && userId ? userId : null;
-    const normalizedIp = typeof ip === 'string' ? ip : '';
-    if (!roomId || (!normalizedUserId && !normalizedIp)) return null;
-    const result = await getPool().query(
-      `SELECT *
-       FROM room_bans
-       WHERE room_id = $1
-         AND (
-           ($2::text IS NOT NULL AND user_id = $2)
-           OR (user_id IS NULL AND $3::text <> '' AND ip = $3)
-         )
-       ORDER BY created_at DESC, id DESC
-       LIMIT 1`,
-      [roomId, normalizedUserId, normalizedIp]
-    );
-    return mapRoomBan(result.rows[0]);
+    return getActiveBanService().getActiveBan({ roomId, userId, ip });
   }
 
   async function pruneRooms(now = Date.now()) {
@@ -1116,17 +1100,10 @@ function createRoomStore({
              WHERE rb.room_id = r.id AND rb.user_id = $2
            )
          )
-         AND NOT EXISTS (
-           SELECT 1 FROM room_bans ban
-           WHERE ban.room_id = r.id
-             AND ban.user_id = $2
-             AND ban.revoked_at IS NULL
-             AND (ban.expires_at IS NULL OR ban.expires_at > current_timestamp)
-         )
        LIMIT 1`,
       [roomId, userId]
     );
-    return result.rowCount === 1;
+    return result.rowCount === 1 && !await getActiveBanService().isBanned({ roomId, userId });
   }
 
   async function canUserReactInRoom(roomId, userId) {
@@ -1137,17 +1114,10 @@ function createRoomStore({
        JOIN room_memberships rm ON rm.room_id = r.id AND rm.user_id = $2
        WHERE r.id = $1
          AND r.deleted_at IS NULL
-         AND NOT EXISTS (
-           SELECT 1 FROM room_bans ban
-           WHERE ban.room_id = r.id
-             AND ban.user_id = $2
-             AND ban.revoked_at IS NULL
-             AND (ban.expires_at IS NULL OR ban.expires_at > current_timestamp)
-         )
        LIMIT 1`,
       [roomId, userId]
     );
-    return result.rowCount === 1;
+    return result.rowCount === 1 && !await getActiveBanService().isBanned({ roomId, userId });
   }
 
   async function listSummaryRecipientUserIds(roomId) {
@@ -1171,7 +1141,10 @@ function createRoomStore({
        FROM recipients`,
       [roomId]
     );
-    return result.rows.map((row) => row.user_id).filter(Boolean);
+    return getActiveBanService().filterEligibleUserIds({
+      roomId,
+      userIds: result.rows.map((row) => row.user_id).filter(Boolean)
+    });
   }
 
   async function listNotificationRecipientUserIds(roomId) {
@@ -1197,7 +1170,10 @@ function createRoomStore({
        FROM recipients`,
       [roomId]
     );
-    return result.rows.map((row) => row.user_id).filter(Boolean);
+    return getActiveBanService().filterEligibleUserIds({
+      roomId,
+      userIds: result.rows.map((row) => row.user_id).filter(Boolean)
+    });
   }
 
   async function addRoomBookmarkForUser(userId, roomId, now = Date.now()) {
