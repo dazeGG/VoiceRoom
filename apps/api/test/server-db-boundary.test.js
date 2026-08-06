@@ -72,6 +72,9 @@ function createFakeStore() {
     async listMessages(roomId) {
       return messages.get(roomId) || [];
     },
+    async listSummaryRecipientUserIds() {
+      return [];
+    },
     async markRoomActive() {},
     async markRoomEmpty() {},
     async pruneRooms() {}
@@ -187,8 +190,14 @@ test('server logs mark-empty failures instead of creating unhandled rejections',
   });
 
   try {
-    voice.ws.close();
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    sendWs(voice.ws, 'room.leave', {
+      roomId: 'room-empty-fail',
+      peerId: 'peer0002',
+      sessionToken: 'goodtoken12345678901234567890123'
+    });
+    for (let attempt = 0; attempt < 50 && errors.length === 0; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
     assert.equal(errors.some((entry) => String(entry[0]).includes('Failed to persist room occupancy')), true);
   } finally {
     console.error = originalError;
@@ -247,7 +256,11 @@ test('server serializes a late empty write before the active write of a concurre
     });
     await identityStarted.promise;
 
-    leaving.ws.close();
+    sendWs(leaving.ws, 'room.leave', {
+      roomId: 'room-occupancy-race',
+      peerId: 'leaving-peer',
+      sessionToken: 'l'.repeat(32)
+    });
     await emptyStarted.promise;
     releaseIdentity.resolve();
 

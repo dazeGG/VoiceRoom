@@ -186,9 +186,14 @@ test('room owner receives bounded room.summary as peers join and leave', async (
     assert.equal(summary.hiddenPeerCount, 1, 'hiddenPeerCount must be peers - visiblePeers');
     assert.ok(summary.visiblePeers.every((peer) => typeof peer.id === 'string'));
 
-    // One peer leaves; the owner sees the count drop.
+    // One peer explicitly leaves; a transport-only close now keeps presence
+    // during the bounded reconnect lease.
     const sinceLeave = ownerWs.frames.length;
-    peers[0].peer.ws.close();
+    sendWs(peers[0].peer.ws, 'room.leave', {
+      roomId,
+      peerId: peers[0].creds.peerId,
+      sessionToken: peers[0].creds.sessionToken
+    });
 
     const afterLeave = await waitForWsType(
       ownerWs.frames,
@@ -199,6 +204,7 @@ test('room owner receives bounded room.summary as peers join and leave', async (
     );
     assert.equal(afterLeave.payload.room.visiblePeers.length, 5);
     assert.equal(afterLeave.payload.room.hiddenPeerCount, 0);
+    peers[0].peer.ws.close();
 
     ownerWs.ws.close();
     for (const { peer } of peers) peer.ws.close();

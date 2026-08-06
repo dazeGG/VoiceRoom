@@ -267,7 +267,7 @@ test('kick and ban lifecycle enforces join, token, chat, preview, and undo', asy
     name: 'Target'
   });
   const rejectedOldJoin = await waitForWsType(target.frames, 'error', () => true, 5000, oldJoinStart);
-  assert.equal(rejectedOldJoin.error.code, 'invalid_session');
+  assert.equal(rejectedOldJoin.error.code, 'superseded_join');
 
   const freshPeerId = 'target-fresh-peer';
   const freshPeerToken = 'f'.repeat(32);
