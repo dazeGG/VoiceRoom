@@ -33,6 +33,7 @@ import {
 import {
   connectLiveKitRoom,
   disconnectLiveKitRoom,
+  syncAuthoritativeScreenPresence,
   syncLiveKitParticipantById,
   syncLiveKitParticipants
 } from '../services/livekit-service';
@@ -438,6 +439,7 @@ async function handleVoiceRealtimeEvent(event: RealtimeEvent): Promise<void> {
       });
     }
     for (const peer of remotePeers) {
+      syncAuthoritativeScreenPresence(peer.id, Boolean(peer.screen));
       createParticipant(peer);
     }
     syncLiveKitParticipants(state.livekitRoom);

@@ -36,6 +36,11 @@ async function loadLiveKitService() {
     export const startUi = () => {};
     export const setVoiceConnectionStatus = () => {};
     export const showToast = () => {};
+    export class ApiRequestError extends Error {
+      constructor(message, code = '', roomId = '', status = 0) {
+        super(message); this.code = code; this.roomId = roomId; this.status = status;
+      }
+    }
     export const postJson = async () => ({});
     export const queueAudioUnlock = () => {};
     export const syncRemoteAudioPlayback = () => {};
@@ -68,6 +73,19 @@ async function loadLiveKitService() {
       clearAll() {},
       schedule() {}
     });
+    export const isCurrentRoomRecoveryEpoch = () => true;
+    export const notifyLiveKitDisconnected = () => {};
+    export const notifyLiveKitReconciled = () => {};
+    export const notifyLiveKitReconnecting = () => {};
+    export const setRoomRecoveryLiveKitAdapter = () => {};
+    export const subscribeRoomRecoveryTransitions = () => () => {};
+    export class ScreenRecoveryGraceController {
+      beginGlobal() {}
+      cancel() {}
+      endGlobal() {}
+      schedule() {}
+      authoritativeStop() {}
+    }
     export const createParticipant = (peerInfo) => {
       const existing = state.peers.get(peerInfo.id);
       if (existing) {

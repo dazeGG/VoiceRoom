@@ -14,9 +14,18 @@ export type RoomRecoveryLiveKitAdapter = {
 
 let controller: RealtimeRecoveryController | null = null;
 let liveKitAdapter: RoomRecoveryLiveKitAdapter | null = null;
+const transitionHandlers = new Set<(event: Readonly<Record<string, unknown>>) => void>();
 
 function logTransition(event: Record<string, unknown>): void {
   if (import.meta.env.DEV) console.debug('room_recovery_transition', event);
+  for (const handler of transitionHandlers) handler(event);
+}
+
+export function subscribeRoomRecoveryTransitions(
+  handler: (event: Readonly<Record<string, unknown>>) => void
+): () => void {
+  transitionHandlers.add(handler);
+  return () => transitionHandlers.delete(handler);
 }
 
 export function setRoomRecoveryLiveKitAdapter(adapter: RoomRecoveryLiveKitAdapter | null): void {
