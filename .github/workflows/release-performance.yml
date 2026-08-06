@@ -14,4 +14,6 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version-file: .nvmrc, cache: npm }
       - run: npm ci
-      - run: node scripts/perf/g91-release-budgets.mjs --profile rc --goal G91 --evidence "${{ inputs.evidence_file }}"
+      - run: node scripts/perf/g91-release-budgets.mjs --profile rc --goal G91 --evidence "$EVIDENCE_FILE"
+        env:
+          EVIDENCE_FILE: ${{ inputs.evidence_file }}

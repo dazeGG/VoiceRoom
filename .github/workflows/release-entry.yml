@@ -1,5 +1,8 @@
 name: Release 2.5.0 develop entry
-on: { workflow_dispatch: {} }
+on:
+  workflow_dispatch:
+    inputs:
+      selection_file: { description: Repository-relative immutable G01 selection artifact, required: true, type: string }
 permissions: { contents: read }
 jobs:
   goal-g93:
@@ -14,4 +17,6 @@ jobs:
       - run: npm ci
       - run: node --test scripts/test/g93-entry-gate.test.mjs
       - name: Fail closed until external release-entry evidence is complete
-        run: node scripts/test/g93-entry-gate.test.mjs --gate
+        env:
+          SELECTION_FILE: ${{ inputs.selection_file }}
+        run: node scripts/test/g93-entry-gate.test.mjs --gate --selection "$SELECTION_FILE"

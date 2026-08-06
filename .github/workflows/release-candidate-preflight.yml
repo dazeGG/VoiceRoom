@@ -16,4 +16,6 @@ jobs:
         with: { node-version-file: .nvmrc, cache: npm }
       - run: npm ci
       - run: node --test scripts/test/g94-rc-preflight.test.mjs
-      - run: node scripts/release/verify-rc-candidate.mjs --verify "${{ inputs.evidence_file }}"
+      - run: node scripts/release/verify-rc-candidate.mjs --verify "$EVIDENCE_FILE"
+        env:
+          EVIDENCE_FILE: ${{ inputs.evidence_file }}

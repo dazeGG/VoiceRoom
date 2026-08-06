@@ -2,11 +2,12 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import test from 'node:test';
 import { verifyMediaCheckpoint } from '../checkpoints/media.mjs';
+import { bindCheckpointFixture, evidenceChainSha256 } from '../checkpoints/immutable-evidence.mjs';
 
 const index = JSON.parse(fs.readFileSync('docs/releases/2.5.0/evidence/index.json', 'utf8'));
 const hash = (character) => `sha256:${character.repeat(64)}`;
 function fixture() {
-  return {
+  const value = {
     contract: 'voice-room.media-checkpoint/v1', release: '2.5.0', gitSha: 'a'.repeat(40),
     digests: { api: hash('a'), web: hash('b'), worker: hash('c') },
     checkpoints: {
@@ -21,8 +22,10 @@ function fixture() {
     },
     failures: ['disk-pressure', 'provider-failure', 'livekit-failure', 'attachment-delete-race', 'moderation-rollback'].map((id) => ({ id, passed: true, failClosed: true, noLeak: true })),
     observation: { startedAt: '2026-08-06T10:00:00.000Z', endedAt: '2026-08-06T11:00:00.000Z', authLeaks: 0, missingFiles: 0, unboundedQueues: 0 },
-    stopDefects: [], evidenceChainSha256: hash('9')
+    stopDefects: [], evidenceChainSha256: ''
   };
+  bindCheckpointFixture(value, 'evidence/g90-proof.json'); value.evidenceChainSha256 = evidenceChainSha256(value);
+  return value;
 }
 
 test('G90-A01 accepts only a complete immutable 60-minute media checkpoint', () => {

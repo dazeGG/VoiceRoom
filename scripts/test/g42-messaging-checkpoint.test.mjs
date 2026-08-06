@@ -2,12 +2,13 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import test from 'node:test';
 import { verifyMessagingCheckpoint } from '../checkpoints/messaging.mjs';
+import { bindCheckpointFixture, evidenceChainSha256 } from '../checkpoints/immutable-evidence.mjs';
 
 const index = JSON.parse(fs.readFileSync('docs/releases/2.5.0/evidence/index.json', 'utf8'));
 const hash = (character) => `sha256:${character.repeat(64)}`;
 
 function fixture() {
-  return {
+  const value = {
     contract: 'voice-room.messaging-checkpoint/v1', release: '2.5.0', gitSha: 'a'.repeat(40),
     digests: { api: hash('a'), web: hash('b'), worker: hash('c') },
     seedManifest: { id: 'messaging-v1', sha256: hash('d') },
@@ -18,8 +19,10 @@ function fixture() {
     },
     failures: ['worker-loss', 'duplicate-delivery', 'reordered-stream', 'cursor-tamper', 'active-ban-expiry'].map((id) => ({ id, passed: true, safeDisable: true })),
     observation: { startedAt: '2026-08-06T10:00:00.000Z', endedAt: '2026-08-06T11:00:00.000Z' },
-    stopDefects: [], evidenceChainSha256: hash('e')
+    stopDefects: [], evidenceChainSha256: ''
   };
+  bindCheckpointFixture(value, 'evidence/g42-proof.json'); value.evidenceChainSha256 = evidenceChainSha256(value);
+  return value;
 }
 
 test('G42-A01 accepts only immutable complete predecessor and matrix evidence', () => {

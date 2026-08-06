@@ -1,8 +1,11 @@
-import assert from 'node:assert/strict'; import fs from 'node:fs'; import test from 'node:test'; import { pathToFileURL } from 'node:url';
+import assert from 'node:assert/strict'; import crypto from 'node:crypto'; import fs from 'node:fs'; import test from 'node:test'; import { pathToFileURL } from 'node:url';
+import { readRepositoryArtifact } from '../checkpoints/immutable-evidence.mjs';
 const SHA256 = /^sha256:[a-f0-9]{64}$/; const GIT_SHA = /^[a-f0-9]{40}$/;
-export function verifyEntryGate({ index, lineage, selection, repairLedger, archiveMap, archiveLedger }) {
+export function verifyEntryGate({ index, lineage, selection, repairLedger, archiveMap, archiveLedger, expectedSha }) {
   if (lineage?.schemaVersion !== 1 || lineage.release !== '2.5.0' || !lineage.selectedAttemptId || !GIT_SHA.test(lineage.terminalDevelopSha || '') || !Array.isArray(lineage.ancestors)) throw new Error('G93 terminal bootstrap lineage is unavailable');
   if (selection?.attempt_id !== lineage.selectedAttemptId || selection?.terminal_develop_sha !== lineage.terminalDevelopSha || selection?.status !== 'selected') throw new Error('G93 external selection mismatch');
+  if (selection?._artifactSha256 !== lineage.sourceDigests?.selection) throw new Error('G93 selection artifact digest mismatch');
+  if (expectedSha && lineage.terminalDevelopSha !== expectedSha) throw new Error('G93 terminal develop SHA does not match workflow HEAD');
   if (!SHA256.test(lineage.sourceDigests?.selection || '') || !SHA256.test(lineage.sourceDigests?.attempts || '') || !SHA256.test(lineage.sourceDigests?.recoveries || '')) throw new Error('G93 lineage source digests missing');
   if (index?.status === 'G03_PRE_PUBLICATION' || !Array.isArray(archiveMap?.objects) || archiveMap.objects.length === 0 || !Array.isArray(archiveLedger?.entries) || archiveLedger.entries.length === 0) throw new Error('G93 archive chain is not current');
   for (const key of ['g42MessagingCheckpoint','g50MembershipCheckpoint','g71EngagementCheckpoint','g90MediaCheckpoint','g91ReleaseBudgets','g92ActivationMatrix']) if (index?.[key]?.status !== 'VERIFIED') throw new Error(`G93 prerequisite ${key} is pending`);
@@ -16,7 +19,7 @@ export function verifyEntryGate({ index, lineage, selection, repairLedger, archi
 }
 function synthetic() {
   const digest = `sha256:${'a'.repeat(64)}`; const checkpoints = Object.fromEntries(['g42MessagingCheckpoint','g50MembershipCheckpoint','g71EngagementCheckpoint','g90MediaCheckpoint','g91ReleaseBudgets','g92ActivationMatrix'].map((key) => [key, { status: 'VERIFIED' }]));
-  return { index: { status: 'G03_ARCHIVED', ...checkpoints }, lineage: { schemaVersion: 1, release: '2.5.0', selectedAttemptId: 'attempt-1', terminalDevelopSha: 'b'.repeat(40), ancestors: [], sourceDigests: { selection: digest, attempts: digest, recoveries: digest } }, selection: { attempt_id: 'attempt-1', terminal_develop_sha: 'b'.repeat(40), status: 'selected' }, repairLedger: { entries: [] }, archiveMap: { objects: [{}] }, archiveLedger: { entries: [{}] } };
+  return { index: { status: 'G03_ARCHIVED', ...checkpoints }, lineage: { schemaVersion: 1, release: '2.5.0', selectedAttemptId: 'attempt-1', terminalDevelopSha: 'b'.repeat(40), ancestors: [], sourceDigests: { selection: digest, attempts: digest, recoveries: digest } }, selection: { attempt_id: 'attempt-1', terminal_develop_sha: 'b'.repeat(40), status: 'selected', _artifactSha256: digest }, repairLedger: { entries: [] }, archiveMap: { objects: [{}] }, archiveLedger: { entries: [{}] } };
 }
 if (!process.argv.includes('--gate')) {
   test('G93-A01 one immutable external lineage can authorize only the release branch', () => { assert.deepEqual(verifyEntryGate(synthetic()), { status: 'RELEASE_BRANCH_AUTHORIZED', branch: 'release/2.5.0', terminalDevelopSha: 'b'.repeat(40) }); });
@@ -27,6 +30,12 @@ if (!process.argv.includes('--gate')) {
     const read = (file) => JSON.parse(fs.readFileSync(file, 'utf8')); assert.throws(() => verifyEntryGate({ index: read('docs/releases/2.5.0/evidence/index.json'), lineage: read('docs/releases/2.5.0/evidence/bootstrap-lineage.json'), selection: null, repairLedger: read('docs/releases/2.5.0/evidence/repair-ledger.json'), archiveMap: read('docs/releases/2.5.0/evidence/archive-map.json'), archiveLedger: read('docs/releases/2.5.0/evidence/archive-ledger.json') }));
   });
 } else if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  try { verifyEntryGate({ index: JSON.parse(fs.readFileSync('docs/releases/2.5.0/evidence/index.json')), lineage: JSON.parse(fs.readFileSync('docs/releases/2.5.0/evidence/bootstrap-lineage.json')), selection: null, repairLedger: JSON.parse(fs.readFileSync('docs/releases/2.5.0/evidence/repair-ledger.json')), archiveMap: JSON.parse(fs.readFileSync('docs/releases/2.5.0/evidence/archive-map.json')), archiveLedger: JSON.parse(fs.readFileSync('docs/releases/2.5.0/evidence/archive-ledger.json')) }); }
+  try {
+    const selectionIndex = process.argv.indexOf('--selection');
+    if (selectionIndex < 0 || !process.argv[selectionIndex + 1]) throw new Error('G93 immutable --selection artifact is required');
+    const selectionBytes = readRepositoryArtifact(process.argv[selectionIndex + 1]).bytes;
+    const selection = { ...JSON.parse(selectionBytes), _artifactSha256: `sha256:${crypto.createHash('sha256').update(selectionBytes).digest('hex')}` };
+    verifyEntryGate({ index: JSON.parse(fs.readFileSync('docs/releases/2.5.0/evidence/index.json')), lineage: JSON.parse(fs.readFileSync('docs/releases/2.5.0/evidence/bootstrap-lineage.json')), selection, repairLedger: JSON.parse(fs.readFileSync('docs/releases/2.5.0/evidence/repair-ledger.json')), archiveMap: JSON.parse(fs.readFileSync('docs/releases/2.5.0/evidence/archive-map.json')), archiveLedger: JSON.parse(fs.readFileSync('docs/releases/2.5.0/evidence/archive-ledger.json')), expectedSha: process.env.GITHUB_SHA });
+  }
   catch (error) { console.error(error.message); process.exitCode = 1; }
 }

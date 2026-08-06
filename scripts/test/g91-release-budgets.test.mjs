@@ -2,15 +2,18 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import test from 'node:test';
 import { verifyBudgetEvidence, verifyBudgetProfile } from '../perf/g91-release-budgets.mjs';
+import { bindCheckpointFixture, evidenceChainSha256 } from '../checkpoints/immutable-evidence.mjs';
 
 const profile = JSON.parse(fs.readFileSync('scripts/perf/release-250-profile.v1.json', 'utf8'));
 function evidence() {
-  return {
+  const value = {
     gitSha: 'a'.repeat(40), apiDigest: `sha256:${'a'.repeat(64)}`, webDigest: `sha256:${'b'.repeat(64)}`, workerDigest: `sha256:${'c'.repeat(64)}`,
     hardware: { cpu: 'fixture', memoryBytes: 1 }, database: { engine: 'postgresql', version: 'fixture' }, concurrency: { clients: 1 },
     startedAt: '2026-08-06T10:00:00.000Z', endedAt: '2026-08-06T11:00:00.000Z', metricLabels: ['status', 'operation'], alertsVerified: true, autoDisableVerified: true,
-    measurements: Object.fromEntries(Object.entries(profile.budgets).map(([surface, limits]) => [surface, { ...limits }]))
+    measurements: Object.fromEntries(Object.entries(profile.budgets).map(([surface, limits]) => [surface, { ...limits }])), evidenceChainSha256: ''
   };
+  bindCheckpointFixture(value, 'evidence/g91-proof.json'); value.evidenceChainSha256 = evidenceChainSha256(value);
+  return value;
 }
 
 test('G91-A01 frozen profile and immutable evidence satisfy exact release budgets', () => {

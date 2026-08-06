@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { assertCheckpointArtifact, assertEvidenceIdentity, readRepositoryArtifact } from '../checkpoints/immutable-evidence.mjs';
 
 const SHA256 = /^sha256:[a-f0-9]{64}$/; const GIT_SHA = /^[a-f0-9]{40}$/;
 export function verifyBudgetProfile(profile) {
@@ -11,7 +12,7 @@ export function verifyBudgetProfile(profile) {
   for (const [surface, key, value] of exact) if (profile.budgets?.[surface]?.[key] !== value) throw new Error(`G91 budget ${surface}.${key} changed`);
   return true;
 }
-export function verifyBudgetEvidence(profile, evidence) {
+export function verifyBudgetEvidence(profile, evidence, { expectedSha, resolveArtifact } = {}) {
   verifyBudgetProfile(profile);
   for (const key of profile.requiredEvidence) if (evidence?.[key] == null || evidence[key] === '') throw new Error(`G91 evidence ${key} is missing`);
   if (!GIT_SHA.test(evidence.gitSha) || !['apiDigest','webDigest','workerDigest'].every((key) => SHA256.test(evidence[key]))) throw new Error('G91 immutable source evidence is invalid');
@@ -22,6 +23,8 @@ export function verifyBudgetEvidence(profile, evidence) {
   const labels = new Set((evidence.metricLabels || []).map((item) => String(item).toLowerCase()));
   for (const forbidden of profile.forbiddenMetricLabels) if (labels.has(forbidden)) throw new Error(`G91 forbidden metric label ${forbidden}`);
   if (evidence.alertsVerified !== true || evidence.autoDisableVerified !== true) throw new Error('G91 alerts and auto-disable proof are required');
+  assertCheckpointArtifact(evidence, resolveArtifact);
+  assertEvidenceIdentity(evidence, expectedSha);
   return { status: 'VERIFIED', gitSha: evidence.gitSha };
 }
 function cli() {
@@ -29,7 +32,7 @@ function cli() {
   if (profileName !== 'rc' || goal !== 'G91') throw new Error('Usage: --profile rc --goal G91 [--evidence file]');
   const profile = JSON.parse(fs.readFileSync(path.resolve('scripts/perf/release-250-profile.v1.json'), 'utf8')); verifyBudgetProfile(profile);
   const evidenceIndex = process.argv.indexOf('--evidence');
-  const result = evidenceIndex > -1 ? verifyBudgetEvidence(profile, JSON.parse(fs.readFileSync(process.argv[evidenceIndex + 1], 'utf8'))) : { status: 'PENDING_EXTERNAL_PERFORMANCE_EVIDENCE' };
+  const result = evidenceIndex > -1 ? verifyBudgetEvidence(profile, readRepositoryArtifact(process.argv[evidenceIndex + 1]).value, { expectedSha: process.env.GITHUB_SHA }) : { status: 'PENDING_EXTERNAL_PERFORMANCE_EVIDENCE' };
   process.stdout.write(`${JSON.stringify({ ok: true, ...result })}\n`);
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) { try { cli(); } catch (error) { console.error(error.message); process.exitCode = 1; } }

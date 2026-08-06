@@ -1,5 +1,5 @@
-import fs from 'node:fs';
 import { pathToFileURL } from 'node:url';
+import { assertCheckpointArtifact, assertEvidenceIdentity, readRepositoryArtifact } from './immutable-evidence.mjs';
 
 const SHA256 = /^sha256:[a-f0-9]{64}$/;
 const GIT_SHA = /^[a-f0-9]{40}$/;
@@ -18,7 +18,7 @@ function requirePassedSet(items, required, label, predicate = (item) => item?.pa
   return passed;
 }
 
-export function verifyEngagementCheckpoint(value) {
+export function verifyEngagementCheckpoint(value, { expectedSha, resolveArtifact } = {}) {
   if (!value || value.contract !== 'voice-room.engagement-checkpoint/v1' || value.release !== '2.5.0') throw new Error('Invalid G71 checkpoint contract');
   if (!GIT_SHA.test(value.gitSha || '')) throw new Error('G71 requires an immutable git SHA');
   for (const component of ['api', 'web', 'worker']) {
@@ -48,6 +48,8 @@ export function verifyEngagementCheckpoint(value) {
   if (startedAt === null || endedAt === null || endedAt - startedAt < 60 * 60 * 1000) throw new Error('G71 observation must be at least 60 minutes');
   if (!Array.isArray(value.stopDefects) || value.stopDefects.length !== 0) throw new Error('G71 contains stop defects');
   if (!SHA256.test(value.evidenceChainSha256 || '')) throw new Error('G71 evidence chain checksum is missing');
+  assertCheckpointArtifact(value, resolveArtifact);
+  assertEvidenceIdentity(value, expectedSha);
   return Object.freeze({ gitSha: value.gitSha, durationMs: endedAt - startedAt, profiles: [...profiles].sort() });
 }
 
@@ -56,7 +58,7 @@ function cli() {
   if (verifyIndex < 0) throw new Error('Usage: node scripts/checkpoints/engagement.mjs --verify <checkpoint.json>');
   const file = process.argv[verifyIndex + 1] || process.env.G71_CHECKPOINT_FILE;
   if (!file) throw new Error('G71_CHECKPOINT_FILE or checkpoint path is required');
-  const result = verifyEngagementCheckpoint(JSON.parse(fs.readFileSync(file, 'utf8')));
+  const result = verifyEngagementCheckpoint(readRepositoryArtifact(file).value, { expectedSha: process.env.GITHUB_SHA });
   process.stdout.write(`${JSON.stringify({ ok: true, ...result })}\n`);
 }
 

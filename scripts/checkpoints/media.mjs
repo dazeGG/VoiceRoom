@@ -1,12 +1,12 @@
-import fs from 'node:fs';
 import { pathToFileURL } from 'node:url';
+import { assertCheckpointArtifact, assertEvidenceIdentity, readRepositoryArtifact } from './immutable-evidence.mjs';
 
 const SHA256 = /^sha256:[a-f0-9]{64}$/;
 const GIT_SHA = /^[a-f0-9]{40}$/;
 const REQUIRED_PROFILES = new Set(['all-off', 'all-on', 'n-1-api', 'rescue']);
 const REQUIRED_FAILURES = new Set(['disk-pressure', 'provider-failure', 'livekit-failure', 'attachment-delete-race', 'moderation-rollback']);
 
-export function verifyMediaCheckpoint(value) {
+export function verifyMediaCheckpoint(value, { expectedSha, resolveArtifact } = {}) {
   if (!value || value.contract !== 'voice-room.media-checkpoint/v1' || value.release !== '2.5.0') throw new Error('Invalid G90 checkpoint contract');
   if (!GIT_SHA.test(value.gitSha || '')) throw new Error('G90 requires an immutable git SHA');
   for (const component of ['api', 'web', 'worker']) if (!SHA256.test(value.digests?.[component] || '')) throw new Error(`G90 requires immutable ${component} digest`);
@@ -24,12 +24,14 @@ export function verifyMediaCheckpoint(value) {
   if (!Number.isFinite(started) || !Number.isFinite(ended) || ended - started < 3_600_000) throw new Error('G90 observation must be at least 60 minutes');
   if ((value.observation?.authLeaks ?? 1) !== 0 || (value.observation?.missingFiles ?? 1) !== 0 || (value.observation?.unboundedQueues ?? 1) !== 0) throw new Error('G90 observation contains a stop condition');
   if (!Array.isArray(value.stopDefects) || value.stopDefects.length !== 0 || !SHA256.test(value.evidenceChainSha256 || '')) throw new Error('G90 evidence chain is incomplete');
+  assertCheckpointArtifact(value, resolveArtifact);
+  assertEvidenceIdentity(value, expectedSha);
   return Object.freeze({ gitSha: value.gitSha, durationMs: ended - started, profiles: [...profiles].sort() });
 }
 
 function cli() {
   const index = process.argv.indexOf('--verify'); const file = process.argv[index + 1] || process.env.G90_CHECKPOINT_FILE;
   if (index < 0 || !file) throw new Error('Usage: node scripts/checkpoints/media.mjs --verify <checkpoint.json>');
-  process.stdout.write(`${JSON.stringify({ ok: true, ...verifyMediaCheckpoint(JSON.parse(fs.readFileSync(file, 'utf8'))) })}\n`);
+  process.stdout.write(`${JSON.stringify({ ok: true, ...verifyMediaCheckpoint(readRepositoryArtifact(file).value, { expectedSha: process.env.GITHUB_SHA }) })}\n`);
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) { try { cli(); } catch (error) { console.error(error.message); process.exitCode = 1; } }

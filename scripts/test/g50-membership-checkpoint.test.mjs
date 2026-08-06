@@ -2,12 +2,13 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import test from 'node:test';
 import { verifyMembershipCheckpoint } from '../checkpoints/membership.mjs';
+import { bindCheckpointFixture, evidenceChainSha256 } from '../checkpoints/immutable-evidence.mjs';
 
 const index = JSON.parse(fs.readFileSync('docs/releases/2.5.0/evidence/index.json', 'utf8'));
 const hash = (character) => `sha256:${character.repeat(64)}`;
 
 function fixture() {
-  return {
+  const value = {
     contract: 'voice-room.membership-checkpoint/v1', release: '2.5.0', gitSha: 'a'.repeat(40),
     digests: { api: hash('a'), web: hash('b'), worker: hash('c') },
     messagingCheckpoint: { artifactId: 'g42', sha256: hash('d'), verified: true },
@@ -19,8 +20,10 @@ function fixture() {
     compatibility: ['v2.4.2-client', 'owner-quota', 'visible-rooms', 'summary-recipient', 'directory-leave-rejoin'].map((id) => ({ id, passed: true })),
     strictTokenCorpus: ['leave', 'ban', 'explicit-revoke', 'restart', 'partition'].map((id) => ({ id, sameTokenDenied: true, failClosed: true })),
     observation: { startedAt: '2026-08-06T10:00:00.000Z', endedAt: '2026-08-06T11:00:00.000Z' },
-    stopDefects: [], evidenceChainSha256: hash('e')
+    stopDefects: [], evidenceChainSha256: ''
   };
+  bindCheckpointFixture(value, 'evidence/g50-proof.json'); value.evidenceChainSha256 = evidenceChainSha256(value);
+  return value;
 }
 
 test('G50-A01 accepts only immutable complete membership evidence', () => {
