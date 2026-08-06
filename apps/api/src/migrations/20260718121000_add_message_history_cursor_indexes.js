@@ -3,6 +3,7 @@
 exports.shorthands = undefined;
 
 exports.up = (pgm) => {
+  pgm.sql("SET LOCAL lock_timeout = '5s'");
   // room_messages_room_created_idx already supplies the exact active
   // (room_id, created_at, id) tuple and supports a backward cursor scan.
   // Direct-message indexes predate soft deletion, so cursor reads get partial

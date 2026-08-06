@@ -3,6 +3,7 @@
 exports.shorthands = undefined;
 
 exports.up = (pgm) => {
+  pgm.sql("SET LOCAL lock_timeout = '5s'");
   pgm.addColumn('room_messages', {
     reply_to_message_id: { type: 'varchar(64)' }
   });
