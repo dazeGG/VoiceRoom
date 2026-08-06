@@ -56,6 +56,7 @@ function createReactionTables(pgm, prefix, messageTable, messageIdType) {
 }
 
 exports.up = (pgm) => {
+  pgm.sql("SET LOCAL lock_timeout = '5s'");
   createReactionTables(pgm, 'room', 'room_messages', 'varchar(64)');
   createReactionTables(pgm, 'direct', 'direct_messages', 'varchar(36)');
 };
