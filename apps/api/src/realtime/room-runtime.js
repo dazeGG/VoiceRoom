@@ -394,6 +394,38 @@ function createRoomRealtimeRuntime(deps) {
     return { ok: true, finalized: results.some((result) => result.finalized) };
   }
 
+  async function finalizePendingReconnectLease({
+    roomId,
+    peerId,
+    sessionToken,
+    reason = 'left'
+  } = {}) {
+    const normalizedRoomId = normalizeRoomId(roomId);
+    const normalizedPeerId = normalizePeerId(peerId);
+    const normalizedSessionToken = normalizeSessionToken(sessionToken);
+    if (!normalizedRoomId || !normalizedPeerId || !normalizedSessionToken) {
+      return { ok: false, finalized: false, code: 'invalid_session' };
+    }
+
+    const record = reconnectLeases.get(
+      reconnectLeaseKey(normalizedRoomId, normalizedPeerId, normalizedSessionToken)
+    );
+    // A leave replayed by a fresh application socket may only terminate the
+    // disconnected transport's existing lease. Never synthesize a lease here:
+    // doing so would let a delayed leave tear down a newer active replacement.
+    if (
+      !record
+      || !record.disconnected
+      || !['pending', 'finalizer-failed', 'terminal-finalizer-failed'].includes(record.state)
+    ) {
+      return { ok: true, finalized: false };
+    }
+
+    terminalClaimRecord(record, reason, null);
+    const [result] = await settleLeaseFinalizers([record], reason);
+    return { ok: true, finalized: Boolean(result?.finalized) };
+  }
+
   async function cancelRoomReconnectLeases({ roomId, reason = 'deleted', finalizePeer = null } = {}) {
     const peerIds = new Set([
       ...[...reconnectLeases.values()].filter((record) => record.roomId === roomId).map((record) => record.peerId),
@@ -740,7 +772,7 @@ function createRoomRealtimeRuntime(deps) {
     return { ok: false, code: 'superseded_join', message: 'Join replaced by a newer connection' };
   }
 
-  async function joinVoiceRoom(connection, payload, sessionUser, clientIp = '') {
+  async function joinVoiceRoom(connection, payload, sessionUser, clientIp = '', requestId = '') {
     const joinRequestSequence = ++voiceJoinRequestSequence;
     const roomId = normalizeRoomId(payload.roomId);
     const peerId = normalizePeerId(payload.peerId);
@@ -954,7 +986,14 @@ function createRoomRealtimeRuntime(deps) {
         scheduleSummaryBroadcast(roomId);
       }
 
-      await queueRoomOccupancyTransition(roomId);
+      try {
+        await queueRoomOccupancyTransition(roomId);
+      } catch (error) {
+        // Presence was already committed in memory. Keep the resync protocol
+        // live by delivering the authoritative snapshot even when the
+        // best-effort occupancy marker cannot be persisted.
+        console.error('Failed to persist room occupancy:', error);
+      }
 
       if (
         !isCurrentConnectionVoiceJoin(connection, connectionJoinIntent)
@@ -971,7 +1010,7 @@ function createRoomRealtimeRuntime(deps) {
         return supersededVoiceJoin(connection, roomId, transport.id);
       }
       if (snapshot) {
-        wsRegistry.sendToConnection(connection, buildServerEnvelope('room.snapshot', snapshot));
+        wsRegistry.sendToConnection(connection, buildServerEnvelope('room.snapshot', snapshot, requestId));
       }
 
       return { ok: true, reconnecting };
@@ -1014,6 +1053,13 @@ function createRoomRealtimeRuntime(deps) {
         reason: 'left',
         expectedSessionToken: sessionToken,
         expectedTransportId: activeVoice.transportId
+      });
+    } else if (sessionToken) {
+      await finalizePendingReconnectLease({
+        roomId: payload.roomId,
+        peerId: payload.peerId,
+        sessionToken,
+        reason: 'left'
       });
     }
     if (connection.activeVoice?.roomId === payload.roomId && connection.activeVoice?.peerId === payload.peerId) {
@@ -1183,6 +1229,7 @@ function createRoomRealtimeRuntime(deps) {
     cleanupConnection,
     disconnectAccountFromRoom,
     finalizeReconnectLease,
+    finalizePendingReconnectLease,
     finalizeReconnectPeers,
     flushSummary,
     invalidateRecipientCache,

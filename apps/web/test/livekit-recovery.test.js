@@ -7,7 +7,7 @@ const source = fs.readFileSync(new URL('../src/lib/features/room/client/services
 test('fresh LiveKit replacement is a snapshot-gated coordinator one-shot with atomic candidate commit', () => {
   assert.match(source, /attemptFreshLiveKitReplacement[\s\S]*postJson\('\/api\/livekit-token'/);
   assert.match(source, /isCurrentRoomRecoveryEpoch\(epoch\)/);
-  assert.match(source, /bindLiveKitRoomEvents\(candidate, isCurrent\)/);
+  assert.match(source, /bindLiveKitRoomEvents\(candidate, eventCurrent\)/);
   assert.match(source, /state\.livekitRoom = candidate;\s*state\.localMicPublication = microphonePublication;\s*state\.localScreenPublications = screenPublications;/);
   assert.match(source, /oldRoom && oldRoom !== candidate[\s\S]*disconnectLiveKitRoomInstance\(oldRoom\)/);
   assert.match(source, /setRoomRecoveryLiveKitAdapter\(\{ attemptFreshReplacement: attemptFreshLiveKitReplacement \}\)/);

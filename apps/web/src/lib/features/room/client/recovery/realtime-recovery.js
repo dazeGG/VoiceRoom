@@ -16,10 +16,14 @@ const RETRYABLE_CODES = new Set([
   'livekit_gate_principal_unavailable',
   'livekit_gate_unavailable',
   'membership_persist_failed',
-  'membership_unavailable'
+  'membership_unavailable',
+  'network_error',
+  'transport_error',
+  'reconnect_finalize_failed',
+  'superseded_join'
 ]);
 
-const SAFE_CODES = new Set([...TERMINAL_CODES, ...RETRYABLE_CODES, 'network_error', 'transport_error', 'unknown_error']);
+const SAFE_CODES = new Set([...TERMINAL_CODES, ...RETRYABLE_CODES, 'unknown_error']);
 
 export function sanitizeRecoveryCode(value) {
   return typeof value === 'string' && SAFE_CODES.has(value) ? value : 'unknown_error';
@@ -88,6 +92,7 @@ export class RealtimeRecoveryController {
     this.retryTimer = null;
     this.cooldownTimer = null;
     this.cooldownComplete = false;
+    this.cooldownCycles = 0;
     this.meaningfulRearm = false;
     this.rearmNeedsSnapshotRequest = false;
     this.rearmSnapshotReady = false;
@@ -189,6 +194,14 @@ export class RealtimeRecoveryController {
     return true;
   }
 
+  appSnapshotRequestFailed(error) {
+    if (!this.active) return;
+    const classified = classifyRecoveryFailure(error);
+    this.emit('app_snapshot_failed', classified.retryable ? 'retryable' : 'terminal', this.attempts, classified.status, classified.code);
+    if (classified.retryable) this.enterCooldown();
+    else this.fail('terminal');
+  }
+
   livekitReconnecting() {
     if (!this.active) return;
     this.livekitReady = false;
@@ -271,12 +284,14 @@ export class RealtimeRecoveryController {
     this.effectGeneration += 1;
     this.inFlight = false;
     this.attempts = 0;
+    this.cooldownCycles = 0;
     this.setPhase('healthy', trigger, 'succeeded');
   }
 
   requestSnapshot() {
     if (!this.active || !this.appConnected) return;
-    this.requestAppSnapshot({ epoch: this.epoch, appEpoch: this.appEpoch });
+    const requested = this.requestAppSnapshot({ epoch: this.epoch, appEpoch: this.appEpoch });
+    if (requested === false) this.appSnapshotRequestFailed({ code: 'transport_error' });
   }
 
   maybeAttempt() {
@@ -339,12 +354,18 @@ export class RealtimeRecoveryController {
     this.rearmNeedsSnapshotRequest = false;
     this.rearmSnapshotReady = false;
     const failedEpoch = this.epoch;
+    const cooldownDelay = Math.min(this.cooldownMs * 8, this.cooldownMs * 2 ** this.cooldownCycles);
+    this.cooldownCycles += 1;
     this.cooldownTimer = this.schedule(() => {
       this.cooldownTimer = null;
       if (!this.isCurrent(failedEpoch)) return;
       this.cooldownComplete = true;
+      if (this.isNetworkOnline && this.appConnected && this.replacementRequired) {
+        this.markMeaningfulRearm('cooldown_probe', true);
+        return;
+      }
       this.tryRearm();
-    }, this.cooldownMs);
+    }, cooldownDelay);
   }
 
   markMeaningfulRearm(trigger, requestSnapshot) {

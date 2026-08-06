@@ -10,6 +10,7 @@ export interface PeerInfo {
   deafened?: boolean;
   muted?: boolean;
   screen?: boolean;
+  screenAuthoritative?: boolean;
   screenAudio?: boolean;
   screenProfileId?: string;
   screenStreamId?: string;
@@ -40,6 +41,7 @@ export interface Participant {
   name: string;
   micReceiver: RTCRtpReceiver | null;
   screen: boolean;
+  screenAuthoritative: boolean | null;
   screenAudio: boolean;
   screenProfileId: string;
   screenStream: MediaStream | null;

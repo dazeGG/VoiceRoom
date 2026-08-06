@@ -354,6 +354,48 @@ test('initial join is announced even when a reconnect replaces it during occupan
   assert.deepEqual(broadcasts.map((message) => message.type), ['peer-joined']);
 });
 
+test('committed join still returns a correlated snapshot when occupancy persistence fails', async () => {
+  const room = { id: ROOM_ID, name: 'Room', peers: new Map() };
+  const sent = [];
+  const errors = [];
+  const originalError = console.error;
+  console.error = (...args) => errors.push(args);
+  const runtime = createRuntime(room, [], {
+    queueRoomOccupancyTransition: async () => {
+      throw new Error('occupancy unavailable');
+    },
+    wsRegistry: {
+      sendToConnection(_connection, envelope) {
+        sent.push(envelope);
+      }
+    },
+    store: {
+      async getRoom() { return { id: ROOM_ID, name: 'Room' }; },
+      async getOrCreatePeerIdentity() {
+        return { status: 'ok', identity: { avatarColorKey: 'blue' } };
+      }
+    }
+  });
+
+  try {
+    const result = await runtime.joinVoiceRoom(
+      createVoiceConnection(),
+      { roomId: ROOM_ID, peerId: OWNER_ID, sessionToken: OWNER_TOKEN, name: 'Owner' },
+      null,
+      '',
+      'recovery-request-1'
+    );
+
+    assert.equal(result.ok, true);
+    assert.equal(room.peers.has(OWNER_ID), true);
+    assert.equal(sent.at(-1)?.type, 'room.snapshot');
+    assert.equal(sent.at(-1)?.id, 'recovery-request-1');
+    assert.equal(errors.some((entry) => String(entry[0]).includes('Failed to persist room occupancy')), true);
+  } finally {
+    console.error = originalError;
+  }
+});
+
 test('explicit leave cancels a join before it can attach a peer', async () => {
   const room = { id: ROOM_ID, peers: new Map() };
   let releaseIdentity;
@@ -691,6 +733,32 @@ test('explicit leave terminal-claims a pending lease and stale expiry cannot fin
   await Promise.resolve();
   assert.equal(revoked.length, 1);
   assert.equal(closed.length, 1);
+});
+
+test('leave replayed on a fresh socket finalizes only the matching disconnected lease', async () => {
+  const scheduler = createManualScheduler();
+  const revoked = [];
+  const closed = [];
+  const owner = createPeer(OWNER_ID, { transport: { id: 'transport-replayed-leave', close() {} } });
+  const room = { id: ROOM_ID, peers: new Map([[owner.id, owner]]) };
+  const runtime = createLeaseRuntime({ room, scheduler, revoked, closed });
+  runtime.cleanupConnection(createVoiceConnection({
+    roomId: ROOM_ID,
+    peerId: OWNER_ID,
+    sessionToken: OWNER_TOKEN,
+    transportId: owner.transport.id
+  }));
+
+  await runtime.leaveVoiceRoom(createVoiceConnection(), {
+    roomId: ROOM_ID,
+    peerId: OWNER_ID,
+    sessionToken: OWNER_TOKEN
+  });
+
+  assert.equal(room.peers.has(OWNER_ID), false);
+  assert.equal(revoked.length, 1);
+  assert.equal(closed.length, 1);
+  assert.equal(closed[0].reason, 'left');
 });
 
 test('terminal ownership invalidates an in-flight claimed replacement without resurrection', async () => {

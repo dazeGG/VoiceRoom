@@ -31,6 +31,7 @@ function retainDetailDispatch(): void {
   detailDispatchRefs += 1;
   if (detailDispatchUnsub) return;
   detailDispatchUnsub = getAppRealtime().subscribe((event) => {
+    acknowledgeActiveVoiceResync(event);
     if (event.type === 'pong') {
       // Heartbeat has no roomId; every room handler may use it as liveness.
       for (const roomId of detailHandlers.keys()) dispatchRoomDetail(roomId, event);
@@ -60,6 +61,54 @@ let activeVoiceJoin: {
 let restoreHooked = false;
 let lastRestoreEpoch = 0;
 let lastActiveResyncKey = '';
+let activeResync: { key: string; requestId: string; attempts: number; timer: ReturnType<typeof setTimeout> | null } | null = null;
+let activeResyncSequence = 0;
+let activeResyncFailureHandler: ((failure: { code: string; requestId: string }) => void) | null = null;
+
+function clearActiveResync(): void {
+  if (activeResync?.timer) clearTimeout(activeResync.timer);
+  activeResync = null;
+}
+
+function sendActiveResyncAttempt(): void {
+  if (!activeResync || !activeVoiceJoin) return;
+  const pending = activeResync;
+  pending.attempts += 1;
+  getAppRealtime().send('room.join', activeVoiceJoin, pending.requestId);
+  pending.timer = setTimeout(() => {
+    if (activeResync !== pending) return;
+    if (pending.attempts < 3) {
+      sendActiveResyncAttempt();
+      return;
+    }
+    clearActiveResync();
+    activeResyncFailureHandler?.({ code: 'transport_error', requestId: pending.requestId });
+  }, 1_000 * 2 ** (pending.attempts - 1));
+}
+
+export function setActiveVoiceResyncFailureHandler(handler: ((failure: { code: string; requestId: string }) => void) | null): void {
+  activeResyncFailureHandler = handler;
+}
+
+export function acknowledgeActiveVoiceResync(event: RealtimeEvent): boolean {
+  const pending = activeResync;
+  if (!pending) return false;
+  if (
+    event.type === 'room.snapshot'
+    && event.id === pending.requestId
+    && event.payload.mode === 'active'
+    && event.payload.roomId === activeVoiceJoin?.roomId
+  ) {
+    clearActiveResync();
+    return true;
+  }
+  if (event.type === 'error' && event.payload.id === pending.requestId) {
+    clearActiveResync();
+    activeResyncFailureHandler?.({ code: event.payload.code, requestId: pending.requestId });
+    return true;
+  }
+  return false;
+}
 
 function ensureReconnectRestore(): void {
   if (restoreHooked) return;
@@ -68,6 +117,7 @@ function ensureReconnectRestore(): void {
     if (connectionEpoch <= lastRestoreEpoch) return;
     lastRestoreEpoch = connectionEpoch;
     lastActiveResyncKey = '';
+    clearActiveResync();
     for (const roomId of previewSubscriptions.keys()) {
       getAppRealtime().send('room.preview.subscribe', { roomId });
     }
@@ -195,6 +245,7 @@ export function leaveVoiceRoom(payload: { roomId: string; peerId: string; sessio
   ) {
     activeVoiceJoin = null;
     lastActiveResyncKey = '';
+    clearActiveResync();
   }
   getAppRealtime().send('room.leave', payload);
 }
@@ -205,7 +256,14 @@ export function requestActiveVoiceResync(recoveryEpoch: number, appEpoch: number
   const key = `${recoveryEpoch}:${appEpoch}`;
   if (lastActiveResyncKey === key) return false;
   lastActiveResyncKey = key;
-  conn.send('room.join', activeVoiceJoin);
+  clearActiveResync();
+  activeResync = {
+    key,
+    requestId: `voice-resync-${appEpoch}-${++activeResyncSequence}`,
+    attempts: 0,
+    timer: null
+  };
+  sendActiveResyncAttempt();
   return true;
 }
 

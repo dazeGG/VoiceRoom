@@ -38,8 +38,8 @@ function createRegistry() {
   return registry;
 }
 
-function clientFrame(type, payload) {
-  return JSON.stringify({ type, payload });
+function clientFrame(type, payload, id) {
+  return JSON.stringify(id ? { id, type, payload } : { type, payload });
 }
 
 async function waitFor(predicate) {
@@ -53,8 +53,9 @@ async function waitFor(predicate) {
 function createHandler(resolveSessionUser, events, { failedJoinPeerId = '' } = {}) {
   const registry = createRegistry();
   const roomRuntime = {
-    async joinVoiceRoom(connection, payload) {
+    async joinVoiceRoom(connection, payload, _sessionUser, _clientIp, requestId) {
       if (payload.peerId === failedJoinPeerId) throw new Error('synthetic join failure');
+      registry.lastJoinRequestId = requestId;
       events.push(`join:${payload.peerId}`);
       connection.activeVoice = {
         roomId: payload.roomId,
@@ -64,6 +65,7 @@ function createHandler(resolveSessionUser, events, { failedJoinPeerId = '' } = {
       return { ok: true };
     },
     async leaveVoiceRoom(connection, payload) {
+      registry.lastLeavePayload = payload;
       events.push(`leave:${payload.peerId}`);
       if (
         connection.activeVoice?.roomId === payload.roomId
@@ -106,7 +108,7 @@ test('JOIN then LEAVE keeps wire order while join authorization is pending', asy
     peerId: PEER_A,
     sessionToken: TOKEN_A,
     name: 'Alice'
-  }));
+  }, 'recovery-request-1'));
   await waitFor(() => Boolean(releaseJoinSession));
   socket.emit('message', clientFrame('room.leave', {
     roomId: ROOM_ID,
@@ -118,6 +120,8 @@ test('JOIN then LEAVE keeps wire order while join authorization is pending', asy
   await waitFor(() => events.length === 2);
   assert.deepEqual(events, [`join:${PEER_A}`, `leave:${PEER_A}`]);
   assert.equal(registry.connection.activeVoice, null);
+  assert.equal(registry.lastJoinRequestId, 'recovery-request-1');
+  assert.equal(registry.lastLeavePayload.sessionToken, TOKEN_A);
 });
 
 test('two JOIN frames keep receive order when the first authorization is slower', async () => {

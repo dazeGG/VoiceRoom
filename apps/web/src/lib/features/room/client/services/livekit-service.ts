@@ -51,9 +51,19 @@ import {
   type RecoveryAttemptOutcome
 } from '../recovery/room-recovery';
 import { ScreenRecoveryGraceController } from '../recovery/screen-recovery-grace.js';
+import { LiveKitReconcileGeneration } from '../recovery/livekit-reconcile-generation.js';
 
 const screenSubscriptionRetryController = createScreenSubscriptionRetryController();
 const screenRecoveryGrace = new ScreenRecoveryGraceController();
+const liveKitReconcileGenerations = new WeakMap<Room, LiveKitReconcileGeneration>();
+
+function reconcileGenerationFor(room: Room): LiveKitReconcileGeneration {
+  const existing = liveKitReconcileGenerations.get(room);
+  if (existing) return existing;
+  const generation = new LiveKitReconcileGeneration();
+  liveKitReconcileGenerations.set(room, generation);
+  return generation;
+}
 
 subscribeRoomRecoveryTransitions((event) => {
   const phase = String(event.phase || '');
@@ -128,12 +138,25 @@ export async function attemptFreshLiveKitReplacement({
   const oldRoom = state.livekitRoom;
   const microphoneStream = state.localStream;
   const screenStream = state.localScreenStream;
-  const isCurrent = () => isCurrentRoomRecoveryEpoch(epoch) && state.joined && state.localStream === microphoneStream;
+  const roomId = state.roomId;
+  const peerId = state.peerId;
+  const sessionToken = state.sessionToken;
+  const screenTrackIds = screenStream?.getTracks().map((track) => track.id).sort().join(':') ?? '';
+  const identityCurrent = () => isCurrentRoomRecoveryEpoch(epoch)
+    && state.joined
+    && state.roomId === roomId
+    && state.peerId === peerId
+    && state.sessionToken === sessionToken
+    && state.localStream === microphoneStream
+    && state.localScreenStream === screenStream
+    && (state.localScreenStream?.getTracks().map((track) => track.id).sort().join(':') ?? '') === screenTrackIds;
+  const isCurrent = () => identityCurrent() && state.livekitRoom === oldRoom;
   let candidate: Room | null = null;
   let microphonePublication: LocalTrackPublication | null = null;
   let screenPublications = new Map<string, LocalTrackPublication>();
 
   try {
+    if (oldRoom) reconcileGenerationFor(oldRoom).invalidate();
     const credentials = await postJson('/api/livekit-token', {
       name: state.self?.name || state.peerId,
       peerId: state.peerId,
@@ -144,7 +167,8 @@ export async function attemptFreshLiveKitReplacement({
 
     candidate = await connectLiveKitWithFallback(credentials, isCurrent);
     if (!candidate || !isCurrent()) return { retryable: true, code: 'transport_error' };
-    if (!(await bindLiveKitRoomEvents(candidate, isCurrent)) || !isCurrent()) {
+    const eventCurrent = () => identityCurrent() && (state.livekitRoom === oldRoom || state.livekitRoom === candidate);
+    if (!(await bindLiveKitRoomEvents(candidate, eventCurrent)) || !isCurrent()) {
       await disconnectLiveKitRoomInstance(candidate);
       return { retryable: true, code: 'transport_error' };
     }
@@ -282,6 +306,7 @@ async function bindLiveKitRoomEvents(room: Room, isCurrent: () => boolean): Prom
   const { RoomEvent } = await loadLiveKitClient();
   if (!isCurrent()) return false;
   const current = () => isCurrent() && state.livekitRoom === room;
+  const reconcileGeneration = reconcileGenerationFor(room);
 
   room.on(RoomEvent.Connected, () => {
     if (!current()) return;
@@ -289,18 +314,21 @@ async function bindLiveKitRoomEvents(room: Room, isCurrent: () => boolean): Prom
   });
   room.on(RoomEvent.Reconnecting, () => {
     if (!current()) return;
+    reconcileGeneration.invalidate();
     notifyLiveKitReconnecting();
     if (state.joined || state.connecting) setVoiceConnectionStatus('reconnecting');
   });
   room.on(RoomEvent.Reconnected, () => {
     if (!current()) return;
+    const generation = reconcileGeneration.capture();
     if (state.joined || state.connecting) setVoiceConnectionStatus('connected');
     recoverLiveKitRoom(room, current).then(() => {
-      if (current()) notifyLiveKitReconciled();
+      if (current() && reconcileGeneration.isCurrent(generation)) notifyLiveKitReconciled();
     }).catch(() => logLiveKitTransition('warn', { event: 'in_place_reconcile', result: 'failed' }));
   });
   room.on(RoomEvent.Disconnected, () => {
     if (!current()) return;
+    reconcileGeneration.invalidate();
     if (state.joined) setVoiceConnectionStatus('lost');
     notifyLiveKitDisconnected();
   });
@@ -317,6 +345,7 @@ async function bindLiveKitRoomEvents(room: Room, isCurrent: () => boolean): Prom
   });
   room.on(RoomEvent.SignalReconnecting, () => {
     if (!current()) return;
+    reconcileGeneration.invalidate();
     notifyLiveKitReconnecting();
     if (state.joined || state.connecting) setVoiceConnectionStatus('signal-reconnecting');
   });
@@ -624,6 +653,7 @@ export async function disconnectLiveKitRoom(): Promise<void> {
 }
 
 async function disconnectLiveKitRoomInstance(room: Room): Promise<void> {
+  reconcileGenerationFor(room).invalidate();
   if (state.livekitRoom === room) {
     clearAllScreenSubscriptionRetries();
     state.livekitRoom = null;
@@ -641,6 +671,7 @@ async function disconnectLiveKitRoomInstance(room: Room): Promise<void> {
 
 export function updateLiveKitPublicationState(peer: Participant, publication: TrackPublication): void {
   if (isScreenVideoPublication(publication)) {
+    if (peer.screenAuthoritative === false) return;
     screenRecoveryGrace.cancel(peer.id);
     const hadScreen = peer.screen;
     peer.screen = true;
@@ -650,6 +681,7 @@ export function updateLiveKitPublicationState(peer: Participant, publication: Tr
     if (!hadScreen) refreshScreenTiles();
   }
   if (isScreenAudioPublication(publication)) {
+    if (peer.screenAuthoritative === false) return;
     screenRecoveryGrace.cancel(peer.id);
     peer.screenAudio = true;
     updatePeerStatus(peer);
@@ -703,6 +735,7 @@ function attachSubscribedRemoteScreenTrack(
 }
 
 function shouldSubscribeToScreen(peer: Participant): boolean {
+  if (peer.screenAuthoritative === false) return false;
   return getRemoteScreenDemand(peer) !== 'hidden';
 }
 
@@ -982,7 +1015,7 @@ function handleLiveKitTrackUnpublished(publication: RemoteTrackPublication, part
       return;
     }
     const hadScreen = peer.screen;
-    peer.screen = screenPresence.active;
+    peer.screen = peer.screenAuthoritative === false ? false : screenPresence.active;
     peer.screenAudio = screenPresence.hasAudio;
     const audioTrackId = publication.track?.mediaStreamTrack?.id;
     if (audioTrackId) detachRemoteScreenAudioTrack(peer, audioTrackId);
@@ -1002,7 +1035,7 @@ function handleLiveKitTrackUnpublished(publication: RemoteTrackPublication, part
       return;
     }
     const hadScreen = peer.screen;
-    peer.screen = screenPresence.active;
+    peer.screen = peer.screenAuthoritative === false ? false : screenPresence.active;
     peer.screenAudio = screenPresence.hasAudio;
 
     applyRemoteScreenCue(peer, hadScreen, peer.screen);
@@ -1048,6 +1081,15 @@ function finalizeRemoteScreenLoss(peerId: string): void {
 }
 
 export function syncAuthoritativeScreenPresence(peerId: string, screen: boolean): void {
+  const peer = state.peers.get(peerId);
+  if (peer) {
+    peer.screenAuthoritative = screen;
+    if (!screen) {
+      peer.screen = false;
+      peer.screenAudio = false;
+      detachRemoteScreen(peer);
+    }
+  }
   if (screen) {
     screenRecoveryGrace.cancel(peerId);
     return;

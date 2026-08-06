@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import test from 'node:test';
 
 import { ScreenRecoveryGraceController } from '../src/lib/features/room/client/recovery/screen-recovery-grace.js';
@@ -88,4 +89,32 @@ test('authoritative stop cancels a pending media-only grace', () => {
   grace.authoritativeStop('peer');
   fake.advance(8_000);
   assert.equal(expired, false);
+});
+
+test('global hard deadline is absolute across recovery epoch churn', () => {
+  const fake = clock();
+  const expired = [];
+  const grace = new ScreenRecoveryGraceController({
+    globalHardCapMs: 20_000,
+    now: fake.now,
+    setTimeout: fake.setTimeout,
+    clearTimeout: fake.clearTimeout
+  });
+  grace.beginGlobal(1);
+  grace.schedule('peer', () => expired.push('peer'));
+  fake.advance(15_000);
+  grace.beginGlobal(2);
+  fake.advance(4_999);
+  assert.deepEqual(expired, []);
+  fake.advance(1);
+  assert.deepEqual(expired, ['peer']);
+});
+
+test('authoritative screen intent wins over stale LiveKit media availability', () => {
+  const livekit = fs.readFileSync(
+    new URL('../src/lib/features/room/client/services/livekit-service.ts', import.meta.url),
+    'utf8'
+  );
+  assert.match(livekit, /peer\.screenAuthoritative === false/);
+  assert.match(livekit, /peer\.screen = false;[\s\S]{0,100}peer\.screenAudio = false;/);
 });

@@ -1,5 +1,5 @@
 import { RealtimeRecoveryController, classifyRecoveryFailure } from './realtime-recovery.js';
-import { requestActiveVoiceResync } from '$lib/features/home/model/room-realtime';
+import { requestActiveVoiceResync, setActiveVoiceResyncFailureHandler } from '$lib/features/home/model/room-realtime';
 
 export type RecoveryAttemptOutcome = {
   ok?: boolean;
@@ -44,14 +44,16 @@ export function startRoomRecovery(appEpoch: number, appConnected: boolean): numb
       }
     },
     requestAppSnapshot: ({ epoch, appEpoch: currentAppEpoch }: { epoch: number; appEpoch: number }) => {
-      requestActiveVoiceResync(epoch, currentAppEpoch);
+      return requestActiveVoiceResync(epoch, currentAppEpoch);
     },
     onTransition: logTransition
   });
+  setActiveVoiceResyncFailureHandler(({ code }) => controller?.appSnapshotRequestFailed({ code }));
   return controller.activate({ appEpoch, appConnected });
 }
 
 export function cancelRoomRecovery(): void {
+  setActiveVoiceResyncFailureHandler(null);
   controller?.cancel();
   controller = null;
 }

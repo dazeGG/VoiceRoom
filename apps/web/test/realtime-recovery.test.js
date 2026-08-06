@@ -118,7 +118,7 @@ test('fresh replacement is gated by a current active snapshot containing the loc
   assert.equal(controller.getSnapshot().phase, 'healthy');
 });
 
-test('retry budget is single-flight, bounded, and rearms only after cooldown plus online edge', async () => {
+test('retry budget is single-flight, bounded, and autonomously probes after cooldown', async () => {
   const clock = fakeClock();
   let calls = 0;
   const { controller, snapshots } = createController({
@@ -149,13 +149,52 @@ test('retry budget is single-flight, bounded, and rearms only after cooldown plu
   assert.equal(calls, 2);
   assert.equal(controller.getSnapshot().phase, 'failed');
   clock.advance(1_000);
-  assert.equal(controller.getSnapshot().phase, 'failed');
-  controller.networkOffline();
-  controller.networkOnline();
   assert.equal(controller.getSnapshot().phase, 'waiting-app-snapshot');
   assert.equal(snapshots.length, 2);
   controller.appSnapshotApplied({ appEpoch: 4, active: true, hasLocalPeer: true });
   assert.equal(calls, 3);
+});
+
+test('snapshot timeout enters cooldown and probes again without a network edge', () => {
+  const clock = fakeClock();
+  const { controller, snapshots } = createController({ clock, cooldownMs: 1_000 });
+
+  controller.livekitDisconnected();
+  assert.equal(snapshots.length, 1);
+  controller.appSnapshotRequestFailed({ code: 'transport_error' });
+  assert.equal(controller.getSnapshot().phase, 'failed');
+
+  clock.advance(1_000);
+  assert.equal(controller.getSnapshot().phase, 'waiting-app-snapshot');
+  assert.equal(snapshots.length, 2);
+});
+
+test('a later transport regression invalidates an in-place reconcile completion', async () => {
+  const { LiveKitReconcileGeneration } = await import('../src/lib/features/room/client/recovery/livekit-reconcile-generation.js');
+  const generation = new LiveKitReconcileGeneration();
+  const reconnected = generation.capture();
+  generation.invalidate();
+  assert.equal(generation.isCurrent(reconnected), false);
+  const laterReconnect = generation.capture();
+  assert.equal(generation.isCurrent(laterReconnect), true);
+});
+
+test('web recovery wiring pins replacement identity and correlates bounded resync retries', () => {
+  const realtime = fs.readFileSync(new URL('../src/lib/api/realtime.ts', import.meta.url), 'utf8');
+  const roomRealtime = fs.readFileSync(new URL('../src/lib/features/home/model/room-realtime.ts', import.meta.url), 'utf8');
+  const livekit = fs.readFileSync(new URL('../src/lib/features/room/client/services/livekit-service.ts', import.meta.url), 'utf8');
+
+  assert.match(realtime, /this\.reconnectTimer !== null[\s\S]{0,160}clearTimeout\(this\.reconnectTimer\)/);
+  assert.match(realtime, /generation !== this\.openGeneration/);
+  assert.match(roomRealtime, /voice-resync-\$\{appEpoch\}/);
+  assert.match(roomRealtime, /pending\.attempts < 3/);
+  assert.match(roomRealtime, /code: 'transport_error'/);
+  assert.match(roomRealtime, /event\.id === pending\.requestId/);
+  assert.match(roomRealtime, /event\.payload\.id === pending\.requestId/);
+  assert.match(livekit, /state\.sessionToken === sessionToken/);
+  assert.match(livekit, /state\.localScreenStream === screenStream/);
+  assert.match(livekit, /screenTrackIds/);
+  assert.match(livekit, /oldRoom\) reconcileGenerationFor\(oldRoom\)\.invalidate\(\)/);
 });
 
 test('stale replacement completion cannot revive a cancelled or newer recovery epoch', async () => {

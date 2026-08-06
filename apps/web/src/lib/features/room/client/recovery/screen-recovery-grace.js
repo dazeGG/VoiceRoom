@@ -12,8 +12,10 @@ export class ScreenRecoveryGraceController {
   }
 
   beginGlobal(epoch) {
-    if (this.globalActive && this.globalEpoch === epoch) return;
-    if (this.globalTimer !== null) this.cancelTimer(this.globalTimer);
+    if (this.globalActive) {
+      this.globalEpoch = epoch;
+      return;
+    }
     this.globalActive = true;
     this.globalEpoch = epoch;
     this.globalTimer = this.scheduleTimer(() => this.endGlobal(true), this.globalHardCapMs);

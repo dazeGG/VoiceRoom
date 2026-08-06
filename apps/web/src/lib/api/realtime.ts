@@ -68,7 +68,13 @@ export type ReactionRealtimeEvent = {
   };
 };
 
-export type RealtimeEvent = RealtimeAccountEvent | RealtimeRoomEvent | RealtimeErrorEvent | NotificationRealtimeEvent | ReactionRealtimeEvent;
+export type RealtimeEvent = (
+  RealtimeAccountEvent
+  | RealtimeRoomEvent
+  | RealtimeErrorEvent
+  | NotificationRealtimeEvent
+  | ReactionRealtimeEvent
+) & { id?: string };
 
 /** @deprecated Use RealtimeEvent */
 export type { RealtimeEvent as RealtimeEventUnion };
@@ -82,7 +88,7 @@ type ServerEnvelope = {
 
 export interface RealtimeHandle {
   close: () => void;
-  send: (type: string, payload?: Record<string, unknown>) => void;
+  send: (type: string, payload?: Record<string, unknown>, id?: string) => void;
 }
 
 const RECONNECT_BASE_MS = 500;
@@ -110,7 +116,11 @@ function parseRealtimeEvent(envelope: ServerEnvelope): RealtimeEvent | null {
       }
     };
   }
-  return { type: envelope.type, payload: envelope.payload ?? {} } as RealtimeEvent;
+  return {
+    type: envelope.type,
+    payload: envelope.payload ?? {},
+    ...(envelope.id ? { id: envelope.id } : {})
+  } as RealtimeEvent;
 }
 
 class AppRealtimeConnection {
@@ -126,6 +136,7 @@ class AppRealtimeConnection {
   private stateHandlers = new Set<(connected: boolean, connectionEpoch: number) => void>();
   private everConnected = false;
   private connectionEpoch = 0;
+  private openGeneration = 0;
   private heartbeatWatchdog = new RealtimeHeartbeatWatchdog({ timeoutMs: HEARTBEAT_TIMEOUT_MS });
 
   subscribe(handler: (event: RealtimeEvent) => void): () => void {
@@ -140,9 +151,9 @@ class AppRealtimeConnection {
     };
   }
 
-  send(type: string, payload: Record<string, unknown> = {}): void {
+  send(type: string, payload: Record<string, unknown> = {}, id?: string): void {
     if (isDesktopBoundaryBlocked()) return;
-    const frame = JSON.stringify({ type, payload });
+    const frame = JSON.stringify({ ...(id ? { id } : {}), type, payload });
     if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
       this.outboundQueue.push(frame);
       this.ensureConnected();
@@ -176,17 +187,18 @@ class AppRealtimeConnection {
   }
 
   private scheduleReconnect(): void {
-    if (this.closedByClient || this.refCount === 0) return;
+    if (this.closedByClient || this.refCount === 0 || this.reconnectTimer !== null) return;
     const baseDelay = Math.min(RECONNECT_MAX_MS, RECONNECT_BASE_MS * 2 ** this.reconnectAttempt);
     const delay = baseDelay * (0.5 + Math.random() * 0.5);
     this.reconnectAttempt += 1;
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
-      this.openSocket();
+      this.ensureConnected();
     }, delay);
   }
 
   private startHeartbeat(): void {
+    if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
     this.heartbeatWatchdog.reset();
     this.heartbeatTimer = setInterval(() => {
       if (this.heartbeatWatchdog.isTimedOut()) {
@@ -203,10 +215,12 @@ class AppRealtimeConnection {
   }
 
   private openSocket(): void {
+    if (this.socket && (this.socket.readyState === WebSocket.OPEN || this.socket.readyState === WebSocket.CONNECTING)) return;
+    const generation = ++this.openGeneration;
     const socket = new WebSocket(wsUrl());
     this.socket = socket;
     socket.onopen = () => {
-      if (this.socket !== socket) return;
+      if (this.socket !== socket || generation !== this.openGeneration) return;
       this.connectionEpoch += 1;
       this.reconnectAttempt = 0;
       this.send('hello', {});
@@ -222,7 +236,7 @@ class AppRealtimeConnection {
       this.emitState(true);
     };
     socket.onmessage = (event) => {
-      if (this.socket !== socket) return;
+      if (this.socket !== socket || generation !== this.openGeneration) return;
       let envelope: ServerEnvelope | null = null;
       try {
         envelope = JSON.parse(String(event.data)) as ServerEnvelope;
@@ -234,7 +248,7 @@ class AppRealtimeConnection {
       if (parsed) this.emit(parsed);
     };
     socket.onclose = () => {
-      if (this.socket !== socket) return;
+      if (this.socket !== socket || generation !== this.openGeneration) return;
       this.clearTimers();
       this.socket = null;
       this.emitState(false);
@@ -278,11 +292,16 @@ class AppRealtimeConnection {
       return;
     }
     this.closedByClient = false;
+    if (this.reconnectTimer !== null) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
     this.openSocket();
   }
 
   private disconnect(): void {
     this.closedByClient = true;
+    this.openGeneration += 1;
     this.clearTimers();
     this.outboundQueue.length = 0;
     this.socket?.close();

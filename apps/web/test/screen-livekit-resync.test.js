@@ -86,6 +86,11 @@ async function loadLiveKitService() {
       schedule() {}
       authoritativeStop() {}
     }
+    export class LiveKitReconcileGeneration {
+      capture() { return 0; }
+      invalidate() { return 1; }
+      isCurrent() { return true; }
+    }
     export const createParticipant = (peerInfo) => {
       const existing = state.peers.get(peerInfo.id);
       if (existing) {

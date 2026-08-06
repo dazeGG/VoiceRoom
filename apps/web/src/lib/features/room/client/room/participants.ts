@@ -66,6 +66,7 @@ function createParticipantModel(peerInfo: PeerInfo, isLocal: boolean): Participa
     name,
     micReceiver: null,
     screen: Boolean(peerInfo.screen),
+    screenAuthoritative: peerInfo.screenAuthoritative ? Boolean(peerInfo.screen) : null,
     screenAudio: Boolean(peerInfo.screenAudio),
     screenProfileId: getScreenProfile(peerInfo.screenProfileId ?? '').id,
     screenStream: null,
@@ -178,6 +179,7 @@ export function updateParticipant(peerInfo: PeerInfo): void {
   const hadName = participant.name;
   const hadAccountUserId = participant.accountUserId;
   const hasScreenUpdate = Object.hasOwn(peerInfo, 'screen');
+  const hasAuthoritativeScreenUpdate = peerInfo.screenAuthoritative === true && hasScreenUpdate;
   if (Object.hasOwn(peerInfo, 'accountUserId')) participant.accountUserId = peerInfo.accountUserId || '';
   if (Object.hasOwn(peerInfo, 'avatarAccent')) participant.avatarAccent = peerInfo.avatarAccent || '';
   if (Object.hasOwn(peerInfo, 'avatarColorKey')) participant.avatarColorKey = peerInfo.avatarColorKey || participant.avatarColorKey;
@@ -185,8 +187,13 @@ export function updateParticipant(peerInfo: PeerInfo): void {
   if (Object.hasOwn(peerInfo, 'name')) participant.name = peerInfo.name || participant.name;
   if (Object.hasOwn(peerInfo, 'deafened')) participant.deafened = Boolean(peerInfo.deafened);
   if (Object.hasOwn(peerInfo, 'muted')) participant.muted = Boolean(peerInfo.muted);
-  if (hasScreenUpdate) participant.screen = Boolean(peerInfo.screen);
-  if (Object.hasOwn(peerInfo, 'screenAudio')) participant.screenAudio = Boolean(peerInfo.screenAudio);
+  if (hasScreenUpdate && (hasAuthoritativeScreenUpdate || participant.screenAuthoritative !== false)) {
+    participant.screen = Boolean(peerInfo.screen);
+  }
+  if (hasAuthoritativeScreenUpdate) participant.screenAuthoritative = Boolean(peerInfo.screen);
+  if (Object.hasOwn(peerInfo, 'screenAudio') && (hasAuthoritativeScreenUpdate || participant.screenAuthoritative !== false)) {
+    participant.screenAudio = Boolean(peerInfo.screenAudio);
+  }
   if (Object.hasOwn(peerInfo, 'screenProfileId')) participant.screenProfileId = getScreenProfile(peerInfo.screenProfileId ?? '').id;
   if (Object.hasOwn(peerInfo, 'screenStreamId')) participant.screenStreamId = peerInfo.screenStreamId || '';
   const hadViewedScreenOwnerId = participant.viewedScreenPeerId;

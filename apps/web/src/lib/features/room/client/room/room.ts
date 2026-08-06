@@ -432,6 +432,7 @@ async function handleVoiceRealtimeEvent(event: RealtimeEvent): Promise<void> {
       // may carry a stale server copy (e.g. changed while reconnecting), so keep them.
       updateParticipant({
         ...localPeer,
+        screenAuthoritative: true,
         deafened: state.outputMuted,
         isLocal: true,
         muted: state.muted,
@@ -440,7 +441,7 @@ async function handleVoiceRealtimeEvent(event: RealtimeEvent): Promise<void> {
     }
     for (const peer of remotePeers) {
       syncAuthoritativeScreenPresence(peer.id, Boolean(peer.screen));
-      createParticipant(peer);
+      createParticipant({ ...peer, screenAuthoritative: true });
     }
     syncLiveKitParticipants(state.livekitRoom);
     refreshParticipantState();
@@ -481,7 +482,7 @@ async function handleVoiceRealtimeEvent(event: RealtimeEvent): Promise<void> {
 
   if (event.type === 'room.peer.joined') {
     if (event.payload.peer?.id) state.serverPeerIds.add(event.payload.peer.id);
-    createParticipant(event.payload.peer);
+    createParticipant({ ...event.payload.peer, screenAuthoritative: true });
     syncLiveKitParticipantById(event.payload.peer?.id);
     playPeerJoinCue(event.payload.peer?.id);
     refreshParticipantState();
@@ -499,7 +500,8 @@ async function handleVoiceRealtimeEvent(event: RealtimeEvent): Promise<void> {
   }
 
   if (event.type === 'room.peer.updated') {
-    updateParticipant(event.payload.peer);
+    syncAuthoritativeScreenPresence(event.payload.peer.id, Boolean(event.payload.peer.screen));
+    updateParticipant({ ...event.payload.peer, screenAuthoritative: Object.hasOwn(event.payload.peer, 'screen') });
     return;
   }
 
