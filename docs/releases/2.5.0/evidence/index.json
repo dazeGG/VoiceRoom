@@ -23,6 +23,15 @@
     "matrixArtifactId": null,
     "verifiedAt": null
   },
+  "g42MessagingCheckpoint": {
+    "contract": "voice-room.messaging-checkpoint/v1",
+    "runner": "scripts/checkpoints/messaging.mjs",
+    "test": "scripts/test/g42-messaging-checkpoint.test.mjs",
+    "status": "PENDING_EXTERNAL_STAGING",
+    "checkpointArtifactId": null,
+    "observationMinutes": 0,
+    "verifiedAt": null
+  },
   "archiveAuthority": "archive-authority.json",
   "archiveMap": "archive-map.json",
   "archiveLedger": "archive-ledger.json",
