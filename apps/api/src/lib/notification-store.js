@@ -282,21 +282,13 @@ function createNotificationStore({
         return { status: 'not_saved_room', preferences: await getPreferences(userId, client) };
       }
 
-      if (muted) {
-        await client.query(
-          `INSERT INTO notification_room_mutes (id, user_id, room_id, created_at, updated_at)
-           VALUES ($1, $2, $3, current_timestamp, current_timestamp)
-           ON CONFLICT (user_id, room_id) DO UPDATE
-           SET updated_at = current_timestamp`,
-          [createRowId(), userId, roomId]
-        );
-      } else {
-        await client.query(
-          `DELETE FROM notification_room_mutes
-           WHERE user_id = $1 AND room_id = $2`,
-          [userId, roomId]
-        );
-      }
+      await client.query(
+        `INSERT INTO notification_room_mutes (id, user_id, room_id, level, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, current_timestamp, current_timestamp)
+         ON CONFLICT (user_id, room_id) DO UPDATE
+         SET level = EXCLUDED.level, updated_at = current_timestamp`,
+        [createRowId(), userId, roomId, muted ? 'none' : 'all']
+      );
 
       return { status: muted ? 'muted' : 'unmuted', preferences: await getPreferences(userId, client) };
     });
@@ -313,19 +305,26 @@ function createNotificationStore({
         [roomId]
       );
       if (room.rowCount === 0) return { ok: false, code: 'not_found' };
-      if (level === 'all') {
-        await client.query('DELETE FROM notification_room_mutes WHERE user_id = $1 AND room_id = $2', [userId, roomId]);
-      } else {
-        await client.query(
-          `INSERT INTO notification_room_mutes (id, user_id, room_id, level, created_at, updated_at)
-           VALUES ($1, $2, $3, $4, current_timestamp, current_timestamp)
-           ON CONFLICT (user_id, room_id) DO UPDATE
-           SET level = EXCLUDED.level, updated_at = current_timestamp`,
-          [createRowId(), userId, roomId, level]
-        );
-      }
+      await client.query(
+        `INSERT INTO notification_room_mutes (id, user_id, room_id, level, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, current_timestamp, current_timestamp)
+         ON CONFLICT (user_id, room_id) DO UPDATE
+         SET level = EXCLUDED.level, updated_at = current_timestamp`,
+        [createRowId(), userId, roomId, level]
+      );
       return { ok: true, level };
     });
+  }
+
+  async function getRoomLevel({ userId, roomId }) {
+    if (!userId || !roomId) return 'mentions';
+    const result = await getPool().query(
+      `SELECT level
+       FROM notification_room_mutes
+       WHERE user_id = $1 AND room_id = $2`,
+      [userId, roomId]
+    );
+    return result.rows[0]?.level || 'mentions';
   }
 
   async function isRoomMuted({ userId, roomId }) {
@@ -333,7 +332,7 @@ function createNotificationStore({
     const result = await getPool().query(
       `SELECT 1
        FROM notification_room_mutes
-       WHERE user_id = $1 AND room_id = $2`,
+       WHERE user_id = $1 AND room_id = $2 AND level = 'none'`,
       [userId, roomId]
     );
     return result.rowCount > 0;
@@ -348,6 +347,7 @@ function createNotificationStore({
   return {
     close,
     getPreferences,
+    getRoomLevel,
     isDmMuted,
     isRoomMuted,
     setDmMute,

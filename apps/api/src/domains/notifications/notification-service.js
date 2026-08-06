@@ -32,7 +32,7 @@ function createNotificationService({ pool, inbox, mentions, eligibility, outbox,
     };
     return client ? run(client) : transaction(pool,run);
   }
-  async function getRoomLevel({userId,roomId}){const prefs=await notificationStore?.getPreferences?.(userId);if(prefs?.roomLevels?.[roomId])return prefs.roomLevels[roomId];return prefs?.mutedRoomIds?.includes(roomId)?'none':'mentions';}
+  async function getRoomLevel({userId,roomId}){if(notificationStore?.getRoomLevel)return notificationStore.getRoomLevel({userId,roomId});const prefs=await notificationStore?.getPreferences?.(userId);if(prefs?.roomLevels?.[roomId])return prefs.roomLevels[roomId];return prefs?.mutedRoomIds?.includes(roomId)?'none':'mentions';}
   async function setRoomLevel({userId,roomId,level}){const normalized=normalizeNotificationLevel(level,'');if(!normalized) return {ok:false,code:'invalid_level'};if(notificationStore?.setRoomLevel)return notificationStore.setRoomLevel({userId,roomId,level:normalized});return {ok:false,code:'not_supported'};}
   return { count,createAddressedForMessage,getRoomLevel,list,markAllRead,markRead,resync,setRoomLevel };
 }
