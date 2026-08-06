@@ -92,6 +92,11 @@ test('G69-A02 desired PUT is idempotent, bounded, revisioned and publishes only 
   await realtime.publish({ conversation: { type: 'dm', id: 'peer' }, actorUserId: 'account', messageId: 'm', summary: { emoji: '😀', count: 1, reactedByMe: true, revision: '1' } });
   assert.equal(roomEvents.length, 1);
   assert.deepEqual(accountEvents.map(([id]) => id).sort(), ['account', 'peer']);
+
+  let release; let settled=false;
+  const ordered=createReactionRealtimeAdapter({broadcastRoom:()=>new Promise((resolve)=>{release=resolve;})});
+  const pending=ordered.publish({conversation:{type:'room',id:'room'},messageId:'m',summary:{emoji:'😀',count:1,reactedByMe:true,revision:'2'}}).then(()=>{settled=true;});
+  await new Promise((resolve)=>setImmediate(resolve)); assert.equal(settled,false); release(true); await pending; assert.equal(settled,true);
 });
 
 test('G69 routes preserve no-store reads and service authorization status', async () => {

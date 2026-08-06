@@ -378,7 +378,7 @@ function getReactionServices() {
     broadcastRoom: async (roomId, event) => {
       const room = await getRoom(roomId);
       if (!room) return false;
-      broadcast(room, event);
+      roomRuntime?.broadcastRoomDetail(roomId, event);
       return true;
     },
     broadcastAccount: broadcastToUser,

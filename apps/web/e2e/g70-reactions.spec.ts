@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { createPermanentRoom, enterRoom, registerViaUi, uniqueLogin } from './helpers';
 
 const store = readFileSync(new URL('../src/lib/shared/chat/reaction-store.svelte.ts', import.meta.url), 'utf8');
@@ -38,7 +39,7 @@ test('G70 supplemental accessibility contracts remain visible in components', as
   expect(reactors).toContain('Показать ещё');
 });
 
-test('G70-A02 keyboard interaction and 120-reactor pagination execute through the rendered UI', async ({ page }) => {
+test('G70 supplemental mocked keyboard and pagination rendering remains deterministic', async ({ page }) => {
   const allReactors = Array.from({ length: 120 }, (_, index) => ({ userId: `user-${index}`, displayName: `Reactor ${index}`, avatarUrl: null }));
   await page.route('**/api/capabilities', async (route) => { const response = await route.fetch(); const body = await response.json(); await route.fulfill({ response, json: { ...body, features: { ...body.features, reactions: true } } }); });
   await page.route('**/api/reactions/**', async (route) => {
@@ -91,6 +92,7 @@ test('G70-A03 late reaction response cannot revive a deleted message', async ({ 
 });
 
 test('G70-A04 two accounts and a guest enforce the real mutation boundary across contexts', async ({ browser, page }) => {
+  test.skip(process.env.E2E_REAL_REACTIONS !== 'true','E2E_REAL_REACTIONS requires the release-test capability overlay');
   const enableReactions = async (target: typeof page) => target.route('**/api/capabilities', async (route) => { const response = await route.fetch(); const body = await response.json(); await route.fulfill({ response, json: { ...body, features: { ...body.features, reactions: true } } }); });
   await enableReactions(page); const ownerLogin = uniqueLogin('reactionowner'); await registerViaUi(page, ownerLogin); const roomId = await createPermanentRoom(page, `Reaction contexts ${ownerLogin}`); await enterRoom(page, roomId);
   const memberContext = await browser.newContext(); const member = await memberContext.newPage(); await enableReactions(member); await registerViaUi(member, uniqueLogin('reactionmember')); await enterRoom(member, roomId);
@@ -99,6 +101,28 @@ test('G70-A04 two accounts and a guest enforce the real mutation boundary across
   const input = page.getByPlaceholder('Написать в комнату…'); await input.fill('three-context reaction boundary'); await input.press('Enter');
   const memberMessage = member.locator('.chat-msg-text', { hasText: 'three-context reaction boundary' }); const guestMessage = guest.locator('.chat-msg-text', { hasText: 'three-context reaction boundary' }); await expect(memberMessage).toBeVisible(); await expect(guestMessage).toBeVisible();
   await memberMessage.hover(); await expect(memberMessage.getByRole('button', { name: /Добавить быструю реакцию/ }).first()).toBeVisible();
+  const mutationResponse=member.waitForResponse((response)=>response.request().method()==='PUT'&&response.url().includes('/api/reactions/')); await memberMessage.getByRole('button', { name: 'Добавить быструю реакцию 👍' }).click(); const mutation=await mutationResponse; expect(mutation.ok(),await mutation.text()).toBe(true);
+  await expect(member.locator('.reaction-chip').getByText('1'),'mutating member applies the authoritative API response').toBeVisible(); await expect(page.locator('.reaction-chip').getByText('1'),'owner receives reaction.updated').toBeVisible(); await expect(guest.locator('.reaction-chip').getByText('1'),'guest receives read-only reaction.updated').toBeVisible();
   await guestMessage.hover(); await expect(guestMessage.getByRole('button', { name: /Добавить быструю реакцию/ })).toHaveCount(0);
+  await member.close(); const reconnected = await memberContext.newPage(); await enableReactions(reconnected); await enterRoom(reconnected, roomId); await reconnected.getByRole('button', { name: 'Чат', exact: true }).click();
+  await expect(reconnected.locator('.chat-msg-text', { hasText: 'three-context reaction boundary' }).locator('.reaction-chip').getByText('1')).toBeVisible();
+  const ownerMessage = page.locator('.chat-msg-text', { hasText: 'three-context reaction boundary' }); await ownerMessage.hover(); await ownerMessage.getByRole('button', { name: 'Добавить быструю реакцию 👍' }).click();
+  for (const target of [page, reconnected, guest]) await expect(target.locator('.reaction-chip').getByText('2')).toBeVisible();
   await memberContext.close(); await guestContext.close();
+});
+
+test('G70-A02 real storage paginates 120 reactors through the production API', async ({ page }) => {
+  test.skip(!process.env.E2E_DATABASE_URL, 'E2E_DATABASE_URL is required for the real 120-reactor storage scenario');
+  await page.route('**/api/capabilities', async (route) => { const response = await route.fetch(); const body = await response.json(); await route.fulfill({ response, json: { ...body, features: { ...body.features, reactions: true } } }); });
+  const login = uniqueLogin('reactionreal'); await registerViaUi(page, login); const roomId = await createPermanentRoom(page, `Reaction real ${login}`); await enterRoom(page, roomId); await page.getByRole('button', { name: 'Чат', exact: true }).click();
+  const input = page.getByPlaceholder('Написать в комнату…'); await input.fill('real 120 reactors'); await input.press('Enter');
+  const message = page.locator('.chat-msg-text', { hasText: 'real 120 reactors' }); await expect(message).toBeVisible(); const messageId = await message.getAttribute('data-message-id'); expect(messageId).toBeTruthy();
+  const { Client } = createRequire(import.meta.url)('pg'); const client = new Client({ connectionString:process.env.E2E_DATABASE_URL }); await client.connect();
+  try {
+    await client.query('BEGIN');
+    for (let index=0;index<120;index+=1) { const userId=`g70-reactor-${String(index).padStart(3,'0')}`; await client.query(`INSERT INTO users(id,login,display_name,password_hash) VALUES($1,$2,$3,'fixture') ON CONFLICT(id) DO NOTHING`,[userId,`g70r${String(index).padStart(3,'0')}`,`Real Reactor ${index}`]); await client.query(`INSERT INTO room_message_reactions(message_id,emoji,user_id,revision,created_at) VALUES($1,'👍',$2,120,current_timestamp+($3*interval '1 millisecond')) ON CONFLICT DO NOTHING`,[messageId,userId,index]); }
+    await client.query(`INSERT INTO room_message_reaction_revisions(message_id,emoji,revision) VALUES($1,'👍',120) ON CONFLICT(message_id,emoji) DO UPDATE SET revision=120,updated_at=current_timestamp`,[messageId]); await client.query('COMMIT');
+  } catch (error) { await client.query('ROLLBACK'); throw error; } finally { await client.end(); }
+  await page.reload(); await expect(page.locator('body')).toHaveAttribute('data-screen','room'); await page.getByRole('button', { name:'Чат', exact:true }).click(); const restored=page.locator('.chat-msg-text',{hasText:'real 120 reactors'}); await expect(restored).toBeVisible(); const count=restored.getByRole('button',{name:'Показать пользователей: 120'}); await count.click();
+  await expect(page.getByText('Real Reactor 49')).toBeVisible(); await page.getByRole('button',{name:'Показать ещё'}).click(); await expect(page.getByText('Real Reactor 99')).toBeVisible(); await page.getByRole('button',{name:'Показать ещё'}).click(); await expect(page.getByText('Real Reactor 119')).toBeVisible(); await expect(page.getByRole('button',{name:'Показать ещё'})).toHaveCount(0);
 });

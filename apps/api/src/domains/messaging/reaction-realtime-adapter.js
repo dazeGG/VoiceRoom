@@ -21,14 +21,14 @@ function createReactionRealtimeAdapter({ broadcastRoom, broadcastAccount, resolv
     };
 
     if (conversation.type === 'room') {
-      return roomBroadcaster(conversation.id, event) === false ? 0 : 1;
+      return (await roomBroadcaster(conversation.id, event)) === false ? 0 : 1;
     }
     if (conversation.type !== 'dm') return 0;
 
     const recipients = new Set(await recipientResolver(input));
     let published = 0;
     for (const userId of recipients) {
-      if (userId && accountBroadcaster(userId, event) !== false) published += 1;
+      if (userId && (await accountBroadcaster(userId, event)) !== false) published += 1;
     }
     return published;
   }
