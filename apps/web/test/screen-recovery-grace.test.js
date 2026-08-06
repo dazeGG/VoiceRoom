@@ -110,6 +110,20 @@ test('global hard deadline is absolute across recovery epoch churn', () => {
   assert.deepEqual(expired, ['peer']);
 });
 
+test('screen grace timers invoke injected schedulers without rebinding their receiver', () => {
+  let receiver = null;
+  const grace = new ScreenRecoveryGraceController({
+    setTimeout(callback) {
+      receiver = this;
+      return { callback };
+    },
+    clearTimeout() {}
+  });
+
+  grace.beginGlobal(1);
+  assert.equal(receiver, undefined);
+});
+
 test('authoritative screen intent wins over stale LiveKit media availability', () => {
   const livekit = fs.readFileSync(
     new URL('../src/lib/features/room/client/services/livekit-service.ts', import.meta.url),

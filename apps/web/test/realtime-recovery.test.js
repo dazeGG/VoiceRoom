@@ -169,6 +169,23 @@ test('snapshot timeout enters cooldown and probes again without a network edge',
   assert.equal(snapshots.length, 2);
 });
 
+test('recovery timers invoke injected schedulers without rebinding their receiver', () => {
+  let receiver = null;
+  const controller = new RealtimeRecoveryController({
+    attemptReplacement: async () => ({ ok: true }),
+    requestAppSnapshot: () => true,
+    setTimeout(callback) {
+      receiver = this;
+      return { callback };
+    },
+    clearTimeout() {}
+  });
+  controller.activate({ appEpoch: 1, appConnected: true });
+  controller.livekitDisconnected();
+  controller.appSnapshotRequestFailed({ code: 'transport_error' });
+  assert.equal(receiver, undefined);
+});
+
 test('a later transport regression invalidates an in-place reconcile completion', async () => {
   const { LiveKitReconcileGeneration } = await import('../src/lib/features/room/client/recovery/livekit-reconcile-generation.js');
   const generation = new LiveKitReconcileGeneration();

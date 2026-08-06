@@ -1,10 +1,16 @@
 export class ScreenRecoveryGraceController {
-  constructor({ localGraceMs = 8_000, globalHardCapMs = 35_000, now = Date.now, setTimeout = globalThis.setTimeout, clearTimeout = globalThis.clearTimeout } = {}) {
+  constructor({
+    localGraceMs = 8_000,
+    globalHardCapMs = 35_000,
+    now = Date.now,
+    setTimeout: scheduleTimer = (callback, delay) => globalThis.setTimeout(callback, delay),
+    clearTimeout: cancelTimer = (timer) => globalThis.clearTimeout(timer)
+  } = {}) {
     this.localGraceMs = localGraceMs;
     this.globalHardCapMs = globalHardCapMs;
     this.now = now;
-    this.scheduleTimer = setTimeout;
-    this.cancelTimer = clearTimeout;
+    this.scheduleTimer = (callback, delay) => scheduleTimer(callback, delay);
+    this.cancelTimer = (timer) => cancelTimer(timer);
     this.pending = new Map();
     this.globalEpoch = 0;
     this.globalActive = false;

@@ -57,8 +57,8 @@ export class RealtimeRecoveryController {
     requestAppSnapshot,
     onTransition = (_event) => {},
     now = Date.now,
-    setTimeout: schedule = globalThis.setTimeout,
-    clearTimeout: cancel = globalThis.clearTimeout,
+    setTimeout: schedule = (callback, delay) => globalThis.setTimeout(callback, delay),
+    clearTimeout: cancel = (timer) => globalThis.clearTimeout(timer),
     random = Math.random,
     retryDelaysMs = DEFAULT_RETRY_DELAYS_MS,
     maxAttempts = DEFAULT_MAX_ATTEMPTS,
@@ -71,8 +71,8 @@ export class RealtimeRecoveryController {
     this.requestAppSnapshot = requestAppSnapshot;
     this.onTransition = onTransition;
     this.now = now;
-    this.schedule = schedule;
-    this.cancelTimer = cancel;
+    this.schedule = (callback, delay) => schedule(callback, delay);
+    this.cancelTimer = (timer) => cancel(timer);
     this.random = random;
     this.retryDelaysMs = [...retryDelaysMs];
     this.maxAttempts = maxAttempts;
