@@ -384,12 +384,17 @@ function getReactionServices() {
   const service = createReactionService({
     repository: createReactionRepository({ client: pool }),
     cursorCodec: getHistoryServices().cursorCodec,
-    requireVisible: async ({ conversation, messageId, viewer }) => {
-      if (!viewer?.id) return false;
+    requireVisible: async ({ conversation, messageId, viewer, operation }) => {
       if (conversation.type === 'room') {
-        if (!await getRoomStore().canUserReactInRoom(conversation.id, viewer.id)) return false;
-        return Boolean(await getMessageService().room.getMessage(conversation.id, messageId));
+        const message = await getMessageService().room.getMessage(conversation.id, messageId);
+        if (!message) return false;
+        if (operation === 'read' && !viewer?.id) return Boolean(await getRoom(conversation.id));
+        if (!viewer?.id) return false;
+        return operation === 'read'
+          ? getRoomStore().canUserReadRoomChat(conversation.id, viewer.id)
+          : getRoomStore().canUserReactInRoom(conversation.id, viewer.id);
       }
+      if (!viewer?.id) return false;
       return Boolean(await getMessageService().direct.getMessage(viewer.id, conversation.id, messageId));
     },
     writesEnabled: () => release250FeatureEnabled('reactions'),
