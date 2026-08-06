@@ -1,6 +1,7 @@
 'use strict';
 
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
 const { performance } = require('node:perf_hooks');
 const path = require('node:path');
 const { Client } = require('pg');
@@ -132,6 +133,8 @@ test('G17-A02 store and PostgreSQL upgrade equal the shared classifier corpus wi
 });
 
 test('G17-A02 lock timeout rolls the target migration back in at most five seconds', { skip: !process.env.TEST_DATABASE_URL }, async (t) => {
+  const migrationSource = fs.readFileSync(path.join(MIGRATIONS_DIR, '20260718120000_add_push_subscription_platform_class.js'), 'utf8');
+  assert.match(migrationSource, /SET LOCAL lock_timeout = '5s'/);
   const { cleanup, databaseUrl } = await createTestDatabase(t);
   t.after(cleanup);
   await migrate(databaseUrl, BASE_TIMESTAMP);
@@ -143,7 +146,7 @@ test('G17-A02 lock timeout rolls the target migration back in at most five secon
   const startedAt = performance.now();
   await assert.rejects(migrate(databaseUrl, PLATFORM_TIMESTAMP), (error) => error?.code === '55P03');
   const durationMs = performance.now() - startedAt;
-  assert.ok(durationMs >= 4500 && durationMs <= 5500, `lock timeout was ${durationMs.toFixed(1)}ms`);
+  assert.ok(durationMs >= 4500 && durationMs <= 5200, `five-second lock timeout completed in ${durationMs.toFixed(1)}ms`);
   await blocker.query('ROLLBACK');
   await blocker.end();
 
