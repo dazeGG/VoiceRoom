@@ -7,6 +7,11 @@ import { spawnSync } from "node:child_process";
 
 const json = (file) => JSON.parse(fs.readFileSync(file));
 const source = (file) => fs.readFileSync(file, "utf8");
+const toolPlatform = os.platform() === "darwin" && os.arch() === "arm64"
+  ? "darwin_arm64"
+  : os.platform() === "linux" && os.arch() === "x64"
+    ? "linux_amd64"
+    : null;
 
 test("actionlint bootstrap revalidates provenance and never probes a cached executable", () => {
   const lock = json("config/tool-locks/actionlint-v1.7.12.json");
@@ -33,10 +38,8 @@ test("ORAS bootstrap revalidates archive signature, checksums and immutable keys
   assert.doesNotMatch(wrapper, /latest|npx |npm |brew /);
 });
 
-test("poisoned executable caches are rejected without execution", () => {
-  const host = `${os.platform() === "darwin" ? "Darwin" : "Linux"}-${os.arch() === "arm64" ? "arm64" : "x86_64"}`;
-  const platform = host === "Darwin-arm64" ? "darwin_arm64" : host === "Linux-x86_64" ? "linux_amd64" : null;
-  if (!platform) return;
+test("poisoned executable caches are rejected without execution", { skip: !toolPlatform }, () => {
+  const platform = toolPlatform;
   for (const tool of ["actionlint", "oras"]) {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), `g01-${tool}-poison-`));
     try {

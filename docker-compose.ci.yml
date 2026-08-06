@@ -89,7 +89,6 @@ services:
         condition: service_healthy
       media-init:
         condition: service_completed_successfully
-    restart: on-failure
     environment:
       NODE_ENV: test
       VOICE_ROOM_WORKER: media-processing

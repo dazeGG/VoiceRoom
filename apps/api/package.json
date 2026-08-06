@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
-    "check": "node --check src/server.js && node --check src/realtime/*.js && node --check src/domains/admission/*.js && node --check src/domains/media/*.js && node --check src/domains/membership/*.js && node --check src/domains/messaging/*.js && node --check src/domains/moderation/*.js && node --check src/domains/notifications/*.js && node --check src/platform/*.js && node --check src/workers/*.js && node --check src/lib/*.js && node --check src/scripts/*.js && node --check src/migrations/*.js && node --check test/db-harness.js && node --check test/require-test-database-url.js",
+    "check": "node ../../scripts/check-js-syntax.mjs src test/db-harness.js test/require-test-database-url.js",
     "test": "node --test test/*.test.js",
     "test:g05": "node --test test/g05-livekit-boundary.test.js",
     "db:migrate": "node src/scripts/migrate.js up",

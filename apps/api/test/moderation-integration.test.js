@@ -1,5 +1,6 @@
 'use strict';
 
+const { socketPathForDirectory } = require('./ipc-harness');
 process.env.ROOM_CREATE_POW_DIFFICULTY = '0';
 process.env.ROOM_CHAT_RATE_LIMIT = '0';
 process.env.TRUST_PROXY = 'true';
@@ -179,7 +180,7 @@ async function requestJson(socketPath, method, pathname, { body, cookie = '', ip
 
 async function startServer() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'voice-room-moderation-'));
-  const socketPath = path.join(dir, 'api.sock');
+  const socketPath = socketPathForDirectory(dir);
   const store = createModerationStore();
   const server = createApiServer({
     store,

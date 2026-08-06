@@ -292,15 +292,31 @@ test("G03-A02 recovery CLI uses digest-only ORAS fetch, real attestation gate an
   try {
     const manifest = path.join(directory, "manifest.json"), layer = path.join(directory, "layer.json"), output = path.join(directory, "recovered.json");
     fs.writeFileSync(manifest, object.manifestBytes); fs.writeFileSync(layer, bytes);
-    const oras = path.join(directory, "oras.sh"), gh = path.join(directory, "gh.sh");
-    fs.writeFileSync(oras, `#!/bin/sh\nif [ "$1 $2" = "manifest fetch" ]; then cp '${manifest}' "$4"; elif [ "$1 $2" = "blob fetch" ]; then cp '${layer}' "$4"; else exit 2; fi\n`);
-    fs.writeFileSync(gh, '#!/bin/sh\necho verified\n'); fs.chmodSync(oras, 0o755); fs.chmodSync(gh, 0o755);
-    const result = spawnSync(process.execPath, ["scripts/evidence/recover-from-oci.mjs", "--reference", "ghcr.io/dazegg/voiceroom-release-evidence", "--digest", object.manifestDigest,
-      "--object-id", object.objectId, "--repo", "dazeGG/VoiceRoom", "--output", output, "--oras", oras, "--gh", gh], { encoding: "utf8" });
+    const recovery = path.resolve("scripts/evidence/recover-from-oci.mjs"), callLog = path.join(directory, "calls.ndjson");
+    const reference = `ghcr.io/dazegg/voiceroom-release-evidence@${object.manifestDigest}`;
+    const layerReference = `ghcr.io/dazegg/voiceroom-release-evidence@${JSON.parse(object.manifestBytes).layers[0].digest}`;
+    const shim = (command, expected, source = null) => `const fs=require("node:fs"),path=require("node:path"),args=process.argv.slice(2),normalized=[...args],expected=${JSON.stringify(expected)};${source ? "normalized[2]=path.basename(normalized[2]);" : ""}if(JSON.stringify(normalized)!==JSON.stringify(expected)){console.error("unexpected ${command} args",JSON.stringify(args));process.exit(2)}fs.appendFileSync(${JSON.stringify(callLog)},JSON.stringify({command:${JSON.stringify(command)},args:normalized})+"\\n");${source ? `fs.copyFileSync(${JSON.stringify(source)},args[2]);` : ""}\n`;
+    fs.writeFileSync(path.join(directory, "manifest"), shim("manifest", ["fetch", "--output", "manifest.json", reference], manifest));
+    fs.writeFileSync(path.join(directory, "blob"), shim("blob", ["fetch", "--output", "layer.json", layerReference], layer));
+    fs.writeFileSync(path.join(directory, "attestation"), shim("attestation", ["verify", `oci://${reference}`, "--repo", "dazeGG/VoiceRoom"]));
+    const args = [recovery, "--reference", "ghcr.io/dazegg/voiceroom-release-evidence", "--digest", object.manifestDigest,
+      "--object-id", object.objectId, "--repo", "dazeGG/VoiceRoom", "--output", output, "--oras", process.execPath, "--gh", process.execPath];
+    const result = spawnSync(process.execPath, args, { cwd: directory, encoding: "utf8" });
     assert.equal(result.status, 0, result.stderr); assert.deepEqual(fs.readFileSync(output), bytes);
-    fs.writeFileSync(gh, '#!/bin/sh\nexit 1\n');
-    const denied = spawnSync(process.execPath, ["scripts/evidence/recover-from-oci.mjs", "--reference", "ghcr.io/dazegg/voiceroom-release-evidence", "--digest", object.manifestDigest,
-      "--object-id", object.objectId, "--repo", "dazeGG/VoiceRoom", "--output", `${output}.denied`, "--oras", oras, "--gh", gh], { encoding: "utf8" });
+    assert.deepEqual(fs.readFileSync(callLog, "utf8").trimEnd().split("\n").map(JSON.parse), [
+      { command: "manifest", args: ["fetch", "--output", "manifest.json", reference] },
+      { command: "blob", args: ["fetch", "--output", "layer.json", layerReference] },
+      { command: "attestation", args: ["verify", `oci://${reference}`, "--repo", "dazeGG/VoiceRoom"] },
+    ]);
+    fs.writeFileSync(path.join(directory, "attestation"), "process.exitCode = 1;\n");
+    const deniedArgs = [...args]; deniedArgs[deniedArgs.indexOf(output)] = `${output}.denied`;
+    const denied = spawnSync(process.execPath, deniedArgs, { cwd: directory, encoding: "utf8" });
     assert.notEqual(denied.status, 0); assert.equal(fs.existsSync(`${output}.denied`), false);
+    const missingOutput = `${output}.missing`, missingArgs = [...args];
+    missingArgs[missingArgs.indexOf(output)] = missingOutput;
+    missingArgs[missingArgs.indexOf("--oras") + 1] = path.join(directory, "missing-oras");
+    const missing = spawnSync(process.execPath, missingArgs, { cwd: directory, encoding: "utf8" });
+    assert.notEqual(missing.status, 0); assert.match(missing.stderr, /OCI manifest fetch failed:.*ENOENT/i);
+    assert.doesNotMatch(missing.stderr, /Cannot read properties/); assert.equal(fs.existsSync(missingOutput), false);
   } finally { fs.rmSync(directory, { recursive: true, force: true }); }
 });

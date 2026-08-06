@@ -1,5 +1,6 @@
 'use strict';
 
+const { socketPathForDirectory } = require('./ipc-harness');
 process.env.ROOM_CREATE_POW_DIFFICULTY = '0';
 
 const test = require('node:test');
@@ -336,7 +337,7 @@ async function openPreviewSession(socketPath, roomId, { cookie = '' } = {}) {
 
 async function startSocketServer(seed, { store = createFakeStore(seed), users = createFakeUsers() } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'voice-room-crud-'));
-  const socketPath = path.join(dir, 'api.sock');
+  const socketPath = socketPathForDirectory(dir);
   const server = createApiServer({ store, users, friends: createFakeFriends() });
   await new Promise((resolve, reject) => {
     server.listen({ path: socketPath }, (error) => (error ? reject(error) : resolve()));

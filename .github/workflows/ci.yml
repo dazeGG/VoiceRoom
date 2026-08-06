@@ -103,6 +103,20 @@ jobs:
       - run: npm run check
       - run: npm run build
 
+  foundation-contracts:
+    name: G01-G03 foundation contracts
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Run exact G01-G03 contract suite
+        run: node --test scripts/test/g01*.test.mjs scripts/test/g02*.test.mjs scripts/test/g03*.test.mjs
+
   test:
     name: Tests
     runs-on: ubuntu-latest
