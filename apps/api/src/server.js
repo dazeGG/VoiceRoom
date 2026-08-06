@@ -229,6 +229,9 @@ const presenceRooms = new Map();
 let wsRegistry = null;
 let roomRuntime = null;
 const roomOccupancyQueue = new Map();
+const roomOccupancyRetries = new Map();
+const ROOM_OCCUPANCY_RETRY_BASE_MS = 1000;
+const ROOM_OCCUPANCY_RETRY_MAX_MS = 30000;
 
 function getLogLevel(env = process.env) {
   const configured = (env.LOG_LEVEL || '').trim();
@@ -1080,6 +1083,13 @@ function createRoomId() {
 }
 
 async function pruneRooms(now = Date.now()) {
+  // Reconcile every room that is known active in memory before the durable
+  // idle-room sweep. If the database is still unavailable, fail the sweep
+  // closed so an old empty_since marker cannot delete a live dynamic room.
+  const activeRoomIds = [...presenceRooms.entries()]
+    .filter(([, room]) => room?.peers?.size > 0)
+    .map(([roomId]) => roomId);
+  await Promise.all(activeRoomIds.map((roomId) => queueRoomOccupancyTransition(roomId)));
   await getRoomStore().pruneRooms(now);
   for (const roomId of [...presenceRooms.keys()]) {
     const room = await getRoomStore().getRoom(roomId);
@@ -1213,13 +1223,48 @@ function queueRoomOccupancyTransition(roomId) {
   roomOccupancyQueue.set(roomId, transition);
   void transition.then(
     () => {
-      if (roomOccupancyQueue.get(roomId) === transition) roomOccupancyQueue.delete(roomId);
+      if (roomOccupancyQueue.get(roomId) !== transition) return;
+      roomOccupancyQueue.delete(roomId);
+      clearRoomOccupancyRetry(roomId);
     },
     () => {
-      if (roomOccupancyQueue.get(roomId) === transition) roomOccupancyQueue.delete(roomId);
+      if (roomOccupancyQueue.get(roomId) !== transition) return;
+      roomOccupancyQueue.delete(roomId);
+      scheduleRoomOccupancyRetry(roomId);
     }
   );
   return transition;
+}
+
+function clearRoomOccupancyRetry(roomId) {
+  const retry = roomOccupancyRetries.get(roomId);
+  if (!retry) return;
+  if (retry.timer) clearTimeout(retry.timer);
+  roomOccupancyRetries.delete(roomId);
+}
+
+function clearRoomOccupancyRetries() {
+  for (const roomId of roomOccupancyRetries.keys()) clearRoomOccupancyRetry(roomId);
+}
+
+function scheduleRoomOccupancyRetry(roomId) {
+  const current = roomOccupancyRetries.get(roomId);
+  if (current?.timer) return;
+  const attempt = (current?.attempt || 0) + 1;
+  const delay = Math.min(
+    ROOM_OCCUPANCY_RETRY_BASE_MS * 2 ** Math.max(0, attempt - 1),
+    ROOM_OCCUPANCY_RETRY_MAX_MS
+  );
+  const retry = { attempt, timer: null };
+  retry.timer = setTimeout(() => {
+    if (roomOccupancyRetries.get(roomId) !== retry) return;
+    retry.timer = null;
+    void queueRoomOccupancyTransition(roomId).catch((error) => {
+      console.error('Failed to retry room occupancy persistence:', error);
+    });
+  }, delay);
+  retry.timer?.unref?.();
+  roomOccupancyRetries.set(roomId, retry);
 }
 
 function sendEvent(peer, message) {
@@ -3955,7 +4000,11 @@ function createApiApp({
   realtimeSetTimeout = globalThis.setTimeout,
   realtimeClearTimeout = globalThis.clearTimeout
 } = {}) {
-  if (store && store !== roomStore) presenceRooms.clear();
+  if (store && store !== roomStore) {
+    presenceRooms.clear();
+    roomOccupancyQueue.clear();
+    clearRoomOccupancyRetries();
+  }
   if (store) roomStore = store;
   if (users) userStore = users;
   if (friends) friendStore = friends;
@@ -4329,6 +4378,7 @@ function createApiServer(options = {}) {
     });
     return server;
   };
+  server.once('close', clearRoomOccupancyRetries);
   return server;
 }
 
@@ -4456,6 +4506,7 @@ if (require.main === module) {
 
 module.exports = {
   __private: {
+    pruneRooms,
     resolveCursorHmacKeys,
     resolveRealtimeReconnectLeaseMs
   },
