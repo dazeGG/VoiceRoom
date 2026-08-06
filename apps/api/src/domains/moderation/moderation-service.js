@@ -38,6 +38,9 @@ function createModerationService({
     const mutation = normalizeBanMutation(input);
     const key = normalizeIdempotencyKey(idempotencyKey);
     if (!mutation || !key || mutation.userId === actorUserId) return { status: 'invalid', ban: null };
+    // Reject non-owners before resolving account or network principals. The
+    // transaction repeats this check to close ownership-change races.
+    if (!await authorizeOwner(roomId, actorUserId)) return { status: 'forbidden', ban: null };
     const principals = typeof resolvePrincipals === 'function'
       ? await resolvePrincipals({ roomId, ...mutation })
       : [];
