@@ -7,6 +7,8 @@ import crypto from "node:crypto";
 import { execFileSync } from "node:child_process";
 import Ajv2020 from "ajv/dist/2020.js";
 import addFormats from "ajv-formats";
+// Playwright exports its pinned YAML 1.2 parser through this supported subpath.
+import { yaml } from "playwright-core/lib/utilsBundle";
 import { artifactName, buildAuthenticatedEarlyFailure, buildF9Envelope, buildF11Envelope, buildReviewComment, buildSelection, envelopePayloadDigest, parseReviewComment, selectCanonicalFailure, validateArtifactlessBackfillAuthority, validateBootstrapFailure, validateFallbackCandidatePair } from "../evidence/emit-bootstrap-selection.mjs";
 import { activateCandidateReport, buildActivationCapture, buildCandidateReport, buildF7Envelope as buildAuthenticatedF7Envelope, buildF7RepositoryGates, buildG01VerificationCatalog, prepareAndCreateBootstrapBranch, prepareBootstrapAuthority, reconstructNextOrdinal, validateLivePublication, validateRegistry } from "../evidence/bootstrap-export.mjs";
 import { validateEnvelope } from "../evidence/validate-envelope.mjs";
@@ -14,6 +16,7 @@ import { G01_WRITABLE } from "../evidence/recover-landed-bootstrap.mjs";
 
 const read = (file) => fs.readFileSync(file, "utf8");
 const json = (file) => JSON.parse(read(file));
+const readWorkflow = () => yaml.parse(read(".github/workflows/ci.yml"));
 const digest = (character) => `sha256:${character.repeat(64)}`;
 const compactDigest = (value) => `sha256:${crypto.createHash("sha256").update(JSON.stringify(value)).digest("hex")}`;
 const REPOSITORY = "dazeGG/VoiceRoom";
@@ -679,19 +682,21 @@ test("selection CLI emits compact JSON with one real LF", () => {
 });
 
 test("CI executes the exported G01 writable manifest directly", () => {
-  const workflow = JSON.parse(execFileSync("python3", ["-c", "import json,yaml; print(json.dumps(yaml.safe_load(open('.github/workflows/ci.yml'))))"]));
+  const workflow = readWorkflow();
   const script = workflow.jobs["bootstrap-seal"].steps.find((step) => step.name === "Atomically derive current attempt from complete GitHub history and emit F7")?.run;
   assert.ok(script, "G01 F7 workflow step must exist");
   const line = script.split("\n").map((entry) => entry.trim()).find((entry) => entry.endsWith("> g01-head-blob-paths.txt"));
   assert.ok(line, "CI G01 manifest command must exist");
   const command = line.match(/^(node .+?) > g01-head-blob-paths\.txt$/)?.[1];
   assert.ok(command, "CI G01 manifest command must be extractable without rewriting it");
-  const output = execFileSync("bash", ["-c", command], { encoding: "utf8" }).trimEnd().split("\n");
+  const inlineScript = command.match(/^node --input-type=module -e '([^']+)'$/)?.[1];
+  assert.ok(inlineScript, "CI G01 manifest command must remain a portable inline Node invocation");
+  const output = execFileSync(process.execPath, ["--input-type=module", "-e", inlineScript], { encoding: "utf8" }).trimEnd().split("\n");
   assert.deepEqual(output, G01_WRITABLE);
 });
 
 test("bootstrap-plan scopes the standard GitHub token to the attested catalog step", () => {
-  const workflow = JSON.parse(execFileSync("python3", ["-c", "import json,yaml; print(json.dumps(yaml.safe_load(open('.github/workflows/ci.yml'))))"]));
+  const workflow = readWorkflow();
   assertBootstrapPlanToken(workflow);
   const hostile = structuredClone(workflow);
   delete hostile.jobs["bootstrap-plan"].steps.find((step) => step.name === "Run exact targeted G01 command catalog and produce reports").env.GH_TOKEN;
@@ -706,7 +711,7 @@ test("bootstrap-plan scopes the standard GitHub token to the attested catalog st
 });
 
 test("workflow has reachable bounded premerge F9 and automatic merged-commit F11/selection with authenticated provenance", () => {
-  const workflow = read(".github/workflows/ci.yml"); const parsed = JSON.parse(execFileSync("python3", ["-c", "import json,yaml; print(json.dumps(yaml.safe_load(open('.github/workflows/ci.yml'))))"]));
+  const workflow = read(".github/workflows/ci.yml"); const parsed = readWorkflow();
   assert.equal(parsed.jobs["bootstrap-plan"].name, "G01 targeted bootstrap gate"); assert.equal(parsed.jobs["bootstrap-plan"].needs, undefined);
   assert.deepEqual(parsed.jobs["bootstrap-seal"].needs, ["policy", "check", "test", "bootstrap-plan"]); assert.doesNotMatch(parsed.jobs["bootstrap-seal"].if, /always\(\)/);
   const block = workflow.slice(workflow.indexOf("  bootstrap-plan:"), workflow.indexOf("\n  bootstrap-postmerge:"));
@@ -716,7 +721,9 @@ test("workflow has reachable bounded premerge F9 and automatic merged-commit F11
   for (const token of ["activation-authority.json", "candidate.preparedAuthority", "prior-records.ndjson", "selectCanonicalFailure", "recoveryLineage", "current-check-suite.json", "current-check-run-pages.json", "targeted-evidence/report-manifest.json"]) assert.ok(block.includes(token), `missing activation proof: ${token}`);
   assert.ok(read("scripts/evidence/bootstrap-export.mjs").includes("--prepare-live"), "live preparation CLI must exist"); assert.match(read("scripts/evidence/bootstrap-export.mjs"), /maxBuffer = 128 \* 1024 \* 1024/, "live GitHub history and artifact reads need an explicit bounded buffer"); assert.doesNotMatch(read("scripts/evidence/bootstrap-export.mjs"), /--prior-failure/, "arbitrary prior-failure JSON input is forbidden"); assert.doesNotMatch(workflow, /OMX_G01_PREPARED_AUTHORITY_JSON|PREPARED_AUTHORITY_JSON/, "mutable prepared-authority transport is forbidden");
   assert.match(block, /path:\s*\|[\s\S]*activation-authority\.json/, "F7 artifact must persist replayable activation authority");
-  const post = workflow.slice(workflow.indexOf("  bootstrap-postmerge:"), workflow.indexOf("\n  deploy:"));
+  const postStart = workflow.indexOf("  bootstrap-postmerge:"), postEnd = workflow.indexOf("\n  goal-g02:");
+  assert.ok(postStart >= 0 && postEnd > postStart, "G01 lifecycle jobs must remain a bounded block before G02");
+  const post = workflow.slice(postStart, postEnd);
   for (const token of ["github.ref == 'refs/heads/develop'", "commits/$GITHUB_SHA/pulls", "merge_commit_sha===process.env.GITHUB_SHA", "actions/runs/$GITHUB_RUN_ID/jobs", "Lint, typecheck & build", "Tests", "workflowPath", "download-digest", "g01-merge-", "bootstrap-selection:", "bootstrap-failure.", "github.run_attempt", "bootstrap-selection.$ATTEMPT_ID.json", "artifact-digest", "selection_sha256", "recoveryLineage", "always() &&"]) assert.ok(post.includes(token), `missing lifecycle proof: ${token}`);
   for (const token of ["id: postmerge_checkout", "id: selection_checkout", "test -f early-context.json || exit 0", "test -f selection-early-context.json || exit 0", "steps.record.outputs.recorded == 'true'"]) assert.ok(post.includes(token), `missing early-failure fallback proof: ${token}`);
   for (const token of ["early-f7.zip", "early-f9.zip", "selection-early-f7.zip", "selection-early-f9.zip", "early-producer-run.json", "G01_INLINE_RECORDER_START", "candidate-registry-report.g01.json", "payload count", "archive digest", "run_attempt", "recoveryLineage"]) assert.ok(post.includes(token), `checkout-free recorders must authenticate exact F7/F9 provenance: ${token}`);
@@ -728,11 +735,11 @@ test("workflow has reachable bounded premerge F9 and automatic merged-commit F11
   assert.doesNotMatch(workflow, /workflow_dispatch|bootstrap_phase|bootstrap_f7_artifact_id|find \. -maxdepth 1 -name/);
   const backfill=parsed.jobs["bootstrap-artifactless-backfill"],producer=backfill.steps.find(({name})=>name==="Produce standard failure payload and authenticated backfill sidecar");assert.deepEqual(backfill.permissions,{actions:"read",checks:"read",contents:"read","pull-requests":"read"});assert.match(backfill.if,/feature\/g01-artifactless-backfill/);assert.equal(parsed.jobs["bootstrap-postmerge"].name,"G01 authenticated post-merge F11");for(const token of ["matchingArtifactIds:[]","backfill-subject-f11.log","failurePayloadDigest","bootstrap-failure-backfill-authority","validateArtifactlessBackfillAuthority","G01 authenticated post-merge F11"])assert.ok(producer.run.includes(token),`missing backfill proof: ${token}`);
   assert.doesNotMatch(post, /ghcr\.io|docker push|packages:\s*write/);
-  const deploy = workflow.slice(workflow.indexOf("  deploy:")); assert.match(deploy, /needs: \[check, test\]/);
+  assert.equal(parsed.jobs.deploy, undefined, "the removed legacy deploy job must not re-enter the G01 workflow");
 });
 
 test("inline early recorders are checkout-free and executable across failed/skipped dependency states", () => {
-  const parsed = JSON.parse(execFileSync("python3", ["-c", "import json,yaml; print(json.dumps(yaml.safe_load(open('.github/workflows/ci.yml'))))"]).toString());
+  const parsed = readWorkflow();
   const f11 = parsed.jobs["bootstrap-f11-early-recorder"], selection = parsed.jobs["bootstrap-selection-early-recorder"];
   assert.deepEqual(f11.needs, ["check", "test", "bootstrap-postmerge"]); assert.deepEqual(selection.needs, ["bootstrap-postmerge", "bootstrap-selection"]);
   for (const job of [f11, selection]) { assert.match(job.if, /^always\(\)/); assert.equal(job.steps.some((step) => String(step.uses ?? "").startsWith("actions/checkout") || String(step.uses ?? "").startsWith("actions/setup-node")), false); assert.ok(job.steps.some((step) => step.uses === "actions/upload-artifact@v4")); }
@@ -741,7 +748,7 @@ test("inline early recorders are checkout-free and executable across failed/skip
   const script = f11.steps[0].run.match(marker)?.[1], selectionScript = selection.steps[0].run.match(marker)?.[1]; assert.ok(script); assert.equal(selectionScript, script, "both checkout-free phases must execute the tested self-contained recorder"); assert.equal(script.includes("./scripts/"), false, "checkout-free recorder cannot import repository files");
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "g01-inline-recorder-")), f7dir = "/tmp/g01-early-f7", f9dir = "/tmp/g01-early-f9";
   try {
-    fs.rmSync(f7dir, { recursive: true, force: true }); fs.rmSync(f9dir, { recursive: true, force: true }); fs.mkdirSync(f7dir); fs.mkdirSync(f9dir);
+    fs.rmSync(f7dir, { recursive: true, force: true }); fs.rmSync(f9dir, { recursive: true, force: true }); fs.mkdirSync(f7dir, { recursive: true }); fs.mkdirSync(f9dir, { recursive: true });
     const base = chain(), producerRun = { ...base.approvalAuthority.f7Artifact.run, status: "completed", conclusion: "success" }, currentRun = run(90, base.merge, "develop", "push", "in_progress", null, 2), mergedPr = pr({ state: "closed" }); delete mergedPr.merged;
     const f7Bytes = Buffer.from(`${JSON.stringify(base.f7)}\n`), zip7 = Buffer.from("exact f7 archive"), zip9 = Buffer.from("exact f9 archive");
     const metadata = (id, name, bytes) => ({ id, name, expired: false, digest: `sha256:${crypto.createHash("sha256").update(bytes).digest("hex")}`, workflow_run: { id: producerRun.id } });
@@ -754,8 +761,8 @@ test("inline early recorders are checkout-free and executable across failed/skip
   } finally { fs.rmSync(directory, { recursive: true, force: true }); fs.rmSync(f7dir, { recursive: true, force: true }); fs.rmSync(f9dir, { recursive: true, force: true }); }
 });
 
-test("checkout-free recorder shell step executes no-op, discovers failure, downloads archives, writes outputs and gates upload", () => {
-  const parsed = JSON.parse(execFileSync("python3", ["-c", "import json,yaml; print(json.dumps(yaml.safe_load(open('.github/workflows/ci.yml'))))"]).toString()), job = parsed.jobs["bootstrap-f11-early-recorder"], selectionJob = parsed.jobs["bootstrap-selection-early-recorder"], shell = job.steps[0].run, selectionShell = selectionJob.steps[0].run, upload = job.steps[1];
+test("checkout-free recorder shell step executes no-op, discovers failure, downloads archives, writes outputs and gates upload", { skip: process.platform === "win32" }, () => {
+  const parsed = readWorkflow(), job = parsed.jobs["bootstrap-f11-early-recorder"], selectionJob = parsed.jobs["bootstrap-selection-early-recorder"], shell = job.steps[0].run, selectionShell = selectionJob.steps[0].run, upload = job.steps[1];
   assert.equal(upload.if, "steps.record.outputs.recorded == 'true'"); assert.equal(upload.uses, "actions/upload-artifact@v4");
   assert.equal(selectionJob.steps[1].if, "steps.record.outputs.recorded == 'true'"); assert.equal(selectionJob.steps[1].uses, "actions/upload-artifact@v4");
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "g01-recorder-shell-"));

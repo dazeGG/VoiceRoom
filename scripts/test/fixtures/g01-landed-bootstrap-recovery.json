@@ -101,7 +101,7 @@
               "runAttempt": 1,
               "headSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
               "archiveDigest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
-              "payloadDigest": "sha256:a51c99308eecdcee8e5b1da6aee55e743de8afef7e15564dab5457dee49715b6"
+              "payloadDigest": "sha256:ff7c145b0ca7fffeb068ac258e971f836873e89395ca0655dd976a347bb492b3"
             },
             "f9": {
               "artifactId": 2,
@@ -122,7 +122,7 @@
               "payloadDigest": "sha256:f57b86bf97f760951e8fba499aa97a26825dc63fd1bb41dd501648a364a12d3b"
             }
           },
-          "selectionDigest": "sha256:16186d4fcb057e06649a1797483d977bf0646a0284e2e7b800facfec4892a94d"
+          "selectionDigest": "sha256:312ace402e7adb31444b25bcb61fd34815b1c4f67a34f44a7abdd69840b1fb86"
         },
         "f7": {
           "schemaVersion": 1,
@@ -336,8 +336,8 @@
             "inputs": [
               {
                 "path": ".github/workflows/ci.yml",
-                "size": 101566,
-                "sha256": "sha256:f5c831bd9432d17fba0070eda02d6d042eb871f7ea823c150a984a0cd13aac57"
+                "size": 120579,
+                "sha256": "sha256:c45d69a3070687b9b053b23e1cb8ccb3447afcbb5ccc310b162f925895932bed"
               },
               {
                 "path": "config/evidence/release-evidence-archive.v1.json",
@@ -346,13 +346,13 @@
               },
               {
                 "path": "docs/RELEASE_2.5.0_PLAN.md",
-                "size": 319405,
-                "sha256": "sha256:8cf4559e71eae1f566fd880b29025317c1bae66547ca3dd67dfa310b56343375"
+                "size": 321898,
+                "sha256": "sha256:a370704ad39c1aaf0ce453ede86128b57e6a105f596b52214815746812fca218"
               },
               {
                 "path": "docs/RELEASE_2.5.0_TEST_SPEC.md",
-                "size": 195411,
-                "sha256": "sha256:d1df10539a16a3e4631c88ebf5f69dc1b119fae3b93bbf18b6fcd6dda2e9c32d"
+                "size": 197571,
+                "sha256": "sha256:c944683500c6484fc8c00dde5131e2ff0bcda33ad582256421f7daeed19e9f7c"
               },
               {
                 "path": "docs/releases/2.5.0/evidence/schema/envelope.schema.json",
@@ -703,7 +703,7 @@
               "runAttempt": 1,
               "headSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
               "archiveDigest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
-              "payloadDigest": "sha256:5fc87a5aa65352238ab96359273004a75c9337ec86a6760de371d0992210d7c1"
+              "payloadDigest": "sha256:5af30acb65b0b0b725d5efd6977b704f2b5891e088a2c82ee276ed666e851e65"
             },
             "f9": {
               "artifactId": 2,
@@ -724,7 +724,7 @@
               "payloadDigest": "sha256:0b9cfcedff4edb911cdd4c2e3563499b1e7eede0716fea74acf1f79cc232a540"
             }
           },
-          "selectionDigest": "sha256:7ad89c455c956cf74db0ea210d44664bd1f1f4e66e8c0789716a8c1dea765259"
+          "selectionDigest": "sha256:354404c81d9c86472b75b8bf42baa99c2a85951c44d814b4cb8321c791959a90"
         },
         "parentSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         "f7": {
@@ -939,8 +939,8 @@
             "inputs": [
               {
                 "path": ".github/workflows/ci.yml",
-                "size": 101566,
-                "sha256": "sha256:f5c831bd9432d17fba0070eda02d6d042eb871f7ea823c150a984a0cd13aac57"
+                "size": 120579,
+                "sha256": "sha256:c45d69a3070687b9b053b23e1cb8ccb3447afcbb5ccc310b162f925895932bed"
               },
               {
                 "path": "config/evidence/release-evidence-archive.v1.json",
@@ -949,13 +949,13 @@
               },
               {
                 "path": "docs/RELEASE_2.5.0_PLAN.md",
-                "size": 319405,
-                "sha256": "sha256:8cf4559e71eae1f566fd880b29025317c1bae66547ca3dd67dfa310b56343375"
+                "size": 321898,
+                "sha256": "sha256:a370704ad39c1aaf0ce453ede86128b57e6a105f596b52214815746812fca218"
               },
               {
                 "path": "docs/RELEASE_2.5.0_TEST_SPEC.md",
-                "size": 195411,
-                "sha256": "sha256:d1df10539a16a3e4631c88ebf5f69dc1b119fae3b93bbf18b6fcd6dda2e9c32d"
+                "size": 197571,
+                "sha256": "sha256:c944683500c6484fc8c00dde5131e2ff0bcda33ad582256421f7daeed19e9f7c"
               },
               {
                 "path": "docs/releases/2.5.0/evidence/schema/envelope.schema.json",
