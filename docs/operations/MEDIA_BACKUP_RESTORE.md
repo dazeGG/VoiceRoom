@@ -5,7 +5,7 @@ The release 2.5.0 media backup unit is a PostgreSQL dump plus the matching immut
 Create a dump with the normal PostgreSQL tooling while media writers are quiesced or covered by the same operational cut, then run:
 
 ```sh
-node scripts/backup/create-coordinated-snapshot.mjs --database /safe/input/database.dump --uploads /safe/input/uploads --output /safe/archive/snapshot-001 --namespace staging-restore-drill-001
+node scripts/backup/create-coordinated-snapshot.mjs --database /safe/input/database.dump --uploads /safe/input/uploads --catalog /safe/input/media-catalog.json --output /safe/archive/snapshot-001 --namespace staging-restore-drill-001
 ```
 
 Restore only into a new direct child of an isolated root. The command verifies the contract, namespace, every path, size and hash before it creates the target. It rejects symlinks, existing targets, path traversal and incomplete pairs.
@@ -14,6 +14,6 @@ Restore only into a new direct child of an isolated root. The command verifies t
 node scripts/restore/restore-coordinated-snapshot.mjs --snapshot /safe/archive/snapshot-001 --allowed-root /tmp/voice-room-restore-drill --target /tmp/voice-room-restore-drill/restored --namespace staging-restore-drill-001
 ```
 
-After restoring the database with `pg_restore`, reset expired media-job leases before starting workers, as recorded by `restore-report.json`. Validate attachment dimensions/state/access against the restored files, then start one worker and confirm queued cleanup/processing resumes without duplicate visible attachments.
+The catalog must contain `attachments` with `id`, `state`, `access`, `width` and `height`, plus a `leases` array. Restore validates the bounded state/access vocabulary and positive dimensions, then resets every captured `leased` job to `pending` with no owner or expiry. `restore-report.json` records the recovered count. After restoring the database with `pg_restore`, reconcile that catalog against database rows before starting one worker, then confirm queued cleanup/processing resumes without duplicate visible attachments.
 
 RPO and RTO remain external staging evidence. This repository does not claim either target until a timed drill is archived in the release evidence chain.

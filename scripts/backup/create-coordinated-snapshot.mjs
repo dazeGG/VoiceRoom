@@ -26,17 +26,21 @@ function filesBelow(root, current = root) {
   return result.sort();
 }
 
-export function createCoordinatedSnapshot({ databaseDump, uploads, output, namespace }) {
-  if (!databaseDump || !uploads || !output || !namespace) throw new Error('databaseDump, uploads, output and namespace are required');
+export function createCoordinatedSnapshot({ databaseDump, uploads, catalog, output, namespace }) {
+  if (!databaseDump || !uploads || !catalog || !output || !namespace) throw new Error('databaseDump, uploads, catalog, output and namespace are required');
   const db = fs.realpathSync(databaseDump);
   const media = fs.realpathSync(uploads);
-  if (!fs.statSync(db).isFile() || !fs.statSync(media).isDirectory()) throw new Error('Snapshot sources must be a database dump file and uploads directory');
+  const catalogFile = fs.realpathSync(catalog);
+  if (!fs.statSync(db).isFile() || !fs.statSync(media).isDirectory() || !fs.statSync(catalogFile).isFile()) throw new Error('Snapshot sources must include database dump, uploads directory and catalog file');
+  const catalogValue = JSON.parse(fs.readFileSync(catalogFile, 'utf8'));
+  if (!Array.isArray(catalogValue.attachments) || !Array.isArray(catalogValue.leases)) throw new Error('Snapshot catalog must contain attachments and leases');
   const destination = path.resolve(output);
   if (fs.existsSync(destination)) throw new Error('Snapshot output already exists');
   fs.mkdirSync(path.dirname(destination), { recursive: true });
   const staging = fs.mkdtempSync(path.join(path.dirname(destination), '.snapshot-'));
   try {
     fs.copyFileSync(db, path.join(staging, 'database.dump'), fs.constants.COPYFILE_EXCL);
+    fs.copyFileSync(catalogFile, path.join(staging, 'media-catalog.json'), fs.constants.COPYFILE_EXCL);
     const mediaOut = path.join(staging, 'uploads');
     fs.mkdirSync(mediaOut);
     const uploadsManifest = filesBelow(media);
@@ -49,6 +53,7 @@ export function createCoordinatedSnapshot({ databaseDump, uploads, output, names
       contract: 'voice-room.coordinated-media-snapshot/v1', namespace,
       createdAt: new Date().toISOString(),
       database: { path: 'database.dump', bytes: fs.statSync(path.join(staging, 'database.dump')).size, sha256: sha256(path.join(staging, 'database.dump')) },
+      catalog: { path: 'media-catalog.json', bytes: fs.statSync(path.join(staging, 'media-catalog.json')).size, sha256: sha256(path.join(staging, 'media-catalog.json')) },
       uploads: uploadsManifest.map((relative) => {
         const file = path.join(mediaOut, ...relative.split('/'));
         return { path: relative, bytes: fs.statSync(file).size, sha256: sha256(file) };
@@ -67,7 +72,7 @@ export function createCoordinatedSnapshot({ databaseDump, uploads, output, names
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   try {
     const input = args(process.argv.slice(2));
-    const manifest = createCoordinatedSnapshot({ databaseDump: input.database, uploads: input.uploads, output: input.output, namespace: input.namespace });
+    const manifest = createCoordinatedSnapshot({ databaseDump: input.database, uploads: input.uploads, catalog: input.catalog, output: input.output, namespace: input.namespace });
     process.stdout.write(`${JSON.stringify({ ok: true, namespace: manifest.namespace })}\n`);
   } catch (error) { console.error(error.message); process.exitCode = 1; }
 }

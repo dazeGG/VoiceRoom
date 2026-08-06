@@ -14,8 +14,13 @@ function fixture(t) {
   fs.writeFileSync(path.join(uploads, 'objects', 'asset.bin'), 'media');
   const database = path.join(root, 'source.dump');
   fs.writeFileSync(database, 'database');
+  const catalog = path.join(root, 'media-catalog.json');
+  fs.writeFileSync(catalog, JSON.stringify({
+    attachments: [{ id: 'attachment', state: 'ready', access: 'room', width: 640, height: 480 }],
+    leases: [{ id: 'job', state: 'leased', leaseOwner: 'dead-worker', leaseExpiresAt: '2026-08-06T09:00:00.000Z' }]
+  }));
   const snapshot = path.join(root, 'snapshot');
-  createCoordinatedSnapshot({ databaseDump: database, uploads, output: snapshot, namespace: 'test-run' });
+  createCoordinatedSnapshot({ databaseDump: database, uploads, catalog, output: snapshot, namespace: 'test-run' });
   const allowedRoot = path.join(root, 'isolated-restores');
   fs.mkdirSync(allowedRoot);
   return { allowedRoot, root, snapshot };
@@ -27,7 +32,10 @@ test('G89-A01 restores a verified DB/uploads pair into one isolated target', (t)
   const report = restoreCoordinatedSnapshot({ snapshot, target, allowedRoot, namespace: 'test-run' });
   assert.equal(fs.readFileSync(path.join(target, 'database.dump'), 'utf8'), 'database');
   assert.equal(fs.readFileSync(path.join(target, 'uploads', 'objects', 'asset.bin'), 'utf8'), 'media');
-  assert.equal(report.leaseRecoveryRequired, true);
+  assert.equal(report.leasesRecovered, 1);
+  const catalog = JSON.parse(fs.readFileSync(path.join(target, 'media-catalog.json'), 'utf8'));
+  assert.deepEqual(catalog.attachments[0], { id: 'attachment', state: 'ready', access: 'room', width: 640, height: 480 });
+  assert.deepEqual(catalog.leases[0], { id: 'job', state: 'pending', leaseOwner: null, leaseExpiresAt: null });
 });
 
 test('G89-A02 fails closed on partial, tampered, foreign or escaping restore input', (t) => {
@@ -46,8 +54,9 @@ test('G89-A03 snapshot creation rejects symlinked uploads where supported', (t) 
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const uploads = path.join(root, 'uploads'); fs.mkdirSync(uploads);
   const database = path.join(root, 'db.dump'); fs.writeFileSync(database, 'db');
+  const catalog = path.join(root, 'catalog.json'); fs.writeFileSync(catalog, JSON.stringify({ attachments: [], leases: [] }));
   const outside = path.join(root, 'outside'); fs.writeFileSync(outside, 'secret');
   try { fs.symlinkSync(outside, path.join(uploads, 'link')); }
   catch { t.skip('symlink creation is unavailable'); return; }
-  assert.throws(() => createCoordinatedSnapshot({ databaseDump: database, uploads, output: path.join(root, 'snapshot'), namespace: 'test-run' }), /Symlinks/);
+  assert.throws(() => createCoordinatedSnapshot({ databaseDump: database, uploads, catalog, output: path.join(root, 'snapshot'), namespace: 'test-run' }), /Symlinks/);
 });

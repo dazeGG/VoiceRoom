@@ -18,10 +18,22 @@ export function restoreCoordinatedSnapshot({ snapshot, target, allowedRoot, name
   assertRegular(path.join(source, 'manifest.json'), 'Snapshot manifest');
   const manifest = JSON.parse(fs.readFileSync(path.join(source, 'manifest.json'), 'utf8'));
   if (manifest.contract !== 'voice-room.coordinated-media-snapshot/v1' || manifest.namespace !== namespace) throw new Error('Snapshot namespace or contract mismatch');
-  if (!manifest.database || !Array.isArray(manifest.uploads)) throw new Error('Snapshot DB/uploads pair is incomplete');
+  if (!manifest.database || !manifest.catalog || !Array.isArray(manifest.uploads)) throw new Error('Snapshot DB/uploads/catalog set is incomplete');
   const database = path.join(source, manifest.database.path || '');
+  const catalog = path.join(source, manifest.catalog.path || '');
   assertRegular(database, 'Database dump');
+  assertRegular(catalog, 'Media catalog');
   if (sha256(database) !== manifest.database.sha256 || fs.statSync(database).size !== manifest.database.bytes) throw new Error('Database dump hash or size mismatch');
+  if (sha256(catalog) !== manifest.catalog.sha256 || fs.statSync(catalog).size !== manifest.catalog.bytes) throw new Error('Media catalog hash or size mismatch');
+  const catalogValue = JSON.parse(fs.readFileSync(catalog, 'utf8'));
+  if (!Array.isArray(catalogValue.attachments) || !Array.isArray(catalogValue.leases)) throw new Error('Invalid media catalog');
+  const states = new Set(['draft', 'uploaded', 'processing', 'ready', 'failed', 'deleted']);
+  const access = new Set(['room', 'dm', 'denied']);
+  for (const attachment of catalogValue.attachments) {
+    if (!attachment?.id || !states.has(attachment.state) || !access.has(attachment.access)
+      || !Number.isInteger(attachment.width) || attachment.width < 1
+      || !Number.isInteger(attachment.height) || attachment.height < 1) throw new Error('Invalid attachment dimensions, state or access in media catalog');
+  }
   for (const item of manifest.uploads) {
     if (!item?.path || path.isAbsolute(item.path) || item.path.split(/[\\/]/).includes('..')) throw new Error('Unsafe upload path in manifest');
     const file = path.join(source, 'uploads', ...item.path.split('/'));
@@ -31,13 +43,24 @@ export function restoreCoordinatedSnapshot({ snapshot, target, allowedRoot, name
   const staging = fs.mkdtempSync(path.join(root, '.restore-'));
   try {
     fs.copyFileSync(database, path.join(staging, 'database.dump'), fs.constants.COPYFILE_EXCL);
+    const restoredCatalog = {
+      ...catalogValue,
+      leases: catalogValue.leases.map((lease) => lease?.state === 'leased'
+        ? { ...lease, state: 'pending', leaseOwner: null, leaseExpiresAt: null }
+        : lease)
+    };
+    fs.writeFileSync(path.join(staging, 'media-catalog.json'), `${JSON.stringify(restoredCatalog, null, 2)}\n`, { flag: 'wx' });
     fs.mkdirSync(path.join(staging, 'uploads'));
     for (const item of manifest.uploads) {
       const output = path.join(staging, 'uploads', ...item.path.split('/'));
       fs.mkdirSync(path.dirname(output), { recursive: true });
       fs.copyFileSync(path.join(source, 'uploads', ...item.path.split('/')), output, fs.constants.COPYFILE_EXCL);
     }
-    const report = { contract: 'voice-room.coordinated-media-restore/v1', namespace, leaseRecoveryRequired: true, restoredAt: new Date().toISOString() };
+    const report = {
+      contract: 'voice-room.coordinated-media-restore/v1', namespace,
+      leasesRecovered: catalogValue.leases.filter((lease) => lease?.state === 'leased').length,
+      restoredAt: new Date().toISOString()
+    };
     fs.writeFileSync(path.join(staging, 'restore-report.json'), `${JSON.stringify(report, null, 2)}\n`, { flag: 'wx' });
     if (!inside(root, staging) || path.dirname(destination) !== root) throw new Error('Restore containment changed before commit');
     fs.renameSync(staging, destination);
