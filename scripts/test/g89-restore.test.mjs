@@ -74,3 +74,15 @@ test('G89-A04 restore rejects manifest escapes and symlinks in every source comp
   manifest.uploads[0].path = 'linked-objects/asset.bin'; fs.writeFileSync(manifestFile, JSON.stringify(manifest));
   assert.throws(() => restoreCoordinatedSnapshot({ snapshot, target: path.join(allowedRoot, 'linked'), allowedRoot, namespace: 'test-run' }), /symlink/);
 });
+
+test('G89-A05 snapshot output cannot overlap or pollute uploads and a safe sibling succeeds', (t) => {
+  const root=fs.mkdtempSync(path.join(os.tmpdir(),'voice-room-g89-output-'));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
+  const uploads=path.join(root,'uploads');fs.mkdirSync(path.join(uploads,'objects'),{recursive:true});fs.writeFileSync(path.join(uploads,'objects','asset.bin'),'media');
+  const database=path.join(root,'db.dump');fs.writeFileSync(database,'db');const catalog=path.join(root,'catalog.json');fs.writeFileSync(catalog,JSON.stringify({attachments:[],leases:[]}));
+  const input={databaseDump:database,uploads,catalog,namespace:'test-run'};const before=fs.readdirSync(uploads,{recursive:true}).sort();
+  for(const output of [uploads,path.join(uploads,'nested','snapshot'),root]) assert.throws(()=>createCoordinatedSnapshot({...input,output}),/must not overlap/);
+  assert.deepEqual(fs.readdirSync(uploads,{recursive:true}).sort(),before);assert.equal(fs.readdirSync(uploads).some((name)=>name.startsWith('.snapshot-')),false);assert.equal(fs.existsSync(path.join(uploads,'nested')),false);
+  const linkedParent=path.join(root,'linked-uploads');let linked=false;try{fs.symlinkSync(uploads,linkedParent,'junction');linked=true;}catch{}
+  if(linked){assert.throws(()=>createCoordinatedSnapshot({...input,output:path.join(linkedParent,'snapshot')}),/contains a symlink/);assert.equal(fs.existsSync(path.join(uploads,'snapshot')),false);}
+  const safe=path.join(root,'snapshots','safe');const manifest=createCoordinatedSnapshot({...input,output:safe});assert.equal(manifest.namespace,'test-run');assert.equal(fs.readFileSync(path.join(safe,'uploads','objects','asset.bin'),'utf8'),'media');
+});

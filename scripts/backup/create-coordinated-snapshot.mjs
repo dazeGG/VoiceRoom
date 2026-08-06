@@ -26,6 +26,22 @@ function filesBelow(root, current = root) {
   return result.sort();
 }
 
+function resolvedProspectivePath(value) {
+  const absolute = path.resolve(value); const parsed = path.parse(absolute); let current = parsed.root;
+  for (const component of absolute.slice(parsed.root.length).split(path.sep).filter(Boolean)) {
+    current = path.join(current, component);
+    try { if (fs.lstatSync(current).isSymbolicLink()) throw new Error(`Snapshot output path contains a symlink: ${current}`); }
+    catch (error) { if (error.code !== 'ENOENT') throw error; }
+  }
+  let ancestor = absolute; while (!fs.existsSync(ancestor)) ancestor = path.dirname(ancestor);
+  return path.resolve(fs.realpathSync(ancestor), path.relative(ancestor, absolute));
+}
+
+function containsPath(parent, candidate) {
+  const relative = path.relative(parent, candidate);
+  return relative === '' || (relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative));
+}
+
 export function createCoordinatedSnapshot({ databaseDump, uploads, catalog, output, namespace }) {
   if (!databaseDump || !uploads || !catalog || !output || !namespace) throw new Error('databaseDump, uploads, catalog, output and namespace are required');
   const db = fs.realpathSync(databaseDump);
@@ -34,10 +50,11 @@ export function createCoordinatedSnapshot({ databaseDump, uploads, catalog, outp
   if (!fs.statSync(db).isFile() || !fs.statSync(media).isDirectory() || !fs.statSync(catalogFile).isFile()) throw new Error('Snapshot sources must include database dump, uploads directory and catalog file');
   const catalogValue = JSON.parse(fs.readFileSync(catalogFile, 'utf8'));
   if (!Array.isArray(catalogValue.attachments) || !Array.isArray(catalogValue.leases)) throw new Error('Snapshot catalog must contain attachments and leases');
-  const destination = path.resolve(output);
+  const destination = resolvedProspectivePath(output); const destinationParent = path.dirname(destination);
+  if (containsPath(media, destination) || containsPath(destination, media) || containsPath(media, destinationParent)) throw new Error('Snapshot output and staging must not overlap the uploads source');
   if (fs.existsSync(destination)) throw new Error('Snapshot output already exists');
-  fs.mkdirSync(path.dirname(destination), { recursive: true });
-  const staging = fs.mkdtempSync(path.join(path.dirname(destination), '.snapshot-'));
+  fs.mkdirSync(destinationParent, { recursive: true });
+  const staging = fs.mkdtempSync(path.join(destinationParent, '.snapshot-'));
   try {
     fs.copyFileSync(db, path.join(staging, 'database.dump'), fs.constants.COPYFILE_EXCL);
     fs.copyFileSync(catalogFile, path.join(staging, 'media-catalog.json'), fs.constants.COPYFILE_EXCL);
