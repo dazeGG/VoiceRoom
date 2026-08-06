@@ -1179,7 +1179,7 @@ test('manual screen receiver demand is ordered, race-safe, and isolated from scr
   assert.match(trackUnsubscribed, /shouldSubscribeToScreen\(peer\)/);
   assert.match(trackUnsubscribed, /scheduleScreenSubscriptionRetry\(peer, publication\)/);
   assert.match(trackUnpublished, /detachRemoteScreenVideoTracks\(peer\)/);
-  assert.match(trackUnpublished, /peer\.screen = screenPresence\.active/);
+  assert.match(trackUnpublished, /peer\.screen = peer\.screenAuthoritative === false \? false : screenPresence\.active/);
   assert.match(trackUnpublished, /if \(!screenPresence\.hasVideo\) detachRemoteScreenVideoTracks\(peer\)/);
   assert.match(attachSubscribedScreen, /publication\.isSubscribed === false/);
   assert.match(attachSubscribedScreen, /publication\.track as RemoteTrack/);

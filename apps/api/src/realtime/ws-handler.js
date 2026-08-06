@@ -1,6 +1,10 @@
 'use strict';
 
-const { normalizeRoomId } = require('@voice-room/shared/validation');
+const {
+  normalizePeerId,
+  normalizeRoomId,
+  normalizeSessionToken
+} = require('@voice-room/shared/validation');
 const { buildServerEnvelope, buildServerErrorEnvelope, parseInboundMessage } = require('./envelope');
 
 function createWsHandler({
@@ -68,7 +72,8 @@ function createWsHandler({
         connection,
         envelope.payload,
         currentSession?.user || null,
-        getClientIp(req)
+        getClientIp(req),
+        envelope.id
       );
       if (!result.ok && result.code === 'room_banned') {
         registry.sendToConnection(connection, buildServerEnvelope('room.banned', {
@@ -86,7 +91,8 @@ function createWsHandler({
     if (envelope.type === 'room.leave') {
       await roomRuntime.leaveVoiceRoom(connection, {
         roomId: normalizeRoomId(envelope.payload.roomId),
-        peerId: envelope.payload.peerId
+        peerId: normalizePeerId(envelope.payload.peerId),
+        sessionToken: normalizeSessionToken(envelope.payload.sessionToken)
       });
       return;
     }

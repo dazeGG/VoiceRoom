@@ -8,7 +8,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const http = require('node:http');
 
-const { createApiServer } = require('../src/server');
+const { __private, createApiServer } = require('../src/server');
 const { openWs, joinVoiceRoom, sendWs, waitForWsType } = require('./ws-harness');
 
 function deferred() {
@@ -25,7 +25,7 @@ function createFakeStore() {
   const rooms = new Map();
   const messages = new Map();
   return {
-    rooms: new Map(),
+    rooms,
     async appendMessage(roomId, message) {
       if (!rooms.has(roomId)) return null;
       const entry = { ...message, roomId };
@@ -71,6 +71,9 @@ function createFakeStore() {
     },
     async listMessages(roomId) {
       return messages.get(roomId) || [];
+    },
+    async listSummaryRecipientUserIds() {
+      return [];
     },
     async markRoomActive() {},
     async markRoomEmpty() {},
@@ -187,8 +190,14 @@ test('server logs mark-empty failures instead of creating unhandled rejections',
   });
 
   try {
-    voice.ws.close();
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    sendWs(voice.ws, 'room.leave', {
+      roomId: 'room-empty-fail',
+      peerId: 'peer0002',
+      sessionToken: 'goodtoken12345678901234567890123'
+    });
+    for (let attempt = 0; attempt < 50 && errors.length === 0; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
     assert.equal(errors.some((entry) => String(entry[0]).includes('Failed to persist room occupancy')), true);
   } finally {
     console.error = originalError;
@@ -247,7 +256,11 @@ test('server serializes a late empty write before the active write of a concurre
     });
     await identityStarted.promise;
 
-    leaving.ws.close();
+    sendWs(leaving.ws, 'room.leave', {
+      roomId: 'room-occupancy-race',
+      peerId: 'leaving-peer',
+      sessionToken: 'l'.repeat(32)
+    });
     await emptyStarted.promise;
     releaseIdentity.resolve();
 
@@ -271,6 +284,54 @@ test('server serializes a late empty write before the active write of a concurre
     releaseEmpty.resolve();
     leaving.ws.close();
     joining.ws.close();
+    await close(server);
+  }
+});
+
+test('pruning retries failed active occupancy before sweeping dynamic rooms', async () => {
+  const store = createFakeStore();
+  const roomId = 'room-active-retry';
+  await store.createRoom({ creatorIp: 'test', isStatic: false, roomId, now: 1000 });
+  let activeAttempts = 0;
+  store.markRoomActive = async (activeRoomId) => {
+    activeAttempts += 1;
+    if (activeAttempts === 1) throw new Error('temporary occupancy failure');
+    const room = store.rooms.get(activeRoomId);
+    if (room) room.emptySince = null;
+  };
+  store.pruneRooms = async () => {
+    const room = store.rooms.get(roomId);
+    if (room?.emptySince != null) store.rooms.delete(roomId);
+  };
+
+  const errors = [];
+  const originalError = console.error;
+  console.error = (...args) => errors.push(args);
+  const server = createApiServer({ store });
+  const port = await listen(server);
+  const voice = openWs(port);
+  await voice.ready;
+
+  try {
+    await joinVoiceRoom(voice, {
+      roomId,
+      peerId: 'active-peer',
+      sessionToken: 'a'.repeat(32),
+      name: 'Active peer'
+    });
+
+    assert.equal(activeAttempts, 1);
+    assert.ok(await store.getRoom(roomId));
+
+    await __private.pruneRooms(5000);
+
+    assert.equal(activeAttempts, 2);
+    assert.equal((await store.getRoom(roomId))?.emptySince, null);
+    assert.ok(await store.getRoom(roomId));
+    assert.equal(errors.some((entry) => String(entry[0]).includes('Failed to persist room occupancy')), true);
+  } finally {
+    console.error = originalError;
+    voice.ws.close();
     await close(server);
   }
 });

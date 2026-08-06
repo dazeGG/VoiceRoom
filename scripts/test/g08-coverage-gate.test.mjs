@@ -127,15 +127,18 @@ const SERVER_INTERNAL_COVERAGE_SCRIPT = String.raw`
   accountToken.resolveOptionalSessionUser = async () => ({ id: "user-1" });
   accountToken.getRoomStore().getOrCreatePeerIdentity = async () => ({ status: "created", identity: null });
   await run("handleLiveKitToken", accountToken, "done = handleLiveKitToken({}, {});");
-  const moderationStore = { revokeLiveKitGatePeer: async () => {} };
+  const moderationStore = {
+    revokeLiveKitGatePeer: async () => {},
+    invalidatePeerIdentity: async () => {}
+  };
   const moderationSandbox = {
     getRoomStore: () => moderationStore,
     sendEvent() {}, broadcastToUser() {},
     wsRegistry: { connections: new Map(), unregisterConnectionForRoom() {} },
     closePeer() {}, removeLiveKitParticipant: async () => {}
   };
-  await run("disconnectModeratedPeer", moderationSandbox, "done = disconnectModeratedPeer({ id: 'room-1' }, { id: 'peer-1', accountUserId: '', gateGuestPrincipalId: 'guest-1', transport: { id: 'transport-1' } }, 'room.kicked');");
-  await run("disconnectModeratedPeer", moderationSandbox, "done = disconnectModeratedPeer({ id: 'room-1' }, { id: 'peer-2', accountUserId: 'user-1', gateGuestPrincipalId: '', transport: { id: 'transport-2' } }, 'room.kicked');");
+  await run("runModeratedPeerCleanup", moderationSandbox, "done = runModeratedPeerCleanup({ id: 'room-1' }, { id: 'peer-1', accountUserId: '', gateGuestPrincipalId: 'guest-1', transport: { id: 'transport-1' } }, 'room.kicked', { gateAlreadyRevoked: false, ownershipFinalized: false });");
+  await run("runModeratedPeerCleanup", moderationSandbox, "done = runModeratedPeerCleanup({ id: 'room-1' }, { id: 'peer-2', accountUserId: 'user-1', gateGuestPrincipalId: '', transport: { id: 'transport-2' } }, 'room.kicked', { gateAlreadyRevoked: false, ownershipFinalized: false });");
   const accountPeer = { id: "peer-1", accountUserId: "user-1", gateGuestPrincipalId: "", ip: "127.0.0.1" };
   await run("handleBanRoomPeer", {
     MAX_ROOM_BANS: 100,
@@ -146,7 +149,7 @@ const SERVER_INTERNAL_COVERAGE_SCRIPT = String.raw`
     liveKitGatePrincipalForPeer: () => ({ principalType: "account", principalId: "user-1" }),
     isLiveKitGatePrincipal: () => true,
     getRoomStore: () => ({ createRoomBanWithLiveKitGateRevocations: async () => ({ status: "created", ban: { id: "ban-1" }, revocations: [{}] }) }),
-    disconnectModeratedPeer: async () => {},
+    finalizeModeratedPeers: async (_room, _peers, _type, options = {}) => options.beforeFinalize?.(),
     sendJson() {}
   }, "done = handleBanRoomPeer({}, {}, 'room-1');");
   await run("removeLiveKitParticipant", { getLiveKitConfig: () => ({ enabled: true, adminUrl: "http://internal", apiKey: "key", apiSecret: "secret" }), RoomServiceClient: class { async removeParticipant() {} }, getLiveKitRoomName: (value) => value, console }, "done = removeLiveKitParticipant('room-1', 'peer-1');");
