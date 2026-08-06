@@ -120,6 +120,7 @@ function normalizeManifest(candidate) {
   if (!isObject(candidate)) return null;
   const contract = candidate.contractVersion || candidate.contract;
   if (contract !== CAPABILITY_CONTRACT) return null;
+  if (candidate.schemaVersion !== CAPABILITY_SCHEMA_VERSION) return null;
 
   const publicKeys = Array.isArray(candidate.publicKeys)
     ? candidate.publicKeys.map(normalizePublicNode)
@@ -160,6 +161,14 @@ function normalizeManifest(candidate) {
     if (!item?.key) return null;
     if (byKey.has(item.key)) return null;
     byKey.set(item.key, item);
+  }
+
+  for (const item of internalPrerequisites) {
+    if (item.requiredBy.some((key) => !byKey.has(key))) return null;
+  }
+
+  for (const item of operatorFlags) {
+    if (item.requiredBy.some((key) => !byKey.has(key))) return null;
   }
 
   for (const item of internalPrerequisites) {

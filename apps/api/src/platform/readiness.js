@@ -226,8 +226,9 @@ function compareReplicas(manifest, localReport, replicas) {
     let stale = false;
 
     if (!replica.manifestDigest || replica.manifestDigest !== localDigest) stale = true;
-    if ((replica.manifestSchemaVersion || 0) !== (manifest.schemaVersion || 1)) stale = true;
-    if (replica.contractVersion && replica.contractVersion !== manifest.contractVersion) stale = true;
+    if (replica.manifestSchemaVersion !== manifest.schemaVersion) stale = true;
+    if (replica.contractVersion !== manifest.contractVersion) stale = true;
+    if (normalizedReplicas.length > 0 && replica.ready !== true) stale = true;
 
     for (const key of PUBLIC_CAPABILITY_KEYS) {
       const localValue = Boolean(localFeatures[key]);
@@ -374,8 +375,9 @@ function createReadinessReport(manifestPath, options = {}) {
     options.replicas
   );
 
-  const effective = { ...evaluated.features };
-  for (const key of consensus.disagreeing) effective[key] = false;
+  const effective = consensus.consensus
+    ? { ...evaluated.features }
+    : Object.fromEntries(PUBLIC_CAPABILITY_KEYS.map((key) => [key, false]));
 
   return {
     manifest: evaluated.manifest,

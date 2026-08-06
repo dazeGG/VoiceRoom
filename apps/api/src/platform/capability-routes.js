@@ -59,7 +59,6 @@ function createCapabilitySnapshot(readiness) {
     manifestDigest: readiness?.manifest?.digest || null,
     manifestSchemaVersion: readiness?.manifest?.schemaVersion || 1,
     features: publicFeatureFlags(readiness?.features),
-    operatorFlags: readiness?.operatorFlags || {},
     replica: readiness?.replica || null,
     ready: readiness?.replica?.ready === true || readiness?.ready === true
   };
