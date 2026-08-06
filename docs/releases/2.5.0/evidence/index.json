@@ -41,6 +41,15 @@
     "observationMinutes": 0,
     "verifiedAt": null
   },
+  "g71EngagementCheckpoint": {
+    "contract": "voice-room.engagement-checkpoint/v1",
+    "runner": "scripts/checkpoints/engagement.mjs",
+    "test": "scripts/test/g71-engagement-checkpoint.test.mjs",
+    "status": "PENDING_EXTERNAL_STAGING",
+    "checkpointArtifactId": null,
+    "observationMinutes": 0,
+    "verifiedAt": null
+  },
   "archiveAuthority": "archive-authority.json",
   "archiveMap": "archive-map.json",
   "archiveLedger": "archive-ledger.json",
