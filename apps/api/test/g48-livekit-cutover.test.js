@@ -5,12 +5,21 @@ process.env.LIVEKIT_GATE_SECRET = 'g48-test-livekit-gate-secret-at-least-32-byte
 
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const net = require('node:net');
 const path = require('node:path');
+const { Pool } = require('pg');
 const { test } = require('node:test');
 const { createApiApp } = require('../src/server');
 const { renderPrometheus, resetMetricsForTest } = require('../src/lib/metrics');
 const { createCredentialBoundaryService } = require('../src/domains/admission/credential-boundary-service');
 const { createLiveKitAuthGateService } = require('../src/domains/admission/livekit-auth-gate-service');
+const { createRoomStore } = require('../src/lib/room-store');
+const { runMigrations } = require('../src/lib/migrate');
+const { createTestDatabase } = require('./db-harness');
+
+function listen(server) { return new Promise((resolve,reject)=>{ server.once('error',reject); server.listen(0,'127.0.0.1',()=>resolve(server.address().port)); }); }
+function close(server) { return new Promise((resolve)=>server.close(()=>resolve())); }
+function upgrade(port, requestPath) { return new Promise((resolve,reject)=>{ const socket=net.connect(port,'127.0.0.1',()=>socket.write(`GET ${requestPath} HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Key: dGVzdA==\r\nSec-WebSocket-Version: 13\r\n\r\n`)); let response=''; socket.on('data',(chunk)=>{response+=chunk; if(response.includes('\r\n\r\n'))socket.end();}); socket.on('end',()=>resolve(response)); socket.on('error',reject); }); }
 
 test('G48 supplemental source contract keeps admission ordering visible', () => {
   const source = fs.readFileSync(path.resolve(__dirname, '../src/server.js'), 'utf8');
@@ -63,6 +72,21 @@ test('G48-A04 real credential boundary survives restart, supports multitab, and 
   const raced = await boundary.issueCredential({ roomId: 'room', peerId: 'raced', principal });
   assert.equal(raced.status, 'issued');
   assert.equal((await restartedGate.authorize(`/rtc?vr_gate_credential=${encodeURIComponent(raced.credential.value)}`)).ok, false);
+});
+
+test('G48-A04 PostgreSQL-backed external HTTP/WS gate survives restart and rejects direct/internal, replay, partition and concurrent reconnect attacks', { skip:!process.env.TEST_DATABASE_URL }, async (t) => {
+  const db=await createTestDatabase(t); await runMigrations({databaseUrl:db.databaseUrl,logger:{log(){},info(){},warn(){},error(){}},noLock:true}); const pool=new Pool({connectionString:db.databaseUrl}); t.after(async()=>{await pool.end();await db.cleanup();});
+  const store=createRoomStore({pool}); await store.createRoom({roomId:'g48-network',creatorIp:'127.0.0.1'}); const principal={principalType:'account',principalId:'g48-account'}; const boundary=createCredentialBoundaryService({roomStore:store,secret:process.env.LIVEKIT_GATE_SECRET});
+  const upstream=net.createServer((socket)=>{let request='';socket.on('data',(chunk)=>{request+=chunk;if(!request.includes('\r\n\r\n'))return;const direct=request.includes('vr_gate_credential=');socket.end(direct?'HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\n\r\n':'HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: websocket\r\n\r\n');});}); const upstreamPort=await listen(upstream);t.after(()=>close(upstream));
+  const issued=await Promise.all(['tab-a','tab-b'].map((peerId)=>boundary.issueCredential({roomId:'g48-network',peerId,principal}))); const makeGate=()=>createLiveKitAuthGateService({boundary,roomStore:store,upstreamUrl:`ws://127.0.0.1:${upstreamPort}`}).createServer(); let gate=makeGate();let gatePort=await listen(gate);
+  const pathFor=(credential)=>`/rtc?vr_gate_credential=${encodeURIComponent(credential)}`;
+  assert.match(await upgrade(gatePort,pathFor(issued[0].credential.value)),/^HTTP\/1\.1 101/); assert.match(await upgrade(upstreamPort,pathFor(issued[0].credential.value)),/^HTTP\/1\.1 403/);
+  await close(gate); gate=makeGate();gatePort=await listen(gate);t.after(()=>close(gate)); const concurrent=await Promise.all(issued.map((entry)=>upgrade(gatePort,pathFor(entry.credential.value)))); assert.ok(concurrent.every((response)=>/^HTTP\/1\.1 101/.test(response)));
+  const tampered=`${issued[0].credential.value.slice(0,-1)}x`; assert.match(await upgrade(gatePort,pathFor(tampered)),/^HTTP\/1\.1 403/);
+  await boundary.revokePrincipal({roomId:'g48-network',principal}); for(const entry of issued)assert.match(await upgrade(gatePort,pathFor(entry.credential.value)),/^HTTP\/1\.1 403/);
+  const racedPromise=boundary.issueCredential({roomId:'g48-network',peerId:'race',principal}); const revokePromise=boundary.revokePrincipal({roomId:'g48-network',principal}); const [raced]=await Promise.all([racedPromise,revokePromise]); await boundary.revokePrincipal({roomId:'g48-network',principal}); if(raced.status==='issued')assert.match(await upgrade(gatePort,pathFor(raced.credential.value)),/^HTTP\/1\.1 403/);
+  await close(gate); gate=makeGate();gatePort=await listen(gate); assert.match(await upgrade(gatePort,pathFor(issued[0].credential.value)),/^HTTP\/1\.1 403/);
+  assert.match(fs.readFileSync(path.resolve(__dirname,'../../../docker-compose.dev.yml'),'utf8'),/livekit\/livekit-server:v1\.13\.2/);
 });
 
 test('G48-A03 issued credential fails closed when membership persistence and revoke both fail', async (t) => {
