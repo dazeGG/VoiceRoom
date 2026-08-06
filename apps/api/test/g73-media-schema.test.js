@@ -3,6 +3,8 @@ const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const { Pool } = require('pg');
+const path = require('node:path');
+const { runner } = require('node-pg-migrate');
 const test = require('node:test');
 const { runMigrations } = require('../src/lib/migrate');
 const { createTestDatabase } = require('./db-harness');
@@ -21,9 +23,22 @@ test('G73-A01 fresh PG schema is repeatable, bounded and N-1-readable', { skip: 
   assert.match(indexes, /message_attachments_cleanup_idx/);
   assert.match(indexes, /media_processing_jobs_claim_idx/);
   assert.equal((await pool.query('SELECT count(*)::int count FROM room_messages')).rows[0].count, 0);
-  const migration = fs.readFileSync(require.resolve('../src/migrations/20260718140000_create_message_attachments_and_media_jobs.js'), 'utf8');
+  const migration = fs.readFileSync(require.resolve('../src/migrations/20260720162000_limit_message_attachment_bytes.js'), 'utf8');
   assert.match(migration, /lock_timeout = '5s'/);
-  assert.doesNotMatch(migration, /20971520/);
+  assert.match(migration, /10485760/);
+  assert.match(migration, /20971520/);
+});
+
+test('G73-A03 corrective byte limit rolls back to the historical 20MiB contract and reapplies cleanly', { skip: !process.env.TEST_DATABASE_URL, timeout: 120000 }, async (t) => {
+  const db = await createTestDatabase(t); await runMigrations({ databaseUrl: db.databaseUrl, logger: SILENT, noLock: true });
+  const pool = new Pool({ connectionString: db.databaseUrl, max: 2 }); t.after(async () => { await pool.end(); await db.cleanup(); });
+  await runner({ databaseUrl: db.databaseUrl, dir: path.resolve(__dirname, '../src/migrations'), direction: 'down', count: 1, migrationsTable: 'pgmigrations', logger: SILENT, noLock: true });
+  await pool.query(`INSERT INTO users(id,login,display_name,password_hash) VALUES ('rollback-owner','rollback-owner','Owner','x')`);
+  const oversizedId = crypto.randomUUID();
+  await pool.query(`INSERT INTO message_attachments(id,owner_id,context,state,reserved_bytes) VALUES ($1,'rollback-owner','room','uploading',15728640)`, [oversizedId]);
+  await pool.query('DELETE FROM message_attachments WHERE id=$1', [oversizedId]);
+  await runner({ databaseUrl: db.databaseUrl, dir: path.resolve(__dirname, '../src/migrations'), direction: 'up', count: 1, migrationsTable: 'pgmigrations', logger: SILENT, noLock: true });
+  await assert.rejects(pool.query(`INSERT INTO message_attachments(id,owner_id,context,state,reserved_bytes) VALUES ($1,'rollback-owner','room','uploading',15728640)`, [crypto.randomUUID()]));
 });
 
 test('G73-A02 constraints reject illegal bytes/states/transitions and application rollback is clean', { skip: !process.env.TEST_DATABASE_URL, timeout: 120000 }, async (t) => {

@@ -33,21 +33,9 @@ exports.up = (pgm) => {
     BEGIN
       LOOP
         WITH batch AS (
-          SELECT
-            id,
-            metadata,
-            lower(coalesce(metadata->>'userAgent', '')) AS user_agent,
-            coalesce(metadata->>'platform', '') AS platform,
-            CASE
-              WHEN coalesce(metadata->>'maxTouchPoints', '') ~ '^\d+(\.\d+)?$'
-                THEN (metadata->>'maxTouchPoints')::numeric
-              ELSE 0
-            END AS max_touch_points
+          SELECT id, lower(coalesce(metadata->>'userAgent', '')) AS user_agent
           FROM push_subscriptions
-          WHERE metadata ?| ARRAY[
-            'desktopBridge', 'maxTouchPoints', 'platform', 'platformClass',
-            'userAgent', 'userAgentData', 'userAgentDataMobile'
-          ]
+          WHERE metadata ? 'userAgent'
           ORDER BY created_at, id
           LIMIT 1000
           FOR UPDATE SKIP LOCKED
@@ -56,27 +44,15 @@ exports.up = (pgm) => {
           SELECT
             id,
             CASE
-              WHEN metadata->>'platformClass' IN ('desktop', 'mobile', 'unknown')
-                THEN (metadata->>'platformClass')::${PLATFORM_CLASS_TYPE}
-              WHEN metadata @> '{"desktopBridge": true}'::jsonb THEN 'desktop'::${PLATFORM_CLASS_TYPE}
-              WHEN jsonb_typeof(metadata->'userAgentDataMobile') = 'boolean'
-                THEN CASE WHEN (metadata->>'userAgentDataMobile')::boolean THEN 'mobile' ELSE 'desktop' END::${PLATFORM_CLASS_TYPE}
-              WHEN jsonb_typeof(metadata->'userAgentData'->'mobile') = 'boolean'
-                THEN CASE WHEN (metadata->'userAgentData'->>'mobile')::boolean THEN 'mobile' ELSE 'desktop' END::${PLATFORM_CLASS_TYPE}
               WHEN user_agent ~ '(android|iphone|ipod|windows phone|mobile|ipad)' THEN 'mobile'::${PLATFORM_CLASS_TYPE}
-              WHEN platform ~* '^MacIntel$' AND max_touch_points > 1 THEN 'mobile'::${PLATFORM_CLASS_TYPE}
               WHEN user_agent ~ '(windows|macintosh|cros|x11|linux)' THEN 'desktop'::${PLATFORM_CLASS_TYPE}
-              WHEN platform ~* '^(win|mac|linux)' THEN 'desktop'::${PLATFORM_CLASS_TYPE}
               ELSE 'unknown'::${PLATFORM_CLASS_TYPE}
             END AS platform_class
           FROM batch
         )
         UPDATE push_subscriptions AS subscription
         SET platform_class = classified.platform_class,
-            metadata = subscription.metadata - ARRAY[
-              'desktopBridge', 'maxTouchPoints', 'platform', 'platformClass',
-              'userAgent', 'userAgentData', 'userAgentDataMobile'
-            ]
+            metadata = subscription.metadata - 'userAgent'
         FROM classified
         WHERE subscription.id = classified.id;
 
