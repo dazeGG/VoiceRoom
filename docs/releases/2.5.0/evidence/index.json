@@ -59,6 +59,26 @@
     "observationMinutes": 0,
     "verifiedAt": null
   },
+  "g91ReleaseBudgets": {
+    "contract": "voice-room.release-performance/v1",
+    "profile": "scripts/perf/release-250-profile.v1.json",
+    "status": "PENDING_EXTERNAL_PERFORMANCE_EVIDENCE",
+    "artifactId": null,
+    "verifiedAt": null
+  },
+  "g92ActivationMatrix": {
+    "contract": "voice-room.activation-matrix/v1",
+    "runner": "scripts/checkpoints/g92-activation-matrix.mjs",
+    "status": "PENDING_EXTERNAL_ACTIVATION_EVIDENCE",
+    "artifactId": null,
+    "verifiedAt": null
+  },
+  "g93DevelopEntry": {
+    "status": "BLOCKED_PENDING_EXTERNAL_EVIDENCE",
+    "authorizedBranch": null,
+    "terminalDevelopSha": null,
+    "verifiedAt": null
+  },
   "archiveAuthority": "archive-authority.json",
   "archiveMap": "archive-map.json",
   "archiveLedger": "archive-ledger.json",

@@ -1,0 +1,17 @@
+name: Release 2.5.0 develop entry
+on: { workflow_dispatch: {} }
+permissions: { contents: read }
+jobs:
+  goal-g93:
+    if: github.ref == 'refs/heads/develop'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@v4
+        with: { node-version-file: .nvmrc, cache: npm }
+      - run: npm ci
+      - run: node --test scripts/test/g93-entry-gate.test.mjs
+      - name: Fail closed until external release-entry evidence is complete
+        run: node scripts/test/g93-entry-gate.test.mjs --gate
