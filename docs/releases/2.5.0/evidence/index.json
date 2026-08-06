@@ -50,6 +50,15 @@
     "observationMinutes": 0,
     "verifiedAt": null
   },
+  "g90MediaCheckpoint": {
+    "contract": "voice-room.media-checkpoint/v1",
+    "runner": "scripts/checkpoints/media.mjs",
+    "test": "scripts/test/g90-media-checkpoint.test.mjs",
+    "status": "PENDING_EXTERNAL_STAGING",
+    "checkpointArtifactId": null,
+    "observationMinutes": 0,
+    "verifiedAt": null
+  },
   "archiveAuthority": "archive-authority.json",
   "archiveMap": "archive-map.json",
   "archiveLedger": "archive-ledger.json",
