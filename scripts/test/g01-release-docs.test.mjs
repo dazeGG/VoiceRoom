@@ -7,8 +7,6 @@ import crypto from "node:crypto";
 import { execFileSync } from "node:child_process";
 import Ajv2020 from "ajv/dist/2020.js";
 import addFormats from "ajv-formats";
-// Playwright exports its pinned YAML 1.2 parser through this supported subpath.
-import { yaml } from "playwright-core/lib/utilsBundle";
 import { artifactName, buildAuthenticatedEarlyFailure, buildF9Envelope, buildF11Envelope, buildReviewComment, buildSelection, envelopePayloadDigest, parseReviewComment, selectCanonicalFailure, validateArtifactlessBackfillAuthority, validateBootstrapFailure, validateFallbackCandidatePair } from "../evidence/emit-bootstrap-selection.mjs";
 import { activateCandidateReport, buildActivationCapture, buildCandidateReport, buildF7Envelope as buildAuthenticatedF7Envelope, buildF7RepositoryGates, buildG01VerificationCatalog, prepareAndCreateBootstrapBranch, prepareBootstrapAuthority, reconstructNextOrdinal, validateLivePublication, validateRegistry } from "../evidence/bootstrap-export.mjs";
 import { validateEnvelope } from "../evidence/validate-envelope.mjs";
@@ -16,7 +14,7 @@ import { G01_WRITABLE } from "../evidence/recover-landed-bootstrap.mjs";
 
 const read = (file) => fs.readFileSync(file, "utf8");
 const json = (file) => JSON.parse(read(file));
-const readWorkflow = () => yaml.parse(read(".github/workflows/ci.yml"));
+const readWorkflow = () => read(".github/workflows/ci.yml");
 const digest = (character) => `sha256:${character.repeat(64)}`;
 const compactDigest = (value) => `sha256:${crypto.createHash("sha256").update(JSON.stringify(value)).digest("hex")}`;
 const REPOSITORY = "dazeGG/VoiceRoom";
@@ -25,11 +23,64 @@ const reviewedFiles = () => G01_WRITABLE.map((filename) => ({ filename, mode: fs
 const reviewedTree = (reviewedBaseSha = "9".repeat(40), reviewedHeadSha = "a".repeat(40)) => ({ candidateFiles: reviewedFiles(), reviewedBaseSha, reviewedHeadSha });
 const syntheticPreBranchInputs = () => ["bootstrap-attempts.json", "bootstrap-landed-recoveries.json"].map((name) => { const candidate = json(`docs/releases/2.5.0/evidence/${name}`); if (name === "bootstrap-attempts.json") delete candidate.preparedAuthority; return { filename: name, bytes: Buffer.from(JSON.stringify(candidate)) }; });
 
+function indentation(line) {
+  return line.match(/^ */)[0].length;
+}
+
+function namedBlock(source, marker, indent, siblingPrefix = "") {
+  const lines = source.split(/\r?\n/);
+  const start = lines.findIndex((line) => indentation(line) === indent && line.trim() === `${siblingPrefix}${marker}`);
+  if (start < 0) return null;
+  let end = start + 1;
+  while (end < lines.length) {
+    const line = lines[end];
+    if (line.trim() && indentation(line) <= indent && line.trim().startsWith(siblingPrefix)) break;
+    end += 1;
+  }
+  return lines.slice(start, end).join("\n");
+}
+
+const jobBlock = (workflow, name) => namedBlock(workflow, `${name}:`, 2);
+const stepBlock = (job, name) => namedBlock(job, `name: ${name}`, 6, "- ");
+
+function nestedBlock(source, key) {
+  const lines = source.split(/\r?\n/);
+  const start = lines.findIndex((line) => line.trim() === `${key}:`);
+  if (start < 0) return null;
+  const indent = indentation(lines[start]);
+  let end = start + 1;
+  while (end < lines.length && (!lines[end].trim() || indentation(lines[end]) > indent)) end += 1;
+  return lines.slice(start + 1, end).filter((line) => line.trim());
+}
+
+function field(source, key) {
+  const line = source.split(/\r?\n/).find((candidate) => candidate.trim().startsWith(`${key}:`));
+  return line?.trim().slice(key.length + 1).trim();
+}
+
+function inlineList(source, key) {
+  const value = field(source, key);
+  assert.match(value ?? "", /^\[.*\]$/, `${key} must remain an inline list`);
+  return value.slice(1, -1).split(",").map((entry) => entry.trim()).filter(Boolean);
+}
+
+function runBlock(source) {
+  const lines = source.split(/\r?\n/);
+  const start = lines.findIndex((line) => line.trim() === "run: |");
+  assert.ok(start >= 0, "workflow run block must exist");
+  const indent = indentation(lines[start]);
+  let end = start + 1;
+  while (end < lines.length && (!lines[end].trim() || indentation(lines[end]) > indent)) end += 1;
+  return lines.slice(start + 1, end).map((line) => line.slice(Math.min(line.length, indent + 2))).join("\n");
+}
+
 function assertBootstrapPlanToken(workflow) {
-  const job = workflow.jobs?.["bootstrap-plan"];
-  assert.deepEqual(job?.permissions, { contents: "read" }, "bootstrap-plan must retain exact read-only contents permission");
-  const step = job.steps?.find((candidate) => candidate.name === "Run exact targeted G01 command catalog and produce reports");
-  if (!step || Object.keys(step.env ?? {}).length !== 1 || step.env.GH_TOKEN !== "${{ github.token }}") {
+  const job = jobBlock(workflow, "bootstrap-plan");
+  assert.ok(job, "bootstrap-plan job must exist");
+  assert.deepEqual(nestedBlock(job, "permissions")?.map((line) => line.trim()), ["contents: read"], "bootstrap-plan must retain exact read-only contents permission");
+  const step = stepBlock(job, "Run exact targeted G01 command catalog and produce reports");
+  const environment = step ? nestedBlock(step, "env")?.map((line) => line.trim()) : null;
+  if (!step || !environment || environment.length !== 1 || environment[0] !== "GH_TOKEN: ${{ github.token }}") {
     const error = new Error("bootstrap-plan catalog step must receive only the standard GitHub token");
     error.code = 4;
     throw error;
@@ -683,7 +734,7 @@ test("selection CLI emits compact JSON with one real LF", () => {
 
 test("CI executes the exported G01 writable manifest directly", () => {
   const workflow = readWorkflow();
-  const script = workflow.jobs["bootstrap-seal"].steps.find((step) => step.name === "Atomically derive current attempt from complete GitHub history and emit F7")?.run;
+  const script = runBlock(stepBlock(jobBlock(workflow, "bootstrap-seal"), "Atomically derive current attempt from complete GitHub history and emit F7"));
   assert.ok(script, "G01 F7 workflow step must exist");
   const line = script.split("\n").map((entry) => entry.trim()).find((entry) => entry.endsWith("> g01-head-blob-paths.txt"));
   assert.ok(line, "CI G01 manifest command must exist");
@@ -698,8 +749,7 @@ test("CI executes the exported G01 writable manifest directly", () => {
 test("bootstrap-plan scopes the standard GitHub token to the attested catalog step", () => {
   const workflow = readWorkflow();
   assertBootstrapPlanToken(workflow);
-  const hostile = structuredClone(workflow);
-  delete hostile.jobs["bootstrap-plan"].steps.find((step) => step.name === "Run exact targeted G01 command catalog and produce reports").env.GH_TOKEN;
+  const hostile = workflow.replace("          GH_TOKEN: ${{ github.token }}\n", "");
   let failure;
   try {
     assertBootstrapPlanToken(hostile);
@@ -711,9 +761,9 @@ test("bootstrap-plan scopes the standard GitHub token to the attested catalog st
 });
 
 test("workflow has reachable bounded premerge F9 and automatic merged-commit F11/selection with authenticated provenance", () => {
-  const workflow = read(".github/workflows/ci.yml"); const parsed = readWorkflow();
-  assert.equal(parsed.jobs["bootstrap-plan"].name, "G01 targeted bootstrap gate"); assert.equal(parsed.jobs["bootstrap-plan"].needs, undefined);
-  assert.deepEqual(parsed.jobs["bootstrap-seal"].needs, ["policy", "check", "test", "bootstrap-plan"]); assert.doesNotMatch(parsed.jobs["bootstrap-seal"].if, /always\(\)/);
+  const workflow = readWorkflow(), planJob = jobBlock(workflow, "bootstrap-plan"), sealJob = jobBlock(workflow, "bootstrap-seal");
+  assert.equal(field(planJob, "name"), "G01 targeted bootstrap gate"); assert.equal(field(planJob, "needs"), undefined);
+  assert.deepEqual(inlineList(sealJob, "needs"), ["policy", "check", "test", "bootstrap-plan"]); assert.doesNotMatch(field(sealJob, "if") ?? "", /always\(\)/);
   const block = workflow.slice(workflow.indexOf("  bootstrap-plan:"), workflow.indexOf("\n  bootstrap-postmerge:"));
   assert.match(block, /check-runs\?filter=all&per_page=100/, "all check runs must remain visible so reruns and duplicate names fail closed");
   assert.doesNotMatch(block, /check-runs\?filter=latest/, "latest-only filtering can hide duplicate or rerun check runs");
@@ -733,19 +783,19 @@ test("workflow has reachable bounded premerge F9 and automatic merged-commit F11
   assert.doesNotMatch(post, /Materialize landed-unsealed|fallback-prs\.json/, "checkout-dependent duplicate failure recorders are forbidden");
   for (const token of ["normalizedIdentities", "observedMax", "reconstructionDigest", "gh-api--paginate-completed-no-next-page"]) assert.ok(read("scripts/evidence/bootstrap-export.mjs").includes(token), `missing replayable activation field: ${token}`);
   assert.doesNotMatch(workflow, /workflow_dispatch|bootstrap_phase|bootstrap_f7_artifact_id|find \. -maxdepth 1 -name/);
-  const backfill=parsed.jobs["bootstrap-artifactless-backfill"],producer=backfill.steps.find(({name})=>name==="Produce standard failure payload and authenticated backfill sidecar");assert.deepEqual(backfill.permissions,{actions:"read",checks:"read",contents:"read","pull-requests":"read"});assert.match(backfill.if,/feature\/g01-artifactless-backfill/);assert.equal(parsed.jobs["bootstrap-postmerge"].name,"G01 authenticated post-merge F11");for(const token of ["matchingArtifactIds:[]","backfill-subject-f11.log","failurePayloadDigest","bootstrap-failure-backfill-authority","validateArtifactlessBackfillAuthority","G01 authenticated post-merge F11"])assert.ok(producer.run.includes(token),`missing backfill proof: ${token}`);
+  const backfill=jobBlock(workflow,"bootstrap-artifactless-backfill"),producer=runBlock(stepBlock(backfill,"Produce standard failure payload and authenticated backfill sidecar"));assert.deepEqual(nestedBlock(backfill,"permissions").map((line)=>line.trim()),["actions: read","checks: read","contents: read","pull-requests: read"]);assert.match(field(backfill,"if"),/feature\/g01-artifactless-backfill/);assert.equal(field(jobBlock(workflow,"bootstrap-postmerge"),"name"),"G01 authenticated post-merge F11");for(const token of ["matchingArtifactIds:[]","backfill-subject-f11.log","failurePayloadDigest","bootstrap-failure-backfill-authority","validateArtifactlessBackfillAuthority","G01 authenticated post-merge F11"])assert.ok(producer.includes(token),`missing backfill proof: ${token}`);
   assert.doesNotMatch(post, /ghcr\.io|docker push|packages:\s*write/);
-  assert.equal(parsed.jobs.deploy, undefined, "the removed legacy deploy job must not re-enter the G01 workflow");
+  assert.equal(jobBlock(workflow,"deploy"), null, "the removed legacy deploy job must not re-enter the G01 workflow");
 });
 
 test("inline early recorders are checkout-free and executable across failed/skipped dependency states", () => {
-  const parsed = readWorkflow();
-  const f11 = parsed.jobs["bootstrap-f11-early-recorder"], selection = parsed.jobs["bootstrap-selection-early-recorder"];
-  assert.deepEqual(f11.needs, ["check", "test", "bootstrap-postmerge"]); assert.deepEqual(selection.needs, ["bootstrap-postmerge", "bootstrap-selection"]);
-  for (const job of [f11, selection]) { assert.match(job.if, /^always\(\)/); assert.equal(job.steps.some((step) => String(step.uses ?? "").startsWith("actions/checkout") || String(step.uses ?? "").startsWith("actions/setup-node")), false); assert.ok(job.steps.some((step) => step.uses === "actions/upload-artifact@v4")); }
-  assert.match(f11.steps[0].run, /echo 'recorded=false'[\s\S]*POSTMERGE_RESULT" == success[\s\S]*test -f early-context\.json \|\| exit 0/); assert.match(selection.steps[0].run, /POSTMERGE_RESULT" != success[\s\S]*SELECTION_RESULT" == success/);
+  const workflow = readWorkflow();
+  const f11 = jobBlock(workflow,"bootstrap-f11-early-recorder"), selection = jobBlock(workflow,"bootstrap-selection-early-recorder"), f11Run = runBlock(f11), selectionRun = runBlock(selection);
+  assert.deepEqual(inlineList(f11,"needs"), ["check", "test", "bootstrap-postmerge"]); assert.deepEqual(inlineList(selection,"needs"), ["bootstrap-postmerge", "bootstrap-selection"]);
+  for (const job of [f11, selection]) { assert.match(field(job,"if"), /^always\(\)/); assert.doesNotMatch(job, /actions\/(?:checkout|setup-node)/); assert.match(job, /uses: actions\/upload-artifact@v4/); }
+  assert.match(f11Run, /echo 'recorded=false'[\s\S]*POSTMERGE_RESULT" == success[\s\S]*test -f early-context\.json \|\| exit 0/); assert.match(selectionRun, /POSTMERGE_RESULT" != success[\s\S]*SELECTION_RESULT" == success/);
   const marker = /\/\/ G01_INLINE_RECORDER_START\n([\s\S]*?)\/\/ G01_INLINE_RECORDER_END/;
-  const script = f11.steps[0].run.match(marker)?.[1], selectionScript = selection.steps[0].run.match(marker)?.[1]; assert.ok(script); assert.equal(selectionScript, script, "both checkout-free phases must execute the tested self-contained recorder"); assert.equal(script.includes("./scripts/"), false, "checkout-free recorder cannot import repository files");
+  const script = f11Run.match(marker)?.[1], selectionScript = selectionRun.match(marker)?.[1]; assert.ok(script); assert.equal(selectionScript, script, "both checkout-free phases must execute the tested self-contained recorder"); assert.equal(script.includes("./scripts/"), false, "checkout-free recorder cannot import repository files");
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "g01-inline-recorder-")), f7dir = "/tmp/g01-early-f7", f9dir = "/tmp/g01-early-f9";
   try {
     fs.rmSync(f7dir, { recursive: true, force: true }); fs.rmSync(f9dir, { recursive: true, force: true }); fs.mkdirSync(f7dir, { recursive: true }); fs.mkdirSync(f9dir, { recursive: true });
@@ -762,9 +812,8 @@ test("inline early recorders are checkout-free and executable across failed/skip
 });
 
 test("checkout-free recorder shell step executes no-op, discovers failure, downloads archives, writes outputs and gates upload", { skip: process.platform === "win32" }, () => {
-  const parsed = readWorkflow(), job = parsed.jobs["bootstrap-f11-early-recorder"], selectionJob = parsed.jobs["bootstrap-selection-early-recorder"], shell = job.steps[0].run, selectionShell = selectionJob.steps[0].run, upload = job.steps[1];
-  assert.equal(upload.if, "steps.record.outputs.recorded == 'true'"); assert.equal(upload.uses, "actions/upload-artifact@v4");
-  assert.equal(selectionJob.steps[1].if, "steps.record.outputs.recorded == 'true'"); assert.equal(selectionJob.steps[1].uses, "actions/upload-artifact@v4");
+  const workflow = readWorkflow(), job = jobBlock(workflow,"bootstrap-f11-early-recorder"), selectionJob = jobBlock(workflow,"bootstrap-selection-early-recorder"), shell = runBlock(job), selectionShell = runBlock(selectionJob);
+  for (const recorder of [job, selectionJob]) assert.match(recorder, /if: steps\.record\.outputs\.recorded == 'true'[\s\S]*uses: actions\/upload-artifact@v4/);
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "g01-recorder-shell-"));
   try {
     const base = chain(), fixture = path.join(directory, "fixture"), bin = path.join(directory, "bin"); fs.mkdirSync(fixture); fs.mkdirSync(bin);

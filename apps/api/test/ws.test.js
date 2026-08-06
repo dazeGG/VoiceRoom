@@ -5,11 +5,9 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const http = require('node:http');
-const net = require('node:net');
 const { spawn } = require('node:child_process');
 const path = require('node:path');
 const os = require('node:os');
-const WebSocket = require('ws');
 const { createTestDatabase } = require('./db-harness');
 const { joinVoiceRoom, openWs: openHarnessWs, subscribeRoomPreview, waitForWsType } = require('./ws-harness');
 
@@ -109,29 +107,7 @@ function delay(ms) {
 }
 
 function openWs(socketPath, cookie) {
-  const frames = [];
-  const ws = new WebSocket('ws://localhost/api/ws', {
-    createConnection: () => net.createConnection(socketPath),
-    headers: cookie ? { Cookie: cookie } : undefined
-  });
-
-  const ready = new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error('WS did not deliver ready')), 5000);
-    ws.on('message', (raw) => {
-      const parsed = JSON.parse(String(raw));
-      frames.push(parsed);
-      if (parsed.type === 'ready') {
-        clearTimeout(timer);
-        resolve(parsed);
-      }
-    });
-    ws.on('error', (error) => {
-      clearTimeout(timer);
-      reject(error);
-    });
-  });
-
-  return { ws, frames, ready };
+  return openHarnessWs(socketPath, { cookie });
 }
 
 async function register(socketPath, login) {
