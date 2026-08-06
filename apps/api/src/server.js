@@ -49,6 +49,7 @@ const { createRelease250Pool } = require('./lib/release-250-pool');
 const {
   observeMaintenance,
   recordHttpRequest,
+  recordMediaPressure,
   renderPrometheus
 } = require('./lib/metrics');
 const { createCredentialBoundaryService } = require('./domains/admission/credential-boundary-service');
@@ -566,7 +567,8 @@ function getMediaServices() {
   const pressure = createMediaPressureService({
     storagePath: storage.root,
     minFreeBytes: readEnvInt('MEDIA_MIN_FREE_BYTES', 2 * 1024 * 1024 * 1024, 1),
-    replicaConsensus: () => readinessProvider.getSnapshot()?.replicaConsensus === true
+    replicaConsensus: () => readinessProvider.getSnapshot()?.replicaConsensus === true,
+    onSnapshot: recordMediaPressure
   });
   const attachments = createAttachmentRepository({ pool });
   const jobs = createMediaJobRepository({ pool });

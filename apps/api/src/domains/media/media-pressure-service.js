@@ -10,6 +10,7 @@ function createMediaPressureService({
   minFreeBytes = DEFAULT_MIN_FREE_BYTES,
   recoveryBytes = DEFAULT_RECOVERY_BYTES,
   replicaConsensus = () => true,
+  onSnapshot = () => {},
   statfs = fs.statfs,
   storagePath
 } = {}) {
@@ -34,8 +35,10 @@ function createMediaPressureService({
           healthy: localHealthy && replicasAgree,
           reason: !replicasAgree ? 'replica_disagreement' : localHealthy ? 'ready' : 'low_disk_space'
         });
+        onSnapshot(snapshot);
       } catch {
         snapshot = Object.freeze({ checkedAt: Date.now(), freeBytes: 0, healthy: false, reason: 'storage_unavailable' });
+        onSnapshot(snapshot);
       } finally {
         checking = null;
       }

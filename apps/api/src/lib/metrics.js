@@ -3,6 +3,7 @@
 const httpRequests = new Map();
 const maintenanceTasks = new Map();
 let pgPoolErrors = 0;
+let mediaPressure = { freeBytes: 0, healthy: false, reason: 'unchecked' };
 
 function labelValue(value) {
   return String(value).replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n');
@@ -54,6 +55,14 @@ function recordMaintenanceDuration(task, durationMs) {
 
 function recordPgPoolError() {
   pgPoolErrors += 1;
+}
+
+function recordMediaPressure(snapshot = {}) {
+  mediaPressure = {
+    freeBytes: Math.max(0, Number(snapshot.freeBytes) || 0),
+    healthy: snapshot.healthy === true,
+    reason: String(snapshot.reason || 'unknown')
+  };
 }
 
 async function observeMaintenance(task, callback) {
@@ -114,6 +123,12 @@ function renderPrometheus({
     '# HELP voice_room_api_pg_pool_errors_total Unexpected PostgreSQL pool errors.',
     '# TYPE voice_room_api_pg_pool_errors_total counter',
     `voice_room_api_pg_pool_errors_total ${pgPoolErrors}`,
+    '# HELP voice_room_api_media_free_bytes Available bytes in private media storage.',
+    '# TYPE voice_room_api_media_free_bytes gauge',
+    `voice_room_api_media_free_bytes ${mediaPressure.freeBytes}`,
+    '# HELP voice_room_api_media_pressure_healthy Whether media uploads and claims are pressure-safe.',
+    '# TYPE voice_room_api_media_pressure_healthy gauge',
+    metricLine('voice_room_api_media_pressure_healthy', { reason: mediaPressure.reason }, Number(mediaPressure.healthy)),
     '# HELP voice_room_api_maintenance_duration_seconds_sum Cumulative maintenance task duration.',
     '# TYPE voice_room_api_maintenance_duration_seconds_sum counter'
   );
@@ -150,12 +165,14 @@ function resetMetricsForTest() {
   httpRequests.clear();
   maintenanceTasks.clear();
   pgPoolErrors = 0;
+  mediaPressure = { freeBytes: 0, healthy: false, reason: 'unchecked' };
 }
 
 module.exports = {
   observeMaintenance,
   recordHttpRequest,
   recordMaintenanceDuration,
+  recordMediaPressure,
   recordPgPoolError,
   renderPrometheus,
   resetMetricsForTest
