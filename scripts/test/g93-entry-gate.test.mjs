@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'; import fs from 'node:fs'; import { spawnSync } from 'node:child_process'; import test from 'node:test'; import { pathToFileURL } from 'node:url';
-import { assertEvidenceIdentity, bindExternalFixture, evidenceChainSha256, readExternalArtifact } from '../checkpoints/immutable-evidence.mjs';
+import { assertEvidenceIdentity, bindExternalFixture, evidenceChainSha256, externalAuthenticationFromCli, readExternalArtifact } from '../checkpoints/immutable-evidence.mjs';
 const SHA256 = /^sha256:[a-f0-9]{64}$/; const GIT_SHA = /^[a-f0-9]{40}$/;
 export function verifyEntryGate({ index, lineage, selection, envelope, repairLedger, archiveMap, archiveLedger, expectedSha, isAncestor = () => true }) {
   if (lineage?.schemaVersion !== 1 || lineage.release !== '2.5.0' || !lineage.selectedAttemptId || !GIT_SHA.test(lineage.terminalDevelopSha || '') || !Array.isArray(lineage.ancestors)) throw new Error('G93 terminal bootstrap lineage is unavailable');
@@ -36,7 +36,7 @@ if (!process.argv.includes('--gate')) {
 } else if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   try {
     const arg = (name) => { const index = process.argv.indexOf(name); if (index < 0 || !process.argv[index + 1]) throw new Error(`G93 ${name} is required`); return process.argv[index + 1]; };
-    const root = arg('--external-root'); const selectionArtifact = readExternalArtifact(root, arg('--selection'), arg('--selection-sha256')); const envelopeArtifact = readExternalArtifact(root, arg('--envelope'), arg('--envelope-sha256'));
+    const root = arg('--external-root'); const authentication = externalAuthenticationFromCli(process.argv); const selectionArtifact = readExternalArtifact(root, arg('--selection'), arg('--selection-sha256'), authentication); const envelopeArtifact = readExternalArtifact(root, arg('--envelope'), arg('--envelope-sha256'), authentication);
     const selection = { ...selectionArtifact.value, _artifactSha256: arg('--selection-sha256') };
     verifyEntryGate({ index: JSON.parse(fs.readFileSync('docs/releases/2.5.0/evidence/index.json')), lineage: JSON.parse(fs.readFileSync('docs/releases/2.5.0/evidence/bootstrap-lineage.json')), selection, envelope: envelopeArtifact.value, repairLedger: JSON.parse(fs.readFileSync('docs/releases/2.5.0/evidence/repair-ledger.json')), archiveMap: JSON.parse(fs.readFileSync('docs/releases/2.5.0/evidence/archive-map.json')), archiveLedger: JSON.parse(fs.readFileSync('docs/releases/2.5.0/evidence/archive-ledger.json')), expectedSha: process.env.GITHUB_SHA, isAncestor: (base, head) => spawnSync('git', ['merge-base', '--is-ancestor', base, head]).status === 0 });
   }
