@@ -17,7 +17,7 @@ function createNotificationService({ pool, inbox, mentions, eligibility, outbox,
   }
   async function count(userId){return inbox.unreadCount(userId);}
   async function markRead({userId,notificationId}){const item=await inbox.markRead({recipientUserId:userId,notificationId});if(!item)return {ok:false,code:'not_found'};const unread=await inbox.unreadCount(userId);return {ok:true,notification:item,unreadCount:unread.count,revision:unread.revision};}
-  async function markAllRead({userId,through}){const updated=await inbox.markAllRead({recipientUserId:userId,through});const unread=await inbox.unreadCount(userId);return {ok:true,updated,unreadCount:unread.count,revision:unread.revision};}
+  async function markAllRead({userId,through}){const result=await inbox.markAllRead({recipientUserId:userId,through});const unread=await inbox.unreadCount(userId);return {ok:true,updated:typeof result==='number'?result:result.updated,unreadCount:unread.count,revision:Math.max(unread.revision,Number(result?.revision)||0)};}
   async function resync(userId){const unread=await inbox.unreadCount(userId);return {ok:true,unreadCount:unread.count,revision:unread.revision};}
   async function createAddressedForMessage({roomId,messageId,creatorUserId,targetUserIds=[],replyTargetUserId=null,body='',client}={}) {
     const run=async(db)=>{
