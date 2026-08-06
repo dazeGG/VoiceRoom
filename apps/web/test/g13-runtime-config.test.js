@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import http from 'node:http';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -12,6 +14,10 @@ import {
 } from '@voice-room/shared/runtime-config';
 
 const repositoryRoot = fileURLToPath(new URL('../../../', import.meta.url));
+const caddyImage = 'caddy:2.11.3-alpine';
+const dockerAvailable = spawnSync('docker', ['version', '--format', '{{.Server.Version}}'], {
+  encoding: 'utf8'
+}).status === 0;
 
 function runtimePayload(wsUrl) {
   return JSON.stringify({
@@ -47,6 +53,57 @@ async function fetchEdgeConfig(origin, timeoutMs = 100) {
     clearTimeout(timer);
   }
 }
+
+async function startCaddyEdge(wsUrl) {
+  const name = `voiceroom-g13-${randomUUID()}`;
+  const caddyfile = path.join(repositoryRoot, 'Caddyfile');
+  const run = spawnSync('docker', [
+    'run', '-d', '--name', name,
+    '-e', 'DOMAIN=:80',
+    '-e', 'LIVEKIT_DOMAIN=:81',
+    '-e', `LIVEKIT_GATE_PUBLIC_URL=${wsUrl}`,
+    '-p', '127.0.0.1::80',
+    '-v', `${caddyfile}:/etc/caddy/Caddyfile:ro`,
+    caddyImage
+  ], { encoding: 'utf8' });
+  if (run.status !== 0) throw new Error(run.stderr || 'failed to start Caddy edge');
+
+  const mapping = spawnSync('docker', ['port', name, '80/tcp'], { encoding: 'utf8' });
+  const port = mapping.stdout.trim().match(/:(\d+)$/)?.[1];
+  if (!port) throw new Error(`missing Caddy port mapping: ${mapping.stderr}`);
+  const origin = `http://127.0.0.1:${port}`;
+
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    try {
+      const response = await fetch(`${origin}/runtime-config.json`);
+      if (response.ok) break;
+    } catch {}
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+
+  return {
+    name,
+    origin,
+    imageId: spawnSync('docker', ['image', 'inspect', caddyImage, '--format', '{{.Id}}'], { encoding: 'utf8' }).stdout.trim(),
+    close: () => { spawnSync('docker', ['rm', '-f', name], { encoding: 'utf8' }); }
+  };
+}
+
+test('G13-A01 the pinned Caddy image serves two runtime configs without rebuilding', {
+  skip: !dockerAvailable
+}, async (t) => {
+  const edgeA = await startCaddyEdge('wss://caddy-a.example.test');
+  t.after(edgeA.close);
+  const edgeB = await startCaddyEdge('wss://caddy-b.example.test');
+  t.after(edgeB.close);
+
+  const first = await fetchEdgeConfig(edgeA.origin, 1_000);
+  const second = await fetchEdgeConfig(edgeB.origin, 1_000);
+  assert.equal(first.livekit.wsUrl, 'wss://caddy-a.example.test/');
+  assert.equal(second.livekit.wsUrl, 'wss://caddy-b.example.test/');
+  assert.match(edgeA.imageId, /^sha256:/);
+  assert.equal(edgeA.imageId, edgeB.imageId);
+});
 
 test('G13-A01 one Web image contract serves distinct runtime configuration over real HTTP edges', async (t) => {
   const edgeA = await startEdge((_request, response) => {
