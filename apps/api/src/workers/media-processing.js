@@ -115,9 +115,9 @@ function createMediaProcessingWorker({
   }
 
   async function runOnce() {
+    observeOldestPending(await jobRepository.oldestPendingAgeMs());
     if (stopping || (pressureService && !await pressureService.canClaimWork())) return 0;
     const jobs = await jobRepository.claimBatch({ workerId, limit: batchSize, leaseMs });
-    observeOldestPending(jobs.length ? Math.max(...jobs.map((job) => Math.max(0, Date.now() - new Date(job.createdAt).getTime()))) : 0);
     for (let offset = 0; offset < jobs.length; offset += concurrency) {
       await Promise.all(jobs.slice(offset, offset + concurrency).map(processJob));
       if (stopping) break;

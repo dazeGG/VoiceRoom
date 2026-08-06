@@ -26,9 +26,9 @@ function createNotificationDeliveryWorker({ outbox, provider, batchSize=50, leas
     await outbox.recordHeartbeat({...lease,ready:true});
     while(guard.isOwned()) {
       guard.assertOwned();
+      observeOldestPending(await outbox.oldestPendingAgeMs());
       if(disabledReason){await outbox.recordHeartbeat({...lease,ready:false});await wait(idleMs,guard.signal);continue;}
       const jobs=await outbox.claimBatch({...lease,limit:batchSize,staleClaimMs:leaseMs});
-      observeOldestPending(jobs.length ? Math.max(...jobs.map((job)=>Math.max(0,Date.now()-new Date(job.createdAt).getTime()))) : 0);
       if(!jobs.length){await wait(idleMs,guard.signal);continue;}
       for(const job of jobs){
         guard.assertOwned();
