@@ -7,7 +7,7 @@ on:
         description: Checkpoint to verify
         required: true
         type: choice
-        options: [messaging, membership, engagement, media]
+        options: [messaging, membership, engagement, media, activation]
       evidence_file:
         description: Repository-relative immutable checkpoint JSON
         required: true
@@ -77,3 +77,15 @@ jobs:
       - run: npm ci
       - run: node --test scripts/test/g89-restore.test.mjs scripts/test/g90-media-checkpoint.test.mjs
       - run: node scripts/checkpoints/media.mjs --verify "${{ inputs.evidence_file }}"
+  activation:
+    if: inputs.checkpoint == 'activation'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@v4
+        with: { node-version-file: .nvmrc, cache: npm }
+      - run: npm ci
+      - run: node --test scripts/test/g92-activation-matrix.test.mjs
+      - run: node scripts/checkpoints/g92-activation-matrix.mjs --manifest config/capability-dag.v1.json --verify "${{ inputs.evidence_file }}"
