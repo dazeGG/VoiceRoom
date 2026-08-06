@@ -206,8 +206,9 @@ test('web recovery wiring pins replacement identity and correlates bounded resyn
   assert.match(roomRealtime, /voice-resync-\$\{appEpoch\}/);
   assert.match(roomRealtime, /pending\.attempts < 3/);
   assert.match(roomRealtime, /code: 'transport_error'/);
-  assert.match(roomRealtime, /event\.id === pending\.requestId/);
-  assert.match(roomRealtime, /event\.payload\.id === pending\.requestId/);
+  assert.match(roomRealtime, /pending\.currentRequestId = `\$\{pending\.requestId\}-attempt-\$\{pending\.attempts\}`/);
+  assert.match(roomRealtime, /event\.id === pending\.currentRequestId/);
+  assert.match(roomRealtime, /event\.payload\.id !== pending\.currentRequestId/);
   assert.match(livekit, /state\.sessionToken === sessionToken/);
   assert.match(livekit, /state\.localScreenStream === screenStream/);
   assert.match(livekit, /screenTrackIds/);

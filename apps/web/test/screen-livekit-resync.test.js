@@ -33,6 +33,8 @@ async function loadLiveKitService() {
     export const livekitClientState = {
       resolvers: []
     };
+    export const screenAttachments = [];
+    export const detachedScreens = [];
     export const startUi = () => {};
     export const setVoiceConnectionStatus = () => {};
     export const showToast = () => {};
@@ -94,8 +96,12 @@ async function loadLiveKitService() {
     export const createParticipant = (peerInfo) => {
       const existing = state.peers.get(peerInfo.id);
       if (existing) {
-        if (Object.hasOwn(peerInfo, 'screen')) existing.screen = Boolean(peerInfo.screen);
-        if (Object.hasOwn(peerInfo, 'screenAudio')) existing.screenAudio = Boolean(peerInfo.screenAudio);
+        if (Object.hasOwn(peerInfo, 'screen') && existing.screenAuthoritative !== false) {
+          existing.screen = Boolean(peerInfo.screen);
+        }
+        if (Object.hasOwn(peerInfo, 'screenAudio') && existing.screenAuthoritative !== false) {
+          existing.screenAudio = Boolean(peerInfo.screenAudio);
+        }
         return existing;
       }
       const peer = { ...peerInfo, screen: Boolean(peerInfo.screen), screenAudio: Boolean(peerInfo.screenAudio) };
@@ -103,12 +109,21 @@ async function loadLiveKitService() {
       return peer;
     };
     export const applyRemoteScreenCue = () => {};
-    export const attachRemoteScreenStream = () => {};
+    export const attachRemoteScreenStream = (peer, stream) => {
+      screenAttachments.push({ peer, stream });
+      peer.screen = true;
+      peer.screenStream = stream;
+    };
     export const attachRemoteTrack = () => {};
     export const ensureRemoteAudioElement = () => null;
     export const detachLiveKitParticipant = () => {};
     export const detachRemoteAudioTrack = () => {};
-    export const detachRemoteScreen = () => {};
+    export const detachRemoteScreen = (peer) => {
+      detachedScreens.push(peer.id);
+      peer.screen = false;
+      peer.screenAudio = false;
+      peer.screenStream = null;
+    };
     export const detachRemoteScreenAudioTrack = () => {};
     export const detachRemoteScreenVideoTrack = () => {};
     export const detachRemoteScreenVideoTracks = () => {};
@@ -136,6 +151,8 @@ async function loadLiveKitService() {
   return {
     service: await import(moduleUrl(output)),
     livekitClientState: (await import(stubUrl)).livekitClientState,
+    screenAttachments: (await import(stubUrl)).screenAttachments,
+    detachedScreens: (await import(stubUrl)).detachedScreens,
     state: (await import(stubUrl)).state
   };
 }
@@ -215,4 +232,54 @@ test('async quality demand ignores a screen publication replaced under the same 
 
   assert.equal(peer.livekitParticipant, participant);
   assert.deepEqual(qualityCalls, []);
+});
+
+test('late screen subscription cannot override authoritative screen stop', async () => {
+  const { detachedScreens, screenAttachments, service, state } = await loadLiveKitService();
+  const subscriptionCalls = [];
+  const existing = {
+    id: 'peer-late-screen',
+    screen: false,
+    screenAudio: false,
+    screenAuthoritative: false,
+    screenStream: null,
+    voiceIssue: ''
+  };
+  state.peers.set(existing.id, existing);
+  state.viewedScreenPeerId = existing.id;
+
+  const mediaStream = { id: 'late-screen-stream' };
+  const screenPublication = {
+    isDesired: true,
+    isMuted: false,
+    isSubscribed: true,
+    setSubscribed(subscribed) {
+      subscriptionCalls.push(subscribed);
+      this.isDesired = subscribed;
+    },
+    source: 'screen-video',
+    track: {
+      mediaStream,
+      mediaStreamTrack: { id: 'late-screen-track', readyState: 'live' }
+    },
+    trackSid: 'late-screen-sid'
+  };
+  const participant = {
+    identity: existing.id,
+    isLocal: false,
+    isScreenShareEnabled: true,
+    joinedAt: new Date(0),
+    name: 'Late screen sender',
+    trackPublications: new Map([[screenPublication.trackSid, screenPublication]])
+  };
+
+  const synced = service.syncLiveKitParticipant(participant);
+
+  assert.equal(synced, existing);
+  assert.deepEqual(screenAttachments, []);
+  assert.deepEqual(detachedScreens, [existing.id]);
+  assert.equal(subscriptionCalls.at(-1), false);
+  assert.equal(existing.screen, false);
+  assert.equal(existing.screenAudio, false);
+  assert.equal(existing.screenStream, null);
 });

@@ -940,6 +940,16 @@ function handleLiveKitTrackSubscribed(
   updateLiveKitPublicationState(peer, publication);
 
   const mediaTrack = track.mediaStreamTrack;
+  if (
+    peer.screenAuthoritative === false &&
+    (isScreenVideoPublication(publication) || isScreenAudioPublication(publication))
+  ) {
+    clearScreenSubscriptionRetry(publication);
+    publication.setSubscribed(false);
+    detachRemoteScreen(peer);
+    return;
+  }
+
   const stream = track.mediaStream || new MediaStream([mediaTrack]);
   if (isScreenVideoPublication(publication)) {
     screenRecoveryGrace.cancel(peer.id);

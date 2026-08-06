@@ -61,9 +61,22 @@ let activeVoiceJoin: {
 let restoreHooked = false;
 let lastRestoreEpoch = 0;
 let lastActiveResyncKey = '';
-let activeResync: { key: string; requestId: string; attempts: number; timer: ReturnType<typeof setTimeout> | null } | null = null;
+let activeResync: {
+  key: string;
+  requestId: string;
+  currentRequestId: string;
+  requestIds: Set<string>;
+  attempts: number;
+  timer: ReturnType<typeof setTimeout> | null;
+} | null = null;
 let activeResyncSequence = 0;
 let activeResyncFailureHandler: ((failure: { code: string; requestId: string }) => void) | null = null;
+const retryableActiveResyncErrors = new Set([
+  'network_error',
+  'reconnect_finalize_failed',
+  'superseded_join',
+  'transport_error'
+]);
 
 function clearActiveResync(): void {
   if (activeResync?.timer) clearTimeout(activeResync.timer);
@@ -74,7 +87,9 @@ function sendActiveResyncAttempt(): void {
   if (!activeResync || !activeVoiceJoin) return;
   const pending = activeResync;
   pending.attempts += 1;
-  getAppRealtime().send('room.join', activeVoiceJoin, pending.requestId);
+  pending.currentRequestId = `${pending.requestId}-attempt-${pending.attempts}`;
+  pending.requestIds.add(pending.currentRequestId);
+  getAppRealtime().send('room.join', activeVoiceJoin, pending.currentRequestId);
   pending.timer = setTimeout(() => {
     if (activeResync !== pending) return;
     if (pending.attempts < 3) {
@@ -82,8 +97,12 @@ function sendActiveResyncAttempt(): void {
       return;
     }
     clearActiveResync();
-    activeResyncFailureHandler?.({ code: 'transport_error', requestId: pending.requestId });
+    activeResyncFailureHandler?.({ code: 'transport_error', requestId: pending.currentRequestId });
   }, 1_000 * 2 ** (pending.attempts - 1));
+}
+
+function isRetryableActiveResyncError(code: string): boolean {
+  return retryableActiveResyncErrors.has(code);
 }
 
 export function setActiveVoiceResyncFailureHandler(handler: ((failure: { code: string; requestId: string }) => void) | null): void {
@@ -95,16 +114,25 @@ export function acknowledgeActiveVoiceResync(event: RealtimeEvent): boolean {
   if (!pending) return false;
   if (
     event.type === 'room.snapshot'
-    && event.id === pending.requestId
+    && pending.requestIds.has(event.id || '')
+    && event.id === pending.currentRequestId
     && event.payload.mode === 'active'
     && event.payload.roomId === activeVoiceJoin?.roomId
   ) {
     clearActiveResync();
     return true;
   }
-  if (event.type === 'error' && event.payload.id === pending.requestId) {
+  if (event.type === 'room.snapshot' && pending.requestIds.has(event.id || '')) return true;
+  if (event.type === 'error' && pending.requestIds.has(event.payload.id || '')) {
+    if (event.payload.id !== pending.currentRequestId) return true;
+    if (isRetryableActiveResyncError(event.payload.code) && pending.attempts < 3) {
+      if (pending.timer) clearTimeout(pending.timer);
+      pending.timer = null;
+      sendActiveResyncAttempt();
+      return true;
+    }
     clearActiveResync();
-    activeResyncFailureHandler?.({ code: event.payload.code, requestId: pending.requestId });
+    activeResyncFailureHandler?.({ code: event.payload.code, requestId: pending.currentRequestId });
     return true;
   }
   return false;
@@ -260,6 +288,8 @@ export function requestActiveVoiceResync(recoveryEpoch: number, appEpoch: number
   activeResync = {
     key,
     requestId: `voice-resync-${appEpoch}-${++activeResyncSequence}`,
+    currentRequestId: '',
+    requestIds: new Set(),
     attempts: 0,
     timer: null
   };

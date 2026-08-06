@@ -335,6 +335,8 @@ function isRemoteScreenTrack(peer: Participant, track: MediaStreamTrack, stream:
 }
 
 export function attachRemoteScreenStream(peer: Participant, stream: MediaStream): void {
+  if (peer.screenAuthoritative === false) return;
+
   const screenStream = mergeRemoteScreenStream(peer, stream);
   const hasVideo = screenStream.getVideoTracks().some((track) => track.readyState !== 'ended');
   peer.screen = peer.screen || hasVideo;
