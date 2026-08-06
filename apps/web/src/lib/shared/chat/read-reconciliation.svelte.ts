@@ -9,6 +9,10 @@ export function createReadReconciliation(options: ReadReconciliationOptions) {
   let pending: string | undefined;
   let active: Promise<void> | null = null;
   let committed = '';
+  let sequence = 0;
+  const source = crypto.randomUUID();
+  const seen = new Set<string>();
+  const sourceSequences = new Map<string, number>();
   const channelName = `voice-room:read:${options.scope}`;
   const channel = typeof BroadcastChannel === 'undefined' ? null : new BroadcastChannel(channelName);
 
@@ -20,7 +24,11 @@ export function createReadReconciliation(options: ReadReconciliationOptions) {
       try {
         const accepted = await options.commit(options.legacy ? undefined : candidate);
         committed = typeof accepted === 'string' && accepted ? accepted : candidate || committed;
-        if (committed) channel?.postMessage({ cursor: committed });
+        if (candidate) seen.add(candidate);
+        if (committed) {
+          seen.add(committed);
+          channel?.postMessage({ cursor: committed, sequence: ++sequence, source });
+        }
       } catch {
         if (pending === undefined) pending = candidate;
         break;
@@ -37,12 +45,17 @@ export function createReadReconciliation(options: ReadReconciliationOptions) {
     return active;
   }
 
-  channel?.addEventListener('message', (event: MessageEvent<{ cursor?: unknown }>) => {
+  channel?.addEventListener('message', (event: MessageEvent<{ cursor?: unknown; sequence?: unknown; source?: unknown }>) => {
     const cursor = typeof event.data?.cursor === 'string' ? event.data.cursor : '';
-    // Opaque cursors are intentionally not ordered in the browser. Once this
-    // tab has an acknowledged cursor, a foreign cursor cannot safely advance
-    // it; account realtime/resync remains the authority for cross-tab state.
-    if (!cursor || committed) return;
+    const remoteSource = typeof event.data?.source === 'string' ? event.data.source : '';
+    const remoteSequence = Number(event.data?.sequence);
+    if (!cursor || cursor === committed || seen.has(cursor)) return;
+    // Cursor payloads are opaque. Order the transport envelope per sender and
+    // let the server's monotonic read cursor reject cross-sender stale values.
+    if (remoteSource && Number.isSafeInteger(remoteSequence) && remoteSequence > 0) {
+      if (remoteSequence <= (sourceSequences.get(remoteSource) || 0)) return;
+      sourceSequences.set(remoteSource, remoteSequence);
+    }
     void advanceAfterRender(cursor);
   });
 
