@@ -9,6 +9,7 @@ function createMediaPressureService({
   checkIntervalMs = 5_000,
   minFreeBytes = DEFAULT_MIN_FREE_BYTES,
   recoveryBytes = DEFAULT_RECOVERY_BYTES,
+  replicaConsensus = () => true,
   statfs = fs.statfs,
   storagePath
 } = {}) {
@@ -25,11 +26,13 @@ function createMediaPressureService({
         const stats = await statfs(storagePath);
         const freeBytes = Number(stats.bavail) * Number(stats.bsize);
         const threshold = snapshot.healthy ? minFreeBytes : minFreeBytes + recoveryBytes;
+        const replicasAgree = (await replicaConsensus()) === true;
+        const localHealthy = Number.isFinite(freeBytes) && freeBytes >= threshold;
         snapshot = Object.freeze({
           checkedAt: Date.now(),
           freeBytes,
-          healthy: Number.isFinite(freeBytes) && freeBytes >= threshold,
-          reason: Number.isFinite(freeBytes) && freeBytes >= threshold ? 'ready' : 'low_disk_space'
+          healthy: localHealthy && replicasAgree,
+          reason: !replicasAgree ? 'replica_disagreement' : localHealthy ? 'ready' : 'low_disk_space'
         });
       } catch {
         snapshot = Object.freeze({ checkedAt: Date.now(), freeBytes: 0, healthy: false, reason: 'storage_unavailable' });

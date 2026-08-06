@@ -565,7 +565,8 @@ function getMediaServices() {
   const storage = createMediaStorage({ rootDir: process.env.MEDIA_STORAGE_DIR || '/data/media' });
   const pressure = createMediaPressureService({
     storagePath: storage.root,
-    minFreeBytes: readEnvInt('MEDIA_MIN_FREE_BYTES', 2 * 1024 * 1024 * 1024, 1)
+    minFreeBytes: readEnvInt('MEDIA_MIN_FREE_BYTES', 2 * 1024 * 1024 * 1024, 1),
+    replicaConsensus: () => readinessProvider.getSnapshot()?.replicaConsensus === true
   });
   const attachments = createAttachmentRepository({ pool });
   const jobs = createMediaJobRepository({ pool });
@@ -623,7 +624,6 @@ function publicAttachment(attachment) {
   return {
     id: attachment.id,
     context: attachment.context,
-    ownerId: attachment.ownerId,
     order: attachment.order,
     mimeType: attachment.mimeType,
     bytes: attachment.processedBytes || attachment.originalBytes,
