@@ -50,7 +50,7 @@ const {
   observeMaintenance,
   recordCredentialRevokeCleanupFailure,
   recordHttpRequest,
-  recordMediaAuthorizationDenialFailure,
+  recordMediaAuthorizationInvariantFailure,
   recordMediaPressure,
   renderPrometheus
 } = require('./lib/metrics');
@@ -612,7 +612,7 @@ function getMediaServices() {
       );
       return result.rowCount === 1;
     },
-    onAuthorizationDenial: recordMediaAuthorizationDenialFailure
+    onAuthorizationInvariantFailure: recordMediaAuthorizationInvariantFailure
   });
   mediaServices = { attachments, jobs, pressure, quota, service, storage, visibility };
   return mediaServices;

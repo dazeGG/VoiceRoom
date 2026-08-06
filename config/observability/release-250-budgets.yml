@@ -11,5 +11,5 @@ groups:
         expr: voice_room_media_oldest_pending_seconds > 900
         for: 1m
       - alert: VoiceRoomMediaAuthorizationLeak
-        expr: increase(voice_room_media_authorization_denial_failures_total[5m]) > 0
+        expr: increase(voice_room_media_authorization_invariant_failures_total[5m]) > 0
         for: 0m

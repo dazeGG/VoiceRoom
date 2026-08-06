@@ -141,6 +141,7 @@ services:
   notification-delivery:
     image: ${VOICEROOM_WORKER_IMAGE:?set immutable VOICEROOM_WORKER_IMAGE digest}
     restart: on-failure
+    expose: ["9464"]
     depends_on:
       postgres:
         condition: service_healthy
@@ -156,10 +157,12 @@ services:
       VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
       VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
       VAPID_SUBJECT: ${VAPID_SUBJECT:-}
+      WORKER_METRICS_PORT: 9464
 
   media-processing:
     image: ${VOICEROOM_WORKER_IMAGE:?set immutable VOICEROOM_WORKER_IMAGE digest}
     restart: on-failure
+    expose: ["9464"]
     depends_on:
       postgres:
         condition: service_healthy
@@ -173,6 +176,7 @@ services:
       DATABASE_URL: ${DATABASE_URL:-postgres://${POSTGRES_USER:-voice_room}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-voice_room}}
       MEDIA_STORAGE_DIR: /data/media
       MEDIA_PROCESSING_CLAIM_ENABLED: ${MEDIA_PROCESSING_CLAIM_ENABLED:-false}
+      WORKER_METRICS_PORT: 9464
     volumes:
       - media:/data/media
 
