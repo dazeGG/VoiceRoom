@@ -32,6 +32,15 @@
     "observationMinutes": 0,
     "verifiedAt": null
   },
+  "g50MembershipCheckpoint": {
+    "contract": "voice-room.membership-checkpoint/v1",
+    "runner": "scripts/checkpoints/membership.mjs",
+    "test": "scripts/test/g50-membership-checkpoint.test.mjs",
+    "status": "PENDING_EXTERNAL_STAGING",
+    "checkpointArtifactId": null,
+    "observationMinutes": 0,
+    "verifiedAt": null
+  },
   "archiveAuthority": "archive-authority.json",
   "archiveMap": "archive-map.json",
   "archiveLedger": "archive-ledger.json",
