@@ -31,6 +31,7 @@
   let activeIndex = $state(0);
   let frequentEmoji = $state<string[]>([...DEFAULT_FREQUENT_REACTIONS]);
   let grid: HTMLDivElement | null = $state(null);
+  let searchInput: HTMLInputElement | null = $state(null);
   const options = $derived.by(() => {
     const query = search.trim();
     if (!query) return ALL_EMOJI;
@@ -46,6 +47,11 @@
     return () => {
       cancelled = true;
     };
+  });
+
+  $effect(() => {
+    if (!open) return;
+    void tick().then(() => searchInput?.focus());
   });
 
   async function focusOption(index: number): Promise<void> {
@@ -118,7 +124,7 @@
         <div class="reaction-picker">
           <label>
             <span class="sr-only">Поиск эмодзи</span>
-            <input bind:value={search} type="search" placeholder="Найти эмодзи" oninput={() => (activeIndex = 0)} />
+            <input bind:this={searchInput} bind:value={search} type="search" placeholder="Найти эмодзи" oninput={() => (activeIndex = 0)} />
           </label>
           <div class="emoji-grid" role="grid" tabindex="-1" aria-label="Доступные реакции" bind:this={grid} onkeydown={gridKeydown}>
             {#each options as emoji, index (emoji)}

@@ -13,7 +13,6 @@
     canMutate?: boolean;
   } = $props();
 
-  let openEmoji = $state('');
   const summaries = $derived(store.forMessage(messageId));
 </script>
 
@@ -34,24 +33,19 @@
           <span class="reaction-toggle" aria-hidden="true">{summary.emoji}</span>
         {/if}
         <Popover
-          open={openEmoji === summary.emoji}
-          onBeforeClose={() => { openEmoji = ''; }}
           placement="top-start"
           role="dialog"
           ariaLabel={`Пользователи с реакцией ${summary.emoji}`}
         >
-          {#snippet trigger({ toggle, panelId })}
+          {#snippet trigger({ open, toggle, panelId })}
             <button
               class="reaction-count"
               type="button"
               aria-label={`Показать пользователей: ${summary.count}`}
               aria-haspopup="dialog"
-              aria-expanded={openEmoji === summary.emoji}
+              aria-expanded={open}
               aria-controls={panelId}
-              onclick={() => {
-                openEmoji = openEmoji === summary.emoji ? '' : summary.emoji;
-                toggle();
-              }}
+              onclick={toggle}
             >{summary.count}</button>
           {/snippet}
           {#snippet content({ close })}
