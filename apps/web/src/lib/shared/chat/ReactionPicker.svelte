@@ -103,6 +103,7 @@
     <Popover
       bind:open
       placement="top-start"
+      flip
       role="dialog"
       ariaLabel="Выбор реакции"
       onBeforeClose={() => { search = ''; }}
@@ -146,9 +147,9 @@
 {/if}
 
 <style>
-  .reaction-quick-actions { display: flex; align-items: stretch; border-right: 1px solid rgba(255, 255, 255, .12); }
-  .reaction-quick-trigger, .reaction-picker-trigger { min-width: 40px; min-height: 36px; border: 0; border-radius: 0; background: transparent; color: inherit; cursor: pointer; }
-  .reaction-quick-trigger { font-size: 1.05rem; }
+  .reaction-quick-actions { display: flex; align-items: stretch; overflow: visible; border-radius: 6px 0 0 6px; background: var(--warm-800); }
+  .reaction-quick-trigger, .reaction-picker-trigger { width: 32px; height: 32px; border: 0; border-right: 1px solid rgba(255, 255, 255, .08); border-radius: 0; padding: 0; background: var(--warm-800); color: inherit; cursor: pointer; }
+  .reaction-quick-trigger { font-size: .95rem; }
   .reaction-picker-trigger { color: color-mix(in oklch, currentColor, transparent 42%); }
   .reaction-quick-trigger:hover, .reaction-quick-trigger:focus-visible,
   .reaction-picker-trigger:hover, .reaction-picker-trigger:focus-visible { background: color-mix(in oklch, var(--paper), var(--ink) 10%); color: inherit; outline: none; }

@@ -22,7 +22,7 @@
 </div>
 
 <style>
-  .mention-menu { position: absolute; z-index: 20; display: grid; width: min(320px, 90vw); max-height: 280px; overflow: auto; padding: 6px; border: 1px solid var(--line); border-radius: 12px; background: var(--paper); box-shadow: var(--shadow); }
+  .mention-menu { position: absolute; z-index: 20; left: 18px; right: 18px; bottom: calc(100% - 8px); display: grid; width: auto; max-height: 280px; overflow: auto; padding: 6px; border: 1px solid var(--line); border-radius: 12px; background: var(--paper); box-shadow: var(--shadow); }
   button { display: grid; gap: 2px; padding: 8px 10px; border: 0; border-radius: 8px; background: transparent; color: inherit; text-align: left; }
   button.active, button:hover { background: color-mix(in oklch, var(--paper), var(--ink) 8%); }
   small { color: var(--muted); }

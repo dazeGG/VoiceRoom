@@ -34,6 +34,7 @@
         {/if}
         <Popover
           placement="top-start"
+          flip
           role="dialog"
           ariaLabel={`Пользователи с реакцией ${summary.emoji}`}
         >
@@ -59,13 +60,13 @@
 {/if}
 
 <style>
-  .reaction-summary { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 5px; }
-  .reaction-chip { display: inline-flex; align-items: stretch; min-height: 34px; overflow: visible; border: 1px solid color-mix(in oklch, currentColor, transparent 82%); border-radius: 999px; background: color-mix(in oklch, currentColor, transparent 94%); }
+  .reaction-summary { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; }
+  .reaction-chip { display: inline-flex; align-items: center; height: 26px; overflow: visible; border: 1px solid color-mix(in oklch, currentColor, transparent 82%); border-radius: 8px; background: color-mix(in oklch, currentColor, transparent 94%); }
   .reaction-chip.reacted { border-color: var(--green); background: color-mix(in oklch, var(--green), transparent 88%); }
   .reaction-chip.pending { opacity: .65; }
-  button { min-width: 34px; border: 0; background: transparent; color: inherit; cursor: pointer; }
+  button { min-width: 0; height: 24px; border: 0; background: transparent; color: inherit; line-height: 1; cursor: pointer; }
   button:disabled { cursor: default; }
-  .reaction-toggle { display: grid; place-items: center; padding: 4px 5px 4px 9px; font-size: 1rem; }
-  .reaction-count { padding: 4px 9px 4px 4px; font-variant-numeric: tabular-nums; }
+  .reaction-toggle { display: grid; place-items: center; padding: 1px 3px 1px 7px; font-size: .9rem; }
+  .reaction-count { min-width: 20px; padding: 1px 7px 1px 2px; font-family: var(--font-mono); font-size: 11px; font-variant-numeric: tabular-nums; }
   .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 </style>

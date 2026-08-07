@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ChevronRight, Copy, MessageSquare, Pencil, Trash2, Users } from '@lucide/svelte';
+  import { ChevronRight, Copy, MessageSquare, Pencil, Reply, Trash2, Users } from '@lucide/svelte';
   import { iconSm } from '$lib/shared/ui/icons';
   import { onMount, tick } from 'svelte';
   import { deleteRoomChatMessage, editRoomChatMessage, fetchRoomChat, fetchRoomChatPage, markRoomChatRead, postRoomChat, type ChatMessage } from '$lib/api/rooms';
@@ -206,6 +206,7 @@
     const query = mentionComposer.update(draft, composeEl.selectionStart ?? draft.length);
     if (!query && !draft.slice(0, composeEl.selectionStart ?? draft.length).endsWith('@')) return;
     await loadRoomMembership(roomId, { query });
+    if (mentionComposer.query !== query) return;
     mentionComposer.setCandidates(getRoomMembership(roomId).members.filter((member) => member.userId !== session.user?.id));
   }
 
@@ -825,7 +826,7 @@
                   {#if message.attachments?.length}<AttachmentMosaic attachments={message.attachments} />{/if}
                   <div class="chat-msg-actions" role="toolbar" aria-label="Действия с сообщением">
                     {#if reactionsEnabled && session.user?.id}<ReactionPicker store={reactions} messageId={message.id} userId={session.user.id} />{/if}
-                    {#if repliesEnabled}<button type="button" aria-label="Ответить" title="Ответить" onclick={() => { replyTarget = message; composeEl?.focus(); }}><MessageSquare {...iconSm} /></button>{/if}
+                    {#if repliesEnabled}<button type="button" aria-label="Ответить" title="Ответить" onclick={() => { replyTarget = message; composeEl?.focus(); }}><Reply {...iconSm} /></button>{/if}
                     <button type="button" aria-label="Копировать текст" title="Копировать текст" onclick={() => void copyMessageText(message)}><Copy {...iconSm} /></button>
                     {#if group.self}
                       <button type="button" aria-label="Редактировать" title="Редактировать" onclick={() => startEditing(message)}><Pencil {...iconSm} /></button>
