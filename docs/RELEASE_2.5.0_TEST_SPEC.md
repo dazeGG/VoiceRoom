@@ -1,12 +1,14 @@
 # VoiceRoom 2.5.0 unified — verification and release evidence specification
 
-**Status:** Planner revision 7 repaired pair for Architect re-review; planning only.  
+**Status:** active implementation verification under the user-authorized consolidated integration amendment; PR #114 remains blocked until exact-head code and architecture approval.
 **Companion:** `.omx/plans/prd-release-2-5-0-unified.md`.  
 **Tracked execution target after G01:** `docs/RELEASE_2.5.0_TEST_SPEC.md`.  
 **Baseline:** `develop` `02d78bcf06e364aed0e72ed7216b4f12aa8809ad`; production `v2.4.2` `6cd4b30ceea044fa9c0d0e279c82f4e5cd5668bd`.  
 **Evidence rule:** a green command without exact SHA, environment, artifact checksum, review identities and prerequisite state is diagnostic, not a merge or release gate.
 
 > **Execution amendment (2026-07-20):** G01–G93 remain named verification slices, not separate PRs. `docs/RELEASE_2.5.0_EXECUTION_PLAN.md` groups them into nine delivery branches. Targeted tests still run at their named slice; exact-head review, repository gates and merge evidence close once per delivery branch, with the existing G42/G50/G71/G90 and final release gates retained.
+
+> **Consolidated integration amendment (2026-08-07):** `docs/releases/2.5.0/amendments/CONSOLIDATED-INTEGRATION.json` supersedes the nine-PR delivery shape with the user-directed single branch and PR #114. It does not waive any G01–G93 acceptance criterion, hostile fixture, immutable external observation, checkpoint or RC gate. One exact-head code-reviewer/architect loop closes the develop PR; mutation restarts both lanes.
 
 ## 1. Verification outcome and non-negotiable truths
 
@@ -600,4 +602,5 @@ Missing/unprovable pre-G01 authority (before lineage); fabricated/relabelled boo
 - **Revision 6 checkpoint 2 — 2026-07-18 Planner repair:** extended deterministic literal card/trace paths through G63 without changing the blocker contracts or earlier card semantics. G64–G93 remain explicit pending work and no implementation is authorized.
 - **Revision 6 checkpoint 3/final Planner pass — 2026-07-18:** completed all 93 literal card/trace catalogs, removed pending markers, closed G43 conditional-schema ambiguity, bound G47 mechanism shape to exact files and retained G93 supersession ancestry. The pair requires and records exhaustive secondary-path, mutation and deterministic-regeneration proof before Architect review.
 - **Revision 7 Architect-blocker repair — 2026-07-18:** made the four G01 states a total current-attempt partition; placed historical abandonment and unconsumed preparation in PRE_BRANCH with deterministic cleanup; made first PR/run ID the atomic active transition; removed predicted future fields from tracked candidates; added strictly post-F11 external selection, exact recovery catalogs/commands, G02 terminal disjunction, G03 archive and late G93 summary semantics while retaining exactly 93 canonical cards/traces, their literal-catalog guarantee and the 9/10/15 DAG.
-- **Pending consensus:** a fresh role-specific Architect must approve this PRD/spec pair; only afterward may a sequential role-specific Critic return `APPROVE`. This file authorizes no implementation, branch, PR, merge, tag, release or deployment.
+- **Revision 8 — 2026-08-07 consolidated integration verification:** recorded the explicit one-branch user authority, exact-head PR review gate, inherited-migration checksum policy, live runtime heartbeat/replica proof, generalized exact-head evidence producer and descendant-safe G03 archive recovery. No external observation is treated as green by this amendment.
+- **Develop merge authority:** this specification permits PR #114 to merge to `develop` only after code-reviewer `APPROVE`, architect `CLEAR`, green required checks and an unchanged reviewed head. Release branch, `main`, tag, release and production deployment remain unauthorized here.
