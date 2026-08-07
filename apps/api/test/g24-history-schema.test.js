@@ -4,9 +4,10 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { test } = require('node:test');
 
-test('G24-A01 history indexes are additive tuple indexes with a five-second lock budget', () => {
+test('G24-A01 history indexes are additive tuple indexes under the runner lock budget', () => {
   const source = fs.readFileSync(path.resolve(__dirname, '../src/migrations/20260718121000_add_message_history_cursor_indexes.js'), 'utf8');
-  assert.match(source, /SET LOCAL lock_timeout = '5s'/);
+  const runner = fs.readFileSync(path.resolve(__dirname, '../src/lib/migrate.js'), 'utf8');
+  assert.match(runner, /SET lock_timeout TO '\$\{LOCK_TIMEOUT_MS\}ms'/);
   assert.match(source, /sender_id, recipient_id, created_at DESC, id DESC/);
   assert.match(source, /recipient_id, sender_id, created_at DESC, id DESC/);
   assert.match(source, /WHERE deleted_at IS NULL/g);

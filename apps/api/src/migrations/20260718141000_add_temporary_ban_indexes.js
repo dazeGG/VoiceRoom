@@ -3,7 +3,6 @@
 exports.shorthands = undefined;
 
 exports.up = (pgm) => {
-  pgm.sql("SET LOCAL lock_timeout = '5s'");
   pgm.addColumns('room_bans', {
     reason: { type: 'varchar(500)', notNull: true, default: '' },
     idempotency_key: { type: 'varchar(128)' },
@@ -22,7 +21,6 @@ exports.up = (pgm) => {
 };
 
 exports.down = (pgm) => {
-  pgm.sql("SET LOCAL lock_timeout = '5s'");
   pgm.dropIndex('room_bans', [], { name: 'room_bans_idempotency_idx' });
   pgm.dropIndex('room_bans', [], { name: 'room_bans_active_page_idx' });
   pgm.dropColumns('room_bans', ['revoked_at', 'updated_at', 'idempotency_key', 'reason']);

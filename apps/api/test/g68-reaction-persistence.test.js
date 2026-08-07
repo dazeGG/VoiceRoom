@@ -43,8 +43,8 @@ test('G68-A01 desired-state rows are unique, idempotent, monotonic and applicati
     throw new Error('rollback');
   }), /rollback/);
   assert.equal((await pool.query(`SELECT count(*)::int AS count FROM room_message_reactions WHERE emoji = '👩🏽‍💻'`)).rows[0].count, 0);
-  const migration = fs.readFileSync(require.resolve('../src/migrations/20260718135000_create_message_reactions.js'), 'utf8');
-  assert.match(migration, /lock_timeout = '5s'/);
+  const migrationRunner = fs.readFileSync(require.resolve('../src/lib/migrate.js'), 'utf8');
+  assert.match(migrationRunner, /SET lock_timeout TO '\$\{LOCK_TIMEOUT_MS\}ms'/);
 });
 
 test('G68-A02 same-microsecond 10k reactor pagination is stable and index-backed', { skip: !process.env.TEST_DATABASE_URL, timeout: 120000 }, async (t) => {

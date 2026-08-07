@@ -17,5 +17,6 @@ test('G32-A02 schema keeps immutable pointers without purge-cascade foreign keys
   assert.match(source, /reply_to_message_id is immutable/);
   assert.match(source, /BEFORE UPDATE OF reply_to_message_id/);
   assert.doesNotMatch(source, /references|ON DELETE CASCADE/i);
-  assert.match(source, /SET LOCAL lock_timeout = '5s'/);
+  const runner = fs.readFileSync(path.resolve(__dirname, '../src/lib/migrate.js'), 'utf8');
+  assert.match(runner, /SET lock_timeout TO '\$\{LOCK_TIMEOUT_MS\}ms'/);
 });

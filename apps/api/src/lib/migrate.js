@@ -209,6 +209,7 @@ async function runMigrations({
 
     await setMigrationGuardState(client, MIGRATION_GUARD_STATES.running, `direction=${direction},dir=${path.basename(dir)}`);
     migrationStarted = true;
+    await query(client, `SET lock_timeout TO '${LOCK_TIMEOUT_MS}ms'`);
 
     const migrations = await migrationRunner({
       dbClient: client,
@@ -237,6 +238,9 @@ async function runMigrations({
     }
     throw error;
   } finally {
+    if (locked) {
+      await query(client, 'SET lock_timeout TO 0').catch(() => {});
+    }
     if (locked) {
       await releaseMigrationLock(client, lockValue);
     }

@@ -33,7 +33,7 @@ class FakeClient {
   async query(text, values = []) {
     const sql = text.replace(/\s+/g, ' ').trim();
     this.queries.push({ sql, values });
-    if (sql.startsWith('SET statement_timeout')) return { rows: [] };
+    if (sql.startsWith('SET statement_timeout') || sql.startsWith('SET lock_timeout')) return { rows: [] };
     if (sql.includes('pg_advisory_lock')) {
       if (this.lockTimeout) {
         const error = new Error('canceling statement due to statement timeout');
@@ -95,6 +95,8 @@ test('G15-A01 serial runner holds the fence through migration completion and sup
   });
   assert.deepEqual(result, []);
   assert.equal(observedRunning, true);
+  assert.ok(client.queries.some(({ sql }) => sql === "SET lock_timeout TO '5000ms'"));
+  assert.ok(client.queries.some(({ sql }) => sql === 'SET lock_timeout TO 0'));
   assert.equal(client.guardState, MIGRATION_GUARD_STATES.clean);
   assert.equal(client.lockHeld, false);
 });

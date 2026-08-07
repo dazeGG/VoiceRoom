@@ -3,7 +3,6 @@
 exports.shorthands = undefined;
 
 exports.up = (pgm) => {
-  pgm.sql("SET LOCAL lock_timeout = '5s'");
   pgm.sql(`
     ALTER TABLE room_chat_reads
       ADD COLUMN IF NOT EXISTS last_read_message_created_at timestamptz,
