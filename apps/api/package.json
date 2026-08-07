@@ -7,7 +7,7 @@
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
     "check": "node ../../scripts/check-js-syntax.mjs src test/db-harness.js test/require-test-database-url.js",
-    "test": "node --test test/*.test.js",
+    "test": "node --test --test-concurrency=1 test/*.test.js",
     "test:g05": "node --test test/g05-livekit-boundary.test.js",
     "db:migrate": "node src/scripts/migrate.js up",
     "db:rollback": "node src/scripts/migrate.js down",
