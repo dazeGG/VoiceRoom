@@ -1,6 +1,7 @@
 'use strict';
 
 const { startWorkerMetricsServer } = require('../lib/worker-metrics-server');
+const { startWorkerHeartbeat } = require('../platform/worker-heartbeat');
 
 const workers = Object.freeze({
   'media-maintenance': require('./media-maintenance').main,
@@ -17,7 +18,12 @@ async function main(env = process.env) {
     throw new Error(`VOICE_ROOM_WORKER must be one of: ${Object.keys(workers).join(', ')}`);
   }
   const metrics = await startWorkerMetricsServer({ host: env.WORKER_METRICS_HOST || '0.0.0.0', port: Number(env.WORKER_METRICS_PORT || 9464) });
-  try { await run(env); } finally { await metrics.close(); }
+  const heartbeat = await startWorkerHeartbeat({ env, workerName });
+  try { await run(env); }
+  finally {
+    await heartbeat.close();
+    await metrics.close();
+  }
 }
 
 if (require.main === module) {

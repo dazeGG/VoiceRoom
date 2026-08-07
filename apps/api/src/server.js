@@ -102,7 +102,7 @@ const { createMediaService, MAX_UPLOAD_BYTES } = require('./domains/media/media-
 const { createMediaVisibilityService } = require('./domains/media/media-visibility-service');
 const { registerMediaRoutes } = require('./domains/media/media-routes');
 const { createCursorCodec } = require('./platform/cursor-codec');
-const { createReadinessProvider } = require('./platform/readiness');
+const { createRuntimeReadinessProvider } = require('./platform/runtime-readiness');
 const { registerCapabilityRoutes } = require('./platform/capability-routes');
 const { mentionUserIdsFromContent } = require('@voice-room/shared/mentions');
 
@@ -155,8 +155,18 @@ function readinessReadySetFromEnv(name) {
   return new Set(raw.split(',').map((item) => item.trim()).filter(Boolean));
 }
 
-const readinessProvider = createReadinessProvider({
+const CAPABILITY_API_REPLICA_ID = (process.env.CAPABILITY_API_REPLICA_ID || process.env.HOSTNAME || 'api-primary').trim();
+const CAPABILITY_EXPECTED_API_REPLICA_IDS = (() => {
+  const configured = readinessReadySetFromEnv('CAPABILITY_EXPECTED_API_REPLICA_IDS');
+  return configured.size ? [...configured] : [CAPABILITY_API_REPLICA_ID];
+})();
+const readinessProvider = createRuntimeReadinessProvider({
+  expectedApiReplicaIds: CAPABILITY_EXPECTED_API_REPLICA_IDS,
+  getClient: () => getRelease250Pool(),
+  heartbeatIntervalMs: readEnvInt('CAPABILITY_HEARTBEAT_INTERVAL_MS', 5_000, 1_000),
+  heartbeatMaxAgeMs: readEnvInt('CAPABILITY_HEARTBEAT_MAX_AGE_MS', 15_000, 3_000),
   manifestPath: CAPABILITY_DAG_PATH,
+  runtimeId: CAPABILITY_API_REPLICA_ID,
   getReadinessOptions: () => ({
     desired: CAPABILITY_DESIRED,
     binaryReady: readinessReadySetFromEnv('CAPABILITY_READY_BINARY'),
@@ -4043,6 +4053,8 @@ function createApiApp({
   });
   app.register(fastifyWebsocket, { options: { maxPayload: WS_MAX_PAYLOAD_BYTES } });
   const activeReadinessProvider = readinessProviderOverride || readinessProvider;
+  app.addHook('onReady', async () => { await activeReadinessProvider.start?.(); });
+  app.addHook('onClose', async () => { await activeReadinessProvider.stop?.(); });
   app.addHook('onReady', startMessageDeliveryListener);
   app.addHook('onClose', stopMessageDeliveryListener);
 
