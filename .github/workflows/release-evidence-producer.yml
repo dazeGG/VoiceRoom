@@ -1,0 +1,110 @@
+name: Release 2.5.0 immutable evidence producer
+
+on:
+  workflow_dispatch:
+    inputs:
+      stage:
+        description: Evidence stage to publish
+        required: true
+        type: choice
+        options: [checkpoint, performance, develop-entry, rc]
+      bundle_sha256:
+        description: SHA256 of release-evidence-bundle.json inside the source ZIP
+        required: true
+        type: string
+      confirm:
+        description: Type PUBLISH-RELEASE-EVIDENCE
+        required: true
+        type: string
+
+concurrency:
+  group: release-2.5.0-evidence-${{ inputs.stage }}-${{ github.sha }}
+  cancel-in-progress: false
+
+permissions:
+  actions: read
+  attestations: write
+  contents: read
+  id-token: write
+  packages: write
+
+jobs:
+  publish:
+    if: github.repository == 'dazeGG/VoiceRoom' && inputs.confirm == 'PUBLISH-RELEASE-EVIDENCE'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: release-evidence
+    env:
+      BUNDLE_SHA256: ${{ inputs.bundle_sha256 }}
+      EVIDENCE_BUNDLE_URL: ${{ secrets.RELEASE_EVIDENCE_BUNDLE_URL }}
+      PACKAGE: ghcr.io/dazegg/voiceroom-release-evidence
+      STAGE: ${{ inputs.stage }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - name: Require exact release branch and externally captured bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected_ref=refs/heads/develop
+          if [[ "$STAGE" == rc ]]; then expected_ref=refs/heads/release/2.5.0; fi
+          test "$GITHUB_REF" = "$expected_ref"
+          test -n "$EVIDENCE_BUNDLE_URL"
+          [[ "$EVIDENCE_BUNDLE_URL" == https://* ]]
+          [[ "$BUNDLE_SHA256" =~ ^sha256:[0-9a-f]{64}$ ]]
+          curl --proto '=https' --proto-redir '=https' --tlsv1.2 -fsSLo source-evidence.zip "$EVIDENCE_BUNDLE_URL"
+      - name: Extract only manifest-declared exact-head evidence
+        id: prepare
+        run: node scripts/evidence/prepare-release-evidence-bundle.mjs --archive source-evidence.zip --bundle-sha256 "$BUNDLE_SHA256" --code-sha "$GITHUB_SHA" --stage "$STAGE" --output published
+      - name: Log in with the repository token
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: Publish exact files and deterministic OCI manifest
+        id: publish
+        shell: bash
+        env:
+          DIGEST: ${{ steps.prepare.outputs.manifest-digest }}
+          CONFIG_DIGEST: ${{ steps.prepare.outputs.config-digest }}
+        run: |
+          set -euo pipefail
+          ./scripts/ci/run-oras.sh blob push --media-type application/vnd.oci.empty.v1+json --descriptor "$PACKAGE@$CONFIG_DIGEST" published/.oci/config.json
+          node -e 'for(const x of JSON.parse(require("node:fs").readFileSync("published/.oci/entries.json")))console.log([x.mediaType,x.digest,x.path].join("\t"))' |
+          while IFS=$'\t' read -r media_type digest file; do
+            ./scripts/ci/run-oras.sh blob push --media-type "$media_type" --descriptor "$PACKAGE@$digest" "published/$file"
+          done
+          ./scripts/ci/run-oras.sh manifest push --media-type application/vnd.oci.image.manifest.v1+json --descriptor "$PACKAGE@$DIGEST" published/.oci/manifest.json
+          ./scripts/ci/run-oras.sh manifest fetch --output fetched-manifest.json "$PACKAGE@$DIGEST"
+          cmp published/.oci/manifest.json fetched-manifest.json
+          printf 'digest=%s\n' "$DIGEST" >> "$GITHUB_OUTPUT"
+      - name: Attest exact OCI manifest
+        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6
+        with:
+          subject-name: ${{ env.PACKAGE }}
+          subject-digest: ${{ steps.publish.outputs.digest }}
+          push-to-registry: true
+      - name: Verify attestation and publish a never-reused discovery tag
+        shell: bash
+        env:
+          DIGEST: ${{ steps.publish.outputs.digest }}
+        run: |
+          set -euo pipefail
+          gh attestation verify "oci://$PACKAGE@$DIGEST" --repo "$GITHUB_REPOSITORY"
+          tag="release-250-$STAGE-${GITHUB_SHA:0:12}-run${GITHUB_RUN_ID}-attempt${GITHUB_RUN_ATTEMPT}"
+          ./scripts/ci/run-oras.sh tag "$PACKAGE@$DIGEST" "$tag"
+          test "$(./scripts/ci/run-oras.sh resolve "$PACKAGE:$tag")" = "$DIGEST"
+      - name: Remove producer-only OCI preparation files
+        run: rm -rf published/.oci
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-250-${{ inputs.stage }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: published/
+          if-no-files-found: error
+          retention-days: 90

@@ -27,6 +27,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.sha }}
+          fetch-depth: 0
       - name: Download immutable sources and authenticate every binding
         shell: bash
         run: |
@@ -59,7 +60,9 @@ jobs:
           const fs=require('node:fs'),rows=JSON.parse(fs.readFileSync('authenticated/source-plan.json'));
           fs.writeFileSync('authenticated/sources.json',JSON.stringify(rows.map(([artifactId,objectId,runAttempt])=>({artifactId,runAttempt,path:`authenticated/${artifactId}/extracted/${objectId}`,metadataPath:`authenticated/${artifactId}/metadata.json`,runPath:`authenticated/${artifactId}/run.json`}))));
           NODE
-          test "$(gh api repos/$GITHUB_REPOSITORY/git/ref/heads/develop --jq .object.sha)" = "$TERMINAL_DEVELOP_SHA"
+          test "$GITHUB_REF" = refs/heads/develop
+          test "$(gh api repos/$GITHUB_REPOSITORY/git/ref/heads/develop --jq .object.sha)" = "$GITHUB_SHA"
+          git merge-base --is-ancestor "$TERMINAL_DEVELOP_SHA" "$GITHUB_SHA"
           node scripts/evidence/archive-to-oci.mjs --validate-sources --sources authenticated/sources.json --terminal-develop-sha "$TERMINAL_DEVELOP_SHA" > authenticated/lineage-report.json
       - uses: actions/upload-artifact@v4
         with:
@@ -100,6 +103,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.sha }}
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
@@ -119,7 +123,9 @@ jobs:
           cp "authenticated-source/$ARTIFACT_ID/metadata.json" source/metadata.json
           cp "authenticated-source/$ARTIFACT_ID/run.json" source/run.json
           cp "authenticated-source/$ARTIFACT_ID/extracted/$OBJECT_ID" "extracted/$OBJECT_ID"
-          test "$(gh api repos/$GITHUB_REPOSITORY/git/ref/heads/develop --jq .object.sha)" = "$TERMINAL_DEVELOP_SHA"
+          test "$GITHUB_REF" = refs/heads/develop
+          test "$(gh api repos/$GITHUB_REPOSITORY/git/ref/heads/develop --jq .object.sha)" = "$GITHUB_SHA"
+          git merge-base --is-ancestor "$TERMINAL_DEVELOP_SHA" "$GITHUB_SHA"
           run_id="$(node -p 'JSON.parse(require("node:fs").readFileSync("source/metadata.json")).workflow_run.id')"
           source_sha="$(node -p 'JSON.parse(require("node:fs").readFileSync("source/run.json")).head_sha')"
           run_attempt="$(node -p 'JSON.parse(require("node:fs").readFileSync("source/run.json")).run_attempt')"

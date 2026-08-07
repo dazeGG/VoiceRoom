@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { readExternalArtifact, sha256 } from '../checkpoints/immutable-evidence.mjs';
+import { extractEvidenceBundle, prepareOciBundle } from '../evidence/prepare-release-evidence-bundle.mjs';
 
 function storedZip(entries) {
   const locals=[];const centrals=[];let offset=0;
@@ -15,7 +16,7 @@ function fixture(t,{archiveEntries,ociBytes=Buffer.from('{"ok":true}')}={}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'voice-room-evidence-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const objectPath = 'checkpoint.json'; const objectDigest = sha256(ociBytes);const archive=storedZip(archiveEntries||[{name:objectPath,bytes:ociBytes}]);
-  const expected = { repository:'dazeGG/VoiceRoom',workflowPath:'.github/workflows/evidence-archive.yml',event:'workflow_dispatch',ref:'develop',actor:'dazeGG',headSha:'a'.repeat(40),runAttempt:'2',artifactId:'41',artifactName:'release-250-evidence',archiveSha256:sha256(archive),ociDigest:`sha256:${'c'.repeat(64)}` };
+  const expected = { repository:'dazeGG/VoiceRoom',workflowPath:'.github/workflows/release-evidence-producer.yml',event:'workflow_dispatch',ref:'develop',actor:'dazeGG',headSha:'a'.repeat(40),runAttempt:'2',artifactId:'41',artifactName:'release-250-evidence',archiveSha256:sha256(archive),ociDigest:`sha256:${'c'.repeat(64)}` };
   const run = { id:91,run_attempt:2,path:expected.workflowPath,event:expected.event,head_branch:expected.ref,head_sha:expected.headSha,status:'completed',conclusion:'success',actor:{login:expected.actor},repository:{full_name:expected.repository} };
   const metadata = { id:41,name:expected.artifactName,digest:expected.archiveSha256,expired:false,workflow_run:{id:run.id,head_sha:run.head_sha} };
   const proof = { contract:'voice-room.evidence-oci/v1',repository:expected.repository,workflowPath:expected.workflowPath,event:expected.event,ref:expected.ref,actor:expected.actor,headSha:expected.headSha,runId:run.id,runAttempt:run.run_attempt,conclusion:'success',artifactId:metadata.id,artifactName:metadata.name,artifactArchiveSha256:expected.archiveSha256,ociDigest:expected.ociDigest,attestationVerified:true,archived:true,objectDigests:{[objectPath]:objectDigest} };
@@ -52,7 +53,20 @@ test('every release consumer retains the checksummed Actions archive beside the 
   for(const workflow of ['checkpoint.yml','release-performance.yml','release-entry.yml','release-candidate-preflight.yml']){
     const source=fs.readFileSync(path.join(process.cwd(),'.github','workflows',workflow),'utf8');
     assert.match(source,/test "sha256:\$\(sha256sum external-evidence\.zip/);
-    assert.match(source,/oras pull "\$OCI_REPOSITORY@\$OCI_DIGEST" -o external-evidence/);
+    assert.match(source,/scripts\/ci\/run-oras\.sh pull "\$OCI_REPOSITORY@\$OCI_DIGEST" -o external-evidence/);
     assert.match(source,/mv external-evidence\.zip external-evidence\/actions-archive\.zip/);
+    assert.match(source,/EVIDENCE_PRODUCER_WORKFLOW: \.github\/workflows\/release-evidence-producer\.yml/);
   }
+});
+
+test('generalized exact-head producer extracts only digest-bound files and prepares titled OCI layers', (t) => {
+  const output=fs.mkdtempSync(path.join(os.tmpdir(),'voice-room-evidence-bundle-'));t.after(()=>fs.rmSync(output,{recursive:true,force:true}));
+  const codeSha='b'.repeat(40);const evidence=Buffer.from(JSON.stringify({codeSha,ok:true}));const proof=Buffer.from(JSON.stringify({passed:true}));
+  const bundle=Buffer.from(JSON.stringify({contract:'voice-room.release-evidence-bundle/v1',release:'2.5.0',stage:'checkpoint',codeSha,files:[{path:'checkpoint.json',sha256:sha256(evidence),mediaType:'application/json'},{path:'evidence/proof.json',sha256:sha256(proof),mediaType:'application/json'}]}));
+  const archive=storedZip([{name:'release-evidence-bundle.json',bytes:bundle},{name:'checkpoint.json',bytes:evidence},{name:'evidence/proof.json',bytes:proof}]);
+  const value=extractEvidenceBundle({archiveBytes:archive,bundleDigest:sha256(bundle),codeSha,outputDirectory:output,stage:'checkpoint'});
+  const prepared=prepareOciBundle({bundle:value,directory:output,runAttempt:2,runId:91});
+  assert.deepEqual(prepared.manifest.layers.map((layer)=>layer.annotations['org.opencontainers.image.title']),['release-evidence-bundle.json','checkpoint.json','evidence/proof.json']);
+  assert.equal(prepared.manifest.annotations['org.opencontainers.image.revision'],codeSha);
+  assert.throws(()=>extractEvidenceBundle({archiveBytes:archive,bundleDigest:sha256(bundle),codeSha:'c'.repeat(40),outputDirectory:output,stage:'checkpoint'}),/identity is invalid/);
 });

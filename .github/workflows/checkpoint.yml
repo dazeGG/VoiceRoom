@@ -25,7 +25,7 @@ permissions: { contents: read, actions: read, packages: read, attestations: read
 
 env:
   EVIDENCE_PRODUCER_REPOSITORY: ${{ github.repository }}
-  EVIDENCE_PRODUCER_WORKFLOW: .github/workflows/evidence-archive.yml
+  EVIDENCE_PRODUCER_WORKFLOW: .github/workflows/release-evidence-producer.yml
   EVIDENCE_PRODUCER_EVENT: workflow_dispatch
   EVIDENCE_PRODUCER_REF: develop
   EVIDENCE_PRODUCER_ACTOR: ${{ github.repository_owner }}
@@ -50,8 +50,6 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
-      - &oras
-        uses: oras-project/setup-oras@v1
       - &download
         name: Resolve authenticated OCI-primary evidence
         env: { GH_TOKEN: "${{ github.token }}", ARTIFACT_ID: "${{ inputs.evidence_artifact_id }}", ARCHIVE_SHA256: "${{ inputs.archive_sha256 }}", OCI_REPOSITORY: "${{ inputs.oci_repository }}", OCI_DIGEST: "${{ inputs.oci_digest }}" }
@@ -61,9 +59,9 @@ jobs:
           gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id" > producer-run.json
           gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$ARTIFACT_ID/zip" > external-evidence.zip
           test "sha256:$(sha256sum external-evidence.zip | cut -d' ' -f1)" = "$ARCHIVE_SHA256"
-          echo "$GH_TOKEN" | oras login "${OCI_REPOSITORY%%/*}" -u "$GITHUB_ACTOR" --password-stdin
+          echo "$GH_TOKEN" | ./scripts/ci/run-oras.sh login "${OCI_REPOSITORY%%/*}" -u "$GITHUB_ACTOR" --password-stdin
           gh attestation verify "oci://$OCI_REPOSITORY@$OCI_DIGEST" --repo "$GITHUB_REPOSITORY"
-          oras pull "$OCI_REPOSITORY@$OCI_DIGEST" -o external-evidence
+          ./scripts/ci/run-oras.sh pull "$OCI_REPOSITORY@$OCI_DIGEST" -o external-evidence
           mv external-evidence.zip external-evidence/actions-archive.zip
           mv producer-metadata.json producer-run.json external-evidence/
       - run: node scripts/test/g42-messaging-checkpoint.test.mjs --verify
@@ -82,7 +80,6 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
-      - *oras
       - *download
       - run: node scripts/test/g50-membership-checkpoint.test.mjs --verify
       - run: node scripts/checkpoints/membership.mjs --external-root external-evidence --verify "$OBJECT_PATH" --sha256 "$OBJECT_SHA256"
@@ -100,7 +97,6 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
-      - *oras
       - *download
       - run: node scripts/test/g71-engagement-checkpoint.test.mjs --verify
       - run: node scripts/checkpoints/engagement.mjs --external-root external-evidence --verify "$OBJECT_PATH" --sha256 "$OBJECT_SHA256"
@@ -118,7 +114,6 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
-      - *oras
       - *download
       - run: node --test scripts/test/g89-restore.test.mjs scripts/test/g90-media-checkpoint.test.mjs
       - run: node scripts/checkpoints/media.mjs --external-root external-evidence --verify "$OBJECT_PATH" --sha256 "$OBJECT_SHA256"
@@ -133,7 +128,6 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version-file: .nvmrc, cache: npm }
       - run: npm ci
-      - *oras
       - *download
       - run: node --test scripts/test/g92-activation-matrix.test.mjs
       - run: node scripts/checkpoints/g92-activation-matrix.mjs --manifest config/capability-dag.v1.json --external-root external-evidence --verify "$OBJECT_PATH" --sha256 "$OBJECT_SHA256"

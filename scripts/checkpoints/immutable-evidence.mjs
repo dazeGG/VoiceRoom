@@ -60,7 +60,7 @@ function canonicalArchivePath(file) {
   return normalized;
 }
 
-function readActionsArchiveObject(archive, objectPath) {
+export function readActionsArchiveObject(archive, objectPath) {
   const requested = canonicalArchivePath(objectPath);
   const minimum = Math.max(0, archive.length - 65_557); let eocd = -1;
   for (let offset = archive.length - 22; offset >= minimum; offset -= 1) if (archive.readUInt32LE(offset) === 0x06054b50) { eocd = offset; break; }
@@ -76,7 +76,7 @@ function readActionsArchiveObject(archive, objectPath) {
     const name = archive.subarray(cursor + 46, cursor + 46 + nameLength).toString('utf8'); canonicalArchivePath(name.endsWith('/') ? name.slice(0, -1) : name);
     if (names.has(name)) throw new Error('Actions archive contains duplicate paths'); names.add(name);
     const unixMode = externalAttributes >>> 16; if ((unixMode & 0o170000) === 0o120000) throw new Error('Actions archive contains a symlink');
-    if ((flags & 1) !== 0 || ![0, 8].includes(method) || compressedSize === 0xffffffff || size === 0xffffffff) throw new Error('Actions archive entry encoding is unsupported');
+    if ((flags & 1) !== 0 || ![0, 8].includes(method) || compressedSize === 0xffffffff || size === 0xffffffff || size > 16 * 1024 * 1024) throw new Error('Actions archive entry encoding is unsupported');
     if (name === requested) selected = { compressedSize, flags, localOffset, method, name, size };
     cursor = end;
   }
