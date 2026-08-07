@@ -745,37 +745,15 @@ html.is-desktop .sidebar-download { display: none; }
 .lobby-dm-head-status[data-presence='online'] { color: var(--green); }
 .lobby-dm-head-status[data-presence='offline'] { color: var(--warm-faint); }
 .lobby-dm-scroll { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; }
-.lobby-dm-thread { margin-top: auto; display: flex; flex-direction: column; gap: 14px; padding: 22px 24px; }
+.lobby-dm-thread { margin-top: auto; display: flex; flex-direction: column; gap: 15px; padding: 22px 24px; }
 
-.lobby-dm-day {
-  position: sticky;
-  top: 8px;
-  z-index: 3;
-  display: flex;
-  justify-content: center;
-  margin: 4px 0;
-  pointer-events: none;
-}
-.lobby-dm-day-label {
-  flex: none;
-  font-family: var(--font-mono);
-  letter-spacing: 0.08em;
-  font-size: 11px;
-  color: var(--warm-ink-dim);
-  background: var(--warm-800);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 999px;
-  padding: 5px 13px;
-  backdrop-filter: blur(8px);
-}
-
-.lobby-dm-group { display: flex; gap: 11px; align-items: flex-end; }
-.lobby-dm-group--me { flex-direction: row-reverse; }
-.lobby-dm-bubbles { max-width: 64%; display: flex; flex-direction: column; align-items: flex-start; gap: 3px; }
-.lobby-dm-group--me .lobby-dm-bubbles { align-items: flex-end; }
+.dm-chat-group { align-items: flex-start; }
+.dm-chat-message { color: var(--warm-ink-dim); }
+.dm-chat-content { display: grid; min-width: 0; max-width: min(720px, 100%); gap: 6px; }
+.dm-chat-content .attachment-mosaic { width: min(560px, 100%); }
 .lobby-room-invitation {
   display: grid;
-  width: min(390px, 72%);
+  width: min(390px, 100%);
   grid-template-columns: 38px minmax(0, 1fr);
   gap: 10px 12px;
   border: 1px solid color-mix(in oklch, var(--green), transparent 72%);
@@ -791,107 +769,12 @@ html.is-desktop .sidebar-download { display: none; }
 .lobby-room-invitation-actions button { min-height: 32px; border-radius: 8px; padding: 0 11px; font: inherit; font-size: 12px; font-weight: 750; cursor: pointer; }
 .lobby-room-invitation-dismiss { border: 1px solid rgba(255,255,255,.1); background: transparent; color: var(--warm-muted); }
 .lobby-room-invitation-join { border: 0; background: var(--green); color: oklch(14% .02 130); }
-.lobby-dm-bubble {
-  position: relative;
-  border-radius: 16px;
-  padding: 9px 13px;
-  font-size: 14px;
-  line-height: 1.45;
-  word-break: break-word;
-  white-space: pre-wrap;
-}
-.lobby-dm-bubble--them {
-  background: var(--panel);
-  color: var(--warm-ink);
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  border-bottom-left-radius: 5px;
-}
-.lobby-dm-bubble--me {
-  background: var(--accent);
-  color: var(--accent-ink);
-  border-bottom-right-radius: 5px;
-}
-
-.lobby-dm-bubble--attachment-only {
-  padding: 0;
-  border: 0;
-  border-radius: 14px;
-  background: transparent;
-}
-
-.lobby-dm-bubble--has-attachments {
-  display: grid;
-  width: min(560px, 100%);
-  gap: 6px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-}
-
-.lobby-dm-bubble--has-attachments .attachment-mosaic {
-  width: 100%;
-}
-
-.lobby-dm-bubble--has-attachments .dm-msg-content {
-  display: block;
-  width: fit-content;
-  max-width: 100%;
-  padding: 9px 13px;
-  border-radius: 16px;
-}
-
-.lobby-dm-bubble--has-attachments.lobby-dm-bubble--them .dm-msg-content {
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  border-bottom-left-radius: 5px;
-  background: var(--panel);
-  color: var(--warm-ink);
-}
-
-.lobby-dm-bubble--has-attachments.lobby-dm-bubble--me .dm-msg-content {
-  justify-self: end;
-  border-bottom-right-radius: 5px;
-  background: var(--accent);
-  color: var(--accent-ink);
-}
-
-.lobby-dm-bubble--media-caption {
-  gap: 0;
-  overflow: hidden;
-  border-radius: 16px;
-}
-
-.lobby-dm-bubble--media-caption.lobby-dm-bubble--them {
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  border-bottom-left-radius: 5px;
-  background: var(--panel);
-}
-
-.lobby-dm-bubble--media-caption.lobby-dm-bubble--me {
-  border-bottom-right-radius: 5px;
-  background: var(--accent);
-}
-
-.lobby-dm-bubble--media-caption .attachment-mosaic {
-  border-radius: 0;
-}
-
-.lobby-dm-bubble--media-caption .dm-msg-content,
-.lobby-dm-bubble--media-caption.lobby-dm-bubble--them .dm-msg-content,
-.lobby-dm-bubble--media-caption.lobby-dm-bubble--me .dm-msg-content {
-  justify-self: stretch;
-  box-sizing: border-box;
-  width: 100%;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-}
-
-.lobby-dm-bubble a {
+.dm-chat-message a {
   color: inherit;
   text-decoration: underline;
   text-underline-offset: 2px;
 }
-.lobby-dm-bubble a:hover {
+.dm-chat-message a:hover {
   opacity: 0.85;
 }
 
@@ -904,28 +787,6 @@ html.is-desktop .sidebar-download { display: none; }
 }
 
 .dm-msg-content { min-width: 0; }
-.dm-msg-actions {
-  position: absolute;
-  bottom: calc(100% - 4px);
-  right: 4px;
-  z-index: 4;
-  display: flex;
-  overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 7px;
-  background: var(--warm-800);
-  opacity: 0;
-  transform: translateY(2px);
-  pointer-events: none;
-  transition: opacity 120ms ease, transform 120ms ease;
-}
-.lobby-dm-bubble:hover .dm-msg-actions,
-.lobby-dm-bubble:focus-within .dm-msg-actions { opacity: 1; transform: translateY(0); pointer-events: auto; }
-.dm-msg-actions button { display: grid; min-width: 40px; min-height: 36px; place-items: center; border: 0; border-radius: 0; padding: 0; background: transparent; color: var(--warm-muted); cursor: pointer; }
-.dm-msg-actions button:hover,
-.dm-msg-actions button:focus-visible { background: var(--control-hover); color: var(--warm-ink); outline: none; }
-.dm-msg-actions .dm-msg-action-danger:hover,
-.dm-msg-actions .dm-msg-action-danger:focus-visible { color: oklch(72% 0.18 28); }
 
 .dm-msg-edit {
   display: grid;
@@ -966,8 +827,6 @@ html.is-desktop .sidebar-download { display: none; }
 }
 
 .dm-msg-edit-actions button:disabled { cursor: default; opacity: 0.45; }
-.lobby-dm-time { font-family: var(--font-mono); font-size: 10px; color: var(--warm-faint); margin-top: 2px; padding: 0 4px; }
-
 .lobby-dm-compose { flex: none; padding: 14px 24px 20px; }
 .lobby-dm-compose-row {
   display: flex;

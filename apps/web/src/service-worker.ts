@@ -8,6 +8,8 @@ type PushPayload = {
   tag?: string;
   url?: string;
   dedupeKey?: string;
+  notificationId?: string;
+  revision?: number;
   type?: string;
   expiresAt?: number;
 };
@@ -36,7 +38,7 @@ self.addEventListener('push', (event) => {
     if (Number.isFinite(payload.expiresAt) && Number(payload.expiresAt) <= Date.now()) return;
     await self.registration.showNotification(payload.title || 'VoiceRoom', {
       body: payload.body || '',
-      data: { url: payload.url || '/', dedupeKey: payload.dedupeKey, type: payload.type },
+      data: { url: payload.url || '/', dedupeKey: payload.dedupeKey, notificationId: payload.notificationId, revision: payload.revision, type: payload.type },
       icon: '/voiceroom-icon.svg',
       tag: payload.tag || payload.dedupeKey || 'voice-room'
     });

@@ -50,6 +50,7 @@ function createActiveBanRepository({ pool, now = Date.now } = {}) {
       `SELECT *
        FROM room_bans
        WHERE room_id = $1
+         AND revoked_at IS NULL
          AND (expires_at IS NULL OR expires_at > $4)
          AND (
            ($2::varchar(36) IS NOT NULL AND user_id = $2)
@@ -70,10 +71,30 @@ function createActiveBanRepository({ pool, now = Date.now } = {}) {
       `SELECT COUNT(*)::int AS count
        FROM room_bans
        WHERE room_id = $1
+         AND revoked_at IS NULL
          AND (expires_at IS NULL OR expires_at > $2)`,
       [roomId, toDate(at)]
     );
     return Number(result.rows[0]?.count || 0);
+  }
+
+  async function filterActiveUserIds({ roomId, userIds = [], at = now(), client } = {}) {
+    const normalizedUserIds = Array.from(new Set(
+      (Array.isArray(userIds) ? userIds : [])
+        .filter((userId) => typeof userId === 'string' && userId.trim())
+        .map((userId) => userId.trim())
+    ));
+    if (!roomId || normalizedUserIds.length === 0) return [];
+    const result = await executor(client).query(
+      `SELECT DISTINCT user_id
+       FROM room_bans
+       WHERE room_id = $1
+         AND user_id = ANY($2::varchar[])
+         AND revoked_at IS NULL
+         AND (expires_at IS NULL OR expires_at > $3)`,
+      [roomId, normalizedUserIds, toDate(at)]
+    );
+    return result.rows.map((row) => row.user_id).filter(Boolean);
   }
 
   async function insert({ roomId, userId = null, ip = '', expiresAt = null, metadata = {}, at = now(), client } = {}) {
@@ -96,7 +117,7 @@ function createActiveBanRepository({ pool, now = Date.now } = {}) {
     return mapActiveBan(result.rows[0]);
   }
 
-  return { countActive, findActive, insert, mapActiveBan, normalizePrincipal };
+  return { countActive, filterActiveUserIds, findActive, insert, mapActiveBan, normalizePrincipal };
 }
 
 module.exports = { createActiveBanRepository, mapActiveBan, normalizePrincipal };

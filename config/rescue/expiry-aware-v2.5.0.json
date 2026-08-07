@@ -1,0 +1,23 @@
+{
+  "contract": "voice-room.expiry-aware-rescue/v1",
+  "release": "2.5.0",
+  "readCompatibility": "2.4.2",
+  "requiresFullyUpgradedSchema": true,
+  "admission": {
+    "activeMembershipsOnly": true,
+    "expiryAwareBans": true
+  },
+  "capabilityDesired": {
+    "messageHistory": false,
+    "membership": false,
+    "replies": false,
+    "engagement": false,
+    "notifications": false,
+    "reactions": false,
+    "moderationCenter": false,
+    "mediaUploads": false,
+    "mediaRead": false
+  },
+  "newWritesEnabled": false,
+  "workersEnabled": false
+}

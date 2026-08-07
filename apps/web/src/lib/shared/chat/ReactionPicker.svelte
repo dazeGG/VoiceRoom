@@ -31,6 +31,7 @@
   let activeIndex = $state(0);
   let frequentEmoji = $state<string[]>([...DEFAULT_FREQUENT_REACTIONS]);
   let grid: HTMLDivElement | null = $state(null);
+  let searchInput: HTMLInputElement | null = $state(null);
   const options = $derived.by(() => {
     const query = search.trim();
     if (!query) return ALL_EMOJI;
@@ -46,6 +47,11 @@
     return () => {
       cancelled = true;
     };
+  });
+
+  $effect(() => {
+    if (!open) return;
+    void tick().then(() => searchInput?.focus());
   });
 
   async function focusOption(index: number): Promise<void> {
@@ -97,6 +103,7 @@
     <Popover
       bind:open
       placement="top-start"
+      flip
       role="dialog"
       ariaLabel="Выбор реакции"
       onBeforeClose={() => { search = ''; }}
@@ -118,7 +125,7 @@
         <div class="reaction-picker">
           <label>
             <span class="sr-only">Поиск эмодзи</span>
-            <input bind:value={search} type="search" placeholder="Найти эмодзи" oninput={() => (activeIndex = 0)} />
+            <input bind:this={searchInput} bind:value={search} type="search" placeholder="Найти эмодзи" oninput={() => (activeIndex = 0)} />
           </label>
           <div class="emoji-grid" role="grid" tabindex="-1" aria-label="Доступные реакции" bind:this={grid} onkeydown={gridKeydown}>
             {#each options as emoji, index (emoji)}
@@ -140,15 +147,15 @@
 {/if}
 
 <style>
-  .reaction-quick-actions { display: flex; align-items: stretch; border-right: 1px solid rgba(255, 255, 255, .12); }
-  .reaction-quick-trigger, .reaction-picker-trigger { min-width: 40px; min-height: 36px; border: 0; border-radius: 0; background: transparent; color: inherit; cursor: pointer; }
-  .reaction-quick-trigger { font-size: 1.05rem; }
+  .reaction-quick-actions { display: flex; align-items: stretch; overflow: visible; border-radius: 6px 0 0 6px; background: var(--warm-800); }
+  .reaction-quick-trigger, .reaction-picker-trigger { width: 32px; height: 32px; border: 0; border-right: 1px solid rgba(255, 255, 255, .08); border-radius: 0; padding: 0; background: var(--warm-800); color: inherit; cursor: pointer; }
+  .reaction-quick-trigger { font-size: .95rem; }
   .reaction-picker-trigger { color: color-mix(in oklch, currentColor, transparent 42%); }
   .reaction-quick-trigger:hover, .reaction-quick-trigger:focus-visible,
   .reaction-picker-trigger:hover, .reaction-picker-trigger:focus-visible { background: color-mix(in oklch, var(--paper), var(--ink) 10%); color: inherit; outline: none; }
-  .reaction-picker { display: grid; gap: 7px; width: min(330px, 82vw); padding: 3px; }
+  .reaction-picker { display: grid; gap: 6px; width: min(300px, calc(100vw - 28px)); padding: 2px; }
   input { width: 100%; min-height: 40px; border: 1px solid color-mix(in oklch, currentColor, transparent 80%); border-radius: 9px; padding: 7px 10px; background: transparent; color: inherit; }
-  .emoji-grid { display: grid; grid-template-columns: repeat(8, 1fr); max-height: 240px; overflow-y: auto; }
+  .emoji-grid { display: grid; grid-template-columns: repeat(7, 1fr); max-height: min(132px, calc(100vh - 226px)); overflow-y: auto; }
   .emoji-grid button { display: grid; place-items: center; min-width: 40px; min-height: 40px; border: 0; border-radius: 7px; background: transparent; font-size: 1.15rem; cursor: pointer; }
   .emoji-grid button:hover, .emoji-grid button:focus-visible { background: color-mix(in oklch, var(--paper), var(--ink) 12%); }
   p { margin: 8px; text-align: center; opacity: .7; }

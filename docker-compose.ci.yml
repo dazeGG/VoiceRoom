@@ -98,6 +98,42 @@ services:
     volumes:
       - media:/data/media
 
+  media-maintenance:
+    build:
+      context: .
+      target: worker
+    depends_on:
+      api:
+        condition: service_healthy
+      media-init:
+        condition: service_completed_successfully
+    environment:
+      NODE_ENV: test
+      VOICE_ROOM_WORKER: media-maintenance
+      DATABASE_URL: postgres://voice_room:voice_room_ci@postgres:5432/voice_room_ci
+      MEDIA_STORAGE_DIR: /data/media
+      MEDIA_MAINTENANCE_CLAIM_ENABLED: "true"
+    volumes:
+      - media:/data/media
+
+  media-reconciliation:
+    build:
+      context: .
+      target: worker
+    depends_on:
+      api:
+        condition: service_healthy
+      media-init:
+        condition: service_completed_successfully
+    environment:
+      NODE_ENV: test
+      VOICE_ROOM_WORKER: media-reconciliation
+      DATABASE_URL: postgres://voice_room:voice_room_ci@postgres:5432/voice_room_ci
+      MEDIA_STORAGE_DIR: /data/media
+      MEDIA_RECONCILIATION_CLAIM_ENABLED: "true"
+    volumes:
+      - media:/data/media
+
   api:
     build:
       context: .

@@ -107,6 +107,24 @@ test('healthz fails readiness when capability snapshot is unavailable', async (t
   });
 });
 
+test('API lifecycle starts and stops runtime readiness', async () => {
+  let starts = 0;
+  let stops = 0;
+  const app = createApiApp({
+    store: createFakeStore(),
+    readinessProviderOverride: {
+      async start() { starts += 1; },
+      async stop() { stops += 1; },
+      getSnapshot() { return { features: {} }; }
+    }
+  });
+
+  await app.ready();
+  assert.equal(starts, 1);
+  await app.close();
+  assert.equal(stops, 1);
+});
+
 test('capability route returns exactly the public boolean capability contract', async (t) => {
   const app = createApiApp({
     store: createFakeStore(),

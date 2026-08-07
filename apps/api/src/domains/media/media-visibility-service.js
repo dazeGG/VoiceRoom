@@ -16,7 +16,8 @@ function createMediaVisibilityService({
   messageVisibilityService,
   resolveRoomMessage,
   resolveDirectMessage,
-  storage
+  storage,
+  onAuthorizationInvariantFailure = () => {}
 } = {}) {
   if (!attachmentRepository || !storage) throw new TypeError('Media visibility dependencies are required');
 
@@ -46,14 +47,14 @@ function createMediaVisibilityService({
       if (!visible) throw new MediaVisibilityError();
       return;
     }
-    throw new MediaVisibilityError();
+    onAuthorizationInvariantFailure(); throw new MediaVisibilityError();
   }
 
   async function open({ attachmentId, variant, viewerId }) {
     if (variant !== 'preview' && variant !== 'processed') throw new MediaVisibilityError();
     const attachment = await attachmentRepository.findById(attachmentId);
     await requireVisible(attachment, viewerId);
-    const opened = await storage.openRead(attachment.id, variant).catch(() => { throw new MediaVisibilityError(); });
+    const opened = await storage.openRead(attachment.id, variant).catch(() => { onAuthorizationInvariantFailure(); throw new MediaVisibilityError(); });
     return Object.freeze({
       bytes: opened.bytes,
       extension: 'webp',

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-import fs from "node:fs";
 import { fileURLToPath } from "node:url";
+import { readRepositoryArtifact } from "../checkpoints/immutable-evidence.mjs";
 
 export const DISABLED = "PROMOTION_DISABLED_EXTERNAL_AUTHORITY";
 export const READY = "PROMOTION_READY_EXTERNAL_AUTHORITY";
@@ -11,7 +11,7 @@ const SHA = /^[0-9a-f]{40}$/;
 const SECRET_EXPR = /\$\{\{\s*secrets\.[A-Z0-9_]*(?:PROD|PRODUCTION|SSH|DEPLOY)[A-Z0-9_]*\s*\}\}/i;
 
 export function readProductionPolicy(path = "config/deploy/production-environment-policy.v1.json") {
-  return JSON.parse(fs.readFileSync(path, "utf8"));
+  return readRepositoryArtifact(path).value;
 }
 
 function disabled(reason) {
@@ -77,7 +77,7 @@ export function evaluateProductionAuthority(snapshot, policy = readProductionPol
 function main(argv = process.argv.slice(2)) {
   const fixtureIndex = argv.indexOf("--fixture");
   if (fixtureIndex === -1 || !argv[fixtureIndex + 1]) throw new Error("usage: check-production-environment.mjs --fixture FILE");
-  const result = evaluateProductionAuthority(JSON.parse(fs.readFileSync(argv[fixtureIndex + 1], "utf8")));
+  const result = evaluateProductionAuthority(readRepositoryArtifact(argv[fixtureIndex + 1]).value);
   process.stdout.write(`${JSON.stringify(result)}\n`);
   if (result.status === HARD_FAIL) process.exit(1);
 }

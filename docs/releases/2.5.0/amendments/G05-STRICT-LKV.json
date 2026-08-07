@@ -10,8 +10,13 @@
     "selectedAt": "2026-07-20"
   },
   "canonicalDigests": {
-    "plan": "sha256:a370704ad39c1aaf0ce453ede86128b57e6a105f596b52214815746812fca218",
-    "spec": "sha256:c944683500c6484fc8c00dde5131e2ff0bcda33ad582256421f7daeed19e9f7c"
+    "plan": "sha256:faeb5d27f9315e43fef658f1196236e0339e82a90491e3079d1a4c6ba5c16057",
+    "spec": "sha256:bfc40ac5f1ad5fdc14c6c480f0c4d2591048f8fdbe4e70e4e4d6ea261bcef98f"
+  },
+  "digestRefresh": {
+    "recordedAt": "2026-08-07T00:00:00.000Z",
+    "reason": "Canonical documents recorded the user-authorized consolidated develop-PR shape, live readiness correction and generalized evidence producer. The approved strict external-auth-gate mechanism, invariants and hostile matrix are unchanged.",
+    "scopeAmendment": "docs/releases/2.5.0/amendments/CONSOLIDATED-INTEGRATION.json"
   },
   "approvals": [
     {

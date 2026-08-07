@@ -34,6 +34,11 @@ function legacyPeerMessageToWs(message, roomId) {
         roomId,
         message: message.message
       });
+    case 'reaction.updated':
+      return buildServerEnvelope('reaction.updated', {
+        ...message.payload,
+        roomId: message.payload?.roomId || roomId
+      });
     default:
       return null;
   }

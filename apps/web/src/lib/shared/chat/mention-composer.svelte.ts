@@ -4,6 +4,10 @@ import type { RoomMessageContentV1, RoomMessageSegmentV1 } from '@voice-room/sha
 
 export type SelectedMention = Pick<MembershipMember, 'userId' | 'displayName' | 'login'>;
 
+function mentionToken(member: SelectedMention): string {
+  return `@${member.login}`;
+}
+
 export function createMentionComposer() {
   let query = $state('');
   let anchorStart = $state(-1);
@@ -31,8 +35,7 @@ export function createMentionComposer() {
 
   function choose(text: string, caret: number, member = candidates[activeIndex]): { text: string; caret: number } | null {
     if (!member || anchorStart < 0 || selected.length >= MAX_MENTIONS_PER_MESSAGE) return null;
-    const label = member.displayName || member.login;
-    const replacement = `@${label} `;
+    const replacement = `${mentionToken(member)} `;
     const next = text.slice(0, anchorStart) + replacement + text.slice(caret);
     if (!selected.some((item) => item.userId === member.userId)) selected = [...selected, member];
     close();
@@ -41,7 +44,7 @@ export function createMentionComposer() {
 
   function remove(userId: string): void { selected = selected.filter((item) => item.userId !== userId); }
   function toContent(text: string): RoomMessageContentV1 {
-    const pending = selected.map((member) => ({ member, token: `@${member.displayName || member.login}` }));
+    const pending = selected.map((member) => ({ member, token: mentionToken(member) }));
     const segments: RoomMessageSegmentV1[] = [];
     let offset = 0;
     while (offset < text.length) {

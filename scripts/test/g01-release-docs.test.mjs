@@ -210,7 +210,11 @@ test("G01 workflow resolves recursive trees from authenticated commit tree ident
 test("authority and candidate registries are truthful and structurally validated", () => {
   const authority = json("docs/releases/2.5.0/evidence/archive-authority.json"); assert.equal(authority.decision.startG01, true); assert.equal(authority.status, "ARCHIVE_AUTHORITY_GREEN");
   const attempts = json("docs/releases/2.5.0/evidence/bootstrap-attempts.json"), recoveries = json("docs/releases/2.5.0/evidence/bootstrap-landed-recoveries.json");
-  validateRegistry(attempts, "bootstrap-attempts.json"); validateRegistry(recoveries, "bootstrap-landed-recoveries.json"); assert.equal(attempts.state, recoveries.state); assert.equal(fs.existsSync("docs/releases/2.5.0/evidence/bootstrap-lineage.json"), false);
+  validateRegistry(attempts, "bootstrap-attempts.json"); validateRegistry(recoveries, "bootstrap-landed-recoveries.json"); assert.equal(attempts.state, recoveries.state);
+  assert.deepEqual(json("docs/releases/2.5.0/evidence/bootstrap-lineage.json"), {
+    schemaVersion: 1, release: "2.5.0", status: "PENDING_EXTERNAL_G01_SELECTION",
+    selectedAttemptId: null, terminalDevelopSha: null, ancestors: [], sourceDigests: null,
+  });
 });
 
 test("candidate identity binds reconstructed current ordinal, registry, branch and head", () => {

@@ -3,6 +3,7 @@
 const { createDbPool } = require('../lib/db');
 const { createAttachmentRepository } = require('../domains/media/attachment-repository');
 const { createMediaReconciliationService } = require('../domains/media/media-reconciliation-service');
+const { createMediaJobRepository } = require('../domains/media/media-job-repository');
 const { createMediaStorage } = require('../domains/media/storage');
 
 async function main() {
@@ -10,6 +11,7 @@ async function main() {
   const storage = createMediaStorage({ rootDir: process.env.MEDIA_STORAGE_DIR || '/data/media' });
   const service = createMediaReconciliationService({
     attachmentRepository: createAttachmentRepository({ pool }),
+    jobRepository: createMediaJobRepository({ pool }),
     storage
   });
   try {

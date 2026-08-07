@@ -454,7 +454,7 @@ test("G08 changed LiveKit gate persistence decisions are exercised through the p
     if (/INSERT INTO livekit_gate_credentials/.test(text)) return { rows: [{ id: values[0] }], rowCount: 1 };
     if (/FROM livekit_gate_credentials c/.test(text) && /LIMIT 1/.test(text)) return { rows: state.credentialAllowed ? [{ id: "credential-1" }] : [], rowCount: state.credentialAllowed ? 1 : 0 };
     if (/SELECT 1 FROM rooms/.test(text)) return { rows: state.roomExists ? [{ one: 1 }] : [], rowCount: state.roomExists ? 1 : 0 };
-    if (/SELECT COUNT\(\*\)::int AS count FROM room_bans/.test(text)) return { rows: [{ count: state.banCount }], rowCount: 1 };
+    if (/SELECT COUNT\(\*\)::int AS count[\s\S]*FROM room_bans/.test(text)) return { rows: [{ count: state.banCount }], rowCount: 1 };
     if (/INSERT INTO room_bans/.test(text)) return { rows: [{ id: values[0], room_id: values[1], user_id: values[2], ip: values[3], created_at: values[4], metadata: values[5] }], rowCount: 1 };
     return { rows: [], rowCount: 1 };
   };

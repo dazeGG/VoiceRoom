@@ -20,12 +20,15 @@ async function main() {
   if (String(process.env.MEDIA_RECONCILIATION_CLAIM_ENABLED || '').toLowerCase() !== 'true') return;
   const { createDbPool } = require('../lib/db');
   const { createAttachmentRepository } = require('../domains/media/attachment-repository');
+  const { createMediaJobRepository } = require('../domains/media/media-job-repository');
   const { createMediaReconciliationService } = require('../domains/media/media-reconciliation-service');
   const { createMediaStorage } = require('../domains/media/storage');
   const pool = createDbPool();
+  const attachments = createAttachmentRepository({ pool });
   const worker = createMediaReconciliationWorker({
     reconciliationService: createMediaReconciliationService({
-      attachmentRepository: createAttachmentRepository({ pool }),
+      attachmentRepository: attachments,
+      jobRepository: createMediaJobRepository({ pool }),
       storage: createMediaStorage({ rootDir: process.env.MEDIA_STORAGE_DIR || '/data/media' })
     })
   });

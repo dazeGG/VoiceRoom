@@ -3,6 +3,7 @@
 const crypto = require('node:crypto');
 const sharp = require('sharp');
 const { MediaJobFenceError } = require('../domains/media/media-job-repository');
+const { recordMediaOldestPending } = require('../lib/metrics');
 
 const DEFAULTS = Object.freeze({ batchSize: 10, concurrency: 2, leaseMs: 120_000, maxAttempts: 5, timeoutMs: 30_000 });
 
@@ -61,7 +62,8 @@ function createMediaProcessingWorker({
   concurrency = DEFAULTS.concurrency,
   leaseMs = DEFAULTS.leaseMs,
   maxAttempts = DEFAULTS.maxAttempts,
-  timeoutMs = DEFAULTS.timeoutMs
+  timeoutMs = DEFAULTS.timeoutMs,
+  observeOldestPending = recordMediaOldestPending
 } = {}) {
   if (!attachmentRepository || !jobRepository || !storage) throw new TypeError('Media processing dependencies are required');
   let stopping = false;
@@ -113,6 +115,7 @@ function createMediaProcessingWorker({
   }
 
   async function runOnce() {
+    observeOldestPending(await jobRepository.oldestPendingAgeMs());
     if (stopping || (pressureService && !await pressureService.canClaimWork())) return 0;
     const jobs = await jobRepository.claimBatch({ workerId, limit: batchSize, leaseMs });
     for (let offset = 0; offset < jobs.length; offset += concurrency) {

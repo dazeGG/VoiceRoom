@@ -96,7 +96,11 @@ function createMediaStorage({ rootDir, mediaDir } = {}) {
     let handle;
     try {
       handle = await fs.promises.open(directory, fs.constants.O_RDONLY);
-      await handle.sync();
+      await handle.sync().catch((error) => {
+        // Windows does not permit fsync on directory handles. File data was
+        // already synced before rename; retain directory fsync where supported.
+        if (!['EINVAL', 'ENOTSUP', 'EPERM'].includes(error?.code)) throw error;
+      });
     } finally {
       await handle?.close();
     }

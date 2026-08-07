@@ -171,6 +171,14 @@ function createMediaJobRepository({ pool } = {}) {
     return mapMediaJob(result.rows[0]);
   }
 
+  async function oldestPendingAgeMs({ client } = {}) {
+    const result = await executor(client).query(
+      `SELECT COALESCE(EXTRACT(EPOCH FROM (current_timestamp-MIN(created_at)))*1000,0)::bigint AS age_ms
+       FROM media_processing_jobs WHERE state IN ('pending', 'processing')`
+    );
+    return Number(result.rows[0]?.age_ms || 0);
+  }
+
   async function removeTerminalBefore(before, { limit = 500, client } = {}) {
     const result = await executor(client).query(
       `WITH candidates AS (
@@ -215,7 +223,7 @@ function createMediaJobRepository({ pool } = {}) {
     }
   }
 
-  return Object.freeze({ claimBatch, complete, completeProcessing, enqueue, fail, findById, removeTerminalBefore, renew });
+  return Object.freeze({ claimBatch, complete, completeProcessing, enqueue, fail, findById, oldestPendingAgeMs, removeTerminalBefore, renew });
 }
 
 module.exports = { MediaJobFenceError, createMediaJobRepository, mapMediaJob };

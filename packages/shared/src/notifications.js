@@ -49,13 +49,14 @@ function normalizeNotificationItem(value) {
   };
 }
 
-function buildNotificationEnvelope({ notifications = [], nextCursor, hasMore = false, unreadCount = 0, revision = 0 } = {}) {
+function buildNotificationEnvelope({ notifications = [], nextCursor, hasMore = false, unreadCount = 0, revision = 0, firstUnread = null } = {}) {
   return {
     contractVersion: NOTIFICATION_CONTRACT_VERSION,
     notifications: Array.isArray(notifications) ? notifications.map(normalizeNotificationItem).filter(Boolean) : [],
     pageInfo: { nextCursor: cleanString(nextCursor, 4096) || undefined, hasMore: Boolean(hasMore) },
     unreadCount: Math.max(0, Number.isSafeInteger(Number(unreadCount)) ? Number(unreadCount) : 0),
-    revision: Math.max(0, Number.isSafeInteger(Number(revision)) ? Number(revision) : 0)
+    revision: Math.max(0, Number.isSafeInteger(Number(revision)) ? Number(revision) : 0),
+    firstUnread: normalizeNotificationItem(firstUnread)
   };
 }
 
@@ -68,7 +69,8 @@ function normalizeNotificationEnvelope(value) {
     nextCursor: value.pageInfo?.nextCursor,
     hasMore: value.pageInfo?.hasMore,
     unreadCount: value.unreadCount,
-    revision: value.revision
+    revision: value.revision,
+    firstUnread: value.firstUnread
   }) };
 }
 

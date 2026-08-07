@@ -1,0 +1,12 @@
+services:
+  api:
+    environment:
+      CAPABILITY_DESIRED: '{"historyCursor":true,"membership":true,"reactions":true}'
+      CAPABILITY_READY_BINARY: shared.reaction.v1,api.reaction.v1,web.reaction.v1,api.history.v1,web.history.v1,api.membership.v1,web.membership.v1
+      CAPABILITY_READY_SCHEMA: G68,G24,G43
+      CAPABILITY_READY_INDEX: G68,G24,G43,G45
+      CAPABILITY_READY_CONFIG: unicode.G07,cursor.hmac,strictCredential.G05
+      CAPABILITY_READY_API: G69,G26,G27,G44,G45,G47,G48,G49
+      CAPABILITY_READY_WEB: G70,G28,G29,G46
+      CAPABILITY_READY_VISIBILITY: G23,membership.admission
+      CAPABILITY_READY_INTERNAL: internal.strictCredential

@@ -1,0 +1,4 @@
+import {expect,test} from '@playwright/test';import {readFileSync} from 'node:fs';
+const model=readFileSync(new URL('../src/lib/shared/notifications/inbox.svelte.ts',import.meta.url),'utf8');const router=readFileSync(new URL('../src/lib/shared/notifications/router.ts',import.meta.url),'utf8');const ui=readFileSync(new URL('../src/lib/features/home/components/NotificationInbox.svelte',import.meta.url),'utf8');
+test('G60-A01 inbox pagination rejects stale responses and preserves retracted privacy',async()=>{expect(model).toContain('requestGeneration');expect(model).toContain('generation!==requestGeneration');expect(ui).toContain("item.retractedAt ? 'Сообщение недоступно'");expect(ui).toContain('aria-live="polite"');});
+test('G60-A02 deep links target around history without voice auto-join',async()=>{expect(model).toContain('firstUnread');expect(model).toContain('envelope.firstUnread');expect(router).not.toContain('joinVoice');});

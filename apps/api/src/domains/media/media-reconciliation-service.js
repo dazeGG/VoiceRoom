@@ -1,9 +1,18 @@
 'use strict';
 
-function createMediaReconciliationService({ attachmentRepository, storage, assertLeaseOwned = async () => true } = {}) {
+function createMediaReconciliationService({ attachmentRepository, jobRepository, storage, assertLeaseOwned = async () => true } = {}) {
   if (!attachmentRepository || !storage) throw new TypeError('Media reconciliation dependencies are required');
 
   async function reconcile() {
+    let processingJobsRecovered = 0;
+    if (jobRepository?.enqueue && attachmentRepository.listProcessingWithoutActiveJob) {
+      const recoverable = await attachmentRepository.listProcessingWithoutActiveJob({ limit: 500 });
+      for (const attachment of recoverable) {
+        await assertLeaseOwned();
+        await jobRepository.enqueue(attachment.id);
+        processingJobsRecovered += 1;
+      }
+    }
     const databaseKeys = new Map();
     let afterId = null;
     for (;;) {
@@ -36,6 +45,7 @@ function createMediaReconciliationService({ attachmentRepository, storage, asser
       filesystemFiles: fileKeys.size,
       markedUnavailable,
       orphanFilesRemoved,
+      processingJobsRecovered,
       severity: markedUnavailable > 0 ? 'p0' : 'ok'
     });
   }

@@ -191,6 +191,17 @@ test('attachment repository covers cleanup, storage inventory, quota, and owner 
   assert.equal(calls.at(-1).values[0], 500);
   await repository.listCleanupCandidates({ limit: 1 });
   assert.equal(calls.at(-1).values[0], 1);
+  assert.equal((await repository.listProcessingWithoutActiveJob({ limit: 0 })).length, 1);
+  assert.equal(calls.at(-1).values[0], 500);
+  assert.match(calls.at(-1).text, /NOT EXISTS/);
+  assert.match(calls.at(-1).text, /job\.state IN \('pending', 'processing'\)/);
+  await repository.listProcessingWithoutActiveJob({ limit: 999, client: {
+    async query(text, values) {
+      assert.match(text, /attachment\.state = 'processing'/);
+      assert.deepEqual(values, [500]);
+      return { rows: [ROW], rowCount: 1 };
+    }
+  }});
   assert.equal((await repository.markCleanupDeleted('attachment-1')).id, 'attachment-1');
   const cleanupDeleteSql = calls.at(-1).text;
   assert.equal((cleanupDeleteSql.match(/WHERE id = \$1/g) || []).length, 1);

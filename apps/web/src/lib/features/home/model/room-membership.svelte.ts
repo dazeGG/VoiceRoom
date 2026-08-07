@@ -11,6 +11,7 @@ interface RoomMembershipEntry {
   presenceRevision: number;
   loaded: boolean;
   loading: boolean;
+  requestGeneration: number;
   error: string;
 }
 
@@ -27,6 +28,7 @@ function emptyEntry(): RoomMembershipEntry {
     presenceRevision: 0,
     loaded: false,
     loading: false,
+    requestGeneration: 0,
     error: ''
   };
 }
@@ -86,7 +88,7 @@ export async function loadRoomMembership(
   { append = false, query = '' }: { append?: boolean; query?: string } = {}
 ): Promise<void> {
   const entry = getRoomMembership(roomId);
-  if (entry.loading) return;
+  const requestGeneration = ++entry.requestGeneration;
   entry.loading = true;
   entry.error = '';
   try {
@@ -94,6 +96,7 @@ export async function loadRoomMembership(
       cursor: append && query === entry.query ? entry.nextCursor : undefined,
       query
     });
+    if (requestGeneration !== entry.requestGeneration) return;
     entry.members = mergeMembers(append && query === entry.query ? entry.members : [], envelope.members);
     entry.query = query;
     if (!query) entry.cachedMembers = entry.members;
@@ -103,10 +106,11 @@ export async function loadRoomMembership(
     entry.loaded = true;
     persist(roomId, entry);
   } catch (error) {
+    if (requestGeneration !== entry.requestGeneration) return;
     entry.error = error instanceof Error ? error.message : 'Не удалось загрузить участников';
     if (!query && entry.cachedMembers.length > 0) entry.members = entry.cachedMembers;
   } finally {
-    entry.loading = false;
+    if (requestGeneration === entry.requestGeneration) entry.loading = false;
   }
 }
 

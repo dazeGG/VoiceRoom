@@ -37,11 +37,14 @@ function createModerationRepository({ cursorCodec, pool } = {}) {
 
   function encodeCursor(roomId, row) {
     if (!row?.created_at || !row?.id) return undefined;
+    const createdAtMicros = row.created_at_micros
+      ? String(row.created_at_micros)
+      : (BigInt(new Date(row.created_at).getTime()) * 1000n).toString();
     return cursorCodec.encode({
       purpose: 'moderation-bans',
       context: `room:${roomId}`,
       tuple: {
-        createdAtMicros: (BigInt(new Date(row.created_at).getTime()) * 1000n).toString(),
+        createdAtMicros,
         id: row.id
       }
     });
@@ -139,7 +142,7 @@ function createModerationRepository({ cursorCodec, pool } = {}) {
       throw error;
     }
     const result = await executor(client).query(
-      `SELECT *
+      `SELECT *, FLOOR(EXTRACT(EPOCH FROM created_at) * 1000000)::bigint::text AS created_at_micros
        FROM room_bans
        WHERE room_id = $1
          AND revoked_at IS NULL

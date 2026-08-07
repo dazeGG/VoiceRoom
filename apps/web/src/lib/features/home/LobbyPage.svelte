@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { pushState, replaceState } from '$app/navigation';
-  import { Bell, X } from '@lucide/svelte';
+  import { X } from '@lucide/svelte';
   import type { AuthUser, OwnedRoom } from '$lib/api/auth';
   import { fetchOwnedRooms } from '$lib/api/auth';
   import { createRoom } from '$lib/api/rooms';
@@ -328,6 +328,13 @@
       onGoHome={goHome}
       onOpenPeople={openPeople}
       onOpenSettings={openSettings}
+      notificationsEnabled={notificationInboxEnabled}
+      notificationsOpen={notificationInboxOpen}
+      notificationUnreadCount={notificationInbox.unreadCount}
+      onOpenNotifications={() => {
+        notificationInboxOpen = !notificationInboxOpen;
+        if (notificationInboxOpen) void notificationInbox.load();
+      }}
       {onToast}
       activeVoiceRoomId={connectedVoiceRoomId}
       activeVoiceRoomName={connectedVoiceRoom ? roomDisplayName(connectedVoiceRoom) : connectedVoiceRoomId || ''}
@@ -356,7 +363,7 @@
       {:else if friendsState.mode === 'rooms' && !embeddedRoomVisible}
         <VoiceHome {rooms} onOpenRoom={previewRoom} onCreateRoom={() => (createDialogOpen = true)} onJoinCode={handleJoin} {onToast} />
       {:else if friendsState.mode === 'friends' && friendsState.view === 'dm'}
-        <DmView selfId={user.id} />
+        <DmView selfId={user.id} self={user} />
       {:else if friendsState.mode === 'friends' && friendsState.view === 'people'}
         <PeopleView {user} {onToast} onHome={goHome} />
       {:else if friendsState.mode === 'friends'}
@@ -379,19 +386,6 @@
   />
   <LobbyRoomSettingsDialog room={previewSettingsRoom} onClose={() => (previewSettingsRoomId = '')} onSaved={refreshRooms} onDeleted={() => { previewSettingsRoomId = ''; closeViewedRoom(); void refreshRooms(); }} {onToast} />
   {#if notificationInboxEnabled}
-    <button
-      class="notification-inbox-trigger"
-      type="button"
-      aria-label="Уведомления"
-      aria-expanded={notificationInboxOpen}
-      onclick={() => {
-        notificationInboxOpen = !notificationInboxOpen;
-        if (notificationInboxOpen) void notificationInbox.load();
-      }}
-    >
-      <Bell {...iconSm} />
-      {#if notificationInbox.unreadCount}<span>{notificationInbox.unreadCount > 99 ? '99+' : notificationInbox.unreadCount}</span>{/if}
-    </button>
     {#if notificationInboxOpen}
       <aside class="notification-inbox-panel" aria-label="Панель уведомлений">
         <button class="notification-inbox-close" type="button" aria-label="Закрыть" onclick={() => (notificationInboxOpen = false)}><X {...iconSm} /></button>
@@ -402,9 +396,11 @@
 {/if}
 
 <style>
-  .notification-inbox-trigger { position: fixed; z-index: 70; right: 22px; top: 18px; display: grid; place-items: center; width: 42px; height: 42px; border: 1px solid var(--line); border-radius: 13px; background: var(--paper); color: inherit; cursor: pointer; }
-  .notification-inbox-trigger span { position: absolute; right: -5px; top: -5px; min-width: 19px; height: 19px; border-radius: 999px; background: var(--coral); color: var(--ink); font-size: 11px; line-height: 19px; text-align: center; }
-  .notification-inbox-panel { position: fixed; z-index: 71; right: 22px; top: 68px; width: min(420px, calc(100vw - 32px)); max-height: min(620px, calc(100vh - 90px)); overflow: auto; border: 1px solid var(--line); border-radius: 16px; background: var(--paper); box-shadow: var(--shadow); }
+  .notification-inbox-panel { position: fixed; z-index: 71; left: 326px; bottom: 16px; width: min(420px, calc(100vw - 358px)); max-height: min(620px, calc(100vh - 32px)); overflow: auto; border: 1px solid var(--line); border-radius: 16px; background: var(--paper); box-shadow: var(--shadow); }
   .notification-inbox-panel :global(.notification-inbox) { margin: 18px; }
-  .notification-inbox-close { position: absolute; right: 10px; top: 10px; display: grid; place-items: center; width: 32px; height: 32px; border: 0; border-radius: 9px; background: transparent; color: inherit; cursor: pointer; }
+  .notification-inbox-panel :global(.notification-inbox > header) { padding-right: 36px; }
+  .notification-inbox-close { position: absolute; z-index: 1; right: 10px; top: 10px; display: grid; place-items: center; width: 32px; height: 32px; border: 0; border-radius: 9px; background: var(--paper); color: inherit; cursor: pointer; }
+  @media (max-width: 900px) {
+    .notification-inbox-panel { left: 12px; right: 12px; bottom: 76px; width: auto; max-height: min(560px, calc(100vh - 96px)); }
+  }
 </style>

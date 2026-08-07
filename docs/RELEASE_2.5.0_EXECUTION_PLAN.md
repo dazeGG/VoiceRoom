@@ -1,10 +1,12 @@
 # VoiceRoom 2.5.0 — consolidated execution plan
 
-**Status:** approved execution-shape amendment; planning only.
+**Status:** superseded for branch granularity by the active consolidated integration amendment; retained as dependency-order history.
 **Scope source:** `docs/RELEASE_2.5.0_PLAN.md`.
 **Verification source:** `docs/RELEASE_2.5.0_TEST_SPEC.md`.
 **Constraint:** preserve G01–G93 requirements while delivering them through no more than ten feature branches.
 **Current branch:** `feature/2.5.0-foundation`, renamed from `feature/2.5.0-g03-durable-evidence-archive` without changing its commits.
+
+> On 2026-08-07 the user explicitly consolidated the already-sequenced B01–B09 work into one implementation branch and PR #114. See `docs/releases/2.5.0/amendments/CONSOLIDATED-INTEGRATION.json`. Goal order, acceptance criteria, checkpoints and RC gates below remain normative; only branch/PR granularity is superseded.
 
 ## 1. Outcome
 

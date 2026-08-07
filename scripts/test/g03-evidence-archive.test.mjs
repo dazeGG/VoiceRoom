@@ -166,6 +166,8 @@ test("workflows use exact token permissions, pinned attestation, scheduled senti
   assert.match(archive, /github\.token/);
   assert.match(archive, /scripts\/ci\/run-oras\.sh/);
   assert.match(archive, /ref: \$\{\{ github\.sha \}\}/);
+  assert.match(archive, /git merge-base --is-ancestor "\$TERMINAL_DEVELOP_SHA" "\$GITHUB_SHA"/);
+  assert.doesNotMatch(archive, /git\/ref\/heads\/develop --jq \.object\.sha\)" = "\$TERMINAL_DEVELOP_SHA"/);
   assert.match(archive, /--validate-sources/);
   assert.match(archive, /--record-batch/);
   assert.match(archive, /blob fetch --output fetched-layer\.json/);

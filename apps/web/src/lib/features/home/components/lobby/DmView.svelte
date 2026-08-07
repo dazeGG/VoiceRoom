@@ -1,8 +1,9 @@
 <script lang="ts">
-  import { Bell, BellOff, Copy, DoorOpen, MessageSquare, Pencil, Trash2, User, UserMinus, X } from '@lucide/svelte';
+  import { Bell, BellOff, Copy, DoorOpen, Pencil, Reply, Trash2, User, UserMinus, X } from '@lucide/svelte';
   import { iconMd, iconSm } from '$lib/shared/ui/icons';
   import { onMount, tick } from 'svelte';
   import type { DirectMessage } from '$lib/api/dm';
+  import type { AuthUser } from '$lib/api/auth';
   import { Avatar } from '$lib/shared/ui';
   import { effectivePresenceStatus } from '$lib/shared/presence';
   import ChatText from '$lib/shared/components/ChatText.svelte';
@@ -41,7 +42,7 @@
   import AttachmentUploadControl from '$lib/shared/chat/AttachmentUploadControl.svelte';
   import ReplyPreview from '$lib/shared/chat/ReplyPreview.svelte';
 
-  let { selfId } = $props<{ selfId: string }>();
+  let { selfId, self } = $props<{ selfId: string; self: AuthUser }>();
 
   let draft = $state('');
   let sending = $state(false);
@@ -485,40 +486,41 @@
           {/if}
           {#each groups as group (group.key)}
             {#if group.dayLabel}
-              <div class="lobby-dm-day">
-                <span class="lobby-dm-day-label">{group.dayLabel}</span>
-              </div>
+              <div class="chat-day-divider"><span>{group.dayLabel}</span></div>
             {/if}
-            <div class="lobby-dm-group" class:lobby-dm-group--me={group.fromMe}>
-              {#if !group.fromMe && peer}
-                <Avatar name={friendName(peer)} src={peer.avatarUrl} colorKey={peer.avatarColorKey} background={peer.avatarAccent || undefined} size={32} />
-              {/if}
-              <div class="lobby-dm-bubbles">
+            <div class="chat-msg dm-chat-group" data-self={group.fromMe}>
+              <Avatar
+                class="chat-msg-avatar"
+                name={group.fromMe ? (self.displayName?.trim() || self.login) : friendName(peer!)}
+                src={group.fromMe ? self.avatarUrl : peer?.avatarUrl}
+                colorKey={group.fromMe ? self.avatarColorKey : peer?.avatarColorKey}
+                background={(group.fromMe ? self.avatarAccent : peer?.avatarAccent) || undefined}
+                size={34}
+              />
+              <div class="chat-msg-main">
+                <div class="chat-msg-meta">
+                  <span class="chat-msg-author" style={`color:${(group.fromMe ? self.avatarAccent : peer?.avatarAccent) || 'var(--accent)'}`}>
+                    {group.fromMe ? (self.displayName?.trim() || self.login) : friendName(peer!)}
+                  </span>
+                  <time class="chat-msg-time" datetime={new Date(group.bubbles[0].createdAt).toISOString()}>{formatTime(group.bubbles[0].createdAt)}</time>
+                </div>
                 {#each group.bubbles as bubble (bubble.id)}
-                  {#if bubble.invite}
-                    <article class="lobby-room-invitation" data-status={bubble.invite.status}>
-                      <span class="lobby-room-invitation-icon"><DoorOpen {...iconMd} aria-hidden="true" /></span>
-                      <div class="lobby-room-invitation-copy">
-                        <strong>{inviteTitle(bubble, group.fromMe)}</strong>
-                        <span>{bubble.invite.roomName || bubble.invite.roomId}</span>
-                      </div>
-                      {#if inviteActionable(bubble, group.fromMe)}
-                        <div class="lobby-room-invitation-actions">
-                          <button type="button" class="lobby-room-invitation-dismiss" disabled={inviteResponding === bubble.id} onclick={() => void onInviteRespond(bubble, 'decline')}>Не сейчас</button>
-                          <button type="button" class="lobby-room-invitation-join" disabled={inviteResponding === bubble.id} onclick={() => void onInviteRespond(bubble, 'accept')}>Войти</button>
+                  <div class="chat-msg-text dm-chat-message" data-message-id={bubble.id} data-group-first={bubble.id === group.bubbles[0].id}>
+                    {#if bubble.invite}
+                      <article class="lobby-room-invitation" data-status={bubble.invite.status}>
+                        <span class="lobby-room-invitation-icon"><DoorOpen {...iconMd} aria-hidden="true" /></span>
+                        <div class="lobby-room-invitation-copy">
+                          <strong>{inviteTitle(bubble, group.fromMe)}</strong>
+                          <span>{bubble.invite.roomName || bubble.invite.roomId}</span>
                         </div>
-                      {/if}
-                    </article>
-                  {:else}
-                  <div
-                    class="lobby-dm-bubble"
-                    class:lobby-dm-bubble--me={group.fromMe}
-                    class:lobby-dm-bubble--them={!group.fromMe}
-                    class:lobby-dm-bubble--has-attachments={Boolean(bubble.attachments?.length)}
-                    class:lobby-dm-bubble--media-caption={Boolean(bubble.body.trim() && bubble.attachments?.length)}
-                    class:lobby-dm-bubble--attachment-only={!bubble.body.trim() && Boolean(bubble.attachments?.length) && !bubble.replyPreview}
-                  >
-                    {#if editingMessageId === bubble.id}
+                        {#if inviteActionable(bubble, group.fromMe)}
+                          <div class="lobby-room-invitation-actions">
+                            <button type="button" class="lobby-room-invitation-dismiss" disabled={inviteResponding === bubble.id} onclick={() => void onInviteRespond(bubble, 'decline')}>Не сейчас</button>
+                            <button type="button" class="lobby-room-invitation-join" disabled={inviteResponding === bubble.id} onclick={() => void onInviteRespond(bubble, 'accept')}>Войти</button>
+                          </div>
+                        {/if}
+                      </article>
+                    {:else if editingMessageId === bubble.id}
                       <div class="dm-msg-edit">
                         <textarea
                           class="dm-msg-edit-input"
@@ -536,24 +538,24 @@
                         </div>
                       </div>
                     {:else}
-                      {#if bubble.replyPreview}<ReplyPreview preview={bubble.replyPreview} />{/if}
-                      {#if bubble.attachments?.length}<AttachmentMosaic attachments={bubble.attachments} />{/if}
-                      {#if bubble.body.trim()}<span class="dm-msg-content"><ChatText text={bubble.body} />{#if bubble.editedAt}<span class="dm-msg-edited">(изменено)</span>{/if}</span>{/if}
-                      <div class="dm-msg-actions" role="toolbar" aria-label="Действия с сообщением">
+                      <div class="dm-chat-content">
+                        {#if bubble.replyPreview}<ReplyPreview preview={bubble.replyPreview} />{/if}
+                        {#if bubble.attachments?.length}<AttachmentMosaic attachments={bubble.attachments} />{/if}
+                        {#if bubble.body.trim()}<span class="chat-msg-content dm-msg-content"><ChatText text={bubble.body} />{#if bubble.editedAt}<span class="dm-msg-edited">(изменено)</span>{/if}</span>{/if}
+                        {#if reactionsEnabled}<ReactionSummary store={reactions} messageId={bubble.id} />{/if}
+                      </div>
+                      <div class="chat-msg-actions" role="toolbar" aria-label="Действия с сообщением">
                         {#if reactionsEnabled}<ReactionPicker store={reactions} messageId={bubble.id} userId={selfId} />{/if}
-                        {#if repliesEnabled}<button type="button" aria-label="Ответить" title="Ответить" onclick={() => { replyTarget = bubble; inputEl?.focus(); }}><MessageSquare {...iconSm} /></button>{/if}
+                        {#if repliesEnabled}<button type="button" aria-label="Ответить" title="Ответить" onclick={() => { replyTarget = bubble; inputEl?.focus(); }}><Reply {...iconSm} /></button>{/if}
                         <button type="button" aria-label="Копировать текст" title="Копировать текст" onclick={() => void copyMessageText(bubble)}><Copy {...iconSm} aria-hidden="true" /></button>
                         {#if group.fromMe}
                           <button type="button" aria-label="Редактировать" title="Редактировать" onclick={() => startEditing(bubble)}><Pencil {...iconSm} aria-hidden="true" /></button>
-                          <button type="button" class="dm-msg-action-danger" aria-label="Удалить" title="Удалить" onclick={() => void onDelete(bubble.id)}><Trash2 {...iconSm} aria-hidden="true" /></button>
+                          <button type="button" class="chat-msg-action-danger" aria-label="Удалить" title="Удалить" onclick={() => void onDelete(bubble.id)}><Trash2 {...iconSm} aria-hidden="true" /></button>
                         {/if}
                       </div>
-                      {#if reactionsEnabled}<ReactionSummary store={reactions} messageId={bubble.id} />{/if}
                     {/if}
                   </div>
-                  {/if}
                 {/each}
-                <div class="lobby-dm-time">{formatTime(group.bubbles[group.bubbles.length - 1].createdAt)}</div>
               </div>
             </div>
           {/each}

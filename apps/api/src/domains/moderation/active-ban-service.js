@@ -12,6 +12,17 @@ function createActiveBanService({ pool, repository = createActiveBanRepository({
     return Boolean(await getActiveBan(input));
   }
 
+  async function filterEligibleUserIds({ roomId, userIds = [], at = now(), client } = {}) {
+    const normalized = Array.from(new Set(
+      (Array.isArray(userIds) ? userIds : [])
+        .filter((userId) => typeof userId === 'string' && userId.trim())
+        .map((userId) => userId.trim())
+    ));
+    if (!roomId || normalized.length === 0) return [];
+    const banned = new Set(await repository.filterActiveUserIds({ roomId, userIds: normalized, at, client }));
+    return normalized.filter((userId) => !banned.has(userId));
+  }
+
   async function createBan({ roomId, userId = null, ip = '', expiresAt = null, metadata = {}, maxActiveBans = 100 } = {}) {
     const principal = normalizePrincipal({ userId, ip });
     if (!roomId || (!principal.userId && !principal.ip)) return { ban: null, status: 'invalid' };
@@ -31,7 +42,7 @@ function createActiveBanService({ pool, repository = createActiveBanRepository({
     });
   }
 
-  return { createBan, getActiveBan, isBanned, repository };
+  return { createBan, filterEligibleUserIds, getActiveBan, isBanned, repository };
 }
 
 module.exports = { createActiveBanService };

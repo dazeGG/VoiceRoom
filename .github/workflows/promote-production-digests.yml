@@ -24,9 +24,11 @@ jobs:
       - uses: actions/checkout@v4
       - name: Prove production promotion is externally disabled
         shell: bash
+        env:
+          AUTHORITY_FILE: ${{ inputs.authority }}
         run: |
           set -euo pipefail
-          fixture="${{ inputs.authority }}"
+          fixture="$AUTHORITY_FILE"
           if [[ -z "$fixture" ]]; then
             printf '{"mode":"live-pretag"}\n' > promotion-authority.json
             fixture=promotion-authority.json

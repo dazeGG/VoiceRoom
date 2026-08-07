@@ -3,6 +3,8 @@
   padding: 12px 12px 0;
 }
 
+.attachment-compose-error { margin: 6px 12px 0; color: var(--coral); font-size: 12px; }
+
 .attachment-draft-list {
   display: flex;
   flex-wrap: wrap;

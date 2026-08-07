@@ -192,7 +192,7 @@ function replicaVectorFor(manifestDigest, manifestSchemaVersion, contractVersion
   return sha256Hex(checksOrdered.join('\n'));
 }
 
-function compareReplicas(manifest, localReport, replicas) {
+function compareReplicas(manifest, localReport, replicas, { required = false } = {}) {
   const normalizedReplicas = Array.isArray(replicas) && replicas.length ? replicas : [];
   const localFeatures = localReport.features;
   const localVector = localReport.signature;
@@ -200,6 +200,14 @@ function compareReplicas(manifest, localReport, replicas) {
 
   const replicaResults = [];
   const disagreeing = new Set();
+
+  if (required && normalizedReplicas.length === 0) {
+    return {
+      consensus: false,
+      disagreeing: [...PUBLIC_CAPABILITY_KEYS],
+      replicas: []
+    };
+  }
 
   for (let index = 0; index < Math.max(1, normalizedReplicas.length); index += 1) {
     const raw = normalizedReplicas[index] || {};
@@ -226,8 +234,9 @@ function compareReplicas(manifest, localReport, replicas) {
     let stale = false;
 
     if (!replica.manifestDigest || replica.manifestDigest !== localDigest) stale = true;
-    if ((replica.manifestSchemaVersion || 0) !== (manifest.schemaVersion || 1)) stale = true;
-    if (replica.contractVersion && replica.contractVersion !== manifest.contractVersion) stale = true;
+    if (replica.manifestSchemaVersion !== manifest.schemaVersion) stale = true;
+    if (replica.contractVersion !== manifest.contractVersion) stale = true;
+    if (normalizedReplicas.length > 0 && replica.ready !== true) stale = true;
 
     for (const key of PUBLIC_CAPABILITY_KEYS) {
       const localValue = Boolean(localFeatures[key]);
@@ -371,11 +380,13 @@ function createReadinessReport(manifestPath, options = {}) {
       signature: evaluated.signature,
       features: evaluated.features
     },
-    options.replicas
+    options.replicas,
+    { required: options.requireReplicaConsensus === true }
   );
 
-  const effective = { ...evaluated.features };
-  for (const key of consensus.disagreeing) effective[key] = false;
+  const effective = consensus.consensus
+    ? { ...evaluated.features }
+    : Object.fromEntries(PUBLIC_CAPABILITY_KEYS.map((key) => [key, false]));
 
   return {
     manifest: evaluated.manifest,

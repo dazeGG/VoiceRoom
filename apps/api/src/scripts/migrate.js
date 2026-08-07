@@ -14,6 +14,9 @@ function parseArgs(argv) {
 
 async function main() {
   const { direction, noLock, clearDirty } = parseArgs(process.argv);
+  if (noLock && process.env.NODE_ENV === 'production') {
+    throw new Error('Production migrations require the fenced advisory lock');
+  }
   if (direction === 'down' && process.env.NODE_ENV === 'production') {
     throw new Error('Production down migrations are disabled; roll back the application against additive schema');
   }

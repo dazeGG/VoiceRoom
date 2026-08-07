@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { BellOff, Check, Settings, UserPlus } from '@lucide/svelte';
+  import { Bell, BellOff, Check, Settings, UserPlus } from '@lucide/svelte';
   import { tick } from 'svelte';
   import type { AuthUser } from '$lib/api/auth';
   import { Avatar, Badge, ContextMenu, Popover } from '$lib/shared/ui';
@@ -21,6 +21,10 @@
     onGoHome,
     onOpenPeople,
     onOpenSettings,
+    notificationsEnabled = false,
+    notificationsOpen = false,
+    notificationUnreadCount = 0,
+    onOpenNotifications,
     onToast,
     activeVoiceRoomId = null,
     activeVoiceRoomName = '',
@@ -36,6 +40,10 @@
     onGoHome: () => void;
     onOpenPeople: () => void;
     onOpenSettings: () => void;
+    notificationsEnabled?: boolean;
+    notificationsOpen?: boolean;
+    notificationUnreadCount?: number;
+    onOpenNotifications?: () => void;
     onToast: (message: string) => void;
     activeVoiceRoomId?: string | null;
     activeVoiceRoomName?: string;
@@ -375,6 +383,21 @@
     </Popover>
     <div class="lv-profile-actions">
       <SidebarDownload />
+      {#if notificationsEnabled}
+        <button
+          class="lobby-gear lv-notification-button"
+          type="button"
+          title="Уведомления"
+          aria-label="Открыть уведомления"
+          aria-expanded={notificationsOpen}
+          onclick={onOpenNotifications}
+        >
+          <Bell {...iconSm} aria-hidden="true" />
+          {#if notificationUnreadCount > 0}
+            <span class="lv-notification-count">{notificationUnreadCount > 99 ? '99+' : notificationUnreadCount}</span>
+          {/if}
+        </button>
+      {/if}
       <button
         class="lobby-gear"
         type="button"
@@ -431,6 +454,25 @@
     justify-content: flex-end;
     gap: 10px;
     margin-left: auto;
+  }
+
+  .lv-notification-button { position: relative; }
+  .lv-notification-count {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    display: grid;
+    min-width: 17px;
+    height: 17px;
+    place-items: center;
+    border: 2px solid var(--panel);
+    border-radius: 999px;
+    padding: 0 3px;
+    background: var(--coral);
+    color: var(--ink);
+    font-family: var(--font-mono);
+    font-size: 9px;
+    line-height: 1;
   }
 
   :global(.lv-status-popover) {

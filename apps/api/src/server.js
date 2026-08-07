@@ -16,7 +16,7 @@ const { buildServerEnvelope } = require('./realtime/envelope');
 const { URL } = require('node:url');
 const { RoomServiceClient } = require('livekit-server-sdk');
 
-const { readEnvInt, readEnvBool, readDatabaseConfig, readUploadsDir } = require('./lib/config');
+const { readEnvInt, readEnvBool, readMessageDeliveryMode, readDatabaseConfig, readUploadsDir } = require('./lib/config');
 const {
   normalizeRoomId,
   normalizePeerId,
@@ -44,11 +44,14 @@ const { createPushStore } = require('./lib/push-store');
 const { createPushService, resolvePushTtl, shouldDeliverPush } = require('./lib/push-service');
 const { cleanPushEndpoint } = require('./lib/push-endpoint');
 const { startApiListener } = require('./lib/listen');
-const { runMigrations } = require('./lib/migrate');
+const { assertMigrationReady, runMigrations } = require('./lib/migrate');
 const { createRelease250Pool } = require('./lib/release-250-pool');
 const {
   observeMaintenance,
+  recordCredentialRevokeCleanupFailure,
   recordHttpRequest,
+  recordMediaAuthorizationInvariantFailure,
+  recordMediaPressure,
   renderPrometheus
 } = require('./lib/metrics');
 const { createCredentialBoundaryService } = require('./domains/admission/credential-boundary-service');
@@ -99,7 +102,7 @@ const { createMediaService, MAX_UPLOAD_BYTES } = require('./domains/media/media-
 const { createMediaVisibilityService } = require('./domains/media/media-visibility-service');
 const { registerMediaRoutes } = require('./domains/media/media-routes');
 const { createCursorCodec } = require('./platform/cursor-codec');
-const { createReadinessProvider } = require('./platform/readiness');
+const { createRuntimeReadinessProvider } = require('./platform/runtime-readiness');
 const { registerCapabilityRoutes } = require('./platform/capability-routes');
 const { mentionUserIdsFromContent } = require('@voice-room/shared/mentions');
 
@@ -152,8 +155,18 @@ function readinessReadySetFromEnv(name) {
   return new Set(raw.split(',').map((item) => item.trim()).filter(Boolean));
 }
 
-const readinessProvider = createReadinessProvider({
+const CAPABILITY_API_REPLICA_ID = (process.env.CAPABILITY_API_REPLICA_ID || process.env.HOSTNAME || 'api-primary').trim();
+const CAPABILITY_EXPECTED_API_REPLICA_IDS = (() => {
+  const configured = readinessReadySetFromEnv('CAPABILITY_EXPECTED_API_REPLICA_IDS');
+  return configured.size ? [...configured] : [CAPABILITY_API_REPLICA_ID];
+})();
+const readinessProvider = createRuntimeReadinessProvider({
+  expectedApiReplicaIds: CAPABILITY_EXPECTED_API_REPLICA_IDS,
+  getClient: () => getRelease250Pool(),
+  heartbeatIntervalMs: readEnvInt('CAPABILITY_HEARTBEAT_INTERVAL_MS', 5_000, 1_000),
+  heartbeatMaxAgeMs: readEnvInt('CAPABILITY_HEARTBEAT_MAX_AGE_MS', 15_000, 3_000),
   manifestPath: CAPABILITY_DAG_PATH,
+  runtimeId: CAPABILITY_API_REPLICA_ID,
   getReadinessOptions: () => ({
     desired: CAPABILITY_DESIRED,
     binaryReady: readinessReadySetFromEnv('CAPABILITY_READY_BINARY'),
@@ -188,7 +201,8 @@ const MAX_GUEST_STREAMS_PER_IP = readEnvInt('MAX_GUEST_STREAMS_PER_IP', 8, 1);
 const WS_MAX_PAYLOAD_BYTES = readEnvInt('WS_MAX_PAYLOAD_BYTES', 64 * 1024, 1024);
 const RETENTION_PURGE_INTERVAL_MS = readEnvInt('RETENTION_PURGE_INTERVAL_MS', 60 * 60 * 1000, 0);
 const RETENTION_KEEP_DELETED_MS = readEnvInt('RETENTION_KEEP_DELETED_MS', 30 * 24 * 60 * 60 * 1000, 60000);
-const MESSAGE_DIRECT_EMIT_ENABLED = readEnvBool('MESSAGE_DIRECT_EMIT_ENABLED', true);
+const MESSAGE_DELIVERY_MODE = readMessageDeliveryMode();
+const MESSAGE_DIRECT_EMIT_ENABLED = MESSAGE_DELIVERY_MODE.directEmitEnabled;
 const MESSAGE_DELIVERY_LISTEN_ENABLED = readEnvBool('MESSAGE_DELIVERY_LISTEN_ENABLED', true);
 // Desktop app downloads are served from the latest GitHub release of this repo.
 // Metadata is cached server-side so visitors never hit GitHub's per-IP rate limit.
@@ -374,7 +388,7 @@ function getReactionServices() {
     broadcastRoom: async (roomId, event) => {
       const room = await getRoom(roomId);
       if (!room) return false;
-      broadcast(room, event);
+      roomRuntime?.broadcastRoomDetail(roomId, event);
       return true;
     },
     broadcastAccount: broadcastToUser,
@@ -383,12 +397,17 @@ function getReactionServices() {
   const service = createReactionService({
     repository: createReactionRepository({ client: pool }),
     cursorCodec: getHistoryServices().cursorCodec,
-    requireVisible: async ({ conversation, messageId, viewer }) => {
-      if (!viewer?.id) return false;
+    requireVisible: async ({ conversation, messageId, viewer, operation }) => {
       if (conversation.type === 'room') {
-        if (!await getRoomStore().canUserReactInRoom(conversation.id, viewer.id)) return false;
-        return Boolean(await getMessageService().room.getMessage(conversation.id, messageId));
+        const message = await getMessageService().room.getMessage(conversation.id, messageId);
+        if (!message) return false;
+        if (operation === 'read' && !viewer?.id) return Boolean(await getRoom(conversation.id));
+        if (!viewer?.id) return false;
+        return operation === 'read'
+          ? getRoomStore().canUserReadRoomChat(conversation.id, viewer.id)
+          : getRoomStore().canUserReactInRoom(conversation.id, viewer.id);
       }
+      if (!viewer?.id) return false;
       return Boolean(await getMessageService().direct.getMessage(viewer.id, conversation.id, messageId));
     },
     writesEnabled: () => release250FeatureEnabled('reactions'),
@@ -479,7 +498,7 @@ function getNotificationServices() {
   if (!pool) return null;
   const inbox = createInboxRepository({ pool });
   const mentions = createMentionRepository({ pool });
-  const eligibility = createMentionEligibilityService({ pool });
+  const eligibility = createMentionEligibilityService({ activeBanService: getActiveBanService(), pool });
   const outbox = createNotificationOutboxRepository({ pool });
   const service = createNotificationService({
     pool,
@@ -559,7 +578,9 @@ function getMediaServices() {
   const storage = createMediaStorage({ rootDir: process.env.MEDIA_STORAGE_DIR || '/data/media' });
   const pressure = createMediaPressureService({
     storagePath: storage.root,
-    minFreeBytes: readEnvInt('MEDIA_MIN_FREE_BYTES', 2 * 1024 * 1024 * 1024, 1)
+    minFreeBytes: readEnvInt('MEDIA_MIN_FREE_BYTES', 2 * 1024 * 1024 * 1024, 1),
+    replicaConsensus: () => readinessProvider.getSnapshot()?.replicaConsensus === true,
+    onSnapshot: recordMediaPressure
   });
   const attachments = createAttachmentRepository({ pool });
   const jobs = createMediaJobRepository({ pool });
@@ -578,21 +599,17 @@ function getMediaServices() {
     authorizeRoomAttachment: async ({ attachment, viewerId }) => {
       if (!attachment.roomMessageId) return false;
       const result = await pool.query(
-        `SELECT 1
+        `SELECT room.id AS room_id
          FROM room_messages message
          JOIN rooms room ON room.id = message.room_id AND room.deleted_at IS NULL
          JOIN room_memberships membership ON membership.room_id = room.id AND membership.user_id = $2
          WHERE message.id = $1 AND message.deleted_at IS NULL
            AND (message.expires_at IS NULL OR message.expires_at > current_timestamp)
-           AND NOT EXISTS (
-             SELECT 1 FROM room_bans ban
-             WHERE ban.room_id = room.id AND ban.user_id = $2 AND ban.revoked_at IS NULL
-               AND (ban.expires_at IS NULL OR ban.expires_at > current_timestamp)
-           )
          LIMIT 1`,
         [attachment.roomMessageId, viewerId]
       );
-      return result.rowCount === 1;
+      if (result.rowCount !== 1) return false;
+      return !await getActiveBanService().isBanned({ roomId: result.rows[0].room_id, userId: viewerId });
     },
     authorizeDirectAttachment: async ({ attachment, viewerId }) => {
       if (!attachment.directMessageId) return false;
@@ -604,7 +621,8 @@ function getMediaServices() {
         [attachment.directMessageId, viewerId]
       );
       return result.rowCount === 1;
-    }
+    },
+    onAuthorizationInvariantFailure: recordMediaAuthorizationInvariantFailure
   });
   mediaServices = { attachments, jobs, pressure, quota, service, storage, visibility };
   return mediaServices;
@@ -621,7 +639,6 @@ function publicAttachment(attachment) {
   return {
     id: attachment.id,
     context: attachment.context,
-    ownerId: attachment.ownerId,
     order: attachment.order,
     mimeType: attachment.mimeType,
     bytes: attachment.processedBytes || attachment.originalBytes,
@@ -1419,6 +1436,22 @@ async function readJsonBody(req) {
   }
 }
 
+async function revokeIssuedAdmission({ boundary = getCredentialBoundary(), cause, credentialId, principal, recordFailure = recordCredentialRevokeCleanupFailure, req, roomId }) {
+  try {
+    const revoked = await boundary.revokeCredential({ credentialId, roomId, principal });
+    if (revoked?.status !== 'revoked') {
+      const error = new Error('Issued admission credential cleanup was refused');
+      error.code = 'credential_revoke_cleanup_refused';
+      throw error;
+    }
+  } catch (cleanupError) {
+    recordFailure();
+    req?.log?.error?.({ cleanupError, code: 'credential_revoke_cleanup_failed', roomId }, 'Issued admission credential cleanup failed');
+    if (cause) throw new AggregateError([cause, cleanupError], 'Admission persistence and credential cleanup both failed', { cause });
+    throw cleanupError;
+  }
+}
+
 async function handleLiveKitToken(req, res) {
   const livekit = getLiveKitConfig();
   const body = await readJsonBody(req);
@@ -1481,7 +1514,6 @@ async function handleLiveKitToken(req, res) {
     return;
   }
   const livekitRoom = getLiveKitRoomName(roomId);
-  let persistedMembership = null;
   let memberships = null;
   if (sessionUser?.id) {
     memberships = getMembershipServices();
@@ -1489,13 +1521,39 @@ async function handleLiveKitToken(req, res) {
       sendJson(res, 503, { ok: false, code: 'membership_unavailable', error: 'Membership service unavailable' });
       return;
     }
-    persistedMembership = await memberships.service.persistSuccessfulAdmission({
-      roomId,
-      userId: sessionUser.id,
-      ip: getClientIp(req, TRUST_PROXY),
-      admissionSucceeded: true
-    });
+  }
+
+  if (!provider) {
+    sendJson(res, 503, { ok: false, code: 'livekit_gate_unavailable', error: 'LiveKit gate unavailable' });
+    return;
+  }
+  const issued = await provider.issueAdmission({ livekitRoom, name, peerId, principal, roomId });
+  if (issued.status !== 'issued') {
+    sendJson(res, 503, { ok: false, code: 'livekit_gate_credential_unavailable', error: 'LiveKit gate unavailable' });
+    return;
+  }
+
+  if (await findRoomBan(roomId, sessionUser?.id, getClientIp(req, TRUST_PROXY))) {
+    await getCredentialBoundary().revokePrincipal({ principal, roomId });
+    sendRoomBanned(res, roomId);
+    return;
+  }
+
+  if (sessionUser?.id) {
+    let persistedMembership;
+    try {
+      persistedMembership = await memberships.service.persistSuccessfulAdmission({
+        roomId,
+        userId: sessionUser.id,
+        ip: getClientIp(req, TRUST_PROXY),
+        admissionSucceeded: true
+      });
+    } catch (error) {
+      await revokeIssuedAdmission({ cause: error, credentialId: issued.admission.gateCredentialId, principal, req, roomId });
+      throw error;
+    }
     if (persistedMembership.status !== 'active') {
+      await revokeIssuedAdmission({ credentialId: issued.admission.gateCredentialId, principal, req, roomId });
       if (persistedMembership.status === 'banned') {
         sendRoomBanned(res, roomId);
       } else {
@@ -1503,48 +1561,6 @@ async function handleLiveKitToken(req, res) {
       }
       return;
     }
-  }
-
-  if (!provider) {
-    if (persistedMembership?.created) {
-      await memberships.service.rollbackSuccessfulAdmission({
-        roomId,
-        userId: sessionUser.id,
-        membershipId: persistedMembership.membership.id
-      });
-    }
-    sendJson(res, 503, { ok: false, code: 'livekit_gate_unavailable', error: 'LiveKit gate unavailable' });
-    return;
-  }
-  let issued;
-  try {
-    issued = await provider.issueAdmission({ livekitRoom, name, peerId, principal, roomId });
-  } catch (error) {
-    if (persistedMembership?.created) {
-      await memberships.service.rollbackSuccessfulAdmission({
-        roomId,
-        userId: sessionUser.id,
-        membershipId: persistedMembership.membership.id
-      });
-    }
-    throw error;
-  }
-  if (issued.status !== 'issued') {
-    if (persistedMembership?.created) {
-      await memberships.service.rollbackSuccessfulAdmission({
-        roomId,
-        userId: sessionUser.id,
-        membershipId: persistedMembership.membership.id
-      });
-    }
-    sendJson(res, 503, { ok: false, code: 'livekit_gate_credential_unavailable', error: 'LiveKit gate unavailable' });
-    return;
-  }
-
-  if (await findRoomBan(roomId, sessionUser?.id, getClientIp(req, TRUST_PROXY))) {
-    await getCredentialBoundary().revokePrincipal({ roomId, principal });
-    sendRoomBanned(res, roomId);
-    return;
   }
 
   sendJson(res, 200, {
@@ -4037,6 +4053,8 @@ function createApiApp({
   });
   app.register(fastifyWebsocket, { options: { maxPayload: WS_MAX_PAYLOAD_BYTES } });
   const activeReadinessProvider = readinessProviderOverride || readinessProvider;
+  app.addHook('onReady', async () => { await activeReadinessProvider.start?.(); });
+  app.addHook('onClose', async () => { await activeReadinessProvider.stop?.(); });
   app.addHook('onReady', startMessageDeliveryListener);
   app.addHook('onClose', stopMessageDeliveryListener);
 
@@ -4440,6 +4458,9 @@ async function bootstrap({ env = process.env, logger = console, exit = process.e
     if (readEnvBool('MIGRATE_ON_START', env.NODE_ENV !== 'production', env)) {
       await runMigrations({ databaseUrl: database.url, logger });
     }
+    if (env.NODE_ENV === 'production') {
+      await assertMigrationReady({ databaseUrl: database.url });
+    }
     roomStore = createRoomStore({
       databaseUrl: database.url,
       logger,
@@ -4507,6 +4528,7 @@ if (require.main === module) {
 module.exports = {
   __private: {
     pruneRooms,
+    revokeIssuedAdmission,
     resolveCursorHmacKeys,
     resolveRealtimeReconnectLeaseMs
   },

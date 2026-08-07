@@ -25,6 +25,7 @@ function disposePreview(draft: ComposeDraft): void {
 export class AttachmentComposeStore {
   drafts = $state<ComposeDraft[]>([]);
   busy = $state(false);
+  lastError = $state<string | null>(null);
 
   private readonly storageKey: string;
 
@@ -42,6 +43,7 @@ export class AttachmentComposeStore {
   get canSend(): boolean { return this.drafts.length > 0 && this.drafts.every((draft) => draft.state === 'ready'); }
 
   async addFiles(files: Iterable<File>): Promise<void> {
+    this.lastError = null;
     const candidates = Array.from(files).slice(0, Math.max(0, 4 - this.drafts.length));
     for (const file of candidates) {
       if (!allowedTypes.has(file.type) || file.size < 1 || file.size > 10 * 1024 * 1024) {
@@ -74,7 +76,13 @@ export class AttachmentComposeStore {
       }), { progress: 1 });
       await this.waitUntilTerminal(draft);
     } catch (error) {
-      if (draft && draft.state !== 'ready') draft.error = error instanceof Error ? error.message : 'Ошибка загрузки';
+      if (draft && draft.state !== 'ready') {
+        this.lastError = error instanceof Error ? error.message : 'Ошибка загрузки';
+        await deleteAttachment(draft.id).catch(() => {});
+        disposePreview(draft);
+        this.drafts = this.drafts.filter((item) => item.id !== draft?.id);
+        this.persist();
+      }
       else throw error;
     } finally {
       this.busy = false;
@@ -82,7 +90,7 @@ export class AttachmentComposeStore {
   }
 
   async waitUntilTerminal(draft: ComposeDraft): Promise<void> {
-    for (let attempt = 0; attempt < 120 && draft.state === 'processing'; attempt += 1) {
+    for (let attempt = 0; attempt < 120 && (draft.state === 'pending' || draft.state === 'processing'); attempt += 1) {
       await new Promise((resolve) => setTimeout(resolve, 1_000));
       Object.assign(draft, await getAttachmentStatus(draft.id));
     }
@@ -99,7 +107,7 @@ export class AttachmentComposeStore {
         error: null
       }));
     this.persist();
-    await Promise.all(this.drafts.filter((draft) => draft.state === 'processing').map((draft) => this.waitUntilTerminal(draft)));
+    await Promise.all(this.drafts.filter((draft) => draft.state === 'pending' || draft.state === 'processing').map((draft) => this.waitUntilTerminal(draft)));
   }
 
   move(from: number, to: number): void {
@@ -130,6 +138,15 @@ export class AttachmentComposeStore {
 
   clearBound(): void {
     this.drafts.forEach(disposePreview);
+    this.drafts = [];
+    this.persist();
+  }
+
+  discard(): void {
+    for (const draft of this.drafts) {
+      disposePreview(draft);
+      void deleteAttachment(draft.id).catch(() => {});
+    }
     this.drafts = [];
     this.persist();
   }
@@ -169,6 +186,7 @@ export function dataTransferHasImages(data: DataTransfer | null): boolean {
 }
 
 export function clearAttachmentComposeStores(): void {
+  for (const store of stores.values()) store.discard();
   stores.clear();
   if (typeof localStorage !== 'undefined') {
     for (let index = localStorage.length - 1; index >= 0; index -= 1) {

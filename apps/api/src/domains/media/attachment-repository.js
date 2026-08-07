@@ -284,6 +284,21 @@ ${CLEANUP_CANDIDATE_PREDICATE}
     }));
   }
 
+  async function listProcessingWithoutActiveJob({ limit = 500, client } = {}) {
+    const result = await executor(client).query(
+      `SELECT attachment.* FROM message_attachments attachment
+       WHERE attachment.state = 'processing'
+         AND NOT EXISTS (
+           SELECT 1 FROM media_processing_jobs job
+           WHERE job.attachment_id = attachment.id AND job.kind = 'process'
+             AND job.state IN ('pending', 'processing')
+         )
+       ORDER BY attachment.updated_at ASC, attachment.id ASC LIMIT $1`,
+      [Math.max(1, Math.min(Number(limit) || 500, 500))]
+    );
+    return result.rows.map(mapAttachment);
+  }
+
   async function markUnavailable(id, failureCode = 'media_missing', client) {
     return markFailed(id, failureCode, client);
   }
@@ -348,6 +363,7 @@ ${CLEANUP_CANDIDATE_PREDICATE}
     listCleanupCandidates,
     listForMessage,
     listOwnerDrafts,
+    listProcessingWithoutActiveJob,
     listStorageKeys,
     lockOwner,
     markDeleted,

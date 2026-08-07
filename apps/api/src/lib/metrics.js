@@ -3,6 +3,11 @@
 const httpRequests = new Map();
 const maintenanceTasks = new Map();
 let pgPoolErrors = 0;
+let mediaPressure = { freeBytes: 0, healthy: false, reason: 'unchecked' };
+let notificationOldestPendingSeconds = 0;
+let mediaOldestPendingSeconds = 0;
+let mediaAuthorizationInvariantFailures = 0;
+let credentialRevokeCleanupFailures = 0;
 
 function labelValue(value) {
   return String(value).replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n');
@@ -55,6 +60,19 @@ function recordMaintenanceDuration(task, durationMs) {
 function recordPgPoolError() {
   pgPoolErrors += 1;
 }
+
+function recordMediaPressure(snapshot = {}) {
+  mediaPressure = {
+    freeBytes: Math.max(0, Number(snapshot.freeBytes) || 0),
+    healthy: snapshot.healthy === true,
+    reason: String(snapshot.reason || 'unknown')
+  };
+}
+
+function recordNotificationOldestPending(ageMs) { notificationOldestPendingSeconds = Math.max(0, Number(ageMs) || 0) / 1000; }
+function recordMediaOldestPending(ageMs) { mediaOldestPendingSeconds = Math.max(0, Number(ageMs) || 0) / 1000; }
+function recordMediaAuthorizationInvariantFailure() { mediaAuthorizationInvariantFailures += 1; }
+function recordCredentialRevokeCleanupFailure() { credentialRevokeCleanupFailures += 1; }
 
 async function observeMaintenance(task, callback) {
   const startedAt = process.hrtime.bigint();
@@ -114,6 +132,24 @@ function renderPrometheus({
     '# HELP voice_room_api_pg_pool_errors_total Unexpected PostgreSQL pool errors.',
     '# TYPE voice_room_api_pg_pool_errors_total counter',
     `voice_room_api_pg_pool_errors_total ${pgPoolErrors}`,
+    '# HELP voice_room_api_media_free_bytes Available bytes in private media storage.',
+    '# TYPE voice_room_api_media_free_bytes gauge',
+    `voice_room_api_media_free_bytes ${mediaPressure.freeBytes}`,
+    '# HELP voice_room_api_media_pressure_healthy Whether media uploads and claims are pressure-safe.',
+    '# TYPE voice_room_api_media_pressure_healthy gauge',
+    metricLine('voice_room_api_media_pressure_healthy', { reason: mediaPressure.reason }, Number(mediaPressure.healthy)),
+    '# HELP voice_room_notification_oldest_pending_seconds Age of the oldest claimed notification job.',
+    '# TYPE voice_room_notification_oldest_pending_seconds gauge',
+    `voice_room_notification_oldest_pending_seconds ${notificationOldestPendingSeconds}`,
+    '# HELP voice_room_media_oldest_pending_seconds Age of the oldest claimed media job.',
+    '# TYPE voice_room_media_oldest_pending_seconds gauge',
+    `voice_room_media_oldest_pending_seconds ${mediaOldestPendingSeconds}`,
+    '# HELP voice_room_media_authorization_invariant_failures_total Unexpected authorization/storage invariant failures; ordinary hidden 404 denials are excluded.',
+    '# TYPE voice_room_media_authorization_invariant_failures_total counter',
+    `voice_room_media_authorization_invariant_failures_total ${mediaAuthorizationInvariantFailures}`,
+    '# HELP voice_room_credential_revoke_cleanup_failures_total Admission credential cleanup failures.',
+    '# TYPE voice_room_credential_revoke_cleanup_failures_total counter',
+    `voice_room_credential_revoke_cleanup_failures_total ${credentialRevokeCleanupFailures}`,
     '# HELP voice_room_api_maintenance_duration_seconds_sum Cumulative maintenance task duration.',
     '# TYPE voice_room_api_maintenance_duration_seconds_sum counter'
   );
@@ -150,12 +186,22 @@ function resetMetricsForTest() {
   httpRequests.clear();
   maintenanceTasks.clear();
   pgPoolErrors = 0;
+  mediaPressure = { freeBytes: 0, healthy: false, reason: 'unchecked' };
+  notificationOldestPendingSeconds = 0;
+  mediaOldestPendingSeconds = 0;
+  mediaAuthorizationInvariantFailures = 0;
+  credentialRevokeCleanupFailures = 0;
 }
 
 module.exports = {
   observeMaintenance,
   recordHttpRequest,
   recordMaintenanceDuration,
+  recordMediaPressure,
+  recordNotificationOldestPending,
+  recordMediaOldestPending,
+  recordMediaAuthorizationInvariantFailure,
+  recordCredentialRevokeCleanupFailure,
   recordPgPoolError,
   renderPrometheus,
   resetMetricsForTest

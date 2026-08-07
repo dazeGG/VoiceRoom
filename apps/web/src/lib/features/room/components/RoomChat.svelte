@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ChevronRight, Copy, MessageSquare, Pencil, Trash2, Users } from '@lucide/svelte';
+  import { ChevronRight, Copy, MessageSquare, Pencil, Reply, Trash2, Users } from '@lucide/svelte';
   import { iconSm } from '$lib/shared/ui/icons';
   import { onMount, tick } from 'svelte';
   import { deleteRoomChatMessage, editRoomChatMessage, fetchRoomChat, fetchRoomChatPage, markRoomChatRead, postRoomChat, type ChatMessage } from '$lib/api/rooms';
@@ -206,6 +206,7 @@
     const query = mentionComposer.update(draft, composeEl.selectionStart ?? draft.length);
     if (!query && !draft.slice(0, composeEl.selectionStart ?? draft.length).endsWith('@')) return;
     await loadRoomMembership(roomId, { query });
+    if (mentionComposer.query !== query) return;
     mentionComposer.setCandidates(getRoomMembership(roomId).members.filter((member) => member.userId !== session.user?.id));
   }
 
@@ -530,7 +531,9 @@
       history.reconcileLatest(page.messages, (item) => firstCreatedAt == null || item.createdAt >= firstCreatedAt);
       await tick();
       await markLatestRenderedRead();
-    } catch {}
+    } catch (cause) {
+      console.error('Failed to reconcile realtime room read cursor', cause);
+    }
   }
 
   function onHistoryScroll(): void {
@@ -822,8 +825,8 @@
                   <span class="chat-msg-content">{#if message.content}<StructuredMessageContent content={message.content} fallback={message.text} />{:else}<ChatText text={message.text} />{/if}{#if message.editedAt}<span class="chat-msg-edited">(изменено)</span>{/if}</span>
                   {#if message.attachments?.length}<AttachmentMosaic attachments={message.attachments} />{/if}
                   <div class="chat-msg-actions" role="toolbar" aria-label="Действия с сообщением">
-                    {#if reactionsEnabled}<ReactionPicker store={reactions} messageId={message.id} userId={session.user?.id || ''} disabled={!session.user?.id} />{/if}
-                    {#if repliesEnabled}<button type="button" aria-label="Ответить" title="Ответить" onclick={() => { replyTarget = message; composeEl?.focus(); }}><MessageSquare {...iconSm} /></button>{/if}
+                    {#if reactionsEnabled && session.user?.id}<ReactionPicker store={reactions} messageId={message.id} userId={session.user.id} />{/if}
+                    {#if repliesEnabled}<button type="button" aria-label="Ответить" title="Ответить" onclick={() => { replyTarget = message; composeEl?.focus(); }}><Reply {...iconSm} /></button>{/if}
                     <button type="button" aria-label="Копировать текст" title="Копировать текст" onclick={() => void copyMessageText(message)}><Copy {...iconSm} /></button>
                     {#if group.self}
                       <button type="button" aria-label="Редактировать" title="Редактировать" onclick={() => startEditing(message)}><Pencil {...iconSm} /></button>

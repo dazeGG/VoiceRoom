@@ -189,7 +189,7 @@ test('lobby join is the single room-code action and explains auto-save', () => {
 
   assert.match(authApi, /addRoomByCode/);
   assert.match(authApi, /authPost<\{ room: OwnedRoom \}>\('\/auth\/rooms'/);
-  assert.doesNotMatch(lobby, /handleAddRoom|addDialogOpen|addRoomCode|addError|adding/);
+  assert.doesNotMatch(lobby, /handleAddRoom|addDialogOpen|addRoomCode|addError|\badding\b/);
   assert.doesNotMatch(lobby, /Введите код уже созданной постоянной комнаты|Комната добавлена/);
   assert.doesNotMatch(voiceHome, /onAddRoom|Добавить комнату по коду|lr-icon-btn/);
   assert.match(voiceHome, /placeholder="Код или ссылка"/);
@@ -1389,6 +1389,8 @@ test('shared typography uses CSP-safe local UI, display, and mono font roles', (
   const lobbyV2 = read('src/lib/features/home/styles/lobby-v2.css');
   const voiceHome = read('src/lib/features/home/components/lobby/VoiceHome.svelte');
   const friends = read('src/lib/features/home/styles/friends.css');
+  const dmView = read('src/lib/features/home/components/lobby/DmView.svelte');
+  const chatCss = read('src/lib/features/room/styles/chat-rail.css');
   const settings = read('src/lib/features/home/styles/settings.css');
   const roomLayout = read('src/lib/features/room/styles/layout.css');
   const stageLayout = read('src/lib/features/room/styles/stage-layout.css');
@@ -1462,7 +1464,8 @@ test('shared typography uses CSP-safe local UI, display, and mono font roles', (
   assertRuleFont(lobby, '.lobby-search-input', '--font-mono');
   assertRuleFont(lobby, '.room-card-code', '--font-mono');
   assertRuleFont(friends, '.lobby-profile-handle', '--font-mono');
-  assertRuleFont(friends, '.lobby-dm-time', '--font-mono');
+  assert.match(dmView, /class="chat-msg-time"/);
+  assertRuleFont(chatCss, '.chat-msg-time', '--font-mono');
   assert.match(roomMenuContent, /\.room-menu-code\) \{[\s\S]*font-family: var\(--font-mono\)/);
 });
 
@@ -1737,21 +1740,16 @@ test('chat image attachments support picker, clipboard, and drag-and-drop behind
   assert.match(attachmentCss, /\.attachment-draft-remove \{[\s\S]*background: var\(--coral\)/);
   assert.match(chatCss, /\.chat-compose-row \{[\s\S]*align-items: stretch/);
   assert.match(friendsCss, /\.lobby-dm-compose-row \{[\s\S]*align-items: stretch/);
-  assert.match(dmView, /lobby-dm-bubble--attachment-only[\s\S]*!bubble\.body\.trim\(\)[\s\S]*bubble\.attachments/);
-  assert.match(friendsCss, /\.lobby-dm-bubble--attachment-only \{[\s\S]*padding: 0;[\s\S]*background: transparent/);
-  assert.match(dmView, /lobby-dm-bubble--has-attachments=\{Boolean\(bubble\.attachments\?\.length\)\}/);
-  assert.match(dmView, /lobby-dm-bubble--media-caption=\{Boolean\(bubble\.body\.trim\(\) && bubble\.attachments\?\.length\)\}/);
+  assert.match(dmView, /class="chat-msg-text dm-chat-message"/);
+  assert.match(dmView, /class="dm-chat-content"/);
+  assert.doesNotMatch(dmView, /lobby-dm-bubble/);
   assert.ok(
     dmView.indexOf('<AttachmentMosaic attachments={bubble.attachments} />')
-      < dmView.indexOf('<span class="dm-msg-content">'),
+      < dmView.indexOf('<span class="chat-msg-content dm-msg-content">'),
     'DM attachments render above their caption within one message'
   );
-  assert.match(friendsCss, /\.lobby-dm-bubble--has-attachments \{[\s\S]*display: grid;[\s\S]*width: min\(560px, 100%\);[\s\S]*padding: 0;[\s\S]*background: transparent/);
-  assert.match(friendsCss, /\.lobby-dm-bubble--has-attachments \.attachment-mosaic \{[\s\S]*width: 100%/);
-  assert.match(friendsCss, /\.lobby-dm-bubble--has-attachments \.dm-msg-content \{[\s\S]*padding: 9px 13px;[\s\S]*border-radius: 16px/);
-  assert.match(friendsCss, /\.lobby-dm-bubble--media-caption \{[\s\S]*gap: 0;[\s\S]*overflow: hidden;[\s\S]*border-radius: 16px/);
-  assert.match(friendsCss, /\.lobby-dm-bubble--media-caption \.attachment-mosaic \{[\s\S]*border-radius: 0/);
-  assert.match(friendsCss, /\.lobby-dm-bubble--media-caption \.dm-msg-content,[\s\S]*width: 100%;[\s\S]*border: 0;[\s\S]*background: transparent/);
+  assert.match(friendsCss, /\.dm-chat-content \{[\s\S]*display: grid;[\s\S]*max-width: min\(720px, 100%\);[\s\S]*gap: 6px/);
+  assert.match(friendsCss, /\.dm-chat-content \.attachment-mosaic \{[\s\S]*width: min\(560px, 100%\)/);
   assert.match(chatCss, /\.chat-rail-compose \.attachment-upload-root \{[\s\S]*margin-top: 5px/);
   assert.match(composeStore, /imageFilesFromClipboard[\s\S]*clipboardData/);
   assert.match(composeStore, /imageFilesFromDataTransfer[\s\S]*data\.files/);
@@ -1960,7 +1958,7 @@ test('room preview, room, and direct chats use a stable top-right message action
   assert.doesNotMatch(previewChat, /chat-msg-edit-button/);
   assert.doesNotMatch(chat, /rootClass="chat-msg-menu-root"/);
   assert.match(chat, /queueMicrotask\(\(\) => openParticipantContextMenu/);
-  assert.match(dm, /class="dm-msg-actions" role="toolbar"/);
+  assert.match(dm, /class="chat-msg-actions" role="toolbar"/);
   assert.match(dm, /aria-label="Копировать текст"/);
   assert.match(dm, /aria-label="Редактировать"/);
   assert.match(dm, /aria-label="Удалить"/);
@@ -1975,8 +1973,9 @@ test('room preview, room, and direct chats use a stable top-right message action
   // The toolbar sits fully above the message body in both chats.
   assert.match(roomCss, /\.chat-msg-actions[\s\S]*bottom: calc\(100% - 4px\)[\s\S]*right: -16px[\s\S]*opacity: 0/);
   assert.match(roomCss, /\.chat-msg-text:hover \.chat-msg-actions/);
-  assert.match(dmCss, /\.dm-msg-actions[\s\S]*bottom: calc\(100% - 4px\)[\s\S]*right: 4px[\s\S]*opacity: 0/);
-  assert.match(dmCss, /\.lobby-dm-bubble:hover \.dm-msg-actions/);
+  assert.match(dm, /data-group-first=\{bubble\.id === group\.bubbles\[0\]\.id\}/);
+  assert.doesNotMatch(dmCss, /\.dm-msg-actions|\.lobby-dm-bubble/);
+  assert.match(roomCss, /\.chat-msg-actions \{[^}]*overflow: visible/);
 });
 
 test('composer ArrowUp edits the latest own message in both chats', () => {
@@ -1995,7 +1994,7 @@ test('message action toolbars expose persisted quick reactions and a separated f
   const picker = read('src/lib/shared/chat/ReactionPicker.svelte');
   const persistence = read('src/lib/shared/chat/frequent-reactions.ts');
 
-  assert.match(chat, /ReactionPicker store=\{reactions\} messageId=\{message\.id\} userId=\{session\.user\?\.id \|\| ''\}/);
+  assert.match(chat, /\{#if reactionsEnabled && session\.user\?\.id\}<ReactionPicker store=\{reactions\} messageId=\{message\.id\} userId=\{session\.user\.id\}/);
   assert.match(dm, /ReactionPicker store=\{reactions\} messageId=\{bubble\.id\} userId=\{selfId\}/);
   assert.ok(chat.indexOf('ReactionPicker store={reactions} messageId={message.id}') < chat.indexOf('aria-label="Ответить"'));
   assert.ok(dm.indexOf('ReactionPicker store={reactions} messageId={bubble.id}') < dm.indexOf('aria-label="Ответить"'));
@@ -2009,6 +2008,50 @@ test('message action toolbars expose persisted quick reactions and a separated f
   assert.match(persistence, /voice-room:frequent-reactions/);
   assert.match(persistence, /frequentReactionKey\(namespace: string, userId: string\)/);
   assert.match(persistence, /readLocalStorage\(key\)/);
+});
+
+test('manual chat polish keeps notifications local, direct messages flat, reactions compact, and mentions login-bound', () => {
+  const lobby = read('src/lib/features/home/LobbyPage.svelte');
+  const sidebar = read('src/lib/features/home/components/lobby/Sidebar.svelte');
+  const dm = read('src/lib/features/home/components/lobby/DmView.svelte');
+  const roomChat = read('src/lib/features/room/components/RoomChat.svelte');
+  const chatCss = read('src/lib/features/room/styles/chat-rail.css');
+  const picker = read('src/lib/shared/chat/ReactionPicker.svelte');
+  const summary = read('src/lib/shared/chat/ReactionSummary.svelte');
+  const mentionComposer = read('src/lib/shared/chat/mention-composer.svelte.ts');
+  const mentionAutocomplete = read('src/lib/shared/chat/MentionAutocomplete.svelte');
+  const membership = read('src/lib/features/home/model/room-membership.svelte.ts');
+
+  const downloadIndex = sidebar.indexOf('<SidebarDownload />');
+  const notificationIndex = sidebar.indexOf('class="lobby-gear lv-notification-button"');
+  const settingsIndex = sidebar.indexOf('title="Настройки"');
+  assert.ok(downloadIndex >= 0 && downloadIndex < notificationIndex && notificationIndex < settingsIndex);
+  assert.match(sidebar, /notificationUnreadCount > 99 \? '99\+' : notificationUnreadCount/);
+  assert.doesNotMatch(lobby, /notification-inbox-trigger/);
+
+  assert.match(dm, /class="chat-msg dm-chat-group"/);
+  assert.match(dm, /class="chat-msg-text dm-chat-message"/);
+  assert.match(dm, /class="chat-msg-avatar"/);
+  assert.match(dm, /class="chat-msg-main"/);
+  assert.doesNotMatch(dm, /lobby-dm-bubble|row-reverse/);
+  for (const source of [dm, roomChat]) {
+    assert.match(source, /aria-label="Ответить"[\s\S]*<Reply/);
+  }
+
+  assert.match(chatCss, /\.chat-msg-actions \{[^}]*overflow: visible/);
+  assert.match(picker, /\.reaction-quick-trigger, \.reaction-picker-trigger \{ width: 32px; height: 32px/);
+  assert.match(picker, /placement="top-start"[\s\S]*flip[\s\S]*aria-label="Открыть выбор эмодзи"[\s\S]*onclick=\{toggle\}/);
+  assert.match(summary, /\.reaction-chip \{[^}]*height: 26px;[^}]*border-radius: 8px/);
+  assert.match(summary, /placement="top-start"[\s\S]*flip/);
+  assert.match(summary, /\.reaction-count \{[^}]*min-width: 20px;[^}]*font-family: var\(--font-mono\);[^}]*font-variant-numeric: tabular-nums/);
+
+  assert.match(mentionComposer, /return `@\$\{member\.login\}`/);
+  assert.doesNotMatch(mentionComposer, /return `@\$\{member\.displayName/);
+  assert.match(roomChat, /if \(mentionComposer\.query !== query\) return/);
+  assert.match(membership, /const requestGeneration = \+\+entry\.requestGeneration/);
+  assert.match(membership, /if \(requestGeneration !== entry\.requestGeneration\) return/);
+  assert.match(mentionAutocomplete, /bottom: calc\(100% - 8px\)/);
+  assert.match(chatCss, /\.chat-rail-compose \{[\s\S]*position: relative/);
 });
 
 test('frequent reaction ranking is user-scoped, deterministic, and limited to three choices', async () => {
@@ -2187,8 +2230,8 @@ test('release polish removes token drift, inline people styles, and adds reduced
   assert.match(switchCss, /\.ui-switch::after[\s\S]*inset: -10px -4px/);
   assert.match(sliderCss, /\.vr-slider-control[\s\S]*height: 36px/);
   assert.match(reactions, /\.emoji-grid button[\s\S]*min-height: 40px/);
-  assert.match(chatCss, /\.chat-msg-actions button[\s\S]*min-height: 36px/);
-  assert.match(dmCss, /\.dm-msg-actions button[\s\S]*min-height: 36px/);
+  assert.match(chatCss, /\.chat-msg-actions > button[\s\S]*width: 32px;[\s\S]*height: 32px/);
+  assert.doesNotMatch(dmCss, /\.dm-msg-actions/);
   assert.match(roomControlsCss, /\.gate-switch::after[\s\S]*inset: -12px -6px/);
   assert.match(settingsCss, /\.settings-switch::after[\s\S]*inset: -10px -4px/);
 });

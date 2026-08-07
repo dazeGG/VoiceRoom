@@ -17,7 +17,14 @@ const DEFAULT_RUNTIME_CONFIG = {
 function normalizeLiveKitUrl(value) {
   if (typeof value !== 'string') return '';
   const url = value.trim();
-  return /^wss?:\/\//i.test(url) ? url : '';
+  if (!/^wss?:\/\//i.test(url)) return '';
+  try {
+    const parsed = new URL(url);
+    if (parsed.username || parsed.password) return '';
+    return parsed.toString();
+  } catch {
+    return '';
+  }
 }
 
 function normalizeLiveKitServerUrl(value) {
@@ -89,7 +96,10 @@ function parseRuntimeConfig(raw) {
     return null;
   }
 
-  if (parsed?.contractVersion !== RUNTIME_CONFIG_CONTRACT) return null;
+  if (
+    parsed?.contractVersion !== RUNTIME_CONFIG_CONTRACT ||
+    parsed?.schemaVersion !== RUNTIME_SCHEMA_VERSION
+  ) return null;
   return normalizePayload(parsed) || null;
 }
 

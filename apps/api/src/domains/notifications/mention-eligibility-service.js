@@ -9,8 +9,9 @@ class MentionEligibilityError extends Error {
   }
 }
 
-function createMentionEligibilityService({ pool } = {}) {
+function createMentionEligibilityService({ activeBanService, pool } = {}) {
   if (!pool?.query) throw new TypeError('A PostgreSQL pool is required');
+  if (!activeBanService?.filterEligibleUserIds) throw new TypeError('Active ban service is required');
 
   async function validate({ roomId, creatorUserId, targetUserIds, client } = {}) {
     const normalized = normalizeMentionUserIds(targetUserIds, { creatorUserId });
@@ -18,19 +19,24 @@ function createMentionEligibilityService({ pool } = {}) {
     const db = client?.query ? client : pool;
     const creator = await db.query(
       `SELECT 1 FROM room_memberships rm JOIN rooms r ON r.id = rm.room_id
-       WHERE rm.room_id=$1 AND rm.user_id=$2 AND r.deleted_at IS NULL
-         AND NOT EXISTS (SELECT 1 FROM room_bans b WHERE b.room_id=$1 AND b.user_id=$2 AND (b.expires_at IS NULL OR b.expires_at > current_timestamp))`,
+       WHERE rm.room_id=$1 AND rm.user_id=$2 AND r.deleted_at IS NULL`,
       [roomId, creatorUserId]
     );
     if (!creator.rowCount) throw new MentionEligibilityError('creator_not_eligible');
+    if ((await activeBanService.filterEligibleUserIds({ roomId, userIds: [creatorUserId], client: db })).length !== 1) {
+      throw new MentionEligibilityError('creator_not_eligible');
+    }
     if (!normalized.userIds.length) return [];
     const targets = await db.query(
       `SELECT rm.user_id FROM room_memberships rm
-       WHERE rm.room_id=$1 AND rm.user_id = ANY($2::varchar[])
-         AND NOT EXISTS (SELECT 1 FROM room_bans b WHERE b.room_id=$1 AND b.user_id=rm.user_id AND (b.expires_at IS NULL OR b.expires_at > current_timestamp))`,
+       WHERE rm.room_id=$1 AND rm.user_id = ANY($2::varchar[])`,
       [roomId, normalized.userIds]
     );
-    const eligible = new Set(targets.rows.map((row) => row.user_id));
+    const eligible = new Set(await activeBanService.filterEligibleUserIds({
+      roomId,
+      userIds: targets.rows.map((row) => row.user_id),
+      client: db
+    }));
     if (eligible.size !== normalized.userIds.length) throw new MentionEligibilityError();
     return normalized.userIds;
   }

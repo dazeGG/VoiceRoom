@@ -1,6 +1,7 @@
 'use strict';
 
 const { Client } = require('pg');
+const fs = require('node:fs');
 const path = require('node:path');
 const { PG_MIGRATE_LOCK_ID, runner } = require('node-pg-migrate');
 const { readDatabaseConfig } = require('./config');
@@ -15,6 +16,13 @@ const MIGRATION_GUARD_STATES = {
   dirty: 'dirty'
 };
 const LOCK_TIMEOUT_MS = 5000;
+
+function expectedMigrationCatalog(dir = DEFAULT_MIGRATIONS_DIR) {
+  return fs.readdirSync(dir, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && /\.(?:c?js|ts)$/.test(entry.name))
+    .map((entry) => entry.name.replace(/\.(?:c?js|ts)$/, ''))
+    .sort();
+}
 
 function migrationLogger(logger) {
   return {
@@ -95,6 +103,68 @@ async function releaseMigrationLock(client, lockValue) {
   await query(client, 'SELECT pg_advisory_unlock($1)', [lockValue]).catch(() => {});
 }
 
+function advisoryLockParts(lockValue) {
+  const value = BigInt(lockValue);
+  return {
+    classId: Number(BigInt.asUintN(32, value >> 32n)),
+    objectId: Number(BigInt.asUintN(32, value))
+  };
+}
+
+async function assertMigrationLockHeld(client, lockValue) {
+  const { classId, objectId } = advisoryLockParts(lockValue);
+  const rows = await query(client, `
+    SELECT EXISTS (
+      SELECT 1
+      FROM pg_locks
+      WHERE locktype = 'advisory'
+        AND pid = pg_backend_pid()
+        AND granted
+        AND classid = $1
+        AND objid = $2
+        AND objsubid = 1
+    ) AS held
+  `, [classId, objectId]);
+  if (rows[0]?.held !== true) {
+    throw new Error('Migration advisory lock was lost before completion');
+  }
+}
+
+async function assertMigrationReady({
+  databaseUrl = readDatabaseConfig().url,
+  dir = DEFAULT_MIGRATIONS_DIR,
+  clientFactory = (connectionString) => new Client({ connectionString })
+} = {}) {
+  const client = clientFactory(databaseUrl);
+  await client.connect();
+  try {
+    const relation = await query(client, `SELECT
+      to_regclass('public.${MIGRATION_GUARD_TABLE}') AS guard_table,
+      to_regclass('public.${DEFAULT_MIGRATIONS_TABLE}') AS migrations_table`);
+    if (!relation[0]?.guard_table || !relation[0]?.migrations_table) {
+      throw new Error('API rollout blocked because the migration guard or catalog is absent');
+    }
+    const rows = await query(
+      client,
+      `SELECT state, marker FROM ${MIGRATION_GUARD_TABLE} WHERE id = $1`,
+      [MIGRATION_GUARD_ID]
+    );
+    const state = rows[0]?.state;
+    if (state === MIGRATION_GUARD_STATES.running || state === MIGRATION_GUARD_STATES.dirty) {
+      throw new Error(`API rollout blocked by migration guard state ${state}: ${rows[0]?.marker || 'unknown reason'}`);
+    }
+    if (state !== MIGRATION_GUARD_STATES.clean) throw new Error(`API rollout blocked by unknown migration guard state ${state || 'missing'}`);
+    const applied = (await query(client, `SELECT name FROM ${DEFAULT_MIGRATIONS_TABLE} ORDER BY name ASC`)).map((row) => row.name);
+    const expected = expectedMigrationCatalog(dir);
+    if (applied.length !== expected.length || applied.some((name, index) => name !== expected[index])) {
+      throw new Error(`API rollout blocked because migration catalog/head does not match this build (expected ${expected.at(-1) || 'none'}, got ${applied.at(-1) || 'none'})`);
+    }
+    return true;
+  } finally {
+    await client.end();
+  }
+}
+
 async function runMigrations({
   databaseUrl = readDatabaseConfig().url,
   direction = 'up',
@@ -102,10 +172,12 @@ async function runMigrations({
   logger = console,
   noLock = process.env.NODE_ENV === 'test',
   lockValue = PG_MIGRATE_LOCK_ID,
-  clearDirty = false
+  clearDirty = false,
+  clientFactory = (connectionString) => new Client({ connectionString }),
+  migrationRunner = runner
 } = {}) {
   if (noLock) {
-    return runner({
+    return migrationRunner({
       databaseUrl,
       dir,
       direction,
@@ -118,7 +190,7 @@ async function runMigrations({
     });
   }
 
-  const client = new Client({ connectionString: databaseUrl });
+  const client = clientFactory(databaseUrl);
   await client.connect();
   let locked = false;
   let migrationStarted = false;
@@ -126,6 +198,7 @@ async function runMigrations({
   try {
     await acquireMigrationLock(client, lockValue);
     locked = true;
+    await assertMigrationLockHeld(client, lockValue);
     if (clearDirty) {
       await ensureMigrationGuardSchema(client);
       await setMigrationGuardState(client, MIGRATION_GUARD_STATES.clean, 'cleared by explicit operator request');
@@ -136,8 +209,9 @@ async function runMigrations({
 
     await setMigrationGuardState(client, MIGRATION_GUARD_STATES.running, `direction=${direction},dir=${path.basename(dir)}`);
     migrationStarted = true;
+    await query(client, `SET lock_timeout TO '${LOCK_TIMEOUT_MS}ms'`);
 
-    const migrations = await runner({
+    const migrations = await migrationRunner({
       dbClient: client,
       dir,
       direction,
@@ -149,6 +223,7 @@ async function runMigrations({
       noLock: true
     });
 
+    await assertMigrationLockHeld(client, lockValue);
     await setMigrationGuardState(client, MIGRATION_GUARD_STATES.clean, `last=${path.basename(dir)}:${direction}`);
     if (migrations.length) {
       logger.log(`PostgreSQL migrations ${direction} complete (${migrations.length} applied).`);
@@ -159,10 +234,13 @@ async function runMigrations({
     return migrations;
   } catch (error) {
     if (migrationStarted) {
-      await setMigrationGuardState(client, MIGRATION_GUARD_STATES.dirty, `direction=${direction}, error=${error.message}`);
+      await setMigrationGuardState(client, MIGRATION_GUARD_STATES.dirty, `direction=${direction}, error=${error.message}`).catch(() => {});
     }
     throw error;
   } finally {
+    if (locked) {
+      await query(client, 'SET lock_timeout TO 0').catch(() => {});
+    }
     if (locked) {
       await releaseMigrationLock(client, lockValue);
     }
@@ -172,7 +250,12 @@ async function runMigrations({
 
 module.exports = {
   DEFAULT_MIGRATIONS_DIR,
+  expectedMigrationCatalog,
+  assertMigrationLockHeld,
+  assertMigrationReady,
+  advisoryLockParts,
   runMigrations,
   MIGRATION_GUARD_TABLE,
+  MIGRATION_GUARD_STATES,
   LOCK_TIMEOUT_MS
 };

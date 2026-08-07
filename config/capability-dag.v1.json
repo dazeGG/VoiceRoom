@@ -1,5 +1,6 @@
 {
   "contract": "voice-room.capabilities/v1",
+  "schemaVersion": 1,
   "publicKeys": [
     {
       "key": "historyCursor",

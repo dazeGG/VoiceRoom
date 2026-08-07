@@ -100,14 +100,21 @@ test('media job renew, complete, and fail enforce fencing tokens', async () => {
 });
 
 test('media job repository finds and prunes terminal jobs', async () => {
-  const { calls, pool } = poolWith(async (text) => /DELETE/.test(text)
-    ? { rows: [{ id: 'job-1' }, { id: 'job-2' }], rowCount: 2 }
-    : { rows: [JOB], rowCount: 1 });
+  const { calls, pool } = poolWith(async (text) => {
+    if (/DELETE/.test(text)) return { rows: [{ id: 'job-1' }, { id: 'job-2' }], rowCount: 2 };
+    if (/AS age_ms/.test(text)) return { rows: [{ age_ms: '1234' }], rowCount: 1 };
+    return { rows: [JOB], rowCount: 1 };
+  });
   const repository = createMediaJobRepository({ pool });
 
   assert.equal((await repository.findById('job-1')).id, 'job-1');
   const client = { async query() { return { rows: [JOB], rowCount: 1 }; } };
   assert.equal((await repository.findById('job-1', { client })).id, 'job-1');
+  assert.equal(await repository.oldestPendingAgeMs(), 1234);
+  assert.match(calls.at(-1).text, /state IN \('pending', 'processing'\)/);
+  assert.equal(await repository.oldestPendingAgeMs({
+    client: { async query() { return { rows: [{ age_ms: null }] }; } }
+  }), 0);
   assert.deepEqual(await repository.removeTerminalBefore(new Date(), { limit: 0 }), ['job-1', 'job-2']);
   assert.equal(calls.at(-1).values[1], 500);
   await repository.removeTerminalBefore(new Date(), { limit: 2 });
