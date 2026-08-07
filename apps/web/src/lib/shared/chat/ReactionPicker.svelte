@@ -153,9 +153,9 @@
   .reaction-picker-trigger { color: color-mix(in oklch, currentColor, transparent 42%); }
   .reaction-quick-trigger:hover, .reaction-quick-trigger:focus-visible,
   .reaction-picker-trigger:hover, .reaction-picker-trigger:focus-visible { background: color-mix(in oklch, var(--paper), var(--ink) 10%); color: inherit; outline: none; }
-  .reaction-picker { display: grid; gap: 7px; width: min(330px, 82vw); padding: 3px; }
+  .reaction-picker { display: grid; gap: 6px; width: min(300px, calc(100vw - 28px)); padding: 2px; }
   input { width: 100%; min-height: 40px; border: 1px solid color-mix(in oklch, currentColor, transparent 80%); border-radius: 9px; padding: 7px 10px; background: transparent; color: inherit; }
-  .emoji-grid { display: grid; grid-template-columns: repeat(8, 1fr); max-height: 240px; overflow-y: auto; }
+  .emoji-grid { display: grid; grid-template-columns: repeat(7, 1fr); max-height: min(132px, calc(100vh - 226px)); overflow-y: auto; }
   .emoji-grid button { display: grid; place-items: center; min-width: 40px; min-height: 40px; border: 0; border-radius: 7px; background: transparent; font-size: 1.15rem; cursor: pointer; }
   .emoji-grid button:hover, .emoji-grid button:focus-visible { background: color-mix(in oklch, var(--paper), var(--ink) 12%); }
   p { margin: 8px; text-align: center; opacity: .7; }

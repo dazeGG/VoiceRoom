@@ -398,7 +398,8 @@
 <style>
   .notification-inbox-panel { position: fixed; z-index: 71; left: 326px; bottom: 16px; width: min(420px, calc(100vw - 358px)); max-height: min(620px, calc(100vh - 32px)); overflow: auto; border: 1px solid var(--line); border-radius: 16px; background: var(--paper); box-shadow: var(--shadow); }
   .notification-inbox-panel :global(.notification-inbox) { margin: 18px; }
-  .notification-inbox-close { position: absolute; right: 10px; top: 10px; display: grid; place-items: center; width: 32px; height: 32px; border: 0; border-radius: 9px; background: transparent; color: inherit; cursor: pointer; }
+  .notification-inbox-panel :global(.notification-inbox > header) { padding-right: 36px; }
+  .notification-inbox-close { position: absolute; z-index: 1; right: 10px; top: 10px; display: grid; place-items: center; width: 32px; height: 32px; border: 0; border-radius: 9px; background: var(--paper); color: inherit; cursor: pointer; }
   @media (max-width: 900px) {
     .notification-inbox-panel { left: 12px; right: 12px; bottom: 76px; width: auto; max-height: min(560px, calc(100vh - 96px)); }
   }

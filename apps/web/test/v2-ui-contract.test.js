@@ -189,7 +189,7 @@ test('lobby join is the single room-code action and explains auto-save', () => {
 
   assert.match(authApi, /addRoomByCode/);
   assert.match(authApi, /authPost<\{ room: OwnedRoom \}>\('\/auth\/rooms'/);
-  assert.doesNotMatch(lobby, /handleAddRoom|addDialogOpen|addRoomCode|addError|adding/);
+  assert.doesNotMatch(lobby, /handleAddRoom|addDialogOpen|addRoomCode|addError|\badding\b/);
   assert.doesNotMatch(lobby, /Введите код уже созданной постоянной комнаты|Комната добавлена/);
   assert.doesNotMatch(voiceHome, /onAddRoom|Добавить комнату по коду|lr-icon-btn/);
   assert.match(voiceHome, /placeholder="Код или ссылка"/);
