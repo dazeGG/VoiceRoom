@@ -63,13 +63,13 @@ function validateF7Gates(gates,envelope){
     for(const key of ["jobId","checkRunId","checkSuiteId","runId","runAttempt"])assert.ok(Number.isInteger(gate[key])&&gate[key]>0);assert.equal(gate.jobId,gate.checkRunId);assert.ok(!ids.has(gate.jobId));ids.add(gate.jobId);assert.equal(gate.checkSuiteId,envelope.producerRun.checkSuiteId);assert.equal(gate.runId,envelope.producerRun.id);assert.equal(gate.runAttempt,envelope.producerRun.runAttempt);assert.equal(gate.headSha,envelope.sourceSha);assert.equal(gate.status,"completed");assert.equal(gate.conclusion,"success");assert.equal(gate.detailsUrl,`https://github.com/${envelope.producerRun.repository}/actions/runs/${gate.runId}/job/${gate.jobId}`);assert.ok(instant(gate.startedAt,`F7 gate ${index} start`)<=instant(gate.completedAt,`F7 gate ${index} completion`));assert.ok(instant(gate.completedAt,`F7 gate ${index} completion`)<instant(envelope.createdAt,"F7.createdAt"));
   }
 }
-function validateF7Verification(value,envelope){
+function validateF7Verification(value,envelope,{ verifyCurrentInputs = true } = {}){
   exactKeys(value,["targetedCommand","requiredJob","caseIds","fixturePaths","proofLevel","repositoryCommands","reports","inputs"],"F7.verification");assert.equal(value.targetedCommand,F7_TARGETED_COMMAND);assert.equal(value.requiredJob,"bootstrap-plan");assert.deepEqual(value.caseIds,["G01-A01","G01-A02"]);assert.deepEqual(value.fixturePaths,["scripts/test/fixtures/g01-landed-bootstrap-recovery.json"]);assert.equal(value.proofLevel,"P3");assert.deepEqual(value.repositoryCommands,F7_REPOSITORY_COMMANDS);
-  assert.ok(Array.isArray(value.inputs));assert.deepEqual(value.inputs.map(({path})=>path),F7_INPUT_PATHS);for(const [index,row] of value.inputs.entries()){exactKeys(row,["path","size","sha256"],`F7.inputs[${index}]`);const bytes=fs.readFileSync(row.path);assert.equal(row.size,bytes.length);assert.equal(row.sha256,`sha256:${crypto.createHash("sha256").update(bytes).digest("hex")}`)}
+  assert.ok(Array.isArray(value.inputs));assert.deepEqual(value.inputs.map(({path})=>path),F7_INPUT_PATHS);for(const [index,row] of value.inputs.entries()){exactKeys(row,["path","size","sha256"],`F7.inputs[${index}]`);assert.ok(Number.isInteger(row.size)&&row.size>0);assert.match(row.sha256,DIGEST);if(verifyCurrentInputs){const bytes=fs.readFileSync(row.path);assert.equal(row.size,bytes.length);assert.equal(row.sha256,`sha256:${crypto.createHash("sha256").update(bytes).digest("hex")}`)}}
   assert.ok(Array.isArray(value.reports));assert.deepEqual(value.reports.map(({path})=>path),F7_REPORT_PATHS);const target=envelope.requiredGates.at(-1);for(const [index,row] of value.reports.entries()){exactKeys(row,["path","size","sha256","producer"],`F7.reports[${index}]`);assert.ok(Number.isInteger(row.size)&&row.size>=0);assert.match(row.sha256,DIGEST);exactKeys(row.producer,["jobId","checkRunId","name","runId","runAttempt","headSha","producedAt","completedAt"],`F7.reports[${index}].producer`);assert.deepEqual({jobId:row.producer.jobId,checkRunId:row.producer.checkRunId,name:row.producer.name,runId:row.producer.runId,runAttempt:row.producer.runAttempt,headSha:row.producer.headSha,completedAt:row.producer.completedAt},{jobId:target.jobId,checkRunId:target.checkRunId,name:target.name,runId:target.runId,runAttempt:target.runAttempt,headSha:target.headSha,completedAt:target.completedAt});assert.ok(instant(row.producer.producedAt,`F7 report ${index} producedAt`)<=instant(row.producer.completedAt,`F7 report ${index} completedAt`));}
 }
 
-export function validateEnvelope(envelope, expectedPhase) {
+export function validateEnvelope(envelope, expectedPhase, options = {}) {
   const common = ["schemaVersion", "goal", "phase", "status", "evidenceId", "attemptId", "sourceBranch", "sourceSha", "digest", "createdAt"];
   const phaseFields = expectedPhase === "F7" ? ["baseSha", "producerRun", "requiredGates", "verification"] : expectedPhase === "F9" ? ["f7Digest", "reviewObjects"] : expectedPhase === "F11"
     ? ["f7Digest", "f9Digest", "mergeSha", "terminalDevelopSha", "remoteDeleted", "mergedAt", "remoteDeletionObservedAt", "prNumber", "postMergeRun"] : [];
@@ -78,7 +78,7 @@ export function validateEnvelope(envelope, expectedPhase) {
   assert.match(envelope.sourceSha, SHA); assert.match(envelope.digest, DIGEST); instant(envelope.createdAt, `${expectedPhase}.createdAt`);
   assert.match(envelope.evidenceId, new RegExp(`^${PHASE_PREFIX[expectedPhase]}\\.(?:g01|bootstrap-recovery-a[0-9]{2,})\\.json$`)); lineage(envelope);
   if (expectedPhase === "F7") {
-    assert.match(envelope.baseSha, SHA); validateF7ProducerRun(envelope.producerRun,envelope); validateF7Gates(envelope.requiredGates,envelope); validateF7Verification(envelope.verification,envelope);
+    assert.match(envelope.baseSha, SHA); validateF7ProducerRun(envelope.producerRun,envelope); validateF7Gates(envelope.requiredGates,envelope); validateF7Verification(envelope.verification,envelope,options);
   }
   if (expectedPhase === "F9") {
     assert.match(envelope.f7Digest, DIGEST); assert.ok(Array.isArray(envelope.reviewObjects) && envelope.reviewObjects.length === 3);
@@ -113,8 +113,8 @@ export function validateEnvelope(envelope, expectedPhase) {
   return envelope;
 }
 
-export function validateEnvelopeChain(f7, f9, f11) {
-  validateEnvelope(f7, "F7"); validateEnvelope(f9, "F9"); validateEnvelope(f11, "F11");
+export function validateEnvelopeChain(f7, f9, f11, options = {}) {
+  validateEnvelope(f7, "F7", options); validateEnvelope(f9, "F9", options); validateEnvelope(f11, "F11", options);
   assert.equal(f7.sourceSha, f9.sourceSha); assert.equal(f7.attemptId, f9.attemptId); assert.equal(f9.attemptId, f11.attemptId); assert.equal(f7.sourceBranch, f9.sourceBranch); assert.equal(f9.sourceBranch, f11.sourceBranch);
   assert.equal(f9.f7Digest, f7.digest); assert.equal(f11.f7Digest, f7.digest); assert.equal(f11.f9Digest, f9.digest);
   const suffixes = [f7, f9, f11].map(({ evidenceId }) => evidenceId.slice(evidenceId.indexOf(".") + 1)); assert.equal(new Set(suffixes).size, 1);

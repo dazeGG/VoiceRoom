@@ -16,12 +16,12 @@ export function bindCheckpointFixture(value, artifactPath = 'evidence/checkpoint
   value.proofBundle = { artifactPath, sha256: sha256(bytes) };
   Object.defineProperty(value, '_resolveArtifact', { value: () => bytes });
   Object.defineProperty(value, '_externalBinding', { value: { sha256: sha256(Buffer.from(JSON.stringify(value))) } });
-  Object.defineProperty(value, '_authenticatedProducer', { value: { verified: true, fixture: true } });
+  Object.defineProperty(value, '_authenticatedProducer', { value: { verified: true, fixture: true, headSha: value.codeSha } });
   return value;
 }
 export function bindExternalFixture(value) {
   Object.defineProperty(value, '_externalBinding', { value: { sha256: sha256(Buffer.from(JSON.stringify(value))) } });
-  Object.defineProperty(value, '_authenticatedProducer', { value: { verified: true, fixture: true } });
+  Object.defineProperty(value, '_authenticatedProducer', { value: { verified: true, fixture: true, headSha: value.codeSha } });
   return value;
 }
 export function assertCheckpointArtifact(value, resolveArtifact = value?._resolveArtifact || ((file) => readRepositoryArtifact(file).bytes)) {
@@ -35,6 +35,7 @@ export function assertCheckpointArtifact(value, resolveArtifact = value?._resolv
 export function assertEvidenceIdentity(value, expectedSha) {
   if (!value?._externalBinding || !/^sha256:[a-f0-9]{64}$/.test(value._externalBinding.sha256 || '')) throw new Error('Evidence must come from an externally digest-bound artifact');
   if (value?._authenticatedProducer?.verified !== true) throw new Error('Evidence producer metadata and OCI attestation are not authenticated');
+  if (!/^[a-f0-9]{40}$/.test(value._authenticatedProducer.headSha || '') || value._authenticatedProducer.headSha !== value.codeSha) throw new Error('Evidence producer HEAD does not match the evidence code SHA');
   if (expectedSha && value.codeSha !== expectedSha) throw new Error('Evidence code SHA does not match the evaluated workflow HEAD');
   if (value.evidenceChainSha256 !== evidenceChainSha256(value)) throw new Error('Evidence checksum chain does not match its contents');
 }
@@ -104,7 +105,7 @@ export function authenticateEvidenceRoot(root, objectPath, objectDigest, expecte
   const archive = fs.readFileSync(archivePath); if (sha256(archive) !== archiveDigest) throw new Error('Authenticated Actions archive digest mismatch');
   const archivedObject = readActionsArchiveObject(archive, objectPath); const ociObject = fs.readFileSync(path.join(root, canonicalArchivePath(objectPath)));
   if (sha256(archivedObject) !== objectDigest || !archivedObject.equals(ociObject)) throw new Error('Actions archive and OCI evidence object do not match');
-  return Object.freeze({ verified: true, repository: run.repository.full_name, workflowPath: run.path, runId: run.id, runAttempt: run.run_attempt, archiveDigest, ociDigest: expected.ociDigest, objectDigest });
+  return Object.freeze({ verified: true, repository: run.repository.full_name, workflowPath: run.path, runId: run.id, runAttempt: run.run_attempt, headSha: run.head_sha, archiveDigest, ociDigest: expected.ociDigest, objectDigest });
 }
 
 export function readExternalArtifact(rootDirectory, file, expectedDigest, authentication) {

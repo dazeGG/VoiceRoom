@@ -49,6 +49,11 @@ export function extractEvidenceBundle({ archiveBytes, bundleDigest, codeSha, out
   for (const file of bundle.files) {
     const bytes = readActionsArchiveObject(archiveBytes, file.path);
     if (sha256(bytes) !== file.sha256) throw new Error(`Evidence bundle digest mismatch for ${file.path}`);
+    if (file.mediaType === 'application/json') {
+      let value;
+      try { value = JSON.parse(bytes); } catch { throw new Error(`Evidence bundle JSON is invalid for ${file.path}`); }
+      if (value && typeof value === 'object' && Object.hasOwn(value, 'codeSha') && value.codeSha !== bundle.codeSha) throw new Error(`Evidence bundle object code SHA mismatch for ${file.path}`);
+    }
     const target = path.join(output, ...file.path.split('/'));
     fs.mkdirSync(path.dirname(target), { recursive: true });
     fs.writeFileSync(target, bytes);

@@ -27,7 +27,7 @@ function exactArray(actual, expected, label) {
 function validSelection(facts) {
   const selection = facts.selection;
   try {
-    const { terminalDevelopSha, lineageSuffix } = validateEnvelopeChain(facts.f7, facts.f9, facts.f11);
+    const { terminalDevelopSha, lineageSuffix } = validateEnvelopeChain(facts.f7, facts.f9, facts.f11, { verifyCurrentInputs: false });
     assert.deepEqual(Object.keys(selection).sort(), ["ancestorFailures", "artifactBindings", "attemptId", "bootstrapSupersessionChainDigest", "createdAt", "evidenceId", "f11Digest", "f11Id", "f7Digest", "f7Id", "f9Digest", "f9Id", "release", "remoteDeleted", "schemaVersion", "selectionDigest", "status", "terminalDevelopSha", "terminalKind"].sort());
     assert.equal(selection.schemaVersion, 1); assert.equal(selection.release, "2.5.0");
     assert.equal(selection.status, "SELECTED_GREEN"); assert.equal(selection.remoteDeleted, true);

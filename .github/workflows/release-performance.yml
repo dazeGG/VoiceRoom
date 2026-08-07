@@ -6,7 +6,6 @@ on:
       evidence_artifact_name: { description: Exact archived Actions artifact name, required: true, type: string }
       archive_sha256: { description: Artifact archive SHA256, required: true, type: string }
       producer_run_attempt: { description: Exact producer run attempt, required: true, type: string }
-      producer_head_sha: { description: Exact producer head SHA, required: true, type: string }
       oci_repository: { description: Evidence OCI repository without tag or digest, required: true, type: string }
       oci_digest: { description: Pinned evidence OCI manifest digest, required: true, type: string }
       object_path: { description: Evidence object path, required: true, type: string }
@@ -22,7 +21,7 @@ jobs:
       EVIDENCE_PRODUCER_EVENT: workflow_dispatch
       EVIDENCE_PRODUCER_REF: develop
       EVIDENCE_PRODUCER_ACTOR: ${{ github.repository_owner }}
-      EVIDENCE_PRODUCER_HEAD_SHA: ${{ inputs.producer_head_sha }}
+      EVIDENCE_PRODUCER_HEAD_SHA: ${{ github.sha }}
       EVIDENCE_PRODUCER_RUN_ATTEMPT: ${{ inputs.producer_run_attempt }}
       EVIDENCE_ARTIFACT_ID: ${{ inputs.evidence_artifact_id }}
       EVIDENCE_ARTIFACT_NAME: ${{ inputs.evidence_artifact_name }}
@@ -31,6 +30,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with: { persist-credentials: false }
+      - name: Validate required develop branch
+        run: node scripts/release/validate-workflow-ref.mjs --expected refs/heads/develop
       - uses: actions/setup-node@v4
         with: { node-version-file: .nvmrc, cache: npm }
       - run: npm ci

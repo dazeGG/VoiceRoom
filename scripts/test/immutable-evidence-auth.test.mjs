@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { readExternalArtifact, sha256 } from '../checkpoints/immutable-evidence.mjs';
+import { assertEvidenceIdentity, readExternalArtifact, sha256 } from '../checkpoints/immutable-evidence.mjs';
 import { extractEvidenceBundle, prepareOciBundle } from '../evidence/prepare-release-evidence-bundle.mjs';
 
 function storedZip(entries) {
@@ -40,6 +40,13 @@ test('same-repository attested OCI self-declaration cannot link different archiv
   assert.throws(()=>readExternalArtifact(value.root,value.objectPath,value.objectDigest,value.expected),/archive and OCI evidence object do not match/);
 });
 
+test('authenticated producer HEAD must equal the evidence object code SHA', (t) => {
+  const codeSha = 'b'.repeat(40);
+  const value = fixture(t, { ociBytes: Buffer.from(JSON.stringify({ codeSha, evidenceChainSha256: `sha256:${'1'.repeat(64)}` })) });
+  const result = readExternalArtifact(value.root, value.objectPath, value.objectDigest, value.expected);
+  assert.throws(() => assertEvidenceIdentity(result.value, codeSha), /producer HEAD does not match/);
+});
+
 test('tampered archive, escaping path and symlink entries fail closed', (t) => {
   const tampered=fixture(t);const bytes=Buffer.from(tampered.archive);bytes[35]^=1;fs.writeFileSync(path.join(tampered.root,'actions-archive.zip'),bytes);
   assert.throws(()=>readExternalArtifact(tampered.root,tampered.objectPath,tampered.objectDigest,tampered.expected),/archive digest mismatch/);
@@ -56,6 +63,8 @@ test('every release consumer retains the checksummed Actions archive beside the 
     assert.match(source,/scripts\/ci\/run-oras\.sh pull "\$OCI_REPOSITORY@\$OCI_DIGEST" -o external-evidence/);
     assert.match(source,/mv external-evidence\.zip external-evidence\/actions-archive\.zip/);
     assert.match(source,/EVIDENCE_PRODUCER_WORKFLOW: \.github\/workflows\/release-evidence-producer\.yml/);
+    assert.match(source,/EVIDENCE_PRODUCER_HEAD_SHA: \$\{\{ github\.sha \}\}/);
+    assert.doesNotMatch(source,/producer_head_sha:/);
   }
 });
 
@@ -69,4 +78,8 @@ test('generalized exact-head producer extracts only digest-bound files and prepa
   assert.deepEqual(prepared.manifest.layers.map((layer)=>layer.annotations['org.opencontainers.image.title']),['release-evidence-bundle.json','checkpoint.json','evidence/proof.json']);
   assert.equal(prepared.manifest.annotations['org.opencontainers.image.revision'],codeSha);
   assert.throws(()=>extractEvidenceBundle({archiveBytes:archive,bundleDigest:sha256(bundle),codeSha:'c'.repeat(40),outputDirectory:output,stage:'checkpoint'}),/identity is invalid/);
+  const hostileEvidence=Buffer.from(JSON.stringify({codeSha:'c'.repeat(40),ok:true}));
+  const hostileBundle=Buffer.from(JSON.stringify({contract:'voice-room.release-evidence-bundle/v1',release:'2.5.0',stage:'checkpoint',codeSha,files:[{path:'checkpoint.json',sha256:sha256(hostileEvidence),mediaType:'application/json'}]}));
+  const hostileArchive=storedZip([{name:'release-evidence-bundle.json',bytes:hostileBundle},{name:'checkpoint.json',bytes:hostileEvidence}]);
+  assert.throws(()=>extractEvidenceBundle({archiveBytes:hostileArchive,bundleDigest:sha256(hostileBundle),codeSha,outputDirectory:output,stage:'checkpoint'}),/object code SHA mismatch/);
 });
