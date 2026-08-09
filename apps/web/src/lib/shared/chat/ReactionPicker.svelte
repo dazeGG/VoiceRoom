@@ -315,9 +315,14 @@
   /* The picker draws its own header and footer to the panel edges. */
   :global(.reaction-picker-panel) { padding: 0; overflow: hidden; }
 
-  .reaction-picker { display: flex; width: min(392px, calc(100vw - 28px)); flex-direction: column; }
+  .reaction-picker {
+    display: flex;
+    width: min(392px, calc(100vw - 28px));
+    max-height: var(--popover-available-height, calc(100dvh - 16px));
+    flex-direction: column;
+  }
 
-  .reaction-picker-head { display: flex; flex-direction: column; gap: 12px; padding: 14px 14px 10px; }
+  .reaction-picker-head { display: flex; flex: none; flex-direction: column; gap: 12px; padding: 14px 14px 10px; }
 
   .reaction-picker-search input {
     width: 100%;
@@ -357,6 +362,8 @@
   .reaction-picker-body {
     display: flex;
     max-height: min(300px, 46vh);
+    min-height: 0;
+    flex: 1 1 auto;
     flex-direction: column;
     gap: 10px;
     padding: 2px 14px 14px;
@@ -397,6 +404,7 @@
 
   .reaction-picker-foot {
     display: flex;
+    flex: none;
     align-items: center;
     gap: 11px;
     min-height: 48px;

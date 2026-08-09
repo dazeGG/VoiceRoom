@@ -4,7 +4,11 @@
 
 <script lang="ts">
   import { tick } from 'svelte';
-  import { resolvePopoverPlacement } from './popover-placement';
+  import {
+    parsePlacement,
+    resolvePopoverPlacement,
+    viewportSpaceAroundTrigger
+  } from './popover-placement';
   import type {
     PopoverCloseReason,
     PopoverContentState,
@@ -35,10 +39,14 @@
   let root = $state<HTMLElement | null>(null);
   let panel = $state<HTMLElement | null>(null);
   let resolvedPlacement = $state<PopoverPlacement>('bottom-end');
+  let availableHeight = $state<number | null>(null);
   let measureGeneration = 0;
 
   $effect(() => {
-    if (!open) resolvedPlacement = placement;
+    if (!open) {
+      resolvedPlacement = placement;
+      availableHeight = null;
+    }
   });
 
   $effect(() => {
@@ -61,10 +69,26 @@
     const triggerEl = root.firstElementChild;
     if (!(panel instanceof HTMLElement) || !(triggerEl instanceof HTMLElement)) return;
 
-    resolvedPlacement = resolvePopoverPlacement(
-      triggerEl.getBoundingClientRect(),
+    // The panel is positioned against the root box, which may be taller than
+    // its trigger when a toolbar stretches its children. Measure that same
+    // anchor so the available-space calculation matches the CSS geometry.
+    const anchorRect = root.getBoundingClientRect();
+    const nextPlacement = resolvePopoverPlacement(
+      anchorRect,
       panel.getBoundingClientRect(),
       placement
+    );
+    resolvedPlacement = nextPlacement;
+    const { spaceAbove, spaceBelow } = viewportSpaceAroundTrigger(anchorRect);
+    const panelStyle = getComputedStyle(panel);
+    const panelChromeHeight =
+      Number.parseFloat(panelStyle.paddingTop) +
+      Number.parseFloat(panelStyle.paddingBottom) +
+      Number.parseFloat(panelStyle.borderTopWidth) +
+      Number.parseFloat(panelStyle.borderBottomWidth);
+    availableHeight = Math.max(
+      0,
+      (parsePlacement(nextPlacement).vertical === 'top' ? spaceAbove : spaceBelow) - panelChromeHeight
     );
   }
 
@@ -191,6 +215,7 @@
       aria-label={ariaLabel || undefined}
       aria-hidden={keepContentMounted && !open ? true : undefined}
       hidden={keepContentMounted && !open ? true : undefined}
+      style:--popover-available-height={availableHeight === null ? undefined : `${availableHeight}px`}
       onkeydown={onPanelKeydown}
     >
       {@render content(contentState)}
