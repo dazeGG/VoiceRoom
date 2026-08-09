@@ -506,9 +506,15 @@ test("G08 realtime join retains and revokes the exact gate principal", async () 
   const store = {
     async getOrCreatePeerIdentity() { return { status: "created", identity: { id: identityIds.shift(), avatarColorKey: "blue" } }; },
     async getRoom() { return room; },
+    async isRoomServerMuted() { return false; },
     async listMessages() { return []; },
     async listSummaryRecipientUserIds() { return []; },
     async markRoomActive() {},
+    normalizeGatePrincipal({ accountUserId, guestPrincipalId }) {
+      if (accountUserId) return { principalType: "account", principalId: accountUserId };
+      if (guestPrincipalId) return { principalType: "guest", principalId: guestPrincipalId };
+      return null;
+    },
     async revokeLiveKitGatePeer(value) { revoked.push(value); }
   };
   const wsRegistry = {

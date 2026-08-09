@@ -301,3 +301,60 @@ test('searchUsers matches login and display name, excludes self', async (t) => {
   const logins = results.map((u) => u.login).sort();
   assert.deepEqual(logins, ['alicia']);
 });
+
+test('concurrent friend acceptance and blocking cannot leave a friendship behind', async (t) => {
+  const { users, friends } = await createStores(t);
+  const alice = await makeUser(users, 'race-alice');
+  const bob = await makeUser(users, 'race-bob');
+  const sent = await friends.sendRequest({ requesterId: alice.id, addresseeUserId: bob.id });
+
+  const [accepted, blocked] = await Promise.all([
+    friends.respondRequest({ userId: bob.id, requestId: sent.requestId, action: 'accept' }),
+    friends.blockUser({ userId: bob.id, targetId: alice.id })
+  ]);
+
+  assert.ok(['accepted', 'blocked', 'not_found'].includes(accepted.status));
+  assert.ok(['blocked', 'already_blocked'].includes(blocked.status));
+  assert.equal(await friends.areFriends(alice.id, bob.id), false);
+  assert.equal(await friends.isBlockedBetween(alice.id, bob.id), true);
+});
+
+test('blocking expires pending room invitations in both directions', async (t) => {
+  const { users, friends } = await createStores(t);
+  const alice = await makeUser(users, 'block-invite-alice');
+  const bob = await makeUser(users, 'block-invite-bob');
+  await friends.sendMessage({
+    senderId: alice.id,
+    recipientId: bob.id,
+    body: 'alice invite',
+    metadata: { kind: 'room-invite', roomId: 'room-a', status: 'pending' }
+  });
+  await friends.sendMessage({
+    senderId: bob.id,
+    recipientId: alice.id,
+    body: 'bob invite',
+    metadata: { kind: 'room-invite', roomId: 'room-b', status: 'pending' }
+  });
+
+  await friends.blockUser({ userId: alice.id, targetId: bob.id });
+
+  const messages = await friends.listThread({ userId: alice.id, peerId: bob.id });
+  assert.deepEqual(messages.map((message) => message.invite.status), ['expired', 'expired']);
+});
+
+test('blocked-user projection is public-only and disappears after unblock', async (t) => {
+  const { users, friends } = await createStores(t);
+  const alice = await makeUser(users, 'blocked-list-alice');
+  const bob = await makeUser(users, 'blocked-list-bob');
+  await friends.blockUser({ userId: alice.id, targetId: bob.id });
+
+  const blockedUsers = await friends.listBlockedUsers(alice.id);
+  assert.equal(blockedUsers.length, 1);
+  assert.equal(blockedUsers[0].id, bob.id);
+  assert.equal(Object.hasOwn(blockedUsers[0], 'passwordHash'), false);
+  assert.equal(Object.hasOwn(blockedUsers[0], 'password_hash'), false);
+
+  assert.equal((await friends.unblockUser({ userId: alice.id, targetId: bob.id })).status, 'unblocked');
+  assert.deepEqual(await friends.listBlockedUserIds(alice.id), []);
+  assert.deepEqual(await friends.listBlockedUsers(alice.id), []);
+});

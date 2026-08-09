@@ -124,6 +124,7 @@ test('G48-A03 issued credential fails closed when membership persistence and rev
     async getRoom(id) { return rooms.get(id) || null; }, async markRoomActive() {}, async markRoomEmpty() {}, async pruneRooms() {}, async listSummaryRecipientUserIds() { return []; },
     async getOrCreatePeerIdentity({ peerId }) { return { status: 'created', identity: { id: peerId, peerId, avatarColorKey: 'green' } }; },
     normalizeGatePrincipal({ accountUserId, guestPrincipalId, roomId }) { return accountUserId ? { principalType: 'account', principalId: accountUserId } : { principalType: 'guest', principalId: `${roomId}:${guestPrincipalId}` }; },
+    async isRoomServerMuted() { return false; },
     async getLiveKitGatePrincipalEpoch() { return { status: 'ready', epoch: 0 }; }, async createLiveKitGateCredential() { return { status: 'created' }; }, async verifyLiveKitGateCredential() { return { status: 'allowed' }; },
     async revokeLiveKitGateCredential() { throw new Error('revoke unavailable'); }, async revokeLiveKitGatePrincipal() { return { status: 'revoked', epoch: 1 }; }
   };

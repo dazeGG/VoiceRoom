@@ -10,6 +10,10 @@ export type ContextMenuProps = {
   y: number;
   ariaLabel: string;
   restoreFocus?: HTMLElement | null;
+  /** Drop the panel's inner padding for content that draws to its own edges. */
+  padded?: boolean;
+  /** Panels holding a card rather than a list of actions should say so. */
+  role?: 'menu' | 'listbox' | 'dialog';
   onClose: () => void;
   content: Snippet<[ContextMenuContentState]>;
 };

@@ -642,6 +642,53 @@ function createRoomStore({
     return revokeLiveKitGatePrincipal({ principal, roomId, now });
   }
 
+  // --- Server mutes -------------------------------------------------------
+  //
+  // Keyed by gate principal, not peer id, so the mute survives a reconnect:
+  // rejoining with a fresh peer id must not silently clear a moderator action.
+
+  async function setRoomServerMute({ roomId, principal, mutedBy } = {}) {
+    if (!isValidGatePrincipal(principal)) return { status: 'invalid' };
+    const result = await getPool().query(
+      `INSERT INTO room_server_mutes (room_id, principal_type, principal_id, muted_by)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (room_id, principal_type, principal_id) DO NOTHING`,
+      [roomId, principal.principalType, principal.principalId, mutedBy]
+    );
+    return { status: result.rowCount > 0 ? 'muted' : 'already_muted' };
+  }
+
+  async function clearRoomServerMute({ roomId, principal } = {}) {
+    if (!isValidGatePrincipal(principal)) return { status: 'invalid' };
+    const result = await getPool().query(
+      `DELETE FROM room_server_mutes
+       WHERE room_id = $1 AND principal_type = $2 AND principal_id = $3`,
+      [roomId, principal.principalType, principal.principalId]
+    );
+    return { status: result.rowCount > 0 ? 'unmuted' : 'not_found' };
+  }
+
+  async function isRoomServerMuted({ roomId, principal } = {}) {
+    if (!isValidGatePrincipal(principal)) return false;
+    const result = await getPool().query(
+      `SELECT 1 FROM room_server_mutes
+       WHERE room_id = $1 AND principal_type = $2 AND principal_id = $3`,
+      [roomId, principal.principalType, principal.principalId]
+    );
+    return result.rowCount > 0;
+  }
+
+  async function listRoomServerMutes(roomId) {
+    const result = await getPool().query(
+      `SELECT principal_type, principal_id FROM room_server_mutes WHERE room_id = $1`,
+      [roomId]
+    );
+    return result.rows.map((row) => ({
+      principalType: row.principal_type,
+      principalId: row.principal_id
+    }));
+  }
+
   async function createRoomBanWithLiveKitGateRevocations({
     roomId,
     userId = null,
@@ -1233,7 +1280,11 @@ function createRoomStore({
     appendMessage,
     canUserReactInRoom,
     canUserReadRoomChat,
+    clearRoomServerMute,
     close,
+    isRoomServerMuted,
+    listRoomServerMutes,
+    setRoomServerMute,
     countEmptyRoomsForIp,
     countOwnedStaticRoomsForUser,
     countQuotaRoomsForIp,

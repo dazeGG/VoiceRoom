@@ -36,18 +36,47 @@ export type PopoverProps = {
   content: Snippet<[PopoverContentState]>;
 };
 
+/**
+ * `danger` is destructive (coral), `friendly` is a relationship-building action
+ * (green), `accent` marks the item the menu is primarily about.
+ */
+export type PopoverMenuItemVariant = 'default' | 'accent' | 'friendly' | 'danger';
+
 export type PopoverMenuItemProps = {
   label: string;
   onclick?: (event: MouseEvent) => void;
   disabled?: boolean;
-  variant?: 'default' | 'danger';
+  variant?: PopoverMenuItemVariant;
+  /** Renders as the current choice: tinted row plus a check mark. */
+  selected?: boolean;
   showChevron?: boolean;
+  /** Chevron turns accent-coloured while the submenu it opens is showing. */
+  chevronActive?: boolean;
+  /** Keyboard shortcut shown right-aligned, e.g. "E" or "⌫". */
+  hint?: string;
   icon?: Snippet;
-  role?: 'menuitem' | 'option';
+  role?: 'menuitem' | 'option' | 'button';
+  ariaHaspopup?: 'menu';
+  ariaExpanded?: boolean;
+  ariaControls?: string;
+  onpointerenter?: (event: PointerEvent) => void;
+  onfocus?: (event: FocusEvent) => void;
+};
+
+export type PopoverMenuLabelProps = {
+  text: string;
 };
 
 export type PopoverDividerProps = {
   tight?: boolean;
+};
+
+export type PopoverSubmenuProps = {
+  label: string;
+  ariaLabel?: string;
+  disabled?: boolean;
+  icon?: Snippet;
+  content: Snippet<[{ close: () => void }]>;
 };
 
 // --- internal (not re-exported from index.ts) ---

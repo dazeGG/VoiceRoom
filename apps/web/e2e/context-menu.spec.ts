@@ -96,7 +96,7 @@ test('friend context menu opens from pointer and keyboard in the sidebar', async
 
     await friendRow.click({ button: 'right' });
     await expect(friendMenu).toBeVisible();
-    await expect(friendMenu.getByRole('menuitem', { name: 'Открыть сообщения' })).toBeFocused();
+    await expect(friendMenu.getByRole('menuitem', { name: 'Написать' })).toBeFocused();
     await page.keyboard.press('Escape');
     await expect(friendRow).toBeFocused();
 

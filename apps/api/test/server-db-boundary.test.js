@@ -69,6 +69,14 @@ function createFakeStore() {
       }
       return { identity: { avatarColorKey: 'blurple', peerId }, status: 'created' };
     },
+    normalizeGatePrincipal({ accountUserId, guestPrincipalId }) {
+      return accountUserId
+        ? { principalId: accountUserId, principalType: 'account' }
+        : { principalId: guestPrincipalId || 'test-guest', principalType: 'guest' };
+    },
+    async isRoomServerMuted() {
+      return false;
+    },
     async listMessages(roomId) {
       return messages.get(roomId) || [];
     },

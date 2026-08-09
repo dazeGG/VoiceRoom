@@ -19,6 +19,7 @@
   import { copyText } from '$lib/shared/utils/clipboard';
   import { triggerDesktopDownload } from './services/desktop-download';
   import { dismissToast, pushToast, toastState, type ToastOptions } from './model/toasts.svelte';
+  import { ProfileCardHost } from './components/profile-card';
   import { syncPushNotificationState } from './model/push-notifications.svelte';
   import {
     DESKTOP_BUILDS,
@@ -276,5 +277,7 @@
     <AuthDialog mode={authMode} onClose={closeAuthDialog} onModeChange={switchAuthMode} />
   {/key}
 {/if}
+
+<ProfileCardHost onToast={(message) => pushToast(message)} />
 
 <ToastStack toasts={toastState.items} onDismiss={dismissToast} />

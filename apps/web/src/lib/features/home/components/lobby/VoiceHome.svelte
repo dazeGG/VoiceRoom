@@ -8,13 +8,14 @@
   import { roomDisplayName } from '../../model/rooms';
   import { friendsState, showPeople } from '../../model/friends.svelte';
   import { notificationPreferences } from '$lib/shared/notifications/preferences.svelte';
-  import { RoomMenuContent } from '$lib/shared/components/room-menu';
+  import { RoomCardMenuContent } from '$lib/shared/components/room-menu';
 
-  let { rooms, onOpenRoom, onCreateRoom, onJoinCode, onToast } = $props<{
+  let { rooms, onOpenRoom, onCreateRoom, onJoinCode, onRoomsChanged, onToast } = $props<{
     rooms: OwnedRoom[];
     onOpenRoom: (roomId: string) => void;
     onCreateRoom: () => void;
     onJoinCode: (code: string) => void;
+    onRoomsChanged?: () => void;
     onToast?: (message: string) => void;
   }>();
 
@@ -30,6 +31,16 @@
 
   function roomAvatars(roomId: string) {
     return roomPeerAvatarItems(roomPresence.peersByRoomId[roomId] || []);
+  }
+
+  // Friends already in the room render disabled in the invite submenu.
+  function roomPresentUserIds(roomId: string): Set<string> {
+    const peers = roomPresence.peersByRoomId[roomId] || [];
+    return new Set(
+      peers
+        .map((peer: { accountUserId?: string }) => peer.accountUserId || '')
+        .filter((userId: string) => userId !== '')
+    );
   }
 
   function roomUnreadCount(room: OwnedRoom): number {
@@ -169,12 +180,15 @@
   >
     {#snippet content({ close })}
       {#key contextRoom.roomId}
-        <RoomMenuContent
+        <RoomCardMenuContent
           roomId={contextRoom.roomId}
           name={roomDisplayName(contextRoom)}
-          avatarUrl={contextRoom.avatarUrl}
+          friends={friendsState.friends}
+          presentUserIds={roomPresentUserIds(contextRoom.roomId)}
           {close}
           canClose={(roomId) => contextRoomId === roomId}
+          onRenamed={onRoomsChanged}
+          onDeleted={onRoomsChanged}
           {onToast}
         />
       {/key}

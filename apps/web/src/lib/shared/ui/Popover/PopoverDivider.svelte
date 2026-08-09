@@ -9,11 +9,11 @@
 <style>
   .popover-divider {
     height: 1px;
-    margin: 2px 8px 6px;
-    background: var(--control-line);
+    margin: 6px 8px;
+    background: color-mix(in oklch, var(--control-line), transparent 45%);
   }
 
   .popover-divider--tight {
-    margin: 6px 8px;
+    margin: 3px 8px;
   }
 </style>

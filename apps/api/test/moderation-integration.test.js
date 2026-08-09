@@ -101,6 +101,9 @@ function createModerationStore() {
         ? { principalId: accountUserId, principalType: 'account' }
         : { principalId: guestPrincipalId, principalType: 'guest' };
     },
+    async isRoomServerMuted() {
+      return false;
+    },
     async getRoom(roomId) {
       return roomId === ROOM_ID ? { ...room, peers: new Map() } : null;
     },

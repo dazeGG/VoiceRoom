@@ -10,6 +10,7 @@ export interface PeerInfo {
   deafened?: boolean;
   muted?: boolean;
   screen?: boolean;
+  serverMuted?: boolean;
   screenAuthoritative?: boolean;
   screenAudio?: boolean;
   screenProfileId?: string;
@@ -46,6 +47,8 @@ export interface Participant {
   screenProfileId: string;
   screenStream: MediaStream | null;
   screenStreamId: string;
+  /** Muted by the room owner; the participant cannot lift it themselves. */
+  serverMuted: boolean;
   stream: MediaStream | null;
   viewedScreenPeerId: string;
   voiceIssue: string;

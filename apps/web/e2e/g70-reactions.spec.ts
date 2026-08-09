@@ -55,7 +55,7 @@ test('G70 supplemental mocked keyboard and pagination rendering remains determin
   const input = page.getByPlaceholder('Написать в комнату…'); await input.fill('keyboard reaction'); await input.press('Enter');
   const message = page.locator('.chat-msg-text', { hasText: 'keyboard reaction' }); await expect(message).toBeVisible(); await message.hover();
   const pickerButton = message.getByRole('button', { name: 'Открыть выбор эмодзи' }); await pickerButton.focus(); await pickerButton.press('Enter');
-  const grid = page.getByRole('grid', { name: 'Доступные реакции' }); await expect(grid).toBeVisible(); const search = page.getByPlaceholder('Найти эмодзи'); await expect(search).toBeFocused(); await search.press('Tab');
+  const grid = page.getByRole('grid', { name: 'Доступные реакции' }); await expect(grid).toBeVisible(); const search = page.getByPlaceholder('Поиск реакции'); await expect(search).toBeFocused(); await search.press('Tab'); await expect(page.getByRole('tab', { name: 'Часто используемые' })).toBeFocused(); await page.keyboard.press('Tab');
   const firstCell = grid.getByRole('gridcell').first(); await expect(firstCell).toBeFocused(); await firstCell.press('ArrowRight'); await page.keyboard.press('Home'); const keyboardMutation = page.waitForRequest((request) => request.method() === 'PUT' && request.url().includes('/api/reactions/')); await Promise.all([keyboardMutation, page.keyboard.press('Enter')]);
   const thumbChip = page.locator('.reaction-chip', { has: page.getByRole('button', { name: /реакцию 👍/i }) }); const count = thumbChip.getByRole('button', { name: 'Показать пользователей: 120' }); await expect(count).toBeVisible(); await count.click();
   await expect(page.getByRole('heading', { name: /Реакция/ })).toBeFocused();

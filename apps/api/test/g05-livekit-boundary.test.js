@@ -85,6 +85,9 @@ function createGateAwareStore() {
       if (!roomId || !guest) return null;
       return { principalType: 'guest', principalId: `${roomId}:${guest}` };
     },
+    async isRoomServerMuted() {
+      return false;
+    },
     async getLiveKitGatePrincipalEpoch({ principal, roomId }) {
       const key = principalKey({ roomId, ...principal });
       if (!epochs.has(key)) epochs.set(key, 0);

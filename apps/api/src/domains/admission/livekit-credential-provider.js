@@ -14,7 +14,14 @@ function createLiveKitCredentialProvider({
   if (!boundary || typeof boundary.issueCredential !== 'function') throw new TypeError('credential boundary is required');
   const ttlSeconds = Math.max(60, Number(tokenTtlSeconds) || 6 * 60 * 60);
 
-  async function issueAdmission({ roomId, livekitRoom, peerId, name = '', principal } = {}) {
+  async function issueAdmission({
+    roomId,
+    livekitRoom,
+    peerId,
+    name = '',
+    principal,
+    canPublishMicrophone = true
+  } = {}) {
     if (!apiKey || !apiSecret || !gateUrl || !roomId || !livekitRoom || !peerId || !principal) {
       return { status: 'unavailable', admission: null };
     }
@@ -27,10 +34,12 @@ function createLiveKitCredentialProvider({
       name,
       ttl: ttlSeconds
     });
+    const canPublishSources = [TrackSource.SCREEN_SHARE, TrackSource.SCREEN_SHARE_AUDIO];
+    if (canPublishMicrophone !== false) canPublishSources.unshift(TrackSource.MICROPHONE);
     token.addGrant({
       canPublish: true,
       canPublishData: true,
-      canPublishSources: [TrackSource.MICROPHONE, TrackSource.SCREEN_SHARE, TrackSource.SCREEN_SHARE_AUDIO],
+      canPublishSources,
       canSubscribe: true,
       room: livekitRoom,
       roomJoin: true
