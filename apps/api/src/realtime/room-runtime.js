@@ -899,10 +899,20 @@ function createRoomRealtimeRuntime(deps) {
         return { ok: false, code: 'invalid_session', message: 'Invalid peer session' };
       }
       const avatarColorKey = identityResult.identity?.avatarColorKey || avatarColorForPeerId(peerId);
-      const persistedServerMuted = await loadServerMute(roomId, {
-        accountUserId: sessionUser?.id || '',
-        gateGuestPrincipalId: identityResult.identity?.id || ''
-      });
+      let persistedServerMuted;
+      try {
+        persistedServerMuted = await loadServerMute(roomId, {
+          accountUserId: sessionUser?.id || '',
+          gateGuestPrincipalId: identityResult.identity?.id || ''
+        });
+      } catch {
+        terminalClaimFailure = true;
+        return {
+          ok: false,
+          code: 'server_mute_unavailable',
+          message: 'Не удалось проверить ограничения микрофона. Попробуйте ещё раз.'
+        };
+      }
       if (!authorizeVoiceJoin(joinState, joinRequestSequence)) {
         return supersededVoiceJoin(connection, roomId);
       }
