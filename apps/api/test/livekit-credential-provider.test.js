@@ -5,6 +5,10 @@ const assert = require('node:assert/strict');
 
 const { createLiveKitCredentialProvider } = require('../src/domains/admission/livekit-credential-provider');
 
+function jwtPayload(token) {
+  return JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString('utf8'));
+}
+
 test('livekit credential provider rejects missing admission input without issuing a gate credential', async () => {
   let calls = 0;
   const config = {
@@ -114,4 +118,30 @@ test('livekit credential provider clamps invalid token TTL to a safe minimum', a
 
   assert.equal(result.status, 'issued');
   assert.equal(result.admission.ttlSeconds, 6 * 60 * 60);
+});
+
+test('server-muted admission omits microphone publishing while preserving screen sharing', async () => {
+  const provider = createLiveKitCredentialProvider({
+    apiKey: 'key',
+    apiSecret: 'secret',
+    boundary: {
+      async issueCredential() {
+        return { status: 'issued', credential: { id: 'credential-muted', value: 'signed-muted' } };
+      }
+    },
+    gateUrl: 'wss://gate.example/rtc'
+  });
+
+  const result = await provider.issueAdmission({
+    roomId: 'room-muted',
+    livekitRoom: 'voice-room-muted',
+    peerId: 'peer-muted',
+    principal: { principalId: 'user-muted', principalType: 'account' },
+    canPublishMicrophone: false
+  });
+
+  const sources = jwtPayload(result.admission.token).video.canPublishSources;
+  assert.equal(sources.includes('microphone'), false, 'microphone TrackSource is absent');
+  assert.equal(sources.includes('screen_share'), true, 'screen-share TrackSource remains allowed');
+  assert.equal(sources.includes('screen_share_audio'), true, 'screen-share audio TrackSource remains allowed');
 });

@@ -48,6 +48,14 @@ function createFakeStore(seed = {}) {
     async getOrCreatePeerIdentity({ peerId }) {
       return { identity: { avatarColorKey: 'blurple', peerId }, status: 'created' };
     },
+    normalizeGatePrincipal({ accountUserId, guestPrincipalId }) {
+      return accountUserId
+        ? { principalId: accountUserId, principalType: 'account' }
+        : { principalId: guestPrincipalId || 'test-guest', principalType: 'guest' };
+    },
+    async isRoomServerMuted() {
+      return false;
+    },
     async updateRoom(roomId, patch) {
       const room = rooms.get(roomId);
       if (!room || room.deletedAt) return null;

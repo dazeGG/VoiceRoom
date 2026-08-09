@@ -772,6 +772,25 @@ function createRoomRealtimeRuntime(deps) {
     return { ok: false, code: 'superseded_join', message: 'Join replaced by a newer connection' };
   }
 
+  // Moderator mutes are stored per gate principal. A lookup failure must block
+  // admission: treating an unavailable authority as "not muted" would let a
+  // participant bypass moderation simply by reconnecting during a DB outage.
+  async function loadServerMute(roomId, peer) {
+    const store = getRoomStore();
+    if (typeof store?.isRoomServerMuted !== 'function' || typeof store?.normalizeGatePrincipal !== 'function') {
+      const error = new Error('Server mute authority is unavailable');
+      error.code = 'server_mute_unavailable';
+      throw error;
+    }
+    const principal = store.normalizeGatePrincipal({
+      accountUserId: peer.accountUserId || null,
+      guestPrincipalId: peer.gateGuestPrincipalId || '',
+      roomId
+    });
+    if (!principal) return false;
+    return store.isRoomServerMuted({ roomId, principal });
+  }
+
   async function joinVoiceRoom(connection, payload, sessionUser, clientIp = '', requestId = '') {
     const joinRequestSequence = ++voiceJoinRequestSequence;
     const roomId = normalizeRoomId(payload.roomId);
@@ -880,6 +899,10 @@ function createRoomRealtimeRuntime(deps) {
         return { ok: false, code: 'invalid_session', message: 'Invalid peer session' };
       }
       const avatarColorKey = identityResult.identity?.avatarColorKey || avatarColorForPeerId(peerId);
+      const persistedServerMuted = await loadServerMute(roomId, {
+        accountUserId: sessionUser?.id || '',
+        gateGuestPrincipalId: identityResult.identity?.id || ''
+      });
       if (!authorizeVoiceJoin(joinState, joinRequestSequence)) {
         return supersededVoiceJoin(connection, roomId);
       }
@@ -939,12 +962,13 @@ function createRoomRealtimeRuntime(deps) {
         gateGuestPrincipalId: identityResult.identity?.id || '',
         ip: clientIp || '',
         joinedAt: previous?.joinedAt ?? Date.now(),
-        muted: previous?.muted ?? false,
+        muted: Boolean(previous?.muted || persistedServerMuted),
         name: reconnecting && !sessionUser ? (previous?.name ?? name) : name,
         screen: previous?.screen ?? false,
         screenAudio: previous?.screenAudio ?? false,
         screenProfileId: previous?.screenProfileId ?? '',
         screenStreamId: previous?.screenStreamId ?? '',
+        serverMuted: Boolean(previous?.serverMuted || persistedServerMuted),
         viewedScreenPeerId: previous?.viewedScreenPeerId ?? '',
         sessionToken,
         transport
@@ -1145,7 +1169,9 @@ function createRoomRealtimeRuntime(deps) {
     const stoppedScreen = Object.hasOwn(patch, 'screen') && peer.screen && !Boolean(patch.screen);
 
     if (Object.hasOwn(patch, 'name') && !peer.accountUserId) peer.name = cleanName(patch.name);
-    if (Object.hasOwn(patch, 'muted')) peer.muted = Boolean(patch.muted);
+    // A moderator mute outranks the client: the participant may still mute
+    // itself, but an unmute is dropped until the owner lifts the server mute.
+    if (Object.hasOwn(patch, 'muted')) peer.muted = peer.serverMuted || Boolean(patch.muted);
     if (Object.hasOwn(patch, 'deafened')) peer.deafened = Boolean(patch.deafened);
     if (Object.hasOwn(patch, 'screen')) peer.screen = Boolean(patch.screen);
     if (Object.hasOwn(patch, 'screenAudio')) peer.screenAudio = Boolean(patch.screenAudio);

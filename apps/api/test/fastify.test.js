@@ -52,6 +52,9 @@ function createFakeStore() {
         ? { principalId: accountUserId, principalType: 'account' }
         : { principalId: guestPrincipalId, principalType: 'guest' };
     },
+    async isRoomServerMuted() {
+      return false;
+    },
     async markRoomActive() {},
     async markRoomEmpty() {},
     async pruneRooms() {},

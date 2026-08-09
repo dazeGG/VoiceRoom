@@ -412,7 +412,7 @@ test('ws sends additive account notification envelopes without regressing legacy
   bob.ws.close();
 });
 
-test('ring requires an active friend and delivers one expiring invitation per cooldown', async (t) => {
+test('ring works from the lobby for an active friend and delivers one invitation per cooldown', async (t) => {
   const { dir, socketPath } = getSocketPath();
   const { cleanup, databaseUrl } = await createTestDatabase(t);
   const logs = { stdout: '', stderr: '' };
@@ -455,7 +455,8 @@ test('ring requires an active friend and delivers one expiring invitation per co
     cookie: aliceCookie,
     body: { userId: bobId }
   });
-  assert.equal(beforeJoin.status, 403);
+  assert.equal(beforeJoin.status, 200);
+  await delay(1100);
 
   const alice = openHarnessWs(socketPath, { cookie: aliceCookie });
   const bob = openWs(socketPath, bobCookie);
@@ -579,14 +580,29 @@ test('ring requires an active friend and delivers one expiring invitation per co
   });
   assert.equal(
     threadAfterLeave.body.messages.find((message) => message.id === secondInvite.payload.message.id)?.invite?.status,
-    'expired'
+    'pending'
   );
+  assert.equal(
+    bob.frames.slice(bobBeforeLeave).some((frame) =>
+      frame.type === 'dm.message.edited'
+      && frame.payload?.message?.id === secondInvite.payload.message.id
+    ),
+    false
+  );
+
+  const bobBeforeDelete = bob.frames.length;
+  const deletedRoom = await request(socketPath, {
+    method: 'DELETE',
+    pathname: `/api/rooms/${encodeURIComponent(roomId)}`,
+    cookie: aliceCookie
+  });
+  assert.equal(deletedRoom.status, 200);
   const expired = await waitForWsType(
     bob.frames,
     'dm.message.edited',
     (frame) => frame.payload?.message?.id === secondInvite.payload.message.id,
     5000,
-    bobBeforeLeave
+    bobBeforeDelete
   );
   assert.equal(expired.payload.message.invite.status, 'expired');
 

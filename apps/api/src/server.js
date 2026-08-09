@@ -14,7 +14,7 @@ const {
 } = require('./realtime/room-runtime');
 const { buildServerEnvelope } = require('./realtime/envelope');
 const { URL } = require('node:url');
-const { RoomServiceClient } = require('livekit-server-sdk');
+const { RoomServiceClient, TrackSource } = require('livekit-server-sdk');
 
 const { readEnvInt, readEnvBool, readMessageDeliveryMode, readDatabaseConfig, readUploadsDir } = require('./lib/config');
 const {
@@ -81,6 +81,9 @@ const { createReactionRepository } = require('./domains/messaging/reaction-repos
 const { createReactionService } = require('./domains/messaging/reaction-service');
 const { createReactionRealtimeAdapter } = require('./domains/messaging/reaction-realtime-adapter');
 const { registerReactionRoutes } = require('./domains/messaging/reaction-routes');
+const { createPinRepository } = require('./domains/messaging/pin-repository');
+const { createPinService } = require('./domains/messaging/pin-service');
+const { registerPinRoutes } = require('./domains/messaging/pin-routes');
 const { createInboxRepository } = require('./domains/notifications/inbox-repository');
 const { createMentionRepository } = require('./domains/notifications/mention-repository');
 const { createMentionEligibilityService } = require('./domains/notifications/mention-eligibility-service');
@@ -220,6 +223,7 @@ function resolveRealtimeReconnectLeaseMs(env = process.env) {
 let roomStore = null;
 let userStore = null;
 let friendStore = null;
+let friendStoreInviteExpiryEnabled = false;
 let notificationStore = null;
 let pushStore = null;
 let pushService = null;
@@ -232,6 +236,7 @@ let membershipPool = null;
 let membershipServices = null;
 let release250Pool = null;
 let reactionServices = null;
+let pinServices = null;
 let notificationServices = null;
 let moderationServices = null;
 let mediaServices = null;
@@ -415,6 +420,40 @@ function getReactionServices() {
   });
   reactionServices = { realtime, service };
   return reactionServices;
+}
+
+function getPinServices() {
+  if (pinServices) return pinServices;
+  const pool = getRelease250Pool();
+  if (!pool) return null;
+  const service = createPinService({
+    repository: createPinRepository({ client: pool }),
+    // Everyone watching the room detail stream needs the new pin list: the
+    // pinned bar is shared state, not a per-viewer projection.
+    publish: async ({ roomId, action, messageId, pins, count }) => {
+      const room = await getRoom(roomId);
+      if (!room) return false;
+      roomRuntime?.broadcastRoomDetail(roomId, {
+        type: 'room.pins',
+        payload: { roomId, action, messageId, pins, count }
+      });
+      return true;
+    }
+  });
+  pinServices = { service };
+  return pinServices;
+}
+
+async function refreshPinsAfterMessageMutation(roomId, action, messageId) {
+  const service = getPinServices()?.service;
+  if (!service?.refresh) return;
+  try {
+    await service.refresh({ roomId, action, messageId });
+  } catch (error) {
+    // The message mutation is already committed. Preserve its success while
+    // retaining evidence; clients will reconcile the derived pin list on load.
+    console.error('Failed to refresh room pins after message mutation:', error);
+  }
 }
 
 function getMessageDeliveryServices() {
@@ -1193,6 +1232,7 @@ function publicPeer(peer) {
     muted: peer.muted,
     name: peer.name,
     screen: peer.screen,
+    serverMuted: Boolean(peer.serverMuted),
     screenAudio: peer.screenAudio,
     screenProfileId: peer.screenProfileId,
     screenStreamId: peer.screenStreamId,
@@ -1318,18 +1358,12 @@ function publishClearedScreenViewers(room, ownerPeerId) {
   }
 }
 
-function isAccountActiveInRoom(roomId, userId) {
-  const room = presenceRooms.get(roomId);
-  return Boolean(
-    room
-    && userId
-    && Array.from(room.peers.values()).some((peer) => peer.accountUserId === userId)
-  );
-}
-
+// senderId narrows the expiry to one inviter; pass null to expire every pending
+// invitation for the room (used when the room itself goes away).
 async function expireRoomInvitations(senderId, roomId) {
-  if (!senderId || !roomId) return [];
-  const messages = await getMessageService().direct.expirePendingInvites({ senderId, roomId });
+  if (!roomId) return [];
+  if (!friendStoreInviteExpiryEnabled || typeof friendStore?.expirePendingInvites !== 'function') return [];
+  const messages = await friendStore.expirePendingInvites({ senderId: senderId || null, roomId });
   for (const message of messages) {
     const event = { type: 'dm.message.edited', message };
     broadcastToUser(message.senderId, event);
@@ -1347,11 +1381,6 @@ function closePeer(roomId, peerId, transportId, reason = 'left') {
 
   current.closed = true;
   room.peers.delete(peerId);
-  if (current.accountUserId && !isAccountActiveInRoom(roomId, current.accountUserId)) {
-    void expireRoomInvitations(current.accountUserId, roomId).catch((error) => {
-      console.error('Failed to expire room invitations:', error);
-    });
-  }
   if (!current.replaced) {
     publishClearedScreenViewers(room, peerId);
     broadcast(room, { type: 'peer-left', peerId, reason });
@@ -1513,6 +1542,21 @@ async function handleLiveKitToken(req, res) {
     sendJson(res, 503, { ok: false, code: 'livekit_gate_principal_unavailable', error: 'LiveKit gate principal unavailable' });
     return;
   }
+  let serverMuted;
+  try {
+    if (typeof getRoomStore().isRoomServerMuted !== 'function') {
+      throw new Error('Server mute authority is unavailable');
+    }
+    serverMuted = await getRoomStore().isRoomServerMuted({ roomId, principal });
+  } catch (error) {
+    req?.log?.error?.({ err: error, roomId }, 'Failed to resolve persisted server mute before LiveKit admission');
+    sendJson(res, 503, {
+      ok: false,
+      code: 'server_mute_unavailable',
+      error: 'Voice moderation state is unavailable'
+    });
+    return;
+  }
   const livekitRoom = getLiveKitRoomName(roomId);
   let memberships = null;
   if (sessionUser?.id) {
@@ -1527,10 +1571,39 @@ async function handleLiveKitToken(req, res) {
     sendJson(res, 503, { ok: false, code: 'livekit_gate_unavailable', error: 'LiveKit gate unavailable' });
     return;
   }
-  const issued = await provider.issueAdmission({ livekitRoom, name, peerId, principal, roomId });
+  let issued = await provider.issueAdmission({
+    canPublishMicrophone: !serverMuted,
+    livekitRoom,
+    name,
+    peerId,
+    principal,
+    roomId
+  });
   if (issued.status !== 'issued') {
     sendJson(res, 503, { ok: false, code: 'livekit_gate_credential_unavailable', error: 'LiveKit gate unavailable' });
     return;
+  }
+  try {
+    const currentServerMuted = await getRoomStore().isRoomServerMuted({ roomId, principal });
+    if (currentServerMuted !== serverMuted) {
+      await revokeIssuedAdmission({ credentialId: issued.admission.gateCredentialId, principal, req, roomId });
+      serverMuted = currentServerMuted;
+      issued = await provider.issueAdmission({
+        canPublishMicrophone: !serverMuted,
+        livekitRoom,
+        name,
+        peerId,
+        principal,
+        roomId
+      });
+      if (issued.status !== 'issued') {
+        sendJson(res, 503, { ok: false, code: 'livekit_gate_credential_unavailable', error: 'LiveKit gate unavailable' });
+        return;
+      }
+    }
+  } catch (error) {
+    await revokeIssuedAdmission({ cause: error, credentialId: issued.admission.gateCredentialId, principal, req, roomId });
+    throw error;
   }
 
   if (await findRoomBan(roomId, sessionUser?.id, getClientIp(req, TRUST_PROXY))) {
@@ -1724,6 +1797,11 @@ async function handleDeleteRoom(req, res, roomId, request) {
   if (presence) broadcast(presence, { type: 'room-deleted', roomId });
   roomRuntime?.mirrorLegacyRoomEvent(roomId, { type: 'room-deleted', roomId });
   roomRuntime?.invalidateRecipientCache(roomId);
+  // Invitations outlive the inviter's session now, so the deleted room is the
+  // only thing left that can invalidate them.
+  void expireRoomInvitations(null, roomId).catch((error) => {
+    console.error('Failed to expire room invitations:', error);
+  });
 
   // Terminal-claim every active/leased peer before credential or transport
   // teardown so a delayed replacement join cannot resurrect the deleted room.
@@ -2597,6 +2675,64 @@ async function removeLiveKitParticipant(roomId, peerId) {
   }
 }
 
+// Server mute is enforced at the SFU, not just in the client: microphone is
+// removed from the participant's allowed sources while screen sharing and data
+// remain intact, and the live microphone track is muted immediately. A failed
+// mute falls back to disconnecting the participant; the durable row then keeps
+// microphone out of every freshly issued admission token.
+function resolveServerMutePermission(currentPermission = {}, muted) {
+  const declaredSources = Array.isArray(currentPermission.canPublishSources)
+    ? currentPermission.canPublishSources
+    : [];
+  const currentSources = declaredSources.length > 0
+    ? declaredSources
+    : [TrackSource.MICROPHONE, TrackSource.SCREEN_SHARE, TrackSource.SCREEN_SHARE_AUDIO];
+  const canPublishSources = muted
+    ? currentSources.filter((source) => source !== TrackSource.MICROPHONE)
+    : [...new Set([...currentSources, TrackSource.MICROPHONE])];
+  return { ...currentPermission, canPublishSources };
+}
+
+async function setLiveKitParticipantMuted(roomId, peerId, muted) {
+  const livekit = getLiveKitConfig();
+  if (!livekit.enabled) return;
+  const service = new RoomServiceClient(livekit.adminUrl, livekit.apiKey, livekit.apiSecret);
+  const roomName = getLiveKitRoomName(roomId);
+  try {
+    const participant = await service.getParticipant(roomName, peerId);
+    // Preserve every unrelated grant. A microphone moderation action must not
+    // widen subscriptions/data grants or revoke screen-share publication.
+    await service.updateParticipant(
+      roomName,
+      peerId,
+      undefined,
+      resolveServerMutePermission(participant?.permission || {}, muted)
+    );
+    if (muted) {
+      // Microphone only — a moderator mute must not silence the participant's
+      // screen-share audio.
+      const microphoneTracks = (participant?.tracks || [])
+        .filter((track) => track.source === TrackSource.MICROPHONE && !track.muted);
+      for (const track of microphoneTracks) {
+        await service.mutePublishedTrack(roomName, peerId, track.sid, true);
+      }
+    }
+  } catch (error) {
+    if (/not.?found/i.test(String(error?.message || ''))) return { status: 'offline' };
+    console.error('Failed to apply LiveKit server mute:', error);
+    if (muted) {
+      try {
+        await service.removeParticipant(roomName, peerId);
+        return { status: 'disconnected' };
+      } catch (disconnectError) {
+        throw new AggregateError([error, disconnectError], 'LiveKit server mute and disconnect both failed', { cause: error });
+      }
+    }
+    throw error;
+  }
+  return { status: 'applied' };
+}
+
 function liveKitGatePrincipalForPeer(roomId, peer) {
   return getRoomStore().normalizeGatePrincipal({
     accountUserId: peer.accountUserId || null,
@@ -2706,6 +2842,53 @@ async function handleKickRoomPeer(req, res, roomId) {
   }
   await disconnectModeratedPeer(room, peer, 'room.kicked');
   sendJson(res, 200, { ok: true });
+}
+
+// Owner-only microphone mute. `muted` in the body picks the direction so the
+// menu can toggle without tracking which endpoint to call.
+async function handleServerMuteRoomPeer(req, res, roomId) {
+  const room = await authorizeRoomMutation(req, res, roomId);
+  if (!room) return;
+  const body = await readJsonBody(req);
+  const peerId = normalizePeerId(body.peerId);
+  const peer = peerId ? room.peers.get(peerId) : null;
+  if (!peer) {
+    sendJson(res, 404, { ok: false, error: 'Участник не найден' });
+    return;
+  }
+  if (peer.accountUserId && peer.accountUserId === room.ownerId) {
+    sendJson(res, 400, { ok: false, error: 'Нельзя выключить микрофон владельцу комнаты' });
+    return;
+  }
+  const muted = body.muted !== false;
+
+  const principal = liveKitGatePrincipalForPeer(room.id, peer);
+  if (!isLiveKitGatePrincipal(principal)) {
+    sendJson(res, 400, { ok: false, error: 'Участник не поддерживает модерацию микрофона' });
+    return;
+  }
+
+  const store = getRoomStore();
+  const result = muted
+    ? await store.setRoomServerMute({ roomId: room.id, principal, mutedBy: room.ownerId })
+    : await store.clearRoomServerMute({ roomId: room.id, principal });
+  if (result.status === 'invalid') {
+    sendJson(res, 400, { ok: false, error: 'Участник не поддерживает модерацию микрофона' });
+    return;
+  }
+
+  peer.serverMuted = muted;
+  // Muting also forces the local flag on; lifting it does not unmute for them,
+  // the participant decides when to speak again.
+  if (muted) peer.muted = true;
+
+  await setLiveKitParticipantMuted(room.id, peer.id, muted);
+
+  const event = { type: 'peer-updated', peer: publicPeer(peer) };
+  broadcast(room, event);
+  roomRuntime?.mirrorLegacyRoomEvent(room.id, event);
+  sendEvent(peer, { type: 'room.server-mute', roomId: room.id, peerId: peer.id, muted });
+  sendJson(res, 200, { ok: true, muted });
 }
 
 async function handleBanRoomPeer(req, res, roomId) {
@@ -2892,6 +3075,7 @@ async function requireSessionUser(req, res) {
 function publicFriendEntry(entry) {
   return {
     user: entry.user,
+    friendsSince: entry.friendsSince ?? null,
     online: isUserOnline(entry.user.id),
     unreadCount: entry.unreadCount,
     lastMessage: entry.lastMessage
@@ -2987,6 +3171,9 @@ async function handleSendFriendRequest(req, res) {
     case 'self':
       sendJson(res, 400, { ok: false, error: 'Нельзя добавить себя' });
       return;
+    case 'blocked':
+      sendJson(res, 403, { ok: false, error: 'Заявку отправить нельзя' });
+      return;
     case 'already_friends':
       sendJson(res, 200, { ok: true, status: 'already_friends', user: result.user });
       return;
@@ -3045,6 +3232,10 @@ async function handleRespondFriendRequest(req, res, requestId, action) {
     sendJson(res, 200, { ok: true, status: 'accepted', user: result.user });
     return;
   }
+  if (result.status === 'blocked') {
+    sendJson(res, 409, { ok: false, code: 'relationship_blocked', error: 'Заявка больше недоступна' });
+    return;
+  }
   sendJson(res, 200, { ok: true, status: 'declined' });
 }
 
@@ -3083,6 +3274,58 @@ async function handleRemoveFriend(req, res, friendId) {
     return;
   }
   broadcastToUser(id, { type: 'friend-removed', userId: user.id });
+  sendJson(res, 200, { ok: true });
+}
+
+async function handleBlockedList(req, res) {
+  const user = await requireSessionUser(req, res);
+  if (!user) return;
+  const [blocked, users] = await Promise.all([
+    getFriendStore().listBlockedUserIds(user.id),
+    getFriendStore().listBlockedUsers(user.id)
+  ]);
+  sendJson(res, 200, { ok: true, blocked, users });
+}
+
+async function handleBlockUser(req, res, targetUserId) {
+  const user = await requireSessionUser(req, res);
+  if (!user) return;
+
+  const id = cleanUuid(targetUserId);
+  if (!id || id === user.id) {
+    sendJson(res, 400, { ok: false, error: 'Нельзя заблокировать этого пользователя' });
+    return;
+  }
+
+  const result = await getFriendStore().blockUser({ userId: user.id, targetId: id });
+  if (result.status === 'not_found') {
+    sendJson(res, 404, { ok: false, error: 'Пользователь не найден' });
+    return;
+  }
+  if (result.status === 'invalid') {
+    sendJson(res, 400, { ok: false, error: 'Нельзя заблокировать этого пользователя' });
+    return;
+  }
+  // The blocked side is told the friendship ended, but never that a block was
+  // applied — the UI on their end simply shows the person is no longer a friend.
+  if (result.unfriended) broadcastToUser(id, { type: 'friend-removed', userId: user.id });
+  sendJson(res, 200, { ok: true, status: result.status });
+}
+
+async function handleUnblockUser(req, res, targetUserId) {
+  const user = await requireSessionUser(req, res);
+  if (!user) return;
+
+  const id = cleanUuid(targetUserId);
+  if (!id) {
+    sendJson(res, 404, { ok: false, error: 'Пользователь не найден' });
+    return;
+  }
+  const result = await getFriendStore().unblockUser({ userId: user.id, targetId: id });
+  if (result.status === 'not_found') {
+    sendJson(res, 404, { ok: false, error: 'Пользователь не заблокирован' });
+    return;
+  }
   sendJson(res, 200, { ok: true });
 }
 
@@ -3149,6 +3392,10 @@ async function handleSendDm(req, res, peerId) {
 
   if (!(await getFriendStore().areFriends(user.id, id))) {
     sendJson(res, 403, { ok: false, error: 'Вы не друзья' });
+    return;
+  }
+  if (await getFriendStore().isBlockedBetween(user.id, id)) {
+    sendJson(res, 403, { ok: false, code: 'relationship_blocked', error: 'Сообщение недоступно' });
     return;
   }
 
@@ -3274,9 +3521,9 @@ async function handleRespondDmInvite(req, res, peerIdParam, messageId) {
     sendJson(res, 403, { ok: false, error: 'Отвечать может только приглашённый' });
     return;
   }
-  if (action === 'accepted' && !isAccountActiveInRoom(current.invite.roomId, current.senderId)) {
+  if (action === 'accepted' && !(await getRoom(current.invite.roomId))) {
     await expireRoomInvitations(current.senderId, current.invite.roomId);
-    sendJson(res, 410, { ok: false, error: 'Приглашение больше не действует' });
+    sendJson(res, 410, { ok: false, error: 'Комната больше не существует' });
     return;
   }
 
@@ -3332,14 +3579,15 @@ async function handleRingRoom(req, res, rawRoomId) {
     return;
   }
 
-  const presence = presenceRooms.get(roomId);
-  const senderIsActive = Boolean(presence && Array.from(presence.peers.values()).some((peer) => peer.accountUserId === user.id));
-  if (!senderIsActive) {
-    sendJson(res, 403, { ok: false, error: 'Join the room before inviting friends' });
-    return;
-  }
+  // Presence is deliberately not required: you can invite a friend to a room
+  // from the lobby before joining it yourself. The per-pair rate limit below
+  // still bounds how often anyone can ring the same person.
   if (!(await getFriendStore().areFriends(user.id, targetUserId))) {
     sendJson(res, 403, { ok: false, error: 'You are not friends' });
+    return;
+  }
+  if (await getFriendStore().isBlockedBetween(user.id, targetUserId)) {
+    sendJson(res, 403, { ok: false, code: 'relationship_blocked', error: 'Invite is unavailable' });
     return;
   }
 
@@ -3361,8 +3609,8 @@ async function handleRingRoom(req, res, rawRoomId) {
   const ringRoom = { id: room.id, name: room.name || '', emoji: room.emoji || '' };
   broadcastToUser(targetUserId, { type: 'ring.incoming', fromUser, room: ringRoom, expiresAt: ringExpiresAt });
   // Persist the invitation as a regular DM so both sides share one timeline
-  // entry (with live status) instead of per-device local copies. Its lifetime
-  // is tied to the sender's room presence; the shorter expiry only bounds the
+  // entry (with live status) instead of per-device local copies. The invitation
+  // stays actionable while the room exists; the shorter expiry only bounds the
   // audible ring and its push notification.
   const inviteMessage = await getMessageService().direct.sendMessage({
     senderId: user.id,
@@ -3673,6 +3921,7 @@ async function handleDeleteRoomChatMessage(req, res, roomId, messageId) {
   // legacy event names and treats unknown events as transport failures.
   const delEvent = buildServerEnvelope('room.chat.deleted', { roomId, messageId });
   roomRuntime?.broadcastRoomDetail?.(roomId, delEvent);
+  await refreshPinsAfterMessageMutation(roomId, 'message-deleted', messageId);
 
   sendJson(res, 200, { ok: true, deleted: true });
 }
@@ -3750,6 +3999,7 @@ async function handleEditRoomChatMessage(req, res, roomId, messageId) {
     roomId,
     buildServerEnvelope('room.chat.edited', { roomId, message: publicMessage })
   );
+  await refreshPinsAfterMessageMutation(roomId, 'message-edited', messageId);
   sendJson(res, 200, { ok: true, message: publicMessage });
 }
 
@@ -4023,6 +4273,7 @@ function createApiApp({
   }
   if (store) roomStore = store;
   if (users) userStore = users;
+  friendStoreInviteExpiryEnabled = Boolean(friends?.expirePendingInvites);
   if (friends) friendStore = friends;
   messageService = null;
   historyServices = null;
@@ -4030,6 +4281,7 @@ function createApiApp({
   liveKitCredentialProvider = liveKitCredentials;
   membershipServices = membershipServicesOverride;
   reactionServices = null;
+  pinServices = null;
   notificationServices = null;
   moderationServices = null;
   mediaServices = null;
@@ -4210,6 +4462,21 @@ function createApiApp({
     });
   }
 
+  const pins = getPinServices();
+  if (pins) {
+    registerPinRoutes({
+      app,
+      pinService: pins.service,
+      resolveRoomAccess: async ({ request, roomId, action }) => {
+        const session = await resolveSessionUser(request);
+        const viewer = session?.user || null;
+        const authorized = Boolean(viewer?.id)
+          && await getRoomStore()[action === 'write' ? 'canUserReactInRoom' : 'canUserReadRoomChat'](roomId, viewer.id);
+        return { authorized, statusCode: session ? 403 : 401, viewer };
+      }
+    });
+  }
+
   const notificationDomain = getNotificationServices();
   if (notificationDomain) {
     registerNotificationRoutes({
@@ -4271,6 +4538,9 @@ function createApiApp({
   app.post('/api/rooms/:roomId/kick', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
     return handleKickRoomPeer(req, res, normalizeRoomId(request.params.roomId));
   }));
+  app.post('/api/rooms/:roomId/server-mute', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
+    return handleServerMuteRoomPeer(req, res, normalizeRoomId(request.params.roomId));
+  }));
   app.post('/api/rooms/:roomId/ban', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
     return handleBanRoomPeer(req, res, normalizeRoomId(request.params.roomId));
   }));
@@ -4320,6 +4590,14 @@ function createApiApp({
   }));
   app.delete('/api/friends/requests/:id', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
     return handleCancelFriendRequest(req, res, request.params.id);
+  }));
+  // Registered before /api/friends/:userId so the literal segment wins the match.
+  app.get('/api/blocks', (request, reply) => runLegacyHandler(request, reply, handleBlockedList));
+  app.put('/api/blocks/:userId', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
+    return handleBlockUser(req, res, request.params.userId);
+  }));
+  app.delete('/api/blocks/:userId', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
+    return handleUnblockUser(req, res, request.params.userId);
   }));
   app.delete('/api/friends/:userId', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
     return handleRemoveFriend(req, res, request.params.userId);
@@ -4529,6 +4807,7 @@ module.exports = {
   __private: {
     pruneRooms,
     revokeIssuedAdmission,
+    resolveServerMutePermission,
     resolveCursorHmacKeys,
     resolveRealtimeReconnectLeaseMs
   },

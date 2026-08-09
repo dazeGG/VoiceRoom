@@ -29,8 +29,14 @@ function createPeer(id, overrides = {}) {
 function createRuntime(room, broadcasts, overrides = {}) {
   const store = {
     async getRoom() { return null; },
+    async isRoomServerMuted() { return false; },
     async listMessages() { return []; },
     async listSummaryRecipientUserIds() { return []; },
+    normalizeGatePrincipal({ accountUserId, guestPrincipalId }) {
+      return accountUserId
+        ? { principalId: accountUserId, principalType: 'account' }
+        : { principalId: guestPrincipalId, principalType: 'guest' };
+    },
     ...overrides.store
   };
   const wsRegistry = {
@@ -150,6 +156,59 @@ function createLeaseRuntime({
     }
   });
 }
+
+test('reconnect restores persisted server mute for the account principal', async () => {
+  const room = { id: ROOM_ID, peers: new Map() };
+  const lookups = [];
+  const runtime = createRuntime(room, [], {
+    store: {
+      async getRoom() { return room; },
+      async getOrCreatePeerIdentity({ peerId }) {
+        return { status: 'ok', identity: { id: `identity-${peerId}`, avatarColorKey: 'blue' } };
+      },
+      async isRoomServerMuted(input) {
+        lookups.push(input);
+        return true;
+      }
+    }
+  });
+  const payload = { roomId: ROOM_ID, peerId: OWNER_ID, sessionToken: OWNER_TOKEN, name: 'Owner' };
+  const sessionUser = { id: 'account-owner', displayName: 'Owner' };
+
+  assert.equal((await runtime.joinVoiceRoom(createVoiceConnection(), payload, sessionUser)).ok, true);
+  assert.equal((await runtime.joinVoiceRoom(createVoiceConnection(), payload, sessionUser)).ok, true);
+
+  assert.equal(lookups.length, 2);
+  assert.deepEqual(lookups[1].principal, { principalId: 'account-owner', principalType: 'account' });
+  assert.equal(room.peers.get(OWNER_ID).serverMuted, true);
+  assert.equal(room.peers.get(OWNER_ID).muted, true);
+});
+
+test('reconnect fails closed when persisted server-mute authority is unavailable', async () => {
+  const room = { id: ROOM_ID, peers: new Map() };
+  const runtime = createRuntime(room, [], {
+    store: {
+      async getRoom() { return room; },
+      async getOrCreatePeerIdentity({ peerId }) {
+        return { status: 'ok', identity: { id: `identity-${peerId}`, avatarColorKey: 'blue' } };
+      },
+      async isRoomServerMuted() {
+        throw new Error('database unavailable');
+      }
+    }
+  });
+
+  await assert.rejects(
+    runtime.joinVoiceRoom(createVoiceConnection(), {
+      roomId: ROOM_ID,
+      peerId: OWNER_ID,
+      sessionToken: OWNER_TOKEN,
+      name: 'Owner'
+    }, { id: 'account-owner', displayName: 'Owner' }),
+    /database unavailable/
+  );
+  assert.equal(room.peers.size, 0);
+});
 
 test('attendance only accepts an active remote screen owner', () => {
   const owner = createPeer(OWNER_ID, { screen: true });
