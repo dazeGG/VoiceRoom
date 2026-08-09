@@ -7,7 +7,7 @@
   import { RoomMenu } from '$lib/shared/components/room-menu';
   import { state as roomClientState } from '../client/core/state.svelte';
   import { getConnectionStatusView } from '../client/ui/status';
-  import { roomUi, selectRoomPanel, type RoomPanelTab } from '../room-ui.svelte';
+  import { closeChat, roomUi, selectRoomPanel, type RoomPanelTab } from '../room-ui.svelte';
   import { roomSettingsUi, openRoomSettings } from '../room-settings.svelte';
   import { showToast } from '../client/ui/toast';
   import { friendsState } from '$lib/features/home/model/friends.svelte';
@@ -27,6 +27,10 @@
   const roomUnreadCount = $derived(Math.max(roomUi.unreadChat, roomPresence.unreadCountByRoomId[roomClientState.roomId] ?? 0));
 
   function openRoomPanel(tab: RoomPanelTab): void {
+    if (roomUi.chatOpen && roomUi.activePanel === tab) {
+      closeChat();
+      return;
+    }
     selectRoomPanel(tab);
     if (tab !== 'chat') return;
     setRoomUnreadCount(roomClientState.roomId, 0);

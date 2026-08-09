@@ -1269,7 +1269,8 @@ test('lobby v2 keeps dock in main area, switchable preview panels, and people ad
   assert.doesNotMatch(memberList, /searchable|room-member-list__search|Найти участника/);
   assert.doesNotMatch(memberList, /Создатель|<h2[^>]*>Участники<\/h2>/);
   assert.match(memberList, /roomMembershipState\.byRoomId\[roomId\] \?\? null/);
-  assert.match(memberList, /getRoomMembership\(roomId\);/);
+  assert.match(memberList, /const currentRoomId = roomId;/);
+  assert.match(memberList, /untrack\(\(\) => \{\s*getRoomMembership\(currentRoomId\);\s*void loadRoomMembership\(currentRoomId\);\s*\}\);/);
   assert.doesNotMatch(memberList, /\$derived\(getRoomMembership\(roomId\)\)/);
   assert.doesNotMatch(memberList, /В голосовом канале|Остальные/);
   assert.doesNotMatch(membershipState, /left\.inVoice !== right\.inVoice|left\.role !== right\.role|localeCompare/);
