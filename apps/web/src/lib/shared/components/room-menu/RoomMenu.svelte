@@ -1,5 +1,7 @@
 <script lang="ts">
   import { BellOff, ChevronDown } from '@lucide/svelte';
+  import type { RoomRelationship } from '$lib/api/auth';
+  import type { Friend } from '$lib/api/friends';
   import { Avatar, Ellipsis, Popover } from '$lib/shared/ui';
   import { iconSm } from '$lib/shared/ui/icons';
   import { isRoomNotificationsMuted } from '$lib/shared/notifications/preferences.svelte';
@@ -18,8 +20,12 @@
     headingClass = '',
     placement = 'bottom-start',
     keepContentMounted = false,
+    relationship = 'owner',
+    friends,
+    presentUserIds = new Set<string>(),
     onOpenSettings,
     inviteContent,
+    onRoomsChanged,
     onToast,
     showNotificationControls = true
   } = $props<{
@@ -34,8 +40,12 @@
     headingClass?: string;
     placement?: PopoverPlacement;
     keepContentMounted?: boolean;
+    relationship?: RoomRelationship;
+    friends?: Friend[];
+    presentUserIds?: Set<string>;
     onOpenSettings?: () => void;
     inviteContent?: import('svelte').Snippet<[close: () => void]>;
+    onRoomsChanged?: () => void;
     onToast?: (message: string) => void;
     showNotificationControls?: boolean;
   }>();
@@ -79,10 +89,14 @@
       {roomId}
       {name}
       {avatarUrl}
+      {relationship}
+      {friends}
+      {presentUserIds}
       {close}
       canClose={(targetRoomId) => targetRoomId === roomId}
       {onOpenSettings}
       {inviteContent}
+      {onRoomsChanged}
       {onToast}
       {showNotificationControls}
     />

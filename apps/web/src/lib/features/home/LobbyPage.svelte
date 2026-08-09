@@ -325,7 +325,6 @@
   <div class="lobby-shell lv dens-cozy">
     <Sidebar
       {user}
-      {rooms}
       onGoHome={goHome}
       onOpenPeople={openPeople}
       onOpenSettings={openSettings}
@@ -358,17 +357,17 @@
       {/if}
 
       {#if friendsState.mode === 'rooms' && selectedRoom && connectedVoiceRoomId && selectedRoom.roomId !== connectedVoiceRoomId}
-        <RoomBrowseView {user} room={selectedRoom} onEnter={() => enterRoom(selectedRoom.roomId)} onBack={closeViewedRoom} onOpenSettings={selectedRoom.relationship === 'owner' ? () => (previewSettingsRoomId = selectedRoom.roomId) : undefined} {onToast} />
+        <RoomBrowseView {user} room={selectedRoom} onEnter={() => enterRoom(selectedRoom.roomId)} onBack={closeViewedRoom} onOpenSettings={selectedRoom.relationship === 'owner' ? () => (previewSettingsRoomId = selectedRoom.roomId) : undefined} onRoomsChanged={() => { closeViewedRoom(); void refreshRooms(); }} {onToast} />
       {:else if friendsState.mode === 'rooms' && selectedRoom && (!embeddedRoomId || !embeddedRoomVisible)}
-        <RoomPreviewView {user} room={selectedRoom} onEnter={() => enterRoom(selectedRoom.roomId)} onBack={closeViewedRoom} onOpenSettings={selectedRoom.relationship === 'owner' ? () => (previewSettingsRoomId = selectedRoom.roomId) : undefined} {onToast} />
+        <RoomPreviewView {user} room={selectedRoom} onEnter={() => enterRoom(selectedRoom.roomId)} onBack={closeViewedRoom} onOpenSettings={selectedRoom.relationship === 'owner' ? () => (previewSettingsRoomId = selectedRoom.roomId) : undefined} onRoomsChanged={() => { closeViewedRoom(); void refreshRooms(); }} {onToast} />
       {:else if friendsState.mode === 'rooms' && !embeddedRoomVisible}
-        <VoiceHome {rooms} onOpenRoom={previewRoom} onCreateRoom={() => (createDialogOpen = true)} onJoinCode={handleJoin} onRoomsChanged={refreshRooms} {onToast} />
+        <VoiceHome {rooms} onOpenRoom={previewRoom} onCreateRoom={() => (createDialogOpen = true)} onJoinCode={handleJoin} onRoomsChanged={refreshRooms} onOpenRoomSettings={(roomId) => (previewSettingsRoomId = roomId)} {onToast} />
       {:else if friendsState.mode === 'friends' && friendsState.view === 'dm'}
         <DmView selfId={user.id} self={user} />
       {:else if friendsState.mode === 'friends' && friendsState.view === 'people'}
         <PeopleView {user} {onToast} onHome={goHome} />
       {:else if friendsState.mode === 'friends'}
-        <VoiceHome {rooms} onOpenRoom={previewRoom} onCreateRoom={() => (createDialogOpen = true)} onJoinCode={handleJoin} onRoomsChanged={refreshRooms} {onToast} />
+        <VoiceHome {rooms} onOpenRoom={previewRoom} onCreateRoom={() => (createDialogOpen = true)} onJoinCode={handleJoin} onRoomsChanged={refreshRooms} onOpenRoomSettings={(roomId) => (previewSettingsRoomId = roomId)} {onToast} />
       {/if}
     </main>
   </div>

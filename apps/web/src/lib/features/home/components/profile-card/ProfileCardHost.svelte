@@ -4,6 +4,7 @@
   // route toasts to its own stack.
   import { ContextMenu } from '$lib/shared/ui';
   import { ProfileCard, type ProfileCardRelationship } from '$lib/shared/components/profile-card';
+  import { session } from '$lib/features/auth/session.svelte';
   import { closeProfileCard, profileCardUi } from '../../profile-card-ui.svelte';
   import {
     acceptRequestByUserId,
@@ -21,7 +22,11 @@
 
   const person = $derived(profileCardUi.person);
   const relationship = $derived<ProfileCardRelationship>(
-    person?.userId ? getFriendRelationship(person.userId) : 'unavailable'
+    person?.userId && person.userId === session.user?.id
+      ? 'self'
+      : person?.userId
+        ? getFriendRelationship(person.userId)
+        : 'unavailable'
   );
   const friendsSince = $derived(
     person?.userId

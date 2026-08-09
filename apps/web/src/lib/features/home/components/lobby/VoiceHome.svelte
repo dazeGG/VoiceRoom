@@ -8,14 +8,15 @@
   import { roomDisplayName } from '../../model/rooms';
   import { friendsState, showPeople } from '../../model/friends.svelte';
   import { notificationPreferences } from '$lib/shared/notifications/preferences.svelte';
-  import { RoomCardMenuContent } from '$lib/shared/components/room-menu';
+  import { RoomMenuContent } from '$lib/shared/components/room-menu';
 
-  let { rooms, onOpenRoom, onCreateRoom, onJoinCode, onRoomsChanged, onToast } = $props<{
+  let { rooms, onOpenRoom, onCreateRoom, onJoinCode, onRoomsChanged, onOpenRoomSettings, onToast } = $props<{
     rooms: OwnedRoom[];
     onOpenRoom: (roomId: string) => void;
     onCreateRoom: () => void;
     onJoinCode: (code: string) => void;
     onRoomsChanged?: () => void;
+    onOpenRoomSettings?: (roomId: string) => void;
     onToast?: (message: string) => void;
   }>();
 
@@ -180,15 +181,17 @@
   >
     {#snippet content({ close })}
       {#key contextRoom.roomId}
-        <RoomCardMenuContent
+        <RoomMenuContent
           roomId={contextRoom.roomId}
           name={roomDisplayName(contextRoom)}
+          avatarUrl={contextRoom.avatarUrl}
+          relationship={contextRoom.relationship}
           friends={friendsState.friends}
           presentUserIds={roomPresentUserIds(contextRoom.roomId)}
           {close}
           canClose={(roomId) => contextRoomId === roomId}
-          onRenamed={onRoomsChanged}
-          onDeleted={onRoomsChanged}
+          onOpenSettings={contextRoom.relationship === 'owner' ? () => onOpenRoomSettings?.(contextRoom.roomId) : undefined}
+          {onRoomsChanged}
           {onToast}
         />
       {/key}

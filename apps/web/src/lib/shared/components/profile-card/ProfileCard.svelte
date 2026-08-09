@@ -62,7 +62,9 @@
       </span>
     {/if}
 
-    {#if relationship === 'unavailable'}
+    {#if relationship === 'self'}
+      <!-- Identity only: social actions against your own account are invalid. -->
+    {:else if relationship === 'unavailable'}
       <p class="profile-card-note">Гость комнаты — профиль и дружба недоступны.</p>
     {:else}
       <div class="profile-card-actions">

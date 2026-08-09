@@ -7,6 +7,8 @@
     roomMembershipState
   } from '../../model/room-membership.svelte';
   import type { MembershipMember } from '$lib/api/memberships';
+  import { openProfileCardFor } from '../../profile-card-ui.svelte';
+  import type { ProfileCardPerson } from '$lib/shared/components/profile-card';
 
   let { roomId }: { roomId: string } = $props();
   const roster = $derived(roomMembershipState.byRoomId[roomId] ?? null);
@@ -24,7 +26,36 @@
   function nameFor(member: MembershipMember): string {
     return member.displayName || member.login;
   }
+
+  function openMemberProfile(member: MembershipMember, event: MouseEvent): void {
+    const person: ProfileCardPerson = {
+      userId: member.userId,
+      name: nameFor(member),
+      login: member.login,
+      avatarUrl: member.avatarUrl,
+      avatarColorKey: member.avatarColorKey,
+      avatarAccent: member.avatarAccent,
+      presence: member.presenceStatus === 'afk' ? 'away' : member.presenceStatus
+    };
+    openProfileCardFor(person, event.currentTarget);
+  }
 </script>
+
+{#snippet memberRow(member: MembershipMember)}
+  <button class="room-member-list__member" type="button" aria-haspopup="dialog" aria-label={`Профиль ${nameFor(member)}`} onclick={(event) => openMemberProfile(member, event)}>
+    <Avatar
+      name={nameFor(member)}
+      src={member.avatarUrl}
+      colorKey={member.avatarColorKey}
+      size={32}
+      showDot
+      online={member.presenceStatus !== 'offline'}
+      dnd={member.presenceStatus === 'dnd'}
+      afk={member.presenceStatus === 'afk'}
+    />
+    <span><strong>{nameFor(member)}</strong><small>@{member.login}</small></span>
+  </button>
+{/snippet}
 
 <section class="room-member-list" aria-label="Участники комнаты">
   <div aria-live="polite" aria-atomic="true" class="sr-only">
@@ -41,29 +72,14 @@
     <h3>В сети — {onlineMembers.length}</h3>
     <ul aria-label="Участники в сети">
       {#each onlineMembers as member (member.userId)}
-        <li>
-          <Avatar
-            name={nameFor(member)}
-            src={member.avatarUrl}
-            colorKey={member.avatarColorKey}
-            size={32}
-            showDot
-            online={member.presenceStatus !== 'offline'}
-            dnd={member.presenceStatus === 'dnd'}
-            afk={member.presenceStatus === 'afk'}
-          />
-          <span><strong>{nameFor(member)}</strong><small>@{member.login}</small></span>
-        </li>
+        <li>{@render memberRow(member)}</li>
       {/each}
     </ul>
 
     <h3>Не в сети — {offlineMembers.length}</h3>
     <ul aria-label="Участники не в сети">
       {#each offlineMembers as member (member.userId)}
-        <li>
-          <Avatar name={nameFor(member)} src={member.avatarUrl} colorKey={member.avatarColorKey} size={32} showDot />
-          <span><strong>{nameFor(member)}</strong><small>@{member.login}</small></span>
-        </li>
+        <li>{@render memberRow(member)}</li>
       {/each}
     </ul>
 
@@ -87,8 +103,10 @@
   h3, p { margin: 0; }
   h3 { color: var(--ink-muted); font-size: 12px; font-weight: 700; text-transform: uppercase; }
   ul { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
-  li { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 6px; border-radius: 10px; }
-  li > span { display: grid; min-width: 0; }
+  li { min-width: 0; }
+  .room-member-list__member { display: flex; width: 100%; align-items: center; gap: 10px; min-width: 0; padding: 8px; border: 0; border-radius: 12px; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; transition: background 120ms ease; }
+  .room-member-list__member:hover, .room-member-list__member:focus-visible { background: color-mix(in oklch, var(--control), transparent 52%); outline: none; }
+  .room-member-list__member > span { display: grid; min-width: 0; }
   strong, small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   strong { font-size: 14px; }
   small { color: var(--ink-muted); font-size: 12px; }

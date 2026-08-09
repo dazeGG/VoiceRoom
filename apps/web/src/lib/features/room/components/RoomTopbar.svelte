@@ -35,6 +35,10 @@
     if (roomClientState.self?.accountUserId) void markRoomChatRead(roomClientState.roomId).catch(() => {});
   }
 
+  function notifyRoomsChanged(): void {
+    window.dispatchEvent(new CustomEvent('voice-room:rooms-changed', { detail: { roomId: roomClientState.roomId } }));
+  }
+
 </script>
 
 <Topbar label="Новая голосовая комната" reload>
@@ -60,7 +64,9 @@
         heading
         headingClass="room-heading-title-wrap"
         keepContentMounted
+        relationship={roomSettingsUi.isOwner ? 'owner' : 'bookmarked'}
         onOpenSettings={roomSettingsUi.isOwner ? openRoomSettings : undefined}
+        onRoomsChanged={notifyRoomsChanged}
         inviteContent={roomClientState.self?.accountUserId ? roomInviteContent : undefined}
         onToast={showToast}
         showNotificationControls={Boolean(roomClientState.self?.accountUserId)}
