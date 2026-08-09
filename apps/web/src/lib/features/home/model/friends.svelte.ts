@@ -18,6 +18,7 @@ import {
   type SendRequestStatus,
   type Relationship
 } from '$lib/api/friends';
+import { blockUser as apiBlockUser, unblockUser as apiUnblockUser } from '$lib/api/blocks';
 import { deleteDirectMessage, editDirectMessage, fetchThread, fetchThreadPage, markThreadRead, respondRoomInvite, sendDirectMessage, type DirectMessage } from '$lib/api/dm';
 import { connectRealtime, type RealtimeEvent, type RealtimeHandle } from '$lib/api/realtime';
 import type { PresenceStatus } from '$lib/shared/presence';
@@ -505,6 +506,21 @@ export async function removeFriend(userId: string): Promise<void> {
     friendsState.selectedFriendId = null;
   }
   await refreshFriends().catch(() => {});
+}
+
+// Blocking is server-side a superset of unfriending, so the local cleanup is the
+// same: leave the DM view if it was open on them, then resync.
+export async function blockUser(userId: string): Promise<void> {
+  await apiBlockUser(userId);
+  if (friendsState.selectedFriendId === userId) {
+    friendsState.view = 'home';
+    friendsState.selectedFriendId = null;
+  }
+  await Promise.all([refreshFriends().catch(() => {}), refreshRequests().catch(() => {})]);
+}
+
+export async function unblockUser(userId: string): Promise<void> {
+  await apiUnblockUser(userId);
 }
 
 // --- Realtime -----------------------------------------------------------

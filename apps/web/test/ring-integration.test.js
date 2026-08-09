@@ -9,12 +9,15 @@ const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
 
 test('Ring UI is authenticated, online-first, expiring, actionable, and teardown-safe', () => {
   const topbar = read('src/lib/features/room/components/RoomTopbar.svelte');
+  const inviteList = read('src/lib/shared/components/room-menu/RoomInviteFriendList.svelte');
   const friends = read('src/lib/features/home/model/friends.svelte.ts');
   const dmView = read('src/lib/features/home/components/lobby/DmView.svelte');
   const serviceWorker = read('src/service-worker.ts');
 
   assert.match(topbar, /roomClientState\.self\?\.accountUserId/);
-  assert.match(topbar, /Number\(b\.online\) - Number\(a\.online\)/);
+  // Ordering moved into the shared invite list, which both the room-name menu
+  // and the lobby room-card menu render.
+  assert.match(inviteList, /Number\(b\.online\) - Number\(a\.online\)/);
   assert.match(topbar, /inviteContent=/);
   // The ring event only plays the cue (and only while it is still fresh); the
   // invitation itself arrives as a DM message with an invite payload.

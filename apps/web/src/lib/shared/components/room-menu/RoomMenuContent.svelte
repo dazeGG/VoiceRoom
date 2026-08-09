@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Bell, BellOff, Copy, Link, Settings, UserRoundPlus } from '@lucide/svelte';
-  import { Avatar, Ellipsis, PopoverDivider, PopoverMenuItem } from '$lib/shared/ui';
+  import { Avatar, Ellipsis, PopoverDivider, PopoverMenuItem, PopoverMenuLabel, PopoverSubmenu } from '$lib/shared/ui';
   import { iconMd } from '$lib/shared/ui/icons';
   import { copyText } from '$lib/shared/utils/clipboard';
   import {
@@ -32,7 +32,6 @@
 
   const roomMuted = $derived(isRoomNotificationsMuted(roomId));
   let muteSaving = $state(false);
-  let inviteOpen = $state(false);
 
   function openSettings(): void {
     close(false);
@@ -83,15 +82,13 @@
 
   <PopoverDivider />
 
+  <PopoverMenuLabel text="Комната" />
+
   {#if inviteContent}
-    <div class="room-menu-submenu" role="group" onpointerenter={() => (inviteOpen = true)} onpointerleave={() => (inviteOpen = false)}>
-      <PopoverMenuItem label="Позвать друга" showChevron onclick={() => (inviteOpen = true)}>
-        {#snippet icon()}<UserRoundPlus {...iconMd} aria-hidden="true" />{/snippet}
-      </PopoverMenuItem>
-      {#if inviteOpen}
-        <div class="room-menu-invite" role="menu" aria-label="Позвать друга">{@render inviteContent(close)}</div>
-      {/if}
-    </div>
+    <PopoverSubmenu label="Пригласить" ariaLabel={`Позвать друга в ${name}`}>
+      {#snippet icon()}<UserRoundPlus {...iconMd} aria-hidden="true" />{/snippet}
+      {#snippet content()}{@render inviteContent(close)}{/snippet}
+    </PopoverSubmenu>
   {/if}
 
   <PopoverMenuItem label="Скопировать код" onclick={() => void copyValue(roomId, 'Код скопирован')}>
@@ -130,8 +127,11 @@
 
 <style>
   .room-menu-content {
-    width: min(264px, calc(100vw - 28px));
+    display: flex;
+    width: min(272px, calc(100vw - 28px));
     max-width: 100%;
+    flex-direction: column;
+    gap: 2px;
   }
 
   .room-menu-head {
@@ -147,33 +147,6 @@
     min-width: 0;
     flex-direction: column;
     gap: 3px;
-  }
-
-  .room-menu-submenu { position: relative; }
-  .room-menu-submenu::after { content: ''; position: absolute; top: 0; left: 100%; width: 10px; height: 100%; }
-  .room-menu-invite {
-    position: absolute;
-    top: -6px;
-    left: calc(100% + 10px);
-    z-index: 4;
-    min-width: 244px;
-    border: 1px solid rgba(255,255,255,.1);
-    border-radius: 16px;
-    padding: 6px;
-    background: var(--warm-800);
-    box-shadow: 0 24px 60px rgba(0,0,0,.48);
-  }
-  .room-menu-invite::before {
-    content: '';
-    position: absolute;
-    top: 20px;
-    left: -5px;
-    width: 9px;
-    height: 9px;
-    border-bottom: 1px solid rgba(255,255,255,.1);
-    border-left: 1px solid rgba(255,255,255,.1);
-    background: var(--warm-800);
-    transform: rotate(45deg);
   }
 
   :global(.room-menu-name) {

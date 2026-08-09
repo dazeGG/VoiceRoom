@@ -27,6 +27,8 @@
   import { getCapabilityFeature } from '$lib/platform/capability-state.svelte';
   import { getAppRealtime } from '$lib/api/realtime';
   import { createReactionStore } from '$lib/shared/chat/reaction-store.svelte';
+  import MessageContextMenu from '$lib/shared/chat/MessageContextMenu.svelte';
+  import { DEFAULT_FREQUENT_REACTIONS, loadFrequentReactions } from '$lib/shared/chat/frequent-reactions';
   import ReactionPicker from '$lib/shared/chat/ReactionPicker.svelte';
   import ReactionSummary from '$lib/shared/chat/ReactionSummary.svelte';
   import {
@@ -62,6 +64,11 @@
   let mediaUploadsEnabled = $state(false);
   let repliesEnabled = $state(false);
   let replyTarget = $state<DirectMessage | null>(null);
+  let menuMessage = $state<DirectMessage | null>(null);
+  let menuFromMe = $state(false);
+  let menuX = $state(0);
+  let menuY = $state(0);
+  let quickReactions = $state<string[]>([...DEFAULT_FREQUENT_REACTIONS]);
   let sendAttemptKey = '';
   let sendAttemptFingerprint = '';
 
@@ -206,6 +213,11 @@
 
   onMount(() => {
     void getCapabilityFeature('reactions').then((enabled) => { reactionsEnabled = enabled; });
+    if (selfId) {
+      void loadFrequentReactions('chat', selfId).then((emoji) => {
+        if (emoji.length > 0) quickReactions = emoji;
+      });
+    }
     void getCapabilityFeature('replies').then((enabled) => { repliesEnabled = enabled; });
     void getCapabilityFeature('mediaUploads').then((enabled) => { mediaUploadsEnabled = enabled; });
     return getAppRealtime().subscribe((event) => {
@@ -350,7 +362,34 @@
     try {
       await deleteMessage(mid);
       reactions.markDeleted(mid);
-    } catch {}
+      pushToast('Сообщение удалено');
+    } catch (cause) {
+      pushToast(cause instanceof Error && cause.message ? cause.message : 'Не удалось удалить сообщение', { variant: 'error' });
+    }
+  }
+
+  // Invitations are interactive cards with their own buttons; a context menu on
+  // top of them would offer actions that do not apply.
+  function openMessageMenu(bubble: DirectMessage, fromMe: boolean, event: MouseEvent): void {
+    if (bubble.invite || editingMessageId === bubble.id) return;
+    event.preventDefault();
+    menuMessage = bubble;
+    menuFromMe = fromMe;
+    menuX = event.clientX;
+    menuY = event.clientY;
+  }
+
+  function closeMessageMenu(): void {
+    menuMessage = null;
+  }
+
+  // The picker lives in each bubble's hover toolbar; the menu entry drives it
+  // rather than mounting a second popover.
+  function openReactionPickerFor(messageId: string): void {
+    queueMicrotask(() => {
+      const row = scrollEl?.querySelector(`[data-message-id="${CSS.escape(messageId)}"]`);
+      row?.querySelector<HTMLButtonElement>('.reaction-picker-trigger')?.click();
+    });
   }
 
   async function copyMessageText(message: DirectMessage): Promise<void> {
@@ -505,7 +544,14 @@
                   <time class="chat-msg-time" datetime={new Date(group.bubbles[0].createdAt).toISOString()}>{formatTime(group.bubbles[0].createdAt)}</time>
                 </div>
                 {#each group.bubbles as bubble (bubble.id)}
-                  <div class="chat-msg-text dm-chat-message" data-message-id={bubble.id} data-group-first={bubble.id === group.bubbles[0].id}>
+                  <!-- svelte-ignore a11y_no_static_element_interactions -->
+                  <div
+                    class="chat-msg-text dm-chat-message"
+                    class:is-context={menuMessage?.id === bubble.id}
+                    data-message-id={bubble.id}
+                    data-group-first={bubble.id === group.bubbles[0].id}
+                    oncontextmenu={(event) => openMessageMenu(bubble, group.fromMe, event)}
+                  >
                     {#if bubble.invite}
                       <article class="lobby-room-invitation" data-status={bubble.invite.status}>
                         <span class="lobby-room-invitation-icon"><DoorOpen {...iconMd} aria-hidden="true" /></span>
@@ -637,3 +683,27 @@
     </div>
   {/if}
 </div>
+
+{#if menuMessage}
+  {@const target = menuMessage}
+  <MessageContextMenu
+    open={Boolean(menuMessage)}
+    x={menuX}
+    y={menuY}
+    quickReactions={quickReactions}
+    activeReactions={new Set(
+      reactions.forMessage(target.id).filter((summary) => summary.reactedByMe).map((summary) => summary.emoji)
+    )}
+    canReact={reactionsEnabled && Boolean(selfId)}
+    canReply={repliesEnabled}
+    canEdit={menuFromMe}
+    canDelete={menuFromMe}
+    onClose={closeMessageMenu}
+    onReact={(emoji) => void reactions.toggle(target.id, emoji)}
+    onOpenReactionPicker={() => openReactionPickerFor(target.id)}
+    onReply={() => { replyTarget = target; inputEl?.focus(); }}
+    onCopy={() => void copyMessageText(target)}
+    onEdit={() => startEditing(target)}
+    onDelete={() => void onDelete(target.id)}
+  />
+{/if}

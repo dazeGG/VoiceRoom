@@ -154,11 +154,21 @@ export interface RoomPeer {
   screenAudio?: boolean;
   screenProfileId?: string;
   screenStreamId?: string;
+  /** Muted by the room owner. The participant cannot lift this themselves. */
+  serverMuted?: boolean;
   viewedScreenPeerId?: string;
 }
 
 export async function kickRoomPeer(roomId: string, peerId: string): Promise<void> {
   await postJsonAuth(`/api/rooms/${encodeURIComponent(roomId)}/kick`, { peerId });
+}
+
+export async function setRoomPeerServerMute(
+  roomId: string,
+  peerId: string,
+  muted: boolean
+): Promise<void> {
+  await postJsonAuth(`/api/rooms/${encodeURIComponent(roomId)}/server-mute`, { peerId, muted });
 }
 
 export async function banRoomPeer(roomId: string, peerId: string): Promise<string> {

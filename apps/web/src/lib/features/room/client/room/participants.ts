@@ -71,6 +71,7 @@ function createParticipantModel(peerInfo: PeerInfo, isLocal: boolean): Participa
     screenProfileId: getScreenProfile(peerInfo.screenProfileId ?? '').id,
     screenStream: null,
     screenStreamId: peerInfo.screenStreamId || '',
+    serverMuted: Boolean(peerInfo.serverMuted),
     stream: null,
     viewedScreenPeerId: peerInfo.viewedScreenPeerId || '',
     voiceIssue: ''
@@ -196,6 +197,7 @@ export function updateParticipant(peerInfo: PeerInfo): void {
   }
   if (Object.hasOwn(peerInfo, 'screenProfileId')) participant.screenProfileId = getScreenProfile(peerInfo.screenProfileId ?? '').id;
   if (Object.hasOwn(peerInfo, 'screenStreamId')) participant.screenStreamId = peerInfo.screenStreamId || '';
+  if (Object.hasOwn(peerInfo, 'serverMuted')) participant.serverMuted = Boolean(peerInfo.serverMuted);
   const hadViewedScreenOwnerId = participant.viewedScreenPeerId;
   if (Object.hasOwn(peerInfo, 'viewedScreenPeerId')) {
     participant.viewedScreenPeerId = peerInfo.viewedScreenPeerId || '';

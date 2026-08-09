@@ -1,8 +1,8 @@
 <script lang="ts">
   import { Bell, BellOff, Check, Settings, UserPlus } from '@lucide/svelte';
   import { tick } from 'svelte';
-  import type { AuthUser } from '$lib/api/auth';
-  import { Avatar, Badge, ContextMenu, Popover } from '$lib/shared/ui';
+  import type { AuthUser, OwnedRoom } from '$lib/api/auth';
+  import { Avatar, Badge, ContextMenu, Popover, PopoverMenuLabel } from '$lib/shared/ui';
   import { iconSm } from '$lib/shared/ui/icons';
   import {
     effectivePresenceStatus,
@@ -18,6 +18,7 @@
 
   let {
     user,
+    rooms = [],
     onGoHome,
     onOpenPeople,
     onOpenSettings,
@@ -37,6 +38,8 @@
     onToggleVoiceDeafen
   } = $props<{
     user: AuthUser;
+    /** Rooms you own — offered under "Позвать в комнату" in the friend menu. */
+    rooms?: OwnedRoom[];
     onGoHome: () => void;
     onOpenPeople: () => void;
     onOpenSettings: () => void;
@@ -354,6 +357,7 @@
         </button>
       {/snippet}
       {#snippet content({ close })}
+        <PopoverMenuLabel text="Статус" />
         <div class="lv-status-list">
           {#each statusOptions as option, index (option.value)}
             {@const selected = selfPresence === option.value}
@@ -424,8 +428,10 @@
       {#key contextFriend.user.id}
         <FriendMenuContent
           friend={contextFriend}
+          {rooms}
           {close}
           canClose={(userId) => contextFriendId === userId}
+          profileRestoreFocus={contextTrigger}
           {onToast}
         />
       {/key}
@@ -486,29 +492,29 @@
 
   .lv-status-option {
     display: grid;
-    grid-template-columns: 12px minmax(0, 1fr) 18px;
+    grid-template-columns: 11px minmax(0, 1fr) 18px;
     align-items: center;
-    gap: 12px;
+    gap: 11px;
     width: 100%;
-    min-height: 42px;
-    padding: 9px 10px;
+    min-height: 40px;
+    padding: 8px 12px;
     border: 0;
     border-radius: 12px;
     background: transparent;
-    color: var(--ink);
+    color: var(--warm-ink-dim);
     font: inherit;
     text-align: left;
     cursor: pointer;
     transition: background 140ms ease, color 140ms ease;
   }
 
+  /* Same accent wash the shared menu items use, so the status list reads as one
+     family with every other menu. */
   .lv-status-option:hover,
-  .lv-status-option:focus-visible {
-    background: var(--control-hover);
-  }
-
+  .lv-status-option:focus-visible,
   .lv-status-option.is-selected {
-    background: color-mix(in oklch, var(--accent) 9%, transparent);
+    background: color-mix(in oklch, var(--accent), transparent 88%);
+    color: var(--warm-ink);
   }
 
   .lv-status-option:disabled {
@@ -534,15 +540,15 @@
   }
 
   .lv-status-label {
-    color: #e7e2d4;
-    font-size: 14px;
-    font-weight: 620;
+    color: currentColor;
+    font-size: 14.5px;
+    font-weight: 600;
     line-height: 1.25;
   }
 
   .lv-status-note {
     max-width: 29ch;
-    color: #9d9788;
+    color: var(--warm-faint);
     font-size: 11px;
     line-height: 1.4;
   }

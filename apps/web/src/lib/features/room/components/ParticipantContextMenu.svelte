@@ -1,18 +1,40 @@
 <script lang="ts">
-  import { Ban, Check, MessageSquare, MicOff, UserMinus, UserPlus, Volume2 } from '@lucide/svelte';
-  import { banRoomPeer, kickRoomPeer, undoRoomBan } from '$lib/api/rooms';
+  import {
+    Ban,
+    Check,
+    LogOut,
+    MessageSquare,
+    MicOff,
+    User,
+    UserMinus,
+    UserPlus,
+    Volume2,
+    VolumeX
+  } from '@lucide/svelte';
+  import {
+    banRoomPeer,
+    kickRoomPeer,
+    setRoomPeerServerMute,
+    undoRoomBan
+  } from '$lib/api/rooms';
   import { iconMd, iconSm } from '$lib/shared/ui/icons';
-  import { onMount } from 'svelte';
   import { session } from '$lib/features/auth/session.svelte';
   import {
     acceptRequestByUserId,
     addFriendByUserId,
     getFriendRelationship,
-    getKnownLogin,
     openDm,
+    removeFriend,
     setMode
   } from '$lib/features/home/model/friends.svelte';
-  import { Avatar, Slider } from '$lib/shared/ui';
+  import { openProfileCardFor } from '$lib/features/home/profile-card-ui.svelte';
+  import {
+    ContextMenu,
+    PopoverDivider,
+    PopoverMenuItem,
+    PopoverMenuLabel,
+    Slider
+  } from '$lib/shared/ui';
   import {
     getParticipantAudioPreference,
     getParticipantAudioPreferenceKey,
@@ -20,8 +42,8 @@
   } from '../client/core/settings';
   import { applyRemoteParticipantAudioPreferences } from '../client/services/media-playback-service';
   import { getParticipantById } from '../client/room/participants';
-  import { getAvatarPresentation } from '../client/ui/avatar-presentation';
   import { showToast } from '../client/ui/toast';
+  import { participantProfilePerson } from '../profile-card-adapter';
   import {
     closeParticipantContextMenu,
     participantContextMenu
@@ -29,27 +51,22 @@
   import { roomSettingsUi } from '../room-settings.svelte';
   import { state as roomState } from '../client/core/state.svelte';
 
-  const MENU_WIDTH = 272;
-  const MENU_EDGE_GAP = 10;
-
-  let panel = $state<HTMLElement>();
   let volumePercent = $state(100);
   let localMuted = $state(false);
+  let moderating = $state(false);
 
   const volumeLabel = $derived(`${Math.round(volumePercent)}%`);
   const peer = $derived(participantContextMenu.open ? getParticipantById(participantContextMenu.peerId) : null);
   const preferenceKey = $derived(peer ? getParticipantAudioPreferenceKey(peer.accountUserId, peer.id) : '');
-  const avatar = $derived(peer ? getAvatarPresentation(peer) : null);
+  // Volume, local mute and forced mute only make sense from a grid tile, where
+  // you are actually listening to this person.
+  const showAudioControls = $derived(participantContextMenu.variant === 'tile');
   const canUseSocialActions = $derived(
     Boolean(peer && session.user && peer.accountUserId && peer.accountUserId !== session.user?.id)
   );
   const canModerate = $derived(Boolean(peer && roomSettingsUi.isOwner && !peer.isLocal));
   const relationship = $derived(
     canUseSocialActions && peer?.accountUserId ? getFriendRelationship(peer.accountUserId) : 'none'
-  );
-  const handle = $derived(peer?.accountUserId ? getKnownLogin(peer.accountUserId) : '');
-  const subtitle = $derived(
-    handle ? `@${handle}` : peer?.accountUserId ? 'Участник комнаты' : 'Гость комнаты'
   );
 
   $effect(() => {
@@ -59,31 +76,39 @@
     localMuted = preference.muted;
   });
 
-  function positionPanel(): void {
-    if (!panel) return;
-    const viewportWidth = document.documentElement.clientWidth || window.innerWidth;
-    const viewportHeight = document.documentElement.clientHeight || window.innerHeight;
-    const rect = panel.getBoundingClientRect();
-    const width = Math.max(rect.width || MENU_WIDTH, MENU_WIDTH);
-    const height = rect.height || 260;
-    const left = Math.min(
-      Math.max(MENU_EDGE_GAP, participantContextMenu.x),
-      Math.max(MENU_EDGE_GAP, viewportWidth - width - MENU_EDGE_GAP)
-    );
-    const top = Math.min(
-      Math.max(MENU_EDGE_GAP, participantContextMenu.y),
-      Math.max(MENU_EDGE_GAP, viewportHeight - height - MENU_EDGE_GAP)
-    );
-    panel.style.left = `${left}px`;
-    panel.style.top = `${top}px`;
-  }
-
   function setVolume(percent: number): void {
     if (!peer || !preferenceKey) return;
     const safePercent = Math.min(200, Math.max(0, Number.isFinite(percent) ? percent : 100));
     volumePercent = safePercent;
     storeParticipantAudioPreference(preferenceKey, { volume: safePercent / 100 });
     applyRemoteParticipantAudioPreferences(peer);
+  }
+
+  function errorToastMessage(error: unknown, fallback: string): string {
+    return error instanceof Error && error.message ? error.message : fallback;
+  }
+
+  // Every action closes the menu first so the result is visible immediately;
+  // failures surface as a toast rather than by leaving the menu hanging open.
+  function act(action: () => Promise<void>, fallback: string): void {
+    if (!peer || moderating) return;
+    moderating = true;
+    closeParticipantContextMenu(peer.id, false);
+    void action()
+      .catch((error) => showToast(errorToastMessage(error, fallback), { variant: 'error' }))
+      .finally(() => { moderating = false; });
+  }
+
+  function showProfile(event: MouseEvent): void {
+    if (!peer?.accountUserId) return;
+    const person = participantProfilePerson(peer);
+    const anchor = event.currentTarget instanceof HTMLElement ? event.currentTarget : null;
+    const anchorRect = anchor?.getBoundingClientRect() ?? null;
+    const restoreFocus = participantContextMenu.restoreFocus;
+    closeParticipantContextMenu(peer.id, false);
+    // Deferred so the closing menu does not swallow the card's own outside-click
+    // listener during the same pointer event.
+    queueMicrotask(() => openProfileCardFor(person, { rect: anchorRect, restoreFocus }));
   }
 
   function toggleLocalMute(): void {
@@ -96,70 +121,69 @@
     closeParticipantContextMenu(peer.id);
   }
 
-  function errorToastMessage(error: unknown, fallback: string): string {
-    return error instanceof Error && error.message ? error.message : fallback;
-  }
-
-  async function openDirectMessage(): Promise<void> {
-    if (!peer?.accountUserId) return;
-    const peerId = peer.id;
-    const accountUserId = peer.accountUserId;
-    closeParticipantContextMenu(peerId);
-    try {
+  function openDirectMessage(): void {
+    const accountUserId = peer?.accountUserId;
+    if (!accountUserId) return;
+    act(async () => {
       setMode('friends');
       await openDm(accountUserId);
-    } catch (error) {
-      console.error(error);
-      showToast(errorToastMessage(error, 'Не удалось открыть личные сообщения'), { variant: 'error' });
-    }
+    }, 'Не удалось открыть личные сообщения');
   }
 
-  async function sendFriendRequest(): Promise<void> {
-    if (!peer?.accountUserId) return;
-    const peerId = peer.id;
-    const accountUserId = peer.accountUserId;
-    closeParticipantContextMenu(peerId);
-    try {
+  function sendFriendRequest(): void {
+    const accountUserId = peer?.accountUserId;
+    if (!accountUserId) return;
+    act(async () => {
       const result = await addFriendByUserId(accountUserId);
-      showToast(getFriendRequestToast(result.status));
-    } catch (error) {
-      console.error(error);
-      showToast(errorToastMessage(error, 'Не удалось отправить заявку в друзья'), { variant: 'error' });
-    }
+      showToast(friendRequestToast(result.status));
+    }, 'Не удалось отправить заявку в друзья');
   }
 
-  async function acceptFriendRequest(): Promise<void> {
-    if (!peer?.accountUserId) return;
-    const peerId = peer.id;
-    const accountUserId = peer.accountUserId;
-    closeParticipantContextMenu(peerId);
-    try {
+  function acceptFriendRequest(): void {
+    const accountUserId = peer?.accountUserId;
+    if (!accountUserId) return;
+    act(async () => {
       await acceptRequestByUserId(accountUserId);
       showToast('Заявка принята');
-    } catch (error) {
-      console.error(error);
-      showToast(errorToastMessage(error, 'Не удалось принять заявку в друзья'), { variant: 'error' });
-    }
+    }, 'Не удалось принять заявку в друзья');
   }
 
-  async function kickParticipant(): Promise<void> {
+  function dropFriend(): void {
+    const accountUserId = peer?.accountUserId;
+    const name = peer?.name ?? 'Пользователь';
+    if (!accountUserId) return;
+    act(async () => {
+      await removeFriend(accountUserId);
+      showToast(`${name} удалён из друзей`);
+    }, 'Не удалось удалить из друзей');
+  }
+
+  function toggleServerMute(): void {
     if (!peer) return;
     const peerId = peer.id;
-    closeParticipantContextMenu(peerId);
-    try {
-      await kickRoomPeer(roomState.roomId, peerId);
-      showToast(`${peer.name} исключён из комнаты`);
-    } catch (error) {
-      showToast(errorToastMessage(error, 'Не удалось исключить участника'), { variant: 'error' });
-    }
+    const name = peer.name;
+    const next = !peer.serverMuted;
+    act(async () => {
+      await setRoomPeerServerMute(roomState.roomId, peerId, next);
+      showToast(next ? `Микрофон ${name} выключен` : `Микрофон ${name} включён`);
+    }, 'Не удалось изменить микрофон участника');
   }
 
-  async function banParticipant(): Promise<void> {
+  function kickParticipant(): void {
+    if (!peer) return;
+    const peerId = peer.id;
+    const name = peer.name;
+    act(async () => {
+      await kickRoomPeer(roomState.roomId, peerId);
+      showToast(`${name} исключён из комнаты`);
+    }, 'Не удалось исключить участника');
+  }
+
+  function banParticipant(): void {
     if (!peer) return;
     const peerId = peer.id;
     const peerName = peer.name;
-    closeParticipantContextMenu(peerId);
-    try {
+    act(async () => {
       const banId = await banRoomPeer(roomState.roomId, peerId);
       showToast(`${peerName} заблокирован`, {
         actionLabel: 'Отменить',
@@ -173,12 +197,10 @@
           }
         }
       });
-    } catch (error) {
-      showToast(errorToastMessage(error, 'Не удалось заблокировать участника'), { variant: 'error' });
-    }
+    }, 'Не удалось заблокировать участника');
   }
 
-  function getFriendRequestToast(status: 'sent' | 'accepted' | 'already_sent' | 'already_friends'): string {
+  function friendRequestToast(status: 'sent' | 'accepted' | 'already_sent' | 'already_friends'): string {
     switch (status) {
       case 'accepted':
         return 'Теперь вы друзья';
@@ -191,167 +213,158 @@
         return 'Заявка в друзья отправлена';
     }
   }
-
-  function handleKeydown(event: KeyboardEvent): void {
-    if (!participantContextMenu.open) return;
-    const activeElement = document.activeElement;
-    const isRangeInput = activeElement instanceof HTMLInputElement && activeElement.type === 'range';
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      closeParticipantContextMenu();
-    } else if (event.key === 'ArrowDown' && !isRangeInput) {
-      event.preventDefault();
-      focusNext(1);
-    } else if (event.key === 'ArrowUp' && !isRangeInput) {
-      event.preventDefault();
-      focusNext(-1);
-    }
-  }
-
-  function focusNext(delta: number): void {
-    if (!panel) return;
-    const items = [...panel.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), [tabindex]:not([tabindex="-1"])')];
-    if (items.length === 0) return;
-    const currentIndex = Math.max(0, items.indexOf(document.activeElement as HTMLElement));
-    const nextIndex = (currentIndex + delta + items.length) % items.length;
-    items[nextIndex]?.focus();
-  }
-
-  function handlePointerDown(event: PointerEvent): void {
-    if (!panel || panel.contains(event.target as Node)) return;
-    closeParticipantContextMenu('', false);
-  }
-
-  function handleFocusIn(event: FocusEvent): void {
-    if (!participantContextMenu.open || !panel) return;
-    const target = event.target;
-    if (target instanceof Node && panel.contains(target)) return;
-    const opener = document.querySelector<HTMLElement>(
-      `.participant[data-peer-id="${CSS.escape(participantContextMenu.restoreFocusPeerId)}"]`
-    );
-    if (opener && target instanceof Node && opener.contains(target)) return;
-    closeParticipantContextMenu('', false);
-  }
-
-  onMount(() => {
-    document.addEventListener('keydown', handleKeydown);
-    document.addEventListener('pointerdown', handlePointerDown, { capture: true });
-    document.addEventListener('focusin', handleFocusIn);
-    return () => {
-      document.removeEventListener('keydown', handleKeydown);
-      document.removeEventListener('pointerdown', handlePointerDown, { capture: true });
-      document.removeEventListener('focusin', handleFocusIn);
-    };
-  });
-
-  $effect(() => {
-    if (participantContextMenu.open && panel) {
-      queueMicrotask(() => {
-        positionPanel();
-        const first = panel?.querySelector<HTMLElement>('button:not(:disabled), input:not(:disabled)');
-        (first || panel)?.focus();
-      });
-    }
-  });
 </script>
 
-{#if participantContextMenu.open && peer && !peer.isLocal && avatar}
-  <div
-    bind:this={panel}
-    class="participant-context-menu"
-    data-peer-id={peer.id}
+{#if participantContextMenu.open && peer && !peer.isLocal}
+  <ContextMenu
+    open={participantContextMenu.open}
+    x={participantContextMenu.x}
+    y={participantContextMenu.y}
+    ariaLabel={`Действия для ${peer.name}`}
+    restoreFocus={participantContextMenu.restoreFocus}
     role="dialog"
-    aria-label={`Действия для ${peer.name}`}
-    tabindex="-1"
+    onClose={() => closeParticipantContextMenu('', false)}
   >
-    <div class="participant-context-menu-head">
-      <span class="pcm-avatar" aria-hidden="true">
-        <Avatar name={peer.name} src={avatar.src} background={avatar.background} size={42} />
-        <span class="pcm-avatar-status"></span>
-      </span>
-      <span class="pcm-identity">
-        <strong>{peer.name}</strong>
-        <span class="pcm-handle">{subtitle}</span>
-      </span>
-    </div>
+    {#snippet content()}
+      <div class="participant-menu" data-peer-id={peer.id}>
+        <PopoverMenuLabel text={showAudioControls ? 'Плитка в сетке' : 'Участник'} />
 
-    {#if canUseSocialActions && relationship === 'friend'}
-      <span class="participant-context-menu-divider" aria-hidden="true"></span>
-      <button class="pcm-item" type="button" onclick={openDirectMessage}>
-        <MessageSquare class="pcm-item-icon" {...iconMd} aria-hidden="true" />
-        <span>Написать сообщение</span>
-      </button>
-    {:else if canUseSocialActions && relationship === 'incoming'}
-      <span class="participant-context-menu-divider" aria-hidden="true"></span>
-      <button class="pcm-item pcm-item--accent" type="button" onclick={acceptFriendRequest}>
-        <Check class="pcm-item-icon" {...iconMd} aria-hidden="true" />
-        <span>Принять заявку</span>
-      </button>
-    {:else if canUseSocialActions && relationship === 'outgoing'}
-      <span class="participant-context-menu-divider" aria-hidden="true"></span>
-      <p class="participant-context-menu-note">Заявка в друзья уже отправлена.</p>
-    {:else if canUseSocialActions}
-      <span class="participant-context-menu-divider" aria-hidden="true"></span>
-      <button class="pcm-item pcm-item--accent" type="button" onclick={sendFriendRequest}>
-        <UserPlus class="pcm-item-icon" {...iconMd} aria-hidden="true" />
-        <span>Добавить в друзья</span>
-      </button>
-    {:else if !peer.accountUserId}
-      <span class="participant-context-menu-divider" aria-hidden="true"></span>
-      <p class="participant-context-menu-note">Гость: доступны только локальные настройки звука.</p>
-    {/if}
+        {#if peer.accountUserId}
+          <PopoverMenuItem role="button" label="Профиль" onclick={showProfile}>
+            {#snippet icon()}<User {...iconMd} aria-hidden="true" />{/snippet}
+          </PopoverMenuItem>
+        {/if}
 
-    <span class="participant-context-menu-divider" aria-hidden="true"></span>
+        {#if canUseSocialActions}
+          <PopoverMenuItem role="button" label="Написать" onclick={openDirectMessage}>
+            {#snippet icon()}<MessageSquare {...iconMd} aria-hidden="true" />{/snippet}
+          </PopoverMenuItem>
 
-    <div class="pcm-volume">
-      <div class="pcm-volume-head">
-        <span class="pcm-volume-label">
-          <Volume2 {...iconSm} aria-hidden="true" />
-          <span>Громкость</span>
-        </span>
-        <output class="pcm-volume-value">{volumeLabel}</output>
+          {#if relationship === 'friend'}
+            <PopoverMenuItem role="button" label="Удалить из друзей" variant="danger" onclick={dropFriend}>
+              {#snippet icon()}<UserMinus {...iconMd} aria-hidden="true" />{/snippet}
+            </PopoverMenuItem>
+          {:else if relationship === 'incoming'}
+            <PopoverMenuItem role="button" label="Принять заявку" variant="friendly" onclick={acceptFriendRequest}>
+              {#snippet icon()}<Check {...iconMd} aria-hidden="true" />{/snippet}
+            </PopoverMenuItem>
+          {:else if relationship === 'outgoing'}
+            <PopoverMenuItem role="button" label="Заявка отправлена" variant="friendly" disabled onclick={() => {}}>
+              {#snippet icon()}<UserPlus {...iconMd} aria-hidden="true" />{/snippet}
+            </PopoverMenuItem>
+          {:else}
+            <PopoverMenuItem role="button" label="Добавить в друзья" variant="friendly" onclick={sendFriendRequest}>
+              {#snippet icon()}<UserPlus {...iconMd} aria-hidden="true" />{/snippet}
+            </PopoverMenuItem>
+          {/if}
+        {:else if !peer.accountUserId}
+          <p class="participant-menu-note">Гость: доступны только локальные настройки звука.</p>
+        {/if}
+
+        {#if showAudioControls}
+          <PopoverDivider />
+
+          <div class="participant-menu-volume">
+            <div class="participant-menu-volume-head">
+              <span class="participant-menu-volume-label">
+                <Volume2 {...iconSm} aria-hidden="true" />
+                <span>Громкость</span>
+              </span>
+              <output class="participant-menu-volume-value">{volumeLabel}</output>
+            </div>
+            <Slider
+              bind:value={volumePercent}
+              min={0}
+              max={200}
+              step={1}
+              defaultValue={100}
+              snap
+              snapThreshold={6}
+              ariaLabel={`Громкость ${peer.name}`}
+              ariaValueText={volumeLabel}
+              onValueChange={setVolume}
+            />
+          </div>
+
+          <PopoverMenuItem
+            role="button"
+            label={localMuted ? 'Включить для меня' : 'Заглушить для меня'}
+            variant={localMuted ? 'accent' : 'default'}
+            onclick={toggleLocalMute}
+          >
+            {#snippet icon()}<VolumeX {...iconMd} aria-hidden="true" />{/snippet}
+          </PopoverMenuItem>
+        {/if}
+
+        {#if canModerate}
+          <PopoverDivider />
+          <PopoverMenuLabel text="Модерация" />
+
+          {#if showAudioControls}
+            <PopoverMenuItem
+              role="button"
+              label={peer.serverMuted ? 'Включить микрофон' : 'Выключить микрофон'}
+              disabled={moderating}
+              onclick={toggleServerMute}
+            >
+              {#snippet icon()}<MicOff {...iconMd} aria-hidden="true" />{/snippet}
+            </PopoverMenuItem>
+          {/if}
+
+          <PopoverMenuItem role="button" label="Исключить из комнаты" variant="danger" disabled={moderating} onclick={kickParticipant}>
+            {#snippet icon()}<LogOut {...iconMd} aria-hidden="true" />{/snippet}
+          </PopoverMenuItem>
+          <PopoverMenuItem role="button" label="Заблокировать в комнате" variant="danger" disabled={moderating} onclick={banParticipant}>
+            {#snippet icon()}<Ban {...iconMd} aria-hidden="true" />{/snippet}
+          </PopoverMenuItem>
+        {/if}
       </div>
-      <Slider
-        bind:value={volumePercent}
-        min={0}
-        max={200}
-        step={1}
-        defaultValue={100}
-        snap
-        snapThreshold={6}
-        ariaLabel={`Громкость ${peer.name}`}
-        ariaValueText={volumeLabel}
-        onValueChange={setVolume}
-      />
-      <div class="pcm-volume-scale" aria-hidden="true">
-        <span>0%</span>
-        <span>100%</span>
-        <span>200%</span>
-      </div>
-    </div>
-
-    <span class="participant-context-menu-divider" aria-hidden="true"></span>
-
-    <button
-      class="pcm-item pcm-item--mute"
-      type="button"
-      aria-pressed={localMuted}
-      onclick={toggleLocalMute}
-    >
-      <MicOff class="pcm-item-icon" {...iconMd} aria-hidden="true" />
-      <span>{localMuted ? 'Включить локально' : 'Заглушить'}</span>
-    </button>
-
-    {#if canModerate}
-      <span class="participant-context-menu-divider" aria-hidden="true"></span>
-      <button class="pcm-item" type="button" onclick={kickParticipant}>
-        <UserMinus class="pcm-item-icon" {...iconMd} aria-hidden="true" />
-        <span>Исключить</span>
-      </button>
-      <button class="pcm-item pcm-item--danger" type="button" onclick={banParticipant}>
-        <Ban class="pcm-item-icon" {...iconMd} aria-hidden="true" />
-        <span>Заблокировать</span>
-      </button>
-    {/if}
-  </div>
+    {/snippet}
+  </ContextMenu>
 {/if}
+
+<style>
+  .participant-menu {
+    display: flex;
+    width: min(288px, calc(100vw - 28px));
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .participant-menu-note {
+    margin: 0;
+    padding: 4px 12px 10px;
+    color: var(--warm-faint);
+    font-size: 13px;
+    line-height: 1.45;
+  }
+
+  .participant-menu-volume {
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+    padding: 10px 12px 12px;
+  }
+
+  .participant-menu-volume-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .participant-menu-volume-label {
+    display: inline-flex;
+    flex: 1;
+    align-items: center;
+    gap: 10px;
+    color: var(--warm-ink-dim);
+    font-size: 14px;
+    font-weight: 600;
+  }
+
+  .participant-menu-volume-value {
+    color: var(--warm-faint);
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+  }
+</style>

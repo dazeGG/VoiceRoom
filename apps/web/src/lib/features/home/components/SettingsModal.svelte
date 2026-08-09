@@ -3,6 +3,7 @@
   import { onDestroy, untrack } from 'svelte';
   import type { AuthUser, OwnedRoom } from '$lib/api/auth';
   import type { PublicUser } from '$lib/api/friends';
+  import { fetchBlockedUsers, unblockUser } from '$lib/api/blocks';
   import { iconMd, iconSm } from '$lib/shared/ui/icons';
   import { changePassword, deleteUserAvatar, updateDisplayName, uploadUserAvatar } from '$lib/api/auth';
   import { isValidPassword, PASSWORD_MIN_LENGTH } from '$lib/features/auth/account';
@@ -128,6 +129,10 @@
   let notificationVolume = $state(100);
   let notificationSaving = $state(false);
   let notificationTargetSaving = $state('');
+  let blockedUsers = $state<PublicUser[]>([]);
+  let blockedUsersLoading = $state(false);
+  let blockedUserSaving = $state('');
+  let blockedUsersLoaded = false;
   let previewingSoundSet = $state(false);
   let confirmedSpeakerId = '';
   let speakerChangeGeneration = 0;
@@ -168,6 +173,41 @@
     desktopPlatform = window.voiceRoomRuntime?.platform || '';
     globalHotkeysAvailable = desktopApp && desktopGlobalHotkeysAvailable();
   });
+
+  $effect(() => {
+    if (!open) {
+      blockedUsersLoaded = false;
+      return;
+    }
+    if (tab === 'notifications' && !blockedUsersLoaded) void loadBlockedUsers();
+  });
+
+  async function loadBlockedUsers(): Promise<void> {
+    if (blockedUsersLoading) return;
+    blockedUsersLoading = true;
+    try {
+      blockedUsers = await fetchBlockedUsers();
+      blockedUsersLoaded = true;
+    } catch (error) {
+      onToast(error instanceof Error && error.message ? error.message : 'Не удалось загрузить блокировки', { variant: 'error' });
+    } finally {
+      blockedUsersLoading = false;
+    }
+  }
+
+  async function unblockBlockedUser(userId: string): Promise<void> {
+    if (blockedUserSaving) return;
+    blockedUserSaving = userId;
+    try {
+      await unblockUser(userId);
+      blockedUsers = blockedUsers.filter((entry) => entry.id !== userId);
+      onToast('Пользователь разблокирован');
+    } catch (error) {
+      onToast(error instanceof Error && error.message ? error.message : 'Не удалось разблокировать', { variant: 'error' });
+    } finally {
+      blockedUserSaving = '';
+    }
+  }
 
   // Reset both forms whenever the modal (re)opens or the account changes.
   $effect(() => {
@@ -1010,6 +1050,44 @@
                 </section>
                 </div>
               </div>
+
+              <section class="settings-notification-group settings-blocked-users" aria-labelledby="blockedUsersTitle">
+                <div>
+                  <span class="settings-section-title" id="blockedUsersTitle">Заблокированные пользователи</span>
+                  <div class="settings-gate-hint">Разблокировка не восстанавливает дружбу и историю отношений.</div>
+                </div>
+                {#if blockedUsersLoading}
+                  <div class="settings-notification-empty" role="status">Загружаем…</div>
+                {:else if blockedUsers.length > 0}
+                  <div class="settings-notification-list">
+                    {#each blockedUsers as blocked (blocked.id)}
+                      <div class="settings-notification-row">
+                        <Avatar
+                          name={blocked.displayName?.trim() || blocked.login}
+                          src={blocked.avatarUrl}
+                          colorKey={blocked.avatarColorKey}
+                          background={blocked.avatarAccent || undefined}
+                          size={32}
+                        />
+                        <span class="settings-notification-name">
+                          <strong>{blocked.displayName?.trim() || blocked.login}</strong>
+                          <small>@{blocked.login}</small>
+                        </span>
+                        <button
+                          class="settings-unblock-button"
+                          type="button"
+                          disabled={Boolean(blockedUserSaving)}
+                          onclick={() => void unblockBlockedUser(blocked.id)}
+                        >
+                          {blockedUserSaving === blocked.id ? 'Разблокируем…' : 'Разблокировать'}
+                        </button>
+                      </div>
+                    {/each}
+                  </div>
+                {:else}
+                  <div class="settings-notification-empty">Заблокированных пользователей нет.</div>
+                {/if}
+              </section>
 
             </div>
           {/if}

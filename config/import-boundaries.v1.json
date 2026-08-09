@@ -39,6 +39,9 @@
         "apps/api/src/lib/room-store.js",
         "apps/api/src/domains/messaging/message-read-repository.js"
       ],
+      "room_message_pins": ["apps/api/src/domains/messaging/pin-repository.js"],
+      "room_server_mutes": ["apps/api/src/lib/room-store.js"],
+      "user_blocks": ["apps/api/src/lib/friend-store.js"],
       "users": ["apps/api/src/lib/user-store.js", "apps/api/src/lib/notification-store.js"],
       "sessions": ["apps/api/src/lib/user-store.js"],
       "friend_requests": ["apps/api/src/lib/friend-store.js"],

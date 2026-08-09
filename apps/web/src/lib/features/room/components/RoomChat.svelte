@@ -17,12 +17,25 @@
   import { playRoomChatMessageCue } from '../client/media/cues';
   import { applyRoomDeleted, applyRoomNotFound, applyRoomUpdated } from '../client/room/lifecycle';
   import { openParticipantContextMenu } from '../participant-context-ui.svelte';
+  import { openProfileCardFor } from '$lib/features/home/profile-card-ui.svelte';
+  import { getParticipantById } from '../client/room/participants';
+  import { participantProfilePerson } from '../profile-card-adapter';
   import { roomUi, closeChat, incrementUnreadChat, markChatRead, selectRoomPanel } from '../room-ui.svelte';
   import { isRoomNotificationsMuted } from '$lib/shared/notifications/preferences.svelte';
   import { getCapabilityFeature } from '$lib/platform/capability-state.svelte';
   import { createAnchoredHistory } from '../room-history.svelte';
   import { createReadReconciliation } from '$lib/shared/chat/read-reconciliation.svelte';
   import { createReactionStore } from '$lib/shared/chat/reaction-store.svelte';
+  import MessageContextMenu from '$lib/shared/chat/MessageContextMenu.svelte';
+  import { DEFAULT_FREQUENT_REACTIONS, loadFrequentReactions } from '$lib/shared/chat/frequent-reactions';
+  import PinnedMessagesBar from './PinnedMessagesBar.svelte';
+  import {
+    applyRoomPinsEvent,
+    isMessagePinned,
+    loadRoomPins,
+    resetRoomPins,
+    togglePin
+  } from '../pins.svelte';
   import ReactionPicker from '$lib/shared/chat/ReactionPicker.svelte';
   import ReactionSummary from '$lib/shared/chat/ReactionSummary.svelte';
   import {
@@ -74,6 +87,10 @@
   let repliesEnabled = $state(false);
   let engagementEnabled = $state(false);
   let replyTarget = $state<ChatMessage | null>(null);
+  let menuMessage = $state<ChatMessage | null>(null);
+  let menuX = $state(0);
+  let menuY = $state(0);
+  let quickReactions = $state<string[]>([...DEFAULT_FREQUENT_REACTIONS]);
   let sendAttemptKey = '';
   let sendAttemptFingerprint = '';
   const chatVisible = $derived(roomUi.chatOpen && roomUi.activePanel === 'chat');
@@ -391,6 +408,10 @@
         reactions.applyServer(event.payload.messageId, event.payload.summary);
         return;
       }
+      if (event.type === 'room.pins') {
+        applyRoomPinsEvent(event.payload.roomId, event.payload);
+        return;
+      }
       if (event.type === 'room.chat.edited') {
         const edited = event.payload.message;
         if (edited?.id) {
@@ -444,13 +465,70 @@
       }
     });
 
+    void loadRoomPins(roomId);
+    if (session.user?.id) {
+      void loadFrequentReactions('chat', session.user.id).then((emoji) => {
+        if (emoji.length > 0) quickReactions = emoji;
+      });
+    }
+
     return () => {
       controller.abort();
       history.close();
       readReconciliation?.dispose();
+      resetRoomPins();
       unsubscribe();
     };
   });
+
+  // --- message context menu ---------------------------------------------
+
+  function openMessageMenu(message: ChatMessage, event: MouseEvent): void {
+    if (editingMessageId === message.id) return;
+    event.preventDefault();
+    menuMessage = message;
+    menuX = event.clientX;
+    menuY = event.clientY;
+  }
+
+  function closeMessageMenu(): void {
+    menuMessage = null;
+  }
+
+  function reactFromMenu(messageId: string, emoji: string): void {
+    void reactions.toggle(messageId, emoji);
+  }
+
+  // The emoji picker is owned by each message's hover toolbar, so the menu entry
+  // drives that trigger rather than duplicating the popover.
+  function openReactionPickerFor(messageId: string): void {
+    queueMicrotask(() => {
+      const row = chatBody?.querySelector(`[data-message-id="${CSS.escape(messageId)}"]`);
+      row?.querySelector<HTMLButtonElement>('.reaction-picker-trigger')?.click();
+    });
+  }
+
+  function jumpToMessage(messageId: string): void {
+    const row = chatBody?.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(messageId)}"]`);
+    if (!row) {
+      showToast('Сообщение не загружено — прокрутите историю выше');
+      return;
+    }
+    row.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    row.classList.add('is-highlighted');
+    setTimeout(() => row.classList.remove('is-highlighted'), 1600);
+  }
+
+  async function togglePinned(messageId: string): Promise<void> {
+    try {
+      await togglePin(roomId, messageId);
+    } catch (err) {
+      showToast(
+        err instanceof Error && err.message ? err.message : 'Не удалось закрепить сообщение',
+        { variant: 'error' }
+      );
+    }
+  }
 
   // Reconcile the server's recent-message window with what's already rendered:
   // known ids are replaced so edits missed while disconnected still appear,
@@ -687,15 +765,34 @@
     }
   }
 
-  // Open the participant context menu from a chat author (avatar or name). Only
-  // works for others who are still in the room; self and absent peers are inert.
+  // Left click on a chat author (avatar or name) shows their profile card;
+  // right click opens the participant menu. Both only apply to others who are
+  // still in the room — self and absent peers are inert.
+  function openUserProfile(group: ChatGroup, event: MouseEvent): void {
+    if (group.self) return;
+    const participant = getParticipantById(group.peerId);
+    if (!participant) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const anchor = event.currentTarget;
+    const person = participantProfilePerson(participant);
+    queueMicrotask(() => openProfileCardFor(person, anchor));
+  }
+
   function openUserMenu(group: ChatGroup, event: MouseEvent): void {
     if (group.self) return;
     event.preventDefault();
     event.stopPropagation();
-    const target = event.currentTarget as HTMLElement;
-    const rect = target.getBoundingClientRect();
-    queueMicrotask(() => openParticipantContextMenu(group.peerId, rect.left + rect.width / 2, rect.bottom + 6));
+    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    queueMicrotask(() =>
+      openParticipantContextMenu(
+        group.peerId,
+        rect.left + rect.width / 2,
+        rect.bottom + 6,
+        'list',
+        event.currentTarget instanceof HTMLElement ? event.currentTarget : null
+      )
+    );
   }
 
   async function copyMessageText(message: ChatMessage): Promise<void> {
@@ -755,6 +852,11 @@
   </header>
 
   {#if roomUi.activePanel === 'chat'}
+  <PinnedMessagesBar
+    onJump={jumpToMessage}
+    onUnpin={(messageId) => void togglePinned(messageId)}
+    canUnpin={Boolean(session.user?.id)}
+  />
   <div class="chat-rail-body" id="room-panel-chat" role="tabpanel" aria-labelledby="room-panel-chat-tab" bind:this={chatBody} onscroll={onHistoryScroll}>
     {#if loading}
       <p class="chat-rail-note">Загружаем сообщения…</p>
@@ -778,9 +880,10 @@
               class="chat-avatar-button chat-msg-trigger"
               type="button"
               aria-haspopup="dialog"
-              aria-label={`Действия для ${group.name}`}
-              title={`Действия для ${group.name}`}
-              onclick={(event) => openUserMenu(group, event)}
+              aria-label={`Профиль ${group.name}`}
+              title={`Профиль ${group.name}`}
+              onclick={(event) => openUserProfile(group, event)}
+              oncontextmenu={(event) => openUserMenu(group, event)}
             >
               <Avatar class="chat-msg-avatar" name={group.name} src={group.avatarUrl} background={group.avatarBackground} size={34} />
             </button>
@@ -795,14 +898,22 @@
                   type="button"
                   style={`color:${group.avatarBackground}`}
                   aria-haspopup="dialog"
-                  aria-label={`Действия для ${group.name}`}
-                  onclick={(event) => openUserMenu(group, event)}
+                  aria-label={`Профиль ${group.name}`}
+                  onclick={(event) => openUserProfile(group, event)}
+                  oncontextmenu={(event) => openUserMenu(group, event)}
                 >{group.name}</button>
               {/if}
               <time class="chat-msg-time" datetime={new Date(group.messages[0].createdAt).toISOString()}>{group.time}</time>
             </div>
             {#each group.messages as message (message.id)}
-              <div class="chat-msg-text" data-message-id={message.id} data-group-first={message.id === group.messages[0].id}>
+              <!-- svelte-ignore a11y_no_static_element_interactions -->
+              <div
+                class="chat-msg-text"
+                class:is-context={menuMessage?.id === message.id}
+                data-message-id={message.id}
+                data-group-first={message.id === group.messages[0].id}
+                oncontextmenu={(event) => openMessageMenu(message, event)}
+              >
                 {#if editingMessageId === message.id}
                   <div class="chat-msg-edit">
                     <textarea
@@ -884,3 +995,30 @@
     </div>
   {/if}
 </aside>
+
+{#if menuMessage}
+  {@const target = menuMessage}
+  <MessageContextMenu
+    open={Boolean(menuMessage)}
+    x={menuX}
+    y={menuY}
+    quickReactions={quickReactions}
+    activeReactions={new Set(
+      reactions.forMessage(target.id).filter((summary) => summary.reactedByMe).map((summary) => summary.emoji)
+    )}
+    canReact={reactionsEnabled && Boolean(session.user?.id)}
+    canReply={repliesEnabled}
+    canPin={Boolean(session.user?.id)}
+    pinned={isMessagePinned(target.id)}
+    canEdit={isOwnMessage(target)}
+    canDelete={isOwnMessage(target)}
+    onClose={closeMessageMenu}
+    onReact={(emoji) => reactFromMenu(target.id, emoji)}
+    onOpenReactionPicker={() => openReactionPickerFor(target.id)}
+    onReply={() => { replyTarget = target; composeEl?.focus(); }}
+    onCopy={() => void copyMessageText(target)}
+    onTogglePin={() => void togglePinned(target.id)}
+    onEdit={() => startEditing(target)}
+    onDelete={() => void deleteMessage(target.id)}
+  />
+{/if}

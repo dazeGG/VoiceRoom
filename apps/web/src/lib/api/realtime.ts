@@ -68,12 +68,24 @@ export type ReactionRealtimeEvent = {
   };
 };
 
+export type PinsRealtimeEvent = {
+  type: 'room.pins';
+  payload: {
+    roomId: string;
+    action: 'pinned' | 'unpinned';
+    messageId: string;
+    pins: unknown;
+    count: number;
+  };
+};
+
 export type RealtimeEvent = (
   RealtimeAccountEvent
   | RealtimeRoomEvent
   | RealtimeErrorEvent
   | NotificationRealtimeEvent
   | ReactionRealtimeEvent
+  | PinsRealtimeEvent
 ) & { id?: string };
 
 /** @deprecated Use RealtimeEvent */

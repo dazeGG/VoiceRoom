@@ -9,6 +9,7 @@
   import '$lib/features/home/styles/home.css';
   import RoomPage from '$lib/features/room/RoomPage.svelte';
   import { MascotIcon, ToastStack } from '$lib/shared/ui';
+  import { ProfileCardHost } from '$lib/features/home/components/profile-card';
 
   let boundaryReady = $state(false);
   let desktopAllowed = $state(false);
@@ -107,5 +108,7 @@
     <RoomPage roomId={routeRoomId} autoJoin />
   {/key}
 {/if}
+
+<ProfileCardHost onToast={(message) => showToast(message)} />
 
 <ToastStack toasts={toastState.items} onDismiss={dismissToast} />

@@ -205,17 +205,29 @@
     flex: none;
   }
 
+  /* Matches the context-menu panel so a popover menu and a right-click menu are
+     visually the same surface. */
   .popover-panel {
     position: absolute;
     z-index: 50;
     min-width: 0;
-    padding: 6px;
+    padding: 8px;
     border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 18px;
-    background: var(--warm-800);
-    box-shadow:
-      0 24px 60px rgba(0, 0, 0, 0.55),
-      0 2px 0 rgba(255, 255, 255, 0.04) inset;
+    border-radius: 20px;
+    background: color-mix(in srgb, var(--warm-800) 94%, transparent);
+    backdrop-filter: blur(20px);
+    box-shadow: 0 26px 70px rgba(0, 0, 0, 0.62);
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .popover-panel:not(.popover-panel--closed) {
+      animation: popover-panel-enter 120ms ease-out;
+    }
+  }
+
+  @keyframes popover-panel-enter {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
   }
 
   .popover-panel--closed {
