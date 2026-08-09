@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ChevronRight, Copy, MessageSquare, Pencil, Trash2, Users } from '@lucide/svelte';
+  import { ChevronRight, MessageSquare, Users } from '@lucide/svelte';
   import type { AuthUser } from '$lib/api/auth';
   import { iconSm } from '$lib/shared/ui/icons';
   import { getAppRealtime } from '$lib/api/realtime';
@@ -25,6 +25,11 @@
   import AttachmentMosaic from '$lib/shared/chat/AttachmentMosaic.svelte';
   import AttachmentUploadControl from '$lib/shared/chat/AttachmentUploadControl.svelte';
   import { tick } from 'svelte';
+  import MessageContextMenu from '$lib/shared/chat/MessageContextMenu.svelte';
+  import MessageHoverActions from '$lib/shared/chat/MessageHoverActions.svelte';
+  import ReplyPreview from '$lib/shared/chat/ReplyPreview.svelte';
+  import { openProfileCardFor } from '../../profile-card-ui.svelte';
+  import { roomMessageProfilePerson } from '$lib/features/room/profile-card-adapter';
 
   let { roomId, user, onClose, onSelectParticipants, onToast } = $props<{
     roomId: string;
@@ -49,6 +54,10 @@
   let attachmentDragDepth = $state(0);
   let chatPinnedToBottom = true;
   let composerAttachmentCount = 0;
+  let menuMessage = $state<ChatMessage | null>(null);
+  let menuX = $state(0);
+  let menuY = $state(0);
+  let replyTarget = $state<ChatMessage | null>(null);
 
   $effect(() => {
     const activeRoomId = roomId;
@@ -238,7 +247,8 @@
       const message = await postRoomChat(roomId, {
         name: displayName,
         text,
-        attachmentIds: media?.readyIds ?? []
+        attachmentIds: media?.readyIds ?? [],
+        replyTo: replyTarget ? { messageId: replyTarget.id } : undefined
       });
       if (!messageIds.has(message.id) && !messages.some((item) => item.id === message.id)) {
         messageIds.add(message.id);
@@ -246,6 +256,7 @@
         queueMicrotask(scrollToBottom);
       }
       draft = '';
+      replyTarget = null;
       media?.clearBound();
       sent = true;
     } catch (err) {
@@ -288,6 +299,26 @@
     } catch {
       onToast?.('Не удалось скопировать');
     }
+  }
+
+  function openMessageMenu(message: ChatMessage, event: MouseEvent): void {
+    if (editingMessageId === message.id) return;
+    event.preventDefault();
+    event.stopPropagation();
+    menuMessage = message;
+    menuX = event.clientX;
+    menuY = event.clientY;
+  }
+
+  function closeMessageMenu(): void {
+    menuMessage = null;
+  }
+
+  function openUserProfile(group: ChatGroup, event: MouseEvent): void {
+    if (group.self) return;
+    event.preventDefault();
+    event.stopPropagation();
+    openProfileCardFor(roomMessageProfilePerson(group.messages[0]), event.currentTarget);
   }
 
   function startEditing(message: ChatMessage): void {
@@ -437,14 +468,25 @@
     {:else if groups.length}
       {#each groups as group (group.key)}
         <div class="chat-msg" data-self={group.self}>
-          <Avatar class="chat-msg-avatar" name={group.name} src={group.avatarUrl} background={group.avatarBackground} size={34} />
+          {#if group.self}
+            <Avatar class="chat-msg-avatar" name={group.name} src={group.avatarUrl} background={group.avatarBackground} size={34} />
+          {:else}
+            <button class="chat-avatar-button chat-msg-trigger" type="button" aria-haspopup="dialog" aria-label={`Профиль ${group.name}`} onclick={(event) => openUserProfile(group, event)}>
+              <Avatar class="chat-msg-avatar" name={group.name} src={group.avatarUrl} background={group.avatarBackground} size={34} />
+            </button>
+          {/if}
           <div class="chat-msg-main">
             <div class="chat-msg-meta">
-              <span class="chat-msg-author" style={`color:${group.avatarBackground}`}>{group.name}</span>
+              {#if group.self}
+                <span class="chat-msg-author" style={`color:${group.avatarBackground}`}>{group.name}</span>
+              {:else}
+                <button class="chat-msg-author chat-msg-trigger" type="button" style={`color:${group.avatarBackground}`} aria-haspopup="dialog" aria-label={`Профиль ${group.name}`} onclick={(event) => openUserProfile(group, event)}>{group.name}</button>
+              {/if}
               <time class="chat-msg-time" datetime={new Date(group.messages[0].createdAt).toISOString()}>{group.time}</time>
             </div>
             {#each group.messages as message (message.id)}
-              <div class="chat-msg-text" data-group-first={message.id === group.messages[0].id}>
+              <!-- svelte-ignore a11y_no_static_element_interactions -->
+              <div class="chat-msg-text" class:is-context={menuMessage?.id === message.id} data-message-id={message.id} data-group-first={message.id === group.messages[0].id} oncontextmenu={(event) => openMessageMenu(message, event)}>
                 {#if editingMessageId === message.id}
                   <div class="chat-msg-edit">
                     <textarea
@@ -463,15 +505,15 @@
                     </div>
                   </div>
                 {:else}
+                  {#if message.replyPreview}<ReplyPreview preview={message.replyPreview} />{/if}
                   {#if message.attachments?.length}<AttachmentMosaic attachments={message.attachments} />{/if}
                   {#if message.text}<span class="chat-msg-content"><ChatText text={message.text} />{#if message.editedAt}<span class="chat-msg-edited">(изменено)</span>{/if}</span>{/if}
-                  <div class="chat-msg-actions" role="toolbar" aria-label="Действия с сообщением">
-                    <button type="button" aria-label="Копировать текст" title="Копировать текст" onclick={() => void copyMessageText(message)}><Copy {...iconSm} /></button>
-                    {#if group.self}
-                      <button type="button" aria-label="Редактировать" title="Редактировать" onclick={() => startEditing(message)}><Pencil {...iconSm} /></button>
-                      <button class="chat-msg-action-danger" type="button" aria-label="Удалить" title="Удалить" onclick={() => void deleteMessage(message.id)}><Trash2 {...iconSm} /></button>
-                    {/if}
-                  </div>
+                  <MessageHoverActions
+                    messageId={message.id}
+                    onReply={() => { replyTarget = message; composeEl?.focus(); }}
+                    onCopy={() => void copyMessageText(message)}
+                    onMore={(event) => openMessageMenu(message, event)}
+                  />
                 {/if}
               </div>
             {/each}
@@ -488,6 +530,12 @@
   {/if}
 
   <form class="chat-rail-compose" onsubmit={sendMessage} onpaste={onComposePaste}>
+    {#if replyTarget}
+      <div class="chat-reply-target">
+        <ReplyPreview preview={{ messageId: replyTarget.id, deleted: false, author: { id: replyTarget.authorUserId || replyTarget.peerId, name: replyTarget.name }, text: replyTarget.text }} />
+        <button type="button" onclick={() => (replyTarget = null)}>Отмена</button>
+      </div>
+    {/if}
     <div class="chat-compose-row attachment-compose-field">
       {#if media}<AttachmentComposer store={media} disabled={sending} />{/if}
       <div class="attachment-compose-controls">
@@ -507,3 +555,19 @@
     </div>
   </form>
 </aside>
+
+{#if menuMessage}
+  {@const target = menuMessage}
+  <MessageContextMenu
+    open={Boolean(menuMessage)}
+    x={menuX}
+    y={menuY}
+    canEdit={isOwnMessage(target)}
+    canDelete={isOwnMessage(target)}
+    onClose={closeMessageMenu}
+    onReply={() => { replyTarget = target; composeEl?.focus(); }}
+    onCopy={() => void copyMessageText(target)}
+    onEdit={() => startEditing(target)}
+    onDelete={() => void deleteMessage(target.id)}
+  />
+{/if}

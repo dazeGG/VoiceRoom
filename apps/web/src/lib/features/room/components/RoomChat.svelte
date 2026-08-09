@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ChevronRight, Copy, MessageSquare, Pencil, Reply, Trash2, Users } from '@lucide/svelte';
+  import { ChevronRight, MessageSquare, Users } from '@lucide/svelte';
   import { iconSm } from '$lib/shared/ui/icons';
   import { onMount, tick } from 'svelte';
   import { deleteRoomChatMessage, editRoomChatMessage, fetchRoomChat, fetchRoomChatPage, markRoomChatRead, postRoomChat, type ChatMessage } from '$lib/api/rooms';
@@ -19,7 +19,7 @@
   import { openParticipantContextMenu } from '../participant-context-ui.svelte';
   import { openProfileCardFor } from '$lib/features/home/profile-card-ui.svelte';
   import { getParticipantById } from '../client/room/participants';
-  import { participantProfilePerson } from '../profile-card-adapter';
+  import { participantProfilePerson, roomMessageProfilePerson } from '../profile-card-adapter';
   import { roomUi, closeChat, incrementUnreadChat, markChatRead, selectRoomPanel } from '../room-ui.svelte';
   import { isRoomNotificationsMuted } from '$lib/shared/notifications/preferences.svelte';
   import { getCapabilityFeature } from '$lib/platform/capability-state.svelte';
@@ -27,6 +27,7 @@
   import { createReadReconciliation } from '$lib/shared/chat/read-reconciliation.svelte';
   import { createReactionStore } from '$lib/shared/chat/reaction-store.svelte';
   import MessageContextMenu from '$lib/shared/chat/MessageContextMenu.svelte';
+  import MessageHoverActions from '$lib/shared/chat/MessageHoverActions.svelte';
   import { DEFAULT_FREQUENT_REACTIONS, loadFrequentReactions } from '$lib/shared/chat/frequent-reactions';
   import PinnedMessagesBar from './PinnedMessagesBar.svelte';
   import {
@@ -36,7 +37,6 @@
     resetRoomPins,
     togglePin
   } from '../pins.svelte';
-  import ReactionPicker from '$lib/shared/chat/ReactionPicker.svelte';
   import ReactionSummary from '$lib/shared/chat/ReactionSummary.svelte';
   import {
     dataTransferHasImages,
@@ -765,17 +765,18 @@
     }
   }
 
-  // Left click on a chat author (avatar or name) shows their profile card;
-  // right click opens the participant menu. Both only apply to others who are
-  // still in the room — self and absent peers are inert.
+  // Left click on another author (avatar or name) shows their profile card.
+  // Realtime participant data enriches it when available; message identity is
+  // the stable fallback after that person has left the room.
   function openUserProfile(group: ChatGroup, event: MouseEvent): void {
     if (group.self) return;
     const participant = getParticipantById(group.peerId);
-    if (!participant) return;
     event.preventDefault();
     event.stopPropagation();
     const anchor = event.currentTarget;
-    const person = participantProfilePerson(participant);
+    const person = participant
+      ? participantProfilePerson(participant)
+      : roomMessageProfilePerson(group.messages[0]);
     queueMicrotask(() => openProfileCardFor(person, anchor));
   }
 
@@ -935,15 +936,15 @@
                   {#if message.replyPreview}<ReplyPreview preview={message.replyPreview} />{/if}
                   <span class="chat-msg-content">{#if message.content}<StructuredMessageContent content={message.content} fallback={message.text} />{:else}<ChatText text={message.text} />{/if}{#if message.editedAt}<span class="chat-msg-edited">(изменено)</span>{/if}</span>
                   {#if message.attachments?.length}<AttachmentMosaic attachments={message.attachments} />{/if}
-                  <div class="chat-msg-actions" role="toolbar" aria-label="Действия с сообщением">
-                    {#if reactionsEnabled && session.user?.id}<ReactionPicker store={reactions} messageId={message.id} userId={session.user.id} />{/if}
-                    {#if repliesEnabled}<button type="button" aria-label="Ответить" title="Ответить" onclick={() => { replyTarget = message; composeEl?.focus(); }}><Reply {...iconSm} /></button>{/if}
-                    <button type="button" aria-label="Копировать текст" title="Копировать текст" onclick={() => void copyMessageText(message)}><Copy {...iconSm} /></button>
-                    {#if group.self}
-                      <button type="button" aria-label="Редактировать" title="Редактировать" onclick={() => startEditing(message)}><Pencil {...iconSm} /></button>
-                      <button class="chat-msg-action-danger" type="button" aria-label="Удалить" title="Удалить" onclick={() => void deleteMessage(message.id)}><Trash2 {...iconSm} /></button>
-                    {/if}
-                  </div>
+                  <MessageHoverActions
+                    reactionStore={reactionsEnabled && session.user?.id ? reactions : undefined}
+                    messageId={message.id}
+                    userId={session.user?.id}
+                    canReply={repliesEnabled}
+                    onReply={() => { replyTarget = message; composeEl?.focus(); }}
+                    onCopy={() => void copyMessageText(message)}
+                    onMore={(event) => openMessageMenu(message, event)}
+                  />
                   {#if reactionsEnabled}<ReactionSummary store={reactions} messageId={message.id} canMutate={Boolean(session.user?.id)} />{/if}
                 {/if}
               </div>

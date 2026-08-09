@@ -17,9 +17,21 @@
   let row = $state<HTMLDivElement | null>(null);
   let panel = $state<HTMLDivElement | null>(null);
   let side = $state<'left' | 'right'>('right');
-  let panelTop = $state(-8);
+  let panelLeft = $state(8);
+  let panelTop = $state(8);
   let timer: ReturnType<typeof setTimeout> | null = null;
   const panelId = `popover-submenu-${++submenuCounter}`;
+
+  function portal(node: HTMLElement) {
+    const owner = row?.closest<HTMLElement>('[data-overlay-id]')?.dataset.overlayId;
+    if (owner) node.dataset.overlayOwner = owner;
+    document.body.appendChild(node);
+    return {
+      destroy() {
+        node.remove();
+      }
+    };
+  }
 
   function triggerButton(): HTMLButtonElement | null {
     return row?.querySelector(':scope > button') ?? null;
@@ -33,12 +45,13 @@
     const rightSpace = window.innerWidth - rowRect.right;
     const leftSpace = rowRect.left;
     side = rightSpace >= panelRect.width + 18 || rightSpace >= leftSpace ? 'right' : 'left';
-    const desiredTop = rowRect.top - 8;
-    const viewportTop = Math.min(
-      Math.max(8, desiredTop),
+    panelLeft = side === 'right'
+      ? Math.min(window.innerWidth - panelRect.width - 8, rowRect.right + 10)
+      : Math.max(8, rowRect.left - panelRect.width - 10);
+    panelTop = Math.min(
+      Math.max(8, rowRect.top - 8),
       Math.max(8, window.innerHeight - panelRect.height - 8)
     );
-    panelTop = viewportTop - rowRect.top;
     await tick();
     if (focus && open) panel?.querySelector<HTMLElement>('[role="menuitem"]:not([disabled])')?.focus();
   }
@@ -110,8 +123,14 @@
   function handlePointerLeave(event: PointerEvent): void {
     cancelTimer();
     const next = event.relatedTarget;
-    if (next instanceof Node && row?.contains(next)) return;
+    if (next instanceof Node && (row?.contains(next) || panel?.contains(next))) return;
     open = false;
+  }
+
+  function handlePanelPointerLeave(event: PointerEvent): void {
+    const next = event.relatedTarget;
+    if (next instanceof Node && (panel?.contains(next) || row?.contains(next))) return;
+    close();
   }
 
   onDestroy(cancelTimer);
@@ -124,6 +143,7 @@
 <div
   bind:this={row}
   class="popover-submenu"
+  data-submenu-side={side}
   role="group"
   onpointerenter={scheduleOpen}
   onpointerleave={handlePointerLeave}
@@ -143,6 +163,7 @@
   />
   {#if open}
     <div
+      use:portal
       bind:this={panel}
       id={panelId}
       class="popover-submenu-panel"
@@ -150,7 +171,9 @@
       role="menu"
       tabindex="-1"
       aria-label={ariaLabel || label}
+      style:left={`${panelLeft}px`}
       style:top={`${panelTop}px`}
+      onpointerleave={handlePanelPointerLeave}
       onkeydown={handlePanelKeydown}
     >
       {@render content({ close })}
@@ -174,15 +197,14 @@
     height: 100%;
   }
 
-  .popover-submenu:has(.popover-submenu-panel[data-side='left'])::after {
+  .popover-submenu[data-submenu-side='left']::after {
     right: 100%;
     left: auto;
   }
 
   .popover-submenu-panel {
-    position: absolute;
-    left: calc(100% + 10px);
-    z-index: 4;
+    position: fixed;
+    z-index: 160;
     min-width: 244px;
     max-width: min(268px, calc(100vw - 28px));
     padding: 8px;
@@ -190,11 +212,6 @@
     border-radius: 18px;
     background: var(--warm-800);
     box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
-  }
-
-  .popover-submenu-panel[data-side='left'] {
-    right: calc(100% + 10px);
-    left: auto;
   }
 
   @media (prefers-reduced-motion: no-preference) {

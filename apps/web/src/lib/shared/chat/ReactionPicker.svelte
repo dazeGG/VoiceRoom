@@ -179,6 +179,7 @@
       bind:open
       placement="top-start"
       flip
+      floating
       role="dialog"
       ariaLabel="Выбор реакции"
       panelClass="reaction-picker-panel"

@@ -30,6 +30,7 @@
     panelClass = '',
     keepContentMounted = false,
     flip = false,
+    floating = false,
     onBeforeClose,
     trigger,
     content
@@ -40,12 +41,22 @@
   let panel = $state<HTMLElement | null>(null);
   let resolvedPlacement = $state<PopoverPlacement>('bottom-end');
   let availableHeight = $state<number | null>(null);
+  let floatingLeft = $state(8);
+  let floatingTop = $state(8);
+  let floatingPositioned = $state(false);
   let measureGeneration = 0;
+
+  function portal(node: HTMLElement, enabled: boolean) {
+    if (!enabled) return {};
+    document.body.appendChild(node);
+    return { destroy: () => node.remove() };
+  }
 
   $effect(() => {
     if (!open) {
       resolvedPlacement = placement;
       availableHeight = null;
+      floatingPositioned = false;
     }
   });
 
@@ -63,21 +74,16 @@
   async function resolvePlacementAfterOpen(generation: number): Promise<void> {
     await tick();
     await nextFrame();
-    if (generation !== measureGeneration || !open || !root) return;
-
-    const panel = root.querySelector<HTMLElement>('.popover-panel');
-    const triggerEl = root.firstElementChild;
-    if (!(panel instanceof HTMLElement) || !(triggerEl instanceof HTMLElement)) return;
+    if (generation !== measureGeneration || !open || !root || !panel) return;
 
     // The panel is positioned against the root box, which may be taller than
     // its trigger when a toolbar stretches its children. Measure that same
     // anchor so the available-space calculation matches the CSS geometry.
     const anchorRect = root.getBoundingClientRect();
-    const nextPlacement = resolvePopoverPlacement(
-      anchorRect,
-      panel.getBoundingClientRect(),
-      placement
-    );
+    const panelRect = panel.getBoundingClientRect();
+    const nextPlacement = flip
+      ? resolvePopoverPlacement(anchorRect, panelRect, placement)
+      : placement;
     resolvedPlacement = nextPlacement;
     const { spaceAbove, spaceBelow } = viewportSpaceAroundTrigger(anchorRect);
     const panelStyle = getComputedStyle(panel);
@@ -90,11 +96,36 @@
       0,
       (parsePlacement(nextPlacement).vertical === 'top' ? spaceAbove : spaceBelow) - panelChromeHeight
     );
+    if (floating) {
+      const axis = parsePlacement(nextPlacement);
+      const panelWidth = panelRect.width;
+      const panelHeight = Math.min(panelRect.height, availableHeight + panelChromeHeight);
+      const desiredLeft = axis.horizontal === 'start'
+        ? anchorRect.left
+        : anchorRect.right - panelWidth;
+      floatingLeft = Math.min(
+        Math.max(8, desiredLeft),
+        Math.max(8, window.innerWidth - panelWidth - 8)
+      );
+      const desiredTop = axis.vertical === 'top'
+        ? anchorRect.top - panelHeight - 10
+        : anchorRect.bottom + 10;
+      floatingTop = Math.min(
+        Math.max(8, desiredTop),
+        Math.max(8, window.innerHeight - panelHeight - 8)
+      );
+      floatingPositioned = true;
+    }
   }
 
   function openWithPlacement(): void {
     resolvedPlacement = placement;
-    if (!flip) return;
+    const generation = ++measureGeneration;
+    void resolvePlacementAfterOpen(generation);
+  }
+
+  function repositionFloating(): void {
+    if (!open || !floating) return;
     const generation = ++measureGeneration;
     void resolvePlacementAfterOpen(generation);
   }
@@ -127,7 +158,13 @@
 
   function onWindowPointerDown(event: PointerEvent): void {
     if (!open || !root) return;
-    if (!root.contains(event.target as Node)) requestClose('outside', false);
+    if (!isInsidePopover(event.target)) requestClose('outside', false);
+  }
+
+  function isInsidePopover(target: EventTarget | null): boolean {
+    if (!(target instanceof Node)) return false;
+    if (root?.contains(target) || panel?.contains(target)) return true;
+    return target instanceof Element && Boolean(target.closest(`[data-overlay-owner="${panelId}"]`));
   }
 
   function onFocusOut(event: FocusEvent): void {
@@ -139,7 +176,12 @@
     // move to a real outside element; onWindowPointerDown already covers
     // genuine outside clicks.
     if (!(nextTarget instanceof Node)) return;
-    if (root.contains(nextTarget)) return;
+    if (isInsidePopover(nextTarget)) return;
+    requestClose('focusout', false);
+  }
+
+  function onPanelFocusOut(event: FocusEvent): void {
+    if (!open || isInsidePopover(event.relatedTarget)) return;
     requestClose('focusout', false);
   }
 
@@ -199,24 +241,31 @@
   } satisfies PopoverContentState);
 </script>
 
-<svelte:window onpointerdown={onWindowPointerDown} onkeydown={onWindowKeydown} />
+<svelte:window onpointerdown={onWindowPointerDown} onkeydown={onWindowKeydown} onresize={repositionFloating} onscroll={repositionFloating} />
 
-<div class={`popover-root ${rootClass}`.trim()} bind:this={root} onfocusout={onFocusOut}>
+<div class={`popover-root ${rootClass}`.trim()} bind:this={root} data-overlay-id={panelId} onfocusout={onFocusOut}>
   {@render trigger(triggerState)}
 
   {#if open || keepContentMounted}
     <div
+      use:portal={floating}
       id={panelId}
       bind:this={panel}
       class={`popover-panel ${panelClass}`.trim()}
       class:popover-panel--closed={keepContentMounted && !open}
+      class:popover-panel--floating={floating}
       data-placement={resolvedPlacement}
+      data-overlay-id={panelId}
       {role}
       aria-label={ariaLabel || undefined}
       aria-hidden={keepContentMounted && !open ? true : undefined}
       hidden={keepContentMounted && !open ? true : undefined}
       style:--popover-available-height={availableHeight === null ? undefined : `${availableHeight}px`}
+      style:left={floating ? `${floatingLeft}px` : undefined}
+      style:top={floating ? `${floatingTop}px` : undefined}
+      style:visibility={floating && !floatingPositioned ? 'hidden' : undefined}
       onkeydown={onPanelKeydown}
+      onfocusout={onPanelFocusOut}
     >
       {@render content(contentState)}
     </div>
@@ -258,6 +307,13 @@
   .popover-panel--closed {
     display: none !important;
     pointer-events: none;
+  }
+
+  .popover-panel--floating {
+    position: fixed;
+    z-index: 150;
+    right: auto !important;
+    bottom: auto !important;
   }
 
   .popover-panel[data-placement='bottom-end'] {

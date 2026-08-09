@@ -6,6 +6,7 @@ import type { ProfileCardPerson } from '$lib/shared/components/profile-card';
 import { friendsState, getKnownLogin } from '$lib/features/home/model/friends.svelte';
 import type { PresenceStatus } from '$lib/shared/presence';
 import type { Participant } from './client/model/participants';
+import type { ChatMessage } from '$lib/api/rooms';
 
 function presenceFor(accountUserId: string): PresenceStatus {
   if (!accountUserId) return 'online';
@@ -27,6 +28,19 @@ export function participantProfilePerson(participant: Participant): ProfileCardP
     avatarUrl: participant.avatarUrl || null,
     avatarColorKey: participant.avatarColorKey || '',
     avatarAccent: participant.avatarAccent || null,
+    presence: userId ? presenceFor(userId) : 'online'
+  };
+}
+
+export function roomMessageProfilePerson(message: ChatMessage): ProfileCardPerson {
+  const userId = message.authorUserId || null;
+  return {
+    userId,
+    name: message.name,
+    login: userId ? getKnownLogin(userId) : '',
+    avatarUrl: message.avatarUrl || null,
+    avatarColorKey: message.avatarColorKey || '',
+    avatarAccent: message.avatarAccent || null,
     presence: userId ? presenceFor(userId) : 'online'
   };
 }

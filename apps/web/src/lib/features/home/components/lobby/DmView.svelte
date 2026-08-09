@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Bell, BellOff, Copy, DoorOpen, Pencil, Reply, Trash2, User, UserMinus, X } from '@lucide/svelte';
+  import { Bell, BellOff, DoorOpen, User, UserMinus, X } from '@lucide/svelte';
   import { iconMd, iconSm } from '$lib/shared/ui/icons';
   import { onMount, tick } from 'svelte';
   import type { DirectMessage } from '$lib/api/dm';
@@ -28,8 +28,8 @@
   import { getAppRealtime } from '$lib/api/realtime';
   import { createReactionStore } from '$lib/shared/chat/reaction-store.svelte';
   import MessageContextMenu from '$lib/shared/chat/MessageContextMenu.svelte';
+  import MessageHoverActions from '$lib/shared/chat/MessageHoverActions.svelte';
   import { DEFAULT_FREQUENT_REACTIONS, loadFrequentReactions } from '$lib/shared/chat/frequent-reactions';
-  import ReactionPicker from '$lib/shared/chat/ReactionPicker.svelte';
   import ReactionSummary from '$lib/shared/chat/ReactionSummary.svelte';
   import {
     dataTransferHasImages,
@@ -43,6 +43,8 @@
   import AttachmentMosaic from '$lib/shared/chat/AttachmentMosaic.svelte';
   import AttachmentUploadControl from '$lib/shared/chat/AttachmentUploadControl.svelte';
   import ReplyPreview from '$lib/shared/chat/ReplyPreview.svelte';
+  import { openProfileCardFor } from '../../profile-card-ui.svelte';
+  import type { ProfileCardPerson } from '$lib/shared/components/profile-card';
 
   let { selfId, self } = $props<{ selfId: string; self: AuthUser }>();
 
@@ -178,6 +180,22 @@
           : 'не в сети'
   );
   const peerMuted = $derived(isPeerNotificationsMuted(peer?.id));
+
+  function openMessageAuthorProfile(event: MouseEvent): void {
+    if (!peer) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const person: ProfileCardPerson = {
+      userId: peer.id,
+      name: friendName(peer),
+      login: peer.login,
+      avatarUrl: peer.avatarUrl,
+      avatarColorKey: peer.avatarColorKey,
+      avatarAccent: peer.avatarAccent,
+      presence
+    };
+    openProfileCardFor(person, event.currentTarget);
+  }
   let muteSaving = $state(false);
   let inviteResponding = $state('');
   const profileAccent = $derived(peer?.avatarAccent || '');
@@ -528,19 +546,20 @@
               <div class="chat-day-divider"><span>{group.dayLabel}</span></div>
             {/if}
             <div class="chat-msg dm-chat-group" data-self={group.fromMe}>
-              <Avatar
-                class="chat-msg-avatar"
-                name={group.fromMe ? (self.displayName?.trim() || self.login) : friendName(peer!)}
-                src={group.fromMe ? self.avatarUrl : peer?.avatarUrl}
-                colorKey={group.fromMe ? self.avatarColorKey : peer?.avatarColorKey}
-                background={(group.fromMe ? self.avatarAccent : peer?.avatarAccent) || undefined}
-                size={34}
-              />
+              {#if group.fromMe}
+                <Avatar class="chat-msg-avatar" name={self.displayName?.trim() || self.login} src={self.avatarUrl} colorKey={self.avatarColorKey} background={self.avatarAccent || undefined} size={34} />
+              {:else}
+                <button class="chat-avatar-button chat-msg-trigger" type="button" aria-haspopup="dialog" aria-label={`Профиль ${friendName(peer!)}`} onclick={openMessageAuthorProfile}>
+                  <Avatar class="chat-msg-avatar" name={friendName(peer!)} src={peer?.avatarUrl} colorKey={peer?.avatarColorKey} background={peer?.avatarAccent || undefined} size={34} />
+                </button>
+              {/if}
               <div class="chat-msg-main">
                 <div class="chat-msg-meta">
-                  <span class="chat-msg-author" style={`color:${(group.fromMe ? self.avatarAccent : peer?.avatarAccent) || 'var(--accent)'}`}>
-                    {group.fromMe ? (self.displayName?.trim() || self.login) : friendName(peer!)}
-                  </span>
+                  {#if group.fromMe}
+                    <span class="chat-msg-author" style={`color:${self.avatarAccent || 'var(--accent)'}`}>{self.displayName?.trim() || self.login}</span>
+                  {:else}
+                    <button class="chat-msg-author chat-msg-trigger" type="button" style={`color:${peer?.avatarAccent || 'var(--accent)'}`} aria-haspopup="dialog" aria-label={`Профиль ${friendName(peer!)}`} onclick={openMessageAuthorProfile}>{friendName(peer!)}</button>
+                  {/if}
                   <time class="chat-msg-time" datetime={new Date(group.bubbles[0].createdAt).toISOString()}>{formatTime(group.bubbles[0].createdAt)}</time>
                 </div>
                 {#each group.bubbles as bubble (bubble.id)}
@@ -590,15 +609,15 @@
                         {#if bubble.body.trim()}<span class="chat-msg-content dm-msg-content"><ChatText text={bubble.body} />{#if bubble.editedAt}<span class="dm-msg-edited">(изменено)</span>{/if}</span>{/if}
                         {#if reactionsEnabled}<ReactionSummary store={reactions} messageId={bubble.id} />{/if}
                       </div>
-                      <div class="chat-msg-actions" role="toolbar" aria-label="Действия с сообщением">
-                        {#if reactionsEnabled}<ReactionPicker store={reactions} messageId={bubble.id} userId={selfId} />{/if}
-                        {#if repliesEnabled}<button type="button" aria-label="Ответить" title="Ответить" onclick={() => { replyTarget = bubble; inputEl?.focus(); }}><Reply {...iconSm} /></button>{/if}
-                        <button type="button" aria-label="Копировать текст" title="Копировать текст" onclick={() => void copyMessageText(bubble)}><Copy {...iconSm} aria-hidden="true" /></button>
-                        {#if group.fromMe}
-                          <button type="button" aria-label="Редактировать" title="Редактировать" onclick={() => startEditing(bubble)}><Pencil {...iconSm} aria-hidden="true" /></button>
-                          <button type="button" class="chat-msg-action-danger" aria-label="Удалить" title="Удалить" onclick={() => void onDelete(bubble.id)}><Trash2 {...iconSm} aria-hidden="true" /></button>
-                        {/if}
-                      </div>
+                      <MessageHoverActions
+                        reactionStore={reactionsEnabled ? reactions : undefined}
+                        messageId={bubble.id}
+                        userId={selfId}
+                        canReply={repliesEnabled}
+                        onReply={() => { replyTarget = bubble; inputEl?.focus(); }}
+                        onCopy={() => void copyMessageText(bubble)}
+                        onMore={(event) => openMessageMenu(bubble, group.fromMe, event)}
+                      />
                     {/if}
                   </div>
                 {/each}
