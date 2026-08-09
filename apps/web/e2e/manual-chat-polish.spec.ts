@@ -199,3 +199,112 @@ test('manual polish keeps the newest mention query, emits login-bound segments, 
   expect(pickerBox!.y).toBeGreaterThanOrEqual(8);
   expect(pickerBox!.y + pickerBox!.height).toBeLessThanOrEqual(420);
 });
+
+test('room members panel releases navigation, switches to chat, collapses, and keeps speaking state binary', async ({ browser, page, baseURL }) => {
+  await enableCapabilities(page, ['membership']);
+  await page.setViewportSize({ width: 1440, height: 900 });
+
+  const ownerLogin = uniqueLogin('roomnavowner');
+  const friendLogin = uniqueLogin('roomnavfriend');
+  await registerViaUi(page, ownerLogin);
+
+  const friendContext = await browser.newContext({ baseURL });
+  const friendPage = await friendContext.newPage();
+  try {
+    await registerViaUi(friendPage, friendLogin);
+    const request = await friendContext.request.post('/api/friends/requests', { data: { login: ownerLogin } });
+    expect(request.ok()).toBe(true);
+    const incoming = await page.context().request.get('/api/friends/requests');
+    const requestId = ((await incoming.json()) as { incoming?: Array<{ id: string }> }).incoming?.[0]?.id;
+    expect(requestId).toBeTruthy();
+    const accepted = await page.context().request.post(`/api/friends/requests/${requestId}/accept`, { data: {} });
+    expect(accepted.ok()).toBe(true);
+
+    await page.reload();
+    const roomName = `Room navigation ${ownerLogin}`;
+    const roomId = await createPermanentRoom(page, roomName);
+    let membershipRequests = 0;
+    await page.route(`**/api/rooms/${roomId}/members*`, async (route) => {
+      membershipRequests += 1;
+      await route.fulfill({
+        json: {
+          contractVersion: 1,
+          roomId,
+          members: [{
+            userId: 'room-navigation-owner',
+            displayName: ownerLogin,
+            login: ownerLogin,
+            avatarColorKey: 'green',
+            avatarUrl: null,
+            avatarAccent: null,
+            role: 'owner',
+            joinedAt: Date.now(),
+            inVoice: true,
+            presenceStatus: 'online'
+          }],
+          pageInfo: { hasMore: false },
+          presenceRevision: 1
+        }
+      });
+    });
+    await enterRoom(page, roomId);
+
+    const panel = page.locator('.room-chat-rail');
+    const topbarTabs = page.locator('.room-heading-actions .room-panel-tabs');
+    await topbarTabs.getByRole('button', { name: 'Участники' }).click();
+    await expect(panel).toBeVisible();
+    await expect(panel.locator('#room-panel-participants')).toBeVisible();
+    await expect(panel.getByText(ownerLogin, { exact: true }).first()).toBeVisible();
+
+    const panelChatTab = panel.getByRole('tab', { name: 'Чат' });
+    await expect.poll(() => panelChatTab.evaluate((element) => {
+      const rect = element.getBoundingClientRect();
+      return document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2)?.closest('button') === element;
+    })).toBe(true);
+    await panelChatTab.click();
+    await expect(panel.locator('#room-panel-chat')).toBeVisible();
+    await panel.getByRole('tab', { name: 'Участники' }).click();
+    await expect(panel.locator('#room-panel-participants')).toBeVisible();
+    expect(membershipRequests).toBeLessThanOrEqual(2);
+
+    const localTile = page.locator('.participant[data-local="true"]').first();
+    await expect(localTile).toBeVisible({ timeout: 20_000 });
+    const speakingStyle = await localTile.evaluate((element) => {
+      const tile = getComputedStyle(element);
+      const ring = getComputedStyle(element.querySelector('.voice-ring')!);
+      return {
+        tileTransitionProperty: tile.transitionProperty,
+        ringTransitionDuration: ring.transitionDuration,
+        ringTransform: ring.transform
+      };
+    });
+    expect(speakingStyle.tileTransitionProperty).not.toContain('border-color');
+    expect(speakingStyle.tileTransitionProperty).not.toContain('box-shadow');
+    expect(speakingStyle.ringTransitionDuration).toBe('0s');
+    expect(speakingStyle.ringTransform).toBe('none');
+
+    await page.locator('.lv-row', { hasText: friendLogin }).first().click();
+    await expect(page.getByPlaceholder('Написать сообщение…')).toBeVisible();
+    await expect(page.locator('body')).toHaveAttribute('data-screen', 'start');
+
+    await page.getByRole('button', { name: `Открыть комнату ${roomName}` }).click();
+    await expect(page.locator('body')).toHaveAttribute('data-screen', 'room');
+    await expect(panel).toBeVisible();
+    await panel.getByRole('button', { name: 'Свернуть панель' }).click();
+    await expect(panel).toBeHidden();
+
+    await topbarTabs.getByRole('button', { name: 'Чат' }).click();
+    await expect(panel).toBeVisible();
+    await expect(panel.locator('#room-panel-chat')).toBeVisible();
+    await panel.getByRole('button', { name: 'Свернуть панель' }).click();
+    await expect(panel).toBeHidden();
+
+    await topbarTabs.getByRole('button', { name: 'Участники' }).click();
+    await expect(panel.locator('#room-panel-participants')).toBeVisible();
+    await page.locator('.lv-side-head').click();
+    await expect(page.getByRole('button', { name: 'Создать комнату' })).toBeVisible();
+    await expect(page.locator('body')).toHaveAttribute('data-screen', 'start');
+  } finally {
+    await friendContext.close();
+  }
+});

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import Avatar from '$lib/shared/ui/Avatar/Avatar.svelte';
   import {
     getRoomMembership,
@@ -13,9 +14,11 @@
   const offlineMembers = $derived((roster?.members ?? []).filter((member) => member.presenceStatus === 'offline'));
 
   $effect(() => {
-    roomId;
-    getRoomMembership(roomId);
-    void loadRoomMembership(roomId);
+    const currentRoomId = roomId;
+    untrack(() => {
+      getRoomMembership(currentRoomId);
+      void loadRoomMembership(currentRoomId);
+    });
   });
 
   function nameFor(member: MembershipMember): string {

@@ -17,6 +17,10 @@
   background: color-mix(in oklch, var(--warm-950), transparent 45%);
 }
 
+.room-chat-rail[hidden] {
+  display: none;
+}
+
 @media (min-width: 901px) {
   .room-chat-rail {
     position: fixed;

@@ -96,7 +96,7 @@ body[data-screen-view="true"][data-strip-collapsed="true"] .stage-strip {
   overflow: hidden;
   background: color-mix(in oklch, var(--participant-pastel), var(--paper-deep) 30%);
   box-shadow: none;
-  transition: border-color 180ms ease, background 180ms ease, box-shadow 180ms ease, opacity 180ms ease;
+  transition: background 180ms ease, opacity 180ms ease;
 }
 
 .participant:not([data-local="true"]) { cursor: pointer; }
@@ -150,11 +150,9 @@ body[data-screen-view="true"][data-strip-collapsed="true"] .stage-strip {
   place-items: center;
   border-radius: 50%;
   background: transparent;
-  transition: transform 160ms ease;
 }
 
 .participant[data-speaking="true"] .voice-ring {
-  transform: scale(1.03);
   box-shadow: none;
 }
 
