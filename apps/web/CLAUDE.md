@@ -1,4 +1,3 @@
-<!-- Parent: ../AGENTS.md -->
 # Web guidance
 
 - Preserve the existing Svelte feature/shared boundaries; reuse shared UI and model utilities before adding new abstractions.
