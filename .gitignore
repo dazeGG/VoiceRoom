@@ -20,6 +20,11 @@ pnpm-debug.log*
 
 # Local scratch and generated artifacts
 graphify-out/
+.graphify/branch.json
+.graphify/worktree.json
+.graphify/needs_update
+.graphify/cache/
+.graphify/manifest.json
 work/
 outputs/
 deploy/
