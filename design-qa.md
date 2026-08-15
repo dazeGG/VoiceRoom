@@ -2,11 +2,11 @@
 
 ## Visual truth
 
-- `C:\Users\daze\AppData\Local\Temp\codex-clipboard-f847f160-1554-4db3-96b9-a6f48514e00e.png` — compact message hover toolbar.
-- `C:\Users\daze\AppData\Local\Temp\codex-clipboard-9b38c093-7cd3-4460-b902-12f758f9da43.png` — failure state where the reaction picker expands the chat layout.
-- Implementation comparison: `.omx/artifacts/design-qa/message-hover-toolbar.png`.
-- Implementation comparison: `.omx/artifacts/design-qa/reaction-picker-floating.png`.
-- Participant profile state: `.omx/artifacts/design-qa/participant-profile.png`.
+- Reference screenshot: compact message hover toolbar.
+- Reference screenshot: failure state where the reaction picker expands the chat layout.
+- Implementation comparison: message hover toolbar.
+- Implementation comparison: reaction picker floating state.
+- Participant profile state comparison.
 
 ## Environment and state
 

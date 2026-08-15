@@ -147,5 +147,5 @@ Nine branches are the smallest practical grouping that preserves separate messag
 
 ### Follow-ups
 
-- Update the durable OMX goal ledger from 93 executable goals to nine branch-level delivery goals before implementation resumes.
+- Update the durable goal ledger from 93 executable goals to nine branch-level delivery goals before implementation resumes.
 - Do not execute product tasks until that ledger migration has been reviewed against this document.
