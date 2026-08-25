@@ -274,8 +274,13 @@
 
 <style>
   /* Floating panel chrome — Popover owns open/close + placement; consumers fill slots. */
+  /* A grid root drops the whitespace text run Svelte leaves between the trigger
+     and the panel anchor. As a block box that run added a full line box under
+     the trigger, which inflated the root and pushed the trigger off the centre
+     line of any toolbar hosting it. */
   .popover-root {
     position: relative;
+    display: grid;
     flex: none;
   }
 

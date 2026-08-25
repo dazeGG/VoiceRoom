@@ -2298,6 +2298,7 @@ test('chat hover actions stay compact, float the picker, and open profiles from 
   assert.doesNotMatch(hover, /Редактировать|Удалить|Закрепить/);
   assert.match(picker, /\bflip\b[\s\S]*\bfloating\b/);
   assert.match(popover, /class:popover-panel--floating=\{floating\}/);
+  assert.match(popover, /\.popover-root \{[^}]*display: grid;/);
   assert.match(popover, /style:--popover-available-height/);
   assert.match(roomChat, /openUserProfile[\s\S]*roomMessageProfilePerson/);
   assert.match(dm, /openMessageAuthorProfile[\s\S]*openProfileCardFor/);
