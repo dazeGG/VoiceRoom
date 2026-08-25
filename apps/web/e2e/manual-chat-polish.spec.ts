@@ -74,8 +74,12 @@ test('manual polish renders direct messages with the shared flat chat row and ar
     await expect(composer).toBeVisible();
     await composer.fill('flat direct message');
     await composer.press('Enter');
-    const messageText = page.getByText('flat direct message', { exact: true }).last();
-    const message = messageText.locator('xpath=ancestor::div[contains(@class,"dm-chat-message")]');
+    // Anchor on the row id: the composer preview repeats the message text once a
+    // reply target is picked, and the text leaves the row entirely in edit mode,
+    // so a text lookup would drift away from the row under test.
+    const sentMessage = page.locator('.dm-chat-message', { hasText: 'flat direct message' }).last();
+    await expect(sentMessage).toBeVisible();
+    const message = page.locator(`.dm-chat-message[data-message-id="${await sentMessage.getAttribute('data-message-id')}"]`);
     await expect(message).toBeVisible();
     await expect(message.locator('xpath=ancestor::div[contains(@class,"dm-chat-group")]')).toHaveAttribute('data-self', 'true');
     const style = await message.evaluate((element) => {
