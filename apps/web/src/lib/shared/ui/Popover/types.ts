@@ -31,6 +31,8 @@ export type PopoverProps = {
   keepContentMounted?: boolean;
   /** Flip vertically on open when the preferred side would leave the viewport. */
   flip?: boolean;
+  /** Portal the panel to the document body and position it against the trigger. */
+  floating?: boolean;
   onBeforeClose?: (reason: PopoverCloseReason) => boolean | void;
   trigger: Snippet<[PopoverTriggerState]>;
   content: Snippet<[PopoverContentState]>;

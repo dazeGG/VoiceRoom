@@ -11,7 +11,7 @@ const { __private, createApiApp } = require('../src/server');
 const ALICE_ID = '11111111-1111-4111-8111-111111111111';
 const BOB_ID = '22222222-2222-4222-8222-222222222222';
 
-function createStore({ muteLookup = async () => false } = {}) {
+function createStore({ muteLookup = async () => false, removeBookmark = async () => ({ removed: false, status: 'removed' }) } = {}) {
   const rooms = new Map([['context-room', {
     id: 'context-room',
     name: 'Context room',
@@ -34,12 +34,49 @@ function createStore({ muteLookup = async () => false } = {}) {
         : { principalId: guestPrincipalId, principalType: 'guest' };
     },
     isRoomServerMuted: muteLookup,
+    removeRoomBookmarkForUser: removeBookmark,
     async markRoomActive() {},
     async markRoomEmpty() {},
     async pruneRooms() {},
     async listSummaryRecipientUserIds() { return []; }
   };
 }
+
+test('room list removal rejects owners and removes only bookmarked rooms', async (t) => {
+  const calls = [];
+  const app = createApiApp({
+    store: createStore({
+      removeBookmark: async (userId, roomId) => {
+        calls.push({ userId, roomId });
+        return userId === ALICE_ID
+          ? { removed: false, status: 'owner' }
+          : { removed: true, status: 'removed' };
+      }
+    }),
+    users: createUsers()
+  });
+  t.after(() => app.close());
+
+  const owner = await app.inject({
+    method: 'DELETE',
+    url: '/api/auth/rooms/context-room',
+    headers: { cookie: 'vr_session=alice-session' }
+  });
+  assert.equal(owner.statusCode, 403);
+  assert.equal(owner.json().code, 'room_owner');
+
+  const member = await app.inject({
+    method: 'DELETE',
+    url: '/api/auth/rooms/context-room',
+    headers: { cookie: 'vr_session=bob-session' }
+  });
+  assert.equal(member.statusCode, 200);
+  assert.equal(member.json().removed, true);
+  assert.deepEqual(calls, [
+    { userId: ALICE_ID, roomId: 'context-room' },
+    { userId: BOB_ID, roomId: 'context-room' }
+  ]);
+});
 
 function createUsers() {
   return {

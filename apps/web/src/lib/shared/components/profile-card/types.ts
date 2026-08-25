@@ -15,7 +15,7 @@ export interface ProfileCardPerson {
 }
 
 /** Mirrors the friends API relationship plus the guest case. */
-export type ProfileCardRelationship = 'friend' | 'outgoing' | 'incoming' | 'none' | 'unavailable';
+export type ProfileCardRelationship = 'self' | 'friend' | 'outgoing' | 'incoming' | 'none' | 'unavailable';
 
 export interface ProfileCardProps {
   person: ProfileCardPerson;

@@ -1270,6 +1270,27 @@ function createRoomStore({
     });
   }
 
+  async function removeRoomBookmarkForUser(userId, roomId) {
+    if (!userId || !roomId) return { removed: false, status: 'not_found' };
+    return transaction(getPool(), async (client) => {
+      const owner = await client.query(
+        `SELECT 1 FROM room_memberships
+         WHERE room_id = $1 AND user_id = $2 AND role = 'owner'
+         LIMIT 1`,
+        [roomId, userId]
+      );
+      if (owner.rowCount > 0) return { removed: false, status: 'owner' };
+
+      const result = await client.query(
+        `DELETE FROM room_bookmarks
+         WHERE room_id = $1 AND user_id = $2
+         RETURNING id`,
+        [roomId, userId]
+      );
+      return { removed: result.rowCount > 0, status: 'removed' };
+    });
+  }
+
   async function close() {
     if (activePool) {
       await activePool.end();
@@ -1312,6 +1333,7 @@ function createRoomStore({
     listSummaryRecipientUserIds,
     listNotificationRecipientUserIds,
     addRoomBookmarkForUser,
+    removeRoomBookmarkForUser,
     markActiveTemporaryRoomsEmpty,
     markRoomActive,
     markRoomChatRead,

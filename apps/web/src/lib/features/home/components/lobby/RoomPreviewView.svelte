@@ -14,12 +14,13 @@
   import { roomPresence } from '../../model/room-presence.svelte';
   import { getCapabilityFeature } from '$lib/platform/capability-state.svelte';
 
-  let { room, user, onEnter, onBack, onOpenSettings, onToast } = $props<{
+  let { room, user, onEnter, onBack, onOpenSettings, onRoomsChanged, onToast } = $props<{
     room: OwnedRoom;
     user: AuthUser;
     onEnter: () => void;
     onBack: () => void;
     onOpenSettings?: () => void;
+    onRoomsChanged?: () => void;
     onToast?: (message: string) => void;
   }>();
 
@@ -31,6 +32,7 @@
   const previewRoomId = $derived(room.roomId);
   const roomUnreadCount = $derived(roomPresence.unreadCountByRoomId[previewRoomId] ?? room.unreadCount ?? 0);
   const screenPeers = $derived(peers.filter((peer) => peer.screen));
+  const presentUserIds = $derived(new Set(peers.map((peer) => peer.accountUserId || '').filter(Boolean)));
   const tileCount = $derived(peers.length + screenPeers.length);
 
   function applySnapshot(peerList: RoomPeer[]): void {
@@ -99,7 +101,7 @@
 
 <div class="lobby-roomview">
   <div class="lobby-roomview-top">
-    <RoomViewHeader {room} {onBack} {onOpenSettings} {onToast} />
+    <RoomViewHeader {room} {presentUserIds} {onBack} {onOpenSettings} {onRoomsChanged} {onToast} />
     <div class="lobby-roomview-actions">
       <div class="room-panel-tabs room-panel-tabs--topbar" role="group" aria-label="Открыть раздел панели комнаты">
         <button

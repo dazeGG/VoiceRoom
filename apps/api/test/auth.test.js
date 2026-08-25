@@ -310,6 +310,24 @@ test('auth flow: register, session, owned rooms, logout', async (t) => {
   });
   assert.equal(tempBookmark.status, 400);
 
+  const ownerRemoval = await request(socketPath, {
+    method: 'DELETE',
+    pathname: `/api/auth/rooms/${room.body.roomId}`,
+    cookie
+  });
+  assert.equal(ownerRemoval.status, 403);
+  assert.equal(ownerRemoval.body.code, 'room_owner');
+
+  const bookmarkRemoval = await request(socketPath, {
+    method: 'DELETE',
+    pathname: `/api/auth/rooms/${room.body.roomId}`,
+    cookie: secondCookie
+  });
+  assert.equal(bookmarkRemoval.status, 200);
+  assert.equal(bookmarkRemoval.body.removed, true);
+  const afterBookmarkRemoval = await request(socketPath, { pathname: '/api/auth/rooms', cookie: secondCookie });
+  assert.deepEqual(afterBookmarkRemoval.body.rooms, []);
+
   // Listing rooms requires a session.
   const roomsAnon = await request(socketPath, { pathname: '/api/auth/rooms' });
   assert.equal(roomsAnon.status, 401);

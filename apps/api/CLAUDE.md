@@ -1,4 +1,3 @@
-<!-- Parent: ../AGENTS.md -->
 # API guidance
 
 - Keep HTTP handlers thin; persistence, migrations, and realtime behavior belong in their existing modules.

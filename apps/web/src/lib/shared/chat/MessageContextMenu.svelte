@@ -51,10 +51,32 @@
   } = $props();
 
   function pick(action: (() => void) | undefined, close: () => void): void {
-    close();
-    action?.();
+    try {
+      action?.();
+    } finally {
+      close();
+    }
+  }
+
+  function handleShortcut(event: KeyboardEvent): void {
+    if (!open || event.isComposing || event.metaKey || event.ctrlKey || event.altKey) return;
+    const target = event.target;
+    if (target instanceof HTMLElement && target.closest('input, textarea, select, [contenteditable="true"], [role="textbox"]')) return;
+    if (event.key.toLowerCase() === 'e' && canEdit && onEdit) {
+      event.preventDefault();
+      event.stopPropagation();
+      onEdit();
+      onClose();
+    } else if ((event.key === 'Delete' || event.key === 'Backspace') && canDelete && onDelete) {
+      event.preventDefault();
+      event.stopPropagation();
+      onDelete();
+      onClose();
+    }
   }
 </script>
+
+<svelte:window onkeydown={handleShortcut} />
 
 <ContextMenu {open} {x} {y} ariaLabel="Действия с сообщением" {onClose}>
   {#snippet content({ close })}
@@ -71,8 +93,8 @@
               aria-label={`Реакция ${emoji}`}
               title={`Реакция ${emoji}`}
               onclick={() => {
-                close();
                 onReact?.(emoji);
+                close();
               }}
             >{emoji}</button>
           {/each}
@@ -85,8 +107,8 @@
             title="Поставить реакцию"
             onclick={(event) => {
               const anchor = event.currentTarget;
-              close();
               onOpenReactionPicker?.(anchor);
+              close();
             }}
           ><SmilePlus {...iconMd} aria-hidden="true" /></button>
         </div>
@@ -121,7 +143,7 @@
       {/if}
 
       {#if canEdit}
-        <PopoverMenuItem label="Изменить" disabled={busy} onclick={() => pick(onEdit, close)}>
+        <PopoverMenuItem label="Изменить" hint="E" disabled={busy} onclick={() => pick(onEdit, close)}>
           {#snippet icon()}<Pencil {...iconMd} aria-hidden="true" />{/snippet}
         </PopoverMenuItem>
       {/if}
@@ -130,6 +152,7 @@
         <PopoverDivider />
         <PopoverMenuItem
           label="Удалить"
+          hint="⌫"
           variant="danger"
           disabled={busy}
           onclick={() => pick(onDelete, close)}

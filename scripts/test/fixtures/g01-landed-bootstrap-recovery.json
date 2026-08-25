@@ -1253,7 +1253,6 @@
     "scripts/ci/run-actionlint.sh",
     "config/tool-locks/actionlint-v1.7.12.json",
     "scripts/ci/run-oras.sh",
-    "config/tool-locks/oras-v1.3.3.json",
-    ".omx/context/release-2-5-0-archive-authority.json"
+    "config/tool-locks/oras-v1.3.3.json"
   ]
 }

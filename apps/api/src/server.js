@@ -2287,6 +2287,28 @@ async function handleAddAuthRoom(req, res) {
   sendJson(res, 200, { ok: true, room: publicLobbyRoom(added.room) });
 }
 
+async function handleRemoveAuthRoom(req, res, rawRoomId) {
+  const session = await resolveSessionUser(req);
+  if (!session) {
+    sendJson(res, 401, { ok: false, error: 'Требуется вход' });
+    return;
+  }
+
+  const roomId = normalizeRoomId(rawRoomId);
+  if (!roomId) {
+    sendJson(res, 404, { ok: false, error: 'Комната не найдена' });
+    return;
+  }
+
+  const result = await getRoomStore().removeRoomBookmarkForUser(session.user.id, roomId);
+  if (result.status === 'owner') {
+    sendJson(res, 403, { ok: false, code: 'room_owner', error: 'Владелец управляет комнатой через настройки' });
+    return;
+  }
+  roomRuntime?.invalidateRecipientCache(roomId);
+  sendJson(res, 200, { ok: true, removed: result.removed });
+}
+
 async function handleMarkRoomChatRead(req, res, rawRoomId) {
   const user = await requireSessionUser(req, res);
   if (!user) return;
@@ -4522,6 +4544,11 @@ function createApiApp({
   app.post('/api/auth/password', (request, reply) => runLegacyHandler(request, reply, handleChangePassword));
   app.get('/api/auth/rooms', (request, reply) => runLegacyHandler(request, reply, handleAuthRooms));
   app.post('/api/auth/rooms', (request, reply) => runLegacyHandler(request, reply, handleAddAuthRoom));
+  app.delete('/api/auth/rooms/:roomId', (request, reply) => runLegacyHandler(
+    request,
+    reply,
+    (req, res) => handleRemoveAuthRoom(req, res, request.params.roomId)
+  ));
   app.post('/api/rooms', (request, reply) => runLegacyHandler(request, reply, handleCreateRoom));
   app.put('/api/rooms/:roomId', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
     return handleUpdateRoom(req, res, normalizeRoomId(request.params.roomId));

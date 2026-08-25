@@ -11,7 +11,7 @@ test("frozen recovery catalogs are exact, nonempty, unique and disjoint", () => 
   validateRecoveryFixture(fixture);
   assert.equal(G01_WRITABLE.length, 36);
   assert.equal(RECOVERY_WRITABLE.length, 17);
-  assert.equal(RECOVERY_READ_ONLY.length, 22);
+  assert.equal(RECOVERY_READ_ONLY.length, 21);
 });
 
 test("four-state classification rejects forged chronology and terminal SHAs", () => {

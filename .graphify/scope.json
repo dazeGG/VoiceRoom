@@ -1,0 +1,16 @@
+{
+  "requested_mode": "auto",
+  "resolved_mode": "committed",
+  "source": "default-auto",
+  "root": ".",
+  "git_root": ".",
+  "head": "8836119279ab270f69fe6ded343b8888b899d37d",
+  "candidate_count": 851,
+  "included_count": 742,
+  "excluded_untracked_count": 755,
+  "excluded_ignored_count": 19702,
+  "excluded_sensitive_count": 13,
+  "missing_committed_count": 0,
+  "warnings": [],
+  "recommendation": "Use --scope all or graphify.yaml inputs.corpus for a knowledge-base folder."
+}

@@ -1071,7 +1071,7 @@
                         />
                         <span class="settings-notification-name">
                           <strong>{blocked.displayName?.trim() || blocked.login}</strong>
-                          <small>@{blocked.login}</small>
+                          {#if blocked.login}<small>@{blocked.login}</small>{/if}
                         </span>
                         <button
                           class="settings-unblock-button"

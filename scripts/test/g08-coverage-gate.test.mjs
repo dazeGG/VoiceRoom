@@ -401,6 +401,14 @@ test("G08 web TypeScript producer measures actual auth and media decision files"
   assert.equal((await auth.deleteUserAvatar()).id, "u1");
   globalThis.fetch = async () => response({ payload: { room: { roomId: "room" } } });
   assert.equal((await auth.addRoomByCode("room")).roomId, "room");
+  globalThis.fetch = async () => response({ payload: { removed: true } });
+  assert.equal(await auth.removeRoomFromList("room"), true);
+  globalThis.fetch = async () => response({ payload: {} });
+  assert.equal(await auth.removeRoomFromList("room"), false);
+  globalThis.fetch = async () => response({ ok: false, payload: { error: "нет доступа" } });
+  await assert.rejects(() => auth.removeRoomFromList("room"), /нет доступа/);
+  globalThis.fetch = async () => ({ ok: false, json: async () => { throw new Error("not json"); } });
+  await assert.rejects(() => auth.removeRoomFromList("room"), /удалить комнату из списка/i);
 
   globalThis.fetch = async () => response({ payload: { user: null } });
   assert.equal(await auth.fetchMe(), null);

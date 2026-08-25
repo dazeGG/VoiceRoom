@@ -74,8 +74,12 @@ test('manual polish renders direct messages with the shared flat chat row and ar
     await expect(composer).toBeVisible();
     await composer.fill('flat direct message');
     await composer.press('Enter');
-    const messageText = page.getByText('flat direct message', { exact: true }).last();
-    const message = messageText.locator('xpath=ancestor::div[contains(@class,"dm-chat-message")]');
+    // Anchor on the row id: the composer preview repeats the message text once a
+    // reply target is picked, and the text leaves the row entirely in edit mode,
+    // so a text lookup would drift away from the row under test.
+    const sentMessage = page.locator('.dm-chat-message', { hasText: 'flat direct message' }).last();
+    await expect(sentMessage).toBeVisible();
+    const message = page.locator(`.dm-chat-message[data-message-id="${await sentMessage.getAttribute('data-message-id')}"]`);
     await expect(message).toBeVisible();
     await expect(message.locator('xpath=ancestor::div[contains(@class,"dm-chat-group")]')).toHaveAttribute('data-self', 'true');
     const style = await message.evaluate((element) => {
@@ -88,10 +92,23 @@ test('manual polish renders direct messages with the shared flat chat row and ar
 
     await message.hover();
     const reply = message.getByRole('button', { name: 'Ответить' });
+    const copy = message.getByRole('button', { name: 'Копировать текст' });
+    const more = message.getByRole('button', { name: 'Больше действий' });
     await expect(reply).toBeVisible();
+    await expect(copy).toBeVisible();
+    await expect(more).toBeVisible();
+    await expect(message.getByRole('button', { name: 'Редактировать' })).toHaveCount(0);
+    await expect(message.getByRole('button', { name: 'Удалить' })).toHaveCount(0);
     await expect(reply.locator('svg')).toHaveCount(1);
     await reply.click();
     await expect(page.locator('.dm-reply-target')).toContainText('flat direct message');
+
+    await message.hover();
+    await more.click();
+    const menu = page.getByRole('menu', { name: 'Действия с сообщением' });
+    await expect(menu.getByRole('menuitem', { name: 'Изменить' })).toBeVisible();
+    await page.keyboard.press('e');
+    await expect(message.getByRole('textbox', { name: 'Текст сообщения' })).toBeVisible();
   } finally {
     await secondContext.close();
   }
@@ -198,6 +215,8 @@ test('manual polish keeps the newest mention query, emits login-bound segments, 
   expect(pickerBox).not.toBeNull();
   expect(pickerBox!.y).toBeGreaterThanOrEqual(8);
   expect(pickerBox!.y + pickerBox!.height).toBeLessThanOrEqual(420);
+  await expect.poll(() => picker.evaluate((element) => getComputedStyle(element).position)).toBe('fixed');
+  await expect.poll(() => page.locator('.chat-rail-body').evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
 });
 
 test('room members panel releases navigation, switches to chat, collapses, and keeps speaking state binary', async ({ browser, page, baseURL }) => {
@@ -255,6 +274,11 @@ test('room members panel releases navigation, switches to chat, collapses, and k
     await expect(panel).toBeVisible();
     await expect(panel.locator('#room-panel-participants')).toBeVisible();
     await expect(panel.getByText(ownerLogin, { exact: true }).first()).toBeVisible();
+    const member = panel.getByRole('button', { name: `Профиль ${ownerLogin}` });
+    await expect(member).toBeVisible();
+    await member.click();
+    await expect(page.getByRole('dialog', { name: `Профиль ${ownerLogin}` })).toBeVisible();
+    await page.keyboard.press('Escape');
 
     const panelChatTab = panel.getByRole('tab', { name: 'Чат' });
     await expect.poll(() => panelChatTab.evaluate((element) => {

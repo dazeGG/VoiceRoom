@@ -184,7 +184,7 @@ test('reconnect restores persisted server mute for the account principal', async
   assert.equal(room.peers.get(OWNER_ID).muted, true);
 });
 
-test('reconnect fails closed when persisted server-mute authority is unavailable', async () => {
+test('reconnect returns a terminal error when persisted server-mute authority is unavailable', async () => {
   const room = { id: ROOM_ID, peers: new Map() };
   const runtime = createRuntime(room, [], {
     store: {
@@ -198,15 +198,17 @@ test('reconnect fails closed when persisted server-mute authority is unavailable
     }
   });
 
-  await assert.rejects(
-    runtime.joinVoiceRoom(createVoiceConnection(), {
+  const result = await runtime.joinVoiceRoom(createVoiceConnection(), {
       roomId: ROOM_ID,
       peerId: OWNER_ID,
       sessionToken: OWNER_TOKEN,
       name: 'Owner'
-    }, { id: 'account-owner', displayName: 'Owner' }),
-    /database unavailable/
-  );
+    }, { id: 'account-owner', displayName: 'Owner' });
+  assert.deepEqual(result, {
+    ok: false,
+    code: 'server_mute_unavailable',
+    message: 'Не удалось проверить ограничения микрофона. Попробуйте ещё раз.'
+  });
   assert.equal(room.peers.size, 0);
 });
 

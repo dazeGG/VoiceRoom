@@ -1,4 +1,3 @@
-<!-- Parent: ../AGENTS.md -->
 # Shared contracts guidance
 
 - Treat exported validators, realtime envelopes, and declarations as public contracts between API and Web.

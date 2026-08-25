@@ -1,8 +1,8 @@
 <script lang="ts">
   import { Bell, BellOff, Check, Settings, UserPlus } from '@lucide/svelte';
   import { tick } from 'svelte';
-  import type { AuthUser, OwnedRoom } from '$lib/api/auth';
-  import { Avatar, Badge, ContextMenu, Popover, PopoverMenuLabel } from '$lib/shared/ui';
+  import type { AuthUser } from '$lib/api/auth';
+  import { Avatar, Badge, Popover, PopoverMenuLabel } from '$lib/shared/ui';
   import { iconSm } from '$lib/shared/ui/icons';
   import {
     effectivePresenceStatus,
@@ -13,12 +13,10 @@
   import { friendsState, openDm } from '../../model/friends.svelte';
   import { notificationPreferences, updatePresenceStatus } from '$lib/shared/notifications/preferences.svelte';
   import SidebarDownload from '../SidebarDownload.svelte';
-  import { FriendMenuContent } from '../friend-menu';
   import VoiceCallWidget from './VoiceCallWidget.svelte';
 
   let {
     user,
-    rooms = [],
     onGoHome,
     onOpenPeople,
     onOpenSettings,
@@ -38,8 +36,6 @@
     onToggleVoiceDeafen
   } = $props<{
     user: AuthUser;
-    /** Rooms you own — offered under "Позвать в комнату" in the friend menu. */
-    rooms?: OwnedRoom[];
     onGoHome: () => void;
     onOpenPeople: () => void;
     onOpenSettings: () => void;
@@ -102,36 +98,6 @@
   const selectedStatusIndex = $derived(
     Math.max(0, statusOptions.findIndex((option) => option.value === selfPresence))
   );
-  let contextFriendId = $state('');
-  let contextX = $state(0);
-  let contextY = $state(0);
-  let contextTrigger = $state<HTMLElement | null>(null);
-  const contextFriend = $derived(friendsState.friends.find((entry) => entry.user.id === contextFriendId));
-
-  function openFriendContextMenu(event: MouseEvent, userId: string): void {
-    event.preventDefault();
-    event.stopPropagation();
-    contextFriendId = userId;
-    contextX = event.clientX;
-    contextY = event.clientY;
-    contextTrigger = event.currentTarget instanceof HTMLElement ? event.currentTarget : null;
-  }
-
-  function handleFriendKeydown(event: KeyboardEvent, userId: string): void {
-    const isContextKey = event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey);
-    if (!isContextKey || !(event.currentTarget instanceof HTMLElement)) return;
-    event.preventDefault();
-    event.stopPropagation();
-    const rect = event.currentTarget.getBoundingClientRect();
-    contextFriendId = userId;
-    contextX = rect.left + Math.min(rect.width - 12, 48);
-    contextY = rect.top + Math.min(rect.height - 8, 36);
-    contextTrigger = event.currentTarget;
-  }
-
-  function closeFriendContextMenu(): void {
-    contextFriendId = '';
-  }
 
   async function focusStatusOption(index = selectedStatusIndex): Promise<void> {
     await tick();
@@ -277,12 +243,8 @@
         <button
           class="lv-row"
           class:is-active={friendsState.selectedFriendId === entry.user.id && friendsState.view === 'dm'}
-          class:is-context={contextFriendId === entry.user.id}
           type="button"
           onclick={() => openDm(entry.user.id)}
-          oncontextmenu={(event) => openFriendContextMenu(event, entry.user.id)}
-          onkeydown={(event) => handleFriendKeydown(event, entry.user.id)}
-          aria-haspopup="menu"
         >
           <Avatar
             name={friendName(entry.user)}
@@ -414,30 +376,6 @@
     </div>
   </div>
 </aside>
-
-{#if contextFriend}
-  <ContextMenu
-    open={Boolean(contextFriendId)}
-    x={contextX}
-    y={contextY}
-    ariaLabel={`Действия для ${friendName(contextFriend.user)}`}
-    restoreFocus={contextTrigger}
-    onClose={closeFriendContextMenu}
-  >
-    {#snippet content({ close })}
-      {#key contextFriend.user.id}
-        <FriendMenuContent
-          friend={contextFriend}
-          {rooms}
-          {close}
-          canClose={(userId) => contextFriendId === userId}
-          profileRestoreFocus={contextTrigger}
-          {onToast}
-        />
-      {/key}
-    {/snippet}
-  </ContextMenu>
-{/if}
 
 <style>
   .lv-profile-user {

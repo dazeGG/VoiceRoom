@@ -51,10 +51,10 @@ export async function fetchBlockedUsers(): Promise<PublicUser[]> {
     avatarColorKey: id,
     avatarUrl: null,
     createdAt: 0,
-    displayName: '',
+    displayName: 'Заблокированный пользователь',
     doNotDisturb: false,
     id,
-    login: id,
+    login: '',
     presenceStatus: 'offline'
   }));
 }
