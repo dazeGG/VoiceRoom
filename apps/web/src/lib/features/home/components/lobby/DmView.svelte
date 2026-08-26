@@ -43,6 +43,7 @@
   import AttachmentMosaic from '$lib/shared/chat/AttachmentMosaic.svelte';
   import AttachmentUploadControl from '$lib/shared/chat/AttachmentUploadControl.svelte';
   import ReplyPreview from '$lib/shared/chat/ReplyPreview.svelte';
+  import ReplyTargetBar from '$lib/shared/chat/ReplyTargetBar.svelte';
   import { openProfileCardFor } from '../../profile-card-ui.svelte';
   import type { ProfileCardPerson } from '$lib/shared/components/profile-card';
 
@@ -180,6 +181,32 @@
           : 'не в сети'
   );
   const peerMuted = $derived(isPeerNotificationsMuted(peer?.id));
+
+  function openSelfProfile(event: MouseEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+    const person: ProfileCardPerson = {
+      userId: selfId,
+      name: self.displayName?.trim() || self.login,
+      login: self.login,
+      avatarUrl: self.avatarUrl,
+      avatarColorKey: self.avatarColorKey,
+      avatarAccent: self.avatarAccent,
+      presence: 'online'
+    };
+    openProfileCardFor(person, event.currentTarget);
+  }
+
+  function jumpToMessage(messageId: string): void {
+    const row = scrollEl?.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(messageId)}"]`);
+    if (!row) {
+      pushToast('Сообщение не загружено — прокрутите историю выше');
+      return;
+    }
+    row.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    row.classList.add('is-highlighted');
+    setTimeout(() => row.classList.remove('is-highlighted'), 1600);
+  }
 
   function openMessageAuthorProfile(event: MouseEvent): void {
     if (!peer) return;
@@ -547,7 +574,9 @@
             {/if}
             <div class="chat-msg dm-chat-group" data-self={group.fromMe}>
               {#if group.fromMe}
-                <Avatar class="chat-msg-avatar" name={self.displayName?.trim() || self.login} src={self.avatarUrl} colorKey={self.avatarColorKey} background={self.avatarAccent || undefined} size={34} />
+                <button class="chat-avatar-button chat-msg-trigger" type="button" aria-haspopup="dialog" aria-label="Ваш профиль" onclick={openSelfProfile}>
+                  <Avatar class="chat-msg-avatar" name={self.displayName?.trim() || self.login} src={self.avatarUrl} colorKey={self.avatarColorKey} background={self.avatarAccent || undefined} size={34} />
+                </button>
               {:else}
                 <button class="chat-avatar-button chat-msg-trigger" type="button" aria-haspopup="dialog" aria-label={`Профиль ${friendName(peer!)}`} onclick={openMessageAuthorProfile}>
                   <Avatar class="chat-msg-avatar" name={friendName(peer!)} src={peer?.avatarUrl} colorKey={peer?.avatarColorKey} background={peer?.avatarAccent || undefined} size={34} />
@@ -556,7 +585,7 @@
               <div class="chat-msg-main">
                 <div class="chat-msg-meta">
                   {#if group.fromMe}
-                    <span class="chat-msg-author" style={`color:${self.avatarAccent || 'var(--accent)'}`}>{self.displayName?.trim() || self.login}</span>
+                    <button class="chat-msg-author chat-msg-trigger" type="button" style={`color:${self.avatarAccent || 'var(--accent)'}`} aria-haspopup="dialog" aria-label="Ваш профиль" onclick={openSelfProfile}>{self.displayName?.trim() || self.login}</button>
                   {:else}
                     <button class="chat-msg-author chat-msg-trigger" type="button" style={`color:${peer?.avatarAccent || 'var(--accent)'}`} aria-haspopup="dialog" aria-label={`Профиль ${friendName(peer!)}`} onclick={openMessageAuthorProfile}>{friendName(peer!)}</button>
                   {/if}
@@ -604,7 +633,7 @@
                       </div>
                     {:else}
                       <div class="dm-chat-content">
-                        {#if bubble.replyPreview}<ReplyPreview preview={bubble.replyPreview} />{/if}
+                        {#if bubble.replyPreview}<ReplyPreview preview={bubble.replyPreview} interactive onjump={jumpToMessage} />{/if}
                         {#if bubble.attachments?.length}<AttachmentMosaic attachments={bubble.attachments} />{/if}
                         {#if bubble.body.trim()}<span class="chat-msg-content dm-msg-content"><ChatText text={bubble.body} />{#if bubble.editedAt}<span class="dm-msg-edited">(изменено)</span>{/if}</span>{/if}
                         {#if reactionsEnabled}<ReactionSummary store={reactions} messageId={bubble.id} />{/if}
@@ -629,7 +658,14 @@
     </div>
 
     <div class="lobby-dm-compose" onpaste={onComposePaste}>
-      {#if replyTarget}<div class="dm-reply-target"><ReplyPreview preview={{ messageId: replyTarget.id, deleted: false, author: { id: replyTarget.senderId, name: replyTarget.senderId === selfId ? 'Вы' : friendName(peer!) }, text: replyTarget.body }} /><button type="button" onclick={() => (replyTarget = null)}>Отмена</button></div>{/if}
+      {#if replyTarget}
+        {@const target = replyTarget}
+        <ReplyTargetBar
+          target={{ messageId: target.id, deleted: false, author: { id: target.senderId, name: target.senderId === selfId ? 'Вы' : friendName(peer!) }, text: target.body }}
+          onjump={jumpToMessage}
+          oncancel={() => (replyTarget = null)}
+        />
+      {/if}
       <div class="lobby-dm-compose-row attachment-compose-field">
         {#if media}<AttachmentComposer store={media} disabled={sending} />{/if}
         <div class="attachment-compose-controls">

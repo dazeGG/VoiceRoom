@@ -75,6 +75,24 @@ test('PostgreSQL room store caps retained chat messages per room', async (t) => 
   assert.deepEqual(messages.map((message) => message.id), ['msg-2', 'msg-3']);
 });
 
+test('PostgreSQL room store keeps room history when no cap or TTL is configured', async (t) => {
+  const store = await createMigratedStore(t);
+  const room = await store.createRoom({ creatorIp: '127.0.0.1', isStatic: true, roomId: 'roomkeep1', now: 1000 });
+
+  for (let index = 1; index <= 3; index += 1) {
+    await store.appendMessage(room.id, { id: `msg-keep-${index}`, text: `message ${index}`, createdAt: 1000 + index }, 1000 + index);
+  }
+
+  const stored = await store.listMessages(room.id, { now: 2000, limit: 10 });
+  assert.deepEqual(stored.map((message) => message.id), ['msg-keep-1', 'msg-keep-2', 'msg-keep-3']);
+  assert.deepEqual(stored.map((message) => message.expiresAt), [null, null, null]);
+
+  // A year later the cleanup sweep still has nothing to expire.
+  await store.pruneRooms(1000 + 365 * 24 * 60 * 60 * 1000);
+  const survived = await store.listMessages(room.id, { now: 1000 + 365 * 24 * 60 * 60 * 1000, limit: 10 });
+  assert.deepEqual(survived.map((message) => message.id), ['msg-keep-1', 'msg-keep-2', 'msg-keep-3']);
+});
+
 test('PostgreSQL room store returns the latest limited chat messages in display order', async (t) => {
   const store = await createMigratedStore(t, { maxMessagesPerRoom: 10, messageTtlMs: 60000 });
   const room = await store.createRoom({ creatorIp: '127.0.0.1', isStatic: true, roomId: 'roomlatest1', now: 1000 });

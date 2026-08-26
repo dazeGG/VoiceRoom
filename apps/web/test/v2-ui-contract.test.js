@@ -9,6 +9,15 @@ const require = createRequire(import.meta.url);
 const ts = require('typescript');
 const read = (path) => readFileSync(resolve(root, path), 'utf8');
 
+// The in-room rail and the lobby preview are thin wrappers over one shared chat
+// panel, so a contract about "the room chat" holds across the wrapper plus the
+// panel it renders.
+const ROOM_CHAT_PANEL_PATH = 'src/lib/features/room/components/RoomChatPanel.svelte';
+const readRoomChat = () => `${read('src/lib/features/room/components/RoomChat.svelte')}
+${read(ROOM_CHAT_PANEL_PATH)}`;
+const readPreviewChat = () => `${read('src/lib/features/home/components/lobby/RoomPreviewChat.svelte')}
+${read(ROOM_CHAT_PANEL_PATH)}`;
+
 async function importTypeScript(path) {
   const output = ts.transpileModule(read(path), {
     compilerOptions: {
@@ -319,7 +328,7 @@ test('lobby separates viewed room from connected voice room', () => {
 test('room chat keeps transport mounted and tracks unread state while closed', () => {
   const stage = read('src/lib/features/room/components/RoomStage.svelte');
   const ui = read('src/lib/features/room/room-ui.svelte.ts');
-  const chat = read('src/lib/features/room/components/RoomChat.svelte');
+  const chat = readRoomChat();
   const topbar = read('src/lib/features/room/components/RoomTopbar.svelte');
   const roomMenu = read('src/lib/shared/components/room-menu/RoomMenu.svelte');
   const roomMenuContent = read('src/lib/shared/components/room-menu/RoomMenuContent.svelte');
@@ -328,7 +337,8 @@ test('room chat keeps transport mounted and tracks unread state while closed', (
   assert.match(ui, /unreadChat: 0/);
   assert.match(ui, /incrementUnreadChat/);
   assert.match(chat, /messageIds/);
-  assert.match(chat, /incrementUnreadChat\(\)/);
+  assert.match(chat, /onUnreadMessage=\{incrementUnreadChat\}/);
+  assert.match(chat, /onUnreadMessage\?\.\(\)/);
   // 2.4.0 chat multiline + links
   assert.match(chat, /ChatText/);
   assert.match(chat, /chat-rail-textarea/);
@@ -380,7 +390,7 @@ test('room chat keeps transport mounted and tracks unread state while closed', (
 });
 
 test('room chat terminal lifecycle frames leave the room screen', () => {
-  const chat = read('src/lib/features/room/components/RoomChat.svelte');
+  const chat = readRoomChat();
   const lifecycle = read('src/lib/features/room/client/room/lifecycle.ts');
 
   assert.match(lifecycle, /export function applyRoomNotFound/);
@@ -395,7 +405,7 @@ test('room chat terminal lifecycle frames leave the room screen', () => {
 });
 
 test('room side panel exposes chat and participant tabs backed by the authoritative roster', () => {
-  const chat = read('src/lib/features/room/components/RoomChat.svelte');
+  const chat = readRoomChat();
   const topbar = read('src/lib/features/room/components/RoomTopbar.svelte');
   const memberList = read('src/lib/features/home/components/lobby/RoomMemberList.svelte');
   const membershipApi = read('src/lib/api/memberships.ts');
@@ -413,10 +423,11 @@ test('room side panel exposes chat and participant tabs backed by the authoritat
   assert.match(chat, /aria-label="Участники"/);
   assert.match(chat, /title="Участники"/);
   assert.match(chat, /<Users/);
-  assert.match(chat, /aria-selected=\{roomUi\.activePanel === 'chat'\}/);
-  assert.match(chat, /aria-selected=\{roomUi\.activePanel === 'participants'\}/);
+  assert.match(chat, /aria-selected=\{activeTab === 'chat'\}/);
+  assert.match(chat, /aria-selected=\{activeTab === 'participants'\}/);
+  assert.match(chat, /activeTab=\{roomUi\.activePanel === 'participants' \? 'participants' : 'chat'\}/);
   assert.match(chat, /aria-label="Свернуть панель"/);
-  assert.match(chat, /onclick=\{closeChat\}/);
+  assert.match(chat, /onCollapse=\{closeChat\}/);
   assert.match(topbar, /role="group" aria-label="Открыть раздел панели комнаты"/);
   assert.match(topbar, /aria-label="Чат"/);
   assert.match(topbar, /aria-label="Участники"/);
@@ -603,7 +614,7 @@ test('room and participant avatars preserve fallbacks while preferring uploaded 
   const voiceHome = read('src/lib/features/home/components/lobby/VoiceHome.svelte');
   const createDialog = read('src/lib/features/home/components/CreateRoomDialog.svelte');
   const participantTile = read('src/lib/features/room/components/ParticipantTile.svelte');
-  const chat = read('src/lib/features/room/components/RoomChat.svelte');
+  const chat = readRoomChat();
   const roomNet = read('src/lib/features/room/client/net/api.ts');
   const roomTopbar = read('src/lib/features/room/components/RoomTopbar.svelte');
   const roomMenu = read('src/lib/shared/components/room-menu/RoomMenu.svelte');
@@ -1252,7 +1263,7 @@ test('lobby v2 keeps dock in main area, switchable preview panels, and people ad
   assert.match(friendsCss, /data-members-open/);
   const roomStage = read('src/lib/features/room/components/RoomStage.svelte');
   const roomPage = read('src/lib/features/room/RoomPage.svelte');
-  const roomChat = read('src/lib/features/room/components/RoomChat.svelte');
+  const roomChat = readRoomChat();
   const memberList = read('src/lib/features/home/components/lobby/RoomMemberList.svelte');
   const membershipState = read('src/lib/features/home/model/room-membership.svelte.ts');
   assert.match(roomPage, /<RoomStage \/>/);
@@ -1285,8 +1296,8 @@ test('chat composers and add-friend control preserve compact keyboard-first beha
   const dm = read('src/lib/features/home/components/lobby/DmView.svelte');
   const lobbyV2 = read('src/lib/features/home/styles/lobby-v2.css');
   const friends = read('src/lib/features/home/styles/friends.css');
-  const roomChat = read('src/lib/features/room/components/RoomChat.svelte');
-  const previewChat = read('src/lib/features/home/components/lobby/RoomPreviewChat.svelte');
+  const roomChat = readRoomChat();
+  const previewChat = readPreviewChat();
   const roomChatCss = read('src/lib/features/room/styles/chat-rail.css');
   const dmSubmit = functionBody(dm, 'submit');
   const roomSubmit = functionBody(roomChat, 'sendMessage');
@@ -1657,8 +1668,8 @@ test('notification cue volume respects stored multiplier', () => {
 test('sound cue layer covers direct messages and friend request events', () => {
   const cues = read('src/lib/features/room/client/media/cues.ts');
   const friends = read('src/lib/features/home/model/friends.svelte.ts');
-  const roomChat = read('src/lib/features/room/components/RoomChat.svelte');
-  const previewChat = read('src/lib/features/home/components/lobby/RoomPreviewChat.svelte');
+  const roomChat = readRoomChat();
+  const previewChat = readPreviewChat();
   const settingsModal = read('src/lib/features/home/components/SettingsModal.svelte');
 
   assert.match(cues, /playDirectMessageCue/);
@@ -1670,7 +1681,8 @@ test('sound cue layer covers direct messages and friend request events', () => {
   assert.match(friends, /case 'friend\.accepted'[\s\S]*playFriendAcceptedCue\(\)/);
   assert.match(friends, /case 'dm\.message'[\s\S]*playDirectMessageCue\(\)/);
   assert.match(roomChat, /event\.type !== 'room\.chat\.message'[\s\S]*message\.peerId !== peerId[\s\S]*playRoomChatMessageCue\(\)/);
-  assert.match(previewChat, /event\.type !== 'room\.chat\.message'[\s\S]*message\.peerId !== accountPeerId[\s\S]*playRoomChatMessageCue\(\)/);
+  assert.match(previewChat, /event\.type !== 'room\.chat\.message'[\s\S]*message\.peerId !== peerId[\s\S]*playRoomChatMessageCue\(\)/);
+  assert.match(previewChat, /peerId=\{`auth-\$\{user\.id\}`\}/);
   assert.doesNotMatch(settingsModal, /settings-cue-grid|previewCue/);
   assert.match(settingsModal, /const cues = \[[\s\S]*playPeerCue\('join'\)[\s\S]*playRoomChatMessageCue\(\)[\s\S]*playFriendAcceptedCue\(\)/);
   assert.match(settingsModal, /disabled=\{previewingSoundSet\}/);
@@ -1716,8 +1728,8 @@ test('chat image attachments support picker, clipboard, and drag-and-drop behind
   const dropOverlay = read('src/lib/shared/chat/AttachmentDropOverlay.svelte');
   const composeStore = read('src/lib/shared/chat/attachment-compose.svelte.ts');
   const attachmentCss = read('src/lib/shared/chat/attachment.css');
-  const roomChat = read('src/lib/features/room/components/RoomChat.svelte');
-  const previewChat = read('src/lib/features/home/components/lobby/RoomPreviewChat.svelte');
+  const roomChat = readRoomChat();
+  const previewChat = readPreviewChat();
   const dmView = read('src/lib/features/home/components/lobby/DmView.svelte');
   const friendsCss = read('src/lib/features/home/styles/friends.css');
   const chatCss = read('src/lib/features/room/styles/chat-rail.css');
@@ -1827,8 +1839,8 @@ test('effective presence gives physical offline priority and safely supports leg
 });
 
 test('delete realtime contracts avoid stale chat and false room affordances', () => {
-  const roomChat = read('src/lib/features/room/components/RoomChat.svelte');
-  const previewChat = read('src/lib/features/home/components/lobby/RoomPreviewChat.svelte');
+  const roomChat = readRoomChat();
+  const previewChat = readPreviewChat();
   const messageMenu = read('src/lib/shared/chat/MessageContextMenu.svelte');
   const friends = read('src/lib/features/home/model/friends.svelte.ts');
   const accountEvents = read('../api/src/realtime/account-events.js');
@@ -1844,8 +1856,8 @@ test('delete realtime contracts avoid stale chat and false room affordances', ()
 });
 
 test('message editing is author-only in UI and applies realtime replacements', () => {
-  const roomChat = read('src/lib/features/room/components/RoomChat.svelte');
-  const previewChat = read('src/lib/features/home/components/lobby/RoomPreviewChat.svelte');
+  const roomChat = readRoomChat();
+  const previewChat = readPreviewChat();
   const dmView = read('src/lib/features/home/components/lobby/DmView.svelte');
   const friends = read('src/lib/features/home/model/friends.svelte.ts');
   const realtime = read('src/lib/api/realtime.ts');
@@ -1868,12 +1880,51 @@ test('message editing is author-only in UI and applies realtime replacements', (
   assert.match(friends, /case 'ready'[\s\S]*resyncOpenThread\(\{ force: true \}\)/);
   assert.match(messageMenu, /\{#if canEdit\}[\s\S]*label="Изменить"[\s\S]*hint="E"/);
   assert.match(roomChat, /canEdit=\{isOwnMessage\(target\)\}[\s\S]*onEdit=\{\(\) => startEditing\(target\)\}/);
-  assert.match(roomOwnership, /message\.authorUserId === accountUserId/);
-  assert.match(roomOwnership, /message\.peerId === peerId/);
-  assert.match(previewOwnership, /message\.authorUserId === user\.id/);
-  assert.match(previewOwnership, /message\.peerId === accountPeerId/);
+  for (const ownership of [roomOwnership, previewOwnership]) {
+    assert.match(ownership, /message\.authorUserId === accountUserId/);
+    assert.match(ownership, /message\.peerId === peerId/);
+  }
   assert.match(dmView, /canEdit=\{menuFromMe\}[\s\S]*onEdit=\{\(\) => startEditing\(target\)\}/);
   for (const source of [roomChat, previewChat, dmView]) assert.match(source, /\(изменено\)/);
+});
+
+test('room surfaces share one chat panel, quotes jump, and an opened chat starts on the newest message', () => {
+  const panel = read(ROOM_CHAT_PANEL_PATH);
+  const rail = read('src/lib/features/room/components/RoomChat.svelte');
+  const preview = read('src/lib/features/home/components/lobby/RoomPreviewChat.svelte');
+  const dm = read('src/lib/features/home/components/lobby/DmView.svelte');
+  const replyBar = read('src/lib/shared/chat/ReplyTargetBar.svelte');
+
+  // The lobby preview and the in-room rail are wrappers: neither owns chat
+  // transport, so the two surfaces cannot drift apart in features again.
+  assert.match(rail, /<RoomChatPanel/);
+  assert.match(preview, /<RoomChatPanel/);
+  for (const wrapper of [rail, preview]) {
+    assert.doesNotMatch(wrapper, /fetchRoomChat|postRoomChat|MessageContextMenu|MessageHoverActions/);
+  }
+  assert.match(panel, /reactionsEnabled/);
+  assert.match(panel, /<PinnedMessagesBar/);
+  assert.match(panel, /<MentionAutocomplete/);
+
+  // Cancelling a reply is an icon, and the quote it shows is a jump target.
+  assert.match(replyBar, /aria-label="Отменить ответ"/);
+  assert.match(replyBar, /<X size=/);
+  assert.doesNotMatch(replyBar, />Отмена</);
+  for (const source of [panel, dm]) {
+    assert.match(source, /<ReplyTargetBar[\s\S]*?onjump=\{jumpToMessage\}[\s\S]*?oncancel=/);
+    assert.match(source, /<ReplyPreview preview=\{\w+\.replyPreview\} interactive onjump=\{jumpToMessage\}/);
+    assert.match(source, /function jumpToMessage/);
+  }
+
+  // Your own avatar and name open your own profile card.
+  assert.match(panel, /canOpenProfile = \(group: ChatGroup\)/);
+  assert.match(panel, /group\.self \? 'Ваш профиль'/);
+  assert.match(dm, /aria-label="Ваш профиль"/);
+
+  // Opening the chat parks it on the newest message even after late layout.
+  assert.match(panel, /async function settleAtBottom/);
+  assert.match(panel, /requestAnimationFrame/);
+  assert.match(panel, /\} else if \(!signal\.aborted && chatVisible\) \{\s*\/\/[\s\S]*?await settleAtBottom\(\);/);
 });
 
 test('room menus share semantic groups and expose invite as a right-hand submenu only in voice', () => {
@@ -1952,8 +2003,8 @@ test('participant focus uses a centered stage and a bounded carousel strip', () 
 });
 
 test('room preview, room, and direct chats use a stable top-right message action toolbar', () => {
-  const chat = read('src/lib/features/room/components/RoomChat.svelte');
-  const previewChat = read('src/lib/features/home/components/lobby/RoomPreviewChat.svelte');
+  const chat = readRoomChat();
+  const previewChat = readPreviewChat();
   const dm = read('src/lib/features/home/components/lobby/DmView.svelte');
   const roomCss = read('src/lib/features/room/styles/chat-rail.css');
   const dmCss = read('src/lib/features/home/styles/friends.css');
@@ -1968,7 +2019,8 @@ test('room preview, room, and direct chats use a stable top-right message action
   assert.doesNotMatch(previewChat, /chat-msg-edit-button/);
   assert.doesNotMatch(chat, /rootClass="chat-msg-menu-root"/);
   assert.match(chat, /queueMicrotask\(\(\) => openProfileCardFor\(person, anchor\)\)/);
-  assert.match(chat, /openParticipantContextMenu\([\s\S]*group\.peerId[\s\S]*'list'/);
+  assert.match(chat, /onAuthorContextMenu\(group\.peerId, event\)/);
+  assert.match(chat, /openParticipantContextMenu\([\s\S]*authorPeerId[\s\S]*'list'/);
   assert.match(roomCss, /\.chat-msg-text[\s\S]*width: calc\(100% \+ 45px\)/);
   assert.doesNotMatch(roomCss, /\.chat-msg::before/);
   assert.match(roomCss, /\.chat-msg-text::before[\s\S]*inset: -3px -20px/);
@@ -1986,7 +2038,7 @@ test('room preview, room, and direct chats use a stable top-right message action
 });
 
 test('composer ArrowUp edits the latest own message in both chats', () => {
-  const chat = read('src/lib/features/room/components/RoomChat.svelte');
+  const chat = readRoomChat();
   const dm = read('src/lib/features/home/components/lobby/DmView.svelte');
 
   for (const source of [chat, dm]) {
@@ -1996,7 +2048,7 @@ test('composer ArrowUp edits the latest own message in both chats', () => {
 });
 
 test('message action toolbars expose persisted quick reactions and a separated full picker', () => {
-  const chat = read('src/lib/features/room/components/RoomChat.svelte');
+  const chat = readRoomChat();
   const dm = read('src/lib/features/home/components/lobby/DmView.svelte');
   const picker = read('src/lib/shared/chat/ReactionPicker.svelte');
   const persistence = read('src/lib/shared/chat/frequent-reactions.ts');
@@ -2024,7 +2076,7 @@ test('manual chat polish keeps notifications local, direct messages flat, reacti
   const lobby = read('src/lib/features/home/LobbyPage.svelte');
   const sidebar = read('src/lib/features/home/components/lobby/Sidebar.svelte');
   const dm = read('src/lib/features/home/components/lobby/DmView.svelte');
-  const roomChat = read('src/lib/features/room/components/RoomChat.svelte');
+  const roomChat = readRoomChat();
   const chatCss = read('src/lib/features/room/styles/chat-rail.css');
   const picker = read('src/lib/shared/chat/ReactionPicker.svelte');
   const summary = read('src/lib/shared/chat/ReactionSummary.svelte');
@@ -2110,8 +2162,8 @@ test('room preview header drops the live badge — the stage already shows who i
 });
 
 test('room chats re-stamp the current profile when the room broadcasts a peer update', () => {
-  const chat = read('src/lib/features/room/components/RoomChat.svelte');
-  const previewChat = read('src/lib/features/home/components/lobby/RoomPreviewChat.svelte');
+  const chat = readRoomChat();
+  const previewChat = readPreviewChat();
   const previewCss = read('src/lib/features/home/styles/friends.css');
 
   assert.match(chat, /event\.type === 'room\.peer\.updated'/);
@@ -2125,7 +2177,7 @@ test('room chats re-stamp the current profile when the room broadcasts a peer up
 });
 
 test('room chat date bubbles stay pinned per day section and replace each other while scrolling', () => {
-  const chat = read('src/lib/features/room/components/RoomChat.svelte');
+  const chat = readRoomChat();
   const css = read('src/lib/features/room/styles/chat-rail.css');
 
   assert.match(chat, /class="chat-day-section"/);
@@ -2284,7 +2336,7 @@ test('chat hover actions stay compact, float the picker, and open profiles from 
   const hover = read('src/lib/shared/chat/MessageHoverActions.svelte');
   const picker = read('src/lib/shared/chat/ReactionPicker.svelte');
   const popover = read('src/lib/shared/ui/Popover/Popover.svelte');
-  const roomChat = read('src/lib/features/room/components/RoomChat.svelte');
+  const roomChat = readRoomChat();
   const dm = read('src/lib/features/home/components/lobby/DmView.svelte');
   const members = read('src/lib/features/home/components/lobby/RoomMemberList.svelte');
   const sidebar = read('src/lib/features/home/components/lobby/Sidebar.svelte');

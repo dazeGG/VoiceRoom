@@ -226,6 +226,15 @@
   white-space: nowrap;
 }
 
+/* Message rows reach 45px into the avatar column to widen the hover target, and
+   being positioned they paint over it. Lift the identity triggers back on top so
+   the avatar and the name stay clickable. */
+.chat-avatar-button,
+.chat-msg-meta .chat-msg-trigger {
+  position: relative;
+  z-index: 1;
+}
+
 .chat-msg-trigger {
   border: 0;
   margin: 0;
