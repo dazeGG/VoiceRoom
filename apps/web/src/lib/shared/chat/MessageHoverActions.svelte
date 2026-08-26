@@ -23,11 +23,14 @@
   }>();
 
   const hasReactions = $derived(Boolean(reactionStore && userId));
+  // An open picker moves the pointer and the focus into its panel, which would
+  // drop the row's :hover and take this toolbar with it.
+  let pickerOpen = $state(false);
 </script>
 
-<div class="chat-msg-actions" role="toolbar" aria-label="Действия с сообщением">
+<div class="chat-msg-actions" role="toolbar" aria-label="Действия с сообщением" data-overlay-open={pickerOpen}>
   {#if reactionStore && userId}
-    <ReactionPicker store={reactionStore} {messageId} {userId} />
+    <ReactionPicker store={reactionStore} {messageId} {userId} showQuickReactions={false} bind:open={pickerOpen} />
   {/if}
   {#if hasReactions}<span class="chat-msg-actions-divider" role="separator" aria-orientation="vertical"></span>{/if}
   {#if canReply}

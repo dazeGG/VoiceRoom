@@ -134,9 +134,17 @@ test('the lobby preview runs the same room chat as the rail, with jumpable quote
   await expect(row).toBeVisible();
 
   // The preview owns the same hover toolbar as the room rail, reactions included.
+  // Quick reactions live in the message menu, so the toolbar stays narrow enough
+  // to clear the author line.
   await row.hover();
-  await expect(row.getByRole('button', { name: /Добавить быструю реакцию/ })).toHaveCount(3);
   await expect(row.getByRole('button', { name: 'Открыть выбор эмодзи' })).toBeVisible();
+  await expect(row.getByRole('button', { name: /Добавить быструю реакцию/ })).toHaveCount(0);
+  await row.getByRole('button', { name: 'Больше действий' }).click();
+  const menu = page.getByRole('menu', { name: 'Действия с сообщением' });
+  await expect(menu.getByRole('menuitem', { name: /Реакция/ })).toHaveCount(3);
+  await expect(menu.getByRole('menuitem', { name: 'Поставить реакцию' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(menu).toHaveCount(0);
 
   // Answering shows an icon-cancelled row whose quote jumps back to the message.
   await row.getByRole('button', { name: 'Ответить' }).click();

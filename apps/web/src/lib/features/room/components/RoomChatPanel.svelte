@@ -987,9 +987,12 @@
                     </div>
                   </div>
                 {:else}
-                  {#if message.replyPreview}<ReplyPreview preview={message.replyPreview} interactive onjump={jumpToMessage} />{/if}
-                  <span class="chat-msg-content">{#if message.content}<StructuredMessageContent content={message.content} fallback={message.text} />{:else}<ChatText text={message.text} />{/if}{#if message.editedAt}<span class="chat-msg-edited">(изменено)</span>{/if}</span>
-                  {#if message.attachments?.length}<AttachmentMosaic attachments={message.attachments} />{/if}
+                  <div class="chat-msg-body">
+                    {#if message.replyPreview}<ReplyPreview preview={message.replyPreview} interactive onjump={jumpToMessage} />{/if}
+                    <span class="chat-msg-content">{#if message.content}<StructuredMessageContent content={message.content} fallback={message.text} />{:else}<ChatText text={message.text} />{/if}{#if message.editedAt}<span class="chat-msg-edited">(изменено)</span>{/if}</span>
+                    {#if message.attachments?.length}<AttachmentMosaic attachments={message.attachments} />{/if}
+                    {#if reactionsEnabled}<ReactionSummary store={reactions} messageId={message.id} canMutate={Boolean(session.user?.id)} />{/if}
+                  </div>
                   <MessageHoverActions
                     reactionStore={reactionsEnabled && session.user?.id ? reactions : undefined}
                     messageId={message.id}
@@ -999,7 +1002,6 @@
                     onCopy={() => void copyMessageText(message)}
                     onMore={(event) => openMessageMenu(message, event)}
                   />
-                  {#if reactionsEnabled}<ReactionSummary store={reactions} messageId={message.id} canMutate={Boolean(session.user?.id)} />{/if}
                 {/if}
               </div>
             {/each}
