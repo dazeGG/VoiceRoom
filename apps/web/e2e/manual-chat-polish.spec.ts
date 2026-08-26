@@ -116,6 +116,59 @@ test('manual polish renders direct messages with the shared flat chat row and ar
   }
 });
 
+test('the lobby preview runs the same room chat as the rail, with jumpable quotes and clickable identity', async ({ page }) => {
+  await enableCapabilities(page, ['reactions', 'replies']);
+  const login = uniqueLogin('chatparity');
+  await registerViaUi(page, login);
+  const roomName = `Parity ${login}`;
+  const roomId = await createPermanentRoom(page, roomName);
+
+  await page.locator('.lv-card', { hasText: roomName }).first().click();
+  await page.getByRole('button', { name: 'Чат', exact: true }).first().click();
+  const composer = page.getByPlaceholder('Написать в комнату…');
+  await expect(composer).toBeVisible({ timeout: 20_000 });
+  await composer.fill('parity message');
+  await composer.press('Enter');
+
+  const row = page.locator('.chat-msg-text', { hasText: 'parity message' }).last();
+  await expect(row).toBeVisible();
+
+  // The preview owns the same hover toolbar as the room rail, reactions included.
+  await row.hover();
+  await expect(row.getByRole('button', { name: /Добавить быструю реакцию/ })).toHaveCount(3);
+  await expect(row.getByRole('button', { name: 'Открыть выбор эмодзи' })).toBeVisible();
+
+  // Answering shows an icon-cancelled row whose quote jumps back to the message.
+  await row.getByRole('button', { name: 'Ответить' }).click();
+  const replyTarget = page.locator('.reply-target');
+  await expect(replyTarget).toBeVisible();
+  await expect(replyTarget.getByRole('button', { name: 'Отменить ответ' })).toBeVisible();
+  await expect(replyTarget.getByRole('button', { name: /Отмена$/ })).toHaveCount(0);
+  await expect(replyTarget.getByRole('button', { name: /Перейти к сообщению/ })).toBeVisible();
+  await replyTarget.getByRole('button', { name: 'Отменить ответ' }).click();
+  await expect(replyTarget).toHaveCount(0);
+
+  // Your own avatar and name open your own card instead of being inert text.
+  const selfTriggers = page.getByRole('button', { name: 'Ваш профиль' });
+  await expect(selfTriggers).toHaveCount(2);
+  await selfTriggers.first().click();
+  await expect(page.locator('[data-profile-card]')).toBeVisible();
+  await page.keyboard.press('Escape');
+
+  // The rail opens parked on the newest message.
+  await enterRoom(page, roomId);
+  const rail = page.locator('.room-chat-rail').first();
+  if (await rail.evaluate((element) => (element as HTMLElement).hidden)) {
+    await page.locator('button[title="Чат"]').first().click();
+  }
+  const railBody = page.locator('.room-chat-rail .chat-rail-body');
+  await expect(railBody).toBeVisible({ timeout: 20_000 });
+  await expect(railBody.locator('.chat-msg-text', { hasText: 'parity message' })).toBeVisible();
+  await expect
+    .poll(async () => railBody.evaluate((element) => Math.round(element.scrollHeight - element.scrollTop - element.clientHeight)))
+    .toBeLessThanOrEqual(2);
+});
+
 test('manual polish keeps the newest mention query, emits login-bound segments, and flips the picker at the viewport edge', async ({ page }) => {
   await enableCapabilities(page, ['engagement', 'reactions']);
   const login = uniqueLogin('mentionrace');
