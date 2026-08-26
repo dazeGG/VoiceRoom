@@ -101,7 +101,9 @@ test('manual polish renders direct messages with the shared flat chat row and ar
     await expect(message.getByRole('button', { name: 'Удалить' })).toHaveCount(0);
     await expect(reply.locator('svg')).toHaveCount(1);
     await reply.click();
-    await expect(page.locator('.dm-reply-target')).toContainText('flat direct message');
+    const dmReplyTarget = page.locator('.reply-target');
+    await expect(dmReplyTarget).toContainText('flat direct message');
+    await expect(dmReplyTarget.getByRole('button', { name: 'Отменить ответ' })).toBeVisible();
 
     await message.hover();
     await more.click();
