@@ -1927,6 +1927,33 @@ test('room surfaces share one chat panel, quotes jump, and an opened chat starts
   assert.match(panel, /\} else if \(!signal\.aborted && chatVisible\) \{\s*\/\/[\s\S]*?await settleAtBottom\(\);/);
 });
 
+test('room messages stack their reactions and keep the hover toolbar clear of the author line', () => {
+  const panel = read(ROOM_CHAT_PANEL_PATH);
+  const dm = read('src/lib/features/home/components/lobby/DmView.svelte');
+  const css = read('src/lib/features/room/styles/chat-rail.css');
+  const dmCss = read('src/lib/features/home/styles/friends.css');
+
+  // Reactions belong under the message, left aligned, the way direct messages
+  // already render them — not beside the text in the row's flex line.
+  assert.match(panel, /<div class="chat-msg-body">[\s\S]*<ReactionSummary[\s\S]*<\/div>\s*<MessageHoverActions/);
+  assert.match(css, /\.chat-msg-body \{[^}]*display: grid;[^}]*justify-items: start;/);
+  assert.match(dm, /<div class="dm-chat-content">[\s\S]*<ReactionSummary/);
+  assert.match(dmCss, /\.dm-chat-content \{ display: grid;/);
+
+  // The row is not an isolated stacking context, so the hovered group can lift
+  // the toolbar over the author line instead of trapping it behind.
+  assert.doesNotMatch(css, /\.chat-msg-text \{[^}]*isolation: isolate/);
+  assert.match(css, /\.chat-msg:has\(\.chat-msg-text:hover\)[\s\S]*z-index: 6/);
+
+  // The toolbar has to survive losing :hover, or the overlay it opened steals
+  // the pointer and the buttons disappear from under the cursor.
+  assert.match(css, /\.chat-msg-text\.is-context \.chat-msg-actions,\s*\.chat-msg-actions\[data-overlay-open='true'\] \{ opacity: 1;/);
+  assert.match(css, /\.chat-msg-meta:hover \+ \.chat-msg-text \.chat-msg-actions \{ opacity: 1;/);
+  const hover = read('src/lib/shared/chat/MessageHoverActions.svelte');
+  assert.match(hover, /data-overlay-open=\{pickerOpen\}/);
+  assert.match(hover, /bind:open=\{pickerOpen\}/);
+});
+
 test('room menus share semantic groups and expose invite as a right-hand submenu only in voice', () => {
   const content = read('src/lib/shared/components/room-menu/RoomMenuContent.svelte');
   const topbar = read('src/lib/features/room/components/RoomTopbar.svelte');
@@ -2057,6 +2084,9 @@ test('message action toolbars expose persisted quick reactions and a separated f
   assert.match(chat, /<MessageHoverActions[\s\S]*reactionStore=\{reactionsEnabled && session\.user\?\.id \? reactions : undefined\}[\s\S]*userId=\{session\.user\?\.id\}/);
   assert.match(dm, /<MessageHoverActions[\s\S]*reactionStore=\{reactionsEnabled \? reactions : undefined\}[\s\S]*userId=\{selfId\}/);
   assert.match(hoverActions, /\{#if reactionStore && userId\}[\s\S]*<ReactionPicker/);
+  assert.match(hoverActions, /showQuickReactions=\{false\}/);
+  assert.match(picker, /showQuickReactions = true/);
+  assert.match(picker, /\{#if showQuickReactions\}/);
   assert.ok(hoverActions.indexOf('<ReactionPicker') < hoverActions.indexOf('aria-label="Ответить"'));
   assert.match(picker, /class="reaction-quick-actions" role="group" aria-label="Быстрые реакции"/);
   assert.match(picker, /\{#each frequentEmoji as emoji/);

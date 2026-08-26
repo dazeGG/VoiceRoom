@@ -22,15 +22,20 @@
     store,
     messageId,
     userId,
-    disabled = false
+    disabled = false,
+    showQuickReactions = true,
+    open = $bindable(false)
   }: {
     store: ReactionStore;
     messageId: string;
     userId: string;
     disabled?: boolean;
+    /** Off inside the hover toolbar, which has no room for three more buttons. */
+    showQuickReactions?: boolean;
+    /** Bindable so a host toolbar can stay visible while the panel is open. */
+    open?: boolean;
   } = $props();
 
-  let open = $state(false);
   let search = $state('');
   let activeGroupKey = $state('frequent');
   let activeIndex = $state(0);
@@ -165,7 +170,7 @@
 
 {#if !store.isDeleted(messageId)}
   <div class="reaction-quick-actions" role="group" aria-label="Быстрые реакции">
-    {#each frequentEmoji as emoji (emoji)}
+    {#if showQuickReactions}{#each frequentEmoji as emoji (emoji)}
       <button
         class="reaction-quick-trigger"
         type="button"
@@ -174,7 +179,7 @@
         title={`Реакция ${emoji}`}
         onclick={() => void react(emoji)}
       >{emoji}</button>
-    {/each}
+    {/each}{/if}
     <Popover
       bind:open
       placement="top-start"

@@ -273,7 +273,10 @@ button.chat-msg-author {
 
 .chat-msg-text {
   position: relative;
-  isolation: isolate;
+  /* Deliberately not an isolated stacking context: the hover toolbar has to be
+     able to paint above the author line, which lives outside this row. The
+     hovered .chat-msg raises the whole group instead, which keeps the row's
+     z-index:-1 highlight behind everything inside it. */
   display: flex;
   min-width: 0;
   align-items: flex-start;
@@ -318,6 +321,18 @@ button.chat-msg-author {
   transition: background 400ms ease;
 }
 
+/* The message body stacks its parts, so reactions land under the text on the
+   left instead of beside it — the same shape direct messages use. */
+.chat-msg-body {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: 4px;
+  justify-items: start;
+}
+
+.chat-msg-body > * { max-width: 100%; }
+
 .chat-msg-content { min-width: 0; flex: 1; }
 /* Floating pill above the message, matching the context-menu surface: same
    blur, border and shadow, so hover actions and the right-click menu read as
@@ -327,6 +342,16 @@ button.chat-msg-author {
    lifted above the message body, is not covered by the pinned date bubble. */
 .chat-msg:has(.chat-msg-text:hover), .chat-msg:has(.chat-msg-text:focus-within) { z-index: 6; }
 .chat-msg-text:hover .chat-msg-actions, .chat-msg-text:focus-within .chat-msg-actions { opacity: 1; transform: translateY(0); pointer-events: auto; }
+/* The toolbar of a group's first message floats over the author line, so the
+   author line has to hold it open too — otherwise it vanishes the moment the
+   pointer crosses that band on its way to the toolbar, or after an overlay
+   closes under the pointer there. */
+.chat-msg-meta:hover + .chat-msg-text .chat-msg-actions { opacity: 1; transform: translateY(0); pointer-events: auto; }
+/* An open message menu or reaction picker takes the pointer and the focus out of
+   the row, so :hover alone would hide the toolbar the overlay was opened from —
+   and with it the target the user is about to click. */
+.chat-msg-text.is-context .chat-msg-actions,
+.chat-msg-actions[data-overlay-open='true'] { opacity: 1; transform: translateY(0); pointer-events: auto; }
 .chat-msg-actions > button { display: grid; width: 36px; height: 36px; place-items: center; border: 0; border-radius: 12px; padding: 0; background: transparent; color: var(--warm-muted); cursor: pointer; transition: background 120ms ease, color 120ms ease; }
 .chat-msg-actions-divider { width: 1px; height: 24px; flex: none; margin: 0 2px; background: var(--line); }
 .chat-msg-actions button:hover, .chat-msg-actions button:focus-visible { background: color-mix(in oklch, var(--accent), transparent 86%); color: var(--warm-ink); outline: none; }
