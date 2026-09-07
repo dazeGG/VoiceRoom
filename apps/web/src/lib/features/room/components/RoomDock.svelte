@@ -5,6 +5,7 @@
     Headphones,
     Mic,
     MicOff,
+    Music,
     ScreenShare,
     ScreenShareOff,
     X
@@ -44,7 +45,11 @@
   import { setMicrophoneVolume } from '../client/services/microphone-service';
 
   import { screenUi } from '../screen-ui.svelte';
+  import { isRoomMusicVisible, roomMusic, toggleRoomMusicPanel } from '../room-music.svelte';
 
+  // Temporary rooms have no shared music at all, so the control is absent
+  // rather than disabled. The server rejects the commands independently.
+  const musicVisible = $derived(isRoomMusicVisible());
   const connection = $derived(getConnectionStatusView());
   const callControls = $derived(getCallControlsView());
   const outputControls = $derived(getOutputControlsView());
@@ -267,6 +272,22 @@
         <span class="sr-only" id="screenText">{screenControls.label}</span>
       </button>
     </div>
+
+    {#if musicVisible}
+      <div class="dock-cluster">
+        <button
+          class="dock-button music-button"
+          id="musicButton"
+          type="button"
+          aria-pressed={roomMusic.panelOpen}
+          aria-label="Музыка комнаты"
+          onclick={toggleRoomMusicPanel}
+        >
+          <span class="dock-icon" aria-hidden="true"><Music /></span>
+          <span class="sr-only">Музыка комнаты</span>
+        </button>
+      </div>
+    {/if}
 
     <span class="dock-divider" aria-hidden="true"></span>
 

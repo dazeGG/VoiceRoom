@@ -5,6 +5,7 @@ import {
   DEFAULT_MICROPHONE_VOLUME,
   DEFAULT_NOISE_MODE,
   DEFAULT_NOTIFICATION_VOLUME,
+  DEFAULT_MUSIC_VOLUME,
   DEFAULT_PARTICIPANT_VOLUME,
   DEFAULT_STREAM_VOLUME,
   GATE_THRESHOLD_DB_STORAGE_KEY,
@@ -13,9 +14,12 @@ import {
   MASTER_VOLUME_STORAGE_KEY,
   MAX_MASTER_VOLUME,
   MAX_MICROPHONE_VOLUME,
+  MAX_MUSIC_VOLUME,
   MAX_NOTIFICATION_VOLUME,
   MAX_PARTICIPANT_VOLUME,
   MAX_STREAM_VOLUME,
+  MUSIC_MUTED_STORAGE_KEY,
+  MUSIC_VOLUME_STORAGE_KEY,
   NOISE_MODES,
   NOISE_MODE_STORAGE_KEY,
   MICROPHONE_MODE_STORAGE_KEY,
@@ -141,6 +145,36 @@ export function clampStreamVolume(volume: number, maxVolume = MAX_STREAM_VOLUME)
   return Number.isFinite(volume)
     ? Math.min(upperBound, Math.max(0, volume))
     : DEFAULT_STREAM_VOLUME;
+}
+
+// Shared-music listening preferences. They are read on every music routing pass
+// and are deliberately client-only: muting the music must not produce any
+// outgoing realtime traffic, and must not disturb the other listeners.
+export function getStoredMusicVolume(): number {
+  const storedValue = Number.parseFloat(localStorage.getItem(MUSIC_VOLUME_STORAGE_KEY) || '');
+  return Number.isFinite(storedValue) ? clampMusicVolume(storedValue) : DEFAULT_MUSIC_VOLUME;
+}
+
+export function storeMusicVolume(volume: number): number {
+  const clampedVolume = clampMusicVolume(volume);
+  localStorage.setItem(MUSIC_VOLUME_STORAGE_KEY, String(clampedVolume));
+  return clampedVolume;
+}
+
+export function clampMusicVolume(volume: number): number {
+  return Number.isFinite(volume)
+    ? Math.min(MAX_MUSIC_VOLUME, Math.max(0, volume))
+    : DEFAULT_MUSIC_VOLUME;
+}
+
+export function getStoredMusicMuted(): boolean {
+  return localStorage.getItem(MUSIC_MUTED_STORAGE_KEY) === 'true';
+}
+
+export function storeMusicMuted(muted: boolean): boolean {
+  const value = Boolean(muted);
+  localStorage.setItem(MUSIC_MUTED_STORAGE_KEY, String(value));
+  return value;
 }
 
 export function clampGateThresholdDb(value: number): number {

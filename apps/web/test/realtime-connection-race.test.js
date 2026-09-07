@@ -9,6 +9,7 @@ const moduleUrl = (source) => `data:text/javascript;base64,${Buffer.from(source)
 
 test('eager ensureConnected cancels a scheduled reconnect and keeps one socket heartbeat', async () => {
   const stubUrl = moduleUrl(`
+    export const normalizeMusicCommand = () => null;
     export const isDesktopBoundaryBlocked = () => false;
     export class RealtimeHeartbeatWatchdog {
       isTimedOut() { return false; }

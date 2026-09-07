@@ -55,6 +55,7 @@ export function createInitialRoomState(): AppState {
     micMutedBeforeOutputMute: false,
     micProcessor: null,
     muted: false,
+    musicBotIdentity: '',
     noiseMode: getStoredNoiseMode(),
     outputDeviceId: localStorage.getItem(OUTPUT_DEVICE_STORAGE_KEY) || '',
     outputMuted: localStorage.getItem(OUTPUT_MUTED_STORAGE_KEY) === 'true',

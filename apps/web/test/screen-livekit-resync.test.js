@@ -44,6 +44,9 @@ async function loadLiveKitService() {
       }
     }
     export const postJson = async () => ({});
+    export const attachMusicTrack = () => {};
+    export const detachMusicTrack = () => {};
+    export const getMusicTrackId = () => '';
     export const queueAudioUnlock = () => {};
     export const syncRemoteAudioPlayback = () => {};
     export const clearPeerJoinCue = () => {};

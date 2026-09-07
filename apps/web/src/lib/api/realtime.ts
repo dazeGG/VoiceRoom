@@ -5,6 +5,11 @@ import type { PublicUser } from './friends';
 import type { ChatMessage, RoomPeer, RoomSummary } from './rooms';
 import type { NotificationRealtimeEvent } from '../shared/notifications';
 import type { ReactionSummary } from '@voice-room/shared/reactions';
+import {
+  normalizeMusicCommand,
+  type MusicSession,
+  type MusicTrackRef
+} from '@voice-room/shared/room-music';
 import { isDesktopBoundaryBlocked } from '$lib/platform/desktop-boundary';
 import { RealtimeHeartbeatWatchdog } from './realtime-heartbeat.js';
 
@@ -38,6 +43,14 @@ export type RoomSnapshot = {
   // Server-side in-memory call clock: when the current voice session started
   // (first live peer), or null while the room is empty. Never persisted.
   voiceActiveSince?: number | null;
+  // Shared-music block, present only on an `active` snapshot for a static room.
+  // `musicBotIdentity` and `musicIsMaster` are siblings of `music` rather than
+  // members of it, because `normalizeMusicSession` would strip an unknown key
+  // from the session: the first is a transport detail the client needs to find
+  // the bot's publication, the second is the viewer's own permission.
+  music?: MusicSession;
+  musicBotIdentity?: string | null;
+  musicIsMaster?: boolean;
   mode: 'preview' | 'active';
 };
 
@@ -79,6 +92,32 @@ export type PinsRealtimeEvent = {
   };
 };
 
+// Two event types, not one: `room.music.position` exists so the bot's 2s
+// heartbeat does not re-broadcast a queue of up to 100 items. `musicBotIdentity`
+// rides on both, because the bot can leave the room on its own initiative and a
+// client must be able to learn (or unlearn) the identity without a fresh
+// snapshot. Both are routed `activeOnly`, so a lobby preview receives neither.
+export type MusicRealtimeEvent =
+  | {
+      type: 'room.music.state';
+      payload: {
+        roomId: string;
+        music?: MusicSession;
+        musicBotIdentity?: string | null;
+      };
+    }
+  | {
+      type: 'room.music.position';
+      payload: {
+        roomId: string;
+        musicBotIdentity?: string | null;
+        sessionEpoch?: number;
+        itemId?: string | null;
+        positionMs?: number;
+        positionAt?: number | null;
+      };
+    };
+
 export type RealtimeEvent = (
   RealtimeAccountEvent
   | RealtimeRoomEvent
@@ -86,6 +125,7 @@ export type RealtimeEvent = (
   | NotificationRealtimeEvent
   | ReactionRealtimeEvent
   | PinsRealtimeEvent
+  | MusicRealtimeEvent
 ) & { id?: string };
 
 /** @deprecated Use RealtimeEvent */
@@ -324,6 +364,49 @@ class AppRealtimeConnection {
 export function getAppRealtime(): AppRealtimeConnection {
   if (!shared) shared = new AppRealtimeConnection();
   return shared;
+}
+
+// --- Shared music commands ------------------------------------------------
+// Every wrapper builds its frame through `normalizeMusicCommand` from the shared
+// contract rather than by hand, so a client can never put a shape on the wire
+// that the server would reject. A `false` return means the input did not
+// normalize (e.g. a link that is not a supported VK Video, Rutube or YouTube
+// link) and nothing was sent.
+// `normalizeMusicCommand` deliberately ignores `roomId`: room scoping,
+// authorship and the static-room rule are decided on the server.
+
+function sendMusicCommand(roomId: string, command: Record<string, unknown> & { type: string }): boolean {
+  const room = String(roomId || '').trim();
+  if (!room) return false;
+  const { type, ...payload } = command;
+  getAppRealtime().send(type, { roomId: room, ...payload });
+  return true;
+}
+
+export function enqueueRoomMusic(roomId: string, link: string): boolean {
+  const command = normalizeMusicCommand('room.music.enqueue', { link });
+  return command ? sendMusicCommand(roomId, command) : false;
+}
+
+export function enqueueRoomMusicTrackRef(roomId: string, trackRef: MusicTrackRef): boolean {
+  const command = normalizeMusicCommand('room.music.enqueue', { trackRef });
+  return command ? sendMusicCommand(roomId, command) : false;
+}
+
+/** `itemId === null` skips whatever is currently playing. */
+export function skipRoomMusic(roomId: string, itemId: string | null = null): boolean {
+  const command = normalizeMusicCommand('room.music.skip', { itemId });
+  return command ? sendMusicCommand(roomId, command) : false;
+}
+
+export function removeRoomMusicItem(roomId: string, itemId: string): boolean {
+  const command = normalizeMusicCommand('room.music.remove', { itemId });
+  return command ? sendMusicCommand(roomId, command) : false;
+}
+
+export function stopRoomMusic(roomId: string): boolean {
+  const command = normalizeMusicCommand('room.music.stop', {});
+  return command ? sendMusicCommand(roomId, command) : false;
 }
 
 export function connectRealtime(onEvent: (event: RealtimeEvent) => void): RealtimeHandle {

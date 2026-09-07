@@ -25,6 +25,7 @@ import {
 } from './ui/controls';
 import { eventMatchesHotkey, isTypingTarget } from './core/hotkeys';
 import { resetGuestNameDialog, updateNameStatuses } from './ui/names';
+import { resetRoomMusic } from '$lib/features/room/room-music.svelte';
 import {
   joinRoom,
   leaveRoom,
@@ -167,6 +168,7 @@ export function mountRoomClient(_root: ParentNode = document, options: { roomId?
     state.peers.clear();
     state.serverPeerIds.clear();
     state.serverPeerSyncReady = false;
+    resetRoomMusic();
     state.self = null;
     state.roomName = '';
     state.roomAvatarUrl = '';

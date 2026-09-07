@@ -174,6 +174,13 @@ export interface RoomAudioState {
   micMutedBeforeOutputMute: boolean;
   micProcessor: MicProcessor | MicProcessor[] | null;
   muted: boolean;
+  /**
+   * LiveKit identity of the shared-music bot for the open room, or '' when no bot
+   * is present. It is NOT a peer: the bot is never materialized into `peers`, and
+   * this identity is the only thing that distinguishes its publication from a
+   * screen share (it publishes on the ScreenShareAudio source).
+   */
+  musicBotIdentity: string;
   noiseMode: NoiseMode;
   outputDeviceId: string;
   outputMuted: boolean;

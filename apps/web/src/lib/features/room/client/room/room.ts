@@ -61,6 +61,13 @@ import {
 } from '$lib/features/home/model/room-realtime';
 import { applyRoomDeleted, applyRoomUpdated } from './lifecycle';
 import {
+  applyRoomMusicError,
+  applyRoomMusicPosition,
+  applyRoomMusicSnapshot,
+  applyRoomMusicState,
+  resetRoomMusic
+} from '../../room-music.svelte';
+import {
   cancelRoomRecovery,
   notifyRoomAppConnection,
   notifyRoomNetworkOffline,
@@ -380,6 +387,7 @@ async function performJoinRoom(generation: number): Promise<void> {
     state.voiceRealtimeTeardown = null;
     state.serverPeerIds.clear();
     state.serverPeerSyncReady = false;
+    resetRoomMusic();
     await disconnectLiveKitRoom();
     state.self = null;
     stopLocalStream();
@@ -443,6 +451,10 @@ async function handleVoiceRealtimeEvent(event: RealtimeEvent): Promise<void> {
       syncAuthoritativeScreenPresence(peer.id, Boolean(peer.screen));
       createParticipant({ ...peer, screenAuthoritative: true });
     }
+    // Before `syncLiveKitParticipants`: it reconciles the music publication, and
+    // the bot identity has to be in place by then or a late joiner subscribes to
+    // nothing and hears nothing, with no error raised anywhere.
+    applyRoomMusicSnapshot(snapshot);
     syncLiveKitParticipants(state.livekitRoom);
     refreshParticipantState();
     notifyRoomSnapshotApplied({
@@ -459,6 +471,10 @@ async function handleVoiceRealtimeEvent(event: RealtimeEvent): Promise<void> {
       showRoomModerationScreen('banned');
       return;
     }
+    // A rejected music command belongs in the music panel, next to the input
+    // that caused it. `payload.message` is a developer string in English and
+    // must never be the thing the user reads.
+    if (applyRoomMusicError(event.payload.code)) return;
     showToast(event.payload.message || 'Ошибка realtime-соединения');
     if (event.payload.code === 'invalid_session' || event.payload.code === 'join_failed' || event.payload.code === 'room_full') {
       leaveRoom();
@@ -511,6 +527,16 @@ async function handleVoiceRealtimeEvent(event: RealtimeEvent): Promise<void> {
     return;
   }
 
+  if (event.type === 'room.music.state') {
+    applyRoomMusicState(event.payload);
+    return;
+  }
+
+  if (event.type === 'room.music.position') {
+    applyRoomMusicPosition(event.payload);
+    return;
+  }
+
   if (event.type === 'room.updated') {
     applyRoomUpdated(event.payload.room);
     return;
@@ -547,6 +573,7 @@ export function leaveRoom(): void {
   state.voiceRealtimeTeardown = null;
   state.serverPeerIds.clear();
   state.serverPeerSyncReady = false;
+  resetRoomMusic();
   disconnectLiveKitRoom().catch((error) => console.warn('LiveKit disconnect failed', error));
   if (state.screenSourceRequest) cancelScreenSourcePicker();
   closeScreenView();

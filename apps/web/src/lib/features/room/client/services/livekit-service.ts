@@ -14,7 +14,13 @@ import { state } from '../core/state.svelte';
 import { setVoiceConnectionStatus } from '../ui/status';
 import { showToast } from '../ui/toast';
 import { ApiRequestError, postJson } from '../net/api';
-import { queueAudioUnlock, syncRemoteAudioPlayback } from './media-playback-service';
+import {
+  attachMusicTrack,
+  detachMusicTrack,
+  getMusicTrackId,
+  queueAudioUnlock,
+  syncRemoteAudioPlayback
+} from './media-playback-service';
 import { clearPeerJoinCue } from '../media/cues';
 import { getScreenProfile, getScreenPublishVideoOptions } from '../media/profiles';
 import { loadLiveKitClient, TRACK_SOURCE } from '../media/livekit-runtime';
@@ -191,6 +197,7 @@ export async function attemptFreshLiveKitReplacement({
     state.localMicPublication = microphonePublication;
     state.localScreenPublications = screenPublications;
     clearAllScreenSubscriptionRetries();
+    clearAllMusicSubscriptionRetries();
     syncLiveKitParticipants(candidate);
     retryDemandedScreenSubscriptions(candidate);
     syncLiveKitVoiceSubscriptions();
@@ -339,6 +346,10 @@ async function bindLiveKitRoomEvents(room: Room, isCurrent: () => boolean): Prom
   });
   room.on(RoomEvent.ParticipantDisconnected, (participant) => {
     if (!current()) return;
+    if (isMusicBotIdentity(participant.identity)) {
+      teardownMusicLane();
+      return;
+    }
     const peer = state.peers.get(participant.identity);
     if (peer) detachLiveKitParticipant(peer, 'голос переподключается');
     refreshParticipantState();
@@ -386,6 +397,13 @@ async function bindLiveKitRoomEvents(room: Room, isCurrent: () => boolean): Prom
   });
   room.on(RoomEvent.TrackPublished, (publication, participant) => {
     if (!current()) return;
+    // `createLiveKitParticipant` returns null for the bot, so without this
+    // branch a track the bot publishes while this client is already connected
+    // would be dropped here and never subscribed.
+    if (isMusicBotIdentity(participant.identity)) {
+      handleMusicPublication(participant.identity, publication);
+      return;
+    }
     const peer = createLiveKitParticipant(participant);
     if (!peer) return;
     updateLiveKitPublicationState(peer, publication);
@@ -430,6 +448,9 @@ async function bindLiveKitRoomEvents(room: Room, isCurrent: () => boolean): Prom
 
 export function syncLiveKitParticipants(room: Room | null): void {
   prunePeersOutsideServerList();
+  // Runs on every room snapshot, and is the pass that catches a music
+  // publication which existed before this client connected.
+  reconcileMusicPublication();
   if (!room) return;
 
   room.remoteParticipants.forEach((participant) => {
@@ -438,7 +459,14 @@ export function syncLiveKitParticipants(room: Room | null): void {
 }
 
 export function syncLiveKitParticipant(participant: RemoteParticipant | null | undefined): Participant | null {
-  if (!participant || !isServerKnownRemotePeer(participant.identity)) return null;
+  if (!participant) return null;
+  if (isMusicBotIdentity(participant.identity)) {
+    participant.trackPublications.forEach((publication) => {
+      handleMusicPublication(participant.identity, publication);
+    });
+    return null;
+  }
+  if (!isServerKnownRemotePeer(participant.identity)) return null;
 
   const peer = createLiveKitParticipant(participant);
   if (!peer) return null;
@@ -499,6 +527,191 @@ function prunePeersOutsideServerList(): void {
       clearPeerJoinCue(peerId);
     }
   }
+}
+
+// --- Shared music lane ---------------------------------------------------
+//
+// The music bot is a LiveKit participant that the server never lists as a room
+// peer. That is deliberate and load-bearing:
+//
+//   * `isServerKnownRemotePeer` is NOT a subscription filter, it is the peer
+//     materialization filter inside `createLiveKitParticipant`, which writes
+//     into `state.peers`. The participant list and the stage tiles render from
+//     `state.peers`, so relaxing it would put the bot in the UI.
+//   * `prunePeersOutsideServerList` is the first statement of
+//     `syncLiveKitParticipants`, which runs on every room snapshot, so a bot
+//     peer would be created and destroyed in a loop — dropping the audio and
+//     rebuilding its gain node every time.
+//
+// So the bot never becomes a peer. Instead every entry point branches on its
+// identity *before* it reaches any track-source predicate: the bot publishes on
+// the ScreenShareAudio source (livekit-rtc has no "music" source), and without
+// the early branch its track would land in the screen-share paths with tiles
+// and the subscription retry controller attached.
+
+// Bounded retry budget for the music publication, one entry per track SID.
+// This is the same controller the screen lane uses — its name records its first
+// caller, not a restriction; the mechanism (backoff, a per-SID attempt cap, a
+// response window) is exactly what a subscription that can fail silently needs.
+//
+// A plain toggle inside `reconcileMusicPublication` would not do: reconcile runs
+// on the bot's 2s position heartbeat, so it would resubscribe every two seconds
+// for as long as the failure lasted. `schedule` is idempotent and capped, so the
+// heartbeat can drive recovery without becoming a subscribe storm.
+const musicSubscriptionRetryController = createScreenSubscriptionRetryController();
+
+export function isMusicBotIdentity(identity: string | null | undefined): boolean {
+  return Boolean(identity) && identity === state.musicBotIdentity;
+}
+
+/**
+ * Points the lane at a bot identity (or `''` for none) and reconciles.
+ *
+ * The identity arrives over the app WebSocket and may land before or after
+ * `connectLiveKitRoom`, so this is safe to call at any time and as often as the
+ * server repeats itself.
+ */
+export function setMusicBotIdentity(identity: string | null | undefined): void {
+  const next = identity || '';
+  if (state.musicBotIdentity !== next) {
+    // Only an identity *change* tears the lane down. A new track from the same
+    // bot must not, or local mute would not survive a track change.
+    if (state.musicBotIdentity) teardownMusicLane();
+    state.musicBotIdentity = next;
+  }
+  reconcileMusicPublication();
+}
+
+function teardownMusicLane(): void {
+  musicSubscriptionRetryController.clearAll();
+  detachMusicTrack();
+}
+
+/**
+ * A reconnect is a new transport epoch, so a SID that exhausted its retry budget
+ * on the previous connection must be eligible again — the same reason the screen
+ * lane clears its budget there. Without this a transient outage longer than the
+ * retry window strands the music until the bot republishes with a new SID.
+ */
+function clearAllMusicSubscriptionRetries(): void {
+  musicSubscriptionRetryController.clearAll();
+}
+
+/**
+ * Idempotently subscribes to and attaches the bot's current publication.
+ *
+ * This exists because the client connects with `autoSubscribe: false`: a client
+ * that joins after the bot started receives no `TrackPublished` event for a
+ * publication that already existed, so without a reconcile pass a late joiner
+ * would hear nothing and no error would be raised anywhere.
+ */
+export function reconcileMusicPublication(): void {
+  const identity = state.musicBotIdentity;
+  if (!identity) {
+    teardownMusicLane();
+    return;
+  }
+
+  const participant = state.livekitRoom?.remoteParticipants?.get?.(identity);
+  if (!participant) {
+    detachMusicTrack();
+    return;
+  }
+
+  participant.trackPublications.forEach((publication) => {
+    handleMusicPublication(identity, publication);
+  });
+}
+
+/**
+ * The single handler every music branch funnels into.
+ *
+ * Subscription is unconditional: the local listening preference is applied as
+ * gain on the `'media'` bus by `syncMusicAudioPlayback`, never by unsubscribing.
+ * An unsubscribe would cost seconds of latency on unmute and would not survive
+ * a track change.
+ */
+function handleMusicPublication(
+  identity: string,
+  publication: TrackPublication | null | undefined,
+  track: RemoteTrack | null | undefined = null
+): void {
+  if (!isMusicBotIdentity(identity) || !publication) return;
+
+  const remotePublication = publication as RemoteTrackPublication;
+  if (typeof remotePublication.setSubscribed === 'function' && remotePublication.isDesired !== true) {
+    remotePublication.setSubscribed(true);
+  }
+
+  const musicTrack = track ?? (remotePublication.track as RemoteTrack | null | undefined) ?? null;
+  const mediaTrack = musicTrack?.mediaStreamTrack;
+  const attachable = remotePublication.isSubscribed !== false
+    && Boolean(mediaTrack)
+    && mediaTrack!.kind === 'audio'
+    && mediaTrack!.readyState !== 'ended';
+
+  if (!attachable) {
+    // Desired but carrying no live track. Usually transient — the track arrives
+    // moments later on TrackSubscribed, and the scheduled attempt sees it
+    // attached and clears itself. When it is not transient this is the only
+    // thing standing between the listener and permanent silence.
+    scheduleMusicSubscriptionRetry(remotePublication);
+    return;
+  }
+
+  musicSubscriptionRetryController.clear(remotePublication.trackSid);
+  attachMusicTrack(mediaTrack!);
+}
+
+function scheduleMusicSubscriptionRetry(publication: RemoteTrackPublication): void {
+  if (typeof publication.setSubscribed !== 'function') return;
+
+  musicSubscriptionRetryController.schedule({
+    isAttached: () => {
+      const trackId = (publication.track as RemoteTrack | null | undefined)?.mediaStreamTrack?.id;
+      return Boolean(trackId) && trackId === getMusicTrackId();
+    },
+    // The bot may have left, or republished under a new SID, while the attempt
+    // was pending; either way this publication is no longer the lane's.
+    isCurrent: () => currentMusicPublicationFor(publication.trackSid) === publication,
+    isDemanded: () => Boolean(state.musicBotIdentity),
+    key: publication.trackSid,
+    retry: () => {
+      publication.setSubscribed(false);
+      publication.setSubscribed(true);
+    }
+  });
+}
+
+function currentMusicPublicationFor(trackSid: string): TrackPublication | undefined {
+  const identity = state.musicBotIdentity;
+  if (!identity) return undefined;
+  return state.livekitRoom?.remoteParticipants?.get?.(identity)?.trackPublications.get(trackSid);
+}
+
+function handleMusicPublicationGone(
+  identity: string,
+  publication: TrackPublication | null | undefined,
+  track: RemoteTrack | null | undefined = null
+): void {
+  if (!isMusicBotIdentity(identity)) return;
+  if (publication) musicSubscriptionRetryController.clear(publication.trackSid);
+
+  const trackId = (track ?? (publication?.track as RemoteTrack | null | undefined))?.mediaStreamTrack?.id;
+  // Without a track id the publication is gone with nothing left to match, so
+  // the whole lane goes; with one, only the lane holding that track.
+  detachMusicTrack(trackId || '');
+}
+
+/**
+ * A failed subscription is the silent failure mode for this lane: no error
+ * surfaces anywhere, there is just no sound. It goes on the same bounded retry
+ * budget as a publication that is desired but carrying no track, so the two
+ * routes to silence recover the same way and neither can spin.
+ */
+function handleMusicSubscriptionFailed(participant: RemoteParticipant, trackSid: string): void {
+  const publication = participant.trackPublications.get(trackSid) as RemoteTrackPublication | undefined;
+  if (publication) scheduleMusicSubscriptionRetry(publication);
 }
 
 
@@ -656,6 +869,7 @@ async function disconnectLiveKitRoomInstance(room: Room): Promise<void> {
   reconcileGenerationFor(room).invalidate();
   if (state.livekitRoom === room) {
     clearAllScreenSubscriptionRetries();
+    teardownMusicLane();
     state.livekitRoom = null;
     state.localMicPublication = null;
     state.localScreenPublications.clear();
@@ -670,6 +884,14 @@ async function disconnectLiveKitRoomInstance(room: Room): Promise<void> {
 }
 
 export function updateLiveKitPublicationState(peer: Participant, publication: TrackPublication): void {
+  // Defensive: the bot is never materialized into `state.peers`, so it should
+  // not be able to reach here at all. The branch stands before every source
+  // predicate anyway, because its publication is ScreenShareAudio and would
+  // otherwise raise a screen-share flag on whichever peer carried it in.
+  if (isMusicBotIdentity(peer.id)) {
+    handleMusicPublication(peer.id, publication);
+    return;
+  }
   if (isScreenVideoPublication(publication)) {
     if (peer.screenAuthoritative === false) return;
     screenRecoveryGrace.cancel(peer.id);
@@ -694,6 +916,14 @@ export function updateLiveKitPublicationState(peer: Participant, publication: Tr
 }
 
 function syncLiveKitPublicationSubscription(peer: Participant, publication: TrackPublication): void {
+  // Before the source predicates: the microphone branch below binds subscription
+  // to `state.outputMuted`, and reusing that policy for music would turn a local
+  // mute into an unsubscribe.
+  if (isMusicBotIdentity(peer.id)) {
+    handleMusicPublication(peer.id, publication);
+    return;
+  }
+
   const remotePublication = publication as RemoteTrackPublication;
   if (typeof remotePublication.setSubscribed !== 'function') return;
 
@@ -764,6 +994,10 @@ function handleLiveKitTrackSubscriptionFailed(
   error?: number
 ): void {
   if (!participant) return;
+  if (isMusicBotIdentity(participant.identity)) {
+    handleMusicSubscriptionFailed(participant, trackSid);
+    return;
+  }
   const peer = state.peers.get(participant.identity) || syncLiveKitParticipant(participant);
   if (!peer) return;
 
@@ -853,6 +1087,7 @@ async function recoverLiveKitRoom(room: Room, isCurrent: () => boolean = () => s
   // otherwise a transient outage longer than the retry window can strand the
   // publication until the sender republishes it with a new SID.
   clearAllScreenSubscriptionRetries();
+  clearAllMusicSubscriptionRetries();
   if (!isCurrent()) return;
   syncLiveKitParticipants(room);
   retryDemandedScreenSubscriptions(room);
@@ -935,6 +1170,10 @@ function handleLiveKitTrackSubscribed(
   publication: RemoteTrackPublication,
   participant: RemoteParticipant
 ): void {
+  if (isMusicBotIdentity(participant.identity)) {
+    handleMusicPublication(participant.identity, publication, track);
+    return;
+  }
   const peer = createLiveKitParticipant(participant);
   if (!peer) return;
   updateLiveKitPublicationState(peer, publication);
@@ -980,6 +1219,10 @@ function handleLiveKitTrackUnsubscribed(
   publication: RemoteTrackPublication,
   participant: RemoteParticipant
 ): void {
+  if (isMusicBotIdentity(participant.identity)) {
+    handleMusicPublicationGone(participant.identity, publication, track);
+    return;
+  }
   const peer = state.peers.get(participant.identity);
   if (!peer) return;
 
@@ -1004,6 +1247,12 @@ function handleLiveKitTrackUnsubscribed(
 }
 
 function handleLiveKitTrackUnpublished(publication: RemoteTrackPublication, participant: RemoteParticipant): void {
+  // Ahead of `clearScreenSubscriptionRetry`: the bot's publication is
+  // ScreenShareAudio and has no business in the screen retry controller.
+  if (isMusicBotIdentity(participant.identity)) {
+    handleMusicPublicationGone(participant.identity, publication);
+    return;
+  }
   clearScreenSubscriptionRetry(publication);
   const peer = state.peers.get(participant.identity);
   if (!peer) return;

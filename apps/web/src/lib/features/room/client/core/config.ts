@@ -35,10 +35,17 @@ export const OUTPUT_DEVICE_STORAGE_KEY = 'voice-room:output-device-id';
 export const OUTPUT_MUTED_STORAGE_KEY = 'voice-room:output-muted';
 export const STREAM_VOLUME_STORAGE_KEY = 'voice-room:stream-volume';
 export const PARTICIPANT_AUDIO_PREFERENCES_STORAGE_KEY = 'voice-room:participant-audio-preferences';
+// Shared-music playback is muted and scaled per listener. Both preferences stay
+// on this client: they never reach the server, so one listener's silence never
+// stops the music for the room.
+export const MUSIC_VOLUME_STORAGE_KEY = 'voice-room:music-volume';
+export const MUSIC_MUTED_STORAGE_KEY = 'voice-room:music-muted';
 export const DEFAULT_STREAM_VOLUME = 0.5;
 export const DEFAULT_PARTICIPANT_VOLUME = 1;
+export const DEFAULT_MUSIC_VOLUME = 0.5;
 export const MAX_STREAM_VOLUME = 2;
 export const MAX_PARTICIPANT_VOLUME = 2;
+export const MAX_MUSIC_VOLUME = 2;
 export const PEER_LATENCY_INTERVAL_MS = 3000;
 export const PEER_LATENCY_GOOD_MS = 150;
 export const PEER_LATENCY_FAIR_MS = 300;

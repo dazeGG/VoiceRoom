@@ -8,6 +8,7 @@
     confirmScreenSourcePicker,
     switchScreenTab
   } from '../client/ui/screen-source-picker';
+  import RoomMusicPanel from './RoomMusicPanel.svelte';
   import { guestNameUi } from '../guest-name-ui.svelte';
   import { screenSourceUi } from '../screen-source-ui.svelte';
   import { invokeToastAction, toastUi } from '../toast-ui.svelte';
@@ -284,6 +285,8 @@
     </div>
   </section>
 </div>
+
+<RoomMusicPanel />
 
 <button
   class="sound-button"

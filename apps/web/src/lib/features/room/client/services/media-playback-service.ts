@@ -3,6 +3,7 @@ import { state } from '../core/state.svelte';
 import { MAX_STREAM_VOLUME } from '../core/config';
 import { getMicrophoneProcessors } from './microphone-service';
 import { getParticipantAudioPreference, getParticipantAudioPreferenceKey } from '../core/settings';
+import { musicPreferences } from '../core/music-preferences.svelte';
 import type { Participant } from '../core/types';
 import { setVoiceConnectionStatus } from '../ui/status';
 import {
@@ -27,6 +28,7 @@ export function supportsAudioOutputSelection(): boolean {
 export function syncPlaybackMuteState(options: { muteDelayMs?: number } = {}): void {
   syncAudioBusSettings(options);
   syncRemoteAudioPlayback();
+  syncMusicAudioPlayback();
   syncScreenVideoAudioSoon();
   if (isAppPlaybackMuted()) {
     state.audioUnlockPending = false;
@@ -57,6 +59,87 @@ export function applyRemoteParticipantAudioPreferences(peer: Participant): void 
 
 export function releaseRemoteAudioElement(mediaElement: HTMLMediaElement): void {
   releaseMediaStreamElement(mediaElement);
+}
+
+// --- Shared music lane ---------------------------------------------------
+// The music bot is not a participant, so its audio element cannot hang off a
+// `Participant` like every other remote track does. It lives here in module
+// state instead, and there is at most one of it per client.
+let musicAudioElement: HTMLAudioElement | null = null;
+let musicTrackId = '';
+
+export function getMusicAudioElement(): HTMLAudioElement | null {
+  return musicAudioElement;
+}
+
+export function getMusicTrackId(): string {
+  return musicTrackId;
+}
+
+export function attachMusicTrack(track: MediaStreamTrack): void {
+  if (track.kind !== 'audio' || track.readyState === 'ended') return;
+
+  if (musicAudioElement && musicTrackId === track.id) {
+    if (!musicAudioElement.isConnected) document.body.append(musicAudioElement);
+    syncMusicAudioPlayback();
+    return;
+  }
+
+  detachMusicTrack();
+  const audio = document.createElement('audio');
+  audio.autoplay = true;
+  audio.muted = true;
+  (audio as HTMLAudioElement & { playsInline: boolean }).playsInline = true;
+  // The bot publishes on the ScreenShareAudio source, and a LiveKit stream can
+  // carry more than one track, so the element gets exactly the music track.
+  audio.srcObject = new MediaStream([track]);
+  musicAudioElement = audio;
+  musicTrackId = track.id;
+  document.body.append(audio);
+  syncMusicAudioPlayback();
+
+  track.addEventListener('ended', () => detachMusicTrack(track.id), { once: true });
+}
+
+/** Tears the lane down. With a `trackId`, only when it is the attached track. */
+export function detachMusicTrack(trackId = ''): void {
+  const audio = musicAudioElement;
+  if (!audio) return;
+  if (trackId && musicTrackId !== trackId) return;
+
+  audio.pause();
+  audio.srcObject = null;
+  releaseMediaStreamElement(audio);
+  audio.remove();
+  musicAudioElement = null;
+  musicTrackId = '';
+}
+
+/**
+ * Sibling of `applyRemoteParticipantAudioPreferences` for the music lane.
+ *
+ * Routes to the `'media'` bus — the one screen-share audio uses — and never to
+ * `'voice'`: on the voice bus the voice master gain would also scale the music,
+ * and per-listener music volume would stop being independent. The local
+ * preference is applied as gain only; the subscription is never touched, so
+ * muting costs nothing and survives a track change.
+ */
+export function syncMusicAudioPlayback(): void {
+  const audio = musicAudioElement;
+  if (!audio) return;
+
+  const volume = musicPreferences.volume;
+  const muted = isAppPlaybackMuted() || musicPreferences.muted || volume <= 0;
+  try {
+    const routed = routeMediaStreamElement(audio, 'media', { muted, volume });
+    if (routed && !muted && getSharedAudioContext().state !== 'running') {
+      queueAudioUnlock({ showFallback: true });
+    }
+  } catch (error) {
+    console.warn('Music audio routing unavailable', error);
+    audio.muted = true;
+  }
+  playMediaElement(audio);
 }
 
 export async function syncAudioOutputDevices(): Promise<boolean> {
