@@ -22,6 +22,12 @@
       "image": "ghcr.io/dazegg/voiceroom-worker",
       "dockerTarget": "worker",
       "composeVariable": "VOICEROOM_WORKER_IMAGE"
+    },
+    {
+      "id": "musicbot",
+      "image": "ghcr.io/dazegg/voiceroom-musicbot",
+      "dockerTarget": "musicbot",
+      "composeVariable": "VOICEROOM_MUSICBOT_IMAGE"
     }
   ],
   "requirements": {

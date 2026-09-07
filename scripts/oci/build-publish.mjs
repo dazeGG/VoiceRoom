@@ -15,8 +15,8 @@ export const RUNTIME_PUBLICATION_SEQUENCE = Object.freeze([
 ]);
 
 const DIGEST = /^sha256:[0-9a-f]{64}$/;
-const IMAGE = /^ghcr\.io\/dazegg\/voiceroom-(api|web|worker)$/;
-const IDS = ["api", "web", "worker"];
+const IMAGE = /^ghcr\.io\/dazegg\/voiceroom-(api|web|worker|musicbot)$/;
+const IDS = ["api", "web", "worker", "musicbot"];
 
 export function sha256(value) {
   return `sha256:${crypto.createHash("sha256").update(value).digest("hex")}`;
@@ -39,7 +39,7 @@ export function validateRuntimeConfig(config) {
       JSON.stringify(config.nonProductionEnvironments) !== JSON.stringify(["release-candidate", "staging"]))
     throw new Error("runtime publication must bind the two non-production environments");
   const packages = config.runtimePackages;
-  if (!Array.isArray(packages) || packages.length !== IDS.length) throw new Error("runtime packages must be api/web/worker only");
+  if (!Array.isArray(packages) || packages.length !== IDS.length) throw new Error(`runtime packages must be ${IDS.join("/")} only`);
   for (const id of IDS) {
     const row = packages.find((candidate) => candidate.id === id);
     if (!row || !IMAGE.test(row.image) || row.image === config.evidencePackage ||
@@ -110,6 +110,7 @@ export function assertDeploymentComposeUsesDigests(composeText) {
     ["media-processing", { image: "WORKER", worker: "media-processing" }],
     ["media-maintenance", { image: "WORKER", worker: "media-maintenance" }],
     ["media-reconciliation", { image: "WORKER", worker: "media-reconciliation" }],
+    ["music-bot", { image: "MUSICBOT" }],
   ]);
   for (const [service, expected] of services) {
     const block = composeText.match(new RegExp(`^  ${service}:\\n([\\s\\S]*?)(?=^  [a-zA-Z0-9_-]+:|^volumes:|\\z)`, "m"))?.[0] ?? "";

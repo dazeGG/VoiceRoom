@@ -23,6 +23,17 @@
     respond `{"contractVersion":"voice-room.runtime-config/v1","schemaVersion":1,"livekit":{"wsUrl":"{$LIVEKIT_GATE_PUBLIC_URL}","connectFallbacks":[]}}` 200
   }
 
+  # Control-plane routes under `/internal/*` (music-bot track-ended and
+  # heartbeat callbacks) must be reachable only from inside the compose
+  # network. The API authenticates them with a shared secret, so this is
+  # defence in depth rather than the only lock — but internal network
+  # reachability is not authorization, which is why the whole prefix is denied
+  # here and not just the two paths that exist today: a future internal route
+  # must not become public by omission.
+  handle /internal/* {
+    respond 404
+  }
+
   @api_metrics_allowed {
     path /api/metrics
     remote_ip {$API_METRICS_ALLOWED_REMOTE:127.0.0.1}

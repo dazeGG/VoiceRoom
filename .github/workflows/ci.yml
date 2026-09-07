@@ -173,6 +173,28 @@ jobs:
         if: always()
         run: docker compose -f docker-compose.ci.yml down --volumes --remove-orphans
 
+  music-bot:
+    name: Music bot lint & tests
+    runs-on: ubuntu-latest
+    # `apps/music-bot` is Python, so it is invisible to the npm workspace gates
+    # above: the root `npm test` only covers workspaces, and this directory has
+    # no package.json by design. Without this job its logic ships unchecked.
+    defaults:
+      run:
+        working-directory: apps/music-bot
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          # Matches the `musicbot` target's base image in the root Dockerfile.
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: apps/music-bot/pyproject.toml
+      - run: python -m pip install --upgrade pip
+      - run: pip install -e ".[dev]"
+      - run: ruff check .
+      - run: pytest -q
+
   goal-g05:
     name: G05 strict LiveKit gate proof
     runs-on: ubuntu-latest

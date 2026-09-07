@@ -109,6 +109,8 @@ services:
       MESSAGE_DELIVERY_LISTEN_ENABLED: ${MESSAGE_DELIVERY_LISTEN_ENABLED:-true}
       MESSAGE_DIRECT_EMIT_ENABLED: ${MESSAGE_DIRECT_EMIT_ENABLED:-true}
       MESSAGE_DELIVERY_CLAIM_ENABLED: ${MESSAGE_DELIVERY_CLAIM_ENABLED:-false}
+      MUSIC_BOT_URL: http://music-bot:8080
+      MUSIC_BOT_SECRET: ${MUSIC_BOT_SECRET:?set MUSIC_BOT_SECRET in .env}
     expose:
       - "3000"
     volumes:
@@ -217,6 +219,36 @@ services:
       MEDIA_RECONCILIATION_CLAIM_ENABLED: ${MEDIA_RECONCILIATION_CLAIM_ENABLED:-false}
     volumes:
       - media:/data/media
+
+  music-bot:
+    image: ${VOICEROOM_MUSICBOT_IMAGE:?set immutable VOICEROOM_MUSICBOT_IMAGE digest}
+    restart: unless-stopped
+    depends_on:
+      livekit:
+        condition: service_started
+    environment:
+      HOST: 0.0.0.0
+      PORT: 8080
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      LIVEKIT_INTERNAL_URL: ws://livekit:7880
+      MUSIC_BOT_SECRET: ${MUSIC_BOT_SECRET:?set MUSIC_BOT_SECRET in .env}
+      MUSIC_BOT_API_URL: http://api:3000
+      MUSIC_BOT_SOURCES: ${MUSIC_BOT_SOURCES:-vk,rutube}
+      # Feature flag: bot egress only. When set, `youtube` is reachable and is
+      # added to the default source list automatically (still overridable via
+      # MUSIC_BOT_SOURCES above). Left unset the service still boots and
+      # answers `source_unavailable` for youtube (AC-9 still holds — nothing
+      # required here to keep the rest of the stack working).
+      MUSIC_BOT_PROXY: ${MUSIC_BOT_PROXY:-}
+      MUSIC_BOT_MAX_ROOMS: ${MUSIC_BOT_MAX_ROOMS:-8}
+    expose:
+      - "8080"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=3).status == 200 else 1)\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
 
   caddy:
     image: ${VOICEROOM_WEB_IMAGE:?set immutable VOICEROOM_WEB_IMAGE digest}

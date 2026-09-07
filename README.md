@@ -43,6 +43,9 @@ apps/
       room/        Svelte room shell + room client/media layer
     static/        статика как есть: воркеты, rnnoise (wasm), icon, fonts
     dist/          production static build для Caddy
+  music-bot/       Python-сервис общей музыки: resolve VK/Rutube/YouTube через yt-dlp, ffmpeg, публикация в LiveKit
+    src/           control-plane HTTP и аудио-пайплайн
+    tests/         pytest
 packages/
   shared/          общие contracts/validation для web и api
 ```
@@ -129,6 +132,7 @@ GitHub-аналог GitLab CI/CD variables находится здесь:
 | `VAPID_PRIVATE_KEY` | API / Web Push | Приватная часть стабильной VAPID-пары. Никогда не публиковать и не хранить в Git. |
 | `GITHUB_TOKEN` | API desktop release endpoint, optional | Нужен только если хочется повысить лимит GitHub API. |
 | `POW_SECRET` | API production/staging, optional | Стабильный secret для proof-of-work challenge; если не задан, генерируется на процесс и challenge'и инвалидируются при рестарте. |
+| `MUSIC_BOT_SECRET` | API / music-bot | Общий секрет control-plane между `api` и `music-bot` (не менее 32 символов). Обязателен в production compose: без него сервис `music-bot` не поднимется. |
 
 **Variables** — не секреты, но окружение-зависимые настройки:
 
@@ -138,6 +142,9 @@ GitHub-аналог GitLab CI/CD variables находится здесь:
 | `LIVEKIT_DOMAIN` | `livekit.${DOMAIN}` | Домен LiveKit. |
 | `LIVEKIT_GATE_PUBLIC_URL` | `wss://livekit.example.com` | Публичный browser-facing URL auth-gate. По умолчанию собирается из `LIVEKIT_DOMAIN`. |
 | `LIVEKIT_INTERNAL_URL` | `ws://livekit:7880` | Внутренний адрес LiveKit SFU для API при запуске без production compose. Production compose фиксирует service URL сам. |
+| `MUSIC_BOT_URL` | `http://music-bot:8080` | Внутренний адрес control-plane `music-bot` для API при запуске без production compose. Production compose фиксирует service URL сам. |
+| `MUSIC_BOT_SOURCES` | `vk,rutube` | Список источников, разрешённых для резолва в `music-bot` (`vk`, `rutube`, `youtube`). Ссылка на источник вне этого списка резолвится как `source_unavailable`, а не ошибка ссылки. |
+| `MUSIC_BOT_PROXY` | optional | Прокси для исходящих запросов `music-bot` (только его собственный egress — на API и web не влияет). Если задан, `youtube` автоматически добавляется к дефолтному списку `MUSIC_BOT_SOURCES`. |
 | `LIVEKIT_URL` | optional | Legacy fallback для host/dev запуска. В production не используйте его как публичный URL; задавайте `LIVEKIT_GATE_PUBLIC_URL`. |
 | `LIVEKIT_PUBLIC_URL` | optional | Для dev compose, если внешний LiveKit port отличается. |
 | `TRUST_PROXY` | `true` в compose/proxy | Включать только за доверенным reverse proxy. |
@@ -230,6 +237,7 @@ POSTGRES_PASSWORD
 LIVEKIT_API_KEY
 LIVEKIT_API_SECRET
 LIVEKIT_GATE_SECRET
+MUSIC_BOT_SECRET
 VAPID_PUBLIC_KEY
 VAPID_PRIVATE_KEY
 VAPID_SUBJECT
@@ -238,6 +246,22 @@ VAPID_SUBJECT
 `DATABASE_URL` в compose соберётся автоматически из `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` и service name `postgres`. Если деплой не через compose — задайте `DATABASE_URL` явно как secret.
 Если Web Push намеренно не используется, `VAPID_*` можно опустить — API продолжит работать,
 но `/api/push/config` вернёт `enabled: false` и клиент отключит переключатель push-уведомлений.
+
+#### Обновление существующей установки: `MUSIC_BOT_SECRET`
+
+Вместе с сервисом `music-bot` в production compose появилась обязательная переменная `MUSIC_BOT_SECRET`.
+Она задана как `${MUSIC_BOT_SECRET:?set MUSIC_BOT_SECRET in .env}` у сервисов `api` и `music-bot`, поэтому
+**существующий production `.env` без неё уронит `npm start` до старта контейнеров.** Перед обновлением
+добавьте в `.env` случайное значение длиной не менее 32 символов, не совпадающее с `LIVEKIT_GATE_SECRET`
+и `LIVEKIT_API_SECRET`:
+
+```text
+MUSIC_BOT_SECRET=<random-32+>
+```
+
+`MUSIC_BOT_SOURCES` и `MUSIC_BOT_PROXY` при этом остаются необязательными: без них `music-bot` стартует с
+дефолтными источниками `vk,rutube`, а `youtube` резолвится как `source_unavailable`, пока не задан
+`MUSIC_BOT_PROXY` — комната, голос, экран и чат работают как обычно вне зависимости от них.
 
 ### CI/CD (GitHub Actions)
 
@@ -283,7 +307,30 @@ Production compose собирает runtime-образы из одного Docke
 - `postgres` — PostgreSQL с volume `postgres_data` и healthcheck;
 - `api` — Node.js API на `:3000`, ждёт healthy Postgres, применяет migrations, хранит аватарки в volume `uploads` и отвечает только на `/api/*`;
 - `caddy` — frontend static build из `apps/web/dist`, reverse proxy для `/api/*` и отдельный reverse proxy для LiveKit domain;
-- `livekit` — LiveKit SFU.
+- `livekit` — LiveKit SFU;
+- `music-bot` — Python-сервис общей музыки: резолвит ссылки VK Video, Rutube и YouTube через `yt-dlp`, декодирует поток через `ffmpeg` и публикует его в комнату LiveKit. Порт наружу не публикуется, control-plane закрыт общим секретом `MUSIC_BOT_SECRET`.
+
+### Общая музыка (`music-bot`)
+
+Резолвер один — `yt-dlp` — и умеет VK Video, Rutube и YouTube через общий интерфейс; какие из них реально
+работают на конкретном деплое, решает не код, а `MUSIC_BOT_SOURCES` и `MUSIC_BOT_PROXY`:
+
+- `MUSIC_BOT_SOURCES` (по умолчанию `vk,rutube`) — список включённых источников. Ссылка на источник вне
+  списка резолвится как `source_unavailable` (валидная ссылка, источник недоступен из этого деплоя), а не
+  как ошибка ссылки.
+- `youtube` в списке источников есть всегда на уровне wire-контракта, но с сервера в России он с 10 февраля
+  2026 полностью заблокирован (домен изъят из НСДИ) — без прокси YouTube резолвится как
+  `source_unavailable`. Задайте `MUSIC_BOT_PROXY` (прокси для egress только самого `music-bot`, на API/web
+  не влияет) — тогда `youtube` автоматически добавляется к дефолтному списку источников.
+- Yandex.Music полностью удалён из проекта: платная подписка Яндекс.Плюс, которую требовал токен сервисного
+  аккаунта, не подошла по деньгам, а VK/Rutube/YouTube через `yt-dlp` покрывают тот же сценарий без неё.
+- **VK — самый хрупкий источник.** VK периодически меняет протокол плеера, и публичные видео иногда
+  внезапно начинают требовать авторизацию. Ожидайте, что VK-резолв время от времени будет падать с
+  `source_unavailable`/`not_found` — это штатный шум, а не повод чинить сервис; комната и остальная музыка
+  продолжают работать.
+- В `apps/music-bot/pyproject.toml` версия `yt-dlp` запинена точно, как и остальные зависимости, но это
+  единственная зависимость, где точный пин **устареет по дизайну**: экстракторы ломаются, когда сайты-
+  источники меняют разметку/протокол, и обновлять `yt-dlp` придётся регулярно, а не только по CVE.
 
 Production-like запуск:
 
