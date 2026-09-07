@@ -50,6 +50,7 @@ function createRoomRealtimeRuntime(deps) {
     queueRoomOccupancyTransition = async (roomId) => getRoomStore().markRoomActive(roomId),
     findRoomBan = async () => null,
     credentialBoundary = null,
+    musicService = null,
     removeLiveKitParticipant = async () => {},
     now = Date.now,
     setTimeout: scheduleTimeout = globalThis.setTimeout,
@@ -533,18 +534,28 @@ function createRoomRealtimeRuntime(deps) {
     return connection.previewRoomIds.has(roomId) || connection.activeVoice?.roomId === roomId;
   }
 
-  function broadcastRoomDetail(roomId, envelope, { previewOnly = false } = {}) {
+  function broadcastRoomDetail(roomId, envelope, { previewOnly = false, activeOnly = false } = {}) {
     for (const connection of wsRegistry.roomDetailSubscribers(roomId)) {
       const isActivePeer = connection.activeVoice?.roomId === roomId;
       if (previewOnly) {
         // Active peers already receive this over their voice transport via
         // broadcast(); only reach preview-only subscribers here.
         if (isActivePeer || !connection.previewRoomIds.has(roomId)) continue;
+      } else if (activeOnly) {
+        // Room-detail delivery reaches lobby preview subscribers by default.
+        // Gating the snapshot alone would still leak the music queue and its
+        // authors into the lobby through incremental updates, so every
+        // room.music.* event is restricted to peers actually in the call.
+        if (!isActivePeer) continue;
       } else if (!connectionWantsRoomDetail(connection, roomId)) {
         continue;
       }
       wsRegistry.sendToConnection(connection, envelope);
     }
+  }
+
+  function broadcastMusicEvent(roomId, type, payload) {
+    broadcastRoomDetail(roomId, buildServerEnvelope(type, payload), { activeOnly: true });
   }
 
   function mirrorLegacyRoomEvent(roomId, message) {
@@ -647,7 +658,7 @@ function createRoomRealtimeRuntime(deps) {
     }
   }
 
-  async function buildRoomSnapshot(roomId, mode = 'preview') {
+  async function buildRoomSnapshot(roomId, mode = 'preview', { viewerUserId = '' } = {}) {
     const dbRoom = await getRoomStore().getRoom(roomId);
     if (!dbRoom) return null;
     const recentMessages = (await getRoomStore().listMessages(roomId, { limit: 100 })).map(publicChatMessage);
@@ -655,7 +666,7 @@ function createRoomRealtimeRuntime(deps) {
     // snapshot overwrite a newer peer update that was already broadcast.
     const presence = presenceRooms.get(roomId);
     const peers = presence ? Array.from(presence.peers.values()).map(publicPeer) : [];
-    return {
+    const snapshot = {
       roomId,
       room: publicLobbyRoom(dbRoom),
       peers,
@@ -663,6 +674,16 @@ function createRoomRealtimeRuntime(deps) {
       voiceActiveSince: presence?.voiceActiveSince || null,
       mode
     };
+    // The player exists only inside an active static room. The lobby preview
+    // uses the same builder, so the gate has to live here rather than at the
+    // call site.
+    if (mode === 'active' && dbRoom.isStatic && musicService) {
+      const block = musicService.getSnapshotBlock(roomId);
+      snapshot.music = block.music;
+      snapshot.musicBotIdentity = block.musicBotIdentity;
+      snapshot.musicIsMaster = Boolean(viewerUserId && dbRoom.ownerId === viewerUserId);
+    }
+    return snapshot;
   }
 
   async function subscribePreview(connection, roomId) {
@@ -971,6 +992,21 @@ function createRoomRealtimeRuntime(deps) {
         id: peerId,
         gateGuestPrincipalId: identityResult.identity?.id || '',
         ip: clientIp || '',
+        // Music master status is resolved once, here, from the room row this
+        // join already loaded — `rooms.owner_id`, the same authority
+        // `isRoomOwner` queries. Caching it keeps a DB round-trip off the WS hot
+        // path: every `room.music.skip` would otherwise pay for one.
+        //
+        // PRECONDITION: this is a snapshot taken at join, and it is safe only
+        // because `rooms.owner_id` is immutable after creation — it is written
+        // by room creation and by nothing else in `apps/api/src`. There is no
+        // ownership-transfer path today. Anything that adds one MUST invalidate
+        // this cache on already-connected peers: otherwise a former owner keeps
+        // master authority (stop-all, and skip/remove on anyone's items) for the
+        // whole life of their existing WS session, and the new owner has none
+        // until they rejoin. Re-querying on the WS hot path is not the fix.
+        isMusicMaster: Boolean(room.isStatic && sessionUser?.id && room.ownerId === sessionUser.id),
+        isStaticRoom: Boolean(room.isStatic),
         joinedAt: previous?.joinedAt ?? Date.now(),
         muted: Boolean(previous?.muted || persistedServerMuted),
         name: reconnecting && !sessionUser ? (previous?.name ?? name) : name,
@@ -1036,7 +1072,7 @@ function createRoomRealtimeRuntime(deps) {
         return supersededVoiceJoin(connection, roomId, transport.id);
       }
 
-      const snapshot = await buildRoomSnapshot(roomId, 'active');
+      const snapshot = await buildRoomSnapshot(roomId, 'active', { viewerUserId: sessionUser?.id || '' });
       if (
         !isCurrentConnectionVoiceJoin(connection, connectionJoinIntent)
         || room.peers.get(peerId)?.transport?.id !== transport.id
@@ -1256,9 +1292,34 @@ function createRoomRealtimeRuntime(deps) {
     connection.previewRoomIds.clear();
   }
 
+  // Music commands are room-scoped: the connection must be an active peer of the
+  // room it names. Permissions come from the peer record cached at join, so no
+  // storage call happens on this path.
+  async function handleMusicCommand(connection, command) {
+    if (!musicService) return { ok: false, code: 'music_unavailable' };
+    const active = connection.activeVoice;
+    if (!active?.roomId || !active.peerId) return { ok: false, code: 'not_active_peer' };
+    const peer = presenceRooms.get(active.roomId)?.peers?.get(active.peerId);
+    if (!peer || peer.closed || peer.transport?.id !== active.transportId) {
+      return { ok: false, code: 'not_active_peer' };
+    }
+    return musicService.handleCommand({
+      roomId: active.roomId,
+      peerId: active.peerId,
+      // Rate limiting keys on these, never on the client-chosen peer id.
+      accountUserId: peer.accountUserId || '',
+      clientIp: peer.ip || '',
+      isMaster: Boolean(peer.isMusicMaster),
+      isStatic: Boolean(peer.isStaticRoom),
+      command
+    });
+  }
+
   return {
     broadcastChatMessage,
+    broadcastMusicEvent,
     broadcastRoomDetail,
+    handleMusicCommand,
     buildRoomSnapshot,
     cancelAccountReconnectLeases,
     cancelRoomReconnectLeases,

@@ -5,6 +5,10 @@ const {
   normalizeRoomId,
   normalizeSessionToken
 } = require('@voice-room/shared/validation');
+const {
+  MUSIC_CLIENT_COMMAND_TYPES,
+  normalizeMusicCommand
+} = require('@voice-room/shared/room-music');
 const { buildServerEnvelope, buildServerErrorEnvelope, parseInboundMessage } = require('./envelope');
 
 function createWsHandler({
@@ -103,6 +107,27 @@ function createWsHandler({
         registry.sendToConnection(
           connection,
           buildServerErrorEnvelope(result.code || 'update_failed', 'Peer update rejected', envelope.id)
+        );
+      }
+      return;
+    }
+
+    if (MUSIC_CLIENT_COMMAND_TYPES.includes(envelope.type)) {
+      // Payload shape only. Room scoping, authorship and the static-room rule
+      // belong to the runtime, which holds the peer record this join validated.
+      const command = normalizeMusicCommand(envelope.type, envelope.payload);
+      if (!command) {
+        registry.sendToConnection(
+          connection,
+          buildServerErrorEnvelope('invalid_link', 'Invalid music command payload', envelope.id)
+        );
+        return;
+      }
+      const result = await roomRuntime.handleMusicCommand(connection, command);
+      if (!result.ok) {
+        registry.sendToConnection(
+          connection,
+          buildServerErrorEnvelope(result.code || 'music_unavailable', 'Music command rejected', envelope.id)
         );
       }
       return;

@@ -13,6 +13,12 @@ const {
   resolveViewedScreenPeerId
 } = require('./realtime/room-runtime');
 const { buildServerEnvelope } = require('./realtime/envelope');
+const {
+  MUSIC_SECRET_HEADER,
+  createMusicBotClient,
+  normalizeMusicBotSecret
+} = require('./domains/music/music-bot-client');
+const { createMusicSessionService } = require('./domains/music/music-session-service');
 const { URL } = require('node:url');
 const { RoomServiceClient, TrackSource } = require('livekit-server-sdk');
 
@@ -31,6 +37,7 @@ const {
   isValidPassword,
   normalizeLogin
 } = require('@voice-room/shared/validation');
+const { normalizeMusicItemId } = require('@voice-room/shared/room-music');
 const { createProofOfWork } = require('./lib/pow');
 const { getClientIp, createRateLimiter } = require('./lib/rate-limit');
 const { MAX_AVATAR_BYTES, createAvatarKey, processAvatar } = require('./lib/avatar-processing');
@@ -248,8 +255,13 @@ let messageDeliveryServices = null;
 let messageDeliveryListener = null;
 
 const presenceRooms = new Map();
+// Music session state lives beside presence, not inside room-runtime: that
+// module owns no state, everything it touches is injected into it.
+const musicRooms = new Map();
 let wsRegistry = null;
 let roomRuntime = null;
+let musicBotClient = null;
+let musicService = null;
 const roomOccupancyQueue = new Map();
 const roomOccupancyRetries = new Map();
 const ROOM_OCCUPANCY_RETRY_BASE_MS = 1000;
@@ -1243,9 +1255,17 @@ function publicPeer(peer) {
   };
 }
 
+// Byte lengths, not string lengths. `timingSafeEqual` throws a RangeError on
+// buffers of different sizes, and a UTF-16 length check does not imply equal
+// UTF-8 byte counts: Node decodes headers as latin-1, so a same-character-count
+// header carrying bytes >= 0x80 passed the old check and then threw inside the
+// comparison — an unauthenticated 500 instead of a clean 401.
 function tokensMatch(expected, actual) {
-  if (!expected || !actual || expected.length !== actual.length) return false;
-  return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(actual));
+  if (!expected || !actual) return false;
+  const expectedBytes = Buffer.from(expected, 'utf8');
+  const actualBytes = Buffer.from(actual, 'utf8');
+  if (expectedBytes.length !== actualBytes.length) return false;
+  return crypto.timingSafeEqual(expectedBytes, actualBytes);
 }
 
 function getAuthorizedPeer(roomId, peerId, sessionToken) {
@@ -1394,6 +1414,10 @@ function closePeer(roomId, peerId, transportId, reason = 'left') {
   if (room.peers.size === 0) {
     // The call ended: reset the in-memory call clock (never persisted).
     room.voiceActiveSince = null;
+    // Nobody is left to hear the music or to control it. This is the only place
+    // a peer leaves the room, and `peers.size === 0` is already reconnect-lease
+    // aware, so no extra grace timer is needed here.
+    musicService?.handleRoomEmpty(roomId);
     void queueRoomOccupancyTransition(roomId).catch((error) => {
       console.error('Failed to persist room occupancy:', error);
     });
@@ -4201,6 +4225,61 @@ async function handleDesktopLatest(res) {
   }
 }
 
+// --- music-bot control plane (bot -> API) ------------------------------------
+//
+// These two routes sit outside /api because they are not part of the browser
+// surface. Reachability is NOT authorization: the bot authenticates with the
+// same shared secret it accepts in the other direction, exactly as the LiveKit
+// gate does. Deployments must keep the `/internal/` prefix off the public edge.
+
+function authorizeMusicBotCallback(req, res) {
+  // Same floor the LiveKit gate secret already enforces. Compose's `:?` only
+  // proves the variable is set, so without this a deployment can ship
+  // `MUSIC_BOT_SECRET=x` and have a guessable control plane. Below the floor the
+  // secret is treated as absent and every callback is refused.
+  const secret = normalizeMusicBotSecret(process.env.MUSIC_BOT_SECRET);
+  const provided = String(req.headers?.[MUSIC_SECRET_HEADER] || '');
+  if (!secret || !tokensMatch(secret, provided)) {
+    sendJson(res, 401, { ok: false, error: 'Unauthorized' });
+    return false;
+  }
+  return true;
+}
+
+async function handleMusicBotCallback(req, res, roomId, kind) {
+  if (!authorizeMusicBotCallback(req, res)) return;
+  if (!musicService) {
+    sendJson(res, 503, { ok: false, error: 'Music sessions are unavailable' });
+    return;
+  }
+  const normalizedRoomId = normalizeRoomId(roomId);
+  const body = await readJsonBody(req);
+  const sessionEpoch = Number(body?.sessionEpoch);
+  const itemId = normalizeMusicItemId(body?.itemId);
+  if (!normalizedRoomId || !Number.isSafeInteger(sessionEpoch) || sessionEpoch < 0 || !itemId) {
+    sendJson(res, 400, { ok: false, error: 'Invalid music callback payload' });
+    return;
+  }
+
+  const result = kind === 'track-ended'
+    ? musicService.handleTrackEnded({ roomId: normalizedRoomId, sessionEpoch, itemId })
+    : musicService.handleHeartbeat({
+      roomId: normalizedRoomId,
+      sessionEpoch,
+      itemId,
+      positionMs: body?.positionMs,
+      status: body?.status
+    });
+
+  if (!result.ok) {
+    // 409 is the bot's explicit "you no longer own this session" signal: it
+    // leaves the room instead of retrying.
+    sendJson(res, 409, { ok: false, error: 'stale', code: result.code });
+    return;
+  }
+  sendJson(res, 200, { ok: true });
+}
+
 function getApiRoutePath(pathname) {
   if (pathname === API_PREFIX) return '/';
   if (pathname.startsWith(`${API_PREFIX}/`)) return pathname.slice(API_PREFIX.length);
@@ -4334,6 +4413,17 @@ function createApiApp({
   app.addHook('onClose', async () => { await activeReadinessProvider.stop?.(); });
   app.addHook('onReady', startMessageDeliveryListener);
   app.addHook('onClose', stopMessageDeliveryListener);
+  // A restart wipes the in-memory queue, so anything the bot is still playing is
+  // orphaned by definition. Best effort: never block readiness on it.
+  app.addHook('onReady', async () => {
+    if (!musicBotClient?.enabled) return;
+    try {
+      await musicService.reconcile({ roomIds: [] });
+    } catch (error) {
+      console.error('Music session reconciliation failed:', error);
+    }
+  });
+  app.addHook('onClose', async () => { musicService?.shutdown(); });
 
   wsRegistry = createConnectionRegistry({
     maxConnectionsPerUser: MAX_REALTIME_STREAMS_PER_USER,
@@ -4346,6 +4436,17 @@ function createApiApp({
     onConnectionClose: (connection) => {
       roomRuntime?.cleanupConnection(connection);
     }
+  });
+
+  musicBotClient = createMusicBotClient();
+  musicRooms.clear();
+  musicService = createMusicSessionService({
+    musicRooms,
+    botClient: musicBotClient,
+    publish: (roomId, type, payload) => roomRuntime?.broadcastMusicEvent(roomId, type, payload),
+    getLiveKitConfig,
+    getLiveKitRoomName,
+    removeLiveKitParticipant
   });
 
   roomRuntime = createRoomRealtimeRuntime({
@@ -4367,6 +4468,7 @@ function createApiApp({
     queueRoomOccupancyTransition,
     findRoomBan,
     credentialBoundary: getCredentialBoundary(),
+    musicService,
     removeLiveKitParticipant,
     reconnectLeaseMs: realtimeReconnectLeaseMs,
     now: realtimeNow,
@@ -4534,6 +4636,17 @@ function createApiApp({
       readsEnabled: () => release250FeatureEnabled('mediaRead')
     });
   }
+
+  app.post('/internal/rooms/:roomId/music/track-ended', (request, reply) => runLegacyHandler(
+    request,
+    reply,
+    (req, res) => handleMusicBotCallback(req, res, request.params.roomId, 'track-ended')
+  ));
+  app.post('/internal/rooms/:roomId/music/heartbeat', (request, reply) => runLegacyHandler(
+    request,
+    reply,
+    (req, res) => handleMusicBotCallback(req, res, request.params.roomId, 'heartbeat')
+  ));
 
   app.get('/api/pow-challenge', (request, reply) => runLegacyHandler(request, reply, handlePowChallenge));
   app.get('/api/desktop/latest', (request, reply) => runLegacyHandler(request, reply, (_req, res) => handleDesktopLatest(res)));
