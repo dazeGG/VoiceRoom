@@ -32,10 +32,27 @@ function normalizeRoomId(value) {
   return /^[A-Za-z0-9_-]{3,48}$/.test(roomId) ? roomId : '';
 }
 
+// Identity namespaces the server mints for participants it owns rather than for
+// a human peer — currently only the music bot. A client must never be able to
+// present one as its own peer id: such a peer is audible in the room but absent
+// from the participant list, so per-peer mute and kick cannot reach it. The
+// prefixes live here, in the one module every join and WS command already goes
+// through, so a change to the minted identity format cannot silently reopen the
+// hole. Lower-cased; matching is prefix-based and case-insensitive so neither a
+// separator change (`music-bot-x` -> `music-bot:x`) nor `MUSIC-BOT-x` escapes it.
+const RESERVED_PEER_ID_PREFIXES = Object.freeze(['music-bot']);
+
+function isReservedPeerId(value) {
+  if (typeof value !== 'string') return false;
+  const candidate = value.trim().toLowerCase();
+  return RESERVED_PEER_ID_PREFIXES.some((prefix) => candidate.startsWith(prefix));
+}
+
 function normalizePeerId(value) {
   if (typeof value !== 'string') return '';
   const peerId = value.trim();
-  return /^[A-Za-z0-9_-]{8,80}$/.test(peerId) ? peerId : '';
+  if (!/^[A-Za-z0-9_-]{8,80}$/.test(peerId)) return '';
+  return isReservedPeerId(peerId) ? '' : peerId;
 }
 
 function normalizeSessionToken(value) {
@@ -119,6 +136,7 @@ module.exports = {
   PASSWORD_MAX_LENGTH,
   PASSWORD_MIN_LENGTH,
   PRESENCE_STATUSES,
+  RESERVED_PEER_ID_PREFIXES,
   SCREEN_PROFILE_IDS,
   cleanAvatarColorKey,
   cleanDisplayName,
@@ -128,6 +146,7 @@ module.exports = {
   cleanRoomName,
   cleanScreenProfileId,
   cleanStreamId,
+  isReservedPeerId,
   isValidPassword,
   normalizeLogin,
   normalizePeerId,

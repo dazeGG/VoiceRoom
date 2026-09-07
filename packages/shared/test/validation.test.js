@@ -5,6 +5,8 @@ const assert = require('node:assert/strict');
 const {
   normalizeRoomId,
   normalizePeerId,
+  isReservedPeerId,
+  RESERVED_PEER_ID_PREFIXES,
   normalizeSessionToken,
   cleanName,
   cleanDisplayName,
@@ -40,6 +42,38 @@ test('normalizePeerId enforces 8-80 length', () => {
   assert.equal(normalizePeerId('1234567'), '');
   assert.equal(normalizePeerId('a'.repeat(81)), '');
   assert.equal(normalizePeerId('peer.dot'), '');
+});
+
+test('normalizePeerId rejects reserved system identities', () => {
+  // The exact attack string: the music bot's LiveKit identity matched the peer-id
+  // character class, so any client could claim it and be treated as the bot.
+  assert.equal(normalizePeerId('music-bot-general'), '');
+  assert.equal(normalizePeerId('music-bot:general'), '');
+  assert.equal(normalizePeerId('MUSIC-BOT-general'), '');
+  assert.equal(normalizePeerId('Music-Bot_general'), '');
+  assert.equal(normalizePeerId('  music-bot-general  '), '');
+  assert.equal(normalizePeerId('music-botnnnn'), '');
+  assert.equal(normalizePeerId('music-bot'), '');
+
+  // Ordinary peer ids are untouched, including ones that merely mention music.
+  assert.equal(normalizePeerId('a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d'), 'a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d');
+  assert.equal(normalizePeerId('auth-1234567890'), 'auth-1234567890');
+  assert.equal(normalizePeerId('musicbot-fan'), 'musicbot-fan');
+  assert.equal(normalizePeerId('my-music-bot-1'), 'my-music-bot-1');
+  assert.equal(normalizePeerId('lqz3k9-music-bot'), 'lqz3k9-music-bot');
+});
+
+test('isReservedPeerId keeps the reserved namespace in one place', () => {
+  assert.deepEqual(RESERVED_PEER_ID_PREFIXES, ['music-bot']);
+  assert.equal(Object.isFrozen(RESERVED_PEER_ID_PREFIXES), true);
+  for (const prefix of RESERVED_PEER_ID_PREFIXES) {
+    assert.equal(prefix, prefix.toLowerCase());
+    assert.equal(isReservedPeerId(prefix), true);
+    assert.equal(isReservedPeerId(`${prefix.toUpperCase()}-room`), true);
+  }
+  assert.equal(isReservedPeerId('peer-12345678'), false);
+  assert.equal(isReservedPeerId(null), false);
+  assert.equal(isReservedPeerId(42), false);
 });
 
 test('normalizeSessionToken enforces 32-128 length', () => {

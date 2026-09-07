@@ -17,7 +17,11 @@ const KNOWN_CLIENT_TYPES = new Set([
   'room.preview.unsubscribe',
   'room.join',
   'room.leave',
-  'room.peer.update'
+  'room.peer.update',
+  'room.music.enqueue',
+  'room.music.skip',
+  'room.music.remove',
+  'room.music.stop'
 ]);
 
 function isPlainObject(value) {

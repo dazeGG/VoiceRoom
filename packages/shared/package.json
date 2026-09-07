@@ -59,6 +59,11 @@
       "import": "./src/moderation.mjs",
       "require": "./src/moderation.js"
     },
+    "./room-music": {
+      "types": "./src/room-music.d.ts",
+      "import": "./src/room-music.mjs",
+      "require": "./src/room-music.js"
+    },
     "./realtime": {
       "types": "./src/realtime.d.ts",
       "import": "./src/realtime.js",
@@ -96,7 +101,7 @@
     }
   },
   "scripts": {
-    "check": "node --check src/validation.js && node --check src/realtime.js && node --check src/avatar-accent.js && node --check src/avatar-accent.mjs && node --check src/emoji.js && node --check src/emoji.mjs && node --check src/emoji-groups.js && node --check src/emoji-groups.mjs && node --check src/runtime-config.js && node --check src/runtime-config.mjs && node --check src/capabilities.js && node --check src/capabilities.mjs && node --check src/platform-class.js && node --check src/platform-class.mjs && node --check src/messaging-history.js && node --check src/messaging-send.js && node --check src/membership.js && node --check src/membership.mjs && node --check src/room-message-content.js && node --check src/room-message-content.mjs && node --check src/reactions.js && node --check src/reactions.mjs && node --check src/attachments.js && node --check src/mentions.js && node --check src/mentions.mjs && node --check src/notifications.js && node --check src/notifications.mjs && node --check src/moderation.js && node --check src/moderation.mjs",
+    "check": "node --check src/validation.js && node --check src/realtime.js && node --check src/avatar-accent.js && node --check src/avatar-accent.mjs && node --check src/emoji.js && node --check src/emoji.mjs && node --check src/emoji-groups.js && node --check src/emoji-groups.mjs && node --check src/runtime-config.js && node --check src/runtime-config.mjs && node --check src/capabilities.js && node --check src/capabilities.mjs && node --check src/platform-class.js && node --check src/platform-class.mjs && node --check src/messaging-history.js && node --check src/messaging-send.js && node --check src/membership.js && node --check src/membership.mjs && node --check src/room-message-content.js && node --check src/room-message-content.mjs && node --check src/reactions.js && node --check src/reactions.mjs && node --check src/attachments.js && node --check src/mentions.js && node --check src/mentions.mjs && node --check src/notifications.js && node --check src/notifications.mjs && node --check src/moderation.js && node --check src/moderation.mjs && node --check src/room-music.js && node --check src/room-music.mjs",
     "test": "node --test test/*.test.js"
   }
 }
