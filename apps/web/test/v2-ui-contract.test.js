@@ -2130,6 +2130,14 @@ test('message action toolbars expose persisted quick reactions and a separated f
   assert.match(picker, /function beginToneHover\(emoji: string, event: PointerEvent\)/);
   assert.match(picker, /oncontextmenu=/);
   assert.match(picker, /function dismissOverlays\(event: PointerEvent\)/);
+  // The swatches have to be reachable: leaving the tile only starts a grace
+  // period, and entering the strip cancels it outright.
+  assert.match(picker, /TONE_CLOSE_GRACE_MS = \d+/);
+  assert.match(picker, /function scheduleToneClose\(\)/);
+  assert.match(picker, /onpointerenter=\{cancelToneClose\}/);
+  // And it has to stay inside the panel, which clips whatever hangs out.
+  assert.match(picker, /toneStripLeft = Math\.min\(/);
+  assert.match(picker, /pickerBox\.width - half - TONE_STRIP_MARGIN/);
   assert.doesNotMatch(picker, /beginLongPress|reaction-tone-strip-close/);
   // The jump is instant: an animated one walked the window through every row in
   // between and asked for the artwork of each.

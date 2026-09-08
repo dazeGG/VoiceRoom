@@ -55,3 +55,15 @@ test('a message that names you is marked for you and nobody else', () => {
   // mention behaves like pointing at any other message.
   assert.ok(css.indexOf('.chat-msg-text.mentions-me::before') < css.indexOf('.chat-msg-text.is-context::before'));
 });
+
+test('the mention marker spans the same block the tint does', () => {
+  const css = read('src/lib/features/room/styles/chat-rail.css');
+
+  // On the first message of a group the tint reaches up past the author line,
+  // so the marker has to reach there too instead of starting halfway down, and
+  // the tint needs headroom or it sits flush against the avatar.
+  assert.match(
+    css,
+    /\.chat-msg-text\.mentions-me\[data-group-first='true'\]::before,\s*\n\.chat-msg-text\.mentions-me\[data-group-first='true'\]::after \{\s*\n\s*top: -30px;/
+  );
+});

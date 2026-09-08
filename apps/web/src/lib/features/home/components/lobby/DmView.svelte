@@ -306,6 +306,66 @@
   let lastAutoScrolledPeer = '';
   let lastAutoScrolledMessage = '';
 
+  // A thread is not ready the moment its messages arrive: images and emoji are
+  // still resolving, and every one that lands changes the height, so a scroll
+  // to the bottom taken too early stops short. The placeholder therefore stays
+  // up while the thread renders behind it, and comes down once the artwork has
+  // settled and the view is actually at the newest message.
+  const SETTLE_TIMEOUT_MS = 2000;
+  let threadSettling = $state(false);
+  let settleToken = 0;
+
+  function pendingArtwork(root: HTMLElement): Promise<unknown> {
+    const images = [...root.querySelectorAll('img')].filter((image) => !image.complete);
+    if (!images.length) return Promise.resolve();
+    return Promise.all(
+      images.map(
+        (image) =>
+          new Promise<void>((resolve) => {
+            const done = (): void => {
+              image.removeEventListener('load', done);
+              image.removeEventListener('error', done);
+              resolve();
+            };
+            image.addEventListener('load', done);
+            image.addEventListener('error', done);
+          })
+      )
+    );
+  }
+
+  async function settleThread(token: number): Promise<void> {
+    await tick();
+    if (token !== settleToken) return;
+    if (scrollEl) {
+      // A slow or dead image must not hold the thread hostage.
+      await Promise.race([
+        pendingArtwork(scrollEl),
+        new Promise((resolve) => setTimeout(resolve, SETTLE_TIMEOUT_MS))
+      ]);
+    }
+    if (token !== settleToken) return;
+    await tick();
+    if (token !== settleToken) return;
+    if (scrollEl) scrollEl.scrollTop = scrollEl.scrollHeight;
+    threadSettling = false;
+  }
+
+  $effect(() => {
+    const peerId = friendsState.selectedFriendId ?? '';
+    const loading = friendsState.threadLoading;
+    if (friendsState.view !== 'dm' || !peerId) {
+      threadSettling = false;
+      return;
+    }
+    if (loading) {
+      settleToken += 1;
+      threadSettling = true;
+      return;
+    }
+    void settleThread((settleToken += 1));
+  });
+
   // Prepending older history keeps the same newest id, so it must not trigger
   // this latest-message autoscroll and disturb the preserved anchor.
   $effect(() => {
@@ -552,14 +612,15 @@
     {/if}
 
     <div class="lobby-dm-scroll lobby-scroll" bind:this={scrollEl} onscroll={onThreadScroll}>
-      {#if friendsState.threadLoading}
-        <div class="lobby-dm-empty">Загружаем переписку…</div>
-      {:else if friendsState.threadHistoryError && groups.length === 0}
+      {#if friendsState.threadLoading || threadSettling}
+        <div class="lobby-dm-loading" role="status">Загружаем переписку…</div>
+      {/if}
+      {#if friendsState.threadHistoryError && groups.length === 0}
         <div class="lobby-dm-empty">{friendsState.threadHistoryError}</div>
-      {:else if groups.length === 0}
+      {:else if groups.length === 0 && !friendsState.threadLoading && !threadSettling}
         <div class="lobby-dm-empty">Здесь пока пусто. Напишите первым!</div>
       {:else}
-        <div class="lobby-dm-thread">
+        <div class="lobby-dm-thread" class:is-settling={threadSettling}>
           {#if friendsState.threadHistoryError}
             <div class="lobby-dm-empty">{friendsState.threadHistoryError}</div>
           {/if}
