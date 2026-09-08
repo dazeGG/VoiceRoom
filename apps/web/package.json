@@ -5,7 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "predev": "npm run emoji:assets",
     "build": "vite build",
+    "prebuild": "npm run emoji:assets",
+    "emoji:assets": "node scripts/build-emoji-assets.mjs",
     "check": "node --check static/audio-gate.worklet.js && node --check static/desktop-audio-source.worklet.js && node --check static/rnnoise/rnnoise.worklet.js && svelte-kit sync && tsc --noEmit && svelte-check --tsconfig ./tsconfig.json",
     "preview": "vite preview",
     "test": "node --test test/*.test.js",
@@ -16,6 +19,7 @@
     "@lucide/svelte": "^1.24.0",
     "@voice-room/shared": "file:../../packages/shared",
     "livekit-client": "^2.19.2",
+    "openmoji": "17.0.0",
     "svelte-fa": "^4.0.4"
   },
   "devDependencies": {

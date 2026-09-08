@@ -2105,9 +2105,22 @@ test('message action toolbars expose persisted quick reactions and a separated f
   assert.match(picker, /SmilePlus/);
   assert.match(picker, /placeholder="Поиск реакции"/);
   assert.match(picker, /listReactionEmojiGroups/);
-  assert.match(picker, /role="tablist"[\s\S]*aria-label="Категории реакций"/);
-  assert.match(picker, /role="tabpanel"/);
-  assert.match(picker, /tabindex=\{activeGroupKey === group\.key \? 0 : -1\}/);
+  // Categories are anchors into one continuous list, not tabs that swap the
+  // content out, so scrolling passes from one category into the next.
+  assert.match(picker, /class="reaction-picker-anchors"[\s\S]*role="toolbar"/);
+  assert.match(picker, /aria-label="Разделы реакций"/);
+  assert.match(picker, /function goToSection\(key: string\)/);
+  assert.match(picker, /scroller\.scrollTo\(\{ top, behavior: 'smooth' \}\)/);
+  assert.doesNotMatch(picker, /role="tablist"|role="tabpanel"/);
+  // ~2400 tiles in one scroller, so only the visible rows may exist.
+  assert.match(picker, /const visibleRows = \$derived\.by/);
+  assert.match(picker, /style:height=\{`\$\{layout\.totalHeight\}px`\}/);
+  // Skin tones are a choice, not 1565 extra tiles: a remembered default plus a
+  // long press for a one-off, which leaves the default alone.
+  assert.match(picker, /listCollapsedReactionEmojis/);
+  assert.match(picker, /function beginLongPress\(emoji: string\)/);
+  assert.match(picker, /saveSkinTone\(tone, SKIN_TONES\.length\)/);
+  assert.match(picker, /toneStripFor/);
   assert.match(persistence, /indexedDB\.open\(DATABASE_NAME, DATABASE_VERSION\)/);
   assert.match(persistence, /voice-room:frequent-reactions/);
   assert.match(persistence, /frequentReactionKey\(namespace: string, userId: string\)/);

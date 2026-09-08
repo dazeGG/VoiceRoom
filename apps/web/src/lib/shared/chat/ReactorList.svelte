@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import Emoji from './Emoji.svelte';
   import type { ReactionStore } from './reaction-store.svelte';
 
   let {
@@ -26,7 +27,7 @@
 
 <section class="reactor-list" aria-labelledby="reactor-list-title">
   <header>
-    <h3 id="reactor-list-title" tabindex="-1" bind:this={heading}>Реакция {emoji}</h3>
+    <h3 id="reactor-list-title" tabindex="-1" bind:this={heading}>Реакция <Emoji {emoji} size={18} decorative /></h3>
     <button type="button" aria-label="Закрыть список" onclick={() => onclose?.()}>×</button>
   </header>
 

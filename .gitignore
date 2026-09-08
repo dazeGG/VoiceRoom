@@ -48,3 +48,6 @@ playwright-report/
 .playwright/
 .claude/
 .omc/
+
+# Generated emoji artwork (see apps/web/scripts/build-emoji-assets.mjs)
+apps/web/static/emoji/

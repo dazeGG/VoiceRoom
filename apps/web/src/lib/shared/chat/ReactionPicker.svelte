@@ -1,22 +1,40 @@
 <script lang="ts">
   import { listReactionEmojiGroups } from '@voice-room/shared/emoji-groups';
+  import {
+    SKIN_TONES,
+    applySkinTone,
+    hasSkinToneVariants,
+    listCollapsedReactionEmojis,
+    listSkinToneVariants
+  } from '@voice-room/shared/emoji-skin-tones';
   import { SmilePlus } from '@lucide/svelte';
   import { iconSm } from '$lib/shared/ui/icons';
   import { Popover } from '$lib/shared/ui';
   import { tick } from 'svelte';
+  import Emoji from './Emoji.svelte';
   import type { ReactionStore } from './reaction-store.svelte';
   import {
     DEFAULT_FREQUENT_REACTIONS,
     loadFrequentReactions,
     recordFrequentReaction
   } from './frequent-reactions';
+  import { NEUTRAL_TONE, loadSkinTone, saveSkinTone } from './skin-tone-preference';
 
   const GROUPS = listReactionEmojiGroups();
   const COLUMNS = 7;
   const PERSISTENCE_NAMESPACE = 'chat';
-  // The corpus is ~3900 entries. Rendering all of them at once stalls the
-  // popover, so search is capped and the browse view shows one category.
-  const SEARCH_LIMIT = 120;
+
+  // The browse list is one continuous scroller holding every category, so the
+  // category buttons are anchors into it rather than tabs that swap the content
+  // out. That costs ~2400 tiles, far past what the DOM wants to hold, so only
+  // the visible rows are rendered against a spacer of the full height.
+  const TILE = 44;
+  const TILE_GAP = 4;
+  const ROW_HEIGHT = TILE + TILE_GAP;
+  const HEADER_HEIGHT = 28;
+  const OVERSCAN_ROWS = 3;
+
+  const COLLAPSED = listCollapsedReactionEmojis();
 
   let {
     store,
@@ -37,50 +55,116 @@
   } = $props();
 
   let search = $state('');
-  let activeGroupKey = $state('frequent');
+  let activeSectionKey = $state('frequent');
   let activeIndex = $state(0);
   let previewEmoji = $state('');
   let frequentEmoji = $state<string[]>([...DEFAULT_FREQUENT_REACTIONS]);
-  let grid: HTMLDivElement | null = $state(null);
+  let skinTone = $state(NEUTRAL_TONE);
+  let toneMenuOpen = $state(false);
+  let toneStripFor = $state('');
+  let scroller: HTMLDivElement | null = $state(null);
   let searchInput: HTMLInputElement | null = $state(null);
+  let scrollTop = $state(0);
+  let viewportHeight = $state(300);
+  let longPressTimer = 0;
 
   const searching = $derived(search.trim().length > 0);
 
-  const sections = $derived.by(() => {
+  interface PickerSection {
+    key: string;
+    label: string;
+    emojis: string[];
+  }
+
+  const sections = $derived.by((): PickerSection[] => {
     const query = search.trim();
     if (query) {
-      const matches: string[] = [];
-      for (const group of GROUPS) {
-        for (const emoji of group.emojis) {
-          if (!emoji.includes(query)) continue;
-          matches.push(emoji);
-          if (matches.length >= SEARCH_LIMIT) break;
-        }
-        if (matches.length >= SEARCH_LIMIT) break;
-      }
+      const matches = COLLAPSED.filter((emoji) => emoji.includes(query));
       return [{ key: 'search', label: 'Результаты', emojis: matches }];
     }
 
-    // The default view pairs your own history with the first category, so the
-    // popover is useful before you have picked a category.
-    if (activeGroupKey === 'frequent') {
-      const group = GROUPS[0];
-      return [
-        { key: 'frequent', label: 'Часто используемые', emojis: frequentEmoji },
-        { key: group.key, label: group.label, emojis: [...group.emojis] }
-      ];
+    const browse: PickerSection[] = [];
+    if (frequentEmoji.length) {
+      browse.push({ key: 'frequent', label: 'Часто используемые', emojis: [...frequentEmoji] });
     }
-
-    const group = GROUPS.find((entry) => entry.key === activeGroupKey) ?? GROUPS[0];
-    return [{ key: group.key, label: group.label, emojis: [...group.emojis] }];
+    const visible = new Set(COLLAPSED);
+    for (const group of GROUPS) {
+      browse.push({
+        key: group.key,
+        label: group.label,
+        emojis: group.emojis.filter((emoji) => visible.has(emoji))
+      });
+    }
+    return browse;
   });
 
-  const flatOptions = $derived(
-    sections.flatMap((section) =>
-      section.emojis.map((emoji, index) => ({ emoji, key: `${section.key}:${index}:${emoji}` }))
-    )
+  /** Whatever the reader's tone preference turns this base into. */
+  function toned(emoji: string): string {
+    return hasSkinToneVariants(emoji) ? applySkinTone(emoji, skinTone) : emoji;
+  }
+
+  type PickerRow =
+    | { kind: 'header'; key: string; sectionKey: string; label: string; top: number; height: number }
+    | {
+        kind: 'grid';
+        key: string;
+        sectionKey: string;
+        emojis: string[];
+        firstIndex: number;
+        top: number;
+        height: number;
+      };
+
+  const layout = $derived.by(() => {
+    const rows: PickerRow[] = [];
+    const flat: string[] = [];
+    const sectionTop = new Map<string, number>();
+    let top = 0;
+
+    for (const section of sections) {
+      if (!section.emojis.length) continue;
+      sectionTop.set(section.key, top);
+      rows.push({
+        kind: 'header',
+        key: `${section.key}:header`,
+        sectionKey: section.key,
+        label: section.label,
+        top,
+        height: HEADER_HEIGHT
+      });
+      top += HEADER_HEIGHT;
+
+      for (let offset = 0; offset < section.emojis.length; offset += COLUMNS) {
+        rows.push({
+          kind: 'grid',
+          key: `${section.key}:${offset}`,
+          sectionKey: section.key,
+          emojis: section.emojis.slice(offset, offset + COLUMNS),
+          firstIndex: flat.length + offset,
+          top,
+          height: ROW_HEIGHT
+        });
+        top += ROW_HEIGHT;
+      }
+      flat.push(...section.emojis);
+    }
+
+    return { rows, flat, sectionTop, totalHeight: top };
+  });
+
+  const visibleRows = $derived.by(() => {
+    const from = scrollTop - OVERSCAN_ROWS * ROW_HEIGHT;
+    const to = scrollTop + viewportHeight + OVERSCAN_ROWS * ROW_HEIGHT;
+    return layout.rows.filter((row) => row.top + row.height >= from && row.top <= to);
+  });
+
+  const toneStripOptions = $derived(
+    toneStripFor ? [toneStripFor, ...listSkinToneVariants(toneStripFor)] : []
   );
-  const activeTabId = $derived(`reaction-category-${activeGroupKey}`);
+
+  $effect(() => {
+    skinTone = loadSkinTone(SKIN_TONES.length);
+  });
 
   $effect(() => {
     const activeUserId = userId;
@@ -95,14 +179,64 @@
 
   $effect(() => {
     if (!open) return;
-    void tick().then(() => searchInput?.focus());
+    void tick().then(() => {
+      searchInput?.focus();
+      if (scroller) viewportHeight = scroller.clientHeight || viewportHeight;
+    });
   });
 
+  // Which category the reader is actually looking at, so the anchors stay honest
+  // while they scroll instead of only when they click.
+  $effect(() => {
+    const position = scrollTop + 1;
+    let current = layout.rows[0]?.sectionKey ?? 'frequent';
+    for (const row of layout.rows) {
+      if (row.kind !== 'header' || row.top > position) continue;
+      current = row.sectionKey;
+    }
+    activeSectionKey = current;
+  });
+
+  function onScroll(event: Event): void {
+    const target = event.currentTarget as HTMLDivElement;
+    scrollTop = target.scrollTop;
+    viewportHeight = target.clientHeight;
+  }
+
+
+  function goToSection(key: string): void {
+    search = '';
+    activeSectionKey = key;
+    activeIndex = 0;
+    void tick().then(() => {
+      const top = layout.sectionTop.get(key);
+      if (top === undefined || !scroller) return;
+      scroller.scrollTo({ top, behavior: 'smooth' });
+    });
+  }
+
   async function focusOption(index: number): Promise<void> {
-    activeIndex = Math.max(0, Math.min(index, flatOptions.length - 1));
-    previewEmoji = flatOptions[activeIndex]?.emoji || '';
+    const flat = layout.flat;
+    if (!flat.length) return;
+    activeIndex = Math.max(0, Math.min(index, flat.length - 1));
+    previewEmoji = toned(flat[activeIndex] ?? '');
+
+    // The target row may be outside the rendered window, so bring it into view
+    // first and let the window rebuild before reaching for the button.
+    const row = layout.rows.find(
+      (entry) =>
+        entry.kind === 'grid'
+        && activeIndex >= entry.firstIndex
+        && activeIndex < entry.firstIndex + entry.emojis.length
+    );
+    if (row && scroller) {
+      if (row.top < scrollTop) scroller.scrollTop = row.top;
+      else if (row.top + row.height > scrollTop + viewportHeight) {
+        scroller.scrollTop = row.top + row.height - viewportHeight;
+      }
+    }
     await tick();
-    grid?.querySelectorAll<HTMLButtonElement>('[role="gridcell"]')[activeIndex]?.focus();
+    scroller?.querySelector<HTMLButtonElement>(`[data-option-index="${activeIndex}"]`)?.focus();
   }
 
   function gridKeydown(event: KeyboardEvent): void {
@@ -112,7 +246,7 @@
     else if (event.key === 'ArrowDown') next += COLUMNS;
     else if (event.key === 'ArrowUp') next -= COLUMNS;
     else if (event.key === 'Home') next = 0;
-    else if (event.key === 'End') next = flatOptions.length - 1;
+    else if (event.key === 'End') next = layout.flat.length - 1;
     else return;
     event.preventDefault();
     // A context menu may be hosting this picker; it must not also move its own
@@ -121,28 +255,46 @@
     void focusOption(next);
   }
 
-  function selectGroup(key: string): void {
-    activeGroupKey = key;
-    search = '';
-    activeIndex = 0;
-  }
-
   function categoryKeydown(event: KeyboardEvent): void {
-    const tabs = Array.from(
-      (event.currentTarget as HTMLElement).querySelectorAll<HTMLButtonElement>('[role="tab"]')
+    const anchors = Array.from(
+      (event.currentTarget as HTMLElement).querySelectorAll<HTMLButtonElement>('[data-category]')
     );
-    const current = tabs.indexOf(document.activeElement as HTMLButtonElement);
+    const current = anchors.indexOf(document.activeElement as HTMLButtonElement);
     if (current < 0) return;
     let next = current;
-    if (event.key === 'ArrowRight') next = (current + 1) % tabs.length;
-    else if (event.key === 'ArrowLeft') next = (current - 1 + tabs.length) % tabs.length;
+    if (event.key === 'ArrowRight') next = (current + 1) % anchors.length;
+    else if (event.key === 'ArrowLeft') next = (current - 1 + anchors.length) % anchors.length;
     else if (event.key === 'Home') next = 0;
-    else if (event.key === 'End') next = tabs.length - 1;
+    else if (event.key === 'End') next = anchors.length - 1;
     else return;
     event.preventDefault();
     event.stopPropagation();
-    tabs[next]?.focus();
-    tabs[next]?.click();
+    anchors[next]?.focus();
+    anchors[next]?.click();
+  }
+
+  function chooseTone(tone: number): void {
+    skinTone = tone;
+    saveSkinTone(tone, SKIN_TONES.length);
+    toneMenuOpen = false;
+  }
+
+  // Telegram and WhatsApp both hold to reach the other tones and keep the
+  // default untouched, so a one-off pick here does not rewrite the preference.
+  function openToneStrip(emoji: string): void {
+    if (!hasSkinToneVariants(emoji)) return;
+    toneStripFor = emoji;
+  }
+
+  function beginLongPress(emoji: string): void {
+    if (!hasSkinToneVariants(emoji)) return;
+    window.clearTimeout(longPressTimer);
+    longPressTimer = window.setTimeout(() => openToneStrip(emoji), 450);
+  }
+
+  function cancelLongPress(): void {
+    window.clearTimeout(longPressTimer);
+    longPressTimer = 0;
   }
 
   async function react(emoji: string): Promise<void> {
@@ -156,15 +308,29 @@
   }
 
   async function choose(emoji: string, close: () => void): Promise<void> {
+    cancelLongPress();
+    // A long press opened the tone strip; the release that ends it is not also
+    // a pick of the base emoji.
+    if (toneStripFor) return;
+    await react(emoji);
+    close();
+  }
+
+  async function chooseFromStrip(emoji: string, close: () => void): Promise<void> {
+    toneStripFor = '';
     await react(emoji);
     close();
   }
 
   function resetOnClose(): void {
+    cancelLongPress();
     search = '';
-    activeGroupKey = 'frequent';
+    activeSectionKey = 'frequent';
     activeIndex = 0;
     previewEmoji = '';
+    toneMenuOpen = false;
+    toneStripFor = '';
+    scrollTop = 0;
   }
 </script>
 
@@ -178,7 +344,7 @@
         aria-label={`Добавить быструю реакцию ${emoji}`}
         title={`Реакция ${emoji}`}
         onclick={() => void react(emoji)}
-      >{emoji}</button>
+      ><Emoji {emoji} size={20} decorative /></button>
     {/each}{/if}
     <Popover
       bind:open
@@ -207,97 +373,166 @@
       {#snippet content({ close })}
         <div class="reaction-picker">
           <div class="reaction-picker-head">
-            <label class="reaction-picker-search">
-              <span class="sr-only">Поиск реакции</span>
-              <input
-                bind:this={searchInput}
-                bind:value={search}
-                type="search"
-                placeholder="Поиск реакции"
-                oninput={() => (activeIndex = 0)}
-              />
-            </label>
+            <div class="reaction-picker-search-row">
+              <label class="reaction-picker-search">
+                <span class="sr-only">Поиск реакции</span>
+                <input
+                  bind:this={searchInput}
+                  bind:value={search}
+                  type="search"
+                  placeholder="Поиск реакции"
+                  oninput={() => {
+                    activeIndex = 0;
+                    scrollTop = 0;
+                    if (scroller) scroller.scrollTop = 0;
+                  }}
+                />
+              </label>
 
+              <div class="reaction-tone">
+                <button
+                  class="reaction-tone-trigger"
+                  type="button"
+                  aria-label="Цвет кожи по умолчанию"
+                  title="Цвет кожи по умолчанию"
+                  aria-haspopup="true"
+                  aria-expanded={toneMenuOpen}
+                  onclick={() => (toneMenuOpen = !toneMenuOpen)}
+                ><Emoji emoji={applySkinTone('\u{270B}', skinTone)} size={20} decorative /></button>
+
+                {#if toneMenuOpen}
+                  <div class="reaction-tone-menu" role="menu" aria-label="Цвет кожи">
+                    {#each ['\u{270B}', ...listSkinToneVariants('\u{270B}')] as swatch, index (swatch)}
+                      {@const tone = index - 1}
+                      <button
+                        class="reaction-tone-option"
+                        class:is-active={tone === skinTone}
+                        type="button"
+                        role="menuitemradio"
+                        aria-checked={tone === skinTone}
+                        aria-label={tone === NEUTRAL_TONE ? 'Без цвета кожи' : `Тон ${index}`}
+                        onclick={() => chooseTone(tone)}
+                      ><Emoji emoji={swatch} size={20} decorative /></button>
+                    {/each}
+                  </div>
+                {/if}
+              </div>
+            </div>
+
+            <!-- Anchors, not tabs: they scroll the one list rather than swapping
+                 its contents. -->
             <div
-              class="reaction-picker-tabs"
-              role="tablist"
+              class="reaction-picker-anchors"
+              role="toolbar"
               tabindex="-1"
-              aria-label="Категории реакций"
+              aria-label="Разделы реакций"
               onkeydown={categoryKeydown}
             >
-              <button
-                id="reaction-category-frequent"
-                class="reaction-picker-tab"
-                class:is-active={!searching && activeGroupKey === 'frequent'}
-                type="button"
-                role="tab"
-                aria-selected={activeGroupKey === 'frequent'}
-                aria-label="Часто используемые"
-                aria-controls="reaction-picker-category-panel"
-                tabindex={activeGroupKey === 'frequent' ? 0 : -1}
-                title="Часто используемые"
-                onclick={() => selectGroup('frequent')}
-              >🕘</button>
+              {#if frequentEmoji.length}
+                <button
+                  class="reaction-picker-anchor"
+                  class:is-active={!searching && activeSectionKey === 'frequent'}
+                  type="button"
+                  data-category="frequent"
+                  aria-label="Часто используемые"
+                  aria-current={activeSectionKey === 'frequent' ? 'true' : undefined}
+                  title="Часто используемые"
+                  onclick={() => goToSection('frequent')}
+                >🕘</button>
+              {/if}
               {#each GROUPS as group (group.key)}
                 <button
-                  id={`reaction-category-${group.key}`}
-                  class="reaction-picker-tab"
-                  class:is-active={!searching && activeGroupKey === group.key}
+                  class="reaction-picker-anchor"
+                  class:is-active={!searching && activeSectionKey === group.key}
                   type="button"
-                  role="tab"
-                  aria-selected={activeGroupKey === group.key}
+                  data-category={group.key}
                   aria-label={group.label}
-                  aria-controls="reaction-picker-category-panel"
-                  tabindex={activeGroupKey === group.key ? 0 : -1}
+                  aria-current={activeSectionKey === group.key ? 'true' : undefined}
                   title={group.label}
-                  onclick={() => selectGroup(group.key)}
-                >{group.icon}</button>
+                  onclick={() => goToSection(group.key)}
+                ><Emoji emoji={group.icon} size={20} decorative /></button>
               {/each}
             </div>
           </div>
 
-          <div id="reaction-picker-category-panel" role="tabpanel" aria-labelledby={activeTabId}>
-            <div
-              class="reaction-picker-body"
-              role="grid"
-              tabindex="-1"
-              aria-label="Доступные реакции"
-              bind:this={grid}
-              onkeydown={gridKeydown}
-            >
-            {#each sections as section (section.key)}
-              {#if section.emojis.length > 0}
-                <span class="reaction-picker-section">{section.label}</span>
-                <div class="reaction-picker-grid">
-                  {#each section.emojis as emoji, index (`${section.key}:${index}:${emoji}`)}
-                    {@const optionKey = `${section.key}:${index}:${emoji}`}
-                    {@const flatIndex = flatOptions.findIndex((option) => option.key === optionKey)}
-                    <button
-                      type="button"
-                      role="gridcell"
-                      tabindex={flatIndex === activeIndex ? 0 : -1}
-                      aria-label={`Реакция ${emoji}`}
-                      onclick={() => void choose(emoji, close)}
-                      onfocus={() => {
-                        activeIndex = flatIndex >= 0 ? flatIndex : index;
-                        previewEmoji = emoji;
-                      }}
-                      onpointerenter={() => (previewEmoji = emoji)}
-                    >{emoji}</button>
-                  {/each}
-                </div>
-              {/if}
-            {/each}
+          <div
+            class="reaction-picker-body"
+            role="grid"
+            tabindex="-1"
+            aria-label="Доступные реакции"
+            bind:this={scroller}
+            onscroll={onScroll}
+            onkeydown={gridKeydown}
+          >
+            <div class="reaction-picker-spacer" style:height={`${layout.totalHeight}px`}>
+              {#each visibleRows as row (row.key)}
+                {#if row.kind === 'header'}
+                  <span class="reaction-picker-section" style:top={`${row.top}px`}>{row.label}</span>
+                {:else}
+                  <div class="reaction-picker-grid" style:top={`${row.top}px`} role="row">
+                    {#each row.emojis as emoji, column (emoji)}
+                      {@const index = row.firstIndex + column}
+                      {@const display = toned(emoji)}
+                      <button
+                        type="button"
+                        role="gridcell"
+                        data-option-index={index}
+                        tabindex={index === activeIndex ? 0 : -1}
+                        aria-label={`Реакция ${display}`}
+                        aria-haspopup={hasSkinToneVariants(emoji) ? 'true' : undefined}
+                        onclick={() => void choose(display, close)}
+                        oncontextmenu={(event) => {
+                          if (!hasSkinToneVariants(emoji)) return;
+                          event.preventDefault();
+                          openToneStrip(emoji);
+                        }}
+                        onpointerdown={() => beginLongPress(emoji)}
+                        onpointerup={cancelLongPress}
+                        onpointerleave={cancelLongPress}
+                        onpointercancel={cancelLongPress}
+                        onfocus={() => {
+                          activeIndex = index;
+                          previewEmoji = display;
+                        }}
+                        onpointerenter={() => (previewEmoji = display)}
+                      >
+                        <Emoji emoji={display} decorative />
+                        {#if hasSkinToneVariants(emoji)}
+                          <span class="reaction-picker-tone-hint" aria-hidden="true"></span>
+                        {/if}
+                      </button>
+                    {/each}
+                  </div>
+                {/if}
+              {/each}
+            </div>
 
-            {#if flatOptions.length === 0}
+            {#if layout.flat.length === 0}
               <p class="reaction-picker-empty">Ничего не найдено</p>
             {/if}
-            </div>
           </div>
+
+          {#if toneStripFor}
+            <div class="reaction-tone-strip" role="group" aria-label="Цвет кожи для этой реакции">
+              {#each toneStripOptions as option (option)}
+                <button
+                  type="button"
+                  aria-label={`Реакция ${option}`}
+                  onclick={() => void chooseFromStrip(option, close)}
+                ><Emoji emoji={option} decorative /></button>
+              {/each}
+              <button
+                class="reaction-tone-strip-close"
+                type="button"
+                aria-label="Закрыть выбор цвета"
+                onclick={() => (toneStripFor = '')}
+              >×</button>
+            </div>
+          {/if}
 
           <div class="reaction-picker-foot" aria-hidden="true">
             {#if previewEmoji}
-              <span class="reaction-picker-preview">{previewEmoji}</span>
+              <span class="reaction-picker-preview"><Emoji emoji={previewEmoji} decorative /></span>
             {:else}
               <span class="reaction-picker-hint">Выберите реакцию</span>
             {/if}
@@ -313,7 +548,6 @@
      as the sibling action buttons. */
   .reaction-quick-actions { display: flex; align-items: center; gap: 4px; overflow: visible; }
   .reaction-quick-trigger, .reaction-picker-trigger { display: grid; width: 36px; height: 36px; place-items: center; border: 0; border-radius: 12px; padding: 0; background: transparent; color: inherit; cursor: pointer; transition: background 120ms ease, color 120ms ease; }
-  .reaction-quick-trigger { font-size: 18px; line-height: 1; }
   .reaction-picker-trigger { color: color-mix(in oklch, currentColor, transparent 42%); }
   .reaction-quick-trigger:hover, .reaction-quick-trigger:focus-visible,
   .reaction-picker-trigger:hover, .reaction-picker-trigger:focus-visible { background: color-mix(in oklch, var(--accent), transparent 86%); color: var(--accent); outline: none; }
@@ -322,6 +556,7 @@
   :global(.reaction-picker-panel) { padding: 0; overflow: hidden; }
 
   .reaction-picker {
+    position: relative;
     display: flex;
     width: min(392px, calc(100vw - 28px));
     max-height: var(--popover-available-height, calc(100dvh - 16px));
@@ -329,6 +564,10 @@
   }
 
   .reaction-picker-head { display: flex; flex: none; flex-direction: column; gap: 12px; padding: 14px 14px 10px; }
+
+  .reaction-picker-search-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+
+  .reaction-picker-search { flex: 1 1 auto; min-width: 0; }
 
   .reaction-picker-search input {
     width: 100%;
@@ -346,9 +585,57 @@
   .reaction-picker-search input::placeholder { color: var(--warm-muted-dim); }
   .reaction-picker-search input:focus { border-color: color-mix(in oklch, var(--accent), transparent 40%); outline: none; }
 
-  .reaction-picker-tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+  .reaction-tone { position: relative; flex: none; }
 
-  .reaction-picker-tab {
+  .reaction-tone-trigger {
+    display: grid;
+    width: 44px;
+    height: 44px;
+    place-items: center;
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    border-radius: 15px;
+    background: color-mix(in oklch, var(--control), transparent 45%);
+    cursor: pointer;
+  }
+
+  .reaction-tone-trigger:hover,
+  .reaction-tone-trigger:focus-visible { border-color: color-mix(in oklch, var(--accent), transparent 40%); outline: none; }
+
+  .reaction-tone-menu {
+    position: absolute;
+    z-index: 2;
+    top: calc(100% + 6px);
+    inset-inline-end: 0;
+    display: flex;
+    gap: 2px;
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    border-radius: 13px;
+    padding: 4px;
+    background: var(--warm-900);
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.42);
+  }
+
+  .reaction-tone-option,
+  .reaction-tone-strip button {
+    display: grid;
+    width: 34px;
+    height: 34px;
+    place-items: center;
+    border: 0;
+    border-radius: 10px;
+    background: transparent;
+    cursor: pointer;
+  }
+
+  .reaction-tone-option:hover,
+  .reaction-tone-option:focus-visible,
+  .reaction-tone-option.is-active,
+  .reaction-tone-strip button:hover,
+  .reaction-tone-strip button:focus-visible { background: color-mix(in oklch, var(--accent), transparent 86%); outline: none; }
+
+  .reaction-picker-anchors { display: flex; flex-wrap: wrap; gap: 6px; }
+
+  .reaction-picker-anchor {
     display: grid;
     width: 40px;
     height: 40px;
@@ -362,23 +649,30 @@
     transition: background 120ms ease;
   }
 
-  .reaction-picker-tab:hover,
-  .reaction-picker-tab.is-active { background: color-mix(in oklch, var(--accent), transparent 86%); }
+  .reaction-picker-anchor:hover,
+  .reaction-picker-anchor.is-active { background: color-mix(in oklch, var(--accent), transparent 86%); }
 
   .reaction-picker-body {
-    display: flex;
+    position: relative;
     max-height: min(300px, 46vh);
     min-height: 0;
     flex: 1 1 auto;
-    flex-direction: column;
-    gap: 10px;
     padding: 2px 14px 14px;
     overflow-y: auto;
   }
 
   .reaction-picker-body:focus { outline: none; }
 
+  /* Rows are positioned against the full-height spacer, so scrolling stays
+     accurate while only the visible ones exist. */
+  .reaction-picker-spacer { position: relative; }
+
   .reaction-picker-section {
+    position: absolute;
+    inset-inline: 0;
+    display: flex;
+    height: 28px;
+    align-items: center;
     color: var(--warm-faint);
     font-family: var(--font-mono);
     font-size: 10.5px;
@@ -386,17 +680,22 @@
     text-transform: uppercase;
   }
 
-  .reaction-picker-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+  .reaction-picker-grid {
+    position: absolute;
+    inset-inline: 0;
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px;
+  }
 
   .reaction-picker-grid button {
+    position: relative;
     display: grid;
     height: 44px;
     place-items: center;
     border: 0;
     border-radius: 13px;
     background: transparent;
-    font-size: 22px;
-    line-height: 1;
     cursor: pointer;
   }
 
@@ -406,7 +705,37 @@
     outline: none;
   }
 
+  /* The corner notch marks what a long press can open, the way a keyboard marks
+     a key with alternates. */
+  .reaction-picker-tone-hint {
+    position: absolute;
+    right: 4px;
+    bottom: 4px;
+    width: 0;
+    height: 0;
+    border-top: 4px solid transparent;
+    border-inline-start: 4px solid color-mix(in oklch, currentColor, transparent 62%);
+  }
+
   .reaction-picker-empty { margin: 8px 0; color: var(--warm-faint); font-size: 13px; text-align: center; }
+
+  .reaction-tone-strip {
+    position: absolute;
+    z-index: 3;
+    inset-inline: 12px;
+    bottom: 58px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    border-radius: 15px;
+    padding: 5px;
+    background: var(--warm-900);
+    box-shadow: 0 14px 30px rgba(0, 0, 0, 0.46);
+  }
+
+  .reaction-tone-strip-close { color: var(--warm-muted); font-size: 18px; }
 
   .reaction-picker-foot {
     display: flex;
@@ -419,7 +748,6 @@
     background: color-mix(in oklch, var(--control), transparent 82%);
   }
 
-  .reaction-picker-preview { font-size: 22px; line-height: 1; }
   .reaction-picker-hint { color: var(--warm-muted-dim); font-family: var(--font-mono); font-size: 12.5px; }
 
   .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
