@@ -22,13 +22,16 @@ test('collapsing folds every tone variant into a base that stays in the corpus',
   assert.equal(new Set(collapsed).size, collapsed.length);
   assert.ok(Object.isFrozen(collapsed));
 
+  // Nothing browsable carries a tone: the list shows gestures once, and the
+  // colour is a separate choice.
+  for (const emoji of collapsed) {
+    assert.equal(cjs.skinToneBase(emoji), emoji);
+    assert.equal(cjs.isCollapsedSkinToneVariant(emoji), false);
+  }
   for (const emoji of corpus) {
     if (visible.has(emoji)) continue;
-    // Anything hidden is reachable: it is one of the tones of a visible base.
     assert.ok(cjs.isCollapsedSkinToneVariant(emoji));
-    const base = cjs.skinToneBase(emoji);
-    assert.ok(visible.has(base));
-    assert.ok(cjs.listSkinToneVariants(base).includes(emoji));
+    assert.notEqual(cjs.skinToneBase(emoji), emoji);
   }
 });
 
@@ -67,14 +70,15 @@ test('a base without tones, and an out-of-range tone, resolve to the base itself
   assert.equal(cjs.isCollapsedSkinToneVariant(WAVE_MEDIUM), true);
 });
 
-test('mixed-tone multi-person sequences stay browsable instead of hiding behind a base', () => {
+test('mixed-tone multi-person sequences are hidden rather than shown as extra colours', () => {
   const visible = new Set(cjs.listCollapsedReactionEmojis());
 
-  // Two people, two modifiers, and no toneless spelling of its own: collapsing
-  // it would make it reachable only by search.
+  // Two people, one modifier each. No single swatch expresses "light hand, dark
+  // hand", so this is not offered anywhere; showing it inline instead just read
+  // as the same gesture repeated in colours.
   assert.ok(listReactionEmojis().includes(HANDSHAKE_MIXED));
-  assert.ok(visible.has(HANDSHAKE_MIXED));
-  assert.equal(cjs.isCollapsedSkinToneVariant(HANDSHAKE_MIXED), false);
+  assert.equal(visible.has(HANDSHAKE_MIXED), false);
+  assert.equal(cjs.isCollapsedSkinToneVariant(HANDSHAKE_MIXED), true);
   assert.equal(cjs.hasSkinToneVariants(cjs.skinToneBase(HANDSHAKE_MIXED)), false);
 });
 

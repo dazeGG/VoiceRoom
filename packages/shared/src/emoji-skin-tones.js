@@ -53,7 +53,12 @@ function build() {
   }
 
   const byBase = new Map();
-  const collapsed = new Set();
+  // Nothing carrying a tone modifier is ever browsed directly. Leaving some of
+  // them inline — the mixed-tone spellings that no single swatch can express —
+  // read as the picker showing the same gesture in several colours for no
+  // apparent reason, so they are reached through a base's swatches or not at
+  // all.
+  const collapsed = new Set(corpus.filter((emoji) => tonesIn(emoji).length > 0));
 
   for (const [base, variants] of families) {
     // A base the corpus does not carry itself has nothing to collapse behind:
@@ -75,10 +80,6 @@ function build() {
 
     const tones = Object.freeze(SKIN_TONES.map((tone) => uniform.get(tone)));
     byBase.set(base, Object.freeze({ base, tones }));
-    // Only what the swatches can bring back is hidden. A family may also hold
-    // mixed-tone spellings (two people, one modifier each); those stay inline,
-    // because no swatch would offer them again.
-    for (const sequence of tones) collapsed.add(sequence);
   }
 
   const visible = Object.freeze(corpus.filter((emoji) => !collapsed.has(emoji)));

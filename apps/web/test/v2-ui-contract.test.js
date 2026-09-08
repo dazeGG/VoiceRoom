@@ -2104,23 +2104,37 @@ test('message action toolbars expose persisted quick reactions and a separated f
   assert.match(picker, /\{#each frequentEmoji as emoji/);
   assert.match(picker, /SmilePlus/);
   assert.match(picker, /placeholder="Поиск реакции"/);
-  assert.match(picker, /listReactionEmojiGroups/);
+  const catalog = read('src/lib/shared/chat/emoji-catalog.ts');
+  // Categories now come through the catalogue layer, which drops anything the
+  // artwork cannot draw before the picker ever sees it.
+  assert.match(picker, /listBrowsableCategories/);
+  assert.match(catalog, /listReactionEmojiGroups/);
+  assert.match(catalog, /import coverage from '\.\/emoji-coverage\.json'/);
+  assert.match(catalog, /function isOfferedEmoji\(emoji: string\): boolean/);
   // Categories are anchors into one continuous list, not tabs that swap the
   // content out, so scrolling passes from one category into the next.
   assert.match(picker, /class="reaction-picker-anchors"[\s\S]*role="toolbar"/);
   assert.match(picker, /aria-label="Разделы реакций"/);
   assert.match(picker, /function goToSection\(key: string\)/);
-  assert.match(picker, /scroller\.scrollTo\(\{ top, behavior: 'smooth' \}\)/);
   assert.doesNotMatch(picker, /role="tablist"|role="tabpanel"/);
   // ~2400 tiles in one scroller, so only the visible rows may exist.
   assert.match(picker, /const visibleRows = \$derived\.by/);
   assert.match(picker, /style:height=\{`\$\{layout\.totalHeight\}px`\}/);
   // Skin tones are a choice, not 1565 extra tiles: a remembered default plus a
   // long press for a one-off, which leaves the default alone.
-  assert.match(picker, /listCollapsedReactionEmojis/);
-  assert.match(picker, /function beginLongPress\(emoji: string\)/);
+  assert.match(picker, /BROWSABLE_EMOJIS/);
   assert.match(picker, /saveSkinTone\(tone, SKIN_TONES\.length\)/);
-  assert.match(picker, /toneStripFor/);
+  // A dwell or a right click reaches the swatches; there is no hold-to-open,
+  // and no close button — leaving the strip or pressing elsewhere puts it away.
+  assert.match(picker, /TONE_HOVER_DELAY_MS = 300/);
+  assert.match(picker, /function beginToneHover\(emoji: string, event: PointerEvent\)/);
+  assert.match(picker, /oncontextmenu=/);
+  assert.match(picker, /function dismissOverlays\(event: PointerEvent\)/);
+  assert.doesNotMatch(picker, /beginLongPress|reaction-tone-strip-close/);
+  // The jump is instant: an animated one walked the window through every row in
+  // between and asked for the artwork of each.
+  assert.doesNotMatch(picker, /behavior: 'smooth'/);
+  assert.match(picker, /scroller\.scrollTop = top;/);
   assert.match(persistence, /indexedDB\.open\(DATABASE_NAME, DATABASE_VERSION\)/);
   assert.match(persistence, /voice-room:frequent-reactions/);
   assert.match(persistence, /frequentReactionKey\(namespace: string, userId: string\)/);

@@ -1,12 +1,5 @@
 <script lang="ts">
-  import { listReactionEmojiGroups } from '@voice-room/shared/emoji-groups';
-  import {
-    SKIN_TONES,
-    applySkinTone,
-    hasSkinToneVariants,
-    listCollapsedReactionEmojis,
-    listSkinToneVariants
-  } from '@voice-room/shared/emoji-skin-tones';
+  import { SKIN_TONES } from '@voice-room/shared/emoji-skin-tones';
   import { SmilePlus } from '@lucide/svelte';
   import { iconSm } from '$lib/shared/ui/icons';
   import { Popover } from '$lib/shared/ui';
@@ -19,8 +12,16 @@
     recordFrequentReaction
   } from './frequent-reactions';
   import { NEUTRAL_TONE, loadSkinTone, saveSkinTone } from './skin-tone-preference';
+  import {
+    BROWSABLE_EMOJIS,
+    TONE_SWATCH_BASE,
+    hasSkinToneChoices,
+    listBrowsableCategories,
+    skinToneChoices,
+    withSkinTone
+  } from './emoji-catalog';
 
-  const GROUPS = listReactionEmojiGroups();
+  const CATEGORIES = listBrowsableCategories();
   const COLUMNS = 7;
   const PERSISTENCE_NAMESPACE = 'chat';
 
@@ -32,9 +33,10 @@
   const TILE_GAP = 4;
   const ROW_HEIGHT = TILE + TILE_GAP;
   const HEADER_HEIGHT = 28;
-  const OVERSCAN_ROWS = 3;
-
-  const COLLAPSED = listCollapsedReactionEmojis();
+  // Two rows of slack: enough that a fast wheel never shows a blank strip,
+  // few enough that a jump to a category asks for one screen of artwork.
+  const OVERSCAN_ROWS = 2;
+  const TONE_HOVER_DELAY_MS = 300;
 
   let {
     store,
@@ -62,11 +64,15 @@
   let skinTone = $state(NEUTRAL_TONE);
   let toneMenuOpen = $state(false);
   let toneStripFor = $state('');
+  let toneStripLeft = $state(0);
+  let toneStripTop = $state(0);
+  let strip: HTMLDivElement | null = $state(null);
   let scroller: HTMLDivElement | null = $state(null);
   let searchInput: HTMLInputElement | null = $state(null);
   let scrollTop = $state(0);
   let viewportHeight = $state(300);
-  let longPressTimer = 0;
+  let toneHoverTimer = 0;
+  let picker: HTMLDivElement | null = $state(null);
 
   const searching = $derived(search.trim().length > 0);
 
@@ -79,28 +85,23 @@
   const sections = $derived.by((): PickerSection[] => {
     const query = search.trim();
     if (query) {
-      const matches = COLLAPSED.filter((emoji) => emoji.includes(query));
-      return [{ key: 'search', label: 'Результаты', emojis: matches }];
+      const matches = BROWSABLE_EMOJIS.filter((emoji) => emoji.includes(query));
+      return [{ key: 'search', label: 'Результаты', emojis: [...matches] }];
     }
 
     const browse: PickerSection[] = [];
     if (frequentEmoji.length) {
       browse.push({ key: 'frequent', label: 'Часто используемые', emojis: [...frequentEmoji] });
     }
-    const visible = new Set(COLLAPSED);
-    for (const group of GROUPS) {
-      browse.push({
-        key: group.key,
-        label: group.label,
-        emojis: group.emojis.filter((emoji) => visible.has(emoji))
-      });
+    for (const category of CATEGORIES) {
+      browse.push({ key: category.key, label: category.label, emojis: category.emojis });
     }
     return browse;
   });
 
   /** Whatever the reader's tone preference turns this base into. */
   function toned(emoji: string): string {
-    return hasSkinToneVariants(emoji) ? applySkinTone(emoji, skinTone) : emoji;
+    return withSkinTone(emoji, skinTone);
   }
 
   type PickerRow =
@@ -158,9 +159,7 @@
     return layout.rows.filter((row) => row.top + row.height >= from && row.top <= to);
   });
 
-  const toneStripOptions = $derived(
-    toneStripFor ? [toneStripFor, ...listSkinToneVariants(toneStripFor)] : []
-  );
+  const toneStripOptions = $derived(toneStripFor ? skinToneChoices(toneStripFor) : []);
 
   $effect(() => {
     skinTone = loadSkinTone(SKIN_TONES.length);
@@ -211,7 +210,11 @@
     void tick().then(() => {
       const top = layout.sectionTop.get(key);
       if (top === undefined || !scroller) return;
-      scroller.scrollTo({ top, behavior: 'smooth' });
+      // Instant, not smooth: an animated scroll walks the window across every
+      // row in between, so the jump asked for hundreds of screens of artwork on
+      // the way and felt like the picker was loading forever.
+      scroller.scrollTop = top;
+      scrollTop = top;
     });
   }
 
@@ -273,28 +276,53 @@
     anchors[next]?.click();
   }
 
+  /** A press anywhere that is not the strip or the tone menu puts them away. */
+  function dismissOverlays(event: PointerEvent): void {
+    const target = event.target;
+    if (!(target instanceof Node)) return;
+    if (strip?.contains(target)) return;
+    if (!(target instanceof Element) || !target.closest('.reaction-tone')) toneMenuOpen = false;
+    if (!(target instanceof Element) || !target.closest('.reaction-picker-grid button')) {
+      toneStripFor = '';
+    }
+  }
+
   function chooseTone(tone: number): void {
     skinTone = tone;
     saveSkinTone(tone, SKIN_TONES.length);
     toneMenuOpen = false;
   }
 
-  // Telegram and WhatsApp both hold to reach the other tones and keep the
-  // default untouched, so a one-off pick here does not rewrite the preference.
-  function openToneStrip(emoji: string): void {
-    if (!hasSkinToneVariants(emoji)) return;
+  // A one-off pick, which leaves the remembered default alone. It opens on a
+  // dwell or a right click; the strip is anchored to the tile so the colours
+  // appear where the eye already is.
+  function openToneStrip(emoji: string, tile: HTMLElement): void {
+    if (!hasSkinToneChoices(emoji) || !picker) return;
+    const tileBox = tile.getBoundingClientRect();
+    const pickerBox = picker.getBoundingClientRect();
+    toneStripLeft = tileBox.left - pickerBox.left + tileBox.width / 2;
+    toneStripTop = tileBox.top - pickerBox.top;
     toneStripFor = emoji;
   }
 
-  function beginLongPress(emoji: string): void {
-    if (!hasSkinToneVariants(emoji)) return;
-    window.clearTimeout(longPressTimer);
-    longPressTimer = window.setTimeout(() => openToneStrip(emoji), 450);
+  function beginToneHover(emoji: string, event: PointerEvent): void {
+    const tile = event.currentTarget as HTMLElement;
+    if (!hasSkinToneChoices(emoji)) return;
+    window.clearTimeout(toneHoverTimer);
+    toneHoverTimer = window.setTimeout(() => openToneStrip(emoji, tile), TONE_HOVER_DELAY_MS);
   }
 
-  function cancelLongPress(): void {
-    window.clearTimeout(longPressTimer);
-    longPressTimer = 0;
+  function cancelToneHover(): void {
+    window.clearTimeout(toneHoverTimer);
+    toneHoverTimer = 0;
+  }
+
+  /** Leaving the tile closes the strip unless the pointer moved onto it. */
+  function leaveTile(event: PointerEvent): void {
+    cancelToneHover();
+    const next = event.relatedTarget;
+    if (next instanceof Node && strip?.contains(next)) return;
+    toneStripFor = '';
   }
 
   async function react(emoji: string): Promise<void> {
@@ -308,10 +336,7 @@
   }
 
   async function choose(emoji: string, close: () => void): Promise<void> {
-    cancelLongPress();
-    // A long press opened the tone strip; the release that ends it is not also
-    // a pick of the base emoji.
-    if (toneStripFor) return;
+    cancelToneHover();
     await react(emoji);
     close();
   }
@@ -323,7 +348,7 @@
   }
 
   function resetOnClose(): void {
-    cancelLongPress();
+    cancelToneHover();
     search = '';
     activeSectionKey = 'frequent';
     activeIndex = 0;
@@ -371,7 +396,12 @@
       {/snippet}
 
       {#snippet content({ close })}
-        <div class="reaction-picker">
+        <div
+          class="reaction-picker"
+          role="presentation"
+          bind:this={picker}
+          onpointerdown={dismissOverlays}
+        >
           <div class="reaction-picker-head">
             <div class="reaction-picker-search-row">
               <label class="reaction-picker-search">
@@ -398,11 +428,11 @@
                   aria-haspopup="true"
                   aria-expanded={toneMenuOpen}
                   onclick={() => (toneMenuOpen = !toneMenuOpen)}
-                ><Emoji emoji={applySkinTone('\u{270B}', skinTone)} size={20} decorative /></button>
+                ><Emoji emoji={withSkinTone(TONE_SWATCH_BASE, skinTone)} size={20} decorative /></button>
 
                 {#if toneMenuOpen}
                   <div class="reaction-tone-menu" role="menu" aria-label="Цвет кожи">
-                    {#each ['\u{270B}', ...listSkinToneVariants('\u{270B}')] as swatch, index (swatch)}
+                    {#each skinToneChoices(TONE_SWATCH_BASE) as swatch, index (swatch)}
                       {@const tone = index - 1}
                       <button
                         class="reaction-tone-option"
@@ -440,7 +470,7 @@
                   onclick={() => goToSection('frequent')}
                 >🕘</button>
               {/if}
-              {#each GROUPS as group (group.key)}
+              {#each CATEGORIES as group (group.key)}
                 <button
                   class="reaction-picker-anchor"
                   class:is-active={!searching && activeSectionKey === group.key}
@@ -479,25 +509,25 @@
                         data-option-index={index}
                         tabindex={index === activeIndex ? 0 : -1}
                         aria-label={`Реакция ${display}`}
-                        aria-haspopup={hasSkinToneVariants(emoji) ? 'true' : undefined}
+                        aria-haspopup={hasSkinToneChoices(emoji) ? 'true' : undefined}
                         onclick={() => void choose(display, close)}
                         oncontextmenu={(event) => {
-                          if (!hasSkinToneVariants(emoji)) return;
+                          if (!hasSkinToneChoices(emoji)) return;
                           event.preventDefault();
-                          openToneStrip(emoji);
+                          openToneStrip(emoji, event.currentTarget as HTMLElement);
                         }}
-                        onpointerdown={() => beginLongPress(emoji)}
-                        onpointerup={cancelLongPress}
-                        onpointerleave={cancelLongPress}
-                        onpointercancel={cancelLongPress}
                         onfocus={() => {
                           activeIndex = index;
                           previewEmoji = display;
                         }}
-                        onpointerenter={() => (previewEmoji = display)}
+                        onpointerenter={(event) => {
+                          previewEmoji = display;
+                          beginToneHover(emoji, event);
+                        }}
+                        onpointerleave={leaveTile}
                       >
                         <Emoji emoji={display} decorative />
-                        {#if hasSkinToneVariants(emoji)}
+                        {#if hasSkinToneChoices(emoji)}
                           <span class="reaction-picker-tone-hint" aria-hidden="true"></span>
                         {/if}
                       </button>
@@ -513,7 +543,18 @@
           </div>
 
           {#if toneStripFor}
-            <div class="reaction-tone-strip" role="group" aria-label="Цвет кожи для этой реакции">
+            <!-- Anchored to the tile and only as wide as the six swatches. It
+                 closes by leaving it or clicking elsewhere; a click inside is
+                 never a reason to take the whole picker down with it. -->
+            <div
+              class="reaction-tone-strip"
+              role="group"
+              aria-label="Цвет кожи для этой реакции"
+              bind:this={strip}
+              style:left={`${toneStripLeft}px`}
+              style:top={`${toneStripTop}px`}
+              onpointerleave={() => (toneStripFor = '')}
+            >
               {#each toneStripOptions as option (option)}
                 <button
                   type="button"
@@ -521,12 +562,6 @@
                   onclick={() => void chooseFromStrip(option, close)}
                 ><Emoji emoji={option} decorative /></button>
               {/each}
-              <button
-                class="reaction-tone-strip-close"
-                type="button"
-                aria-label="Закрыть выбор цвета"
-                onclick={() => (toneStripFor = '')}
-              >×</button>
             </div>
           {/if}
 
@@ -719,23 +754,22 @@
 
   .reaction-picker-empty { margin: 8px 0; color: var(--warm-faint); font-size: 13px; text-align: center; }
 
+  /* Anchored over the tile it belongs to and only as wide as its six swatches,
+     rather than a full-width bar with empty space on both sides. */
   .reaction-tone-strip {
     position: absolute;
     z-index: 3;
-    inset-inline: 12px;
-    bottom: 58px;
     display: flex;
+    width: max-content;
     align-items: center;
-    justify-content: center;
     gap: 2px;
     border: 1px solid rgba(255, 255, 255, 0.09);
     border-radius: 15px;
-    padding: 5px;
+    padding: 4px;
     background: var(--warm-900);
     box-shadow: 0 14px 30px rgba(0, 0, 0, 0.46);
+    transform: translate(-50%, calc(-100% - 6px));
   }
-
-  .reaction-tone-strip-close { color: var(--warm-muted); font-size: 18px; }
 
   .reaction-picker-foot {
     display: flex;

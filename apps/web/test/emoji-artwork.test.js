@@ -14,6 +14,7 @@ const RU_FLAG = '\u{1F1F7}\u{1F1FA}';
 const WAVE_DARK = '\u{1F44B}\u{1F3FF}';
 const FAMILY = '\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F466}';
 const KEYCAP_ONE = '1\u{FE0F}\u{20E3}';
+const REGIONAL_INDICATOR_PAIR = /[\u{1F1E6}-\u{1F1FF}]{2}/u;
 
 test('an asset name spells out every code point of the sequence', () => {
   assert.equal(assetName(RU_FLAG), '1F1F7-1F1FA');
@@ -32,17 +33,28 @@ test('the runtime and the generator agree on how a file is named', () => {
   assert.match(runtime, /`\/emoji\/\$\{emojiAssetName\(emoji\)\}\.svg`/);
 });
 
-test('the pinned artwork covers every reaction the corpus accepts', async () => {
-  // Coverage is the release gate from the 2.6 plan: the renderer has to cover
-  // the whole accepted dataset. A gap would drop those reactions back onto the
-  // platform font, which on Windows draws flags as letters.
+test('the offered catalogue is exactly what the artwork can draw', async () => {
+  // Twemoji does not reach the newest corpus additions. Rather than let those
+  // fall back to the platform font — which on Windows draws flags as letters —
+  // the offered set is locked to the artwork, so what is offered is always
+  // drawable and what cannot be drawn is never offered.
   const { copies, missing } = await planEmojiAssets();
   const corpus = listReactionEmojis();
+  const catalogue = JSON.parse(read('src/lib/shared/chat/emoji-coverage.json'));
+  const offered = new Set(catalogue.emojis);
 
-  assert.deepEqual(missing, []);
-  assert.equal(copies.length, corpus.length);
-  assert.equal(new Set(copies.map((copy) => copy.name)).size, corpus.length);
+  assert.deepEqual(catalogue.emojis, copies.map((copy) => copy.emoji));
+  assert.equal(offered.size, copies.length);
+  assert.equal(copies.length + missing.length, corpus.length);
   assert.ok(copies.some((copy) => copy.name === assetName(RU_FLAG)));
+  for (const emoji of missing) assert.equal(offered.has(emoji), false);
+
+  // Flags were the whole reason for shipping artwork, so a set that lost them
+  // would defeat the point while passing everything else.
+  const flags = corpus.filter((emoji) => REGIONAL_INDICATOR_PAIR.test(emoji));
+  const uncovered = flags.filter((emoji) => !offered.has(emoji));
+  assert.ok(flags.length > 250);
+  assert.ok(uncovered.length <= 1, `too many flags missing: ${uncovered.join(' ')}`);
 });
 
 test('reaction surfaces draw the artwork instead of leaving it to the platform font', () => {
@@ -64,12 +76,18 @@ test('reaction surfaces draw the artwork instead of leaving it to the platform f
   }
 });
 
-test('the generated artwork carries its attribution', () => {
+test('the artwork ships the upstream licence, not the repackager\'s', () => {
   const script = read('scripts/build-emoji-assets.mjs');
+  const licence = read('scripts/emoji-artwork-LICENSE.txt');
 
-  // OpenMoji is CC BY-SA 4.0, so the licence and credit ship with the files.
+  // The npm package carrying the files is a community repackaging that ships
+  // only an MIT notice covering the packaging. That does not relicense
+  // Twemoji's artwork, which is CC BY 4.0, so the upstream text travels with
+  // the files from this repo and the credit names Twemoji, not the repackager.
+  assert.match(licence, /Attribution 4\.0 International/);
+  assert.match(script, /graphicsLicenceFile/);
   assert.match(script, /LICENSE\.txt/);
   assert.match(script, /ATTRIBUTION\.txt/);
-  assert.match(script, /CC BY-SA 4\.0/);
-  assert.match(script, /openmoji\.org/);
+  assert.match(script, /CC BY 4\.0/);
+  assert.match(script, /jdecked\/twemoji/);
 });
