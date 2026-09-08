@@ -317,6 +317,8 @@ button.chat-msg-author {
   background: color-mix(in oklch, var(--green), transparent 90%);
 }
 
+/* The marker spans whatever the tint spans, so on the first message of a group
+   it runs past the author line rather than starting halfway down. */
 .chat-msg-text.mentions-me::after {
   content: '';
   position: absolute;
@@ -328,8 +330,11 @@ button.chat-msg-author {
   background: var(--green);
 }
 
-.chat-msg-text.mentions-me[data-group-first='true']::before {
-  top: -25px;
+/* Room above the author line to match the room below the text: without it the
+   tint started flush against the avatar while the bottom kept its padding. */
+.chat-msg-text.mentions-me[data-group-first='true']::before,
+.chat-msg-text.mentions-me[data-group-first='true']::after {
+  top: -30px;
 }
 
 /* While its context menu is open the message stays lit, so it is obvious which

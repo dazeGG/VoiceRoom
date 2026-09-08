@@ -748,7 +748,27 @@ html.is-desktop .sidebar-download { display: none; }
 .lobby-dm-head-status[data-presence='afk'] { color: var(--amber); }
 .lobby-dm-head-status[data-presence='online'] { color: var(--green); }
 .lobby-dm-head-status[data-presence='offline'] { color: var(--warm-faint); }
-.lobby-dm-scroll { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; }
+.lobby-dm-scroll { position: relative; flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; }
+
+/* Covers the thread while it renders and its artwork resolves, so the reader
+   never watches messages reflow under a scroll position that is still moving. */
+.lobby-dm-loading {
+  position: sticky;
+  z-index: 2;
+  top: 0;
+  display: flex;
+  height: 100%;
+  min-height: 100%;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: -100%;
+  background: var(--paper-deep, var(--paper));
+  color: var(--warm-faint);
+  font-size: 13.5px;
+}
+
+/* Rendered, and therefore loading its images, but not yet shown. */
+.lobby-dm-thread.is-settling { visibility: hidden; }
 .lobby-dm-thread { margin-top: auto; display: flex; flex-direction: column; gap: 15px; padding: 22px 24px; }
 
 .dm-chat-group { align-items: flex-start; }

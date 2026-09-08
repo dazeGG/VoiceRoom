@@ -16,8 +16,10 @@
     onRemoveFriend
   }: ProfileCardProps = $props();
 
-  // The banner takes the person's avatar colour so the card reads as theirs even
-  // when they use a photo, where the accent would otherwise be invisible.
+  // The card itself takes the person's avatar colour, washed into the surface
+  // from the top, so it reads as theirs even when they use a photo — where the
+  // accent would otherwise be invisible. A separate banner band above the
+  // content only added a shape to explain.
   const accent = $derived(person.avatarAccent || getAvatarColor(person.avatarColorKey).background);
   const friendsSinceLabel = $derived.by(() => {
     if (relationship !== 'friend' || !friendsSince) return '';
@@ -29,9 +31,7 @@
   });
 </script>
 
-<div class="profile-card" data-profile-card>
-  <div class="profile-card-cover" style:--profile-accent={accent}></div>
-
+<div class="profile-card" data-profile-card style:--profile-accent={accent}>
   <div class="profile-card-body">
     <span class="profile-card-avatar">
       <Avatar
@@ -39,12 +39,12 @@
         src={person.avatarUrl}
         colorKey={person.avatarColorKey}
         background={person.avatarAccent || undefined}
-        size={84}
+        size={72}
         online={person.presence === 'online'}
         afk={person.presence === 'away'}
         dnd={person.presence === 'dnd'}
         showDot
-        ring="var(--warm-800)"
+        ring="var(--profile-surface)"
       />
     </span>
 
@@ -96,47 +96,50 @@
 </div>
 
 <style>
+  /* One padding value all round, and one rhythm: lines that belong together sit
+     tight, groups are separated by a single larger step. */
   .profile-card {
+    --profile-surface: color-mix(in oklch, var(--profile-accent), var(--warm-900) 88%);
+    --profile-pad: 20px;
+    --profile-group-gap: 18px;
     width: min(320px, calc(100vw - 28px));
     overflow: hidden;
     border-radius: 20px;
-  }
-
-  .profile-card-cover {
-    height: 88px;
     background: linear-gradient(
-      135deg,
-      color-mix(in oklch, var(--profile-accent), var(--warm-950) 22%),
-      color-mix(in oklch, var(--profile-accent), var(--warm-950) 58%)
+      180deg,
+      color-mix(in oklch, var(--profile-accent), var(--warm-900) 72%),
+      var(--profile-surface) 180px
     );
   }
 
   .profile-card-body {
     display: flex;
     flex-direction: column;
-    gap: 16px;
-    /* Pulls the avatar up so it straddles the cover edge. */
-    margin-top: -42px;
-    padding: 0 4px 4px;
+    gap: var(--profile-group-gap);
+    padding: var(--profile-pad);
   }
 
   .profile-card-avatar {
     display: inline-flex;
+    align-self: flex-start;
     border-radius: 50%;
-    box-shadow: 0 0 0 5px var(--warm-800);
+    box-shadow: 0 0 0 4px color-mix(in oklch, var(--profile-accent), var(--warm-900) 72%);
   }
 
+  /* The name and the handle are one thing said twice, so they read as a block. */
   .profile-card-identity {
     display: flex;
     min-width: 0;
     flex-direction: column;
-    gap: 2px;
+    gap: 3px;
+    /* Closer to the face than to the next group. */
+    margin-top: calc(4px - var(--profile-group-gap));
   }
 
   :global(.profile-card-name) {
     color: var(--warm-ink);
     font-family: var(--font-display, var(--font-ui));
-    font-size: 22px;
+    font-size: 21px;
     font-weight: 700;
     letter-spacing: -0.02em;
   }
@@ -150,7 +153,7 @@
   .profile-card-since {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 3px;
   }
 
   .profile-card-since-label {
@@ -168,7 +171,7 @@
 
   .profile-card-note {
     margin: 0;
-    color: var(--warm-faint);
+    color: var(--warm-muted-dim);
     font-size: 13px;
     line-height: 1.5;
   }
@@ -179,14 +182,15 @@
     gap: 8px;
   }
 
+
   .profile-card-action {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: 9px;
-    height: 46px;
+    height: 44px;
     border: 1px solid transparent;
-    border-radius: 16px;
+    border-radius: 14px;
     background: var(--control);
     color: var(--warm-ink);
     font-family: var(--font-ui);

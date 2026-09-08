@@ -37,6 +37,11 @@
   // few enough that a jump to a category asks for one screen of artwork.
   const OVERSCAN_ROWS = 2;
   const TONE_HOVER_DELAY_MS = 300;
+  const TONE_CLOSE_GRACE_MS = 260;
+  const TONE_SWATCH = 34;
+  const TONE_SWATCH_GAP = 2;
+  const TONE_STRIP_PADDING = 5;
+  const TONE_STRIP_MARGIN = 8;
 
   let {
     store,
@@ -72,6 +77,7 @@
   let scrollTop = $state(0);
   let viewportHeight = $state(300);
   let toneHoverTimer = 0;
+  let toneCloseTimer = 0;
   let picker: HTMLDivElement | null = $state(null);
 
   const searching = $derived(search.trim().length > 0);
@@ -298,11 +304,34 @@
   // appear where the eye already is.
   function openToneStrip(emoji: string, tile: HTMLElement): void {
     if (!hasSkinToneChoices(emoji) || !picker) return;
+    cancelToneClose();
     const tileBox = tile.getBoundingClientRect();
     const pickerBox = picker.getBoundingClientRect();
-    toneStripLeft = tileBox.left - pickerBox.left + tileBox.width / 2;
-    toneStripTop = tileBox.top - pickerBox.top;
+    // Six swatches plus the padding and border around them. Kept in sync with
+    // the stylesheet so the strip can be clamped before it is measured.
+    const width = 6 * TONE_SWATCH + 5 * TONE_SWATCH_GAP + 2 * TONE_STRIP_PADDING;
+    const half = width / 2;
+    const centre = tileBox.left - pickerBox.left + tileBox.width / 2;
+    // Clamped to the panel: unclamped, a swatch row over the leftmost column
+    // hung outside the picker and was clipped away.
+    toneStripLeft = Math.min(
+      Math.max(centre, half + TONE_STRIP_MARGIN),
+      pickerBox.width - half - TONE_STRIP_MARGIN
+    );
+    toneStripTop = Math.max(tileBox.top - pickerBox.top, TONE_SWATCH + TONE_STRIP_MARGIN);
     toneStripFor = emoji;
+  }
+
+  // Reaching the swatches means leaving the tile, so the strip survives a short
+  // grace period; entering it cancels the close outright.
+  function scheduleToneClose(): void {
+    window.clearTimeout(toneCloseTimer);
+    toneCloseTimer = window.setTimeout(() => (toneStripFor = ''), TONE_CLOSE_GRACE_MS);
+  }
+
+  function cancelToneClose(): void {
+    window.clearTimeout(toneCloseTimer);
+    toneCloseTimer = 0;
   }
 
   function beginToneHover(emoji: string, event: PointerEvent): void {
@@ -317,12 +346,9 @@
     toneHoverTimer = 0;
   }
 
-  /** Leaving the tile closes the strip unless the pointer moved onto it. */
-  function leaveTile(event: PointerEvent): void {
+  function leaveTile(): void {
     cancelToneHover();
-    const next = event.relatedTarget;
-    if (next instanceof Node && strip?.contains(next)) return;
-    toneStripFor = '';
+    if (toneStripFor) scheduleToneClose();
   }
 
   async function react(emoji: string): Promise<void> {
@@ -349,6 +375,7 @@
 
   function resetOnClose(): void {
     cancelToneHover();
+    cancelToneClose();
     search = '';
     activeSectionKey = 'frequent';
     activeIndex = 0;
@@ -553,7 +580,8 @@
               bind:this={strip}
               style:left={`${toneStripLeft}px`}
               style:top={`${toneStripTop}px`}
-              onpointerleave={() => (toneStripFor = '')}
+              onpointerenter={cancelToneClose}
+              onpointerleave={scheduleToneClose}
             >
               {#each toneStripOptions as option (option)}
                 <button
@@ -765,10 +793,14 @@
     gap: 2px;
     border: 1px solid rgba(255, 255, 255, 0.09);
     border-radius: 15px;
-    padding: 4px;
+    /* Padding, gap and swatch size are mirrored by the TONE_* constants, which
+       clamp the strip inside the panel before it can be measured. */
+    padding: 5px;
     background: var(--warm-900);
     box-shadow: 0 14px 30px rgba(0, 0, 0, 0.46);
-    transform: translate(-50%, calc(-100% - 6px));
+    /* Overlaps its tile by a couple of pixels: a gap here is a dead zone the
+       pointer crosses on the way to the swatches. */
+    transform: translate(-50%, calc(-100% + 2px));
   }
 
   .reaction-picker-foot {
