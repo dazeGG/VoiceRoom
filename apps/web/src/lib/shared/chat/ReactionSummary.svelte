@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Popover } from '$lib/shared/ui';
   import ReactorList from './ReactorList.svelte';
+  import Emoji from './Emoji.svelte';
   import type { ReactionStore } from './reaction-store.svelte';
 
   let {
@@ -28,9 +29,9 @@
             aria-pressed={summary.reactedByMe}
             aria-label={`${summary.reactedByMe ? 'Убрать' : 'Добавить'} реакцию ${summary.emoji}`}
             onclick={() => void store.toggle(messageId, summary.emoji)}
-          >{summary.emoji}</button>
+          ><Emoji emoji={summary.emoji} size={18} decorative /></button>
         {:else}
-          <span class="reaction-toggle" aria-hidden="true">{summary.emoji}</span>
+          <span class="reaction-toggle" aria-hidden="true"><Emoji emoji={summary.emoji} size={18} decorative /></span>
         {/if}
         <Popover
           placement="top-start"

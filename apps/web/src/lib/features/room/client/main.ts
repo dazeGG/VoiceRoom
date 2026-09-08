@@ -57,7 +57,7 @@ export function mountRoomClient(_root: ParentNode = document, options: { roomId?
   activeVoiceLeaveTeardown = registerActiveVoiceLeave(leaveRoom);
   activeVoiceControlsTeardown = registerActiveVoiceControls({
     toggleMic: toggleMicrophoneMuted,
-    toggleDeafen: toggleOutputMute
+    toggleDeafen: () => toggleOutputMute()
   });
   const desktopRuntime = Boolean(window.voiceRoomRuntime?.isDesktop);
   let lastDesktopHotkeyFailure = '';

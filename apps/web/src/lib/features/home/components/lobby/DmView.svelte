@@ -658,15 +658,15 @@
     </div>
 
     <div class="lobby-dm-compose" onpaste={onComposePaste}>
-      {#if replyTarget}
-        {@const target = replyTarget}
-        <ReplyTargetBar
-          target={{ messageId: target.id, deleted: false, author: { id: target.senderId, name: target.senderId === selfId ? 'Вы' : friendName(peer!) }, text: target.body }}
-          onjump={jumpToMessage}
-          oncancel={() => (replyTarget = null)}
-        />
-      {/if}
       <div class="lobby-dm-compose-row attachment-compose-field">
+        {#if replyTarget}
+          {@const target = replyTarget}
+          <ReplyTargetBar
+            target={{ messageId: target.id, deleted: false, author: { id: target.senderId, name: target.senderId === selfId ? 'Вы' : friendName(peer!) }, text: target.body }}
+            onjump={jumpToMessage}
+            oncancel={() => (replyTarget = null)}
+          />
+        {/if}
         {#if media}<AttachmentComposer store={media} disabled={sending} />{/if}
         <div class="attachment-compose-controls">
           {#if media}<AttachmentUploadControl store={media} disabled={sending} onerror={showAttachmentError} />{/if}

@@ -37,6 +37,8 @@ export interface Participant {
   meterData: Uint8Array<ArrayBuffer> | null;
   muted: boolean;
   speaking: boolean;
+  /** Meter-loop bookkeeping: while `now` is under this, the ring stays lit. */
+  speakingHoldUntil: number;
   statusLabel: string;
   level: number;
   name: string;

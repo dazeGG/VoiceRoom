@@ -1,7 +1,10 @@
 <script lang="ts">
-  // The composer row that shows which message the draft answers. The quote is a
-  // jump target, and cancelling is an icon so the row reads as part of the
-  // composer instead of a form with a stray text button.
+  // The composer row that shows which message the draft answers. It renders
+  // inside the bordered composer field, directly above the text row and on the
+  // same footing as pending image attachments, so the draft reads as one input
+  // rather than a stray card floating above it. The quote is a jump target, and
+  // cancelling is an icon so the row reads as part of the composer instead of a
+  // form with a stray text button.
   import { X } from '@lucide/svelte';
   import ReplyPreview from './ReplyPreview.svelte';
   import type { ReplyTarget } from './reply-store.svelte';
@@ -31,21 +34,21 @@
 </div>
 
 <style>
+  /* Matches .attachment-composer padding so a reply and a pending image line up
+     against the same field edge. */
   .reply-target {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 4px;
     min-width: 0;
-    border-radius: 12px;
-    padding: 4px 4px 4px 0;
-    background: color-mix(in oklch, var(--control), transparent 55%);
+    padding: 10px 10px 0;
   }
 
   .reply-target :global(.reply-preview) {
     min-height: 0;
-    border-start-start-radius: 12px;
-    border-end-start-radius: 12px;
-    background: transparent;
+    border-start-end-radius: 8px;
+    border-end-end-radius: 8px;
+    padding-block: 5px;
   }
 
   .reply-target-cancel {

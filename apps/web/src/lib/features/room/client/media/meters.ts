@@ -1,5 +1,10 @@
 import { roomDeviceUi } from '$lib/features/room/room-device-ui.svelte';
-import { GATE_THRESHOLD_MIN_DB, LOCAL_GATE_DISABLED_SPEAKING_DB } from '../core/config';
+import {
+  GATE_THRESHOLD_MIN_DB,
+  LOCAL_GATE_DISABLED_SPEAKING_DB,
+  REMOTE_SPEAKING_DB,
+  SPEAKING_RELEASE_HOLD_MS
+} from '../core/config';
 import { state } from '../core/state.svelte';
 import { amplitudeToDb } from '../core/settings';
 import { getSharedAudioContext } from '../services/media-playback-service';
@@ -60,21 +65,35 @@ function updateMeter(participant: Participant | null): void {
   const visibleLevel = participant.muted ? 0 : level;
   const visibleLevelDb = participant.muted ? GATE_THRESHOLD_MIN_DB : levelDb;
   participant.level = visibleLevel;
-  if (participant.isLocal) {
-    if (roomDeviceUi.devicePopoverOpen) {
-      refreshMicrophoneLevelMeterSoon(visibleLevelDb);
-    }
-    const speaking = isLocalMicrophoneSpeaking(participant, levelDb);
-    if (participant.speaking !== speaking) {
-      participant.speaking = speaking;
-      bumpParticipantsRevision();
-    }
+  if (participant.isLocal && roomDeviceUi.devicePopoverOpen) {
+    refreshMicrophoneLevelMeterSoon(visibleLevelDb);
   }
+  applySpeaking(participant, isOverSpeakingThreshold(participant, levelDb));
 }
 
-function isLocalMicrophoneSpeaking(participant: Participant, levelDb: number): boolean {
+/**
+ * Both rings are driven from this tab's own analyser rather than from the SFU's
+ * active-speaker list: the server view is computed on an interval and arrives
+ * over the wire, which showed up as the ring lagging behind the voice. The
+ * remote analyser sits on the decoded track, so it lights the frame the audio
+ * lands.
+ */
+function isOverSpeakingThreshold(participant: Participant, levelDb: number): boolean {
   if (participant.muted) return false;
+  // Deafened means nothing is reaching this tab, so no ring may claim otherwise.
+  if (state.outputMuted) return false;
+
+  if (!participant.isLocal) return levelDb >= REMOTE_SPEAKING_DB;
   if (!isGateDisabled()) return levelDb >= state.gateThresholdDb;
 
   return levelDb >= LOCAL_GATE_DISABLED_SPEAKING_DB;
+}
+
+function applySpeaking(participant: Participant, over: boolean): void {
+  const now = performance.now();
+  if (over) participant.speakingHoldUntil = now + SPEAKING_RELEASE_HOLD_MS;
+  const speaking = over || now < participant.speakingHoldUntil;
+  if (participant.speaking === speaking) return;
+  participant.speaking = speaking;
+  bumpParticipantsRevision();
 }

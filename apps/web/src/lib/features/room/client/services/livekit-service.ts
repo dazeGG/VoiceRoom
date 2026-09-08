@@ -407,7 +407,9 @@ async function bindLiveKitRoomEvents(room: Room, isCurrent: () => boolean): Prom
     if (!current()) return;
     const activeIds = new Set(speakers.map((participant) => participant.identity));
     for (const peer of state.peers.values()) {
-      setParticipantSpeaking(peer, activeIds.has(peer.id));
+      // Fallback only — see the note in `updateSpeakingStats`.
+      if (peer.analyser) continue;
+      setParticipantSpeaking(peer, !state.outputMuted && activeIds.has(peer.id));
     }
   });
   room.on(RoomEvent.ConnectionQualityChanged, (quality, participant) => {

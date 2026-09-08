@@ -61,6 +61,7 @@ function createParticipantModel(peerInfo: PeerInfo, isLocal: boolean): Participa
     meterData: null,
     muted: Boolean(peerInfo.muted),
     speaking: false,
+    speakingHoldUntil: 0,
     statusLabel: '',
     level: 0,
     name,
@@ -541,6 +542,18 @@ export function setParticipantSpeaking(participant: Participant | null, speaking
   if (participant.speaking === nextSpeaking) return;
   participant.speaking = nextSpeaking;
   refreshParticipantState();
+}
+
+/**
+ * Drop every ring at once. Deafened means no audio reaches this tab, so a ring
+ * left over from the last thing heard would be telling the user something false.
+ */
+export function clearAllSpeaking(): void {
+  setParticipantSpeaking(state.self, false);
+  for (const peer of state.peers.values()) {
+    peer.incomingVoiceActive = false;
+    setParticipantSpeaking(peer, false);
+  }
 }
 
 export function updatePeerStatus(peer: Participant): void {

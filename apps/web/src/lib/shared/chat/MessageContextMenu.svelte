@@ -5,6 +5,7 @@
   import { Copy, Pencil, Pin, PinOff, Reply, SmilePlus, Trash2 } from '@lucide/svelte';
   import { ContextMenu, PopoverDivider, PopoverMenuItem } from '$lib/shared/ui';
   import { iconMd } from '$lib/shared/ui/icons';
+  import Emoji from './Emoji.svelte';
 
   let {
     open,
@@ -96,7 +97,7 @@
                 onReact?.(emoji);
                 close();
               }}
-            >{emoji}</button>
+            ><Emoji {emoji} size={20} decorative /></button>
           {/each}
           <button
             class="message-menu-reaction message-menu-reaction--more"

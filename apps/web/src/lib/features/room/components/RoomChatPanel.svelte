@@ -1020,15 +1020,15 @@
   {/if}
 
   <form class="chat-rail-compose" onsubmit={sendMessage} onpaste={onComposePaste}>
-    {#if replyTarget}
-      {@const target = replyTarget}
-      <ReplyTargetBar
-        target={{ messageId: target.id, deleted: false, author: { id: target.authorUserId || target.peerId, name: target.name }, text: target.text }}
-        onjump={jumpToMessage}
-        oncancel={() => (replyTarget = null)}
-      />
-    {/if}
     <div class="chat-compose-row attachment-compose-field">
+      {#if replyTarget}
+        {@const target = replyTarget}
+        <ReplyTargetBar
+          target={{ messageId: target.id, deleted: false, author: { id: target.authorUserId || target.peerId, name: target.name }, text: target.text }}
+          onjump={jumpToMessage}
+          oncancel={() => (replyTarget = null)}
+        />
+      {/if}
       {#if media}<AttachmentComposer store={media} disabled={sending} />{/if}
       <div class="attachment-compose-controls">
         {#if media}<AttachmentUploadControl store={media} disabled={sending} onerror={showAttachmentError} />{/if}
