@@ -748,6 +748,8 @@ test('participant tiles stay visually uniform and highlight only active speakers
   const participantTile = read('src/lib/features/room/components/ParticipantTile.svelte');
   const meters = read('src/lib/features/room/client/media/meters.ts');
   const livekit = read('src/lib/features/room/client/services/livekit-service.ts');
+  const stats = read('src/lib/features/room/client/room/stats.ts');
+  const controls = read('src/lib/features/room/client/ui/controls.ts');
 
   assert.match(css, /\.participant\[data-speaking="true"\]/);
   assert.match(css, /border-color: var\(--green\)/);
@@ -757,10 +759,20 @@ test('participant tiles stay visually uniform and highlight only active speakers
   assert.match(participants, /refreshParticipantState\(\)/);
   assert.match(participants, /bumpParticipantsRevision\(\)/);
   assert.match(participantTile, /data-speaking=\{String\(participant\.speaking\)\}/);
-  assert.match(meters, /const speaking = isLocalMicrophoneSpeaking\(participant, levelDb\)/);
+  // Every ring is driven by this tab's own analyser, so it lights on the frame
+  // the audio arrives instead of waiting for the SFU's sampled speaker list.
+  assert.match(meters, /applySpeaking\(participant, isOverSpeakingThreshold\(participant, levelDb\)\)/);
+  assert.match(meters, /if \(!participant\.isLocal\) return levelDb >= REMOTE_SPEAKING_DB/);
   assert.match(meters, /participant\.speaking = speaking/);
   assert.match(meters, /bumpParticipantsRevision\(\)/);
+  // Deafened must not leave a ring standing: nothing is reaching this tab.
+  assert.match(meters, /if \(state\.outputMuted\) return false/);
+  assert.match(controls, /if \(state\.outputMuted\) clearAllSpeaking\(\)/);
+  assert.match(participants, /export function clearAllSpeaking\(\)/);
+  // The server view stays a fallback for peers whose analyser is not up yet.
   assert.match(livekit, /RoomEvent\.ActiveSpeakersChanged/);
+  assert.match(livekit, /if \(peer\.analyser\) continue;/);
+  assert.match(stats, /if \(peer\.analyser\) continue;/);
 });
 
 test('screen share publish tuning applies codec, bitrate, degradation and contentHint contracts', () => {

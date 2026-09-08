@@ -92,6 +92,10 @@ async function updateSpeakingStats(): Promise<void> {
 
   for (const peer of state.peers.values()) {
     peer.incomingVoiceActive = Boolean(peer.livekitParticipant?.isSpeaking);
-    setParticipantSpeaking(peer, !peer.muted && peer.incomingVoiceActive);
+    // The audio meter owns the ring whenever it can see the decoded track; the
+    // server's view only fills in before the analyser is attached, because it
+    // is sampled on an interval and lags audible speech.
+    if (peer.analyser) continue;
+    setParticipantSpeaking(peer, !peer.muted && !state.outputMuted && peer.incomingVoiceActive);
   }
 }

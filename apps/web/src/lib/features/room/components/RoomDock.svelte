@@ -214,7 +214,7 @@
               aria-pressed={outputControls.ariaPressed}
               aria-label={outputControls.label}
               data-state={outputControls.stateName}
-              onclick={toggleOutputMute}
+              onclick={() => toggleOutputMute()}
             >
               <span class="dock-icon dock-icon-output" aria-hidden="true"><Headphones /></span>
               <span class="dock-icon dock-icon-output-muted" aria-hidden="true"><HeadphoneOff /></span>

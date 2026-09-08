@@ -48,6 +48,17 @@ export const STREAM_VIEWER_CUE_DEDUPE_MS = 1200;
 export const GATE_CAPTURE_SWITCH_DEBOUNCE_MS = 700;
 export const LOCAL_GATE_DISABLED_SPEAKING_DB = -42;
 export const SPEAKING_STATS_INTERVAL_MS = 200;
+/**
+ * Speaking threshold for a remote participant, measured on their decoded audio
+ * in this tab. Deliberately below the local gate: the ring answers "is this
+ * person's audio reaching me", so anything audible has to raise it.
+ */
+export const REMOTE_SPEAKING_DB = -50;
+/**
+ * The ring rises on the first frame over the threshold and only falls after
+ * this much silence, so it does not strobe between syllables.
+ */
+export const SPEAKING_RELEASE_HOLD_MS = 180;
 
 export type NoiseMode = 'browser' | 'off' | 'rnnoise';
 export type MicrophoneMode = 'open' | 'push-to-talk';
