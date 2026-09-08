@@ -16,7 +16,8 @@
   import { applyRoomDeleted, applyRoomNotFound, applyRoomUpdated } from '../client/room/lifecycle';
   import { openProfileCardFor } from '$lib/features/home/profile-card-ui.svelte';
   import { getParticipantById } from '../client/room/participants';
-  import { participantProfilePerson, roomMessageProfilePerson } from '../profile-card-adapter';
+  import { state as roomState } from '../client/core/state.svelte';
+  import { mentionProfilePerson, participantProfilePerson, roomMessageProfilePerson } from '../profile-card-adapter';
   import { isRoomNotificationsMuted } from '$lib/shared/notifications/preferences.svelte';
   import { getCapabilityFeature } from '$lib/platform/capability-state.svelte';
   import { createAnchoredHistory } from '../room-history.svelte';
@@ -842,6 +843,31 @@
     queueMicrotask(() => openProfileCardFor(person, anchor));
   }
 
+  // A mention opens the same card the author's avatar opens, so "who is this"
+  // has one answer everywhere in the message.
+  function openMentionProfile(userId: string, label: string, event: MouseEvent): void {
+    if (!userId) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const anchor = event.currentTarget;
+    const person = mentionProfilePerson(
+      userId,
+      label,
+      getRoomMembership(roomId).members,
+      [...roomState.peers.values()]
+    );
+    queueMicrotask(() => openProfileCardFor(person, anchor));
+  }
+
+  /** Whether this message points at the reader, so their own row stands out. */
+  function mentionsMe(message: ChatMessage): boolean {
+    const selfUserId = session.user?.id;
+    if (!selfUserId || message.content?.version !== 1) return false;
+    return message.content.segments.some(
+      (segment) => segment.type === 'mention' && segment.userId === selfUserId
+    );
+  }
+
   function openUserMenu(group: ChatGroup, event: MouseEvent): void {
     if (group.self || !onAuthorContextMenu) return;
     event.preventDefault();
@@ -965,6 +991,7 @@
               <div
                 class="chat-msg-text"
                 class:is-context={menuMessage?.id === message.id}
+                class:mentions-me={mentionsMe(message)}
                 data-message-id={message.id}
                 data-group-first={message.id === group.messages[0].id}
                 oncontextmenu={(event) => openMessageMenu(message, event)}
@@ -989,7 +1016,7 @@
                 {:else}
                   <div class="chat-msg-body">
                     {#if message.replyPreview}<ReplyPreview preview={message.replyPreview} interactive onjump={jumpToMessage} />{/if}
-                    <span class="chat-msg-content">{#if message.content}<StructuredMessageContent content={message.content} fallback={message.text} />{:else}<ChatText text={message.text} />{/if}{#if message.editedAt}<span class="chat-msg-edited">(изменено)</span>{/if}</span>
+                    <span class="chat-msg-content">{#if message.content}<StructuredMessageContent content={message.content} fallback={message.text} onmention={openMentionProfile} />{:else}<ChatText text={message.text} />{/if}{#if message.editedAt}<span class="chat-msg-edited">(изменено)</span>{/if}</span>
                     {#if message.attachments?.length}<AttachmentMosaic attachments={message.attachments} />{/if}
                     {#if reactionsEnabled}<ReactionSummary store={reactions} messageId={message.id} canMutate={Boolean(session.user?.id)} />{/if}
                   </div>

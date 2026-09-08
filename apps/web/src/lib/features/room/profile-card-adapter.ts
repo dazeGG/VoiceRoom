@@ -7,6 +7,7 @@ import { friendsState, getKnownLogin } from '$lib/features/home/model/friends.sv
 import type { PresenceStatus } from '$lib/shared/presence';
 import type { Participant } from './client/model/participants';
 import type { ChatMessage } from '$lib/api/rooms';
+import type { MembershipMember } from '@voice-room/shared/membership';
 
 function presenceFor(accountUserId: string): PresenceStatus {
   if (!accountUserId) return 'online';
@@ -42,5 +43,44 @@ export function roomMessageProfilePerson(message: ChatMessage): ProfileCardPerso
     avatarColorKey: message.avatarColorKey || '',
     avatarAccent: message.avatarAccent || null,
     presence: userId ? presenceFor(userId) : 'online'
+  };
+}
+
+/**
+ * A mention carries only a user id and the label it was written with, so the
+ * card is filled in from whoever we already know about that person — the room
+ * membership first, then a live participant — and falls back to the label when
+ * they are a stranger who has since left.
+ */
+export function mentionProfilePerson(
+  userId: string,
+  label: string,
+  members: readonly MembershipMember[],
+  participants: readonly Participant[]
+): ProfileCardPerson {
+  const member = members.find((entry) => entry.userId === userId);
+  if (member) {
+    return {
+      userId,
+      name: member.displayName || member.login,
+      login: member.login,
+      avatarUrl: member.avatarUrl,
+      avatarColorKey: member.avatarColorKey || '',
+      avatarAccent: member.avatarAccent,
+      presence: presenceFor(userId)
+    };
+  }
+
+  const participant = participants.find((entry) => entry.accountUserId === userId);
+  if (participant) return participantProfilePerson(participant);
+
+  return {
+    userId,
+    name: label.replace(/^@/, ''),
+    login: getKnownLogin(userId),
+    avatarUrl: null,
+    avatarColorKey: '',
+    avatarAccent: null,
+    presence: presenceFor(userId)
   };
 }

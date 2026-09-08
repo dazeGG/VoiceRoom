@@ -309,6 +309,29 @@ button.chat-msg-author {
   background: color-mix(in oklch, var(--control), transparent 65%);
 }
 
+/* A message that names you stays lit with a marker down its edge, so it is
+   findable by scrolling back rather than only at the moment it arrives. The
+   hover and context-menu rules come later and still win, so pointing at it
+   behaves like pointing at any other message. */
+.chat-msg-text.mentions-me::before {
+  background: color-mix(in oklch, var(--green), transparent 90%);
+}
+
+.chat-msg-text.mentions-me::after {
+  content: '';
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  left: -20px;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--green);
+}
+
+.chat-msg-text.mentions-me[data-group-first='true']::before {
+  top: -25px;
+}
+
 /* While its context menu is open the message stays lit, so it is obvious which
    message the menu belongs to. */
 .chat-msg-text.is-context::before {
