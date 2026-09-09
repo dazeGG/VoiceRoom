@@ -22,11 +22,12 @@ import { blockUser as apiBlockUser, unblockUser as apiUnblockUser } from '$lib/a
 import { deleteDirectMessage, editDirectMessage, fetchThread, fetchThreadPage, markThreadRead, respondRoomInvite, sendDirectMessage, type DirectMessage } from '$lib/api/dm';
 import { connectRealtime, type RealtimeEvent, type RealtimeHandle } from '$lib/api/realtime';
 import type { PresenceStatus } from '$lib/shared/presence';
-import { playDirectMessageCue, playFriendAcceptedCue, playFriendRequestCue, playRingCue } from '$lib/features/room/client/media/cues';
+import { playDirectMessageCue, playFriendAcceptedCue, playFriendRequestCue, playRingCue, playRoomChatMessageCue } from '$lib/features/room/client/media/cues';
 import {
   canUseNotifications,
   getNotificationDeliveryPermission,
   routeNotificationEvent,
+  shouldPlayNotificationCue,
   showBrowserNotification,
   type NotificationActiveTarget
 } from '$lib/shared/notifications/router';
@@ -546,6 +547,21 @@ function handleNotificationRealtimeEvent(event: RealtimeEvent): boolean {
     return true;
   }
   syncNotificationPermission();
+  // Being mentioned in a room you are not looking at produced nothing audible:
+  // the DM path has its own cue and the room path only sounds from inside that
+  // room's chat panel. The sound is decided separately from the browser
+  // notification, which a denied permission would otherwise silence too.
+  if (
+    event.type === 'notification.room.message'
+    && shouldPlayNotificationCue(event, {
+      userId: selfId,
+      activeTarget: getActiveNotificationTarget(),
+      mutedRoomIds: notificationPreferences.mutedRoomIds,
+      doNotDisturb: notificationPreferences.doNotDisturb
+    })
+  ) {
+    playRoomChatMessageCue();
+  }
   const routed = routeNotificationEvent(event, {
     userId: selfId,
     activeTarget: getActiveNotificationTarget(),

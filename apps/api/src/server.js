@@ -2325,6 +2325,7 @@ async function handleMarkRoomChatRead(req, res, rawRoomId) {
   if (typeof body.cursor === 'string' && body.cursor) {
     try {
       const result = await getHistoryServices().read.advanceRoom({ cursor: body.cursor, roomId, userId: user.id });
+      await retireRoomNotifications(roomId, user.id, result.readThrough);
       await roomRuntime?.sendRoomSummaryToUser(roomId, user.id);
       sendJson(res, 200, { ok: true, ...result });
     } catch (error) {
@@ -2338,8 +2339,25 @@ async function handleMarkRoomChatRead(req, res, rawRoomId) {
     sendJson(res, 404, { ok: false, error: 'Комната не найдена' });
     return;
   }
+  await retireRoomNotifications(roomId, user.id, lastReadAt);
   await roomRuntime?.sendRoomSummaryToUser(roomId, user.id);
   sendJson(res, 200, { ok: true, lastReadAt, unreadCount: 0 });
+}
+
+/**
+ * Reading a room's chat retires the notifications it produced. They are two
+ * records of the same event, and leaving them apart meant the bell still
+ * claimed unread mentions for messages already read — and said so again after
+ * every reload. Best-effort: a read that succeeded must not fail over this.
+ */
+async function retireRoomNotifications(roomId, userId, through) {
+  try {
+    const { service } = getNotificationServices();
+    if (typeof service?.markRoomRead !== 'function') return;
+    await service.markRoomRead({ userId, roomId, through: through ?? null });
+  } catch (error) {
+    console.error('Failed to retire room notifications:', error);
+  }
 }
 
 async function handleRoomStatus(res, url) {
