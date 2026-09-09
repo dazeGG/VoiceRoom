@@ -5,6 +5,12 @@
 
 .attachment-compose-error { margin: 6px 12px 0; color: var(--coral); font-size: 12px; }
 
+/* A pending image is a button so it can be opened for a closer look; it keeps
+   the tile's shape so the row still reads as a strip of thumbnails. */
+.attachment-draft-open { display: block; width: 100%; height: 100%; padding: 0; border: 0; border-radius: inherit; background: transparent; cursor: zoom-in; }
+.attachment-draft-open img { display: block; width: 100%; height: 100%; border-radius: inherit; object-fit: cover; }
+.attachment-draft-open:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
 .attachment-draft-list {
   display: flex;
   flex-wrap: wrap;
@@ -244,13 +250,21 @@
 
 .attachment-lightbox-backdrop { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 20px; background: color-mix(in oklch, var(--paper-deep), transparent 6%); }
 .attachment-lightbox { position: relative; display: grid; width: min(96vw, 1200px); height: min(92vh, 900px); color: white; }
-.attachment-lightbox header { z-index: 2; display: flex; align-items: center; justify-content: flex-end; gap: 16px; padding: 8px; }
-.attachment-lightbox header span { margin-right: auto; }
-.attachment-lightbox a { color: inherit; }
-.attachment-lightbox-image { display: grid; place-items: center; min-height: 0; border: 0; background: transparent; cursor: zoom-in; overflow: auto; }
-.attachment-lightbox-image.zoomed { cursor: zoom-out; place-items: start center; }
-.attachment-lightbox-image img { display: block; max-width: 100%; max-height: 100%; object-fit: contain; }
-.attachment-lightbox-image.zoomed img { max-width: none; max-height: none; }
+.attachment-lightbox header { z-index: 2; display: flex; align-items: center; gap: 16px; padding: 8px 8px 12px; }
+.attachment-lightbox-counter { margin-right: auto; font-family: var(--font-mono); font-size: 12.5px; opacity: 0.75; }
+.attachment-lightbox-tools { display: flex; align-items: center; gap: 2px; padding: 4px; border-radius: 13px; background: color-mix(in oklch, var(--paper-deep), transparent 28%); }
+.attachment-lightbox-tools button, .attachment-lightbox-tools a { display: grid; width: 34px; height: 34px; place-items: center; border: 0; border-radius: 9px; background: transparent; color: inherit; cursor: pointer; }
+.attachment-lightbox-tools button:hover:not(:disabled), .attachment-lightbox-tools button:focus-visible, .attachment-lightbox-tools a:hover, .attachment-lightbox-tools a:focus-visible { background: color-mix(in oklch, var(--paper), transparent 62%); outline: none; }
+.attachment-lightbox-tools button:disabled { cursor: default; opacity: 0.4; }
+.attachment-lightbox-scale { min-width: 44px; font-family: var(--font-mono); font-size: 12px; text-align: center; opacity: 0.8; }
+
+/* The stage clips; the image inside it is what moves, so panning never grows a
+   scrollbar and the transform stays the single source of position. */
+.attachment-lightbox-stage { display: grid; place-items: center; min-height: 0; overflow: hidden; cursor: zoom-in; touch-action: none; }
+.attachment-lightbox-stage.is-zoomed { cursor: grab; }
+.attachment-lightbox-stage.is-dragging { cursor: grabbing; }
+.attachment-lightbox-stage img { display: block; max-width: 100%; max-height: 100%; object-fit: contain; transform-origin: center; transition: transform 90ms ease-out; }
+.attachment-lightbox-stage.is-dragging img { transition: none; }
 .attachment-previous, .attachment-next { position: absolute; top: 50%; width: 48px; height: 64px; border: 0; border-radius: 10px; font-size: 38px; color: var(--ink); background: color-mix(in oklch, var(--paper-deep), transparent 45%); }
 .attachment-previous { left: 8px; }
 .attachment-next { right: 8px; }

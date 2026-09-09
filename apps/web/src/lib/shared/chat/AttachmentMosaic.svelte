@@ -7,6 +7,14 @@
   let { attachments = [] }: { attachments?: MessageAttachment[] } = $props();
   let selected = $state(-1);
   const ready = $derived(attachments.filter((attachment) => attachment.state === 'ready'));
+  const items = $derived(
+    ready.map((attachment) => ({
+      src: attachmentVariantUrl(attachment.id, 'processed'),
+      downloadHref: attachmentVariantUrl(attachment.id, 'processed', true),
+      width: attachment.width,
+      height: attachment.height
+    }))
+  );
 </script>
 
 {#if attachments.length}
@@ -29,5 +37,5 @@
 {/if}
 
 {#if selected >= 0}
-  <AttachmentLightbox attachments={ready} index={selected} onclose={() => { selected = -1; }} />
+  <AttachmentLightbox {items} index={selected} onclose={() => { selected = -1; }} />
 {/if}

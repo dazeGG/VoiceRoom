@@ -28,7 +28,13 @@ function createMessageReadService({ authorizeRoomRead, cursorCodec, repository }
     const tuple = decode(cursor, 'room-read', `room:${roomId}`);
     const state = await repository.advanceRoom({ roomId, userId, tuple });
     if (!state) throw new MessageReadError('message_not_visible', 409);
-    return { advanced: !state.unchanged, cursor };
+    // The caller retires this room's notifications up to here, so it needs to
+    // know how far the read actually reached.
+    return {
+      advanced: !state.unchanged,
+      cursor,
+      readThrough: state.last_read_message_created_at ?? null
+    };
   }
 
   async function advanceDm({ cursor, peerId, userId }) {

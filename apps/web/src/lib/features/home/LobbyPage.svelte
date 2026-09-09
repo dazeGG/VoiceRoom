@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { getAppRealtime } from '$lib/api/realtime';
   import { pushState, replaceState } from '$app/navigation';
-  import { X } from '@lucide/svelte';
   import type { AuthUser, OwnedRoom } from '$lib/api/auth';
   import { fetchOwnedRooms } from '$lib/api/auth';
   import { createRoom } from '$lib/api/rooms';
@@ -28,7 +28,6 @@
   import { createNotificationInbox, notificationRoute } from '$lib/shared/notifications/inbox.svelte';
   import { fetchNotificationInbox, markAllNotificationsRead, markNotificationRead } from '$lib/api/notifications';
   import { getCapabilityFeature } from '$lib/platform/capability-state.svelte';
-  import { iconSm } from '$lib/shared/ui/icons';
   import { friendsState, initLobby, openDm, showHome, showPeople } from './model/friends.svelte';
   import type { ToastOptions } from './model/toasts.svelte';
   import {
@@ -133,6 +132,13 @@
       notificationInboxEnabled = enabled;
       if (enabled) void notificationInbox.load();
     });
+    // Without this the badge only ever caught up on a reload, so a mention that
+    // arrived while the lobby was open stayed invisible until then.
+    const teardownNotifications = getAppRealtime().subscribe((event) => {
+      if (!notificationInboxEnabled) return;
+      if (event.type !== 'notification.room.message') return;
+      void notificationInbox.load();
+    });
     const teardownFriends = user ? initLobby(user.id, user.doNotDisturb, user.presenceStatus) : () => {};
     const teardownRooms = user
       ? initLobbyRoomRealtime(
@@ -190,6 +196,7 @@
     window.addEventListener('voice-room:rooms-changed', onRoomsChanged);
     window.addEventListener('popstate', onPopState);
     return () => {
+      teardownNotifications();
       teardownFriends();
       teardownRooms();
       window.removeEventListener('voice-room:embedded-leave', onEmbeddedLeave);
@@ -388,18 +395,20 @@
   {#if notificationInboxEnabled}
     {#if notificationInboxOpen}
       <aside class="notification-inbox-panel" aria-label="Панель уведомлений">
-        <button class="notification-inbox-close" type="button" aria-label="Закрыть" onclick={() => (notificationInboxOpen = false)}><X {...iconSm} /></button>
-        <NotificationInbox inbox={notificationInbox} onopen={openNotification} />
+        <NotificationInbox
+          inbox={notificationInbox}
+          onopen={openNotification}
+          onclose={() => (notificationInboxOpen = false)}
+        />
       </aside>
     {/if}
   {/if}
 {/if}
 
 <style>
-  .notification-inbox-panel { position: fixed; z-index: 71; left: 326px; bottom: 16px; width: min(420px, calc(100vw - 358px)); max-height: min(620px, calc(100vh - 32px)); overflow: auto; border: 1px solid var(--line); border-radius: 16px; background: var(--paper); box-shadow: var(--shadow); }
-  .notification-inbox-panel :global(.notification-inbox) { margin: 18px; }
-  .notification-inbox-panel :global(.notification-inbox > header) { padding-right: 36px; }
-  .notification-inbox-close { position: absolute; z-index: 1; right: 10px; top: 10px; display: grid; place-items: center; width: 32px; height: 32px; border: 0; border-radius: 9px; background: var(--paper); color: inherit; cursor: pointer; }
+  /* The panel clips; the list inside it is what scrolls. */
+  .notification-inbox-panel { position: fixed; z-index: 71; left: 326px; bottom: 16px; display: flex; width: min(420px, calc(100vw - 358px)); max-height: min(620px, calc(100vh - 32px)); overflow: hidden; border: 1px solid var(--line); border-radius: 16px; background: var(--paper); box-shadow: var(--shadow); }
+  .notification-inbox-panel :global(.notification-inbox) { flex: 1 1 auto; min-width: 0; }
   @media (max-width: 900px) {
     .notification-inbox-panel { left: 12px; right: 12px; bottom: 76px; width: auto; max-height: min(560px, calc(100vh - 96px)); }
   }
