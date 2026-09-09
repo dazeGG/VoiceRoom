@@ -30,23 +30,23 @@ test('the notification panel offers one bulk action and cannot scroll sideways',
 });
 
 test('a mention is audible and counted while the lobby is open', () => {
-  const router = read('src/lib/shared/notifications/router.ts');
   const friends = read('src/lib/features/home/model/friends.svelte.ts');
   const lobby = read('src/lib/features/home/LobbyPage.svelte');
 
-  // The sound must not hang off the browser-notification permission: being
-  // pinged while sitting in the app should be audible even if that was denied.
-  const cueStart = router.indexOf('export function shouldPlayNotificationCue');
-  const cueBody = router.slice(cueStart, router.indexOf('\n}', cueStart));
-  assert.ok(cueStart > 0);
-  assert.doesNotMatch(cueBody, /notificationsAvailable|options\.permission/);
-  assert.match(cueBody, /options\.doNotDisturb/);
-  assert.match(cueBody, /activeTargetSuppresses/);
-  assert.match(friends, /shouldPlayNotificationCue\(event, \{/);
-  assert.match(friends, /playRoomChatMessageCue\(\)/);
-
-  // And the badge has to catch up without a reload.
+  // The realtime event fires for every message in every room you belong to, so
+  // it cannot say you were the one addressed. The inbox can, because that is
+  // exactly what it holds — a rise in its unread count is the ping.
   assert.match(lobby, /event\.type !== 'notification\.room\.message'/);
-  assert.match(lobby, /void notificationInbox\.load\(\)/);
+  assert.match(lobby, /const before = notificationInbox\.unreadCount/);
+  assert.match(lobby, /notificationInbox\.unreadCount > before/);
+  assert.match(lobby, /playRoomChatMessageCue\(\)/);
   assert.match(lobby, /teardownNotifications\(\)/);
+
+  // Muting a room asks not to hear the conversation, not to be unreachable, so
+  // only Do Not Disturb silences a ping.
+  assert.match(lobby, /!notificationPreferences\.doNotDisturb/);
+  assert.doesNotMatch(lobby, /mutedRoomIds/);
+
+  // The room-wide cue is gone with it: it fired for messages nobody addressed.
+  assert.doesNotMatch(friends, /playRoomChatMessageCue/);
 });

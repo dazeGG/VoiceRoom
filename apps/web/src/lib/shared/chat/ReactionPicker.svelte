@@ -22,7 +22,7 @@
   } from './emoji-catalog';
 
   const CATEGORIES = listBrowsableCategories();
-  const COLUMNS = 7;
+  const COLUMNS = 8;
   const PERSISTENCE_NAMESPACE = 'chat';
 
   // The browse list is one continuous scroller holding every category, so the
@@ -64,7 +64,6 @@
   let search = $state('');
   let activeSectionKey = $state('frequent');
   let activeIndex = $state(0);
-  let previewEmoji = $state('');
   let frequentEmoji = $state<string[]>([...DEFAULT_FREQUENT_REACTIONS]);
   let skinTone = $state(NEUTRAL_TONE);
   let toneMenuOpen = $state(false);
@@ -228,7 +227,6 @@
     const flat = layout.flat;
     if (!flat.length) return;
     activeIndex = Math.max(0, Math.min(index, flat.length - 1));
-    previewEmoji = toned(flat[activeIndex] ?? '');
 
     // The target row may be outside the rendered window, so bring it into view
     // first and let the window rebuild before reaching for the button.
@@ -379,7 +377,6 @@
     search = '';
     activeSectionKey = 'frequent';
     activeIndex = 0;
-    previewEmoji = '';
     toneMenuOpen = false;
     toneStripFor = '';
     scrollTop = 0;
@@ -543,14 +540,8 @@
                           event.preventDefault();
                           openToneStrip(emoji, event.currentTarget as HTMLElement);
                         }}
-                        onfocus={() => {
-                          activeIndex = index;
-                          previewEmoji = display;
-                        }}
-                        onpointerenter={(event) => {
-                          previewEmoji = display;
-                          beginToneHover(emoji, event);
-                        }}
+                        onfocus={() => (activeIndex = index)}
+                        onpointerenter={(event) => beginToneHover(emoji, event)}
                         onpointerleave={leaveTile}
                       >
                         <Emoji emoji={display} decorative />
@@ -593,13 +584,6 @@
             </div>
           {/if}
 
-          <div class="reaction-picker-foot" aria-hidden="true">
-            {#if previewEmoji}
-              <span class="reaction-picker-preview"><Emoji emoji={previewEmoji} decorative /></span>
-            {:else}
-              <span class="reaction-picker-hint">Выберите реакцию</span>
-            {/if}
-          </div>
         </div>
       {/snippet}
     </Popover>
@@ -621,7 +605,7 @@
   .reaction-picker {
     position: relative;
     display: flex;
-    width: min(392px, calc(100vw - 28px));
+    width: min(430px, calc(100vw - 28px));
     max-height: var(--popover-available-height, calc(100dvh - 16px));
     flex-direction: column;
   }
@@ -696,12 +680,16 @@
   .reaction-tone-strip button:hover,
   .reaction-tone-strip button:focus-visible { background: color-mix(in oklch, var(--accent), transparent 86%); outline: none; }
 
-  .reaction-picker-anchors { display: flex; flex-wrap: wrap; gap: 6px; }
+  /* One line, always: wrapping to a second row cost the grid a whole row of
+     emoji for something the reader only glances at. */
+  .reaction-picker-anchors { display: flex; flex-wrap: nowrap; gap: 4px; }
 
   .reaction-picker-anchor {
     display: grid;
-    width: 40px;
-    height: 40px;
+    width: 36px;
+    height: 36px;
+    flex: 1 1 0;
+    min-width: 0;
     place-items: center;
     border: 0;
     border-radius: 13px;
@@ -717,7 +705,7 @@
 
   .reaction-picker-body {
     position: relative;
-    max-height: min(300px, 46vh);
+    max-height: min(368px, 58vh);
     min-height: 0;
     flex: 1 1 auto;
     padding: 2px 14px 14px;
@@ -747,7 +735,7 @@
     position: absolute;
     inset-inline: 0;
     display: grid;
-    grid-template-columns: repeat(7, 1fr);
+    grid-template-columns: repeat(8, 1fr);
     gap: 4px;
   }
 
@@ -802,19 +790,6 @@
        pointer crosses on the way to the swatches. */
     transform: translate(-50%, calc(-100% + 2px));
   }
-
-  .reaction-picker-foot {
-    display: flex;
-    flex: none;
-    align-items: center;
-    gap: 11px;
-    min-height: 48px;
-    padding: 12px 16px;
-    border-top: 1px solid rgba(255, 255, 255, 0.09);
-    background: color-mix(in oklch, var(--control), transparent 82%);
-  }
-
-  .reaction-picker-hint { color: var(--warm-muted-dim); font-family: var(--font-mono); font-size: 12.5px; }
 
   .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 </style>

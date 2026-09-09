@@ -2143,6 +2143,10 @@ test('message action toolbars expose persisted quick reactions and a separated f
   // between and asked for the artwork of each.
   assert.doesNotMatch(picker, /behavior: 'smooth'/);
   assert.match(picker, /scroller\.scrollTop = top;/);
+  // The category strip stays one line and the grid keeps the height that the
+  // preview bar used to take: it only ever repeated the emoji under the cursor.
+  assert.match(picker, /\.reaction-picker-anchors \{ display: flex; flex-wrap: nowrap;/);
+  assert.doesNotMatch(picker, /reaction-picker-foot|reaction-picker-hint|previewEmoji/);
   assert.match(persistence, /indexedDB\.open\(DATABASE_NAME, DATABASE_VERSION\)/);
   assert.match(persistence, /voice-room:frequent-reactions/);
   assert.match(persistence, /frequentReactionKey\(namespace: string, userId: string\)/);
