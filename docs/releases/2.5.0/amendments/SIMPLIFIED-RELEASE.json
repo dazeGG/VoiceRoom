@@ -46,9 +46,10 @@
         "room read write and exact-microsecond DM read verified against the dev database in rolled-back transactions"
       ]
     },
-    "manualAcceptance": "Owner-reported acceptance on the dev deployment of reactions, mentions, notification centre, image viewer, speaking rings, room and DM read state."
+    "manualAcceptance": "Owner-reported acceptance on the dev deployment of reactions, mentions, the notification centre, the image viewer, speaking rings and room read state. DM read state after the exact-microsecond fix (deployed as ae660af) was verified only against the dev database, not yet confirmed by the owner."
   },
   "knownRisks": [
+    "DM read persistence after the exact-microsecond fix is database-verified but awaits owner confirmation on the dev deployment.",
     "G17-A02 migration lock-timeout test failed once on develop (9188 ms against a 5 s bound) and passed on later runs; treated as timing-sensitive, not fixed.",
     "Full API integration suite and web end-to-end suite were not run locally in the final stabilisation window; the API suite ran in CI against PostgreSQL.",
     "scripts/test/validate_release_250_plan.py already fails on the develop plan ('plan must contain exactly 93 canonical cards'), independent of this release; its CI job runs only for G01 bootstrap branches, so it neither ran nor blocks here."
