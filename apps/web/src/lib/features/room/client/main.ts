@@ -2,6 +2,7 @@ import { GATE_THRESHOLD_MIN_DB } from './core/config';
 import { roomDeviceUi } from '$lib/features/room/room-device-ui.svelte';
 import { startUi } from '$lib/features/room/start-ui.svelte';
 import { registerActiveVoiceControls, registerActiveVoiceLeave } from '$lib/features/room/voice-session.svelte';
+import { isDesktopBoundaryAllowed } from '$lib/platform/desktop-boundary';
 
 import { state } from './core/state.svelte';
 import { getStoredPeerSession } from './core/session';
@@ -48,6 +49,7 @@ let activeVoiceControlsTeardown: (() => void) | null = null;
 let desktopHotkeysTeardown: (() => void) | null = null;
 
 export function mountRoomClient(_root: ParentNode = document, options: { roomId?: string; embeddedRoomId?: string; autoJoin?: boolean } = {}): () => void {
+  if (!isDesktopBoundaryAllowed()) return () => {};
   if (mounted) return unmountRoomClient;
   mounted = true;
   mountAbortController = new AbortController();
@@ -55,7 +57,7 @@ export function mountRoomClient(_root: ParentNode = document, options: { roomId?
   activeVoiceLeaveTeardown = registerActiveVoiceLeave(leaveRoom);
   activeVoiceControlsTeardown = registerActiveVoiceControls({
     toggleMic: toggleMicrophoneMuted,
-    toggleDeafen: toggleOutputMute
+    toggleDeafen: () => toggleOutputMute()
   });
   const desktopRuntime = Boolean(window.voiceRoomRuntime?.isDesktop);
   let lastDesktopHotkeyFailure = '';

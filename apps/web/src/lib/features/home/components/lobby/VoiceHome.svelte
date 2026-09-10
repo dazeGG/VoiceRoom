@@ -10,11 +10,13 @@
   import { notificationPreferences } from '$lib/shared/notifications/preferences.svelte';
   import { RoomMenuContent } from '$lib/shared/components/room-menu';
 
-  let { rooms, onOpenRoom, onCreateRoom, onJoinCode, onToast } = $props<{
+  let { rooms, onOpenRoom, onCreateRoom, onJoinCode, onRoomsChanged, onOpenRoomSettings, onToast } = $props<{
     rooms: OwnedRoom[];
     onOpenRoom: (roomId: string) => void;
     onCreateRoom: () => void;
     onJoinCode: (code: string) => void;
+    onRoomsChanged?: () => void;
+    onOpenRoomSettings?: (roomId: string) => void;
     onToast?: (message: string) => void;
   }>();
 
@@ -30,6 +32,16 @@
 
   function roomAvatars(roomId: string) {
     return roomPeerAvatarItems(roomPresence.peersByRoomId[roomId] || []);
+  }
+
+  // Friends already in the room render disabled in the invite submenu.
+  function roomPresentUserIds(roomId: string): Set<string> {
+    const peers = roomPresence.peersByRoomId[roomId] || [];
+    return new Set(
+      peers
+        .map((peer: { accountUserId?: string }) => peer.accountUserId || '')
+        .filter((userId: string) => userId !== '')
+    );
   }
 
   function roomUnreadCount(room: OwnedRoom): number {
@@ -173,8 +185,13 @@
           roomId={contextRoom.roomId}
           name={roomDisplayName(contextRoom)}
           avatarUrl={contextRoom.avatarUrl}
+          relationship={contextRoom.relationship}
+          friends={friendsState.friends}
+          presentUserIds={roomPresentUserIds(contextRoom.roomId)}
           {close}
           canClose={(roomId) => contextRoomId === roomId}
+          onOpenSettings={contextRoom.relationship === 'owner' ? () => onOpenRoomSettings?.(contextRoom.roomId) : undefined}
+          {onRoomsChanged}
           {onToast}
         />
       {/key}

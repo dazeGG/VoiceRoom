@@ -4,6 +4,9 @@ import type { DirectMessage } from './dm';
 import type { PublicUser } from './friends';
 import type { ChatMessage, RoomPeer, RoomSummary } from './rooms';
 import type { NotificationRealtimeEvent } from '../shared/notifications';
+import type { ReactionSummary } from '@voice-room/shared/reactions';
+import { isDesktopBoundaryBlocked } from '$lib/platform/desktop-boundary';
+import { RealtimeHeartbeatWatchdog } from './realtime-heartbeat.js';
 
 export type RealtimeAccountEvent =
   | { type: 'ready'; payload: { userId?: string; guest?: boolean; onlineFriendIds?: string[] } }
@@ -55,8 +58,35 @@ export type RealtimeRoomEvent =
   | { type: 'room.banned'; payload: { roomId: string; peerId?: string } };
 
 export type RealtimeErrorEvent = { type: 'error'; payload: { code: string; message: string; id?: string } };
+export type ReactionRealtimeEvent = {
+  type: 'reaction.updated';
+  payload: {
+    conversation: { type: 'room' | 'dm'; id: string };
+    roomId?: string;
+    messageId: string;
+    summary: ReactionSummary;
+  };
+};
 
-export type RealtimeEvent = RealtimeAccountEvent | RealtimeRoomEvent | RealtimeErrorEvent | NotificationRealtimeEvent;
+export type PinsRealtimeEvent = {
+  type: 'room.pins';
+  payload: {
+    roomId: string;
+    action: 'pinned' | 'unpinned';
+    messageId: string;
+    pins: unknown;
+    count: number;
+  };
+};
+
+export type RealtimeEvent = (
+  RealtimeAccountEvent
+  | RealtimeRoomEvent
+  | RealtimeErrorEvent
+  | NotificationRealtimeEvent
+  | ReactionRealtimeEvent
+  | PinsRealtimeEvent
+) & { id?: string };
 
 /** @deprecated Use RealtimeEvent */
 export type { RealtimeEvent as RealtimeEventUnion };
@@ -70,12 +100,13 @@ type ServerEnvelope = {
 
 export interface RealtimeHandle {
   close: () => void;
-  send: (type: string, payload?: Record<string, unknown>) => void;
+  send: (type: string, payload?: Record<string, unknown>, id?: string) => void;
 }
 
 const RECONNECT_BASE_MS = 500;
 const RECONNECT_MAX_MS = 8000;
 const HEARTBEAT_MS = 15000;
+const HEARTBEAT_TIMEOUT_MS = 30000;
 
 let shared: AppRealtimeConnection | null = null;
 
@@ -97,7 +128,11 @@ function parseRealtimeEvent(envelope: ServerEnvelope): RealtimeEvent | null {
       }
     };
   }
-  return { type: envelope.type, payload: envelope.payload ?? {} } as RealtimeEvent;
+  return {
+    type: envelope.type,
+    payload: envelope.payload ?? {},
+    ...(envelope.id ? { id: envelope.id } : {})
+  } as RealtimeEvent;
 }
 
 class AppRealtimeConnection {
@@ -109,11 +144,15 @@ class AppRealtimeConnection {
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private outboundQueue: string[] = [];
-  private restoreHandlers = new Set<() => void>();
-  private stateHandlers = new Set<(connected: boolean) => void>();
+  private restoreHandlers = new Set<(connectionEpoch: number) => void>();
+  private stateHandlers = new Set<(connected: boolean, connectionEpoch: number) => void>();
   private everConnected = false;
+  private connectionEpoch = 0;
+  private openGeneration = 0;
+  private heartbeatWatchdog = new RealtimeHeartbeatWatchdog({ timeoutMs: HEARTBEAT_TIMEOUT_MS });
 
   subscribe(handler: (event: RealtimeEvent) => void): () => void {
+    if (isDesktopBoundaryBlocked()) return () => {};
     this.handlers.add(handler);
     this.refCount += 1;
     this.ensureConnected();
@@ -124,8 +163,9 @@ class AppRealtimeConnection {
     };
   }
 
-  send(type: string, payload: Record<string, unknown> = {}): void {
-    const frame = JSON.stringify({ type, payload });
+  send(type: string, payload: Record<string, unknown> = {}, id?: string): void {
+    if (isDesktopBoundaryBlocked()) return;
+    const frame = JSON.stringify({ ...(id ? { id } : {}), type, payload });
     if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
       this.outboundQueue.push(frame);
       this.ensureConnected();
@@ -143,6 +183,7 @@ class AppRealtimeConnection {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
     }
+    this.heartbeatWatchdog.reset();
   }
 
   private emit(event: RealtimeEvent): void {
@@ -158,39 +199,56 @@ class AppRealtimeConnection {
   }
 
   private scheduleReconnect(): void {
-    if (this.closedByClient || this.refCount === 0) return;
+    if (this.closedByClient || this.refCount === 0 || this.reconnectTimer !== null) return;
     const baseDelay = Math.min(RECONNECT_MAX_MS, RECONNECT_BASE_MS * 2 ** this.reconnectAttempt);
     const delay = baseDelay * (0.5 + Math.random() * 0.5);
     this.reconnectAttempt += 1;
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
-      this.openSocket();
+      this.ensureConnected();
     }, delay);
   }
 
   private startHeartbeat(): void {
+    if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
+    this.heartbeatWatchdog.reset();
     this.heartbeatTimer = setInterval(() => {
+      if (this.heartbeatWatchdog.isTimedOut()) {
+        if (this.heartbeatTimer) {
+          clearInterval(this.heartbeatTimer);
+          this.heartbeatTimer = null;
+        }
+        this.socket?.close(4000, 'heartbeat_timeout');
+        return;
+      }
+      this.heartbeatWatchdog.recordPing();
       this.send('ping', { at: Date.now() });
     }, HEARTBEAT_MS);
   }
 
   private openSocket(): void {
-    this.socket = new WebSocket(wsUrl());
-    this.socket.onopen = () => {
+    if (this.socket && (this.socket.readyState === WebSocket.OPEN || this.socket.readyState === WebSocket.CONNECTING)) return;
+    const generation = ++this.openGeneration;
+    const socket = new WebSocket(wsUrl());
+    this.socket = socket;
+    socket.onopen = () => {
+      if (this.socket !== socket || generation !== this.openGeneration) return;
+      this.connectionEpoch += 1;
       this.reconnectAttempt = 0;
       this.send('hello', {});
       // Restore handlers replay subscriptions lost with the previous socket.
       // On the very first open the originals are still sitting in the
       // outbound queue, so replaying would double-send them.
       if (this.everConnected) {
-        for (const restore of this.restoreHandlers) restore();
+        for (const restore of this.restoreHandlers) restore(this.connectionEpoch);
       }
       this.everConnected = true;
       this.flushQueue();
       this.startHeartbeat();
       this.emitState(true);
     };
-    this.socket.onmessage = (event) => {
+    socket.onmessage = (event) => {
+      if (this.socket !== socket || generation !== this.openGeneration) return;
       let envelope: ServerEnvelope | null = null;
       try {
         envelope = JSON.parse(String(event.data)) as ServerEnvelope;
@@ -198,20 +256,22 @@ class AppRealtimeConnection {
         return;
       }
       const parsed = parseRealtimeEvent(envelope);
+      if (parsed?.type === 'pong') this.heartbeatWatchdog.recordPong();
       if (parsed) this.emit(parsed);
     };
-    this.socket.onclose = () => {
+    socket.onclose = () => {
+      if (this.socket !== socket || generation !== this.openGeneration) return;
       this.clearTimers();
       this.socket = null;
       this.emitState(false);
       this.scheduleReconnect();
     };
-    this.socket.onerror = () => {
-      this.socket?.close();
+    socket.onerror = () => {
+      socket.close();
     };
   }
 
-  onRestore(handler: () => void): () => void {
+  onRestore(handler: (connectionEpoch: number) => void): () => void {
     this.restoreHandlers.add(handler);
     return () => {
       this.restoreHandlers.delete(handler);
@@ -219,7 +279,7 @@ class AppRealtimeConnection {
   }
 
   // Connection liveness for UI indicators: true on socket open, false on loss.
-  onStateChange(handler: (connected: boolean) => void): () => void {
+  onStateChange(handler: (connected: boolean, connectionEpoch: number) => void): () => void {
     this.stateHandlers.add(handler);
     return () => {
       this.stateHandlers.delete(handler);
@@ -227,19 +287,33 @@ class AppRealtimeConnection {
   }
 
   private emitState(connected: boolean): void {
-    for (const handler of this.stateHandlers) handler(connected);
+    for (const handler of this.stateHandlers) handler(connected, this.connectionEpoch);
+  }
+
+  getConnectionEpoch(): number {
+    return this.connectionEpoch;
+  }
+
+  isConnected(): boolean {
+    return this.socket?.readyState === WebSocket.OPEN;
   }
 
   ensureConnected(): void {
+    if (isDesktopBoundaryBlocked()) return;
     if (this.socket && (this.socket.readyState === WebSocket.OPEN || this.socket.readyState === WebSocket.CONNECTING)) {
       return;
     }
     this.closedByClient = false;
+    if (this.reconnectTimer !== null) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
     this.openSocket();
   }
 
   private disconnect(): void {
     this.closedByClient = true;
+    this.openGeneration += 1;
     this.clearTimers();
     this.outboundQueue.length = 0;
     this.socket?.close();

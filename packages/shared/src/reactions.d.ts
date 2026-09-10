@@ -1,0 +1,11 @@
+export type ReactionMutation = { messageId: string; emoji: string; active: boolean };
+export type ReactionSummary = { emoji: string; count: number; reactedByMe: boolean; revision: string };
+export type Reactor = { userId: string; displayName: string; avatarUrl: string | null };
+export type ReactorPage = { reactors: Reactor[]; nextCursor: string | null };
+export const DEFAULT_REACTOR_LIMIT: number;
+export const MAX_REACTOR_LIMIT: number;
+export function normalizeReactionMutation(value: unknown): ReactionMutation | null;
+export function normalizeReactionRevision(value: unknown): string | null;
+export function normalizeReactionSummary(value: unknown): ReactionSummary | null;
+export function normalizeReactorQuery(value?: unknown): { cursor: string | null; limit: number } | null;
+export function normalizeReactorPage(value: unknown): ReactorPage | null;

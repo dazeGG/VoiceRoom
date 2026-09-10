@@ -1,6 +1,6 @@
 {
   "name": "voice-room",
-  "version": "2.4.2",
+  "version": "2.5.0",
   "private": true,
   "description": "Simple link-based LiveKit voice chat with screen sharing.",
   "workspaces": [
@@ -15,17 +15,18 @@
     "dev:up": "docker compose -f docker-compose.dev.yml up -d --build",
     "dev:down": "docker compose -f docker-compose.dev.yml down",
     "dev:logs": "docker compose -f docker-compose.dev.yml logs -f",
-    "dev:restart": "docker compose -f docker-compose.dev.yml restart api web",
+    "dev:restart": "docker compose -f docker-compose.dev.yml restart livekit-gate api web",
     "dev:api": "docker compose -f docker-compose.dev.yml up --build api",
     "dev:web": "docker compose -f docker-compose.dev.yml up --build web",
-    "dev:livekit": "docker compose -f docker-compose.dev.yml up --build livekit",
+    "dev:livekit": "docker compose -f docker-compose.dev.yml up --build livekit-gate",
     "dev:host:api": "npm --workspace @voice-room/api run dev",
     "dev:host:web": "npm --workspace @voice-room/web run dev",
     "dev:host:livekit": "docker run --rm -e LIVEKIT_KEYS=\"devkey: devsecret\" -p 7880:7880 -p 7881:7881 -p 7882:7882/udp livekit/livekit-server:v1.13.2 --dev --bind 0.0.0.0",
     "build": "npm --workspace @voice-room/web run build",
     "check": "npm --workspace @voice-room/shared run check && npm --workspace @voice-room/api run check && npm --workspace @voice-room/web run check",
     "test": "npm --workspace @voice-room/shared run test && npm --workspace @voice-room/api run test && npm --workspace @voice-room/web run test",
-    "e2e": "npm --workspace @voice-room/web run e2e"
+    "e2e": "npm --workspace @voice-room/web run e2e",
+    "coverage:g08": "node -e \"const fs=require('node:fs');fs.rmSync('coverage/.release-250-v8',{recursive:true,force:true});fs.mkdirSync('coverage/.release-250-v8',{recursive:true})\" && G08_V8_DIR=coverage/.release-250-v8 NODE_V8_COVERAGE=coverage/.release-250-v8 node --test --test-concurrency=1 scripts/test/g08-coverage-gate.test.mjs packages/shared/test/*.test.js apps/api/test/*.test.js && node scripts/coverage/check-release-250-coverage.mjs --v8-dir coverage/.release-250-v8 --out coverage/release-250-summary.json --collect-only && node scripts/coverage/check-release-250-coverage.mjs --coverage coverage/release-250-summary.json --base-thresholds-absent"
   },
   "packageManager": "npm@11.16.0",
   "engines": {

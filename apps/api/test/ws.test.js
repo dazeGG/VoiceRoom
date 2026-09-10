@@ -1,5 +1,6 @@
 'use strict';
 
+const { socketPathForDirectory } = require('./ipc-harness');
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -7,13 +8,12 @@ const http = require('node:http');
 const { spawn } = require('node:child_process');
 const path = require('node:path');
 const os = require('node:os');
-const WebSocket = require('ws');
 const { createTestDatabase } = require('./db-harness');
 const { joinVoiceRoom, openWs: openHarnessWs, subscribeRoomPreview, waitForWsType } = require('./ws-harness');
 
 function getSocketPath() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'voice-room-ws-'));
-  return { dir, socketPath: path.join(dir, 'api.sock') };
+  return { dir, socketPath: socketPathForDirectory(dir) };
 }
 
 function waitForHealthz(socketPath, timeoutMs = 5000) {
@@ -107,28 +107,7 @@ function delay(ms) {
 }
 
 function openWs(socketPath, cookie) {
-  const frames = [];
-  const ws = new WebSocket(`ws+unix://${socketPath}:/api/ws`, {
-    headers: cookie ? { Cookie: cookie } : undefined
-  });
-
-  const ready = new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error('WS did not deliver ready')), 5000);
-    ws.on('message', (raw) => {
-      const parsed = JSON.parse(String(raw));
-      frames.push(parsed);
-      if (parsed.type === 'ready') {
-        clearTimeout(timer);
-        resolve(parsed);
-      }
-    });
-    ws.on('error', (error) => {
-      clearTimeout(timer);
-      reject(error);
-    });
-  });
-
-  return { ws, frames, ready };
+  return openHarnessWs(socketPath, { cookie });
 }
 
 async function register(socketPath, login) {
@@ -433,13 +412,13 @@ test('ws sends additive account notification envelopes without regressing legacy
   bob.ws.close();
 });
 
-test('ring requires an active friend and delivers one expiring invitation per cooldown', async (t) => {
+test('ring works from the lobby for an active friend and delivers one invitation per cooldown', async (t) => {
   const { dir, socketPath } = getSocketPath();
   const { cleanup, databaseUrl } = await createTestDatabase(t);
   const logs = { stdout: '', stderr: '' };
   const child = startServer(socketPath, databaseUrl, logs, {
     RING_RATE_LIMIT: '1',
-    RING_RATE_WINDOW_MS: '30000',
+    RING_RATE_WINDOW_MS: '1000',
     RING_TTL_MS: '5000'
   });
   t.after(() => {
@@ -476,7 +455,8 @@ test('ring requires an active friend and delivers one expiring invitation per co
     cookie: aliceCookie,
     body: { userId: bobId }
   });
-  assert.equal(beforeJoin.status, 403);
+  assert.equal(beforeJoin.status, 200);
+  await delay(1100);
 
   const alice = openHarnessWs(socketPath, { cookie: aliceCookie });
   const bob = openWs(socketPath, bobCookie);
@@ -522,6 +502,7 @@ test('ring requires an active friend and delivers one expiring invitation per co
   assert.equal(inviteMessage.invite.roomId, roomId);
   assert.equal(inviteMessage.invite.roomName, 'Ring Room');
   assert.equal(inviteMessage.invite.status, 'pending');
+  assert.equal(inviteMessage.invite.expiresAt, null);
   assert.match(inviteMessage.body, /Ring Room/);
 
   // Only the invited recipient may respond; the sender gets a 403.
@@ -564,6 +545,66 @@ test('ring requires an active friend and delivers one expiring invitation per co
   });
   assert.equal(repeated.status, 429);
   assert.ok(Number(repeated.body.retryAfterSeconds) > 0);
+
+  await delay(1100);
+  const bobBeforeSecondInvite = bob.frames.length;
+  const second = await request(socketPath, {
+    method: 'POST',
+    pathname: `/api/rooms/${encodeURIComponent(roomId)}/ring`,
+    cookie: aliceCookie,
+    body: { userId: bobId }
+  });
+  assert.equal(second.status, 200);
+  const secondInvite = await waitForWsType(
+    bob.frames,
+    'dm.message',
+    (frame) => frame.payload?.message?.invite?.status === 'pending',
+    5000,
+    bobBeforeSecondInvite
+  );
+
+  const bobBeforeLeave = bob.frames.length;
+  alice.ws.send(JSON.stringify({
+    type: 'room.leave',
+    payload: { roomId, peerId: 'alice-ring-peer', sessionToken: 'r'.repeat(32) }
+  }));
+  await delay(250);
+  const peersAfterLeave = await request(socketPath, {
+    pathname: `/api/rooms/${encodeURIComponent(roomId)}/peers`,
+    cookie: bobCookie
+  });
+  assert.equal(peersAfterLeave.body.peers.some((peer) => peer.accountUserId === inviteMessage.senderId), false);
+  const threadAfterLeave = await request(socketPath, {
+    pathname: `/api/dm/${encodeURIComponent(inviteMessage.senderId)}`,
+    cookie: bobCookie
+  });
+  assert.equal(
+    threadAfterLeave.body.messages.find((message) => message.id === secondInvite.payload.message.id)?.invite?.status,
+    'pending'
+  );
+  assert.equal(
+    bob.frames.slice(bobBeforeLeave).some((frame) =>
+      frame.type === 'dm.message.edited'
+      && frame.payload?.message?.id === secondInvite.payload.message.id
+    ),
+    false
+  );
+
+  const bobBeforeDelete = bob.frames.length;
+  const deletedRoom = await request(socketPath, {
+    method: 'DELETE',
+    pathname: `/api/rooms/${encodeURIComponent(roomId)}`,
+    cookie: aliceCookie
+  });
+  assert.equal(deletedRoom.status, 200);
+  const expired = await waitForWsType(
+    bob.frames,
+    'dm.message.edited',
+    (frame) => frame.payload?.message?.id === secondInvite.payload.message.id,
+    5000,
+    bobBeforeDelete
+  );
+  assert.equal(expired.payload.message.invite.status, 'expired');
 
   alice.ws.close();
   bob.ws.close();

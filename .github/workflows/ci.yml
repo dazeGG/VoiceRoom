@@ -3,13 +3,13 @@ name: CI/CD
 on:
   push:
     branches: [develop, main]
+    tags: ['v*']
   pull_request:
     branches: [develop, main]
-
 permissions:
   contents: read
 
-# Cancel superseded runs on PRs; never cancel a main run (it may be mid-deploy).
+# Cancel superseded runs on PRs; push and tag runs always finish.
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -88,29 +88,158 @@ jobs:
       - run: npm ci
       - run: npm test
 
-  deploy:
-    name: Deploy to server
-    needs: [check, test]
-    # Only deploy real pushes to main, never PRs or forks.
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+  voice-join:
+    name: Voice room join smoke
     runs-on: ubuntu-latest
-    # Serialize deploys so two pushes can't rebuild the stack concurrently.
-    concurrency:
-      group: deploy-production
-      cancel-in-progress: false
+    timeout-minutes: 20
     steps:
-      - name: Deploy over SSH
-        uses: appleboy/ssh-action@v1.2.5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_KEY }}
-          port: ${{ secrets.SSH_PORT || '22' }}
-          script: |
-            set -euo pipefail
-            cd "${{ vars.DEPLOY_PATH || '/srv/voiceroom' }}"
-            git fetch --all --prune
-            git reset --hard origin/main
-            # API applies PostgreSQL migrations on bootstrap before it listens.
-            docker compose up -d --build
-            docker image prune -f
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Start production-like voice stack
+        run: docker compose -f docker-compose.ci.yml up -d --build --wait --wait-timeout 180
+      - name: Join voice and verify chat behavior through production-like services
+        run: npm --workspace @voice-room/web run e2e -- e2e/room-voice.spec.ts e2e/chat-image-paste.spec.ts e2e/manual-chat-polish.spec.ts --project=chromium --retries=0
+      - name: Capture voice stack diagnostics
+        if: failure()
+        run: |
+          docker compose -f docker-compose.ci.yml ps
+          docker compose -f docker-compose.ci.yml logs --no-color --tail=250
+      - name: Always tear down the voice stack
+        if: always()
+        run: docker compose -f docker-compose.ci.yml down --volumes --remove-orphans
+
+  goal-g05:
+    name: G05 strict LiveKit gate proof
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm --workspace @voice-room/api run test:g05
+      - run: G05_SELECTED_MECHANISM=external-auth-gate node scripts/lkv/run-strict-boundary-proof.mjs --json --fail-on-blocked
+
+  goal-g08:
+    name: G08 measured coverage gate
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    permissions:
+      contents: read
+    env:
+      TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Capture protected-base coverage policy and changed files
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p coverage
+          git diff --name-only "${{ github.event.pull_request.base.sha }}" "${{ github.event.pull_request.head.sha }}" > coverage/release-250-changed-files.txt
+          git diff --unified=0 "${{ github.event.pull_request.base.sha }}" "${{ github.event.pull_request.head.sha }}" > coverage/release-250-changed.diff
+          if git cat-file -e "${{ github.event.pull_request.base.sha }}:config/coverage/release-250-thresholds.json"; then
+            git show "${{ github.event.pull_request.base.sha }}:config/coverage/release-250-thresholds.json" > coverage/release-250-base-thresholds.json
+            echo "G08_BASELINE_ARGS=--base-thresholds coverage/release-250-base-thresholds.json" >> "$GITHUB_ENV"
+          else
+            echo "G08_BASELINE_ARGS=--base-thresholds-absent" >> "$GITHUB_ENV"
+          fi
+      - run: npm run coverage:g08
+      - name: Enforce G08 coverage and protected-base ratchet
+        shell: bash
+        run: |
+          read -r -a baseline_args <<< "$G08_BASELINE_ARGS"
+          node scripts/coverage/check-release-250-coverage.mjs \
+            --coverage coverage/release-250-summary.json \
+            --changed-files coverage/release-250-changed-files.txt \
+            --changed-diff coverage/release-250-changed.diff \
+            "${baseline_args[@]}"
+      - name: Persist G08 measured coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: g08-release-250-coverage-run-${{ github.run_id }}-attempt-${{ github.run_attempt }}-head-${{ github.event.pull_request.head.sha }}
+          path: |
+            coverage/release-250-summary.json
+            coverage/release-250-changed-files.txt
+            coverage/release-250-changed.diff
+            coverage/release-250-base-thresholds.json
+          if-no-files-found: error
+          retention-days: 90
+
+  images:
+    name: Publish ${{ matrix.target }} image
+    needs: [check, test, voice-join, goal-g05]
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        target: [api, worker, web]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: ${{ matrix.target }}
+          push: true
+          tags: ghcr.io/dazegg/voiceroom-${{ matrix.target }}:${{ github.sha }}
+          labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          cache-from: type=gha,scope=${{ matrix.target }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.target }}
+
+  deploy-dev:
+    name: Deploy dev
+    needs: images
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    uses: ./.github/workflows/deploy.yml
+    with:
+      environment: dev
+      url: https://dev.voiceroom.ru
+    secrets: inherit
+
+  deploy-production:
+    name: Deploy production
+    needs: images
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    uses: ./.github/workflows/deploy.yml
+    with:
+      environment: production
+      url: https://voiceroom.ru
+    secrets: inherit

@@ -6,6 +6,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const { createApiApp, createApiServer } = require('../src/server');
+const { PUBLIC_CAPABILITY_KEYS } = require('@voice-room/shared/capabilities');
 const { resetMetricsForTest } = require('../src/lib/metrics');
 
 function createFakeStore() {
@@ -46,6 +47,14 @@ function createFakeStore() {
       }
       return { identity: { avatarColorKey: 'blurple', peerId }, status: 'created' };
     },
+    normalizeGatePrincipal({ accountUserId, guestPrincipalId }) {
+      return accountUserId
+        ? { principalId: accountUserId, principalType: 'account' }
+        : { principalId: guestPrincipalId, principalType: 'guest' };
+    },
+    async isRoomServerMuted() {
+      return false;
+    },
     async markRoomActive() {},
     async markRoomEmpty() {},
     async pruneRooms() {},
@@ -79,6 +88,107 @@ test('createApiApp exposes a Fastify app with inject-based routes', async (t) =>
   assert.equal(legacyVisualRoom.statusCode, 201);
   assert.equal('emoji' in legacyVisualRoom.json(), false);
   assert.equal('roomPresetKey' in legacyVisualRoom.json(), false);
+});
+
+test('healthz fails readiness when capability snapshot is unavailable', async (t) => {
+  const app = createApiApp({
+    store: createFakeStore(),
+    readinessProviderOverride: {
+      getSnapshot() {
+        throw new Error('manifest unavailable');
+      }
+    }
+  });
+  t.after(() => app.close());
+
+  const health = await app.inject({ method: 'GET', url: '/api/healthz' });
+  assert.equal(health.statusCode, 503);
+  assert.deepEqual(health.json(), {
+    ok: false,
+    code: 'readiness_unavailable',
+    error: 'Readiness snapshot unavailable'
+  });
+});
+
+test('API lifecycle starts and stops runtime readiness', async () => {
+  let starts = 0;
+  let stops = 0;
+  const app = createApiApp({
+    store: createFakeStore(),
+    readinessProviderOverride: {
+      async start() { starts += 1; },
+      async stop() { stops += 1; },
+      getSnapshot() { return { features: {} }; }
+    }
+  });
+
+  await app.ready();
+  assert.equal(starts, 1);
+  await app.close();
+  assert.equal(stops, 1);
+});
+
+test('capability route returns exactly the public boolean capability contract', async (t) => {
+  const app = createApiApp({
+    store: createFakeStore(),
+    readinessProviderOverride: {
+      getSnapshot() {
+        return {
+          features: {
+            historyCursor: true,
+            mediaUploads: true,
+            unknownFutureFlag: true
+          }
+        };
+      }
+    }
+  });
+  t.after(() => app.close());
+
+  const response = await app.inject({ method: 'GET', url: '/api/capabilities' });
+  assert.equal(response.statusCode, 200);
+  const features = response.json().features;
+  assert.deepEqual(Object.keys(features), PUBLIC_CAPABILITY_KEYS);
+  assert.equal(Object.values(features).every((value) => typeof value === 'boolean'), true);
+  assert.equal(features.historyCursor, true);
+  assert.equal(features.mediaUploads, true);
+  assert.equal(features.readCursor, false);
+  assert.equal(features.unknownFutureFlag, undefined);
+});
+
+test('capability route defaults the public boolean contract when readiness throws', async (t) => {
+  const app = createApiApp({
+    store: createFakeStore(),
+    readinessProviderOverride: {
+      getSnapshot() {
+        throw new Error('manifest unavailable');
+      }
+    }
+  });
+  t.after(() => app.close());
+
+  const response = await app.inject({ method: 'GET', url: '/api/capabilities' });
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(response.json().features, Object.fromEntries(PUBLIC_CAPABILITY_KEYS.map((key) => [key, false])));
+});
+
+test('production cursor HMAC resolution has no membership fallback secret', () => {
+  const { resolveCursorHmacKeys } = require('../src/server').__private;
+
+  assert.throws(() => resolveCursorHmacKeys({
+    context: 'membership',
+    env: { NODE_ENV: 'production', LIVEKIT_GATE_SECRET: 'too-short' }
+  }), /VOICE_ROOM_CURSOR_HMAC_KEYS is required in production/);
+
+  assert.throws(() => resolveCursorHmacKeys({
+    context: 'history',
+    env: { NODE_ENV: 'production', LIVEKIT_GATE_SECRET: 'x'.repeat(64) }
+  }), /VOICE_ROOM_CURSOR_HMAC_KEYS is required in production/);
+
+  assert.equal(resolveCursorHmacKeys({
+    context: 'membership',
+    env: { NODE_ENV: 'production', VOICE_ROOM_CURSOR_HMAC_KEYS: 'configured-key' }
+  }), 'configured-key');
 });
 
 test('createApiServer keeps the legacy http server contract while exposing app/inject', async () => {
@@ -832,6 +942,18 @@ test('livekit token uses authenticated user avatar color for room peer identity'
 
   const app = createApiApp({
     store,
+    liveKitCredentials: {
+      async issueAdmission() {
+        return { status: 'issued', admission: { room: 'voice-room-test', token: 'jwt', ttlSeconds: 60, url: 'ws://gate.test/rtc' } };
+      }
+    },
+    membershipServicesOverride: {
+      service: {
+        async persistSuccessfulAdmission() {
+          return { created: false, status: 'active' };
+        }
+      }
+    },
     users: {
       async getSessionUser(token) {
         assert.equal(token, 'session-token');
@@ -878,7 +1000,14 @@ test('livekit token validates persisted anonymous peer identity before issuing v
   process.env.LIVEKIT_API_KEY = 'devkey';
   process.env.LIVEKIT_API_SECRET = 'devsecretdevsecretdevsecret';
 
-  const app = createApiApp({ store: createFakeStore() });
+  const app = createApiApp({
+    store: createFakeStore(),
+    liveKitCredentials: {
+      async issueAdmission() {
+        return { status: 'issued', admission: { room: 'voice-room-test', token: 'jwt', ttlSeconds: 60, url: 'ws://gate.test/rtc' } };
+      }
+    }
+  });
   t.after(async () => {
     await app.close();
     if (previous.url === undefined) delete process.env.LIVEKIT_URL;

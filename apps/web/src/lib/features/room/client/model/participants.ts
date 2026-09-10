@@ -10,6 +10,8 @@ export interface PeerInfo {
   deafened?: boolean;
   muted?: boolean;
   screen?: boolean;
+  serverMuted?: boolean;
+  screenAuthoritative?: boolean;
   screenAudio?: boolean;
   screenProfileId?: string;
   screenStreamId?: string;
@@ -35,15 +37,20 @@ export interface Participant {
   meterData: Uint8Array<ArrayBuffer> | null;
   muted: boolean;
   speaking: boolean;
+  /** Meter-loop bookkeeping: while `now` is under this, the ring stays lit. */
+  speakingHoldUntil: number;
   statusLabel: string;
   level: number;
   name: string;
   micReceiver: RTCRtpReceiver | null;
   screen: boolean;
+  screenAuthoritative: boolean | null;
   screenAudio: boolean;
   screenProfileId: string;
   screenStream: MediaStream | null;
   screenStreamId: string;
+  /** Muted by the room owner; the participant cannot lift it themselves. */
+  serverMuted: boolean;
   stream: MediaStream | null;
   viewedScreenPeerId: string;
   voiceIssue: string;

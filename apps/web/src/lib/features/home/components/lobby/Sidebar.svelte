@@ -1,8 +1,8 @@
 <script lang="ts">
-  import { BellOff, Check, Settings, UserPlus } from '@lucide/svelte';
+  import { Bell, BellOff, Check, Settings, UserPlus } from '@lucide/svelte';
   import { tick } from 'svelte';
   import type { AuthUser } from '$lib/api/auth';
-  import { Avatar, Badge, ContextMenu, Popover } from '$lib/shared/ui';
+  import { Avatar, Badge, Popover, PopoverMenuLabel } from '$lib/shared/ui';
   import { iconSm } from '$lib/shared/ui/icons';
   import {
     effectivePresenceStatus,
@@ -13,7 +13,6 @@
   import { friendsState, openDm } from '../../model/friends.svelte';
   import { notificationPreferences, updatePresenceStatus } from '$lib/shared/notifications/preferences.svelte';
   import SidebarDownload from '../SidebarDownload.svelte';
-  import { FriendMenuContent } from '../friend-menu';
   import VoiceCallWidget from './VoiceCallWidget.svelte';
 
   let {
@@ -21,6 +20,10 @@
     onGoHome,
     onOpenPeople,
     onOpenSettings,
+    notificationsEnabled = false,
+    notificationsOpen = false,
+    notificationUnreadCount = 0,
+    onOpenNotifications,
     onToast,
     activeVoiceRoomId = null,
     activeVoiceRoomName = '',
@@ -36,6 +39,10 @@
     onGoHome: () => void;
     onOpenPeople: () => void;
     onOpenSettings: () => void;
+    notificationsEnabled?: boolean;
+    notificationsOpen?: boolean;
+    notificationUnreadCount?: number;
+    onOpenNotifications?: () => void;
     onToast: (message: string) => void;
     activeVoiceRoomId?: string | null;
     activeVoiceRoomName?: string;
@@ -91,36 +98,6 @@
   const selectedStatusIndex = $derived(
     Math.max(0, statusOptions.findIndex((option) => option.value === selfPresence))
   );
-  let contextFriendId = $state('');
-  let contextX = $state(0);
-  let contextY = $state(0);
-  let contextTrigger = $state<HTMLElement | null>(null);
-  const contextFriend = $derived(friendsState.friends.find((entry) => entry.user.id === contextFriendId));
-
-  function openFriendContextMenu(event: MouseEvent, userId: string): void {
-    event.preventDefault();
-    event.stopPropagation();
-    contextFriendId = userId;
-    contextX = event.clientX;
-    contextY = event.clientY;
-    contextTrigger = event.currentTarget instanceof HTMLElement ? event.currentTarget : null;
-  }
-
-  function handleFriendKeydown(event: KeyboardEvent, userId: string): void {
-    const isContextKey = event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey);
-    if (!isContextKey || !(event.currentTarget instanceof HTMLElement)) return;
-    event.preventDefault();
-    event.stopPropagation();
-    const rect = event.currentTarget.getBoundingClientRect();
-    contextFriendId = userId;
-    contextX = rect.left + Math.min(rect.width - 12, 48);
-    contextY = rect.top + Math.min(rect.height - 8, 36);
-    contextTrigger = event.currentTarget;
-  }
-
-  function closeFriendContextMenu(): void {
-    contextFriendId = '';
-  }
 
   async function focusStatusOption(index = selectedStatusIndex): Promise<void> {
     await tick();
@@ -266,12 +243,8 @@
         <button
           class="lv-row"
           class:is-active={friendsState.selectedFriendId === entry.user.id && friendsState.view === 'dm'}
-          class:is-context={contextFriendId === entry.user.id}
           type="button"
           onclick={() => openDm(entry.user.id)}
-          oncontextmenu={(event) => openFriendContextMenu(event, entry.user.id)}
-          onkeydown={(event) => handleFriendKeydown(event, entry.user.id)}
-          aria-haspopup="menu"
         >
           <Avatar
             name={friendName(entry.user)}
@@ -346,6 +319,7 @@
         </button>
       {/snippet}
       {#snippet content({ close })}
+        <PopoverMenuLabel text="Статус" />
         <div class="lv-status-list">
           {#each statusOptions as option, index (option.value)}
             {@const selected = selfPresence === option.value}
@@ -375,6 +349,21 @@
     </Popover>
     <div class="lv-profile-actions">
       <SidebarDownload />
+      {#if notificationsEnabled}
+        <button
+          class="lobby-gear lv-notification-button"
+          type="button"
+          title="Уведомления"
+          aria-label="Открыть уведомления"
+          aria-expanded={notificationsOpen}
+          onclick={onOpenNotifications}
+        >
+          <Bell {...iconSm} aria-hidden="true" />
+          {#if notificationUnreadCount > 0}
+            <span class="lv-notification-count">{notificationUnreadCount > 99 ? '99+' : notificationUnreadCount}</span>
+          {/if}
+        </button>
+      {/if}
       <button
         class="lobby-gear"
         type="button"
@@ -387,28 +376,6 @@
     </div>
   </div>
 </aside>
-
-{#if contextFriend}
-  <ContextMenu
-    open={Boolean(contextFriendId)}
-    x={contextX}
-    y={contextY}
-    ariaLabel={`Действия для ${friendName(contextFriend.user)}`}
-    restoreFocus={contextTrigger}
-    onClose={closeFriendContextMenu}
-  >
-    {#snippet content({ close })}
-      {#key contextFriend.user.id}
-        <FriendMenuContent
-          friend={contextFriend}
-          {close}
-          canClose={(userId) => contextFriendId === userId}
-          {onToast}
-        />
-      {/key}
-    {/snippet}
-  </ContextMenu>
-{/if}
 
 <style>
   .lv-profile-user {
@@ -433,6 +400,25 @@
     margin-left: auto;
   }
 
+  .lv-notification-button { position: relative; }
+  .lv-notification-count {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    display: grid;
+    min-width: 17px;
+    height: 17px;
+    place-items: center;
+    border: 2px solid var(--panel);
+    border-radius: 999px;
+    padding: 0 3px;
+    background: var(--coral);
+    color: var(--ink);
+    font-family: var(--font-mono);
+    font-size: 9px;
+    line-height: 1;
+  }
+
   :global(.lv-status-popover) {
     width: min(286px, calc(100vw - 28px));
   }
@@ -444,29 +430,29 @@
 
   .lv-status-option {
     display: grid;
-    grid-template-columns: 12px minmax(0, 1fr) 18px;
+    grid-template-columns: 11px minmax(0, 1fr) 18px;
     align-items: center;
-    gap: 12px;
+    gap: 11px;
     width: 100%;
-    min-height: 42px;
-    padding: 9px 10px;
+    min-height: 40px;
+    padding: 8px 12px;
     border: 0;
     border-radius: 12px;
     background: transparent;
-    color: var(--ink);
+    color: var(--warm-ink-dim);
     font: inherit;
     text-align: left;
     cursor: pointer;
     transition: background 140ms ease, color 140ms ease;
   }
 
+  /* Same accent wash the shared menu items use, so the status list reads as one
+     family with every other menu. */
   .lv-status-option:hover,
-  .lv-status-option:focus-visible {
-    background: var(--control-hover);
-  }
-
+  .lv-status-option:focus-visible,
   .lv-status-option.is-selected {
-    background: color-mix(in oklch, var(--accent) 9%, transparent);
+    background: color-mix(in oklch, var(--accent), transparent 88%);
+    color: var(--warm-ink);
   }
 
   .lv-status-option:disabled {
@@ -492,15 +478,15 @@
   }
 
   .lv-status-label {
-    color: #e7e2d4;
-    font-size: 14px;
-    font-weight: 620;
+    color: currentColor;
+    font-size: 14.5px;
+    font-weight: 600;
     line-height: 1.25;
   }
 
   .lv-status-note {
     max-width: 29ch;
-    color: #9d9788;
+    color: var(--warm-faint);
     font-size: 11px;
     line-height: 1.4;
   }

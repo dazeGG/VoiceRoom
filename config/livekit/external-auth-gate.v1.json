@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "release": "2.5.0",
+  "goal": "G05",
+  "selectedMechanism": "external-auth-gate",
+  "publicSignaling": {
+    "service": "livekit-gate",
+    "path": "/rtc",
+    "credentialQueryParam": "vr_gate_credential",
+    "fallbackAllowed": false
+  },
+  "internalLiveKit": {
+    "image": "livekit/livekit-server:v1.13.2",
+    "port": 7880,
+    "productionHostBindAllowed": false
+  },
+  "linearization": {
+    "store": "postgresql",
+    "positiveCacheAllowed": false,
+    "credentialRow": "livekit_gate_credentials",
+    "principalEpochRow": "livekit_gate_principal_epochs"
+  },
+  "principals": {
+    "account": "account id",
+    "guest": "server-issued persistent room-scoped UUID",
+    "ip": "ban signal only"
+  },
+  "availabilityPolicy": "deny on API, gate, database, config, or migration uncertainty"
+}

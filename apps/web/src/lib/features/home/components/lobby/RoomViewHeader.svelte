@@ -3,12 +3,15 @@
   import type { OwnedRoom } from '$lib/api/auth';
   import { iconMd } from '$lib/shared/ui/icons';
   import { roomDisplayName } from '../../model/rooms';
+  import { friendsState } from '../../model/friends.svelte';
   import { RoomMenu } from '$lib/shared/components/room-menu';
 
-  let { room, onBack, onOpenSettings, onToast } = $props<{
+  let { room, presentUserIds = new Set<string>(), onBack, onOpenSettings, onRoomsChanged, onToast } = $props<{
     room: OwnedRoom;
+    presentUserIds?: Set<string>;
     onBack: () => void;
     onOpenSettings?: () => void;
+    onRoomsChanged?: () => void;
     onToast?: (message: string) => void;
   }>();
 
@@ -28,7 +31,11 @@
     triggerClass="lobby-roomview-trigger"
     titleClass="lobby-roomview-name"
     chevronClass="lobby-roomview-chevron"
+    relationship={room.relationship}
+    friends={friendsState.friends}
+    {presentUserIds}
     {onOpenSettings}
+    {onRoomsChanged}
     {onToast}
   />
 </div>

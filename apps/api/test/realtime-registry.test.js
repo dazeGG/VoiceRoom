@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createConnectionRegistry } = require('../src/realtime/registry');
+const { buildRoomMembershipPresenceSnapshot, createConnectionRegistry } = require('../src/realtime/registry');
 
 const settle = () => new Promise((resolve) => setImmediate(resolve));
 
@@ -52,4 +52,49 @@ test('manual offline masks open sockets and stale tabs cannot overwrite active a
   await settle();
   assert.equal(registry.userPresenceStatuses.has('user-1'), false);
   assert.deepEqual(presenceEvents.map((event) => event.online), [true, false, true, false]);
+});
+
+test('presence revision advances when account availability changes', () => {
+  const registry = createConnectionRegistry({
+    maxConnectionsPerUser: 8,
+    keepaliveMs: 15_000,
+    getFriendIds: async () => []
+  });
+
+  assert.equal(registry.getPresenceRevision(), 0);
+  const connection = registry.addConnection('user-1', socket());
+  const connectedRevision = registry.getPresenceRevision();
+  assert.ok(connectedRevision > 0);
+
+  registry.setUserPresenceStatus('user-1', 'away');
+  const awayRevision = registry.getPresenceRevision();
+  assert.ok(awayRevision > connectedRevision);
+
+  registry.setUserPresenceStatus('user-1', 'away');
+  assert.equal(registry.getPresenceRevision(), awayRevision);
+
+  registry.removeConnection(connection);
+  assert.ok(registry.getPresenceRevision() > awayRevision);
+});
+
+test('membership presence includes signed-in users before they join voice', () => {
+  const registry = createConnectionRegistry({
+    maxConnectionsPerUser: 8,
+    keepaliveMs: 15_000,
+    getFriendIds: async () => []
+  });
+  registry.addConnection('owner-1', socket(), '127.0.0.1', 'online');
+
+  const snapshot = buildRoomMembershipPresenceSnapshot(
+    'room-1',
+    { updatedAt: 10, peers: new Map() },
+    registry
+  );
+
+  assert.deepEqual(snapshot.byUserId.get('owner-1'), [{
+    inVoice: false,
+    roomId: null,
+    presenceStatus: 'online'
+  }]);
+  assert.equal(snapshot.revision, registry.getPresenceRevision());
 });

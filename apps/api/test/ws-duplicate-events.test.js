@@ -1,5 +1,6 @@
 'use strict';
 
+const { socketPathForDirectory } = require('./ipc-harness');
 // Regression: a single room.peer.update must fan out exactly one
 // room.peer.updated to each other active peer. Today broadcast() delivers
 // once per peer transport AND once via mirrorLegacyRoomEvent to every
@@ -23,7 +24,7 @@ const TOKEN_B = 'b'.repeat(32);
 
 function getSocketPath() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'voice-room-dup-'));
-  return { dir, socketPath: path.join(dir, 'api.sock') };
+  return { dir, socketPath: socketPathForDirectory(dir) };
 }
 
 function waitForHealthz(socketPath, timeoutMs = 5000) {

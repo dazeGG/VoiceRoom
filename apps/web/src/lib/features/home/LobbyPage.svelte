@@ -1,5 +1,9 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { getAppRealtime } from '$lib/api/realtime';
+  import { playRoomChatMessageCue } from '$lib/features/room/client/media/cues';
+  import { notificationPreferences } from '$lib/shared/notifications/preferences.svelte';
+  import { pushState, replaceState } from '$app/navigation';
   import type { AuthUser, OwnedRoom } from '$lib/api/auth';
   import { fetchOwnedRooms } from '$lib/api/auth';
   import { createRoom } from '$lib/api/rooms';
@@ -22,6 +26,10 @@
   import RoomBrowseView from './components/lobby/RoomBrowseView.svelte';
   import RoomPreviewView from './components/lobby/RoomPreviewView.svelte';
   import LobbyRoomSettingsDialog from './components/lobby/LobbyRoomSettingsDialog.svelte';
+  import NotificationInbox from './components/NotificationInbox.svelte';
+  import { createNotificationInbox } from '$lib/shared/notifications/inbox.svelte';
+  import { fetchNotificationInbox, markAllNotificationsRead, markNotificationRead } from '$lib/api/notifications';
+  import { getCapabilityFeature } from '$lib/platform/capability-state.svelte';
   import { friendsState, initLobby, openDm, showHome, showPeople } from './model/friends.svelte';
   import type { ToastOptions } from './model/toasts.svelte';
   import {
@@ -40,7 +48,7 @@
     setViewedRoomFromRoute
   } from './model/room-navigation.svelte';
   import { roomDisplayName } from './model/rooms';
-  import { roomUi } from '$lib/features/room/room-ui.svelte';
+  import { openChat, roomUi } from '$lib/features/room/room-ui.svelte';
   import '$lib/shared/styles/typography.css';
   import '$lib/shared/styles/dialog.css';
   import '$lib/features/room/styles/chat-rail.css';
@@ -61,6 +69,13 @@
   let settingsOpen = $state(false);
   let settingsTab = $state<'profile' | 'sound' | 'hotkeys' | 'notifications'>('profile');
   let previewSettingsRoomId = $state('');
+  let notificationInboxEnabled = $state(false);
+  let notificationInboxOpen = $state(false);
+  const notificationInbox = createNotificationInbox({
+    list: fetchNotificationInbox,
+    read: markNotificationRead,
+    readAll: markAllNotificationsRead
+  });
   const selectedRoomId = $derived(roomNavigation.viewedRoomId);
   const embeddedRoomId = $derived(roomNavigation.embeddedRoomId);
   const autoJoinRoomId = $derived(roomNavigation.joinIntentRoomId);
@@ -101,7 +116,7 @@
   function replaceUrlWithActiveVoiceRoom(roomId: string | null = connectedVoiceRoomId): void {
     const target = roomId ? `/r/${encodeURIComponent(roomId)}` : '/';
     if (`${window.location.pathname}${window.location.search}` === target) return;
-    history.replaceState(null, '', target);
+    replaceState(target, {});
   }
 
   function closeEmbeddedRoom({ replaceUrl = true, closedRoomId = embeddedRoomId }: { replaceUrl?: boolean; closedRoomId?: string | null } = {}): void {
@@ -115,6 +130,29 @@
 
   onMount(() => {
     void refreshRooms();
+    void getCapabilityFeature('engagement').then((enabled) => {
+      notificationInboxEnabled = enabled;
+      if (enabled) void notificationInbox.load();
+    });
+    // Without this the badge only ever caught up on a reload, so a mention that
+    // arrived while the lobby was open stayed invisible until then.
+    //
+    // The reload is also how a ping becomes audible. The realtime event fires
+    // for every message in every room you belong to, so it cannot tell you were
+    // the one addressed — the inbox can, because that is exactly what it holds.
+    // A rise in its unread count means someone named you, and that is worth a
+    // sound even in a room whose messages you muted: muting a room is asking not
+    // to hear the conversation, not asking not to be reachable.
+    const teardownNotifications = getAppRealtime().subscribe((event) => {
+      if (!notificationInboxEnabled) return;
+      if (event.type !== 'notification.room.message') return;
+      const before = notificationInbox.unreadCount;
+      void notificationInbox.load().then(() => {
+        if (notificationInbox.unreadCount > before && !notificationPreferences.doNotDisturb) {
+          playRoomChatMessageCue();
+        }
+      });
+    });
     const teardownFriends = user ? initLobby(user.id, user.doNotDisturb, user.presenceStatus) : () => {};
     const teardownRooms = user
       ? initLobbyRoomRealtime(
@@ -162,16 +200,26 @@
       selectRoomForVoiceEntry(initialRoomId);
       friendsState.mode = 'rooms';
     }
-    const initialDmId = new URLSearchParams(window.location.search).get('dm');
+    const initialParams = new URLSearchParams(window.location.search);
+    const initialDmId = initialParams.get('dm');
     if (!initialRoomId && initialDmId) {
-      history.replaceState(null, '', '/');
+      replaceState('/', {});
       void openDm(initialDmId).catch(() => onToast('Не удалось открыть диалог'));
+    }
+    // A mention link — from the bell or from a push — lands here rather than on
+    // /r/:roomId, so it previews the room and never joins voice.
+    const linkedRoomId = initialParams.get('room');
+    const linkedMessageId = initialParams.get('message');
+    if (!initialRoomId && linkedRoomId && linkedMessageId) {
+      replaceState('/', {});
+      openRoomMessage(linkedRoomId, linkedMessageId);
     }
 
     window.addEventListener('voice-room:embedded-leave', onEmbeddedLeave);
     window.addEventListener('voice-room:rooms-changed', onRoomsChanged);
     window.addEventListener('popstate', onPopState);
     return () => {
+      teardownNotifications();
       teardownFriends();
       teardownRooms();
       window.removeEventListener('voice-room:embedded-leave', onEmbeddedLeave);
@@ -222,7 +270,7 @@
   function enterRoom(roomId: string): void {
     selectRoomForVoiceEntry(roomId);
     friendsState.mode = 'rooms';
-    history.pushState(null, '', `/r/${encodeURIComponent(roomId)}`);
+    pushState(`/r/${encodeURIComponent(roomId)}`, {});
   }
 
   function previewRoom(roomId: string): void {
@@ -241,7 +289,7 @@
     const openedRoomId = openActiveVoiceRoom();
     if (!openedRoomId) return;
     friendsState.mode = 'rooms';
-    history.pushState(null, '', `/r/${encodeURIComponent(openedRoomId)}`);
+    pushState(`/r/${encodeURIComponent(openedRoomId)}`, {});
   }
 
   async function leaveConnectedVoiceRoom(): Promise<void> {
@@ -295,6 +343,32 @@
     showHome();
     if (selectedRoomId) closeViewedRoom();
   }
+
+  // Which message a mention link asked to show, so the preview opens its chat on
+  // it. Scoped to a room so it cannot leak into the next room previewed.
+  let previewAnchor = $state<{ roomId: string; messageId: string } | null>(null);
+
+  /**
+   * Show a message in its room without joining voice. The old route went through
+   * /r/:roomId, which on load means "put me back inside this room" and joined —
+   * and it reloaded the page while still failing to open the chat.
+   */
+  function openRoomMessage(roomId: string, messageId: string): void {
+    friendsState.mode = 'rooms';
+    if (getActiveVoiceRoomId() === roomId) {
+      // Already in that room: its own chat is the one to show.
+      openActiveVoiceRoom();
+      openChat();
+      return;
+    }
+    previewAnchor = { roomId, messageId };
+    selectRoomPreview(roomId);
+  }
+
+  function openNotification(item: import('@voice-room/shared/notifications').NotificationItem): void {
+    notificationInboxOpen = false;
+    openRoomMessage(item.roomId, item.sourceMessageId);
+  }
 </script>
 
 
@@ -305,6 +379,13 @@
       onGoHome={goHome}
       onOpenPeople={openPeople}
       onOpenSettings={openSettings}
+      notificationsEnabled={notificationInboxEnabled}
+      notificationsOpen={notificationInboxOpen}
+      notificationUnreadCount={notificationInbox.unreadCount}
+      onOpenNotifications={() => {
+        notificationInboxOpen = !notificationInboxOpen;
+        if (notificationInboxOpen) void notificationInbox.load();
+      }}
       {onToast}
       activeVoiceRoomId={connectedVoiceRoomId}
       activeVoiceRoomName={connectedVoiceRoom ? roomDisplayName(connectedVoiceRoom) : connectedVoiceRoomId || ''}
@@ -327,17 +408,22 @@
       {/if}
 
       {#if friendsState.mode === 'rooms' && selectedRoom && connectedVoiceRoomId && selectedRoom.roomId !== connectedVoiceRoomId}
-        <RoomBrowseView {user} room={selectedRoom} onEnter={() => enterRoom(selectedRoom.roomId)} onBack={closeViewedRoom} onOpenSettings={selectedRoom.relationship === 'owner' ? () => (previewSettingsRoomId = selectedRoom.roomId) : undefined} {onToast} />
+        <RoomBrowseView {user} room={selectedRoom} onEnter={() => enterRoom(selectedRoom.roomId)} onBack={closeViewedRoom} onOpenSettings={selectedRoom.relationship === 'owner' ? () => (previewSettingsRoomId = selectedRoom.roomId) : undefined} onRoomsChanged={() => { closeViewedRoom(); void refreshRooms(); }} {onToast} />
       {:else if friendsState.mode === 'rooms' && selectedRoom && (!embeddedRoomId || !embeddedRoomVisible)}
-        <RoomPreviewView {user} room={selectedRoom} onEnter={() => enterRoom(selectedRoom.roomId)} onBack={closeViewedRoom} onOpenSettings={selectedRoom.relationship === 'owner' ? () => (previewSettingsRoomId = selectedRoom.roomId) : undefined} {onToast} />
+        {@const anchor = previewAnchor?.roomId === selectedRoom.roomId ? previewAnchor : null}
+        <!-- Keyed on the anchor so a second mention in a room already on screen
+             still reopens its chat on the new message. -->
+        {#key anchor?.messageId ?? ''}
+        <RoomPreviewView {user} room={selectedRoom} initialPanel={anchor ? 'chat' : null} aroundMessageId={anchor?.messageId} onEnter={() => enterRoom(selectedRoom.roomId)} onBack={closeViewedRoom} onOpenSettings={selectedRoom.relationship === 'owner' ? () => (previewSettingsRoomId = selectedRoom.roomId) : undefined} onRoomsChanged={() => { closeViewedRoom(); void refreshRooms(); }} {onToast} />
+        {/key}
       {:else if friendsState.mode === 'rooms' && !embeddedRoomVisible}
-        <VoiceHome {rooms} onOpenRoom={previewRoom} onCreateRoom={() => (createDialogOpen = true)} onJoinCode={handleJoin} {onToast} />
+        <VoiceHome {rooms} onOpenRoom={previewRoom} onCreateRoom={() => (createDialogOpen = true)} onJoinCode={handleJoin} onRoomsChanged={refreshRooms} onOpenRoomSettings={(roomId) => (previewSettingsRoomId = roomId)} {onToast} />
       {:else if friendsState.mode === 'friends' && friendsState.view === 'dm'}
-        <DmView selfId={user.id} />
+        <DmView selfId={user.id} self={user} />
       {:else if friendsState.mode === 'friends' && friendsState.view === 'people'}
         <PeopleView {user} {onToast} onHome={goHome} />
       {:else if friendsState.mode === 'friends'}
-        <VoiceHome {rooms} onOpenRoom={previewRoom} onCreateRoom={() => (createDialogOpen = true)} onJoinCode={handleJoin} {onToast} />
+        <VoiceHome {rooms} onOpenRoom={previewRoom} onCreateRoom={() => (createDialogOpen = true)} onJoinCode={handleJoin} onRoomsChanged={refreshRooms} onOpenRoomSettings={(roomId) => (previewSettingsRoomId = roomId)} {onToast} />
       {/if}
     </main>
   </div>
@@ -355,4 +441,24 @@
     {onLogout}
   />
   <LobbyRoomSettingsDialog room={previewSettingsRoom} onClose={() => (previewSettingsRoomId = '')} onSaved={refreshRooms} onDeleted={() => { previewSettingsRoomId = ''; closeViewedRoom(); void refreshRooms(); }} {onToast} />
+  {#if notificationInboxEnabled}
+    {#if notificationInboxOpen}
+      <aside class="notification-inbox-panel" aria-label="Панель уведомлений">
+        <NotificationInbox
+          inbox={notificationInbox}
+          onopen={openNotification}
+          onclose={() => (notificationInboxOpen = false)}
+        />
+      </aside>
+    {/if}
+  {/if}
 {/if}
+
+<style>
+  /* The panel clips; the list inside it is what scrolls. */
+  .notification-inbox-panel { position: fixed; z-index: 71; left: 326px; bottom: 16px; display: flex; width: min(420px, calc(100vw - 358px)); max-height: min(620px, calc(100vh - 32px)); overflow: hidden; border: 1px solid var(--line); border-radius: 16px; background: var(--paper); box-shadow: var(--shadow); }
+  .notification-inbox-panel :global(.notification-inbox) { flex: 1 1 auto; min-width: 0; }
+  @media (max-width: 900px) {
+    .notification-inbox-panel { left: 12px; right: 12px; bottom: 76px; width: auto; max-height: min(560px, calc(100vh - 96px)); }
+  }
+</style>

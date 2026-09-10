@@ -1,5 +1,6 @@
 'use strict';
 
+const { socketPathForDirectory } = require('./ipc-harness');
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -19,7 +20,7 @@ function getSocketPath() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'voice-room-sock-'));
   return {
     dir,
-    socketPath: path.join(dir, 'api.sock')
+    socketPath: socketPathForDirectory(dir)
   };
 }
 
@@ -182,16 +183,34 @@ test('WS reconnect preserves presence and avoids spurious join/leave events', as
     );
     const beforeReconnect = peerB.frames.length;
 
+    peerA.ws.close();
+    await wait(150);
     const peerA2 = openWs(socketPath);
     await peerA2.ready;
     await joinVoiceRoom(peerA2, { roomId, peerId: PEER_A, sessionToken: TOKEN_A, name: 'Evil' });
-    peerA.ws.close();
     await wait(150);
 
     const reconnectEvents = peerB.frames.slice(beforeReconnect).filter((frame) =>
       frame.type === 'room.peer.joined' || frame.type === 'room.peer.left'
     );
     assert.equal(reconnectEvents.length, 0);
+
+    const peerA3 = openWs(socketPath);
+    await peerA3.ready;
+    await joinVoiceRoom(peerA3, { roomId, peerId: PEER_A, sessionToken: TOKEN_A, name: 'Still Evil' });
+    const beforeStaleLeave = peerB.frames.length;
+    sendWs(peerA2.ws, 'room.leave', { roomId, peerId: PEER_A });
+    await wait(150);
+    const afterStaleLeave = await postJson(socketPath, '/api/state', {
+      roomId,
+      peerId: PEER_A,
+      sessionToken: TOKEN_A
+    });
+    assert.equal(afterStaleLeave.status, 200);
+    assert.equal(
+      peerB.frames.slice(beforeStaleLeave).some((frame) => frame.type === 'room.peer.left'),
+      false
+    );
 
     const beforeStaleWrite = peerB.frames.length;
     const staleWrite = await postJson(socketPath, '/api/state', {
@@ -229,6 +248,7 @@ test('WS reconnect preserves presence and avoids spurious join/leave events', as
     );
 
     peerA2.ws.close();
+    peerA3.ws.close();
     peerB.ws.close();
   } catch (error) {
     dumpServerLogs(serverLogs);

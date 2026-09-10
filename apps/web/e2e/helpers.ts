@@ -1,5 +1,27 @@
 import { expect, type Page } from '@playwright/test';
 
+export async function waitForHttpReady(
+  url: string,
+  options: { timeoutMs?: number; intervalMs?: number; fetchImpl?: typeof fetch } = {}
+): Promise<void> {
+  const timeoutMs = options.timeoutMs ?? 90_000;
+  const intervalMs = options.intervalMs ?? 500;
+  const fetchImpl = options.fetchImpl ?? fetch;
+  const deadline = Date.now() + timeoutMs;
+  let lastError: unknown;
+  while (Date.now() < deadline) {
+    try {
+      const response = await fetchImpl(url);
+      if (response.ok) return;
+      lastError = new Error(`readiness returned ${response.status}`);
+    } catch (error) {
+      lastError = error;
+    }
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
+  throw new Error(`readiness timeout for ${url}`, { cause: lastError });
+}
+
 // Unique-per-run credentials. The login allows [a-z0-9_], 3-32 chars, so
 // keep it lowercase alphanumeric.
 export function uniqueLogin(prefix = 'e2e'): string {
@@ -18,7 +40,7 @@ function authDialog(page: Page, name: 'Вход' | 'Создать аккаун�
 export async function registerViaUi(page: Page, login: string): Promise<void> {
   await page.goto('/register');
   const dialog = authDialog(page, 'Создать аккаунт');
-  await expect(dialog).toBeVisible();
+  await expect(dialog).toBeVisible({ timeout: 30_000 });
   await dialog.getByLabel('Логин').fill(login);
   await dialog.getByLabel('Пароль', { exact: true }).fill(PASSWORD);
   await dialog.getByLabel('Повторите пароль').fill(PASSWORD);
@@ -35,7 +57,7 @@ export async function registerViaUi(page: Page, login: string): Promise<void> {
 export async function loginViaUi(page: Page, login: string): Promise<void> {
   await page.goto('/login');
   const dialog = authDialog(page, 'Вход');
-  await expect(dialog).toBeVisible();
+  await expect(dialog).toBeVisible({ timeout: 30_000 });
   await dialog.getByLabel('Логин').fill(login);
   await dialog.getByLabel('Пароль', { exact: true }).fill(PASSWORD);
   await Promise.all([

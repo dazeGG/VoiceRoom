@@ -122,9 +122,9 @@ GitHub-аналог GitLab CI/CD variables находится здесь:
 | `POSTGRES_PASSWORD` | docker compose / production | Пароль PostgreSQL. |
 | `DATABASE_URL` | API host-only / non-compose deploy | Полная PostgreSQL URL. В compose обычно собирается из `POSTGRES_*`. |
 | `TEST_DATABASE_URL` | Локальные/внешние API tests | Admin-capable PostgreSQL URL для test harness. В CI **не нужен**: workflow поднимает эфемерный Postgres service и задаёт URL сам. |
-| `SSH_HOST` / `SSH_USER` / `SSH_KEY` / `SSH_PORT` | CD (deploy job) | Доступ к серверу для SSH-деплоя. `SSH_PORT` опционален (по умолчанию `22`). |
 | `LIVEKIT_API_KEY` | API / LiveKit | Ключ LiveKit. |
 | `LIVEKIT_API_SECRET` | API / LiveKit | Секрет LiveKit. Сгенерировать случайным значением. |
+| `LIVEKIT_GATE_SECRET` | API / LiveKit gate | Отдельный случайный секрет длиной не менее 32 символов. Не должен совпадать с `LIVEKIT_API_SECRET`. |
 | `VAPID_PRIVATE_KEY` | API / Web Push | Приватная часть стабильной VAPID-пары. Никогда не публиковать и не хранить в Git. |
 | `GITHUB_TOKEN` | API desktop release endpoint, optional | Нужен только если хочется повысить лимит GitHub API. |
 | `POW_SECRET` | API production/staging, optional | Стабильный secret для proof-of-work challenge; если не задан, генерируется на процесс и challenge'и инвалидируются при рестарте. |
@@ -135,7 +135,9 @@ GitHub-аналог GitLab CI/CD variables находится здесь:
 | --- | --- | --- |
 | `DOMAIN` | `voice.example.com` | Основной домен web-приложения. |
 | `LIVEKIT_DOMAIN` | `livekit.${DOMAIN}` | Домен LiveKit. |
-| `LIVEKIT_URL` | `wss://livekit.example.com` | Browser-facing LiveKit URL. В production не используйте `127.0.0.1`. |
+| `LIVEKIT_GATE_PUBLIC_URL` | `wss://livekit.example.com` | Публичный browser-facing URL auth-gate. По умолчанию собирается из `LIVEKIT_DOMAIN`. |
+| `LIVEKIT_INTERNAL_URL` | `ws://livekit:7880` | Внутренний адрес LiveKit SFU для API при запуске без production compose. Production compose фиксирует service URL сам. |
+| `LIVEKIT_URL` | optional | Legacy fallback для host/dev запуска. В production не используйте его как публичный URL; задавайте `LIVEKIT_GATE_PUBLIC_URL`. |
 | `LIVEKIT_PUBLIC_URL` | optional | Для dev compose, если внешний LiveKit port отличается. |
 | `TRUST_PROXY` | `true` в compose/proxy | Включать только за доверенным reverse proxy. |
 | `LOG_LEVEL` | `info` в production compose | Уровень JSON-логов API (`debug`, `info`, `warn`, `error`; `silent`/`off` выключают). Health-check запросы не пишутся в request-log. |
@@ -150,8 +152,8 @@ GitHub-аналог GitLab CI/CD variables находится здесь:
 | `ROOM_PRUNE_INTERVAL_MS` | `60000` | Интервал soft-cleanup expired messages / idle dynamic rooms. |
 | `RETENTION_PURGE_INTERVAL_MS` | `3600000` | Интервал физического удаления старых soft-deleted rows. `0` выключает purge. |
 | `RETENTION_KEEP_DELETED_MS` | `2592000000` | Сколько хранить soft-deleted rows перед hard-delete. |
-| `ROOM_CHAT_TTL_MS` | `604800000` | TTL chat history. |
-| `ROOM_CHAT_MAX_MESSAGES` | `500` | Max chat messages per room. |
+| `ROOM_CHAT_TTL_MS` | `0` | TTL chat history. `0` — история комнаты не протухает. |
+| `ROOM_CHAT_MAX_MESSAGES` | `0` | Max chat messages per room. `0` — без лимита. |
 | `ROOM_CHAT_RATE_LIMIT` | `60` | Room chat rate limit. |
 | `ROOM_CHAT_RATE_WINDOW_MS` | `60000` | Room chat rate window. |
 | `UPLOADS_DIR` | `apps/api/uploads` (host) / `/data/uploads` (compose) | Каталог нормализованных WebP-аватарок. В production должен находиться на persistent volume. |
@@ -185,7 +187,6 @@ GitHub-аналог GitLab CI/CD variables находится здесь:
 | `API_METRICS_ALLOWED_REMOTE` | `127.0.0.1` | Caddy allowlist для публичного пути `/api/metrics`; задайте Tailscale IP/range status-сервера, иначе endpoint закрыт снаружи. |
 | `DESKTOP_RELEASE_REPO` | `dazeGG/VoiceRoomDesktop` | Repo для latest desktop release. |
 | `DESKTOP_RELEASE_CACHE_MS` | `600000` | Cache TTL для desktop release metadata. |
-| `DEPLOY_PATH` | `/srv/voiceroom` | Путь к git-клону репозитория на сервере для CD (deploy job). |
 
 ### Переопределение dev-значений (опционально)
 
@@ -226,6 +227,7 @@ LIVEKIT_DOMAIN
 POSTGRES_PASSWORD
 LIVEKIT_API_KEY
 LIVEKIT_API_SECRET
+LIVEKIT_GATE_SECRET
 VAPID_PUBLIC_KEY
 VAPID_PRIVATE_KEY
 VAPID_SUBJECT
@@ -237,31 +239,28 @@ VAPID_SUBJECT
 
 ### CI/CD (GitHub Actions)
 
-Пайплайн описан в `.github/workflows/ci.yml`. Проверки запускаются для pull request и push в `develop`/`main`; deploy запускается только для push в `main`. Ветки, PR, коммиты, hotfix и релизы ведутся по [`docs/GIT_FLOW.md`](./docs/GIT_FLOW.md):
+Пайплайн описан в `.github/workflows/ci.yml`. Проверки запускаются для pull request и push в `develop`/`main`. Ветки, PR, коммиты, hotfix и релизы ведутся по [`docs/GIT_FLOW.md`](./docs/GIT_FLOW.md):
 
 - **policy** — проверяет допустимый Git Flow маршрут PR и Conventional Commit формат PR title.
 - **check** — `npm ci`, `npm run check` (shared+api+web: `node --check`, `svelte-kit sync`, `tsc --noEmit`), `npm run build` (Vite).
 - **test** — `npm test` против эфемерного PostgreSQL service-контейнера. `TEST_DATABASE_URL` задаётся прямо в workflow одноразовым значением — секрет для этого **не нужен** (test harness создаёт/удаляет временную БД на каждый тест).
-- **deploy** — только на push в `main` и только после зелёных `check`+`test`. По SSH делает `git reset --hard origin/main` и `docker compose up -d --build` в каталоге деплоя. Миграции применяются API на bootstrap, отдельного шага нет.
+- **voice-join** — проверка входа в голосовую комнату через LiveKit.
+- **G05 / G08** — строгий LiveKit-профиль и порог покрытия изменённого кода.
 
-**Secrets для деплоя** (Settings → Secrets and variables → Actions → Secrets):
+**Деплой** (`.github/workflows/deploy.yml`, вызывается из `ci.yml` только после зелёных `check`, `test`, `voice-join` и G05):
 
-| Name | Назначение |
-| --- | --- |
-| `SSH_HOST` | Хост сервера. |
-| `SSH_USER` | SSH-пользователь с доступом к docker compose. |
-| `SSH_KEY` | Приватный SSH-ключ (PEM). Публичный — в `authorized_keys` сервера. |
-| `SSH_PORT` | Опционально, по умолчанию `22`. |
+- **images** — на каждый push в `develop`, `main` и тег `v*` собирает таргеты `api`, `worker`, `web` и публикует `ghcr.io/dazegg/voiceroom-<target>:<commit-sha>`.
+- **deploy-dev** — push в `develop` сразу выкатывается на dev (environment `dev`, https://dev.voiceroom.ru).
+- **deploy-production** — тег `v*` на коммите из `main`, совпадающий с версией в `package.json`; job ждёт Approve в environment `production` (https://voiceroom.ru).
 
-**Variables для деплоя**: `DEPLOY_PATH` — путь к клону репозитория на сервере (по умолчанию `/srv/voiceroom`).
+Выкатку делает `scripts/cd/remote-deploy.sh` на сервере по SSH: бэкап `.env` и `pg_dump` в `deploy-backups/ci/` (хранятся 5 последних; ручные бэкапы рядом не трогаются), `git checkout` коммита, `docker pull` образов, подстановка `VOICEROOM_*_IMAGE` в `.env`, `docker compose config`, `docker compose up -d --wait`. Если любой шаг падает, возвращаются прежние коммит, `.env` и контейнеры. Миграции при этом **не откатываются** — после неудачной миграции восстанавливайте БД из дампа (см. [`docs/operations/PREDEPLOY_MIGRATIONS.md`](./docs/operations/PREDEPLOY_MIGRATIONS.md)).
 
-На сервере должен быть git-клон репозитория в `DEPLOY_PATH` со своим production `.env` (как минимум `DOMAIN`, `POSTGRES_PASSWORD`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`) — деплой пересобирает стек из исходников, app-секреты живут на сервере, а не в Actions.
+Каждый environment хранит свои secrets `SSH_HOST`, `SSH_USER`, `SSH_KEY` и variables `DEPLOY_PATH`, `SSH_FINGERPRINT` (ED25519-отпечаток хоста; без совпадения деплой не стартует). Серверный `.env` (как минимум `DOMAIN`, `POSTGRES_PASSWORD`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, `LIVEKIT_GATE_SECRET`, `VOICE_ROOM_CURSOR_HMAC_KEYS`) живёт на сервере, а не в Actions.
 
 Прочие рекомендации:
 
-- Для protected branches включите required reviewers; сделайте `policy`, `check` и `test` обязательными проверками для PR в `develop` и `main`, а для production Environment включите protection rules.
+- Для protected branches включите required reviewers; сделайте `policy`, `check` и `test` обязательными проверками для PR в `develop` и `main`.
 - Не печатайте secrets в workflow logs; передавайте их через `with:`/`env:` только в нужные jobs/steps.
-- Для supply-chain harden можно запинить `appleboy/ssh-action` на commit SHA вместо тега `v1.2.5`.
 
 Миграции:
 
@@ -305,7 +304,7 @@ npm run dev:down
 
 Он публикует Vite на `127.0.0.1:${WEB_PORT:-5180}`, API на `${API_PORT:-3000}`, PostgreSQL на `${POSTGRES_PORT:-5432}` и LiveKit на `7880/7881/7882`. Внутри compose Vite проксирует `/api` на `http://api:3000`; вне compose дефолты остаются host-local. Если меняете `LIVEKIT_HTTP_PORT`, задайте и browser-facing `LIVEKIT_PUBLIC_URL` (например `ws://localhost:17880`), потому что это значение API отдаёт клиенту.
 
-Для Docker/production используйте отдельный prod-like `.env`: `LIVEKIT_URL` должен быть публичным URL из браузера, обычно `wss://$LIVEKIT_DOMAIN`. Локальный dev `.env` с `LIVEKIT_URL=ws://127.0.0.1:7880` предназначен для host/dev compose сценария; в production контейнере такой URL будет неверен для внешних браузеров.
+Для Docker/production используйте отдельный prod-like `.env`: браузеры подключаются к `LIVEKIT_GATE_PUBLIC_URL` (по умолчанию `wss://$LIVEKIT_DOMAIN`), а API обращается к SFU по внутреннему `ws://livekit:7880`, зафиксированному в compose. Не задавайте публичный адрес через legacy-переменную `LIVEKIT_URL`: старое значение может оставаться в `.env`, но production API больше не использует его вместо внутреннего service URL.
 
 В production приложение должно стоять за HTTPS, volumes `postgres_data` и `uploads` нужно бэкапить как единый согласованный набор, а LiveKit должен иметь публично доступные ICE/TCP и ICE/UDP порты. `postgres_data` содержит ключи аватарок, а `uploads` — соответствующие WebP-файлы; потеря одного из volumes делает резервную копию неполной. Для файловой копии volumes остановите оба изменяющих их сервиса (`docker compose stop api postgres`), сохраните `postgres_data` и `uploads`, затем запустите Postgres, дождитесь healthy-состояния и запустите API. Если Postgres останавливать нельзя, остановите API, сделайте согласованный `pg_dump`/`pg_basebackup`, отдельно заархивируйте неизменяемый в этот момент `uploads` и только после этого верните API. Альтернатива — атомарный snapshot обоих volumes на уровне хранилища. Если пользователи часто сидят за строгими корпоративными сетями, следующим шагом стоит добавить TURN/TLS в LiveKit deployment.
 
@@ -356,7 +355,7 @@ Web Push доступен только залогиненным пользова
 
 Постоянные комнаты больше не считаются в IP-квоту: создавать их могут только авторизованные пользователи, а владение ограничено `MAX_STATIC_ROOMS_PER_USER` (по умолчанию 3). Временные ownerless-комнаты остаются ограничены по IP через `MAX_TEMP_ROOMS_PER_IP` (legacy `MAX_EMPTY_ROOMS_PER_IP` используется только как fallback для старых env-файлов), чтобы один IP не заполнял `MAX_ROOMS` пустыми временными комнатами.
 
-История чата хранится в PostgreSQL до `ROOM_CHAT_TTL_MS`, но на комнату сохраняется не больше `ROOM_CHAT_MAX_MESSAGES` последних сообщений. Отправка чата ограничена `ROOM_CHAT_RATE_LIMIT` на пару IP+room за `ROOM_CHAT_RATE_WINDOW_MS`. Для production важно совместно бэкапить volumes `postgres_data` и `uploads` и не терять `DATABASE_URL`/credentials. Cleanup expired chat/idle dynamic rooms runs on a process-local `ROOM_PRUNE_INTERVAL_MS` timer; old soft-deleted rows are physically purged by `RETENTION_PURGE_INTERVAL_MS` after `RETENTION_KEEP_DELETED_MS`. API currently assumes exactly one running instance: presence (including peer IP for moderation), WebSocket registry, Ring, POW challenges, cleanup timers and non-durable rate-limit state are process-local. Durable rooms/messages/users, bans and push subscriptions live in PostgreSQL, avatar files live on the API `uploads` volume, and room quota/capacity enforcement is transactional in PostgreSQL at room creation time. Horizontal scaling requires sticky WebSocket routing, shared avatar storage such as S3 and moving other process-local state to shared storage such as Redis/pub-sub.
+История чата хранится в PostgreSQL бессрочно: по умолчанию `ROOM_CHAT_TTL_MS=0` (сообщения не протухают) и `ROOM_CHAT_MAX_MESSAGES=0` (нет лимита на комнату). Положительные значения возвращают прежнее поведение — TTL и окно последних N сообщений. Отправка чата ограничена `ROOM_CHAT_RATE_LIMIT` на пару IP+room за `ROOM_CHAT_RATE_WINDOW_MS`. Для production важно совместно бэкапить volumes `postgres_data` и `uploads` и не терять `DATABASE_URL`/credentials. Cleanup expired chat/idle dynamic rooms runs on a process-local `ROOM_PRUNE_INTERVAL_MS` timer; old soft-deleted rows are physically purged by `RETENTION_PURGE_INTERVAL_MS` after `RETENTION_KEEP_DELETED_MS`. API currently assumes exactly one running instance: presence (including peer IP for moderation), WebSocket registry, Ring, POW challenges, cleanup timers and non-durable rate-limit state are process-local. Durable rooms/messages/users, bans and push subscriptions live in PostgreSQL, avatar files live on the API `uploads` volume, and room quota/capacity enforcement is transactional in PostgreSQL at room creation time. Horizontal scaling requires sticky WebSocket routing, shared avatar storage such as S3 and moving other process-local state to shared storage such as Redis/pub-sub.
 
 LiveKit снимает mesh-нагрузку с браузеров: каждый участник публикует микрофон и экран один раз в SFU, а остальные клиенты подписываются на tracks через LiveKit.
 

@@ -13,6 +13,15 @@ function readEnvBool(name, fallback, env = process.env) {
   return /^(1|true|yes|on)$/i.test(value.trim());
 }
 
+function readMessageDeliveryMode(env = process.env) {
+  const directEmitEnabled = readEnvBool('MESSAGE_DIRECT_EMIT_ENABLED', true, env);
+  const claimEnabled = readEnvBool('MESSAGE_DELIVERY_CLAIM_ENABLED', false, env);
+  if (directEmitEnabled && claimEnabled) {
+    throw new Error('MESSAGE_DIRECT_EMIT_ENABLED and MESSAGE_DELIVERY_CLAIM_ENABLED cannot both be enabled');
+  }
+  return Object.freeze({ claimEnabled, directEmitEnabled });
+}
+
 function readDatabaseConfig(env = process.env) {
   const raw = typeof env.DATABASE_URL === 'string' ? env.DATABASE_URL.trim() : '';
   if (!raw) {
@@ -38,4 +47,4 @@ function readUploadsDir(env = process.env) {
   return path.resolve(configured || path.join(__dirname, '../../uploads'));
 }
 
-module.exports = { readEnvInt, readEnvBool, readDatabaseConfig, readUploadsDir };
+module.exports = { readEnvInt, readEnvBool, readMessageDeliveryMode, readDatabaseConfig, readUploadsDir };

@@ -61,15 +61,18 @@ function createParticipantModel(peerInfo: PeerInfo, isLocal: boolean): Participa
     meterData: null,
     muted: Boolean(peerInfo.muted),
     speaking: false,
+    speakingHoldUntil: 0,
     statusLabel: '',
     level: 0,
     name,
     micReceiver: null,
     screen: Boolean(peerInfo.screen),
+    screenAuthoritative: peerInfo.screenAuthoritative ? Boolean(peerInfo.screen) : null,
     screenAudio: Boolean(peerInfo.screenAudio),
     screenProfileId: getScreenProfile(peerInfo.screenProfileId ?? '').id,
     screenStream: null,
     screenStreamId: peerInfo.screenStreamId || '',
+    serverMuted: Boolean(peerInfo.serverMuted),
     stream: null,
     viewedScreenPeerId: peerInfo.viewedScreenPeerId || '',
     voiceIssue: ''
@@ -178,6 +181,7 @@ export function updateParticipant(peerInfo: PeerInfo): void {
   const hadName = participant.name;
   const hadAccountUserId = participant.accountUserId;
   const hasScreenUpdate = Object.hasOwn(peerInfo, 'screen');
+  const hasAuthoritativeScreenUpdate = peerInfo.screenAuthoritative === true && hasScreenUpdate;
   if (Object.hasOwn(peerInfo, 'accountUserId')) participant.accountUserId = peerInfo.accountUserId || '';
   if (Object.hasOwn(peerInfo, 'avatarAccent')) participant.avatarAccent = peerInfo.avatarAccent || '';
   if (Object.hasOwn(peerInfo, 'avatarColorKey')) participant.avatarColorKey = peerInfo.avatarColorKey || participant.avatarColorKey;
@@ -185,10 +189,16 @@ export function updateParticipant(peerInfo: PeerInfo): void {
   if (Object.hasOwn(peerInfo, 'name')) participant.name = peerInfo.name || participant.name;
   if (Object.hasOwn(peerInfo, 'deafened')) participant.deafened = Boolean(peerInfo.deafened);
   if (Object.hasOwn(peerInfo, 'muted')) participant.muted = Boolean(peerInfo.muted);
-  if (hasScreenUpdate) participant.screen = Boolean(peerInfo.screen);
-  if (Object.hasOwn(peerInfo, 'screenAudio')) participant.screenAudio = Boolean(peerInfo.screenAudio);
+  if (hasScreenUpdate && (hasAuthoritativeScreenUpdate || participant.screenAuthoritative !== false)) {
+    participant.screen = Boolean(peerInfo.screen);
+  }
+  if (hasAuthoritativeScreenUpdate) participant.screenAuthoritative = Boolean(peerInfo.screen);
+  if (Object.hasOwn(peerInfo, 'screenAudio') && (hasAuthoritativeScreenUpdate || participant.screenAuthoritative !== false)) {
+    participant.screenAudio = Boolean(peerInfo.screenAudio);
+  }
   if (Object.hasOwn(peerInfo, 'screenProfileId')) participant.screenProfileId = getScreenProfile(peerInfo.screenProfileId ?? '').id;
   if (Object.hasOwn(peerInfo, 'screenStreamId')) participant.screenStreamId = peerInfo.screenStreamId || '';
+  if (Object.hasOwn(peerInfo, 'serverMuted')) participant.serverMuted = Boolean(peerInfo.serverMuted);
   const hadViewedScreenOwnerId = participant.viewedScreenPeerId;
   if (Object.hasOwn(peerInfo, 'viewedScreenPeerId')) {
     participant.viewedScreenPeerId = peerInfo.viewedScreenPeerId || '';
@@ -328,6 +338,8 @@ function isRemoteScreenTrack(peer: Participant, track: MediaStreamTrack, stream:
 }
 
 export function attachRemoteScreenStream(peer: Participant, stream: MediaStream): void {
+  if (peer.screenAuthoritative === false) return;
+
   const screenStream = mergeRemoteScreenStream(peer, stream);
   const hasVideo = screenStream.getVideoTracks().some((track) => track.readyState !== 'ended');
   peer.screen = peer.screen || hasVideo;
@@ -530,6 +542,18 @@ export function setParticipantSpeaking(participant: Participant | null, speaking
   if (participant.speaking === nextSpeaking) return;
   participant.speaking = nextSpeaking;
   refreshParticipantState();
+}
+
+/**
+ * Drop every ring at once. Deafened means no audio reaches this tab, so a ring
+ * left over from the last thing heard would be telling the user something false.
+ */
+export function clearAllSpeaking(): void {
+  setParticipantSpeaking(state.self, false);
+  for (const peer of state.peers.values()) {
+    peer.incomingVoiceActive = false;
+    setParticipantSpeaking(peer, false);
+  }
 }
 
 export function updatePeerStatus(peer: Participant): void {

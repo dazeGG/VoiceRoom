@@ -383,6 +383,7 @@ export function shouldNotify(event: RealtimeEvent | NotificationRealtimeEvent, o
   return routeNotificationEvent(event, options).notify;
 }
 
+
 export function routeNotificationEvent(
   event: RealtimeEvent | NotificationRealtimeEvent,
   options: NotificationRouteOptions = {}

@@ -1,0 +1,17 @@
+groups:
+  - name: voice-room-media
+    rules:
+      - alert: VoiceRoomMediaPressure
+        expr: voice_room_api_media_pressure_healthy == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: Private media storage is not accepting uploads or worker claims
+      - alert: VoiceRoomMediaLowFreeSpace
+        expr: voice_room_api_media_free_bytes < 2147483648
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: Private media storage has less than 2 GiB available

@@ -9,6 +9,15 @@ const require = createRequire(import.meta.url);
 const ts = require('typescript');
 const read = (path) => readFileSync(resolve(root, path), 'utf8');
 
+// The in-room rail and the lobby preview are thin wrappers over one shared chat
+// panel, so a contract about "the room chat" holds across the wrapper plus the
+// panel it renders.
+const ROOM_CHAT_PANEL_PATH = 'src/lib/features/room/components/RoomChatPanel.svelte';
+const readRoomChat = () => `${read('src/lib/features/room/components/RoomChat.svelte')}
+${read(ROOM_CHAT_PANEL_PATH)}`;
+const readPreviewChat = () => `${read('src/lib/features/home/components/lobby/RoomPreviewChat.svelte')}
+${read(ROOM_CHAT_PANEL_PATH)}`;
+
 async function importTypeScript(path) {
   const output = ts.transpileModule(read(path), {
     compilerOptions: {
@@ -158,16 +167,26 @@ test('home auth flow is loader-first and has no localStorage session oracle', ()
   assert.equal(existsSync(resolve(root, 'src/lib/features/auth/AuthShell.svelte')), false);
 });
 
-test('page CSP narrows websocket connect sources to configured LiveKit origins', () => {
+test('page CSP supports runtime LiveKit origins while production Caddy narrows them', () => {
   const config = read('svelte.config.js');
+  const caddy = read('../../Caddyfile');
+  const compose = read('../../docker-compose.yml');
+  const dockerfile = read('../../Dockerfile');
   const cspBlock = config.slice(config.indexOf("'connect-src'"), config.indexOf("'default-src'"));
 
   assert.match(config, /function liveKitConnectSources/);
   assert.ok(cspBlock.includes('...liveKitConnectSources()'));
+  for (const scheme of ["'http:'", "'https:'", "'ws:'", "'wss:'"]) {
+    assert.ok(cspBlock.includes(scheme), `missing runtime connect scheme ${scheme}`);
+  }
   assert.ok(cspBlock.includes("'ws://localhost:*'"));
   assert.ok(cspBlock.includes("'ws://127.0.0.1:*'"));
-  assert.doesNotMatch(cspBlock, /'ws:'\s*,/);
-  assert.doesNotMatch(cspBlock, /'wss:'\s*,/);
+  assert.match(
+    caddy,
+    /Content-Security-Policy "frame-ancestors 'none'; connect-src 'self' wss:\/\/\{\$LIVEKIT_DOMAIN\} https:\/\/\{\$LIVEKIT_DOMAIN\} stun: turn: turns:"/
+  );
+  assert.match(dockerfile, /FROM caddy:2\.11\.3-alpine AS web/);
+  assert.match(compose, /\n  caddy:\n[\s\S]*?image: \$\{VOICEROOM_WEB_IMAGE:\?set immutable VOICEROOM_WEB_IMAGE digest\}/);
   assert.ok(config.includes("'style-src': ['self', 'unsafe-inline']"));
   assert.match(config, /style attributes/);
 });
@@ -179,7 +198,7 @@ test('lobby join is the single room-code action and explains auto-save', () => {
 
   assert.match(authApi, /addRoomByCode/);
   assert.match(authApi, /authPost<\{ room: OwnedRoom \}>\('\/auth\/rooms'/);
-  assert.doesNotMatch(lobby, /handleAddRoom|addDialogOpen|addRoomCode|addError|adding/);
+  assert.doesNotMatch(lobby, /handleAddRoom|addDialogOpen|addRoomCode|addError|\badding\b/);
   assert.doesNotMatch(lobby, /Введите код уже созданной постоянной комнаты|Комната добавлена/);
   assert.doesNotMatch(voiceHome, /onAddRoom|Добавить комнату по коду|lr-icon-btn/);
   assert.match(voiceHome, /placeholder="Код или ссылка"/);
@@ -250,7 +269,7 @@ test('lobby separates viewed room from connected voice room', () => {
   assert.doesNotMatch(previewRoom, /history\.(?:push|replace)State/);
   assert.match(previewRoom, /replaceUrlWithActiveVoiceRoom\(\)/);
   assert.match(replaceUrlWithActiveVoiceRoom, /roomId \? `\/r\/\$\{encodeURIComponent\(roomId\)\}` : '\/'/);
-  assert.match(replaceUrlWithActiveVoiceRoom, /history\.replaceState\(null, '', target\)/);
+  assert.match(replaceUrlWithActiveVoiceRoom, /replaceState\(target, \{\}\)/);
   assert.match(enterRoom, /selectRoomForVoiceEntry\(roomId\)/);
   assert.match(roomNavigation, /roomNavigation\.embeddedRoomId = roomId/);
   assert.match(roomNavigation, /roomNavigation\.joinIntentRoomId = roomId/);
@@ -309,7 +328,7 @@ test('lobby separates viewed room from connected voice room', () => {
 test('room chat keeps transport mounted and tracks unread state while closed', () => {
   const stage = read('src/lib/features/room/components/RoomStage.svelte');
   const ui = read('src/lib/features/room/room-ui.svelte.ts');
-  const chat = read('src/lib/features/room/components/RoomChat.svelte');
+  const chat = readRoomChat();
   const topbar = read('src/lib/features/room/components/RoomTopbar.svelte');
   const roomMenu = read('src/lib/shared/components/room-menu/RoomMenu.svelte');
   const roomMenuContent = read('src/lib/shared/components/room-menu/RoomMenuContent.svelte');
@@ -318,15 +337,16 @@ test('room chat keeps transport mounted and tracks unread state while closed', (
   assert.match(ui, /unreadChat: 0/);
   assert.match(ui, /incrementUnreadChat/);
   assert.match(chat, /messageIds/);
-  assert.match(chat, /incrementUnreadChat\(\)/);
+  assert.match(chat, /onUnreadMessage=\{incrementUnreadChat\}/);
+  assert.match(chat, /onUnreadMessage\?\.\(\)/);
   // 2.4.0 chat multiline + links
   assert.match(chat, /ChatText/);
   assert.match(chat, /chat-rail-textarea/);
   assert.match(chat, /onComposeKeydown|onkeydown=\{onComposeKeydown\}/);
   assert.doesNotMatch(chat, /draft\.replace\(\/\\s\+\/g, ' '\)/);
-  assert.match(topbar, /room-chat-unread/);
+  assert.match(topbar, /room-panel-tab-unread/);
   assert.match(topbar, /inviteContent=/);
-  assert.match(topbar, /import \{ RoomMenu \} from '\$lib\/shared\/components\/room-menu'/);
+  assert.match(topbar, /import \{ RoomInviteFriendList, RoomMenu \} from '\$lib\/shared\/components\/room-menu'/);
   assert.match(topbar, /<RoomMenu/);
   assert.match(topbar, /headingClass="room-heading-title-wrap"/);
   assert.match(topbar, /\bheading\b/);
@@ -370,7 +390,7 @@ test('room chat keeps transport mounted and tracks unread state while closed', (
 });
 
 test('room chat terminal lifecycle frames leave the room screen', () => {
-  const chat = read('src/lib/features/room/components/RoomChat.svelte');
+  const chat = readRoomChat();
   const lifecycle = read('src/lib/features/room/client/room/lifecycle.ts');
 
   assert.match(lifecycle, /export function applyRoomNotFound/);
@@ -382,6 +402,62 @@ test('room chat terminal lifecycle frames leave the room screen', () => {
   // connection-level subscribe would go silent until the user joins voice.
   assert.match(chat, /subscribeRoomPreview\(roomId/);
   assert.doesNotMatch(chat, /getAppRealtime\(\)\.subscribe/);
+});
+
+test('room side panel exposes chat and participant tabs backed by the authoritative roster', () => {
+  const chat = readRoomChat();
+  const topbar = read('src/lib/features/room/components/RoomTopbar.svelte');
+  const memberList = read('src/lib/features/home/components/lobby/RoomMemberList.svelte');
+  const membershipApi = read('src/lib/api/memberships.ts');
+  const stage = read('src/lib/features/room/components/RoomStage.svelte');
+  const ui = read('src/lib/features/room/room-ui.svelte.ts');
+  const css = read('src/lib/features/room/styles/chat-rail.css');
+  const layoutCss = read('src/lib/features/room/styles/layout.css');
+  const controlsCss = read('src/lib/features/room/styles/controls.css');
+  const friendsCss = read('src/lib/features/home/styles/friends.css');
+
+  assert.match(chat, /role="tablist"/);
+  assert.match(chat, /aria-label="Чат"/);
+  assert.match(chat, /title="Чат"/);
+  assert.match(chat, /<MessageSquare/);
+  assert.match(chat, /aria-label="Участники"/);
+  assert.match(chat, /title="Участники"/);
+  assert.match(chat, /<Users/);
+  assert.match(chat, /aria-selected=\{activeTab === 'chat'\}/);
+  assert.match(chat, /aria-selected=\{activeTab === 'participants'\}/);
+  assert.match(chat, /activeTab=\{roomUi\.activePanel === 'participants' \? 'participants' : 'chat'\}/);
+  assert.match(chat, /aria-label="Свернуть панель"/);
+  assert.match(chat, /onCollapse=\{closeChat\}/);
+  assert.match(topbar, /role="group" aria-label="Открыть раздел панели комнаты"/);
+  assert.match(topbar, /aria-label="Чат"/);
+  assert.match(topbar, /aria-label="Участники"/);
+  assert.match(topbar, /aria-pressed=\{roomUi\.chatOpen && roomUi\.activePanel === 'chat'\}/);
+  assert.match(topbar, /aria-pressed=\{roomUi\.chatOpen && roomUi\.activePanel === 'participants'\}/);
+  assert.match(topbar, /onclick=\{\(\) => openRoomPanel\('chat'\)\}/);
+  assert.match(topbar, /onclick=\{\(\) => openRoomPanel\('participants'\)\}/);
+  assert.doesNotMatch(topbar, /toggleChat|class="room-chat-toggle"/);
+  assert.match(ui, /activePanel: 'chat'/);
+  assert.match(ui, /roomUi\.chatOpen && roomUi\.activePanel === 'chat'/);
+  assert.match(chat, /<RoomMemberList \{roomId\} \/>/);
+  assert.match(membershipApi, /fetchRoomMemberships/);
+  assert.match(membershipApi, /\/api\/rooms\/\$\{encodeURIComponent\(roomId\)\}\/members/);
+  assert.match(memberList, /В сети — \{onlineMembers\.length\}/);
+  assert.match(memberList, /Не в сети — \{offlineMembers\.length\}/);
+  assert.match(memberList, /member\.presenceStatus !== 'offline'/);
+  assert.match(memberList, /member\.presenceStatus === 'offline'/);
+  assert.doesNotMatch(memberList, /Найти участника|room-member-list__search|Search/);
+  assert.doesNotMatch(memberList, /<h2[^>]*>Участники<\/h2>|Создатель/);
+  assert.doesNotMatch(stage, /room-members-rail|data-members-open/);
+  assert.match(css, /\.room-panel-tabs button\[data-active='true'\]/);
+  assert.match(css, /--room-panel-width:\s*360px/);
+  assert.match(css, /\.room-chat-rail\s*\{[\s\S]*width:\s*var\(--room-panel-width\)/);
+  assert.match(friendsCss, /\.lobby-preview-chat\s*\{[\s\S]*width:\s*var\(--room-panel-width\)/);
+  assert.match(friendsCss, /\.lobby-room-members\s*\{[\s\S]*width:\s*var\(--room-panel-width\)/);
+  assert.match(friendsCss, /data-preview-chat-open='true'\][\s\S]*padding-right:\s*var\(--room-panel-width\)/);
+  assert.match(friendsCss, /data-members-open='true'\][\s\S]*padding-right:\s*var\(--room-panel-width\)/);
+  assert.match(layoutCss, /padding-right:\s*var\(--room-panel-width\)/);
+  assert.match(controlsCss, /right:\s*var\(--room-panel-width\)/);
+  assert.doesNotMatch(`${css}\n${layoutCss}\n${controlsCss}\n${friendsCss}`, /--(?:chat-rail|members-rail)-width/);
 });
 
 
@@ -483,19 +559,18 @@ test('shared Popover primitive exposes trigger/content slots and dismiss behavio
   assert.match(sidebarDownload, /aria-haspopup="menu"/);
 });
 
-test('room menus share one implementation and room and friend rows expose accessible context menus', () => {
+test('room menus share one implementation while chat rows stay free of friend context menus', () => {
   const roomViewHeader = read('src/lib/features/home/components/lobby/RoomViewHeader.svelte');
   const roomTopbar = read('src/lib/features/room/components/RoomTopbar.svelte');
   const roomMenu = read('src/lib/shared/components/room-menu/RoomMenu.svelte');
   const roomMenuContent = read('src/lib/shared/components/room-menu/RoomMenuContent.svelte');
   const voiceHome = read('src/lib/features/home/components/lobby/VoiceHome.svelte');
   const sidebar = read('src/lib/features/home/components/lobby/Sidebar.svelte');
-  const friendMenu = read('src/lib/features/home/components/friend-menu/FriendMenuContent.svelte');
   const contextMenu = read('src/lib/shared/ui/ContextMenu/ContextMenu.svelte');
   const clipboard = read('src/lib/shared/utils/clipboard.ts');
 
   assert.match(roomViewHeader, /import \{ RoomMenu \} from '\$lib\/shared\/components\/room-menu'/);
-  assert.match(roomTopbar, /import \{ RoomMenu \} from '\$lib\/shared\/components\/room-menu'/);
+  assert.match(roomTopbar, /import \{ RoomInviteFriendList, RoomMenu \} from '\$lib\/shared\/components\/room-menu'/);
   assert.match(roomViewHeader, /<RoomMenu[\s\S]*roomId=\{room\.roomId\}[\s\S]*avatarUrl=\{room\.avatarUrl\}/);
   assert.match(roomTopbar, /<RoomMenu[\s\S]*roomId=\{roomClientState\.roomId\}[\s\S]*avatarUrl=\{roomClientState\.roomAvatarUrl\}/);
   assert.match(roomMenu, /<Popover [^>]*role="menu"[^>]*ariaLabel="Меню комнаты"/);
@@ -511,16 +586,11 @@ test('room menus share one implementation and room and friend rows expose access
   assert.match(voiceHome, /event\.key === 'ContextMenu' \|\| \(event\.key === 'F10' && event\.shiftKey\)/);
   assert.match(voiceHome, /<ContextMenu[\s\S]*<RoomMenuContent/);
   assert.match(voiceHome, /canClose=\{\(roomId\) => contextRoomId === roomId\}/);
-  assert.match(sidebar, /oncontextmenu=\{\(event\) => openFriendContextMenu\(event, entry\.user\.id\)\}/);
-  assert.match(sidebar, /event\.key === 'ContextMenu' \|\| \(event\.key === 'F10' && event\.shiftKey\)/);
-  assert.match(sidebar, /<ContextMenu[\s\S]*<FriendMenuContent/);
-  assert.match(sidebar, /canClose=\{\(userId\) => contextFriendId === userId\}/);
-  assert.match(friendMenu, /data-friend-menu-content/);
-  assert.match(friendMenu, /Открыть сообщения/);
-  assert.match(friendMenu, /Удалить из друзей/);
-  assert.match(friendMenu, /const nextMuted = !muted/);
-  assert.doesNotMatch(friendMenu, /Уведомления друга (?:выключены|включены)/);
-  assert.match(friendMenu, /Не удалось изменить уведомления/);
+  assert.match(voiceHome, /relationship=\{contextRoom\.relationship\}/);
+  assert.match(roomMenuContent, /label=\{roomMuted \? 'Включить уведомления' : 'Выключить уведомления'\}/);
+  assert.match(roomMenuContent, /isOwner && onOpenSettings/);
+  assert.match(roomMenuContent, /!isOwner[\s\S]*label="Удалить из списка"/);
+  assert.doesNotMatch(sidebar, /openFriendContextMenu|FriendMenuContent|oncontextmenu/);
   assert.match(clipboard, /if \(!navigator\.clipboard\?\.writeText\)/);
   assert.match(clipboard, /throw new Error\('Clipboard API is unavailable'\)/);
 
@@ -532,7 +602,7 @@ test('room menus share one implementation and room and friend rows expose access
   assert.match(contextMenu, /queueMicrotask\(\(\) => restoreFocus\?\.focus\(\)\)/);
   assert.match(contextMenu, /window\.addEventListener\('resize', handleViewportChange\)/);
   assert.match(contextMenu, /window\.addEventListener\('scroll', handleViewportScroll/);
-  assert.match(contextMenu, /panel\.contains\(event\.target\)/);
+  assert.match(contextMenu, /isInsideOwnedOverlay\(event\.target\)/);
   assert.match(contextMenu, /max-height: calc\(100dvh - 16px\)/);
   assert.match(contextMenu, /overflow-y: auto/);
 });
@@ -544,7 +614,7 @@ test('room and participant avatars preserve fallbacks while preferring uploaded 
   const voiceHome = read('src/lib/features/home/components/lobby/VoiceHome.svelte');
   const createDialog = read('src/lib/features/home/components/CreateRoomDialog.svelte');
   const participantTile = read('src/lib/features/room/components/ParticipantTile.svelte');
-  const chat = read('src/lib/features/room/components/RoomChat.svelte');
+  const chat = readRoomChat();
   const roomNet = read('src/lib/features/room/client/net/api.ts');
   const roomTopbar = read('src/lib/features/room/components/RoomTopbar.svelte');
   const roomMenu = read('src/lib/shared/components/room-menu/RoomMenu.svelte');
@@ -578,7 +648,7 @@ test('release 2.4 follow-up keeps room actions in the room menu and fits call ti
 
   assert.doesNotMatch(topbar, /class="room-chat-toggle"[^>]*title="Настройки комнаты"/);
   assert.match(roomMenu, /label="Настройки комнаты"/);
-  assert.match(roomMenu, /label="Позвать друга"/);
+  assert.match(roomMenu, /<PopoverSubmenu label="Пригласить"/);
   assert.match(stageLayout, /--grid-aspect:/);
   assert.match(stageLayout, /100cqh/);
   assert.match(sidebar, /class="lv-profile-actions"/);
@@ -597,6 +667,7 @@ test('room rings render as shared timeline invitations carried by DMs', () => {
   assert.doesNotMatch(friends, /const ringToastIds/);
   assert.doesNotMatch(friends, /pushToast\(`\$\{senderName\} зовёт/);
   assert.match(dmApi, /invite\?: DirectMessageInvite \| null/);
+  assert.match(dmApi, /metadata\.kind === 'room-invite'/);
   assert.match(dmApi, /\/invites\/\$\{encodeURIComponent\(messageId\)\}\/respond/);
   assert.match(dmView, /bubble\.invite/);
   assert.match(dmView, /lobby-room-invitation/);
@@ -677,6 +748,8 @@ test('participant tiles stay visually uniform and highlight only active speakers
   const participantTile = read('src/lib/features/room/components/ParticipantTile.svelte');
   const meters = read('src/lib/features/room/client/media/meters.ts');
   const livekit = read('src/lib/features/room/client/services/livekit-service.ts');
+  const stats = read('src/lib/features/room/client/room/stats.ts');
+  const controls = read('src/lib/features/room/client/ui/controls.ts');
 
   assert.match(css, /\.participant\[data-speaking="true"\]/);
   assert.match(css, /border-color: var\(--green\)/);
@@ -686,10 +759,20 @@ test('participant tiles stay visually uniform and highlight only active speakers
   assert.match(participants, /refreshParticipantState\(\)/);
   assert.match(participants, /bumpParticipantsRevision\(\)/);
   assert.match(participantTile, /data-speaking=\{String\(participant\.speaking\)\}/);
-  assert.match(meters, /const speaking = isLocalMicrophoneSpeaking\(participant, levelDb\)/);
+  // Every ring is driven by this tab's own analyser, so it lights on the frame
+  // the audio arrives instead of waiting for the SFU's sampled speaker list.
+  assert.match(meters, /applySpeaking\(participant, isOverSpeakingThreshold\(participant, levelDb\)\)/);
+  assert.match(meters, /if \(!participant\.isLocal\) return levelDb >= REMOTE_SPEAKING_DB/);
   assert.match(meters, /participant\.speaking = speaking/);
   assert.match(meters, /bumpParticipantsRevision\(\)/);
+  // Deafened must not leave a ring standing: nothing is reaching this tab.
+  assert.match(meters, /if \(state\.outputMuted\) return false/);
+  assert.match(controls, /if \(state\.outputMuted\) clearAllSpeaking\(\)/);
+  assert.match(participants, /export function clearAllSpeaking\(\)/);
+  // The server view stays a fallback for peers whose analyser is not up yet.
   assert.match(livekit, /RoomEvent\.ActiveSpeakersChanged/);
+  assert.match(livekit, /if \(peer\.analyser\) continue;/);
+  assert.match(stats, /if \(peer\.analyser\) continue;/);
 });
 
 test('screen share publish tuning applies codec, bitrate, degradation and contentHint contracts', () => {
@@ -1113,7 +1196,7 @@ test('manual screen receiver demand is ordered, race-safe, and isolated from scr
   assert.match(trackUnsubscribed, /shouldSubscribeToScreen\(peer\)/);
   assert.match(trackUnsubscribed, /scheduleScreenSubscriptionRetry\(peer, publication\)/);
   assert.match(trackUnpublished, /detachRemoteScreenVideoTracks\(peer\)/);
-  assert.match(trackUnpublished, /peer\.screen = screenPresence\.active/);
+  assert.match(trackUnpublished, /peer\.screen = peer\.screenAuthoritative === false \? false : screenPresence\.active/);
   assert.match(trackUnpublished, /if \(!screenPresence\.hasVideo\) detachRemoteScreenVideoTracks\(peer\)/);
   assert.match(attachSubscribedScreen, /publication\.isSubscribed === false/);
   assert.match(attachSubscribedScreen, /publication\.track as RemoteTrack/);
@@ -1129,17 +1212,17 @@ test('manual screen receiver demand is ordered, race-safe, and isolated from scr
   assert.doesNotMatch(detachScreenVideo, /stream\.getAudioTracks\(\)/);
 });
 
-test('lobby v2 keeps dock in main area, preview chat, and people add-friend flow', () => {
+test('lobby v2 keeps dock in main area, switchable preview panels, and people add-friend flow', () => {
   const controls = read('src/lib/features/room/styles/controls.css');
   const lobby = read('src/lib/features/home/LobbyPage.svelte');
   const sidebar = read('src/lib/features/home/components/lobby/Sidebar.svelte');
-  assert.match(sidebar, /import \{[^}]*\bAvatar\b[^}]*\bBadge\b[^}]*\bContextMenu\b[^}]*\bPopover\b[^}]*\} from '\$lib\/shared\/ui'/);
+  assert.match(sidebar, /import \{[^}]*\bAvatar\b[^}]*\bBadge\b[^}]*\bPopover\b[^}]*\} from '\$lib\/shared\/ui'/);
+  assert.doesNotMatch(sidebar, /ContextMenu|FriendMenuContent/);
   assert.match(sidebar, /onOpenPeople/);
   assert.doesNotMatch(sidebar, /lastMessagePreview/);
   assert.doesNotMatch(sidebar, /entry\.lastMessage\.body/);
   const previewView = read('src/lib/features/home/components/lobby/RoomPreviewView.svelte');
   const browseView = read('src/lib/features/home/components/lobby/RoomBrowseView.svelte');
-  const previewChat = read('src/lib/features/home/components/lobby/RoomPreviewChat.svelte');
   const peopleView = read('src/lib/features/home/components/lobby/PeopleView.svelte');
   const friendsCss = read('src/lib/features/home/styles/friends.css');
 
@@ -1150,8 +1233,25 @@ test('lobby v2 keeps dock in main area, preview chat, and people add-friend flow
   assert.match(roomLayoutCss, /body\[data-lobby-embedded="true"\] \.room-embedded-shell \.topbar/);
   assert.match(sidebar, /import SidebarDownload from '\.\.\/SidebarDownload\.svelte'/);
   assert.match(sidebar, /<SidebarDownload \/>/);
-  assert.match(previewView, /RoomPreviewChat/);
-  assert.match(browseView, /RoomPreviewChat/);
+  for (const view of [previewView, browseView]) {
+    assert.match(view, /RoomPreviewChat/);
+    assert.match(view, /let activePanel = \$state<'chat' \| 'participants' \| null>\(null\)/);
+    assert.match(view, /aria-label="Чат"/);
+    assert.match(view, /aria-label="Участники"/);
+    assert.match(view, /<MessageSquare/);
+    assert.match(view, /<Users/);
+    assert.match(view, /aria-label="Свернуть панель"/);
+    assert.match(view, /onClose=\{\(\) => \(activePanel = null\)\}/);
+    assert.match(view, /onSelectParticipants=\{\(\) => selectPanel\('participants'\)\}/);
+  }
+  assert.match(previewView, /getCapabilityFeature\('membership'\)/);
+  assert.match(browseView, /getCapabilityFeature\('membership'\)/);
+  assert.match(previewView, /<RoomMemberList roomId=\{previewRoomId\} \/>/);
+  assert.match(browseView, /<RoomMemberList roomId=\{previewRoomId\} \/>/);
+  assert.match(previewView, /data-members-open=\{activePanel === 'participants'\}/);
+  assert.match(browseView, /data-members-open=\{activePanel === 'participants'\}/);
+  assert.match(previewView, /data-preview-chat-open=\{activePanel === 'chat'\}/);
+  assert.match(browseView, /data-preview-chat-open=\{activePanel === 'chat'\}/);
   assert.match(previewView, /'\$lib\/features\/room\/styles\/room\.css'/);
   assert.match(browseView, /'\$lib\/features\/room\/styles\/room\.css'/);
   assert.match(previewView, /class="stage lobby-preview-stage"/);
@@ -1163,26 +1263,35 @@ test('lobby v2 keeps dock in main area, preview chat, and people add-friend flow
   assert.doesNotMatch(friendsCss, /lobby-stage-tile|lobby-stage-avatar|lobby-stage-grid/);
   assert.doesNotMatch(previewView, /тихо сейчас/);
   assert.doesNotMatch(browseView, /тихо сейчас/);
-  assert.match(previewChat, /fetchRoomChat\(roomId\)/);
-  assert.match(previewChat, /postRoomChat\(roomId/);
-  // 2.4.0 chat updates in preview too
-  assert.match(previewChat, /ChatText/);
-  assert.match(previewChat, /chat-rail-textarea/);
-  assert.match(previewChat, /chat-rail-collapse/);
-  assert.match(previewView, /let previewChatOpen = \$state\(false\)/);
-  assert.match(browseView, /let previewChatOpen = \$state\(false\)/);
   assert.match(previewView, /const previewRoomId = \$derived\(room\.roomId\)/);
   assert.match(browseView, /const previewRoomId = \$derived\(room\.roomId\)/);
   assert.match(previewView, /\$effect\(\(\) => \{\s*const roomId = previewRoomId;[\s\S]*subscribeRoomPreview\(roomId, handlePreviewEvent\)/);
   assert.match(browseView, /\$effect\(\(\) => \{\s*const roomId = previewRoomId;[\s\S]*subscribeRoomPreview\(roomId, handlePreviewEvent\)/);
-  assert.match(previewView, /previewChatOpen = false/);
-  assert.match(browseView, /previewChatOpen = false/);
   assert.match(peopleView, /copyText\(user\.login\)/);
   assert.doesNotMatch(peopleView, /searchUsers/);
   assert.doesNotMatch(peopleView, /oninput=\{onInput\}/);
   assert.match(peopleView, /@\{user\.login\}/);
-  assert.match(friendsCss, /\.lobby-preview-chat/);
-  assert.match(friendsCss, /data-preview-chat-open/);
+  assert.match(friendsCss, /\.lobby-room-members/);
+  assert.match(friendsCss, /data-members-open/);
+  const roomStage = read('src/lib/features/room/components/RoomStage.svelte');
+  const roomPage = read('src/lib/features/room/RoomPage.svelte');
+  const roomChat = readRoomChat();
+  const memberList = read('src/lib/features/home/components/lobby/RoomMemberList.svelte');
+  const membershipState = read('src/lib/features/home/model/room-membership.svelte.ts');
+  assert.match(roomPage, /<RoomStage \/>/);
+  assert.doesNotMatch(roomStage, /RoomMemberList|room-members-rail|data-members-open/);
+  assert.match(roomChat, /<RoomMemberList \{roomId\} \/>/);
+  assert.match(roomChat, /roomUi\.activePanel === 'participants'/);
+  assert.match(memberList, /В сети — \{onlineMembers\.length\}/);
+  assert.match(memberList, /Не в сети — \{offlineMembers\.length\}/);
+  assert.doesNotMatch(memberList, /searchable|room-member-list__search|Найти участника/);
+  assert.doesNotMatch(memberList, /Создатель|<h2[^>]*>Участники<\/h2>/);
+  assert.match(memberList, /roomMembershipState\.byRoomId\[roomId\] \?\? null/);
+  assert.match(memberList, /const currentRoomId = roomId;/);
+  assert.match(memberList, /untrack\(\(\) => \{\s*getRoomMembership\(currentRoomId\);\s*void loadRoomMembership\(currentRoomId\);\s*\}\);/);
+  assert.doesNotMatch(memberList, /\$derived\(getRoomMembership\(roomId\)\)/);
+  assert.doesNotMatch(memberList, /В голосовом канале|Остальные/);
+  assert.doesNotMatch(membershipState, /left\.inVoice !== right\.inVoice|left\.role !== right\.role|localeCompare/);
   assert.match(friendsCss, /\.lobby-dm-head[\s\S]*border: 0/);
   const dmView = read('src/lib/features/home/components/lobby/DmView.svelte');
   assert.match(dmView, /bind:this=\{inputEl\}/);
@@ -1199,8 +1308,8 @@ test('chat composers and add-friend control preserve compact keyboard-first beha
   const dm = read('src/lib/features/home/components/lobby/DmView.svelte');
   const lobbyV2 = read('src/lib/features/home/styles/lobby-v2.css');
   const friends = read('src/lib/features/home/styles/friends.css');
-  const roomChat = read('src/lib/features/room/components/RoomChat.svelte');
-  const previewChat = read('src/lib/features/home/components/lobby/RoomPreviewChat.svelte');
+  const roomChat = readRoomChat();
+  const previewChat = readPreviewChat();
   const roomChatCss = read('src/lib/features/room/styles/chat-rail.css');
   const dmSubmit = functionBody(dm, 'submit');
   const roomSubmit = functionBody(roomChat, 'sendMessage');
@@ -1299,6 +1408,8 @@ test('shared typography uses CSP-safe local UI, display, and mono font roles', (
   const lobbyV2 = read('src/lib/features/home/styles/lobby-v2.css');
   const voiceHome = read('src/lib/features/home/components/lobby/VoiceHome.svelte');
   const friends = read('src/lib/features/home/styles/friends.css');
+  const dmView = read('src/lib/features/home/components/lobby/DmView.svelte');
+  const chatCss = read('src/lib/features/room/styles/chat-rail.css');
   const settings = read('src/lib/features/home/styles/settings.css');
   const roomLayout = read('src/lib/features/room/styles/layout.css');
   const stageLayout = read('src/lib/features/room/styles/stage-layout.css');
@@ -1367,12 +1478,12 @@ test('shared typography uses CSP-safe local UI, display, and mono font roles', (
   assertRuleFont(settings, '.settings-sound-value', '--font-ui');
   assertRuleFont(roomLayout, '.room-heading-title', '--font-ui');
   assertRuleFont(roomControls, '.room-chat-unread', '--font-ui');
-  assertRuleFont(roomParticipants, '.pcm-volume-scale', '--font-ui');
 
   assertRuleFont(lobby, '.lobby-search-input', '--font-mono');
   assertRuleFont(lobby, '.room-card-code', '--font-mono');
   assertRuleFont(friends, '.lobby-profile-handle', '--font-mono');
-  assertRuleFont(friends, '.lobby-dm-time', '--font-mono');
+  assert.match(dmView, /class="chat-msg-time"/);
+  assertRuleFont(chatCss, '.chat-msg-time', '--font-mono');
   assert.match(roomMenuContent, /\.room-menu-code\) \{[\s\S]*font-family: var\(--font-mono\)/);
 });
 
@@ -1490,9 +1601,9 @@ test('participant context menu is remote-only and exposes relationship-aware loc
 
   assert.match(menu, /const canUseSocialActions = \$derived/);
   assert.match(menu, /getFriendRelationship\(peer\.accountUserId\)/);
-  assert.match(menu, /Написать сообщение/);
-  assert.match(menu, /Принять заявку/);
-  assert.match(menu, /Заявка в друзья уже отправлена/);
+  assert.match(menu, /label="Написать"/);
+  assert.match(menu, /label="Принять заявку"/);
+  assert.match(menu, /label="Заявка отправлена"/);
   assert.match(menu, /Добавить в друзья/);
   assert.match(menu, /Гость: доступны только локальные настройки звука/);
 
@@ -1503,20 +1614,21 @@ test('participant context menu is remote-only and exposes relationship-aware loc
   assert.match(menu, /muted: !getParticipantAudioPreference\(preferenceKey\)\.muted/);
   assert.match(menu, /applyRemoteParticipantAudioPreferences\(peer\)/);
 
-  assert.match(menu, /role="dialog"/);
-  assert.match(menu, /document\.addEventListener\('keydown', handleKeydown/);
-  assert.match(menu, /document\.addEventListener\('pointerdown', handlePointerDown, \{ capture: true \}\)/);
-  assert.match(menu, /document\.addEventListener\('focusin', handleFocusIn\)/);
+  assert.match(menu, /<ContextMenu/);
+  const contextMenuPrimitive = read('src/lib/shared/ui/ContextMenu/ContextMenu.svelte');
+  assert.match(contextMenuPrimitive, /window\.addEventListener\('keydown', handleKeydown/);
+  assert.match(contextMenuPrimitive, /window\.addEventListener\('pointerdown', handlePointerDown, \{ capture: true \}\)/);
+  assert.match(contextMenuPrimitive, /onfocusout=\{handleFocusOut\}/);
   assert.match(contextUi, /restoreFocusPeerId/);
-  assert.match(contextUi, /queueMicrotask\(\(\) => focusParticipantTile/);
-  assert.match(menu, /activeElement instanceof HTMLInputElement && activeElement\.type === 'range'/);
-  assert.match(menu, /event\.key === 'ArrowDown' && !isRangeInput/);
-  assert.match(menu, /event\.key === 'ArrowUp' && !isRangeInput/);
+  assert.match(contextUi, /focusTarget\?\.isConnected/);
+  assert.match(contextMenuPrimitive, /\[contenteditable="true"\]/);
+  assert.match(contextMenuPrimitive, /role === 'dialog' \|\| ownsNavigation/);
+  assert.match(menu, /role="dialog"/);
   assert.match(participants, /closeParticipantContextMenu\(peerId\)/);
   assert.match(room, /closeParticipantContextMenu\(\)/);
   assert.match(menu, /const peerId = peer\.id/);
-  assert.match(menu, /const accountUserId = peer\.accountUserId/);
-  assert.match(menu, /closeParticipantContextMenu\(peerId\)/);
+  assert.match(menu, /const accountUserId = peer\?\.accountUserId/);
+  assert.match(menu, /closeParticipantContextMenu\(peer\.id, false\)/);
   assert.match(menu, /addFriendByUserId\(accountUserId\)/);
   assert.match(menu, /acceptRequestByUserId\(accountUserId\)/);
   const friends = read('src/lib/features/home/model/friends.svelte.ts');
@@ -1541,12 +1653,16 @@ test('participant context menu is remote-only and exposes relationship-aware loc
   assert.match(menu, /setMode\('friends'\)/);
   assert.match(menu, /await openDm\(accountUserId\)/);
   assert.match(menu, /function errorToastMessage\(error: unknown, fallback: string\): string/);
-  assert.match(menu, /showToast\(errorToastMessage\(error, 'Не удалось отправить заявку в друзья'\), \{ variant: 'error' \}\)/);
-  assert.match(menu, /showToast\(errorToastMessage\(error, 'Не удалось принять заявку в друзья'\), \{ variant: 'error' \}\)/);
-  assert.match(menu, /showToast\(errorToastMessage\(error, 'Не удалось открыть личные сообщения'\), \{ variant: 'error' \}\)/);
+  // Failures funnel through one helper; each action supplies its own fallback.
+  assert.match(menu, /showToast\(errorToastMessage\(error, fallback\), \{ variant: 'error' \}\)/);
+  assert.match(menu, /'Не удалось отправить заявку в друзья'/);
+  assert.match(menu, /'Не удалось принять заявку в друзья'/);
+  assert.match(menu, /'Не удалось открыть личные сообщения'/);
 
-  assert.match(css, /\.participant-context-menu/);
-  assert.match(css, /\.pcm-volume/);
+  // The menu chrome comes from the shared primitives; only the volume block is
+  // still local to this component.
+  assert.match(menu, /class="participant-menu"/);
+  assert.match(menu, /\.participant-menu-volume/);
   assert.match(menu, /<Slider[\s\S]*bind:value=\{volumePercent\}/);
 });
 
@@ -1564,8 +1680,8 @@ test('notification cue volume respects stored multiplier', () => {
 test('sound cue layer covers direct messages and friend request events', () => {
   const cues = read('src/lib/features/room/client/media/cues.ts');
   const friends = read('src/lib/features/home/model/friends.svelte.ts');
-  const roomChat = read('src/lib/features/room/components/RoomChat.svelte');
-  const previewChat = read('src/lib/features/home/components/lobby/RoomPreviewChat.svelte');
+  const roomChat = readRoomChat();
+  const previewChat = readPreviewChat();
   const settingsModal = read('src/lib/features/home/components/SettingsModal.svelte');
 
   assert.match(cues, /playDirectMessageCue/);
@@ -1577,7 +1693,8 @@ test('sound cue layer covers direct messages and friend request events', () => {
   assert.match(friends, /case 'friend\.accepted'[\s\S]*playFriendAcceptedCue\(\)/);
   assert.match(friends, /case 'dm\.message'[\s\S]*playDirectMessageCue\(\)/);
   assert.match(roomChat, /event\.type !== 'room\.chat\.message'[\s\S]*message\.peerId !== peerId[\s\S]*playRoomChatMessageCue\(\)/);
-  assert.match(previewChat, /event\.type !== 'room\.chat\.message'[\s\S]*message\.peerId !== accountPeerId[\s\S]*playRoomChatMessageCue\(\)/);
+  assert.match(previewChat, /event\.type !== 'room\.chat\.message'[\s\S]*message\.peerId !== peerId[\s\S]*playRoomChatMessageCue\(\)/);
+  assert.match(previewChat, /peerId=\{`auth-\$\{user\.id\}`\}/);
   assert.doesNotMatch(settingsModal, /settings-cue-grid|previewCue/);
   assert.match(settingsModal, /const cues = \[[\s\S]*playPeerCue\('join'\)[\s\S]*playRoomChatMessageCue\(\)[\s\S]*playFriendAcceptedCue\(\)/);
   assert.match(settingsModal, /disabled=\{previewingSoundSet\}/);
@@ -1606,13 +1723,72 @@ test('focus styles use light border tokens instead of colored glow', () => {
   const appCss = read('src/lib/shared/styles/app.css');
   const controlsCss = read('src/lib/features/room/styles/controls.css');
   const friendsCss = read('src/lib/features/home/styles/friends.css');
+  const chatCss = read('src/lib/features/room/styles/chat-rail.css');
 
-  assert.match(appCss, /--focus-border/);
+  assert.match(appCss, /--focus-border: rgba\(255, 255, 255, 0\.72\)/);
   assert.match(appCss, /--focus-ring: color-mix\(in oklch, var\(--ink\)/);
   assert.match(controlsCss, /border-color: var\(--focus-border/);
   assert.doesNotMatch(controlsCss, /oklch\(70% 0\.14 82/);
   assert.doesNotMatch(controlsCss, /box-shadow: 0 0 0 3px var\(--focus-ring\)/);
   assert.match(friendsCss, /\.lobby-dm-input:focus[\s\S]*border-color: var\(--focus-border/);
+  assert.match(chatCss, /\.chat-rail-input:focus[\s\S]*border-color: var\(--focus-border/);
+});
+
+test('chat image attachments support picker, clipboard, and drag-and-drop behind the media capability', () => {
+  const composer = read('src/lib/shared/chat/AttachmentComposer.svelte');
+  const uploadControl = read('src/lib/shared/chat/AttachmentUploadControl.svelte');
+  const dropOverlay = read('src/lib/shared/chat/AttachmentDropOverlay.svelte');
+  const composeStore = read('src/lib/shared/chat/attachment-compose.svelte.ts');
+  const attachmentCss = read('src/lib/shared/chat/attachment.css');
+  const roomChat = readRoomChat();
+  const previewChat = readPreviewChat();
+  const dmView = read('src/lib/features/home/components/lobby/DmView.svelte');
+  const friendsCss = read('src/lib/features/home/styles/friends.css');
+  const chatCss = read('src/lib/features/room/styles/chat-rail.css');
+
+  assert.match(composer, /attachment-draft[\s\S]*attachment-draft-remove/);
+  assert.doesNotMatch(composer, /Переместить раньше|Переместить позже|>Удалить</);
+  assert.match(uploadControl, /type="file"[\s\S]*Загрузить фото/);
+  assert.match(dropOverlay, /Перетащите фото сюда/);
+  assert.match(attachmentCss, /\.attachment-compose-field[\s\S]*border:[\s\S]*\.attachment-add-button[\s\S]*background: transparent/);
+  assert.match(attachmentCss, /\.attachment-compose-field[\s\S]*flex-direction: column/);
+  assert.match(attachmentCss, /\.attachment-compose-controls[\s\S]*align-items: flex-start/);
+  assert.match(attachmentCss, /\.attachment-upload-root[\s\S]*align-self: flex-start/);
+  assert.match(attachmentCss, /\.attachment-add-button \{[\s\S]*width: 32px;[\s\S]*height: 32px/);
+  assert.match(attachmentCss, /\.attachment-upload-root \{[\s\S]*margin: 8px 0 0 8px/);
+  assert.match(attachmentCss, /\.attachment-draft-loading[\s\S]*background: color-mix\(in srgb, var\(--warm-950\)/);
+  assert.doesNotMatch(
+    attachmentCss.match(/\.attachment-draft-loading \{[\s\S]*?\n\}/)?.[0] || '',
+    /var\(--accent\)/
+  );
+  assert.match(attachmentCss, /\.attachment-draft-remove \{[\s\S]*background: var\(--coral\)/);
+  assert.match(chatCss, /\.chat-compose-row \{[\s\S]*align-items: stretch/);
+  assert.match(friendsCss, /\.lobby-dm-compose-row \{[\s\S]*align-items: stretch/);
+  assert.match(dmView, /class="chat-msg-text dm-chat-message"/);
+  assert.match(dmView, /class="dm-chat-content"/);
+  assert.doesNotMatch(dmView, /lobby-dm-bubble/);
+  assert.ok(
+    dmView.indexOf('<AttachmentMosaic attachments={bubble.attachments} />')
+      < dmView.indexOf('<span class="chat-msg-content dm-msg-content">'),
+    'DM attachments render above their caption within one message'
+  );
+  assert.match(friendsCss, /\.dm-chat-content \{[\s\S]*display: grid;[\s\S]*max-width: min\(720px, 100%\);[\s\S]*gap: 6px/);
+  assert.match(friendsCss, /\.dm-chat-content \.attachment-mosaic \{[\s\S]*width: min\(560px, 100%\)/);
+  assert.match(chatCss, /\.chat-rail-compose \.attachment-upload-root \{[\s\S]*margin-top: 5px/);
+  assert.match(composeStore, /imageFilesFromClipboard[\s\S]*clipboardData/);
+  assert.match(composeStore, /imageFilesFromDataTransfer[\s\S]*data\.files/);
+  for (const parent of [roomChat, previewChat, dmView]) {
+    assert.match(parent, /getCapabilityFeature\('mediaUploads'\)/);
+    assert.match(parent, /onpaste=\{onComposePaste\}/);
+    assert.match(parent, /imageFilesFromClipboard\(event\)[\s\S]*media\.addFiles\(files\)/);
+    assert.match(parent, /ondragenter=\{onAttachmentDragEnter\}/);
+    assert.match(parent, /ondrop=\{onAttachmentDrop\}/);
+    assert.match(parent, /<AttachmentUploadControl/);
+    assert.match(parent, /attachment-compose-field[\s\S]*<AttachmentComposer[\s\S]*attachment-compose-controls/);
+    assert.match(parent, /PinnedToBottom[\s\S]*drafts\.length[\s\S]*tick\(\)/);
+  }
+  assert.match(previewChat, /attachmentIds: media\?\.readyIds \?\? \[\]/);
+  assert.match(previewChat, /\{#if message\.attachments\?\.length\}<AttachmentMosaic/);
 });
 
 test('desktop shell layout stays in shared web styles, not electron overrides', () => {
@@ -1643,7 +1819,6 @@ test('avatar presence colors are solid and cover dnd, afk, online, and offline s
   const presence = read('src/lib/shared/presence.ts');
   const sidebar = read('src/lib/features/home/components/lobby/Sidebar.svelte');
   const dmView = read('src/lib/features/home/components/lobby/DmView.svelte');
-  const friendMenu = read('src/lib/features/home/components/friend-menu/FriendMenuContent.svelte');
   const roomTopbar = read('src/lib/features/room/components/RoomTopbar.svelte');
 
   assert.match(avatar, /dnd \? 'dnd' : afk \? 'afk' : online \? 'online' : 'offline'/);
@@ -1659,8 +1834,8 @@ test('avatar presence colors are solid and cover dnd, afk, online, and offline s
   assert.match(sidebar, /effectivePresenceStatus\(entry\.online, entry\.user\.presenceStatus, entry\.user\.doNotDisturb\)/);
   assert.match(sidebar, /afk=\{selfPresence === 'away'\}/);
   assert.match(dmView, /effectivePresenceStatus\(online, peer\?\.presenceStatus, peer\?\.doNotDisturb\)/);
-  assert.match(friendMenu, /effectivePresenceStatus\(friend\.online, friend\.user\.presenceStatus, friend\.user\.doNotDisturb\)/);
-  assert.match(roomTopbar, /effectivePresenceStatus\(friend\.online, friend\.user\.presenceStatus, friend\.user\.doNotDisturb\)/);
+  const inviteList = read('src/lib/shared/components/room-menu/RoomInviteFriendList.svelte');
+  assert.match(inviteList, /effectivePresenceStatus\(\s*friend\.online,\s*friend\.user\.presenceStatus,\s*friend\.user\.doNotDisturb\s*\)/);
 });
 
 test('effective presence gives physical offline priority and safely supports legacy payloads', async () => {
@@ -1676,8 +1851,9 @@ test('effective presence gives physical offline priority and safely supports leg
 });
 
 test('delete realtime contracts avoid stale chat and false room affordances', () => {
-  const roomChat = read('src/lib/features/room/components/RoomChat.svelte');
-  const previewChat = read('src/lib/features/home/components/lobby/RoomPreviewChat.svelte');
+  const roomChat = readRoomChat();
+  const previewChat = readPreviewChat();
+  const messageMenu = read('src/lib/shared/chat/MessageContextMenu.svelte');
   const friends = read('src/lib/features/home/model/friends.svelte.ts');
   const accountEvents = read('../api/src/realtime/account-events.js');
   const apiServer = read('../api/src/server.js');
@@ -1687,12 +1863,13 @@ test('delete realtime contracts avoid stale chat and false room affordances', ()
   assert.match(accountEvents, /case 'dm\.message\.deleted'/);
   assert.match(previewChat, /event\.type === 'room\.chat\.deleted'[\s\S]*messages = messages\.filter/);
   assert.match(friends, /case 'dm\.message\.deleted'[\s\S]*refreshFriends\(\)/);
-  assert.match(roomChat, /\{#if group\.self\}[\s\S]*label="Удалить"/);
+  assert.match(messageMenu, /\{#if canDelete\}[\s\S]*label="Удалить"/);
+  assert.match(roomChat, /canDelete=\{isOwnMessage\(target\)\}[\s\S]*onDelete=\{\(\) => void deleteMessage\(target\.id\)\}/);
 });
 
 test('message editing is author-only in UI and applies realtime replacements', () => {
-  const roomChat = read('src/lib/features/room/components/RoomChat.svelte');
-  const previewChat = read('src/lib/features/home/components/lobby/RoomPreviewChat.svelte');
+  const roomChat = readRoomChat();
+  const previewChat = readPreviewChat();
   const dmView = read('src/lib/features/home/components/lobby/DmView.svelte');
   const friends = read('src/lib/features/home/model/friends.svelte.ts');
   const realtime = read('src/lib/api/realtime.ts');
@@ -1700,6 +1877,7 @@ test('message editing is author-only in UI and applies realtime replacements', (
   const server = read('../api/src/server.js');
   const roomOwnership = functionBody(roomChat, 'isOwnMessage');
   const previewOwnership = functionBody(previewChat, 'isOwnMessage');
+  const messageMenu = read('src/lib/shared/chat/MessageContextMenu.svelte');
 
   assert.match(server, /buildServerEnvelope\('room\.chat\.edited'/);
   assert.match(server, /type: 'dm\.message\.edited'/);
@@ -1712,13 +1890,80 @@ test('message editing is author-only in UI and applies realtime replacements', (
   assert.match(previewChat, /event\.type === 'room\.chat\.edited'[\s\S]*messages = messages\.map/);
   assert.match(friends, /case 'dm\.message\.edited'[\s\S]*applyEditedMessage/);
   assert.match(friends, /case 'ready'[\s\S]*resyncOpenThread\(\{ force: true \}\)/);
-  assert.match(roomChat, /\{#if group\.self\}[\s\S]*label="Редактировать"[\s\S]*startEditing\(message\)/);
-  assert.match(roomOwnership, /message\.authorUserId === accountUserId/);
-  assert.match(roomOwnership, /message\.peerId === peerId/);
-  assert.match(previewOwnership, /message\.authorUserId === user\.id/);
-  assert.match(previewOwnership, /message\.peerId === accountPeerId/);
-  assert.match(dmView, /\{#if group\.fromMe\}[\s\S]*startEditing\(bubble\)/);
+  assert.match(messageMenu, /\{#if canEdit\}[\s\S]*label="Изменить"[\s\S]*hint="E"/);
+  assert.match(roomChat, /canEdit=\{isOwnMessage\(target\)\}[\s\S]*onEdit=\{\(\) => startEditing\(target\)\}/);
+  for (const ownership of [roomOwnership, previewOwnership]) {
+    assert.match(ownership, /message\.authorUserId === accountUserId/);
+    assert.match(ownership, /message\.peerId === peerId/);
+  }
+  assert.match(dmView, /canEdit=\{menuFromMe\}[\s\S]*onEdit=\{\(\) => startEditing\(target\)\}/);
   for (const source of [roomChat, previewChat, dmView]) assert.match(source, /\(изменено\)/);
+});
+
+test('room surfaces share one chat panel, quotes jump, and an opened chat starts on the newest message', () => {
+  const panel = read(ROOM_CHAT_PANEL_PATH);
+  const rail = read('src/lib/features/room/components/RoomChat.svelte');
+  const preview = read('src/lib/features/home/components/lobby/RoomPreviewChat.svelte');
+  const dm = read('src/lib/features/home/components/lobby/DmView.svelte');
+  const replyBar = read('src/lib/shared/chat/ReplyTargetBar.svelte');
+
+  // The lobby preview and the in-room rail are wrappers: neither owns chat
+  // transport, so the two surfaces cannot drift apart in features again.
+  assert.match(rail, /<RoomChatPanel/);
+  assert.match(preview, /<RoomChatPanel/);
+  for (const wrapper of [rail, preview]) {
+    assert.doesNotMatch(wrapper, /fetchRoomChat|postRoomChat|MessageContextMenu|MessageHoverActions/);
+  }
+  assert.match(panel, /reactionsEnabled/);
+  assert.match(panel, /<PinnedMessagesBar/);
+  assert.match(panel, /<MentionAutocomplete/);
+
+  // Cancelling a reply is an icon, and the quote it shows is a jump target.
+  assert.match(replyBar, /aria-label="Отменить ответ"/);
+  assert.match(replyBar, /<X size=/);
+  assert.doesNotMatch(replyBar, />Отмена</);
+  for (const source of [panel, dm]) {
+    assert.match(source, /<ReplyTargetBar[\s\S]*?onjump=\{jumpToMessage\}[\s\S]*?oncancel=/);
+    assert.match(source, /<ReplyPreview preview=\{\w+\.replyPreview\} interactive onjump=\{jumpToMessage\}/);
+    assert.match(source, /function jumpToMessage/);
+  }
+
+  // Your own avatar and name open your own profile card.
+  assert.match(panel, /canOpenProfile = \(group: ChatGroup\)/);
+  assert.match(panel, /group\.self \? 'Ваш профиль'/);
+  assert.match(dm, /aria-label="Ваш профиль"/);
+
+  // Opening the chat parks it on the newest message even after late layout.
+  assert.match(panel, /async function settleAtBottom/);
+  assert.match(panel, /requestAnimationFrame/);
+  assert.match(panel, /\} else if \(!signal\.aborted && chatVisible\) \{\s*\/\/[\s\S]*?await settleAtBottom\(\);/);
+});
+
+test('room messages stack their reactions and keep the hover toolbar clear of the author line', () => {
+  const panel = read(ROOM_CHAT_PANEL_PATH);
+  const dm = read('src/lib/features/home/components/lobby/DmView.svelte');
+  const css = read('src/lib/features/room/styles/chat-rail.css');
+  const dmCss = read('src/lib/features/home/styles/friends.css');
+
+  // Reactions belong under the message, left aligned, the way direct messages
+  // already render them — not beside the text in the row's flex line.
+  assert.match(panel, /<div class="chat-msg-body">[\s\S]*<ReactionSummary[\s\S]*<\/div>\s*<MessageHoverActions/);
+  assert.match(css, /\.chat-msg-body \{[^}]*display: grid;[^}]*justify-items: start;/);
+  assert.match(dm, /<div class="dm-chat-content">[\s\S]*<ReactionSummary/);
+  assert.match(dmCss, /\.dm-chat-content \{ display: grid;/);
+
+  // The row is not an isolated stacking context, so the hovered group can lift
+  // the toolbar over the author line instead of trapping it behind.
+  assert.doesNotMatch(css, /\.chat-msg-text \{[^}]*isolation: isolate/);
+  assert.match(css, /\.chat-msg:has\(\.chat-msg-text:hover\)[\s\S]*z-index: 6/);
+
+  // The toolbar has to survive losing :hover, or the overlay it opened steals
+  // the pointer and the buttons disappear from under the cursor.
+  assert.match(css, /\.chat-msg-text\.is-context \.chat-msg-actions,\s*\.chat-msg-actions\[data-overlay-open='true'\] \{ opacity: 1;/);
+  assert.match(css, /\.chat-msg-meta:hover \+ \.chat-msg-text \.chat-msg-actions \{ opacity: 1;/);
+  const hover = read('src/lib/shared/chat/MessageHoverActions.svelte');
+  assert.match(hover, /data-overlay-open=\{pickerOpen\}/);
+  assert.match(hover, /bind:open=\{pickerOpen\}/);
 });
 
 test('room menus share semantic groups and expose invite as a right-hand submenu only in voice', () => {
@@ -1726,15 +1971,21 @@ test('room menus share semantic groups and expose invite as a right-hand submenu
   const topbar = read('src/lib/features/room/components/RoomTopbar.svelte');
   const header = read('src/lib/features/home/components/lobby/RoomViewHeader.svelte');
 
-  assert.match(content, /label="Позвать друга" showChevron/);
-  assert.match(content, /onpointerenter=\{\(\) => \(inviteOpen = true\)\}/);
-  assert.match(content, /onpointerleave=\{\(\) => \(inviteOpen = false\)\}/);
-  assert.match(content, /\.room-menu-submenu::after[\s\S]*width: 10px/);
-  assert.match(content, /\.room-menu-invite[\s\S]*left: calc\(100% \+ 10px\)/);
+  assert.match(content, /<PopoverSubmenu label="Пригласить"/);
+  // Hover-to-open with its 120ms dwell now lives in the shared submenu primitive.
+  const submenu = read('src/lib/shared/ui/Popover/PopoverSubmenu.svelte');
+  assert.match(submenu, /onpointerenter=\{scheduleOpen\}/);
+  assert.match(submenu, /onpointerleave=\{handlePointerLeave\}/);
+  assert.match(submenu, /HOVER_DELAY_MS = 120/);
+  assert.match(submenu, /\.popover-submenu::after[\s\S]*width: 12px/);
+  assert.match(submenu, /use:portal/);
+  assert.match(submenu, /position: fixed/);
+  assert.match(submenu, /rowRect\.right \+ 10/);
   assert.match(content, /label="Скопировать код"[\s\S]*label="Скопировать ссылку"[\s\S]*Выключить уведомления[\s\S]*label="Настройки комнаты"/);
   assert.match(topbar, /inviteContent/);
-  assert.match(topbar, /В комнате/);
-  assert.match(topbar, /disabled=\{Boolean\(ringingUserId\) \|\| alreadyInRoom\}/);
+  const inviteList = read('src/lib/shared/components/room-menu/RoomInviteFriendList.svelte');
+  assert.match(inviteList, /В комнате/);
+  assert.match(inviteList, /disabled=\{Boolean\(ringingUserId\) \|\| alreadyInRoom\}/);
   assert.doesNotMatch(header, /inviteContent/);
 });
 
@@ -1742,9 +1993,10 @@ test('room invitation decisions replace the actions with a durable result in the
   const dmApi = read('src/lib/api/dm.ts');
   const dm = read('src/lib/features/home/components/lobby/DmView.svelte');
 
-  assert.match(dmApi, /status: 'pending' \| 'accepted' \| 'declined'/);
+  assert.match(dmApi, /status: 'pending' \| 'accepted' \| 'declined' \| 'expired'/);
   assert.match(dm, /Принял приглашение/);
   assert.match(dm, /Отклонил предложение/);
+  assert.match(dm, /Приглашение завершено/);
   assert.match(dm, /\{#if inviteActionable\(bubble, group\.fromMe\)\}/);
 });
 
@@ -1790,42 +2042,174 @@ test('participant focus uses a centered stage and a bounded carousel strip', () 
 });
 
 test('room preview, room, and direct chats use a stable top-right message action toolbar', () => {
-  const chat = read('src/lib/features/room/components/RoomChat.svelte');
-  const previewChat = read('src/lib/features/home/components/lobby/RoomPreviewChat.svelte');
+  const chat = readRoomChat();
+  const previewChat = readPreviewChat();
   const dm = read('src/lib/features/home/components/lobby/DmView.svelte');
   const roomCss = read('src/lib/features/room/styles/chat-rail.css');
   const dmCss = read('src/lib/features/home/styles/friends.css');
+  const hoverActions = read('src/lib/shared/chat/MessageHoverActions.svelte');
 
-  for (const source of [chat, previewChat]) {
-    assert.match(source, /class="chat-msg-actions" role="toolbar"/);
-    assert.match(source, /aria-label="Копировать текст"/);
-    assert.match(source, /aria-label="Редактировать"/);
-    assert.match(source, /aria-label="Удалить"/);
-  }
+  for (const source of [chat, previewChat, dm]) assert.match(source, /<MessageHoverActions/);
+  assert.match(hoverActions, /class="chat-msg-actions" role="toolbar"/);
+  assert.match(hoverActions, /aria-label="Копировать текст"/);
+  assert.match(hoverActions, /aria-label="Ответить"/);
+  assert.match(hoverActions, /aria-label="Больше действий"/);
+  assert.doesNotMatch(hoverActions, /aria-label="Редактировать"|aria-label="Удалить"|aria-label="Закрепить"/);
   assert.doesNotMatch(previewChat, /chat-msg-edit-button/);
   assert.doesNotMatch(chat, /rootClass="chat-msg-menu-root"/);
-  assert.match(chat, /queueMicrotask\(\(\) => openParticipantContextMenu/);
-  assert.match(dm, /class="dm-msg-actions" role="toolbar"/);
-  assert.match(dm, /aria-label="Копировать текст"/);
-  assert.match(dm, /aria-label="Редактировать"/);
-  assert.match(dm, /aria-label="Удалить"/);
+  assert.match(chat, /queueMicrotask\(\(\) => openProfileCardFor\(person, anchor\)\)/);
+  assert.match(chat, /onAuthorContextMenu\(group\.peerId, event\)/);
+  assert.match(chat, /openParticipantContextMenu\([\s\S]*authorPeerId[\s\S]*'list'/);
   assert.match(roomCss, /\.chat-msg-text[\s\S]*width: calc\(100% \+ 45px\)/);
-  assert.match(roomCss, /\.chat-msg:has\(\.chat-msg-text:hover\)::before/);
+  assert.doesNotMatch(roomCss, /\.chat-msg::before/);
+  assert.match(roomCss, /\.chat-msg-text::before[\s\S]*inset: -3px -20px/);
+  assert.match(roomCss, /\.chat-msg-text\[data-group-first='true'\]::before[\s\S]*top: -25px[\s\S]*left: -45px/);
+  assert.match(roomCss, /\.chat-msg-text:hover::before/);
+  for (const source of [chat, previewChat]) {
+    assert.match(source, /data-group-first=\{message\.id === group\.messages\[0\]\.id\}/);
+  }
   // The toolbar sits fully above the message body in both chats.
-  assert.match(roomCss, /\.chat-msg-actions[\s\S]*bottom: calc\(100% - 4px\)[\s\S]*right: -16px[\s\S]*opacity: 0/);
+  assert.match(roomCss, /\.chat-msg-actions \{[\s\S]*bottom: calc\(100% - 6px\)[\s\S]*right: -12px[\s\S]*opacity: 0/);
   assert.match(roomCss, /\.chat-msg-text:hover \.chat-msg-actions/);
-  assert.match(dmCss, /\.dm-msg-actions[\s\S]*bottom: calc\(100% - 4px\)[\s\S]*right: 4px[\s\S]*opacity: 0/);
-  assert.match(dmCss, /\.lobby-dm-bubble:hover \.dm-msg-actions/);
+  assert.match(dm, /data-group-first=\{bubble\.id === group\.bubbles\[0\]\.id\}/);
+  assert.doesNotMatch(dmCss, /\.dm-msg-actions|\.lobby-dm-bubble/);
+  assert.match(roomCss, /\.chat-msg-actions \{[^}]*overflow: visible/);
 });
 
 test('composer ArrowUp edits the latest own message in both chats', () => {
-  const chat = read('src/lib/features/room/components/RoomChat.svelte');
+  const chat = readRoomChat();
   const dm = read('src/lib/features/home/components/lobby/DmView.svelte');
 
   for (const source of [chat, dm]) {
     assert.match(source, /key === 'ArrowUp' && !draft\.trim\(\) && !editingMessageId/);
     assert.match(source, /findLastOwnMessage/);
   }
+});
+
+test('message action toolbars expose persisted quick reactions and a separated full picker', () => {
+  const chat = readRoomChat();
+  const dm = read('src/lib/features/home/components/lobby/DmView.svelte');
+  const picker = read('src/lib/shared/chat/ReactionPicker.svelte');
+  const persistence = read('src/lib/shared/chat/frequent-reactions.ts');
+  const hoverActions = read('src/lib/shared/chat/MessageHoverActions.svelte');
+
+  assert.match(chat, /<MessageHoverActions[\s\S]*reactionStore=\{reactionsEnabled && session\.user\?\.id \? reactions : undefined\}[\s\S]*userId=\{session\.user\?\.id\}/);
+  assert.match(dm, /<MessageHoverActions[\s\S]*reactionStore=\{reactionsEnabled \? reactions : undefined\}[\s\S]*userId=\{selfId\}/);
+  assert.match(hoverActions, /\{#if reactionStore && userId\}[\s\S]*<ReactionPicker/);
+  assert.match(hoverActions, /showQuickReactions=\{false\}/);
+  assert.match(picker, /showQuickReactions = true/);
+  assert.match(picker, /\{#if showQuickReactions\}/);
+  assert.ok(hoverActions.indexOf('<ReactionPicker') < hoverActions.indexOf('aria-label="Ответить"'));
+  assert.match(picker, /class="reaction-quick-actions" role="group" aria-label="Быстрые реакции"/);
+  assert.match(picker, /\{#each frequentEmoji as emoji/);
+  assert.match(picker, /SmilePlus/);
+  assert.match(picker, /placeholder="Поиск реакции"/);
+  const catalog = read('src/lib/shared/chat/emoji-catalog.ts');
+  // Categories now come through the catalogue layer, which drops anything the
+  // artwork cannot draw before the picker ever sees it.
+  assert.match(picker, /listBrowsableCategories/);
+  assert.match(catalog, /listReactionEmojiGroups/);
+  assert.match(catalog, /import coverage from '\.\/emoji-coverage\.json'/);
+  assert.match(catalog, /function isOfferedEmoji\(emoji: string\): boolean/);
+  // Categories are anchors into one continuous list, not tabs that swap the
+  // content out, so scrolling passes from one category into the next.
+  assert.match(picker, /class="reaction-picker-anchors"[\s\S]*role="toolbar"/);
+  assert.match(picker, /aria-label="Разделы реакций"/);
+  assert.match(picker, /function goToSection\(key: string\)/);
+  assert.doesNotMatch(picker, /role="tablist"|role="tabpanel"/);
+  // ~2400 tiles in one scroller, so only the visible rows may exist.
+  assert.match(picker, /const visibleRows = \$derived\.by/);
+  assert.match(picker, /style:height=\{`\$\{layout\.totalHeight\}px`\}/);
+  // Skin tones are a choice, not 1565 extra tiles: a remembered default plus a
+  // long press for a one-off, which leaves the default alone.
+  assert.match(picker, /BROWSABLE_EMOJIS/);
+  assert.match(picker, /saveSkinTone\(tone, SKIN_TONES\.length\)/);
+  // A dwell or a right click reaches the swatches; there is no hold-to-open,
+  // and no close button — leaving the strip or pressing elsewhere puts it away.
+  assert.match(picker, /TONE_HOVER_DELAY_MS = 300/);
+  assert.match(picker, /function beginToneHover\(emoji: string, event: PointerEvent\)/);
+  assert.match(picker, /oncontextmenu=/);
+  assert.match(picker, /function dismissOverlays\(event: PointerEvent\)/);
+  // The swatches have to be reachable: leaving the tile only starts a grace
+  // period, and entering the strip cancels it outright.
+  assert.match(picker, /TONE_CLOSE_GRACE_MS = \d+/);
+  assert.match(picker, /function scheduleToneClose\(\)/);
+  assert.match(picker, /onpointerenter=\{cancelToneClose\}/);
+  // And it has to stay inside the panel, which clips whatever hangs out.
+  assert.match(picker, /toneStripLeft = Math\.min\(/);
+  assert.match(picker, /pickerBox\.width - half - TONE_STRIP_MARGIN/);
+  assert.doesNotMatch(picker, /beginLongPress|reaction-tone-strip-close/);
+  // The jump is instant: an animated one walked the window through every row in
+  // between and asked for the artwork of each.
+  assert.doesNotMatch(picker, /behavior: 'smooth'/);
+  assert.match(picker, /scroller\.scrollTop = top;/);
+  // The category strip stays one line and the grid keeps the height that the
+  // preview bar used to take: it only ever repeated the emoji under the cursor.
+  assert.match(picker, /\.reaction-picker-anchors \{ display: flex; flex-wrap: nowrap;/);
+  assert.doesNotMatch(picker, /reaction-picker-foot|reaction-picker-hint|previewEmoji/);
+  assert.match(persistence, /indexedDB\.open\(DATABASE_NAME, DATABASE_VERSION\)/);
+  assert.match(persistence, /voice-room:frequent-reactions/);
+  assert.match(persistence, /frequentReactionKey\(namespace: string, userId: string\)/);
+  assert.match(persistence, /readLocalStorage\(key\)/);
+});
+
+test('manual chat polish keeps notifications local, direct messages flat, reactions compact, and mentions login-bound', () => {
+  const lobby = read('src/lib/features/home/LobbyPage.svelte');
+  const sidebar = read('src/lib/features/home/components/lobby/Sidebar.svelte');
+  const dm = read('src/lib/features/home/components/lobby/DmView.svelte');
+  const roomChat = readRoomChat();
+  const chatCss = read('src/lib/features/room/styles/chat-rail.css');
+  const picker = read('src/lib/shared/chat/ReactionPicker.svelte');
+  const summary = read('src/lib/shared/chat/ReactionSummary.svelte');
+  const mentionComposer = read('src/lib/shared/chat/mention-composer.svelte.ts');
+  const mentionAutocomplete = read('src/lib/shared/chat/MentionAutocomplete.svelte');
+  const membership = read('src/lib/features/home/model/room-membership.svelte.ts');
+
+  const downloadIndex = sidebar.indexOf('<SidebarDownload />');
+  const notificationIndex = sidebar.indexOf('class="lobby-gear lv-notification-button"');
+  const settingsIndex = sidebar.indexOf('title="Настройки"');
+  assert.ok(downloadIndex >= 0 && downloadIndex < notificationIndex && notificationIndex < settingsIndex);
+  assert.match(sidebar, /notificationUnreadCount > 99 \? '99\+' : notificationUnreadCount/);
+  assert.doesNotMatch(lobby, /notification-inbox-trigger/);
+
+  assert.match(dm, /class="chat-msg dm-chat-group"/);
+  assert.match(dm, /class="chat-msg-text dm-chat-message"/);
+  assert.match(dm, /class="chat-msg-avatar"/);
+  assert.match(dm, /class="chat-msg-main"/);
+  assert.doesNotMatch(dm, /lobby-dm-bubble|row-reverse/);
+  const hoverActions = read('src/lib/shared/chat/MessageHoverActions.svelte');
+  assert.match(hoverActions, /aria-label="Ответить"[\s\S]*<Reply/);
+  for (const source of [dm, roomChat]) assert.match(source, /<MessageHoverActions/);
+
+  assert.match(chatCss, /\.chat-msg-actions \{[^}]*overflow: visible/);
+  assert.match(picker, /\.reaction-quick-trigger, \.reaction-picker-trigger \{[^}]*width: 36px; height: 36px/);
+  assert.match(picker, /placement="top-start"[\s\S]*flip[\s\S]*aria-label="Открыть выбор эмодзи"[\s\S]*onclick=\{toggle\}/);
+  assert.match(summary, /\.reaction-chip \{[^}]*height: 26px;[^}]*border-radius: 8px/);
+  assert.match(summary, /placement="top-start"[\s\S]*flip/);
+  assert.match(summary, /\.reaction-count \{[^}]*min-width: 20px;[^}]*font-family: var\(--font-mono\);[^}]*font-variant-numeric: tabular-nums/);
+
+  assert.match(mentionComposer, /return `@\$\{member\.login\}`/);
+  assert.doesNotMatch(mentionComposer, /return `@\$\{member\.displayName/);
+  assert.match(roomChat, /if \(mentionComposer\.query !== query\) return/);
+  assert.match(membership, /const requestGeneration = \+\+entry\.requestGeneration/);
+  assert.match(membership, /if \(requestGeneration !== entry\.requestGeneration\) return/);
+  assert.match(mentionAutocomplete, /bottom: calc\(100% - 8px\)/);
+  assert.match(chatCss, /\.chat-rail-compose \{[\s\S]*position: relative/);
+});
+
+test('frequent reaction ranking is user-scoped, deterministic, and limited to three choices', async () => {
+  const { frequentReactionKey, rankFrequentReactions } = await importTypeScript('src/lib/shared/chat/frequent-reactions.ts');
+
+  assert.equal(frequentReactionKey('chat', 'user-42'), 'chat:user-42');
+  assert.deepEqual(
+    rankFrequentReactions([
+      { emoji: '👍', count: 2, lastUsedAt: 10 },
+      { emoji: '😂', count: 4, lastUsedAt: 5 },
+      { emoji: '🔥', count: 4, lastUsedAt: 12 },
+      { emoji: '❤️', count: 1, lastUsedAt: 20 }
+    ]).map((entry) => entry.emoji),
+    ['🔥', '😂', '👍']
+  );
 });
 
 test('sidebar call widget shows only the room call timer from the server clock', () => {
@@ -1838,7 +2222,7 @@ test('sidebar call widget shows only the room call timer from the server clock',
 
   assert.match(widget, /voice-timers/);
   assert.match(widget, /<RoomCallTimer variant="sidebar" \/>/);
-  assert.match(topbar, /<RoomCallTimer \/>[\s\S]*class="room-chat-toggle"/);
+  assert.match(topbar, /<RoomCallTimer \/>[\s\S]*class="room-panel-tabs room-panel-tabs--topbar"/);
   assert.match(timer, /formatElapsed/);
   assert.match(timer, /voiceSession\.roomActiveSince/);
   assert.doesNotMatch(timer, />звонок</);
@@ -1859,8 +2243,8 @@ test('room preview header drops the live badge — the stage already shows who i
 });
 
 test('room chats re-stamp the current profile when the room broadcasts a peer update', () => {
-  const chat = read('src/lib/features/room/components/RoomChat.svelte');
-  const previewChat = read('src/lib/features/home/components/lobby/RoomPreviewChat.svelte');
+  const chat = readRoomChat();
+  const previewChat = readPreviewChat();
   const previewCss = read('src/lib/features/home/styles/friends.css');
 
   assert.match(chat, /event\.type === 'room\.peer\.updated'/);
@@ -1874,7 +2258,7 @@ test('room chats re-stamp the current profile when the room broadcasts a peer up
 });
 
 test('room chat date bubbles stay pinned per day section and replace each other while scrolling', () => {
-  const chat = read('src/lib/features/room/components/RoomChat.svelte');
+  const chat = readRoomChat();
   const css = read('src/lib/features/room/styles/chat-rail.css');
 
   assert.match(chat, /class="chat-day-section"/);
@@ -1924,4 +2308,135 @@ test('settings sound columns cannot widen the modal content area', () => {
   assert.match(devicesRule.groups.body, /min-width:\s*0/);
   assert.match(devicesRule.groups.body, /max-width:\s*100%/);
   assert.match(css, /\.settings-sound-device \.popover-root[\s\S]*width:\s*100%[\s\S]*max-width:\s*100%/);
+});
+
+test('release polish shares dialog focus trapping across modal surfaces', () => {
+  const focusTrap = read('src/lib/shared/ui/focus-trap.ts');
+  const dialog = read('src/lib/shared/ui/Dialog/Dialog.svelte');
+  const avatarCrop = read('src/lib/shared/ui/AvatarCropDialog/AvatarCropDialog.svelte');
+  const settings = read('src/lib/features/home/components/SettingsModal.svelte');
+  const lobbyRoomSettings = read('src/lib/features/home/components/lobby/LobbyRoomSettingsDialog.svelte');
+  const roomSettings = read('src/lib/features/room/components/RoomSettingsDialog.svelte');
+
+  assert.match(focusTrap, /FOCUSABLE_SELECTOR/);
+  assert.match(focusTrap, /event\.key !== 'Tab'/);
+  assert.match(focusTrap, /opener\?\.isConnected/);
+  assert.match(focusTrap, /function suspend\(\): void/);
+  assert.match(focusTrap, /!root\.contains\(activeElement\)/);
+  for (const source of [dialog, avatarCrop, settings, lobbyRoomSettings, roomSettings]) {
+    assert.match(source, /dialogFocusTrap/);
+    assert.match(source, /tabindex="-1"/);
+    assert.match(source, /data-dialog-initial-focus/);
+  }
+});
+
+test('popover menus and create-room tabs expose honest keyboard semantics', () => {
+  const popover = read('src/lib/shared/ui/Popover/Popover.svelte');
+  const createRoom = read('src/lib/features/home/components/CreateRoomDialog.svelte');
+  const lobbyCss = read('src/lib/features/home/styles/lobby-v2.css');
+
+  assert.match(popover, /role !== 'menu'/);
+  assert.match(popover, /if \(!open \|\| role !== 'menu'\) return;\s*focusMenuItem\(0\)/);
+  assert.match(popover, /querySelectorAll<HTMLElement>\('\[role="menuitem"\]'\)/);
+  for (const key of ['ArrowDown', 'ArrowUp', 'Home', 'End']) assert.match(popover, new RegExp(`event\\.key === '${key}'`));
+
+  assert.match(createRoom, /role="tablist" aria-label="Тип комнаты" tabindex="-1" onkeydown=\{onTabsKeydown\}/);
+  assert.match(createRoom, /initialFocus="#createRoomPermanentTab"/);
+  assert.match(createRoom, /aria-controls="createRoomPermanentPanel"/);
+  assert.match(createRoom, /aria-controls="createRoomTempPanel"/);
+  assert.match(createRoom, /role="tabpanel"/);
+  assert.match(createRoom, /tabindex=\{tab === 'permanent' \? 0 : -1\}/);
+  assert.match(createRoom, /tabindex=\{tab === 'temp' \? 0 : -1\}/);
+  assert.match(lobbyCss, /\.lr-dialog-form/);
+});
+
+test('release polish removes token drift, inline people styles, and adds reduced-motion and hit-area baselines', () => {
+  const layout = read('src/routes/+layout.svelte');
+  const appCss = read('src/lib/shared/styles/app.css');
+  const people = read('src/lib/features/home/components/lobby/PeopleView.svelte');
+  const lobbyCss = read('src/lib/features/home/styles/lobby-v2.css');
+  const switchCss = read('src/lib/shared/ui/Switch/Switch.svelte');
+  const sliderCss = read('src/lib/shared/ui/Slider/Slider.svelte');
+  const reactions = read('src/lib/shared/chat/ReactionPicker.svelte');
+  const chatCss = read('src/lib/features/room/styles/chat-rail.css');
+  const dmCss = read('src/lib/features/home/styles/friends.css');
+  const roomControlsCss = read('src/lib/features/room/styles/controls.css');
+  const settingsCss = read('src/lib/features/home/styles/settings.css');
+
+  assert.match(layout, /font-family: var\(--font-ui\)/);
+  assert.equal((appCss.match(/--focus-border:/g) || []).length, 1);
+  assert.match(appCss, /@media \(prefers-reduced-motion: reduce\)/);
+  assert.match(appCss, /transition-duration: 0\.001ms !important/);
+  assert.doesNotMatch(people, /\sstyle="/);
+  assert.match(lobbyCss, /\.people-request-copy/);
+  assert.match(lobbyCss, /\.people-truncate/);
+  assert.match(switchCss, /\.ui-switch::after[\s\S]*inset: -10px -4px/);
+  assert.match(sliderCss, /\.vr-slider-control[\s\S]*height: 36px/);
+  assert.match(reactions, /\.reaction-picker-grid button[\s\S]*height: 44px/);
+  assert.match(chatCss, /\.chat-msg-actions > button[\s\S]*width: 36px;[\s\S]*height: 36px/);
+  assert.doesNotMatch(dmCss, /\.dm-msg-actions/);
+  assert.match(roomControlsCss, /\.gate-switch::after[\s\S]*inset: -12px -6px/);
+  assert.match(settingsCss, /\.settings-switch::after[\s\S]*inset: -10px -4px/);
+});
+
+test('context-menu follow-up preserves async feedback, focus scopes, guest boundaries, and unblock recovery', () => {
+  const dm = read('src/lib/features/home/components/lobby/DmView.svelte');
+  const profileUi = read('src/lib/features/home/profile-card-ui.svelte.ts');
+  const contextMenu = read('src/lib/shared/ui/ContextMenu/ContextMenu.svelte');
+  const submenu = read('src/lib/shared/ui/Popover/PopoverSubmenu.svelte');
+  const participantMenu = read('src/lib/features/room/components/ParticipantContextMenu.svelte');
+  const pinned = read('src/lib/features/room/components/PinnedMessagesBar.svelte');
+  const messageMenu = read('src/lib/shared/chat/MessageContextMenu.svelte');
+  const roomMenu = read('src/lib/shared/components/room-menu/RoomMenuContent.svelte');
+  const blocks = read('src/lib/api/blocks.ts');
+  const settings = read('src/lib/features/home/components/SettingsModal.svelte');
+
+  assert.match(dm, /pushToast\('Сообщение удалено'\)/);
+  assert.match(profileUi, /rect: Pick<DOMRect, 'left' \| 'bottom'>/);
+  assert.match(profileUi, /explicit\?\.restoreFocus \?\? element/);
+  assert.match(contextMenu, /role === 'dialog' \|\| ownsNavigation/);
+  assert.match(contextMenu, /activeScope && activeScope !== panel/);
+  assert.match(submenu, /use:portal/);
+  assert.match(submenu, /position:\s*fixed/);
+  assert.match(submenu, /ariaHaspopup="menu"/);
+  assert.match(submenu, /rightSpace >= panelRect\.width/);
+  assert.match(participantMenu, /role="dialog"/);
+  assert.match(participantMenu, /\{#if peer\.accountUserId\}[\s\S]*label="Профиль"/);
+  assert.match(pinned, /\{#if canUnpin\}[\s\S]*aria-label="Открепить сообщение"/);
+  assert.match(messageMenu, /hint="E"/);
+  assert.match(messageMenu, /hint="⌫"/);
+  assert.match(messageMenu, /handleShortcut/);
+  assert.match(roomMenu, /stillCurrent\(targetRoomId\)/);
+  assert.match(blocks, /export async function fetchBlockedUsers/);
+  assert.match(settings, /Заблокированные пользователи/);
+  assert.match(settings, /unblockBlockedUser\(blocked\.id\)/);
+  assert.doesNotMatch(blocks, /login:\s*id/);
+});
+
+test('chat hover actions stay compact, float the picker, and open profiles from messages and members', () => {
+  const hover = read('src/lib/shared/chat/MessageHoverActions.svelte');
+  const picker = read('src/lib/shared/chat/ReactionPicker.svelte');
+  const popover = read('src/lib/shared/ui/Popover/Popover.svelte');
+  const roomChat = readRoomChat();
+  const dm = read('src/lib/features/home/components/lobby/DmView.svelte');
+  const members = read('src/lib/features/home/components/lobby/RoomMemberList.svelte');
+  const sidebar = read('src/lib/features/home/components/lobby/Sidebar.svelte');
+  const profileHost = read('src/lib/features/home/components/profile-card/ProfileCardHost.svelte');
+  const messageMenu = read('src/lib/shared/chat/MessageContextMenu.svelte');
+
+  assert.match(hover, /chat-msg-actions-divider/);
+  assert.match(hover, /aria-label="Ответить"/);
+  assert.match(hover, /aria-label="Копировать текст"/);
+  assert.match(hover, /aria-label="Больше действий"/);
+  assert.doesNotMatch(hover, /Редактировать|Удалить|Закрепить/);
+  assert.match(picker, /\bflip\b[\s\S]*\bfloating\b/);
+  assert.match(popover, /class:popover-panel--floating=\{floating\}/);
+  assert.match(popover, /\.popover-root \{[^}]*display: grid;/);
+  assert.match(popover, /style:--popover-available-height/);
+  assert.match(roomChat, /openUserProfile[\s\S]*roomMessageProfilePerson/);
+  assert.match(dm, /openMessageAuthorProfile[\s\S]*openProfileCardFor/);
+  assert.match(members, /class="room-member-list__member"[\s\S]*openMemberProfile/);
+  assert.match(profileHost, /person\.userId === session\.user\?\.id[\s\S]*\? 'self'/);
+  assert.ok(messageMenu.indexOf('action?.();') < messageMenu.indexOf('close();'));
+  assert.doesNotMatch(sidebar, /aria-haspopup="menu"/);
 });

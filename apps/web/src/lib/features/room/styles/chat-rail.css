@@ -3,17 +3,22 @@
    «Чат» button in the top bar; when hidden it leaves no layout footprint. */
 
 :root {
-  --chat-rail-width: 360px;
+  --room-panel-width: 360px;
 }
 
 .room-chat-rail {
+  position: relative;
   flex: none;
-  width: var(--chat-rail-width);
+  width: var(--room-panel-width);
   display: flex;
   flex-direction: column;
   min-height: 0;
   border-left: 1px solid rgba(255, 255, 255, 0.07);
   background: color-mix(in oklch, var(--warm-950), transparent 45%);
+}
+
+.room-chat-rail[hidden] {
+  display: none;
 }
 
 @media (min-width: 901px) {
@@ -40,21 +45,64 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 18px 20px;
+  padding: 12px 14px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
 
-.chat-rail-title {
+.room-panel-tabs {
   display: flex;
   align-items: center;
-  gap: 9px;
-  color: #e7e2d4;
-  font-size: 14px;
-  font-weight: 700;
+  gap: 4px;
+  min-width: 0;
+  padding: 3px;
+  border-radius: 11px;
+  background: color-mix(in oklch, var(--control), transparent 36%);
 }
 
-.chat-rail-title svg {
-  color: #9a9484;
+.room-panel-tabs button {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  width: 36px;
+  height: 34px;
+  border: 0;
+  border-radius: 8px;
+  padding: 0;
+  background: transparent;
+  color: #8e897b;
+  font-family: var(--font-ui);
+  font-size: 12.5px;
+  font-weight: 650;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.room-panel-tab-unread {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 6px;
+  height: 6px;
+  border: 1px solid var(--warm-800);
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.room-panel-tabs button:hover {
+  color: #d5cfbf;
+}
+
+.room-panel-tabs button[data-active='true'] {
+  background: color-mix(in oklch, var(--warm-700), transparent 18%);
+  color: #f0eadc;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06), 0 3px 10px rgba(0, 0, 0, 0.18);
+}
+
+.room-panel-tabs button:focus-visible {
+  outline: 2px solid var(--focus-border, rgba(255, 255, 255, 0.72));
+  outline-offset: 2px;
 }
 
 .chat-rail-collapse {
@@ -84,6 +132,13 @@
   flex-direction: column;
   gap: 15px;
   padding: 18px 20px;
+}
+
+.room-panel-members {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 18px 16px 24px;
 }
 
 /* Anchor content to the bottom without `justify-content: flex-end`: that would
@@ -129,9 +184,6 @@
   isolation: isolate;
 }
 
-.chat-msg::before { content: ''; position: absolute; z-index: -1; inset: -4px -20px; background: transparent; transition: background 120ms ease; }
-.chat-msg:has(.chat-msg-text:hover)::before, .chat-msg:has(.chat-msg-text:focus-within)::before { background: color-mix(in oklch, var(--control), transparent 65%); }
-
 .chat-msg-avatar {
   flex: none;
   display: flex;
@@ -174,6 +226,15 @@
   white-space: nowrap;
 }
 
+/* Message rows reach 45px into the avatar column to widen the hover target, and
+   being positioned they paint over it. Lift the identity triggers back on top so
+   the avatar and the name stay clickable. */
+.chat-avatar-button,
+.chat-msg-meta .chat-msg-trigger {
+  position: relative;
+  z-index: 1;
+}
+
 .chat-msg-trigger {
   border: 0;
   margin: 0;
@@ -212,6 +273,10 @@ button.chat-msg-author {
 
 .chat-msg-text {
   position: relative;
+  /* Deliberately not an isolated stacking context: the hover toolbar has to be
+     able to paint above the author line, which lives outside this row. The
+     hovered .chat-msg raises the whole group instead, which keeps the row's
+     z-index:-1 highlight behind everything inside it. */
   display: flex;
   min-width: 0;
   align-items: flex-start;
@@ -225,15 +290,100 @@ button.chat-msg-author {
   overflow-wrap: anywhere;
 }
 
+.chat-msg-text::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: -3px -20px;
+  background: transparent;
+  transition: background 120ms ease;
+}
+
+.chat-msg-text[data-group-first='true']::before {
+  top: -25px;
+  left: -45px;
+}
+
+.chat-msg-text:hover::before,
+.chat-msg-text:focus-within::before {
+  background: color-mix(in oklch, var(--control), transparent 65%);
+}
+
+/* A message that names you stays lit with a marker down its edge, so it is
+   findable by scrolling back rather than only at the moment it arrives. The
+   hover and context-menu rules come later and still win, so pointing at it
+   behaves like pointing at any other message. */
+.chat-msg-text.mentions-me::before {
+  background: color-mix(in oklch, var(--green), transparent 90%);
+}
+
+/* The marker spans whatever the tint spans, so on the first message of a group
+   it runs past the author line rather than starting halfway down. */
+.chat-msg-text.mentions-me::after {
+  content: '';
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  left: -20px;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--green);
+}
+
+/* Room above the author line to match the room below the text: without it the
+   tint started flush against the avatar while the bottom kept its padding. */
+.chat-msg-text.mentions-me[data-group-first='true']::before,
+.chat-msg-text.mentions-me[data-group-first='true']::after {
+  top: -30px;
+}
+
+/* While its context menu is open the message stays lit, so it is obvious which
+   message the menu belongs to. */
+.chat-msg-text.is-context::before {
+  background: color-mix(in oklch, var(--accent), transparent 92%);
+}
+
+/* Brief flash after jumping here from the pinned bar. */
+.chat-msg-text.is-highlighted::before {
+  background: color-mix(in oklch, var(--accent), transparent 86%);
+  transition: background 400ms ease;
+}
+
+/* The message body stacks its parts, so reactions land under the text on the
+   left instead of beside it — the same shape direct messages use. */
+.chat-msg-body {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: 4px;
+  justify-items: start;
+}
+
+.chat-msg-body > * { max-width: 100%; }
+
 .chat-msg-content { min-width: 0; flex: 1; }
-.chat-msg-actions { position: absolute; bottom: calc(100% - 4px); right: -16px; z-index: 2; display: flex; overflow: hidden; border: 1px solid rgba(255,255,255,.1); border-radius: 7px; background: var(--warm-800); opacity: 0; transform: translateY(2px); pointer-events: none; transition: opacity 120ms ease, transform 120ms ease; }
+/* Floating pill above the message, matching the context-menu surface: same
+   blur, border and shadow, so hover actions and the right-click menu read as
+   one system. */
+.chat-msg-actions { position: absolute; bottom: calc(100% - 6px); right: -12px; z-index: 2; display: flex; align-items: center; gap: 4px; overflow: visible; padding: 5px; border: 1px solid rgba(255,255,255,.1); border-radius: 16px; background: color-mix(in srgb, var(--warm-800) 94%, transparent); backdrop-filter: blur(20px); box-shadow: 0 16px 40px rgba(0,0,0,.55); opacity: 0; transform: translateY(2px); pointer-events: none; transition: opacity 120ms ease, transform 120ms ease; }
 /* A hovered message must rise above the sticky day divider so its toolbar,
    lifted above the message body, is not covered by the pinned date bubble. */
 .chat-msg:has(.chat-msg-text:hover), .chat-msg:has(.chat-msg-text:focus-within) { z-index: 6; }
 .chat-msg-text:hover .chat-msg-actions, .chat-msg-text:focus-within .chat-msg-actions { opacity: 1; transform: translateY(0); pointer-events: auto; }
-.chat-msg-actions button { display: grid; width: 30px; height: 28px; place-items: center; border: 0; border-radius: 0; background: transparent; color: var(--warm-muted); cursor: pointer; }
-.chat-msg-actions button:hover, .chat-msg-actions button:focus-visible { background: var(--control); color: var(--warm-ink); outline: none; }
-.chat-msg-actions .chat-msg-action-danger:hover, .chat-msg-actions .chat-msg-action-danger:focus-visible { color: oklch(72% .18 28); }
+/* The toolbar of a group's first message floats over the author line, so the
+   author line has to hold it open too — otherwise it vanishes the moment the
+   pointer crosses that band on its way to the toolbar, or after an overlay
+   closes under the pointer there. */
+.chat-msg-meta:hover + .chat-msg-text .chat-msg-actions { opacity: 1; transform: translateY(0); pointer-events: auto; }
+/* An open message menu or reaction picker takes the pointer and the focus out of
+   the row, so :hover alone would hide the toolbar the overlay was opened from —
+   and with it the target the user is about to click. */
+.chat-msg-text.is-context .chat-msg-actions,
+.chat-msg-actions[data-overlay-open='true'] { opacity: 1; transform: translateY(0); pointer-events: auto; }
+.chat-msg-actions > button { display: grid; width: 36px; height: 36px; place-items: center; border: 0; border-radius: 12px; padding: 0; background: transparent; color: var(--warm-muted); cursor: pointer; transition: background 120ms ease, color 120ms ease; }
+.chat-msg-actions-divider { width: 1px; height: 24px; flex: none; margin: 0 2px; background: var(--line); }
+.chat-msg-actions button:hover, .chat-msg-actions button:focus-visible { background: color-mix(in oklch, var(--accent), transparent 86%); color: var(--warm-ink); outline: none; }
+.chat-msg-actions .chat-msg-action-danger:hover, .chat-msg-actions .chat-msg-action-danger:focus-visible { background: color-mix(in oklch, var(--coral), transparent 86%); color: var(--coral); }
 
 .chat-msg-text + .chat-msg-text {
   margin-top: 3px;
@@ -293,14 +443,12 @@ button.chat-msg-author {
   opacity: 0.45;
 }
 
-.chat-msg-text a,
-.lobby-dm-bubble a {
+.chat-msg-text a {
   color: inherit;
   text-decoration: underline;
   text-underline-offset: 2px;
 }
-.chat-msg-text a:hover,
-.lobby-dm-bubble a:hover {
+.chat-msg-text a:hover {
   opacity: 0.85;
 }
 
@@ -331,8 +479,15 @@ button.chat-msg-author {
 }
 
 .chat-rail-compose {
+  position: relative;
   display: flex;
+  flex-direction: column;
   padding: 14px 18px 18px;
+}
+
+.chat-compose-row {
+  display: flex;
+  align-items: stretch;
 }
 
 .chat-rail-input {
@@ -350,6 +505,14 @@ button.chat-msg-author {
   transition: border-color 0.15s ease;
 }
 
+.chat-compose-row .chat-rail-input {
+  padding-left: 8px;
+}
+
+.chat-rail-compose .attachment-upload-root {
+  margin-top: 5px;
+}
+
 .chat-rail-textarea {
   resize: none;
   overflow-y: auto;
@@ -363,8 +526,10 @@ button.chat-msg-author {
   color: #6f6a5c;
 }
 
-.chat-rail-input:focus {
-  border-color: rgba(154, 143, 106, 0.65);
+.chat-rail-input:focus,
+.chat-rail-input:focus-visible {
+  border-color: var(--focus-border, rgba(255, 255, 255, 0.72));
+  box-shadow: none;
 }
 
 /* On narrow screens the rail overlays the room instead of squeezing the grid. */

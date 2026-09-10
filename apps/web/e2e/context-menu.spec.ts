@@ -15,6 +15,9 @@ test('room context menu supports pointer, keyboard navigation, focus restore, an
   await card.click({ button: 'right' });
   await expect(menu).toBeVisible();
   await expect(items.first()).toBeFocused();
+  await expect(menu.getByRole('menuitem', { name: 'Выключить уведомления' })).toBeVisible();
+  await expect(menu.getByRole('menuitem', { name: 'Настройки комнаты' })).toBeVisible();
+  await expect(menu.getByRole('menuitem', { name: 'Удалить из списка' })).toHaveCount(0);
 
   await page.keyboard.press('ArrowDown');
   await expect(items.nth(1)).toBeFocused();
@@ -62,7 +65,7 @@ test('room context menu supports pointer, keyboard navigation, focus restore, an
   await expect(menu).toBeVisible();
 });
 
-test('friend context menu opens from pointer and keyboard in the sidebar', async ({ browser, page }) => {
+test('friend rows open only the direct-message thread and do not expose a context menu', async ({ browser, page }) => {
   const firstLogin = uniqueLogin('friendone');
   const secondLogin = uniqueLogin('friendtwo');
 
@@ -91,19 +94,41 @@ test('friend context menu opens from pointer and keyboard in the sidebar', async
 
     await page.reload();
     const friendRow = page.locator('.lv-row', { hasText: secondLogin }).first();
-    const friendMenu = page.getByRole('menu', { name: `Действия для ${secondLogin}` });
     await expect(friendRow).toBeVisible();
 
     await friendRow.click({ button: 'right' });
-    await expect(friendMenu).toBeVisible();
-    await expect(friendMenu.getByRole('menuitem', { name: 'Открыть сообщения' })).toBeFocused();
-    await page.keyboard.press('Escape');
-    await expect(friendRow).toBeFocused();
-
-    await friendRow.focus();
-    await page.keyboard.press('Shift+F10');
-    await expect(friendMenu.getByRole('menuitem', { name: 'Удалить из друзей' })).toBeVisible();
+    await expect(page.getByRole('menu', { name: `Действия для ${secondLogin}` })).toHaveCount(0);
+    await friendRow.click();
+    await expect(page.getByPlaceholder('Написать сообщение…')).toBeVisible();
   } finally {
     await secondContext.close();
+  }
+});
+
+test('bookmarked room menu can remove the room from the list but cannot open owner settings', async ({ browser, page, baseURL }) => {
+  const ownerLogin = uniqueLogin('roomowner');
+  const memberLogin = uniqueLogin('roommember');
+  await registerViaUi(page, ownerLogin);
+  const roomName = `Shared ${ownerLogin}`;
+  const roomId = await createPermanentRoom(page, roomName);
+
+  const memberContext = await browser.newContext({ baseURL });
+  const member = await memberContext.newPage();
+  try {
+    await registerViaUi(member, memberLogin);
+    const added = await memberContext.request.post('/api/auth/rooms', { data: { code: roomId } });
+    expect(added.ok()).toBe(true);
+    await member.reload();
+
+    const card = member.locator('.lv-card', { hasText: roomName }).first();
+    await expect(card).toBeVisible();
+    await card.click({ button: 'right' });
+    const menu = member.getByRole('menu', { name: `Меню комнаты ${roomName}` });
+    await expect(menu.getByRole('menuitem', { name: 'Удалить из списка' })).toBeVisible();
+    await expect(menu.getByRole('menuitem', { name: 'Настройки комнаты' })).toHaveCount(0);
+    await menu.getByRole('menuitem', { name: 'Удалить из списка' }).click();
+    await expect(card).toHaveCount(0);
+  } finally {
+    await memberContext.close();
   }
 });

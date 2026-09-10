@@ -207,6 +207,12 @@ test('editMessage updates active room message text and maps its edit timestamp',
 
 test('room notification recipients ignore legacy server-side room mute rows', async () => {
   const pool = createFakePool((text, values) => {
+    if (/FROM room_bans/.test(text)) {
+      assert.match(text, /revoked_at IS NULL/);
+      assert.match(text, /expires_at IS NULL OR expires_at > \$3/);
+      assert.deepEqual(values.slice(0, 2), ['room1', ['owner-user', 'bookmark-user']]);
+      return { rows: [], rowCount: 0 };
+    }
     assert.match(text, /FROM room_memberships/);
     assert.match(text, /FROM room_bookmarks/);
     assert.doesNotMatch(text, /notification_room_mutes/);

@@ -1,3 +1,7 @@
+<script lang="ts" module>
+  let contextMenuCounter = 0;
+</script>
+
 <script lang="ts">
   import { onMount, tick } from 'svelte';
   import type { ContextMenuProps } from './types';
@@ -10,11 +14,14 @@
     y,
     ariaLabel,
     restoreFocus = null,
+    padded = true,
+    role = 'menu',
     onClose,
     content
   }: ContextMenuProps = $props();
 
   let panel = $state<HTMLDivElement | null>(null);
+  const overlayId = `context-menu-${++contextMenuCounter}`;
   let left = $state(EDGE_GAP);
   let top = $state(EDGE_GAP);
   let positionGeneration = 0;
@@ -28,7 +35,11 @@
 
   function menuItems(): HTMLElement[] {
     if (!panel) return [];
-    return [...panel.querySelectorAll<HTMLElement>('[role="menuitem"]:not([disabled])')];
+    const itemRole = role === 'listbox' ? 'option' : 'menuitem';
+    return [...panel.querySelectorAll<HTMLElement>(`[role="${itemRole}"]:not([disabled])`)].filter((item) => {
+      const scope = item.parentElement?.closest<HTMLElement>('[role="menu"], [role="listbox"]');
+      return scope === panel;
+    });
   }
 
   function focusItem(index: number): void {
@@ -55,10 +66,18 @@
     if (!open) return;
     const items = menuItems();
     const currentIndex = items.indexOf(document.activeElement as HTMLElement);
+    const active = document.activeElement;
+    const activeElement = active instanceof HTMLElement ? active : null;
+    const ownsNavigation = Boolean(activeElement?.closest(
+      'input, textarea, select, [contenteditable="true"], [role="textbox"], [role="slider"], [role="grid"], [role="tablist"]'
+    ));
+    const activeScope = activeElement?.parentElement?.closest<HTMLElement>('[role="menu"], [role="listbox"]');
 
     if (event.key === 'Escape') {
       event.preventDefault();
       close();
+    } else if (role === 'dialog' || ownsNavigation || (activeScope && activeScope !== panel)) {
+      return;
     } else if (event.key === 'ArrowDown') {
       event.preventDefault();
       focusItem(currentIndex < 0 ? 0 : currentIndex + 1);
@@ -75,13 +94,19 @@
   }
 
   function handlePointerDown(event: PointerEvent): void {
-    if (!open || !panel || panel.contains(event.target as Node)) return;
+    if (!open || !panel || isInsideOwnedOverlay(event.target)) return;
     close(false);
+  }
+
+  function isInsideOwnedOverlay(target: EventTarget | null): boolean {
+    if (!(target instanceof Node)) return false;
+    if (panel?.contains(target)) return true;
+    return target instanceof Element && Boolean(target.closest(`[data-overlay-owner="${overlayId}"]`));
   }
 
   function handleFocusOut(event: FocusEvent): void {
     if (!open || !panel || !(event.relatedTarget instanceof Node)) return;
-    if (!panel.contains(event.relatedTarget)) close(false);
+    if (!isInsideOwnedOverlay(event.relatedTarget)) close(false);
   }
 
   function handleViewportChange(): void {
@@ -89,7 +114,7 @@
   }
 
   function handleViewportScroll(event: Event): void {
-    if (panel && event.target instanceof Node && panel.contains(event.target)) return;
+    if (isInsideOwnedOverlay(event.target)) return;
     handleViewportChange();
   }
 
@@ -119,15 +144,19 @@
   <div
     bind:this={panel}
     class="context-menu-panel"
+    class:context-menu-panel--bare={!padded}
     data-context-menu
-    role="menu"
+    data-overlay-id={overlayId}
+    {role}
     aria-label={ariaLabel}
     tabindex="-1"
     style:left={`${left}px`}
     style:top={`${top}px`}
     onfocusout={handleFocusOut}
   >
-    {@render content({ close })}
+    <div class="context-menu-panel-inner">
+      {@render content({ close })}
+    </div>
   </div>
 {/if}
 
@@ -136,18 +165,37 @@
     position: fixed;
     z-index: 140;
     box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
     min-width: min(244px, calc(100vw - 16px));
     max-width: min(320px, calc(100vw - 16px));
     max-height: calc(100vh - 16px);
     max-height: calc(100dvh - 16px);
+    overflow-x: hidden;
     overflow-y: auto;
-    padding: 6px;
+    overscroll-behavior: contain;
+    padding: 8px;
     border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 18px;
-    background: var(--warm-800);
-    box-shadow:
-      0 24px 60px rgba(0, 0, 0, 0.55),
-      0 2px 0 rgba(255, 255, 255, 0.04) inset;
+    border-radius: 20px;
+    background: color-mix(in srgb, var(--warm-800) 94%, transparent);
+    backdrop-filter: blur(20px);
+    box-shadow: 0 26px 70px rgba(0, 0, 0, 0.62);
+  }
+
+  .context-menu-panel--bare {
+    gap: 0;
+    padding: 0;
+    /* The content owns the rounded corners, so clip anything that overflows
+       them (the profile-card banner). */
+    overflow: hidden;
+  }
+
+  .context-menu-panel-inner {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: inherit;
   }
 
   .context-menu-panel:focus {
@@ -160,14 +208,15 @@
   }
 
   @media (prefers-reduced-motion: no-preference) {
-    .context-menu-panel {
+    .context-menu-panel-inner {
       animation: context-menu-enter 120ms cubic-bezier(0.22, 1, 0.36, 1);
-      transform-origin: top left;
     }
   }
 
+  /* Keep the panel inside its measured viewport bounds for the whole entrance.
+     Movement here would temporarily push edge-aligned menus outside the gap. */
   @keyframes context-menu-enter {
-    from { opacity: 0; transform: scale(0.985); }
-    to { opacity: 1; transform: scale(1); }
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
   }
 </style>

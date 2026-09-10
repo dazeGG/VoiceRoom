@@ -1,6 +1,7 @@
 'use strict';
 
 const webPush = require('web-push');
+const { PLATFORM_CLASSES } = require('@voice-room/shared/platform-class');
 const { cleanPushEndpoint, describePushEndpoint } = require('./push-endpoint');
 
 function describePushError(error) {
@@ -53,11 +54,14 @@ function createPushService({ store, env = process.env, client = webPush, logger 
       subscriptions = await store.listByUserId(userId);
     } catch (error) {
       logger.warn?.({ err: error, userId }, 'Failed to load push subscriptions');
+      if (context.strictFailures) throw error;
       return { enabled: true, sent: 0, removed: 0 };
     }
     let sent = 0;
     let removed = 0;
+    const failures = [];
     await Promise.all(subscriptions.map(async (subscription) => {
+      if (subscription.platformClass === PLATFORM_CLASSES.mobile) return;
       const endpoint = cleanPushEndpoint(subscription.endpoint);
       if (!endpoint) {
         try {
@@ -87,8 +91,12 @@ function createPushService({ store, env = process.env, client = webPush, logger 
           return;
         }
         logger.warn?.({ ...describePushError(error), ...describePushEndpoint(endpoint) }, 'Push delivery failed');
+        failures.push(error);
       }
     }));
+    if (context.strictFailures && failures.length > 0) {
+      throw new AggregateError(failures, 'Push provider delivery failed');
+    }
     return { enabled: true, sent, removed };
   }
 

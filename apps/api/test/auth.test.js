@@ -1,5 +1,6 @@
 'use strict';
 
+const { socketPathForDirectory } = require('./ipc-harness');
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -11,7 +12,7 @@ const { createTestDatabase } = require('./db-harness');
 
 function getSocketPath() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'voice-room-auth-'));
-  return { dir, socketPath: path.join(dir, 'api.sock') };
+  return { dir, socketPath: socketPathForDirectory(dir) };
 }
 
 function waitForHealthz(socketPath, timeoutMs = 5000) {
@@ -308,6 +309,24 @@ test('auth flow: register, session, owned rooms, logout', async (t) => {
     cookie: secondCookie
   });
   assert.equal(tempBookmark.status, 400);
+
+  const ownerRemoval = await request(socketPath, {
+    method: 'DELETE',
+    pathname: `/api/auth/rooms/${room.body.roomId}`,
+    cookie
+  });
+  assert.equal(ownerRemoval.status, 403);
+  assert.equal(ownerRemoval.body.code, 'room_owner');
+
+  const bookmarkRemoval = await request(socketPath, {
+    method: 'DELETE',
+    pathname: `/api/auth/rooms/${room.body.roomId}`,
+    cookie: secondCookie
+  });
+  assert.equal(bookmarkRemoval.status, 200);
+  assert.equal(bookmarkRemoval.body.removed, true);
+  const afterBookmarkRemoval = await request(socketPath, { pathname: '/api/auth/rooms', cookie: secondCookie });
+  assert.deepEqual(afterBookmarkRemoval.body.rooms, []);
 
   // Listing rooms requires a session.
   const roomsAnon = await request(socketPath, { pathname: '/api/auth/rooms' });

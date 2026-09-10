@@ -26,6 +26,8 @@ export interface FriendLastMessage {
 
 export interface Friend {
   user: PublicUser;
+  /** Epoch millis the friendship was established, null for pre-migration rows. */
+  friendsSince: number | null;
   online: boolean;
   unreadCount: number;
   lastMessage: FriendLastMessage | null;

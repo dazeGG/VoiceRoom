@@ -35,7 +35,7 @@ async function makeUser(users, login) {
 }
 
 test('notification preferences default private notifications off and update explicitly', async (t) => {
-  const automaticPresenceLeaseMs = 25;
+  const automaticPresenceLeaseMs = 500;
   const { users, notifications } = await createStores(t, { automaticPresenceLeaseMs });
   const alice = await makeUser(users, 'alice');
 
@@ -43,6 +43,7 @@ test('notification preferences default private notifications off and update expl
     doNotDisturb: false,
     mutedPeerIds: [],
     mutedRoomIds: [],
+    roomLevels: {},
     presenceStatus: 'online',
     presenceStatusAutomatic: false,
     privateNotifications: false

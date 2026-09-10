@@ -36,7 +36,7 @@ function mapInvite(metadata) {
   return {
     roomId: String(metadata.roomId || ''),
     roomName: String(metadata.roomName || ''),
-    status: metadata.status === 'accepted' || metadata.status === 'declined' ? metadata.status : 'pending',
+    status: ['accepted', 'declined', 'expired'].includes(metadata.status) ? metadata.status : 'pending',
     expiresAt: Number(metadata.expiresAt) || null
   };
 }
@@ -52,6 +52,7 @@ function mapMessage(row) {
     editedAt: toMillis(row.edited_at),
     readAt: toMillis(row.read_at),
     invite: mapInvite(row.metadata),
+    replyTo: row.reply_to_message_id ? { messageId: row.reply_to_message_id } : undefined,
     // deletedAt kept internal; callers filter before map
     deletedAt: row.deleted_at ? toMillis(row.deleted_at) : null
   };
@@ -60,6 +61,14 @@ function mapMessage(row) {
 // friendships store the pair ordered so a single row is canonical.
 function orderedPair(a, b) {
   return a < b ? [a, b] : [b, a];
+}
+
+async function lockUserPair(client, a, b) {
+  const [low, high] = orderedPair(a, b);
+  await client.query(
+    `SELECT pg_advisory_xact_lock(hashtext($1))`,
+    [`voice-room:user-pair:${low}:${high}`]
+  );
 }
 
 // Escape LIKE wildcards in user-supplied search terms (we use ESCAPE '\').
@@ -103,7 +112,7 @@ function createFriendStore({ databaseUrl, logger = console, pool } = {}) {
   async function listFriends(userId) {
     const pool = getPool();
     const friendsResult = await pool.query(
-      `SELECT u.*
+      `SELECT u.*, f.created_at AS friends_since
        FROM friendships f
        JOIN users u ON u.id = CASE WHEN f.user_a_id = $1 THEN f.user_b_id ELSE f.user_a_id END
        WHERE f.user_a_id = $1 OR f.user_b_id = $1
@@ -140,6 +149,7 @@ function createFriendStore({ databaseUrl, logger = console, pool } = {}) {
 
     return friendsResult.rows.map((row) => ({
       user: mapPublicUser(row),
+      friendsSince: toMillis(row.friends_since),
       unreadCount: unread.get(row.id) || 0,
       lastMessage: lastMessage.get(row.id) || null
     }));
@@ -177,6 +187,15 @@ function createFriendStore({ databaseUrl, logger = console, pool } = {}) {
       const addressee = userResult.rows[0];
       if (!addressee) return { status: 'not_found' };
       if (addressee.id === requesterId) return { status: 'self' };
+
+      await lockUserPair(client, requesterId, addressee.id);
+
+      // A block in either direction stops the request. The status is the same
+      // for both directions so the sender cannot probe whether they were the
+      // one blocked.
+      if (await isBlockedBetween(requesterId, addressee.id, client)) {
+        return { status: 'blocked' };
+      }
 
       if (await areFriends(requesterId, addressee.id, client)) {
         return { status: 'already_friends', user: mapPublicUser(addressee) };
@@ -296,6 +315,14 @@ function createFriendStore({ databaseUrl, logger = console, pool } = {}) {
 
   async function respondRequest({ userId, requestId, action }) {
     return transaction(getPool(), async (client) => {
+      const candidate = await client.query(
+        `SELECT requester_id FROM friend_requests
+         WHERE id = $1 AND addressee_id = $2 AND status = 'pending'`,
+        [requestId, userId]
+      );
+      if (candidate.rowCount === 0) return { status: 'not_found' };
+
+      await lockUserPair(client, userId, candidate.rows[0].requester_id);
       const result = await client.query(
         `SELECT * FROM friend_requests
          WHERE id = $1 AND addressee_id = $2 AND status = 'pending'
@@ -306,6 +333,13 @@ function createFriendStore({ databaseUrl, logger = console, pool } = {}) {
       if (!request) return { status: 'not_found' };
 
       if (action === 'accept') {
+        if (await isBlockedBetween(userId, request.requester_id, client)) {
+          await client.query(
+            `UPDATE friend_requests SET status = 'cancelled', responded_at = current_timestamp WHERE id = $1`,
+            [requestId]
+          );
+          return { status: 'blocked', requesterId: request.requester_id };
+        }
         await client.query(
           `UPDATE friend_requests SET status = 'accepted', responded_at = current_timestamp WHERE id = $1`,
           [requestId]
@@ -344,6 +378,102 @@ function createFriendStore({ databaseUrl, logger = console, pool } = {}) {
     );
     if (result.rowCount === 0) return { status: 'not_found' };
     return { status: 'removed' };
+  }
+
+  // --- Blocks -------------------------------------------------------------
+
+  // A block is directed, but every enforcement point treats an edge in either
+  // direction as a stop, so this is the single predicate callers should use.
+  async function isBlockedBetween(a, b, client = getPool()) {
+    if (!a || !b || a === b) return false;
+    const result = await client.query(
+      `SELECT 1 FROM user_blocks
+       WHERE (blocker_id = $1 AND blocked_id = $2)
+          OR (blocker_id = $2 AND blocked_id = $1)
+       LIMIT 1`,
+      [a, b]
+    );
+    return result.rowCount > 0;
+  }
+
+  async function listBlockedUserIds(userId, client = getPool()) {
+    const result = await client.query(
+      `SELECT blocked_id FROM user_blocks WHERE blocker_id = $1`,
+      [userId]
+    );
+    return result.rows.map((row) => row.blocked_id);
+  }
+
+  async function listBlockedUsers(userId, client = getPool()) {
+    const result = await client.query(
+      `SELECT u.*
+       FROM user_blocks b
+       JOIN users u ON u.id = b.blocked_id
+       WHERE b.blocker_id = $1
+       ORDER BY lower(coalesce(u.display_name, u.login)), u.id`,
+      [userId]
+    );
+    return result.rows.map(mapPublicUser);
+  }
+
+  // Blocking is a hard reset of the relationship: the friendship goes away and
+  // any pending request in either direction is cancelled, so unblocking later
+  // starts from a clean slate rather than silently restoring contact.
+  async function blockUser({ userId, targetId }) {
+    if (!targetId || userId === targetId) return { status: 'invalid' };
+    return transaction(getPool(), async (client) => {
+      await lockUserPair(client, userId, targetId);
+      const exists = await client.query(`SELECT 1 FROM users WHERE id = $1`, [targetId]);
+      if (exists.rowCount === 0) return { status: 'not_found' };
+
+      const inserted = await client.query(
+        `INSERT INTO user_blocks (blocker_id, blocked_id)
+         VALUES ($1, $2)
+         ON CONFLICT (blocker_id, blocked_id) DO NOTHING`,
+        [userId, targetId]
+      );
+
+      const [low, high] = orderedPair(userId, targetId);
+      const unfriended = await client.query(
+        `DELETE FROM friendships WHERE user_a_id = $1 AND user_b_id = $2`,
+        [low, high]
+      );
+      await client.query(
+        `UPDATE friend_requests
+         SET status = 'cancelled', responded_at = current_timestamp
+         WHERE status = 'pending'
+           AND ((requester_id = $1 AND addressee_id = $2)
+             OR (requester_id = $2 AND addressee_id = $1))`,
+        [userId, targetId]
+      );
+      await client.query(
+        `UPDATE direct_messages
+         SET metadata = jsonb_set(metadata, '{status}', '"expired"'::jsonb, true),
+             edited_at = current_timestamp
+         WHERE metadata->>'kind' = 'room-invite'
+           AND metadata->>'status' = 'pending'
+           AND ((sender_id = $1 AND recipient_id = $2)
+             OR (sender_id = $2 AND recipient_id = $1))`,
+        [userId, targetId]
+      );
+
+      return {
+        status: inserted.rowCount > 0 ? 'blocked' : 'already_blocked',
+        unfriended: unfriended.rowCount > 0
+      };
+    });
+  }
+
+  async function unblockUser({ userId, targetId }) {
+    if (!targetId || userId === targetId) return { status: 'invalid' };
+    return transaction(getPool(), async (client) => {
+      await lockUserPair(client, userId, targetId);
+      const result = await client.query(
+        `DELETE FROM user_blocks WHERE blocker_id = $1 AND blocked_id = $2`,
+        [userId, targetId]
+      );
+      return { status: result.rowCount > 0 ? 'unblocked' : 'not_found' };
+    });
   }
 
   // --- Direct messages ----------------------------------------------------
@@ -397,15 +527,23 @@ function createFriendStore({ databaseUrl, logger = console, pool } = {}) {
     return mapMessage(result.rows[0] || null);
   }
 
-  async function sendMessage({ senderId, recipientId, body, metadata = null }) {
+  async function sendMessage({ senderId, recipientId, body, metadata = null, replyToMessageId = null, beforeUnitOfWork = null, unitOfWork = null }) {
     const id = crypto.randomUUID();
-    const result = await getPool().query(
-      `INSERT INTO direct_messages (id, sender_id, recipient_id, body, created_at, metadata)
-       VALUES ($1, $2, $3, $4, current_timestamp, $5)
-       RETURNING *`,
-      [id, senderId, recipientId, body, metadata ? JSON.stringify(metadata) : '{}']
-    );
-    return mapMessage(result.rows[0]);
+    return transaction(getPool(), async (client) => {
+      if (typeof beforeUnitOfWork === 'function') {
+        const prepared = await beforeUnitOfWork(client);
+        if (prepared?.replay) return { ...prepared.message, idempotencyReplay: true };
+      }
+      const result = await client.query(
+        `INSERT INTO direct_messages (id, sender_id, recipient_id, body, created_at, metadata, reply_to_message_id)
+         VALUES ($1, $2, $3, $4, current_timestamp, $5, $6)
+         RETURNING *`,
+        [id, senderId, recipientId, body, metadata ? JSON.stringify(metadata) : '{}', replyToMessageId]
+      );
+      const message = mapMessage(result.rows[0]);
+      if (typeof unitOfWork === 'function') await unitOfWork(client, message);
+      return message;
+    });
   }
 
   // Only the invited recipient may resolve a pending room invitation; the
@@ -423,6 +561,23 @@ function createFriendStore({ databaseUrl, logger = console, pool } = {}) {
       [messageId, recipientId, status]
     );
     return mapMessage(result.rows[0] || null);
+  }
+
+  // Expires pending invitations for a room. Omitting senderId expires every
+  // sender's invitations, which is what a deleted room needs.
+  async function expirePendingInvites({ senderId = null, roomId }) {
+    const result = await getPool().query(
+      `UPDATE direct_messages
+       SET metadata = jsonb_set(metadata, '{status}', to_jsonb('expired'::text))
+       WHERE ($1::varchar IS NULL OR sender_id = $1)
+         AND metadata->>'kind' = 'room-invite'
+         AND metadata->>'roomId' = $2
+         AND metadata->>'status' = 'pending'
+         AND deleted_at IS NULL
+       RETURNING *`,
+      [senderId, roomId]
+    );
+    return result.rows.map(mapMessage);
   }
 
   // Mark every message from peer -> user as read. Returns the number marked so
@@ -456,9 +611,15 @@ function createFriendStore({ databaseUrl, logger = console, pool } = {}) {
 
   return {
     areFriends,
+    blockUser,
     cancelRequest,
     close,
+    isBlockedBetween,
+    listBlockedUserIds,
+    listBlockedUsers,
+    unblockUser,
     countIncomingRequests,
+    expirePendingInvites,
     getFriendIds,
     getUnreadCounts,
     editMessage,

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Check, X } from '@lucide/svelte';
   import { deriveAvatarAccent, dominantAvatarColor } from '@voice-room/shared/avatar-accent';
+  import { dialogFocusTrap } from '$lib/shared/ui/focus-trap';
   import Avatar from '../Avatar/Avatar.svelte';
   import type { AvatarCropDialogProps } from './types';
 
@@ -183,13 +184,20 @@
 
 {#if open}
   <div class="crop-overlay" role="presentation" onclick={onOverlayClick}>
-    <div class="crop-dialog" role="dialog" aria-modal="true" aria-labelledby="avatarCropTitle">
+    <div
+      class="crop-dialog"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="avatarCropTitle"
+      tabindex="-1"
+      use:dialogFocusTrap={{ enabled: open }}
+    >
       <header class="crop-head">
         <div>
           <h2 id="avatarCropTitle">{title}</h2>
           <p>Перетащите изображение, масштабируйте ползунком или колесом</p>
         </div>
-        <button type="button" aria-label="Закрыть" onclick={onClose} disabled={saving}><X size={18} /></button>
+        <button type="button" aria-label="Закрыть" onclick={onClose} disabled={saving} data-dialog-initial-focus><X size={18} /></button>
       </header>
 
       <div class="crop-body">

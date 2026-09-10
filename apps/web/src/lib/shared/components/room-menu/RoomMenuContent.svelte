@@ -1,38 +1,55 @@
 <script lang="ts">
-  import { Bell, BellOff, Copy, Link, Settings, UserRoundPlus } from '@lucide/svelte';
-  import { Avatar, Ellipsis, PopoverDivider, PopoverMenuItem } from '$lib/shared/ui';
+  import { Bell, BellOff, Copy, Link, Settings, Trash2, UserRoundPlus } from '@lucide/svelte';
+  import type { RoomRelationship } from '$lib/api/auth';
+  import type { Friend } from '$lib/api/friends';
+  import { removeRoomFromList } from '$lib/api/auth';
+  import { Avatar, Ellipsis, PopoverDivider, PopoverMenuItem, PopoverMenuLabel, PopoverSubmenu } from '$lib/shared/ui';
   import { iconMd } from '$lib/shared/ui/icons';
   import { copyText } from '$lib/shared/utils/clipboard';
   import {
     isRoomNotificationsMuted,
     updateRoomNotificationsMuted
   } from '$lib/shared/notifications/preferences.svelte';
+  import RoomInviteFriendList from './RoomInviteFriendList.svelte';
 
   let {
     roomId,
     name,
     avatarUrl = null,
+    relationship = 'owner',
+    friends,
+    presentUserIds = new Set<string>(),
     close,
     canClose,
     onOpenSettings,
     inviteContent,
+    onRoomsChanged,
     onToast,
     showNotificationControls = true
   } = $props<{
     roomId: string;
     name: string;
     avatarUrl?: string | null;
+    relationship?: RoomRelationship;
+    friends?: Friend[];
+    presentUserIds?: Set<string>;
     close: (restoreFocus?: boolean) => void;
     canClose?: (roomId: string) => boolean;
     onOpenSettings?: () => void;
     inviteContent?: import('svelte').Snippet<[close: () => void]>;
+    onRoomsChanged?: () => void;
     onToast?: (message: string) => void;
     showNotificationControls?: boolean;
   }>();
 
   const roomMuted = $derived(isRoomNotificationsMuted(roomId));
+  const isOwner = $derived(relationship === 'owner');
   let muteSaving = $state(false);
-  let inviteOpen = $state(false);
+  let removeSaving = $state(false);
+
+  function stillCurrent(targetRoomId: string): boolean {
+    return canClose?.(targetRoomId) ?? true;
+  }
 
   function openSettings(): void {
     close(false);
@@ -43,13 +60,13 @@
     const targetRoomId = roomId;
     try {
       await copyText(value);
-      if (!(canClose?.(targetRoomId) ?? true)) return;
+      if (!stillCurrent(targetRoomId)) return;
       onToast?.(successMessage);
     } catch {
-      if (!(canClose?.(targetRoomId) ?? true)) return;
+      if (!stillCurrent(targetRoomId)) return;
       onToast?.('Не удалось скопировать');
     }
-    close();
+    if (stillCurrent(targetRoomId)) close();
   }
 
   async function toggleRoomMute(): Promise<void> {
@@ -60,16 +77,32 @@
     const nextMuted = !roomMuted;
     try {
       await updateRoomNotificationsMuted(targetRoomId, nextMuted);
-      if (!(canClose?.(targetRoomId) ?? true)) return;
-      close();
+      if (stillCurrent(targetRoomId)) close();
     } catch {
-      if (!(canClose?.(targetRoomId) ?? true)) return;
-      onToast?.('Не удалось изменить уведомления');
+      if (stillCurrent(targetRoomId)) onToast?.('Не удалось изменить уведомления');
     } finally {
       muteSaving = false;
     }
   }
 
+  async function removeBookmark(): Promise<void> {
+    if (isOwner || removeSaving) return;
+    removeSaving = true;
+    const targetRoomId = roomId;
+    try {
+      await removeRoomFromList(targetRoomId);
+      if (!stillCurrent(targetRoomId)) return;
+      onToast?.(`Комната «${name}» удалена из списка`);
+      close(false);
+      onRoomsChanged?.();
+    } catch (error) {
+      if (stillCurrent(targetRoomId)) {
+        onToast?.(error instanceof Error && error.message ? error.message : 'Не удалось удалить комнату из списка');
+      }
+    } finally {
+      removeSaving = false;
+    }
+  }
 </script>
 
 <div class="room-menu-content" data-room-menu-content>
@@ -82,16 +115,29 @@
   </div>
 
   <PopoverDivider />
+  <PopoverMenuLabel text="Комната" />
 
   {#if inviteContent}
-    <div class="room-menu-submenu" role="group" onpointerenter={() => (inviteOpen = true)} onpointerleave={() => (inviteOpen = false)}>
-      <PopoverMenuItem label="Позвать друга" showChevron onclick={() => (inviteOpen = true)}>
-        {#snippet icon()}<UserRoundPlus {...iconMd} aria-hidden="true" />{/snippet}
-      </PopoverMenuItem>
-      {#if inviteOpen}
-        <div class="room-menu-invite" role="menu" aria-label="Позвать друга">{@render inviteContent(close)}</div>
-      {/if}
-    </div>
+    <PopoverSubmenu label="Пригласить" ariaLabel={`Позвать друга в ${name}`}>
+      {#snippet icon()}<UserRoundPlus {...iconMd} aria-hidden="true" />{/snippet}
+      {#snippet content()}{@render inviteContent(close)}{/snippet}
+    </PopoverSubmenu>
+  {:else if friends}
+    <PopoverSubmenu label="Пригласить" ariaLabel={`Позвать друга в ${name}`}>
+      {#snippet icon()}<UserRoundPlus {...iconMd} aria-hidden="true" />{/snippet}
+      {#snippet content({ close: closeSubmenu })}
+        <RoomInviteFriendList
+          {friends}
+          {roomId}
+          {presentUserIds}
+          {onToast}
+          close={() => {
+            closeSubmenu();
+            close();
+          }}
+        />
+      {/snippet}
+    </PopoverSubmenu>
   {/if}
 
   <PopoverMenuItem label="Скопировать код" onclick={() => void copyValue(roomId, 'Код скопирован')}>
@@ -107,7 +153,6 @@
 
   {#if showNotificationControls}
     <PopoverDivider />
-
     <PopoverMenuItem
       label={roomMuted ? 'Включить уведомления' : 'Выключить уведомления'}
       onclick={() => void toggleRoomMute()}
@@ -119,62 +164,29 @@
     </PopoverMenuItem>
   {/if}
 
-  {#if onOpenSettings}
-    <PopoverDivider />
+  <PopoverDivider />
+  {#if isOwner && onOpenSettings}
     <PopoverMenuItem label="Настройки комнаты" onclick={openSettings}>
       {#snippet icon()}<Settings {...iconMd} aria-hidden="true" />{/snippet}
     </PopoverMenuItem>
+  {:else if !isOwner}
+    <PopoverMenuItem label="Удалить из списка" variant="danger" disabled={removeSaving} onclick={() => void removeBookmark()}>
+      {#snippet icon()}<Trash2 {...iconMd} aria-hidden="true" />{/snippet}
+    </PopoverMenuItem>
   {/if}
-
 </div>
 
 <style>
   .room-menu-content {
-    width: min(264px, calc(100vw - 28px));
+    display: flex;
+    width: min(286px, calc(100vw - 28px));
     max-width: 100%;
-  }
-
-  .room-menu-head {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 10px 10px 12px;
-  }
-
-  .room-menu-info {
-    display: flex;
-    flex: 1;
-    min-width: 0;
     flex-direction: column;
-    gap: 3px;
+    gap: 2px;
   }
 
-  .room-menu-submenu { position: relative; }
-  .room-menu-submenu::after { content: ''; position: absolute; top: 0; left: 100%; width: 10px; height: 100%; }
-  .room-menu-invite {
-    position: absolute;
-    top: -6px;
-    left: calc(100% + 10px);
-    z-index: 4;
-    min-width: 244px;
-    border: 1px solid rgba(255,255,255,.1);
-    border-radius: 16px;
-    padding: 6px;
-    background: var(--warm-800);
-    box-shadow: 0 24px 60px rgba(0,0,0,.48);
-  }
-  .room-menu-invite::before {
-    content: '';
-    position: absolute;
-    top: 20px;
-    left: -5px;
-    width: 9px;
-    height: 9px;
-    border-bottom: 1px solid rgba(255,255,255,.1);
-    border-left: 1px solid rgba(255,255,255,.1);
-    background: var(--warm-800);
-    transform: rotate(45deg);
-  }
+  .room-menu-head { display: flex; align-items: center; gap: 12px; padding: 10px 10px 12px; }
+  .room-menu-info { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 3px; }
 
   :global(.room-menu-name) {
     color: var(--warm-ink, #ece7d9);

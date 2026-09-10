@@ -1,0 +1,232 @@
+name: voiceroom-g02-ci
+
+services:
+  deps:
+    build:
+      context: .
+      target: deps
+    command: npm ci
+    working_dir: /app
+    volumes:
+      - .:/app
+      - node_modules:/app/node_modules
+      - api_node_modules:/app/apps/api/node_modules
+      - web_node_modules:/app/apps/web/node_modules
+      - shared_node_modules:/app/packages/shared/node_modules
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: voice_room_ci
+      POSTGRES_USER: voice_room
+      POSTGRES_PASSWORD: voice_room_ci
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U voice_room -d voice_room_ci"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    ports:
+      - "127.0.0.1:55439:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+
+  livekit:
+    image: livekit/livekit-server:v1.13.2
+    command: --dev --bind 0.0.0.0 --node-ip 127.0.0.1
+    environment:
+      LIVEKIT_KEYS: "devkey: devsecret"
+    ports:
+      - "127.0.0.1:7880:7880"
+      - "127.0.0.1:7881:7881"
+      - "127.0.0.1:7882:7882/udp"
+
+  livekit-gate:
+    build:
+      context: .
+      target: deps
+    command: node apps/api/src/domains/admission/livekit-auth-gate-service.js
+    working_dir: /app
+    depends_on:
+      deps:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      livekit:
+        condition: service_started
+    environment:
+      DATABASE_URL: postgres://voice_room:voice_room_ci@postgres:5432/voice_room_ci
+      LIVEKIT_GATE_SECRET: ci-livekit-gate-secret-at-least-32-bytes
+      LIVEKIT_INTERNAL_URL: ws://livekit:7880
+    ports:
+      - "127.0.0.1:7890:3080"
+    volumes:
+      - .:/app
+      - node_modules:/app/node_modules
+      - api_node_modules:/app/apps/api/node_modules
+      - web_node_modules:/app/apps/web/node_modules
+      - shared_node_modules:/app/packages/shared/node_modules
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3080/readyz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 2s
+      timeout: 3s
+      retries: 45
+
+  media-init:
+    build:
+      context: .
+      target: api
+    user: root
+    command: ["sh", "-c", "mkdir -p /data/media && chown node:node /data/media && chmod 0700 /data/media"]
+    volumes:
+      - media:/data/media
+
+  media-processing:
+    build:
+      context: .
+      target: worker
+    depends_on:
+      api:
+        condition: service_healthy
+      media-init:
+        condition: service_completed_successfully
+    environment:
+      NODE_ENV: test
+      VOICE_ROOM_WORKER: media-processing
+      DATABASE_URL: postgres://voice_room:voice_room_ci@postgres:5432/voice_room_ci
+      MEDIA_STORAGE_DIR: /data/media
+      MEDIA_PROCESSING_CLAIM_ENABLED: "true"
+    volumes:
+      - media:/data/media
+
+  media-maintenance:
+    build:
+      context: .
+      target: worker
+    depends_on:
+      api:
+        condition: service_healthy
+      media-init:
+        condition: service_completed_successfully
+    environment:
+      NODE_ENV: test
+      VOICE_ROOM_WORKER: media-maintenance
+      DATABASE_URL: postgres://voice_room:voice_room_ci@postgres:5432/voice_room_ci
+      MEDIA_STORAGE_DIR: /data/media
+      MEDIA_MAINTENANCE_CLAIM_ENABLED: "true"
+    volumes:
+      - media:/data/media
+
+  media-reconciliation:
+    build:
+      context: .
+      target: worker
+    depends_on:
+      api:
+        condition: service_healthy
+      media-init:
+        condition: service_completed_successfully
+    environment:
+      NODE_ENV: test
+      VOICE_ROOM_WORKER: media-reconciliation
+      DATABASE_URL: postgres://voice_room:voice_room_ci@postgres:5432/voice_room_ci
+      MEDIA_STORAGE_DIR: /data/media
+      MEDIA_RECONCILIATION_CLAIM_ENABLED: "true"
+    volumes:
+      - media:/data/media
+
+  api:
+    build:
+      context: .
+      target: deps
+    user: node
+    command: npm --workspace @voice-room/api run dev
+    working_dir: /app
+    depends_on:
+      deps:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      livekit:
+        condition: service_started
+      livekit-gate:
+        condition: service_started
+      media-init:
+        condition: service_completed_successfully
+    environment:
+      NODE_ENV: test
+      HOST: 0.0.0.0
+      PORT: 3000
+      DATABASE_URL: postgres://voice_room:voice_room_ci@postgres:5432/voice_room_ci
+      LIVEKIT_URL: ws://livekit:7880
+      LIVEKIT_INTERNAL_URL: ws://livekit:7880
+      LIVEKIT_GATE_PUBLIC_URL: ws://voice-gate.test:7890
+      LIVEKIT_GATE_SECRET: ci-livekit-gate-secret-at-least-32-bytes
+      LIVEKIT_API_KEY: devkey
+      LIVEKIT_API_SECRET: devsecret
+      ROOM_CREATE_POW_DIFFICULTY: 0
+      ROOM_CREATE_RATE_LIMIT: 0
+      TRUST_PROXY: "false"
+      UPLOADS_DIR: /data/uploads
+      MEDIA_STORAGE_DIR: /data/media
+      MEDIA_MIN_FREE_BYTES: 1
+      CAPABILITY_DESIRED: '{"historyCursor":true,"mediaRead":true,"mediaUploads":true}'
+      CAPABILITY_READY_BINARY: api.history.v1,web.history.v1,api.mediaRead.v1,web.mediaRead.v1,api.mediaUpload.v1,web.mediaUpload.v1
+      CAPABILITY_READY_SCHEMA: G24,G73
+      CAPABILITY_READY_INDEX: G24,G73,G76
+      CAPABILITY_READY_CONFIG: cursor.hmac,privateStorage.G74,mediaLimits.G75
+      CAPABILITY_READY_API: G26,G27,G75,G76,G81,G82
+      CAPABILITY_READY_WEB: G28,G29,G83,G84
+      CAPABILITY_READY_VISIBILITY: G23
+      CAPABILITY_READY_WORKER: media-processing.G77,media-maintenance.G78,media-reconciliation.G79,media-pressure.G80
+      CAPABILITY_READY_INTERNAL: internal.attachmentBinding
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - .:/app
+      - node_modules:/app/node_modules
+      - api_node_modules:/app/apps/api/node_modules
+      - web_node_modules:/app/apps/web/node_modules
+      - shared_node_modules:/app/packages/shared/node_modules
+      - uploads:/data/uploads
+      - media:/data/media
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000/api/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 2s
+      timeout: 3s
+      retries: 45
+
+  web:
+    build:
+      context: .
+      target: deps
+    command: sh -c "npx svelte-kit sync && npm run build && npm run preview -- --host 0.0.0.0 --port 5180"
+    working_dir: /app/apps/web
+    depends_on:
+      deps:
+        condition: service_completed_successfully
+      api:
+        condition: service_healthy
+    environment:
+      VITE_DEV_HOST: 0.0.0.0
+      VITE_DEV_API_TARGET: http://api:3000
+    ports:
+      - "127.0.0.1:5180:5180"
+    volumes:
+      - .:/app
+      - node_modules:/app/node_modules
+      - api_node_modules:/app/apps/api/node_modules
+      - web_node_modules:/app/apps/web/node_modules
+      - shared_node_modules:/app/packages/shared/node_modules
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:5180').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 2s
+      timeout: 3s
+      retries: 45
+
+volumes:
+  node_modules:
+  api_node_modules:
+  web_node_modules:
+  shared_node_modules:
+  uploads:
+  media:

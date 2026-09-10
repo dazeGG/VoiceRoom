@@ -26,9 +26,8 @@
   --blue: oklch(71% 0.17 250);
   --coral: oklch(64% 0.22 20);
   --amber: oklch(82% 0.17 85);
-  --focus-border: color-mix(in oklch, var(--green), var(--line) 52%);
-  --focus-ring: color-mix(in oklch, var(--ink), transparent 68%);
   --focus-border: rgba(255, 255, 255, 0.72);
+  --focus-ring: color-mix(in oklch, var(--ink), transparent 68%);
   --shadow: 0 24px 70px oklch(6% 0.02 92 / 0.46);
   --shadow-glow: 0 10px 32px var(--accent-glow);
   --radius-sm: 8px;
@@ -65,6 +64,17 @@
   --warm-muted: #a39c8a;
   --warm-muted-dim: #948d7c;
   --warm-faint: #7d7666;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
 }
 
 * {

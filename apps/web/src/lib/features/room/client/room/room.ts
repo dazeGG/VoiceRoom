@@ -33,6 +33,7 @@ import {
 import {
   connectLiveKitRoom,
   disconnectLiveKitRoom,
+  syncAuthoritativeScreenPresence,
   syncLiveKitParticipantById,
   syncLiveKitParticipants
 } from '../services/livekit-service';
@@ -59,6 +60,15 @@ import {
   subscribeRoomVoice
 } from '$lib/features/home/model/room-realtime';
 import { applyRoomDeleted, applyRoomUpdated } from './lifecycle';
+import {
+  cancelRoomRecovery,
+  notifyRoomAppConnection,
+  notifyRoomNetworkOffline,
+  notifyRoomNetworkOnline,
+  notifyRoomSnapshotApplied,
+  notifyLiveKitReconciled,
+  startRoomRecovery
+} from '../recovery/room-recovery';
 
 type RoomEntryGateResult = 'authenticated' | 'anonymous' | 'failure';
 
@@ -309,12 +319,22 @@ async function performJoinRoom(generation: number): Promise<void> {
         console.error('Voice realtime handler failed', err);
       });
     });
+    const realtime = getAppRealtime();
+    startRoomRecovery(realtime.getConnectionEpoch(), realtime.isConnected());
     // Surface WS drops in the status pill; the snapshot that follows the
     // automatic re-join flips it back to 'connected'.
-    const detachConnState = getAppRealtime().onStateChange((connected) => {
+    const detachConnState = realtime.onStateChange((connected, appEpoch) => {
       setServerConnectionStatus(connected ? 'connecting' : 'reconnecting');
+      notifyRoomAppConnection(connected, appEpoch);
     });
+    const handleOffline = () => notifyRoomNetworkOffline();
+    const handleOnline = () => notifyRoomNetworkOnline();
+    window.addEventListener('offline', handleOffline);
+    window.addEventListener('online', handleOnline);
     state.voiceRealtimeTeardown = () => {
+      cancelRoomRecovery();
+      window.removeEventListener('offline', handleOffline);
+      window.removeEventListener('online', handleOnline);
       detachConnState();
       detachVoiceEvents();
     };
@@ -329,6 +349,7 @@ async function performJoinRoom(generation: number): Promise<void> {
 
     const connected = await connectLiveKitRoom(name, isCurrent);
     if (!connected || !isCurrent()) return;
+    notifyLiveKitReconciled();
     state.joined = true;
     setConnectedVoiceRoom(state.roomId);
     void syncDesktopGlobalHotkeys(true);
@@ -374,7 +395,7 @@ async function performJoinRoom(generation: number): Promise<void> {
 function formatJoinError(error: unknown): string {
   const message = errorMessage(error);
   if (/signal connection|failed to fetch/i.test(message)) {
-    return 'LiveKit недоступен: проверьте LIVEKIT_URL=ws://127.0.0.1:7880 и перезапустите VoiceRoom';
+    return 'LiveKit недоступен: проверьте LIVEKIT_GATE_PUBLIC_URL и перезапустите VoiceRoom';
   }
   return message || 'Не удалось подключиться';
 }
@@ -411,6 +432,7 @@ async function handleVoiceRealtimeEvent(event: RealtimeEvent): Promise<void> {
       // may carry a stale server copy (e.g. changed while reconnecting), so keep them.
       updateParticipant({
         ...localPeer,
+        screenAuthoritative: true,
         deafened: state.outputMuted,
         isLocal: true,
         muted: state.muted,
@@ -418,10 +440,16 @@ async function handleVoiceRealtimeEvent(event: RealtimeEvent): Promise<void> {
       });
     }
     for (const peer of remotePeers) {
-      createParticipant(peer);
+      syncAuthoritativeScreenPresence(peer.id, Boolean(peer.screen));
+      createParticipant({ ...peer, screenAuthoritative: true });
     }
     syncLiveKitParticipants(state.livekitRoom);
     refreshParticipantState();
+    notifyRoomSnapshotApplied({
+      appEpoch: getAppRealtime().getConnectionEpoch(),
+      active: snapshot.mode === 'active',
+      hasLocalPeer: Boolean(localPeer)
+    });
     if (state.joined) postState().catch(() => {});
     return;
   }
@@ -454,7 +482,7 @@ async function handleVoiceRealtimeEvent(event: RealtimeEvent): Promise<void> {
 
   if (event.type === 'room.peer.joined') {
     if (event.payload.peer?.id) state.serverPeerIds.add(event.payload.peer.id);
-    createParticipant(event.payload.peer);
+    createParticipant({ ...event.payload.peer, screenAuthoritative: true });
     syncLiveKitParticipantById(event.payload.peer?.id);
     playPeerJoinCue(event.payload.peer?.id);
     refreshParticipantState();
@@ -472,7 +500,8 @@ async function handleVoiceRealtimeEvent(event: RealtimeEvent): Promise<void> {
   }
 
   if (event.type === 'room.peer.updated') {
-    updateParticipant(event.payload.peer);
+    syncAuthoritativeScreenPresence(event.payload.peer.id, Boolean(event.payload.peer.screen));
+    updateParticipant({ ...event.payload.peer, screenAuthoritative: Object.hasOwn(event.payload.peer, 'screen') });
     return;
   }
 
@@ -495,6 +524,7 @@ async function handleVoiceRealtimeEvent(event: RealtimeEvent): Promise<void> {
 
 export function leaveRoom(): void {
   joinAttemptGeneration += 1;
+  cancelRoomRecovery();
   void syncDesktopGlobalHotkeys(false);
   if (!state.joined && !state.localStream && !state.localScreenStream && !state.connecting && !voiceJoinSent && !state.voiceRealtimeTeardown) return;
 

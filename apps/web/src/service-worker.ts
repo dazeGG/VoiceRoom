@@ -8,12 +8,25 @@ type PushPayload = {
   tag?: string;
   url?: string;
   dedupeKey?: string;
+  notificationId?: string;
+  revision?: number;
   type?: string;
   expiresAt?: number;
 };
 
+function serviceWorkerRunsOnMobile(): boolean {
+  const nav = self.navigator as Navigator & { userAgentData?: { mobile?: boolean } };
+  if (typeof nav.userAgentData?.mobile === 'boolean') return nav.userAgentData.mobile;
+  const userAgent = nav.userAgent || '';
+  const platform = nav.platform || '';
+  const maxTouchPoints = Number.isFinite(nav.maxTouchPoints) ? Number(nav.maxTouchPoints) : 0;
+  return /android|iphone|ipod|ipad|windows phone|mobile/i.test(userAgent) ||
+    (/^MacIntel$/i.test(platform) && maxTouchPoints > 1);
+}
+
 self.addEventListener('push', (event) => {
   event.waitUntil((async () => {
+    if (serviceWorkerRunsOnMobile()) return;
     const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
     if (windows.some((client) => client.visibilityState === 'visible' && client.focused)) return;
     let payload: PushPayload = {};
@@ -25,7 +38,7 @@ self.addEventListener('push', (event) => {
     if (Number.isFinite(payload.expiresAt) && Number(payload.expiresAt) <= Date.now()) return;
     await self.registration.showNotification(payload.title || 'VoiceRoom', {
       body: payload.body || '',
-      data: { url: payload.url || '/', dedupeKey: payload.dedupeKey, type: payload.type },
+      data: { url: payload.url || '/', dedupeKey: payload.dedupeKey, notificationId: payload.notificationId, revision: payload.revision, type: payload.type },
       icon: '/voiceroom-icon.svg',
       tag: payload.tag || payload.dedupeKey || 'voice-room'
     });

@@ -194,7 +194,7 @@ body[data-lobby-embedded="true"] .room-embedded-shell .topbar {
 
 @media (min-width: 901px) {
   body[data-chat-open="true"] .room-layout {
-    padding-right: var(--chat-rail-width);
+    padding-right: var(--room-panel-width);
   }
 }
 

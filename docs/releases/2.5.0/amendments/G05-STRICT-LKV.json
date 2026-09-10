@@ -1,0 +1,90 @@
+{
+  "schemaVersion": 1,
+  "release": "2.5.0",
+  "goal": "G05",
+  "status": "APPROVED_AMENDMENT",
+  "selectedMechanism": "external-auth-gate",
+  "decisionSource": {
+    "blockedExperiment": "G05 baseline proof recorded BLOCKED_FOR_AMENDMENT for standard LiveKit JWT same-token replay",
+    "userSelection": "option-1 external auth-gate",
+    "selectedAt": "2026-07-20"
+  },
+  "canonicalDigests": {
+    "plan": "sha256:faeb5d27f9315e43fef658f1196236e0339e82a90491e3079d1a4c6ba5c16057",
+    "spec": "sha256:bfc40ac5f1ad5fdc14c6c480f0c4d2591048f8fdbe4e70e4e4d6ea261bcef98f"
+  },
+  "digestRefresh": {
+    "recordedAt": "2026-08-07T00:00:00.000Z",
+    "reason": "Canonical documents recorded the user-authorized consolidated develop-PR shape, live readiness correction and generalized evidence producer. The approved strict external-auth-gate mechanism, invariants and hostile matrix are unchanged.",
+    "scopeAmendment": "docs/releases/2.5.0/amendments/CONSOLIDATED-INTEGRATION.json"
+  },
+  "approvals": [
+    {
+      "role": "Planner",
+      "verdict": "APPROVE",
+      "basis": "The amendment preserves strict-only LKV scope, blocks successors before green restarted G05 and names a bounded future implementation surface."
+    },
+    {
+      "role": "Architect",
+      "verdict": "APPROVE",
+      "basis": "The external auth-gate is the minimal self-hosted topology that can re-check authoritative PostgreSQL state before LiveKit admission."
+    },
+    {
+      "role": "Critic",
+      "verdict": "APPROVE",
+      "basis": "The amendment rejects bounded replay, implicit provider changes, positive-cache bypasses and successor start before proof."
+    }
+  ],
+  "boundedReplayAccepted": false,
+  "successorStartAllowedBeforeGreenG05": false,
+  "invariants": {
+    "publicWssBoundary": "sole public WSS gate",
+    "livekitInternalPort": "7880 internal",
+    "guestIdentity": "account id/room-scoped guest UUID/IP ban-only",
+    "gateCredential": "separate signed gate credential",
+    "linearization": "PostgreSQL linearization with epoch/no positive cache",
+    "availabilityPolicy": "security>availability",
+    "revokeOrdering": "revoke commit before RemoveParticipant/success"
+  },
+  "hostileTestMatrix": [
+    "stolen-token",
+    "restart",
+    "partition",
+    "clock-skew",
+    "concurrent-mint-revoke",
+    "leave",
+    "ban",
+    "explicit-revoke",
+    "guest-ip-ban-only"
+  ],
+  "futureCatalogImpacts": {
+    "G47": {
+      "addedWritablePaths": [
+        "apps/api/src/domains/admission/livekit-auth-gate-service.js",
+        "apps/api/src/domains/admission/gate-credential-signer.js",
+        "config/livekit/external-auth-gate.v1.json"
+      ],
+      "requiredTests": [
+        "approved external auth-gate topology",
+        "closed gate-on-store-uncertainty",
+        "guest IP-ban-only identity"
+      ]
+    },
+    "G48": {
+      "addedWritablePaths": [
+        "apps/api/src/domains/admission/livekit-auth-gate-service.js",
+        "apps/api/src/domains/admission/gate-credential-signer.js"
+      ],
+      "addedReadOnlyPaths": [
+        "config/livekit/external-auth-gate.v1.json",
+        "docker-compose.lkv.yml"
+      ],
+      "requiredTests": [
+        "stolen gate credential",
+        "internal 7880 direct-connect rejection",
+        "fail closed on gate/controller uncertainty"
+      ]
+    }
+  },
+  "restartRule": "Restart G05 from amended green develop; no G06 or affected successor may start before restarted G05 is green."
+}

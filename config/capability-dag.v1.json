@@ -1,0 +1,758 @@
+{
+  "contract": "voice-room.capabilities/v1",
+  "schemaVersion": 1,
+  "publicKeys": [
+    {
+      "key": "historyCursor",
+      "owner": "platform.capabilities",
+      "requires": {
+        "binary": [
+          "api.history.v1",
+          "web.history.v1"
+        ],
+        "schema": [
+          "G24"
+        ],
+        "index": [
+          "G24"
+        ],
+        "config": [
+          "cursor.hmac"
+        ],
+        "api": [
+          "G26",
+          "G27"
+        ],
+        "web": [
+          "G28",
+          "G29"
+        ],
+        "visibility": [
+          "G23"
+        ],
+        "worker": [],
+        "internal": []
+      },
+      "activation": {
+        "goal": "G42",
+        "checkpoint": "messaging"
+      },
+      "safeRead": "history with message writes and claims stopped",
+      "rollback": {
+        "public": false,
+        "operators": [
+          "op.message.write",
+          "op.message.dispatch.claim"
+        ]
+      },
+      "dependsOn": []
+    },
+    {
+      "key": "readCursor",
+      "owner": "platform.capabilities",
+      "requires": {
+        "binary": [
+          "api.read.v1",
+          "web.read.v1"
+        ],
+        "schema": [
+          "G25"
+        ],
+        "index": [
+          "G25"
+        ],
+        "config": [
+          "cursor.hmac"
+        ],
+        "api": [
+          "G30"
+        ],
+        "web": [
+          "G31"
+        ],
+        "visibility": [
+          "G23"
+        ],
+        "worker": [],
+        "internal": []
+      },
+      "activation": {
+        "goal": "G42",
+        "checkpoint": "messaging"
+      },
+      "safeRead": "history GET with read writes stopped",
+      "rollback": {
+        "public": false,
+        "operators": [
+          "op.readCursor.write"
+        ]
+      },
+      "dependsOn": [
+        "historyCursor"
+      ]
+    },
+    {
+      "key": "replies",
+      "owner": "messaging",
+      "requires": {
+        "binary": [
+          "shared.reply.v1",
+          "api.reply.v1",
+          "web.reply.v1"
+        ],
+        "schema": [
+          "G32"
+        ],
+        "index": [
+          "G32"
+        ],
+        "config": [],
+        "api": [
+          "G33"
+        ],
+        "web": [
+          "G34"
+        ],
+        "visibility": [
+          "G23"
+        ],
+        "worker": [],
+        "internal": [
+          "internal.idempotentSend",
+          "internal.messageDelivery"
+        ]
+      },
+      "activation": {
+        "goal": "G42",
+        "checkpoint": "messaging"
+      },
+      "safeRead": "existing reply projection with writes stopped",
+      "rollback": {
+        "public": false,
+        "operators": [
+          "op.reply.write"
+        ]
+      },
+      "dependsOn": [
+        "historyCursor"
+      ]
+    },
+    {
+      "key": "membership",
+      "owner": "membership",
+      "requires": {
+        "binary": [
+          "api.membership.v1",
+          "web.membership.v1"
+        ],
+        "schema": [
+          "G43"
+        ],
+        "index": [
+          "G43",
+          "G45"
+        ],
+        "config": [
+          "strictCredential.G05"
+        ],
+        "api": [
+          "G44",
+          "G45",
+          "G47",
+          "G48",
+          "G49"
+        ],
+        "web": [
+          "G46"
+        ],
+        "visibility": [
+          "membership.admission"
+        ],
+        "worker": [],
+        "internal": [
+          "internal.strictCredential"
+        ]
+      },
+      "activation": {
+        "goal": "G50",
+        "checkpoint": "membership"
+      },
+      "safeRead": "directory and roster with joins and mints stopped",
+      "rollback": {
+        "public": false,
+        "operators": [
+          "op.membership.join",
+          "op.membership.credentialMint"
+        ]
+      },
+      "dependsOn": []
+    },
+    {
+      "key": "engagement",
+      "owner": "engagement",
+      "requires": {
+        "binary": [
+          "shared.engagement.v1",
+          "api.engagement.v1",
+          "web.engagement.v1"
+        ],
+        "schema": [
+          "G52",
+          "G55",
+          "G56"
+        ],
+        "index": [
+          "G52",
+          "G56",
+          "G59"
+        ],
+        "config": [
+          "notification.policy"
+        ],
+        "api": [
+          "G53",
+          "G57",
+          "G59",
+          "G61",
+          "G65"
+        ],
+        "web": [
+          "G54",
+          "G58",
+          "G60",
+          "G62",
+          "G64",
+          "G66"
+        ],
+        "visibility": [
+          "G23"
+        ],
+        "worker": [
+          "message-delivery.G38",
+          "notification-delivery.G63"
+        ],
+        "internal": [
+          "internal.idempotentSend",
+          "internal.messageDelivery",
+          "internal.structuredContent",
+          "internal.mentions",
+          "internal.notificationInbox",
+          "internal.notificationPolicies",
+          "internal.unreadNavigation"
+        ]
+      },
+      "activation": {
+        "goal": "G71",
+        "checkpoint": "engagement"
+      },
+      "safeRead": "content and inbox with writes and delivery claims stopped",
+      "rollback": {
+        "public": false,
+        "operators": [
+          "op.engagement.write",
+          "op.notification.dispatch.claim"
+        ]
+      },
+      "dependsOn": [
+        "historyCursor",
+        "readCursor",
+        "replies",
+        "membership"
+      ]
+    },
+    {
+      "key": "reactions",
+      "owner": "engagement.reactions",
+      "requires": {
+        "binary": [
+          "shared.reaction.v1",
+          "api.reaction.v1",
+          "web.reaction.v1"
+        ],
+        "schema": [
+          "G68"
+        ],
+        "index": [
+          "G68"
+        ],
+        "config": [
+          "unicode.G07"
+        ],
+        "api": [
+          "G69"
+        ],
+        "web": [
+          "G70"
+        ],
+        "visibility": [
+          "G23"
+        ],
+        "worker": [],
+        "internal": []
+      },
+      "activation": {
+        "goal": "G71",
+        "checkpoint": "engagement"
+      },
+      "safeRead": "summaries and reactor lists with writes stopped",
+      "rollback": {
+        "public": false,
+        "operators": [
+          "op.reaction.write"
+        ]
+      },
+      "dependsOn": [
+        "historyCursor",
+        "membership"
+      ]
+    },
+    {
+      "key": "mediaRead",
+      "owner": "media",
+      "requires": {
+        "binary": [
+          "api.mediaRead.v1",
+          "web.mediaRead.v1"
+        ],
+        "schema": [
+          "G73"
+        ],
+        "index": [
+          "G73"
+        ],
+        "config": [
+          "privateStorage.G74"
+        ],
+        "api": [
+          "G82"
+        ],
+        "web": [
+          "G84"
+        ],
+        "visibility": [
+          "G23"
+        ],
+        "worker": [],
+        "internal": [
+          "internal.attachmentBinding"
+        ]
+      },
+      "activation": {
+        "goal": "G90",
+        "checkpoint": "media"
+      },
+      "safeRead": "authorized ready bytes when all upload workers stop",
+      "rollback": {
+        "public": false,
+        "operators": []
+      },
+      "dependsOn": [
+        "historyCursor"
+      ]
+    },
+    {
+      "key": "mediaUploads",
+      "owner": "media",
+      "requires": {
+        "binary": [
+          "api.mediaUpload.v1",
+          "web.mediaUpload.v1"
+        ],
+        "schema": [
+          "G73"
+        ],
+        "index": [
+          "G73",
+          "G76"
+        ],
+        "config": [
+          "privateStorage.G74",
+          "mediaLimits.G75"
+        ],
+        "api": [
+          "G75",
+          "G76",
+          "G81",
+          "G82"
+        ],
+        "web": [
+          "G83"
+        ],
+        "visibility": [
+          "G23"
+        ],
+        "worker": [
+          "media-processing.G77",
+          "media-maintenance.G78",
+          "media-reconciliation.G79",
+          "media-pressure.G80"
+        ],
+        "internal": [
+          "internal.attachmentBinding"
+        ]
+      },
+      "activation": {
+        "goal": "G90",
+        "checkpoint": "media"
+      },
+      "safeRead": "mediaRead while reserve/process/maintenance stop",
+      "rollback": {
+        "public": false,
+        "operators": [
+          "op.media.upload.reserve",
+          "op.media.process.claim",
+          "op.media.maintenance.claim"
+        ]
+      },
+      "dependsOn": [
+        "historyCursor",
+        "mediaRead"
+      ]
+    },
+    {
+      "key": "moderationCenter",
+      "owner": "moderation",
+      "requires": {
+        "binary": [
+          "api.moderation.v1",
+          "web.moderation.v1"
+        ],
+        "schema": [
+          "G86",
+          "G87"
+        ],
+        "index": [
+          "G86"
+        ],
+        "config": [
+          "rescue.G85"
+        ],
+        "api": [
+          "G86",
+          "G87"
+        ],
+        "web": [
+          "G88"
+        ],
+        "visibility": [
+          "G23"
+        ],
+        "worker": [
+          "media-maintenance.G78"
+        ],
+        "internal": [
+          "internal.attachmentBinding"
+        ]
+      },
+      "activation": {
+        "goal": "G90",
+        "checkpoint": "media"
+      },
+      "safeRead": "ban enforcement, unban and deleted-media denial when UI/writes stop",
+      "rollback": {
+        "public": false,
+        "operators": [
+          "op.moderation.write",
+          "op.media.maintenance.claim"
+        ]
+      },
+      "dependsOn": [
+        "membership",
+        "mediaRead"
+      ]
+    }
+  ],
+  "internalPrerequisites": [
+    {
+      "key": "internal.desktopBoundary",
+      "owner": "web.platform",
+      "readyWhen": [
+        "G16",
+        "G17",
+        "G18",
+        "G19"
+      ],
+      "requiredBy": [],
+      "rollback": false
+    },
+    {
+      "key": "internal.idempotentSend",
+      "owner": "messaging",
+      "readyWhen": [
+        "G36"
+      ],
+      "requiredBy": [
+        "replies",
+        "engagement"
+      ],
+      "rollback": false
+    },
+    {
+      "key": "internal.messageDelivery",
+      "owner": "message-delivery",
+      "readyWhen": [
+        "G37",
+        "G38",
+        "G39",
+        "G40"
+      ],
+      "requiredBy": [
+        "replies",
+        "engagement"
+      ],
+      "rollback": false
+    },
+    {
+      "key": "internal.structuredContent",
+      "owner": "engagement.content",
+      "readyWhen": [
+        "G51",
+        "G52",
+        "G53",
+        "G54"
+      ],
+      "requiredBy": [
+        "engagement"
+      ],
+      "rollback": false
+    },
+    {
+      "key": "internal.mentions",
+      "owner": "engagement.mentions",
+      "readyWhen": [
+        "G55",
+        "G57",
+        "G58"
+      ],
+      "requiredBy": [
+        "engagement"
+      ],
+      "rollback": false
+    },
+    {
+      "key": "internal.notificationInbox",
+      "owner": "engagement.notifications",
+      "readyWhen": [
+        "G56",
+        "G57",
+        "G59",
+        "G60"
+      ],
+      "requiredBy": [
+        "engagement"
+      ],
+      "rollback": false
+    },
+    {
+      "key": "internal.notificationPolicies",
+      "owner": "engagement.notifications",
+      "readyWhen": [
+        "G61",
+        "G62"
+      ],
+      "requiredBy": [
+        "engagement"
+      ],
+      "rollback": false
+    },
+    {
+      "key": "internal.unreadNavigation",
+      "owner": "engagement.navigation",
+      "readyWhen": [
+        "G66"
+      ],
+      "requiredBy": [
+        "engagement"
+      ],
+      "rollback": false
+    },
+    {
+      "key": "internal.attachmentBinding",
+      "owner": "media",
+      "readyWhen": [
+        "G72",
+        "G73",
+        "G81",
+        "G82"
+      ],
+      "requiredBy": [
+        "mediaRead",
+        "mediaUploads",
+        "moderationCenter"
+      ],
+      "rollback": false
+    },
+    {
+      "key": "internal.strictCredential",
+      "owner": "membership.credentials",
+      "readyWhen": [
+        "G05",
+        "G47",
+        "G48"
+      ],
+      "requiredBy": [
+        "membership"
+      ],
+      "rollback": false
+    }
+  ],
+  "operatorFlags": [
+    {
+      "key": "op.message.write",
+      "owner": "messaging",
+      "default": false,
+      "requiredBy": [
+        "replies",
+        "engagement"
+      ],
+      "stop": "new message writes",
+      "introducedBy": "G36"
+    },
+    {
+      "key": "op.message.dispatch.claim",
+      "owner": "message-delivery",
+      "default": false,
+      "requiredBy": [
+        "engagement"
+      ],
+      "stop": "new message-delivery claims",
+      "introducedBy": "G38"
+    },
+    {
+      "key": "op.readCursor.write",
+      "owner": "messaging.read",
+      "default": false,
+      "requiredBy": [
+        "readCursor"
+      ],
+      "stop": "new explicit read marks",
+      "introducedBy": "G30"
+    },
+    {
+      "key": "op.reply.write",
+      "owner": "messaging.reply",
+      "default": false,
+      "requiredBy": [
+        "replies"
+      ],
+      "stop": "new reply pointers",
+      "introducedBy": "G33"
+    },
+    {
+      "key": "op.membership.join",
+      "owner": "membership",
+      "default": false,
+      "requiredBy": [
+        "membership"
+      ],
+      "stop": "new joins",
+      "introducedBy": "G44"
+    },
+    {
+      "key": "op.membership.credentialMint",
+      "owner": "membership.credentials",
+      "default": false,
+      "requiredBy": [
+        "membership"
+      ],
+      "stop": "new credential mint",
+      "introducedBy": "G47"
+    },
+    {
+      "key": "op.engagement.write",
+      "owner": "engagement",
+      "default": false,
+      "requiredBy": [
+        "engagement"
+      ],
+      "stop": "content/mention/inbox writes",
+      "introducedBy": "G53"
+    },
+    {
+      "key": "op.notification.dispatch.claim",
+      "owner": "notification-delivery",
+      "default": false,
+      "requiredBy": [
+        "engagement"
+      ],
+      "stop": "provider delivery claims",
+      "introducedBy": "G63"
+    },
+    {
+      "key": "op.reaction.write",
+      "owner": "engagement.reactions",
+      "default": false,
+      "requiredBy": [
+        "reactions"
+      ],
+      "stop": "reaction mutation",
+      "introducedBy": "G69"
+    },
+    {
+      "key": "op.media.upload.reserve",
+      "owner": "media.upload",
+      "default": false,
+      "requiredBy": [
+        "mediaUploads"
+      ],
+      "stop": "new upload slots",
+      "introducedBy": "G76"
+    },
+    {
+      "key": "op.media.process.claim",
+      "owner": "media-processing",
+      "default": false,
+      "requiredBy": [
+        "mediaUploads"
+      ],
+      "stop": "processing claims",
+      "introducedBy": "G77"
+    },
+    {
+      "key": "op.media.maintenance.claim",
+      "owner": "media-maintenance",
+      "default": false,
+      "requiredBy": [
+        "mediaUploads",
+        "moderationCenter"
+      ],
+      "stop": "cleanup/reconcile claims",
+      "introducedBy": "G78"
+    },
+    {
+      "key": "op.moderation.write",
+      "owner": "moderation",
+      "default": false,
+      "requiredBy": [
+        "moderationCenter"
+      ],
+      "stop": "new ban/delete writes",
+      "introducedBy": "G86"
+    },
+    {
+      "key": "op.rollout.cohort",
+      "owner": "platform.rollout",
+      "default": false,
+      "requiredBy": [],
+      "stop": "new cohort activation",
+      "introducedBy": "G42"
+    },
+    {
+      "key": "op.compat.profile",
+      "owner": "platform.rollback",
+      "default": "normal",
+      "enum": [
+        "normal",
+        "rescue"
+      ],
+      "requiredBy": [],
+      "stop": "normal profile when rescue selected",
+      "introducedBy": "G85"
+    }
+  ],
+  "replicaConsensus": {
+    "algorithm": "all-ready-API-replicas-report-identical-manifest-digest-and-prerequisite-vector",
+    "disagreement": "all-public-false",
+    "unknown": "false"
+  }
+}

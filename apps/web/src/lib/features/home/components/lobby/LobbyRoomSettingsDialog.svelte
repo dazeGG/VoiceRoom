@@ -4,7 +4,10 @@
   import type { OwnedRoom } from '$lib/api/auth';
   import { deleteRoom, deleteRoomAvatar, updateRoom, uploadRoomAvatar } from '$lib/api/rooms';
   import { Avatar, AvatarCropDialog } from '$lib/shared/ui';
+  import { dialogFocusTrap } from '$lib/shared/ui/focus-trap';
   import { iconSm } from '$lib/shared/ui/icons';
+  import ModerationCenter from './ModerationCenter.svelte';
+  import { getCapabilityFeature } from '$lib/platform/capability-state.svelte';
 
   let { room, onClose, onSaved, onDeleted, onToast }: {
     room: OwnedRoom | null;
@@ -25,6 +28,7 @@
   let pendingAvatar = $state<Blob | null>(null);
   let avatarPreviewUrl = $state('');
   let removeAvatarPending = $state(false);
+  let moderationEnabled = $state(false);
 
   $effect(() => {
     const activeRoom = room;
@@ -38,6 +42,7 @@
       avatarPreviewUrl = '';
       pendingAvatar = null;
       removeAvatarPending = false;
+      if (activeRoom) void getCapabilityFeature('moderationCenter').then((enabled) => { moderationEnabled = enabled; });
     });
   });
 
@@ -111,8 +116,15 @@
 
 {#if room}
   <div class="settings-overlay" role="presentation" onclick={(event) => event.target === event.currentTarget && onClose()}>
-    <div class="settings-modal room-settings-modal" role="dialog" aria-modal="true" aria-label="Настройки комнаты">
-      <div class="settings-head"><span class="settings-title">Настройки комнаты</span><button class="settings-close" type="button" aria-label="Закрыть" onclick={onClose}><X {...iconSm} /></button></div>
+    <div
+      class="settings-modal room-settings-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Настройки комнаты"
+      tabindex="-1"
+      use:dialogFocusTrap={{ enabled: Boolean(room) && !cropOpen }}
+    >
+      <div class="settings-head"><span class="settings-title">Настройки комнаты</span><button class="settings-close" type="button" aria-label="Закрыть" onclick={onClose} data-dialog-initial-focus><X {...iconSm} /></button></div>
       <form class="settings-content room-settings-content" onsubmit={save}>
         {#if error}<p class="dialog-error" role="alert">{error}</p>{/if}
         <div class="room-profile-head">
@@ -150,6 +162,7 @@
           {:else}<button class="dialog-danger-trigger" type="button" onclick={() => (confirmDelete = true)}>Удалить комнату</button>{/if}
         </div>
       </form>
+      {#if moderationEnabled}<div class="room-settings-moderation"><ModerationCenter roomId={room.roomId} /></div>{/if}
     </div>
   </div>
 {/if}
@@ -171,6 +184,7 @@
 <style>
   .room-settings-modal { width: min(560px, calc(100vw - 28px)); }
   .room-settings-content { display: flex; flex-direction: column; gap: 24px; padding: 26px; }
+  .room-settings-moderation { padding: 0 26px 26px; }
   .room-profile-head { display: flex; align-items: center; gap: 16px; }
   .room-name-field { display: grid; flex: 1; gap: 7px; }
 

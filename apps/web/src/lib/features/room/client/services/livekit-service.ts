@@ -13,10 +13,9 @@ import { startUi } from '$lib/features/room/start-ui.svelte';
 import { state } from '../core/state.svelte';
 import { setVoiceConnectionStatus } from '../ui/status';
 import { showToast } from '../ui/toast';
-import { postJson } from '../net/api';
+import { ApiRequestError, postJson } from '../net/api';
 import { queueAudioUnlock, syncRemoteAudioPlayback } from './media-playback-service';
 import { clearPeerJoinCue } from '../media/cues';
-import { errorMessage } from '../core/utils';
 import { getScreenProfile, getScreenPublishVideoOptions } from '../media/profiles';
 import { loadLiveKitClient, TRACK_SOURCE } from '../media/livekit-runtime';
 import { getScreenReceiverDemand } from '../media/screen-receiver-demand';
@@ -42,8 +41,41 @@ import {
 } from '../room/participants';
 import { refreshScreenAction, refreshScreenStage, refreshScreenTiles } from '../ui/screen-view';
 import type { Participant } from '../core/types';
+import {
+  isCurrentRoomRecoveryEpoch,
+  notifyLiveKitDisconnected,
+  notifyLiveKitReconciled,
+  notifyLiveKitReconnecting,
+  setRoomRecoveryLiveKitAdapter,
+  subscribeRoomRecoveryTransitions,
+  type RecoveryAttemptOutcome
+} from '../recovery/room-recovery';
+import { ScreenRecoveryGraceController } from '../recovery/screen-recovery-grace.js';
+import { LiveKitReconcileGeneration } from '../recovery/livekit-reconcile-generation.js';
 
 const screenSubscriptionRetryController = createScreenSubscriptionRetryController();
+const screenRecoveryGrace = new ScreenRecoveryGraceController();
+const liveKitReconcileGenerations = new WeakMap<Room, LiveKitReconcileGeneration>();
+
+function reconcileGenerationFor(room: Room): LiveKitReconcileGeneration {
+  const existing = liveKitReconcileGenerations.get(room);
+  if (existing) return existing;
+  const generation = new LiveKitReconcileGeneration();
+  liveKitReconcileGenerations.set(room, generation);
+  return generation;
+}
+
+subscribeRoomRecoveryTransitions((event) => {
+  const phase = String(event.phase || '');
+  const epoch = Number(event.epoch || 0);
+  if (phase === 'recovering' || phase === 'waiting-app-snapshot' || phase === 'waiting-livekit') {
+    screenRecoveryGrace.beginGlobal(epoch);
+  } else if (phase === 'healthy') {
+    screenRecoveryGrace.endGlobal(false);
+  } else if (phase === 'failed' || phase === 'cancelled') {
+    screenRecoveryGrace.endGlobal(true);
+  }
+});
 
 export async function connectLiveKitRoom(
   name: string,
@@ -97,16 +129,121 @@ export async function connectLiveKitRoom(
   return true;
 }
 
+export async function attemptFreshLiveKitReplacement({
+  epoch
+}: {
+  epoch: number;
+  attempt: number;
+}): Promise<RecoveryAttemptOutcome> {
+  const oldRoom = state.livekitRoom;
+  const microphoneStream = state.localStream;
+  const screenStream = state.localScreenStream;
+  const roomId = state.roomId;
+  const peerId = state.peerId;
+  const sessionToken = state.sessionToken;
+  const screenTrackIds = screenStream?.getTracks().map((track) => track.id).sort().join(':') ?? '';
+  const identityCurrent = () => isCurrentRoomRecoveryEpoch(epoch)
+    && state.joined
+    && state.roomId === roomId
+    && state.peerId === peerId
+    && state.sessionToken === sessionToken
+    && state.localStream === microphoneStream
+    && state.localScreenStream === screenStream
+    && (state.localScreenStream?.getTracks().map((track) => track.id).sort().join(':') ?? '') === screenTrackIds;
+  const isCurrent = () => identityCurrent() && state.livekitRoom === oldRoom;
+  let candidate: Room | null = null;
+  let microphonePublication: LocalTrackPublication | null = null;
+  let screenPublications = new Map<string, LocalTrackPublication>();
+
+  try {
+    if (oldRoom) reconcileGenerationFor(oldRoom).invalidate();
+    const credentials = await postJson('/api/livekit-token', {
+      name: state.self?.name || state.peerId,
+      peerId: state.peerId,
+      roomId: state.roomId,
+      sessionToken: state.sessionToken
+    });
+    if (!isCurrent()) return { retryable: true, code: 'transport_error' };
+
+    candidate = await connectLiveKitWithFallback(credentials, isCurrent);
+    if (!candidate || !isCurrent()) return { retryable: true, code: 'transport_error' };
+    const eventCurrent = () => identityCurrent() && (state.livekitRoom === oldRoom || state.livekitRoom === candidate);
+    if (!(await bindLiveKitRoomEvents(candidate, eventCurrent)) || !isCurrent()) {
+      await disconnectLiveKitRoomInstance(candidate);
+      return { retryable: true, code: 'transport_error' };
+    }
+
+    microphonePublication = await publishLocalMicrophoneForRoom(candidate, microphoneStream, isCurrent, false);
+    if (!microphonePublication || !isCurrent()) {
+      await disconnectLiveKitRoomInstance(candidate);
+      return { retryable: true, code: 'transport_error' };
+    }
+    screenPublications = await publishLocalScreenTracksForRoom(candidate, screenStream, isCurrent);
+    if (!isCurrent()) {
+      await disposeCandidatePublications(candidate, screenPublications);
+      await disconnectLiveKitRoomInstance(candidate);
+      return { retryable: true, code: 'transport_error' };
+    }
+
+    // Commit the fully reconciled candidate as one state transition. Until this
+    // point its guarded event handlers cannot mutate shared room state.
+    state.livekitRoom = candidate;
+    state.localMicPublication = microphonePublication;
+    state.localScreenPublications = screenPublications;
+    clearAllScreenSubscriptionRetries();
+    syncLiveKitParticipants(candidate);
+    retryDemandedScreenSubscriptions(candidate);
+    syncLiveKitVoiceSubscriptions();
+    syncRemoteAudioPlayback();
+    refreshParticipantState();
+    setVoiceConnectionStatus('connected');
+
+    if (oldRoom && oldRoom !== candidate) await disconnectLiveKitRoomInstance(oldRoom);
+    logLiveKitTransition('info', { event: 'fresh_replacement', result: 'succeeded' });
+    return { ok: true };
+  } catch (error) {
+    if (candidate && candidate !== state.livekitRoom) {
+      await disposeCandidatePublications(candidate, screenPublications);
+      await disconnectLiveKitRoomInstance(candidate);
+    }
+    const status = error instanceof ApiRequestError ? error.status : 0;
+    const code = error instanceof ApiRequestError ? error.code : error instanceof LiveKitTransportError ? error.code : 'transport_error';
+    logLiveKitTransition('warn', { event: 'fresh_replacement', result: 'failed', status, code: safeLiveKitCode(code) });
+    return {
+      retryable: !(error instanceof ApiRequestError) || isRetryableLiveKitApiFailure(error),
+      status,
+      code
+    };
+  }
+}
+
+function isRetryableLiveKitApiFailure(error: ApiRequestError): boolean {
+  if (['authentication_required', 'invalid_join', 'invalid_session', 'room_banned', 'room_full', 'room_not_found'].includes(error.code)) return false;
+  return [408, 425, 429].includes(error.status)
+    || error.status >= 500
+    || ['livekit_gate_credential_unavailable', 'livekit_gate_principal_unavailable', 'livekit_gate_unavailable', 'membership_persist_failed', 'membership_unavailable'].includes(error.code);
+}
+
+function safeLiveKitCode(code: string): string {
+  return [
+    'authentication_required', 'invalid_join', 'invalid_session', 'room_banned', 'room_full', 'room_not_found',
+    'livekit_gate_credential_unavailable', 'livekit_gate_principal_unavailable', 'livekit_gate_unavailable',
+    'membership_persist_failed', 'membership_unavailable', 'transport_error'
+  ].includes(code) ? code : 'unknown_error';
+}
+
+setRoomRecoveryLiveKitAdapter({ attemptFreshReplacement: attemptFreshLiveKitReplacement });
+
 async function connectLiveKitWithFallback(
-  credentials: { url: string; token: string },
+  credentials: { url: string; urls?: string[]; token: string },
   isCurrent: () => boolean
 ): Promise<Room | null> {
   const { Room } = await loadLiveKitClient();
   if (!isCurrent()) return null;
-  const urls = getLiveKitConnectUrls(credentials.url);
-  let lastError: unknown = null;
-
-  for (const url of urls) {
+  const configuredUrls = credentials.urls?.length ? credentials.urls : [credentials.url];
+  const urls = [...new Set(configuredUrls.flatMap(getLiveKitConnectUrls))];
+  for (let candidateIndex = 0; candidateIndex < urls.length; candidateIndex += 1) {
+    const url = urls[candidateIndex];
     if (!isCurrent()) return null;
     const room = new Room({
       adaptiveStream: false,
@@ -121,17 +258,16 @@ async function connectLiveKitWithFallback(
         await disconnectLiveKitRoomInstance(room);
         return null;
       }
-      logLocalLiveKitDebug('info', `LiveKit connected to ${url}`);
+      logLiveKitTransition('info', { event: 'candidate_connect', candidateIndex, candidateCount: urls.length, result: 'connected' });
       return room;
-    } catch (error) {
-      lastError = error;
-      logLocalLiveKitDebug('warn', `LiveKit connect failed for ${url}`, error);
+    } catch {
+      logLiveKitTransition('warn', { event: 'candidate_connect', candidateIndex, candidateCount: urls.length, result: 'failed' });
       await room.disconnect(false).catch(() => {});
       if (!isCurrent()) return null;
     }
   }
 
-  throw new Error(`${errorMessage(lastError) || 'LiveKit connection failed'} (${urls.join(', ')})`);
+  throw new LiveKitTransportError();
 }
 
 function getLiveKitConnectUrls(url: string): string[] {
@@ -151,55 +287,90 @@ function getLiveKitConnectUrls(url: string): string[] {
   return [...new Set(urls)];
 }
 
-function logLocalLiveKitDebug(level: 'info' | 'warn', ...args: unknown[]): void {
+function logLiveKitTransition(level: 'info' | 'warn', event: Record<string, string | number>): void {
   if (!['localhost', '127.0.0.1', '::1'].includes(window.location.hostname)) return;
-  console[level](...args);
+  console[level]('livekit_recovery_transition', event);
+}
+
+class LiveKitTransportError extends Error {
+  code = 'transport_error';
+  status = 0;
+
+  constructor() {
+    super('LiveKit transport unavailable');
+    this.name = 'LiveKitTransportError';
+  }
 }
 
 async function bindLiveKitRoomEvents(room: Room, isCurrent: () => boolean): Promise<boolean> {
   const { RoomEvent } = await loadLiveKitClient();
-  if (!isCurrent() || state.livekitRoom !== room) return false;
+  if (!isCurrent()) return false;
+  const current = () => isCurrent() && state.livekitRoom === room;
+  const reconcileGeneration = reconcileGenerationFor(room);
 
   room.on(RoomEvent.Connected, () => {
+    if (!current()) return;
     if (state.voiceConnection !== 'connected') setVoiceConnectionStatus('connecting');
   });
   room.on(RoomEvent.Reconnecting, () => {
+    if (!current()) return;
+    reconcileGeneration.invalidate();
+    notifyLiveKitReconnecting();
     if (state.joined || state.connecting) setVoiceConnectionStatus('reconnecting');
   });
   room.on(RoomEvent.Reconnected, () => {
+    if (!current()) return;
+    const generation = reconcileGeneration.capture();
     if (state.joined || state.connecting) setVoiceConnectionStatus('connected');
-    recoverLiveKitRoom(room).catch((error) => console.warn('LiveKit recovery failed', error));
+    recoverLiveKitRoom(room, current).then(() => {
+      if (current() && reconcileGeneration.isCurrent(generation)) notifyLiveKitReconciled();
+    }).catch(() => logLiveKitTransition('warn', { event: 'in_place_reconcile', result: 'failed' }));
   });
   room.on(RoomEvent.Disconnected, () => {
+    if (!current()) return;
+    reconcileGeneration.invalidate();
     if (state.joined) setVoiceConnectionStatus('lost');
+    notifyLiveKitDisconnected();
   });
   room.on(RoomEvent.ParticipantConnected, (participant) => {
+    if (!current()) return;
     syncLiveKitParticipant(participant);
     refreshParticipantState();
   });
   room.on(RoomEvent.ParticipantDisconnected, (participant) => {
+    if (!current()) return;
     const peer = state.peers.get(participant.identity);
     if (peer) detachLiveKitParticipant(peer, 'голос переподключается');
     refreshParticipantState();
   });
   room.on(RoomEvent.SignalReconnecting, () => {
+    if (!current()) return;
+    reconcileGeneration.invalidate();
+    notifyLiveKitReconnecting();
     if (state.joined || state.connecting) setVoiceConnectionStatus('signal-reconnecting');
   });
   room.on(RoomEvent.SignalConnected, () => {
+    if (!current()) return;
     if (state.voiceConnection === 'signal-reconnecting') setVoiceConnectionStatus('connecting');
   });
   room.on(RoomEvent.LocalTrackPublished, (publication) => {
+    if (!current()) return;
     if (!isMicrophonePublication(publication)) return;
     state.localMicPublication = publication;
     setVoiceConnectionStatus('connected');
   });
   room.on(RoomEvent.LocalTrackUnpublished, (publication) => {
+    if (!current()) return;
     if (!isMicrophonePublication(publication)) return;
     state.localMicPublication = null;
     if (state.joined) setVoiceConnectionStatus('reconnecting');
   });
-  room.on(RoomEvent.TrackSubscriptionFailed, handleLiveKitTrackSubscriptionFailed);
+  room.on(RoomEvent.TrackSubscriptionFailed, (...args) => {
+    if (!current()) return;
+    handleLiveKitTrackSubscriptionFailed(...args);
+  });
   room.on(RoomEvent.AudioPlaybackStatusChanged, () => {
+    if (!current()) return;
     if (room.canPlaybackAudio === false) {
       queueAudioUnlock({ showFallback: true });
       setVoiceConnectionStatus('playback-blocked');
@@ -210,30 +381,39 @@ async function bindLiveKitRoomEvents(room: Room, isCurrent: () => boolean): Prom
     }
   });
   room.on(RoomEvent.LocalAudioSilenceDetected, () => {
+    if (!current()) return;
     if (!state.muted) showToast('Микрофон не передает звук');
   });
   room.on(RoomEvent.TrackPublished, (publication, participant) => {
+    if (!current()) return;
     const peer = createLiveKitParticipant(participant);
     if (!peer) return;
     updateLiveKitPublicationState(peer, publication);
     syncLiveKitPublicationSubscription(peer, publication);
   });
   room.on(RoomEvent.TrackUnpublished, (publication, participant) => {
+    if (!current()) return;
     handleLiveKitTrackUnpublished(publication, participant);
   });
   room.on(RoomEvent.TrackSubscribed, (track, publication, participant) => {
+    if (!current()) return;
     handleLiveKitTrackSubscribed(track, publication, participant);
   });
   room.on(RoomEvent.TrackUnsubscribed, (track, publication, participant) => {
+    if (!current()) return;
     handleLiveKitTrackUnsubscribed(track, publication, participant);
   });
   room.on(RoomEvent.ActiveSpeakersChanged, (speakers) => {
+    if (!current()) return;
     const activeIds = new Set(speakers.map((participant) => participant.identity));
     for (const peer of state.peers.values()) {
-      setParticipantSpeaking(peer, activeIds.has(peer.id));
+      // Fallback only — see the note in `updateSpeakingStats`.
+      if (peer.analyser) continue;
+      setParticipantSpeaking(peer, !state.outputMuted && activeIds.has(peer.id));
     }
   });
   room.on(RoomEvent.ConnectionQualityChanged, (quality, participant) => {
+    if (!current()) return;
     if (!participant) return;
     if (participant.isLocal) {
       state.localConnectionQuality = quality || 'unknown';
@@ -244,6 +424,7 @@ async function bindLiveKitRoomEvents(room: Room, isCurrent: () => boolean): Prom
     peer.connectionQuality = quality || 'unknown';
   });
   room.on(RoomEvent.ParticipantNameChanged, (name, participant) => {
+    if (!current()) return;
     updateParticipant({ id: participant.identity, name: name || participant.identity });
   });
   return true;
@@ -337,9 +518,10 @@ export async function publishLocalMicrophone(): Promise<void> {
 async function publishLocalMicrophoneForRoom(
   room: Room,
   stream: MediaStream | null,
-  isCurrent: () => boolean
-): Promise<boolean> {
-  if (!stream || !isCurrent()) return false;
+  isCurrent: () => boolean,
+  commit = true
+): Promise<LocalTrackPublication | null> {
+  if (!stream || !isCurrent()) return null;
   const [track] = stream.getAudioTracks();
   if (!track) throw new Error('Браузер не отдал аудио-трек');
 
@@ -352,11 +534,15 @@ async function publishLocalMicrophoneForRoom(
   });
   if (!isCurrent()) {
     await room.localParticipant.unpublishTrack(publication.track ?? track, false).catch(() => {});
-    return false;
+    return null;
   }
-  state.localMicPublication = publication;
+  if (commit) state.localMicPublication = publication;
   await syncMicrophonePublicationMuted(publication);
-  return isCurrent();
+  if (!isCurrent()) {
+    await room.localParticipant.unpublishTrack(publication.track ?? track, false).catch(() => {});
+    return null;
+  }
+  return publication;
 }
 
 export async function unpublishLocalMicrophone(stopOnUnpublish = false): Promise<void> {
@@ -385,22 +571,59 @@ async function syncMicrophonePublicationMuted(publication: LocalTrackPublication
 }
 
 export async function publishLocalScreenTracks(): Promise<void> {
-  if (!state.livekitRoom || !state.localScreenStream) return;
-  const profile = getScreenProfile(state.localScreenProfileId);
-  state.localScreenPublications.clear();
+  const room = state.livekitRoom;
+  const stream = state.localScreenStream;
+  if (!room || !stream) return;
+  const publications = await publishLocalScreenTracksForRoom(
+    room,
+    stream,
+    () => state.livekitRoom === room && state.localScreenStream === stream
+  );
+  if (state.livekitRoom === room && state.localScreenStream === stream) state.localScreenPublications = publications;
+}
 
-  for (const track of state.localScreenStream.getTracks()) {
+async function publishLocalScreenTracksForRoom(
+  room: Room,
+  stream: MediaStream | null,
+  isCurrent: () => boolean,
+  existing: Map<string, LocalTrackPublication> = new Map()
+): Promise<Map<string, LocalTrackPublication>> {
+  const publications = new Map<string, LocalTrackPublication>(existing);
+  const created = new Map<string, LocalTrackPublication>();
+  if (!stream || !isCurrent()) return publications;
+  const profile = getScreenProfile(state.localScreenProfileId);
+  for (const track of stream.getTracks().filter((candidate) => candidate.readyState !== 'ended')) {
+    if (publications.has(track.id)) continue;
     const videoOptions = track.kind === 'video' ? await getScreenPublishVideoOptions(profile) : null;
-    const publication = await state.livekitRoom.localParticipant.publishTrack(track, {
+    if (!isCurrent()) break;
+    const publication = await room.localParticipant.publishTrack(track, {
       audioPreset: track.kind === 'audio' ? { maxBitrate: SCREEN_AUDIO_BITRATE } : undefined,
       ...(track.kind === 'audio' ? { dtx: false } : {}),
       name: track.kind === 'video' ? 'screen' : 'screen-audio',
       ...(videoOptions ?? {}),
       source: track.kind === 'video' ? videoOptions!.source : TRACK_SOURCE.ScreenShareAudio as Track.Source,
-      stream: state.localScreenStream.id
+      stream: stream.id
     });
-    state.localScreenPublications.set(track.id, publication);
+    if (!isCurrent()) {
+      await room.localParticipant.unpublishTrack(publication.track ?? track, false).catch(() => {});
+      break;
+    }
+    publications.set(track.id, publication);
+    created.set(track.id, publication);
   }
+  if (!isCurrent()) await disposeCandidatePublications(room, created);
+  return publications;
+}
+
+async function disposeCandidatePublications(
+  room: Room,
+  publications: Map<string, LocalTrackPublication>
+): Promise<void> {
+  await Promise.allSettled([...publications.values()].map((publication) => {
+    const track = publication.track;
+    return track ? room.localParticipant.unpublishTrack(track, false) : Promise.resolve();
+  }));
+  publications.clear();
 }
 
 export async function unpublishLocalScreenTracks(stopOnUnpublish = false): Promise<void> {
@@ -432,8 +655,9 @@ export async function disconnectLiveKitRoom(): Promise<void> {
 }
 
 async function disconnectLiveKitRoomInstance(room: Room): Promise<void> {
-  clearAllScreenSubscriptionRetries();
+  reconcileGenerationFor(room).invalidate();
   if (state.livekitRoom === room) {
+    clearAllScreenSubscriptionRetries();
     state.livekitRoom = null;
     state.localMicPublication = null;
     state.localScreenPublications.clear();
@@ -442,13 +666,15 @@ async function disconnectLiveKitRoomInstance(room: Room): Promise<void> {
   try {
     room.removeAllListeners?.();
     await room.disconnect(false);
-  } catch (error) {
-    console.warn('LiveKit disconnect failed', error);
+  } catch {
+    logLiveKitTransition('warn', { event: 'disconnect', result: 'failed' });
   }
 }
 
 export function updateLiveKitPublicationState(peer: Participant, publication: TrackPublication): void {
   if (isScreenVideoPublication(publication)) {
+    if (peer.screenAuthoritative === false) return;
+    screenRecoveryGrace.cancel(peer.id);
     const hadScreen = peer.screen;
     peer.screen = true;
     applyRemoteScreenCue(peer, hadScreen, true);
@@ -457,6 +683,8 @@ export function updateLiveKitPublicationState(peer: Participant, publication: Tr
     if (!hadScreen) refreshScreenTiles();
   }
   if (isScreenAudioPublication(publication)) {
+    if (peer.screenAuthoritative === false) return;
+    screenRecoveryGrace.cancel(peer.id);
     peer.screenAudio = true;
     updatePeerStatus(peer);
   }
@@ -509,6 +737,7 @@ function attachSubscribedRemoteScreenTrack(
 }
 
 function shouldSubscribeToScreen(peer: Participant): boolean {
+  if (peer.screenAuthoritative === false) return false;
   return getRemoteScreenDemand(peer) !== 'hidden';
 }
 
@@ -559,7 +788,7 @@ async function scheduleScreenSubscriptionRetry(
   const { SubscriptionError } = await loadLiveKitClient();
   if (error === SubscriptionError.SE_CODEC_UNSUPPORTED) {
     clearScreenSubscriptionRetry(publication);
-    console.warn('LiveKit screen subscription codec is unsupported.', { trackSid: publication.trackSid });
+    logLiveKitTransition('warn', { event: 'screen_subscription', result: 'codec_unsupported' });
     return;
   }
   if (!shouldSubscribeToScreen(peer)) {
@@ -620,15 +849,19 @@ function setRemotePublicationSubscribed(publication: RemoteTrackPublication, sub
   publication.setSubscribed(subscribed);
 }
 
-async function recoverLiveKitRoom(room: Room): Promise<void> {
+async function recoverLiveKitRoom(room: Room, isCurrent: () => boolean = () => state.livekitRoom === room): Promise<void> {
   // A reconnect is a new transport epoch. A screen SID that exhausted its
   // bounded retry budget on the previous connection must be eligible again;
   // otherwise a transient outage longer than the retry window can strand the
   // publication until the sender republishes it with a new SID.
   clearAllScreenSubscriptionRetries();
+  if (!isCurrent()) return;
   syncLiveKitParticipants(room);
   retryDemandedScreenSubscriptions(room);
   await ensureLocalMicrophonePublished();
+  if (!isCurrent()) return;
+  await ensureLocalScreenPublished(room, isCurrent);
+  if (!isCurrent()) return;
   syncLiveKitVoiceSubscriptions();
   syncRemoteAudioPlayback();
   refreshParticipantState();
@@ -679,6 +912,20 @@ async function ensureLocalMicrophonePublished(): Promise<void> {
   }
 }
 
+async function ensureLocalScreenPublished(room: Room, isCurrent: () => boolean): Promise<void> {
+  const stream = state.localScreenStream;
+  if (!stream || !isCurrent()) return;
+  const publications = await publishLocalScreenTracksForRoom(
+    room,
+    stream,
+    () => isCurrent() && state.livekitRoom === room && state.localScreenStream === stream,
+    state.localScreenPublications
+  );
+  if (isCurrent() && state.livekitRoom === room && state.localScreenStream === stream) {
+    state.localScreenPublications = publications;
+  }
+}
+
 export function findLocalMicrophonePublication(): LocalTrackPublication | null {
   const publications = state.livekitRoom?.localParticipant?.trackPublications;
   if (!publications?.values) return null;
@@ -695,8 +942,19 @@ function handleLiveKitTrackSubscribed(
   updateLiveKitPublicationState(peer, publication);
 
   const mediaTrack = track.mediaStreamTrack;
+  if (
+    peer.screenAuthoritative === false &&
+    (isScreenVideoPublication(publication) || isScreenAudioPublication(publication))
+  ) {
+    clearScreenSubscriptionRetry(publication);
+    publication.setSubscribed(false);
+    detachRemoteScreen(peer);
+    return;
+  }
+
   const stream = track.mediaStream || new MediaStream([mediaTrack]);
   if (isScreenVideoPublication(publication)) {
+    screenRecoveryGrace.cancel(peer.id);
     void applyRemoteScreenVideoDemand(peer, publication);
     attachRemoteScreenStream(peer, stream);
     if (mediaTrack.readyState !== 'ended') clearScreenSubscriptionRetry(publication);
@@ -705,6 +963,7 @@ function handleLiveKitTrackSubscribed(
   }
 
   if (isScreenAudioPublication(publication)) {
+    screenRecoveryGrace.cancel(peer.id);
     attachRemoteScreenStream(peer, stream);
     if (mediaTrack.readyState !== 'ended') clearScreenSubscriptionRetry(publication);
     else void scheduleScreenSubscriptionRetry(peer, publication);
@@ -761,8 +1020,14 @@ function handleLiveKitTrackUnpublished(publication: RemoteTrackPublication, part
   );
 
   if (isScreenAudioPublication(publication)) {
+    if (!screenPresence.active) {
+      const audioTrackId = publication.track?.mediaStreamTrack?.id;
+      if (audioTrackId) detachRemoteScreenAudioTrack(peer, audioTrackId);
+      scheduleRemoteScreenLoss(peer.id);
+      return;
+    }
     const hadScreen = peer.screen;
-    peer.screen = screenPresence.active;
+    peer.screen = peer.screenAuthoritative === false ? false : screenPresence.active;
     peer.screenAudio = screenPresence.hasAudio;
     const audioTrackId = publication.track?.mediaStreamTrack?.id;
     if (audioTrackId) detachRemoteScreenAudioTrack(peer, audioTrackId);
@@ -775,8 +1040,14 @@ function handleLiveKitTrackUnpublished(publication: RemoteTrackPublication, part
   }
 
   if (isScreenVideoPublication(publication)) {
+    if (!screenPresence.active) {
+      const videoTrackId = publication.track?.mediaStreamTrack?.id;
+      if (videoTrackId) detachRemoteScreenVideoTrack(peer, videoTrackId);
+      scheduleRemoteScreenLoss(peer.id);
+      return;
+    }
     const hadScreen = peer.screen;
-    peer.screen = screenPresence.active;
+    peer.screen = peer.screenAuthoritative === false ? false : screenPresence.active;
     peer.screenAudio = screenPresence.hasAudio;
 
     applyRemoteScreenCue(peer, hadScreen, peer.screen);
@@ -794,6 +1065,48 @@ function handleLiveKitTrackUnpublished(publication: RemoteTrackPublication, part
     peer.voiceIssue = '';
     updatePeerStatus(peer);
   }
+}
+
+function scheduleRemoteScreenLoss(peerId: string): void {
+  screenRecoveryGrace.schedule(peerId, () => finalizeRemoteScreenLoss(peerId));
+}
+
+function finalizeRemoteScreenLoss(peerId: string): void {
+  const peer = state.peers.get(peerId);
+  if (!peer) return;
+  const publications = peer.livekitParticipant?.trackPublications?.values
+    ? [...peer.livekitParticipant.trackPublications.values()]
+    : [];
+  const presence = getScreenPublicationPresence(publications, isScreenVideoPublication, isScreenAudioPublication);
+  if (presence.active) {
+    screenRecoveryGrace.cancel(peerId);
+    return;
+  }
+  const hadScreen = peer.screen;
+  peer.screen = false;
+  peer.screenAudio = false;
+  detachRemoteScreen(peer);
+  applyRemoteScreenCue(peer, hadScreen, false);
+  refreshScreenAction(peer);
+  refreshScreenTiles();
+  refreshScreenStage();
+}
+
+export function syncAuthoritativeScreenPresence(peerId: string, screen: boolean): void {
+  const peer = state.peers.get(peerId);
+  if (peer) {
+    peer.screenAuthoritative = screen;
+    if (!screen) {
+      peer.screen = false;
+      peer.screenAudio = false;
+      detachRemoteScreen(peer);
+    }
+  }
+  if (screen) {
+    screenRecoveryGrace.cancel(peerId);
+    return;
+  }
+  screenRecoveryGrace.authoritativeStop(peerId);
 }
 
 export function isMicrophonePublication(publication: TrackPublication | null | undefined): boolean {

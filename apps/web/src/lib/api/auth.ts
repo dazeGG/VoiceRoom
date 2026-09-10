@@ -114,6 +114,17 @@ export async function addRoomByCode(code: string): Promise<OwnedRoom> {
   return payload.room;
 }
 
+export async function removeRoomFromList(roomId: string): Promise<boolean> {
+  const response = await fetch(`/api/auth/rooms/${encodeURIComponent(roomId)}`, {
+    method: 'DELETE',
+    credentials: 'same-origin',
+    headers: { Accept: 'application/json' }
+  });
+  const payload = (await response.json().catch(() => ({}))) as { error?: string; removed?: boolean };
+  if (!response.ok) throw new Error(payload.error || 'Не удалось удалить комнату из списка');
+  return Boolean(payload.removed);
+}
+
 export async function fetchOwnedRooms(): Promise<OwnedRoom[]> {
   const response = await fetch('/api/auth/rooms', {
     credentials: 'same-origin',

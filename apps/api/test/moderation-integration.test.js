@@ -1,5 +1,6 @@
 'use strict';
 
+const { socketPathForDirectory } = require('./ipc-harness');
 process.env.ROOM_CREATE_POW_DIFFICULTY = '0';
 process.env.ROOM_CHAT_RATE_LIMIT = '0';
 process.env.TRUST_PROXY = 'true';
@@ -95,6 +96,14 @@ function createModerationStore() {
       identities.set(key, identity);
       return { identity, status: existing ? 'reused' : 'created' };
     },
+    normalizeGatePrincipal({ accountUserId, guestPrincipalId }) {
+      return accountUserId
+        ? { principalId: accountUserId, principalType: 'account' }
+        : { principalId: guestPrincipalId, principalType: 'guest' };
+    },
+    async isRoomServerMuted() {
+      return false;
+    },
     async getRoom(roomId) {
       return roomId === ROOM_ID ? { ...room, peers: new Map() } : null;
     },
@@ -174,9 +183,25 @@ async function requestJson(socketPath, method, pathname, { body, cookie = '', ip
 
 async function startServer() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'voice-room-moderation-'));
-  const socketPath = path.join(dir, 'api.sock');
+  const socketPath = socketPathForDirectory(dir);
   const store = createModerationStore();
-  const server = createApiServer({ store, users: createUsers(), friends: createFriends() });
+  const server = createApiServer({
+    store,
+    users: createUsers(),
+    friends: createFriends(),
+    liveKitCredentials: {
+      async issueAdmission() {
+        return { status: 'issued', admission: { room: ROOM_ID, token: 'jwt', ttlSeconds: 60, url: 'ws://gate.test/rtc' } };
+      }
+    },
+    membershipServicesOverride: {
+      service: {
+        async persistSuccessfulAdmission() {
+          return { created: false, status: 'active' };
+        }
+      }
+    }
+  });
   await new Promise((resolve, reject) => {
     server.listen({ path: socketPath }, (error) => error ? reject(error) : resolve());
   });
@@ -246,7 +271,7 @@ test('kick and ban lifecycle enforces join, token, chat, preview, and undo', asy
     name: 'Target'
   });
   const rejectedOldJoin = await waitForWsType(target.frames, 'error', () => true, 5000, oldJoinStart);
-  assert.equal(rejectedOldJoin.error.code, 'invalid_session');
+  assert.equal(rejectedOldJoin.error.code, 'superseded_join');
 
   const freshPeerId = 'target-fresh-peer';
   const freshPeerToken = 'f'.repeat(32);

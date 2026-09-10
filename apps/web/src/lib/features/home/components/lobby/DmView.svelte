@@ -1,8 +1,9 @@
 <script lang="ts">
-  import { Bell, BellOff, Copy, DoorOpen, Pencil, Trash2, User, UserMinus, X } from '@lucide/svelte';
+  import { Bell, BellOff, DoorOpen, User, UserMinus, X } from '@lucide/svelte';
   import { iconMd, iconSm } from '$lib/shared/ui/icons';
-  import { tick } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import type { DirectMessage } from '$lib/api/dm';
+  import type { AuthUser } from '$lib/api/auth';
   import { Avatar } from '$lib/shared/ui';
   import { effectivePresenceStatus } from '$lib/shared/presence';
   import ChatText from '$lib/shared/components/ChatText.svelte';
@@ -15,13 +16,38 @@
     removeFriend,
     respondRoomInvitation,
     sendMessage,
+    loadOlderThread,
     toggleProfile
   } from '../../model/friends.svelte';
   import { isPeerNotificationsMuted, updatePeerNotificationsMuted } from '$lib/shared/notifications/preferences.svelte';
   import { copyText } from '$lib/shared/utils/clipboard';
   import { pushToast } from '../../model/toasts.svelte';
+  import { markThreadRead } from '$lib/api/dm';
+  import { createReadReconciliation } from '$lib/shared/chat/read-reconciliation.svelte';
+  import { getCapabilityFeature } from '$lib/platform/capability-state.svelte';
+  import { getAppRealtime } from '$lib/api/realtime';
+  import { createReactionStore } from '$lib/shared/chat/reaction-store.svelte';
+  import MessageContextMenu from '$lib/shared/chat/MessageContextMenu.svelte';
+  import MessageHoverActions from '$lib/shared/chat/MessageHoverActions.svelte';
+  import { DEFAULT_FREQUENT_REACTIONS, loadFrequentReactions } from '$lib/shared/chat/frequent-reactions';
+  import ReactionSummary from '$lib/shared/chat/ReactionSummary.svelte';
+  import {
+    dataTransferHasImages,
+    getAttachmentComposeStore,
+    imageFilesFromClipboard,
+    imageFilesFromDataTransfer,
+    type AttachmentComposeStore
+  } from '$lib/shared/chat/attachment-compose.svelte';
+  import AttachmentComposer from '$lib/shared/chat/AttachmentComposer.svelte';
+  import AttachmentDropOverlay from '$lib/shared/chat/AttachmentDropOverlay.svelte';
+  import AttachmentMosaic from '$lib/shared/chat/AttachmentMosaic.svelte';
+  import AttachmentUploadControl from '$lib/shared/chat/AttachmentUploadControl.svelte';
+  import ReplyPreview from '$lib/shared/chat/ReplyPreview.svelte';
+  import ReplyTargetBar from '$lib/shared/chat/ReplyTargetBar.svelte';
+  import { openProfileCardFor } from '../../profile-card-ui.svelte';
+  import type { ProfileCardPerson } from '$lib/shared/components/profile-card';
 
-  let { selfId } = $props<{ selfId: string }>();
+  let { selfId, self } = $props<{ selfId: string; self: AuthUser }>();
 
   let draft = $state('');
   let sending = $state(false);
@@ -30,7 +56,33 @@
   let editSaving = $state(false);
   let scrollEl = $state<HTMLDivElement | null>(null);
   let inputEl = $state<HTMLTextAreaElement | null>(null);
+  let threadPinnedToBottom = true;
+  let composerAttachmentCount = 0;
   let editEl = $state<HTMLTextAreaElement | null>(null);
+  let readReconciliation: ReturnType<typeof createReadReconciliation> | null = null;
+  let reactionsEnabled = $state(false);
+  const reactions = createReactionStore();
+  let media = $state<AttachmentComposeStore | null>(null);
+  let attachmentDragDepth = $state(0);
+  let mediaUploadsEnabled = $state(false);
+  let repliesEnabled = $state(false);
+  let replyTarget = $state<DirectMessage | null>(null);
+  let menuMessage = $state<DirectMessage | null>(null);
+  let menuFromMe = $state(false);
+  let menuX = $state(0);
+  let menuY = $state(0);
+  let quickReactions = $state<string[]>([...DEFAULT_FREQUENT_REACTIONS]);
+  let sendAttemptKey = '';
+  let sendAttemptFingerprint = '';
+
+  function idempotencyKeyFor(value: unknown): string {
+    const fingerprint = JSON.stringify(value);
+    if (!sendAttemptKey || sendAttemptFingerprint !== fingerprint) {
+      sendAttemptKey = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      sendAttemptFingerprint = fingerprint;
+    }
+    return sendAttemptKey;
+  }
 
   function autoResize() {
     if (!inputEl) return;
@@ -58,6 +110,53 @@
     queueMicrotask(autoResize);
   }
 
+  async function onComposePaste(event: ClipboardEvent): Promise<void> {
+    if (!media) return;
+    const files = imageFilesFromClipboard(event);
+    if (!files.length) return;
+    event.preventDefault();
+    try {
+      await media.addFiles(files);
+    } catch (cause) {
+      pushToast(cause instanceof Error ? cause.message : 'Не удалось вставить изображение', { variant: 'error' });
+    }
+  }
+
+  function onAttachmentDragEnter(event: DragEvent): void {
+    if (!media || sending || !dataTransferHasImages(event.dataTransfer)) return;
+    event.preventDefault();
+    attachmentDragDepth += 1;
+  }
+
+  function onAttachmentDragOver(event: DragEvent): void {
+    if (!media || sending || !dataTransferHasImages(event.dataTransfer)) return;
+    event.preventDefault();
+    if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
+  }
+
+  function onAttachmentDragLeave(event: DragEvent): void {
+    if (!attachmentDragDepth) return;
+    event.preventDefault();
+    attachmentDragDepth = Math.max(0, attachmentDragDepth - 1);
+  }
+
+  async function onAttachmentDrop(event: DragEvent): Promise<void> {
+    if (!media) return;
+    const files = imageFilesFromDataTransfer(event.dataTransfer);
+    if (!files.length) return;
+    event.preventDefault();
+    attachmentDragDepth = 0;
+    try {
+      await media.addFiles(files);
+    } catch (cause) {
+      pushToast(cause instanceof Error ? cause.message : 'Не удалось загрузить изображение', { variant: 'error' });
+    }
+  }
+
+  function showAttachmentError(message: string): void {
+    pushToast(message, { variant: 'error' });
+  }
+
   function findLastOwnMessage(): DirectMessage | null {
     for (let index = friendsState.thread.length - 1; index >= 0; index -= 1) {
       const message = friendsState.thread[index];
@@ -82,9 +181,96 @@
           : 'не в сети'
   );
   const peerMuted = $derived(isPeerNotificationsMuted(peer?.id));
+
+  function openSelfProfile(event: MouseEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+    const person: ProfileCardPerson = {
+      userId: selfId,
+      name: self.displayName?.trim() || self.login,
+      login: self.login,
+      avatarUrl: self.avatarUrl,
+      avatarColorKey: self.avatarColorKey,
+      avatarAccent: self.avatarAccent,
+      presence: 'online'
+    };
+    openProfileCardFor(person, event.currentTarget);
+  }
+
+  function jumpToMessage(messageId: string): void {
+    const row = scrollEl?.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(messageId)}"]`);
+    if (!row) {
+      pushToast('Сообщение не загружено — прокрутите историю выше');
+      return;
+    }
+    row.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    row.classList.add('is-highlighted');
+    setTimeout(() => row.classList.remove('is-highlighted'), 1600);
+  }
+
+  function openMessageAuthorProfile(event: MouseEvent): void {
+    if (!peer) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const person: ProfileCardPerson = {
+      userId: peer.id,
+      name: friendName(peer),
+      login: peer.login,
+      avatarUrl: peer.avatarUrl,
+      avatarColorKey: peer.avatarColorKey,
+      avatarAccent: peer.avatarAccent,
+      presence
+    };
+    openProfileCardFor(person, event.currentTarget);
+  }
   let muteSaving = $state(false);
   let inviteResponding = $state('');
   const profileAccent = $derived(peer?.avatarAccent || '');
+
+  $effect(() => {
+    const peerId = friendsState.selectedFriendId;
+    if (!peerId) {
+      reactions.reset();
+      media = null;
+      return;
+    }
+    reactions.setConversation({ type: 'dm', id: peerId });
+    media = mediaUploadsEnabled ? getAttachmentComposeStore('dm', peerId) : null;
+  });
+
+  $effect(() => {
+    if (!reactionsEnabled) return;
+    for (const message of friendsState.thread) {
+      if (!message.invite) void reactions.load(message.id);
+    }
+  });
+
+  $effect(() => {
+    const attachmentCount = media?.drafts.length ?? 0;
+    if (attachmentCount === composerAttachmentCount) return;
+    composerAttachmentCount = attachmentCount;
+    if (threadPinnedToBottom) {
+      void tick().then(() => {
+        if (scrollEl) scrollEl.scrollTop = scrollEl.scrollHeight;
+      });
+    }
+  });
+
+  onMount(() => {
+    void getCapabilityFeature('reactions').then((enabled) => { reactionsEnabled = enabled; });
+    if (selfId) {
+      void loadFrequentReactions('chat', selfId).then((emoji) => {
+        if (emoji.length > 0) quickReactions = emoji;
+      });
+    }
+    void getCapabilityFeature('replies').then((enabled) => { repliesEnabled = enabled; });
+    void getCapabilityFeature('mediaUploads').then((enabled) => { mediaUploadsEnabled = enabled; });
+    return getAppRealtime().subscribe((event) => {
+      if (event.type !== 'reaction.updated' || event.payload.conversation.type !== 'dm') return;
+      if (event.payload.conversation.id !== friendsState.selectedFriendId) return;
+      reactions.applyServer(event.payload.messageId, event.payload.summary);
+    });
+  });
 
   interface Group {
     key: string;
@@ -117,13 +303,114 @@
     return result;
   });
 
-  // Autoscroll to the newest message whenever the thread grows.
+  let lastAutoScrolledPeer = '';
+  let lastAutoScrolledMessage = '';
+
+  // A thread is not ready the moment its messages arrive: images and emoji are
+  // still resolving, and every one that lands changes the height, so a scroll
+  // to the bottom taken too early stops short. The placeholder therefore stays
+  // up while the thread renders behind it, and comes down once the artwork has
+  // settled and the view is actually at the newest message.
+  const SETTLE_TIMEOUT_MS = 2000;
+  let threadSettling = $state(false);
+  let settleToken = 0;
+
+  function pendingArtwork(root: HTMLElement): Promise<unknown> {
+    const images = [...root.querySelectorAll('img')].filter((image) => !image.complete);
+    if (!images.length) return Promise.resolve();
+    return Promise.all(
+      images.map(
+        (image) =>
+          new Promise<void>((resolve) => {
+            const done = (): void => {
+              image.removeEventListener('load', done);
+              image.removeEventListener('error', done);
+              resolve();
+            };
+            image.addEventListener('load', done);
+            image.addEventListener('error', done);
+          })
+      )
+    );
+  }
+
+  async function settleThread(token: number): Promise<void> {
+    await tick();
+    if (token !== settleToken) return;
+    if (scrollEl) {
+      // A slow or dead image must not hold the thread hostage.
+      await Promise.race([
+        pendingArtwork(scrollEl),
+        new Promise((resolve) => setTimeout(resolve, SETTLE_TIMEOUT_MS))
+      ]);
+    }
+    if (token !== settleToken) return;
+    await tick();
+    if (token !== settleToken) return;
+    if (scrollEl) scrollEl.scrollTop = scrollEl.scrollHeight;
+    threadSettling = false;
+  }
+
   $effect(() => {
-    void friendsState.thread.length;
+    const peerId = friendsState.selectedFriendId ?? '';
+    const loading = friendsState.threadLoading;
+    if (friendsState.view !== 'dm' || !peerId) {
+      threadSettling = false;
+      return;
+    }
+    if (loading) {
+      settleToken += 1;
+      threadSettling = true;
+      return;
+    }
+    void settleThread((settleToken += 1));
+  });
+
+  // Prepending older history keeps the same newest id, so it must not trigger
+  // this latest-message autoscroll and disturb the preserved anchor.
+  $effect(() => {
+    const peerId = friendsState.selectedFriendId ?? '';
+    const newestId = friendsState.thread.at(-1)?.id ?? '';
+    if (peerId === lastAutoScrolledPeer && newestId === lastAutoScrolledMessage) return;
+    lastAutoScrolledPeer = peerId;
+    lastAutoScrolledMessage = newestId;
     void tick().then(() => {
       if (scrollEl) scrollEl.scrollTop = scrollEl.scrollHeight;
     });
   });
+
+  $effect(() => {
+    const peerId = friendsState.selectedFriendId;
+    const cursorEnabled = friendsState.threadReadCursorEnabled;
+    readReconciliation?.dispose();
+    readReconciliation = null;
+    if (friendsState.view !== 'dm' || !peerId) return;
+    readReconciliation = createReadReconciliation({
+      scope: `dm:${peerId}`,
+      legacy: !cursorEnabled,
+      commit: async (cursor) => {
+        await markThreadRead(peerId, cursor);
+      }
+    });
+    return () => {
+      readReconciliation?.dispose();
+      readReconciliation = null;
+    };
+  });
+
+  $effect(() => {
+    const revision = friendsState.threadReadRevision;
+    const candidate = friendsState.threadReadCandidate;
+    if (!revision || !candidate || !readReconciliation) return;
+    void tick().then(() => readReconciliation?.advanceAfterRender(candidate === '__legacy__' ? undefined : candidate));
+  });
+
+  function onThreadScroll(): void {
+    if (!scrollEl) return;
+    threadPinnedToBottom = scrollEl.scrollHeight - scrollEl.scrollTop - scrollEl.clientHeight <= 48;
+    if (scrollEl.scrollTop > 32) return;
+    void loadOlderThread(scrollEl);
+  }
 
   // Focus the compose field when opening or switching DM threads.
   $effect(() => {
@@ -135,12 +422,19 @@
 
   async function submit(): Promise<void> {
     const text = draft.trim();
-    if (!text || sending) return;
+    if ((!text && !media?.canSend) || sending) return;
+    if (media?.drafts.length && !media.canSend) return;
     sending = true;
     let sent = false;
     try {
-      await sendMessage(text);
+      const attachmentIds = media?.readyIds ?? [];
+      const replyTo = replyTarget ? { messageId: replyTarget.id } : undefined;
+      await sendMessage(text, attachmentIds, replyTo, idempotencyKeyFor({ text, attachmentIds, replyTo }));
       draft = '';
+      media?.clearBound();
+      replyTarget = null;
+      sendAttemptKey = '';
+      sendAttemptFingerprint = '';
       sent = true;
     } catch {
       // Keep the draft intact so the message can be retried.
@@ -172,7 +466,35 @@
   async function onDelete(mid: string): Promise<void> {
     try {
       await deleteMessage(mid);
-    } catch {}
+      reactions.markDeleted(mid);
+      pushToast('Сообщение удалено');
+    } catch (cause) {
+      pushToast(cause instanceof Error && cause.message ? cause.message : 'Не удалось удалить сообщение', { variant: 'error' });
+    }
+  }
+
+  // Invitations are interactive cards with their own buttons; a context menu on
+  // top of them would offer actions that do not apply.
+  function openMessageMenu(bubble: DirectMessage, fromMe: boolean, event: MouseEvent): void {
+    if (bubble.invite || editingMessageId === bubble.id) return;
+    event.preventDefault();
+    menuMessage = bubble;
+    menuFromMe = fromMe;
+    menuX = event.clientX;
+    menuY = event.clientY;
+  }
+
+  function closeMessageMenu(): void {
+    menuMessage = null;
+  }
+
+  // The picker lives in each bubble's hover toolbar; the menu entry drives it
+  // rather than mounting a second popover.
+  function openReactionPickerFor(messageId: string): void {
+    queueMicrotask(() => {
+      const row = scrollEl?.querySelector(`[data-message-id="${CSS.escape(messageId)}"]`);
+      row?.querySelector<HTMLButtonElement>('.reaction-picker-trigger')?.click();
+    });
   }
 
   async function copyMessageText(message: DirectMessage): Promise<void> {
@@ -189,6 +511,7 @@
     if (!invite) return '';
     if (invite.status === 'accepted') return 'Принял приглашение';
     if (invite.status === 'declined') return 'Отклонил предложение';
+    if (invite.status === 'expired') return 'Приглашение завершено';
     if (invite.expiresAt && invite.expiresAt <= Date.now()) return 'Приглашение истекло';
     return fromMe ? 'Приглашение отправлено' : 'Приглашение в комнату';
   }
@@ -253,7 +576,16 @@
   }
 </script>
 
-<div class="lobby-dm">
+<div
+  class="lobby-dm"
+  role="region"
+  aria-label="Личные сообщения"
+  ondragenter={onAttachmentDragEnter}
+  ondragover={onAttachmentDragOver}
+  ondragleave={onAttachmentDragLeave}
+  ondrop={onAttachmentDrop}
+>
+  {#if attachmentDragDepth > 0}<AttachmentDropOverlay />{/if}
   <div class="lobby-dm-col">
     {#if peer}
       <button class="lobby-dm-head" type="button" onclick={toggleProfile}>
@@ -279,42 +611,71 @@
       </button>
     {/if}
 
-    <div class="lobby-dm-scroll lobby-scroll" bind:this={scrollEl}>
-      {#if friendsState.threadLoading}
-        <div class="lobby-dm-empty">Загружаем переписку…</div>
-      {:else if groups.length === 0}
+    <div class="lobby-dm-scroll lobby-scroll" bind:this={scrollEl} onscroll={onThreadScroll}>
+      {#if friendsState.threadLoading || threadSettling}
+        <div class="lobby-dm-loading" role="status">Загружаем переписку…</div>
+      {/if}
+      {#if friendsState.threadHistoryError && groups.length === 0}
+        <div class="lobby-dm-empty">{friendsState.threadHistoryError}</div>
+      {:else if groups.length === 0 && !friendsState.threadLoading && !threadSettling}
         <div class="lobby-dm-empty">Здесь пока пусто. Напишите первым!</div>
       {:else}
-        <div class="lobby-dm-thread">
+        <div class="lobby-dm-thread" class:is-settling={threadSettling}>
+          {#if friendsState.threadHistoryError}
+            <div class="lobby-dm-empty">{friendsState.threadHistoryError}</div>
+          {/if}
+          {#if friendsState.threadHistoryEnabled && (friendsState.threadLoadingOlder || friendsState.threadHasMoreBefore)}
+            <button type="button" class="lobby-dm-empty" disabled={friendsState.threadLoadingOlder} onclick={() => void loadOlderThread(scrollEl)}>
+              {friendsState.threadLoadingOlder ? 'Загружаем…' : 'Показать предыдущие'}
+            </button>
+          {/if}
           {#each groups as group (group.key)}
             {#if group.dayLabel}
-              <div class="lobby-dm-day">
-                <span class="lobby-dm-day-label">{group.dayLabel}</span>
-              </div>
+              <div class="chat-day-divider"><span>{group.dayLabel}</span></div>
             {/if}
-            <div class="lobby-dm-group" class:lobby-dm-group--me={group.fromMe}>
-              {#if !group.fromMe && peer}
-                <Avatar name={friendName(peer)} src={peer.avatarUrl} colorKey={peer.avatarColorKey} background={peer.avatarAccent || undefined} size={32} />
+            <div class="chat-msg dm-chat-group" data-self={group.fromMe}>
+              {#if group.fromMe}
+                <button class="chat-avatar-button chat-msg-trigger" type="button" aria-haspopup="dialog" aria-label="Ваш профиль" onclick={openSelfProfile}>
+                  <Avatar class="chat-msg-avatar" name={self.displayName?.trim() || self.login} src={self.avatarUrl} colorKey={self.avatarColorKey} background={self.avatarAccent || undefined} size={34} />
+                </button>
+              {:else}
+                <button class="chat-avatar-button chat-msg-trigger" type="button" aria-haspopup="dialog" aria-label={`Профиль ${friendName(peer!)}`} onclick={openMessageAuthorProfile}>
+                  <Avatar class="chat-msg-avatar" name={friendName(peer!)} src={peer?.avatarUrl} colorKey={peer?.avatarColorKey} background={peer?.avatarAccent || undefined} size={34} />
+                </button>
               {/if}
-              <div class="lobby-dm-bubbles">
-                {#each group.bubbles as bubble (bubble.id)}
-                  {#if bubble.invite}
-                    <article class="lobby-room-invitation" data-status={bubble.invite.status}>
-                      <span class="lobby-room-invitation-icon"><DoorOpen {...iconMd} aria-hidden="true" /></span>
-                      <div class="lobby-room-invitation-copy">
-                        <strong>{inviteTitle(bubble, group.fromMe)}</strong>
-                        <span>{bubble.invite.roomName || bubble.invite.roomId}</span>
-                      </div>
-                      {#if inviteActionable(bubble, group.fromMe)}
-                        <div class="lobby-room-invitation-actions">
-                          <button type="button" class="lobby-room-invitation-dismiss" disabled={inviteResponding === bubble.id} onclick={() => void onInviteRespond(bubble, 'decline')}>Не сейчас</button>
-                          <button type="button" class="lobby-room-invitation-join" disabled={inviteResponding === bubble.id} onclick={() => void onInviteRespond(bubble, 'accept')}>Войти</button>
-                        </div>
-                      {/if}
-                    </article>
+              <div class="chat-msg-main">
+                <div class="chat-msg-meta">
+                  {#if group.fromMe}
+                    <button class="chat-msg-author chat-msg-trigger" type="button" style={`color:${self.avatarAccent || 'var(--accent)'}`} aria-haspopup="dialog" aria-label="Ваш профиль" onclick={openSelfProfile}>{self.displayName?.trim() || self.login}</button>
                   {:else}
-                  <div class="lobby-dm-bubble" class:lobby-dm-bubble--me={group.fromMe} class:lobby-dm-bubble--them={!group.fromMe}>
-                    {#if editingMessageId === bubble.id}
+                    <button class="chat-msg-author chat-msg-trigger" type="button" style={`color:${peer?.avatarAccent || 'var(--accent)'}`} aria-haspopup="dialog" aria-label={`Профиль ${friendName(peer!)}`} onclick={openMessageAuthorProfile}>{friendName(peer!)}</button>
+                  {/if}
+                  <time class="chat-msg-time" datetime={new Date(group.bubbles[0].createdAt).toISOString()}>{formatTime(group.bubbles[0].createdAt)}</time>
+                </div>
+                {#each group.bubbles as bubble (bubble.id)}
+                  <!-- svelte-ignore a11y_no_static_element_interactions -->
+                  <div
+                    class="chat-msg-text dm-chat-message"
+                    class:is-context={menuMessage?.id === bubble.id}
+                    data-message-id={bubble.id}
+                    data-group-first={bubble.id === group.bubbles[0].id}
+                    oncontextmenu={(event) => openMessageMenu(bubble, group.fromMe, event)}
+                  >
+                    {#if bubble.invite}
+                      <article class="lobby-room-invitation" data-status={bubble.invite.status}>
+                        <span class="lobby-room-invitation-icon"><DoorOpen {...iconMd} aria-hidden="true" /></span>
+                        <div class="lobby-room-invitation-copy">
+                          <strong>{inviteTitle(bubble, group.fromMe)}</strong>
+                          <span>{bubble.invite.roomName || bubble.invite.roomId}</span>
+                        </div>
+                        {#if inviteActionable(bubble, group.fromMe)}
+                          <div class="lobby-room-invitation-actions">
+                            <button type="button" class="lobby-room-invitation-dismiss" disabled={inviteResponding === bubble.id} onclick={() => void onInviteRespond(bubble, 'decline')}>Не сейчас</button>
+                            <button type="button" class="lobby-room-invitation-join" disabled={inviteResponding === bubble.id} onclick={() => void onInviteRespond(bubble, 'accept')}>Войти</button>
+                          </div>
+                        {/if}
+                      </article>
+                    {:else if editingMessageId === bubble.id}
                       <div class="dm-msg-edit">
                         <textarea
                           class="dm-msg-edit-input"
@@ -332,19 +693,24 @@
                         </div>
                       </div>
                     {:else}
-                      <span class="dm-msg-content"><ChatText text={bubble.body} />{#if bubble.editedAt}<span class="dm-msg-edited">(изменено)</span>{/if}</span>
-                      <div class="dm-msg-actions" role="toolbar" aria-label="Действия с сообщением">
-                        <button type="button" aria-label="Копировать текст" title="Копировать текст" onclick={() => void copyMessageText(bubble)}><Copy {...iconSm} aria-hidden="true" /></button>
-                        {#if group.fromMe}
-                          <button type="button" aria-label="Редактировать" title="Редактировать" onclick={() => startEditing(bubble)}><Pencil {...iconSm} aria-hidden="true" /></button>
-                          <button type="button" class="dm-msg-action-danger" aria-label="Удалить" title="Удалить" onclick={() => void onDelete(bubble.id)}><Trash2 {...iconSm} aria-hidden="true" /></button>
-                        {/if}
+                      <div class="dm-chat-content">
+                        {#if bubble.replyPreview}<ReplyPreview preview={bubble.replyPreview} interactive onjump={jumpToMessage} />{/if}
+                        {#if bubble.attachments?.length}<AttachmentMosaic attachments={bubble.attachments} />{/if}
+                        {#if bubble.body.trim()}<span class="chat-msg-content dm-msg-content"><ChatText text={bubble.body} />{#if bubble.editedAt}<span class="dm-msg-edited">(изменено)</span>{/if}</span>{/if}
+                        {#if reactionsEnabled}<ReactionSummary store={reactions} messageId={bubble.id} />{/if}
                       </div>
+                      <MessageHoverActions
+                        reactionStore={reactionsEnabled ? reactions : undefined}
+                        messageId={bubble.id}
+                        userId={selfId}
+                        canReply={repliesEnabled}
+                        onReply={() => { replyTarget = bubble; inputEl?.focus(); }}
+                        onCopy={() => void copyMessageText(bubble)}
+                        onMore={(event) => openMessageMenu(bubble, group.fromMe, event)}
+                      />
                     {/if}
                   </div>
-                  {/if}
                 {/each}
-                <div class="lobby-dm-time">{formatTime(group.bubbles[group.bubbles.length - 1].createdAt)}</div>
               </div>
             </div>
           {/each}
@@ -352,17 +718,31 @@
       {/if}
     </div>
 
-    <div class="lobby-dm-compose">
-      <textarea
-        class="lobby-dm-input lobby-dm-textarea"
-        placeholder="Написать сообщение…"
-        bind:this={inputEl}
-        bind:value={draft}
-        rows="1"
-        onkeydown={onKeydown}
-        oninput={autoResize}
-        disabled={sending}
-      ></textarea>
+    <div class="lobby-dm-compose" onpaste={onComposePaste}>
+      <div class="lobby-dm-compose-row attachment-compose-field">
+        {#if replyTarget}
+          {@const target = replyTarget}
+          <ReplyTargetBar
+            target={{ messageId: target.id, deleted: false, author: { id: target.senderId, name: target.senderId === selfId ? 'Вы' : friendName(peer!) }, text: target.body }}
+            onjump={jumpToMessage}
+            oncancel={() => (replyTarget = null)}
+          />
+        {/if}
+        {#if media}<AttachmentComposer store={media} disabled={sending} />{/if}
+        <div class="attachment-compose-controls">
+          {#if media}<AttachmentUploadControl store={media} disabled={sending} onerror={showAttachmentError} />{/if}
+          <textarea
+            class="lobby-dm-input lobby-dm-textarea"
+            placeholder="Написать сообщение…"
+            bind:this={inputEl}
+            bind:value={draft}
+            rows="1"
+            onkeydown={onKeydown}
+            oninput={autoResize}
+            disabled={sending}
+          ></textarea>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -419,3 +799,27 @@
     </div>
   {/if}
 </div>
+
+{#if menuMessage}
+  {@const target = menuMessage}
+  <MessageContextMenu
+    open={Boolean(menuMessage)}
+    x={menuX}
+    y={menuY}
+    quickReactions={quickReactions}
+    activeReactions={new Set(
+      reactions.forMessage(target.id).filter((summary) => summary.reactedByMe).map((summary) => summary.emoji)
+    )}
+    canReact={reactionsEnabled && Boolean(selfId)}
+    canReply={repliesEnabled}
+    canEdit={menuFromMe}
+    canDelete={menuFromMe}
+    onClose={closeMessageMenu}
+    onReact={(emoji) => void reactions.toggle(target.id, emoji)}
+    onOpenReactionPicker={() => openReactionPickerFor(target.id)}
+    onReply={() => { replyTarget = target; inputEl?.focus(); }}
+    onCopy={() => void copyMessageText(target)}
+    onEdit={() => startEditing(target)}
+    onDelete={() => void onDelete(target.id)}
+  />
+{/if}

@@ -10,7 +10,7 @@ import { playMicCue, playOutputCue } from '../media/cues';
 import { getLocalMicrophoneCapture, setMicrophoneCaptureEnabled } from '../services/microphone-service';
 import { syncLiveKitVoiceSubscriptions, syncLocalMicrophonePublicationMuted } from '../services/livekit-service';
 import { getDisplayName } from './names';
-import { updateParticipant } from '../room/participants';
+import { clearAllSpeaking, updateParticipant } from '../room/participants';
 import { persistMicrophoneMode, persistOutputMuted } from '../core/settings';
 import { showToast } from './toast';
 import { setVoiceControlsState } from '$lib/features/room/voice-session.svelte';
@@ -124,13 +124,17 @@ export function setMicrophoneMuted(muted: boolean, options: { playCue?: boolean;
 }
 
 function toggleMute(): void {
-  if (state.outputMuted && state.muted) {
-    showToast('Сначала включите звук');
+  if (state.microphoneMode === 'push-to-talk' && !state.outputMuted) {
+    showToast('В режиме Push-to-talk удерживайте назначенную клавишу');
     return;
   }
 
-  if (state.microphoneMode === 'push-to-talk') {
-    showToast('В режиме Push-to-talk удерживайте назначенную клавишу');
+  // Deafened force-mutes the microphone, so the mic button has nothing to
+  // unmute on its own. Rather than refuse, take it as the intent to come back
+  // to the conversation and lift the output mute too — the same thing the
+  // headphone button would do, which is what people expect from Discord.
+  if (state.outputMuted) {
+    toggleOutputMute({ unmuteMicrophone: true });
     return;
   }
 
@@ -207,7 +211,12 @@ export function toggleMicrophoneMuted(): void {
   toggleMute();
 }
 
-export function toggleOutputMute(): void {
+/**
+ * @param options.unmuteMicrophone Undeafening from the microphone button also
+ * opens the microphone, regardless of whether it happened to be muted before
+ * the output was cut.
+ */
+export function toggleOutputMute(options: { unmuteMicrophone?: boolean } = {}): void {
   const nextOutputMuted = !state.outputMuted;
   if (nextOutputMuted) {
     state.micMutedBeforeOutputMute = state.muted;
@@ -220,10 +229,16 @@ export function toggleOutputMute(): void {
   if (state.localStream) {
     if (state.outputMuted) {
       setMicrophoneMuted(true, { playCue: false, post: false });
-    } else if (state.microphoneMode === 'open' && !state.micMutedBeforeOutputMute) {
+    } else if (
+      state.microphoneMode === 'open'
+      && (options.unmuteMicrophone || !state.micMutedBeforeOutputMute)
+    ) {
       setMicrophoneMuted(false, { playCue: false, post: false });
     }
   }
+
+  // Rings are cleared on the same tick as the mute so none survives the switch.
+  if (state.outputMuted) clearAllSpeaking();
 
   syncOutputDeviceUiState();
   syncLiveKitVoiceSubscriptions();

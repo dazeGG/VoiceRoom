@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "release": "2.5.0",
+  "goal": "G47",
+  "decision": "CATALOG_COMPATIBILITY_CORRECTION",
+  "recordedAt": "2026-08-06T00:00:00.000Z",
+  "supersedesCatalogEntry": "apps/api/src/migrations/20260718130000_create_room_credential_epochs.js",
+  "appliedPath": "apps/api/src/migrations/20260720160000_create_livekit_gate_credentials.js",
+  "appliedBlobSha256": "sha256:fcd75b8ce4c4dd89d7830a9df864a52057f97dab2af32dce791114c06cdc9845",
+  "authoritativeConfig": "config/livekit/external-auth-gate.v1.json",
+  "removedUnrealizedConfigEntry": "config/livekit/credential-boundary.v1.json",
+  "rationale": "The later-named migration is the single already-applied implementation of the approved PostgreSQL principal-epoch and credential-row mechanism. Renaming or duplicating an applied migration would make upgrade history ambiguous, so the canonical catalogs are corrected to the deployed identity.",
+  "schemaBindings": {
+    "credentialRow": "livekit_gate_credentials",
+    "principalEpochRow": "livekit_gate_principal_epochs"
+  },
+  "priorCanonicalDigests": {
+    "docs/RELEASE_2.5.0_PLAN.md": "sha256:a370704ad39c1aaf0ce453ede86128b57e6a105f596b52214815746812fca218",
+    "docs/RELEASE_2.5.0_TEST_SPEC.md": "sha256:c944683500c6484fc8c00dde5131e2ff0bcda33ad582256421f7daeed19e9f7c"
+  },
+  "amendedCanonicalDigests": {
+    "docs/RELEASE_2.5.0_PLAN.md": "sha256:3c6833fd2d6491e717d6be5d189b03098aabb565714e9049bd91a773e0631736",
+    "docs/RELEASE_2.5.0_TEST_SPEC.md": "sha256:9e37341b56a6b05107d8b2c7231beae537cf119f5d560acb859430c209f4205b"
+  },
+  "constraints": {
+    "renameAppliedMigration": false,
+    "createDuplicateMigration": false,
+    "mechanismChanged": false
+  }
+}

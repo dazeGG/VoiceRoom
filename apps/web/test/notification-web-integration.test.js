@@ -172,15 +172,17 @@ test('muted notification targets show a bell-off indicator beside their names', 
   assert.match(lobbyCss, /\.lv-notification-muted\s*\{[^}]*flex:\s*none/);
 });
 
-test('unread badges stay Volt unless their friend or room notifications are muted', () => {
+test('unread badges and compact room-panel indicators remain wired to canonical counts', () => {
   const badge = read('src/lib/shared/ui/Badge/Badge.svelte');
   const badgeTypes = read('src/lib/shared/ui/Badge/types.ts');
   const sidebar = read('src/lib/features/home/components/lobby/Sidebar.svelte');
   const voiceHome = read('src/lib/features/home/components/lobby/VoiceHome.svelte');
   const roomPreview = read('src/lib/features/home/components/lobby/RoomPreviewView.svelte');
   const roomBrowse = read('src/lib/features/home/components/lobby/RoomBrowseView.svelte');
-  const previewChat = read('src/lib/features/home/components/lobby/RoomPreviewChat.svelte');
-  const roomChat = read('src/lib/features/room/components/RoomChat.svelte');
+  const previewChat = `${read('src/lib/features/home/components/lobby/RoomPreviewChat.svelte')}
+${read('src/lib/features/room/components/RoomChatPanel.svelte')}`;
+  const roomChat = `${read('src/lib/features/room/components/RoomChat.svelte')}
+${read('src/lib/features/room/components/RoomChatPanel.svelte')}`;
   const roomTopbar = read('src/lib/features/room/components/RoomTopbar.svelte');
   const roomControls = read('src/lib/features/room/styles/controls.css');
 
@@ -191,12 +193,12 @@ test('unread badges stay Volt unless their friend or room notifications are mute
   assert.match(voiceHome, /class="lv-card-unread" tone=\{roomNotificationsMuted \? 'muted' : 'default'\}/);
   for (const preview of [roomPreview, roomBrowse]) {
     assert.match(preview, /roomPresence\.unreadCountByRoomId\[previewRoomId\] \?\? room\.unreadCount \?\? 0/);
-    assert.match(preview, /class="room-chat-unread" data-muted=\{roomNotificationsMuted\}/);
+    assert.match(preview, /\{#if roomUnreadCount > 0\}<span class="room-panel-tab-unread"/);
   }
-  assert.match(previewChat, /markRoomChatRead\(activeRoomId\)/);
+  assert.match(previewChat, /markRoomChatRead\(roomId\)/);
   assert.match(roomChat, /roomUi\.chatOpen[\s\S]*markRoomChatRead\(roomId\)/);
-  assert.match(roomTopbar, /roomNotificationsMuted = \$derived\(notificationPreferences\.mutedRoomIds\.includes\(roomClientState\.roomId\)\)/);
-  assert.match(roomTopbar, /data-muted=\{roomNotificationsMuted\}/);
+  assert.match(roomTopbar, /const roomUnreadCount = \$derived\(Math\.max\(roomUi\.unreadChat,/);
+  assert.match(roomTopbar, /\{#if roomUnreadCount > 0\}<span class="room-panel-tab-unread"/);
   assert.match(roomControls, /\.room-chat-unread\s*\{[^}]*background: var\(--accent\)/);
   assert.match(roomControls, /\.room-chat-unread\[data-muted='true'\]\s*\{[^}]*background: var\(--control-hover\)/);
 });
@@ -212,13 +214,15 @@ test('clearing room unread state cannot subscribe its caller to the same reactiv
 test('reading a room clears the canonical lobby badge and rejects stale unread summaries', () => {
   const roomPresence = read('src/lib/features/home/model/room-presence.svelte.ts');
   const voiceHome = read('src/lib/features/home/components/lobby/VoiceHome.svelte');
-  const previewChat = read('src/lib/features/home/components/lobby/RoomPreviewChat.svelte');
-  const roomChat = read('src/lib/features/room/components/RoomChat.svelte');
+  const previewChat = `${read('src/lib/features/home/components/lobby/RoomPreviewChat.svelte')}
+${read('src/lib/features/room/components/RoomChatPanel.svelte')}`;
+  const roomChat = `${read('src/lib/features/room/components/RoomChat.svelte')}
+${read('src/lib/features/room/components/RoomChatPanel.svelte')}`;
 
   assert.match(roomPresence, /beginRoomChatReadSession/);
   assert.match(roomPresence, /roomChatIsBeingRead\(summary\.roomId\) \? 0/);
   assert.match(voiceHome, /roomPresence\.unreadCountByRoomId\[room\.roomId\] \?\? room\.unreadCount \?\? 0/);
-  assert.match(previewChat, /beginRoomChatReadSession\(activeRoomId\)/);
+  assert.match(previewChat, /beginRoomChatReadSession\(roomId\)/);
   assert.match(roomChat, /beginRoomChatReadSession\(roomId\)/);
 });
 
@@ -247,8 +251,13 @@ test('Web Push uses credentialed subscription endpoints and suppresses focused-w
   assert.match(worker, /openWindow\(target\.href\)/);
   assert.match(worker, /target\.origin !== self\.location\.origin/);
   const lobby = read('src/lib/features/home/LobbyPage.svelte');
-  assert.match(lobby, /new URLSearchParams\(window\.location\.search\)\.get\('dm'\)/);
+  // The lobby reads the landing query once; a DM link and a push mention link
+  // (room + message, never the joining /r/ route) are both honoured from it.
+  assert.match(lobby, /const initialParams = new URLSearchParams\(window\.location\.search\)/);
+  assert.match(lobby, /initialParams\.get\('dm'\)/);
   assert.match(lobby, /openDm\(initialDmId\)/);
+  assert.match(lobby, /initialParams\.get\('room'\)/);
+  assert.match(lobby, /openRoomMessage\(linkedRoomId, linkedMessageId\)/);
 });
 
 test('DM and room mutes are server-backed and exposed from settings targets', () => {
@@ -256,8 +265,10 @@ test('DM and room mutes are server-backed and exposed from settings targets', ()
   const dm = read('src/lib/features/home/components/lobby/DmView.svelte');
   const roomMenu = read('src/lib/shared/components/room-menu/RoomMenuContent.svelte');
   const roomMenuTrigger = read('src/lib/shared/components/room-menu/RoomMenu.svelte');
-  const previewChat = read('src/lib/features/home/components/lobby/RoomPreviewChat.svelte');
-  const roomChat = read('src/lib/features/room/components/RoomChat.svelte');
+  const previewChat = `${read('src/lib/features/home/components/lobby/RoomPreviewChat.svelte')}
+${read('src/lib/features/room/components/RoomChatPanel.svelte')}`;
+  const roomChat = `${read('src/lib/features/room/components/RoomChat.svelte')}
+${read('src/lib/features/room/components/RoomChatPanel.svelte')}`;
   const roomTopbar = read('src/lib/features/room/components/RoomTopbar.svelte');
   const settings = read('src/lib/features/home/components/SettingsModal.svelte');
 
@@ -282,8 +293,8 @@ test('DM and room mutes are server-backed and exposed from settings targets', ()
   assert.match(roomMenuTrigger, /\{#if roomMuted\}[\s\S]*<BellOff/);
   assert.match(roomMenuTrigger, /\{showNotificationControls\}/);
   assert.match(roomTopbar, /showNotificationControls=\{Boolean\(roomClientState\.self\?\.accountUserId\)\}/);
-  assert.match(previewChat, /isRoomNotificationsMuted\(activeRoomId\)/);
-  assert.match(previewChat, /message\.peerId !== accountPeerId && !isRoomNotificationsMuted\(activeRoomId\)[\s\S]*playRoomChatMessageCue\(\)/);
+  assert.match(previewChat, /isRoomNotificationsMuted\(roomId\)/);
+  assert.match(previewChat, /message\.peerId !== peerId && !isRoomNotificationsMuted\(roomId\)[\s\S]*playRoomChatMessageCue\(\)/);
   assert.match(roomChat, /isRoomNotificationsMuted\(roomId\)/);
   assert.match(roomChat, /message\.peerId !== peerId && !isRoomNotificationsMuted\(roomId\)[\s\S]*playRoomChatMessageCue\(\)/);
   assert.match(settings, /updatePrivateNotifications\(!notificationPreferences\.privateNotifications\)/);

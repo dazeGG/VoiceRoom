@@ -46,7 +46,7 @@
     if (participant.isLocal) return;
     event.preventDefault();
     event.stopPropagation();
-    openParticipantContextMenu(participant.id, event.clientX, event.clientY);
+    openParticipantContextMenu(participant.id, event.clientX, event.clientY, 'tile', tile ?? null);
   }
 
   function handleKeydown(event: KeyboardEvent): void {
@@ -61,7 +61,7 @@
     event.preventDefault();
     event.stopPropagation();
     const rect = tile.getBoundingClientRect();
-    openParticipantContextMenu(participant.id, rect.left + rect.width / 2, rect.top + rect.height / 2);
+    openParticipantContextMenu(participant.id, rect.left + rect.width / 2, rect.top + rect.height / 2, 'tile', tile);
   }
 </script>
 

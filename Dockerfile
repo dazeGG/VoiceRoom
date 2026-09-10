@@ -10,13 +10,6 @@ RUN npm ci
 
 FROM deps AS web-build
 
-ARG DOMAIN
-ARG LIVEKIT_DOMAIN
-ARG LIVEKIT_URL
-ENV DOMAIN=$DOMAIN
-ENV LIVEKIT_DOMAIN=$LIVEKIT_DOMAIN
-ENV LIVEKIT_URL=$LIVEKIT_URL
-
 COPY apps/web ./apps/web
 COPY packages ./packages
 RUN npm run build
@@ -34,13 +27,18 @@ RUN npm ci --omit=dev
 
 COPY apps/api ./apps/api
 COPY packages/shared ./packages/shared
+COPY config ./config
 
-RUN mkdir -p /data/uploads && chown node:node /data/uploads
+RUN mkdir -p /data/uploads /data/media && chown node:node /data/uploads /data/media
 
 USER node
 EXPOSE 3000
 
 CMD ["node", "apps/api/src/server.js"]
+
+FROM api AS worker
+
+CMD ["node", "apps/api/src/workers/main.js"]
 
 FROM caddy:2.11.3-alpine AS web
 
