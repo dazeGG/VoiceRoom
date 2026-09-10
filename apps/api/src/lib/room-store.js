@@ -1272,8 +1272,18 @@ function createRoomStore({
          LIMIT 1`,
         [room.id, userId]
       );
+      const isOwner = owner.rowCount > 0;
+      // Adding a room to the list makes the user a member, like joining it does.
+      if (!isOwner && !await getActiveBanService().isBanned({ roomId: room.id, userId, at: now, client })) {
+        await client.query(
+          `INSERT INTO room_memberships (id, room_id, user_id, role, created_at, updated_at)
+           VALUES ($1, $2, $3, 'member', $4, $4)
+           ON CONFLICT (room_id, user_id) DO NOTHING`,
+          [createRowId(), room.id, userId, toDate(now)]
+        );
+      }
       return {
-        room: withRelationship(room, owner.rowCount > 0 ? 'owner' : 'bookmarked'),
+        room: withRelationship(room, isOwner ? 'owner' : 'bookmarked'),
         status: 'bookmarked'
       };
     });
@@ -1294,6 +1304,12 @@ function createRoomStore({
         `DELETE FROM room_bookmarks
          WHERE room_id = $1 AND user_id = $2
          RETURNING id`,
+        [roomId, userId]
+      );
+      // Removing the room from the list also ends the (non-owner) membership.
+      await client.query(
+        `DELETE FROM room_memberships
+         WHERE room_id = $1 AND user_id = $2 AND role = 'member'`,
         [roomId, userId]
       );
       return { removed: result.rowCount > 0, status: 'removed' };
