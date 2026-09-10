@@ -122,7 +122,6 @@ GitHub-аналог GitLab CI/CD variables находится здесь:
 | `POSTGRES_PASSWORD` | docker compose / production | Пароль PostgreSQL. |
 | `DATABASE_URL` | API host-only / non-compose deploy | Полная PostgreSQL URL. В compose обычно собирается из `POSTGRES_*`. |
 | `TEST_DATABASE_URL` | Локальные/внешние API tests | Admin-capable PostgreSQL URL для test harness. В CI **не нужен**: workflow поднимает эфемерный Postgres service и задаёт URL сам. |
-| `SSH_HOST` / `SSH_USER` / `SSH_KEY` / `SSH_PORT` | CD (deploy job) | Доступ к серверу для SSH-деплоя. `SSH_PORT` опционален (по умолчанию `22`). |
 | `LIVEKIT_API_KEY` | API / LiveKit | Ключ LiveKit. |
 | `LIVEKIT_API_SECRET` | API / LiveKit | Секрет LiveKit. Сгенерировать случайным значением. |
 | `LIVEKIT_GATE_SECRET` | API / LiveKit gate | Отдельный случайный секрет длиной не менее 32 символов. Не должен совпадать с `LIVEKIT_API_SECRET`. |
@@ -188,7 +187,6 @@ GitHub-аналог GitLab CI/CD variables находится здесь:
 | `API_METRICS_ALLOWED_REMOTE` | `127.0.0.1` | Caddy allowlist для публичного пути `/api/metrics`; задайте Tailscale IP/range status-сервера, иначе endpoint закрыт снаружи. |
 | `DESKTOP_RELEASE_REPO` | `dazeGG/VoiceRoomDesktop` | Repo для latest desktop release. |
 | `DESKTOP_RELEASE_CACHE_MS` | `600000` | Cache TTL для desktop release metadata. |
-| `DEPLOY_PATH` | `/srv/voiceroom` | Путь к git-клону репозитория на сервере для CD (deploy job). |
 
 ### Переопределение dev-значений (опционально)
 
@@ -241,31 +239,20 @@ VAPID_SUBJECT
 
 ### CI/CD (GitHub Actions)
 
-Пайплайн описан в `.github/workflows/ci.yml`. Проверки запускаются для pull request и push в `develop`/`main`; deploy запускается только для push в `main`. Ветки, PR, коммиты, hotfix и релизы ведутся по [`docs/GIT_FLOW.md`](./docs/GIT_FLOW.md):
+Пайплайн описан в `.github/workflows/ci.yml`. Проверки запускаются для pull request и push в `develop`/`main`. Ветки, PR, коммиты, hotfix и релизы ведутся по [`docs/GIT_FLOW.md`](./docs/GIT_FLOW.md):
 
 - **policy** — проверяет допустимый Git Flow маршрут PR и Conventional Commit формат PR title.
 - **check** — `npm ci`, `npm run check` (shared+api+web: `node --check`, `svelte-kit sync`, `tsc --noEmit`), `npm run build` (Vite).
 - **test** — `npm test` против эфемерного PostgreSQL service-контейнера. `TEST_DATABASE_URL` задаётся прямо в workflow одноразовым значением — секрет для этого **не нужен** (test harness создаёт/удаляет временную БД на каждый тест).
-- **deploy** — только на push в `main` и только после зелёных `check`+`test`. По SSH делает `git reset --hard origin/main` и `docker compose up -d --build` в каталоге деплоя. Миграции применяются API на bootstrap, отдельного шага нет.
+- **voice-join** — проверка входа в голосовую комнату через LiveKit.
+- **G05 / G08** — строгий LiveKit-профиль и порог покрытия изменённого кода.
 
-**Secrets для деплоя** (Settings → Secrets and variables → Actions → Secrets):
-
-| Name | Назначение |
-| --- | --- |
-| `SSH_HOST` | Хост сервера. |
-| `SSH_USER` | SSH-пользователь с доступом к docker compose. |
-| `SSH_KEY` | Приватный SSH-ключ (PEM). Публичный — в `authorized_keys` сервера. |
-| `SSH_PORT` | Опционально, по умолчанию `22`. |
-
-**Variables для деплоя**: `DEPLOY_PATH` — путь к клону репозитория на сервере (по умолчанию `/srv/voiceroom`).
-
-На сервере должен быть git-клон репозитория в `DEPLOY_PATH` со своим production `.env` (как минимум `DOMAIN`, `POSTGRES_PASSWORD`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, `LIVEKIT_GATE_SECRET`) — деплой пересобирает стек из исходников, app-секреты живут на сервере, а не в Actions.
+**Автоматического деплоя нет.** Ни push в `main`, ни тег не выкатывают стек: dev- и production-сервер обновляются вручную — `git checkout` нужного коммита в каталоге деплоя, сборка образов `docker build --target api|worker|web`, прописывание их тегов в серверный `.env` (`VOICEROOM_API_IMAGE`, `VOICEROOM_WEB_IMAGE`, `VOICEROOM_WORKER_IMAGE`) и `docker compose up -d --remove-orphans`. Перед production-выкаткой с новыми миграциями сделайте бэкап БД (см. [`docs/operations/MEDIA_BACKUP_RESTORE.md`](./docs/operations/MEDIA_BACKUP_RESTORE.md) и [`docs/operations/PREDEPLOY_MIGRATIONS.md`](./docs/operations/PREDEPLOY_MIGRATIONS.md)). Production `.env` (как минимум `DOMAIN`, `POSTGRES_PASSWORD`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, `LIVEKIT_GATE_SECRET`) живёт на сервере, а не в Actions.
 
 Прочие рекомендации:
 
-- Для protected branches включите required reviewers; сделайте `policy`, `check` и `test` обязательными проверками для PR в `develop` и `main`, а для production Environment включите protection rules.
+- Для protected branches включите required reviewers; сделайте `policy`, `check` и `test` обязательными проверками для PR в `develop` и `main`.
 - Не печатайте secrets в workflow logs; передавайте их через `with:`/`env:` только в нужные jobs/steps.
-- Для supply-chain harden можно запинить `appleboy/ssh-action` на commit SHA вместо тега `v1.2.5`.
 
 Миграции:
 
