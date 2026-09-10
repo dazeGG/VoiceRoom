@@ -1,5 +1,5 @@
 import type { NotificationEnvelope, NotificationItem } from '@voice-room/shared/notifications';
-import { normalizeNotificationEnvelope } from '@voice-room/shared/notifications';
+import { normalizeNotificationEnvelope, notificationRoute as sharedNotificationRoute } from '@voice-room/shared/notifications';
 
 export type NotificationInboxTransport = {
   list(cursor?: string): Promise<unknown>;
@@ -7,8 +7,9 @@ export type NotificationInboxTransport = {
   readAll(): Promise<unknown>;
 };
 
+/** One route for the panel and for push alike — see the shared builder for why it avoids /r/. */
 export function notificationRoute(item: Pick<NotificationItem, 'roomId' | 'sourceMessageId'>): string {
-  return `/r/${encodeURIComponent(item.roomId)}?chat=1&around=${encodeURIComponent(item.sourceMessageId)}`;
+  return sharedNotificationRoute(item);
 }
 
 export function createNotificationInbox(transport: NotificationInboxTransport) {

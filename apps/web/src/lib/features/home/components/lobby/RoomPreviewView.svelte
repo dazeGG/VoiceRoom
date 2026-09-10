@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import { ChevronRight, LogIn, MessageSquare, MicOff, Users } from '@lucide/svelte';
   import { iconMd, iconSm } from '$lib/shared/ui/icons';
   import type { AuthUser, OwnedRoom } from '$lib/api/auth';
@@ -14,9 +15,26 @@
   import { roomPresence } from '../../model/room-presence.svelte';
   import { getCapabilityFeature } from '$lib/platform/capability-state.svelte';
 
-  let { room, user, onEnter, onBack, onOpenSettings, onRoomsChanged, onToast } = $props<{
+  let {
+    room,
+    user,
+    initialPanel = null,
+    aroundMessageId = undefined,
+    onEnter,
+    onBack,
+    onOpenSettings,
+    onRoomsChanged,
+    onToast
+  } = $props<{
     room: OwnedRoom;
     user: AuthUser;
+    /**
+     * Panel to show when this room is first previewed. A mention link opens the
+     * chat straight away, without joining voice.
+     */
+    initialPanel?: 'chat' | 'participants' | null;
+    /** Scroll the chat to this message once it opens. */
+    aroundMessageId?: string;
     onEnter: () => void;
     onBack: () => void;
     onOpenSettings?: () => void;
@@ -64,7 +82,10 @@
     const roomId = previewRoomId;
     loading = true;
     peers = [];
-    activePanel = null;
+    // Read untracked: the effect belongs to the room, and re-running it for a
+    // new anchor would tear down and resubscribe the preview for nothing. A new
+    // anchor remounts this view instead.
+    activePanel = untrack(() => initialPanel);
     const unsubscribe = subscribeRoomPreview(roomId, handlePreviewEvent);
     return unsubscribe;
   });
@@ -190,6 +211,7 @@
         <RoomPreviewChat
           roomId={previewRoomId}
           {user}
+          {aroundMessageId}
           {onToast}
           onClose={() => (activePanel = null)}
           onSelectParticipants={() => selectPanel('participants')}

@@ -27,7 +27,7 @@
   import RoomPreviewView from './components/lobby/RoomPreviewView.svelte';
   import LobbyRoomSettingsDialog from './components/lobby/LobbyRoomSettingsDialog.svelte';
   import NotificationInbox from './components/NotificationInbox.svelte';
-  import { createNotificationInbox, notificationRoute } from '$lib/shared/notifications/inbox.svelte';
+  import { createNotificationInbox } from '$lib/shared/notifications/inbox.svelte';
   import { fetchNotificationInbox, markAllNotificationsRead, markNotificationRead } from '$lib/api/notifications';
   import { getCapabilityFeature } from '$lib/platform/capability-state.svelte';
   import { friendsState, initLobby, openDm, showHome, showPeople } from './model/friends.svelte';
@@ -48,7 +48,7 @@
     setViewedRoomFromRoute
   } from './model/room-navigation.svelte';
   import { roomDisplayName } from './model/rooms';
-  import { roomUi } from '$lib/features/room/room-ui.svelte';
+  import { openChat, roomUi } from '$lib/features/room/room-ui.svelte';
   import '$lib/shared/styles/typography.css';
   import '$lib/shared/styles/dialog.css';
   import '$lib/features/room/styles/chat-rail.css';
@@ -200,10 +200,19 @@
       selectRoomForVoiceEntry(initialRoomId);
       friendsState.mode = 'rooms';
     }
-    const initialDmId = new URLSearchParams(window.location.search).get('dm');
+    const initialParams = new URLSearchParams(window.location.search);
+    const initialDmId = initialParams.get('dm');
     if (!initialRoomId && initialDmId) {
       replaceState('/', {});
       void openDm(initialDmId).catch(() => onToast('Не удалось открыть диалог'));
+    }
+    // A mention link — from the bell or from a push — lands here rather than on
+    // /r/:roomId, so it previews the room and never joins voice.
+    const linkedRoomId = initialParams.get('room');
+    const linkedMessageId = initialParams.get('message');
+    if (!initialRoomId && linkedRoomId && linkedMessageId) {
+      replaceState('/', {});
+      openRoomMessage(linkedRoomId, linkedMessageId);
     }
 
     window.addEventListener('voice-room:embedded-leave', onEmbeddedLeave);
@@ -335,9 +344,30 @@
     if (selectedRoomId) closeViewedRoom();
   }
 
+  // Which message a mention link asked to show, so the preview opens its chat on
+  // it. Scoped to a room so it cannot leak into the next room previewed.
+  let previewAnchor = $state<{ roomId: string; messageId: string } | null>(null);
+
+  /**
+   * Show a message in its room without joining voice. The old route went through
+   * /r/:roomId, which on load means "put me back inside this room" and joined —
+   * and it reloaded the page while still failing to open the chat.
+   */
+  function openRoomMessage(roomId: string, messageId: string): void {
+    friendsState.mode = 'rooms';
+    if (getActiveVoiceRoomId() === roomId) {
+      // Already in that room: its own chat is the one to show.
+      openActiveVoiceRoom();
+      openChat();
+      return;
+    }
+    previewAnchor = { roomId, messageId };
+    selectRoomPreview(roomId);
+  }
+
   function openNotification(item: import('@voice-room/shared/notifications').NotificationItem): void {
     notificationInboxOpen = false;
-    window.location.assign(notificationRoute(item));
+    openRoomMessage(item.roomId, item.sourceMessageId);
   }
 </script>
 
@@ -380,7 +410,12 @@
       {#if friendsState.mode === 'rooms' && selectedRoom && connectedVoiceRoomId && selectedRoom.roomId !== connectedVoiceRoomId}
         <RoomBrowseView {user} room={selectedRoom} onEnter={() => enterRoom(selectedRoom.roomId)} onBack={closeViewedRoom} onOpenSettings={selectedRoom.relationship === 'owner' ? () => (previewSettingsRoomId = selectedRoom.roomId) : undefined} onRoomsChanged={() => { closeViewedRoom(); void refreshRooms(); }} {onToast} />
       {:else if friendsState.mode === 'rooms' && selectedRoom && (!embeddedRoomId || !embeddedRoomVisible)}
-        <RoomPreviewView {user} room={selectedRoom} onEnter={() => enterRoom(selectedRoom.roomId)} onBack={closeViewedRoom} onOpenSettings={selectedRoom.relationship === 'owner' ? () => (previewSettingsRoomId = selectedRoom.roomId) : undefined} onRoomsChanged={() => { closeViewedRoom(); void refreshRooms(); }} {onToast} />
+        {@const anchor = previewAnchor?.roomId === selectedRoom.roomId ? previewAnchor : null}
+        <!-- Keyed on the anchor so a second mention in a room already on screen
+             still reopens its chat on the new message. -->
+        {#key anchor?.messageId ?? ''}
+        <RoomPreviewView {user} room={selectedRoom} initialPanel={anchor ? 'chat' : null} aroundMessageId={anchor?.messageId} onEnter={() => enterRoom(selectedRoom.roomId)} onBack={closeViewedRoom} onOpenSettings={selectedRoom.relationship === 'owner' ? () => (previewSettingsRoomId = selectedRoom.roomId) : undefined} onRoomsChanged={() => { closeViewedRoom(); void refreshRooms(); }} {onToast} />
+        {/key}
       {:else if friendsState.mode === 'rooms' && !embeddedRoomVisible}
         <VoiceHome {rooms} onOpenRoom={previewRoom} onCreateRoom={() => (createDialogOpen = true)} onJoinCode={handleJoin} onRoomsChanged={refreshRooms} onOpenRoomSettings={(roomId) => (previewSettingsRoomId = roomId)} {onToast} />
       {:else if friendsState.mode === 'friends' && friendsState.view === 'dm'}
