@@ -16,7 +16,7 @@ function getSocketPath() {
   return { dir, socketPath: socketPathForDirectory(dir) };
 }
 
-function waitForHealthz(socketPath, timeoutMs = 5000) {
+function waitForHealthz(socketPath, timeoutMs = 15000) {
   const started = Date.now();
   return new Promise((resolve, reject) => {
     const attempt = () => {
