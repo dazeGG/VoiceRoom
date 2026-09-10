@@ -1,6 +1,8 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { getAppRealtime } from '$lib/api/realtime';
+  import { playRoomChatMessageCue } from '$lib/features/room/client/media/cues';
+  import { notificationPreferences } from '$lib/shared/notifications/preferences.svelte';
   import { pushState, replaceState } from '$app/navigation';
   import type { AuthUser, OwnedRoom } from '$lib/api/auth';
   import { fetchOwnedRooms } from '$lib/api/auth';
@@ -134,10 +136,22 @@
     });
     // Without this the badge only ever caught up on a reload, so a mention that
     // arrived while the lobby was open stayed invisible until then.
+    //
+    // The reload is also how a ping becomes audible. The realtime event fires
+    // for every message in every room you belong to, so it cannot tell you were
+    // the one addressed — the inbox can, because that is exactly what it holds.
+    // A rise in its unread count means someone named you, and that is worth a
+    // sound even in a room whose messages you muted: muting a room is asking not
+    // to hear the conversation, not asking not to be reachable.
     const teardownNotifications = getAppRealtime().subscribe((event) => {
       if (!notificationInboxEnabled) return;
       if (event.type !== 'notification.room.message') return;
-      void notificationInbox.load();
+      const before = notificationInbox.unreadCount;
+      void notificationInbox.load().then(() => {
+        if (notificationInbox.unreadCount > before && !notificationPreferences.doNotDisturb) {
+          playRoomChatMessageCue();
+        }
+      });
     });
     const teardownFriends = user ? initLobby(user.id, user.doNotDisturb, user.presenceStatus) : () => {};
     const teardownRooms = user

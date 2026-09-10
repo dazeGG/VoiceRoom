@@ -34,6 +34,12 @@ test('the viewer zooms and pans by transform rather than by scrolling', () => {
   // Zooming back out recentres: at fit size there is nowhere left to pan to.
   assert.match(lightbox, /if \(!zoomed\) \{\s*\n\s*offsetX = 0;\s*\n\s*offsetY = 0;/);
   assert.match(css, /\.attachment-lightbox-stage \{[^}]*overflow: hidden/);
+  // The dialog hands the stage the height left over, and the image fills that
+  // box instead of asking for a percentage of an auto-sized row — which
+  // resolved against nothing and left a tall screenshot at natural size,
+  // pushed out of the frame with the rest of it black.
+  assert.match(css, /\.attachment-lightbox \{[^}]*grid-template-rows: auto minmax\(0, 1fr\)/);
+  assert.match(css, /\.attachment-lightbox-stage img \{[^}]*width: 100%; height: 100%; object-fit: contain/);
 
   // Keyboard reaches every control the mouse does.
   assert.match(lightbox, /event\.key === 'Escape'/);

@@ -383,27 +383,6 @@ export function shouldNotify(event: RealtimeEvent | NotificationRealtimeEvent, o
   return routeNotificationEvent(event, options).notify;
 }
 
-/**
- * Whether this event deserves a sound in the page you are looking at.
- *
- * Deliberately not `shouldNotify`: that also asks whether the browser will show
- * a system notification, which depends on a permission the reader may well have
- * denied. Being pinged while sitting in the app should still be audible, so
- * only the audience questions are asked — is it mine, am I already looking at
- * it, and have I muted it.
- */
-export function shouldPlayNotificationCue(
-  event: RealtimeEvent | NotificationRealtimeEvent,
-  options: NotificationRouteOptions = {}
-): boolean {
-  if (!isNotificationRealtimeEvent(event)) return false;
-  if (options.doNotDisturb) return false;
-  if (options.userId && eventSenderId(event) === options.userId) return false;
-  if (activeTargetSuppresses(event, options.activeTarget)) return false;
-  if (event.type === 'notification.dm.message') return !hasId(options.mutedPeerIds, event.payload?.peer?.id);
-  if (event.type === 'notification.room.message') return !hasId(options.mutedRoomIds, event.payload?.room?.roomId);
-  return true;
-}
 
 export function routeNotificationEvent(
   event: RealtimeEvent | NotificationRealtimeEvent,
