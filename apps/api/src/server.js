@@ -2352,7 +2352,9 @@ async function handleMarkRoomChatRead(req, res, rawRoomId) {
  */
 async function retireRoomNotifications(roomId, userId, through) {
   try {
-    const { service } = getNotificationServices();
+    // No release-2.5 pool means no inbox to retire; that is a quiet no-op, not
+    // a TypeError logged on every read.
+    const service = getNotificationServices()?.service;
     if (typeof service?.markRoomRead !== 'function') return;
     await service.markRoomRead({ userId, roomId, through: through ?? null });
   } catch (error) {
