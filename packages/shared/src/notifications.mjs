@@ -72,6 +72,17 @@ function normalizeNotificationEnvelope(value) {
   }) };
 }
 
+/**
+ * Where a notification takes you: the room's lobby preview with its chat open
+ * on the source message. Deliberately not /r/:roomId — that route means "put me
+ * back inside this room" and joins voice on load, which a mention must never do.
+ */
+function notificationRoute(item) {
+  const roomId = encodeURIComponent(String(item?.roomId || ''));
+  const messageId = encodeURIComponent(String(item?.sourceMessageId || ''));
+  return `/?room=${roomId}&message=${messageId}`;
+}
+
 function buildProviderPayload(item, { privateNotifications = false } = {}) {
   const notification = normalizeNotificationItem(item);
   if (!notification) return null;
@@ -82,7 +93,7 @@ function buildProviderPayload(item, { privateNotifications = false } = {}) {
     dedupeKey: `${notification.id}:${notification.revision}`,
     title: 'VoiceRoom',
     body: privateNotifications ? 'Open VoiceRoom to view this notification.' : (notification.body || 'You have a new notification'),
-    route: `/r/${encodeURIComponent(notification.roomId)}?message=${encodeURIComponent(notification.sourceMessageId)}`
+    route: notificationRoute(notification)
   };
 }
 
@@ -97,5 +108,6 @@ export {
   normalizeNotificationEnvelope,
   normalizeNotificationItem,
   normalizeNotificationLevel,
-  normalizeNotificationLimit
+  normalizeNotificationLimit,
+  notificationRoute
 };

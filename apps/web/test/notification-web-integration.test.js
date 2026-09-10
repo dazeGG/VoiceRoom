@@ -251,8 +251,13 @@ test('Web Push uses credentialed subscription endpoints and suppresses focused-w
   assert.match(worker, /openWindow\(target\.href\)/);
   assert.match(worker, /target\.origin !== self\.location\.origin/);
   const lobby = read('src/lib/features/home/LobbyPage.svelte');
-  assert.match(lobby, /new URLSearchParams\(window\.location\.search\)\.get\('dm'\)/);
+  // The lobby reads the landing query once; a DM link and a push mention link
+  // (room + message, never the joining /r/ route) are both honoured from it.
+  assert.match(lobby, /const initialParams = new URLSearchParams\(window\.location\.search\)/);
+  assert.match(lobby, /initialParams\.get\('dm'\)/);
   assert.match(lobby, /openDm\(initialDmId\)/);
+  assert.match(lobby, /initialParams\.get\('room'\)/);
+  assert.match(lobby, /openRoomMessage\(linkedRoomId, linkedMessageId\)/);
 });
 
 test('DM and room mutes are server-backed and exposed from settings targets', () => {

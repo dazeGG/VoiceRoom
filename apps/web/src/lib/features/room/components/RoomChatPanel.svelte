@@ -80,6 +80,7 @@
     onUnreadMessage,
     onToast,
     onAuthorContextMenu,
+    aroundMessageId = undefined,
     participants
   }: {
     roomId: string;
@@ -103,6 +104,12 @@
     onUnreadMessage?: () => void;
     onToast?: (message: string, options?: { variant?: 'error' }) => void;
     onAuthorContextMenu?: (peerId: string, event: MouseEvent) => void;
+    /**
+     * Open the history around this message and scroll to it. Passed explicitly
+     * by hosts that route there themselves; the `around` query parameter is
+     * still honoured for links that land on the room page directly.
+     */
+    aroundMessageId?: string;
     participants?: Snippet;
   } = $props();
 
@@ -605,13 +612,13 @@
           commit: (cursor) => markRoomChatRead(roomId, cursor)
         })
       : null;
-    const aroundMessageId = new URL(window.location.href).searchParams.get('around') || undefined;
-    if (historyEnabled) await history.open(roomId, aroundMessageId);
+    const anchorMessageId = aroundMessageId || new URL(window.location.href).searchParams.get('around') || undefined;
+    if (historyEnabled) await history.open(roomId, anchorMessageId);
     else await refreshMessages(signal);
-    if (aroundMessageId && !signal.aborted) {
+    if (anchorMessageId && !signal.aborted) {
       await tick();
       chatPinnedToBottom = false;
-      document.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(aroundMessageId)}"]`)?.scrollIntoView({ block: 'center' });
+      document.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(anchorMessageId)}"]`)?.scrollIntoView({ block: 'center' });
     } else if (!signal.aborted && chatVisible) {
       // The first page must land on the newest message: the body was empty when
       // the visibility effect ran, so its scroll then was a no-op.

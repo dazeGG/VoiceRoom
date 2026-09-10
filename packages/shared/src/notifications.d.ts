@@ -12,4 +12,6 @@ export function normalizeNotificationLimit(value: unknown, fallback?: number): n
 export function normalizeNotificationItem(value: unknown): NotificationItem | null;
 export function buildNotificationEnvelope(value?: Partial<NotificationEnvelope> & { nextCursor?: string; hasMore?: boolean }): NotificationEnvelope;
 export function normalizeNotificationEnvelope(value: unknown): { ok: true; envelope: NotificationEnvelope } | { ok: false; code: string };
+/** The lobby preview of the room with its chat open on the source message; never joins voice. */
+export function notificationRoute(item: Pick<NotificationItem, 'roomId' | 'sourceMessageId'>): string;
 export function buildProviderPayload(value: unknown, options?: { privateNotifications?: boolean }): { contractVersion: 1; notificationId: string; revision: number; dedupeKey: string; title: string; body: string; route: string } | null;
