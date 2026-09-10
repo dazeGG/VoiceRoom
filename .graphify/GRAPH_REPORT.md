@@ -1,24 +1,24 @@
 # Graph Report - .  (2026-09-10)
 
 ## Corpus Check
-- Large corpus: 703 files · ~337 122 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.
+- Large corpus: 703 files · ~336 885 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.
 
 ## Summary
-- 5563 nodes · 14447 edges · 228 communities detected
+- 5570 nodes · 14473 edges · 227 communities detected
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS · INFERRED: 6 edges (avg confidence: 0.73)
 - Token cost: 0 input · 0 output
-- Edge kinds: contains: 4151 · MODIFIES: 3858 · ON_BRANCH: 2060 · calls: 1698 · imports: 1078 · imports_from: 722 · PARENT_OF: 576 · method: 206 · re_exports: 59 · references: 23 · inherits: 9 · conceptually_related_to: 4 · semantically_similar_to: 2 · implements: 1
+- Edge kinds: contains: 4155 · MODIFIES: 3872 · ON_BRANCH: 2063 · calls: 1698 · imports: 1079 · imports_from: 723 · PARENT_OF: 579 · method: 206 · re_exports: 59 · references: 23 · inherits: 9 · conceptually_related_to: 4 · semantically_similar_to: 2 · implements: 1
 
 
 ## Input Scope
 - Requested: auto
 - Resolved: committed (source: default-auto)
 - Included files: 703 · Candidates: 783
-- Excluded: 3 untracked · 46338 ignored · 13 sensitive · 0 missing committed
+- Excluded: 3 untracked · 46347 ignored · 13 sensitive · 0 missing committed
 - Recommendation: Use --scope all or graphify.yaml inputs.corpus for a knowledge-base folder.
 
 ## Graph Freshness
-- Built from Git commit: `2268029`
+- Built from Git commit: `995ced6`
 - Compare this hash to `git rev-parse HEAD` before trusting freshness-sensitive graph output.
 ## God Nodes (most connected - your core abstractions)
 1. `sendJson()` - 68 edges
@@ -62,7 +62,7 @@ Nodes (120): feature/2.5.0-to-rc, feature/cd-pipeline, feature/docs-cleanup, fea
 
 ### Community 2 - "Community 2"
 Cohesion: 0.03
-Nodes (29): SelectedMention, 2d36bc7 fix(api): bound messaging schema locks, 728cea2 feat: implement release 2.5.0 messaging platform (#105), ab373a6 chore(release): 2.5.0 (#121), { createDbPool }, createRelease250Pool(), createMediaQuotaRepository(), createMediaQuotaService() (+21 more)
+Nodes (30): SelectedMention, 2d36bc7 fix(api): bound messaging schema locks, 728cea2 feat: implement release 2.5.0 messaging platform (#105), ab373a6 chore(release): 2.5.0 (#121), { createDbPool }, createRelease250Pool(), createMediaQuotaRepository(), createMediaQuotaService() (+22 more)
 
 ### Community 3 - "Community 3"
 Cohesion: 0.03
@@ -286,82 +286,86 @@ Cohesion: 0.09
 Nodes (15): 12b694d fix(web): refine room controls and stream notices (#58), 514fe5c fix(web): keep preference changes quiet, 5b7d102 chore(release): back-merge 2.4.0 into develop, 70b16b9 fix(web): align stream tiles and viewer cues (#59), 7685ba6 style(web): polish lobby status surfaces, 76fc735 Add desktop notification enable setting, 85d261a feat(web): improve toast presentation, 8d84b9b fix(web): unify room and profile menus (+7 more)
 
 ### Community 59 - "Community 59"
+Cohesion: 0.09
+Nodes (24): 2204c26 fix(api): make users who added a room its members, 2268029 chore(release): prepare 2.5.1, 33a3ea7 fix(api): remove a left room from the list through the room store, c547b4f chore(graphify): rebuild the code graph for the membership backfill, createMembershipRepository(), crypto, mapDirectoryMember(), mapMembership() (+16 more)
+
+### Community 60 - "Community 60"
 Cohesion: 0.08
 Nodes (21): authorize(), { createGateCredentialSigner }, createMemoryGateStore(), extractCredential(), mint(), readTopologyEvidence(), require, runAuthGateProof() (+13 more)
 
-### Community 60 - "Community 60"
+### Community 61 - "Community 61"
 Cohesion: 0.07
 Nodes (17): registerMediaRoutes(), createMediaVisibilityService(), MediaVisibilityError, assert, { createMediaVisibilityService }, fastify, { registerMediaRoutes }, test (+9 more)
 
-### Community 61 - "Community 61"
+### Community 62 - "Community 62"
 Cohesion: 0.08
 Nodes (25): { createReadinessReport, resolveManifestPath }, createRuntimeReadinessProvider(), { createRuntimeReadinessRepository }, failClosedSnapshot(), { PUBLIC_CAPABILITY_KEYS }, createRuntimeReadinessRepository(), { createDbPool }, { createRuntimeReadinessRepository } (+17 more)
 
-### Community 62 - "Community 62"
+### Community 63 - "Community 63"
 Cohesion: 0.08
 Nodes (13): AppRealtimeConnection, connectRealtime(), getAppRealtime(), PinsRealtimeEvent, ReactionRealtimeEvent, RealtimeAccountEvent, RealtimeErrorEvent, RealtimeEvent (+5 more)
 
-### Community 63 - "Community 63"
+### Community 64 - "Community 64"
 Cohesion: 0.06
 Nodes (2): 01a206a chore: release v2.1.1, cce23b6 fix(web): stabilize preview chat identity
 
-### Community 64 - "Community 64"
+### Community 65 - "Community 65"
 Cohesion: 0.08
 Nodes (9): 08e3e13 Merge branch 'hotfix/2.2.1', 17edd27 feat(web): add lobby voice controls widget, 397400d chore(release): bump version to 2.2.2, 3b6010b Merge branch 'release/2.2.2', 52c6592 Merge tag 'v2.2.1' into develop, 5fa984e Merge tag 'v2.2.2' into develop, ControlHandler, LeaveHandler (+1 more)
 
-### Community 65 - "Community 65"
+### Community 66 - "Community 66"
 Cohesion: 0.09
 Nodes (17): 2ea3623 Merge pull request #116 from dazeGG/feature/2.5.0-manual-fixes, 60484d7 feat(api): add contextual social and room actions, createPinRepository(), mapPin(), requireQuery(), toMillis(), registerPinRoutes(), createPinService() (+9 more)
 
-### Community 66 - "Community 66"
+### Community 67 - "Community 67"
 Cohesion: 0.08
 Nodes (5): RealtimeHeartbeatWatchdog, f52476e fix(room): recover realtime and media after network loss (#111), LiveKitReconcileGeneration, ScreenRecoveryGraceController, source
 
-### Community 67 - "Community 67"
+### Community 68 - "Community 68"
 Cohesion: 0.07
 Nodes (20): 20fdff5 feat(api): persist static rooms and chat, fs, net, startApiListener(), assert, fs, os, path (+12 more)
 
-### Community 68 - "Community 68"
+### Community 69 - "Community 69"
 Cohesion: 0.08
 Nodes (20): cf49285 fix(api): reconcile media across replicas, CONTEXTS, crypto, mapAttachment(), MIME_TYPES, createMediaReconciliationService(), { createAttachmentRepository }, { createDbPool } (+12 more)
 
-### Community 69 - "Community 69"
+### Community 70 - "Community 70"
 Cohesion: 0.10
 Nodes (21): 4ea02ee fix(api): harden temporary moderation flows, attachmentRevoker(), cleanupEnqueuer(), createMessageModerationService(), requireOperation(), { transaction }, createModerationRepository(), crypto (+13 more)
 
-### Community 70 - "Community 70"
+### Community 71 - "Community 71"
 Cohesion: 0.08
 Nodes (18): 54086b4 fix(api): serialize notification retraction revisions, b3732be fix(notifications): make inbox revisions monotonic, model, router, ui, inbox, reconcile, room (+10 more)
 
-### Community 71 - "Community 71"
+### Community 72 - "Community 72"
 Cohesion: 0.08
 Nodes (21): da2ffb3 fix(release): stabilize G01-G03 foundation gates (#112), extensions, files, path, socketPathForDirectory(), assert, { createApiServer }, createFriends() (+13 more)
 
-### Community 72 - "Community 72"
+### Community 73 - "Community 73"
 Cohesion: 0.08
 Nodes (21): AVATAR_KEY_PATTERN, createAvatarStorage(), fs, path, { readUploadsDir }, validateAvatarKey(), assert, { createApiApp } (+13 more)
 
-### Community 73 - "Community 73"
+### Community 74 - "Community 74"
 Cohesion: 0.13
 Nodes (22): deletePushSubscription(), fetchPushConfig(), PushConfig, savePushSubscription(), decodeVapidKey(), detachPushSubscription(), getRegistration(), isDesktopRuntime() (+14 more)
 
-### Community 74 - "Community 74"
+### Community 75 - "Community 75"
 Cohesion: 0.10
 Nodes (18): 1709ead fix(api): centralize active room ban enforcement, createActiveBanRepository(), crypto, mapActiveBan(), normalizePrincipal(), toMillis(), { createActiveBanRepository, normalizePrincipal }, createActiveBanService() (+10 more)
 
-### Community 75 - "Community 75"
+### Community 76 - "Community 76"
 Cohesion: 0.13
 Nodes (24): SCREEN_FPS_OPTIONS, SCREEN_QUALITY_OPTIONS, SCREEN_SIMULCAST_LAYER, SCREEN_STREAM_MODE_PROFILES, ScreenProfile, ScreenStreamMode, loadLiveKitClient(), TRACK_SOURCE (+16 more)
 
-### Community 76 - "Community 76"
+### Community 77 - "Community 77"
 Cohesion: 0.18
 Nodes (18): dm, picker, reactors, room, store, summary, authDialog(), createPermanentRoom() (+10 more)
 
-### Community 77 - "Community 77"
+### Community 78 - "Community 78"
 Cohesion: 0.11
 Nodes (19): RoomSnapshot, acknowledgeActiveVoiceResync(), clearActiveResync(), detailHandlers, ensureAppRealtimeConnected(), ensureReconnectRestore(), isRetryableActiveResyncError(), joinVoiceRoom() (+11 more)
 
-### Community 78 - "Community 78"
+### Community 79 - "Community 79"
 Cohesion: 0.10
 Nodes (17): ae1827c fix(reactions): converge updates across realtime clients, ff08a8e test(api): exercise gate through postgres and network boundaries, createReactionRealtimeAdapter(), registerReactionRoutes(), createReactionService(), normalizeConversation(), {
   normalizeReactionMutation,
@@ -370,21 +374,17 @@ Nodes (17): ae1827c fix(reactions): converge updates across realtime clients, ff
   normalizeReactorQuery
 }, ReactionServiceError (+9 more)
 
-### Community 79 - "Community 79"
+### Community 80 - "Community 80"
 Cohesion: 0.15
 Nodes (23): ParsedScreenStats, ScreenStatsPrevious, unpublishLocalScreenTracks(), setLocalAppAudioSuppressed(), applyLocalScreenEncodingProfile(), applyLocalScreenProfileState(), applyScreenSenderEncoding(), findLocalScreenVideoPublication() (+15 more)
 
-### Community 80 - "Community 80"
+### Community 81 - "Community 81"
 Cohesion: 0.15
 Nodes (22): asSet(), buildNodeMap(), compareReplicas(), createReadinessProvider(), createReadinessReport(), crypto, evaluateFromOptions(), evaluatePublicNode() (+14 more)
 
-### Community 81 - "Community 81"
+### Community 82 - "Community 82"
 Cohesion: 0.11
 Nodes (17): checkApiSources(), findSqlWrites(), findTimers(), globToRegExp(), isOwner(), normalizePath(), walkFiles(), checkImportBoundaries() (+9 more)
-
-### Community 82 - "Community 82"
-Cohesion: 0.12
-Nodes (18): 2204c26 fix(api): make users who added a room its members, 2268029 chore(release): prepare 2.5.1, createMembershipRepository(), crypto, mapDirectoryMember(), mapMembership(), toMillis(), { createMembershipRepository } (+10 more)
 
 ### Community 83 - "Community 83"
 Cohesion: 0.11
@@ -399,10 +399,14 @@ Cohesion: 0.09
 Nodes (15): assert, automaticPresenceMigration, avatarMigration, dndMigration, friendsMigration, membershipMigration, messageEditingMigration, migration (+7 more)
 
 ### Community 86 - "Community 86"
+Cohesion: 0.11
+Nodes (17): 995ced6 test(api): give spawned test servers 15 seconds to become ready, acceptFirstRequest(), assert, befriend(), cookieFrom(), { createTestDatabase }, fs, http (+9 more)
+
+### Community 87 - "Community 87"
 Cohesion: 0.16
 Nodes (21): clearAllPeerJoinCues(), clearPeerJoinCue(), clearStreamViewerCues(), CueNote, getCueGain(), isCuePlaybackSuppressed(), peerJoinCueTimes, playCueSequence() (+13 more)
 
-### Community 87 - "Community 87"
+### Community 88 - "Community 88"
 Cohesion: 0.12
 Nodes (15): { buildServerEnvelope }, toWsAccountEvent(), {
   parseClientEnvelope,
@@ -411,21 +415,17 @@ Nodes (15): { buildServerEnvelope }, toWsAccountEvent(), {
   validateClientCommand
 }, parseInboundMessage(), sendWsEnvelope(), serializeEnvelope(), buildRoomMembershipPresenceSnapshot(), { buildServerEnvelope, sendWsEnvelope } (+7 more)
 
-### Community 88 - "Community 88"
+### Community 89 - "Community 89"
 Cohesion: 0.11
 Nodes (17): 0b4c646 feat(platform): enforce G14 capability readiness, 5459a43 feat(platform): harden G13 runtime configuration edge, createCapabilitySnapshot(), formatCapabilityPayload(), HEALTH_CAPABILITIES_LIMITS, { PUBLIC_CAPABILITY_KEYS }, publicFeatureFlags(), registerCapabilityRoutes() (+9 more)
 
-### Community 89 - "Community 89"
+### Community 90 - "Community 90"
 Cohesion: 0.15
 Nodes (17): 1886650 feat(api): persist rooms and chat in postgres, 364b82c build(api): fence G15 predeploy migrations, path, readDatabaseConfig(), readEnvBool(), readEnvInt(), readMessageDeliveryMode(), readUploadsDir() (+9 more)
 
-### Community 90 - "Community 90"
+### Community 91 - "Community 91"
 Cohesion: 0.10
 Nodes (13): assert, { createApiApp }, { createCredentialBoundaryService }, { createLiveKitAuthGateService }, { createRoomStore }, { createTestDatabase }, fs, net (+5 more)
-
-### Community 91 - "Community 91"
-Cohesion: 0.12
-Nodes (16): acceptFirstRequest(), assert, befriend(), cookieFrom(), { createTestDatabase }, fs, http, { openWs, waitForWsType } (+8 more)
 
 ### Community 92 - "Community 92"
 Cohesion: 0.11
@@ -852,71 +852,71 @@ Nodes (4): iconLg, iconMd, iconSm, iconXs
 
 ### Community 195 - "Community 195"
 Cohesion: 0.33
-Nodes (2): { createDbPool }, createDmHistoryRepository()
-
-### Community 196 - "Community 196"
-Cohesion: 0.33
 Nodes (2): { createDbPool }, createRoomHistoryRepository()
 
-### Community 197 - "Community 197"
+### Community 196 - "Community 196"
 Cohesion: 0.40
 Nodes (2): o, s()
 
-### Community 198 - "Community 198"
+### Community 197 - "Community 197"
 Cohesion: 0.33
 Nodes (2): participantContextMenu, ParticipantMenuVariant
 
-### Community 199 - "Community 199"
+### Community 198 - "Community 198"
 Cohesion: 0.47
 Nodes (4): effectivePresenceStatus(), isPresenceStatus(), normalizePresenceStatus(), PRESENCE_STATUSES
 
-### Community 200 - "Community 200"
+### Community 199 - "Community 199"
 Cohesion: 0.53
 Nodes (5): classifyPlatform(), classifyPlatformPolicy(), normalizedString(), PLATFORM_CLASSES, platformPolicy()
 
-### Community 201 - "Community 201"
+### Community 200 - "Community 200"
 Cohesion: 0.33
 Nodes (5): RoomMessageContentV1, RoomMessageLinkSegmentV1, RoomMessageMentionSegmentV1, RoomMessageSegmentV1, RoomMessageTextSegmentV1
 
-### Community 202 - "Community 202"
+### Community 201 - "Community 201"
 Cohesion: 0.40
 Nodes (5): loadRoomRealtime(), moduleUrl(), require, root, ts
 
-### Community 203 - "Community 203"
+### Community 202 - "Community 202"
 Cohesion: 0.40
 Nodes (5): assert, { createApiApp }, openAccountWs(), test, waitForFrame()
 
-### Community 204 - "Community 204"
+### Community 203 - "Community 203"
 Cohesion: 0.33
 Nodes (1): FakeServer
 
-### Community 205 - "Community 205"
+### Community 204 - "Community 204"
 Cohesion: 0.33
 Nodes (4): assert, fs, path, test
 
-### Community 206 - "Community 206"
+### Community 205 - "Community 205"
 Cohesion: 0.40
 Nodes (5): Expiry-Aware Rescue Profile Doc (G85), Predeploy Migrations Doc, Release 2.6.0 Plan — Engagement & Notifications (Superseded), Release 2.7.0 Plan — Media & Moderation (Superseded), VoiceRoom 2.5.0 Unified — Verification and Release Evidence Specification
 
-### Community 207 - "Community 207"
+### Community 206 - "Community 206"
 Cohesion: 0.40
 Nodes (4): MemberPresenceStatus, MembershipEnvelope, MembershipMember, MembershipRole
 
-### Community 208 - "Community 208"
+### Community 207 - "Community 207"
 Cohesion: 0.40
 Nodes (4): HistoryEnvelope, HistoryMode, HistoryRequest, MessageDto
 
-### Community 209 - "Community 209"
+### Community 208 - "Community 208"
 Cohesion: 0.40
 Nodes (4): ActiveBan, BanMutation, ModerationDuration, ModerationPage
 
-### Community 210 - "Community 210"
+### Community 209 - "Community 209"
 Cohesion: 0.40
 Nodes (4): ReactionMutation, ReactionSummary, Reactor, ReactorPage
 
-### Community 211 - "Community 211"
+### Community 210 - "Community 210"
 Cohesion: 0.50
 Nodes (1): VoiceRoomDesktopAudioSourceProcessor
+
+### Community 211 - "Community 211"
+Cohesion: 0.40
+Nodes (1): FakeSocket
 
 ### Community 212 - "Community 212"
 Cohesion: 0.40
@@ -924,7 +924,7 @@ Nodes (1): FakeSocket
 
 ### Community 213 - "Community 213"
 Cohesion: 0.40
-Nodes (1): FakeSocket
+Nodes (4): assert, fs, path, { test }
 
 ### Community 214 - "Community 214"
 Cohesion: 0.40
@@ -932,98 +932,94 @@ Nodes (4): assert, fs, path, { test }
 
 ### Community 215 - "Community 215"
 Cohesion: 0.40
-Nodes (4): assert, fs, path, { test }
-
-### Community 216 - "Community 216"
-Cohesion: 0.40
 Nodes (1): FakeSocket
 
-### Community 217 - "Community 217"
+### Community 216 - "Community 216"
 Cohesion: 0.50
 Nodes (4): 166a0e8 test(release): resolve rescue fixtures from repository root, 5dd3691 test(api): serialize database suites, bf6bba7 test(api): cover media backlog age query, f540886 test(release): refresh CI gate fixtures
 
-### Community 218 - "Community 218"
+### Community 217 - "Community 217"
 Cohesion: 0.50
 Nodes (3): desktop, router, sw
 
-### Community 219 - "Community 219"
+### Community 218 - "Community 218"
 Cohesion: 0.67
 Nodes (3): assertRenderedContainer(), renderSvelte(), renderSvelteModule()
 
-### Community 220 - "Community 220"
+### Community 219 - "Community 219"
 Cohesion: 0.83
 Nodes (3): cleanId(), mentionUserIdsFromContent(), normalizeMentionUserIds()
 
-### Community 221 - "Community 221"
+### Community 220 - "Community 220"
 Cohesion: 0.67
 Nodes (2): 2a9aa5b test(api): prove media quota and worker safety, 575dc80 fix(api): align private media boundaries
 
-### Community 222 - "Community 222"
+### Community 221 - "Community 221"
 Cohesion: 1.00
 Nodes (1): FakeTimers
 
-### Community 223 - "Community 223"
+### Community 222 - "Community 222"
 Cohesion: 1.00
 Nodes (2): VoiceRoom App Icon (Owl Mascot Mark on Dark Rounded Square), VoiceRoom Mascot Mark (Masked Owl Silhouette, Transparent)
 
-### Community 224 - "Community 224"
+### Community 223 - "Community 223"
 Cohesion: 1.00
 Nodes (1): ADR: Unicode authority for message reactions
 
-### Community 225 - "Community 225"
+### Community 224 - "Community 224"
 Cohesion: 1.00
 Nodes (1): VoiceRoom 2.5 Architecture Boundaries
 
-### Community 226 - "Community 226"
+### Community 225 - "Community 225"
 Cohesion: 1.00
 Nodes (1): Backlog
 
-### Community 227 - "Community 227"
+### Community 226 - "Community 226"
 Cohesion: 1.00
 Nodes (1): config/capability-dag.v1.json
 
-### Community 228 - "Community 228"
+### Community 227 - "Community 227"
 Cohesion: 1.00
 Nodes (1): Capability Readiness Doc
 
-### Community 229 - "Community 229"
+### Community 228 - "Community 228"
 Cohesion: 1.00
 Nodes (1): Design QA — reusable room and chat menus
 
-### Community 230 - "Community 230"
+### Community 229 - "Community 229"
 Cohesion: 1.00
 Nodes (1): Font Assets README
 
-### Community 231 - "Community 231"
+### Community 230 - "Community 230"
 Cohesion: 1.00
 Nodes (1): LiveKit External Auth-Gate Operations Doc (G05)
 
-### Community 232 - "Community 232"
+### Community 231 - "Community 231"
 Cohesion: 1.00
 Nodes (1): VoiceRoom monitoring agent
 
-### Community 233 - "Community 233"
+### Community 232 - "Community 232"
 Cohesion: 1.00
 Nodes (1): OCI Runtime Publication Doc
 
-### Community 234 - "Community 234"
+### Community 233 - "Community 233"
 Cohesion: 1.00
 Nodes (1): packages/CLAUDE.md Guidance
 
-### Community 235 - "Community 235"
+### Community 234 - "Community 234"
 Cohesion: 1.00
 Nodes (1): Production Digest Promotion Doc
 
-### Community 236 - "Community 236"
+### Community 235 - "Community 235"
 Cohesion: 1.00
 Nodes (1): Release 2.5.0 Repairs README
 
 ## Knowledge Gaps
-- **1501 isolated node(s):** `http`, `net`, `{ URL }`, `{ createDbPool }`, `{ createGateCredentialSigner }` (+1496 more)
+- **1504 isolated node(s):** `http`, `net`, `{ URL }`, `{ createDbPool }`, `{ createGateCredentialSigner }` (+1499 more)
   These have ≤1 connection - possible missing edges or undocumented components.
 - **Thin community `Community 40`** (2 nodes): `206a214 refactor(web): use shared slider in settings controls`, `9d79af1 refactor(web): reuse shared slider in room controls`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 63`** (2 nodes): `01a206a chore: release v2.1.1`, `cce23b6 fix(web): stabilize preview chat identity`
+- **Thin community `Community 64`** (2 nodes): `01a206a chore: release v2.1.1`, `cce23b6 fix(web): stabilize preview chat identity`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
 - **Thin community `Community 124`** (2 nodes): `ContextMenuContentState`, `ContextMenuProps`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
@@ -1031,55 +1027,53 @@ Nodes (1): Release 2.5.0 Repairs README
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
 - **Thin community `Community 191`** (1 nodes): `lang`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 195`** (2 nodes): `{ createDbPool }`, `createDmHistoryRepository()`
+- **Thin community `Community 195`** (2 nodes): `{ createDbPool }`, `createRoomHistoryRepository()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 196`** (2 nodes): `{ createDbPool }`, `createRoomHistoryRepository()`
+- **Thin community `Community 196`** (2 nodes): `o`, `s()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 197`** (2 nodes): `o`, `s()`
+- **Thin community `Community 197`** (2 nodes): `participantContextMenu`, `ParticipantMenuVariant`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 198`** (2 nodes): `participantContextMenu`, `ParticipantMenuVariant`
+- **Thin community `Community 203`** (1 nodes): `FakeServer`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 204`** (1 nodes): `FakeServer`
+- **Thin community `Community 210`** (1 nodes): `VoiceRoomDesktopAudioSourceProcessor`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 211`** (1 nodes): `VoiceRoomDesktopAudioSourceProcessor`
+- **Thin community `Community 211`** (1 nodes): `FakeSocket`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
 - **Thin community `Community 212`** (1 nodes): `FakeSocket`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 213`** (1 nodes): `FakeSocket`
+- **Thin community `Community 215`** (1 nodes): `FakeSocket`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 216`** (1 nodes): `FakeSocket`
+- **Thin community `Community 220`** (2 nodes): `2a9aa5b test(api): prove media quota and worker safety`, `575dc80 fix(api): align private media boundaries`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 221`** (2 nodes): `2a9aa5b test(api): prove media quota and worker safety`, `575dc80 fix(api): align private media boundaries`
+- **Thin community `Community 221`** (1 nodes): `FakeTimers`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 222`** (1 nodes): `FakeTimers`
+- **Thin community `Community 222`** (2 nodes): `VoiceRoom App Icon (Owl Mascot Mark on Dark Rounded Square)`, `VoiceRoom Mascot Mark (Masked Owl Silhouette, Transparent)`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 223`** (2 nodes): `VoiceRoom App Icon (Owl Mascot Mark on Dark Rounded Square)`, `VoiceRoom Mascot Mark (Masked Owl Silhouette, Transparent)`
+- **Thin community `Community 223`** (1 nodes): `ADR: Unicode authority for message reactions`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 224`** (1 nodes): `ADR: Unicode authority for message reactions`
+- **Thin community `Community 224`** (1 nodes): `VoiceRoom 2.5 Architecture Boundaries`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 225`** (1 nodes): `VoiceRoom 2.5 Architecture Boundaries`
+- **Thin community `Community 225`** (1 nodes): `Backlog`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 226`** (1 nodes): `Backlog`
+- **Thin community `Community 226`** (1 nodes): `config/capability-dag.v1.json`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 227`** (1 nodes): `config/capability-dag.v1.json`
+- **Thin community `Community 227`** (1 nodes): `Capability Readiness Doc`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 228`** (1 nodes): `Capability Readiness Doc`
+- **Thin community `Community 228`** (1 nodes): `Design QA — reusable room and chat menus`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 229`** (1 nodes): `Design QA — reusable room and chat menus`
+- **Thin community `Community 229`** (1 nodes): `Font Assets README`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 230`** (1 nodes): `Font Assets README`
+- **Thin community `Community 230`** (1 nodes): `LiveKit External Auth-Gate Operations Doc (G05)`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 231`** (1 nodes): `LiveKit External Auth-Gate Operations Doc (G05)`
+- **Thin community `Community 231`** (1 nodes): `VoiceRoom monitoring agent`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 232`** (1 nodes): `VoiceRoom monitoring agent`
+- **Thin community `Community 232`** (1 nodes): `OCI Runtime Publication Doc`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 233`** (1 nodes): `OCI Runtime Publication Doc`
+- **Thin community `Community 233`** (1 nodes): `packages/CLAUDE.md Guidance`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 234`** (1 nodes): `packages/CLAUDE.md Guidance`
+- **Thin community `Community 234`** (1 nodes): `Production Digest Promotion Doc`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 235`** (1 nodes): `Production Digest Promotion Doc`
-  Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 236`** (1 nodes): `Release 2.5.0 Repairs README`
+- **Thin community `Community 235`** (1 nodes): `Release 2.5.0 Repairs README`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
 
 ## Suggested Questions
@@ -1088,13 +1082,13 @@ _Questions this graph is uniquely positioned to answer:_
 - **Why does `RealtimeRecoveryController` connect `Community 45` to `Community 11`?**
   _High betweenness centrality (0.009) - this node is a cross-community bridge._
 - **What connects `http`, `net`, `{ URL }` to the rest of the system?**
-  _1501 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _1504 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Community 0` be split into smaller, more focused modules?**
   _Cohesion score 0.011750881316098707 - nodes in this community are weakly interconnected._
 - **Should `Community 1` be split into smaller, more focused modules?**
   _Cohesion score 0.09795420674705324 - nodes in this community are weakly interconnected._
 - **Should `Community 2` be split into smaller, more focused modules?**
-  _Cohesion score 0.028035456606885178 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.0269850514463211 - nodes in this community are weakly interconnected._
 - **Should `Community 3` be split into smaller, more focused modules?**
   _Cohesion score 0.026509572901325478 - nodes in this community are weakly interconnected._
 - **Should `Community 4` be split into smaller, more focused modules?**
