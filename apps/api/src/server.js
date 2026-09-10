@@ -4478,7 +4478,11 @@ function createApiApp({
           return false;
         }
       },
-      prepareLeave: ({ roomId, user }) => roomRuntime.disconnectAccountFromRoom({ roomId, userId: user.id })
+      prepareLeave: ({ roomId, user }) => roomRuntime.disconnectAccountFromRoom({ roomId, userId: user.id }),
+      onLeft: async ({ roomId, user }) => {
+        await getRoomStore().removeRoomBookmarkForUser(user.id, roomId);
+        roomRuntime?.invalidateRecipientCache(roomId);
+      }
     });
   }
 

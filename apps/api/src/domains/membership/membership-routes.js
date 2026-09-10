@@ -11,6 +11,7 @@ function registerMembershipRoutes({
   completeAdmission,
   directoryService,
   membershipService,
+  onLeft,
   prepareLeave,
   resolveUser,
   membershipEnabled = () => true
@@ -84,6 +85,9 @@ function registerMembershipRoutes({
       if (result.status !== 'left' && result.status !== 'not_active') {
         return send(reply, 409, { ok: false, code: 'room_leave_failed', error: 'Unable to leave room' });
       }
+      // Leaving also takes the room off the user's list. Runs for an already
+      // inactive membership too, so retrying a failed leave finishes the job.
+      if (typeof onLeft === 'function') await onLeft({ request, roomId, user });
       return send(reply, 200, { ok: true, left: result.status === 'left' });
     });
   }
