@@ -5,7 +5,7 @@
 - `apps/web` is the Svelte/Vite frontend.
 - `packages/shared` owns contracts shared by API and Web. Update shared contracts before their consumers.
 - `docs/GIT_FLOW.md` is the source of truth for branches, commits, pull requests, hotfixes, and releases.
-- `docs/RELEASE_<version>_PLAN.md` files are release-specific target-state plans; do not describe an unmet gate as already implemented.
+- A release may add a `docs/RELEASE_<version>_PLAN.md` target-state plan; none is active now. Do not describe an unmet gate as already implemented.
 
 ## Mandatory Git Flow
 - Before changing files, run `git status --short --branch` and preserve unrelated user changes.
