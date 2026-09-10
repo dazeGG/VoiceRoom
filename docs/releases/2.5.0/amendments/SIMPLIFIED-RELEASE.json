@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "release": "2.5.0",
+  "amendmentId": "SIMPLIFIED-RELEASE-2026-09-10",
+  "status": "ACTIVE_FOR_RELEASE_PR",
+  "recordedAt": "2026-09-10T00:00:00.000Z",
+  "authority": {
+    "kind": "explicit-user-scope-override",
+    "instruction": "Fix the red develop CI, then prepare release 2.5.0 in the simplified form: versioning, release notes and an amendment recording that the full G01–G93 evidence protocol was not executed, with a PR into main that is not merged without explicit approval.",
+    "releaseBranch": "release/2.5.0",
+    "releaseBase": "a4410ed",
+    "supersedesAmendment": "CONSOLIDATED-INTEGRATION-2026-08-07"
+  },
+  "supersedes": {
+    "evidenceProtocol": "G01–G93 exact-head F0–F11 evidence objects, the GHCR evidence archive and per-gate merge envelopes",
+    "replacement": "Repository CI on the exact release base, plus the verification recorded below",
+    "retainedGates": false
+  },
+  "notExecuted": [
+    "G01–G93 exact-head evidence objects and merge envelopes",
+    "GHCR release-evidence archive and attestation",
+    "RC exact-head physical/manual matrix",
+    "staged binary rollback and N-1 client rehearsal",
+    "restore RPO/RTO rehearsal",
+    "performance and security budget evidence"
+  ],
+  "verifiedEvidence": {
+    "repositoryCi": {
+      "commit": "a4410ed",
+      "workflowRun": 34495597659,
+      "conclusion": "success",
+      "jobs": [
+        "Lint, typecheck & build",
+        "Tests",
+        "Voice room join smoke",
+        "G05 strict LiveKit gate proof"
+      ]
+    },
+    "devDeployment": {
+      "host": "dev.voiceroom.ru",
+      "lastVerifiedCommit": "ae660af",
+      "checks": [
+        "all ten containers on the release image tag, api and livekit-gate healthy",
+        "predeploy migrations a no-op",
+        "no api or worker errors after switch-over",
+        "room read write and exact-microsecond DM read verified against the dev database in rolled-back transactions"
+      ]
+    },
+    "manualAcceptance": "Owner-reported acceptance on the dev deployment of reactions, mentions, notification centre, image viewer, speaking rings, room and DM read state."
+  },
+  "knownRisks": [
+    "G17-A02 migration lock-timeout test failed once on develop (9188 ms against a 5 s bound) and passed on later runs; treated as timing-sensitive, not fixed.",
+    "Full API integration suite and web end-to-end suite were not run locally in the final stabilisation window; the API suite ran in CI against PostgreSQL.",
+    "scripts/test/validate_release_250_plan.py already fails on the develop plan ('plan must contain exactly 93 canonical cards'), independent of this release; its CI job runs only for G01 bootstrap branches, so it neither ran nor blocks here."
+  ],
+  "notAuthorized": [
+    "main merge without explicit approval",
+    "tag or GitHub Release without explicit approval",
+    "production deployment",
+    "fabricated gate evidence",
+    "describing any item in notExecuted as satisfied"
+  ]
+}
