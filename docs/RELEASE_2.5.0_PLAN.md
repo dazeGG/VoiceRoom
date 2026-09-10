@@ -1,6 +1,6 @@
 # VoiceRoom 2.5.0 — unified messaging platform PRD
 
-**Status:** released under the user-authorized simplified release amendment (`docs/releases/2.5.0/amendments/SIMPLIFIED-RELEASE.json`). The G01–G93 exact-head evidence protocol described below was **not executed**; its gates are unmet requirements, not satisfied ones. Release verification is limited to repository CI on the release base and the dev-deployment checks recorded in that amendment.
+**Status:** release prepared on `release/2.5.0` (PR #121) under the user-authorized simplified release amendment (`docs/releases/2.5.0/amendments/SIMPLIFIED-RELEASE.json`); not yet merged into `main`, tagged `v2.5.0` or back-merged into `develop`. The G01–G93 exact-head evidence protocol described below was **not executed**; its gates are unmet requirements, not satisfied ones. Release verification is limited to repository CI on the release base and the dev-deployment checks recorded in that amendment.
 **Baseline:** `develop` `02d78bcf06e364aed0e72ed7216b4f12aa8809ad`; production tag `v2.4.2` on `6cd4b30ceea044fa9c0d0e279c82f4e5cd5668bd`.  
 **Planning artifacts:** this file and the local planning workspace's test-spec draft.  
 **Tracked execution sources after G01:** `docs/RELEASE_2.5.0_PLAN.md` and `docs/RELEASE_2.5.0_TEST_SPEC.md`. The local planning workspace is ignored and is never the sole execution source of truth.  
