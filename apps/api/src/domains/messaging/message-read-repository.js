@@ -18,14 +18,17 @@ function createMessageReadRepository({ databaseUrl, logger = console, pool } = {
       );
       if (!message.rowCount) return null;
       const result = await client.query(
+        // room_chat_reads has no updated_at column: 20260718122000 gave one only
+        // to the new direct_message_read_cursors table. Writing it here made every
+        // cursor-based room read fail in the database, so nothing was ever stored
+        // and the unread count came back on reload.
         `INSERT INTO room_chat_reads (
-           room_id, user_id, last_read_at, last_read_message_created_at, last_read_message_id, updated_at
-         ) VALUES ($1, $2, $3, $3, $4, current_timestamp)
+           room_id, user_id, last_read_at, last_read_message_created_at, last_read_message_id
+         ) VALUES ($1, $2, $3, $3, $4)
          ON CONFLICT (room_id, user_id) DO UPDATE SET
            last_read_at = GREATEST(room_chat_reads.last_read_at, EXCLUDED.last_read_at),
            last_read_message_created_at = EXCLUDED.last_read_message_created_at,
-           last_read_message_id = EXCLUDED.last_read_message_id,
-           updated_at = current_timestamp
+           last_read_message_id = EXCLUDED.last_read_message_id
          WHERE room_chat_reads.last_read_message_created_at IS NULL
             OR (room_chat_reads.last_read_message_created_at, room_chat_reads.last_read_message_id)
                < (EXCLUDED.last_read_message_created_at, EXCLUDED.last_read_message_id)
