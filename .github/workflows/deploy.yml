@@ -1,0 +1,99 @@
+name: Deploy
+
+# Called from ci.yml once the verification jobs and image publication are green.
+# Each environment carries its own SSH_HOST / SSH_USER / SSH_KEY secrets and
+# DEPLOY_PATH / SSH_FINGERPRINT variables.
+on:
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+      url:
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Roll out to ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment:
+      name: ${{ inputs.environment }}
+      url: ${{ inputs.url }}
+    # One rollout per environment at a time; never cancel one that has started.
+    concurrency:
+      group: deploy-${{ inputs.environment }}
+      cancel-in-progress: false
+    env:
+      IMAGE_PREFIX: ghcr.io/dazegg/voiceroom
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check the release tag
+        if: inputs.environment == 'production'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::$GITHUB_REF_NAME does not point at a commit on main"
+            exit 1
+          fi
+          version="v$(node -p "require('./package.json').version")"
+          if [ "$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match package.json version $version"
+            exit 1
+          fi
+
+      - name: Trust the deploy host
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_FINGERPRINT: ${{ vars.SSH_FINGERPRINT }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          ssh-keyscan -T 15 -t ed25519 "$SSH_HOST" > ~/.ssh/known_hosts 2>/dev/null
+          actual="$(ssh-keygen -lf ~/.ssh/known_hosts | awk '{print $2}')"
+          if [ -z "$SSH_FINGERPRINT" ] || [ "$actual" != "$SSH_FINGERPRINT" ]; then
+            echo "::error::host key '$actual' does not match SSH_FINGERPRINT of the ${{ inputs.environment }} environment"
+            exit 1
+          fi
+
+      - name: Roll out images
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_KEY: ${{ secrets.SSH_KEY }}
+          DEPLOY_PATH: ${{ vars.DEPLOY_PATH }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${DEPLOY_PATH:?set DEPLOY_PATH on the ${{ inputs.environment }} environment}"
+          key="$RUNNER_TEMP/deploy_key"
+          install -m 600 /dev/null "$key"
+          printf '%s\n' "$SSH_KEY" > "$key"
+          args="$(printf '%q ' "$DEPLOY_PATH" "$GITHUB_SHA" \
+            "$IMAGE_PREFIX-api:$GITHUB_SHA" "$IMAGE_PREFIX-worker:$GITHUB_SHA" "$IMAGE_PREFIX-web:$GITHUB_SHA")"
+          ssh -i "$key" -o BatchMode=yes -o StrictHostKeyChecking=yes -o IdentitiesOnly=yes \
+            "$SSH_USER@$SSH_HOST" "bash -s -- $args" < scripts/cd/remote-deploy.sh
+
+      - name: Check the public health endpoint
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 12); do
+            if curl -fsS --max-time 10 "${{ inputs.url }}/api/healthz"; then
+              echo
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::${{ inputs.url }}/api/healthz did not answer after the rollout"
+          exit 1

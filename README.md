@@ -247,7 +247,15 @@ VAPID_SUBJECT
 - **voice-join** — проверка входа в голосовую комнату через LiveKit.
 - **G05 / G08** — строгий LiveKit-профиль и порог покрытия изменённого кода.
 
-**Автоматического деплоя нет.** Ни push в `main`, ни тег не выкатывают стек: dev- и production-сервер обновляются вручную — `git checkout` нужного коммита в каталоге деплоя, сборка образов `docker build --target api|worker|web`, прописывание их тегов в серверный `.env` (`VOICEROOM_API_IMAGE`, `VOICEROOM_WEB_IMAGE`, `VOICEROOM_WORKER_IMAGE`) и `docker compose up -d --remove-orphans`. Перед production-выкаткой с новыми миграциями сделайте бэкап БД (см. [`docs/operations/MEDIA_BACKUP_RESTORE.md`](./docs/operations/MEDIA_BACKUP_RESTORE.md) и [`docs/operations/PREDEPLOY_MIGRATIONS.md`](./docs/operations/PREDEPLOY_MIGRATIONS.md)). Production `.env` (как минимум `DOMAIN`, `POSTGRES_PASSWORD`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, `LIVEKIT_GATE_SECRET`) живёт на сервере, а не в Actions.
+**Деплой** (`.github/workflows/deploy.yml`, вызывается из `ci.yml` только после зелёных `check`, `test`, `voice-join` и G05):
+
+- **images** — на каждый push в `develop`, `main` и тег `v*` собирает таргеты `api`, `worker`, `web` и публикует `ghcr.io/dazegg/voiceroom-<target>:<commit-sha>`.
+- **deploy-dev** — push в `develop` сразу выкатывается на dev (environment `dev`, https://dev.voiceroom.ru).
+- **deploy-production** — тег `v*` на коммите из `main`, совпадающий с версией в `package.json`; job ждёт Approve в environment `production` (https://voiceroom.ru).
+
+Выкатку делает `scripts/cd/remote-deploy.sh` на сервере по SSH: бэкап `.env` и `pg_dump` в `deploy-backups/ci/` (хранятся 5 последних; ручные бэкапы рядом не трогаются), `git checkout` коммита, `docker pull` образов, подстановка `VOICEROOM_*_IMAGE` в `.env`, `docker compose config`, `docker compose up -d --wait`. Если любой шаг падает, возвращаются прежние коммит, `.env` и контейнеры. Миграции при этом **не откатываются** — после неудачной миграции восстанавливайте БД из дампа (см. [`docs/operations/PREDEPLOY_MIGRATIONS.md`](./docs/operations/PREDEPLOY_MIGRATIONS.md)).
+
+Каждый environment хранит свои secrets `SSH_HOST`, `SSH_USER`, `SSH_KEY` и variables `DEPLOY_PATH`, `SSH_FINGERPRINT` (ED25519-отпечаток хоста; без совпадения деплой не стартует). Серверный `.env` (как минимум `DOMAIN`, `POSTGRES_PASSWORD`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, `LIVEKIT_GATE_SECRET`, `VOICE_ROOM_CURSOR_HMAC_KEYS`) живёт на сервере, а не в Actions.
 
 Прочие рекомендации:
 
