@@ -2,10 +2,11 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 
 const { createRoomStore } = require('../src/lib/room-store');
-const { createMembershipRepository } = require('../src/domains/membership/membership-repository');
-const { createMembershipService } = require('../src/domains/membership/membership-service');
+const { registerMembershipRoutes } = require('../src/domains/membership/membership-routes');
 
 function createFakePool(handler) {
   const calls = [];
@@ -21,7 +22,6 @@ function createFakePool(handler) {
   };
   return {
     calls,
-    client,
     async query(text, values = []) {
       calls.push({ scope: 'pool', text, values });
       return handler(text, values, calls);
@@ -130,51 +130,60 @@ test('owners cannot remove their room from the list and keep their membership', 
   assert.equal(indexOf(pool.calls, /DELETE FROM/), -1);
 });
 
-function serviceWith(repository) {
-  const pool = createFakePool(() => ({ rows: [], rowCount: 0 }));
-  return { pool, service: createMembershipService({ pool, repository }) };
+function leaveRoute({ membership = { role: 'member' }, leaveStatus = 'left', prepared = true } = {}) {
+  const handlers = {};
+  const onLeftCalls = [];
+  registerMembershipRoutes({
+    app: {
+      get() {},
+      delete(route, handler) { handlers[route] = handler; }
+    },
+    resolveUser: async () => ({ user: { id: 'user-1' } }),
+    membershipService: {
+      async getMembership() { return membership; },
+      async leaveRoom() { return { status: leaveStatus }; }
+    },
+    prepareLeave: async () => prepared,
+    onLeft: async ({ roomId, user }) => { onLeftCalls.push({ roomId, userId: user.id }); }
+  });
+  const handler = handlers['/api/rooms/:roomId/memberships/me'];
+  return {
+    onLeftCalls,
+    async call() {
+      const reply = {};
+      reply.code = (statusCode) => ({ send: (payload) => { reply.statusCode = statusCode; reply.payload = payload; return reply; } });
+      await handler({ params: { roomId: 'static-room' } }, reply);
+      return reply;
+    }
+  };
 }
 
-test('leaving a room also removes it from the list inside the same transaction', async () => {
-  const bookmarkDeletes = [];
-  const { pool, service } = serviceWith({
-    async getActive() { return { id: 'membership', role: 'member' }; },
-    async deleteActive() { return { id: 'membership', role: 'member' }; },
-    async deleteBookmark(roomId, userId, options) { bookmarkDeletes.push({ roomId, userId, client: options.client }); return true; }
-  });
+test('leaving a room also takes it off the list, including a retry after the membership is gone', async () => {
+  const left = leaveRoute();
+  assert.deepEqual((await left.call()).payload, { ok: true, left: true });
+  assert.deepEqual(left.onLeftCalls, [{ roomId: 'static-room', userId: 'user-1' }]);
 
-  const result = await service.leaveRoom({ roomId: 'static-room', userId: 'user-1' });
-
-  assert.equal(result.status, 'left');
-  assert.deepEqual(bookmarkDeletes, [{ roomId: 'static-room', userId: 'user-1', client: pool.client }]);
+  const retried = leaveRoute({ membership: null, leaveStatus: 'not_active' });
+  assert.deepEqual((await retried.call()).payload, { ok: true, left: false });
+  assert.deepEqual(retried.onLeftCalls, [{ roomId: 'static-room', userId: 'user-1' }]);
 });
 
-test('owners, non-members and lost deletes leave the list untouched', async () => {
-  const bookmarkDeletes = [];
-  const deleteBookmark = async () => { bookmarkDeletes.push(true); return true; };
+test('owners, failed leaves and refused disconnects keep the room on the list', async () => {
+  const owner = leaveRoute({ membership: { role: 'owner' } });
+  assert.equal((await owner.call()).statusCode, 409);
 
-  const owner = serviceWith({ async getActive() { return { id: 'm', role: 'owner' }; }, deleteBookmark });
-  assert.equal((await owner.service.leaveRoom({ roomId: 'r', userId: 'u' })).status, 'owner_required');
+  const failed = leaveRoute({ leaveStatus: 'invalid' });
+  assert.equal((await failed.call()).statusCode, 409);
 
-  const outsider = serviceWith({ async getActive() { return null; }, deleteBookmark });
-  assert.equal((await outsider.service.leaveRoom({ roomId: 'r', userId: 'u' })).status, 'not_active');
+  const refused = leaveRoute({ prepared: false });
+  assert.equal((await refused.call()).statusCode, 503);
 
-  const raced = serviceWith({
-    async getActive() { return { id: 'm', role: 'member' }; },
-    async deleteActive() { return null; },
-    deleteBookmark
-  });
-  assert.equal((await raced.service.leaveRoom({ roomId: 'r', userId: 'u' })).status, 'not_active');
-
-  assert.deepEqual(bookmarkDeletes, []);
+  assert.deepEqual([...owner.onLeftCalls, ...failed.onLeftCalls, ...refused.onLeftCalls], []);
 });
 
-test('membership repository deletes a list entry and reports whether one existed', async () => {
-  const pool = createFakePool((text) => ({ rows: [], rowCount: /DELETE FROM room_bookmarks/.test(text) ? 1 : 0 }));
-  const repository = createMembershipRepository({ pool });
-
-  assert.equal(await repository.deleteBookmark('static-room', 'user-1'), true);
-  assert.deepEqual(pool.calls.at(-1).values, ['static-room', 'user-1']);
-  assert.equal(await repository.deleteBookmark('', 'user-1'), false);
-  assert.equal(pool.calls.length, 1);
+test('the API wires leaving a room to the room store that owns the list', () => {
+  const source = fs.readFileSync(path.resolve(__dirname, '../src/server.js'), 'utf8');
+  const start = source.indexOf('registerMembershipRoutes({');
+  const wiring = source.slice(start, source.indexOf('\n    });', start));
+  assert.match(wiring, /onLeft: async \(\{ roomId, user \}\) => \{\s*await getRoomStore\(\)\.removeRoomBookmarkForUser\(user\.id, roomId\);/);
 });

@@ -51,8 +51,8 @@ test('bookmark backfill promotes list-only users to members, skips bans and dead
   for (const login of ['owner', 'alice', 'bob', 'carol', 'dave', 'erin', 'frank', 'gina']) {
     ids[login] = crypto.randomUUID();
     await pool.query(
-      `INSERT INTO users (id, login, display_name, password_hash) VALUES ($1, $2, $2, 'x')`,
-      [ids[login], login]
+      `INSERT INTO users (id, login, display_name, password_hash) VALUES ($1, $2, $3, 'x')`,
+      [ids[login], login, login]
     );
   }
   await pool.query(

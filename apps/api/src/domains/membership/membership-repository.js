@@ -67,16 +67,6 @@ function createMembershipRepository({ pool } = {}) {
     return mapMembership(result.rows[0]);
   }
 
-  async function deleteBookmark(roomId, userId, { client } = {}) {
-    if (!roomId || !userId) return false;
-    const result = await executor(client).query(
-      `DELETE FROM room_bookmarks
-       WHERE room_id = $1 AND user_id = $2`,
-      [roomId, userId]
-    );
-    return result.rowCount > 0;
-  }
-
   async function upsertActive({ roomId, userId, role = 'member', metadata = {}, at = Date.now(), client } = {}) {
     if (!roomId || !userId) return null;
     const normalizedRole = role === 'owner' ? 'owner' : 'member';
@@ -131,7 +121,7 @@ function createMembershipRepository({ pool } = {}) {
     return { members: rows.map(mapDirectoryMember), hasMore };
   }
 
-  return { deleteActive, deleteBookmark, getActive, isActive, listDirectoryPage, mapDirectoryMember, mapMembership, upsertActive };
+  return { deleteActive, getActive, isActive, listDirectoryPage, mapDirectoryMember, mapMembership, upsertActive };
 }
 
 module.exports = { createMembershipRepository, mapDirectoryMember, mapMembership };
