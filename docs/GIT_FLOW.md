@@ -45,7 +45,7 @@ This repository uses Git Flow for all development and releases. This file is the
 1. Confirm `develop` is green and the preceding production tag exists.
 2. Create `release/<version>` from the audited `develop` commit.
 3. Allow only versioning, release notes, migrations/operations notes, QA fixes, and release polish on the release branch.
-4. Run every gate required by the matching `docs/RELEASE_<version>_PLAN.md`; statements in a plan are requirements until fresh evidence proves them.
+4. Run the repository gates, plus every gate of a matching `docs/RELEASE_<version>_PLAN.md` if the release has one; statements in a plan are requirements until fresh evidence proves them.
 5. Open the release PR into `main`. Do not merge it while required jobs or release gates are failing.
 6. After explicit approval, merge into `main`, verify the production version, and create the annotated tag `v<version>` on the release commit.
 7. Merge the release result back into `develop` so versioning and stabilization fixes are not lost.
