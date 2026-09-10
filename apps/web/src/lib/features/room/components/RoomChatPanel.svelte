@@ -555,6 +555,11 @@
       toast('Сообщение не загружено — прокрутите историю выше');
       return;
     }
+    flashMessage(row);
+  }
+
+  /** Centre a message and flash it, so the eye lands on the one that was meant. */
+  function flashMessage(row: HTMLElement): void {
     row.scrollIntoView({ block: 'center', behavior: 'smooth' });
     row.classList.add('is-highlighted');
     setTimeout(() => row.classList.remove('is-highlighted'), 1600);
@@ -618,7 +623,11 @@
     if (anchorMessageId && !signal.aborted) {
       await tick();
       chatPinnedToBottom = false;
-      document.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(anchorMessageId)}"]`)?.scrollIntoView({ block: 'center' });
+      // Arriving from a notification lands the way jumping to a reply does:
+      // centred and flashed. Mentions are already tinted, so with several on
+      // screen the flash is what says which one this link was for.
+      const target = chatBody?.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(anchorMessageId)}"]`);
+      if (target) flashMessage(target);
     } else if (!signal.aborted && chatVisible) {
       // The first page must land on the newest message: the body was empty when
       // the visibility effect ran, so its scroll then was a no-op.
