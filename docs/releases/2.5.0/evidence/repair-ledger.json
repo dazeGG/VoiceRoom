@@ -1,6 +1,0 @@
-{
-  "entries": [],
-  "release": "2.5.0",
-  "rule": "No repair is authorized before a valid external G01 terminal selection.",
-  "schemaVersion": 1
-}

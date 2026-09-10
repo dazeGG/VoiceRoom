@@ -1,9 +1,0 @@
-{
-  "schemaVersion": 1,
-  "release": "2.5.0",
-  "status": "PENDING_EXTERNAL_G01_SELECTION",
-  "selectedAttemptId": null,
-  "terminalDevelopSha": null,
-  "ancestors": [],
-  "sourceDigests": null
-}
