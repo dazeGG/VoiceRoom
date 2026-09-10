@@ -53,3 +53,19 @@ test('the preview opens on the chat and scrolls it to the linked message', () =>
   assert.match(chat, /const anchorMessageId = aroundMessageId \|\| new URL\(window\.location\.href\)\.searchParams\.get\('around'\)/);
   assert.match(chat, /history\.open\(roomId, anchorMessageId\)/);
 });
+
+test('arriving from a notification flashes that message, as a reply jump does', () => {
+  const chat = read('src/lib/features/room/components/RoomChatPanel.svelte');
+  const css = read('src/lib/features/room/styles/chat-rail.css');
+
+  // Mentions are tinted green already, so with several on screen only a flash
+  // says which one the link was for. Both paths share the same helper.
+  assert.match(chat, /function flashMessage\(row: HTMLElement\): void/);
+  assert.match(chat, /if \(target\) flashMessage\(target\)/);
+  const jump = chat.slice(chat.indexOf('function jumpToMessage'));
+  assert.match(jump.slice(0, jump.indexOf('\n  }')), /flashMessage\(row\)/);
+  assert.match(chat, /classList\.add\('is-highlighted'\)/);
+
+  // The flash is declared after the mention tint, so it wins while it lasts.
+  assert.ok(css.indexOf('.chat-msg-text.mentions-me::before') < css.indexOf('.chat-msg-text.is-highlighted::before'));
+});
