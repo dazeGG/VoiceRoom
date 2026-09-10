@@ -1,24 +1,24 @@
-# Graph Report - .  (2026-08-15)
+# Graph Report - .  (2026-09-10)
 
 ## Corpus Check
-- Large corpus: 742 files · ~423 896 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.
+- Large corpus: 696 files · ~333 702 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.
 
 ## Summary
-- 5668 nodes · 13354 edges · 244 communities detected
+- 5503 nodes · 13514 edges · 242 communities detected
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS · INFERRED: 6 edges (avg confidence: 0.73)
 - Token cost: 0 input · 0 output
-- Edge kinds: contains: 4307 · MODIFIES: 3297 · calls: 1994 · imports: 1198 · ON_BRANCH: 1000 · imports_from: 759 · PARENT_OF: 499 · method: 202 · re_exports: 59 · references: 23 · inherits: 9 · conceptually_related_to: 4 · semantically_similar_to: 2 · implements: 1
+- Edge kinds: contains: 4115 · MODIFIES: 3419 · calls: 1697 · ON_BRANCH: 1640 · imports: 1072 · imports_from: 716 · PARENT_OF: 555 · method: 202 · re_exports: 59 · references: 23 · inherits: 9 · conceptually_related_to: 4 · semantically_similar_to: 2 · implements: 1
 
 
 ## Input Scope
 - Requested: auto
 - Resolved: committed (source: default-auto)
-- Included files: 742 · Candidates: 851
-- Excluded: 755 untracked · 19702 ignored · 13 sensitive · 0 missing committed
+- Included files: 696 · Candidates: 774
+- Excluded: 0 untracked · 46333 ignored · 13 sensitive · 0 missing committed
 - Recommendation: Use --scope all or graphify.yaml inputs.corpus for a knowledge-base folder.
 
 ## Graph Freshness
-- Built from Git commit: `8836119`
+- Built from Git commit: `1fa0876`
 - Compare this hash to `git rev-parse HEAD` before trusting freshness-sensitive graph output.
 ## God Nodes (most connected - your core abstractions)
 1. `sendJson()` - 68 edges
@@ -54,332 +54,299 @@
 
 ### Community 0 - "Community 0"
 Cohesion: 0.01
-Nodes (181): createFriendStore(), { createDbPool }, createRelease250Pool(), createMediaQuotaRepository(), registerMembershipRoutes(), createDirectMessageRepository(), { createDbPool, transaction }, createMessageReadRepository() (+173 more)
+Nodes (179): createFriendStore(), createMediaQuotaRepository(), registerMembershipRoutes(), createDirectMessageRepository(), registerRoomHistoryRoutes(), createRoomMessageRepository(), registerNotificationRoutes(), { assertMigrationReady, runMigrations } (+171 more)
 
 ### Community 1 - "Community 1"
-Cohesion: 0.06
-Nodes (97): develop, feature/2.5.0-manual-fixes, feature/2.5.0-to-rc, 01e9d33 feat(room): add side panel participant roster, 01f4965 fix(livekit): unblock browser room joins, 09e2f5e feat(web): restore room avatar settings, 0ccab26 docs: add 2.5–2.7 release train plans and backlog, 0fbf930 fix(web): polish avatar and chat controls (+89 more)
+Cohesion: 0.08
+Nodes (103): feature/2.5.0-to-rc, feature/docs-cleanup, feature/room-shared-music, release/2.5.0, 0043b03 build: ship music-bot as a published runtime image, 01f4965 fix(livekit): unblock browser room joins, 025e0ee test(ci): align G08 with raw TCP gate, 09e2f5e feat(web): restore room avatar settings (+95 more)
 
 ### Community 2 - "Community 2"
-Cohesion: 0.03
-Nodes (18): 043b73d chore: release v2.1.5, 2391bbe feat(web): migrate UI icons to Lucide (#42), 9976dab Merge tag 'v2.1.5' into develop, aed41e8 fix(web): harden room svelte migration, e31d9e6 feat(web): add participant context menu, ff38a51 Merge branch 'release/2.1.5', state, EllipsisProps (+10 more)
+Cohesion: 0.04
+Nodes (46): addRoomByCode(), authPost(), AuthUser, avatarRequest(), changePassword(), Credentials, deleteUserAvatar(), fetchMe() (+38 more)
 
 ### Community 3 - "Community 3"
-Cohesion: 0.03
-Nodes (62): 1578df6 feat: add account settings, 208f295 feat(presence): add selectable account statuses, 22a796b Merge pull request #8 from feature/404-page, 3580978 fix(api): harden session and cookie write security, 4a8d9fc fix(api): address room persistence review findings, a5a9bf8 chore(dev): update docker workflow docs, cc7f297 Merge pull request: chore private monitoring agent, ec9f802 feat(api): persist visual identity keys (+54 more)
+Cohesion: 0.04
+Nodes (21): 043b73d chore: release v2.1.5, 2391bbe feat(web): migrate UI icons to Lucide (#42), 9976dab Merge tag 'v2.1.5' into develop, aed41e8 fix(web): harden room svelte migration, e0f8314 feat(web): refine room and lobby interactions, e31d9e6 feat(web): add participant context menu, ff38a51 Merge branch 'release/2.1.5', state (+13 more)
 
 ### Community 4 - "Community 4"
-Cohesion: 0.05
-Nodes (70): deleteDirectMessage(), DirectMessageHistoryPage, DirectMessageInvite, editDirectMessage(), fetchThread(), fetchThreadPage(), HistoryMessageDto, markThreadRead() (+62 more)
+Cohesion: 0.03
+Nodes (63): playbackPolicy, 1578df6 feat: add account settings, 208f295 feat(presence): add selectable account statuses, 3580978 fix(api): harden session and cookie write security, 4a8d9fc fix(api): address room persistence review findings, a5a9bf8 chore(dev): update docker workflow docs, c948bb7 feat(notifications): add do not disturb settings (#53), cc7f297 Merge pull request: chore private monitoring agent (+55 more)
 
 ### Community 5 - "Community 5"
-Cohesion: 0.05
-Nodes (70): SCREEN_FPS_OPTIONS, SCREEN_QUALITY_OPTIONS, SCREEN_SIMULCAST_LAYER, SCREEN_STREAM_MODE_PROFILES, DesktopAudioCapture, DesktopPickerSelection, ScreenProfile, ScreenSourceSelection (+62 more)
+Cohesion: 0.07
+Nodes (87): feature/2.5.0-manual-fixes, main, wip/discord-redesign, 0112d02 fix(infra): pin livekit server version, 02824cd fix(web): surface friend request errors, 049a913 fix(web): keep popover open on ambiguous focus loss, 07e362c chore(omx): update model routing, 0d5875a fix: close migration dependency audit finding (+79 more)
 
 ### Community 6 - "Community 6"
 Cohesion: 0.04
-Nodes (34): 08e3e13 Merge branch 'hotfix/2.2.1', 0a0699b chore: release v2.1.2, 0d30394 chore: merge v2.1.1 back to develop, 0f3d7a0 Merge branch 'hotfix/2.1.3', 0ffac54 feat(infra): expose livekit prometheus metrics for status stack (#22), 17edd27 feat(web): add lobby voice controls widget, 1840f18 chore: release v2.1.4, 2684b15 chore: release v2.1.3 (+26 more)
+Nodes (54): 19902ab feat: prepare 2.5.0 RC and polish chats (#114), cf49285 fix(api): reconcile media across replicas, d8e3847 test(web): prove messaging reconciliation flows, CONTEXTS, createAttachmentRepository(), crypto, mapAttachment(), MIME_TYPES (+46 more)
 
 ### Community 7 - "Community 7"
 Cohesion: 0.04
-Nodes (41): del(), fetchJson(), patchJson(), postJson(), postJsonAuth(), putJson(), CreateRoomOptions, CreateRoomResponse (+33 more)
+Nodes (52): 54086b4 fix(api): serialize notification retraction revisions, ac8e530 fix(notifications): persist explicit all room level, d56e835 fix(notifications): preserve conservative room policy, api, prefs, createDbPool(), { Pool }, { readDatabaseConfig } (+44 more)
 
 ### Community 8 - "Community 8"
 Cohesion: 0.04
-Nodes (28): AuthUser, roomNameFor(), clearSession(), session, setUser(), syncRoomName(), 2b2c6c9 chore: release v2.0.0, 59d8617 feat(web): add authenticated lobby and room chat v2 (+20 more)
+Nodes (42): del(), fetchJson(), patchJson(), postJson(), postJsonAuth(), putJson(), createRoomProof(), hasLeadingZeroBits() (+34 more)
 
 ### Community 9 - "Community 9"
 Cohesion: 0.07
-Nodes (72): main, wip/discord-redesign, 0112d02 fix(infra): pin livekit server version, 01a206a chore: release v2.1.1, 02824cd fix(web): surface friend request errors, 07e362c chore(omx): update model routing, 0d5875a fix: close migration dependency audit finding, 1718dc1 Bump version to 1.6.1 (+64 more)
+Nodes (62): ApiRequestError, postJson(), isCurrentRoomRecoveryEpoch(), notifyLiveKitDisconnected(), notifyLiveKitReconnecting(), RecoveryAttemptOutcome, setRoomRecoveryLiveKitAdapter(), subscribeRoomRecoveryTransitions() (+54 more)
 
 ### Community 10 - "Community 10"
 Cohesion: 0.04
-Nodes (63): isRoomEmbedded(), extractRoomId(), clearAllPeerJoinCues(), clearPeerJoinCue(), clearStreamViewerCues(), startMeters(), stopMeters(), ApiRequestError (+55 more)
+Nodes (47): 74df7a9 fix(api): revoke only failed admission credential, 760fdfe fix(api): remediate oversized attachments before validation, c02e107 fix(web): recover attachment compose safely, d37be0b feat(api): expose media pressure health, composer, dm, room, store (+39 more)
 
 ### Community 11 - "Community 11"
-Cohesion: 0.05
-Nodes (38): 02d78bc Merge pull request #69 from dazeGG/hotfix/2.4.2-backmerge, 6cd4b30 fix(web): stabilize screen sharing in 2.4.2 (#68), cf1ea14 chore(release): back-merge 2.4.2 into develop, getScreenPublicationPresence(), ScreenPublicationPresence, getScreenReceiverDemand(), ScreenReceiverDemand, createScreenSubscriptionRetryController() (+30 more)
+Cohesion: 0.06
+Nodes (53): isRoomEmbedded(), extractRoomId(), checkRoomExists(), cancelRoomRecovery(), notifyLiveKitReconciled(), notifyRoomAppConnection(), notifyRoomNetworkOffline(), notifyRoomNetworkOnline() (+45 more)
 
 ### Community 12 - "Community 12"
-Cohesion: 0.08
-Nodes (42): assertCheckpointArtifact(), assertEvidenceIdentity(), authenticateEvidenceRoot(), bindCheckpointFixture(), bindExternalFixture(), canonical(), canonicalArchivePath(), checkpointPayload() (+34 more)
+Cohesion: 0.06
+Nodes (37): 164b853 refactor(web): neutral input placeholders, dedicated dev port, desktop drag region (#16), 2c5f8d4 feat(web): show stream quality on tile thumbnails, 634b607 feat(web): prepare Voice Room 1.7.0, 65f8383 chore: removed status agent file, 67b668e chore: merge v2.0.2 back to develop, 7dd4a5f refactor(rooms): replace visual presets with fallback avatars (#44), 7f48829 feat(web): render visual identity tokens, aaef77d fix(web): move stream metadata onto thumbnails (+29 more)
 
 ### Community 13 - "Community 13"
-Cohesion: 0.09
-Nodes (54): 1a5009b fix(web): remove transient voice-connecting placeholder, applyRemoteScreenVideoDemand(), attachSubscribedRemoteScreenTrack(), attemptFreshLiveKitReplacement(), bindLiveKitRoomEvents(), clearAllScreenSubscriptionRetries(), clearScreenSubscriptionRetry(), connectLiveKitRoom() (+46 more)
+Cohesion: 0.04
+Nodes (12): 2137216 fix(chat): unify image captions, 2207473 fix(web): make the tone strip reachable and settle the DM thread before showing it, 3d21918 fix(chat): complete clipboard image processing, 4a58e90 fix(chat): refine attachment composer visuals, 63e4eb1 fix(chat): align attachment previews, 6c425ac fix(chat): restore room invitations, 9eaca9b feat(chat): redesign image attachment composer, c22c49a Merge branch 'feature/2.5.0-fixes' into develop (+4 more)
 
 ### Community 14 - "Community 14"
-Cohesion: 0.11
-Nodes (58): broadcastDmNotification(), broadcastToUser(), broadcastUserProfileToFriends(), buildSessionCookie(), checkPushSubscriptionRate(), cleanPushSubscription(), cleanUuid(), clearSessionCookie() (+50 more)
+Cohesion: 0.07
+Nodes (50): dbToAmplitude(), persistMicrophoneVolume(), MicProcessor, MicrophoneCapture, unpublishLocalMicrophone(), applyInputGainToCapture(), applyNoiseGateToCapture(), combineMicrophoneProcessors() (+42 more)
 
 ### Community 15 - "Community 15"
-Cohesion: 0.06
-Nodes (38): eventMatchesHotkey(), getDefaultHotkeyBinding(), getHotkeyStorageKey(), HotkeyAction, isTypingTarget(), parseHotkeyBinding(), readHotkeyBinding(), writeHotkeyBinding() (+30 more)
+Cohesion: 0.05
+Nodes (46): ad596da test(api): prove reaction persistence invariants, d43fd78 fix(shared): accept signed reactor cursors, assertReactionEmoji(), cleanReactionEmoji(), EMOJI_REACTION_AUTHORITY, buildGroups(), GROUP_ANCHORS, listReactionEmojiGroups() (+38 more)
 
 ### Community 16 - "Community 16"
+Cohesion: 0.05
+Nodes (19): RoomPeer, AvatarCropDialogProps, AvatarCropShape, 6584f79 feat: add uploaded avatars for users and rooms (#45), e0eb12c chore(release): prepare 2.4.0, reconcileAvatarStorage(), MascotIconProps, MascotVariant (+11 more)
+
+### Community 17 - "Community 17"
+Cohesion: 0.07
+Nodes (44): 1886650 feat(api): persist rooms and chat in postgres, 364b82c build(api): fence G15 predeploy migrations, c928af9 fix(api): require exact migration catalog readiness, path, readDatabaseConfig(), readEnvBool(), readEnvInt(), readMessageDeliveryMode() (+36 more)
+
+### Community 18 - "Community 18"
+Cohesion: 0.05
+Nodes (25): 0a0699b chore: release v2.1.2, 0d30394 chore: merge v2.1.1 back to develop, 0d74cad Merge branch 'release/2.1.6', 0f3d7a0 Merge branch 'hotfix/2.1.3', 0ffac54 feat(infra): expose livekit prometheus metrics for status stack (#22), 1840f18 chore: release v2.1.4, 2684b15 chore: release v2.1.3, 2994d09 fix(api): return friend request id from listRequests (+17 more)
+
+### Community 19 - "Community 19"
+Cohesion: 0.09
+Nodes (47): clampStreamVolume(), getStoredStreamVolume(), normalizeStoredStreamVolume(), storeStreamVolume(), clearScreenAttendance(), setScreenAttendance(), releaseScreenMediaElement(), activateScreenStageUi() (+39 more)
+
+### Community 20 - "Community 20"
 Cohesion: 0.06
 Nodes (18): accessibleName(), assertAccessibleName(), assertFocusOrder(), assertKeyboardActivation(), assertLiveRegion(), assertReducedMotionEnabled(), assertStableLayout(), text() (+10 more)
 
-### Community 17 - "Community 17"
-Cohesion: 0.09
-Nodes (46): clampStreamVolume(), getStoredStreamVolume(), normalizeStoredStreamVolume(), storeStreamVolume(), clearScreenAttendance(), setScreenAttendance(), activateScreenStageUi(), bindScreenStageIdleUi() (+38 more)
-
-### Community 18 - "Community 18"
-Cohesion: 0.07
-Nodes (52): attachMediaProjection(), attachReplyProjection(), cleanChatText(), cleanDmText(), clearRoomOccupancyRetries(), clearRoomOccupancyRetry(), createApiApp(), createFastifyLoggerOptions() (+44 more)
-
-### Community 19 - "Community 19"
-Cohesion: 0.07
-Nodes (41): a0ff17a feat(web): improve sound settings with sliders and cue volume (#30), MicrophoneMode, NOISE_MODES, NoiseMode, NoiseModeOption, SCREEN_QUALITY_ORDER, ScreenFpsOption, ScreenQualityOption (+33 more)
-
-### Community 20 - "Community 20"
-Cohesion: 0.04
-Nodes (13): SelectedMention, 728cea2 feat: implement release 2.5.0 messaging platform (#105), { buildMessageDeliveryEvent }, AnchoredHistoryOptions, AnchoredHistoryPage, AttachmentContext, AttachmentState, MessageAttachment (+5 more)
-
 ### Community 21 - "Community 21"
-Cohesion: 0.05
-Nodes (13): 3ba8cf5 fix(web): contain sound settings layout, 48bcc0d fix(web): silence notification success toasts, 672bc61 Allow selecting push to talk before hotkey, 76fc735 Add desktop notification enable setting, 8e916e0 feat(web): integrate global desktop voice hotkeys, a511d06 fix(web): align muted notification indicators, b521be9 Move desktop hotkeys to settings tab, c3ada5c Fix desktop notification settings toggle (+5 more)
+Cohesion: 0.06
+Nodes (41): acceptFriendRequest(), cancelFriendRequest(), declineFriendRequest(), fetchFriends(), fetchRequests(), Friend, FriendLastMessage, IncomingRequest (+33 more)
 
 ### Community 22 - "Community 22"
 Cohesion: 0.07
-Nodes (47): activeTargetSuppresses(), actorLabel(), BrowserNotificationPayload, buildNotificationPayload(), canUseNotifications(), cleanupMemoryDedupe(), consumeNotificationDedupeKey(), dedupeStorageKey() (+39 more)
+Nodes (41): a0ff17a feat(web): improve sound settings with sliders and cue volume (#30), MicrophoneMode, NOISE_MODES, NoiseMode, NoiseModeOption, SCREEN_QUALITY_ORDER, ScreenFpsOption, ScreenQualityOption (+33 more)
 
 ### Community 23 - "Community 23"
 Cohesion: 0.08
-Nodes (35): fetchNotificationPreferences(), normalizePreferences(), NotificationMuteResponse, NotificationPreferences, NotificationPreferencesResponse, RoomNotificationLevel, setDmNotificationsMuted(), setDoNotDisturb() (+27 more)
+Nodes (46): DesktopAudioCapture, DesktopPickerSelection, ScreenSourceSelection, createAbortError(), applyScreenCaptureProfile(), CaptureAttemptDetail, CaptureError, createBrowserDisplayMediaConstraints() (+38 more)
 
 ### Community 24 - "Community 24"
-Cohesion: 0.05
-Nodes (8): 2137216 fix(chat): unify image captions, 24d9640 fix(chat): restore clipboard image uploads, 3d21918 fix(chat): complete clipboard image processing, 4a58e90 fix(chat): refine attachment composer visuals, 63e4eb1 fix(chat): align attachment previews, 6c425ac fix(chat): restore room invitations, 9eaca9b feat(chat): redesign image attachment composer, f9e04c6 fix(chat): keep attachment composer anchored
+Cohesion: 0.07
+Nodes (51): attachMediaProjection(), attachReplyProjection(), cleanChatText(), cleanDmText(), createApiApp(), createFastifyLoggerOptions(), dispatchMessageDeliveryEvent(), fastify (+43 more)
 
 ### Community 25 - "Community 25"
-Cohesion: 0.05
-Nodes (34): assert, { Client }, { createTestDatabase }, NEW_TABLES, { runMigrations }, SILENT, test, createTestDatabase() (+26 more)
+Cohesion: 0.13
+Nodes (51): broadcastDmNotification(), broadcastToUser(), broadcastUserProfileToFriends(), checkPushSubscriptionRate(), cleanPushSubscription(), cleanUuid(), expireRoomInvitations(), getFriendStore() (+43 more)
 
 ### Community 26 - "Community 26"
-Cohesion: 0.05
-Nodes (10): 12b694d fix(web): refine room controls and stream notices (#58), 14d55d2 fix(web): sync room profiles and improve modal layout, 54de960 fix(api): use authoritative active peer names, 5b7d102 chore(release): back-merge 2.4.0 into develop, 70b16b9 fix(web): align stream tiles and viewer cues (#59), 962ff1e Merge pull request #63 from dazeGG/feature/profile-sync-preview-centering, 99e894e fix(api): resolve chat authors from live profiles, 9a4a2f5 fix(web): align room preview with active room ui (+2 more)
+Cohesion: 0.06
+Nodes (32): 02d78bc Merge pull request #69 from dazeGG/hotfix/2.4.2-backmerge, 6cd4b30 fix(web): stabilize screen sharing in 2.4.2 (#68), cf1ea14 chore(release): back-merge 2.4.2 into develop, getScreenPublicationPresence(), ScreenPublicationPresence, getScreenReceiverDemand(), ScreenReceiverDemand, createScreenSubscriptionRetryController() (+24 more)
 
 ### Community 27 - "Community 27"
-Cohesion: 0.07
-Nodes (36): 3f83f05 Merge branch 'release/2.2.0', 4cfb160 chore(release): bump version to 2.2.0, 7524c15 feat(realtime): add websocket room updates, beffc4f Merge tag 'v2.2.0' into develop, { buildServerEnvelope }, toWsAccountEvent(), {
-  parseClientEnvelope,
-  buildServerEnvelope,
-  buildServerErrorEnvelope,
-  validateClientCommand
-}, parseInboundMessage() (+28 more)
+Cohesion: 0.04
+Nodes (15): SelectedMention, 2d36bc7 fix(api): bound messaging schema locks, 728cea2 feat: implement release 2.5.0 messaging platform (#105), a2ee398 test(api): prove messaging pagination and reads, { buildMessageDeliveryEvent }, AnchoredHistoryOptions, AnchoredHistoryPage, AttachmentContext (+7 more)
 
 ### Community 28 - "Community 28"
-Cohesion: 0.09
-Nodes (41): aggregateArchiveProofs(), ANCESTOR_KEYS, appendArchiveProof(), ARCHIVE_OBJECT_ORDER, args(), ARTIFACT_BINDING_KEYS, assertArchiveState(), buildArchiveObject() (+33 more)
+Cohesion: 0.07
+Nodes (41): 01e9d33 feat(room): add side panel participant roster, 0753576 fix(web): show avatars in stream placeholders, 08bd491 fix(web): focus DM compose input when opening a friend chat (#28), 0a9be62 fix(web): keep room preview chat closed by default (#32), 1a262f9 feat(shared): group reaction emoji, 1ddbd67 fix(web): show viewer avatars in stream badge, 1ecef6b fix(room): show persistent participant roster, 331bb32 fix(web): restore room panel interaction (+33 more)
 
 ### Community 29 - "Community 29"
 Cohesion: 0.08
-Nodes (39): ParsedScreenStats, ScreenStatsPrevious, disconnectAudioNode(), errorMessage(), errorName(), getInitials(), hasLeadingZeroBits(), isCaptureCancelled() (+31 more)
+Nodes (42): 9c3b5e4 feat(audio): add unified playback bus (#54), getParticipantAudioPreferenceKey(), getStoredMasterVolume(), applyAudioBusOutput(), AudioBusGraph, AudioBusKind, busNode(), connectDefaultOutput() (+34 more)
 
-### Community 30 - "Community 30"
-Cohesion: 0.12
-Nodes (41): 8b5b175 chore: merge v2.0.1 back to develop, cef76ec chore: release v2.0.1, e9dccb2 fix(web): recover remote microphone playback, applyRemoteScreenCue(), applyStreamViewerCue(), attachMeterSoon(), attachRemoteAudioTrack(), attachRemoteScreenStream() (+33 more)
+### Community 31 - "Community 31"
+Cohesion: 0.07
+Nodes (46): activeTargetSuppresses(), actorLabel(), BrowserNotificationPayload, buildNotificationPayload(), canUseNotifications(), cleanupMemoryDedupe(), consumeNotificationDedupeKey(), dedupeStorageKey() (+38 more)
 
 ### Community 32 - "Community 32"
-Cohesion: 0.09
-Nodes (37): buildF7Envelope(), buildF7RepositoryGates(), buildG01VerificationCatalog(), artifactAuthority(), assertBootstrapPlanToken(), bindPrepared(), buildF7Envelope(), candidateReport() (+29 more)
+Cohesion: 0.05
+Nodes (33): 88169aa fix(api): preserve migration history with corrective follow-ups, 88e8e93 test(release): define physical support matrix gate, b318c49 test(web): prove desktop root boundary, c4b1a22 test(api): enforce exact migration lock budget, edf6daf test(api): prove platform class migration, BLOCKED_ROUTES, { classifyPlatform, PLATFORM_CLASSES }, { createDbPool, transaction } (+25 more)
 
 ### Community 33 - "Community 33"
-Cohesion: 0.06
-Nodes (17): AvatarProps, 1594fb0 feat(web): refine chat and room interactions, e0eb12c chore(release): prepare 2.4.0, reconcileAvatarStorage(), MascotIconProps, MascotVariant, AvatarAccentPresentation, AvatarAccentRgb (+9 more)
+Cohesion: 0.05
+Nodes (34): assert, { Client }, { createTestDatabase }, NEW_TABLES, { runMigrations }, SILENT, test, createTestDatabase() (+26 more)
 
 ### Community 34 - "Community 34"
-Cohesion: 0.08
-Nodes (37): 0753576 fix(web): show avatars in stream placeholders, 08bd491 fix(web): focus DM compose input when opening a friend chat (#28), 0a9be62 fix(web): keep room preview chat closed by default (#32), 0d74cad Merge branch 'release/2.1.6', 1ddbd67 fix(web): show viewer avatars in stream badge, 1ecef6b fix(room): show persistent participant roster, 2eb2cbf chore: release v2.1.6, 3940c26 fix(web): preserve friend online status across realtime race (#27) (+29 more)
+Cohesion: 0.11
+Nodes (43): 1a5009b fix(web): remove transient voice-connecting placeholder, 8b5b175 chore: merge v2.0.1 back to develop, cef76ec chore: release v2.0.1, e9dccb2 fix(web): recover remote microphone playback, applyRemoteScreenCue(), applyStreamViewerCue(), attachMeterSoon(), attachRemoteAudioTrack() (+35 more)
 
 ### Community 35 - "Community 35"
-Cohesion: 0.09
-Nodes (33): 2c5f8d4 feat(web): show stream quality on tile thumbnails, 7dd4a5f refactor(rooms): replace visual presets with fallback avatars (#44), 7f48829 feat(web): render visual identity tokens, aaef77d fix(web): move stream metadata onto thumbnails, df5ba40 feat(rooms): implement kick and ban moderation (#50), createPeerId(), createSessionToken(), getRoomIdFromPath() (+25 more)
-
-### Community 36 - "Community 36"
-Cohesion: 0.09
-Nodes (21): RoomPeer, AvatarCropDialogProps, AvatarCropShape, AvatarStackItem, AvatarStackProps, 0c20745 chore(release): back-merge 2.1.9, 6584f79 feat: add uploaded avatars for users and rooms (#45), 98e9f11 chore(release): merge 2.1.9 (+13 more)
+Cohesion: 0.06
+Nodes (30): b6c5445 fix(api): reuse account avatar color in calls, {
+  AVATAR_COLOR_KEYS,
+  cleanAvatarColorKey
+}, avatarColorForPeerId(), { createActiveBanService }, { createDbPool, transaction }, createRoomStore(), crypto, mapMessage() (+22 more)
 
 ### Community 37 - "Community 37"
-Cohesion: 0.06
-Nodes (27): 54086b4 fix(api): serialize notification retraction revisions, { Pool }, { readDatabaseConfig }, { recordPgPoolError }, transaction(), createInboxRepository(), crypto, { transaction } (+19 more)
+Cohesion: 0.05
+Nodes (2): 206a214 refactor(web): use shared slider in settings controls, 9d79af1 refactor(web): reuse shared slider in room controls
 
 ### Community 38 - "Community 38"
-Cohesion: 0.14
-Nodes (38): artifactBinding(), artifactName(), authenticatedGitHubInstant(), authenticateMergedPullRequest(), bindAncestorArtifacts(), buildAuthenticatedEarlyFailure(), buildF11Envelope(), buildF9Envelope() (+30 more)
+Cohesion: 0.09
+Nodes (32): develop, emojiAssetName(), emojiAssetUrl(), 1051d9c fix(web): make the speaking ring report who is actually audible, 1fa0876 docs: remove shipped release plans and stale notes, 28759aa fix(web): stack room reactions and keep the message toolbar reachable, 42e581f feat(web): draw reactions from bundled artwork and rebuild the picker, 4553c35 fix(web): reconcile repeated cross-tab read cursors (+24 more)
 
 ### Community 39 - "Community 39"
+Cohesion: 0.06
+Nodes (34): 2a9aa5b test(api): prove media quota and worker safety, 575dc80 fix(api): align private media boundaries, createMediaService(), detectExactContainer(), FORMAT_MIME, MediaServiceError, PNG_END, readBounded() (+26 more)
+
+### Community 40 - "Community 40"
+Cohesion: 0.09
+Nodes (31): fetchNotificationPreferences(), normalizePreferences(), NotificationMuteResponse, NotificationPreferences, NotificationPreferencesResponse, RoomNotificationLevel, setDmNotificationsMuted(), setDoNotDisturb() (+23 more)
+
+### Community 41 - "Community 41"
+Cohesion: 0.07
+Nodes (13): AvatarProps, BadgeProps, ButtonProps, 1594fb0 feat(web): refine chat and room interactions, 3db468e feat(web): Volt redesign — landing, lobby v2, shared UI (#38), DialogProps, ToastOptions, toastState (+5 more)
+
+### Community 42 - "Community 42"
+Cohesion: 0.07
+Nodes (34): 31409db style(web): restore dock device popover chrome, 3f83f05 Merge branch 'release/2.2.0', 4cfb160 chore(release): bump version to 2.2.0, 6113243 chore(release): bump version to 2.1.11, 7524c15 feat(realtime): add websocket room updates, 81d9540 Merge tag 'v2.1.11' into develop, beffc4f Merge tag 'v2.2.0' into develop, ff9ac77 Merge branch 'release/2.1.11' (+26 more)
+
+### Community 43 - "Community 43"
+Cohesion: 0.08
+Nodes (30): createMessageReplyHandlers(), registerMessageReplyRoutes(), REPLY_CONFLICT_BODY, { ReplyTargetUnavailableError }, isInvitation(), isReplyTargetKindAllowed(), isUnavailable(), messageId() (+22 more)
+
+### Community 44 - "Community 44"
 Cohesion: 0.13
 Nodes (10): classifyRecoveryFailure(), DEFAULT_RETRY_DELAYS_MS, elapsedBucket(), RealtimeRecoveryController, RETRYABLE_CODES, SAFE_CODES, sanitizeRecoveryCode(), TERMINAL_CODES (+2 more)
 
-### Community 40 - "Community 40"
-Cohesion: 0.12
-Nodes (34): buildMergeEnvelope(), buildGoalEvidence(), bytesDigest(), canonicalInstant(), compactDigest(), exactKeys(), recomputeEnvelopeDigest(), SELECTION_KEYS (+26 more)
+### Community 45 - "Community 45"
+Cohesion: 0.06
+Nodes (6): 1b46251 fix(web): fit the image viewer, tighten the picker, ping on mention only, 2bb0df7 feat(web): give images a real viewer, and open pending ones in it, 9c1c7df Merge branch 'feature/2.5.0-fixes' into develop, a0dac33 Merge branch 'feature/2.5.0-fixes' into develop, webRoot, webRoot
 
-### Community 41 - "Community 41"
+### Community 46 - "Community 46"
+Cohesion: 0.09
+Nodes (34): 6eb964c feat(shared): add the room shared-music wire contract, buildRoomRealtimeSummary(), buildServerEnvelope(), isPlainObject(), KNOWN_CLIENT_TYPES, { normalizeRoomId, normalizePeerId, normalizeSessionToken, cleanName }, parseClientEnvelope(), parseServerEnvelope() (+26 more)
+
+### Community 47 - "Community 47"
 Cohesion: 0.09
 Nodes (18): AttachmentApiError, AttachmentContext, AttachmentDraft, AttachmentDraftState, createAttachmentSlot(), deleteAttachment(), Envelope, getAttachmentStatus() (+10 more)
 
-### Community 42 - "Community 42"
-Cohesion: 0.06
-Nodes (29): ac8e530 fix(notifications): persist explicit all room level, d56e835 fix(notifications): preserve conservative room policy, api, prefs, { cleanPresenceStatus }, { createDbPool, transaction }, createNotificationStore(), crypto (+21 more)
-
-### Community 43 - "Community 43"
-Cohesion: 0.09
-Nodes (28): c928af9 fix(api): require exact migration catalog readiness, acquireMigrationLock(), advisoryLockParts(), assertMigrationLockHeld(), assertMigrationReady(), assertNoDirtyMigrationState(), { Client }, DEFAULT_MIGRATIONS_DIR (+20 more)
-
-### Community 44 - "Community 44"
-Cohesion: 0.09
-Nodes (33): buildRoomRealtimeSummary(), buildServerEnvelope(), isPlainObject(), KNOWN_CLIENT_TYPES, { normalizeRoomId, normalizePeerId, normalizeSessionToken, cleanName }, parseClientEnvelope(), parseServerEnvelope(), toRoomPeerSummary() (+25 more)
-
-### Community 45 - "Community 45"
-Cohesion: 0.09
-Nodes (17): BadgeProps, ButtonProps, 025e0ee test(ci): align G08 with raw TCP gate, 110a1fb fix(web): render push setup failures as errors, 13148b1 style(web): apply canonical background palette, 1ce845a fix(deps): update vulnerable transitive packages, 22239a5 feat(chat): add room unread badges, 3db468e feat(web): Volt redesign — landing, lobby v2, shared UI (#38) (+9 more)
-
-### Community 46 - "Community 46"
-Cohesion: 0.14
-Nodes (34): abandonmentAttemptId(), abandonmentCore(), activateCandidateReport(), activeIdentity(), artifactOrdinalsFromPages(), authenticatedGitHubInstant(), buildActivationCapture(), buildCandidateReport() (+26 more)
-
-### Community 47 - "Community 47"
+### Community 48 - "Community 48"
 Cohesion: 0.11
 Nodes (37): authorizeRoomMutation(), broadcast(), broadcastRoomUpdate(), checkAvatarUploadRate(), closePeer(), countRoomCreationQuotaRoomsForIp(), disconnectModeratedPeer(), finalizeModeratedPeers() (+29 more)
 
-### Community 48 - "Community 48"
-Cohesion: 0.06
-Nodes (4): 451844b feat(web): refine lobby and room settings, addOrigin(), config, liveKitConnectSources()
-
 ### Community 49 - "Community 49"
 Cohesion: 0.08
-Nodes (29): ad596da test(api): prove reaction persistence invariants, d43fd78 fix(shared): accept signed reactor cursors, assertReactionEmoji(), cleanReactionEmoji(), EMOJI_REACTION_AUTHORITY, buildGroups(), GROUP_ANCHORS, listReactionEmojiGroups() (+21 more)
+Nodes (28): 5d910ea fix(notifications): fail closed on provider errors, desktop, router, sw, cleanPushEndpoint(), crypto, describePushEndpoint(), EXACT_PUSH_HOSTS (+20 more)
 
 ### Community 50 - "Community 50"
-Cohesion: 0.06
-Nodes (28): 74df7a9 fix(api): revoke only failed admission credential, 760fdfe fix(api): remediate oversized attachments before validation, 88169aa fix(api): preserve migration history with corrective follow-ups, edf6daf test(api): prove platform class migration, assert, { classifyPlatform }, { Client }, { createPushStore } (+20 more)
-
-### Community 51 - "Community 51"
 Cohesion: 0.07
 Nodes (23): b16c894 fix(api): expose fail-closed release telemetry, fa382b2 fix(api): derive backlog age directly from storage, createNotificationOutboxRepository(), crypto, NotificationFenceError, createNotificationPushProvider(), assert, {createNotificationDeliveryWorker} (+15 more)
 
+### Community 51 - "Community 51"
+Cohesion: 0.11
+Nodes (21): RoomRealtimeSummary, AvatarStackItem, AvatarStackProps, 0c20745 chore(release): back-merge 2.1.9, 46cb450 feat(web): extend shared slider customization, 98e9f11 chore(release): merge 2.1.9, 98f910e Merge branch 'release/2.1.7', a6e2011 Merge branch 'release/2.1.8' (+13 more)
+
 ### Community 52 - "Community 52"
-Cohesion: 0.06
-Nodes (26): CONTEXTS, createAttachmentRepository(), crypto, mapAttachment(), MIME_TYPES, assert, {
-  createAttachmentRepository,
-  mapAttachment
-}, ROW (+18 more)
+Cohesion: 0.12
+Nodes (16): fetchReactionSummaries(), fetchReactors(), ReactionConversation, reactionUrl(), setReactionDesired(), validSummaries(), ReactionSnapshotView, replaceReactionSnapshot() (+8 more)
 
 ### Community 53 - "Community 53"
-Cohesion: 0.08
-Nodes (15): 19902ab feat: prepare 2.5.0 RC and polish chats (#114), 4553c35 fix(web): reconcile repeated cross-tab read cursors, 8e66057 fix(ci): fail release gates on wrong branch, d8e3847 test(web): prove messaging reconciliation flows, ecc157a refactor(web): preserve async failure evidence, BLOCKED_ROUTES, desktop, router (+7 more)
-
-### Community 54 - "Community 54"
-Cohesion: 0.07
-Nodes (13): DesktopAsset, DesktopRelease, 164b853 refactor(web): neutral input placeholders, dedicated dev port, desktop drag region (#16), 634b607 feat(web): prepare Voice Room 1.7.0, 7d47c23 fix(web): preserve dev API proxy origin, c03d726 feat(web): refine room not-found page, d2ae430 docs(web): document dev proxy origin contract, e2dc193 chore: removed agents md (+5 more)
-
-### Community 55 - "Community 55"
 Cohesion: 0.10
 Nodes (29): 0ec8255 chore(release): bump version to 2.2.3, 2adaec0 Merge branch 'hotfix/2.2.3-ci', bc6c32c Merge tag 'v2.2.3' into develop, cf119b8 fix(api): wait for fresh websocket summary frames, assert, cookieFrom(), { createTestDatabase }, fs (+21 more)
 
-### Community 56 - "Community 56"
-Cohesion: 0.10
-Nodes (24): 1595593 feat(notifications): add web push delivery (#51), 4977987 feat(rooms): add friend ring invitations (#52), 5d910ea fix(notifications): fail closed on provider errors, cleanPushEndpoint(), crypto, describePushEndpoint(), EXACT_PUSH_HOSTS, isAllowedPushHost() (+16 more)
+### Community 54 - "Community 54"
+Cohesion: 0.09
+Nodes (28): eventMatchesHotkey(), getDefaultHotkeyBinding(), getHotkeyStorageKey(), HotkeyAction, isTypingTarget(), parseHotkeyBinding(), readHotkeyBinding(), writeHotkeyBinding() (+20 more)
 
-### Community 57 - "Community 57"
-Cohesion: 0.08
-Nodes (17): 2ea3623 Merge pull request #116 from dazeGG/feature/2.5.0-manual-fixes, 60484d7 feat(api): add contextual social and room actions, createPinRepository(), mapPin(), requireQuery(), toMillis(), registerPinRoutes(), createPinService() (+9 more)
-
-### Community 58 - "Community 58"
+### Community 55 - "Community 55"
 Cohesion: 0.08
 Nodes (21): authorize(), { createGateCredentialSigner }, createMemoryGateStore(), extractCredential(), mint(), readTopologyEvidence(), require, runAuthGateProof() (+13 more)
 
-### Community 59 - "Community 59"
+### Community 56 - "Community 56"
 Cohesion: 0.08
 Nodes (25): { createReadinessReport, resolveManifestPath }, createRuntimeReadinessProvider(), { createRuntimeReadinessRepository }, failClosedSnapshot(), { PUBLIC_CAPABILITY_KEYS }, createRuntimeReadinessRepository(), { createDbPool }, { createRuntimeReadinessRepository } (+17 more)
 
-### Community 60 - "Community 60"
-Cohesion: 0.13
-Nodes (15): fetchReactionSummaries(), fetchReactors(), ReactionConversation, reactionUrl(), setReactionDesired(), validSummaries(), ReactionSnapshotView, replaceReactionSnapshot() (+7 more)
-
-### Community 61 - "Community 61"
+### Community 57 - "Community 57"
 Cohesion: 0.08
 Nodes (13): AppRealtimeConnection, connectRealtime(), getAppRealtime(), PinsRealtimeEvent, ReactionRealtimeEvent, RealtimeAccountEvent, RealtimeErrorEvent, RealtimeEvent (+5 more)
 
-### Community 62 - "Community 62"
-Cohesion: 0.12
-Nodes (27): dbToAmplitude(), persistMicrophoneVolume(), MicProcessor, applyInputGainToCapture(), applyNoiseGateToCapture(), combineMicrophoneProcessors(), createNoiseGatedStream(), createNoiseGateEnvelope() (+19 more)
+### Community 58 - "Community 58"
+Cohesion: 0.09
+Nodes (7): aae885c Merge pull request #117 from dazeGG/feature/2.5.0-manual-fixes, c80ed8a feat(web): expand contextual menus, ProfileCardAnchor, profileCardUi, ProfileCardPerson, ProfileCardProps, ProfileCardRelationship
 
-### Community 63 - "Community 63"
+### Community 59 - "Community 59"
+Cohesion: 0.06
+Nodes (2): 01a206a chore: release v2.1.1, cce23b6 fix(web): stabilize preview chat identity
+
+### Community 60 - "Community 60"
+Cohesion: 0.08
+Nodes (9): 08e3e13 Merge branch 'hotfix/2.2.1', 17edd27 feat(web): add lobby voice controls widget, 397400d chore(release): bump version to 2.2.2, 3b6010b Merge branch 'release/2.2.2', 52c6592 Merge tag 'v2.2.1' into develop, 5fa984e Merge tag 'v2.2.2' into develop, ControlHandler, LeaveHandler (+1 more)
+
+### Community 61 - "Community 61"
 Cohesion: 0.09
 Nodes (20): {
   buildHistoryEnvelope,
   normalizeHistoryRequest
 }, createRoomHistoryService(), RoomHistoryError, createCursorCodec(), crypto, CursorCodecError, makePayload(), normalizeKeys() (+12 more)
 
-### Community 64 - "Community 64"
+### Community 62 - "Community 62"
 Cohesion: 0.08
 Nodes (5): RealtimeHeartbeatWatchdog, f52476e fix(room): recover realtime and media after network loss (#111), LiveKitReconcileGeneration, ScreenRecoveryGraceController, source
 
-### Community 65 - "Community 65"
-Cohesion: 0.11
-Nodes (22): containsPath(), createCoordinatedSnapshot(), filesBelow(), resolvedProspectivePath(), sha256(), 06b943b fix(ops): bind media restore catalog, 1332815 feat(ops): add coordinated media restore, 2350242 build(api): define expiry-aware rescue profile (+14 more)
+### Community 63 - "Community 63"
+Cohesion: 0.09
+Nodes (22): 177f5e3 test(api): prove durable message delivery, 93cad8e test(release): define G42 messaging checkpoint, abortError(), boundedBackoff(), createLeaseRuntime(), crypto, delay(), LeaseLostError (+14 more)
 
-### Community 66 - "Community 66"
+### Community 64 - "Community 64"
 Cohesion: 0.07
 Nodes (20): 20fdff5 feat(api): persist static rooms and chat, fs, net, startApiListener(), assert, fs, os, path (+12 more)
 
-### Community 67 - "Community 67"
-Cohesion: 0.11
-Nodes (23): 9c3b5e4 feat(audio): add unified playback bus (#54), getStoredMasterVolume(), applyAudioBusOutput(), AudioBusGraph, AudioBusKind, connectDefaultOutput(), createGraph(), getAudioBusGraph() (+15 more)
-
-### Community 68 - "Community 68"
+### Community 65 - "Community 65"
 Cohesion: 0.07
-Nodes (17): playbackPolicy, c948bb7 feat(notifications): add do not disturb settings (#53), assert, automaticPresenceMigration, avatarMigration, dndMigration, friendsMigration, membershipMigration (+9 more)
+Nodes (17): 1595593 feat(notifications): add web push delivery (#51), PushPayload, assert, automaticPresenceMigration, avatarMigration, dndMigration, friendsMigration, membershipMigration (+9 more)
 
-### Community 69 - "Community 69"
+### Community 66 - "Community 66"
 Cohesion: 0.08
 Nodes (21): da2ffb3 fix(release): stabilize G01-G03 foundation gates (#112), extensions, files, path, socketPathForDirectory(), assert, { createApiServer }, createFriends() (+13 more)
 
-### Community 70 - "Community 70"
+### Community 67 - "Community 67"
 Cohesion: 0.08
 Nodes (21): AVATAR_KEY_PATTERN, createAvatarStorage(), fs, path, { readUploadsDir }, validateAvatarKey(), assert, { createApiApp } (+13 more)
 
-### Community 71 - "Community 71"
+### Community 68 - "Community 68"
+Cohesion: 0.10
+Nodes (13): 2ea3623 Merge pull request #116 from dazeGG/feature/2.5.0-manual-fixes, 60484d7 feat(api): add contextual social and room actions, registerPinRoutes(), createPinService(), normalizeMessageId(), normalizeRoomId(), PinServiceError, requireAccount() (+5 more)
+
+### Community 69 - "Community 69"
 Cohesion: 0.13
 Nodes (22): deletePushSubscription(), fetchPushConfig(), PushConfig, savePushSubscription(), decodeVapidKey(), detachPushSubscription(), getRegistration(), isDesktopRuntime() (+14 more)
 
-### Community 72 - "Community 72"
-Cohesion: 0.11
-Nodes (10): ChatMessage, c80ed8a feat(web): expand contextual menus, ProfileCardAnchor, profileCardUi, ProfileCardPerson, ProfileCardProps, ProfileCardRelationship, participantProfilePerson() (+2 more)
-
-### Community 73 - "Community 73"
+### Community 70 - "Community 70"
 Cohesion: 0.10
 Nodes (18): 1709ead fix(api): centralize active room ban enforcement, createActiveBanRepository(), crypto, mapActiveBan(), normalizePrincipal(), toMillis(), { createActiveBanRepository, normalizePrincipal }, createActiveBanService() (+10 more)
 
-### Community 74 - "Community 74"
-Cohesion: 0.08
-Nodes (18): 2d36bc7 fix(api): bound messaging schema locks, 2d8eac5 test(messaging): lock G20-G23 contracts, a2ee398 test(api): prove messaging pagination and reads, cb7ad0e feat(api): fence message delivery cutover, createMessageReadService(), MessageReadError, assert, fs (+10 more)
-
-### Community 75 - "Community 75"
-Cohesion: 0.08
-Nodes (20): d9f484d test(engagement): prove content and mention UoW, model, room, ui, {
-  contentFromLegacyText,
-  normalizeRoomMessageContent,
-  projectRoomMessageContent
-}, createContentRepository(), assert, c (+12 more)
-
-### Community 76 - "Community 76"
+### Community 71 - "Community 71"
 Cohesion: 0.13
-Nodes (23): MicrophoneCapture, attachMeter(), isLocalMicrophoneSpeaking(), refreshMicrophoneLevelMeterSoon(), updateMeter(), unpublishLocalMicrophone(), buildDeviceOptions(), GateControlView (+15 more)
+Nodes (24): SCREEN_FPS_OPTIONS, SCREEN_QUALITY_OPTIONS, SCREEN_SIMULCAST_LAYER, SCREEN_STREAM_MODE_PROFILES, ScreenProfile, ScreenStreamMode, loadLiveKitClient(), TRACK_SOURCE (+16 more)
 
-### Community 77 - "Community 77"
-Cohesion: 0.10
-Nodes (22): httpKey(), httpRequests, labels(), maintenanceTasks, mediaPressure, metricLine(), observeMaintenance(), recordCredentialRevokeCleanupFailure() (+14 more)
+### Community 72 - "Community 72"
+Cohesion: 0.18
+Nodes (18): dm, picker, reactors, room, store, summary, authDialog(), createPermanentRoom() (+10 more)
 
-### Community 78 - "Community 78"
+### Community 73 - "Community 73"
 Cohesion: 0.11
 Nodes (19): RoomSnapshot, acknowledgeActiveVoiceResync(), clearActiveResync(), detailHandlers, ensureAppRealtimeConnected(), ensureReconnectRestore(), isRetryableActiveResyncError(), joinVoiceRoom() (+11 more)
 
-### Community 79 - "Community 79"
+### Community 74 - "Community 74"
 Cohesion: 0.10
 Nodes (17): ae1827c fix(reactions): converge updates across realtime clients, ff08a8e test(api): exercise gate through postgres and network boundaries, createReactionRealtimeAdapter(), registerReactionRoutes(), createReactionService(), normalizeConversation(), {
   normalizeReactionMutation,
@@ -388,130 +355,104 @@ Nodes (17): ae1827c fix(reactions): converge updates across realtime clients, ff
   normalizeReactorQuery
 }, ReactionServiceError (+9 more)
 
-### Community 80 - "Community 80"
-Cohesion: 0.12
-Nodes (21): persistMicrophoneMode(), persistOutputMuted(), supportsAudioOutputSelection(), getLocalMicrophoneCapture(), beginPushToTalk(), CallControlsView, endPushToTalk(), handleMicButtonClick() (+13 more)
+### Community 75 - "Community 75"
+Cohesion: 0.15
+Nodes (23): ParsedScreenStats, ScreenStatsPrevious, unpublishLocalScreenTracks(), setLocalAppAudioSuppressed(), applyLocalScreenEncodingProfile(), applyLocalScreenProfileState(), applyScreenSenderEncoding(), findLocalScreenVideoPublication() (+15 more)
 
-### Community 81 - "Community 81"
-Cohesion: 0.14
-Nodes (20): isInvitation(), isReplyTargetKindAllowed(), isUnavailable(), messageId(), projectAuthor(), projectReplyPreview(), projectReplyTombstone(), projectText() (+12 more)
-
-### Community 82 - "Community 82"
+### Community 76 - "Community 76"
 Cohesion: 0.15
 Nodes (22): asSet(), buildNodeMap(), compareReplicas(), createReadinessProvider(), createReadinessReport(), crypto, evaluateFromOptions(), evaluatePublicNode() (+14 more)
 
+### Community 77 - "Community 77"
+Cohesion: 0.13
+Nodes (18): 110a1fb fix(web): render push setup failures as errors, 12b694d fix(web): refine room controls and stream notices (#58), 13148b1 style(web): apply canonical background palette, 42643ef feat(presence): automate away status from system idle, 4977987 feat(rooms): add friend ring invitations (#52), 5b7d102 chore(release): back-merge 2.4.0 into develop, 70b16b9 fix(web): align stream tiles and viewer cues (#59), 76fc735 Add desktop notification enable setting (+10 more)
+
+### Community 78 - "Community 78"
+Cohesion: 0.13
+Nodes (20): persistMicrophoneMode(), persistOutputMuted(), supportsAudioOutputSelection(), beginPushToTalk(), CallControlsView, endPushToTalk(), handleMicButtonClick(), OutputControlsView (+12 more)
+
+### Community 80 - "Community 80"
+Cohesion: 0.10
+Nodes (11): 0fbf930 fix(web): polish avatar and chat controls, 451844b feat(web): refine lobby and room settings, 74d4ec7 fix(web): defer audio unlock to stream gesture, 7c3fb72 fix(api): refresh avatar identity on room join, 8e4a907 docs(release): add 2.4.0 implementation plan, a49077b fix(shared): expose avatar accent to esm consumers, b3efade fix(api): sync profile updates with friends, root (+3 more)
+
+### Community 81 - "Community 81"
+Cohesion: 0.13
+Nodes (10): formatHotkeyBinding(), formatHotkeyCode(), hotkeyBindingFromEvent(), hotkeyMatchesEvent(), isApplePlatform(), isHotkeyModifierCode(), MODIFIER_CODES, HotkeyBinding (+2 more)
+
+### Community 82 - "Community 82"
+Cohesion: 0.16
+Nodes (21): clearAllPeerJoinCues(), clearPeerJoinCue(), clearStreamViewerCues(), CueNote, getCueGain(), isCuePlaybackSuppressed(), peerJoinCueTimes, playCueSequence() (+13 more)
+
 ### Community 83 - "Community 83"
-Cohesion: 0.25
-Nodes (15): c8ab9d1 chore(release): back-merge 2.4.1 into develop, d95ed85 chore(release): back-merge 2.4.1 into develop, fef0e20 chore(release): prepare 2.4.1, authDialog(), createPermanentRoom(), enterRoom(), loginViaUi(), openRoomHeadingMenu() (+7 more)
+Cohesion: 0.12
+Nodes (15): { buildServerEnvelope }, toWsAccountEvent(), {
+  parseClientEnvelope,
+  buildServerEnvelope,
+  buildServerErrorEnvelope,
+  validateClientCommand
+}, parseInboundMessage(), sendWsEnvelope(), serializeEnvelope(), buildRoomMembershipPresenceSnapshot(), { buildServerEnvelope, sendWsEnvelope } (+7 more)
 
 ### Community 84 - "Community 84"
-Cohesion: 0.10
-Nodes (4): a136dc0 fix(web): stabilize chat actions and overlays, bc72aaa feat(web): unify room and context menus (#56), ContextMenuContentState, ContextMenuProps
-
-### Community 85 - "Community 85"
-Cohesion: 0.11
-Nodes (17): 049a913 fix(web): keep popover open on ambiguous focus loss, 206a214 refactor(web): use shared slider in settings controls, 31409db style(web): restore dock device popover chrome, 3c617ec style(web): polish dm day separator, 3fe3910 test(web): update slider contract tests, 46cb450 feat(web): extend shared slider customization, 6113243 chore(release): bump version to 2.1.11, 7db2783 docs(monitoring): align LiveKit track metric labels (+9 more)
-
-### Community 86 - "Community 86"
-Cohesion: 0.13
-Nodes (19): 1886650 feat(api): persist rooms and chat in postgres, 364b82c build(api): fence G15 predeploy migrations, 8fdccbd chore(scripts): default to docker compose workflows, a36adca chore(docker): add postgres compose workflows, path, readDatabaseConfig(), readEnvBool(), readEnvInt() (+11 more)
-
-### Community 87 - "Community 87"
-Cohesion: 0.10
-Nodes (12): cc45703 fix(api): expose worker metrics across process boundaries, createMediaVisibilityService(), MediaVisibilityError, assert, { createMediaVisibilityService }, fastify, { registerMediaRoutes }, test (+4 more)
-
-### Community 89 - "Community 89"
-Cohesion: 0.09
-Nodes (14): ReadReconciliationOptions, b3732be fix(notifications): make inbox revisions monotonic, model, router, ui, inbox, reconcile, room (+6 more)
-
-### Community 90 - "Community 90"
-Cohesion: 0.12
-Nodes (18): 2a9aa5b test(api): prove media quota and worker safety, 575dc80 fix(api): align private media boundaries, createMediaStorage(), createStorageKey(), crypto, fs, parseStorageKey(), path (+10 more)
-
-### Community 91 - "Community 91"
-Cohesion: 0.12
-Nodes (15): abortError(), boundedBackoff(), createLeaseRuntime(), crypto, delay(), LeaseLostError, assert, { LeaseLostError, boundedBackoff, createLeaseRuntime } (+7 more)
-
-### Community 92 - "Community 92"
 Cohesion: 0.11
 Nodes (17): 0b4c646 feat(platform): enforce G14 capability readiness, 5459a43 feat(platform): harden G13 runtime configuration edge, createCapabilitySnapshot(), formatCapabilityPayload(), HEALTH_CAPABILITIES_LIMITS, { PUBLIC_CAPABILITY_KEYS }, publicFeatureFlags(), registerCapabilityRoutes() (+9 more)
 
-### Community 93 - "Community 93"
-Cohesion: 0.17
-Nodes (20): getParticipantAudioPreferenceKey(), busNode(), releaseMediaStreamElement(), routeMediaStreamElement(), applyRemoteParticipantAudioPreferences(), applyScreenMediaElementVolume(), handleAudioUnlockGesture(), hasPendingStreamWatchGate() (+12 more)
-
-### Community 94 - "Community 94"
-Cohesion: 0.14
-Nodes (14): createDbPool(), {
-  AVATAR_COLOR_KEYS,
-  cleanAvatarColorKey
-}, avatarColorForPeerId(), { createActiveBanService }, { createDbPool, transaction }, crypto, mapMessage(), mapPeerIdentity() (+6 more)
-
-### Community 95 - "Community 95"
-Cohesion: 0.10
-Nodes (13): assert, { createApiApp }, { createCredentialBoundaryService }, { createLiveKitAuthGateService }, { createRoomStore }, { createTestDatabase }, fs, net (+5 more)
-
-### Community 96 - "Community 96"
+### Community 85 - "Community 85"
 Cohesion: 0.12
 Nodes (16): acceptFirstRequest(), assert, befriend(), cookieFrom(), { createTestDatabase }, fs, http, { openWs, waitForWsType } (+8 more)
 
-### Community 97 - "Community 97"
+### Community 86 - "Community 86"
 Cohesion: 0.11
 Nodes (15): acceptFirstRequest(), assert, befriend(), cookieFrom(), { createTestDatabase }, fs, http, { joinVoiceRoom, openWs: openHarnessWs, subscribeRoomPreview, waitForWsType } (+7 more)
 
-### Community 98 - "Community 98"
-Cohesion: 0.15
-Nodes (16): addRoomByCode(), authPost(), avatarRequest(), changePassword(), Credentials, deleteUserAvatar(), fetchMe(), fetchOwnedRooms() (+8 more)
-
-### Community 99 - "Community 99"
+### Community 87 - "Community 87"
 Cohesion: 0.15
 Nodes (8): conversationKey(), createReplyStore(), normalizeTarget(), ReplyAuthor, ReplyConversation, ReplySendInput, ReplyStore, ReplyTarget
 
-### Community 100 - "Community 100"
-Cohesion: 0.20
-Nodes (19): compactDigest(), exactKeys(), F7_GATE_NAMES, F7_INPUT_PATHS, F7_REPORT_PATHS, F7_REPOSITORY_COMMANDS, instant(), lineage() (+11 more)
+### Community 88 - "Community 88"
+Cohesion: 0.11
+Nodes (11): 84ba47a feat(web): rebuild the notification centre, and retire notifications on read, createMessageReadService(), MessageReadError, assert, { createCursorCodec }, { createMessageReadService }, { test }, assert (+3 more)
 
-### Community 101 - "Community 101"
+### Community 89 - "Community 89"
 Cohesion: 0.12
-Nodes (16): createMediaService(), detectExactContainer(), FORMAT_MIME, MediaServiceError, PNG_END, readBounded(), sharp, assert (+8 more)
+Nodes (10): getAllParticipants(), getParticipantById(), FullscreenView, getActiveScreenPeer(), getScreenMetaView(), getScreenViewers(), getStreamVolumeView(), ScreenMetaView (+2 more)
 
-### Community 102 - "Community 102"
+### Community 90 - "Community 90"
 Cohesion: 0.12
 Nodes (14): assert, buildApp(), { createApiApp, createApiServer }, createFakeFriends(), createFakeStore(), createFakeUsers(), fs, http (+6 more)
 
-### Community 103 - "Community 103"
+### Community 91 - "Community 91"
 Cohesion: 0.15
 Nodes (14): CapabilityFeatures, CapabilityKey, CapabilityResponse, isCapabilityReady(), loadCapabilities(), resetCapabilities(), CapabilityEdge, CapabilityState (+6 more)
 
-### Community 104 - "Community 104"
+### Community 92 - "Community 92"
 Cohesion: 0.13
 Nodes (15): recordMediaOldestPending(), assert, { DEFAULTS, createMediaProcessingWorker, retryDelay }, fs, { MediaJobFenceError }, test, createMediaProcessingWorker(), crypto (+7 more)
 
-### Community 105 - "Community 105"
-Cohesion: 0.12
-Nodes (14): { classifyPlatform, PLATFORM_CLASSES }, { createDbPool, transaction }, createPushStore(), crypto, normalizePlatformClass(), PLATFORM_SIGNAL_METADATA_KEYS, resolvePlatformClass(), assert (+6 more)
-
-### Community 106 - "Community 106"
+### Community 93 - "Community 93"
 Cohesion: 0.17
 Nodes (18): { AccessToken, TrackSource }, assertCase(), { createDbPool }, { createGateCredentialSigner }, { createRoomStore }, directLocalhostPortClosed(), mintCredentials(), openWebSocket() (+10 more)
 
-### Community 107 - "Community 107"
-Cohesion: 0.19
-Nodes (18): CueNote, getCueGain(), isCuePlaybackSuppressed(), peerJoinCueTimes, playCueSequence(), playDirectMessageCue(), playFriendAcceptedCue(), playFriendRequestCue() (+10 more)
+### Community 94 - "Community 94"
+Cohesion: 0.13
+Nodes (12): actorLockKey(), boundedString(), createMessageIdempotencyRepository(), crypto, encodeParts(), IdempotencyConflictError, IdempotencyQuotaError, ledgerKey() (+4 more)
 
-### Community 108 - "Community 108"
+### Community 95 - "Community 95"
+Cohesion: 0.16
+Nodes (19): appendToThread(), applyEditedMessage(), applyFriendProfile(), bumpLastMessage(), editMessage(), findFriend(), flushPendingNotificationEvents(), getActiveNotificationTarget() (+11 more)
+
+### Community 96 - "Community 96"
 Cohesion: 0.20
 Nodes (16): flipPlacementVertical(), parsePlacement(), resolvePopoverPlacement(), viewportSpaceAroundTrigger(), PlacementAxis, PopoverCloseReason, PopoverContentState, PopoverDividerProps (+8 more)
 
-### Community 110 - "Community 110"
+### Community 98 - "Community 98"
 Cohesion: 0.11
 Nodes (12): assert, { createTestDatabase }, fs, http, { openWs, joinVoiceRoom, sendWs, waitForWsType }, os, path, { socketPathForDirectory } (+4 more)
 
-### Community 111 - "Community 111"
+### Community 99 - "Community 99"
 Cohesion: 0.14
-Nodes (13): cli(), isoMillis(), REQUIRED_COMPATIBILITY, REQUIRED_PROFILES, REQUIRED_REVOCATIONS, verifyMembershipCheckpoint(), 501ef14 test(web): lock leave and rejoin flow, ebd3ed4 test(release): define G50 membership checkpoint (+5 more)
+Nodes (10): ReadReconciliationOptions, b3732be fix(notifications): make inbox revisions monotonic, c3cd163 fix: open a mention in its room's chat without joining voice, eab2b79 Merge branch 'feature/2.5.0-fixes' into develop, NotificationInboxTransport, NotificationEnvelope, NotificationItem, NotificationLevel (+2 more)
 
-### Community 112 - "Community 112"
+### Community 100 - "Community 100"
 Cohesion: 0.16
 Nodes (13): 4ea02ee fix(api): harden temporary moderation flows, createModerationRepository(), crypto, mapModerationBan(), toMillis(), {
   buildModerationPage,
@@ -521,91 +462,91 @@ Nodes (13): 4ea02ee fix(api): harden temporary moderation flows, createModeratio
   normalizeModerationPageRequest
 }, { createModerationRepository }, createModerationService() (+5 more)
 
-### Community 113 - "Community 113"
-Cohesion: 0.24
-Nodes (15): assertDeploymentComposeUsesDigests(), assertRuntimePublicationRecord(), buildRuntimePublicationRecord(), IDS, main(), parseArgs(), readRuntimeConfig(), RUNTIME_PUBLICATION_SEQUENCE (+7 more)
-
-### Community 114 - "Community 114"
+### Community 101 - "Community 101"
 Cohesion: 0.11
 Nodes (11): assert, { createTestDatabase }, fs, http, { openWs, joinVoiceRoom, subscribeRoomPreview, waitForWsType }, os, path, { socketPathForDirectory } (+3 more)
 
-### Community 115 - "Community 115"
-Cohesion: 0.11
-Nodes (12): assert, { createPinRepository }, { createPinService }, { createRoomStore }, { createTestDatabase }, { createUserStore }, Fastify, { Pool } (+4 more)
-
-### Community 116 - "Community 116"
+### Community 102 - "Community 102"
 Cohesion: 0.11
 Nodes (12): assert, { createTestDatabase }, fs, http, { openWs, sendWs, joinVoiceRoom, waitForWsType, countWsType }, os, path, { socketPathForDirectory } (+4 more)
 
-### Community 117 - "Community 117"
-Cohesion: 0.18
-Nodes (12): BlockStatus, blockUrl(), blockUser(), unblockUser(), getJsonAuth(), deleteModeratedMessage(), fetchActiveBans(), parsePage() (+4 more)
-
-### Community 118 - "Community 118"
+### Community 103 - "Community 103"
 Cohesion: 0.23
 Nodes (15): FetchMembershipsOptions, fetchRoomMemberships(), leaveRoomMembership(), applyRoomVoicePeers(), cacheKey(), clearRoomMembership(), emptyEntry(), getRoomMembership() (+7 more)
 
-### Community 119 - "Community 119"
+### Community 104 - "Community 104"
 Cohesion: 0.18
 Nodes (12): fetchRoomPins(), pinAuthor(), PinnedMessage, PinnedMessageAuthor, PinResponse, pinRoomMessage(), PinSnapshot, pinUrl() (+4 more)
 
-### Community 120 - "Community 120"
-Cohesion: 0.20
-Nodes (12): 0df0656 fix(ci): authenticate artifactless G01 recovery, 5e6f12f fix(ci): authenticate artifactless G01 recovery, 7de0041 ci(release): prepare g01-a19 (#86), 8ad8855 chore: replace OMX/Codex AGENTS.md with CLAUDE.md, purge codex/omx traces, classifyBootstrap(), exactArray(), G01_WRITABLE, RECOVERY_READ_ONLY (+4 more)
-
-### Community 121 - "Community 121"
-Cohesion: 0.22
-Nodes (14): 1d96cbf fix(livekit): preserve gate credentials on runtime urls (#108), 78389f2 fix(livekit): use gate server base url (#109), RuntimeConfigV1, DEFAULT_RUNTIME_CONFIG, getRuntimeConfig(), inheritLiveKitGateCredential(), normalizeLiveKitServerUrl(), normalizeLiveKitUrl() (+6 more)
-
-### Community 122 - "Community 122"
+### Community 105 - "Community 105"
 Cohesion: 0.15
-Nodes (12): cf49285 fix(api): reconcile media across replicas, createMediaReconciliationService(), { createAttachmentRepository }, { createDbPool }, { createMediaJobRepository }, { createMediaReconciliationService }, { createMediaStorage }, assert (+4 more)
+Nodes (12): 2d8eac5 test(messaging): lock G20-G23 contracts, cb7ad0e feat(api): fence message delivery cutover, createMessageService(), { createMessageVisibilityService }, createMessageVisibilityService(), MessageVisibilityError, assert, { createMessageService } (+4 more)
 
-### Community 123 - "Community 123"
+### Community 106 - "Community 106"
+Cohesion: 0.20
+Nodes (12): cleanDisplayName(), clearPendingGuestNameRequest(), handleGuestNameSubmit(), persistName(), requestGuestNameForRoom(), requireSavedName(), resetGuestNameDialog(), saveNameFromValue() (+4 more)
+
+### Community 107 - "Community 107"
+Cohesion: 0.15
+Nodes (14): disconnectAudioNode(), errorMessage(), errorName(), getInitials(), hasLeadingZeroBits(), isCaptureCancelled(), isSafariBrowser(), stopStream() (+6 more)
+
+### Community 108 - "Community 108"
 Cohesion: 0.14
 Nodes (12): { buildMessageDeliveryEvent }, createMessageOutboxRepository(), crypto, encodeParts(), logicalKey(), MessageDeliveryFenceError, requireQuery(), assert (+4 more)
 
-### Community 124 - "Community 124"
+### Community 109 - "Community 109"
+Cohesion: 0.13
+Nodes (12): { buildServerEnvelope, buildServerErrorEnvelope, parseInboundMessage }, createWsHandler(), {
+  normalizePeerId,
+  normalizeRoomId,
+  normalizeSessionToken
+}, assert, createHandler(), createRegistry(), { createWsHandler }, { EventEmitter } (+4 more)
+
+### Community 110 - "Community 110"
 Cohesion: 0.18
 Nodes (15): buildHistoryEnvelope(), cleanString(), getReadCursorFromMessage(), HISTORY_MODE_SET, HISTORY_MODES, isObject(), isOpaqueCursor(), MESSAGE_KIND_SET (+7 more)
 
-### Community 125 - "Community 125"
+### Community 111 - "Community 111"
 Cohesion: 0.16
 Nodes (14): cleanUpstreamUrl(), { createCredentialBoundaryService }, { createDbPool }, { createGateCredentialSigner }, createLiveKitAuthGateService(), { createRoomStore }, deny(), destroySocket() (+6 more)
 
-### Community 126 - "Community 126"
+### Community 112 - "Community 112"
 Cohesion: 0.28
 Nodes (15): DEFAULT_FREQUENT_REACTIONS, FrequentReaction, frequentReactionKey(), loadFrequentReactions(), localStorageKey(), memory, normalizeEntries(), openDatabase() (+7 more)
 
-### Community 127 - "Community 127"
+### Community 113 - "Community 113"
 Cohesion: 0.16
 Nodes (14): 2ca6443 test(shared): lock platform classification contract, 69b709a test(shared): correct platform DTO assertion, classifyPlatform(), classifyPlatformPolicy(), normalizedString(), PLATFORM_CLASSES, platformPolicy(), assert (+6 more)
 
-### Community 128 - "Community 128"
-Cohesion: 0.22
-Nodes (11): cleanDisplayName(), clearPendingGuestNameRequest(), handleGuestNameSubmit(), persistName(), requestGuestNameForRoom(), requireSavedName(), resetGuestNameDialog(), saveNameFromValue() (+3 more)
-
-### Community 129 - "Community 129"
+### Community 114 - "Community 114"
 Cohesion: 0.16
 Nodes (13): createMembershipRepository(), crypto, mapDirectoryMember(), mapMembership(), toMillis(), { createMembershipRepository }, createMembershipService(), { transaction } (+5 more)
 
-### Community 130 - "Community 130"
+### Community 115 - "Community 115"
 Cohesion: 0.20
 Nodes (12): clearDisconnectedHiddenEmbed(), clearViewedRoom(), connectedRoomIsViewed(), embeddedRoomIsVisible(), getActiveVoiceRoomId(), openActiveVoiceRoom(), roomNavigation, RoomShellMode (+4 more)
 
-### Community 131 - "Community 131"
+### Community 116 - "Community 116"
 Cohesion: 0.16
 Nodes (10): checkImportBoundaries(), extractImports(), globToRegExp(), normalizePath(), walkFiles(), assert, fs, os (+2 more)
 
-### Community 132 - "Community 132"
+### Community 117 - "Community 117"
 Cohesion: 0.16
 Nodes (13): BrowserIdleDetector, BrowserIdleDetectorConstructor, createPresenceIdleController(), DesktopIdleBridge, DesktopIdleScope, EventTarget, getDesktopIdleSecondsReader(), hasGrantedBrowserIdlePermission() (+5 more)
 
-### Community 133 - "Community 133"
+### Community 118 - "Community 118"
 Cohesion: 0.13
 Nodes (4): DeniedNotification, FakeNotification, require, ts
 
-### Community 134 - "Community 134"
+### Community 119 - "Community 119"
+Cohesion: 0.22
+Nodes (11): containsPath(), createCoordinatedSnapshot(), filesBelow(), resolvedProspectivePath(), sha256(), 06b943b fix(ops): bind media restore catalog, 1332815 feat(ops): add coordinated media restore, 2350242 build(api): define expiry-aware rescue profile (+3 more)
+
+### Community 120 - "Community 120"
+Cohesion: 0.15
+Nodes (2): ContextMenuContentState, ContextMenuProps
+
+### Community 121 - "Community 121"
 Cohesion: 0.16
 Nodes (9): createMediaJobRepository(), crypto, JOB_KINDS, mapMediaJob(), MediaJobFenceError, assert, JOB, {
   MediaJobFenceError,
@@ -613,11 +554,7 @@ Nodes (9): createMediaJobRepository(), crypto, JOB_KINDS, mapMediaJob(), MediaJo
   mapMediaJob
 } (+1 more)
 
-### Community 135 - "Community 135"
-Cohesion: 0.17
-Nodes (10): createMessageService(), { createMessageVisibilityService }, createMessageVisibilityService(), MessageVisibilityError, assert, { createMessageService }, { createMessageVisibilityService }, fs (+2 more)
-
-### Community 136 - "Community 136"
+### Community 122 - "Community 122"
 Cohesion: 0.14
 Nodes (10): clearViewedScreenPeerReferences(), createRoomRealtimeRuntime(), resolveViewedScreenPeerId(), assert, {
   clearViewedScreenPeerReferences,
@@ -625,55 +562,39 @@ Nodes (10): clearViewedScreenPeerReferences(), createRoomRealtimeRuntime(), reso
   resolveViewedScreenPeerId
 }, createLeaseRuntime(), createRuntime(), OWNER_TOKEN (+2 more)
 
-### Community 137 - "Community 137"
+### Community 123 - "Community 123"
 Cohesion: 0.21
 Nodes (10): INTERNAL_NODE_KEYS, isManifestValid(), isObject(), normalizeInternalNode(), normalizeManifest(), normalizeOperatorNode(), normalizePublicNode(), OPERATOR_KEYS (+2 more)
 
-### Community 138 - "Community 138"
+### Community 124 - "Community 124"
 Cohesion: 0.31
 Nodes (13): buildMessageDeliveryEvent(), cleanString(), DELIVERY_EVENT_TYPES, isObject(), isSystemCard(), normalizeConversation(), normalizeIdempotency(), normalizeReplyPointer() (+5 more)
 
-### Community 139 - "Community 139"
-Cohesion: 0.26
-Nodes (11): buildActivationMatrix(), cli(), exactVector(), EXPECTED, FAILURES, manifestDigest(), unique(), verifyActivationEvidence() (+3 more)
-
-### Community 140 - "Community 140"
-Cohesion: 0.14
-Nodes (10): 177f5e3 test(api): prove durable message delivery, IdempotencyConflictError, assert, fs, path, { requireReplyTarget }, { test }, assert (+2 more)
-
-### Community 141 - "Community 141"
+### Community 125 - "Community 125"
 Cohesion: 0.19
 Nodes (11): DesktopNotificationPayload, BridgeResult, DesktopBridge, resolveBridge(), showDesktopNotification(), browserNavigator(), classifyPlatform(), classifyPlatformPolicy() (+3 more)
 
-### Community 142 - "Community 142"
-Cohesion: 0.16
-Nodes (9): buildRoomMembershipPresenceSnapshot(), { buildServerEnvelope, sendWsEnvelope }, { cleanPresenceStatus }, createConnectionRegistry(), crypto, { toWsAccountEvent }, assert, { buildRoomMembershipPresenceSnapshot, createConnectionRegistry } (+1 more)
+### Community 126 - "Community 126"
+Cohesion: 0.19
+Nodes (11): assetName(), catalogueFile, graphicsLicenceFile, main(), outputDir, packageRoot, planEmojiAssets(), require (+3 more)
 
-### Community 143 - "Community 143"
-Cohesion: 0.15
-Nodes (10): createWsHandler(), assert, createHandler(), createRegistry(), { createWsHandler }, { EventEmitter }, FakeSocket, test (+2 more)
-
-### Community 144 - "Community 144"
-Cohesion: 0.14
-Nodes (3): ControlHandler, LeaveHandler, voiceSession
-
-### Community 145 - "Community 145"
+### Community 127 - "Community 127"
 Cohesion: 0.14
 Nodes (14): attachPresence(), bootstrap(), createRoomForRequest(), createRoomId(), getPresenceRoom(), getRoom(), handleCreateRoom(), handleRoomPeers() (+6 more)
 
-### Community 146 - "Community 146"
-Cohesion: 0.19
-Nodes (10): ajv, ARTIFACT_FIELDS, comparableArtifact(), digest(), index, REQUIRED_PLATFORMS, schema, validateShape (+2 more)
+### Community 128 - "Community 128"
+Cohesion: 0.15
+Nodes (6): loadParticipantScreenLifecycle(), moduleUrl(), require, root, TestMediaStream, ts
 
-### Community 147 - "Community 147"
+### Community 129 - "Community 129"
 Cohesion: 0.21
 Nodes (12): DirectMessage, ActiveResync, contentVersion(), createDmThreadResyncCoordinator(), mergeMessage(), newestTimestamp(), replayMutations(), ResyncRequestOptions (+4 more)
 
-### Community 148 - "Community 148"
+### Community 130 - "Community 130"
 Cohesion: 0.22
-Nodes (9): cli(), isoMillis(), REQUIRED_CLIENTS, REQUIRED_FAILURES, REQUIRED_PROFILES, requirePassedSet(), verifyEngagementCheckpoint(), 824382d test(release): define G71 engagement checkpoint (+1 more)
+Nodes (7): PublicUser, formatTime(), pad(), formatChatDayLabel(), isSameDay(), MONTHS, startOfDay()
 
-### Community 149 - "Community 149"
+### Community 131 - "Community 131"
 Cohesion: 0.21
 Nodes (9): createProofOfWork(), crypto, hasLeadingZeroBits(), normalizePowNonce(), parsePowChallenge(), assert, crypto, {
   hasLeadingZeroBits,
@@ -682,19 +603,27 @@ Nodes (9): createProofOfWork(), crypto, hasLeadingZeroBits(), normalizePowNonce(
   createProofOfWork
 } (+1 more)
 
-### Community 150 - "Community 150"
+### Community 132 - "Community 132"
 Cohesion: 0.26
 Nodes (11): cacheKey(), configCache, defaultConfig(), fetchRuntimeConfig(), hasSuspiciousSecrets(), loadRuntimeConfig(), resolveConfigOrigin(), resolveConfigUrl() (+3 more)
 
-### Community 151 - "Community 151"
+### Community 133 - "Community 133"
 Cohesion: 0.31
 Nodes (11): clamp(), deriveAvatarAccent(), fitChromaToSrgb(), isInSrgbGamut(), linearToSrgb(), normalizeChannel(), oklchToHex(), oklchToLinearRgb() (+3 more)
 
-### Community 152 - "Community 152"
+### Community 134 - "Community 134"
+Cohesion: 0.23
+Nodes (10): buildNotificationEnvelope(), buildProviderPayload(), cleanString(), normalizeNotificationEnvelope(), normalizeNotificationItem(), NOTIFICATION_LEVEL_SET, NOTIFICATION_LEVELS, NOTIFICATION_REASON_SET (+2 more)
+
+### Community 135 - "Community 135"
+Cohesion: 0.28
+Nodes (11): DEFAULT_RUNTIME_CONFIG, getRuntimeConfig(), inheritLiveKitGateCredential(), normalizeLiveKitServerUrl(), normalizeLiveKitUrl(), normalizePayload(), parseRuntimeConfig(), resolveLiveKitConnectUrls() (+3 more)
+
+### Community 136 - "Community 136"
 Cohesion: 0.15
 Nodes (11): assert, { createApiApp }, { createGateCredentialSigner }, { createLiveKitAuthGateService, extractCredential }, { EventEmitter }, fs, net, path (+3 more)
 
-### Community 153 - "Community 153"
+### Community 137 - "Community 137"
 Cohesion: 0.15
 Nodes (10): assert, crypto, {
   EMOJI_REACTION_AUTHORITY,
@@ -704,27 +633,35 @@ Nodes (10): assert, crypto, {
   listReactionEmojis
 }, fs, PACKAGE_JSON, path, { pathToFileURL }, ROOT (+2 more)
 
-### Community 154 - "Community 154"
+### Community 138 - "Community 138"
 Cohesion: 0.15
 Nodes (10): ADMISSION_INTERNAL_COVERAGE_SCRIPT, { createGateCredentialSigner }, { createLiveKitAuthGateService, extractCredential }, { createRoomRealtimeRuntime }, { createRoomStore }, greenSummary, require, SERVER_INTERNAL_COVERAGE_SCRIPT (+2 more)
 
-### Community 155 - "Community 155"
+### Community 139 - "Community 139"
+Cohesion: 0.15
+Nodes (5): assert, { createMediaVisibilityService }, fastify, { registerMediaRoutes }, test
+
+### Community 140 - "Community 140"
+Cohesion: 0.15
+Nodes (10): assert, { createNotificationStore }, { createRoomStore }, { createTestDatabase }, { createUserStore }, crypto, { runMigrations }, { setTimeout: delay } (+2 more)
+
+### Community 141 - "Community 141"
 Cohesion: 0.17
-Nodes (2): 359caaf fix(web): keep reaction picker in viewport, 508a06c test(release): supply mute authority in G08
+Nodes (10): deleteDirectMessage(), DirectMessageHistoryPage, DirectMessageInvite, editDirectMessage(), fetchThread(), fetchThreadPage(), HistoryMessageDto, markThreadRead() (+2 more)
 
-### Community 156 - "Community 156"
-Cohesion: 0.18
-Nodes (10): 53d093e test(api): execute hostile credential boundary scenarios, 7609180 fix(web): harden reaction convergence, ac1c7f4 fix(api): allow safe guest reaction reads, f124c57 fix(web): verify reaction boundaries through rendered UI, dm, picker, reactors, room (+2 more)
-
-### Community 157 - "Community 157"
-Cohesion: 0.23
-Nodes (8): cli(), isoMillis(), REQUIRED_FAILURES, REQUIRED_PROFILES, verifyMessagingCheckpoint(), 10de220 test(api): prove active ban expiry in PostgreSQL, 93cad8e test(release): define G42 messaging checkpoint, index
-
-### Community 158 - "Community 158"
+### Community 143 - "Community 143"
 Cohesion: 0.20
-Nodes (9): 05f2a77 test(api): bind strict credential cutover, 849600b fix(api): persist membership after admission, model, { buildMembershipEnvelope, normalizeMembershipRequest }, createMemberDirectoryService(), presenceForUser(), assert, { createMemberDirectoryService, presenceForUser } (+1 more)
+Nodes (9): 10de220 test(api): prove active ban expiry in PostgreSQL, 849600b fix(api): persist membership after admission, model, { buildMembershipEnvelope, normalizeMembershipRequest }, createMemberDirectoryService(), presenceForUser(), assert, { createMemberDirectoryService, presenceForUser } (+1 more)
 
-### Community 159 - "Community 159"
+### Community 144 - "Community 144"
+Cohesion: 0.17
+Nodes (10): 166a0e8 test(release): resolve rescue fixtures from repository root, 5dd3691 test(api): serialize database suites, bf6bba7 test(api): cover media backlog age query, f540886 test(release): refresh CI gate fixtures, assert, fs, path, profile (+2 more)
+
+### Community 145 - "Community 145"
+Cohesion: 0.17
+Nodes (9): d9f484d test(engagement): prove content and mention UoW, model, room, ui, assert, c, test, composer (+1 more)
+
+### Community 146 - "Community 146"
 Cohesion: 0.24
 Nodes (10): createAvatarKey(), crypto, { deriveAvatarAccent, dominantAvatarColor }, detectAvatarFormat(), processAvatar(), sharp, assert, {
   AVATAR_SIZE,
@@ -733,438 +670,502 @@ Nodes (10): createAvatarKey(), crypto, { deriveAvatarAccent, dominantAvatarColor
   processAvatar
 } (+2 more)
 
-### Community 160 - "Community 160"
+### Community 147 - "Community 147"
 Cohesion: 0.20
 Nodes (8): {
   buildHistoryEnvelope,
   normalizeHistoryRequest
 }, canonicalParticipants(), createDmHistoryService(), DmHistoryError, assert, { canonicalParticipants, createDmHistoryService }, { createCursorCodec }, { test }
 
-### Community 161 - "Community 161"
-Cohesion: 0.21
-Nodes (8): actorLockKey(), boundedString(), createMessageIdempotencyRepository(), crypto, encodeParts(), IdempotencyQuotaError, ledgerKey(), normalizeIdentity()
-
-### Community 162 - "Community 162"
-Cohesion: 0.24
-Nodes (6): formatTime(), pad(), formatChatDayLabel(), isSameDay(), MONTHS, startOfDay()
-
-### Community 164 - "Community 164"
+### Community 149 - "Community 149"
 Cohesion: 0.24
 Nodes (9): attachmentTextFallback(), MIME_TYPES, normalizeAttachment(), normalizeAttachments(), STATES, text(), assert, { MAX_ATTACHMENT_BYTES, attachmentTextFallback, normalizeAttachment, normalizeAttachments } (+1 more)
 
-### Community 165 - "Community 165"
+### Community 150 - "Community 150"
 Cohesion: 0.29
 Nodes (11): buildModerationPage(), cleanString(), durationToExpiresAt(), MODERATION_DURATION_MS, MODERATION_DURATIONS, normalizeActiveBan(), normalizeBanDuration(), normalizeBanMutation() (+3 more)
 
-### Community 166 - "Community 166"
-Cohesion: 0.24
-Nodes (9): buildNotificationEnvelope(), buildProviderPayload(), cleanString(), normalizeNotificationEnvelope(), normalizeNotificationItem(), NOTIFICATION_LEVEL_SET, NOTIFICATION_LEVELS, NOTIFICATION_REASON_SET (+1 more)
-
-### Community 167 - "Community 167"
+### Community 151 - "Community 151"
 Cohesion: 0.17
 Nodes (6): createApiServer(), assert, http, { openWs, joinVoiceRoom, sendWs, waitForWsType }, { __private, createApiServer }, test
 
-### Community 168 - "Community 168"
+### Community 152 - "Community 152"
 Cohesion: 0.24
 Nodes (10): hasSurfaceToken(), isAllowedBackground(), lineAt(), paletteViolations(), root, sourceFiles(), sourceRoot, styleFragments() (+2 more)
 
-### Community 169 - "Community 169"
+### Community 153 - "Community 153"
+Cohesion: 0.18
+Nodes (10): a1d0d15 fix(restore): reject escaping snapshot sources, afaf670 fix(release): bind gates to immutable evidence, f50f3bc test(api): pin historical migration byte digests, assert, crypto, EXPECTED, fs, path (+2 more)
+
+### Community 155 - "Community 155"
 Cohesion: 0.27
 Nodes (8): attachmentRevoker(), cleanupEnqueuer(), createMessageModerationService(), requireOperation(), { transaction }, assert, { createMessageModerationService }, test
 
-### Community 170 - "Community 170"
+### Community 156 - "Community 156"
 Cohesion: 0.24
-Nodes (7): RoomRealtimeSummary, applyRoomSummary(), beginRoomChatReadSession(), roomChatIsBeingRead(), roomChatReadSessions, roomPresence, setRoomUnreadCount()
+Nodes (4): DesktopAsset, DesktopRelease, DESKTOP_BUILDS, DesktopBuild
 
-### Community 171 - "Community 171"
+### Community 157 - "Community 157"
 Cohesion: 0.22
 Nodes (8): apps/CLAUDE.md, docs/GIT_FLOW.md, .github CLAUDE.md Policy, Pull Request Template, docs/RELEASE_<version>_PLAN.md, Root CLAUDE.md, Room client architecture (ARCHITECTURE.md), apps/web/CLAUDE.md
 
-### Community 172 - "Community 172"
+### Community 158 - "Community 158"
+Cohesion: 0.27
+Nodes (8): BROWSABLE_EMOJIS, BROWSABLE_SET, EmojiCategory, hasSkinToneChoices(), isOfferedEmoji(), OFFERED, skinToneChoices(), withSkinTone()
+
+### Community 159 - "Community 159"
+Cohesion: 0.24
+Nodes (7): cc45703 fix(api): expose worker metrics across process boundaries, createMediaVisibilityService(), MediaVisibilityError, assert, { createMediaVisibilityService }, metrics, test
+
+### Community 160 - "Community 160"
 Cohesion: 0.27
 Nodes (7): createMediaMaintenanceService(), assert, { createMediaMaintenanceService }, { createMediaMaintenanceWorker }, test, createMediaMaintenanceWorker(), main()
 
-### Community 173 - "Community 173"
+### Community 161 - "Community 161"
 Cohesion: 0.24
 Nodes (6): registerMediaRoutes(), assert, createApp(), fastify, { registerMediaRoutes }, test
 
-### Community 174 - "Community 174"
-Cohesion: 0.22
-Nodes (5): createMessageReplyHandlers(), registerMessageReplyRoutes(), REPLY_CONFLICT_BODY, { ReplyTargetUnavailableError }, ReplyTargetUnavailableError
-
-### Community 175 - "Community 175"
+### Community 162 - "Community 162"
 Cohesion: 0.22
 Nodes (7): createMentionEligibilityService(), MentionEligibilityError, { normalizeMentionUserIds }, assert, {createMentionEligibilityService}, {normalizeMentionUserIds}, test
 
-### Community 176 - "Community 176"
-Cohesion: 0.27
-Nodes (8): getRoundTripTimeFromStats(), startPeerLatencyStats(), startSpeakingStats(), stopPeerLatencyStats(), stopSpeakingStats(), updateLocalLiveKitLatency(), updatePeerLatencyStats(), findFirstLocalPublication()
-
-### Community 177 - "Community 177"
+### Community 163 - "Community 163"
 Cohesion: 0.36
 Nodes (9): buildMembershipEnvelope(), cleanString(), isObject(), MEMBERSHIP_ROLE_SET, MEMBERSHIP_ROLES, normalizeMembershipEnvelope(), normalizeMembershipLimit(), normalizeMembershipMember() (+1 more)
 
-### Community 178 - "Community 178"
+### Community 164 - "Community 164"
 Cohesion: 0.22
 Nodes (3): configure(), deferred(), MemoryStorage
 
-### Community 179 - "Community 179"
+### Community 165 - "Community 165"
 Cohesion: 0.22
 Nodes (9): assert, commonJs, fs, invoke(), packageJson, path, { pathToFileURL }, snapshot() (+1 more)
 
-### Community 180 - "Community 180"
+### Community 166 - "Community 166"
+Cohesion: 0.39
+Nodes (8): getJsonAuth(), deleteModeratedMessage(), fetchActiveBans(), parsePage(), putBan(), responseJson(), roomModerationUrl(), unban()
+
+### Community 168 - "Community 168"
 Cohesion: 0.25
 Nodes (4): 924295b test(web): prove G13 against pinned Caddy, a37d685 test(web): make G13 paths workspace-safe, fdb6786 test(api): make G14 paths workspace-safe, repositoryRoot
 
-### Community 181 - "Community 181"
-Cohesion: 0.22
-Nodes (8): f50f3bc test(api): pin historical migration byte digests, assert, crypto, EXPECTED, fs, path, ROOT, test
-
-### Community 182 - "Community 182"
-Cohesion: 0.42
-Nodes (8): argument(), canonicalPath(), cli(), extractEvidenceBundle(), parseBundle(), prepareOciBundle(), sha256(), STAGES
-
-### Community 183 - "Community 183"
+### Community 169 - "Community 169"
 Cohesion: 0.25
 Nodes (6): http, { renderPrometheus }, startWorkerMetricsServer(), { startWorkerHeartbeat }, { startWorkerMetricsServer }, workers
 
-### Community 184 - "Community 184"
+### Community 170 - "Community 170"
+Cohesion: 0.33
+Nodes (8): applySpeaking(), attachMeter(), isLocalMicrophoneSpeaking(), isOverSpeakingThreshold(), refreshMicrophoneLevelMeterSoon(), startMeters(), stopMeters(), updateMeter()
+
+### Community 171 - "Community 171"
 Cohesion: 0.25
 Nodes (7): {
   normalizeRoomMessageContent,
   projectRoomMessageContent
 }, projectStoredRoomMessage(), assert, fs, path, {projectStoredRoomMessage}, test
 
-### Community 185 - "Community 185"
+### Community 172 - "Community 172"
+Cohesion: 0.25
+Nodes (7): {
+  contentFromLegacyText,
+  normalizeRoomMessageContent,
+  projectRoomMessageContent
+}, createContentRepository(), assert, {createContentRepository}, fs, path, test
+
+### Community 173 - "Community 173"
 Cohesion: 0.39
 Nodes (7): checkApiSources(), findSqlWrites(), findTimers(), globToRegExp(), isOwner(), normalizePath(), walkFiles()
 
-### Community 186 - "Community 186"
+### Community 174 - "Community 174"
 Cohesion: 0.44
 Nodes (8): cleanHttpUrl(), cleanString(), contentFromLegacyText(), normalizeRoomMessageContent(), normalizeSegment(), projectKnownContent(), projectRoomMessageContent(), utf8ByteLength()
 
-### Community 187 - "Community 187"
-Cohesion: 0.39
-Nodes (7): createRoomProof(), hasLeadingZeroBits(), normalizeChallenge(), PowChallenge, RoomProof, solveProofOfWork(), waitForUi()
+### Community 175 - "Community 175"
+Cohesion: 0.32
+Nodes (4): BlockStatus, blockUrl(), blockUser(), unblockUser()
 
-### Community 188 - "Community 188"
+### Community 176 - "Community 176"
+Cohesion: 0.25
+Nodes (7): 05f2a77 test(api): bind strict credential cutover, 501ef14 test(web): lock leave and rejoin flow, ebd3ed4 test(release): define G50 membership checkpoint, membershipModel, routes, service, voiceSession
+
+### Community 177 - "Community 177"
 Cohesion: 0.32
 Nodes (5): createRateLimiter(), getClientIp(), assert, { getClientIp, createRateLimiter }, test
 
-### Community 190 - "Community 190"
+### Community 179 - "Community 179"
 Cohesion: 0.32
 Nodes (4): getFocusedParticipant(), getParticipantCount(), getSortedParticipants(), participantsUi
 
-### Community 191 - "Community 191"
+### Community 180 - "Community 180"
 Cohesion: 0.29
 Nodes (5): assert, { createApiApp }, openWs(), test, waitForFrame()
 
-### Community 192 - "Community 192"
-Cohesion: 0.25
-Nodes (6): assert, fs, path, profile, repositoryRoot, test
-
-### Community 193 - "Community 193"
+### Community 181 - "Community 181"
 Cohesion: 0.25
 Nodes (3): FakeWebSocket, require, ts
 
-### Community 194 - "Community 194"
-Cohesion: 0.46
-Nodes (7): digest_text(), main(), parse_args(), read_pair(), require(), validate_canonical(), validate_strict_lkv_amendment()
-
-### Community 195 - "Community 195"
+### Community 182 - "Community 182"
 Cohesion: 0.25
 Nodes (6): assert, metricsPath, path, serverPath, { spawn }, test
 
-### Community 197 - "Community 197"
+### Community 184 - "Community 184"
 Cohesion: 0.33
 Nodes (4): fingerprint(), SendShadow, SendShadowState, stableJson()
 
-### Community 198 - "Community 198"
+### Community 185 - "Community 185"
+Cohesion: 0.43
+Nodes (6): RoomLifecycleSummary, applyRoomDeleted(), applyRoomNotFound(), applyRoomUpdated(), refreshRoomHeadingSoon(), showRoomNotFoundSoon()
+
+### Community 186 - "Community 186"
 Cohesion: 0.48
 Nodes (7): docs/CLAUDE.md governance rules, VoiceRoom 2.5.0 consolidated execution plan, Git Flow workflow, VoiceRoom 2.5.0 unified messaging platform PRD, Release 2.4.0 verification plan, Release 2.4.1 verification plan, Release 2.4.2 hotfix verification plan
 
-### Community 200 - "Community 200"
+### Community 187 - "Community 187"
 Cohesion: 0.33
 Nodes (3): CONTEXT_TABLES, createReactionRepository(), requireQuery()
 
-### Community 201 - "Community 201"
+### Community 188 - "Community 188"
+Cohesion: 0.57
+Nodes (5): assertRegular(), inside(), resolveSnapshotFile(), restoreCoordinatedSnapshot(), sha256()
+
+### Community 189 - "Community 189"
 Cohesion: 0.29
 Nodes (6): CapabilityInternalNode, CapabilityManifest, CapabilityOperatorNode, CapabilityPublicNode, CapabilityReplicaConsensus, CapabilityRequires
 
-### Community 202 - "Community 202"
+### Community 190 - "Community 190"
 Cohesion: 0.29
 Nodes (6): ConversationRef, IdempotencyDescriptor, MessageDeliveryEvent, ReplyPointer, ReplyPreview, SendEnvelope
 
-### Community 203 - "Community 203"
+### Community 191 - "Community 191"
+Cohesion: 0.38
+Nodes (7): buildSessionCookie(), clearSessionCookie(), getUserStore(), handleChangePassword(), handleLogin(), handleLogout(), handleRegister()
+
+### Community 192 - "Community 192"
 Cohesion: 0.33
 Nodes (3): DEFAULT_OPTIONS, getSmoothingCoefficient(), VoiceRoomNoiseGateProcessor
 
-### Community 204 - "Community 204"
+### Community 193 - "Community 193"
 Cohesion: 0.29
 Nodes (2): require, ts
 
-### Community 205 - "Community 205"
+### Community 194 - "Community 194"
 Cohesion: 0.29
 Nodes (6): assert, { createReadinessReport }, fs, path, { readMessageDeliveryMode }, { test }
 
-### Community 206 - "Community 206"
+### Community 195 - "Community 195"
 Cohesion: 0.29
-Nodes (1): TestMediaStream
+Nodes (3): FakeIdleDetector, require, ts
 
-### Community 207 - "Community 207"
+### Community 196 - "Community 196"
+Cohesion: 0.29
+Nodes (4): assert, fs, path, test
+
+### Community 197 - "Community 197"
 Cohesion: 0.38
 Nodes (5): FOCUSABLE_SELECTOR, focusInitialElement(), FocusTrapOptions, getFocusableElements(), isHTMLElement()
 
-### Community 208 - "Community 208"
+### Community 198 - "Community 198"
+Cohesion: 0.60
+Nodes (5): ChatMessage, mentionProfilePerson(), participantProfilePerson(), presenceFor(), roomMessageProfilePerson()
+
+### Community 199 - "Community 199"
 Cohesion: 0.33
 Nodes (1): lang
 
-### Community 209 - "Community 209"
+### Community 200 - "Community 200"
+Cohesion: 0.33
+Nodes (6): 2ce6059 test(shared): lock attachment contracts, 7609180 fix(web): harden reaction convergence, 824382d test(release): define G71 engagement checkpoint, ac1c7f4 fix(api): allow safe guest reaction reads, b541a05 test(api): resolve reaction fixtures from workspace, c1f8e3c test(web): bind account-only reaction picker
+
+### Community 201 - "Community 201"
+Cohesion: 0.33
+Nodes (6): 94552a2 test(release): fail closed at develop entry, 9e7182b perf(release): freeze 2.5.0 budgets, d5ce547 test(release): validate frozen budgets, ecc157a refactor(web): preserve async failure evidence, f5c42a7 test(release): prepare fail-closed rc preflight, fbe0d61 test(release): generate activation matrix
+
+### Community 202 - "Community 202"
 Cohesion: 0.33
 Nodes (6): Desktop Support Matrix Doc (G19), Release 2.5.0 Durable Evidence Archive Doc (G03), Coordinated Media Backup and Restore Doc, Release 2.5.0 Budgets Doc (G91), Release 2.5.0 Develop Entry Doc (G93), Release 2.5.0 RC Preflight Doc
 
-### Community 210 - "Community 210"
-Cohesion: 0.33
-Nodes (5): css, dm, lightbox, mosaic, room
-
-### Community 211 - "Community 211"
+### Community 203 - "Community 203"
 Cohesion: 0.60
 Nodes (4): iconLg, iconMd, iconSm, iconXs
 
-### Community 212 - "Community 212"
+### Community 204 - "Community 204"
 Cohesion: 0.33
 Nodes (2): { createDbPool }, createDmHistoryRepository()
 
-### Community 213 - "Community 213"
+### Community 205 - "Community 205"
 Cohesion: 0.33
 Nodes (2): { createDbPool }, createRoomHistoryRepository()
 
-### Community 214 - "Community 214"
+### Community 206 - "Community 206"
 Cohesion: 0.40
 Nodes (2): o, s()
 
-### Community 215 - "Community 215"
+### Community 207 - "Community 207"
 Cohesion: 0.33
 Nodes (2): participantContextMenu, ParticipantMenuVariant
 
-### Community 216 - "Community 216"
+### Community 208 - "Community 208"
+Cohesion: 0.47
+Nodes (4): effectivePresenceStatus(), isPresenceStatus(), normalizePresenceStatus(), PRESENCE_STATUSES
+
+### Community 209 - "Community 209"
 Cohesion: 0.33
 Nodes (5): RoomMessageContentV1, RoomMessageLinkSegmentV1, RoomMessageMentionSegmentV1, RoomMessageSegmentV1, RoomMessageTextSegmentV1
 
-### Community 217 - "Community 217"
+### Community 210 - "Community 210"
 Cohesion: 0.40
 Nodes (5): loadRoomRealtime(), moduleUrl(), require, root, ts
 
-### Community 218 - "Community 218"
+### Community 211 - "Community 211"
 Cohesion: 0.40
 Nodes (5): assert, { createApiApp }, openAccountWs(), test, waitForFrame()
 
-### Community 219 - "Community 219"
+### Community 212 - "Community 212"
 Cohesion: 0.33
-Nodes (5): assert, fs, { LEASE_IDENTITY, createMessageDeliveryWorker }, path, { test }
+Nodes (1): FakeBroadcastChannel
 
-### Community 220 - "Community 220"
+### Community 213 - "Community 213"
 Cohesion: 0.33
 Nodes (1): FakeServer
 
-### Community 221 - "Community 221"
-Cohesion: 0.40
-Nodes (4): composer, dm, room, store
+### Community 214 - "Community 214"
+Cohesion: 0.60
+Nodes (4): isToneIndex(), loadSkinTone(), saveSkinTone(), SkinToneIndex
 
-### Community 222 - "Community 222"
+### Community 215 - "Community 215"
+Cohesion: 0.40
+Nodes (4): inbox, reconcile, room, ui
+
+### Community 216 - "Community 216"
+Cohesion: 0.40
+Nodes (4): api, component, lobby, room
+
+### Community 217 - "Community 217"
 Cohesion: 0.40
 Nodes (5): Expiry-Aware Rescue Profile Doc (G85), Predeploy Migrations Doc, Release 2.6.0 Plan — Engagement & Notifications (Superseded), Release 2.7.0 Plan — Media & Moderation (Superseded), VoiceRoom 2.5.0 Unified — Verification and Release Evidence Specification
 
-### Community 223 - "Community 223"
+### Community 218 - "Community 218"
+Cohesion: 0.60
+Nodes (4): createPinRepository(), mapPin(), requireQuery(), toMillis()
+
+### Community 219 - "Community 219"
 Cohesion: 0.40
 Nodes (2): createMentionRepository(), crypto
 
-### Community 224 - "Community 224"
+### Community 220 - "Community 220"
 Cohesion: 0.40
 Nodes (4): MemberPresenceStatus, MembershipEnvelope, MembershipMember, MembershipRole
 
-### Community 225 - "Community 225"
+### Community 221 - "Community 221"
 Cohesion: 0.40
 Nodes (4): HistoryEnvelope, HistoryMode, HistoryRequest, MessageDto
 
-### Community 226 - "Community 226"
+### Community 222 - "Community 222"
 Cohesion: 0.40
 Nodes (4): ActiveBan, BanMutation, ModerationDuration, ModerationPage
 
-### Community 227 - "Community 227"
+### Community 223 - "Community 223"
 Cohesion: 0.40
 Nodes (4): ReactionMutation, ReactionSummary, Reactor, ReactorPage
 
-### Community 228 - "Community 228"
+### Community 224 - "Community 224"
 Cohesion: 0.50
 Nodes (1): VoiceRoomDesktopAudioSourceProcessor
 
-### Community 229 - "Community 229"
+### Community 225 - "Community 225"
 Cohesion: 0.40
 Nodes (1): FakeSocket
+
+### Community 226 - "Community 226"
+Cohesion: 0.40
+Nodes (1): FakeSocket
+
+### Community 227 - "Community 227"
+Cohesion: 0.40
+Nodes (1): FakeClient
+
+### Community 228 - "Community 228"
+Cohesion: 0.40
+Nodes (4): assert, fs, path, { test }
+
+### Community 229 - "Community 229"
+Cohesion: 0.40
+Nodes (4): assert, fs, path, { test }
 
 ### Community 230 - "Community 230"
 Cohesion: 0.40
-Nodes (1): FakeSocket
+Nodes (4): assert, fs, path, test
 
 ### Community 231 - "Community 231"
 Cohesion: 0.40
-Nodes (4): assert, fs, path, test
+Nodes (4): assert, cjs, ITEM, test
 
 ### Community 232 - "Community 232"
 Cohesion: 0.50
-Nodes (2): createMediaQuotaService(), MediaQuotaError
+Nodes (3): model, router, ui
 
 ### Community 233 - "Community 233"
 Cohesion: 0.50
-Nodes (1): registerDmHistoryRoutes()
+Nodes (2): createMediaQuotaService(), MediaQuotaError
 
 ### Community 234 - "Community 234"
 Cohesion: 0.50
-Nodes (1): registerModerationRoutes()
+Nodes (1): registerDmHistoryRoutes()
 
 ### Community 235 - "Community 235"
-Cohesion: 0.83
-Nodes (3): cleanId(), mentionUserIdsFromContent(), normalizeMentionUserIds()
+Cohesion: 0.50
+Nodes (1): registerModerationRoutes()
 
 ### Community 236 - "Community 236"
 Cohesion: 0.83
-Nodes (3): digest(), readySnapshot(), sha()
+Nodes (3): cleanId(), mentionUserIdsFromContent(), normalizeMentionUserIds()
 
 ### Community 237 - "Community 237"
 Cohesion: 1.00
-Nodes (2): VoiceRoom App Icon (Owl Mascot Mark on Dark Rounded Square), VoiceRoom Mascot Mark (Masked Owl Silhouette, Transparent)
+Nodes (1): FakeTimers
 
 ### Community 238 - "Community 238"
 Cohesion: 1.00
-Nodes (1): ADR: Unicode authority for message reactions
+Nodes (2): VoiceRoom App Icon (Owl Mascot Mark on Dark Rounded Square), VoiceRoom Mascot Mark (Masked Owl Silhouette, Transparent)
 
 ### Community 239 - "Community 239"
 Cohesion: 1.00
-Nodes (1): VoiceRoom 2.5 Architecture Boundaries
+Nodes (1): ADR: Unicode authority for message reactions
 
 ### Community 240 - "Community 240"
 Cohesion: 1.00
-Nodes (1): Backlog
+Nodes (1): VoiceRoom 2.5 Architecture Boundaries
 
 ### Community 241 - "Community 241"
 Cohesion: 1.00
-Nodes (1): config/capability-dag.v1.json
+Nodes (1): Backlog
 
 ### Community 242 - "Community 242"
 Cohesion: 1.00
-Nodes (1): Capability Readiness Doc
+Nodes (1): config/capability-dag.v1.json
 
 ### Community 243 - "Community 243"
 Cohesion: 1.00
-Nodes (1): Design QA — reusable room and chat menus
+Nodes (1): Capability Readiness Doc
 
 ### Community 244 - "Community 244"
 Cohesion: 1.00
-Nodes (1): Font Assets README
+Nodes (1): Design QA — reusable room and chat menus
 
 ### Community 245 - "Community 245"
 Cohesion: 1.00
-Nodes (1): LiveKit External Auth-Gate Operations Doc (G05)
+Nodes (1): Font Assets README
 
 ### Community 246 - "Community 246"
 Cohesion: 1.00
-Nodes (1): VoiceRoom monitoring agent
+Nodes (1): LiveKit External Auth-Gate Operations Doc (G05)
 
 ### Community 247 - "Community 247"
 Cohesion: 1.00
-Nodes (1): OCI Runtime Publication Doc
+Nodes (1): VoiceRoom monitoring agent
 
 ### Community 248 - "Community 248"
 Cohesion: 1.00
-Nodes (1): packages/CLAUDE.md Guidance
+Nodes (1): OCI Runtime Publication Doc
 
 ### Community 249 - "Community 249"
 Cohesion: 1.00
-Nodes (1): Production Digest Promotion Doc
+Nodes (1): packages/CLAUDE.md Guidance
 
 ### Community 250 - "Community 250"
+Cohesion: 1.00
+Nodes (1): Production Digest Promotion Doc
+
+### Community 251 - "Community 251"
 Cohesion: 1.00
 Nodes (1): Release 2.5.0 Repairs README
 
 ## Knowledge Gaps
-- **1501 isolated node(s):** `http`, `net`, `{ URL }`, `{ createDbPool }`, `{ createGateCredentialSigner }` (+1496 more)
+- **1477 isolated node(s):** `http`, `net`, `{ URL }`, `{ createDbPool }`, `{ createGateCredentialSigner }` (+1472 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **Thin community `Community 155`** (2 nodes): `359caaf fix(web): keep reaction picker in viewport`, `508a06c test(release): supply mute authority in G08`
+- **Thin community `Community 37`** (2 nodes): `206a214 refactor(web): use shared slider in settings controls`, `9d79af1 refactor(web): reuse shared slider in room controls`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 204`** (2 nodes): `require`, `ts`
+- **Thin community `Community 59`** (2 nodes): `01a206a chore: release v2.1.1`, `cce23b6 fix(web): stabilize preview chat identity`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 206`** (1 nodes): `TestMediaStream`
+- **Thin community `Community 120`** (2 nodes): `ContextMenuContentState`, `ContextMenuProps`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 208`** (1 nodes): `lang`
+- **Thin community `Community 193`** (2 nodes): `require`, `ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 212`** (2 nodes): `{ createDbPool }`, `createDmHistoryRepository()`
+- **Thin community `Community 199`** (1 nodes): `lang`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 213`** (2 nodes): `{ createDbPool }`, `createRoomHistoryRepository()`
+- **Thin community `Community 204`** (2 nodes): `{ createDbPool }`, `createDmHistoryRepository()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 214`** (2 nodes): `o`, `s()`
+- **Thin community `Community 205`** (2 nodes): `{ createDbPool }`, `createRoomHistoryRepository()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 215`** (2 nodes): `participantContextMenu`, `ParticipantMenuVariant`
+- **Thin community `Community 206`** (2 nodes): `o`, `s()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 220`** (1 nodes): `FakeServer`
+- **Thin community `Community 207`** (2 nodes): `participantContextMenu`, `ParticipantMenuVariant`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 223`** (2 nodes): `createMentionRepository()`, `crypto`
+- **Thin community `Community 212`** (1 nodes): `FakeBroadcastChannel`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 228`** (1 nodes): `VoiceRoomDesktopAudioSourceProcessor`
+- **Thin community `Community 213`** (1 nodes): `FakeServer`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 229`** (1 nodes): `FakeSocket`
+- **Thin community `Community 219`** (2 nodes): `createMentionRepository()`, `crypto`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 230`** (1 nodes): `FakeSocket`
+- **Thin community `Community 224`** (1 nodes): `VoiceRoomDesktopAudioSourceProcessor`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 232`** (2 nodes): `createMediaQuotaService()`, `MediaQuotaError`
+- **Thin community `Community 225`** (1 nodes): `FakeSocket`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 233`** (1 nodes): `registerDmHistoryRoutes()`
+- **Thin community `Community 226`** (1 nodes): `FakeSocket`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 234`** (1 nodes): `registerModerationRoutes()`
+- **Thin community `Community 227`** (1 nodes): `FakeClient`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 237`** (2 nodes): `VoiceRoom App Icon (Owl Mascot Mark on Dark Rounded Square)`, `VoiceRoom Mascot Mark (Masked Owl Silhouette, Transparent)`
+- **Thin community `Community 233`** (2 nodes): `createMediaQuotaService()`, `MediaQuotaError`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 238`** (1 nodes): `ADR: Unicode authority for message reactions`
+- **Thin community `Community 234`** (1 nodes): `registerDmHistoryRoutes()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 239`** (1 nodes): `VoiceRoom 2.5 Architecture Boundaries`
+- **Thin community `Community 235`** (1 nodes): `registerModerationRoutes()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 240`** (1 nodes): `Backlog`
+- **Thin community `Community 237`** (1 nodes): `FakeTimers`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 241`** (1 nodes): `config/capability-dag.v1.json`
+- **Thin community `Community 238`** (2 nodes): `VoiceRoom App Icon (Owl Mascot Mark on Dark Rounded Square)`, `VoiceRoom Mascot Mark (Masked Owl Silhouette, Transparent)`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 242`** (1 nodes): `Capability Readiness Doc`
+- **Thin community `Community 239`** (1 nodes): `ADR: Unicode authority for message reactions`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 243`** (1 nodes): `Design QA — reusable room and chat menus`
+- **Thin community `Community 240`** (1 nodes): `VoiceRoom 2.5 Architecture Boundaries`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 244`** (1 nodes): `Font Assets README`
+- **Thin community `Community 241`** (1 nodes): `Backlog`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 245`** (1 nodes): `LiveKit External Auth-Gate Operations Doc (G05)`
+- **Thin community `Community 242`** (1 nodes): `config/capability-dag.v1.json`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 246`** (1 nodes): `VoiceRoom monitoring agent`
+- **Thin community `Community 243`** (1 nodes): `Capability Readiness Doc`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 247`** (1 nodes): `OCI Runtime Publication Doc`
+- **Thin community `Community 244`** (1 nodes): `Design QA — reusable room and chat menus`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 248`** (1 nodes): `packages/CLAUDE.md Guidance`
+- **Thin community `Community 245`** (1 nodes): `Font Assets README`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 249`** (1 nodes): `Production Digest Promotion Doc`
+- **Thin community `Community 246`** (1 nodes): `LiveKit External Auth-Gate Operations Doc (G05)`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 250`** (1 nodes): `Release 2.5.0 Repairs README`
+- **Thin community `Community 247`** (1 nodes): `VoiceRoom monitoring agent`
+  Too small to be a meaningful cluster - may be noise or needs more connections extracted.
+- **Thin community `Community 248`** (1 nodes): `OCI Runtime Publication Doc`
+  Too small to be a meaningful cluster - may be noise or needs more connections extracted.
+- **Thin community `Community 249`** (1 nodes): `packages/CLAUDE.md Guidance`
+  Too small to be a meaningful cluster - may be noise or needs more connections extracted.
+- **Thin community `Community 250`** (1 nodes): `Production Digest Promotion Doc`
+  Too small to be a meaningful cluster - may be noise or needs more connections extracted.
+- **Thin community `Community 251`** (1 nodes): `Release 2.5.0 Repairs README`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `RealtimeRecoveryController` connect `Community 39` to `Community 10`?**
+- **Why does `RealtimeRecoveryController` connect `Community 44` to `Community 11`?**
   _High betweenness centrality (0.009) - this node is a cross-community bridge._
 - **What connects `http`, `net`, `{ URL }` to the rest of the system?**
-  _1501 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _1477 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Community 0` be split into smaller, more focused modules?**
-  _Cohesion score 0.010856049736967958 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.011044776119402985 - nodes in this community are weakly interconnected._
 - **Should `Community 1` be split into smaller, more focused modules?**
-  _Cohesion score 0.056074766355140186 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.08215085884988797 - nodes in this community are weakly interconnected._
 - **Should `Community 2` be split into smaller, more focused modules?**
-  _Cohesion score 0.03157216494845361 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.035232212308396245 - nodes in this community are weakly interconnected._
 - **Should `Community 3` be split into smaller, more focused modules?**
-  _Cohesion score 0.03036935704514364 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.035164835164835165 - nodes in this community are weakly interconnected._
 - **Should `Community 4` be split into smaller, more focused modules?**
-  _Cohesion score 0.04607046070460705 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.029213483146067417 - nodes in this community are weakly interconnected._
