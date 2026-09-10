@@ -49,9 +49,10 @@ function createMembershipService({ pool, repository = createMembershipRepository
       if (!membership) return { membership: null, status: 'not_active' };
       if (membership.role === 'owner') return { membership, status: 'owner_required' };
       const deleted = await repository.deleteActive(roomId, userId, { client });
-      return deleted
-        ? { membership: deleted, status: 'left' }
-        : { membership: membership, status: 'not_active' };
+      if (!deleted) return { membership: membership, status: 'not_active' };
+      // Leaving also removes the room from the user's list.
+      await repository.deleteBookmark(roomId, userId, { client });
+      return { membership: deleted, status: 'left' };
     });
   }
 

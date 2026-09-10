@@ -10,6 +10,11 @@ const { runMigrations } = require('../src/lib/migrate');
 const { createAttachmentRepository } = require('../src/domains/media/attachment-repository');
 const { createTestDatabase } = require('./db-harness');
 const SILENT = { log() {}, info() {}, warn() {}, error() {} };
+// Rolling back to just before the attachment byte limit also undoes every later migration.
+const BYTE_LIMIT_ROLLBACK_COUNT = (() => {
+  const files = fs.readdirSync(path.resolve(__dirname, '../src/migrations')).filter((name) => name.endsWith('.js')).sort();
+  return files.length - files.indexOf('20260720162000_limit_message_attachment_bytes.js');
+})();
 
 test('G73-A01 fresh PG schema is repeatable, bounded and N-1-readable', { skip: !process.env.TEST_DATABASE_URL, timeout: 120000 }, async (t) => {
   const db = await createTestDatabase(t);
@@ -33,7 +38,7 @@ test('G73-A01 fresh PG schema is repeatable, bounded and N-1-readable', { skip: 
 test('G73-A03 upgrade remediates historical 10-20MiB rows before validation and remains rollback safe', { skip: !process.env.TEST_DATABASE_URL, timeout: 120000 }, async (t) => {
   const db = await createTestDatabase(t); await runMigrations({ databaseUrl: db.databaseUrl, logger: SILENT, noLock: true });
   const pool = new Pool({ connectionString: db.databaseUrl, max: 2 }); t.after(async () => { await pool.end(); await db.cleanup(); });
-  await runner({ databaseUrl: db.databaseUrl, dir: path.resolve(__dirname, '../src/migrations'), direction: 'down', count: 5, migrationsTable: 'pgmigrations', logger: SILENT, noLock: true });
+  await runner({ databaseUrl: db.databaseUrl, dir: path.resolve(__dirname, '../src/migrations'), direction: 'down', count: BYTE_LIMIT_ROLLBACK_COUNT, migrationsTable: 'pgmigrations', logger: SILENT, noLock: true });
   await pool.query(`INSERT INTO users(id,login,display_name,password_hash) VALUES ('rollback-owner','rollback-owner','Owner','x')`);
   const uploadingId=crypto.randomUUID(), processingId=crypto.randomUUID(), readyId=crypto.randomUUID(), safeId=crypto.randomUUID();
   await pool.query(`INSERT INTO message_attachments(id,owner_id,context,state,reserved_bytes,reservation_expires_at) VALUES ($1,'rollback-owner','room','uploading',15728640,current_timestamp+interval '1 hour'),($2,'rollback-owner','room','uploading',10485760,current_timestamp+interval '1 hour')`,[uploadingId,safeId]);
@@ -50,7 +55,7 @@ test('G73-A03 upgrade remediates historical 10-20MiB rows before validation and 
   const repository=createAttachmentRepository({pool}); assert.deepEqual(await repository.quotaUsage('rollback-owner'),{pendingCount:1,recentCount:4,usedBytes:10485760});
   await assert.rejects(pool.query(`INSERT INTO message_attachments(id,owner_id,context,state,reserved_bytes) VALUES ($1,'rollback-owner','room','uploading',15728640)`, [crypto.randomUUID()]));
   const snapshot=JSON.stringify(remediated); await runMigrations({databaseUrl:db.databaseUrl,logger:SILENT,noLock:true}); assert.equal(JSON.stringify((await pool.query(`SELECT id,state,reserved_bytes,original_bytes,failure_code,deleted_at,metadata,original_storage_key FROM message_attachments WHERE id=ANY($1::uuid[]) ORDER BY id`,[[uploadingId,processingId,readyId]])).rows),snapshot);
-  await runner({ databaseUrl: db.databaseUrl, dir: path.resolve(__dirname, '../src/migrations'), direction: 'down', count: 5, migrationsTable: 'pgmigrations', logger: SILENT, noLock: true });
+  await runner({ databaseUrl: db.databaseUrl, dir: path.resolve(__dirname, '../src/migrations'), direction: 'down', count: BYTE_LIMIT_ROLLBACK_COUNT, migrationsTable: 'pgmigrations', logger: SILENT, noLock: true });
   const rollbackId=crypto.randomUUID(); await pool.query(`INSERT INTO message_attachments(id,owner_id,context,state,reserved_bytes) VALUES ($1,'rollback-owner','room','uploading',15728640)`,[rollbackId]);
   assert.equal((await repository.findById(readyId)).internalState,'deleted'); assert.equal((await repository.findById(rollbackId)).reservedBytes,15728640);
 });
