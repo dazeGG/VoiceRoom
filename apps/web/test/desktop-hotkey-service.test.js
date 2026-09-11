@@ -85,11 +85,12 @@ test('desktop hotkey sync buffers early events, prefers the latest status, and d
     writable: true
   });
 
+  // No file watcher: watchers from parallel test files crash the process on CI.
   const server = await createServer({
     appType: 'custom',
     logLevel: 'silent',
     root: resolve(import.meta.dirname, '..'),
-    server: { middlewareMode: true }
+    server: { hmr: false, middlewareMode: true, watch: null }
   });
   t.after(async () => {
     unbind();
