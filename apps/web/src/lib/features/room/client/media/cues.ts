@@ -72,7 +72,21 @@ export function playDirectMessageCue(): void {
   ], 'DM');
 }
 
-export function playRoomChatMessageCue(): void {
+const ROOM_CHAT_CUE_DEDUPE_MS = 10_000;
+const roomChatCueTimes = new Map<string, number>();
+
+// The same room message can reach several listeners at once — the lobby preview
+// and the open room each mount a chat panel, and a mention also rings from the
+// lobby — so a message id is heard only once.
+export function playRoomChatMessageCue(messageId?: string): void {
+  if (messageId) {
+    const now = Date.now();
+    for (const [id, playedAt] of roomChatCueTimes) {
+      if (now - playedAt > ROOM_CHAT_CUE_DEDUPE_MS) roomChatCueTimes.delete(id);
+    }
+    if (roomChatCueTimes.has(messageId)) return;
+    roomChatCueTimes.set(messageId, now);
+  }
   playCueSequence([
     { frequency: 587, peak: 0.026, duration: 0.095 },
     { frequency: 784, peak: 0.024, start: 0.065, duration: 0.11 }

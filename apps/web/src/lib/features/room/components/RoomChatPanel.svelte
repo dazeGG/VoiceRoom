@@ -496,7 +496,7 @@
       error = '';
       if (historyEnabled) history.upsert(message);
       else messages = [...messages, message];
-      if (message.peerId !== peerId && !isRoomNotificationsMuted(roomId)) playRoomChatMessageCue();
+      if (message.peerId !== peerId && !isRoomNotificationsMuted(roomId)) playRoomChatMessageCue(message.id);
       if (chatVisible) {
         onRead?.();
         setRoomUnreadCount(roomId, 0);
