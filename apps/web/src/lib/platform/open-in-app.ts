@@ -34,6 +34,7 @@ const ROOM_ID_PATTERN = /^[A-Za-z0-9_-]{3,48}$/;
 
 export interface OpenInAppSignals {
   desktopBridge: boolean;
+  automated?: boolean;
   userAgent?: string;
   mobile?: boolean;
   maxTouchPoints?: number;
@@ -51,10 +52,11 @@ export function buildAppRoomLink(roomId: string, hostname: string): string | nul
 
 /**
  * The desktop app exists for Windows and macOS only. Touch Macs are iPads in
- * desktop mode, and the app itself never offers to open itself.
+ * desktop mode, the app itself never offers to open itself, and automated
+ * browsers (navigator.webdriver) have no app to hand the link to.
  */
 export function shouldOfferOpenInApp(signals: OpenInAppSignals): boolean {
-  if (signals.desktopBridge || signals.mobile === true) return false;
+  if (signals.desktopBridge || signals.automated === true || signals.mobile === true) return false;
   const userAgent = signals.userAgent || '';
   if (/Windows NT/.test(userAgent)) return true;
   return /Macintosh|Mac OS X/.test(userAgent) && (signals.maxTouchPoints ?? 0) <= 1;
@@ -64,6 +66,7 @@ export function readOpenInAppSignals(): OpenInAppSignals {
   if (typeof window === 'undefined') return { desktopBridge: false };
   const nav = window.navigator as Navigator & { userAgentData?: { mobile?: boolean } };
   return {
+    automated: nav.webdriver === true,
     desktopBridge: Boolean(window.voiceRoomRuntime?.isDesktop),
     maxTouchPoints: nav.maxTouchPoints,
     mobile: typeof nav.userAgentData?.mobile === 'boolean' ? nav.userAgentData.mobile : undefined,

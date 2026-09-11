@@ -1,4 +1,4 @@
-import test from 'node:test';
+import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -6,21 +6,36 @@ import { createServer } from 'vite';
 
 const webRoot = resolve(import.meta.dirname, '..');
 
+// One Vite server for the whole file, without a file watcher: a server per
+// test exhausts file watchers on CI runners and kills the test process.
+let serverPromise = null;
+
+function getServer() {
+  serverPromise ??= createServer({
+    appType: 'custom',
+    logLevel: 'silent',
+    root: webRoot,
+    server: { hmr: false, middlewareMode: true, watch: null }
+  });
+  return serverPromise;
+}
+
+after(async () => {
+  if (serverPromise) await (await serverPromise).close();
+});
+
+// Every load gets fresh module instances, so module-level state (sync
+// de-duplication, the in-app navigation mark) never leaks between tests.
 async function loadModule(t, modulePath, windowValue = {}) {
   Object.defineProperty(globalThis, 'window', { configurable: true, value: windowValue, writable: true });
   const originalWarn = console.warn;
   console.warn = () => {};
-  const server = await createServer({
-    appType: 'custom',
-    logLevel: 'silent',
-    root: webRoot,
-    server: { middlewareMode: true }
-  });
-  t.after(async () => {
-    await server.close();
+  t.after(() => {
     delete globalThis.window;
     console.warn = originalWarn;
   });
+  const server = await getServer();
+  server.moduleGraph.invalidateAll();
   return server.ssrLoadModule(modulePath);
 }
 
@@ -174,6 +189,7 @@ test('open in app targets desktop browsers only with the right scheme', async (t
   assert.equal(service.shouldOfferOpenInApp({ desktopBridge: true, userAgent: windowsChrome }), false, 'inside the app');
   assert.equal(service.shouldOfferOpenInApp({ desktopBridge: false, userAgent: macSafari, maxTouchPoints: 5 }), false, 'iPad desktop mode');
   assert.equal(service.shouldOfferOpenInApp({ desktopBridge: false, userAgent: windowsChrome, mobile: true }), false);
+  assert.equal(service.shouldOfferOpenInApp({ automated: true, desktopBridge: false, userAgent: windowsChrome }), false, 'Playwright and other webdriver sessions');
   assert.equal(service.shouldOfferOpenInApp({ desktopBridge: false, userAgent: linux }), false);
 });
 
