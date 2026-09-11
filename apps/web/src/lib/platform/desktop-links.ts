@@ -36,10 +36,6 @@ export function normalizeDesktopLink(value: unknown): DesktopLink | null {
   }
 }
 
-export function desktopLinksAvailable(): boolean {
-  return typeof getBridge()?.onOpen === 'function';
-}
-
 /**
  * Routes voiceroom:// links opened while the desktop app is running. Without a
  * subscription the shell reloads the page on the link's route instead.

@@ -22,7 +22,7 @@ declare global {
       }) => Promise<unknown>;
     };
     voiceRoomDesktopDiagnostics?: {
-      copyInfo?: () => Promise<unknown>;
+      copyInfo: () => Promise<unknown>;
       getInfo: () => Promise<unknown>;
       openLogsFolder: () => Promise<unknown>;
       setContext: (context: { userId: string; roomId: string }) => Promise<unknown>;

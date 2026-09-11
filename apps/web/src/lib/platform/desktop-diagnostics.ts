@@ -12,7 +12,7 @@ function getBridge(): Window['voiceRoomDesktopDiagnostics'] | undefined {
 
 export function desktopDiagnosticsAvailable(): boolean {
   const bridge = getBridge();
-  return typeof bridge?.openLogsFolder === 'function' && typeof bridge?.getInfo === 'function';
+  return typeof bridge?.copyInfo === 'function' && typeof bridge?.openLogsFolder === 'function';
 }
 
 export async function openDesktopLogsFolder(): Promise<boolean> {
@@ -30,18 +30,10 @@ export async function openDesktopLogsFolder(): Promise<boolean> {
 /** Copies the shell's system summary, which already includes the web context. */
 export async function copyDesktopDiagnostics(): Promise<boolean> {
   const bridge = getBridge();
-  if (!bridge) return false;
+  if (typeof bridge?.copyInfo !== 'function') return false;
   try {
-    if (typeof bridge.copyInfo === 'function') {
-      const result = await bridge.copyInfo();
-      return (result as { ok?: unknown } | null)?.ok === true;
-    }
-    if (typeof bridge.getInfo !== 'function' || !navigator.clipboard?.writeText) return false;
-    const info = await bridge.getInfo();
-    const text = (info as { text?: unknown } | null)?.text;
-    if (typeof text !== 'string' || !text) return false;
-    await navigator.clipboard.writeText(text);
-    return true;
+    const result = await bridge.copyInfo();
+    return (result as { ok?: unknown } | null)?.ok === true;
   } catch (error) {
     console.warn('Desktop diagnostics copy failed', error);
     return false;

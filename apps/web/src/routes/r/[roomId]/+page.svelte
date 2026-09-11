@@ -25,6 +25,7 @@
   let authLoadError = $state(false);
   let guestContinuedInBrowser = $state(false);
   let guestAppLaunched = false;
+  let inAppNavigation = false;
   const routeRoomId = $derived(page.params.roomId || '');
   // Guests auto-join as soon as RoomPage mounts, so the offer is decided before
   // it renders. Signed-in users get the same offer from LobbyPage.
@@ -35,8 +36,8 @@
       && !authLoadError
       && Boolean(routeRoomId)
       && !guestContinuedInBrowser
+      && !inAppNavigation
       && shouldOfferOpenInApp(readOpenInAppSignals())
-      && !consumeInAppRoomNavigation()
   );
 
   $effect(() => {
@@ -52,6 +53,8 @@
   }
 
   onMount(() => {
+    // Read before boundaryReady so the offer below never sees a stale mark.
+    inAppNavigation = consumeInAppRoomNavigation();
     const policy = applyDesktopBoundaryToDocument();
     desktopAllowed = policy.desktopAllowed;
     boundaryReady = true;

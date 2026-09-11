@@ -38,7 +38,6 @@ test('desktop links normalize shell payloads and ignore anything unexpected', as
     }
   });
 
-  assert.equal(service.desktopLinksAvailable(), true);
   assert.deepEqual(service.normalizeDesktopLink({ kind: 'room', roomId: 'abc123', route: '/r/abc123' }), { kind: 'room', roomId: 'abc123' });
   assert.deepEqual(service.normalizeDesktopLink({ kind: 'mention', roomId: 'abc123', messageId: 'm1' }), { kind: 'mention', roomId: 'abc123', messageId: 'm1' });
   assert.deepEqual(service.normalizeDesktopLink({ kind: 'dm', dmId: 'u-7' }), { kind: 'dm', dmId: 'u-7' });
@@ -58,7 +57,6 @@ test('desktop links normalize shell payloads and ignore anything unexpected', as
 
 test('desktop links are a no-op without the shell bridge', async (t) => {
   const service = await loadModule(t, '/src/lib/platform/desktop-links.ts', {});
-  assert.equal(service.desktopLinksAvailable(), false);
   assert.equal(typeof service.bindDesktopLinks(() => {}), 'function');
 });
 
@@ -76,7 +74,6 @@ test('desktop call state is sent once per change and actions are filtered', asyn
   });
   const active = { active: true, micMuted: false, outputMuted: true, roomId: 'abc123', roomName: 'Гостиная' };
 
-  assert.equal(service.desktopCallAvailable(), true);
   service.syncDesktopCallState(active);
   service.syncDesktopCallState({ ...active });
   service.syncDesktopCallState({ ...active, micMuted: true });
@@ -141,24 +138,17 @@ test('desktop diagnostics copy, open logs and share the web context', async (t) 
   assert.deepEqual(contexts, [{ roomId: 'abc123', userId: 'u1' }, { roomId: '', userId: 'u1' }]);
 });
 
-test('desktop diagnostics fall back to the clipboard and fail closed', async (t) => {
-  const written = [];
-  Object.defineProperty(globalThis, 'navigator', {
-    configurable: true,
-    value: { clipboard: { writeText: async (text) => written.push(text) } },
-    writable: true
-  });
-  t.after(() => { delete globalThis.navigator; });
+test('desktop diagnostics fail closed on bridge errors and without the bridge', async (t) => {
   const service = await loadModule(t, '/src/lib/platform/desktop-diagnostics.ts', {
     voiceRoomDesktopDiagnostics: {
+      copyInfo: async () => { throw new Error('untrusted'); },
       getInfo: async () => ({ text: 'app: 1.3.0' }),
       openLogsFolder: async () => { throw new Error('untrusted'); },
       setContext: async () => {}
     }
   });
 
-  assert.equal(await service.copyDesktopDiagnostics(), true);
-  assert.deepEqual(written, ['app: 1.3.0']);
+  assert.equal(await service.copyDesktopDiagnostics(), false);
   assert.equal(await service.openDesktopLogsFolder(), false);
 
   const bare = await loadModule(t, '/src/lib/platform/desktop-diagnostics.ts', {});
@@ -290,7 +280,8 @@ test('lobby routes every voice entry, desktop links and call controls through th
 
 test('guests get the open-in-app offer before auto-joining, and in-app reloads are marked', () => {
   const route = readFileSync(resolve(webRoot, 'src/routes/r/[roomId]/+page.svelte'), 'utf8');
-  assert.match(route, /const guestOpenInApp = \$derived\([\s\S]*?!session\.user[\s\S]*?shouldOfferOpenInApp\(readOpenInAppSignals\(\)\)[\s\S]*?!consumeInAppRoomNavigation\(\)/);
+  assert.match(route, /onMount\(\(\) => \{[\s\S]*?inAppNavigation = consumeInAppRoomNavigation\(\);[\s\S]*?boundaryReady = true;/);
+  assert.match(route, /const guestOpenInApp = \$derived\([\s\S]*?!session\.user[\s\S]*?!inAppNavigation[\s\S]*?shouldOfferOpenInApp\(readOpenInAppSignals\(\)\)/);
   assert.match(route, /\{:else if guestOpenInApp\}\s*<OpenInAppScreen[\s\S]*?\{:else\}\s*\{#key routeRoomId\}\s*<RoomPage roomId=\{routeRoomId\} autoJoin \/>/);
 
   for (const file of ['src/lib/features/home/HomePage.svelte', 'src/lib/features/room/client/room/room.ts']) {

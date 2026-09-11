@@ -28,11 +28,6 @@ function toPayload(state: DesktopCallState): DesktopCallState | { active: false 
   };
 }
 
-export function desktopCallAvailable(): boolean {
-  const bridge = getBridge();
-  return typeof bridge?.setState === 'function' && typeof bridge?.onAction === 'function';
-}
-
 /** Mirrors the voice call into the tray, taskbar and Dock of the desktop app. */
 export function syncDesktopCallState(state: DesktopCallState): void {
   const bridge = getBridge();
