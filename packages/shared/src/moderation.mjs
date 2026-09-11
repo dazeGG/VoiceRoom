@@ -54,12 +54,30 @@ function normalizeModerationPageRequest(value = {}) {
   };
 }
 
+// Who an account ban is about, so an owner reads a name instead of a user id.
+// Optional: bans created before the profile was projected, and guest bans,
+// carry none.
+function normalizeBanProfile(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const login = cleanString(value.login, 64);
+  if (!login) return null;
+  const avatarUrl = cleanString(value.avatarUrl, 512);
+  return {
+    displayName: cleanString(value.displayName, 100),
+    login,
+    avatarUrl: avatarUrl.startsWith('/api/avatars/') ? avatarUrl : null,
+    avatarColorKey: cleanString(value.avatarColorKey, 64),
+    avatarAccent: cleanString(value.avatarAccent, 64) || null
+  };
+}
+
 function normalizeActiveBan(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const id = cleanString(value.id, 36);
   const roomId = cleanString(value.roomId, 48);
   const userId = cleanString(value.subject?.userId ?? value.userId, 36) || null;
   const kind = userId ? 'account' : 'guest';
+  const profile = userId ? normalizeBanProfile(value.subject?.profile) : null;
   const createdAt = Number(value.createdAt);
   const updatedAt = Number(value.updatedAt ?? value.createdAt);
   const expiresAt = value.expiresAt == null ? null : Number(value.expiresAt);
@@ -68,7 +86,7 @@ function normalizeActiveBan(value) {
   return {
     id,
     roomId,
-    subject: { kind, userId },
+    subject: profile ? { kind, userId, profile } : { kind, userId },
     reason: typeof value.reason === 'string' ? value.reason.slice(0, MODERATION_REASON_MAX_LENGTH) : '',
     createdAt,
     updatedAt,

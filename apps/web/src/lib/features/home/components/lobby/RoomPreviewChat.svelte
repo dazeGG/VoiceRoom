@@ -6,11 +6,13 @@
   import RoomChatPanel from '$lib/features/room/components/RoomChatPanel.svelte';
   import { friendName } from '../../model/lobby-format';
 
-  let { roomId, user, aroundMessageId = undefined, onClose, onSelectParticipants, onToast } = $props<{
+  let { roomId, user, aroundMessageId = undefined, canModerate = false, onClose, onSelectParticipants, onToast } = $props<{
     roomId: string;
     user: AuthUser;
     /** Scroll the preview chat to this message, e.g. when opened from a mention. */
     aroundMessageId?: string;
+    /** The viewer owns the room and may delete anyone's message. */
+    canModerate?: boolean;
     onClose?: () => void;
     onSelectParticipants?: () => void;
     onToast?: (message: string) => void;
@@ -28,6 +30,7 @@
   rootClass="lobby-preview-chat"
   ariaLabel="Чат комнаты"
   {aroundMessageId}
+  {canModerate}
   onSelectParticipants={() => onSelectParticipants?.()}
   onCollapse={() => onClose?.()}
   onToast={(message) => onToast?.(message)}

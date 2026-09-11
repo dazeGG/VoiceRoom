@@ -202,6 +202,7 @@
         <RoomPreviewChat
           roomId={previewRoomId}
           {user}
+          canModerate={room.relationship === 'owner'}
           {onToast}
           onClose={() => (activePanel = null)}
           onSelectParticipants={() => selectPanel('participants')}
