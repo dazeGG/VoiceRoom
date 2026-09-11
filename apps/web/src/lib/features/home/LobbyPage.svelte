@@ -30,7 +30,7 @@
   import { createNotificationInbox } from '$lib/shared/notifications/inbox.svelte';
   import { fetchNotificationInbox, markAllNotificationsRead, markNotificationRead } from '$lib/api/notifications';
   import { getCapabilityFeature } from '$lib/platform/capability-state.svelte';
-  import { friendsState, initLobby, openDm, showHome, showPeople } from './model/friends.svelte';
+  import { ENTER_ROOM_EVENT, friendsState, initLobby, openDm, showHome, showPeople } from './model/friends.svelte';
   import type { ToastOptions } from './model/toasts.svelte';
   import {
     getActiveVoiceRoomId,
@@ -48,6 +48,23 @@
     setViewedRoomFromRoute
   } from './model/room-navigation.svelte';
   import { roomDisplayName } from './model/rooms';
+  import {
+    applyRoomSwitchDecision,
+    readRoomSwitchConfirmEnabled,
+    shouldConfirmRoomSwitch
+  } from './model/room-switch-confirmation';
+  import RoomSwitchDialog from './components/RoomSwitchDialog.svelte';
+  import OpenInAppScreen from './components/OpenInAppScreen.svelte';
+  import { bindDesktopLinks, type DesktopLink } from '$lib/platform/desktop-links';
+  import { bindDesktopCallActions, syncDesktopCallState } from '$lib/platform/desktop-call';
+  import { syncDesktopDiagnosticsContext } from '$lib/platform/desktop-diagnostics';
+  import {
+    buildAppRoomLink,
+    consumeInAppRoomNavigation,
+    launchAppLink,
+    readOpenInAppSignals,
+    shouldOfferOpenInApp
+  } from '$lib/platform/open-in-app';
   import { openChat, roomUi } from '$lib/features/room/room-ui.svelte';
   import '$lib/shared/styles/typography.css';
   import '$lib/shared/styles/dialog.css';
@@ -69,6 +86,10 @@
   let settingsOpen = $state(false);
   let settingsTab = $state<'profile' | 'sound' | 'hotkeys' | 'notifications' | 'app'>('profile');
   let previewSettingsRoomId = $state('');
+  // Room waiting for "switch rooms?" while voice is connected elsewhere.
+  let pendingRoomSwitchId = $state('');
+  // Room a browser offered to open in the desktop app before joining voice.
+  let openInAppRoomId = $state('');
   let notificationInboxEnabled = $state(false);
   let notificationInboxOpen = $state(false);
   const notificationInbox = createNotificationInbox({
@@ -196,7 +217,13 @@
     // temporary rooms (absent from "Мои комнаты") leave the user stranded on the
     // rooms home with the route still pointing at the room.
     const initialRoomId = extractRoomId(window.location.pathname);
-    if (initialRoomId) {
+    if (initialRoomId && shouldOfferOpenInApp(readOpenInAppSignals()) && !consumeInAppRoomNavigation()) {
+      // The browser cannot tell whether the desktop app picked the link up, so
+      // it waits for an explicit choice instead of joining voice twice.
+      openInAppRoomId = initialRoomId;
+      friendsState.mode = 'rooms';
+      openRoomInApp();
+    } else if (initialRoomId) {
       selectRoomForVoiceEntry(initialRoomId);
       friendsState.mode = 'rooms';
     }
@@ -215,13 +242,30 @@
       openRoomMessage(linkedRoomId, linkedMessageId);
     }
 
+    function onEnterRoomRequest(event: Event): void {
+      const roomId = event instanceof CustomEvent && typeof event.detail?.roomId === 'string' ? event.detail.roomId : '';
+      if (roomId) requestEnterRoom(roomId);
+    }
+
+    const teardownDesktopLinks = bindDesktopLinks(openDesktopLink);
+    const teardownDesktopCall = bindDesktopCallActions({
+      'toggle-mic': toggleActiveVoiceMic,
+      'toggle-output': toggleActiveVoiceDeafen,
+      disconnect: () => void leaveConnectedVoiceRoom()
+    });
+
     window.addEventListener('voice-room:embedded-leave', onEmbeddedLeave);
     window.addEventListener('voice-room:rooms-changed', onRoomsChanged);
     window.addEventListener('popstate', onPopState);
+    window.addEventListener(ENTER_ROOM_EVENT, onEnterRoomRequest);
     return () => {
+      window.removeEventListener(ENTER_ROOM_EVENT, onEnterRoomRequest);
       teardownNotifications();
       teardownFriends();
       teardownRooms();
+      teardownDesktopLinks();
+      teardownDesktopCall();
+      syncDesktopCallState({ active: false, micMuted: false, outputMuted: false, roomId: '', roomName: '' });
       window.removeEventListener('voice-room:embedded-leave', onEmbeddedLeave);
       window.removeEventListener('voice-room:rooms-changed', onRoomsChanged);
       window.removeEventListener('popstate', onPopState);
@@ -250,6 +294,20 @@
   });
 
   $effect(() => {
+    syncDesktopCallState({
+      active: Boolean(connectedVoiceRoomId),
+      micMuted: voiceSession.muted,
+      outputMuted: voiceSession.deafened,
+      roomId: connectedVoiceRoomId || '',
+      roomName: connectedVoiceRoom ? roomDisplayName(connectedVoiceRoom) : connectedVoiceRoomId || ''
+    });
+  });
+
+  $effect(() => {
+    syncDesktopDiagnosticsContext({ roomId: connectedVoiceRoomId || '', userId: user?.id || '' });
+  });
+
+  $effect(() => {
     void connectedRoomVisible;
     if (!connectedVoiceRoomId && embeddedRoomId && selectedRoomId !== embeddedRoomId) {
       clearDisconnectedHiddenEmbed();
@@ -271,6 +329,55 @@
     selectRoomForVoiceEntry(roomId);
     friendsState.mode = 'rooms';
     pushState(`/r/${encodeURIComponent(roomId)}`, {});
+  }
+
+  // Every way into voice goes through here, so switching away from a live call
+  // always gets the same question.
+  function requestEnterRoom(roomId: string): void {
+    const needsConfirmation = shouldConfirmRoomSwitch({
+      confirmEnabled: readRoomSwitchConfirmEnabled(),
+      connectedRoomId: getActiveVoiceRoomId(),
+      targetRoomId: roomId
+    });
+    if (needsConfirmation) {
+      pendingRoomSwitchId = roomId;
+      return;
+    }
+    enterRoom(roomId);
+  }
+
+  function resolveRoomSwitch(proceed: boolean, dontAskAgain = false): void {
+    const roomId = pendingRoomSwitchId;
+    pendingRoomSwitchId = '';
+    if (roomId && applyRoomSwitchDecision({ dontAskAgain, proceed })) enterRoom(roomId);
+  }
+
+  function roomLabel(roomId: string): string {
+    const room = rooms.find((entry) => entry.roomId === roomId);
+    return room ? roomDisplayName(room) : roomId;
+  }
+
+  function openRoomInApp(): void {
+    const link = buildAppRoomLink(openInAppRoomId, window.location.hostname);
+    if (!link) {
+      continueRoomInBrowser();
+      return;
+    }
+    launchAppLink(link);
+  }
+
+  function continueRoomInBrowser(): void {
+    const roomId = openInAppRoomId;
+    openInAppRoomId = '';
+    if (!roomId) return;
+    selectRoomForVoiceEntry(roomId);
+    friendsState.mode = 'rooms';
+  }
+
+  function openDesktopLink(link: DesktopLink): void {
+    if (link.kind === 'room') requestEnterRoom(link.roomId);
+    else if (link.kind === 'mention') openRoomMessage(link.roomId, link.messageId);
+    else if (link.kind === 'dm') void openDm(link.dmId).catch(() => onToast('Не удалось открыть диалог'));
   }
 
   function previewRoom(roomId: string): void {
@@ -310,7 +417,7 @@
       onToast('Введите код комнаты');
       return;
     }
-    enterRoom(roomId);
+    requestEnterRoom(roomId);
   }
 
   async function handleCreate(payload: { name: string; isStatic: boolean }): Promise<void> {
@@ -319,7 +426,7 @@
     try {
       const roomId = await createRoom(payload);
       createDialogOpen = false;
-      enterRoom(roomId);
+      requestEnterRoom(roomId);
       if (payload.isStatic) void refreshRooms();
       onToast('Комната создана');
     } catch (error) {
@@ -408,13 +515,13 @@
       {/if}
 
       {#if friendsState.mode === 'rooms' && selectedRoom && connectedVoiceRoomId && selectedRoom.roomId !== connectedVoiceRoomId}
-        <RoomBrowseView {user} room={selectedRoom} onEnter={() => enterRoom(selectedRoom.roomId)} onBack={closeViewedRoom} onOpenSettings={selectedRoom.relationship === 'owner' ? () => (previewSettingsRoomId = selectedRoom.roomId) : undefined} onRoomsChanged={() => { closeViewedRoom(); void refreshRooms(); }} {onToast} />
+        <RoomBrowseView {user} room={selectedRoom} onEnter={() => requestEnterRoom(selectedRoom.roomId)} onBack={closeViewedRoom} onOpenSettings={selectedRoom.relationship === 'owner' ? () => (previewSettingsRoomId = selectedRoom.roomId) : undefined} onRoomsChanged={() => { closeViewedRoom(); void refreshRooms(); }} {onToast} />
       {:else if friendsState.mode === 'rooms' && selectedRoom && (!embeddedRoomId || !embeddedRoomVisible)}
         {@const anchor = previewAnchor?.roomId === selectedRoom.roomId ? previewAnchor : null}
         <!-- Keyed on the anchor so a second mention in a room already on screen
              still reopens its chat on the new message. -->
         {#key anchor?.messageId ?? ''}
-        <RoomPreviewView {user} room={selectedRoom} initialPanel={anchor ? 'chat' : null} aroundMessageId={anchor?.messageId} onEnter={() => enterRoom(selectedRoom.roomId)} onBack={closeViewedRoom} onOpenSettings={selectedRoom.relationship === 'owner' ? () => (previewSettingsRoomId = selectedRoom.roomId) : undefined} onRoomsChanged={() => { closeViewedRoom(); void refreshRooms(); }} {onToast} />
+        <RoomPreviewView {user} room={selectedRoom} initialPanel={anchor ? 'chat' : null} aroundMessageId={anchor?.messageId} onEnter={() => requestEnterRoom(selectedRoom.roomId)} onBack={closeViewedRoom} onOpenSettings={selectedRoom.relationship === 'owner' ? () => (previewSettingsRoomId = selectedRoom.roomId) : undefined} onRoomsChanged={() => { closeViewedRoom(); void refreshRooms(); }} {onToast} />
         {/key}
       {:else if friendsState.mode === 'rooms' && !embeddedRoomVisible}
         <VoiceHome {rooms} onOpenRoom={previewRoom} onCreateRoom={() => (createDialogOpen = true)} onJoinCode={handleJoin} onRoomsChanged={refreshRooms} onOpenRoomSettings={(roomId) => (previewSettingsRoomId = roomId)} {onToast} />
@@ -441,6 +548,16 @@
     {onLogout}
   />
   <LobbyRoomSettingsDialog room={previewSettingsRoom} onClose={() => (previewSettingsRoomId = '')} onSaved={refreshRooms} onDeleted={() => { previewSettingsRoomId = ''; closeViewedRoom(); void refreshRooms(); }} {onToast} />
+  <RoomSwitchDialog
+    open={Boolean(pendingRoomSwitchId)}
+    fromName={roomLabel(connectedVoiceRoomId || '')}
+    toName={roomLabel(pendingRoomSwitchId)}
+    onConfirm={(dontAskAgain) => resolveRoomSwitch(true, dontAskAgain)}
+    onCancel={() => resolveRoomSwitch(false)}
+  />
+  {#if openInAppRoomId}
+    <OpenInAppScreen onRetry={openRoomInApp} onContinue={continueRoomInBrowser} />
+  {/if}
   {#if notificationInboxEnabled}
     {#if notificationInboxOpen}
       <aside class="notification-inbox-panel" aria-label="Панель уведомлений">

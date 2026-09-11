@@ -276,7 +276,7 @@ test('lobby separates viewed room from connected voice room', () => {
   assert.match(enterRoom, /friendsState\.mode = 'rooms'/);
   assert.match(
     lobby,
-    /async function handleCreate[\s\S]*const roomId = await createRoom\(payload\);[\s\S]*createDialogOpen = false;[\s\S]*enterRoom\(roomId\);[\s\S]*if \(payload\.isStatic\) void refreshRooms\(\)/
+    /async function handleCreate[\s\S]*const roomId = await createRoom\(payload\);[\s\S]*createDialogOpen = false;[\s\S]*requestEnterRoom\(roomId\);[\s\S]*if \(payload\.isStatic\) void refreshRooms\(\)/
   );
   assert.match(closeViewedRoom, /const transition = routeToHome\(\)/);
   assert.match(closeViewedRoom, /if \(transition\.closeEmbeddedRoom\) closeEmbeddedRoom\(\{ replaceUrl: false \}\)/);
@@ -297,7 +297,7 @@ test('lobby separates viewed room from connected voice room', () => {
     leaveConnectedVoiceRoom.indexOf('closeEmbeddedRoom()') < leaveConnectedVoiceRoom.indexOf('clearViewedRoom()'),
     'sidebar leave restores URL before clearing the viewed room'
   );
-  assert.match(lobby, /<RoomBrowseView \{user\} room=\{selectedRoom\} onEnter=\{\(\) => enterRoom\(selectedRoom\.roomId\)\}/);
+  assert.match(lobby, /<RoomBrowseView \{user\} room=\{selectedRoom\} onEnter=\{\(\) => requestEnterRoom\(selectedRoom\.roomId\)\}/);
   assert.match(lobby, /dataset\.lobbyEmbedded = 'true'/);
   assert.match(lobby, /delete document\.body\.dataset\.lobbyEmbedded/);
   assert.match(browseView, /subscribeRoomPreview\(roomId, handlePreviewEvent\)/);

@@ -10,14 +10,51 @@
   import RoomPage from '$lib/features/room/RoomPage.svelte';
   import { MascotIcon, ToastStack } from '$lib/shared/ui';
   import { ProfileCardHost } from '$lib/features/home/components/profile-card';
+  import OpenInAppScreen from '$lib/features/home/components/OpenInAppScreen.svelte';
+  import {
+    buildAppRoomLink,
+    consumeInAppRoomNavigation,
+    launchAppLink,
+    readOpenInAppSignals,
+    shouldOfferOpenInApp
+  } from '$lib/platform/open-in-app';
 
   let boundaryReady = $state(false);
   let desktopAllowed = $state(false);
   let loggingOut = $state(false);
   let authLoadError = $state(false);
+  let guestContinuedInBrowser = $state(false);
+  let guestAppLaunched = false;
+  let inAppNavigation = false;
   const routeRoomId = $derived(page.params.roomId || '');
+  // Guests auto-join as soon as RoomPage mounts, so the offer is decided before
+  // it renders. Signed-in users get the same offer from LobbyPage.
+  const guestOpenInApp = $derived(
+    boundaryReady
+      && session.loaded
+      && !session.user
+      && !authLoadError
+      && Boolean(routeRoomId)
+      && !guestContinuedInBrowser
+      && !inAppNavigation
+      && shouldOfferOpenInApp(readOpenInAppSignals())
+  );
+
+  $effect(() => {
+    if (!guestOpenInApp || guestAppLaunched) return;
+    guestAppLaunched = true;
+    openGuestRoomInApp();
+  });
+
+  function openGuestRoomInApp(): void {
+    const link = buildAppRoomLink(routeRoomId, window.location.hostname);
+    if (link) launchAppLink(link);
+    else guestContinuedInBrowser = true;
+  }
 
   onMount(() => {
+    // Read before boundaryReady so the offer below never sees a stale mark.
+    inAppNavigation = consumeInAppRoomNavigation();
     const policy = applyDesktopBoundaryToDocument();
     desktopAllowed = policy.desktopAllowed;
     boundaryReady = true;
@@ -103,6 +140,8 @@
   </div>
 {:else if session.user}
   <LobbyPage user={session.user} {loggingOut} onLogout={handleLogout} onToast={showToast} />
+{:else if guestOpenInApp}
+  <OpenInAppScreen onRetry={openGuestRoomInApp} onContinue={() => (guestContinuedInBrowser = true)} />
 {:else}
   {#key routeRoomId}
     <RoomPage roomId={routeRoomId} autoJoin />
