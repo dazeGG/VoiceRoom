@@ -529,6 +529,11 @@ export async function unblockUser(userId: string): Promise<void> {
 // --- Realtime -----------------------------------------------------------
 
 function getActiveNotificationTarget(): NotificationActiveTarget | null {
+  // An open chat only counts as "being read" while the window is in front: a
+  // minimized, hidden-to-tray or background window still gets the notification.
+  if (typeof document !== 'undefined' && (document.visibilityState !== 'visible' || !document.hasFocus())) {
+    return null;
+  }
   if (friendsState.view === 'dm' && friendsState.selectedFriendId) {
     return { kind: 'dm', peerId: friendsState.selectedFriendId };
   }

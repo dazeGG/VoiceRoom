@@ -214,6 +214,7 @@ test('room notification recipients ignore legacy server-side room mute rows', as
       return { rows: [], rowCount: 0 };
     }
     assert.match(text, /FROM room_memberships/);
+    assert.doesNotMatch(text, /rm\.role = 'owner'/, 'members are recipients too, not only the owner');
     assert.match(text, /FROM room_bookmarks/);
     assert.doesNotMatch(text, /notification_room_mutes/);
     assert.deepEqual(values, ['room1']);
@@ -230,7 +231,8 @@ test('room notification recipients ignore legacy server-side room mute rows', as
 test('getRoomUnreadCount counts active messages after the user read cursor and excludes own posts', async () => {
   const pool = createFakePool((text, values) => {
     assert.match(text, /LEFT JOIN room_chat_reads/);
-    assert.match(text, /m\.created_at > COALESCE\(rcr\.last_read_at/);
+    assert.match(text, /LEFT JOIN room_memberships rm\s+ON rm\.room_id = m\.room_id AND rm\.user_id = \$2/);
+    assert.match(text, /m\.created_at > COALESCE\(rcr\.last_read_at, rm\.created_at, '-infinity'::timestamptz\)/);
     assert.match(text, /m\.author_user_id IS DISTINCT FROM \$2/);
     assert.deepEqual(values.slice(0, 2), ['room1', 'user1']);
     return { rows: [{ unread_count: 4 }], rowCount: 1 };

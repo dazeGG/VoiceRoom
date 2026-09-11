@@ -7,7 +7,8 @@
   import type { AuthUser, OwnedRoom } from '$lib/api/auth';
   import { fetchOwnedRooms } from '$lib/api/auth';
   import { createRoom } from '$lib/api/rooms';
-  import { clearRoomPresence } from './model/room-presence.svelte';
+  import { clearRoomPresence, roomPresence } from './model/room-presence.svelte';
+  import { countUnreadForBadge, syncDesktopBadgeCount } from '$lib/platform/desktop-attention';
   import { initLobbyRoomRealtime } from './model/room-realtime';
   import { extractRoomId } from '$lib/shared/utils/room';
   import SettingsModal from './components/SettingsModal.svelte';
@@ -266,6 +267,7 @@
       teardownDesktopLinks();
       teardownDesktopCall();
       syncDesktopCallState({ active: false, micMuted: false, outputMuted: false, roomId: '', roomName: '' });
+      syncDesktopBadgeCount(0);
       window.removeEventListener('voice-room:embedded-leave', onEmbeddedLeave);
       window.removeEventListener('voice-room:rooms-changed', onRoomsChanged);
       window.removeEventListener('popstate', onPopState);
@@ -305,6 +307,17 @@
 
   $effect(() => {
     syncDesktopDiagnosticsContext({ roomId: connectedVoiceRoomId || '', userId: user?.id || '' });
+  });
+
+  $effect(() => {
+    // Muted chats stay out of the icon count; the mention cue above is not
+    // affected by room mutes.
+    syncDesktopBadgeCount(countUnreadForBadge({
+      friends: friendsState.friends,
+      mutes: notificationPreferences,
+      roomUnreadById: roomPresence.unreadCountByRoomId,
+      rooms
+    }));
   });
 
   $effect(() => {
