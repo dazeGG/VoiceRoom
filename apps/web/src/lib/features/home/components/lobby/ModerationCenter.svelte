@@ -1,32 +1,30 @@
 <script lang="ts">
-  import { onDestroy, onMount } from 'svelte';
-  import { Ban, RotateCcw, ShieldAlert, Trash2 } from '@lucide/svelte';
-  import type { ActiveBan, ModerationDuration } from '@voice-room/shared/moderation';
-  import { deleteModeratedMessage, fetchActiveBans, putBan, unban } from '$lib/api/moderation';
-  import { iconSm } from '$lib/shared/ui/icons';
+  import { onMount } from 'svelte';
+  import { Ban, Clock } from '@lucide/svelte';
+  import type { ActiveBan } from '@voice-room/shared/moderation';
+  import { fetchActiveBans } from '$lib/api/moderation';
+  import { Avatar } from '$lib/shared/ui';
+  import { iconMd, iconSm } from '$lib/shared/ui/icons';
+  import {
+    banExpiryLabel,
+    banSubjectName,
+    liftRoomBan,
+    type ModerationNotice
+  } from '../../model/room-moderation';
 
-  let { roomId, onMessageDeleted = () => {} }: {
+  // Active bans of one room, shown as the «Блокировки» section of the room
+  // settings. Bans are placed from a member's menu; this list only lifts them.
+  let { roomId, onNotify = () => {} }: {
     roomId: string;
-    onMessageDeleted?: (messageId: string) => void;
+    onNotify?: ModerationNotice;
   } = $props();
 
   let bans = $state<ActiveBan[]>([]);
   let nextCursor = $state<string>();
   let loading = $state(true);
   let loadingMore = $state(false);
-  let saving = $state(false);
   let error = $state('');
-  let userId = $state('');
-  let reason = $state('');
-  let duration = $state<ModerationDuration>('1h');
-  let messageId = $state('');
-  let deletingMessage = $state(false);
-  let undoBan = $state<ActiveBan | null>(null);
-  let undoTimer: ReturnType<typeof setTimeout> | undefined;
-
-  function idempotencyKey(): string {
-    return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  }
+  let liftingId = $state('');
 
   async function load(reset = false): Promise<void> {
     if (reset) loading = true;
@@ -44,138 +42,104 @@
     }
   }
 
-  function offerUndo(ban: ActiveBan): void {
-    if (undoTimer) clearTimeout(undoTimer);
-    undoBan = ban;
-    undoTimer = setTimeout(() => { undoBan = null; }, 10_000);
-  }
-
-  async function submitBan(event: SubmitEvent): Promise<void> {
-    event.preventDefault();
-    if (saving || !userId.trim()) return;
-    saving = true;
-    error = '';
+  async function lift(ban: ActiveBan): Promise<void> {
+    if (liftingId) return;
+    liftingId = ban.id;
     try {
-      const ban = await putBan(roomId, {
-        userId: userId.trim(),
-        guestIp: null,
-        duration,
-        reason: reason.trim()
-      }, idempotencyKey());
-      bans = [ban, ...bans.filter((item) => item.id !== ban.id && item.subject.userId !== ban.subject.userId)];
-      userId = '';
-      reason = '';
-      offerUndo(ban);
-    } catch (cause) {
-      error = cause instanceof Error ? cause.message : 'Не удалось заблокировать участника';
+      if (await liftRoomBan(roomId, ban, onNotify)) bans = bans.filter((item) => item.id !== ban.id);
     } finally {
-      saving = false;
+      liftingId = '';
     }
-  }
-
-  async function removeBan(ban: ActiveBan): Promise<void> {
-    error = '';
-    try {
-      await unban(roomId, ban.id);
-      bans = bans.filter((item) => item.id !== ban.id);
-      if (undoBan?.id === ban.id) undoBan = null;
-    } catch (cause) {
-      error = cause instanceof Error ? cause.message : 'Не удалось снять блокировку';
-    }
-  }
-
-  async function removeMessage(event: SubmitEvent): Promise<void> {
-    event.preventDefault();
-    const id = messageId.trim();
-    if (!id || deletingMessage) return;
-    deletingMessage = true;
-    error = '';
-    try {
-      await deleteModeratedMessage(roomId, id);
-      messageId = '';
-      onMessageDeleted(id);
-    } catch (cause) {
-      error = cause instanceof Error ? cause.message : 'Не удалось удалить сообщение';
-    } finally {
-      deletingMessage = false;
-    }
-  }
-
-  function expiryLabel(ban: ActiveBan): string {
-    return ban.expiresAt == null
-      ? 'Навсегда'
-      : `до ${new Intl.DateTimeFormat('ru', { dateStyle: 'medium', timeStyle: 'short' }).format(ban.expiresAt)}`;
   }
 
   onMount(() => { void load(true); });
-  onDestroy(() => { if (undoTimer) clearTimeout(undoTimer); });
 </script>
 
-<section class="moderation-center" aria-labelledby="moderation-title">
-  <header>
-    <span class="moderation-icon" aria-hidden="true"><ShieldAlert {...iconSm} /></span>
-    <div><h2 id="moderation-title">Модерация</h2><p>Управление блокировками и нарушающими правила сообщениями</p></div>
+<section class="room-bans" aria-labelledby="room-bans-title" aria-busy={loading}>
+  <header class="room-bans-head">
+    <h3 class="room-bans-title" id="room-bans-title">
+      Блокировки{#if !loading && !error}<span class="room-bans-count">{bans.length}{nextCursor ? '+' : ''}</span>{/if}
+    </h3>
+    <p>Заблокированные не могут зайти в комнату. Заблокировать участника можно через меню «⋯» во вкладке «Участники».</p>
   </header>
 
-  {#if error}<p class="moderation-error" role="alert">{error}</p>{/if}
-  {#if undoBan}
-    <div class="undo" role="status">
-      <span>Участник заблокирован</span>
-      <button type="button" onclick={() => removeBan(undoBan!)}><RotateCcw {...iconSm} /> Отменить</button>
+  {#if error}
+    <div class="room-bans-error" role="alert">
+      <span>{error}</span>
+      <button type="button" onclick={() => load(true)}>Повторить</button>
     </div>
   {/if}
 
-  <form class="ban-form" onsubmit={submitBan}>
-    <h3>Заблокировать участника</h3>
-    <label><span>ID участника</span><input bind:value={userId} maxlength="36" autocomplete="off" required /></label>
-    <label><span>Срок</span><select bind:value={duration}><option value="1h">1 час</option><option value="1d">1 день</option><option value="7d">7 дней</option><option value="permanent">Навсегда</option></select></label>
-    <label class="reason"><span>Причина <small>необязательно</small></span><textarea bind:value={reason} maxlength="500" rows="2"></textarea></label>
-    <button class="primary" type="submit" disabled={saving || !userId.trim()}><Ban {...iconSm} /> {saving ? 'Блокируем…' : 'Заблокировать'}</button>
-  </form>
-
-  <div class="active-section">
-    <h3>Активные блокировки</h3>
-    {#if loading}<p class="empty" aria-live="polite">Загружаем…</p>
-    {:else if bans.length === 0}<p class="empty">Активных блокировок нет</p>
-    {:else}<ul>{#each bans as ban (ban.id)}<li><div><strong>{ban.subject.userId ?? 'Гость'}</strong><span>{expiryLabel(ban)}</span>{#if ban.reason}<p>{ban.reason}</p>{/if}</div><button type="button" aria-label={`Снять блокировку ${ban.subject.userId ?? 'гостя'}`} onclick={() => removeBan(ban)}>Разблокировать</button></li>{/each}</ul>{/if}
-    {#if nextCursor}<button class="more" type="button" disabled={loadingMore} onclick={() => load(false)}>{loadingMore ? 'Загружаем…' : 'Показать ещё'}</button>{/if}
-  </div>
-
-  <form class="delete-form" onsubmit={removeMessage}>
-    <h3>Удалить сообщение</h3>
-    <label><span>ID сообщения</span><input bind:value={messageId} maxlength="64" autocomplete="off" required /></label>
-    <button type="submit" disabled={deletingMessage || !messageId.trim()}><Trash2 {...iconSm} /> {deletingMessage ? 'Удаляем…' : 'Удалить'}</button>
-  </form>
+  {#if loading}
+    <p class="room-bans-loading" aria-live="polite">Загружаем…</p>
+  {:else if bans.length === 0 && !error}
+    <div class="room-bans-empty">
+      <span class="room-bans-empty-icon" aria-hidden="true"><Ban {...iconMd} /></span>
+      <strong>Активных блокировок нет</strong>
+      <span>Здесь появятся участники, которых вы заблокируете.</span>
+    </div>
+  {:else if bans.length > 0}
+    <ul class="room-bans-list">
+      {#each bans as ban (ban.id)}
+        {@const name = banSubjectName(ban)}
+        <li class="room-ban">
+          <Avatar {name} src={ban.subject.profile?.avatarUrl ?? null} colorKey={ban.subject.profile?.avatarColorKey} size={36} />
+          <div class="room-ban-body">
+            <div class="room-ban-name">
+              <strong>{name}</strong>
+              {#if ban.subject.profile}<small>@{ban.subject.profile.login}</small>{/if}
+            </div>
+            <span class="room-ban-term" data-permanent={ban.expiresAt == null}>
+              <Clock {...iconSm} aria-hidden="true" />{banExpiryLabel(ban)}
+            </span>
+            {#if ban.reason}<p class="room-ban-reason">{ban.reason}</p>{/if}
+          </div>
+          <button
+            class="settings-unblock-button"
+            type="button"
+            aria-label={`Снять блокировку ${name}`}
+            disabled={liftingId === ban.id}
+            onclick={() => lift(ban)}
+          >{liftingId === ban.id ? 'Снимаем…' : 'Разблокировать'}</button>
+        </li>
+      {/each}
+    </ul>
+    {#if nextCursor}
+      <button class="room-bans-more" type="button" disabled={loadingMore} onclick={() => load(false)}>
+        {loadingMore ? 'Загружаем…' : 'Показать ещё'}
+      </button>
+    {/if}
+  {/if}
 </section>
 
 <style>
-  .moderation-center { display: grid; gap: 20px; color: var(--ink); }
-  header { display: flex; gap: 12px; align-items: flex-start; }
-  header h2, h3, header p { margin: 0; }
-  header h2 { font-size: 18px; }
-  header p, .empty { margin-top: 4px; color: var(--muted); font-size: 13px; }
-  .moderation-icon { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; background: color-mix(in oklch, var(--coral) 18%, transparent); color: var(--coral); }
-  .moderation-error, .undo { margin: 0; padding: 10px 12px; border-radius: 10px; font-size: 13px; }
-  .moderation-error { background: color-mix(in oklch, var(--coral) 12%, transparent); color: var(--coral); }
-  .undo { display: flex; align-items: center; justify-content: space-between; background: color-mix(in oklch, var(--green) 12%, transparent); color: var(--green); }
-  .undo button { display: inline-flex; gap: 6px; align-items: center; border: 0; background: transparent; color: inherit; font-weight: 700; cursor: pointer; }
-  form { display: grid; gap: 12px; padding: 16px; border: 1px solid var(--line); border-radius: 14px; background: color-mix(in oklch, var(--paper), var(--ink) 3%); }
-  .ban-form { grid-template-columns: minmax(0, 1fr) 140px; }
-  form h3, .reason, form .primary { grid-column: 1 / -1; }
-  label { display: grid; gap: 6px; color: var(--muted); font-size: 12px; font-weight: 600; }
-  small { font-weight: 400; }
-  input, select, textarea { width: 100%; box-sizing: border-box; padding: 10px 11px; border: 1px solid var(--line); border-radius: 9px; background: var(--control); color: inherit; font: inherit; }
-  textarea { resize: vertical; }
-  button { font: inherit; }
-  .primary, .delete-form button, li button, .more { justify-self: start; padding: 9px 12px; border: 0; border-radius: 9px; cursor: pointer; font-weight: 650; }
-  .primary, .delete-form button { display: inline-flex; align-items: center; gap: 7px; background: var(--coral); color: var(--ink); }
-  button:disabled { cursor: not-allowed; opacity: .55; }
-  .active-section { display: grid; gap: 10px; }
-  ul { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
-  li { display: flex; justify-content: space-between; gap: 12px; padding: 12px; border: 1px solid var(--line); border-radius: 11px; }
-  li div { min-width: 0; display: grid; gap: 3px; }
-  li span, li p { margin: 0; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
-  li button, .more { align-self: center; border: 1px solid rgba(255,255,255,.12); background: transparent; color: inherit; }
-  .delete-form { border-color: rgba(239,68,68,.22); }
-  @media (max-width: 520px) { .ban-form { grid-template-columns: 1fr; } .ban-form > * { grid-column: 1; } li { align-items: flex-start; flex-direction: column; } }
+  .room-bans { display: grid; gap: 16px; color: var(--warm-ink); }
+  .room-bans-head { display: grid; gap: 6px; }
+  .room-bans-title { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 15px; font-weight: 700; }
+  .room-bans-count { padding: 1px 8px; border-radius: var(--radius-pill, 999px); background: var(--control); color: var(--warm-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .room-bans-head p { margin: 0; color: var(--warm-faint); font-size: 12.5px; line-height: 1.5; }
+  .room-bans-error { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border-radius: 10px; background: color-mix(in oklch, var(--coral) 12%, transparent); color: var(--coral); font-size: 13px; }
+  .room-bans-error button { flex: none; border: 0; background: transparent; color: inherit; font: 700 13px var(--font-ui); cursor: pointer; }
+  .room-bans-loading { margin: 0; color: var(--warm-faint); font-size: 13px; }
+  .room-bans-empty { display: grid; justify-items: center; gap: 6px; padding: 28px 16px; border: 1px dashed rgba(255, 255, 255, 0.09); border-radius: 14px; color: var(--warm-faint); font-size: 12.5px; text-align: center; }
+  .room-bans-empty strong { color: var(--warm-ink-dim); font-size: 14px; }
+  .room-bans-empty-icon { display: grid; width: 40px; height: 40px; margin-bottom: 4px; place-items: center; border-radius: 12px; background: var(--control); color: var(--warm-muted); }
+  .room-bans-list { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+  .room-ban { display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 10px; border-radius: 12px; }
+  .room-ban:hover { background: var(--control); }
+  .room-ban-body { display: grid; gap: 3px; min-width: 0; }
+  .room-ban-name { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+  .room-ban-name strong, .room-ban-name small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .room-ban-name strong { font-size: 14px; }
+  .room-ban-name small { color: var(--warm-faint); font-size: 12px; }
+  .room-ban-term { display: inline-flex; align-items: center; gap: 5px; color: var(--warm-muted); font-size: 12px; }
+  .room-ban-term[data-permanent='true'] { color: var(--coral); }
+  .room-ban-reason { margin: 0; color: var(--warm-faint); font-size: 12px; line-height: 1.4; overflow-wrap: anywhere; }
+  .room-bans-more { justify-self: stretch; min-height: 38px; border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 10px; background: transparent; color: var(--warm-ink-dim); font: 600 13px var(--font-ui); cursor: pointer; }
+  .room-bans-more:hover:not(:disabled) { background: var(--control); }
+  .room-bans-more:disabled { cursor: default; opacity: 0.6; }
+  @media (max-width: 520px) {
+    .room-ban { grid-template-columns: 36px minmax(0, 1fr); }
+    .room-ban :global(.settings-unblock-button) { grid-column: 2; justify-self: start; }
+  }
 </style>

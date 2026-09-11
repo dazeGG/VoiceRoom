@@ -1864,7 +1864,8 @@ test('delete realtime contracts avoid stale chat and false room affordances', ()
   assert.match(previewChat, /event\.type === 'room\.chat\.deleted'[\s\S]*messages = messages\.filter/);
   assert.match(friends, /case 'dm\.message\.deleted'[\s\S]*refreshFriends\(\)/);
   assert.match(messageMenu, /\{#if canDelete\}[\s\S]*label="Удалить"/);
-  assert.match(roomChat, /canDelete=\{isOwnMessage\(target\)\}[\s\S]*onDelete=\{\(\) => void deleteMessage\(target\.id\)\}/);
+  // Authors delete their own messages; the room owner may delete anyone's.
+  assert.match(roomChat, /canDelete=\{isOwnMessage\(target\) \|\| canModerate\}[\s\S]*onDelete=\{\(\) => void deleteMessage\(target\.id\)\}/);
 });
 
 test('message editing is author-only in UI and applies realtime replacements', () => {

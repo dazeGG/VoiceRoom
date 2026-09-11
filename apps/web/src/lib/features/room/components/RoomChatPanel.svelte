@@ -80,6 +80,7 @@
     onUnreadMessage,
     onToast,
     onAuthorContextMenu,
+    canModerate = false,
     aroundMessageId = undefined,
     participants
   }: {
@@ -104,6 +105,8 @@
     onUnreadMessage?: () => void;
     onToast?: (message: string, options?: { variant?: 'error' }) => void;
     onAuthorContextMenu?: (peerId: string, event: MouseEvent) => void;
+    /** The room owner may delete anyone's message, not only their own. */
+    canModerate?: boolean;
     /**
      * Open the history around this message and scroll to it. Passed explicitly
      * by hosts that route there themselves; the `around` query parameter is
@@ -1116,7 +1119,7 @@
     canPin={Boolean(session.user?.id)}
     pinned={isMessagePinned(target.id)}
     canEdit={isOwnMessage(target)}
-    canDelete={isOwnMessage(target)}
+    canDelete={isOwnMessage(target) || canModerate}
     onClose={closeMessageMenu}
     onReact={(emoji) => reactFromMenu(target.id, emoji)}
     onOpenReactionPicker={() => openReactionPickerFor(target.id)}

@@ -8,6 +8,7 @@
   import { getRoomIdFromPath, getStoredPeerSession } from '../client/core/session';
   import { openParticipantContextMenu } from '../participant-context-ui.svelte';
   import { roomUi, closeChat, incrementUnreadChat, markChatRead, selectRoomPanel } from '../room-ui.svelte';
+  import { roomSettingsUi } from '../room-settings.svelte';
   import RoomChatPanel from './RoomChatPanel.svelte';
   import RoomMemberList from '$lib/features/home/components/lobby/RoomMemberList.svelte';
 
@@ -76,6 +77,7 @@
     onUnreadMessage={incrementUnreadChat}
     onToast={(message, options) => showToast(message, options)}
     onAuthorContextMenu={openAuthorMenu}
+    canModerate={roomSettingsUi.isOwner}
   >
     {#snippet participants()}
       <RoomMemberList {roomId} />

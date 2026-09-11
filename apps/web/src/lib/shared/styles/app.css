@@ -164,7 +164,9 @@ body:not([data-screen="room"]) .topbar {
   position: fixed;
   right: var(--space-lg);
   bottom: var(--space-lg);
-  z-index: 10;
+  /* Above modal dialogs (settings overlay is 60): an action a dialog starts,
+     like a ban with its undo, must stay reachable while the dialog is open. */
+  z-index: 200;
   max-width: min(360px, calc(100vw - 32px));
   border: 1px solid color-mix(in oklch, var(--control-line), var(--ink) 18%);
   border-radius: var(--radius-sm);

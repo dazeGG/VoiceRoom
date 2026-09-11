@@ -14,14 +14,29 @@ function toMillis(value) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+// Only the active list joins users, so rows from mutations carry no login and
+// project no profile.
+function mapBanProfile(row) {
+  if (!row.user_id || !row.login) return null;
+  return {
+    displayName: row.display_name || '',
+    login: row.login,
+    avatarUrl: row.avatar_key ? `/api/avatars/${encodeURIComponent(row.avatar_key)}` : null,
+    avatarColorKey: row.avatar_color_key || '',
+    avatarAccent: row.avatar_accent || null
+  };
+}
+
 function mapModerationBan(row) {
   if (!row) return null;
+  const profile = mapBanProfile(row);
   return {
     id: row.id,
     roomId: row.room_id,
     subject: {
       kind: row.user_id ? 'account' : 'guest',
-      userId: row.user_id || null
+      userId: row.user_id || null,
+      ...(profile ? { profile } : {})
     },
     reason: row.reason || '',
     createdAt: toMillis(row.created_at),
@@ -142,15 +157,22 @@ function createModerationRepository({ cursorCodec, pool } = {}) {
       throw error;
     }
     const result = await executor(client).query(
-      `SELECT *, FLOOR(EXTRACT(EPOCH FROM created_at) * 1000000)::bigint::text AS created_at_micros
-       FROM room_bans
-       WHERE room_id = $1
-         AND revoked_at IS NULL
-         AND (expires_at IS NULL OR expires_at > $2)
-         AND ($3::bigint IS NULL OR (created_at, id) < (
+      `SELECT rb.*,
+              FLOOR(EXTRACT(EPOCH FROM rb.created_at) * 1000000)::bigint::text AS created_at_micros,
+              u.login,
+              u.display_name,
+              u.avatar_color_key,
+              u.avatar_key,
+              u.avatar_accent
+       FROM room_bans rb
+       LEFT JOIN users u ON u.id = rb.user_id
+       WHERE rb.room_id = $1
+         AND rb.revoked_at IS NULL
+         AND (rb.expires_at IS NULL OR rb.expires_at > $2)
+         AND ($3::bigint IS NULL OR (rb.created_at, rb.id) < (
            TIMESTAMPTZ 'epoch' + $3::bigint * INTERVAL '1 microsecond', $4::varchar(36)
          ))
-       ORDER BY created_at DESC, id DESC
+       ORDER BY rb.created_at DESC, rb.id DESC
        LIMIT $5`,
       [roomId, asDate(at), after?.createdAtMicros || null, after?.id || null, limit + 1]
     );
