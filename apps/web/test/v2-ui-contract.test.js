@@ -1692,8 +1692,8 @@ test('sound cue layer covers direct messages and friend request events', () => {
   assert.match(friends, /case 'friend\.request'[\s\S]*playFriendRequestCue\(\)/);
   assert.match(friends, /case 'friend\.accepted'[\s\S]*playFriendAcceptedCue\(\)/);
   assert.match(friends, /case 'dm\.message'[\s\S]*playDirectMessageCue\(\)/);
-  assert.match(roomChat, /event\.type !== 'room\.chat\.message'[\s\S]*message\.peerId !== peerId[\s\S]*playRoomChatMessageCue\(\)/);
-  assert.match(previewChat, /event\.type !== 'room\.chat\.message'[\s\S]*message\.peerId !== peerId[\s\S]*playRoomChatMessageCue\(\)/);
+  assert.match(roomChat, /event\.type !== 'room\.chat\.message'[\s\S]*message\.peerId !== peerId[\s\S]*playRoomChatMessageCue\(message\.id\)/);
+  assert.match(previewChat, /event\.type !== 'room\.chat\.message'[\s\S]*message\.peerId !== peerId[\s\S]*playRoomChatMessageCue\(message\.id\)/);
   assert.match(previewChat, /peerId=\{`auth-\$\{user\.id\}`\}/);
   assert.doesNotMatch(settingsModal, /settings-cue-grid|previewCue/);
   assert.match(settingsModal, /const cues = \[[\s\S]*playPeerCue\('join'\)[\s\S]*playRoomChatMessageCue\(\)[\s\S]*playFriendAcceptedCue\(\)/);

@@ -502,6 +502,10 @@ async function dispatchMessageDeliveryEvent(event) {
     );
     broadcastToUser(message.senderId, { type: 'dm-message', message: projected });
     broadcastToUser(message.recipientId, { type: 'dm-message', message: projected });
+    // The direct-emit path notifies right after sending; the relayed path has to
+    // do the same or DMs never raise a system notification.
+    const sender = await getUserStore().getUserById(message.senderId).catch(() => null);
+    if (sender) await broadcastDmNotification(message.recipientId, sender, projected);
   }
 }
 

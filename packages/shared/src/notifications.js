@@ -94,7 +94,7 @@ function buildProviderPayload(item, { privateNotifications = false } = {}) {
     revision: notification.revision,
     dedupeKey: `${notification.id}:${notification.revision}`,
     title: 'VoiceRoom',
-    body: privateNotifications ? 'Open VoiceRoom to view this notification.' : (notification.body || 'You have a new notification'),
+    body: privateNotifications ? 'Откройте VoiceRoom, чтобы посмотреть уведомление.' : (notification.body || 'У вас новое уведомление'),
     route: notificationRoute(notification)
   };
 }
