@@ -1,10 +1,28 @@
-import test from 'node:test';
+import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { createServer } from 'vite';
 
 const webRoot = resolve(import.meta.dirname, '..');
+
+// One Vite server for the whole file, without a file watcher: a server per
+// test exhausts file watchers on CI runners and kills the test process.
+let serverPromise = null;
+
+function getServer() {
+  serverPromise ??= createServer({
+    appType: 'custom',
+    logLevel: 'silent',
+    root: webRoot,
+    server: { hmr: false, middlewareMode: true, watch: null }
+  });
+  return serverPromise;
+}
+
+after(async () => {
+  if (serverPromise) await (await serverPromise).close();
+});
 
 async function loadService(t, bridge) {
   Object.defineProperty(globalThis, 'window', {
@@ -14,17 +32,12 @@ async function loadService(t, bridge) {
   });
   const originalWarn = console.warn;
   console.warn = () => {};
-  const server = await createServer({
-    appType: 'custom',
-    logLevel: 'silent',
-    root: webRoot,
-    server: { middlewareMode: true }
-  });
-  t.after(async () => {
-    await server.close();
+  t.after(() => {
     delete globalThis.window;
     console.warn = originalWarn;
   });
+  const server = await getServer();
+  server.moduleGraph.invalidateAll();
   return server.ssrLoadModule('/src/lib/platform/desktop-autostart.ts');
 }
 
