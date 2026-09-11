@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Bell, BellOff, Keyboard, LogOut, Mic, Pencil, User, X } from '@lucide/svelte';
+  import { Bell, BellOff, Keyboard, LogOut, Mic, Monitor, Pencil, User, X } from '@lucide/svelte';
   import { onDestroy, untrack } from 'svelte';
   import type { AuthUser, OwnedRoom } from '$lib/api/auth';
   import type { PublicUser } from '$lib/api/friends';
@@ -47,6 +47,13 @@
     setDesktopGlobalHotkeysSuspended
   } from '$lib/features/room/client/services/desktop-hotkey-service';
   import {
+    desktopAutostartAvailable,
+    readDesktopAutostartSettings,
+    updateDesktopAutostartSettings,
+    type DesktopAutostartPatch,
+    type DesktopAutostartSettings
+  } from '$lib/platform/desktop-autostart';
+  import {
     getDefaultHotkeyBinding,
     readHotkeyBinding,
     writeHotkeyBinding,
@@ -82,7 +89,7 @@
     onLogout
   } = $props<{
     open: boolean;
-    tab: 'profile' | 'sound' | 'hotkeys' | 'notifications';
+    tab: 'profile' | 'sound' | 'hotkeys' | 'notifications' | 'app';
     user: AuthUser | null;
     notificationUsers?: PublicUser[];
     notificationRooms?: OwnedRoom[];
@@ -125,6 +132,11 @@
   let globalHotkeysAvailable = $state(false);
   let desktopApp = $state(false);
   let desktopPlatform = $state('');
+  let autostartAvailable = $state(false);
+  let autostartSupported = $state(false);
+  let openAtLogin = $state(false);
+  let startMinimized = $state(false);
+  let autostartSaving = $state(false);
   let masterVolume = $state(100);
   let notificationVolume = $state(100);
   let notificationSaving = $state(false);
@@ -172,7 +184,32 @@
     desktopApp = Boolean(window.voiceRoomRuntime?.isDesktop);
     desktopPlatform = window.voiceRoomRuntime?.platform || '';
     globalHotkeysAvailable = desktopApp && desktopGlobalHotkeysAvailable();
+    autostartAvailable = desktopApp && desktopAutostartAvailable();
+    if (autostartAvailable) void loadAutostartSettings();
   });
+
+  function applyAutostartSettings(settings: DesktopAutostartSettings): void {
+    autostartSupported = settings.supported;
+    openAtLogin = settings.openAtLogin;
+    startMinimized = settings.startMinimized;
+  }
+
+  async function loadAutostartSettings(): Promise<void> {
+    const settings = await readDesktopAutostartSettings();
+    if (settings) applyAutostartSettings(settings);
+  }
+
+  async function changeAutostart(patch: DesktopAutostartPatch): Promise<void> {
+    if (autostartSaving) return;
+    autostartSaving = true;
+    try {
+      const settings = await updateDesktopAutostartSettings(patch);
+      if (settings) applyAutostartSettings(settings);
+      if (!settings || settings.reason) onToast('Не удалось изменить автозапуск', { variant: 'error' });
+    } finally {
+      autostartSaving = false;
+    }
+  }
 
   $effect(() => {
     if (!open) {
@@ -606,6 +643,12 @@
                 Хоткеи
               </button>
             {/if}
+            {#if desktopApp && autostartAvailable}
+              <button class="settings-nav-item" type="button" data-active={tab === 'app'} onclick={() => (tab = 'app')}>
+                <Monitor {...iconMd} aria-hidden="true" />
+                Приложение
+              </button>
+            {/if}
             <button class="settings-nav-item" type="button" data-active={tab === 'notifications'} onclick={() => (tab = 'notifications')}>
               <Bell {...iconMd} aria-hidden="true" />
               Уведомления
@@ -911,6 +954,50 @@
                 {:else}
                   Системные сочетания недоступны в этой сборке приложения.
                 {/if}
+              </div>
+            </div>
+          {:else if tab === 'app' && desktopApp && autostartAvailable}
+            <div class="settings-sound">
+              <div>
+                <div class="settings-gate-head">
+                  <span class="settings-field-label">Автозапуск</span>
+                  <button
+                    class="settings-switch"
+                    type="button"
+                    role="switch"
+                    aria-checked={openAtLogin}
+                    aria-label="Автозапуск"
+                    disabled={autostartSaving || !autostartSupported}
+                    onclick={() => void changeAutostart({ openAtLogin: !openAtLogin })}
+                  >
+                    <span class="settings-switch-knob" aria-hidden="true"></span>
+                  </button>
+                </div>
+                <div class="settings-gate-hint">
+                  {#if autostartSupported}Voice Room откроется при входе в систему.
+                  {:else}Автозапуск недоступен в этой сборке приложения.{/if}
+                </div>
+              </div>
+
+              <div class="settings-notification-dependent" data-disabled={!openAtLogin}>
+                <div class="settings-gate-head">
+                  <span class="settings-field-label">Автозапуск свёрнутым</span>
+                  <button
+                    class="settings-switch"
+                    type="button"
+                    role="switch"
+                    aria-checked={startMinimized}
+                    aria-label="Автозапуск свёрнутым"
+                    disabled={autostartSaving || !autostartSupported || !openAtLogin}
+                    onclick={() => void changeAutostart({ startMinimized: !startMinimized })}
+                  >
+                    <span class="settings-switch-knob" aria-hidden="true"></span>
+                  </button>
+                </div>
+                <div class="settings-gate-hint">
+                  {#if macDesktopApp}При автозапуске окно не откроется — Voice Room будет ждать в Dock.
+                  {:else}При автозапуске окно не откроется — Voice Room будет ждать в трее.{/if}
+                </div>
               </div>
             </div>
           {:else}
