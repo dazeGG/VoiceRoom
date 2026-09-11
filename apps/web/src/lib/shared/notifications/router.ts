@@ -117,8 +117,8 @@ export type NotificationRouteResult =
   | { notify: true; payload: BrowserNotificationPayload }
   | { notify: false; reason: string };
 
-const DEFAULT_BODY = 'New message';
-const PRIVATE_BODY = 'Open VoiceRoom to view this notification.';
+const DEFAULT_BODY = 'Новое сообщение';
+const PRIVATE_BODY = 'Откройте VoiceRoom, чтобы посмотреть уведомление.';
 const MAX_BODY_LENGTH = 120;
 const DEFAULT_DEDUPE_TTL_MS = 5 * 60 * 1000;
 const DEDUPE_PREFIX = 'voice-room:notification-dedupe:';
@@ -145,7 +145,7 @@ function actorLabel(actor: Pick<NotificationActor, 'displayName' | 'login' | 'id
 }
 
 function roomLabel(room: Pick<NotificationRoomContext, 'name' | 'roomId'> | null | undefined): string {
-  return room?.name?.trim() || room?.roomId?.trim() || 'Room';
+  return room?.name?.trim() || room?.roomId?.trim() || 'Комната';
 }
 
 function isNotificationRealtimeEvent(event: RealtimeEvent | NotificationRealtimeEvent): event is NotificationRealtimeEvent {
@@ -322,9 +322,9 @@ export function buildNotificationPayload(
 
   if (event.type === 'notification.dm.message') {
     if (!isNonEmptyString(event.payload?.peer?.id) || !isNonEmptyString(event.payload?.message?.id)) return null;
-    const peerName = actorLabel(event.payload.peer, 'Friend');
+    const peerName = actorLabel(event.payload.peer, 'Друг');
     return {
-      title: `${peerName} sent a message`,
+      title: peerName,
       body: privateNotifications ? PRIVATE_BODY : truncateNotificationBody(event.payload.message?.body || DEFAULT_BODY),
       tag: dedupeKey,
       dedupeKey,
@@ -340,10 +340,10 @@ export function buildNotificationPayload(
     ) {
       return null;
     }
-    const senderName = actorLabel(event.payload.sender, 'Someone');
+    const senderName = actorLabel(event.payload.sender, 'Кто-то');
     const name = roomLabel(event.payload.room);
     return {
-      title: `${senderName} in ${name}`,
+      title: `${senderName} — ${name}`,
       body: privateNotifications ? PRIVATE_BODY : truncateNotificationBody(event.payload.message?.body || DEFAULT_BODY),
       tag: dedupeKey,
       dedupeKey,
@@ -358,10 +358,10 @@ export function buildNotificationPayload(
 
   if (event.type === 'notification.friend.request') {
     if (!isNonEmptyString(event.payload?.requester?.id) || !isNonEmptyString(event.payload?.requestId)) return null;
-    const requesterName = actorLabel(event.payload.requester, 'Someone');
+    const requesterName = actorLabel(event.payload.requester, 'Кто-то');
     return {
-      title: 'New friend request',
-      body: privateNotifications ? PRIVATE_BODY : `${requesterName} wants to be friends.`,
+      title: 'Новая заявка в друзья',
+      body: privateNotifications ? PRIVATE_BODY : `${requesterName} хочет добавить вас в друзья.`,
       tag: dedupeKey,
       dedupeKey,
       data: { kind: 'friend-request', requesterId: event.payload.requester?.id, requestId: event.payload.requestId }
@@ -369,10 +369,10 @@ export function buildNotificationPayload(
   }
 
   if (!isNonEmptyString(event.payload?.user?.id)) return null;
-  const userName = actorLabel(event.payload.user, 'Someone');
+  const userName = actorLabel(event.payload.user, 'Кто-то');
   return {
-    title: 'Friend request accepted',
-    body: privateNotifications ? PRIVATE_BODY : `${userName} accepted your friend request.`,
+    title: 'Заявка в друзья принята',
+    body: privateNotifications ? PRIVATE_BODY : `${userName} теперь у вас в друзьях.`,
     tag: dedupeKey,
     dedupeKey,
     data: { kind: 'friend-accepted', userId: event.payload.user?.id }

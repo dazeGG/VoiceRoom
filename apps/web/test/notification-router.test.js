@@ -75,24 +75,31 @@ test('routes notification payloads with visible non-private bodies and title for
 
   const dm = router.routeNotificationEvent(dmEvent(), { permission: 'granted', notificationsAvailable: true });
   assert.equal(dm.notify, true);
-  assert.equal(dm.payload.title, 'Alice sent a message');
+  assert.equal(dm.payload.title, 'Alice');
   assert.equal(dm.payload.body, 'hello from Alice');
   assert.equal(dm.payload.tag, 'dm:msg-1');
   assert.deepEqual(dm.payload.data, { kind: 'dm', peerId: 'alice-id', messageId: 'msg-1' });
 
   const room = router.routeNotificationEvent(roomEvent(), { permission: 'granted', notificationsAvailable: true });
   assert.equal(room.notify, true);
-  assert.equal(room.payload.title, 'Bob in Daily');
+  assert.equal(room.payload.title, 'Bob — Daily');
   assert.equal(room.payload.body, 'standup starts now');
   assert.equal(room.payload.data.roomId, 'daily');
 
   const request = router.buildNotificationPayload(friendRequestEvent(), { privateNotifications: false });
-  assert.equal(request.title, 'New friend request');
-  assert.equal(request.body, 'Cara wants to be friends.');
+  assert.equal(request.title, 'Новая заявка в друзья');
+  assert.equal(request.body, 'Cara хочет добавить вас в друзья.');
 
   const accepted = router.buildNotificationPayload(acceptedEvent(), { privateNotifications: false });
-  assert.equal(accepted.title, 'Friend request accepted');
-  assert.equal(accepted.body, 'Dana accepted your friend request.');
+  assert.equal(accepted.title, 'Заявка в друзья принята');
+  assert.equal(accepted.body, 'Dana теперь у вас в друзьях.');
+
+  const fallbackRoom = roomEvent();
+  delete fallbackRoom.payload.room.name;
+  delete fallbackRoom.payload.message.body;
+  const fallback = router.buildNotificationPayload(fallbackRoom, { privateNotifications: false });
+  assert.equal(fallback.title, 'Bob — daily');
+  assert.equal(fallback.body, 'Новое сообщение');
 });
 
 
@@ -156,7 +163,7 @@ test('truncates notification bodies conservatively with an ellipsis', async () =
   assert.equal(payload.body, 'one two three four five');
 
   const privatePayload = router.buildNotificationPayload(dmEvent({ body: 'secret text' }), { privateNotifications: true });
-  assert.equal(privatePayload.body, 'Open VoiceRoom to view this notification.');
+  assert.equal(privatePayload.body, 'Откройте VoiceRoom, чтобы посмотреть уведомление.');
 });
 
 test('browser helpers dedupe by tag/key and never request permission outside explicit helper', async () => {
@@ -204,7 +211,7 @@ test('browser helpers dedupe by tag/key and never request permission outside exp
     assert.ok(first);
     assert.equal(second, null);
     assert.equal(calls.length, 1);
-    assert.equal(calls[0].title, 'Alice sent a message');
+    assert.equal(calls[0].title, 'Alice');
     assert.equal(requestPermissionCalls, 0, 'showing does not request permission');
 
     assert.equal(router.isNotificationDedupeKeyFresh('dm:dedupe'), true);
@@ -272,7 +279,7 @@ test('desktop bridge is preferred over page Notification and does not request pe
     assert.equal(result, null);
     assert.deepEqual(bridgeCalls, [
       {
-        title: 'Alice sent a message',
+        title: 'Alice',
         body: 'hello from Alice',
         tag: 'dm:desktop',
         dedupeKey: 'dm:desktop'
@@ -346,7 +353,7 @@ test('desktop bridge unsupported result falls back to browser Notification', asy
 
     assert.ok(result);
     assert.equal(notificationCalls.length, 1);
-    assert.equal(notificationCalls[0].title, 'Bob in Daily');
+    assert.equal(notificationCalls[0].title, 'Bob — Daily');
     assert.equal(notificationCalls[0].options.tag, 'room:desktop-fallback');
   } finally {
     if (originalNotification === undefined) delete globalThis.Notification;

@@ -41,7 +41,7 @@ function createNotificationDeliveryWorker({ outbox, provider, batchSize=50, leas
           const addressed=reasons.includes('mention')||reasons.includes('reply');
           const suppressed=!current || current.retracted_at || current.dnd || current.level==='none' || (current.level==='mentions' && !addressed);
           if(suppressed){await outbox.markSuppressed(job.eventId,lease);observe(true);continue;}
-          const result=await provider.deliver({...job,payload:{...job.payload,body:current.private_notifications?'Open VoiceRoom to view this notification.':job.payload?.body}});
+          const result=await provider.deliver({...job,payload:{...job.payload,body:current.private_notifications?'Откройте VoiceRoom, чтобы посмотреть уведомление.':job.payload?.body}});
           guard.assertOwned();
           if(result?.suppressed) await outbox.markSuppressed(job.eventId,lease); else await outbox.markDelivered(job.eventId,lease);
           observe(true);

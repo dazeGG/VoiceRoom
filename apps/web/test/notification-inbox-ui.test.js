@@ -39,7 +39,8 @@ test('a mention is audible and counted while the lobby is open', () => {
   assert.match(lobby, /event\.type !== 'notification\.room\.message'/);
   assert.match(lobby, /const before = notificationInbox\.unreadCount/);
   assert.match(lobby, /notificationInbox\.unreadCount > before/);
-  assert.match(lobby, /playRoomChatMessageCue\(\)/);
+  // Keyed by message id so a room chat panel that already rang for it stays quiet.
+  assert.match(lobby, /playRoomChatMessageCue\(messageId\)/);
   assert.match(lobby, /teardownNotifications\(\)/);
 
   // Muting a room asks not to hear the conversation, not to be unreachable, so

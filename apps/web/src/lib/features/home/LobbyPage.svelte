@@ -169,9 +169,10 @@
       if (!notificationInboxEnabled) return;
       if (event.type !== 'notification.room.message') return;
       const before = notificationInbox.unreadCount;
+      const messageId = event.payload?.message?.id;
       void notificationInbox.load().then(() => {
         if (notificationInbox.unreadCount > before && !notificationPreferences.doNotDisturb) {
-          playRoomChatMessageCue();
+          playRoomChatMessageCue(messageId);
         }
       });
     });
