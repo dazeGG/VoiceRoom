@@ -60,6 +60,7 @@ import {
   subscribeRoomVoice
 } from '$lib/features/home/model/room-realtime';
 import { applyRoomDeleted, applyRoomUpdated } from './lifecycle';
+import { markInAppRoomNavigation } from '$lib/platform/open-in-app';
 import {
   cancelRoomRecovery,
   notifyRoomAppConnection,
@@ -198,6 +199,7 @@ export function handleRoomCodeKeydown(event: KeyboardEvent): void {
 }
 
 function openRoom(roomId: string): void {
+  markInAppRoomNavigation();
   window.location.href = `/r/${encodeURIComponent(roomId)}`;
 }
 

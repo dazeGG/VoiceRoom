@@ -786,6 +786,13 @@
   margin-top: 4px;
 }
 
+.settings-diagnostics-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
 .settings-unblock-button {
   flex: none;
   min-height: 34px;

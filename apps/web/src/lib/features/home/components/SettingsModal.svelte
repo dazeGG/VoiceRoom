@@ -54,6 +54,12 @@
     type DesktopAutostartSettings
   } from '$lib/platform/desktop-autostart';
   import {
+    copyDesktopDiagnostics,
+    desktopDiagnosticsAvailable,
+    openDesktopLogsFolder
+  } from '$lib/platform/desktop-diagnostics';
+  import { readRoomSwitchConfirmEnabled, writeRoomSwitchConfirmEnabled } from '../model/room-switch-confirmation';
+  import {
     getDefaultHotkeyBinding,
     readHotkeyBinding,
     writeHotkeyBinding,
@@ -137,6 +143,8 @@
   let openAtLogin = $state(false);
   let startMinimized = $state(false);
   let autostartSaving = $state(false);
+  let diagnosticsAvailable = $state(false);
+  let confirmRoomSwitch = $state(true);
   let masterVolume = $state(100);
   let notificationVolume = $state(100);
   let notificationSaving = $state(false);
@@ -186,7 +194,23 @@
     globalHotkeysAvailable = desktopApp && desktopGlobalHotkeysAvailable();
     autostartAvailable = desktopApp && desktopAutostartAvailable();
     if (autostartAvailable) void loadAutostartSettings();
+    diagnosticsAvailable = desktopApp && desktopDiagnosticsAvailable();
+    confirmRoomSwitch = readRoomSwitchConfirmEnabled();
   });
+
+  function toggleRoomSwitchConfirm(): void {
+    confirmRoomSwitch = !confirmRoomSwitch;
+    writeRoomSwitchConfirmEnabled(confirmRoomSwitch);
+  }
+
+  async function openLogsFolder(): Promise<void> {
+    if (!(await openDesktopLogsFolder())) onToast('Не удалось открыть папку логов', { variant: 'error' });
+  }
+
+  async function copyDiagnostics(): Promise<void> {
+    if (await copyDesktopDiagnostics()) onToast('Скопировано');
+    else onToast('Не удалось скопировать информацию о системе', { variant: 'error' });
+  }
 
   function applyAutostartSettings(settings: DesktopAutostartSettings): void {
     autostartSupported = settings.supported;
@@ -862,6 +886,23 @@
                 </section>
               </div>
 
+              <div>
+                <div class="settings-gate-head">
+                  <span class="settings-field-label">Спрашивать перед переходом в другую комнату</span>
+                  <button
+                    class="settings-switch"
+                    type="button"
+                    role="switch"
+                    aria-checked={confirmRoomSwitch}
+                    aria-label="Спрашивать перед переходом в другую комнату"
+                    onclick={toggleRoomSwitchConfirm}
+                  >
+                    <span class="settings-switch-knob" aria-hidden="true"></span>
+                  </button>
+                </div>
+                <div class="settings-gate-hint">Когда вы уже в голосе, Voice Room уточнит, прежде чем переключить звонок.</div>
+              </div>
+
               {#if desktopApp}
                 <div class="settings-hotkeys">
                   <div>
@@ -999,6 +1040,21 @@
                   {:else}При автозапуске окно не откроется — Voice Room будет ждать в трее.{/if}
                 </div>
               </div>
+
+              {#if diagnosticsAvailable}
+                <div>
+                  <span class="settings-field-label">Диагностика</span>
+                  <div class="settings-gate-hint">Логи и сведения о системе помогут поддержке разобраться с проблемой.</div>
+                  <div class="settings-diagnostics-actions">
+                    <button class="settings-unblock-button" type="button" onclick={() => void openLogsFolder()}>
+                      Открыть папку логов
+                    </button>
+                    <button class="settings-unblock-button" type="button" onclick={() => void copyDiagnostics()}>
+                      Скопировать информацию о системе
+                    </button>
+                  </div>
+                </div>
+              {/if}
             </div>
           {:else}
             <div class="settings-sound">
