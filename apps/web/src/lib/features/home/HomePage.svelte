@@ -11,6 +11,7 @@
   import '$lib/shared/styles/app.css';
   import './styles/home.css';
   import { extractRoomId } from '$lib/shared/utils/room';
+  import { markInAppRoomNavigation } from '$lib/platform/open-in-app';
   import { MascotIcon, ToastStack } from '$lib/shared/ui';
   import DesktopAppCard from './components/DesktopAppCard.svelte';
   import LandingHero from './components/LandingHero.svelte';
@@ -133,6 +134,7 @@
   }
 
   function openRoom(roomId: string): void {
+    markInAppRoomNavigation();
     window.location.href = `/r/${encodeURIComponent(roomId)}`;
   }
 

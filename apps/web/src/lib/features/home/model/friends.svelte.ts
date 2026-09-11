@@ -364,6 +364,9 @@ export function closeProfile(): void {
   friendsState.profileOpen = false;
 }
 
+// The lobby enters voice for this event through its usual confirmation flow.
+export const ENTER_ROOM_EVENT = 'voice-room:enter-room';
+
 // Accept or decline a room invitation carried by a DM. The server flips the
 // invite status and fans the edited message out to both participants, so the
 // local update here is just the immediate echo.
@@ -375,7 +378,7 @@ export async function respondRoomInvitation(message: DirectMessage, action: 'acc
   applyEditedMessage(updated);
   if (action === 'accept') {
     const roomId = updated.invite?.roomId || message.invite.roomId;
-    window.setTimeout(() => window.location.assign(`/r/${encodeURIComponent(roomId)}`), 120);
+    window.setTimeout(() => window.dispatchEvent(new CustomEvent(ENTER_ROOM_EVENT, { detail: { roomId } })), 120);
   }
 }
 
