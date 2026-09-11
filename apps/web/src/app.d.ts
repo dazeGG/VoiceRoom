@@ -7,6 +7,10 @@ declare global {
   namespace App {}
 
   interface Window {
+    voiceRoomDesktopAttention?: {
+      requestAttention: (options?: { critical?: boolean }) => Promise<unknown>;
+      setBadgeCount: (count: number) => Promise<unknown>;
+    };
     voiceRoomDesktopAutostart?: {
       getSettings: () => Promise<unknown>;
       setSettings: (settings: { openAtLogin?: boolean; startMinimized?: boolean }) => Promise<unknown>;

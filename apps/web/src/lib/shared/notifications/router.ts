@@ -422,8 +422,10 @@ function toDesktopNotificationPayload(payload: BrowserNotificationPayload): Desk
 
 function showPageNotification(payload: BrowserNotificationPayload): Notification | null {
   if (typeof globalThis.Notification === 'undefined' || globalThis.Notification.permission !== 'granted') return null;
+  // Silent: the app plays its own cue for the same event.
   return new globalThis.Notification(payload.title, {
     body: payload.body,
+    silent: true,
     tag: payload.tag,
     data: payload.data
   });
