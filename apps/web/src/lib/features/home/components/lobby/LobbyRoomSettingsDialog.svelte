@@ -1,20 +1,25 @@
 <script lang="ts">
   import { onDestroy, untrack } from 'svelte';
-  import { Pencil, X } from '@lucide/svelte';
+  import { Ban, Pencil, SlidersHorizontal, Users, X } from '@lucide/svelte';
   import type { OwnedRoom } from '$lib/api/auth';
   import { deleteRoom, deleteRoomAvatar, updateRoom, uploadRoomAvatar } from '$lib/api/rooms';
   import { Avatar, AvatarCropDialog } from '$lib/shared/ui';
   import { dialogFocusTrap } from '$lib/shared/ui/focus-trap';
-  import { iconSm } from '$lib/shared/ui/icons';
+  import { iconMd, iconSm } from '$lib/shared/ui/icons';
   import ModerationCenter from './ModerationCenter.svelte';
+  import RoomMemberList from './RoomMemberList.svelte';
+  import { BAN_UNDO_DURATION_MS, type ModerationNoticeOptions } from '../../model/room-moderation';
+  import { dismissToast, type ToastOptions } from '../../model/toasts.svelte';
   import { getCapabilityFeature } from '$lib/platform/capability-state.svelte';
+
+  type Section = 'general' | 'members' | 'bans';
 
   let { room, onClose, onSaved, onDeleted, onToast }: {
     room: OwnedRoom | null;
     onClose: () => void;
     onSaved: () => void;
     onDeleted: () => void;
-    onToast: (message: string) => void;
+    onToast: (message: string, options?: ToastOptions) => void;
   } = $props();
 
   let name = $state('');
@@ -29,6 +34,8 @@
   let avatarPreviewUrl = $state('');
   let removeAvatarPending = $state(false);
   let moderationEnabled = $state(false);
+  let membershipEnabled = $state(false);
+  let section = $state<Section>('general');
 
   $effect(() => {
     const activeRoom = room;
@@ -36,13 +43,17 @@
       name = activeRoom?.name || '';
       error = '';
       confirmDelete = false;
+      section = 'general';
       avatarFile = null;
       cropOpen = false;
       if (avatarPreviewUrl) URL.revokeObjectURL(avatarPreviewUrl);
       avatarPreviewUrl = '';
       pendingAvatar = null;
       removeAvatarPending = false;
-      if (activeRoom) void getCapabilityFeature('moderationCenter').then((enabled) => { moderationEnabled = enabled; });
+      if (activeRoom) {
+        void getCapabilityFeature('moderationCenter').then((enabled) => { moderationEnabled = enabled; });
+        void getCapabilityFeature('membership').then((enabled) => { membershipEnabled = enabled; });
+      }
     });
   });
 
@@ -112,7 +123,28 @@
     pendingAvatar = null;
     removeAvatarPending = true;
   }
+
+  function notifyModeration(message: string, options: ModerationNoticeOptions = {}): void {
+    const undo = options.undo;
+    onToast(message, {
+      variant: options.variant,
+      duration: undo ? BAN_UNDO_DURATION_MS : undefined,
+      // The stack keeps a toast open after its action, so undo closes it first:
+      // a second click would otherwise try to lift an already lifted ban.
+      actions: undo ? [{ label: undo.label, onClick: (toastId) => { dismissToast(toastId); undo.run(); } }] : undefined
+    });
+  }
+
+  // A member menu open inside the dialog owns Escape: it closes the menu, not
+  // the whole dialog underneath it.
+  function onWindowKeydown(event: KeyboardEvent): void {
+    if (!room || cropOpen || event.key !== 'Escape') return;
+    if (document.querySelector('.popover-submenu-panel, .popover-panel--floating')) return;
+    onClose();
+  }
 </script>
+
+<svelte:window onkeydown={onWindowKeydown} />
 
 {#if room}
   <div class="settings-overlay" role="presentation" onclick={(event) => event.target === event.currentTarget && onClose()}>
@@ -125,44 +157,65 @@
       use:dialogFocusTrap={{ enabled: Boolean(room) && !cropOpen }}
     >
       <div class="settings-head"><span class="settings-title">Настройки комнаты</span><button class="settings-close" type="button" aria-label="Закрыть" onclick={onClose} data-dialog-initial-focus><X {...iconSm} /></button></div>
-      <form class="settings-content room-settings-content" onsubmit={save}>
-        {#if error}<p class="dialog-error" role="alert">{error}</p>{/if}
-        <div class="room-profile-head">
-          <div class="room-avatar-control">
-            <input bind:this={avatarInput} class="room-avatar-input" type="file" accept="image/jpeg,image/png,image/webp" onchange={onAvatarFile} />
-            <button
-              class="room-avatar-edit"
-              type="button"
-              onclick={() => avatarInput?.click()}
-              disabled={saving || deleting}
-              aria-label={room.avatarUrl ? 'Изменить аватар комнаты' : 'Загрузить аватар комнаты'}
-              title={room.avatarUrl ? 'Изменить аватар комнаты' : 'Загрузить аватар комнаты'}
-            >
-              <Avatar name={name || room.roomId} src={avatarPreviewUrl || (removeAvatarPending ? null : room.avatarUrl)} shape="squircle" background="var(--room-avatar-bg)" size={58} />
-              <span class="room-avatar-overlay" aria-hidden="true"><Pencil {...iconSm} /></span>
-            </button>
-            {#if avatarPreviewUrl || (room.avatarUrl && !removeAvatarPending)}
-              <button
-                class="room-avatar-remove"
-                type="button"
-                onclick={removeAvatar}
-                disabled={saving || deleting}
-                aria-label="Удалить аватар комнаты"
-                title="Удалить аватар комнаты"
-              ><X {...iconSm} aria-hidden="true" /></button>
-            {/if}
-          </div>
-          <label class="room-name-field"><span class="settings-field-label">Название</span><input class="settings-input" maxlength="60" bind:value={name} /></label>
-        </div>
-        <div class="settings-actions"><button class="settings-cancel" type="button" onclick={onClose}>Отмена</button><button class="settings-save" type="submit" disabled={saving || !name.trim()}>{saving ? 'Сохраняем…' : 'Сохранить'}</button></div>
-        <div class="dialog-danger-zone">
-          {#if confirmDelete}
-            <p class="dialog-danger-note">Комната будет удалена для всех участников.</p>
-            <div class="dialog-danger-actions"><button class="settings-cancel" type="button" onclick={() => (confirmDelete = false)}>Отмена</button><button class="dialog-danger-confirm" type="button" disabled={deleting} onclick={remove}>Удалить навсегда</button></div>
-          {:else}<button class="dialog-danger-trigger" type="button" onclick={() => (confirmDelete = true)}>Удалить комнату</button>{/if}
-        </div>
-      </form>
-      {#if moderationEnabled}<div class="room-settings-moderation"><ModerationCenter roomId={room.roomId} /></div>{/if}
+      <div class="settings-body room-settings-body" data-sectioned={membershipEnabled || moderationEnabled}>
+        {#if membershipEnabled || moderationEnabled}
+          <nav class="settings-nav" aria-label="Разделы настроек комнаты">
+            <div class="settings-nav-main">
+              <button class="settings-nav-item" type="button" data-active={section === 'general'} aria-current={section === 'general' ? 'true' : undefined} onclick={() => (section = 'general')}><SlidersHorizontal {...iconMd} aria-hidden="true" />Основное</button>
+              {#if membershipEnabled}
+                <button class="settings-nav-item" type="button" data-active={section === 'members'} aria-current={section === 'members' ? 'true' : undefined} onclick={() => (section = 'members')}><Users {...iconMd} aria-hidden="true" />Участники</button>
+              {/if}
+              {#if moderationEnabled}
+                <button class="settings-nav-item" type="button" data-active={section === 'bans'} aria-current={section === 'bans' ? 'true' : undefined} onclick={() => (section = 'bans')}><Ban {...iconMd} aria-hidden="true" />Блокировки</button>
+              {/if}
+            </div>
+          </nav>
+        {/if}
+
+        {#if section === 'members' && membershipEnabled}
+          <div class="settings-content room-settings-content"><RoomMemberList roomId={room.roomId} canModerate={moderationEnabled} onNotify={notifyModeration} /></div>
+        {:else if section === 'bans' && moderationEnabled}
+          <div class="settings-content room-settings-content"><ModerationCenter roomId={room.roomId} onNotify={notifyModeration} /></div>
+        {:else}
+          <form class="settings-content room-settings-content" onsubmit={save}>
+            {#if error}<p class="dialog-error" role="alert">{error}</p>{/if}
+            <div class="room-profile-head">
+              <div class="room-avatar-control">
+                <input bind:this={avatarInput} class="room-avatar-input" type="file" accept="image/jpeg,image/png,image/webp" onchange={onAvatarFile} />
+                <button
+                  class="room-avatar-edit"
+                  type="button"
+                  onclick={() => avatarInput?.click()}
+                  disabled={saving || deleting}
+                  aria-label={room.avatarUrl ? 'Изменить аватар комнаты' : 'Загрузить аватар комнаты'}
+                  title={room.avatarUrl ? 'Изменить аватар комнаты' : 'Загрузить аватар комнаты'}
+                >
+                  <Avatar name={name || room.roomId} src={avatarPreviewUrl || (removeAvatarPending ? null : room.avatarUrl)} shape="squircle" background="var(--room-avatar-bg)" size={58} />
+                  <span class="room-avatar-overlay" aria-hidden="true"><Pencil {...iconSm} /></span>
+                </button>
+                {#if avatarPreviewUrl || (room.avatarUrl && !removeAvatarPending)}
+                  <button
+                    class="room-avatar-remove"
+                    type="button"
+                    onclick={removeAvatar}
+                    disabled={saving || deleting}
+                    aria-label="Удалить аватар комнаты"
+                    title="Удалить аватар комнаты"
+                  ><X {...iconSm} aria-hidden="true" /></button>
+                {/if}
+              </div>
+              <label class="room-name-field"><span class="settings-field-label">Название</span><input class="settings-input" maxlength="60" bind:value={name} /></label>
+            </div>
+            <div class="settings-actions"><button class="settings-cancel" type="button" onclick={onClose}>Отмена</button><button class="settings-save" type="submit" disabled={saving || !name.trim()}>{saving ? 'Сохраняем…' : 'Сохранить'}</button></div>
+            <div class="dialog-danger-zone">
+              {#if confirmDelete}
+                <p class="dialog-danger-note">Комната будет удалена для всех участников.</p>
+                <div class="dialog-danger-actions"><button class="settings-cancel" type="button" onclick={() => (confirmDelete = false)}>Отмена</button><button class="dialog-danger-confirm" type="button" disabled={deleting} onclick={remove}>Удалить навсегда</button></div>
+              {:else}<button class="dialog-danger-trigger" type="button" onclick={() => (confirmDelete = true)}>Удалить комнату</button>{/if}
+            </div>
+          </form>
+        {/if}
+      </div>
     </div>
   </div>
 {/if}
@@ -182,11 +235,19 @@
 />
 
 <style>
-  .room-settings-modal { width: min(560px, calc(100vw - 28px)); }
+  .room-settings-modal { width: min(780px, calc(100vw - 28px)); }
+  /* Without sections the dialog is just the general form, sized by its content;
+     with sections it keeps one height so switching tabs does not jump. */
+  .room-settings-body { height: auto; min-height: 0; }
+  .room-settings-body[data-sectioned='true'] { height: min(540px, calc(90vh - 74px)); }
   .room-settings-content { display: flex; flex-direction: column; gap: 24px; padding: 26px; }
-  .room-settings-moderation { padding: 0 26px 26px; }
   .room-profile-head { display: flex; align-items: center; gap: 16px; }
   .room-name-field { display: grid; flex: 1; gap: 7px; }
+
+  @media (max-width: 600px) {
+    .room-settings-body[data-sectioned='true'] { height: auto; overflow-y: auto; }
+    .room-settings-content { padding: 22px 18px; }
+  }
 
   .room-avatar-control { position: relative; flex: none; width: 58px; height: 58px; }
   .room-avatar-input { display: none; }

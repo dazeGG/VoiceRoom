@@ -12,10 +12,17 @@ export interface BanMutation {
   duration: ModerationDuration;
   reason: string;
 }
+export interface ActiveBanProfile {
+  displayName: string;
+  login: string;
+  avatarUrl: string | null;
+  avatarColorKey: string;
+  avatarAccent: string | null;
+}
 export interface ActiveBan {
   id: string;
   roomId: string;
-  subject: { kind: 'account' | 'guest'; userId: string | null };
+  subject: { kind: 'account' | 'guest'; userId: string | null; profile?: ActiveBanProfile };
   reason: string;
   createdAt: number;
   updatedAt: number;

@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { Pencil, X } from '@lucide/svelte';
+  import { Ban, ChevronDown, Pencil, SlidersHorizontal, Users, X } from '@lucide/svelte';
   import '$lib/features/home/styles/settings.css';
-  import { iconSm } from '$lib/shared/ui/icons';
+  import { iconMd, iconSm } from '$lib/shared/ui/icons';
   import { Avatar, AvatarCropDialog } from '$lib/shared/ui';
   import { dialogFocusTrap } from '$lib/shared/ui/focus-trap';
   import { deleteRoom, deleteRoomAvatar, updateRoom, uploadRoomAvatar } from '$lib/api/rooms';
@@ -11,8 +11,11 @@
   import { roomSettingsUi, closeRoomSettings } from '../room-settings.svelte';
   import ModerationCenter from '$lib/features/home/components/lobby/ModerationCenter.svelte';
   import RoomMemberList from '$lib/features/home/components/lobby/RoomMemberList.svelte';
+  import { BAN_UNDO_DURATION_MS, type ModerationNoticeOptions } from '$lib/features/home/model/room-moderation';
   import { getCapabilityFeature } from '$lib/platform/capability-state.svelte';
   import { fetchRoomNotificationLevel, setRoomNotificationLevel, type RoomNotificationLevel } from '$lib/api/notifications';
+
+  type Section = 'general' | 'members' | 'bans';
 
   let name = $state('');
   let error = $state('');
@@ -31,6 +34,7 @@
   let engagementEnabled = $state(false);
   let notificationLevel = $state<RoomNotificationLevel>('mentions');
   let notificationSaving = $state(false);
+  let section = $state<Section>('general');
 
   // Reset the form from the live room state each time the dialog opens —
   // roomClientState (the vanilla room client's store, aliased to avoid
@@ -45,6 +49,7 @@
         engagementEnabled = enabled;
         if (enabled) notificationLevel = await fetchRoomNotificationLevel(roomClientState.roomId).catch(() => 'mentions');
       });
+      section = 'general';
       name = roomClientState.roomName;
       error = '';
       confirmingDelete = false;
@@ -141,6 +146,15 @@
     }
   }
 
+  function notifyModeration(message: string, options: ModerationNoticeOptions = {}): void {
+    showToast(message, {
+      variant: options.variant,
+      actionLabel: options.undo?.label,
+      action: options.undo?.run,
+      duration: options.undo ? BAN_UNDO_DURATION_MS : undefined
+    });
+  }
+
   function onClose(): void {
     if (saving || deleting || avatarSaving || cropOpen) return;
     closeRoomSettings();
@@ -150,8 +164,14 @@
     if (event.target === event.currentTarget) onClose();
   }
 
+  // A member menu open inside the dialog owns Escape: it closes the menu, not
+  // the whole dialog underneath it.
+  function hasOpenPopover(): boolean {
+    return Boolean(document.querySelector('.popover-submenu-panel, .popover-panel--floating'));
+  }
+
   function onKeydown(event: KeyboardEvent): void {
-    if (roomSettingsUi.open && !cropOpen && event.key === 'Escape') onClose();
+    if (roomSettingsUi.open && !cropOpen && event.key === 'Escape' && !hasOpenPopover()) onClose();
   }
 </script>
 
@@ -174,93 +194,126 @@
         </button>
       </div>
 
-      <form class="settings-content room-settings-content" onsubmit={save}>
-        {#if error}
-          <p class="dialog-error" role="alert">{error}</p>
+      <div class="settings-body room-settings-body" data-sectioned={membershipEnabled || moderationEnabled}>
+        {#if membershipEnabled || moderationEnabled}
+          <nav class="settings-nav" aria-label="Разделы настроек комнаты">
+            <div class="settings-nav-main">
+              <button class="settings-nav-item" type="button" data-active={section === 'general'} aria-current={section === 'general' ? 'true' : undefined} onclick={() => (section = 'general')}>
+                <SlidersHorizontal {...iconMd} aria-hidden="true" />
+                Основное
+              </button>
+              {#if membershipEnabled}
+                <button class="settings-nav-item" type="button" data-active={section === 'members'} aria-current={section === 'members' ? 'true' : undefined} onclick={() => (section = 'members')}>
+                  <Users {...iconMd} aria-hidden="true" />
+                  Участники
+                </button>
+              {/if}
+              {#if moderationEnabled}
+                <button class="settings-nav-item" type="button" data-active={section === 'bans'} aria-current={section === 'bans' ? 'true' : undefined} onclick={() => (section = 'bans')}>
+                  <Ban {...iconMd} aria-hidden="true" />
+                  Блокировки
+                </button>
+              {/if}
+            </div>
+          </nav>
         {/if}
 
-        <div class="room-profile-head">
-        <div class="room-avatar-field">
-          <div class="room-avatar-control">
-            <input bind:this={avatarInput} class="room-avatar-input" type="file" accept="image/jpeg,image/png,image/webp" onchange={onAvatarFile} />
-            <button
-              class="room-avatar-edit"
-              type="button"
-              onclick={() => avatarInput?.click()}
-              disabled={avatarSaving}
-              aria-label={roomClientState.roomAvatarUrl ? 'Изменить аватар комнаты' : 'Загрузить аватар комнаты'}
-              title={roomClientState.roomAvatarUrl ? 'Изменить аватар комнаты' : 'Загрузить аватар комнаты'}
-            >
-              <Avatar name={name || roomClientState.roomId} src={avatarPreviewUrl || (removeAvatarPending ? null : roomClientState.roomAvatarUrl)} shape="squircle" background="var(--room-avatar-bg)" size={58} />
-              <span class="room-avatar-overlay" aria-hidden="true">
-                <Pencil {...iconSm} />
-              </span>
-            </button>
-            {#if avatarPreviewUrl || (roomClientState.roomAvatarUrl && !removeAvatarPending)}
-              <button
-                class="room-avatar-remove"
-                type="button"
-                onclick={removeAvatar}
-                disabled={avatarSaving}
-                aria-label="Удалить аватар комнаты"
-                title="Удалить аватар комнаты"
-              >
-                <X {...iconSm} aria-hidden="true" />
-              </button>
-            {/if}
+        {#if section === 'members' && membershipEnabled}
+          <div class="settings-content room-settings-content">
+            <RoomMemberList roomId={roomClientState.roomId} canModerate={moderationEnabled} onNotify={notifyModeration} />
           </div>
-        </div>
-        <div class="room-name-field">
-          <span class="settings-field-label">Название</span>
-          <input class="settings-input" maxlength="60" placeholder="Название комнаты" bind:value={name} />
-        </div>
-        </div>
-
-        <div class="settings-actions">
-          <button class="settings-cancel" type="button" onclick={onClose}>Отмена</button>
-          <button class="settings-save" type="submit" disabled={saving}>
-            {#if saving}
-              <span class="home-spinner" aria-hidden="true"></span>
+        {:else if section === 'bans' && moderationEnabled}
+          <div class="settings-content room-settings-content">
+            <ModerationCenter roomId={roomClientState.roomId} onNotify={notifyModeration} />
+          </div>
+        {:else}
+          <form class="settings-content room-settings-content" onsubmit={save}>
+            {#if error}
+              <p class="dialog-error" role="alert">{error}</p>
             {/if}
-            Сохранить
-          </button>
-        </div>
 
-        <div class="dialog-danger-zone">
-          {#if confirmingDelete}
-            <p class="dialog-danger-note">Комната будет удалена для всех участников. Это действие нельзя отменить.</p>
-            <div class="dialog-danger-actions">
-              <button class="settings-cancel" type="button" onclick={() => (confirmingDelete = false)} disabled={deleting}>Отмена</button>
-              <button class="dialog-danger-confirm" type="button" onclick={confirmDelete} disabled={deleting}>
-                {#if deleting}
+            <div class="room-profile-head">
+            <div class="room-avatar-field">
+              <div class="room-avatar-control">
+                <input bind:this={avatarInput} class="room-avatar-input" type="file" accept="image/jpeg,image/png,image/webp" onchange={onAvatarFile} />
+                <button
+                  class="room-avatar-edit"
+                  type="button"
+                  onclick={() => avatarInput?.click()}
+                  disabled={avatarSaving}
+                  aria-label={roomClientState.roomAvatarUrl ? 'Изменить аватар комнаты' : 'Загрузить аватар комнаты'}
+                  title={roomClientState.roomAvatarUrl ? 'Изменить аватар комнаты' : 'Загрузить аватар комнаты'}
+                >
+                  <Avatar name={name || roomClientState.roomId} src={avatarPreviewUrl || (removeAvatarPending ? null : roomClientState.roomAvatarUrl)} shape="squircle" background="var(--room-avatar-bg)" size={58} />
+                  <span class="room-avatar-overlay" aria-hidden="true">
+                    <Pencil {...iconSm} />
+                  </span>
+                </button>
+                {#if avatarPreviewUrl || (roomClientState.roomAvatarUrl && !removeAvatarPending)}
+                  <button
+                    class="room-avatar-remove"
+                    type="button"
+                    onclick={removeAvatar}
+                    disabled={avatarSaving}
+                    aria-label="Удалить аватар комнаты"
+                    title="Удалить аватар комнаты"
+                  >
+                    <X {...iconSm} aria-hidden="true" />
+                  </button>
+                {/if}
+              </div>
+            </div>
+            <div class="room-name-field">
+              <span class="settings-field-label">Название</span>
+              <input class="settings-input" maxlength="60" placeholder="Название комнаты" bind:value={name} />
+            </div>
+            </div>
+
+            {#if engagementEnabled}
+              <label class="room-settings-notifications">
+                <span class="settings-field-label">Уведомления комнаты</span>
+                <span class="settings-select-wrap">
+                  <select class="settings-select" value={notificationLevel} onchange={saveNotificationLevel} disabled={notificationSaving}>
+                    <option value="all">Все сообщения</option>
+                    <option value="mentions">Упоминания и ответы</option>
+                    <option value="none">Выключены</option>
+                  </select>
+                  <span class="settings-select-chevron" aria-hidden="true"><ChevronDown {...iconSm} /></span>
+                </span>
+              </label>
+            {/if}
+
+            <div class="settings-actions">
+              <button class="settings-cancel" type="button" onclick={onClose}>Отмена</button>
+              <button class="settings-save" type="submit" disabled={saving}>
+                {#if saving}
                   <span class="home-spinner" aria-hidden="true"></span>
                 {/if}
-                Удалить навсегда
+                Сохранить
               </button>
             </div>
-          {:else}
-            <button class="dialog-danger-trigger" type="button" onclick={() => (confirmingDelete = true)}>
-              Удалить комнату
-            </button>
-          {/if}
-        </div>
-      </form>
-      {#if engagementEnabled}
-        <label class="room-settings-notifications">
-          <span>Уведомления комнаты</span>
-          <select value={notificationLevel} onchange={saveNotificationLevel} disabled={notificationSaving}>
-            <option value="all">Все сообщения</option>
-            <option value="mentions">Упоминания и ответы</option>
-            <option value="none">Выключены</option>
-          </select>
-        </label>
-      {/if}
-      {#if membershipEnabled}
-        <div class="room-settings-members"><RoomMemberList roomId={roomClientState.roomId} /></div>
-      {/if}
-      {#if moderationEnabled}
-        <div class="room-settings-moderation"><ModerationCenter roomId={roomClientState.roomId} /></div>
-      {/if}
+
+            <div class="dialog-danger-zone">
+              {#if confirmingDelete}
+                <p class="dialog-danger-note">Комната будет удалена для всех участников. Это действие нельзя отменить.</p>
+                <div class="dialog-danger-actions">
+                  <button class="settings-cancel" type="button" onclick={() => (confirmingDelete = false)} disabled={deleting}>Отмена</button>
+                  <button class="dialog-danger-confirm" type="button" onclick={confirmDelete} disabled={deleting}>
+                    {#if deleting}
+                      <span class="home-spinner" aria-hidden="true"></span>
+                    {/if}
+                    Удалить навсегда
+                  </button>
+                </div>
+              {:else}
+                <button class="dialog-danger-trigger" type="button" onclick={() => (confirmingDelete = true)}>
+                  Удалить комнату
+                </button>
+              {/if}
+            </div>
+          </form>
+        {/if}
+      </div>
     </div>
   </div>
 {/if}
@@ -282,14 +335,22 @@
 />
 
 <style>
-  .room-settings-members, .room-settings-moderation { padding: 0 20px 20px; }
-  .room-settings-notifications { display: grid; gap: 8px; padding: 0 20px 20px; }
-  .room-settings-modal { width: 620px; }
+  .room-settings-modal { width: 780px; }
+  /* Without sections the dialog is just the general form, sized by its content;
+     with sections it keeps one height so switching tabs does not jump. */
+  .room-settings-body { height: auto; min-height: 0; }
+  .room-settings-body[data-sectioned='true'] { height: min(560px, calc(90vh - 74px)); }
   .room-settings-content { display: flex; flex-direction: column; gap: 28px; padding: 28px 30px 30px; }
-  .room-settings-moderation { padding: 0 30px 30px; }
+  .room-settings-notifications { display: grid; }
+  .room-settings-notifications .settings-field-label { margin-bottom: 9px; }
   .room-profile-head { display: flex; align-items: center; gap: 16px; }
   .room-name-field { flex: 1; min-width: 0; }
   .room-avatar-field { flex: none; }
+
+  @media (max-width: 600px) {
+    .room-settings-body[data-sectioned='true'] { height: auto; overflow-y: auto; }
+    .room-settings-content { padding: 22px 18px; }
+  }
 
   .room-avatar-control {
     position: relative;

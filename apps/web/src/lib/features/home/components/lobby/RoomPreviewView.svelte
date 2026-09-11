@@ -212,6 +212,7 @@
           roomId={previewRoomId}
           {user}
           {aroundMessageId}
+          canModerate={room.relationship === 'owner'}
           {onToast}
           onClose={() => (activePanel = null)}
           onSelectParticipants={() => selectPanel('participants')}
