@@ -174,6 +174,9 @@
         && notificationPreferences.deliveryPermission === 'granted'
   );
   const macDesktopApp = $derived(desktopApp && desktopPlatform === 'darwin');
+  const systemNotificationsEnabled = $derived(
+    notificationPreferences.notificationsEnabled && notificationPreferences.deliveryPermission === 'granted'
+  );
   const notificationToggleLabel = $derived(desktopApp ? 'Уведомления приложения' : 'Push этого браузера');
   const microphoneOptions = $derived([
     { value: '', label: 'Системный' },
@@ -572,6 +575,17 @@
         ? 'Не удалось изменить push-уведомления'
         : 'Push-уведомления не настроены на сервере', { variant: 'error' });
     }
+  }
+
+  // Desktop app switch in «Приложение»: turns the OS notification toasts on or
+  // off for this device. In-app cues and the unread badge are unaffected.
+  async function toggleSystemNotifications(): Promise<void> {
+    if (systemNotificationsEnabled) {
+      setNotificationsEnabled(false);
+      return;
+    }
+    const permission = await requestNotificationsFromUiAction();
+    if (permission !== 'granted') onToast('Системные уведомления недоступны', { variant: 'error' });
   }
 
   async function togglePrivateNotifications(): Promise<void> {
@@ -1041,6 +1055,25 @@
                 </div>
               </div>
 
+              {#if !macDesktopApp}
+                <div>
+                  <div class="settings-gate-head">
+                    <span class="settings-field-label">Системные уведомления</span>
+                    <button
+                      class="settings-switch"
+                      type="button"
+                      role="switch"
+                      aria-checked={systemNotificationsEnabled}
+                      aria-label="Системные уведомления"
+                      onclick={() => void toggleSystemNotifications()}
+                    >
+                      <span class="settings-switch-knob" aria-hidden="true"></span>
+                    </button>
+                  </div>
+                  <div class="settings-gate-hint">Уведомления Windows о сообщениях и заявках в друзья, без системного звука. Звуки Voice Room и счётчик на панели задач от этого не зависят.</div>
+                </div>
+              {/if}
+
               {#if diagnosticsAvailable}
                 <div>
                   <span class="settings-field-label">Диагностика</span>
@@ -1059,7 +1092,8 @@
           {:else}
             <div class="settings-sound">
               {#if !macDesktopApp}
-                <div>
+                <!-- The desktop app keeps this switch in «Приложение». -->
+                <div hidden={desktopApp && autostartAvailable}>
                   <div class="settings-gate-head">
                     <span class="settings-field-label">{notificationToggleLabel}</span>
                     <button

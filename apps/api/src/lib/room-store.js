@@ -1098,10 +1098,13 @@ function createRoomStore({
                 FROM room_messages m
                 LEFT JOIN room_chat_reads rcr
                   ON rcr.room_id = m.room_id AND rcr.user_id = $1
+                LEFT JOIN room_memberships rm
+                  ON rm.room_id = m.room_id AND rm.user_id = $1
                 WHERE m.room_id = deduped.id
                   AND m.deleted_at IS NULL
                   AND (m.expires_at IS NULL OR m.expires_at > current_timestamp)
-                  AND m.created_at > COALESCE(rcr.last_read_at, '-infinity'::timestamptz)
+                  -- Without a read cursor, history from before the user joined is not unread.
+                  AND m.created_at > COALESCE(rcr.last_read_at, rm.created_at, '-infinity'::timestamptz)
                   AND m.author_user_id IS DISTINCT FROM $1
               ) AS unread_count
        FROM deduped
@@ -1118,10 +1121,12 @@ function createRoomStore({
        FROM room_messages m
        LEFT JOIN room_chat_reads rcr
          ON rcr.room_id = m.room_id AND rcr.user_id = $2
+       LEFT JOIN room_memberships rm
+         ON rm.room_id = m.room_id AND rm.user_id = $2
        WHERE m.room_id = $1
          AND m.deleted_at IS NULL
          AND (m.expires_at IS NULL OR m.expires_at > $3)
-         AND m.created_at > COALESCE(rcr.last_read_at, '-infinity'::timestamptz)
+         AND m.created_at > COALESCE(rcr.last_read_at, rm.created_at, '-infinity'::timestamptz)
          AND m.author_user_id IS DISTINCT FROM $2`,
       [roomId, userId, toDate(now)]
     );
@@ -1222,11 +1227,11 @@ function createRoomStore({
     if (!roomId) return [];
     const result = await getPool().query(
       `WITH recipients AS (
+         -- Every member hears about room messages, not only the owner.
          SELECT rm.user_id
          FROM room_memberships rm
          JOIN rooms r ON r.id = rm.room_id
          WHERE rm.room_id = $1
-           AND rm.role = 'owner'
            AND r.is_static = true
            AND r.deleted_at IS NULL
          UNION ALL
