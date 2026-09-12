@@ -55,6 +55,8 @@
     shouldConfirmRoomSwitch
   } from './model/room-switch-confirmation';
   import RoomSwitchDialog from './components/RoomSwitchDialog.svelte';
+  import RecoveryCodesOnboarding from './components/RecoveryCodesOnboarding.svelte';
+  import { clearSession } from '$lib/features/auth/session.svelte';
   import OpenInAppScreen from './components/OpenInAppScreen.svelte';
   import { bindDesktopLinks, type DesktopLink } from '$lib/platform/desktop-links';
   import { bindDesktopCallActions, syncDesktopCallState } from '$lib/platform/desktop-call';
@@ -85,7 +87,7 @@
   let creating = $state(false);
   let createDialogOpen = $state(false);
   let settingsOpen = $state(false);
-  let settingsTab = $state<'profile' | 'sound' | 'hotkeys' | 'notifications' | 'app'>('profile');
+  let settingsTab = $state<'profile' | 'sound' | 'hotkeys' | 'notifications' | 'app' | 'security'>('profile');
   let previewSettingsRoomId = $state('');
   // Room waiting for "switch rooms?" while voice is connected elsewhere.
   let pendingRoomSwitchId = $state('');
@@ -149,6 +151,13 @@
       replaceUrlWithActiveVoiceRoom(connectedVoiceRoomId === closedRoomId ? null : connectedVoiceRoomId);
     }
   }
+
+  // The server closes the realtime socket with a dedicated code when this
+  // device's session was ended elsewhere (another device, password recovery).
+  onMount(() => getAppRealtime().onSessionEnded(() => {
+    clearSession();
+    onToast('Сеанс на этом устройстве завершён. Войдите снова');
+  }));
 
   onMount(() => {
     void refreshRooms();
@@ -455,6 +464,11 @@
     settingsOpen = true;
   }
 
+  function openSecuritySettings(): void {
+    settingsTab = 'security';
+    settingsOpen = true;
+  }
+
   function openPeople(): void {
     friendsState.mode = 'friends';
     showPeople();
@@ -561,6 +575,7 @@
     {onToast}
     {onLogout}
   />
+  <RecoveryCodesOnboarding onCreateCodes={openSecuritySettings} />
   <LobbyRoomSettingsDialog room={previewSettingsRoom} onClose={() => (previewSettingsRoomId = '')} onSaved={refreshRooms} onDeleted={() => { previewSettingsRoomId = ''; closeViewedRoom(); void refreshRooms(); }} {onToast} />
   <RoomSwitchDialog
     open={Boolean(pendingRoomSwitchId)}

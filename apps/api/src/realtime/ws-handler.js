@@ -134,7 +134,7 @@ function createWsHandler({
 
     const clientIp = getClientIp(req);
     const connection = sessionUser
-      ? registry.addConnection(sessionUser.id, socket, clientIp, sessionUser.presenceStatus)
+      ? registry.addConnection(sessionUser.id, socket, clientIp, sessionUser.presenceStatus, session.session?.tokenHash)
       : registry.addGuestConnection(socket, guestIp);
 
     if (sessionUser) {

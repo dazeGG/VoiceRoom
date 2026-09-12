@@ -1,12 +1,13 @@
 <script module lang="ts">
-  export type AuthMode = 'login' | 'register';
+  export type AuthMode = 'login' | 'register' | 'recover';
 </script>
 
 <script lang="ts">
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { X } from '@lucide/svelte';
-  import { login, register } from '$lib/api/auth';
+  import { normalizeRecoveryCode } from '@voice-room/shared/account-security';
+  import { login, recoverAccount, register } from '$lib/api/auth';
   import { iconMd } from '$lib/shared/ui/icons';
   import { LOGIN_HINT, PASSWORD_MIN_LENGTH, isValidPassword, normalizeLogin } from './account';
   import { session, setUser } from './session.svelte';
@@ -23,16 +24,44 @@
     onModeChange: (mode: AuthMode) => void;
   } = $props();
 
+  const COPY: Record<AuthMode, { title: string; subtitle: string; submit: string; submitting: string; failure: string }> = {
+    login: {
+      title: 'Вход',
+      subtitle: 'Продолжите с сохранёнными комнатами и именем.',
+      submit: 'Войти',
+      submitting: 'Входим…',
+      failure: 'Не удалось войти'
+    },
+    register: {
+      title: 'Создать аккаунт',
+      subtitle: 'Сохраняйте комнаты, историю и своё имя.',
+      submit: 'Создать аккаунт',
+      submitting: 'Создаём…',
+      failure: 'Не удалось создать аккаунт'
+    },
+    recover: {
+      title: 'Восстановить доступ',
+      subtitle: 'Введите логин, один из кодов восстановления и новый пароль. Код сработает только один раз.',
+      submit: 'Сменить пароль и войти',
+      submitting: 'Восстанавливаем…',
+      failure: 'Не удалось восстановить доступ'
+    }
+  };
+
   let dialog: HTMLDialogElement;
   let loginInput: HTMLInputElement;
   let loginValue = $state('');
   let displayName = $state('');
+  let recoveryCode = $state('');
   let password = $state('');
   let passwordConfirm = $state('');
   let error = $state('');
   let submitting = $state(false);
 
   const isLogin = $derived(mode === 'login');
+  const isRegister = $derived(mode === 'register');
+  const isRecover = $derived(mode === 'recover');
+  const copy = $derived(COPY[mode]);
 
   onMount(() => {
     dialog.showModal();
@@ -56,42 +85,45 @@
     onModeChange(nextMode);
   }
 
+  function validate(): string {
+    if (isRegister && !normalizeLogin(loginValue)) return `Логин: ${LOGIN_HINT}`;
+    if (isRecover && !normalizeLogin(loginValue)) return 'Введите логин аккаунта';
+    if (isRecover && !normalizeRecoveryCode(recoveryCode)) return 'Код восстановления — 16 символов, например ABCD-EFGH-JKMN-PQRS';
+    if (!isLogin && !isValidPassword(password)) return `Пароль должен быть не короче ${PASSWORD_MIN_LENGTH} символов`;
+    if (!isLogin && password !== passwordConfirm) return 'Пароли не совпадают';
+    return '';
+  }
+
   async function handleSubmit(event: SubmitEvent): Promise<void> {
     event.preventDefault();
     if (submitting) return;
 
-    error = '';
-    if (!isLogin && !normalizeLogin(loginValue)) {
-      error = `Логин: ${LOGIN_HINT}`;
-      return;
-    }
-    if (!isLogin && !isValidPassword(password)) {
-      error = `Пароль должен быть не короче ${PASSWORD_MIN_LENGTH} символов`;
-      return;
-    }
-    if (!isLogin && password !== passwordConfirm) {
-      error = 'Пароли не совпадают';
-      return;
-    }
+    error = validate();
+    if (error) return;
 
     submitting = true;
     try {
-      const user = isLogin
-        ? await login({ login: loginValue.trim(), password })
-        : await register({
-            login: loginValue.trim(),
-            displayName: displayName.trim(),
-            password,
-            passwordConfirm
-          });
-      setUser(user);
+      if (isRecover) {
+        const recovered = await recoverAccount({
+          login: loginValue.trim(),
+          code: recoveryCode,
+          newPassword: password
+        });
+        setUser(recovered.user);
+      } else {
+        const user = isLogin
+          ? await login({ login: loginValue.trim(), password })
+          : await register({
+              login: loginValue.trim(),
+              displayName: displayName.trim(),
+              password,
+              passwordConfirm
+            });
+        setUser(user);
+      }
       await goto('/');
     } catch (cause) {
-      error = cause instanceof Error && cause.message
-        ? cause.message
-        : isLogin
-          ? 'Не удалось войти'
-          : 'Не удалось создать аккаунт';
+      error = cause instanceof Error && cause.message ? cause.message : copy.failure;
     } finally {
       submitting = false;
     }
@@ -112,10 +144,8 @@
 
     <div class="auth-dialog-heading">
       <p class="auth-dialog-kicker">Ваши комнаты всегда рядом</p>
-      <h1 class="auth-title" id="authDialogTitle">{isLogin ? 'Вход' : 'Создать аккаунт'}</h1>
-      <p class="auth-subtitle">
-        {isLogin ? 'Продолжите с сохранёнными комнатами и именем.' : 'Сохраняйте комнаты, историю и своё имя.'}
-      </p>
+      <h1 class="auth-title" id="authDialogTitle">{copy.title}</h1>
+      <p class="auth-subtitle">{copy.subtitle}</p>
     </div>
 
     <form class="auth-form" onsubmit={handleSubmit}>
@@ -139,7 +169,7 @@
         />
       </div>
 
-      {#if !isLogin}
+      {#if isRegister}
         <div class="auth-field">
           <label class="auth-label" for="authDisplayNameInput">
             Отображаемое имя <span class="auth-label-soft">· необязательно</span>
@@ -155,8 +185,25 @@
         </div>
       {/if}
 
+      {#if isRecover}
+        <div class="auth-field">
+          <label class="auth-label" for="authRecoveryCodeInput">Код восстановления</label>
+          <input
+            id="authRecoveryCodeInput"
+            class="auth-input auth-input--code"
+            maxlength="32"
+            autocapitalize="characters"
+            autocomplete="one-time-code"
+            spellcheck="false"
+            placeholder="XXXX-XXXX-XXXX-XXXX"
+            bind:value={recoveryCode}
+            required
+          />
+        </div>
+      {/if}
+
       <div class="auth-field">
-        <label class="auth-label" for="authPasswordInput">Пароль</label>
+        <label class="auth-label" for="authPasswordInput">{isRecover ? 'Новый пароль' : 'Пароль'}</label>
         <PasswordField
           id="authPasswordInput"
           autocomplete={isLogin ? 'current-password' : 'new-password'}
@@ -180,22 +227,27 @@
       <button class="auth-submit" type="submit" disabled={submitting || !session.loaded}>
         {#if submitting}
           <span class="auth-spinner" aria-hidden="true"></span>
-          {isLogin ? 'Входим…' : 'Создаём…'}
+          {copy.submitting}
         {:else}
-          {isLogin ? 'Войти' : 'Создать аккаунт'}
+          {copy.submit}
         {/if}
       </button>
     </form>
 
-    <p class="auth-foot">
-      {isLogin ? 'Нет аккаунта?' : 'Уже есть аккаунт?'}
-      <button
-        type="button"
-        class="auth-link"
-        onclick={() => switchMode(isLogin ? 'register' : 'login')}
-      >
-        {isLogin ? 'Зарегистрироваться' : 'Войти'}
-      </button>
-    </p>
+    {#if isLogin}
+      <p class="auth-foot">
+        Нет аккаунта?
+        <button type="button" class="auth-link" onclick={() => switchMode('register')}>Зарегистрироваться</button>
+      </p>
+      <p class="auth-foot auth-foot--secondary">
+        Забыли пароль?
+        <button type="button" class="auth-link" onclick={() => switchMode('recover')}>Восстановить по коду</button>
+      </p>
+    {:else}
+      <p class="auth-foot">
+        {isRecover ? 'Вспомнили пароль?' : 'Уже есть аккаунт?'}
+        <button type="button" class="auth-link" onclick={() => switchMode('login')}>Войти</button>
+      </p>
+    {/if}
   </div>
 </dialog>

@@ -4,9 +4,21 @@ const crypto = require('node:crypto');
 const { createDbPool, transaction } = require('./db');
 const { hashPassword, verifyPassword } = require('./password');
 const { AVATAR_COLOR_KEYS, cleanAvatarColorKey, cleanPresenceStatus } = require('@voice-room/shared/validation');
+const {
+  RECOVERY_CODE_ALPHABET,
+  RECOVERY_CODE_COUNT,
+  RECOVERY_CODE_LENGTH,
+  describeUserAgent,
+  normalizeOnboardingKey,
+  normalizeRecoveryCode
+} = require('@voice-room/shared/account-security');
 
 const DEFAULT_SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+const SESSION_TOUCH_INTERVAL_MS = 60 * 60 * 1000;
+const USER_AGENT_MAX_LENGTH = 512;
+const LOCATION_LABEL_MAX_LENGTH = 120;
 const UNIQUE_VIOLATION = '23505';
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function toDate(ms) {
   const next = Number(ms);
@@ -64,6 +76,27 @@ function createSessionToken() {
 
 function hashSessionToken(token) {
   return crypto.createHash('sha256').update(String(token)).digest('base64url');
+}
+
+function createRecoveryCode() {
+  let code = '';
+  for (let index = 0; index < RECOVERY_CODE_LENGTH; index += 1) {
+    code += RECOVERY_CODE_ALPHABET[crypto.randomInt(RECOVERY_CODE_ALPHABET.length)];
+  }
+  return code;
+}
+
+// Bound to the account so the same code on two accounts never shares a hash.
+function hashRecoveryCode(userId, code) {
+  return crypto.createHash('sha256').update(`${userId}:${code}`).digest('hex');
+}
+
+function cleanUserAgent(value) {
+  return typeof value === 'string' ? value.slice(0, USER_AGENT_MAX_LENGTH) : '';
+}
+
+function cleanLocationLabel(value) {
+  return typeof value === 'string' ? value.trim().slice(0, LOCATION_LABEL_MAX_LENGTH) : '';
 }
 
 function createUserStore({ databaseUrl, logger = console, pool, sessionTtlMs = DEFAULT_SESSION_TTL_MS } = {}) {
@@ -157,42 +190,33 @@ function createUserStore({ databaseUrl, logger = console, pool, sessionTtlMs = D
     return result.rows.map((row) => row.avatar_key).filter(Boolean);
   }
 
+  // Every way of replacing a password ends the same: the old credential stops
+  // working everywhere, so all sessions and push subscriptions go with it.
+  async function replacePasswordInTransaction(client, { userId, newPassword, now }) {
+    const passwordHash = await hashPassword(newPassword);
+    await client.query(
+      `UPDATE users SET password_hash = $2, updated_at = $3 WHERE id = $1`,
+      [userId, passwordHash, toDate(now)]
+    );
+    await client.query(`DELETE FROM sessions WHERE user_id = $1`, [userId]);
+    await client.query(`DELETE FROM push_subscriptions WHERE user_id = $1`, [userId]);
+  }
+
   // Password change always re-verifies the current password first so a leaked
   // session alone can't rotate the credential. Status mirrors the createUser
   // shape so the route layer can branch without inspecting errors.
   async function changePassword({ userId, currentPassword, newPassword, now = Date.now() }) {
-    const pool = getPool();
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
+    return transaction(getPool(), async (client) => {
       const userResult = await client.query(`SELECT * FROM users WHERE id = $1 FOR UPDATE`, [userId]);
       const user = mapUser(userResult.rows[0]);
-      if (!user) {
-        await client.query('ROLLBACK');
-        return { status: 'not_found' };
-      }
+      if (!user) return { status: 'not_found' };
 
       const ok = await verifyPassword(currentPassword, user.passwordHash);
-      if (!ok) {
-        await client.query('ROLLBACK');
-        return { status: 'invalid_password' };
-      }
+      if (!ok) return { status: 'invalid_password' };
 
-      const passwordHash = await hashPassword(newPassword);
-      await client.query(
-        `UPDATE users SET password_hash = $2, updated_at = $3 WHERE id = $1`,
-        [userId, passwordHash, toDate(now)]
-      );
-      await client.query(`DELETE FROM sessions WHERE user_id = $1`, [userId]);
-      await client.query(`DELETE FROM push_subscriptions WHERE user_id = $1`, [userId]);
-      await client.query('COMMIT');
+      await replacePasswordInTransaction(client, { userId, newPassword, now });
       return { status: 'updated' };
-    } catch (error) {
-      await client.query('ROLLBACK').catch(() => {});
-      throw error;
-    } finally {
-      client.release();
-    }
+    });
   }
 
   async function verifyCredentials(login, password) {
@@ -207,22 +231,32 @@ function createUserStore({ databaseUrl, logger = console, pool, sessionTtlMs = D
     return ok ? user : null;
   }
 
-  async function createSession({ userId, now = Date.now(), token = createSessionToken() }) {
+  async function createSession({
+    userId,
+    now = Date.now(),
+    token = createSessionToken(),
+    userAgent = '',
+    locationLabel = ''
+  }) {
     const expiresAt = now + sessionTtlMs;
     const tokenHash = hashSessionToken(token);
-    await getPool().query(
-      `INSERT INTO sessions (id, user_id, created_at, last_seen_at, expires_at)
-       VALUES ($1, $2, $3, $3, $4)`,
-      [tokenHash, userId, toDate(now), toDate(expiresAt)]
+    const result = await getPool().query(
+      `INSERT INTO sessions (id, user_id, created_at, last_seen_at, expires_at, user_agent, location_label)
+       VALUES ($1, $2, $3, $3, $4, $5, $6)
+       RETURNING public_id`,
+      [tokenHash, userId, toDate(now), toDate(expiresAt), cleanUserAgent(userAgent), cleanLocationLabel(locationLabel)]
     );
-    return { token, expiresAt };
+    return { expiresAt, publicId: result.rows[0]?.public_id || null, token, tokenHash };
   }
 
-  async function getSessionUser(token, now = Date.now()) {
+  // `userAgent` and `resolveLocation` only feed the hourly touch, so a request
+  // never waits on a location lookup and an unchanged session is not rewritten.
+  async function getSessionUser(token, now = Date.now(), { userAgent, resolveLocation } = {}) {
     if (typeof token !== 'string' || !token) return null;
     const tokenHash = hashSessionToken(token);
     const result = await getPool().query(
-      `SELECT u.*, s.expires_at AS session_expires_at
+      `SELECT u.*, s.expires_at AS session_expires_at, s.last_seen_at AS session_last_seen_at,
+              s.public_id AS session_public_id
        FROM sessions s
        JOIN users u ON u.id = s.user_id
        WHERE s.id = $1 AND s.expires_at > $2`,
@@ -231,21 +265,51 @@ function createUserStore({ databaseUrl, logger = console, pool, sessionTtlMs = D
     const row = result.rows[0];
     if (!row) return null;
 
-    // Best-effort sliding touch; failures here must not block the request.
-    // Throttle writes to roughly once per hour and extend the server-side TTL.
-    const nextExpiresAt = toDate(now + sessionTtlMs);
-    getPool()
-      .query(
-        `UPDATE sessions
-         SET last_seen_at = $2,
-             expires_at = GREATEST(expires_at, $3)
-         WHERE id = $1
-           AND last_seen_at <= $4`,
-        [tokenHash, toDate(now), nextExpiresAt, toDate(now - 60 * 60 * 1000)]
-      )
-      .catch((error) => logger.error('Failed to touch session:', error));
+    if (toMillis(row.session_last_seen_at) <= now - SESSION_TOUCH_INTERVAL_MS) {
+      void touchSession({ tokenHash, now, userAgent, resolveLocation })
+        .catch((error) => logger.error('Failed to touch session:', error));
+    }
 
-    return { session: { expiresAt: toMillis(row.session_expires_at), token }, user: mapUser(row) };
+    return {
+      session: {
+        expiresAt: toMillis(row.session_expires_at),
+        publicId: row.session_public_id,
+        token,
+        tokenHash
+      },
+      user: mapUser(row)
+    };
+  }
+
+  // Best-effort sliding touch: extends the server-side TTL and refreshes what
+  // the devices list shows. An empty location keeps the previous label, so a
+  // missing GeoIP database does not erase what an earlier lookup found.
+  async function touchSession({ tokenHash, now, userAgent, resolveLocation }) {
+    let locationLabel = '';
+    if (typeof resolveLocation === 'function') {
+      try {
+        locationLabel = cleanLocationLabel(await resolveLocation());
+      } catch (error) {
+        logger.error('Failed to resolve session location:', error);
+      }
+    }
+    await getPool().query(
+      `UPDATE sessions
+       SET last_seen_at = $2,
+           expires_at = GREATEST(expires_at, $3),
+           user_agent = CASE WHEN $5 = '' THEN user_agent ELSE $5 END,
+           location_label = CASE WHEN $6 = '' THEN location_label ELSE $6 END
+       WHERE id = $1
+         AND last_seen_at <= $4`,
+      [
+        tokenHash,
+        toDate(now),
+        toDate(now + sessionTtlMs),
+        toDate(now - SESSION_TOUCH_INTERVAL_MS),
+        cleanUserAgent(userAgent),
+        locationLabel
+      ]
+    );
   }
 
   async function deleteSession(token) {
@@ -257,6 +321,145 @@ function createUserStore({ databaseUrl, logger = console, pool, sessionTtlMs = D
   async function pruneSessions(now = Date.now()) {
     const result = await getPool().query(`DELETE FROM sessions WHERE expires_at <= $1`, [toDate(now)]);
     return result.rowCount;
+  }
+
+  async function listSessions({ userId, currentTokenHash = '', now = Date.now() }) {
+    const result = await getPool().query(
+      `SELECT id, public_id, user_agent, location_label, last_seen_at
+       FROM sessions
+       WHERE user_id = $1 AND expires_at > $2
+       ORDER BY last_seen_at DESC, created_at DESC`,
+      [userId, toDate(now)]
+    );
+    return result.rows.map((row) => ({
+      id: row.public_id,
+      current: Boolean(currentTokenHash) && row.id === currentTokenHash,
+      ...describeUserAgent(row.user_agent),
+      location: row.location_label || '',
+      lastSeenAt: toMillis(row.last_seen_at)
+    }));
+  }
+
+  // Returns the token hash so the caller can close whatever that session still
+  // holds open (sockets, voice); the hash itself never reaches a client.
+  async function revokeSession({ userId, publicId }) {
+    if (typeof publicId !== 'string' || !UUID_PATTERN.test(publicId)) return { status: 'not_found', tokenHash: null };
+    const result = await getPool().query(
+      `DELETE FROM sessions WHERE user_id = $1 AND public_id = $2 RETURNING id`,
+      [userId, publicId.toLowerCase()]
+    );
+    return result.rowCount === 1
+      ? { status: 'revoked', tokenHash: result.rows[0].id }
+      : { status: 'not_found', tokenHash: null };
+  }
+
+  async function revokeOtherSessions({ userId, keepTokenHash }) {
+    const result = await getPool().query(
+      `DELETE FROM sessions WHERE user_id = $1 AND id <> $2 RETURNING id`,
+      [userId, String(keepTokenHash || '')]
+    );
+    return { tokenHashes: result.rows.map((row) => row.id) };
+  }
+
+  // Generating a set proves the password again, like a password change, so a
+  // stolen session cannot mint itself a permanent way back into the account.
+  async function generateRecoveryCodes({ userId, currentPassword, now = Date.now() }) {
+    return transaction(getPool(), async (client) => {
+      const userResult = await client.query(`SELECT * FROM users WHERE id = $1 FOR UPDATE`, [userId]);
+      const user = mapUser(userResult.rows[0]);
+      if (!user) return { status: 'not_found', codes: [] };
+      if (!await verifyPassword(currentPassword, user.passwordHash)) return { status: 'invalid_password', codes: [] };
+
+      const codes = Array.from({ length: RECOVERY_CODE_COUNT }, createRecoveryCode);
+      await client.query(`DELETE FROM account_recovery_codes WHERE user_id = $1`, [userId]);
+      await client.query(
+        `INSERT INTO account_recovery_codes (user_id, code_hash, created_at)
+         SELECT $1, hash, $3 FROM unnest($2::text[]) AS hash`,
+        [userId, codes.map((code) => hashRecoveryCode(userId, code)), toDate(now)]
+      );
+      return { status: 'generated', codes, generatedAt: now };
+    });
+  }
+
+  async function getRecoveryCodesStatus(userId) {
+    const result = await getPool().query(
+      `SELECT count(*) FILTER (WHERE used_at IS NULL)::int AS remaining, max(created_at) AS generated_at
+       FROM account_recovery_codes
+       WHERE user_id = $1`,
+      [userId]
+    );
+    const row = result.rows[0] || {};
+    return {
+      remaining: Number(row.remaining) || 0,
+      generatedAt: row.generated_at ? toMillis(row.generated_at) : null
+    };
+  }
+
+  // Both failure paths (unknown login, wrong or spent code) return before the
+  // password hash is computed, so neither is observably slower than the other.
+  async function recoverWithCode({ login, code, newPassword, now = Date.now() }) {
+    const normalizedCode = normalizeRecoveryCode(code);
+    if (!login || !normalizedCode) return { status: 'invalid', user: null, remaining: 0 };
+    return transaction(getPool(), async (client) => {
+      const userResult = await client.query(`SELECT * FROM users WHERE login = $1 FOR UPDATE`, [login]);
+      const user = mapUser(userResult.rows[0]);
+      if (!user) return { status: 'invalid', user: null, remaining: 0 };
+
+      const spent = await client.query(
+        `UPDATE account_recovery_codes
+         SET used_at = $3
+         WHERE user_id = $1 AND code_hash = $2 AND used_at IS NULL
+         RETURNING id`,
+        [user.id, hashRecoveryCode(user.id, normalizedCode), toDate(now)]
+      );
+      if (spent.rowCount !== 1) return { status: 'invalid', user: null, remaining: 0 };
+
+      await replacePasswordInTransaction(client, { userId: user.id, newPassword, now });
+      const remaining = await client.query(
+        `SELECT count(*)::int AS remaining FROM account_recovery_codes WHERE user_id = $1 AND used_at IS NULL`,
+        [user.id]
+      );
+      return { status: 'recovered', user, remaining: Number(remaining.rows[0]?.remaining) || 0 };
+    });
+  }
+
+  async function listDismissedOnboarding(userId) {
+    const result = await getPool().query(
+      `SELECT metadata->'onboardingDismissed' AS dismissed FROM users WHERE id = $1`,
+      [userId]
+    );
+    const dismissed = result.rows[0]?.dismissed;
+    return Array.isArray(dismissed) ? dismissed.map(normalizeOnboardingKey).filter(Boolean) : [];
+  }
+
+  async function dismissOnboarding({ userId, key, now = Date.now() }) {
+    const onboardingKey = normalizeOnboardingKey(key);
+    if (!onboardingKey) return { status: 'invalid', dismissed: [] };
+    const result = await getPool().query(
+      `UPDATE users
+       SET metadata = jsonb_set(
+             metadata,
+             '{onboardingDismissed}',
+             CASE
+               WHEN jsonb_typeof(metadata->'onboardingDismissed') <> 'array' OR metadata->'onboardingDismissed' IS NULL
+                 THEN jsonb_build_array($2::text)
+               WHEN metadata->'onboardingDismissed' @> jsonb_build_array($2::text)
+                 THEN metadata->'onboardingDismissed'
+               ELSE (metadata->'onboardingDismissed') || jsonb_build_array($2::text)
+             END,
+             true
+           ),
+           updated_at = $3
+       WHERE id = $1
+       RETURNING metadata->'onboardingDismissed' AS dismissed`,
+      [userId, onboardingKey, toDate(now)]
+    );
+    if (result.rowCount !== 1) return { status: 'not_found', dismissed: [] };
+    const dismissed = result.rows[0].dismissed;
+    return {
+      status: 'dismissed',
+      dismissed: Array.isArray(dismissed) ? dismissed.map(normalizeOnboardingKey).filter(Boolean) : []
+    };
   }
 
   async function close() {
@@ -271,11 +474,19 @@ function createUserStore({ databaseUrl, logger = console, pool, sessionTtlMs = D
     createSession,
     createUser,
     deleteSession,
+    dismissOnboarding,
+    generateRecoveryCodes,
+    getRecoveryCodesStatus,
     getSessionUser,
     getUserById,
     getUserByLogin,
     listAvatarKeys,
+    listDismissedOnboarding,
+    listSessions,
     pruneSessions,
+    recoverWithCode,
+    revokeOtherSessions,
+    revokeSession,
     swapAvatar,
     updateAvatar,
     updateDisplayName,
@@ -285,6 +496,7 @@ function createUserStore({ databaseUrl, logger = console, pool, sessionTtlMs = D
 
 module.exports = {
   createUserStore,
+  hashRecoveryCode,
   hashSessionToken,
   mapUser,
   publicUser,

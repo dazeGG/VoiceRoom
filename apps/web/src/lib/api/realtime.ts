@@ -107,6 +107,8 @@ const RECONNECT_BASE_MS = 500;
 const RECONNECT_MAX_MS = 8000;
 const HEARTBEAT_MS = 15000;
 const HEARTBEAT_TIMEOUT_MS = 30000;
+// Mirrors the API close code for sockets whose account session was ended.
+const SESSION_ENDED_CLOSE_CODE = 4401;
 
 let shared: AppRealtimeConnection | null = null;
 
@@ -259,15 +261,33 @@ class AppRealtimeConnection {
       if (parsed?.type === 'pong') this.heartbeatWatchdog.recordPong();
       if (parsed) this.emit(parsed);
     };
-    socket.onclose = () => {
+    socket.onclose = (event?: CloseEvent) => {
       if (this.socket !== socket || generation !== this.openGeneration) return;
       this.clearTimers();
       this.socket = null;
       this.emitState(false);
+      if (event?.code === SESSION_ENDED_CLOSE_CODE) {
+        // The account session behind this socket was ended; reconnecting would
+        // only come back as a guest, so hand control to the sign-out flow.
+        this.closedByClient = true;
+        for (const handler of this.sessionEndedHandlers) handler();
+        return;
+      }
       this.scheduleReconnect();
     };
     socket.onerror = () => {
       socket.close();
+    };
+  }
+
+  private sessionEndedHandlers = new Set<() => void>();
+
+  // Fires when the server closed the socket because its account session ended
+  // (signed out elsewhere, revoked from another device, password replaced).
+  onSessionEnded(handler: () => void): () => void {
+    this.sessionEndedHandlers.add(handler);
+    return () => {
+      this.sessionEndedHandlers.delete(handler);
     };
   }
 

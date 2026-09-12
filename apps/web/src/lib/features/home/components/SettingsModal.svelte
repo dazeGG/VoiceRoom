@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Bell, BellOff, Keyboard, LogOut, Mic, Monitor, Pencil, User, X } from '@lucide/svelte';
+  import { Bell, BellOff, Keyboard, LogOut, Mic, Monitor, Pencil, ShieldCheck, User, X } from '@lucide/svelte';
   import { onDestroy, untrack } from 'svelte';
   import type { AuthUser, OwnedRoom } from '$lib/api/auth';
   import type { PublicUser } from '$lib/api/friends';
@@ -82,6 +82,7 @@
     syncPushNotificationState
   } from '../model/push-notifications.svelte';
   import type { ToastOptions } from '../model/toasts.svelte';
+  import AccountSecuritySettings from './AccountSecuritySettings.svelte';
 
   let {
     open,
@@ -95,7 +96,7 @@
     onLogout
   } = $props<{
     open: boolean;
-    tab: 'profile' | 'sound' | 'hotkeys' | 'notifications' | 'app';
+    tab: 'profile' | 'sound' | 'hotkeys' | 'notifications' | 'app' | 'security';
     user: AuthUser | null;
     notificationUsers?: PublicUser[];
     notificationRooms?: OwnedRoom[];
@@ -116,6 +117,8 @@
   let avatarInput = $state<HTMLInputElement>();
   let avatarFile = $state<File | null>(null);
   let cropOpen = $state(false);
+  // A dialog opened from the security tab owns focus and Escape while it is up.
+  let securityDialogOpen = $state(false);
   let avatarSaving = $state(false);
   let pendingAvatar = $state<Blob | null>(null);
   let avatarPreviewUrl = $state('');
@@ -355,7 +358,7 @@
 
   function onKeydown(event: KeyboardEvent): void {
     if ((event.target as HTMLElement | null)?.closest?.('[data-hotkey-recorder-recording="true"]')) return;
-    if (open && !cropOpen && event.key === 'Escape') onClose();
+    if (open && !cropOpen && !securityDialogOpen && event.key === 'Escape') onClose();
   }
 
   function stopSoundPreview(): void {
@@ -655,7 +658,7 @@
       aria-modal="true"
       aria-labelledby="settingsTitle"
       tabindex="-1"
-      use:dialogFocusTrap={{ enabled: open && !cropOpen }}
+      use:dialogFocusTrap={{ enabled: open && !cropOpen && !securityDialogOpen }}
     >
       <div class="settings-head">
         <span class="settings-title" id="settingsTitle">Настройки</span>
@@ -670,6 +673,10 @@
             <button class="settings-nav-item" type="button" data-active={tab === 'profile'} onclick={() => (tab = 'profile')}>
               <User {...iconMd} aria-hidden="true" />
               Профиль
+            </button>
+            <button class="settings-nav-item" type="button" data-active={tab === 'security'} onclick={() => (tab = 'security')}>
+              <ShieldCheck {...iconMd} aria-hidden="true" />
+              Безопасность
             </button>
             <button class="settings-nav-item" type="button" data-active={tab === 'sound'} onclick={() => (tab = 'sound')}>
               <Mic {...iconMd} aria-hidden="true" />
@@ -762,6 +769,12 @@
                 Сохранить
               </button>
             </div>
+          {:else if tab === 'security'}
+            <AccountSecuritySettings
+              login={user?.login ?? ''}
+              {onToast}
+              onDialogOpenChange={(dialogOpen) => (securityDialogOpen = dialogOpen)}
+            />
           {:else if tab === 'sound'}
             <div class="settings-sound">
               <div class="settings-sound-devices">

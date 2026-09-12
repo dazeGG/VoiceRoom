@@ -3,6 +3,13 @@
 // which is how a logged-in user's persistent rooms get an owner).
 
 import type { PresenceStatus } from '$lib/shared/presence';
+import {
+  normalizeAccountSession,
+  normalizeOnboardingKey,
+  type AccountSession,
+  type OnboardingKey,
+  type RecoveryCodesStatus
+} from '@voice-room/shared/account-security';
 
 export interface AuthUser {
   avatarAccent: string | null;
@@ -135,4 +142,87 @@ export async function fetchOwnedRooms(): Promise<OwnedRoom[]> {
   }
   const payload = (await response.json()) as { rooms?: OwnedRoom[] };
   return Array.isArray(payload.rooms) ? payload.rooms : [];
+}
+
+export type { AccountSession, OnboardingKey, RecoveryCodesStatus };
+
+export interface AccountSecurity {
+  recoveryCodes: RecoveryCodesStatus;
+  onboardingDismissed: OnboardingKey[];
+}
+
+export interface RecoverInput {
+  login: string;
+  code: string;
+  newPassword: string;
+}
+
+async function authRead<T>(path: string, method: 'GET' | 'DELETE', fallbackError: string): Promise<T> {
+  const response = await fetch(`/api${path}`, {
+    method,
+    credentials: 'same-origin',
+    headers: { Accept: 'application/json' }
+  });
+  const payload = (await response.json().catch(() => ({}))) as T & { error?: string };
+  if (!response.ok) throw new Error(payload.error || fallbackError);
+  return payload;
+}
+
+function readRecoveryCodesStatus(value: Partial<RecoveryCodesStatus> | undefined): RecoveryCodesStatus {
+  return {
+    remaining: Math.max(0, Number(value?.remaining) || 0),
+    generatedAt: typeof value?.generatedAt === 'number' ? value.generatedAt : null
+  };
+}
+
+export async function fetchAccountSecurity(): Promise<AccountSecurity> {
+  const payload = await authRead<{ recoveryCodes?: RecoveryCodesStatus; onboardingDismissed?: unknown[] }>(
+    '/auth/security',
+    'GET',
+    'Не удалось загрузить настройки безопасности'
+  );
+  return {
+    recoveryCodes: readRecoveryCodesStatus(payload.recoveryCodes),
+    onboardingDismissed: (Array.isArray(payload.onboardingDismissed) ? payload.onboardingDismissed : [])
+      .map(normalizeOnboardingKey)
+      .filter((key): key is OnboardingKey => Boolean(key))
+  };
+}
+
+export async function fetchAccountSessions(): Promise<AccountSession[]> {
+  const payload = await authRead<{ sessions?: unknown[] }>('/auth/sessions', 'GET', 'Не удалось загрузить устройства');
+  return (Array.isArray(payload.sessions) ? payload.sessions : [])
+    .map(normalizeAccountSession)
+    .filter((session): session is AccountSession => session !== null);
+}
+
+export async function revokeAccountSession(sessionId: string): Promise<void> {
+  await authRead(`/auth/sessions/${encodeURIComponent(sessionId)}`, 'DELETE', 'Не удалось завершить сеанс');
+}
+
+export async function revokeOtherAccountSessions(): Promise<number> {
+  const payload = await authPost<{ revoked?: number }>('/auth/sessions/revoke-others', {});
+  return Math.max(0, Number(payload.revoked) || 0);
+}
+
+export async function generateRecoveryCodes(
+  currentPassword: string
+): Promise<{ codes: string[]; recoveryCodes: RecoveryCodesStatus }> {
+  const payload = await authPost<{ codes?: unknown[]; recoveryCodes?: RecoveryCodesStatus }>(
+    '/auth/recovery-codes',
+    { currentPassword }
+  );
+  return {
+    codes: (Array.isArray(payload.codes) ? payload.codes : []).filter((code): code is string => typeof code === 'string'),
+    recoveryCodes: readRecoveryCodesStatus(payload.recoveryCodes)
+  };
+}
+
+export async function recoverAccount(input: RecoverInput): Promise<{ user: AuthUser; remaining: number }> {
+  const payload = await authPost<{ user: AuthUser; recoveryCodes?: Partial<RecoveryCodesStatus> }>('/auth/recover', input);
+  return { user: payload.user, remaining: readRecoveryCodesStatus(payload.recoveryCodes).remaining };
+}
+
+export async function dismissOnboarding(key: OnboardingKey): Promise<void> {
+  await authPost(`/auth/onboarding/${encodeURIComponent(key)}/dismiss`, {});
 }
