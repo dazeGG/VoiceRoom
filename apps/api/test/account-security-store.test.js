@@ -3,6 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
+const { Pool } = require('pg');
 
 const { createUserStore } = require('../src/lib/user-store');
 const { runMigrations } = require('../src/lib/migrate');
@@ -183,10 +184,23 @@ test('a recovery code only opens the account it was issued for', async (t) => {
   assert.deepEqual((await store.getRecoveryCodesStatus(ada.id)).remaining, 10);
 });
 
-test('onboarding dismissals are kept once per account and unknown keys are refused', async (t) => {
-  const store = await createMigratedStore(t);
+test('new accounts skip release announcements; existing ones dismiss them once', async (t) => {
+  const { cleanup, databaseUrl } = await createTestDatabase(t);
+  await runMigrations({ databaseUrl, logger: SILENT });
+  const store = createUserStore({ databaseUrl, logger: SILENT });
+  const pool = new Pool({ connectionString: databaseUrl });
+  t.after(async () => {
+    await store.close();
+    await pool.end();
+    await cleanup();
+  });
   const { user } = await store.createUser({ login: 'ada', password: 'lovelace-1843' });
 
+  // Registering after the release must not greet the account with its announcement.
+  assert.deepEqual(await store.listDismissedOnboarding(user.id), [RECOVERY_CODES_ONBOARDING_KEY]);
+
+  // An account from before the release has no dismissal recorded yet.
+  await pool.query(`UPDATE users SET metadata = '{}'::jsonb WHERE id = $1`, [user.id]);
   assert.deepEqual(await store.listDismissedOnboarding(user.id), []);
   assert.deepEqual(
     await store.dismissOnboarding({ userId: user.id, key: 'release-9.9.9-whatever' }),
