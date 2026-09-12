@@ -19,6 +19,13 @@ const RECOVERY_CODES_REMINDER_SNOOZE_MS = 3 * 24 * 60 * 60 * 1000;
 const LOGIN_FAMILIARITY_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
 const LOGIN_ALERT_TTL_MS = 14 * 24 * 60 * 60 * 1000;
 const LOGIN_ALERT_KINDS = Object.freeze(['login', 'recovery']);
+// An account asked to be deleted stays restorable this long; then its personal
+// data goes away and what others still see of it reads as a deleted account.
+const ACCOUNT_DELETION_GRACE_MS = 7 * 24 * 60 * 60 * 1000;
+const DELETED_ACCOUNT_NAME = 'Удалённый аккаунт';
+// Finished deletions free their row's login under this prefix, so no new
+// account may take it.
+const DELETED_LOGIN_PREFIX = 'deleted-';
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const RELEASE_VERSION_PATTERN = /^(0|[1-9]\d{0,3})\.(0|[1-9]\d{0,3})\.(0|[1-9]\d{0,3})$/;
 
@@ -95,6 +102,10 @@ function isRecoveryCodesReminderDue(status, reminder, now = Date.now()) {
   return !(Number.isFinite(snoozedUntil) && snoozedUntil > now);
 }
 
+function isDeletedAccountLogin(value) {
+  return typeof value === 'string' && value.trim().toLowerCase().startsWith(DELETED_LOGIN_PREFIX);
+}
+
 function normalizeLoginAlert(value) {
   if (!value || typeof value !== 'object') return null;
   const id = typeof value.id === 'string' && UUID_PATTERN.test(value.id) ? value.id.toLowerCase() : '';
@@ -139,7 +150,10 @@ function normalizeAccountSession(value) {
 }
 
 module.exports = {
+  ACCOUNT_DELETION_GRACE_MS,
   ACCOUNT_SECURITY_CONTRACT_VERSION,
+  DELETED_ACCOUNT_NAME,
+  DELETED_LOGIN_PREFIX,
   LOGIN_ALERT_TTL_MS,
   LOGIN_FAMILIARITY_WINDOW_MS,
   RECOVERY_CODES_REMINDER_SNOOZE_MS,
@@ -152,6 +166,7 @@ module.exports = {
   describeUserAgent,
   formatRecoveryCode,
   hasUnseenWhatsNew,
+  isDeletedAccountLogin,
   isRecoveryCodesReminderDue,
   normalizeAccountSession,
   normalizeLoginAlert,

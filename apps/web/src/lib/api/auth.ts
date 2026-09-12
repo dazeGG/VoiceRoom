@@ -7,6 +7,8 @@ import {
   normalizeAccountSession,
   normalizeLoginAlert,
   normalizeReleaseVersion,
+  type AccountDeletionPreview,
+  type AccountDeletionRoom,
   type AccountSession,
   type LoginAlert,
   type RecoveryCodesReminder,
@@ -71,7 +73,7 @@ async function authPost<T>(path: string, body: unknown): Promise<T> {
     method: 'POST'
   });
 
-  let payload: { error?: string } | null = null;
+  let payload: ({ error?: string; code?: string } & Record<string, unknown>) | null = null;
   try {
     payload = await response.json();
   } catch {
@@ -79,9 +81,23 @@ async function authPost<T>(path: string, body: unknown): Promise<T> {
   }
 
   if (!response.ok) {
-    throw new Error(payload?.error || 'Сервер недоступен');
+    throw new AuthRequestError(payload?.error || 'Сервер недоступен', payload?.code || '', payload || {});
   }
   return payload as T;
+}
+
+// Carries the machine-readable code and extra fields some auth answers need,
+// such as when a sign-in hits an account that is waiting to be deleted.
+export class AuthRequestError extends Error {
+  code: string;
+  details: Record<string, unknown>;
+
+  constructor(message: string, code: string, details: Record<string, unknown>) {
+    super(message);
+    this.name = 'AuthRequestError';
+    this.code = code;
+    this.details = details;
+  }
 }
 
 export async function register(input: RegisterInput): Promise<AuthUser> {
@@ -147,7 +163,15 @@ export async function fetchOwnedRooms(): Promise<OwnedRoom[]> {
   return Array.isArray(payload.rooms) ? payload.rooms : [];
 }
 
-export type { AccountSession, LoginAlert, RecoveryCodesReminder, RecoveryCodesStatus, WhatsNewState };
+export type {
+  AccountDeletionPreview,
+  AccountDeletionRoom,
+  AccountSession,
+  LoginAlert,
+  RecoveryCodesReminder,
+  RecoveryCodesStatus,
+  WhatsNewState
+};
 
 export interface AccountSecurity {
   recoveryCodes: RecoveryCodesStatus;
@@ -219,6 +243,28 @@ export async function fetchLoginAlerts(): Promise<LoginAlert[]> {
   return (Array.isArray(payload.alerts) ? payload.alerts : [])
     .map(normalizeLoginAlert)
     .filter((alert): alert is LoginAlert => alert !== null);
+}
+
+export async function fetchAccountDeletionPreview(): Promise<AccountDeletionPreview> {
+  const payload = await authRead<{ graceDays?: number; rooms?: AccountDeletionRoom[] }>(
+    '/auth/account/deletion',
+    'GET',
+    'Не удалось подготовить удаление аккаунта'
+  );
+  return {
+    graceDays: Math.max(1, Number(payload.graceDays) || 7),
+    rooms: Array.isArray(payload.rooms) ? payload.rooms : []
+  };
+}
+
+export async function requestAccountDeletion(currentPassword: string): Promise<{ deletionScheduledFor: number }> {
+  const payload = await authPost<{ deletionScheduledFor?: number }>('/auth/account/deletion', { currentPassword });
+  return { deletionScheduledFor: Number(payload.deletionScheduledFor) || Date.now() };
+}
+
+export async function restoreAccount(input: Credentials): Promise<AuthUser> {
+  const payload = await authPost<{ user: AuthUser }>('/auth/account/restore', input);
+  return payload.user;
 }
 
 export async function confirmLoginAlert(alertId: string): Promise<void> {

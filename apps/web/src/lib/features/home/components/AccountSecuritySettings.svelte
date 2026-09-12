@@ -16,6 +16,7 @@
   import { formatLastSeen, recoveryCodesSummary, sessionDeviceLabel } from '../model/account-security';
   import type { ToastOptions } from '../model/toasts.svelte';
   import RecoveryCodesDialog from './RecoveryCodesDialog.svelte';
+  import DeleteAccountDialog from './DeleteAccountDialog.svelte';
 
   let { login, highlightRecoveryCodes = false, highlightPassword = false, onToast, onDialogOpenChange = () => {} } = $props<{
     login: string;
@@ -36,6 +37,7 @@
   let endingSessionId = $state('');
   let endingOthers = $state(false);
   let codesDialogOpen = $state(false);
+  let deleteDialogOpen = $state(false);
   let currentPassword = $state('');
   let newPassword = $state('');
   let changingPassword = $state(false);
@@ -46,7 +48,7 @@
   const recoveryCodesHighlighted = $derived(highlightRecoveryCodes && recoveryCodes?.remaining === 0);
 
   $effect(() => {
-    onDialogOpenChange(codesDialogOpen);
+    onDialogOpenChange(codesDialogOpen || deleteDialogOpen);
   });
 
   $effect(() => {
@@ -252,7 +254,21 @@
       </div>
     {/if}
   </section>
+
+  <section class="settings-notification-group" aria-labelledby="accountDeletionTitle">
+    <span class="settings-section-title" id="accountDeletionTitle">Удаление аккаунта</span>
+    <div class="account-security-danger">
+      <div class="settings-gate-hint">
+        Аккаунт скроется сразу и удалится через 7 дней. До этого его можно восстановить, войдя с паролем.
+      </div>
+      <button class="settings-unblock-button" type="button" onclick={() => (deleteDialogOpen = true)}>
+        Удалить аккаунт
+      </button>
+    </div>
+  </section>
 </div>
+
+<DeleteAccountDialog open={deleteDialogOpen} onClose={() => (deleteDialogOpen = false)} {onToast} />
 
 <RecoveryCodesDialog
   open={codesDialogOpen}
@@ -342,7 +358,23 @@
     margin-top: 0;
   }
 
+  .account-security-danger {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .account-security-danger .settings-gate-hint {
+    margin-top: 0;
+  }
+
   @media (max-width: 560px) {
+    .account-security-danger {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+
     .account-security-head {
       flex-direction: column;
     }

@@ -95,6 +95,24 @@ test('a missing recovery codes reminder sits above the rooms, snoozes and highli
   assert.match(security, /\.account-security-action\[data-highlight='true'\] \{\s*animation:/);
 });
 
+test('account deletion asks for the password, explains the grace period and can be undone by signing in', () => {
+  const security = read('src/lib/features/home/components/AccountSecuritySettings.svelte');
+  const dialog = read('src/lib/features/home/components/DeleteAccountDialog.svelte');
+  const auth = read('src/lib/features/auth/AuthDialog.svelte');
+  const api = read('src/lib/api/auth.ts');
+
+  assert.match(security, /<DeleteAccountDialog open=\{deleteDialogOpen\}/);
+  // The nested dialog owns focus and Escape like the recovery codes dialog.
+  assert.match(security, /onDialogOpenChange\(codesDialogOpen \|\| deleteDialogOpen\)/);
+  assert.match(dialog, /disabled=\{deleting \|\| !understood \|\| !password\}/);
+  assert.match(dialog, /expectSessionEnd\(\);\s*try \{\s*const \{ deletionScheduledFor \} = await requestAccountDeletion\(password\);/);
+  assert.match(dialog, /«Удалённый аккаунт»/);
+  assert.match(dialog, /\.delete-account-layer :global\(\.ui-dialog-overlay\) \{\s*z-index: 100;/);
+  assert.match(api, /export class AuthRequestError extends Error/);
+  assert.match(auth, /cause\.code === 'account_deletion_pending'/);
+  assert.match(auth, /restoreAccount\(\{ login: loginValue\.trim\(\), password \}\)/);
+});
+
 test('a sign-in from a new device asks this account, and "Это не я" leads to securing it', () => {
   const dialog = read('src/lib/features/home/components/LoginAlertDialog.svelte');
   const lobby = read('src/lib/features/home/LobbyPage.svelte');

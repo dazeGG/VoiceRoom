@@ -55,7 +55,9 @@ function mapUser(row) {
     id: row.id,
     login: row.login,
     passwordHash: row.password_hash,
-    presenceStatus
+    presenceStatus,
+    deletionRequestedAt: row.deletion_requested_at ? toMillis(row.deletion_requested_at) : null,
+    deletedAt: row.deleted_at ? toMillis(row.deleted_at) : null
   };
 }
 
@@ -205,8 +207,14 @@ function createUserStore({ databaseUrl, logger = console, pool, sessionTtlMs = D
   }
 
   async function listAvatarKeys() {
+    // An account waiting to be deleted keeps its avatar aside for a restore, so
+    // avatar reconciliation must not treat that file as unused.
     const result = await getPool().query(
-      `SELECT avatar_key FROM users WHERE avatar_key IS NOT NULL`
+      `SELECT avatar_key FROM users WHERE avatar_key IS NOT NULL
+       UNION
+       SELECT metadata->'deletedProfile'->>'avatarKey' AS avatar_key
+       FROM users
+       WHERE metadata->'deletedProfile'->>'avatarKey' IS NOT NULL`
     );
     return result.rows.map((row) => row.avatar_key).filter(Boolean);
   }
@@ -424,7 +432,8 @@ function createUserStore({ databaseUrl, logger = console, pool, sessionTtlMs = D
     return transaction(getPool(), async (client) => {
       const userResult = await client.query(`SELECT * FROM users WHERE login = $1 FOR UPDATE`, [login]);
       const user = mapUser(userResult.rows[0]);
-      if (!user) return { status: 'invalid', user: null, remaining: 0 };
+      // An account waiting to be deleted comes back through a restore, not a code.
+      if (!user || user.deletionRequestedAt || user.deletedAt) return { status: 'invalid', user: null, remaining: 0 };
 
       const spent = await client.query(
         `UPDATE account_recovery_codes
