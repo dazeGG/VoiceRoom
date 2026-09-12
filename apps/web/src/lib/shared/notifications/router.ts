@@ -328,7 +328,12 @@ export function buildNotificationPayload(
       body: privateNotifications ? PRIVATE_BODY : truncateNotificationBody(event.payload.message?.body || DEFAULT_BODY),
       tag: dedupeKey,
       dedupeKey,
-      data: { kind: 'dm', peerId: event.payload.peer?.id, messageId: event.payload.message?.id }
+      data: {
+        kind: 'dm',
+        peerId: event.payload.peer.id,
+        messageId: event.payload.message.id,
+        route: `/?dm=${encodeURIComponent(event.payload.peer.id)}`
+      }
     };
   }
 
@@ -351,7 +356,8 @@ export function buildNotificationPayload(
         kind: 'room',
         roomId: event.payload.room?.roomId,
         senderId: event.payload.sender?.id,
-        messageId: event.payload.message?.id
+        messageId: event.payload.message.id,
+        route: `/?room=${encodeURIComponent(event.payload.room.roomId)}&message=${encodeURIComponent(event.payload.message.id)}`
       }
     };
   }
@@ -409,12 +415,22 @@ export function routeNotificationEvent(
   return { notify: true, payload };
 }
 
+// The desktop shell replaces a shown notification that has the same tag (and
+// alerts again), so each conversation keeps only its latest message there.
+// Page notifications keep per-message tags: Chromium would replace them silently.
+function desktopNotificationTag(payload: BrowserNotificationPayload): string {
+  const data = payload.data;
+  if (data?.kind === 'dm' && typeof data.peerId === 'string') return `dm:${data.peerId}`;
+  if (data?.kind === 'room' && typeof data.roomId === 'string') return `room:${data.roomId}`;
+  return payload.tag;
+}
+
 function toDesktopNotificationPayload(payload: BrowserNotificationPayload): DesktopNotificationPayload {
   const route = typeof payload.data?.route === 'string' ? payload.data.route : undefined;
   return {
     title: payload.title,
     body: payload.body,
-    tag: payload.tag,
+    tag: desktopNotificationTag(payload),
     dedupeKey: payload.dedupeKey,
     ...(route ? { route } : {})
   };
