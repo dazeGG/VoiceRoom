@@ -75,7 +75,8 @@ test('what is new follows the last seen release, not recovery codes', () => {
   assert.doesNotMatch(dialog, /recoveryCodes|RecoveryCodes/);
   assert.match(dialog, /void markWhatsNewSeen\(\)/);
   assert.match(model, /state\.current === WHATS_NEW_VERSION && hasUnseenWhatsNew\(state\.lastSeen, state\.current\)/);
-  assert.match(lobby, /<WhatsNewDialog onOpenSecurity=\{\(\) => openSecuritySettings\(\)\} \/>/);
+  // The security question about a new sign-in outranks the release announcement.
+  assert.match(lobby, /<WhatsNewDialog paused=\{loginAlertOpen\} onOpenSecurity=\{\(\) => openSecuritySettings\(\)\} \/>/);
 });
 
 test('a missing recovery codes reminder sits above the rooms, snoozes and highlights the action', () => {
@@ -92,4 +93,26 @@ test('a missing recovery codes reminder sits above the rooms, snoozes and highli
   assert.match(lobby, /await snoozeRecoveryCodesReminder\(\);/);
   assert.match(security, /data-highlight=\{recoveryCodesHighlighted\}/);
   assert.match(security, /\.account-security-action\[data-highlight='true'\] \{\s*animation:/);
+});
+
+test('a sign-in from a new device asks this account, and "Это не я" leads to securing it', () => {
+  const dialog = read('src/lib/features/home/components/LoginAlertDialog.svelte');
+  const lobby = read('src/lib/features/home/LobbyPage.svelte');
+  const realtime = read('src/lib/api/realtime.ts');
+  const security = read('src/lib/features/home/components/AccountSecuritySettings.svelte');
+
+  assert.match(realtime, /type: 'account\.login\.new'/);
+  assert.match(realtime, /type: 'account\.login\.resolved'/);
+  assert.match(dialog, /event\.type === 'account\.login\.new'/);
+  assert.match(dialog, /event\.type === 'account\.login\.resolved'/);
+  // Sign-ins that happened while offline show up after a reconnect or next visit.
+  assert.match(dialog, /onRestore\(\(\) => void load\(\)\)/);
+  assert.match(dialog, /login-alert-button--danger[\s\S]*?Это не я/);
+  assert.match(dialog, /login-alert-button--safe[\s\S]*?Это я/);
+  assert.match(dialog, /secure\('password'\)/);
+  assert.match(dialog, /secure\('recovery-codes'\)/);
+  // Above the settings modal (z-index 60) and every other lobby dialog.
+  assert.match(dialog, /\.login-alert-layer :global\(\.ui-dialog-overlay\) \{\s*z-index: 110;/);
+  assert.match(lobby, /<LoginAlertDialog\s+onSecureAccount=\{\(target\) => openSecuritySettings\(target\)\}/);
+  assert.match(security, /data-highlight=\{highlightPassword\}/);
 });

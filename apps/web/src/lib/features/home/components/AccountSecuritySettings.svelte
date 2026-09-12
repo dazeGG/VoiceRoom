@@ -17,15 +17,18 @@
   import type { ToastOptions } from '../model/toasts.svelte';
   import RecoveryCodesDialog from './RecoveryCodesDialog.svelte';
 
-  let { login, highlightRecoveryCodes = false, onToast, onDialogOpenChange = () => {} } = $props<{
+  let { login, highlightRecoveryCodes = false, highlightPassword = false, onToast, onDialogOpenChange = () => {} } = $props<{
     login: string;
     // Set when the lobby reminder brought the user here.
     highlightRecoveryCodes?: boolean;
+    // Set after "Это не я" on a new sign-in.
+    highlightPassword?: boolean;
     onToast: (message: string, options?: ToastOptions) => void;
     onDialogOpenChange?: (open: boolean) => void;
   }>();
 
   let recoveryCodesButton = $state<HTMLButtonElement>();
+  let currentPasswordInput = $state<HTMLInputElement>();
 
   let recoveryCodes = $state<RecoveryCodesStatus | null>(null);
   let sessions = $state<AccountSession[]>([]);
@@ -48,6 +51,17 @@
 
   $effect(() => {
     if (recoveryCodesHighlighted) recoveryCodesButton?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  });
+
+  $effect(() => {
+    if (!highlightPassword || !currentPasswordInput) return;
+    const input = currentPasswordInput;
+    // After the settings dialog has placed its own initial focus.
+    const timer = window.setTimeout(() => {
+      input.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      input.focus();
+    }, 80);
+    return () => window.clearTimeout(timer);
   });
 
   onMount(() => {
@@ -136,7 +150,7 @@
       <div class="settings-password-fields">
         <div>
           <span class="settings-field-label">Текущий пароль</span>
-          <input class="settings-input" type="password" bind:value={currentPassword} placeholder="••••••••" autocomplete="current-password" />
+          <input class="settings-input" type="password" bind:this={currentPasswordInput} bind:value={currentPassword} placeholder="••••••••" autocomplete="current-password" />
         </div>
         <div>
           <span class="settings-field-label">Новый пароль</span>
@@ -145,7 +159,12 @@
       </div>
       <div class="account-security-password-foot">
         <div class="settings-gate-hint">После смены пароля завершатся все сеансы, включая этот.</div>
-        <button class="settings-save account-security-action" type="submit" disabled={changingPassword || !currentPassword || !newPassword}>
+        <button
+          class="settings-save account-security-action"
+          type="submit"
+          data-highlight={highlightPassword}
+          disabled={changingPassword || !currentPassword || !newPassword}
+        >
           {#if changingPassword}<span class="home-spinner" aria-hidden="true"></span>{/if}
           Сменить пароль
         </button>
