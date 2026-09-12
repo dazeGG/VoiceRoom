@@ -57,7 +57,6 @@ function startServer(socketPath, databaseUrl, logs, envOverrides = {}) {
       ...process.env,
       NODE_ENV: 'test',
       MAX_EMPTY_ROOMS_PER_IP: '0',
-      ROOM_CHAT_TTL_MS: '60000',
       ROOM_CREATE_POW_DIFFICULTY: '0',
       ROOM_CREATE_RATE_LIMIT: '0',
       DATABASE_URL: databaseUrl,

@@ -8,8 +8,9 @@ const {
   cleanAvatarColorKey
 } = require('@voice-room/shared/validation');
 
-// 0 keeps messages until they are deleted; a positive value expires them.
-const DEFAULT_MESSAGE_TTL_MS = 0;
+// Room history is never expired or trimmed: a message leaves only when its
+// author or the room owner deletes it, or when its room is deleted.
+const DEFAULT_LIST_LIMIT = 500;
 
 function createRowId() {
   return crypto.randomUUID?.() || crypto.randomBytes(16).toString('hex');
@@ -34,12 +35,6 @@ function toMillis(value) {
   if (value instanceof Date) return value.getTime();
   const parsed = Date.parse(value);
   return Number.isFinite(parsed) ? parsed : Date.now();
-}
-
-// 0 means "retain everything"; anything unparsable falls back to unlimited too,
-// because silently dropping history is worse than keeping too much of it.
-function normalizeMessageLimit(value) {
-  return normalizePositiveInt(value, 0);
 }
 
 function mapRoom(row) {
@@ -136,17 +131,14 @@ function roomIdFrom(roomOrId) {
 function createRoomStore({
   databaseUrl,
   logger = console,
-  maxMessagesPerRoom = 0,
-  messageTtlMs = DEFAULT_MESSAGE_TTL_MS,
   pool,
   roomIdleTtlMs = 15 * 60 * 1000
 } = {}) {
   let activePool = pool || null;
   let activeBanService = null;
-  const retainedMessageLimit = normalizeMessageLimit(maxMessagesPerRoom);
   // Callers that ask for no explicit window still get a bounded page rather than
-  // the whole (now unbounded) history.
-  const defaultListLimit = retainedMessageLimit > 0 ? retainedMessageLimit : 500;
+  // the whole history.
+  const defaultListLimit = DEFAULT_LIST_LIMIT;
   function getPool() {
     if (!activePool) {
       activePool = createDbPool({ databaseUrl, logger });
@@ -838,30 +830,38 @@ function createRoomStore({
   async function pruneRooms(now = Date.now()) {
     const nowDate = toDate(now);
     const idleBefore = toDate(now - roomIdleTtlMs);
-    return transaction(getPool(), async (client) => {
-      const expiredMessages = await client.query(
-        `UPDATE room_messages
-         SET deleted_at = $1
-         WHERE deleted_at IS NULL AND expires_at IS NOT NULL AND expires_at <= $1`,
-        [nowDate]
-      );
-      const expiredRooms = await client.query(
-        `UPDATE rooms
-         SET deleted_at = $1, updated_at = $1
-         WHERE deleted_at IS NULL
-           AND is_static = false
-           AND empty_since IS NOT NULL
-           AND empty_since <= $2`,
-        [nowDate, idleBefore]
-      );
-      return expiredMessages.rowCount > 0 || expiredRooms.rowCount > 0;
-    });
+    const expiredRooms = await getPool().query(
+      `UPDATE rooms
+       SET deleted_at = $1, updated_at = $1
+       WHERE deleted_at IS NULL
+         AND is_static = false
+         AND empty_since IS NOT NULL
+         AND empty_since <= $2`,
+      [nowDate, idleBefore]
+    );
+    return expiredRooms.rowCount > 0;
   }
 
   async function purgeDeleted({ olderThanMs = 30 * 24 * 60 * 60 * 1000, batchSize = 5000, now = Date.now() } = {}) {
     const cutoff = toDate(now - normalizePositiveInt(olderThanMs, 30 * 24 * 60 * 60 * 1000));
     const limit = Math.max(1, normalizePositiveInt(batchSize, 5000));
     return transaction(getPool(), async (client) => {
+      // Attachments are the one reference that does not cascade. Unbind the ones
+      // on messages that may go now, whether deleted on their own or with their
+      // room, and mark them deleted so media cleanup removes the files.
+      await client.query(
+        `UPDATE message_attachments
+         SET state = 'deleted', deleted_at = COALESCE(deleted_at, current_timestamp),
+             room_message_id = NULL, attachment_order = NULL, bound_at = NULL,
+             updated_at = current_timestamp
+         WHERE room_message_id IN (
+           SELECT m.id FROM room_messages m
+           LEFT JOIN rooms r ON r.id = m.room_id
+           WHERE (m.deleted_at IS NOT NULL AND m.deleted_at < $1)
+              OR (r.deleted_at IS NOT NULL AND r.deleted_at < $1)
+         )`,
+        [cutoff]
+      );
       const messages = await client.query(
         `WITH doomed AS (
            SELECT id FROM room_messages
@@ -914,11 +914,6 @@ function createRoomStore({
   async function appendMessage(roomId, message, now = Date.now()) {
     const id = typeof message?.id === 'string' && message.id ? message.id : crypto.randomUUID();
     const createdAt = normalizePositiveInt(message?.createdAt, now);
-    const fallbackExpiresAt = messageTtlMs > 0 ? createdAt + messageTtlMs : null;
-    const expiresAt = message?.expiresAt == null
-      ? fallbackExpiresAt
-      : normalizePositiveInt(message.expiresAt, fallbackExpiresAt);
-    if (expiresAt !== null && expiresAt <= now) return null;
 
     return transaction(getPool(), async (client) => {
       const room = await client.query(
@@ -945,7 +940,7 @@ function createRoomStore({
             : (typeof message?.name === 'string' ? message.name : ''),
           typeof message?.text === 'string' ? message.text : '',
           toDate(createdAt),
-          expiresAt === null ? null : toDate(expiresAt),
+          null,
           typeof message?.authorUserId === 'string' ? message.authorUserId : null,
           typeof message?.replyToMessageId === 'string' ? message.replyToMessageId : null,
           message?.content ? JSON.stringify(message.content) : null
@@ -958,31 +953,11 @@ function createRoomStore({
 
       await client.query(`UPDATE rooms SET updated_at = $2 WHERE id = $1`, [roomId, toDate(now)]);
 
-      if (retainedMessageLimit > 0) {
-        await client.query(
-          `WITH ranked AS (
-             SELECT id, row_number() OVER (ORDER BY created_at DESC, id DESC) AS position
-             FROM room_messages
-             WHERE room_id = $1 AND deleted_at IS NULL
-           )
-           UPDATE room_messages
-           SET deleted_at = $2
-           WHERE id IN (SELECT id FROM ranked WHERE position > $3)`,
-          [roomId, toDate(now), retainedMessageLimit]
-        );
-      }
-
       return mapMessage(inserted.rows[0]);
     });
   }
 
   async function listMessages(roomId, { limit = defaultListLimit, now = Date.now() } = {}) {
-    await getPool().query(
-      `UPDATE room_messages
-       SET deleted_at = $2
-       WHERE room_id = $1 AND deleted_at IS NULL AND expires_at IS NOT NULL AND expires_at <= $2`,
-      [roomId, toDate(now)]
-    );
     const boundedLimit = Math.max(0, normalizePositiveInt(limit, defaultListLimit));
     if (boundedLimit === 0) return [];
 
