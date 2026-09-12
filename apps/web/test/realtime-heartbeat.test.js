@@ -45,5 +45,5 @@ test('app realtime closes an unresponsive socket and ignores stale socket callba
 
   assert.match(source, /heartbeatWatchdog\.isTimedOut\(\)[\s\S]*socket\?\.close\(4000, 'heartbeat_timeout'\)/);
   assert.match(source, /parsed\?\.type === 'pong'\) this\.heartbeatWatchdog\.recordPong\(\)/);
-  assert.match(source, /socket\.onclose = \(\) => \{\s*if \(this\.socket !== socket \|\| generation !== this\.openGeneration\) return;/);
+  assert.match(source, /socket\.onclose = \((?:event\?: CloseEvent)?\) => \{\s*if \(this\.socket !== socket \|\| generation !== this\.openGeneration\) return;/);
 });
