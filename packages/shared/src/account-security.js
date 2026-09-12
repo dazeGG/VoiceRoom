@@ -13,6 +13,13 @@ const RECOVERY_CODE_PATTERN = /^[0-9A-HJKMNP-TV-Z]{16}$/;
 // so only people who used an earlier release are shown it.
 const WHATS_NEW_VERSION = '2.6.0';
 const RECOVERY_CODES_REMINDER_SNOOZE_MS = 3 * 24 * 60 * 60 * 1000;
+// A sign-in from a device and city the account has not used within this window
+// asks the account whether it was them; an unanswered question expires after
+// the alert TTL.
+const LOGIN_FAMILIARITY_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
+const LOGIN_ALERT_TTL_MS = 14 * 24 * 60 * 60 * 1000;
+const LOGIN_ALERT_KINDS = Object.freeze(['login', 'recovery']);
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const RELEASE_VERSION_PATTERN = /^(0|[1-9]\d{0,3})\.(0|[1-9]\d{0,3})\.(0|[1-9]\d{0,3})$/;
 
 // Order matters: Chromium-based browsers also carry "Chrome/" and "Safari/",
@@ -88,6 +95,22 @@ function isRecoveryCodesReminderDue(status, reminder, now = Date.now()) {
   return !(Number.isFinite(snoozedUntil) && snoozedUntil > now);
 }
 
+function normalizeLoginAlert(value) {
+  if (!value || typeof value !== 'object') return null;
+  const id = typeof value.id === 'string' && UUID_PATTERN.test(value.id) ? value.id.toLowerCase() : '';
+  const kind = LOGIN_ALERT_KINDS.includes(value.kind) ? value.kind : '';
+  const createdAt = Number(value.createdAt);
+  if (!id || !kind || !Number.isSafeInteger(createdAt) || createdAt < 0) return null;
+  return {
+    id,
+    kind,
+    client: boundedText(value.client, 64),
+    os: boundedText(value.os, 32),
+    location: boundedText(value.location, 120),
+    createdAt
+  };
+}
+
 function describeUserAgent(value) {
   const userAgent = typeof value === 'string' ? value.slice(0, 512) : '';
   const match = (rules) => rules.find(([pattern]) => pattern.test(userAgent))?.[1] || '';
@@ -117,6 +140,8 @@ function normalizeAccountSession(value) {
 
 module.exports = {
   ACCOUNT_SECURITY_CONTRACT_VERSION,
+  LOGIN_ALERT_TTL_MS,
+  LOGIN_FAMILIARITY_WINDOW_MS,
   RECOVERY_CODES_REMINDER_SNOOZE_MS,
   RECOVERY_CODE_ALPHABET,
   RECOVERY_CODE_COUNT,
@@ -129,6 +154,7 @@ module.exports = {
   hasUnseenWhatsNew,
   isRecoveryCodesReminderDue,
   normalizeAccountSession,
+  normalizeLoginAlert,
   normalizeRecoveryCode,
   normalizeReleaseVersion
 };

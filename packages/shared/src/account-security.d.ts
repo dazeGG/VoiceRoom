@@ -26,7 +26,20 @@ export interface WhatsNewState {
   lastSeen: string | null;
 }
 
+export type LoginAlertKind = 'login' | 'recovery';
+
+export interface LoginAlert {
+  id: string;
+  kind: LoginAlertKind;
+  client: string;
+  os: string;
+  location: string;
+  createdAt: number;
+}
+
 export const ACCOUNT_SECURITY_CONTRACT_VERSION: 1;
+export const LOGIN_ALERT_TTL_MS: number;
+export const LOGIN_FAMILIARITY_WINDOW_MS: number;
 export const RECOVERY_CODES_REMINDER_SNOOZE_MS: number;
 export const RECOVERY_CODE_ALPHABET: string;
 export const RECOVERY_CODE_COUNT: 10;
@@ -44,5 +57,6 @@ export function isRecoveryCodesReminderDue(
   now?: number
 ): boolean;
 export function normalizeAccountSession(value: unknown): AccountSession | null;
+export function normalizeLoginAlert(value: unknown): LoginAlert | null;
 export function normalizeRecoveryCode(value: unknown): string;
 export function normalizeReleaseVersion(value: unknown): string;

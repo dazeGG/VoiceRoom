@@ -845,7 +845,8 @@ async function queuePush(userId, payload, context = {}) {
   try {
     if (!getPushService().config.enabled) return;
     const preferences = await getNotificationStore().getPreferences(userId);
-    if (!shouldDeliverPush(preferences, context)) return;
+    // Security alerts reach the account even in do-not-disturb.
+    if (!context.ignorePreferences && !shouldDeliverPush(preferences, context)) return;
     const body = preferences.privateNotifications && payload.privateBody
       ? payload.privateBody
       : payload.body;
@@ -1064,6 +1065,38 @@ async function sessionDeviceFor(req) {
   };
 }
 
+function describeLoginDevice(alert) {
+  const device = [alert.client || 'Неизвестный браузер', alert.os].filter(Boolean).join(' · ');
+  return alert.location ? `${device}, ${alert.location}` : device;
+}
+
+// Records a sign-in and, when it comes from an unfamiliar device or city, asks
+// the account's other devices right away and by push. A failure here must not
+// fail the sign-in itself.
+async function recordAndAnnounceLogin({ userId, session, device, kind }) {
+  try {
+    const { alert } = await getUserStore().recordLogin({
+      userId,
+      sessionPublicId: session.publicId,
+      kind,
+      userAgent: device.userAgent,
+      locationLabel: device.locationLabel
+    });
+    if (!alert) return;
+    broadcastToUser(userId, { type: 'account.login.new', alert });
+    void queuePush(userId, {
+      type: 'account.login',
+      title: kind === 'recovery' ? 'Вход по коду восстановления' : 'Новый вход в аккаунт',
+      body: `${describeLoginDevice(alert)}. Если это были не вы, откройте Voice Room.`,
+      tag: `login-alert:${alert.id}`,
+      dedupeKey: `login-alert:${alert.id}`,
+      url: '/'
+    }, { ignorePreferences: true });
+  } catch (error) {
+    console.error('Failed to record a sign-in:', error);
+  }
+}
+
 async function resolveOptionalSessionUser(req) {
   if (!getSessionToken(req)) return null;
   const session = await resolveSessionUser(req);
@@ -1210,6 +1243,10 @@ function startPruneTimer(server, logger = console) {
     void observeMaintenance('session_prune', () => getUserStore().pruneSessions())
       .catch((error) => {
         logger.error('Session prune timer failed:', error);
+      });
+    void observeMaintenance('login_event_prune', () => getUserStore().pruneLoginEvents())
+      .catch((error) => {
+        logger.error('Sign-in history prune timer failed:', error);
       });
     if (RETENTION_PURGE_INTERVAL_MS > 0 && getRoomStore().purgeDeleted) {
       void observeMaintenance('retention_purge', () => getRoomStore().purgeDeleted({ olderThanMs: RETENTION_KEEP_DELETED_MS }))
@@ -1915,7 +1952,9 @@ async function handleRegister(req, res) {
     return;
   }
 
-  const session = await getUserStore().createSession({ userId: created.user.id, ...await sessionDeviceFor(req) });
+  const device = await sessionDeviceFor(req);
+  const session = await getUserStore().createSession({ userId: created.user.id, ...device });
+  await recordAndAnnounceLogin({ userId: created.user.id, session, device, kind: 'register' });
   sendJson(
     res,
     201,
@@ -1952,7 +1991,9 @@ async function handleLogin(req, res) {
     return;
   }
 
-  const session = await getUserStore().createSession({ userId: user.id, ...await sessionDeviceFor(req) });
+  const device = await sessionDeviceFor(req);
+  const session = await getUserStore().createSession({ userId: user.id, ...device });
+  await recordAndAnnounceLogin({ userId: user.id, session, device, kind: 'login' });
   sendJson(
     res,
     200,
@@ -2249,6 +2290,53 @@ async function handleMarkWhatsNewSeen(req, res) {
   sendJson(res, 200, { ok: true, whatsNew: { current: WHATS_NEW_VERSION, lastSeen: result.whatsNewSeen } });
 }
 
+async function handleLoginAlerts(req, res) {
+  const session = await resolveSessionUser(req);
+  if (!session) {
+    sendJson(res, 401, { ok: false, error: 'Требуется вход' });
+    return;
+  }
+  const alerts = await getUserStore().listPendingLoginAlerts({
+    userId: session.user.id,
+    excludeSessionPublicId: session.session.publicId
+  });
+  sendJson(res, 200, { ok: true, alerts });
+}
+
+async function handleResolveLoginAlert(req, res, alertId, resolution) {
+  const session = await resolveSessionUser(req);
+  if (!session) {
+    sendJson(res, 401, { ok: false, error: 'Требуется вход' });
+    return;
+  }
+  const userId = session.user.id;
+  const result = await getUserStore().resolveLoginAlert({
+    userId,
+    alertId,
+    resolution,
+    currentSessionPublicId: session.session.publicId
+  });
+  if (result.status !== 'resolved') {
+    sendJson(res, 404, { ok: false, error: 'Вход не найден или на него уже ответили' });
+    return;
+  }
+  if (result.revokedTokenHash) {
+    await endAccountSessionConnections({ userId, tokenHashes: [result.revokedTokenHash] });
+  }
+  // Every other device showing the same question closes it.
+  broadcastToUser(userId, { type: 'account.login.resolved', alertId: String(alertId).toLowerCase(), resolution });
+  if (resolution === 'confirmed') {
+    sendJson(res, 200, { ok: true, resolution });
+    return;
+  }
+  sendJson(res, 200, {
+    ok: true,
+    resolution,
+    sessionEnded: Boolean(result.revokedTokenHash),
+    recoveryCodes: await getUserStore().getRecoveryCodesStatus(userId)
+  });
+}
+
 async function handleListSessions(req, res) {
   const session = await resolveSessionUser(req);
   if (!session) {
@@ -2361,7 +2449,9 @@ async function handleRecoverAccount(req, res) {
   }
 
   await endAccountSessionConnections({ userId: result.user.id });
-  const session = await getUserStore().createSession({ userId: result.user.id, ...await sessionDeviceFor(req) });
+  const device = await sessionDeviceFor(req);
+  const session = await getUserStore().createSession({ userId: result.user.id, ...device });
+  await recordAndAnnounceLogin({ userId: result.user.id, session, device, kind: 'recovery' });
   sendJson(
     res,
     200,
@@ -4831,6 +4921,17 @@ function createApiApp({
   app.post('/api/auth/recovery-codes/reminder/snooze', (request, reply) => runLegacyHandler(request, reply, handleSnoozeRecoveryCodesReminder));
   app.get('/api/auth/whats-new', (request, reply) => runLegacyHandler(request, reply, handleWhatsNew));
   app.post('/api/auth/whats-new/seen', (request, reply) => runLegacyHandler(request, reply, handleMarkWhatsNewSeen));
+  app.get('/api/auth/login-alerts', (request, reply) => runLegacyHandler(request, reply, handleLoginAlerts));
+  app.post('/api/auth/login-alerts/:alertId/confirm', (request, reply) => runLegacyHandler(
+    request,
+    reply,
+    (req, res) => handleResolveLoginAlert(req, res, request.params.alertId, 'confirmed')
+  ));
+  app.post('/api/auth/login-alerts/:alertId/deny', (request, reply) => runLegacyHandler(
+    request,
+    reply,
+    (req, res) => handleResolveLoginAlert(req, res, request.params.alertId, 'denied')
+  ));
   app.get('/api/auth/rooms', (request, reply) => runLegacyHandler(request, reply, handleAuthRooms));
   app.post('/api/auth/rooms', (request, reply) => runLegacyHandler(request, reply, handleAddAuthRoom));
   app.delete('/api/auth/rooms/:roomId', (request, reply) => runLegacyHandler(

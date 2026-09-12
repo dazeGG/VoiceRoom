@@ -6,7 +6,7 @@
   import { iconMd } from '$lib/shared/ui/icons';
   import { WHATS_NEW_ITEMS, shouldShowWhatsNew, type WhatsNewIcon } from '../model/whats-new';
 
-  let { onOpenSecurity } = $props<{ onOpenSecurity: () => void }>();
+  let { paused = false, onOpenSecurity } = $props<{ paused?: boolean; onOpenSecurity: () => void }>();
 
   const ICONS: Record<WhatsNewIcon, typeof KeyRound> = {
     devices: MonitorSmartphone,
@@ -14,13 +14,15 @@
     password: LockKeyhole
   };
 
-  let open = $state(false);
+  let due = $state(false);
+  // Waits while a more urgent dialog, such as a new sign-in question, is up.
+  const open = $derived(due && !paused);
 
   onMount(() => {
     let cancelled = false;
     void fetchWhatsNew()
       .then((state) => {
-        if (!cancelled && shouldShowWhatsNew(state)) open = true;
+        if (!cancelled && shouldShowWhatsNew(state)) due = true;
       })
       .catch(() => {
         // The announcement is optional; a failed check must not get in the way.
@@ -32,7 +34,7 @@
 
   // Recorded as seen however the dialog is closed, so each release is shown once.
   function finish(openSecurity: boolean): void {
-    open = false;
+    due = false;
     void markWhatsNewSeen().catch(() => {});
     if (openSecurity) onOpenSecurity();
   }

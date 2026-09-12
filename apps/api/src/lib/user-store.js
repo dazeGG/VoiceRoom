@@ -5,6 +5,8 @@ const { createDbPool, transaction } = require('./db');
 const { hashPassword, verifyPassword } = require('./password');
 const { AVATAR_COLOR_KEYS, cleanAvatarColorKey, cleanPresenceStatus } = require('@voice-room/shared/validation');
 const {
+  LOGIN_ALERT_TTL_MS,
+  LOGIN_FAMILIARITY_WINDOW_MS,
   RECOVERY_CODES_REMINDER_SNOOZE_MS,
   RECOVERY_CODE_ALPHABET,
   RECOVERY_CODE_COUNT,
@@ -21,6 +23,9 @@ const USER_AGENT_MAX_LENGTH = 512;
 const LOCATION_LABEL_MAX_LENGTH = 120;
 const UNIQUE_VIOLATION = '23505';
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+// Longer than the familiarity window, so a device keeps vouching for itself
+// for the whole window after its last sign-in.
+const LOGIN_EVENT_RETENTION_MS = 90 * 24 * 60 * 60 * 1000;
 
 function toDate(ms) {
   const next = Number(ms);
@@ -99,6 +104,18 @@ function cleanUserAgent(value) {
 
 function cleanLocationLabel(value) {
   return typeof value === 'string' ? value.trim().slice(0, LOCATION_LABEL_MAX_LENGTH) : '';
+}
+
+// What a device is shown by; the session it opened stays server-side.
+function mapLoginAlert(row) {
+  return {
+    id: row.id,
+    kind: row.kind,
+    client: row.client || '',
+    os: row.os || '',
+    location: row.location_label || '',
+    createdAt: toMillis(row.created_at)
+  };
 }
 
 function createUserStore({ databaseUrl, logger = console, pool, sessionTtlMs = DEFAULT_SESSION_TTL_MS } = {}) {
@@ -474,6 +491,122 @@ function createUserStore({ databaseUrl, logger = console, pool, sessionTtlMs = D
       : { status: 'not_found', snoozedUntil: null };
   }
 
+  // A sign-in needs the account's attention when it comes from a device (browser
+  // and system) and city the account has not used in the familiarity window.
+  // Only answered or unflagged sign-ins vouch for a device: an unanswered
+  // question must not let the same stranger sign in again quietly. The first
+  // sign-in an account records with nothing else open just sets the baseline.
+  async function recordLogin({
+    userId,
+    sessionPublicId = null,
+    kind = 'login',
+    userAgent = '',
+    locationLabel = '',
+    now = Date.now()
+  }) {
+    const device = describeUserAgent(userAgent);
+    const location = cleanLocationLabel(locationLabel);
+    const sameDevice = (entry) => entry.client === device.client && entry.os === device.os && entry.location === location;
+    return transaction(getPool(), async (db) => {
+      await db.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`voice-room:login-events:${userId}`]);
+      let alert = false;
+      if (kind !== 'register') {
+        const history = await db.query(
+          `SELECT client, os, location_label, alert, resolution, created_at
+           FROM account_login_events
+           WHERE user_id = $1 AND created_at > $2`,
+          [userId, toDate(now - LOGIN_FAMILIARITY_WINDOW_MS)]
+        );
+        const sessions = await db.query(
+          `SELECT s.user_agent, s.location_label
+           FROM sessions s
+           LEFT JOIN account_login_events e ON e.session_public_id = s.public_id
+           WHERE s.user_id = $1
+             AND s.expires_at > $2
+             AND s.public_id IS DISTINCT FROM $3::uuid
+             AND NOT (COALESCE(e.alert, false) AND (e.resolution IS NULL OR e.resolution = 'denied'))`,
+          [userId, toDate(now), sessionPublicId]
+        );
+        const vouchedByHistory = history.rows.some((row) => (!row.alert || row.resolution === 'confirmed')
+          && sameDevice({ client: row.client, os: row.os, location: row.location_label }));
+        const vouchedBySession = sessions.rows.some((row) => sameDevice({
+          ...describeUserAgent(row.user_agent),
+          location: row.location_label || ''
+        }));
+        // Only an account that never signed in sets a baseline. Judging by the
+        // window alone would let any sign-in after a month away pass quietly.
+        const signedInBefore = history.rowCount > 0 || (await db.query(
+          'SELECT 1 FROM account_login_events WHERE user_id = $1 LIMIT 1',
+          [userId]
+        )).rowCount > 0;
+        const baseline = !signedInBefore && sessions.rowCount === 0;
+        alert = !baseline && !vouchedByHistory && !vouchedBySession;
+      }
+      const inserted = await db.query(
+        `INSERT INTO account_login_events (user_id, session_public_id, kind, client, os, location_label, alert, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         RETURNING *`,
+        [userId, sessionPublicId, kind, device.client, device.os, location, alert, toDate(now)]
+      );
+      return { alert: alert ? mapLoginAlert(inserted.rows[0]) : null };
+    });
+  }
+
+  // Unanswered questions about sign-ins, except the one this very session made.
+  async function listPendingLoginAlerts({ userId, excludeSessionPublicId = null, now = Date.now() }) {
+    const result = await getPool().query(
+      `SELECT *
+       FROM account_login_events
+       WHERE user_id = $1
+         AND alert
+         AND resolved_at IS NULL
+         AND created_at > $2
+         AND session_public_id IS DISTINCT FROM $3::uuid
+       ORDER BY created_at ASC
+       LIMIT 20`,
+      [userId, toDate(now - LOGIN_ALERT_TTL_MS), excludeSessionPublicId]
+    );
+    return result.rows.map(mapLoginAlert);
+  }
+
+  // "Это не я" ends the session that sign-in opened in the same transaction and
+  // hands back its token hash so its sockets and voice can be closed too.
+  async function resolveLoginAlert({ userId, alertId, resolution, currentSessionPublicId = null, now = Date.now() }) {
+    if (!UUID_PATTERN.test(String(alertId || '')) || !['confirmed', 'denied'].includes(resolution)) {
+      return { status: 'not_found', revokedTokenHash: null };
+    }
+    return transaction(getPool(), async (db) => {
+      const resolved = await db.query(
+        `UPDATE account_login_events
+         SET resolved_at = $4, resolution = $3
+         WHERE id = $1
+           AND user_id = $2
+           AND alert
+           AND resolved_at IS NULL
+           AND created_at > $5
+           AND session_public_id IS DISTINCT FROM $6::uuid
+         RETURNING session_public_id`,
+        [String(alertId).toLowerCase(), userId, resolution, toDate(now), toDate(now - LOGIN_ALERT_TTL_MS), currentSessionPublicId]
+      );
+      if (resolved.rowCount !== 1) return { status: 'not_found', revokedTokenHash: null };
+      const sessionPublicId = resolved.rows[0].session_public_id;
+      if (resolution !== 'denied' || !sessionPublicId) return { status: 'resolved', revokedTokenHash: null };
+      const deleted = await db.query(
+        `DELETE FROM sessions WHERE user_id = $1 AND public_id = $2 RETURNING id`,
+        [userId, sessionPublicId]
+      );
+      return { status: 'resolved', revokedTokenHash: deleted.rows[0]?.id || null };
+    });
+  }
+
+  async function pruneLoginEvents(now = Date.now()) {
+    const result = await getPool().query(
+      `DELETE FROM account_login_events WHERE created_at <= $1`,
+      [toDate(now - LOGIN_EVENT_RETENTION_MS)]
+    );
+    return result.rowCount;
+  }
+
   async function close() {
     if (activePool) {
       await activePool.end();
@@ -493,10 +626,14 @@ function createUserStore({ databaseUrl, logger = console, pool, sessionTtlMs = D
     getUserById,
     getUserByLogin,
     listAvatarKeys,
+    listPendingLoginAlerts,
     listSessions,
     markWhatsNewSeen,
+    pruneLoginEvents,
     pruneSessions,
+    recordLogin,
     recoverWithCode,
+    resolveLoginAlert,
     revokeOtherSessions,
     revokeSession,
     snoozeRecoveryCodesReminder,

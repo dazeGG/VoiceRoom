@@ -5,6 +5,7 @@ import type { PublicUser } from './friends';
 import type { ChatMessage, RoomPeer, RoomSummary } from './rooms';
 import type { NotificationRealtimeEvent } from '../shared/notifications';
 import type { ReactionSummary } from '@voice-room/shared/reactions';
+import type { LoginAlert } from '@voice-room/shared/account-security';
 import { isDesktopBoundaryBlocked } from '$lib/platform/desktop-boundary';
 import { RealtimeHeartbeatWatchdog } from './realtime-heartbeat.js';
 
@@ -21,7 +22,9 @@ export type RealtimeAccountEvent =
   | { type: 'dm.message'; payload: { message: DirectMessage } }
   | { type: 'dm.message.edited'; payload: { message: DirectMessage } }
   | { type: 'dm.read'; payload: { userId: string } }
-  | { type: 'dm.message.deleted'; payload: { messageId: string; peerUserId?: string } };
+  | { type: 'dm.message.deleted'; payload: { messageId: string; peerUserId?: string } }
+  | { type: 'account.login.new'; payload: { alert: LoginAlert } }
+  | { type: 'account.login.resolved'; payload: { alertId: string; resolution: 'confirmed' | 'denied' } };
 
 export type RoomRealtimeSummary = RoomSummary & {
   visiblePeers: RoomPeer[];

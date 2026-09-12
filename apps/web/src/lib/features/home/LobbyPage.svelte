@@ -56,6 +56,7 @@
   } from './model/room-switch-confirmation';
   import RoomSwitchDialog from './components/RoomSwitchDialog.svelte';
   import WhatsNewDialog from './components/WhatsNewDialog.svelte';
+  import LoginAlertDialog from './components/LoginAlertDialog.svelte';
   import { fetchAccountSecurity, snoozeRecoveryCodesReminder } from '$lib/api/auth';
   import { shouldShowRecoveryCodesReminder } from './model/account-security';
   import { clearSession, consumeExpectedSessionEnd, session as authSession } from '$lib/features/auth/session.svelte';
@@ -90,8 +91,9 @@
   let createDialogOpen = $state(false);
   let settingsOpen = $state(false);
   let settingsTab = $state<'profile' | 'sound' | 'hotkeys' | 'notifications' | 'app' | 'security'>('profile');
-  let securityHighlight = $state<'recovery-codes' | null>(null);
+  let securityHighlight = $state<'recovery-codes' | 'password' | null>(null);
   let recoveryCodesReminder = $state(false);
+  let loginAlertOpen = $state(false);
   let previewSettingsRoomId = $state('');
   // Room waiting for "switch rooms?" while voice is connected elsewhere.
   let pendingRoomSwitchId = $state('');
@@ -471,7 +473,7 @@
     settingsOpen = true;
   }
 
-  function openSecuritySettings(highlight: 'recovery-codes' | null = null): void {
+  function openSecuritySettings(highlight: 'recovery-codes' | 'password' | null = null): void {
     securityHighlight = highlight;
     settingsTab = 'security';
     settingsOpen = true;
@@ -608,7 +610,12 @@
     {onToast}
     {onLogout}
   />
-  <WhatsNewDialog onOpenSecurity={() => openSecuritySettings()} />
+  <LoginAlertDialog
+    onSecureAccount={(target) => openSecuritySettings(target)}
+    onOpenChange={(open) => (loginAlertOpen = open)}
+    {onToast}
+  />
+  <WhatsNewDialog paused={loginAlertOpen} onOpenSecurity={() => openSecuritySettings()} />
   <LobbyRoomSettingsDialog room={previewSettingsRoom} onClose={() => (previewSettingsRoomId = '')} onSaved={refreshRooms} onDeleted={() => { previewSettingsRoomId = ''; closeViewedRoom(); void refreshRooms(); }} {onToast} />
   <RoomSwitchDialog
     open={Boolean(pendingRoomSwitchId)}

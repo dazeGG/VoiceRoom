@@ -5,8 +5,10 @@
 import type { PresenceStatus } from '$lib/shared/presence';
 import {
   normalizeAccountSession,
+  normalizeLoginAlert,
   normalizeReleaseVersion,
   type AccountSession,
+  type LoginAlert,
   type RecoveryCodesReminder,
   type RecoveryCodesStatus,
   type WhatsNewState
@@ -145,7 +147,7 @@ export async function fetchOwnedRooms(): Promise<OwnedRoom[]> {
   return Array.isArray(payload.rooms) ? payload.rooms : [];
 }
 
-export type { AccountSession, RecoveryCodesReminder, RecoveryCodesStatus, WhatsNewState };
+export type { AccountSession, LoginAlert, RecoveryCodesReminder, RecoveryCodesStatus, WhatsNewState };
 
 export interface AccountSecurity {
   recoveryCodes: RecoveryCodesStatus;
@@ -210,6 +212,25 @@ export async function fetchWhatsNew(): Promise<WhatsNewState> {
 
 export async function markWhatsNewSeen(): Promise<void> {
   await authPost('/auth/whats-new/seen', {});
+}
+
+export async function fetchLoginAlerts(): Promise<LoginAlert[]> {
+  const payload = await authRead<{ alerts?: unknown[] }>('/auth/login-alerts', 'GET', 'Не удалось проверить входы в аккаунт');
+  return (Array.isArray(payload.alerts) ? payload.alerts : [])
+    .map(normalizeLoginAlert)
+    .filter((alert): alert is LoginAlert => alert !== null);
+}
+
+export async function confirmLoginAlert(alertId: string): Promise<void> {
+  await authPost(`/auth/login-alerts/${encodeURIComponent(alertId)}/confirm`, {});
+}
+
+export async function denyLoginAlert(alertId: string): Promise<{ sessionEnded: boolean; recoveryCodes: RecoveryCodesStatus }> {
+  const payload = await authPost<{ sessionEnded?: boolean; recoveryCodes?: RecoveryCodesStatus }>(
+    `/auth/login-alerts/${encodeURIComponent(alertId)}/deny`,
+    {}
+  );
+  return { sessionEnded: payload.sessionEnded === true, recoveryCodes: readRecoveryCodesStatus(payload.recoveryCodes) };
 }
 
 export async function fetchAccountSessions(): Promise<AccountSession[]> {

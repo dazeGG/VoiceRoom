@@ -158,3 +158,30 @@ test('session rows are validated at the boundary', async () => {
   assert.equal(cjs.normalizeAccountSession({ ...row, lastSeenAt: 'yesterday' }), null);
   assert.equal(cjs.normalizeAccountSession({ ...row, current: 'yes' }).current, false);
 });
+
+test('login alerts are validated at the boundary', async () => {
+  const esm = await loadEsm();
+  assert.ok(cjs.LOGIN_ALERT_TTL_MS < cjs.LOGIN_FAMILIARITY_WINDOW_MS);
+  const alert = {
+    id: '6F9619FF-8B86-D011-B42D-00C04FC964FF',
+    kind: 'recovery',
+    client: ' Firefox ',
+    os: 'Linux',
+    location: 'Казань, Россия',
+    createdAt: 1_789_000_000_000,
+    sessionPublicId: 'must-not-leak'
+  };
+  const expected = {
+    id: '6f9619ff-8b86-d011-b42d-00c04fc964ff',
+    kind: 'recovery',
+    client: 'Firefox',
+    os: 'Linux',
+    location: 'Казань, Россия',
+    createdAt: 1_789_000_000_000
+  };
+  assert.deepEqual(cjs.normalizeLoginAlert(alert), expected);
+  assert.deepEqual(esm.normalizeLoginAlert(alert), expected);
+  assert.equal(cjs.normalizeLoginAlert({ ...alert, kind: 'register' }), null);
+  assert.equal(cjs.normalizeLoginAlert({ ...alert, id: 'nope' }), null);
+  assert.equal(cjs.normalizeLoginAlert({ ...alert, createdAt: 'today' }), null);
+});
