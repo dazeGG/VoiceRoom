@@ -132,11 +132,6 @@ const LIVEKIT_GATE_PUBLIC_URL = cleanLiveKitUrl(process.env.LIVEKIT_GATE_PUBLIC_
 const LIVEKIT_GATE_SECRET = (process.env.LIVEKIT_GATE_SECRET || '').trim();
 const ROOM_IDLE_TTL_MS = readEnvInt('ROOM_IDLE_TTL_MS', 900000, 1000);
 const ROOM_PRUNE_INTERVAL_MS = readEnvInt('ROOM_PRUNE_INTERVAL_MS', 60000, 0);
-// Room history is kept until a message or its room is deleted. Both limits
-// accept 0 as "no limit", which is the default: a room chat is a durable log,
-// not a rolling window. Set them to a positive value to re-enable trimming.
-const ROOM_CHAT_TTL_MS = readEnvInt('ROOM_CHAT_TTL_MS', 0, 0);
-const ROOM_CHAT_MAX_MESSAGES = readEnvInt('ROOM_CHAT_MAX_MESSAGES', 0, 0);
 const ROOM_CHAT_RATE_LIMIT = readEnvInt('ROOM_CHAT_RATE_LIMIT', 60, 0);
 const ROOM_CHAT_RATE_WINDOW_MS = readEnvInt('ROOM_CHAT_RATE_WINDOW_MS', 60000, 1000);
 const ROOM_CREATE_RATE_LIMIT = readEnvInt('ROOM_CREATE_RATE_LIMIT', 20, 0);
@@ -283,8 +278,6 @@ function createFastifyLoggerOptions(env = process.env) {
 function getRoomStore() {
   if (!roomStore) {
     roomStore = createRoomStore({
-      maxMessagesPerRoom: ROOM_CHAT_MAX_MESSAGES,
-      messageTtlMs: ROOM_CHAT_TTL_MS,
       roomIdleTtlMs: ROOM_IDLE_TTL_MS
     });
   }
@@ -3047,7 +3040,6 @@ async function handleRoomChatPost(req, res, roomId) {
   const now = Date.now();
   const message = await getMessageService().room.appendMessage(roomId, {
     createdAt: now,
-    expiresAt: ROOM_CHAT_TTL_MS > 0 ? now + ROOM_CHAT_TTL_MS : null,
     id: crypto.randomUUID?.() || crypto.randomBytes(16).toString('hex'),
     avatarColorKey,
     name,
@@ -5342,8 +5334,6 @@ async function bootstrap({ env = process.env, logger = console, exit = process.e
     roomStore = createRoomStore({
       databaseUrl: database.url,
       logger,
-      maxMessagesPerRoom: ROOM_CHAT_MAX_MESSAGES,
-      messageTtlMs: ROOM_CHAT_TTL_MS,
       roomIdleTtlMs: ROOM_IDLE_TTL_MS
     });
     await roomStore.markActiveTemporaryRoomsEmpty();
