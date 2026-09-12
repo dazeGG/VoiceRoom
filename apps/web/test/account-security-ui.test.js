@@ -29,7 +29,9 @@ test('an ended session stops reconnecting and signs the lobby out', () => {
   // guest socket, so the client hands over to the sign-out flow instead.
   assert.match(realtime, /const SESSION_ENDED_CLOSE_CODE = 4401;/);
   assert.match(realtime, /event\?\.code === SESSION_ENDED_CLOSE_CODE\) \{[\s\S]*?this\.closedByClient = true;[\s\S]*?return;/);
-  assert.match(lobby, /getAppRealtime\(\)\.onSessionEnded\(\(\) => \{\s*clearSession\(\);/);
+  // Our own sign-out and password change also close the socket; only a session
+  // ended from somewhere else may sign the lobby out with its own message.
+  assert.match(lobby, /onSessionEnded\(\(\) => \{[\s\S]*?if \(consumeExpectedSessionEnd\(\) \|\| !authSession\.user\) return;\s*clearSession\(\);/);
 });
 
 test('security settings list devices and show recovery codes only once', () => {
@@ -51,11 +53,25 @@ test('security settings list devices and show recovery codes only once', () => {
   assert.match(codes, /disabled=\{!saved\}/);
 });
 
-test('the 2.6.0 onboarding is offered once, only to accounts without codes', () => {
+test('the password is changed in the security tab, and our own session ends stay quiet', () => {
+  const settings = read('src/lib/features/home/components/SettingsModal.svelte');
+  const security = read('src/lib/features/home/components/AccountSecuritySettings.svelte');
+  const signOut = read('src/lib/features/home/model/sign-out.ts');
+
+  assert.doesNotMatch(settings, /changePassword|Текущий пароль/);
+  assert.match(security, /autocomplete="current-password"/);
+  // Both requests make the server close this device's socket with 4401.
+  assert.match(security, /expectSessionEnd\(\);\s*try \{\s*await changePassword\(currentPassword, newPassword\);/);
+  assert.match(signOut, /expectSessionEnd\(\);\s*try \{\s*await logout\(\);/);
+});
+
+test('the what-is-new onboarding is offered once, only to accounts without codes', () => {
   const onboarding = read('src/lib/features/home/components/RecoveryCodesOnboarding.svelte');
   const model = read('src/lib/features/home/model/account-security.ts');
   const lobby = read('src/lib/features/home/LobbyPage.svelte');
 
+  assert.match(onboarding, /title="Что нового в Voice Room"/);
+  assert.doesNotMatch(onboarding, /\d+\.\d+\.\d+/);
   assert.match(onboarding, /dismissOnboarding\(RECOVERY_CODES_ONBOARDING_KEY\)/);
   assert.match(model, /security\.recoveryCodes\.remaining === 0\s*&& !security\.onboardingDismissed\.includes\(RECOVERY_CODES_ONBOARDING_KEY\)/);
   assert.match(lobby, /<RecoveryCodesOnboarding onCreateCodes=\{openSecuritySettings\} \/>/);

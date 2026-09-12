@@ -34,7 +34,7 @@
   }
 </script>
 
-<Dialog {open} title="Новое в Voice Room 2.6.0" onClose={() => finish(false)} width={460}>
+<Dialog {open} title="Что нового в Voice Room" onClose={() => finish(false)} width={460}>
   <div class="release-onboarding">
     <div class="release-onboarding-item">
       <span class="release-onboarding-icon" aria-hidden="true"><KeyRound {...iconMd} /></span>

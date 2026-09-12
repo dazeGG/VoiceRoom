@@ -5,9 +5,8 @@
   import type { PublicUser } from '$lib/api/friends';
   import { fetchBlockedUsers, unblockUser } from '$lib/api/blocks';
   import { iconMd, iconSm } from '$lib/shared/ui/icons';
-  import { changePassword, deleteUserAvatar, updateDisplayName, uploadUserAvatar } from '$lib/api/auth';
-  import { isValidPassword, PASSWORD_MIN_LENGTH } from '$lib/features/auth/account';
-  import { clearSession, setUser } from '$lib/features/auth/session.svelte';
+  import { deleteUserAvatar, updateDisplayName, uploadUserAvatar } from '$lib/api/auth';
+  import { setUser } from '$lib/features/auth/session.svelte';
   import { state as roomClientState } from '$lib/features/room/client/core/state.svelte';
   import { playPeerCue, playDirectMessageCue, playFriendAcceptedCue, playMicCue, playRoomChatMessageCue, playStreamCue } from '$lib/features/room/client/media/cues';
   import {
@@ -111,8 +110,6 @@
 
   // Profile form
   let name = $state('');
-  let currentPassword = $state('');
-  let newPassword = $state('');
   let saving = $state(false);
   let avatarInput = $state<HTMLInputElement>();
   let avatarFile = $state<File | null>(null);
@@ -283,8 +280,6 @@
     if (!isOpen) return;
     untrack(() => {
       name = user?.displayName ?? '';
-      currentPassword = '';
-      newPassword = '';
       if (avatarPreviewUrl) URL.revokeObjectURL(avatarPreviewUrl);
       avatarPreviewUrl = '';
       pendingAvatar = null;
@@ -377,31 +372,22 @@
     if (saving) return;
     // Snapshot before any await: updating the session re-runs the reset effect.
     const trimmedName = name.trim();
-    const curPass = currentPassword;
-    const nextPass = newPassword;
     const wantsRename = trimmedName !== (user?.displayName ?? '');
-    const wantsPassword = curPass.length > 0 || nextPass.length > 0;
     const avatarBlob = pendingAvatar;
     const shouldRemoveAvatar = removeAvatarPending;
     const wantsAvatar = Boolean(avatarBlob) || shouldRemoveAvatar;
 
-    if (!wantsRename && !wantsPassword && !wantsAvatar) {
+    if (!wantsRename && !wantsAvatar) {
       onClose();
-      return;
-    }
-    if (wantsPassword && !isValidPassword(nextPass)) {
-      onToast(`Новый пароль: минимум ${PASSWORD_MIN_LENGTH} символов`);
       return;
     }
 
     saving = true;
-    let renamed = false;
     try {
       let nextUser = user;
       if (wantsRename) {
         nextUser = await updateDisplayName(trimmedName);
         setUser(nextUser);
-        renamed = true;
       }
       if (avatarBlob) {
         nextUser = await uploadUserAvatar(avatarBlob);
@@ -412,19 +398,10 @@
         setUser(nextUser);
         syncLocalParticipantAvatar(nextUser);
       }
-      if (wantsPassword) {
-        await changePassword(curPass, nextPass);
-        currentPassword = '';
-        newPassword = '';
-        clearSession();
-        onToast('Пароль изменён, войдите снова');
-      } else {
-        onToast('Изменения сохранены');
-      }
+      onToast('Изменения сохранены');
       onClose();
     } catch (error) {
-      const message = error instanceof Error && error.message ? error.message : 'Не удалось сохранить';
-      onToast(renamed ? `Имя сохранено, пароль не изменён: ${message}` : message);
+      onToast(error instanceof Error && error.message ? error.message : 'Не удалось сохранить');
     } finally {
       saving = false;
     }
@@ -746,19 +723,6 @@
               <div>
                 <span class="settings-field-label">Имя</span>
                 <input class="settings-input" bind:value={name} maxlength="40" autocomplete="nickname" />
-              </div>
-
-              <div class="settings-divider"></div>
-
-              <div class="settings-password-fields">
-                <div>
-                  <span class="settings-field-label">Текущий пароль</span>
-                  <input class="settings-input" type="password" bind:value={currentPassword} placeholder="••••••••" autocomplete="current-password" />
-                </div>
-                <div>
-                  <span class="settings-field-label">Новый пароль</span>
-                  <input class="settings-input" type="password" bind:value={newPassword} placeholder="Минимум {PASSWORD_MIN_LENGTH} символов" autocomplete="new-password" />
-                </div>
               </div>
             </div>
 

@@ -10,6 +10,21 @@ export const session = $state<{ loaded: boolean; user: AuthUser | null }>({
 
 let inflight: Promise<AuthUser | null> | null = null;
 
+// Set right before a request that ends this device's own session (sign-out,
+// password change): the server then closes the realtime socket too, and that
+// close must not read as the session being ended from another device.
+let sessionEndExpected = false;
+
+export function expectSessionEnd(expected = true): void {
+  sessionEndExpected = expected;
+}
+
+export function consumeExpectedSessionEnd(): boolean {
+  const expected = sessionEndExpected;
+  sessionEndExpected = false;
+  return expected;
+}
+
 // Mirror the account name into the room's local name key so voice rooms open
 // with the account's display name already filled in. This is not used as an
 // auth oracle; /auth/me remains the only source for logged-in state.
@@ -27,6 +42,7 @@ function syncRoomName(user: AuthUser | null): void {
 }
 
 export function setUser(user: AuthUser | null): void {
+  sessionEndExpected = false;
   session.user = user;
   session.loaded = true;
   syncRoomName(user);

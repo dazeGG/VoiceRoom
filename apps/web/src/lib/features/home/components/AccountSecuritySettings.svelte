@@ -2,6 +2,7 @@
   import { KeyRound, Laptop, MonitorSmartphone } from '@lucide/svelte';
   import { onMount } from 'svelte';
   import {
+    changePassword,
     fetchAccountSecurity,
     fetchAccountSessions,
     revokeAccountSession,
@@ -9,6 +10,8 @@
     type AccountSession,
     type RecoveryCodesStatus
   } from '$lib/api/auth';
+  import { isValidPassword, PASSWORD_MIN_LENGTH } from '$lib/features/auth/account';
+  import { clearSession, expectSessionEnd } from '$lib/features/auth/session.svelte';
   import { iconMd } from '$lib/shared/ui/icons';
   import { formatLastSeen, recoveryCodesSummary, sessionDeviceLabel } from '../model/account-security';
   import type { ToastOptions } from '../model/toasts.svelte';
@@ -26,6 +29,9 @@
   let endingSessionId = $state('');
   let endingOthers = $state(false);
   let codesDialogOpen = $state(false);
+  let currentPassword = $state('');
+  let newPassword = $state('');
+  let changingPassword = $state(false);
 
   const hasOtherSessions = $derived(sessions.some((session) => !session.current));
   const lowOnCodes = $derived(Boolean(recoveryCodes && recoveryCodes.remaining > 0 && recoveryCodes.remaining <= 2));
@@ -53,6 +59,34 @@
       onToast(errorMessage(error, 'Не удалось загрузить настройки безопасности'), { variant: 'error' });
     } finally {
       loading = false;
+    }
+  }
+
+  async function submitPasswordChange(event: SubmitEvent): Promise<void> {
+    event.preventDefault();
+    if (changingPassword) return;
+    if (!currentPassword) {
+      onToast('Введите текущий пароль');
+      return;
+    }
+    if (!isValidPassword(newPassword)) {
+      onToast(`Новый пароль: минимум ${PASSWORD_MIN_LENGTH} символов`);
+      return;
+    }
+    changingPassword = true;
+    // The server ends every session of the account, this one included.
+    expectSessionEnd();
+    try {
+      await changePassword(currentPassword, newPassword);
+      currentPassword = '';
+      newPassword = '';
+      clearSession();
+      onToast('Пароль изменён, войдите снова');
+    } catch (error) {
+      expectSessionEnd(false);
+      onToast(errorMessage(error, 'Не удалось сменить пароль'), { variant: 'error' });
+    } finally {
+      changingPassword = false;
     }
   }
 
@@ -86,6 +120,29 @@
 </script>
 
 <div class="account-security">
+  <section class="settings-notification-group" aria-labelledby="accountPasswordTitle">
+    <span class="settings-section-title" id="accountPasswordTitle">Пароль</span>
+    <form class="account-security-password" onsubmit={submitPasswordChange}>
+      <div class="settings-password-fields">
+        <div>
+          <span class="settings-field-label">Текущий пароль</span>
+          <input class="settings-input" type="password" bind:value={currentPassword} placeholder="••••••••" autocomplete="current-password" />
+        </div>
+        <div>
+          <span class="settings-field-label">Новый пароль</span>
+          <input class="settings-input" type="password" bind:value={newPassword} placeholder="Минимум {PASSWORD_MIN_LENGTH} символов" autocomplete="new-password" />
+        </div>
+      </div>
+      <div class="account-security-password-foot">
+        <div class="settings-gate-hint">После смены пароля завершатся все сеансы, включая этот.</div>
+        <button class="settings-save account-security-action" type="submit" disabled={changingPassword || !currentPassword || !newPassword}>
+          {#if changingPassword}<span class="home-spinner" aria-hidden="true"></span>{/if}
+          Сменить пароль
+        </button>
+      </div>
+    </form>
+  </section>
+
   <section class="settings-notification-group" aria-labelledby="recoveryCodesTitle">
     <span class="settings-section-title" id="recoveryCodesTitle">Коды восстановления</span>
     {#if loading && !recoveryCodes}
@@ -207,6 +264,18 @@
   .account-security-action {
     padding: 8px 14px;
     font-size: 13px;
+  }
+
+  .account-security-password-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 12px;
+  }
+
+  .account-security-password-foot .settings-gate-hint {
+    margin-top: 0;
   }
 
   @media (max-width: 560px) {
