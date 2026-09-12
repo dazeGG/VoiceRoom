@@ -273,6 +273,12 @@
     color: var(--warm-muted);
   }
 
+  /* The shared row style sets these in the mono face meant for @logins. */
+  .account-security-row :global(.settings-notification-name small) {
+    font-family: var(--font-ui);
+    letter-spacing: normal;
+  }
+
   .account-security-row[data-warning='true'] .account-security-icon {
     color: var(--amber, #e0b457);
   }
