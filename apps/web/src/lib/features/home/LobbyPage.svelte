@@ -56,7 +56,7 @@
   } from './model/room-switch-confirmation';
   import RoomSwitchDialog from './components/RoomSwitchDialog.svelte';
   import RecoveryCodesOnboarding from './components/RecoveryCodesOnboarding.svelte';
-  import { clearSession } from '$lib/features/auth/session.svelte';
+  import { clearSession, consumeExpectedSessionEnd, session as authSession } from '$lib/features/auth/session.svelte';
   import OpenInAppScreen from './components/OpenInAppScreen.svelte';
   import { bindDesktopLinks, type DesktopLink } from '$lib/platform/desktop-links';
   import { bindDesktopCallActions, syncDesktopCallState } from '$lib/platform/desktop-call';
@@ -155,6 +155,8 @@
   // The server closes the realtime socket with a dedicated code when this
   // device's session was ended elsewhere (another device, password recovery).
   onMount(() => getAppRealtime().onSessionEnded(() => {
+    // Our own sign-out or password change already handles the UI.
+    if (consumeExpectedSessionEnd() || !authSession.user) return;
     clearSession();
     onToast('Сеанс на этом устройстве завершён. Войдите снова');
   }));
