@@ -622,6 +622,23 @@ function createRoomStore({
     });
   }
 
+  // Revokes only what was issued to one peer id. A principal revocation would
+  // bump the epoch and cut the account off on every device in the room; ending a
+  // single account session must leave its other devices connected.
+  async function revokeLiveKitGateCredentialsForPeer({ peerId, principal, roomId, now = Date.now() } = {}) {
+    if (!peerId || !roomId || !isValidGatePrincipal(principal)) return { status: 'invalid', revoked: 0 };
+    return transaction(getPool(), async (client) => {
+      await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`voice-room:livekit-gate:${roomId}:${principal.principalType}:${principal.principalId}`]);
+      const result = await client.query(
+        `UPDATE livekit_gate_credentials
+         SET revoked_at = $5
+         WHERE room_id = $1 AND peer_id = $2 AND principal_type = $3 AND principal_id = $4 AND revoked_at IS NULL`,
+        [roomId, peerId, principal.principalType, principal.principalId, toDate(now)]
+      );
+      return { status: 'revoked', revoked: result.rowCount };
+    });
+  }
+
   async function revokeLiveKitGatePrincipalInTransaction(client, { principal, roomId, now = Date.now() } = {}) {
     await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`voice-room:livekit-gate:${roomId}:${principal.principalType}:${principal.principalId}`]);
     const epoch = await client.query(
@@ -1371,6 +1388,7 @@ function createRoomStore({
     invalidatePeerIdentity,
     normalizeGatePrincipal,
     revokeLiveKitGateCredential,
+    revokeLiveKitGateCredentialsForPeer,
     revokeLiveKitGatePeer,
     revokeLiveKitGatePrincipal,
     revokeLiveKitGatePrincipalInTransaction,

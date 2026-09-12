@@ -109,11 +109,15 @@ services:
       MESSAGE_DELIVERY_LISTEN_ENABLED: ${MESSAGE_DELIVERY_LISTEN_ENABLED:-true}
       MESSAGE_DIRECT_EMIT_ENABLED: ${MESSAGE_DIRECT_EMIT_ENABLED:-true}
       MESSAGE_DELIVERY_CLAIM_ENABLED: ${MESSAGE_DELIVERY_CLAIM_ENABLED:-false}
+      # City/country for the signed-in devices list. Without the file the list
+      # simply shows no location; fetch it with scripts/geoip/fetch-dbip-city-lite.mjs.
+      GEOIP_DB_PATH: ${GEOIP_DB_PATH:-/data/geoip/dbip-city-lite.mmdb}
     expose:
       - "3000"
     volumes:
       - uploads:/data/uploads
       - media:/data/media
+      - ./geoip:/data/geoip:ro
     healthcheck:
       test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000/api/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
       interval: 10s

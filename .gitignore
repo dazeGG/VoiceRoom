@@ -33,6 +33,8 @@ apps/web/build/
 apps/web/dist/
 apps/web/.svelte-kit/
 apps/api/uploads/
+# Downloaded DB-IP City Lite database (scripts/geoip/fetch-dbip-city-lite.mjs)
+/geoip/
 
 # Docker/Caddy local state
 caddy_data/

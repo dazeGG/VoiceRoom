@@ -37,7 +37,9 @@ const { MAX_AVATAR_BYTES, createAvatarKey, processAvatar } = require('./lib/avat
 const { reconcileAvatarStorage } = require('./lib/avatar-reconciliation');
 const { createAvatarStorage, validateAvatarKey } = require('./lib/avatar-storage');
 const { avatarColorForPeerId, createRoomStore } = require('./lib/room-store');
-const { createUserStore, publicUser } = require('./lib/user-store');
+const { createUserStore, hashSessionToken, publicUser } = require('./lib/user-store');
+const { createGeoLocator } = require('./lib/geoip');
+const { formatRecoveryCode } = require('@voice-room/shared/account-security');
 const { createFriendStore } = require('./lib/friend-store');
 const { createNotificationStore } = require('./lib/notification-store');
 const { createPushStore } = require('./lib/push-store');
@@ -188,6 +190,10 @@ const readinessProvider = createRuntimeReadinessProvider({
 });
 const AUTH_RATE_LIMIT = readEnvInt('AUTH_RATE_LIMIT', 30, 0);
 const AUTH_RATE_WINDOW_MS = readEnvInt('AUTH_RATE_WINDOW_MS', 60000, 1000);
+const GEOIP_DB_PATH = String(process.env.GEOIP_DB_PATH || '').trim();
+// Close code for sockets whose account session was ended; clients stop
+// reconnecting and return to the sign-in screen instead.
+const SESSION_REVOKED_CLOSE_CODE = 4401;
 const DM_RATE_LIMIT = readEnvInt('DM_RATE_LIMIT', 30, 0);
 const DM_RATE_WINDOW_MS = readEnvInt('DM_RATE_WINDOW_MS', 10000, 1000);
 const FRIEND_REQUEST_RATE_LIMIT = readEnvInt('FRIEND_REQUEST_RATE_LIMIT', 20, 0);
@@ -225,6 +231,7 @@ function resolveRealtimeReconnectLeaseMs(env = process.env) {
 
 let roomStore = null;
 let userStore = null;
+let geoLocator = null;
 let friendStore = null;
 let friendStoreInviteExpiryEnabled = false;
 let notificationStore = null;
@@ -283,6 +290,13 @@ function getUserStore() {
     userStore = createUserStore({ sessionTtlMs: SESSION_TTL_MS });
   }
   return userStore;
+}
+
+function getGeoLocator() {
+  if (!geoLocator) {
+    geoLocator = createGeoLocator({ databasePath: GEOIP_DB_PATH });
+  }
+  return geoLocator;
 }
 
 function getFriendStore() {
@@ -1035,7 +1049,19 @@ function getSessionToken(req) {
 async function resolveSessionUser(req) {
   const token = getSessionToken(req);
   if (!token) return null;
-  return getUserStore().getSessionUser(token);
+  return getUserStore().getSessionUser(token, Date.now(), {
+    userAgent: String(req.headers?.['user-agent'] || ''),
+    resolveLocation: () => getGeoLocator().locate(getClientIp(req, TRUST_PROXY))
+  });
+}
+
+// What the signed-in devices list shows about a new session. The IP is only
+// used for the local city/country lookup and is not stored.
+async function sessionDeviceFor(req) {
+  return {
+    userAgent: String(req.headers?.['user-agent'] || ''),
+    locationLabel: await getGeoLocator().locate(getClientIp(req, TRUST_PROXY))
+  };
 }
 
 async function resolveOptionalSessionUser(req) {
@@ -1889,7 +1915,7 @@ async function handleRegister(req, res) {
     return;
   }
 
-  const session = await getUserStore().createSession({ userId: created.user.id });
+  const session = await getUserStore().createSession({ userId: created.user.id, ...await sessionDeviceFor(req) });
   sendJson(
     res,
     201,
@@ -1926,7 +1952,7 @@ async function handleLogin(req, res) {
     return;
   }
 
-  const session = await getUserStore().createSession({ userId: user.id });
+  const session = await getUserStore().createSession({ userId: user.id, ...await sessionDeviceFor(req) });
   sendJson(
     res,
     200,
@@ -1939,6 +1965,7 @@ async function handleLogout(req, res) {
   const token = getSessionToken(req);
   if (token) {
     await getUserStore().deleteSession(token);
+    await endAccountSessionConnections({ tokenHashes: [hashSessionToken(token)] });
   }
   sendJson(res, 200, { ok: true }, { 'Set-Cookie': clearSessionCookie() });
 }
@@ -2154,7 +2181,169 @@ async function handleChangePassword(req, res) {
     return;
   }
 
+  await endAccountSessionConnections({ userId: session.user.id });
   sendJson(res, 200, { ok: true }, { 'Set-Cookie': clearSessionCookie() });
+}
+
+function sendTooManyAttempts(res, retryAfterSeconds) {
+  sendJson(
+    res,
+    429,
+    { ok: false, error: 'Слишком много попыток, попробуйте позже' },
+    { 'Retry-After': String(retryAfterSeconds) }
+  );
+}
+
+async function handleAccountSecurity(req, res) {
+  const session = await resolveSessionUser(req);
+  if (!session) {
+    sendJson(res, 401, { ok: false, error: 'Требуется вход' });
+    return;
+  }
+  const [recoveryCodes, onboardingDismissed] = await Promise.all([
+    getUserStore().getRecoveryCodesStatus(session.user.id),
+    getUserStore().listDismissedOnboarding(session.user.id)
+  ]);
+  sendJson(res, 200, { ok: true, recoveryCodes, onboardingDismissed });
+}
+
+async function handleListSessions(req, res) {
+  const session = await resolveSessionUser(req);
+  if (!session) {
+    sendJson(res, 401, { ok: false, error: 'Требуется вход' });
+    return;
+  }
+  const sessions = await getUserStore().listSessions({
+    userId: session.user.id,
+    currentTokenHash: session.session.tokenHash
+  });
+  sendJson(res, 200, { ok: true, sessions });
+}
+
+async function handleRevokeSession(req, res, sessionId) {
+  const session = await resolveSessionUser(req);
+  if (!session) {
+    sendJson(res, 401, { ok: false, error: 'Требуется вход' });
+    return;
+  }
+  const publicId = typeof sessionId === 'string' ? sessionId.toLowerCase() : '';
+  if (publicId && publicId === String(session.session.publicId).toLowerCase()) {
+    sendJson(res, 400, { ok: false, error: 'Чтобы завершить этот сеанс, выйдите из аккаунта' });
+    return;
+  }
+  const result = await getUserStore().revokeSession({ userId: session.user.id, publicId });
+  if (result.status !== 'revoked') {
+    sendJson(res, 404, { ok: false, error: 'Сеанс не найден' });
+    return;
+  }
+  await endAccountSessionConnections({ userId: session.user.id, tokenHashes: [result.tokenHash] });
+  sendJson(res, 200, { ok: true });
+}
+
+async function handleRevokeOtherSessions(req, res) {
+  const session = await resolveSessionUser(req);
+  if (!session) {
+    sendJson(res, 401, { ok: false, error: 'Требуется вход' });
+    return;
+  }
+  const result = await getUserStore().revokeOtherSessions({
+    userId: session.user.id,
+    keepTokenHash: session.session.tokenHash
+  });
+  await endAccountSessionConnections({ userId: session.user.id, tokenHashes: result.tokenHashes });
+  sendJson(res, 200, { ok: true, revoked: result.tokenHashes.length });
+}
+
+async function handleGenerateRecoveryCodes(req, res) {
+  const session = await resolveSessionUser(req);
+  if (!session) {
+    sendJson(res, 401, { ok: false, error: 'Требуется вход' });
+    return;
+  }
+  // The password is the only secret guarding this, exactly as for a password change.
+  const rate = authLimiter.check(`recovery-codes:${session.user.id}`);
+  if (!rate.allowed) {
+    sendTooManyAttempts(res, rate.retryAfterSeconds);
+    return;
+  }
+
+  const body = await readJsonBody(req);
+  const currentPassword = typeof body.currentPassword === 'string' ? body.currentPassword : '';
+  const result = await getUserStore().generateRecoveryCodes({ userId: session.user.id, currentPassword });
+  if (result.status === 'not_found') {
+    sendJson(res, 404, { ok: false, error: 'Аккаунт не найден' });
+    return;
+  }
+  if (result.status === 'invalid_password') {
+    sendJson(res, 400, { ok: false, error: 'Неверный пароль' });
+    return;
+  }
+  sendJson(
+    res,
+    200,
+    {
+      ok: true,
+      codes: result.codes.map(formatRecoveryCode),
+      recoveryCodes: { remaining: result.codes.length, generatedAt: result.generatedAt }
+    },
+    { 'Cache-Control': 'no-store' }
+  );
+}
+
+async function handleRecoverAccount(req, res) {
+  const clientIp = getClientIp(req, TRUST_PROXY);
+  const ipRate = authLimiter.check(`recover:${clientIp}`);
+  if (!ipRate.allowed) {
+    sendTooManyAttempts(res, ipRate.retryAfterSeconds);
+    return;
+  }
+
+  const body = await readJsonBody(req);
+  const login = normalizeLogin(body.login);
+  // Keyed on the login too, so spreading guesses across addresses does not help.
+  const loginRate = login ? authLimiter.check(`recover-login:${login}`) : ipRate;
+  if (!loginRate.allowed) {
+    sendTooManyAttempts(res, loginRate.retryAfterSeconds);
+    return;
+  }
+  const newPassword = typeof body.newPassword === 'string' ? body.newPassword : '';
+  if (!isValidPassword(newPassword)) {
+    sendJson(res, 400, { ok: false, error: 'Пароль должен быть не короче 8 символов' });
+    return;
+  }
+
+  const result = await getUserStore().recoverWithCode({ login, code: body.code, newPassword });
+  if (result.status !== 'recovered') {
+    sendJson(res, 401, { ok: false, error: 'Неверный логин или код восстановления' });
+    return;
+  }
+
+  await endAccountSessionConnections({ userId: result.user.id });
+  const session = await getUserStore().createSession({ userId: result.user.id, ...await sessionDeviceFor(req) });
+  sendJson(
+    res,
+    200,
+    { ok: true, user: publicUser(result.user), recoveryCodes: { remaining: result.remaining } },
+    { 'Set-Cookie': buildSessionCookie(session.token, SESSION_TTL_MS / 1000) }
+  );
+}
+
+async function handleDismissOnboarding(req, res, key) {
+  const session = await resolveSessionUser(req);
+  if (!session) {
+    sendJson(res, 401, { ok: false, error: 'Требуется вход' });
+    return;
+  }
+  const result = await getUserStore().dismissOnboarding({ userId: session.user.id, key });
+  if (result.status === 'invalid') {
+    sendJson(res, 404, { ok: false, error: 'Неизвестная подсказка' });
+    return;
+  }
+  if (result.status === 'not_found') {
+    sendJson(res, 404, { ok: false, error: 'Аккаунт не найден' });
+    return;
+  }
+  sendJson(res, 200, { ok: true, onboardingDismissed: result.dismissed });
 }
 
 function publicLobbyRoom(room) {
@@ -2873,6 +3062,37 @@ async function finalizeModeratedPeers(
 
 async function disconnectModeratedPeer(room, peer, type, { gateAlreadyRevoked = false } = {}) {
   await finalizeModeratedPeers(room, [peer], type, { gateAlreadyRevoked });
+}
+
+// An ended account session also loses what it still holds open: its sockets stop
+// receiving account events and its voice seat goes at once, not when the LiveKit
+// token expires. Only that peer's gate credentials are revoked, so the account's
+// other devices stay connected, even in the same room. Without token hashes
+// every socket of the account is closed (the password was replaced); without an
+// account id the hashes alone pick the sockets (sign-out).
+async function endAccountSessionConnections({ userId = null, tokenHashes = null }) {
+  if (!wsRegistry || (!userId && !Array.isArray(tokenHashes))) return;
+  const targets = wsRegistry.findAccountConnections(userId, tokenHashes);
+  for (const connection of targets) {
+    const activeVoice = connection.activeVoice;
+    if (!activeVoice?.roomId || !activeVoice.peerId) continue;
+    try {
+      const peer = presenceRooms.get(activeVoice.roomId)?.peers.get(activeVoice.peerId);
+      const principal = peer ? liveKitGatePrincipalForPeer(activeVoice.roomId, peer) : null;
+      if (principal) {
+        await getRoomStore().revokeLiveKitGateCredentialsForPeer({
+          roomId: activeVoice.roomId,
+          peerId: activeVoice.peerId,
+          principal
+        });
+      }
+      await roomRuntime?.leaveVoiceRoom(connection, activeVoice);
+      await removeLiveKitParticipant(activeVoice.roomId, activeVoice.peerId);
+    } catch (error) {
+      console.error('Failed to end voice for an ended account session:', error);
+    }
+  }
+  wsRegistry.closeConnections(targets, SESSION_REVOKED_CLOSE_CODE, 'Session ended');
 }
 
 async function handleKickRoomPeer(req, res, roomId) {
@@ -4573,6 +4793,21 @@ function createApiApp({
   app.post('/api/auth/avatar', (request, reply) => runLegacyHandler(request, reply, handleUploadUserAvatar));
   app.delete('/api/auth/avatar', (request, reply) => runLegacyHandler(request, reply, handleDeleteUserAvatar));
   app.post('/api/auth/password', (request, reply) => runLegacyHandler(request, reply, handleChangePassword));
+  app.post('/api/auth/recover', (request, reply) => runLegacyHandler(request, reply, handleRecoverAccount));
+  app.get('/api/auth/security', (request, reply) => runLegacyHandler(request, reply, handleAccountSecurity));
+  app.post('/api/auth/recovery-codes', (request, reply) => runLegacyHandler(request, reply, handleGenerateRecoveryCodes));
+  app.get('/api/auth/sessions', (request, reply) => runLegacyHandler(request, reply, handleListSessions));
+  app.post('/api/auth/sessions/revoke-others', (request, reply) => runLegacyHandler(request, reply, handleRevokeOtherSessions));
+  app.delete('/api/auth/sessions/:sessionId', (request, reply) => runLegacyHandler(
+    request,
+    reply,
+    (req, res) => handleRevokeSession(req, res, request.params.sessionId)
+  ));
+  app.post('/api/auth/onboarding/:key/dismiss', (request, reply) => runLegacyHandler(
+    request,
+    reply,
+    (req, res) => handleDismissOnboarding(req, res, request.params.key)
+  ));
   app.get('/api/auth/rooms', (request, reply) => runLegacyHandler(request, reply, handleAuthRooms));
   app.post('/api/auth/rooms', (request, reply) => runLegacyHandler(request, reply, handleAddAuthRoom));
   app.delete('/api/auth/rooms/:roomId', (request, reply) => runLegacyHandler(
