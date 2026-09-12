@@ -196,8 +196,14 @@ test('recovery codes restore access over HTTP and end every earlier session', as
   const initial = await request(socketPath, { pathname: '/api/auth/security', cookie });
   assert.equal(initial.status, 200);
   assert.deepEqual(initial.body.recoveryCodes, { remaining: 0, generatedAt: null });
-  // A freshly registered account never sees the release announcement.
-  assert.deepEqual(initial.body.onboardingDismissed, ['release-2.6.0-recovery-codes']);
+  assert.deepEqual(initial.body.recoveryCodesReminder, { snoozedUntil: null });
+
+  // A freshly registered account starts at the current announcement.
+  const whatsNew = await request(socketPath, { pathname: '/api/auth/whats-new', cookie });
+  assert.equal(whatsNew.status, 200);
+  assert.match(whatsNew.body.whatsNew.current, /^\d+\.\d+\.\d+$/);
+  assert.equal(whatsNew.body.whatsNew.lastSeen, whatsNew.body.whatsNew.current);
+  assert.equal((await request(socketPath, { pathname: '/api/auth/whats-new' })).status, 401);
 
   const wrongPassword = await request(socketPath, {
     method: 'POST',
@@ -219,21 +225,22 @@ test('recovery codes restore access over HTTP and end every earlier session', as
   for (const code of generated.body.codes) assert.match(code, FORMATTED_CODE);
   assert.equal((await request(socketPath, { pathname: '/api/auth/security', cookie })).body.recoveryCodes.remaining, 10);
 
-  const dismissed = await request(socketPath, {
+  const snoozed = await request(socketPath, {
     method: 'POST',
-    pathname: '/api/auth/onboarding/release-2.6.0-recovery-codes/dismiss',
+    pathname: '/api/auth/recovery-codes/reminder/snooze',
     cookie,
     body: {}
   });
-  assert.equal(dismissed.status, 200);
-  assert.deepEqual(dismissed.body.onboardingDismissed, ['release-2.6.0-recovery-codes']);
-  const unknownKey = await request(socketPath, {
-    method: 'POST',
-    pathname: '/api/auth/onboarding/release-0.0.0-nope/dismiss',
-    cookie,
-    body: {}
-  });
-  assert.equal(unknownKey.status, 404);
+  assert.equal(snoozed.status, 200);
+  assert.ok(snoozed.body.recoveryCodesReminder.snoozedUntil > Date.now() + 2 * 24 * 60 * 60 * 1000);
+  assert.deepEqual(
+    (await request(socketPath, { pathname: '/api/auth/security', cookie })).body.recoveryCodesReminder,
+    snoozed.body.recoveryCodesReminder
+  );
+
+  const seen = await request(socketPath, { method: 'POST', pathname: '/api/auth/whats-new/seen', cookie, body: {} });
+  assert.equal(seen.status, 200);
+  assert.equal(seen.body.whatsNew.lastSeen, seen.body.whatsNew.current);
 
   const socket = openWs(socketPath, { cookie });
   await socket.ready;

@@ -88,12 +88,52 @@ test('every alphabet symbol survives normalization', () => {
   assert.equal(cjs.normalizeRecoveryCode(cjs.RECOVERY_CODE_ALPHABET.slice(16)), cjs.RECOVERY_CODE_ALPHABET.slice(16));
 });
 
-test('onboarding keys and session rows are validated at the boundary', async () => {
+test('what is new is compared by release version, not by string order', async () => {
   const esm = await loadEsm();
-  assert.equal(cjs.normalizeOnboardingKey(cjs.RECOVERY_CODES_ONBOARDING_KEY), 'release-2.6.0-recovery-codes');
-  assert.equal(cjs.normalizeOnboardingKey('release-9.9.9-anything'), '');
-  assert.deepEqual(esm.ONBOARDING_KEYS, cjs.ONBOARDING_KEYS);
+  assert.equal(cjs.normalizeReleaseVersion(cjs.WHATS_NEW_VERSION), cjs.WHATS_NEW_VERSION);
+  assert.equal(esm.WHATS_NEW_VERSION, cjs.WHATS_NEW_VERSION);
 
+  for (const [left, right, expected] of [
+    ['2.6.0', '2.6.0', 0],
+    ['2.5.8', '2.6.0', -1],
+    ['2.10.0', '2.9.9', 1],
+    ['10.0.0', '9.99.99', 1],
+    ['2.6', '2.6.0', null],
+    ['v2.6.0', '2.6.0', null],
+    [null, '2.6.0', null]
+  ]) {
+    assert.equal(cjs.compareReleaseVersions(left, right), expected, `${left} vs ${right}`);
+    assert.equal(esm.compareReleaseVersions(left, right), expected, `${left} vs ${right} (ESM)`);
+  }
+
+  // Accounts that never recorded an announcement predate every release.
+  assert.equal(cjs.hasUnseenWhatsNew(null, '2.6.0'), true);
+  assert.equal(cjs.hasUnseenWhatsNew('2.5.0', '2.6.0'), true);
+  assert.equal(cjs.hasUnseenWhatsNew('2.6.0', '2.6.0'), false);
+  assert.equal(cjs.hasUnseenWhatsNew('2.7.0', '2.6.0'), false);
+  assert.equal(cjs.hasUnseenWhatsNew(null, 'not-a-version'), false);
+});
+
+test('the recovery codes reminder is due only without codes and outside its snooze', async () => {
+  const esm = await loadEsm();
+  const now = 1_000_000;
+  const later = now + cjs.RECOVERY_CODES_REMINDER_SNOOZE_MS;
+  assert.equal(cjs.RECOVERY_CODES_REMINDER_SNOOZE_MS, 3 * 24 * 60 * 60 * 1000);
+
+  for (const [status, reminder, expected] of [
+    [{ remaining: 0 }, { snoozedUntil: null }, true],
+    [{ remaining: 0 }, { snoozedUntil: now - 1 }, true],
+    [{ remaining: 0 }, { snoozedUntil: later }, false],
+    [{ remaining: 3 }, { snoozedUntil: null }, false],
+    [null, { snoozedUntil: null }, false]
+  ]) {
+    assert.equal(cjs.isRecoveryCodesReminderDue(status, reminder, now), expected, JSON.stringify([status, reminder]));
+    assert.equal(esm.isRecoveryCodesReminderDue(status, reminder, now), expected);
+  }
+});
+
+test('session rows are validated at the boundary', async () => {
+  const esm = await loadEsm();
   const row = {
     id: '6F9619FF-8B86-D011-B42D-00C04FC964FF',
     current: true,

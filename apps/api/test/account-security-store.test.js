@@ -7,7 +7,11 @@ const { Pool } = require('pg');
 
 const { createUserStore } = require('../src/lib/user-store');
 const { runMigrations } = require('../src/lib/migrate');
-const { RECOVERY_CODES_ONBOARDING_KEY, normalizeRecoveryCode } = require('@voice-room/shared/account-security');
+const {
+  RECOVERY_CODES_REMINDER_SNOOZE_MS,
+  WHATS_NEW_VERSION,
+  normalizeRecoveryCode
+} = require('@voice-room/shared/account-security');
 const { createTestDatabase } = require('./db-harness');
 
 const SILENT = { log() {}, info() {}, warn() {}, error() {} };
@@ -184,7 +188,7 @@ test('a recovery code only opens the account it was issued for', async (t) => {
   assert.deepEqual((await store.getRecoveryCodesStatus(ada.id)).remaining, 10);
 });
 
-test('new accounts skip release announcements; existing ones dismiss them once', async (t) => {
+test('new accounts start at the current announcement and the codes reminder snoozes for three days', async (t) => {
   const { cleanup, databaseUrl } = await createTestDatabase(t);
   await runMigrations({ databaseUrl, logger: SILENT });
   const store = createUserStore({ databaseUrl, logger: SILENT });
@@ -196,24 +200,27 @@ test('new accounts skip release announcements; existing ones dismiss them once',
   });
   const { user } = await store.createUser({ login: 'ada', password: 'lovelace-1843' });
 
-  // Registering after the release must not greet the account with its announcement.
-  assert.deepEqual(await store.listDismissedOnboarding(user.id), [RECOVERY_CODES_ONBOARDING_KEY]);
+  // Registering after a release must not greet the account with its announcement.
+  assert.deepEqual(await store.getAccountNotices(user.id), {
+    whatsNewSeen: WHATS_NEW_VERSION,
+    recoveryCodesReminderSnoozedUntil: null
+  });
 
-  // An account from before the release has no dismissal recorded yet.
+  // An account from before announcements existed has nothing recorded.
   await pool.query(`UPDATE users SET metadata = '{}'::jsonb WHERE id = $1`, [user.id]);
-  assert.deepEqual(await store.listDismissedOnboarding(user.id), []);
-  assert.deepEqual(
-    await store.dismissOnboarding({ userId: user.id, key: 'release-9.9.9-whatever' }),
-    { status: 'invalid', dismissed: [] }
-  );
+  assert.deepEqual(await store.getAccountNotices(user.id), { whatsNewSeen: null, recoveryCodesReminderSnoozedUntil: null });
 
-  const expected = { status: 'dismissed', dismissed: [RECOVERY_CODES_ONBOARDING_KEY] };
-  assert.deepEqual(await store.dismissOnboarding({ userId: user.id, key: RECOVERY_CODES_ONBOARDING_KEY }), expected);
-  assert.deepEqual(await store.dismissOnboarding({ userId: user.id, key: RECOVERY_CODES_ONBOARDING_KEY }), expected);
-  assert.deepEqual(await store.listDismissedOnboarding(user.id), [RECOVERY_CODES_ONBOARDING_KEY]);
-
+  assert.deepEqual(await store.markWhatsNewSeen({ userId: user.id }), { status: 'seen', whatsNewSeen: WHATS_NEW_VERSION });
   assert.deepEqual(
-    await store.dismissOnboarding({ userId: crypto.randomUUID(), key: RECOVERY_CODES_ONBOARDING_KEY }),
-    { status: 'not_found', dismissed: [] }
+    await store.snoozeRecoveryCodesReminder({ userId: user.id, now: 1_000 }),
+    { status: 'snoozed', snoozedUntil: 1_000 + RECOVERY_CODES_REMINDER_SNOOZE_MS }
   );
+  assert.deepEqual(await store.getAccountNotices(user.id), {
+    whatsNewSeen: WHATS_NEW_VERSION,
+    recoveryCodesReminderSnoozedUntil: 1_000 + 3 * 24 * HOUR
+  });
+
+  const ghost = crypto.randomUUID();
+  assert.deepEqual(await store.markWhatsNewSeen({ userId: ghost }), { status: 'not_found', whatsNewSeen: null });
+  assert.deepEqual(await store.snoozeRecoveryCodesReminder({ userId: ghost }), { status: 'not_found', snoozedUntil: null });
 });

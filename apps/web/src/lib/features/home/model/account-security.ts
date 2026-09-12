@@ -1,4 +1,4 @@
-import { RECOVERY_CODE_COUNT, RECOVERY_CODES_ONBOARDING_KEY } from '@voice-room/shared/account-security';
+import { RECOVERY_CODE_COUNT, isRecoveryCodesReminderDue } from '@voice-room/shared/account-security';
 import type { AccountSecurity, AccountSession, RecoveryCodesStatus } from '$lib/api/auth';
 
 const HOUR_MS = 60 * 60 * 1000;
@@ -44,7 +44,6 @@ export function recoveryCodesFileText(codes: string[], login: string, createdAt 
   ].join('\n');
 }
 
-export function shouldOfferRecoveryCodesOnboarding(security: AccountSecurity): boolean {
-  return security.recoveryCodes.remaining === 0
-    && !security.onboardingDismissed.includes(RECOVERY_CODES_ONBOARDING_KEY);
+export function shouldShowRecoveryCodesReminder(security: AccountSecurity, now = Date.now()): boolean {
+  return isRecoveryCodesReminderDue(security.recoveryCodes, security.recoveryCodesReminder, now);
 }

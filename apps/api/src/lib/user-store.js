@@ -5,13 +5,14 @@ const { createDbPool, transaction } = require('./db');
 const { hashPassword, verifyPassword } = require('./password');
 const { AVATAR_COLOR_KEYS, cleanAvatarColorKey, cleanPresenceStatus } = require('@voice-room/shared/validation');
 const {
-  ONBOARDING_KEYS,
+  RECOVERY_CODES_REMINDER_SNOOZE_MS,
   RECOVERY_CODE_ALPHABET,
   RECOVERY_CODE_COUNT,
   RECOVERY_CODE_LENGTH,
+  WHATS_NEW_VERSION,
   describeUserAgent,
-  normalizeOnboardingKey,
-  normalizeRecoveryCode
+  normalizeRecoveryCode,
+  normalizeReleaseVersion
 } = require('@voice-room/shared/account-security');
 
 const DEFAULT_SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
@@ -116,13 +117,13 @@ function createUserStore({ databaseUrl, logger = console, pool, sessionTtlMs = D
     const assignedAvatarColorKey = cleanAvatarColorKey(avatarColorKey) || randomAvatarColorKey();
 
     try {
-      // Release announcements are for accounts that existed before the release;
-      // a new account starts with all of them already behind it.
+      // "What's new" is for people who used an earlier release; a new account
+      // starts at the current announcement.
       const result = await getPool().query(
         `INSERT INTO users (id, login, display_name, password_hash, avatar_color_key, created_at, updated_at, metadata)
-         VALUES ($1, $2, $3, $4, $5, $6, $6, jsonb_build_object('onboardingDismissed', to_jsonb($7::text[])))
+         VALUES ($1, $2, $3, $4, $5, $6, $6, jsonb_build_object('whatsNewSeen', $7::text))
          RETURNING *`,
-        [id, login, displayName, passwordHash, assignedAvatarColorKey, toDate(now), [...ONBOARDING_KEYS]]
+        [id, login, displayName, passwordHash, assignedAvatarColorKey, toDate(now), WHATS_NEW_VERSION]
       );
       return { status: 'created', user: mapUser(result.rows[0]) };
     } catch (error) {
@@ -426,43 +427,51 @@ function createUserStore({ databaseUrl, logger = console, pool, sessionTtlMs = D
     });
   }
 
-  async function listDismissedOnboarding(userId) {
+  // Per-account state of the nudges the lobby shows: the last "what's new"
+  // announcement seen and how long the recovery codes reminder stays hidden.
+  async function getAccountNotices(userId) {
     const result = await getPool().query(
-      `SELECT metadata->'onboardingDismissed' AS dismissed FROM users WHERE id = $1`,
+      `SELECT metadata->>'whatsNewSeen' AS whats_new_seen,
+              metadata->'recoveryCodesReminderSnoozedUntil' AS reminder_snoozed_until
+       FROM users
+       WHERE id = $1`,
       [userId]
     );
-    const dismissed = result.rows[0]?.dismissed;
-    return Array.isArray(dismissed) ? dismissed.map(normalizeOnboardingKey).filter(Boolean) : [];
+    const row = result.rows[0];
+    const snoozedUntil = Number(row?.reminder_snoozed_until);
+    return {
+      whatsNewSeen: normalizeReleaseVersion(row?.whats_new_seen) || null,
+      recoveryCodesReminderSnoozedUntil: Number.isSafeInteger(snoozedUntil) && snoozedUntil > 0 ? snoozedUntil : null
+    };
   }
 
-  async function dismissOnboarding({ userId, key, now = Date.now() }) {
-    const onboardingKey = normalizeOnboardingKey(key);
-    if (!onboardingKey) return { status: 'invalid', dismissed: [] };
+  // Only the current announcement can be recorded, so a stale client cannot
+  // pin an account to an older release.
+  async function markWhatsNewSeen({ userId, now = Date.now() }) {
     const result = await getPool().query(
       `UPDATE users
-       SET metadata = jsonb_set(
-             metadata,
-             '{onboardingDismissed}',
-             CASE
-               WHEN jsonb_typeof(metadata->'onboardingDismissed') <> 'array' OR metadata->'onboardingDismissed' IS NULL
-                 THEN jsonb_build_array($2::text)
-               WHEN metadata->'onboardingDismissed' @> jsonb_build_array($2::text)
-                 THEN metadata->'onboardingDismissed'
-               ELSE (metadata->'onboardingDismissed') || jsonb_build_array($2::text)
-             END,
-             true
-           ),
+       SET metadata = jsonb_set(metadata, '{whatsNewSeen}', to_jsonb($2::text), true),
            updated_at = $3
-       WHERE id = $1
-       RETURNING metadata->'onboardingDismissed' AS dismissed`,
-      [userId, onboardingKey, toDate(now)]
+       WHERE id = $1`,
+      [userId, WHATS_NEW_VERSION, toDate(now)]
     );
-    if (result.rowCount !== 1) return { status: 'not_found', dismissed: [] };
-    const dismissed = result.rows[0].dismissed;
-    return {
-      status: 'dismissed',
-      dismissed: Array.isArray(dismissed) ? dismissed.map(normalizeOnboardingKey).filter(Boolean) : []
-    };
+    return result.rowCount === 1
+      ? { status: 'seen', whatsNewSeen: WHATS_NEW_VERSION }
+      : { status: 'not_found', whatsNewSeen: null };
+  }
+
+  async function snoozeRecoveryCodesReminder({ userId, now = Date.now() }) {
+    const snoozedUntil = now + RECOVERY_CODES_REMINDER_SNOOZE_MS;
+    const result = await getPool().query(
+      `UPDATE users
+       SET metadata = jsonb_set(metadata, '{recoveryCodesReminderSnoozedUntil}', to_jsonb($2::bigint), true),
+           updated_at = $3
+       WHERE id = $1`,
+      [userId, snoozedUntil, toDate(now)]
+    );
+    return result.rowCount === 1
+      ? { status: 'snoozed', snoozedUntil }
+      : { status: 'not_found', snoozedUntil: null };
   }
 
   async function close() {
@@ -477,19 +486,20 @@ function createUserStore({ databaseUrl, logger = console, pool, sessionTtlMs = D
     createSession,
     createUser,
     deleteSession,
-    dismissOnboarding,
     generateRecoveryCodes,
+    getAccountNotices,
     getRecoveryCodesStatus,
     getSessionUser,
     getUserById,
     getUserByLogin,
     listAvatarKeys,
-    listDismissedOnboarding,
     listSessions,
+    markWhatsNewSeen,
     pruneSessions,
     recoverWithCode,
     revokeOtherSessions,
     revokeSession,
+    snoozeRecoveryCodesReminder,
     swapAvatar,
     updateAvatar,
     updateDisplayName,

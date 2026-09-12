@@ -5,10 +5,11 @@
 import type { PresenceStatus } from '$lib/shared/presence';
 import {
   normalizeAccountSession,
-  normalizeOnboardingKey,
+  normalizeReleaseVersion,
   type AccountSession,
-  type OnboardingKey,
-  type RecoveryCodesStatus
+  type RecoveryCodesReminder,
+  type RecoveryCodesStatus,
+  type WhatsNewState
 } from '@voice-room/shared/account-security';
 
 export interface AuthUser {
@@ -144,11 +145,11 @@ export async function fetchOwnedRooms(): Promise<OwnedRoom[]> {
   return Array.isArray(payload.rooms) ? payload.rooms : [];
 }
 
-export type { AccountSession, OnboardingKey, RecoveryCodesStatus };
+export type { AccountSession, RecoveryCodesReminder, RecoveryCodesStatus, WhatsNewState };
 
 export interface AccountSecurity {
   recoveryCodes: RecoveryCodesStatus;
-  onboardingDismissed: OnboardingKey[];
+  recoveryCodesReminder: RecoveryCodesReminder;
 }
 
 export interface RecoverInput {
@@ -175,18 +176,40 @@ function readRecoveryCodesStatus(value: Partial<RecoveryCodesStatus> | undefined
   };
 }
 
+function readRecoveryCodesReminder(value: Partial<RecoveryCodesReminder> | undefined): RecoveryCodesReminder {
+  const snoozedUntil = Number(value?.snoozedUntil);
+  return { snoozedUntil: Number.isFinite(snoozedUntil) && snoozedUntil > 0 ? snoozedUntil : null };
+}
+
 export async function fetchAccountSecurity(): Promise<AccountSecurity> {
-  const payload = await authRead<{ recoveryCodes?: RecoveryCodesStatus; onboardingDismissed?: unknown[] }>(
-    '/auth/security',
-    'GET',
-    'Не удалось загрузить настройки безопасности'
-  );
+  const payload = await authRead<{
+    recoveryCodes?: RecoveryCodesStatus;
+    recoveryCodesReminder?: Partial<RecoveryCodesReminder>;
+  }>('/auth/security', 'GET', 'Не удалось загрузить настройки безопасности');
   return {
     recoveryCodes: readRecoveryCodesStatus(payload.recoveryCodes),
-    onboardingDismissed: (Array.isArray(payload.onboardingDismissed) ? payload.onboardingDismissed : [])
-      .map(normalizeOnboardingKey)
-      .filter((key): key is OnboardingKey => Boolean(key))
+    recoveryCodesReminder: readRecoveryCodesReminder(payload.recoveryCodesReminder)
   };
+}
+
+export async function snoozeRecoveryCodesReminder(): Promise<RecoveryCodesReminder> {
+  const payload = await authPost<{ recoveryCodesReminder?: Partial<RecoveryCodesReminder> }>(
+    '/auth/recovery-codes/reminder/snooze',
+    {}
+  );
+  return readRecoveryCodesReminder(payload.recoveryCodesReminder);
+}
+
+export async function fetchWhatsNew(): Promise<WhatsNewState> {
+  const payload = await authRead<{ whatsNew?: Partial<WhatsNewState> }>('/auth/whats-new', 'GET', 'Не удалось загрузить новости');
+  return {
+    current: normalizeReleaseVersion(payload.whatsNew?.current),
+    lastSeen: normalizeReleaseVersion(payload.whatsNew?.lastSeen) || null
+  };
+}
+
+export async function markWhatsNewSeen(): Promise<void> {
+  await authPost('/auth/whats-new/seen', {});
 }
 
 export async function fetchAccountSessions(): Promise<AccountSession[]> {
@@ -221,8 +244,4 @@ export async function generateRecoveryCodes(
 export async function recoverAccount(input: RecoverInput): Promise<{ user: AuthUser; remaining: number }> {
   const payload = await authPost<{ user: AuthUser; recoveryCodes?: Partial<RecoveryCodesStatus> }>('/auth/recover', input);
   return { user: payload.user, remaining: readRecoveryCodesStatus(payload.recoveryCodes).remaining };
-}
-
-export async function dismissOnboarding(key: OnboardingKey): Promise<void> {
-  await authPost(`/auth/onboarding/${encodeURIComponent(key)}/dismiss`, {});
 }
