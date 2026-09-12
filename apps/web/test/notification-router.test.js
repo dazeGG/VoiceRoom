@@ -78,13 +78,15 @@ test('routes notification payloads with visible non-private bodies and title for
   assert.equal(dm.payload.title, 'Alice');
   assert.equal(dm.payload.body, 'hello from Alice');
   assert.equal(dm.payload.tag, 'dm:msg-1');
-  assert.deepEqual(dm.payload.data, { kind: 'dm', peerId: 'alice-id', messageId: 'msg-1' });
+  assert.deepEqual(dm.payload.data, { kind: 'dm', peerId: 'alice-id', messageId: 'msg-1', route: '/?dm=alice-id' });
 
   const room = router.routeNotificationEvent(roomEvent(), { permission: 'granted', notificationsAvailable: true });
   assert.equal(room.notify, true);
   assert.equal(room.payload.title, 'Bob — Daily');
   assert.equal(room.payload.body, 'standup starts now');
   assert.equal(room.payload.data.roomId, 'daily');
+  assert.equal(room.payload.data.route, '/?room=daily&message=msg-2');
+  assert.equal(room.payload.tag, 'room:daily:message:msg-2');
 
   const request = router.buildNotificationPayload(friendRequestEvent(), { privateNotifications: false });
   assert.equal(request.title, 'Новая заявка в друзья');
@@ -281,8 +283,9 @@ test('desktop bridge is preferred over page Notification and does not request pe
       {
         title: 'Alice',
         body: 'hello from Alice',
-        tag: 'dm:desktop',
-        dedupeKey: 'dm:desktop'
+        tag: 'dm:alice-id',
+        dedupeKey: 'dm:desktop',
+        route: '/?dm=alice-id'
       }
     ]);
     assert.equal(notificationCalls.length, 0);
