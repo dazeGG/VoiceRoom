@@ -196,7 +196,8 @@ test('recovery codes restore access over HTTP and end every earlier session', as
   const initial = await request(socketPath, { pathname: '/api/auth/security', cookie });
   assert.equal(initial.status, 200);
   assert.deepEqual(initial.body.recoveryCodes, { remaining: 0, generatedAt: null });
-  assert.deepEqual(initial.body.onboardingDismissed, []);
+  // A freshly registered account never sees the release announcement.
+  assert.deepEqual(initial.body.onboardingDismissed, ['release-2.6.0-recovery-codes']);
 
   const wrongPassword = await request(socketPath, {
     method: 'POST',

@@ -5,6 +5,7 @@ const { createDbPool, transaction } = require('./db');
 const { hashPassword, verifyPassword } = require('./password');
 const { AVATAR_COLOR_KEYS, cleanAvatarColorKey, cleanPresenceStatus } = require('@voice-room/shared/validation');
 const {
+  ONBOARDING_KEYS,
   RECOVERY_CODE_ALPHABET,
   RECOVERY_CODE_COUNT,
   RECOVERY_CODE_LENGTH,
@@ -115,11 +116,13 @@ function createUserStore({ databaseUrl, logger = console, pool, sessionTtlMs = D
     const assignedAvatarColorKey = cleanAvatarColorKey(avatarColorKey) || randomAvatarColorKey();
 
     try {
+      // Release announcements are for accounts that existed before the release;
+      // a new account starts with all of them already behind it.
       const result = await getPool().query(
-        `INSERT INTO users (id, login, display_name, password_hash, avatar_color_key, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $6)
+        `INSERT INTO users (id, login, display_name, password_hash, avatar_color_key, created_at, updated_at, metadata)
+         VALUES ($1, $2, $3, $4, $5, $6, $6, jsonb_build_object('onboardingDismissed', to_jsonb($7::text[])))
          RETURNING *`,
-        [id, login, displayName, passwordHash, assignedAvatarColorKey, toDate(now)]
+        [id, login, displayName, passwordHash, assignedAvatarColorKey, toDate(now), [...ONBOARDING_KEYS]]
       );
       return { status: 'created', user: mapUser(result.rows[0]) };
     } catch (error) {
