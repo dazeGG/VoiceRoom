@@ -7,7 +7,7 @@
   import { goto } from '$app/navigation';
   import { X } from '@lucide/svelte';
   import { normalizeRecoveryCode } from '@voice-room/shared/account-security';
-  import { login, recoverAccount, register } from '$lib/api/auth';
+  import { AuthRequestError, login, recoverAccount, register, restoreAccount } from '$lib/api/auth';
   import { iconMd } from '$lib/shared/ui/icons';
   import { LOGIN_HINT, PASSWORD_MIN_LENGTH, isValidPassword, normalizeLogin } from './account';
   import { session, setUser } from './session.svelte';
@@ -57,6 +57,12 @@
   let passwordConfirm = $state('');
   let error = $state('');
   let submitting = $state(false);
+  // Set when the account signing in is waiting to be deleted: the dialog offers
+  // to restore it instead of an error.
+  let pendingDeletionAt = $state<number | null>(null);
+
+  const formatDeletionDate = (value: number): string =>
+    new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long' }).format(value);
 
   const isLogin = $derived(mode === 'login');
   const isRegister = $derived(mode === 'register');
@@ -123,7 +129,26 @@
       }
       await goto('/');
     } catch (cause) {
+      if (isLogin && cause instanceof AuthRequestError && cause.code === 'account_deletion_pending') {
+        pendingDeletionAt = Number(cause.details.deletionScheduledFor) || null;
+        return;
+      }
       error = cause instanceof Error && cause.message ? cause.message : copy.failure;
+    } finally {
+      submitting = false;
+    }
+  }
+
+  async function restorePendingAccount(): Promise<void> {
+    if (submitting) return;
+    submitting = true;
+    error = '';
+    try {
+      setUser(await restoreAccount({ login: loginValue.trim(), password }));
+      pendingDeletionAt = null;
+      await goto('/');
+    } catch (cause) {
+      error = cause instanceof Error && cause.message ? cause.message : 'Не удалось восстановить аккаунт';
     } finally {
       submitting = false;
     }
@@ -151,6 +176,17 @@
     <form class="auth-form" onsubmit={handleSubmit}>
       {#if error}
         <p class="auth-error" role="alert">{error}</p>
+      {/if}
+
+      {#if isLogin && pendingDeletionAt !== null}
+        <div class="auth-restore" role="status">
+          <p>
+            Этот аккаунт ожидает удаления — оно произойдёт {formatDeletionDate(pendingDeletionAt)}. Восстановить его?
+          </p>
+          <button class="auth-submit" type="button" disabled={submitting} onclick={() => void restorePendingAccount()}>
+            Восстановить аккаунт
+          </button>
+        </div>
       {/if}
 
       <div class="auth-field">

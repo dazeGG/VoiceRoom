@@ -159,6 +159,23 @@ test('session rows are validated at the boundary', async () => {
   assert.equal(cjs.normalizeAccountSession({ ...row, current: 'yes' }).current, false);
 });
 
+test('deleted accounts use a reserved login prefix and a fixed name', async () => {
+  const esm = await loadEsm();
+  assert.equal(cjs.ACCOUNT_DELETION_GRACE_MS, 7 * 24 * 60 * 60 * 1000);
+  assert.equal(esm.DELETED_ACCOUNT_NAME, 'Удалённый аккаунт');
+  for (const [login, expected] of [
+    ['deleted-1a2b3c4d', true],
+    [' Deleted-anything', true],
+    ['deleted', false],
+    ['undeleted-1', false],
+    ['ada', false],
+    [null, false]
+  ]) {
+    assert.equal(cjs.isDeletedAccountLogin(login), expected, String(login));
+    assert.equal(esm.isDeletedAccountLogin(login), expected, `${String(login)} (ESM)`);
+  }
+});
+
 test('login alerts are validated at the boundary', async () => {
   const esm = await loadEsm();
   assert.ok(cjs.LOGIN_ALERT_TTL_MS < cjs.LOGIN_FAMILIARITY_WINDOW_MS);
