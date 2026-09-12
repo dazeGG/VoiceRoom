@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { BellOff, ChevronRight, Plus, UserPlus } from '@lucide/svelte';
+  import { BellOff, ChevronRight, Plus, ShieldCheck, UserPlus, X } from '@lucide/svelte';
   import { Avatar, AvatarStack, Badge, Button, ContextMenu, Ellipsis, MascotIcon } from '$lib/shared/ui';
   import { iconMd, iconSm } from '$lib/shared/ui/icons';
   import type { OwnedRoom } from '$lib/api/auth';
@@ -10,13 +10,27 @@
   import { notificationPreferences } from '$lib/shared/notifications/preferences.svelte';
   import { RoomMenuContent } from '$lib/shared/components/room-menu';
 
-  let { rooms, onOpenRoom, onCreateRoom, onJoinCode, onRoomsChanged, onOpenRoomSettings, onToast } = $props<{
+  let {
+    rooms,
+    onOpenRoom,
+    onCreateRoom,
+    onJoinCode,
+    onRoomsChanged,
+    onOpenRoomSettings,
+    recoveryCodesReminder = false,
+    onOpenRecoveryCodes = () => {},
+    onSnoozeRecoveryCodes = () => {},
+    onToast
+  } = $props<{
     rooms: OwnedRoom[];
     onOpenRoom: (roomId: string) => void;
     onCreateRoom: () => void;
     onJoinCode: (code: string) => void;
     onRoomsChanged?: () => void;
     onOpenRoomSettings?: (roomId: string) => void;
+    recoveryCodesReminder?: boolean;
+    onOpenRecoveryCodes?: () => void;
+    onSnoozeRecoveryCodes?: () => void;
     onToast?: (message: string) => void;
   }>();
 
@@ -97,6 +111,32 @@
         <ChevronRight {...iconMd} aria-hidden="true" />
       </span>
     </button>
+  {/if}
+
+  {#if recoveryCodesReminder}
+    <div class="lr-callout lr-callout--split">
+      <button class="lr-callout-main" type="button" onclick={onOpenRecoveryCodes}>
+        <span class="lr-callout-icon">
+          <ShieldCheck {...iconMd} aria-hidden="true" />
+        </span>
+        <div style="flex:1;min-width:0;">
+          <div class="lr-callout-title">Защитите аккаунт</div>
+          <div class="lr-callout-sub">Создайте коды восстановления — без них забытый пароль не вернуть</div>
+        </div>
+        <span style="flex:none;color:var(--warm-faint);">
+          <ChevronRight {...iconMd} aria-hidden="true" />
+        </span>
+      </button>
+      <button
+        class="lr-callout-dismiss"
+        type="button"
+        aria-label="Напомнить через 3 дня"
+        title="Напомнить через 3 дня"
+        onclick={onSnoozeRecoveryCodes}
+      >
+        <X {...iconSm} aria-hidden="true" />
+      </button>
+    </div>
   {/if}
 
   <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:16px;margin:24px 0 18px;">

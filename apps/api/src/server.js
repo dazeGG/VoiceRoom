@@ -39,7 +39,7 @@ const { createAvatarStorage, validateAvatarKey } = require('./lib/avatar-storage
 const { avatarColorForPeerId, createRoomStore } = require('./lib/room-store');
 const { createUserStore, hashSessionToken, publicUser } = require('./lib/user-store');
 const { createGeoLocator } = require('./lib/geoip');
-const { formatRecoveryCode } = require('@voice-room/shared/account-security');
+const { WHATS_NEW_VERSION, formatRecoveryCode } = require('@voice-room/shared/account-security');
 const { createFriendStore } = require('./lib/friend-store');
 const { createNotificationStore } = require('./lib/notification-store');
 const { createPushStore } = require('./lib/push-store');
@@ -2200,11 +2200,53 @@ async function handleAccountSecurity(req, res) {
     sendJson(res, 401, { ok: false, error: 'Требуется вход' });
     return;
   }
-  const [recoveryCodes, onboardingDismissed] = await Promise.all([
+  const [recoveryCodes, notices] = await Promise.all([
     getUserStore().getRecoveryCodesStatus(session.user.id),
-    getUserStore().listDismissedOnboarding(session.user.id)
+    getUserStore().getAccountNotices(session.user.id)
   ]);
-  sendJson(res, 200, { ok: true, recoveryCodes, onboardingDismissed });
+  sendJson(res, 200, {
+    ok: true,
+    recoveryCodes,
+    recoveryCodesReminder: { snoozedUntil: notices.recoveryCodesReminderSnoozedUntil }
+  });
+}
+
+async function handleSnoozeRecoveryCodesReminder(req, res) {
+  const session = await resolveSessionUser(req);
+  if (!session) {
+    sendJson(res, 401, { ok: false, error: 'Требуется вход' });
+    return;
+  }
+  const result = await getUserStore().snoozeRecoveryCodesReminder({ userId: session.user.id });
+  if (result.status !== 'snoozed') {
+    sendJson(res, 404, { ok: false, error: 'Аккаунт не найден' });
+    return;
+  }
+  sendJson(res, 200, { ok: true, recoveryCodesReminder: { snoozedUntil: result.snoozedUntil } });
+}
+
+async function handleWhatsNew(req, res) {
+  const session = await resolveSessionUser(req);
+  if (!session) {
+    sendJson(res, 401, { ok: false, error: 'Требуется вход' });
+    return;
+  }
+  const notices = await getUserStore().getAccountNotices(session.user.id);
+  sendJson(res, 200, { ok: true, whatsNew: { current: WHATS_NEW_VERSION, lastSeen: notices.whatsNewSeen } });
+}
+
+async function handleMarkWhatsNewSeen(req, res) {
+  const session = await resolveSessionUser(req);
+  if (!session) {
+    sendJson(res, 401, { ok: false, error: 'Требуется вход' });
+    return;
+  }
+  const result = await getUserStore().markWhatsNewSeen({ userId: session.user.id });
+  if (result.status !== 'seen') {
+    sendJson(res, 404, { ok: false, error: 'Аккаунт не найден' });
+    return;
+  }
+  sendJson(res, 200, { ok: true, whatsNew: { current: WHATS_NEW_VERSION, lastSeen: result.whatsNewSeen } });
 }
 
 async function handleListSessions(req, res) {
@@ -2328,23 +2370,6 @@ async function handleRecoverAccount(req, res) {
   );
 }
 
-async function handleDismissOnboarding(req, res, key) {
-  const session = await resolveSessionUser(req);
-  if (!session) {
-    sendJson(res, 401, { ok: false, error: 'Требуется вход' });
-    return;
-  }
-  const result = await getUserStore().dismissOnboarding({ userId: session.user.id, key });
-  if (result.status === 'invalid') {
-    sendJson(res, 404, { ok: false, error: 'Неизвестная подсказка' });
-    return;
-  }
-  if (result.status === 'not_found') {
-    sendJson(res, 404, { ok: false, error: 'Аккаунт не найден' });
-    return;
-  }
-  sendJson(res, 200, { ok: true, onboardingDismissed: result.dismissed });
-}
 
 function publicLobbyRoom(room) {
   const result = {
@@ -4803,11 +4828,9 @@ function createApiApp({
     reply,
     (req, res) => handleRevokeSession(req, res, request.params.sessionId)
   ));
-  app.post('/api/auth/onboarding/:key/dismiss', (request, reply) => runLegacyHandler(
-    request,
-    reply,
-    (req, res) => handleDismissOnboarding(req, res, request.params.key)
-  ));
+  app.post('/api/auth/recovery-codes/reminder/snooze', (request, reply) => runLegacyHandler(request, reply, handleSnoozeRecoveryCodesReminder));
+  app.get('/api/auth/whats-new', (request, reply) => runLegacyHandler(request, reply, handleWhatsNew));
+  app.post('/api/auth/whats-new/seen', (request, reply) => runLegacyHandler(request, reply, handleMarkWhatsNewSeen));
   app.get('/api/auth/rooms', (request, reply) => runLegacyHandler(request, reply, handleAuthRooms));
   app.post('/api/auth/rooms', (request, reply) => runLegacyHandler(request, reply, handleAddAuthRoom));
   app.delete('/api/auth/rooms/:roomId', (request, reply) => runLegacyHandler(

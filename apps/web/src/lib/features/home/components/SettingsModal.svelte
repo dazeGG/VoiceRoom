@@ -90,6 +90,7 @@
     notificationUsers = [],
     notificationRooms = [],
     loggingOut = false,
+    securityHighlight = null,
     onClose,
     onToast,
     onLogout
@@ -100,6 +101,7 @@
     notificationUsers?: PublicUser[];
     notificationRooms?: OwnedRoom[];
     loggingOut?: boolean;
+    securityHighlight?: 'recovery-codes' | null;
     onClose: () => void;
     onToast: (message: string, options?: ToastOptions) => void;
     onLogout: () => void;
@@ -736,6 +738,7 @@
           {:else if tab === 'security'}
             <AccountSecuritySettings
               login={user?.login ?? ''}
+              highlightRecoveryCodes={securityHighlight === 'recovery-codes'}
               {onToast}
               onDialogOpenChange={(dialogOpen) => (securityDialogOpen = dialogOpen)}
             />

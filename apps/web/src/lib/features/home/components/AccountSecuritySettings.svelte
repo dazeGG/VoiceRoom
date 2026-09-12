@@ -17,11 +17,15 @@
   import type { ToastOptions } from '../model/toasts.svelte';
   import RecoveryCodesDialog from './RecoveryCodesDialog.svelte';
 
-  let { login, onToast, onDialogOpenChange = () => {} } = $props<{
+  let { login, highlightRecoveryCodes = false, onToast, onDialogOpenChange = () => {} } = $props<{
     login: string;
+    // Set when the lobby reminder brought the user here.
+    highlightRecoveryCodes?: boolean;
     onToast: (message: string, options?: ToastOptions) => void;
     onDialogOpenChange?: (open: boolean) => void;
   }>();
+
+  let recoveryCodesButton = $state<HTMLButtonElement>();
 
   let recoveryCodes = $state<RecoveryCodesStatus | null>(null);
   let sessions = $state<AccountSession[]>([]);
@@ -36,8 +40,14 @@
   const hasOtherSessions = $derived(sessions.some((session) => !session.current));
   const lowOnCodes = $derived(Boolean(recoveryCodes && recoveryCodes.remaining > 0 && recoveryCodes.remaining <= 2));
 
+  const recoveryCodesHighlighted = $derived(highlightRecoveryCodes && recoveryCodes?.remaining === 0);
+
   $effect(() => {
     onDialogOpenChange(codesDialogOpen);
+  });
+
+  $effect(() => {
+    if (recoveryCodesHighlighted) recoveryCodesButton?.scrollIntoView({ block: 'center', behavior: 'smooth' });
   });
 
   onMount(() => {
@@ -154,7 +164,13 @@
           <strong>{recoveryCodes.remaining > 0 ? 'Коды созданы' : 'Коды не созданы'}</strong>
           <small>{recoveryCodesSummary(recoveryCodes)}</small>
         </span>
-        <button class="settings-save account-security-action" type="button" onclick={() => (codesDialogOpen = true)}>
+        <button
+          class="settings-save account-security-action"
+          type="button"
+          bind:this={recoveryCodesButton}
+          data-highlight={recoveryCodesHighlighted}
+          onclick={() => (codesDialogOpen = true)}
+        >
           {recoveryCodes.generatedAt ? 'Создать новые' : 'Создать коды'}
         </button>
       </div>
@@ -264,6 +280,29 @@
   .account-security-action {
     padding: 8px 14px;
     font-size: 13px;
+  }
+
+  .account-security-action[data-highlight='true'] {
+    animation: account-security-highlight 1.4s ease-in-out 4;
+  }
+
+  @keyframes account-security-highlight {
+    0%,
+    100% {
+      box-shadow: 0 0 0 0 color-mix(in oklch, var(--accent), transparent 40%);
+    }
+
+    50% {
+      box-shadow: 0 0 0 7px color-mix(in oklch, var(--accent), transparent 80%);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .account-security-action[data-highlight='true'] {
+      animation: none;
+      outline: 2px solid var(--accent);
+      outline-offset: 3px;
+    }
   }
 
   .account-security-password-foot {

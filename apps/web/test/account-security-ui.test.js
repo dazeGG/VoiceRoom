@@ -65,14 +65,31 @@ test('the password is changed in the security tab, and our own session ends stay
   assert.match(signOut, /expectSessionEnd\(\);\s*try \{\s*await logout\(\);/);
 });
 
-test('the what-is-new onboarding is offered once, only to accounts without codes', () => {
-  const onboarding = read('src/lib/features/home/components/RecoveryCodesOnboarding.svelte');
-  const model = read('src/lib/features/home/model/account-security.ts');
+test('what is new follows the last seen release, not recovery codes', () => {
+  const dialog = read('src/lib/features/home/components/WhatsNewDialog.svelte');
+  const model = read('src/lib/features/home/model/whats-new.ts');
   const lobby = read('src/lib/features/home/LobbyPage.svelte');
 
-  assert.match(onboarding, /title="Что нового в Voice Room"/);
-  assert.doesNotMatch(onboarding, /\d+\.\d+\.\d+/);
-  assert.match(onboarding, /dismissOnboarding\(RECOVERY_CODES_ONBOARDING_KEY\)/);
-  assert.match(model, /security\.recoveryCodes\.remaining === 0\s*&& !security\.onboardingDismissed\.includes\(RECOVERY_CODES_ONBOARDING_KEY\)/);
-  assert.match(lobby, /<RecoveryCodesOnboarding onCreateCodes=\{openSecuritySettings\} \/>/);
+  assert.match(dialog, /title="Что нового в Voice Room"/);
+  assert.doesNotMatch(dialog, /\d+\.\d+\.\d+/);
+  assert.doesNotMatch(dialog, /recoveryCodes|RecoveryCodes/);
+  assert.match(dialog, /void markWhatsNewSeen\(\)/);
+  assert.match(model, /state\.current === WHATS_NEW_VERSION && hasUnseenWhatsNew\(state\.lastSeen, state\.current\)/);
+  assert.match(lobby, /<WhatsNewDialog onOpenSecurity=\{\(\) => openSecuritySettings\(\)\} \/>/);
+});
+
+test('a missing recovery codes reminder sits above the rooms, snoozes and highlights the action', () => {
+  const home = read('src/lib/features/home/components/lobby/VoiceHome.svelte');
+  const lobby = read('src/lib/features/home/LobbyPage.svelte');
+  const security = read('src/lib/features/home/components/AccountSecuritySettings.svelte');
+  const model = read('src/lib/features/home/model/account-security.ts');
+
+  // A plain callout like friend requests, never an overlay that blocks the lobby.
+  assert.match(home, /\{#if recoveryCodesReminder\}\s*<div class="lr-callout lr-callout--split">/);
+  assert.match(home, /aria-label="Напомнить через 3 дня"[\s\S]*?onclick=\{onSnoozeRecoveryCodes\}/);
+  assert.match(model, /isRecoveryCodesReminderDue\(security\.recoveryCodes, security\.recoveryCodesReminder, now\)/);
+  assert.match(lobby, /onOpenRecoveryCodes=\{\(\) => openSecuritySettings\('recovery-codes'\)\}/);
+  assert.match(lobby, /await snoozeRecoveryCodesReminder\(\);/);
+  assert.match(security, /data-highlight=\{recoveryCodesHighlighted\}/);
+  assert.match(security, /\.account-security-action\[data-highlight='true'\] \{\s*animation:/);
 });
