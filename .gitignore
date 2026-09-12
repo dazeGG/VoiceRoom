@@ -51,3 +51,6 @@ playwright-report/
 
 # Generated emoji artwork (see apps/web/scripts/build-emoji-assets.mjs)
 apps/web/static/emoji/
+.graphify/.graphify_*
+.graphify/description-instructions/
+.graphify/label-instructions/
