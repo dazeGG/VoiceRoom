@@ -45,6 +45,7 @@
   import AttachmentMosaic from '$lib/shared/chat/AttachmentMosaic.svelte';
   import AttachmentUploadControl from '$lib/shared/chat/AttachmentUploadControl.svelte';
   import ReplyPreview from '$lib/shared/chat/ReplyPreview.svelte';
+  import LinkPreviewCard from '$lib/shared/chat/LinkPreviewCard.svelte';
   import ReplyTargetBar from '$lib/shared/chat/ReplyTargetBar.svelte';
   import { loadChatDraft, saveChatDraft } from '$lib/shared/chat/chat-drafts';
   import { openProfileCardFor } from '../../profile-card-ui.svelte';
@@ -761,6 +762,7 @@
                         {#if bubble.replyPreview}<ReplyPreview preview={bubble.replyPreview} interactive onjump={jumpToMessage} />{/if}
                         {#if bubble.attachments?.length}<AttachmentMosaic attachments={bubble.attachments} />{/if}
                         {#if bubble.body.trim()}<span class="chat-msg-content dm-msg-content"><ChatText text={bubble.body} />{#if bubble.editedAt}<span class="dm-msg-edited">(изменено)</span>{/if}</span>{/if}
+                        {#if bubble.linkPreview}<LinkPreviewCard preview={bubble.linkPreview} />{/if}
                         {#if reactionsEnabled}<ReactionSummary store={reactions} messageId={bubble.id} />{/if}
                       </div>
                       <MessageHoverActions

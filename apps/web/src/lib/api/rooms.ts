@@ -4,6 +4,7 @@ import type { MessageAttachment } from '@voice-room/shared/attachments';
 import type { ReplyTarget } from '$lib/shared/chat/reply-store.svelte';
 import type { RoomMessageContentV1 } from '@voice-room/shared/room-message-content';
 import { projectRoomMessageContent } from '@voice-room/shared/room-message-content';
+import { normalizeLinkPreview, type LinkPreview } from '@voice-room/shared/link-preview';
 
 export interface CreateRoomOptions {
   isStatic?: boolean;
@@ -68,6 +69,7 @@ export interface ChatMessage {
   cursor?: string;
   readCursor?: string;
   attachments?: MessageAttachment[];
+  linkPreview?: LinkPreview;
   replyTo?: { messageId: string };
   replyPreview?: ReplyTarget;
 }
@@ -95,6 +97,7 @@ interface HistoryMessageDto {
   attachments?: MessageAttachment[];
   replyTo?: { messageId: string };
   replyPreview?: ReplyTarget;
+  linkPreview?: unknown;
   editedAt?: unknown;
   expiresAt?: unknown;
 }
@@ -255,6 +258,7 @@ function roomMessageFromHistory(roomId: string, message: HistoryMessageDto): Cha
     cursor: message.cursor,
     readCursor: message.readCursor,
     attachments: message.attachments,
+    linkPreview: normalizeLinkPreview(message.linkPreview) ?? undefined,
     replyTo: message.replyTo,
     replyPreview: message.replyPreview
   };

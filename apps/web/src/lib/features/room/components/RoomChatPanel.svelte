@@ -47,6 +47,7 @@
   import AttachmentMosaic from '$lib/shared/chat/AttachmentMosaic.svelte';
   import AttachmentUploadControl from '$lib/shared/chat/AttachmentUploadControl.svelte';
   import ReplyPreview from '$lib/shared/chat/ReplyPreview.svelte';
+  import LinkPreviewCard from '$lib/shared/chat/LinkPreviewCard.svelte';
   import ReplyTargetBar from '$lib/shared/chat/ReplyTargetBar.svelte';
   import StructuredMessageContent from '$lib/shared/chat/StructuredMessageContent.svelte';
   import { contentFromLegacyText } from '@voice-room/shared/room-message-content';
@@ -1122,6 +1123,7 @@
                   <div class="chat-msg-body">
                     {#if message.replyPreview}<ReplyPreview preview={message.replyPreview} interactive onjump={jumpToMessage} />{/if}
                     <span class="chat-msg-content">{#if message.content}<StructuredMessageContent content={message.content} fallback={message.text} onmention={openMentionProfile} />{:else}<ChatText text={message.text} />{/if}{#if message.editedAt}<span class="chat-msg-edited">(изменено)</span>{/if}</span>
+                    {#if message.linkPreview}<LinkPreviewCard preview={message.linkPreview} />{/if}
                     {#if message.attachments?.length}<AttachmentMosaic attachments={message.attachments} />{/if}
                     {#if reactionsEnabled}<ReactionSummary store={reactions} messageId={message.id} canMutate={Boolean(session.user?.id)} />{/if}
                   </div>
