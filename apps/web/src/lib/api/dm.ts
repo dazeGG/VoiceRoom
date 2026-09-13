@@ -4,6 +4,7 @@ import { del, getJsonAuth, patchJson, postJsonAuth } from './http';
 import type { PublicUser } from './friends';
 import type { MessageAttachment } from '@voice-room/shared/attachments';
 import type { ReplyTarget } from '$lib/shared/chat/reply-store.svelte';
+import { normalizeLinkPreview, type LinkPreview } from '@voice-room/shared/link-preview';
 
 // A room invitation embedded in a message: rendered as an actionable card in
 // the thread instead of a text bubble. Status changes arrive as message edits.
@@ -26,6 +27,7 @@ export interface DirectMessage {
   cursor?: string;
   readCursor?: string;
   attachments?: MessageAttachment[];
+  linkPreview?: LinkPreview;
   replyTo?: { messageId: string };
   replyPreview?: ReplyTarget;
 }
@@ -57,6 +59,7 @@ interface HistoryMessageDto {
   readAt?: unknown;
   recipientId?: unknown;
   metadata?: unknown;
+  linkPreview?: unknown;
 }
 
 // Opening a thread also clears its unread badge server-side.
@@ -130,6 +133,7 @@ function directMessageFromHistory(peerId: string, message: HistoryMessageDto): D
     cursor: message.cursor,
     readCursor: message.readCursor,
     attachments: message.attachments,
+    linkPreview: normalizeLinkPreview(message.linkPreview ?? metadata.linkPreview) ?? undefined,
     replyTo: message.replyTo,
     replyPreview: message.replyPreview
   };

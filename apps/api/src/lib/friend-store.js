@@ -3,6 +3,7 @@
 const crypto = require('node:crypto');
 const { createDbPool, transaction } = require('./db');
 const { cleanAvatarColorKey, cleanPresenceStatus } = require('@voice-room/shared/validation');
+const { normalizeLinkPreview } = require('@voice-room/shared/link-preview');
 
 function toMillis(value) {
   if (value == null) return null;
@@ -52,6 +53,7 @@ function mapMessage(row) {
     editedAt: toMillis(row.edited_at),
     readAt: toMillis(row.read_at),
     invite: mapInvite(row.metadata),
+    linkPreview: normalizeLinkPreview(row.metadata?.linkPreview) || undefined,
     replyTo: row.reply_to_message_id ? { messageId: row.reply_to_message_id } : undefined,
     // deletedAt kept internal; callers filter before map
     deletedAt: row.deleted_at ? toMillis(row.deleted_at) : null

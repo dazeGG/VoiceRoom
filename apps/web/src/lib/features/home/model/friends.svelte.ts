@@ -419,7 +419,11 @@ export async function editMessage(messageId: string, text: string): Promise<void
   applyEditedMessage(message);
 }
 
-function appendToThread(message: DirectMessage): void {
+function appendToThread(incoming: DirectMessage): void {
+  // A link preview can arrive as an edit before the message itself is
+  // delivered; the later, preview-less copy must not wipe it.
+  const known = friendsState.thread.find((existing) => existing.id === incoming.id);
+  const message = known?.linkPreview && !incoming.linkPreview ? { ...incoming, linkPreview: known.linkPreview } : incoming;
   if (friendsState.threadHistoryEnabled) dmHistory.upsert(message);
   else {
     if (friendsState.thread.some((existing) => existing.id === message.id)) return;

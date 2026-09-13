@@ -153,6 +153,7 @@ GitHub-аналог GitLab CI/CD variables находится здесь:
 | `ROOM_PRUNE_INTERVAL_MS` | `60000` | Интервал soft-cleanup expired messages / idle dynamic rooms. |
 | `RETENTION_PURGE_INTERVAL_MS` | `3600000` | Интервал физического удаления старых soft-deleted rows. `0` выключает purge. |
 | `RETENTION_KEEP_DELETED_MS` | `2592000000` | Сколько хранить soft-deleted rows перед hard-delete. |
+| `LINK_PREVIEWS_ENABLED` | `false` (в `docker-compose.yml` — `true`) | Превью первой ссылки в сообщении. API сам открывает страницу только в публичном интернете (http/https на портах 80 и 443, без внутренних адресов на каждом редиректе), берёт заголовок, описание и картинку и хранит картинку в `uploads/link-previews`, так что читатели ничего не загружают со стороннего сайта. |
 | `ROOM_CHAT_RATE_LIMIT` | `60` | Room chat rate limit. |
 | `ROOM_CHAT_RATE_WINDOW_MS` | `60000` | Room chat rate window. |
 | `UPLOADS_DIR` | `apps/api/uploads` (host) / `/data/uploads` (compose) | Каталог нормализованных WebP-аватарок. В production должен находиться на persistent volume. |
