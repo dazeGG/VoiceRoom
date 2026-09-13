@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Bell, BellOff, DoorOpen, User, UserMinus, X } from '@lucide/svelte';
   import { iconMd, iconSm } from '$lib/shared/ui/icons';
-  import { onMount, tick } from 'svelte';
+  import { onMount, tick, untrack } from 'svelte';
   import type { DirectMessage } from '$lib/api/dm';
   import type { AuthUser } from '$lib/api/auth';
   import { Avatar } from '$lib/shared/ui';
@@ -44,6 +44,7 @@
   import AttachmentUploadControl from '$lib/shared/chat/AttachmentUploadControl.svelte';
   import ReplyPreview from '$lib/shared/chat/ReplyPreview.svelte';
   import ReplyTargetBar from '$lib/shared/chat/ReplyTargetBar.svelte';
+  import { loadChatDraft, saveChatDraft } from '$lib/shared/chat/chat-drafts';
   import { openProfileCardFor } from '../../profile-card-ui.svelte';
   import type { ProfileCardPerson } from '$lib/shared/components/profile-card';
 
@@ -412,6 +413,48 @@
     void loadOlderThread(scrollEl);
   }
 
+  // Each thread keeps its own unsent text on this device: switching threads
+  // stores the one being left and brings back the one being opened.
+  const DRAFT_SAVE_DELAY_MS = 400;
+  let draftPeerId = '';
+  let draftSaveTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function persistDraft(): void {
+    if (draftSaveTimer) {
+      clearTimeout(draftSaveTimer);
+      draftSaveTimer = null;
+    }
+    if (draftPeerId) saveChatDraft(selfId, { type: 'dm', id: draftPeerId }, { text: draft });
+  }
+
+  $effect(() => {
+    const peerId = friendsState.selectedFriendId ?? '';
+    untrack(() => {
+      if (peerId === draftPeerId) return;
+      persistDraft();
+      draftPeerId = peerId;
+      draft = peerId ? (loadChatDraft(selfId, { type: 'dm', id: peerId })?.text ?? '') : '';
+      void tick().then(autoResize);
+    });
+  });
+
+  $effect(() => {
+    void draft;
+    untrack(() => {
+      if (!draftPeerId) return;
+      if (draftSaveTimer) clearTimeout(draftSaveTimer);
+      draftSaveTimer = setTimeout(persistDraft, DRAFT_SAVE_DELAY_MS);
+    });
+  });
+
+  $effect(() => {
+    window.addEventListener('pagehide', persistDraft);
+    return () => {
+      window.removeEventListener('pagehide', persistDraft);
+      persistDraft();
+    };
+  });
+
   // Focus the compose field when opening or switching DM threads.
   $effect(() => {
     const peerId = friendsState.selectedFriendId;
@@ -426,11 +469,19 @@
     if (media?.drafts.length && !media.canSend) return;
     sending = true;
     let sent = false;
+    const sentPeerId = draftPeerId;
     try {
       const attachmentIds = media?.readyIds ?? [];
       const replyTo = replyTarget ? { messageId: replyTarget.id } : undefined;
       await sendMessage(text, attachmentIds, replyTo, idempotencyKeyFor({ text, attachmentIds, replyTo }));
-      draft = '';
+      // The thread may have been switched while the message was on its way:
+      // only the draft that was actually sent goes away.
+      if (sentPeerId === draftPeerId) {
+        draft = '';
+        persistDraft();
+      } else if (sentPeerId) {
+        saveChatDraft(selfId, { type: 'dm', id: sentPeerId }, { text: '' });
+      }
       media?.clearBound();
       replyTarget = null;
       sendAttemptKey = '';

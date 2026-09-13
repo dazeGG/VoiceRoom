@@ -2,7 +2,7 @@
   import type { Snippet } from 'svelte';
   import { ChevronRight, MessageSquare, Users } from '@lucide/svelte';
   import { iconSm } from '$lib/shared/ui/icons';
-  import { onMount, tick } from 'svelte';
+  import { onMount, tick, untrack } from 'svelte';
   import { deleteRoomChatMessage, editRoomChatMessage, fetchRoomChat, fetchRoomChatPage, markRoomChatRead, postRoomChat, type ChatMessage } from '$lib/api/rooms';
   import { beginRoomChatReadSession, setRoomUnreadCount } from '$lib/features/home/model/room-presence.svelte';
   import { session } from '$lib/features/auth/session.svelte';
@@ -51,6 +51,7 @@
   import StructuredMessageContent from '$lib/shared/chat/StructuredMessageContent.svelte';
   import { contentFromLegacyText } from '@voice-room/shared/room-message-content';
   import { createMentionComposer } from '$lib/shared/chat/mention-composer.svelte';
+  import { loadChatDraft, saveChatDraft } from '$lib/shared/chat/chat-drafts';
   import MentionAutocomplete from '$lib/shared/chat/MentionAutocomplete.svelte';
   import { getRoomMembership, loadRoomMembership } from '$lib/features/home/model/room-membership.svelte';
   import type { MembershipMember } from '@voice-room/shared/membership';
@@ -296,6 +297,61 @@
       autoResize();
     });
   }
+
+  // Unsent text and its chosen mentions stay on this device per account and
+  // room. Guests have no account, so their composer starts empty every time.
+  const DRAFT_SAVE_DELAY_MS = 400;
+  let draftRestoredFor = '';
+  let draftSaveTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function draftOwnerKey(): string {
+    const userId = session.user?.id ?? '';
+    return userId && roomId ? `${userId}:${roomId}` : '';
+  }
+
+  function persistDraft(): void {
+    if (draftSaveTimer) {
+      clearTimeout(draftSaveTimer);
+      draftSaveTimer = null;
+    }
+    const userId = session.user?.id ?? '';
+    // Nothing is stored before the saved draft was brought back, or an empty
+    // composer would overwrite it.
+    if (!userId || draftOwnerKey() !== draftRestoredFor) return;
+    saveChatDraft(userId, { type: 'room', id: roomId }, { text: draft, mentions: mentionComposer.selected });
+  }
+
+  $effect(() => {
+    const key = draftOwnerKey();
+    untrack(() => {
+      if (!key || key === draftRestoredFor) return;
+      draftRestoredFor = key;
+      const userId = session.user?.id ?? '';
+      const saved = loadChatDraft(userId, { type: 'room', id: roomId });
+      if (!saved || draft) return;
+      draft = saved.text;
+      mentionComposer.restore(saved.mentions);
+      void tick().then(autoResize);
+    });
+  });
+
+  $effect(() => {
+    void draft;
+    void mentionComposer.selected;
+    untrack(() => {
+      if (!draftRestoredFor) return;
+      if (draftSaveTimer) clearTimeout(draftSaveTimer);
+      draftSaveTimer = setTimeout(persistDraft, DRAFT_SAVE_DELAY_MS);
+    });
+  });
+
+  $effect(() => {
+    window.addEventListener('pagehide', persistDraft);
+    return () => {
+      window.removeEventListener('pagehide', persistDraft);
+      persistDraft();
+    };
+  });
 
   function findLastOwnMessage(): ChatMessage | null {
     for (let index = messages.length - 1; index >= 0; index -= 1) {
@@ -744,6 +800,7 @@
       sendAttemptKey = '';
       sendAttemptFingerprint = '';
       mentionComposer.reset();
+      persistDraft();
       sent = true;
     } catch (err) {
       error = err instanceof Error ? err.message : 'Не удалось отправить сообщение';
