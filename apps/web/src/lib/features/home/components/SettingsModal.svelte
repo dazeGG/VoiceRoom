@@ -53,6 +53,16 @@
     type DesktopAutostartSettings
   } from '$lib/platform/desktop-autostart';
   import {
+    desktopOverlayAvailable,
+    previewDesktopOverlay,
+    readDesktopOverlaySettings,
+    setDesktopOverlaySuspended,
+    updateDesktopOverlaySettings,
+    type DesktopOverlayPatch,
+    type DesktopOverlaySettings,
+    type OverlayAnchor
+  } from '$lib/platform/desktop-overlay';
+  import {
     copyDesktopDiagnostics,
     desktopDiagnosticsAvailable,
     openDesktopLogsFolder
@@ -145,6 +155,21 @@
   let openAtLogin = $state(false);
   let startMinimized = $state(false);
   let autostartSaving = $state(false);
+  let overlayAvailable = $state(false);
+  let overlayEnabled = $state(true);
+  let overlayOpacity = $state(92);
+  let overlayAnchor = $state<OverlayAnchor>('top-left');
+  let overlayShowParticipants = $state(true);
+  let overlayShowControls = $state(true);
+  let overlayClickThrough = $state(true);
+  let overlayHotkey = $state<HotkeyBinding | null>({
+    altKey: false,
+    code: 'Backquote',
+    ctrlKey: true,
+    metaKey: false,
+    shiftKey: false
+  });
+  let overlaySaving = $state(false);
   let diagnosticsAvailable = $state(false);
   let confirmRoomSwitch = $state(true);
   let masterVolume = $state(100);
@@ -199,6 +224,8 @@
     globalHotkeysAvailable = desktopApp && desktopGlobalHotkeysAvailable();
     autostartAvailable = desktopApp && desktopAutostartAvailable();
     if (autostartAvailable) void loadAutostartSettings();
+    overlayAvailable = desktopApp && desktopOverlayAvailable();
+    if (overlayAvailable) void loadOverlaySettings();
     diagnosticsAvailable = desktopApp && desktopDiagnosticsAvailable();
     confirmRoomSwitch = readRoomSwitchConfirmEnabled();
   });
@@ -226,6 +253,38 @@
   async function loadAutostartSettings(): Promise<void> {
     const settings = await readDesktopAutostartSettings();
     if (settings) applyAutostartSettings(settings);
+  }
+
+  function applyOverlaySettings(settings: DesktopOverlaySettings): void {
+    overlayEnabled = settings.enabled;
+    overlayOpacity = Math.round(settings.opacity * 100);
+    overlayAnchor = settings.anchor;
+    overlayShowParticipants = settings.showParticipants;
+    overlayShowControls = settings.showControls;
+    overlayClickThrough = settings.clickThrough;
+    overlayHotkey = settings.interactiveBinding;
+  }
+
+  async function loadOverlaySettings(): Promise<void> {
+    const settings = await readDesktopOverlaySettings();
+    if (settings) applyOverlaySettings(settings);
+  }
+
+  async function changeOverlay(patch: DesktopOverlayPatch): Promise<void> {
+    if (overlaySaving) return;
+    overlaySaving = true;
+    try {
+      const settings = await updateDesktopOverlaySettings(patch);
+      if (settings) applyOverlaySettings(settings);
+      if (!settings) onToast('Не удалось сохранить оверлей', { variant: 'error' });
+    } finally {
+      overlaySaving = false;
+    }
+  }
+
+  async function previewOverlay(): Promise<void> {
+    if (await previewDesktopOverlay()) onToast('Оверлей на 8 секунд. Если его не видно — игра в exclusive fullscreen.');
+    else onToast('Не удалось показать оверлей', { variant: 'error' });
   }
 
   async function changeAutostart(patch: DesktopAutostartPatch): Promise<void> {
@@ -667,7 +726,7 @@
                 Хоткеи
               </button>
             {/if}
-            {#if desktopApp && autostartAvailable}
+            {#if desktopApp && (autostartAvailable || overlayAvailable)}
               <button class="settings-nav-item" type="button" data-active={tab === 'app'} onclick={() => (tab = 'app')}>
                 <Monitor {...iconMd} aria-hidden="true" />
                 Приложение
@@ -992,8 +1051,142 @@
                 {/if}
               </div>
             </div>
-          {:else if tab === 'app' && desktopApp && autostartAvailable}
+          {:else if tab === 'app' && desktopApp && (autostartAvailable || overlayAvailable)}
             <div class="settings-sound">
+              {#if overlayAvailable}
+                <div>
+                  <div class="settings-gate-head">
+                    <span class="settings-field-label">Оверлей в игре</span>
+                    <button
+                      class="settings-switch"
+                      type="button"
+                      role="switch"
+                      aria-checked={overlayEnabled}
+                      aria-label="Оверлей в игре"
+                      disabled={overlaySaving}
+                      onclick={() => void changeOverlay({ enabled: !overlayEnabled })}
+                    >
+                      <span class="settings-switch-knob" aria-hidden="true"></span>
+                    </button>
+                  </div>
+                  <div class="settings-gate-hint">
+                    Компактная панель поверх <strong>оконного и borderless</strong> режима, пока Voice Room в фоне и вы в голосе.
+                    В exclusive fullscreen Windows отдаёт монитор игре — оверлей там не появится. Поставьте в игре «Без рамки» / Fullscreen Windowed.
+                  </div>
+                </div>
+
+                <div class="settings-notification-dependent" data-disabled={!overlayEnabled}>
+                  <div class="settings-sound-head">
+                    <span class="settings-field-label">Прозрачность</span>
+                    <output class="settings-sound-value">{overlayOpacity}%</output>
+                  </div>
+                  <Slider
+                    bind:value={overlayOpacity}
+                    min={40}
+                    max={100}
+                    defaultValue={92}
+                    step={1}
+                    disabled={overlaySaving || !overlayEnabled}
+                    ariaLabel="Прозрачность оверлея"
+                    ariaValueText={`${overlayOpacity}%`}
+                    onValueChange={(value) => void changeOverlay({ opacity: value / 100 })}
+                  />
+                </div>
+
+                <div class="settings-notification-dependent" data-disabled={!overlayEnabled}>
+                  <span class="settings-field-label">Положение</span>
+                  <Select
+                    bind:value={overlayAnchor}
+                    options={[
+                      { value: 'top-left', label: 'Слева сверху' },
+                      { value: 'top-right', label: 'Справа сверху' },
+                      { value: 'bottom-left', label: 'Слева снизу' },
+                      { value: 'bottom-right', label: 'Справа снизу' }
+                    ]}
+                    label="Положение оверлея"
+                    variant="field"
+                    disabled={overlaySaving || !overlayEnabled}
+                    onValueChange={(value) => void changeOverlay({ anchor: value as OverlayAnchor })}
+                  />
+                </div>
+
+                <div class="settings-notification-dependent" data-disabled={!overlayEnabled}>
+                  <div class="settings-gate-head">
+                    <span class="settings-field-label">Кто говорит</span>
+                    <button
+                      class="settings-switch"
+                      type="button"
+                      role="switch"
+                      aria-checked={overlayShowParticipants}
+                      aria-label="Показывать участников"
+                      disabled={overlaySaving || !overlayEnabled}
+                      onclick={() => void changeOverlay({ showParticipants: !overlayShowParticipants })}
+                    >
+                      <span class="settings-switch-knob" aria-hidden="true"></span>
+                    </button>
+                  </div>
+                </div>
+
+                <div class="settings-notification-dependent" data-disabled={!overlayEnabled}>
+                  <div class="settings-gate-head">
+                    <span class="settings-field-label">Кнопки микрофона и звука</span>
+                    <button
+                      class="settings-switch"
+                      type="button"
+                      role="switch"
+                      aria-checked={overlayShowControls}
+                      aria-label="Кнопки оверлея"
+                      disabled={overlaySaving || !overlayEnabled}
+                      onclick={() => void changeOverlay({ showControls: !overlayShowControls })}
+                    >
+                      <span class="settings-switch-knob" aria-hidden="true"></span>
+                    </button>
+                  </div>
+                </div>
+
+                <div class="settings-notification-dependent" data-disabled={!overlayEnabled}>
+                  <div class="settings-gate-head">
+                    <span class="settings-field-label">Клики проходят в игру</span>
+                    <button
+                      class="settings-switch"
+                      type="button"
+                      role="switch"
+                      aria-checked={overlayClickThrough}
+                      aria-label="Клики проходят в игру"
+                      disabled={overlaySaving || !overlayEnabled}
+                      onclick={() => void changeOverlay({ clickThrough: !overlayClickThrough })}
+                    >
+                      <span class="settings-switch-knob" aria-hidden="true"></span>
+                    </button>
+                  </div>
+                  <div class="settings-gate-hint">Пока включено, мышь идёт в игру. Сочетание ниже на время включает клики по оверлею.</div>
+                </div>
+
+                <div class="settings-notification-dependent" data-disabled={!overlayEnabled}>
+                  <span class="settings-field-label">Клавиша оверлея</span>
+                  <HotkeyRecorder
+                    bind:value={overlayHotkey}
+                    disabled={overlaySaving || !overlayEnabled}
+                    ariaLabel="Клавиша оверлея"
+                    onRecordingChange={(recording) => void setDesktopOverlaySuspended(recording)}
+                    onValueChange={(value) => void changeOverlay({ interactiveBinding: value })}
+                  />
+                  <div class="settings-gate-hint">По умолчанию Ctrl+`. Нужен модификатор, как у остальных глобальных сочетаний.</div>
+                </div>
+
+                <div class="settings-notification-dependent" data-disabled={!overlayEnabled}>
+                  <button
+                    class="settings-unblock-button"
+                    type="button"
+                    disabled={overlaySaving || !overlayEnabled}
+                    onclick={() => void previewOverlay()}
+                  >
+                    Показать оверлей сейчас
+                  </button>
+                </div>
+              {/if}
+
+              {#if autostartAvailable}
               <div>
                 <div class="settings-gate-head">
                   <span class="settings-field-label">Автозапуск</span>
@@ -1053,6 +1246,7 @@
                   </div>
                   <div class="settings-gate-hint">Уведомления Windows о сообщениях и заявках в друзья, без системного звука. Звуки Voice Room и счётчик на панели задач от этого не зависят.</div>
                 </div>
+              {/if}
               {/if}
 
               {#if diagnosticsAvailable}

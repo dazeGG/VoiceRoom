@@ -37,6 +37,13 @@ declare global {
     voiceRoomDesktopLinks?: {
       onOpen: (handler: (payload: unknown) => void) => () => void;
     };
+    voiceRoomDesktopOverlay?: {
+      getSettings: () => Promise<unknown>;
+      preview: () => Promise<unknown>;
+      setSettings: (settings: Record<string, unknown>) => Promise<unknown>;
+      setSnapshot: (snapshot: { participants?: unknown[] }) => Promise<unknown>;
+      setSuspended: (suspended: boolean) => Promise<unknown>;
+    };
     voiceRoomRuntime?: {
       isDesktop?: boolean;
       platform?: string;
