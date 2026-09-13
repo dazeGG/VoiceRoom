@@ -17,8 +17,10 @@
     respondRoomInvitation,
     sendMessage,
     loadOlderThread,
-    toggleProfile
+    toggleProfile,
+    dmTyping
   } from '../../model/friends.svelte';
+  import { createTypingNotifier } from '$lib/shared/chat/typing.svelte';
   import { isPeerNotificationsMuted, updatePeerNotificationsMuted } from '$lib/shared/notifications/preferences.svelte';
   import { copyText } from '$lib/shared/utils/clipboard';
   import { pushToast } from '../../model/toasts.svelte';
@@ -182,6 +184,15 @@
           : 'не в сети'
   );
   const peerMuted = $derived(isPeerNotificationsMuted(peer?.id));
+  const peerTyping = $derived(Boolean(peer && dmTyping.has(peer.id)));
+  const typingNotifier = createTypingNotifier(() => {
+    if (draftPeerId) getAppRealtime().send('dm.typing', { userId: draftPeerId });
+  });
+
+  function onComposeInput(): void {
+    autoResize();
+    if (draft.trim()) typingNotifier.notify();
+  }
 
   function openSelfProfile(event: MouseEvent): void {
     event.preventDefault();
@@ -432,6 +443,7 @@
     untrack(() => {
       if (peerId === draftPeerId) return;
       persistDraft();
+      typingNotifier.reset();
       draftPeerId = peerId;
       draft = peerId ? (loadChatDraft(selfId, { type: 'dm', id: peerId })?.text ?? '') : '';
       void tick().then(autoResize);
@@ -476,6 +488,7 @@
       await sendMessage(text, attachmentIds, replyTo, idempotencyKeyFor({ text, attachmentIds, replyTo }));
       // The thread may have been switched while the message was on its way:
       // only the draft that was actually sent goes away.
+      typingNotifier.reset();
       if (sentPeerId === draftPeerId) {
         draft = '';
         persistDraft();
@@ -654,7 +667,7 @@
         />
         <div style="flex:1;min-width:0;">
           <div class="lobby-dm-head-name">{friendName(peer)}</div>
-          <div class="lobby-dm-head-status" data-presence={presence}>{presenceLabel}</div>
+          <div class="lobby-dm-head-status" data-presence={presence} data-typing={peerTyping || undefined} aria-live="polite">{peerTyping ? 'печатает…' : presenceLabel}</div>
         </div>
         <span style="flex:none;width:34px;height:34px;display:flex;align-items:center;justify-content:center;color:#9a9484;">
           <User {...iconMd} aria-hidden="true" />
@@ -789,7 +802,7 @@
             bind:value={draft}
             rows="1"
             onkeydown={onKeydown}
-            oninput={autoResize}
+            oninput={onComposeInput}
             disabled={sending}
           ></textarea>
         </div>

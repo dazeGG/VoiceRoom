@@ -533,8 +533,9 @@ function createRoomRealtimeRuntime(deps) {
     return connection.previewRoomIds.has(roomId) || connection.activeVoice?.roomId === roomId;
   }
 
-  function broadcastRoomDetail(roomId, envelope, { previewOnly = false } = {}) {
+  function broadcastRoomDetail(roomId, envelope, { previewOnly = false, except = null } = {}) {
     for (const connection of wsRegistry.roomDetailSubscribers(roomId)) {
+      if (connection === except) continue;
       const isActivePeer = connection.activeVoice?.roomId === roomId;
       if (previewOnly) {
         // Active peers already receive this over their voice transport via
@@ -561,6 +562,41 @@ function createRoomRealtimeRuntime(deps) {
     broadcastRoomDetail(roomId, envelope);
     scheduleSummaryBroadcast(roomId);
     void broadcastRoomMessageNotification(roomId, message);
+  }
+
+  // Typing notices are forwarded and never stored. Only someone who can read
+  // the room chat may announce typing in it: an account with the room open or
+  // in its call, or a guest in its call. The name comes from the call roster or
+  // the account profile, never from the client.
+  const TYPING_FORWARD_MIN_MS = 1000;
+  const TYPING_PROFILE_TTL_MS = 60_000;
+
+  async function typistForConnection(connection, roomId) {
+    const voicePeerId = connection.activeVoice?.roomId === roomId ? connection.activeVoice.peerId : '';
+    const peer = voicePeerId ? presenceRooms.get(roomId)?.peers.get(voicePeerId) : null;
+    if (peer) {
+      return { peerId: peer.id, userId: peer.accountUserId || null, name: cleanName(peer.name) || 'Гость' };
+    }
+    if (!connection.userId || !connection.previewRoomIds.has(roomId) || !getUserStore) return null;
+    const cached = connection.typingProfile;
+    if (cached && now() - cached.at < TYPING_PROFILE_TTL_MS) return cached.typist;
+    const user = await getUserStore().getUserById(connection.userId);
+    if (!user) return null;
+    const typist = { peerId: `auth-${user.id}`, userId: user.id, name: user.displayName || user.login || '' };
+    connection.typingProfile = { at: now(), typist };
+    return typist;
+  }
+
+  async function broadcastRoomTyping(connection, roomId) {
+    if (connection.closed || !roomId) return false;
+    const forwardedAt = connection.typingForwardedAt?.get(roomId) ?? 0;
+    if (now() - forwardedAt < TYPING_FORWARD_MIN_MS) return false;
+    const typist = await typistForConnection(connection, roomId);
+    if (!typist || connection.closed) return false;
+    connection.typingForwardedAt ??= new Map();
+    connection.typingForwardedAt.set(roomId, now());
+    broadcastRoomDetail(roomId, buildServerEnvelope('room.chat.typing', { roomId, typist }), { except: connection });
+    return true;
   }
 
   function roomNotificationContext(room) {
@@ -1259,6 +1295,7 @@ function createRoomRealtimeRuntime(deps) {
   return {
     broadcastChatMessage,
     broadcastRoomDetail,
+    broadcastRoomTyping,
     buildRoomSnapshot,
     cancelAccountReconnectLeases,
     cancelRoomReconnectLeases,

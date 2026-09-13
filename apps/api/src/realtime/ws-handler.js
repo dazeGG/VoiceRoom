@@ -13,10 +13,35 @@ function createWsHandler({
   resolveSessionUser,
   getFriendIds,
   isUserOnline,
-  getClientIp = () => 'unknown'
+  canTypeToUser = async () => false,
+  getClientIp = () => 'unknown',
+  now = Date.now
 }) {
   function reportMessageError(error) {
     console.error('WS message handler failed:', error);
+  }
+
+  // Direct typing notices reach only a friend when neither side blocked the
+  // other. The check is cached per connection and thread for a short while so
+  // a burst of typing costs one lookup, and a notice goes out at most once a
+  // second per thread.
+  const DM_TYPING_FORWARD_MIN_MS = 1000;
+  const DM_TYPING_PERMISSION_TTL_MS = 30_000;
+
+  async function forwardDirectTyping(connection, peerId) {
+    if (!connection.userId || peerId === connection.userId) return;
+    connection.dmTyping ??= new Map();
+    const entry = connection.dmTyping.get(peerId) || { allowed: false, checkedAt: -Infinity, forwardedAt: -Infinity };
+    connection.dmTyping.set(peerId, entry);
+    if (now() - entry.forwardedAt < DM_TYPING_FORWARD_MIN_MS) return;
+    if (now() - entry.checkedAt >= DM_TYPING_PERMISSION_TTL_MS) {
+      entry.allowed = Boolean(await canTypeToUser(connection.userId, peerId));
+      entry.checkedAt = now();
+      if (connection.closed) return;
+    }
+    if (!entry.allowed) return;
+    entry.forwardedAt = now();
+    registry.sendToUser(peerId, buildServerEnvelope('dm.typing', { userId: connection.userId }));
   }
 
   function enqueueMessage(connection, task) {
@@ -105,6 +130,16 @@ function createWsHandler({
           buildServerErrorEnvelope(result.code || 'update_failed', 'Peer update rejected', envelope.id)
         );
       }
+      return;
+    }
+
+    if (envelope.type === 'room.chat.typing') {
+      await roomRuntime.broadcastRoomTyping(connection, normalizeRoomId(envelope.payload.roomId));
+      return;
+    }
+
+    if (envelope.type === 'dm.typing') {
+      await forwardDirectTyping(connection, envelope.payload.userId);
       return;
     }
 

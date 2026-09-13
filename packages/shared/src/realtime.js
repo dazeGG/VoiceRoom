@@ -17,8 +17,17 @@ const KNOWN_CLIENT_TYPES = new Set([
   'room.preview.unsubscribe',
   'room.join',
   'room.leave',
-  'room.peer.update'
+  'room.peer.update',
+  'room.chat.typing',
+  'dm.typing'
 ]);
+
+// A typing notice is only a hint and is never stored: a client repeats it at
+// most every TYPING_NOTICE_INTERVAL_MS while its composer has text, and a
+// receiver drops it TYPING_NOTICE_TTL_MS after the last one arrived.
+const TYPING_NOTICE_INTERVAL_MS = 2500;
+const TYPING_NOTICE_TTL_MS = 6000;
+const USER_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function isPlainObject(value) {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -138,12 +147,22 @@ function validateClientCommand(envelope) {
     return { ok: false, code: 'invalid_name' };
   }
 
+  if (envelope.type === 'room.chat.typing' && !normalizeRoomId(payload.roomId)) {
+    return { ok: false, code: 'invalid_room_id' };
+  }
+
+  if (envelope.type === 'dm.typing' && !(typeof payload.userId === 'string' && USER_ID_RE.test(payload.userId))) {
+    return { ok: false, code: 'invalid_user_id' };
+  }
+
   return { ok: true, envelope: { ...envelope, payload } };
 }
 
 module.exports = {
   MAX_VISIBLE_ROOM_PEERS,
   SUMMARY_COALESCE_MS,
+  TYPING_NOTICE_INTERVAL_MS,
+  TYPING_NOTICE_TTL_MS,
   KNOWN_CLIENT_TYPES,
   parseClientEnvelope,
   parseServerEnvelope,
