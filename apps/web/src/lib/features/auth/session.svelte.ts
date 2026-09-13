@@ -1,4 +1,5 @@
 import { fetchMe, type AuthUser } from '$lib/api/auth';
+import { clearChatDrafts, resumeChatDrafts } from '$lib/shared/chat/chat-drafts';
 import { roomNameFor } from './account';
 
 // App-wide auth state. `loaded` flips true once the first /auth/me resolves so
@@ -43,6 +44,7 @@ function syncRoomName(user: AuthUser | null): void {
 
 export function setUser(user: AuthUser | null): void {
   sessionEndExpected = false;
+  if (user) resumeChatDrafts();
   session.user = user;
   session.loaded = true;
   syncRoomName(user);
@@ -69,6 +71,9 @@ export async function loadSession(force = false): Promise<AuthUser | null> {
 }
 
 export function clearSession(): void {
+  // The session ended on this device (sign-out, password change, deletion or a
+  // revoked session): unsent texts must not outlive it on a shared computer.
+  clearChatDrafts();
   session.user = null;
   session.loaded = true;
   syncRoomName(null);
