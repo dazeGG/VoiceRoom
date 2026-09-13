@@ -52,6 +52,8 @@
   import { contentFromLegacyText } from '@voice-room/shared/room-message-content';
   import { createMentionComposer } from '$lib/shared/chat/mention-composer.svelte';
   import { loadChatDraft, saveChatDraft } from '$lib/shared/chat/chat-drafts';
+  import { createTypingNotifier, createTypingTracker, formatTypingLabel } from '$lib/shared/chat/typing.svelte';
+  import { getAppRealtime } from '$lib/api/realtime';
   import MentionAutocomplete from '$lib/shared/chat/MentionAutocomplete.svelte';
   import { getRoomMembership, loadRoomMembership } from '$lib/features/home/model/room-membership.svelte';
   import type { MembershipMember } from '@voice-room/shared/membership';
@@ -296,6 +298,25 @@
       composeEl?.setSelectionRange(selected.caret, selected.caret);
       autoResize();
     });
+  }
+
+  // Who else is typing in this room. Notices name the person the server saw,
+  // keyed like message authors (account id, or the guest's peer id) so their
+  // message clears them.
+  const roomTyping = createTypingTracker();
+  const typingLabel = $derived(formatTypingLabel(roomTyping.names));
+  const typingNotifier = createTypingNotifier(() => {
+    if (roomId) getAppRealtime().send('room.chat.typing', { roomId });
+  });
+
+  function typingKey(person: { userId?: string | null; authorUserId?: string | null; peerId?: string }): string {
+    return person.userId || person.authorUserId || person.peerId || '';
+  }
+
+  function onComposeInput(): void {
+    autoResize();
+    void updateMentionCandidates();
+    if (draft.trim()) typingNotifier.notify();
   }
 
   // Unsent text and its chosen mentions stay on this device per account and
@@ -545,8 +566,15 @@
           : message);
         return;
       }
+      if (event.type === 'room.chat.typing') {
+        const typist = event.payload.typist;
+        if (!typist || typist.peerId === peerId || (typist.userId && typist.userId === session.user?.id)) return;
+        roomTyping.note(typingKey(typist), typist.name);
+        return;
+      }
       if (event.type !== 'room.chat.message') return;
       const message = event.payload.message;
+      if (message) roomTyping.clear(typingKey(message));
       if (!message?.id || messageIds.has(message.id) || messages.some((item) => item.id === message.id)) return;
       messageIds.add(message.id);
       error = '';
@@ -801,6 +829,7 @@
       sendAttemptFingerprint = '';
       mentionComposer.reset();
       persistDraft();
+      typingNotifier.reset();
       sent = true;
     } catch (err) {
       error = err instanceof Error ? err.message : 'Не удалось отправить сообщение';
@@ -1122,6 +1151,10 @@
     <p class="chat-rail-error">{error}</p>
   {/if}
 
+  {#if typingLabel}
+    <p class="chat-rail-typing" aria-live="polite">{typingLabel}</p>
+  {/if}
+
   <form class="chat-rail-compose" onsubmit={sendMessage} onpaste={onComposePaste}>
     <div class="chat-compose-row attachment-compose-field">
       {#if replyTarget}
@@ -1143,7 +1176,7 @@
           maxlength="500"
           placeholder="Написать в комнату…"
           onkeydown={onComposeKeydown}
-          oninput={() => { autoResize(); void updateMentionCandidates(); }}
+          oninput={onComposeInput}
           oncompositionstart={() => mentionComposer.setComposing(true)}
           oncompositionend={() => { mentionComposer.setComposing(false); void updateMentionCandidates(); }}
           disabled={sending}

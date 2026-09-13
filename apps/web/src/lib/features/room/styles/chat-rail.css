@@ -478,6 +478,17 @@ button.chat-msg-author {
   color: #d2a08c;
 }
 
+.chat-rail-typing {
+  margin: 0;
+  padding: 0 20px 2px;
+  overflow: hidden;
+  color: #8e897b;
+  font-size: 12px;
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .chat-rail-compose {
   position: relative;
   display: flex;

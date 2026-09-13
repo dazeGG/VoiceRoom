@@ -21,6 +21,7 @@ import {
 import { blockUser as apiBlockUser, unblockUser as apiUnblockUser } from '$lib/api/blocks';
 import { deleteDirectMessage, editDirectMessage, fetchThread, fetchThreadPage, markThreadRead, respondRoomInvite, sendDirectMessage, type DirectMessage } from '$lib/api/dm';
 import { connectRealtime, type RealtimeEvent, type RealtimeHandle } from '$lib/api/realtime';
+import { createTypingTracker } from '$lib/shared/chat/typing.svelte';
 import type { PresenceStatus } from '$lib/shared/presence';
 import { playDirectMessageCue, playFriendAcceptedCue, playFriendRequestCue, playRingCue } from '$lib/features/room/client/media/cues';
 import {
@@ -71,6 +72,9 @@ interface FriendsState {
   threadHistoryError: string;
   profileOpen: boolean;
 }
+
+// Friends currently typing to this account, keyed by their user id.
+export const dmTyping = createTypingTracker();
 
 export const friendsState = $state<FriendsState>({
   automaticPresenceIdleAvailable: false,
@@ -640,6 +644,8 @@ function handleRealtimeEvent(event: RealtimeEvent): void {
     case 'dm.message': {
       const { message } = event.payload;
       const peerId = message.senderId === selfId ? message.recipientId : message.senderId;
+      // The message itself ends that friend's "typing" state.
+      if (message.senderId !== selfId) dmTyping.clear(message.senderId);
       threadResync.recordUpsert(peerId, message);
       bumpLastMessage(peerId, message);
       const isOpenThread = friendsState.view === 'dm' && friendsState.selectedFriendId === peerId;
@@ -677,6 +683,10 @@ function handleRealtimeEvent(event: RealtimeEvent): void {
         else friendsState.thread = friendsState.thread.filter((m) => m.id !== mid);
         void refreshFriends().catch(() => {});
       }
+      break;
+    }
+    case 'dm.typing': {
+      if (event.payload?.userId && event.payload.userId !== selfId) dmTyping.note(event.payload.userId);
       break;
     }
     case 'dm.message.edited': {

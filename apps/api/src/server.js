@@ -4911,6 +4911,11 @@ function createApiApp({
     resolveSessionUser,
     getFriendIds: (userId) => getFriendStore().getFriendIds(userId),
     isUserOnline,
+    // The same relationship rule as sending a direct message.
+    canTypeToUser: async (userId, peerId) => (
+      await getFriendStore().areFriends(userId, peerId)
+      && !(await getFriendStore().isBlockedBetween(userId, peerId))
+    ),
     getClientIp: (req) => getClientIp(req, TRUST_PROXY)
   });
 
