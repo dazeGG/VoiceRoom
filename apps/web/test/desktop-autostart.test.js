@@ -91,9 +91,9 @@ test('desktop autostart service swallows bridge failures', async (t) => {
 test('settings modal exposes desktop-only autostart switches', () => {
   const modal = readFileSync(resolve(webRoot, 'src/lib/features/home/components/SettingsModal.svelte'), 'utf8');
 
-  assert.match(modal, /\{#if desktopApp && autostartAvailable\}[\s\S]*data-active=\{tab === 'app'\}[\s\S]*Приложение[\s\S]*\{\/if\}/);
+  assert.match(modal, /\{#if desktopApp && \(autostartAvailable \|\| overlayAvailable\)\}[\s\S]*data-active=\{tab === 'app'\}[\s\S]*Приложение[\s\S]*\{\/if\}/);
   assert.match(
     modal,
-    /\{:else if tab === 'app' && desktopApp && autostartAvailable\}[\s\S]*aria-label="Автозапуск"[\s\S]*changeAutostart\(\{ openAtLogin: !openAtLogin \}\)[\s\S]*aria-label="Автозапуск свёрнутым"[\s\S]*disabled=\{autostartSaving \|\| !autostartSupported \|\| !openAtLogin\}[\s\S]*changeAutostart\(\{ startMinimized: !startMinimized \}\)/
+    /\{:else if tab === 'app' && desktopApp && \(autostartAvailable \|\| overlayAvailable\)\}[\s\S]*aria-label="Автозапуск"[\s\S]*changeAutostart\(\{ openAtLogin: !openAtLogin \}\)[\s\S]*aria-label="Автозапуск свёрнутым"[\s\S]*disabled=\{autostartSaving \|\| !autostartSupported \|\| !openAtLogin\}[\s\S]*changeAutostart\(\{ startMinimized: !startMinimized \}\)/
   );
 });
