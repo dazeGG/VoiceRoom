@@ -119,7 +119,7 @@ test('system notifications stay silent and have a switch in the desktop app tab'
   const modal = readFileSync(resolve(webRoot, 'src/lib/features/home/components/SettingsModal.svelte'), 'utf8');
 
   assert.match(router, /new globalThis\.Notification\(payload\.title, \{[\s\S]*?silent: true/);
-  assert.match(modal, /\{:else if tab === 'app' && desktopApp && autostartAvailable\}[\s\S]*?\{#if !macDesktopApp\}[\s\S]*?aria-checked=\{systemNotificationsEnabled\}[\s\S]*?aria-label="Системные уведомления"[\s\S]*?toggleSystemNotifications\(\)/);
+  assert.match(modal, /\{:else if tab === 'app' && desktopApp && \(autostartAvailable \|\| overlayAvailable\)\}[\s\S]*?\{#if !macDesktopApp\}[\s\S]*?aria-checked=\{systemNotificationsEnabled\}[\s\S]*?aria-label="Системные уведомления"[\s\S]*?toggleSystemNotifications\(\)/);
   assert.match(modal, /async function toggleSystemNotifications\(\)[\s\S]*?setNotificationsEnabled\(false\)[\s\S]*?requestNotificationsFromUiAction\(\)/);
   assert.match(modal, /<div hidden=\{desktopApp && autostartAvailable\}>\s*<div class="settings-gate-head">\s*<span class="settings-field-label">\{notificationToggleLabel\}/);
 });

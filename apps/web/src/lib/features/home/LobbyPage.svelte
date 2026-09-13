@@ -58,6 +58,8 @@
   import OpenInAppScreen from './components/OpenInAppScreen.svelte';
   import { bindDesktopLinks, type DesktopLink } from '$lib/platform/desktop-links';
   import { bindDesktopCallActions, syncDesktopCallState } from '$lib/platform/desktop-call';
+  import { syncDesktopOverlaySnapshot } from '$lib/platform/desktop-overlay';
+  import { getSortedParticipants } from '$lib/features/room/participants-ui.svelte';
   import { syncDesktopDiagnosticsContext } from '$lib/platform/desktop-diagnostics';
   import {
     buildAppRoomLink,
@@ -304,6 +306,21 @@
       roomId: connectedVoiceRoomId || '',
       roomName: connectedVoiceRoom ? roomDisplayName(connectedVoiceRoom) : connectedVoiceRoomId || ''
     });
+  });
+
+  $effect(() => {
+    if (!connectedVoiceRoomId) {
+      syncDesktopOverlaySnapshot([]);
+      return;
+    }
+    syncDesktopOverlaySnapshot(getSortedParticipants().map((participant) => ({
+      id: participant.id,
+      micMuted: participant.muted,
+      name: participant.name || '',
+      outputMuted: participant.deafened,
+      self: participant.isLocal,
+      speaking: participant.speaking
+    })));
   });
 
   $effect(() => {
