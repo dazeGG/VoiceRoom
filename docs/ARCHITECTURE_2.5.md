@@ -13,6 +13,7 @@ This document records the release 2.5 brownfield ownership gates. It describes t
 | Notification preferences and mutes | `apps/api/src/lib/notification-store.js` | `notification_preferences`, `notification_dm_mutes`, `notification_room_mutes`, notification-owned user preference columns |
 | Push subscriptions | `apps/api/src/lib/push-store.js` | `push_subscriptions` |
 | Account deletion lifecycle | `apps/api/src/domains/account/account-deletion-repository.js` | `users` deletion columns and anonymization, `reserved_logins`, `rooms` ownership hand-over; on the finished deletion only, the deleted account's rows in `sessions`, `room_memberships`, `room_bookmarks`, `room_chat_reads`, `friendships`, `friend_requests`, `user_blocks`, notification preference, mute and inbox tables, `push_subscriptions`, `account_recovery_codes` and `account_login_events` |
+| Link previews | `apps/api/src/domains/link-previews/*`, `apps/api/src/lib/link-preview-*.js` | `link_previews`, the `metadata.linkPreview` key of `room_messages` and `direct_messages`, image files under `uploads/link-previews` |
 | Schema migrations | `apps/api/src/migrations/*.js` | All schema-owned tables during migration only |
 
 ## Import Boundaries

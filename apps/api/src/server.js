@@ -36,6 +36,12 @@ const { getClientIp, createRateLimiter } = require('./lib/rate-limit');
 const { MAX_AVATAR_BYTES, createAvatarKey, processAvatar } = require('./lib/avatar-processing');
 const { reconcileAvatarStorage } = require('./lib/avatar-reconciliation');
 const { createAvatarStorage, validateAvatarKey } = require('./lib/avatar-storage');
+const { firstPreviewableUrl } = require('@voice-room/shared/link-preview');
+const { createLinkPreviewFetcher } = require('./lib/link-preview-fetcher');
+const { processLinkPreviewImage } = require('./lib/link-preview-image');
+const { createLinkPreviewStorage, reconcileLinkPreviewImages } = require('./lib/link-preview-storage');
+const { createLinkPreviewRepository } = require('./domains/link-previews/link-preview-repository');
+const { createLinkPreviewService } = require('./domains/link-previews/link-preview-service');
 const { avatarColorForPeerId, createRoomStore } = require('./lib/room-store');
 const { createUserStore, hashSessionToken, publicUser } = require('./lib/user-store');
 const { createGeoLocator } = require('./lib/geoip');
@@ -214,6 +220,8 @@ const MAX_GUEST_STREAMS_PER_IP = readEnvInt('MAX_GUEST_STREAMS_PER_IP', 8, 1);
 const WS_MAX_PAYLOAD_BYTES = readEnvInt('WS_MAX_PAYLOAD_BYTES', 64 * 1024, 1024);
 const RETENTION_PURGE_INTERVAL_MS = readEnvInt('RETENTION_PURGE_INTERVAL_MS', 60 * 60 * 1000, 0);
 const RETENTION_KEEP_DELETED_MS = readEnvInt('RETENTION_KEEP_DELETED_MS', 30 * 24 * 60 * 60 * 1000, 60000);
+// Off unless configured: a link preview makes the API open a URL a user posted.
+const LINK_PREVIEWS_ENABLED = readEnvBool('LINK_PREVIEWS_ENABLED', false);
 const MESSAGE_DELIVERY_MODE = readMessageDeliveryMode();
 const MESSAGE_DIRECT_EMIT_ENABLED = MESSAGE_DELIVERY_MODE.directEmitEnabled;
 const MESSAGE_DELIVERY_LISTEN_ENABLED = readEnvBool('MESSAGE_DELIVERY_LISTEN_ENABLED', true);
@@ -828,6 +836,66 @@ function getAvatarStorage() {
   return avatarStorage;
 }
 
+let linkPreviewStorage = null;
+let linkPreviewService = null;
+
+function getLinkPreviewStorage() {
+  if (!linkPreviewStorage) linkPreviewStorage = createLinkPreviewStorage();
+  return linkPreviewStorage;
+}
+
+function getLinkPreviewService() {
+  if (!LINK_PREVIEWS_ENABLED) return null;
+  if (linkPreviewService) return linkPreviewService;
+  const pool = getRelease250Pool();
+  if (!pool) return null;
+  linkPreviewService = createLinkPreviewService({
+    repository: createLinkPreviewRepository({ pool }),
+    fetcher: createLinkPreviewFetcher(),
+    storage: getLinkPreviewStorage(),
+    processImage: processLinkPreviewImage,
+    onRoomPreview: broadcastRoomLinkPreview,
+    onDirectPreview: broadcastDirectLinkPreview
+  });
+  return linkPreviewService;
+}
+
+// A preview reaches readers as an edit of the message, re-read in full so it
+// carries its attachments and reply quote like any other copy of it.
+async function broadcastRoomLinkPreview({ roomId, messageId }) {
+  const message = await getMessageService().room.getMessage(roomId, messageId);
+  if (!message) return;
+  const projected = await attachReplyProjection('room', await attachMediaProjection('room', message), { roomId });
+  roomRuntime?.broadcastRoomDetail?.(
+    roomId,
+    buildServerEnvelope('room.chat.edited', { roomId, message: publicChatMessage(projected) })
+  );
+}
+
+async function broadcastDirectLinkPreview({ messageId, senderId, recipientId }) {
+  const message = await getMessageService().direct.getMessage(senderId, recipientId, messageId);
+  if (!message) return;
+  const projected = await attachReplyProjection('dm', await attachMediaProjection('dm', message), {
+    userId: senderId,
+    peerId: recipientId
+  });
+  const event = { type: 'dm.message.edited', message: projected };
+  broadcastToUser(recipientId, event);
+  broadcastToUser(senderId, event);
+}
+
+// Previews are built after the reply was sent. A new message without a link
+// needs no work; an edit always does, because it may have removed the link.
+function scheduleRoomLinkPreview(roomId, messageId, text, { edited = false } = {}) {
+  if (!edited && !firstPreviewableUrl(text)) return;
+  getLinkPreviewService()?.scheduleRoomMessage({ roomId, messageId, text });
+}
+
+function scheduleDirectLinkPreview({ messageId, senderId, recipientId, text, edited = false }) {
+  if (!edited && !firstPreviewableUrl(text)) return;
+  getLinkPreviewService()?.scheduleDirectMessage({ messageId, senderId, recipientId, text });
+}
+
 function isUserOnline(userId) {
   return Boolean(wsRegistry?.isUserOnline(userId));
 }
@@ -1261,6 +1329,12 @@ function startPruneTimer(server, logger = console) {
       .catch((error) => {
         logger.error('Account deletion timer failed:', error);
       });
+    if (getLinkPreviewService()) {
+      void observeMaintenance('link_preview_prune', () => getLinkPreviewService().pruneExpired())
+        .catch((error) => {
+          logger.error('Link preview prune timer failed:', error);
+        });
+    }
     if (RETENTION_PURGE_INTERVAL_MS > 0 && getRoomStore().purgeDeleted) {
       void observeMaintenance('retention_purge', () => getRoomStore().purgeDeleted({ olderThanMs: RETENTION_KEEP_DELETED_MS }))
         .catch((error) => {
@@ -1519,6 +1593,7 @@ function publicChatMessage(message) {
     text: message.text,
     content: message.content,
     attachments: Array.isArray(message.attachments) ? message.attachments : [],
+    linkPreview: message.linkPreview || undefined,
     replyTo: message.replyTo,
     replyPreview: message.replyPreview
   };
@@ -2689,6 +2764,29 @@ async function handleGetAvatar(res, key) {
   stream.pipe(res);
 }
 
+async function handleGetLinkPreviewImage(res, key) {
+  let stream;
+  try {
+    stream = getLinkPreviewStorage().createReadStream(key);
+    await new Promise((resolve, reject) => {
+      stream.once('open', resolve);
+      stream.once('error', reject);
+    });
+  } catch (error) {
+    if (error instanceof TypeError || error?.code === 'ENOENT') {
+      sendJson(res, 404, { ok: false, error: 'Image not found' });
+      return;
+    }
+    throw error;
+  }
+  res.writeHead(200, {
+    ...baseHeaders(),
+    'Cache-Control': 'public, max-age=31536000, immutable',
+    'Content-Type': 'image/webp'
+  });
+  stream.pipe(res);
+}
+
 async function handleAuthRooms(req, res) {
   const session = await resolveSessionUser(req);
   if (!session) {
@@ -3144,6 +3242,7 @@ async function handleRoomChatPost(req, res, roomId) {
       : activePeer?.avatarUrl || null
   };
   if (!message.idempotencyReplay && MESSAGE_DIRECT_EMIT_ENABLED) roomRuntime?.broadcastChatMessage(roomId, publicMessage);
+  if (!message.idempotencyReplay) scheduleRoomLinkPreview(roomId, message.id, text);
   sendJson(res, 201, { ok: true, message: publicChatMessage(publicMessage) });
 }
 
@@ -4042,6 +4141,9 @@ async function handleSendDm(req, res, peerId) {
     await broadcastDmNotification(id, user, message);
     broadcastToUser(user.id, { type: 'dm-message', message });
   }
+  if (!storedMessage.idempotencyReplay) {
+    scheduleDirectLinkPreview({ messageId: storedMessage.id, senderId: user.id, recipientId: id, text });
+  }
   sendJson(res, 201, { ok: true, message });
 }
 
@@ -4556,6 +4658,7 @@ async function handleEditRoomChatMessage(req, res, roomId, messageId) {
     buildServerEnvelope('room.chat.edited', { roomId, message: publicMessage })
   );
   await refreshPinsAfterMessageMutation(roomId, 'message-edited', messageId);
+  scheduleRoomLinkPreview(roomId, messageId, text, { edited: true });
   sendJson(res, 200, { ok: true, message: publicMessage });
 }
 
@@ -4650,6 +4753,7 @@ async function handleEditDmMessage(req, res, peerIdParam, messageId) {
     return;
   }
 
+  scheduleDirectLinkPreview({ messageId, senderId: user.id, recipientId: peerId, text, edited: true });
   const event = { type: 'dm.message.edited', message };
   broadcastToUser(peerId, event);
   broadcastToUser(user.id, event);
@@ -5147,6 +5251,9 @@ function createApiApp({
   app.get('/api/avatars/:key', (request, reply) => runLegacyHandler(request, reply, (_req, res) => {
     return handleGetAvatar(res, request.params.key);
   }));
+  app.get('/api/link-previews/:key', (request, reply) => runLegacyHandler(request, reply, (_req, res) => {
+    return handleGetLinkPreviewImage(res, request.params.key);
+  }));
   app.get('/api/rooms/:roomId', (request, reply) => runLegacyHandler(request, reply, (_req, res) => {
     const roomId = normalizeRoomId(request.params.roomId);
     return handleRoomStatus(res, new URL(`/rooms/${roomId}`, 'http://localhost'));
@@ -5361,6 +5468,19 @@ async function bootstrap({ env = process.env, logger = console, exit = process.e
     });
     if (reconciliation.removed > 0) {
       logger.info?.(`Removed ${reconciliation.removed} orphaned avatar file(s)`);
+    }
+    linkPreviewStorage = createLinkPreviewStorage({ uploadsDir: readUploadsDir(env) });
+    try {
+      const previewPool = getRelease250Pool();
+      if (previewPool) {
+        const removedPreviewImages = await reconcileLinkPreviewImages({
+          storage: linkPreviewStorage,
+          repository: createLinkPreviewRepository({ pool: previewPool })
+        });
+        if (removedPreviewImages > 0) logger.info?.(`Removed ${removedPreviewImages} unused link preview image(s)`);
+      }
+    } catch (error) {
+      logger.warn?.('Link preview image reconciliation failed:', error);
     }
     const server = createApiServer({
       store: roomStore,

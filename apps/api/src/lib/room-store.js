@@ -7,6 +7,7 @@ const {
   AVATAR_COLOR_KEYS,
   cleanAvatarColorKey
 } = require('@voice-room/shared/validation');
+const { normalizeLinkPreview } = require('@voice-room/shared/link-preview');
 
 // Room history is never expired or trimmed: a message leaves only when its
 // author or the room owner deletes it, or when its room is deleted.
@@ -118,6 +119,7 @@ function mapMessage(row) {
     roomId: row.room_id,
     text: row.text || '',
     ...(row.content ? { content: row.content } : {}),
+    ...(normalizeLinkPreview(row.metadata?.linkPreview) ? { linkPreview: normalizeLinkPreview(row.metadata.linkPreview) } : {}),
     ...(row.reply_to_message_id ? { replyTo: { messageId: row.reply_to_message_id } } : {}),
     // 2.4.0: author for ownership (nullable for guests/legacy)
     authorUserId: row.author_user_id || null
