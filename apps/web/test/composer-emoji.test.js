@@ -55,12 +55,12 @@ test('both composers carry an emoji button on the right that inserts and announc
   const dmView = read('src/lib/features/home/components/lobby/DmView.svelte');
 
   for (const [source, field] of [[roomChat, 'composeEl'], [dmView, 'inputEl']]) {
-    // After the textarea, inside the same control row as the attachment button.
-    assert.match(source, /class="attachment-compose-controls">[\s\S]*<textarea[\s\S]*<\/textarea>\s*<ComposerEmojiPicker/);
+    // After the field, inside the same control row as the attachment button.
+    assert.match(source, /class="attachment-compose-controls">[\s\S]*<EmojiComposer[\s\S]*?\/>\s*<ComposerEmojiPicker/);
     assert.match(source, /onpick=\{insertEmoji\}/);
     assert.match(source, /onbrowse=\{\(\) => typingNotifier\.notify\('emoji'\)\}/);
-    assert.match(source, new RegExp(`insertIntoDraft\\(draft, emoji, \\{ start: ${field}\\?\\.selectionStart, end: ${field}\\?\\.selectionEnd \\}`));
-    assert.match(source, new RegExp(`${field}\\?\\.setSelectionRange\\(inserted\\.caret, inserted\\.caret\\)`));
+    // The field puts the emoji at its remembered caret and reports the input.
+    assert.match(source, new RegExp(`function insertEmoji\\(emoji: string\\): void \\{\\s*${field}\\?\\.insertText\\(emoji\\);\\s*\\}`));
   }
 });
 

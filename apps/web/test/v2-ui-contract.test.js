@@ -84,14 +84,11 @@ function fontRangesByFamily(typography) {
   return ranges;
 }
 
-// The text family each role resolves to. The emoji font leads every stack but
-// only covers emoji, so weights are checked against the family after it.
 function fontFamiliesByRole(typography) {
   const roles = new Map();
-  const rolePattern = /--font-(?<role>ui|display|mono):\s*(?<stack>[^;]+);/g;
+  const rolePattern = /--font-(?<role>ui|display|mono):\s*'(?<family>[^']+)'/g;
   for (const match of typography.matchAll(rolePattern)) {
-    const families = [...match.groups.stack.matchAll(/'(?<family>[^']+)'/g)].map((family) => family.groups.family);
-    roles.set(match.groups.role, families.find((family) => family !== 'Twemoji Color'));
+    roles.set(match.groups.role, match.groups.family);
   }
   return roles;
 }
@@ -1324,7 +1321,7 @@ test('chat composers and add-friend control preserve compact keyboard-first beha
   assert.match(lobbyV2, /\.lr-add-field input\s*\{[^}]*height:\s*100%[^}]*padding:\s*0/);
 
   for (const composer of [dm, roomChat, previewChat]) {
-    assert.match(composer, /rows="1"/);
+    assert.match(composer, /<EmojiComposer/);
     assert.match(composer, /\.isComposing\) return/);
     assert.match(composer, /\.key === 'Enter' && !\w+\.shiftKey/);
   }
@@ -1334,13 +1331,13 @@ test('chat composers and add-friend control preserve compact keyboard-first beha
   assert.match(roomChatCss, /\.chat-rail-input\s*\{[^}]*padding:\s*10px 14px/);
 
   assert.ok(dmSubmit.indexOf('await sendMessage(text)') < dmSubmit.indexOf("draft = ''"));
-  assert.ok(dmSubmit.indexOf("draft = ''") < dmSubmit.indexOf("inputEl.style.height = ''"));
+  assert.ok(dmSubmit.indexOf("draft = ''") < dmSubmit.indexOf('inputEl?.focus()'));
   assert.doesNotMatch(dmSubmit.slice(dmSubmit.indexOf('catch'), dmSubmit.indexOf('finally')), /draft\s*=/);
   assert.ok(roomSubmit.indexOf('await postRoomChat') < roomSubmit.indexOf("draft = ''"));
-  assert.ok(roomSubmit.indexOf("draft = ''") < roomSubmit.indexOf("composeEl.style.height = ''"));
+  assert.ok(roomSubmit.indexOf("draft = ''") < roomSubmit.indexOf('composeEl?.focus()'));
   assert.doesNotMatch(roomSubmit.slice(roomSubmit.indexOf('catch'), roomSubmit.indexOf('finally')), /draft\s*=/);
   assert.ok(previewSubmit.indexOf('await postRoomChat') < previewSubmit.indexOf("draft = ''"));
-  assert.ok(previewSubmit.indexOf("draft = ''") < previewSubmit.indexOf("composeEl.style.height = ''"));
+  assert.ok(previewSubmit.indexOf("draft = ''") < previewSubmit.indexOf('composeEl?.focus()'));
   assert.doesNotMatch(previewSubmit.slice(previewSubmit.indexOf('catch'), previewSubmit.indexOf('finally')), /draft\s*=/);
 
   for (const [body, element] of [
@@ -1350,7 +1347,9 @@ test('chat composers and add-friend control preserve compact keyboard-first beha
   ]) {
     assert.match(body, /if \(!sent\) return;\s*await tick\(\)/);
     assert.ok(body.indexOf('sending = false') < body.indexOf('await tick()'));
-    assert.ok(body.indexOf(`${element}.style.height = ''`) < body.indexOf(`${element}?.focus()`));
+    // The field sizes itself with CSS, so nothing resets a height by hand.
+    assert.ok(body.indexOf('await tick()') < body.indexOf(`${element}?.focus()`));
+    assert.doesNotMatch(body, /style\.height/);
   }
 
   assert.doesNotMatch(`${roomChat}\n${previewChat}`, /\bSend\b|chat-rail-send/);
@@ -1434,8 +1433,7 @@ test('shared typography uses CSP-safe local UI, display, and mono font roles', (
     'nunito-latin.woff2',
     'jetbrainsmono-cyrillic.woff2',
     'jetbrainsmono-latin-ext.woff2',
-    'jetbrainsmono-latin.woff2',
-    'twemoji.woff2'
+    'jetbrainsmono-latin.woff2'
   ]) {
     assert.ok(existsSync(resolve(root, 'static/fonts', file)), `${file} is bundled`);
     assert.match(typography, new RegExp(`url\\('/fonts/${file}'\\) format\\('woff2'\\)`));
@@ -1447,10 +1445,9 @@ test('shared typography uses CSP-safe local UI, display, and mono font roles', (
   assert.match(typography, /font-family: 'Nunito'/);
   assert.match(typography, /font-family: 'Comfortaa'/);
   assert.match(typography, /font-family: 'JetBrains Mono'/);
-  // The emoji font leads every role; its unicode-range keeps it to emoji.
-  assert.match(typography, /--font-ui: 'Twemoji Color', 'Nunito', system-ui, -apple-system, 'Segoe UI', sans-serif;/);
-  assert.match(typography, /--font-display: 'Twemoji Color', 'Comfortaa', 'Nunito', system-ui, -apple-system, 'Segoe UI', sans-serif;/);
-  assert.match(typography, /--font-mono: 'Twemoji Color', 'JetBrains Mono', ui-monospace, 'SF Mono', 'Cascadia Mono', monospace;/);
+  assert.match(typography, /--font-ui: 'Nunito', system-ui, -apple-system, 'Segoe UI', sans-serif;/);
+  assert.match(typography, /--font-display: 'Comfortaa', 'Nunito', system-ui, -apple-system, 'Segoe UI', sans-serif;/);
+  assert.match(typography, /--font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', 'Cascadia Mono', monospace;/);
   assert.match(typography, /--font-sans: var\(--font-ui\);/);
   assert.match(typography, /--font-serif: var\(--font-display\);/);
   assert.match(typography, /U\+0301, U\+0400-045F/);

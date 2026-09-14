@@ -40,24 +40,24 @@ test('unsent direct message text stays with its own thread across switches and p
     await openThread(grace.login);
     await composer.fill('черновик для Грейс');
     await openThread(linus.login);
-    await expect(composer).toHaveValue('');
+    await expect(composer).toHaveText('');
     await composer.fill('черновик для Линуса');
     await openThread(grace.login);
-    await expect(composer).toHaveValue('черновик для Грейс');
+    await expect(composer).toHaveText('черновик для Грейс');
 
     await page.goto('/');
     await openThread(linus.login);
-    await expect(composer).toHaveValue('черновик для Линуса');
+    await expect(composer).toHaveText('черновик для Линуса');
 
     // Sending ends that draft; the other thread keeps its own.
     await composer.press('Enter');
     await expect(page.locator('.dm-chat-message', { hasText: 'черновик для Линуса' }).last()).toBeVisible();
-    await expect(composer).toHaveValue('');
+    await expect(composer).toHaveText('');
     await page.goto('/');
     await openThread(linus.login);
-    await expect(composer).toHaveValue('');
+    await expect(composer).toHaveText('');
     await openThread(grace.login);
-    await expect(composer).toHaveValue('черновик для Грейс');
+    await expect(composer).toHaveText('черновик для Грейс');
   } finally {
     await grace.context.close();
     await linus.context.close();
@@ -81,11 +81,11 @@ test('unsent room chat text survives leaving the page and is gone once sent', as
   await composer.fill('недописанное сообщение');
   await page.goto('/');
   await openRoomChat();
-  await expect(composer).toHaveValue('недописанное сообщение');
+  await expect(composer).toHaveText('недописанное сообщение');
 
   await composer.press('Enter');
   await expect(page.locator('.chat-msg-text', { hasText: 'недописанное сообщение' }).last()).toBeVisible();
   await page.goto('/');
   await openRoomChat();
-  await expect(composer).toHaveValue('');
+  await expect(composer).toHaveText('');
 });

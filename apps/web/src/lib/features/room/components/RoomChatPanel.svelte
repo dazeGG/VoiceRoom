@@ -1,4 +1,5 @@
 <script lang="ts">
+  import EmojiText from '$lib/shared/chat/EmojiText.svelte';
   import type { Snippet } from 'svelte';
   import { ChevronRight, MessageSquare, Users } from '@lucide/svelte';
   import { iconSm } from '$lib/shared/ui/icons';
@@ -45,7 +46,7 @@
   import AttachmentComposer from '$lib/shared/chat/AttachmentComposer.svelte';
   import ComposerEmojiPicker from '$lib/shared/chat/ComposerEmojiPicker.svelte';
   import TypingIndicator from '$lib/shared/chat/TypingIndicator.svelte';
-  import { insertIntoDraft } from '$lib/shared/chat/composer-insert';
+  import EmojiComposer from '$lib/shared/chat/EmojiComposer.svelte';
   import AttachmentDropOverlay from '$lib/shared/chat/AttachmentDropOverlay.svelte';
   import AttachmentMosaic from '$lib/shared/chat/AttachmentMosaic.svelte';
   import AttachmentUploadControl from '$lib/shared/chat/AttachmentUploadControl.svelte';
@@ -132,10 +133,10 @@
   let editSaving = $state(false);
   let error = $state('');
   let chatBody = $state<HTMLDivElement | null>(null);
-  let composeEl = $state<HTMLTextAreaElement | null>(null);
+  let composeEl = $state<ReturnType<typeof EmojiComposer> | null>(null);
   let chatPinnedToBottom = true;
   let composerAttachmentCount = 0;
-  let editEl = $state<HTMLTextAreaElement | null>(null);
+  let editEl = $state<ReturnType<typeof EmojiComposer> | null>(null);
   let historyEnabled = $state(false);
   let hasMoreBefore = $state(false);
   let loadingOlder = $state(false);
@@ -181,13 +182,6 @@
     if (chatPinnedToBottom) void tick().then(scrollToBottom);
   });
 
-  function autoResize() {
-    if (!composeEl) return;
-    composeEl.style.height = 'auto';
-    const next = Math.min(composeEl.scrollHeight, 140);
-    composeEl.style.height = `${next}px`;
-  }
-
   function idempotencyKeyFor(value: unknown): string {
     const fingerprint = JSON.stringify(value);
     if (!sendAttemptKey || sendAttemptFingerprint !== fingerprint) {
@@ -230,7 +224,6 @@
       }
       return;
     }
-    queueMicrotask(autoResize);
   }
 
   async function onComposePaste(event: ClipboardEvent): Promise<void> {
@@ -285,8 +278,9 @@
       mentionComposer.close();
       return;
     }
-    const query = mentionComposer.update(draft, composeEl.selectionStart ?? draft.length);
-    if (!query && !draft.slice(0, composeEl.selectionStart ?? draft.length).endsWith('@')) return;
+    const caret = composeEl.getSelection().start;
+    const query = mentionComposer.update(draft, caret);
+    if (!query && !draft.slice(0, caret).endsWith('@')) return;
     await loadRoomMembership(roomId, { query });
     if (mentionComposer.query !== query) return;
     mentionComposer.setCandidates(getRoomMembership(roomId).members.filter((member) => member.userId !== session.user?.id));
@@ -294,13 +288,12 @@
 
   function chooseMention(member: MembershipMember): void {
     if (!composeEl) return;
-    const selected = mentionComposer.choose(draft, composeEl.selectionStart ?? draft.length, member);
+    const selected = mentionComposer.choose(draft, composeEl.getSelection().start, member);
     if (!selected) return;
     draft = selected.text;
     void tick().then(() => {
       composeEl?.focus();
-      composeEl?.setSelectionRange(selected.caret, selected.caret);
-      autoResize();
+      composeEl?.setSelection(selected.caret);
     });
   }
 
@@ -318,23 +311,15 @@
   }
 
   function onComposeInput(): void {
-    autoResize();
     void updateMentionCandidates();
     if (draft.trim()) typingNotifier.notify();
   }
 
-  // The field keeps its caret while the picker has focus, so the emoji lands
-  // where the person was writing and the field takes focus back afterwards.
+  // The field remembers its caret while the picker has focus, so the emoji
+  // lands where the person was writing, within the field's length limit, and
+  // the field takes focus back and reports the input as if it were typed.
   function insertEmoji(emoji: string): void {
-    // 500 is the field's maxlength, which a scripted value would bypass.
-    const inserted = insertIntoDraft(draft, emoji, { start: composeEl?.selectionStart, end: composeEl?.selectionEnd }, 500);
-    if (!inserted) return;
-    draft = inserted.text;
-    void tick().then(() => {
-      composeEl?.focus();
-      composeEl?.setSelectionRange(inserted.caret, inserted.caret);
-      onComposeInput();
-    });
+    composeEl?.insertText(emoji);
   }
 
   // Unsent text and its chosen mentions stay on this device per account and
@@ -370,7 +355,6 @@
       if (!saved || draft) return;
       draft = saved.text;
       mentionComposer.restore(saved.mentions);
-      void tick().then(autoResize);
     });
   });
 
@@ -856,7 +840,6 @@
     }
     if (!sent) return;
     await tick();
-    if (composeEl) composeEl.style.height = '';
     composeEl?.focus();
   }
 
@@ -907,7 +890,7 @@
     error = '';
     void tick().then(() => {
       editEl?.focus();
-      editEl?.setSelectionRange(editEl.value.length, editEl.value.length);
+      editEl?.setSelection(editDraft.length);
     });
   }
 
@@ -1103,9 +1086,9 @@
                   aria-label={group.self ? 'Ваш профиль' : `Профиль ${group.name}`}
                   onclick={(event) => openUserProfile(group, event)}
                   oncontextmenu={(event) => openUserMenu(group, event)}
-                >{group.name}</button>
+                ><EmojiText text={group.name} /></button>
               {:else}
-                <span class="chat-msg-author" style={`color:${group.avatarBackground}`}>{group.name}</span>
+                <span class="chat-msg-author" style={`color:${group.avatarBackground}`}><EmojiText text={group.name} /></span>
               {/if}
               <time class="chat-msg-time" datetime={new Date(group.messages[0].createdAt).toISOString()}>{group.time}</time>
             </div>
@@ -1121,16 +1104,15 @@
               >
                 {#if editingMessageId === message.id}
                   <div class="chat-msg-edit">
-                    <textarea
+                    <EmojiComposer
                       class="chat-msg-edit-input"
                       bind:this={editEl}
                       bind:value={editDraft}
-                      rows="2"
-                      maxlength="500"
-                      aria-label="Текст сообщения"
+                      maxlength={500}
+                      ariaLabel="Текст сообщения"
                       onkeydown={onEditKeydown}
                       disabled={editSaving}
-                    ></textarea>
+                    />
                     <div class="chat-msg-edit-actions">
                       <button type="button" onclick={cancelEditing} disabled={editSaving}>Отмена</button>
                       <button type="button" onclick={saveEdit} disabled={editSaving || !editDraft.trim()}>Сохранить</button>
@@ -1183,19 +1165,18 @@
       {#if media}<AttachmentComposer store={media} disabled={sending} />{/if}
       <div class="attachment-compose-controls">
         {#if media}<AttachmentUploadControl store={media} disabled={sending} onerror={showAttachmentError} />{/if}
-        <textarea
+        <EmojiComposer
           class="chat-rail-input chat-rail-textarea"
           bind:this={composeEl}
           bind:value={draft}
-          rows="1"
-          maxlength="500"
+          maxlength={500}
           placeholder="Написать в комнату…"
           onkeydown={onComposeKeydown}
           oninput={onComposeInput}
           oncompositionstart={() => mentionComposer.setComposing(true)}
           oncompositionend={() => { mentionComposer.setComposing(false); void updateMentionCandidates(); }}
           disabled={sending}
-        ></textarea>
+        />
         <ComposerEmojiPicker
           userId={session.user?.id ?? ''}
           disabled={sending}

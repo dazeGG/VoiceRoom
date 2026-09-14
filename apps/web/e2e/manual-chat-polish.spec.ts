@@ -253,7 +253,7 @@ test('manual polish keeps the newest mention query, emits login-bound segments, 
   releaseSlow();
   await expect(page.getByRole('option', { name: /@slow_login/ })).toHaveCount(0);
   await stableOption.click();
-  await expect(composer).toHaveValue('@stable_login ');
+  await expect.poll(() => composer.evaluate((element) => element.textContent)).toBe('@stable_login ');
   const mentionRequest = page.waitForRequest((request) => request.method() === 'POST' && request.url().endsWith(`/api/rooms/${roomId}/chat`));
   await composer.press('Enter');
   const payload = (await mentionRequest).postDataJSON() as { content?: { segments?: unknown[] } };

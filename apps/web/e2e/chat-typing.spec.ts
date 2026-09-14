@@ -32,7 +32,10 @@ test('a friend sees typing and emoji browsing under the message field, until the
     await writer.getByRole('button', { name: 'Добавить эмодзи' }).click();
     await expect(typing).toHaveText(/ выбирает эмодзи…$/);
     await writer.getByRole('gridcell', { name: 'Эмодзи 👍' }).first().click();
-    await expect(composer).toHaveValue('секунду, пишу👍');
+    // The field draws the emoji as artwork, so the text is the words and the
+    // emoji is an image carrying the character.
+    await expect(composer).toHaveText('секунду, пишу');
+    await expect(composer.locator('img.composer-emoji[alt="👍"]')).toBeVisible();
     await expect(composer).toBeFocused();
     await expect(typing).toHaveText(/ печатает…$/);
 
