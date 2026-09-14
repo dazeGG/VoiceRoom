@@ -64,7 +64,8 @@
     type DesktopOverlayForeground,
     type DesktopOverlayPatch,
     type DesktopOverlaySettings,
-    type OverlayAnchor
+    type OverlayAnchor,
+    type OverlayAvatarSize
   } from '$lib/platform/desktop-overlay';
   import {
     copyDesktopDiagnostics,
@@ -161,8 +162,9 @@
   let autostartSaving = $state(false);
   let overlayAvailable = $state(false);
   let overlayEnabled = $state(true);
-  let overlayOpacity = $state(45);
+  let overlayOpacity = $state(50);
   let overlayAnchor = $state<OverlayAnchor>('top-left');
+  let overlayAvatarSize = $state<OverlayAvatarSize>('medium');
   let overlayShowNames = $state(true);
   let overlayClickThrough = $state(true);
   let overlayHotkey = $state<HotkeyBinding | null>({
@@ -283,6 +285,7 @@
     overlayEnabled = settings.enabled;
     overlayOpacity = Math.round(settings.opacity * 100);
     overlayAnchor = settings.anchor;
+    overlayAvatarSize = settings.avatarSize;
     overlayShowNames = settings.showNames;
     overlayClickThrough = settings.clickThrough;
     overlayHotkey = settings.interactiveBinding;
@@ -1171,7 +1174,7 @@
                     bind:value={overlayOpacity}
                     min={20}
                     max={100}
-                    defaultValue={45}
+                    defaultValue={50}
                     step={1}
                     disabled={!overlayEnabled}
                     ariaLabel="Видимость молчащих участников"
@@ -1195,6 +1198,22 @@
                     variant="field"
                     disabled={overlaySaving || !overlayEnabled}
                     onValueChange={(value) => void changeOverlay({ anchor: value as OverlayAnchor })}
+                  />
+                </div>
+
+                <div class="settings-notification-dependent" data-disabled={!overlayEnabled}>
+                  <span class="settings-field-label">Размер аватаров</span>
+                  <Select
+                    bind:value={overlayAvatarSize}
+                    options={[
+                      { value: 'small', label: 'Маленькие' },
+                      { value: 'medium', label: 'Средние' },
+                      { value: 'large', label: 'Большие' }
+                    ]}
+                    label="Размер аватаров в оверлее"
+                    variant="field"
+                    disabled={overlaySaving || !overlayEnabled}
+                    onValueChange={(value) => void changeOverlay({ avatarSize: value as OverlayAvatarSize })}
                   />
                 </div>
 
@@ -1231,7 +1250,7 @@
                       <span class="settings-switch-knob" aria-hidden="true"></span>
                     </button>
                   </div>
-                  <div class="settings-gate-hint">Пока включено, мышь идёт в игру. Сочетание ниже на время включает клики по оверлею.</div>
+                  <div class="settings-gate-hint">Пока включено, мышь идёт в игру сквозь аватары.</div>
                 </div>
 
                 <div class="settings-notification-dependent" data-disabled={!overlayEnabled}>
@@ -1243,7 +1262,7 @@
                     onRecordingChange={(recording) => void setDesktopOverlaySuspended(recording)}
                     onValueChange={(value) => void changeOverlay({ interactiveBinding: value })}
                   />
-                  <div class="settings-gate-hint">По умолчанию Ctrl+`. Нужен модификатор, как у остальных глобальных сочетаний.</div>
+                  <div class="settings-gate-hint">По умолчанию Ctrl+`. В игре затемняет экран и показывает всех участников звонка плитками. Повторное нажатие или Esc — обратно в игру. Нужен модификатор, как у остальных глобальных сочетаний.</div>
                 </div>
 
                 <div class="settings-notification-dependent" data-disabled={!overlayEnabled}>

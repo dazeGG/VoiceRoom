@@ -2,6 +2,8 @@ import type { HotkeyBinding } from '$lib/shared/ui/HotkeyRecorder/types';
 
 export const OVERLAY_ANCHORS = ['top-left', 'top-right', 'bottom-left', 'bottom-right'] as const;
 export type OverlayAnchor = (typeof OVERLAY_ANCHORS)[number];
+export const OVERLAY_AVATAR_SIZES = ['small', 'medium', 'large'] as const;
+export type OverlayAvatarSize = (typeof OVERLAY_AVATAR_SIZES)[number];
 
 export interface DesktopOverlayParticipant {
   avatarAccent?: string;
@@ -19,6 +21,7 @@ export interface DesktopOverlaySettings {
   enabled: boolean;
   opacity: number;
   anchor: OverlayAnchor;
+  avatarSize: OverlayAvatarSize;
   showParticipants: boolean;
   showNames: boolean;
   showControls: boolean;
@@ -39,6 +42,7 @@ export type DesktopOverlayPatch = Partial<DesktopOverlaySettings>;
 
 const DEFAULT_SETTINGS: DesktopOverlaySettings = {
   anchor: 'top-left',
+  avatarSize: 'medium',
   clickThrough: true,
   enabled: true,
   interactiveBinding: {
@@ -48,7 +52,7 @@ const DEFAULT_SETTINGS: DesktopOverlaySettings = {
     metaKey: false,
     shiftKey: false
   },
-  opacity: 0.45,
+  opacity: 0.5,
   showControls: false,
   showNames: true,
   showParticipants: true,
@@ -62,6 +66,10 @@ function getBridge(): Window['voiceRoomDesktopOverlay'] | undefined {
 
 function isAnchor(value: unknown): value is OverlayAnchor {
   return typeof value === 'string' && (OVERLAY_ANCHORS as readonly string[]).includes(value);
+}
+
+function isAvatarSize(value: unknown): value is OverlayAvatarSize {
+  return typeof value === 'string' && (OVERLAY_AVATAR_SIZES as readonly string[]).includes(value);
 }
 
 function normalizeBinding(value: unknown): HotkeyBinding | null {
@@ -89,6 +97,7 @@ export function normalizeOverlaySettings(value: unknown): DesktopOverlaySettings
   const source = value as Record<string, unknown>;
   return {
     anchor: isAnchor(source.anchor) ? source.anchor : DEFAULT_SETTINGS.anchor,
+    avatarSize: isAvatarSize(source.avatarSize) ? source.avatarSize : DEFAULT_SETTINGS.avatarSize,
     clickThrough: source.clickThrough !== false,
     enabled: source.enabled !== false,
     interactiveBinding: Object.hasOwn(source, 'interactiveBinding')
@@ -129,6 +138,7 @@ export async function updateDesktopOverlaySettings(
   if (typeof patch.enabled === 'boolean') payload.enabled = patch.enabled;
   if (typeof patch.opacity === 'number') payload.opacity = clampOpacity(patch.opacity);
   if (isAnchor(patch.anchor)) payload.anchor = patch.anchor;
+  if (isAvatarSize(patch.avatarSize)) payload.avatarSize = patch.avatarSize;
   if (typeof patch.showParticipants === 'boolean') payload.showParticipants = patch.showParticipants;
   if (typeof patch.showNames === 'boolean') payload.showNames = patch.showNames;
   if (typeof patch.showControls === 'boolean') payload.showControls = patch.showControls;
