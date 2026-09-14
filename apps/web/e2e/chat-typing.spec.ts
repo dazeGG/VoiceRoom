@@ -40,7 +40,11 @@ test('a friend sees typing and emoji browsing under the message field, until the
     await expect(typing).toHaveText(/ печатает…$/);
 
     await composer.press('Enter');
-    await expect(page.locator('.dm-chat-message', { hasText: 'секунду, пишу👍' }).last()).toBeVisible();
+    // The message draws 👍 as artwork, so its text is the words and the emoji
+    // is an image carrying the character.
+    const sent = page.locator('.dm-chat-message', { hasText: 'секунду, пишу' }).last();
+    await expect(sent).toBeVisible();
+    await expect(sent.locator('img[alt="👍"]')).toBeVisible();
     await expect(typing).toHaveText('');
   } finally {
     await writerContext.close();
