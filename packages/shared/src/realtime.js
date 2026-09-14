@@ -27,10 +27,18 @@ const KNOWN_CLIENT_TYPES = new Set([
 // receiver drops it TYPING_NOTICE_TTL_MS after the last one arrived.
 const TYPING_NOTICE_INTERVAL_MS = 2500;
 const TYPING_NOTICE_TTL_MS = 6000;
+// What the person is doing in the composer. A notice without an activity comes
+// from a client older than the emoji picker and means typing.
+const TYPING_ACTIVITIES = Object.freeze(['typing', 'emoji']);
 const USER_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function isPlainObject(value) {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function normalizeTypingActivity(value) {
+  if (value === undefined || value === null) return 'typing';
+  return TYPING_ACTIVITIES.includes(value) ? value : null;
 }
 
 function parseClientEnvelope(raw) {
@@ -155,6 +163,10 @@ function validateClientCommand(envelope) {
     return { ok: false, code: 'invalid_user_id' };
   }
 
+  if ((envelope.type === 'room.chat.typing' || envelope.type === 'dm.typing') && !normalizeTypingActivity(payload.activity)) {
+    return { ok: false, code: 'invalid_typing_activity' };
+  }
+
   return { ok: true, envelope: { ...envelope, payload } };
 }
 
@@ -163,6 +175,8 @@ module.exports = {
   SUMMARY_COALESCE_MS,
   TYPING_NOTICE_INTERVAL_MS,
   TYPING_NOTICE_TTL_MS,
+  TYPING_ACTIVITIES,
+  normalizeTypingActivity,
   KNOWN_CLIENT_TYPES,
   parseClientEnvelope,
   parseServerEnvelope,

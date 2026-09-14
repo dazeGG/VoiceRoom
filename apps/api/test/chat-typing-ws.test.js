@@ -139,7 +139,7 @@ test('typing in a direct thread reaches only a friend, at most once a second', a
 
   sendWs(aliceWs.ws, 'dm.typing', { userId: bob.id });
   const notice = await waitForWsType(bobWs.frames, 'dm.typing');
-  assert.deepEqual(notice.payload, { userId: alice.id });
+  assert.deepEqual(notice.payload, { userId: alice.id, activity: 'typing' });
 
   // Repeats inside a second are dropped; strangers and guests reach nobody.
   sendWs(aliceWs.ws, 'dm.typing', { userId: bob.id });
@@ -177,7 +177,7 @@ test('room typing reaches everyone with the chat open, named by the server and n
   sendWs(guestWs.ws, 'room.chat.typing', { roomId, name: 'Подделка' });
   for (const session of [ownerWs, viewerWs]) {
     const notice = await waitForWsType(session.frames, 'room.chat.typing');
-    assert.deepEqual(notice.payload, { roomId, typist: { peerId: 'guest-typing-peer', userId: null, name: 'Гость Петя' } });
+    assert.deepEqual(notice.payload, { roomId, typist: { peerId: 'guest-typing-peer', userId: null, name: 'Гость Петя' }, activity: 'typing' });
   }
 
   sendWs(ownerWs.ws, 'room.chat.typing', { roomId });
@@ -192,4 +192,38 @@ test('room typing reaches everyone with the chat open, named by the server and n
   assert.equal(countWsType(guestWs.frames, 'room.chat.typing'), 1, 'only the owner reached the guest');
   assert.equal(countWsType(viewerWs.frames, 'room.chat.typing'), 2);
   assert.equal(countWsType(outsiderWs.frames, 'room.chat.typing'), 0);
+});
+
+test('a notice says whether someone types or picks an emoji, and switching is not held back by the other one', async (t) => {
+  const server = await startServer(t);
+  const dana = await server.register('dana');
+  const erik = await server.register('erik');
+  await server.befriend(dana, erik, 'erik');
+  const roomId = await server.createRoom(dana);
+
+  const danaWs = await server.connect(dana.cookie);
+  const erikWs = await server.connect(erik.cookie);
+
+  sendWs(danaWs.ws, 'dm.typing', { userId: erik.id, activity: 'emoji' });
+  sendWs(danaWs.ws, 'dm.typing', { userId: erik.id, activity: 'emoji' });
+  sendWs(danaWs.ws, 'dm.typing', { userId: erik.id });
+  await waitForWsType(erikWs.frames, 'dm.typing', () => countWsType(erikWs.frames, 'dm.typing') === 2);
+  await delay(400);
+  const direct = erikWs.frames.filter((frame) => frame.type === 'dm.typing').map((frame) => frame.payload);
+  assert.deepEqual(direct, [
+    { userId: dana.id, activity: 'emoji' },
+    { userId: dana.id, activity: 'typing' }
+  ], 'a repeated emoji notice inside a second is dropped, a switch to typing is not');
+
+  sendWs(danaWs.ws, 'dm.typing', { userId: erik.id, activity: 'recording' });
+  const rejected = await waitForWsType(danaWs.frames, 'error');
+  assert.equal(rejected.error.code, 'invalid_typing_activity');
+
+  await subscribeRoomPreview(danaWs, roomId);
+  await subscribeRoomPreview(erikWs, roomId);
+  sendWs(erikWs.ws, 'room.chat.typing', { roomId, activity: 'emoji' });
+  sendWs(erikWs.ws, 'room.chat.typing', { roomId, activity: 'typing' });
+  await waitForWsType(danaWs.frames, 'room.chat.typing', () => countWsType(danaWs.frames, 'room.chat.typing') === 2);
+  const inRoom = danaWs.frames.filter((frame) => frame.type === 'room.chat.typing').map((frame) => frame.payload.activity);
+  assert.deepEqual(inRoom, ['emoji', 'typing']);
 });

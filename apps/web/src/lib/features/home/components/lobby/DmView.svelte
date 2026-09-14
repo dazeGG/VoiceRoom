@@ -20,7 +20,7 @@
     toggleProfile,
     dmTyping
   } from '../../model/friends.svelte';
-  import { createTypingNotifier } from '$lib/shared/chat/typing.svelte';
+  import { createTypingNotifier, formatTypingLabel } from '$lib/shared/chat/typing.svelte';
   import { isPeerNotificationsMuted, updatePeerNotificationsMuted } from '$lib/shared/notifications/preferences.svelte';
   import { copyText } from '$lib/shared/utils/clipboard';
   import { pushToast } from '../../model/toasts.svelte';
@@ -41,6 +41,9 @@
     type AttachmentComposeStore
   } from '$lib/shared/chat/attachment-compose.svelte';
   import AttachmentComposer from '$lib/shared/chat/AttachmentComposer.svelte';
+  import ComposerEmojiPicker from '$lib/shared/chat/ComposerEmojiPicker.svelte';
+  import TypingIndicator from '$lib/shared/chat/TypingIndicator.svelte';
+  import { insertIntoDraft } from '$lib/shared/chat/composer-insert';
   import AttachmentDropOverlay from '$lib/shared/chat/AttachmentDropOverlay.svelte';
   import AttachmentMosaic from '$lib/shared/chat/AttachmentMosaic.svelte';
   import AttachmentUploadControl from '$lib/shared/chat/AttachmentUploadControl.svelte';
@@ -185,14 +188,30 @@
           : 'не в сети'
   );
   const peerMuted = $derived(isPeerNotificationsMuted(peer?.id));
-  const peerTyping = $derived(Boolean(peer && dmTyping.has(peer.id)));
-  const typingNotifier = createTypingNotifier(() => {
-    if (draftPeerId) getAppRealtime().send('dm.typing', { userId: draftPeerId });
+  const peerTypingActivity = $derived(peer ? dmTyping.activityOf(peer.id) : null);
+  const typingLabel = $derived(
+    peer && peerTypingActivity ? formatTypingLabel([{ name: friendName(peer), activity: peerTypingActivity }]) : ''
+  );
+  const typingNotifier = createTypingNotifier((activity) => {
+    if (draftPeerId) getAppRealtime().send('dm.typing', { userId: draftPeerId, activity });
   });
 
   function onComposeInput(): void {
     autoResize();
     if (draft.trim()) typingNotifier.notify();
+  }
+
+  // The field keeps its caret while the picker has focus, so the emoji lands
+  // where the person was writing and the field takes focus back afterwards.
+  function insertEmoji(emoji: string): void {
+    const inserted = insertIntoDraft(draft, emoji, { start: inputEl?.selectionStart, end: inputEl?.selectionEnd });
+    if (!inserted) return;
+    draft = inserted.text;
+    void tick().then(() => {
+      inputEl?.focus();
+      inputEl?.setSelectionRange(inserted.caret, inserted.caret);
+      onComposeInput();
+    });
   }
 
   function openSelfProfile(event: MouseEvent): void {
@@ -668,7 +687,7 @@
         />
         <div style="flex:1;min-width:0;">
           <div class="lobby-dm-head-name">{friendName(peer)}</div>
-          <div class="lobby-dm-head-status" data-presence={presence} data-typing={peerTyping || undefined} aria-live="polite">{peerTyping ? 'печатает…' : presenceLabel}</div>
+          <div class="lobby-dm-head-status" data-presence={presence}>{presenceLabel}</div>
         </div>
         <span style="flex:none;width:34px;height:34px;display:flex;align-items:center;justify-content:center;color:#9a9484;">
           <User {...iconMd} aria-hidden="true" />
@@ -807,8 +826,15 @@
             oninput={onComposeInput}
             disabled={sending}
           ></textarea>
+          <ComposerEmojiPicker
+            userId={selfId}
+            disabled={sending}
+            onpick={insertEmoji}
+            onbrowse={() => typingNotifier.notify('emoji')}
+          />
         </div>
       </div>
+      <TypingIndicator label={typingLabel} />
     </div>
   </div>
 

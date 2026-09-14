@@ -748,7 +748,6 @@ html.is-desktop .sidebar-download { display: none; }
 .lobby-dm-head-status[data-presence='afk'] { color: var(--amber); }
 .lobby-dm-head-status[data-presence='online'] { color: var(--green); }
 .lobby-dm-head-status[data-presence='offline'] { color: var(--warm-faint); }
-.lobby-dm-head-status[data-typing] { color: var(--green); }
 .lobby-dm-scroll { position: relative; flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; }
 
 /* Covers the thread while it renders and its artwork resolves, so the reader
@@ -852,7 +851,7 @@ html.is-desktop .sidebar-download { display: none; }
 }
 
 .dm-msg-edit-actions button:disabled { cursor: default; opacity: 0.45; }
-.lobby-dm-compose { flex: none; padding: 14px 24px 20px; }
+.lobby-dm-compose { position: relative; flex: none; padding: 14px 24px 20px; --chat-typing-inset: 26px; }
 .lobby-dm-compose-row {
   display: flex;
   align-items: stretch;
