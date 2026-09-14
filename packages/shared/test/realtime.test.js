@@ -25,6 +25,27 @@ test('typing notices name a room or a user and carry nothing the server trusts',
   }
 });
 
+test('a typing notice says whether the person types or picks an emoji, and means typing when it does not say', () => {
+  const { TYPING_ACTIVITIES, normalizeTypingActivity } = require('../src/realtime');
+  assert.deepEqual([...TYPING_ACTIVITIES], ['typing', 'emoji']);
+  assert.equal(normalizeTypingActivity(undefined), 'typing');
+  assert.equal(normalizeTypingActivity(null), 'typing');
+  assert.equal(normalizeTypingActivity('emoji'), 'emoji');
+  for (const bad of ['', 'Emoji', 'recording', 1, {}]) assert.equal(normalizeTypingActivity(bad), null);
+
+  const userId = '123e4567-e89b-12d3-a456-426614174000';
+  assert.equal(validateClientCommand({ type: 'room.chat.typing', payload: { roomId: 'abcdefghij', activity: 'emoji' } }).ok, true);
+  assert.equal(validateClientCommand({ type: 'dm.typing', payload: { userId, activity: 'typing' } }).ok, true);
+  assert.deepEqual(
+    validateClientCommand({ type: 'room.chat.typing', payload: { roomId: 'abcdefghij', activity: 'recording' } }),
+    { ok: false, code: 'invalid_typing_activity' }
+  );
+  assert.deepEqual(
+    validateClientCommand({ type: 'dm.typing', payload: { userId, activity: 42 } }),
+    { ok: false, code: 'invalid_typing_activity' }
+  );
+});
+
 test('parseClientEnvelope accepts valid envelopes', () => {
   const result = parseClientEnvelope(JSON.stringify({ type: 'ping', payload: { at: 1 } }));
   assert.equal(result.ok, true);
