@@ -38,8 +38,11 @@ declare global {
       onOpen: (handler: (payload: unknown) => void) => () => void;
     };
     voiceRoomDesktopOverlay?: {
+      addGame: (exe?: string) => Promise<unknown>;
+      getForeground: () => Promise<unknown>;
       getSettings: () => Promise<unknown>;
       preview: () => Promise<unknown>;
+      removeGame: (exe: string) => Promise<unknown>;
       setSettings: (settings: Record<string, unknown>) => Promise<unknown>;
       setSnapshot: (snapshot: { participants?: unknown[] }) => Promise<unknown>;
       setSuspended: (suspended: boolean) => Promise<unknown>;

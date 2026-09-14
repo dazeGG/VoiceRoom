@@ -72,8 +72,10 @@ test('desktop overlay service normalizes settings and sends a typed patch', asyn
       shiftKey: false
     },
     opacity: 0.5,
-    showControls: true,
-    showParticipants: false
+    showControls: false,
+    showNames: true,
+    showParticipants: false,
+    allowedExecutables: []
   });
   assert.deepEqual(await service.updateDesktopOverlaySettings({
     enabled: false,
@@ -86,8 +88,10 @@ test('desktop overlay service normalizes settings and sends a typed patch', asyn
     enabled: false,
     interactiveBinding: null,
     opacity: 1,
-    showControls: true,
-    showParticipants: true
+    showControls: false,
+    showNames: true,
+    showParticipants: true,
+    allowedExecutables: []
   });
   assert.deepEqual(calls, [{
     anchor: 'top-left',
@@ -96,4 +100,7 @@ test('desktop overlay service normalizes settings and sends a typed patch', asyn
     opacity: 1
   }]);
   assert.equal(await service.previewDesktopOverlay(), true);
+
+  await service.updateDesktopOverlaySettings({ opacity: 0.05 });
+  assert.equal(calls.at(-1).opacity, 0.2);
 });
