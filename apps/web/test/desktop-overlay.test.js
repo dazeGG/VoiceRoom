@@ -62,6 +62,7 @@ test('desktop overlay service normalizes settings and sends a typed patch', asyn
   assert.equal(service.desktopOverlayAvailable(), true);
   assert.deepEqual(await service.readDesktopOverlaySettings(), {
     anchor: 'bottom-right',
+    avatarSize: 'medium',
     clickThrough: true,
     enabled: true,
     interactiveBinding: {
@@ -84,6 +85,7 @@ test('desktop overlay service normalizes settings and sends a typed patch', asyn
     interactiveBinding: { code: 'KeyO', ctrlKey: true }
   }), {
     anchor: 'top-left',
+    avatarSize: 'medium',
     clickThrough: false,
     enabled: false,
     interactiveBinding: null,
@@ -103,4 +105,9 @@ test('desktop overlay service normalizes settings and sends a typed patch', asyn
 
   await service.updateDesktopOverlaySettings({ opacity: 0.05 });
   assert.equal(calls.at(-1).opacity, 0.2);
+
+  await service.updateDesktopOverlaySettings({ avatarSize: 'large' });
+  assert.deepEqual(calls.at(-1), { avatarSize: 'large' });
+  await service.updateDesktopOverlaySettings({ avatarSize: 'huge' });
+  assert.deepEqual(calls.at(-1), {});
 });
