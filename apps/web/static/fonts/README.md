@@ -7,9 +7,8 @@ These WOFF2 files are self-hosted so the web app can keep `font-src 'self'`.
 - `nunito-*.woff2`: Google Fonts CSS API, `https://fonts.googleapis.com/css2?family=Nunito:wght@400..800&display=swap`, resolved to `https://fonts.gstatic.com/s/nunito/v32/...`. Upstream license: `https://raw.githubusercontent.com/google/fonts/main/ofl/nunito/OFL.txt`.
 - `comfortaa-*.woff2`: Google Fonts CSS API, `https://fonts.googleapis.com/css2?family=Comfortaa:wght@400..700&display=swap`, resolved to `https://fonts.gstatic.com/s/comfortaa/v47/...`. Upstream license: `https://raw.githubusercontent.com/google/fonts/main/ofl/comfortaa/OFL.txt`.
 - `jetbrainsmono-*.woff2`: retained existing JetBrains Mono subsets. Upstream license: `https://raw.githubusercontent.com/JetBrains/JetBrainsMono/master/OFL.txt`.
-- `twemoji.woff2`: colour (COLR) emoji font of Twemoji 15, the same artwork as `@twemoji/svg` 15.0.0, taken from the npm package `twemoji-colr-font@15.0.3` (`https://github.com/mrdrogdrog/twemoji-color-font`). Vendored rather than installed because that package is archived and flagged as no longer supported on npm. Font licence: SIL Open Font License 1.1, copied as `twemoji-LICENSE.txt`; the Twemoji graphics are CC BY 4.0 (`https://github.com/jdecked/twemoji`).
 
-All four families are licensed under the SIL Open Font License 1.1.
+All three families are licensed under the SIL Open Font License 1.1.
 
 ## SHA-256
 
@@ -25,5 +24,4 @@ ff264d19d7bc72ebfe70160dcfe766d0c775dec4c833f2c6739705a6f110ac58  comfortaa-cyri
 b63651df977d08650ff2e598a3979a490f114b59353605e091dd3fdb530f530e  nunito-cyrillic.woff2
 511ce967375fd2d924483d798f1086a533259fc675181f62944ec1176fe8786d  nunito-latin-ext.woff2
 20fc9b6fc618e7c3c68d3ac750a2a5dfbceb8521675458d2cea580b5693e4798  nunito-latin.woff2
-598b6867d47954acab46edd6a9773d734b844d221d3a95834da7442d5df64f98  twemoji.woff2
 ```
