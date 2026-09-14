@@ -213,7 +213,7 @@ test('a notice says whether someone types or picks an emoji, and switching is no
   assert.deepEqual(direct, [
     { userId: dana.id, activity: 'emoji' },
     { userId: dana.id, activity: 'typing' }
-  ], 'a repeated emoji notice inside a second is dropped, a switch to typing is not');
+  ], 'a repeated emoji notice inside a second is dropped, the switch to typing arrives when the second is up');
 
   sendWs(danaWs.ws, 'dm.typing', { userId: erik.id, activity: 'recording' });
   const rejected = await waitForWsType(danaWs.frames, 'error');

@@ -7,6 +7,7 @@ const {
 } = require('@voice-room/shared/validation');
 const { normalizeTypingActivity } = require('@voice-room/shared/realtime');
 const { buildServerEnvelope, buildServerErrorEnvelope, parseInboundMessage } = require('./envelope');
+const { createTypingThrottle } = require('./typing-throttle');
 
 function createWsHandler({
   registry,
@@ -24,24 +25,27 @@ function createWsHandler({
 
   // Direct typing notices reach only a friend when neither side blocked the
   // other. The check is cached per connection and thread for a short while so
-  // a burst of typing costs one lookup, and a notice goes out at most once a
-  // second per thread and activity.
-  const DM_TYPING_FORWARD_MIN_MS = 1000;
+  // a burst of typing costs one lookup, and notices to a thread go through the
+  // typing throttle.
   const DM_TYPING_PERMISSION_TTL_MS = 30_000;
 
-  async function forwardDirectTyping(connection, peerId, activity = 'typing') {
+  function forwardDirectTyping(connection, peerId, activity = 'typing') {
     if (!connection.userId || peerId === connection.userId) return;
-    connection.dmTyping ??= new Map();
-    const entry = connection.dmTyping.get(peerId) || { allowed: false, checkedAt: -Infinity, forwardedAt: new Map() };
-    connection.dmTyping.set(peerId, entry);
-    if (now() - (entry.forwardedAt.get(activity) ?? -Infinity) < DM_TYPING_FORWARD_MIN_MS) return;
+    connection.dmTypingThrottle ??= createTypingThrottle({ now });
+    connection.dmTypingThrottle.offer(peerId, activity, (value) => {
+      sendDirectTyping(connection, peerId, value).catch(reportMessageError);
+    });
+  }
+
+  async function sendDirectTyping(connection, peerId, activity) {
+    connection.dmTypingPermission ??= new Map();
+    const entry = connection.dmTypingPermission.get(peerId) || { allowed: false, checkedAt: -Infinity };
+    connection.dmTypingPermission.set(peerId, entry);
     if (now() - entry.checkedAt >= DM_TYPING_PERMISSION_TTL_MS) {
       entry.allowed = Boolean(await canTypeToUser(connection.userId, peerId));
       entry.checkedAt = now();
-      if (connection.closed) return;
     }
-    if (!entry.allowed) return;
-    entry.forwardedAt.set(activity, now());
+    if (!entry.allowed || connection.closed) return;
     registry.sendToUser(peerId, buildServerEnvelope('dm.typing', { userId: connection.userId, activity }));
   }
 

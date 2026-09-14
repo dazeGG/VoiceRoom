@@ -13,6 +13,7 @@ const { buildServerEnvelope, buildServerErrorEnvelope } = require('./envelope');
 const { buildRoomRealtimeSummaryFromLobbyRoom, createSummaryCoalescer } = require('./summary');
 const { createWsTransport } = require('./peer-transport');
 const { legacyPeerMessageToWs } = require('./legacy-events');
+const { createTypingThrottle } = require('./typing-throttle');
 
 function resolveViewedScreenPeerId(room, viewerPeerId, value) {
   const ownerPeerId = normalizePeerId(value);
@@ -568,7 +569,6 @@ function createRoomRealtimeRuntime(deps) {
   // the room chat may announce typing in it: an account with the room open or
   // in its call, or a guest in its call. The name comes from the call roster or
   // the account profile, never from the client.
-  const TYPING_FORWARD_MIN_MS = 1000;
   const TYPING_PROFILE_TTL_MS = 60_000;
 
   async function typistForConnection(connection, roomId) {
@@ -587,19 +587,20 @@ function createRoomRealtimeRuntime(deps) {
     return typist;
   }
 
-  // Each activity has its own once-a-second budget, so closing the emoji picker
-  // and typing again is announced right away instead of a second later.
-  async function broadcastRoomTyping(connection, roomId, activity = 'typing') {
-    if (connection.closed || !roomId) return false;
-    const throttleKey = `${roomId}:${activity}`;
-    const forwardedAt = connection.typingForwardedAt?.get(throttleKey) ?? 0;
-    if (now() - forwardedAt < TYPING_FORWARD_MIN_MS) return false;
+  function broadcastRoomTyping(connection, roomId, activity = 'typing') {
+    if (connection.closed || !roomId) return;
+    connection.roomTypingThrottle ??= createTypingThrottle({ now });
+    connection.roomTypingThrottle.offer(roomId, activity, (value) => {
+      sendRoomTyping(connection, roomId, value).catch((error) => {
+        console.error('Failed to forward a room typing notice:', error);
+      });
+    });
+  }
+
+  async function sendRoomTyping(connection, roomId, activity) {
     const typist = await typistForConnection(connection, roomId);
-    if (!typist || connection.closed) return false;
-    connection.typingForwardedAt ??= new Map();
-    connection.typingForwardedAt.set(throttleKey, now());
+    if (!typist || connection.closed) return;
     broadcastRoomDetail(roomId, buildServerEnvelope('room.chat.typing', { roomId, typist, activity }), { except: connection });
-    return true;
   }
 
   function roomNotificationContext(room) {
