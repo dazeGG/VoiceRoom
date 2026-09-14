@@ -43,71 +43,76 @@ test('desktop overlay service is unavailable without the shell bridge', async (t
   assert.equal(service.desktopOverlayAvailable(), false);
   assert.equal(await service.readDesktopOverlaySettings(), null);
   assert.equal(await service.updateDesktopOverlaySettings({ enabled: false }), null);
-  assert.equal(await service.previewDesktopOverlay(), false);
 });
 
 test('desktop overlay service normalizes settings and sends a typed patch', async (t) => {
   const calls = [];
   const service = await loadService(t, {
-    getSettings: async () => ({ enabled: 1, opacity: 0.5, anchor: 'bottom-right', showParticipants: false }),
+    getSettings: async () => ({
+      allowedExecutables: ['mygame.exe', 3, ''],
+      anchor: 'bottom-right',
+      avatarSize: 'large',
+      clickThrough: false,
+      enabled: 1,
+      opacity: 0.5
+    }),
     setSettings: async (patch) => {
       calls.push(patch);
-      return { enabled: false, opacity: 1.4, anchor: 'nope', clickThrough: false, interactiveBinding: null };
+      return { anchor: 'nope', enabled: false, showNames: false };
     },
-    preview: async () => ({ ok: true }),
-    setSnapshot: async () => ({}),
-    setSuspended: async () => ({ ok: true })
+    setSnapshot: async () => ({})
   });
 
   assert.equal(service.desktopOverlayAvailable(), true);
   assert.deepEqual(await service.readDesktopOverlaySettings(), {
     anchor: 'bottom-right',
-    avatarSize: 'medium',
-    clickThrough: true,
+    avatarSize: 'large',
     enabled: true,
-    interactiveBinding: {
-      altKey: false,
-      code: 'Backquote',
-      ctrlKey: true,
-      metaKey: false,
-      shiftKey: false
-    },
-    opacity: 0.5,
-    showControls: false,
     showNames: true,
-    showParticipants: false,
-    allowedExecutables: []
+    allowedExecutables: ['mygame.exe']
   });
   assert.deepEqual(await service.updateDesktopOverlaySettings({
-    enabled: false,
-    opacity: 2,
     anchor: 'top-left',
-    interactiveBinding: { code: 'KeyO', ctrlKey: true }
+    avatarSize: 'huge',
+    enabled: false,
+    opacity: 0.2,
+    showNames: false
   }), {
     anchor: 'top-left',
     avatarSize: 'medium',
-    clickThrough: false,
     enabled: false,
-    interactiveBinding: null,
-    opacity: 1,
-    showControls: false,
-    showNames: true,
-    showParticipants: true,
+    showNames: false,
     allowedExecutables: []
   });
-  assert.deepEqual(calls, [{
-    anchor: 'top-left',
-    enabled: false,
-    interactiveBinding: { code: 'KeyO', ctrlKey: true },
-    opacity: 1
-  }]);
-  assert.equal(await service.previewDesktopOverlay(), true);
+  assert.deepEqual(calls, [{ anchor: 'top-left', enabled: false, showNames: false }]);
 
-  await service.updateDesktopOverlaySettings({ opacity: 0.05 });
-  assert.equal(calls.at(-1).opacity, 0.2);
+  await service.updateDesktopOverlaySettings({ avatarSize: 'small' });
+  assert.deepEqual(calls.at(-1), { avatarSize: 'small' });
+});
 
-  await service.updateDesktopOverlaySettings({ avatarSize: 'large' });
-  assert.deepEqual(calls.at(-1), { avatarSize: 'large' });
-  await service.updateDesktopOverlaySettings({ avatarSize: 'huge' });
-  assert.deepEqual(calls.at(-1), {});
+test('desktop overlay snapshot carries mute and stream state once per change', async (t) => {
+  const snapshots = [];
+  const service = await loadService(t, {
+    getSettings: async () => ({}),
+    setSettings: async () => ({}),
+    setSnapshot: async (snapshot) => {
+      snapshots.push(snapshot);
+      return {};
+    }
+  });
+  const participant = {
+    id: 'a',
+    micMuted: true,
+    name: 'Ann',
+    outputMuted: false,
+    self: false,
+    speaking: true,
+    streaming: true
+  };
+
+  service.syncDesktopOverlaySnapshot([participant]);
+  service.syncDesktopOverlaySnapshot([{ ...participant }]);
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.deepEqual(snapshots, [{ participants: [participant] }]);
 });
