@@ -84,11 +84,14 @@ function fontRangesByFamily(typography) {
   return ranges;
 }
 
+// The text family each role resolves to. The emoji font leads every stack but
+// only covers emoji, so weights are checked against the family after it.
 function fontFamiliesByRole(typography) {
   const roles = new Map();
-  const rolePattern = /--font-(?<role>ui|display|mono):\s*'(?<family>[^']+)'/g;
+  const rolePattern = /--font-(?<role>ui|display|mono):\s*(?<stack>[^;]+);/g;
   for (const match of typography.matchAll(rolePattern)) {
-    roles.set(match.groups.role, match.groups.family);
+    const families = [...match.groups.stack.matchAll(/'(?<family>[^']+)'/g)].map((family) => family.groups.family);
+    roles.set(match.groups.role, families.find((family) => family !== 'Twemoji Color'));
   }
   return roles;
 }
@@ -1431,7 +1434,8 @@ test('shared typography uses CSP-safe local UI, display, and mono font roles', (
     'nunito-latin.woff2',
     'jetbrainsmono-cyrillic.woff2',
     'jetbrainsmono-latin-ext.woff2',
-    'jetbrainsmono-latin.woff2'
+    'jetbrainsmono-latin.woff2',
+    'twemoji.woff2'
   ]) {
     assert.ok(existsSync(resolve(root, 'static/fonts', file)), `${file} is bundled`);
     assert.match(typography, new RegExp(`url\\('/fonts/${file}'\\) format\\('woff2'\\)`));
@@ -1443,9 +1447,10 @@ test('shared typography uses CSP-safe local UI, display, and mono font roles', (
   assert.match(typography, /font-family: 'Nunito'/);
   assert.match(typography, /font-family: 'Comfortaa'/);
   assert.match(typography, /font-family: 'JetBrains Mono'/);
-  assert.match(typography, /--font-ui: 'Nunito', system-ui, -apple-system, 'Segoe UI', sans-serif;/);
-  assert.match(typography, /--font-display: 'Comfortaa', 'Nunito', system-ui, -apple-system, 'Segoe UI', sans-serif;/);
-  assert.match(typography, /--font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', 'Cascadia Mono', monospace;/);
+  // The emoji font leads every role; its unicode-range keeps it to emoji.
+  assert.match(typography, /--font-ui: 'Twemoji Color', 'Nunito', system-ui, -apple-system, 'Segoe UI', sans-serif;/);
+  assert.match(typography, /--font-display: 'Twemoji Color', 'Comfortaa', 'Nunito', system-ui, -apple-system, 'Segoe UI', sans-serif;/);
+  assert.match(typography, /--font-mono: 'Twemoji Color', 'JetBrains Mono', ui-monospace, 'SF Mono', 'Cascadia Mono', monospace;/);
   assert.match(typography, /--font-sans: var\(--font-ui\);/);
   assert.match(typography, /--font-serif: var\(--font-display\);/);
   assert.match(typography, /U\+0301, U\+0400-045F/);

@@ -89,10 +89,29 @@
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
 }
 
+/* Emoji in text — the message field, message bodies, names — come from a
+   colour font of the same Twemoji artwork the picker and reactions draw as
+   images, so an emoji looks the same wherever it appears and flags work on
+   Windows. The file is twemoji.woff2 from twemoji-colr-font 15.0.3, the
+   Twemoji 15 build that matches @twemoji/svg; it is vendored with its OFL
+   licence because that package is archived and no longer supported on npm.
+   The range covers emoji code points only: digits, # and *, ©, ® and ™ stay
+   in the text font, so plain text never changes. A browser without colour
+   font support falls back to the system emoji. */
+@font-face {
+  font-family: 'Twemoji Color';
+  font-style: normal;
+  /* One face for every weight, so emoji in bold names are not faux-bolded. */
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('/fonts/twemoji.woff2') format('woff2');
+  unicode-range: U+200D, U+203C, U+2049, U+20E3, U+2139, U+2194-2199, U+21A9-21AA, U+231A-231B, U+2328, U+23CF, U+23E9-23F3, U+23F8-23FA, U+24C2, U+25AA-25AB, U+25B6, U+25C0, U+25FB-25FE, U+2600-27BF, U+2934-2935, U+2B05-2B07, U+2B1B-2B1C, U+2B50, U+2B55, U+3030, U+303D, U+3297, U+3299, U+FE0F, U+1F000-1FAFF, U+E0020-E007F;
+}
+
 :root {
-  --font-ui: 'Nunito', system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --font-display: 'Comfortaa', 'Nunito', system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', 'Cascadia Mono', monospace;
+  --font-ui: 'Twemoji Color', 'Nunito', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-display: 'Twemoji Color', 'Comfortaa', 'Nunito', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'Twemoji Color', 'JetBrains Mono', ui-monospace, 'SF Mono', 'Cascadia Mono', monospace;
   --font-sans: var(--font-ui);
   --font-serif: var(--font-display);
 }

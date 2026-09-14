@@ -1,7 +1,7 @@
 <script lang="ts">
-  // One reaction emoji, drawn from the bundled OpenMoji artwork so it looks the
+  // One reaction emoji, drawn from the bundled Twemoji artwork so it looks the
   // same on every OS — see emoji-asset.ts for why the platform font is not
-  // enough. The character itself stays the alt text, so selecting, copying and
+  // enough. Emoji inside text use a colour font of the same artwork instead. The character itself stays the alt text, so selecting, copying and
   // screen readers all still see an emoji rather than a picture of one, and a
   // failed image load falls back to it.
   import { emojiAssetUrl } from './emoji-asset';
