@@ -43,6 +43,9 @@
     type AttachmentComposeStore
   } from '$lib/shared/chat/attachment-compose.svelte';
   import AttachmentComposer from '$lib/shared/chat/AttachmentComposer.svelte';
+  import ComposerEmojiPicker from '$lib/shared/chat/ComposerEmojiPicker.svelte';
+  import TypingIndicator from '$lib/shared/chat/TypingIndicator.svelte';
+  import { insertIntoDraft } from '$lib/shared/chat/composer-insert';
   import AttachmentDropOverlay from '$lib/shared/chat/AttachmentDropOverlay.svelte';
   import AttachmentMosaic from '$lib/shared/chat/AttachmentMosaic.svelte';
   import AttachmentUploadControl from '$lib/shared/chat/AttachmentUploadControl.svelte';
@@ -53,7 +56,7 @@
   import { contentFromLegacyText } from '@voice-room/shared/room-message-content';
   import { createMentionComposer } from '$lib/shared/chat/mention-composer.svelte';
   import { loadChatDraft, saveChatDraft } from '$lib/shared/chat/chat-drafts';
-  import { createTypingNotifier, createTypingTracker, formatTypingLabel } from '$lib/shared/chat/typing.svelte';
+  import { createTypingNotifier, createTypingTracker, formatTypingLabel, typingActivityOf } from '$lib/shared/chat/typing.svelte';
   import { getAppRealtime } from '$lib/api/realtime';
   import MentionAutocomplete from '$lib/shared/chat/MentionAutocomplete.svelte';
   import { getRoomMembership, loadRoomMembership } from '$lib/features/home/model/room-membership.svelte';
@@ -305,9 +308,9 @@
   // keyed like message authors (account id, or the guest's peer id) so their
   // message clears them.
   const roomTyping = createTypingTracker();
-  const typingLabel = $derived(formatTypingLabel(roomTyping.names));
-  const typingNotifier = createTypingNotifier(() => {
-    if (roomId) getAppRealtime().send('room.chat.typing', { roomId });
+  const typingLabel = $derived(formatTypingLabel(roomTyping.people));
+  const typingNotifier = createTypingNotifier((activity) => {
+    if (roomId) getAppRealtime().send('room.chat.typing', { roomId, activity });
   });
 
   function typingKey(person: { userId?: string | null; authorUserId?: string | null; peerId?: string }): string {
@@ -318,6 +321,20 @@
     autoResize();
     void updateMentionCandidates();
     if (draft.trim()) typingNotifier.notify();
+  }
+
+  // The field keeps its caret while the picker has focus, so the emoji lands
+  // where the person was writing and the field takes focus back afterwards.
+  function insertEmoji(emoji: string): void {
+    // 500 is the field's maxlength, which a scripted value would bypass.
+    const inserted = insertIntoDraft(draft, emoji, { start: composeEl?.selectionStart, end: composeEl?.selectionEnd }, 500);
+    if (!inserted) return;
+    draft = inserted.text;
+    void tick().then(() => {
+      composeEl?.focus();
+      composeEl?.setSelectionRange(inserted.caret, inserted.caret);
+      onComposeInput();
+    });
   }
 
   // Unsent text and its chosen mentions stay on this device per account and
@@ -570,7 +587,7 @@
       if (event.type === 'room.chat.typing') {
         const typist = event.payload.typist;
         if (!typist || typist.peerId === peerId || (typist.userId && typist.userId === session.user?.id)) return;
-        roomTyping.note(typingKey(typist), typist.name);
+        roomTyping.note(typingKey(typist), typist.name, typingActivityOf(event.payload.activity));
         return;
       }
       if (event.type !== 'room.chat.message') return;
@@ -1153,10 +1170,6 @@
     <p class="chat-rail-error">{error}</p>
   {/if}
 
-  {#if typingLabel}
-    <p class="chat-rail-typing" aria-live="polite">{typingLabel}</p>
-  {/if}
-
   <form class="chat-rail-compose" onsubmit={sendMessage} onpaste={onComposePaste}>
     <div class="chat-compose-row attachment-compose-field">
       {#if replyTarget}
@@ -1183,11 +1196,18 @@
           oncompositionend={() => { mentionComposer.setComposing(false); void updateMentionCandidates(); }}
           disabled={sending}
         ></textarea>
+        <ComposerEmojiPicker
+          userId={session.user?.id ?? ''}
+          disabled={sending}
+          onpick={insertEmoji}
+          onbrowse={() => typingNotifier.notify('emoji')}
+        />
       </div>
     </div>
     {#if mentionComposer.isOpen}
       <MentionAutocomplete candidates={mentionComposer.candidates} activeIndex={mentionComposer.activeIndex} onselect={chooseMention} />
     {/if}
+    <TypingIndicator label={typingLabel} />
   </form>
   {:else if participants}
     <div class="room-panel-members" id={participantsPanelId} role="tabpanel" aria-labelledby={participantsTabId}>

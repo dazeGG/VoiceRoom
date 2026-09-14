@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { createPermanentRoom, enterRoom, registerViaUi, uniqueLogin } from './helpers';
 
-test('a friend sees "печатает…" in the thread header while you type, until the message arrives', async ({ browser, page, baseURL }) => {
+test('a friend sees typing and emoji browsing under the message field, until the message arrives', async ({ browser, page, baseURL }) => {
   const readerLogin = uniqueLogin('typingreader');
   const writerLogin = uniqueLogin('typingwriter');
   await registerViaUi(page, readerLogin);
@@ -18,19 +18,27 @@ test('a friend sees "печатает…" in the thread header while you type, u
 
     await page.goto('/');
     await page.locator('.lv-row', { hasText: writerLogin }).first().click();
-    const status = page.locator('.lobby-dm-head-status');
-    await expect(status).toBeVisible();
-    await expect(status).not.toHaveText('печатает…');
+    const typing = page.locator('.lobby-dm-compose .chat-typing');
+    await expect(page.locator('.lobby-dm-head-status')).toBeVisible();
+    await expect(typing).toHaveText('');
 
     await writer.goto('/');
     await writer.locator('.lv-row', { hasText: readerLogin }).first().click();
     const composer = writer.getByPlaceholder('Написать сообщение…');
     await composer.fill('секунду, пишу');
-    await expect(status).toHaveText('печатает…');
+    await expect(typing).toHaveText(/ печатает…$/);
+    await expect(page.locator('.lobby-dm-head-status')).not.toContainText('печатает');
+
+    await writer.getByRole('button', { name: 'Добавить эмодзи' }).click();
+    await expect(typing).toHaveText(/ выбирает эмодзи…$/);
+    await writer.getByRole('gridcell', { name: 'Эмодзи 👍' }).first().click();
+    await expect(composer).toHaveValue('секунду, пишу👍');
+    await expect(composer).toBeFocused();
+    await expect(typing).toHaveText(/ печатает…$/);
 
     await composer.press('Enter');
-    await expect(page.locator('.dm-chat-message', { hasText: 'секунду, пишу' }).last()).toBeVisible();
-    await expect(status).not.toHaveText('печатает…');
+    await expect(page.locator('.dm-chat-message', { hasText: 'секунду, пишу👍' }).last()).toBeVisible();
+    await expect(typing).toHaveText('');
   } finally {
     await writerContext.close();
   }
@@ -59,13 +67,17 @@ test('the room chat shows who is typing from the call to someone reading it in t
     await expect(composer).toBeVisible({ timeout: 20_000 });
     await composer.fill('сейчас расскажу');
 
-    const typing = page.locator('.chat-rail-typing');
+    const typing = page.locator('.chat-rail-compose .chat-typing');
     await expect(typing).toHaveText(`${guestLogin} печатает…`);
-    await expect(caller.locator('.chat-rail-typing')).toHaveCount(0);
+    await expect(caller.locator('.chat-rail-compose .chat-typing')).toHaveText('');
+
+    await caller.locator('.room-chat-rail').getByRole('button', { name: 'Добавить эмодзи' }).click();
+    await expect(typing).toHaveText(`${guestLogin} выбирает эмодзи…`);
+    await caller.keyboard.press('Escape');
 
     await composer.press('Enter');
     await expect(page.locator('.chat-msg-text', { hasText: 'сейчас расскажу' }).last()).toBeVisible();
-    await expect(typing).toHaveCount(0);
+    await expect(typing).toHaveText('');
   } finally {
     await callerContext.close();
   }

@@ -23,7 +23,7 @@ export type RealtimeAccountEvent =
   | { type: 'dm.message.edited'; payload: { message: DirectMessage } }
   | { type: 'dm.read'; payload: { userId: string } }
   | { type: 'dm.message.deleted'; payload: { messageId: string; peerUserId?: string } }
-  | { type: 'dm.typing'; payload: { userId: string } }
+  | { type: 'dm.typing'; payload: { userId: string; activity?: string } }
   | { type: 'account.login.new'; payload: { alert: LoginAlert } }
   | { type: 'account.login.resolved'; payload: { alertId: string; resolution: 'confirmed' | 'denied' } };
 
@@ -54,7 +54,7 @@ export type RealtimeRoomEvent =
   | { type: 'room.chat.message'; payload: { roomId: string; message: ChatMessage } }
   | { type: 'room.chat.edited'; payload: { roomId: string; message: ChatMessage } }
   | { type: 'room.chat.deleted'; payload: { roomId: string; messageId: string } }
-  | { type: 'room.chat.typing'; payload: { roomId: string; typist: { peerId: string; userId: string | null; name: string } } }
+  | { type: 'room.chat.typing'; payload: { roomId: string; typist: { peerId: string; userId: string | null; name: string }; activity?: string } }
   | { type: 'room.updated'; payload: { room: RoomSummary } }
   | { type: 'room.deleted'; payload: { roomId: string } }
   | { type: 'room.not_found'; payload: { roomId: string } }

@@ -21,7 +21,7 @@ import {
 import { blockUser as apiBlockUser, unblockUser as apiUnblockUser } from '$lib/api/blocks';
 import { deleteDirectMessage, editDirectMessage, fetchThread, fetchThreadPage, markThreadRead, respondRoomInvite, sendDirectMessage, type DirectMessage } from '$lib/api/dm';
 import { connectRealtime, type RealtimeEvent, type RealtimeHandle } from '$lib/api/realtime';
-import { createTypingTracker } from '$lib/shared/chat/typing.svelte';
+import { createTypingTracker, typingActivityOf } from '$lib/shared/chat/typing.svelte';
 import type { PresenceStatus } from '$lib/shared/presence';
 import { playDirectMessageCue, playFriendAcceptedCue, playFriendRequestCue, playRingCue } from '$lib/features/room/client/media/cues';
 import {
@@ -690,7 +690,9 @@ function handleRealtimeEvent(event: RealtimeEvent): void {
       break;
     }
     case 'dm.typing': {
-      if (event.payload?.userId && event.payload.userId !== selfId) dmTyping.note(event.payload.userId);
+      if (event.payload?.userId && event.payload.userId !== selfId) {
+        dmTyping.note(event.payload.userId, '', typingActivityOf(event.payload.activity));
+      }
       break;
     }
     case 'dm.message.edited': {
