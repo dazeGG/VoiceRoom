@@ -332,6 +332,9 @@
       return;
     }
     syncDesktopOverlaySnapshot(getSortedParticipants().map((participant) => ({
+      avatarAccent: participant.avatarAccent || '',
+      avatarColorKey: participant.avatarColorKey || '',
+      avatarUrl: participant.avatarUrl || '',
       id: participant.id,
       micMuted: participant.muted,
       name: participant.name || '',
