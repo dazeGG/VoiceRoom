@@ -340,7 +340,8 @@
       name: participant.name || '',
       outputMuted: participant.deafened,
       self: participant.isLocal,
-      speaking: participant.speaking
+      speaking: participant.speaking,
+      streaming: participant.screen
     })));
   });
 
