@@ -29,7 +29,10 @@
   const dotColor = $derived(presenceColors[presence]);
   const initial = $derived.by(() => {
     const trimmed = name.trim();
-    return trimmed ? trimmed.charAt(0).toUpperCase() : '?';
+    // The first letter or digit, so a name that opens with an emoji still gets
+    // an initial rather than half of that emoji's surrogate pair.
+    const letter = trimmed.match(/[\p{L}\p{N}]/u)?.[0];
+    return letter ? letter.toUpperCase() : '?';
   });
   let imageFailed = $state(false);
 

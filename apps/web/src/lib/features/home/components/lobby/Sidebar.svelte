@@ -1,4 +1,5 @@
 <script lang="ts">
+  import EmojiText from '$lib/shared/chat/EmojiText.svelte';
   import { Bell, BellOff, Check, Settings, UserPlus } from '@lucide/svelte';
   import { tick } from 'svelte';
   import type { AuthUser } from '$lib/api/auth';
@@ -259,7 +260,7 @@
           />
           <div style="min-width:0;flex:1;">
             <div class="lv-notification-title">
-              <div class="lv-row-name" style={`font-weight:${entry.unreadCount > 0 ? 750 : 650}`}>{friendName(entry.user)}</div>
+              <div class="lv-row-name" style={`font-weight:${entry.unreadCount > 0 ? 750 : 650}`}><EmojiText text={friendName(entry.user)} /></div>
               {#if friendNotificationsMuted}
                 <span class="lv-notification-muted" role="img" aria-label="Уведомления отключены" title="Уведомления отключены">
                   <BellOff {...iconSm} aria-hidden="true" />
@@ -313,7 +314,7 @@
             ring="var(--panel)"
           />
           <span style="min-width:0;flex:1;text-align:left;">
-            <span class="lv-row-name" style="display:block;">{selfName}</span>
+            <span class="lv-row-name" style="display:block;"><EmojiText text={selfName} /></span>
             <span class="lv-profile-handle" style="display:block;">@{user.login}</span>
           </span>
         </button>

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import EmojiText from '$lib/shared/chat/EmojiText.svelte';
   import { Check, X } from '@lucide/svelte';
   import { deriveAvatarAccent, dominantAvatarColor } from '@voice-room/shared/avatar-accent';
   import { dialogFocusTrap } from '$lib/shared/ui/focus-trap';
@@ -226,17 +227,17 @@
           {#if kind === 'user'}
             <div class="crop-user-tile" style={`--preview-accent:${accent.background};--preview-shadow:${accent.shadow}`}>
               <Avatar name={name} src={previewUrl} size={76} />
-              <strong>{name || 'Ваш профиль'}</strong>
+              <strong><EmojiText text={name || 'Ваш профиль'} /></strong>
               <span>плитка разговора</span>
             </div>
             <div class="crop-sidebar-preview">
               <Avatar name={name} src={previewUrl} size={34} online showDot ring="#24221d" />
-              <div><strong>{name || 'Ваш профиль'}</strong><span>в сети</span></div>
+              <div><strong><EmojiText text={name || 'Ваш профиль'} /></strong><span>в сети</span></div>
             </div>
           {:else}
             <div class="crop-room-preview">
               <Avatar name={name} src={previewUrl} shape="squircle" size={48} background="var(--room-avatar-bg)" />
-              <div><strong>{name || 'Комната'}</strong><span>карточка лобби</span></div>
+              <div><strong><EmojiText text={name || 'Комната'} /></strong><span>карточка лобби</span></div>
             </div>
           {/if}
         </aside>

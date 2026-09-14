@@ -1,4 +1,5 @@
 <script lang="ts">
+  import EmojiText from '$lib/shared/chat/EmojiText.svelte';
   import { Bell, BellOff, Keyboard, LogOut, Mic, Monitor, Pencil, ShieldCheck, User, X } from '@lucide/svelte';
   import { onDestroy, untrack } from 'svelte';
   import type { AuthUser, OwnedRoom } from '$lib/api/auth';
@@ -810,7 +811,7 @@
                 {/if}
               </div>
               <div>
-                <div class="settings-profile-name">{label}</div>
+                <div class="settings-profile-name"><EmojiText text={label} /></div>
                 <div class="settings-profile-sub">@{user?.login}</div>
               </div>
             </div>
@@ -1359,7 +1360,7 @@
                           />
                           <span class="settings-notification-name">
                             <span class="settings-notification-title">
-                              <strong>{peer.displayName?.trim() || peer.login}</strong>
+                              <strong><EmojiText text={peer.displayName?.trim() || peer.login} /></strong>
                               {#if peerMuted}
                                 <span class="settings-notification-muted" role="img" aria-label="Уведомления отключены" title="Уведомления отключены">
                                   <BellOff {...iconSm} aria-hidden="true" />
@@ -1397,7 +1398,7 @@
                           <Avatar name={room.name?.trim() || room.roomId} src={room.avatarUrl} shape="squircle" background="var(--room-avatar-bg)" size={32} />
                           <span class="settings-notification-name">
                             <span class="settings-notification-title">
-                              <strong>{room.name?.trim() || 'Комната'}</strong>
+                              <strong><EmojiText text={room.name?.trim() || 'Комната'} /></strong>
                               {#if roomMuted}
                                 <span class="settings-notification-muted" role="img" aria-label="Уведомления отключены" title="Уведомления отключены">
                                   <BellOff {...iconSm} aria-hidden="true" />
@@ -1446,7 +1447,7 @@
                           size={32}
                         />
                         <span class="settings-notification-name">
-                          <strong>{blocked.displayName?.trim() || blocked.login}</strong>
+                          <strong><EmojiText text={blocked.displayName?.trim() || blocked.login} /></strong>
                           {#if blocked.login}<small>@{blocked.login}</small>{/if}
                         </span>
                         <button

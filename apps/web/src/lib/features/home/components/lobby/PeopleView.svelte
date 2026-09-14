@@ -1,4 +1,5 @@
 <script lang="ts">
+  import EmojiText from '$lib/shared/chat/EmojiText.svelte';
   import { Check, ChevronLeft, Copy, X } from '@lucide/svelte';
   import type { AuthUser } from '$lib/api/auth';
   import { Avatar, Button } from '$lib/shared/ui';
@@ -133,7 +134,7 @@
           <div class="lr-req-card">
             <Avatar name={friendName(request.user)} src={request.user.avatarUrl} colorKey={request.user.avatarColorKey} background={request.user.avatarAccent || undefined} size={44} />
             <div class="people-request-copy">
-              <div class="lr-req-name people-truncate">{friendName(request.user)}</div>
+              <div class="lr-req-name people-truncate"><EmojiText text={friendName(request.user)} /></div>
               <div class="lr-req-handle people-truncate">@{request.user.login}</div>
               <div class="lr-req-meta people-truncate">{mutualLabel(request.mutualFriends)}</div>
             </div>
@@ -159,7 +160,7 @@
           <div class="lr-req-card">
             <Avatar name={friendName(request.user)} src={request.user.avatarUrl} colorKey={request.user.avatarColorKey} background={request.user.avatarAccent || undefined} size={44} />
             <div class="people-request-copy">
-              <div class="lr-req-name people-truncate">{friendName(request.user)}</div>
+              <div class="lr-req-name people-truncate"><EmojiText text={friendName(request.user)} /></div>
               <div class="lr-req-handle people-truncate">@{request.user.login}</div>
               <div class="lr-req-pending"><span class="lr-req-pending-dot"></span>заявка отправлена · ждём ответа</div>
             </div>

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import EmojiText from '$lib/shared/chat/EmojiText.svelte';
   import { onMount } from 'svelte';
   import { Ban, Clock } from '@lucide/svelte';
   import type { ActiveBan } from '@voice-room/shared/moderation';
@@ -86,7 +87,7 @@
           <Avatar {name} src={ban.subject.profile?.avatarUrl ?? null} colorKey={ban.subject.profile?.avatarColorKey} size={36} />
           <div class="room-ban-body">
             <div class="room-ban-name">
-              <strong>{name}</strong>
+              <strong><EmojiText text={name} /></strong>
               {#if ban.subject.profile}<small>@{ban.subject.profile.login}</small>{/if}
             </div>
             <span class="room-ban-term" data-permanent={ban.expiresAt == null}>
