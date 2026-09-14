@@ -1,4 +1,5 @@
 <script lang="ts">
+  import EmojiText from '$lib/shared/chat/EmojiText.svelte';
   // Friend picker behind "Пригласить". Inviting no longer requires being in the
   // room, so this works the same from the lobby and from inside the room.
   import { Avatar } from '$lib/shared/ui';
@@ -79,7 +80,7 @@
           dnd={presence === 'dnd'}
           showDot
         />
-        <span class="room-invite-friend-name">{name}</span>
+        <span class="room-invite-friend-name"><EmojiText text={name} /></span>
         {#if alreadyInRoom}<small class="room-invite-friend-note">В комнате</small>{/if}
       </button>
     {/each}

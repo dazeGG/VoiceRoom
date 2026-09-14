@@ -1,4 +1,5 @@
 <script lang="ts">
+  import EmojiText from '$lib/shared/chat/EmojiText.svelte';
   import { Bell, BellOff, DoorOpen, User, UserMinus, X } from '@lucide/svelte';
   import { iconMd, iconSm } from '$lib/shared/ui/icons';
   import { onMount, tick, untrack } from 'svelte';
@@ -43,7 +44,7 @@
   import AttachmentComposer from '$lib/shared/chat/AttachmentComposer.svelte';
   import ComposerEmojiPicker from '$lib/shared/chat/ComposerEmojiPicker.svelte';
   import TypingIndicator from '$lib/shared/chat/TypingIndicator.svelte';
-  import { insertIntoDraft } from '$lib/shared/chat/composer-insert';
+  import EmojiComposer from '$lib/shared/chat/EmojiComposer.svelte';
   import AttachmentDropOverlay from '$lib/shared/chat/AttachmentDropOverlay.svelte';
   import AttachmentMosaic from '$lib/shared/chat/AttachmentMosaic.svelte';
   import AttachmentUploadControl from '$lib/shared/chat/AttachmentUploadControl.svelte';
@@ -62,10 +63,10 @@
   let editDraft = $state('');
   let editSaving = $state(false);
   let scrollEl = $state<HTMLDivElement | null>(null);
-  let inputEl = $state<HTMLTextAreaElement | null>(null);
+  let inputEl = $state<ReturnType<typeof EmojiComposer> | null>(null);
   let threadPinnedToBottom = true;
   let composerAttachmentCount = 0;
-  let editEl = $state<HTMLTextAreaElement | null>(null);
+  let editEl = $state<ReturnType<typeof EmojiComposer> | null>(null);
   let readReconciliation: ReturnType<typeof createReadReconciliation> | null = null;
   let reactionsEnabled = $state(false);
   const reactions = createReactionStore();
@@ -91,13 +92,6 @@
     return sendAttemptKey;
   }
 
-  function autoResize() {
-    if (!inputEl) return;
-    inputEl.style.height = 'auto';
-    const next = Math.min(inputEl.scrollHeight, 140);
-    inputEl.style.height = `${next}px`;
-  }
-
   function onKeydown(event: KeyboardEvent): void {
     if (event.isComposing) return;
     if (event.key === 'Enter' && !event.shiftKey) {
@@ -114,7 +108,6 @@
       }
       return;
     }
-    queueMicrotask(autoResize);
   }
 
   async function onComposePaste(event: ClipboardEvent): Promise<void> {
@@ -197,21 +190,14 @@
   });
 
   function onComposeInput(): void {
-    autoResize();
     if (draft.trim()) typingNotifier.notify();
   }
 
-  // The field keeps its caret while the picker has focus, so the emoji lands
-  // where the person was writing and the field takes focus back afterwards.
+  // The field remembers its caret while the picker has focus, so the emoji
+  // lands where the person was writing, and the field takes focus back and
+  // reports the input as if it were typed.
   function insertEmoji(emoji: string): void {
-    const inserted = insertIntoDraft(draft, emoji, { start: inputEl?.selectionStart, end: inputEl?.selectionEnd });
-    if (!inserted) return;
-    draft = inserted.text;
-    void tick().then(() => {
-      inputEl?.focus();
-      inputEl?.setSelectionRange(inserted.caret, inserted.caret);
-      onComposeInput();
-    });
+    inputEl?.insertText(emoji);
   }
 
   function openSelfProfile(event: MouseEvent): void {
@@ -466,7 +452,6 @@
       typingNotifier.reset();
       draftPeerId = peerId;
       draft = peerId ? (loadChatDraft(selfId, { type: 'dm', id: peerId })?.text ?? '') : '';
-      void tick().then(autoResize);
     });
   });
 
@@ -527,7 +512,6 @@
     }
     if (!sent) return;
     await tick();
-    if (inputEl) inputEl.style.height = '';
     inputEl?.focus();
   }
 
@@ -623,7 +607,7 @@
     editDraft = message.body;
     void tick().then(() => {
       editEl?.focus();
-      editEl?.setSelectionRange(editEl.value.length, editEl.value.length);
+      editEl?.setSelection(editDraft.length);
     });
   }
 
@@ -686,7 +670,7 @@
           ring="var(--paper-deep)"
         />
         <div style="flex:1;min-width:0;">
-          <div class="lobby-dm-head-name">{friendName(peer)}</div>
+          <div class="lobby-dm-head-name"><EmojiText text={friendName(peer)} /></div>
           <div class="lobby-dm-head-status" data-presence={presence}>{presenceLabel}</div>
         </div>
         <span style="flex:none;width:34px;height:34px;display:flex;align-items:center;justify-content:center;color:#9a9484;">
@@ -730,9 +714,9 @@
               <div class="chat-msg-main">
                 <div class="chat-msg-meta">
                   {#if group.fromMe}
-                    <button class="chat-msg-author chat-msg-trigger" type="button" style={`color:${self.avatarAccent || 'var(--accent)'}`} aria-haspopup="dialog" aria-label="Ваш профиль" onclick={openSelfProfile}>{self.displayName?.trim() || self.login}</button>
+                    <button class="chat-msg-author chat-msg-trigger" type="button" style={`color:${self.avatarAccent || 'var(--accent)'}`} aria-haspopup="dialog" aria-label="Ваш профиль" onclick={openSelfProfile}><EmojiText text={self.displayName?.trim() || self.login} /></button>
                   {:else}
-                    <button class="chat-msg-author chat-msg-trigger" type="button" style={`color:${peer?.avatarAccent || 'var(--accent)'}`} aria-haspopup="dialog" aria-label={`Профиль ${friendName(peer!)}`} onclick={openMessageAuthorProfile}>{friendName(peer!)}</button>
+                    <button class="chat-msg-author chat-msg-trigger" type="button" style={`color:${peer?.avatarAccent || 'var(--accent)'}`} aria-haspopup="dialog" aria-label={`Профиль ${friendName(peer!)}`} onclick={openMessageAuthorProfile}><EmojiText text={friendName(peer!)} /></button>
                   {/if}
                   <time class="chat-msg-time" datetime={new Date(group.bubbles[0].createdAt).toISOString()}>{formatTime(group.bubbles[0].createdAt)}</time>
                 </div>
@@ -750,7 +734,7 @@
                         <span class="lobby-room-invitation-icon"><DoorOpen {...iconMd} aria-hidden="true" /></span>
                         <div class="lobby-room-invitation-copy">
                           <strong>{inviteTitle(bubble, group.fromMe)}</strong>
-                          <span>{bubble.invite.roomName || bubble.invite.roomId}</span>
+                          <span><EmojiText text={bubble.invite.roomName || bubble.invite.roomId} /></span>
                         </div>
                         {#if inviteActionable(bubble, group.fromMe)}
                           <div class="lobby-room-invitation-actions">
@@ -761,16 +745,15 @@
                       </article>
                     {:else if editingMessageId === bubble.id}
                       <div class="dm-msg-edit">
-                        <textarea
+                        <EmojiComposer
                           class="dm-msg-edit-input"
                           bind:this={editEl}
                           bind:value={editDraft}
-                          rows="2"
-                          maxlength="2000"
-                          aria-label="Текст сообщения"
+                          maxlength={2000}
+                          ariaLabel="Текст сообщения"
                           onkeydown={onEditKeydown}
                           disabled={editSaving}
-                        ></textarea>
+                        />
                         <div class="dm-msg-edit-actions">
                           <button type="button" onclick={cancelEditing} disabled={editSaving}>Отмена</button>
                           <button type="button" onclick={saveEdit} disabled={editSaving || !editDraft.trim()}>Сохранить</button>
@@ -816,16 +799,15 @@
         {#if media}<AttachmentComposer store={media} disabled={sending} />{/if}
         <div class="attachment-compose-controls">
           {#if media}<AttachmentUploadControl store={media} disabled={sending} onerror={showAttachmentError} />{/if}
-          <textarea
+          <EmojiComposer
             class="lobby-dm-input lobby-dm-textarea"
             placeholder="Написать сообщение…"
             bind:this={inputEl}
             bind:value={draft}
-            rows="1"
             onkeydown={onKeydown}
             oninput={onComposeInput}
             disabled={sending}
-          ></textarea>
+          />
           <ComposerEmojiPicker
             userId={selfId}
             disabled={sending}
@@ -858,7 +840,7 @@
           showDot
           ring="var(--paper-deep)"
         />
-        <div class="lobby-profile-panel-name">{friendName(peer)}</div>
+        <div class="lobby-profile-panel-name"><EmojiText text={friendName(peer)} /></div>
         <div class="lobby-profile-panel-handle">@{peer.login}</div>
 
         <div class="lobby-profile-stats">

@@ -1,15 +1,18 @@
-// Materialises the reaction emoji artwork into `static/emoji/`, and writes the
-// catalogue of what that artwork actually covers.
+// Materialises the emoji artwork into `static/emoji/`, and writes the catalogue
+// of what that artwork actually covers.
 //
-// Reactions are drawn from SVG files rather than left to the platform font,
-// because the platform font is not a renderer we control: Windows ships no flag
-// glyphs at all, so `🇷🇺` renders as the letters "RU" there.
+// Emoji — in the picker, reactions, message text and names — are drawn from
+// SVG files rather than left to the platform font, because the platform font is
+// not a renderer we control: Windows ships no flag glyphs at all, so `🇷🇺`
+// renders as the letters "RU" there. This is how Discord draws them too, and
+// the files come from Discord's own Twemoji release.
 //
-// Twemoji does not reach every entry of the pinned Unicode 17.0 corpus — it is
-// missing 303 of the newest additions. Rather than let those fall back to the
-// platform font and look foreign next to the rest, the offered set is locked to
-// what the artwork covers: `emoji-coverage.json` is the catalogue the picker
-// browses, and an emoji outside it is simply not offered.
+// Twemoji does not reach every entry of the pinned Unicode 17.0 corpus — the
+// newest additions have no artwork yet. Rather than let those fall back to the
+// platform font and look foreign next to the rest, the set is locked to what
+// the artwork covers: `emoji-coverage.json` is the catalogue the picker browses
+// and the text renderer recognises, and an emoji outside it is simply not
+// offered, and stays plain text where someone types it.
 //
 // The artwork is not committed. It is copied out of the pinned npm package on
 // `predev`/`prebuild`, so the lockfile stays the single source of truth for
@@ -27,9 +30,10 @@ const require = createRequire(import.meta.url);
 const webRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
 const outputDir = join(webRoot, 'static', 'emoji');
 const catalogueFile = join(webRoot, 'src', 'lib', 'shared', 'chat', 'emoji-coverage.json');
-const packageRoot = dirname(require.resolve('@twemoji/svg/package.json'));
+const ARTWORK_PACKAGE = '@discordapp/twemoji';
+const packageRoot = join(dirname(require.resolve(`${ARTWORK_PACKAGE}/package.json`)), 'dist', 'svg');
 const graphicsLicenceFile = join(dirname(fileURLToPath(import.meta.url)), 'emoji-artwork-LICENSE.txt');
-const { version } = require('@twemoji/svg/package.json');
+const { version } = require(`${ARTWORK_PACKAGE}/package.json`);
 
 /** Our canonical asset name: every code point of the sequence, upper-case hex. */
 export function assetName(sequence) {
@@ -41,23 +45,29 @@ export function assetName(sequence) {
 /** Which artwork file backs each corpus entry, and which entries have none. */
 export async function planEmojiAssets() {
   const corpus = listReactionEmojis();
-  const available = new Set(
+  // Twemoji spells code points without leading zeros (`31-20e3.svg`, `a9.svg`),
+  // so each file is keyed by our padded spelling and remembers its own name.
+  const available = new Map(
     (await readdir(packageRoot))
       .filter((file) => file.endsWith('.svg'))
-      .map((file) => file.slice(0, -4).toUpperCase())
+      .map((file) => [
+        file
+          .slice(0, -4)
+          .split('-')
+          .map((part) => part.toUpperCase().padStart(4, '0'))
+          .join('-'),
+        file.slice(0, -4)
+      ])
   );
 
   const missing = [];
   const copies = [];
   for (const emoji of corpus) {
     const name = assetName(emoji);
-    // Twemoji drops the emoji-presentation selector from its filenames; the
-    // output always keeps our fully-qualified name so the runtime never guesses.
-    const source = available.has(name)
-      ? name
-      : available.has(name.replace(/-?FE0F/g, ''))
-        ? name.replace(/-?FE0F/g, '')
-        : '';
+    // Twemoji usually drops the emoji-presentation selector from its filenames;
+    // the output always keeps our fully-qualified name so the runtime never
+    // guesses.
+    const source = available.get(name) ?? available.get(name.replace(/-?FE0F/g, '')) ?? '';
     if (!source) {
       missing.push(emoji);
       continue;
@@ -72,28 +82,29 @@ async function main() {
   const { copies, missing, corpus } = await planEmojiAssets();
 
   if (!copies.length) {
-    throw new Error(`@twemoji/svg@${version} covers none of the corpus; the source layout changed`);
+    throw new Error(`${ARTWORK_PACKAGE}@${version} covers none of the corpus; the source layout changed`);
   }
 
   await rm(outputDir, { force: true, recursive: true });
   await mkdir(outputDir, { recursive: true });
   await Promise.all(
     copies.map(({ source, name }) =>
-      copyFile(join(packageRoot, `${source.toLowerCase()}.svg`), join(outputDir, `${name}.svg`))
+      copyFile(join(packageRoot, `${source}.svg`), join(outputDir, `${name}.svg`))
     )
   );
 
-  // `@twemoji/svg` is a community repackaging and ships only an MIT notice for
-  // the packaging itself. That does not relicense the artwork: Twemoji's
-  // graphics are CC BY 4.0 upstream. So the upstream licence text travels with
-  // the files from this repo, and the credit names Twemoji, not the repackager.
+  // The npm package ships only the MIT notice that covers Twemoji's code. That
+  // does not cover the artwork: Twemoji's graphics are CC BY 4.0 upstream. So
+  // the upstream licence text travels with the files from this repo, and the
+  // credit names Twemoji and the fork the files came from.
   await copyFile(graphicsLicenceFile, join(outputDir, 'LICENSE.txt'));
   await writeFile(
     join(outputDir, 'ATTRIBUTION.txt'),
     [
       'Emoji artwork: Twemoji — https://github.com/jdecked/twemoji',
+      'Distributed as Discord\'s Twemoji fork — https://github.com/discord/twemoji',
       'Graphics licence: CC BY 4.0 — https://creativecommons.org/licenses/by/4.0/',
-      `Obtained through @twemoji/svg ${version}, pinned by the web app lockfile.`,
+      `Obtained through ${ARTWORK_PACKAGE} ${version}, pinned by the web app lockfile.`,
       '',
       'Generated by apps/web/scripts/build-emoji-assets.mjs. Do not edit by hand.',
       ''
@@ -103,9 +114,9 @@ async function main() {
 
   const catalogue = {
     _comment:
-      'Generated by apps/web/scripts/build-emoji-assets.mjs. The reactions this app offers, '
-      + 'locked to what the pinned artwork covers.',
-    source: `@twemoji/svg@${version}`,
+      'Generated by apps/web/scripts/build-emoji-assets.mjs. The emoji this app draws and offers — '
+      + 'in the picker, reactions and text — locked to what the pinned artwork covers.',
+    source: `${ARTWORK_PACKAGE}@${version}`,
     emojis: copies.map(({ emoji }) => emoji)
   };
   const serialised = `${JSON.stringify(catalogue, null, 2)}\n`;
@@ -113,7 +124,7 @@ async function main() {
   if (previous !== serialised) await writeFile(catalogueFile, serialised, 'utf8');
 
   console.log(
-    `emoji assets: ${copies.length} of ${corpus.length} corpus entries from @twemoji/svg@${version}`
+    `emoji assets: ${copies.length} of ${corpus.length} corpus entries from ${ARTWORK_PACKAGE}@${version}`
       + ` -> static/emoji (${missing.length} not covered and not offered)`
   );
 }

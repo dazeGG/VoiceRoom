@@ -80,44 +80,18 @@ test('the artwork ships the upstream licence, not the repackager\'s', () => {
   const script = read('scripts/build-emoji-assets.mjs');
   const licence = read('scripts/emoji-artwork-LICENSE.txt');
 
-  // The npm package carrying the files is a community repackaging that ships
-  // only an MIT notice covering the packaging. That does not relicense
-  // Twemoji's artwork, which is CC BY 4.0, so the upstream text travels with
-  // the files from this repo and the credit names Twemoji, not the repackager.
+  // The npm package carrying the files ships only the MIT notice for Twemoji's
+  // code. That does not cover the artwork, which is CC BY 4.0, so the upstream
+  // text travels with the files from this repo and the credit names Twemoji
+  // and Discord's fork the files come from.
   assert.match(licence, /Attribution 4\.0 International/);
   assert.match(script, /graphicsLicenceFile/);
   assert.match(script, /LICENSE\.txt/);
   assert.match(script, /ATTRIBUTION\.txt/);
   assert.match(script, /CC BY 4\.0/);
   assert.match(script, /jdecked\/twemoji/);
-});
-
-test('emoji inside text use the colour font of the same artwork, and plain text keeps its font', () => {
-  const typography = read('src/lib/shared/styles/typography.css');
-  const manifest = JSON.parse(read('package.json'));
-
-  // Vendored next to the text fonts with its licence: the npm package that
-  // carries this Twemoji 15 build is archived and flagged unsupported, so the
-  // build does not depend on it.
-  assert.equal(manifest.dependencies?.['twemoji-colr-font'], undefined);
-  assert.equal(manifest.devDependencies?.['twemoji-colr-font'], undefined);
-  const font = readFileSync(join(webRoot, 'static/fonts/twemoji.woff2'));
-  assert.equal(font.subarray(0, 4).toString('latin1'), 'wOF2');
-  assert.match(read('static/fonts/twemoji-LICENSE.txt'), /SIL OPEN FONT LICENSE/);
-  assert.match(read('static/fonts/README.md'), /`twemoji\.woff2`:[^\n]*SIL Open Font License 1\.1/);
-
-  const face = typography.match(/@font-face \{[^}]*'Twemoji Color'[^}]*\}/)?.[0] ?? '';
-  assert.match(face, /src: url\('\/fonts\/twemoji\.woff2'\) format\('woff2'\);/);
-  assert.match(face, /font-display: swap;/);
-  const range = face.match(/unicode-range: ([^;]+);/)?.[1] ?? '';
-  assert.match(range, /U\+1F000-1FAFF/, 'pictographs');
-  assert.match(range, /U\+FE0F/, 'the emoji presentation selector');
-  assert.match(range, /U\+E0020-E007F/, 'subdivision flag tags');
-  // Digits, # and *, ©, ® and ™ are emoji code points too, but in running text
-  // they have to stay in the text font.
-  assert.doesNotMatch(range, /U\+00|U\+002[3A]|U\+003|U\+2122/);
-
-  for (const token of ['--font-ui', '--font-display', '--font-mono']) {
-    assert.match(typography, new RegExp(`${token}: 'Twemoji Color', `), `${token} reaches the emoji font first`);
-  }
+  assert.match(script, /github\.com\/discord\/twemoji/);
+  assert.match(script, /const ARTWORK_PACKAGE = '@discordapp\/twemoji';/);
+  assert.equal(JSON.parse(read('package.json')).devDependencies['@discordapp/twemoji'], '16.0.1');
+  assert.match(read('src/lib/shared/chat/emoji-coverage.json'), /"source": "@discordapp\/twemoji@16\.0\.1"/);
 });

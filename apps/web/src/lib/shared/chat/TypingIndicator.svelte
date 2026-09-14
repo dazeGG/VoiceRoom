@@ -1,10 +1,13 @@
 <script lang="ts">
+  import EmojiText from './EmojiText.svelte';
+
   let { label }: { label: string } = $props();
 </script>
 
 <!-- Always in the tree, so a screen reader hears the line change instead of
-     meeting a live region that only appears together with its first text. -->
-<p class="chat-typing" aria-live="polite">{label}</p>
+     meeting a live region that only appears together with its first text.
+     Names in it may carry emoji, drawn like everywhere else. -->
+<p class="chat-typing" aria-live="polite"><EmojiText text={label} /></p>
 
 <style>
   /* Sits in the top padding right above the message field, so the composer

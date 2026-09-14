@@ -1,4 +1,5 @@
 <script lang="ts">
+  import EmojiText from '$lib/shared/chat/EmojiText.svelte';
   import { fetchAccountDeletionPreview, requestAccountDeletion, type AccountDeletionPreview } from '$lib/api/auth';
   import { clearSession, expectSessionEnd } from '$lib/features/auth/session.svelte';
   import { Button, Dialog } from '$lib/shared/ui';
@@ -83,11 +84,13 @@
           <span class="settings-field-label">Ваши постоянные комнаты через {graceDays} дней</span>
           {#each preview.rooms as room (room.roomId)}
             <div class="delete-account-room">
-              <strong>{room.name || 'Комната без названия'}</strong>
+              <strong><EmojiText text={room.name || 'Комната без названия'} /></strong>
               <small>
-                {room.heir
-                  ? `перейдёт к ${room.heir.displayName || room.heir.login} — самому давнему участнику`
-                  : 'удалится: других участников нет'}
+                <EmojiText
+                  text={room.heir
+                    ? `перейдёт к ${room.heir.displayName || room.heir.login} — самому давнему участнику`
+                    : 'удалится: других участников нет'}
+                  />
               </small>
             </div>
           {/each}

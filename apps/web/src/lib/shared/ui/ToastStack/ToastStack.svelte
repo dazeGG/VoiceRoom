@@ -1,4 +1,5 @@
 <script lang="ts">
+  import EmojiText from '$lib/shared/chat/EmojiText.svelte';
   import { Bell, Check, CircleAlert, Info, TriangleAlert, X } from '@lucide/svelte';
   import { iconXs } from '$lib/shared/ui/icons';
   import type { ToastStackProps } from './types';
@@ -20,7 +21,7 @@
           {:else if toast.variant === 'info'}<Info {...iconXs} />
           {:else}<Bell {...iconXs} />{/if}
         </span>
-        <span class="ui-toast-copy"><strong class="ui-toast-message">{toast.message}</strong>{#if toast.description}<span class="ui-toast-description">{toast.description}</span>{/if}</span>
+        <span class="ui-toast-copy"><strong class="ui-toast-message"><EmojiText text={toast.message} /></strong>{#if toast.description}<span class="ui-toast-description">{toast.description}</span>{/if}</span>
         {#if toast.actions?.length}
           <div class="ui-toast-actions">
             {#each toast.actions as action}

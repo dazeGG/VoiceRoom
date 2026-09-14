@@ -407,7 +407,8 @@ button.chat-msg-author {
 .chat-msg-edit-input {
   width: 100%;
   min-height: 54px;
-  resize: vertical;
+  max-height: 180px;
+  box-sizing: border-box;
   border: 1px solid rgba(255, 255, 255, 0.13);
   border-radius: 8px;
   outline: none;
@@ -518,10 +519,10 @@ button.chat-msg-author {
   margin-top: 5px;
 }
 
+/* The field grows with its text up to the cap, then scrolls. */
 .chat-rail-textarea {
-  resize: none;
+  box-sizing: border-box;
   overflow-y: auto;
-  height: 42px;
   min-height: 42px;
   max-height: 140px;
   line-height: 1.35;

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import EmojiText from '$lib/shared/chat/EmojiText.svelte';
   import { Maximize, Minimize, Volume2, VolumeX } from '@lucide/svelte';
   import { AvatarStack } from '$lib/shared/ui';
   import { handleScreenStageClick } from '../client/ui/screen-view';
@@ -66,7 +67,7 @@
   {#if meta}
     <div class="screen-meta" id="screenMeta">
       <span class="screen-meta-live" aria-hidden="true"></span>
-      <span class="screen-meta-title" id="screenMetaTitle">{meta.title}</span>
+      <span class="screen-meta-title" id="screenMetaTitle"><EmojiText text={meta.title} /></span>
       {#if meta.showSepProfile}
         <span class="screen-meta-sep" id="screenMetaSepProfile" aria-hidden="true">·</span>
       {/if}

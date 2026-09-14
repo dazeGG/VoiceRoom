@@ -1,4 +1,5 @@
 <script lang="ts">
+  import EmojiText from '$lib/shared/chat/EmojiText.svelte';
   import { untrack } from 'svelte';
   import { ChevronRight, LogIn, MessageSquare, MicOff, Users } from '@lucide/svelte';
   import { iconMd, iconSm } from '$lib/shared/ui/icons';
@@ -181,7 +182,7 @@
                 </div>
                 <div class="participant-copy">
                   <h2>
-                    <span class="participant-name">{peerName(peer)}</span>
+                    <span class="participant-name"><EmojiText text={peerName(peer)} /></span>
                     <span class="participant-muted-icon" aria-label="Микрофон выключен" title="Микрофон выключен">
                       <MicOff {...iconSm} aria-hidden="true" />
                     </span>

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { linkPreviewImageUrl, type LinkPreview } from '@voice-room/shared/link-preview';
+  import EmojiText from './EmojiText.svelte';
 
   let { preview }: { preview: LinkPreview } = $props();
 
@@ -20,9 +21,9 @@
     />
   {/if}
   <span class="link-preview__text">
-    <span class="link-preview__site">{preview.siteName}</span>
-    {#if preview.title}<strong class="link-preview__title">{preview.title}</strong>{/if}
-    {#if preview.description}<span class="link-preview__description">{preview.description}</span>{/if}
+    <span class="link-preview__site"><EmojiText text={preview.siteName} /></span>
+    {#if preview.title}<strong class="link-preview__title"><EmojiText text={preview.title} /></strong>{/if}
+    {#if preview.description}<span class="link-preview__description"><EmojiText text={preview.description} /></span>{/if}
   </span>
 </a>
 

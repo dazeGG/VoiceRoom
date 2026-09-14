@@ -1,4 +1,5 @@
 <script lang="ts">
+  import EmojiText from './EmojiText.svelte';
   import { onMount } from 'svelte';
   import Emoji from './Emoji.svelte';
   import type { ReactionStore } from './reaction-store.svelte';
@@ -42,9 +43,9 @@
           {#if reactor.avatarUrl}
             <img src={reactor.avatarUrl} alt="" width="28" height="28" />
           {:else}
-            <span class="avatar" aria-hidden="true">{reactor.displayName.slice(0, 1).toUpperCase()}</span>
+            <span class="avatar" aria-hidden="true">{(reactor.displayName.match(/[\p{L}\p{N}]/u)?.[0] ?? '?').toUpperCase()}</span>
           {/if}
-          <span>{reactor.displayName}</span>
+          <span><EmojiText text={reactor.displayName} /></span>
         </li>
       {/each}
     </ul>

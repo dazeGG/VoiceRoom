@@ -1,4 +1,5 @@
 <script lang="ts">
+  import EmojiText from '$lib/shared/chat/EmojiText.svelte';
   // Collapsed strip above the chat body. Collapsed it is just a count; expanded
   // it lists the pinned messages newest-first, each jumping to the message.
   import { ChevronDown, Pin, X } from '@lucide/svelte';
@@ -49,7 +50,7 @@
         {#each roomPins.pins as pin (pin.messageId)}
           <li class="pinned-bar-item">
             <button class="pinned-bar-jump" type="button" onclick={() => onJump(pin.messageId)}>
-              <span class="pinned-bar-author">{pin.author.name || 'Участник'}</span>
+              <span class="pinned-bar-author"><EmojiText text={pin.author.name || 'Участник'} /></span>
               <span class="pinned-bar-text">{preview(pin.text)}</span>
             </button>
             {#if canUnpin}

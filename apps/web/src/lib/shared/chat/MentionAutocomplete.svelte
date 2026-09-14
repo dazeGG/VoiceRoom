@@ -1,4 +1,5 @@
 <script lang="ts">
+  import EmojiText from './EmojiText.svelte';
   // Picking who to mention is picking a person, so the row carries the face
   // alongside both names: two people can share a display name, and the login is
   // what actually goes into the message.
@@ -27,7 +28,7 @@
         size={28}
       />
       <span class="mention-names">
-        <span class="mention-name">{label(member)}</span>
+        <span class="mention-name"><EmojiText text={label(member)} /></span>
         <small>@{member.login}{member.role === 'owner' ? ' · Создатель' : ''}</small>
       </span>
     </button>

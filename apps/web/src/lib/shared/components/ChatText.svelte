@@ -1,4 +1,5 @@
 <script lang="ts">
+  import EmojiText from '$lib/shared/chat/EmojiText.svelte';
   import { parseChatLinks } from '$lib/shared/utils/linkify';
 
   let { text = '' }: { text?: string } = $props();
@@ -10,7 +11,7 @@
   {#if seg.kind === 'link' && seg.href}
     <a href={seg.href} target="_blank" rel="noopener noreferrer nofollow">{seg.text}</a>
   {:else}
-    {seg.text}
+    <EmojiText text={seg.text} />
   {/if}
 {/each}
 
