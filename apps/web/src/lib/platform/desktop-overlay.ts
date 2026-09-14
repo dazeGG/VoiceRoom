@@ -4,6 +4,9 @@ export const OVERLAY_ANCHORS = ['top-left', 'top-right', 'bottom-left', 'bottom-
 export type OverlayAnchor = (typeof OVERLAY_ANCHORS)[number];
 
 export interface DesktopOverlayParticipant {
+  avatarAccent?: string;
+  avatarColorKey?: string;
+  avatarUrl?: string;
   id: string;
   name: string;
   micMuted: boolean;
@@ -17,9 +20,19 @@ export interface DesktopOverlaySettings {
   opacity: number;
   anchor: OverlayAnchor;
   showParticipants: boolean;
+  showNames: boolean;
   showControls: boolean;
   clickThrough: boolean;
   interactiveBinding: HotkeyBinding | null;
+  allowedExecutables: string[];
+}
+
+export interface DesktopOverlayForeground {
+  exe: string;
+  game: boolean;
+  label: string;
+  reason: string;
+  title: string;
 }
 
 export type DesktopOverlayPatch = Partial<DesktopOverlaySettings>;
@@ -35,9 +48,11 @@ const DEFAULT_SETTINGS: DesktopOverlaySettings = {
     metaKey: false,
     shiftKey: false
   },
-  opacity: 0.92,
-  showControls: true,
-  showParticipants: true
+  opacity: 0.45,
+  showControls: false,
+  showNames: true,
+  showParticipants: true,
+  allowedExecutables: []
 };
 
 function getBridge(): Window['voiceRoomDesktopOverlay'] | undefined {
@@ -66,7 +81,7 @@ function normalizeBinding(value: unknown): HotkeyBinding | null {
 function clampOpacity(value: unknown): number {
   const numeric = typeof value === 'number' ? value : Number.parseFloat(String(value));
   if (!Number.isFinite(numeric)) return DEFAULT_SETTINGS.opacity;
-  return Math.min(1, Math.max(0.4, numeric));
+  return Math.min(1, Math.max(0.2, numeric));
 }
 
 export function normalizeOverlaySettings(value: unknown): DesktopOverlaySettings | null {
@@ -80,8 +95,12 @@ export function normalizeOverlaySettings(value: unknown): DesktopOverlaySettings
       ? normalizeBinding(source.interactiveBinding)
       : DEFAULT_SETTINGS.interactiveBinding,
     opacity: clampOpacity(source.opacity),
-    showControls: source.showControls !== false,
-    showParticipants: source.showParticipants !== false
+    showControls: source.showControls === true,
+    showNames: source.showNames !== false,
+    showParticipants: source.showParticipants !== false,
+    allowedExecutables: Array.isArray(source.allowedExecutables)
+      ? source.allowedExecutables.filter((item): item is string => typeof item === 'string' && Boolean(item))
+      : []
   };
 }
 
@@ -111,8 +130,10 @@ export async function updateDesktopOverlaySettings(
   if (typeof patch.opacity === 'number') payload.opacity = clampOpacity(patch.opacity);
   if (isAnchor(patch.anchor)) payload.anchor = patch.anchor;
   if (typeof patch.showParticipants === 'boolean') payload.showParticipants = patch.showParticipants;
+  if (typeof patch.showNames === 'boolean') payload.showNames = patch.showNames;
   if (typeof patch.showControls === 'boolean') payload.showControls = patch.showControls;
   if (typeof patch.clickThrough === 'boolean') payload.clickThrough = patch.clickThrough;
+  if (Array.isArray(patch.allowedExecutables)) payload.allowedExecutables = patch.allowedExecutables;
   if (patch.interactiveBinding === null || (patch.interactiveBinding && typeof patch.interactiveBinding === 'object')) {
     payload.interactiveBinding = patch.interactiveBinding;
   }
@@ -133,6 +154,51 @@ export async function previewDesktopOverlay(): Promise<boolean> {
   } catch (error) {
     console.warn('Desktop overlay preview failed', error);
     return false;
+  }
+}
+
+function normalizeForeground(value: unknown): DesktopOverlayForeground | null {
+  if (!value || typeof value !== 'object') return null;
+  const source = value as Record<string, unknown>;
+  return {
+    exe: typeof source.exe === 'string' ? source.exe : '',
+    game: source.game === true,
+    label: typeof source.label === 'string' ? source.label : '',
+    reason: typeof source.reason === 'string' ? source.reason : '',
+    title: typeof source.title === 'string' ? source.title : ''
+  };
+}
+
+export async function readDesktopOverlayForeground(): Promise<DesktopOverlayForeground | null> {
+  const bridge = getBridge();
+  if (!bridge?.getForeground) return null;
+  try {
+    return normalizeForeground(await bridge.getForeground());
+  } catch (error) {
+    console.warn('Desktop overlay foreground read failed', error);
+    return null;
+  }
+}
+
+export async function addDesktopOverlayGame(exe?: string): Promise<DesktopOverlaySettings | null> {
+  const bridge = getBridge();
+  if (!bridge?.addGame) return null;
+  try {
+    return normalizeOverlaySettings(await bridge.addGame(exe));
+  } catch (error) {
+    console.warn('Desktop overlay add game failed', error);
+    return null;
+  }
+}
+
+export async function removeDesktopOverlayGame(exe: string): Promise<DesktopOverlaySettings | null> {
+  const bridge = getBridge();
+  if (!bridge?.removeGame) return null;
+  try {
+    return normalizeOverlaySettings(await bridge.removeGame(exe));
+  } catch (error) {
+    console.warn('Desktop overlay remove game failed', error);
+    return null;
   }
 }
 
