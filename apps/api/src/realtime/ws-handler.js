@@ -5,6 +5,7 @@ const {
   normalizeRoomId,
   normalizeSessionToken
 } = require('@voice-room/shared/validation');
+const { normalizeTypingActivity } = require('@voice-room/shared/realtime');
 const { buildServerEnvelope, buildServerErrorEnvelope, parseInboundMessage } = require('./envelope');
 
 function createWsHandler({
@@ -24,24 +25,24 @@ function createWsHandler({
   // Direct typing notices reach only a friend when neither side blocked the
   // other. The check is cached per connection and thread for a short while so
   // a burst of typing costs one lookup, and a notice goes out at most once a
-  // second per thread.
+  // second per thread and activity.
   const DM_TYPING_FORWARD_MIN_MS = 1000;
   const DM_TYPING_PERMISSION_TTL_MS = 30_000;
 
-  async function forwardDirectTyping(connection, peerId) {
+  async function forwardDirectTyping(connection, peerId, activity = 'typing') {
     if (!connection.userId || peerId === connection.userId) return;
     connection.dmTyping ??= new Map();
-    const entry = connection.dmTyping.get(peerId) || { allowed: false, checkedAt: -Infinity, forwardedAt: -Infinity };
+    const entry = connection.dmTyping.get(peerId) || { allowed: false, checkedAt: -Infinity, forwardedAt: new Map() };
     connection.dmTyping.set(peerId, entry);
-    if (now() - entry.forwardedAt < DM_TYPING_FORWARD_MIN_MS) return;
+    if (now() - (entry.forwardedAt.get(activity) ?? -Infinity) < DM_TYPING_FORWARD_MIN_MS) return;
     if (now() - entry.checkedAt >= DM_TYPING_PERMISSION_TTL_MS) {
       entry.allowed = Boolean(await canTypeToUser(connection.userId, peerId));
       entry.checkedAt = now();
       if (connection.closed) return;
     }
     if (!entry.allowed) return;
-    entry.forwardedAt = now();
-    registry.sendToUser(peerId, buildServerEnvelope('dm.typing', { userId: connection.userId }));
+    entry.forwardedAt.set(activity, now());
+    registry.sendToUser(peerId, buildServerEnvelope('dm.typing', { userId: connection.userId, activity }));
   }
 
   function enqueueMessage(connection, task) {
@@ -134,12 +135,16 @@ function createWsHandler({
     }
 
     if (envelope.type === 'room.chat.typing') {
-      await roomRuntime.broadcastRoomTyping(connection, normalizeRoomId(envelope.payload.roomId));
+      await roomRuntime.broadcastRoomTyping(
+        connection,
+        normalizeRoomId(envelope.payload.roomId),
+        normalizeTypingActivity(envelope.payload.activity) || 'typing'
+      );
       return;
     }
 
     if (envelope.type === 'dm.typing') {
-      await forwardDirectTyping(connection, envelope.payload.userId);
+      await forwardDirectTyping(connection, envelope.payload.userId, normalizeTypingActivity(envelope.payload.activity) || 'typing');
       return;
     }
 

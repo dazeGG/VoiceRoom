@@ -587,15 +587,18 @@ function createRoomRealtimeRuntime(deps) {
     return typist;
   }
 
-  async function broadcastRoomTyping(connection, roomId) {
+  // Each activity has its own once-a-second budget, so closing the emoji picker
+  // and typing again is announced right away instead of a second later.
+  async function broadcastRoomTyping(connection, roomId, activity = 'typing') {
     if (connection.closed || !roomId) return false;
-    const forwardedAt = connection.typingForwardedAt?.get(roomId) ?? 0;
+    const throttleKey = `${roomId}:${activity}`;
+    const forwardedAt = connection.typingForwardedAt?.get(throttleKey) ?? 0;
     if (now() - forwardedAt < TYPING_FORWARD_MIN_MS) return false;
     const typist = await typistForConnection(connection, roomId);
     if (!typist || connection.closed) return false;
     connection.typingForwardedAt ??= new Map();
-    connection.typingForwardedAt.set(roomId, now());
-    broadcastRoomDetail(roomId, buildServerEnvelope('room.chat.typing', { roomId, typist }), { except: connection });
+    connection.typingForwardedAt.set(throttleKey, now());
+    broadcastRoomDetail(roomId, buildServerEnvelope('room.chat.typing', { roomId, typist, activity }), { except: connection });
     return true;
   }
 
