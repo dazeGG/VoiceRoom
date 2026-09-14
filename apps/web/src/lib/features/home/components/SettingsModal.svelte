@@ -55,11 +55,9 @@
   import {
     addDesktopOverlayGame,
     desktopOverlayAvailable,
-    previewDesktopOverlay,
     readDesktopOverlayForeground,
     readDesktopOverlaySettings,
     removeDesktopOverlayGame,
-    setDesktopOverlaySuspended,
     updateDesktopOverlaySettings,
     type DesktopOverlayForeground,
     type DesktopOverlayPatch,
@@ -162,18 +160,9 @@
   let autostartSaving = $state(false);
   let overlayAvailable = $state(false);
   let overlayEnabled = $state(true);
-  let overlayOpacity = $state(50);
   let overlayAnchor = $state<OverlayAnchor>('top-left');
   let overlayAvatarSize = $state<OverlayAvatarSize>('medium');
   let overlayShowNames = $state(true);
-  let overlayClickThrough = $state(true);
-  let overlayHotkey = $state<HotkeyBinding | null>({
-    altKey: false,
-    code: 'Backquote',
-    ctrlKey: true,
-    metaKey: false,
-    shiftKey: false
-  });
   let overlaySaving = $state(false);
   let overlayPending: DesktopOverlayPatch | null = null;
   let overlayAllowed = $state<string[]>([]);
@@ -283,12 +272,9 @@
 
   function applyOverlaySettings(settings: DesktopOverlaySettings): void {
     overlayEnabled = settings.enabled;
-    overlayOpacity = Math.round(settings.opacity * 100);
     overlayAnchor = settings.anchor;
     overlayAvatarSize = settings.avatarSize;
     overlayShowNames = settings.showNames;
-    overlayClickThrough = settings.clickThrough;
-    overlayHotkey = settings.interactiveBinding;
     overlayAllowed = settings.allowedExecutables;
   }
 
@@ -297,8 +283,8 @@
     if (settings) applyOverlaySettings(settings);
   }
 
-  // A slider drag sends a patch per step. Merge patches that arrive mid-save so the
-  // last value always lands, and only sync the UI back once nothing is queued.
+  // Changes can arrive while one is still saving. Merge them so the last value always
+  // lands, and only sync the UI back once nothing is queued.
   async function changeOverlay(patch: DesktopOverlayPatch): Promise<void> {
     overlayPending = { ...(overlayPending ?? {}), ...patch };
     if (overlaySaving) return;
@@ -320,9 +306,8 @@
     }
   }
 
-  async function previewOverlay(): Promise<void> {
-    if (await previewDesktopOverlay()) onToast('Оверлей на 8 секунд. Если его не видно — игра в exclusive fullscreen.');
-    else onToast('Не удалось показать оверлей', { variant: 'error' });
+  function executableName(exe: string): string {
+    return exe.split(/[\\/]/).pop() || exe;
   }
 
   async function addOverlayGame(): Promise<void> {
@@ -1126,65 +1111,6 @@
                 </div>
 
                 <div class="settings-notification-dependent" data-disabled={!overlayEnabled}>
-                  <span class="settings-field-label">Последнее окно</span>
-                  <div class="settings-gate-hint">
-                    {#if overlayForeground?.exe}
-                      {overlayForeground.label}{#if overlayForeground.title} — {overlayForeground.title}{/if}
-                      {#if overlayForeground.game} · это игра
-                      {:else} · не игра
-                      {/if}
-                    {:else}
-                      Пока пусто. Переключитесь в игру и вернитесь сюда — Voice Room запомнит её окно.
-                    {/if}
-                  </div>
-                  {#if overlayForeground?.exe && !overlayForeground.game}
-                    <button
-                      class="settings-unblock-button"
-                      type="button"
-                      disabled={overlaySaving || !overlayEnabled}
-                      onclick={() => void addOverlayGame()}
-                    >
-                      Добавить как игру
-                    </button>
-                  {/if}
-                  {#if overlayAllowed.length}
-                    <div class="settings-gate-hint">Добавленные вручную:</div>
-                    {#each overlayAllowed as exe (exe)}
-                      <div class="settings-gate-head">
-                        <span class="settings-gate-hint">{exe}</span>
-                        <button
-                          class="settings-unblock-button"
-                          type="button"
-                          disabled={overlaySaving || !overlayEnabled}
-                          onclick={() => void removeOverlayGame(exe)}
-                        >
-                          Убрать
-                        </button>
-                      </div>
-                    {/each}
-                  {/if}
-                </div>
-
-                <div class="settings-notification-dependent" data-disabled={!overlayEnabled}>
-                  <div class="settings-sound-head">
-                    <span class="settings-field-label">Видимость молчащих</span>
-                    <output class="settings-sound-value">{overlayOpacity}%</output>
-                  </div>
-                  <Slider
-                    bind:value={overlayOpacity}
-                    min={20}
-                    max={100}
-                    defaultValue={50}
-                    step={1}
-                    disabled={!overlayEnabled}
-                    ariaLabel="Видимость молчащих участников"
-                    ariaValueText={`${overlayOpacity}%`}
-                    onValueChange={(value) => void changeOverlay({ opacity: value / 100 })}
-                  />
-                  <div class="settings-gate-hint">Кто говорит, виден полностью. Остальные — с этой видимостью.</div>
-                </div>
-
-                <div class="settings-notification-dependent" data-disabled={!overlayEnabled}>
                   <span class="settings-field-label">Положение</span>
                   <Select
                     bind:value={overlayAnchor}
@@ -1235,46 +1161,53 @@
                   <div class="settings-gate-hint">Если выключить, в игре останутся только аватары.</div>
                 </div>
 
-                <div class="settings-notification-dependent" data-disabled={!overlayEnabled}>
-                  <div class="settings-gate-head">
-                    <span class="settings-field-label">Клики проходят в игру</span>
-                    <button
-                      class="settings-switch"
-                      type="button"
-                      role="switch"
-                      aria-checked={overlayClickThrough}
-                      aria-label="Клики проходят в игру"
-                      disabled={overlaySaving || !overlayEnabled}
-                      onclick={() => void changeOverlay({ clickThrough: !overlayClickThrough })}
-                    >
-                      <span class="settings-switch-knob" aria-hidden="true"></span>
-                    </button>
+                <section
+                  class="settings-overlay-games"
+                  data-disabled={!overlayEnabled}
+                  aria-labelledby="overlayGamesTitle"
+                >
+                  <span class="settings-field-label" id="overlayGamesTitle">Последнее окно</span>
+                  <div class="settings-overlay-window">
+                    {#if overlayForeground?.exe}
+                      <div class="settings-overlay-window-text">
+                        <span class="settings-overlay-window-name">{overlayForeground.title || overlayForeground.label}</span>
+                        <span class="settings-overlay-window-exe">{overlayForeground.label}</span>
+                      </div>
+                      {#if overlayForeground.game}
+                        <span class="settings-overlay-window-status">Игра</span>
+                      {:else}
+                        <button
+                          class="settings-overlay-add"
+                          type="button"
+                          disabled={overlaySaving || !overlayEnabled}
+                          onclick={() => void addOverlayGame()}
+                        >
+                          Добавить как игру
+                        </button>
+                      {/if}
+                    {:else}
+                      <span class="settings-overlay-window-empty">Переключитесь в игру и вернитесь сюда — здесь появится её окно.</span>
+                    {/if}
                   </div>
-                  <div class="settings-gate-hint">Пока включено, мышь идёт в игру сквозь аватары.</div>
-                </div>
-
-                <div class="settings-notification-dependent" data-disabled={!overlayEnabled}>
-                  <span class="settings-field-label">Клавиша оверлея</span>
-                  <HotkeyRecorder
-                    bind:value={overlayHotkey}
-                    disabled={overlaySaving || !overlayEnabled}
-                    ariaLabel="Клавиша оверлея"
-                    onRecordingChange={(recording) => void setDesktopOverlaySuspended(recording)}
-                    onValueChange={(value) => void changeOverlay({ interactiveBinding: value })}
-                  />
-                  <div class="settings-gate-hint">По умолчанию Ctrl+`. В игре затемняет экран и показывает всех участников звонка плитками. Повторное нажатие или Esc — обратно в игру. Нужен модификатор, как у остальных глобальных сочетаний.</div>
-                </div>
-
-                <div class="settings-notification-dependent" data-disabled={!overlayEnabled}>
-                  <button
-                    class="settings-unblock-button"
-                    type="button"
-                    disabled={overlaySaving || !overlayEnabled}
-                    onclick={() => void previewOverlay()}
-                  >
-                    Показать оверлей сейчас
-                  </button>
-                </div>
+                  {#if overlayAllowed.length}
+                    <ul class="settings-overlay-allowed" aria-label="Игры, добавленные вручную">
+                      {#each overlayAllowed as exe (exe)}
+                        <li class="settings-overlay-allowed-item" title={exe}>
+                          <span>{executableName(exe)}</span>
+                          <button
+                            class="settings-overlay-remove"
+                            type="button"
+                            aria-label={`Убрать ${executableName(exe)}`}
+                            disabled={overlaySaving || !overlayEnabled}
+                            onclick={() => void removeOverlayGame(exe)}
+                          >
+                            <X {...iconSm} aria-hidden="true" />
+                          </button>
+                        </li>
+                      {/each}
+                    </ul>
+                  {/if}
+                </section>
               {/if}
 
               {#if autostartAvailable}

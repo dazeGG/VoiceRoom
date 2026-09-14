@@ -814,6 +814,140 @@
   opacity: 0.6;
 }
 
+/* Desktop overlay: the last window before Voice Room, offered as a game. */
+.settings-overlay-games {
+  padding-top: 18px;
+  border-top: 1px solid color-mix(in oklch, var(--warm-faint), transparent 82%);
+  transition: opacity 0.16s ease;
+}
+
+.settings-overlay-games[data-disabled='true'] {
+  opacity: 0.48;
+}
+
+.settings-overlay-window {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 54px;
+  padding: 8px 8px 8px 14px;
+  border: 1px solid color-mix(in oklch, var(--warm-faint), transparent 84%);
+  border-radius: var(--radius-md);
+  background: color-mix(in oklch, var(--panel-strong), transparent 45%);
+}
+
+.settings-overlay-window-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.settings-overlay-window-name,
+.settings-overlay-window-exe {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-overlay-window-name {
+  color: var(--warm-ink);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.settings-overlay-window-exe {
+  color: var(--warm-faint);
+  font-size: 12px;
+}
+
+.settings-overlay-window-empty {
+  padding: 6px 0;
+  color: var(--warm-faint);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.settings-overlay-window-status {
+  flex: none;
+  margin-right: 6px;
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  background: color-mix(in oklch, var(--green), transparent 86%);
+  color: var(--green);
+  font: 700 12px var(--font-ui);
+}
+
+.settings-overlay-add {
+  flex: none;
+  min-height: 36px;
+  padding: 0 14px;
+  border: none;
+  border-radius: 11px;
+  background: var(--green);
+  color: oklch(20% 0.05 150);
+  font: 700 12.5px var(--font-ui);
+  cursor: pointer;
+  transition: filter 0.15s ease;
+}
+
+.settings-overlay-add:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.settings-overlay-add:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.settings-overlay-allowed {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.settings-overlay-allowed-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  max-width: 100%;
+  min-height: 28px;
+  padding: 0 3px 0 11px;
+  border-radius: var(--radius-pill);
+  background: color-mix(in oklch, var(--panel-strong), transparent 25%);
+  color: var(--warm-ink);
+  font-size: 12px;
+}
+
+.settings-overlay-allowed-item > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-overlay-remove {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--warm-faint);
+  cursor: pointer;
+}
+
+.settings-overlay-remove:hover:not(:disabled) {
+  background: color-mix(in oklch, var(--coral), transparent 84%);
+  color: var(--coral);
+}
+
 @media (max-width: 820px) {
   .settings-sound-devices,
   .settings-notification-targets,
