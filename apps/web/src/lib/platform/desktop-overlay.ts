@@ -1,5 +1,3 @@
-import type { HotkeyBinding } from '$lib/shared/ui/HotkeyRecorder/types';
-
 export const OVERLAY_ANCHORS = ['top-left', 'top-right', 'bottom-left', 'bottom-right'] as const;
 export type OverlayAnchor = (typeof OVERLAY_ANCHORS)[number];
 export const OVERLAY_AVATAR_SIZES = ['small', 'medium', 'large'] as const;
@@ -15,18 +13,16 @@ export interface DesktopOverlayParticipant {
   outputMuted: boolean;
   self: boolean;
   speaking: boolean;
+  streaming: boolean;
 }
 
+// The overlay always lets clicks through and always fades silent participants,
+// so only these preferences are configurable.
 export interface DesktopOverlaySettings {
   enabled: boolean;
-  opacity: number;
   anchor: OverlayAnchor;
   avatarSize: OverlayAvatarSize;
-  showParticipants: boolean;
   showNames: boolean;
-  showControls: boolean;
-  clickThrough: boolean;
-  interactiveBinding: HotkeyBinding | null;
   allowedExecutables: string[];
 }
 
@@ -43,19 +39,8 @@ export type DesktopOverlayPatch = Partial<DesktopOverlaySettings>;
 const DEFAULT_SETTINGS: DesktopOverlaySettings = {
   anchor: 'top-left',
   avatarSize: 'medium',
-  clickThrough: true,
   enabled: true,
-  interactiveBinding: {
-    altKey: false,
-    code: 'Backquote',
-    ctrlKey: true,
-    metaKey: false,
-    shiftKey: false
-  },
-  opacity: 0.5,
-  showControls: false,
   showNames: true,
-  showParticipants: true,
   allowedExecutables: []
 };
 
@@ -72,41 +57,14 @@ function isAvatarSize(value: unknown): value is OverlayAvatarSize {
   return typeof value === 'string' && (OVERLAY_AVATAR_SIZES as readonly string[]).includes(value);
 }
 
-function normalizeBinding(value: unknown): HotkeyBinding | null {
-  if (value === null) return null;
-  if (!value || typeof value !== 'object') return DEFAULT_SETTINGS.interactiveBinding;
-  const source = value as Record<string, unknown>;
-  if (typeof source.code !== 'string' || !source.code) return DEFAULT_SETTINGS.interactiveBinding;
-  return {
-    altKey: source.altKey === true,
-    code: source.code,
-    ctrlKey: source.ctrlKey === true,
-    metaKey: source.metaKey === true,
-    shiftKey: source.shiftKey === true
-  };
-}
-
-function clampOpacity(value: unknown): number {
-  const numeric = typeof value === 'number' ? value : Number.parseFloat(String(value));
-  if (!Number.isFinite(numeric)) return DEFAULT_SETTINGS.opacity;
-  return Math.min(1, Math.max(0.2, numeric));
-}
-
 export function normalizeOverlaySettings(value: unknown): DesktopOverlaySettings | null {
   if (!value || typeof value !== 'object') return null;
   const source = value as Record<string, unknown>;
   return {
     anchor: isAnchor(source.anchor) ? source.anchor : DEFAULT_SETTINGS.anchor,
     avatarSize: isAvatarSize(source.avatarSize) ? source.avatarSize : DEFAULT_SETTINGS.avatarSize,
-    clickThrough: source.clickThrough !== false,
     enabled: source.enabled !== false,
-    interactiveBinding: Object.hasOwn(source, 'interactiveBinding')
-      ? normalizeBinding(source.interactiveBinding)
-      : DEFAULT_SETTINGS.interactiveBinding,
-    opacity: clampOpacity(source.opacity),
-    showControls: source.showControls === true,
     showNames: source.showNames !== false,
-    showParticipants: source.showParticipants !== false,
     allowedExecutables: Array.isArray(source.allowedExecutables)
       ? source.allowedExecutables.filter((item): item is string => typeof item === 'string' && Boolean(item))
       : []
@@ -136,34 +94,15 @@ export async function updateDesktopOverlaySettings(
   if (!bridge?.setSettings) return null;
   const payload: DesktopOverlayPatch = {};
   if (typeof patch.enabled === 'boolean') payload.enabled = patch.enabled;
-  if (typeof patch.opacity === 'number') payload.opacity = clampOpacity(patch.opacity);
   if (isAnchor(patch.anchor)) payload.anchor = patch.anchor;
   if (isAvatarSize(patch.avatarSize)) payload.avatarSize = patch.avatarSize;
-  if (typeof patch.showParticipants === 'boolean') payload.showParticipants = patch.showParticipants;
   if (typeof patch.showNames === 'boolean') payload.showNames = patch.showNames;
-  if (typeof patch.showControls === 'boolean') payload.showControls = patch.showControls;
-  if (typeof patch.clickThrough === 'boolean') payload.clickThrough = patch.clickThrough;
   if (Array.isArray(patch.allowedExecutables)) payload.allowedExecutables = patch.allowedExecutables;
-  if (patch.interactiveBinding === null || (patch.interactiveBinding && typeof patch.interactiveBinding === 'object')) {
-    payload.interactiveBinding = patch.interactiveBinding;
-  }
   try {
     return normalizeOverlaySettings(await bridge.setSettings(payload));
   } catch (error) {
     console.warn('Desktop overlay settings update failed', error);
     return null;
-  }
-}
-
-export async function previewDesktopOverlay(): Promise<boolean> {
-  const bridge = getBridge();
-  if (!bridge?.preview) return false;
-  try {
-    await bridge.preview();
-    return true;
-  } catch (error) {
-    console.warn('Desktop overlay preview failed', error);
-    return false;
   }
 }
 
@@ -209,16 +148,6 @@ export async function removeDesktopOverlayGame(exe: string): Promise<DesktopOver
   } catch (error) {
     console.warn('Desktop overlay remove game failed', error);
     return null;
-  }
-}
-
-export async function setDesktopOverlaySuspended(suspended: boolean): Promise<void> {
-  const bridge = getBridge();
-  if (!bridge?.setSuspended) return;
-  try {
-    await bridge.setSuspended(Boolean(suspended));
-  } catch (error) {
-    console.warn('Desktop overlay hotkey suspend failed', error);
   }
 }
 
