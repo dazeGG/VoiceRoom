@@ -54,11 +54,15 @@
     type DesktopAutostartSettings
   } from '$lib/platform/desktop-autostart';
   import {
+    addDesktopOverlayGame,
     desktopOverlayAvailable,
     previewDesktopOverlay,
+    readDesktopOverlayForeground,
     readDesktopOverlaySettings,
+    removeDesktopOverlayGame,
     setDesktopOverlaySuspended,
     updateDesktopOverlaySettings,
+    type DesktopOverlayForeground,
     type DesktopOverlayPatch,
     type DesktopOverlaySettings,
     type OverlayAnchor
@@ -155,10 +159,9 @@
   let autostartSaving = $state(false);
   let overlayAvailable = $state(false);
   let overlayEnabled = $state(true);
-  let overlayOpacity = $state(92);
+  let overlayOpacity = $state(45);
   let overlayAnchor = $state<OverlayAnchor>('top-left');
-  let overlayShowParticipants = $state(true);
-  let overlayShowControls = $state(true);
+  let overlayShowNames = $state(true);
   let overlayClickThrough = $state(true);
   let overlayHotkey = $state<HotkeyBinding | null>({
     altKey: false,
@@ -168,6 +171,9 @@
     shiftKey: false
   });
   let overlaySaving = $state(false);
+  let overlayPending: DesktopOverlayPatch | null = null;
+  let overlayAllowed = $state<string[]>([]);
+  let overlayForeground = $state<DesktopOverlayForeground | null>(null);
   let diagnosticsAvailable = $state(false);
   let confirmRoomSwitch = $state(true);
   let masterVolume = $state(100);
@@ -228,6 +234,24 @@
     confirmRoomSwitch = readRoomSwitchConfirmEnabled();
   });
 
+  $effect(() => {
+    if (!open || !overlayAvailable) {
+      overlayForeground = null;
+      return;
+    }
+    let cancelled = false;
+    async function tick(): Promise<void> {
+      const next = await readDesktopOverlayForeground();
+      if (!cancelled) overlayForeground = next;
+    }
+    void tick();
+    const timer = window.setInterval(() => { void tick(); }, 1000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  });
+
   function toggleRoomSwitchConfirm(): void {
     confirmRoomSwitch = !confirmRoomSwitch;
     writeRoomSwitchConfirmEnabled(confirmRoomSwitch);
@@ -257,10 +281,10 @@
     overlayEnabled = settings.enabled;
     overlayOpacity = Math.round(settings.opacity * 100);
     overlayAnchor = settings.anchor;
-    overlayShowParticipants = settings.showParticipants;
-    overlayShowControls = settings.showControls;
+    overlayShowNames = settings.showNames;
     overlayClickThrough = settings.clickThrough;
     overlayHotkey = settings.interactiveBinding;
+    overlayAllowed = settings.allowedExecutables;
   }
 
   async function loadOverlaySettings(): Promise<void> {
@@ -268,13 +292,24 @@
     if (settings) applyOverlaySettings(settings);
   }
 
+  // A slider drag sends a patch per step. Merge patches that arrive mid-save so the
+  // last value always lands, and only sync the UI back once nothing is queued.
   async function changeOverlay(patch: DesktopOverlayPatch): Promise<void> {
+    overlayPending = { ...(overlayPending ?? {}), ...patch };
     if (overlaySaving) return;
     overlaySaving = true;
     try {
-      const settings = await updateDesktopOverlaySettings(patch);
-      if (settings) applyOverlaySettings(settings);
-      if (!settings) onToast('Не удалось сохранить оверлей', { variant: 'error' });
+      while (overlayPending) {
+        const next: DesktopOverlayPatch = overlayPending;
+        overlayPending = null;
+        const settings = await updateDesktopOverlaySettings(next);
+        if (!settings) {
+          onToast('Не удалось сохранить оверлей', { variant: 'error' });
+          if (!overlayPending) await loadOverlaySettings();
+          continue;
+        }
+        if (!overlayPending) applyOverlaySettings(settings);
+      }
     } finally {
       overlaySaving = false;
     }
@@ -283,6 +318,18 @@
   async function previewOverlay(): Promise<void> {
     if (await previewDesktopOverlay()) onToast('Оверлей на 8 секунд. Если его не видно — игра в exclusive fullscreen.');
     else onToast('Не удалось показать оверлей', { variant: 'error' });
+  }
+
+  async function addOverlayGame(): Promise<void> {
+    const settings = await addDesktopOverlayGame(overlayForeground?.exe);
+    if (settings) applyOverlaySettings(settings);
+    else onToast('Не удалось добавить игру', { variant: 'error' });
+  }
+
+  async function removeOverlayGame(exe: string): Promise<void> {
+    const settings = await removeDesktopOverlayGame(exe);
+    if (settings) applyOverlaySettings(settings);
+    else onToast('Не удалось убрать игру', { variant: 'error' });
   }
 
   async function changeAutostart(patch: DesktopAutostartPatch): Promise<void> {
@@ -1089,27 +1136,68 @@
                     </button>
                   </div>
                   <div class="settings-gate-hint">
-                    Компактная панель поверх <strong>оконного и borderless</strong> режима, пока Voice Room в фоне и вы в голосе.
-                    В exclusive fullscreen Windows отдаёт монитор игре — оверлей там не появится. Поставьте в игре «Без рамки» / Fullscreen Windowed.
+                    Панель только поверх <strong>игры</strong> в оконном или borderless режиме: Steam, Epic, Riot, Xbox и то, что вы добавите ниже. Браузер, проводник и лаунчеры не считаются игрой.
+                    В exclusive fullscreen Windows отдаёт монитор игре — оверлея там не будет.
                   </div>
                 </div>
 
                 <div class="settings-notification-dependent" data-disabled={!overlayEnabled}>
+                  <span class="settings-field-label">Последнее окно</span>
+                  <div class="settings-gate-hint">
+                    {#if overlayForeground?.exe}
+                      {overlayForeground.label}{#if overlayForeground.title} — {overlayForeground.title}{/if}
+                      {#if overlayForeground.game} · это игра
+                      {:else} · не игра
+                      {/if}
+                    {:else}
+                      Пока пусто. Переключитесь в игру и вернитесь сюда — Voice Room запомнит её окно.
+                    {/if}
+                  </div>
+                  {#if overlayForeground?.exe && !overlayForeground.game}
+                    <button
+                      class="settings-unblock-button"
+                      type="button"
+                      disabled={overlaySaving || !overlayEnabled}
+                      onclick={() => void addOverlayGame()}
+                    >
+                      Добавить как игру
+                    </button>
+                  {/if}
+                  {#if overlayAllowed.length}
+                    <div class="settings-gate-hint">Добавленные вручную:</div>
+                    {#each overlayAllowed as exe (exe)}
+                      <div class="settings-gate-head">
+                        <span class="settings-gate-hint">{exe}</span>
+                        <button
+                          class="settings-unblock-button"
+                          type="button"
+                          disabled={overlaySaving || !overlayEnabled}
+                          onclick={() => void removeOverlayGame(exe)}
+                        >
+                          Убрать
+                        </button>
+                      </div>
+                    {/each}
+                  {/if}
+                </div>
+
+                <div class="settings-notification-dependent" data-disabled={!overlayEnabled}>
                   <div class="settings-sound-head">
-                    <span class="settings-field-label">Прозрачность</span>
+                    <span class="settings-field-label">Видимость молчащих</span>
                     <output class="settings-sound-value">{overlayOpacity}%</output>
                   </div>
                   <Slider
                     bind:value={overlayOpacity}
-                    min={40}
+                    min={20}
                     max={100}
-                    defaultValue={92}
+                    defaultValue={45}
                     step={1}
-                    disabled={overlaySaving || !overlayEnabled}
-                    ariaLabel="Прозрачность оверлея"
+                    disabled={!overlayEnabled}
+                    ariaLabel="Видимость молчащих участников"
                     ariaValueText={`${overlayOpacity}%`}
                     onValueChange={(value) => void changeOverlay({ opacity: value / 100 })}
                   />
+                  <div class="settings-gate-hint">Кто говорит, виден полностью. Остальные — с этой видимостью.</div>
                 </div>
 
                 <div class="settings-notification-dependent" data-disabled={!overlayEnabled}>
@@ -1131,36 +1219,20 @@
 
                 <div class="settings-notification-dependent" data-disabled={!overlayEnabled}>
                   <div class="settings-gate-head">
-                    <span class="settings-field-label">Кто говорит</span>
+                    <span class="settings-field-label">Имена участников</span>
                     <button
                       class="settings-switch"
                       type="button"
                       role="switch"
-                      aria-checked={overlayShowParticipants}
-                      aria-label="Показывать участников"
+                      aria-checked={overlayShowNames}
+                      aria-label="Имена участников"
                       disabled={overlaySaving || !overlayEnabled}
-                      onclick={() => void changeOverlay({ showParticipants: !overlayShowParticipants })}
+                      onclick={() => void changeOverlay({ showNames: !overlayShowNames })}
                     >
                       <span class="settings-switch-knob" aria-hidden="true"></span>
                     </button>
                   </div>
-                </div>
-
-                <div class="settings-notification-dependent" data-disabled={!overlayEnabled}>
-                  <div class="settings-gate-head">
-                    <span class="settings-field-label">Кнопки микрофона и звука</span>
-                    <button
-                      class="settings-switch"
-                      type="button"
-                      role="switch"
-                      aria-checked={overlayShowControls}
-                      aria-label="Кнопки оверлея"
-                      disabled={overlaySaving || !overlayEnabled}
-                      onclick={() => void changeOverlay({ showControls: !overlayShowControls })}
-                    >
-                      <span class="settings-switch-knob" aria-hidden="true"></span>
-                    </button>
-                  </div>
+                  <div class="settings-gate-hint">Если выключить, в игре останутся только аватары.</div>
                 </div>
 
                 <div class="settings-notification-dependent" data-disabled={!overlayEnabled}>
