@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -81,18 +81,21 @@ test('what is new follows the last seen release, not recovery codes', () => {
 
 test('what is new is a few short story slides that wait for the reader', () => {
   const dialog = read('src/lib/features/home/components/WhatsNewDialog.svelte');
-  const scene = read('src/lib/features/home/components/WhatsNewScene.svelte');
   const model = read('src/lib/features/home/model/whats-new.ts');
-  const slides = [...model.matchAll(/\{ scene: '(\w+)', title: '([^']+)', text: '([^']+)'/g)];
+  const slides = [...model.matchAll(/\{\s*image: '([^']+)',\s*alt: '([^']+)',\s*title: '([^']+)',\s*text: '([^']+)'/g)];
 
   assert.ok(slides.length >= 2 && slides.length <= 4, `expected 2–4 slides, got ${slides.length}`);
-  for (const [, id, title, text] of slides) {
+  for (const [, image, alt, title, text] of slides) {
     assert.ok(title.length <= 32, `"${title}" is too long for a slide title`);
     assert.ok(text.length <= 90, `"${text}" is more than a line of slide text`);
-    assert.match(scene, new RegExp(`scene === '${id}'`), `the ${id} slide has no picture`);
+    assert.ok(alt.length > 10, `the ${image} picture needs a description`);
+    // Screenshots of the real app, served from static and kept light.
+    assert.match(image, /^\/whats-new\/\d+\.\d+\.\d+\/[a-z-]+\.webp$/);
+    const file = join(webRoot, 'static', image);
+    assert.ok(existsSync(file), `${image} is missing from static`);
+    assert.ok(statSync(file).size <= 150 * 1024, `${image} is heavier than 150 KB`);
   }
-  // The pictures are illustrations only.
-  assert.match(scene, /<div class="scene" inert aria-hidden="true">/);
+  assert.match(dialog, /<img\s+class="stories-image"[^>]*src=\{slide\.image\}[^>]*alt=\{slide\.alt\}/);
   // Stories pause while read and do not flick through under reduced motion.
   assert.match(dialog, /animation-play-state: paused/);
   assert.match(dialog, /matchMedia\('\(prefers-reduced-motion: reduce\)'\)/);
