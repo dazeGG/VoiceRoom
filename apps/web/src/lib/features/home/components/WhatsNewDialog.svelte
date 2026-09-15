@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { KeyRound, LockKeyhole, MonitorSmartphone } from '@lucide/svelte';
+  import { KeyRound, Link, MonitorSmartphone, PenLine, ShieldAlert, SmilePlus, UserX } from '@lucide/svelte';
   import { onMount } from 'svelte';
   import { fetchWhatsNew, markWhatsNewSeen } from '$lib/api/auth';
   import { Button, Dialog } from '$lib/shared/ui';
@@ -11,7 +11,11 @@
   const ICONS: Record<WhatsNewIcon, typeof KeyRound> = {
     devices: MonitorSmartphone,
     key: KeyRound,
-    password: LockKeyhole
+    signin: ShieldAlert,
+    deletion: UserX,
+    emoji: SmilePlus,
+    drafts: PenLine,
+    links: Link
   };
 
   let due = $state(false);
