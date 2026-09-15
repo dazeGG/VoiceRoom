@@ -4,7 +4,6 @@
   import { Button } from '$lib/shared/ui';
   import { dialogFocusTrap } from '$lib/shared/ui/focus-trap';
   import { WHATS_NEW_SLIDES, WHATS_NEW_SLIDE_MS, shouldShowWhatsNew } from '../model/whats-new';
-  import WhatsNewScene from './WhatsNewScene.svelte';
 
   let { paused = false, onOpenSecurity } = $props<{ paused?: boolean; onOpenSecurity: () => void }>();
 
@@ -31,7 +30,10 @@
     let cancelled = false;
     void fetchWhatsNew()
       .then((state) => {
-        if (!cancelled && shouldShowWhatsNew(state)) due = true;
+        if (cancelled || !shouldShowWhatsNew(state)) return;
+        // Every picture is fetched up front, so a slide never opens on an empty frame.
+        for (const item of WHATS_NEW_SLIDES) new Image().src = item.image;
+        due = true;
       })
       .catch(() => {
         // The announcement is optional; a failed check must not get in the way.
@@ -133,7 +135,7 @@
       onpointerleave={(event) => onHover(event, false)}
     >
       <div class="stories-progress" aria-hidden="true">
-        {#each WHATS_NEW_SLIDES as item, i (item.scene)}
+        {#each WHATS_NEW_SLIDES as item, i (item.image)}
           <span class="stories-segment">
             {#if i < index || (i === index && (ended || reducedMotion))}
               <span class="stories-fill stories-fill--full"></span>
@@ -166,7 +168,14 @@
       >
         {#key index}
           <div class="stories-slide">
-            <WhatsNewScene scene={slide.scene} />
+            <img
+              class="stories-image"
+              src={slide.image}
+              alt={slide.alt}
+              width="1088"
+              height="816"
+              draggable="false"
+            />
             <h2 class="stories-title" id="whatsNewSlideTitle">{slide.title}</h2>
             <p class="stories-text" id="whatsNewSlideText">{slide.text}</p>
           </div>
@@ -206,7 +215,7 @@
   }
 
   .stories-card {
-    width: min(420px, 100%);
+    width: min(520px, 100%);
     padding: 14px 16px 16px;
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: var(--radius-xl);
@@ -293,6 +302,19 @@
 
   .stories-slide {
     animation: stories-in 220ms ease-out;
+  }
+
+  /* A screenshot of the real app, framed like the surfaces around it. */
+  .stories-image {
+    display: block;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 4 / 3;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: var(--radius-lg);
+    background: var(--panel);
+    object-fit: cover;
+    user-select: none;
   }
 
   @keyframes stories-in {
