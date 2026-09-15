@@ -42,6 +42,7 @@
     class:emoji-inline={inline} style:--emoji-size={box}
     src={url}
     alt={decorative ? '' : emoji}
+    data-emoji={emoji}
     draggable="false"
     loading="lazy"
     decoding="async"
@@ -60,9 +61,12 @@
 
   /* In running text: a little larger than the letters and resting on the line
      rather than floating above it, with a hair of space from its neighbours. */
+  /* Selectable like the letters around it, so a selection that crosses it
+     copies it too (see emoji-copy.ts). */
   .emoji-inline {
     margin: 0 0.05em 0 0.1em;
     vertical-align: -0.3em;
+    user-select: auto;
   }
 
   /* The platform font is the last resort, so it has to land on the same box. */
