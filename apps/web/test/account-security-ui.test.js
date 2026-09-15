@@ -70,13 +70,34 @@ test('what is new follows the last seen release, not recovery codes', () => {
   const model = read('src/lib/features/home/model/whats-new.ts');
   const lobby = read('src/lib/features/home/LobbyPage.svelte');
 
-  assert.match(dialog, /title="Что нового в Voice Room"/);
+  assert.match(dialog, /Что нового в Voice Room/);
   assert.doesNotMatch(dialog, /\d+\.\d+\.\d+/);
   assert.doesNotMatch(dialog, /recoveryCodes|RecoveryCodes/);
   assert.match(dialog, /void markWhatsNewSeen\(\)/);
   assert.match(model, /state\.current === WHATS_NEW_VERSION && hasUnseenWhatsNew\(state\.lastSeen, state\.current\)/);
   // The security question about a new sign-in outranks the release announcement.
   assert.match(lobby, /<WhatsNewDialog paused=\{loginAlertOpen\} onOpenSecurity=\{\(\) => openSecuritySettings\(\)\} \/>/);
+});
+
+test('what is new is a few short story slides that wait for the reader', () => {
+  const dialog = read('src/lib/features/home/components/WhatsNewDialog.svelte');
+  const scene = read('src/lib/features/home/components/WhatsNewScene.svelte');
+  const model = read('src/lib/features/home/model/whats-new.ts');
+  const slides = [...model.matchAll(/\{ scene: '(\w+)', title: '([^']+)', text: '([^']+)'/g)];
+
+  assert.ok(slides.length >= 2 && slides.length <= 4, `expected 2–4 slides, got ${slides.length}`);
+  for (const [, id, title, text] of slides) {
+    assert.ok(title.length <= 32, `"${title}" is too long for a slide title`);
+    assert.ok(text.length <= 90, `"${text}" is more than a line of slide text`);
+    assert.match(scene, new RegExp(`scene === '${id}'`), `the ${id} slide has no picture`);
+  }
+  // The pictures are illustrations only.
+  assert.match(scene, /<div class="scene" inert aria-hidden="true">/);
+  // Stories pause while read and do not flick through under reduced motion.
+  assert.match(dialog, /animation-play-state: paused/);
+  assert.match(dialog, /matchMedia\('\(prefers-reduced-motion: reduce\)'\)/);
+  assert.match(dialog, /i === index && \(ended \|\| reducedMotion\)/);
+  assert.match(dialog, /document\.hidden/);
 });
 
 test('a missing recovery codes reminder sits above the rooms, snoozes and highlights the action', () => {
