@@ -2,10 +2,12 @@
   import { linkPreviewImageUrl, type LinkPreview } from '@voice-room/shared/link-preview';
   import EmojiText from './EmojiText.svelte';
 
-  let { preview }: { preview: LinkPreview } = $props();
+  // imageSrc stands in for the stored copy where there is none to show, such as
+  // the sample card in the release announcement.
+  let { preview, imageSrc = null }: { preview: LinkPreview; imageSrc?: string | null } = $props();
 
   // The image is the copy the server stored, never the linked site's own file.
-  const imageUrl = $derived(preview.image ? linkPreviewImageUrl(preview.image.key) : null);
+  const imageUrl = $derived(imageSrc ?? (preview.image ? linkPreviewImageUrl(preview.image.key) : null));
 </script>
 
 <!-- A compact card that sits under the message rather than taking it over: the
