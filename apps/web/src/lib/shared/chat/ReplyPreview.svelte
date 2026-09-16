@@ -1,4 +1,5 @@
 <script lang="ts">
+  import EmojiText from './EmojiText.svelte';
   import type { ReplyTarget } from './reply-store.svelte';
 
   let {
@@ -27,13 +28,13 @@
     aria-label={`Перейти к сообщению${author ? ` от ${author}` : ''}`}
     onclick={jump}
   >
-    {#if author}<strong>{author}</strong>{/if}
-    <span>{text}</span>
+    {#if author}<strong><EmojiText text={author} /></strong>{/if}
+    <span><EmojiText text={text} /></span>
   </button>
 {:else}
   <div class="reply-preview" class:reply-preview-tombstone={preview.deleted} aria-label="Ответ на сообщение">
-    {#if author}<strong>{author}</strong>{/if}
-    <span>{text}</span>
+    {#if author}<strong><EmojiText text={author} /></strong>{/if}
+    <span><EmojiText text={text} /></span>
   </div>
 {/if}
 

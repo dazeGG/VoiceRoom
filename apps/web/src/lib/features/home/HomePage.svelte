@@ -54,7 +54,7 @@
   const showLobby = $derived(session.loaded && Boolean(user));
   const authMode = $derived.by<AuthMode | null>(() => {
     const requestedMode = page.url.searchParams.get('auth');
-    if (requestedMode === 'login' || requestedMode === 'register') return requestedMode;
+    if (requestedMode === 'login' || requestedMode === 'register' || requestedMode === 'recover') return requestedMode;
     return initialAuthMode;
   });
 

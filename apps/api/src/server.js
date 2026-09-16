@@ -36,8 +36,22 @@ const { getClientIp, createRateLimiter } = require('./lib/rate-limit');
 const { MAX_AVATAR_BYTES, createAvatarKey, processAvatar } = require('./lib/avatar-processing');
 const { reconcileAvatarStorage } = require('./lib/avatar-reconciliation');
 const { createAvatarStorage, validateAvatarKey } = require('./lib/avatar-storage');
+const { firstPreviewableUrl } = require('@voice-room/shared/link-preview');
+const { createLinkPreviewFetcher } = require('./lib/link-preview-fetcher');
+const { processLinkPreviewImage } = require('./lib/link-preview-image');
+const { createLinkPreviewStorage, reconcileLinkPreviewImages } = require('./lib/link-preview-storage');
+const { createLinkPreviewRepository } = require('./domains/link-previews/link-preview-repository');
+const { createLinkPreviewService } = require('./domains/link-previews/link-preview-service');
 const { avatarColorForPeerId, createRoomStore } = require('./lib/room-store');
-const { createUserStore, publicUser } = require('./lib/user-store');
+const { createUserStore, hashSessionToken, publicUser } = require('./lib/user-store');
+const { createGeoLocator } = require('./lib/geoip');
+const {
+  ACCOUNT_DELETION_GRACE_MS,
+  WHATS_NEW_VERSION,
+  formatRecoveryCode,
+  isDeletedAccountLogin
+} = require('@voice-room/shared/account-security');
+const { createAccountDeletionRepository } = require('./domains/account/account-deletion-repository');
 const { createFriendStore } = require('./lib/friend-store');
 const { createNotificationStore } = require('./lib/notification-store');
 const { createPushStore } = require('./lib/push-store');
@@ -124,11 +138,6 @@ const LIVEKIT_GATE_PUBLIC_URL = cleanLiveKitUrl(process.env.LIVEKIT_GATE_PUBLIC_
 const LIVEKIT_GATE_SECRET = (process.env.LIVEKIT_GATE_SECRET || '').trim();
 const ROOM_IDLE_TTL_MS = readEnvInt('ROOM_IDLE_TTL_MS', 900000, 1000);
 const ROOM_PRUNE_INTERVAL_MS = readEnvInt('ROOM_PRUNE_INTERVAL_MS', 60000, 0);
-// Room history is kept until a message or its room is deleted. Both limits
-// accept 0 as "no limit", which is the default: a room chat is a durable log,
-// not a rolling window. Set them to a positive value to re-enable trimming.
-const ROOM_CHAT_TTL_MS = readEnvInt('ROOM_CHAT_TTL_MS', 0, 0);
-const ROOM_CHAT_MAX_MESSAGES = readEnvInt('ROOM_CHAT_MAX_MESSAGES', 0, 0);
 const ROOM_CHAT_RATE_LIMIT = readEnvInt('ROOM_CHAT_RATE_LIMIT', 60, 0);
 const ROOM_CHAT_RATE_WINDOW_MS = readEnvInt('ROOM_CHAT_RATE_WINDOW_MS', 60000, 1000);
 const ROOM_CREATE_RATE_LIMIT = readEnvInt('ROOM_CREATE_RATE_LIMIT', 20, 0);
@@ -188,6 +197,10 @@ const readinessProvider = createRuntimeReadinessProvider({
 });
 const AUTH_RATE_LIMIT = readEnvInt('AUTH_RATE_LIMIT', 30, 0);
 const AUTH_RATE_WINDOW_MS = readEnvInt('AUTH_RATE_WINDOW_MS', 60000, 1000);
+const GEOIP_DB_PATH = String(process.env.GEOIP_DB_PATH || '').trim();
+// Close code for sockets whose account session was ended; clients stop
+// reconnecting and return to the sign-in screen instead.
+const SESSION_REVOKED_CLOSE_CODE = 4401;
 const DM_RATE_LIMIT = readEnvInt('DM_RATE_LIMIT', 30, 0);
 const DM_RATE_WINDOW_MS = readEnvInt('DM_RATE_WINDOW_MS', 10000, 1000);
 const FRIEND_REQUEST_RATE_LIMIT = readEnvInt('FRIEND_REQUEST_RATE_LIMIT', 20, 0);
@@ -207,6 +220,8 @@ const MAX_GUEST_STREAMS_PER_IP = readEnvInt('MAX_GUEST_STREAMS_PER_IP', 8, 1);
 const WS_MAX_PAYLOAD_BYTES = readEnvInt('WS_MAX_PAYLOAD_BYTES', 64 * 1024, 1024);
 const RETENTION_PURGE_INTERVAL_MS = readEnvInt('RETENTION_PURGE_INTERVAL_MS', 60 * 60 * 1000, 0);
 const RETENTION_KEEP_DELETED_MS = readEnvInt('RETENTION_KEEP_DELETED_MS', 30 * 24 * 60 * 60 * 1000, 60000);
+// Off unless configured: a link preview makes the API open a URL a user posted.
+const LINK_PREVIEWS_ENABLED = readEnvBool('LINK_PREVIEWS_ENABLED', false);
 const MESSAGE_DELIVERY_MODE = readMessageDeliveryMode();
 const MESSAGE_DIRECT_EMIT_ENABLED = MESSAGE_DELIVERY_MODE.directEmitEnabled;
 const MESSAGE_DELIVERY_LISTEN_ENABLED = readEnvBool('MESSAGE_DELIVERY_LISTEN_ENABLED', true);
@@ -225,6 +240,7 @@ function resolveRealtimeReconnectLeaseMs(env = process.env) {
 
 let roomStore = null;
 let userStore = null;
+let geoLocator = null;
 let friendStore = null;
 let friendStoreInviteExpiryEnabled = false;
 let notificationStore = null;
@@ -270,8 +286,6 @@ function createFastifyLoggerOptions(env = process.env) {
 function getRoomStore() {
   if (!roomStore) {
     roomStore = createRoomStore({
-      maxMessagesPerRoom: ROOM_CHAT_MAX_MESSAGES,
-      messageTtlMs: ROOM_CHAT_TTL_MS,
       roomIdleTtlMs: ROOM_IDLE_TTL_MS
     });
   }
@@ -283,6 +297,13 @@ function getUserStore() {
     userStore = createUserStore({ sessionTtlMs: SESSION_TTL_MS });
   }
   return userStore;
+}
+
+function getGeoLocator() {
+  if (!geoLocator) {
+    geoLocator = createGeoLocator({ databasePath: GEOIP_DB_PATH });
+  }
+  return geoLocator;
 }
 
 function getFriendStore() {
@@ -386,6 +407,16 @@ function getRelease250Pool() {
   if (!databaseUrl) return null;
   release250Pool = release250Pool || createRelease250Pool({ databaseUrl });
   return release250Pool;
+}
+
+let accountDeletionRepository = null;
+
+function getAccountDeletionRepository() {
+  if (accountDeletionRepository) return accountDeletionRepository;
+  const pool = getRelease250Pool();
+  if (!pool) return null;
+  accountDeletionRepository = createAccountDeletionRepository({ pool });
+  return accountDeletionRepository;
 }
 
 function getReactionServices() {
@@ -805,6 +836,66 @@ function getAvatarStorage() {
   return avatarStorage;
 }
 
+let linkPreviewStorage = null;
+let linkPreviewService = null;
+
+function getLinkPreviewStorage() {
+  if (!linkPreviewStorage) linkPreviewStorage = createLinkPreviewStorage();
+  return linkPreviewStorage;
+}
+
+function getLinkPreviewService() {
+  if (!LINK_PREVIEWS_ENABLED) return null;
+  if (linkPreviewService) return linkPreviewService;
+  const pool = getRelease250Pool();
+  if (!pool) return null;
+  linkPreviewService = createLinkPreviewService({
+    repository: createLinkPreviewRepository({ pool }),
+    fetcher: createLinkPreviewFetcher(),
+    storage: getLinkPreviewStorage(),
+    processImage: processLinkPreviewImage,
+    onRoomPreview: broadcastRoomLinkPreview,
+    onDirectPreview: broadcastDirectLinkPreview
+  });
+  return linkPreviewService;
+}
+
+// A preview reaches readers as an edit of the message, re-read in full so it
+// carries its attachments and reply quote like any other copy of it.
+async function broadcastRoomLinkPreview({ roomId, messageId }) {
+  const message = await getMessageService().room.getMessage(roomId, messageId);
+  if (!message) return;
+  const projected = await attachReplyProjection('room', await attachMediaProjection('room', message), { roomId });
+  roomRuntime?.broadcastRoomDetail?.(
+    roomId,
+    buildServerEnvelope('room.chat.edited', { roomId, message: publicChatMessage(projected) })
+  );
+}
+
+async function broadcastDirectLinkPreview({ messageId, senderId, recipientId }) {
+  const message = await getMessageService().direct.getMessage(senderId, recipientId, messageId);
+  if (!message) return;
+  const projected = await attachReplyProjection('dm', await attachMediaProjection('dm', message), {
+    userId: senderId,
+    peerId: recipientId
+  });
+  const event = { type: 'dm.message.edited', message: projected };
+  broadcastToUser(recipientId, event);
+  broadcastToUser(senderId, event);
+}
+
+// Previews are built after the reply was sent. A new message without a link
+// needs no work; an edit always does, because it may have removed the link.
+function scheduleRoomLinkPreview(roomId, messageId, text, { edited = false } = {}) {
+  if (!edited && !firstPreviewableUrl(text)) return;
+  getLinkPreviewService()?.scheduleRoomMessage({ roomId, messageId, text });
+}
+
+function scheduleDirectLinkPreview({ messageId, senderId, recipientId, text, edited = false }) {
+  if (!edited && !firstPreviewableUrl(text)) return;
+  getLinkPreviewService()?.scheduleDirectMessage({ messageId, senderId, recipientId, text });
+}
+
 function isUserOnline(userId) {
   return Boolean(wsRegistry?.isUserOnline(userId));
 }
@@ -831,7 +922,8 @@ async function queuePush(userId, payload, context = {}) {
   try {
     if (!getPushService().config.enabled) return;
     const preferences = await getNotificationStore().getPreferences(userId);
-    if (!shouldDeliverPush(preferences, context)) return;
+    // Security alerts reach the account even in do-not-disturb.
+    if (!context.ignorePreferences && !shouldDeliverPush(preferences, context)) return;
     const body = preferences.privateNotifications && payload.privateBody
       ? payload.privateBody
       : payload.body;
@@ -1035,7 +1127,51 @@ function getSessionToken(req) {
 async function resolveSessionUser(req) {
   const token = getSessionToken(req);
   if (!token) return null;
-  return getUserStore().getSessionUser(token);
+  return getUserStore().getSessionUser(token, Date.now(), {
+    userAgent: String(req.headers?.['user-agent'] || ''),
+    resolveLocation: () => getGeoLocator().locate(getClientIp(req, TRUST_PROXY))
+  });
+}
+
+// What the signed-in devices list shows about a new session. The IP is only
+// used for the local city/country lookup and is not stored.
+async function sessionDeviceFor(req) {
+  return {
+    userAgent: String(req.headers?.['user-agent'] || ''),
+    locationLabel: await getGeoLocator().locate(getClientIp(req, TRUST_PROXY))
+  };
+}
+
+function describeLoginDevice(alert) {
+  const device = [alert.client || 'Неизвестный браузер', alert.os].filter(Boolean).join(' · ');
+  return alert.location ? `${device}, ${alert.location}` : device;
+}
+
+// Records a sign-in and, when it comes from an unfamiliar device or city, asks
+// the account's other devices right away and by push. A failure here must not
+// fail the sign-in itself.
+async function recordAndAnnounceLogin({ userId, session, device, kind }) {
+  try {
+    const { alert } = await getUserStore().recordLogin({
+      userId,
+      sessionPublicId: session.publicId,
+      kind,
+      userAgent: device.userAgent,
+      locationLabel: device.locationLabel
+    });
+    if (!alert) return;
+    broadcastToUser(userId, { type: 'account.login.new', alert });
+    void queuePush(userId, {
+      type: 'account.login',
+      title: kind === 'recovery' ? 'Вход по коду восстановления' : 'Новый вход в аккаунт',
+      body: `${describeLoginDevice(alert)}. Если это были не вы, откройте Voice Room.`,
+      tag: `login-alert:${alert.id}`,
+      dedupeKey: `login-alert:${alert.id}`,
+      url: '/'
+    }, { ignorePreferences: true });
+  } catch (error) {
+    console.error('Failed to record a sign-in:', error);
+  }
 }
 
 async function resolveOptionalSessionUser(req) {
@@ -1185,6 +1321,20 @@ function startPruneTimer(server, logger = console) {
       .catch((error) => {
         logger.error('Session prune timer failed:', error);
       });
+    void observeMaintenance('login_event_prune', () => getUserStore().pruneLoginEvents())
+      .catch((error) => {
+        logger.error('Sign-in history prune timer failed:', error);
+      });
+    void observeMaintenance('account_deletion_finalize', () => finalizeDueAccountDeletions())
+      .catch((error) => {
+        logger.error('Account deletion timer failed:', error);
+      });
+    if (getLinkPreviewService()) {
+      void observeMaintenance('link_preview_prune', () => getLinkPreviewService().pruneExpired())
+        .catch((error) => {
+          logger.error('Link preview prune timer failed:', error);
+        });
+    }
     if (RETENTION_PURGE_INTERVAL_MS > 0 && getRoomStore().purgeDeleted) {
       void observeMaintenance('retention_purge', () => getRoomStore().purgeDeleted({ olderThanMs: RETENTION_KEEP_DELETED_MS }))
         .catch((error) => {
@@ -1443,6 +1593,7 @@ function publicChatMessage(message) {
     text: message.text,
     content: message.content,
     attachments: Array.isArray(message.attachments) ? message.attachments : [],
+    linkPreview: message.linkPreview || undefined,
     replyTo: message.replyTo,
     replyPreview: message.replyPreview
   };
@@ -1798,6 +1949,14 @@ async function handleDeleteRoom(req, res, roomId, request) {
     return;
   }
 
+  await finishRoomDeletion(roomId, { avatarKey: deleted.avatarKey, request });
+  sendJson(res, 200, { ok: true });
+}
+
+// Everything a room deletion does after the durable soft-delete: tell whoever
+// watches it, expire its invitations, drop every peer and its avatar. Shared by
+// the owner's delete and by rooms nobody inherits from a deleted account.
+async function finishRoomDeletion(roomId, { avatarKey = null, request = null } = {}) {
   // Broadcast after durable soft-delete, before presence teardown so the WS
   // writes are not racing socket close.
   const presence = presenceRooms.get(roomId);
@@ -1846,9 +2005,7 @@ async function handleDeleteRoom(req, res, roomId, request) {
     // Cleanup callbacks continue close/remove even when credential revoke fails.
     request?.log?.warn?.({ code: 'room_delete_peer_cleanup_failed' }, 'Room peer cleanup finished with errors');
   }
-  await removeAvatarBestEffort(deleted.avatarKey, request);
-
-  sendJson(res, 200, { ok: true });
+  await removeAvatarBestEffort(avatarKey, request);
 }
 
 async function handleRegister(req, res) {
@@ -1882,6 +2039,11 @@ async function handleRegister(req, res) {
     sendJson(res, 400, { ok: false, error: 'Пароли не совпадают' });
     return;
   }
+  // A deleted account's login stays taken, so nobody can pose as that person.
+  if (isDeletedAccountLogin(login) || await getAccountDeletionRepository()?.isLoginReserved(login)) {
+    sendJson(res, 409, { ok: false, error: 'Этот логин уже занят' });
+    return;
+  }
 
   const created = await getUserStore().createUser({ login, displayName, password });
   if (created.status === 'login_taken') {
@@ -1889,7 +2051,9 @@ async function handleRegister(req, res) {
     return;
   }
 
-  const session = await getUserStore().createSession({ userId: created.user.id });
+  const device = await sessionDeviceFor(req);
+  const session = await getUserStore().createSession({ userId: created.user.id, ...device });
+  await recordAndAnnounceLogin({ userId: created.user.id, session, device, kind: 'register' });
   sendJson(
     res,
     201,
@@ -1925,8 +2089,20 @@ async function handleLogin(req, res) {
     sendJson(res, 401, { ok: false, error: 'Неверный логин или пароль' });
     return;
   }
+  // The right password on an account waiting to be deleted offers a restore.
+  if (user.deletionRequestedAt) {
+    sendJson(res, 409, {
+      ok: false,
+      code: 'account_deletion_pending',
+      error: 'Аккаунт ожидает удаления',
+      deletionScheduledFor: user.deletionRequestedAt + ACCOUNT_DELETION_GRACE_MS
+    });
+    return;
+  }
 
-  const session = await getUserStore().createSession({ userId: user.id });
+  const device = await sessionDeviceFor(req);
+  const session = await getUserStore().createSession({ userId: user.id, ...device });
+  await recordAndAnnounceLogin({ userId: user.id, session, device, kind: 'login' });
   sendJson(
     res,
     200,
@@ -1939,6 +2115,7 @@ async function handleLogout(req, res) {
   const token = getSessionToken(req);
   if (token) {
     await getUserStore().deleteSession(token);
+    await endAccountSessionConnections({ tokenHashes: [hashSessionToken(token)] });
   }
   sendJson(res, 200, { ok: true }, { 'Set-Cookie': clearSessionCookie() });
 }
@@ -2154,8 +2331,343 @@ async function handleChangePassword(req, res) {
     return;
   }
 
+  await endAccountSessionConnections({ userId: session.user.id });
   sendJson(res, 200, { ok: true }, { 'Set-Cookie': clearSessionCookie() });
 }
+
+function sendTooManyAttempts(res, retryAfterSeconds) {
+  sendJson(
+    res,
+    429,
+    { ok: false, error: 'Слишком много попыток, попробуйте позже' },
+    { 'Retry-After': String(retryAfterSeconds) }
+  );
+}
+
+async function handleAccountSecurity(req, res) {
+  const session = await resolveSessionUser(req);
+  if (!session) {
+    sendJson(res, 401, { ok: false, error: 'Требуется вход' });
+    return;
+  }
+  const [recoveryCodes, notices] = await Promise.all([
+    getUserStore().getRecoveryCodesStatus(session.user.id),
+    getUserStore().getAccountNotices(session.user.id)
+  ]);
+  sendJson(res, 200, {
+    ok: true,
+    recoveryCodes,
+    recoveryCodesReminder: { snoozedUntil: notices.recoveryCodesReminderSnoozedUntil }
+  });
+}
+
+async function handleSnoozeRecoveryCodesReminder(req, res) {
+  const session = await resolveSessionUser(req);
+  if (!session) {
+    sendJson(res, 401, { ok: false, error: 'Требуется вход' });
+    return;
+  }
+  const result = await getUserStore().snoozeRecoveryCodesReminder({ userId: session.user.id });
+  if (result.status !== 'snoozed') {
+    sendJson(res, 404, { ok: false, error: 'Аккаунт не найден' });
+    return;
+  }
+  sendJson(res, 200, { ok: true, recoveryCodesReminder: { snoozedUntil: result.snoozedUntil } });
+}
+
+async function handleWhatsNew(req, res) {
+  const session = await resolveSessionUser(req);
+  if (!session) {
+    sendJson(res, 401, { ok: false, error: 'Требуется вход' });
+    return;
+  }
+  const notices = await getUserStore().getAccountNotices(session.user.id);
+  sendJson(res, 200, { ok: true, whatsNew: { current: WHATS_NEW_VERSION, lastSeen: notices.whatsNewSeen } });
+}
+
+async function handleMarkWhatsNewSeen(req, res) {
+  const session = await resolveSessionUser(req);
+  if (!session) {
+    sendJson(res, 401, { ok: false, error: 'Требуется вход' });
+    return;
+  }
+  const result = await getUserStore().markWhatsNewSeen({ userId: session.user.id });
+  if (result.status !== 'seen') {
+    sendJson(res, 404, { ok: false, error: 'Аккаунт не найден' });
+    return;
+  }
+  sendJson(res, 200, { ok: true, whatsNew: { current: WHATS_NEW_VERSION, lastSeen: result.whatsNewSeen } });
+}
+
+async function handleLoginAlerts(req, res) {
+  const session = await resolveSessionUser(req);
+  if (!session) {
+    sendJson(res, 401, { ok: false, error: 'Требуется вход' });
+    return;
+  }
+  const alerts = await getUserStore().listPendingLoginAlerts({
+    userId: session.user.id,
+    excludeSessionPublicId: session.session.publicId
+  });
+  sendJson(res, 200, { ok: true, alerts });
+}
+
+async function handleResolveLoginAlert(req, res, alertId, resolution) {
+  const session = await resolveSessionUser(req);
+  if (!session) {
+    sendJson(res, 401, { ok: false, error: 'Требуется вход' });
+    return;
+  }
+  const userId = session.user.id;
+  const result = await getUserStore().resolveLoginAlert({
+    userId,
+    alertId,
+    resolution,
+    currentSessionPublicId: session.session.publicId
+  });
+  if (result.status !== 'resolved') {
+    sendJson(res, 404, { ok: false, error: 'Вход не найден или на него уже ответили' });
+    return;
+  }
+  if (result.revokedTokenHash) {
+    await endAccountSessionConnections({ userId, tokenHashes: [result.revokedTokenHash] });
+  }
+  // Every other device showing the same question closes it.
+  broadcastToUser(userId, { type: 'account.login.resolved', alertId: String(alertId).toLowerCase(), resolution });
+  if (resolution === 'confirmed') {
+    sendJson(res, 200, { ok: true, resolution });
+    return;
+  }
+  sendJson(res, 200, {
+    ok: true,
+    resolution,
+    sessionEnded: Boolean(result.revokedTokenHash),
+    recoveryCodes: await getUserStore().getRecoveryCodesStatus(userId)
+  });
+}
+
+function sendAccountDeletionUnavailable(res) {
+  sendJson(res, 503, { ok: false, error: 'Удаление аккаунта сейчас недоступно' });
+}
+
+async function handleAccountDeletionPreview(req, res) {
+  const session = await resolveSessionUser(req);
+  if (!session) {
+    sendJson(res, 401, { ok: false, error: 'Требуется вход' });
+    return;
+  }
+  const repository = getAccountDeletionRepository();
+  if (!repository) {
+    sendAccountDeletionUnavailable(res);
+    return;
+  }
+  sendJson(res, 200, { ok: true, ...await repository.previewDeletion({ userId: session.user.id }) });
+}
+
+async function handleRequestAccountDeletion(req, res, request) {
+  const session = await resolveSessionUser(req);
+  if (!session) {
+    sendJson(res, 401, { ok: false, error: 'Требуется вход' });
+    return;
+  }
+  const repository = getAccountDeletionRepository();
+  if (!repository) {
+    sendAccountDeletionUnavailable(res);
+    return;
+  }
+  const userId = session.user.id;
+  const rate = authLimiter.check(`account-deletion:${userId}`);
+  if (!rate.allowed) {
+    sendTooManyAttempts(res, rate.retryAfterSeconds);
+    return;
+  }
+
+  const body = await readJsonBody(req);
+  const currentPassword = typeof body.currentPassword === 'string' ? body.currentPassword : '';
+  const result = await repository.requestDeletion({ userId, currentPassword });
+  if (result.status === 'invalid_password') {
+    sendJson(res, 400, { ok: false, error: 'Неверный пароль' });
+    return;
+  }
+  if (result.status === 'not_found') {
+    sendJson(res, 404, { ok: false, error: 'Аккаунт не найден' });
+    return;
+  }
+  if (result.status === 'already_requested') {
+    sendJson(res, 409, { ok: false, code: 'account_deletion_pending', error: 'Аккаунт уже ожидает удаления', deletionScheduledFor: result.scheduledFor });
+    return;
+  }
+
+  await endAccountSessionConnections({ userId });
+  // Friends' lists and open conversations switch to the anonymous name now.
+  const hidden = await getUserStore().getUserById(userId);
+  if (hidden) await broadcastUserProfileToFriends(hidden, request);
+  sendJson(res, 200, { ok: true, deletionScheduledFor: result.scheduledFor }, { 'Set-Cookie': clearSessionCookie() });
+}
+
+async function handleRestoreAccount(req, res, request) {
+  const repository = getAccountDeletionRepository();
+  if (!repository) {
+    sendAccountDeletionUnavailable(res);
+    return;
+  }
+  const rate = authLimiter.check(`restore:${getClientIp(req, TRUST_PROXY)}`);
+  if (!rate.allowed) {
+    sendTooManyAttempts(res, rate.retryAfterSeconds);
+    return;
+  }
+
+  const body = await readJsonBody(req);
+  const login = normalizeLogin(body.login);
+  const password = typeof body.password === 'string' ? body.password : '';
+  const result = login && password
+    ? await repository.restoreAccount({ login, password })
+    : { status: 'invalid', userId: null };
+  if (result.status === 'expired') {
+    sendJson(res, 410, { ok: false, error: 'Аккаунт уже удалён' });
+    return;
+  }
+  if (result.status !== 'restored') {
+    sendJson(res, 401, { ok: false, error: 'Неверный логин или пароль' });
+    return;
+  }
+
+  const user = await getUserStore().getUserById(result.userId);
+  const device = await sessionDeviceFor(req);
+  const session = await getUserStore().createSession({ userId: user.id, ...device });
+  await recordAndAnnounceLogin({ userId: user.id, session, device, kind: 'login' });
+  await broadcastUserProfileToFriends(user, request);
+  sendJson(
+    res,
+    200,
+    { ok: true, user: publicUser(user) },
+    { 'Set-Cookie': buildSessionCookie(session.token, SESSION_TTL_MS / 1000) }
+  );
+}
+
+async function handleListSessions(req, res) {
+  const session = await resolveSessionUser(req);
+  if (!session) {
+    sendJson(res, 401, { ok: false, error: 'Требуется вход' });
+    return;
+  }
+  const sessions = await getUserStore().listSessions({
+    userId: session.user.id,
+    currentTokenHash: session.session.tokenHash
+  });
+  sendJson(res, 200, { ok: true, sessions });
+}
+
+async function handleRevokeSession(req, res, sessionId) {
+  const session = await resolveSessionUser(req);
+  if (!session) {
+    sendJson(res, 401, { ok: false, error: 'Требуется вход' });
+    return;
+  }
+  const publicId = typeof sessionId === 'string' ? sessionId.toLowerCase() : '';
+  if (publicId && publicId === String(session.session.publicId).toLowerCase()) {
+    sendJson(res, 400, { ok: false, error: 'Чтобы завершить этот сеанс, выйдите из аккаунта' });
+    return;
+  }
+  const result = await getUserStore().revokeSession({ userId: session.user.id, publicId });
+  if (result.status !== 'revoked') {
+    sendJson(res, 404, { ok: false, error: 'Сеанс не найден' });
+    return;
+  }
+  await endAccountSessionConnections({ userId: session.user.id, tokenHashes: [result.tokenHash] });
+  sendJson(res, 200, { ok: true });
+}
+
+async function handleRevokeOtherSessions(req, res) {
+  const session = await resolveSessionUser(req);
+  if (!session) {
+    sendJson(res, 401, { ok: false, error: 'Требуется вход' });
+    return;
+  }
+  const result = await getUserStore().revokeOtherSessions({
+    userId: session.user.id,
+    keepTokenHash: session.session.tokenHash
+  });
+  await endAccountSessionConnections({ userId: session.user.id, tokenHashes: result.tokenHashes });
+  sendJson(res, 200, { ok: true, revoked: result.tokenHashes.length });
+}
+
+async function handleGenerateRecoveryCodes(req, res) {
+  const session = await resolveSessionUser(req);
+  if (!session) {
+    sendJson(res, 401, { ok: false, error: 'Требуется вход' });
+    return;
+  }
+  // The password is the only secret guarding this, exactly as for a password change.
+  const rate = authLimiter.check(`recovery-codes:${session.user.id}`);
+  if (!rate.allowed) {
+    sendTooManyAttempts(res, rate.retryAfterSeconds);
+    return;
+  }
+
+  const body = await readJsonBody(req);
+  const currentPassword = typeof body.currentPassword === 'string' ? body.currentPassword : '';
+  const result = await getUserStore().generateRecoveryCodes({ userId: session.user.id, currentPassword });
+  if (result.status === 'not_found') {
+    sendJson(res, 404, { ok: false, error: 'Аккаунт не найден' });
+    return;
+  }
+  if (result.status === 'invalid_password') {
+    sendJson(res, 400, { ok: false, error: 'Неверный пароль' });
+    return;
+  }
+  sendJson(
+    res,
+    200,
+    {
+      ok: true,
+      codes: result.codes.map(formatRecoveryCode),
+      recoveryCodes: { remaining: result.codes.length, generatedAt: result.generatedAt }
+    },
+    { 'Cache-Control': 'no-store' }
+  );
+}
+
+async function handleRecoverAccount(req, res) {
+  const clientIp = getClientIp(req, TRUST_PROXY);
+  const ipRate = authLimiter.check(`recover:${clientIp}`);
+  if (!ipRate.allowed) {
+    sendTooManyAttempts(res, ipRate.retryAfterSeconds);
+    return;
+  }
+
+  const body = await readJsonBody(req);
+  const login = normalizeLogin(body.login);
+  // Keyed on the login too, so spreading guesses across addresses does not help.
+  const loginRate = login ? authLimiter.check(`recover-login:${login}`) : ipRate;
+  if (!loginRate.allowed) {
+    sendTooManyAttempts(res, loginRate.retryAfterSeconds);
+    return;
+  }
+  const newPassword = typeof body.newPassword === 'string' ? body.newPassword : '';
+  if (!isValidPassword(newPassword)) {
+    sendJson(res, 400, { ok: false, error: 'Пароль должен быть не короче 8 символов' });
+    return;
+  }
+
+  const result = await getUserStore().recoverWithCode({ login, code: body.code, newPassword });
+  if (result.status !== 'recovered') {
+    sendJson(res, 401, { ok: false, error: 'Неверный логин или код восстановления' });
+    return;
+  }
+
+  await endAccountSessionConnections({ userId: result.user.id });
+  const device = await sessionDeviceFor(req);
+  const session = await getUserStore().createSession({ userId: result.user.id, ...device });
+  await recordAndAnnounceLogin({ userId: result.user.id, session, device, kind: 'recovery' });
+  sendJson(
+    res,
+    200,
+    { ok: true, user: publicUser(result.user), recoveryCodes: { remaining: result.remaining } },
+    { 'Set-Cookie': buildSessionCookie(session.token, SESSION_TTL_MS / 1000) }
+  );
+}
+
 
 function publicLobbyRoom(room) {
   const result = {
@@ -2240,6 +2752,29 @@ async function handleGetAvatar(res, key) {
   } catch (error) {
     if (error instanceof TypeError || error?.code === 'ENOENT') {
       sendJson(res, 404, { ok: false, error: 'Avatar not found' });
+      return;
+    }
+    throw error;
+  }
+  res.writeHead(200, {
+    ...baseHeaders(),
+    'Cache-Control': 'public, max-age=31536000, immutable',
+    'Content-Type': 'image/webp'
+  });
+  stream.pipe(res);
+}
+
+async function handleGetLinkPreviewImage(res, key) {
+  let stream;
+  try {
+    stream = getLinkPreviewStorage().createReadStream(key);
+    await new Promise((resolve, reject) => {
+      stream.once('open', resolve);
+      stream.once('error', reject);
+    });
+  } catch (error) {
+    if (error instanceof TypeError || error?.code === 'ENOENT') {
+      sendJson(res, 404, { ok: false, error: 'Image not found' });
       return;
     }
     throw error;
@@ -2603,7 +3138,6 @@ async function handleRoomChatPost(req, res, roomId) {
   const now = Date.now();
   const message = await getMessageService().room.appendMessage(roomId, {
     createdAt: now,
-    expiresAt: ROOM_CHAT_TTL_MS > 0 ? now + ROOM_CHAT_TTL_MS : null,
     id: crypto.randomUUID?.() || crypto.randomBytes(16).toString('hex'),
     avatarColorKey,
     name,
@@ -2708,6 +3242,7 @@ async function handleRoomChatPost(req, res, roomId) {
       : activePeer?.avatarUrl || null
   };
   if (!message.idempotencyReplay && MESSAGE_DIRECT_EMIT_ENABLED) roomRuntime?.broadcastChatMessage(roomId, publicMessage);
+  if (!message.idempotencyReplay) scheduleRoomLinkPreview(roomId, message.id, text);
   sendJson(res, 201, { ok: true, message: publicChatMessage(publicMessage) });
 }
 
@@ -2873,6 +3408,69 @@ async function finalizeModeratedPeers(
 
 async function disconnectModeratedPeer(room, peer, type, { gateAlreadyRevoked = false } = {}) {
   await finalizeModeratedPeers(room, [peer], type, { gateAlreadyRevoked });
+}
+
+// Accounts waiting to be deleted, and deleted ones, can no longer be written to
+// or invited anywhere.
+function isActiveAccount(user) {
+  return Boolean(user && !user.deletionRequestedAt && !user.deletedAt);
+}
+
+// Finishes deletions whose grace period is over: rooms go to their heirs, rooms
+// nobody inherits are torn down like an owner's delete, and the avatar file goes.
+async function finalizeDueAccountDeletions(now = Date.now()) {
+  const repository = getAccountDeletionRepository();
+  if (!repository) return 0;
+  let finished = 0;
+  for (const userId of await repository.listDueDeletions({ now })) {
+    try {
+      const result = await repository.finalizeDeletion({ userId, now });
+      if (result.status !== 'deleted') continue;
+      finished += 1;
+      await removeAvatarBestEffort(result.avatarKey);
+      for (const { roomId } of result.transferredRooms) {
+        const room = await getRoomStore().getRoom(roomId);
+        if (room) broadcastRoomUpdate(roomId, room);
+      }
+      for (const { roomId, avatarKey } of result.deletedRooms) {
+        await finishRoomDeletion(roomId, { avatarKey });
+      }
+    } catch (error) {
+      console.error('Failed to finish an account deletion:', error);
+    }
+  }
+  return finished;
+}
+
+// An ended account session also loses what it still holds open: its sockets stop
+// receiving account events and its voice seat goes at once, not when the LiveKit
+// token expires. Only that peer's gate credentials are revoked, so the account's
+// other devices stay connected, even in the same room. Without token hashes
+// every socket of the account is closed (the password was replaced); without an
+// account id the hashes alone pick the sockets (sign-out).
+async function endAccountSessionConnections({ userId = null, tokenHashes = null }) {
+  if (!wsRegistry || (!userId && !Array.isArray(tokenHashes))) return;
+  const targets = wsRegistry.findAccountConnections(userId, tokenHashes);
+  for (const connection of targets) {
+    const activeVoice = connection.activeVoice;
+    if (!activeVoice?.roomId || !activeVoice.peerId) continue;
+    try {
+      const peer = presenceRooms.get(activeVoice.roomId)?.peers.get(activeVoice.peerId);
+      const principal = peer ? liveKitGatePrincipalForPeer(activeVoice.roomId, peer) : null;
+      if (principal) {
+        await getRoomStore().revokeLiveKitGateCredentialsForPeer({
+          roomId: activeVoice.roomId,
+          peerId: activeVoice.peerId,
+          principal
+        });
+      }
+      await roomRuntime?.leaveVoiceRoom(connection, activeVoice);
+      await removeLiveKitParticipant(activeVoice.roomId, activeVoice.peerId);
+    } catch (error) {
+      console.error('Failed to end voice for an ended account session:', error);
+    }
+  }
+  wsRegistry.closeConnections(targets, SESSION_REVOKED_CLOSE_CODE, 'Session ended');
 }
 
 async function handleKickRoomPeer(req, res, roomId) {
@@ -3447,6 +4045,10 @@ async function handleSendDm(req, res, peerId) {
     sendJson(res, 403, { ok: false, code: 'relationship_blocked', error: 'Сообщение недоступно' });
     return;
   }
+  if (!isActiveAccount(await getUserStore().getUserById(id))) {
+    sendJson(res, 403, { ok: false, code: 'account_deleted', error: 'Аккаунт удалён' });
+    return;
+  }
 
   const body = await readJsonBody(req);
   const text = cleanDmText(body.text);
@@ -3538,6 +4140,9 @@ async function handleSendDm(req, res, peerId) {
     broadcastToUser(id, { type: 'dm-message', message });
     await broadcastDmNotification(id, user, message);
     broadcastToUser(user.id, { type: 'dm-message', message });
+  }
+  if (!storedMessage.idempotencyReplay) {
+    scheduleDirectLinkPreview({ messageId: storedMessage.id, senderId: user.id, recipientId: id, text });
   }
   sendJson(res, 201, { ok: true, message });
 }
@@ -3637,6 +4242,10 @@ async function handleRingRoom(req, res, rawRoomId) {
   }
   if (await getFriendStore().isBlockedBetween(user.id, targetUserId)) {
     sendJson(res, 403, { ok: false, code: 'relationship_blocked', error: 'Invite is unavailable' });
+    return;
+  }
+  if (!isActiveAccount(await getUserStore().getUserById(targetUserId))) {
+    sendJson(res, 403, { ok: false, code: 'account_deleted', error: 'Invite is unavailable' });
     return;
   }
 
@@ -4049,6 +4658,7 @@ async function handleEditRoomChatMessage(req, res, roomId, messageId) {
     buildServerEnvelope('room.chat.edited', { roomId, message: publicMessage })
   );
   await refreshPinsAfterMessageMutation(roomId, 'message-edited', messageId);
+  scheduleRoomLinkPreview(roomId, messageId, text, { edited: true });
   sendJson(res, 200, { ok: true, message: publicMessage });
 }
 
@@ -4143,6 +4753,7 @@ async function handleEditDmMessage(req, res, peerIdParam, messageId) {
     return;
   }
 
+  scheduleDirectLinkPreview({ messageId, senderId: user.id, recipientId: peerId, text, edited: true });
   const event = { type: 'dm.message.edited', message };
   broadcastToUser(peerId, event);
   broadcastToUser(user.id, event);
@@ -4404,6 +5015,11 @@ function createApiApp({
     resolveSessionUser,
     getFriendIds: (userId) => getFriendStore().getFriendIds(userId),
     isUserOnline,
+    // The same relationship rule as sending a direct message.
+    canTypeToUser: async (userId, peerId) => (
+      await getFriendStore().areFriends(userId, peerId)
+      && !(await getFriendStore().isBlockedBetween(userId, peerId))
+    ),
     getClientIp: (req) => getClientIp(req, TRUST_PROXY)
   });
 
@@ -4573,6 +5189,33 @@ function createApiApp({
   app.post('/api/auth/avatar', (request, reply) => runLegacyHandler(request, reply, handleUploadUserAvatar));
   app.delete('/api/auth/avatar', (request, reply) => runLegacyHandler(request, reply, handleDeleteUserAvatar));
   app.post('/api/auth/password', (request, reply) => runLegacyHandler(request, reply, handleChangePassword));
+  app.post('/api/auth/recover', (request, reply) => runLegacyHandler(request, reply, handleRecoverAccount));
+  app.get('/api/auth/security', (request, reply) => runLegacyHandler(request, reply, handleAccountSecurity));
+  app.post('/api/auth/recovery-codes', (request, reply) => runLegacyHandler(request, reply, handleGenerateRecoveryCodes));
+  app.get('/api/auth/sessions', (request, reply) => runLegacyHandler(request, reply, handleListSessions));
+  app.post('/api/auth/sessions/revoke-others', (request, reply) => runLegacyHandler(request, reply, handleRevokeOtherSessions));
+  app.delete('/api/auth/sessions/:sessionId', (request, reply) => runLegacyHandler(
+    request,
+    reply,
+    (req, res) => handleRevokeSession(req, res, request.params.sessionId)
+  ));
+  app.post('/api/auth/recovery-codes/reminder/snooze', (request, reply) => runLegacyHandler(request, reply, handleSnoozeRecoveryCodesReminder));
+  app.get('/api/auth/whats-new', (request, reply) => runLegacyHandler(request, reply, handleWhatsNew));
+  app.post('/api/auth/whats-new/seen', (request, reply) => runLegacyHandler(request, reply, handleMarkWhatsNewSeen));
+  app.get('/api/auth/login-alerts', (request, reply) => runLegacyHandler(request, reply, handleLoginAlerts));
+  app.post('/api/auth/login-alerts/:alertId/confirm', (request, reply) => runLegacyHandler(
+    request,
+    reply,
+    (req, res) => handleResolveLoginAlert(req, res, request.params.alertId, 'confirmed')
+  ));
+  app.post('/api/auth/login-alerts/:alertId/deny', (request, reply) => runLegacyHandler(
+    request,
+    reply,
+    (req, res) => handleResolveLoginAlert(req, res, request.params.alertId, 'denied')
+  ));
+  app.get('/api/auth/account/deletion', (request, reply) => runLegacyHandler(request, reply, handleAccountDeletionPreview));
+  app.post('/api/auth/account/deletion', (request, reply) => runLegacyHandler(request, reply, handleRequestAccountDeletion));
+  app.post('/api/auth/account/restore', (request, reply) => runLegacyHandler(request, reply, handleRestoreAccount));
   app.get('/api/auth/rooms', (request, reply) => runLegacyHandler(request, reply, handleAuthRooms));
   app.post('/api/auth/rooms', (request, reply) => runLegacyHandler(request, reply, handleAddAuthRoom));
   app.delete('/api/auth/rooms/:roomId', (request, reply) => runLegacyHandler(
@@ -4607,6 +5250,9 @@ function createApiApp({
   }));
   app.get('/api/avatars/:key', (request, reply) => runLegacyHandler(request, reply, (_req, res) => {
     return handleGetAvatar(res, request.params.key);
+  }));
+  app.get('/api/link-previews/:key', (request, reply) => runLegacyHandler(request, reply, (_req, res) => {
+    return handleGetLinkPreviewImage(res, request.params.key);
   }));
   app.get('/api/rooms/:roomId', (request, reply) => runLegacyHandler(request, reply, (_req, res) => {
     const roomId = normalizeRoomId(request.params.roomId);
@@ -4800,8 +5446,6 @@ async function bootstrap({ env = process.env, logger = console, exit = process.e
     roomStore = createRoomStore({
       databaseUrl: database.url,
       logger,
-      maxMessagesPerRoom: ROOM_CHAT_MAX_MESSAGES,
-      messageTtlMs: ROOM_CHAT_TTL_MS,
       roomIdleTtlMs: ROOM_IDLE_TTL_MS
     });
     await roomStore.markActiveTemporaryRoomsEmpty();
@@ -4824,6 +5468,19 @@ async function bootstrap({ env = process.env, logger = console, exit = process.e
     });
     if (reconciliation.removed > 0) {
       logger.info?.(`Removed ${reconciliation.removed} orphaned avatar file(s)`);
+    }
+    linkPreviewStorage = createLinkPreviewStorage({ uploadsDir: readUploadsDir(env) });
+    try {
+      const previewPool = getRelease250Pool();
+      if (previewPool) {
+        const removedPreviewImages = await reconcileLinkPreviewImages({
+          storage: linkPreviewStorage,
+          repository: createLinkPreviewRepository({ pool: previewPool })
+        });
+        if (removedPreviewImages > 0) logger.info?.(`Removed ${removedPreviewImages} unused link preview image(s)`);
+      }
+    } catch (error) {
+      logger.warn?.('Link preview image reconciliation failed:', error);
     }
     const server = createApiServer({
       store: roomStore,

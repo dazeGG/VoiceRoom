@@ -1,4 +1,5 @@
 <script lang="ts">
+  import EmojiText from '$lib/shared/chat/EmojiText.svelte';
   import type { EllipsisProps } from './types';
 
   let {
@@ -22,7 +23,7 @@
   {#if children}
     {@render children()}
   {:else}
-    {text}
+    <EmojiText {text} />
   {/if}
 </svelte:element>
 

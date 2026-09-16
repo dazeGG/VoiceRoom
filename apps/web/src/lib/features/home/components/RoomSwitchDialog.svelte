@@ -1,4 +1,5 @@
 <script lang="ts">
+  import EmojiText from '$lib/shared/chat/EmojiText.svelte';
   import { Button, Dialog } from '$lib/shared/ui';
 
   let { open, fromName, toName, onConfirm, onCancel } = $props<{
@@ -17,7 +18,7 @@
 </script>
 
 <Dialog {open} title={`Перейти в комнату «${toName}»?`} onClose={onCancel} width={430}>
-  <p class="room-switch-text">Вы покинете звонок в «{fromName}».</p>
+  <p class="room-switch-text">Вы покинете звонок в «<EmojiText text={fromName} />».</p>
   <label class="room-switch-remember">
     <input type="checkbox" bind:checked={dontAskAgain} />
     <span>Больше не спрашивать</span>

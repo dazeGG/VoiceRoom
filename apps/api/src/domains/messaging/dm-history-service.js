@@ -4,6 +4,7 @@ const {
   buildHistoryEnvelope,
   normalizeHistoryRequest
 } = require('@voice-room/shared/messaging-history');
+const { normalizeLinkPreview } = require('@voice-room/shared/link-preview');
 
 class DmHistoryError extends Error {
   constructor(code, statusCode, message) {
@@ -61,6 +62,7 @@ function createDmHistoryService({ repository, cursorCodec, visibilityPolicy, pro
       readAt: message.readAt,
       metadata: message.metadata,
       attachments: message.attachments,
+      linkPreview: normalizeLinkPreview(message.metadata?.linkPreview) || undefined,
       replyTo: message.replyTo,
       replyPreview: message.replyPreview,
       cursor: encodeTuple(userId, peerId, tuple),

@@ -146,7 +146,8 @@
   border-color: var(--focus-border, rgba(255, 255, 255, 0.72));
 }
 
-.attachment-compose-field textarea {
+.attachment-compose-field textarea,
+.attachment-compose-field [role='textbox'] {
   border: 0 !important;
   background: var(--warm-900) !important;
   box-shadow: none !important;

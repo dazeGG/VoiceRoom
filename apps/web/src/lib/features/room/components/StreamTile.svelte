@@ -1,4 +1,5 @@
 <script lang="ts">
+  import EmojiText from '$lib/shared/chat/EmojiText.svelte';
   import { Monitor } from '@lucide/svelte';
   import { iconLg } from '$lib/shared/ui/icons';
   import { state as roomState } from '../client/core/state.svelte';
@@ -83,7 +84,7 @@
       aria-label={`Развернуть стрим ${participant.isLocal ? 'ваш' : participant.name}`}
       onclick={handleEnter}
     ></button>
-    <span class="stream-tile-copy"><strong>{title}</strong></span>
+    <span class="stream-tile-copy"><strong><EmojiText text={title} /></strong></span>
   </div>
 {:else}
   <button
@@ -109,7 +110,7 @@
       {/if}
     </span>
     {#if isIdle}
-      <span class="stream-tile-copy stream-tile-copy-idle"><strong>{title}</strong></span>
+      <span class="stream-tile-copy stream-tile-copy-idle"><strong><EmojiText text={title} /></strong></span>
       <span class="stream-tile-actions">
         <span class="stream-tile-action stream-tile-action-primary">
           {isSubscribed ? 'Подключение' : 'Смотреть стрим'}

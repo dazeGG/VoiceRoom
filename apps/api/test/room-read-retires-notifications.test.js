@@ -49,3 +49,64 @@ test('retirement is scoped to one room and bounded by the read point', () => {
   assert.match(service, /if\(!userId\|\|!roomId\)return \{ok:false,code:'invalid_request'\}/);
   assert.match(service, /markRoomRead,/);
 });
+
+// A client that records the UPDATE and answers the revision lookup, enough to
+// see what the repository hands PostgreSQL without a database.
+function recordingClient() {
+  const updates = [];
+  return {
+    updates,
+    async query(sql, params) {
+      if (/pg_advisory_xact_lock/.test(sql)) return { rows: [] };
+      if (/AS revision FROM user_notifications/.test(sql)) return { rows: [{ revision: 7 }] };
+      if (/^UPDATE user_notifications/.test(sql)) {
+        updates.push(params);
+        return { rowCount: 2, rows: [] };
+      }
+      throw new Error(`unexpected query: ${sql}`);
+    }
+  };
+}
+
+test('a read point in epoch milliseconds reaches PostgreSQL as a time, not a number', async () => {
+  const { createInboxRepository } = require('../src/domains/notifications/inbox-repository');
+  const client = recordingClient();
+  const repository = createInboxRepository({ pool: client });
+  const readAt = 1789427934720;
+
+  // The legacy room read reports milliseconds; that number used to reach
+  // `$3::timestamptz` as "1789427934720" and fail every read of the room.
+  const result = await repository.markReadForRoom({ recipientUserId: 'user-1', roomId: 'room-1', through: readAt, client });
+  assert.deepEqual(result, { updated: 2, revision: 7 });
+  const [recipient, room, bound, revision] = client.updates[0];
+  assert.deepEqual([recipient, room, revision], ['user-1', 'room-1', 7]);
+  assert.ok(bound instanceof Date);
+  assert.equal(bound.getTime(), readAt);
+
+  // A Date from a row and an ISO string mean the same point.
+  await repository.markReadForRoom({ recipientUserId: 'user-1', roomId: 'room-1', through: new Date(readAt), client });
+  await repository.markReadForRoom({ recipientUserId: 'user-1', roomId: 'room-1', through: new Date(readAt).toISOString(), client });
+  assert.equal(client.updates[1][2].getTime(), readAt);
+  assert.equal(client.updates[2][2].getTime(), readAt);
+
+  // No bound still means the whole room.
+  await repository.markReadForRoom({ recipientUserId: 'user-1', roomId: 'room-1', through: null, client });
+  assert.equal(client.updates[3][2], null);
+
+  // All notifications are bounded the same way.
+  await repository.markAllRead({ recipientUserId: 'user-1', through: readAt, client });
+  assert.equal(client.updates[4][1].getTime(), readAt);
+});
+
+test('a read point that is not a time retires nothing instead of the whole room', async () => {
+  const { createInboxRepository } = require('../src/domains/notifications/inbox-repository');
+  const client = recordingClient();
+  const repository = createInboxRepository({ pool: client });
+
+  assert.deepEqual(
+    await repository.markReadForRoom({ recipientUserId: 'user-1', roomId: 'room-1', through: 'not a time', client }),
+    { updated: 0, revision: null }
+  );
+  assert.deepEqual(await repository.markAllRead({ recipientUserId: 'user-1', through: Number.NaN, client }), { updated: 0, revision: null });
+  assert.equal(client.updates.length, 0);
+});

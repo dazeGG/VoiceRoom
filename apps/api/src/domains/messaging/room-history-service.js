@@ -69,6 +69,7 @@ function createRoomHistoryService({ repository, cursorCodec, visibilityPolicy, p
       editedAt: message.editedAt,
       expiresAt: message.expiresAt,
       attachments: message.attachments,
+      linkPreview: message.linkPreview,
       replyTo: message.replyTo,
       replyPreview: message.replyPreview,
       cursor: encodeTuple(roomId, tuple),

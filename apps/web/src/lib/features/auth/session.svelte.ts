@@ -1,4 +1,5 @@
 import { fetchMe, type AuthUser } from '$lib/api/auth';
+import { clearChatDrafts, resumeChatDrafts } from '$lib/shared/chat/chat-drafts';
 import { roomNameFor } from './account';
 
 // App-wide auth state. `loaded` flips true once the first /auth/me resolves so
@@ -9,6 +10,21 @@ export const session = $state<{ loaded: boolean; user: AuthUser | null }>({
 });
 
 let inflight: Promise<AuthUser | null> | null = null;
+
+// Set right before a request that ends this device's own session (sign-out,
+// password change): the server then closes the realtime socket too, and that
+// close must not read as the session being ended from another device.
+let sessionEndExpected = false;
+
+export function expectSessionEnd(expected = true): void {
+  sessionEndExpected = expected;
+}
+
+export function consumeExpectedSessionEnd(): boolean {
+  const expected = sessionEndExpected;
+  sessionEndExpected = false;
+  return expected;
+}
 
 // Mirror the account name into the room's local name key so voice rooms open
 // with the account's display name already filled in. This is not used as an
@@ -27,6 +43,8 @@ function syncRoomName(user: AuthUser | null): void {
 }
 
 export function setUser(user: AuthUser | null): void {
+  sessionEndExpected = false;
+  if (user) resumeChatDrafts();
   session.user = user;
   session.loaded = true;
   syncRoomName(user);
@@ -53,6 +71,9 @@ export async function loadSession(force = false): Promise<AuthUser | null> {
 }
 
 export function clearSession(): void {
+  // The session ended on this device (sign-out, password change, deletion or a
+  // revoked session): unsent texts must not outlive it on a shared computer.
+  clearChatDrafts();
   session.user = null;
   session.loaded = true;
   syncRoomName(null);

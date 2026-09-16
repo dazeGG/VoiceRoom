@@ -1,4 +1,5 @@
 <script lang="ts">
+  import EmojiText from '$lib/shared/chat/EmojiText.svelte';
   // The panel you reach from the bell. It answers two questions — what happened
   // and how long ago — and offers exactly one bulk action. "К первому
   // непрочитанному" is gone: every unread row is already one click away, and
@@ -101,7 +102,7 @@
             <button type="button" onclick={() => open(item)}>
               <span class="notification-inbox-dot" aria-hidden="true"></span>
               <span class="notification-inbox-text">
-                <strong>{item.retractedAt ? 'Сообщение недоступно' : item.body || 'Новое уведомление'}</strong>
+                <strong><EmojiText text={item.retractedAt ? 'Сообщение недоступно' : item.body || 'Новое уведомление'} /></strong>
                 <small>
                   <span class="notification-inbox-reason">{reasonLabel(item.reasons)}</span>
                   {#if timeAgo(item.createdAt)}<span class="notification-inbox-time">{timeAgo(item.createdAt)}</span>{/if}

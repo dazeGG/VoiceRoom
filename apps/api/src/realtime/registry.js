@@ -63,11 +63,12 @@ function createConnectionRegistry({
     return connectionCount(userId) > 0 && userPresenceStatuses.get(userId) !== 'offline';
   }
 
-  function createConnectionRecord(userId, socket, clientIp = '', presenceStatus = 'online') {
+  function createConnectionRecord(userId, socket, clientIp = '', presenceStatus = 'online', authSessionHash = '') {
     return {
       id: createConnectionId(userId || 'guest'),
       userId: userId || null,
       guest: !userId,
+      authSessionHash: userId ? String(authSessionHash || '') : '',
       clientIp: clientIp || '',
       guestIp: null,
       socket,
@@ -81,7 +82,7 @@ function createConnectionRegistry({
     };
   }
 
-  function addConnection(userId, socket, clientIp = '', presenceStatus = 'online') {
+  function addConnection(userId, socket, clientIp = '', presenceStatus = 'online', authSessionHash = '') {
     let set = userConnections.get(userId);
     const wasOffline = !isUserOnline(userId);
     if (!set) {
@@ -92,7 +93,7 @@ function createConnectionRegistry({
       userPresenceStatuses.set(userId, cleanPresenceStatus(presenceStatus) || 'online');
     }
     const activePresenceStatus = userPresenceStatuses.get(userId);
-    const connection = createConnectionRecord(userId, socket, clientIp, activePresenceStatus);
+    const connection = createConnectionRecord(userId, socket, clientIp, activePresenceStatus, authSessionHash);
     set.add(connection);
     connections.set(connection.id, connection);
     bumpPresenceRevision();
@@ -259,6 +260,27 @@ function createConnectionRegistry({
     connection.lastHeartbeatAt = Date.now();
   }
 
+  // Sockets authenticated by account sessions that were just ended. Without a
+  // hash list this selects every socket of the account (password replaced);
+  // without an account id the hashes are matched across all signed-in sockets.
+  function findAccountConnections(userId, tokenHashes = null) {
+    const wanted = Array.isArray(tokenHashes) ? new Set(tokenHashes.filter(Boolean)) : null;
+    const candidates = userId ? userConnections.get(userId) : wanted ? connections.values() : null;
+    if (!candidates) return [];
+    return [...candidates].filter((connection) => !connection.guest && (!wanted || wanted.has(connection.authSessionHash)));
+  }
+
+  function closeConnections(targets, code = 4401, reason = 'Session revoked') {
+    for (const connection of targets) {
+      try {
+        connection.socket.close(code, reason);
+      } catch {
+        // The socket may already be gone; the registry entry still has to go.
+      }
+      removeConnection(connection);
+    }
+  }
+
   function pruneStale(now = Date.now()) {
     const stale = [];
     // 5x keepalive: background tabs throttle timers, so a healthy client's
@@ -280,8 +302,10 @@ function createConnectionRegistry({
     addConnection,
     addGuestConnection,
     broadcastAccountEvent,
+    closeConnections,
     connectionCount,
     connections,
+    findAccountConnections,
     getPresenceRevision: () => presenceRevision,
     isUserOnline,
     removeConnection,

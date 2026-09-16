@@ -4,6 +4,7 @@
   // the message header opens. Without a handler — a preview, a quoted reply —
   // it stays plain text rather than offering an action that leads nowhere.
   import type { RoomMessageContentV1 } from '@voice-room/shared/room-message-content';
+  import EmojiText from './EmojiText.svelte';
 
   let {
     content,
@@ -22,10 +23,10 @@
 
 {#if content?.version === 1 && Array.isArray(content.segments)}
   <span class="structured-message">
-    {#each content.segments as segment}{#if segment.type === 'text'}{segment.text}{:else if segment.type === 'link'}<a href={segment.href} target="_blank" rel="noopener noreferrer">{segment.label}</a>{:else if segment.type === 'mention'}{#if onmention && segment.userId}<button class="structured-message__mention" type="button" data-user-id={segment.userId} aria-label={`Открыть профиль ${mentionLabel(segment.label)}`} onclick={(event) => onmention(segment.userId, segment.label, event)}>{mentionLabel(segment.label)}</button>{:else}<span class="structured-message__mention" data-user-id={segment.userId}>{mentionLabel(segment.label)}</span>{/if}{/if}{/each}
+    {#each content.segments as segment}{#if segment.type === 'text'}<EmojiText text={segment.text} />{:else if segment.type === 'link'}<a href={segment.href} target="_blank" rel="noopener noreferrer">{segment.label}</a>{:else if segment.type === 'mention'}{#if onmention && segment.userId}<button class="structured-message__mention" type="button" data-user-id={segment.userId} aria-label={`Открыть профиль ${mentionLabel(segment.label)}`} onclick={(event) => onmention(segment.userId, segment.label, event)}>{mentionLabel(segment.label)}</button>{:else}<span class="structured-message__mention" data-user-id={segment.userId}>{mentionLabel(segment.label)}</span>{/if}{/if}{/each}
   </span>
 {:else}
-  <span>{fallback}</span>
+  <span><EmojiText text={fallback} /></span>
 {/if}
 
 <style>

@@ -1,5 +1,6 @@
 'use strict';
 
+const { normalizeLinkPreview } = require('@voice-room/shared/link-preview');
 const { createDbPool } = require('../../lib/db');
 
 const ROOM_MESSAGE_SELECT = `
@@ -38,6 +39,7 @@ function mapRoomMessage(row) {
     avatarColorKey: row.avatar_color_key || null,
     avatarKey: row.avatar_key || null,
     avatarAccent: row.avatar_accent || null,
+    linkPreview: normalizeLinkPreview(row.metadata?.linkPreview) || undefined,
     replyTo: row.reply_to_message_id ? { messageId: row.reply_to_message_id } : undefined
   };
 }

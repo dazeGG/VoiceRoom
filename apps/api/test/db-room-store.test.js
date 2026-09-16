@@ -128,10 +128,12 @@ test('swapRoomAvatar locks the room row and returns the exact key it replaced', 
   assert.ok(pool.calls.some(({ text }) => text === 'COMMIT'));
 });
 
-test('appendMessage uses a transaction, verifies room existence, inserts row, and enforces cap', async () => {
-  const pool = createFakePool((text) => {
+test('appendMessage uses a transaction, verifies room existence, inserts a row that never expires, and trims nothing', async () => {
+  let insertedValues;
+  const pool = createFakePool((text, values) => {
     if (/SELECT id FROM rooms/.test(text)) return { rows: [{ id: 'room1' }], rowCount: 1 };
     if (/INSERT INTO room_messages/.test(text)) {
+      insertedValues = values;
       return {
         rows: [{
           id: 'msg1', room_id: 'room1', peer_id: 'peer1', name: 'Ada', text: 'hello',
@@ -142,7 +144,7 @@ test('appendMessage uses a transaction, verifies room existence, inserts row, an
     }
     return { rows: [], rowCount: 1 };
   });
-  const store = createRoomStore({ maxMessagesPerRoom: 2, pool });
+  const store = createRoomStore({ pool });
 
   const message = await store.appendMessage('room1', {
     id: 'msg1', peerId: 'peer1', name: 'Ada', text: 'hello', createdAt: 1000, expiresAt: 2000
@@ -155,7 +157,8 @@ test('appendMessage uses a transaction, verifies room existence, inserts row, an
   });
   assert.ok(pool.calls.some((call) => call.text === 'BEGIN'));
   assert.ok(pool.calls.some((call) => /INSERT INTO room_messages/.test(call.text)));
-  assert.ok(pool.calls.some((call) => /row_number\(\) OVER/.test(call.text)));
+  assert.equal(insertedValues[6], null, 'a requested expiry is ignored');
+  assert.ok(!pool.calls.some((call) => /UPDATE room_messages/.test(call.text)), 'older messages stay');
   assert.ok(pool.calls.some((call) => call.text === 'COMMIT'));
 });
 
@@ -280,7 +283,7 @@ test('listVisibleRoomsForUser returns per-user unread metadata', async () => {
   assert.equal(rooms[0].lastMessageAt, 4000);
 });
 
-test('listMessages soft-deletes expired messages before selecting active rows', async () => {
+test('listMessages only reads active rows and never deletes anything', async () => {
   const pool = createFakePool((text) => {
     if (/SELECT \*/.test(text)) {
       return {
@@ -305,13 +308,14 @@ test('listMessages soft-deletes expired messages before selecting active rows', 
     avatar_accent: '#49303f',
     created_at: new Date(1000), expires_at: new Date(2000)
   })]);
-  assert.match(pool.calls[0].text, /UPDATE room_messages/);
-  assert.match(pool.calls[1].text, /LEFT JOIN room_peer_identities/);
-  assert.match(pool.calls[1].text, /LEFT JOIN users/);
-  assert.match(pool.calls[1].text, /COALESCE\(NULLIF\(u\.display_name, ''\), u\.login, recent\.name\) AS name/);
+  assert.equal(pool.calls.length, 1);
+  assert.doesNotMatch(pool.calls[0].text, /UPDATE|DELETE/);
+  assert.match(pool.calls[0].text, /LEFT JOIN room_peer_identities/);
+  assert.match(pool.calls[0].text, /LEFT JOIN users/);
+  assert.match(pool.calls[0].text, /COALESCE\(NULLIF\(u\.display_name, ''\), u\.login, recent\.name\) AS name/);
   assert.equal(messages[0].avatarAccent, '#49303f');
   assert.match(messages[0].avatarKey, /^av_/);
-  assert.match(pool.calls[1].text, /ORDER BY recent.created_at ASC, recent.id ASC/);
+  assert.match(pool.calls[0].text, /ORDER BY recent.created_at ASC, recent.id ASC/);
 });
 
 

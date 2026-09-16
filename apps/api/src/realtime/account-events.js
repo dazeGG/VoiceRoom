@@ -72,6 +72,13 @@ function toWsAccountEvent(message) {
     case 'room.kicked':
     case 'room.banned':
       return buildServerEnvelope(message.type, { roomId: message.roomId, peerId: message.peerId });
+    case 'account.login.new':
+      return buildServerEnvelope('account.login.new', { alert: message.alert });
+    case 'account.login.resolved':
+      return buildServerEnvelope('account.login.resolved', {
+        alertId: message.alertId,
+        resolution: message.resolution
+      });
     default:
       return null;
   }

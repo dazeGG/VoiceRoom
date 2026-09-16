@@ -3,6 +3,7 @@
 const crypto = require('node:crypto');
 const { createDbPool, transaction } = require('./db');
 const { cleanAvatarColorKey, cleanPresenceStatus } = require('@voice-room/shared/validation');
+const { normalizeLinkPreview } = require('@voice-room/shared/link-preview');
 
 function toMillis(value) {
   if (value == null) return null;
@@ -52,6 +53,7 @@ function mapMessage(row) {
     editedAt: toMillis(row.edited_at),
     readAt: toMillis(row.read_at),
     invite: mapInvite(row.metadata),
+    linkPreview: normalizeLinkPreview(row.metadata?.linkPreview) || undefined,
     replyTo: row.reply_to_message_id ? { messageId: row.reply_to_message_id } : undefined,
     // deletedAt kept internal; callers filter before map
     deletedAt: row.deleted_at ? toMillis(row.deleted_at) : null
@@ -164,6 +166,8 @@ function createFriendStore({ databaseUrl, logger = console, pool } = {}) {
     const result = await getPool().query(
       `SELECT * FROM users
        WHERE id <> $1
+         AND deletion_requested_at IS NULL
+         AND deleted_at IS NULL
          AND (lower(login) LIKE $2 ESCAPE '\\' OR lower(display_name) LIKE $2 ESCAPE '\\')
        ORDER BY lower(login)
        LIMIT $3`,
@@ -185,7 +189,8 @@ function createFriendStore({ databaseUrl, logger = console, pool } = {}) {
         ? await client.query(`SELECT * FROM users WHERE id = $1`, [addresseeUserId])
         : await client.query(`SELECT * FROM users WHERE login = $1`, [addresseeLogin]);
       const addressee = userResult.rows[0];
-      if (!addressee) return { status: 'not_found' };
+      // Deleted and soon-to-be-deleted accounts cannot be found or befriended.
+      if (!addressee || addressee.deletion_requested_at || addressee.deleted_at) return { status: 'not_found' };
       if (addressee.id === requesterId) return { status: 'self' };
 
       await lockUserPair(client, requesterId, addressee.id);

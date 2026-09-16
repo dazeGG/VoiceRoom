@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { applyDesktopBoundaryToDocument } from '$lib/platform/desktop-boundary';
+  import { installEmojiCopy } from '$lib/shared/chat/emoji-copy';
 
   let { children } = $props();
   let boundaryReady = $state(false);
@@ -9,6 +10,8 @@
   onMount(() => {
     desktopAllowed = applyDesktopBoundaryToDocument().desktopAllowed;
     boundaryReady = true;
+    // Emoji drawn as artwork copy as their characters anywhere in the app.
+    return installEmojiCopy();
   });
 </script>
 

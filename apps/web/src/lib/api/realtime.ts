@@ -5,6 +5,7 @@ import type { PublicUser } from './friends';
 import type { ChatMessage, RoomPeer, RoomSummary } from './rooms';
 import type { NotificationRealtimeEvent } from '../shared/notifications';
 import type { ReactionSummary } from '@voice-room/shared/reactions';
+import type { LoginAlert } from '@voice-room/shared/account-security';
 import { isDesktopBoundaryBlocked } from '$lib/platform/desktop-boundary';
 import { RealtimeHeartbeatWatchdog } from './realtime-heartbeat.js';
 
@@ -21,7 +22,10 @@ export type RealtimeAccountEvent =
   | { type: 'dm.message'; payload: { message: DirectMessage } }
   | { type: 'dm.message.edited'; payload: { message: DirectMessage } }
   | { type: 'dm.read'; payload: { userId: string } }
-  | { type: 'dm.message.deleted'; payload: { messageId: string; peerUserId?: string } };
+  | { type: 'dm.message.deleted'; payload: { messageId: string; peerUserId?: string } }
+  | { type: 'dm.typing'; payload: { userId: string; activity?: string } }
+  | { type: 'account.login.new'; payload: { alert: LoginAlert } }
+  | { type: 'account.login.resolved'; payload: { alertId: string; resolution: 'confirmed' | 'denied' } };
 
 export type RoomRealtimeSummary = RoomSummary & {
   visiblePeers: RoomPeer[];
@@ -50,6 +54,7 @@ export type RealtimeRoomEvent =
   | { type: 'room.chat.message'; payload: { roomId: string; message: ChatMessage } }
   | { type: 'room.chat.edited'; payload: { roomId: string; message: ChatMessage } }
   | { type: 'room.chat.deleted'; payload: { roomId: string; messageId: string } }
+  | { type: 'room.chat.typing'; payload: { roomId: string; typist: { peerId: string; userId: string | null; name: string }; activity?: string } }
   | { type: 'room.updated'; payload: { room: RoomSummary } }
   | { type: 'room.deleted'; payload: { roomId: string } }
   | { type: 'room.not_found'; payload: { roomId: string } }
@@ -107,6 +112,8 @@ const RECONNECT_BASE_MS = 500;
 const RECONNECT_MAX_MS = 8000;
 const HEARTBEAT_MS = 15000;
 const HEARTBEAT_TIMEOUT_MS = 30000;
+// Mirrors the API close code for sockets whose account session was ended.
+const SESSION_ENDED_CLOSE_CODE = 4401;
 
 let shared: AppRealtimeConnection | null = null;
 
@@ -259,15 +266,33 @@ class AppRealtimeConnection {
       if (parsed?.type === 'pong') this.heartbeatWatchdog.recordPong();
       if (parsed) this.emit(parsed);
     };
-    socket.onclose = () => {
+    socket.onclose = (event?: CloseEvent) => {
       if (this.socket !== socket || generation !== this.openGeneration) return;
       this.clearTimers();
       this.socket = null;
       this.emitState(false);
+      if (event?.code === SESSION_ENDED_CLOSE_CODE) {
+        // The account session behind this socket was ended; reconnecting would
+        // only come back as a guest, so hand control to the sign-out flow.
+        this.closedByClient = true;
+        for (const handler of this.sessionEndedHandlers) handler();
+        return;
+      }
       this.scheduleReconnect();
     };
     socket.onerror = () => {
       socket.close();
+    };
+  }
+
+  private sessionEndedHandlers = new Set<() => void>();
+
+  // Fires when the server closed the socket because its account session ended
+  // (signed out elsewhere, revoked from another device, password replaced).
+  onSessionEnded(handler: () => void): () => void {
+    this.sessionEndedHandlers.add(handler);
+    return () => {
+      this.sessionEndedHandlers.delete(handler);
     };
   }
 

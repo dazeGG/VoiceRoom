@@ -2,6 +2,8 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const crypto = require('node:crypto');
+const { Pool } = require('pg');
 
 const { createRoomStore } = require('../src/lib/room-store');
 const { createUserStore } = require('../src/lib/user-store');
@@ -22,7 +24,7 @@ async function createMigratedStore(t, options = {}) {
 test('PostgreSQL room store persists registry and message shape across store instances', async (t) => {
   const { cleanup, databaseUrl } = await createTestDatabase(t);
   await runMigrations({ databaseUrl, logger: { log() {}, info() {}, warn() {}, error() {} } });
-  const store = createRoomStore({ databaseUrl, maxMessagesPerRoom: 10, messageTtlMs: 60000 });
+  const store = createRoomStore({ databaseUrl });
   t.after(async () => {
     await store.close();
     await reopened.close();
@@ -32,7 +34,6 @@ test('PostgreSQL room store persists registry and message shape across store ins
   const room = await store.createRoom({ creatorIp: '127.0.0.1', isStatic: true, roomId: 'roompersist1', now: 1000 });
   const message = await store.appendMessage(room.id, {
     createdAt: 1100,
-    expiresAt: 61000,
     id: 'msg-persist-1',
     name: 'Ada',
     peerId: 'peer-persist',
@@ -42,7 +43,7 @@ test('PostgreSQL room store persists registry and message shape across store ins
   assert.equal(room.isStatic, true);
   assert.equal(message.roomId, room.id);
 
-  const reopened = createRoomStore({ databaseUrl, maxMessagesPerRoom: 10, messageTtlMs: 60000 });
+  const reopened = createRoomStore({ databaseUrl });
   const restoredRoom = await reopened.getRoom(room.id);
   const restoredMessages = await reopened.listMessages(room.id, { now: 2000, limit: 10 });
 
@@ -51,36 +52,17 @@ test('PostgreSQL room store persists registry and message shape across store ins
   assert.deepEqual(restoredMessages.map((entry) => entry.text), ['hello']);
 });
 
-test('PostgreSQL room store prunes expired chat messages during active cleanup', async (t) => {
-  const store = await createMigratedStore(t, { maxMessagesPerRoom: 10, messageTtlMs: 1000 });
-  const room = await store.createRoom({ creatorIp: '127.0.0.1', isStatic: true, roomId: 'roomprune1', now: 1000 });
-
-  await store.appendMessage(room.id, { id: 'expired-msg', text: 'old', createdAt: 1000, expiresAt: 1500 }, 1000);
-  await store.appendMessage(room.id, { id: 'fresh-msg', text: 'fresh', createdAt: 2000, expiresAt: 5000 }, 2000);
-
-  assert.equal(await store.pruneRooms(2500), true);
-  const messages = await store.listMessages(room.id, { now: 2500, limit: 10 });
-  assert.deepEqual(messages.map((message) => message.id), ['fresh-msg']);
-});
-
-test('PostgreSQL room store caps retained chat messages per room', async (t) => {
-  const store = await createMigratedStore(t, { maxMessagesPerRoom: 2, messageTtlMs: 60000 });
-  const room = await store.createRoom({ creatorIp: '127.0.0.1', isStatic: true, roomId: 'roomcap1', now: 1000 });
-
-  await store.appendMessage(room.id, { id: 'msg-1', text: 'one', createdAt: 1000, expiresAt: 60000 }, 1000);
-  await store.appendMessage(room.id, { id: 'msg-2', text: 'two', createdAt: 2000, expiresAt: 60000 }, 2000);
-  await store.appendMessage(room.id, { id: 'msg-3', text: 'three', createdAt: 3000, expiresAt: 60000 }, 3000);
-
-  const messages = await store.listMessages(room.id, { now: 4000, limit: 10 });
-  assert.deepEqual(messages.map((message) => message.id), ['msg-2', 'msg-3']);
-});
-
-test('PostgreSQL room store keeps room history when no cap or TTL is configured', async (t) => {
+test('PostgreSQL room store never expires or trims room history, even when a message asks for an expiry', async (t) => {
   const store = await createMigratedStore(t);
   const room = await store.createRoom({ creatorIp: '127.0.0.1', isStatic: true, roomId: 'roomkeep1', now: 1000 });
 
   for (let index = 1; index <= 3; index += 1) {
-    await store.appendMessage(room.id, { id: `msg-keep-${index}`, text: `message ${index}`, createdAt: 1000 + index }, 1000 + index);
+    await store.appendMessage(room.id, {
+      id: `msg-keep-${index}`,
+      text: `message ${index}`,
+      createdAt: 1000 + index,
+      expiresAt: 1500
+    }, 1000 + index);
   }
 
   const stored = await store.listMessages(room.id, { now: 2000, limit: 10 });
@@ -94,15 +76,14 @@ test('PostgreSQL room store keeps room history when no cap or TTL is configured'
 });
 
 test('PostgreSQL room store returns the latest limited chat messages in display order', async (t) => {
-  const store = await createMigratedStore(t, { maxMessagesPerRoom: 10, messageTtlMs: 60000 });
+  const store = await createMigratedStore(t);
   const room = await store.createRoom({ creatorIp: '127.0.0.1', isStatic: true, roomId: 'roomlatest1', now: 1000 });
 
   for (let index = 1; index <= 5; index += 1) {
     await store.appendMessage(room.id, {
       id: `msg-latest-${index}`,
       text: `message ${index}`,
-      createdAt: 1000 + index,
-      expiresAt: 60000
+      createdAt: 1000 + index
     }, 1000 + index);
   }
 
@@ -187,6 +168,60 @@ test('PostgreSQL room ban cap is enforced per room and physical room purge casca
   await store.purgeDeleted({ olderThanMs: 1, now: 3000 });
   assert.equal(await store.findActiveRoomBan({ roomId: 'ban-cap-room', ip: '192.0.2.1' }), null);
   assert.ok(await store.findActiveRoomBan({ roomId: 'ban-other-room', ip: '192.0.2.2' }));
+});
+
+test('purging deleted messages and deleted rooms unbinds their attachments for media cleanup', async (t) => {
+  const { cleanup, databaseUrl } = await createTestDatabase(t);
+  await runMigrations({ databaseUrl, logger: { log() {}, info() {}, warn() {}, error() {} } });
+  const store = createRoomStore({ databaseUrl });
+  const users = createUserStore({ databaseUrl, logger: { error() {} } });
+  const pool = new Pool({ connectionString: databaseUrl });
+  t.after(async () => {
+    await Promise.all([store.close(), users.close(), pool.end()]);
+    await cleanup();
+  });
+
+  const { user } = await users.createUser({ login: 'purge-author', password: 'password123' });
+  await store.createRoom({ creatorIp: 'owner-ip', isStatic: true, roomId: 'purge-room', now: 1000 });
+  await store.createRoom({ creatorIp: 'owner-ip', isStatic: true, roomId: 'purge-gone-room', now: 1000 });
+  const post = (roomId, id) => store.appendMessage(roomId, { id, text: id, authorUserId: user.id, createdAt: 1100 }, 1100);
+  await post('purge-room', 'purge-deleted');
+  await post('purge-room', 'purge-kept');
+  await post('purge-gone-room', 'purge-in-gone-room');
+  const attach = async (messageId) => {
+    const id = crypto.randomUUID();
+    await pool.query(
+      `INSERT INTO message_attachments (id, owner_id, context, state, room_message_id, attachment_order, bound_at)
+       VALUES ($1, $2, 'room', 'processing', $3, 0, current_timestamp)`,
+      [id, user.id, messageId]
+    );
+    return id;
+  };
+  const deletedAttachment = await attach('purge-deleted');
+  const keptAttachment = await attach('purge-kept');
+  const roomAttachment = await attach('purge-in-gone-room');
+
+  assert.equal(await store.softDeleteMessage('purge-room', 'purge-deleted'), true);
+  await store.deleteRoom('purge-gone-room', 2000);
+  const purged = await store.purgeDeleted({ olderThanMs: 1, now: Date.now() + 60_000 });
+  assert.equal(purged.messages, 1);
+  assert.equal(purged.rooms, 1);
+
+  const { rows } = await pool.query(
+    `SELECT id, state, room_message_id, attachment_order, bound_at, deleted_at FROM message_attachments`
+  );
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  for (const id of [deletedAttachment, roomAttachment]) {
+    const row = byId.get(id);
+    assert.equal(row.state, 'deleted');
+    assert.equal(row.room_message_id, null);
+    assert.equal(row.attachment_order, null);
+    assert.equal(row.bound_at, null);
+    assert.ok(row.deleted_at);
+  }
+  assert.equal(byId.get(keptAttachment).state, 'processing');
+  assert.equal(byId.get(keptAttachment).room_message_id, 'purge-kept');
+  assert.deepEqual((await store.listMessages('purge-room', { limit: 10 })).map((message) => message.id), ['purge-kept']);
 });
 
 test('PostgreSQL peer identity invalidation rejects the prior session token', async (t) => {

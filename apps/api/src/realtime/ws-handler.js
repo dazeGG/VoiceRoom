@@ -5,7 +5,9 @@ const {
   normalizeRoomId,
   normalizeSessionToken
 } = require('@voice-room/shared/validation');
+const { normalizeTypingActivity } = require('@voice-room/shared/realtime');
 const { buildServerEnvelope, buildServerErrorEnvelope, parseInboundMessage } = require('./envelope');
+const { createTypingThrottle } = require('./typing-throttle');
 
 function createWsHandler({
   registry,
@@ -13,10 +15,59 @@ function createWsHandler({
   resolveSessionUser,
   getFriendIds,
   isUserOnline,
-  getClientIp = () => 'unknown'
+  canTypeToUser = async () => false,
+  getClientIp = () => 'unknown',
+  now = Date.now
 }) {
   function reportMessageError(error) {
     console.error('WS message handler failed:', error);
+  }
+
+  // Direct typing notices reach only a friend when neither side blocked the
+  // other. The check is cached per connection and thread for a short while so
+  // a burst of typing costs one lookup, and notices to a thread go through the
+  // typing throttle.
+  const DM_TYPING_PERMISSION_TTL_MS = 30_000;
+  // The client picks the thread ids, so the cache and the lookups behind it are
+  // bounded per connection: naming endless strangers can grow neither this
+  // process nor the load on the database.
+  const DM_TYPING_THREAD_LIMIT = 32;
+  const DM_TYPING_LOOKUP_BUDGET = 20;
+  const DM_TYPING_LOOKUP_WINDOW_MS = 30_000;
+
+  function spendTypingLookup(connection) {
+    const at = now();
+    const budget = connection.dmTypingLookups;
+    if (!budget || at - budget.windowAt >= DM_TYPING_LOOKUP_WINDOW_MS) {
+      connection.dmTypingLookups = { windowAt: at, spent: 1 };
+      return true;
+    }
+    if (budget.spent >= DM_TYPING_LOOKUP_BUDGET) return false;
+    budget.spent += 1;
+    return true;
+  }
+
+  function forwardDirectTyping(connection, peerId, activity = 'typing') {
+    if (!connection.userId || peerId === connection.userId) return;
+    connection.dmTypingThrottle ??= createTypingThrottle({ now });
+    connection.dmTypingThrottle.offer(peerId, activity, (value) => {
+      sendDirectTyping(connection, peerId, value).catch(reportMessageError);
+    });
+  }
+
+  async function sendDirectTyping(connection, peerId, activity) {
+    const cache = (connection.dmTypingPermission ??= new Map());
+    const entry = cache.get(peerId) || { allowed: false, checkedAt: -Infinity };
+    cache.delete(peerId);
+    cache.set(peerId, entry);
+    while (cache.size > DM_TYPING_THREAD_LIMIT) cache.delete(cache.keys().next().value);
+    if (now() - entry.checkedAt >= DM_TYPING_PERMISSION_TTL_MS) {
+      if (!spendTypingLookup(connection)) return;
+      entry.allowed = Boolean(await canTypeToUser(connection.userId, peerId));
+      entry.checkedAt = now();
+    }
+    if (!entry.allowed || connection.closed) return;
+    registry.sendToUser(peerId, buildServerEnvelope('dm.typing', { userId: connection.userId, activity }));
   }
 
   function enqueueMessage(connection, task) {
@@ -108,6 +159,20 @@ function createWsHandler({
       return;
     }
 
+    if (envelope.type === 'room.chat.typing') {
+      await roomRuntime.broadcastRoomTyping(
+        connection,
+        normalizeRoomId(envelope.payload.roomId),
+        normalizeTypingActivity(envelope.payload.activity) || 'typing'
+      );
+      return;
+    }
+
+    if (envelope.type === 'dm.typing') {
+      await forwardDirectTyping(connection, envelope.payload.userId, normalizeTypingActivity(envelope.payload.activity) || 'typing');
+      return;
+    }
+
     registry.sendToConnection(
       connection,
       buildServerErrorEnvelope('not_implemented', `Unsupported message type: ${envelope.type}`, envelope.id)
@@ -134,7 +199,7 @@ function createWsHandler({
 
     const clientIp = getClientIp(req);
     const connection = sessionUser
-      ? registry.addConnection(sessionUser.id, socket, clientIp, sessionUser.presenceStatus)
+      ? registry.addConnection(sessionUser.id, socket, clientIp, sessionUser.presenceStatus, session.session?.tokenHash)
       : registry.addGuestConnection(socket, guestIp);
 
     if (sessionUser) {

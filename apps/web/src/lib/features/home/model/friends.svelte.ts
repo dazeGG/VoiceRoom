@@ -21,6 +21,7 @@ import {
 import { blockUser as apiBlockUser, unblockUser as apiUnblockUser } from '$lib/api/blocks';
 import { deleteDirectMessage, editDirectMessage, fetchThread, fetchThreadPage, markThreadRead, respondRoomInvite, sendDirectMessage, type DirectMessage } from '$lib/api/dm';
 import { connectRealtime, type RealtimeEvent, type RealtimeHandle } from '$lib/api/realtime';
+import { createTypingTracker, typingActivityOf } from '$lib/shared/chat/typing.svelte';
 import type { PresenceStatus } from '$lib/shared/presence';
 import { playDirectMessageCue, playFriendAcceptedCue, playFriendRequestCue, playRingCue } from '$lib/features/room/client/media/cues';
 import {
@@ -71,6 +72,9 @@ interface FriendsState {
   threadHistoryError: string;
   profileOpen: boolean;
 }
+
+// Friends currently typing to this account, keyed by their user id.
+export const dmTyping = createTypingTracker();
 
 export const friendsState = $state<FriendsState>({
   automaticPresenceIdleAvailable: false,
@@ -415,7 +419,11 @@ export async function editMessage(messageId: string, text: string): Promise<void
   applyEditedMessage(message);
 }
 
-function appendToThread(message: DirectMessage): void {
+function appendToThread(incoming: DirectMessage): void {
+  // A link preview can arrive as an edit before the message itself is
+  // delivered; the later, preview-less copy must not wipe it.
+  const known = friendsState.thread.find((existing) => existing.id === incoming.id);
+  const message = known?.linkPreview && !incoming.linkPreview ? { ...incoming, linkPreview: known.linkPreview } : incoming;
   if (friendsState.threadHistoryEnabled) dmHistory.upsert(message);
   else {
     if (friendsState.thread.some((existing) => existing.id === message.id)) return;
@@ -640,6 +648,8 @@ function handleRealtimeEvent(event: RealtimeEvent): void {
     case 'dm.message': {
       const { message } = event.payload;
       const peerId = message.senderId === selfId ? message.recipientId : message.senderId;
+      // The message itself ends that friend's "typing" state.
+      if (message.senderId !== selfId) dmTyping.clear(message.senderId);
       threadResync.recordUpsert(peerId, message);
       bumpLastMessage(peerId, message);
       const isOpenThread = friendsState.view === 'dm' && friendsState.selectedFriendId === peerId;
@@ -676,6 +686,12 @@ function handleRealtimeEvent(event: RealtimeEvent): void {
         if (friendsState.threadHistoryEnabled) dmHistory.remove(mid);
         else friendsState.thread = friendsState.thread.filter((m) => m.id !== mid);
         void refreshFriends().catch(() => {});
+      }
+      break;
+    }
+    case 'dm.typing': {
+      if (event.payload?.userId && event.payload.userId !== selfId) {
+        dmTyping.note(event.payload.userId, '', typingActivityOf(event.payload.activity));
       }
       break;
     }

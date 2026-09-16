@@ -33,6 +33,8 @@ apps/web/build/
 apps/web/dist/
 apps/web/.svelte-kit/
 apps/api/uploads/
+# Downloaded DB-IP City Lite database (scripts/geoip/fetch-dbip-city-lite.mjs)
+/geoip/
 
 # Docker/Caddy local state
 caddy_data/
@@ -51,3 +53,6 @@ playwright-report/
 
 # Generated emoji artwork (see apps/web/scripts/build-emoji-assets.mjs)
 apps/web/static/emoji/
+.graphify/.graphify_*
+.graphify/description-instructions/
+.graphify/label-instructions/

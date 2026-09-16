@@ -1,13 +1,13 @@
 <script lang="ts">
-  import { Bell, BellOff, Keyboard, LogOut, Mic, Monitor, Pencil, User, X } from '@lucide/svelte';
+  import EmojiText from '$lib/shared/chat/EmojiText.svelte';
+  import { Bell, BellOff, Keyboard, LogOut, Mic, Monitor, Pencil, ShieldCheck, User, X } from '@lucide/svelte';
   import { onDestroy, untrack } from 'svelte';
   import type { AuthUser, OwnedRoom } from '$lib/api/auth';
   import type { PublicUser } from '$lib/api/friends';
   import { fetchBlockedUsers, unblockUser } from '$lib/api/blocks';
   import { iconMd, iconSm } from '$lib/shared/ui/icons';
-  import { changePassword, deleteUserAvatar, updateDisplayName, uploadUserAvatar } from '$lib/api/auth';
-  import { isValidPassword, PASSWORD_MIN_LENGTH } from '$lib/features/auth/account';
-  import { clearSession, setUser } from '$lib/features/auth/session.svelte';
+  import { deleteUserAvatar, updateDisplayName, uploadUserAvatar } from '$lib/api/auth';
+  import { setUser } from '$lib/features/auth/session.svelte';
   import { state as roomClientState } from '$lib/features/room/client/core/state.svelte';
   import { playPeerCue, playDirectMessageCue, playFriendAcceptedCue, playMicCue, playRoomChatMessageCue, playStreamCue } from '$lib/features/room/client/media/cues';
   import {
@@ -95,6 +95,7 @@
     syncPushNotificationState
   } from '../model/push-notifications.svelte';
   import type { ToastOptions } from '../model/toasts.svelte';
+  import AccountSecuritySettings from './AccountSecuritySettings.svelte';
 
   let {
     open,
@@ -103,16 +104,18 @@
     notificationUsers = [],
     notificationRooms = [],
     loggingOut = false,
+    securityHighlight = null,
     onClose,
     onToast,
     onLogout
   } = $props<{
     open: boolean;
-    tab: 'profile' | 'sound' | 'hotkeys' | 'notifications' | 'app';
+    tab: 'profile' | 'sound' | 'hotkeys' | 'notifications' | 'app' | 'security';
     user: AuthUser | null;
     notificationUsers?: PublicUser[];
     notificationRooms?: OwnedRoom[];
     loggingOut?: boolean;
+    securityHighlight?: 'recovery-codes' | 'password' | null;
     onClose: () => void;
     onToast: (message: string, options?: ToastOptions) => void;
     onLogout: () => void;
@@ -123,12 +126,12 @@
 
   // Profile form
   let name = $state('');
-  let currentPassword = $state('');
-  let newPassword = $state('');
   let saving = $state(false);
   let avatarInput = $state<HTMLInputElement>();
   let avatarFile = $state<File | null>(null);
   let cropOpen = $state(false);
+  // A dialog opened from the security tab owns focus and Escape while it is up.
+  let securityDialogOpen = $state(false);
   let avatarSaving = $state(false);
   let pendingAvatar = $state<Blob | null>(null);
   let avatarPreviewUrl = $state('');
@@ -374,8 +377,6 @@
     if (!isOpen) return;
     untrack(() => {
       name = user?.displayName ?? '';
-      currentPassword = '';
-      newPassword = '';
       if (avatarPreviewUrl) URL.revokeObjectURL(avatarPreviewUrl);
       avatarPreviewUrl = '';
       pendingAvatar = null;
@@ -449,7 +450,7 @@
 
   function onKeydown(event: KeyboardEvent): void {
     if ((event.target as HTMLElement | null)?.closest?.('[data-hotkey-recorder-recording="true"]')) return;
-    if (open && !cropOpen && event.key === 'Escape') onClose();
+    if (open && !cropOpen && !securityDialogOpen && event.key === 'Escape') onClose();
   }
 
   function stopSoundPreview(): void {
@@ -468,31 +469,22 @@
     if (saving) return;
     // Snapshot before any await: updating the session re-runs the reset effect.
     const trimmedName = name.trim();
-    const curPass = currentPassword;
-    const nextPass = newPassword;
     const wantsRename = trimmedName !== (user?.displayName ?? '');
-    const wantsPassword = curPass.length > 0 || nextPass.length > 0;
     const avatarBlob = pendingAvatar;
     const shouldRemoveAvatar = removeAvatarPending;
     const wantsAvatar = Boolean(avatarBlob) || shouldRemoveAvatar;
 
-    if (!wantsRename && !wantsPassword && !wantsAvatar) {
+    if (!wantsRename && !wantsAvatar) {
       onClose();
-      return;
-    }
-    if (wantsPassword && !isValidPassword(nextPass)) {
-      onToast(`Новый пароль: минимум ${PASSWORD_MIN_LENGTH} символов`);
       return;
     }
 
     saving = true;
-    let renamed = false;
     try {
       let nextUser = user;
       if (wantsRename) {
         nextUser = await updateDisplayName(trimmedName);
         setUser(nextUser);
-        renamed = true;
       }
       if (avatarBlob) {
         nextUser = await uploadUserAvatar(avatarBlob);
@@ -503,19 +495,10 @@
         setUser(nextUser);
         syncLocalParticipantAvatar(nextUser);
       }
-      if (wantsPassword) {
-        await changePassword(curPass, nextPass);
-        currentPassword = '';
-        newPassword = '';
-        clearSession();
-        onToast('Пароль изменён, войдите снова');
-      } else {
-        onToast('Изменения сохранены');
-      }
+      onToast('Изменения сохранены');
       onClose();
     } catch (error) {
-      const message = error instanceof Error && error.message ? error.message : 'Не удалось сохранить';
-      onToast(renamed ? `Имя сохранено, пароль не изменён: ${message}` : message);
+      onToast(error instanceof Error && error.message ? error.message : 'Не удалось сохранить');
     } finally {
       saving = false;
     }
@@ -749,7 +732,7 @@
       aria-modal="true"
       aria-labelledby="settingsTitle"
       tabindex="-1"
-      use:dialogFocusTrap={{ enabled: open && !cropOpen }}
+      use:dialogFocusTrap={{ enabled: open && !cropOpen && !securityDialogOpen }}
     >
       <div class="settings-head">
         <span class="settings-title" id="settingsTitle">Настройки</span>
@@ -764,6 +747,10 @@
             <button class="settings-nav-item" type="button" data-active={tab === 'profile'} onclick={() => (tab = 'profile')}>
               <User {...iconMd} aria-hidden="true" />
               Профиль
+            </button>
+            <button class="settings-nav-item" type="button" data-active={tab === 'security'} onclick={() => (tab = 'security')}>
+              <ShieldCheck {...iconMd} aria-hidden="true" />
+              Безопасность
             </button>
             <button class="settings-nav-item" type="button" data-active={tab === 'sound'} onclick={() => (tab = 'sound')}>
               <Mic {...iconMd} aria-hidden="true" />
@@ -824,7 +811,7 @@
                 {/if}
               </div>
               <div>
-                <div class="settings-profile-name">{label}</div>
+                <div class="settings-profile-name"><EmojiText text={label} /></div>
                 <div class="settings-profile-sub">@{user?.login}</div>
               </div>
             </div>
@@ -833,19 +820,6 @@
               <div>
                 <span class="settings-field-label">Имя</span>
                 <input class="settings-input" bind:value={name} maxlength="40" autocomplete="nickname" />
-              </div>
-
-              <div class="settings-divider"></div>
-
-              <div class="settings-password-fields">
-                <div>
-                  <span class="settings-field-label">Текущий пароль</span>
-                  <input class="settings-input" type="password" bind:value={currentPassword} placeholder="••••••••" autocomplete="current-password" />
-                </div>
-                <div>
-                  <span class="settings-field-label">Новый пароль</span>
-                  <input class="settings-input" type="password" bind:value={newPassword} placeholder="Минимум {PASSWORD_MIN_LENGTH} символов" autocomplete="new-password" />
-                </div>
               </div>
             </div>
 
@@ -856,6 +830,14 @@
                 Сохранить
               </button>
             </div>
+          {:else if tab === 'security'}
+            <AccountSecuritySettings
+              login={user?.login ?? ''}
+              highlightRecoveryCodes={securityHighlight === 'recovery-codes'}
+              highlightPassword={securityHighlight === 'password'}
+              {onToast}
+              onDialogOpenChange={(dialogOpen) => (securityDialogOpen = dialogOpen)}
+            />
           {:else if tab === 'sound'}
             <div class="settings-sound">
               <div class="settings-sound-devices">
@@ -1378,7 +1360,7 @@
                           />
                           <span class="settings-notification-name">
                             <span class="settings-notification-title">
-                              <strong>{peer.displayName?.trim() || peer.login}</strong>
+                              <strong><EmojiText text={peer.displayName?.trim() || peer.login} /></strong>
                               {#if peerMuted}
                                 <span class="settings-notification-muted" role="img" aria-label="Уведомления отключены" title="Уведомления отключены">
                                   <BellOff {...iconSm} aria-hidden="true" />
@@ -1416,7 +1398,7 @@
                           <Avatar name={room.name?.trim() || room.roomId} src={room.avatarUrl} shape="squircle" background="var(--room-avatar-bg)" size={32} />
                           <span class="settings-notification-name">
                             <span class="settings-notification-title">
-                              <strong>{room.name?.trim() || 'Комната'}</strong>
+                              <strong><EmojiText text={room.name?.trim() || 'Комната'} /></strong>
                               {#if roomMuted}
                                 <span class="settings-notification-muted" role="img" aria-label="Уведомления отключены" title="Уведомления отключены">
                                   <BellOff {...iconSm} aria-hidden="true" />
@@ -1465,7 +1447,7 @@
                           size={32}
                         />
                         <span class="settings-notification-name">
-                          <strong>{blocked.displayName?.trim() || blocked.login}</strong>
+                          <strong><EmojiText text={blocked.displayName?.trim() || blocked.login} /></strong>
                           {#if blocked.login}<small>@{blocked.login}</small>{/if}
                         </span>
                         <button

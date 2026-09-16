@@ -55,6 +55,11 @@
     shouldConfirmRoomSwitch
   } from './model/room-switch-confirmation';
   import RoomSwitchDialog from './components/RoomSwitchDialog.svelte';
+  import WhatsNewDialog from './components/WhatsNewDialog.svelte';
+  import LoginAlertDialog from './components/LoginAlertDialog.svelte';
+  import { fetchAccountSecurity, snoozeRecoveryCodesReminder } from '$lib/api/auth';
+  import { shouldShowRecoveryCodesReminder } from './model/account-security';
+  import { clearSession, consumeExpectedSessionEnd, session as authSession } from '$lib/features/auth/session.svelte';
   import OpenInAppScreen from './components/OpenInAppScreen.svelte';
   import { bindDesktopLinks, type DesktopLink } from '$lib/platform/desktop-links';
   import { bindDesktopCallActions, syncDesktopCallState } from '$lib/platform/desktop-call';
@@ -87,7 +92,10 @@
   let creating = $state(false);
   let createDialogOpen = $state(false);
   let settingsOpen = $state(false);
-  let settingsTab = $state<'profile' | 'sound' | 'hotkeys' | 'notifications' | 'app'>('profile');
+  let settingsTab = $state<'profile' | 'sound' | 'hotkeys' | 'notifications' | 'app' | 'security'>('profile');
+  let securityHighlight = $state<'recovery-codes' | 'password' | null>(null);
+  let recoveryCodesReminder = $state(false);
+  let loginAlertOpen = $state(false);
   let previewSettingsRoomId = $state('');
   // Room waiting for "switch rooms?" while voice is connected elsewhere.
   let pendingRoomSwitchId = $state('');
@@ -152,8 +160,18 @@
     }
   }
 
+  // The server closes the realtime socket with a dedicated code when this
+  // device's session was ended elsewhere (another device, password recovery).
+  onMount(() => getAppRealtime().onSessionEnded(() => {
+    // Our own sign-out or password change already handles the UI.
+    if (consumeExpectedSessionEnd() || !authSession.user) return;
+    clearSession();
+    onToast('Сеанс на этом устройстве завершён. Войдите снова');
+  }));
+
   onMount(() => {
     void refreshRooms();
+    void refreshRecoveryCodesReminder();
     void getCapabilityFeature('engagement').then((enabled) => {
       notificationInboxEnabled = enabled;
       if (enabled) void notificationInbox.load();
@@ -476,6 +494,36 @@
     settingsOpen = true;
   }
 
+  function openSecuritySettings(highlight: 'recovery-codes' | 'password' | null = null): void {
+    securityHighlight = highlight;
+    settingsTab = 'security';
+    settingsOpen = true;
+  }
+
+  function closeSettings(): void {
+    settingsOpen = false;
+    securityHighlight = null;
+    // Codes may have been created meanwhile.
+    void refreshRecoveryCodesReminder();
+  }
+
+  async function refreshRecoveryCodesReminder(): Promise<void> {
+    try {
+      recoveryCodesReminder = shouldShowRecoveryCodesReminder(await fetchAccountSecurity());
+    } catch {
+      // The reminder is optional; keep whatever was shown.
+    }
+  }
+
+  async function snoozeRecoveryCodes(): Promise<void> {
+    recoveryCodesReminder = false;
+    try {
+      await snoozeRecoveryCodesReminder();
+    } catch {
+      onToast('Не удалось отложить напоминание', { variant: 'error' });
+    }
+  }
+
   function openPeople(): void {
     friendsState.mode = 'friends';
     showPeople();
@@ -559,13 +607,13 @@
         <RoomPreviewView {user} room={selectedRoom} initialPanel={anchor ? 'chat' : null} aroundMessageId={anchor?.messageId} onEnter={() => requestEnterRoom(selectedRoom.roomId)} onBack={closeViewedRoom} onOpenSettings={selectedRoom.relationship === 'owner' ? () => (previewSettingsRoomId = selectedRoom.roomId) : undefined} onRoomsChanged={() => { closeViewedRoom(); void refreshRooms(); }} {onToast} />
         {/key}
       {:else if friendsState.mode === 'rooms' && !embeddedRoomVisible}
-        <VoiceHome {rooms} onOpenRoom={previewRoom} onCreateRoom={() => (createDialogOpen = true)} onJoinCode={handleJoin} onRoomsChanged={refreshRooms} onOpenRoomSettings={(roomId) => (previewSettingsRoomId = roomId)} {onToast} />
+        <VoiceHome {rooms} onOpenRoom={previewRoom} onCreateRoom={() => (createDialogOpen = true)} onJoinCode={handleJoin} onRoomsChanged={refreshRooms} onOpenRoomSettings={(roomId) => (previewSettingsRoomId = roomId)} {recoveryCodesReminder} onOpenRecoveryCodes={() => openSecuritySettings('recovery-codes')} onSnoozeRecoveryCodes={snoozeRecoveryCodes} {onToast} />
       {:else if friendsState.mode === 'friends' && friendsState.view === 'dm'}
         <DmView selfId={user.id} self={user} />
       {:else if friendsState.mode === 'friends' && friendsState.view === 'people'}
         <PeopleView {user} {onToast} onHome={goHome} />
       {:else if friendsState.mode === 'friends'}
-        <VoiceHome {rooms} onOpenRoom={previewRoom} onCreateRoom={() => (createDialogOpen = true)} onJoinCode={handleJoin} onRoomsChanged={refreshRooms} onOpenRoomSettings={(roomId) => (previewSettingsRoomId = roomId)} {onToast} />
+        <VoiceHome {rooms} onOpenRoom={previewRoom} onCreateRoom={() => (createDialogOpen = true)} onJoinCode={handleJoin} onRoomsChanged={refreshRooms} onOpenRoomSettings={(roomId) => (previewSettingsRoomId = roomId)} {recoveryCodesReminder} onOpenRecoveryCodes={() => openSecuritySettings('recovery-codes')} onSnoozeRecoveryCodes={snoozeRecoveryCodes} {onToast} />
       {/if}
     </main>
   </div>
@@ -578,10 +626,17 @@
     {notificationUsers}
     notificationRooms={rooms}
     {loggingOut}
-    onClose={() => (settingsOpen = false)}
+    {securityHighlight}
+    onClose={closeSettings}
     {onToast}
     {onLogout}
   />
+  <LoginAlertDialog
+    onSecureAccount={(target) => openSecuritySettings(target)}
+    onOpenChange={(open) => (loginAlertOpen = open)}
+    {onToast}
+  />
+  <WhatsNewDialog paused={loginAlertOpen} onOpenSecurity={() => openSecuritySettings()} />
   <LobbyRoomSettingsDialog room={previewSettingsRoom} onClose={() => (previewSettingsRoomId = '')} onSaved={refreshRooms} onDeleted={() => { previewSettingsRoomId = ''; closeViewedRoom(); void refreshRooms(); }} {onToast} />
   <RoomSwitchDialog
     open={Boolean(pendingRoomSwitchId)}

@@ -80,14 +80,18 @@ test('the artwork ships the upstream licence, not the repackager\'s', () => {
   const script = read('scripts/build-emoji-assets.mjs');
   const licence = read('scripts/emoji-artwork-LICENSE.txt');
 
-  // The npm package carrying the files is a community repackaging that ships
-  // only an MIT notice covering the packaging. That does not relicense
-  // Twemoji's artwork, which is CC BY 4.0, so the upstream text travels with
-  // the files from this repo and the credit names Twemoji, not the repackager.
+  // The npm package carrying the files ships only the MIT notice for Twemoji's
+  // code. That does not cover the artwork, which is CC BY 4.0, so the upstream
+  // text travels with the files from this repo and the credit names Twemoji
+  // and Discord's fork the files come from.
   assert.match(licence, /Attribution 4\.0 International/);
   assert.match(script, /graphicsLicenceFile/);
   assert.match(script, /LICENSE\.txt/);
   assert.match(script, /ATTRIBUTION\.txt/);
   assert.match(script, /CC BY 4\.0/);
   assert.match(script, /jdecked\/twemoji/);
+  assert.match(script, /github\.com\/discord\/twemoji/);
+  assert.match(script, /const ARTWORK_PACKAGE = '@discordapp\/twemoji';/);
+  assert.equal(JSON.parse(read('package.json')).devDependencies['@discordapp/twemoji'], '16.0.1');
+  assert.match(read('src/lib/shared/chat/emoji-coverage.json'), /"source": "@discordapp\/twemoji@16\.0\.1"/);
 });

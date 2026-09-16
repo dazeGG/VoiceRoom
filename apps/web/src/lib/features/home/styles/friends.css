@@ -821,7 +821,8 @@ html.is-desktop .sidebar-download { display: none; }
 .dm-msg-edit-input {
   width: 100%;
   min-height: 56px;
-  resize: vertical;
+  max-height: 200px;
+  box-sizing: border-box;
   border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 9px;
   outline: none;
@@ -851,7 +852,7 @@ html.is-desktop .sidebar-download { display: none; }
 }
 
 .dm-msg-edit-actions button:disabled { cursor: default; opacity: 0.45; }
-.lobby-dm-compose { flex: none; padding: 14px 24px 20px; }
+.lobby-dm-compose { position: relative; flex: none; padding: 14px 24px 20px; --chat-typing-inset: 26px; }
 .lobby-dm-compose-row {
   display: flex;
   align-items: stretch;
@@ -874,8 +875,9 @@ html.is-desktop .sidebar-download { display: none; }
 .lobby-dm-compose-row .lobby-dm-input {
   padding-left: 8px;
 }
+/* The field grows with its text up to the cap, then scrolls. */
 .lobby-dm-textarea {
-  height: 48px;
+  box-sizing: border-box;
   min-height: 48px;
   max-height: 140px;
   overflow-y: auto;
@@ -887,6 +889,7 @@ html.is-desktop .sidebar-download { display: none; }
   box-shadow: none;
 }
 .lobby-dm-input::placeholder { color: var(--warm-faint); }
+.lobby-dm-input { --composer-placeholder: var(--warm-faint); }
 
 .lobby-dm-empty { flex: 1; display: flex; align-items: center; justify-content: center; color: var(--warm-faint); font-size: 13.5px; }
 

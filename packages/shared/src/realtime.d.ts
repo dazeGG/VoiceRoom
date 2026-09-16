@@ -1,5 +1,13 @@
 export const MAX_VISIBLE_ROOM_PEERS: 5;
 export const SUMMARY_COALESCE_MS: 75;
+export const TYPING_NOTICE_INTERVAL_MS: 2500;
+export const TYPING_NOTICE_TTL_MS: 6000;
+
+export type TypingActivity = 'typing' | 'emoji';
+export const TYPING_ACTIVITIES: readonly TypingActivity[];
+export function normalizeTypingActivity(value: unknown): TypingActivity | null;
+
+export type RoomTypist = { peerId: string; userId: string | null; name: string };
 
 export type ClientEnvelope = {
   id?: string;

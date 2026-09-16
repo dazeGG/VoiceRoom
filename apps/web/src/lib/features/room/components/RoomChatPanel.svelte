@@ -1,8 +1,9 @@
 <script lang="ts">
+  import EmojiText from '$lib/shared/chat/EmojiText.svelte';
   import type { Snippet } from 'svelte';
   import { ChevronRight, MessageSquare, Users } from '@lucide/svelte';
   import { iconSm } from '$lib/shared/ui/icons';
-  import { onMount, tick } from 'svelte';
+  import { onMount, tick, untrack } from 'svelte';
   import { deleteRoomChatMessage, editRoomChatMessage, fetchRoomChat, fetchRoomChatPage, markRoomChatRead, postRoomChat, type ChatMessage } from '$lib/api/rooms';
   import { beginRoomChatReadSession, setRoomUnreadCount } from '$lib/features/home/model/room-presence.svelte';
   import { session } from '$lib/features/auth/session.svelte';
@@ -43,14 +44,21 @@
     type AttachmentComposeStore
   } from '$lib/shared/chat/attachment-compose.svelte';
   import AttachmentComposer from '$lib/shared/chat/AttachmentComposer.svelte';
+  import ComposerEmojiPicker from '$lib/shared/chat/ComposerEmojiPicker.svelte';
+  import TypingIndicator from '$lib/shared/chat/TypingIndicator.svelte';
+  import EmojiComposer from '$lib/shared/chat/EmojiComposer.svelte';
   import AttachmentDropOverlay from '$lib/shared/chat/AttachmentDropOverlay.svelte';
   import AttachmentMosaic from '$lib/shared/chat/AttachmentMosaic.svelte';
   import AttachmentUploadControl from '$lib/shared/chat/AttachmentUploadControl.svelte';
   import ReplyPreview from '$lib/shared/chat/ReplyPreview.svelte';
+  import LinkPreviewCard from '$lib/shared/chat/LinkPreviewCard.svelte';
   import ReplyTargetBar from '$lib/shared/chat/ReplyTargetBar.svelte';
   import StructuredMessageContent from '$lib/shared/chat/StructuredMessageContent.svelte';
   import { contentFromLegacyText } from '@voice-room/shared/room-message-content';
   import { createMentionComposer } from '$lib/shared/chat/mention-composer.svelte';
+  import { loadChatDraft, saveChatDraft } from '$lib/shared/chat/chat-drafts';
+  import { createTypingNotifier, createTypingTracker, formatTypingLabel, typingActivityOf } from '$lib/shared/chat/typing.svelte';
+  import { getAppRealtime } from '$lib/api/realtime';
   import MentionAutocomplete from '$lib/shared/chat/MentionAutocomplete.svelte';
   import { getRoomMembership, loadRoomMembership } from '$lib/features/home/model/room-membership.svelte';
   import type { MembershipMember } from '@voice-room/shared/membership';
@@ -125,10 +133,10 @@
   let editSaving = $state(false);
   let error = $state('');
   let chatBody = $state<HTMLDivElement | null>(null);
-  let composeEl = $state<HTMLTextAreaElement | null>(null);
+  let composeEl = $state<ReturnType<typeof EmojiComposer> | null>(null);
   let chatPinnedToBottom = true;
   let composerAttachmentCount = 0;
-  let editEl = $state<HTMLTextAreaElement | null>(null);
+  let editEl = $state<ReturnType<typeof EmojiComposer> | null>(null);
   let historyEnabled = $state(false);
   let hasMoreBefore = $state(false);
   let loadingOlder = $state(false);
@@ -174,13 +182,6 @@
     if (chatPinnedToBottom) void tick().then(scrollToBottom);
   });
 
-  function autoResize() {
-    if (!composeEl) return;
-    composeEl.style.height = 'auto';
-    const next = Math.min(composeEl.scrollHeight, 140);
-    composeEl.style.height = `${next}px`;
-  }
-
   function idempotencyKeyFor(value: unknown): string {
     const fingerprint = JSON.stringify(value);
     if (!sendAttemptKey || sendAttemptFingerprint !== fingerprint) {
@@ -223,7 +224,6 @@
       }
       return;
     }
-    queueMicrotask(autoResize);
   }
 
   async function onComposePaste(event: ClipboardEvent): Promise<void> {
@@ -278,8 +278,9 @@
       mentionComposer.close();
       return;
     }
-    const query = mentionComposer.update(draft, composeEl.selectionStart ?? draft.length);
-    if (!query && !draft.slice(0, composeEl.selectionStart ?? draft.length).endsWith('@')) return;
+    const caret = composeEl.getSelection().start;
+    const query = mentionComposer.update(draft, caret);
+    if (!query && !draft.slice(0, caret).endsWith('@')) return;
     await loadRoomMembership(roomId, { query });
     if (mentionComposer.query !== query) return;
     mentionComposer.setCandidates(getRoomMembership(roomId).members.filter((member) => member.userId !== session.user?.id));
@@ -287,15 +288,93 @@
 
   function chooseMention(member: MembershipMember): void {
     if (!composeEl) return;
-    const selected = mentionComposer.choose(draft, composeEl.selectionStart ?? draft.length, member);
+    const selected = mentionComposer.choose(draft, composeEl.getSelection().start, member);
     if (!selected) return;
     draft = selected.text;
     void tick().then(() => {
       composeEl?.focus();
-      composeEl?.setSelectionRange(selected.caret, selected.caret);
-      autoResize();
+      composeEl?.setSelection(selected.caret);
     });
   }
+
+  // Who else is typing in this room. Notices name the person the server saw,
+  // keyed like message authors (account id, or the guest's peer id) so their
+  // message clears them.
+  const roomTyping = createTypingTracker();
+  const typingLabel = $derived(formatTypingLabel(roomTyping.people));
+  const typingNotifier = createTypingNotifier((activity) => {
+    if (roomId) getAppRealtime().send('room.chat.typing', { roomId, activity });
+  });
+
+  function typingKey(person: { userId?: string | null; authorUserId?: string | null; peerId?: string }): string {
+    return person.userId || person.authorUserId || person.peerId || '';
+  }
+
+  function onComposeInput(): void {
+    void updateMentionCandidates();
+    if (draft.trim()) typingNotifier.notify();
+  }
+
+  // The field remembers its caret while the picker has focus, so the emoji
+  // lands where the person was writing, within the field's length limit, and
+  // the field takes focus back and reports the input as if it were typed.
+  function insertEmoji(emoji: string): void {
+    composeEl?.insertText(emoji);
+  }
+
+  // Unsent text and its chosen mentions stay on this device per account and
+  // room. Guests have no account, so their composer starts empty every time.
+  const DRAFT_SAVE_DELAY_MS = 400;
+  let draftRestoredFor = '';
+  let draftSaveTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function draftOwnerKey(): string {
+    const userId = session.user?.id ?? '';
+    return userId && roomId ? `${userId}:${roomId}` : '';
+  }
+
+  function persistDraft(): void {
+    if (draftSaveTimer) {
+      clearTimeout(draftSaveTimer);
+      draftSaveTimer = null;
+    }
+    const userId = session.user?.id ?? '';
+    // Nothing is stored before the saved draft was brought back, or an empty
+    // composer would overwrite it.
+    if (!userId || draftOwnerKey() !== draftRestoredFor) return;
+    saveChatDraft(userId, { type: 'room', id: roomId }, { text: draft, mentions: mentionComposer.selected });
+  }
+
+  $effect(() => {
+    const key = draftOwnerKey();
+    untrack(() => {
+      if (!key || key === draftRestoredFor) return;
+      draftRestoredFor = key;
+      const userId = session.user?.id ?? '';
+      const saved = loadChatDraft(userId, { type: 'room', id: roomId });
+      if (!saved || draft) return;
+      draft = saved.text;
+      mentionComposer.restore(saved.mentions);
+    });
+  });
+
+  $effect(() => {
+    void draft;
+    void mentionComposer.selected;
+    untrack(() => {
+      if (!draftRestoredFor) return;
+      if (draftSaveTimer) clearTimeout(draftSaveTimer);
+      draftSaveTimer = setTimeout(persistDraft, DRAFT_SAVE_DELAY_MS);
+    });
+  });
+
+  $effect(() => {
+    window.addEventListener('pagehide', persistDraft);
+    return () => {
+      window.removeEventListener('pagehide', persistDraft);
+      persistDraft();
+    };
+  });
 
   function findLastOwnMessage(): ChatMessage | null {
     for (let index = messages.length - 1; index >= 0; index -= 1) {
@@ -489,8 +568,15 @@
           : message);
         return;
       }
+      if (event.type === 'room.chat.typing') {
+        const typist = event.payload.typist;
+        if (!typist || typist.peerId === peerId || (typist.userId && typist.userId === session.user?.id)) return;
+        roomTyping.note(typingKey(typist), typist.name, typingActivityOf(event.payload.activity));
+        return;
+      }
       if (event.type !== 'room.chat.message') return;
       const message = event.payload.message;
+      if (message) roomTyping.clear(typingKey(message));
       if (!message?.id || messageIds.has(message.id) || messages.some((item) => item.id === message.id)) return;
       messageIds.add(message.id);
       error = '';
@@ -744,6 +830,8 @@
       sendAttemptKey = '';
       sendAttemptFingerprint = '';
       mentionComposer.reset();
+      persistDraft();
+      typingNotifier.reset();
       sent = true;
     } catch (err) {
       error = err instanceof Error ? err.message : 'Не удалось отправить сообщение';
@@ -752,7 +840,6 @@
     }
     if (!sent) return;
     await tick();
-    if (composeEl) composeEl.style.height = '';
     composeEl?.focus();
   }
 
@@ -803,7 +890,7 @@
     error = '';
     void tick().then(() => {
       editEl?.focus();
-      editEl?.setSelectionRange(editEl.value.length, editEl.value.length);
+      editEl?.setSelection(editDraft.length);
     });
   }
 
@@ -999,9 +1086,9 @@
                   aria-label={group.self ? 'Ваш профиль' : `Профиль ${group.name}`}
                   onclick={(event) => openUserProfile(group, event)}
                   oncontextmenu={(event) => openUserMenu(group, event)}
-                >{group.name}</button>
+                ><EmojiText text={group.name} /></button>
               {:else}
-                <span class="chat-msg-author" style={`color:${group.avatarBackground}`}>{group.name}</span>
+                <span class="chat-msg-author" style={`color:${group.avatarBackground}`}><EmojiText text={group.name} /></span>
               {/if}
               <time class="chat-msg-time" datetime={new Date(group.messages[0].createdAt).toISOString()}>{group.time}</time>
             </div>
@@ -1017,16 +1104,15 @@
               >
                 {#if editingMessageId === message.id}
                   <div class="chat-msg-edit">
-                    <textarea
+                    <EmojiComposer
                       class="chat-msg-edit-input"
                       bind:this={editEl}
                       bind:value={editDraft}
-                      rows="2"
-                      maxlength="500"
-                      aria-label="Текст сообщения"
+                      maxlength={500}
+                      ariaLabel="Текст сообщения"
                       onkeydown={onEditKeydown}
                       disabled={editSaving}
-                    ></textarea>
+                    />
                     <div class="chat-msg-edit-actions">
                       <button type="button" onclick={cancelEditing} disabled={editSaving}>Отмена</button>
                       <button type="button" onclick={saveEdit} disabled={editSaving || !editDraft.trim()}>Сохранить</button>
@@ -1036,6 +1122,7 @@
                   <div class="chat-msg-body">
                     {#if message.replyPreview}<ReplyPreview preview={message.replyPreview} interactive onjump={jumpToMessage} />{/if}
                     <span class="chat-msg-content">{#if message.content}<StructuredMessageContent content={message.content} fallback={message.text} onmention={openMentionProfile} />{:else}<ChatText text={message.text} />{/if}{#if message.editedAt}<span class="chat-msg-edited">(изменено)</span>{/if}</span>
+                    {#if message.linkPreview}<LinkPreviewCard preview={message.linkPreview} />{/if}
                     {#if message.attachments?.length}<AttachmentMosaic attachments={message.attachments} />{/if}
                     {#if reactionsEnabled}<ReactionSummary store={reactions} messageId={message.id} canMutate={Boolean(session.user?.id)} />{/if}
                   </div>
@@ -1078,24 +1165,30 @@
       {#if media}<AttachmentComposer store={media} disabled={sending} />{/if}
       <div class="attachment-compose-controls">
         {#if media}<AttachmentUploadControl store={media} disabled={sending} onerror={showAttachmentError} />{/if}
-        <textarea
+        <EmojiComposer
           class="chat-rail-input chat-rail-textarea"
           bind:this={composeEl}
           bind:value={draft}
-          rows="1"
-          maxlength="500"
+          maxlength={500}
           placeholder="Написать в комнату…"
           onkeydown={onComposeKeydown}
-          oninput={() => { autoResize(); void updateMentionCandidates(); }}
+          oninput={onComposeInput}
           oncompositionstart={() => mentionComposer.setComposing(true)}
           oncompositionend={() => { mentionComposer.setComposing(false); void updateMentionCandidates(); }}
           disabled={sending}
-        ></textarea>
+        />
+        <ComposerEmojiPicker
+          userId={session.user?.id ?? ''}
+          disabled={sending}
+          onpick={insertEmoji}
+          onbrowse={() => typingNotifier.notify('emoji')}
+        />
       </div>
     </div>
     {#if mentionComposer.isOpen}
       <MentionAutocomplete candidates={mentionComposer.candidates} activeIndex={mentionComposer.activeIndex} onselect={chooseMention} />
     {/if}
+    <TypingIndicator label={typingLabel} />
   </form>
   {:else if participants}
     <div class="room-panel-members" id={participantsPanelId} role="tabpanel" aria-labelledby={participantsTabId}>

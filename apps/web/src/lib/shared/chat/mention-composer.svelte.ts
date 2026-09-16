@@ -66,10 +66,15 @@ export function createMentionComposer() {
   function move(delta: number): void { if (candidates.length) activeIndex = (activeIndex + delta + candidates.length) % candidates.length; }
   function close(): void { query = ''; anchorStart = -1; activeIndex = 0; candidates = []; }
   function reset(): void { close(); selected = []; composing = false; }
+  // Brings back the mentions of a restored draft so they still notify on send.
+  function restore(value: readonly SelectedMention[]): void {
+    close();
+    selected = value.slice(0, MAX_MENTIONS_PER_MESSAGE).map((member) => ({ ...member }));
+  }
 
   return {
     get activeIndex() { return activeIndex; }, get candidates() { return candidates; }, get isOpen() { return anchorStart >= 0 && candidates.length > 0; },
     get query() { return query; }, get selected() { return selected; },
-    choose, close, move, remove, reset, setCandidates, setComposing(value: boolean) { composing = value; }, toContent, update
+    choose, close, move, remove, reset, restore, setCandidates, setComposing(value: boolean) { composing = value; }, toContent, update
   };
 }

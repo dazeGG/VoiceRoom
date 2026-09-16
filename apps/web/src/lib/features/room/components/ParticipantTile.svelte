@@ -1,4 +1,5 @@
 <script lang="ts">
+  import EmojiText from '$lib/shared/chat/EmojiText.svelte';
   import { HeadphoneOff, MicOff, MonitorPlay } from '@lucide/svelte';
   import { iconSm } from '$lib/shared/ui/icons';
   import { getAvatarPresentation } from '../client/ui/avatar-presentation';
@@ -97,7 +98,7 @@
   </div>
   <div class="participant-copy">
     <h2>
-      <span class="participant-name">{participant.name}</span>
+      <span class="participant-name"><EmojiText text={participant.name} /></span>
       <span class="participant-muted-icon" aria-label="Микрофон выключен" title="Микрофон выключен"><MicOff {...iconSm} /></span>
       <span class="participant-deafened-icon" aria-label="Звук выключен" title="Звук выключен"><HeadphoneOff {...iconSm} /></span>
     </h2>

@@ -483,6 +483,62 @@
   margin-top: 1px;
 }
 
+.lr-callout + .lr-callout {
+  margin-top: 10px;
+}
+
+/* A callout with its own dismiss control: a button cannot nest another, so the
+   frame is a plain box holding the main action and the dismiss button. */
+.lr-callout--split {
+  gap: 0;
+  padding: 0;
+  cursor: default;
+}
+
+.lr-callout--split:hover {
+  background: color-mix(in oklch, var(--accent), transparent 92%);
+}
+
+.lr-callout--split:has(.lr-callout-main:hover) {
+  background: color-mix(in oklch, var(--accent), transparent 86%);
+}
+
+.lr-callout-main {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+  padding: 14px 8px 14px 16px;
+  border: none;
+  border-radius: inherit;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.lr-callout-dismiss {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  margin-right: 12px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--warm-faint);
+  cursor: pointer;
+}
+
+.lr-callout-dismiss:hover {
+  background: var(--control);
+  color: var(--warm-ink);
+}
+
 /* ---- search field ---- */
 .lr-search {
   display: flex;

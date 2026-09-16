@@ -1321,7 +1321,7 @@ test('chat composers and add-friend control preserve compact keyboard-first beha
   assert.match(lobbyV2, /\.lr-add-field input\s*\{[^}]*height:\s*100%[^}]*padding:\s*0/);
 
   for (const composer of [dm, roomChat, previewChat]) {
-    assert.match(composer, /rows="1"/);
+    assert.match(composer, /<EmojiComposer/);
     assert.match(composer, /\.isComposing\) return/);
     assert.match(composer, /\.key === 'Enter' && !\w+\.shiftKey/);
   }
@@ -1331,13 +1331,13 @@ test('chat composers and add-friend control preserve compact keyboard-first beha
   assert.match(roomChatCss, /\.chat-rail-input\s*\{[^}]*padding:\s*10px 14px/);
 
   assert.ok(dmSubmit.indexOf('await sendMessage(text)') < dmSubmit.indexOf("draft = ''"));
-  assert.ok(dmSubmit.indexOf("draft = ''") < dmSubmit.indexOf("inputEl.style.height = ''"));
+  assert.ok(dmSubmit.indexOf("draft = ''") < dmSubmit.indexOf('inputEl?.focus()'));
   assert.doesNotMatch(dmSubmit.slice(dmSubmit.indexOf('catch'), dmSubmit.indexOf('finally')), /draft\s*=/);
   assert.ok(roomSubmit.indexOf('await postRoomChat') < roomSubmit.indexOf("draft = ''"));
-  assert.ok(roomSubmit.indexOf("draft = ''") < roomSubmit.indexOf("composeEl.style.height = ''"));
+  assert.ok(roomSubmit.indexOf("draft = ''") < roomSubmit.indexOf('composeEl?.focus()'));
   assert.doesNotMatch(roomSubmit.slice(roomSubmit.indexOf('catch'), roomSubmit.indexOf('finally')), /draft\s*=/);
   assert.ok(previewSubmit.indexOf('await postRoomChat') < previewSubmit.indexOf("draft = ''"));
-  assert.ok(previewSubmit.indexOf("draft = ''") < previewSubmit.indexOf("composeEl.style.height = ''"));
+  assert.ok(previewSubmit.indexOf("draft = ''") < previewSubmit.indexOf('composeEl?.focus()'));
   assert.doesNotMatch(previewSubmit.slice(previewSubmit.indexOf('catch'), previewSubmit.indexOf('finally')), /draft\s*=/);
 
   for (const [body, element] of [
@@ -1347,7 +1347,9 @@ test('chat composers and add-friend control preserve compact keyboard-first beha
   ]) {
     assert.match(body, /if \(!sent\) return;\s*await tick\(\)/);
     assert.ok(body.indexOf('sending = false') < body.indexOf('await tick()'));
-    assert.ok(body.indexOf(`${element}.style.height = ''`) < body.indexOf(`${element}?.focus()`));
+    // The field sizes itself with CSS, so nothing resets a height by hand.
+    assert.ok(body.indexOf('await tick()') < body.indexOf(`${element}?.focus()`));
+    assert.doesNotMatch(body, /style\.height/);
   }
 
   assert.doesNotMatch(`${roomChat}\n${previewChat}`, /\bSend\b|chat-rail-send/);
@@ -2090,7 +2092,7 @@ test('composer ArrowUp edits the latest own message in both chats', () => {
 test('message action toolbars expose persisted quick reactions and a separated full picker', () => {
   const chat = readRoomChat();
   const dm = read('src/lib/features/home/components/lobby/DmView.svelte');
-  const picker = read('src/lib/shared/chat/ReactionPicker.svelte');
+  const picker = read('src/lib/shared/chat/ReactionPicker.svelte') + read('src/lib/shared/chat/EmojiPickerPanel.svelte');
   const persistence = read('src/lib/shared/chat/frequent-reactions.ts');
   const hoverActions = read('src/lib/shared/chat/MessageHoverActions.svelte');
 
@@ -2104,7 +2106,7 @@ test('message action toolbars expose persisted quick reactions and a separated f
   assert.match(picker, /class="reaction-quick-actions" role="group" aria-label="Быстрые реакции"/);
   assert.match(picker, /\{#each frequentEmoji as emoji/);
   assert.match(picker, /SmilePlus/);
-  assert.match(picker, /placeholder="Поиск реакции"/);
+  assert.match(picker, /searchLabel = 'Поиск реакции'[\s\S]*placeholder=\{searchLabel\}/);
   const catalog = read('src/lib/shared/chat/emoji-catalog.ts');
   // Categories now come through the catalogue layer, which drops anything the
   // artwork cannot draw before the picker ever sees it.
@@ -2115,7 +2117,7 @@ test('message action toolbars expose persisted quick reactions and a separated f
   // Categories are anchors into one continuous list, not tabs that swap the
   // content out, so scrolling passes from one category into the next.
   assert.match(picker, /class="reaction-picker-anchors"[\s\S]*role="toolbar"/);
-  assert.match(picker, /aria-label="Разделы реакций"/);
+  assert.match(picker, /sectionsLabel = 'Разделы реакций'[\s\S]*aria-label=\{sectionsLabel\}/);
   assert.match(picker, /function goToSection\(key: string\)/);
   assert.doesNotMatch(picker, /role="tablist"|role="tabpanel"/);
   // ~2400 tiles in one scroller, so only the visible rows may exist.
@@ -2160,7 +2162,7 @@ test('manual chat polish keeps notifications local, direct messages flat, reacti
   const dm = read('src/lib/features/home/components/lobby/DmView.svelte');
   const roomChat = readRoomChat();
   const chatCss = read('src/lib/features/room/styles/chat-rail.css');
-  const picker = read('src/lib/shared/chat/ReactionPicker.svelte');
+  const picker = read('src/lib/shared/chat/ReactionPicker.svelte') + read('src/lib/shared/chat/EmojiPickerPanel.svelte');
   const summary = read('src/lib/shared/chat/ReactionSummary.svelte');
   const mentionComposer = read('src/lib/shared/chat/mention-composer.svelte.ts');
   const mentionAutocomplete = read('src/lib/shared/chat/MentionAutocomplete.svelte');
@@ -2358,7 +2360,7 @@ test('release polish removes token drift, inline people styles, and adds reduced
   const lobbyCss = read('src/lib/features/home/styles/lobby-v2.css');
   const switchCss = read('src/lib/shared/ui/Switch/Switch.svelte');
   const sliderCss = read('src/lib/shared/ui/Slider/Slider.svelte');
-  const reactions = read('src/lib/shared/chat/ReactionPicker.svelte');
+  const reactions = read('src/lib/shared/chat/ReactionPicker.svelte') + read('src/lib/shared/chat/EmojiPickerPanel.svelte');
   const chatCss = read('src/lib/features/room/styles/chat-rail.css');
   const dmCss = read('src/lib/features/home/styles/friends.css');
   const roomControlsCss = read('src/lib/features/room/styles/controls.css');
@@ -2416,7 +2418,7 @@ test('context-menu follow-up preserves async feedback, focus scopes, guest bound
 
 test('chat hover actions stay compact, float the picker, and open profiles from messages and members', () => {
   const hover = read('src/lib/shared/chat/MessageHoverActions.svelte');
-  const picker = read('src/lib/shared/chat/ReactionPicker.svelte');
+  const picker = read('src/lib/shared/chat/ReactionPicker.svelte') + read('src/lib/shared/chat/EmojiPickerPanel.svelte');
   const popover = read('src/lib/shared/ui/Popover/Popover.svelte');
   const roomChat = readRoomChat();
   const dm = read('src/lib/features/home/components/lobby/DmView.svelte');

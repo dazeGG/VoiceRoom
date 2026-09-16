@@ -104,7 +104,7 @@ jobs:
       - name: Start production-like voice stack
         run: docker compose -f docker-compose.ci.yml up -d --build --wait --wait-timeout 180
       - name: Join voice and verify chat behavior through production-like services
-        run: npm --workspace @voice-room/web run e2e -- e2e/room-voice.spec.ts e2e/chat-image-paste.spec.ts e2e/manual-chat-polish.spec.ts --project=chromium --retries=0
+        run: npm --workspace @voice-room/web run e2e -- e2e/room-voice.spec.ts e2e/chat-image-paste.spec.ts e2e/manual-chat-polish.spec.ts e2e/chat-drafts.spec.ts e2e/chat-typing.spec.ts --project=chromium --retries=0
       - name: Capture voice stack diagnostics
         if: failure()
         run: |

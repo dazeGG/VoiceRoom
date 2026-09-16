@@ -1,4 +1,5 @@
 <script lang="ts">
+  import EmojiText from '$lib/shared/chat/EmojiText.svelte';
   import { HeadphoneOff, Headphones, LogOut, Mic, MicOff } from '@lucide/svelte';
   import { Avatar } from '$lib/shared/ui';
   import { iconMd, iconSm } from '$lib/shared/ui/icons';
@@ -33,7 +34,7 @@
   <button class="voice-head" type="button" aria-label={openLabel} title={openLabel} onclick={onOpen}>
     <Avatar name={roomName} src={avatarUrl} shape="squircle" background="var(--room-avatar-bg)" size={42} />
     <div class="voice-head-body">
-      <div class="voice-room-name" title={roomName}>{roomName}</div>
+      <div class="voice-room-name" title={roomName}><EmojiText text={roomName} /></div>
       {#if muted}
         <div class="voice-status voice-status--muted">
           <span class="voice-status-icon">
