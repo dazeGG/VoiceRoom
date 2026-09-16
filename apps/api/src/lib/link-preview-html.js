@@ -19,7 +19,7 @@ function decodeEntities(text) {
       const valid = Number.isInteger(code) && code > 0 && code <= 0x10ffff && (code < 0xd800 || code > 0xdfff);
       return valid ? String.fromCodePoint(code) : '';
     }
-    return NAMED_ENTITIES[body.toLowerCase()] ?? entity;
+    return (Object.hasOwn(NAMED_ENTITIES, body.toLowerCase()) ? NAMED_ENTITIES[body.toLowerCase()] : entity);
   });
 }
 

@@ -8,13 +8,29 @@
 // эмодзи" after they went back to typing, and alternating activities still
 // cannot get past the budget.
 const TYPING_FORWARD_MIN_MS = 1000;
+// A client names the targets it types to, so one connection must not be able
+// to grow this map without end: the least recently used target is dropped,
+// which costs at most one extra forward when that thread comes back.
+const TYPING_TARGET_LIMIT = 64;
 
 function createTypingThrottle({
   minIntervalMs = TYPING_FORWARD_MIN_MS,
   now = Date.now,
-  setTimer = setTimeout
+  setTimer = setTimeout,
+  clearTimer = clearTimeout,
+  maxTargets = TYPING_TARGET_LIMIT
 } = {}) {
   const targets = new Map();
+
+  function remember(key, entry) {
+    targets.delete(key);
+    targets.set(key, entry);
+    while (targets.size > maxTargets) {
+      const [oldestKey, oldest] = targets.entries().next().value;
+      if (oldest.timer) clearTimer(oldest.timer);
+      targets.delete(oldestKey);
+    }
+  }
 
   function send(entry, activity, forward) {
     entry.at = now();
@@ -24,11 +40,8 @@ function createTypingThrottle({
 
   // Returns whether the notice went out right away.
   function offer(key, activity, forward) {
-    let entry = targets.get(key);
-    if (!entry) {
-      entry = { at: -Infinity, activity: null, pending: null, timer: null };
-      targets.set(key, entry);
-    }
+    const entry = targets.get(key) || { at: -Infinity, activity: null, pending: null, timer: null };
+    remember(key, entry);
     const wait = entry.at + minIntervalMs - now();
     if (wait <= 0 && !entry.timer) {
       send(entry, activity, forward);
@@ -50,10 +63,11 @@ function createTypingThrottle({
     return false;
   }
 
-  return { offer };
+  return { offer, size: () => targets.size };
 }
 
 module.exports = {
   TYPING_FORWARD_MIN_MS,
+  TYPING_TARGET_LIMIT,
   createTypingThrottle
 };

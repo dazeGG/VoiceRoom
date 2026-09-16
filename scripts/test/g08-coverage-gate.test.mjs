@@ -423,6 +423,69 @@ test("G08 web TypeScript producer measures actual auth and media decision files"
   globalThis.fetch = async () => ({ ok: false, json: async () => { throw new Error("not json"); } });
   await assert.rejects(() => auth.login({ login: "user", password: "bad" }), /сервер недоступен/i);
 
+  // Account security, added in 2.6.0: every call, plus the fallback each answer
+  // leans on when the server leaves a field out.
+  globalThis.fetch = async () => response({ payload: { recoveryCodes: { remaining: 3, generatedAt: 10 }, recoveryCodesReminder: { snoozedUntil: 20 } } });
+  assert.deepEqual(await auth.fetchAccountSecurity(), {
+    recoveryCodes: { remaining: 3, generatedAt: 10 },
+    recoveryCodesReminder: { snoozedUntil: 20 }
+  });
+  globalThis.fetch = async () => response({ payload: {} });
+  assert.deepEqual(await auth.fetchAccountSecurity(), {
+    recoveryCodes: { remaining: 0, generatedAt: null },
+    recoveryCodesReminder: { snoozedUntil: null }
+  });
+  globalThis.fetch = async () => response({ payload: { recoveryCodesReminder: { snoozedUntil: 42 } } });
+  assert.deepEqual(await auth.snoozeRecoveryCodesReminder(), { snoozedUntil: 42 });
+  globalThis.fetch = async () => response({ payload: { whatsNew: { current: "2.6.0", lastSeen: "not-a-version" } } });
+  assert.deepEqual(await auth.fetchWhatsNew(), { current: "2.6.0", lastSeen: null });
+  globalThis.fetch = async () => response({ payload: {} });
+  await auth.markWhatsNewSeen();
+  assert.deepEqual(await auth.fetchLoginAlerts(), []);
+  globalThis.fetch = async () => response({ payload: { alerts: [null, "nonsense"] } });
+  assert.deepEqual(await auth.fetchLoginAlerts(), []);
+  globalThis.fetch = async () => response({ payload: { sessions: [null] } });
+  assert.deepEqual(await auth.fetchAccountSessions(), []);
+  globalThis.fetch = async () => response({ payload: {} });
+  assert.deepEqual(await auth.fetchAccountDeletionPreview(), { graceDays: 7, rooms: [] });
+  globalThis.fetch = async () => response({ payload: { graceDays: 3, rooms: [{ roomId: "room", name: "Комната", heir: null }] } });
+  assert.deepEqual(await auth.fetchAccountDeletionPreview(), { graceDays: 3, rooms: [{ roomId: "room", name: "Комната", heir: null }] });
+  globalThis.fetch = async () => response({ payload: { deletionScheduledFor: 5 } });
+  assert.deepEqual(await auth.requestAccountDeletion("password"), { deletionScheduledFor: 5 });
+  globalThis.fetch = async () => response({ payload: {} });
+  assert.ok((await auth.requestAccountDeletion("password")).deletionScheduledFor > 0);
+  globalThis.fetch = async () => response({ payload: { user } });
+  assert.equal((await auth.restoreAccount({ login: "user", password: "password" })).id, "u1");
+  globalThis.fetch = async () => response({ payload: {} });
+  await auth.confirmLoginAlert("alert id");
+  assert.deepEqual(await auth.denyLoginAlert("alert id"), { sessionEnded: false, recoveryCodes: { remaining: 0, generatedAt: null } });
+  globalThis.fetch = async () => response({ payload: { sessionEnded: true, recoveryCodes: { remaining: 2, generatedAt: 7 } } });
+  assert.deepEqual(await auth.denyLoginAlert("alert id"), { sessionEnded: true, recoveryCodes: { remaining: 2, generatedAt: 7 } });
+  globalThis.fetch = async () => response({ payload: {} });
+  await auth.revokeAccountSession("session id");
+  assert.equal(await auth.revokeOtherAccountSessions(), 0);
+  globalThis.fetch = async () => response({ payload: { revoked: 2 } });
+  assert.equal(await auth.revokeOtherAccountSessions(), 2);
+  globalThis.fetch = async () => response({ payload: { codes: ["AAAA-BBBB", 5], recoveryCodes: { remaining: 10, generatedAt: 1 } } });
+  assert.deepEqual(await auth.generateRecoveryCodes("password"), {
+    codes: ["AAAA-BBBB"],
+    recoveryCodes: { remaining: 10, generatedAt: 1 }
+  });
+  globalThis.fetch = async () => response({ payload: {} });
+  assert.deepEqual(await auth.generateRecoveryCodes("password"), { codes: [], recoveryCodes: { remaining: 0, generatedAt: null } });
+  globalThis.fetch = async () => response({ payload: { user, recoveryCodes: { remaining: 9 } } });
+  assert.deepEqual(await auth.recoverAccount({ login: "user", code: "code", newPassword: "password" }), { user, remaining: 9 });
+
+  globalThis.fetch = async () => response({ ok: false, payload: { error: "нет доступа" } });
+  await assert.rejects(() => auth.fetchAccountSecurity(), /нет доступа/);
+  await assert.rejects(() => auth.generateRecoveryCodes("password"), /нет доступа/);
+  globalThis.fetch = async () => response({ ok: false, payload: {} });
+  await assert.rejects(() => auth.fetchWhatsNew(), /новости/i);
+  await assert.rejects(() => auth.fetchLoginAlerts(), /входы в аккаунт/i);
+  await assert.rejects(() => auth.fetchAccountSessions(), /устройства/i);
+  await assert.rejects(() => auth.fetchAccountDeletionPreview(), /удаление аккаунта/i);
+  await assert.rejects(() => auth.revokeAccountSession("session id"), /завершить сеанс/i);
+
   assert.equal(media.getScreenReceiverDemand("", "", new Set()), "hidden");
   assert.equal(media.getScreenReceiverDemand("peer", "peer", new Set()), "stage");
   assert.equal(media.getScreenReceiverDemand("peer", "", new Set(["peer"])), "preview");

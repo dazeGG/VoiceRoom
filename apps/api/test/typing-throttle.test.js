@@ -23,12 +23,12 @@ function createClock() {
   };
 }
 
-function setup() {
+function setup(options = {}) {
   const clock = createClock();
-  const throttle = createTypingThrottle({ minIntervalMs: 1000, now: clock.now, setTimer: clock.setTimer });
+  const throttle = createTypingThrottle({ minIntervalMs: 1000, now: clock.now, setTimer: clock.setTimer, ...options });
   const sent = [];
   const offer = (key, activity) => throttle.offer(key, activity, (value) => sent.push(`${key}:${value}`));
-  return { clock, offer, sent };
+  return { clock, offer, sent, throttle };
 }
 
 test('a repeat of the same activity inside a second is dropped and the next second goes out', () => {
@@ -93,4 +93,23 @@ test('alternating activities cannot get past one notice a second, and targets do
   clock.advance(200);
   assert.deepEqual(sent.filter((entry) => entry.startsWith('room:')), ['room:typing', 'room:emoji']);
   assert.deepEqual(sent.filter((entry) => entry.startsWith('friend:')), ['friend:typing']);
+});
+
+test('a connection cannot grow the throttle past its target limit', () => {
+  const cleared = [];
+  const { clock, offer, throttle } = setup({ maxTargets: 2, clearTimer: (timer) => cleared.push(timer) });
+
+  offer('a', 'typing');
+  // 'a' now waits out its second with a pending switch, so it holds a timer.
+  offer('a', 'emoji');
+  offer('b', 'typing');
+  offer('c', 'typing');
+
+  assert.equal(throttle.size(), 2, 'the least recently used target is dropped');
+  assert.equal(cleared.length, 1, 'a dropped target does not leave its timer behind');
+
+  // Dropping 'a' forgets when it last sent, so it is free to send again.
+  clock.advance(100);
+  assert.equal(offer('a', 'typing'), true);
+  assert.equal(throttle.size(), 2);
 });

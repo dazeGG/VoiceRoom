@@ -31,14 +31,17 @@ function createLinkPreviewService({
     return crypto.createHash('sha256').update(url).digest('hex');
   }
 
+  // A finished fetch hands its slot to the next waiter instead of releasing it,
+  // so a caller that arrives in the same tick cannot take the same slot twice.
   async function withFetchSlot(task) {
     if (active >= MAX_CONCURRENT_FETCHES) await new Promise((resolve) => waiting.push(resolve));
-    active += 1;
+    else active += 1;
     try {
       return await task();
     } finally {
-      active -= 1;
-      waiting.shift()?.();
+      const next = waiting.shift();
+      if (next) next();
+      else active -= 1;
     }
   }
 
