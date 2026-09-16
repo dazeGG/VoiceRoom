@@ -19,6 +19,7 @@ import { publishLocalScreenTracks, unpublishLocalScreenTracks } from './livekit-
 import { openScreenShare, stopLocalScreenAudioCapture } from './screen-capture-service';
 import { TRACK_SOURCE } from '../media/livekit-runtime';
 import { updateParticipant } from '../room/participants';
+import { isMicrophoneShownMuted } from '../core/microphone-mute';
 import {
   getActiveScreenPeer,
   hideScreenStage,
@@ -85,7 +86,7 @@ export async function startScreenShare(profileId: string = getSelectedScreenProf
 
     updateParticipant({
       id: state.peerId,
-      muted: state.muted,
+      muted: isMicrophoneShownMuted(),
       name: getDisplayName(),
       screen: true,
       screenAudio: hasScreenAudio(),
@@ -133,7 +134,7 @@ export async function stopScreenShare(options: { notify?: boolean; quiet?: boole
 
     updateParticipant({
       id: state.peerId,
-      muted: state.muted,
+      muted: isMicrophoneShownMuted(),
       name: getDisplayName(),
       screen: false,
       screenAudio: false,

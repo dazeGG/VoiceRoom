@@ -84,6 +84,7 @@ function isOverSpeakingThreshold(participant: Participant, levelDb: number): boo
   if (state.outputMuted) return false;
 
   if (!participant.isLocal) return levelDb >= REMOTE_SPEAKING_DB;
+  if (state.microphoneMode === 'push-to-talk') return state.pushToTalkActive;
   if (!isGateDisabled()) return levelDb >= state.gateThresholdDb;
 
   return levelDb >= LOCAL_GATE_DISABLED_SPEAKING_DB;

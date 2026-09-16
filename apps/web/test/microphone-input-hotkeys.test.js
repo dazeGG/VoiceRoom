@@ -164,3 +164,36 @@ test('configurable hotkeys and push-to-talk cover hold, release, and focus loss'
   assert.match(main, /phase === 'pressed'/);
   assert.match(dock, /data-active=\{roomClientState\.pushToTalkActive\}/);
 });
+
+test('idle push-to-talk is not shown as a mute and a held key lights the ring with the gate open', () => {
+  const muteRule = read('src/lib/features/room/client/core/microphone-mute.ts');
+  const presence = read('src/lib/features/room/client/room/presence.ts');
+  const livekit = read('src/lib/features/room/client/services/livekit-service.ts');
+  const controls = read('src/lib/features/room/client/ui/controls.ts');
+  const meters = read('src/lib/features/room/client/media/meters.ts');
+  const microphone = read('src/lib/features/room/client/services/microphone-service.ts');
+  const devices = read('src/lib/features/room/client/ui/devices.ts');
+  const css = read('src/lib/features/room/styles/controls.css');
+
+  // One rule decides what the room sees: deafen still shows, idle PTT does not.
+  assert.match(muteRule, /if \(!state\.muted\) return false;\s*return state\.microphoneMode !== 'push-to-talk' \|\| state\.outputMuted;/);
+  assert.match(presence, /muted: isMicrophoneShownMuted\(\)/);
+  assert.doesNotMatch(presence, /muted: state\.muted/);
+  assert.doesNotMatch(controls, /muted: state\.muted/);
+  // The SFU publication follows the shown state, so peers get no mute event.
+  assert.match(livekit, /async function syncMicrophonePublicationMuted[\s\S]*?if \(isMicrophoneShownMuted\(\)\) \{\s*await publication\.mute\(\)/);
+  // Mode and deafen switches resync even when state.muted itself stays put.
+  assert.match(controls, /if \(state\.muted === wasMuted\) syncShownMicrophoneMute\(\)/);
+  assert.match(controls, /toggleOutputMute[\s\S]*syncLocalMicrophonePublicationMuted\(\)[\s\S]*clearAllSpeaking/);
+
+  // Own ring is green for the whole hold rather than gated on level.
+  assert.match(meters, /if \(state\.microphoneMode === 'push-to-talk'\) return state\.pushToTalkActive;/);
+  // Holding the key opens the gate; release and reset put the threshold back.
+  assert.match(microphone, /const threshold = state\.pushToTalkActive \? 0 : getGateThresholdAmplitude\(\);/);
+  assert.match(controls, /state\.pushToTalkActive = true;\s*syncPushToTalkGate\(\);/);
+  assert.match(controls, /state\.pushToTalkActive = false;\s*syncPushToTalkGate\(\);\s*setMicrophoneMuted\(true/);
+  assert.match(devices, /updateActiveGateThreshold\(state\.pushToTalkActive \? 0 : threshold\)/);
+
+  // The dock no longer paints idle PTT as a coral mute.
+  assert.doesNotMatch(css, /\.mic-button\[data-state="ptt"\]/);
+});
