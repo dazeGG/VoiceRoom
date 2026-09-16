@@ -215,6 +215,10 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - uses: docker/build-push-action@v7
+        env:
+          # The build summary stays on the run page; the per-build record
+          # artifact is not used and only fills Actions storage.
+          DOCKER_BUILD_RECORD_UPLOAD: false
         with:
           context: .
           target: ${{ matrix.target }}
