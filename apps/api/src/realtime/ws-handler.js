@@ -28,6 +28,24 @@ function createWsHandler({
   // a burst of typing costs one lookup, and notices to a thread go through the
   // typing throttle.
   const DM_TYPING_PERMISSION_TTL_MS = 30_000;
+  // The client picks the thread ids, so the cache and the lookups behind it are
+  // bounded per connection: naming endless strangers can grow neither this
+  // process nor the load on the database.
+  const DM_TYPING_THREAD_LIMIT = 32;
+  const DM_TYPING_LOOKUP_BUDGET = 20;
+  const DM_TYPING_LOOKUP_WINDOW_MS = 30_000;
+
+  function spendTypingLookup(connection) {
+    const at = now();
+    const budget = connection.dmTypingLookups;
+    if (!budget || at - budget.windowAt >= DM_TYPING_LOOKUP_WINDOW_MS) {
+      connection.dmTypingLookups = { windowAt: at, spent: 1 };
+      return true;
+    }
+    if (budget.spent >= DM_TYPING_LOOKUP_BUDGET) return false;
+    budget.spent += 1;
+    return true;
+  }
 
   function forwardDirectTyping(connection, peerId, activity = 'typing') {
     if (!connection.userId || peerId === connection.userId) return;
@@ -38,10 +56,13 @@ function createWsHandler({
   }
 
   async function sendDirectTyping(connection, peerId, activity) {
-    connection.dmTypingPermission ??= new Map();
-    const entry = connection.dmTypingPermission.get(peerId) || { allowed: false, checkedAt: -Infinity };
-    connection.dmTypingPermission.set(peerId, entry);
+    const cache = (connection.dmTypingPermission ??= new Map());
+    const entry = cache.get(peerId) || { allowed: false, checkedAt: -Infinity };
+    cache.delete(peerId);
+    cache.set(peerId, entry);
+    while (cache.size > DM_TYPING_THREAD_LIMIT) cache.delete(cache.keys().next().value);
     if (now() - entry.checkedAt >= DM_TYPING_PERMISSION_TTL_MS) {
+      if (!spendTypingLookup(connection)) return;
       entry.allowed = Boolean(await canTypeToUser(connection.userId, peerId));
       entry.checkedAt = now();
     }

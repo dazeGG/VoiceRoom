@@ -58,20 +58,32 @@ function findTimers(source) {
   return timers;
 }
 
+// A file listed here writes across domains on purpose, such as erasing an
+// account from every table in one transaction. The exception is bounded: it
+// may touch only the tables declared next to it.
+function crossDomainTablesFor(filePath, crossDomainWriters) {
+  for (const [owner, tables] of Object.entries(crossDomainWriters)) {
+    if (filePath === owner || filePath.endsWith(`/${owner}`)) return tables;
+  }
+  return null;
+}
+
 export function checkApiSources({ config, files }) {
   const violations = [];
   const fileSet = files || walkFiles("apps/api/src");
   const ownerPrefixes = config.writeRules?.ownerPathPrefixes || [];
   const allowedOwners = config.writeRules?.allowedOwners || {};
+  const crossDomainWriters = config.writeRules?.crossDomainWriters || {};
 
   for (const filePath of fileSet) {
     if (!fs.existsSync(filePath)) continue;
     const source = fs.readFileSync(filePath, "utf8");
+    const declaredCrossDomain = crossDomainTablesFor(filePath, crossDomainWriters);
     for (const table of findSqlWrites(source)) {
       const owners = allowedOwners[table];
-      if (owners && !isOwner(filePath, owners, ownerPrefixes)) {
-        violations.push({ ruleId: "direct-foreign-table-write", filePath, table, owners });
-      }
+      if (!owners || isOwner(filePath, owners, ownerPrefixes)) continue;
+      if (declaredCrossDomain?.includes(table)) continue;
+      violations.push({ ruleId: "direct-foreign-table-write", filePath, table, owners });
     }
 
     const timerForbidden = (config.timerRules?.forbiddenSources || []).some((glob) => globToRegExp(glob).test(filePath));

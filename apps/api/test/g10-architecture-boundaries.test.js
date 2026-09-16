@@ -36,6 +36,25 @@ test('G10-A01 current API composition graph stays inside import, write and timer
   assert.match(serverSource, /module\.exports\s*=\s*\{/);
 });
 
+test('G10-A03 a declared cross-domain writer may touch only its declared tables', async () => {
+  const { checkApiSources } = await loadScanners();
+  const rules = config();
+  const [writer] = Object.keys(rules.writeRules.crossDomainWriters);
+  const declared = rules.writeRules.crossDomainWriters[writer];
+
+  assert.ok(declared.length > 0, 'a cross-domain writer declares the tables it erases');
+  const allowed = fixtureFile(writer, `async function run(db) { await db.query('DELETE FROM ${declared[0]} WHERE user_id = $1'); }
+`);
+  assert.deepEqual(checkApiSources({ config: rules, files: [allowed] }), []);
+
+  const undeclared = Object.keys(rules.writeRules.allowedOwners).find((table) => !declared.includes(table));
+  const forbidden = fixtureFile(writer, `async function run(db) { await db.query('DELETE FROM ${undeclared} WHERE id = $1'); }
+`);
+  const violations = checkApiSources({ config: rules, files: [forbidden] });
+  assert.equal(violations[0]?.ruleId, 'direct-foreign-table-write');
+  assert.equal(violations[0]?.table, undeclared);
+});
+
 test('G10-A02 seeded forbidden imports, direct foreign writes and listener worker timers fail', async () => {
   const { checkImportBoundaries, checkApiSources } = await loadScanners();
   const rules = config();

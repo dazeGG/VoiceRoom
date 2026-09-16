@@ -26,6 +26,16 @@
   // the global rule shortens every animation, which would flick through them all.
   const running = $derived(!hovered && !held && !hiddenTab);
 
+  // The card can disappear under a more urgent dialog while the pointer is over
+  // it or held down, and then no pointerleave or pointerup ever reaches it. Its
+  // reasons to wait go with it, so the story is never stuck when it comes back.
+  $effect(() => {
+    if (open) return;
+    hovered = false;
+    held = false;
+    pointerStart = null;
+  });
+
   onMount(() => {
     let cancelled = false;
     void fetchWhatsNew()
@@ -83,6 +93,7 @@
     else if (event.key === 'ArrowLeft') step(-1);
   }
 
+  let stageEl: HTMLElement | undefined = $state();
   let pointerStart: { x: number; y: number; at: number } | null = null;
 
   function onPointerDown(event: PointerEvent): void {
@@ -104,8 +115,8 @@
     }
     // A quick tap turns the page as in stories: the left third goes back.
     if (Math.abs(dx) < 10 && Math.abs(dy) < 10 && performance.now() - start.at < 300) {
-      const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
-      step(event.clientX - rect.left < rect.width / 3 ? -1 : 1);
+      const rect = stageEl?.getBoundingClientRect();
+      if (rect) step(event.clientX - rect.left < rect.width / 3 ? -1 : 1);
     }
   }
 
@@ -119,7 +130,8 @@
   }
 </script>
 
-<svelte:window onkeydown={onKeydown} />
+<!-- The release happens wherever the pointer went, so the window hears it. -->
+<svelte:window onkeydown={onKeydown} onpointerup={onPointerUp} onpointercancel={onPointerCancel} />
 
 {#if open}
   <div class="stories-overlay" role="presentation">
@@ -162,9 +174,8 @@
         class="stories-stage"
         role="presentation"
         tabindex="-1"
+        bind:this={stageEl}
         onpointerdown={onPointerDown}
-        onpointerup={onPointerUp}
-        onpointercancel={onPointerCancel}
       >
         {#key index}
           <div class="stories-slide">
