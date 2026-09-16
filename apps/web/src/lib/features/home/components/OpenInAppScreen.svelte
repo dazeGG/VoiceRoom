@@ -1,10 +1,41 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
+  import { fetchDesktopRelease, type DesktopRelease } from '$lib/api/desktop';
   import { Button } from '$lib/shared/ui';
+  import { detectDesktopBuildId } from '../model/desktop-builds';
+  import { startDesktopBuildDownload } from '../services/desktop-download';
 
   let { onRetry, onContinue } = $props<{
     onRetry: () => void;
     onContinue: () => void;
   }>();
+
+  let release: DesktopRelease | null = null;
+  let releasePromise: Promise<DesktopRelease | null> | null = null;
+  let downloading = $state(false);
+
+  function loadRelease(): Promise<DesktopRelease | null> {
+    releasePromise ??= fetchDesktopRelease()
+      .then((latest) => (release = latest))
+      .catch(() => null);
+    return releasePromise;
+  }
+
+  // Fetched as the screen opens, so the click usually starts the download in the
+  // same user gesture instead of after a request the browser may treat as a popup.
+  onMount(() => {
+    void loadRelease();
+  });
+
+  async function download(): Promise<void> {
+    if (downloading) return;
+    downloading = true;
+    try {
+      startDesktopBuildDownload(release ?? (await loadRelease()), detectDesktopBuildId());
+    } finally {
+      downloading = false;
+    }
+  }
 </script>
 
 <div class="open-in-app" role="dialog" aria-modal="true" aria-labelledby="openInAppTitle">
@@ -13,8 +44,10 @@
     <p>
       Если Voice Room установлен, комната откроется в нём. Разрешите браузеру открыть приложение, если он спросит.
     </p>
+    <p>Приложения ещё нет? Скачайте его: в нём оверлей поверх игр, горячие клавиши и Push-to-talk.</p>
     <div class="open-in-app-actions">
-      <Button variant="primary" type="button" onclick={onRetry}>Открыть снова</Button>
+      <Button variant="primary" type="button" disabled={downloading} onclick={download}>Скачать приложение</Button>
+      <Button variant="ghost" type="button" onclick={onRetry}>Открыть снова</Button>
       <Button variant="ghost" type="button" onclick={onContinue}>Продолжить в браузере</Button>
     </div>
   </div>
