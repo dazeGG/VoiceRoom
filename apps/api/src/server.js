@@ -43,7 +43,7 @@ const { createLinkPreviewStorage, reconcileLinkPreviewImages } = require('./lib/
 const { createLinkPreviewRepository } = require('./domains/link-previews/link-preview-repository');
 const { createLinkPreviewService } = require('./domains/link-previews/link-preview-service');
 const { avatarColorForPeerId, createRoomStore } = require('./lib/room-store');
-const { createUserStore, hashSessionToken, publicUser } = require('./lib/user-store');
+const { createUserStore, hashSessionToken, publicUser, selfUser } = require('./lib/user-store');
 const { createGeoLocator } = require('./lib/geoip');
 const {
   ACCOUNT_DELETION_GRACE_MS,
@@ -2057,7 +2057,7 @@ async function handleRegister(req, res) {
   sendJson(
     res,
     201,
-    { ok: true, user: publicUser(created.user) },
+    { ok: true, user: await reloadSelfUser(created.user) },
     { 'Set-Cookie': buildSessionCookie(session.token, SESSION_TTL_MS / 1000) }
   );
 }
@@ -2106,7 +2106,7 @@ async function handleLogin(req, res) {
   sendJson(
     res,
     200,
-    { ok: true, user: publicUser(user) },
+    { ok: true, user: await reloadSelfUser(user) },
     { 'Set-Cookie': buildSessionCookie(session.token, SESSION_TTL_MS / 1000) }
   );
 }
@@ -2120,9 +2120,16 @@ async function handleLogout(req, res) {
   sendJson(res, 200, { ok: true }, { 'Set-Cookie': clearSessionCookie() });
 }
 
+// Creating a session can stamp per-account markers (the desktop app marker),
+// so a self response built right after it re-reads the row instead of reusing
+// the user loaded before.
+async function reloadSelfUser(user) {
+  return selfUser((await getUserStore().getUserById(user.id)) || user);
+}
+
 async function handleMe(req, res) {
   const session = await resolveSessionUser(req);
-  sendJson(res, 200, { ok: true, user: session ? publicUser(session.user) : null });
+  sendJson(res, 200, { ok: true, user: session ? selfUser(session.user) : null });
 }
 
 async function handleUpdateProfile(req, res, request) {
@@ -2142,7 +2149,7 @@ async function handleUpdateProfile(req, res, request) {
 
   refreshActiveUserProfile(user);
   await broadcastUserProfileToFriends(user, request);
-  sendJson(res, 200, { ok: true, user: publicUser(user) });
+  sendJson(res, 200, { ok: true, user: selfUser(user) });
 }
 
 function checkAvatarUploadRate(res, userId) {
@@ -2269,7 +2276,7 @@ async function handleUploadUserAvatar(req, res, request) {
   }
   refreshActiveUserProfile(result.user);
   await broadcastUserProfileToFriends(result.user, request);
-  sendJson(res, 200, { ok: true, user: publicUser(result.user) });
+  sendJson(res, 200, { ok: true, user: selfUser(result.user) });
 }
 
 async function handleDeleteUserAvatar(req, res, request) {
@@ -2286,7 +2293,7 @@ async function handleDeleteUserAvatar(req, res, request) {
   await removeAvatarBestEffort(result.previousAvatarKey, request);
   refreshActiveUserProfile(result.user);
   await broadcastUserProfileToFriends(result.user, request);
-  sendJson(res, 200, { ok: true, user: publicUser(result.user) });
+  sendJson(res, 200, { ok: true, user: selfUser(result.user) });
 }
 
 async function handleChangePassword(req, res) {
@@ -2397,6 +2404,20 @@ async function handleMarkWhatsNewSeen(req, res) {
     return;
   }
   sendJson(res, 200, { ok: true, whatsNew: { current: WHATS_NEW_VERSION, lastSeen: result.whatsNewSeen } });
+}
+
+async function handleMarkAppPromptSeen(req, res) {
+  const session = await resolveSessionUser(req);
+  if (!session) {
+    sendJson(res, 401, { ok: false, error: 'Требуется вход' });
+    return;
+  }
+  const result = await getUserStore().markAppPromptSeen({ userId: session.user.id });
+  if (result.status !== 'seen') {
+    sendJson(res, 404, { ok: false, error: 'Аккаунт не найден' });
+    return;
+  }
+  sendJson(res, 200, { ok: true, appPromptSeen: true });
 }
 
 async function handleLoginAlerts(req, res) {
@@ -2540,7 +2561,7 @@ async function handleRestoreAccount(req, res, request) {
   sendJson(
     res,
     200,
-    { ok: true, user: publicUser(user) },
+    { ok: true, user: await reloadSelfUser(user) },
     { 'Set-Cookie': buildSessionCookie(session.token, SESSION_TTL_MS / 1000) }
   );
 }
@@ -2663,7 +2684,7 @@ async function handleRecoverAccount(req, res) {
   sendJson(
     res,
     200,
-    { ok: true, user: publicUser(result.user), recoveryCodes: { remaining: result.remaining } },
+    { ok: true, user: await reloadSelfUser(result.user), recoveryCodes: { remaining: result.remaining } },
     { 'Set-Cookie': buildSessionCookie(session.token, SESSION_TTL_MS / 1000) }
   );
 }
@@ -5202,6 +5223,7 @@ function createApiApp({
   app.post('/api/auth/recovery-codes/reminder/snooze', (request, reply) => runLegacyHandler(request, reply, handleSnoozeRecoveryCodesReminder));
   app.get('/api/auth/whats-new', (request, reply) => runLegacyHandler(request, reply, handleWhatsNew));
   app.post('/api/auth/whats-new/seen', (request, reply) => runLegacyHandler(request, reply, handleMarkWhatsNewSeen));
+  app.post('/api/auth/app-prompt/seen', (request, reply) => runLegacyHandler(request, reply, handleMarkAppPromptSeen));
   app.get('/api/auth/login-alerts', (request, reply) => runLegacyHandler(request, reply, handleLoginAlerts));
   app.post('/api/auth/login-alerts/:alertId/confirm', (request, reply) => runLegacyHandler(
     request,

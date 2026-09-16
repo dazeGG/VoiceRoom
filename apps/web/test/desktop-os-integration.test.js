@@ -309,8 +309,8 @@ test('guests get the open-in-app offer before auto-joining, and in-app reloads a
 test('open-in-app screen offers the desktop download next to retry and continue', () => {
   const screen = readFileSync(resolve(webRoot, 'src/lib/features/home/components/OpenInAppScreen.svelte'), 'utf8');
   assert.match(screen, /let \{ onRetry, onContinue \} = \$props/, 'both call sites keep their props');
-  assert.match(screen, /onMount\(\(\) => \{\s*void loadRelease\(\);/);
-  assert.match(screen, /startDesktopBuildDownload\(release \?\? \(await loadRelease\(\)\), detectDesktopBuildId\(\)\)/);
+  assert.match(screen, /onMount\(\(\) => \{\s*startDownload = createDesktopDownload\(\);/);
+  assert.match(screen, /await startDownload\(\);/);
   assert.match(
     screen,
     /<div class="open-in-app-actions">\s*<Button variant="primary"[^>]*onclick=\{download\}>Скачать приложение<\/Button>\s*<Button variant="ghost" type="button" onclick=\{onRetry\}>Открыть снова<\/Button>\s*<Button variant="ghost" type="button" onclick=\{onContinue\}>Продолжить в браузере<\/Button>/

@@ -13,6 +13,7 @@ const {
   RECOVERY_CODE_LENGTH,
   WHATS_NEW_VERSION,
   describeUserAgent,
+  isDesktopAppUserAgent,
   normalizeRecoveryCode,
   normalizeReleaseVersion
 } = require('@voice-room/shared/account-security');
@@ -38,6 +39,12 @@ function toMillis(value) {
   return Number.isFinite(parsed) ? parsed : Date.now();
 }
 
+// Per-account markers kept in `users.metadata` as epoch milliseconds.
+function metadataMillis(metadata, key) {
+  const value = Number(metadata && typeof metadata === 'object' ? metadata[key] : NaN);
+  return Number.isSafeInteger(value) && value > 0 ? value : null;
+}
+
 function randomAvatarColorKey() {
   return AVATAR_COLOR_KEYS[crypto.randomInt(AVATAR_COLOR_KEYS.length)];
 }
@@ -57,7 +64,9 @@ function mapUser(row) {
     passwordHash: row.password_hash,
     presenceStatus,
     deletionRequestedAt: row.deletion_requested_at ? toMillis(row.deletion_requested_at) : null,
-    deletedAt: row.deleted_at ? toMillis(row.deleted_at) : null
+    deletedAt: row.deleted_at ? toMillis(row.deleted_at) : null,
+    desktopAppSeenAt: metadataMillis(row.metadata, 'desktopAppSeenAt'),
+    appPromptSeenAt: metadataMillis(row.metadata, 'appPromptSeenAt')
   };
 }
 
@@ -76,6 +85,18 @@ function publicUser(user) {
     id: user.id,
     login: user.login,
     presenceStatus
+  };
+}
+
+// The signed-in account's own view: the public shape plus facts that must never
+// reach other users (DM peers, profile broadcasts, message authors).
+function selfUser(user) {
+  const base = publicUser(user);
+  if (!base) return null;
+  return {
+    ...base,
+    hasUsedDesktopApp: Boolean(user.desktopAppSeenAt),
+    appPromptSeen: Boolean(user.appPromptSeenAt)
   };
 }
 
@@ -275,6 +296,15 @@ function createUserStore({ databaseUrl, logger = console, pool, sessionTtlMs = D
        RETURNING public_id`,
       [tokenHash, userId, toDate(now), toDate(expiresAt), cleanUserAgent(userAgent), cleanLocationLabel(locationLabel)]
     );
+    if (isDesktopAppUserAgent(userAgent)) {
+      await getPool().query(
+        `UPDATE users
+         SET metadata = jsonb_set(metadata, '{desktopAppSeenAt}', to_jsonb($2::bigint), true)
+         WHERE id = $1
+           AND NOT (metadata ? 'desktopAppSeenAt')`,
+        [userId, Math.trunc(Number(now) || Date.now())]
+      );
+    }
     return { expiresAt, publicId: result.rows[0]?.public_id || null, token, tokenHash };
   }
 
@@ -339,6 +369,20 @@ function createUserStore({ databaseUrl, logger = console, pool, sessionTtlMs = D
         locationLabel
       ]
     );
+    // A session that predates the marker (or a desktop login made while an
+    // older release was live) is stamped on its next hourly touch. The guard
+    // keeps the users row from being rewritten on every later touch.
+    if (isDesktopAppUserAgent(userAgent)) {
+      await getPool().query(
+        `UPDATE users u
+         SET metadata = jsonb_set(u.metadata, '{desktopAppSeenAt}', to_jsonb($2::bigint), true)
+         FROM sessions s
+         WHERE s.id = $1
+           AND u.id = s.user_id
+           AND NOT (u.metadata ? 'desktopAppSeenAt')`,
+        [tokenHash, Math.trunc(Number(now) || Date.now())]
+      );
+    }
   }
 
   async function deleteSession(token) {
@@ -484,6 +528,25 @@ function createUserStore({ databaseUrl, logger = console, pool, sessionTtlMs = D
     return result.rowCount === 1
       ? { status: 'seen', whatsNewSeen: WHATS_NEW_VERSION }
       : { status: 'not_found', whatsNewSeen: null };
+  }
+
+  // The one-time post-registration app prompt: the first time it is shown or
+  // dismissed wins, so repeated calls from several tabs keep that moment.
+  async function markAppPromptSeen({ userId, now = Date.now() }) {
+    const result = await getPool().query(
+      `UPDATE users
+       SET metadata = CASE
+             WHEN metadata ? 'appPromptSeenAt' THEN metadata
+             ELSE jsonb_set(metadata, '{appPromptSeenAt}', to_jsonb($2::bigint), true)
+           END
+       WHERE id = $1
+       RETURNING metadata->'appPromptSeenAt' AS seen_at`,
+      [userId, Math.trunc(Number(now) || Date.now())]
+    );
+    const seenAt = Number(result.rows[0]?.seen_at);
+    return result.rowCount === 1
+      ? { status: 'seen', appPromptSeenAt: Number.isSafeInteger(seenAt) ? seenAt : null }
+      : { status: 'not_found', appPromptSeenAt: null };
   }
 
   async function snoozeRecoveryCodesReminder({ userId, now = Date.now() }) {
@@ -637,6 +700,7 @@ function createUserStore({ databaseUrl, logger = console, pool, sessionTtlMs = D
     listAvatarKeys,
     listPendingLoginAlerts,
     listSessions,
+    markAppPromptSeen,
     markWhatsNewSeen,
     pruneLoginEvents,
     pruneSessions,
@@ -659,5 +723,6 @@ module.exports = {
   hashSessionToken,
   mapUser,
   publicUser,
-  randomAvatarColorKey
+  randomAvatarColorKey,
+  selfUser
 };

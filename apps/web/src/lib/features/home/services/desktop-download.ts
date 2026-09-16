@@ -1,5 +1,5 @@
-import type { DesktopRelease } from '$lib/api/desktop';
-import { RELEASES_URL } from '../model/desktop-builds';
+import { fetchDesktopRelease, type DesktopRelease } from '$lib/api/desktop';
+import { RELEASES_URL, detectDesktopBuildId } from '../model/desktop-builds';
 
 export function triggerDesktopDownload(url: string): void {
   const link = document.createElement('a');
@@ -21,4 +21,19 @@ export function startDesktopBuildDownload(release: DesktopRelease | null, buildI
   } else {
     window.open(RELEASES_URL, '_blank', 'noopener');
   }
+}
+
+/**
+ * A download action for this device's build. The release is requested as soon
+ * as the action is created, so a later click usually starts the download inside
+ * the same gesture instead of after a request the browser may treat as a popup.
+ */
+export function createDesktopDownload(): () => Promise<void> {
+  let release: DesktopRelease | null = null;
+  const pending = fetchDesktopRelease()
+    .then((latest) => (release = latest))
+    .catch(() => null);
+  return async () => {
+    startDesktopBuildDownload(release ?? (await pending), detectDesktopBuildId());
+  };
 }

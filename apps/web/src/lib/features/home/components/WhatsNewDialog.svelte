@@ -5,11 +5,20 @@
   import { dialogFocusTrap } from '$lib/shared/ui/focus-trap';
   import { WHATS_NEW_SLIDES, WHATS_NEW_SLIDE_MS, shouldShowWhatsNew } from '../model/whats-new';
 
-  let { paused = false, onOpenSecurity } = $props<{ paused?: boolean; onOpenSecurity: () => void }>();
+  let { paused = false, onOpenSecurity, onOpenChange } = $props<{
+    paused?: boolean;
+    onOpenSecurity: () => void;
+    /** Lets the lobby hold back other prompts while the story is on screen. */
+    onOpenChange?: (open: boolean) => void;
+  }>();
 
   let due = $state(false);
   // Waits while a more urgent dialog, such as a new sign-in question, is up.
   const open = $derived(due && !paused);
+
+  $effect(() => {
+    onOpenChange?.(open);
+  });
 
   let index = $state(0);
   // The last slide has run its time and stays up until the reader closes it.

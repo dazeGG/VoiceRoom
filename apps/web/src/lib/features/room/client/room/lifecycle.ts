@@ -21,6 +21,7 @@ export function applyRoomUpdated(room: RoomLifecycleSummary): void {
   if (room.roomId !== state.roomId) return;
   state.roomName = room.name || '';
   state.roomAvatarUrl = room.avatarUrl || '';
+  state.roomIsStatic = room.isStatic === true;
   if (document.body.dataset.screen === 'room') {
     refreshRoomHeadingSoon();
   }

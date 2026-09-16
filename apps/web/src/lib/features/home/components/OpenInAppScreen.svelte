@@ -1,37 +1,25 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { fetchDesktopRelease, type DesktopRelease } from '$lib/api/desktop';
   import { Button } from '$lib/shared/ui';
-  import { detectDesktopBuildId } from '../model/desktop-builds';
-  import { startDesktopBuildDownload } from '../services/desktop-download';
+  import { createDesktopDownload } from '../services/desktop-download';
 
   let { onRetry, onContinue } = $props<{
     onRetry: () => void;
     onContinue: () => void;
   }>();
 
-  let release: DesktopRelease | null = null;
-  let releasePromise: Promise<DesktopRelease | null> | null = null;
+  let startDownload: (() => Promise<void>) | null = null;
   let downloading = $state(false);
 
-  function loadRelease(): Promise<DesktopRelease | null> {
-    releasePromise ??= fetchDesktopRelease()
-      .then((latest) => (release = latest))
-      .catch(() => null);
-    return releasePromise;
-  }
-
-  // Fetched as the screen opens, so the click usually starts the download in the
-  // same user gesture instead of after a request the browser may treat as a popup.
   onMount(() => {
-    void loadRelease();
+    startDownload = createDesktopDownload();
   });
 
   async function download(): Promise<void> {
-    if (downloading) return;
+    if (downloading || !startDownload) return;
     downloading = true;
     try {
-      startDesktopBuildDownload(release ?? (await loadRelease()), detectDesktopBuildId());
+      await startDownload();
     } finally {
       downloading = false;
     }

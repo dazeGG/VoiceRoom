@@ -135,6 +135,8 @@ export interface RoomSessionState {
   roomId: string;
   roomAvatarUrl: string;
   roomName: string;
+  /** Permanent rooms survive being empty; temporary ones are deleted once idle. */
+  roomIsStatic: boolean;
   moderationReason: 'banned' | 'kicked' | '';
   roomRoute: boolean;
   /** Mirrors document.body.dataset.screen so Svelte components react to screen transitions. */

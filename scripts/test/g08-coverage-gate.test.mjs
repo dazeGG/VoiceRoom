@@ -399,6 +399,16 @@ test("G08 web TypeScript producer measures actual auth and media decision files"
   await auth.logout();
   assert.equal((await auth.uploadUserAvatar(new Blob(["avatar"]))).id, "u1");
   assert.equal((await auth.deleteUserAvatar()).id, "u1");
+  // An older API sends no self-only flags: the app banner may show, the one-time
+  // prompt never does. A current API's flags pass through untouched.
+  const legacyUser = await auth.login({ login: "user", password: "password" });
+  assert.equal(legacyUser.hasUsedDesktopApp, false);
+  assert.equal(legacyUser.appPromptSeen, true);
+  globalThis.fetch = async () => response({ payload: { user: { id: "u1", hasUsedDesktopApp: true, appPromptSeen: false } } });
+  const flaggedUser = await auth.fetchMe();
+  assert.equal(flaggedUser.hasUsedDesktopApp, true);
+  assert.equal(flaggedUser.appPromptSeen, false);
+  assert.equal((await auth.recoverAccount({ login: "user", code: "code", newPassword: "password" })).user.hasUsedDesktopApp, true);
   globalThis.fetch = async () => response({ payload: { room: { roomId: "room" } } });
   assert.equal((await auth.addRoomByCode("room")).roomId, "room");
   globalThis.fetch = async () => response({ payload: { removed: true } });
@@ -441,6 +451,7 @@ test("G08 web TypeScript producer measures actual auth and media decision files"
   assert.deepEqual(await auth.fetchWhatsNew(), { current: "2.6.0", lastSeen: null });
   globalThis.fetch = async () => response({ payload: {} });
   await auth.markWhatsNewSeen();
+  await auth.markAppPromptSeen();
   assert.deepEqual(await auth.fetchLoginAlerts(), []);
   globalThis.fetch = async () => response({ payload: { alerts: [null, "nonsense"] } });
   assert.deepEqual(await auth.fetchLoginAlerts(), []);
@@ -474,7 +485,10 @@ test("G08 web TypeScript producer measures actual auth and media decision files"
   globalThis.fetch = async () => response({ payload: {} });
   assert.deepEqual(await auth.generateRecoveryCodes("password"), { codes: [], recoveryCodes: { remaining: 0, generatedAt: null } });
   globalThis.fetch = async () => response({ payload: { user, recoveryCodes: { remaining: 9 } } });
-  assert.deepEqual(await auth.recoverAccount({ login: "user", code: "code", newPassword: "password" }), { user, remaining: 9 });
+  assert.deepEqual(await auth.recoverAccount({ login: "user", code: "code", newPassword: "password" }), {
+    user: { ...user, hasUsedDesktopApp: false, appPromptSeen: true },
+    remaining: 9
+  });
 
   globalThis.fetch = async () => response({ ok: false, payload: { error: "нет доступа" } });
   await assert.rejects(() => auth.fetchAccountSecurity(), /нет доступа/);
