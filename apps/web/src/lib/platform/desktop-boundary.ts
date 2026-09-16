@@ -66,3 +66,24 @@ export function isDesktopBoundaryAllowed(): boolean {
 export function isDesktopBoundaryBlocked(): boolean {
   return !isDesktopBoundaryAllowed();
 }
+
+export function isRoomClientAllowed(): boolean {
+  return getDesktopBoundaryPolicy().roomClientAllowed;
+}
+
+// Set by the room page while it is mounted. On a phone that page is the only
+// screen that renders, and every way out of it is a full navigation, so the
+// flag cannot outlive the room within a page.
+let roomRouteActive = false;
+
+export function setRoomRouteActive(active: boolean): void {
+  roomRouteActive = active;
+}
+
+/**
+ * The realtime socket carries voice presence and room chat, so a phone may open
+ * it only for a mounted room page. Push stays behind isDesktopBoundaryBlocked.
+ */
+export function isRealtimeBlocked(): boolean {
+  return isDesktopBoundaryBlocked() && !(roomRouteActive && isRoomClientAllowed());
+}

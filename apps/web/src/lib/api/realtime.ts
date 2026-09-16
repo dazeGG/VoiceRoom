@@ -6,7 +6,7 @@ import type { ChatMessage, RoomPeer, RoomSummary } from './rooms';
 import type { NotificationRealtimeEvent } from '../shared/notifications';
 import type { ReactionSummary } from '@voice-room/shared/reactions';
 import type { LoginAlert } from '@voice-room/shared/account-security';
-import { isDesktopBoundaryBlocked } from '$lib/platform/desktop-boundary';
+import { isRealtimeBlocked } from '$lib/platform/desktop-boundary';
 import { RealtimeHeartbeatWatchdog } from './realtime-heartbeat.js';
 
 export type RealtimeAccountEvent =
@@ -159,7 +159,7 @@ class AppRealtimeConnection {
   private heartbeatWatchdog = new RealtimeHeartbeatWatchdog({ timeoutMs: HEARTBEAT_TIMEOUT_MS });
 
   subscribe(handler: (event: RealtimeEvent) => void): () => void {
-    if (isDesktopBoundaryBlocked()) return () => {};
+    if (isRealtimeBlocked()) return () => {};
     this.handlers.add(handler);
     this.refCount += 1;
     this.ensureConnected();
@@ -171,7 +171,7 @@ class AppRealtimeConnection {
   }
 
   send(type: string, payload: Record<string, unknown> = {}, id?: string): void {
-    if (isDesktopBoundaryBlocked()) return;
+    if (isRealtimeBlocked()) return;
     const frame = JSON.stringify({ ...(id ? { id } : {}), type, payload });
     if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
       this.outboundQueue.push(frame);
@@ -324,7 +324,7 @@ class AppRealtimeConnection {
   }
 
   ensureConnected(): void {
-    if (isDesktopBoundaryBlocked()) return;
+    if (isRealtimeBlocked()) return;
     if (this.socket && (this.socket.readyState === WebSocket.OPEN || this.socket.readyState === WebSocket.CONNECTING)) {
       return;
     }

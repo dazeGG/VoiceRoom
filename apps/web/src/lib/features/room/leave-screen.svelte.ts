@@ -1,14 +1,17 @@
-// Shown to a guest who pressed «Выйти» instead of sending them straight home:
-// the moment they leave is the natural one to offer an account. `isStatic` is
-// captured before leaving, because the room client forgets the room on leave.
-export const guestLeaveUi = $state<{ open: boolean; roomId: string; isStatic: boolean }>({
+// Shown instead of sending someone straight to `/` after «Покинуть звонок»:
+// a guest is offered an account, and a phone, where `/` is desktop-only, stays
+// on the room page with a way back into the call. `isStatic` is captured before
+// leaving, because the room client forgets the room on leave.
+export const leaveScreenUi = $state<{ open: boolean; roomId: string; isStatic: boolean; guest: boolean }>({
   open: false,
   roomId: '',
-  isStatic: false
+  isStatic: false,
+  guest: false
 });
 
-export function openGuestLeave(roomId: string, isStatic: boolean): void {
-  guestLeaveUi.roomId = roomId;
-  guestLeaveUi.isStatic = isStatic;
-  guestLeaveUi.open = true;
+export function openLeaveScreen({ roomId, isStatic, guest }: { roomId: string; isStatic: boolean; guest: boolean }): void {
+  leaveScreenUi.roomId = roomId;
+  leaveScreenUi.isStatic = isStatic;
+  leaveScreenUi.guest = guest;
+  leaveScreenUi.open = true;
 }

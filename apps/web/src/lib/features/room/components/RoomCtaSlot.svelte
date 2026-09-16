@@ -4,6 +4,7 @@
   import AuthDialog, { type AuthMode } from '$lib/features/auth/AuthDialog.svelte';
   import { session } from '$lib/features/auth/session.svelte';
   import AppBenefitsModal from '$lib/features/home/components/AppBenefitsModal.svelte';
+  import { getDesktopBoundaryPolicy } from '$lib/platform/desktop-boundary';
   import { readOpenInAppSignals, shouldOfferOpenInApp } from '$lib/platform/open-in-app';
   import { Button } from '$lib/shared/ui';
   import { iconSm } from '$lib/shared/ui/icons';
@@ -15,6 +16,7 @@
   // Decided once per page: the platform does not change under a visit.
   let appAvailable = $state(false);
   let embedded = $state(false);
+  let mobile = $state(false);
   let dismissed = $state(false);
   let authMode = $state<AuthMode | null>(null);
   let benefitsOpen = $state(false);
@@ -22,6 +24,7 @@
   onMount(() => {
     appAvailable = shouldOfferOpenInApp(readOpenInAppSignals());
     embedded = isRoomEmbedded();
+    mobile = !getDesktopBoundaryPolicy().desktopAllowed;
   });
 
   const cta = $derived(resolveRoomCta({
@@ -33,6 +36,8 @@
   }));
 </script>
 
+{#if cta || (mobile && roomClientState.joined)}
+<div class="room-cta-stack">
 {#if cta}
   <aside class="room-cta" aria-label={cta === 'account' ? 'Создать аккаунт' : 'Скачать приложение'}>
     {#if cta === 'account'}
@@ -51,6 +56,12 @@
     </button>
   </aside>
 {/if}
+{#if mobile && roomClientState.joined}
+  <!-- A mobile browser suspends the microphone when it leaves the foreground. -->
+  <p class="room-mobile-hint" role="note">Звонок идёт, пока браузер открыт и экран включён</p>
+{/if}
+</div>
+{/if}
 
 {#if authMode}
   <AuthDialog
@@ -64,22 +75,57 @@
 <AppBenefitsModal open={benefitsOpen} onClose={() => (benefitsOpen = false)} />
 
 <style>
-  .room-cta {
-    position: absolute;
-    top: 88px;
-    left: 50%;
+  /* Floats just above the dock, mirroring its offsets, so it never covers the
+     heading: on narrow screens the heading wraps and its tabs move down. */
+  .room-cta-stack {
+    position: fixed;
+    right: 0;
+    bottom: calc(max(var(--space-lg), env(safe-area-inset-bottom)) + 80px);
+    left: 0;
     z-index: 15;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding-inline: 16px;
+    pointer-events: none;
+  }
+
+  .room-cta-stack > :global(*) {
+    max-width: min(640px, 100%);
+    pointer-events: auto;
+  }
+
+  :global(body[data-lobby-embedded="true"]) .room-cta-stack {
+    left: var(--lobby-sidebar-width, 312px);
+  }
+
+  @media (min-width: 901px) {
+    :global(body[data-chat-open="true"]) .room-cta-stack {
+      right: var(--room-panel-width);
+    }
+  }
+
+  .room-mobile-hint {
+    margin: 0;
+    padding: 6px 12px;
+    border-radius: var(--radius-pill);
+    background: color-mix(in srgb, var(--warm-800) 88%, transparent);
+    color: var(--warm-muted);
+    font-size: 12px;
+    text-align: center;
+  }
+
+  .room-cta {
     display: flex;
     align-items: center;
     gap: 12px;
-    width: max-content;
-    max-width: min(640px, calc(100% - 32px));
+    max-width: 100%;
     padding: 8px 8px 8px 16px;
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: var(--radius-pill);
     background: var(--warm-800);
     box-shadow: var(--shadow);
-    transform: translateX(-50%);
   }
 
   .room-cta-text {
@@ -92,8 +138,8 @@
     display: grid;
     place-items: center;
     flex: none;
-    width: 32px;
-    height: 32px;
+    width: 44px;
+    height: 44px;
     border: 0;
     border-radius: var(--radius-pill);
     background: transparent;

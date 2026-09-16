@@ -1,41 +1,73 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import AuthDialog, { type AuthMode } from '$lib/features/auth/AuthDialog.svelte';
   import { addRoomByCode } from '$lib/api/auth';
+  import { getDesktopBoundaryPolicy } from '$lib/platform/desktop-boundary';
   import { Button } from '$lib/shared/ui';
-  import { guestLeaveUi } from '../guest-leave.svelte';
+  import { leaveScreenUi } from '../leave-screen.svelte';
 
   let authMode = $state<AuthMode | null>(null);
+  // `/` is desktop-only, so a phone never leaves this page on its own.
+  let mobile = $state(false);
+  let accountCreated = $state(false);
+
+  onMount(() => {
+    mobile = !getDesktopBoundaryPolicy().desktopAllowed;
+  });
+
+  const offerAccount = $derived(leaveScreenUi.guest && !accountCreated);
 
   function goHome(): void {
     window.location.href = '/';
   }
 
-  // A permanent room is saved to the new account, so «вернёшься сюда» is true.
+  function rejoin(): void {
+    window.location.href = `/r/${encodeURIComponent(leaveScreenUi.roomId)}`;
+  }
+
+  // A permanent room is saved to the new account, so «вернётесь сюда» is true.
   // A temporary room is deleted once empty and promises nothing.
   async function afterAccountCreated(): Promise<void> {
-    if (guestLeaveUi.isStatic && guestLeaveUi.roomId) {
+    if (leaveScreenUi.isStatic && leaveScreenUi.roomId) {
       try {
-        await addRoomByCode(guestLeaveUi.roomId);
+        await addRoomByCode(leaveScreenUi.roomId);
       } catch (error) {
         console.error('[voice-room] save left room to new account', error);
       }
+    }
+    if (mobile) {
+      authMode = null;
+      accountCreated = true;
+      return;
     }
     goHome();
   }
 </script>
 
-{#if guestLeaveUi.open}
-  <div class="guest-leave" role="dialog" aria-modal="true" aria-labelledby="guestLeaveTitle">
+{#if leaveScreenUi.open}
+  <div class="guest-leave" role="dialog" aria-modal="true" aria-labelledby="leaveScreenTitle">
     <div class="guest-leave-card">
-      <h1 id="guestLeaveTitle">Вы вышли из комнаты</h1>
-      {#if guestLeaveUi.isStatic}
-        <p>Создайте аккаунт, и эта комната сохранится у вас: вернётесь сюда без ссылки.</p>
+      <h1 id="leaveScreenTitle">{accountCreated ? 'Аккаунт создан' : 'Вы вышли из комнаты'}</h1>
+      {#if offerAccount}
+        {#if leaveScreenUi.isStatic}
+          <p>Создайте аккаунт, и эта комната сохранится у вас: вернётесь сюда без ссылки.</p>
+        {:else}
+          <p>С аккаунтом у вас будут свои постоянные комнаты, друзья и личные сообщения.</p>
+        {/if}
       {:else}
-        <p>С аккаунтом у вас будут свои постоянные комнаты, друзья и личные сообщения.</p>
+        <p>Лобби, друзья и личные сообщения — на компьютере. С телефона можно вернуться в эту комнату.</p>
       {/if}
       <div class="guest-leave-actions">
-        <Button variant="primary" type="button" onclick={() => (authMode = 'register')}>Создать аккаунт</Button>
-        <Button variant="ghost" type="button" onclick={goHome}>Не сейчас</Button>
+        {#if offerAccount}
+          <Button variant="primary" type="button" onclick={() => (authMode = 'register')}>Создать аккаунт</Button>
+          {#if mobile}
+            <Button variant="ghost" type="button" onclick={rejoin}>Вернуться в звонок</Button>
+          {:else}
+            <Button variant="ghost" type="button" onclick={goHome}>Не сейчас</Button>
+          {/if}
+        {:else}
+          <Button variant="primary" type="button" onclick={rejoin}>Вернуться в звонок</Button>
+        {/if}
       </div>
     </div>
   </div>

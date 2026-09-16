@@ -65,6 +65,20 @@
     font-size: 1.55rem;
   }
 
+  /* A long room name must shrink inside the heading instead of widening the
+     page: the menu's popover root otherwise sizes to the full title. */
+  .room-heading-main > .popover-root {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .room-heading-title {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   .heading-actions {
     justify-content: stretch;
   }
@@ -201,6 +215,21 @@
     width: 24px;
     height: 42px;
   }
+}
+
+/* Phones: mobile browsers cannot capture the screen, and dock controls keep a
+   44px touch target even on the narrowest viewports. */
+html[data-platform-class="mobile"] .screen-button {
+  display: none;
+}
+
+html[data-platform-class="mobile"] :is(.mic-button, .output-button, .leave-button, .screen-exit-button, .dock-connection) {
+  min-width: 44px;
+  min-height: 44px;
+}
+
+html[data-platform-class="mobile"] .dock-split {
+  min-height: 44px;
 }
 
 @media (prefers-reduced-motion: reduce) {
