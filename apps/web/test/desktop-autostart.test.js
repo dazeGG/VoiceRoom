@@ -1,30 +1,16 @@
-import test, { after } from 'node:test';
+import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { createServer } from 'vite';
+
+import * as service from '../src/lib/platform/desktop-autostart.ts';
 
 const webRoot = resolve(import.meta.dirname, '..');
 
-// One Vite server for the whole file, without a file watcher: a server per
-// test exhausts file watchers on CI runners and kills the test process.
-let serverPromise = null;
-
-function getServer() {
-  serverPromise ??= createServer({
-    appType: 'custom',
-    logLevel: 'silent',
-    root: webRoot,
-    server: { hmr: false, middlewareMode: true, watch: null }
-  });
-  return serverPromise;
-}
-
-after(async () => {
-  if (serverPromise) await (await serverPromise).close();
-});
-
-async function loadService(t, bridge) {
+// The service has no module state and reads `window` on every call, so one
+// native import covers every bridge shape. Loading it through an in-process
+// Vite server used to abort the whole test file with a V8 fatal on CI.
+function useBridge(t, bridge) {
   Object.defineProperty(globalThis, 'window', {
     configurable: true,
     value: bridge === undefined ? {} : { voiceRoomDesktopAutostart: bridge },
@@ -36,13 +22,10 @@ async function loadService(t, bridge) {
     delete globalThis.window;
     console.warn = originalWarn;
   });
-  const server = await getServer();
-  server.moduleGraph.invalidateAll();
-  return server.ssrLoadModule('/src/lib/platform/desktop-autostart.ts');
 }
 
 test('desktop autostart service is unavailable without the shell bridge', async (t) => {
-  const service = await loadService(t, undefined);
+  useBridge(t, undefined);
 
   assert.equal(service.desktopAutostartAvailable(), false);
   assert.equal(await service.readDesktopAutostartSettings(), null);
@@ -51,7 +34,7 @@ test('desktop autostart service is unavailable without the shell bridge', async 
 
 test('desktop autostart service normalizes shell results and sends only boolean fields', async (t) => {
   const calls = [];
-  const service = await loadService(t, {
+  useBridge(t, {
     getSettings: async () => ({ openAtLogin: 1, startMinimized: true, supported: true }),
     setSettings: async (patch) => {
       calls.push(patch);
@@ -75,7 +58,7 @@ test('desktop autostart service normalizes shell results and sends only boolean 
 });
 
 test('desktop autostart service swallows bridge failures', async (t) => {
-  const service = await loadService(t, {
+  useBridge(t, {
     getSettings: async () => {
       throw new Error('untrusted frame');
     },
