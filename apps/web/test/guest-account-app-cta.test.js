@@ -55,23 +55,28 @@ test('signing in from a room hands the account to a reload instead of swapping t
   assert.match(slot, /guest: !embedded && !session\.user/);
   assert.match(slot, /hasUsedDesktopApp: session\.user\?\.hasUsedDesktopApp \?\? false/);
   assert.match(slot, /roomClientState\.roomIsStatic\s*\?\s*'Создайте аккаунт, чтобы сохранить комнату/, 'only permanent rooms promise to be saved');
-  assert.match(read('src/lib/features/room/RoomPage.svelte'), /<RoomTopbar \/>\s*<RoomCtaSlot \/>[\s\S]*<GuestLeaveScreen \/>/);
+  assert.match(read('src/lib/features/room/RoomPage.svelte'), /<RoomTopbar \/>\s*<RoomCtaSlot \/>[\s\S]*<LeaveScreen \/>/);
+  // The slot floats above the dock: on narrow screens the heading wraps and its tabs move down.
+  assert.match(slot, /\.room-cta-stack \{\s*position: fixed;[\s\S]*?bottom: calc\(max\(var\(--space-lg\), env\(safe-area-inset-bottom\)\) \+ 80px\);/);
 });
 
-test('a guest leaving sees an honest leave screen, and only a permanent room is saved to the new account', () => {
+test('leaving shows an honest leave screen to guests and phones, and only a permanent room is saved to a new account', () => {
   const room = read('src/lib/features/room/client/room/room.ts');
   assert.match(
     room,
-    /export async function handleLeaveButtonClick\(\): Promise<void> \{\s*\/\/[^\n]*\n\s*const roomId = state\.roomId;\s*const guest = !isRoomEmbedded\(\) && !session\.user;/,
-    'who was a guest is read before leaveRoom forgets it'
+    /export async function handleLeaveButtonClick\(\): Promise<void> \{\s*\/\/[^\n]*\n\s*const roomId = state\.roomId;\s*const guest = !isRoomEmbedded\(\) && !session\.user;\s*\/\/[^\n]*\n\s*const mobile = !getDesktopBoundaryPolicy\(\)\.desktopAllowed;/,
+    'who was a guest, and whether this is a phone, is read before leaveRoom forgets the room'
   );
-  assert.match(room, /if \(guest && roomId\) \{\s*openGuestLeave\(roomId, state\.roomIsStatic\);\s*return;\s*\}\s*window\.location\.href = '\/';/);
+  assert.match(room, /if \(\(guest \|\| mobile\) && roomId\) \{\s*openLeaveScreen\(\{ roomId, isStatic: state\.roomIsStatic, guest \}\);\s*return;\s*\}\s*window\.location\.href = '\/';/);
 
-  const screen = read('src/lib/features/room/components/GuestLeaveScreen.svelte');
-  assert.match(screen, /\{#if guestLeaveUi\.isStatic\}\s*<p>[^<]*вернётесь сюда без ссылки/);
+  const screen = read('src/lib/features/room/components/LeaveScreen.svelte');
+  assert.match(screen, /\{#if leaveScreenUi\.isStatic\}\s*<p>[^<]*вернётесь сюда без ссылки/);
   assert.match(screen, /\{:else\}\s*<p>С аккаунтом у вас будут свои постоянные комнаты, друзья и личные сообщения\.<\/p>/);
-  assert.match(screen, /if \(guestLeaveUi\.isStatic && guestLeaveUi\.roomId\) \{\s*try \{\s*await addRoomByCode\(guestLeaveUi\.roomId\);/);
+  assert.match(screen, /if \(leaveScreenUi\.isStatic && leaveScreenUi\.roomId\) \{\s*try \{\s*await addRoomByCode\(leaveScreenUi\.roomId\);/);
   assert.match(screen, /onAuthenticated=\{afterAccountCreated\}/);
+  // A phone never goes to `/`, which is desktop-only: it keeps a way back into the call.
+  assert.match(screen, /if \(mobile\) \{\s*authMode = null;\s*accountCreated = true;\s*return;\s*\}\s*goHome\(\);/);
+  assert.match(screen, /\{#if mobile\}\s*<Button variant="ghost" type="button" onclick=\{rejoin\}>Вернуться в звонок<\/Button>\s*\{:else\}\s*<Button variant="ghost" type="button" onclick=\{goHome\}>Не сейчас<\/Button>/);
 
   const api = read('src/lib/features/room/client/net/api.ts');
   assert.match(api, /state\.roomIsStatic = status\?\.isStatic === true;/);

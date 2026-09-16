@@ -4,7 +4,7 @@
   import '$lib/shared/styles/app.css';
   import '$lib/shared/styles/dialog.css';
   import './styles/room.css';
-  import GuestLeaveScreen from './components/GuestLeaveScreen.svelte';
+  import LeaveScreen from './components/LeaveScreen.svelte';
   import NotFoundScreen from './components/NotFoundScreen.svelte';
   import RoomEntryErrorScreen from './components/RoomEntryErrorScreen.svelte';
   import RoomModerationScreen from './components/RoomModerationScreen.svelte';
@@ -14,7 +14,7 @@
   import RoomStage from './components/RoomStage.svelte';
   import RoomTopbar from './components/RoomTopbar.svelte';
   import StartRoomScreen from './components/StartRoomScreen.svelte';
-  import { applyDesktopBoundaryToDocument } from '$lib/platform/desktop-boundary';
+  import { applyDesktopBoundaryToDocument, setRoomRouteActive } from '$lib/platform/desktop-boundary';
   import { setRoomEmbedded } from './client/core/embed';
 
   let { embeddedRoomId = '', roomId = '', autoJoin = false } = $props<{
@@ -29,8 +29,11 @@
   onMount(() => {
     let cleanup: (() => void) | undefined;
     const policy = applyDesktopBoundaryToDocument();
-    if (!policy.desktopAllowed) return;
+    if (!policy.roomClientAllowed) return;
 
+    // Before the client loads: on a phone it opens the realtime socket only
+    // while this page is marked active.
+    setRoomRouteActive(true);
     setRoomEmbedded(Boolean(embeddedRoomId));
 
     void import('./client/main').then(({ mountRoomClient }) => {
@@ -41,6 +44,7 @@
     return () => {
       cleanup?.();
       setRoomEmbedded(false);
+      setRoomRouteActive(false);
     };
   });
 </script>
@@ -55,12 +59,5 @@
   <NotFoundScreen />
   <RoomOverlays />
   <RoomSettingsDialog />
-  <GuestLeaveScreen />
+  <LeaveScreen />
 </div>
-
-<style>
-  /* Anchors the account/app call to action without taking a grid row. */
-  .app-shell {
-    position: relative;
-  }
-</style>

@@ -12,7 +12,8 @@ import { createRoomProof } from '../net/pow';
 import { errorMessage, wait } from '../core/utils';
 import { extractRoomId, rotateStoredPeerSession } from '../core/session';
 import { isRoomEmbedded } from '../core/embed';
-import { openGuestLeave } from '../../guest-leave.svelte';
+import { openLeaveScreen } from '../../leave-screen.svelte';
+import { getDesktopBoundaryPolicy } from '$lib/platform/desktop-boundary';
 import { getDisplayName, persistName, requestGuestNameForRoom, requireSavedName, updateNameStatuses } from '../ui/names';
 import {
   resetConnectionStatus,
@@ -595,6 +596,8 @@ export async function handleLeaveButtonClick(): Promise<void> {
   // Read before leaving: leaveRoom forgets who was in the call.
   const roomId = state.roomId;
   const guest = !isRoomEmbedded() && !session.user;
+  // `/` is desktop-only, so leaving on a phone stays on the room page.
+  const mobile = !getDesktopBoundaryPolicy().desktopAllowed;
   if (state.joined || state.localStream || state.connecting) {
     playPeerCue('leave');
     await wait(180);
@@ -606,8 +609,8 @@ export async function handleLeaveButtonClick(): Promise<void> {
     return;
   }
 
-  if (guest && roomId) {
-    openGuestLeave(roomId, state.roomIsStatic);
+  if ((guest || mobile) && roomId) {
+    openLeaveScreen({ roomId, isStatic: state.roomIsStatic, guest });
     return;
   }
 

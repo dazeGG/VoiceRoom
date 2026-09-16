@@ -12,6 +12,8 @@ export interface PlatformPolicy {
   contractVersion: 'voice-room.platform-class/v1';
   platformClass: PlatformClass;
   desktopAllowed: boolean;
+  /** The room page (voice, room chat, watching a screen) may run on this platform. */
+  roomClientAllowed: boolean;
 }
 
 export const PLATFORM_CLASS_CONTRACT: PlatformPolicy['contractVersion'];

@@ -2,7 +2,9 @@ import { expect, test, type Browser, type BrowserContext, type Page } from '@pla
 
 const MOBILE_UA = 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 Chrome/126.0 Mobile Safari/537.36';
 const DESKTOP_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126.0 Safari/537.36';
-const BLOCKED_ROUTES = ['/', '/login', '/register', '/r/g18-fixture-room'];
+// The room page is the one screen a phone may open (see mobile-room.spec.ts);
+// home, lobby and account screens stay desktop-only.
+const BLOCKED_ROUTES = ['/', '/login', '/register'];
 
 async function mobileContext(browser: Browser): Promise<BrowserContext> {
   const context = await browser.newContext({
@@ -34,7 +36,7 @@ function collectProhibitedCalls(page: Page): string[] {
   return calls;
 }
 
-test('G18-A01 blocks every entry route before child effects mount', async ({ browser }) => {
+test('G18-A01 blocks every non-room entry route before child effects mount', async ({ browser }) => {
   const context = await mobileContext(browser);
   try {
     for (const route of BLOCKED_ROUTES) {
