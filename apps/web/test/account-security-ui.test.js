@@ -76,7 +76,10 @@ test('what is new follows the last seen release, not recovery codes', () => {
   assert.match(dialog, /void markWhatsNewSeen\(\)/);
   assert.match(model, /state\.current === WHATS_NEW_VERSION && hasUnseenWhatsNew\(state\.lastSeen, state\.current\)/);
   // The security question about a new sign-in outranks the release announcement.
-  assert.match(lobby, /<WhatsNewDialog paused=\{loginAlertOpen\} onOpenSecurity=\{\(\) => openSecuritySettings\(\)\} \/>/);
+  assert.match(
+    lobby,
+    /<WhatsNewDialog\s+paused=\{loginAlertOpen\}\s+onOpenSecurity=\{\(\) => openSecuritySettings\(\)\}\s+onOpenChange=\{\(open\) => \(whatsNewOpen = open\)\}\s*\/>/
+  );
 });
 
 test('what is new is a few short story slides that wait for the reader', () => {

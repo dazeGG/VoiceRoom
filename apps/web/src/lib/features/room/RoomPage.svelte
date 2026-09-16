@@ -4,9 +4,11 @@
   import '$lib/shared/styles/app.css';
   import '$lib/shared/styles/dialog.css';
   import './styles/room.css';
+  import GuestLeaveScreen from './components/GuestLeaveScreen.svelte';
   import NotFoundScreen from './components/NotFoundScreen.svelte';
   import RoomEntryErrorScreen from './components/RoomEntryErrorScreen.svelte';
   import RoomModerationScreen from './components/RoomModerationScreen.svelte';
+  import RoomCtaSlot from './components/RoomCtaSlot.svelte';
   import RoomOverlays from './components/RoomOverlays.svelte';
   import RoomSettingsDialog from './components/RoomSettingsDialog.svelte';
   import RoomStage from './components/RoomStage.svelte';
@@ -45,6 +47,7 @@
 
 <div class="app-shell" class:room-embedded-shell={embedded} bind:this={roomRoot}>
   <RoomTopbar />
+  <RoomCtaSlot />
   <StartRoomScreen />
   <RoomStage />
   <RoomEntryErrorScreen />
@@ -52,4 +55,12 @@
   <NotFoundScreen />
   <RoomOverlays />
   <RoomSettingsDialog />
+  <GuestLeaveScreen />
 </div>
+
+<style>
+  /* Anchors the account/app call to action without taking a grid row. */
+  .app-shell {
+    position: relative;
+  }
+</style>

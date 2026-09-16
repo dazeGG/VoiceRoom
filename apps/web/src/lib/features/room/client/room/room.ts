@@ -12,6 +12,7 @@ import { createRoomProof } from '../net/pow';
 import { errorMessage, wait } from '../core/utils';
 import { extractRoomId, rotateStoredPeerSession } from '../core/session';
 import { isRoomEmbedded } from '../core/embed';
+import { openGuestLeave } from '../../guest-leave.svelte';
 import { getDisplayName, persistName, requestGuestNameForRoom, requireSavedName, updateNameStatuses } from '../ui/names';
 import {
   resetConnectionStatus,
@@ -591,6 +592,9 @@ function stopLocalStream(): void {
 }
 
 export async function handleLeaveButtonClick(): Promise<void> {
+  // Read before leaving: leaveRoom forgets who was in the call.
+  const roomId = state.roomId;
+  const guest = !isRoomEmbedded() && !session.user;
   if (state.joined || state.localStream || state.connecting) {
     playPeerCue('leave');
     await wait(180);
@@ -598,11 +602,37 @@ export async function handleLeaveButtonClick(): Promise<void> {
   }
 
   if (isRoomEmbedded()) {
-    window.dispatchEvent(new CustomEvent('voice-room:embedded-leave', { detail: { roomId: state.roomId } }));
+    window.dispatchEvent(new CustomEvent('voice-room:embedded-leave', { detail: { roomId } }));
+    return;
+  }
+
+  if (guest && roomId) {
+    openGuestLeave(roomId, state.roomIsStatic);
     return;
   }
 
   window.location.href = '/';
+}
+
+/**
+ * A guest who just created an account comes back to the same room as that
+ * account. The session is not swapped in place: that would unmount this call
+ * mid-flight and let the lobby offer the desktop app again. Instead the call is
+ * left cleanly and the room page reloads signed in, with the in-app mark set so
+ * the reload joins in the browser.
+ */
+export async function rejoinRoomSignedIn(roomId: string): Promise<void> {
+  markInAppRoomNavigation();
+  try {
+    if (state.joined || state.localStream || state.connecting) {
+      playPeerCue('leave');
+      await wait(180);
+      leaveRoom();
+    }
+  } catch (error) {
+    console.error('[voice-room] guest register rejoin', error);
+  }
+  window.location.assign(`/r/${encodeURIComponent(roomId)}`);
 }
 
 export async function copyRoomCode(): Promise<void> {

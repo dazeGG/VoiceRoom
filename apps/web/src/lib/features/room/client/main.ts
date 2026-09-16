@@ -170,6 +170,7 @@ export function mountRoomClient(_root: ParentNode = document, options: { roomId?
     state.self = null;
     state.roomName = '';
     state.roomAvatarUrl = '';
+    state.roomIsStatic = false;
     state.roomId = mountedRoomId;
     state.roomRoute = true;
     state.peerId = peerSession.peerId;

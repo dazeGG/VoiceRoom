@@ -56,6 +56,9 @@
   } from './model/room-switch-confirmation';
   import RoomSwitchDialog from './components/RoomSwitchDialog.svelte';
   import WhatsNewDialog from './components/WhatsNewDialog.svelte';
+  import AppBenefitsModal from './components/AppBenefitsModal.svelte';
+  import { shouldOpenAppPrompt } from '$lib/features/room/room-cta';
+  import { markAppPromptSeen } from '$lib/api/auth';
   import LoginAlertDialog from './components/LoginAlertDialog.svelte';
   import { fetchAccountSecurity, snoozeRecoveryCodesReminder } from '$lib/api/auth';
   import { shouldShowRecoveryCodesReminder } from './model/account-security';
@@ -96,6 +99,11 @@
   let securityHighlight = $state<'recovery-codes' | 'password' | null>(null);
   let recoveryCodesReminder = $state(false);
   let loginAlertOpen = $state(false);
+  let whatsNewOpen = $state(false);
+  // The one-time app prompt after registration, decided per account by the API.
+  let appPromptAvailable = $state(false);
+  let appPromptOpen = $state(false);
+  let appPromptDone = $state(false);
   let previewSettingsRoomId = $state('');
   // Room waiting for "switch rooms?" while voice is connected elsewhere.
   let pendingRoomSwitchId = $state('');
@@ -112,6 +120,31 @@
   const embeddedRoomId = $derived(roomNavigation.embeddedRoomId);
   const autoJoinRoomId = $derived(roomNavigation.joinIntentRoomId);
   const connectedVoiceRoomId = $derived(getActiveVoiceRoomId());
+
+  // Opens once the lobby is quiet: no sign-in question or story on screen and no
+  // call joining or live, so it never covers the call or its audio-unlock prompt.
+  $effect(() => {
+    if (appPromptDone || appPromptOpen || !user) return;
+    if (!shouldOpenAppPrompt({
+      appAvailable: appPromptAvailable,
+      hasUsedDesktopApp: user.hasUsedDesktopApp,
+      appPromptSeen: user.appPromptSeen,
+      otherDialogOpen: loginAlertOpen || whatsNewOpen,
+      voiceActive: Boolean(connectedVoiceRoomId || roomNavigation.joinIntentRoomId)
+    })) return;
+    appPromptOpen = true;
+  });
+
+  onMount(() => {
+    // The desktop app exists for Windows and macOS browsers only.
+    appPromptAvailable = shouldOfferOpenInApp(readOpenInAppSignals());
+  });
+
+  function closeAppPrompt(): void {
+    appPromptOpen = false;
+    appPromptDone = true;
+    void markAppPromptSeen().catch((error) => console.warn('App prompt was not recorded', error));
+  }
   const selectedRoom = $derived(rooms.find((room) => room.roomId === selectedRoomId) ?? null);
   const previewSettingsRoom = $derived(rooms.find((room) => room.roomId === previewSettingsRoomId) ?? null);
   const connectedVoiceRoom = $derived(rooms.find((room) => room.roomId === connectedVoiceRoomId) ?? null);
@@ -636,7 +669,12 @@
     onOpenChange={(open) => (loginAlertOpen = open)}
     {onToast}
   />
-  <WhatsNewDialog paused={loginAlertOpen} onOpenSecurity={() => openSecuritySettings()} />
+  <WhatsNewDialog
+    paused={loginAlertOpen}
+    onOpenSecurity={() => openSecuritySettings()}
+    onOpenChange={(open) => (whatsNewOpen = open)}
+  />
+  <AppBenefitsModal open={appPromptOpen} onClose={closeAppPrompt} />
   <LobbyRoomSettingsDialog room={previewSettingsRoom} onClose={() => (previewSettingsRoomId = '')} onSaved={refreshRooms} onDeleted={() => { previewSettingsRoomId = ''; closeViewedRoom(); void refreshRooms(); }} {onToast} />
   <RoomSwitchDialog
     open={Boolean(pendingRoomSwitchId)}
