@@ -7,7 +7,11 @@ import {
   unlockAudio
 } from '../services/media-playback-service';
 import { playMicCue, playOutputCue } from '../media/cues';
-import { getLocalMicrophoneCapture, setMicrophoneCaptureEnabled } from '../services/microphone-service';
+import {
+  getLocalMicrophoneCapture,
+  setMicrophoneCaptureEnabled,
+  syncPushToTalkGate
+} from '../services/microphone-service';
 import { syncLiveKitVoiceSubscriptions, syncLocalMicrophonePublicationMuted } from '../services/livekit-service';
 import { getDisplayName } from './names';
 import { clearAllSpeaking, updateParticipant } from '../room/participants';
@@ -15,12 +19,13 @@ import { persistMicrophoneMode, persistOutputMuted } from '../core/settings';
 import { showToast } from './toast';
 import { setVoiceControlsState } from '$lib/features/room/voice-session.svelte';
 import { PUSH_TO_TALK_RELEASE_HOLD_MS, type MicrophoneMode } from '../core/config';
+import { isMicrophoneShownMuted } from '../core/microphone-mute';
 
 let pushToTalkReleaseTimer = 0;
 
 /** Mirror the current mic/output mute state to the lobby voice-session store. */
 function syncVoiceSessionControls(): void {
-  setVoiceControlsState({ muted: state.muted, deafened: state.outputMuted });
+  setVoiceControlsState({ muted: isMicrophoneShownMuted(), deafened: state.outputMuted });
 }
 
 export interface CallControlsView {
@@ -58,7 +63,7 @@ export function getCallControlsView(): CallControlsView {
 
   return {
     label,
-    ariaPressed: Boolean(state.joined && state.muted),
+    ariaPressed: Boolean(state.joined && isMicrophoneShownMuted()),
     disabled: state.connecting,
     stateName: state.connecting
       ? 'connecting'
@@ -106,6 +111,7 @@ export function setMicrophoneMuted(muted: boolean, options: { playCue?: boolean;
     state.pushToTalkActive = false;
     window.clearTimeout(pushToTalkReleaseTimer);
     pushToTalkReleaseTimer = 0;
+    syncPushToTalkGate();
   }
 
   state.muted = nextMuted;
@@ -116,11 +122,28 @@ export function setMicrophoneMuted(muted: boolean, options: { playCue?: boolean;
   updateParticipant({
     deafened: state.outputMuted,
     id: state.peerId,
-    muted: state.muted,
+    muted: isMicrophoneShownMuted(),
     name: getDisplayName()
   });
   syncVoiceSessionControls();
   if (post) postState().catch(() => {});
+}
+
+/**
+ * Push the shown mute state out when it changed without `state.muted` changing,
+ * e.g. switching a muted open microphone to push-to-talk, where
+ * `setMicrophoneMuted` has nothing to do but the room must stop showing a mute.
+ */
+function syncShownMicrophoneMute(): void {
+  syncLocalMicrophonePublicationMuted().catch((error) => console.warn('LiveKit microphone mute failed', error));
+  updateParticipant({
+    deafened: state.outputMuted,
+    id: state.peerId,
+    muted: isMicrophoneShownMuted(),
+    name: getDisplayName()
+  });
+  syncVoiceSessionControls();
+  postState().catch(() => {});
 }
 
 function toggleMute(): void {
@@ -149,7 +172,9 @@ export function setMicrophoneMode(mode: MicrophoneMode): MicrophoneMode {
 
   if (state.localStream) {
     const shouldMute = nextMode === 'push-to-talk' || state.outputMuted;
+    const wasMuted = state.muted;
     setMicrophoneMuted(shouldMute, { playCue: false });
+    if (state.muted === wasMuted) syncShownMicrophoneMute();
   }
   return nextMode;
 }
@@ -167,6 +192,7 @@ export function beginPushToTalk(): boolean {
   if (state.pushToTalkActive) return true;
 
   state.pushToTalkActive = true;
+  syncPushToTalkGate();
   setMicrophoneMuted(false, { playCue: false });
   return true;
 }
@@ -178,6 +204,7 @@ export function endPushToTalk(options: { immediate?: boolean } = {}): void {
   const close = () => {
     pushToTalkReleaseTimer = 0;
     state.pushToTalkActive = false;
+    syncPushToTalkGate();
     setMicrophoneMuted(true, { playCue: false });
   };
 
@@ -193,6 +220,7 @@ export function resetPushToTalkState(): void {
   window.clearTimeout(pushToTalkReleaseTimer);
   pushToTalkReleaseTimer = 0;
   state.pushToTalkActive = false;
+  syncPushToTalkGate();
 }
 
 export async function handleMicButtonClick(event: Event): Promise<void> {
@@ -237,6 +265,10 @@ export function toggleOutputMute(options: { unmuteMicrophone?: boolean } = {}): 
     }
   }
 
+  // Deafen changes whether an idle push-to-talk microphone shows as muted even
+  // when `state.muted` stays put, so the SFU publication is resynced either way.
+  syncLocalMicrophonePublicationMuted().catch((error) => console.warn('LiveKit microphone mute failed', error));
+
   // Rings are cleared on the same tick as the mute so none survives the switch.
   if (state.outputMuted) clearAllSpeaking();
 
@@ -246,7 +278,7 @@ export function toggleOutputMute(options: { unmuteMicrophone?: boolean } = {}): 
   updateParticipant({
     deafened: state.outputMuted,
     id: state.peerId,
-    muted: state.muted,
+    muted: isMicrophoneShownMuted(),
     name: getDisplayName()
   });
   syncVoiceSessionControls();

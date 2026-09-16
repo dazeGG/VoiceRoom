@@ -221,14 +221,12 @@ button:focus-visible {
 
 /* Muted / deafened toggles turn coral, matching VoiceDock. */
 .mic-button[data-state="muted"],
-.mic-button[data-state="ptt"],
 .output-button[data-state="muted"] {
   background: color-mix(in oklch, var(--coral) 16%, transparent);
   color: #e8a094;
 }
 
 .mic-button[data-state="muted"]:hover,
-.mic-button[data-state="ptt"]:hover,
 .output-button[data-state="muted"]:hover {
   background: color-mix(in oklch, var(--coral) 24%, transparent);
 }
@@ -263,17 +261,12 @@ button:focus-visible {
 .dock-icon-output-muted,
 .dock-icon-screen-stop,
 .mic-button[data-state="muted"] .dock-icon-mic,
-.mic-button[data-state="ptt"] .dock-icon-mic,
 .output-button[data-state="muted"] .dock-icon-output,
 .screen-button[data-state="live"] .dock-icon-screen {
   display: none;
 }
 
 .mic-button[data-state="muted"] .dock-icon-muted {
-  display: grid;
-}
-
-.mic-button[data-state="ptt"] .dock-icon-muted {
   display: grid;
 }
 
@@ -288,8 +281,8 @@ button:focus-visible {
   bottom: 2px;
   border-radius: 4px;
   padding: 1px 3px;
-  background: color-mix(in oklch, var(--coral) 24%, transparent);
-  color: #efb1a7;
+  background: color-mix(in oklch, var(--line) 60%, transparent);
+  color: var(--muted);
   font-size: 7px;
   font-weight: 800;
   line-height: 1.15;

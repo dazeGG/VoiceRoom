@@ -61,6 +61,7 @@ import {
 } from '$lib/features/home/model/room-realtime';
 import { applyRoomDeleted, applyRoomUpdated } from './lifecycle';
 import { markInAppRoomNavigation } from '$lib/platform/open-in-app';
+import { isMicrophoneShownMuted } from '../core/microphone-mute';
 import {
   cancelRoomRecovery,
   notifyRoomAppConnection,
@@ -305,7 +306,7 @@ async function performJoinRoom(generation: number): Promise<void> {
       deafened: state.outputMuted,
       isLocal: true,
       joinedAt: Date.now(),
-      muted: state.muted,
+      muted: isMicrophoneShownMuted(),
       name,
       avatarAccent: session.user?.avatarAccent || '',
       avatarColorKey: session.user?.avatarColorKey || '',
@@ -356,8 +357,8 @@ async function performJoinRoom(generation: number): Promise<void> {
     setConnectedVoiceRoom(state.roomId);
     void syncDesktopGlobalHotkeys(true);
     setVoiceSessionTiming({ joinedAt: state.self?.joinedAt ?? Date.now() });
-    setVoiceControlsState({ muted: state.muted, deafened: state.outputMuted });
-    if (state.muted || state.outputMuted) postState().catch(() => {});
+    setVoiceControlsState({ muted: isMicrophoneShownMuted(), deafened: state.outputMuted });
+    if (isMicrophoneShownMuted() || state.outputMuted) postState().catch(() => {});
     refreshCallControls();
     refreshScreenControls();
     startMeters();
@@ -437,7 +438,7 @@ async function handleVoiceRealtimeEvent(event: RealtimeEvent): Promise<void> {
         screenAuthoritative: true,
         deafened: state.outputMuted,
         isLocal: true,
-        muted: state.muted,
+        muted: isMicrophoneShownMuted(),
         viewedScreenPeerId: state.self?.viewedScreenPeerId ?? localPeer.viewedScreenPeerId
       });
     }

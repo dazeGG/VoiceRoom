@@ -1,6 +1,7 @@
 import { updateVoicePeer } from '$lib/features/home/model/room-realtime';
 import { state } from '../core/state.svelte';
 import { getDisplayName } from '../ui/names';
+import { isMicrophoneShownMuted } from '../core/microphone-mute';
 
 function hasLocalScreenAudio(): boolean {
   return Boolean(state.localScreenStream?.getAudioTracks().some((track) => track.readyState !== 'ended'));
@@ -14,7 +15,7 @@ export async function postState(): Promise<void> {
     sessionToken: state.sessionToken,
     patch: {
       deafened: state.outputMuted,
-      muted: state.muted,
+      muted: isMicrophoneShownMuted(),
       name: getDisplayName(),
       screen: Boolean(state.localScreenStream),
       screenAudio: hasLocalScreenAudio(),
