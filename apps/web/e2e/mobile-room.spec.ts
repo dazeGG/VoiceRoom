@@ -74,8 +74,11 @@ test('a guest on a phone joins a room, chats, and stays on the room page after l
       await composer.fill('привет с телефона');
       await composer.press('Enter');
       await expect(guest.getByText('привет с телефона').last()).toBeVisible({ timeout: 15_000 });
+      // Paged history is account-only and answered a guest with 401 «Room is not
+      // available», which the panel rendered as a chat error.
+      await expect(guest.locator('.chat-rail-error')).toHaveCount(0);
       // On a narrow screen the chat covers the heading; it closes from its own header.
-      await guest.getByRole('button', { name: 'Свернуть панель' }).click();
+      await guest.getByRole('button', { name: 'Закрыть панель' }).click();
       await expect(composer).toBeHidden();
     });
 
@@ -112,6 +115,28 @@ test('a signed-in phone gets the standalone room with its account, never the lob
     const left = member.getByRole('dialog', { name: 'Вы вышли из комнаты' });
     await expect(left).toContainText('Лобби, друзья и личные сообщения — на компьютере');
     await expect(member).toHaveURL(new RegExp(`/r/${roomId}$`));
+  } finally {
+    await context.close();
+  }
+});
+
+test('a phone starts a temporary room from `/` and joins it as a guest', async ({ browser, baseURL }) => {
+  test.setTimeout(90_000);
+  const context = await phone(browser, baseURL);
+  try {
+    const visitor = await context.newPage();
+    await visitor.goto('/');
+    // `/` used to be desktop-only, so a phone had no way into a call of its own.
+    await expect(visitor.getByRole('main', { name: 'Неподдерживаемое устройство' })).toHaveCount(0);
+    await expect(visitor.getByRole('heading', { name: 'Голосовая комната прямо в браузере' })).toBeVisible();
+
+    await visitor.getByRole('button', { name: 'Создать комнату' }).click();
+    await expect(visitor).toHaveURL(/\/r\/[a-z0-9]+$/i, { timeout: 20_000 });
+
+    await expect(visitor.locator('#guestNameInput')).toBeVisible({ timeout: 20_000 });
+    await visitor.locator('#guestNameInput').fill('Телефон');
+    await visitor.locator('#guestNameSubmitButton').click();
+    await expectJoinedPhoneRoom(visitor);
   } finally {
     await context.close();
   }

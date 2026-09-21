@@ -33,7 +33,7 @@ test('a guest creates an account from the room and is back in the same call as t
   const guest = await joinAsGuest(browser, baseURL, roomId);
   try {
     const call = guest.getByRole('complementary', { name: 'Создать аккаунт' });
-    await expect(call).toContainText('сохранить комнату');
+    await expect(call).toContainText('Сохраните эту комнату за собой');
     await call.getByRole('button', { name: 'Создать аккаунт' }).click();
 
     const login = uniqueLogin('ctaguest');

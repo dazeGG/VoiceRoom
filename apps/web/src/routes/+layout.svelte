@@ -8,9 +8,11 @@
   let boundaryReady = $state(false);
   let desktopAllowed = $state(false);
   let roomClientAllowed = $state(false);
-  // Phones get the room page only; the lobby, home and account screens stay
-  // desktop-only and keep the block screen below.
-  const allowed = $derived(desktopAllowed || (roomClientAllowed && page.route.id === '/r/[roomId]'));
+  // Phones get the room page, and `/`, where the route offers to start one;
+  // the lobby and the account screens stay desktop-only and keep the block
+  // screen below.
+  const MOBILE_ROUTES = ['/r/[roomId]', '/'];
+  const allowed = $derived(desktopAllowed || (roomClientAllowed && MOBILE_ROUTES.includes(page.route.id ?? '')));
 
   onMount(() => {
     const policy = applyDesktopBoundaryToDocument();

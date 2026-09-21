@@ -1,7 +1,8 @@
 <script lang="ts">
   import EmojiText from '$lib/shared/chat/EmojiText.svelte';
   import type { Snippet } from 'svelte';
-  import { ChevronRight, MessageSquare, Users } from '@lucide/svelte';
+  import { ChevronRight, MessageSquare, Users, X } from '@lucide/svelte';
+  import { getDesktopBoundaryPolicy } from '$lib/platform/desktop-boundary';
   import { iconSm } from '$lib/shared/ui/icons';
   import { onMount, tick, untrack } from 'svelte';
   import { deleteRoomChatMessage, editRoomChatMessage, fetchRoomChat, fetchRoomChatPage, markRoomChatRead, postRoomChat, type ChatMessage } from '$lib/api/rooms';
@@ -138,6 +139,9 @@
   let composerAttachmentCount = 0;
   let editEl = $state<ReturnType<typeof EmojiComposer> | null>(null);
   let historyEnabled = $state(false);
+  // On a phone the panel is the whole screen rather than a rail beside the
+  // stage, so it closes with a cross instead of collapsing to the right.
+  let mobile = $state(false);
   let hasMoreBefore = $state(false);
   let loadingOlder = $state(false);
   let readCursorEnabled = $state(false);
@@ -475,6 +479,7 @@
   }
 
   onMount(() => {
+    mobile = !getDesktopBoundaryPolicy().desktopAllowed;
     if (!roomId) {
       loading = false;
       error = 'Комната не найдена';
@@ -696,7 +701,10 @@
       getCapabilityFeature('readCursor')
     ]).catch(() => [false, false] as const);
     if (signal.aborted) return;
-    historyEnabled = canPage;
+    // Paged history is account-only: GET /chat/history answers a guest with 401
+    // «Room is not available», which surfaced as a chat error in a room a guest
+    // can otherwise read and write. Guests keep the recent-window endpoint.
+    historyEnabled = canPage && Boolean(session.user?.id);
     readCursorEnabled = canRead;
     readReconciliation?.dispose();
     readReconciliation = session.user?.id
@@ -1032,8 +1040,17 @@
         <Users {...iconSm} aria-hidden="true" />
       </button>
     </div>
-    <button class="chat-rail-collapse" type="button" aria-label="Свернуть панель" onclick={() => onCollapse?.()}>
-      <ChevronRight {...iconSm} aria-hidden="true" />
+    <button
+      class="chat-rail-collapse"
+      type="button"
+      aria-label={mobile ? 'Закрыть панель' : 'Свернуть панель'}
+      onclick={() => onCollapse?.()}
+    >
+      {#if mobile}
+        <X {...iconSm} aria-hidden="true" />
+      {:else}
+        <ChevronRight {...iconSm} aria-hidden="true" />
+      {/if}
     </button>
   </header>
 

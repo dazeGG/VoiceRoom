@@ -2,9 +2,9 @@ import { expect, test, type Browser, type BrowserContext, type Page } from '@pla
 
 const MOBILE_UA = 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 Chrome/126.0 Mobile Safari/537.36';
 const DESKTOP_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126.0 Safari/537.36';
-// The room page is the one screen a phone may open (see mobile-room.spec.ts);
-// home, lobby and account screens stay desktop-only.
-const BLOCKED_ROUTES = ['/', '/login', '/register'];
+// The room page and `/`, which offers to start one, are the screens a phone may
+// open (see mobile-room.spec.ts); the lobby and account screens stay desktop-only.
+const BLOCKED_ROUTES = ['/login', '/register'];
 
 async function mobileContext(browser: Browser): Promise<BrowserContext> {
   const context = await browser.newContext({
@@ -36,7 +36,7 @@ function collectProhibitedCalls(page: Page): string[] {
   return calls;
 }
 
-test('G18-A01 blocks every non-room entry route before child effects mount', async ({ browser }) => {
+test('G18-A01 blocks every desktop-only entry route before child effects mount', async ({ browser }) => {
   const context = await mobileContext(browser);
   try {
     for (const route of BLOCKED_ROUTES) {
@@ -62,7 +62,7 @@ test('G18-A02 registered mobile service worker suppresses a delivered push notif
   await context.grantPermissions(['notifications'], { origin });
   const page = await context.newPage();
   try {
-    await page.goto('/');
+    await page.goto('/login');
     await expect(page.getByRole('main', { name: 'Неподдерживаемое устройство' })).toBeVisible();
     const cdp = await context.newCDPSession(page);
     await cdp.send('ServiceWorker.enable');

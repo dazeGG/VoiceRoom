@@ -54,7 +54,11 @@ test('signing in from a room hands the account to a reload instead of swapping t
   assert.match(slot, /onAuthenticated=\{\(\) => rejoinRoomSignedIn\(roomClientState\.roomId\)\}/);
   assert.match(slot, /guest: !embedded && !session\.user/);
   assert.match(slot, /hasUsedDesktopApp: session\.user\?\.hasUsedDesktopApp \?\? false/);
-  assert.match(slot, /roomClientState\.roomIsStatic\s*\?\s*'Создайте аккаунт, чтобы сохранить комнату/, 'only permanent rooms promise to be saved');
+  assert.match(
+    slot,
+    /if \(roomClientState\.roomIsStatic\) \{\s*return \{\s*label: 'Создать аккаунт',\s*title: 'Сохраните эту комнату за собой',/,
+    'only permanent rooms promise to be saved'
+  );
   assert.match(read('src/lib/features/room/RoomPage.svelte'), /<RoomTopbar \/>\s*<RoomCtaSlot \/>[\s\S]*<LeaveScreen \/>/);
   // The slot floats above the dock: on narrow screens the heading wraps and its tabs move down.
   assert.match(slot, /\.room-cta-stack \{\s*position: fixed;[\s\S]*?bottom: calc\(max\(var\(--space-lg\), env\(safe-area-inset-bottom\)\) \+ 80px\);/);

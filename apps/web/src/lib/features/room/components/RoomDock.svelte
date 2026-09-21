@@ -251,7 +251,7 @@
       </Popover>
     </div>
 
-    <div class="dock-cluster">
+    <div class="dock-cluster dock-cluster--screen">
       <button
         class="dock-button screen-button"
         id="screenButton"
