@@ -199,3 +199,33 @@ test('microphone server mute preserves unrelated LiveKit permissions and screen 
   assert.equal(unmuted.canPublishData, false);
   assert.equal(unmuted.canSubscribe, false);
 });
+
+// Taken verbatim from production on 2026-09-22: every normal leave logged an
+// error because the suppression matched only `message`, which says nothing
+// about Not Found. A participant the SFU has already dropped is the outcome
+// the removal wants, so it must not reach the error stream.
+test('a participant the SFU has already dropped is not an error', () => {
+  const production = Object.assign(new Error('twirp error unknown: participant does not exist'), {
+    name: 'Not Found',
+    status: 404,
+    code: 'not_found'
+  });
+  assert.equal(__private.isLiveKitParticipantAlreadyGone(production), true);
+
+  // Each signal on its own is enough: the SDK has changed shape before.
+  assert.equal(__private.isLiveKitParticipantAlreadyGone({ status: 404 }), true);
+  assert.equal(__private.isLiveKitParticipantAlreadyGone({ code: 'not_found' }), true);
+  assert.equal(__private.isLiveKitParticipantAlreadyGone({ name: 'Not Found' }), true);
+  assert.equal(__private.isLiveKitParticipantAlreadyGone({ message: 'participant does not exist' }), true);
+});
+
+test('a real removal failure still reaches the error stream', () => {
+  const upstream = Object.assign(new Error('twirp error internal: connection refused'), {
+    name: 'Internal',
+    status: 500,
+    code: 'internal'
+  });
+  assert.equal(__private.isLiveKitParticipantAlreadyGone(upstream), false);
+  assert.equal(__private.isLiveKitParticipantAlreadyGone(new Error('permission denied')), false);
+  assert.equal(__private.isLiveKitParticipantAlreadyGone(undefined), false);
+});
