@@ -3,6 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
+const fs = require('node:fs');
 const { readEnvInt, readEnvBool, readDatabaseConfig, readUploadsDir } = require('../src/lib/config');
 
 test('readEnvInt parses a valid integer', () => {
@@ -66,4 +67,25 @@ test('readDatabaseConfig accepts postgres URLs', () => {
   assert.deepEqual(readDatabaseConfig({ DATABASE_URL: ' postgresql://user:pass@localhost/voice_room ' }), {
     url: 'postgresql://user:pass@localhost/voice_room'
   });
+});
+
+// A feature that ships disabled is reachable only if compose hands the flag
+// to the container. CLIENT_LOG_INTAKE_ENABLED was documented and read by the
+// API but never passed, so no containerised deployment could turn the browser
+// log intake on, whatever the host .env said.
+test('compose passes every feature flag the API leaves disabled by default', () => {
+  const root = path.join(__dirname, '../../..');
+  const server = fs.readFileSync(path.join(root, 'apps/api/src/server.js'), 'utf8');
+  const compose = fs.readFileSync(path.join(root, 'docker-compose.yml'), 'utf8');
+
+  const apiBlock = compose.slice(compose.indexOf('\n  api:'), compose.indexOf('\n  message-delivery:'));
+  const passed = new Set(Array.from(apiBlock.matchAll(/^ {6}([A-Z0-9_]+):/gm), (m) => m[1]));
+  const defaultOff = Array.from(
+    server.matchAll(/readEnvBool\(\s*'([A-Z0-9_]+)',\s*false/g),
+    (m) => m[1]
+  );
+
+  assert.ok(defaultOff.length > 0, 'expected the API to declare default-off flags');
+  const unreachable = defaultOff.filter((name) => !passed.has(name));
+  assert.deepEqual(unreachable, [], `compose never passes these flags to api: ${unreachable.join(', ')}`);
 });
