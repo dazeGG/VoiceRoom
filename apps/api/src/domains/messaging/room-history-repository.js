@@ -2,6 +2,7 @@
 
 const { normalizeLinkPreview } = require('@voice-room/shared/link-preview');
 const { createDbPool } = require('../../lib/db');
+const { createLogger } = require('../../lib/logger');
 
 const ROOM_MESSAGE_SELECT = `
   SELECT m.*,
@@ -44,7 +45,7 @@ function mapRoomMessage(row) {
   };
 }
 
-function createRoomHistoryRepository({ databaseUrl, logger = console, pool } = {}) {
+function createRoomHistoryRepository({ databaseUrl, logger = createLogger({ name: 'api' }), pool } = {}) {
   let activePool = pool || null;
 
   function getPool() {

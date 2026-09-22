@@ -32,6 +32,15 @@ const {
   normalizeLogin
 } = require('@voice-room/shared/validation');
 const { createProofOfWork } = require('./lib/pow');
+const { LOG_EVENTS } = require('./lib/log-events');
+const { CLIENT_LOG_LIMITS, normalizeClientLogBatch } = require('./lib/client-log-intake');
+const {
+  createFastifyLoggerOptions,
+  createLogger,
+  hashIp,
+  newRequestId,
+  normalizeRequestId
+} = require('./lib/logger');
 const { getClientIp, createRateLimiter } = require('./lib/rate-limit');
 const { MAX_AVATAR_BYTES, createAvatarKey, processAvatar } = require('./lib/avatar-processing');
 const { reconcileAvatarStorage } = require('./lib/avatar-reconciliation');
@@ -213,6 +222,11 @@ const AVATAR_UPLOAD_RATE_WINDOW_MS = readEnvInt('AVATAR_UPLOAD_RATE_WINDOW_MS', 
 const PUSH_SUBSCRIPTION_RATE_LIMIT = readEnvInt('PUSH_SUBSCRIPTION_RATE_LIMIT', 20, 0);
 const PUSH_SUBSCRIPTION_RATE_WINDOW_MS = readEnvInt('PUSH_SUBSCRIPTION_RATE_WINDOW_MS', 60000, 1000);
 const MAX_PUSH_SUBSCRIPTIONS_PER_USER = readEnvInt('MAX_PUSH_SUBSCRIPTIONS_PER_USER', 10, 1);
+// Browser log intake is off unless an operator turns it on: it is a public
+// write path into the log stream, so it stays opt-in per environment.
+const CLIENT_LOG_INTAKE_ENABLED = readEnvBool('CLIENT_LOG_INTAKE_ENABLED', false);
+const CLIENT_LOG_RATE_LIMIT = readEnvInt('CLIENT_LOG_RATE_LIMIT', 6, 0);
+const CLIENT_LOG_RATE_WINDOW_MS = readEnvInt('CLIENT_LOG_RATE_WINDOW_MS', 60000, 1000);
 // Cap concurrent realtime (WebSocket) connections per user so a single account
 // cannot pin an unbounded number of keep-alive connections.
 const MAX_REALTIME_STREAMS_PER_USER = readEnvInt('MAX_REALTIME_STREAMS_PER_USER', 8, 1);
@@ -271,16 +285,20 @@ const roomOccupancyRetries = new Map();
 const ROOM_OCCUPANCY_RETRY_BASE_MS = 1000;
 const ROOM_OCCUPANCY_RETRY_MAX_MS = 30000;
 
-function getLogLevel(env = process.env) {
-  const configured = (env.LOG_LEVEL || '').trim();
-  if (configured) return configured;
-  return env.NODE_ENV === 'production' ? 'info' : 'silent';
+// Work that runs outside a request (timers, listeners, background dispatch)
+// still has to be searchable next to the requests it was triggered by, so it
+// logs through one process logger with the same base fields and redaction
+// instead of falling back to console.
+let processLogger = null;
+
+function getProcessLogger() {
+  return (processLogger ||= createLogger({ name: 'api' }));
 }
 
-function createFastifyLoggerOptions(env = process.env) {
-  const level = getLogLevel(env).toLowerCase();
-  if (['false', 'off', 'none', 'silent'].includes(level)) return false;
-  return { level };
+// createApiApp builds a fresh Fastify logger per app; background work adopts it
+// so a test harness and the real process agree on the destination.
+function setProcessLogger(logger) {
+  processLogger = logger || null;
 }
 
 function getRoomStore() {
@@ -486,7 +504,7 @@ async function refreshPinsAfterMessageMutation(roomId, action, messageId) {
   } catch (error) {
     // The message mutation is already committed. Preserve its success while
     // retaining evidence; clients will reconcile the derived pin list on load.
-    console.error('Failed to refresh room pins after message mutation:', error);
+    getProcessLogger().error({ evt: LOG_EVENTS.MESSAGE_PIN_REFRESH_FAILED, roomId, messageId, err: error }, 'failed to refresh room pins after a message mutation');
   }
 }
 
@@ -552,10 +570,10 @@ async function startMessageDeliveryListener() {
       const parsed = JSON.parse(notification.payload || '{}');
       const row = parsed.eventId ? await delivery.outbox.getEvent(parsed.eventId) : null;
       if (row?.payload) await dispatchMessageDeliveryEvent(row.payload);
-    })().catch((error) => console.error('Failed to dispatch durable message event:', error));
+    })().catch((error) => getProcessLogger().error({ evt: LOG_EVENTS.MESSAGE_EVENT_DISPATCH_FAILED, err: error }, 'failed to dispatch a durable message event'));
   };
   client.on('notification', onNotification);
-  client.on('error', (error) => console.error('Message delivery listener failed:', error));
+  client.on('error', (error) => getProcessLogger().error({ evt: LOG_EVENTS.MESSAGE_LISTENER_FAILED, err: error }, 'message delivery listener failed'));
   await client.query('LISTEN voice_room_message_delivery');
   messageDeliveryListener = { client, onNotification };
 }
@@ -933,7 +951,7 @@ async function queuePush(userId, payload, context = {}) {
     const deliveryContext = ttl === undefined ? context : { ...context, ttl };
     await getPushService().sendToUser(userId, { ...publicPayload, body }, deliveryContext);
   } catch (error) {
-    console.error('Failed to send push notification:', error);
+    getProcessLogger().warn({ evt: LOG_EVENTS.PUSH_SEND_FAILED, userId, err: error }, 'failed to send a push notification');
   }
 }
 
@@ -976,7 +994,7 @@ async function broadcastDmNotification(recipientUserId, sender, message) {
     }, { peerUserId: sender.id });
     return broadcastCount;
   } catch (error) {
-    console.error('Failed to broadcast DM notification:', error);
+    getProcessLogger().error({ evt: LOG_EVENTS.NOTIFICATION_BROADCAST_FAILED, err: error }, 'failed to broadcast a direct message notification');
     return 0;
   }
 }
@@ -1037,6 +1055,10 @@ const avatarUploadLimiter = createRateLimiter({
 const pushSubscriptionLimiter = createRateLimiter({
   limit: PUSH_SUBSCRIPTION_RATE_LIMIT,
   windowMs: PUSH_SUBSCRIPTION_RATE_WINDOW_MS
+});
+const clientLogLimiter = createRateLimiter({
+  limit: CLIENT_LOG_RATE_LIMIT,
+  windowMs: CLIENT_LOG_RATE_WINDOW_MS
 });
 
 function getLiveKitConnectSources() {
@@ -1127,10 +1149,15 @@ function getSessionToken(req) {
 async function resolveSessionUser(req) {
   const token = getSessionToken(req);
   if (!token) return null;
-  return getUserStore().getSessionUser(token, Date.now(), {
+  const session = await getUserStore().getSessionUser(token, Date.now(), {
     userAgent: String(req.headers?.['user-agent'] || ''),
     resolveLocation: () => getGeoLocator().locate(getClientIp(req, TRUST_PROXY))
   });
+  // Stamped for the request-completed record: without it every authenticated
+  // request looks anonymous in the log and a user's report cannot be traced to
+  // the requests they actually made.
+  if (session?.user?.id && req) req.voiceRoomUserId = session.user.id;
+  return session;
 }
 
 // What the signed-in devices list shows about a new session. The IP is only
@@ -1170,7 +1197,7 @@ async function recordAndAnnounceLogin({ userId, session, device, kind }) {
       url: '/'
     }, { ignorePreferences: true });
   } catch (error) {
-    console.error('Failed to record a sign-in:', error);
+    getProcessLogger().error({ evt: LOG_EVENTS.AUTH_SIGN_IN_RECORD_FAILED, userId, kind, err: error }, 'failed to record a sign-in');
   }
 }
 
@@ -1297,7 +1324,7 @@ async function pruneRooms(now = Date.now()) {
   }
 }
 
-function startPruneTimer(server, logger = console) {
+function startPruneTimer(server, logger = getProcessLogger()) {
   // Reap WS connections whose clients stopped heartbeating (half-open sockets
   // never emit 'close'), otherwise dead peers linger in rosters and friends
   // stay "online" forever.
@@ -1305,7 +1332,7 @@ function startPruneTimer(server, logger = console) {
     try {
       wsRegistry?.pruneStale();
     } catch (error) {
-      logger.error('WS prune timer failed:', error);
+      logger.error({ evt: LOG_EVENTS.MAINTENANCE_TASK_FAILED, task: 'ws-prune', err: error }, 'ws prune timer failed');
     }
   }, KEEPALIVE_MS);
   if (typeof wsTimer.unref === 'function') wsTimer.unref();
@@ -1315,30 +1342,30 @@ function startPruneTimer(server, logger = console) {
 
   const timer = setInterval(() => {
     void observeMaintenance('room_prune', () => pruneRooms()).catch((error) => {
-      logger.error('Room prune timer failed:', error);
+      logger.error({ evt: LOG_EVENTS.MAINTENANCE_TASK_FAILED, task: 'room-prune', err: error }, 'room prune timer failed');
     });
     void observeMaintenance('session_prune', () => getUserStore().pruneSessions())
       .catch((error) => {
-        logger.error('Session prune timer failed:', error);
+        logger.error({ evt: LOG_EVENTS.MAINTENANCE_TASK_FAILED, task: 'session-prune', err: error }, 'session prune timer failed');
       });
     void observeMaintenance('login_event_prune', () => getUserStore().pruneLoginEvents())
       .catch((error) => {
-        logger.error('Sign-in history prune timer failed:', error);
+        logger.error({ evt: LOG_EVENTS.MAINTENANCE_TASK_FAILED, task: 'sign-in-history-prune', err: error }, 'sign-in history prune timer failed');
       });
     void observeMaintenance('account_deletion_finalize', () => finalizeDueAccountDeletions())
       .catch((error) => {
-        logger.error('Account deletion timer failed:', error);
+        logger.error({ evt: LOG_EVENTS.MAINTENANCE_TASK_FAILED, task: 'account-deletion', err: error }, 'account deletion timer failed');
       });
     if (getLinkPreviewService()) {
       void observeMaintenance('link_preview_prune', () => getLinkPreviewService().pruneExpired())
         .catch((error) => {
-          logger.error('Link preview prune timer failed:', error);
+          logger.error({ evt: LOG_EVENTS.MAINTENANCE_TASK_FAILED, task: 'link-preview-prune', err: error }, 'link preview prune timer failed');
         });
     }
     if (RETENTION_PURGE_INTERVAL_MS > 0 && getRoomStore().purgeDeleted) {
       void observeMaintenance('retention_purge', () => getRoomStore().purgeDeleted({ olderThanMs: RETENTION_KEEP_DELETED_MS }))
         .catch((error) => {
-          logger.error('Retention purge timer failed:', error);
+          logger.error({ evt: LOG_EVENTS.MAINTENANCE_TASK_FAILED, task: 'retention-purge', err: error }, 'retention purge timer failed');
         });
     }
   }, ROOM_PRUNE_INTERVAL_MS);
@@ -1474,7 +1501,7 @@ function scheduleRoomOccupancyRetry(roomId) {
     if (roomOccupancyRetries.get(roomId) !== retry) return;
     retry.timer = null;
     void queueRoomOccupancyTransition(roomId).catch((error) => {
-      console.error('Failed to retry room occupancy persistence:', error);
+      getProcessLogger().error({ evt: LOG_EVENTS.ROOM_OCCUPANCY_RETRY_FAILED, err: error }, 'failed to retry room occupancy persistence');
     });
   }, delay);
   retry.timer?.unref?.();
@@ -1549,7 +1576,7 @@ function closePeer(roomId, peerId, transportId, reason = 'left') {
     // The call ended: reset the in-memory call clock (never persisted).
     room.voiceActiveSince = null;
     void queueRoomOccupancyTransition(roomId).catch((error) => {
-      console.error('Failed to persist room occupancy:', error);
+      getProcessLogger().error({ evt: LOG_EVENTS.ROOM_OCCUPANCY_PERSIST_FAILED, roomId, err: error }, 'failed to persist room occupancy');
     });
   } else {
     room.updatedAt = Date.now();
@@ -1623,6 +1650,20 @@ async function readJsonBody(req) {
   }
 }
 
+// Every refusal to admit a peer to the SFU is recorded with the code the
+// client is about to see. A call that "does not connect" is otherwise
+// indistinguishable in the logs from one that was never attempted.
+function logAdmissionDenied(req, { roomId, peerId, code, err = null }) {
+  req?.log?.warn?.({
+    evt: LOG_EVENTS.LIVEKIT_ADMISSION_DENIED,
+    reqId: req?.id,
+    roomId,
+    peerId,
+    code,
+    err: err || undefined
+  }, 'LiveKit admission denied');
+}
+
 async function revokeIssuedAdmission({ boundary = getCredentialBoundary(), cause, credentialId, principal, recordFailure = recordCredentialRevokeCleanupFailure, req, roomId }) {
   try {
     const revoked = await boundary.revokeCredential({ credentialId, roomId, principal });
@@ -1633,7 +1674,14 @@ async function revokeIssuedAdmission({ boundary = getCredentialBoundary(), cause
     }
   } catch (cleanupError) {
     recordFailure();
-    req?.log?.error?.({ cleanupError, code: 'credential_revoke_cleanup_failed', roomId }, 'Issued admission credential cleanup failed');
+    req?.log?.error?.({
+      evt: LOG_EVENTS.LIVEKIT_ADMISSION_REVOKED,
+      reqId: req?.id,
+      credentialId,
+      roomId,
+      code: 'credential_revoke_cleanup_failed',
+      err: cleanupError
+    }, 'issued admission credential cleanup failed');
     if (cause) throw new AggregateError([cause, cleanupError], 'Admission persistence and credential cleanup both failed', { cause });
     throw cleanupError;
   }
@@ -1673,6 +1721,7 @@ async function handleLiveKitToken(req, res) {
     return;
   }
   if (!provider && (!livekit.gateSecret || livekit.gateSecret.length < 32)) {
+    logAdmissionDenied(req, { roomId, peerId, code: 'livekit_gate_unavailable' });
     sendJson(res, 503, {
       ok: false,
       code: 'livekit_gate_unavailable',
@@ -1697,6 +1746,7 @@ async function handleLiveKitToken(req, res) {
     roomId
   });
   if (!principal) {
+    logAdmissionDenied(req, { roomId, peerId, code: 'livekit_gate_principal_unavailable' });
     sendJson(res, 503, { ok: false, code: 'livekit_gate_principal_unavailable', error: 'LiveKit gate principal unavailable' });
     return;
   }
@@ -1707,7 +1757,7 @@ async function handleLiveKitToken(req, res) {
     }
     serverMuted = await getRoomStore().isRoomServerMuted({ roomId, principal });
   } catch (error) {
-    req?.log?.error?.({ err: error, roomId }, 'Failed to resolve persisted server mute before LiveKit admission');
+    logAdmissionDenied(req, { roomId, peerId, code: 'server_mute_unavailable', err: error });
     sendJson(res, 503, {
       ok: false,
       code: 'server_mute_unavailable',
@@ -1726,6 +1776,7 @@ async function handleLiveKitToken(req, res) {
   }
 
   if (!provider) {
+    logAdmissionDenied(req, { roomId, peerId, code: 'livekit_gate_unavailable' });
     sendJson(res, 503, { ok: false, code: 'livekit_gate_unavailable', error: 'LiveKit gate unavailable' });
     return;
   }
@@ -1738,6 +1789,7 @@ async function handleLiveKitToken(req, res) {
     roomId
   });
   if (issued.status !== 'issued') {
+    logAdmissionDenied(req, { roomId, peerId, code: 'livekit_gate_credential_unavailable' });
     sendJson(res, 503, { ok: false, code: 'livekit_gate_credential_unavailable', error: 'LiveKit gate unavailable' });
     return;
   }
@@ -1765,6 +1817,7 @@ async function handleLiveKitToken(req, res) {
   }
 
   if (await findRoomBan(roomId, sessionUser?.id, getClientIp(req, TRUST_PROXY))) {
+    logAdmissionDenied(req, { roomId, peerId, code: 'room_banned' });
     await getCredentialBoundary().revokePrincipal({ principal, roomId });
     sendRoomBanned(res, roomId);
     return;
@@ -1966,7 +2019,7 @@ async function finishRoomDeletion(roomId, { avatarKey = null, request = null } =
   // Invitations outlive the inviter's session now, so the deleted room is the
   // only thing left that can invalidate them.
   void expireRoomInvitations(null, roomId).catch((error) => {
-    console.error('Failed to expire room invitations:', error);
+    getProcessLogger().error({ evt: LOG_EVENTS.ROOM_INVITATION_EXPIRY_FAILED, err: error }, 'failed to expire room invitations');
   });
 
   // Terminal-claim every active/leased peer before credential or transport
@@ -2006,6 +2059,66 @@ async function finishRoomDeletion(roomId, { avatarKey = null, request = null } =
     request?.log?.warn?.({ code: 'room_delete_peer_cleanup_failed' }, 'Room peer cleanup finished with errors');
   }
   await removeAvatarBestEffort(avatarKey, request);
+}
+
+// Browser log intake. The room client buffers what it saw locally and posts
+// the buffer when a call fails, which is the only way a microphone, screen
+// share or reconnect failure on someone else's machine becomes visible here.
+// Records are re-emitted into the same stream as server records rather than
+// stored, so they age out with the rest of the logs and need no schema.
+async function handleClientLogs(req, res) {
+  if (!CLIENT_LOG_INTAKE_ENABLED) {
+    sendJson(res, 404, { ok: false, error: 'Not found' });
+    return;
+  }
+
+  const clientIp = getClientIp(req, TRUST_PROXY);
+  const rate = clientLogLimiter.check(`client-logs:${clientIp}`);
+  if (!rate.allowed) {
+    sendJson(
+      res,
+      429,
+      { ok: false, error: 'Слишком много попыток, попробуйте позже' },
+      { 'Retry-After': String(rate.retryAfterSeconds) }
+    );
+    return;
+  }
+
+  const session = await resolveSessionUser(req);
+  const body = await readJsonBody(req);
+  const batch = normalizeClientLogBatch(body);
+
+  if (batch.dropped > 0) {
+    req?.log?.warn?.({
+      evt: LOG_EVENTS.CLIENT_REPORT_REJECTED,
+      reqId: req?.id,
+      dropped: batch.dropped,
+      accepted: batch.events.length
+    }, 'client log records were rejected');
+  }
+
+  // The shared fields are bound once so each record carries the identity of
+  // the reporter without the client being able to claim one.
+  const reporter = {
+    source: 'web',
+    reqId: req?.id,
+    clientSessionId: batch.sessionId || undefined,
+    userId: session?.user?.id || undefined,
+    ipHash: hashIp(clientIp)
+  };
+
+  for (const event of batch.events) {
+    req?.log?.[event.level]?.({
+      evt: LOG_EVENTS.CLIENT_REPORT,
+      ...reporter,
+      ns: event.ns,
+      at: event.at,
+      stale: event.stale || undefined,
+      ctx: event.ctx
+    }, event.msg);
+  }
+
+  sendJson(res, 202, { ok: true, accepted: batch.events.length, dropped: batch.dropped, limits: CLIENT_LOG_LIMITS });
 }
 
 async function handleRegister(req, res) {
@@ -2918,7 +3031,7 @@ async function retireRoomNotifications(roomId, userId, through) {
     if (typeof service?.markRoomRead !== 'function') return;
     await service.markRoomRead({ userId, roomId, through: through ?? null });
   } catch (error) {
-    console.error('Failed to retire room notifications:', error);
+    getProcessLogger().error({ evt: LOG_EVENTS.NOTIFICATION_RETIRE_FAILED, err: error }, 'failed to retire room notifications');
   }
 }
 
@@ -3139,7 +3252,7 @@ async function handleRoomChatPost(req, res, roomId) {
     try {
       authorUser = await getUserStore().getUserById(activePeer.accountUserId);
     } catch (error) {
-      console.error('Failed to resolve room chat author profile:', error);
+      getProcessLogger().warn({ evt: LOG_EVENTS.MESSAGE_AUTHOR_PROFILE_FAILED, roomId, err: error }, 'failed to resolve a room chat author profile');
     }
   }
 
@@ -3275,7 +3388,7 @@ async function removeLiveKitParticipant(roomId, peerId) {
     await service.removeParticipant(getLiveKitRoomName(roomId), peerId);
   } catch (error) {
     if (!/not.?found/i.test(String(error?.message || ''))) {
-      console.error('Failed to remove moderated LiveKit participant:', error);
+      getProcessLogger().error({ evt: LOG_EVENTS.LIVEKIT_PARTICIPANT_REMOVE_FAILED, err: error }, 'failed to remove a moderated LiveKit participant');
     }
   }
 }
@@ -3324,7 +3437,7 @@ async function setLiveKitParticipantMuted(roomId, peerId, muted) {
     }
   } catch (error) {
     if (/not.?found/i.test(String(error?.message || ''))) return { status: 'offline' };
-    console.error('Failed to apply LiveKit server mute:', error);
+    getProcessLogger().error({ evt: LOG_EVENTS.LIVEKIT_MUTE_FAILED, roomId, peerId, err: error }, 'failed to apply a LiveKit server mute');
     if (muted) {
       try {
         await service.removeParticipant(roomName, peerId);
@@ -3457,7 +3570,7 @@ async function finalizeDueAccountDeletions(now = Date.now()) {
         await finishRoomDeletion(roomId, { avatarKey });
       }
     } catch (error) {
-      console.error('Failed to finish an account deletion:', error);
+      getProcessLogger().error({ evt: LOG_EVENTS.ACCOUNT_DELETION_FAILED, err: error }, 'failed to finish an account deletion');
     }
   }
   return finished;
@@ -3488,7 +3601,7 @@ async function endAccountSessionConnections({ userId = null, tokenHashes = null 
       await roomRuntime?.leaveVoiceRoom(connection, activeVoice);
       await removeLiveKitParticipant(activeVoice.roomId, activeVoice.peerId);
     } catch (error) {
-      console.error('Failed to end voice for an ended account session:', error);
+      getProcessLogger().error({ evt: LOG_EVENTS.ACCOUNT_SESSION_VOICE_END_FAILED, userId, err: error }, 'failed to end voice for an ended account session');
     }
   }
   wsRegistry.closeConnections(targets, SESSION_REVOKED_CLOSE_CODE, 'Session ended');
@@ -4852,7 +4965,7 @@ async function handleDesktopLatest(res) {
       sendJson(res, 200, { ok: true, ...desktopReleaseCache.data }, { 'Cache-Control': 'public, max-age=60' });
       return;
     }
-    console.error('Failed to fetch desktop release:', error.message);
+    getProcessLogger().warn({ evt: LOG_EVENTS.DESKTOP_RELEASE_FETCH_FAILED, err: error }, 'failed to fetch the desktop release manifest');
     sendJson(res, 502, { ok: false, error: 'Не удалось получить данные о релизе' });
   }
 }
@@ -4865,6 +4978,12 @@ function getApiRoutePath(pathname) {
 
 function attachFastifyRequestBody(request) {
   request.raw.body = request.body;
+  // Legacy handlers receive the raw Node request, which carries neither the
+  // request id nor a logger. Both are attached here so any handler can emit a
+  // record that correlates with the request line, without threading the
+  // Fastify request through every signature.
+  request.raw.id = request.id;
+  request.raw.log = request.log;
   return request.raw;
 }
 
@@ -4875,10 +4994,18 @@ function getRequestRouteLabel(request) {
 function logHttpRequest(request, statusCode, durationMs) {
   const route = getRequestRouteLabel(request);
   if (route === '/api/healthz') return;
-  request.log?.info?.({
+  // A slow or failed request is the one worth finding later, so it is raised
+  // above the steady-state info stream rather than being counted only in the
+  // Prometheus histogram.
+  const level = statusCode >= 500 ? 'error' : statusCode >= 400 ? 'warn' : 'info';
+  request.log?.[level]?.({
+    evt: LOG_EVENTS.HTTP_REQUEST,
+    reqId: request.id,
     method: request.method,
     route,
     statusCode,
+    userId: request.raw?.voiceRoomUserId || undefined,
+    ipHash: hashIp(getClientIp(request.raw || request, TRUST_PROXY)),
     durationMs: Math.round(durationMs * 100) / 100
   }, 'request completed');
 }
@@ -4908,7 +5035,12 @@ async function runLegacyHandler(request, reply, handler) {
     const status = error.statusCode || 500;
     const message = error.publicMessage || (status >= 500 ? 'Internal server error' : error.message);
     if (status >= 500) {
-      request.log?.error?.({ err: error }, 'legacy handler failed') || console.error(error);
+      request.log?.error?.({
+        evt: LOG_EVENTS.HTTP_HANDLER_FAILED,
+        reqId: request.id,
+        route,
+        err: error
+      }, 'legacy handler failed');
     }
     if (!res.headersSent) {
       sendJson(res, status, { ok: false, error: message });
@@ -4945,7 +5077,10 @@ function createApiApp({
   realtimeReconnectLeaseMs = resolveRealtimeReconnectLeaseMs(process.env),
   realtimeNow = Date.now,
   realtimeSetTimeout = globalThis.setTimeout,
-  realtimeClearTimeout = globalThis.clearTimeout
+  realtimeClearTimeout = globalThis.clearTimeout,
+  // A test that asserts a failure was observed rather than swallowed needs
+  // somewhere to observe it: Fastify's own logger is silent by default.
+  logger = null
 } = {}) {
   if (store && store !== roomStore) {
     presenceRooms.clear();
@@ -4976,8 +5111,21 @@ function createApiApp({
   const app = fastify({
     bodyLimit: BODY_LIMIT_BYTES,
     disableRequestLogging: true,
+    // A request id supplied by the edge is reused so one identifier spans
+    // Caddy, the API and the browser report that quotes it; anything malformed
+    // is replaced rather than trusted into the log stream.
+    genReqId: (request) => normalizeRequestId(request.headers['x-request-id']) || newRequestId(),
     logger: createFastifyLoggerOptions(),
     trustProxy: TRUST_PROXY
+  });
+  const appLogger = logger || app.log;
+  setProcessLogger(appLogger);
+
+  // The client cannot quote an id it never saw, so every response carries it
+  // back — including the error responses a user is most likely to report.
+  app.addHook('onRequest', (request, reply, done) => {
+    reply.header('x-request-id', request.id);
+    done();
   });
 
   app.register(fastifyCookie, { hook: 'onRequest' });
@@ -5001,7 +5149,8 @@ function createApiApp({
     getFriendIds: (userId) => getFriendStore().getFriendIds(userId),
     onConnectionClose: (connection) => {
       roomRuntime?.cleanupConnection(connection);
-    }
+    },
+    logger: appLogger
   });
 
   roomRuntime = createRoomRealtimeRuntime({
@@ -5027,7 +5176,8 @@ function createApiApp({
     reconnectLeaseMs: realtimeReconnectLeaseMs,
     now: realtimeNow,
     setTimeout: realtimeSetTimeout,
-    clearTimeout: realtimeClearTimeout
+    clearTimeout: realtimeClearTimeout,
+    logger: appLogger
   });
 
   const wsHandler = createWsHandler({
@@ -5041,7 +5191,8 @@ function createApiApp({
       await getFriendStore().areFriends(userId, peerId)
       && !(await getFriendStore().isBlockedBetween(userId, peerId))
     ),
-    getClientIp: (req) => getClientIp(req, TRUST_PROXY)
+    getClientIp: (req) => getClientIp(req, TRUST_PROXY),
+    logger: appLogger
   });
 
   app.setNotFoundHandler((request, reply) => {
@@ -5202,6 +5353,7 @@ function createApiApp({
 
   app.get('/api/pow-challenge', (request, reply) => runLegacyHandler(request, reply, handlePowChallenge));
   app.get('/api/desktop/latest', (request, reply) => runLegacyHandler(request, reply, (_req, res) => handleDesktopLatest(res)));
+  app.post('/api/client-logs', (request, reply) => runLegacyHandler(request, reply, handleClientLogs));
   app.post('/api/auth/register', (request, reply) => runLegacyHandler(request, reply, handleRegister));
   app.post('/api/auth/login', (request, reply) => runLegacyHandler(request, reply, handleLogin));
   app.post('/api/auth/logout', (request, reply) => runLegacyHandler(request, reply, handleLogout));
@@ -5404,7 +5556,7 @@ function createApiServer(options = {}) {
   return server;
 }
 
-async function closeStores(logger = console) {
+async function closeStores(logger = getProcessLogger()) {
   await Promise.allSettled([
     roomStore?.close?.(),
     userStore?.close?.(),
@@ -5414,21 +5566,21 @@ async function closeStores(logger = console) {
     membershipPool?.end?.()
   ]).then((results) => {
     for (const result of results) {
-      if (result.status === 'rejected') logger.error('Failed to close store:', result.reason);
+      if (result.status === 'rejected') logger.error({ evt: LOG_EVENTS.STORE_CLOSE_FAILED, err: result.reason }, 'failed to close a store');
     }
   });
   membershipPool = null;
   membershipServices = null;
 }
 
-function installGracefulShutdown(server, { logger = console, exit = process.exit, timeoutMs = 8000 } = {}) {
+function installGracefulShutdown(server, { logger = getProcessLogger(), exit = process.exit, timeoutMs = 8000 } = {}) {
   let shuttingDown = false;
   async function shutdown(signal) {
     if (shuttingDown) return;
     shuttingDown = true;
-    logger.info?.(`Received ${signal}; shutting down gracefully`);
+    logger.info({ evt: LOG_EVENTS.SHUTDOWN_STARTED, signal }, 'shutting down gracefully');
     const timeout = setTimeout(() => {
-      logger.error?.('Graceful shutdown timed out; exiting');
+      logger.error({ evt: LOG_EVENTS.SHUTDOWN_TIMEOUT, timeoutMs }, 'graceful shutdown timed out; exiting');
       exit(1);
     }, timeoutMs);
     if (typeof timeout.unref === 'function') timeout.unref();
@@ -5447,7 +5599,7 @@ function installGracefulShutdown(server, { logger = console, exit = process.exit
       exit(0);
     } catch (error) {
       clearTimeout(timeout);
-      logger.error?.('Graceful shutdown failed:', error);
+      logger.error({ evt: LOG_EVENTS.SHUTDOWN_FAILED, err: error }, 'graceful shutdown failed');
       exit(1);
     }
   }
@@ -5456,7 +5608,7 @@ function installGracefulShutdown(server, { logger = console, exit = process.exit
   process.once('SIGINT', () => void shutdown('SIGINT'));
 }
 
-async function bootstrap({ env = process.env, logger = console, exit = process.exit } = {}) {
+async function bootstrap({ env = process.env, logger = createLogger({ env, name: 'api' }), exit = process.exit } = {}) {
   try {
     const database = readDatabaseConfig(env);
     if (readEnvBool('MIGRATE_ON_START', env.NODE_ENV !== 'production', env)) {
@@ -5489,7 +5641,7 @@ async function bootstrap({ env = process.env, logger = console, exit = process.e
       roomStore
     });
     if (reconciliation.removed > 0) {
-      logger.info?.(`Removed ${reconciliation.removed} orphaned avatar file(s)`);
+      logger.info({ evt: LOG_EVENTS.MAINTENANCE_TASK_COMPLETED, task: 'avatar-reconciliation', removed: reconciliation.removed }, 'removed orphaned avatar files');
     }
     linkPreviewStorage = createLinkPreviewStorage({ uploadsDir: readUploadsDir(env) });
     try {
@@ -5499,10 +5651,10 @@ async function bootstrap({ env = process.env, logger = console, exit = process.e
           storage: linkPreviewStorage,
           repository: createLinkPreviewRepository({ pool: previewPool })
         });
-        if (removedPreviewImages > 0) logger.info?.(`Removed ${removedPreviewImages} unused link preview image(s)`);
+        if (removedPreviewImages > 0) logger.info({ evt: LOG_EVENTS.MAINTENANCE_TASK_COMPLETED, task: 'link-preview-reconciliation', removed: removedPreviewImages }, 'removed unused link preview images');
       }
     } catch (error) {
-      logger.warn?.('Link preview image reconciliation failed:', error);
+      logger.warn({ evt: LOG_EVENTS.LINK_PREVIEW_RECONCILE_FAILED, err: error }, 'link preview image reconciliation failed');
     }
     const server = createApiServer({
       store: roomStore,
@@ -5527,7 +5679,7 @@ async function bootstrap({ env = process.env, logger = console, exit = process.e
     installGracefulShutdown(server, { logger, exit });
     return server;
   } catch (error) {
-    logger.error('Voice Room API failed to bootstrap:', error.message);
+    logger.fatal({ evt: LOG_EVENTS.BOOTSTRAP_FAILED, err: error }, 'Voice Room API failed to bootstrap');
     if (exit === process.exit && typeof process !== 'undefined') {
       process.exitCode = 1;
     }

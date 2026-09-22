@@ -18,8 +18,10 @@ test('bootstrap fails before listen when DATABASE_URL is missing', async () => {
   const result = await bootstrap({
     env: {},
     logger: {
-      log() {},
-      error: (...items) => logs.push(items.join(' '))
+      info() {},
+      warn() {},
+      error() {},
+      fatal: (fields, msg) => logs.push({ ...fields, msg })
     },
     exit: (code) => {
       exitCode = code;
@@ -28,5 +30,7 @@ test('bootstrap fails before listen when DATABASE_URL is missing', async () => {
 
   assert.equal(result, null);
   assert.equal(exitCode, 1);
-  assert.match(logs.join('\n'), /DATABASE_URL is required/);
+  assert.equal(logs.length, 1);
+  assert.equal(logs[0].evt, 'boot.failed');
+  assert.match(logs[0].err.message, /DATABASE_URL is required/);
 });

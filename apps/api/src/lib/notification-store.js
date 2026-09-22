@@ -3,6 +3,7 @@
 const crypto = require('node:crypto');
 const { cleanPresenceStatus } = require('@voice-room/shared/validation');
 const { createDbPool, transaction } = require('./db');
+const { createLogger } = require('./logger');
 
 const DEFAULT_AUTOMATIC_PRESENCE_LEASE_MS = 3 * 60 * 1000;
 
@@ -34,7 +35,7 @@ function mapPreferences({
 function createNotificationStore({
   automaticPresenceLeaseMs = DEFAULT_AUTOMATIC_PRESENCE_LEASE_MS,
   databaseUrl,
-  logger = console,
+  logger = createLogger({ name: 'api' }),
   pool
 } = {}) {
   let activePool = pool || null;

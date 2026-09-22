@@ -4,6 +4,8 @@ const { createDbPool } = require('../lib/db');
 const { readEnvInt, readMessageDeliveryMode } = require('../lib/config');
 const { createMessageOutboxRepository } = require('../domains/messaging/message-outbox-repository');
 const { boundedBackoff, createLeaseRuntime } = require('../platform/lease-runtime');
+const { LOG_EVENTS } = require('../lib/log-events');
+const { createLogger } = require('../lib/logger');
 
 const LEASE_IDENTITY = 'message-delivery.G38';
 
@@ -29,7 +31,7 @@ function createMessageDeliveryWorker({
   deliver,
   idleMs = 250,
   leaseMs = 30_000,
-  logger = console,
+  logger = createLogger({ name: 'worker.message-delivery' }),
   maxAttempts = 12,
   outbox,
   renewMs = 10_000,
@@ -88,7 +90,13 @@ function createMessageDeliveryWorker({
             error,
             maxAttempts
           });
-          logger.warn?.(`Message delivery ${event.eventId} failed:`, error);
+          logger.warn({
+            evt: LOG_EVENTS.MESSAGE_DELIVERY_FAILED,
+            eventId: event.eventId,
+            attempt: event.attempts,
+            maxAttempts,
+            err: error
+          }, 'message delivery attempt failed');
         }
       }
     }
@@ -104,7 +112,7 @@ function createMessageDeliveryWorker({
     run: processLease,
     onHeartbeat(heartbeat) {
       void outbox.recordHeartbeat(heartbeat).catch((error) => {
-        logger.warn?.('Unable to record message delivery heartbeat:', error);
+        logger.warn({ evt: LOG_EVENTS.WORKER_HEARTBEAT_FAILED, worker: 'message-delivery', err: error }, 'unable to record the message delivery heartbeat');
       });
     }
   });
@@ -121,7 +129,8 @@ function createMessageDeliveryWorker({
 
 async function main(env = process.env) {
   if (!readMessageDeliveryMode(env).claimEnabled) {
-    console.log('Message delivery claims are disabled');
+    createLogger({ env, name: 'worker.message-delivery' })
+      .info({ evt: LOG_EVENTS.WORKER_DISABLED, worker: 'message-delivery', reason: 'claims_disabled' }, 'message delivery claims are disabled');
     return;
   }
 
@@ -156,7 +165,8 @@ async function main(env = process.env) {
 
 if (require.main === module) {
   main().catch((error) => {
-    console.error('Message delivery worker failed:', error);
+    createLogger({ name: 'worker.message-delivery' })
+      .fatal({ evt: LOG_EVENTS.WORKER_FAILED, worker: 'message-delivery', err: error }, 'message delivery worker failed');
     process.exitCode = 1;
   });
 }

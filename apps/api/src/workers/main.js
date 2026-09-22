@@ -2,6 +2,8 @@
 
 const { startWorkerMetricsServer } = require('../lib/worker-metrics-server');
 const { startWorkerHeartbeat } = require('../platform/worker-heartbeat');
+const { LOG_EVENTS } = require('../lib/log-events');
+const { createLogger } = require('../lib/logger');
 
 const workers = Object.freeze({
   'media-maintenance': require('./media-maintenance').main,
@@ -17,8 +19,10 @@ async function main(env = process.env) {
   if (!run) {
     throw new Error(`VOICE_ROOM_WORKER must be one of: ${Object.keys(workers).join(', ')}`);
   }
+  const log = createLogger({ env, name: `worker.${workerName}` });
   const metrics = await startWorkerMetricsServer({ host: env.WORKER_METRICS_HOST || '0.0.0.0', port: Number(env.WORKER_METRICS_PORT || 9464) });
   const heartbeat = await startWorkerHeartbeat({ env, workerName });
+  log.info({ evt: LOG_EVENTS.WORKER_STARTED, worker: workerName }, 'worker started');
   try { await run(env); }
   finally {
     await heartbeat.close();

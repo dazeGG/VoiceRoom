@@ -53,7 +53,7 @@ function createGate({ errors = [] } = {}) {
   const service = createLiveKitAuthGateService({
     boundary,
     roomStore: {},
-    logger: { error: (...args) => errors.push(args) },
+    logger: { error: (fields, msg) => errors.push({ ...fields, msg }) },
     upstreamUrl: 'ws://127.0.0.1:7880'
   });
   return service.createServer();
@@ -156,5 +156,6 @@ test('an upstream write that throws tears down both sockets and is logged', asyn
   assert.equal(client.destroyed, true);
   assert.equal(upstream.destroyed, true);
   assert.equal(errors.length, 1);
-  assert.match(String(errors[0][0]), /upstream connection failed/);
+  assert.equal(errors[0].evt, 'livekit.gate_upstream_failed');
+  assert.match(errors[0].msg, /upstream connection failed/);
 });

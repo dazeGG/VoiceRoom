@@ -3,6 +3,8 @@
 const webPush = require('web-push');
 const { PLATFORM_CLASSES } = require('@voice-room/shared/platform-class');
 const { cleanPushEndpoint, describePushEndpoint } = require('./push-endpoint');
+const { LOG_EVENTS } = require('./log-events');
+const { createLogger } = require('./logger');
 
 function describePushError(error) {
   return {
@@ -41,7 +43,7 @@ function resolvePushTtl({ expiresAt, ttl } = {}, now = Date.now()) {
   return resolvedTtl;
 }
 
-function createPushService({ store, env = process.env, client = webPush, logger = console, now = Date.now } = {}) {
+function createPushService({ store, env = process.env, client = webPush, logger = createLogger({ name: 'api' }), now = Date.now } = {}) {
   const config = readPushConfig(env);
   if (config.enabled) client.setVapidDetails(config.subject, config.vapidPublicKey, config.privateKey);
 
@@ -53,7 +55,7 @@ function createPushService({ store, env = process.env, client = webPush, logger 
     try {
       subscriptions = await store.listByUserId(userId);
     } catch (error) {
-      logger.warn?.({ err: error, userId }, 'Failed to load push subscriptions');
+      logger.warn({ evt: LOG_EVENTS.PUSH_SUBSCRIPTION_LOAD_FAILED, err: error, userId }, 'failed to load push subscriptions');
       if (context.strictFailures) throw error;
       return { enabled: true, sent: 0, removed: 0 };
     }
@@ -68,7 +70,7 @@ function createPushService({ store, env = process.env, client = webPush, logger 
           await store.removeByEndpoint(subscription.endpoint);
           removed += 1;
         } catch (cleanupError) {
-          logger.warn?.({ ...describePushError(cleanupError), ...describePushEndpoint(subscription.endpoint) }, 'Failed to remove invalid push subscription');
+          logger.warn({ evt: LOG_EVENTS.PUSH_SUBSCRIPTION_PRUNE_FAILED, reason: 'invalid', ...describePushError(cleanupError), ...describePushEndpoint(subscription.endpoint) }, 'failed to remove an invalid push subscription');
         }
         return;
       }
@@ -86,11 +88,11 @@ function createPushService({ store, env = process.env, client = webPush, logger 
             await store.removeByEndpoint(endpoint);
             removed += 1;
           } catch (cleanupError) {
-            logger.warn?.({ ...describePushError(cleanupError), ...describePushEndpoint(endpoint) }, 'Failed to remove expired push subscription');
+            logger.warn({ evt: LOG_EVENTS.PUSH_SUBSCRIPTION_PRUNE_FAILED, reason: 'expired', ...describePushError(cleanupError), ...describePushEndpoint(endpoint) }, 'failed to remove an expired push subscription');
           }
           return;
         }
-        logger.warn?.({ ...describePushError(error), ...describePushEndpoint(endpoint) }, 'Push delivery failed');
+        logger.warn({ evt: LOG_EVENTS.PUSH_SEND_FAILED, ...describePushError(error), ...describePushEndpoint(endpoint) }, 'push delivery failed');
         failures.push(error);
       }
     }));

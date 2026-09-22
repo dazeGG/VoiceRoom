@@ -7,6 +7,8 @@ const { createDbPool } = require('../../lib/db');
 const { createGateCredentialSigner } = require('./gate-credential-signer');
 const { createCredentialBoundaryService } = require('./credential-boundary-service');
 const { createRoomStore } = require('../../lib/room-store');
+const { LOG_EVENTS } = require('../../lib/log-events');
+const { createLogger } = require('../../lib/logger');
 
 const DEFAULT_GATE_PATH = '/rtc';
 
@@ -77,7 +79,7 @@ function createLiveKitAuthGateService({
   boundary,
   databaseUrl,
   gatePath = DEFAULT_GATE_PATH,
-  logger = console,
+  logger = createLogger({ name: 'api' }),
   pool,
   roomStore,
   secret,
@@ -153,14 +155,14 @@ function createLiveKitAuthGateService({
               socket.pipe(upstreamSocket);
               upstreamSocket.pipe(socket);
             } catch (error) {
-              logger.error?.('LiveKit gate upstream connection failed:', error);
+              logger.error({ evt: LOG_EVENTS.LIVEKIT_GATE_UPSTREAM_FAILED, err: error }, 'LiveKit gate upstream connection failed');
               destroySocket(socket);
               closeUpstream();
             }
           });
           upstreamSocket.once('error', (error) => {
             if (!tunnelEstablished) {
-              logger.error?.('LiveKit gate upstream connection failed:', error);
+              logger.error({ evt: LOG_EVENTS.LIVEKIT_GATE_UPSTREAM_FAILED, err: error }, 'LiveKit gate upstream connection failed');
               deny(socket, 503, 'Service Unavailable');
             } else {
               destroySocket(socket);
@@ -170,7 +172,7 @@ function createLiveKitAuthGateService({
           upstreamSocket.once('close', () => destroySocket(socket));
         })
         .catch((error) => {
-          logger.error?.('LiveKit gate authorization failed:', error);
+          logger.error({ evt: LOG_EVENTS.LIVEKIT_GATE_AUTHORIZATION_FAILED, err: error }, 'LiveKit gate authorization failed');
           deny(socket, 503, 'Service Unavailable');
         });
     });
@@ -192,7 +194,7 @@ module.exports = {
 };
 
 if (require.main === module) {
-  const logger = console;
+  const logger = createLogger({ name: 'livekit-auth-gate' });
   try {
     const service = createLiveKitAuthGateService({
       databaseUrl: process.env.DATABASE_URL,
@@ -204,10 +206,10 @@ if (require.main === module) {
     const port = Number(process.env.LIVEKIT_GATE_PORT || 3080);
     const host = process.env.LIVEKIT_GATE_HOST || '0.0.0.0';
     service.createServer().listen(port, host, () => {
-      logger.info?.(`LiveKit auth gate listening on ${host}:${port}${service.path}`);
+      logger.info({ evt: LOG_EVENTS.LISTENING, service: 'livekit-auth-gate', host, port, path: service.path }, 'LiveKit auth gate listening');
     });
   } catch (error) {
-    logger.error?.('LiveKit auth gate failed to start:', error);
+    logger.fatal({ evt: LOG_EVENTS.BOOTSTRAP_FAILED, service: 'livekit-auth-gate', err: error }, 'LiveKit auth gate failed to start');
     process.exitCode = 1;
   }
 }
