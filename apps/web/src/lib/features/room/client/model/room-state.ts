@@ -37,6 +37,7 @@ export function createInitialRoomState(): AppState {
     localConnectionQuality: 'unknown',
     livekitRoom: null,
     localPingMs: null,
+    localNetwork: { inboundLossPct: null, jitterMs: null, outboundLossPct: null, transport: null },
     localMicPublication: null,
     localScreenPublications: new Map(),
     localScreenAudioCapture: null,

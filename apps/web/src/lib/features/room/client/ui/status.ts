@@ -83,12 +83,13 @@ export function getConnectionStatusView(): ConnectionStatusView {
   if (state.voiceConnection === 'connected') {
     const quality = getPeerLatencyQuality(state.localPingMs, state.localConnectionQuality);
     const ping = formatLocalPing();
-    const unstable = quality === 'poor';
+    const lossy = hasNoticeableLoss();
+    const unstable = quality === 'poor' || lossy;
     const label = `${unstable ? 'Голос нестабилен' : 'Голос подключен'}${ping ? ` · ${ping}` : ''}`;
     return {
       label,
       stateName: unstable ? 'warning' : 'connected',
-      title: ping ? `Пинг до LiveKit ${ping}` : 'Голосовой канал LiveKit подключен'
+      title: formatNetworkDetails(ping)
     };
   }
 
@@ -121,6 +122,25 @@ export function getConnectionStatusView(): ConnectionStatusView {
     stateName: 'idle',
     title: ''
   };
+}
+
+// Opus with RED conceals a few percent of loss; beyond this listeners hear it.
+const NOTICEABLE_LOSS_PCT = 5;
+
+function hasNoticeableLoss(): boolean {
+  const { inboundLossPct, outboundLossPct } = state.localNetwork;
+  return (inboundLossPct ?? 0) >= NOTICEABLE_LOSS_PCT || (outboundLossPct ?? 0) >= NOTICEABLE_LOSS_PCT;
+}
+
+export function formatNetworkDetails(ping: string): string {
+  const { inboundLossPct, jitterMs, outboundLossPct, transport } = state.localNetwork;
+  const parts = [ping ? `Пинг до LiveKit ${ping}` : 'Голосовой канал LiveKit подключен'];
+  if (outboundLossPct !== null) parts.push(`потери от вас ${outboundLossPct}%`);
+  if (inboundLossPct !== null) parts.push(`потери к вам ${inboundLossPct}%`);
+  if (jitterMs !== null) parts.push(`джиттер ${jitterMs} мс`);
+  if (transport === 'relay') parts.push('через ретранслятор (UDP недоступен)');
+  else if (transport === 'tcp') parts.push('через TCP (UDP недоступен)');
+  return parts.join(' · ');
 }
 
 function formatLocalPing(): string {

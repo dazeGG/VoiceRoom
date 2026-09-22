@@ -146,11 +146,23 @@ export interface RoomSessionState {
   sessionToken: string;
 }
 
+/**
+ * What the connection pill reports beyond ping: packet loss both ways, jitter
+ * of what we hear, and whether media had to fall back to TCP or a relay.
+ */
+export interface LocalNetworkStats {
+  inboundLossPct: number | null;
+  jitterMs: number | null;
+  outboundLossPct: number | null;
+  transport: 'udp' | 'tcp' | 'relay' | null;
+}
+
 export interface RoomConnectionState {
   connecting: boolean;
   voiceRealtimeTeardown: (() => void) | null;
   localConnectionQuality: string;
   localPingMs: number | null;
+  localNetwork: LocalNetworkStats;
   livekitRoom: Room | null;
   serverConnection: string;
   serverPeerIds: Set<string>;
