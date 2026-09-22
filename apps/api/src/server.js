@@ -1276,18 +1276,32 @@ function hasValidSameOrigin(req) {
   return true;
 }
 
-function rejectCrossOriginCookieWrite(req, res) {
+// A cookie-carrying write from another origin — including a sibling subdomain,
+// which SameSite=Lax treats as same-site — is refused. Browsers always attach
+// Origin to cross-origin unsafe requests, so a request with neither Origin nor
+// Referer is a non-browser client that cannot be a CSRF vehicle.
+function isCrossOriginCookieWrite(req) {
   if (!requestHasUnsafeMethod(req)) return false;
   if (!getSessionToken(req)) return false;
   const hasBrowserOrigin = Boolean(req.headers?.origin || req.headers?.referer);
-  if (!hasBrowserOrigin || hasValidSameOrigin(req)) return false;
-  sendJson(res, 403, { ok: false, error: 'Cross-origin request rejected' });
-  return true;
+  return hasBrowserOrigin && !hasValidSameOrigin(req);
+}
+
+// Browsers always send Origin on a WebSocket handshake and never enforce the
+// same-origin policy on it, so the server has to: a page on any other origin
+// could otherwise open an authenticated socket with the user's cookie and read
+// their DMs, presence and typing (cross-site WebSocket hijacking).
+function isCrossOriginWebSocket(req) {
+  const upgrade = String(req.headers?.upgrade || '').toLowerCase();
+  if (upgrade !== 'websocket') return false;
+  const origin = req.headers?.origin;
+  if (typeof origin !== 'string' || !origin) return false;
+  const host = requestHost(req);
+  return !host || originHost(origin) !== host;
 }
 
 function getLiveKitRoomName(roomId) {
-  const prefix = String(process.env.LIVEKIT_ROOM_PREFIX || 'voice-room-').replace(/[^A-Za-z0-9_.:-]/g, '-');
-  return `${prefix}${roomId}`;
+  return liveKitRoomName(roomId);
 }
 
 function getLiveKitConfig() {
@@ -5104,7 +5118,6 @@ async function runLegacyHandler(request, reply, handler) {
   });
 
   try {
-    if (rejectCrossOriginCookieWrite(req, res)) return;
     await handler(req, res, request);
   } catch (error) {
     const status = error.statusCode || 500;
@@ -5202,6 +5215,24 @@ function createApiApp({
   // dropped for nearly every route.
   app.addHook('onRequest', (request, reply, done) => {
     reply.raw.setHeader('x-request-id', request.id);
+    done();
+  });
+
+  // Origin checks run for every route, not only the legacy handlers: the
+  // domain routes (bans, memberships, media, notifications, reactions, pins)
+  // mutate state with the same session cookie.
+  app.addHook('onRequest', (request, reply, done) => {
+    if (isCrossOriginWebSocket(request.raw)) {
+      // The refused handshake socket is not an HTTP connection the server
+      // tracks, so it has to be closed explicitly once the 403 is written.
+      reply.code(403).header('Connection', 'close').send({ ok: false, error: 'Cross-origin request rejected' });
+      reply.raw.once('finish', () => request.raw.socket?.destroySoon?.());
+      return;
+    }
+    if (isCrossOriginCookieWrite(request.raw)) {
+      reply.code(403).send({ ok: false, error: 'Cross-origin request rejected' });
+      return;
+    }
     done();
   });
 
