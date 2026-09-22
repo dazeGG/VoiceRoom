@@ -1656,7 +1656,6 @@ async function readJsonBody(req) {
 function logAdmissionDenied(req, { roomId, peerId, code, err = null }) {
   req?.log?.warn?.({
     evt: LOG_EVENTS.LIVEKIT_ADMISSION_DENIED,
-    reqId: req?.id,
     roomId,
     peerId,
     code,
@@ -1676,7 +1675,6 @@ async function revokeIssuedAdmission({ boundary = getCredentialBoundary(), cause
     recordFailure();
     req?.log?.error?.({
       evt: LOG_EVENTS.LIVEKIT_ADMISSION_REVOKED,
-      reqId: req?.id,
       credentialId,
       roomId,
       code: 'credential_revoke_cleanup_failed',
@@ -2091,7 +2089,6 @@ async function handleClientLogs(req, res) {
   if (batch.dropped > 0) {
     req?.log?.warn?.({
       evt: LOG_EVENTS.CLIENT_REPORT_REJECTED,
-      reqId: req?.id,
       dropped: batch.dropped,
       accepted: batch.events.length
     }, 'client log records were rejected');
@@ -2101,7 +2098,6 @@ async function handleClientLogs(req, res) {
   // the reporter without the client being able to claim one.
   const reporter = {
     source: 'web',
-    reqId: req?.id,
     clientSessionId: batch.sessionId || undefined,
     userId: session?.user?.id || undefined,
     ipHash: hashIp(clientIp)
@@ -5000,7 +4996,6 @@ function logHttpRequest(request, statusCode, durationMs) {
   const level = statusCode >= 500 ? 'error' : statusCode >= 400 ? 'warn' : 'info';
   request.log?.[level]?.({
     evt: LOG_EVENTS.HTTP_REQUEST,
-    reqId: request.id,
     method: request.method,
     route,
     statusCode,
@@ -5037,7 +5032,6 @@ async function runLegacyHandler(request, reply, handler) {
     if (status >= 500) {
       request.log?.error?.({
         evt: LOG_EVENTS.HTTP_HANDLER_FAILED,
-        reqId: request.id,
         route,
         err: error
       }, 'legacy handler failed');
