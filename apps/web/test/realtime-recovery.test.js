@@ -298,6 +298,10 @@ test('API failure classification is stable and fails unknown HTTP errors closed'
     retryable: true, result: 'retryable', status: 503, code: 'livekit_gate_unavailable'
   });
   assert.equal(classifyRecoveryFailure({ status: 503, code: 'invalid_session' }).retryable, false);
+  // A LiveKit token asked for before the realtime re-join lands is retried.
+  assert.deepEqual(classifyRecoveryFailure({ status: 409, code: 'not_in_room' }), {
+    retryable: true, result: 'retryable', status: 409, code: 'not_in_room'
+  });
   assert.equal(classifyRecoveryFailure({ status: 418, code: 'surprise' }).retryable, false);
   assert.equal(classifyRecoveryFailure(new TypeError('fetch failed')).retryable, true);
   assert.equal(sanitizeRecoveryCode('token=secret'), 'unknown_error');

@@ -1695,6 +1695,15 @@ async function revokeIssuedAdmission({ boundary = getCredentialBoundary(), cause
   }
 }
 
+async function waitForRosterPeer(roomId, peerId, timeoutMs = LIVEKIT_ROSTER_WAIT_MS) {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const peer = presenceRooms.get(roomId)?.peers?.get(peerId);
+    if (peer || Date.now() >= deadline) return peer || null;
+    await new Promise((resolve) => setTimeout(resolve, ROSTER_POLL_INTERVAL_MS));
+  }
+}
+
 async function handleLiveKitToken(req, res) {
   const livekit = getLiveKitConfig();
   const body = await readJsonBody(req);
@@ -1720,6 +1729,22 @@ async function handleLiveKitToken(req, res) {
     return;
   }
 
+  // Media admission belongs to a peer the room roster already knows. Without
+  // this a caller holding only the room id could subscribe to every voice and
+  // screen share while staying invisible — and therefore un-kickable. The
+  // client sends the realtime join just before asking for a token, so give
+  // that join a moment to land instead of failing the race.
+  const rosterPeer = await waitForRosterPeer(roomId, peerId);
+  if (!rosterPeer) {
+    logAdmissionDenied(req, { roomId, peerId, code: 'not_in_room' });
+    sendJson(res, 409, { ok: false, code: 'not_in_room', error: 'Сначала нужно войти в комнату' });
+    return;
+  }
+  if (!tokensMatch(rosterPeer.sessionToken, sessionToken)) {
+    sendJson(res, 403, { ok: false, error: 'Сессия участника недействительна' });
+    return;
+  }
+
   const provider = getLiveKitCredentialProvider();
   if (!provider && !livekit.enabled) {
     sendJson(res, 503, {
@@ -1738,11 +1763,6 @@ async function handleLiveKitToken(req, res) {
     return;
   }
 
-  const existingPeer = room.peers.get(peerId);
-  if (existingPeer && !tokensMatch(existingPeer.sessionToken, sessionToken)) {
-    sendJson(res, 403, { ok: false, error: 'Сессия участника недействительна' });
-    return;
-  }
   const identityResult = await getRoomStore().getOrCreatePeerIdentity({ roomId, peerId, sessionToken, displayName: name, avatarColorKey: sessionAvatarColorKey(sessionUser) });
   if (identityResult.status === 'token_mismatch') {
     sendJson(res, 403, { ok: false, error: 'Сессия участника недействительна' });

@@ -142,8 +142,13 @@ test('a block in either direction rejects room rings before invite persistence',
 
 test('LiveKit admission fails closed when persisted server-mute lookup fails', async (t) => {
   let issued = 0;
+  const store = createStore({ muteLookup: async () => { throw new Error('database unavailable'); } });
+  // Admission is only for peers already in the room roster.
+  (await store.getRoom('context-room')).peers.set('peer-alice', {
+    id: 'peer-alice', name: 'Alice', sessionToken: 'goodtoken123456789012345678901234'
+  });
   const app = createApiApp({
-    store: createStore({ muteLookup: async () => { throw new Error('database unavailable'); } }),
+    store,
     users: createUsers(),
     liveKitCredentials: {
       async issueAdmission() {

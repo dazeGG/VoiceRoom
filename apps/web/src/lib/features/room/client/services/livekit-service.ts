@@ -222,14 +222,14 @@ function isRetryableLiveKitApiFailure(error: ApiRequestError): boolean {
   if (['authentication_required', 'invalid_join', 'invalid_session', 'room_banned', 'room_full', 'room_not_found'].includes(error.code)) return false;
   return [408, 425, 429].includes(error.status)
     || error.status >= 500
-    || ['livekit_gate_credential_unavailable', 'livekit_gate_principal_unavailable', 'livekit_gate_unavailable', 'membership_persist_failed', 'membership_unavailable'].includes(error.code);
+    || ['livekit_gate_credential_unavailable', 'livekit_gate_principal_unavailable', 'livekit_gate_unavailable', 'membership_persist_failed', 'membership_unavailable', 'not_in_room'].includes(error.code);
 }
 
 function safeLiveKitCode(code: string): string {
   return [
     'authentication_required', 'invalid_join', 'invalid_session', 'room_banned', 'room_full', 'room_not_found',
     'livekit_gate_credential_unavailable', 'livekit_gate_principal_unavailable', 'livekit_gate_unavailable',
-    'membership_persist_failed', 'membership_unavailable', 'transport_error'
+    'membership_persist_failed', 'membership_unavailable', 'not_in_room', 'transport_error'
   ].includes(code) ? code : 'unknown_error';
 }
 

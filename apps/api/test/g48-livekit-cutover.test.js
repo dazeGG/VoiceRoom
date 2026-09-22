@@ -10,6 +10,7 @@ const path = require('node:path');
 const { Pool } = require('pg');
 const { test } = require('node:test');
 const { createApiApp } = require('../src/server');
+const { withRosterPeer } = require('./roster-harness');
 const { renderPrometheus, resetMetricsForTest } = require('../src/lib/metrics');
 const { createCredentialBoundaryService } = require('../src/domains/admission/credential-boundary-service');
 const { createLiveKitAuthGateService } = require('../src/domains/admission/livekit-auth-gate-service');
@@ -100,7 +101,7 @@ test('G48-A03 PostgreSQL admission cleanup revokes only the failed tab credentia
   const healthy=await boundary.issueCredential({roomId,peerId:'healthy-tab',principal}); assert.equal(healthy.status,'issued');
   let failedCredential=null;
   const app=createApiApp({
-    store,
+    store:withRosterPeer(store,{id:'failed-tab',sessionToken:'goodtoken123456789012345678901234'}),
     users:{async getSessionUser(){return {user:{id:principal.principalId,avatarColorKey:'green'}};}},
     liveKitCredentials:{async issueAdmission(input){const issued=await boundary.issueCredential({roomId:input.roomId,peerId:input.peerId,principal:input.principal}); failedCredential=issued.credential; return {status:'issued',admission:{gateCredentialId:issued.credential.id,room:input.livekitRoom,token:'must-not-leak',ttlSeconds:60,url:`ws://gate.test/rtc?vr_gate_credential=${encodeURIComponent(issued.credential.value)}`}};}},
     membershipServicesOverride:{service:{async persistSuccessfulAdmission(){throw new Error('membership unavailable');}}}
@@ -131,7 +132,7 @@ test('G48-A03 issued credential fails closed when membership persistence and rev
     async getLiveKitGatePrincipalEpoch() { return { status: 'ready', epoch: 0 }; }, async createLiveKitGateCredential() { return { status: 'created' }; }, async verifyLiveKitGateCredential() { return { status: 'allowed' }; },
     async revokeLiveKitGateCredential() { throw new Error('revoke unavailable'); }, async revokeLiveKitGatePrincipal() { return { status: 'revoked', epoch: 1 }; }
   };
-  const app = createApiApp({ store, users: { async getSessionUser() { return { user: { id: 'account', avatarColorKey: 'green' } }; } }, liveKitCredentials: { async issueAdmission() { return { status: 'issued', admission: { gateCredentialId: 'credential', token: 'issued', room: 'room', url: 'ws://gate', ttlSeconds: 60 } }; } }, membershipServicesOverride: { service: { async persistSuccessfulAdmission() { throw new Error('membership unavailable'); } } } });
+  const app = createApiApp({ store: withRosterPeer(store, { id: 'peer0001', sessionToken: 'goodtoken123456789012345678901234' }), users: { async getSessionUser() { return { user: { id: 'account', avatarColorKey: 'green' } }; } }, liveKitCredentials: { async issueAdmission() { return { status: 'issued', admission: { gateCredentialId: 'credential', token: 'issued', room: 'room', url: 'ws://gate', ttlSeconds: 60 } }; } }, membershipServicesOverride: { service: { async persistSuccessfulAdmission() { throw new Error('membership unavailable'); } } } });
   t.after(() => app.close());
   const room = await app.inject({ method: 'POST', url: '/api/rooms', payload: { isStatic: false } });
   const response = await app.inject({ method: 'POST', url: '/api/livekit-token', headers: { cookie: 'vr_session=session' }, payload: { name: 'Account', peerId: 'peer0001', roomId: room.json().roomId, sessionToken: 'goodtoken123456789012345678901234' } });

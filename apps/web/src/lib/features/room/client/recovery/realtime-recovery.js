@@ -17,6 +17,9 @@ const RETRYABLE_CODES = new Set([
   'livekit_gate_unavailable',
   'membership_persist_failed',
   'membership_unavailable',
+  // The server only admits peers its roster knows; during recovery the
+  // realtime re-join can still be on its way.
+  'not_in_room',
   'network_error',
   'transport_error',
   'reconnect_finalize_failed',
