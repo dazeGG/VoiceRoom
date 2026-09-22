@@ -174,8 +174,8 @@ test('G15-A01 concurrent PostgreSQL runners serialize behind one advisory fence'
   };
   const clientFactory = (connectionString) => new Client({ connectionString });
   await Promise.all([
-    runMigrations({ databaseUrl, clientFactory, migrationRunner, logger: { log() {} } }),
-    runMigrations({ databaseUrl, clientFactory, migrationRunner, logger: { log() {} } })
+    runMigrations({ databaseUrl, clientFactory, migrationRunner, logger: { log() {}, info() {}, warn() {}, error() {} } }),
+    runMigrations({ databaseUrl, clientFactory, migrationRunner, logger: { log() {}, info() {}, warn() {}, error() {} } })
   ]);
   assert.match(order.join(','), /^start:\d+,end:\d+,start:\d+,end:\d+$/);
 });

@@ -210,6 +210,10 @@ if (require.main === module) {
     });
   } catch (error) {
     logger.fatal({ evt: LOG_EVENTS.BOOTSTRAP_FAILED, service: 'livekit-auth-gate', err: error }, 'LiveKit auth gate failed to start');
+    // The logger is silent unless LOG_LEVEL is set, and a process that refuses
+    // to start must still tell the operator why.
+    process.stderr.write(`LiveKit auth gate failed to start: ${error?.stack || error}
+`);
     process.exitCode = 1;
   }
 }
