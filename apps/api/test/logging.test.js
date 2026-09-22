@@ -211,3 +211,23 @@ test('client log intake marks a replayed buffer as stale and pulls back a future
   assert.equal(batch.events[1].at, now);
   assert.equal(batch.events[1].stale, false);
 });
+
+test('client log intake strips URL queries and masks tokens before they reach the log', () => {
+  const now = Date.now();
+  const jwt = 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJwZWVyLWEifQ.c2lnbmF0dXJl';
+  const batch = normalizeClientLogBatch({
+    events: [{
+      at: now,
+      level: 'error',
+      ns: 'room:livekit',
+      msg: `could not connect to wss://livekit.example/rtc?access_token=${jwt}&vr_gate_credential=vrg1.abc.def`,
+      ctx: { errorMessage: `token ${jwt} rejected`, credential: 'vrg1.payload.signature', page: 'https://app.example/room/abc#frag' }
+    }]
+  }, { now });
+
+  const [event] = batch.events;
+  assert.equal(event.msg, 'could not connect to wss://livekit.example/rtc?…');
+  assert.equal(event.ctx.errorMessage, 'token [redacted] rejected');
+  assert.equal(event.ctx.credential, '[redacted]');
+  assert.equal(event.ctx.page, 'https://app.example/room/abc?…');
+});
