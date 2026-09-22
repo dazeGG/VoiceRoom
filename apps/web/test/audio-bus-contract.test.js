@@ -37,7 +37,10 @@ test('remote voice, screen audio, and cues use the bus without a duplicate audib
   assert.match(bus, /routed\.gain\.gain\.value = options\.muted \? 0 : volume/);
   assert.match(bus, /mediaElement\.muted = true/);
   assert.match(participants, /audio\.srcObject = new MediaStream\(\[track\]\)/);
-  assert.match(playback, /routeMediaStreamElement\(audio, 'voice'/);
+  // Voices play on their own element (Chrome's echo canceller only hears
+  // WebRTC-rendered audio) and join the mix only for a boost above 100%.
+  assert.match(playback, /playVoiceElement\(audio, \{ muted, volume: preference\.volume \}\)/);
+  assert.match(bus, /if \(level > 1\) \{\s*return routeMediaStreamElement\(element, 'voice'/);
   assert.match(playback, /routeMediaStreamElement\(mediaElement, 'media'/);
   assert.match(screen, /releaseScreenMediaElement\(video\)/);
   assert.match(cues, /gain\.connect\(getAudioBusInput\('sfx'\)\)/);

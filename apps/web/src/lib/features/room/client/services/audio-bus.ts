@@ -28,7 +28,18 @@ interface RoutedSource {
   stream: MediaStream;
 }
 
+interface VoicePlayback {
+  muted: boolean;
+  volume: number;
+}
+
+export type VoicePlaybackPath = 'direct' | 'mixed' | 'none';
+
 const routedSources = new WeakMap<HTMLMediaElement, RoutedSource>();
+// Every remote voice element and the level its listener asked for; the path it
+// takes (direct element playback or the Web Audio mix) is re-decided whenever
+// the master volume, mute or output device changes.
+const voiceElements = new Map<HTMLMediaElement, VoicePlayback>();
 let graph: AudioBusGraph | null = null;
 let sinkDestination: MediaStreamAudioDestinationNode | null = null;
 let sinkElement: HTMLAudioElement | null = null;
@@ -80,6 +91,7 @@ export function getAudioBusInput(kind: AudioBusKind): AudioNode {
 }
 
 export function syncAudioBusSettings(options: { muteDelayMs?: number } = {}): void {
+  syncVoiceElements(options.muteDelayMs || 0);
   if (!graph) return;
   graph.sfx.gain.value = getNotificationVolumeMultiplier();
   const now = graph.context.currentTime;
@@ -166,8 +178,66 @@ async function applyAudioBusOutput(sinkId: string): Promise<boolean> {
 }
 
 export function syncAudioBusOutput(requestedId = state.outputDeviceId || ''): Promise<boolean> {
-  const applyRequestedOutput = () => applyAudioBusOutput(requestedId);
+  const applyRequestedOutput = async () => {
+    const selected = await applyAudioBusOutput(requestedId);
+    for (const element of voiceElements.keys()) {
+      if (!routedSources.has(element)) applyElementSink(element, requestedId);
+    }
+    return selected;
+  };
   return queueAudioOutputTransition(applyRequestedOutput);
+}
+
+function outputGain(): number {
+  if (state.outputMuted || state.localAppAudioSuppressed) return 0;
+  return getStoredMasterVolume() / 100;
+}
+
+function applyElementSink(element: HTMLMediaElement, sinkId: string): void {
+  if (!supportsElementSink()) return;
+  const withSink = element as HTMLMediaElement & { sinkId?: string };
+  if ((withSink.sinkId || '') === sinkId) return;
+  element.setSinkId(sinkId).catch((error) => log.warn('voice element output device unavailable', errorContext(error)));
+}
+
+/**
+ * Plays one remote voice. Chrome's echo canceller only takes audio that WebRTC
+ * itself renders as its reference, so a voice mixed through Web Audio is
+ * never subtracted from the listener's microphone and leaks back as echo for
+ * anyone on speakers. Voices therefore play on their own element whenever the
+ * requested level fits in [0, 1]; only a boost above 100% (per-user or master)
+ * needs the Web Audio mix and its limiter.
+ */
+export function playVoiceElement(element: HTMLMediaElement, playback: VoicePlayback): VoicePlaybackPath {
+  voiceElements.set(element, playback);
+  return applyVoicePlayback(element, playback);
+}
+
+function applyVoicePlayback(element: HTMLMediaElement, playback: VoicePlayback): VoicePlaybackPath {
+  const requested = Number.isFinite(playback.volume) ? Math.min(2, Math.max(0, playback.volume)) : 1;
+  const level = playback.muted ? 0 : requested * outputGain();
+  if (level > 1) {
+    return routeMediaStreamElement(element, 'voice', { muted: playback.muted, volume: requested }) ? 'mixed' : 'none';
+  }
+
+  releaseRoutedSource(element);
+  const stream = element.srcObject instanceof MediaStream ? element.srcObject : null;
+  if (!stream?.getAudioTracks().some((track) => track.readyState !== 'ended')) {
+    element.muted = true;
+    return 'none';
+  }
+  element.volume = level;
+  element.muted = level <= 0;
+  applyElementSink(element, state.outputDeviceId || '');
+  return 'direct';
+}
+
+function syncVoiceElements(muteDelayMs: number): void {
+  const apply = () => {
+    for (const [element, playback] of voiceElements) applyVoicePlayback(element, playback);
+  };
+  if (muteDelayMs > 0 && outputGain() === 0) window.setTimeout(apply, muteDelayMs);
+  else apply();
 }
 
 function busNode(current: AudioBusGraph, kind: AudioBusKind): GainNode {
@@ -182,7 +252,7 @@ export function routeMediaStreamElement(
   const stream = mediaElement.srcObject instanceof MediaStream ? mediaElement.srcObject : null;
   const hasLiveAudio = Boolean(stream?.getAudioTracks().some((track) => track.readyState !== 'ended'));
   if (!stream || !hasLiveAudio) {
-    releaseMediaStreamElement(mediaElement);
+    releaseRoutedSource(mediaElement);
     mediaElement.muted = true;
     return false;
   }
@@ -190,7 +260,7 @@ export function routeMediaStreamElement(
   const current = getAudioBusGraph();
   let routed = routedSources.get(mediaElement);
   if (!routed || routed.stream !== stream || routed.bus !== kind) {
-    releaseMediaStreamElement(mediaElement);
+    releaseRoutedSource(mediaElement);
     const source = current.context.createMediaStreamSource(stream);
     const gain = current.context.createGain();
     source.connect(gain);
@@ -207,6 +277,11 @@ export function routeMediaStreamElement(
 }
 
 export function releaseMediaStreamElement(mediaElement: HTMLMediaElement): void {
+  voiceElements.delete(mediaElement);
+  releaseRoutedSource(mediaElement);
+}
+
+function releaseRoutedSource(mediaElement: HTMLMediaElement): void {
   const routed = routedSources.get(mediaElement);
   if (!routed) return;
   routed.source.disconnect();

@@ -1516,7 +1516,7 @@ test('remote participant audio preferences persist volume and local mute separat
   assert.match(playback, /export function applyRemoteParticipantAudioPreferences\(peer: Participant\)/);
   assert.match(functionBody(playback, 'applyRemoteParticipantAudioPreferences'), /getParticipantAudioPreferenceKey\(peer\.accountUserId, peer\.id\)/);
   assert.match(functionBody(playback, 'applyRemoteParticipantAudioPreferences'), /isAppPlaybackMuted\(\) \|\| preference\.muted \|\| preference\.volume <= 0/);
-  assert.match(functionBody(playback, 'applyRemoteParticipantAudioPreferences'), /routeMediaStreamElement\(audio, 'voice', \{ muted, volume: preference\.volume \}\)/);
+  assert.match(functionBody(playback, 'applyRemoteParticipantAudioPreferences'), /playVoiceElement\(audio, \{ muted, volume: preference\.volume \}\)/);
   const outputSyncBody = functionBody(playback, 'syncAudioOutputDevices');
   assert.match(outputSyncBody, /syncAudioBusOutput\(\)/);
   assert.match(playback, /export function releaseRemoteAudioElement\(mediaElement: HTMLMediaElement\)/);
