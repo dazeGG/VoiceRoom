@@ -3376,6 +3376,18 @@ async function handleRoomChatPost(req, res, roomId) {
   sendJson(res, 201, { ok: true, message: publicChatMessage(publicMessage) });
 }
 
+// A participant the SFU no longer knows is the state this call is trying to
+// reach, so it is not a failure. The LiveKit SDK reports it as a 404 whose
+// message reads "participant does not exist" while only `name` and `code` say
+// Not Found, so matching on the message alone never recognised it and every
+// normal leave logged an error.
+function isLiveKitParticipantAlreadyGone(error) {
+  if (Number(error?.status) === 404) return true;
+  if (String(error?.code || '').toLowerCase() === 'not_found') return true;
+  const text = `${error?.name || ''} ${error?.message || ''}`;
+  return /not.?found/i.test(text) || /does not exist/i.test(text);
+}
+
 async function removeLiveKitParticipant(roomId, peerId) {
   const livekit = getLiveKitConfig();
   if (!livekit.enabled) return;
@@ -3383,8 +3395,8 @@ async function removeLiveKitParticipant(roomId, peerId) {
   try {
     await service.removeParticipant(getLiveKitRoomName(roomId), peerId);
   } catch (error) {
-    if (!/not.?found/i.test(String(error?.message || ''))) {
-      getProcessLogger().error({ evt: LOG_EVENTS.LIVEKIT_PARTICIPANT_REMOVE_FAILED, err: error }, 'failed to remove a moderated LiveKit participant');
+    if (!isLiveKitParticipantAlreadyGone(error)) {
+      getProcessLogger().error({ evt: LOG_EVENTS.LIVEKIT_PARTICIPANT_REMOVE_FAILED, roomId, peerId, err: error }, 'failed to remove a moderated LiveKit participant');
     }
   }
 }
@@ -5694,6 +5706,7 @@ module.exports = {
     pruneRooms,
     revokeIssuedAdmission,
     resolveServerMutePermission,
+    isLiveKitParticipantAlreadyGone,
     resolveCursorHmacKeys,
     resolveRealtimeReconnectLeaseMs
   },
