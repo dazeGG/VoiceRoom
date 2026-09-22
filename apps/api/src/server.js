@@ -29,7 +29,9 @@ const {
   cleanLiveKitUrl,
   cleanPresenceStatus,
   isValidPassword,
-  normalizeLogin
+  normalizeLogin,
+  accountPeerIdFor,
+  isReservedPeerId
 } = require('@voice-room/shared/validation');
 const { createProofOfWork } = require('./lib/pow');
 const { LOG_EVENTS } = require('./lib/log-events');
@@ -1225,7 +1227,7 @@ function sessionDisplayName(user) {
 }
 
 function sessionChatPeerId(user) {
-  return user?.id ? normalizePeerId(`auth-${user.id}`) : '';
+  return accountPeerIdFor(user?.id);
 }
 
 function buildSessionCookie(token, maxAgeSeconds) {
@@ -1702,7 +1704,7 @@ async function handleLiveKitToken(req, res) {
   const name = cleanName(body.name);
   const sessionUser = await resolveOptionalSessionUser(req);
 
-  if (!roomId || !peerId || !sessionToken) {
+  if (!roomId || !peerId || !sessionToken || isReservedPeerId(peerId)) {
     sendJson(res, 400, { ok: false, error: 'Invalid room, peer, or session token' });
     return;
   }
@@ -3230,10 +3232,13 @@ async function handleRoomChatPost(req, res, roomId) {
     return;
   }
 
-  const authenticatedPeerId = requestedPeerId ? '' : sessionChatPeerId(sessionUser);
-  let peerId = requestedPeerId || authenticatedPeerId;
+  // A requested peer id is only honoured when it is a live roster entry whose
+  // session token matches below. Anything else — including another guest's id
+  // or a reserved `auth-` id — falls back to the caller's own account peer id,
+  // so a message can never be filed under an identity the caller does not hold.
+  const activePeer = requestedPeerId && !isReservedPeerId(requestedPeerId) ? room.peers.get(requestedPeerId) : null;
+  let peerId = activePeer ? requestedPeerId : sessionChatPeerId(sessionUser);
   let avatarColorKey = sessionAvatarColorKey(sessionUser) || avatarColorForPeerId(peerId);
-  const activePeer = requestedPeerId ? room.peers.get(requestedPeerId) : null;
   if (activePeer) {
     if (!tokensMatch(activePeer.sessionToken, sessionToken)) {
       sendJson(res, 403, { ok: false, error: 'Invalid peer session' });
@@ -4711,10 +4716,13 @@ async function handleDeleteRoomChatMessage(req, res, roomId, messageId) {
   }
 
   // Permission:
-  // - guest peer session matches the message peerId, or
-  // - logged in authorUserId matches current, or
+  // - an account-authored message belongs to that account only, or
+  // - a guest message belongs to the live peer session that wrote it, or
   // - current user is owner of static room
-  const isPeerAuthor = requestedPeerId && requestedPeerId === msg.peerId;
+  // A peer id match never stands in for account authorship: peer ids are
+  // client-chosen, and matching them is exactly how a guest could act on a
+  // signed-in author's messages.
+  const isPeerAuthor = !msg.authorUserId && requestedPeerId && requestedPeerId === msg.peerId;
   const isAccountAuthor = sessionUser && msg.authorUserId && sessionUser.id === msg.authorUserId;
   const isRoomOwner = sessionUser && room.isStatic && room.ownerId === sessionUser.id;
 
@@ -4780,7 +4788,9 @@ async function handleEditRoomChatMessage(req, res, roomId, messageId) {
     return;
   }
 
-  const isPeerAuthor = Boolean(requestedPeerId && requestedPeerId === current.peerId);
+  // Account authorship is decided by the account alone; the peer-session path
+  // only covers guest messages (see the delete handler for why).
+  const isPeerAuthor = Boolean(!current.authorUserId && requestedPeerId && requestedPeerId === current.peerId);
   const isAccountAuthor = Boolean(sessionUser && current.authorUserId && sessionUser.id === current.authorUserId);
   if (isAccountAuthor) {
     // The account id is durable ownership. It also lets a signed-in author edit
