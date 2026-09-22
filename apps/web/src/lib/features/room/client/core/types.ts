@@ -167,6 +167,7 @@ export interface RoomAudioState {
   audioContext: AudioContext | null;
   audioUnlockPending: boolean;
   gateThresholdDb: number;
+  gateAuto: boolean;
   localMicPublication: LocalTrackPublication | null;
   localRawStream: MediaStream | null;
   localStream: MediaStream | null;

@@ -1,6 +1,7 @@
 export const DEFAULT_NOISE_MODE = 'rnnoise';
 export const DEFAULT_GATE_THRESHOLD_DB = -100;
 export const GATE_THRESHOLD_DB_STORAGE_KEY = 'voice-room:gate-threshold-db';
+export const GATE_AUTO_STORAGE_KEY = 'voice-room:gate-auto';
 export const PREVIOUS_GATE_THRESHOLD_STORAGE_KEY = 'voice-room:gate-threshold';
 export const GATE_THRESHOLD_MAX_DB = 0;
 export const GATE_THRESHOLD_MIN_DB = -100;

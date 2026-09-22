@@ -6,8 +6,21 @@ const DEFAULT_OPTIONS = {
   floorGain: 0.02,
   holdMs: 140,
   releaseMs: 160,
-  threshold: 0
+  threshold: 0,
+  // Automatic sensitivity: the threshold follows the room's noise floor
+  // instead of a fixed level, the way Discord's "automatically determine input
+  // sensitivity" does. The floor drops at once to any quieter block and creeps
+  // up slowly, so speech never raises it but a fan switching on eventually does.
+  auto: false,
+  autoMarginDb: 12,
+  autoMinDb: -62,
+  autoMaxDb: -26,
+  autoFloorRiseDbPerSecond: 3
 };
+
+function dbToAmplitude(db) {
+  return 10 ** (db / 20);
+}
 
 function getSmoothingCoefficient(milliseconds) {
   const duration = Math.max(0.001, milliseconds / 1000);
@@ -37,14 +50,52 @@ class VoiceRoomNoiseGateProcessor extends AudioWorkletProcessor {
     this.detectorReleaseCoefficient = getSmoothingCoefficient(processorOptions.detectorReleaseMs);
     this.closeRatio = Math.max(0, Math.min(1, processorOptions.closeRatio));
 
+    this.auto = Boolean(processorOptions.auto);
+    this.forcedOpen = false;
+    this.autoMargin = dbToAmplitude(processorOptions.autoMarginDb);
+    this.autoMin = dbToAmplitude(processorOptions.autoMinDb);
+    this.autoMax = dbToAmplitude(processorOptions.autoMaxDb);
+    // Per 128-sample render quantum: how far the floor may rise.
+    this.floorRise = dbToAmplitude(processorOptions.autoFloorRiseDbPerSecond * 128 / sampleRate);
+    this.floor = this.autoMin;
+    if (this.auto) this.applyAutoThreshold();
+
     this.port.onmessage = (event) => {
-      if (event.data?.type !== 'set-threshold') return;
-      this.setThreshold(event.data.threshold);
+      if (event.data?.type === 'set-threshold') this.setThreshold(event.data.threshold);
+      else if (event.data?.type === 'set-auto') this.setAuto(event.data.auto);
     };
   }
 
+  setAuto(value) {
+    this.auto = Boolean(value);
+    if (this.auto && !this.forcedOpen) this.applyAutoThreshold();
+  }
+
+  applyAutoThreshold() {
+    const threshold = Math.min(this.autoMax, Math.max(this.autoMin, this.floor * this.autoMargin));
+    this.threshold = threshold;
+    this.closeThreshold = threshold * this.closeRatio;
+  }
+
+  trackNoiseFloor(input) {
+    let sum = 0;
+    for (let index = 0; index < input.length; index += 1) sum += input[index] * input[index];
+    const rms = Math.sqrt(sum / Math.max(1, input.length));
+    // A quieter block is the new floor right away; a louder one only nudges it.
+    this.floor = rms < this.floor ? Math.max(rms, this.autoMin / 4) : Math.min(this.floor * this.floorRise, rms);
+    this.applyAutoThreshold();
+  }
+
   setThreshold(value) {
-    this.threshold = Math.max(0, Number(value) || 0);
+    const threshold = Math.max(0, Number(value) || 0);
+    // Zero is the push-to-talk override: open fully until a real threshold
+    // comes back, even in automatic mode.
+    this.forcedOpen = threshold <= 0;
+    if (this.auto && !this.forcedOpen) {
+      this.applyAutoThreshold();
+      return;
+    }
+    this.threshold = threshold;
     this.closeThreshold = this.threshold * this.closeRatio;
     if (this.threshold <= 0) {
       this.open = true;
@@ -61,6 +112,8 @@ class VoiceRoomNoiseGateProcessor extends AudioWorkletProcessor {
       output.fill(0);
       return true;
     }
+
+    if (this.auto && !this.forcedOpen) this.trackNoiseFloor(input);
 
     for (let index = 0; index < output.length; index += 1) {
       const sample = input[index] || 0;

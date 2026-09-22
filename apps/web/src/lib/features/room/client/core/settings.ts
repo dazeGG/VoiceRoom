@@ -7,6 +7,7 @@ import {
   DEFAULT_NOTIFICATION_VOLUME,
   DEFAULT_PARTICIPANT_VOLUME,
   DEFAULT_STREAM_VOLUME,
+  GATE_AUTO_STORAGE_KEY,
   GATE_THRESHOLD_DB_STORAGE_KEY,
   GATE_THRESHOLD_MAX_DB,
   GATE_THRESHOLD_MIN_DB,
@@ -101,6 +102,25 @@ export function persistMasterVolume(volume: number): number {
 
 export function getNoiseModeLabel(mode: unknown): string {
   return NOISE_MODES[getNoiseMode(mode)].label;
+}
+
+// Automatic sensitivity lets the gate follow the noise floor instead of the
+// fixed slider threshold (static/audio-gate.worklet.js).
+export function getStoredGateAuto(): boolean {
+  try {
+    return localStorage.getItem(GATE_AUTO_STORAGE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+export function persistGateAuto(auto: boolean): boolean {
+  try {
+    localStorage.setItem(GATE_AUTO_STORAGE_KEY, auto ? '1' : '0');
+  } catch {
+    // Storage may be unavailable; the choice still applies for this session.
+  }
+  return auto;
 }
 
 export function getStoredGateThresholdDb(): number {

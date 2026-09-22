@@ -10,6 +10,7 @@ import {
 } from '../core/config';
 import { getRoomIdFromPath, getStoredPeerSession } from '../core/session';
 import {
+  getStoredGateAuto,
   getStoredGateThresholdDb,
   getStoredMicrophoneMode,
   getStoredMicrophoneVolume,
@@ -31,6 +32,7 @@ export function createInitialRoomState(): AppState {
     connecting: false,
     voiceRealtimeTeardown: null,
     gateThresholdDb: getStoredGateThresholdDb(),
+    gateAuto: getStoredGateAuto(),
     joined: false,
     localConnectionQuality: 'unknown',
     livekitRoom: null,

@@ -60,6 +60,13 @@ export function syncPushToTalkGate(): void {
   }
 }
 
+/** Pushes the automatic-sensitivity choice into a running gate. */
+export function syncGateAuto(): void {
+  for (const processor of getMicrophoneProcessors(state.micProcessor)) {
+    if (processor.type === 'gate') processor.setAuto?.(state.gateAuto);
+  }
+}
+
 export function getGateThresholdAmplitude(): number {
   if (isGateDisabled()) return 0;
 
@@ -293,7 +300,10 @@ function createNoiseGateOptions(threshold: number) {
     floorGain: GATE_FLOOR_GAIN,
     holdMs: GATE_HOLD_MS,
     releaseMs: GATE_RELEASE_MS,
-    threshold
+    threshold,
+    // The ScriptProcessor fallback keeps the manual threshold; only the
+    // worklet implements automatic sensitivity.
+    auto: state.gateAuto
   };
 }
 
