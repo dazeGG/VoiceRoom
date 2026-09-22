@@ -57,5 +57,6 @@ export async function checkRoomExists(roomId: string): Promise<boolean> {
   // instead of the bare code.
   state.roomName = typeof status?.name === 'string' ? status.name : '';
   state.roomAvatarUrl = typeof status?.avatarUrl === 'string' ? status.avatarUrl : '';
+  state.roomIsStatic = status?.isStatic === true;
   return Boolean(status?.exists);
 }

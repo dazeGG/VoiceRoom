@@ -7,7 +7,7 @@
   import { goto } from '$app/navigation';
   import { X } from '@lucide/svelte';
   import { normalizeRecoveryCode } from '@voice-room/shared/account-security';
-  import { AuthRequestError, login, recoverAccount, register, restoreAccount } from '$lib/api/auth';
+  import { AuthRequestError, login, recoverAccount, register, restoreAccount, type AuthUser } from '$lib/api/auth';
   import { iconMd } from '$lib/shared/ui/icons';
   import { LOGIN_HINT, PASSWORD_MIN_LENGTH, isValidPassword, normalizeLogin } from './account';
   import { session, setUser } from './session.svelte';
@@ -17,11 +17,18 @@
   let {
     mode,
     onClose,
-    onModeChange
+    onModeChange,
+    onAuthenticated
   }: {
     mode: AuthMode;
     onClose: () => void;
     onModeChange: (mode: AuthMode) => void;
+    /**
+     * Takes over what happens after signing in. When set, the dialog neither
+     * stores the user nor navigates: a room hands the account to a clean reload,
+     * because swapping the session in place would unmount the live call.
+     */
+    onAuthenticated?: (user: AuthUser) => Promise<void> | void;
   } = $props();
 
   const COPY: Record<AuthMode, { title: string; subtitle: string; submit: string; submitting: string; failure: string }> = {
@@ -100,6 +107,18 @@
     return '';
   }
 
+  // Returns true when the caller is taking the page elsewhere, so the form stays
+  // disabled instead of inviting a second submit while the page leaves.
+  async function finish(user: AuthUser): Promise<boolean> {
+    if (onAuthenticated) {
+      await onAuthenticated(user);
+      return true;
+    }
+    setUser(user);
+    await goto('/');
+    return false;
+  }
+
   async function handleSubmit(event: SubmitEvent): Promise<void> {
     event.preventDefault();
     if (submitting) return;
@@ -108,6 +127,7 @@
     if (error) return;
 
     submitting = true;
+    let leaving = false;
     try {
       if (isRecover) {
         const recovered = await recoverAccount({
@@ -115,7 +135,7 @@
           code: recoveryCode,
           newPassword: password
         });
-        setUser(recovered.user);
+        leaving = await finish(recovered.user);
       } else {
         const user = isLogin
           ? await login({ login: loginValue.trim(), password })
@@ -125,9 +145,8 @@
               password,
               passwordConfirm
             });
-        setUser(user);
+        leaving = await finish(user);
       }
-      await goto('/');
     } catch (cause) {
       if (isLogin && cause instanceof AuthRequestError && cause.code === 'account_deletion_pending') {
         pendingDeletionAt = Number(cause.details.deletionScheduledFor) || null;
@@ -135,7 +154,7 @@
       }
       error = cause instanceof Error && cause.message ? cause.message : copy.failure;
     } finally {
-      submitting = false;
+      if (!leaving) submitting = false;
     }
   }
 
@@ -143,14 +162,15 @@
     if (submitting) return;
     submitting = true;
     error = '';
+    let leaving = false;
     try {
-      setUser(await restoreAccount({ login: loginValue.trim(), password }));
+      const user = await restoreAccount({ login: loginValue.trim(), password });
       pendingDeletionAt = null;
-      await goto('/');
+      leaving = await finish(user);
     } catch (cause) {
       error = cause instanceof Error && cause.message ? cause.message : 'Не удалось восстановить аккаунт';
     } finally {
-      submitting = false;
+      if (!leaving) submitting = false;
     }
   }
 </script>

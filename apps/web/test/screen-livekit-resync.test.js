@@ -135,6 +135,7 @@ async function loadLiveKitService() {
     export const refreshScreenAction = () => {};
     export const refreshScreenStage = () => {};
     export const refreshScreenTiles = () => {};
+    export const isMicrophoneShownMuted = () => state.muted === true;
   `);
   const path = 'src/lib/features/room/client/services/livekit-service.ts';
   const source = readFileSync(resolve(root, path), 'utf8')

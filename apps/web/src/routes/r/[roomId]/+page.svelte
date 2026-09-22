@@ -21,6 +21,9 @@
 
   let boundaryReady = $state(false);
   let desktopAllowed = $state(false);
+  // A phone may open this page: the room itself works in a mobile browser, but a
+  // signed-in phone gets the standalone room, never the desktop lobby.
+  let roomAllowed = $state(false);
   let loggingOut = $state(false);
   let authLoadError = $state(false);
   let guestContinuedInBrowser = $state(false);
@@ -57,8 +60,9 @@
     inAppNavigation = consumeInAppRoomNavigation();
     const policy = applyDesktopBoundaryToDocument();
     desktopAllowed = policy.desktopAllowed;
+    roomAllowed = policy.roomClientAllowed;
     boundaryReady = true;
-    if (!policy.desktopAllowed) return;
+    if (!policy.roomClientAllowed) return;
 
     void loadSession().catch(() => {
       authLoadError = true;
@@ -107,7 +111,7 @@
       </div>
     </main>
   </div>
-{:else if !desktopAllowed}
+{:else if !roomAllowed}
   <div class="app-shell">
     <main class="auth-session-error" aria-label="Неподдерживаемое устройство" aria-live="polite">
       <div class="auth-session-error-card">
@@ -138,7 +142,7 @@
       </div>
     </main>
   </div>
-{:else if session.user}
+{:else if session.user && desktopAllowed}
   <LobbyPage user={session.user} {loggingOut} onLogout={handleLogout} onToast={showToast} />
 {:else if guestOpenInApp}
   <OpenInAppScreen onRetry={openGuestRoomInApp} onContinue={() => (guestContinuedInBrowser = true)} />

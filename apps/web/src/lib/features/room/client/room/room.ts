@@ -12,6 +12,8 @@ import { createRoomProof } from '../net/pow';
 import { errorMessage, wait } from '../core/utils';
 import { extractRoomId, rotateStoredPeerSession } from '../core/session';
 import { isRoomEmbedded } from '../core/embed';
+import { openLeaveScreen } from '../../leave-screen.svelte';
+import { getDesktopBoundaryPolicy } from '$lib/platform/desktop-boundary';
 import { getDisplayName, persistName, requestGuestNameForRoom, requireSavedName, updateNameStatuses } from '../ui/names';
 import {
   resetConnectionStatus,
@@ -61,6 +63,7 @@ import {
 } from '$lib/features/home/model/room-realtime';
 import { applyRoomDeleted, applyRoomUpdated } from './lifecycle';
 import { markInAppRoomNavigation } from '$lib/platform/open-in-app';
+import { isMicrophoneShownMuted } from '../core/microphone-mute';
 import {
   cancelRoomRecovery,
   notifyRoomAppConnection,
@@ -305,7 +308,7 @@ async function performJoinRoom(generation: number): Promise<void> {
       deafened: state.outputMuted,
       isLocal: true,
       joinedAt: Date.now(),
-      muted: state.muted,
+      muted: isMicrophoneShownMuted(),
       name,
       avatarAccent: session.user?.avatarAccent || '',
       avatarColorKey: session.user?.avatarColorKey || '',
@@ -356,8 +359,8 @@ async function performJoinRoom(generation: number): Promise<void> {
     setConnectedVoiceRoom(state.roomId);
     void syncDesktopGlobalHotkeys(true);
     setVoiceSessionTiming({ joinedAt: state.self?.joinedAt ?? Date.now() });
-    setVoiceControlsState({ muted: state.muted, deafened: state.outputMuted });
-    if (state.muted || state.outputMuted) postState().catch(() => {});
+    setVoiceControlsState({ muted: isMicrophoneShownMuted(), deafened: state.outputMuted });
+    if (isMicrophoneShownMuted() || state.outputMuted) postState().catch(() => {});
     refreshCallControls();
     refreshScreenControls();
     startMeters();
@@ -437,7 +440,7 @@ async function handleVoiceRealtimeEvent(event: RealtimeEvent): Promise<void> {
         screenAuthoritative: true,
         deafened: state.outputMuted,
         isLocal: true,
-        muted: state.muted,
+        muted: isMicrophoneShownMuted(),
         viewedScreenPeerId: state.self?.viewedScreenPeerId ?? localPeer.viewedScreenPeerId
       });
     }
@@ -590,6 +593,11 @@ function stopLocalStream(): void {
 }
 
 export async function handleLeaveButtonClick(): Promise<void> {
+  // Read before leaving: leaveRoom forgets who was in the call.
+  const roomId = state.roomId;
+  const guest = !isRoomEmbedded() && !session.user;
+  // `/` is desktop-only, so leaving on a phone stays on the room page.
+  const mobile = !getDesktopBoundaryPolicy().desktopAllowed;
   if (state.joined || state.localStream || state.connecting) {
     playPeerCue('leave');
     await wait(180);
@@ -597,11 +605,37 @@ export async function handleLeaveButtonClick(): Promise<void> {
   }
 
   if (isRoomEmbedded()) {
-    window.dispatchEvent(new CustomEvent('voice-room:embedded-leave', { detail: { roomId: state.roomId } }));
+    window.dispatchEvent(new CustomEvent('voice-room:embedded-leave', { detail: { roomId } }));
+    return;
+  }
+
+  if ((guest || mobile) && roomId) {
+    openLeaveScreen({ roomId, isStatic: state.roomIsStatic, guest });
     return;
   }
 
   window.location.href = '/';
+}
+
+/**
+ * A guest who just created an account comes back to the same room as that
+ * account. The session is not swapped in place: that would unmount this call
+ * mid-flight and let the lobby offer the desktop app again. Instead the call is
+ * left cleanly and the room page reloads signed in, with the in-app mark set so
+ * the reload joins in the browser.
+ */
+export async function rejoinRoomSignedIn(roomId: string): Promise<void> {
+  markInAppRoomNavigation();
+  try {
+    if (state.joined || state.localStream || state.connecting) {
+      playPeerCue('leave');
+      await wait(180);
+      leaveRoom();
+    }
+  } catch (error) {
+    console.error('[voice-room] guest register rejoin', error);
+  }
+  window.location.assign(`/r/${encodeURIComponent(roomId)}`);
 }
 
 export async function copyRoomCode(): Promise<void> {

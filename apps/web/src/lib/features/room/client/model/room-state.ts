@@ -65,6 +65,7 @@ export function createInitialRoomState(): AppState {
     moderationReason: '',
     roomAvatarUrl: '',
     roomName: '',
+    roomIsStatic: false,
     roomRoute: window.location.pathname.startsWith('/r/'),
     screen: '',
     savedName: '',

@@ -7,16 +7,18 @@ import {
   normalizeAccountSession,
   normalizeLoginAlert,
   normalizeReleaseVersion,
+  normalizeSelfUserFlags,
   type AccountDeletionPreview,
   type AccountDeletionRoom,
   type AccountSession,
   type LoginAlert,
   type RecoveryCodesReminder,
   type RecoveryCodesStatus,
+  type SelfUserFlags,
   type WhatsNewState
 } from '@voice-room/shared/account-security';
 
-export interface AuthUser {
+export interface AuthUser extends SelfUserFlags {
   avatarAccent: string | null;
   avatarColorKey: string;
   avatarUrl: string | null;
@@ -27,6 +29,12 @@ export interface AuthUser {
   id: string;
   login: string;
   presenceStatus: PresenceStatus;
+}
+
+// Every response that returns the signed-in account goes through here, so the
+// self-only flags always exist even when an older API leaves them out.
+function readAuthUser<T extends AuthUser | null | undefined>(user: T): T {
+  return (user ? { ...user, ...normalizeSelfUserFlags(user) } : user) as T;
 }
 
 export type RoomRelationship = 'owner' | 'bookmarked';
@@ -49,7 +57,7 @@ async function avatarRequest(path: string, method: 'POST' | 'DELETE', file?: Blo
   const response = await fetch(`/api${path}`, { method, body, credentials: 'same-origin' });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(payload.error || 'Не удалось обновить аватар');
-  return payload.user;
+  return readAuthUser(payload.user as AuthUser);
 }
 
 export const uploadUserAvatar = (file: Blob): Promise<AuthUser> => avatarRequest('/auth/avatar', 'POST', file);
@@ -102,12 +110,12 @@ export class AuthRequestError extends Error {
 
 export async function register(input: RegisterInput): Promise<AuthUser> {
   const payload = await authPost<{ user: AuthUser }>('/auth/register', input);
-  return payload.user;
+  return readAuthUser(payload.user);
 }
 
 export async function login(input: Credentials): Promise<AuthUser> {
   const payload = await authPost<{ user: AuthUser }>('/auth/login', input);
-  return payload.user;
+  return readAuthUser(payload.user);
 }
 
 export async function logout(): Promise<void> {
@@ -116,7 +124,7 @@ export async function logout(): Promise<void> {
 
 export async function updateDisplayName(displayName: string): Promise<AuthUser> {
   const payload = await authPost<{ user: AuthUser }>('/auth/profile', { displayName });
-  return payload.user;
+  return readAuthUser(payload.user);
 }
 
 export async function changePassword(currentPassword: string, newPassword: string): Promise<void> {
@@ -132,7 +140,7 @@ export async function fetchMe(): Promise<AuthUser | null> {
     throw new Error('Не удалось проверить сессию');
   }
   const payload = (await response.json()) as { user: AuthUser | null };
-  return payload.user ?? null;
+  return readAuthUser(payload.user ?? null);
 }
 
 export async function addRoomByCode(code: string): Promise<OwnedRoom> {
@@ -238,6 +246,10 @@ export async function markWhatsNewSeen(): Promise<void> {
   await authPost('/auth/whats-new/seen', {});
 }
 
+export async function markAppPromptSeen(): Promise<void> {
+  await authPost('/auth/app-prompt/seen', {});
+}
+
 export async function fetchLoginAlerts(): Promise<LoginAlert[]> {
   const payload = await authRead<{ alerts?: unknown[] }>('/auth/login-alerts', 'GET', 'Не удалось проверить входы в аккаунт');
   return (Array.isArray(payload.alerts) ? payload.alerts : [])
@@ -264,7 +276,7 @@ export async function requestAccountDeletion(currentPassword: string): Promise<{
 
 export async function restoreAccount(input: Credentials): Promise<AuthUser> {
   const payload = await authPost<{ user: AuthUser }>('/auth/account/restore', input);
-  return payload.user;
+  return readAuthUser(payload.user);
 }
 
 export async function confirmLoginAlert(alertId: string): Promise<void> {
@@ -310,5 +322,5 @@ export async function generateRecoveryCodes(
 
 export async function recoverAccount(input: RecoverInput): Promise<{ user: AuthUser; remaining: number }> {
   const payload = await authPost<{ user: AuthUser; recoveryCodes?: Partial<RecoveryCodesStatus> }>('/auth/recover', input);
-  return { user: payload.user, remaining: readRecoveryCodesStatus(payload.recoveryCodes).remaining };
+  return { user: readAuthUser(payload.user), remaining: readRecoveryCodesStatus(payload.recoveryCodes).remaining };
 }

@@ -32,16 +32,18 @@ test('G16-A01 classifies the canonical platform corpus deterministically', async
 test('G16-A02 policy is fail-open only for unknown and never returns raw signals', () => {
   for (const fixture of CORPUS) {
     const policy = cjs.classifyPlatformPolicy(fixture.input);
-    assert.deepEqual(Object.keys(policy).sort(), ['contractVersion', 'desktopAllowed', 'platformClass']);
+    assert.deepEqual(Object.keys(policy).sort(), ['contractVersion', 'desktopAllowed', 'platformClass', 'roomClientAllowed']);
     assert.equal(policy.contractVersion, 'voice-room.platform-class/v1');
     assert.equal(policy.desktopAllowed, fixture.expected !== 'mobile', fixture.name);
+    assert.equal(policy.roomClientAllowed, true, `${fixture.name}: rooms open on every platform`);
     assert.equal(JSON.stringify(policy).includes('userAgent'), false, fixture.name);
   }
 
   assert.deepEqual(cjs.platformPolicy('not-a-class'), {
     contractVersion: 'voice-room.platform-class/v1',
     platformClass: 'unknown',
-    desktopAllowed: true
+    desktopAllowed: true,
+    roomClientAllowed: true
   });
 });
 
@@ -51,6 +53,7 @@ test('G16-A02 declaration and runtime contracts expose the same normalized DTO',
   assert.match(declaration, /contractVersion: 'voice-room\.platform-class\/v1'/);
   assert.match(declaration, /platformClass: PlatformClass/);
   assert.match(declaration, /desktopAllowed: boolean/);
+  assert.match(declaration, /roomClientAllowed: boolean/);
   assert.doesNotMatch(
     declaration.match(/export interface PlatformPolicy \{[\s\S]*?\}/)?.[0] || '',
     /userAgent|\bplatform\??:|maxTouchPoints|desktopBridge/

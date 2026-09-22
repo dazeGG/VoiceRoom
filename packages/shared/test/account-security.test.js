@@ -57,6 +57,34 @@ test('describeUserAgent names the client and OS the same way in CJS and ESM', as
   }
 });
 
+test('isDesktopAppUserAgent agrees with the described client in CJS and ESM', async () => {
+  const esm = await loadEsm();
+  for (const fixture of USER_AGENTS) {
+    const expected = fixture.expected.client === 'VoiceRoom Desktop';
+    assert.equal(cjs.isDesktopAppUserAgent(fixture.value), expected, fixture.name);
+    assert.equal(esm.isDesktopAppUserAgent(fixture.value), expected, `${fixture.name} (ESM)`);
+  }
+  // Repeated calls must not carry regex state between user agents.
+  const shell = USER_AGENTS[0].value;
+  assert.equal(cjs.isDesktopAppUserAgent(shell), true);
+  assert.equal(cjs.isDesktopAppUserAgent(shell), true);
+});
+
+test('normalizeSelfUserFlags defaults an older API to banner-on, prompt-off', async () => {
+  const esm = await loadEsm();
+  const cases = [
+    [{ hasUsedDesktopApp: true, appPromptSeen: false }, { hasUsedDesktopApp: true, appPromptSeen: false }],
+    [{ hasUsedDesktopApp: false, appPromptSeen: true }, { hasUsedDesktopApp: false, appPromptSeen: true }],
+    [{}, { hasUsedDesktopApp: false, appPromptSeen: true }],
+    [null, { hasUsedDesktopApp: false, appPromptSeen: true }],
+    [{ hasUsedDesktopApp: 'yes', appPromptSeen: 0 }, { hasUsedDesktopApp: false, appPromptSeen: true }]
+  ];
+  for (const [input, expected] of cases) {
+    assert.deepEqual(cjs.normalizeSelfUserFlags(input), expected);
+    assert.deepEqual(esm.normalizeSelfUserFlags(input), expected);
+  }
+});
+
 test('normalizeRecoveryCode accepts typed variations and rejects everything else', async () => {
   const esm = await loadEsm();
   const canonical = '0123456789ABCDEF'.replace('C', 'H');

@@ -36,7 +36,10 @@ export function platformPolicy(platformClass) {
   return {
     contractVersion: PLATFORM_CLASS_CONTRACT,
     platformClass: normalized,
-    desktopAllowed: normalized !== PLATFORM_CLASSES.mobile
+    desktopAllowed: normalized !== PLATFORM_CLASSES.mobile,
+    // A room page works in a mobile browser too (voice, chat, watching a
+    // screen); everything else stays desktop-only behind desktopAllowed.
+    roomClientAllowed: true
   };
 }
 

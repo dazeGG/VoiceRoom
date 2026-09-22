@@ -50,6 +50,7 @@ import {
   subscribeRoomRecoveryTransitions,
   type RecoveryAttemptOutcome
 } from '../recovery/room-recovery';
+import { isMicrophoneShownMuted } from '../core/microphone-mute';
 import { ScreenRecoveryGraceController } from '../recovery/screen-recovery-grace.js';
 import { LiveKitReconcileGeneration } from '../recovery/livekit-reconcile-generation.js';
 
@@ -563,7 +564,9 @@ export async function syncLocalMicrophonePublicationMuted(): Promise<void> {
 }
 
 async function syncMicrophonePublicationMuted(publication: LocalTrackPublication): Promise<void> {
-  if (state.muted) {
+  // Push-to-talk idle stays unmuted on the SFU: the capture track is disabled, so
+  // only silence (DTX) goes out, and peers do not get a mute event to show.
+  if (isMicrophoneShownMuted()) {
     await publication.mute();
   } else {
     await publication.unmute();

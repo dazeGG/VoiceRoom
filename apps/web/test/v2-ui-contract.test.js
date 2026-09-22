@@ -426,7 +426,8 @@ test('room side panel exposes chat and participant tabs backed by the authoritat
   assert.match(chat, /aria-selected=\{activeTab === 'chat'\}/);
   assert.match(chat, /aria-selected=\{activeTab === 'participants'\}/);
   assert.match(chat, /activeTab=\{roomUi\.activePanel === 'participants' \? 'participants' : 'chat'\}/);
-  assert.match(chat, /aria-label="Свернуть панель"/);
+  // A phone closes the panel with a cross instead of collapsing it to the right.
+  assert.match(chat, /aria-label=\{mobile \? 'Закрыть панель' : 'Свернуть панель'\}/);
   assert.match(chat, /onCollapse=\{closeChat\}/);
   assert.match(topbar, /role="group" aria-label="Открыть раздел панели комнаты"/);
   assert.match(topbar, /aria-label="Чат"/);

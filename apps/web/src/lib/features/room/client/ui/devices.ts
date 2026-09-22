@@ -238,7 +238,7 @@ export function updateGateThresholdFromSlider(value: string | number): void {
 
   window.clearTimeout(gateSwitchTimer);
   if (!state.joined || !state.localStream) return;
-  if (updateActiveGateThreshold(threshold)) return;
+  if (updateActiveGateThreshold(state.pushToTalkActive ? 0 : threshold)) return;
   if (threshold <= 0) return;
 
   gateSwitchTimer = window.setTimeout(() => {

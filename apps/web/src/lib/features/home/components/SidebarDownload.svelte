@@ -5,8 +5,8 @@
   import { fetchDesktopRelease, type DesktopRelease } from '$lib/api/desktop';
   import { Popover, PopoverMenuItem } from '$lib/shared/ui';
   import { iconSm } from '$lib/shared/ui/icons';
-  import { DESKTOP_BUILDS, RELEASES_URL } from '../model/desktop-builds';
-  import { triggerDesktopDownload } from '../services/desktop-download';
+  import { DESKTOP_BUILDS } from '../model/desktop-builds';
+  import { startDesktopBuildDownload } from '../services/desktop-download';
 
   let open = $state(false);
   let release = $state<DesktopRelease | null>(null);
@@ -35,13 +35,7 @@
     if (downloadingId) return;
     downloadingId = buildId;
     try {
-      const latestRelease = release ?? (await ensureRelease());
-      const asset = latestRelease?.assets[buildId] ?? null;
-      if (asset) {
-        triggerDesktopDownload(asset.url);
-      } else {
-        window.open(RELEASES_URL, '_blank', 'noopener');
-      }
+      startDesktopBuildDownload(release ?? (await ensureRelease()), buildId);
     } finally {
       downloadingId = '';
       close();

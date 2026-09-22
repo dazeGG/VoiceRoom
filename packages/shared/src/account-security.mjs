@@ -126,6 +126,25 @@ function describeUserAgent(value) {
   return { client: match(CLIENT_RULES), os: match(OS_RULES) };
 }
 
+// The desktop app is the Electron shell, whose user agent carries "VoiceRoom" or
+// "Electron/". Session descriptions and the per-account app marker both use
+// this rule, so they can never disagree about who has used the app.
+function isDesktopAppUserAgent(value) {
+  const userAgent = typeof value === 'string' ? value.slice(0, 512) : '';
+  return CLIENT_RULES[0][0].test(userAgent);
+}
+
+// Facts about the signed-in account that only the account itself receives.
+// An older API sends neither flag: the app banner may then show, but the
+// one-time post-registration prompt never does.
+function normalizeSelfUserFlags(value) {
+  const source = value && typeof value === 'object' ? value : {};
+  return {
+    hasUsedDesktopApp: source.hasUsedDesktopApp === true,
+    appPromptSeen: source.appPromptSeen !== false
+  };
+}
+
 function boundedText(value, max) {
   return typeof value === 'string' ? value.trim().slice(0, max) : '';
 }
@@ -165,9 +184,11 @@ export {
   formatRecoveryCode,
   hasUnseenWhatsNew,
   isDeletedAccountLogin,
+  isDesktopAppUserAgent,
   isRecoveryCodesReminderDue,
   normalizeAccountSession,
   normalizeLoginAlert,
   normalizeRecoveryCode,
-  normalizeReleaseVersion
+  normalizeReleaseVersion,
+  normalizeSelfUserFlags
 };

@@ -45,6 +45,24 @@
     flex-direction: column;
   }
 
+  /* In-room the heading stays one row: stacking it dropped the call timer and
+     the chat/participants tabs into a second line under the room name, where
+     they read as a stray block over the stage. The name takes what is left and
+     ellipsises; the actions keep their intrinsic width on the right. */
+  .room-heading.topbar-room-heading {
+    align-items: center;
+    flex-direction: row;
+    gap: var(--space-sm);
+  }
+
+  .room-heading.topbar-room-heading .room-heading-main {
+    flex: 1 1 auto;
+  }
+
+  .room-heading.topbar-room-heading .room-heading-title {
+    max-width: 100%;
+  }
+
   .status-pill,
   .heading-actions,
   .tool-button {
@@ -63,6 +81,20 @@
   .room-heading-title {
     max-width: calc(100vw - 172px);
     font-size: 1.55rem;
+  }
+
+  /* A long room name must shrink inside the heading instead of widening the
+     page: the menu's popover root otherwise sizes to the full title. */
+  .room-heading-main > .popover-root {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .room-heading-title {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .heading-actions {
@@ -201,6 +233,36 @@
     width: 24px;
     height: 42px;
   }
+}
+
+/* Phones: mobile browsers cannot capture the screen, and dock controls keep a
+   44px touch target even on the narrowest viewports. The whole cluster goes,
+   not just the button: an empty flex child still spends the shell's gap and
+   pushed the divider off-centre between the headphones and the signal bars. */
+html[data-platform-class="mobile"] .dock-cluster--screen {
+  display: none;
+}
+
+html[data-platform-class="mobile"] :is(.mic-button, .output-button, .leave-button, .screen-exit-button, .dock-connection) {
+  min-width: 44px;
+  min-height: 44px;
+}
+
+html[data-platform-class="mobile"] .dock-split {
+  min-height: 44px;
+}
+
+/* The heading tabs are the only way into chat on a phone, so they get the same
+   44px target as the dock. */
+html[data-platform-class="mobile"] :is(.room-panel-tabs--topbar, .chat-rail-head .room-panel-tabs) button {
+  width: 40px;
+  height: 40px;
+}
+
+html[data-platform-class="mobile"] .chat-rail-collapse {
+  width: 40px;
+  height: 40px;
+  border-radius: 11px;
 }
 
 @media (prefers-reduced-motion: reduce) {

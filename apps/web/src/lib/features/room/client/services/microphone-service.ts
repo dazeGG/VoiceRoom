@@ -44,6 +44,18 @@ export function isGateDisabled(): boolean {
   return state.gateThresholdDb <= GATE_THRESHOLD_MIN_DB;
 }
 
+/**
+ * Holding the push-to-talk key is an explicit "I am talking", so the gate has
+ * nothing left to decide: open it fully while the key is held and put the user's
+ * threshold back on release. A pipeline built without a gate has nothing to sync.
+ */
+export function syncPushToTalkGate(): void {
+  const threshold = state.pushToTalkActive ? 0 : getGateThresholdAmplitude();
+  for (const processor of getMicrophoneProcessors(state.micProcessor)) {
+    if (processor.type === 'gate') processor.setThreshold?.(threshold);
+  }
+}
+
 export function getGateThresholdAmplitude(): number {
   if (isGateDisabled()) return 0;
 

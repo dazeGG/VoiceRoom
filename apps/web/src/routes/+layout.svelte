@@ -1,14 +1,23 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { page } from '$app/state';
   import { applyDesktopBoundaryToDocument } from '$lib/platform/desktop-boundary';
   import { installEmojiCopy } from '$lib/shared/chat/emoji-copy';
 
   let { children } = $props();
   let boundaryReady = $state(false);
   let desktopAllowed = $state(false);
+  let roomClientAllowed = $state(false);
+  // Phones get the room page, and `/`, where the route offers to start one;
+  // the lobby and the account screens stay desktop-only and keep the block
+  // screen below.
+  const MOBILE_ROUTES = ['/r/[roomId]', '/'];
+  const allowed = $derived(desktopAllowed || (roomClientAllowed && MOBILE_ROUTES.includes(page.route.id ?? '')));
 
   onMount(() => {
-    desktopAllowed = applyDesktopBoundaryToDocument().desktopAllowed;
+    const policy = applyDesktopBoundaryToDocument();
+    desktopAllowed = policy.desktopAllowed;
+    roomClientAllowed = policy.roomClientAllowed;
     boundaryReady = true;
     // Emoji drawn as artwork copy as their characters anywhere in the app.
     return installEmojiCopy();
@@ -22,7 +31,7 @@
       <h1>Voice Room запускается</h1>
     </section>
   </main>
-{:else if desktopAllowed}
+{:else if allowed}
   {@render children()}
 {:else}
   <main class="device-boundary" aria-label="Неподдерживаемое устройство" aria-live="polite">

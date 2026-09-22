@@ -306,6 +306,61 @@ test('guests get the open-in-app offer before auto-joining, and in-app reloads a
   }
 });
 
+test('open-in-app screen offers the desktop download next to retry and continue', () => {
+  const screen = readFileSync(resolve(webRoot, 'src/lib/features/home/components/OpenInAppScreen.svelte'), 'utf8');
+  assert.match(screen, /let \{ onRetry, onContinue \} = \$props/, 'both call sites keep their props');
+  assert.match(screen, /onMount\(\(\) => \{\s*startDownload = createDesktopDownload\(\);/);
+  assert.match(screen, /await startDownload\(\);/);
+  assert.match(
+    screen,
+    /<div class="open-in-app-actions">\s*<Button variant="primary"[^>]*onclick=\{download\}>Скачать приложение<\/Button>\s*<Button variant="ghost" type="button" onclick=\{onRetry\}>Открыть снова<\/Button>\s*<Button variant="ghost" type="button" onclick=\{onContinue\}>Продолжить в браузере<\/Button>/
+  );
+
+  const sidebar = readFileSync(resolve(webRoot, 'src/lib/features/home/components/SidebarDownload.svelte'), 'utf8');
+  assert.match(sidebar, /startDesktopBuildDownload\(release \?\? \(await ensureRelease\(\)\), buildId\)/);
+  assert.doesNotMatch(sidebar, /RELEASES_URL/, 'the release-page fallback lives in the shared helper');
+});
+
+test('desktop build download uses the release asset and falls back to the releases page', async (t) => {
+  const opened = [];
+  const clicked = [];
+  const appended = [];
+  const originalDocument = globalThis.document;
+  globalThis.document = {
+    body: { appendChild: (node) => appended.push(node) },
+    createElement: () => ({
+      click() { clicked.push(this.href); },
+      remove() {}
+    })
+  };
+  t.after(() => {
+    if (originalDocument === undefined) delete globalThis.document;
+    else globalThis.document = originalDocument;
+  });
+  const downloads = await loadModule(t, '/src/lib/features/home/services/desktop-download.ts', {
+    open: (...args) => opened.push(args)
+  });
+  const { RELEASES_URL } = await (await getServer()).ssrLoadModule('/src/lib/features/home/model/desktop-builds.ts');
+  const release = {
+    version: '1.2.3',
+    htmlUrl: 'https://example.test/release',
+    assets: { 'win-x64': { url: 'https://example.test/VoiceRoom.exe', size: 1 }, 'mac-x64': null }
+  };
+
+  downloads.startDesktopBuildDownload(release, 'win-x64');
+  assert.deepEqual(clicked, ['https://example.test/VoiceRoom.exe']);
+  assert.equal(appended[0]?.rel, 'noopener');
+  assert.deepEqual(opened, []);
+
+  downloads.startDesktopBuildDownload(release, 'mac-x64');
+  downloads.startDesktopBuildDownload(null, 'win-x64');
+  assert.deepEqual(opened, [
+    [RELEASES_URL, '_blank', 'noopener'],
+    [RELEASES_URL, '_blank', 'noopener']
+  ]);
+  assert.equal(clicked.length, 1);
+});
+
 test('settings expose the room switch question and desktop diagnostics', () => {
   const modal = readFileSync(resolve(webRoot, 'src/lib/features/home/components/SettingsModal.svelte'), 'utf8');
 

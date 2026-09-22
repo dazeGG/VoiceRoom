@@ -1,10 +1,29 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import { Button } from '$lib/shared/ui';
+  import { createDesktopDownload } from '../services/desktop-download';
 
   let { onRetry, onContinue } = $props<{
     onRetry: () => void;
     onContinue: () => void;
   }>();
+
+  let startDownload: (() => Promise<void>) | null = null;
+  let downloading = $state(false);
+
+  onMount(() => {
+    startDownload = createDesktopDownload();
+  });
+
+  async function download(): Promise<void> {
+    if (downloading || !startDownload) return;
+    downloading = true;
+    try {
+      await startDownload();
+    } finally {
+      downloading = false;
+    }
+  }
 </script>
 
 <div class="open-in-app" role="dialog" aria-modal="true" aria-labelledby="openInAppTitle">
@@ -13,8 +32,10 @@
     <p>
       Если Voice Room установлен, комната откроется в нём. Разрешите браузеру открыть приложение, если он спросит.
     </p>
+    <p>Приложения ещё нет? Скачайте его: в нём оверлей поверх игр, горячие клавиши и Push-to-talk.</p>
     <div class="open-in-app-actions">
-      <Button variant="primary" type="button" onclick={onRetry}>Открыть снова</Button>
+      <Button variant="primary" type="button" disabled={downloading} onclick={download}>Скачать приложение</Button>
+      <Button variant="ghost" type="button" onclick={onRetry}>Открыть снова</Button>
       <Button variant="ghost" type="button" onclick={onContinue}>Продолжить в браузере</Button>
     </div>
   </div>

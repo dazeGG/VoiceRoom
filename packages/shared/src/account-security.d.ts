@@ -37,6 +37,14 @@ export interface LoginAlert {
   createdAt: number;
 }
 
+/** Facts about the signed-in account that only the account itself receives. */
+export interface SelfUserFlags {
+  /** The account has signed in from the desktop app at least once. */
+  hasUsedDesktopApp: boolean;
+  /** The one-time post-registration app prompt was already shown or dismissed. */
+  appPromptSeen: boolean;
+}
+
 export interface AccountDeletionRoom {
   roomId: string;
   name: string;
@@ -66,6 +74,7 @@ export function describeUserAgent(value: unknown): UserAgentDescription;
 export function formatRecoveryCode(value: unknown): string;
 export function hasUnseenWhatsNew(lastSeen: unknown, current?: string): boolean;
 export function isDeletedAccountLogin(value: unknown): boolean;
+export function isDesktopAppUserAgent(value: unknown): boolean;
 export function isRecoveryCodesReminderDue(
   status: Pick<RecoveryCodesStatus, 'remaining'> | null | undefined,
   reminder: RecoveryCodesReminder | null | undefined,
@@ -75,3 +84,4 @@ export function normalizeAccountSession(value: unknown): AccountSession | null;
 export function normalizeLoginAlert(value: unknown): LoginAlert | null;
 export function normalizeRecoveryCode(value: unknown): string;
 export function normalizeReleaseVersion(value: unknown): string;
+export function normalizeSelfUserFlags(value: unknown): SelfUserFlags;
