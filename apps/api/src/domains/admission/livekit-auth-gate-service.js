@@ -12,6 +12,7 @@ const { createLogger } = require('../../lib/logger');
 const { normalizeLiveKitRoomPrefix, verifyAccessTokenBinding } = require('./livekit-token-binding');
 
 const DEFAULT_GATE_PATH = '/rtc';
+const VALIDATE_TIMEOUT_MS = 5_000;
 
 function normalizeGatePath(value) {
   const path = String(value || DEFAULT_GATE_PATH).trim();
@@ -57,6 +58,14 @@ function deny(socket, code = 403, reason = 'Forbidden') {
   } catch {
     destroySocket(socket);
   }
+}
+
+// livekit-client calls `<signal path>/validate` (v0 or v1) with the same query
+// after a failed connect to learn why. Answering 404 made it conclude the
+// server lacks v1 signaling, retry on the v0 path and report the wrong error.
+function isValidatePath(requestUrl, gatePath) {
+  const { pathname } = new URL(requestUrl || '/', 'ws://gate.local');
+  return pathname === `${gatePath}/validate` || pathname === `${gatePath}/v1/validate`;
 }
 
 function buildUpstreamUpgradeRequest({ request, strippedPath, upstream }) {
@@ -125,6 +134,10 @@ function createLiveKitAuthGateService({
           });
         return;
       }
+      if (req.method === 'GET' && isValidatePath(req.url, path)) {
+        proxyValidate(req, res);
+        return;
+      }
       res.writeHead(404);
       res.end();
     });
@@ -188,6 +201,47 @@ function createLiveKitAuthGateService({
         });
     });
     return server;
+  }
+
+  // The validate probe gets the same admission check as the upgrade itself, so
+  // a revoked or mismatched admission hears 403 (LiveKit's "not allowed")
+  // instead of whatever LiveKit would say about the bare JWT.
+  function proxyValidate(req, res) {
+    authorize(req.url, req.headers || {})
+      .then((decision) => {
+        if (!decision.ok) {
+          res.writeHead(403, { 'content-type': 'text/plain; charset=utf-8' });
+          res.end('LiveKit admission is no longer valid');
+          return;
+        }
+        const headers = { ...req.headers, host: upstream.host };
+        delete headers['x-vr-gate-credential'];
+        const upstreamRequest = http.request({
+          headers,
+          host: upstream.hostname,
+          method: 'GET',
+          path: decision.strippedPath,
+          port: Number(upstream.port || 80),
+          timeout: VALIDATE_TIMEOUT_MS
+        }, (upstreamResponse) => {
+          res.writeHead(upstreamResponse.statusCode || 502, {
+            'content-type': upstreamResponse.headers['content-type'] || 'text/plain; charset=utf-8'
+          });
+          upstreamResponse.pipe(res);
+        });
+        upstreamRequest.on('timeout', () => upstreamRequest.destroy(new Error('validate timed out')));
+        upstreamRequest.on('error', (error) => {
+          logger.error({ evt: LOG_EVENTS.LIVEKIT_GATE_UPSTREAM_FAILED, err: error }, 'LiveKit gate validate failed');
+          if (!res.headersSent) res.writeHead(502);
+          res.end();
+        });
+        upstreamRequest.end();
+      })
+      .catch((error) => {
+        logger.error({ evt: LOG_EVENTS.LIVEKIT_GATE_AUTHORIZATION_FAILED, err: error }, 'LiveKit gate authorization failed');
+        res.writeHead(503);
+        res.end();
+      });
   }
 
   return {

@@ -162,3 +162,36 @@ test('credential-only authorize calls keep checking just the credential', async 
   assert.equal((await gate.authorize('/rtc?vr_gate_credential=x')).ok, true);
   assert.equal((await gate.authorize('/rtc?vr_gate_credential=x', {})).code, 'missing_token');
 });
+
+test('the validate probe is admitted like the upgrade and proxied without the gate credential', async (t) => {
+  const http = require('node:http');
+  const seen = [];
+  const upstream = http.createServer((req, res) => {
+    seen.push(req.url);
+    res.writeHead(200, { 'content-type': 'text/plain' });
+    res.end('success');
+  });
+  await new Promise((resolve) => upstream.listen(0, '127.0.0.1', resolve));
+  t.after(() => upstream.close());
+  const gate = createLiveKitAuthGateService({
+    boundary: { assertReady: async () => true, authorizeCredential: async () => ({ ok: true, claims: CLAIMS }) },
+    logger: { error: () => {}, warn: () => {} },
+    roomPrefix: 'voice-room-',
+    roomStore: {},
+    upstreamUrl: `ws://127.0.0.1:${upstream.address().port}`
+  }).createServer();
+  await new Promise((resolve) => gate.listen(0, '127.0.0.1', resolve));
+  t.after(() => gate.close());
+  const base = `http://127.0.0.1:${gate.address().port}`;
+
+  const ok = await fetch(`${base}/rtc/v1/validate?access_token=${tokenFor()}&vr_gate_credential=x`);
+  assert.equal(ok.status, 200);
+  assert.equal(await ok.text(), 'success');
+  assert.deepEqual(seen, [`/rtc/v1/validate?access_token=${tokenFor()}`]);
+
+  const foreign = await fetch(`${base}/rtc/validate?access_token=${tokenFor({ room: 'voice-room-room-b' })}&vr_gate_credential=x`);
+  assert.equal(foreign.status, 403);
+  assert.equal(seen.length, 1, 'a refused probe never reaches LiveKit');
+
+  assert.equal((await fetch(`${base}/rtc/other`)).status, 404);
+});
