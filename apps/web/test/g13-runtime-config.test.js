@@ -144,7 +144,7 @@ test('G13-A01 one Web image contract serves distinct runtime configuration over 
 
   const dockerfile = readFileSync(path.join(repositoryRoot, 'Dockerfile'), 'utf8');
   const caddyfile = readFileSync(path.join(repositoryRoot, 'Caddyfile'), 'utf8');
-  assert.match(dockerfile, /FROM caddy:2\.11\.3-alpine AS web/);
+  assert.match(dockerfile, /FROM caddy:2\.11\.4-alpine AS web/);
   assert.match(caddyfile, /handle \/runtime-config\.json/);
   assert.match(caddyfile, /Cache-Control "no-store"/);
   assert.match(caddyfile, /\{\$LIVEKIT_GATE_PUBLIC_URL\}/);
