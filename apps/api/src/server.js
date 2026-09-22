@@ -5123,8 +5123,11 @@ function createApiApp({
 
   // The client cannot quote an id it never saw, so every response carries it
   // back — including the error responses a user is most likely to report.
+  // It goes on the raw response because legacy handlers hijack the reply and
+  // write to that themselves: a header set on the Fastify reply would be
+  // dropped for nearly every route.
   app.addHook('onRequest', (request, reply, done) => {
-    reply.header('x-request-id', request.id);
+    reply.raw.setHeader('x-request-id', request.id);
     done();
   });
 
