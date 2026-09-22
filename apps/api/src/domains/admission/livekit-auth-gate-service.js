@@ -9,7 +9,7 @@ const { createCredentialBoundaryService } = require('./credential-boundary-servi
 const { createRoomStore } = require('../../lib/room-store');
 const { LOG_EVENTS } = require('../../lib/log-events');
 const { createLogger } = require('../../lib/logger');
-const { normalizeLiveKitRoomPrefix, verifyAccessTokenBinding } = require('./livekit-token-binding');
+const { normalizeLiveKitRoomPrefix, verifyAccessTokenBinding } = require('./livekit-token-binding.mts');
 
 const DEFAULT_GATE_PATH = '/rtc';
 const VALIDATE_TIMEOUT_MS = 5_000;

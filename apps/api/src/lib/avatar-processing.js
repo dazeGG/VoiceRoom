@@ -3,7 +3,7 @@
 const crypto = require('node:crypto');
 const sharp = require('sharp');
 const { deriveAvatarAccent, dominantAvatarColor } = require('@voice-room/shared/avatar-accent');
-const { detectImageFormat } = require('./image-signature');
+const { detectImageFormat } = require('./image-signature.mts');
 
 const AVATAR_SIZE = 256;
 const MAX_AVATAR_BYTES = 5 * 1024 * 1024;

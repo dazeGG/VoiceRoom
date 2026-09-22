@@ -15,7 +15,7 @@ const {
   getLiveKitRoomName,
   normalizeLiveKitRoomPrefix,
   verifyAccessTokenBinding
-} = require('../src/domains/admission/livekit-token-binding');
+} = require('../src/domains/admission/livekit-token-binding.mts');
 const { createLiveKitAuthGateService } = require('../src/domains/admission/livekit-auth-gate-service');
 
 const NOW = Date.now();

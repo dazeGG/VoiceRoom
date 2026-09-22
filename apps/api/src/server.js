@@ -80,7 +80,8 @@ const {
   renderPrometheus
 } = require('./lib/metrics');
 const { createCredentialBoundaryService } = require('./domains/admission/credential-boundary-service');
-const { getLiveKitRoomName: liveKitRoomName } = require('./domains/admission/livekit-token-binding');
+const { getLiveKitRoomName: liveKitRoomName } = require('./domains/admission/livekit-token-binding.mts');
+const { isCrossOriginCookieWrite, isCrossOriginWebSocket } = require('./platform/http/origin-guard.mts');
 const { createLiveKitCredentialProvider } = require('./domains/admission/livekit-credential-provider');
 const { createMembershipRepository } = require('./domains/membership/membership-repository');
 const { createMembershipService } = require('./domains/membership/membership-service');
@@ -1252,58 +1253,6 @@ function clearSessionCookie() {
   const parts = [`${SESSION_COOKIE_NAME}=`, 'Path=/', 'HttpOnly', 'SameSite=Lax', 'Max-Age=0'];
   if (SESSION_COOKIE_SECURE) parts.push('Secure');
   return parts.join('; ');
-}
-
-function requestHost(req) {
-  const host = req.headers?.host;
-  return typeof host === 'string' ? host.toLowerCase() : '';
-}
-
-function originHost(value) {
-  if (typeof value !== 'string' || !value) return '';
-  try {
-    return new URL(value).host.toLowerCase();
-  } catch {
-    return '';
-  }
-}
-
-function requestHasUnsafeMethod(req) {
-  return !['GET', 'HEAD', 'OPTIONS'].includes(String(req.method || '').toUpperCase());
-}
-
-function hasValidSameOrigin(req) {
-  const host = requestHost(req);
-  if (!host) return false;
-  const origin = req.headers?.origin;
-  if (typeof origin === 'string' && origin) return originHost(origin) === host;
-  const referer = req.headers?.referer;
-  if (typeof referer === 'string' && referer) return originHost(referer) === host;
-  return true;
-}
-
-// A cookie-carrying write from another origin — including a sibling subdomain,
-// which SameSite=Lax treats as same-site — is refused. Browsers always attach
-// Origin to cross-origin unsafe requests, so a request with neither Origin nor
-// Referer is a non-browser client that cannot be a CSRF vehicle.
-function isCrossOriginCookieWrite(req) {
-  if (!requestHasUnsafeMethod(req)) return false;
-  if (!getSessionToken(req)) return false;
-  const hasBrowserOrigin = Boolean(req.headers?.origin || req.headers?.referer);
-  return hasBrowserOrigin && !hasValidSameOrigin(req);
-}
-
-// Browsers always send Origin on a WebSocket handshake and never enforce the
-// same-origin policy on it, so the server has to: a page on any other origin
-// could otherwise open an authenticated socket with the user's cookie and read
-// their DMs, presence and typing (cross-site WebSocket hijacking).
-function isCrossOriginWebSocket(req) {
-  const upgrade = String(req.headers?.upgrade || '').toLowerCase();
-  if (upgrade !== 'websocket') return false;
-  const origin = req.headers?.origin;
-  if (typeof origin !== 'string' || !origin) return false;
-  const host = requestHost(req);
-  return !host || originHost(origin) !== host;
 }
 
 function getLiveKitRoomName(roomId) {
@@ -5264,7 +5213,7 @@ function createApiApp({
       reply.raw.once('finish', () => request.raw.socket?.destroySoon?.());
       return;
     }
-    if (isCrossOriginCookieWrite(request.raw)) {
+    if (isCrossOriginCookieWrite(request.raw, Boolean(getSessionToken(request.raw)))) {
       reply.code(403).send({ ok: false, error: 'Cross-origin request rejected' });
       return;
     }

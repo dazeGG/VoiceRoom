@@ -2,7 +2,7 @@
 
 const crypto = require('node:crypto');
 const sharp = require('sharp');
-const { isAllowedImage } = require('./image-signature');
+const { isAllowedImage } = require('./image-signature.mts');
 
 const MAX_INPUT_PIXELS = 40 * 1024 * 1024;
 const MAX_SIDE = 640;
