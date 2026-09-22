@@ -168,6 +168,8 @@ GitHub-аналог GitLab CI/CD variables находится здесь:
 | `SESSION_COOKIE_SECURE` | auto in production | Обычно не задавать; true при HTTPS/prod. |
 | `AUTH_RATE_LIMIT` | `30` | Auth rate limit. |
 | `AUTH_RATE_WINDOW_MS` | `60000` | Auth rate window. |
+| `LOGIN_FAILURE_LIMIT` | `10` | Неудачных входов на один логин за окно, с любых адресов. Успешный вход сбрасывает счётчик. |
+| `LOGIN_FAILURE_WINDOW_MS` | `900000` | Окно счётчика неудачных входов на логин. |
 | `DM_RATE_LIMIT` | `30` | DM send rate limit per user. |
 | `DM_RATE_WINDOW_MS` | `10000` | DM rate window. |
 | `FRIEND_REQUEST_RATE_LIMIT` | `20` | Friend request rate limit per user. |

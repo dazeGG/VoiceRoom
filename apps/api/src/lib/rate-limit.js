@@ -49,4 +49,42 @@ function createRateLimiter({ limit, windowMs }) {
   return { check, entries };
 }
 
-module.exports = { getClientIp, createRateLimiter };
+// Counts only failures per key (for example failed logins per account), so an
+// attacker spread across many addresses still hits a ceiling on one account,
+// while the owner's successful sign-in clears the count. A limit or window of
+// <= 0 disables it.
+function createFailureLimiter({ limit, windowMs }) {
+  const entries = new Map();
+
+  function current(key, now) {
+    const entry = entries.get(key);
+    if (!entry) return null;
+    if (now - entry.startedAt >= windowMs) {
+      entries.delete(key);
+      return null;
+    }
+    return entry;
+  }
+
+  function status(key, now = Date.now()) {
+    if (limit <= 0 || windowMs <= 0) return { allowed: true, retryAfterSeconds: 0 };
+    const entry = current(key, now);
+    if (!entry || entry.count < limit) return { allowed: true, retryAfterSeconds: 0 };
+    return { allowed: false, retryAfterSeconds: Math.ceil((windowMs - (now - entry.startedAt)) / 1000) };
+  }
+
+  function recordFailure(key, now = Date.now()) {
+    if (limit <= 0 || windowMs <= 0) return;
+    const entry = current(key, now);
+    if (entry) entry.count += 1;
+    else entries.set(key, { count: 1, startedAt: now });
+  }
+
+  function reset(key) {
+    entries.delete(key);
+  }
+
+  return { entries, recordFailure, reset, status };
+}
+
+module.exports = { getClientIp, createFailureLimiter, createRateLimiter };

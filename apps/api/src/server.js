@@ -43,7 +43,7 @@ const {
   newRequestId,
   normalizeRequestId
 } = require('./lib/logger');
-const { getClientIp, createRateLimiter } = require('./lib/rate-limit');
+const { getClientIp, createFailureLimiter, createRateLimiter } = require('./lib/rate-limit');
 const { MAX_AVATAR_BYTES, createAvatarKey, processAvatar } = require('./lib/avatar-processing');
 const { reconcileAvatarStorage } = require('./lib/avatar-reconciliation');
 const { createAvatarStorage, validateAvatarKey } = require('./lib/avatar-storage');
@@ -216,6 +216,8 @@ const readinessProvider = createRuntimeReadinessProvider({
 });
 const AUTH_RATE_LIMIT = readEnvInt('AUTH_RATE_LIMIT', 30, 0);
 const AUTH_RATE_WINDOW_MS = readEnvInt('AUTH_RATE_WINDOW_MS', 60000, 1000);
+const LOGIN_FAILURE_LIMIT = readEnvInt('LOGIN_FAILURE_LIMIT', 10, 0);
+const LOGIN_FAILURE_WINDOW_MS = readEnvInt('LOGIN_FAILURE_WINDOW_MS', 900000, 1000);
 const GEOIP_DB_PATH = String(process.env.GEOIP_DB_PATH || '').trim();
 // Close code for sockets whose account session was ended; clients stop
 // reconnecting and return to the sign-in screen instead.
@@ -1049,6 +1051,10 @@ const ringLimiter = createRateLimiter({ limit: RING_RATE_LIMIT, windowMs: RING_R
 const authLimiter = createRateLimiter({
   limit: AUTH_RATE_LIMIT,
   windowMs: AUTH_RATE_WINDOW_MS
+});
+const loginFailureLimiter = createFailureLimiter({
+  limit: LOGIN_FAILURE_LIMIT,
+  windowMs: LOGIN_FAILURE_WINDOW_MS
 });
 const dmLimiter = createRateLimiter({
   limit: DM_RATE_LIMIT,
@@ -2237,11 +2243,27 @@ async function handleLogin(req, res) {
     return;
   }
 
+  // The per-IP limit above does nothing against credential stuffing from many
+  // addresses; this caps failed guesses per login regardless of source. It is
+  // keyed by the submitted login, existing or not, so it reveals nothing.
+  const accountRate = loginFailureLimiter.status(login);
+  if (!accountRate.allowed) {
+    sendJson(
+      res,
+      429,
+      { ok: false, error: 'Слишком много попыток, попробуйте позже' },
+      { 'Retry-After': String(accountRate.retryAfterSeconds) }
+    );
+    return;
+  }
+
   const user = await getUserStore().verifyCredentials(login, password);
   if (!user) {
+    loginFailureLimiter.recordFailure(login);
     sendJson(res, 401, { ok: false, error: 'Неверный логин или пароль' });
     return;
   }
+  loginFailureLimiter.reset(login);
   // The right password on an account waiting to be deleted offers a restore.
   if (user.deletionRequestedAt) {
     sendJson(res, 409, {
