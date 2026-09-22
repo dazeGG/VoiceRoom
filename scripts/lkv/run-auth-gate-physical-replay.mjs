@@ -114,7 +114,7 @@ async function mintCredentials({ pool }) {
   });
   livekit.addGrant({
     canPublish: true,
-    canPublishData: true,
+    canPublishData: false,
     canPublishSources: [TrackSource.MICROPHONE],
     canSubscribe: true,
     room: LIVEKIT_ROOM,

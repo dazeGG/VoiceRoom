@@ -46,3 +46,29 @@ Established sessions are removed best-effort through the existing application di
 - G06 and later successors may start only after the restarted G05 branch records a green proof and review envelope.
 - G47 and G48 must use the amended literal path catalogs and hostile matrix from the canonical plan/spec; they cannot infer another provider/topology or credential boundary.
 - The G04 replay harness remains useful because it preserves the pinned baseline evidence that triggered the boundary decision.
+
+## Amendment (2.6.5): the JWT is bound to the gate credential
+
+The 2.5.0 gate checked the gate credential and then tunnelled whatever LiveKit
+JWT rode along. The two were issued together but never compared, so a caller
+could pair a fresh credential with an old JWT: one minted before a server mute
+(microphone still granted), or one for a room they were since banned from.
+
+The gate now reads the JWT LiveKit will authenticate with (the `Authorization`
+header, else the single `access_token` query value) and refuses the upgrade
+unless `sub` is the credential's peer, `video.room` is the credential's room
+under `LIVEKIT_ROOM_PREFIX`, and `nbf` is not older than the credential. It
+does not verify the JWT signature; LiveKit still does. Tokens LiveKit refreshes
+for a connected participant carry a later `nbf` and keep passing.
+
+Two supporting changes close the remaining replay windows:
+
+- A server mute revokes the principal's gate credentials, so a reconnect has to
+  fetch a new admission, which the durable mute row keeps microphone-free.
+- The JWT TTL drops to 10 minutes (`LIVEKIT_TOKEN_TTL_SECONDS=600`). The gate
+  credential keeps its own, longer TTL (`LIVEKIT_GATE_CREDENTIAL_TTL_SECONDS`),
+  since it is revocable server-side and signal resumes reuse it.
+
+Admission is also no longer issued to a peer the room roster does not know
+(`/api/livekit-token` answers `409 not_in_room`), so every media participant is
+visible and moderatable.

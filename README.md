@@ -143,8 +143,10 @@ GitHub-аналог GitLab CI/CD variables находится здесь:
 | `LIVEKIT_PUBLIC_URL` | optional | Для dev compose, если внешний LiveKit port отличается. |
 | `TRUST_PROXY` | `true` в compose/proxy | Включать только за доверенным reverse proxy. |
 | `LOG_LEVEL` | `info` в production compose | Уровень JSON-логов API (`debug`, `info`, `warn`, `error`; `silent`/`off` выключают). Health-check запросы не пишутся в request-log. |
-| `LIVEKIT_TOKEN_TTL_SECONDS` | `21600` | TTL LiveKit token. |
-| `LIVEKIT_ROOM_PREFIX` | `voice-room-` | Prefix room id в LiveKit. |
+| `LIVEKIT_TOKEN_TTL_SECONDS` | `600` | TTL LiveKit JWT. Нужен только на время входа: подключённому участнику LiveKit сам продлевает токен, поэтому короткий TTL ограничивает жизнь утёкшего токена. |
+| `LIVEKIT_GATE_CREDENTIAL_TTL_SECONDS` | `21600` | TTL пропуска auth-gate. Пропуск отзывается на сервере (kick/ban/mute/выход) и нужен для resume и переподключений внутри звонка. |
+| `LIVEKIT_ROSTER_WAIT_MS` | `5000` | Сколько `/api/livekit-token` ждёт, пока realtime-join участника дойдёт до ростера комнаты. Токен выдаётся только участнику ростера. |
+| `LIVEKIT_ROOM_PREFIX` | `voice-room-` | Prefix room id в LiveKit. Должен совпадать у API и auth-gate: gate сверяет комнату в JWT с комнатой пропуска. |
 | `MAX_ROOM_PEERS` | `12` | Max peers per room. |
 | `MAX_ROOMS` | `100` | Общий лимит комнат. |
 | `MAX_EMPTY_ROOMS_PER_IP` | `3` | Legacy лимит временных empty rooms на IP. |

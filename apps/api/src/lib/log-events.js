@@ -59,6 +59,7 @@ const LOG_EVENTS = Object.freeze({
   LIVEKIT_PARTICIPANT_REMOVE_FAILED: 'livekit.participant_remove_failed',
   LIVEKIT_GATE_UPSTREAM_FAILED: 'livekit.gate_upstream_failed',
   LIVEKIT_GATE_AUTHORIZATION_FAILED: 'livekit.gate_authorization_failed',
+  LIVEKIT_GATE_DENIED: 'livekit.gate_denied',
 
   // Messaging and delivery.
   MESSAGE_EVENT_DISPATCH_FAILED: 'msg.event_dispatch_failed',

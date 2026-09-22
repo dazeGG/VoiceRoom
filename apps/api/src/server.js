@@ -78,6 +78,7 @@ const {
   renderPrometheus
 } = require('./lib/metrics');
 const { createCredentialBoundaryService } = require('./domains/admission/credential-boundary-service');
+const { getLiveKitRoomName: liveKitRoomName } = require('./domains/admission/livekit-token-binding');
 const { createLiveKitCredentialProvider } = require('./domains/admission/livekit-credential-provider');
 const { createMembershipRepository } = require('./domains/membership/membership-repository');
 const { createMembershipService } = require('./domains/membership/membership-service');
@@ -142,7 +143,14 @@ const KEEPALIVE_MS = readEnvInt('SSE_KEEPALIVE_MS', 15000, 1000);
 const DEFAULT_REALTIME_RECONNECT_LEASE_MS = 30000;
 const BODY_LIMIT_BYTES = readEnvInt('BODY_LIMIT_BYTES', 65536, 1024);
 const TRUST_PROXY = readEnvBool('TRUST_PROXY', false);
-const LIVEKIT_TOKEN_TTL_SECONDS = readEnvInt('LIVEKIT_TOKEN_TTL_SECONDS', 21600, 60);
+// The LiveKit JWT only has to survive the join: LiveKit refreshes it for a
+// connected participant, so a short TTL bounds how long a leaked token is
+// useful. The gate credential is revocable server-side and keeps the long TTL
+// that signal resumes and in-place reconnects rely on.
+const LIVEKIT_TOKEN_TTL_SECONDS = readEnvInt('LIVEKIT_TOKEN_TTL_SECONDS', 600, 60);
+const LIVEKIT_GATE_CREDENTIAL_TTL_SECONDS = readEnvInt('LIVEKIT_GATE_CREDENTIAL_TTL_SECONDS', 21600, 60);
+const LIVEKIT_ROSTER_WAIT_MS = readEnvInt('LIVEKIT_ROSTER_WAIT_MS', 5000, 0);
+const ROSTER_POLL_INTERVAL_MS = 50;
 const LIVEKIT_GATE_PUBLIC_URL = cleanLiveKitUrl(process.env.LIVEKIT_GATE_PUBLIC_URL || process.env.LIVEKIT_URL || '');
 const LIVEKIT_GATE_SECRET = (process.env.LIVEKIT_GATE_SECRET || '').trim();
 const ROOM_IDLE_TTL_MS = readEnvInt('ROOM_IDLE_TTL_MS', 900000, 1000);
@@ -780,7 +788,7 @@ function getCredentialBoundary() {
   credentialBoundary = createCredentialBoundaryService({
     roomStore: store,
     secret: LIVEKIT_GATE_SECRET,
-    credentialTtlMs: LIVEKIT_TOKEN_TTL_SECONDS * 1000
+    credentialTtlMs: LIVEKIT_GATE_CREDENTIAL_TTL_SECONDS * 1000
   });
   return credentialBoundary;
 }
@@ -3444,7 +3452,7 @@ async function setLiveKitParticipantMuted(roomId, peerId, muted) {
       }
     }
   } catch (error) {
-    if (/not.?found/i.test(String(error?.message || ''))) return { status: 'offline' };
+    if (isLiveKitParticipantAlreadyGone(error)) return { status: 'offline' };
     getProcessLogger().error({ evt: LOG_EVENTS.LIVEKIT_MUTE_FAILED, roomId, peerId, err: error }, 'failed to apply a LiveKit server mute');
     if (muted) {
       try {
@@ -3633,6 +3641,19 @@ async function handleKickRoomPeer(req, res, roomId) {
   sendJson(res, 200, { ok: true });
 }
 
+async function revokeGateCredentialsForServerMute(roomId, peer, principal) {
+  const boundary = getCredentialBoundary();
+  if (!boundary) return;
+  try {
+    await boundary.revokePrincipal({ roomId, principal });
+  } catch (error) {
+    // The live SFU permission is still narrowed below; only a later reconnect
+    // with the old admission would regain the microphone.
+    recordCredentialRevokeCleanupFailure();
+    getProcessLogger().error({ evt: LOG_EVENTS.LIVEKIT_MUTE_FAILED, roomId, peerId: peer.id, err: error }, 'failed to revoke gate credentials for a server mute');
+  }
+}
+
 // Owner-only microphone mute. `muted` in the body picks the direction so the
 // menu can toggle without tracking which endpoint to call.
 async function handleServerMuteRoomPeer(req, res, roomId) {
@@ -3671,6 +3692,10 @@ async function handleServerMuteRoomPeer(req, res, roomId) {
   // the participant decides when to speak again.
   if (muted) peer.muted = true;
 
+  // Every gate credential issued before the mute was paired with a JWT that
+  // still grants the microphone. Revoke them so a reconnect has to fetch a
+  // fresh admission, which the durable mute row keeps microphone-free.
+  if (muted) await revokeGateCredentialsForServerMute(room.id, peer, principal);
   await setLiveKitParticipantMuted(room.id, peer.id, muted);
 
   const event = { type: 'peer-updated', peer: publicPeer(peer) };

@@ -9,6 +9,7 @@ const { createCredentialBoundaryService } = require('./credential-boundary-servi
 const { createRoomStore } = require('../../lib/room-store');
 const { LOG_EVENTS } = require('../../lib/log-events');
 const { createLogger } = require('../../lib/logger');
+const { normalizeLiveKitRoomPrefix, verifyAccessTokenBinding } = require('./livekit-token-binding');
 
 const DEFAULT_GATE_PATH = '/rtc';
 
@@ -81,6 +82,7 @@ function createLiveKitAuthGateService({
   gatePath = DEFAULT_GATE_PATH,
   logger = createLogger({ name: 'api' }),
   pool,
+  roomPrefix = normalizeLiveKitRoomPrefix(),
   roomStore,
   secret,
   upstreamUrl = process.env.LIVEKIT_INTERNAL_URL || process.env.LIVEKIT_URL || 'ws://127.0.0.1:7880'
@@ -94,12 +96,19 @@ function createLiveKitAuthGateService({
     signer: createGateCredentialSigner({ secret })
   });
 
-  async function authorize(requestUrl) {
+  // With `headers` the LiveKit JWT that rides along must belong to the same
+  // admission as the gate credential (see livekit-token-binding.js). The
+  // upgrade handler always passes them; credential-only callers are proofs that
+  // exercise the boundary service in isolation.
+  async function authorize(requestUrl, headers) {
     const { credential, strippedPath } = extractCredential(requestUrl);
     const result = await credentialBoundary.authorizeCredential(credential);
-    return result.ok
-      ? { ok: true, claims: result.claims, strippedPath }
-      : { ok: false, code: result.code, strippedPath };
+    if (!result.ok) return { ok: false, code: result.code, strippedPath };
+    if (headers !== undefined) {
+      const binding = verifyAccessTokenBinding({ claims: result.claims, requestUrl, headers, roomPrefix });
+      if (!binding.ok) return { ok: false, code: binding.code, strippedPath };
+    }
+    return { ok: true, claims: result.claims, strippedPath };
   }
 
   function createServer() {
@@ -128,14 +137,16 @@ function createLiveKitAuthGateService({
         deny(socket, 404, 'Not Found');
         return;
       }
-      authorize(request.url)
+      authorize(request.url, request.headers || {})
         .then((decision) => {
           if (!decision.ok) {
+            logger.warn({ evt: LOG_EVENTS.LIVEKIT_GATE_DENIED, code: decision.code }, 'LiveKit gate denied an upgrade');
             deny(socket, 403, 'Forbidden');
             return;
           }
           if (!isSocketWritable(socket)) return;
           const upstreamSocket = net.connect({
+            noDelay: true,
             host: upstream.hostname,
             port: Number(upstream.port || (upstream.protocol === 'wss:' ? 443 : 80))
           });

@@ -36,9 +36,12 @@ function createLiveKitCredentialProvider({
     });
     const canPublishSources = [TrackSource.SCREEN_SHARE, TrackSource.SCREEN_SHARE_AUDIO];
     if (canPublishMicrophone !== false) canPublishSources.unshift(TrackSource.MICROPHONE);
+    // Chat, reactions and presence travel over the API, never LiveKit data
+    // packets, and the client binds no data handler. Granting data would only
+    // let a modified client flood everyone in the room.
     token.addGrant({
       canPublish: true,
-      canPublishData: true,
+      canPublishData: false,
       canPublishSources,
       canSubscribe: true,
       room: livekitRoom,
