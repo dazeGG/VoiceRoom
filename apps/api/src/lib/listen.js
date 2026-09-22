@@ -2,11 +2,13 @@
 
 const fs = require('node:fs');
 const net = require('node:net');
+const { LOG_EVENTS } = require('./log-events');
+const { createLogger } = require('./logger');
 
 function startApiListener({
   exit = process.exit,
   host = '127.0.0.1',
-  logger = console,
+  logger = createLogger({ name: 'api' }),
   port = 3000,
   server,
   socketPath = ''
@@ -17,18 +19,18 @@ function startApiListener({
 
   function logListenAddress(mode, address) {
     if (mode === 'unix') {
-      logger.log(`Voice Room API is listening on unix://${address}`);
+      logger.info({ evt: LOG_EVENTS.LISTENING, transport: 'unix', address }, 'Voice Room API is listening');
       return;
     }
 
     const actual = typeof address === 'object' && address ? address : null;
     const listenHost = actual?.address || host;
     const listenPort = actual?.port || port;
-    logger.log(`Voice Room API is listening on http://${listenHost}:${listenPort}`);
+    logger.info({ evt: LOG_EVENTS.LISTENING, transport: 'tcp', host: listenHost, port: listenPort }, 'Voice Room API is listening');
   }
 
   function failToStart(error) {
-    logger.error('Voice Room API failed to start:', error);
+    logger.fatal({ evt: LOG_EVENTS.BOOTSTRAP_FAILED, err: error }, 'Voice Room API failed to start');
     if (typeof process !== 'undefined') {
       process.exitCode = 1;
     }
@@ -90,8 +92,13 @@ function startApiListener({
       }
 
       if (error && (error.code === 'EPERM' || error.code === 'EACCES' || error.code === 'ENOTSUP')) {
-        logger.warn(`Unable to bind unix socket at ${socketPath}: ${error.message}`);
-        logger.warn(`Falling back to TCP listen on ${host}:${port}`);
+        logger.warn({
+          evt: LOG_EVENTS.LISTEN_FALLBACK,
+          socketPath,
+          host,
+          port,
+          err: error
+        }, 'unable to bind the unix socket; falling back to a TCP listen');
         listenOnTcp();
         return;
       }

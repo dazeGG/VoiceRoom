@@ -8,6 +8,9 @@
   import { openParticipantContextMenu } from '../participant-context-ui.svelte';
   import { toggleParticipantFocus } from '../participants-ui.svelte';
   import type { Participant } from '../client/core/types';
+  import { createLogger, errorContext } from '$lib/shared/log';
+
+  const log = createLogger('room:participant');
 
   let { participant, variant = 'grid' }: { participant: Participant; variant?: 'grid' | 'focus' | 'strip' } = $props();
 
@@ -28,7 +31,7 @@
   // spotlights are mutually exclusive, so entering one leaves the other.
   function activateParticipant(): void {
     if (roomState.viewedScreenPeerId) {
-      void leaveScreenView({ quiet: true, keepPreview: true }).catch((error) => console.error(error));
+      void leaveScreenView({ quiet: true, keepPreview: true }).catch((error) => log.error('screen view action failed', errorContext(error)));
     }
     toggleParticipantFocus(participant.id);
   }
@@ -40,7 +43,7 @@
 
   function handleScreenAction(event: MouseEvent): void {
     event.stopPropagation();
-    void enterScreenView(participant.id).catch((error) => console.error(error));
+    void enterScreenView(participant.id).catch((error) => log.error('screen view action failed', errorContext(error)));
   }
 
   function handleContextMenu(event: MouseEvent): void {

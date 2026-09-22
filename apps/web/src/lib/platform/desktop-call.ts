@@ -1,3 +1,7 @@
+import { createLogger, errorContext } from '$lib/shared/log';
+
+const log = createLogger('desktop:call');
+
 export interface DesktopCallState {
   active: boolean;
   roomId: string;
@@ -40,7 +44,7 @@ export function syncDesktopCallState(state: DesktopCallState): void {
     .then(() => bridge.setState(payload))
     .catch((error) => {
       if (lastSentKey === key) lastSentKey = '';
-      console.warn('Desktop call state sync failed', error);
+      log.warn('desktop call state sync failed', errorContext(error));
     });
 }
 

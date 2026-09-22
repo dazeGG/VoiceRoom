@@ -83,6 +83,9 @@
   import './styles/friends.css';
   import './styles/settings.css';
   import './styles/lobby-v2.css';
+  import { createLogger, errorContext } from '$lib/shared/log';
+
+  const log = createLogger('lobby');
 
   let { user, loggingOut, onLogout, onToast } = $props<{
     user: AuthUser | null;
@@ -143,7 +146,7 @@
   function closeAppPrompt(): void {
     appPromptOpen = false;
     appPromptDone = true;
-    void markAppPromptSeen().catch((error) => console.warn('App prompt was not recorded', error));
+    void markAppPromptSeen().catch((error) => log.warn('app prompt was not recorded', errorContext(error)));
   }
   const selectedRoom = $derived(rooms.find((room) => room.roomId === selectedRoomId) ?? null);
   const previewSettingsRoom = $derived(rooms.find((room) => room.roomId === previewSettingsRoomId) ?? null);

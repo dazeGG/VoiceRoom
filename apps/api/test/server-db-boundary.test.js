@@ -11,6 +11,22 @@ const http = require('node:http');
 const { __private, createApiServer } = require('../src/server');
 const { openWs, joinVoiceRoom, sendWs, waitForWsType } = require('./ws-harness');
 
+// A logger that records the structured fields, so a test can assert the API
+// observed a failure instead of swallowing it: Fastify's own logger is silent
+// under the test environment.
+function createCapturingLogger(records) {
+  const record = (level) => (fields, msg) => records.push({ level, ...fields, msg });
+  return {
+    debug: record('debug'),
+    error: record('error'),
+    fatal: record('fatal'),
+    info: record('info'),
+    trace: record('trace'),
+    warn: record('warn')
+  };
+}
+
+
 function deferred() {
   let resolve;
   let reject;
@@ -184,9 +200,7 @@ test('server logs mark-empty failures instead of creating unhandled rejections',
   };
 
   const errors = [];
-  const originalError = console.error;
-  console.error = (...args) => errors.push(args);
-  const server = createApiServer({ store });
+  const server = createApiServer({ store, logger: createCapturingLogger(errors) });
   const port = await listen(server);
   const voice = openWs(port);
   await voice.ready;
@@ -203,12 +217,12 @@ test('server logs mark-empty failures instead of creating unhandled rejections',
       peerId: 'peer0002',
       sessionToken: 'goodtoken12345678901234567890123'
     });
-    for (let attempt = 0; attempt < 50 && errors.length === 0; attempt += 1) {
+    const persistFailed = () => errors.some((entry) => entry.evt === 'room.occupancy_persist_failed');
+    for (let attempt = 0; attempt < 50 && !persistFailed(); attempt += 1) {
       await new Promise((resolve) => setTimeout(resolve, 10));
     }
-    assert.equal(errors.some((entry) => String(entry[0]).includes('Failed to persist room occupancy')), true);
+    assert.equal(persistFailed(), true);
   } finally {
-    console.error = originalError;
     voice.ws.close();
     await close(server);
   }
@@ -313,9 +327,7 @@ test('pruning retries failed active occupancy before sweeping dynamic rooms', as
   };
 
   const errors = [];
-  const originalError = console.error;
-  console.error = (...args) => errors.push(args);
-  const server = createApiServer({ store });
+  const server = createApiServer({ store, logger: createCapturingLogger(errors) });
   const port = await listen(server);
   const voice = openWs(port);
   await voice.ready;
@@ -336,9 +348,8 @@ test('pruning retries failed active occupancy before sweeping dynamic rooms', as
     assert.equal(activeAttempts, 2);
     assert.equal((await store.getRoom(roomId))?.emptySince, null);
     assert.ok(await store.getRoom(roomId));
-    assert.equal(errors.some((entry) => String(entry[0]).includes('Failed to persist room occupancy')), true);
+    assert.equal(errors.some((entry) => entry.evt === 'room.occupancy_persist_failed'), true);
   } finally {
-    console.error = originalError;
     voice.ws.close();
     await close(server);
   }

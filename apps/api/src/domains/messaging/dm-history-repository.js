@@ -1,6 +1,7 @@
 'use strict';
 
 const { createDbPool } = require('../../lib/db');
+const { createLogger } = require('../../lib/logger');
 
 function boundedLimit(value) {
   return Math.max(1, Math.min(100, Number.isInteger(value) ? value : 50));
@@ -25,7 +26,7 @@ function mapDirectMessage(row) {
   };
 }
 
-function createDmHistoryRepository({ databaseUrl, logger = console, pool } = {}) {
+function createDmHistoryRepository({ databaseUrl, logger = createLogger({ name: 'api' }), pool } = {}) {
   let activePool = pool || null;
 
   function getPool() {

@@ -90,6 +90,40 @@ test('createApiApp exposes a Fastify app with inject-based routes', async (t) =>
   assert.equal('roomPresetKey' in legacyVisualRoom.json(), false);
 });
 
+// Legacy handlers hijack the reply and write to the raw response themselves,
+// so a header set on the Fastify reply never reaches the client. The id is the
+// only thing tying a user's report to a request, and it is useless unless the
+// client actually receives it.
+test('every response carries the request id the server logged it under', async (t) => {
+  const app = createApiApp({ store: createFakeStore() });
+  t.after(() => app.close());
+
+  const generated = await app.inject({ method: 'GET', url: '/api/healthz' });
+  assert.match(generated.headers['x-request-id'] || '', /^[A-Za-z0-9._-]{1,64}$/);
+
+  const supplied = await app.inject({
+    method: 'GET',
+    url: '/api/healthz',
+    headers: { 'x-request-id': 'probe-abc_123.4' }
+  });
+  assert.equal(supplied.headers['x-request-id'], 'probe-abc_123.4');
+
+  // An id that could forge a log line is replaced rather than echoed.
+  const forged = `bad id${String.fromCharCode(10)}level=30`;
+  const hostile = await app.inject({
+    method: 'GET',
+    url: '/api/healthz',
+    headers: { 'x-request-id': forged }
+  });
+  assert.notEqual(hostile.headers['x-request-id'], forged);
+  assert.match(hostile.headers['x-request-id'] || '', /^[A-Za-z0-9._-]{1,64}$/);
+
+  // A 4xx is exactly the response a user is most likely to report.
+  const missing = await app.inject({ method: 'GET', url: '/api/does-not-exist' });
+  assert.equal(missing.statusCode, 404);
+  assert.match(missing.headers['x-request-id'] || '', /^[A-Za-z0-9._-]{1,64}$/);
+});
+
 test('healthz fails readiness when capability snapshot is unavailable', async (t) => {
   const app = createApiApp({
     store: createFakeStore(),

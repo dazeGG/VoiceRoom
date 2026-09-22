@@ -33,6 +33,8 @@ async function loadScreenAudioControls() {
     export const getScreenStage = () => null;
     export const getScreenVideo = () => null;
     export const getStreamVolumeSlider = () => null;
+    export const createLogger = () => ({ debug() {}, info() {}, warn() {}, error() {} });
+    export const errorContext = (error) => ({ errorMessage: String(error) });
   `);
   const path = 'src/lib/features/room/client/ui/screen-stage-controls.ts';
   const source = readFileSync(resolve(root, path), 'utf8').replace(/from '[^']+'/g, `from '${stubUrl}'`);

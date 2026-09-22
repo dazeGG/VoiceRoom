@@ -4,6 +4,7 @@ const crypto = require('node:crypto');
 const { createDbPool, transaction } = require('./db');
 const { cleanAvatarColorKey, cleanPresenceStatus } = require('@voice-room/shared/validation');
 const { normalizeLinkPreview } = require('@voice-room/shared/link-preview');
+const { createLogger } = require('./logger');
 
 function toMillis(value) {
   if (value == null) return null;
@@ -78,7 +79,7 @@ function escapeLike(term) {
   return term.replace(/[\\%_]/g, (ch) => `\\${ch}`);
 }
 
-function createFriendStore({ databaseUrl, logger = console, pool } = {}) {
+function createFriendStore({ databaseUrl, logger = createLogger({ name: 'api' }), pool } = {}) {
   let activePool = pool || null;
   function getPool() {
     if (!activePool) {

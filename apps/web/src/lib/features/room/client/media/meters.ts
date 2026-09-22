@@ -12,6 +12,10 @@ import { isGateDisabled } from '../services/microphone-service';
 import { bumpParticipantsRevision } from '../../participants-ui.svelte';
 import type { Participant } from '../core/types';
 
+import { createLogger, errorContext } from '$lib/shared/log';
+
+const log = createLogger('room:meters');
+
 let meterFrame = 0;
 
 function refreshMicrophoneLevelMeterSoon(levelDb: number): void {
@@ -29,7 +33,7 @@ export function attachMeter(participant: Participant | null, stream: MediaStream
     participant.analyser = analyser;
     participant.meterData = new Uint8Array(analyser.frequencyBinCount);
   } catch (error) {
-    console.warn('Audio meter unavailable', error);
+    log.warn('audio meter unavailable', errorContext(error));
   }
 }
 

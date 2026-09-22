@@ -5,6 +5,9 @@
   import { getDesktopBoundaryPolicy } from '$lib/platform/desktop-boundary';
   import { Button } from '$lib/shared/ui';
   import { leaveScreenUi } from '../leave-screen.svelte';
+  import { createLogger, errorContext } from '$lib/shared/log';
+
+  const log = createLogger('room:leave');
 
   let authMode = $state<AuthMode | null>(null);
   // `/` is desktop-only, so a phone never leaves this page on its own.
@@ -32,7 +35,7 @@
       try {
         await addRoomByCode(leaveScreenUi.roomId);
       } catch (error) {
-        console.error('[voice-room] save left room to new account', error);
+        log.error('save left room to new account failed', errorContext(error));
       }
     }
     if (mobile) {

@@ -41,6 +41,10 @@ import {
 } from './ui/screen-view';
 import { closeScreenSourceOnEscape } from './ui/screen-source-picker';
 
+import { createLogger, errorContext, installGlobalErrorCapture, reportClientLogs } from '$lib/shared/log';
+
+const log = createLogger('room');
+
 
 let mounted = false;
 let mountAbortController: AbortController | null = null;
@@ -52,6 +56,9 @@ export function mountRoomClient(_root: ParentNode = document, options: { roomId?
   if (!isRoomClientAllowed()) return () => {};
   if (mounted) return unmountRoomClient;
   mounted = true;
+  // The room is where the failures that matter happen, so the capture starts
+  // with it rather than globally at app boot.
+  installGlobalErrorCapture();
   mountAbortController = new AbortController();
   const listenerSignal = mountAbortController.signal;
   activeVoiceLeaveTeardown = registerActiveVoiceLeave(leaveRoom);
@@ -203,7 +210,10 @@ export function mountRoomClient(_root: ParentNode = document, options: { roomId?
         if (ready && options.autoJoin) return joinRoom();
       })
       .catch((error) => {
-        console.error(error);
+        log.error('room client failed', errorContext(error));
+        // The user is now looking at a failure screen; send what led to it
+        // while the buffer still holds the device and connection records.
+        void reportClientLogs('room client failed to start');
         showRoomEntryFailure();
         showToast('Не удалось проверить комнату');
       });

@@ -7,6 +7,10 @@ import { showScreenSourcePicker } from '../ui/screen-source-picker';
 import { setLocalAppAudioSuppressed } from './media-playback-service';
 import type { DesktopAudioCapture, DesktopPickerSelection, ScreenProfile, ScreenSourceSelection, ScreenStreamMode } from '../core/types';
 
+import { createLogger, errorContext } from '$lib/shared/log';
+
+const log = createLogger('room:screen-capture');
+
 interface CaptureAttemptDetail {
   error: unknown;
   method: string;
@@ -155,7 +159,7 @@ async function openDesktopScreenShare(profile: ScreenProfile): Promise<ScreenSha
       stream.addTrack(audioCapture.track);
       state.localScreenAudioCapture = audioCapture;
     } catch (error) {
-      console.warn('Native desktop audio capture failed, continuing without stream audio', error);
+      log.warn('native desktop audio capture failed, continuing without stream audio', errorContext(error));
       showToast('Стрим запущен без звука: безопасный системный звук недоступен', {
         duration: 9000,
         variant: 'error'
@@ -184,7 +188,7 @@ async function openDesktopScreenShare(profile: ScreenProfile): Promise<ScreenSha
       throw error;
     }
     audioCaptureError = error;
-    console.warn('Desktop audio capture unavailable, retrying without audio', error);
+    log.warn('desktop audio capture unavailable, retrying without audio', errorContext(error));
     try {
       stream = await openDesktopStream(source.id, selectedProfile, { audio: false, audioMode: 'none' });
     } catch (videoError) {
@@ -248,7 +252,7 @@ async function openStagedDesktopScreenShare(profile: ScreenProfile, withAudio: b
     stream.addTrack(audioCapture.track);
     state.localScreenAudioCapture = audioCapture;
   } catch (error) {
-    console.warn('Native desktop audio capture failed, continuing without stream audio', error);
+    log.warn('native desktop audio capture failed, continuing without stream audio', errorContext(error));
     showToast('Стрим запущен без звука: безопасный системный звук недоступен', {
       duration: 9000,
       variant: 'error'
@@ -423,7 +427,7 @@ function stopDesktopSafeAudioCapture(capture: DesktopAudioCapture | null): void 
   disconnectAudioNode(capture.destination);
   capture.audioContext?.close?.().catch(() => {});
   stopDesktopAudioSession(capture.sessionId).catch((error) => {
-    console.warn('Native desktop audio stop failed', error);
+    log.warn('native desktop audio stop failed', errorContext(error));
   });
 }
 
@@ -446,7 +450,7 @@ async function openDesktopStream(
       return await attempt.open();
     } catch (error) {
       errors.push({ error, method: attempt.method });
-      console.warn(`Desktop capture failed via ${attempt.method}`, error);
+      log.warn(`Desktop capture failed via ${attempt.method}`, errorContext(error));
     }
   }
 
@@ -603,7 +607,7 @@ export async function applyScreenCaptureProfile(stream: MediaStream, profile: Sc
       const result = await bridge.applyProfile({ fpsId: profile.fpsId, qualityId: profile.qualityId });
       if (result?.ok) return;
     } catch (error) {
-      console.warn('Desktop applyProfile failed, falling back to constraints', error);
+      log.warn('desktop applyProfile failed, falling back to constraints', errorContext(error));
     }
   }
 
@@ -617,6 +621,6 @@ export async function applyScreenCaptureProfile(stream: MediaStream, profile: Sc
     }
     await videoTrack.applyConstraints(constraints);
   } catch (error) {
-    console.warn('Screen capture constraints unavailable', error);
+    log.warn('screen capture constraints unavailable', errorContext(error));
   }
 }

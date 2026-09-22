@@ -21,6 +21,10 @@ import { showToast } from '../ui/toast';
 import { disconnectAudioNode, stopStream } from '../core/utils';
 import type { MicProcessor, MicrophoneCapture } from '../core/types';
 
+import { createLogger, errorContext } from '$lib/shared/log';
+
+const log = createLogger('room:mic');
+
 type GateNode = AudioNode & { setThreshold?: (threshold: number) => void };
 
 interface NoiseGateEnvelope {
@@ -104,7 +108,7 @@ export async function openLocalMicrophone(): Promise<MicrophoneCapture> {
   try {
     capture = await applyNoiseGateToCapture(await createNoiseSuppressedStream(rawStream));
   } catch (error) {
-    console.warn('RNNoise unavailable', error);
+    log.warn('RNNoise unavailable', errorContext(error));
     stopStream(rawStream);
     setNoiseMode('browser');
     showToast('RNNoise недоступен, включен браузерный шумодав');
@@ -196,7 +200,7 @@ async function applyNoiseGateToCapture(capture: MicrophoneCapture): Promise<Micr
       stream: gated.stream
     };
   } catch (error) {
-    console.warn('Noise gate unavailable', error);
+    log.warn('noise gate unavailable', errorContext(error));
     showToast('Гейт недоступен, микрофон работает без него');
     return capture;
   }
@@ -271,7 +275,7 @@ async function createNoiseGateNode(context: AudioContext, threshold: number): Pr
       };
       return node;
     } catch (error) {
-      console.warn('AudioWorklet gate unavailable, using ScriptProcessor', error);
+      log.warn('AudioWorklet gate unavailable, using ScriptProcessor', errorContext(error));
     }
   }
 

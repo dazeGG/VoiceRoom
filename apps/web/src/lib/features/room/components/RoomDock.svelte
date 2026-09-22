@@ -44,6 +44,9 @@
   import { setMicrophoneVolume } from '../client/services/microphone-service';
 
   import { screenUi } from '../screen-ui.svelte';
+  import { createLogger, errorContext } from '$lib/shared/log';
+
+  const log = createLogger('room:dock');
 
   const connection = $derived(getConnectionStatusView());
   const callControls = $derived(getCallControlsView());
@@ -291,7 +294,7 @@
       type="button"
       aria-label="Выйти со стрима"
       hidden={!screenUi.showScreenExit}
-      onclick={() => leaveScreenView({ keepPreview: false }).catch((error) => console.error(error))}
+      onclick={() => leaveScreenView({ keepPreview: false }).catch((error) => log.error('screen view action failed', errorContext(error)))}
     >
       <ScreenShareOff aria-hidden="true" />
     </button>

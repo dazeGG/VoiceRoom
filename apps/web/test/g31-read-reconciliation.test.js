@@ -54,6 +54,6 @@ test('G31-A03 two tabs accept repeated newer cursors and suppress identical or o
 
 test('G31 realtime reconciliation failures stay non-blocking but observable', () => {
   const source = readFileSync(new URL('../src/lib/features/room/components/RoomChatPanel.svelte', import.meta.url), 'utf8');
-  assert.match(source, /catch \(cause\) \{\s*console\.error\('Failed to reconcile realtime room read cursor', cause\);/);
+  assert.match(source, /catch \(cause\) \{\s*log\.error\('failed to reconcile realtime room read cursor', errorContext\(cause\)\);/);
   assert.doesNotMatch(source, /markRealtimeRenderedRead[\s\S]*?catch \{\}/);
 });

@@ -3,6 +3,8 @@
 const crypto = require('node:crypto');
 const { firstPreviewableUrl, normalizeLinkPreview } = require('@voice-room/shared/link-preview');
 const { decodeHtmlBody, extractLinkPreviewMetadata } = require('../../lib/link-preview-html');
+const { LOG_EVENTS } = require('../../lib/log-events');
+const { createLogger } = require('../../lib/logger');
 
 const READY_TTL_MS = 24 * 60 * 60 * 1000;
 const FAILED_TTL_MS = 60 * 60 * 1000;
@@ -20,7 +22,7 @@ function createLinkPreviewService({
   processImage,
   onRoomPreview = async () => {},
   onDirectPreview = async () => {},
-  logger = console,
+  logger = createLogger({ name: 'api' }),
   now = Date.now
 }) {
   const inflight = new Map();
@@ -114,7 +116,7 @@ function createLinkPreviewService({
 
   function inBackground(task) {
     void task().catch((error) => {
-      logger.warn?.('Link preview failed:', error?.message || error);
+      logger.warn({ evt: LOG_EVENTS.LINK_PREVIEW_FAILED, err: error }, 'link preview fetch failed');
     });
   }
 

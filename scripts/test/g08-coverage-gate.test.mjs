@@ -103,6 +103,7 @@ const SERVER_INTERNAL_COVERAGE_SCRIPT = String.raw`
     getLiveKitCredentialProvider: () => ({ issueAdmission: async () => ({ status: "issued", admission: {} }) }),
     getMembershipServices: () => ({ service: { persistSuccessfulAdmission: async () => ({ created: false, status: "active" }) } }),
     getLiveKitRoomName: (roomId) => "voice-room-" + roomId,
+    logAdmissionDenied: () => {},
     getRoom: async () => ({ peers: new Map() }),
     getRoomStore: () => store,
     normalizePeerId: (value) => value,

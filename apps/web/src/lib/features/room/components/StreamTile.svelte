@@ -7,6 +7,9 @@
   import { playMediaElement } from '../client/services/media-playback-service';
   import { enterScreenView } from '../client/ui/screen-view';
   import type { Participant } from '../client/core/types';
+  import { createLogger, errorContext } from '$lib/shared/log';
+
+  const log = createLogger('room:stream');
 
   let {
     participant,
@@ -44,7 +47,7 @@
 
   function handleEnter(event?: Event): void {
     event?.stopPropagation();
-    void enterScreenView(participant.id).catch((error) => console.error(error));
+    void enterScreenView(participant.id).catch((error) => log.error('screen view action failed', errorContext(error)));
   }
 
   $effect(() => {

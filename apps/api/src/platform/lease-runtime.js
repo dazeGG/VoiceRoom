@@ -1,6 +1,8 @@
 'use strict';
 
 const crypto = require('node:crypto');
+const { LOG_EVENTS } = require('../lib/log-events');
+const { createLogger } = require('../lib/logger');
 
 const DEFAULT_LEASE_MS = 30_000;
 const DEFAULT_RENEW_MS = 10_000;
@@ -91,7 +93,7 @@ function createLeaseRuntime({
   idleMs = DEFAULT_IDLE_MS,
   jitter = 0,
   leaseMs = DEFAULT_LEASE_MS,
-  logger = console,
+  logger = createLogger({ name: 'worker' }),
   maxBackoffMs = DEFAULT_MAX_BACKOFF_MS,
   onHeartbeat = () => {},
   ownerId = crypto.randomUUID(),
@@ -154,7 +156,7 @@ function createLeaseRuntime({
         fencingToken: lease.fencingToken,
         identity,
         ownerId
-      }).catch((error) => logger.warn?.('Unable to release fenced lease:', error));
+      }).catch((error) => logger.warn({ evt: LOG_EVENTS.WORKER_HEARTBEAT_FAILED, identity, stage: 'release', err: error }, 'unable to release a fenced lease'));
     }
   }
 
@@ -177,7 +179,7 @@ function createLeaseRuntime({
         await holdLease(lease);
       } catch (error) {
         if (runtimeController.signal.aborted) break;
-        if (!(error instanceof LeaseLostError)) logger.error?.('Fenced lease iteration failed:', error);
+        if (!(error instanceof LeaseLostError)) logger.error({ evt: LOG_EVENTS.WORKER_FAILED, identity, stage: 'iteration', err: error }, 'fenced lease iteration failed');
         failures = Math.min(failures + 1, 20);
         await sleep(boundedBackoff(failures, { baseMs: idleMs, maxMs: maxBackoffMs, jitter }), runtimeController.signal)
           .catch(() => {});

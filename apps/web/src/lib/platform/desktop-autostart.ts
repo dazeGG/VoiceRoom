@@ -1,3 +1,10 @@
+// The explicit extension is required because desktop-autostart.test.js imports
+// this module natively under Node, where neither the `$lib` alias nor an
+// extensionless specifier resolves.
+import { createLogger, errorContext } from '../shared/log.ts';
+
+const log = createLogger('desktop:autostart');
+
 export interface DesktopAutostartSettings {
   openAtLogin: boolean;
   startMinimized: boolean;
@@ -35,7 +42,7 @@ export async function readDesktopAutostartSettings(): Promise<DesktopAutostartSe
   try {
     return normalizeSettings(await bridge.getSettings());
   } catch (error) {
-    console.warn('Desktop autostart settings read failed', error);
+    log.warn('desktop autostart settings read failed', errorContext(error));
     return null;
   }
 }
@@ -51,7 +58,7 @@ export async function updateDesktopAutostartSettings(
   try {
     return normalizeSettings(await bridge.setSettings(payload));
   } catch (error) {
-    console.warn('Desktop autostart settings update failed', error);
+    log.warn('desktop autostart settings update failed', errorContext(error));
     return null;
   }
 }

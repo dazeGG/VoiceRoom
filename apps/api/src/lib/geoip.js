@@ -2,6 +2,8 @@
 
 const fs = require('node:fs');
 const net = require('node:net');
+const { LOG_EVENTS } = require('./log-events');
+const { createLogger } = require('./logger');
 
 const LOCATION_LABEL_MAX_LENGTH = 120;
 
@@ -38,20 +40,20 @@ function formatLocation(record) {
 // MaxMind-format database (DB-IP City Lite in production). The address is only
 // read here: it is never stored or sent anywhere. Without a database every
 // lookup answers '' and the list simply shows no location.
-function createGeoLocator({ databasePath = '', logger = console, openReader } = {}) {
+function createGeoLocator({ databasePath = '', logger = createLogger({ name: 'api' }), openReader } = {}) {
   let readerPromise = null;
 
   function loadReader() {
     if (!databasePath) return Promise.resolve(null);
     readerPromise ||= (async () => {
       if (!fs.existsSync(databasePath)) {
-        logger.warn?.(`GeoIP database not found at ${databasePath}; device locations are disabled`);
+        logger.warn({ evt: LOG_EVENTS.GEOIP_UNAVAILABLE, databasePath, reason: 'missing' }, 'GeoIP database not found; device locations are disabled');
         return null;
       }
       const open = openReader || ((path) => require('maxmind').open(path));
       return open(databasePath);
     })().catch((error) => {
-      logger.error?.('Failed to open GeoIP database:', error);
+      logger.error({ evt: LOG_EVENTS.GEOIP_UNAVAILABLE, databasePath, reason: 'open_failed', err: error }, 'failed to open the GeoIP database');
       return null;
     });
     return readerPromise;

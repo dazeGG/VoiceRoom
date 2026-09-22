@@ -75,7 +75,17 @@ Key API metrics:
 | `voice_room_api_maintenance_duration_seconds_*{task}` | Room/session prune and retention purge duration/count |
 | `voice_room_api_pg_pool_errors_total` | Unexpected PostgreSQL pool errors |
 
-API logs are structured JSON through Fastify/pino. `LOG_LEVEL` defaults to `info` in production compose; health checks are intentionally omitted from request logs.
+API logs are structured JSON through Fastify/pino, and so are the worker and LiveKit auth gate logs. `LOG_LEVEL` defaults to `info` in production compose; health checks are intentionally omitted from request logs. Every record carries a stable `evt` code, and every response carries an `x-request-id` header matching the `reqId` in its log record, so a user report maps to a single request.
+
+Browser log intake (`POST /api/client-logs`) is off by default and adds no storage: accepted records are re-emitted into the same log stream as `client.report`. Enable it per environment with:
+
+```dotenv
+CLIENT_LOG_INTAKE_ENABLED=true
+CLIENT_LOG_RATE_LIMIT=6
+CLIENT_LOG_RATE_WINDOW_MS=60000
+```
+
+The full contract — event codes, levels, redaction and how to chase a specific failure — is in [`LOGGING.md`](LOGGING.md).
 
 ## Start on the VoiceRoom server
 

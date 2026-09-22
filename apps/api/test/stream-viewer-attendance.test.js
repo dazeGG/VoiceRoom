@@ -26,6 +26,20 @@ function createPeer(id, overrides = {}) {
   };
 }
 
+// The runtime logs through an injected logger, so a test that asserts a failure
+// was observed records the structured fields instead of the console.
+function createCapturingLogger(records) {
+  const record = (level) => (fields, msg) => records.push({ level, ...fields, msg });
+  return {
+    debug: record('debug'),
+    error: record('error'),
+    fatal: record('fatal'),
+    info: record('info'),
+    trace: record('trace'),
+    warn: record('warn')
+  };
+}
+
 function createRuntime(room, broadcasts, overrides = {}) {
   const store = {
     async getRoom() { return null; },
@@ -51,6 +65,7 @@ function createRuntime(room, broadcasts, overrides = {}) {
   return createRoomRealtimeRuntime({
     presenceRooms: overrides.presenceRooms || new Map([[room.id, room]]),
     wsRegistry,
+    logger: overrides.logger,
     getRoomStore: () => store,
     getRoom: overrides.getRoom || (async () => room),
     publicPeer: (peer) => ({
@@ -419,9 +434,8 @@ test('committed join still returns a correlated snapshot when occupancy persiste
   const room = { id: ROOM_ID, name: 'Room', peers: new Map() };
   const sent = [];
   const errors = [];
-  const originalError = console.error;
-  console.error = (...args) => errors.push(args);
   const runtime = createRuntime(room, [], {
+    logger: createCapturingLogger(errors),
     queueRoomOccupancyTransition: async () => {
       throw new Error('occupancy unavailable');
     },
@@ -451,9 +465,9 @@ test('committed join still returns a correlated snapshot when occupancy persiste
     assert.equal(room.peers.has(OWNER_ID), true);
     assert.equal(sent.at(-1)?.type, 'room.snapshot');
     assert.equal(sent.at(-1)?.id, 'recovery-request-1');
-    assert.equal(errors.some((entry) => String(entry[0]).includes('Failed to persist room occupancy')), true);
+    assert.equal(errors.some((entry) => entry.evt === 'room.occupancy_persist_failed'), true);
   } finally {
-    console.error = originalError;
+    errors.length = 0;
   }
 });
 

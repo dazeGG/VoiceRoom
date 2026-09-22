@@ -1,3 +1,7 @@
+import { createLogger, errorContext } from '$lib/shared/log';
+
+const log = createLogger('desktop:attention');
+
 export interface DesktopBadgeInput {
   rooms: readonly { roomId: string; unreadCount?: number }[];
   roomUnreadById: Readonly<Record<string, number>>;
@@ -47,6 +51,6 @@ export function syncDesktopBadgeCount(count: number): void {
     .then(() => bridge.setBadgeCount(next))
     .catch((error) => {
       if (lastSentCount === next) lastSentCount = null;
-      console.warn('Desktop badge sync failed', error);
+      log.warn('desktop badge sync failed', errorContext(error));
     });
 }
