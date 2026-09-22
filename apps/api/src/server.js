@@ -3092,10 +3092,15 @@ async function handleRoomStatus(res, url) {
 
 // Read-only snapshot of who is currently in a room. Powers the lobby's room
 // preview ("how the room looks before you enter") without creating a peer.
-async function handleRoomPeers(res, roomId) {
+async function handleRoomPeers(req, res, roomId) {
   const room = await getRoom(roomId);
   if (!room) {
     sendJson(res, 404, { ok: false, error: 'Room not found', roomId });
+    return;
+  }
+  const sessionUser = await resolveOptionalSessionUser(req);
+  if (await findRoomBan(roomId, sessionUser?.id, getClientIp(req, TRUST_PROXY))) {
+    sendRoomBanned(res, roomId);
     return;
   }
   sendJson(res, 200, {
@@ -3162,10 +3167,18 @@ async function handleState(req, res) {
   sendJson(res, 200, { ok: true, peer: publicPeer(peer) });
 }
 
-async function handleRoomChatList(res, roomId) {
+// The room link is the capability for guests, so this list stays readable to
+// anyone who can join — but not to someone the room has banned, who can no
+// longer join either. Account members use the paginated history route.
+async function handleRoomChatList(req, res, roomId) {
   const room = await getRoom(roomId);
   if (!room) {
     sendJson(res, 404, { ok: false, error: 'Room not found', roomId });
+    return;
+  }
+  const sessionUser = await resolveOptionalSessionUser(req);
+  if (await findRoomBan(roomId, sessionUser?.id, getClientIp(req, TRUST_PROXY))) {
+    sendRoomBanned(res, roomId);
     return;
   }
 
@@ -5496,11 +5509,11 @@ function createApiApp({
     const roomId = normalizeRoomId(request.params.roomId);
     return handleRoomStatus(res, new URL(`/rooms/${roomId}`, 'http://localhost'));
   }));
-  app.get('/api/rooms/:roomId/peers', (request, reply) => runLegacyHandler(request, reply, (_req, res) => {
-    return handleRoomPeers(res, normalizeRoomId(request.params.roomId));
+  app.get('/api/rooms/:roomId/peers', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
+    return handleRoomPeers(req, res, normalizeRoomId(request.params.roomId));
   }));
-  app.get('/api/rooms/:roomId/chat', (request, reply) => runLegacyHandler(request, reply, (_req, res) => {
-    return handleRoomChatList(res, normalizeRoomId(request.params.roomId));
+  app.get('/api/rooms/:roomId/chat', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
+    return handleRoomChatList(req, res, normalizeRoomId(request.params.roomId));
   }));
   app.post('/api/rooms/:roomId/chat', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
     return handleRoomChatPost(req, res, normalizeRoomId(request.params.roomId));
