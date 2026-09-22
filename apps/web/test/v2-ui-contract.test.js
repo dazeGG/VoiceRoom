@@ -786,10 +786,14 @@ test('screen share publish tuning applies codec, bitrate, degradation and conten
   assert.match(config, /balanced:[\s\S]*15: 3_000_000[\s\S]*30: 5_000_000/);
   assert.match(config, /high:[\s\S]*15: 4_000_000[\s\S]*30: 7_000_000/);
   assert.match(config, /source:[\s\S]*5: 1_800_000[\s\S]*source: true/);
-  assert.doesNotMatch(config, /60:[\s\S]*contentHint: 'motion'[\s\S]*frameRate: 60/);
+  // 60 FPS is an opt-in for the motion mode; the default stays 30.
+  assert.match(config, /60: \{\s*contentHint: 'motion',\s*frameRate: 60/);
+  assert.doesNotMatch(profiles, /if \(fpsId === '60'\) return '30'/);
+  // Text prefers VP9's screen tools, motion H.264; degradation is set at publish.
+  assert.match(profiles, /contentHint === 'detail' \? \['vp9', 'h264'\] as const : \['h264', 'vp9'\] as const/);
+  assert.match(profiles, /degradationPreference: getScreenDegradationPreference\(profile\.contentHint\)/);
+  assert.match(livekit, /dtx: false, forceStereo: true, red: false/);
   assert.match(config, /SCREEN_SIMULCAST_LAYER = \{[\s\S]*height: 540[\s\S]*width: 960[\s\S]*5: 500_000[\s\S]*30: 1_500_000/);
-  assert.match(profiles, /return 'h264'/);
-  assert.match(profiles, /return 'vp9'/);
   assert.match(profiles, /return 'vp8'/);
   assert.match(profiles, /getScreenDegradationPreference/);
   assert.match(capture, /videoTrack\.contentHint = profile\.contentHint/);

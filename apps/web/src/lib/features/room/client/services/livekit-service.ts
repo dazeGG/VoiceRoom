@@ -601,7 +601,9 @@ async function publishLocalScreenTracksForRoom(
     if (!isCurrent()) break;
     const publication = await room.localParticipant.publishTrack(track, {
       audioPreset: track.kind === 'audio' ? { maxBitrate: SCREEN_AUDIO_BITRATE } : undefined,
-      ...(track.kind === 'audio' ? { dtx: false } : {}),
+      // Shared audio is music and game sound: keep it stereo and continuous,
+      // and skip RED, which would double a 192 kbps stream for little gain.
+      ...(track.kind === 'audio' ? { dtx: false, forceStereo: true, red: false } : {}),
       name: track.kind === 'video' ? 'screen' : 'screen-audio',
       ...(videoOptions ?? {}),
       source: track.kind === 'video' ? videoOptions!.source : TRACK_SOURCE.ScreenShareAudio as Track.Source,

@@ -113,7 +113,8 @@ export const SCREEN_QUALITY_OPTIONS: Record<string, ScreenQualityOption> = {
     bitrateByFps: {
       5: 1_200_000,
       15: 3_000_000,
-      30: 5_000_000
+      30: 5_000_000,
+      60: 7_500_000
     },
     height: 720,
     id: 'balanced',
@@ -124,7 +125,8 @@ export const SCREEN_QUALITY_OPTIONS: Record<string, ScreenQualityOption> = {
     bitrateByFps: {
       5: 1_800_000,
       15: 4_000_000,
-      30: 7_000_000
+      30: 7_000_000,
+      60: 10_000_000
     },
     height: 1080,
     id: 'high',
@@ -135,7 +137,8 @@ export const SCREEN_QUALITY_OPTIONS: Record<string, ScreenQualityOption> = {
     bitrateByFps: {
       5: 1_800_000,
       15: 3_000_000,
-      30: 7_000_000
+      30: 7_000_000,
+      60: 10_000_000
     },
     height: 0,
     id: 'source',
@@ -148,14 +151,15 @@ export const SCREEN_QUALITY_OPTIONS: Record<string, ScreenQualityOption> = {
 export const SCREEN_QUALITY_ORDER = ['balanced', 'high'];
 export const SCREEN_SOURCE_BASE_BITRATE = 1_800_000;
 export const SCREEN_SOURCE_BASE_PIXELS = 1920 * 1080;
-export const SCREEN_SOURCE_MAX_BITRATE = 8_000_000;
+export const SCREEN_SOURCE_MAX_BITRATE = 12_000_000;
 export const SCREEN_SIMULCAST_LAYER = {
   height: 540,
   width: 960,
   bitrateByFps: {
     5: 500_000,
     15: 1_000_000,
-    30: 1_500_000
+    30: 1_500_000,
+    60: 2_000_000
   }
 } as const;
 
@@ -184,5 +188,11 @@ export const SCREEN_FPS_OPTIONS: Record<string, ScreenFpsOption> = {
     frameRate: 30,
     id: '30',
     label: '30 FPS'
+  },
+  60: {
+    contentHint: 'motion',
+    frameRate: 60,
+    id: '60',
+    label: '60 FPS'
   }
 };

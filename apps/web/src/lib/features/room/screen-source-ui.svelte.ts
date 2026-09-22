@@ -7,6 +7,7 @@ export const screenSourceUi = $state({
   selectedSourceId: null as string | null,
   mode: 'games' as 'games' | 'text',
   quality: 'balanced' as 'balanced' | 'high',
+  fps: '30' as '30' | '60',
   audio: true,
   popOpen: false,
 });

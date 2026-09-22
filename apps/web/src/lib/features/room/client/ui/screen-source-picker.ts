@@ -19,6 +19,7 @@ export function showScreenSourcePicker(sources: DesktopCaptureSource[]): Promise
     const currentMode = state.localScreenMode;
     screenSourceUi.mode = currentMode === 'text' ? 'text' : 'games';
     screenSourceUi.quality = state.localScreenQualityId === 'high' ? 'high' : 'balanced';
+    screenSourceUi.fps = state.localScreenFpsId === '60' ? '60' : '30';
     screenSourceUi.audio = true;
     screenSourceUi.popOpen = false;
 
@@ -30,7 +31,7 @@ export function confirmScreenSourcePicker(): void {
   const source = screenSourceUi.sources.find((s) => s.id === screenSourceUi.selectedSourceId);
   if (!source) return;
 
-  const fpsId = screenSourceUi.mode === 'text' ? '5' : '30';
+  const fpsId = screenSourceUi.mode === 'text' ? '5' : screenSourceUi.fps;
   const qualityId = screenSourceUi.mode === 'text' ? 'source' : screenSourceUi.quality;
   const profileId = createScreenProfileId(qualityId, fpsId);
 

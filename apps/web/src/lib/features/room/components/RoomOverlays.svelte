@@ -35,7 +35,7 @@
   ));
   const selectedSource = $derived(screenSourceUi.sources.find((s) => s.id === screenSourceUi.selectedSourceId));
   const qualityLabel = $derived(screenSourceUi.mode === 'text' ? 'Источник' : screenSourceUi.quality === 'high' ? '1080p' : '720p');
-  const fpsLabel = $derived(screenSourceUi.mode === 'text' ? '5 к/с' : '30 к/с');
+  const fpsLabel = $derived(screenSourceUi.mode === 'text' ? '5 к/с' : `${screenSourceUi.fps} к/с`);
   const summaryName = $derived(selectedSource?.name ?? 'Не выбрано');
   const summaryDetail = $derived(`${screenSourceUi.mode === 'text' ? 'Текст' : screenSourceUi.quality === 'high' ? 'HD' : 'SD'} · ${qualityLabel} · ${fpsLabel}${screenSourceUi.audio ? ' · звук' : ''}`);
 
@@ -207,6 +207,19 @@
             onclick={() => { screenSourceUi.quality = 'high'; }}
           >HD</button>
         </div>
+        <div class="screen-source-res-toggle" role="group" aria-label="Частота кадров">
+          <button
+            class="screen-source-res-btn"
+            aria-pressed={screenSourceUi.fps === '30'}
+            onclick={() => { screenSourceUi.fps = '30'; }}
+          >30</button>
+          <button
+            class="screen-source-res-btn"
+            aria-pressed={screenSourceUi.fps === '60'}
+            title="60 к/с: плавнее, но вдвое больше нагрузки на кодирование и сеть"
+            onclick={() => { screenSourceUi.fps = '60'; }}
+          >60</button>
+        </div>
         {/if}
 
         <!-- Settings gear + popover -->
@@ -234,7 +247,7 @@
                 </span>
                 <span class="screen-source-pop-info">
                   <span class="screen-source-pop-title">Плавное видео</span>
-                  <span class="screen-source-pop-desc">30 к/с · для игр и видео</span>
+                  <span class="screen-source-pop-desc">30–60 к/с · для игр и видео</span>
                 </span>
                 <span class="screen-source-pop-radio" aria-hidden="true">
                   {#if screenSourceUi.mode === 'games'}<span class="screen-source-pop-dot"></span>{/if}
