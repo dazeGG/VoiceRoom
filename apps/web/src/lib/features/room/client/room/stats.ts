@@ -3,15 +3,19 @@ import { state } from '../core/state.svelte';
 import { findFirstLocalPublication, findLocalMicrophonePublication } from '../services/livekit-service';
 import { setParticipantSpeaking } from './participants';
 
+import { createLogger, errorContext } from '$lib/shared/log';
+
+const log = createLogger('room:stats');
+
 let peerLatencyTimer = 0;
 let speakingStatsTimer = 0;
 
 export function startPeerLatencyStats(): void {
   if (peerLatencyTimer) return;
 
-  updatePeerLatencyStats().catch((error) => console.warn('Peer latency unavailable', error));
+  updatePeerLatencyStats().catch((error) => log.warn('peer latency unavailable', errorContext(error)));
   peerLatencyTimer = window.setInterval(() => {
-    updatePeerLatencyStats().catch((error) => console.warn('Peer latency unavailable', error));
+    updatePeerLatencyStats().catch((error) => log.warn('peer latency unavailable', errorContext(error)));
   }, PEER_LATENCY_INTERVAL_MS);
 }
 
@@ -35,7 +39,7 @@ async function updateLocalLiveKitLatency(): Promise<void> {
       state.localPingMs = Math.max(0, Math.round(rttMs));
     }
   } catch (error) {
-    console.warn('LiveKit latency unavailable', error);
+    log.warn('liveKit latency unavailable', errorContext(error));
   }
 }
 
@@ -71,7 +75,7 @@ export function startSpeakingStats(): void {
   if (speakingStatsTimer) return;
 
   const tick = () => {
-    updateSpeakingStats().catch((error) => console.warn('Speaking stats unavailable', error));
+    updateSpeakingStats().catch((error) => log.warn('speaking stats unavailable', errorContext(error)));
   };
   speakingStatsTimer = window.setInterval(tick, SPEAKING_STATS_INTERVAL_MS);
   tick();

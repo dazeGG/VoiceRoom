@@ -8,6 +8,10 @@ import { state } from '../core/state.svelte';
 import { getSharedAudioContext, isAppPlaybackMuted, isLocalAppAudioSuppressed, queueAudioUnlock } from '../services/media-playback-service';
 import { getAudioBusInput } from '../services/audio-bus';
 
+import { createLogger, errorContext } from '$lib/shared/log';
+
+const log = createLogger('room:cues');
+
 const peerJoinCueTimes = new Map<string, number>();
 const streamViewerCueTimes = new Map<string, number>();
 
@@ -60,7 +64,7 @@ function playCueSequence(notes: CueNote[], label: string): void {
       });
     });
   } catch (error) {
-    console.warn(`${label} sound unavailable`, error);
+    log.warn(`${label} sound unavailable`, errorContext(error));
   }
 }
 
@@ -187,7 +191,7 @@ export function playPeerCue(type: 'join' | 'leave'): void {
       });
     });
   } catch (error) {
-    console.warn('Peer sound unavailable', error);
+    log.warn('peer sound unavailable', errorContext(error));
   }
 }
 
@@ -234,7 +238,7 @@ export function playMicCue(muted: boolean): void {
       });
     });
   } catch (error) {
-    console.warn('Mic sound unavailable', error);
+    log.warn('mic sound unavailable', errorContext(error));
   }
 }
 
@@ -273,7 +277,7 @@ export function playOutputCue(muted: boolean): void {
       });
     });
   } catch (error) {
-    console.warn('Output sound unavailable', error);
+    log.warn('output sound unavailable', errorContext(error));
   }
 }
 
@@ -313,7 +317,7 @@ export function playStreamCue(type: 'start' | 'stop'): void {
       });
     });
   } catch (error) {
-    console.warn('Stream sound unavailable', error);
+    log.warn('stream sound unavailable', errorContext(error));
   }
 }
 
@@ -380,6 +384,6 @@ export function playStreamViewerCue(type: 'join' | 'leave'): void {
       gain.disconnect();
     });
   } catch (error) {
-    console.warn('Stream viewer sound unavailable', error);
+    log.warn('stream viewer sound unavailable', errorContext(error));
   }
 }

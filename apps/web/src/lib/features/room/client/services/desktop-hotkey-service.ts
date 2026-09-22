@@ -5,6 +5,10 @@ import {
   type HotkeyAction
 } from '../core/hotkeys';
 
+import { createLogger, errorContext } from '$lib/shared/log';
+
+const log = createLogger('desktop:hotkey');
+
 export type DesktopGlobalHotkeyAction = HotkeyAction;
 export type DesktopGlobalHotkeyPhase = 'pressed' | 'released';
 
@@ -170,7 +174,7 @@ export async function syncDesktopGlobalHotkeys(active = voiceActive): Promise<De
       pendingRegistrationStatus = null;
       finishPendingSync(generation, null);
     }
-    console.warn('Desktop hotkey sync failed', error);
+    log.warn('desktop hotkey sync failed', errorContext(error));
     return null;
   }
 }
@@ -181,7 +185,7 @@ export async function setDesktopGlobalHotkeysSuspended(suspended: boolean): Prom
   try {
     await bridge.setSuspended(Boolean(suspended));
   } catch (error) {
-    console.warn('Desktop hotkey suspension failed', error);
+    log.warn('desktop hotkey suspension failed', errorContext(error));
   }
 }
 

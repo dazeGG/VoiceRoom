@@ -20,6 +20,9 @@
     handleGuestNameSubmit,
     syncGuestNameDialogInert
   } from '../client/ui/names';
+  import { createLogger, errorContext } from '$lib/shared/log';
+
+  const log = createLogger('room:overlays');
 
   let guestNameDialog: HTMLDivElement | undefined;
   let guestNameInput: HTMLInputElement | undefined;
@@ -290,5 +293,5 @@
   id="soundButton"
   type="button"
   hidden={!startUi.soundButtonVisible}
-  onclick={() => unlockAudio().catch((error) => console.warn('Audio unlock failed', error))}
+  onclick={() => unlockAudio().catch((error) => log.warn('audio unlock failed', errorContext(error)))}
 >Разрешить звук</button>

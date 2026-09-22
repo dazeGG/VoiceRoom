@@ -29,6 +29,10 @@ import {
 } from '../ui/screen-view';
 import type { ParsedScreenStats, ScreenProfile, ScreenStatsPrevious, ScreenStreamMode } from '../core/types';
 
+import { createLogger, errorContext } from '$lib/shared/log';
+
+const log = createLogger('room:screen-share');
+
 export async function handleScreenButtonClick(): Promise<void> {
   if (state.localScreenStream) {
     await stopScreenShare();
@@ -78,7 +82,7 @@ export async function startScreenShare(profileId: string = getSelectedScreenProf
     state.screenStopping = false;
     setLocalAppAudioSuppressed(false);
     videoTrack.addEventListener('ended', () => {
-      stopScreenShare().catch((error) => console.error(error));
+      stopScreenShare().catch((error) => log.error('screen share failed', errorContext(error)));
     });
     await publishLocalScreenTracks();
     await applyLocalScreenEncodingProfile(profile);
@@ -101,9 +105,9 @@ export async function startScreenShare(profileId: string = getSelectedScreenProf
     showScreenShareStartedToast(profile);
   } catch (error) {
     const cancelled = isCaptureCancelled(error);
-    if (!cancelled) console.error(error);
+    if (!cancelled) log.error('screen share failed', errorContext(error));
     if (state.localScreenStream) {
-      await stopScreenShare({ notify: false, quiet: true }).catch((cleanupError) => console.error(cleanupError));
+      await stopScreenShare({ notify: false, quiet: true }).catch((cleanupError) => log.error('screen share failed', errorContext(cleanupError)));
     } else {
       setLocalAppAudioSuppressed(false);
     }
@@ -187,9 +191,9 @@ export function stopLocalScreenStream(): void {
 
 function startLocalScreenStatsMonitor(): void {
   stopLocalScreenStatsMonitor({ refresh: false });
-  updateLocalScreenStats().catch((error) => console.warn('Screen stats unavailable', error));
+  updateLocalScreenStats().catch((error) => log.warn('screen stats unavailable', errorContext(error)));
   state.localScreenStatsTimer = window.setInterval(() => {
-    updateLocalScreenStats().catch((error) => console.warn('Screen stats unavailable', error));
+    updateLocalScreenStats().catch((error) => log.warn('screen stats unavailable', errorContext(error)));
   }, SCREEN_STATS_INTERVAL_MS);
 }
 

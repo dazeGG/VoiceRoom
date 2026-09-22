@@ -1,3 +1,7 @@
+import { createLogger, errorContext } from '$lib/shared/log';
+
+const log = createLogger('desktop:overlay');
+
 export const OVERLAY_ANCHORS = ['top-left', 'top-right', 'bottom-left', 'bottom-right'] as const;
 export type OverlayAnchor = (typeof OVERLAY_ANCHORS)[number];
 export const OVERLAY_AVATAR_SIZES = ['small', 'medium', 'large'] as const;
@@ -82,7 +86,7 @@ export async function readDesktopOverlaySettings(): Promise<DesktopOverlaySettin
   try {
     return normalizeOverlaySettings(await bridge.getSettings());
   } catch (error) {
-    console.warn('Desktop overlay settings read failed', error);
+    log.warn('desktop overlay settings read failed', errorContext(error));
     return null;
   }
 }
@@ -101,7 +105,7 @@ export async function updateDesktopOverlaySettings(
   try {
     return normalizeOverlaySettings(await bridge.setSettings(payload));
   } catch (error) {
-    console.warn('Desktop overlay settings update failed', error);
+    log.warn('desktop overlay settings update failed', errorContext(error));
     return null;
   }
 }
@@ -124,7 +128,7 @@ export async function readDesktopOverlayForeground(): Promise<DesktopOverlayFore
   try {
     return normalizeForeground(await bridge.getForeground());
   } catch (error) {
-    console.warn('Desktop overlay foreground read failed', error);
+    log.warn('desktop overlay foreground read failed', errorContext(error));
     return null;
   }
 }
@@ -135,7 +139,7 @@ export async function addDesktopOverlayGame(exe?: string): Promise<DesktopOverla
   try {
     return normalizeOverlaySettings(await bridge.addGame(exe));
   } catch (error) {
-    console.warn('Desktop overlay add game failed', error);
+    log.warn('desktop overlay add game failed', errorContext(error));
     return null;
   }
 }
@@ -146,7 +150,7 @@ export async function removeDesktopOverlayGame(exe: string): Promise<DesktopOver
   try {
     return normalizeOverlaySettings(await bridge.removeGame(exe));
   } catch (error) {
-    console.warn('Desktop overlay remove game failed', error);
+    log.warn('desktop overlay remove game failed', errorContext(error));
     return null;
   }
 }
@@ -164,6 +168,6 @@ export function syncDesktopOverlaySnapshot(participants: DesktopOverlayParticipa
     .then(() => bridge.setSnapshot(payload))
     .catch((error) => {
       if (lastSnapshotKey === key) lastSnapshotKey = '';
-      console.warn('Desktop overlay snapshot sync failed', error);
+      log.warn('desktop overlay snapshot sync failed', errorContext(error));
     });
 }

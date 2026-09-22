@@ -1,3 +1,7 @@
+import { createLogger, errorContext } from '$lib/shared/log';
+
+const log = createLogger('desktop:diagnostics');
+
 export interface DesktopDiagnosticsContext {
   userId: string;
   roomId: string;
@@ -22,7 +26,7 @@ export async function openDesktopLogsFolder(): Promise<boolean> {
     const result = await bridge.openLogsFolder();
     return (result as { ok?: unknown } | null)?.ok === true;
   } catch (error) {
-    console.warn('Desktop logs folder failed to open', error);
+    log.warn('desktop logs folder failed to open', errorContext(error));
     return false;
   }
 }
@@ -35,7 +39,7 @@ export async function copyDesktopDiagnostics(): Promise<boolean> {
     const result = await bridge.copyInfo();
     return (result as { ok?: unknown } | null)?.ok === true;
   } catch (error) {
-    console.warn('Desktop diagnostics copy failed', error);
+    log.warn('desktop diagnostics copy failed', errorContext(error));
     return false;
   }
 }
@@ -51,6 +55,6 @@ export function syncDesktopDiagnosticsContext(context: DesktopDiagnosticsContext
     .then(() => bridge.setContext(payload))
     .catch((error) => {
       if (lastContextKey === key) lastContextKey = '';
-      console.warn('Desktop diagnostics context sync failed', error);
+      log.warn('desktop diagnostics context sync failed', errorContext(error));
     });
 }

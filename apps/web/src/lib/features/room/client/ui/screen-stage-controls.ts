@@ -17,6 +17,10 @@ import {
 } from '../../screen-ui.svelte';
 import type { Participant } from '../core/types';
 
+import { createLogger, errorContext } from '$lib/shared/log';
+
+const log = createLogger('room:screen-stage');
+
 const SCREEN_UI_IDLE_MS = 1000;
 let screenUiIdleTimer = 0;
 let screenStagePointerInside = false;
@@ -155,7 +159,7 @@ export async function toggleScreenFullscreen(): Promise<void> {
         return;
       } catch (error) {
         if (!hasDesktopWindowControls()) throw error;
-        console.warn('Stage fullscreen unavailable, using desktop window fullscreen', error);
+        log.warn('stage fullscreen unavailable, using desktop window fullscreen', errorContext(error));
       }
     }
 
@@ -165,7 +169,7 @@ export async function toggleScreenFullscreen(): Promise<void> {
       showToast('Полноэкранный режим недоступен');
     }
   } catch (error) {
-    console.error(error);
+    log.error('screen stage action failed', errorContext(error));
     showToast('Не удалось переключить полноэкранный режим');
   }
 }

@@ -14,6 +14,10 @@ import {
   unlockAudioBus
 } from './audio-bus';
 
+import { createLogger, errorContext } from '$lib/shared/log';
+
+const log = createLogger('room:playback');
+
 export { getSharedAudioContext } from './audio-bus';
 
 function syncScreenVideoAudioSoon(): void {
@@ -49,7 +53,7 @@ export function applyRemoteParticipantAudioPreferences(peer: Participant): void 
         queueAudioUnlock({ showFallback: true });
       }
     } catch (error) {
-      console.warn('Participant audio routing unavailable', error);
+      log.warn('participant audio routing unavailable', errorContext(error));
     }
     playMediaElement(audio);
   }
@@ -90,7 +94,7 @@ export function applyScreenMediaElementVolume(
     if (routed) playMediaElement(mediaElement);
     return routed;
   } catch (error) {
-    console.warn('Stream audio routing unavailable', error);
+    log.warn('stream audio routing unavailable', errorContext(error));
     mediaElement.muted = true;
     return false;
   }
@@ -130,7 +134,7 @@ function hasPendingStreamWatchGate(): boolean {
 
 export function handleAudioUnlockGesture(): void {
   if (!shouldAttemptAudioUnlock()) return;
-  unlockAudio().catch((error) => console.warn('Audio unlock failed', error));
+  unlockAudio().catch((error) => log.warn('audio unlock failed', errorContext(error)));
 }
 
 function shouldAttemptAudioUnlock(): boolean {

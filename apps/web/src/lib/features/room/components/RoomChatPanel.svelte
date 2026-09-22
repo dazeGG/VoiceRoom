@@ -63,6 +63,9 @@
   import MentionAutocomplete from '$lib/shared/chat/MentionAutocomplete.svelte';
   import { getRoomMembership, loadRoomMembership } from '$lib/features/home/model/room-membership.svelte';
   import type { MembershipMember } from '@voice-room/shared/membership';
+  import { createLogger, errorContext } from '$lib/shared/log';
+
+  const log = createLogger('room:chat');
 
   // The one room chat. The in-room rail and the lobby preview differ only in how
   // the viewer is identified and in who owns the surrounding panel chrome, so
@@ -762,7 +765,7 @@
       await tick();
       await markLatestRenderedRead();
     } catch (cause) {
-      console.error('Failed to reconcile realtime room read cursor', cause);
+      log.error('failed to reconcile realtime room read cursor', errorContext(cause));
     }
   }
 

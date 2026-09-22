@@ -1,6 +1,10 @@
 import { RealtimeRecoveryController, classifyRecoveryFailure } from './realtime-recovery.js';
 import { requestActiveVoiceResync, setActiveVoiceResyncFailureHandler } from '$lib/features/home/model/room-realtime';
 
+import { createLogger, reportClientLogs, type LogContext } from '$lib/shared/log';
+
+const log = createLogger('room:recovery');
+
 export type RecoveryAttemptOutcome = {
   ok?: boolean;
   retryable?: boolean;
@@ -16,8 +20,29 @@ let controller: RealtimeRecoveryController | null = null;
 let liveKitAdapter: RoomRecoveryLiveKitAdapter | null = null;
 const transitionHandlers = new Set<(event: Readonly<Record<string, unknown>>) => void>();
 
+// The recovery state machine already emits a flat record of primitives per
+// transition, which is exactly the trail needed to tell a brief blip from a
+// call that never came back. Every transition is buffered; only the terminal
+// failure is raised and reported, so the ordinary reconnect stays quiet.
 function logTransition(event: Record<string, unknown>): void {
-  if (import.meta.env.DEV) console.debug('room_recovery_transition', event);
+  const context: LogContext = {
+    epoch: Number(event.epoch) || 0,
+    trigger: String(event.trigger ?? ''),
+    phase: String(event.phase ?? ''),
+    attempt: Number(event.attempt) || 0,
+    elapsed: String(event.elapsed ?? ''),
+    status: Number(event.status) || 0,
+    code: String(event.code ?? ''),
+    result: String(event.result ?? '')
+  };
+
+  if (event.phase === 'failed') {
+    log.warn('room recovery failed', context);
+    void reportClientLogs(`room recovery failed: ${context.code}`);
+  } else {
+    log.debug('room recovery transition', context);
+  }
+
   for (const handler of transitionHandlers) handler(event);
 }
 
