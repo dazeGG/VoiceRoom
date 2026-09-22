@@ -16,7 +16,7 @@ import {
 import { buildHeaderPolicy, renderCaddySnippet } from '../scripts/emit-caddy-csp.mjs';
 
 const repositoryRoot = fileURLToPath(new URL('../../../', import.meta.url));
-const caddyImage = 'caddy:2.11.3-alpine';
+const caddyImage = 'caddy:2.11.4-alpine';
 const dockerAvailable = spawnSync('docker', ['version', '--format', '{{.Server.Version}}'], {
   encoding: 'utf8'
 }).status === 0;

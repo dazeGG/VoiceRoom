@@ -146,6 +146,9 @@ GitHub-аналог GitLab CI/CD variables находится здесь:
 | `LIVEKIT_TOKEN_TTL_SECONDS` | `600` | TTL LiveKit JWT. Нужен только на время входа: подключённому участнику LiveKit сам продлевает токен, поэтому короткий TTL ограничивает жизнь утёкшего токена. |
 | `LIVEKIT_GATE_CREDENTIAL_TTL_SECONDS` | `21600` | TTL пропуска auth-gate. Пропуск отзывается на сервере (kick/ban/mute/выход) и нужен для resume и переподключений внутри звонка. |
 | `LIVEKIT_ROSTER_WAIT_MS` | `5000` | Сколько `/api/livekit-token` ждёт, пока realtime-join участника дойдёт до ростера комнаты. Токен выдаётся только участнику ростера. |
+| `TURN_ENABLED` | `false` | Включает TURN/TLS на общем `:443` и TURN/UDP на `3478` (см. «TURN/TLS на 443»). |
+| `TURN_DOMAIN` | пусто | DNS-имя TURN, обязательно при `TURN_ENABLED=true`. |
+| `LIVEKIT_MAX_PARTICIPANTS` | `24` | Лимит участников на стороне SFU — страховка поверх `MAX_ROOM_PEERS` с запасом на переподключения. |
 | `LIVEKIT_ROOM_PREFIX` | `voice-room-` | Prefix room id в LiveKit. Должен совпадать у API и auth-gate: gate сверяет комнату в JWT с комнатой пропуска. |
 | `MAX_ROOM_PEERS` | `12` | Max peers per room. |
 | `MAX_ROOMS` | `100` | Общий лимит комнат. |
@@ -312,7 +315,18 @@ npm run dev:down
 
 Для Docker/production используйте отдельный prod-like `.env`: браузеры подключаются к `LIVEKIT_GATE_PUBLIC_URL` (по умолчанию `wss://$LIVEKIT_DOMAIN`), а API обращается к SFU по внутреннему `ws://livekit:7880`, зафиксированному в compose. Не задавайте публичный адрес через legacy-переменную `LIVEKIT_URL`: старое значение может оставаться в `.env`, но production API больше не использует его вместо внутреннего service URL.
 
-В production приложение должно стоять за HTTPS, volumes `postgres_data` и `uploads` нужно бэкапить как единый согласованный набор, а LiveKit должен иметь публично доступные ICE/TCP и ICE/UDP порты. `postgres_data` содержит ключи аватарок, а `uploads` — соответствующие WebP-файлы; потеря одного из volumes делает резервную копию неполной. Для файловой копии volumes остановите оба изменяющих их сервиса (`docker compose stop api postgres`), сохраните `postgres_data` и `uploads`, затем запустите Postgres, дождитесь healthy-состояния и запустите API. Если Postgres останавливать нельзя, остановите API, сделайте согласованный `pg_dump`/`pg_basebackup`, отдельно заархивируйте неизменяемый в этот момент `uploads` и только после этого верните API. Альтернатива — атомарный snapshot обоих volumes на уровне хранилища. Если пользователи часто сидят за строгими корпоративными сетями, следующим шагом стоит добавить TURN/TLS в LiveKit deployment.
+В production приложение должно стоять за HTTPS, volumes `postgres_data` и `uploads` нужно бэкапить как единый согласованный набор, а LiveKit должен иметь публично доступные ICE/TCP и ICE/UDP порты. `postgres_data` содержит ключи аватарок, а `uploads` — соответствующие WebP-файлы; потеря одного из volumes делает резервную копию неполной. Для файловой копии volumes остановите оба изменяющих их сервиса (`docker compose stop api postgres`), сохраните `postgres_data` и `uploads`, затем запустите Postgres, дождитесь healthy-состояния и запустите API. Если Postgres останавливать нельзя, остановите API, сделайте согласованный `pg_dump`/`pg_basebackup`, отдельно заархивируйте неизменяемый в этот момент `uploads` и только после этого верните API. Альтернатива — атомарный snapshot обоих volumes на уровне хранилища. Для пользователей за строгими корпоративными сетями включите TURN (раздел ниже).
+
+### TURN/TLS на 443
+
+Без TURN медиа идёт только по UDP `7882` и TCP `7881`. Сети, где открыты лишь 80/443 (офисы, гостиницы, учебные заведения), не подключат голос вовсе. Встроенный TURN LiveKit закрывает этот случай, и ему не нужен отдельный IP: Caddy (собран с `caddy-l4`) смотрит TLS SNI на общем `:443`, соединения к `TURN_DOMAIN` расшифровывает и передаёт LiveKit на `5349`, остальные идут на сайты как раньше.
+
+1. Создайте DNS-запись `TURN_DOMAIN` (например `turn.example.com`) на этот хост.
+2. В `.env`: `TURN_ENABLED=true` и `TURN_DOMAIN=turn.example.com`. Caddy сам получит сертификат для этого имени.
+3. Откройте на хосте `3478/udp` (TURN/UDP) и `30000-30099/udp` (relay-порты: ретранслированное медиа возвращается на IP ноды).
+4. Проверка: откройте комнату с `?forceRelay=1`. Медиа тогда идёт только через TURN, в подсказке статуса голоса должно быть «через ретранслятор», и звук должен проходить.
+
+Если relay через Docker-bridge не заработает (hairpin NAT до публичного IP ноды зависит от хоста), следующий шаг — `network_mode: host` для сервиса `livekit`.
 
 
 ## Ручной release smoke: static room + chat persist after API restart

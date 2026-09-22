@@ -1,3 +1,11 @@
+{
+  # TURN/TLS routing on :443, present only when TURN_ENABLED=true
+  # (config/caddy/entrypoint.sh copies the snippets into turn.d).
+  import /etc/caddy/turn.d/*.options
+}
+
+import /etc/caddy/turn.d/*.site
+
 {$DOMAIN} {
   encode zstd gzip
 

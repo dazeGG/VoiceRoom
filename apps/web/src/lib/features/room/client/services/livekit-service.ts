@@ -253,7 +253,8 @@ async function connectLiveKitWithFallback(
 
     try {
       await room.connect(url, credentials.token, {
-        autoSubscribe: false
+        autoSubscribe: false,
+        ...(isForcedRelayDiagnostic() ? { rtcConfig: { iceTransportPolicy: 'relay' as RTCIceTransportPolicy } } : {})
       });
       if (!isCurrent()) {
         await disconnectLiveKitRoomInstance(room);
@@ -269,6 +270,20 @@ async function connectLiveKitWithFallback(
   }
 
   throw new LiveKitTransportError();
+}
+
+/**
+ * `?forceRelay=1` on the room URL sends all media through LiveKit's TURN relay.
+ * It exists to verify a TURN deployment (TURN_ENABLED) from a normal network:
+ * with it the status tooltip should read "через ретранслятор" and audio must
+ * still flow.
+ */
+export function isForcedRelayDiagnostic(): boolean {
+  try {
+    return new URLSearchParams(window.location.search).get('forceRelay') === '1';
+  } catch {
+    return false;
+  }
 }
 
 function getLiveKitConnectUrls(url: string): string[] {

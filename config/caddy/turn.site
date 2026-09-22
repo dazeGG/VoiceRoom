@@ -1,0 +1,5 @@
+# Gives TURN_DOMAIN a managed certificate (HTTP-01 on :80). Nothing is served
+# over HTTPS here: TLS for this name is terminated by the layer4 route above.
+{$TURN_DOMAIN} {
+	respond 404
+}

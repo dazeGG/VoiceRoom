@@ -184,7 +184,7 @@ test('page CSP supports runtime LiveKit origins while production Caddy narrows t
   // Caddy imports the full policy generated from this build (see
   // test/caddy-csp.test.js), which narrows connect-src to LIVEKIT_DOMAIN.
   assert.match(caddy, /import \/etc\/caddy\/csp\.caddy/);
-  assert.match(dockerfile, /FROM caddy:2\.11\.3-alpine AS web/);
+  assert.match(dockerfile, /FROM caddy:2\.11\.4-alpine AS web/);
   assert.match(compose, /\n  caddy:\n[\s\S]*?image: \$\{VOICEROOM_WEB_IMAGE:\?set immutable VOICEROOM_WEB_IMAGE digest\}/);
   assert.ok(config.includes("'style-src': ['self', 'unsafe-inline']"));
   assert.match(config, /style attributes/);
