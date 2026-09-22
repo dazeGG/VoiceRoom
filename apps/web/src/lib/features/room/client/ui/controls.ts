@@ -21,6 +21,10 @@ import { setVoiceControlsState } from '$lib/features/room/voice-session.svelte';
 import { PUSH_TO_TALK_RELEASE_HOLD_MS, type MicrophoneMode } from '../core/config';
 import { isMicrophoneShownMuted } from '../core/microphone-mute';
 
+import { createLogger, errorContext } from '$lib/shared/log';
+
+const log = createLogger('room:controls');
+
 let pushToTalkReleaseTimer = 0;
 
 /** Mirror the current mic/output mute state to the lobby voice-session store. */
@@ -116,7 +120,7 @@ export function setMicrophoneMuted(muted: boolean, options: { playCue?: boolean;
 
   state.muted = nextMuted;
   setMicrophoneCaptureEnabled(getLocalMicrophoneCapture(), !state.muted);
-  syncLocalMicrophonePublicationMuted().catch((error) => console.warn('LiveKit microphone mute failed', error));
+  syncLocalMicrophonePublicationMuted().catch((error) => log.warn('liveKit microphone mute failed', errorContext(error)));
 
   if (playCue) playMicCue(state.muted);
   updateParticipant({
@@ -135,7 +139,7 @@ export function setMicrophoneMuted(muted: boolean, options: { playCue?: boolean;
  * `setMicrophoneMuted` has nothing to do but the room must stop showing a mute.
  */
 function syncShownMicrophoneMute(): void {
-  syncLocalMicrophonePublicationMuted().catch((error) => console.warn('LiveKit microphone mute failed', error));
+  syncLocalMicrophonePublicationMuted().catch((error) => log.warn('liveKit microphone mute failed', errorContext(error)));
   updateParticipant({
     deafened: state.outputMuted,
     id: state.peerId,
@@ -267,7 +271,7 @@ export function toggleOutputMute(options: { unmuteMicrophone?: boolean } = {}): 
 
   // Deafen changes whether an idle push-to-talk microphone shows as muted even
   // when `state.muted` stays put, so the SFU publication is resynced either way.
-  syncLocalMicrophonePublicationMuted().catch((error) => console.warn('LiveKit microphone mute failed', error));
+  syncLocalMicrophonePublicationMuted().catch((error) => log.warn('liveKit microphone mute failed', errorContext(error)));
 
   // Rings are cleared on the same tick as the mute so none survives the switch.
   if (state.outputMuted) clearAllSpeaking();

@@ -3,6 +3,7 @@
 const crypto = require('node:crypto');
 const { createDbPool, transaction } = require('./db');
 const { classifyPlatform, PLATFORM_CLASSES } = require('@voice-room/shared/platform-class');
+const { createLogger } = require('./logger');
 
 function createRowId() {
   return crypto.randomUUID?.() || crypto.randomBytes(16).toString('hex');
@@ -62,7 +63,7 @@ function resolvePlatformClass(metadata) {
   });
 }
 
-function createPushStore({ databaseUrl, logger = console, pool, maxSubscriptionsPerUser = 10 } = {}) {
+function createPushStore({ databaseUrl, logger = createLogger({ name: 'api' }), pool, maxSubscriptionsPerUser = 10 } = {}) {
   const subscriptionLimit = Math.max(1, Math.floor(Number(maxSubscriptionsPerUser) || 10));
   let activePool = pool || null;
   function getPool() {

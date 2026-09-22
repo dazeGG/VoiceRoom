@@ -1,3 +1,17 @@
+import { createLogger } from '$lib/shared/log';
+
+const log = createLogger('api');
+
+// The API echoes the id it logged the request under. Recording it on every
+// failure is what turns "it did not work at 14:20" into a single lookup.
+function logFailedResponse(url: string, response: Response): void {
+  log.warn('api request failed', {
+    url,
+    status: response.status,
+    requestId: response.headers.get('x-request-id') ?? ''
+  });
+}
+
 export async function fetchJson<T>(url: string): Promise<T> {
   const response = await fetch(url, { headers: { Accept: 'application/json' } });
   if (!response.ok) throw new Error('Сервер недоступен');
@@ -21,6 +35,7 @@ export async function getJsonAuth<T>(url: string): Promise<T> {
   }
 
   if (!response.ok) {
+    logFailedResponse(url, response);
     throw new Error(payload?.error || 'Сервер недоступен');
   }
 
@@ -48,6 +63,7 @@ export async function postJsonAuth<T>(url: string, body: unknown): Promise<T> {
   }
 
   if (!response.ok) {
+    logFailedResponse(url, response);
     throw new Error(payload?.error || 'Сервер недоступен');
   }
 
@@ -72,6 +88,7 @@ export async function postJson<T>(url: string, body: unknown): Promise<T> {
   }
 
   if (!response.ok) {
+    logFailedResponse(url, response);
     throw new Error(payload?.error || 'Сервер недоступен');
   }
 
@@ -99,6 +116,7 @@ export async function putJson<T>(url: string, body: unknown): Promise<T> {
   }
 
   if (!response.ok) {
+    logFailedResponse(url, response);
     throw new Error(payload?.error || 'Сервер недоступен');
   }
 
@@ -124,6 +142,7 @@ export async function patchJson<T>(url: string, body: unknown): Promise<T> {
   }
 
   if (!response.ok) {
+    logFailedResponse(url, response);
     throw new Error(payload?.error || 'Сервер недоступен');
   }
 
@@ -150,6 +169,7 @@ export async function del<T>(url: string, body?: unknown): Promise<T> {
   }
 
   if (!response.ok) {
+    logFailedResponse(url, response);
     throw new Error(payload?.error || 'Сервер недоступен');
   }
 

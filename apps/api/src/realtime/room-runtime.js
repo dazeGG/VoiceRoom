@@ -12,6 +12,8 @@ const {
 const { buildServerEnvelope, buildServerErrorEnvelope } = require('./envelope');
 const { buildRoomRealtimeSummaryFromLobbyRoom, createSummaryCoalescer } = require('./summary');
 const { createWsTransport } = require('./peer-transport');
+const { LOG_EVENTS } = require('../lib/log-events');
+const { createLogger } = require('../lib/logger');
 const { legacyPeerMessageToWs } = require('./legacy-events');
 const { createTypingThrottle } = require('./typing-throttle');
 
@@ -55,7 +57,8 @@ function createRoomRealtimeRuntime(deps) {
     now = Date.now,
     setTimeout: scheduleTimeout = globalThis.setTimeout,
     clearTimeout: cancelTimeout = globalThis.clearTimeout,
-    reconnectLeaseMs = 30000
+    reconnectLeaseMs = 30000,
+    logger = createLogger({ name: 'api' })
   } = deps;
 
   const recipientCache = new Map();
@@ -468,7 +471,7 @@ function createRoomRealtimeRuntime(deps) {
       const stored = await getRoomStore().listSummaryRecipientUserIds(roomId);
       for (const id of stored) userIds.add(id);
     } catch (error) {
-      console.error('Failed to resolve summary recipients:', error);
+      logger.error({ evt: LOG_EVENTS.ROOM_SUMMARY_RECIPIENTS_FAILED, roomId, err: error }, 'failed to resolve room summary recipients');
     }
 
     const presence = presenceRooms.get(roomId);
@@ -592,7 +595,7 @@ function createRoomRealtimeRuntime(deps) {
     connection.roomTypingThrottle ??= createTypingThrottle({ now });
     connection.roomTypingThrottle.offer(roomId, activity, (value) => {
       sendRoomTyping(connection, roomId, value).catch((error) => {
-        console.error('Failed to forward a room typing notice:', error);
+        logger.warn({ evt: LOG_EVENTS.ROOM_TYPING_FORWARD_FAILED, roomId, err: error }, 'failed to forward a room typing notice');
       });
     });
   }
@@ -639,7 +642,7 @@ function createRoomRealtimeRuntime(deps) {
     try {
       room = await getRoomStore().getRoom(roomId);
     } catch (error) {
-      console.error('Failed to resolve room notification room:', error);
+      logger.error({ evt: LOG_EVENTS.NOTIFICATION_BROADCAST_FAILED, roomId, stage: 'room', err: error }, 'failed to resolve the room for a room notification');
       return;
     }
     if (!room?.isStatic) return;
@@ -651,7 +654,7 @@ function createRoomRealtimeRuntime(deps) {
         ? await listNotificationRecipients(roomId)
         : [];
     } catch (error) {
-      console.error('Failed to resolve room notification recipients:', error);
+      logger.error({ evt: LOG_EVENTS.NOTIFICATION_BROADCAST_FAILED, roomId, stage: 'recipients', err: error }, 'failed to resolve room notification recipients');
       return;
     }
 
@@ -661,7 +664,7 @@ function createRoomRealtimeRuntime(deps) {
       try {
         authorUser = await getUserStore().getUserById(authorUserId);
       } catch (error) {
-        console.error('Failed to resolve room notification sender:', error);
+        logger.warn({ evt: LOG_EVENTS.NOTIFICATION_BROADCAST_FAILED, roomId, stage: 'sender', err: error }, 'failed to resolve a room notification sender');
       }
     }
 
@@ -682,7 +685,7 @@ function createRoomRealtimeRuntime(deps) {
       try {
         wsRegistry.broadcastAccountEvent(userId, notification);
       } catch (error) {
-        console.error('Failed to broadcast room notification:', error);
+        logger.error({ evt: LOG_EVENTS.NOTIFICATION_BROADCAST_FAILED, roomId, stage: 'broadcast', err: error }, 'failed to broadcast a room notification');
       }
     }
   }
@@ -1066,7 +1069,7 @@ function createRoomRealtimeRuntime(deps) {
         // Presence was already committed in memory. Keep the resync protocol
         // live by delivering the authoritative snapshot even when the
         // best-effort occupancy marker cannot be persisted.
-        console.error('Failed to persist room occupancy:', error);
+        logger.error({ evt: LOG_EVENTS.ROOM_OCCUPANCY_PERSIST_FAILED, roomId, err: error }, 'failed to persist room occupancy');
       }
 
       if (
@@ -1254,7 +1257,7 @@ function createRoomRealtimeRuntime(deps) {
     try {
       rooms = await getRoomStore().listVisibleRoomsForUser(userId);
     } catch (error) {
-      console.error('Failed to list rooms for WS ready summaries:', error);
+      logger.error({ evt: LOG_EVENTS.WS_SUMMARY_LOAD_FAILED, userId, err: error }, 'failed to list rooms for the ws ready summaries');
       return;
     }
     for (const dbRoom of rooms) {

@@ -4,6 +4,8 @@ const crypto = require('node:crypto');
 const sharp = require('sharp');
 const { MediaJobFenceError } = require('../domains/media/media-job-repository');
 const { recordMediaOldestPending } = require('../lib/metrics');
+const { LOG_EVENTS } = require('../lib/log-events');
+const { createLogger } = require('../lib/logger');
 
 const DEFAULTS = Object.freeze({ batchSize: 10, concurrency: 2, leaseMs: 120_000, maxAttempts: 5, timeoutMs: 30_000 });
 
@@ -63,7 +65,8 @@ function createMediaProcessingWorker({
   leaseMs = DEFAULTS.leaseMs,
   maxAttempts = DEFAULTS.maxAttempts,
   timeoutMs = DEFAULTS.timeoutMs,
-  observeOldestPending = recordMediaOldestPending
+  observeOldestPending = recordMediaOldestPending,
+  logger = createLogger({ name: 'worker.media-processing' })
 } = {}) {
   if (!attachmentRepository || !jobRepository || !storage) throw new TypeError('Media processing dependencies are required');
   let stopping = false;
@@ -105,7 +108,20 @@ function createMediaProcessingWorker({
           retryDelayMs: retryDelay(job.attempts),
           maxAttempts
         });
-        if (failed.state === 'dead') await attachmentRepository.markFailed(job.attachmentId, error?.code || 'media_processing_failed');
+        // A retry is routine; exhausting the attempts means an upload the user
+        // is still waiting on will never appear, so the two are separated by
+        // level rather than both vanishing into the retry loop.
+        const dead = failed.state === 'dead';
+        logger[dead ? 'error' : 'warn']({
+          evt: LOG_EVENTS.MEDIA_JOB_FAILED,
+          jobId: job.id,
+          attachmentId: job.attachmentId,
+          attempt: job.attempts,
+          maxAttempts,
+          state: failed.state,
+          err: error
+        }, dead ? 'media job exhausted its attempts' : 'media job attempt failed');
+        if (dead) await attachmentRepository.markFailed(job.attachmentId, error?.code || 'media_processing_failed');
       } catch (failure) {
         if (!(failure instanceof MediaJobFenceError)) throw failure;
       }

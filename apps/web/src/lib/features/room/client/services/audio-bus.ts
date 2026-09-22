@@ -6,6 +6,10 @@ import {
   transitionAudioOutput
 } from './audio-output-transition.js';
 
+import { createLogger, errorContext } from '$lib/shared/log';
+
+const log = createLogger('room:audio-bus');
+
 type AudioBusKind = 'voice' | 'media' | 'sfx';
 
 interface AudioBusGraph {
@@ -115,7 +119,7 @@ async function applyAudioBusOutput(sinkId: string): Promise<boolean> {
       select: () => contextWithSink.setSinkId(sinkId),
       connect: () => current.limiter.connect(current.context.destination)
     });
-    if (!selected) console.warn('Audio context output device unavailable');
+    if (!selected) log.warn('audio context output device unavailable');
     return selected;
   }
 
@@ -138,7 +142,7 @@ async function applyAudioBusOutput(sinkId: string): Promise<boolean> {
       }
     });
     if (!selected) {
-      console.warn('Audio element output device unavailable');
+      log.warn('audio element output device unavailable');
       removeSinkElement();
       return false;
     }
@@ -146,7 +150,7 @@ async function applyAudioBusOutput(sinkId: string): Promise<boolean> {
     try {
       await sinkElement.play();
     } catch (error) {
-      console.warn('Audio element playback requires a user gesture', error);
+      log.warn('audio element playback requires a user gesture', errorContext(error));
       state.audioUnlockPending = true;
     }
     return true;

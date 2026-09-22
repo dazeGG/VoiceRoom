@@ -1043,13 +1043,13 @@ test('room route uses lobby for authenticated users and preserves standalone gue
   assert.match(resolveRoomEntryName, /return 'authenticated'/);
   assert.match(resolveRoomEntryName, /return 'failure'/);
   assert.match(resolveRoomEntryName, /await requestGuestNameForRoom\(\)/);
-  assert.match(resolveRoomEntryName, /Guest name request cancelled/);
+  assert.match(resolveRoomEntryName, /guest name request cancelled/);
   assert.match(resolveRoomEntryName, /return 'anonymous'/);
   assert.doesNotMatch(resolveRoomEntryName, /loadSession|showRoomScreen|autoJoinRoom|showRoomNotFound/);
   assert.match(roomView, /async function autoSaveRoomForAuthenticatedUser\(roomId: string\): Promise<void>/);
   assert.match(roomView, /await addRoomByCode\(roomId\)/);
   assert.match(roomView, /window\.dispatchEvent\(new CustomEvent\('voice-room:rooms-changed'/);
-  assert.match(roomView, /console\.debug\('Room auto-save skipped'/);
+  assert.match(roomView, /log\.debug\('room auto-save skipped'/);
   assert.match(lobby, /window\.addEventListener\('voice-room:rooms-changed', onRoomsChanged\)/);
   assert.match(lobby, /window\.removeEventListener\('voice-room:rooms-changed', onRoomsChanged\)/);
   assert.match(functionBody(lobby, 'onRoomsChanged'), /void refreshRooms\(\)/);

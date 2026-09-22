@@ -74,6 +74,10 @@ import {
   startRoomRecovery
 } from '../recovery/room-recovery';
 
+import { createLogger, errorContext } from '$lib/shared/log';
+
+const log = createLogger('room');
+
 type RoomEntryGateResult = 'authenticated' | 'anonymous' | 'failure';
 
 let voiceJoinSent = false;
@@ -176,7 +180,7 @@ export async function createRoomFromStart(): Promise<void> {
     const room = await postJson('/api/rooms', { proof });
     openRoom(room.roomId);
   } catch (error) {
-    console.error(error);
+    log.error('room action failed', errorContext(error));
     showToast(errorMessage(error) || 'Не удалось создать комнату');
   } finally {
     startUi.createRoomLoading = false;
@@ -215,7 +219,7 @@ async function autoSaveRoomForAuthenticatedUser(roomId: string): Promise<void> {
     // Auto-save is a convenience side effect: temporary rooms, already-pruned
     // rooms, and transient bookmark failures must never block or noisy-toast
     // the room entry flow.
-    console.debug('Room auto-save skipped', error);
+    log.debug('room auto-save skipped', errorContext(error));
   }
 }
 
@@ -235,12 +239,12 @@ async function resolveRoomEntryName(): Promise<RoomEntryGateResult> {
         const owned = await fetchOwnedRooms();
         roomSettingsUi.isOwner = owned.some((room) => room.roomId === state.roomId && room.relationship === 'owner');
       } catch (ownedError) {
-        console.warn('Failed to resolve room ownership', ownedError);
+        log.warn('failed to resolve room ownership', errorContext(ownedError));
       }
       return 'authenticated';
     }
   } catch (error) {
-    console.error('Failed to check room entry session', error);
+    log.error('failed to check room entry session', errorContext(error));
     showToast('Не удалось проверить аккаунт. Попробуйте обновить страницу.');
     return 'failure';
   }
@@ -249,7 +253,7 @@ async function resolveRoomEntryName(): Promise<RoomEntryGateResult> {
     await requestGuestNameForRoom();
     return 'anonymous';
   } catch (error) {
-    console.warn('Guest name request cancelled', error);
+    log.warn('guest name request cancelled', errorContext(error));
     return 'failure';
   }
 }
@@ -321,7 +325,7 @@ async function performJoinRoom(generation: number): Promise<void> {
     state.voiceRealtimeTeardown?.();
     const detachVoiceEvents = subscribeRoomVoice(state.roomId, (event) => {
       handleVoiceRealtimeEvent(event).catch((err) => {
-        console.error('Voice realtime handler failed', err);
+        log.error('voice realtime handler failed', errorContext(err));
       });
     });
     const realtime = getAppRealtime();
@@ -373,7 +377,7 @@ async function performJoinRoom(generation: number): Promise<void> {
       // token and LiveKit work self-disposes through the generation predicate.
       return;
     }
-    console.error(error);
+    log.error('room action failed', errorContext(error));
     const banned = error instanceof ApiRequestError && error.code === 'room_banned';
     if (!banned) showToast(formatJoinError(error));
     setVoiceConnectionStatus(isVoiceRouteError(error) ? 'no-route' : 'error');
@@ -552,7 +556,7 @@ export function leaveRoom(): void {
   state.voiceRealtimeTeardown = null;
   state.serverPeerIds.clear();
   state.serverPeerSyncReady = false;
-  disconnectLiveKitRoom().catch((error) => console.warn('LiveKit disconnect failed', error));
+  disconnectLiveKitRoom().catch((error) => log.warn('liveKit disconnect failed', errorContext(error)));
   if (state.screenSourceRequest) cancelScreenSourcePicker();
   closeScreenView();
   closeParticipantContextMenu();
@@ -633,7 +637,7 @@ export async function rejoinRoomSignedIn(roomId: string): Promise<void> {
       leaveRoom();
     }
   } catch (error) {
-    console.error('[voice-room] guest register rejoin', error);
+    log.error('guest register rejoin failed', errorContext(error));
   }
   window.location.assign(`/r/${encodeURIComponent(roomId)}`);
 }

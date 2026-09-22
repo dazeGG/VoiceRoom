@@ -8,6 +8,7 @@ const {
   cleanAvatarColorKey
 } = require('@voice-room/shared/validation');
 const { normalizeLinkPreview } = require('@voice-room/shared/link-preview');
+const { createLogger } = require('./logger');
 
 // Room history is never expired or trimmed: a message leaves only when its
 // author or the room owner deletes it, or when its room is deleted.
@@ -132,7 +133,7 @@ function roomIdFrom(roomOrId) {
 
 function createRoomStore({
   databaseUrl,
-  logger = console,
+  logger = createLogger({ name: 'api' }),
   pool,
   roomIdleTtlMs = 15 * 60 * 1000
 } = {}) {

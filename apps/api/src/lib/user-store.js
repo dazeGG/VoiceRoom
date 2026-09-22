@@ -4,6 +4,8 @@ const crypto = require('node:crypto');
 const { createDbPool, transaction } = require('./db');
 const { hashPassword, verifyPassword } = require('./password');
 const { AVATAR_COLOR_KEYS, cleanAvatarColorKey, cleanPresenceStatus } = require('@voice-room/shared/validation');
+const { LOG_EVENTS } = require('./log-events');
+const { createLogger } = require('./logger');
 const {
   LOGIN_ALERT_TTL_MS,
   LOGIN_FAMILIARITY_WINDOW_MS,
@@ -141,7 +143,7 @@ function mapLoginAlert(row) {
   };
 }
 
-function createUserStore({ databaseUrl, logger = console, pool, sessionTtlMs = DEFAULT_SESSION_TTL_MS } = {}) {
+function createUserStore({ databaseUrl, logger = createLogger({ name: 'api' }), pool, sessionTtlMs = DEFAULT_SESSION_TTL_MS } = {}) {
   let activePool = pool || null;
   function getPool() {
     if (!activePool) {
@@ -326,7 +328,7 @@ function createUserStore({ databaseUrl, logger = console, pool, sessionTtlMs = D
 
     if (toMillis(row.session_last_seen_at) <= now - SESSION_TOUCH_INTERVAL_MS) {
       void touchSession({ tokenHash, now, userAgent, resolveLocation })
-        .catch((error) => logger.error('Failed to touch session:', error));
+        .catch((error) => logger.warn({ evt: LOG_EVENTS.SESSION_TOUCH_FAILED, err: error }, 'failed to touch a session'));
     }
 
     return {
@@ -349,7 +351,7 @@ function createUserStore({ databaseUrl, logger = console, pool, sessionTtlMs = D
       try {
         locationLabel = cleanLocationLabel(await resolveLocation());
       } catch (error) {
-        logger.error('Failed to resolve session location:', error);
+        logger.warn({ evt: LOG_EVENTS.GEOIP_UNAVAILABLE, reason: 'lookup_failed', err: error }, 'failed to resolve a session location');
       }
     }
     await getPool().query(

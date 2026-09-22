@@ -123,7 +123,7 @@ test('PostgreSQL room bans match account or IP and undo stays scoped to its room
   const { cleanup, databaseUrl } = await createTestDatabase(t);
   await runMigrations({ databaseUrl, logger: { log() {}, info() {}, warn() {}, error() {} } });
   const store = createRoomStore({ databaseUrl });
-  const users = createUserStore({ databaseUrl, logger: { error() {} } });
+  const users = createUserStore({ databaseUrl, logger: { log() {}, info() {}, warn() {}, error() {} } });
   t.after(async () => {
     await Promise.all([store.close(), users.close()]);
     await cleanup();
@@ -174,7 +174,7 @@ test('purging deleted messages and deleted rooms unbinds their attachments for m
   const { cleanup, databaseUrl } = await createTestDatabase(t);
   await runMigrations({ databaseUrl, logger: { log() {}, info() {}, warn() {}, error() {} } });
   const store = createRoomStore({ databaseUrl });
-  const users = createUserStore({ databaseUrl, logger: { error() {} } });
+  const users = createUserStore({ databaseUrl, logger: { log() {}, info() {}, warn() {}, error() {} } });
   const pool = new Pool({ connectionString: databaseUrl });
   t.after(async () => {
     await Promise.all([store.close(), users.close(), pool.end()]);

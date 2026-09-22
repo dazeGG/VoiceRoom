@@ -5,6 +5,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { PG_MIGRATE_LOCK_ID, runner } = require('node-pg-migrate');
 const { readDatabaseConfig } = require('./config');
+const { LOG_EVENTS } = require('./log-events');
+const { createLogger } = require('./logger');
 
 const DEFAULT_MIGRATIONS_DIR = path.resolve(__dirname, '..', 'migrations');
 const DEFAULT_MIGRATIONS_TABLE = 'pgmigrations';
@@ -29,7 +31,9 @@ function migrationLogger(logger) {
     info: (...items) => logger?.info?.(...items),
     warn: (...items) => logger?.warn?.(...items),
     error: (...items) => logger?.error?.(...items),
-    log: (...items) => logger?.log?.(...items)
+    // node-pg-migrate calls `log` for progress; pino has no such level, so it
+    // lands on info rather than disappearing through optional chaining.
+    log: (...items) => (logger?.log ? logger.log(...items) : logger?.info?.(...items))
   };
 }
 
@@ -169,7 +173,7 @@ async function runMigrations({
   databaseUrl = readDatabaseConfig().url,
   direction = 'up',
   dir = DEFAULT_MIGRATIONS_DIR,
-  logger = console,
+  logger = createLogger({ name: 'api' }),
   noLock = process.env.NODE_ENV === 'test',
   lockValue = PG_MIGRATE_LOCK_ID,
   clearDirty = false,
@@ -202,7 +206,7 @@ async function runMigrations({
     if (clearDirty) {
       await ensureMigrationGuardSchema(client);
       await setMigrationGuardState(client, MIGRATION_GUARD_STATES.clean, 'cleared by explicit operator request');
-      logger.warn?.('Cleared dirty migration state by explicit operator request.');
+      logger.warn({ evt: LOG_EVENTS.MIGRATION_DIRTY_CLEARED }, 'cleared dirty migration state by explicit operator request');
       return [];
     }
     await assertNoDirtyMigrationState(client);
@@ -226,9 +230,9 @@ async function runMigrations({
     await assertMigrationLockHeld(client, lockValue);
     await setMigrationGuardState(client, MIGRATION_GUARD_STATES.clean, `last=${path.basename(dir)}:${direction}`);
     if (migrations.length) {
-      logger.log(`PostgreSQL migrations ${direction} complete (${migrations.length} applied).`);
+      logger.info({ evt: LOG_EVENTS.MIGRATION_COMPLETED, direction, applied: migrations.length }, 'PostgreSQL migrations complete');
     } else {
-      logger.log(`PostgreSQL migrations ${direction} no-op.`);
+      logger.info({ evt: LOG_EVENTS.MIGRATION_COMPLETED, direction, applied: 0 }, 'PostgreSQL migrations were a no-op');
     }
 
     return migrations;

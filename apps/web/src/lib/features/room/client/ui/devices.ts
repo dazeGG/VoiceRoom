@@ -27,6 +27,10 @@ import { attachMeter } from '../media/meters';
 import { setParticipantSpeaking } from '../room/participants';
 import type { MicrophoneCapture } from '../core/types';
 
+import { createLogger, errorContext } from '$lib/shared/log';
+
+const log = createLogger('room:devices');
+
 let gateSwitchTimer = 0;
 let confirmedOutputDeviceId: string | null = null;
 let outputSwitchGeneration = 0;
@@ -207,7 +211,7 @@ export async function switchMicrophone(options: SwitchMicrophoneOptions = {}): P
     showToast(typeof successMessage === 'function' ? successMessage(nextCapture) : successMessage);
     return true;
   } catch (error) {
-    console.error(error);
+    log.error('device action failed', errorContext(error));
     if (nextCapture) stopMicrophoneCapture(nextCapture);
     persistMicrophoneDeviceId(previousDeviceId);
     if (hasOptionValue(roomDeviceUi.microphoneOptions, previousDeviceId)) {
@@ -246,7 +250,7 @@ export function updateGateThresholdFromSlider(value: string | number): void {
       failureMessage: 'Не удалось применить гейт',
       refreshDeviceList: false,
       successMessage: isGateDisabled() ? 'Гейт выключен' : `Гейт: ${state.gateThresholdDb} dB`
-    }).catch((error) => console.error(error));
+    }).catch((error) => log.error('device action failed', errorContext(error)));
   }, GATE_CAPTURE_SWITCH_DEBOUNCE_MS);
 }
 

@@ -7,12 +7,14 @@ const { createNotificationOutboxRepository } = require('../domains/notifications
 const { createNotificationPushProvider } = require('../domains/notifications/push-provider');
 const { boundedBackoff, createLeaseRuntime } = require('../platform/lease-runtime');
 const { recordNotificationOldestPending } = require('../lib/metrics');
+const { LOG_EVENTS } = require('../lib/log-events');
+const { createLogger } = require('../lib/logger');
 
 const LEASE_IDENTITY = 'notification-delivery.G63';
 
 function wait(ms, signal) { return new Promise((resolve,reject)=>{ if(signal.aborted) return reject(signal.reason); const timer=setTimeout(done,ms); function done(){signal.removeEventListener('abort',cancel);resolve();} function cancel(){clearTimeout(timer);reject(signal.reason);}; signal.addEventListener('abort',cancel,{once:true}); }); }
 
-function createNotificationDeliveryWorker({ outbox, provider, batchSize=50, leaseMs=120000, renewMs=30000, idleMs=250, maxAttempts=8, logger=console, observeOldestPending=recordNotificationOldestPending }={}) {
+function createNotificationDeliveryWorker({ outbox, provider, batchSize=50, leaseMs=120000, renewMs=30000, idleMs=250, maxAttempts=8, logger=createLogger({ name: 'worker.notification-delivery' }), observeOldestPending=recordNotificationOldestPending }={}) {
   if (!outbox || !provider) throw new TypeError('Notification outbox and provider are required');
   let disabledReason = '';
   const outcomes = [];
@@ -35,7 +37,7 @@ function createNotificationDeliveryWorker({ outbox, provider, batchSize=50, leas
         try {
           const ageMs=Date.now()-new Date(job.createdAt).getTime();
           if(ageMs>15*60*1000){disabledReason='oldest_pending_exceeded';await outbox.reschedule(job.eventId,lease,{delayMs:60000,error:new Error(disabledReason),maxAttempts});continue;}
-          if(ageMs>5*60*1000)logger.warn?.(`Notification outbox age exceeds five minutes: ${job.eventId}`);
+          if(ageMs>5*60*1000)logger.warn({evt:LOG_EVENTS.NOTIFICATION_BACKLOG_AGED,eventId:job.eventId,ageMs},'notification outbox age exceeds five minutes');
           const current=await outbox.loadCurrent(job);
           const reasons=current?.reasons||[];
           const addressed=reasons.includes('mention')||reasons.includes('reply');
@@ -49,7 +51,7 @@ function createNotificationDeliveryWorker({ outbox, provider, batchSize=50, leas
           guard.assertOwned();
           await outbox.reschedule(job.eventId,lease,{delayMs:boundedBackoff(job.attempts,{baseMs:5000,maxMs:3600000,jitter:.2}),error,maxAttempts});
           observe(false);
-          logger.warn?.(`Notification delivery ${job.eventId} failed:`,error);
+          logger.warn({evt:LOG_EVENTS.NOTIFICATION_DELIVERY_FAILED,eventId:job.eventId,attempt:job.attempts,maxAttempts,err:error},'notification delivery attempt failed');
         }
       }
     }
@@ -59,11 +61,11 @@ function createNotificationDeliveryWorker({ outbox, provider, batchSize=50, leas
 }
 
 async function main(env=process.env){
-  if(!readEnvBool('NOTIFICATION_DELIVERY_CLAIM_ENABLED',false,env)){console.log('Notification delivery claims are disabled');return;}
+  if(!readEnvBool('NOTIFICATION_DELIVERY_CLAIM_ENABLED',false,env)){createLogger({env,name:'worker.notification-delivery'}).info({evt:LOG_EVENTS.WORKER_DISABLED,worker:'notification-delivery',reason:'claims_disabled'},'notification delivery claims are disabled');return;}
   const pool=createDbPool(); const outbox=createNotificationOutboxRepository({pool}); const store=createPushStore({pool}); const provider=createNotificationPushProvider({store,env});
   const worker=createNotificationDeliveryWorker({outbox,provider,batchSize:readEnvInt('NOTIFICATION_DELIVERY_BATCH_SIZE',50,1,env),leaseMs:readEnvInt('NOTIFICATION_DELIVERY_LEASE_MS',120000,1000,env),renewMs:readEnvInt('NOTIFICATION_DELIVERY_RENEW_MS',30000,100,env),maxAttempts:readEnvInt('NOTIFICATION_DELIVERY_MAX_ATTEMPTS',8,1,env)});
   let stopping; const stop=()=>stopping||(stopping=worker.stop().finally(()=>pool.end())); process.once('SIGINT',()=>void stop());process.once('SIGTERM',()=>void stop()); try{await worker.start();}finally{await stop();}
 }
 
-if(require.main===module) main().catch((error)=>{console.error('Notification delivery worker failed:',error);process.exitCode=1;});
+if(require.main===module) main().catch((error)=>{createLogger({name:'worker.notification-delivery'}).fatal({evt:LOG_EVENTS.WORKER_FAILED,worker:'notification-delivery',err:error},'notification delivery worker failed');process.exitCode=1;});
 module.exports={LEASE_IDENTITY,createNotificationDeliveryWorker,main};

@@ -1,8 +1,9 @@
 'use strict';
 
 const { createDbPool, transaction } = require('../../lib/db');
+const { createLogger } = require('../../lib/logger');
 
-function createMessageReadRepository({ databaseUrl, logger = console, pool } = {}) {
+function createMessageReadRepository({ databaseUrl, logger = createLogger({ name: 'api' }), pool } = {}) {
   let activePool = pool || null;
   const getPool = () => activePool || (activePool = createDbPool({ databaseUrl, logger }));
 

@@ -41,7 +41,7 @@ export function handleScreenStageClick(event: MouseEvent): void {
     return;
   }
 
-  leaveScreenView({ keepPreview: true }).catch((error) => console.error(error));
+  leaveScreenView({ keepPreview: true }).catch((error) => log.error('screen view action failed', errorContext(error)));
 }
 
 export function openLocalStreamPreview(): void {
@@ -256,7 +256,7 @@ export function hideScreenStage(): void {
     document.exitFullscreen().catch(() => {});
   }
   if (document.body.dataset.desktopScreenFullscreen === 'true') {
-    setDesktopScreenFullscreen(false).catch((error) => console.error(error));
+    setDesktopScreenFullscreen(false).catch((error) => log.error('screen view action failed', errorContext(error)));
   }
   refreshScreenTiles();
   refreshStageStripControls();
@@ -314,3 +314,7 @@ export {
   updateScreenFullscreenState,
   updateScreenVolumeFromSlider
 } from './screen-stage-controls';
+
+import { createLogger, errorContext } from '$lib/shared/log';
+
+const log = createLogger('room:screen-view');

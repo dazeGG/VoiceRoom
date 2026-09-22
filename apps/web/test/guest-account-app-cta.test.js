@@ -47,7 +47,7 @@ test('signing in from a room hands the account to a reload instead of swapping t
   const room = read('src/lib/features/room/client/room/room.ts');
   assert.match(
     room,
-    /export async function rejoinRoomSignedIn\(roomId: string\): Promise<void> \{\s*markInAppRoomNavigation\(\);[\s\S]*?playPeerCue\('leave'\);\s*await wait\(180\);\s*leaveRoom\(\);[\s\S]*?console\.error\('\[voice-room\] guest register rejoin', error\);[\s\S]*?window\.location\.assign\(`\/r\/\$\{encodeURIComponent\(roomId\)\}`\);/
+    /export async function rejoinRoomSignedIn\(roomId: string\): Promise<void> \{\s*markInAppRoomNavigation\(\);[\s\S]*?playPeerCue\('leave'\);\s*await wait\(180\);\s*leaveRoom\(\);[\s\S]*?log\.error\('guest register rejoin failed', errorContext\(error\)\);[\s\S]*?window\.location\.assign\(`\/r\/\$\{encodeURIComponent\(roomId\)\}`\);/
   );
 
   const slot = read('src/lib/features/room/components/RoomCtaSlot.svelte');

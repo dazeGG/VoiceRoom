@@ -4,6 +4,8 @@ const crypto = require('node:crypto');
 const { cleanPresenceStatus } = require('@voice-room/shared/validation');
 const { buildServerEnvelope, sendWsEnvelope } = require('./envelope');
 const { toWsAccountEvent } = require('./account-events');
+const { LOG_EVENTS } = require('../lib/log-events');
+const { createLogger } = require('../lib/logger');
 
 function createConnectionId(prefix) {
   return `${prefix}:${Date.now()}:${crypto.randomBytes(4).toString('hex')}`;
@@ -40,7 +42,8 @@ function createConnectionRegistry({
   keepaliveMs,
   onPresenceChange,
   onConnectionClose,
-  getFriendIds
+  getFriendIds,
+  logger = createLogger({ name: 'api' })
 }) {
   const userConnections = new Map();
   const userPresenceStatuses = new Map();
@@ -78,6 +81,7 @@ function createConnectionRegistry({
       pendingVoiceJoin: null,
       inboundMessageQueue: Promise.resolve(),
       lastHeartbeatAt: Date.now(),
+      openedAt: Date.now(),
       closed: false
     };
   }
@@ -124,7 +128,7 @@ function createConnectionRegistry({
     try {
       friendIds = await getFriendIds(userId);
     } catch (error) {
-      console.error('Failed to load friends for WS presence:', error);
+      logger.error({ evt: LOG_EVENTS.WS_PRESENCE_FRIENDS_LOAD_FAILED, userId, online, err: error }, 'failed to load friends for a presence change');
       return;
     }
     for (const friendId of friendIds) {
