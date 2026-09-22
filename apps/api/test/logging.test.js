@@ -3,6 +3,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { Writable } = require('node:stream');
+const { readFileSync } = require('node:fs');
+const { join } = require('node:path');
 
 const { LOG_EVENTS, LOG_EVENT_CODES } = require('../src/lib/log-events');
 const {
@@ -107,6 +109,30 @@ test('hashed client addresses are stable within a process and never reversible',
   assert.notEqual(hash, hashIp('203.0.113.8'));
   assert.ok(!hash.includes('203'));
   assert.equal(hashIp(''), 'unknown');
+});
+
+// Fastify binds reqId to the per-request child logger, so passing it again at
+// the call site emits the key twice in one JSON record. The values match, but
+// it lands in every request record and strict ingesters reject duplicate keys.
+test('a bound request id is not repeated at the call site', () => {
+  const { logger, records } = captureLogger();
+  const child = logger.child({ reqId: 'abc' });
+  child.info({ evt: LOG_EVENTS.HTTP_REQUEST, route: '/probe' }, 'probe');
+
+  assert.equal(records[0].reqId, 'abc');
+  const line = JSON.stringify(records[0]);
+  assert.equal(line.match(/"reqId"/g).length, 1);
+});
+
+test('no handler adds reqId to a record the request logger already binds', () => {
+  const source = readFileSync(join(__dirname, '../src/server.js'), 'utf8');
+  const offenders = source
+    .split(String.fromCharCode(10))
+    .map((line, index) => [index + 1, line])
+    .filter(([, line]) => /^\s*reqId:\s*(req\?\.id|request\.id)\s*,?\s*$/.test(line))
+    .map(([number]) => number);
+
+  assert.deepEqual(offenders, [], `server.js repeats a bound reqId on lines: ${offenders.join(', ')}`);
 });
 
 test('client log intake keeps well-formed records and reports the rest as dropped', () => {
