@@ -1,6 +1,17 @@
 import { fetchDesktopRelease, type DesktopRelease } from '$lib/api/desktop';
 import { RELEASES_URL, detectDesktopBuildId } from '../model/desktop-builds';
 
+const RELEASE_DOWNLOAD_PREFIX = `${new URL(RELEASES_URL).pathname.replace(/\/releases\/latest$/, '')}/releases/download/`;
+
+export function isDesktopReleaseAssetUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' && url.hostname === 'github.com' && url.pathname.startsWith(RELEASE_DOWNLOAD_PREFIX);
+  } catch {
+    return false;
+  }
+}
+
 export function triggerDesktopDownload(url: string): void {
   const link = document.createElement('a');
   link.href = url;
@@ -16,7 +27,9 @@ export function triggerDesktopDownload(url: string): void {
  */
 export function startDesktopBuildDownload(release: DesktopRelease | null, buildId: string): void {
   const asset = release?.assets[buildId] ?? null;
-  if (asset) {
+  // An installer the user will run: follow only GitHub's release-download path
+  // of the desktop repository, whatever the API answered.
+  if (asset && isDesktopReleaseAssetUrl(asset.url)) {
     triggerDesktopDownload(asset.url);
   } else {
     window.open(RELEASES_URL, '_blank', 'noopener');

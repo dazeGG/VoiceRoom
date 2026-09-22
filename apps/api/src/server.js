@@ -5006,10 +5006,23 @@ async function handleEditDmMessage(req, res, peerIdParam, messageId) {
   sendJson(res, 200, { ok: true, message });
 }
 
+// The browser downloads and runs what this URL points at, so only GitHub's own
+// release-download path for the configured repository is passed through.
+function isDesktopReleaseDownloadUrl(value) {
+  try {
+    const url = new URL(String(value || ''));
+    return url.protocol === 'https:'
+      && url.hostname === 'github.com'
+      && url.pathname.startsWith(`/${DESKTOP_RELEASE_REPO}/releases/download/`);
+  } catch {
+    return false;
+  }
+}
+
 function pickReleaseAsset(assets, patterns) {
   for (const pattern of patterns) {
     const found = assets.find((asset) => pattern.test(asset.name || ''));
-    if (found && found.browser_download_url) {
+    if (found && isDesktopReleaseDownloadUrl(found.browser_download_url)) {
       return { url: found.browser_download_url, size: Number(found.size) || 0 };
     }
   }
@@ -5341,22 +5354,21 @@ function createApiApp({
       });
       return;
     }
+    // Public and unauthenticated: it answers "is this replica serving?" and
+    // nothing about the topology behind it. The internal LiveKit address, the
+    // manifest's filesystem path and live room/peer counts stay in /api/metrics,
+    // which Caddy only exposes to the monitoring address.
     const livekit = getLiveKitConfig();
     sendJson(res, 200, {
       livekit: livekit.enabled,
-      livekitUrl: livekit.url || null,
       ok: true,
       capabilityManifest: {
         contractVersion: readiness?.manifest?.contractVersion || null,
         schemaVersion: readiness?.manifest?.schemaVersion || null,
         digest: readiness?.manifest?.digest || null,
-        path: readiness?.manifest?.path || null,
         replicaConsensus: readiness?.replica?.reason || (readiness?.replicaConsensus ? 'agree' : 'disagree'),
         manifestRawSha256: readiness?.manifest?.digest || null
-      },
-      maxRooms: MAX_ROOMS,
-      rooms: await getRoomStore().countRooms(),
-      peers: getPresencePeerCount()
+      }
     });
   }));
 

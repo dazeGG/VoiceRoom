@@ -26,8 +26,8 @@ for (const [address, prefix] of [
 // IPv4-mapped IPv6 (::ffff:0:0/96) is not listed here: BlockList also applies
 // such a rule to every plain IPv4 address. Mapped addresses are refused below.
 for (const [address, prefix] of [
-  ['::', 128], ['::1', 128], ['64:ff9b::', 96], ['100::', 64], ['2001::', 23],
-  ['2001:db8::', 32], ['2002::', 16], ['fc00::', 7], ['fe80::', 10], ['ff00::', 8]
+  ['::', 128], ['::1', 128], ['64:ff9b::', 96], ['64:ff9b:1::', 48], ['100::', 64], ['2001::', 23],
+  ['2001:db8::', 32], ['2002::', 16], ['fc00::', 7], ['fe80::', 10], ['fec0::', 10], ['ff00::', 8]
 ]) {
   BLOCKED_SUBNETS.addSubnet(address, prefix, 'ipv6');
 }
