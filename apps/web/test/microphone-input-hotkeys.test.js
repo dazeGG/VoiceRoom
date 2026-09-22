@@ -51,10 +51,14 @@ test('microphone gain is persisted, limited, and is the last capture stage', () 
   assert.match(settings, /persistMicrophoneVolume/);
   assert.match(settings, /Math\.min\(MAX_MICROPHONE_VOLUME, Math\.max\(0, Math\.round\(volume\)\)\)/);
 
-  assert.match(microphone, /capture = await applyNoiseGateToCapture/);
-  assert.match(microphone, /return applyInputGainToCapture\(capture\)/);
-  assert.match(microphone, /source\.connect\(gain\)/);
-  assert.match(microphone, /gain\.connect\(limiter\)/);
+  // One AudioContext: RNNoise -> gate -> gain, with the gain stage last.
+  assert.match(microphone, /const gate = await createOptionalGateNode\(context\)/);
+  assert.match(microphone, /processors\.push\(createInputGainStage\(context, tail, destination, source\)\);\s*await context\.resume\(\)/);
+  assert.equal((microphone.match(/new AudioContext\(/g) || []).length, 2, 'only createProcessingAudioContext builds contexts');
+  assert.match(microphone, /input\.connect\(gain\)/);
+  // The limiter (and its look-ahead delay) is only in the path above unity gain.
+  assert.match(microphone, /const needsLimiter = value > 1;/);
+  assert.match(microphone, /gain\.connect\(needsLimiter \? limiter : destination\)/);
   assert.match(microphone, /limiter\.connect\(destination\)/);
   assert.match(microphone, /limiter\.threshold\.value = -3/);
   assert.match(microphone, /type: 'input-gain'/);

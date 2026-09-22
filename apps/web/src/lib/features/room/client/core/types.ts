@@ -33,7 +33,8 @@ export interface MicProcessor {
   setGain?: (gain: number) => void;
   source: MediaStreamAudioSourceNode;
   setThreshold?: (threshold: number) => void;
-  type?: 'gate' | 'input-gain';
+  setAuto?: (auto: boolean) => void;
+  type?: 'gate' | 'input-gain' | 'rnnoise';
 }
 
 export interface MicrophoneCapture {

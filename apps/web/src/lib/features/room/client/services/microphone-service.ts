@@ -25,7 +25,7 @@ import { createLogger, errorContext } from '$lib/shared/log';
 
 const log = createLogger('room:mic');
 
-type GateNode = AudioNode & { setThreshold?: (threshold: number) => void };
+type GateNode = AudioNode & { setAuto?: (auto: boolean) => void; setThreshold?: (threshold: number) => void };
 
 interface NoiseGateEnvelope {
   attackCoefficient: number;
@@ -79,103 +79,158 @@ export async function openMicrophone(mode: NoiseMode = state.noiseMode): Promise
 
   const noiseMode = NOISE_MODES[getNoiseMode(mode)];
   const deviceId = state.microphoneDeviceId || roomDeviceUi.microphoneId;
-  return navigator.mediaDevices.getUserMedia({
+  const constraints = (exactDeviceId: string): MediaStreamConstraints => ({
     audio: {
       autoGainControl: true,
       channelCount: 1,
-      deviceId: deviceId ? { exact: deviceId } : undefined,
+      deviceId: exactDeviceId ? { exact: exactDeviceId } : undefined,
       echoCancellation: true,
       noiseSuppression: noiseMode.nativeNoiseSuppression
     },
     video: false
   });
+  try {
+    return await navigator.mediaDevices.getUserMedia(constraints(deviceId));
+  } catch (error) {
+    // A stored device that was unplugged (or re-enumerated by the OS) must not
+    // leave the user without a microphone: open the system default instead.
+    const name = error instanceof DOMException ? error.name : '';
+    if (!deviceId || (name !== 'OverconstrainedError' && name !== 'NotFoundError')) throw error;
+    log.warn('stored microphone unavailable, opening the default', errorContext(error));
+    const stream = await navigator.mediaDevices.getUserMedia(constraints(''));
+    showToast('Выбранный микрофон недоступен, включен микрофон по умолчанию');
+    return stream;
+  }
 }
 
+/**
+ * Builds the whole capture chain — RNNoise, the gate and the input gain — in
+ * one AudioContext. Each MediaStream hop between separate contexts added its
+ * own buffering, so the former chain of up to three contexts cost tens of
+ * milliseconds of mouth-to-ear latency for nothing.
+ */
 export async function openLocalMicrophone(): Promise<MicrophoneCapture> {
   const mode = state.noiseMode;
   const rawStream = await openMicrophone(mode);
 
-  if (mode !== 'rnnoise') {
-    return applyInputGainToCapture(await applyNoiseGateToCapture({
-      mode,
-      processor: null,
-      rawStream,
-      stream: rawStream
-    }));
-  }
+  if (mode !== 'rnnoise') return buildCapturePipeline(rawStream, mode);
 
-  let capture: MicrophoneCapture;
   try {
-    capture = await applyNoiseGateToCapture(await createNoiseSuppressedStream(rawStream));
+    return await buildCapturePipeline(rawStream, 'rnnoise');
   } catch (error) {
     log.warn('RNNoise unavailable', errorContext(error));
     stopStream(rawStream);
     setNoiseMode('browser');
     showToast('RNNoise недоступен, включен браузерный шумодав');
-    const fallbackStream = await openMicrophone('browser');
-    capture = await applyNoiseGateToCapture({
-      mode: 'browser',
-      processor: null,
-      rawStream: fallbackStream,
-      stream: fallbackStream
-    });
+    return buildCapturePipeline(await openMicrophone('browser'), 'browser');
   }
-
-  return applyInputGainToCapture(capture);
 }
 
-async function applyInputGainToCapture(capture: MicrophoneCapture): Promise<MicrophoneCapture> {
-  if (!capture.stream) return capture;
-
+async function buildCapturePipeline(rawStream: MediaStream, mode: NoiseMode): Promise<MicrophoneCapture> {
   const context = createProcessingAudioContext();
   try {
-    const source = context.createMediaStreamSource(capture.stream);
-    const gain = context.createGain();
-    const limiter = context.createDynamicsCompressor();
+    const source = context.createMediaStreamSource(rawStream);
     const destination = context.createMediaStreamDestination();
+    const processors: MicProcessor[] = [];
+    let tail: AudioNode = source;
 
-    gain.gain.value = state.microphoneVolume / 100;
-    limiter.threshold.value = -3;
-    limiter.knee.value = 0;
-    limiter.ratio.value = 20;
-    limiter.attack.value = 0.003;
-    limiter.release.value = 0.08;
+    if (mode === 'rnnoise') {
+      const rnnoise = await createRnnoiseNode(context);
+      tail.connect(rnnoise);
+      tail = rnnoise;
+      processors.push({ context, destination, node: rnnoise, source, type: 'rnnoise' });
+    }
 
-    source.connect(gain);
-    gain.connect(limiter);
-    limiter.connect(destination);
+    const gate = await createOptionalGateNode(context);
+    if (gate) {
+      tail.connect(gate);
+      tail = gate;
+      processors.push({
+        context,
+        destination,
+        node: gate,
+        setAuto: (auto: boolean) => gate.setAuto?.(auto),
+        setThreshold: (nextThreshold: number) => {
+          setNoiseGateNodeThreshold(gate, nextThreshold);
+        },
+        source,
+        type: 'gate'
+      });
+    }
+
+    processors.push(createInputGainStage(context, tail, destination, source));
     await context.resume();
 
-    const [inputTrack] = capture.stream.getAudioTracks();
+    const [inputTrack] = rawStream.getAudioTracks();
     const [outputTrack] = destination.stream.getAudioTracks();
-    if (!outputTrack) throw new Error('Регулятор микрофона не вернул аудио-трек');
+    if (!outputTrack) throw new Error('Обработка микрофона не вернула аудио-трек');
     outputTrack.enabled = inputTrack?.enabled ?? true;
     if ('contentHint' in outputTrack) outputTrack.contentHint = 'speech';
 
-    const inputGainProcessor: MicProcessor = {
-      context,
-      destination,
-      node: gain,
-      nodes: [gain, limiter],
-      setGain: (value: number) => {
-        const now = context.currentTime;
-        gain.gain.cancelScheduledValues(now);
-        gain.gain.setTargetAtTime(value, now, 0.01);
-      },
-      source,
-      type: 'input-gain'
-    };
-
     return {
-      ...capture,
-      processor: combineMicrophoneProcessors(capture.processor, inputGainProcessor),
+      mode,
+      processor: processors,
+      rawStream,
       stream: destination.stream
     };
   } catch (error) {
     context.close().catch(() => {});
-    stopMicrophoneCapture(capture);
+    // The RNNoise caller owns the raw stream: it closes it before reopening
+    // the microphone for the browser fallback.
+    if (mode !== 'rnnoise') stopStream(rawStream);
     throw error;
   }
+}
+
+/**
+ * The limiter only earns its place above unity gain, where the boost could
+ * clip. DynamicsCompressorNode carries a fixed look-ahead delay, so at or
+ * below 100% the gain feeds the destination directly and the chain is
+ * re-routed only when the user actually boosts the microphone.
+ */
+function createInputGainStage(
+  context: AudioContext,
+  input: AudioNode,
+  destination: MediaStreamAudioDestinationNode,
+  source: MediaStreamAudioSourceNode
+): MicProcessor {
+  const gain = context.createGain();
+  const limiter = context.createDynamicsCompressor();
+  limiter.threshold.value = -3;
+  limiter.knee.value = 0;
+  limiter.ratio.value = 20;
+  limiter.attack.value = 0.003;
+  limiter.release.value = 0.08;
+  limiter.connect(destination);
+
+  let limited: boolean | null = null;
+  const route = (value: number) => {
+    const needsLimiter = value > 1;
+    if (needsLimiter === limited) return;
+    if (limited !== null) gain.disconnect();
+    gain.connect(needsLimiter ? limiter : destination);
+    limited = needsLimiter;
+  };
+
+  const initial = state.microphoneVolume / 100;
+  gain.gain.value = initial;
+  input.connect(gain);
+  route(initial);
+
+  return {
+    context,
+    destination,
+    node: gain,
+    nodes: [gain, limiter],
+    setGain: (value: number) => {
+      const now = context.currentTime;
+      route(value);
+      gain.gain.cancelScheduledValues(now);
+      gain.gain.setTargetAtTime(value, now, 0.01);
+    },
+    source,
+    type: 'input-gain'
+  };
 }
 
 export function setMicrophoneVolume(volume: number): number {
@@ -189,71 +244,15 @@ export function setMicrophoneVolume(volume: number): number {
   return nextVolume;
 }
 
-async function applyNoiseGateToCapture(capture: MicrophoneCapture): Promise<MicrophoneCapture> {
-  if (getGateThresholdAmplitude() <= 0) return capture;
-
+async function createOptionalGateNode(context: AudioContext): Promise<GateNode | null> {
+  const threshold = getGateThresholdAmplitude();
+  if (threshold <= 0) return null;
   try {
-    const gated = await createNoiseGatedStream(capture.stream!);
-    return {
-      ...capture,
-      processor: combineMicrophoneProcessors(capture.processor, gated.processor),
-      stream: gated.stream
-    };
+    return await createNoiseGateNode(context, threshold);
   } catch (error) {
     log.warn('noise gate unavailable', errorContext(error));
     showToast('Гейт недоступен, микрофон работает без него');
-    return capture;
-  }
-}
-
-async function createNoiseGatedStream(inputStream: MediaStream): Promise<{
-  kind?: string;
-  processor: MicProcessor | null;
-  stream: MediaStream;
-}> {
-  const threshold = getGateThresholdAmplitude();
-  if (threshold <= 0) {
-    return {
-      processor: null,
-      stream: inputStream
-    };
-  }
-
-  const context = createProcessingAudioContext();
-  try {
-    const source = context.createMediaStreamSource(inputStream);
-    const gate = await createNoiseGateNode(context, threshold);
-    const destination = context.createMediaStreamDestination();
-
-    source.connect(gate);
-    gate.connect(destination);
-    await context.resume();
-
-    const [inputTrack] = inputStream.getAudioTracks();
-    const [outputTrack] = destination.stream.getAudioTracks();
-    if (!outputTrack) {
-      throw new Error('Гейт не вернул аудио-трек');
-    }
-    outputTrack.enabled = inputTrack?.enabled ?? true;
-    if ('contentHint' in outputTrack) outputTrack.contentHint = 'speech';
-
-    return {
-      kind: 'gate',
-      processor: {
-        context,
-        destination,
-        node: gate,
-        setThreshold: (nextThreshold: number) => {
-          setNoiseGateNodeThreshold(gate, nextThreshold);
-        },
-        source,
-        type: 'gate'
-      },
-      stream: destination.stream
-    };
-  } catch (error) {
-    context.close().catch(() => {});
-    throw error;
+    return null;
   }
 }
 
@@ -272,6 +271,9 @@ async function createNoiseGateNode(context: AudioContext, threshold: number): Pr
       });
       node.setThreshold = (nextThreshold: number) => {
         (node as AudioWorkletNode).port.postMessage({ threshold: nextThreshold, type: 'set-threshold' });
+      };
+      node.setAuto = (auto: boolean) => {
+        (node as AudioWorkletNode).port.postMessage({ auto, type: 'set-auto' });
       };
       return node;
     } catch (error) {
@@ -381,52 +383,19 @@ function getGateSmoothingCoefficient(milliseconds: number, sampleRate: number): 
   return 1 - Math.exp(-1 / (duration * sampleRate));
 }
 
-async function createNoiseSuppressedStream(rawStream: MediaStream): Promise<MicrophoneCapture> {
-  if (!window.AudioContext || !window.AudioWorkletNode) {
+async function createRnnoiseNode(context: AudioContext): Promise<AudioNode> {
+  if (!window.AudioWorkletNode || !context.audioWorklet) {
     throw new Error('AudioWorklet недоступен');
   }
-
-  const context = createProcessingAudioContext();
-  try {
-    const { RNNoiseNode, rnnoise_loadAssets: loadAssets } = await loadRnnoiseModule();
-    await RNNoiseNode.register(
-      context,
-      loadAssets({
-        moduleSrc: `${RNNOISE_ASSET_BASE}rnnoise.wasm`,
-        scriptSrc: `${RNNOISE_ASSET_BASE}rnnoise.worklet.js`
-      })
-    );
-
-    const source = context.createMediaStreamSource(rawStream);
-    const rnnoise = new RNNoiseNode(context);
-    const destination = context.createMediaStreamDestination();
-    source.connect(rnnoise);
-    rnnoise.connect(destination);
-    await context.resume();
-
-    const [inputTrack] = rawStream.getAudioTracks();
-    const [outputTrack] = destination.stream.getAudioTracks();
-    if (!outputTrack) {
-      throw new Error('RNNoise не вернул аудио-трек');
-    }
-    outputTrack.enabled = inputTrack?.enabled ?? true;
-    if ('contentHint' in outputTrack) outputTrack.contentHint = 'speech';
-
-    return {
-      mode: 'rnnoise',
-      processor: {
-        context,
-        destination,
-        node: rnnoise,
-        source
-      },
-      rawStream,
-      stream: destination.stream
-    };
-  } catch (error) {
-    context.close().catch(() => {});
-    throw error;
-  }
+  const { RNNoiseNode, rnnoise_loadAssets: loadAssets } = await loadRnnoiseModule();
+  await RNNoiseNode.register(
+    context,
+    loadAssets({
+      moduleSrc: `${RNNOISE_ASSET_BASE}rnnoise.wasm`,
+      scriptSrc: `${RNNOISE_ASSET_BASE}rnnoise.worklet.js`
+    })
+  );
+  return new RNNoiseNode(context);
 }
 
 function loadRnnoiseModule(): Promise<any> {
@@ -436,9 +405,11 @@ function loadRnnoiseModule(): Promise<any> {
 
 export function createProcessingAudioContext(): AudioContext {
   try {
-    return new AudioContext({ sampleRate: 48000 });
+    // 48 kHz is Opus's native rate, so nothing resamples between this chain
+    // and the encoder; 'interactive' asks for the smallest render buffer.
+    return new AudioContext({ latencyHint: 'interactive', sampleRate: 48000 });
   } catch {
-    return new AudioContext();
+    return new AudioContext({ latencyHint: 'interactive' });
   }
 }
 
@@ -486,16 +457,6 @@ export function stopMicrophoneCapture(capture: MicrophoneCapture): void {
     ].filter((stream): stream is MediaStream => Boolean(stream))
   );
   for (const stream of streams) stopStream(stream);
-}
-
-function combineMicrophoneProcessors(
-  currentProcessor: MicProcessor | MicProcessor[] | null,
-  nextProcessor: MicProcessor | null
-): MicProcessor | MicProcessor[] | null {
-  if (!currentProcessor) return nextProcessor;
-  return [...getMicrophoneProcessors(currentProcessor), nextProcessor].filter(
-    (processor): processor is MicProcessor => Boolean(processor)
-  );
 }
 
 export function getMicrophoneProcessors(processor: MicProcessor | MicProcessor[] | null): MicProcessor[] {
