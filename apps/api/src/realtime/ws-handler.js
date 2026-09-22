@@ -312,28 +312,31 @@ function createWsHandler({
     // The close code and how long the socket lived are what separate a normal
     // navigation (1001, minutes) from the instability being chased: an abnormal
     // 1006 seconds after connecting, repeated per user.
-    socket.on('close', (code, reason) => {
-      logger.info({
+    // A socket error is followed by its own 'close', so the record is emitted
+    // once: counting ws.closed must equal the number of sockets that ended,
+    // not the number of ways each one ended.
+    let closeReported = false;
+    function reportClosed({ code = 0, reason = '', error = null } = {}) {
+      if (closeReported) return;
+      closeReported = true;
+      logger[error ? 'warn' : 'info']({
         evt: LOG_EVENTS.WS_CLOSED,
         connId: connection.id,
         userId: connection.userId || undefined,
         code: Number(code) || 0,
         reason: String(reason || '').slice(0, 120) || undefined,
-        durationMs: now() - connection.openedAt
-      }, 'ws closed');
+        durationMs: now() - connection.openedAt,
+        err: error || undefined
+      }, error ? 'ws closed after a socket error' : 'ws closed');
+    }
+
+    socket.on('close', (code, reason) => {
+      reportClosed({ code, reason });
       registry.removeConnection(connection);
     });
 
     socket.on('error', (error) => {
-      logger.warn({
-        evt: LOG_EVENTS.WS_CLOSED,
-        connId: connection.id,
-        userId: connection.userId || undefined,
-        code: 0,
-        reason: 'socket_error',
-        durationMs: now() - connection.openedAt,
-        err: error
-      }, 'ws closed after a socket error');
+      reportClosed({ reason: 'socket_error', error });
       registry.removeConnection(connection);
     });
   }

@@ -120,6 +120,11 @@ export async function reportClientLogs(reason: string): Promise<boolean> {
         method: 'POST'
       });
       if (response.status === 404) intakeAvailable = false;
+      // Delivered records are dropped so a later report carries what happened
+      // since, not a second copy of what the log stream already holds. Only
+      // the records this report sent are removed: anything logged while the
+      // request was in flight belongs to the next one.
+      if (response.ok) buffer.splice(0, events.length - 1);
       // A report that fails must never surface to the user or break the flow
       // that was already going wrong.
     } catch {
