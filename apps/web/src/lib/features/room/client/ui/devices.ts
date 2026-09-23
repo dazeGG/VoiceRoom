@@ -55,7 +55,9 @@ export interface GateControlView {
 export function getGateControlView(): GateControlView {
   const levelDb = Number.isFinite(roomDeviceUi.micLevelDb) ? clampGateThresholdDb(roomDeviceUi.micLevelDb) : GATE_THRESHOLD_MIN_DB;
   const position = getDbMeterPosition(levelDb);
-  const gateOpen = isGateDisabled() || levelDb >= state.gateThresholdDb;
+  // In automatic mode the live threshold is inside the worklet; the meter
+  // does not pretend to know it.
+  const gateOpen = isGateDisabled() || state.gateAuto || levelDb >= state.gateThresholdDb;
 
   const auto = !isGateDisabled() && state.gateAuto;
   return {

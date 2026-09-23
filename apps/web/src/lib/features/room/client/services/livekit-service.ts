@@ -78,18 +78,40 @@ subscribeRoomRecoveryTransitions((event) => {
   }
 });
 
+const NOT_IN_ROOM_RETRY_DELAYS_MS = [500, 1_000, 2_000];
+
+/**
+ * The server only admits peers its roster knows, and the realtime join that
+ * puts us there is sent just before this request. The server already waits a
+ * few seconds for it; a slower or reconnecting realtime socket gets a few more
+ * tries here before the join is treated as failed.
+ */
+async function requestLiveKitCredentials(name: string, isCurrent: () => boolean): Promise<any> {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await postJson('/api/livekit-token', {
+        name,
+        peerId: state.peerId,
+        roomId: state.roomId,
+        sessionToken: state.sessionToken
+      });
+    } catch (error) {
+      const delay = NOT_IN_ROOM_RETRY_DELAYS_MS[attempt];
+      if (!(error instanceof ApiRequestError) || error.code !== 'not_in_room' || delay === undefined) throw error;
+      await new Promise((resolve) => setTimeout(resolve, delay));
+      // A rejected or abandoned join (room full, left the room) ends the wait.
+      if (!isCurrent()) throw error;
+    }
+  }
+}
+
 export async function connectLiveKitRoom(
   name: string,
   isCurrent: () => boolean = () => true
 ): Promise<boolean> {
   setVoiceConnectionStatus('connecting');
 
-  const credentials = await postJson('/api/livekit-token', {
-    name,
-    peerId: state.peerId,
-    roomId: state.roomId,
-    sessionToken: state.sessionToken
-  });
+  const credentials = await requestLiveKitCredentials(name, isCurrent);
   if (!isCurrent()) return false;
 
   const room = await connectLiveKitWithFallback(credentials, isCurrent);
@@ -158,12 +180,7 @@ export async function attemptFreshLiveKitReplacement({
 
   try {
     if (oldRoom) reconcileGenerationFor(oldRoom).invalidate();
-    const credentials = await postJson('/api/livekit-token', {
-      name: state.self?.name || state.peerId,
-      peerId: state.peerId,
-      roomId: state.roomId,
-      sessionToken: state.sessionToken
-    });
+    const credentials = await requestLiveKitCredentials(state.self?.name || state.peerId, isCurrent);
     if (!isCurrent()) return { retryable: true, code: 'transport_error' };
 
     candidate = await connectLiveKitWithFallback(credentials, isCurrent);

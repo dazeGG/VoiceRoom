@@ -5,7 +5,8 @@ import test from 'node:test';
 const source = fs.readFileSync(new URL('../src/lib/features/room/client/services/livekit-service.ts', import.meta.url), 'utf8');
 
 test('fresh LiveKit replacement is a snapshot-gated coordinator one-shot with atomic candidate commit', () => {
-  assert.match(source, /attemptFreshLiveKitReplacement[\s\S]*postJson\('\/api\/livekit-token'/);
+  assert.match(source, /attemptFreshLiveKitReplacement[\s\S]*requestLiveKitCredentials\(/);
+  assert.match(source, /async function requestLiveKitCredentials[\s\S]*?postJson\('\/api\/livekit-token'/);
   assert.match(source, /isCurrentRoomRecoveryEpoch\(epoch\)/);
   assert.match(source, /bindLiveKitRoomEvents\(candidate, eventCurrent\)/);
   assert.match(source, /state\.livekitRoom = candidate;\s*state\.localMicPublication = microphonePublication;\s*state\.localScreenPublications = screenPublications;/);

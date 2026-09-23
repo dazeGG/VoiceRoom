@@ -146,6 +146,9 @@ function shouldAttemptAudioUnlock(): boolean {
 
 export async function unlockAudio(): Promise<void> {
   await unlockAudioBus();
+  // Voices on the direct path are unmuted media elements: a play() the
+  // browser refused before this gesture has to be retried now.
+  syncRemoteAudioPlayback();
   await Promise.allSettled(getMicrophoneProcessors(state.micProcessor).map((processor) => processor.context?.resume()));
   state.audioUnlockPending = false;
   startUi.soundButtonVisible = false;

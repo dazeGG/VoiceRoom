@@ -451,13 +451,16 @@ export function setMicrophoneCaptureEnabled(capture: MicrophoneCapture, enabled:
 
 export function stopMicrophoneCapture(capture: MicrophoneCapture): void {
   const processors = getMicrophoneProcessors(capture.processor);
+  const contexts = new Set<AudioContext>();
   for (const processor of processors) {
     disconnectAudioNode(processor.source);
     disconnectAudioNode(processor.node);
     for (const node of processor.nodes || []) disconnectAudioNode(node);
     disconnectAudioNode(processor.destination);
-    processor.context?.close().catch(() => {});
+    if (processor.context) contexts.add(processor.context);
   }
+  // Every stage of one capture shares a single context.
+  for (const context of contexts) context.close().catch(() => {});
 
   const streams = new Set(
     [

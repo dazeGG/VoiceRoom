@@ -97,3 +97,23 @@ test('manual mode keeps its fixed threshold and can be switched to automatic', (
   gate.run(NOISE, 2);
   assert.ok(gate.run(NOISE, 1) < 0.01, 'automatic mode learns the floor and gates it');
 });
+
+test('turning automatic mode off restores the slider threshold', () => {
+  const gate = loadProcessor({ auto: true, threshold: 0.1 }); // -20 dBFS manual
+  gate.run(NOISE, 2);
+  gate.post({ type: 'set-auto', auto: false });
+  assert.equal(gate.processor.threshold, 0.1);
+  // A slider move while automatic is on is remembered for later, too.
+  gate.post({ type: 'set-auto', auto: true });
+  gate.post({ type: 'set-threshold', threshold: 0.05 });
+  gate.post({ type: 'set-auto', auto: false });
+  assert.equal(gate.processor.threshold, 0.05);
+});
+
+test('one silent block between syllables does not collapse the noise floor', () => {
+  const gate = loadProcessor({ auto: true, threshold: 0.001 });
+  gate.run(NOISE, 2);
+  const before = gate.processor.threshold;
+  gate.run(0, QUANTUM / SAMPLE_RATE);
+  assert.ok(gate.processor.threshold > before * 0.7, `threshold fell from ${before} to ${gate.processor.threshold}`);
+});
