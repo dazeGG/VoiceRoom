@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 import Fastify from 'fastify';
 import { Pool } from 'pg';
 
-import { createPinRepository } from '../src/domains/messaging/pin-repository.js';
-import { createPinService } from '../src/domains/messaging/pin-service.js';
-import { registerPinRoutes } from '../src/domains/messaging/pin-routes.js';
+import { createPinRepository } from '../src/domains/messaging/pin-repository.ts';
+import { createPinService } from '../src/domains/messaging/pin-service.ts';
+import { registerPinRoutes } from '../src/domains/messaging/pin-routes.ts';
 import { createRoomStore } from '../src/lib/room-store.js';
 import { createUserStore } from '../src/lib/user-store.js';
 import { runMigrations } from '../src/lib/migrate.js';

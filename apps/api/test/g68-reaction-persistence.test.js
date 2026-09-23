@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import { Pool } from 'pg';
 import test from 'node:test';
 import { runMigrations } from '../src/lib/migrate.js';
-import { createReactionRepository } from '../src/domains/messaging/reaction-repository.js';
+import { createReactionRepository } from '../src/domains/messaging/reaction-repository.ts';
 import { createTestDatabase } from './db-harness.js';
 
 async function fixture(t) {

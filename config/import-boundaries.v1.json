@@ -4,7 +4,7 @@
   "importRules": [
     {
       "id": "no-shared-src-deep-imports",
-      "sources": ["apps/api/src/**/*.js", "apps/web/src/**/*.{js,ts,svelte}"],
+      "sources": ["apps/api/src/**/*.{js,ts,mts}", "apps/web/src/**/*.{js,ts,svelte}"],
       "forbidden": ["packages/shared/src/", "@voice-room/shared/src/"],
       "message": "Use @voice-room/shared package exports instead of shared src deep imports."
     },
@@ -26,8 +26,8 @@
       "room_peer_identities": ["apps/api/src/lib/room-store.js"],
       "room_messages": [
         "apps/api/src/lib/room-store.js",
-        "apps/api/src/domains/messaging/content-repository.js",
-        "apps/api/src/domains/messaging/reply-repository.js",
+        "apps/api/src/domains/messaging/content-repository.ts",
+        "apps/api/src/domains/messaging/reply-repository.ts",
         "apps/api/src/domains/moderation/message-moderation-service.js",
       "apps/api/src/domains/link-previews/link-preview-repository.js"
       ],
@@ -38,9 +38,9 @@
       ],
       "room_chat_reads": [
         "apps/api/src/lib/room-store.js",
-        "apps/api/src/domains/messaging/message-read-repository.js"
+        "apps/api/src/domains/messaging/message-read-repository.ts"
       ],
-      "room_message_pins": ["apps/api/src/domains/messaging/pin-repository.js"],
+      "room_message_pins": ["apps/api/src/domains/messaging/pin-repository.ts"],
       "room_server_mutes": ["apps/api/src/lib/room-store.js"],
       "user_blocks": ["apps/api/src/lib/friend-store.js"],
       "users": ["apps/api/src/lib/user-store.js", "apps/api/src/lib/notification-store.js"],
@@ -49,8 +49,8 @@
       "friendships": ["apps/api/src/lib/friend-store.js"],
       "direct_messages": [
         "apps/api/src/lib/friend-store.js",
-        "apps/api/src/domains/messaging/message-read-repository.js",
-        "apps/api/src/domains/messaging/reply-repository.js",
+        "apps/api/src/domains/messaging/message-read-repository.ts",
+        "apps/api/src/domains/messaging/reply-repository.ts",
       "apps/api/src/domains/link-previews/link-preview-repository.js"
       ],
       "notification_preferences": ["apps/api/src/lib/notification-store.js"],

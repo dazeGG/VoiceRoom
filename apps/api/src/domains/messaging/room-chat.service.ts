@@ -13,13 +13,10 @@ import { avatarColorForPeerId } from '../../lib/room-store.js';
 import { tokensMatch } from '../../platform/crypto/tokens-match.ts';
 import type { LiveRoom, PresencePeer } from '../rooms/room-views.ts';
 import { cleanChatText, messageFingerprint, normalizeAttachmentIds } from './message-input.ts';
-import { requireReplyTarget as requireReplyTargetJs } from './reply-projector.js';
+import { requireReplyTarget } from './reply-projector.ts';
 import { publicChatMessage, type RoomChatMessage } from './room-chat-views.ts';
 
 type DbClient = unknown;
-
-// reply-projector.js is untyped; its parameter type is inferred from `= {}`.
-const requireReplyTarget = requireReplyTargetJs as (input: { message: unknown; visibility: boolean }) => Promise<unknown>;
 
 interface ChatAuthor {
   id: string;

@@ -92,12 +92,12 @@ import { createDesktopReleaseService } from './domains/ops/desktop-release.servi
 import { getLiveKitRoomName as liveKitRoomName } from './domains/admission/livekit-token-binding.mts';
 import { isCrossOriginCookieWrite, isCrossOriginWebSocket } from './platform/http/origin-guard.mts';
 import { registerMembershipRoutes } from './domains/membership/membership-routes.js';
-import { registerDmHistoryRoutes } from './domains/messaging/dm-history-routes.js';
-import { registerRoomHistoryRoutes } from './domains/messaging/room-history-routes.js';
-import { createContentRepository } from './domains/messaging/content-repository.js';
-import { createReplyRepository } from './domains/messaging/reply-repository.js';
-import { registerReactionRoutes } from './domains/messaging/reaction-routes.js';
-import { registerPinRoutes } from './domains/messaging/pin-routes.js';
+import { registerDmHistoryRoutes } from './domains/messaging/dm-history-routes.ts';
+import { registerRoomHistoryRoutes } from './domains/messaging/room-history-routes.ts';
+import { createContentRepository } from './domains/messaging/content-repository.ts';
+import { createReplyRepository } from './domains/messaging/reply-repository.ts';
+import { registerReactionRoutes } from './domains/messaging/reaction-routes.ts';
+import { registerPinRoutes } from './domains/messaging/pin-routes.ts';
 import { registerNotificationRoutes } from './domains/notifications/notification-routes.js';
 import { registerModerationRoutes } from './domains/moderation/moderation-routes.js';
 import { MAX_UPLOAD_BYTES } from './domains/media/media-service.js';

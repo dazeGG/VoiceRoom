@@ -1,8 +1,51 @@
-import { buildHistoryEnvelope, normalizeHistoryRequest } from '@voice-room/shared/messaging-history';
+import { buildHistoryEnvelope, normalizeHistoryRequest, type HistoryEnvelope } from '@voice-room/shared/messaging-history';
 import { normalizeLinkPreview } from '@voice-room/shared/link-preview';
 
+type Tuple = { createdAtMicros: unknown; id: string };
+type Loose = Record<string, unknown>;
+
+export type StoredDirectMessage = {
+  id: string;
+  senderId: string;
+  recipientId: string;
+  body?: string;
+  createdAt?: unknown;
+  createdAtMicros?: unknown;
+  editedAt?: unknown;
+  readAt?: unknown;
+  metadata?: { linkPreview?: unknown; [key: string]: unknown } | null;
+  attachments?: unknown;
+  replyTo?: unknown;
+  replyPreview?: unknown;
+  [key: string]: unknown;
+};
+
+type HistoryPage = { messages: StoredDirectMessage[]; hasMoreBefore: boolean; hasMoreAfter: boolean };
+type ListInput = { userId: string; peerId: string; anchor: Tuple | undefined; limit: number };
+
+export interface DmHistoryRepository {
+  canReadThread(input: { userId: string; peerId: string }): Promise<boolean>;
+  listLatest(input: ListInput): Promise<HistoryPage>;
+  listBefore(input: ListInput): Promise<HistoryPage>;
+  listAfter(input: ListInput): Promise<HistoryPage>;
+  listAround(input: ListInput): Promise<HistoryPage>;
+}
+
+export interface HistoryCursorCodec {
+  encode(input: { purpose: string; context: string; tuple: Tuple }): string;
+  decode(cursor: string | undefined, options: { purpose: string; context: string }): Tuple;
+}
+
+type VisibilityPolicy = {
+  canViewDirectMessage?(context: Loose): boolean | Promise<boolean>;
+  requireDirectMessage?(context: Loose): unknown;
+};
+
 class DmHistoryError extends Error {
-  constructor(code, statusCode, message) {
+  declare code: string;
+  declare statusCode: number;
+
+  constructor(code: string, statusCode: number, message: string) {
     super(message);
     this.name = 'DmHistoryError';
     this.code = code;
@@ -10,27 +53,34 @@ class DmHistoryError extends Error {
   }
 }
 
-function canonicalParticipants(userId, peerId) {
+function canonicalParticipants(userId: string, peerId: string): [string, string] {
   return userId < peerId ? [userId, peerId] : [peerId, userId];
 }
 
-function createDmHistoryService({ repository, cursorCodec, visibilityPolicy, projectMessage } = {}) {
+function createDmHistoryService({ repository, cursorCodec, visibilityPolicy, projectMessage }: {
+  repository?: DmHistoryRepository;
+  cursorCodec?: HistoryCursorCodec;
+  visibilityPolicy?: VisibilityPolicy;
+  projectMessage?: (input: { message: StoredDirectMessage; userId: string; peerId: string }) => Promise<StoredDirectMessage> | StoredDirectMessage;
+} = {}) {
   if (!repository) throw new TypeError('DM history repository is required');
   if (!cursorCodec?.encode || !cursorCodec?.decode) throw new TypeError('cursor codec is required');
+  const history = repository;
+  const codec = cursorCodec;
 
-  function contextFor(userId, peerId) {
+  function contextFor(userId: string, peerId: string): string {
     return `dm:${canonicalParticipants(userId, peerId).join(':')}`;
   }
 
-  function encodeTuple(userId, peerId, tuple, purpose = 'dm-history') {
-    return cursorCodec.encode({ purpose, context: contextFor(userId, peerId), tuple });
+  function encodeTuple(userId: string, peerId: string, tuple: Tuple, purpose = 'dm-history'): string {
+    return codec.encode({ purpose, context: contextFor(userId, peerId), tuple });
   }
 
-  function decodeTuple(userId, peerId, cursor) {
-    return cursorCodec.decode(cursor, { purpose: 'dm-history', context: contextFor(userId, peerId) });
+  function decodeTuple(userId: string, peerId: string, cursor: string | undefined): Tuple {
+    return codec.decode(cursor, { purpose: 'dm-history', context: contextFor(userId, peerId) });
   }
 
-  function canView(message, userId) {
+  function canView(message: StoredDirectMessage, userId: string): boolean | Promise<boolean> {
     if (!visibilityPolicy) {
       return message.senderId === userId || message.recipientId === userId;
     }
@@ -44,7 +94,7 @@ function createDmHistoryService({ repository, cursorCodec, visibilityPolicy, pro
     return true;
   }
 
-  function toDto(userId, peerId, message) {
+  function toDto(userId: string, peerId: string, message: StoredDirectMessage) {
     const tuple = { createdAtMicros: message.createdAtMicros, id: message.id };
     return {
       id: message.id,
@@ -65,7 +115,7 @@ function createDmHistoryService({ repository, cursorCodec, visibilityPolicy, pro
     };
   }
 
-  async function getPage({ userId, peerId, query = {} } = {}) {
+  async function getPage({ userId, peerId, query = {} }: { userId?: unknown; peerId?: unknown; query?: Loose } = {}): Promise<HistoryEnvelope> {
     const viewer = String(userId || '').trim();
     const peer = String(peerId || '').trim();
     if (!viewer) throw new DmHistoryError('authentication_required', 401, 'Authentication required');
@@ -73,12 +123,12 @@ function createDmHistoryService({ repository, cursorCodec, visibilityPolicy, pro
 
     const parsed = normalizeHistoryRequest(query);
     if (!parsed.ok) throw new DmHistoryError(parsed.code, 400, 'Invalid history cursor');
-    if (!(await repository.canReadThread({ userId: viewer, peerId: peer }))) {
+    if (!(await history.canReadThread({ userId: viewer, peerId: peer }))) {
       throw new DmHistoryError('thread_forbidden', 403, 'Thread is not available');
     }
 
     const { mode, limit, cursor } = parsed.request;
-    let anchor;
+    let anchor: Tuple | undefined;
     if (mode !== 'latest') {
       try {
         anchor = decodeTuple(viewer, peer, cursor);
@@ -87,14 +137,14 @@ function createDmHistoryService({ repository, cursorCodec, visibilityPolicy, pro
       }
     }
 
-    const method = {
+    const method = ({
       latest: 'listLatest',
       before: 'listBefore',
       after: 'listAfter',
       around: 'listAround'
-    }[mode];
-    const page = await repository[method]({ userId: viewer, peerId: peer, anchor, limit });
-    const visible = [];
+    } as const)[mode];
+    const page = await history[method]({ userId: viewer, peerId: peer, anchor, limit });
+    const visible: StoredDirectMessage[] = [];
     for (const message of page.messages) {
       if (await canView(message, viewer)) visible.push(message);
     }

@@ -15,7 +15,7 @@ test('G24-A01 history indexes are additive tuple indexes under the runner lock b
 });
 
 test('G24-A02 room and DM history repositories use tuple comparisons without offset scans', () => {
-  for (const name of ['room-history-repository.js', 'dm-history-repository.js']) {
+  for (const name of ['room-history-repository.ts', 'dm-history-repository.ts']) {
     const source = fs.readFileSync(path.resolve(import.meta.dirname, `../src/domains/messaging/${name}`), 'utf8');
     assert.match(source, /created_at/);
     assert.match(source, /id/);

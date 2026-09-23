@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createCursorCodec } from '../src/platform/cursor-codec.js';
-import { canonicalParticipants, createDmHistoryService } from '../src/domains/messaging/dm-history-service.js';
+import { canonicalParticipants, createDmHistoryService } from '../src/domains/messaging/dm-history-service.ts';
 
 function message(id, micros) { return { id, senderId: 'a', recipientId: 'b', body: id, createdAt: Number(micros), createdAtMicros: String(micros) }; }
 

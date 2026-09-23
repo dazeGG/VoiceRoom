@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createCursorCodec } from '../src/platform/cursor-codec.js';
-import { createMessageReadService } from '../src/domains/messaging/message-read-service.js';
+import { createMessageReadService } from '../src/domains/messaging/message-read-service.ts';
 
 test('G30-A01 room read uses an exact purpose-bound tuple and reports monotonic no-op', async () => {
   const codec = createCursorCodec({ keys: ['m'.repeat(32)] });

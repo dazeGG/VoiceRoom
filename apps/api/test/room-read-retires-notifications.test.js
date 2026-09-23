@@ -28,7 +28,7 @@ test('reading a room retires the notifications that room produced', () => {
 });
 
 test('the read service reports how far the read reached', () => {
-  const service = read('../src/domains/messaging/message-read-service.js');
+  const service = read('../src/domains/messaging/message-read-service.ts');
 
   // The caller needs the read point to bound which notifications it retires.
   assert.match(service, /readThrough: state\.last_read_message_created_at \?\? null/);

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
-import { projectReplyPreview, projectReplyTombstone, requireReplyTarget } from '../src/domains/messaging/reply-projector.js';
+import { projectReplyPreview, projectReplyTombstone, requireReplyTarget } from '../src/domains/messaging/reply-projector.ts';
 
 test('G32-A01 reply projection is non-recursive and terminal states tombstone', async () => {
   const preview = projectReplyPreview({ id: 'reply', text: ' child ', replyTo: { messageId: 'root' }, replyPreview: { messageId: 'root' } });
