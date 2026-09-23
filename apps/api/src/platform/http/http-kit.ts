@@ -39,6 +39,15 @@ export function failure(error: string, extra: { code?: string } = {}): Failure {
   return { ok: false, error, ...extra };
 }
 
+/**
+ * preValidation hook for routes whose legacy handler read a missing or `null`
+ * JSON body as `{}`. Without it the body schema answers 400 before the handler
+ * gets to give its own (401, 403, ...) answer.
+ */
+export async function optionalJsonBody(request: FastifyRequest): Promise<void> {
+  if (request.body === undefined || request.body === null) request.body = {};
+}
+
 export function registerHttpKit(app: FastifyInstance, options: HttpKitOptions): void {
   app.addHook('onSend', async (_request: FastifyRequest, reply: FastifyReply, payload: unknown) => {
     for (const [name, value] of Object.entries(options.securityHeaders())) {
