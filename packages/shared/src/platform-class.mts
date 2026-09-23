@@ -1,15 +1,36 @@
-export const PLATFORM_CLASS_CONTRACT = 'voice-room.platform-class/v1';
-export const PLATFORM_CLASSES = Object.freeze({
+// Which kind of device the client runs on, and what that allows: the desktop
+// app features stay off on mobile, the room page works everywhere.
+
+export type PlatformClass = 'desktop' | 'mobile' | 'unknown';
+
+export interface PlatformSignals {
+  desktopBridge?: boolean;
+  userAgentDataMobile?: boolean;
+  userAgent?: string;
+  platform?: string;
+  maxTouchPoints?: number;
+}
+
+export interface PlatformPolicy {
+  contractVersion: 'voice-room.platform-class/v1';
+  platformClass: PlatformClass;
+  desktopAllowed: boolean;
+  /** The room page (voice, room chat, watching a screen) may run on this platform. */
+  roomClientAllowed: boolean;
+}
+
+export const PLATFORM_CLASS_CONTRACT: PlatformPolicy['contractVersion'] = 'voice-room.platform-class/v1';
+export const PLATFORM_CLASSES: Readonly<Record<PlatformClass, PlatformClass>> = Object.freeze({
   desktop: 'desktop',
   mobile: 'mobile',
   unknown: 'unknown'
 });
 
-function normalizedString(value) {
+function normalizedString(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
 }
 
-export function classifyPlatform(input = {}) {
+export function classifyPlatform(input: PlatformSignals = {}): PlatformClass {
   if (input.desktopBridge === true) return PLATFORM_CLASSES.desktop;
 
   if (typeof input.userAgentDataMobile === 'boolean') {
@@ -29,9 +50,9 @@ export function classifyPlatform(input = {}) {
   return PLATFORM_CLASSES.unknown;
 }
 
-export function platformPolicy(platformClass) {
-  const normalized = Object.values(PLATFORM_CLASSES).includes(platformClass)
-    ? platformClass
+export function platformPolicy(platformClass: unknown): PlatformPolicy {
+  const normalized: PlatformClass = (Object.values(PLATFORM_CLASSES) as unknown[]).includes(platformClass)
+    ? platformClass as PlatformClass
     : PLATFORM_CLASSES.unknown;
   return {
     contractVersion: PLATFORM_CLASS_CONTRACT,
@@ -43,6 +64,6 @@ export function platformPolicy(platformClass) {
   };
 }
 
-export function classifyPlatformPolicy(input = {}) {
+export function classifyPlatformPolicy(input: PlatformSignals = {}): PlatformPolicy {
   return platformPolicy(classifyPlatform(input));
 }

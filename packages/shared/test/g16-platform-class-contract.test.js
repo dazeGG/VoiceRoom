@@ -6,7 +6,7 @@ const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const test = require('node:test');
 
-const cjs = require('../src/platform-class.js');
+const cjs = require('../src/platform-class.mts');
 
 const CORPUS = Object.freeze([
   { name: 'iOS Safari', input: { userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_6 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Safari/604.1' }, expected: 'mobile' },
@@ -21,7 +21,7 @@ const CORPUS = Object.freeze([
 ]);
 
 test('G16-A01 classifies the canonical platform corpus deterministically', async () => {
-  const esm = await import(pathToFileURL(path.join(__dirname, '../src/platform-class.mjs')).href);
+  const esm = await import(pathToFileURL(path.join(__dirname, '../src/platform-class.mts')).href);
   for (const fixture of CORPUS) {
     assert.equal(cjs.classifyPlatform(fixture.input), fixture.expected, fixture.name);
     assert.equal(esm.classifyPlatform(fixture.input), fixture.expected, `${fixture.name} (ESM)`);
@@ -48,7 +48,7 @@ test('G16-A02 policy is fail-open only for unknown and never returns raw signals
 });
 
 test('G16-A02 declaration and runtime contracts expose the same normalized DTO', () => {
-  const declaration = fs.readFileSync(path.join(__dirname, '../src/platform-class.d.ts'), 'utf8');
+  const declaration = fs.readFileSync(path.join(__dirname, '../src/platform-class.mts'), 'utf8');
   assert.match(declaration, /type PlatformClass = 'desktop' \| 'mobile' \| 'unknown'/);
   assert.match(declaration, /contractVersion: 'voice-room\.platform-class\/v1'/);
   assert.match(declaration, /platformClass: PlatformClass/);
