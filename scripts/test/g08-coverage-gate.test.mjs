@@ -90,33 +90,8 @@ const SERVER_INTERNAL_COVERAGE_SCRIPT = String.raw`
   }
   // LiveKit admission moved to domains/admission (admission.service.ts); its
   // branches are covered by apps/api/test/admission-service.test.js.
-  const moderationStore = {
-    revokeLiveKitGatePeer: async () => {},
-    invalidatePeerIdentity: async () => {}
-  };
-  const moderationSandbox = {
-    getRoomStore: () => moderationStore,
-    sendEvent() {}, broadcastToUser() {},
-    wsRegistry: { connections: new Map(), unregisterConnectionForRoom() {} },
-    closePeer() {}, removeLiveKitParticipant: async () => {}
-  };
-  await run("runModeratedPeerCleanup", moderationSandbox, "done = runModeratedPeerCleanup({ id: 'room-1' }, { id: 'peer-1', accountUserId: '', gateGuestPrincipalId: 'guest-1', transport: { id: 'transport-1' } }, 'room.kicked', { gateAlreadyRevoked: false, ownershipFinalized: false });");
-  await run("runModeratedPeerCleanup", moderationSandbox, "done = runModeratedPeerCleanup({ id: 'room-1' }, { id: 'peer-2', accountUserId: 'user-1', gateGuestPrincipalId: '', transport: { id: 'transport-2' } }, 'room.kicked', { gateAlreadyRevoked: false, ownershipFinalized: false });");
-  const accountPeer = { id: "peer-1", accountUserId: "user-1", gateGuestPrincipalId: "", ip: "127.0.0.1" };
-  await run("handleBanRoomPeer", {
-    MAX_ROOM_BANS: 100,
-    authorizeRoomMutation: async () => ({ id: "room-1", ownerId: "owner-1", peers: new Map([[accountPeer.id, accountPeer]]) }),
-    readJsonBody: async () => ({ peerId: accountPeer.id }),
-    normalizePeerId: (value) => value,
-    getLiveKitConfig: () => ({ enabled: true, gateSecret: "x".repeat(32) }),
-    liveKitGatePrincipalForPeer: () => ({ principalType: "account", principalId: "user-1" }),
-    isLiveKitGatePrincipal: () => true,
-    getRoomStore: () => ({ createRoomBanWithLiveKitGateRevocations: async () => ({ status: "created", ban: { id: "ban-1" }, revocations: [{}] }) }),
-    finalizeModeratedPeers: async (_room, _peers, _type, options = {}) => options.beforeFinalize?.(),
-    sendJson() {}
-  }, "done = handleBanRoomPeer({}, {}, 'room-1');");
-  await run("liveKitGatePrincipalForPeer", { getRoomStore: () => ({ normalizeGatePrincipal: (value) => value }) }, "done = Promise.resolve(liveKitGatePrincipalForPeer('room-1', { accountUserId: 'user-1', gateGuestPrincipalId: '' }));");
-  await run("isLiveKitGatePrincipal", {}, "done = Promise.resolve(isLiveKitGatePrincipal({ principalType: 'account', principalId: 'user-1' }));");
+  // Room moderation (kick, server mute, ban) and peer eviction moved to
+  // domains/rooms; apps/api/test/rooms-domain.test.js covers them.
   await run("attachPresence", { getPresenceRoom: () => ({ peers: new Map([["peer-1", {}]]) }) }, "done = Promise.resolve(attachPresence({ id: 'room-1', peers: new Map() }));");
   const connectSandbox = (publicUrl, livekitUrl) => ({ URL, Set, LIVEKIT_GATE_PUBLIC_URL: publicUrl, process: { env: { LIVEKIT_URL: livekitUrl } }, cleanLiveKitUrl: (value) => value });
   await run("getLiveKitConnectSources", connectSandbox("ws://gate.example", "ws://livekit.example"), "done = Promise.resolve(getLiveKitConnectSources());");
