@@ -1,0 +1,17 @@
+# TURN/TLS on the shared :443. Imported into the global options only when
+# TURN_ENABLED=true (config/caddy/entrypoint.sh). Connections whose TLS SNI is
+# TURN_DOMAIN are terminated here and handed to LiveKit's embedded TURN server
+# as plain TCP (LiveKit runs it with external_tls); every other connection
+# falls through to the normal HTTPS sites.
+servers :443 {
+	listener_wrappers {
+		layer4 {
+			@turn tls sni {$TURN_DOMAIN}
+			route @turn {
+				tls
+				proxy livekit:5349
+			}
+		}
+		tls
+	}
+}

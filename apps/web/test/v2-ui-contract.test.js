@@ -181,11 +181,10 @@ test('page CSP supports runtime LiveKit origins while production Caddy narrows t
   }
   assert.ok(cspBlock.includes("'ws://localhost:*'"));
   assert.ok(cspBlock.includes("'ws://127.0.0.1:*'"));
-  assert.match(
-    caddy,
-    /Content-Security-Policy "frame-ancestors 'none'; connect-src 'self' wss:\/\/\{\$LIVEKIT_DOMAIN\} https:\/\/\{\$LIVEKIT_DOMAIN\} stun: turn: turns:"/
-  );
-  assert.match(dockerfile, /FROM caddy:2\.11\.3-alpine AS web/);
+  // Caddy imports the full policy generated from this build (see
+  // test/caddy-csp.test.js), which narrows connect-src to LIVEKIT_DOMAIN.
+  assert.match(caddy, /import \/etc\/caddy\/csp\.caddy/);
+  assert.match(dockerfile, /FROM caddy:2\.11\.4-alpine AS web/);
   assert.match(compose, /\n  caddy:\n[\s\S]*?image: \$\{VOICEROOM_WEB_IMAGE:\?set immutable VOICEROOM_WEB_IMAGE digest\}/);
   assert.ok(config.includes("'style-src': ['self', 'unsafe-inline']"));
   assert.match(config, /style attributes/);
@@ -787,10 +786,14 @@ test('screen share publish tuning applies codec, bitrate, degradation and conten
   assert.match(config, /balanced:[\s\S]*15: 3_000_000[\s\S]*30: 5_000_000/);
   assert.match(config, /high:[\s\S]*15: 4_000_000[\s\S]*30: 7_000_000/);
   assert.match(config, /source:[\s\S]*5: 1_800_000[\s\S]*source: true/);
-  assert.doesNotMatch(config, /60:[\s\S]*contentHint: 'motion'[\s\S]*frameRate: 60/);
+  // 60 FPS is an opt-in for the motion mode; the default stays 30.
+  assert.match(config, /60: \{\s*contentHint: 'motion',\s*frameRate: 60/);
+  assert.doesNotMatch(profiles, /if \(fpsId === '60'\) return '30'/);
+  // Text prefers VP9's screen tools, motion H.264; degradation is set at publish.
+  assert.match(profiles, /contentHint === 'detail' \? \['vp9', 'h264'\] as const : \['h264', 'vp9'\] as const/);
+  assert.match(profiles, /degradationPreference: getScreenDegradationPreference\(profile\.contentHint\)/);
+  assert.match(livekit, /dtx: false, forceStereo: true, red: false/);
   assert.match(config, /SCREEN_SIMULCAST_LAYER = \{[\s\S]*height: 540[\s\S]*width: 960[\s\S]*5: 500_000[\s\S]*30: 1_500_000/);
-  assert.match(profiles, /return 'h264'/);
-  assert.match(profiles, /return 'vp9'/);
   assert.match(profiles, /return 'vp8'/);
   assert.match(profiles, /getScreenDegradationPreference/);
   assert.match(capture, /videoTrack\.contentHint = profile\.contentHint/);
@@ -1513,7 +1516,7 @@ test('remote participant audio preferences persist volume and local mute separat
   assert.match(playback, /export function applyRemoteParticipantAudioPreferences\(peer: Participant\)/);
   assert.match(functionBody(playback, 'applyRemoteParticipantAudioPreferences'), /getParticipantAudioPreferenceKey\(peer\.accountUserId, peer\.id\)/);
   assert.match(functionBody(playback, 'applyRemoteParticipantAudioPreferences'), /isAppPlaybackMuted\(\) \|\| preference\.muted \|\| preference\.volume <= 0/);
-  assert.match(functionBody(playback, 'applyRemoteParticipantAudioPreferences'), /routeMediaStreamElement\(audio, 'voice', \{ muted, volume: preference\.volume \}\)/);
+  assert.match(functionBody(playback, 'applyRemoteParticipantAudioPreferences'), /playVoiceElement\(audio, \{ muted, volume: preference\.volume \}\)/);
   const outputSyncBody = functionBody(playback, 'syncAudioOutputDevices');
   assert.match(outputSyncBody, /syncAudioBusOutput\(\)/);
   assert.match(playback, /export function releaseRemoteAudioElement\(mediaElement: HTMLMediaElement\)/);

@@ -344,17 +344,25 @@ test('desktop build download uses the release asset and falls back to the releas
   const release = {
     version: '1.2.3',
     htmlUrl: 'https://example.test/release',
-    assets: { 'win-x64': { url: 'https://example.test/VoiceRoom.exe', size: 1 }, 'mac-x64': null }
+    assets: {
+      'win-x64': { url: 'https://github.com/dazeGG/VoiceRoomDesktop/releases/download/v1.2.3/VoiceRoom.exe', size: 1 },
+      'mac-x64': null,
+      'mac-arm64': { url: 'https://example.test/VoiceRoom.dmg', size: 1 }
+    }
   };
 
   downloads.startDesktopBuildDownload(release, 'win-x64');
-  assert.deepEqual(clicked, ['https://example.test/VoiceRoom.exe']);
+  assert.deepEqual(clicked, ['https://github.com/dazeGG/VoiceRoomDesktop/releases/download/v1.2.3/VoiceRoom.exe']);
   assert.equal(appended[0]?.rel, 'noopener');
   assert.deepEqual(opened, []);
 
   downloads.startDesktopBuildDownload(release, 'mac-x64');
   downloads.startDesktopBuildDownload(null, 'win-x64');
+  // An installer URL outside the desktop repository's release downloads is
+  // never followed; the releases page opens instead.
+  downloads.startDesktopBuildDownload(release, 'mac-arm64');
   assert.deepEqual(opened, [
+    [RELEASES_URL, '_blank', 'noopener'],
     [RELEASES_URL, '_blank', 'noopener'],
     [RELEASES_URL, '_blank', 'noopener']
   ]);

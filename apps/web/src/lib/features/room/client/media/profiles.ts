@@ -81,7 +81,6 @@ function normalizeScreenQualityId(qualityId: string): string {
 }
 
 function normalizeScreenFpsId(fpsId: string): string {
-  if (fpsId === '60') return '30';
   return Object.hasOwn(SCREEN_FPS_OPTIONS, fpsId) ? fpsId : DEFAULT_SCREEN_FPS_ID;
 }
 
@@ -89,10 +88,19 @@ export function createScreenProfileId(qualityId: string, fpsId: string): string 
   return `${normalizeScreenQualityId(qualityId)}-${normalizeScreenFpsId(fpsId)}`;
 }
 
-export function getPreferredScreenVideoCodec(): 'h264' | 'vp9' | 'vp8' {
+/**
+ * Text and UI (contentHint "detail") compress far better with VP9's screen
+ * tools than with H.264, while motion keeps H.264 for its hardware encoders
+ * and lower CPU. Either way the VP8 backup codec covers viewers that cannot
+ * decode the primary one.
+ */
+export function getPreferredScreenVideoCodec(contentHint = 'motion'): 'h264' | 'vp9' | 'vp8' {
   const codecs = RTCRtpSender.getCapabilities?.('video')?.codecs || [];
-  if (codecs.some((codec) => /video\/h264/i.test(codec.mimeType))) return 'h264';
-  if (codecs.some((codec) => /video\/vp9/i.test(codec.mimeType))) return 'vp9';
+  const supports = (pattern: RegExp) => codecs.some((codec) => pattern.test(codec.mimeType));
+  const order = contentHint === 'detail' ? ['vp9', 'h264'] as const : ['h264', 'vp9'] as const;
+  for (const codec of order) {
+    if (supports(codec === 'vp9' ? /video\/vp9/i : /video\/h264/i)) return codec;
+  }
   return 'vp8';
 }
 
@@ -102,7 +110,7 @@ export function getScreenDegradationPreference(contentHint: string): RTCDegradat
 
 export async function getScreenPublishVideoOptions(profile: ScreenProfile): Promise<TrackPublishOptions> {
   const { VideoPreset } = await loadLiveKitClient();
-  const videoCodec = getPreferredScreenVideoCodec();
+  const videoCodec = getPreferredScreenVideoCodec(profile.contentHint);
   const encoding = {
     maxBitrate: profile.videoBitrate,
     maxFramerate: profile.frameRate
@@ -113,6 +121,9 @@ export async function getScreenPublishVideoOptions(profile: ScreenProfile): Prom
       codec: SCREEN_VIDEO_BACKUP_CODEC,
       encoding
     },
+    // Decided at publish, not only on a later profile switch: motion keeps
+    // its frame rate under congestion, text keeps its resolution.
+    degradationPreference: getScreenDegradationPreference(profile.contentHint),
     screenShareSimulcastLayers: getScreenSimulcastLayers(profile, VideoPreset),
     screenShareEncoding: encoding,
     simulcast: true,
@@ -137,6 +148,7 @@ export function getScreenSimulcastLayers(
 function getSimulcastLayerBitrate(fpsId: string): number {
   if (fpsId === '5') return SCREEN_SIMULCAST_LAYER.bitrateByFps[5];
   if (fpsId === '15') return SCREEN_SIMULCAST_LAYER.bitrateByFps[15];
+  if (fpsId === '60') return SCREEN_SIMULCAST_LAYER.bitrateByFps[60];
   return SCREEN_SIMULCAST_LAYER.bitrateByFps[30];
 }
 

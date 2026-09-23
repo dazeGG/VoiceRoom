@@ -1,0 +1,145 @@
+# VoiceRoom target architecture and migration plan
+
+Status: adopted after the 2.6.4 audit. `ARCHITECTURE_2.5.md` still holds the
+table-ownership and import-boundary rules; this document says where the code is
+going and in what order.
+
+## 1. Repository shape: stay a monorepo
+
+API, web and `packages/shared` stay in one repository.
+
+- `packages/shared` is a live contract (validators, realtime envelopes, screen
+  profile ids, reserved peer ids). One pull request changes the contract and
+  both consumers atomically; split repositories would need a published,
+  versioned package and paired pull requests for every contract change.
+- Versions move in lockstep (2.6.x everywhere), and CI boots the whole stack
+  for the voice-join smoke test. Across repositories that becomes cross-repo
+  orchestration.
+- Deployables are already separate: the `api`, `worker` and `web` images are
+  built and rolled out independently. Splitting the repository would not buy a
+  deployment boundary that does not exist today.
+- The desktop shell is already its own repository, which is right: it has its
+  own release cadence and signing.
+
+Revisit only when there are separate teams per side, independent release
+cadences, or a public API with third-party clients.
+
+## 2. API layering
+
+```
+transport   routes/*.routes.mts   Fastify-native handlers: parse, authorize, call, reply
+application *-service.mts         use cases; own transactions; no HTTP types
+domain      *-policy.mts          pure rules (authorship, moderation, admission)
+data        *-repository.mts      SQL; the only writers of their tables (import-boundaries.v1.json)
+platform    platform/**           http kit, origin guard, config, logging, metrics, db pool
+realtime    realtime/**           WebSocket transport and in-memory presence
+```
+
+Rules:
+
+- A handler never touches SQL and never re-implements an authorization rule.
+  Every rule about who may act on a resource lives in one policy function that
+  both the HTTP route and the WebSocket path call. The audit's H2 (message
+  authorship), M1 (banned reads) and M2 (roster-less admission) were all the
+  same bug: a legacy path and a newer domain route each had their own version
+  of a check and they drifted apart.
+- Cross-cutting request checks are global Fastify hooks, not per-route calls:
+  origin/CSRF (`platform/http/origin-guard.mts`), session resolution, request
+  ids. A route cannot forget a hook.
+- Route input is validated by the shared validators (or a Fastify JSON schema
+  built from them) before the handler runs.
+- Handlers reply through Fastify. `runLegacyHandler` and its `reply.hijack()`
+  go away with `server.js` (see the legacy-handler note in the API guidance).
+
+## 3. Decomposing `server.js`
+
+`apps/api/src/server.js` is ~5.8k lines with ~110 routes, 75 legacy handlers
+and all process-wide singletons. It is split by route group, each move a
+separate pull request that keeps behaviour and tests unchanged:
+
+| Order | Group | Routes | Destination |
+| --- | --- | --- | --- |
+| 1 | Platform | healthz, metrics, client-logs, pow-challenge, desktop | `platform/http/*`, `domains/ops/*` |
+| 2 | LiveKit admission | livekit-token, server mute, gate revocation | `domains/admission/admission.routes.mts` + `admission-policy.mts` |
+| 3 | Rooms | 17 `/api/rooms/*` routes, state | `domains/rooms/*` |
+| 4 | Legacy room chat | list/post/edit/delete | fold into `domains/messaging` (the newer message routes already exist) |
+| 5 | Auth and account | 27 `/api/auth/*` routes | `domains/account/*` |
+| 6 | Social | friends, blocks, dm, presence | `domains/social/*` |
+| 7 | Push and avatars | push, avatars, link-previews | `domains/notifications/*`, `domains/media/*` |
+
+What remains in `server.js` is composition only: build the context (stores,
+services, config), register plugins, hooks and route modules. Target: under
+300 lines.
+
+A route module receives an explicit context instead of reaching for
+module-level singletons:
+
+```ts
+export interface ApiContext {
+  config: ApiConfig;
+  stores: { rooms: RoomStore; users: UserStore; friends: FriendStore };
+  services: { admission: AdmissionService; bans: BanService; /* ... */ };
+  presence: PresenceRegistry;
+  logger: Logger;
+}
+export function registerAdmissionRoutes(app: FastifyInstance, ctx: ApiContext): void;
+```
+
+## 4. TypeScript
+
+The API migrates to TypeScript without a build step, on Node 24's native type
+stripping.
+
+- New and migrated modules are `.mts` (ES modules), strict, erasable syntax
+  only (`erasableSyntaxOnly`: no enums, namespaces or parameter properties).
+- Legacy CommonJS loads them with `require('./x.mts')` (require(esm) is stable
+  in Node 24). Imports always carry the extension.
+- `apps/api/tsconfig.json` checks every `.mts` file strictly; `npm run check`
+  runs it. Legacy `.js` is not type-checked: a probe with `checkJs` reports
+  ~700 inference errors (mostly `= {}` destructuring defaults), which would
+  bury real findings. Files become checked by becoming `.mts`.
+- Order: leaf libraries → repositories → services/policies → route modules
+  (each route group from section 3 moves as `.mts`). A converted file ships
+  with its importers updated and its tests unchanged.
+- Once `server.js` is only composition, the API package flips to
+  `"type": "module"` and the remaining `require` calls become imports.
+
+Already migrated: `domains/admission/livekit-token-binding.mts`,
+`lib/image-signature.mts`, `platform/http/origin-guard.mts`.
+
+`packages/shared` keeps hand-maintained `.js` + `.mjs` twins today. When the
+API is ESM, shared becomes a single TypeScript source with one ESM output and
+the twins are deleted.
+
+## 5. Runtime state and scaling
+
+Presence, realtime connections and rate-limit counters live in process memory,
+so the API runs as exactly one replica. That is a documented constraint, not a
+bug, at the current scale. The path to more replicas:
+
+1. Rate limits and login-failure counters move to PostgreSQL (or Redis).
+2. Presence moves to a shared store; fan-out uses PostgreSQL LISTEN/NOTIFY,
+   which the message outbox already uses.
+3. WebSocket sessions become sticky at the proxy.
+
+LiveKit is a single node. Multi-node needs Redis for LiveKit and
+region-aware admission, and is only worth it if users are spread across
+continents (the voice status pill now reports RTT, loss and transport, which
+shows whether that is the case).
+
+## 6. Media pipeline (as of this plan)
+
+- Capture: one AudioContext, `source → RNNoise → gate (manual or automatic
+  sensitivity) → gain (limiter only above 100%) → destination`, published as
+  Opus 64 kbps with DTX and RED.
+- Playback: each remote voice plays on its own media element, so Chrome's echo
+  canceller uses it as reference; only a boost above 100% goes through the Web
+  Audio mix.
+- Screen share: VP9 for text, H.264 for motion, VP8 backup, degradation
+  preference at publish, 30/60 FPS; screen audio stereo without RED.
+- Network: UDP 7882, TCP 7881, and opt-in TURN/TLS on the shared :443
+  (`TURN_ENABLED`), plus TURN/UDP 3478.
+
+Next steps not in this plan's scope: DeepFilterNet-class noise suppression
+(needs vendored model assets and a CSP-compatible worker, not a CDN blob), a
+native audio path in the desktop shell, and LiveKit multi-node.

@@ -37,7 +37,10 @@ test('remote voice, screen audio, and cues use the bus without a duplicate audib
   assert.match(bus, /routed\.gain\.gain\.value = options\.muted \? 0 : volume/);
   assert.match(bus, /mediaElement\.muted = true/);
   assert.match(participants, /audio\.srcObject = new MediaStream\(\[track\]\)/);
-  assert.match(playback, /routeMediaStreamElement\(audio, 'voice'/);
+  // Voices play on their own element (Chrome's echo canceller only hears
+  // WebRTC-rendered audio) and join the mix only for a boost above 100%.
+  assert.match(playback, /playVoiceElement\(audio, \{ muted, volume: preference\.volume \}\)/);
+  assert.match(bus, /if \(level > 1\) \{\s*return routeMediaStreamElement\(element, 'voice'/);
   assert.match(playback, /routeMediaStreamElement\(mediaElement, 'media'/);
   assert.match(screen, /releaseScreenMediaElement\(video\)/);
   assert.match(cues, /gain\.connect\(getAudioBusInput\('sfx'\)\)/);
@@ -69,4 +72,18 @@ test('output mute lets its confirmation cue finish before muting the master bus'
 
   assert.match(bus, /setValueAtTime\(0, now \+ muteDelayMs \/ 1000\)/);
   assert.match(controls, /syncPlaybackMuteState\(\{ muteDelayMs: nextOutputMuted \? 220 : 0 \}\)/);
+});
+
+test('an audio unlock gesture replays voices that play on their own element', () => {
+  const playback = read('src/lib/features/room/client/services/media-playback-service.ts');
+  const unlock = playback.slice(playback.indexOf('export async function unlockAudio'), playback.indexOf('export function playMediaElement'));
+  assert.match(unlock, /await unlockAudioBus\(\);\s*\/\/[^\n]*\n[^\n]*\n\s*syncRemoteAudioPlayback\(\);/);
+});
+
+test('a token request that races the realtime join is retried while the join is current', () => {
+  const livekit = read('src/lib/features/room/client/services/livekit-service.ts');
+  assert.match(livekit, /NOT_IN_ROOM_RETRY_DELAYS_MS = \[500, 1_000, 2_000\]/);
+  assert.match(livekit, /error\.code !== 'not_in_room'/);
+  assert.match(livekit, /if \(!isCurrent\(\)\) throw error;/);
+  assert.equal((livekit.match(/postJson\('\/api\/livekit-token'/g) || []).length, 1, 'one token request path');
 });

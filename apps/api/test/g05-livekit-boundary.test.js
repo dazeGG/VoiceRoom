@@ -21,6 +21,13 @@ const { createLiveKitAuthGateService, extractCredential } = require('../src/doma
 
 const ROOT = path.resolve(__dirname, '../../..');
 const PEER_ID = 'peer-g05a';
+
+// The gate only reads the JWT payload (LiveKit verifies the signature), so the
+// socket proofs can hand it an unsigned token with the right claims.
+function unsignedLiveKitJwt({ sub, room, nbf = Math.floor(Date.now() / 1000) }) {
+  const encode = (value) => Buffer.from(JSON.stringify(value)).toString('base64url');
+  return `${encode({ alg: 'HS256' })}.${encode({ sub, nbf, video: { room } })}.signature`;
+}
 const SESSION_TOKEN = 'session-g05-token-0000000000000001';
 
 function createGateAwareStore() {
@@ -410,7 +417,7 @@ test('G05 gate survives a client cancellation followed by an upstream socket err
   const gate = createLiveKitAuthGateService({
     boundary: {
       assertReady: async () => true,
-      authorizeCredential: async () => ({ ok: true, claims: {} })
+      authorizeCredential: async () => ({ ok: true, claims: { iat: Date.now(), peer: PEER_ID, room: 'room-g05' } })
     },
     roomStore: {},
     upstreamUrl: 'ws://livekit:7880'
@@ -418,8 +425,9 @@ test('G05 gate survives a client cancellation followed by an upstream socket err
   const server = gate.createServer();
   t.after(() => server.close());
   const client = new FakeSocket();
+  const accessToken = unsignedLiveKitJwt({ sub: PEER_ID, room: 'voice-room-room-g05' });
 
-  server.emit('upgrade', { url: '/rtc?vr_gate_credential=test', headers: {} }, client, Buffer.alloc(0));
+  server.emit('upgrade', { url: `/rtc?access_token=${accessToken}&vr_gate_credential=test`, headers: {} }, client, Buffer.alloc(0));
   await new Promise((resolve) => setImmediate(resolve));
   upstream.emit('connect');
   client.destroy();

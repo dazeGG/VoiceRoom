@@ -7,6 +7,7 @@ import type { Participant } from '../core/types';
 import { setVoiceConnectionStatus } from '../ui/status';
 import {
   getSharedAudioContext,
+  playVoiceElement,
   releaseMediaStreamElement,
   routeMediaStreamElement,
   syncAudioBusOutput,
@@ -48,8 +49,8 @@ export function applyRemoteParticipantAudioPreferences(peer: Participant): void 
   const muted = isAppPlaybackMuted() || preference.muted || preference.volume <= 0;
   for (const audio of peer.audioElements.values()) {
     try {
-      const routed = routeMediaStreamElement(audio, 'voice', { muted, volume: preference.volume });
-      if (routed && !muted && getSharedAudioContext().state !== 'running') {
+      const path = playVoiceElement(audio, { muted, volume: preference.volume });
+      if (path === 'mixed' && !muted && getSharedAudioContext().state !== 'running') {
         queueAudioUnlock({ showFallback: true });
       }
     } catch (error) {
@@ -145,6 +146,9 @@ function shouldAttemptAudioUnlock(): boolean {
 
 export async function unlockAudio(): Promise<void> {
   await unlockAudioBus();
+  // Voices on the direct path are unmuted media elements: a play() the
+  // browser refused before this gesture has to be retried now.
+  syncRemoteAudioPlayback();
   await Promise.allSettled(getMicrophoneProcessors(state.micProcessor).map((processor) => processor.context?.resume()));
   state.audioUnlockPending = false;
   startUi.soundButtonVisible = false;

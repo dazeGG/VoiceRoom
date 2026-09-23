@@ -36,5 +36,8 @@ export function cleanStreamId(value: unknown): string;
 export function isValidPassword(value: unknown): boolean;
 export function normalizeLogin(value: unknown): string;
 export function normalizePeerId(value: unknown): string;
+export const ACCOUNT_PEER_ID_PREFIX: 'auth-';
+export function accountPeerIdFor(userId: unknown): string;
+export function isReservedPeerId(value: unknown): boolean;
 export function normalizeRoomId(value: unknown): string;
 export function normalizeSessionToken(value: unknown): string;

@@ -11,7 +11,7 @@ function walkFiles(root, collected = []) {
   if (!fs.existsSync(root)) return collected;
   const stat = fs.statSync(root);
   if (stat.isFile()) {
-    if (/\.(?:js|mjs|cjs|ts|svelte)$/.test(root)) collected.push(normalizePath(root));
+    if (/\.(?:js|mjs|cjs|ts|mts|cts|svelte)$/.test(root)) collected.push(normalizePath(root));
     return collected;
   }
   for (const entry of fs.readdirSync(root)) {

@@ -29,7 +29,9 @@ const {
   cleanLiveKitUrl,
   cleanPresenceStatus,
   isValidPassword,
-  normalizeLogin
+  normalizeLogin,
+  accountPeerIdFor,
+  isReservedPeerId
 } = require('@voice-room/shared/validation');
 const { createProofOfWork } = require('./lib/pow');
 const { LOG_EVENTS } = require('./lib/log-events');
@@ -41,7 +43,7 @@ const {
   newRequestId,
   normalizeRequestId
 } = require('./lib/logger');
-const { getClientIp, createRateLimiter } = require('./lib/rate-limit');
+const { getClientIp, createFailureLimiter, createRateLimiter } = require('./lib/rate-limit');
 const { MAX_AVATAR_BYTES, createAvatarKey, processAvatar } = require('./lib/avatar-processing');
 const { reconcileAvatarStorage } = require('./lib/avatar-reconciliation');
 const { createAvatarStorage, validateAvatarKey } = require('./lib/avatar-storage');
@@ -78,6 +80,8 @@ const {
   renderPrometheus
 } = require('./lib/metrics');
 const { createCredentialBoundaryService } = require('./domains/admission/credential-boundary-service');
+const { getLiveKitRoomName: liveKitRoomName } = require('./domains/admission/livekit-token-binding.mts');
+const { isCrossOriginCookieWrite, isCrossOriginWebSocket } = require('./platform/http/origin-guard.mts');
 const { createLiveKitCredentialProvider } = require('./domains/admission/livekit-credential-provider');
 const { createMembershipRepository } = require('./domains/membership/membership-repository');
 const { createMembershipService } = require('./domains/membership/membership-service');
@@ -142,7 +146,14 @@ const KEEPALIVE_MS = readEnvInt('SSE_KEEPALIVE_MS', 15000, 1000);
 const DEFAULT_REALTIME_RECONNECT_LEASE_MS = 30000;
 const BODY_LIMIT_BYTES = readEnvInt('BODY_LIMIT_BYTES', 65536, 1024);
 const TRUST_PROXY = readEnvBool('TRUST_PROXY', false);
-const LIVEKIT_TOKEN_TTL_SECONDS = readEnvInt('LIVEKIT_TOKEN_TTL_SECONDS', 21600, 60);
+// The LiveKit JWT only has to survive the join: LiveKit refreshes it for a
+// connected participant, so a short TTL bounds how long a leaked token is
+// useful. The gate credential is revocable server-side and keeps the long TTL
+// that signal resumes and in-place reconnects rely on.
+const LIVEKIT_TOKEN_TTL_SECONDS = readEnvInt('LIVEKIT_TOKEN_TTL_SECONDS', 600, 60);
+const LIVEKIT_GATE_CREDENTIAL_TTL_SECONDS = readEnvInt('LIVEKIT_GATE_CREDENTIAL_TTL_SECONDS', 21600, 60);
+const LIVEKIT_ROSTER_WAIT_MS = readEnvInt('LIVEKIT_ROSTER_WAIT_MS', 5000, 0);
+const ROSTER_POLL_INTERVAL_MS = 50;
 const LIVEKIT_GATE_PUBLIC_URL = cleanLiveKitUrl(process.env.LIVEKIT_GATE_PUBLIC_URL || process.env.LIVEKIT_URL || '');
 const LIVEKIT_GATE_SECRET = (process.env.LIVEKIT_GATE_SECRET || '').trim();
 const ROOM_IDLE_TTL_MS = readEnvInt('ROOM_IDLE_TTL_MS', 900000, 1000);
@@ -206,6 +217,8 @@ const readinessProvider = createRuntimeReadinessProvider({
 });
 const AUTH_RATE_LIMIT = readEnvInt('AUTH_RATE_LIMIT', 30, 0);
 const AUTH_RATE_WINDOW_MS = readEnvInt('AUTH_RATE_WINDOW_MS', 60000, 1000);
+const LOGIN_FAILURE_LIMIT = readEnvInt('LOGIN_FAILURE_LIMIT', 10, 0);
+const LOGIN_FAILURE_WINDOW_MS = readEnvInt('LOGIN_FAILURE_WINDOW_MS', 900000, 1000);
 const GEOIP_DB_PATH = String(process.env.GEOIP_DB_PATH || '').trim();
 // Close code for sockets whose account session was ended; clients stop
 // reconnecting and return to the sign-in screen instead.
@@ -780,7 +793,7 @@ function getCredentialBoundary() {
   credentialBoundary = createCredentialBoundaryService({
     roomStore: store,
     secret: LIVEKIT_GATE_SECRET,
-    credentialTtlMs: LIVEKIT_TOKEN_TTL_SECONDS * 1000
+    credentialTtlMs: LIVEKIT_GATE_CREDENTIAL_TTL_SECONDS * 1000
   });
   return credentialBoundary;
 }
@@ -1040,6 +1053,10 @@ const authLimiter = createRateLimiter({
   limit: AUTH_RATE_LIMIT,
   windowMs: AUTH_RATE_WINDOW_MS
 });
+const loginFailureLimiter = createFailureLimiter({
+  limit: LOGIN_FAILURE_LIMIT,
+  windowMs: LOGIN_FAILURE_WINDOW_MS
+});
 const dmLimiter = createRateLimiter({
   limit: DM_RATE_LIMIT,
   windowMs: DM_RATE_WINDOW_MS
@@ -1217,7 +1234,7 @@ function sessionDisplayName(user) {
 }
 
 function sessionChatPeerId(user) {
-  return user?.id ? normalizePeerId(`auth-${user.id}`) : '';
+  return accountPeerIdFor(user?.id);
 }
 
 function buildSessionCookie(token, maxAgeSeconds) {
@@ -1238,46 +1255,8 @@ function clearSessionCookie() {
   return parts.join('; ');
 }
 
-function requestHost(req) {
-  const host = req.headers?.host;
-  return typeof host === 'string' ? host.toLowerCase() : '';
-}
-
-function originHost(value) {
-  if (typeof value !== 'string' || !value) return '';
-  try {
-    return new URL(value).host.toLowerCase();
-  } catch {
-    return '';
-  }
-}
-
-function requestHasUnsafeMethod(req) {
-  return !['GET', 'HEAD', 'OPTIONS'].includes(String(req.method || '').toUpperCase());
-}
-
-function hasValidSameOrigin(req) {
-  const host = requestHost(req);
-  if (!host) return false;
-  const origin = req.headers?.origin;
-  if (typeof origin === 'string' && origin) return originHost(origin) === host;
-  const referer = req.headers?.referer;
-  if (typeof referer === 'string' && referer) return originHost(referer) === host;
-  return true;
-}
-
-function rejectCrossOriginCookieWrite(req, res) {
-  if (!requestHasUnsafeMethod(req)) return false;
-  if (!getSessionToken(req)) return false;
-  const hasBrowserOrigin = Boolean(req.headers?.origin || req.headers?.referer);
-  if (!hasBrowserOrigin || hasValidSameOrigin(req)) return false;
-  sendJson(res, 403, { ok: false, error: 'Cross-origin request rejected' });
-  return true;
-}
-
 function getLiveKitRoomName(roomId) {
-  const prefix = String(process.env.LIVEKIT_ROOM_PREFIX || 'voice-room-').replace(/[^A-Za-z0-9_.:-]/g, '-');
-  return `${prefix}${roomId}`;
+  return liveKitRoomName(roomId);
 }
 
 function getLiveKitConfig() {
@@ -1685,6 +1664,15 @@ async function revokeIssuedAdmission({ boundary = getCredentialBoundary(), cause
   }
 }
 
+async function waitForRosterPeer(roomId, peerId, timeoutMs = LIVEKIT_ROSTER_WAIT_MS) {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const peer = presenceRooms.get(roomId)?.peers?.get(peerId);
+    if (peer || Date.now() >= deadline) return peer || null;
+    await new Promise((resolve) => setTimeout(resolve, ROSTER_POLL_INTERVAL_MS));
+  }
+}
+
 async function handleLiveKitToken(req, res) {
   const livekit = getLiveKitConfig();
   const body = await readJsonBody(req);
@@ -1694,7 +1682,7 @@ async function handleLiveKitToken(req, res) {
   const name = cleanName(body.name);
   const sessionUser = await resolveOptionalSessionUser(req);
 
-  if (!roomId || !peerId || !sessionToken) {
+  if (!roomId || !peerId || !sessionToken || isReservedPeerId(peerId)) {
     sendJson(res, 400, { ok: false, error: 'Invalid room, peer, or session token' });
     return;
   }
@@ -1707,6 +1695,22 @@ async function handleLiveKitToken(req, res) {
 
   if (await findRoomBan(roomId, sessionUser?.id, getClientIp(req, TRUST_PROXY))) {
     sendRoomBanned(res, roomId);
+    return;
+  }
+
+  // Media admission belongs to a peer the room roster already knows. Without
+  // this a caller holding only the room id could subscribe to every voice and
+  // screen share while staying invisible — and therefore un-kickable. The
+  // client sends the realtime join just before asking for a token, so give
+  // that join a moment to land instead of failing the race.
+  const rosterPeer = await waitForRosterPeer(roomId, peerId);
+  if (!rosterPeer) {
+    logAdmissionDenied(req, { roomId, peerId, code: 'not_in_room' });
+    sendJson(res, 409, { ok: false, code: 'not_in_room', error: 'Сначала нужно войти в комнату' });
+    return;
+  }
+  if (!tokensMatch(rosterPeer.sessionToken, sessionToken)) {
+    sendJson(res, 403, { ok: false, error: 'Сессия участника недействительна' });
     return;
   }
 
@@ -1728,11 +1732,6 @@ async function handleLiveKitToken(req, res) {
     return;
   }
 
-  const existingPeer = room.peers.get(peerId);
-  if (existingPeer && !tokensMatch(existingPeer.sessionToken, sessionToken)) {
-    sendJson(res, 403, { ok: false, error: 'Сессия участника недействительна' });
-    return;
-  }
   const identityResult = await getRoomStore().getOrCreatePeerIdentity({ roomId, peerId, sessionToken, displayName: name, avatarColorKey: sessionAvatarColorKey(sessionUser) });
   if (identityResult.status === 'token_mismatch') {
     sendJson(res, 403, { ok: false, error: 'Сессия участника недействительна' });
@@ -2193,11 +2192,26 @@ async function handleLogin(req, res) {
     return;
   }
 
+  // The per-IP limit above does nothing against credential stuffing from many
+  // addresses; this caps failed guesses per login regardless of source. It is
+  // keyed by the submitted login, existing or not, so it reveals nothing.
+  const accountRate = loginFailureLimiter.reserve(login);
+  if (!accountRate.allowed) {
+    sendJson(
+      res,
+      429,
+      { ok: false, error: 'Слишком много попыток, попробуйте позже' },
+      { 'Retry-After': String(accountRate.retryAfterSeconds) }
+    );
+    return;
+  }
+
   const user = await getUserStore().verifyCredentials(login, password);
   if (!user) {
     sendJson(res, 401, { ok: false, error: 'Неверный логин или пароль' });
     return;
   }
+  loginFailureLimiter.reset(login);
   // The right password on an account waiting to be deleted offers a restore.
   if (user.deletionRequestedAt) {
     sendJson(res, 409, {
@@ -3062,10 +3076,15 @@ async function handleRoomStatus(res, url) {
 
 // Read-only snapshot of who is currently in a room. Powers the lobby's room
 // preview ("how the room looks before you enter") without creating a peer.
-async function handleRoomPeers(res, roomId) {
+async function handleRoomPeers(req, res, roomId) {
   const room = await getRoom(roomId);
   if (!room) {
     sendJson(res, 404, { ok: false, error: 'Room not found', roomId });
+    return;
+  }
+  const sessionUser = await resolveOptionalSessionUser(req);
+  if (await findRoomBan(roomId, sessionUser?.id, getClientIp(req, TRUST_PROXY))) {
+    sendRoomBanned(res, roomId);
     return;
   }
   sendJson(res, 200, {
@@ -3132,10 +3151,18 @@ async function handleState(req, res) {
   sendJson(res, 200, { ok: true, peer: publicPeer(peer) });
 }
 
-async function handleRoomChatList(res, roomId) {
+// The room link is the capability for guests, so this list stays readable to
+// anyone who can join — but not to someone the room has banned, who can no
+// longer join either. Account members use the paginated history route.
+async function handleRoomChatList(req, res, roomId) {
   const room = await getRoom(roomId);
   if (!room) {
     sendJson(res, 404, { ok: false, error: 'Room not found', roomId });
+    return;
+  }
+  const sessionUser = await resolveOptionalSessionUser(req);
+  if (await findRoomBan(roomId, sessionUser?.id, getClientIp(req, TRUST_PROXY))) {
+    sendRoomBanned(res, roomId);
     return;
   }
 
@@ -3222,10 +3249,13 @@ async function handleRoomChatPost(req, res, roomId) {
     return;
   }
 
-  const authenticatedPeerId = requestedPeerId ? '' : sessionChatPeerId(sessionUser);
-  let peerId = requestedPeerId || authenticatedPeerId;
+  // A requested peer id is only honoured when it is a live roster entry whose
+  // session token matches below. Anything else — including another guest's id
+  // or a reserved `auth-` id — falls back to the caller's own account peer id,
+  // so a message can never be filed under an identity the caller does not hold.
+  const activePeer = requestedPeerId && !isReservedPeerId(requestedPeerId) ? room.peers.get(requestedPeerId) : null;
+  let peerId = activePeer ? requestedPeerId : sessionChatPeerId(sessionUser);
   let avatarColorKey = sessionAvatarColorKey(sessionUser) || avatarColorForPeerId(peerId);
-  const activePeer = requestedPeerId ? room.peers.get(requestedPeerId) : null;
   if (activePeer) {
     if (!tokensMatch(activePeer.sessionToken, sessionToken)) {
       sendJson(res, 403, { ok: false, error: 'Invalid peer session' });
@@ -3444,7 +3474,7 @@ async function setLiveKitParticipantMuted(roomId, peerId, muted) {
       }
     }
   } catch (error) {
-    if (/not.?found/i.test(String(error?.message || ''))) return { status: 'offline' };
+    if (isLiveKitParticipantAlreadyGone(error)) return { status: 'offline' };
     getProcessLogger().error({ evt: LOG_EVENTS.LIVEKIT_MUTE_FAILED, roomId, peerId, err: error }, 'failed to apply a LiveKit server mute');
     if (muted) {
       try {
@@ -3633,6 +3663,19 @@ async function handleKickRoomPeer(req, res, roomId) {
   sendJson(res, 200, { ok: true });
 }
 
+async function revokeGateCredentialsForServerMute(roomId, peer, principal) {
+  const boundary = getCredentialBoundary();
+  if (!boundary) return;
+  try {
+    await boundary.revokePrincipal({ roomId, principal });
+  } catch (error) {
+    // The live SFU permission is still narrowed below; only a later reconnect
+    // with the old admission would regain the microphone.
+    recordCredentialRevokeCleanupFailure();
+    getProcessLogger().error({ evt: LOG_EVENTS.LIVEKIT_MUTE_FAILED, roomId, peerId: peer.id, err: error }, 'failed to revoke gate credentials for a server mute');
+  }
+}
+
 // Owner-only microphone mute. `muted` in the body picks the direction so the
 // menu can toggle without tracking which endpoint to call.
 async function handleServerMuteRoomPeer(req, res, roomId) {
@@ -3671,6 +3714,10 @@ async function handleServerMuteRoomPeer(req, res, roomId) {
   // the participant decides when to speak again.
   if (muted) peer.muted = true;
 
+  // Every gate credential issued before the mute was paired with a JWT that
+  // still grants the microphone. Revoke them so a reconnect has to fetch a
+  // fresh admission, which the durable mute row keeps microphone-free.
+  if (muted) await revokeGateCredentialsForServerMute(room.id, peer, principal);
   await setLiveKitParticipantMuted(room.id, peer.id, muted);
 
   const event = { type: 'peer-updated', peer: publicPeer(peer) };
@@ -4686,10 +4733,13 @@ async function handleDeleteRoomChatMessage(req, res, roomId, messageId) {
   }
 
   // Permission:
-  // - guest peer session matches the message peerId, or
-  // - logged in authorUserId matches current, or
+  // - an account-authored message belongs to that account only, or
+  // - a guest message belongs to the live peer session that wrote it, or
   // - current user is owner of static room
-  const isPeerAuthor = requestedPeerId && requestedPeerId === msg.peerId;
+  // A peer id match never stands in for account authorship: peer ids are
+  // client-chosen, and matching them is exactly how a guest could act on a
+  // signed-in author's messages.
+  const isPeerAuthor = !msg.authorUserId && requestedPeerId && requestedPeerId === msg.peerId;
   const isAccountAuthor = sessionUser && msg.authorUserId && sessionUser.id === msg.authorUserId;
   const isRoomOwner = sessionUser && room.isStatic && room.ownerId === sessionUser.id;
 
@@ -4755,7 +4805,9 @@ async function handleEditRoomChatMessage(req, res, roomId, messageId) {
     return;
   }
 
-  const isPeerAuthor = Boolean(requestedPeerId && requestedPeerId === current.peerId);
+  // Account authorship is decided by the account alone; the peer-session path
+  // only covers guest messages (see the delete handler for why).
+  const isPeerAuthor = Boolean(!current.authorUserId && requestedPeerId && requestedPeerId === current.peerId);
   const isAccountAuthor = Boolean(sessionUser && current.authorUserId && sessionUser.id === current.authorUserId);
   if (isAccountAuthor) {
     // The account id is durable ownership. It also lets a signed-in author edit
@@ -4902,10 +4954,23 @@ async function handleEditDmMessage(req, res, peerIdParam, messageId) {
   sendJson(res, 200, { ok: true, message });
 }
 
+// The browser downloads and runs what this URL points at, so only GitHub's own
+// release-download path for the configured repository is passed through.
+function isDesktopReleaseDownloadUrl(value) {
+  try {
+    const url = new URL(String(value || ''));
+    return url.protocol === 'https:'
+      && url.hostname === 'github.com'
+      && url.pathname.startsWith(`/${DESKTOP_RELEASE_REPO}/releases/download/`);
+  } catch {
+    return false;
+  }
+}
+
 function pickReleaseAsset(assets, patterns) {
   for (const pattern of patterns) {
     const found = assets.find((asset) => pattern.test(asset.name || ''));
-    if (found && found.browser_download_url) {
+    if (found && isDesktopReleaseDownloadUrl(found.browser_download_url)) {
       return { url: found.browser_download_url, size: Number(found.size) || 0 };
     }
   }
@@ -5036,7 +5101,6 @@ async function runLegacyHandler(request, reply, handler) {
   });
 
   try {
-    if (rejectCrossOriginCookieWrite(req, res)) return;
     await handler(req, res, request);
   } catch (error) {
     const status = error.statusCode || 500;
@@ -5137,6 +5201,24 @@ function createApiApp({
     done();
   });
 
+  // Origin checks run for every route, not only the legacy handlers: the
+  // domain routes (bans, memberships, media, notifications, reactions, pins)
+  // mutate state with the same session cookie.
+  app.addHook('onRequest', (request, reply, done) => {
+    if (isCrossOriginWebSocket(request.raw)) {
+      // The refused handshake socket is not an HTTP connection the server
+      // tracks, so it has to be closed explicitly once the 403 is written.
+      reply.code(403).header('Connection', 'close').send({ ok: false, error: 'Cross-origin request rejected' });
+      reply.raw.once('finish', () => request.raw.socket?.destroySoon?.());
+      return;
+    }
+    if (isCrossOriginCookieWrite(request.raw, Boolean(getSessionToken(request.raw)))) {
+      reply.code(403).send({ ok: false, error: 'Cross-origin request rejected' });
+      return;
+    }
+    done();
+  });
+
   app.register(fastifyCookie, { hook: 'onRequest' });
   app.register(fastifyMultipart, {
     limits: { fileSize: MAX_UPLOAD_BYTES, files: 1, parts: 2 }
@@ -5220,22 +5302,21 @@ function createApiApp({
       });
       return;
     }
+    // Public and unauthenticated: it answers "is this replica serving?" and
+    // nothing about the topology behind it. The internal LiveKit address, the
+    // manifest's filesystem path and live room/peer counts stay in /api/metrics,
+    // which Caddy only exposes to the monitoring address.
     const livekit = getLiveKitConfig();
     sendJson(res, 200, {
       livekit: livekit.enabled,
-      livekitUrl: livekit.url || null,
       ok: true,
       capabilityManifest: {
         contractVersion: readiness?.manifest?.contractVersion || null,
         schemaVersion: readiness?.manifest?.schemaVersion || null,
         digest: readiness?.manifest?.digest || null,
-        path: readiness?.manifest?.path || null,
         replicaConsensus: readiness?.replica?.reason || (readiness?.replicaConsensus ? 'agree' : 'disagree'),
         manifestRawSha256: readiness?.manifest?.digest || null
-      },
-      maxRooms: MAX_ROOMS,
-      rooms: await getRoomStore().countRooms(),
-      peers: getPresencePeerCount()
+      }
     });
   }));
 
@@ -5441,11 +5522,11 @@ function createApiApp({
     const roomId = normalizeRoomId(request.params.roomId);
     return handleRoomStatus(res, new URL(`/rooms/${roomId}`, 'http://localhost'));
   }));
-  app.get('/api/rooms/:roomId/peers', (request, reply) => runLegacyHandler(request, reply, (_req, res) => {
-    return handleRoomPeers(res, normalizeRoomId(request.params.roomId));
+  app.get('/api/rooms/:roomId/peers', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
+    return handleRoomPeers(req, res, normalizeRoomId(request.params.roomId));
   }));
-  app.get('/api/rooms/:roomId/chat', (request, reply) => runLegacyHandler(request, reply, (_req, res) => {
-    return handleRoomChatList(res, normalizeRoomId(request.params.roomId));
+  app.get('/api/rooms/:roomId/chat', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
+    return handleRoomChatList(req, res, normalizeRoomId(request.params.roomId));
   }));
   app.post('/api/rooms/:roomId/chat', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
     return handleRoomChatPost(req, res, normalizeRoomId(request.params.roomId));

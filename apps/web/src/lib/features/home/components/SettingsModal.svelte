@@ -26,6 +26,7 @@
     gateValueLabel,
     isGateDisabled,
     NOISE_OPTIONS,
+    persistGateAuto,
     persistGateThreshold,
     persistMasterVolume,
     persistMicrophone,
@@ -144,6 +145,7 @@
   let speakerId = $state('');
   let noiseMode = $state('rnnoise');
   let gateOn = $state(false);
+  let gateAuto = $state(false);
   let gateDb = $state(GATE_DEFAULT_DB);
   let micLevelDb = $state(GATE_THRESHOLD_MIN_DB);
   let micVolume = $state(100);
@@ -191,7 +193,7 @@
   // Only surface the live level while the gate is on — off means "don't capture
   // or show the mic level" (the meter effect below stops capturing too).
   const levelScale = $derived(gateOn ? gateMeterPosition(micLevelDb).toFixed(3) : '0');
-  const gateLabel = $derived(gateOn ? gateValueLabel(gateDb) : 'Выкл');
+  const gateLabel = $derived(gateOn ? (gateAuto ? 'Авто' : gateValueLabel(gateDb)) : 'Выкл');
   const browserNotificationsEnabled = $derived(
     pushNotifications.supported
       ? pushNotifications.active
@@ -392,6 +394,7 @@
     noiseMode = sound.noiseMode;
     gateOn = !isGateDisabled(sound.gateThresholdDb);
     gateDb = gateOn ? sound.gateThresholdDb : GATE_DEFAULT_DB;
+    gateAuto = sound.gateAuto;
     micVolume = sound.microphoneVolume;
     latestMicVolume = sound.microphoneVolume;
     microphoneMode = sound.microphoneMode;
@@ -583,6 +586,10 @@
   function toggleGate(): void {
     gateOn = !gateOn;
     persistGate();
+  }
+
+  function toggleGateAuto(): void {
+    gateAuto = persistGateAuto(!gateAuto);
   }
 
   function onGateChange(value: number): void {
@@ -896,7 +903,23 @@
                       </button>
                     </div>
 
-                    <div class="settings-gate-body" data-disabled={!gateOn}>
+                    {#if gateOn}
+                      <div class="settings-gate-head">
+                        <span class="settings-gate-hint">Автоматическая чувствительность</span>
+                        <button
+                          class="settings-switch"
+                          type="button"
+                          role="switch"
+                          aria-checked={gateAuto}
+                          aria-label="Автоматическая чувствительность гейта"
+                          onclick={toggleGateAuto}
+                        >
+                          <span class="settings-switch-knob" aria-hidden="true"></span>
+                        </button>
+                      </div>
+                    {/if}
+
+                    <div class="settings-gate-body" data-disabled={!gateOn || gateAuto}>
                       <div class="settings-gate">
                         <Slider
                           bind:value={gateDb}
@@ -904,7 +927,7 @@
                           max={GATE_THRESHOLD_MAX_DB}
                           step={1}
                           defaultValue={GATE_DEFAULT_DB}
-                          disabled={!gateOn}
+                          disabled={!gateOn || gateAuto}
                           showFill={false}
                           ariaLabel="Порог гейта в децибелах"
                           ariaValueText={gateLabel}
@@ -918,6 +941,7 @@
                       </div>
                       <div class="settings-gate-hint">
                         Микрофон открывается, только когда звук громче порога — отсекает фоновый шум и дыхание.
+                        В автоматическом режиме порог сам подстраивается под шум в комнате.
                       </div>
                     </div>
                   </div>

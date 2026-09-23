@@ -45,22 +45,31 @@ class FakeSocket extends EventEmitter {
   }
 }
 
+// A credential and a LiveKit JWT that belong to the same admission, so the
+// token-binding check passes and the socket branches below are what is tested.
+const CLAIMS = { cid: 'cid-1', iat: Date.now(), peer: 'peer-1', room: 'room-1' };
+const ACCESS_TOKEN = [
+  Buffer.from('{"alg":"HS256"}').toString('base64url'),
+  Buffer.from(JSON.stringify({ sub: 'peer-1', nbf: Math.floor(Date.now() / 1000), video: { room: 'voice-room-room-1' } })).toString('base64url'),
+  'signature'
+].join('.');
+
 function createGate({ errors = [] } = {}) {
   const boundary = {
-    authorizeCredential: async () => ({ ok: true, claims: {} }),
+    authorizeCredential: async () => ({ ok: true, claims: CLAIMS }),
     assertReady: async () => {}
   };
   const service = createLiveKitAuthGateService({
     boundary,
     roomStore: {},
-    logger: { error: (fields, msg) => errors.push({ ...fields, msg }) },
+    logger: { error: (fields, msg) => errors.push({ ...fields, msg }), warn: () => {} },
     upstreamUrl: 'ws://127.0.0.1:7880'
   });
   return service.createServer();
 }
 
 const flush = () => new Promise((resolve) => setImmediate(resolve));
-const upgradeRequest = (url = '/rtc?vr_gate_credential=credential') => ({ url, headers: {} });
+const upgradeRequest = (url = `/rtc?access_token=${ACCESS_TOKEN}&vr_gate_credential=credential`) => ({ url, headers: {} });
 
 function withConnect(factory, run) {
   const original = net.connect;

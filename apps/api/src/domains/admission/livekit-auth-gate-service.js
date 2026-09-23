@@ -9,8 +9,10 @@ const { createCredentialBoundaryService } = require('./credential-boundary-servi
 const { createRoomStore } = require('../../lib/room-store');
 const { LOG_EVENTS } = require('../../lib/log-events');
 const { createLogger } = require('../../lib/logger');
+const { normalizeLiveKitRoomPrefix, verifyAccessTokenBinding } = require('./livekit-token-binding.mts');
 
 const DEFAULT_GATE_PATH = '/rtc';
+const VALIDATE_TIMEOUT_MS = 5_000;
 
 function normalizeGatePath(value) {
   const path = String(value || DEFAULT_GATE_PATH).trim();
@@ -58,6 +60,14 @@ function deny(socket, code = 403, reason = 'Forbidden') {
   }
 }
 
+// livekit-client calls `<signal path>/validate` (v0 or v1) with the same query
+// after a failed connect to learn why. Answering 404 made it conclude the
+// server lacks v1 signaling, retry on the v0 path and report the wrong error.
+function isValidatePath(requestUrl, gatePath) {
+  const { pathname } = new URL(requestUrl || '/', 'ws://gate.local');
+  return pathname === `${gatePath}/validate` || pathname === `${gatePath}/v1/validate`;
+}
+
 function buildUpstreamUpgradeRequest({ request, strippedPath, upstream }) {
   const headers = { ...request.headers };
   delete headers['vr_gate_credential'];
@@ -81,6 +91,7 @@ function createLiveKitAuthGateService({
   gatePath = DEFAULT_GATE_PATH,
   logger = createLogger({ name: 'api' }),
   pool,
+  roomPrefix = normalizeLiveKitRoomPrefix(),
   roomStore,
   secret,
   upstreamUrl = process.env.LIVEKIT_INTERNAL_URL || process.env.LIVEKIT_URL || 'ws://127.0.0.1:7880'
@@ -94,12 +105,19 @@ function createLiveKitAuthGateService({
     signer: createGateCredentialSigner({ secret })
   });
 
-  async function authorize(requestUrl) {
+  // With `headers` the LiveKit JWT that rides along must belong to the same
+  // admission as the gate credential (see livekit-token-binding.js). The
+  // upgrade handler always passes them; credential-only callers are proofs that
+  // exercise the boundary service in isolation.
+  async function authorize(requestUrl, headers) {
     const { credential, strippedPath } = extractCredential(requestUrl);
     const result = await credentialBoundary.authorizeCredential(credential);
-    return result.ok
-      ? { ok: true, claims: result.claims, strippedPath }
-      : { ok: false, code: result.code, strippedPath };
+    if (!result.ok) return { ok: false, code: result.code, strippedPath };
+    if (headers !== undefined) {
+      const binding = verifyAccessTokenBinding({ claims: result.claims, requestUrl, headers, roomPrefix });
+      if (!binding.ok) return { ok: false, code: binding.code, strippedPath };
+    }
+    return { ok: true, claims: result.claims, strippedPath };
   }
 
   function createServer() {
@@ -116,6 +134,10 @@ function createLiveKitAuthGateService({
           });
         return;
       }
+      if (req.method === 'GET' && isValidatePath(req.url, path)) {
+        proxyValidate(req, res);
+        return;
+      }
       res.writeHead(404);
       res.end();
     });
@@ -128,14 +150,16 @@ function createLiveKitAuthGateService({
         deny(socket, 404, 'Not Found');
         return;
       }
-      authorize(request.url)
+      authorize(request.url, request.headers || {})
         .then((decision) => {
           if (!decision.ok) {
+            logger.warn({ evt: LOG_EVENTS.LIVEKIT_GATE_DENIED, code: decision.code }, 'LiveKit gate denied an upgrade');
             deny(socket, 403, 'Forbidden');
             return;
           }
           if (!isSocketWritable(socket)) return;
           const upstreamSocket = net.connect({
+            noDelay: true,
             host: upstream.hostname,
             port: Number(upstream.port || (upstream.protocol === 'wss:' ? 443 : 80))
           });
@@ -177,6 +201,51 @@ function createLiveKitAuthGateService({
         });
     });
     return server;
+  }
+
+  // The validate probe gets the same admission check as the upgrade itself, so
+  // a revoked or mismatched admission hears 403 (LiveKit's "not allowed")
+  // instead of whatever LiveKit would say about the bare JWT.
+  // The probe is a cross-origin fetch from the web origin to the LiveKit
+  // domain without cookies (the admission rides in the URL), so the browser
+  // only lets the client read the answer with an allow-origin header.
+  function proxyValidate(req, res) {
+    res.setHeader('access-control-allow-origin', '*');
+    authorize(req.url, req.headers || {})
+      .then((decision) => {
+        if (!decision.ok) {
+          res.writeHead(403, { 'content-type': 'text/plain; charset=utf-8' });
+          res.end('LiveKit admission is no longer valid');
+          return;
+        }
+        const headers = { ...req.headers, host: upstream.host };
+        delete headers['x-vr-gate-credential'];
+        const upstreamRequest = http.request({
+          headers,
+          host: upstream.hostname,
+          method: 'GET',
+          path: decision.strippedPath,
+          port: Number(upstream.port || 80),
+          timeout: VALIDATE_TIMEOUT_MS
+        }, (upstreamResponse) => {
+          res.writeHead(upstreamResponse.statusCode || 502, {
+            'content-type': upstreamResponse.headers['content-type'] || 'text/plain; charset=utf-8'
+          });
+          upstreamResponse.pipe(res);
+        });
+        upstreamRequest.on('timeout', () => upstreamRequest.destroy(new Error('validate timed out')));
+        upstreamRequest.on('error', (error) => {
+          logger.error({ evt: LOG_EVENTS.LIVEKIT_GATE_UPSTREAM_FAILED, err: error }, 'LiveKit gate validate failed');
+          if (!res.headersSent) res.writeHead(502);
+          res.end();
+        });
+        upstreamRequest.end();
+      })
+      .catch((error) => {
+        logger.error({ evt: LOG_EVENTS.LIVEKIT_GATE_AUTHORIZATION_FAILED, err: error }, 'LiveKit gate authorization failed');
+        res.writeHead(503);
+        res.end();
+      });
   }
 
   return {

@@ -78,18 +78,40 @@ subscribeRoomRecoveryTransitions((event) => {
   }
 });
 
+const NOT_IN_ROOM_RETRY_DELAYS_MS = [500, 1_000, 2_000];
+
+/**
+ * The server only admits peers its roster knows, and the realtime join that
+ * puts us there is sent just before this request. The server already waits a
+ * few seconds for it; a slower or reconnecting realtime socket gets a few more
+ * tries here before the join is treated as failed.
+ */
+async function requestLiveKitCredentials(name: string, isCurrent: () => boolean): Promise<any> {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await postJson('/api/livekit-token', {
+        name,
+        peerId: state.peerId,
+        roomId: state.roomId,
+        sessionToken: state.sessionToken
+      });
+    } catch (error) {
+      const delay = NOT_IN_ROOM_RETRY_DELAYS_MS[attempt];
+      if (!(error instanceof ApiRequestError) || error.code !== 'not_in_room' || delay === undefined) throw error;
+      await new Promise((resolve) => setTimeout(resolve, delay));
+      // A rejected or abandoned join (room full, left the room) ends the wait.
+      if (!isCurrent()) throw error;
+    }
+  }
+}
+
 export async function connectLiveKitRoom(
   name: string,
   isCurrent: () => boolean = () => true
 ): Promise<boolean> {
   setVoiceConnectionStatus('connecting');
 
-  const credentials = await postJson('/api/livekit-token', {
-    name,
-    peerId: state.peerId,
-    roomId: state.roomId,
-    sessionToken: state.sessionToken
-  });
+  const credentials = await requestLiveKitCredentials(name, isCurrent);
   if (!isCurrent()) return false;
 
   const room = await connectLiveKitWithFallback(credentials, isCurrent);
@@ -158,12 +180,7 @@ export async function attemptFreshLiveKitReplacement({
 
   try {
     if (oldRoom) reconcileGenerationFor(oldRoom).invalidate();
-    const credentials = await postJson('/api/livekit-token', {
-      name: state.self?.name || state.peerId,
-      peerId: state.peerId,
-      roomId: state.roomId,
-      sessionToken: state.sessionToken
-    });
+    const credentials = await requestLiveKitCredentials(state.self?.name || state.peerId, isCurrent);
     if (!isCurrent()) return { retryable: true, code: 'transport_error' };
 
     candidate = await connectLiveKitWithFallback(credentials, isCurrent);
@@ -222,14 +239,14 @@ function isRetryableLiveKitApiFailure(error: ApiRequestError): boolean {
   if (['authentication_required', 'invalid_join', 'invalid_session', 'room_banned', 'room_full', 'room_not_found'].includes(error.code)) return false;
   return [408, 425, 429].includes(error.status)
     || error.status >= 500
-    || ['livekit_gate_credential_unavailable', 'livekit_gate_principal_unavailable', 'livekit_gate_unavailable', 'membership_persist_failed', 'membership_unavailable'].includes(error.code);
+    || ['livekit_gate_credential_unavailable', 'livekit_gate_principal_unavailable', 'livekit_gate_unavailable', 'membership_persist_failed', 'membership_unavailable', 'not_in_room'].includes(error.code);
 }
 
 function safeLiveKitCode(code: string): string {
   return [
     'authentication_required', 'invalid_join', 'invalid_session', 'room_banned', 'room_full', 'room_not_found',
     'livekit_gate_credential_unavailable', 'livekit_gate_principal_unavailable', 'livekit_gate_unavailable',
-    'membership_persist_failed', 'membership_unavailable', 'transport_error'
+    'membership_persist_failed', 'membership_unavailable', 'not_in_room', 'transport_error'
   ].includes(code) ? code : 'unknown_error';
 }
 
@@ -253,7 +270,8 @@ async function connectLiveKitWithFallback(
 
     try {
       await room.connect(url, credentials.token, {
-        autoSubscribe: false
+        autoSubscribe: false,
+        ...(isForcedRelayDiagnostic() ? { rtcConfig: { iceTransportPolicy: 'relay' as RTCIceTransportPolicy } } : {})
       });
       if (!isCurrent()) {
         await disconnectLiveKitRoomInstance(room);
@@ -269,6 +287,20 @@ async function connectLiveKitWithFallback(
   }
 
   throw new LiveKitTransportError();
+}
+
+/**
+ * `?forceRelay=1` on the room URL sends all media through LiveKit's TURN relay.
+ * It exists to verify a TURN deployment (TURN_ENABLED) from a normal network:
+ * with it the status tooltip should read "через ретранслятор" and audio must
+ * still flow.
+ */
+export function isForcedRelayDiagnostic(): boolean {
+  try {
+    return new URLSearchParams(window.location.search).get('forceRelay') === '1';
+  } catch {
+    return false;
+  }
 }
 
 function getLiveKitConnectUrls(url: string): string[] {
@@ -601,7 +633,9 @@ async function publishLocalScreenTracksForRoom(
     if (!isCurrent()) break;
     const publication = await room.localParticipant.publishTrack(track, {
       audioPreset: track.kind === 'audio' ? { maxBitrate: SCREEN_AUDIO_BITRATE } : undefined,
-      ...(track.kind === 'audio' ? { dtx: false } : {}),
+      // Shared audio is music and game sound: keep it stereo and continuous,
+      // and skip RED, which would double a 192 kbps stream for little gain.
+      ...(track.kind === 'audio' ? { dtx: false, forceStereo: true, red: false } : {}),
       name: track.kind === 'video' ? 'screen' : 'screen-audio',
       ...(videoOptions ?? {}),
       source: track.kind === 'video' ? videoOptions!.source : TRACK_SOURCE.ScreenShareAudio as Track.Source,

@@ -7,7 +7,8 @@ const {
   normalizeSessionToken,
   cleanName,
   cleanStreamId,
-  cleanScreenProfileId
+  cleanScreenProfileId,
+  isReservedPeerId
 } = require('@voice-room/shared/validation');
 const { buildServerEnvelope, buildServerErrorEnvelope } = require('./envelope');
 const { buildRoomRealtimeSummaryFromLobbyRoom, createSummaryCoalescer } = require('./summary');
@@ -841,7 +842,9 @@ function createRoomRealtimeRuntime(deps) {
     const sessionToken = normalizeSessionToken(payload.sessionToken);
     const name = cleanName(sessionUser?.displayName || sessionUser?.login || payload.name);
 
-    if (!roomId || !peerId || !sessionToken) {
+    // `auth-<userId>` is the API's own account peer id (shared/validation), so
+    // a voice peer may never claim it.
+    if (!roomId || !peerId || !sessionToken || isReservedPeerId(peerId)) {
       return { ok: false, code: 'invalid_join', message: 'Invalid room, peer, or session token' };
     }
 

@@ -529,6 +529,12 @@ body[data-lobby-embedded="true"] .room-dock {
   justify-content: space-between;
 }
 
+.gate-auto-row {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
 .gate-switch {
   position: relative;
   flex: none;

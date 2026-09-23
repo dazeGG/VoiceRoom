@@ -278,6 +278,7 @@ async function performJoinRoom(generation: number): Promise<void> {
   state.connecting = true;
   state.localConnectionQuality = 'unknown';
   state.localPingMs = null;
+  state.localNetwork = { inboundLossPct: null, jitterMs: null, outboundLossPct: null, transport: null };
   resetConnectionStatus();
   setServerConnectionStatus('connecting');
   setVoiceConnectionStatus('idle');
@@ -543,6 +544,7 @@ export function leaveRoom(): void {
   state.audioUnlockPending = false;
   state.localConnectionQuality = 'unknown';
   state.localPingMs = null;
+  state.localNetwork = { inboundLossPct: null, jitterMs: null, outboundLossPct: null, transport: null };
   clearGateSwitchTimer();
   if (state.roomId && state.peerId && state.sessionToken) {
     sendVoiceLeave({

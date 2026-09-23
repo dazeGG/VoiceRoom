@@ -6,6 +6,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const { createApiApp, createApiServer } = require('../src/server');
+const { withRosterPeer } = require('./roster-harness');
 const { PUBLIC_CAPABILITY_KEYS } = require('@voice-room/shared/capabilities');
 const { resetMetricsForTest } = require('../src/lib/metrics');
 
@@ -967,7 +968,7 @@ test('livekit token uses authenticated user avatar color for room peer identity'
   process.env.LIVEKIT_API_KEY = 'devkey';
   process.env.LIVEKIT_API_SECRET = 'devsecretdevsecretdevsecret';
 
-  const store = createFakeStore();
+  const store = withRosterPeer(createFakeStore(), { id: 'peer0001', sessionToken: 'goodtoken123456789012345678901234' });
   let identityInput = null;
   store.getOrCreatePeerIdentity = async (input) => {
     identityInput = input;
@@ -1035,7 +1036,9 @@ test('livekit token validates persisted anonymous peer identity before issuing v
   process.env.LIVEKIT_API_SECRET = 'devsecretdevsecretdevsecret';
 
   const app = createApiApp({
-    store: createFakeStore(),
+    // The roster knows the peer with this token; the persisted identity says
+    // the token is not the one it was first bound to.
+    store: withRosterPeer(createFakeStore(), { id: 'peer0001', sessionToken: 'badtoken123456789012345678901234' }),
     liveKitCredentials: {
       async issueAdmission() {
         return { status: 'issued', admission: { room: 'voice-room-test', token: 'jwt', ttlSeconds: 60, url: 'ws://gate.test/rtc' } };

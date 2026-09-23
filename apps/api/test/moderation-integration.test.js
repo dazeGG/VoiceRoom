@@ -367,6 +367,13 @@ test('kick and ban lifecycle enforces join, token, chat, preview, and undo', asy
   sendWs(preview.ws, 'room.preview.subscribe', { roomId: ROOM_ID });
   await waitForWsType(preview.frames, 'room.snapshot', (frame) => frame.payload.roomId === ROOM_ID, 5000, previewAfterUndoStart);
 
+  // Media admission is only for peers in the room roster, so rejoin first.
+  await joinVoiceRoom(target, {
+    roomId: ROOM_ID,
+    peerId: 'target-after-undo',
+    sessionToken: 'u'.repeat(32),
+    name: 'Target'
+  });
   const tokenAfterUndo = await requestJson(fixture.socketPath, 'POST', '/api/livekit-token', {
     body: { roomId: ROOM_ID, peerId: 'target-after-undo', sessionToken: 'u'.repeat(32), name: 'Target' },
     cookie: TARGET_COOKIE,

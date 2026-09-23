@@ -10,6 +10,7 @@ const path = require('node:path');
 const { Pool } = require('pg');
 const { test } = require('node:test');
 const { createApiApp } = require('../src/server');
+const { withRosterPeer } = require('./roster-harness');
 const { renderPrometheus, resetMetricsForTest } = require('../src/lib/metrics');
 const { createCredentialBoundaryService } = require('../src/domains/admission/credential-boundary-service');
 const { createLiveKitAuthGateService } = require('../src/domains/admission/livekit-auth-gate-service');
@@ -79,7 +80,10 @@ test('G48-A04 PostgreSQL-backed external HTTP/WS gate survives restart and rejec
   const store=createRoomStore({pool}); await store.createRoom({roomId:'g48-network',creatorIp:'127.0.0.1'}); const principal={principalType:'account',principalId:'g48-account'}; const boundary=createCredentialBoundaryService({roomStore:store,secret:process.env.LIVEKIT_GATE_SECRET});
   const upstream=net.createServer((socket)=>{let request='';socket.on('data',(chunk)=>{request+=chunk;if(!request.includes('\r\n\r\n'))return;const direct=request.includes('vr_gate_credential=');socket.end(direct?'HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\n\r\n':'HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: websocket\r\n\r\n');});}); const upstreamPort=await listen(upstream);t.after(()=>close(upstream));
   const issued=await Promise.all(['tab-a','tab-b'].map((peerId)=>boundary.issueCredential({roomId:'g48-network',peerId,principal}))); const makeGate=()=>createLiveKitAuthGateService({boundary,roomStore:store,upstreamUrl:`ws://127.0.0.1:${upstreamPort}`}).createServer(); let gate=makeGate();let gatePort=await listen(gate);
-  const pathFor=(credential)=>`/rtc?vr_gate_credential=${encodeURIComponent(credential)}`;
+  // The gate also binds the LiveKit JWT to the credential; mint a matching unsigned
+  // one from the credential's own claims (LiveKit, not the gate, checks signatures).
+  const accessTokenFor=(credential)=>{const claims=JSON.parse(Buffer.from(String(credential).split('.')[1]||'','base64url').toString('utf8')||'{}');const encode=(value)=>Buffer.from(JSON.stringify(value)).toString('base64url');return `${encode({alg:'HS256'})}.${encode({sub:claims.peer,nbf:Math.floor(Date.now()/1000),video:{room:`voice-room-${claims.room}`}})}.signature`;};
+  const pathFor=(credential)=>{let token='';try{token=accessTokenFor(credential);}catch{}return `/rtc?access_token=${token}&vr_gate_credential=${encodeURIComponent(credential)}`;};
   assert.match(await upgrade(gatePort,pathFor(issued[0].credential.value)),/^HTTP\/1\.1 101/); assert.match(await upgrade(upstreamPort,pathFor(issued[0].credential.value)),/^HTTP\/1\.1 403/);
   await close(gate); gate=makeGate();gatePort=await listen(gate);t.after(()=>close(gate)); const concurrent=await Promise.all(issued.map((entry)=>upgrade(gatePort,pathFor(entry.credential.value)))); assert.ok(concurrent.every((response)=>/^HTTP\/1\.1 101/.test(response)));
   const tampered=`${issued[0].credential.value.slice(0,-1)}x`; assert.match(await upgrade(gatePort,pathFor(tampered)),/^HTTP\/1\.1 403/);
@@ -97,7 +101,7 @@ test('G48-A03 PostgreSQL admission cleanup revokes only the failed tab credentia
   const healthy=await boundary.issueCredential({roomId,peerId:'healthy-tab',principal}); assert.equal(healthy.status,'issued');
   let failedCredential=null;
   const app=createApiApp({
-    store,
+    store:withRosterPeer(store,{id:'failed-tab',sessionToken:'goodtoken123456789012345678901234'}),
     users:{async getSessionUser(){return {user:{id:principal.principalId,avatarColorKey:'green'}};}},
     liveKitCredentials:{async issueAdmission(input){const issued=await boundary.issueCredential({roomId:input.roomId,peerId:input.peerId,principal:input.principal}); failedCredential=issued.credential; return {status:'issued',admission:{gateCredentialId:issued.credential.id,room:input.livekitRoom,token:'must-not-leak',ttlSeconds:60,url:`ws://gate.test/rtc?vr_gate_credential=${encodeURIComponent(issued.credential.value)}`}};}},
     membershipServicesOverride:{service:{async persistSuccessfulAdmission(){throw new Error('membership unavailable');}}}
@@ -128,7 +132,7 @@ test('G48-A03 issued credential fails closed when membership persistence and rev
     async getLiveKitGatePrincipalEpoch() { return { status: 'ready', epoch: 0 }; }, async createLiveKitGateCredential() { return { status: 'created' }; }, async verifyLiveKitGateCredential() { return { status: 'allowed' }; },
     async revokeLiveKitGateCredential() { throw new Error('revoke unavailable'); }, async revokeLiveKitGatePrincipal() { return { status: 'revoked', epoch: 1 }; }
   };
-  const app = createApiApp({ store, users: { async getSessionUser() { return { user: { id: 'account', avatarColorKey: 'green' } }; } }, liveKitCredentials: { async issueAdmission() { return { status: 'issued', admission: { gateCredentialId: 'credential', token: 'issued', room: 'room', url: 'ws://gate', ttlSeconds: 60 } }; } }, membershipServicesOverride: { service: { async persistSuccessfulAdmission() { throw new Error('membership unavailable'); } } } });
+  const app = createApiApp({ store: withRosterPeer(store, { id: 'peer0001', sessionToken: 'goodtoken123456789012345678901234' }), users: { async getSessionUser() { return { user: { id: 'account', avatarColorKey: 'green' } }; } }, liveKitCredentials: { async issueAdmission() { return { status: 'issued', admission: { gateCredentialId: 'credential', token: 'issued', room: 'room', url: 'ws://gate', ttlSeconds: 60 } }; } }, membershipServicesOverride: { service: { async persistSuccessfulAdmission() { throw new Error('membership unavailable'); } } } });
   t.after(() => app.close());
   const room = await app.inject({ method: 'POST', url: '/api/rooms', payload: { isStatic: false } });
   const response = await app.inject({ method: 'POST', url: '/api/livekit-token', headers: { cookie: 'vr_session=session' }, payload: { name: 'Account', peerId: 'peer0001', roomId: room.json().roomId, sessionToken: 'goodtoken123456789012345678901234' } });

@@ -49,4 +49,65 @@ function createRateLimiter({ limit, windowMs }) {
   return { check, entries };
 }
 
-module.exports = { getClientIp, createRateLimiter };
+// Counts only failures per key (for example failed logins per account), so an
+// attacker spread across many addresses still hits a ceiling on one account,
+// while the owner's successful sign-in clears the count. A limit or window of
+// <= 0 disables it.
+function createFailureLimiter({ limit, windowMs, maxEntries = 100_000 }) {
+  const entries = new Map();
+  let lastSweepAt = 0;
+
+  // Keys are attacker-chosen (any submitted login), so expired entries are
+  // swept every window and the map is capped outright.
+  function sweep(now) {
+    if (now - lastSweepAt < windowMs && entries.size < maxEntries) return;
+    lastSweepAt = now;
+    for (const [key, entry] of entries) {
+      if (now - entry.startedAt >= windowMs) entries.delete(key);
+    }
+    while (entries.size >= maxEntries) entries.delete(entries.keys().next().value);
+  }
+
+  function current(key, now) {
+    const entry = entries.get(key);
+    if (!entry) return null;
+    if (now - entry.startedAt >= windowMs) {
+      entries.delete(key);
+      return null;
+    }
+    return entry;
+  }
+
+  function status(key, now = Date.now()) {
+    if (limit <= 0 || windowMs <= 0) return { allowed: true, retryAfterSeconds: 0 };
+    const entry = current(key, now);
+    if (!entry || entry.count < limit) return { allowed: true, retryAfterSeconds: 0 };
+    return { allowed: false, retryAfterSeconds: Math.ceil((windowMs - (now - entry.startedAt)) / 1000) };
+  }
+
+  function recordFailure(key, now = Date.now()) {
+    if (limit <= 0 || windowMs <= 0) return;
+    sweep(now);
+    const entry = current(key, now);
+    if (entry) entry.count += 1;
+    else entries.set(key, { count: 1, startedAt: now });
+  }
+
+  function reset(key) {
+    entries.delete(key);
+  }
+
+  // Counts an attempt before the slow credential check, so a parallel burst
+  // cannot slip more guesses past status() than the limit allows. A success
+  // calls reset(); a failure keeps the reserved count.
+  function reserve(key, now = Date.now()) {
+    const allowed = status(key, now);
+    if (!allowed.allowed) return allowed;
+    recordFailure(key, now);
+    return allowed;
+  }
+
+  return { entries, recordFailure, reserve, reset, status };
+}
+
+module.exports = { getClientIp, createFailureLimiter, createRateLimiter };

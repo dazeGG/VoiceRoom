@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import http from 'node:http';
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -12,9 +13,10 @@ import {
   parseRuntimeConfig,
   resolveLiveKitConnectUrls
 } from '@voice-room/shared/runtime-config';
+import { buildHeaderPolicy, renderCaddySnippet } from '../scripts/emit-caddy-csp.mjs';
 
 const repositoryRoot = fileURLToPath(new URL('../../../', import.meta.url));
-const caddyImage = 'caddy:2.11.3-alpine';
+const caddyImage = 'caddy:2.11.4-alpine';
 const dockerAvailable = spawnSync('docker', ['version', '--format', '{{.Server.Version}}'], {
   encoding: 'utf8'
 }).status === 0;
@@ -57,6 +59,10 @@ async function fetchEdgeConfig(origin, timeoutMs = 100) {
 async function startCaddyEdge(wsUrl) {
   const name = `voiceroom-g13-${randomUUID()}`;
   const caddyfile = path.join(repositoryRoot, 'Caddyfile');
+  // The image generates this snippet from its own build; any valid policy
+  // lets the Caddyfile load here.
+  const cspSnippet = path.join(mkdtempSync(path.join(os.tmpdir(), 'voiceroom-csp-')), 'csp.caddy');
+  writeFileSync(cspSnippet, renderCaddySnippet(buildHeaderPolicy("default-src 'self'; script-src 'self' 'sha256-test='")));
   const run = spawnSync('docker', [
     'run', '-d', '--name', name,
     '-e', 'DOMAIN=:80',
@@ -64,6 +70,7 @@ async function startCaddyEdge(wsUrl) {
     '-e', `LIVEKIT_GATE_PUBLIC_URL=${wsUrl}`,
     '-p', '127.0.0.1::80',
     '-v', `${caddyfile}:/etc/caddy/Caddyfile:ro`,
+    '-v', `${cspSnippet}:/etc/caddy/csp.caddy:ro`,
     caddyImage
   ], { encoding: 'utf8' });
   if (run.status !== 0) throw new Error(run.stderr || 'failed to start Caddy edge');
@@ -137,7 +144,7 @@ test('G13-A01 one Web image contract serves distinct runtime configuration over 
 
   const dockerfile = readFileSync(path.join(repositoryRoot, 'Dockerfile'), 'utf8');
   const caddyfile = readFileSync(path.join(repositoryRoot, 'Caddyfile'), 'utf8');
-  assert.match(dockerfile, /FROM caddy:2\.11\.3-alpine AS web/);
+  assert.match(dockerfile, /FROM caddy:2\.11\.4-alpine AS web/);
   assert.match(caddyfile, /handle \/runtime-config\.json/);
   assert.match(caddyfile, /Cache-Control "no-store"/);
   assert.match(caddyfile, /\{\$LIVEKIT_GATE_PUBLIC_URL\}/);

@@ -69,6 +69,8 @@ test('cleanStreamId validates the pattern', () => {
 test('cleanScreenProfileId only allows known profiles', () => {
   assert.equal(cleanScreenProfileId('balanced-5'), 'balanced-5');
   assert.equal(cleanScreenProfileId('balanced-30'), 'balanced-30');
+  assert.equal(cleanScreenProfileId('high-60'), 'high-60');
+  assert.equal(cleanScreenProfileId('source-60'), 'source-60');
   assert.equal(cleanScreenProfileId('high-5'), 'high-5');
   assert.equal(cleanScreenProfileId('high'), 'high');
   assert.equal(cleanScreenProfileId('source-5'), 'source-5');

@@ -9,13 +9,14 @@ import {
 import type { SelectOption } from '$lib/shared/ui';
 import { roomDeviceUi } from '$lib/features/room/room-device-ui.svelte';
 import { state } from '../core/state.svelte';
-import { clampGateThresholdDb, getDbMeterPosition, getNoiseModeLabel } from '../core/settings';
+import { clampGateThresholdDb, getDbMeterPosition, getNoiseModeLabel, persistGateAuto } from '../core/settings';
 import { showToast } from './toast';
 import {
   getGateThresholdAmplitude,
   getLocalMicrophoneCapture,
   getMicrophoneProcessors,
   isGateDisabled,
+  syncGateAuto,
   openLocalMicrophone,
   setLocalMicrophoneCapture,
   setNoiseMode,
@@ -42,6 +43,7 @@ const GATE_TOGGLE_DEFAULT_DB = -40;
 let lastGateThresholdDb = GATE_TOGGLE_DEFAULT_DB;
 
 export interface GateControlView {
+  auto: boolean;
   levelScale: number;
   levelState: 'open' | 'closed';
   markerActive: boolean;
@@ -53,13 +55,17 @@ export interface GateControlView {
 export function getGateControlView(): GateControlView {
   const levelDb = Number.isFinite(roomDeviceUi.micLevelDb) ? clampGateThresholdDb(roomDeviceUi.micLevelDb) : GATE_THRESHOLD_MIN_DB;
   const position = getDbMeterPosition(levelDb);
-  const gateOpen = isGateDisabled() || levelDb >= state.gateThresholdDb;
+  // In automatic mode the live threshold is inside the worklet; the meter
+  // does not pretend to know it.
+  const gateOpen = isGateDisabled() || state.gateAuto || levelDb >= state.gateThresholdDb;
 
+  const auto = !isGateDisabled() && state.gateAuto;
   return {
+    auto,
     levelScale: position,
     levelState: gateOpen ? 'open' : 'closed',
-    markerActive: !isGateDisabled(),
-    thresholdLabel: isGateDisabled() ? 'Выкл' : `${state.gateThresholdDb} dB`,
+    markerActive: !isGateDisabled() && !auto,
+    thresholdLabel: isGateDisabled() ? 'Выкл' : auto ? 'Авто' : `${state.gateThresholdDb} dB`,
     thresholdValue: state.gateThresholdDb,
     gateOn: !isGateDisabled()
   };
@@ -72,6 +78,11 @@ export function toggleGate(): void {
     lastGateThresholdDb = state.gateThresholdDb;
     updateGateThresholdFromSlider(GATE_THRESHOLD_MIN_DB);
   }
+}
+
+export function toggleGateAuto(): void {
+  state.gateAuto = persistGateAuto(!state.gateAuto);
+  syncGateAuto();
 }
 
 export function clearGateSwitchTimer(): void {

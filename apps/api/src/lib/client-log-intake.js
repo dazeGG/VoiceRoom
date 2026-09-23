@@ -21,11 +21,22 @@ const CLIENT_LOG_LEVELS = Object.freeze(['debug', 'info', 'warn', 'error']);
 const NAMESPACE_PATTERN = /^[A-Za-z0-9:._-]+$/;
 const SESSION_ID_PATTERN = /^[A-Za-z0-9._-]+$/;
 
+// Browser errors quote URLs, and URLs here carry secrets in their query: the
+// LiveKit connect URL holds both the JWT and the gate credential. Queries and
+// fragments are dropped, and anything shaped like a JWT or gate credential is
+// masked wherever it appears.
+const URL_QUERY_PATTERN = /(\b[a-z][a-z0-9+.-]*:\/\/[^\s?#"'<>]*)[?#][^\s"'<>]*/gi;
+const SECRET_PATTERN = /\b(?:eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]*|vrg1\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)/g;
+
+function redactSecrets(text) {
+  return text.replace(URL_QUERY_PATTERN, '$1?…').replace(SECRET_PATTERN, '[redacted]');
+}
+
 function cleanText(value, maxChars) {
   if (typeof value !== 'string') return '';
   // Control characters would let a caller forge extra lines in a line-delimited
   // log stream, so they are stripped rather than escaped.
-  return value.replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, maxChars);
+  return redactSecrets(value.replace(/[\u0000-\u001f\u007f]/g, ' ')).trim().slice(0, maxChars);
 }
 
 function cleanSessionId(value) {

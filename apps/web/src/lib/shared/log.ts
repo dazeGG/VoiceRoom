@@ -86,9 +86,19 @@ export function createLogger(namespace: string): Logger {
 // diagnosis (NotAllowedError vs NotReadableError vs OverconstrainedError).
 export function errorContext(error: unknown, extra: LogContext = {}): LogContext {
   if (error instanceof Error) {
-    return { ...extra, errorName: error.name, errorMessage: error.message };
+    return { ...extra, errorName: error.name, errorMessage: redactForLog(error.message) };
   }
-  return { ...extra, errorMessage: String(error) };
+  return { ...extra, errorMessage: redactForLog(String(error)) };
+}
+
+// Error text quotes URLs, and the LiveKit connect URL carries the JWT and the
+// gate credential in its query. The intake strips these too; doing it here
+// keeps them out of the in-page buffer and anything that copies it.
+const URL_QUERY_PATTERN = /(\b[a-z][a-z0-9+.-]*:\/\/[^\s?#"'<>]*)[?#][^\s"'<>]*/gi;
+const SECRET_PATTERN = /\b(?:eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]*|vrg1\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)/g;
+
+export function redactForLog(text: string): string {
+  return text.replace(URL_QUERY_PATTERN, '$1?…').replace(SECRET_PATTERN, '[redacted]');
 }
 
 export function readLogBuffer(): readonly ClientLogRecord[] {
@@ -149,8 +159,8 @@ export function installGlobalErrorCapture(): void {
 
   window.addEventListener('error', (event) => {
     log.error('uncaught error', {
-      errorMessage: String(event.message || ''),
-      source: String(event.filename || ''),
+      errorMessage: redactForLog(String(event.message || '')),
+      source: redactForLog(String(event.filename || '')),
       line: Number(event.lineno) || 0
     });
   });

@@ -5,17 +5,20 @@ const SCREEN_PROFILE_IDS = new Set([
   'balanced-5',
   'balanced-15',
   'balanced-30',
+  'balanced-60',
   'high',
   'high-5',
   'high-15',
   'high-30',
+  'high-60',
   'low',
   'low-15',
   'low-30',
   'source',
   'source-5',
   'source-15',
-  'source-30'
+  'source-30',
+  'source-60'
 ]);
 
 const PRESENCE_STATUSES = Object.freeze([
@@ -36,6 +39,20 @@ function normalizePeerId(value) {
   if (typeof value !== 'string') return '';
   const peerId = value.trim();
   return /^[A-Za-z0-9_-]{8,80}$/.test(peerId) ? peerId : '';
+}
+
+// `auth-<userId>` is the peer id the API assigns to a signed-in user's lobby
+// messages and typing. It carries account authorship, so no connection may
+// claim it as its own room peer id — a guest holding `auth-<victim>` would
+// otherwise pass the peer-author checks on the victim's messages.
+const ACCOUNT_PEER_ID_PREFIX = 'auth-';
+
+function accountPeerIdFor(userId) {
+  return typeof userId === 'string' && userId ? normalizePeerId(`${ACCOUNT_PEER_ID_PREFIX}${userId}`) : '';
+}
+
+function isReservedPeerId(value) {
+  return typeof value === 'string' && value.trim().toLowerCase().startsWith(ACCOUNT_PEER_ID_PREFIX);
 }
 
 function normalizeSessionToken(value) {
@@ -115,6 +132,9 @@ function cleanLiveKitUrl(value) {
 }
 
 module.exports = {
+  ACCOUNT_PEER_ID_PREFIX,
+  accountPeerIdFor,
+  isReservedPeerId,
   AVATAR_COLOR_KEYS,
   PASSWORD_MAX_LENGTH,
   PASSWORD_MIN_LENGTH,
