@@ -1863,9 +1863,12 @@ test('delete realtime contracts avoid stale chat and false room affordances', ()
   const friends = read('src/lib/features/home/model/friends.svelte.ts');
   const accountEvents = read('../api/src/realtime/account-events.js');
   const apiServer = read('../api/src/server.js');
+  const apiRoomChat = read('../api/src/domains/messaging/room-chat.service.ts');
 
-  assert.match(apiServer, /buildServerEnvelope\('room\.chat\.deleted'/);
-  assert.doesNotMatch(apiServer, /broadcast\(presence, delEvent\)/);
+  // Room chat events go out as room-detail envelopes, never as legacy peer broadcasts.
+  assert.match(apiServer, /roomDetailEvent: buildServerEnvelope/);
+  assert.match(apiRoomChat, /deps\.roomDetailEvent\('room\.chat\.deleted'/);
+  assert.doesNotMatch(apiRoomChat, /broadcast\(presence, delEvent\)/);
   assert.match(accountEvents, /case 'dm\.message\.deleted'/);
   assert.match(previewChat, /event\.type === 'room\.chat\.deleted'[\s\S]*messages = messages\.filter/);
   assert.match(friends, /case 'dm\.message\.deleted'[\s\S]*refreshFriends\(\)/);
@@ -1882,14 +1885,16 @@ test('message editing is author-only in UI and applies realtime replacements', (
   const realtime = read('src/lib/api/realtime.ts');
   const roomsApi = read('src/lib/api/rooms.ts');
   const server = read('../api/src/server.js');
+  const apiRoomChat = read('../api/src/domains/messaging/room-chat.service.ts');
+  const apiRoomChatViews = read('../api/src/domains/messaging/room-chat-views.ts');
   const roomOwnership = functionBody(roomChat, 'isOwnMessage');
   const previewOwnership = functionBody(previewChat, 'isOwnMessage');
   const messageMenu = read('src/lib/shared/chat/MessageContextMenu.svelte');
 
-  assert.match(server, /buildServerEnvelope\('room\.chat\.edited'/);
+  assert.match(apiRoomChat, /deps\.roomDetailEvent\('room\.chat\.edited'/);
   assert.match(server, /type: 'dm\.message\.edited'/);
-  assert.match(server, /Deliberately no owner\/moderator override/);
-  assert.match(server, /authorUserId: message\.authorUserId \|\| null/);
+  assert.match(apiRoomChat, /Deliberately no owner\/moderator override/);
+  assert.match(apiRoomChatViews, /authorUserId: message\.authorUserId \|\| null/);
   assert.match(roomsApi, /authorUserId: string \| null/);
   assert.match(realtime, /type: 'room\.chat\.edited'/);
   assert.match(realtime, /type: 'dm\.message\.edited'/);
