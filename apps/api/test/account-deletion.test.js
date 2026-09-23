@@ -1,15 +1,13 @@
-'use strict';
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
+import { Pool } from 'pg';
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const crypto = require('node:crypto');
-const { Pool } = require('pg');
-
-const { createAccountDeletionRepository } = require('../src/domains/account/account-deletion-repository');
-const { createUserStore } = require('../src/lib/user-store');
-const { runMigrations } = require('../src/lib/migrate');
-const { ACCOUNT_DELETION_GRACE_MS, DELETED_ACCOUNT_NAME } = require('@voice-room/shared/account-security');
-const { createTestDatabase } = require('./db-harness');
+import { createAccountDeletionRepository } from '../src/domains/account/account-deletion-repository.js';
+import { createUserStore } from '../src/lib/user-store.js';
+import { runMigrations } from '../src/lib/migrate.js';
+import { ACCOUNT_DELETION_GRACE_MS, DELETED_ACCOUNT_NAME } from '@voice-room/shared/account-security';
+import { createTestDatabase } from './db-harness.js';
 
 const SILENT = { log() {}, info() {}, warn() {}, error() {} };
 const DAY = 24 * 60 * 60 * 1000;

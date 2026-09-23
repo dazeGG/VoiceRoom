@@ -1,8 +1,7 @@
-'use strict';
-const assert = require('node:assert/strict');
-const { test } = require('node:test');
-const { createCursorCodec } = require('../src/platform/cursor-codec');
-const { createRoomHistoryService } = require('../src/domains/messaging/room-history-service');
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+import { createCursorCodec } from '../src/platform/cursor-codec.js';
+import { createRoomHistoryService } from '../src/domains/messaging/room-history-service.js';
 
 function message(id, micros) { return { id, roomId: 'room-a', createdAt: Number(micros), createdAtMicros: String(micros), text: id }; }
 

@@ -1,7 +1,5 @@
-'use strict';
-
-const http = require('node:http');
-const { renderPrometheus } = require('./metrics');
+import http from 'node:http';
+import { renderPrometheus } from './metrics.js';
 
 function startWorkerMetricsServer({ host = '0.0.0.0', port = 9464, render = renderPrometheus } = {}) {
   const server = http.createServer((request, response) => {
@@ -21,4 +19,4 @@ function startWorkerMetricsServer({ host = '0.0.0.0', port = 9464, render = rend
   });
 }
 
-module.exports = { startWorkerMetricsServer };
+export { startWorkerMetricsServer };

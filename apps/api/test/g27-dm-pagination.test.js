@@ -1,8 +1,7 @@
-'use strict';
-const assert = require('node:assert/strict');
-const { test } = require('node:test');
-const { createCursorCodec } = require('../src/platform/cursor-codec');
-const { canonicalParticipants, createDmHistoryService } = require('../src/domains/messaging/dm-history-service');
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+import { createCursorCodec } from '../src/platform/cursor-codec.js';
+import { canonicalParticipants, createDmHistoryService } from '../src/domains/messaging/dm-history-service.js';
 
 function message(id, micros) { return { id, senderId: 'a', recipientId: 'b', body: id, createdAt: Number(micros), createdAtMicros: String(micros) }; }
 

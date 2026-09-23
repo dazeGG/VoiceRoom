@@ -1,23 +1,21 @@
-'use strict';
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { Pool } from 'pg';
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const crypto = require('node:crypto');
-const fs = require('node:fs');
-const os = require('node:os');
-const path = require('node:path');
-const { Pool } = require('pg');
-
-const { runMigrations } = require('../src/lib/migrate');
-const { createRoomStore } = require('../src/lib/room-store');
-const { createUserStore } = require('../src/lib/user-store');
-const { createLinkPreviewRepository } = require('../src/domains/link-previews/link-preview-repository');
-const { FAILED_TTL_MS, createLinkPreviewService } = require('../src/domains/link-previews/link-preview-service');
-const { createLinkPreviewStorage, reconcileLinkPreviewImages } = require('../src/lib/link-preview-storage');
-const { createTestDatabase } = require('./db-harness');
+import { runMigrations } from '../src/lib/migrate.js';
+import { createRoomStore } from '../src/lib/room-store.js';
+import { createUserStore } from '../src/lib/user-store.js';
+import { createLinkPreviewRepository } from '../src/domains/link-previews/link-preview-repository.js';
+import { FAILED_TTL_MS, createLinkPreviewService } from '../src/domains/link-previews/link-preview-service.js';
+import { createLinkPreviewStorage, reconcileLinkPreviewImages } from '../src/lib/link-preview-storage.js';
+import { createTestDatabase } from './db-harness.js';
 
 const SILENT = { log() {}, info() {}, warn() {}, error() {} };
-const MIGRATIONS_DIR = path.join(__dirname, '../src/migrations');
+const MIGRATIONS_DIR = path.join(import.meta.dirname, '../src/migrations');
 const KEY = `lp_${'ab'.repeat(16)}.webp`;
 const OTHER_KEY = `lp_${'cd'.repeat(16)}.webp`;
 const PAGE = '<html><head><title>fallback</title><meta property="og:title" content="Пост про котов"><meta property="og:image" content="/cover.png"></head><body></body></html>';
@@ -172,8 +170,8 @@ test('the link preview migration applies and rolls back cleanly', async (t) => {
   await runMigrations({ databaseUrl, logger: SILENT });
   assert.equal(await tableExists(), true);
 
-  const names = fs.readdirSync(MIGRATIONS_DIR).filter((file) => file.endsWith('.js')).sort();
-  const index = names.indexOf('20260913120000_create_link_previews.js');
+  const names = fs.readdirSync(MIGRATIONS_DIR).filter((file) => file.endsWith('.cjs')).sort();
+  const index = names.indexOf('20260913120000_create_link_previews.cjs');
   assert.notEqual(index, -1);
   for (let step = 0; step < names.length - index; step += 1) {
     assert.equal((await runMigrations({ databaseUrl, direction: 'down', logger: SILENT })).length, 1);

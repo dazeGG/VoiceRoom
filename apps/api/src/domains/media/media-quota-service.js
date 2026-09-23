@@ -1,5 +1,3 @@
-'use strict';
-
 const DEFAULT_MAX_PENDING = 8;
 const DEFAULT_MAX_FILES_PER_WINDOW = 20;
 const DEFAULT_WINDOW_MS = 10 * 60 * 1000;
@@ -53,7 +51,7 @@ function createMediaQuotaService({
   return Object.freeze({ reserve });
 }
 
-module.exports = {
+export {
   DEFAULT_MAX_BYTES,
   DEFAULT_MAX_FILES_PER_WINDOW,
   DEFAULT_MAX_PENDING,

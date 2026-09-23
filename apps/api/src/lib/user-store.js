@@ -1,12 +1,10 @@
-'use strict';
-
-const crypto = require('node:crypto');
-const { createDbPool, transaction } = require('./db');
-const { hashPassword, verifyPassword } = require('./password');
-const { AVATAR_COLOR_KEYS, cleanAvatarColorKey, cleanPresenceStatus } = require('@voice-room/shared/validation');
-const { LOG_EVENTS } = require('./log-events');
-const { createLogger } = require('./logger');
-const {
+import crypto from 'node:crypto';
+import { createDbPool, transaction } from './db.js';
+import { hashPassword, verifyPassword } from './password.js';
+import { AVATAR_COLOR_KEYS, cleanAvatarColorKey, cleanPresenceStatus } from '@voice-room/shared/validation';
+import { LOG_EVENTS } from './log-events.js';
+import { createLogger } from './logger.js';
+import {
   LOGIN_ALERT_TTL_MS,
   LOGIN_FAMILIARITY_WINDOW_MS,
   RECOVERY_CODES_REMINDER_SNOOZE_MS,
@@ -18,7 +16,7 @@ const {
   isDesktopAppUserAgent,
   normalizeRecoveryCode,
   normalizeReleaseVersion
-} = require('@voice-room/shared/account-security');
+} from '@voice-room/shared/account-security';
 
 const DEFAULT_SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const SESSION_TOUCH_INTERVAL_MS = 60 * 60 * 1000;
@@ -719,7 +717,7 @@ function createUserStore({ databaseUrl, logger = createLogger({ name: 'api' }), 
   };
 }
 
-module.exports = {
+export {
   createUserStore,
   hashRecoveryCode,
   hashSessionToken,

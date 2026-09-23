@@ -1,12 +1,11 @@
-'use strict';
-
-const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const { Pool } = require('pg');
-const test = require('node:test');
-const { runMigrations } = require('../src/lib/migrate');
-const { createReactionRepository } = require('../src/domains/messaging/reaction-repository');
-const { createTestDatabase } = require('./db-harness');
+import { fileURLToPath } from 'node:url';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import { Pool } from 'pg';
+import test from 'node:test';
+import { runMigrations } from '../src/lib/migrate.js';
+import { createReactionRepository } from '../src/domains/messaging/reaction-repository.js';
+import { createTestDatabase } from './db-harness.js';
 
 async function fixture(t) {
   const db = await createTestDatabase(t);
@@ -43,7 +42,7 @@ test('G68-A01 desired-state rows are unique, idempotent, monotonic and applicati
     throw new Error('rollback');
   }), /rollback/);
   assert.equal((await pool.query(`SELECT count(*)::int AS count FROM room_message_reactions WHERE emoji = '👩🏽‍💻'`)).rows[0].count, 0);
-  const migrationRunner = fs.readFileSync(require.resolve('../src/lib/migrate.js'), 'utf8');
+  const migrationRunner = fs.readFileSync(fileURLToPath(new URL('../src/lib/migrate.js', import.meta.url)), 'utf8');
   assert.match(migrationRunner, /SET lock_timeout TO '\$\{LOCK_TIMEOUT_MS\}ms'/);
 });
 

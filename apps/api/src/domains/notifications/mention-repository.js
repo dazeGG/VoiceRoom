@@ -1,6 +1,4 @@
-'use strict';
-
-const crypto = require('node:crypto');
+import crypto from 'node:crypto';
 
 function executor(pool, client) { return client?.query ? client : pool; }
 
@@ -58,4 +56,4 @@ function createMentionRepository({ pool } = {}) {
   return { listActive, replaceForMessage, retractForMessage };
 }
 
-module.exports = { createMentionRepository, mapMention };
+export { createMentionRepository, mapMention };

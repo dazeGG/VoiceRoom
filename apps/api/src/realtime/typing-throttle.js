@@ -1,5 +1,3 @@
-'use strict';
-
 // Typing notices are hints, so each target a connection types to (a room or a
 // friend) gets at most one forward a second. A repeat of the same activity
 // inside that second is dropped: the client repeats it on its own. A change of
@@ -66,8 +64,4 @@ function createTypingThrottle({
   return { offer, size: () => targets.size };
 }
 
-module.exports = {
-  TYPING_FORWARD_MIN_MS,
-  TYPING_TARGET_LIMIT,
-  createTypingThrottle
-};
+export { TYPING_FORWARD_MIN_MS, TYPING_TARGET_LIMIT, createTypingThrottle };

@@ -1,5 +1,3 @@
-'use strict';
-
 // Any room participant may pin, so the only guard against a room turning into
 // an unbounded pin list is this cap. Discord uses 50; matching it keeps the
 // pinned bar scrollable rather than endless.
@@ -115,4 +113,4 @@ function createPinService({ repository, publish, maxPins = MAX_PINS_PER_ROOM } =
   return Object.freeze({ list, pin, refresh, unpin });
 }
 
-module.exports = { MAX_PINS_PER_ROOM, PinServiceError, createPinService };
+export { MAX_PINS_PER_ROOM, PinServiceError, createPinService };

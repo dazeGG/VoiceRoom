@@ -1,23 +1,21 @@
-'use strict';
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import { Client } from 'pg';
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
-const { Client } = require('pg');
-
-const { createTestDatabase } = require('./db-harness');
-const { runMigrations } = require('../src/lib/migrate');
+import { createTestDatabase } from './db-harness.js';
+import { runMigrations } from '../src/lib/migrate.js';
 
 const SILENT = { log() {}, info() {}, warn() {}, error() {} };
 const NEW_TABLES = ['room_message_pins', 'user_blocks', 'room_server_mutes'];
-const FIRST_CONTEXT_MENU_MIGRATION = '20260809120000_create_room_message_pins.js';
+const FIRST_CONTEXT_MENU_MIGRATION = '20260809120000_create_room_message_pins.cjs';
 
 // Down migrations run from the head, so reaching the context-menu tables also
 // undoes every migration added after them.
 function rollbackCountThrough(fileName) {
-  const files = fs.readdirSync(path.resolve(__dirname, '../src/migrations'))
-    .filter((name) => name.endsWith('.js'))
+  const files = fs.readdirSync(path.resolve(import.meta.dirname, '../src/migrations'))
+    .filter((name) => name.endsWith('.cjs'))
     .sort();
   assert.ok(files.includes(fileName), `${fileName} is missing`);
   return files.length - files.indexOf(fileName);

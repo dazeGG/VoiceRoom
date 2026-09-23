@@ -1,5 +1,3 @@
-'use strict';
-
 const httpRequests = new Map();
 const maintenanceTasks = new Map();
 let pgPoolErrors = 0;
@@ -193,7 +191,7 @@ function resetMetricsForTest() {
   credentialRevokeCleanupFailures = 0;
 }
 
-module.exports = {
+export {
   observeMaintenance,
   recordHttpRequest,
   recordMaintenanceDuration,

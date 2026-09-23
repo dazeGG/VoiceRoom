@@ -1,9 +1,7 @@
-'use strict';
-
-const crypto = require('node:crypto');
-const sharp = require('sharp');
-const { deriveAvatarAccent, dominantAvatarColor } = require('@voice-room/shared/avatar-accent');
-const { detectImageFormat } = require('./image-signature.mts');
+import crypto from 'node:crypto';
+import sharp from 'sharp';
+import { deriveAvatarAccent, dominantAvatarColor } from '@voice-room/shared/avatar-accent';
+import { detectImageFormat } from './image-signature.mts';
 
 const AVATAR_SIZE = 256;
 const MAX_AVATAR_BYTES = 5 * 1024 * 1024;
@@ -62,7 +60,7 @@ function createAvatarKey(kind, id, hash) {
   return `${kind === 'room' ? 'room' : 'av'}_${normalizedId}_${hash}.webp`;
 }
 
-module.exports = {
+export {
   AVATAR_SIZE,
   MAX_AVATAR_BYTES,
   createAvatarKey,

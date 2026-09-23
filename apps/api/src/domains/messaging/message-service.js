@@ -1,6 +1,4 @@
-'use strict';
-
-const { createMessageVisibilityService } = require('./message-visibility-service');
+import { createMessageVisibilityService } from './message-visibility-service.js';
 
 function createMessageService({ directMessages, roomMessages, visibility } = {}) {
   if (!directMessages || !roomMessages) {
@@ -26,4 +24,4 @@ function createMessageService({ directMessages, roomMessages, visibility } = {})
   });
 }
 
-module.exports = { createMessageService };
+export { createMessageService };

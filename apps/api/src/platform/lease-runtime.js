@@ -1,8 +1,6 @@
-'use strict';
-
-const crypto = require('node:crypto');
-const { LOG_EVENTS } = require('../lib/log-events');
-const { createLogger } = require('../lib/logger');
+import crypto from 'node:crypto';
+import { LOG_EVENTS } from '../lib/log-events.js';
+import { createLogger } from '../lib/logger.js';
 
 const DEFAULT_LEASE_MS = 30_000;
 const DEFAULT_RENEW_MS = 10_000;
@@ -205,8 +203,4 @@ function createLeaseRuntime({
   });
 }
 
-module.exports = {
-  LeaseLostError,
-  boundedBackoff,
-  createLeaseRuntime
-};
+export { LeaseLostError, boundedBackoff, createLeaseRuntime };

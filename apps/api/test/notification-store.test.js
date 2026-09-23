@@ -1,15 +1,13 @@
-'use strict';
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
+import { setTimeout as delay } from 'node:timers/promises';
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const crypto = require('node:crypto');
-const { setTimeout: delay } = require('node:timers/promises');
-
-const { createNotificationStore } = require('../src/lib/notification-store');
-const { createRoomStore } = require('../src/lib/room-store');
-const { createUserStore } = require('../src/lib/user-store');
-const { runMigrations } = require('../src/lib/migrate');
-const { createTestDatabase } = require('./db-harness');
+import { createNotificationStore } from '../src/lib/notification-store.js';
+import { createRoomStore } from '../src/lib/room-store.js';
+import { createUserStore } from '../src/lib/user-store.js';
+import { runMigrations } from '../src/lib/migrate.js';
+import { createTestDatabase } from './db-harness.js';
 
 const SILENT = { log() {}, info() {}, warn() {}, error() {} };
 

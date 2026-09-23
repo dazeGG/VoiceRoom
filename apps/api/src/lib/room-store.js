@@ -1,14 +1,9 @@
-'use strict';
-
-const crypto = require('node:crypto');
-const { createDbPool, transaction } = require('./db');
-const { createActiveBanService } = require('../domains/moderation/active-ban-service');
-const {
-  AVATAR_COLOR_KEYS,
-  cleanAvatarColorKey
-} = require('@voice-room/shared/validation');
-const { normalizeLinkPreview } = require('@voice-room/shared/link-preview');
-const { createLogger } = require('./logger');
+import crypto from 'node:crypto';
+import { createDbPool, transaction } from './db.js';
+import { createActiveBanService } from '../domains/moderation/active-ban-service.js';
+import { AVATAR_COLOR_KEYS, cleanAvatarColorKey } from '@voice-room/shared/validation';
+import { normalizeLinkPreview } from '@voice-room/shared/link-preview';
+import { createLogger } from './logger.js';
 
 // Room history is never expired or trimmed: a message leaves only when its
 // author or the room owner deletes it, or when its room is deleted.
@@ -1380,7 +1375,7 @@ function createRoomStore({
   };
 }
 
-module.exports = {
+export {
   createRoomId,
   createRoomStore,
   avatarColorForPeerId,

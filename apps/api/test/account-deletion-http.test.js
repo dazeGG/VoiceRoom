@@ -1,17 +1,15 @@
-'use strict';
-
-const { socketPathForDirectory } = require('./ipc-harness');
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const http = require('node:http');
-const { spawn } = require('node:child_process');
-const path = require('node:path');
-const os = require('node:os');
-const { Pool } = require('pg');
-const { createAccountDeletionRepository } = require('../src/domains/account/account-deletion-repository');
-const { ACCOUNT_DELETION_GRACE_MS } = require('@voice-room/shared/account-security');
-const { createTestDatabase } = require('./db-harness');
+import { socketPathForDirectory } from './ipc-harness.js';
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import http from 'node:http';
+import { spawn } from 'node:child_process';
+import path from 'node:path';
+import os from 'node:os';
+import { Pool } from 'pg';
+import { createAccountDeletionRepository } from '../src/domains/account/account-deletion-repository.js';
+import { ACCOUNT_DELETION_GRACE_MS } from '@voice-room/shared/account-security';
+import { createTestDatabase } from './db-harness.js';
 
 function waitForHealthz(socketPath, timeoutMs = 15000) {
   const started = Date.now();
@@ -74,7 +72,7 @@ test('an account can be deleted, restored within the grace period and never re-r
   const socketPath = socketPathForDirectory(dir);
   const { cleanup, databaseUrl } = await createTestDatabase(t);
   const child = spawn(process.execPath, ['src/server.js'], {
-    cwd: path.join(__dirname, '..'),
+    cwd: path.join(import.meta.dirname, '..'),
     env: {
       ...process.env,
       NODE_ENV: 'test',

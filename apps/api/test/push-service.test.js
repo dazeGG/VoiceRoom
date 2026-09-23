@@ -1,8 +1,11 @@
-'use strict';
-
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const { createPushService, readPushConfig, resolvePushTtl, shouldDeliverPush } = require('../src/lib/push-service');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {
+  createPushService,
+  readPushConfig,
+  resolvePushTtl,
+  shouldDeliverPush
+} from '../src/lib/push-service.js';
 
 const ENABLED_ENV = {
   VAPID_PUBLIC_KEY: 'public-key',

@@ -1,10 +1,8 @@
-'use strict';
-
-const webPush = require('web-push');
-const { PLATFORM_CLASSES } = require('@voice-room/shared/platform-class');
-const { cleanPushEndpoint, describePushEndpoint } = require('./push-endpoint');
-const { LOG_EVENTS } = require('./log-events');
-const { createLogger } = require('./logger');
+import webPush from 'web-push';
+import { PLATFORM_CLASSES } from '@voice-room/shared/platform-class';
+import { cleanPushEndpoint, describePushEndpoint } from './push-endpoint.js';
+import { LOG_EVENTS } from './log-events.js';
+import { createLogger } from './logger.js';
 
 function describePushError(error) {
   return {
@@ -108,4 +106,4 @@ function createPushService({ store, env = process.env, client = webPush, logger 
   };
 }
 
-module.exports = { createPushService, readPushConfig, resolvePushTtl, shouldDeliverPush };
+export { createPushService, readPushConfig, resolvePushTtl, shouldDeliverPush };

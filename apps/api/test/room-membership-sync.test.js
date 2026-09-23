@@ -1,12 +1,10 @@
-'use strict';
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
-
-const { createRoomStore } = require('../src/lib/room-store');
-const { registerMembershipRoutes } = require('../src/domains/membership/membership-routes');
+import { createRoomStore } from '../src/lib/room-store.js';
+import { registerMembershipRoutes } from '../src/domains/membership/membership-routes.js';
 
 function createFakePool(handler) {
   const calls = [];
@@ -182,7 +180,7 @@ test('owners, failed leaves and refused disconnects keep the room on the list', 
 });
 
 test('the API wires leaving a room to the room store that owns the list', () => {
-  const source = fs.readFileSync(path.resolve(__dirname, '../src/server.js'), 'utf8');
+  const source = fs.readFileSync(path.resolve(import.meta.dirname, '../src/server.js'), 'utf8');
   const start = source.indexOf('registerMembershipRoutes({');
   const wiring = source.slice(start, source.indexOf('\n    });', start));
   assert.match(wiring, /onLeft: async \(\{ roomId, user \}\) => \{\s*await getRoomStore\(\)\.removeRoomBookmarkForUser\(user\.id, roomId\);/);

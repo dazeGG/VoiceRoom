@@ -1,9 +1,7 @@
-'use strict';
-
-const assert = require('node:assert/strict');
-const test = require('node:test');
-const pg = require('pg');
-const { createTestDatabase } = require('./db-harness');
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import pg from 'pg';
+import { createTestDatabase } from './db-harness.js';
 
 // A pool resolves end() once its clients are out of the pool, before their
 // sockets have closed. On a loaded runner the goodbye leaves a moment later, so

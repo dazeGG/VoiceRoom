@@ -1,9 +1,7 @@
-'use strict';
-
-const dns = require('node:dns');
-const http = require('node:http');
-const https = require('node:https');
-const net = require('node:net');
+import dns from 'node:dns';
+import http from 'node:http';
+import https from 'node:https';
+import net from 'node:net';
 
 // Link previews make the server open URLs that chat users chose, so every
 // request stays on the public internet: only http(s) on the default ports, no
@@ -191,4 +189,4 @@ function createLinkPreviewFetcher({
   };
 }
 
-module.exports = { MAX_IMAGE_BYTES, MAX_PAGE_BYTES, createLinkPreviewFetcher, isPublicAddress };
+export { MAX_IMAGE_BYTES, MAX_PAGE_BYTES, createLinkPreviewFetcher, isPublicAddress };

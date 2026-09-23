@@ -1,9 +1,7 @@
-'use strict';
-
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const { buildRoomRealtimeSummaryFromLobbyRoom } = require('../src/realtime/summary');
-const { createRoomRealtimeRuntime } = require('../src/realtime/room-runtime');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { buildRoomRealtimeSummaryFromLobbyRoom } from '../src/realtime/summary.js';
+import { createRoomRealtimeRuntime } from '../src/realtime/room-runtime.js';
 
 test('buildRoomRealtimeSummaryFromLobbyRoom mirrors shared summary rules', () => {
   const peers = Array.from({ length: 6 }, (_, index) => ({

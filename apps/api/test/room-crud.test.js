@@ -1,18 +1,16 @@
-'use strict';
-
-const { socketPathForDirectory } = require('./ipc-harness');
+import { socketPathForDirectory } from './ipc-harness.js';
 process.env.ROOM_CREATE_POW_DIFFICULTY = '0';
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const http = require('node:http');
-const os = require('node:os');
-const path = require('node:path');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import http from 'node:http';
+import os from 'node:os';
+import path from 'node:path';
 
-const { createApiApp, createApiServer } = require('../src/server');
-const { resolveRealtimeReconnectLeaseMs } = require('../src/server').__private;
-const { openWs, sendWs, joinVoiceRoom, subscribeRoomPreview, waitForWsType } = require('./ws-harness');
+const { createApiApp, createApiServer } = await import('../src/server.js');
+const { resolveRealtimeReconnectLeaseMs } = (await import('../src/server.js')).__private;
+const { openWs, sendWs, joinVoiceRoom, subscribeRoomPreview, waitForWsType } = await import('./ws-harness.js');
 
 const OWNER_ID = 'user-owner';
 const OWNER_TOKEN = 'session-owner';

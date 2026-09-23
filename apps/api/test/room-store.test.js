@@ -1,14 +1,12 @@
-'use strict';
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
+import { Pool } from 'pg';
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const crypto = require('node:crypto');
-const { Pool } = require('pg');
-
-const { createRoomStore } = require('../src/lib/room-store');
-const { createUserStore } = require('../src/lib/user-store');
-const { runMigrations } = require('../src/lib/migrate');
-const { createTestDatabase } = require('./db-harness');
+import { createRoomStore } from '../src/lib/room-store.js';
+import { createUserStore } from '../src/lib/user-store.js';
+import { runMigrations } from '../src/lib/migrate.js';
+import { createTestDatabase } from './db-harness.js';
 
 async function createMigratedStore(t, options = {}) {
   const { cleanup, databaseUrl } = await createTestDatabase(t);

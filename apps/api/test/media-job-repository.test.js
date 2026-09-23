@@ -1,13 +1,7 @@
-'use strict';
+import test from 'node:test';
+import assert from 'node:assert/strict';
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
-
-const {
-  MediaJobFenceError,
-  createMediaJobRepository,
-  mapMediaJob
-} = require('../src/domains/media/media-job-repository');
+import { MediaJobFenceError, createMediaJobRepository, mapMediaJob } from '../src/domains/media/media-job-repository.js';
 
 const JOB = Object.freeze({
   id: 'job-1', attachment_id: 'attachment-1', kind: 'process', state: 'processing', attempts: 1,

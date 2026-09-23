@@ -1,7 +1,5 @@
-'use strict';
-
-const crypto = require('node:crypto');
-const { promisify } = require('node:util');
+import crypto from 'node:crypto';
+import { promisify } from 'node:util';
 
 const scrypt = promisify(crypto.scrypt);
 
@@ -73,4 +71,4 @@ async function verifyPassword(password, stored) {
   return derived.length === expected.length && crypto.timingSafeEqual(derived, expected);
 }
 
-module.exports = { hashPassword, verifyPassword };
+export { hashPassword, verifyPassword };

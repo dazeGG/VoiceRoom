@@ -1,8 +1,6 @@
-'use strict';
-
-const crypto = require('node:crypto');
-const { Pool } = require('pg');
-const { readDatabaseConfig } = require('../src/lib/config');
+import crypto from 'node:crypto';
+import { Pool } from 'pg';
+import { readDatabaseConfig } from '../src/lib/config.js';
 
 function quoteIdent(value) {
   return `"${String(value).replaceAll('"', '""')}"`;
@@ -66,6 +64,4 @@ async function createTestDatabase(t) {
   return { cleanup, databaseUrl, databaseName: name };
 }
 
-module.exports = {
-  createTestDatabase
-};
+export { createTestDatabase };

@@ -1,10 +1,8 @@
-'use strict';
-
-const crypto = require('node:crypto');
-const fs = require('node:fs');
-const path = require('node:path');
-const { LINK_PREVIEW_IMAGE_KEY_PATTERN } = require('@voice-room/shared/link-preview');
-const { readUploadsDir } = require('./config');
+import crypto from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
+import { LINK_PREVIEW_IMAGE_KEY_PATTERN } from '@voice-room/shared/link-preview';
+import { readUploadsDir } from './config.js';
 
 // Preview images live next to avatars, in their own folder so neither kind of
 // reconciliation ever sees the other's files. A key is the content hash of the
@@ -70,4 +68,4 @@ async function reconcileLinkPreviewImages({ storage, repository }) {
   return unused.length;
 }
 
-module.exports = { createLinkPreviewStorage, reconcileLinkPreviewImages, validateLinkPreviewImageKey };
+export { createLinkPreviewStorage, reconcileLinkPreviewImages, validateLinkPreviewImageKey };

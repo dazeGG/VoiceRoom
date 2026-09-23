@@ -1,7 +1,5 @@
-'use strict';
-
-const { createDbPool } = require('../../lib/db');
-const { createLogger } = require('../../lib/logger');
+import { createDbPool } from '../../lib/db.js';
+import { createLogger } from '../../lib/logger.js';
 
 function boundedLimit(value) {
   return Math.max(1, Math.min(100, Number.isInteger(value) ? value : 50));
@@ -154,4 +152,4 @@ function createDmHistoryRepository({ databaseUrl, logger = createLogger({ name: 
   return { canReadThread, close, listAfter, listAround, listBefore, listLatest };
 }
 
-module.exports = { createDmHistoryRepository, mapDirectMessage };
+export { createDmHistoryRepository, mapDirectMessage };

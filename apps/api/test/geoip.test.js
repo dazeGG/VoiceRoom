@@ -1,10 +1,8 @@
-'use strict';
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import path from 'node:path';
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const path = require('node:path');
-
-const { createGeoLocator } = require('../src/lib/geoip');
+import { createGeoLocator } from '../src/lib/geoip.js';
 
 function createLogger() {
   const entries = [];
@@ -41,7 +39,7 @@ test('the locator labels city and country, prefers Russian names and never throw
   };
   let opened = 0;
   const locator = createGeoLocator({
-    databasePath: __filename,
+    databasePath: import.meta.filename,
     logger: createLogger(),
     openReader: async () => {
       opened += 1;
@@ -67,7 +65,7 @@ test('without a usable database every lookup is empty', async () => {
 
   const logger = createLogger();
   const missing = createGeoLocator({
-    databasePath: path.join(__dirname, 'no-such-database.mmdb'),
+    databasePath: path.join(import.meta.dirname, 'no-such-database.mmdb'),
     logger,
     openReader: async () => {
       throw new Error('must not be opened');
@@ -79,7 +77,7 @@ test('without a usable database every lookup is empty', async () => {
 
   const brokenLogger = createLogger();
   const broken = createGeoLocator({
-    databasePath: __filename,
+    databasePath: import.meta.filename,
     logger: brokenLogger,
     openReader: async () => {
       throw new Error('not a MaxMind database');

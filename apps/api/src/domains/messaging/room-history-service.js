@@ -1,9 +1,4 @@
-'use strict';
-
-const {
-  buildHistoryEnvelope,
-  normalizeHistoryRequest
-} = require('@voice-room/shared/messaging-history');
+import { buildHistoryEnvelope, normalizeHistoryRequest } from '@voice-room/shared/messaging-history';
 
 class RoomHistoryError extends Error {
   constructor(code, statusCode, message) {
@@ -140,4 +135,4 @@ function createRoomHistoryService({ repository, cursorCodec, visibilityPolicy, p
   return { getPage };
 }
 
-module.exports = { RoomHistoryError, createRoomHistoryService };
+export { RoomHistoryError, createRoomHistoryService };

@@ -1,5 +1,3 @@
-'use strict';
-
 function requireMethod(store, name) {
   if (!store || typeof store[name] !== 'function') {
     throw new TypeError(`Room message store must implement ${name}()`);
@@ -21,4 +19,4 @@ function createRoomMessageRepository({ store } = {}) {
   });
 }
 
-module.exports = { createRoomMessageRepository };
+export { createRoomMessageRepository };

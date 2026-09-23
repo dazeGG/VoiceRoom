@@ -1,21 +1,25 @@
-'use strict';
-
-const { socketPathForDirectory } = require('./ipc-harness');
+import { socketPathForDirectory } from './ipc-harness.js';
 // Regression: a single room.peer.update must fan out exactly one
 // room.peer.updated to each other active peer. Today broadcast() delivers
 // once per peer transport AND once via mirrorLegacyRoomEvent to every
 // detail subscriber (active peers are both), and updatePeerState mirrors a
 // second time on top of broadcast — so the event is delivered 3x.
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const http = require('node:http');
-const { spawn } = require('node:child_process');
-const path = require('node:path');
-const os = require('node:os');
-const { openWs, sendWs, joinVoiceRoom, waitForWsType, countWsType } = require('./ws-harness');
-const { createTestDatabase } = require('./db-harness');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import http from 'node:http';
+import { spawn } from 'node:child_process';
+import path from 'node:path';
+import os from 'node:os';
+import {
+  openWs,
+  sendWs,
+  joinVoiceRoom,
+  waitForWsType,
+  countWsType
+} from './ws-harness.js';
+import { createTestDatabase } from './db-harness.js';
 
 const PEER_A = 'peer-dup-a1';
 const PEER_B = 'peer-dup-b1';
@@ -55,7 +59,7 @@ function waitForHealthz(socketPath, timeoutMs = 15000) {
 
 function startServer(socketPath, databaseUrl, logs) {
   const child = spawn(process.execPath, ['src/server.js'], {
-    cwd: path.join(__dirname, '..'),
+    cwd: path.join(import.meta.dirname, '..'),
     env: {
       ...process.env,
       NODE_ENV: 'test',

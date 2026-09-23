@@ -1,5 +1,3 @@
-'use strict';
-
 function requireMethod(store, name) {
   if (!store || typeof store[name] !== 'function') {
     throw new TypeError(`Direct message store must implement ${name}()`);
@@ -23,4 +21,4 @@ function createDirectMessageRepository({ store } = {}) {
   });
 }
 
-module.exports = { createDirectMessageRepository };
+export { createDirectMessageRepository };

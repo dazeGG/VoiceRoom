@@ -1,9 +1,7 @@
-'use strict';
+import test from 'node:test';
+import assert from 'node:assert/strict';
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
-
-const { createFailureLimiter } = require('../src/lib/rate-limit');
+import { createFailureLimiter } from '../src/lib/rate-limit.js';
 
 test('reserve counts the attempt before verification, so a parallel burst stops at the limit', () => {
   const limiter = createFailureLimiter({ limit: 3, windowMs: 60_000 });

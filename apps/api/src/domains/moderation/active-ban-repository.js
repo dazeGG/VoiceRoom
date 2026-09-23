@@ -1,6 +1,4 @@
-'use strict';
-
-const crypto = require('node:crypto');
+import crypto from 'node:crypto';
 
 function toDate(value) {
   if (value instanceof Date) return value;
@@ -120,4 +118,4 @@ function createActiveBanRepository({ pool, now = Date.now } = {}) {
   return { countActive, filterActiveUserIds, findActive, insert, mapActiveBan, normalizePrincipal };
 }
 
-module.exports = { createActiveBanRepository, mapActiveBan, normalizePrincipal };
+export { createActiveBanRepository, mapActiveBan, normalizePrincipal };

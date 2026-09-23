@@ -1,5 +1,3 @@
-'use strict';
-
 const ATTACHMENT_ID_PATTERN = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 
 function cleanAttachmentId(value) {
@@ -113,4 +111,4 @@ function registerMediaRoutes({
   }
 }
 
-module.exports = { cleanAttachmentId, registerMediaRoutes, sendError };
+export { cleanAttachmentId, registerMediaRoutes, sendError };

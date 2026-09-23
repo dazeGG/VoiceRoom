@@ -1,15 +1,14 @@
-'use strict';
-const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
-const { test } = require('node:test');
-const { LEASE_IDENTITY, createMessageDeliveryWorker } = require('../src/workers/message-delivery');
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import { test } from 'node:test';
+import { LEASE_IDENTITY, createMessageDeliveryWorker } from '../src/workers/message-delivery.js';
 
 test('G38-A01 worker uses the shared lease runtime and the API listener starts no claim timer', () => {
-  const worker = fs.readFileSync(path.resolve(__dirname, '../src/workers/message-delivery.js'), 'utf8');
-  const server = fs.readFileSync(path.resolve(__dirname, '../src/server.js'), 'utf8');
+  const worker = fs.readFileSync(path.resolve(import.meta.dirname, '../src/workers/message-delivery.js'), 'utf8');
+  const server = fs.readFileSync(path.resolve(import.meta.dirname, '../src/server.js'), 'utf8');
   assert.equal(LEASE_IDENTITY, 'message-delivery.G38');
-  assert.match(worker, /require\('\.\.\/platform\/lease-runtime'\)/);
+  assert.match(worker, /from '\.\.\/platform\/lease-runtime\.js'/);
   assert.equal((worker.match(/createLeaseRuntime/g) || []).length, 2);
   const listener = server.slice(server.indexOf('async function startMessageDeliveryListener'), server.indexOf('async function stopMessageDeliveryListener'));
   assert.doesNotMatch(listener, /setInterval|setTimeout/);

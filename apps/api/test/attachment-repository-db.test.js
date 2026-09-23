@@ -1,14 +1,12 @@
-'use strict';
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
+import { Pool } from 'pg';
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const crypto = require('node:crypto');
-const { Pool } = require('pg');
-
-const { createAttachmentRepository } = require('../src/domains/media/attachment-repository');
-const { runMigrations } = require('../src/lib/migrate');
-const { createUserStore } = require('../src/lib/user-store');
-const { createTestDatabase } = require('./db-harness');
+import { createAttachmentRepository } from '../src/domains/media/attachment-repository.js';
+import { runMigrations } from '../src/lib/migrate.js';
+import { createUserStore } from '../src/lib/user-store.js';
+import { createTestDatabase } from './db-harness.js';
 
 const SILENT = { log() {}, info() {}, warn() {}, error() {} };
 

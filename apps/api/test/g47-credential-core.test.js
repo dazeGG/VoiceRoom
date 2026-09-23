@@ -1,14 +1,12 @@
-'use strict';
-
-const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
-const { Pool } = require('pg');
-const { test } = require('node:test');
-const { createCredentialBoundaryService } = require('../src/domains/admission/credential-boundary-service');
-const { createRoomStore } = require('../src/lib/room-store');
-const { runMigrations } = require('../src/lib/migrate');
-const { createTestDatabase } = require('./db-harness');
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import { Pool } from 'pg';
+import { test } from 'node:test';
+import { createCredentialBoundaryService } from '../src/domains/admission/credential-boundary-service.js';
+import { createRoomStore } from '../src/lib/room-store.js';
+import { runMigrations } from '../src/lib/migrate.js';
+import { createTestDatabase } from './db-harness.js';
 
 const signer = {
   hash: (value) => `hash-${value}`.padEnd(64, '0').slice(0, 64),
@@ -40,11 +38,12 @@ test('G47-A01 persisted epoch denies the exact credential after revoke', { skip:
 });
 
 test('G47-A02 migration catalog has one applied credential schema and an explicit amendment', () => {
-  const root = path.resolve(__dirname, '../../..');
+  const root = path.resolve(import.meta.dirname, '../../..');
   const migrations = fs.readdirSync(path.join(root, 'apps/api/src/migrations')).filter((name) => /credential|livekit_gate/.test(name));
-  assert.deepEqual(migrations, ['20260720160000_create_livekit_gate_credentials.js']);
-  assert.equal(fs.existsSync(path.join(root, 'apps/api/src/migrations/20260718130000_create_room_credential_epochs.js')), false);
+  assert.deepEqual(migrations, ['20260720160000_create_livekit_gate_credentials.cjs']);
+  assert.equal(fs.existsSync(path.join(root, 'apps/api/src/migrations/20260718130000_create_room_credential_epochs.cjs')), false);
   const amendment = JSON.parse(fs.readFileSync(path.join(root, 'docs/releases/2.5.0/amendments/G47-MIGRATION-CATALOG.json'), 'utf8'));
-  assert.equal(amendment.appliedPath, 'apps/api/src/migrations/20260720160000_create_livekit_gate_credentials.js');
-  assert.equal(amendment.supersedesCatalogEntry, 'apps/api/src/migrations/20260718130000_create_room_credential_epochs.js');
+  // The 2.5.0 amendment predates the .cjs rename; the migration is the same file.
+  assert.equal(amendment.appliedPath.replace(/\.c?js$/, ''), 'apps/api/src/migrations/20260720160000_create_livekit_gate_credentials');
+  assert.equal(amendment.supersedesCatalogEntry.replace(/\.c?js$/, ''), 'apps/api/src/migrations/20260718130000_create_room_credential_epochs');
 });

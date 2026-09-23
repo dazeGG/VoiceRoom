@@ -1,14 +1,12 @@
-'use strict';
-
 process.env.ROOM_CHAT_RATE_LIMIT = '1';
 process.env.ROOM_CHAT_RATE_WINDOW_MS = '60000';
 process.env.DM_RATE_LIMIT = '1';
 process.env.DM_RATE_WINDOW_MS = '60000';
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
+import test from 'node:test';
+import assert from 'node:assert/strict';
 
-const { createApiApp } = require('../src/server');
+const { createApiApp } = await import('../src/server.js');
 
 const AUTHOR_ID = '11111111-1111-4111-8111-111111111111';
 const OWNER_ID = '22222222-2222-4222-8222-222222222222';

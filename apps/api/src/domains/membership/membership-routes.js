@@ -1,5 +1,3 @@
-'use strict';
-
 function send(reply, statusCode, payload) {
   if (reply && typeof reply.code === 'function') return reply.code(statusCode).send(payload);
   if (reply && typeof reply.status === 'function') return reply.status(statusCode).send(payload);
@@ -93,4 +91,4 @@ function registerMembershipRoutes({
   }
 }
 
-module.exports = { registerMembershipRoutes };
+export { registerMembershipRoutes };

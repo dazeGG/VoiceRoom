@@ -1,8 +1,6 @@
-'use strict';
-
-const { PUBLIC_CAPABILITY_KEYS } = require('@voice-room/shared/capabilities');
-const { createReadinessReport, resolveManifestPath } = require('./readiness');
-const { createRuntimeReadinessRepository } = require('./runtime-readiness-repository');
+import { PUBLIC_CAPABILITY_KEYS } from '@voice-room/shared/capabilities';
+import { createReadinessReport, resolveManifestPath } from './readiness.js';
+import { createRuntimeReadinessRepository } from './runtime-readiness-repository.js';
 
 function asSet(value) {
   if (value instanceof Set) return new Set(value);
@@ -125,4 +123,4 @@ function createRuntimeReadinessProvider({
   });
 }
 
-module.exports = { createRuntimeReadinessProvider };
+export { createRuntimeReadinessProvider };

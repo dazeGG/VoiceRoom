@@ -1,6 +1,4 @@
-'use strict';
-
-const { createPushService } = require('../../lib/push-service');
+import { createPushService } from '../../lib/push-service.js';
 
 function createNotificationPushProvider({ pushService, store, env, client, logger } = {}) {
   const service = pushService || createPushService({ store, env, client, logger });
@@ -14,4 +12,4 @@ function createNotificationPushProvider({ pushService, store, env, client, logge
   });
 }
 
-module.exports = { createNotificationPushProvider };
+export { createNotificationPushProvider };

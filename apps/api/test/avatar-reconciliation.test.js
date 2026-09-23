@@ -1,9 +1,7 @@
-'use strict';
+import test from 'node:test';
+import assert from 'node:assert/strict';
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
-
-const { reconcileAvatarStorage } = require('../src/lib/avatar-reconciliation');
+import { reconcileAvatarStorage } from '../src/lib/avatar-reconciliation.js';
 
 test('avatar reconciliation removes files that have no live database reference', async () => {
   const userKey = 'av_123e4567-e89b-12d3-a456-426614174000_deadbeef.webp';

@@ -1,5 +1,3 @@
-'use strict';
-
 const REACTION_PATH = '/api/reactions/:type/:conversationId/:messageId';
 const REACTOR_PATH = `${REACTION_PATH}/reactors`;
 
@@ -82,8 +80,4 @@ function registerReactionRoutes({ app, reactionService, resolveUser } = {}) {
   });
 }
 
-module.exports = {
-  REACTION_PATH,
-  REACTOR_PATH,
-  registerReactionRoutes
-};
+export { REACTION_PATH, REACTOR_PATH, registerReactionRoutes };

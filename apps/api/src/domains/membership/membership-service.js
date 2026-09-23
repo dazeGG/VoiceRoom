@@ -1,7 +1,5 @@
-'use strict';
-
-const { transaction } = require('../../lib/db');
-const { createMembershipRepository } = require('./membership-repository');
+import { transaction } from '../../lib/db.js';
+import { createMembershipRepository } from './membership-repository.js';
 
 function createMembershipService({ pool, repository = createMembershipRepository({ pool }), activeBanService, now = Date.now } = {}) {
   async function getMembership(roomId, userId) {
@@ -76,4 +74,4 @@ function createMembershipService({ pool, repository = createMembershipRepository
   };
 }
 
-module.exports = { createMembershipService };
+export { createMembershipService };

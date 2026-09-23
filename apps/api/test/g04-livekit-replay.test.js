@@ -1,12 +1,10 @@
-'use strict';
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
-const { spawnSync } = require('node:child_process');
-
-const repositoryRoot = path.resolve(__dirname, '../../..');
+const repositoryRoot = path.resolve(import.meta.dirname, '../../..');
 
 test('G04-A01 replay harness pins LiveKit v1.13.2 and records same-token baseline reconnects', async () => {
   const compose = fs.readFileSync(path.join(repositoryRoot, 'docker-compose.lkv.yml'), 'utf8');

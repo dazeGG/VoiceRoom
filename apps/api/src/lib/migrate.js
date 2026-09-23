@@ -1,14 +1,12 @@
-'use strict';
+import { Client } from 'pg';
+import fs from 'node:fs';
+import path from 'node:path';
+import { PG_MIGRATE_LOCK_ID, runner } from 'node-pg-migrate';
+import { readDatabaseConfig } from './config.js';
+import { LOG_EVENTS } from './log-events.js';
+import { createLogger } from './logger.js';
 
-const { Client } = require('pg');
-const fs = require('node:fs');
-const path = require('node:path');
-const { PG_MIGRATE_LOCK_ID, runner } = require('node-pg-migrate');
-const { readDatabaseConfig } = require('./config');
-const { LOG_EVENTS } = require('./log-events');
-const { createLogger } = require('./logger');
-
-const DEFAULT_MIGRATIONS_DIR = path.resolve(__dirname, '..', 'migrations');
+const DEFAULT_MIGRATIONS_DIR = path.resolve(import.meta.dirname, '..', 'migrations');
 const DEFAULT_MIGRATIONS_TABLE = 'pgmigrations';
 const MIGRATION_GUARD_TABLE = 'voiceroom_migration_guard';
 const MIGRATION_GUARD_ID = 1;
@@ -252,7 +250,7 @@ async function runMigrations({
   }
 }
 
-module.exports = {
+export {
   DEFAULT_MIGRATIONS_DIR,
   expectedMigrationCatalog,
   assertMigrationLockHeld,

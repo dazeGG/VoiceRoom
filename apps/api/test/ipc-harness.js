@@ -1,6 +1,4 @@
-'use strict';
-
-const path = require('node:path');
+import path from 'node:path';
 
 function socketPathForDirectory(directory) {
   if (process.platform !== 'win32') return path.join(directory, 'api.sock');
@@ -8,4 +6,4 @@ function socketPathForDirectory(directory) {
   return `\\\\.\\pipe\\${name}-${process.pid}`;
 }
 
-module.exports = { socketPathForDirectory };
+export { socketPathForDirectory };

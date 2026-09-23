@@ -1,5 +1,3 @@
-'use strict';
-
 // Reads what a link preview needs from the <head> of a page: Open Graph and
 // Twitter card tags, the description meta tag and <title>. Only the head is
 // scanned, and nothing from the page is ever rendered as HTML.
@@ -88,4 +86,4 @@ function decodeHtmlBody(buffer, contentType) {
   }
 }
 
-module.exports = { decodeHtmlBody, extractLinkPreviewMetadata };
+export { decodeHtmlBody, extractLinkPreviewMetadata };

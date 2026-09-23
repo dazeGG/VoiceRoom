@@ -1,7 +1,5 @@
-'use strict';
-
-const net = require('node:net');
-const WebSocket = require('ws');
+import net from 'node:net';
+import WebSocket from 'ws';
 
 function openWs(target, { cookie, headers = {}, path = '/api/ws' } = {}) {
   const frames = [];
@@ -90,7 +88,7 @@ function countWsType(frames, type, sinceIndex = 0) {
   return frames.slice(sinceIndex).filter((frame) => frame.type === type).length;
 }
 
-module.exports = {
+export {
   openWs,
   sendWs,
   waitForWsType,

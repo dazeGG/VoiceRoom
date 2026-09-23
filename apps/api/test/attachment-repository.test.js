@@ -1,12 +1,7 @@
-'use strict';
+import test from 'node:test';
+import assert from 'node:assert/strict';
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
-
-const {
-  createAttachmentRepository,
-  mapAttachment
-} = require('../src/domains/media/attachment-repository');
+import { createAttachmentRepository, mapAttachment } from '../src/domains/media/attachment-repository.js';
 
 const ROW = Object.freeze({
   id: 'attachment-1',

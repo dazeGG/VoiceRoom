@@ -1,5 +1,3 @@
-'use strict';
-
 const MODERATION_BANS_PATH = '/api/rooms/:roomId/moderation/bans';
 const MODERATION_UNBAN_PATH = '/api/rooms/:roomId/moderation/bans/:banId';
 const MODERATION_DELETE_MESSAGE_PATH = '/api/rooms/:roomId/moderation/messages/:messageId';
@@ -93,9 +91,4 @@ function registerModerationRoutes({ app, moderationService, messageModerationSer
   }
 }
 
-module.exports = {
-  MODERATION_BANS_PATH,
-  MODERATION_DELETE_MESSAGE_PATH,
-  MODERATION_UNBAN_PATH,
-  registerModerationRoutes
-};
+export { MODERATION_BANS_PATH, MODERATION_DELETE_MESSAGE_PATH, MODERATION_UNBAN_PATH, registerModerationRoutes };

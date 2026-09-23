@@ -1,14 +1,12 @@
-'use strict';
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import sharp from 'sharp';
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const os = require('node:os');
-const path = require('node:path');
-const sharp = require('sharp');
-
-const { createApiApp } = require('../src/server');
-const { createAvatarStorage } = require('../src/lib/avatar-storage');
+import { createApiApp } from '../src/server.js';
+import { createAvatarStorage } from '../src/lib/avatar-storage.js';
 
 const OWNER_ID = '123e4567-e89b-12d3-a456-426614174000';
 const OTHER_ID = '123e4567-e89b-12d3-a456-426614174001';

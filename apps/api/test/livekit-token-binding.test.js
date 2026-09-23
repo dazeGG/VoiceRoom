@@ -1,22 +1,22 @@
-'use strict';
-
 // The gate credential and the LiveKit JWT are issued together for one
 // admission. These cases pin that the gate refuses to tunnel a JWT that belongs
 // to another peer, another room, or an admission older than the credential —
 // the replays that would otherwise bypass a ban, a server mute or a logout.
 
-const assert = require('node:assert/strict');
-const { EventEmitter } = require('node:events');
-const net = require('node:net');
-const test = require('node:test');
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
+import assert from 'node:assert/strict';
+import { EventEmitter } from 'node:events';
+import net from 'node:net';
+import test from 'node:test';
 
-const {
+import {
   extractAccessToken,
   getLiveKitRoomName,
   normalizeLiveKitRoomPrefix,
   verifyAccessTokenBinding
-} = require('../src/domains/admission/livekit-token-binding.mts');
-const { createLiveKitAuthGateService } = require('../src/domains/admission/livekit-auth-gate-service');
+} from '../src/domains/admission/livekit-token-binding.mts';
+import { createLiveKitAuthGateService } from '../src/domains/admission/livekit-auth-gate-service.js';
 
 const NOW = Date.now();
 const CLAIMS = { cid: 'cid-1', iat: NOW, peer: 'peer-a', room: 'room-a' };

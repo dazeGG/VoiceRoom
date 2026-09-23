@@ -1,8 +1,6 @@
-'use strict';
-
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const { buildRoomMembershipPresenceSnapshot, createConnectionRegistry } = require('../src/realtime/registry');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { buildRoomMembershipPresenceSnapshot, createConnectionRegistry } from '../src/realtime/registry.js';
 
 const settle = () => new Promise((resolve) => setImmediate(resolve));
 

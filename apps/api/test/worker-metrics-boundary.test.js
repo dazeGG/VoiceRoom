@@ -1,15 +1,15 @@
-'use strict';
-const assert = require('node:assert/strict');
-const path = require('node:path');
-const { spawn } = require('node:child_process');
-const test = require('node:test');
+import { fileURLToPath } from 'node:url';
+import assert from 'node:assert/strict';
+import path from 'node:path';
+import { spawn } from 'node:child_process';
+import test from 'node:test';
 
-const metricsPath = require.resolve('../src/lib/metrics');
-const serverPath = require.resolve('../src/lib/worker-metrics-server');
+const metricsPath = fileURLToPath(new URL('../src/lib/metrics.js', import.meta.url));
+const serverPath = fileURLToPath(new URL('../src/lib/worker-metrics-server.js', import.meta.url));
 
 function startMetricProcess(kind, ageMs) {
   const code = `const m=require(${JSON.stringify(metricsPath)}),s=require(${JSON.stringify(serverPath)});m[process.env.KIND](Number(process.env.AGE));s.startWorkerMetricsServer({host:'127.0.0.1',port:0}).then(x=>{console.log(x.address.port);process.on('SIGTERM',()=>x.close().then(()=>process.exit()));});`;
-  const child = spawn(process.execPath, ['-e', code], { cwd: path.resolve(__dirname, '../../..'), env: { ...process.env, KIND: kind, AGE: String(ageMs) }, stdio: ['ignore', 'pipe', 'inherit'] });
+  const child = spawn(process.execPath, ['-e', code], { cwd: path.resolve(import.meta.dirname, '../../..'), env: { ...process.env, KIND: kind, AGE: String(ageMs) }, stdio: ['ignore', 'pipe', 'inherit'] });
   return new Promise((resolve, reject) => {
     child.once('error', reject);
     child.stdout.once('data', (chunk) => resolve({ child, port: Number(String(chunk).trim()) }));

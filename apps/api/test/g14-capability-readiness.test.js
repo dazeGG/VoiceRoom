@@ -1,20 +1,18 @@
-'use strict';
-
-const assert = require('node:assert/strict');
-const { mkdtempSync, readFileSync, writeFileSync } = require('node:fs');
-const { tmpdir } = require('node:os');
-const path = require('node:path');
-const { test } = require('node:test');
-const {
+import assert from 'node:assert/strict';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { test } from 'node:test';
+import {
   INTERNAL_NODE_KEYS,
   OPERATOR_KEYS,
   PUBLIC_CAPABILITY_KEYS,
   normalizeManifest
-} = require('@voice-room/shared/capabilities');
-const { createCapabilitySnapshot } = require('../src/platform/capability-routes');
-const { createReadinessReport, sha256Hex } = require('../src/platform/readiness');
+} from '@voice-room/shared/capabilities';
+import { createCapabilitySnapshot } from '../src/platform/capability-routes.js';
+import { createReadinessReport, sha256Hex } from '../src/platform/readiness.js';
 
-const repositoryRoot = path.resolve(__dirname, '../../..');
+const repositoryRoot = path.resolve(import.meta.dirname, '../../..');
 const requestedManifestPath = process.env.CAPABILITY_DAG_PATH || 'config/capability-dag.v1.json';
 const manifestPath = path.isAbsolute(requestedManifestPath)
   ? requestedManifestPath

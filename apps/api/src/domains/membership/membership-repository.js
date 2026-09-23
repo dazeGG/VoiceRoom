@@ -1,6 +1,4 @@
-'use strict';
-
-const crypto = require('node:crypto');
+import crypto from 'node:crypto';
 
 function toMillis(value) {
   if (value instanceof Date) return value.getTime();
@@ -124,4 +122,4 @@ function createMembershipRepository({ pool } = {}) {
   return { deleteActive, getActive, isActive, listDirectoryPage, mapDirectoryMember, mapMembership, upsertActive };
 }
 
-module.exports = { createMembershipRepository, mapDirectoryMember, mapMembership };
+export { createMembershipRepository, mapDirectoryMember, mapMembership };

@@ -1,5 +1,3 @@
-'use strict';
-
 function send(reply,status,payload){return reply.code(status).header?.('Cache-Control','no-store').send(payload) ?? reply.code(status).send(payload);}
 function registerNotificationRoutes({app,service,resolveUser,enabled=()=>true}={}){
   if(!app||!service||typeof resolveUser!=='function')throw new TypeError('app, service and resolveUser are required');
@@ -12,4 +10,4 @@ function registerNotificationRoutes({app,service,resolveUser,enabled=()=>true}={
   app.get('/api/notifications/room/:roomId/level',async(request,reply)=>{const user=await auth(request,reply);if(!user)return;return send(reply,200,{ok:true,level:await service.getRoomLevel({userId:user.id,roomId:request.params.roomId})});});
   app.put('/api/notifications/room/:roomId/level',async(request,reply)=>{const user=await auth(request,reply);if(!user)return;const result=await service.setRoomLevel({userId:user.id,roomId:request.params.roomId,level:request.body?.level});return send(reply,result.ok===false?400:200,result);});
 }
-module.exports={registerNotificationRoutes};
+export { registerNotificationRoutes };

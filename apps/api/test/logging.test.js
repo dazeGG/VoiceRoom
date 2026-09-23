@@ -1,20 +1,18 @@
-'use strict';
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { Writable } from 'node:stream';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const { Writable } = require('node:stream');
-const { readFileSync } = require('node:fs');
-const { join } = require('node:path');
-
-const { LOG_EVENTS, LOG_EVENT_CODES } = require('../src/lib/log-events');
-const {
+import { LOG_EVENTS, LOG_EVENT_CODES } from '../src/lib/log-events.js';
+import {
   createFastifyLoggerOptions,
   createLogger,
   getLogLevel,
   hashIp,
   normalizeRequestId
-} = require('../src/lib/logger');
-const { CLIENT_LOG_LIMITS, normalizeClientLogBatch } = require('../src/lib/client-log-intake');
+} from '../src/lib/logger.js';
+import { CLIENT_LOG_LIMITS, normalizeClientLogBatch } from '../src/lib/client-log-intake.js';
 
 // Captures what a logger actually serializes, which is the only way to assert
 // on redaction: the fields are removed by pino at write time, not before.
@@ -125,7 +123,7 @@ test('a bound request id is not repeated at the call site', () => {
 });
 
 test('no handler adds reqId to a record the request logger already binds', () => {
-  const source = readFileSync(join(__dirname, '../src/server.js'), 'utf8');
+  const source = readFileSync(join(import.meta.dirname, '../src/server.js'), 'utf8');
   const offenders = source
     .split(String.fromCharCode(10))
     .map((line, index) => [index + 1, line])

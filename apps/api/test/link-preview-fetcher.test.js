@@ -1,9 +1,7 @@
-'use strict';
-
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const http = require('node:http');
-const { MAX_PAGE_BYTES, createLinkPreviewFetcher, isPublicAddress } = require('../src/lib/link-preview-fetcher');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import http from 'node:http';
+import { MAX_PAGE_BYTES, createLinkPreviewFetcher, isPublicAddress } from '../src/lib/link-preview-fetcher.js';
 
 // A local site the tests reach through a fake DNS answer. The default address
 // policy would refuse 127.0.0.1, so tests that need a real response allow only

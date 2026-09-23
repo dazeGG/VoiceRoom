@@ -1,8 +1,6 @@
 #!/usr/bin/env node
-'use strict';
-
-const { readDatabaseConfig } = require('../lib/config');
-const { runMigrations } = require('../lib/migrate');
+import { readDatabaseConfig } from '../lib/config.js';
+import { runMigrations } from '../lib/migrate.js';
 
 function parseArgs(argv) {
   const args = new Set(argv.slice(2));

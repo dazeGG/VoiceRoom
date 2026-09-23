@@ -1,23 +1,23 @@
-'use strict';
+import crypto from 'node:crypto';
+import fastify from 'fastify';
+import fastifyCookie from '@fastify/cookie';
+import fastifyMultipart from '@fastify/multipart';
+import fastifyWebsocket from '@fastify/websocket';
+import { buildRoomMembershipPresenceSnapshot, createConnectionRegistry } from './realtime/registry.js';
+import { createWsHandler } from './realtime/ws-handler.js';
+import { clearViewedScreenPeerReferences, createRoomRealtimeRuntime, resolveViewedScreenPeerId } from './realtime/room-runtime.js';
+import { buildServerEnvelope } from './realtime/envelope.js';
+import { URL } from 'node:url';
+import { RoomServiceClient, TrackSource } from 'livekit-server-sdk';
 
-const crypto = require('node:crypto');
-const fastify = require('fastify');
-const fastifyCookie = require('@fastify/cookie');
-const fastifyMultipart = require('@fastify/multipart');
-const fastifyWebsocket = require('@fastify/websocket');
-const { buildRoomMembershipPresenceSnapshot, createConnectionRegistry } = require('./realtime/registry');
-const { createWsHandler } = require('./realtime/ws-handler');
-const {
-  clearViewedScreenPeerReferences,
-  createRoomRealtimeRuntime,
-  resolveViewedScreenPeerId
-} = require('./realtime/room-runtime');
-const { buildServerEnvelope } = require('./realtime/envelope');
-const { URL } = require('node:url');
-const { RoomServiceClient, TrackSource } = require('livekit-server-sdk');
-
-const { readEnvInt, readEnvBool, readMessageDeliveryMode, readDatabaseConfig, readUploadsDir } = require('./lib/config');
-const {
+import {
+  readEnvInt,
+  readEnvBool,
+  readMessageDeliveryMode,
+  readDatabaseConfig,
+  readUploadsDir
+} from './lib/config.js';
+import {
   normalizeRoomId,
   normalizePeerId,
   normalizeSessionToken,
@@ -32,109 +32,114 @@ const {
   normalizeLogin,
   accountPeerIdFor,
   isReservedPeerId
-} = require('@voice-room/shared/validation');
-const { createProofOfWork } = require('./lib/pow');
-const { LOG_EVENTS } = require('./lib/log-events');
-const { CLIENT_LOG_LIMITS, normalizeClientLogBatch } = require('./lib/client-log-intake');
-const {
+} from '@voice-room/shared/validation';
+import { createProofOfWork } from './lib/pow.js';
+import { LOG_EVENTS } from './lib/log-events.js';
+import { CLIENT_LOG_LIMITS, normalizeClientLogBatch } from './lib/client-log-intake.js';
+import {
   createFastifyLoggerOptions,
   createLogger,
   hashIp,
   newRequestId,
   normalizeRequestId
-} = require('./lib/logger');
-const { getClientIp, createFailureLimiter, createRateLimiter } = require('./lib/rate-limit');
-const { MAX_AVATAR_BYTES, createAvatarKey, processAvatar } = require('./lib/avatar-processing');
-const { reconcileAvatarStorage } = require('./lib/avatar-reconciliation');
-const { createAvatarStorage, validateAvatarKey } = require('./lib/avatar-storage');
-const { firstPreviewableUrl } = require('@voice-room/shared/link-preview');
-const { createLinkPreviewFetcher } = require('./lib/link-preview-fetcher');
-const { processLinkPreviewImage } = require('./lib/link-preview-image');
-const { createLinkPreviewStorage, reconcileLinkPreviewImages } = require('./lib/link-preview-storage');
-const { createLinkPreviewRepository } = require('./domains/link-previews/link-preview-repository');
-const { createLinkPreviewService } = require('./domains/link-previews/link-preview-service');
-const { avatarColorForPeerId, createRoomStore } = require('./lib/room-store');
-const { createUserStore, hashSessionToken, publicUser, selfUser } = require('./lib/user-store');
-const { createGeoLocator } = require('./lib/geoip');
-const {
+} from './lib/logger.js';
+import { getClientIp, createFailureLimiter, createRateLimiter } from './lib/rate-limit.js';
+import { MAX_AVATAR_BYTES, createAvatarKey, processAvatar } from './lib/avatar-processing.js';
+import { reconcileAvatarStorage } from './lib/avatar-reconciliation.js';
+import { createAvatarStorage, validateAvatarKey } from './lib/avatar-storage.js';
+import { firstPreviewableUrl } from '@voice-room/shared/link-preview';
+import { createLinkPreviewFetcher } from './lib/link-preview-fetcher.js';
+import { processLinkPreviewImage } from './lib/link-preview-image.js';
+import { createLinkPreviewStorage, reconcileLinkPreviewImages } from './lib/link-preview-storage.js';
+import { createLinkPreviewRepository } from './domains/link-previews/link-preview-repository.js';
+import { createLinkPreviewService } from './domains/link-previews/link-preview-service.js';
+import { avatarColorForPeerId, createRoomStore } from './lib/room-store.js';
+import {
+  createUserStore,
+  hashSessionToken,
+  publicUser,
+  selfUser
+} from './lib/user-store.js';
+import { createGeoLocator } from './lib/geoip.js';
+import {
   ACCOUNT_DELETION_GRACE_MS,
   WHATS_NEW_VERSION,
   formatRecoveryCode,
   isDeletedAccountLogin
-} = require('@voice-room/shared/account-security');
-const { createAccountDeletionRepository } = require('./domains/account/account-deletion-repository');
-const { createFriendStore } = require('./lib/friend-store');
-const { createNotificationStore } = require('./lib/notification-store');
-const { createPushStore } = require('./lib/push-store');
-const { createPushService, resolvePushTtl, shouldDeliverPush } = require('./lib/push-service');
-const { cleanPushEndpoint } = require('./lib/push-endpoint');
-const { startApiListener } = require('./lib/listen');
-const { assertMigrationReady, runMigrations } = require('./lib/migrate');
-const { createRelease250Pool } = require('./lib/release-250-pool');
-const {
+} from '@voice-room/shared/account-security';
+import { createAccountDeletionRepository } from './domains/account/account-deletion-repository.js';
+import { createFriendStore } from './lib/friend-store.js';
+import { createNotificationStore } from './lib/notification-store.js';
+import { createPushStore } from './lib/push-store.js';
+import { createPushService, resolvePushTtl, shouldDeliverPush } from './lib/push-service.js';
+import { cleanPushEndpoint } from './lib/push-endpoint.js';
+import { startApiListener } from './lib/listen.js';
+import { assertMigrationReady, runMigrations } from './lib/migrate.js';
+import { createRelease250Pool } from './lib/release-250-pool.js';
+import {
   observeMaintenance,
   recordCredentialRevokeCleanupFailure,
   recordHttpRequest,
   recordMediaAuthorizationInvariantFailure,
   recordMediaPressure,
   renderPrometheus
-} = require('./lib/metrics');
-const { createCredentialBoundaryService } = require('./domains/admission/credential-boundary-service');
-const { getLiveKitRoomName: liveKitRoomName } = require('./domains/admission/livekit-token-binding.mts');
-const { isCrossOriginCookieWrite, isCrossOriginWebSocket } = require('./platform/http/origin-guard.mts');
-const { createLiveKitCredentialProvider } = require('./domains/admission/livekit-credential-provider');
-const { createMembershipRepository } = require('./domains/membership/membership-repository');
-const { createMembershipService } = require('./domains/membership/membership-service');
-const { createMemberDirectoryService } = require('./domains/membership/member-directory-service');
-const { registerMembershipRoutes } = require('./domains/membership/membership-routes');
-const { createDirectMessageRepository } = require('./domains/messaging/direct-message-repository');
-const { createDmHistoryRepository } = require('./domains/messaging/dm-history-repository');
-const { createDmHistoryService } = require('./domains/messaging/dm-history-service');
-const { registerDmHistoryRoutes } = require('./domains/messaging/dm-history-routes');
-const { createMessageService } = require('./domains/messaging/message-service');
-const { createMessageReadRepository } = require('./domains/messaging/message-read-repository');
-const { createMessageReadService } = require('./domains/messaging/message-read-service');
-const { createMessageIdempotencyRepository } = require('./domains/messaging/message-idempotency-repository');
-const { createMessageOutboxRepository } = require('./domains/messaging/message-outbox-repository');
-const { createMessageVisibilityService } = require('./domains/messaging/message-visibility-service');
-const { createRoomHistoryRepository } = require('./domains/messaging/room-history-repository');
-const { createRoomHistoryService } = require('./domains/messaging/room-history-service');
-const { registerRoomHistoryRoutes } = require('./domains/messaging/room-history-routes');
-const { createRoomMessageRepository } = require('./domains/messaging/room-message-repository');
-const { createContentRepository } = require('./domains/messaging/content-repository');
-const { createReplyRepository } = require('./domains/messaging/reply-repository');
-const { requireReplyTarget } = require('./domains/messaging/reply-projector');
-const { createReactionRepository } = require('./domains/messaging/reaction-repository');
-const { createReactionService } = require('./domains/messaging/reaction-service');
-const { createReactionRealtimeAdapter } = require('./domains/messaging/reaction-realtime-adapter');
-const { registerReactionRoutes } = require('./domains/messaging/reaction-routes');
-const { createPinRepository } = require('./domains/messaging/pin-repository');
-const { createPinService } = require('./domains/messaging/pin-service');
-const { registerPinRoutes } = require('./domains/messaging/pin-routes');
-const { createInboxRepository } = require('./domains/notifications/inbox-repository');
-const { createMentionRepository } = require('./domains/notifications/mention-repository');
-const { createMentionEligibilityService } = require('./domains/notifications/mention-eligibility-service');
-const { createNotificationOutboxRepository } = require('./domains/notifications/notification-outbox-repository');
-const { createNotificationService } = require('./domains/notifications/notification-service');
-const { registerNotificationRoutes } = require('./domains/notifications/notification-routes');
-const { createModerationRepository } = require('./domains/moderation/moderation-repository');
-const { createActiveBanService } = require('./domains/moderation/active-ban-service');
-const { createModerationService } = require('./domains/moderation/moderation-service');
-const { createMessageModerationService } = require('./domains/moderation/message-moderation-service');
-const { registerModerationRoutes } = require('./domains/moderation/moderation-routes');
-const { createAttachmentRepository } = require('./domains/media/attachment-repository');
-const { createMediaJobRepository } = require('./domains/media/media-job-repository');
-const { createMediaStorage } = require('./domains/media/storage');
-const { createMediaPressureService } = require('./domains/media/media-pressure-service');
-const { createMediaQuotaRepository } = require('./domains/media/media-quota-repository');
-const { createMediaQuotaService } = require('./domains/media/media-quota-service');
-const { createMediaService, MAX_UPLOAD_BYTES } = require('./domains/media/media-service');
-const { createMediaVisibilityService } = require('./domains/media/media-visibility-service');
-const { registerMediaRoutes } = require('./domains/media/media-routes');
-const { createCursorCodec } = require('./platform/cursor-codec');
-const { createRuntimeReadinessProvider } = require('./platform/runtime-readiness');
-const { registerCapabilityRoutes } = require('./platform/capability-routes');
-const { mentionUserIdsFromContent } = require('@voice-room/shared/mentions');
+} from './lib/metrics.js';
+import { createCredentialBoundaryService } from './domains/admission/credential-boundary-service.js';
+import { getLiveKitRoomName as liveKitRoomName } from './domains/admission/livekit-token-binding.mts';
+import { isCrossOriginCookieWrite, isCrossOriginWebSocket } from './platform/http/origin-guard.mts';
+import { createLiveKitCredentialProvider } from './domains/admission/livekit-credential-provider.js';
+import { createMembershipRepository } from './domains/membership/membership-repository.js';
+import { createMembershipService } from './domains/membership/membership-service.js';
+import { createMemberDirectoryService } from './domains/membership/member-directory-service.js';
+import { registerMembershipRoutes } from './domains/membership/membership-routes.js';
+import { createDirectMessageRepository } from './domains/messaging/direct-message-repository.js';
+import { createDmHistoryRepository } from './domains/messaging/dm-history-repository.js';
+import { createDmHistoryService } from './domains/messaging/dm-history-service.js';
+import { registerDmHistoryRoutes } from './domains/messaging/dm-history-routes.js';
+import { createMessageService } from './domains/messaging/message-service.js';
+import { createMessageReadRepository } from './domains/messaging/message-read-repository.js';
+import { createMessageReadService } from './domains/messaging/message-read-service.js';
+import { createMessageIdempotencyRepository } from './domains/messaging/message-idempotency-repository.js';
+import { createMessageOutboxRepository } from './domains/messaging/message-outbox-repository.js';
+import { createMessageVisibilityService } from './domains/messaging/message-visibility-service.js';
+import { createRoomHistoryRepository } from './domains/messaging/room-history-repository.js';
+import { createRoomHistoryService } from './domains/messaging/room-history-service.js';
+import { registerRoomHistoryRoutes } from './domains/messaging/room-history-routes.js';
+import { createRoomMessageRepository } from './domains/messaging/room-message-repository.js';
+import { createContentRepository } from './domains/messaging/content-repository.js';
+import { createReplyRepository } from './domains/messaging/reply-repository.js';
+import { requireReplyTarget } from './domains/messaging/reply-projector.js';
+import { createReactionRepository } from './domains/messaging/reaction-repository.js';
+import { createReactionService } from './domains/messaging/reaction-service.js';
+import { createReactionRealtimeAdapter } from './domains/messaging/reaction-realtime-adapter.js';
+import { registerReactionRoutes } from './domains/messaging/reaction-routes.js';
+import { createPinRepository } from './domains/messaging/pin-repository.js';
+import { createPinService } from './domains/messaging/pin-service.js';
+import { registerPinRoutes } from './domains/messaging/pin-routes.js';
+import { createInboxRepository } from './domains/notifications/inbox-repository.js';
+import { createMentionRepository } from './domains/notifications/mention-repository.js';
+import { createMentionEligibilityService } from './domains/notifications/mention-eligibility-service.js';
+import { createNotificationOutboxRepository } from './domains/notifications/notification-outbox-repository.js';
+import { createNotificationService } from './domains/notifications/notification-service.js';
+import { registerNotificationRoutes } from './domains/notifications/notification-routes.js';
+import { createModerationRepository } from './domains/moderation/moderation-repository.js';
+import { createActiveBanService } from './domains/moderation/active-ban-service.js';
+import { createModerationService } from './domains/moderation/moderation-service.js';
+import { createMessageModerationService } from './domains/moderation/message-moderation-service.js';
+import { registerModerationRoutes } from './domains/moderation/moderation-routes.js';
+import { createAttachmentRepository } from './domains/media/attachment-repository.js';
+import { createMediaJobRepository } from './domains/media/media-job-repository.js';
+import { createMediaStorage } from './domains/media/storage.js';
+import { createMediaPressureService } from './domains/media/media-pressure-service.js';
+import { createMediaQuotaRepository } from './domains/media/media-quota-repository.js';
+import { createMediaQuotaService } from './domains/media/media-quota-service.js';
+import { createMediaService, MAX_UPLOAD_BYTES } from './domains/media/media-service.js';
+import { createMediaVisibilityService } from './domains/media/media-visibility-service.js';
+import { registerMediaRoutes } from './domains/media/media-routes.js';
+import { createCursorCodec } from './platform/cursor-codec.js';
+import { createRuntimeReadinessProvider } from './platform/runtime-readiness.js';
+import { registerCapabilityRoutes } from './platform/capability-routes.js';
+import { mentionUserIdsFromContent } from '@voice-room/shared/mentions';
 
 const API_PREFIX = '/api';
 const HOST = (process.env.HOST || '127.0.0.1').trim();
@@ -5778,21 +5783,16 @@ async function bootstrap({ env = process.env, logger = createLogger({ env, name:
   }
 }
 
-if (require.main === module) {
+if (import.meta.main) {
   void bootstrap();
 }
 
-module.exports = {
-  __private: {
+export const __private = {
     pruneRooms,
     revokeIssuedAdmission,
     resolveServerMutePermission,
     isLiveKitParticipantAlreadyGone,
     resolveCursorHmacKeys,
     resolveRealtimeReconnectLeaseMs
-  },
-  bootstrap,
-  closeStores,
-  createApiApp,
-  createApiServer
-};
+  };
+export { bootstrap, closeStores, createApiApp, createApiServer };

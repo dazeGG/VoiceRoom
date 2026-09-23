@@ -1,9 +1,7 @@
-'use strict';
-
-const { createDbPool } = require('./db');
+import { createDbPool } from './db.js';
 
 function createRelease250Pool({ databaseUrl }) {
   return createDbPool({ databaseUrl });
 }
 
-module.exports = { createRelease250Pool };
+export { createRelease250Pool };

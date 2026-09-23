@@ -1,9 +1,4 @@
-'use strict';
-
-const {
-  normalizeRoomMessageContent,
-  projectRoomMessageContent
-} = require('@voice-room/shared/room-message-content');
+import { normalizeRoomMessageContent, projectRoomMessageContent } from '@voice-room/shared/room-message-content';
 
 function projectStoredRoomMessage(row) {
   if (!row) return null;
@@ -15,4 +10,4 @@ function projectStoredRoomMessage(row) {
   };
 }
 
-module.exports = { projectStoredRoomMessage };
+export { projectStoredRoomMessage };

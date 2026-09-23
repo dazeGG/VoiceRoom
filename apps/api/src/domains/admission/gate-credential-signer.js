@@ -1,6 +1,4 @@
-'use strict';
-
-const crypto = require('node:crypto');
+import crypto from 'node:crypto';
 
 const CREDENTIAL_PREFIX = 'vrg1';
 
@@ -119,8 +117,4 @@ function createGateCredentialSigner({ secret, now = Date.now, maxFutureSkewMs = 
   };
 }
 
-module.exports = {
-  CREDENTIAL_PREFIX,
-  createGateCredentialSigner,
-  hashGateCredential
-};
+export { CREDENTIAL_PREFIX, createGateCredentialSigner, hashGateCredential };

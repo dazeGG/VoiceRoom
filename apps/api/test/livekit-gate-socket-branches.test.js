@@ -1,17 +1,15 @@
-'use strict';
-
 // The LiveKit auth gate sits on raw sockets, and a socket can go away at any
 // moment: before the gate answers, while authorization is still pending, or
 // between the upstream connecting and the tunnel being written. Each of those
 // must end in a closed socket rather than a write into a dead one or a crash
 // of the whole gate process. These cases are the gate's strict branch budget.
 
-const assert = require('node:assert/strict');
-const { EventEmitter } = require('node:events');
-const net = require('node:net');
-const test = require('node:test');
+import assert from 'node:assert/strict';
+import { EventEmitter } from 'node:events';
+import net from 'node:net';
+import test from 'node:test';
 
-const { createLiveKitAuthGateService } = require('../src/domains/admission/livekit-auth-gate-service');
+import { createLiveKitAuthGateService } from '../src/domains/admission/livekit-auth-gate-service.js';
 
 class FakeSocket extends EventEmitter {
   constructor({ writable = true, withEnd = true, throwOnWrite = false } = {}) {

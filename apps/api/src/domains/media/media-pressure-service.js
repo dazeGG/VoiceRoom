@@ -1,6 +1,4 @@
-'use strict';
-
-const fs = require('node:fs/promises');
+import fs from 'node:fs/promises';
 
 const DEFAULT_MIN_FREE_BYTES = 2 * 1024 * 1024 * 1024;
 const DEFAULT_RECOVERY_BYTES = 256 * 1024 * 1024;
@@ -70,8 +68,4 @@ function createMediaPressureService({
   });
 }
 
-module.exports = {
-  DEFAULT_MIN_FREE_BYTES,
-  DEFAULT_RECOVERY_BYTES,
-  createMediaPressureService
-};
+export { DEFAULT_MIN_FREE_BYTES, DEFAULT_RECOVERY_BYTES, createMediaPressureService };

@@ -1,7 +1,5 @@
-'use strict';
-
-const { createDbPool, transaction } = require('../../lib/db');
-const { createLogger } = require('../../lib/logger');
+import { createDbPool, transaction } from '../../lib/db.js';
+import { createLogger } from '../../lib/logger.js';
 
 function createMessageReadRepository({ databaseUrl, logger = createLogger({ name: 'api' }), pool } = {}) {
   let activePool = pool || null;
@@ -89,4 +87,4 @@ function createMessageReadRepository({ databaseUrl, logger = createLogger({ name
   return Object.freeze({ advanceDm, advanceRoom });
 }
 
-module.exports = { createMessageReadRepository };
+export { createMessageReadRepository };

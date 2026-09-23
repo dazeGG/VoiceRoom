@@ -1,8 +1,6 @@
-'use strict';
-
-const fs = require('node:fs');
-const path = require('node:path');
-const { readUploadsDir } = require('./config');
+import fs from 'node:fs';
+import path from 'node:path';
+import { readUploadsDir } from './config.js';
 
 const USER_ID_PATTERN = '[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}';
 const ROOM_ID_PATTERN = '[abcdefghijkmnpqrstuvwxyz23456789]{10}';
@@ -61,4 +59,4 @@ function createAvatarStorage({ uploadsDir = readUploadsDir() } = {}) {
   return { save, remove, createReadStream, listKeys };
 }
 
-module.exports = { AVATAR_KEY_PATTERN, validateAvatarKey, createAvatarStorage };
+export { AVATAR_KEY_PATTERN, validateAvatarKey, createAvatarStorage };

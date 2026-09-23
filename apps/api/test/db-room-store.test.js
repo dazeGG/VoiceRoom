@@ -1,10 +1,7 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
 
-'use strict';
-
-const test = require('node:test');
-const assert = require('node:assert/strict');
-
-const { createRoomStore, mapMessage, mapRoom } = require('../src/lib/room-store');
+import { createRoomStore, mapMessage, mapRoom } from '../src/lib/room-store.js';
 
 function createFakePool(handler) {
   const calls = [];

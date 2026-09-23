@@ -1,5 +1,3 @@
-'use strict';
-
 const ROOM_HISTORY_PATH = '/api/rooms/:roomId/chat/history';
 
 function sendRouteError(reply, error) {
@@ -44,4 +42,4 @@ function registerRoomHistoryRoutes({ app, historyService, resolveRoomAccess, pat
   });
 }
 
-module.exports = { ROOM_HISTORY_PATH, registerRoomHistoryRoutes };
+export { ROOM_HISTORY_PATH, registerRoomHistoryRoutes };

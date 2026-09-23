@@ -1,22 +1,19 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
 
-'use strict';
-
-const test = require('node:test');
-const assert = require('node:assert/strict');
-
-const migration = require('../src/migrations/20260614144500_create_rooms_and_room_messages');
-const membershipMigration = require('../src/migrations/20260615140000_create_room_memberships_and_bookmarks');
-const visualIdentityMigration = require('../src/migrations/20260615150000_add_visual_identity_keys');
-const friendsMigration = require('../src/migrations/20260627120000_create_friends_and_direct_messages');
-const notificationMigration = require('../src/migrations/20260710140000_create_notification_preferences');
-const roomBansMigration = require('../src/migrations/20260710130000_add_room_bans');
-const pushMigration = require('../src/migrations/20260711130000_create_push_subscriptions');
-const avatarMigration = require('../src/migrations/20260711120000_add_avatars');
-const dndMigration = require('../src/migrations/20260711140000_add_user_dnd');
-const messageEditingMigration = require('../src/migrations/20260712120000_add_message_editing');
-const presenceStatusMigration = require('../src/migrations/20260713120000_add_user_presence_status');
-const automaticPresenceMigration = require('../src/migrations/20260713220000_add_automatic_presence_source');
-const roomChatReadsMigration = require('../src/migrations/20260714120000_create_room_chat_reads');
+import * as migration from '../src/migrations/20260614144500_create_rooms_and_room_messages.cjs';
+import * as membershipMigration from '../src/migrations/20260615140000_create_room_memberships_and_bookmarks.cjs';
+import * as visualIdentityMigration from '../src/migrations/20260615150000_add_visual_identity_keys.cjs';
+import * as friendsMigration from '../src/migrations/20260627120000_create_friends_and_direct_messages.cjs';
+import * as notificationMigration from '../src/migrations/20260710140000_create_notification_preferences.cjs';
+import * as roomBansMigration from '../src/migrations/20260710130000_add_room_bans.cjs';
+import * as pushMigration from '../src/migrations/20260711130000_create_push_subscriptions.cjs';
+import * as avatarMigration from '../src/migrations/20260711120000_add_avatars.cjs';
+import * as dndMigration from '../src/migrations/20260711140000_add_user_dnd.cjs';
+import * as messageEditingMigration from '../src/migrations/20260712120000_add_message_editing.cjs';
+import * as presenceStatusMigration from '../src/migrations/20260713120000_add_user_presence_status.cjs';
+import * as automaticPresenceMigration from '../src/migrations/20260713220000_add_automatic_presence_source.cjs';
+import * as roomChatReadsMigration from '../src/migrations/20260714120000_create_room_chat_reads.cjs';
 
 function createRecorder() {
   const calls = [];

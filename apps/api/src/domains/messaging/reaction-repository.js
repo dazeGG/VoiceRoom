@@ -1,5 +1,3 @@
-'use strict';
-
 const CONTEXT_TABLES = Object.freeze({
   room: Object.freeze({
     reactions: 'room_message_reactions',
@@ -202,4 +200,4 @@ function createReactionRepository({ client } = {}) {
   });
 }
 
-module.exports = { createReactionRepository };
+export { createReactionRepository };

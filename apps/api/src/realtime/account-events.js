@@ -1,6 +1,4 @@
-'use strict';
-
-const { buildServerEnvelope } = require('./envelope');
+import { buildServerEnvelope } from './envelope.js';
 
 function toWsAccountEvent(message) {
   if (!message || typeof message.type !== 'string') return null;
@@ -84,6 +82,4 @@ function toWsAccountEvent(message) {
   }
 }
 
-module.exports = {
-  toWsAccountEvent
-};
+export { toWsAccountEvent };

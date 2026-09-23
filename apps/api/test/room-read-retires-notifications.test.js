@@ -1,11 +1,11 @@
-'use strict';
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import test from 'node:test';
 
-const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
-const test = require('node:test');
-
-const read = (relative) => fs.readFileSync(path.resolve(__dirname, relative), 'utf8');
+const read = (relative) => fs.readFileSync(path.resolve(import.meta.dirname, relative), 'utf8');
 
 test('reading a room retires the notifications that room produced', () => {
   const server = read('../src/server.js');

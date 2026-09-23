@@ -1,9 +1,7 @@
-'use strict';
+import test from 'node:test';
+import assert from 'node:assert/strict';
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
-
-const { createLiveKitCredentialProvider } = require('../src/domains/admission/livekit-credential-provider');
+import { createLiveKitCredentialProvider } from '../src/domains/admission/livekit-credential-provider.js';
 
 function jwtPayload(token) {
   return JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString('utf8'));

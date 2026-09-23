@@ -1,12 +1,10 @@
-'use strict';
-
 process.env.ROOM_CREATE_POW_DIFFICULTY = '0';
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
+import test from 'node:test';
+import assert from 'node:assert/strict';
 
-const { TrackSource } = require('livekit-server-sdk');
-const { __private, createApiApp } = require('../src/server');
+import { TrackSource } from 'livekit-server-sdk';
+const { __private, createApiApp } = await import('../src/server.js');
 
 const ALICE_ID = '11111111-1111-4111-8111-111111111111';
 const BOB_ID = '22222222-2222-4222-8222-222222222222';

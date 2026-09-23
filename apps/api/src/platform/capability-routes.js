@@ -1,6 +1,4 @@
-'use strict';
-
-const { PUBLIC_CAPABILITY_KEYS } = require('@voice-room/shared/capabilities');
+import { PUBLIC_CAPABILITY_KEYS } from '@voice-room/shared/capabilities';
 
 const HEALTH_CAPABILITIES_LIMITS = {
   contractVersion: 1
@@ -64,8 +62,4 @@ function createCapabilitySnapshot(readiness) {
   };
 }
 
-module.exports = {
-  createCapabilitySnapshot,
-  publicFeatureFlags,
-  registerCapabilityRoutes
-};
+export { createCapabilitySnapshot, publicFeatureFlags, registerCapabilityRoutes };

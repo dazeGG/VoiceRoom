@@ -1,6 +1,4 @@
-'use strict';
-
-const crypto = require('node:crypto');
+import crypto from 'node:crypto';
 
 function asDate(value) {
   if (value instanceof Date) return value;
@@ -212,4 +210,4 @@ function createModerationRepository({ cursorCodec, pool } = {}) {
   });
 }
 
-module.exports = { createModerationRepository, mapModerationBan };
+export { createModerationRepository, mapModerationBan };

@@ -1,10 +1,8 @@
-'use strict';
+import test from 'node:test';
+import assert from 'node:assert/strict';
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
-
-const { createUserStore, hashSessionToken, publicUser } = require('../src/lib/user-store');
-const { AVATAR_COLOR_KEYS } = require('@voice-room/shared/validation');
+import { createUserStore, hashSessionToken, publicUser } from '../src/lib/user-store.js';
+import { AVATAR_COLOR_KEYS } from '@voice-room/shared/validation';
 
 function createFakePool(handler) {
   const calls = [];

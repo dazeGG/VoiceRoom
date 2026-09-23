@@ -1,5 +1,3 @@
-'use strict';
-
 function createMediaReconciliationService({ attachmentRepository, jobRepository, storage, assertLeaseOwned = async () => true } = {}) {
   if (!attachmentRepository || !storage) throw new TypeError('Media reconciliation dependencies are required');
 
@@ -53,4 +51,4 @@ function createMediaReconciliationService({ attachmentRepository, jobRepository,
   return Object.freeze({ reconcile });
 }
 
-module.exports = { createMediaReconciliationService };
+export { createMediaReconciliationService };

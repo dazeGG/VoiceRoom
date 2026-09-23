@@ -1,5 +1,3 @@
-'use strict';
-
 function createLinkPreviewRepository({ pool }) {
   if (!pool) throw new TypeError('A database pool is required');
 
@@ -88,4 +86,4 @@ function createLinkPreviewRepository({ pool }) {
   };
 }
 
-module.exports = { createLinkPreviewRepository };
+export { createLinkPreviewRepository };

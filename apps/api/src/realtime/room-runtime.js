@@ -1,7 +1,5 @@
-'use strict';
-
-const { SUMMARY_COALESCE_MS } = require('@voice-room/shared/realtime');
-const {
+import { SUMMARY_COALESCE_MS } from '@voice-room/shared/realtime';
+import {
   normalizeRoomId,
   normalizePeerId,
   normalizeSessionToken,
@@ -9,14 +7,14 @@ const {
   cleanStreamId,
   cleanScreenProfileId,
   isReservedPeerId
-} = require('@voice-room/shared/validation');
-const { buildServerEnvelope, buildServerErrorEnvelope } = require('./envelope');
-const { buildRoomRealtimeSummaryFromLobbyRoom, createSummaryCoalescer } = require('./summary');
-const { createWsTransport } = require('./peer-transport');
-const { LOG_EVENTS } = require('../lib/log-events');
-const { createLogger } = require('../lib/logger');
-const { legacyPeerMessageToWs } = require('./legacy-events');
-const { createTypingThrottle } = require('./typing-throttle');
+} from '@voice-room/shared/validation';
+import { buildServerEnvelope, buildServerErrorEnvelope } from './envelope.js';
+import { buildRoomRealtimeSummaryFromLobbyRoom, createSummaryCoalescer } from './summary.js';
+import { createWsTransport } from './peer-transport.js';
+import { LOG_EVENTS } from '../lib/log-events.js';
+import { createLogger } from '../lib/logger.js';
+import { legacyPeerMessageToWs } from './legacy-events.js';
+import { createTypingThrottle } from './typing-throttle.js';
 
 function resolveViewedScreenPeerId(room, viewerPeerId, value) {
   const ownerPeerId = normalizePeerId(value);
@@ -1328,8 +1326,4 @@ function createRoomRealtimeRuntime(deps) {
   };
 }
 
-module.exports = {
-  clearViewedScreenPeerReferences,
-  createRoomRealtimeRuntime,
-  resolveViewedScreenPeerId
-};
+export { clearViewedScreenPeerReferences, createRoomRealtimeRuntime, resolveViewedScreenPeerId };

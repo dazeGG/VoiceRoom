@@ -1,14 +1,12 @@
-'use strict';
-
-const { socketPathForDirectory } = require('./ipc-harness');
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const http = require('node:http');
-const { spawn } = require('node:child_process');
-const path = require('node:path');
-const os = require('node:os');
-const { createTestDatabase } = require('./db-harness');
+import { socketPathForDirectory } from './ipc-harness.js';
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import http from 'node:http';
+import { spawn } from 'node:child_process';
+import path from 'node:path';
+import os from 'node:os';
+import { createTestDatabase } from './db-harness.js';
 
 function getSocketPath() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'voice-room-realtime-'));
@@ -43,7 +41,7 @@ function waitForHealthz(socketPath, timeoutMs = 15000) {
 
 function startServer(socketPath, databaseUrl, logs) {
   const child = spawn(process.execPath, ['src/server.js'], {
-    cwd: path.join(__dirname, '..'),
+    cwd: path.join(import.meta.dirname, '..'),
     env: {
       ...process.env,
       NODE_ENV: 'test',
@@ -100,7 +98,7 @@ function cookieFrom(setCookie) {
   return String(header || '').split(';')[0];
 }
 
-const { openWs, waitForWsType } = require('./ws-harness');
+import { openWs, waitForWsType } from './ws-harness.js';
 
 function openRealtimeStream(socketPath, cookie) {
   return openWs(socketPath, { cookie });

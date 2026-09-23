@@ -1,11 +1,9 @@
-'use strict';
-
-const {
+import {
   parseClientEnvelope,
   buildServerEnvelope,
   buildServerErrorEnvelope,
   validateClientCommand
-} = require('@voice-room/shared/realtime');
+} from '@voice-room/shared/realtime';
 
 function serializeEnvelope(envelope) {
   return JSON.stringify(envelope);
@@ -27,9 +25,4 @@ function parseInboundMessage(raw) {
   return validateClientCommand(parsed.envelope);
 }
 
-module.exports = {
-  buildServerEnvelope,
-  buildServerErrorEnvelope,
-  parseInboundMessage,
-  sendWsEnvelope
-};
+export { buildServerEnvelope, buildServerErrorEnvelope, parseInboundMessage, sendWsEnvelope };

@@ -1,14 +1,12 @@
-'use strict';
-
-const { createDbPool } = require('../lib/db');
-const { readEnvBool, readEnvInt } = require('../lib/config');
-const { createPushStore } = require('../lib/push-store');
-const { createNotificationOutboxRepository } = require('../domains/notifications/notification-outbox-repository');
-const { createNotificationPushProvider } = require('../domains/notifications/push-provider');
-const { boundedBackoff, createLeaseRuntime } = require('../platform/lease-runtime');
-const { recordNotificationOldestPending } = require('../lib/metrics');
-const { LOG_EVENTS } = require('../lib/log-events');
-const { createLogger } = require('../lib/logger');
+import { createDbPool } from '../lib/db.js';
+import { readEnvBool, readEnvInt } from '../lib/config.js';
+import { createPushStore } from '../lib/push-store.js';
+import { createNotificationOutboxRepository } from '../domains/notifications/notification-outbox-repository.js';
+import { createNotificationPushProvider } from '../domains/notifications/push-provider.js';
+import { boundedBackoff, createLeaseRuntime } from '../platform/lease-runtime.js';
+import { recordNotificationOldestPending } from '../lib/metrics.js';
+import { LOG_EVENTS } from '../lib/log-events.js';
+import { createLogger } from '../lib/logger.js';
 
 const LEASE_IDENTITY = 'notification-delivery.G63';
 
@@ -67,5 +65,5 @@ async function main(env=process.env){
   let stopping; const stop=()=>stopping||(stopping=worker.stop().finally(()=>pool.end())); process.once('SIGINT',()=>void stop());process.once('SIGTERM',()=>void stop()); try{await worker.start();}finally{await stop();}
 }
 
-if(require.main===module) main().catch((error)=>{createLogger({name:'worker.notification-delivery'}).fatal({evt:LOG_EVENTS.WORKER_FAILED,worker:'notification-delivery',err:error},'notification delivery worker failed');process.exitCode=1;});
-module.exports={LEASE_IDENTITY,createNotificationDeliveryWorker,main};
+if(import.meta.main) main().catch((error)=>{createLogger({name:'worker.notification-delivery'}).fatal({evt:LOG_EVENTS.WORKER_FAILED,worker:'notification-delivery',err:error},'notification delivery worker failed');process.exitCode=1;});
+export { LEASE_IDENTITY, createNotificationDeliveryWorker, main };

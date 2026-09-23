@@ -1,8 +1,6 @@
-'use strict';
-
-const assert = require('node:assert/strict');
-const { test } = require('node:test');
-const { createMemberDirectoryService, presenceForUser } = require('../src/domains/membership/member-directory-service');
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+import { createMemberDirectoryService, presenceForUser } from '../src/domains/membership/member-directory-service.js';
 
 test('G45-A01 directory is membership-gated, cursor-bound to room/query and dedupes presence connections', async () => {
   const calls = [];

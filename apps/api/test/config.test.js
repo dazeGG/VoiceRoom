@@ -1,10 +1,13 @@
-'use strict';
-
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const path = require('node:path');
-const fs = require('node:fs');
-const { readEnvInt, readEnvBool, readDatabaseConfig, readUploadsDir } = require('../src/lib/config');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import path from 'node:path';
+import fs from 'node:fs';
+import {
+  readEnvInt,
+  readEnvBool,
+  readDatabaseConfig,
+  readUploadsDir
+} from '../src/lib/config.js';
 
 test('readEnvInt parses a valid integer', () => {
   assert.equal(readEnvInt('PORT', 3000, 1, { PORT: '8080' }), 8080);
@@ -44,7 +47,7 @@ test('readUploadsDir uses an absolute configured directory', () => {
 });
 
 test('readUploadsDir defaults to an ignored API-local directory', () => {
-  assert.equal(readUploadsDir({}), path.resolve(__dirname, '../uploads'));
+  assert.equal(readUploadsDir({}), path.resolve(import.meta.dirname, '../uploads'));
 });
 
 
@@ -74,7 +77,7 @@ test('readDatabaseConfig accepts postgres URLs', () => {
 // API but never passed, so no containerised deployment could turn the browser
 // log intake on, whatever the host .env said.
 test('compose passes every feature flag the API leaves disabled by default', () => {
-  const root = path.join(__dirname, '../../..');
+  const root = path.join(import.meta.dirname, '../../..');
   const server = fs.readFileSync(path.join(root, 'apps/api/src/server.js'), 'utf8');
   const compose = fs.readFileSync(path.join(root, 'docker-compose.yml'), 'utf8');
 

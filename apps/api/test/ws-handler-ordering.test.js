@@ -1,9 +1,7 @@
-'use strict';
-
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const { EventEmitter } = require('node:events');
-const { createWsHandler } = require('../src/realtime/ws-handler');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { EventEmitter } from 'node:events';
+import { createWsHandler } from '../src/realtime/ws-handler.js';
 
 const ROOM_ID = 'room1';
 const PEER_A = 'peer-alice1';

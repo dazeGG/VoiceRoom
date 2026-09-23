@@ -1,5 +1,3 @@
-'use strict';
-
 function createMediaMaintenanceWorker({ maintenanceService, intervalMs = 60_000 } = {}) {
   if (!maintenanceService?.cleanupOnce) throw new TypeError('Media maintenance service is required');
   let stopping = false;
@@ -18,11 +16,11 @@ function createMediaMaintenanceWorker({ maintenanceService, intervalMs = 60_000 
 
 async function main() {
   if (String(process.env.MEDIA_MAINTENANCE_CLAIM_ENABLED || '').toLowerCase() !== 'true') return;
-  const { createDbPool } = require('../lib/db');
-  const { createAttachmentRepository } = require('../domains/media/attachment-repository');
-  const { createMediaJobRepository } = require('../domains/media/media-job-repository');
-  const { createMediaMaintenanceService } = require('../domains/media/media-maintenance-service');
-  const { createMediaStorage } = require('../domains/media/storage');
+  const { createDbPool } = await import('../lib/db.js');
+  const { createAttachmentRepository } = await import('../domains/media/attachment-repository.js');
+  const { createMediaJobRepository } = await import('../domains/media/media-job-repository.js');
+  const { createMediaMaintenanceService } = await import('../domains/media/media-maintenance-service.js');
+  const { createMediaStorage } = await import('../domains/media/storage.js');
   const pool = createDbPool();
   const storage = createMediaStorage({ rootDir: process.env.MEDIA_STORAGE_DIR || '/data/media' });
   const worker = createMediaMaintenanceWorker({
@@ -40,11 +38,11 @@ async function main() {
   finally { await pool.end(); }
 }
 
-if (require.main === module) {
+if (import.meta.main) {
   main().catch((error) => {
     process.stderr.write(`${error?.stack || error}\n`);
     process.exitCode = 1;
   });
 }
 
-module.exports = { createMediaMaintenanceWorker, main };
+export { createMediaMaintenanceWorker, main };

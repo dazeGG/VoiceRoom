@@ -1,7 +1,10 @@
-'use strict';
-
-const { transaction } = require('../../lib/db');
-const { buildNotificationEnvelope, buildProviderPayload, normalizeNotificationLevel, normalizeNotificationLimit } = require('@voice-room/shared/notifications');
+import { transaction } from '../../lib/db.js';
+import {
+  buildNotificationEnvelope,
+  buildProviderPayload,
+  normalizeNotificationLevel,
+  normalizeNotificationLimit
+} from '@voice-room/shared/notifications';
 
 function createNotificationService({ pool, inbox, mentions, eligibility, outbox, cursorCodec, notificationStore } = {}) {
   if (!pool?.query || !inbox) throw new TypeError('Notification service requires pool and inbox repository');
@@ -38,4 +41,4 @@ function createNotificationService({ pool, inbox, mentions, eligibility, outbox,
   return { count,createAddressedForMessage,getRoomLevel,list,markAllRead,markRead,markRoomRead,resync,setRoomLevel };
 }
 
-module.exports={createNotificationService};
+export { createNotificationService };

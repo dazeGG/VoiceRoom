@@ -1,8 +1,10 @@
-'use strict';
-const assert = require('node:assert/strict');
-const test = require('node:test');
-const { DEFAULT_MIN_FREE_BYTES, DEFAULT_RECOVERY_BYTES, createMediaPressureService } = require('../src/domains/media/media-pressure-service');
-const { recordMediaPressure, renderPrometheus, resetMetricsForTest } = require('../src/lib/metrics');
+import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { DEFAULT_MIN_FREE_BYTES, DEFAULT_RECOVERY_BYTES, createMediaPressureService } from '../src/domains/media/media-pressure-service.js';
+import { recordMediaPressure, renderPrometheus, resetMetricsForTest } from '../src/lib/metrics.js';
 
 test('G80-A01 2GiB boundary, claim stop and recovery hysteresis fail closed', async () => {
   let free = DEFAULT_MIN_FREE_BYTES - 1;
@@ -28,6 +30,6 @@ test('G80-A02 replica disagreement disables uploads despite healthy local statfs
   assert.equal(disagreed.healthy, false); assert.equal(disagreed.reason, 'replica_disagreement');
   consensus = true;
   assert.equal((await pressure.measure({ force: true })).healthy, true);
-  const server = require('node:fs').readFileSync(require.resolve('../src/server.js'), 'utf8');
+  const server = require('node:fs').readFileSync(fileURLToPath(new URL('../src/server.js', import.meta.url)), 'utf8');
   assert.match(server, /replicaConsensus: \(\) => readinessProvider\.getSnapshot\(\)\?\.replicaConsensus === true/);
 });

@@ -1,9 +1,7 @@
-'use strict';
+import test from 'node:test';
+import assert from 'node:assert/strict';
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
-
-const { createReadinessReport } = require('../src/platform/readiness');
+import { createReadinessReport } from '../src/platform/readiness.js';
 
 test('media capabilities become ready when every declared prerequisite is ready', () => {
   const report = createReadinessReport('config/capability-dag.v1.json', {

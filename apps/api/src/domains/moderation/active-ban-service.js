@@ -1,7 +1,5 @@
-'use strict';
-
-const { transaction } = require('../../lib/db');
-const { createActiveBanRepository, normalizePrincipal } = require('./active-ban-repository');
+import { transaction } from '../../lib/db.js';
+import { createActiveBanRepository, normalizePrincipal } from './active-ban-repository.js';
 
 function createActiveBanService({ pool, repository = createActiveBanRepository({ pool }), now = Date.now } = {}) {
   async function getActiveBan(input = {}) {
@@ -45,4 +43,4 @@ function createActiveBanService({ pool, repository = createActiveBanRepository({
   return { createBan, filterEligibleUserIds, getActiveBan, isBanned, repository };
 }
 
-module.exports = { createActiveBanService };
+export { createActiveBanService };

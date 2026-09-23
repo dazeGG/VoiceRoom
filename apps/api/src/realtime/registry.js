@@ -1,11 +1,9 @@
-'use strict';
-
-const crypto = require('node:crypto');
-const { cleanPresenceStatus } = require('@voice-room/shared/validation');
-const { buildServerEnvelope, sendWsEnvelope } = require('./envelope');
-const { toWsAccountEvent } = require('./account-events');
-const { LOG_EVENTS } = require('../lib/log-events');
-const { createLogger } = require('../lib/logger');
+import crypto from 'node:crypto';
+import { cleanPresenceStatus } from '@voice-room/shared/validation';
+import { buildServerEnvelope, sendWsEnvelope } from './envelope.js';
+import { toWsAccountEvent } from './account-events.js';
+import { LOG_EVENTS } from '../lib/log-events.js';
+import { createLogger } from '../lib/logger.js';
 
 function createConnectionId(prefix) {
   return `${prefix}:${Date.now()}:${crypto.randomBytes(4).toString('hex')}`;
@@ -330,7 +328,4 @@ function createConnectionRegistry({
   };
 }
 
-module.exports = {
-  buildRoomMembershipPresenceSnapshot,
-  createConnectionRegistry
-};
+export { buildRoomMembershipPresenceSnapshot, createConnectionRegistry };

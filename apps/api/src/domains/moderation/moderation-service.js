@@ -1,14 +1,12 @@
-'use strict';
-
-const {
+import {
   buildModerationPage,
   durationToExpiresAt,
   normalizeBanMutation,
   normalizeIdempotencyKey,
   normalizeModerationPageRequest
-} = require('@voice-room/shared/moderation');
-const { transaction } = require('../../lib/db');
-const { createModerationRepository } = require('./moderation-repository');
+} from '@voice-room/shared/moderation';
+import { transaction } from '../../lib/db.js';
+import { createModerationRepository } from './moderation-repository.js';
 
 function createModerationService({
   pool,
@@ -119,4 +117,4 @@ function createModerationService({
   return Object.freeze({ authorizeOwner, createPermanentBan, listActive, putBan, repository, unban });
 }
 
-module.exports = { createModerationService };
+export { createModerationService };

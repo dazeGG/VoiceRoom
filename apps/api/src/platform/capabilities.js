@@ -1,2 +1,1 @@
-exports.createReadinessReport = require('./readiness').createReadinessReport;
-exports.createReadinessProvider = require('./readiness').createReadinessProvider;
+export { createReadinessProvider, createReadinessReport } from './readiness.js';

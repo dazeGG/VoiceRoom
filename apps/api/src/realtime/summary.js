@@ -1,6 +1,4 @@
-'use strict';
-
-const { buildRoomRealtimeSummary } = require('@voice-room/shared/realtime');
+import { buildRoomRealtimeSummary } from '@voice-room/shared/realtime';
 
 function buildRoomRealtimeSummaryFromLobbyRoom(room, peers, resolveAvatarColorKey) {
   const peerList = Array.isArray(peers) ? peers : [];
@@ -35,7 +33,4 @@ function createSummaryCoalescer({ delayMs, flush }) {
   return { schedule, cancel, clear };
 }
 
-module.exports = {
-  buildRoomRealtimeSummaryFromLobbyRoom,
-  createSummaryCoalescer
-};
+export { buildRoomRealtimeSummaryFromLobbyRoom, createSummaryCoalescer };

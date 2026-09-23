@@ -1,15 +1,20 @@
-'use strict';
-
-const { socketPathForDirectory } = require('./ipc-harness');
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const http = require('node:http');
-const { spawn } = require('node:child_process');
-const path = require('node:path');
-const os = require('node:os');
-const { createTestDatabase } = require('./db-harness');
-const { joinVoiceRoom, openWs: openHarnessWs, subscribeRoomPreview, waitForWsType } = require('./ws-harness');
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
+import { socketPathForDirectory } from './ipc-harness.js';
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import http from 'node:http';
+import { spawn } from 'node:child_process';
+import path from 'node:path';
+import os from 'node:os';
+import { createTestDatabase } from './db-harness.js';
+import {
+  joinVoiceRoom,
+  openWs as openHarnessWs,
+  subscribeRoomPreview,
+  waitForWsType
+} from './ws-harness.js';
 
 function getSocketPath() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'voice-room-ws-'));
@@ -44,7 +49,7 @@ function waitForHealthz(socketPath, timeoutMs = 15000) {
 
 function startServer(socketPath, databaseUrl, logs, extraEnv = {}) {
   const child = spawn(process.execPath, ['src/server.js'], {
-    cwd: path.join(__dirname, '..'),
+    cwd: path.join(import.meta.dirname, '..'),
     env: {
       ...process.env,
       NODE_ENV: 'test',

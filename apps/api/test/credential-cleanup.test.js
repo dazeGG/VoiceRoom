@@ -1,6 +1,7 @@
-'use strict';
-const assert = require('node:assert/strict');
-const test = require('node:test');
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
+import assert from 'node:assert/strict';
+import test from 'node:test';
 const { __private: { revokeIssuedAdmission } } = require('../src/server');
 
 test('issued admission cleanup failure is logged, metered and preserves the primary failure', async () => {

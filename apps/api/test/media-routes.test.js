@@ -1,10 +1,8 @@
-'use strict';
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fastify from 'fastify';
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const fastify = require('fastify');
-
-const { registerMediaRoutes } = require('../src/domains/media/media-routes');
+import { registerMediaRoutes } from '../src/domains/media/media-routes.js';
 
 function createApp() {
   const calls = [];

@@ -1,30 +1,33 @@
-'use strict';
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
+import fs from 'node:fs';
+import http from 'node:http';
+import os from 'node:os';
+import path from 'node:path';
+import { spawn } from 'node:child_process';
+import { Pool } from 'pg';
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const crypto = require('node:crypto');
-const fs = require('node:fs');
-const http = require('node:http');
-const os = require('node:os');
-const path = require('node:path');
-const { spawn } = require('node:child_process');
-const { Pool } = require('pg');
-
-const { runMigrations } = require('../src/lib/migrate');
-const { createUserStore, hashSessionToken, publicUser, selfUser } = require('../src/lib/user-store');
-const { createTestDatabase } = require('./db-harness');
-const { socketPathForDirectory } = require('./ipc-harness');
+import { runMigrations } from '../src/lib/migrate.js';
+import {
+  createUserStore,
+  hashSessionToken,
+  publicUser,
+  selfUser
+} from '../src/lib/user-store.js';
+import { createTestDatabase } from './db-harness.js';
+import { socketPathForDirectory } from './ipc-harness.js';
 
 const SILENT = { log() {}, info() {}, warn() {}, error() {} };
 const MIGRATION = '20260916150000_backfill_desktop_app_marker';
-const MIGRATIONS_DIR = path.join(__dirname, '../src/migrations');
+const MIGRATIONS_DIR = path.join(import.meta.dirname, '../src/migrations');
 const DESKTOP_APP = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) VoiceRoom/1.3.3 Chrome/138.0.0.0 Electron/37.2.0 Safari/537.36';
 const CHROME = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36';
 
 function rollbackCountThrough(name) {
   const names = fs.readdirSync(MIGRATIONS_DIR)
-    .filter((file) => file.endsWith('.js'))
-    .map((file) => file.replace(/\.js$/, ''))
+    .filter((file) => file.endsWith('.cjs'))
+    .map((file) => file.replace(/\.c?js$/, ''))
     .sort();
   const index = names.indexOf(name);
   assert.notEqual(index, -1, `${name} is missing from the migrations directory`);
@@ -191,7 +194,7 @@ test('self-only flags never enter the public user shape other people receive', (
   assert.equal('appPromptSeen' in shared, false);
   assert.deepEqual(selfUser(user), { ...shared, hasUsedDesktopApp: true, appPromptSeen: true });
 
-  const server = fs.readFileSync(path.join(__dirname, '../src/server.js'), 'utf8');
+  const server = fs.readFileSync(path.join(import.meta.dirname, '../src/server.js'), 'utf8');
   assert.match(server, /peer: publicUser\(peer\)/, 'DM peers get the public shape');
   assert.match(server, /type: 'user-updated', user: publicUser\(user\)/, 'profile broadcasts get the public shape');
   assert.match(server, /const actor = publicUser\(user\)/, 'actors get the public shape');
@@ -228,7 +231,7 @@ async function startServer(t) {
   const socketPath = socketPathForDirectory(dir);
   const { cleanup, databaseUrl } = await createTestDatabase(t);
   const child = spawn(process.execPath, ['src/server.js'], {
-    cwd: path.join(__dirname, '..'),
+    cwd: path.join(import.meta.dirname, '..'),
     env: {
       ...process.env,
       NODE_ENV: 'test',

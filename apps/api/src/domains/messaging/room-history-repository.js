@@ -1,8 +1,6 @@
-'use strict';
-
-const { normalizeLinkPreview } = require('@voice-room/shared/link-preview');
-const { createDbPool } = require('../../lib/db');
-const { createLogger } = require('../../lib/logger');
+import { normalizeLinkPreview } from '@voice-room/shared/link-preview';
+import { createDbPool } from '../../lib/db.js';
+import { createLogger } from '../../lib/logger.js';
 
 const ROOM_MESSAGE_SELECT = `
   SELECT m.*,
@@ -156,4 +154,4 @@ function createRoomHistoryRepository({ databaseUrl, logger = createLogger({ name
   return { close, getAnchor, listAfter, listAround, listBefore, listLatest, roomExists };
 }
 
-module.exports = { createRoomHistoryRepository, mapRoomMessage };
+export { createRoomHistoryRepository, mapRoomMessage };

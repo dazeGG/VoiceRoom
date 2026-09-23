@@ -1,8 +1,6 @@
-'use strict';
-
-const crypto = require('node:crypto');
-const sharp = require('sharp');
-const { isAllowedImage } = require('./image-signature.mts');
+import crypto from 'node:crypto';
+import sharp from 'sharp';
+import { isAllowedImage } from './image-signature.mts';
 
 const MAX_INPUT_PIXELS = 40 * 1024 * 1024;
 const MAX_SIDE = 640;
@@ -32,4 +30,4 @@ async function processLinkPreviewImage(buffer) {
   };
 }
 
-module.exports = { processLinkPreviewImage };
+export { processLinkPreviewImage };

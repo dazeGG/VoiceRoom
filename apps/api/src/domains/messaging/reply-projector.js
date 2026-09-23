@@ -1,6 +1,4 @@
-'use strict';
-
-const { REPLY_PREVIEW_TEXT_MAX_LENGTH, isSystemCard } = require('@voice-room/shared/messaging-send');
+import { REPLY_PREVIEW_TEXT_MAX_LENGTH, isSystemCard } from '@voice-room/shared/messaging-send';
 
 const REPLY_TOMBSTONE_TEXT = 'Сообщение недоступно';
 
@@ -99,7 +97,7 @@ async function requireReplyTarget({ message, visibility, visibilityContext, now 
   return preview;
 }
 
-module.exports = {
+export {
   REPLY_TOMBSTONE_TEXT,
   ReplyTargetUnavailableError,
   isReplyTargetKindAllowed,

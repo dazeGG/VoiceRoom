@@ -1,9 +1,7 @@
-'use strict';
-
-const crypto = require('node:crypto');
-const { cleanPresenceStatus } = require('@voice-room/shared/validation');
-const { createDbPool, transaction } = require('./db');
-const { createLogger } = require('./logger');
+import crypto from 'node:crypto';
+import { cleanPresenceStatus } from '@voice-room/shared/validation';
+import { createDbPool, transaction } from './db.js';
+import { createLogger } from './logger.js';
 
 const DEFAULT_AUTOMATIC_PRESENCE_LEASE_MS = 3 * 60 * 1000;
 
@@ -360,7 +358,4 @@ function createNotificationStore({
   };
 }
 
-module.exports = {
-  createNotificationStore,
-  mapPreferences
-};
+export { createNotificationStore, mapPreferences };

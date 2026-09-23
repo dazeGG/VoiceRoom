@@ -1,8 +1,6 @@
-'use strict';
-
-const { URL } = require('node:url');
-const { AccessToken, TrackSource } = require('livekit-server-sdk');
-const { normalizeLiveKitServerUrl } = require('@voice-room/shared/runtime-config');
+import { URL } from 'node:url';
+import { AccessToken, TrackSource } from 'livekit-server-sdk';
+import { normalizeLiveKitServerUrl } from '@voice-room/shared/runtime-config';
 
 function createLiveKitCredentialProvider({
   apiKey,
@@ -64,4 +62,4 @@ function createLiveKitCredentialProvider({
   return Object.freeze({ issueAdmission });
 }
 
-module.exports = { createLiveKitCredentialProvider };
+export { createLiveKitCredentialProvider };

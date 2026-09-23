@@ -1,9 +1,9 @@
-'use strict';
-const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const test = require('node:test');
-const { MediaJobFenceError } = require('../src/domains/media/media-job-repository');
-const { DEFAULTS, createMediaProcessingWorker, retryDelay } = require('../src/workers/media-processing');
+import { fileURLToPath } from 'node:url';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import test from 'node:test';
+import { MediaJobFenceError } from '../src/domains/media/media-job-repository.js';
+import { DEFAULTS, createMediaProcessingWorker, retryDelay } from '../src/workers/media-processing.js';
 
 test('G77-A01 worker defaults, bounded exponential backoff and pressure claim-stop are exact', async () => {
   assert.deepEqual(DEFAULTS, { batchSize: 10, concurrency: 2, leaseMs: 120000, maxAttempts: 5, timeoutMs: 30000 });
@@ -30,7 +30,7 @@ test('G77-A02 fencing loss cannot publish ready/failed state and processing owns
   });
   assert.equal(await worker.runOnce(), 1); assert.equal(failed, 0);
   assert.ok(observedAge >= 19_000);
-  const source = fs.readFileSync(require.resolve('../src/workers/media-processing.js'), 'utf8');
+  const source = fs.readFileSync(fileURLToPath(new URL('../src/workers/media-processing.js', import.meta.url)), 'utf8');
   assert.match(source, /storage\.save\(job\.attachmentId, 'processed'/);
   assert.match(source, /storage\.save\(job\.attachmentId, 'preview'/);
   assert.match(source, /completeProcessing/);

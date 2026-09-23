@@ -1,5 +1,3 @@
-'use strict';
-
 function normalizeTokens(tokens) {
   return [...new Set((Array.isArray(tokens) ? tokens : [])
     .filter((token) => typeof token === 'string' && token.trim())
@@ -80,4 +78,4 @@ function createRuntimeReadinessRepository({ client }) {
   return Object.freeze({ heartbeat, listFresh, remove });
 }
 
-module.exports = { createRuntimeReadinessRepository, normalizeTokens };
+export { createRuntimeReadinessRepository, normalizeTokens };

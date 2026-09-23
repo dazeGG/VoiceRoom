@@ -1,5 +1,3 @@
-'use strict';
-
 class MessageReadError extends Error {
   constructor(code = 'invalid_read_cursor', statusCode = 400) {
     super('Invalid read cursor');
@@ -48,4 +46,4 @@ function createMessageReadService({ authorizeRoomRead, cursorCodec, repository }
   return Object.freeze({ advanceDm, advanceRoom });
 }
 
-module.exports = { MessageReadError, createMessageReadService };
+export { MessageReadError, createMessageReadService };

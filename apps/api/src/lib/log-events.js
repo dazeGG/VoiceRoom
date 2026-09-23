@@ -1,5 +1,3 @@
-'use strict';
-
 // The single source of truth for the `evt` field carried by every structured
 // log record. Grepping or alerting on a stable code is what makes an incident
 // searchable months later, so codes are added here rather than inlined at the
@@ -99,4 +97,4 @@ const LOG_EVENTS = Object.freeze({
 
 const LOG_EVENT_CODES = Object.freeze(Object.values(LOG_EVENTS));
 
-module.exports = { LOG_EVENTS, LOG_EVENT_CODES };
+export { LOG_EVENTS, LOG_EVENT_CODES };

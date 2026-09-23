@@ -1,5 +1,3 @@
-'use strict';
-
 process.env.ROOM_CREATE_POW_DIFFICULTY = '0';
 process.env.LIVEKIT_URL = 'ws://livekit:7880';
 process.env.LIVEKIT_GATE_PUBLIC_URL = 'ws://gate.example.test';
@@ -7,19 +5,19 @@ process.env.LIVEKIT_GATE_SECRET = 'test-g05-livekit-gate-secret-32-bytes-minimum
 process.env.LIVEKIT_API_KEY = 'devkey';
 process.env.LIVEKIT_API_SECRET = 'devsecret';
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const { EventEmitter } = require('node:events');
-const fs = require('node:fs');
-const net = require('node:net');
-const path = require('node:path');
-const { spawnSync } = require('node:child_process');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { EventEmitter } from 'node:events';
+import fs from 'node:fs';
+import net from 'node:net';
+import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 
-const { createApiApp } = require('../src/server');
-const { createGateCredentialSigner } = require('../src/domains/admission/gate-credential-signer');
-const { createLiveKitAuthGateService, extractCredential } = require('../src/domains/admission/livekit-auth-gate-service');
+const { createApiApp } = await import('../src/server.js');
+const { createGateCredentialSigner } = await import('../src/domains/admission/gate-credential-signer.js');
+const { createLiveKitAuthGateService, extractCredential } = await import('../src/domains/admission/livekit-auth-gate-service.js');
 
-const ROOT = path.resolve(__dirname, '../../..');
+const ROOT = path.resolve(import.meta.dirname, '../../..');
 const PEER_ID = 'peer-g05a';
 
 // The gate only reads the JWT payload (LiveKit verifies the signature), so the

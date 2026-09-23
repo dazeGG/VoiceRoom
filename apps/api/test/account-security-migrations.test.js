@@ -1,24 +1,22 @@
-'use strict';
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
+import { Pool } from 'pg';
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const crypto = require('node:crypto');
-const fs = require('node:fs');
-const path = require('node:path');
-const { Pool } = require('pg');
-
-const { runMigrations } = require('../src/lib/migrate');
-const { createUserStore } = require('../src/lib/user-store');
-const { createTestDatabase } = require('./db-harness');
+import { runMigrations } from '../src/lib/migrate.js';
+import { createUserStore } from '../src/lib/user-store.js';
+import { createTestDatabase } from './db-harness.js';
 
 const SILENT = { log() {}, info() {}, warn() {}, error() {} };
-const MIGRATIONS_DIR = path.join(__dirname, '../src/migrations');
+const MIGRATIONS_DIR = path.join(import.meta.dirname, '../src/migrations');
 const FIRST_ACCOUNT_SECURITY_MIGRATION = '20260912120000_add_session_device_metadata';
 
 function rollbackCountThrough(name) {
   const names = fs.readdirSync(MIGRATIONS_DIR)
-    .filter((file) => file.endsWith('.js'))
-    .map((file) => file.replace(/\.js$/, ''))
+    .filter((file) => file.endsWith('.cjs'))
+    .map((file) => file.replace(/\.c?js$/, ''))
     .sort();
   const index = names.indexOf(name);
   assert.notEqual(index, -1, `${name} is missing from the migrations directory`);

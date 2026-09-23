@@ -1,8 +1,7 @@
-'use strict';
-const assert = require('node:assert/strict');
-const test = require('node:test');
-const metrics = require('../src/lib/metrics');
-const { createMediaVisibilityService } = require('../src/domains/media/media-visibility-service');
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import * as metrics from '../src/lib/metrics.js';
+import { createMediaVisibilityService } from '../src/domains/media/media-visibility-service.js';
 
 test('release queue metrics exclude expected hidden 404s and count only invariant failures', async () => {
   metrics.resetMetricsForTest();

@@ -1,5 +1,3 @@
-'use strict';
-
 const DM_HISTORY_PATH = '/api/dm/:userId/history';
 
 function sendRouteError(reply, error) {
@@ -47,4 +45,4 @@ function registerDmHistoryRoutes({ app, historyService, resolveUser, path = DM_H
   });
 }
 
-module.exports = { DM_HISTORY_PATH, registerDmHistoryRoutes };
+export { DM_HISTORY_PATH, registerDmHistoryRoutes };

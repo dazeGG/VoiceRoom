@@ -1,8 +1,8 @@
-const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const os = require('node:os');
-const path = require('node:path');
-const test = require('node:test');
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import test from 'node:test';
 
 async function loadScanners() {
   const [imports, sources] = await Promise.all([
@@ -13,7 +13,7 @@ async function loadScanners() {
 }
 
 function config() {
-  return JSON.parse(fs.readFileSync(path.join(__dirname, '../../../config/import-boundaries.v1.json'), 'utf8'));
+  return JSON.parse(fs.readFileSync(path.join(import.meta.dirname, '../../../config/import-boundaries.v1.json'), 'utf8'));
 }
 
 function fixtureFile(name, source) {
@@ -29,11 +29,11 @@ test('G10-A01 current API composition graph stays inside import, write and timer
   assert.deepEqual(checkImportBoundaries({ config: config() }), []);
   assert.deepEqual(checkApiSources({ config: config() }), []);
 
-  const serverSource = fs.readFileSync(path.join(__dirname, '../src/server.js'), 'utf8');
+  const serverSource = fs.readFileSync(path.join(import.meta.dirname, '../src/server.js'), 'utf8');
   assert.match(serverSource, /function createApiServer\(/);
   assert.match(serverSource, /function createApiApp\(/);
   assert.match(serverSource, /function bootstrap\(/);
-  assert.match(serverSource, /module\.exports\s*=\s*\{/);
+  assert.match(serverSource, /export \{ bootstrap, closeStores, createApiApp, createApiServer \};/);
 });
 
 test('G10-A03 a declared cross-domain writer may touch only its declared tables', async () => {

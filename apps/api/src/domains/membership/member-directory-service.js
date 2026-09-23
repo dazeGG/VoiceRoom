@@ -1,6 +1,4 @@
-'use strict';
-
-const { buildMembershipEnvelope, normalizeMembershipRequest } = require('@voice-room/shared/membership');
+import { buildMembershipEnvelope, normalizeMembershipRequest } from '@voice-room/shared/membership';
 
 const CURSOR_PURPOSE = 'room-members-directory';
 
@@ -63,4 +61,4 @@ function createMemberDirectoryService({ membershipService, repository, cursorCod
   return { list };
 }
 
-module.exports = { CURSOR_PURPOSE, createMemberDirectoryService, presenceForUser };
+export { CURSOR_PURPOSE, createMemberDirectoryService, presenceForUser };

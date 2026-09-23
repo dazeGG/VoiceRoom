@@ -1,5 +1,3 @@
-'use strict';
-
 // `/api/livekit-token` only admits peers the room roster already knows (the
 // realtime join puts them there). Tests that drive the token route through
 // app.inject() have no realtime connection, so they report the peer from the
@@ -14,4 +12,4 @@ function withRosterPeer(store, peer) {
   return store;
 }
 
-module.exports = { withRosterPeer };
+export { withRosterPeer };

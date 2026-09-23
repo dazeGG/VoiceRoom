@@ -1,8 +1,6 @@
-'use strict';
-
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const { createMessageModerationService } = require('../src/domains/moderation/message-moderation-service');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { createMessageModerationService } from '../src/domains/moderation/message-moderation-service.js';
 
 function harness({ failCleanup = false } = {}) {
   const events = [];

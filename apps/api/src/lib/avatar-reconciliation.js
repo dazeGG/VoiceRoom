@@ -1,5 +1,3 @@
-'use strict';
-
 async function reconcileAvatarStorage({ storage, userStore, roomStore }) {
   const [storedKeys, userKeys, roomKeys] = await Promise.all([
     storage.listKeys(),
@@ -12,4 +10,4 @@ async function reconcileAvatarStorage({ storage, userStore, roomStore }) {
   return { orphaned, removed: orphaned.length };
 }
 
-module.exports = { reconcileAvatarStorage };
+export { reconcileAvatarStorage };
