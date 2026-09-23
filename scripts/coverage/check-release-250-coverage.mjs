@@ -322,8 +322,13 @@ function createAccumulator(repoPath, source) {
 
 function mergeScriptCoverage(accumulator, script) {
   accumulator.seenInCoverage = true;
+  // Node appends a `//# sourceURL=` trailer to type-stripped TypeScript, and its
+  // length depends on how the module was loaded (file:// URL or plain path).
+  // Clamping to the file keeps the same function one identity across processes.
+  const sourceLength = accumulator.source.length;
+  const clamp = (offset) => Math.min(offset, sourceLength);
   for (const fn of script.functions ?? []) {
-    const ranges = fn.ranges ?? [];
+    const ranges = (fn.ranges ?? []).map((range) => ({ ...range, startOffset: clamp(range.startOffset), endOffset: clamp(range.endOffset) }));
     const functionRoot = ranges[0];
     if (!functionRoot) continue;
     const functionId = `${fn.functionName || "<anonymous>"}:${functionRoot.startOffset}:${functionRoot.endOffset}`;
@@ -412,8 +417,13 @@ export function collectRelease250V8Coverage({ v8Dir, thresholds, root = process.
   for (const entry of fs.readdirSync(v8Dir).filter((name) => name.endsWith(".json")).sort()) {
     const payload = readJson(path.join(v8Dir, entry), "V8 coverage");
     for (const script of payload.result ?? []) {
-      if (typeof script.url !== "string" || !script.url.startsWith("file://")) continue;
-      const absolute = fileURLToPath(script.url);
+      // Most scripts arrive as file:// URLs; a TypeScript module that CommonJS
+      // require() loads is reported by its plain filesystem path instead.
+      if (typeof script.url !== "string") continue;
+      const absolute = script.url.startsWith("file://")
+        ? fileURLToPath(script.url)
+        : path.isAbsolute(script.url) ? script.url : "";
+      if (!absolute) continue;
       const repoPath = toRepoPath(absolute, absoluteRoot);
       if (!repoPath || !isBusinessFile(repoPath, thresholds) || !fs.existsSync(absolute)) continue;
       const accumulator = accumulators.get(repoPath) ?? createAccumulator(repoPath, fs.readFileSync(absolute, "utf8"));

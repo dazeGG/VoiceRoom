@@ -3,6 +3,7 @@ import crypto from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { EventEmitter } from "node:events";
 import fs from "node:fs";
+import http from "node:http";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
@@ -12,8 +13,8 @@ import { createRequire } from "node:module";
 import { checkRelease250Coverage as enforceRelease250Coverage, collectRelease250V8Coverage } from "../coverage/check-release-250-coverage.mjs";
 
 const require = createRequire(import.meta.url);
-const { createGateCredentialSigner } = require("../../apps/api/src/domains/admission/gate-credential-signer.js");
-const { createLiveKitAuthGateService, extractCredential } = require("../../apps/api/src/domains/admission/livekit-auth-gate-service.js");
+const { createGateCredentialSigner } = require("../../apps/api/src/domains/admission/gate-credential-signer.ts");
+const { createLiveKitAuthGateService, extractCredential } = require("../../apps/api/src/domains/admission/livekit-auth-gate-service.ts");
 const { createRoomStore } = require("../../apps/api/src/lib/room-store.js");
 const { createRoomRealtimeRuntime } = require("../../apps/api/src/realtime/room-runtime.js");
 const SECRET = "g08-test-livekit-gate-secret-at-least-32-bytes";
@@ -55,18 +56,21 @@ const ADMISSION_INTERNAL_COVERAGE_SCRIPT = String.raw`
   const path = require("node:path");
   const vm = require("node:vm");
   const { pathToFileURL } = require("node:url");
+  const { stripTypeScriptTypes } = require("node:module");
   function executeFunction(filePath, functionName, setup, proof) {
     const absolute = path.resolve(filePath);
-    const originalSource = fs.readFileSync(absolute, "utf8");
+    // Strip mode blanks the types in place, so offsets (and coverage) still map to the file.
+    const fileSource = fs.readFileSync(absolute, "utf8");
+    const originalSource = absolute.endsWith(".ts") ? stripTypeScriptTypes(fileSource, { mode: "strip" }) : fileSource;
     const start = originalSource.indexOf("function " + functionName + "(");
     const end = originalSource.indexOf("\n}\n", start) + 2;
     if (start < 0 || end < 2) throw new Error("Unable to extract " + functionName);
     const source = " ".repeat(start) + originalSource.slice(start, end) + "\n" + setup + "\n" + proof + "\n";
     vm.runInThisContext(source, { filename: pathToFileURL(absolute).href });
   }
-  executeFunction("apps/api/src/domains/admission/gate-credential-signer.js", "signPayload", "const crypto = require('node:crypto');", "signPayload('', '');");
-  executeFunction("apps/api/src/domains/admission/gate-credential-signer.js", "parseBase64urlJson", "", "try { parseBase64urlJson(''); } catch {}");
-  executeFunction("apps/api/src/domains/admission/livekit-auth-gate-service.js", "buildUpstreamUpgradeRequest", "const DEFAULT_GATE_PATH = '/api/livekit-gate';", "buildUpstreamUpgradeRequest({ request: { headers: {} }, strippedPath: '', upstream: new URL('ws://livekit.example') });");
+  executeFunction("apps/api/src/domains/admission/gate-credential-signer.ts", "signPayload", "const crypto = require('node:crypto');", "signPayload('', '');");
+  executeFunction("apps/api/src/domains/admission/gate-credential-signer.ts", "parseBase64urlJson", "", "try { parseBase64urlJson(''); } catch {}");
+  executeFunction("apps/api/src/domains/admission/livekit-auth-gate-service.ts", "buildUpstreamUpgradeRequest", "const DEFAULT_GATE_PATH = '/api/livekit-gate';", "buildUpstreamUpgradeRequest({ request: { headers: {} }, strippedPath: '', upstream: new URL('ws://livekit.example') });");
 `;
 const SERVER_INTERNAL_COVERAGE_SCRIPT = String.raw`
   (async () => {
@@ -351,6 +355,49 @@ test("G08-A06 collector unions complementary raw V8 ranges across shards", (t) =
   assert.deepEqual(summary.files["apps/api/src/decision.js"].branches, { total: 2, covered: 2, skipped: 0, pct: 100 });
   assert.equal(summary.meta.branchMetric, "node-v8-branch");
   assert.match(summary.meta.semantics, /not Istanbul AST branch coverage/);
+});
+
+test("G08-A06b collector merges a script reported by its filesystem path", (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "g08-v8-path-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const sourcePath = path.join(root, "apps/api/src/decision.ts");
+  const v8Dir = path.join(root, "v8");
+  fs.mkdirSync(path.dirname(sourcePath), { recursive: true });
+  fs.mkdirSync(v8Dir);
+  const source = "export function decision(value) { return value ? 'yes' : 'no'; }\n";
+  fs.writeFileSync(sourcePath, source);
+  const functions = (left, right) => [{
+    functionName: "decision",
+    ranges: [
+      { startOffset: 0, endOffset: source.length, count: 1 },
+      { startOffset: 34, endOffset: 48, count: left },
+      { startOffset: 51, endOffset: 57, count: right }
+    ]
+  }];
+  // A .ts module loaded through require() is reported by path, not file:// URL.
+  fs.writeFileSync(path.join(v8Dir, "one.json"), JSON.stringify({ result: [{ url: new URL(`file://${sourcePath}`).href, functions: functions(1, 0) }] }));
+  fs.writeFileSync(path.join(v8Dir, "two.json"), JSON.stringify({ result: [{ url: sourcePath, functions: functions(0, 1) }] }));
+  fs.writeFileSync(path.join(v8Dir, "three.json"), JSON.stringify({ result: [{ url: "node:internal/relative", functions: functions(0, 0) }] }));
+  // The type-stripped script ends in a sourceURL trailer whose length differs by
+  // loader; a module-level block one process skipped and another ran is covered.
+  const trailer = (url, blockCount) => [{
+    functionName: "",
+    ranges: [
+      { startOffset: 0, endOffset: source.length + 20 + url.length, count: 1 },
+      ...(blockCount === 0 ? [{ startOffset: 0, endOffset: 7, count: 0 }] : [])
+    ]
+  }];
+  fs.writeFileSync(path.join(v8Dir, "four.json"), JSON.stringify({ result: [{ url: sourcePath, functions: trailer(sourcePath, 0) }] }));
+  fs.writeFileSync(path.join(v8Dir, "five.json"), JSON.stringify({ result: [{ url: new URL(`file://${sourcePath}`).href, functions: trailer(`file://${sourcePath}`, 1) }] }));
+  const summary = collectRelease250V8Coverage({
+    v8Dir,
+    root,
+    thresholds: thresholdFixture({
+      baseline: { ...thresholds.baseline, total: { lines: 0, branches: 0 } },
+      businessPathPatterns: ["apps/api/src/"]
+    })
+  });
+  assert.deepEqual(summary.files["apps/api/src/decision.ts"].branches, { total: 3, covered: 3, skipped: 0, pct: 100 });
 });
 
 test("G08 web TypeScript producer measures actual auth and media decision files", async (t) => {
@@ -657,7 +704,13 @@ test("G08 admission signer exported decisions are fully exercised", () => {
   const expiredCredential = createGateCredentialSigner({ secret: SECRET, now: () => 1000 }).sign(valid);
   const expiredSigner = createGateCredentialSigner({ secret: SECRET, now: () => 2000 });
   assert.equal(expiredSigner.verify(expiredCredential).code, "expired");
-  const defaulted = createGateCredentialSigner({ secret: SECRET }).sign({ ...valid, credentialId: undefined, issuedAt: undefined, expiresAt: Date.now() + 10000 });
+  // A credential stamped past the allowed clock skew is refused; an unusable
+  // skew setting counts as none.
+  const futureCredential = createGateCredentialSigner({ secret: SECRET, now: () => 100_000 }).sign({ ...valid, issuedAt: 100_000, expiresAt: 200_000 });
+  assert.equal(createGateCredentialSigner({ secret: SECRET, now: () => 1000 }).verify(futureCredential).code, "issued_in_future");
+  assert.equal(createGateCredentialSigner({ secret: SECRET, now: () => 90_000, maxFutureSkewMs: "not a number" }).verify(futureCredential).code, "issued_in_future");
+  assert.equal(createGateCredentialSigner({ secret: SECRET, now: () => 90_000 }).verify(futureCredential).ok, true);
+  const defaulted =createGateCredentialSigner({ secret: SECRET }).sign({ ...valid, credentialId: undefined, issuedAt: undefined, expiresAt: Date.now() + 10000 });
   assert.equal(createGateCredentialSigner({ secret: SECRET }).verify(defaulted).ok, true);
 });
 
@@ -777,24 +830,41 @@ test("G08 admission gate service exported decisions and server paths are exercis
   assert.match(String(authErrorClient.writes[0]), /503 Service Unavailable/);
   assert.equal(errors.length, 2);
 
+  // The validate probe relays LiveKit's answer; one that names no content
+  // type still reaches the browser as plain text.
+  net.connect = originalConnect;
+  decision = "allowed";
+  const validateUpstream = http.createServer((request, reply) => { reply.writeHead(401); reply.end("no"); });
+  await new Promise((resolve) => validateUpstream.listen(0, "127.0.0.1", resolve));
+  t.after(() => validateUpstream.close());
+  const validateGate = createLiveKitAuthGateService({ roomStore: store, secret: SECRET, upstreamUrl: `ws://127.0.0.1:${validateUpstream.address().port}` });
+  const validateServer = validateGate.createServer();
+  await new Promise((resolve) => validateServer.listen(0, "127.0.0.1", resolve));
+  t.after(() => validateServer.close());
+  const probe = await fetch(`http://127.0.0.1:${validateServer.address().port}/rtc/validate?access_token=${accessToken}&vr_gate_credential=${credential}`);
+  assert.equal(probe.status, 401);
+  assert.equal(probe.headers.get("content-type"), "text/plain; charset=utf-8");
+  assert.equal(probe.headers.get("access-control-allow-origin"), "*");
+  assert.equal(await probe.text(), "no");
+
   const mainEnv = (extra) => ({
     ...process.env,
     LIVEKIT_GATE_SECRET: SECRET,
     ...extra,
     ...(process.env.G08_V8_DIR ? { NODE_V8_COVERAGE: path.resolve(process.env.G08_V8_DIR) } : {})
   });
-  const invalidSecretMain = spawnSync(process.execPath, [require.resolve("../../apps/api/src/domains/admission/livekit-auth-gate-service.js")], {
+  const invalidSecretMain = spawnSync(process.execPath, [require.resolve("../../apps/api/src/domains/admission/livekit-auth-gate-service.ts")], {
     encoding: "utf8",
     env: mainEnv({ LIVEKIT_GATE_SECRET: "short" })
   });
   assert.equal(invalidSecretMain.status, 1);
   assert.match(invalidSecretMain.stderr, /failed to start/i);
-  const defaultHostMain = spawnSync(process.execPath, [require.resolve("../../apps/api/src/domains/admission/livekit-auth-gate-service.js")], {
+  const defaultHostMain = spawnSync(process.execPath, [require.resolve("../../apps/api/src/domains/admission/livekit-auth-gate-service.ts")], {
     encoding: "utf8",
     env: mainEnv({ LIVEKIT_GATE_PORT: "-1", LIVEKIT_GATE_HOST: "" })
   });
   assert.equal(defaultHostMain.status, 1);
-  const defaultPortMain = spawnSync(process.execPath, [require.resolve("../../apps/api/src/domains/admission/livekit-auth-gate-service.js")], {
+  const defaultPortMain = spawnSync(process.execPath, [require.resolve("../../apps/api/src/domains/admission/livekit-auth-gate-service.ts")], {
     encoding: "utf8",
     env: mainEnv({ LIVEKIT_GATE_PORT: "", LIVEKIT_GATE_HOST: "256.256.256.256" })
   });
