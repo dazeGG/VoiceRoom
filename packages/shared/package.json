@@ -18,28 +18,16 @@
     "./moderation": "./src/moderation.mts",
     "./realtime": "./src/realtime.mts",
     "./avatar-accent": "./src/avatar-accent.mts",
-    "./emoji": {
-      "types": "./src/emoji.d.ts",
-      "import": "./src/emoji.mjs",
-      "require": "./src/emoji.js"
-    },
+    "./emoji": "./src/emoji.mts",
     "./runtime-config": "./src/runtime-config.mts",
     "./platform-class": "./src/platform-class.mts",
     "./visual-identity": "./src/visual-identity.mts",
-    "./emoji-groups": {
-      "types": "./src/emoji-groups.d.ts",
-      "import": "./src/emoji-groups.mjs",
-      "require": "./src/emoji-groups.js"
-    },
-    "./emoji-skin-tones": {
-      "types": "./src/emoji-skin-tones.d.ts",
-      "import": "./src/emoji-skin-tones.mjs",
-      "require": "./src/emoji-skin-tones.js"
-    },
+    "./emoji-groups": "./src/emoji-groups.mts",
+    "./emoji-skin-tones": "./src/emoji-skin-tones.mts",
     "./account-security": "./src/account-security.mts"
   },
   "scripts": {
-    "check": "node --check src/emoji.js && node --check src/emoji.mjs && node --check src/emoji-groups.js && node --check src/emoji-groups.mjs && node --check src/emoji-skin-tones.js && node --check src/emoji-skin-tones.mjs && tsc -p tsconfig.json",
+    "check": "tsc -p tsconfig.json",
     "test": "node --test test/*.test.js"
   }
 }

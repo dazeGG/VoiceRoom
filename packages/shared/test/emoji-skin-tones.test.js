@@ -3,8 +3,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { listReactionEmojis } = require('../src/emoji');
-const cjs = require('../src/emoji-skin-tones');
+const { listReactionEmojis } = require('../src/emoji.mts');
+const cjs = require('../src/emoji-skin-tones.mts');
 
 const WAVE = '\u{1F44B}';
 const WAVE_MEDIUM = '\u{1F44B}\u{1F3FD}';
@@ -83,7 +83,7 @@ test('mixed-tone multi-person sequences are hidden rather than shown as extra co
 });
 
 test('the ESM view matches the CommonJS one', async () => {
-  const esm = await import('../src/emoji-skin-tones.mjs');
+  const esm = await import('../src/emoji-skin-tones.mts');
 
   assert.deepEqual(esm.SKIN_TONES, cjs.SKIN_TONES);
   assert.deepEqual(esm.listCollapsedReactionEmojis(), cjs.listCollapsedReactionEmojis());
