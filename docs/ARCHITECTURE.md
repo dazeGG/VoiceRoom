@@ -135,6 +135,7 @@ Done so far:
 - PR 9e: emoji, emoji-groups and emoji-skin-tones become single `.mts` sources (the corpus keeps its G07 hash; coverage ignores `emoji.mts`), so every shared module is now one TypeScript file and `check` is `tsc` alone.
 - PR 9f: `packages/shared` switches to `"type": "module"`; its modules are renamed `.mts` → `.ts` and its tests are ES modules. A structure test keeps `src/` to one `.ts` file per export.
 - PR 10a: the last six JavaScript modules in `apps/web/src` (realtime heartbeat, realtime and screen recovery, LiveKit reconcile generation, audio output transition, hotkey bindings) become typed `.ts`.
+- PR 10b: the rest of `domains/messaging` (history, reads, replies, pins, reactions, idempotency ledger, delivery outbox, realtime adapters) becomes `.ts`. `config/import-boundaries.v1.json` names the `.ts` owners, and its no-deep-shared-imports rule now covers TypeScript sources too; before, it only matched `apps/api/src/**/*.js`.
 - Typed before PR 0: `domains/admission/livekit-token-binding.mts`, `lib/image-signature.mts`, `platform/http/origin-guard.mts`.
 
 ## 5. Runtime state and scaling
