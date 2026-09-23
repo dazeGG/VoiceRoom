@@ -1,35 +1,98 @@
-const ACCOUNT_SECURITY_CONTRACT_VERSION = 1;
-const RECOVERY_CODE_COUNT = 10;
-const RECOVERY_CODE_LENGTH = 16;
-const RECOVERY_CODE_GROUP_LENGTH = 4;
+// Account security: recovery codes, sign-in alerts, session descriptions,
+// the "what's new" announcement, and account deletion.
+
+export interface UserAgentDescription {
+  client: string;
+  os: string;
+}
+
+export interface AccountSession {
+  id: string;
+  current: boolean;
+  client: string;
+  os: string;
+  location: string;
+  lastSeenAt: number;
+}
+
+export interface RecoveryCodesStatus {
+  remaining: number;
+  generatedAt: number | null;
+}
+
+export interface RecoveryCodesReminder {
+  snoozedUntil: number | null;
+}
+
+export interface WhatsNewState {
+  current: string;
+  lastSeen: string | null;
+}
+
+export type LoginAlertKind = 'login' | 'recovery';
+
+export interface LoginAlert {
+  id: string;
+  kind: LoginAlertKind;
+  client: string;
+  os: string;
+  location: string;
+  createdAt: number;
+}
+
+/** Facts about the signed-in account that only the account itself receives. */
+export interface SelfUserFlags {
+  /** The account has signed in from the desktop app at least once. */
+  hasUsedDesktopApp: boolean;
+  /** The one-time post-registration app prompt was already shown or dismissed. */
+  appPromptSeen: boolean;
+}
+
+export interface AccountDeletionRoom {
+  roomId: string;
+  name: string;
+  heir: { displayName: string; login: string } | null;
+}
+
+export interface AccountDeletionPreview {
+  graceDays: number;
+  rooms: AccountDeletionRoom[];
+}
+
+type Loose = Record<string, unknown>;
+
+export const ACCOUNT_SECURITY_CONTRACT_VERSION = 1 as const;
+export const RECOVERY_CODE_COUNT = 10 as const;
+export const RECOVERY_CODE_LENGTH = 16 as const;
+export const RECOVERY_CODE_GROUP_LENGTH = 4 as const;
 // Crockford base32 has no I, L, O or U, so a code copied from paper survives the
 // usual look-alike mistakes; 16 symbols carry 80 bits.
-const RECOVERY_CODE_ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+export const RECOVERY_CODE_ALPHABET: string = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
 const RECOVERY_CODE_PATTERN = /^[0-9A-HJKMNP-TV-Z]{16}$/;
 // The release whose "what's new" announcement the web client shows. Accounts
 // remember the last announcement they saw and new accounts start at this one,
 // so only people who used an earlier release are shown it.
-const WHATS_NEW_VERSION = '2.6.0';
-const RECOVERY_CODES_REMINDER_SNOOZE_MS = 3 * 24 * 60 * 60 * 1000;
+export const WHATS_NEW_VERSION: string = '2.6.0';
+export const RECOVERY_CODES_REMINDER_SNOOZE_MS: number = 3 * 24 * 60 * 60 * 1000;
 // A sign-in from a device and city the account has not used within this window
 // asks the account whether it was them; an unanswered question expires after
 // the alert TTL.
-const LOGIN_FAMILIARITY_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
-const LOGIN_ALERT_TTL_MS = 14 * 24 * 60 * 60 * 1000;
-const LOGIN_ALERT_KINDS = Object.freeze(['login', 'recovery']);
+export const LOGIN_FAMILIARITY_WINDOW_MS: number = 30 * 24 * 60 * 60 * 1000;
+export const LOGIN_ALERT_TTL_MS: number = 14 * 24 * 60 * 60 * 1000;
+const LOGIN_ALERT_KINDS: readonly LoginAlertKind[] = Object.freeze(['login', 'recovery']);
 // An account asked to be deleted stays restorable this long; then its personal
 // data goes away and what others still see of it reads as a deleted account.
-const ACCOUNT_DELETION_GRACE_MS = 7 * 24 * 60 * 60 * 1000;
-const DELETED_ACCOUNT_NAME = 'Удалённый аккаунт';
+export const ACCOUNT_DELETION_GRACE_MS: number = 7 * 24 * 60 * 60 * 1000;
+export const DELETED_ACCOUNT_NAME: string = 'Удалённый аккаунт';
 // Finished deletions free their row's login under this prefix, so no new
 // account may take it.
-const DELETED_LOGIN_PREFIX = 'deleted-';
+export const DELETED_LOGIN_PREFIX: string = 'deleted-';
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const RELEASE_VERSION_PATTERN = /^(0|[1-9]\d{0,3})\.(0|[1-9]\d{0,3})\.(0|[1-9]\d{0,3})$/;
 
 // Order matters: Chromium-based browsers also carry "Chrome/" and "Safari/",
 // and the desktop shell is Electron, which carries both as well.
-const CLIENT_RULES = Object.freeze([
+const CLIENT_RULES: readonly (readonly [RegExp, string])[] = Object.freeze([
   [/VoiceRoom|Electron\//i, 'VoiceRoom Desktop'],
   [/YaBrowser\//, 'Яндекс Браузер'],
   [/Edg(?:A|iOS)?\//, 'Edge'],
@@ -40,7 +103,7 @@ const CLIENT_RULES = Object.freeze([
 ]);
 
 // Android user agents also say "Linux", and iPadOS can say "Macintosh".
-const OS_RULES = Object.freeze([
+const OS_RULES: readonly (readonly [RegExp, string])[] = Object.freeze([
   [/Windows/i, 'Windows'],
   [/Android/i, 'Android'],
   [/iPhone|iPad|iPod/i, 'iOS'],
@@ -49,7 +112,7 @@ const OS_RULES = Object.freeze([
   [/Linux|X11/i, 'Linux']
 ]);
 
-function normalizeRecoveryCode(value) {
+export function normalizeRecoveryCode(value: unknown): string {
   if (typeof value !== 'string' || value.length > 64) return '';
   const code = value
     .toUpperCase()
@@ -59,55 +122,60 @@ function normalizeRecoveryCode(value) {
   return RECOVERY_CODE_PATTERN.test(code) ? code : '';
 }
 
-function formatRecoveryCode(value) {
+export function formatRecoveryCode(value: unknown): string {
   const code = normalizeRecoveryCode(value);
   if (!code) return '';
-  const groups = [];
+  const groups: string[] = [];
   for (let index = 0; index < code.length; index += RECOVERY_CODE_GROUP_LENGTH) {
     groups.push(code.slice(index, index + RECOVERY_CODE_GROUP_LENGTH));
   }
   return groups.join('-');
 }
 
-function normalizeReleaseVersion(value) {
+export function normalizeReleaseVersion(value: unknown): string {
   const version = typeof value === 'string' ? value.trim() : '';
   return RELEASE_VERSION_PATTERN.test(version) ? version : '';
 }
 
 // -1, 0 or 1 like a sort comparator; null when either side is not a version.
-function compareReleaseVersions(left, right) {
+export function compareReleaseVersions(left: unknown, right: unknown): -1 | 0 | 1 | null {
   const a = normalizeReleaseVersion(left);
   const b = normalizeReleaseVersion(right);
   if (!a || !b) return null;
   const leftParts = a.split('.').map(Number);
   const rightParts = b.split('.').map(Number);
   for (let index = 0; index < 3; index += 1) {
-    if (leftParts[index] !== rightParts[index]) return leftParts[index] < rightParts[index] ? -1 : 1;
+    if (leftParts[index] !== rightParts[index]) return leftParts[index]! < rightParts[index]! ? -1 : 1;
   }
   return 0;
 }
 
 // An account that never recorded an announcement predates them all.
-function hasUnseenWhatsNew(lastSeen, current = WHATS_NEW_VERSION) {
+export function hasUnseenWhatsNew(lastSeen: unknown, current: string = WHATS_NEW_VERSION): boolean {
   if (!normalizeReleaseVersion(current)) return false;
   const order = compareReleaseVersions(lastSeen, current);
   return order === null || order < 0;
 }
 
-function isRecoveryCodesReminderDue(status, reminder, now = Date.now()) {
+export function isRecoveryCodesReminderDue(
+  status: Pick<RecoveryCodesStatus, 'remaining'> | null | undefined,
+  reminder: RecoveryCodesReminder | null | undefined,
+  now: number = Date.now()
+): boolean {
   if (!status || Number(status.remaining) !== 0) return false;
   const snoozedUntil = Number(reminder?.snoozedUntil);
   return !(Number.isFinite(snoozedUntil) && snoozedUntil > now);
 }
 
-function isDeletedAccountLogin(value) {
+export function isDeletedAccountLogin(value: unknown): boolean {
   return typeof value === 'string' && value.trim().toLowerCase().startsWith(DELETED_LOGIN_PREFIX);
 }
 
-function normalizeLoginAlert(value) {
-  if (!value || typeof value !== 'object') return null;
+export function normalizeLoginAlert(input: unknown): LoginAlert | null {
+  if (!input || typeof input !== 'object') return null;
+  const value = input as Loose;
   const id = typeof value.id === 'string' && UUID_PATTERN.test(value.id) ? value.id.toLowerCase() : '';
-  const kind = LOGIN_ALERT_KINDS.includes(value.kind) ? value.kind : '';
+  const kind = (LOGIN_ALERT_KINDS as readonly unknown[]).includes(value.kind) ? value.kind as LoginAlertKind : '';
   const createdAt = Number(value.createdAt);
   if (!id || !kind || !Number.isSafeInteger(createdAt) || createdAt < 0) return null;
   return {
@@ -120,37 +188,38 @@ function normalizeLoginAlert(value) {
   };
 }
 
-function describeUserAgent(value) {
+export function describeUserAgent(value: unknown): UserAgentDescription {
   const userAgent = typeof value === 'string' ? value.slice(0, 512) : '';
-  const match = (rules) => rules.find(([pattern]) => pattern.test(userAgent))?.[1] || '';
+  const match = (rules: readonly (readonly [RegExp, string])[]): string => rules.find(([pattern]) => pattern.test(userAgent))?.[1] || '';
   return { client: match(CLIENT_RULES), os: match(OS_RULES) };
 }
 
 // The desktop app is the Electron shell, whose user agent carries "VoiceRoom" or
 // "Electron/". Session descriptions and the per-account app marker both use
 // this rule, so they can never disagree about who has used the app.
-function isDesktopAppUserAgent(value) {
+export function isDesktopAppUserAgent(value: unknown): boolean {
   const userAgent = typeof value === 'string' ? value.slice(0, 512) : '';
-  return CLIENT_RULES[0][0].test(userAgent);
+  return CLIENT_RULES[0]![0].test(userAgent);
 }
 
 // Facts about the signed-in account that only the account itself receives.
 // An older API sends neither flag: the app banner may then show, but the
 // one-time post-registration prompt never does.
-function normalizeSelfUserFlags(value) {
-  const source = value && typeof value === 'object' ? value : {};
+export function normalizeSelfUserFlags(value: unknown): SelfUserFlags {
+  const source = (value && typeof value === 'object' ? value : {}) as Loose;
   return {
     hasUsedDesktopApp: source.hasUsedDesktopApp === true,
     appPromptSeen: source.appPromptSeen !== false
   };
 }
 
-function boundedText(value, max) {
+function boundedText(value: unknown, max: number): string {
   return typeof value === 'string' ? value.trim().slice(0, max) : '';
 }
 
-function normalizeAccountSession(value) {
-  if (!value || typeof value !== 'object') return null;
+export function normalizeAccountSession(input: unknown): AccountSession | null {
+  if (!input || typeof input !== 'object') return null;
+  const value = input as Loose;
   const id = typeof value.id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value.id)
     ? value.id.toLowerCase()
     : '';
@@ -165,30 +234,3 @@ function normalizeAccountSession(value) {
     lastSeenAt
   };
 }
-
-export {
-  ACCOUNT_DELETION_GRACE_MS,
-  ACCOUNT_SECURITY_CONTRACT_VERSION,
-  DELETED_ACCOUNT_NAME,
-  DELETED_LOGIN_PREFIX,
-  LOGIN_ALERT_TTL_MS,
-  LOGIN_FAMILIARITY_WINDOW_MS,
-  RECOVERY_CODES_REMINDER_SNOOZE_MS,
-  RECOVERY_CODE_ALPHABET,
-  RECOVERY_CODE_COUNT,
-  RECOVERY_CODE_GROUP_LENGTH,
-  RECOVERY_CODE_LENGTH,
-  WHATS_NEW_VERSION,
-  compareReleaseVersions,
-  describeUserAgent,
-  formatRecoveryCode,
-  hasUnseenWhatsNew,
-  isDeletedAccountLogin,
-  isDesktopAppUserAgent,
-  isRecoveryCodesReminderDue,
-  normalizeAccountSession,
-  normalizeLoginAlert,
-  normalizeRecoveryCode,
-  normalizeReleaseVersion,
-  normalizeSelfUserFlags
-};

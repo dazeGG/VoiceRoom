@@ -130,6 +130,7 @@ Done so far:
 - PR 9a: `packages/shared` gets a strict `tsconfig.json` (no Node types, `tsc` in `check`) and its first single-source module, `runtime-config.mts`, exported directly; its `.js`/`.mjs`/`.d.ts` twins are gone. Modules stay `.mts` until the last one moves, then the package switches to `"type": "module"` and they become `.ts`.
 - PR 9b: platform-class, mentions, reactions, link-preview, avatar-accent, attachments and visual-identity become single `.mts` sources (visual-identity still reads its JSON).
 - PR 9c: validation, realtime, messaging-history, messaging-send and room-message-content become single `.mts` sources; validation and visual-identity share the `AvatarColorKey` type through a type-only import.
+- PR 9d: membership, notifications, moderation, capabilities and account-security become single `.mts` sources; only the emoji modules still keep CommonJS, ESM and declaration twins.
 - Typed before PR 0: `domains/admission/livekit-token-binding.mts`, `lib/image-signature.mts`, `platform/http/origin-guard.mts`.
 
 ## 5. Runtime state and scaling

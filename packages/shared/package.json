@@ -5,33 +5,17 @@
   "type": "commonjs",
   "exports": {
     "./validation": "./src/validation.mts",
-    "./capabilities": {
-      "types": "./src/capabilities.d.ts",
-      "import": "./src/capabilities.mjs",
-      "require": "./src/capabilities.js"
-    },
+    "./capabilities": "./src/capabilities.mts",
     "./messaging-history": "./src/messaging-history.mts",
     "./messaging-send": "./src/messaging-send.mts",
-    "./membership": {
-      "types": "./src/membership.d.ts",
-      "import": "./src/membership.mjs",
-      "require": "./src/membership.js"
-    },
+    "./membership": "./src/membership.mts",
     "./link-preview": "./src/link-preview.mts",
     "./room-message-content": "./src/room-message-content.mts",
     "./reactions": "./src/reactions.mts",
     "./attachments": "./src/attachments.mts",
     "./mentions": "./src/mentions.mts",
-    "./notifications": {
-      "types": "./src/notifications.d.ts",
-      "import": "./src/notifications.mjs",
-      "require": "./src/notifications.js"
-    },
-    "./moderation": {
-      "types": "./src/moderation.d.ts",
-      "import": "./src/moderation.mjs",
-      "require": "./src/moderation.js"
-    },
+    "./notifications": "./src/notifications.mts",
+    "./moderation": "./src/moderation.mts",
     "./realtime": "./src/realtime.mts",
     "./avatar-accent": "./src/avatar-accent.mts",
     "./emoji": {
@@ -52,14 +36,10 @@
       "import": "./src/emoji-skin-tones.mjs",
       "require": "./src/emoji-skin-tones.js"
     },
-    "./account-security": {
-      "types": "./src/account-security.d.ts",
-      "import": "./src/account-security.mjs",
-      "require": "./src/account-security.js"
-    }
+    "./account-security": "./src/account-security.mts"
   },
   "scripts": {
-    "check": "node --check src/emoji.js && node --check src/emoji.mjs && node --check src/emoji-groups.js && node --check src/emoji-groups.mjs && node --check src/emoji-skin-tones.js && node --check src/emoji-skin-tones.mjs && node --check src/capabilities.js && node --check src/capabilities.mjs && node --check src/membership.js && node --check src/membership.mjs && node --check src/notifications.js && node --check src/notifications.mjs && node --check src/moderation.js && node --check src/moderation.mjs && node --check src/account-security.js && node --check src/account-security.mjs && tsc -p tsconfig.json",
+    "check": "node --check src/emoji.js && node --check src/emoji.mjs && node --check src/emoji-groups.js && node --check src/emoji-groups.mjs && node --check src/emoji-skin-tones.js && node --check src/emoji-skin-tones.mjs && tsc -p tsconfig.json",
     "test": "node --test test/*.test.js"
   }
 }

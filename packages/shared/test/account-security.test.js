@@ -5,9 +5,9 @@ const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const test = require('node:test');
 
-const cjs = require('../src/account-security.js');
+const cjs = require('../src/account-security.mts');
 
-const loadEsm = () => import(pathToFileURL(path.join(__dirname, '../src/account-security.mjs')).href);
+const loadEsm = () => import(pathToFileURL(path.join(__dirname, '../src/account-security.mts')).href);
 
 const USER_AGENTS = Object.freeze([
   {

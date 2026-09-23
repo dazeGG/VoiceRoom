@@ -2,12 +2,12 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const cjs = require('../src/moderation.js');
+const cjs = require('../src/moderation.mts');
 
 const base = { id: 'ban-1', roomId: 'room-1', createdAt: 1, updatedAt: 1, expiresAt: null, reason: '' };
 
 async function contracts() {
-  return [cjs, await import('../src/moderation.mjs')];
+  return [cjs, await import('../src/moderation.mts')];
 }
 
 test('G88-C01 account bans keep a sanitized profile of the banned user', async () => {

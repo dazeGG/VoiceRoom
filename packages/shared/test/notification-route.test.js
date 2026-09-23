@@ -3,7 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const cjs = require('../src/notifications');
+const cjs = require('../src/notifications.mts');
 
 const ITEM = {
   id: 'n1',
@@ -41,7 +41,7 @@ test('route values are encoded, so an id cannot inject another parameter', () =>
 });
 
 test('push payloads carry the same route the in-app panel uses', async () => {
-  const esm = await import('../src/notifications.mjs');
+  const esm = await import('../src/notifications.mts');
   const payload = cjs.buildProviderPayload(ITEM);
 
   assert.equal(payload.route, cjs.notificationRoute(ITEM));

@@ -1,7 +1,69 @@
-const CAPABILITY_CONTRACT = 'voice-room.capabilities/v1';
-const CAPABILITY_SCHEMA_VERSION = 1;
+// The capability manifest: which public features, internal prerequisites and
+// operator flags exist, how they depend on each other, and the check that
+// rejects a manifest with an unknown, missing, duplicate or cyclic node.
 
-const PUBLIC_CAPABILITY_KEYS = [
+export interface CapabilityRequires {
+  binary: string[];
+  schema: string[];
+  index: string[];
+  config: string[];
+  api: string[];
+  web: string[];
+  visibility: string[];
+  worker: string[];
+  internal: string[];
+}
+
+export interface CapabilityPublicNode {
+  key: string;
+  owner: string;
+  dependsOn: string[];
+  requires: CapabilityRequires;
+  safeRead: string;
+  activation: { goal: string; checkpoint: string } | null;
+  rollback: { public: boolean; operators: string[] } | null;
+  order: number;
+}
+
+export interface CapabilityInternalNode {
+  key: string;
+  owner: string;
+  readyWhen: string[];
+  requiredBy: string[];
+  rollback: boolean;
+}
+
+export interface CapabilityOperatorNode {
+  key: string;
+  owner: string;
+  default: boolean | string;
+  requiredBy: string[];
+  stop: string;
+  introducedBy: string;
+  enum: string[];
+}
+
+export interface CapabilityReplicaConsensus {
+  algorithm: string;
+  disagreement: string;
+  unknown: string;
+}
+
+export interface CapabilityManifest {
+  contractVersion: 'voice-room.capabilities/v1';
+  schemaVersion: 1;
+  publicKeys: CapabilityPublicNode[];
+  internalPrerequisites: CapabilityInternalNode[];
+  operatorFlags: CapabilityOperatorNode[];
+  replicaConsensus: CapabilityReplicaConsensus | null;
+}
+
+type Loose = Record<string, unknown>;
+
+export const CAPABILITY_CONTRACT = 'voice-room.capabilities/v1' as const;
+export const CAPABILITY_SCHEMA_VERSION = 1 as const;
+
+export const PUBLIC_CAPABILITY_KEYS: readonly string[] = [
   'historyCursor',
   'readCursor',
   'replies',
@@ -13,7 +75,7 @@ const PUBLIC_CAPABILITY_KEYS = [
   'moderationCenter'
 ];
 
-const INTERNAL_NODE_KEYS = [
+export const INTERNAL_NODE_KEYS: readonly string[] = [
   'internal.desktopBoundary',
   'internal.idempotentSend',
   'internal.messageDelivery',
@@ -26,7 +88,7 @@ const INTERNAL_NODE_KEYS = [
   'internal.strictCredential'
 ];
 
-const OPERATOR_KEYS = [
+export const OPERATOR_KEYS: readonly string[] = [
   'op.message.write',
   'op.message.dispatch.claim',
   'op.readCursor.write',
@@ -44,22 +106,22 @@ const OPERATOR_KEYS = [
   'op.compat.profile'
 ];
 
-function toSet(values = []) {
+export function toSet(values: unknown = []): Set<string> {
   return new Set(Array.isArray(values) ? values.filter(Boolean) : []);
 }
 
-function isObject(value) {
+function isObject(value: unknown): value is Loose {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
-function toStringArray(values = [], fallback = []) {
+function toStringArray(values: unknown = [], fallback: string[] = []): string[] {
   if (!Array.isArray(values)) return fallback;
-  return values.filter((value) => typeof value === 'string' && value.trim());
+  return values.filter((value): value is string => typeof value === 'string' && Boolean(value.trim()));
 }
 
-function normalizePublicNode(node, index) {
+function normalizePublicNode(node: unknown, index: number): CapabilityPublicNode | null {
   if (!isObject(node)) return null;
-  const requires = isObject(node.requires) ? node.requires : {};
+  const requires: Loose = isObject(node.requires) ? node.requires : {};
 
   return {
     key: String(node.key || '').trim(),
@@ -86,11 +148,11 @@ function normalizePublicNode(node, index) {
           operators: toStringArray(node.rollback.operators, [])
         }
       : null,
-    order: Number.isFinite(node.order) ? node.order : index
+    order: Number.isFinite(node.order) ? node.order as number : index
   };
 }
 
-function normalizeInternalNode(node) {
+function normalizeInternalNode(node: unknown): CapabilityInternalNode | null {
   if (!isObject(node)) return null;
   return {
     key: String(node.key || '').trim(),
@@ -101,20 +163,20 @@ function normalizeInternalNode(node) {
   };
 }
 
-function normalizeOperatorNode(node) {
+function normalizeOperatorNode(node: unknown): CapabilityOperatorNode | null {
   if (!isObject(node)) return null;
   return {
     key: String(node.key || '').trim(),
     owner: String(node.owner || '').trim() || 'platform.capabilities',
-    default: node.default ?? false,
+    default: (node.default ?? false) as boolean | string,
     requiredBy: toStringArray(node.requiredBy, []),
     stop: String(node.stop || ''),
     introducedBy: String(node.introducedBy || ''),
-    enum: Array.isArray(node.enum) ? node.enum.filter((value) => typeof value === 'string') : []
+    enum: Array.isArray(node.enum) ? node.enum.filter((value): value is string => typeof value === 'string') : []
   };
 }
 
-function normalizeManifest(candidate) {
+export function normalizeManifest(candidate: unknown): CapabilityManifest | null {
   if (!isObject(candidate)) return null;
   const contract = candidate.contractVersion || candidate.contract;
   if (contract !== CAPABILITY_CONTRACT) return null;
@@ -151,9 +213,9 @@ function normalizeManifest(candidate) {
     return null;
   }
 
-  const byKey = new Map();
-  const byKeyInternal = new Map();
-  const byOperator = new Map();
+  const byKey = new Map<string, CapabilityPublicNode>();
+  const byKeyInternal = new Map<string, CapabilityInternalNode>();
+  const byOperator = new Map<string, CapabilityOperatorNode>();
 
   for (const item of publicKeys) {
     if (!item?.key) return null;
@@ -161,12 +223,14 @@ function normalizeManifest(candidate) {
     byKey.set(item.key, item);
   }
 
+  // A null node reaches these two loops before the key checks and throws, as
+  // it always has; the manifest is rejected either way.
   for (const item of internalPrerequisites) {
-    if (item.requiredBy.some((key) => !byKey.has(key))) return null;
+    if ((item as CapabilityInternalNode).requiredBy.some((key) => !byKey.has(key))) return null;
   }
 
   for (const item of operatorFlags) {
-    if (item.requiredBy.some((key) => !byKey.has(key))) return null;
+    if ((item as CapabilityOperatorNode).requiredBy.some((key) => !byKey.has(key))) return null;
   }
 
   for (const item of internalPrerequisites) {
@@ -181,19 +245,19 @@ function normalizeManifest(candidate) {
     byOperator.set(item.key, item);
   }
 
-  for (const item of publicKeys) {
+  for (const item of publicKeys as CapabilityPublicNode[]) {
     if (item.dependsOn.some((key) => !byKey.has(key))) return null;
     if (item.requires.internal.some((key) => !byKeyInternal.has(key))) return null;
     if (item.rollback?.operators.some((key) => !byOperator.has(key))) return null;
   }
 
-  const visited = new Set();
-  const visiting = new Set();
-  const visit = (key) => {
+  const visited = new Set<string>();
+  const visiting = new Set<string>();
+  const visit = (key: string): boolean => {
     if (visited.has(key)) return true;
     if (visiting.has(key)) return false;
     visiting.add(key);
-    for (const dependency of byKey.get(key).dependsOn) {
+    for (const dependency of byKey.get(key)!.dependsOn) {
       if (!visit(dependency)) return false;
     }
     visiting.delete(key);
@@ -218,32 +282,18 @@ function normalizeManifest(candidate) {
   };
 }
 
-function isManifestValid(manifest) {
+export function isManifestValid(manifest: unknown): boolean {
   return normalizeManifest(manifest) !== null;
 }
 
-function toPublicKeySet() {
+export function toPublicKeySet(): Set<string> {
   return new Set(PUBLIC_CAPABILITY_KEYS);
 }
 
-function toInternalKeySet() {
+export function toInternalKeySet(): Set<string> {
   return new Set(INTERNAL_NODE_KEYS);
 }
 
-function toOperatorKeySet() {
+export function toOperatorKeySet(): Set<string> {
   return new Set(OPERATOR_KEYS);
 }
-
-export {
-  CAPABILITY_CONTRACT,
-  CAPABILITY_SCHEMA_VERSION,
-  PUBLIC_CAPABILITY_KEYS,
-  INTERNAL_NODE_KEYS,
-  OPERATOR_KEYS,
-  normalizeManifest,
-  isManifestValid,
-  toSet,
-  toPublicKeySet,
-  toInternalKeySet,
-  toOperatorKeySet
-};
