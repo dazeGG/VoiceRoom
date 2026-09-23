@@ -25,7 +25,6 @@ import {
   cleanScreenProfileId,
   cleanLiveKitUrl,
   cleanPresenceStatus,
-  normalizeLogin,
   accountPeerIdFor,
   isReservedPeerId
 } from '@voice-room/shared/validation';
@@ -90,6 +89,9 @@ import { createRoomChatService } from './domains/messaging/room-chat.service.ts'
 import { registerAccountRoutes } from './domains/account/account.routes.ts';
 import { createAccountService } from './domains/account/account.service.ts';
 import { createSessionCookies } from './domains/account/session-cookie.ts';
+import { registerFriendsRoutes } from './domains/social/friends.routes.ts';
+import { createFriendsService } from './domains/social/friends.service.ts';
+import { isActiveAccount, notificationActor } from './domains/social/social-views.ts';
 import { createAdmissionService } from './domains/admission/admission.service.ts';
 import { createLiveKitAdmin } from './domains/admission/livekit-admin.ts';
 import { readLiveKitConfig } from './domains/admission/livekit-config.ts';
@@ -934,19 +936,6 @@ function broadcastToUser(userId, message) {
   return wsRegistry.broadcastAccountEvent(userId, message);
 }
 
-function notificationActor(user) {
-  const actor = publicUser(user);
-  if (!actor) return null;
-  return {
-    id: actor.id,
-    displayName: actor.displayName,
-    login: actor.login,
-    avatarAccent: actor.avatarAccent,
-    avatarColorKey: actor.avatarColorKey,
-    avatarUrl: actor.avatarUrl
-  };
-}
-
 async function queuePush(userId, payload, context = {}) {
   try {
     if (!getPushService().config.enabled) return;
@@ -964,18 +953,6 @@ async function queuePush(userId, payload, context = {}) {
   } catch (error) {
     getProcessLogger().warn({ evt: LOG_EVENTS.PUSH_SEND_FAILED, userId, err: error }, 'failed to send a push notification');
   }
-}
-
-function sendFriendPush(userId, type, actor, dedupeKey) {
-  void queuePush(userId, {
-      type,
-      title: type === 'friend.accepted' ? 'Заявка принята' : 'Новая заявка в друзья',
-      body: actor.displayName || actor.login || 'VoiceRoom',
-      privateBody: 'Откройте VoiceRoom, чтобы посмотреть событие.',
-      tag: type,
-      dedupeKey,
-      url: '/'
-    });
 }
 
 async function broadcastDmNotification(recipientUserId, sender, message) {
@@ -1155,6 +1132,17 @@ const accountService = createAccountService({
   refreshActiveProfile: (user) => refreshActiveUserProfile(user),
   broadcastProfileToFriends: (user, log) => broadcastUserProfileToFriends(user, { log }),
   logger: () => getProcessLogger()
+});
+const friendsService = createFriendsService({
+  friends: getFriendStore,
+  findUser: (userId) => getUserStore().getUserById(userId),
+  findRoom: (roomId) => getRoomStore().getRoom(roomId),
+  sendDirectMessage: (input) => getMessageService().direct.sendMessage(input),
+  isOnline: (userId) => isUserOnline(userId),
+  notifyUser: (userId, event) => broadcastToUser(userId, event),
+  queuePush: (userId, payload, context) => queuePush(userId, payload, context),
+  ringLimiter,
+  ringTtlMs: RING_TTL_MS
 });
 
 function liveKitGatePrincipalForPeer(roomId, peer) {
@@ -1859,12 +1847,6 @@ async function handleGetLinkPreviewImage(res, key) {
   stream.pipe(res);
 }
 
-// Accounts waiting to be deleted, and deleted ones, can no longer be written to
-// or invited anywhere.
-function isActiveAccount(user) {
-  return Boolean(user && !user.deletionRequestedAt && !user.deletedAt);
-}
-
 // Finishes deletions whose grace period is over: rooms go to their heirs, rooms
 // nobody inherits are torn down like an owner's delete, and the avatar file goes.
 async function finalizeDueAccountDeletions(now = Date.now()) {
@@ -1943,263 +1925,6 @@ async function requireSessionUser(req, res) {
     return null;
   }
   return session.user;
-}
-
-function publicFriendEntry(entry) {
-  return {
-    user: entry.user,
-    friendsSince: entry.friendsSince ?? null,
-    online: isUserOnline(entry.user.id),
-    unreadCount: entry.unreadCount,
-    lastMessage: entry.lastMessage
-  };
-}
-
-async function handleFriendsList(req, res) {
-  const user = await requireSessionUser(req, res);
-  if (!user) return;
-
-  const [friends, requestCount] = await Promise.all([
-    getFriendStore().listFriends(user.id),
-    getFriendStore().countIncomingRequests(user.id)
-  ]);
-  sendJson(res, 200, {
-    ok: true,
-    friends: friends.map(publicFriendEntry),
-    incomingRequestCount: requestCount
-  });
-}
-
-async function handleFriendsSearch(req, res, url) {
-  const user = await requireSessionUser(req, res);
-  if (!user) return;
-
-  const query = url.searchParams.get('q') || '';
-  const [results, friendIds, requests] = await Promise.all([
-    getFriendStore().searchUsers({ query, excludeUserId: user.id }),
-    getFriendStore().getFriendIds(user.id),
-    getFriendStore().listRequests(user.id)
-  ]);
-
-  const friendSet = new Set(friendIds);
-  const outgoing = new Set(requests.outgoing.map((row) => row.user.id));
-  const incoming = new Set(requests.incoming.map((row) => row.user.id));
-
-  sendJson(res, 200, {
-    ok: true,
-    results: results.map((candidate) => ({
-      user: candidate,
-      online: isUserOnline(candidate.id),
-      relationship: friendSet.has(candidate.id)
-        ? 'friend'
-        : outgoing.has(candidate.id)
-          ? 'outgoing'
-          : incoming.has(candidate.id)
-            ? 'incoming'
-            : 'none'
-    }))
-  });
-}
-
-async function handleFriendRequestsList(req, res) {
-  const user = await requireSessionUser(req, res);
-  if (!user) return;
-
-  const requests = await getFriendStore().listRequests(user.id);
-  sendJson(res, 200, { ok: true, ...requests });
-}
-
-async function handleSendFriendRequest(req, res) {
-  const user = await requireSessionUser(req, res);
-  if (!user) return;
-
-  const rate = friendRequestLimiter.check(user.id);
-  if (!rate.allowed) {
-    sendJson(
-      res,
-      429,
-      { ok: false, error: 'Слишком много заявок, попробуйте позже', retryAfterSeconds: rate.retryAfterSeconds },
-      { 'Retry-After': String(rate.retryAfterSeconds) }
-    );
-    return;
-  }
-
-  const body = await readJsonBody(req);
-  const targetUserId = cleanUuid(body.userId || body.addresseeUserId || '');
-  const login = normalizeLogin(body.login || body.handle || '');
-  if (!targetUserId && !login) {
-    sendJson(res, 400, { ok: false, error: 'Неверный пользователь' });
-    return;
-  }
-
-  const result = await getFriendStore().sendRequest({
-    requesterId: user.id,
-    addresseeLogin: login,
-    addresseeUserId: targetUserId
-  });
-  switch (result.status) {
-    case 'not_found':
-      sendJson(res, 404, { ok: false, error: 'Пользователь не найден' });
-      return;
-    case 'self':
-      sendJson(res, 400, { ok: false, error: 'Нельзя добавить себя' });
-      return;
-    case 'blocked':
-      sendJson(res, 403, { ok: false, error: 'Заявку отправить нельзя' });
-      return;
-    case 'already_friends':
-      sendJson(res, 200, { ok: true, status: 'already_friends', user: result.user });
-      return;
-    case 'already_sent':
-      sendJson(res, 200, { ok: true, status: 'already_sent', user: result.user });
-      return;
-    case 'accepted':
-      // Reverse request existed: both sides are now friends.
-      broadcastToUser(result.user.id, { type: 'friend-accepted', userId: user.id });
-      broadcastToUser(result.user.id, {
-        type: 'notification.friend.accepted',
-        dedupeKey: `friend-accepted:${result.user.id}:${user.id}`,
-        user: notificationActor(user),
-        context: { userId: user.id, relationship: 'friend' }
-      });
-      void sendFriendPush(result.user.id, 'friend.accepted', user, `friend-accepted:${result.user.id}:${user.id}`);
-      sendJson(res, 200, { ok: true, status: 'accepted', user: result.user });
-      return;
-    default:
-      broadcastToUser(result.user.id, { type: 'friend-request' });
-      broadcastToUser(result.user.id, {
-        type: 'notification.friend.request',
-        dedupeKey: `friend-request:${result.requestId}`,
-        requester: notificationActor(user),
-        requestId: result.requestId
-      });
-      void sendFriendPush(result.user.id, 'friend.request', user, `friend-request:${result.requestId}`);
-      sendJson(res, 201, { ok: true, status: 'sent', user: result.user });
-  }
-}
-
-async function handleRespondFriendRequest(req, res, requestId, action) {
-  const user = await requireSessionUser(req, res);
-  if (!user) return;
-
-  const id = cleanUuid(requestId);
-  if (!id) {
-    sendJson(res, 404, { ok: false, error: 'Заявка не найдена' });
-    return;
-  }
-
-  const result = await getFriendStore().respondRequest({ userId: user.id, requestId: id, action });
-  if (result.status === 'not_found') {
-    sendJson(res, 404, { ok: false, error: 'Заявка не найдена' });
-    return;
-  }
-  if (result.status === 'accepted') {
-    broadcastToUser(result.requesterId, { type: 'friend-accepted', userId: user.id });
-    broadcastToUser(result.requesterId, {
-      type: 'notification.friend.accepted',
-      dedupeKey: `friend-accepted:${result.requesterId}:${user.id}`,
-      user: notificationActor(user),
-      context: { userId: user.id, relationship: 'friend', requestId: id }
-    });
-    void sendFriendPush(result.requesterId, 'friend.accepted', user, `friend-accepted:${result.requesterId}:${user.id}`);
-    sendJson(res, 200, { ok: true, status: 'accepted', user: result.user });
-    return;
-  }
-  if (result.status === 'blocked') {
-    sendJson(res, 409, { ok: false, code: 'relationship_blocked', error: 'Заявка больше недоступна' });
-    return;
-  }
-  sendJson(res, 200, { ok: true, status: 'declined' });
-}
-
-async function handleCancelFriendRequest(req, res, requestId) {
-  const user = await requireSessionUser(req, res);
-  if (!user) return;
-
-  const id = cleanUuid(requestId);
-  if (!id) {
-    sendJson(res, 404, { ok: false, error: 'Заявка не найдена' });
-    return;
-  }
-
-  const result = await getFriendStore().cancelRequest({ userId: user.id, requestId: id });
-  if (result.status === 'not_found') {
-    sendJson(res, 404, { ok: false, error: 'Заявка не найдена' });
-    return;
-  }
-  broadcastToUser(result.addresseeId, { type: 'friend-request' });
-  sendJson(res, 200, { ok: true });
-}
-
-async function handleRemoveFriend(req, res, friendId) {
-  const user = await requireSessionUser(req, res);
-  if (!user) return;
-
-  const id = cleanUuid(friendId);
-  if (!id) {
-    sendJson(res, 404, { ok: false, error: 'Друг не найден' });
-    return;
-  }
-
-  const result = await getFriendStore().removeFriend({ userId: user.id, friendId: id });
-  if (result.status === 'not_found') {
-    sendJson(res, 404, { ok: false, error: 'Друг не найден' });
-    return;
-  }
-  broadcastToUser(id, { type: 'friend-removed', userId: user.id });
-  sendJson(res, 200, { ok: true });
-}
-
-async function handleBlockedList(req, res) {
-  const user = await requireSessionUser(req, res);
-  if (!user) return;
-  const [blocked, users] = await Promise.all([
-    getFriendStore().listBlockedUserIds(user.id),
-    getFriendStore().listBlockedUsers(user.id)
-  ]);
-  sendJson(res, 200, { ok: true, blocked, users });
-}
-
-async function handleBlockUser(req, res, targetUserId) {
-  const user = await requireSessionUser(req, res);
-  if (!user) return;
-
-  const id = cleanUuid(targetUserId);
-  if (!id || id === user.id) {
-    sendJson(res, 400, { ok: false, error: 'Нельзя заблокировать этого пользователя' });
-    return;
-  }
-
-  const result = await getFriendStore().blockUser({ userId: user.id, targetId: id });
-  if (result.status === 'not_found') {
-    sendJson(res, 404, { ok: false, error: 'Пользователь не найден' });
-    return;
-  }
-  if (result.status === 'invalid') {
-    sendJson(res, 400, { ok: false, error: 'Нельзя заблокировать этого пользователя' });
-    return;
-  }
-  // The blocked side is told the friendship ended, but never that a block was
-  // applied — the UI on their end simply shows the person is no longer a friend.
-  if (result.unfriended) broadcastToUser(id, { type: 'friend-removed', userId: user.id });
-  sendJson(res, 200, { ok: true, status: result.status });
-}
-
-async function handleUnblockUser(req, res, targetUserId) {
-  const user = await requireSessionUser(req, res);
-  if (!user) return;
-
-  const id = cleanUuid(targetUserId);
-  if (!id) {
-    sendJson(res, 404, { ok: false, error: 'Пользователь не найден' });
-    return;
-  }
-  const result = await getFriendStore().unblockUser({ userId: user.id, targetId: id });
-  if (result.status === 'not_found') {
-    sendJson(res, 404, { ok: false, error: 'Пользователь не заблокирован' });
-    return;
-  }
-  sendJson(res, 200, { ok: true });
 }
 
 async function handleDmThread(req, res, peerId) {
@@ -2446,75 +2171,6 @@ async function handleMarkDmRead(req, res, peerId) {
     broadcastToUser(id, { type: 'dm-read', userId: user.id });
   }
   sendJson(res, 200, { ok: true, count: result.count });
-}
-
-async function handleRingRoom(req, res, rawRoomId) {
-  const user = await requireSessionUser(req, res);
-  if (!user) return;
-  const roomId = normalizeRoomId(rawRoomId);
-  const body = await readJsonBody(req);
-  const targetUserId = cleanUuid(body.userId);
-  if (!roomId || !targetUserId || targetUserId === user.id) {
-    sendJson(res, 400, { ok: false, error: 'Invalid ring target' });
-    return;
-  }
-
-  // Presence is deliberately not required: you can invite a friend to a room
-  // from the lobby before joining it yourself. The per-pair rate limit below
-  // still bounds how often anyone can ring the same person.
-  if (!(await getFriendStore().areFriends(user.id, targetUserId))) {
-    sendJson(res, 403, { ok: false, error: 'You are not friends' });
-    return;
-  }
-  if (await getFriendStore().isBlockedBetween(user.id, targetUserId)) {
-    sendJson(res, 403, { ok: false, code: 'relationship_blocked', error: 'Invite is unavailable' });
-    return;
-  }
-  if (!isActiveAccount(await getUserStore().getUserById(targetUserId))) {
-    sendJson(res, 403, { ok: false, code: 'account_deleted', error: 'Invite is unavailable' });
-    return;
-  }
-
-  const rate = ringLimiter.check(`${user.id}:${targetUserId}`);
-  if (!rate.allowed) {
-    sendJson(res, 429, { ok: false, error: 'Invite cooldown', retryAfterSeconds: rate.retryAfterSeconds }, {
-      'Retry-After': String(rate.retryAfterSeconds)
-    });
-    return;
-  }
-
-  const room = await getRoomStore().getRoom(roomId);
-  if (!room) {
-    sendJson(res, 404, { ok: false, error: 'Room not found' });
-    return;
-  }
-  const ringExpiresAt = Date.now() + RING_TTL_MS;
-  const fromUser = notificationActor(user);
-  const ringRoom = { id: room.id, name: room.name || '', emoji: room.emoji || '' };
-  broadcastToUser(targetUserId, { type: 'ring.incoming', fromUser, room: ringRoom, expiresAt: ringExpiresAt });
-  // Persist the invitation as a regular DM so both sides share one timeline
-  // entry (with live status) instead of per-device local copies. The invitation
-  // stays actionable while the room exists; the shorter expiry only bounds the
-  // audible ring and its push notification.
-  const inviteMessage = await getMessageService().direct.sendMessage({
-    senderId: user.id,
-    recipientId: targetUserId,
-    body: room.name ? `Приглашение в комнату «${room.name}»` : 'Приглашение в комнату',
-    metadata: { kind: 'room-invite', roomId: room.id, roomName: room.name || '', status: 'pending', expiresAt: null }
-  });
-  broadcastToUser(targetUserId, { type: 'dm-message', message: inviteMessage });
-  broadcastToUser(user.id, { type: 'dm-message', message: inviteMessage });
-  void queuePush(targetUserId, {
-    type: 'ring',
-    title: `${user.displayName || user.login || 'Друг'} зовёт вас`,
-    body: room.name ? `Комната «${room.name}»` : 'Присоединиться к комнате',
-    privateBody: 'Вас зовут в голосовую комнату.',
-    tag: `ring:${user.id}:${roomId}`,
-    dedupeKey: `ring:${user.id}:${roomId}:${ringExpiresAt}`,
-    url: `/r/${encodeURIComponent(roomId)}`,
-    expiresAt: ringExpiresAt
-  }, { expiresAt: ringExpiresAt });
-  sendJson(res, 200, { ok: true });
 }
 
 // --- Notification preferences -------------------------------------------
@@ -3146,6 +2802,7 @@ function createApiApp({
   });
   registerPeerModerationRoutes(app, apiContext, { rooms: roomsService, moderation: peerModeration });
   registerRoomChatRoutes(app, apiContext, roomChat);
+  registerFriendsRoutes(app, apiContext, { friends: friendsService, requestLimiter: friendRequestLimiter });
   registerAccountRoutes(app, apiContext, {
     account: accountService,
     limiter: authLimiter,
@@ -3300,33 +2957,6 @@ function createApiApp({
     return handleGetLinkPreviewImage(res, request.params.key);
   }));
 
-  app.get('/api/friends', (request, reply) => runLegacyHandler(request, reply, handleFriendsList));
-  app.get('/api/friends/search', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
-    const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
-    return handleFriendsSearch(req, res, url);
-  }));
-  app.get('/api/friends/requests', (request, reply) => runLegacyHandler(request, reply, handleFriendRequestsList));
-  app.post('/api/friends/requests', (request, reply) => runLegacyHandler(request, reply, handleSendFriendRequest));
-  app.post('/api/friends/requests/:id/accept', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
-    return handleRespondFriendRequest(req, res, request.params.id, 'accept');
-  }));
-  app.post('/api/friends/requests/:id/decline', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
-    return handleRespondFriendRequest(req, res, request.params.id, 'decline');
-  }));
-  app.delete('/api/friends/requests/:id', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
-    return handleCancelFriendRequest(req, res, request.params.id);
-  }));
-  // Registered before /api/friends/:userId so the literal segment wins the match.
-  app.get('/api/blocks', (request, reply) => runLegacyHandler(request, reply, handleBlockedList));
-  app.put('/api/blocks/:userId', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
-    return handleBlockUser(req, res, request.params.userId);
-  }));
-  app.delete('/api/blocks/:userId', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
-    return handleUnblockUser(req, res, request.params.userId);
-  }));
-  app.delete('/api/friends/:userId', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
-    return handleRemoveFriend(req, res, request.params.userId);
-  }));
   app.get('/api/dm/:userId', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
     return handleDmThread(req, res, request.params.userId);
   }));
@@ -3338,9 +2968,6 @@ function createApiApp({
   }));
   app.post('/api/dm/:userId/read', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
     return handleMarkDmRead(req, res, request.params.userId);
-  }));
-  app.post('/api/rooms/:roomId/ring', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
-    return handleRingRoom(req, res, request.params.roomId);
   }));
   app.patch('/api/dm/:userId/messages/:messageId', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
     return handleEditDmMessage(req, res, request.params.userId, request.params.messageId);
