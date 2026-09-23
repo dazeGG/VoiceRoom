@@ -1,4 +1,52 @@
-const DEFAULT_RETRY_DELAYS_MS = Object.freeze([500, 1_000, 2_000, 4_000]);
+export type RecoveryPhase =
+  | 'idle'
+  | 'waiting-app-snapshot'
+  | 'waiting-livekit'
+  | 'recovering'
+  | 'healthy'
+  | 'failed'
+  | 'cancelled';
+
+export type RecoveryFailure = {
+  retryable: boolean;
+  result: 'terminal' | 'retryable';
+  status: number;
+  code: string;
+};
+
+/** What an attempt resolves to: `{ ok: true }`, a classified failure, or whatever it rejected with. */
+export type ReplacementOutcome = { ok?: boolean; retryable?: boolean; status?: number; code?: string } | null | undefined;
+
+export type RecoveryTransition = Readonly<{
+  epoch: number;
+  appEpoch: number;
+  trigger: string;
+  phase: RecoveryPhase;
+  attempt: number;
+  elapsed: 'lt_1s' | 'lt_5s' | 'lt_15s' | 'gte_15s';
+  status: number;
+  code: string;
+  result: string;
+}>;
+
+type TimerHandle = unknown;
+type ScheduleTimer = (callback: () => void, delay: number) => TimerHandle;
+type CancelTimer = (timer: TimerHandle) => void;
+
+export interface RealtimeRecoveryOptions {
+  attemptReplacement: (context: { epoch: number; attempt: number }) => ReplacementOutcome | Promise<ReplacementOutcome>;
+  requestAppSnapshot: (context: { epoch: number; appEpoch: number }) => boolean | void;
+  onTransition?: (event: RecoveryTransition) => void;
+  now?: () => number;
+  setTimeout?: ScheduleTimer;
+  clearTimeout?: CancelTimer;
+  random?: () => number;
+  retryDelaysMs?: readonly number[];
+  maxAttempts?: number;
+  cooldownMs?: number;
+}
+
+const DEFAULT_RETRY_DELAYS_MS: readonly number[] = Object.freeze([500, 1_000, 2_000, 4_000]);
 const DEFAULT_MAX_ATTEMPTS = 5;
 const DEFAULT_COOLDOWN_MS = 10_000;
 
@@ -28,13 +76,14 @@ const RETRYABLE_CODES = new Set([
 
 const SAFE_CODES = new Set([...TERMINAL_CODES, ...RETRYABLE_CODES, 'unknown_error']);
 
-export function sanitizeRecoveryCode(value) {
+export function sanitizeRecoveryCode(value: unknown): string {
   return typeof value === 'string' && SAFE_CODES.has(value) ? value : 'unknown_error';
 }
 
-export function classifyRecoveryFailure(error) {
+export function classifyRecoveryFailure(input: unknown): RecoveryFailure {
+  const error = input as { code?: unknown; status?: unknown } | null | undefined;
   const rawCode = typeof error?.code === 'string' ? error.code : '';
-  const status = Number.isInteger(error?.status) ? error.status : 0;
+  const status = Number.isInteger(error?.status) ? error?.status as number : 0;
   if (TERMINAL_CODES.has(rawCode)) {
     return { retryable: false, result: 'terminal', status, code: rawCode };
   }
@@ -47,7 +96,7 @@ export function classifyRecoveryFailure(error) {
   return { retryable: false, result: 'terminal', status, code: sanitizeRecoveryCode(rawCode) };
 }
 
-function elapsedBucket(elapsedMs) {
+function elapsedBucket(elapsedMs: number): RecoveryTransition['elapsed'] {
   if (elapsedMs < 1_000) return 'lt_1s';
   if (elapsedMs < 5_000) return 'lt_5s';
   if (elapsedMs < 15_000) return 'lt_15s';
@@ -55,18 +104,51 @@ function elapsedBucket(elapsedMs) {
 }
 
 export class RealtimeRecoveryController {
+  readonly attemptReplacement: RealtimeRecoveryOptions['attemptReplacement'];
+  readonly requestAppSnapshot: RealtimeRecoveryOptions['requestAppSnapshot'];
+  readonly onTransition: (event: RecoveryTransition) => void;
+  readonly now: () => number;
+  readonly schedule: ScheduleTimer;
+  readonly cancelTimer: CancelTimer;
+  readonly random: () => number;
+  readonly retryDelaysMs: number[];
+  readonly maxAttempts: number;
+  readonly cooldownMs: number;
+  epoch: number;
+  phase: RecoveryPhase;
+  active: boolean;
+  appEpoch: number;
+  appConnected: boolean;
+  snapshotReady: boolean;
+  livekitReady: boolean;
+  replacementRequired: boolean;
+  attempts: number;
+  startedAt: number;
+  effectGeneration: number;
+  inFlight: boolean;
+  retryTimer: TimerHandle | null;
+  cooldownTimer: TimerHandle | null;
+  cooldownComplete: boolean;
+  cooldownCycles: number;
+  meaningfulRearm: boolean;
+  rearmNeedsSnapshotRequest: boolean;
+  rearmSnapshotReady: boolean;
+  failedAppEpoch: number;
+  isNetworkOnline: boolean;
+  hasSeenAppConnection: boolean;
+
   constructor({
     attemptReplacement,
     requestAppSnapshot,
     onTransition = (_event) => {},
     now = Date.now,
     setTimeout: schedule = (callback, delay) => globalThis.setTimeout(callback, delay),
-    clearTimeout: cancel = (timer) => globalThis.clearTimeout(timer),
+    clearTimeout: cancel = (timer) => globalThis.clearTimeout(timer as ReturnType<typeof globalThis.setTimeout>),
     random = Math.random,
     retryDelaysMs = DEFAULT_RETRY_DELAYS_MS,
     maxAttempts = DEFAULT_MAX_ATTEMPTS,
     cooldownMs = DEFAULT_COOLDOWN_MS
-  }) {
+  }: RealtimeRecoveryOptions) {
     if (typeof attemptReplacement !== 'function' || typeof requestAppSnapshot !== 'function') {
       throw new TypeError('Recovery effects must be functions');
     }
@@ -104,7 +186,7 @@ export class RealtimeRecoveryController {
     this.hasSeenAppConnection = false;
   }
 
-  activate({ appEpoch = 0, appConnected = false } = {}) {
+  activate({ appEpoch = 0, appConnected = false }: { appEpoch?: number; appConnected?: boolean } = {}): number {
     this.cancelAllTimers();
     this.effectGeneration += 1;
     this.epoch += 1;
@@ -122,7 +204,7 @@ export class RealtimeRecoveryController {
     return this.epoch;
   }
 
-  cancel() {
+  cancel(): void {
     if (!this.active && this.phase === 'cancelled') return;
     this.cancelAllTimers();
     this.effectGeneration += 1;
@@ -132,7 +214,7 @@ export class RealtimeRecoveryController {
     this.emit('leave', 'cancelled');
   }
 
-  appWsLost(appEpoch = this.appEpoch) {
+  appWsLost(appEpoch: number = this.appEpoch): boolean {
     if (!this.active || appEpoch < this.appEpoch) return false;
     this.appEpoch = appEpoch;
     this.appConnected = false;
@@ -153,7 +235,7 @@ export class RealtimeRecoveryController {
     return true;
   }
 
-  appWsRestored(appEpoch) {
+  appWsRestored(appEpoch: number): boolean {
     if (!this.active || !Number.isInteger(appEpoch) || appEpoch < this.appEpoch) return false;
     const laterEpoch = appEpoch > this.appEpoch;
     this.appEpoch = appEpoch;
@@ -179,7 +261,7 @@ export class RealtimeRecoveryController {
     return true;
   }
 
-  appSnapshotApplied({ appEpoch, active, hasLocalPeer }) {
+  appSnapshotApplied({ appEpoch, active, hasLocalPeer }: { appEpoch: number; active: boolean; hasLocalPeer: boolean }): boolean {
     if (!this.active || appEpoch !== this.appEpoch || !active || !hasLocalPeer) {
       this.emit('app_snapshot', 'rejected');
       return false;
@@ -197,7 +279,7 @@ export class RealtimeRecoveryController {
     return true;
   }
 
-  appSnapshotRequestFailed(error) {
+  appSnapshotRequestFailed(error: unknown): void {
     if (!this.active) return;
     const classified = classifyRecoveryFailure(error);
     this.emit('app_snapshot_failed', classified.retryable ? 'retryable' : 'terminal', this.attempts, classified.status, classified.code);
@@ -205,14 +287,14 @@ export class RealtimeRecoveryController {
     else this.fail('terminal');
   }
 
-  livekitReconnecting() {
+  livekitReconnecting(): void {
     if (!this.active) return;
     this.livekitReady = false;
     this.beginRecovery('livekit_reconnecting');
     this.setPhase('waiting-livekit', 'livekit_reconnecting');
   }
 
-  livekitReconciled() {
+  livekitReconciled(): void {
     if (!this.active) return;
     this.effectGeneration += 1;
     this.clearRetryTimer();
@@ -223,7 +305,7 @@ export class RealtimeRecoveryController {
     if (this.snapshotReady) this.completeHealthy('livekit_reconciled');
   }
 
-  livekitDisconnected() {
+  livekitDisconnected(): void {
     if (!this.active) return;
     const alreadyWaiting = this.replacementRequired && !this.livekitReady;
     this.livekitReady = false;
@@ -236,13 +318,13 @@ export class RealtimeRecoveryController {
     }
   }
 
-  networkOffline() {
+  networkOffline(): void {
     if (!this.active || !this.isNetworkOnline) return;
     this.isNetworkOnline = false;
     this.beginRecovery('network_offline');
   }
 
-  networkOnline() {
+  networkOnline(): void {
     if (!this.active || this.isNetworkOnline) return;
     this.isNetworkOnline = true;
     if (this.phase === 'failed') {
@@ -256,11 +338,19 @@ export class RealtimeRecoveryController {
     }
   }
 
-  isCurrent(epoch) {
+  isCurrent(epoch: number): boolean {
     return this.active && epoch === this.epoch;
   }
 
-  getSnapshot() {
+  getSnapshot(): Readonly<{
+    epoch: number;
+    phase: RecoveryPhase;
+    appEpoch: number;
+    snapshotReady: boolean;
+    livekitReady: boolean;
+    attempts: number;
+    inFlight: boolean;
+  }> {
     return Object.freeze({
       epoch: this.epoch,
       phase: this.phase,
@@ -272,7 +362,7 @@ export class RealtimeRecoveryController {
     });
   }
 
-  beginRecovery(trigger) {
+  beginRecovery(trigger: string): void {
     if (this.phase === 'healthy') {
       this.epoch += 1;
       this.startedAt = this.now();
@@ -282,7 +372,7 @@ export class RealtimeRecoveryController {
     if (this.phase !== 'failed') this.setPhase('recovering', trigger);
   }
 
-  completeHealthy(trigger) {
+  completeHealthy(trigger: string): void {
     this.cancelAllTimers();
     this.effectGeneration += 1;
     this.inFlight = false;
@@ -291,13 +381,13 @@ export class RealtimeRecoveryController {
     this.setPhase('healthy', trigger, 'succeeded');
   }
 
-  requestSnapshot() {
+  requestSnapshot(): void {
     if (!this.active || !this.appConnected) return;
     const requested = this.requestAppSnapshot({ epoch: this.epoch, appEpoch: this.appEpoch });
     if (requested === false) this.appSnapshotRequestFailed({ code: 'transport_error' });
   }
 
-  maybeAttempt() {
+  maybeAttempt(): void {
     if (!this.active || this.phase === 'failed' || !this.snapshotReady || !this.replacementRequired || this.inFlight || this.retryTimer) return;
     if (this.attempts >= this.maxAttempts) {
       this.enterCooldown();
@@ -310,10 +400,10 @@ export class RealtimeRecoveryController {
     this.setPhase('waiting-livekit', 'replacement_attempt');
     Promise.resolve(this.attemptReplacement({ epoch, attempt }))
       .then((outcome) => this.finishAttempt(epoch, effectGeneration, attempt, outcome))
-      .catch((error) => this.finishAttempt(epoch, effectGeneration, attempt, classifyRecoveryFailure(error)));
+      .catch((error: unknown) => this.finishAttempt(epoch, effectGeneration, attempt, classifyRecoveryFailure(error)));
   }
 
-  finishAttempt(epoch, effectGeneration, attempt, outcome) {
+  finishAttempt(epoch: number, effectGeneration: number, attempt: number, outcome: ReplacementOutcome): void {
     if (!this.isCurrent(epoch) || effectGeneration !== this.effectGeneration) return;
     this.inFlight = false;
     if (outcome?.ok === true) {
@@ -324,9 +414,9 @@ export class RealtimeRecoveryController {
       else this.setPhase('waiting-app-snapshot', 'replacement_succeeded');
       return;
     }
-    const classified = typeof outcome?.retryable === 'boolean' ? outcome : classifyRecoveryFailure(outcome);
+    const classified: ReplacementOutcome = typeof outcome?.retryable === 'boolean' ? outcome : classifyRecoveryFailure(outcome);
     const code = sanitizeRecoveryCode(classified?.code);
-    const status = Number.isInteger(classified?.status) ? classified.status : 0;
+    const status = Number.isInteger(classified?.status) ? classified?.status as number : 0;
     this.emit('replacement_attempt', classified?.retryable ? 'retryable' : 'terminal', attempt, status, code);
     if (!classified?.retryable) {
       this.fail('terminal');
@@ -344,13 +434,13 @@ export class RealtimeRecoveryController {
     }, delay);
   }
 
-  fail(result) {
+  fail(result: 'terminal' | 'exhausted'): void {
     this.clearRetryTimer();
     this.failedAppEpoch = this.appEpoch;
     this.setPhase('failed', 'recovery_failed', result);
   }
 
-  enterCooldown() {
+  enterCooldown(): void {
     this.fail('exhausted');
     this.cooldownComplete = false;
     this.meaningfulRearm = false;
@@ -371,14 +461,14 @@ export class RealtimeRecoveryController {
     }, cooldownDelay);
   }
 
-  markMeaningfulRearm(trigger, requestSnapshot) {
+  markMeaningfulRearm(trigger: string, requestSnapshot: boolean): void {
     this.meaningfulRearm = true;
     this.rearmNeedsSnapshotRequest ||= requestSnapshot;
     this.emit(trigger, 'rearm_pending');
     this.tryRearm();
   }
 
-  tryRearm() {
+  tryRearm(): void {
     if (this.phase !== 'failed' || !this.cooldownComplete || !this.meaningfulRearm) return;
     this.effectGeneration += 1;
     this.epoch += 1;
@@ -395,13 +485,13 @@ export class RealtimeRecoveryController {
     else if (requestSnapshot) this.requestSnapshot();
   }
 
-  setPhase(phase, trigger, result = 'transition') {
+  setPhase(phase: RecoveryPhase, trigger: string, result = 'transition'): void {
     if (this.phase === phase && result === 'transition') return;
     this.phase = phase;
     this.emit(trigger, result);
   }
 
-  emit(trigger, result, attempt = this.attempts, status = 0, code = 'unknown_error') {
+  emit(trigger: string, result: string, attempt: number = this.attempts, status = 0, code = 'unknown_error'): void {
     this.onTransition(Object.freeze({
       epoch: this.epoch,
       appEpoch: this.appEpoch,
@@ -415,14 +505,14 @@ export class RealtimeRecoveryController {
     }));
   }
 
-  clearRetryTimer() {
+  clearRetryTimer(): void {
     if (this.retryTimer !== null) {
       this.cancelTimer(this.retryTimer);
       this.retryTimer = null;
     }
   }
 
-  cancelAllTimers() {
+  cancelAllTimers(): void {
     this.clearRetryTimer();
     if (this.cooldownTimer !== null) {
       this.cancelTimer(this.cooldownTimer);

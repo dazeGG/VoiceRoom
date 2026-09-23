@@ -4,5 +4,5 @@ export {
   hotkeyBindingFromEvent,
   hotkeyMatchesEvent,
   isHotkeyModifierCode
-} from './hotkey.js';
+} from './hotkey';
 export type { HotkeyBinding, HotkeyRecorderProps } from './types';

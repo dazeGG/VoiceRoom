@@ -4,7 +4,7 @@ import {
   createAudioOutputTransitionQueue,
   initializeAudioOutput,
   transitionAudioOutput
-} from '../src/lib/features/room/client/services/audio-output-transition.js';
+} from '../src/lib/features/room/client/services/audio-output-transition.ts';
 
 function deferred() {
   let resolve;

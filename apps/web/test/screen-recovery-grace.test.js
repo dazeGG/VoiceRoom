@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import test from 'node:test';
 
-import { ScreenRecoveryGraceController } from '../src/lib/features/room/client/recovery/screen-recovery-grace.js';
+import { ScreenRecoveryGraceController } from '../src/lib/features/room/client/recovery/screen-recovery-grace.ts';
 
 function clock() {
   let now = 0;

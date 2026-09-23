@@ -7,7 +7,7 @@ import type { NotificationRealtimeEvent } from '../shared/notifications';
 import type { ReactionSummary } from '@voice-room/shared/reactions';
 import type { LoginAlert } from '@voice-room/shared/account-security';
 import { isRealtimeBlocked } from '$lib/platform/desktop-boundary';
-import { RealtimeHeartbeatWatchdog } from './realtime-heartbeat.js';
+import { RealtimeHeartbeatWatchdog } from './realtime-heartbeat';
 
 export type RealtimeAccountEvent =
   | { type: 'ready'; payload: { userId?: string; guest?: boolean; onlineFriendIds?: string[] } }

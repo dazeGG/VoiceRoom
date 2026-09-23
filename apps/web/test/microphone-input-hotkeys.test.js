@@ -6,7 +6,7 @@ import {
   formatHotkeyBinding,
   hotkeyBindingFromEvent,
   hotkeyMatchesEvent
-} from '../src/lib/shared/ui/HotkeyRecorder/hotkey.js';
+} from '../src/lib/shared/ui/HotkeyRecorder/hotkey.ts';
 
 const root = resolve(import.meta.dirname, '..');
 const read = (path) => readFileSync(resolve(root, path), 'utf8');

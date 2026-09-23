@@ -6,7 +6,7 @@
     formatHotkeyBinding,
     hotkeyBindingFromEvent,
     isHotkeyModifierCode
-  } from './hotkey.js';
+  } from './hotkey';
   import type { HotkeyRecorderProps } from './types';
 
   let {
