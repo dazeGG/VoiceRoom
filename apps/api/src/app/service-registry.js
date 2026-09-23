@@ -63,14 +63,14 @@ import { createModerationRepository } from '../domains/moderation/moderation-rep
 import { createActiveBanService } from '../domains/moderation/active-ban-service.js';
 import { createModerationService } from '../domains/moderation/moderation-service.js';
 import { createMessageModerationService } from '../domains/moderation/message-moderation-service.js';
-import { createAttachmentRepository } from '../domains/media/attachment-repository.js';
-import { createMediaJobRepository } from '../domains/media/media-job-repository.js';
-import { createMediaStorage } from '../domains/media/storage.js';
-import { createMediaPressureService } from '../domains/media/media-pressure-service.js';
-import { createMediaQuotaRepository } from '../domains/media/media-quota-repository.js';
-import { createMediaQuotaService } from '../domains/media/media-quota-service.js';
-import { createMediaService } from '../domains/media/media-service.js';
-import { createMediaVisibilityService } from '../domains/media/media-visibility-service.js';
+import { createAttachmentRepository } from '../domains/media/attachment-repository.ts';
+import { createMediaJobRepository } from '../domains/media/media-job-repository.ts';
+import { createMediaStorage } from '../domains/media/storage.ts';
+import { createMediaPressureService } from '../domains/media/media-pressure-service.ts';
+import { createMediaQuotaRepository } from '../domains/media/media-quota-repository.ts';
+import { createMediaQuotaService } from '../domains/media/media-quota-service.ts';
+import { createMediaService } from '../domains/media/media-service.ts';
+import { createMediaVisibilityService } from '../domains/media/media-visibility-service.ts';
 import { createCursorCodec } from '../platform/cursor-codec.js';
 
 export function resolveCursorHmacKeys({ context, env = process.env, fallbackGateSecret = '' } = {}) {

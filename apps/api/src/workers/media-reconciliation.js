@@ -17,10 +17,10 @@ function createMediaReconciliationWorker({ reconciliationService, intervalMs = 1
 async function main() {
   if (String(process.env.MEDIA_RECONCILIATION_CLAIM_ENABLED || '').toLowerCase() !== 'true') return;
   const { createDbPool } = await import('../lib/db.js');
-  const { createAttachmentRepository } = await import('../domains/media/attachment-repository.js');
-  const { createMediaJobRepository } = await import('../domains/media/media-job-repository.js');
-  const { createMediaReconciliationService } = await import('../domains/media/media-reconciliation-service.js');
-  const { createMediaStorage } = await import('../domains/media/storage.js');
+  const { createAttachmentRepository } = await import('../domains/media/attachment-repository.ts');
+  const { createMediaJobRepository } = await import('../domains/media/media-job-repository.ts');
+  const { createMediaReconciliationService } = await import('../domains/media/media-reconciliation-service.ts');
+  const { createMediaStorage } = await import('../domains/media/storage.ts');
   const pool = createDbPool();
   const attachments = createAttachmentRepository({ pool });
   const worker = createMediaReconciliationWorker({

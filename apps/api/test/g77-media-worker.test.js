@@ -2,7 +2,7 @@ import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import test from 'node:test';
-import { MediaJobFenceError } from '../src/domains/media/media-job-repository.js';
+import { MediaJobFenceError } from '../src/domains/media/media-job-repository.ts';
 import { DEFAULTS, createMediaProcessingWorker, retryDelay } from '../src/workers/media-processing.js';
 
 test('G77-A01 worker defaults, bounded exponential backoff and pressure claim-stop are exact', async () => {

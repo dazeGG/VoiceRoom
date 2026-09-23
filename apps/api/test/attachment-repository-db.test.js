@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import { Pool } from 'pg';
 
-import { createAttachmentRepository } from '../src/domains/media/attachment-repository.js';
+import { createAttachmentRepository } from '../src/domains/media/attachment-repository.ts';
 import { runMigrations } from '../src/lib/migrate.js';
 import { createUserStore } from '../src/lib/user-store.js';
 import { createTestDatabase } from './db-harness.js';

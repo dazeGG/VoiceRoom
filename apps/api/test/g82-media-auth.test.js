@@ -4,8 +4,8 @@ const require = createRequire(import.meta.url);
 import assert from 'node:assert/strict';
 import fastify from 'fastify';
 import test from 'node:test';
-import { registerMediaRoutes } from '../src/domains/media/media-routes.js';
-import { createMediaVisibilityService } from '../src/domains/media/media-visibility-service.js';
+import { registerMediaRoutes } from '../src/domains/media/media-routes.ts';
+import { createMediaVisibilityService } from '../src/domains/media/media-visibility-service.ts';
 const ID = '123e4567-e89b-42d3-a456-426614174000';
 const MISSING = '223e4567-e89b-42d3-a456-426614174000';
 

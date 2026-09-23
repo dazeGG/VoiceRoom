@@ -42,8 +42,8 @@
       "name": "media",
       "enforcement": "on-changed",
       "paths": [
-        "apps/api/src/domains/media/attachment-repository.js",
-        "apps/api/src/domains/media/media-job-repository.js",
+        "apps/api/src/domains/media/attachment-repository.ts",
+        "apps/api/src/domains/media/media-job-repository.ts",
         "apps/web/src/lib/features/room/client/media/screen-receiver-demand.ts"
       ],
       "pathPatterns": []
@@ -51,8 +51,8 @@
   ],
   "businessPathPatterns": [
     "apps/api/src/domains/admission/",
-    "apps/api/src/domains/media/attachment-repository.js",
-    "apps/api/src/domains/media/media-job-repository.js",
+    "apps/api/src/domains/media/attachment-repository.ts",
+    "apps/api/src/domains/media/media-job-repository.ts",
     "apps/web/src/lib/api/auth.ts",
     "apps/web/src/lib/features/room/client/media/screen-receiver-demand.ts"
   ],

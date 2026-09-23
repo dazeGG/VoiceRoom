@@ -5,8 +5,8 @@ import path from 'node:path';
 import { Readable } from 'node:stream';
 import sharp from 'sharp';
 import test from 'node:test';
-import { createMediaService, detectExactContainer, MAX_UPLOAD_BYTES } from '../src/domains/media/media-service.js';
-import { createMediaStorage } from '../src/domains/media/storage.js';
+import { createMediaService, detectExactContainer, MAX_UPLOAD_BYTES } from '../src/domains/media/media-service.ts';
+import { createMediaStorage } from '../src/domains/media/storage.ts';
 const ID = '123e4567-e89b-42d3-a456-426614174000';
 
 test('G75-A01 JPEG/PNG/WebP exact containers and upload status survive service restart without owner leakage', async (t) => {

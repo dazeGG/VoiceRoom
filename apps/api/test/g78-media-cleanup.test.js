@@ -3,7 +3,7 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createMediaMaintenanceService } from '../src/domains/media/media-maintenance-service.js';
+import { createMediaMaintenanceService } from '../src/domains/media/media-maintenance-service.ts';
 import { createMediaMaintenanceWorker } from '../src/workers/media-maintenance.js';
 
 test('G78-A01 cleanup is bounded to 500, rechecks candidates and is idempotent', async () => {
@@ -29,7 +29,7 @@ test('G78-A02 worker shutdown interrupts its wait and retention predicates remai
   const controller = new AbortController(); const running = worker.run({ signal: controller.signal });
   await new Promise((resolve) => setImmediate(resolve)); controller.abort(); await running;
   assert.equal(runs, 1);
-  const source = require('node:fs').readFileSync(fileURLToPath(new URL('../src/domains/media/attachment-repository.js', import.meta.url)), 'utf8');
+  const source = require('node:fs').readFileSync(fileURLToPath(new URL('../src/domains/media/attachment-repository.ts', import.meta.url)), 'utf8');
   assert.match(source, /state = 'uploading'[\s\S]*interval '1 hour'/);
   assert.match(source, /state = 'failed'[\s\S]*interval '1 hour'/);
   assert.match(source, /state = 'ready'[\s\S]*interval '24 hours'/);

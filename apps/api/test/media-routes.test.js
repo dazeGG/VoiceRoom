@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fastify from 'fastify';
 
-import { registerMediaRoutes } from '../src/domains/media/media-routes.js';
+import { registerMediaRoutes } from '../src/domains/media/media-routes.ts';
 
 function createApp() {
   const calls = [];
