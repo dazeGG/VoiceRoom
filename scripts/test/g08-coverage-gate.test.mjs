@@ -92,7 +92,7 @@ const SERVER_INTERNAL_COVERAGE_SCRIPT = String.raw`
   // branches are covered by apps/api/test/admission-service.test.js.
   // Room moderation (kick, server mute, ban) and peer eviction moved to
   // domains/rooms; apps/api/test/rooms-domain.test.js covers them.
-  await run("attachPresence", { getPresenceRoom: () => ({ peers: new Map([["peer-1", {}]]) }) }, "done = Promise.resolve(attachPresence({ id: 'room-1', peers: new Map() }));");
+  // attachPresence moved to realtime/room-presence.ts (apps/api/test/room-presence.test.js).
   const connectSandbox = (publicUrl, livekitUrl) => ({ URL, Set, LIVEKIT_GATE_PUBLIC_URL: publicUrl, process: { env: { LIVEKIT_URL: livekitUrl } }, cleanLiveKitUrl: (value) => value });
   await run("getLiveKitConnectSources", connectSandbox("ws://gate.example", "ws://livekit.example"), "done = Promise.resolve(getLiveKitConnectSources());");
   await run("getLiveKitConnectSources", connectSandbox("", "ws://livekit.example"), "done = Promise.resolve(getLiveKitConnectSources());");
