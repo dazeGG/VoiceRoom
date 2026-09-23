@@ -29,7 +29,7 @@
         "apps/api/src/domains/messaging/content-repository.ts",
         "apps/api/src/domains/messaging/reply-repository.ts",
         "apps/api/src/domains/moderation/message-moderation-service.ts",
-      "apps/api/src/domains/link-previews/link-preview-repository.js"
+      "apps/api/src/domains/link-previews/link-preview-repository.ts"
       ],
       "room_bans": [
         "apps/api/src/lib/room-store.js",
@@ -51,7 +51,7 @@
         "apps/api/src/lib/friend-store.js",
         "apps/api/src/domains/messaging/message-read-repository.ts",
         "apps/api/src/domains/messaging/reply-repository.ts",
-      "apps/api/src/domains/link-previews/link-preview-repository.js"
+      "apps/api/src/domains/link-previews/link-preview-repository.ts"
       ],
       "notification_preferences": ["apps/api/src/lib/notification-store.js"],
       "notification_dm_mutes": ["apps/api/src/lib/notification-store.js"],
@@ -59,7 +59,7 @@
       "push_subscriptions": ["apps/api/src/lib/push-store.js", "apps/api/src/lib/user-store.js"]
     },
     "crossDomainWriters": {
-   "apps/api/src/domains/account/account-deletion-repository.js": [
+   "apps/api/src/domains/account/account-deletion-repository.ts": [
     "users",
     "sessions",
     "push_subscriptions",

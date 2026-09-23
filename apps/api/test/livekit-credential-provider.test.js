@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { createLiveKitCredentialProvider } from '../src/domains/admission/livekit-credential-provider.js';
+import { createLiveKitCredentialProvider } from '../src/domains/admission/livekit-credential-provider.ts';
 
 function jwtPayload(token) {
   return JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString('utf8'));

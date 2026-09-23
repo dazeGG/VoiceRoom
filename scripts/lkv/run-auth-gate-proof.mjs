@@ -6,7 +6,7 @@ import { pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
 
 const require = createRequire(import.meta.url);
-const { createGateCredentialSigner } = require('../../apps/api/src/domains/admission/gate-credential-signer.js');
+const { createGateCredentialSigner } = require('../../apps/api/src/domains/admission/gate-credential-signer.ts');
 
 function extractCredential(requestUrl) {
   const parsed = new URL(requestUrl || '/', 'ws://gate.local');

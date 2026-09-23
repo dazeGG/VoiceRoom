@@ -16,7 +16,7 @@ import {
   normalizeLiveKitRoomPrefix,
   verifyAccessTokenBinding
 } from '../src/domains/admission/livekit-token-binding.mts';
-import { createLiveKitAuthGateService } from '../src/domains/admission/livekit-auth-gate-service.js';
+import { createLiveKitAuthGateService } from '../src/domains/admission/livekit-auth-gate-service.ts';
 
 const NOW = Date.now();
 const CLAIMS = { cid: 'cid-1', iat: NOW, peer: 'peer-a', room: 'room-a' };

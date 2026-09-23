@@ -14,8 +14,8 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 const { createApiApp } = await import('../src/server.js');
-const { createGateCredentialSigner } = await import('../src/domains/admission/gate-credential-signer.js');
-const { createLiveKitAuthGateService, extractCredential } = await import('../src/domains/admission/livekit-auth-gate-service.js');
+const { createGateCredentialSigner } = await import('../src/domains/admission/gate-credential-signer.ts');
+const { createLiveKitAuthGateService, extractCredential } = await import('../src/domains/admission/livekit-auth-gate-service.ts');
 
 const ROOT = path.resolve(import.meta.dirname, '../../..');
 const PEER_ID = 'peer-g05a';

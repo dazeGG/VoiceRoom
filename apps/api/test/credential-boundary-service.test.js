@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { createCredentialBoundaryService } from '../src/domains/admission/credential-boundary-service.js';
+import { createCredentialBoundaryService } from '../src/domains/admission/credential-boundary-service.ts';
 
 const PRINCIPAL = { principalId: 'room-1:guest-1', principalType: 'guest' };
 
