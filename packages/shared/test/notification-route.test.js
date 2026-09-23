@@ -1,9 +1,7 @@
-'use strict';
+import test from 'node:test';
+import assert from 'node:assert/strict';
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
-
-const cjs = require('../src/notifications.mts');
+import * as notifications from '../src/notifications.ts';
 
 const ITEM = {
   id: 'n1',
@@ -20,7 +18,7 @@ const ITEM = {
 };
 
 test('a notification opens the room preview on its message, never the join route', () => {
-  const route = cjs.notificationRoute(ITEM);
+  const route = notifications.notificationRoute(ITEM);
 
   // /r/:roomId means "put me back inside this room" and joins voice on load; a
   // mention must open the chat without doing that.
@@ -32,7 +30,7 @@ test('a notification opens the room preview on its message, never the join route
 });
 
 test('route values are encoded, so an id cannot inject another parameter', () => {
-  const route = cjs.notificationRoute({ roomId: 'a&join=1', sourceMessageId: 'm?x=y' });
+  const route = notifications.notificationRoute({ roomId: 'a&join=1', sourceMessageId: 'm?x=y' });
   const url = new URL(route, 'https://voiceroom.test');
 
   assert.equal(url.searchParams.get('room'), 'a&join=1');
@@ -41,10 +39,7 @@ test('route values are encoded, so an id cannot inject another parameter', () =>
 });
 
 test('push payloads carry the same route the in-app panel uses', async () => {
-  const esm = await import('../src/notifications.mts');
-  const payload = cjs.buildProviderPayload(ITEM);
+  const payload = notifications.buildProviderPayload(ITEM);
 
-  assert.equal(payload.route, cjs.notificationRoute(ITEM));
-  assert.equal(esm.notificationRoute(ITEM), cjs.notificationRoute(ITEM));
-  assert.equal(esm.buildProviderPayload(ITEM).route, payload.route);
+  assert.equal(payload.route, notifications.notificationRoute(ITEM));
 });

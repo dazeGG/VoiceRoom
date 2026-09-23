@@ -1,10 +1,8 @@
-'use strict';
+import test from 'node:test';
+import assert from 'node:assert/strict';
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
-
-const { listReactionEmojis } = require('../src/emoji.mts');
-const cjs = require('../src/emoji-skin-tones.mts');
+import { listReactionEmojis } from '../src/emoji.ts';
+import * as skinTones from '../src/emoji-skin-tones.ts';
 
 const WAVE = '\u{1F44B}';
 const WAVE_MEDIUM = '\u{1F44B}\u{1F3FD}';
@@ -13,7 +11,7 @@ const HANDSHAKE_MIXED = '\u{1FAF1}\u{1F3FB}\u{200D}\u{1FAF2}\u{1F3FF}';
 
 test('collapsing folds every tone variant into a base that stays in the corpus', () => {
   const corpus = listReactionEmojis();
-  const collapsed = cjs.listCollapsedReactionEmojis();
+  const collapsed = skinTones.listCollapsedReactionEmojis();
   const visible = new Set(collapsed);
 
   // Order is preserved, so the category ranges in `emoji-groups` still line up.
@@ -25,76 +23,63 @@ test('collapsing folds every tone variant into a base that stays in the corpus',
   // Nothing browsable carries a tone: the list shows gestures once, and the
   // colour is a separate choice.
   for (const emoji of collapsed) {
-    assert.equal(cjs.skinToneBase(emoji), emoji);
-    assert.equal(cjs.isCollapsedSkinToneVariant(emoji), false);
+    assert.equal(skinTones.skinToneBase(emoji), emoji);
+    assert.equal(skinTones.isCollapsedSkinToneVariant(emoji), false);
   }
   for (const emoji of corpus) {
     if (visible.has(emoji)) continue;
-    assert.ok(cjs.isCollapsedSkinToneVariant(emoji));
-    assert.notEqual(cjs.skinToneBase(emoji), emoji);
+    assert.ok(skinTones.isCollapsedSkinToneVariant(emoji));
+    assert.notEqual(skinTones.skinToneBase(emoji), emoji);
   }
 });
 
 test('every collapsible base offers all five tones, and they are real corpus entries', () => {
   const corpus = new Set(listReactionEmojis());
-  const bases = cjs.listCollapsedReactionEmojis().filter((emoji) => cjs.hasSkinToneVariants(emoji));
+  const bases = skinTones.listCollapsedReactionEmojis().filter((emoji) => skinTones.hasSkinToneVariants(emoji));
 
   assert.ok(bases.length > 0);
   for (const base of bases) {
-    const tones = cjs.listSkinToneVariants(base);
-    assert.equal(tones.length, cjs.SKIN_TONES.length);
+    const tones = skinTones.listSkinToneVariants(base);
+    assert.equal(tones.length, skinTones.SKIN_TONES.length);
     assert.ok(Object.isFrozen(tones));
     tones.forEach((sequence, index) => {
       assert.ok(corpus.has(sequence));
-      assert.equal(cjs.skinToneBase(sequence), base);
-      assert.equal(cjs.applySkinTone(base, index), sequence);
+      assert.equal(skinTones.skinToneBase(sequence), base);
+      assert.equal(skinTones.applySkinTone(base, index), sequence);
       // Tone-uniform only: one swatch cannot mean two different hands.
-      const applied = [...sequence].filter((character) => cjs.SKIN_TONES.includes(character));
+      const applied = [...sequence].filter((character) => skinTones.SKIN_TONES.includes(character));
       assert.ok(applied.length > 0);
-      assert.ok(applied.every((tone) => tone === cjs.SKIN_TONES[index]));
+      assert.ok(applied.every((tone) => tone === skinTones.SKIN_TONES[index]));
     });
   }
 });
 
 test('a base without tones, and an out-of-range tone, resolve to the base itself', () => {
-  assert.equal(cjs.hasSkinToneVariants(GRINNING), false);
-  assert.deepEqual(cjs.listSkinToneVariants(GRINNING), []);
-  assert.equal(cjs.applySkinTone(GRINNING, 3), GRINNING);
-  assert.equal(cjs.skinToneBase(GRINNING), GRINNING);
+  assert.equal(skinTones.hasSkinToneVariants(GRINNING), false);
+  assert.deepEqual(skinTones.listSkinToneVariants(GRINNING), []);
+  assert.equal(skinTones.applySkinTone(GRINNING, 3), GRINNING);
+  assert.equal(skinTones.skinToneBase(GRINNING), GRINNING);
 
-  assert.equal(cjs.applySkinTone(WAVE, -1), WAVE);
-  assert.equal(cjs.applySkinTone(WAVE, 5), WAVE);
-  assert.equal(cjs.applySkinTone(WAVE, 2), WAVE_MEDIUM);
-  assert.equal(cjs.skinToneBase(WAVE_MEDIUM), WAVE);
-  assert.equal(cjs.isCollapsedSkinToneVariant(WAVE), false);
-  assert.equal(cjs.isCollapsedSkinToneVariant(WAVE_MEDIUM), true);
+  assert.equal(skinTones.applySkinTone(WAVE, -1), WAVE);
+  assert.equal(skinTones.applySkinTone(WAVE, 5), WAVE);
+  assert.equal(skinTones.applySkinTone(WAVE, 2), WAVE_MEDIUM);
+  assert.equal(skinTones.skinToneBase(WAVE_MEDIUM), WAVE);
+  assert.equal(skinTones.isCollapsedSkinToneVariant(WAVE), false);
+  assert.equal(skinTones.isCollapsedSkinToneVariant(WAVE_MEDIUM), true);
 });
 
 test('mixed-tone multi-person sequences are hidden rather than shown as extra colours', () => {
-  const visible = new Set(cjs.listCollapsedReactionEmojis());
+  const visible = new Set(skinTones.listCollapsedReactionEmojis());
 
   // Two people, one modifier each. No single swatch expresses "light hand, dark
   // hand", so this is not offered anywhere; showing it inline instead just read
   // as the same gesture repeated in colours.
   assert.ok(listReactionEmojis().includes(HANDSHAKE_MIXED));
   assert.equal(visible.has(HANDSHAKE_MIXED), false);
-  assert.equal(cjs.isCollapsedSkinToneVariant(HANDSHAKE_MIXED), true);
-  assert.equal(cjs.hasSkinToneVariants(cjs.skinToneBase(HANDSHAKE_MIXED)), false);
+  assert.equal(skinTones.isCollapsedSkinToneVariant(HANDSHAKE_MIXED), true);
+  assert.equal(skinTones.hasSkinToneVariants(skinTones.skinToneBase(HANDSHAKE_MIXED)), false);
 });
 
-test('the ESM view matches the CommonJS one', async () => {
-  const esm = await import('../src/emoji-skin-tones.mts');
-
-  assert.deepEqual(esm.SKIN_TONES, cjs.SKIN_TONES);
-  assert.deepEqual(esm.listCollapsedReactionEmojis(), cjs.listCollapsedReactionEmojis());
-  assert.deepEqual(esm.listSkinToneVariants(WAVE), cjs.listSkinToneVariants(WAVE));
-  assert.equal(esm.applySkinTone(WAVE, 4), cjs.applySkinTone(WAVE, 4));
-  assert.equal(esm.skinToneBase(WAVE_MEDIUM), cjs.skinToneBase(WAVE_MEDIUM));
-  assert.equal(esm.hasSkinToneVariants(WAVE), cjs.hasSkinToneVariants(WAVE));
-  assert.equal(
-    esm.isCollapsedSkinToneVariant(WAVE_MEDIUM),
-    cjs.isCollapsedSkinToneVariant(WAVE_MEDIUM)
-  );
-  // Cached, so repeated reads cannot drift.
-  assert.strictEqual(cjs.listCollapsedReactionEmojis(), cjs.listCollapsedReactionEmojis());
+test('the collapsed list is built once, so repeated reads cannot drift', () => {
+  assert.strictEqual(skinTones.listCollapsedReactionEmojis(), skinTones.listCollapsedReactionEmojis());
 });

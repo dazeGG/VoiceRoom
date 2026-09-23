@@ -1,7 +1,11 @@
-'use strict';
-const assert = require('node:assert/strict');
-const test = require('node:test');
-const { MAX_ATTACHMENT_BYTES, attachmentTextFallback, normalizeAttachment, normalizeAttachments } = require('../src/attachments.mts');
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import {
+  MAX_ATTACHMENT_BYTES,
+  attachmentTextFallback,
+  normalizeAttachment,
+  normalizeAttachments
+} from '../src/attachments.ts';
 
 const attachment = (overrides = {}) => ({ id: 'a', context: 'room', ownerId: 'owner', order: 0,
   mimeType: 'image/jpeg', bytes: MAX_ATTACHMENT_BYTES, width: 4000, height: 3000, state: 'ready', url: '/private', ...overrides });

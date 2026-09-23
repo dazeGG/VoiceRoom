@@ -51,7 +51,7 @@ async function loadNamespace(spec) {
 }
 
 function resolveRelative(spec, fromFile) {
-  if (/\.(?:js|mjs|cjs|mts|json)$/.test(spec)) return spec;
+  if (/\.(?:js|mjs|cjs|mts|ts|json)$/.test(spec)) return spec;
   const base = path.resolve(path.dirname(fromFile), spec);
   if (fs.existsSync(`${base}.js`)) return `${spec}.js`;
   if (fs.existsSync(path.join(base, 'index.js'))) return `${spec}/index.js`;

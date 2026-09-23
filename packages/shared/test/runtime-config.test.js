@@ -1,12 +1,6 @@
-'use strict';
-
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const {
-  inheritLiveKitGateCredential,
-  normalizeLiveKitServerUrl,
-  resolveLiveKitConnectUrls
-} = require('../src/runtime-config.mts');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { inheritLiveKitGateCredential, normalizeLiveKitServerUrl, resolveLiveKitConnectUrls } from '../src/runtime-config.ts';
 
 test('removes a legacy rtc path before LiveKit appends its signaling path', () => {
   assert.equal(

@@ -2,7 +2,7 @@
 // avatar colours, presence and screen-share profiles. Each returns the clean
 // value or an empty string, never throws.
 
-import visualIdentity from './visual-identity.mts';
+import visualIdentity from './visual-identity.ts';
 
 export type AvatarColorKey =
   | 'blurple'

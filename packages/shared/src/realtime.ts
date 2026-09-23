@@ -1,7 +1,7 @@
 // The realtime (WebSocket) envelope: what a client may send, what the server
 // answers, typing notices, and the room summary the lobby shows.
 
-import { cleanName, normalizePeerId, normalizeRoomId, normalizeSessionToken } from './validation.mts';
+import { cleanName, normalizePeerId, normalizeRoomId, normalizeSessionToken } from './validation.ts';
 
 export const MAX_VISIBLE_ROOM_PEERS = 5 as const;
 export const SUMMARY_COALESCE_MS = 75 as const;

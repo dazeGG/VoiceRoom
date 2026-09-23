@@ -1,18 +1,19 @@
-'use strict';
-
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const {
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {
   MAX_VISIBLE_ROOM_PEERS,
+  TYPING_ACTIVITIES,
+  TYPING_NOTICE_INTERVAL_MS,
+  TYPING_NOTICE_TTL_MS,
+  normalizeTypingActivity,
   parseClientEnvelope,
   buildServerEnvelope,
   toRoomPeerSummary,
   buildRoomRealtimeSummary,
   validateClientCommand
-} = require('../src/realtime.mts');
+} from '../src/realtime.ts';
 
 test('typing notices name a room or a user and carry nothing the server trusts', () => {
-  const { TYPING_NOTICE_INTERVAL_MS, TYPING_NOTICE_TTL_MS } = require('../src/realtime.mts');
   assert.ok(TYPING_NOTICE_TTL_MS > TYPING_NOTICE_INTERVAL_MS, 'a repeated notice arrives before the last one expires');
 
   assert.equal(validateClientCommand({ type: 'room.chat.typing', payload: { roomId: 'abcdefghij' } }).ok, true);
@@ -26,7 +27,6 @@ test('typing notices name a room or a user and carry nothing the server trusts',
 });
 
 test('a typing notice says whether the person types or picks an emoji, and means typing when it does not say', () => {
-  const { TYPING_ACTIVITIES, normalizeTypingActivity } = require('../src/realtime.mts');
   assert.deepEqual([...TYPING_ACTIVITIES], ['typing', 'emoji']);
   assert.equal(normalizeTypingActivity(undefined), 'typing');
   assert.equal(normalizeTypingActivity(null), 'typing');

@@ -1,8 +1,6 @@
-'use strict';
-
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const {
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {
   normalizeRoomId,
   normalizePeerId,
   normalizeSessionToken,
@@ -18,7 +16,7 @@ const {
   normalizeLogin,
   AVATAR_COLOR_KEYS,
   PRESENCE_STATUSES
-} = require('../src/validation.mts');
+} from '../src/validation.ts';
 
 test('normalizeRoomId accepts valid ids and trims', () => {
   assert.equal(normalizeRoomId('abc'), 'abc');

@@ -8,10 +8,10 @@
 // sequence, and per the 2.6 Unicode policy each tone stays a distinct key.
 //
 // Derived from the corpus rather than shipped as a table, for the same reason
-// `emoji-groups.mts` derives its ranges: `emoji.mts` is content-hash asserted by
+// `emoji-groups.ts` derives its ranges: `emoji.ts` is content-hash asserted by
 // G07 and must not grow a second copy of itself.
 
-import { listReactionEmojis } from './emoji.mts';
+import { listReactionEmojis } from './emoji.ts';
 
 type ToneFamily = Readonly<{ base: string; tones: readonly string[] }>;
 
