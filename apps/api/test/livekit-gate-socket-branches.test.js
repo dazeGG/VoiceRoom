@@ -9,7 +9,7 @@ import { EventEmitter } from 'node:events';
 import net from 'node:net';
 import test from 'node:test';
 
-import { createLiveKitAuthGateService } from '../src/domains/admission/livekit-auth-gate-service.js';
+import { createLiveKitAuthGateService } from '../src/domains/admission/livekit-auth-gate-service.ts';
 
 class FakeSocket extends EventEmitter {
   constructor({ writable = true, withEnd = true, throwOnWrite = false } = {}) {

@@ -7,7 +7,7 @@ import { parseArgs } from 'node:util';
 
 const require = createRequire(import.meta.url);
 const { AccessToken, TrackSource } = require('livekit-server-sdk');
-const { createGateCredentialSigner } = require('../../apps/api/src/domains/admission/gate-credential-signer.js');
+const { createGateCredentialSigner } = require('../../apps/api/src/domains/admission/gate-credential-signer.ts');
 const { createDbPool } = require('../../apps/api/src/lib/db.js');
 const { runMigrations } = require('../../apps/api/src/lib/migrate.js');
 const { createRoomStore } = require('../../apps/api/src/lib/room-store.js');
@@ -58,7 +58,7 @@ async function waitForGateReady(port, expectedStatus = 200) {
 }
 
 function startGate({ databaseUrl, port }) {
-  const child = spawn(process.execPath, ['apps/api/src/domains/admission/livekit-auth-gate-service.js'], {
+  const child = spawn(process.execPath, ['apps/api/src/domains/admission/livekit-auth-gate-service.ts'], {
     cwd: process.cwd(),
     env: {
       ...process.env,
@@ -225,7 +225,7 @@ export async function runPhysicalReplay() {
     selectedMechanism: 'external-auth-gate',
     topology: {
       databaseUrl: DATABASE_URL.replace(/:\/\/([^:]+):([^@]+)@/, '://$1:<redacted>@'),
-      gateEntrypoint: 'apps/api/src/domains/admission/livekit-auth-gate-service.js',
+      gateEntrypoint: 'apps/api/src/domains/admission/livekit-auth-gate-service.ts',
       livekitImage: 'livekit/livekit-server:v1.13.2',
       livekitInternalUrl: LIVEKIT_INTERNAL_URL
     }

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import { Pool } from 'pg';
 
-import { createAccountDeletionRepository } from '../src/domains/account/account-deletion-repository.js';
+import { createAccountDeletionRepository } from '../src/domains/account/account-deletion-repository.ts';
 import { createUserStore } from '../src/lib/user-store.js';
 import { runMigrations } from '../src/lib/migrate.js';
 import { ACCOUNT_DELETION_GRACE_MS, DELETED_ACCOUNT_NAME } from '@voice-room/shared/account-security';

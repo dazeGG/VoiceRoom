@@ -1,8 +1,15 @@
-function createLinkPreviewRepository({ pool }) {
+import type pg from 'pg';
+import type { LinkPreview } from '@voice-room/shared/link-preview';
+
+type QueryClient = Pick<pg.Pool, 'query'>;
+
+export type CachedPreview = { status: 'ready' | 'failed'; preview: unknown; failureCode: string | null };
+
+function createLinkPreviewRepository({ pool }: { pool: QueryClient }) {
   if (!pool) throw new TypeError('A database pool is required');
 
-  async function getCached(urlHash, now) {
-    const result = await pool.query(
+  async function getCached(urlHash: string, now: number): Promise<CachedPreview | null> {
+    const result = await pool.query<{ status: 'ready' | 'failed'; preview: unknown; failure_code: string | null }>(
       `SELECT status, preview, failure_code FROM link_previews WHERE url_hash = $1 AND expires_at > $2`,
       [urlHash, new Date(now)]
     );
@@ -10,7 +17,14 @@ function createLinkPreviewRepository({ pool }) {
     return row ? { status: row.status, preview: row.preview, failureCode: row.failure_code } : null;
   }
 
-  async function saveCached({ urlHash, url, preview, failureCode = null, now, ttlMs }) {
+  async function saveCached({ urlHash, url, preview, failureCode = null, now, ttlMs }: {
+    urlHash: string;
+    url: string;
+    preview: LinkPreview | null;
+    failureCode?: string | null;
+    now: number;
+    ttlMs: number;
+  }): Promise<void> {
     await pool.query(
       `INSERT INTO link_previews (url_hash, url, status, preview, failure_code, fetched_at, expires_at)
        VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7)
@@ -37,28 +51,38 @@ function createLinkPreviewRepository({ pool }) {
     ELSE jsonb_set(metadata, '{linkPreview}', $4::jsonb)
   END`;
 
-  async function setRoomMessagePreview({ roomId, messageId, text, preview }) {
+  async function setRoomMessagePreview({ roomId, messageId, text, preview }: {
+    roomId: string;
+    messageId: string;
+    text: string;
+    preview: LinkPreview | null;
+  }): Promise<boolean> {
     const result = await pool.query(
       `UPDATE room_messages SET ${PREVIEW_ASSIGNMENT}
        WHERE room_id = $1 AND id = $2 AND text = $3 AND deleted_at IS NULL
          AND (metadata -> 'linkPreview') IS DISTINCT FROM $4::jsonb`,
       [roomId, messageId, text, preview ? JSON.stringify(preview) : null]
     );
-    return result.rowCount > 0;
+    return (result.rowCount ?? 0) > 0;
   }
 
-  async function setDirectMessagePreview({ messageId, senderId, text, preview }) {
+  async function setDirectMessagePreview({ messageId, senderId, text, preview }: {
+    messageId: string;
+    senderId: string;
+    text: string;
+    preview: LinkPreview | null;
+  }): Promise<boolean> {
     const result = await pool.query(
       `UPDATE direct_messages SET ${PREVIEW_ASSIGNMENT}
        WHERE id = $1 AND sender_id = $2 AND body = $3 AND deleted_at IS NULL
          AND (metadata -> 'linkPreview') IS DISTINCT FROM $4::jsonb`,
       [messageId, senderId, text, preview ? JSON.stringify(preview) : null]
     );
-    return result.rowCount > 0;
+    return (result.rowCount ?? 0) > 0;
   }
 
-  async function listReferencedImageKeys() {
-    const result = await pool.query(
+  async function listReferencedImageKeys(): Promise<string[]> {
+    const result = await pool.query<{ key: string | null }>(
       `SELECT preview -> 'image' ->> 'key' AS key FROM link_previews
        WHERE preview -> 'image' ->> 'key' IS NOT NULL
        UNION
@@ -68,10 +92,10 @@ function createLinkPreviewRepository({ pool }) {
        SELECT metadata -> 'linkPreview' -> 'image' ->> 'key' FROM direct_messages
        WHERE metadata -> 'linkPreview' -> 'image' ->> 'key' IS NOT NULL`
     );
-    return result.rows.map((row) => row.key).filter(Boolean);
+    return result.rows.map((row) => row.key).filter((key): key is string => Boolean(key));
   }
 
-  async function pruneExpired(now) {
+  async function pruneExpired(now: number): Promise<number | null> {
     const result = await pool.query('DELETE FROM link_previews WHERE expires_at <= $1', [new Date(now)]);
     return result.rowCount;
   }
@@ -85,5 +109,7 @@ function createLinkPreviewRepository({ pool }) {
     setRoomMessagePreview
   };
 }
+
+export type LinkPreviewRepository = ReturnType<typeof createLinkPreviewRepository>;
 
 export { createLinkPreviewRepository };

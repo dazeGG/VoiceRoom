@@ -45,7 +45,7 @@ import { getClientIp, createFailureLimiter, createRateLimiter } from './lib/rate
 import { reconcileAvatarStorage } from './lib/avatar-reconciliation.js';
 import { createAvatarStorage } from './lib/avatar-storage.js';
 import { createLinkPreviewStorage, reconcileLinkPreviewImages } from './lib/link-preview-storage.js';
-import { createLinkPreviewRepository } from './domains/link-previews/link-preview-repository.js';
+import { createLinkPreviewRepository } from './domains/link-previews/link-preview-repository.ts';
 import { avatarColorForPeerId, createRoomStore } from './lib/room-store.js';
 import { createUserStore } from './lib/user-store.js';
 import { createFriendStore } from './lib/friend-store.js';

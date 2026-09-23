@@ -31,10 +31,10 @@
       "name": "auth-admission",
       "enforcement": "on-changed",
       "paths": [
-        "apps/api/src/domains/admission/credential-boundary-service.js",
-        "apps/api/src/domains/admission/gate-credential-signer.js",
-        "apps/api/src/domains/admission/livekit-auth-gate-service.js",
-        "apps/api/src/domains/admission/livekit-credential-provider.js"
+        "apps/api/src/domains/admission/credential-boundary-service.ts",
+        "apps/api/src/domains/admission/gate-credential-signer.ts",
+        "apps/api/src/domains/admission/livekit-auth-gate-service.ts",
+        "apps/api/src/domains/admission/livekit-credential-provider.ts"
       ],
       "pathPatterns": []
     },

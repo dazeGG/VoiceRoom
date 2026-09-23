@@ -7,7 +7,7 @@ import { spawn } from 'node:child_process';
 import path from 'node:path';
 import os from 'node:os';
 import { Pool } from 'pg';
-import { createAccountDeletionRepository } from '../src/domains/account/account-deletion-repository.js';
+import { createAccountDeletionRepository } from '../src/domains/account/account-deletion-repository.ts';
 import { ACCOUNT_DELETION_GRACE_MS } from '@voice-room/shared/account-security';
 import { createTestDatabase } from './db-harness.js';
 
