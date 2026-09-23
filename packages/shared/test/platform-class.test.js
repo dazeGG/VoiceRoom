@@ -44,7 +44,8 @@ test('browser-facing shared modules expose named ESM exports', async () => {
   };
 
   for (const [subpath, names] of Object.entries(expectedExports)) {
-    assert.match(packageJson.exports[`./${subpath}`].import, /\.mjs$/);
+    const target = packageJson.exports[`./${subpath}`];
+    assert.match(typeof target === 'string' ? target : target.import, /\.m(js|ts)$/);
     const esm = await import(`@voice-room/shared/${subpath}`);
     for (const name of names) assert.ok(name in esm, `${subpath} must export ${name}`);
   }
@@ -100,7 +101,8 @@ test('browser ESM and CommonJS contracts stay behaviorally aligned', async () =>
     }
   }
 
-  for (const moduleName of moduleNames) {
+  // A module migrated to one TypeScript source has no twin left to drift.
+  for (const moduleName of moduleNames.filter((name) => typeof packageJson.exports[`./${name}`] !== 'string')) {
     const cjs = require(`../src/${moduleName}.js`);
     const esm = await import(pathToFileURL(path.join(__dirname, `../src/${moduleName}.mjs`)).href);
     assert.deepEqual(Object.keys(esm).sort(), Object.keys(cjs).sort(), `${moduleName} export names drifted`);

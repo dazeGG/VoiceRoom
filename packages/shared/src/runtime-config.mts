@@ -1,13 +1,24 @@
-'use strict';
+// The runtime config the web app reads from /runtime-config.json: which
+// LiveKit URLs to try. Anything malformed falls back to the build default,
+// and a gate credential carried by the API's URL is kept on every fallback.
 
-const RUNTIME_CONFIG_CONTRACT = 'voice-room.runtime-config/v1';
-const RUNTIME_SCHEMA_VERSION = 1;
+export interface RuntimeConfigV1 {
+  contractVersion: 'voice-room.runtime-config/v1';
+  schemaVersion: 1;
+  livekit: {
+    wsUrl: string;
+    connectFallbacks: string[];
+  };
+}
 
-const runtimeLiveKitUrl = typeof process !== 'undefined' && process?.env
-  ? process.env.RUNTIME_LIVEKIT_URL || ''
-  : '';
+const RUNTIME_CONFIG_CONTRACT: RuntimeConfigV1['contractVersion'] = 'voice-room.runtime-config/v1';
+const RUNTIME_SCHEMA_VERSION: RuntimeConfigV1['schemaVersion'] = 1;
 
-const DEFAULT_RUNTIME_CONFIG = {
+// The API reads RUNTIME_LIVEKIT_URL; the browser has no process at all.
+const runtimeProcess = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process;
+const runtimeLiveKitUrl = runtimeProcess?.env ? runtimeProcess.env.RUNTIME_LIVEKIT_URL || '' : '';
+
+const DEFAULT_RUNTIME_CONFIG: RuntimeConfigV1 = {
   contractVersion: RUNTIME_CONFIG_CONTRACT,
   schemaVersion: RUNTIME_SCHEMA_VERSION,
   livekit: {
@@ -16,7 +27,7 @@ const DEFAULT_RUNTIME_CONFIG = {
   }
 };
 
-function normalizeLiveKitUrl(value) {
+function normalizeLiveKitUrl(value: unknown): string {
   if (typeof value !== 'string') return '';
   const url = value.trim();
   if (!/^wss?:\/\//i.test(url)) return '';
@@ -29,7 +40,7 @@ function normalizeLiveKitUrl(value) {
   }
 }
 
-function normalizeLiveKitServerUrl(value) {
+function normalizeLiveKitServerUrl(value: unknown): string {
   const normalized = normalizeLiveKitUrl(value);
   if (!normalized) return '';
 
@@ -42,7 +53,7 @@ function normalizeLiveKitServerUrl(value) {
   }
 }
 
-function inheritLiveKitGateCredential(targetUrl, credentialUrl) {
+function inheritLiveKitGateCredential(targetUrl: unknown, credentialUrl: unknown): string {
   const target = normalizeLiveKitServerUrl(targetUrl);
   const source = normalizeLiveKitServerUrl(credentialUrl);
   if (!target || !source) return target;
@@ -58,7 +69,7 @@ function inheritLiveKitGateCredential(targetUrl, credentialUrl) {
   }
 }
 
-function resolveLiveKitConnectUrls(runtimeConfig, apiUrl) {
+function resolveLiveKitConnectUrls(runtimeConfig: RuntimeConfigV1 | null | undefined, apiUrl: unknown): string[] {
   const api = normalizeLiveKitServerUrl(apiUrl);
   const configured = [runtimeConfig?.livekit?.wsUrl, ...(runtimeConfig?.livekit?.connectFallbacks || [])]
     .map((url) => inheritLiveKitGateCredential(url, api))
@@ -66,16 +77,17 @@ function resolveLiveKitConnectUrls(runtimeConfig, apiUrl) {
   return [...new Set([...configured, api].filter(Boolean))];
 }
 
-function normalizePayload(value) {
+function normalizePayload(value: unknown): RuntimeConfigV1 | null {
   if (!value || typeof value !== 'object') return null;
-  const candidate = {
+  const livekit = (value as { livekit?: { wsUrl?: unknown; connectFallbacks?: unknown } }).livekit;
+  const candidate: RuntimeConfigV1 = {
     contractVersion: RUNTIME_CONFIG_CONTRACT,
     schemaVersion: RUNTIME_SCHEMA_VERSION,
     livekit: {
-      wsUrl: normalizeLiveKitServerUrl(value.livekit?.wsUrl),
-      connectFallbacks: Array.isArray(value.livekit?.connectFallbacks)
-        ? value.livekit.connectFallbacks
-            .map((item) => normalizeLiveKitServerUrl(item))
+      wsUrl: normalizeLiveKitServerUrl(livekit?.wsUrl),
+      connectFallbacks: Array.isArray(livekit?.connectFallbacks)
+        ? livekit.connectFallbacks
+            .map((item: unknown) => normalizeLiveKitServerUrl(item))
             .filter(Boolean)
         : []
     }
@@ -84,14 +96,14 @@ function normalizePayload(value) {
   if (!candidate.livekit.wsUrl && !candidate.livekit.connectFallbacks.length) return null;
 
   const values = new Set([candidate.livekit.wsUrl, ...candidate.livekit.connectFallbacks]);
-  candidate.livekit.connectFallbacks = [...values].filter((value) => value !== candidate.livekit.wsUrl);
+  candidate.livekit.connectFallbacks = [...values].filter((url) => url !== candidate.livekit.wsUrl);
 
   return candidate;
 }
 
-function parseRuntimeConfig(raw) {
+function parseRuntimeConfig(raw: unknown): RuntimeConfigV1 | null {
   if (typeof raw !== 'string') return null;
-  let parsed;
+  let parsed: { contractVersion?: unknown; schemaVersion?: unknown } | null;
   try {
     parsed = JSON.parse(raw);
   } catch {
@@ -105,7 +117,7 @@ function parseRuntimeConfig(raw) {
   return normalizePayload(parsed) || null;
 }
 
-function getRuntimeConfig(raw) {
+function getRuntimeConfig(raw: unknown): RuntimeConfigV1 {
   const parsed = parseRuntimeConfig(raw);
   return parsed || {
     ...DEFAULT_RUNTIME_CONFIG,
@@ -117,7 +129,7 @@ function getRuntimeConfig(raw) {
   };
 }
 
-module.exports = {
+export {
   DEFAULT_RUNTIME_CONFIG,
   RUNTIME_CONFIG_CONTRACT,
   RUNTIME_SCHEMA_VERSION,
