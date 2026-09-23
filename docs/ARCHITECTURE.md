@@ -126,6 +126,7 @@ Done so far:
 - PR 8c: room lifecycle (`domains/rooms/room-lifecycle.ts`: lobby card and room.updated, profile refresh on live seats, invitation expiry, deleted-room teardown), account lifecycle (`domains/account/account-lifecycle.ts`: profile broadcast to friends, ending session connections, finishing due deletions) and the maintenance timers (`platform/maintenance.ts`).
 - PR 8d: the lazily built stores and services move to `app/service-registry.js` (`createServiceRegistry(config, deps)` with `applyOverrides` for createApiApp's test doubles, `install` for bootstrap's stores, `close`); what they need from the realtime layer comes in as `deps`. It stays JavaScript while the factories it wires are JavaScript, since their inferred types are too loose to check the wiring.
 - PR 8e: every environment variable the API reads at start-up moves to `app/config.ts` (`readApiConfig(env)`, frozen, same names).
+- PR 8f: security headers (`platform/http/security-headers.ts`), the request log line (`platform/http/request-log.ts`) and graceful shutdown (`app/graceful-shutdown.ts`) leave `server.js`. `/api/capabilities` was the last route on `runLegacyHandler` and now uses its native path, so it gains the security headers, metric and log line; `runLegacyHandler` and `sendJson` are gone.
 - Typed before PR 0: `domains/admission/livekit-token-binding.mts`, `lib/image-signature.mts`, `platform/http/origin-guard.mts`.
 
 ## 5. Runtime state and scaling

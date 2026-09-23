@@ -1,12 +1,7 @@
-// What every Fastify-native route gets for free. The legacy handlers write
-// their own responses through sendJson() and time themselves in
-// runLegacyHandler(); a route that replies through Fastify must end up with
-// the same security headers, the same `{ ok: false, error }` failures and the
-// same request metric and log line, or moving a route out of server.js would
-// silently change what clients and operators see.
-//
-// Hijacked (legacy) replies skip Fastify's onSend/onResponse hooks, so nothing
-// here double-counts them.
+// What every route gets for free: the security headers, `no-store`, the
+// `{ ok: false, error }` failure shape, and one request metric and log line.
+// A route that hijacks its reply skips Fastify's onSend/onResponse hooks and
+// with them all of this, so no route does.
 
 import type { FastifyError, FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
