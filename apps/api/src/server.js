@@ -92,6 +92,10 @@ import { registerPeerModerationRoutes } from './domains/rooms/peer-moderation.ro
 import { publicLobbyRoom as lobbyRoomView, publicPeer, roomBanned } from './domains/rooms/room-views.ts';
 import { ownerRefusal, registerRoomRoutes } from './domains/rooms/rooms.routes.ts';
 import { createRoomsService } from './domains/rooms/rooms.service.ts';
+import { cleanUuid, messageFingerprint, normalizeAttachmentIds, requestIdempotencyKey } from './domains/messaging/message-input.ts';
+import { publicChatMessage } from './domains/messaging/room-chat-views.ts';
+import { registerRoomChatRoutes } from './domains/messaging/room-chat.routes.ts';
+import { createRoomChatService } from './domains/messaging/room-chat.service.ts';
 import { createAdmissionService } from './domains/admission/admission.service.ts';
 import { createLiveKitAdmin } from './domains/admission/livekit-admin.ts';
 import { readLiveKitConfig } from './domains/admission/livekit-config.ts';
@@ -549,16 +553,6 @@ function getMessageDeliveryServices() {
   return messageDeliveryServices;
 }
 
-function requestIdempotencyKey(req, body) {
-  const value = req?.headers?.['idempotency-key'] ?? body?.idempotencyKey;
-  const key = typeof value === 'string' ? value.trim() : '';
-  return key.length >= 8 && key.length <= 160 ? key : '';
-}
-
-function messageFingerprint(value) {
-  return crypto.createHash('sha256').update(JSON.stringify(value)).digest('hex');
-}
-
 async function dispatchMessageDeliveryEvent(event) {
   if (!event || event.type !== 'message.created' || !event.message) return;
   if (event.conversation?.type === 'room') {
@@ -751,13 +745,6 @@ function getMediaServices() {
   });
   mediaServices = { attachments, jobs, pressure, quota, service, storage, visibility };
   return mediaServices;
-}
-
-function normalizeAttachmentIds(value) {
-  if (value === undefined) return [];
-  if (!Array.isArray(value) || value.length > 4) return null;
-  const ids = value.map((id) => cleanUuid(id));
-  return ids.every(Boolean) && new Set(ids).size === ids.length ? ids : null;
 }
 
 function publicAttachment(attachment) {
@@ -1131,6 +1118,32 @@ const peerModeration = createPeerModerationService({
   },
   notifyPeer: (peer, event) => sendEvent(peer, event),
   maxBans: MAX_ROOM_BANS,
+  logger: () => getProcessLogger()
+});
+const roomChat = createRoomChatService({
+  messages: getMessageService,
+  readService: () => getHistoryServices().read,
+  getRoom,
+  findRoomBan,
+  feature: release250FeatureEnabled,
+  prepareContent: (input) => createContentRepository().prepareWrite(input),
+  mentionUserIds: mentionUserIdsFromContent,
+  limiter: roomChatLimiter,
+  findUser: (userId) => getUserStore().getUserById(userId),
+  media: getMediaServices,
+  replies: () => createReplyRepository({ client: getRelease250Pool() }),
+  notifications: getNotificationServices,
+  delivery: getMessageDeliveryServices,
+  projectMedia: attachMediaProjection,
+  projectReply: attachReplyProjection,
+  identity: { chatPeerId: sessionChatPeerId, avatarColorKey: sessionAvatarColorKey, displayName: sessionDisplayName },
+  directEmit: MESSAGE_DIRECT_EMIT_ENABLED,
+  broadcastChatMessage: (roomId, message) => roomRuntime?.broadcastChatMessage(roomId, message),
+  broadcastRoomDetail: (roomId, event) => roomRuntime?.broadcastRoomDetail?.(roomId, event),
+  roomDetailEvent: buildServerEnvelope,
+  scheduleLinkPreview: scheduleRoomLinkPreview,
+  refreshPins: refreshPinsAfterMessageMutation,
+  sendRoomSummaryToUser: async (roomId, userId) => { await roomRuntime?.sendRoomSummaryToUser(roomId, userId); },
   logger: () => getProcessLogger()
 });
 
@@ -1561,45 +1574,6 @@ function closePeer(roomId, peerId, transportId, reason = 'left') {
   } else {
     room.updatedAt = Date.now();
   }
-}
-
-function cleanChatText(value) {
-  // Preserve newlines for multiline chat (2.4.0); collapse only horizontal runs.
-  // Cap consecutive blank lines and total lines; length cap remains.
-  let text = String(value || '')
-    .replace(/[^\S\n]+/g, ' ')
-    .replace(/ *\n */g, '\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
-  const lines = text.split('\n');
-  if (lines.length > 20) {
-    text = lines.slice(0, 20).join('\n');
-  }
-  return text.slice(0, 500);
-}
-
-function publicChatMessage(message) {
-  return {
-    authorUserId: message.authorUserId || null,
-    avatarAccent: message.avatarAccent || null,
-    avatarColorKey: message.avatarColorKey || avatarColorForPeerId(message.peerId),
-    avatarUrl: message.avatarUrl || (message.avatarKey
-      ? `/api/avatars/${encodeURIComponent(message.avatarKey)}`
-      : null),
-    createdAt: message.createdAt,
-    editedAt: message.editedAt || null,
-    expiresAt: message.expiresAt,
-    id: message.id,
-    name: message.name,
-    peerId: message.peerId,
-    roomId: message.roomId,
-    text: message.text,
-    content: message.content,
-    attachments: Array.isArray(message.attachments) ? message.attachments : [],
-    linkPreview: message.linkPreview || undefined,
-    replyTo: message.replyTo,
-    replyPreview: message.replyPreview
-  };
 }
 
 async function readJsonBody(req) {
@@ -2504,311 +2478,6 @@ async function handleGetLinkPreviewImage(res, key) {
   stream.pipe(res);
 }
 
-async function handleMarkRoomChatRead(req, res, rawRoomId) {
-  const user = await requireSessionUser(req, res);
-  if (!user) return;
-  const roomId = normalizeRoomId(rawRoomId);
-  if (!roomId) {
-    sendJson(res, 404, { ok: false, error: 'Комната не найдена' });
-    return;
-  }
-
-  const body = await readJsonBody(req);
-  if (typeof body.cursor === 'string' && body.cursor) {
-    try {
-      const result = await getHistoryServices().read.advanceRoom({ cursor: body.cursor, roomId, userId: user.id });
-      await retireRoomNotifications(roomId, user.id, result.readThrough);
-      await roomRuntime?.sendRoomSummaryToUser(roomId, user.id);
-      sendJson(res, 200, { ok: true, ...result });
-    } catch (error) {
-      sendJson(res, error.statusCode || 400, { ok: false, code: error.code || 'invalid_read_cursor', error: error.message });
-    }
-    return;
-  }
-
-  const lastReadAt = await getMessageService().room.markRoomChatRead(roomId, user.id);
-  if (lastReadAt == null) {
-    sendJson(res, 404, { ok: false, error: 'Комната не найдена' });
-    return;
-  }
-  await retireRoomNotifications(roomId, user.id, lastReadAt);
-  await roomRuntime?.sendRoomSummaryToUser(roomId, user.id);
-  sendJson(res, 200, { ok: true, lastReadAt, unreadCount: 0 });
-}
-
-/**
- * Reading a room's chat retires the notifications it produced. They are two
- * records of the same event, and leaving them apart meant the bell still
- * claimed unread mentions for messages already read — and said so again after
- * every reload. Best-effort: a read that succeeded must not fail over this.
- */
-async function retireRoomNotifications(roomId, userId, through) {
-  try {
-    // No release-2.5 pool means no inbox to retire; that is a quiet no-op, not
-    // a TypeError logged on every read.
-    const service = getNotificationServices()?.service;
-    if (typeof service?.markRoomRead !== 'function') return;
-    await service.markRoomRead({ userId, roomId, through: through ?? null });
-  } catch (error) {
-    getProcessLogger().error({ evt: LOG_EVENTS.NOTIFICATION_RETIRE_FAILED, err: error }, 'failed to retire room notifications');
-  }
-}
-
-// The room link is the capability for guests, so this list stays readable to
-// anyone who can join — but not to someone the room has banned, who can no
-// longer join either. Account members use the paginated history route.
-async function handleRoomChatList(req, res, roomId) {
-  const room = await getRoom(roomId);
-  if (!room) {
-    sendJson(res, 404, { ok: false, error: 'Room not found', roomId });
-    return;
-  }
-  const sessionUser = await resolveOptionalSessionUser(req);
-  if (await findRoomBan(roomId, sessionUser?.id, getClientIp(req, TRUST_PROXY))) {
-    sendRoomBanned(res, roomId);
-    return;
-  }
-
-  const storedMessages = await getMessageService().room.listMessages(roomId, { limit: 100 });
-  const messages = await Promise.all(storedMessages.map(async (message) => attachReplyProjection(
-    'room',
-    await attachMediaProjection('room', message),
-    { roomId }
-  )));
-  sendJson(res, 200, {
-    ok: true,
-    messages: messages.map(publicChatMessage),
-    roomId
-  });
-}
-
-async function handleRoomChatPost(req, res, roomId) {
-  const room = await getRoom(roomId);
-  const clientIp = getClientIp(req, TRUST_PROXY);
-  const body = await readJsonBody(req);
-  const requestedPeerId = normalizePeerId(body.peerId);
-  const sessionToken = normalizeSessionToken(body.sessionToken);
-  const sessionUser = await resolveOptionalSessionUser(req);
-  const requestedName = cleanName(body.name);
-  let text = cleanChatText(body.text);
-  let content;
-  let mentionUserIds = [];
-  if (body.content != null) {
-    if (!release250FeatureEnabled('engagement')) {
-      sendJson(res, 409, { ok: false, error: 'Structured messages are unavailable' });
-      return;
-    }
-    try {
-      const prepared = createContentRepository().prepareWrite({ content: body.content, text });
-      content = prepared.content;
-      text = prepared.text;
-      const mentions = mentionUserIdsFromContent(content, { creatorUserId: sessionUser?.id || '' });
-      if (!mentions.ok) {
-        sendJson(res, 422, { ok: false, code: mentions.code, error: 'Invalid mention target' });
-        return;
-      }
-      mentionUserIds = mentions.userIds;
-    } catch {
-      sendJson(res, 400, { ok: false, code: 'invalid_message_content', error: 'Invalid message content' });
-      return;
-    }
-  }
-  const attachmentIds = normalizeAttachmentIds(body.attachmentIds);
-  const replyToMessageId = body.replyTo == null ? '' : cleanUuid(body.replyTo?.messageId);
-  const idempotencyKey = requestIdempotencyKey(req, body);
-
-  if (!room) {
-    sendJson(res, 404, { ok: false, error: 'Room not found', roomId });
-    return;
-  }
-
-  if (await findRoomBan(roomId, sessionUser?.id, clientIp)) {
-    sendRoomBanned(res, roomId);
-    return;
-  }
-
-  if (attachmentIds === null) {
-    sendJson(res, 400, { ok: false, error: 'Invalid attachments' });
-    return;
-  }
-  if (body.replyTo != null && (!replyToMessageId || !release250FeatureEnabled('replies'))) {
-    sendJson(res, 409, { ok: false, error: 'Reply target is unavailable' });
-    return;
-  }
-
-  if (!text && attachmentIds.length === 0) {
-    sendJson(res, 400, { ok: false, error: 'Invalid chat message' });
-    return;
-  }
-
-  const rate = roomChatLimiter.check(`${clientIp}:${roomId}`);
-  if (!rate.allowed) {
-    sendJson(
-      res,
-      429,
-      { ok: false, error: 'Too many chat messages', retryAfterSeconds: rate.retryAfterSeconds },
-      { 'Retry-After': String(rate.retryAfterSeconds) }
-    );
-    return;
-  }
-
-  // A requested peer id is only honoured when it is a live roster entry whose
-  // session token matches below. Anything else — including another guest's id
-  // or a reserved `auth-` id — falls back to the caller's own account peer id,
-  // so a message can never be filed under an identity the caller does not hold.
-  const activePeer = requestedPeerId && !isReservedPeerId(requestedPeerId) ? room.peers.get(requestedPeerId) : null;
-  let peerId = activePeer ? requestedPeerId : sessionChatPeerId(sessionUser);
-  let avatarColorKey = sessionAvatarColorKey(sessionUser) || avatarColorForPeerId(peerId);
-  if (activePeer) {
-    if (!tokensMatch(activePeer.sessionToken, sessionToken)) {
-      sendJson(res, 403, { ok: false, error: 'Invalid peer session' });
-      return;
-    }
-    if (await findRoomBan(roomId, activePeer.accountUserId, activePeer.ip || clientIp)) {
-      sendRoomBanned(res, roomId);
-      return;
-    }
-    peerId = activePeer.id;
-    if (sessionAvatarColorKey(sessionUser)) activePeer.avatarColorKey = sessionAvatarColorKey(sessionUser);
-    avatarColorKey = activePeer.avatarColorKey || avatarColorForPeerId(peerId);
-  } else if (!sessionUser) {
-    sendJson(res, 403, { ok: false, error: 'Active room presence or login required' });
-    return;
-  }
-
-  let authorUser = sessionUser;
-  if (!authorUser && activePeer?.accountUserId) {
-    try {
-      authorUser = await getUserStore().getUserById(activePeer.accountUserId);
-    } catch (error) {
-      getProcessLogger().warn({ evt: LOG_EVENTS.MESSAGE_AUTHOR_PROFILE_FAILED, roomId, err: error }, 'failed to resolve a room chat author profile');
-    }
-  }
-
-  const name = sessionDisplayName(authorUser) || activePeer?.name || requestedName;
-  const authorUserId = authorUser?.id || activePeer?.accountUserId || null;
-  const media = attachmentIds.length > 0 ? getMediaServices() : null;
-  const replies = replyToMessageId ? createReplyRepository({ client: getRelease250Pool() }) : null;
-  const notifications = getNotificationServices();
-  const delivery = getMessageDeliveryServices();
-  let idempotencyLedgerKey = '';
-  let replyPreview;
-  let replyTargetUserId = null;
-  if (attachmentIds.length > 0 && (!authorUserId || !media || !release250FeatureEnabled('mediaUploads'))) {
-    sendJson(res, 503, { ok: false, error: 'Media uploads are unavailable' });
-    return;
-  }
-  const now = Date.now();
-  const message = await getMessageService().room.appendMessage(roomId, {
-    createdAt: now,
-    id: crypto.randomUUID?.() || crypto.randomBytes(16).toString('hex'),
-    avatarColorKey,
-    name,
-    peerId,
-    text,
-    content,
-    authorUserId,
-    replyToMessageId: replyToMessageId || null,
-    beforeUnitOfWork: idempotencyKey && delivery
-      ? async (client) => {
-          const reservation = await delivery.idempotency.reserve(client, {
-            actorType: authorUserId ? 'account' : 'guest',
-            actorId: authorUserId || peerId,
-            conversation: { type: 'room', id: roomId },
-            key: idempotencyKey,
-            fingerprint: messageFingerprint({ text, content, attachmentIds, replyToMessageId })
-          });
-          if (reservation.kind === 'replay') {
-            return { replay: true, message: reservation.response.body?.message };
-          }
-          idempotencyLedgerKey = reservation.ledgerKey;
-          return null;
-        }
-      : null,
-    unitOfWork: attachmentIds.length > 0 || replyToMessageId || mentionUserIds.length > 0 || delivery
-      ? async (client, inserted) => {
-          if (replyToMessageId) {
-            const target = await replies.lockRoomTarget({ roomId, messageId: replyToMessageId, client });
-            replyPreview = await requireReplyTarget({ message: target, visibility: true });
-            replyTargetUserId = target?.authorUserId || null;
-          }
-          if (attachmentIds.length > 0) {
-            await media.attachments.bindReady({
-              ownerId: authorUserId,
-              context: 'room',
-              messageId: inserted.id,
-              attachmentIds
-            }, client);
-          }
-          if (
-            authorUserId
-            && notifications
-            && release250FeatureEnabled('engagement')
-            && (mentionUserIds.length > 0 || replyTargetUserId)
-          ) {
-            await notifications.service.createAddressedForMessage({
-              roomId,
-              messageId: inserted.id,
-              creatorUserId: authorUserId,
-              targetUserIds: mentionUserIds,
-              replyTargetUserId,
-              body: text,
-              client
-            });
-          }
-          if (delivery) {
-            const deliveryMessage = {
-              ...inserted,
-              name,
-              avatarAccent: authorUser?.avatarAccent || activePeer?.avatarAccent || null,
-              avatarColorKey,
-              avatarKey: authorUser?.avatarKey || null,
-              avatarUrl: authorUser?.avatarKey
-                ? `/api/avatars/${encodeURIComponent(authorUser.avatarKey)}`
-                : activePeer?.avatarUrl || null
-            };
-            await delivery.outbox.enqueue(client, {
-              eventId: crypto.randomUUID(),
-              type: 'message.created',
-              conversation: { type: 'room', id: roomId },
-              messageId: inserted.id,
-              message: deliveryMessage
-            });
-          }
-          if (idempotencyLedgerKey) {
-            await delivery.idempotency.complete(client, idempotencyLedgerKey, {
-              body: { message: inserted },
-              messageId: inserted.id,
-              statusCode: 201
-            });
-          }
-        }
-      : null
-  });
-
-  if (!message) {
-    sendJson(res, 400, { ok: false, error: 'Invalid chat message' });
-    return;
-  }
-
-  const projectedBase = await attachMediaProjection('room', message);
-  const projectedMessage = message.idempotencyReplay
-    ? await attachReplyProjection('room', projectedBase, { roomId })
-    : { ...projectedBase, replyPreview };
-  const publicMessage = {
-    ...projectedMessage,
-    name,
-    avatarAccent: authorUser?.avatarAccent || activePeer?.avatarAccent || null,
-    avatarColorKey,
-    avatarUrl: authorUser?.avatarKey
-      ? `/api/avatars/${encodeURIComponent(authorUser.avatarKey)}`
-      : activePeer?.avatarUrl || null
-  };
-  if (!message.idempotencyReplay && MESSAGE_DIRECT_EMIT_ENABLED) roomRuntime?.broadcastChatMessage(roomId, publicMessage);
-  if (!message.idempotencyReplay) scheduleRoomLinkPreview(roomId, message.id, text);
-  sendJson(res, 201, { ok: true, message: publicChatMessage(publicMessage) });
-}
-
 // Accounts waiting to be deleted, and deleted ones, can no longer be written to
 // or invited anywhere.
 function isActiveAccount(user) {
@@ -2884,13 +2553,6 @@ function cleanDmText(value) {
     .replace(/\n{3,}/g, '\n\n')
     .trim()
     .slice(0, 2000);
-}
-
-// UUIDs from path params; reject anything that can't be one so a bad value
-// doesn't reach the DB as a parameterized-but-nonsensical lookup.
-function cleanUuid(value) {
-  const id = String(value || '').trim();
-  return /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(id) ? id : '';
 }
 
 async function requireSessionUser(req, res) {
@@ -3708,148 +3370,6 @@ async function handleSetPresenceStatus(req, res, request) {
   sendNotificationMutationResult(res, result);
 }
 
-async function handleDeleteRoomChatMessage(req, res, roomId, messageId) {
-  const room = await getRoom(roomId);
-  if (!room) {
-    sendJson(res, 404, { ok: false, error: 'Room not found', roomId });
-    return;
-  }
-  const body = await readJsonBody(req);
-  const requestedPeerId = normalizePeerId(body.peerId);
-  const sessionToken = normalizeSessionToken(body.sessionToken);
-  const sessionUser = await resolveOptionalSessionUser(req);
-
-  // Load the message (must not be deleted)
-  const msg = await getMessageService().room.getMessage(roomId, messageId);
-  if (!msg) {
-    sendJson(res, 404, { ok: false, error: 'Message not found' });
-    return;
-  }
-
-  // Permission:
-  // - an account-authored message belongs to that account only, or
-  // - a guest message belongs to the live peer session that wrote it, or
-  // - current user is owner of static room
-  // A peer id match never stands in for account authorship: peer ids are
-  // client-chosen, and matching them is exactly how a guest could act on a
-  // signed-in author's messages.
-  const isPeerAuthor = !msg.authorUserId && requestedPeerId && requestedPeerId === msg.peerId;
-  const isAccountAuthor = sessionUser && msg.authorUserId && sessionUser.id === msg.authorUserId;
-  const isRoomOwner = sessionUser && room.isStatic && room.ownerId === sessionUser.id;
-
-  if (isPeerAuthor) {
-    // verify guest token
-    const activePeer = room.peers.get(requestedPeerId);
-    if (!activePeer || !tokensMatch(activePeer.sessionToken, sessionToken)) {
-      sendJson(res, 403, { ok: false, error: 'Invalid peer session' });
-      return;
-    }
-  } else if (!isAccountAuthor && !isRoomOwner) {
-    sendJson(res, 403, { ok: false, error: 'Not allowed to delete this message' });
-    return;
-  }
-  // Only owners allowed on non-static? Per plan: only static have moderation.
-  if (isRoomOwner && !room.isStatic) {
-    sendJson(res, 403, { ok: false, error: 'Moderation only for static rooms' });
-    return;
-  }
-
-  const deleted = await getMessageService().room.softDeleteMessage(roomId, messageId);
-  if (!deleted) {
-    sendJson(res, 404, { ok: false, error: 'Message not found' });
-    return;
-  }
-
-  // Realtime delete notification to both voice peers and preview subscribers.
-  // Use the room-detail WS envelope directly: legacy peer broadcast only accepts
-  // legacy event names and treats unknown events as transport failures.
-  const delEvent = buildServerEnvelope('room.chat.deleted', { roomId, messageId });
-  roomRuntime?.broadcastRoomDetail?.(roomId, delEvent);
-  await refreshPinsAfterMessageMutation(roomId, 'message-deleted', messageId);
-
-  sendJson(res, 200, { ok: true, deleted: true });
-}
-
-async function handleEditRoomChatMessage(req, res, roomId, messageId) {
-  const room = await getRoom(roomId);
-  if (!room) {
-    sendJson(res, 404, { ok: false, error: 'Room not found', roomId });
-    return;
-  }
-
-  const clientIp = getClientIp(req, TRUST_PROXY);
-  const body = await readJsonBody(req);
-  const sessionUser = await resolveOptionalSessionUser(req);
-  if (await findRoomBan(roomId, sessionUser?.id, clientIp)) {
-    sendRoomBanned(res, roomId);
-    return;
-  }
-
-  const text = cleanChatText(body.text);
-  if (!text) {
-    sendJson(res, 400, { ok: false, error: 'Invalid chat message' });
-    return;
-  }
-
-  const requestedPeerId = normalizePeerId(body.peerId);
-  const sessionToken = normalizeSessionToken(body.sessionToken);
-  const current = await getMessageService().room.getMessage(roomId, messageId);
-  if (!current) {
-    sendJson(res, 404, { ok: false, error: 'Message not found' });
-    return;
-  }
-
-  // Account authorship is decided by the account alone; the peer-session path
-  // only covers guest messages (see the delete handler for why).
-  const isPeerAuthor = Boolean(!current.authorUserId && requestedPeerId && requestedPeerId === current.peerId);
-  const isAccountAuthor = Boolean(sessionUser && current.authorUserId && sessionUser.id === current.authorUserId);
-  if (isAccountAuthor) {
-    // The account id is durable ownership. It also lets a signed-in author edit
-    // after their transient room peer session has disconnected or rotated.
-  } else if (isPeerAuthor) {
-    const activePeer = room.peers.get(requestedPeerId);
-    if (!activePeer || !tokensMatch(activePeer.sessionToken, sessionToken)) {
-      sendJson(res, 403, { ok: false, error: 'Invalid peer session' });
-      return;
-    }
-    if (await findRoomBan(roomId, activePeer.accountUserId, activePeer.ip || clientIp)) {
-      sendRoomBanned(res, roomId);
-      return;
-    }
-  } else {
-    // Deliberately no owner/moderator override: editing always belongs to the
-    // original author, even in a static room.
-    sendJson(res, 403, { ok: false, error: 'Not allowed to edit this message' });
-    return;
-  }
-
-  const rate = roomChatLimiter.check(`${clientIp}:${roomId}`);
-  if (!rate.allowed) {
-    sendJson(
-      res,
-      429,
-      { ok: false, error: 'Too many chat messages', retryAfterSeconds: rate.retryAfterSeconds },
-      { 'Retry-After': String(rate.retryAfterSeconds) }
-    );
-    return;
-  }
-
-  const message = await getMessageService().room.editMessage(roomId, messageId, text);
-  if (!message) {
-    sendJson(res, 404, { ok: false, error: 'Message not found' });
-    return;
-  }
-
-  const publicMessage = publicChatMessage(message);
-  roomRuntime?.broadcastRoomDetail?.(
-    roomId,
-    buildServerEnvelope('room.chat.edited', { roomId, message: publicMessage })
-  );
-  await refreshPinsAfterMessageMutation(roomId, 'message-edited', messageId);
-  scheduleRoomLinkPreview(roomId, messageId, text, { edited: true });
-  sendJson(res, 200, { ok: true, message: publicMessage });
-}
-
 async function handleDeleteDmMessage(req, res, peerIdParam, messageId) {
   const user = await requireSessionUser(req, res);
   if (!user) return;
@@ -4244,6 +3764,7 @@ function createApiApp({
     maxRoomPeers: MAX_ROOM_PEERS
   });
   registerPeerModerationRoutes(app, apiContext, { rooms: roomsService, moderation: peerModeration });
+  registerRoomChatRoutes(app, apiContext, roomChat);
   registerOpsRoutes(app, apiContext, {
     readiness: activeReadinessProvider,
     livekitEnabled: () => getLiveKitConfig().enabled,
@@ -4418,21 +3939,6 @@ function createApiApp({
   }));
   app.get('/api/link-previews/:key', (request, reply) => runLegacyHandler(request, reply, (_req, res) => {
     return handleGetLinkPreviewImage(res, request.params.key);
-  }));
-  app.get('/api/rooms/:roomId/chat', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
-    return handleRoomChatList(req, res, normalizeRoomId(request.params.roomId));
-  }));
-  app.post('/api/rooms/:roomId/chat', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
-    return handleRoomChatPost(req, res, normalizeRoomId(request.params.roomId));
-  }));
-  app.post('/api/rooms/:roomId/read', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
-    return handleMarkRoomChatRead(req, res, request.params.roomId);
-  }));
-  app.patch('/api/rooms/:roomId/chat/:messageId', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
-    return handleEditRoomChatMessage(req, res, normalizeRoomId(request.params.roomId), request.params.messageId);
-  }));
-  app.delete('/api/rooms/:roomId/chat/:messageId', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
-    return handleDeleteRoomChatMessage(req, res, normalizeRoomId(request.params.roomId), request.params.messageId);
   }));
 
   app.get('/api/friends', (request, reply) => runLegacyHandler(request, reply, handleFriendsList));

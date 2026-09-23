@@ -8,17 +8,17 @@ import test from 'node:test';
 const read = (relative) => fs.readFileSync(path.resolve(import.meta.dirname, relative), 'utf8');
 
 test('reading a room retires the notifications that room produced', () => {
-  const server = read('../src/server.js');
+  const server = read('../src/domains/messaging/room-chat.service.ts');
 
   // A read and its notification are two records of the same event. Kept apart,
   // the bell went on claiming unread mentions for messages already read, and
   // said so again after every reload because nothing was ever written down.
-  assert.match(server, /async function retireRoomNotifications\(roomId, userId, through\)/);
+  assert.match(server, /async function retireRoomNotifications\(roomId: string, userId: string, through: unknown\)/);
   assert.match(server, /service\.markRoomRead\(\{ userId, roomId, through: through \?\? null \}\)/);
 
   // Both read paths retire: the cursor one and the legacy wall-clock one.
-  assert.match(server, /await retireRoomNotifications\(roomId, user\.id, result\.readThrough\)/);
-  assert.match(server, /await retireRoomNotifications\(roomId, user\.id, lastReadAt\)/);
+  assert.match(server, /await retireRoomNotifications\(roomId, userId, result\.readThrough\)/);
+  assert.match(server, /await retireRoomNotifications\(roomId, userId, lastReadAt\)/);
 
   // Best effort: a read that already succeeded must not fail over this.
   const start = server.indexOf('async function retireRoomNotifications');
