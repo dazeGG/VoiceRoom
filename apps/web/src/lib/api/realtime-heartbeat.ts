@@ -1,5 +1,9 @@
 export class RealtimeHeartbeatWatchdog {
-  constructor({ timeoutMs, now = Date.now }) {
+  readonly timeoutMs: number;
+  readonly now: () => number;
+  pendingSince: number | null;
+
+  constructor({ timeoutMs, now = Date.now }: { timeoutMs: number; now?: () => number }) {
     if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
       throw new TypeError('timeoutMs must be a positive finite number');
     }
@@ -8,19 +12,19 @@ export class RealtimeHeartbeatWatchdog {
     this.pendingSince = null;
   }
 
-  recordPing() {
+  recordPing(): void {
     if (this.pendingSince === null) this.pendingSince = this.now();
   }
 
-  recordPong() {
+  recordPong(): void {
     this.pendingSince = null;
   }
 
-  isTimedOut() {
+  isTimedOut(): boolean {
     return this.pendingSince !== null && this.now() - this.pendingSince >= this.timeoutMs;
   }
 
-  reset() {
+  reset(): void {
     this.pendingSince = null;
   }
 }

@@ -1,4 +1,4 @@
-/** @typedef {import('./types').HotkeyBinding} HotkeyBinding */
+import type { HotkeyBinding } from './types';
 
 const MODIFIER_CODES = new Set([
   'AltLeft',
@@ -11,11 +11,7 @@ const MODIFIER_CODES = new Set([
   'ShiftRight'
 ]);
 
-/**
- * @param {KeyboardEvent} event
- * @returns {HotkeyBinding | null}
- */
-export function hotkeyBindingFromEvent(event) {
+export function hotkeyBindingFromEvent(event: KeyboardEvent): HotkeyBinding | null {
   if (!event.code || MODIFIER_CODES.has(event.code)) return null;
   return {
     altKey: event.altKey,
@@ -26,11 +22,7 @@ export function hotkeyBindingFromEvent(event) {
   };
 }
 
-/**
- * @param {HotkeyBinding | null} binding
- * @param {KeyboardEvent} event
- */
-export function hotkeyMatchesEvent(binding, event) {
+export function hotkeyMatchesEvent(binding: HotkeyBinding | null, event: KeyboardEvent): boolean {
   return Boolean(
     binding
     && binding.code === event.code
@@ -41,11 +33,9 @@ export function hotkeyMatchesEvent(binding, event) {
   );
 }
 
-/** @param {HotkeyBinding | null} binding */
-export function formatHotkeyBinding(binding) {
+export function formatHotkeyBinding(binding: HotkeyBinding | null): string {
   if (!binding) return 'Не назначено';
-  /** @type {string[]} */
-  const parts = [];
+  const parts: string[] = [];
   if (binding.ctrlKey) parts.push('Ctrl');
   if (binding.metaKey) parts.push('⌘');
   if (binding.altKey) parts.push(isApplePlatform() ? '⌥' : 'Alt');
@@ -54,18 +44,15 @@ export function formatHotkeyBinding(binding) {
   return parts.join(' + ');
 }
 
-/** @param {string} code */
-export function isHotkeyModifierCode(code) {
+export function isHotkeyModifierCode(code: string): boolean {
   return MODIFIER_CODES.has(code);
 }
 
-/** @param {string} code */
-function formatHotkeyCode(code) {
+function formatHotkeyCode(code: string): string {
   if (code.startsWith('Key')) return code.slice(3);
   if (code.startsWith('Digit')) return code.slice(5);
   if (code.startsWith('Numpad')) return `Num ${code.slice(6)}`;
-  /** @type {Record<string, string>} */
-  const labels = {
+  const labels: Record<string, string> = {
     ArrowDown: '↓',
     ArrowLeft: '←',
     ArrowRight: '→',
@@ -95,6 +82,6 @@ function formatHotkeyCode(code) {
   return labels[code] || code;
 }
 
-function isApplePlatform() {
+function isApplePlatform(): boolean {
   return typeof navigator !== 'undefined' && /Mac|iPod|iPhone|iPad/.test(navigator.platform);
 }

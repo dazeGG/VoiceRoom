@@ -6,7 +6,7 @@ import {
   RealtimeRecoveryController,
   classifyRecoveryFailure,
   sanitizeRecoveryCode
-} from '../src/lib/features/room/client/recovery/realtime-recovery.js';
+} from '../src/lib/features/room/client/recovery/realtime-recovery.ts';
 
 function deferred() {
   let resolve;
@@ -187,7 +187,7 @@ test('recovery timers invoke injected schedulers without rebinding their receive
 });
 
 test('a later transport regression invalidates an in-place reconcile completion', async () => {
-  const { LiveKitReconcileGeneration } = await import('../src/lib/features/room/client/recovery/livekit-reconcile-generation.js');
+  const { LiveKitReconcileGeneration } = await import('../src/lib/features/room/client/recovery/livekit-reconcile-generation.ts');
   const generation = new LiveKitReconcileGeneration();
   const reconnected = generation.capture();
   generation.invalidate();

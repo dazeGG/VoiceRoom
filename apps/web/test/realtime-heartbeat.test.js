@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import test from 'node:test';
 
-import { RealtimeHeartbeatWatchdog } from '../src/lib/api/realtime-heartbeat.js';
+import { RealtimeHeartbeatWatchdog } from '../src/lib/api/realtime-heartbeat.ts';
 
 test('heartbeat watchdog times out from the first unanswered ping', () => {
   let now = 1_000;

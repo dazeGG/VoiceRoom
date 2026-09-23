@@ -1,4 +1,4 @@
-import { hotkeyMatchesEvent } from '$lib/shared/ui/HotkeyRecorder/hotkey.js';
+import { hotkeyMatchesEvent } from '$lib/shared/ui/HotkeyRecorder/hotkey';
 import type { HotkeyBinding } from '$lib/shared/ui/HotkeyRecorder/types';
 
 export type HotkeyAction = 'mic-mute' | 'output-mute' | 'push-to-talk';

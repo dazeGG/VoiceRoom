@@ -4,7 +4,7 @@ import {
   createAudioOutputTransitionQueue,
   initializeAudioOutput,
   transitionAudioOutput
-} from './audio-output-transition.js';
+} from './audio-output-transition';
 
 import { createLogger, errorContext } from '$lib/shared/log';
 

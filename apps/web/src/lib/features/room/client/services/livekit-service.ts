@@ -51,8 +51,8 @@ import {
   type RecoveryAttemptOutcome
 } from '../recovery/room-recovery';
 import { isMicrophoneShownMuted } from '../core/microphone-mute';
-import { ScreenRecoveryGraceController } from '../recovery/screen-recovery-grace.js';
-import { LiveKitReconcileGeneration } from '../recovery/livekit-reconcile-generation.js';
+import { ScreenRecoveryGraceController } from '../recovery/screen-recovery-grace';
+import { LiveKitReconcileGeneration } from '../recovery/livekit-reconcile-generation';
 
 const screenSubscriptionRetryController = createScreenSubscriptionRetryController();
 const screenRecoveryGrace = new ScreenRecoveryGraceController();

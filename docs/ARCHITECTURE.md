@@ -108,6 +108,7 @@ export function registerAdmissionRoutes(app: FastifyInstance, ctx: ApiContext): 
 7. Push, avatars, link previews.
 8. Realtime runtime and the remaining stores.
 9. `packages/shared` as one TypeScript source; the `.js`/`.mjs` twins go away.
+10. The JavaScript that is left becomes TypeScript: the web leftovers, the API modules domain by domain (then `lib/*`, workers, `service-registry` and `server.js`), then the tests and `scripts/`. Applied migrations stay `.cjs` (byte-pinned); the vendored `static/rnnoise/rnnoise.mjs` stays as shipped; the audio worklets in `apps/web/static` are served unbundled and are decided last.
 
 Done so far:
 
@@ -133,6 +134,7 @@ Done so far:
 - PR 9d: membership, notifications, moderation, capabilities and account-security become single `.mts` sources; only the emoji modules still keep CommonJS, ESM and declaration twins.
 - PR 9e: emoji, emoji-groups and emoji-skin-tones become single `.mts` sources (the corpus keeps its G07 hash; coverage ignores `emoji.mts`), so every shared module is now one TypeScript file and `check` is `tsc` alone.
 - PR 9f: `packages/shared` switches to `"type": "module"`; its modules are renamed `.mts` → `.ts` and its tests are ES modules. A structure test keeps `src/` to one `.ts` file per export.
+- PR 10a: the last six JavaScript modules in `apps/web/src` (realtime heartbeat, realtime and screen recovery, LiveKit reconcile generation, audio output transition, hotkey bindings) become typed `.ts`.
 - Typed before PR 0: `domains/admission/livekit-token-binding.mts`, `lib/image-signature.mts`, `platform/http/origin-guard.mts`.
 
 ## 5. Runtime state and scaling
