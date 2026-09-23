@@ -131,6 +131,7 @@ Done so far:
 - PR 9b: platform-class, mentions, reactions, link-preview, avatar-accent, attachments and visual-identity become single `.mts` sources (visual-identity still reads its JSON).
 - PR 9c: validation, realtime, messaging-history, messaging-send and room-message-content become single `.mts` sources; validation and visual-identity share the `AvatarColorKey` type through a type-only import.
 - PR 9d: membership, notifications, moderation, capabilities and account-security become single `.mts` sources; only the emoji modules still keep CommonJS, ESM and declaration twins.
+- PR 9e: emoji, emoji-groups and emoji-skin-tones become single `.mts` sources (the corpus keeps its G07 hash; coverage ignores `emoji.mts`), so every shared module is now one TypeScript file and `check` is `tsc` alone.
 - Typed before PR 0: `domains/admission/livekit-token-binding.mts`, `lib/image-signature.mts`, `platform/http/origin-guard.mts`.
 
 ## 5. Runtime state and scaling
