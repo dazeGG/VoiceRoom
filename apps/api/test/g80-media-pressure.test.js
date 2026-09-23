@@ -30,6 +30,6 @@ test('G80-A02 replica disagreement disables uploads despite healthy local statfs
   assert.equal(disagreed.healthy, false); assert.equal(disagreed.reason, 'replica_disagreement');
   consensus = true;
   assert.equal((await pressure.measure({ force: true })).healthy, true);
-  const server = require('node:fs').readFileSync(fileURLToPath(new URL('../src/server.js', import.meta.url)), 'utf8');
-  assert.match(server, /replicaConsensus: \(\) => readinessProvider\.getSnapshot\(\)\?\.replicaConsensus === true/);
+  const registry = require('node:fs').readFileSync(fileURLToPath(new URL('../src/app/service-registry.js', import.meta.url)), 'utf8');
+  assert.match(registry, /replicaConsensus: \(\) => readinessProvider\.getSnapshot\(\)\?\.replicaConsensus === true/);
 });

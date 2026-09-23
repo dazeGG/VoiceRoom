@@ -53,13 +53,14 @@ test('G41-A01 eligibility filtering uses the same repository predicate for all u
 test('G41-A02 named HTTP, media, membership, mention and room-store paths call the active-ban service', () => {
   const root = path.resolve(import.meta.dirname, '..');
   const server = fs.readFileSync(path.join(root, 'src/server.js'), 'utf8');
+  const registry = fs.readFileSync(path.join(root, 'src/app/service-registry.js'), 'utf8');
   const roomStore = fs.readFileSync(path.join(root, 'src/lib/room-store.js'), 'utf8');
   const mentions = fs.readFileSync(path.join(root, 'src/domains/notifications/mention-eligibility-service.js'), 'utf8');
 
   assert.match(server, /function findRoomBan[\s\S]*getActiveBanService\(\)/);
-  assert.match(server, /authorizeRoomAttachment[\s\S]*getActiveBanService\(\)\.isBanned/);
-  assert.match(server, /createMembershipService\([\s\S]*findRoomBan/);
-  assert.doesNotMatch(server, /authorizeRoomAttachment[\s\S]*?FROM room_bans/);
+  assert.match(registry, /authorizeRoomAttachment[\s\S]*getActiveBanService\(\)\.isBanned/);
+  assert.match(registry, /createMembershipService\([\s\S]*findRoomBan/);
+  assert.doesNotMatch(registry, /authorizeRoomAttachment[\s\S]*?FROM room_bans/);
   assert.match(mentions, /activeBanService\.filterEligibleUserIds/g);
   assert.doesNotMatch(mentions, /FROM room_bans/);
   assert.match(roomStore, /findActiveRoomBan[\s\S]*getActiveBanService\(\)\.getActiveBan/);

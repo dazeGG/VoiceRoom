@@ -43,9 +43,9 @@ test('G48 supplemental source contract keeps revoke-before-remove ordering visib
   const leaveEnd = runtime.indexOf('\n  async function updatePeerState', leaveStart);
   const leave = runtime.slice(leaveStart, leaveEnd);
   assert.ok(leave.indexOf('revokePrincipalOnce') < leave.indexOf('removeLiveKitParticipant'));
-  const server = fs.readFileSync(path.join(root, 'server.js'), 'utf8');
-  assert.match(server, /revokePrincipalInTransaction:[\s\S]*revokeLiveKitGatePrincipalInTransaction/);
-  assert.match(server, /afterBanCommitted:[\s\S]*disconnectModeratedPeer/);
+  const registry = fs.readFileSync(path.join(root, 'app/service-registry.js'), 'utf8');
+  assert.match(registry, /revokePrincipalInTransaction:[\s\S]*revokeLiveKitGatePrincipalInTransaction/);
+  assert.match(registry, /afterBanCommitted:[\s\S]*disconnectModeratedPeer/);
 });
 
 test('G48-A04 real credential boundary survives restart, supports multitab, and rejects replay, tamper and ban-during-mint', async () => {
