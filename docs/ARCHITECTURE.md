@@ -100,8 +100,8 @@ export function registerAdmissionRoutes(app: FastifyInstance, ctx: ApiContext): 
 
 0. ES modules for the whole API (codemod `scripts/codemods/cjs-to-esm.mjs`).
 1. Skeleton: `ApiContext`, http kit, TypeBox and Kysely wiring with codegen, ops routes (health, metrics, client logs, pow, desktop).
-2. LiveKit admission and server mute.
-3. Rooms and `/api/state`.
+2. LiveKit admission and the SFU side of server mute.
+3. Rooms and `/api/state`, including the server-mute HTTP handler.
 4. Legacy room chat folded into `domains/messaging`.
 5. Auth and account.
 6. Friends, blocks, DMs, presence.
@@ -113,6 +113,7 @@ Done so far:
 
 - PR 0: ES modules (`scripts/codemods/cjs-to-esm.mjs`); applied migrations are `.cjs`.
 - PR 1: `app/context.ts` (`ApiContext`), `platform/http/http-kit.ts` (security headers, `no-store`, request metric and log line, `{ ok: false, error }` failures for every Fastify-native route), `platform/db/kysely.ts` with generated `platform/db/schema.ts` (`npm run db:types`, verified by `test/db-schema-types.test.js`), and the ops group in `domains/ops/` (health, metrics, proof-of-work, desktop release, client logs).
+- PR 2: the admission group in `domains/admission/`: `admission.service.ts` (who gets a LiveKit JWT and gate credential; returns refusal reasons, revokes an issued credential when a later check fails), `admission.routes.ts` (`POST /api/livekit-token` on TypeBox, same error texts and codes as before), `livekit-admin.ts` (participant removal and the SFU microphone mute), `livekit-config.ts`, plus `platform/crypto/tokens-match.ts`. The moderation handler in `server.js` calls `admission.revokeForServerMute` until PR 3 moves it.
 - Typed before PR 0: `domains/admission/livekit-token-binding.mts`, `lib/image-signature.mts`, `platform/http/origin-guard.mts`.
 
 ## 5. Runtime state and scaling
