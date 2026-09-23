@@ -23,6 +23,6 @@
     "noUnusedLocals": true,
     "skipLibCheck": true
   },
-  "include": ["src/**/*.mts", "src/**/*.ts"],
+  "include": ["src/**/*.ts"],
   "exclude": ["src/**/*.d.ts"]
 }

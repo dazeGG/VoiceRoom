@@ -1,13 +1,7 @@
-'use strict';
+import assert from 'node:assert/strict';
+import test from 'node:test';
 
-const assert = require('node:assert/strict');
-const path = require('node:path');
-const { pathToFileURL } = require('node:url');
-const test = require('node:test');
-
-const cjs = require('../src/account-security.mts');
-
-const loadEsm = () => import(pathToFileURL(path.join(__dirname, '../src/account-security.mts')).href);
+import * as accountSecurity from '../src/account-security.ts';
 
 const USER_AGENTS = Object.freeze([
   {
@@ -49,29 +43,24 @@ const USER_AGENTS = Object.freeze([
   { name: 'not a string', value: { userAgent: 'Chrome/1' }, expected: { client: '', os: '' } }
 ]);
 
-test('describeUserAgent names the client and OS the same way in CJS and ESM', async () => {
-  const esm = await loadEsm();
+test('describeUserAgent names the client and OS', async () => {
   for (const fixture of USER_AGENTS) {
-    assert.deepEqual(cjs.describeUserAgent(fixture.value), fixture.expected, fixture.name);
-    assert.deepEqual(esm.describeUserAgent(fixture.value), fixture.expected, `${fixture.name} (ESM)`);
+    assert.deepEqual(accountSecurity.describeUserAgent(fixture.value), fixture.expected, fixture.name);
   }
 });
 
-test('isDesktopAppUserAgent agrees with the described client in CJS and ESM', async () => {
-  const esm = await loadEsm();
+test('isDesktopAppUserAgent agrees with the described client', async () => {
   for (const fixture of USER_AGENTS) {
     const expected = fixture.expected.client === 'VoiceRoom Desktop';
-    assert.equal(cjs.isDesktopAppUserAgent(fixture.value), expected, fixture.name);
-    assert.equal(esm.isDesktopAppUserAgent(fixture.value), expected, `${fixture.name} (ESM)`);
+    assert.equal(accountSecurity.isDesktopAppUserAgent(fixture.value), expected, fixture.name);
   }
   // Repeated calls must not carry regex state between user agents.
   const shell = USER_AGENTS[0].value;
-  assert.equal(cjs.isDesktopAppUserAgent(shell), true);
-  assert.equal(cjs.isDesktopAppUserAgent(shell), true);
+  assert.equal(accountSecurity.isDesktopAppUserAgent(shell), true);
+  assert.equal(accountSecurity.isDesktopAppUserAgent(shell), true);
 });
 
 test('normalizeSelfUserFlags defaults an older API to banner-on, prompt-off', async () => {
-  const esm = await loadEsm();
   const cases = [
     [{ hasUsedDesktopApp: true, appPromptSeen: false }, { hasUsedDesktopApp: true, appPromptSeen: false }],
     [{ hasUsedDesktopApp: false, appPromptSeen: true }, { hasUsedDesktopApp: false, appPromptSeen: true }],
@@ -80,13 +69,11 @@ test('normalizeSelfUserFlags defaults an older API to banner-on, prompt-off', as
     [{ hasUsedDesktopApp: 'yes', appPromptSeen: 0 }, { hasUsedDesktopApp: false, appPromptSeen: true }]
   ];
   for (const [input, expected] of cases) {
-    assert.deepEqual(cjs.normalizeSelfUserFlags(input), expected);
-    assert.deepEqual(esm.normalizeSelfUserFlags(input), expected);
+    assert.deepEqual(accountSecurity.normalizeSelfUserFlags(input), expected);
   }
 });
 
 test('normalizeRecoveryCode accepts typed variations and rejects everything else', async () => {
-  const esm = await loadEsm();
   const canonical = '0123456789ABCDEF'.replace('C', 'H');
   const cases = [
     ['0123-4567-89AB-HDEF', canonical],
@@ -102,24 +89,21 @@ test('normalizeRecoveryCode accepts typed variations and rejects everything else
     [42, '']
   ];
   for (const [input, expected] of cases) {
-    assert.equal(cjs.normalizeRecoveryCode(input), expected, String(input));
-    assert.equal(esm.normalizeRecoveryCode(input), expected, `${String(input)} (ESM)`);
+    assert.equal(accountSecurity.normalizeRecoveryCode(input), expected, String(input));
   }
-  assert.equal(cjs.formatRecoveryCode('0123456789abhdef'), '0123-4567-89AB-HDEF');
-  assert.equal(cjs.formatRecoveryCode('nope'), '');
+  assert.equal(accountSecurity.formatRecoveryCode('0123456789abhdef'), '0123-4567-89AB-HDEF');
+  assert.equal(accountSecurity.formatRecoveryCode('nope'), '');
 });
 
 test('every alphabet symbol survives normalization', () => {
-  assert.equal(cjs.RECOVERY_CODE_ALPHABET.length, 32);
-  const code = cjs.RECOVERY_CODE_ALPHABET.slice(0, cjs.RECOVERY_CODE_LENGTH);
-  assert.equal(cjs.normalizeRecoveryCode(code), code);
-  assert.equal(cjs.normalizeRecoveryCode(cjs.RECOVERY_CODE_ALPHABET.slice(16)), cjs.RECOVERY_CODE_ALPHABET.slice(16));
+  assert.equal(accountSecurity.RECOVERY_CODE_ALPHABET.length, 32);
+  const code = accountSecurity.RECOVERY_CODE_ALPHABET.slice(0, accountSecurity.RECOVERY_CODE_LENGTH);
+  assert.equal(accountSecurity.normalizeRecoveryCode(code), code);
+  assert.equal(accountSecurity.normalizeRecoveryCode(accountSecurity.RECOVERY_CODE_ALPHABET.slice(16)), accountSecurity.RECOVERY_CODE_ALPHABET.slice(16));
 });
 
 test('what is new is compared by release version, not by string order', async () => {
-  const esm = await loadEsm();
-  assert.equal(cjs.normalizeReleaseVersion(cjs.WHATS_NEW_VERSION), cjs.WHATS_NEW_VERSION);
-  assert.equal(esm.WHATS_NEW_VERSION, cjs.WHATS_NEW_VERSION);
+  assert.equal(accountSecurity.normalizeReleaseVersion(accountSecurity.WHATS_NEW_VERSION), accountSecurity.WHATS_NEW_VERSION);
 
   for (const [left, right, expected] of [
     ['2.6.0', '2.6.0', 0],
@@ -130,23 +114,21 @@ test('what is new is compared by release version, not by string order', async ()
     ['v2.6.0', '2.6.0', null],
     [null, '2.6.0', null]
   ]) {
-    assert.equal(cjs.compareReleaseVersions(left, right), expected, `${left} vs ${right}`);
-    assert.equal(esm.compareReleaseVersions(left, right), expected, `${left} vs ${right} (ESM)`);
+    assert.equal(accountSecurity.compareReleaseVersions(left, right), expected, `${left} vs ${right}`);
   }
 
   // Accounts that never recorded an announcement predate every release.
-  assert.equal(cjs.hasUnseenWhatsNew(null, '2.6.0'), true);
-  assert.equal(cjs.hasUnseenWhatsNew('2.5.0', '2.6.0'), true);
-  assert.equal(cjs.hasUnseenWhatsNew('2.6.0', '2.6.0'), false);
-  assert.equal(cjs.hasUnseenWhatsNew('2.7.0', '2.6.0'), false);
-  assert.equal(cjs.hasUnseenWhatsNew(null, 'not-a-version'), false);
+  assert.equal(accountSecurity.hasUnseenWhatsNew(null, '2.6.0'), true);
+  assert.equal(accountSecurity.hasUnseenWhatsNew('2.5.0', '2.6.0'), true);
+  assert.equal(accountSecurity.hasUnseenWhatsNew('2.6.0', '2.6.0'), false);
+  assert.equal(accountSecurity.hasUnseenWhatsNew('2.7.0', '2.6.0'), false);
+  assert.equal(accountSecurity.hasUnseenWhatsNew(null, 'not-a-version'), false);
 });
 
 test('the recovery codes reminder is due only without codes and outside its snooze', async () => {
-  const esm = await loadEsm();
   const now = 1_000_000;
-  const later = now + cjs.RECOVERY_CODES_REMINDER_SNOOZE_MS;
-  assert.equal(cjs.RECOVERY_CODES_REMINDER_SNOOZE_MS, 3 * 24 * 60 * 60 * 1000);
+  const later = now + accountSecurity.RECOVERY_CODES_REMINDER_SNOOZE_MS;
+  assert.equal(accountSecurity.RECOVERY_CODES_REMINDER_SNOOZE_MS, 3 * 24 * 60 * 60 * 1000);
 
   for (const [status, reminder, expected] of [
     [{ remaining: 0 }, { snoozedUntil: null }, true],
@@ -155,13 +137,11 @@ test('the recovery codes reminder is due only without codes and outside its snoo
     [{ remaining: 3 }, { snoozedUntil: null }, false],
     [null, { snoozedUntil: null }, false]
   ]) {
-    assert.equal(cjs.isRecoveryCodesReminderDue(status, reminder, now), expected, JSON.stringify([status, reminder]));
-    assert.equal(esm.isRecoveryCodesReminderDue(status, reminder, now), expected);
+    assert.equal(accountSecurity.isRecoveryCodesReminderDue(status, reminder, now), expected, JSON.stringify([status, reminder]));
   }
 });
 
 test('session rows are validated at the boundary', async () => {
-  const esm = await loadEsm();
   const row = {
     id: '6F9619FF-8B86-D011-B42D-00C04FC964FF',
     current: true,
@@ -171,7 +151,7 @@ test('session rows are validated at the boundary', async () => {
     lastSeenAt: 1_789_000_000_000,
     ip: '203.0.113.7'
   };
-  const normalized = cjs.normalizeAccountSession(row);
+  const normalized = accountSecurity.normalizeAccountSession(row);
   assert.deepEqual(normalized, {
     id: '6f9619ff-8b86-d011-b42d-00c04fc964ff',
     current: true,
@@ -181,16 +161,13 @@ test('session rows are validated at the boundary', async () => {
     lastSeenAt: 1_789_000_000_000
   });
   assert.equal('ip' in normalized, false);
-  assert.deepEqual(esm.normalizeAccountSession(row), normalized);
-  assert.equal(cjs.normalizeAccountSession({ ...row, id: 'not-a-uuid' }), null);
-  assert.equal(cjs.normalizeAccountSession({ ...row, lastSeenAt: 'yesterday' }), null);
-  assert.equal(cjs.normalizeAccountSession({ ...row, current: 'yes' }).current, false);
+  assert.equal(accountSecurity.normalizeAccountSession({ ...row, id: 'not-a-uuid' }), null);
+  assert.equal(accountSecurity.normalizeAccountSession({ ...row, lastSeenAt: 'yesterday' }), null);
+  assert.equal(accountSecurity.normalizeAccountSession({ ...row, current: 'yes' }).current, false);
 });
 
 test('deleted accounts use a reserved login prefix and a fixed name', async () => {
-  const esm = await loadEsm();
-  assert.equal(cjs.ACCOUNT_DELETION_GRACE_MS, 7 * 24 * 60 * 60 * 1000);
-  assert.equal(esm.DELETED_ACCOUNT_NAME, 'Удалённый аккаунт');
+  assert.equal(accountSecurity.ACCOUNT_DELETION_GRACE_MS, 7 * 24 * 60 * 60 * 1000);
   for (const [login, expected] of [
     ['deleted-1a2b3c4d', true],
     [' Deleted-anything', true],
@@ -199,14 +176,12 @@ test('deleted accounts use a reserved login prefix and a fixed name', async () =
     ['ada', false],
     [null, false]
   ]) {
-    assert.equal(cjs.isDeletedAccountLogin(login), expected, String(login));
-    assert.equal(esm.isDeletedAccountLogin(login), expected, `${String(login)} (ESM)`);
+    assert.equal(accountSecurity.isDeletedAccountLogin(login), expected, String(login));
   }
 });
 
 test('login alerts are validated at the boundary', async () => {
-  const esm = await loadEsm();
-  assert.ok(cjs.LOGIN_ALERT_TTL_MS < cjs.LOGIN_FAMILIARITY_WINDOW_MS);
+  assert.ok(accountSecurity.LOGIN_ALERT_TTL_MS < accountSecurity.LOGIN_FAMILIARITY_WINDOW_MS);
   const alert = {
     id: '6F9619FF-8B86-D011-B42D-00C04FC964FF',
     kind: 'recovery',
@@ -224,9 +199,8 @@ test('login alerts are validated at the boundary', async () => {
     location: 'Казань, Россия',
     createdAt: 1_789_000_000_000
   };
-  assert.deepEqual(cjs.normalizeLoginAlert(alert), expected);
-  assert.deepEqual(esm.normalizeLoginAlert(alert), expected);
-  assert.equal(cjs.normalizeLoginAlert({ ...alert, kind: 'register' }), null);
-  assert.equal(cjs.normalizeLoginAlert({ ...alert, id: 'nope' }), null);
-  assert.equal(cjs.normalizeLoginAlert({ ...alert, createdAt: 'today' }), null);
+  assert.deepEqual(accountSecurity.normalizeLoginAlert(alert), expected);
+  assert.equal(accountSecurity.normalizeLoginAlert({ ...alert, kind: 'register' }), null);
+  assert.equal(accountSecurity.normalizeLoginAlert({ ...alert, id: 'nope' }), null);
+  assert.equal(accountSecurity.normalizeLoginAlert({ ...alert, createdAt: 'today' }), null);
 });

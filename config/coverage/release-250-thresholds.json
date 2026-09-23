@@ -60,7 +60,7 @@
     "/test/",
     "/e2e/",
     "/migrations/",
-    "packages/shared/src/emoji.mts",
+    "packages/shared/src/emoji.ts",
     ".d.ts"
   ]
 }

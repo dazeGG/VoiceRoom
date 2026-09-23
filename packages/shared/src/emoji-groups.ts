@@ -1,6 +1,6 @@
 // Category layer over the frozen reaction corpus.
 //
-// `emoji.mts` is generated from the pinned Unicode emoji-test.txt and its content
+// `emoji.ts` is generated from the pinned Unicode emoji-test.txt and its content
 // hash is asserted by G07, so it must not change. The generator walks that file
 // top to bottom, which means the corpus is already in Unicode group order — the
 // groups can therefore be recovered as index ranges instead of shipping a second
@@ -8,7 +8,7 @@
 // future corpus regeneration reorders or drops one of those anchors this module
 // throws at load rather than silently mis-labelling half the picker.
 
-import { listReactionEmojis } from './emoji.mts';
+import { listReactionEmojis } from './emoji.ts';
 
 export interface ReactionEmojiGroup {
   key: string;

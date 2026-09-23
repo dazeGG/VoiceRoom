@@ -1,22 +1,20 @@
-'use strict';
-
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const crypto = require('node:crypto');
-const fs = require('node:fs');
-const path = require('node:path');
-const { pathToFileURL } = require('node:url');
-const {
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
+import {
   EMOJI_REACTION_AUTHORITY,
   assertReactionEmoji,
   cleanReactionEmoji,
   isReactionEmoji,
   listReactionEmojis
-} = require('@voice-room/shared/emoji');
+} from '@voice-room/shared/emoji';
 
-const ROOT = path.resolve(__dirname, '..');
+const ROOT = path.resolve(import.meta.dirname, '..');
 const PACKAGE_JSON = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
-const SOURCE = fs.readFileSync(path.join(ROOT, 'src/emoji.mts'), 'utf8');
+const SOURCE = fs.readFileSync(path.join(ROOT, 'src/emoji.ts'), 'utf8');
 const EXPECTED_CORPUS_SHA256 = '4a53e0c0dc317e6830f4055191e9fe287ab2db8978b2f78bdbaa43a60483d791';
 const EXPECTED_UNICODE_SHA256 = '1d8a944f88d7952f7ef7c5167fef3c67995bcae24543949710231b03a201acda';
 
@@ -97,9 +95,9 @@ test('listReactionEmojis returns a defensive copy', () => {
   assert.equal(listReactionEmojis().length, 3944);
 });
 
-test('the require and import views, the package export and the declared types agree', async () => {
+test('the package export, the source file and the declared types agree', async () => {
   const esm = await import('@voice-room/shared/emoji');
-  const directEsm = await import(pathToFileURL(path.join(ROOT, 'src/emoji.mts')).href);
+  const directEsm = await import(pathToFileURL(path.join(ROOT, 'src/emoji.ts')).href);
 
   for (const module of [esm, directEsm]) {
     assert.deepEqual(module.EMOJI_REACTION_AUTHORITY, EMOJI_REACTION_AUTHORITY);
@@ -110,7 +108,7 @@ test('the require and import views, the package export and the declared types ag
     assert.deepEqual(module.listReactionEmojis(), listReactionEmojis());
   }
 
-  assert.equal(PACKAGE_JSON.exports['./emoji'], './src/emoji.mts');
+  assert.equal(PACKAGE_JSON.exports['./emoji'], './src/emoji.ts');
   assert.match(SOURCE, /export const EMOJI_REACTION_AUTHORITY: EmojiReactionAuthority = /);
   assert.match(SOURCE, /export function isReactionEmoji\(value: unknown\): value is string \{/);
   assert.match(SOURCE, /export function cleanReactionEmoji\(value: unknown\): string \{/);

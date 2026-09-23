@@ -1,8 +1,6 @@
-'use strict';
-
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const { deriveAvatarAccent, dominantAvatarColor } = require('@voice-room/shared/avatar-accent');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { deriveAvatarAccent, dominantAvatarColor } from '@voice-room/shared/avatar-accent';
 
 const HEX_COLOR = /^#[0-9a-f]{6}$/;
 const BOX_SHADOW = /^0 10px 24px #[0-9a-f]{8}$/;
@@ -117,7 +115,7 @@ test('deriveAvatarAccent accepts a null dominant color and falls back to the neu
   assert.deepEqual(deriveAvatarAccent(null), deriveAvatarAccent({ r: 0, g: 0, b: 0 }));
 });
 
-test('CommonJS and ESM copies of the module stay behaviorally identical', async () => {
+test('the package export resolves to the same deterministic accent rules', async () => {
   const module = await import('@voice-room/shared/avatar-accent');
   assert.equal(typeof module.deriveAvatarAccent, 'function');
   assert.equal(typeof module.dominantAvatarColor, 'function');

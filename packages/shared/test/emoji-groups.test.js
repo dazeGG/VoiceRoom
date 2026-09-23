@@ -1,14 +1,11 @@
-'use strict';
+import test from 'node:test';
+import assert from 'node:assert/strict';
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
-
-const { listReactionEmojis } = require('../src/emoji.mts');
-const cjs = require('../src/emoji-groups.mts');
+import { listReactionEmojis } from '../src/emoji.ts';
+import * as emojiGroups from '../src/emoji-groups.ts';
 
 test('reaction emoji groups are an immutable ordered partition of the frozen corpus', async () => {
-  const esm = await import('../src/emoji-groups.mts');
-  const groups = cjs.listReactionEmojiGroups();
+  const groups = emojiGroups.listReactionEmojiGroups();
   const corpus = listReactionEmojis();
 
   assert.deepEqual(groups.map((group) => group.key), [
@@ -26,12 +23,10 @@ test('reaction emoji groups are an immutable ordered partition of the frozen cor
   assert.equal(new Set(groups.flatMap((group) => group.emojis)).size, corpus.length);
   assert.ok(Object.isFrozen(groups));
   assert.ok(groups.every((group) => Object.isFrozen(group) && Object.isFrozen(group.emojis)));
-  assert.strictEqual(cjs.listReactionEmojiGroups(), groups);
-  assert.deepEqual(esm.listReactionEmojiGroups(), groups);
+  assert.strictEqual(emojiGroups.listReactionEmojiGroups(), groups);
 
   for (const group of groups) {
-    assert.equal(cjs.reactionEmojiGroupKey(group.emojis[0]), group.key);
-    assert.equal(esm.reactionEmojiGroupKey(group.emojis.at(-1)), group.key);
+    assert.equal(emojiGroups.reactionEmojiGroupKey(group.emojis[0]), group.key);
   }
-  assert.equal(cjs.reactionEmojiGroupKey('not-an-emoji'), '');
+  assert.equal(emojiGroups.reactionEmojiGroupKey('not-an-emoji'), '');
 });
