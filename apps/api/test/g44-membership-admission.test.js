@@ -1,10 +1,8 @@
-'use strict';
-
-const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
-const { test } = require('node:test');
-const { createMembershipService } = require('../src/domains/membership/membership-service');
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import { test } from 'node:test';
+import { createMembershipService } from '../src/domains/membership/membership-service.js';
 
 test('G44-A01 registered membership follows successful admission and guests/failures create no row', async () => {
   const calls = [];
@@ -23,7 +21,7 @@ test('G44-A01 registered membership follows successful admission and guests/fail
 });
 
 test('G44-A02 HTTP LiveKit admission persists only after credential issue and revokes on persistence refusal', () => {
-  const source = fs.readFileSync(path.resolve(__dirname, '../src/server.js'), 'utf8');
+  const source = fs.readFileSync(path.resolve(import.meta.dirname, '../src/server.js'), 'utf8');
   const start = source.indexOf('async function handleLiveKitToken');
   const end = source.indexOf('\nfunction handlePowChallenge', start);
   const handler = source.slice(start, end);

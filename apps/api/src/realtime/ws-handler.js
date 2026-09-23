@@ -1,15 +1,9 @@
-'use strict';
-
-const {
-  normalizePeerId,
-  normalizeRoomId,
-  normalizeSessionToken
-} = require('@voice-room/shared/validation');
-const { normalizeTypingActivity } = require('@voice-room/shared/realtime');
-const { buildServerEnvelope, buildServerErrorEnvelope, parseInboundMessage } = require('./envelope');
-const { createTypingThrottle } = require('./typing-throttle');
-const { LOG_EVENTS } = require('../lib/log-events');
-const { createLogger, hashIp } = require('../lib/logger');
+import { normalizePeerId, normalizeRoomId, normalizeSessionToken } from '@voice-room/shared/validation';
+import { normalizeTypingActivity } from '@voice-room/shared/realtime';
+import { buildServerEnvelope, buildServerErrorEnvelope, parseInboundMessage } from './envelope.js';
+import { createTypingThrottle } from './typing-throttle.js';
+import { LOG_EVENTS } from '../lib/log-events.js';
+import { createLogger, hashIp } from '../lib/logger.js';
 
 function createWsHandler({
   registry,
@@ -346,6 +340,4 @@ function createWsHandler({
   };
 }
 
-module.exports = {
-  createWsHandler
-};
+export { createWsHandler };

@@ -1,9 +1,7 @@
-'use strict';
+import test from 'node:test';
+import assert from 'node:assert/strict';
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
-
-const { createApiApp } = require('../src/server');
+import { createApiApp } from '../src/server.js';
 
 const SENDER_ID = '11111111-1111-4111-8111-111111111111';
 const RECIPIENT_ID = '22222222-2222-4222-8222-222222222222';

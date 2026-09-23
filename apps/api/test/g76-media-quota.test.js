@@ -1,12 +1,11 @@
-'use strict';
-const assert = require('node:assert/strict');
-const { Pool } = require('pg');
-const test = require('node:test');
-const { runMigrations } = require('../src/lib/migrate');
-const { createAttachmentRepository } = require('../src/domains/media/attachment-repository');
-const { createMediaQuotaRepository } = require('../src/domains/media/media-quota-repository');
-const { createMediaQuotaService } = require('../src/domains/media/media-quota-service');
-const { createTestDatabase } = require('./db-harness');
+import assert from 'node:assert/strict';
+import { Pool } from 'pg';
+import test from 'node:test';
+import { runMigrations } from '../src/lib/migrate.js';
+import { createAttachmentRepository } from '../src/domains/media/attachment-repository.js';
+import { createMediaQuotaRepository } from '../src/domains/media/media-quota-repository.js';
+import { createMediaQuotaService } from '../src/domains/media/media-quota-service.js';
+import { createTestDatabase } from './db-harness.js';
 const SILENT = { log() {}, info() {}, warn() {}, error() {} };
 
 test('G76-A01 concurrent ninth slot is rejected and retry is idempotent', { skip: !process.env.TEST_DATABASE_URL, timeout: 120000 }, async (t) => {

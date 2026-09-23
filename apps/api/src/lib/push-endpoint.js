@@ -1,6 +1,4 @@
-'use strict';
-
-const crypto = require('node:crypto');
+import crypto from 'node:crypto';
 
 const EXACT_PUSH_HOSTS = new Set([
   'fcm.googleapis.com',
@@ -49,4 +47,4 @@ function describePushEndpoint(value) {
   };
 }
 
-module.exports = { cleanPushEndpoint, describePushEndpoint, isAllowedPushHost };
+export { cleanPushEndpoint, describePushEndpoint, isAllowedPushHost };

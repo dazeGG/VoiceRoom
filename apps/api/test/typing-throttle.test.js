@@ -1,8 +1,6 @@
-'use strict';
-
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const { createTypingThrottle } = require('../src/realtime/typing-throttle');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { createTypingThrottle } from '../src/realtime/typing-throttle.js';
 
 function createClock() {
   let time = 0;

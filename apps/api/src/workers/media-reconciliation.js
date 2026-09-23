@@ -1,5 +1,3 @@
-'use strict';
-
 function createMediaReconciliationWorker({ reconciliationService, intervalMs = 15 * 60 * 1000 } = {}) {
   if (!reconciliationService?.reconcile) throw new TypeError('Media reconciliation service is required');
   let stopping = false;
@@ -18,11 +16,11 @@ function createMediaReconciliationWorker({ reconciliationService, intervalMs = 1
 
 async function main() {
   if (String(process.env.MEDIA_RECONCILIATION_CLAIM_ENABLED || '').toLowerCase() !== 'true') return;
-  const { createDbPool } = require('../lib/db');
-  const { createAttachmentRepository } = require('../domains/media/attachment-repository');
-  const { createMediaJobRepository } = require('../domains/media/media-job-repository');
-  const { createMediaReconciliationService } = require('../domains/media/media-reconciliation-service');
-  const { createMediaStorage } = require('../domains/media/storage');
+  const { createDbPool } = await import('../lib/db.js');
+  const { createAttachmentRepository } = await import('../domains/media/attachment-repository.js');
+  const { createMediaJobRepository } = await import('../domains/media/media-job-repository.js');
+  const { createMediaReconciliationService } = await import('../domains/media/media-reconciliation-service.js');
+  const { createMediaStorage } = await import('../domains/media/storage.js');
   const pool = createDbPool();
   const attachments = createAttachmentRepository({ pool });
   const worker = createMediaReconciliationWorker({
@@ -40,11 +38,11 @@ async function main() {
   finally { await pool.end(); }
 }
 
-if (require.main === module) {
+if (import.meta.main) {
   main().catch((error) => {
     process.stderr.write(`${error?.stack || error}\n`);
     process.exitCode = 1;
   });
 }
 
-module.exports = { createMediaReconciliationWorker, main };
+export { createMediaReconciliationWorker, main };

@@ -1,6 +1,4 @@
-'use strict';
-
-const { buildMessageDeliveryEvent } = require('@voice-room/shared/messaging-send');
+import { buildMessageDeliveryEvent } from '@voice-room/shared/messaging-send';
 
 function createMessageRealtimeAdapter({ broadcastRoom, broadcastAccount, createEventId } = {}) {
   const roomBroadcaster = typeof broadcastRoom === 'function' ? broadcastRoom : () => false;
@@ -59,4 +57,4 @@ function createMessageRealtimeAdapter({ broadcastRoom, broadcastAccount, createE
   return Object.freeze({ publishDirectReply, publishRoomReply });
 }
 
-module.exports = { createMessageRealtimeAdapter };
+export { createMessageRealtimeAdapter };

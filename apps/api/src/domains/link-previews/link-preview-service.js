@@ -1,10 +1,8 @@
-'use strict';
-
-const crypto = require('node:crypto');
-const { firstPreviewableUrl, normalizeLinkPreview } = require('@voice-room/shared/link-preview');
-const { decodeHtmlBody, extractLinkPreviewMetadata } = require('../../lib/link-preview-html');
-const { LOG_EVENTS } = require('../../lib/log-events');
-const { createLogger } = require('../../lib/logger');
+import crypto from 'node:crypto';
+import { firstPreviewableUrl, normalizeLinkPreview } from '@voice-room/shared/link-preview';
+import { decodeHtmlBody, extractLinkPreviewMetadata } from '../../lib/link-preview-html.js';
+import { LOG_EVENTS } from '../../lib/log-events.js';
+import { createLogger } from '../../lib/logger.js';
 
 const READY_TTL_MS = 24 * 60 * 60 * 1000;
 const FAILED_TTL_MS = 60 * 60 * 1000;
@@ -129,4 +127,4 @@ function createLinkPreviewService({
   };
 }
 
-module.exports = { FAILED_TTL_MS, READY_TTL_MS, createLinkPreviewService };
+export { FAILED_TTL_MS, READY_TTL_MS, createLinkPreviewService };

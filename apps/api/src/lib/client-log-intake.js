@@ -1,5 +1,3 @@
-'use strict';
-
 // Browser-sourced log records are untrusted input on a public route: they set
 // the size of the log stream, and whatever they carry ends up in the same
 // storage as server records. Everything here is therefore a hard cap applied
@@ -121,9 +119,4 @@ function normalizeClientLogBatch(body, { now = Date.now() } = {}) {
   };
 }
 
-module.exports = {
-  CLIENT_LOG_LEVELS,
-  CLIENT_LOG_LIMITS,
-  normalizeClientLogBatch,
-  normalizeClientLogEvent
-};
+export { CLIENT_LOG_LEVELS, CLIENT_LOG_LIMITS, normalizeClientLogBatch, normalizeClientLogEvent };

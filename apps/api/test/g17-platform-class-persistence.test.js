@@ -1,17 +1,15 @@
-'use strict';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import { performance } from 'node:perf_hooks';
+import path from 'node:path';
+import { Client } from 'pg';
+import { runner } from 'node-pg-migrate';
+import { test } from 'node:test';
+import { classifyPlatform } from '@voice-room/shared/platform-class';
+import { createPushStore } from '../src/lib/push-store.js';
+import { createTestDatabase } from './db-harness.js';
 
-const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const { performance } = require('node:perf_hooks');
-const path = require('node:path');
-const { Client } = require('pg');
-const { runner } = require('node-pg-migrate');
-const { test } = require('node:test');
-const { classifyPlatform } = require('@voice-room/shared/platform-class');
-const { createPushStore } = require('../src/lib/push-store');
-const { createTestDatabase } = require('./db-harness');
-
-const MIGRATIONS_DIR = path.resolve(__dirname, '../src/migrations');
+const MIGRATIONS_DIR = path.resolve(import.meta.dirname, '../src/migrations');
 const BASE_TIMESTAMP = 20260711130000;
 const PLATFORM_TIMESTAMP = 20260718120000;
 const CORRECTIVE_TIMESTAMP = 20260720161000;
@@ -134,7 +132,7 @@ test('G17-A02 store and PostgreSQL upgrade equal the shared classifier corpus wi
 });
 
 test('G17-A02 lock timeout rolls the target migration back in at most five seconds', { skip: !process.env.TEST_DATABASE_URL }, async (t) => {
-  const migrationSource = fs.readFileSync(path.join(MIGRATIONS_DIR, '20260720161000_reclassify_push_subscription_platform.js'), 'utf8');
+  const migrationSource = fs.readFileSync(path.join(MIGRATIONS_DIR, '20260720161000_reclassify_push_subscription_platform.cjs'), 'utf8');
   assert.match(migrationSource, /SET LOCAL lock_timeout = '5s'/);
   const { cleanup, databaseUrl } = await createTestDatabase(t);
   t.after(cleanup);

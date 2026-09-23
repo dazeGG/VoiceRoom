@@ -1,15 +1,12 @@
-
-'use strict';
-
 process.env.ROOM_CREATE_POW_DIFFICULTY = '0';
 process.env.ROOM_CHAT_RATE_LIMIT = '0';
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const http = require('node:http');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import http from 'node:http';
 
-const { __private, createApiServer } = require('../src/server');
-const { openWs, joinVoiceRoom, sendWs, waitForWsType } = require('./ws-harness');
+const { __private, createApiServer } = await import('../src/server.js');
+const { openWs, joinVoiceRoom, sendWs, waitForWsType } = await import('./ws-harness.js');
 
 // A logger that records the structured fields, so a test can assert the API
 // observed a failure instead of swallowing it: Fastify's own logger is silent

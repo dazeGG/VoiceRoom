@@ -1,6 +1,4 @@
-'use strict';
-
-const crypto = require('node:crypto');
+import crypto from 'node:crypto';
 
 function hasLeadingZeroBits(buffer, bits) {
   const fullBytes = Math.floor(bits / 8);
@@ -103,9 +101,4 @@ function createProofOfWork({ secret = crypto.randomBytes(32), difficulty, ttlMs 
   return { sign, prune, createChallenge, verify, usedChallenges };
 }
 
-module.exports = {
-  hasLeadingZeroBits,
-  parsePowChallenge,
-  normalizePowNonce,
-  createProofOfWork
-};
+export { hasLeadingZeroBits, parsePowChallenge, normalizePowNonce, createProofOfWork };

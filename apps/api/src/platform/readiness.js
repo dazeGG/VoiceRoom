@@ -1,14 +1,12 @@
-'use strict';
-
-const crypto = require('node:crypto');
-const { existsSync, readFileSync } = require('node:fs');
-const path = require('node:path');
-const {
+import crypto from 'node:crypto';
+import { existsSync, readFileSync } from 'node:fs';
+import path from 'node:path';
+import {
   normalizeManifest,
   PUBLIC_CAPABILITY_KEYS,
   OPERATOR_KEYS,
   toSet
-} = require('@voice-room/shared/capabilities');
+} from '@voice-room/shared/capabilities';
 
 const DEFAULT_MANIFEST_PATH = 'config/capability-dag.v1.json';
 
@@ -22,7 +20,7 @@ function resolveManifestPath(manifestPath) {
   if (path.isAbsolute(requested)) return requested;
   const fromCwd = path.resolve(process.cwd(), requested);
   if (existsSync(fromCwd)) return fromCwd;
-  return path.resolve(__dirname, '../../../..', requested);
+  return path.resolve(import.meta.dirname, '../../../..', requested);
 }
 
 function sha256Hex(text) {
@@ -416,7 +414,7 @@ function createReadinessProvider(options = {}) {
   return { manifestPath, getSnapshot };
 }
 
-module.exports = {
+export {
   resolveManifestPath,
   readManifestText,
   createReadinessReport,

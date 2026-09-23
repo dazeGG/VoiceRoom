@@ -1,10 +1,5 @@
-'use strict';
-
-const {
-  buildHistoryEnvelope,
-  normalizeHistoryRequest
-} = require('@voice-room/shared/messaging-history');
-const { normalizeLinkPreview } = require('@voice-room/shared/link-preview');
+import { buildHistoryEnvelope, normalizeHistoryRequest } from '@voice-room/shared/messaging-history';
+import { normalizeLinkPreview } from '@voice-room/shared/link-preview';
 
 class DmHistoryError extends Error {
   constructor(code, statusCode, message) {
@@ -124,4 +119,4 @@ function createDmHistoryService({ repository, cursorCodec, visibilityPolicy, pro
   return { getPage };
 }
 
-module.exports = { DmHistoryError, canonicalParticipants, createDmHistoryService };
+export { DmHistoryError, canonicalParticipants, createDmHistoryService };

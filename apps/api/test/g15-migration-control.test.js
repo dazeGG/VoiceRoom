@@ -1,19 +1,17 @@
-'use strict';
-
-const assert = require('node:assert/strict');
-const { spawnSync } = require('node:child_process');
-const path = require('node:path');
-const { Client } = require('pg');
-const { test } = require('node:test');
-const { createTestDatabase } = require('./db-harness');
-const {
+import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import path from 'node:path';
+import { Client } from 'pg';
+import { test } from 'node:test';
+import { createTestDatabase } from './db-harness.js';
+import {
   LOCK_TIMEOUT_MS,
   MIGRATION_GUARD_STATES,
   advisoryLockParts,
   assertMigrationReady,
   expectedMigrationCatalog,
   runMigrations
-} = require('../src/lib/migrate');
+} from '../src/lib/migrate.js';
 
 class FakeClient {
   constructor({ guardTable = true, migrationsTable = true, migrationNames = expectedMigrationCatalog(), guardState = 'clean', loseLock = false, lockTimeout = false } = {}) {
@@ -150,7 +148,7 @@ test('G15-A02 rollout requires a clean guard and the exact migration catalog/hea
 test('G15-A02 production rejects unfenced and down migration commands before database access', () => {
   for (const argument of ['--no-lock', 'down']) {
     const result = spawnSync(process.execPath, ['apps/api/src/scripts/migrate.js', argument], {
-      cwd: path.resolve(__dirname, '../../..'),
+      cwd: path.resolve(import.meta.dirname, '../../..'),
       env: { ...process.env, NODE_ENV: 'production', DATABASE_URL: 'postgres://127.0.0.1:1/unreachable' },
       encoding: 'utf8'
     });

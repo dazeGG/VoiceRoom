@@ -1,11 +1,9 @@
-'use strict';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import test from 'node:test';
 
-const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
-const test = require('node:test');
-
-const read = (relative) => fs.readFileSync(path.resolve(__dirname, relative), 'utf8');
+const read = (relative) => fs.readFileSync(path.resolve(import.meta.dirname, relative), 'utf8');
 
 function statementAfter(source, marker) {
   const start = source.indexOf(marker);
@@ -15,7 +13,7 @@ function statementAfter(source, marker) {
 
 test('the cursor room read writes only columns room_chat_reads actually has', () => {
   const repository = read('../src/domains/messaging/message-read-repository.js');
-  const migration = read('../src/migrations/20260718122000_add_message_read_cursors.js');
+  const migration = read('../src/migrations/20260718122000_add_message_read_cursors.cjs');
   const write = statementAfter(repository, 'INSERT INTO room_chat_reads');
 
   // 20260718122000 added updated_at only to the new direct_message_read_cursors
@@ -27,7 +25,7 @@ test('the cursor room read writes only columns room_chat_reads actually has', ()
 
   const cursorsTable = migration.slice(migration.indexOf('direct_message_read_cursors'));
   assert.match(cursorsTable, /updated_at timestamptz NOT NULL DEFAULT current_timestamp/);
-  assert.doesNotMatch(read('../src/migrations/20260714120000_create_room_chat_reads.js'), /updated_at/);
+  assert.doesNotMatch(read('../src/migrations/20260714120000_create_room_chat_reads.cjs'), /updated_at/);
 });
 
 test('the DM read still stamps updated_at, which its table does have', () => {

@@ -1,6 +1,4 @@
-'use strict';
-
-const crypto = require('node:crypto');
+import crypto from 'node:crypto';
 
 const DEFAULT_RETENTION_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_ACTOR_QUOTA = 1_000;
@@ -179,7 +177,7 @@ function createMessageIdempotencyRepository({
   return Object.freeze({ complete, pruneExpired, reserve });
 }
 
-module.exports = {
+export {
   DEFAULT_ACTOR_QUOTA,
   DEFAULT_RETENTION_MS,
   IdempotencyConflictError,

@@ -1,5 +1,3 @@
-'use strict';
-
 // Resolves the client IP. When trustProxy is enabled the last hop of
 // X-Forwarded-For is used (the IP the trusted reverse proxy observed);
 // otherwise the direct socket address is used so clients cannot spoof it.
@@ -110,4 +108,4 @@ function createFailureLimiter({ limit, windowMs, maxEntries = 100_000 }) {
   return { entries, recordFailure, reserve, reset, status };
 }
 
-module.exports = { getClientIp, createFailureLimiter, createRateLimiter };
+export { getClientIp, createFailureLimiter, createRateLimiter };

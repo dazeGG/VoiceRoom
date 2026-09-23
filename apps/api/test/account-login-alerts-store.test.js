@@ -1,12 +1,10 @@
-'use strict';
+import test from 'node:test';
+import assert from 'node:assert/strict';
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
-
-const { createUserStore } = require('../src/lib/user-store');
-const { runMigrations } = require('../src/lib/migrate');
-const { LOGIN_ALERT_TTL_MS, LOGIN_FAMILIARITY_WINDOW_MS } = require('@voice-room/shared/account-security');
-const { createTestDatabase } = require('./db-harness');
+import { createUserStore } from '../src/lib/user-store.js';
+import { runMigrations } from '../src/lib/migrate.js';
+import { LOGIN_ALERT_TTL_MS, LOGIN_FAMILIARITY_WINDOW_MS } from '@voice-room/shared/account-security';
+import { createTestDatabase } from './db-harness.js';
 
 const SILENT = { log() {}, info() {}, warn() {}, error() {} };
 const DAY = 24 * 60 * 60 * 1000;

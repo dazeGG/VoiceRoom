@@ -1,9 +1,8 @@
-'use strict';
-const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
-const { test } = require('node:test');
-const { requireReplyTarget } = require('../src/domains/messaging/reply-projector');
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import { test } from 'node:test';
+import { requireReplyTarget } from '../src/domains/messaging/reply-projector.js';
 
 test('G33-A01 unavailable and invisible reply targets share one non-disclosing 409', async () => {
   for (const input of [
@@ -16,7 +15,7 @@ test('G33-A01 unavailable and invisible reply targets share one non-disclosing 4
 });
 
 test('G33-A02 room, guest and DM sends lock reply targets inside the message UoW', () => {
-  const server = fs.readFileSync(path.resolve(__dirname, '../src/server.js'), 'utf8');
+  const server = fs.readFileSync(path.resolve(import.meta.dirname, '../src/server.js'), 'utf8');
   assert.match(server, /unitOfWork:[\s\S]*lockRoomTarget/);
   assert.match(server, /unitOfWork:[\s\S]*lockDirectTarget/);
   assert.match(server, /replyToMessageId:[\s\S]*beforeUnitOfWork:[\s\S]*unitOfWork/);

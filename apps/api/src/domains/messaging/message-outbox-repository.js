@@ -1,7 +1,5 @@
-'use strict';
-
-const crypto = require('node:crypto');
-const { buildMessageDeliveryEvent } = require('@voice-room/shared/messaging-send');
+import crypto from 'node:crypto';
+import { buildMessageDeliveryEvent } from '@voice-room/shared/messaging-send';
 
 const DEFAULT_CLAIM_LIMIT = 100;
 const DEFAULT_STALE_CLAIM_MS = 60_000;
@@ -254,9 +252,4 @@ function createMessageOutboxRepository({ pool } = {}) {
   });
 }
 
-module.exports = {
-  DEFAULT_CLAIM_LIMIT,
-  DEFAULT_STALE_CLAIM_MS,
-  MessageDeliveryFenceError,
-  createMessageOutboxRepository
-};
+export { DEFAULT_CLAIM_LIMIT, DEFAULT_STALE_CLAIM_MS, MessageDeliveryFenceError, createMessageOutboxRepository };

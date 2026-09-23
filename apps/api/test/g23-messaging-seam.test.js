@@ -1,10 +1,9 @@
-'use strict';
-const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
-const { test } = require('node:test');
-const { createMessageService } = require('../src/domains/messaging/message-service');
-const { createMessageVisibilityService } = require('../src/domains/messaging/message-visibility-service');
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import { test } from 'node:test';
+import { createMessageService } from '../src/domains/messaging/message-service.js';
+import { createMessageVisibilityService } from '../src/domains/messaging/message-visibility-service.js';
 
 test('G23-A01 message UoW exposes unchanged repositories and exactly one visibility policy', async () => {
   const room = {}; const direct = {}; const visibility = createMessageVisibilityService();
@@ -15,7 +14,7 @@ test('G23-A01 message UoW exposes unchanged repositories and exactly one visibil
 });
 
 test('G23-A02 repository contains one canonical visibility service implementation', () => {
-  const root = path.resolve(__dirname, '../src');
+  const root = path.resolve(import.meta.dirname, '../src');
   const candidates = [];
   for (const dir of ['domains/messaging', 'domains/notifications', 'domains/media']) {
     for (const name of fs.readdirSync(path.join(root, dir))) if (/message-visibility-service\.js$/.test(name)) candidates.push(path.join(dir, name));

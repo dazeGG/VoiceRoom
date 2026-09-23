@@ -1,9 +1,8 @@
-'use strict';
+import crypto from 'node:crypto';
+import pino from 'pino';
 
-const crypto = require('node:crypto');
-const pino = require('pino');
-
-const { version: SERVICE_VERSION } = require('../../package.json');
+import packageJson from '../../package.json' with { type: 'json' };
+const SERVICE_VERSION = packageJson.version;
 
 // Values that must never reach a log sink, whatever nests them. Redaction is
 // applied by pino at serialization time so an accidental `log.info({ req })`
@@ -116,7 +115,7 @@ function newRequestId() {
   return crypto.randomUUID();
 }
 
-module.exports = {
+export {
   createFastifyLoggerOptions,
   createLogger,
   getLogLevel,

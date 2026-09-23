@@ -1,15 +1,13 @@
-'use strict';
-
-const { socketPathForDirectory } = require('./ipc-harness');
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const http = require('node:http');
-const { spawn } = require('node:child_process');
-const path = require('node:path');
-const os = require('node:os');
-const { createTestDatabase } = require('./db-harness');
-const { openWs, waitForWsType } = require('./ws-harness');
+import { socketPathForDirectory } from './ipc-harness.js';
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import http from 'node:http';
+import { spawn } from 'node:child_process';
+import path from 'node:path';
+import os from 'node:os';
+import { createTestDatabase } from './db-harness.js';
+import { openWs, waitForWsType } from './ws-harness.js';
 
 const CHROME_WINDOWS = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36';
 const FIREFOX_LINUX = 'Mozilla/5.0 (X11; Linux x86_64; rv:142.0) Gecko/20100101 Firefox/142.0';
@@ -46,7 +44,7 @@ async function startServer(t) {
   const socketPath = socketPathForDirectory(dir);
   const { cleanup, databaseUrl } = await createTestDatabase(t);
   const child = spawn(process.execPath, ['src/server.js'], {
-    cwd: path.join(__dirname, '..'),
+    cwd: path.join(import.meta.dirname, '..'),
     env: {
       ...process.env,
       NODE_ENV: 'test',

@@ -1,13 +1,7 @@
-'use strict';
-
-const crypto = require('node:crypto');
-const { transaction } = require('../../lib/db');
-const { verifyPassword } = require('../../lib/password');
-const {
-  ACCOUNT_DELETION_GRACE_MS,
-  DELETED_ACCOUNT_NAME,
-  DELETED_LOGIN_PREFIX
-} = require('@voice-room/shared/account-security');
+import crypto from 'node:crypto';
+import { transaction } from '../../lib/db.js';
+import { verifyPassword } from '../../lib/password.js';
+import { ACCOUNT_DELETION_GRACE_MS, DELETED_ACCOUNT_NAME, DELETED_LOGIN_PREFIX } from '@voice-room/shared/account-security';
 
 const UNUSABLE_PASSWORD_HASH = '!';
 
@@ -247,4 +241,4 @@ function createAccountDeletionRepository({ pool, now: clock = Date.now } = {}) {
   });
 }
 
-module.exports = { createAccountDeletionRepository, hashLogin };
+export { createAccountDeletionRepository, hashLogin };

@@ -1,12 +1,11 @@
-'use strict';
-
-const assert = require('node:assert/strict');
-const test = require('node:test');
-const { createCursorCodec } = require('../src/platform/cursor-codec');
-const { createReactionService } = require('../src/domains/messaging/reaction-service');
-const { registerReactionRoutes } = require('../src/domains/messaging/reaction-routes');
-const { createReactionRealtimeAdapter } = require('../src/domains/messaging/reaction-realtime-adapter');
-const fs = require('node:fs');
+import { fileURLToPath } from 'node:url';
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { createCursorCodec } from '../src/platform/cursor-codec.js';
+import { createReactionService } from '../src/domains/messaging/reaction-service.js';
+import { registerReactionRoutes } from '../src/domains/messaging/reaction-routes.js';
+import { createReactionRealtimeAdapter } from '../src/domains/messaging/reaction-realtime-adapter.js';
+import fs from 'node:fs';
 
 function repository() {
   let active = false;
@@ -112,7 +111,7 @@ test('G69 routes preserve no-store reads and service authorization status', asyn
   const writeReply = reply();
   await handlers['PUT /api/reactions/:type/:conversationId/:messageId'](request, writeReply);
   assert.equal(writeReply.status, 403);
-  const server = fs.readFileSync(require.resolve('../src/server.js'), 'utf8');
+  const server = fs.readFileSync(fileURLToPath(new URL('../src/server.js', import.meta.url)), 'utf8');
   assert.match(server, /operation === 'read' && !viewer\?\.id/);
   assert.match(server, /canUserReadRoomChat/);
 });

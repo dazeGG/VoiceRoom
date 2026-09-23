@@ -1,29 +1,27 @@
-'use strict';
-
 process.env.ROOM_CREATE_POW_DIFFICULTY = '0';
 process.env.LIVEKIT_GATE_SECRET = 'g48-test-livekit-gate-secret-at-least-32-bytes';
 
-const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const net = require('node:net');
-const path = require('node:path');
-const { Pool } = require('pg');
-const { test } = require('node:test');
-const { createApiApp } = require('../src/server');
-const { withRosterPeer } = require('./roster-harness');
-const { renderPrometheus, resetMetricsForTest } = require('../src/lib/metrics');
-const { createCredentialBoundaryService } = require('../src/domains/admission/credential-boundary-service');
-const { createLiveKitAuthGateService } = require('../src/domains/admission/livekit-auth-gate-service');
-const { createRoomStore } = require('../src/lib/room-store');
-const { runMigrations } = require('../src/lib/migrate');
-const { createTestDatabase } = require('./db-harness');
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import net from 'node:net';
+import path from 'node:path';
+import { Pool } from 'pg';
+import { test } from 'node:test';
+const { createApiApp } = await import('../src/server.js');
+const { withRosterPeer } = await import('./roster-harness.js');
+const { renderPrometheus, resetMetricsForTest } = await import('../src/lib/metrics.js');
+const { createCredentialBoundaryService } = await import('../src/domains/admission/credential-boundary-service.js');
+const { createLiveKitAuthGateService } = await import('../src/domains/admission/livekit-auth-gate-service.js');
+const { createRoomStore } = await import('../src/lib/room-store.js');
+const { runMigrations } = await import('../src/lib/migrate.js');
+const { createTestDatabase } = await import('./db-harness.js');
 
 function listen(server) { return new Promise((resolve,reject)=>{ server.once('error',reject); server.listen(0,'127.0.0.1',()=>resolve(server.address().port)); }); }
 function close(server) { return new Promise((resolve)=>server.close(()=>resolve())); }
 function upgrade(port, requestPath) { return new Promise((resolve,reject)=>{ const socket=net.connect(port,'127.0.0.1',()=>socket.write(`GET ${requestPath} HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Key: dGVzdA==\r\nSec-WebSocket-Version: 13\r\n\r\n`)); let response=''; socket.on('data',(chunk)=>{response+=chunk; if(response.includes('\r\n\r\n'))socket.end();}); socket.on('end',()=>resolve(response)); socket.on('error',reject); }); }
 
 test('G48 supplemental source contract keeps admission ordering visible', () => {
-  const source = fs.readFileSync(path.resolve(__dirname, '../src/server.js'), 'utf8');
+  const source = fs.readFileSync(path.resolve(import.meta.dirname, '../src/server.js'), 'utf8');
   const start = source.indexOf('async function handleLiveKitToken');
   const end = source.indexOf('\nfunction handlePowChallenge', start);
   const handler = source.slice(start, end);
@@ -36,7 +34,7 @@ test('G48 supplemental source contract keeps admission ordering visible', () => 
 });
 
 test('G48 supplemental source contract keeps revoke-before-remove ordering visible', () => {
-  const root = path.resolve(__dirname, '../src');
+  const root = path.resolve(import.meta.dirname, '../src');
   const runtime = fs.readFileSync(path.join(root, 'realtime/room-runtime.js'), 'utf8');
   const leaveStart = runtime.indexOf('async function disconnectAccountFromRoom');
   const leaveEnd = runtime.indexOf('\n  async function updatePeerState', leaveStart);
@@ -90,7 +88,7 @@ test('G48-A04 PostgreSQL-backed external HTTP/WS gate survives restart and rejec
   await boundary.revokePrincipal({roomId:'g48-network',principal}); for(const entry of issued)assert.match(await upgrade(gatePort,pathFor(entry.credential.value)),/^HTTP\/1\.1 403/);
   const racedPromise=boundary.issueCredential({roomId:'g48-network',peerId:'race',principal}); const revokePromise=boundary.revokePrincipal({roomId:'g48-network',principal}); const [raced]=await Promise.all([racedPromise,revokePromise]); await boundary.revokePrincipal({roomId:'g48-network',principal}); if(raced.status==='issued')assert.match(await upgrade(gatePort,pathFor(raced.credential.value)),/^HTTP\/1\.1 403/);
   await close(gate); gate=makeGate();gatePort=await listen(gate); assert.match(await upgrade(gatePort,pathFor(issued[0].credential.value)),/^HTTP\/1\.1 403/);
-  assert.match(fs.readFileSync(path.resolve(__dirname,'../../../docker-compose.dev.yml'),'utf8'),/livekit\/livekit-server:v1\.13\.2/);
+  assert.match(fs.readFileSync(path.resolve(import.meta.dirname,'../../../docker-compose.dev.yml'),'utf8'),/livekit\/livekit-server:v1\.13\.2/);
 });
 
 test('G48-A03 PostgreSQL admission cleanup revokes only the failed tab credential', { skip:!process.env.TEST_DATABASE_URL }, async (t) => {

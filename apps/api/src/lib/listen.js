@@ -1,9 +1,7 @@
-'use strict';
-
-const fs = require('node:fs');
-const net = require('node:net');
-const { LOG_EVENTS } = require('./log-events');
-const { createLogger } = require('./logger');
+import fs from 'node:fs';
+import net from 'node:net';
+import { LOG_EVENTS } from './log-events.js';
+import { createLogger } from './logger.js';
 
 function startApiListener({
   exit = process.exit,
@@ -121,6 +119,4 @@ function startApiListener({
   listenOnTcp();
 }
 
-module.exports = {
-  startApiListener
-};
+export { startApiListener };

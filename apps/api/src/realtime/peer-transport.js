@@ -1,6 +1,4 @@
-'use strict';
-
-const crypto = require('node:crypto');
+import crypto from 'node:crypto';
 
 function createTransportId() {
   return crypto.randomBytes(16).toString('hex');
@@ -18,7 +16,4 @@ function createWsTransport(send) {
   };
 }
 
-module.exports = {
-  createWsTransport,
-  createTransportId
-};
+export { createWsTransport, createTransportId };

@@ -1,8 +1,6 @@
-'use strict';
-
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const { getClientIp, createRateLimiter } = require('../src/lib/rate-limit');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { getClientIp, createRateLimiter } from '../src/lib/rate-limit.js';
 
 function fakeReq({ remoteAddress = '10.0.0.1', forwardedFor } = {}) {
   const headers = {};

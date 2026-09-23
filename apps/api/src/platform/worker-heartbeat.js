@@ -1,8 +1,6 @@
-'use strict';
-
-const os = require('node:os');
-const { createDbPool } = require('../lib/db');
-const { createRuntimeReadinessRepository } = require('./runtime-readiness-repository');
+import os from 'node:os';
+import { createDbPool } from '../lib/db.js';
+import { createRuntimeReadinessRepository } from './runtime-readiness-repository.js';
 
 const WORKER_CAPABILITIES = Object.freeze({
   'media-maintenance': ['media-maintenance.G78'],
@@ -40,4 +38,4 @@ async function startWorkerHeartbeat({ env = process.env, workerName } = {}) {
   });
 }
 
-module.exports = { WORKER_CAPABILITIES, startWorkerHeartbeat };
+export { WORKER_CAPABILITIES, startWorkerHeartbeat };

@@ -1,5 +1,3 @@
-'use strict';
-
 function createReactionRealtimeAdapter({ broadcastRoom, broadcastAccount, resolveDirectRecipients } = {}) {
   const roomBroadcaster = typeof broadcastRoom === 'function' ? broadcastRoom : () => false;
   const accountBroadcaster = typeof broadcastAccount === 'function' ? broadcastAccount : () => false;
@@ -36,4 +34,4 @@ function createReactionRealtimeAdapter({ broadcastRoom, broadcastAccount, resolv
   return Object.freeze({ publish });
 }
 
-module.exports = { createReactionRealtimeAdapter };
+export { createReactionRealtimeAdapter };

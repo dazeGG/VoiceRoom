@@ -1,9 +1,7 @@
-'use strict';
+import test from 'node:test';
+import assert from 'node:assert/strict';
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
-
-const { hashPassword, verifyPassword } = require('../src/lib/password');
+import { hashPassword, verifyPassword } from '../src/lib/password.js';
 
 test('hashPassword produces a self-describing scrypt string', async () => {
   const hash = await hashPassword('correct horse battery');

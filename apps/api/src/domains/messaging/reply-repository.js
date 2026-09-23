@@ -1,7 +1,5 @@
-'use strict';
-
-const crypto = require('node:crypto');
-const { projectReplyPreview, projectReplyTombstone } = require('./reply-projector');
+import crypto from 'node:crypto';
+import { projectReplyPreview, projectReplyTombstone } from './reply-projector.js';
 
 function requireQuery(client) {
   if (!client || typeof client.query !== 'function') {
@@ -155,4 +153,4 @@ function createReplyRepository({ client } = {}) {
   });
 }
 
-module.exports = { createReplyRepository };
+export { createReplyRepository };

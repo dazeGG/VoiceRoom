@@ -1,6 +1,4 @@
-'use strict';
-
-const { normalizeMentionUserIds } = require('@voice-room/shared/mentions');
+import { normalizeMentionUserIds } from '@voice-room/shared/mentions';
 
 class MentionEligibilityError extends Error {
   constructor(code = 'mention_not_eligible') {
@@ -44,4 +42,4 @@ function createMentionEligibilityService({ activeBanService, pool } = {}) {
   return { validate };
 }
 
-module.exports = { MentionEligibilityError, createMentionEligibilityService };
+export { MentionEligibilityError, createMentionEligibilityService };

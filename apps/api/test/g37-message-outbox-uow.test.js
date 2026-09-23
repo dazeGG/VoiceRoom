@@ -1,9 +1,8 @@
-'use strict';
-const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
-const { test } = require('node:test');
-const { createMessageOutboxRepository } = require('../src/domains/messaging/message-outbox-repository');
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import { test } from 'node:test';
+import { createMessageOutboxRepository } from '../src/domains/messaging/message-outbox-repository.js';
 
 test('G37-A01 logical event identity deduplicates inside the active transaction', async () => {
   const calls = [];
@@ -16,6 +15,6 @@ test('G37-A01 logical event identity deduplicates inside the active transaction'
 });
 
 test('G37-A02 schema is inert, additive, lock-bounded and retains poison evidence', () => {
-  const source = fs.readFileSync(path.resolve(__dirname, '../src/migrations/20260718125000_create_message_delivery_outbox.js'), 'utf8');
+  const source = fs.readFileSync(path.resolve(import.meta.dirname, '../src/migrations/20260718125000_create_message_delivery_outbox.cjs'), 'utf8');
   assert.match(source, /SET LOCAL lock_timeout = '5s'/); assert.match(source, /status IN \('pending', 'processing', 'delivered', 'dead'\)/); assert.match(source, /logical_key[\s\S]*unique: true/);
 });

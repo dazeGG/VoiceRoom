@@ -1,7 +1,6 @@
-'use strict';
-const assert = require('node:assert/strict');
-const { test } = require('node:test');
-const { createMessageIdempotencyRepository, IdempotencyConflictError } = require('../src/domains/messaging/message-idempotency-repository');
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+import { createMessageIdempotencyRepository, IdempotencyConflictError } from '../src/domains/messaging/message-idempotency-repository.js';
 
 function identity(fingerprint = 'fp') { return { actorType: 'account', actorId: 'u', conversation: { type: 'room', id: 'r' }, key: '12345678', fingerprint }; }
 

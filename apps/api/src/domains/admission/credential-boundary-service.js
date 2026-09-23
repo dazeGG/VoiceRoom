@@ -1,7 +1,5 @@
-'use strict';
-
-const crypto = require('node:crypto');
-const { createGateCredentialSigner } = require('./gate-credential-signer');
+import crypto from 'node:crypto';
+import { createGateCredentialSigner } from './gate-credential-signer.js';
 
 const DEFAULT_CREDENTIAL_TTL_MS = 6 * 60 * 60 * 1000;
 
@@ -130,4 +128,4 @@ function createCredentialBoundaryService({
   });
 }
 
-module.exports = { DEFAULT_CREDENTIAL_TTL_MS, createCredentialBoundaryService };
+export { DEFAULT_CREDENTIAL_TTL_MS, createCredentialBoundaryService };

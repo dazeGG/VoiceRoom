@@ -1,14 +1,14 @@
-'use strict';
-
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
 process.env.ROOM_CREATE_POW_DIFFICULTY = '0';
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
+import test from 'node:test';
+import assert from 'node:assert/strict';
 
-const { createApiApp, createApiServer } = require('../src/server');
-const { withRosterPeer } = require('./roster-harness');
-const { PUBLIC_CAPABILITY_KEYS } = require('@voice-room/shared/capabilities');
-const { resetMetricsForTest } = require('../src/lib/metrics');
+const { createApiApp, createApiServer } = await import('../src/server.js');
+const { withRosterPeer } = await import('./roster-harness.js');
+import { PUBLIC_CAPABILITY_KEYS } from '@voice-room/shared/capabilities';
+const { resetMetricsForTest } = await import('../src/lib/metrics.js');
 
 function createFakeStore() {
   const rooms = new Map();

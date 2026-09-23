@@ -1,5 +1,3 @@
-'use strict';
-
 const PIN_COLLECTION_PATH = '/api/rooms/:roomId/pins';
 const PIN_ITEM_PATH = `${PIN_COLLECTION_PATH}/:messageId`;
 
@@ -80,4 +78,4 @@ function registerPinRoutes({ app, pinService, resolveRoomAccess } = {}) {
   });
 }
 
-module.exports = { PIN_COLLECTION_PATH, PIN_ITEM_PATH, registerPinRoutes };
+export { PIN_COLLECTION_PATH, PIN_ITEM_PATH, registerPinRoutes };

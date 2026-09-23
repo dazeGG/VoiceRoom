@@ -1,11 +1,9 @@
-'use strict';
-
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const { createPushStore } = require('../src/lib/push-store');
-const { createUserStore } = require('../src/lib/user-store');
-const { runMigrations } = require('../src/lib/migrate');
-const { createTestDatabase } = require('./db-harness');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { createPushStore } from '../src/lib/push-store.js';
+import { createUserStore } from '../src/lib/user-store.js';
+import { runMigrations } from '../src/lib/migrate.js';
+import { createTestDatabase } from './db-harness.js';
 
 const SILENT = { log() {}, info() {}, warn() {}, error() {} };
 

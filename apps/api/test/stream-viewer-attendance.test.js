@@ -1,12 +1,6 @@
-'use strict';
-
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const {
-  clearViewedScreenPeerReferences,
-  createRoomRealtimeRuntime,
-  resolveViewedScreenPeerId
-} = require('../src/realtime/room-runtime');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { clearViewedScreenPeerReferences, createRoomRealtimeRuntime, resolveViewedScreenPeerId } from '../src/realtime/room-runtime.js';
 
 const ROOM_ID = 'room1';
 const OWNER_ID = 'peer-owner1';

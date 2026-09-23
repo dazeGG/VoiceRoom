@@ -1,6 +1,4 @@
-'use strict';
-
-const crypto = require('node:crypto');
+import crypto from 'node:crypto';
 
 class NotificationFenceError extends Error { constructor() { super('Notification delivery fence lost'); this.code='NOTIFICATION_FENCE_LOST'; } }
 function mapRow(row) { return row ? { eventId:row.event_id,notificationId:row.notification_id,recipientUserId:row.recipient_user_id,revision:Number(row.revision),channel:row.channel,payload:row.payload,status:row.status,attempts:Number(row.attempts),createdAt:row.created_at } : null; }
@@ -23,4 +21,4 @@ function createNotificationOutboxRepository({ pool } = {}) {
   return { acquireLease,claimBatch,enqueue,loadCurrent,markDelivered,markSuppressed,oldestPendingAgeMs,recordHeartbeat,releaseLease,renewLease,reschedule };
 }
 
-module.exports={NotificationFenceError,createNotificationOutboxRepository};
+export { NotificationFenceError, createNotificationOutboxRepository };

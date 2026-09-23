@@ -1,9 +1,7 @@
-'use strict';
-
-const crypto = require('node:crypto');
-const { createDbPool, transaction } = require('./db');
-const { classifyPlatform, PLATFORM_CLASSES } = require('@voice-room/shared/platform-class');
-const { createLogger } = require('./logger');
+import crypto from 'node:crypto';
+import { createDbPool, transaction } from './db.js';
+import { classifyPlatform, PLATFORM_CLASSES } from '@voice-room/shared/platform-class';
+import { createLogger } from './logger.js';
 
 function createRowId() {
   return crypto.randomUUID?.() || crypto.randomBytes(16).toString('hex');
@@ -147,9 +145,4 @@ function createPushStore({ databaseUrl, logger = createLogger({ name: 'api' }), 
   return { close, listByUserId, markSuccess, remove, removeByEndpoint, upsert };
 }
 
-module.exports = {
-  createPushStore,
-  mapSubscription,
-  resolvePlatformClass,
-  sanitizeMetadata
-};
+export { createPushStore, mapSubscription, resolvePlatformClass, sanitizeMetadata };

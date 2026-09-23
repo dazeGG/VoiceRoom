@@ -1,13 +1,11 @@
-'use strict';
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { once } from 'node:events';
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const os = require('node:os');
-const path = require('node:path');
-const { once } = require('node:events');
-
-const { createAvatarStorage, validateAvatarKey } = require('../src/lib/avatar-storage');
+import { createAvatarStorage, validateAvatarKey } from '../src/lib/avatar-storage.js';
 
 const USER_KEY = 'av_123e4567-e89b-12d3-a456-426614174000_deadbeef.webp';
 const ROOM_KEY = 'room_abcdefghij_0123abcd.webp';
@@ -58,7 +56,7 @@ test('avatar storage lists only valid avatar files', async (t) => {
 });
 
 test('Docker build context excludes runtime avatar uploads', async () => {
-  const dockerIgnore = await fs.promises.readFile(path.resolve(__dirname, '../../..', '.dockerignore'), 'utf8');
+  const dockerIgnore = await fs.promises.readFile(path.resolve(import.meta.dirname, '../../..', '.dockerignore'), 'utf8');
   assert.match(dockerIgnore, /^apps\/api\/uploads\/$/m);
 });
 

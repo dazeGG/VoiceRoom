@@ -1,6 +1,4 @@
-'use strict';
-
-const path = require('node:path');
+import path from 'node:path';
 
 function readEnvInt(name, fallback, min, env = process.env) {
   const value = Number.parseInt(env[name] || String(fallback), 10);
@@ -44,7 +42,13 @@ function readDatabaseConfig(env = process.env) {
 
 function readUploadsDir(env = process.env) {
   const configured = typeof env.UPLOADS_DIR === 'string' ? env.UPLOADS_DIR.trim() : '';
-  return path.resolve(configured || path.join(__dirname, '../../uploads'));
+  return path.resolve(configured || path.join(import.meta.dirname, '../../uploads'));
 }
 
-module.exports = { readEnvInt, readEnvBool, readMessageDeliveryMode, readDatabaseConfig, readUploadsDir };
+export {
+  readEnvInt,
+  readEnvBool,
+  readMessageDeliveryMode,
+  readDatabaseConfig,
+  readUploadsDir
+};

@@ -1,9 +1,11 @@
-'use strict';
-const assert = require('node:assert/strict');
-const fastify = require('fastify');
-const test = require('node:test');
-const { registerMediaRoutes } = require('../src/domains/media/media-routes');
-const { createMediaVisibilityService } = require('../src/domains/media/media-visibility-service');
+import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
+import assert from 'node:assert/strict';
+import fastify from 'fastify';
+import test from 'node:test';
+import { registerMediaRoutes } from '../src/domains/media/media-routes.js';
+import { createMediaVisibilityService } from '../src/domains/media/media-visibility-service.js';
 const ID = '123e4567-e89b-42d3-a456-426614174000';
 const MISSING = '223e4567-e89b-42d3-a456-426614174000';
 
@@ -45,6 +47,6 @@ test('G82-A02 guessed and denied reads are indistinguishable 404 with private sa
   assert.equal(ok.headers['content-type'], 'image/webp'); assert.match(ok.headers['content-disposition'], /^inline; filename="image\.webp"$/);
   assert.equal(denied.statusCode, 404); assert.deepEqual(denied.json(), { ok: false, code: 'media_not_found', error: 'Attachment not found' });
   assert.ok(performance.now() - started < 500);
-  const server = require('node:fs').readFileSync(require.resolve('../src/server.js'), 'utf8');
+  const server = require('node:fs').readFileSync(fileURLToPath(new URL('../src/server.js', import.meta.url)), 'utf8');
   assert.doesNotMatch(server.match(/function publicAttachment[\s\S]*?\n\}/)?.[0] || '', /ownerId/);
 });

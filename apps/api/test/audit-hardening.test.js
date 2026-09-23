@@ -1,5 +1,3 @@
-'use strict';
-
 // End-to-end proofs for the authorization gaps closed after the 2.6.4 audit:
 // a guest could claim a signed-in user's `auth-<id>` peer id and rewrite their
 // messages, banned visitors could still read the room, anyone with a room id
@@ -7,7 +5,7 @@
 // handshakes accepted any Origin, logins were only throttled per address, and a
 // server mute left the pre-mute admission usable for a reconnect.
 
-const { socketPathForDirectory } = require('./ipc-harness');
+import { socketPathForDirectory } from './ipc-harness.js';
 process.env.ROOM_CREATE_POW_DIFFICULTY = '0';
 process.env.ROOM_CHAT_RATE_LIMIT = '0';
 process.env.TRUST_PROXY = 'true';
@@ -18,16 +16,16 @@ process.env.LIVEKIT_GATE_SECRET = 'audit-hardening-gate-secret-at-least-32-bytes
 process.env.LIVEKIT_ROSTER_WAIT_MS = '150';
 process.env.LOGIN_FAILURE_LIMIT = '3';
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const crypto = require('node:crypto');
-const fs = require('node:fs');
-const http = require('node:http');
-const os = require('node:os');
-const path = require('node:path');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
+import fs from 'node:fs';
+import http from 'node:http';
+import os from 'node:os';
+import path from 'node:path';
 
-const { createApiServer } = require('../src/server');
-const { openWs, joinVoiceRoom, sendWs, waitForWsType } = require('./ws-harness');
+const { createApiServer } = await import('../src/server.js');
+const { openWs, joinVoiceRoom, sendWs, waitForWsType } = await import('./ws-harness.js');
 
 const OWNER_ID = '11111111-1111-4111-8111-111111111111';
 const VICTIM_ID = '22222222-2222-4222-8222-222222222222';

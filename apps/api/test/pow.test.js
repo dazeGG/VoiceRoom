@@ -1,14 +1,12 @@
-'use strict';
-
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const crypto = require('node:crypto');
-const {
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
+import {
   hasLeadingZeroBits,
   parsePowChallenge,
   normalizePowNonce,
   createProofOfWork
-} = require('../src/lib/pow');
+} from '../src/lib/pow.js';
 
 // Brute-forces a nonce the same way the browser client does.
 function solveChallenge(challenge, difficulty) {

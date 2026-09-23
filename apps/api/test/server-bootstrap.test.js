@@ -1,9 +1,7 @@
-'use strict';
+import test from 'node:test';
+import assert from 'node:assert/strict';
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
-
-const { bootstrap, createApiServer } = require('../src/server');
+import { bootstrap, createApiServer } from '../src/server.js';
 
 test('importing server exposes an app factory without binding or requiring DATABASE_URL', () => {
   assert.equal(typeof createApiServer, 'function');

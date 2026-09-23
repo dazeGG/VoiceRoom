@@ -1,8 +1,6 @@
-'use strict';
-
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const { decodeHtmlBody, extractLinkPreviewMetadata } = require('../src/lib/link-preview-html');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { decodeHtmlBody, extractLinkPreviewMetadata } from '../src/lib/link-preview-html.js';
 
 test('Open Graph tags win, in any attribute order and quoting, with entities decoded', () => {
   const html = `<!doctype html><html><head>

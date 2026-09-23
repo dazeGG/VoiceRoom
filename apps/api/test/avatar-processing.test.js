@@ -1,15 +1,13 @@
-'use strict';
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import sharp from 'sharp';
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const sharp = require('sharp');
-
-const {
+import {
   AVATAR_SIZE,
   createAvatarKey,
   detectAvatarFormat,
   processAvatar
-} = require('../src/lib/avatar-processing');
+} from '../src/lib/avatar-processing.js';
 
 test('avatar processing accepts JPEG, PNG, and WebP magic bytes and normalizes to 256px WebP', async () => {
   for (const format of ['jpeg', 'png', 'webp']) {

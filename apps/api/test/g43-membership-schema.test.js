@@ -1,10 +1,10 @@
-'use strict';
-
-const assert = require('node:assert/strict');
-const { Pool } = require('pg');
-const { test } = require('node:test');
-const { runMigrations } = require('../src/lib/migrate');
-const { createTestDatabase } = require('./db-harness');
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
+import assert from 'node:assert/strict';
+import { Pool } from 'pg';
+import { test } from 'node:test';
+import { runMigrations } from '../src/lib/migrate.js';
+import { createTestDatabase } from './db-harness.js';
 
 test('G43-A01 room_memberships is an active-only unique room/user relation', { skip: !process.env.TEST_DATABASE_URL }, async (t) => {
   const { cleanup, databaseUrl } = await createTestDatabase(t);
@@ -27,7 +27,7 @@ test('G43-A01 room_memberships is an active-only unique room/user relation', { s
 });
 
 test('G43-A02 no later membership-history migration exists', () => {
-  const migration = require('../src/migrations/20260615140000_create_room_memberships_and_bookmarks');
+  const migration = require('../src/migrations/20260615140000_create_room_memberships_and_bookmarks.cjs');
   assert.equal(typeof migration.up, 'function');
   assert.equal(typeof migration.down, 'function');
 });

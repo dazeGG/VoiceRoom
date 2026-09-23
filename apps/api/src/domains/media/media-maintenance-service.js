@@ -1,5 +1,3 @@
-'use strict';
-
 function createMediaMaintenanceService({ attachmentRepository, jobRepository, storage, batchSize = 500 } = {}) {
   if (!attachmentRepository || !storage) throw new TypeError('Media maintenance dependencies are required');
 
@@ -33,4 +31,4 @@ function createMediaMaintenanceService({ attachmentRepository, jobRepository, st
   return Object.freeze({ cleanupOnce });
 }
 
-module.exports = { createMediaMaintenanceService };
+export { createMediaMaintenanceService };

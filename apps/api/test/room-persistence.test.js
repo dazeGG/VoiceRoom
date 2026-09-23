@@ -1,15 +1,13 @@
-'use strict';
-
-const { socketPathForDirectory } = require('./ipc-harness');
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const http = require('node:http');
-const os = require('node:os');
-const { createTestDatabase } = require('./db-harness');
-const { openWs, joinVoiceRoom } = require('./ws-harness');
-const path = require('node:path');
-const { spawn } = require('node:child_process');
+import { socketPathForDirectory } from './ipc-harness.js';
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import http from 'node:http';
+import os from 'node:os';
+import { createTestDatabase } from './db-harness.js';
+import { openWs, joinVoiceRoom } from './ws-harness.js';
+import path from 'node:path';
+import { spawn } from 'node:child_process';
 
 
 function getSocketPath() {
@@ -48,7 +46,7 @@ function waitForHealthz(socketPath, timeoutMs = 15000) {
 
 function startServer(socketPath, databaseUrl, logs, envOverrides = {}) {
   const child = spawn(process.execPath, ['src/server.js'], {
-    cwd: path.join(__dirname, '..'),
+    cwd: path.join(import.meta.dirname, '..'),
     env: {
       ...process.env,
       NODE_ENV: 'test',

@@ -1,10 +1,8 @@
-'use strict';
-
-const { Pool } = require('pg');
-const { readDatabaseConfig } = require('./config');
-const { recordPgPoolError } = require('./metrics');
-const { LOG_EVENTS } = require('./log-events');
-const { createLogger } = require('./logger');
+import { Pool } from 'pg';
+import { readDatabaseConfig } from './config.js';
+import { recordPgPoolError } from './metrics.js';
+import { LOG_EVENTS } from './log-events.js';
+import { createLogger } from './logger.js';
 
 function createDbPool({ databaseUrl = readDatabaseConfig().url, logger = createLogger({ name: 'api' }), max = 10 } = {}) {
   const pool = new Pool({
@@ -35,7 +33,4 @@ async function transaction(pool, callback) {
   }
 }
 
-module.exports = {
-  createDbPool,
-  transaction
-};
+export { createDbPool, transaction };

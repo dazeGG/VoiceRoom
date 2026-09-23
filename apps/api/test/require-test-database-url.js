@@ -1,6 +1,4 @@
-'use strict';
-
-const { readDatabaseConfig } = require('../src/lib/config');
+import { readDatabaseConfig } from '../src/lib/config.js';
 
 try {
   readDatabaseConfig({ DATABASE_URL: process.env.TEST_DATABASE_URL });

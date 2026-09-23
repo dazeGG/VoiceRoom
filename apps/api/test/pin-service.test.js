@@ -1,17 +1,15 @@
-'use strict';
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import Fastify from 'fastify';
+import { Pool } from 'pg';
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const Fastify = require('fastify');
-const { Pool } = require('pg');
-
-const { createPinRepository } = require('../src/domains/messaging/pin-repository');
-const { createPinService } = require('../src/domains/messaging/pin-service');
-const { registerPinRoutes } = require('../src/domains/messaging/pin-routes');
-const { createRoomStore } = require('../src/lib/room-store');
-const { createUserStore } = require('../src/lib/user-store');
-const { runMigrations } = require('../src/lib/migrate');
-const { createTestDatabase } = require('./db-harness');
+import { createPinRepository } from '../src/domains/messaging/pin-repository.js';
+import { createPinService } from '../src/domains/messaging/pin-service.js';
+import { registerPinRoutes } from '../src/domains/messaging/pin-routes.js';
+import { createRoomStore } from '../src/lib/room-store.js';
+import { createUserStore } from '../src/lib/user-store.js';
+import { runMigrations } from '../src/lib/migrate.js';
+import { createTestDatabase } from './db-harness.js';
 
 const SILENT = { log() {}, info() {}, warn() {}, error() {} };
 

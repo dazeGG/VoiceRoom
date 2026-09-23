@@ -1,5 +1,3 @@
-'use strict';
-
 class MediaVisibilityError extends Error {
   constructor() {
     super('Attachment not found');
@@ -66,4 +64,4 @@ function createMediaVisibilityService({
   return Object.freeze({ open, requireVisible });
 }
 
-module.exports = { MediaVisibilityError, createMediaVisibilityService };
+export { MediaVisibilityError, createMediaVisibilityService };

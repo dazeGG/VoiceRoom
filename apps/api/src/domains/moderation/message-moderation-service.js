@@ -1,6 +1,4 @@
-'use strict';
-
-const { transaction } = require('../../lib/db');
+import { transaction } from '../../lib/db.js';
 
 function requireOperation(target, names, label) {
   for (const name of names) {
@@ -95,4 +93,4 @@ function createMessageModerationService({
   return Object.freeze({ deleteRoomMessage });
 }
 
-module.exports = { createMessageModerationService };
+export { createMessageModerationService };

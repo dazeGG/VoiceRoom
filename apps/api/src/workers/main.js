@@ -1,16 +1,19 @@
-'use strict';
-
-const { startWorkerMetricsServer } = require('../lib/worker-metrics-server');
-const { startWorkerHeartbeat } = require('../platform/worker-heartbeat');
-const { LOG_EVENTS } = require('../lib/log-events');
-const { createLogger } = require('../lib/logger');
+import { startWorkerMetricsServer } from '../lib/worker-metrics-server.js';
+import { startWorkerHeartbeat } from '../platform/worker-heartbeat.js';
+import { LOG_EVENTS } from '../lib/log-events.js';
+import { createLogger } from '../lib/logger.js';
+import { main as mediaMaintenanceMain } from './media-maintenance.js';
+import { main as mediaProcessingMain } from './media-processing.js';
+import { main as mediaReconciliationMain } from './media-reconciliation.js';
+import { main as messageDeliveryMain } from './message-delivery.js';
+import { main as notificationDeliveryMain } from './notification-delivery.js';
 
 const workers = Object.freeze({
-  'media-maintenance': require('./media-maintenance').main,
-  'media-processing': require('./media-processing').main,
-  'media-reconciliation': require('./media-reconciliation').main,
-  'message-delivery': require('./message-delivery').main,
-  'notification-delivery': require('./notification-delivery').main
+  'media-maintenance': mediaMaintenanceMain,
+  'media-processing': mediaProcessingMain,
+  'media-reconciliation': mediaReconciliationMain,
+  'message-delivery': messageDeliveryMain,
+  'notification-delivery': notificationDeliveryMain
 });
 
 async function main(env = process.env) {
@@ -30,11 +33,11 @@ async function main(env = process.env) {
   }
 }
 
-if (require.main === module) {
+if (import.meta.main) {
   main().catch((error) => {
     process.stderr.write(`${error?.stack || error}\n`);
     process.exitCode = 1;
   });
 }
 
-module.exports = { main };
+export { main };

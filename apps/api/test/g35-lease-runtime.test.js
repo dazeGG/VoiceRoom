@@ -1,7 +1,6 @@
-'use strict';
-const assert = require('node:assert/strict');
-const { test } = require('node:test');
-const { LeaseLostError, boundedBackoff, createLeaseRuntime } = require('../src/platform/lease-runtime');
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+import { LeaseLostError, boundedBackoff, createLeaseRuntime } from '../src/platform/lease-runtime.js';
 
 test('G35-A01 backoff is deterministic and bounded when jitter is disabled', () => {
   assert.deepEqual([0, 1, 2, 20].map((attempt) => boundedBackoff(attempt, { baseMs: 10, maxMs: 25 })), [10, 20, 25, 25]);

@@ -1,7 +1,5 @@
-'use strict';
-
-const crypto = require('node:crypto');
-const { transaction } = require('../../lib/db');
+import crypto from 'node:crypto';
+import { transaction } from '../../lib/db.js';
 
 function dbFor(pool, client) { return client?.query ? client : pool; }
 
@@ -64,4 +62,4 @@ function createInboxRepository({ pool } = {}) {
   return { findFirstUnread, list, markAllRead, markRead, markReadForRoom, retractByMessage, unreadCount, upsert };
 }
 
-module.exports = { createInboxRepository, mapNotificationRow: mapRow };
+export { createInboxRepository, mapRow as mapNotificationRow };

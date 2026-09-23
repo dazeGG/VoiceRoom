@@ -1,6 +1,4 @@
-'use strict';
-
-const { ReplyTargetUnavailableError } = require('./reply-projector');
+import { ReplyTargetUnavailableError } from './reply-projector.js';
 
 const REPLY_CONFLICT_BODY = Object.freeze({
   error: 'reply_target_unavailable',
@@ -81,8 +79,4 @@ function registerMessageReplyRoutes(fastify, options = {}) {
   return handlers;
 }
 
-module.exports = {
-  REPLY_CONFLICT_BODY,
-  createMessageReplyHandlers,
-  registerMessageReplyRoutes
-};
+export { REPLY_CONFLICT_BODY, createMessageReplyHandlers, registerMessageReplyRoutes };

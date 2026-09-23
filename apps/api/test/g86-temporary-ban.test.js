@@ -1,9 +1,7 @@
-'use strict';
-
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const { createModerationRepository } = require('../src/domains/moderation/moderation-repository');
-const { createModerationService } = require('../src/domains/moderation/moderation-service');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { createModerationRepository } from '../src/domains/moderation/moderation-repository.js';
+import { createModerationService } from '../src/domains/moderation/moderation-service.js';
 
 test('G86-A01 unauthorized ban requests do not resolve target principals', async () => {
   let resolutions = 0;

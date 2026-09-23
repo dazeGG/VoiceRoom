@@ -1,9 +1,7 @@
-'use strict';
-
-const fs = require('node:fs');
-const net = require('node:net');
-const { LOG_EVENTS } = require('./log-events');
-const { createLogger } = require('./logger');
+import fs from 'node:fs';
+import net from 'node:net';
+import { LOG_EVENTS } from './log-events.js';
+import { createLogger } from './logger.js';
 
 const LOCATION_LABEL_MAX_LENGTH = 120;
 
@@ -50,7 +48,7 @@ function createGeoLocator({ databasePath = '', logger = createLogger({ name: 'ap
         logger.warn({ evt: LOG_EVENTS.GEOIP_UNAVAILABLE, databasePath, reason: 'missing' }, 'GeoIP database not found; device locations are disabled');
         return null;
       }
-      const open = openReader || ((path) => require('maxmind').open(path));
+      const open = openReader || ((path) => import('maxmind').then((maxmind) => maxmind.open(path)));
       return open(databasePath);
     })().catch((error) => {
       logger.error({ evt: LOG_EVENTS.GEOIP_UNAVAILABLE, databasePath, reason: 'open_failed', err: error }, 'failed to open the GeoIP database');
@@ -78,4 +76,4 @@ function createGeoLocator({ databasePath = '', logger = createLogger({ name: 'ap
   });
 }
 
-module.exports = { createGeoLocator, formatLocation, normalizeAddress };
+export { createGeoLocator, formatLocation, normalizeAddress };

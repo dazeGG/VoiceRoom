@@ -1,10 +1,4 @@
-'use strict';
-
-const {
-  contentFromLegacyText,
-  normalizeRoomMessageContent,
-  projectRoomMessageContent
-} = require('@voice-room/shared/room-message-content');
+import { contentFromLegacyText, normalizeRoomMessageContent, projectRoomMessageContent } from '@voice-room/shared/room-message-content';
 
 function createContentRepository() {
   function prepareWrite({ content, text }) {
@@ -32,4 +26,4 @@ function createContentRepository() {
   return Object.freeze({ prepareWrite, update });
 }
 
-module.exports = { createContentRepository };
+export { createContentRepository };

@@ -1,11 +1,9 @@
-'use strict';
-
-const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
-const { test } = require('node:test');
-const { readMessageDeliveryMode } = require('../src/lib/config');
-const { createReadinessReport } = require('../src/platform/readiness');
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import { test } from 'node:test';
+import { readMessageDeliveryMode } from '../src/lib/config.js';
+import { createReadinessReport } from '../src/platform/readiness.js';
 
 test('G40-A01 delivery cutover is reversible and rejects duplicate-producing overlap', () => {
   assert.deepEqual(readMessageDeliveryMode({}), { claimEnabled: false, directEmitEnabled: true });
@@ -24,7 +22,7 @@ test('G40-A01 delivery cutover is reversible and rejects duplicate-producing ove
 });
 
 test('G40-A01 API and worker compose services receive the same cutover vector', () => {
-  const compose = fs.readFileSync(path.resolve(__dirname, '../../../docker-compose.yml'), 'utf8');
+  const compose = fs.readFileSync(path.resolve(import.meta.dirname, '../../../docker-compose.yml'), 'utf8');
   const apiBlock = compose.slice(compose.indexOf('\n  api:'), compose.indexOf('\n  message-delivery:'));
   const workerBlock = compose.slice(compose.indexOf('\n  message-delivery:'), compose.indexOf('\n  notification-delivery:'));
   for (const block of [apiBlock, workerBlock]) {
@@ -34,7 +32,7 @@ test('G40-A01 API and worker compose services receive the same cutover vector', 
 });
 
 test('G40-A01 relayed DM delivery raises the recipient notification like direct emit', () => {
-  const source = fs.readFileSync(path.resolve(__dirname, '../src/server.js'), 'utf8');
+  const source = fs.readFileSync(path.resolve(import.meta.dirname, '../src/server.js'), 'utf8');
   const start = source.indexOf('async function dispatchMessageDeliveryEvent');
   const relay = source.slice(start, source.indexOf('async function startMessageDeliveryListener', start));
   assert.ok(start >= 0);

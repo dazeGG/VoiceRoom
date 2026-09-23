@@ -1,11 +1,9 @@
-'use strict';
-
-const {
+import {
   normalizeReactionMutation,
   normalizeReactionSummary,
   normalizeReactorPage,
   normalizeReactorQuery
-} = require('@voice-room/shared/reactions');
+} from '@voice-room/shared/reactions';
 
 class ReactionServiceError extends Error {
   constructor(message, code, statusCode) {
@@ -154,8 +152,4 @@ function createReactionService({
   return Object.freeze({ getReactors, getSummaries, setDesired });
 }
 
-module.exports = {
-  ReactionServiceError,
-  createReactionService,
-  normalizeConversation
-};
+export { ReactionServiceError, createReactionService, normalizeConversation };

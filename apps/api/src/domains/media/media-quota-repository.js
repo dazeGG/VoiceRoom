@@ -1,5 +1,3 @@
-'use strict';
-
 function createMediaQuotaRepository({ attachmentRepository, pool } = {}) {
   if (!attachmentRepository?.quotaUsage || !attachmentRepository?.lockOwner) {
     throw new TypeError('Attachment repository with quota support is required');
@@ -26,4 +24,4 @@ function createMediaQuotaRepository({ attachmentRepository, pool } = {}) {
   return Object.freeze({ withOwnerReservation });
 }
 
-module.exports = { createMediaQuotaRepository };
+export { createMediaQuotaRepository };

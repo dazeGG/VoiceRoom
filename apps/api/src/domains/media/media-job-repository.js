@@ -1,6 +1,4 @@
-'use strict';
-
-const crypto = require('node:crypto');
+import crypto from 'node:crypto';
 
 const JOB_KINDS = new Set(['process', 'cleanup']);
 
@@ -226,4 +224,4 @@ function createMediaJobRepository({ pool } = {}) {
   return Object.freeze({ claimBatch, complete, completeProcessing, enqueue, fail, findById, oldestPendingAgeMs, removeTerminalBefore, renew });
 }
 
-module.exports = { MediaJobFenceError, createMediaJobRepository, mapMediaJob };
+export { MediaJobFenceError, createMediaJobRepository, mapMediaJob };

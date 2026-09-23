@@ -1,6 +1,4 @@
-'use strict';
-
-const crypto = require('node:crypto');
+import crypto from 'node:crypto';
 
 const CONTEXTS = new Set(['room', 'dm']);
 const MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
@@ -378,4 +376,4 @@ ${CLEANUP_CANDIDATE_PREDICATE}
   });
 }
 
-module.exports = { createAttachmentRepository, mapAttachment };
+export { createAttachmentRepository, mapAttachment };

@@ -1,26 +1,24 @@
-'use strict';
+import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
+import test from 'node:test';
+import { Pool } from 'pg';
+import { runner } from 'node-pg-migrate';
 
-const assert = require('node:assert/strict');
-const crypto = require('node:crypto');
-const fs = require('node:fs');
-const path = require('node:path');
-const test = require('node:test');
-const { Pool } = require('pg');
-const { runner } = require('node-pg-migrate');
-
-const { createTestDatabase } = require('./db-harness');
-const { runMigrations } = require('../src/lib/migrate');
+import { createTestDatabase } from './db-harness.js';
+import { runMigrations } from '../src/lib/migrate.js';
 
 const SILENT = { log() {}, info() {}, warn() {}, error() {} };
-const MIGRATIONS_DIR = path.resolve(__dirname, '../src/migrations');
+const MIGRATIONS_DIR = path.resolve(import.meta.dirname, '../src/migrations');
 const BACKFILL_MIGRATION = '20260911120000_backfill_room_memberships_from_bookmarks';
 
 // Later migrations roll back and reapply together with the backfill, so the test
 // keeps exercising the backfill however many migrations are added after it.
 function stepsThroughBackfill() {
   const names = fs.readdirSync(MIGRATIONS_DIR)
-    .filter((file) => file.endsWith('.js'))
-    .map((file) => file.replace(/\.js$/, ''))
+    .filter((file) => file.endsWith('.cjs'))
+    .map((file) => file.replace(/\.c?js$/, ''))
     .sort();
   const index = names.indexOf(BACKFILL_MIGRATION);
   assert.notEqual(index, -1, `${BACKFILL_MIGRATION} is missing from the migrations directory`);

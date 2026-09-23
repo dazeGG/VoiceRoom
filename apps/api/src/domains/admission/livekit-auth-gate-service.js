@@ -1,15 +1,13 @@
-'use strict';
-
-const http = require('node:http');
-const net = require('node:net');
-const { URL } = require('node:url');
-const { createDbPool } = require('../../lib/db');
-const { createGateCredentialSigner } = require('./gate-credential-signer');
-const { createCredentialBoundaryService } = require('./credential-boundary-service');
-const { createRoomStore } = require('../../lib/room-store');
-const { LOG_EVENTS } = require('../../lib/log-events');
-const { createLogger } = require('../../lib/logger');
-const { normalizeLiveKitRoomPrefix, verifyAccessTokenBinding } = require('./livekit-token-binding.mts');
+import http from 'node:http';
+import net from 'node:net';
+import { URL } from 'node:url';
+import { createDbPool } from '../../lib/db.js';
+import { createGateCredentialSigner } from './gate-credential-signer.js';
+import { createCredentialBoundaryService } from './credential-boundary-service.js';
+import { createRoomStore } from '../../lib/room-store.js';
+import { LOG_EVENTS } from '../../lib/log-events.js';
+import { createLogger } from '../../lib/logger.js';
+import { normalizeLiveKitRoomPrefix, verifyAccessTokenBinding } from './livekit-token-binding.mts';
 
 const DEFAULT_GATE_PATH = '/rtc';
 const VALIDATE_TIMEOUT_MS = 5_000;
@@ -256,13 +254,9 @@ function createLiveKitAuthGateService({
   };
 }
 
-module.exports = {
-  DEFAULT_GATE_PATH,
-  createLiveKitAuthGateService,
-  extractCredential
-};
+export { DEFAULT_GATE_PATH, createLiveKitAuthGateService, extractCredential };
 
-if (require.main === module) {
+if (import.meta.main) {
   const logger = createLogger({ name: 'livekit-auth-gate' });
   try {
     const service = createLiveKitAuthGateService({

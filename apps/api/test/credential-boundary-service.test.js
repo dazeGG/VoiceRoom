@@ -1,9 +1,7 @@
-'use strict';
+import test from 'node:test';
+import assert from 'node:assert/strict';
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
-
-const { createCredentialBoundaryService } = require('../src/domains/admission/credential-boundary-service');
+import { createCredentialBoundaryService } from '../src/domains/admission/credential-boundary-service.js';
 
 const PRINCIPAL = { principalId: 'room-1:guest-1', principalType: 'guest' };
 

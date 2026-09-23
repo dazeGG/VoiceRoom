@@ -1,20 +1,18 @@
-'use strict';
-
-const assert = require('node:assert/strict');
-const { readFileSync } = require('node:fs');
-const path = require('node:path');
-const { Pool } = require('pg');
-const test = require('node:test');
-const { normalizeManifest, PUBLIC_CAPABILITY_KEYS } = require('@voice-room/shared/capabilities');
-const { runMigrations } = require('../src/lib/migrate');
-const { createReadinessReport } = require('../src/platform/readiness');
-const { createRuntimeReadinessProvider } = require('../src/platform/runtime-readiness');
-const { createRuntimeReadinessRepository } = require('../src/platform/runtime-readiness-repository');
-const { WORKER_CAPABILITIES, startWorkerHeartbeat } = require('../src/platform/worker-heartbeat');
-const { createTestDatabase } = require('./db-harness');
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { Pool } from 'pg';
+import test from 'node:test';
+import { normalizeManifest, PUBLIC_CAPABILITY_KEYS } from '@voice-room/shared/capabilities';
+import { runMigrations } from '../src/lib/migrate.js';
+import { createReadinessReport } from '../src/platform/readiness.js';
+import { createRuntimeReadinessProvider } from '../src/platform/runtime-readiness.js';
+import { createRuntimeReadinessRepository } from '../src/platform/runtime-readiness-repository.js';
+import { WORKER_CAPABILITIES, startWorkerHeartbeat } from '../src/platform/worker-heartbeat.js';
+import { createTestDatabase } from './db-harness.js';
 
 const SILENT = { log() {}, info() {}, warn() {}, error() {} };
-const manifestPath = path.resolve(__dirname, '../../../config/capability-dag.v1.json');
+const manifestPath = path.resolve(import.meta.dirname, '../../../config/capability-dag.v1.json');
 
 function fullOptions() {
   const manifest = normalizeManifest(JSON.parse(readFileSync(manifestPath, 'utf8')));

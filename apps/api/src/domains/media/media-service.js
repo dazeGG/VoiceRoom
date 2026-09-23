@@ -1,6 +1,4 @@
-'use strict';
-
-const sharp = require('sharp');
+import sharp from 'sharp';
 
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 const MAX_INPUT_PIXELS = 40 * 1024 * 1024;
@@ -182,7 +180,7 @@ function createMediaService({
   return Object.freeze({ createSlot, remove, retry, status, upload });
 }
 
-module.exports = {
+export {
   FORMAT_MIME,
   MAX_INPUT_PIXELS,
   MAX_UPLOAD_BYTES,

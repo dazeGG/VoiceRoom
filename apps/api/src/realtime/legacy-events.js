@@ -1,6 +1,4 @@
-'use strict';
-
-const { buildServerEnvelope } = require('./envelope');
+import { buildServerEnvelope } from './envelope.js';
 
 function legacyPeerMessageToWs(message, roomId) {
   if (!message || typeof message.type !== 'string') return null;
@@ -44,6 +42,4 @@ function legacyPeerMessageToWs(message, roomId) {
   }
 }
 
-module.exports = {
-  legacyPeerMessageToWs
-};
+export { legacyPeerMessageToWs };

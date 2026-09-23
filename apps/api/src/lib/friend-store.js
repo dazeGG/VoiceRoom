@@ -1,10 +1,8 @@
-'use strict';
-
-const crypto = require('node:crypto');
-const { createDbPool, transaction } = require('./db');
-const { cleanAvatarColorKey, cleanPresenceStatus } = require('@voice-room/shared/validation');
-const { normalizeLinkPreview } = require('@voice-room/shared/link-preview');
-const { createLogger } = require('./logger');
+import crypto from 'node:crypto';
+import { createDbPool, transaction } from './db.js';
+import { cleanAvatarColorKey, cleanPresenceStatus } from '@voice-room/shared/validation';
+import { normalizeLinkPreview } from '@voice-room/shared/link-preview';
+import { createLogger } from './logger.js';
 
 function toMillis(value) {
   if (value == null) return null;
@@ -644,9 +642,4 @@ function createFriendStore({ databaseUrl, logger = createLogger({ name: 'api' })
   };
 }
 
-module.exports = {
-  createFriendStore,
-  mapPublicUser,
-  mapMessage,
-  orderedPair
-};
+export { createFriendStore, mapPublicUser, mapMessage, orderedPair };

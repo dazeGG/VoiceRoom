@@ -1,11 +1,9 @@
-'use strict';
-
-const { createDbPool } = require('../lib/db');
-const { readEnvInt, readMessageDeliveryMode } = require('../lib/config');
-const { createMessageOutboxRepository } = require('../domains/messaging/message-outbox-repository');
-const { boundedBackoff, createLeaseRuntime } = require('../platform/lease-runtime');
-const { LOG_EVENTS } = require('../lib/log-events');
-const { createLogger } = require('../lib/logger');
+import { createDbPool } from '../lib/db.js';
+import { readEnvInt, readMessageDeliveryMode } from '../lib/config.js';
+import { createMessageOutboxRepository } from '../domains/messaging/message-outbox-repository.js';
+import { boundedBackoff, createLeaseRuntime } from '../platform/lease-runtime.js';
+import { LOG_EVENTS } from '../lib/log-events.js';
+import { createLogger } from '../lib/logger.js';
 
 const LEASE_IDENTITY = 'message-delivery.G38';
 
@@ -163,7 +161,7 @@ async function main(env = process.env) {
   }
 }
 
-if (require.main === module) {
+if (import.meta.main) {
   main().catch((error) => {
     createLogger({ name: 'worker.message-delivery' })
       .fatal({ evt: LOG_EVENTS.WORKER_FAILED, worker: 'message-delivery', err: error }, 'message delivery worker failed');
@@ -171,8 +169,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = {
-  LEASE_IDENTITY,
-  createMessageDeliveryWorker,
-  main
-};
+export { LEASE_IDENTITY, createMessageDeliveryWorker, main };

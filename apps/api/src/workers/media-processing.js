@@ -1,11 +1,9 @@
-'use strict';
-
-const crypto = require('node:crypto');
-const sharp = require('sharp');
-const { MediaJobFenceError } = require('../domains/media/media-job-repository');
-const { recordMediaOldestPending } = require('../lib/metrics');
-const { LOG_EVENTS } = require('../lib/log-events');
-const { createLogger } = require('../lib/logger');
+import crypto from 'node:crypto';
+import sharp from 'sharp';
+import { MediaJobFenceError } from '../domains/media/media-job-repository.js';
+import { recordMediaOldestPending } from '../lib/metrics.js';
+import { LOG_EVENTS } from '../lib/log-events.js';
+import { createLogger } from '../lib/logger.js';
 
 const DEFAULTS = Object.freeze({ batchSize: 10, concurrency: 2, leaseMs: 120_000, maxAttempts: 5, timeoutMs: 30_000 });
 
@@ -153,11 +151,11 @@ function createMediaProcessingWorker({
 
 async function main() {
   if (String(process.env.MEDIA_PROCESSING_CLAIM_ENABLED || '').toLowerCase() !== 'true') return;
-  const { createDbPool } = require('../lib/db');
-  const { createAttachmentRepository } = require('../domains/media/attachment-repository');
-  const { createMediaJobRepository } = require('../domains/media/media-job-repository');
-  const { createMediaPressureService } = require('../domains/media/media-pressure-service');
-  const { createMediaStorage } = require('../domains/media/storage');
+  const { createDbPool } = await import('../lib/db.js');
+  const { createAttachmentRepository } = await import('../domains/media/attachment-repository.js');
+  const { createMediaJobRepository } = await import('../domains/media/media-job-repository.js');
+  const { createMediaPressureService } = await import('../domains/media/media-pressure-service.js');
+  const { createMediaStorage } = await import('../domains/media/storage.js');
   const pool = createDbPool();
   const storage = createMediaStorage({ rootDir: process.env.MEDIA_STORAGE_DIR || '/data/media' });
   await storage.freeSpace();
@@ -175,11 +173,17 @@ async function main() {
   finally { await pool.end(); }
 }
 
-if (require.main === module) {
+if (import.meta.main) {
   main().catch((error) => {
     process.stderr.write(`${error?.stack || error}\n`);
     process.exitCode = 1;
   });
 }
 
-module.exports = { DEFAULTS, createMediaProcessingWorker, main, retryDelay, transform };
+export {
+  DEFAULTS,
+  createMediaProcessingWorker,
+  main,
+  retryDelay,
+  transform
+};

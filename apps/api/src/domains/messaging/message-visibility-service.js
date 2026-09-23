@@ -1,5 +1,3 @@
-'use strict';
-
 class MessageVisibilityError extends Error {
   constructor() {
     super('Message is not visible');
@@ -57,7 +55,4 @@ function createMessageVisibilityService({ roomAdapter, directAdapter } = {}) {
   });
 }
 
-module.exports = {
-  MessageVisibilityError,
-  createMessageVisibilityService
-};
+export { MessageVisibilityError, createMessageVisibilityService };

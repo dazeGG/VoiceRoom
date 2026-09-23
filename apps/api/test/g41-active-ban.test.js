@@ -1,14 +1,12 @@
-'use strict';
-
-const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
-const { Pool } = require('pg');
-const { test } = require('node:test');
-const { createActiveBanRepository, normalizePrincipal } = require('../src/domains/moderation/active-ban-repository');
-const { createActiveBanService } = require('../src/domains/moderation/active-ban-service');
-const { runMigrations } = require('../src/lib/migrate');
-const { createTestDatabase } = require('./db-harness');
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import { Pool } from 'pg';
+import { test } from 'node:test';
+import { createActiveBanRepository, normalizePrincipal } from '../src/domains/moderation/active-ban-repository.js';
+import { createActiveBanService } from '../src/domains/moderation/active-ban-service.js';
+import { runMigrations } from '../src/lib/migrate.js';
+import { createTestDatabase } from './db-harness.js';
 
 test('G41-A01 active-ban repository applies one expiry and revocation predicate', async () => {
   const queries = [];
@@ -53,7 +51,7 @@ test('G41-A01 eligibility filtering uses the same repository predicate for all u
 });
 
 test('G41-A02 named HTTP, media, membership, mention and room-store paths call the active-ban service', () => {
-  const root = path.resolve(__dirname, '..');
+  const root = path.resolve(import.meta.dirname, '..');
   const server = fs.readFileSync(path.join(root, 'src/server.js'), 'utf8');
   const roomStore = fs.readFileSync(path.join(root, 'src/lib/room-store.js'), 'utf8');
   const mentions = fs.readFileSync(path.join(root, 'src/domains/notifications/mention-eligibility-service.js'), 'utf8');

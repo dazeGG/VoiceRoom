@@ -1,10 +1,8 @@
-'use strict';
-
-const { createDbPool } = require('../lib/db');
-const { createAttachmentRepository } = require('../domains/media/attachment-repository');
-const { createMediaReconciliationService } = require('../domains/media/media-reconciliation-service');
-const { createMediaJobRepository } = require('../domains/media/media-job-repository');
-const { createMediaStorage } = require('../domains/media/storage');
+import { createDbPool } from '../lib/db.js';
+import { createAttachmentRepository } from '../domains/media/attachment-repository.js';
+import { createMediaReconciliationService } from '../domains/media/media-reconciliation-service.js';
+import { createMediaJobRepository } from '../domains/media/media-job-repository.js';
+import { createMediaStorage } from '../domains/media/storage.js';
 
 async function main() {
   const pool = createDbPool();
@@ -24,11 +22,11 @@ async function main() {
   }
 }
 
-if (require.main === module) {
+if (import.meta.main) {
   main().catch((error) => {
     process.stderr.write(`${error?.stack || error}\n`);
     process.exitCode = 1;
   });
 }
 
-module.exports = { main };
+export { main };

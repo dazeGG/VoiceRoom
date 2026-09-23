@@ -1,5 +1,3 @@
-'use strict';
-
 function requireQuery(client) {
   if (!client || typeof client.query !== 'function') {
     throw new TypeError('Pin repository requires a PostgreSQL query client');
@@ -125,4 +123,4 @@ function createPinRepository({ client } = {}) {
   return Object.freeze({ countPins, findVisibleMessage, listPins, lockRoom, pin, transaction, unpin });
 }
 
-module.exports = { createPinRepository };
+export { createPinRepository };

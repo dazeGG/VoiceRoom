@@ -1,6 +1,4 @@
-'use strict';
-
-const crypto = require('node:crypto');
+import crypto from 'node:crypto';
 
 const CURSOR_CODEC_VERSION = 1;
 const DEFAULT_TTL_MS = 30 * 24 * 60 * 60 * 1000;
@@ -148,8 +146,4 @@ function createCursorCodec(options = {}) {
   return { encode, decode };
 }
 
-module.exports = {
-  CURSOR_CODEC_VERSION,
-  CursorCodecError,
-  createCursorCodec
-};
+export { CURSOR_CODEC_VERSION, CursorCodecError, createCursorCodec };

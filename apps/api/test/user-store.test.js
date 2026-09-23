@@ -1,13 +1,11 @@
-'use strict';
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const crypto = require('node:crypto');
-
-const { createUserStore, publicUser } = require('../src/lib/user-store');
-const { AVATAR_COLOR_KEYS } = require('@voice-room/shared/validation');
-const { runMigrations } = require('../src/lib/migrate');
-const { createTestDatabase } = require('./db-harness');
+import { createUserStore, publicUser } from '../src/lib/user-store.js';
+import { AVATAR_COLOR_KEYS } from '@voice-room/shared/validation';
+import { runMigrations } from '../src/lib/migrate.js';
+import { createTestDatabase } from './db-harness.js';
 
 const SILENT = { log() {}, info() {}, warn() {}, error() {} };
 

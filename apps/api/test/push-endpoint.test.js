@@ -1,8 +1,6 @@
-'use strict';
-
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const { cleanPushEndpoint, describePushEndpoint } = require('../src/lib/push-endpoint');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { cleanPushEndpoint, describePushEndpoint } from '../src/lib/push-endpoint.js';
 
 test('push endpoints accept only known browser push services', () => {
   for (const endpoint of [

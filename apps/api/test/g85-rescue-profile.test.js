@@ -1,11 +1,9 @@
-'use strict';
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
-
-const repositoryRoot = path.resolve(__dirname, '../../..');
+const repositoryRoot = path.resolve(import.meta.dirname, '../../..');
 const fromRepositoryRoot = (...parts) => path.join(repositoryRoot, ...parts);
 const profile = JSON.parse(fs.readFileSync(fromRepositoryRoot('config', 'rescue', 'expiry-aware-v2.5.0.json'), 'utf8'));
 
