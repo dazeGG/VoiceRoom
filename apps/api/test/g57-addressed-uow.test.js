@@ -3,10 +3,10 @@ import { Pool } from 'pg';
 import test from 'node:test';
 import { transaction } from '../src/lib/db.js';
 import { runMigrations } from '../src/lib/migrate.js';
-import { createNotificationService } from '../src/domains/notifications/notification-service.js';
-import { createMentionRepository } from '../src/domains/notifications/mention-repository.js';
-import { createInboxRepository } from '../src/domains/notifications/inbox-repository.js';
-import { createNotificationOutboxRepository } from '../src/domains/notifications/notification-outbox-repository.js';
+import { createNotificationService } from '../src/domains/notifications/notification-service.ts';
+import { createMentionRepository } from '../src/domains/notifications/mention-repository.ts';
+import { createInboxRepository } from '../src/domains/notifications/inbox-repository.ts';
+import { createNotificationOutboxRepository } from '../src/domains/notifications/notification-outbox-repository.ts';
 import { createTestDatabase } from './db-harness.js';
 async function fixture(t){const db=await createTestDatabase(t);await runMigrations({databaseUrl:db.databaseUrl,logger:{log(){},info(){},warn(){},error(){}},noLock:true});const pool=new Pool({connectionString:db.databaseUrl,max:2});t.after(async()=>{await pool.end();await db.cleanup();});await pool.query(`INSERT INTO users(id,login,display_name,password_hash) VALUES ('actor','actor','Actor','x'),('target','target','Target','x');INSERT INTO rooms(id,creator_ip) VALUES ('room','');INSERT INTO room_memberships(id,room_id,user_id,role) VALUES ('ma','room','actor','member'),('mt','room','target','member')`);return pool;}
 function service(pool,outbox){return createNotificationService({pool,inbox:createInboxRepository({pool}),mentions:createMentionRepository({pool}),outbox,eligibility:{async validate({targetUserIds}){return targetUserIds;}},cursorCodec:{}});}

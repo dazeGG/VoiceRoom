@@ -3,8 +3,8 @@ import { readFileSync } from 'node:fs';
 
 const membershipModel = readFileSync(new URL('../src/lib/features/home/model/room-membership.svelte.ts', import.meta.url), 'utf8');
 const voiceSession = readFileSync(new URL('../src/lib/features/room/voice-session.svelte.ts', import.meta.url), 'utf8');
-const routes = readFileSync(new URL('../../api/src/domains/membership/membership-routes.js', import.meta.url), 'utf8');
-const service = readFileSync(new URL('../../api/src/domains/membership/membership-service.js', import.meta.url), 'utf8');
+const routes = readFileSync(new URL('../../api/src/domains/membership/membership-routes.ts', import.meta.url), 'utf8');
+const service = readFileSync(new URL('../../api/src/domains/membership/membership-service.ts', import.meta.url), 'utf8');
 
 test('G49-A01 leave-call preserves membership while leave-room uses the durable DELETE endpoint', async () => {
   const leaveCall = voiceSession.slice(
@@ -14,7 +14,7 @@ test('G49-A01 leave-call preserves membership while leave-room uses the durable 
   expect(leaveCall).toMatch(/leaveActiveVoiceRoomWithCue[\s\S]*activeLeaveHandler\(\)/);
   expect(leaveCall).not.toContain('leaveActiveRoomMembership');
   expect(membershipModel).toMatch(/leaveActiveRoomMembership[\s\S]*leaveRoomMembership[\s\S]*clearRoomMembership/);
-  expect(routes).toContain("app.delete('/api/rooms/:roomId/memberships/me'");
+  expect(routes).toMatch(/app\.delete(<\w+>)?\('\/api\/rooms\/:roomId\/memberships\/me'/);
 });
 
 test('G49-A02 revoke/disconnect precedes delete, owner is guarded and rejoin remains an upsert', async () => {

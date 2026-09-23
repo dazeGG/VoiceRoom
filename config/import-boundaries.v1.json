@@ -20,7 +20,7 @@
       "rooms": ["apps/api/src/lib/room-store.js"],
       "room_memberships": [
         "apps/api/src/lib/room-store.js",
-        "apps/api/src/domains/membership/membership-repository.js"
+        "apps/api/src/domains/membership/membership-repository.ts"
       ],
       "room_bookmarks": ["apps/api/src/lib/room-store.js"],
       "room_peer_identities": ["apps/api/src/lib/room-store.js"],
@@ -28,13 +28,13 @@
         "apps/api/src/lib/room-store.js",
         "apps/api/src/domains/messaging/content-repository.ts",
         "apps/api/src/domains/messaging/reply-repository.ts",
-        "apps/api/src/domains/moderation/message-moderation-service.js",
+        "apps/api/src/domains/moderation/message-moderation-service.ts",
       "apps/api/src/domains/link-previews/link-preview-repository.js"
       ],
       "room_bans": [
         "apps/api/src/lib/room-store.js",
-        "apps/api/src/domains/moderation/active-ban-repository.js",
-        "apps/api/src/domains/moderation/moderation-repository.js"
+        "apps/api/src/domains/moderation/active-ban-repository.ts",
+        "apps/api/src/domains/moderation/moderation-repository.ts"
       ],
       "room_chat_reads": [
         "apps/api/src/lib/room-store.js",

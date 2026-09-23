@@ -1,19 +1,36 @@
+import type pg from 'pg';
 import { transaction } from '../../lib/db.js';
-import { createActiveBanRepository, normalizePrincipal } from './active-ban-repository.js';
+import { createActiveBanRepository, normalizePrincipal, type ActiveBanRecord, type ActiveBanRepository } from './active-ban-repository.ts';
 
-function createActiveBanService({ pool, repository = createActiveBanRepository({ pool }), now = Date.now } = {}) {
-  async function getActiveBan(input = {}) {
+type QueryClient = Pick<pg.PoolClient, 'query'>;
+type TimeInput = Date | number | string;
+
+export type BanCreation =
+  | { ban: null; status: 'invalid' | 'not_found' | 'cap_exceeded' }
+  | { ban: ActiveBanRecord | null; status: 'created' };
+
+function createActiveBanService({ pool, repository = createActiveBanRepository({ pool }), now = Date.now }: {
+  pool?: pg.Pool | null;
+  repository?: ActiveBanRepository;
+  now?: () => number;
+} = {}) {
+  async function getActiveBan(input: Parameters<ActiveBanRepository['findActive']>[0] = {}): Promise<ActiveBanRecord | null> {
     return repository.findActive({ ...input, at: input.at ?? now() });
   }
 
-  async function isBanned(input = {}) {
+  async function isBanned(input: Parameters<ActiveBanRepository['findActive']>[0] = {}): Promise<boolean> {
     return Boolean(await getActiveBan(input));
   }
 
-  async function filterEligibleUserIds({ roomId, userIds = [], at = now(), client } = {}) {
+  async function filterEligibleUserIds({ roomId, userIds = [], at = now(), client }: {
+    roomId?: string;
+    userIds?: unknown;
+    at?: TimeInput;
+    client?: QueryClient | null;
+  } = {}): Promise<string[]> {
     const normalized = Array.from(new Set(
       (Array.isArray(userIds) ? userIds : [])
-        .filter((userId) => typeof userId === 'string' && userId.trim())
+        .filter((userId): userId is string => typeof userId === 'string' && Boolean(userId.trim()))
         .map((userId) => userId.trim())
     ));
     if (!roomId || normalized.length === 0) return [];
@@ -21,11 +38,18 @@ function createActiveBanService({ pool, repository = createActiveBanRepository({
     return normalized.filter((userId) => !banned.has(userId));
   }
 
-  async function createBan({ roomId, userId = null, ip = '', expiresAt = null, metadata = {}, maxActiveBans = 100 } = {}) {
+  async function createBan({ roomId, userId = null, ip = '', expiresAt = null, metadata = {}, maxActiveBans = 100 }: {
+    roomId?: string;
+    userId?: unknown;
+    ip?: unknown;
+    expiresAt?: TimeInput | null;
+    metadata?: unknown;
+    maxActiveBans?: number;
+  } = {}): Promise<BanCreation> {
     const principal = normalizePrincipal({ userId, ip });
     if (!roomId || (!principal.userId && !principal.ip)) return { ban: null, status: 'invalid' };
     const at = now();
-    return transaction(pool, async (client) => {
+    return transaction(pool, async (client: pg.PoolClient): Promise<BanCreation> => {
       await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`voice-room:admission:${roomId}`]);
       await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`voice-room:room-bans:${roomId}`]);
       const room = await client.query('SELECT 1 FROM rooms WHERE id = $1 AND deleted_at IS NULL', [roomId]);
@@ -42,5 +66,7 @@ function createActiveBanService({ pool, repository = createActiveBanRepository({
 
   return { createBan, filterEligibleUserIds, getActiveBan, isBanned, repository };
 }
+
+export type ActiveBanService = ReturnType<typeof createActiveBanService>;
 
 export { createActiveBanService };

@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import { createDbPool, transaction } from './db.js';
-import { createActiveBanService } from '../domains/moderation/active-ban-service.js';
+import { createActiveBanService } from '../domains/moderation/active-ban-service.ts';
 import { AVATAR_COLOR_KEYS, cleanAvatarColorKey } from '@voice-room/shared/validation';
 import { normalizeLinkPreview } from '@voice-room/shared/link-preview';
 import { createLogger } from './logger.js';

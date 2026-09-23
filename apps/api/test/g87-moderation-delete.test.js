@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createMessageModerationService } from '../src/domains/moderation/message-moderation-service.js';
+import { createMessageModerationService } from '../src/domains/moderation/message-moderation-service.ts';
 
 function harness({ failCleanup = false } = {}) {
   const events = [];

@@ -1,8 +1,8 @@
 import { createDbPool } from '../lib/db.js';
 import { readEnvBool, readEnvInt } from '../lib/config.js';
 import { createPushStore } from '../lib/push-store.js';
-import { createNotificationOutboxRepository } from '../domains/notifications/notification-outbox-repository.js';
-import { createNotificationPushProvider } from '../domains/notifications/push-provider.js';
+import { createNotificationOutboxRepository } from '../domains/notifications/notification-outbox-repository.ts';
+import { createNotificationPushProvider } from '../domains/notifications/push-provider.ts';
 import { boundedBackoff, createLeaseRuntime } from '../platform/lease-runtime.js';
 import { recordNotificationOldestPending } from '../lib/metrics.js';
 import { LOG_EVENTS } from '../lib/log-events.js';

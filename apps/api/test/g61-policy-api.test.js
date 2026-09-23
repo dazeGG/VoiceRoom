@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { Pool } from 'pg';
 import { normalizeNotificationLevel } from '@voice-room/shared/notifications';
-import { createNotificationService } from '../src/domains/notifications/notification-service.js';
+import { createNotificationService } from '../src/domains/notifications/notification-service.ts';
 import { createNotificationStore } from '../src/lib/notification-store.js';
 import { createRoomStore } from '../src/lib/room-store.js';
 import { createUserStore } from '../src/lib/user-store.js';

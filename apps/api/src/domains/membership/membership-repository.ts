@@ -1,12 +1,64 @@
 import crypto from 'node:crypto';
+import type pg from 'pg';
 
-function toMillis(value) {
+type QueryClient = Pick<pg.PoolClient, 'query'>;
+type Client = QueryClient | null | undefined;
+
+type MembershipRow = {
+  id: string;
+  room_id: string;
+  user_id: string;
+  role: string;
+  created_at: Date | string;
+  updated_at: Date | string;
+  metadata: Record<string, unknown> | null;
+};
+
+type DirectoryRow = {
+  user_id: string;
+  role: string;
+  created_at: Date | string;
+  created_at_micros: string | number;
+  login: string | null;
+  display_name: string | null;
+  avatar_color_key: string | null;
+  avatar_key: string | null;
+  avatar_accent: string | null;
+};
+
+export type MembershipRole = 'owner' | 'member';
+
+export type Membership = {
+  id: string;
+  roomId: string;
+  userId: string;
+  role: MembershipRole;
+  createdAt: number | null;
+  updatedAt: number | null;
+  metadata: Record<string, unknown>;
+};
+
+export type DirectoryCursorTuple = { createdAtMicros: string; id: string };
+
+export type DirectoryMember = {
+  userId: string;
+  displayName: string;
+  login: string;
+  avatarColorKey: string;
+  avatarUrl: string | null;
+  avatarAccent: string | null;
+  role: MembershipRole;
+  joinedAt: number | null;
+  cursorTuple: DirectoryCursorTuple;
+};
+
+function toMillis(value: unknown): number | null {
   if (value instanceof Date) return value.getTime();
-  const parsed = Date.parse(value);
+  const parsed = Date.parse(value as string);
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function mapMembership(row) {
+function mapMembership(row: MembershipRow | null | undefined): Membership | null {
   if (!row) return null;
   return {
     id: row.id,
@@ -19,7 +71,7 @@ function mapMembership(row) {
   };
 }
 
-function mapDirectoryMember(row) {
+function mapDirectoryMember(row: DirectoryRow | null | undefined): DirectoryMember | null {
   if (!row) return null;
   return {
     userId: row.user_id,
@@ -37,26 +89,27 @@ function mapDirectoryMember(row) {
   };
 }
 
-function createMembershipRepository({ pool } = {}) {
+function createMembershipRepository({ pool }: { pool?: QueryClient | null } = {}) {
   if (!pool || typeof pool.query !== 'function') throw new TypeError('A PostgreSQL pool is required');
-  const executor = (client) => client && typeof client.query === 'function' ? client : pool;
+  const defaultDb = pool;
+  const executor = (client: Client): QueryClient => client && typeof client.query === 'function' ? client : defaultDb;
 
-  async function getActive(roomId, userId, { client } = {}) {
+  async function getActive(roomId: string, userId: string, { client }: { client?: Client } = {}): Promise<Membership | null> {
     if (!roomId || !userId) return null;
-    const result = await executor(client).query(
+    const result = await executor(client).query<MembershipRow>(
       `SELECT * FROM room_memberships WHERE room_id = $1 AND user_id = $2 LIMIT 1`,
       [roomId, userId]
     );
     return mapMembership(result.rows[0]);
   }
 
-  async function isActive(roomId, userId, options) {
+  async function isActive(roomId: string, userId: string, options?: { client?: Client }): Promise<boolean> {
     return Boolean(await getActive(roomId, userId, options));
   }
 
-  async function deleteActive(roomId, userId, { client } = {}) {
+  async function deleteActive(roomId: string, userId: string, { client }: { client?: Client } = {}): Promise<Membership | null> {
     if (!roomId || !userId) return null;
-    const result = await executor(client).query(
+    const result = await executor(client).query<MembershipRow>(
       `DELETE FROM room_memberships
        WHERE room_id = $1 AND user_id = $2
        RETURNING *`,
@@ -65,11 +118,18 @@ function createMembershipRepository({ pool } = {}) {
     return mapMembership(result.rows[0]);
   }
 
-  async function upsertActive({ roomId, userId, role = 'member', metadata = {}, at = Date.now(), client } = {}) {
+  async function upsertActive({ roomId, userId, role = 'member', metadata = {}, at = Date.now(), client }: {
+    roomId?: string;
+    userId?: string;
+    role?: string;
+    metadata?: unknown;
+    at?: unknown;
+    client?: Client;
+  } = {}): Promise<Membership | null> {
     if (!roomId || !userId) return null;
     const normalizedRole = role === 'owner' ? 'owner' : 'member';
     const date = new Date(Number.isFinite(Number(at)) ? Number(at) : Date.now());
-    const result = await executor(client).query(
+    const result = await executor(client).query<MembershipRow>(
       `INSERT INTO room_memberships (id, room_id, user_id, role, created_at, updated_at, metadata)
        VALUES ($1, $2, $3, $4, $5, $5, $6)
        ON CONFLICT (room_id, user_id) DO UPDATE
@@ -85,12 +145,18 @@ function createMembershipRepository({ pool } = {}) {
     return mapMembership(result.rows[0]);
   }
 
-  async function listDirectoryPage({ roomId, query = '', limit, after = null, client } = {}) {
+  async function listDirectoryPage({ roomId, query = '', limit, after = null, client }: {
+    roomId?: string;
+    query?: unknown;
+    limit?: unknown;
+    after?: Partial<DirectoryCursorTuple> | null;
+    client?: Client;
+  } = {}): Promise<{ members: DirectoryMember[]; hasMore: boolean }> {
     const pageSize = Math.min(100, Math.max(1, Number(limit) || 50));
     const normalizedQuery = typeof query === 'string' ? query.trim().slice(0, 80) : '';
     const afterMicros = after?.createdAtMicros || '0';
     const afterId = after?.id || '';
-    const result = await executor(client).query(
+    const result = await executor(client).query<DirectoryRow>(
       `SELECT rm.user_id,
               rm.role,
               rm.created_at,
@@ -116,10 +182,12 @@ function createMembershipRepository({ pool } = {}) {
     );
     const hasMore = result.rows.length > pageSize;
     const rows = hasMore ? result.rows.slice(0, pageSize) : result.rows;
-    return { members: rows.map(mapDirectoryMember), hasMore };
+    return { members: rows.map(mapDirectoryMember) as DirectoryMember[], hasMore };
   }
 
   return { deleteActive, getActive, isActive, listDirectoryPage, mapDirectoryMember, mapMembership, upsertActive };
 }
+
+export type MembershipRepository = ReturnType<typeof createMembershipRepository>;
 
 export { createMembershipRepository, mapDirectoryMember, mapMembership };

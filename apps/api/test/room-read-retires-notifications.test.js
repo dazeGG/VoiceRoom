@@ -35,8 +35,8 @@ test('the read service reports how far the read reached', () => {
 });
 
 test('retirement is scoped to one room and bounded by the read point', () => {
-  const repository = read('../src/domains/notifications/inbox-repository.js');
-  const service = read('../src/domains/notifications/notification-service.js');
+  const repository = read('../src/domains/notifications/inbox-repository.ts');
+  const service = read('../src/domains/notifications/notification-service.ts');
 
   assert.match(repository, /async function markReadForRoom\(/);
   // Scoped to the recipient and the room, and never past what was read: a null
@@ -45,8 +45,8 @@ test('retirement is scoped to one room and bounded by the read point', () => {
   assert.match(repository, /\(\$3::timestamptz IS NULL OR created_at <= \$3\)/);
   assert.match(repository, /markReadForRoom,/);
 
-  assert.match(service, /async function markRoomRead\(\{userId,roomId,through=null\}\)/);
-  assert.match(service, /if\(!userId\|\|!roomId\)return \{ok:false,code:'invalid_request'\}/);
+  assert.match(service, /async function markRoomRead\(\{ userId, roomId, through = null \}/);
+  assert.match(service, /if \(!userId \|\| !roomId\) return \{ ok: false as const, code: 'invalid_request' \}/);
   assert.match(service, /markRoomRead,/);
 });
 
@@ -69,7 +69,7 @@ function recordingClient() {
 }
 
 test('a read point in epoch milliseconds reaches PostgreSQL as a time, not a number', async () => {
-  const { createInboxRepository } = require('../src/domains/notifications/inbox-repository');
+  const { createInboxRepository } = require('../src/domains/notifications/inbox-repository.ts');
   const client = recordingClient();
   const repository = createInboxRepository({ pool: client });
   const readAt = 1789427934720;
@@ -99,7 +99,7 @@ test('a read point in epoch milliseconds reaches PostgreSQL as a time, not a num
 });
 
 test('a read point that is not a time retires nothing instead of the whole room', async () => {
-  const { createInboxRepository } = require('../src/domains/notifications/inbox-repository');
+  const { createInboxRepository } = require('../src/domains/notifications/inbox-repository.ts');
   const client = recordingClient();
   const repository = createInboxRepository({ pool: client });
 

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
-import { createMembershipService } from '../src/domains/membership/membership-service.js';
+import { createMembershipService } from '../src/domains/membership/membership-service.ts';
 
 test('G44-A01 registered membership follows successful admission and guests/failures create no row', async () => {
   const calls = [];
