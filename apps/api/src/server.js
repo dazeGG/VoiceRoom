@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import fastify from 'fastify';
+import fastify, { LogController } from 'fastify';
 import fastifyCookie from '@fastify/cookie';
 import fastifyMultipart from '@fastify/multipart';
 import fastifyWebsocket from '@fastify/websocket';
@@ -35,7 +35,6 @@ import {
 } from '@voice-room/shared/validation';
 import { createProofOfWork } from './lib/pow.js';
 import { LOG_EVENTS } from './lib/log-events.js';
-import { CLIENT_LOG_LIMITS, normalizeClientLogBatch } from './lib/client-log-intake.js';
 import {
   createFastifyLoggerOptions,
   createLogger,
@@ -85,6 +84,9 @@ import {
   renderPrometheus
 } from './lib/metrics.js';
 import { createCredentialBoundaryService } from './domains/admission/credential-boundary-service.js';
+import { registerHttpKit } from './platform/http/http-kit.ts';
+import { registerOpsRoutes } from './domains/ops/ops.routes.ts';
+import { createDesktopReleaseService } from './domains/ops/desktop-release.service.ts';
 import { getLiveKitRoomName as liveKitRoomName } from './domains/admission/livekit-token-binding.mts';
 import { isCrossOriginCookieWrite, isCrossOriginWebSocket } from './platform/http/origin-guard.mts';
 import { createLiveKitCredentialProvider } from './domains/admission/livekit-credential-provider.js';
@@ -1038,8 +1040,6 @@ function attachPresence(dbRoom) {
   return dbRoom;
 }
 
-let desktopReleaseCache = { at: 0, data: null };
-let desktopReleaseFetchPromise = null;
 const pow = createProofOfWork({
   secret: process.env.POW_SECRET || crypto.randomBytes(32),
   difficulty: ROOM_CREATE_POW_DIFFICULTY,
@@ -1077,6 +1077,13 @@ const avatarUploadLimiter = createRateLimiter({
 const pushSubscriptionLimiter = createRateLimiter({
   limit: PUSH_SUBSCRIPTION_RATE_LIMIT,
   windowMs: PUSH_SUBSCRIPTION_RATE_WINDOW_MS
+});
+const desktopReleaseService = createDesktopReleaseService({
+  repo: DESKTOP_RELEASE_REPO,
+  cacheMs: DESKTOP_RELEASE_CACHE_MS,
+  timeoutMs: DESKTOP_RELEASE_TIMEOUT_MS,
+  githubToken: (process.env.GITHUB_TOKEN || '').trim() || undefined,
+  logger: { warn: (...args) => getProcessLogger().warn(...args) }
 });
 const clientLogLimiter = createRateLimiter({
   limit: CLIENT_LOG_RATE_LIMIT,
@@ -1855,25 +1862,6 @@ async function handleLiveKitToken(req, res) {
   });
 }
 
-function handlePowChallenge(req, res) {
-  pow.prune();
-
-  if (ROOM_CREATE_POW_DIFFICULTY <= 0) {
-    sendJson(res, 200, { ok: true, required: false });
-    return;
-  }
-
-  const now = Date.now();
-  sendJson(res, 200, {
-    ok: true,
-    algorithm: 'sha256',
-    challenge: pow.createChallenge(getClientIp(req, TRUST_PROXY), now),
-    difficulty: ROOM_CREATE_POW_DIFFICULTY,
-    expiresAt: now + ROOM_CREATE_POW_TTL_MS,
-    required: true
-  });
-}
-
 async function handleCreateRoom(req, res) {
   const rate = roomCreateLimiter.check(getClientIp(req, TRUST_PROXY));
   if (!rate.allowed) {
@@ -2061,64 +2049,6 @@ async function finishRoomDeletion(roomId, { avatarKey = null, request = null } =
     request?.log?.warn?.({ code: 'room_delete_peer_cleanup_failed' }, 'Room peer cleanup finished with errors');
   }
   await removeAvatarBestEffort(avatarKey, request);
-}
-
-// Browser log intake. The room client buffers what it saw locally and posts
-// the buffer when a call fails, which is the only way a microphone, screen
-// share or reconnect failure on someone else's machine becomes visible here.
-// Records are re-emitted into the same stream as server records rather than
-// stored, so they age out with the rest of the logs and need no schema.
-async function handleClientLogs(req, res) {
-  if (!CLIENT_LOG_INTAKE_ENABLED) {
-    sendJson(res, 404, { ok: false, error: 'Not found' });
-    return;
-  }
-
-  const clientIp = getClientIp(req, TRUST_PROXY);
-  const rate = clientLogLimiter.check(`client-logs:${clientIp}`);
-  if (!rate.allowed) {
-    sendJson(
-      res,
-      429,
-      { ok: false, error: 'Слишком много попыток, попробуйте позже' },
-      { 'Retry-After': String(rate.retryAfterSeconds) }
-    );
-    return;
-  }
-
-  const session = await resolveSessionUser(req);
-  const body = await readJsonBody(req);
-  const batch = normalizeClientLogBatch(body);
-
-  if (batch.dropped > 0) {
-    req?.log?.warn?.({
-      evt: LOG_EVENTS.CLIENT_REPORT_REJECTED,
-      dropped: batch.dropped,
-      accepted: batch.events.length
-    }, 'client log records were rejected');
-  }
-
-  // The shared fields are bound once so each record carries the identity of
-  // the reporter without the client being able to claim one.
-  const reporter = {
-    source: 'web',
-    clientSessionId: batch.sessionId || undefined,
-    userId: session?.user?.id || undefined,
-    ipHash: hashIp(clientIp)
-  };
-
-  for (const event of batch.events) {
-    req?.log?.[event.level]?.({
-      evt: LOG_EVENTS.CLIENT_REPORT,
-      ...reporter,
-      ns: event.ns,
-      at: event.at,
-      stale: event.stale || undefined,
-      ctx: event.ctx
-    }, event.msg);
-  }
-
-  sendJson(res, 202, { ok: true, accepted: batch.events.length, dropped: batch.dropped, limits: CLIENT_LOG_LIMITS });
 }
 
 async function handleRegister(req, res) {
@@ -4959,95 +4889,6 @@ async function handleEditDmMessage(req, res, peerIdParam, messageId) {
   sendJson(res, 200, { ok: true, message });
 }
 
-// The browser downloads and runs what this URL points at, so only GitHub's own
-// release-download path for the configured repository is passed through.
-function isDesktopReleaseDownloadUrl(value) {
-  try {
-    const url = new URL(String(value || ''));
-    return url.protocol === 'https:'
-      && url.hostname === 'github.com'
-      && url.pathname.startsWith(`/${DESKTOP_RELEASE_REPO}/releases/download/`);
-  } catch {
-    return false;
-  }
-}
-
-function pickReleaseAsset(assets, patterns) {
-  for (const pattern of patterns) {
-    const found = assets.find((asset) => pattern.test(asset.name || ''));
-    if (found && isDesktopReleaseDownloadUrl(found.browser_download_url)) {
-      return { url: found.browser_download_url, size: Number(found.size) || 0 };
-    }
-  }
-  return null;
-}
-
-function normalizeRelease(release) {
-  const assets = Array.isArray(release.assets) ? release.assets : [];
-  return {
-    version: String(release.tag_name || '').replace(/^v/, ''),
-    htmlUrl: typeof release.html_url === 'string' ? release.html_url : '',
-    assets: {
-      'mac-arm64': pickReleaseAsset(assets, [/-mac-arm64\.dmg$/i]),
-      'mac-x64': pickReleaseAsset(assets, [/-mac-x64\.dmg$/i]),
-      // Prefer the NSIS installer; fall back to the portable build.
-      'win-x64': pickReleaseAsset(assets, [/-win-x64-setup\.exe$/i, /-win-x64\.exe$/i])
-    }
-  };
-}
-
-async function fetchLatestRelease() {
-  const headers = {
-    Accept: 'application/vnd.github+json',
-    'User-Agent': 'voice-room-web',
-    'X-GitHub-Api-Version': '2022-11-28'
-  };
-  const token = process.env.GITHUB_TOKEN && process.env.GITHUB_TOKEN.trim();
-  if (token) headers.Authorization = `Bearer ${token}`;
-
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), DESKTOP_RELEASE_TIMEOUT_MS);
-  try {
-    const response = await fetch(
-      `https://api.github.com/repos/${DESKTOP_RELEASE_REPO}/releases/latest`,
-      { headers, signal: controller.signal }
-    );
-    if (!response.ok) {
-      throw new Error(`GitHub responded ${response.status}`);
-    }
-    return normalizeRelease(await response.json());
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
-async function handleDesktopLatest(res) {
-  const now = Date.now();
-  if (desktopReleaseCache.data && now - desktopReleaseCache.at < DESKTOP_RELEASE_CACHE_MS) {
-    sendJson(res, 200, { ok: true, ...desktopReleaseCache.data }, { 'Cache-Control': 'public, max-age=300' });
-    return;
-  }
-
-  try {
-    if (!desktopReleaseFetchPromise) {
-      desktopReleaseFetchPromise = fetchLatestRelease().finally(() => {
-        desktopReleaseFetchPromise = null;
-      });
-    }
-    const data = await desktopReleaseFetchPromise;
-    desktopReleaseCache = { at: now, data };
-    sendJson(res, 200, { ok: true, ...data }, { 'Cache-Control': 'public, max-age=300' });
-  } catch (error) {
-    // Serve stale metadata if we have any; the binaries are still valid.
-    if (desktopReleaseCache.data) {
-      sendJson(res, 200, { ok: true, ...desktopReleaseCache.data }, { 'Cache-Control': 'public, max-age=60' });
-      return;
-    }
-    getProcessLogger().warn({ evt: LOG_EVENTS.DESKTOP_RELEASE_FETCH_FAILED, err: error }, 'failed to fetch the desktop release manifest');
-    sendJson(res, 502, { ok: false, error: 'Не удалось получить данные о релизе' });
-  }
-}
-
 function getApiRoutePath(pathname) {
   if (pathname === API_PREFIX) return '/';
   if (pathname.startsWith(`${API_PREFIX}/`)) return pathname.slice(API_PREFIX.length);
@@ -5185,7 +5026,9 @@ function createApiApp({
 
   const app = fastify({
     bodyLimit: BODY_LIMIT_BYTES,
-    disableRequestLogging: true,
+    // Request lines come from our own logHttpRequest (one record per request,
+    // healthz excluded), not from Fastify's built-in pair.
+    logController: new LogController({ disableRequestLogging: true }),
     // A request id supplied by the edge is reused so one identifier spans
     // Caddy, the API and the browser report that quotes it; anything malformed
     // is replaced rather than trusted into the log stream.
@@ -5223,6 +5066,23 @@ function createApiApp({
     }
     done();
   });
+
+  // Fastify-native routes get the same headers, failure shape, metric and
+  // request log line as the legacy handlers (platform/http/http-kit.ts).
+  registerHttpKit(app, {
+    securityHeaders: baseHeaders,
+    recordRequest: recordHttpRequest,
+    logRequest: logHttpRequest,
+    logHandlerFailure: (request, route, error) => {
+      request.log?.error?.({ evt: LOG_EVENTS.HTTP_HANDLER_FAILED, route, err: error }, 'route handler failed');
+    }
+  });
+  const apiContext = {
+    logger: appLogger,
+    clientIp: (req) => getClientIp(req, TRUST_PROXY),
+    resolveSession: resolveSessionUser,
+    hashIp
+  };
 
   app.register(fastifyCookie, { hook: 'onRequest' });
   app.register(fastifyMultipart, {
@@ -5295,54 +5155,30 @@ function createApiApp({
     reply.headers(baseHeaders()).code(404).send({ ok: false, error: 'Not found' });
   });
 
-  app.get('/api/healthz', (request, reply) => runLegacyHandler(request, reply, async (req, res) => {
-    let readiness;
-    try {
-      readiness = activeReadinessProvider.getSnapshot();
-    } catch {
-      sendJson(res, 503, {
-        ok: false,
-        code: 'readiness_unavailable',
-        error: 'Readiness snapshot unavailable'
+  registerOpsRoutes(app, apiContext, {
+    readiness: activeReadinessProvider,
+    livekitEnabled: () => getLiveKitConfig().enabled,
+    renderMetrics: () => {
+      const readiness = (() => {
+        try {
+          return activeReadinessProvider.getSnapshot();
+        } catch {
+          return null;
+        }
+      })();
+      return renderPrometheus({
+        activeWs: wsRegistry?.connections?.size || 0,
+        activeGuestWs: getActiveGuestWsCount(),
+        presenceRooms: presenceRooms.size,
+        presencePeers: getPresencePeerCount(),
+        capabilityReadiness: readiness?.features || {}
       });
-      return;
-    }
-    // Public and unauthenticated: it answers "is this replica serving?" and
-    // nothing about the topology behind it. The internal LiveKit address, the
-    // manifest's filesystem path and live room/peer counts stay in /api/metrics,
-    // which Caddy only exposes to the monitoring address.
-    const livekit = getLiveKitConfig();
-    sendJson(res, 200, {
-      livekit: livekit.enabled,
-      ok: true,
-      capabilityManifest: {
-        contractVersion: readiness?.manifest?.contractVersion || null,
-        schemaVersion: readiness?.manifest?.schemaVersion || null,
-        digest: readiness?.manifest?.digest || null,
-        replicaConsensus: readiness?.replica?.reason || (readiness?.replicaConsensus ? 'agree' : 'disagree'),
-        manifestRawSha256: readiness?.manifest?.digest || null
-      }
-    });
-  }));
-
-  app.get('/api/metrics', (request, reply) => {
-    const readiness = (() => {
-      try {
-        return activeReadinessProvider.getSnapshot();
-      } catch {
-        return null;
-      }
-    })();
-    const body = renderPrometheus({
-      activeWs: wsRegistry?.connections?.size || 0,
-      activeGuestWs: getActiveGuestWsCount(),
-      presenceRooms: presenceRooms.size,
-      presencePeers: getPresencePeerCount(),
-      capabilityReadiness: readiness?.features || {}
-    });
-    reply
-      .header('Content-Type', 'text/plain; version=0.0.4; charset=utf-8')
-      .send(body);
+    },
+    pow,
+    powDifficulty: ROOM_CREATE_POW_DIFFICULTY,
+    powTtlMs: ROOM_CREATE_POW_TTL_MS,
+    clientLogs: { enabled: CLIENT_LOG_INTAKE_ENABLED, limiter: clientLogLimiter },
+    desktopRelease: desktopReleaseService
   });
 
   registerCapabilityRoutes({
@@ -5446,9 +5282,6 @@ function createApiApp({
     });
   }
 
-  app.get('/api/pow-challenge', (request, reply) => runLegacyHandler(request, reply, handlePowChallenge));
-  app.get('/api/desktop/latest', (request, reply) => runLegacyHandler(request, reply, (_req, res) => handleDesktopLatest(res)));
-  app.post('/api/client-logs', (request, reply) => runLegacyHandler(request, reply, handleClientLogs));
   app.post('/api/auth/register', (request, reply) => runLegacyHandler(request, reply, handleRegister));
   app.post('/api/auth/login', (request, reply) => runLegacyHandler(request, reply, handleLogin));
   app.post('/api/auth/logout', (request, reply) => runLegacyHandler(request, reply, handleLogout));
