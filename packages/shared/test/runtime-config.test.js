@@ -6,7 +6,7 @@ const {
   inheritLiveKitGateCredential,
   normalizeLiveKitServerUrl,
   resolveLiveKitConnectUrls
-} = require('../src/runtime-config');
+} = require('../src/runtime-config.mts');
 
 test('removes a legacy rtc path before LiveKit appends its signaling path', () => {
   assert.equal(
