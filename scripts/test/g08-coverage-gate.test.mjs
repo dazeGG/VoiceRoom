@@ -112,7 +112,11 @@ const SERVER_INTERNAL_COVERAGE_SCRIPT = String.raw`
     readJsonBody: async () => ({ roomId: "room-1", peerId: "peer-1", sessionToken: "token", name: "Guest" }),
     resolveOptionalSessionUser: async () => null,
     sendJson: (_res, status, body) => { globalThis.result = { status, body }; },
-    sessionAvatarColorKey: () => "blue"
+    sessionAvatarColorKey: () => "blue",
+    // Admission now requires a roster peer with a matching session token.
+    isReservedPeerId: () => false,
+    tokensMatch: (expected, actual) => expected === actual,
+    waitForRosterPeer: async () => ({ id: "peer-1", sessionToken: "token" })
   });
   const baseStore = {
     getOrCreatePeerIdentity: async () => ({ status: "created", identity: { id: "identity-1" } }),
@@ -725,7 +729,7 @@ test("G08 admission gate service exported decisions and server paths are exercis
     verifyLiveKitGateCredential: async () => { if (decision === "throw") throw new Error("db down"); return { status: decision }; }
   };
   const errors = [];
-  const gate = createLiveKitAuthGateService({ roomStore: store, secret: SECRET, gatePath: "rtc", upstreamUrl: "ws://livekit.example", logger: { error: (...args) => errors.push(args) } });
+  const gate = createLiveKitAuthGateService({ roomStore: store, secret: SECRET, gatePath: "rtc", upstreamUrl: "ws://livekit.example", logger: { error: (...args) => errors.push(args), warn: () => {} } });
   assert.equal(gate.path, "/rtc");
   assert.equal(createLiveKitAuthGateService({ roomStore: store, secret: SECRET, gatePath: "", upstreamUrl: "" }).path, "/rtc");
   process.env.LIVEKIT_INTERNAL_URL = "ws://internal.example";
@@ -772,16 +776,20 @@ test("G08 admission gate service exported decisions and server paths are exercis
   const originalConnect = net.connect;
   t.after(() => { net.connect = originalConnect; });
   decision = "allowed";
+  // The gate also binds the LiveKit JWT to the credential (peer, room, nbf); the
+  // signature is LiveKit's to check, so an unsigned token with the claims does.
+  const encodeJwtPart = (value) => Buffer.from(JSON.stringify(value)).toString("base64url");
+  const accessToken = `${encodeJwtPart({ alg: "HS256" })}.${encodeJwtPart({ sub: "peer", nbf: Math.floor(Date.now() / 1000), video: { room: "voice-room-room" } })}.signature`;
   const upstream = new FakeSocket();
   net.connect = () => upstream;
   const client = new FakeSocket();
   server.emit("upgrade", {
-    url: `/rtc?vr_gate_credential=${credential}`,
+    url: `/rtc?access_token=${accessToken}&vr_gate_credential=${credential}`,
     headers: { host: "gate", "x-vr-gate-credential": "remove", array: ["a", "b"], skip: undefined }
   }, client, Buffer.from("head"));
   await new Promise((resolve) => setImmediate(resolve));
   upstream.emit("connect");
-  assert.match(String(upstream.writes[0]), /^GET \/rtc HTTP\/1\.1/);
+  assert.match(String(upstream.writes[0]), /^GET \/rtc\?access_token=[^ ]+ HTTP\/1\.1/);
   assert.equal(upstream.writes[1].toString(), "head");
 
   assert.throws(
@@ -792,7 +800,7 @@ test("G08 admission gate service exported decisions and server paths are exercis
   const upstreamError = new FakeSocket();
   net.connect = () => upstreamError;
   const errorClient = new FakeSocket();
-  server.emit("upgrade", { url: `/rtc?vr_gate_credential=${credential}`, headers: {} }, errorClient, Buffer.alloc(0));
+  server.emit("upgrade", { url: `/rtc?access_token=${accessToken}&vr_gate_credential=${credential}`, headers: {} }, errorClient, Buffer.alloc(0));
   await new Promise((resolve) => setImmediate(resolve));
   upstreamError.emit("error", new Error("connect failed"));
   assert.match(String(errorClient.writes[0]), /503 Service Unavailable/);
