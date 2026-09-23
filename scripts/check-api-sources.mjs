@@ -11,7 +11,7 @@ function walkFiles(root, collected = []) {
   if (!fs.existsSync(root)) return collected;
   const stat = fs.statSync(root);
   if (stat.isFile()) {
-    if (/\.(?:js|mts)$/.test(root)) collected.push(normalizePath(root));
+    if (/\.(?:js|mts|ts)$/.test(root) && !root.endsWith('.d.ts')) collected.push(normalizePath(root));
     return collected;
   }
   for (const entry of fs.readdirSync(root)) {
@@ -48,6 +48,9 @@ function findSqlWrites(source) {
   const writes = [];
   const pattern = /\b(?:INSERT\s+INTO|UPDATE|DELETE\s+FROM)\s+([a-z_][a-z0-9_]*)/gi;
   for (const match of source.matchAll(pattern)) writes.push(match[1].toLowerCase());
+  // Kysely writes name their table as the first string argument.
+  const builder = /\.(?:insertInto|updateTable|deleteFrom|replaceInto|mergeInto)\(\s*['"`]([a-z_][a-z0-9_]*)/gi;
+  for (const match of source.matchAll(builder)) writes.push(match[1].toLowerCase());
   return writes;
 }
 
