@@ -17,7 +17,7 @@ export function collectReplayEvidence(options = {}) {
   };
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (import.meta.main) {
   const { values } = parseArgs({
     options: {
       out: { type: 'string' },

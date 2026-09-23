@@ -88,50 +88,8 @@ const SERVER_INTERNAL_COVERAGE_SCRIPT = String.raw`
     vm.runInNewContext(extract(functionName) + "\n" + proof, sandbox, { filename: pathToFileURL(absolute).href });
     await sandbox.done;
   }
-  const commonTokenSandbox = (store) => ({
-    URL,
-    Date,
-    LIVEKIT_TOKEN_TTL_SECONDS: 60,
-    TRUST_PROXY: false,
-    TrackSource: { MICROPHONE: 1, SCREEN_SHARE: 2, SCREEN_SHARE_AUDIO: 3 },
-    AccessToken: class { addGrant() {} async toJwt() { return "jwt"; } },
-    cleanName: (value) => value,
-    createGateCredentialSigner: () => ({ hash: () => "hash", sign: () => "gate-token" }),
-    findRoomBan: async () => null,
-    getClientIp: () => "127.0.0.1",
-    getLiveKitConfig: () => ({ enabled: true, gateSecret: "x".repeat(32), gateUrl: "ws://gate.example/rtc", apiKey: "key", apiSecret: "secret" }),
-    getLiveKitCredentialProvider: () => ({ issueAdmission: async () => ({ status: "issued", admission: {} }) }),
-    getMembershipServices: () => ({ service: { persistSuccessfulAdmission: async () => ({ created: false, status: "active" }) } }),
-    getLiveKitRoomName: (roomId) => "voice-room-" + roomId,
-    logAdmissionDenied: () => {},
-    getRoom: async () => ({ peers: new Map() }),
-    getRoomStore: () => store,
-    normalizePeerId: (value) => value,
-    normalizeRoomId: (value) => value,
-    normalizeSessionToken: (value) => value,
-    readJsonBody: async () => ({ roomId: "room-1", peerId: "peer-1", sessionToken: "token", name: "Guest" }),
-    resolveOptionalSessionUser: async () => null,
-    sendJson: (_res, status, body) => { globalThis.result = { status, body }; },
-    sessionAvatarColorKey: () => "blue",
-    // Admission now requires a roster peer with a matching session token.
-    isReservedPeerId: () => false,
-    tokensMatch: (expected, actual) => expected === actual,
-    waitForRosterPeer: async () => ({ id: "peer-1", sessionToken: "token" })
-  });
-  const baseStore = {
-    getOrCreatePeerIdentity: async () => ({ status: "created", identity: { id: "identity-1" } }),
-    normalizeGatePrincipal: () => null
-  };
-  const shortSecret = commonTokenSandbox(baseStore);
-  shortSecret.getLiveKitConfig = () => ({ enabled: true, gateSecret: "short" });
-  await run("handleLiveKitToken", shortSecret, "done = handleLiveKitToken({}, {});");
-  await run("handleLiveKitToken", commonTokenSandbox(baseStore), "done = handleLiveKitToken({}, {});");
-  await run("handleLiveKitToken", commonTokenSandbox({ ...baseStore, normalizeGatePrincipal: () => ({ principalType: "guest", principalId: "guest-1" }), getLiveKitGatePrincipalEpoch: async () => ({ status: "unavailable" }) }), "done = handleLiveKitToken({}, {});");
-  await run("handleLiveKitToken", commonTokenSandbox({ ...baseStore, normalizeGatePrincipal: () => ({ principalType: "guest", principalId: "guest-1" }), getLiveKitGatePrincipalEpoch: async () => ({ status: "ready", epoch: 1 }), createLiveKitGateCredential: async () => ({ status: "unavailable" }) }), "done = handleLiveKitToken({}, {});");
-  const accountToken = commonTokenSandbox({ ...baseStore, normalizeGatePrincipal: () => ({ principalType: "account", principalId: "user-1" }), getLiveKitGatePrincipalEpoch: async () => ({ status: "ready", epoch: 1 }), createLiveKitGateCredential: async () => ({ status: "unavailable" }) });
-  accountToken.resolveOptionalSessionUser = async () => ({ id: "user-1" });
-  accountToken.getRoomStore().getOrCreatePeerIdentity = async () => ({ status: "created", identity: null });
-  await run("handleLiveKitToken", accountToken, "done = handleLiveKitToken({}, {});");
+  // LiveKit admission moved to domains/admission (admission.service.ts); its
+  // branches are covered by apps/api/test/admission-service.test.js.
   const moderationStore = {
     revokeLiveKitGatePeer: async () => {},
     invalidatePeerIdentity: async () => {}
@@ -157,7 +115,6 @@ const SERVER_INTERNAL_COVERAGE_SCRIPT = String.raw`
     finalizeModeratedPeers: async (_room, _peers, _type, options = {}) => options.beforeFinalize?.(),
     sendJson() {}
   }, "done = handleBanRoomPeer({}, {}, 'room-1');");
-  await run("removeLiveKitParticipant", { getLiveKitConfig: () => ({ enabled: true, adminUrl: "http://internal", apiKey: "key", apiSecret: "secret" }), RoomServiceClient: class { async removeParticipant() {} }, getLiveKitRoomName: (value) => value, console }, "done = removeLiveKitParticipant('room-1', 'peer-1');");
   await run("liveKitGatePrincipalForPeer", { getRoomStore: () => ({ normalizeGatePrincipal: (value) => value }) }, "done = Promise.resolve(liveKitGatePrincipalForPeer('room-1', { accountUserId: 'user-1', gateGuestPrincipalId: '' }));");
   await run("isLiveKitGatePrincipal", {}, "done = Promise.resolve(isLiveKitGatePrincipal({ principalType: 'account', principalId: 'user-1' }));");
   await run("attachPresence", { getPresenceRoom: () => ({ peers: new Map([["peer-1", {}]]) }) }, "done = Promise.resolve(attachPresence({ id: 'room-1', peers: new Map() }));");
@@ -165,10 +122,6 @@ const SERVER_INTERNAL_COVERAGE_SCRIPT = String.raw`
   await run("getLiveKitConnectSources", connectSandbox("ws://gate.example", "ws://livekit.example"), "done = Promise.resolve(getLiveKitConnectSources());");
   await run("getLiveKitConnectSources", connectSandbox("", "ws://livekit.example"), "done = Promise.resolve(getLiveKitConnectSources());");
   await run("getLiveKitConnectSources", connectSandbox("", ""), "done = Promise.resolve(getLiveKitConnectSources());");
-  const configSandbox = (env, publicUrl) => ({ process: { env }, LIVEKIT_GATE_PUBLIC_URL: publicUrl, LIVEKIT_GATE_SECRET: "x".repeat(32), cleanLiveKitUrl: (value) => value, getLiveKitHttpUrl: (value) => String(value || "").replace(/^ws:/, "http:") });
-  await run("getLiveKitConfig", configSandbox({ LIVEKIT_INTERNAL_URL: "ws://internal", LIVEKIT_URL: "ws://fallback", LIVEKIT_API_KEY: " key ", LIVEKIT_API_SECRET: " secret " }, "ws://gate"), "done = Promise.resolve(getLiveKitConfig());");
-  await run("getLiveKitConfig", configSandbox({ LIVEKIT_URL: "ws://fallback", LIVEKIT_API_KEY: "key", LIVEKIT_API_SECRET: "secret" }, ""), "done = Promise.resolve(getLiveKitConfig());");
-  await run("getLiveKitConfig", configSandbox({}, ""), "done = Promise.resolve(getLiveKitConfig());");
   })().catch((error) => { console.error(error); process.exitCode = 1; });
 `;
 

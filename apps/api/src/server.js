@@ -8,7 +8,6 @@ import { createWsHandler } from './realtime/ws-handler.js';
 import { clearViewedScreenPeerReferences, createRoomRealtimeRuntime, resolveViewedScreenPeerId } from './realtime/room-runtime.js';
 import { buildServerEnvelope } from './realtime/envelope.js';
 import { URL } from 'node:url';
-import { RoomServiceClient, TrackSource } from 'livekit-server-sdk';
 
 import {
   readEnvInt,
@@ -86,6 +85,11 @@ import {
 import { createCredentialBoundaryService } from './domains/admission/credential-boundary-service.js';
 import { registerHttpKit } from './platform/http/http-kit.ts';
 import { registerOpsRoutes } from './domains/ops/ops.routes.ts';
+import { registerAdmissionRoutes } from './domains/admission/admission.routes.ts';
+import { createAdmissionService } from './domains/admission/admission.service.ts';
+import { createLiveKitAdmin } from './domains/admission/livekit-admin.ts';
+import { readLiveKitConfig } from './domains/admission/livekit-config.ts';
+import { tokensMatch } from './platform/crypto/tokens-match.ts';
 import { createDesktopReleaseService } from './domains/ops/desktop-release.service.ts';
 import { getLiveKitRoomName as liveKitRoomName } from './domains/admission/livekit-token-binding.mts';
 import { isCrossOriginCookieWrite, isCrossOriginWebSocket } from './platform/http/origin-guard.mts';
@@ -1078,6 +1082,7 @@ const pushSubscriptionLimiter = createRateLimiter({
   limit: PUSH_SUBSCRIPTION_RATE_LIMIT,
   windowMs: PUSH_SUBSCRIPTION_RATE_WINDOW_MS
 });
+let admissionService = null;
 const desktopReleaseService = createDesktopReleaseService({
   repo: DESKTOP_RELEASE_REPO,
   cacheMs: DESKTOP_RELEASE_CACHE_MS,
@@ -1272,26 +1277,16 @@ function getLiveKitRoomName(roomId) {
 }
 
 function getLiveKitConfig() {
-  const url = cleanLiveKitUrl(process.env.LIVEKIT_INTERNAL_URL || process.env.LIVEKIT_URL || '');
-  const gateUrl = cleanLiveKitUrl(LIVEKIT_GATE_PUBLIC_URL || url);
-  const apiKey = process.env.LIVEKIT_API_KEY && process.env.LIVEKIT_API_KEY.trim();
-  const apiSecret = process.env.LIVEKIT_API_SECRET && process.env.LIVEKIT_API_SECRET.trim();
-  const adminUrl = getLiveKitHttpUrl(url);
-  const publicGateHttpUrl = getLiveKitHttpUrl(gateUrl);
-  return {
-    adminUrl,
-    apiKey,
-    apiSecret,
-    enabled: Boolean(url && gateUrl && apiKey && apiSecret && adminUrl !== publicGateHttpUrl),
-    gateSecret: LIVEKIT_GATE_SECRET,
-    gateUrl,
-    url
-  };
+  return readLiveKitConfig(process.env, { gatePublicUrl: LIVEKIT_GATE_PUBLIC_URL, gateSecret: LIVEKIT_GATE_SECRET });
 }
 
-function getLiveKitHttpUrl(url) {
-  return String(url || '').replace(/^wss:/, 'https:').replace(/^ws:/, 'http:');
-}
+const liveKitAdmin = createLiveKitAdmin({
+  config: getLiveKitConfig,
+  roomName: getLiveKitRoomName,
+  logger: () => getProcessLogger()
+});
+const removeLiveKitParticipant = liveKitAdmin.removeParticipant;
+const setLiveKitParticipantMuted = liveKitAdmin.setParticipantMuted;
 
 function createRoomId() {
   const alphabet = 'abcdefghijkmnpqrstuvwxyz23456789';
@@ -1413,11 +1408,6 @@ function publicPeer(peer) {
     screenStreamId: peer.screenStreamId,
     viewedScreenPeerId: peer.viewedScreenPeerId
   };
-}
-
-function tokensMatch(expected, actual) {
-  if (!expected || !actual || expected.length !== actual.length) return false;
-  return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(actual));
 }
 
 function getAuthorizedPeer(roomId, peerId, sessionToken) {
@@ -1641,41 +1631,6 @@ async function readJsonBody(req) {
   }
 }
 
-// Every refusal to admit a peer to the SFU is recorded with the code the
-// client is about to see. A call that "does not connect" is otherwise
-// indistinguishable in the logs from one that was never attempted.
-function logAdmissionDenied(req, { roomId, peerId, code, err = null }) {
-  req?.log?.warn?.({
-    evt: LOG_EVENTS.LIVEKIT_ADMISSION_DENIED,
-    roomId,
-    peerId,
-    code,
-    err: err || undefined
-  }, 'LiveKit admission denied');
-}
-
-async function revokeIssuedAdmission({ boundary = getCredentialBoundary(), cause, credentialId, principal, recordFailure = recordCredentialRevokeCleanupFailure, req, roomId }) {
-  try {
-    const revoked = await boundary.revokeCredential({ credentialId, roomId, principal });
-    if (revoked?.status !== 'revoked') {
-      const error = new Error('Issued admission credential cleanup was refused');
-      error.code = 'credential_revoke_cleanup_refused';
-      throw error;
-    }
-  } catch (cleanupError) {
-    recordFailure();
-    req?.log?.error?.({
-      evt: LOG_EVENTS.LIVEKIT_ADMISSION_REVOKED,
-      credentialId,
-      roomId,
-      code: 'credential_revoke_cleanup_failed',
-      err: cleanupError
-    }, 'issued admission credential cleanup failed');
-    if (cause) throw new AggregateError([cause, cleanupError], 'Admission persistence and credential cleanup both failed', { cause });
-    throw cleanupError;
-  }
-}
-
 async function waitForRosterPeer(roomId, peerId, timeoutMs = LIVEKIT_ROSTER_WAIT_MS) {
   const deadline = Date.now() + timeoutMs;
   for (;;) {
@@ -1683,183 +1638,6 @@ async function waitForRosterPeer(roomId, peerId, timeoutMs = LIVEKIT_ROSTER_WAIT
     if (peer || Date.now() >= deadline) return peer || null;
     await new Promise((resolve) => setTimeout(resolve, ROSTER_POLL_INTERVAL_MS));
   }
-}
-
-async function handleLiveKitToken(req, res) {
-  const livekit = getLiveKitConfig();
-  const body = await readJsonBody(req);
-  const roomId = normalizeRoomId(body.roomId);
-  const peerId = normalizePeerId(body.peerId);
-  const sessionToken = normalizeSessionToken(body.sessionToken);
-  const name = cleanName(body.name);
-  const sessionUser = await resolveOptionalSessionUser(req);
-
-  if (!roomId || !peerId || !sessionToken || isReservedPeerId(peerId)) {
-    sendJson(res, 400, { ok: false, error: 'Invalid room, peer, or session token' });
-    return;
-  }
-
-  const room = await getRoom(roomId);
-  if (!room) {
-    sendJson(res, 404, { ok: false, error: 'Комната не найдена' });
-    return;
-  }
-
-  if (await findRoomBan(roomId, sessionUser?.id, getClientIp(req, TRUST_PROXY))) {
-    sendRoomBanned(res, roomId);
-    return;
-  }
-
-  // Media admission belongs to a peer the room roster already knows. Without
-  // this a caller holding only the room id could subscribe to every voice and
-  // screen share while staying invisible — and therefore un-kickable. The
-  // client sends the realtime join just before asking for a token, so give
-  // that join a moment to land instead of failing the race.
-  const rosterPeer = await waitForRosterPeer(roomId, peerId);
-  if (!rosterPeer) {
-    logAdmissionDenied(req, { roomId, peerId, code: 'not_in_room' });
-    sendJson(res, 409, { ok: false, code: 'not_in_room', error: 'Сначала нужно войти в комнату' });
-    return;
-  }
-  if (!tokensMatch(rosterPeer.sessionToken, sessionToken)) {
-    sendJson(res, 403, { ok: false, error: 'Сессия участника недействительна' });
-    return;
-  }
-
-  const provider = getLiveKitCredentialProvider();
-  if (!provider && !livekit.enabled) {
-    sendJson(res, 503, {
-      ok: false,
-      error: 'LiveKit не настроен: проверьте LIVEKIT_URL, LIVEKIT_API_KEY и LIVEKIT_API_SECRET'
-    });
-    return;
-  }
-  if (!provider && (!livekit.gateSecret || livekit.gateSecret.length < 32)) {
-    logAdmissionDenied(req, { roomId, peerId, code: 'livekit_gate_unavailable' });
-    sendJson(res, 503, {
-      ok: false,
-      code: 'livekit_gate_unavailable',
-      error: 'LiveKit gate is not configured'
-    });
-    return;
-  }
-
-  const identityResult = await getRoomStore().getOrCreatePeerIdentity({ roomId, peerId, sessionToken, displayName: name, avatarColorKey: sessionAvatarColorKey(sessionUser) });
-  if (identityResult.status === 'token_mismatch') {
-    sendJson(res, 403, { ok: false, error: 'Сессия участника недействительна' });
-    return;
-  }
-  const principal = getRoomStore().normalizeGatePrincipal({
-    accountUserId: sessionUser?.id || null,
-    guestPrincipalId: identityResult.identity?.id || '',
-    roomId
-  });
-  if (!principal) {
-    logAdmissionDenied(req, { roomId, peerId, code: 'livekit_gate_principal_unavailable' });
-    sendJson(res, 503, { ok: false, code: 'livekit_gate_principal_unavailable', error: 'LiveKit gate principal unavailable' });
-    return;
-  }
-  let serverMuted;
-  try {
-    if (typeof getRoomStore().isRoomServerMuted !== 'function') {
-      throw new Error('Server mute authority is unavailable');
-    }
-    serverMuted = await getRoomStore().isRoomServerMuted({ roomId, principal });
-  } catch (error) {
-    logAdmissionDenied(req, { roomId, peerId, code: 'server_mute_unavailable', err: error });
-    sendJson(res, 503, {
-      ok: false,
-      code: 'server_mute_unavailable',
-      error: 'Voice moderation state is unavailable'
-    });
-    return;
-  }
-  const livekitRoom = getLiveKitRoomName(roomId);
-  let memberships = null;
-  if (sessionUser?.id) {
-    memberships = getMembershipServices();
-    if (!memberships) {
-      sendJson(res, 503, { ok: false, code: 'membership_unavailable', error: 'Membership service unavailable' });
-      return;
-    }
-  }
-
-  if (!provider) {
-    logAdmissionDenied(req, { roomId, peerId, code: 'livekit_gate_unavailable' });
-    sendJson(res, 503, { ok: false, code: 'livekit_gate_unavailable', error: 'LiveKit gate unavailable' });
-    return;
-  }
-  let issued = await provider.issueAdmission({
-    canPublishMicrophone: !serverMuted,
-    livekitRoom,
-    name,
-    peerId,
-    principal,
-    roomId
-  });
-  if (issued.status !== 'issued') {
-    logAdmissionDenied(req, { roomId, peerId, code: 'livekit_gate_credential_unavailable' });
-    sendJson(res, 503, { ok: false, code: 'livekit_gate_credential_unavailable', error: 'LiveKit gate unavailable' });
-    return;
-  }
-  try {
-    const currentServerMuted = await getRoomStore().isRoomServerMuted({ roomId, principal });
-    if (currentServerMuted !== serverMuted) {
-      await revokeIssuedAdmission({ credentialId: issued.admission.gateCredentialId, principal, req, roomId });
-      serverMuted = currentServerMuted;
-      issued = await provider.issueAdmission({
-        canPublishMicrophone: !serverMuted,
-        livekitRoom,
-        name,
-        peerId,
-        principal,
-        roomId
-      });
-      if (issued.status !== 'issued') {
-        sendJson(res, 503, { ok: false, code: 'livekit_gate_credential_unavailable', error: 'LiveKit gate unavailable' });
-        return;
-      }
-    }
-  } catch (error) {
-    await revokeIssuedAdmission({ cause: error, credentialId: issued.admission.gateCredentialId, principal, req, roomId });
-    throw error;
-  }
-
-  if (await findRoomBan(roomId, sessionUser?.id, getClientIp(req, TRUST_PROXY))) {
-    logAdmissionDenied(req, { roomId, peerId, code: 'room_banned' });
-    await getCredentialBoundary().revokePrincipal({ principal, roomId });
-    sendRoomBanned(res, roomId);
-    return;
-  }
-
-  if (sessionUser?.id) {
-    let persistedMembership;
-    try {
-      persistedMembership = await memberships.service.persistSuccessfulAdmission({
-        roomId,
-        userId: sessionUser.id,
-        ip: getClientIp(req, TRUST_PROXY),
-        admissionSucceeded: true
-      });
-    } catch (error) {
-      await revokeIssuedAdmission({ cause: error, credentialId: issued.admission.gateCredentialId, principal, req, roomId });
-      throw error;
-    }
-    if (persistedMembership.status !== 'active') {
-      await revokeIssuedAdmission({ credentialId: issued.admission.gateCredentialId, principal, req, roomId });
-      if (persistedMembership.status === 'banned') {
-        sendRoomBanned(res, roomId);
-      } else {
-        sendJson(res, 503, { ok: false, code: 'membership_persist_failed', error: 'Membership unavailable' });
-      }
-      return;
-    }
-  }
-
-  sendJson(res, 200, {
-    ok: true,
-    ...issued.admission
-  });
 }
 
 async function handleCreateRoom(req, res) {
@@ -3341,89 +3119,6 @@ async function handleRoomChatPost(req, res, roomId) {
   sendJson(res, 201, { ok: true, message: publicChatMessage(publicMessage) });
 }
 
-// A participant the SFU no longer knows is the state this call is trying to
-// reach, so it is not a failure. The LiveKit SDK reports it as a 404 whose
-// message reads "participant does not exist" while only `name` and `code` say
-// Not Found, so matching on the message alone never recognised it and every
-// normal leave logged an error.
-function isLiveKitParticipantAlreadyGone(error) {
-  if (Number(error?.status) === 404) return true;
-  if (String(error?.code || '').toLowerCase() === 'not_found') return true;
-  const text = `${error?.name || ''} ${error?.message || ''}`;
-  return /not.?found/i.test(text) || /does not exist/i.test(text);
-}
-
-async function removeLiveKitParticipant(roomId, peerId) {
-  const livekit = getLiveKitConfig();
-  if (!livekit.enabled) return;
-  const service = new RoomServiceClient(livekit.adminUrl, livekit.apiKey, livekit.apiSecret);
-  try {
-    await service.removeParticipant(getLiveKitRoomName(roomId), peerId);
-  } catch (error) {
-    if (!isLiveKitParticipantAlreadyGone(error)) {
-      getProcessLogger().error({ evt: LOG_EVENTS.LIVEKIT_PARTICIPANT_REMOVE_FAILED, roomId, peerId, err: error }, 'failed to remove a moderated LiveKit participant');
-    }
-  }
-}
-
-// Server mute is enforced at the SFU, not just in the client: microphone is
-// removed from the participant's allowed sources while screen sharing and data
-// remain intact, and the live microphone track is muted immediately. A failed
-// mute falls back to disconnecting the participant; the durable row then keeps
-// microphone out of every freshly issued admission token.
-function resolveServerMutePermission(currentPermission = {}, muted) {
-  const declaredSources = Array.isArray(currentPermission.canPublishSources)
-    ? currentPermission.canPublishSources
-    : [];
-  const currentSources = declaredSources.length > 0
-    ? declaredSources
-    : [TrackSource.MICROPHONE, TrackSource.SCREEN_SHARE, TrackSource.SCREEN_SHARE_AUDIO];
-  const canPublishSources = muted
-    ? currentSources.filter((source) => source !== TrackSource.MICROPHONE)
-    : [...new Set([...currentSources, TrackSource.MICROPHONE])];
-  return { ...currentPermission, canPublishSources };
-}
-
-async function setLiveKitParticipantMuted(roomId, peerId, muted) {
-  const livekit = getLiveKitConfig();
-  if (!livekit.enabled) return;
-  const service = new RoomServiceClient(livekit.adminUrl, livekit.apiKey, livekit.apiSecret);
-  const roomName = getLiveKitRoomName(roomId);
-  try {
-    const participant = await service.getParticipant(roomName, peerId);
-    // Preserve every unrelated grant. A microphone moderation action must not
-    // widen subscriptions/data grants or revoke screen-share publication.
-    await service.updateParticipant(
-      roomName,
-      peerId,
-      undefined,
-      resolveServerMutePermission(participant?.permission || {}, muted)
-    );
-    if (muted) {
-      // Microphone only — a moderator mute must not silence the participant's
-      // screen-share audio.
-      const microphoneTracks = (participant?.tracks || [])
-        .filter((track) => track.source === TrackSource.MICROPHONE && !track.muted);
-      for (const track of microphoneTracks) {
-        await service.mutePublishedTrack(roomName, peerId, track.sid, true);
-      }
-    }
-  } catch (error) {
-    if (isLiveKitParticipantAlreadyGone(error)) return { status: 'offline' };
-    getProcessLogger().error({ evt: LOG_EVENTS.LIVEKIT_MUTE_FAILED, roomId, peerId, err: error }, 'failed to apply a LiveKit server mute');
-    if (muted) {
-      try {
-        await service.removeParticipant(roomName, peerId);
-        return { status: 'disconnected' };
-      } catch (disconnectError) {
-        throw new AggregateError([error, disconnectError], 'LiveKit server mute and disconnect both failed', { cause: error });
-      }
-    }
-    throw error;
-  }
-  return { status: 'applied' };
-}
-
 function liveKitGatePrincipalForPeer(roomId, peer) {
   return getRoomStore().normalizeGatePrincipal({
     accountUserId: peer.accountUserId || null,
@@ -3598,19 +3293,6 @@ async function handleKickRoomPeer(req, res, roomId) {
   sendJson(res, 200, { ok: true });
 }
 
-async function revokeGateCredentialsForServerMute(roomId, peer, principal) {
-  const boundary = getCredentialBoundary();
-  if (!boundary) return;
-  try {
-    await boundary.revokePrincipal({ roomId, principal });
-  } catch (error) {
-    // The live SFU permission is still narrowed below; only a later reconnect
-    // with the old admission would regain the microphone.
-    recordCredentialRevokeCleanupFailure();
-    getProcessLogger().error({ evt: LOG_EVENTS.LIVEKIT_MUTE_FAILED, roomId, peerId: peer.id, err: error }, 'failed to revoke gate credentials for a server mute');
-  }
-}
-
 // Owner-only microphone mute. `muted` in the body picks the direction so the
 // menu can toggle without tracking which endpoint to call.
 async function handleServerMuteRoomPeer(req, res, roomId) {
@@ -3652,7 +3334,7 @@ async function handleServerMuteRoomPeer(req, res, roomId) {
   // Every gate credential issued before the mute was paired with a JWT that
   // still grants the microphone. Revoke them so a reconnect has to fetch a
   // fresh admission, which the durable mute row keeps microphone-free.
-  if (muted) await revokeGateCredentialsForServerMute(room.id, peer, principal);
+  if (muted) await admissionService.revokeForServerMute({ roomId: room.id, peerId: peer.id, principal, log: getProcessLogger() });
   await setLiveKitParticipantMuted(room.id, peer.id, muted);
 
   const event = { type: 'peer-updated', peer: publicPeer(peer) };
@@ -5077,6 +4759,18 @@ function createApiApp({
       request.log?.error?.({ evt: LOG_EVENTS.HTTP_HANDLER_FAILED, route, err: error }, 'route handler failed');
     }
   });
+  admissionService = createAdmissionService({
+    livekitConfig: getLiveKitConfig,
+    credentialProvider: getLiveKitCredentialProvider,
+    credentialBoundary: getCredentialBoundary,
+    store: getRoomStore,
+    roomExists: async (roomId) => Boolean(await getRoom(roomId)),
+    findRoomBan,
+    waitForRosterPeer,
+    memberships: getMembershipServices,
+    roomName: getLiveKitRoomName,
+    recordRevokeFailure: recordCredentialRevokeCleanupFailure
+  });
   const apiContext = {
     logger: appLogger,
     clientIp: (req) => getClientIp(req, TRUST_PROXY),
@@ -5155,6 +4849,7 @@ function createApiApp({
     reply.headers(baseHeaders()).code(404).send({ ok: false, error: 'Not found' });
   });
 
+  registerAdmissionRoutes(app, apiContext, admissionService);
   registerOpsRoutes(app, apiContext, {
     readiness: activeReadinessProvider,
     livekitEnabled: () => getLiveKitConfig().enabled,
@@ -5378,7 +5073,6 @@ function createApiApp({
   app.delete('/api/rooms/:roomId/chat/:messageId', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
     return handleDeleteRoomChatMessage(req, res, normalizeRoomId(request.params.roomId), request.params.messageId);
   }));
-  app.post('/api/livekit-token', (request, reply) => runLegacyHandler(request, reply, handleLiveKitToken));
   app.post('/api/state', (request, reply) => runLegacyHandler(request, reply, handleState));
 
   app.get('/api/friends', (request, reply) => runLegacyHandler(request, reply, handleFriendsList));
@@ -5622,9 +5316,6 @@ if (import.meta.main) {
 
 export const __private = {
     pruneRooms,
-    revokeIssuedAdmission,
-    resolveServerMutePermission,
-    isLiveKitParticipantAlreadyGone,
     resolveCursorHmacKeys,
     resolveRealtimeReconnectLeaseMs
   };

@@ -87,7 +87,7 @@ function parseArgs(argv) {
   return args;
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (import.meta.main) {
   const args = parseArgs(process.argv.slice(2));
   const config = JSON.parse(fs.readFileSync(args.config, "utf8"));
   const violations = checkImportBoundaries({ config, files: args.files.length ? args.files.map(normalizePath) : undefined });

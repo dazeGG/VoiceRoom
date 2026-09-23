@@ -21,16 +21,19 @@ function close(server) { return new Promise((resolve)=>server.close(()=>resolve(
 function upgrade(port, requestPath) { return new Promise((resolve,reject)=>{ const socket=net.connect(port,'127.0.0.1',()=>socket.write(`GET ${requestPath} HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Key: dGVzdA==\r\nSec-WebSocket-Version: 13\r\n\r\n`)); let response=''; socket.on('data',(chunk)=>{response+=chunk; if(response.includes('\r\n\r\n'))socket.end();}); socket.on('end',()=>resolve(response)); socket.on('error',reject); }); }
 
 test('G48 supplemental source contract keeps admission ordering visible', () => {
-  const source = fs.readFileSync(path.resolve(import.meta.dirname, '../src/server.js'), 'utf8');
-  const start = source.indexOf('async function handleLiveKitToken');
-  const end = source.indexOf('\nfunction handlePowChallenge', start);
+  const source = fs.readFileSync(path.resolve(import.meta.dirname, '../src/domains/admission/admission.service.ts'), 'utf8');
+  const start = source.indexOf('async function admit');
+  const end = source.indexOf('\n  async function revokeForServerMute', start);
   const handler = source.slice(start, end);
+  assert.ok(start > 0 && end > start);
   assert.match(handler, /findRoomBan/);
   assert.match(handler, /normalizeGatePrincipal/);
   assert.match(handler, /provider\.issueAdmission/);
   assert.match(handler, /persistSuccessfulAdmission/);
-  assert.match(handler, /revokeIssuedAdmission/);
-  assert.ok(handler.indexOf('provider.issueAdmission') < handler.indexOf('persistSuccessfulAdmission'));
+  assert.match(source, /export async function revokeIssuedAdmission/);
+  assert.ok(handler.indexOf('waitForRosterPeer') < handler.indexOf('provider.issueAdmission'));
+  assert.ok(handler.indexOf('provider.issueAdmission') < handler.lastIndexOf('findRoomBan'));
+  assert.ok(handler.lastIndexOf('findRoomBan') < handler.indexOf('persistSuccessfulAdmission'));
 });
 
 test('G48 supplemental source contract keeps revoke-before-remove ordering visible', () => {
