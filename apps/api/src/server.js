@@ -82,7 +82,7 @@ import { registerPeerModerationRoutes } from './domains/rooms/peer-moderation.ro
 import { publicLobbyRoom as lobbyRoomView, publicPeer, roomBanned } from './domains/rooms/room-views.ts';
 import { ownerRefusal, registerRoomRoutes } from './domains/rooms/rooms.routes.ts';
 import { createRoomsService } from './domains/rooms/rooms.service.ts';
-import { cleanUuid, messageFingerprint, normalizeAttachmentIds, requestIdempotencyKey } from './domains/messaging/message-input.ts';
+import { cleanUuid } from './domains/messaging/message-input.ts';
 import { publicChatMessage } from './domains/messaging/room-chat-views.ts';
 import { registerRoomChatRoutes } from './domains/messaging/room-chat.routes.ts';
 import { createRoomChatService } from './domains/messaging/room-chat.service.ts';
@@ -91,7 +91,9 @@ import { createAccountService } from './domains/account/account.service.ts';
 import { createSessionCookies } from './domains/account/session-cookie.ts';
 import { registerFriendsRoutes } from './domains/social/friends.routes.ts';
 import { createFriendsService } from './domains/social/friends.service.ts';
-import { isActiveAccount, notificationActor } from './domains/social/social-views.ts';
+import { notificationActor } from './domains/social/social-views.ts';
+import { registerDirectMessageRoutes } from './domains/messaging/direct-messages.routes.ts';
+import { createDirectMessagesService } from './domains/messaging/direct-messages.service.ts';
 import { createAdmissionService } from './domains/admission/admission.service.ts';
 import { createLiveKitAdmin } from './domains/admission/livekit-admin.ts';
 import { readLiveKitConfig } from './domains/admission/livekit-config.ts';
@@ -120,7 +122,6 @@ import { registerRoomHistoryRoutes } from './domains/messaging/room-history-rout
 import { createRoomMessageRepository } from './domains/messaging/room-message-repository.js';
 import { createContentRepository } from './domains/messaging/content-repository.js';
 import { createReplyRepository } from './domains/messaging/reply-repository.js';
-import { requireReplyTarget } from './domains/messaging/reply-projector.js';
 import { createReactionRepository } from './domains/messaging/reaction-repository.js';
 import { createReactionService } from './domains/messaging/reaction-service.js';
 import { createReactionRealtimeAdapter } from './domains/messaging/reaction-realtime-adapter.js';
@@ -1144,6 +1145,29 @@ const friendsService = createFriendsService({
   ringLimiter,
   ringTtlMs: RING_TTL_MS
 });
+const directMessages = createDirectMessagesService({
+  messages: getMessageService,
+  readService: () => getHistoryServices().read,
+  friends: getFriendStore,
+  findUser: (userId) => getUserStore().getUserById(userId),
+  isDmMuted: async (userId, peerUserId) => {
+    const notifications = getNotificationStore();
+    return typeof notifications.isDmMuted === 'function' ? notifications.isDmMuted({ userId, peerUserId }) : false;
+  },
+  roomExists: async (roomId) => Boolean(await getRoom(roomId)),
+  expireRoomInvitations: (senderId, roomId) => expireRoomInvitations(senderId, roomId),
+  feature: release250FeatureEnabled,
+  limiter: dmLimiter,
+  media: getMediaServices,
+  replies: () => createReplyRepository({ client: getRelease250Pool() }),
+  delivery: getMessageDeliveryServices,
+  projectMedia: attachMediaProjection,
+  projectReply: attachReplyProjection,
+  directEmit: MESSAGE_DIRECT_EMIT_ENABLED,
+  notifyUser: (userId, event) => broadcastToUser(userId, event),
+  notifyRecipient: (recipientId, sender, message) => broadcastDmNotification(recipientId, sender, message),
+  scheduleLinkPreview: scheduleDirectLinkPreview
+});
 
 function liveKitGatePrincipalForPeer(roomId, peer) {
   return gatePrincipalForPeer(getRoomStore(), roomId, peer);
@@ -1906,18 +1930,6 @@ async function endAccountSessionConnections({ userId = null, tokenHashes = null 
 
 // --- Friends, requests, and direct messages -----------------------------
 
-// Normalize a DM body without destroying multi-line formatting: collapse runs
-// of horizontal whitespace, trim spaces around newlines, cap consecutive blank
-// lines, then trim and length-limit.
-function cleanDmText(value) {
-  return String(value || '')
-    .replace(/[^\S\n]+/g, ' ')
-    .replace(/ *\n */g, '\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim()
-    .slice(0, 2000);
-}
-
 async function requireSessionUser(req, res) {
   const session = await resolveSessionUser(req);
   if (!session) {
@@ -1925,252 +1937,6 @@ async function requireSessionUser(req, res) {
     return null;
   }
   return session.user;
-}
-
-async function handleDmThread(req, res, peerId) {
-  const user = await requireSessionUser(req, res);
-  if (!user) return;
-
-  const id = cleanUuid(peerId);
-  if (!id || id === user.id) {
-    sendJson(res, 404, { ok: false, error: 'Диалог не найден' });
-    return;
-  }
-
-  if (!(await getFriendStore().areFriends(user.id, id))) {
-    sendJson(res, 403, { ok: false, error: 'Вы не друзья' });
-    return;
-  }
-
-  const peer = await getUserStore().getUserById(id);
-  if (!peer) {
-    sendJson(res, 404, { ok: false, error: 'Пользователь не найден' });
-    return;
-  }
-
-  const storedMessages = await getMessageService().direct.listThread({ userId: user.id, peerId: id });
-  const messages = await Promise.all(storedMessages.map(async (message) => attachReplyProjection(
-    'dm',
-    await attachMediaProjection('dm', message),
-    { userId: user.id, peerId: id }
-  )));
-  // Opening the thread clears the unread badge and lets the peer see the read.
-  const read = await getMessageService().direct.markRead({ userId: user.id, peerId: id });
-  if (read.count > 0) {
-    broadcastToUser(id, { type: 'dm-read', userId: user.id });
-  }
-
-  const notifications = getNotificationStore();
-  const muted = typeof notifications.isDmMuted === 'function'
-    ? await notifications.isDmMuted({ userId: user.id, peerUserId: id })
-    : false;
-  sendJson(res, 200, { ok: true, peer: publicUser(peer), messages, muted });
-}
-
-async function handleSendDm(req, res, peerId) {
-  const user = await requireSessionUser(req, res);
-  if (!user) return;
-
-  const id = cleanUuid(peerId);
-  if (!id || id === user.id) {
-    sendJson(res, 404, { ok: false, error: 'Диалог не найден' });
-    return;
-  }
-
-  const rate = dmLimiter.check(user.id);
-  if (!rate.allowed) {
-    sendJson(
-      res,
-      429,
-      { ok: false, error: 'Слишком много сообщений, попробуйте позже', retryAfterSeconds: rate.retryAfterSeconds },
-      { 'Retry-After': String(rate.retryAfterSeconds) }
-    );
-    return;
-  }
-
-  if (!(await getFriendStore().areFriends(user.id, id))) {
-    sendJson(res, 403, { ok: false, error: 'Вы не друзья' });
-    return;
-  }
-  if (await getFriendStore().isBlockedBetween(user.id, id)) {
-    sendJson(res, 403, { ok: false, code: 'relationship_blocked', error: 'Сообщение недоступно' });
-    return;
-  }
-  if (!isActiveAccount(await getUserStore().getUserById(id))) {
-    sendJson(res, 403, { ok: false, code: 'account_deleted', error: 'Аккаунт удалён' });
-    return;
-  }
-
-  const body = await readJsonBody(req);
-  const text = cleanDmText(body.text);
-  const attachmentIds = normalizeAttachmentIds(body.attachmentIds);
-  const replyToMessageId = body.replyTo == null ? '' : cleanUuid(body.replyTo?.messageId);
-  const idempotencyKey = requestIdempotencyKey(req, body);
-  if (attachmentIds === null) {
-    sendJson(res, 400, { ok: false, error: 'Invalid attachments' });
-    return;
-  }
-  if (body.replyTo != null && (!replyToMessageId || !release250FeatureEnabled('replies'))) {
-    sendJson(res, 409, { ok: false, error: 'Reply target is unavailable' });
-    return;
-  }
-  if (!text && attachmentIds.length === 0) {
-    sendJson(res, 400, { ok: false, error: 'Пустое сообщение' });
-    return;
-  }
-
-  const media = attachmentIds.length > 0 ? getMediaServices() : null;
-  const replies = replyToMessageId ? createReplyRepository({ client: getRelease250Pool() }) : null;
-  const delivery = getMessageDeliveryServices();
-  let idempotencyLedgerKey = '';
-  let replyPreview;
-  if (attachmentIds.length > 0 && (!media || !release250FeatureEnabled('mediaUploads'))) {
-    sendJson(res, 503, { ok: false, error: 'Media uploads are unavailable' });
-    return;
-  }
-  const storedMessage = await getMessageService().direct.sendMessage({
-    senderId: user.id,
-    recipientId: id,
-    body: text,
-    replyToMessageId: replyToMessageId || null,
-    beforeUnitOfWork: idempotencyKey && delivery
-      ? async (client) => {
-          const reservation = await delivery.idempotency.reserve(client, {
-            actorType: 'account',
-            actorId: user.id,
-            conversation: { type: 'dm', id },
-            key: idempotencyKey,
-            fingerprint: messageFingerprint({ text, attachmentIds, replyToMessageId })
-          });
-          if (reservation.kind === 'replay') {
-            return { replay: true, message: reservation.response.body?.message };
-          }
-          idempotencyLedgerKey = reservation.ledgerKey;
-          return null;
-        }
-      : null,
-    unitOfWork: attachmentIds.length > 0 || replyToMessageId || delivery
-      ? async (client, inserted) => {
-          if (replyToMessageId) {
-            const target = await replies.lockDirectTarget({ userId: user.id, peerId: id, messageId: replyToMessageId, client });
-            replyPreview = await requireReplyTarget({ message: target, visibility: true });
-          }
-          if (attachmentIds.length > 0) {
-            await media.attachments.bindReady({
-              ownerId: user.id,
-              context: 'dm',
-              messageId: inserted.id,
-              attachmentIds
-            }, client);
-          }
-          if (delivery) {
-            await delivery.outbox.enqueue(client, {
-              eventId: crypto.randomUUID(),
-              type: 'message.created',
-              conversation: { type: 'dm', id },
-              messageId: inserted.id,
-              message: inserted
-            });
-          }
-          if (idempotencyLedgerKey) {
-            await delivery.idempotency.complete(client, idempotencyLedgerKey, {
-              body: { message: inserted },
-              messageId: inserted.id,
-              statusCode: 201
-            });
-          }
-        }
-      : null
-  });
-  const projectedBase = await attachMediaProjection('dm', storedMessage);
-  const message = storedMessage.idempotencyReplay
-    ? await attachReplyProjection('dm', projectedBase, { userId: user.id, peerId: id })
-    : { ...projectedBase, replyPreview };
-  // Deliver to the recipient and the sender's other tabs; clients dedupe by id.
-  if (!storedMessage.idempotencyReplay && MESSAGE_DIRECT_EMIT_ENABLED) {
-    broadcastToUser(id, { type: 'dm-message', message });
-    await broadcastDmNotification(id, user, message);
-    broadcastToUser(user.id, { type: 'dm-message', message });
-  }
-  if (!storedMessage.idempotencyReplay) {
-    scheduleDirectLinkPreview({ messageId: storedMessage.id, senderId: user.id, recipientId: id, text });
-  }
-  sendJson(res, 201, { ok: true, message });
-}
-
-// The invited recipient accepts or declines a room invitation stored as a DM.
-// The updated message fans out as a regular edit so both timelines converge.
-async function handleRespondDmInvite(req, res, peerIdParam, messageId) {
-  const user = await requireSessionUser(req, res);
-  if (!user) return;
-
-  const peerId = cleanUuid(peerIdParam);
-  if (!peerId) {
-    sendJson(res, 404, { ok: false, error: 'Диалог не найден' });
-    return;
-  }
-
-  const body = await readJsonBody(req);
-  const action = body.action === 'accept' ? 'accepted' : body.action === 'decline' ? 'declined' : '';
-  if (!action) {
-    sendJson(res, 400, { ok: false, error: 'Неверное действие' });
-    return;
-  }
-
-  const current = await getMessageService().direct.getMessage(user.id, peerId, messageId);
-  if (!current || !current.invite) {
-    sendJson(res, 404, { ok: false, error: 'Приглашение не найдено' });
-    return;
-  }
-  if (current.recipientId !== user.id) {
-    sendJson(res, 403, { ok: false, error: 'Отвечать может только приглашённый' });
-    return;
-  }
-  if (action === 'accepted' && !(await getRoom(current.invite.roomId))) {
-    await expireRoomInvitations(current.senderId, current.invite.roomId);
-    sendJson(res, 410, { ok: false, error: 'Комната больше не существует' });
-    return;
-  }
-
-  const message = await getMessageService().direct.respondInvite({ messageId, recipientId: user.id, status: action });
-  if (!message) {
-    sendJson(res, 409, { ok: false, error: 'Приглашение уже обработано' });
-    return;
-  }
-
-  const event = { type: 'dm.message.edited', message };
-  broadcastToUser(peerId, event);
-  broadcastToUser(user.id, event);
-  sendJson(res, 200, { ok: true, message });
-}
-
-async function handleMarkDmRead(req, res, peerId) {
-  const user = await requireSessionUser(req, res);
-  if (!user) return;
-
-  const id = cleanUuid(peerId);
-  if (!id) {
-    sendJson(res, 404, { ok: false, error: 'Диалог не найден' });
-    return;
-  }
-
-  const body = await readJsonBody(req);
-  if (typeof body.cursor === 'string' && body.cursor) {
-    try {
-      const result = await getHistoryServices().read.advanceDm({ cursor: body.cursor, peerId: id, userId: user.id });
-      broadcastToUser(id, { type: 'dm-read', userId: user.id, cursor: body.cursor });
-      sendJson(res, 200, { ok: true, ...result });
-    } catch (error) {
-      sendJson(res, error.statusCode || 400, { ok: false, code: error.code || 'invalid_read_cursor', error: error.message });
-    }
-    return;
-  }
-
-  const result = await getMessageService().direct.markRead({ userId: user.id, peerId: id });
-  if (result.count > 0) {
-    broadcastToUser(id, { type: 'dm-read', userId: user.id });
-  }
-  sendJson(res, 200, { ok: true, count: result.count });
 }
 
 // --- Notification preferences -------------------------------------------
@@ -2405,104 +2171,6 @@ async function handleSetPresenceStatus(req, res, request) {
   });
   await publishPresenceStatusUpdate(user, result, request);
   sendNotificationMutationResult(res, result);
-}
-
-async function handleDeleteDmMessage(req, res, peerIdParam, messageId) {
-  const user = await requireSessionUser(req, res);
-  if (!user) return;
-
-  const peerId = cleanUuid(peerIdParam);
-  if (!peerId) {
-    sendJson(res, 404, { ok: false, error: 'Диалог не найден' });
-    return;
-  }
-
-  const msg = await getMessageService().direct.getMessage(user.id, peerId, messageId);
-  if (!msg) {
-    sendJson(res, 404, { ok: false, error: 'Сообщение не найдено' });
-    return;
-  }
-
-  // Only sender can delete own message (deletes for both)
-  if (msg.senderId !== user.id) {
-    sendJson(res, 403, { ok: false, error: 'Можно удалять только свои сообщения' });
-    return;
-  }
-
-  const deleted = await getMessageService().direct.softDeleteMessage(messageId);
-  if (!deleted) {
-    sendJson(res, 404, { ok: false, error: 'Сообщение не найдено' });
-    return;
-  }
-
-  // Each side indexes the event by the other participant's id.
-  broadcastToUser(peerId, { type: 'dm.message.deleted', messageId, peerUserId: user.id });
-  broadcastToUser(user.id, { type: 'dm.message.deleted', messageId, peerUserId: peerId });
-
-  // If the deleted msg was unread for the other side, they may recalc, we can also send dm-read like bump?
-  // For simplicity, let client re-fetch count on delete event if needed.
-
-  sendJson(res, 200, { ok: true, deleted: true });
-}
-
-async function handleEditDmMessage(req, res, peerIdParam, messageId) {
-  const user = await requireSessionUser(req, res);
-  if (!user) return;
-
-  const peerId = cleanUuid(peerIdParam);
-  if (!peerId) {
-    sendJson(res, 404, { ok: false, error: 'Диалог не найден' });
-    return;
-  }
-
-  const body = await readJsonBody(req);
-  const text = cleanDmText(body.text);
-  if (!text) {
-    sendJson(res, 400, { ok: false, error: 'Пустое сообщение' });
-    return;
-  }
-
-  const current = await getMessageService().direct.getMessage(user.id, peerId, messageId);
-  if (!current) {
-    sendJson(res, 404, { ok: false, error: 'Сообщение не найдено' });
-    return;
-  }
-  if (current.senderId !== user.id) {
-    sendJson(res, 403, { ok: false, error: 'Можно редактировать только свои сообщения' });
-    return;
-  }
-  if (current.invite) {
-    sendJson(res, 403, { ok: false, error: 'Приглашение нельзя редактировать' });
-    return;
-  }
-
-  const rate = dmLimiter.check(user.id);
-  if (!rate.allowed) {
-    sendJson(
-      res,
-      429,
-      { ok: false, error: 'Слишком много сообщений, попробуйте позже', retryAfterSeconds: rate.retryAfterSeconds },
-      { 'Retry-After': String(rate.retryAfterSeconds) }
-    );
-    return;
-  }
-
-  const message = await getMessageService().direct.editMessage({
-    messageId,
-    senderId: user.id,
-    recipientId: peerId,
-    body: text
-  });
-  if (!message) {
-    sendJson(res, 404, { ok: false, error: 'Сообщение не найдено' });
-    return;
-  }
-
-  scheduleDirectLinkPreview({ messageId, senderId: user.id, recipientId: peerId, text, edited: true });
-  const event = { type: 'dm.message.edited', message };
-  broadcastToUser(peerId, event);
-  broadcastToUser(user.id, event);
-  sendJson(res, 200, { ok: true, message });
 }
 
 function getApiRoutePath(pathname) {
@@ -2803,6 +2471,7 @@ function createApiApp({
   registerPeerModerationRoutes(app, apiContext, { rooms: roomsService, moderation: peerModeration });
   registerRoomChatRoutes(app, apiContext, roomChat);
   registerFriendsRoutes(app, apiContext, { friends: friendsService, requestLimiter: friendRequestLimiter });
+  registerDirectMessageRoutes(app, apiContext, directMessages);
   registerAccountRoutes(app, apiContext, {
     account: accountService,
     limiter: authLimiter,
@@ -2957,24 +2626,6 @@ function createApiApp({
     return handleGetLinkPreviewImage(res, request.params.key);
   }));
 
-  app.get('/api/dm/:userId', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
-    return handleDmThread(req, res, request.params.userId);
-  }));
-  app.post('/api/dm/:userId', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
-    return handleSendDm(req, res, request.params.userId);
-  }));
-  app.post('/api/dm/:userId/invites/:messageId/respond', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
-    return handleRespondDmInvite(req, res, request.params.userId, request.params.messageId);
-  }));
-  app.post('/api/dm/:userId/read', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
-    return handleMarkDmRead(req, res, request.params.userId);
-  }));
-  app.patch('/api/dm/:userId/messages/:messageId', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
-    return handleEditDmMessage(req, res, request.params.userId, request.params.messageId);
-  }));
-  app.delete('/api/dm/:userId/messages/:messageId', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
-    return handleDeleteDmMessage(req, res, request.params.userId, request.params.messageId);
-  }));
   app.get('/api/notifications/preferences', (request, reply) => runLegacyHandler(request, reply, handleNotificationPreferences));
   app.put('/api/notifications/dm/:userId/mute', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
     return handleSetDmMute(req, res, request.params.userId);
