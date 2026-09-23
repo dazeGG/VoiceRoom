@@ -8,6 +8,10 @@ import { createWsHandler } from './realtime/ws-handler.js';
 import { createRoomRealtimeRuntime } from './realtime/room-runtime.js';
 import { buildServerEnvelope } from './realtime/envelope.js';
 import { createRoomPresence } from './realtime/room-presence.ts';
+import { createLinkPreviewEvents } from './domains/link-previews/link-preview-events.ts';
+import { createMessageDeliveryRelay } from './domains/messaging/message-delivery-relay.ts';
+import { createMessageProjection } from './domains/messaging/message-projection.ts';
+import { createNotificationDispatch } from './domains/notifications/notification-dispatch.ts';
 import { URL } from 'node:url';
 
 import {
@@ -40,7 +44,6 @@ import {
 import { getClientIp, createFailureLimiter, createRateLimiter } from './lib/rate-limit.js';
 import { reconcileAvatarStorage } from './lib/avatar-reconciliation.js';
 import { createAvatarStorage } from './lib/avatar-storage.js';
-import { firstPreviewableUrl } from '@voice-room/shared/link-preview';
 import { createLinkPreviewFetcher } from './lib/link-preview-fetcher.js';
 import { processLinkPreviewImage } from './lib/link-preview-image.js';
 import { createLinkPreviewStorage, reconcileLinkPreviewImages } from './lib/link-preview-storage.js';
@@ -56,7 +59,7 @@ import { createAccountDeletionRepository } from './domains/account/account-delet
 import { createFriendStore } from './lib/friend-store.js';
 import { createNotificationStore } from './lib/notification-store.js';
 import { createPushStore } from './lib/push-store.js';
-import { createPushService, resolvePushTtl, shouldDeliverPush } from './lib/push-service.js';
+import { createPushService } from './lib/push-service.js';
 import { startApiListener } from './lib/listen.js';
 import { assertMigrationReady, runMigrations } from './lib/migrate.js';
 import { createRelease250Pool } from './lib/release-250-pool.js';
@@ -306,7 +309,6 @@ let moderationServices = null;
 let mediaServices = null;
 let activeBanService = null;
 let messageDeliveryServices = null;
-let messageDeliveryListener = null;
 
 let wsRegistry = null;
 let roomRuntime = null;
@@ -329,6 +331,44 @@ const {
   sendEvent,
   waitForRosterPeer
 } = roomPresence;
+const messageProjection = createMessageProjection({
+  attachments: () => getMediaServices()?.attachments ?? null,
+  replies: () => {
+    const pool = getRelease250Pool();
+    return pool ? createReplyRepository({ client: pool }) : null;
+  }
+});
+const notificationDispatch = createNotificationDispatch({
+  push: () => getPushService(),
+  preferences: (userId) => getNotificationStore().getPreferences(userId),
+  notifyUser: (userId, event) => broadcastToUser(userId, event),
+  logger: () => getProcessLogger()
+});
+const linkPreviewEvents = createLinkPreviewEvents({
+  previews: () => getLinkPreviewService(),
+  roomMessage: (roomId, messageId) => getMessageService().room.getMessage(roomId, messageId),
+  directMessage: (senderId, recipientId, messageId) => getMessageService().direct.getMessage(senderId, recipientId, messageId),
+  projection: messageProjection,
+  publicChatMessage,
+  broadcastRoomEdit: (roomId, message) => roomRuntime?.broadcastRoomDetail?.(roomId, buildServerEnvelope('room.chat.edited', { roomId, message })),
+  notifyUser: (userId, event) => broadcastToUser(userId, event)
+});
+const messageDeliveryRelay = createMessageDeliveryRelay({
+  enabled: MESSAGE_DELIVERY_LISTEN_ENABLED,
+  pool: () => getRelease250Pool(),
+  outbox: () => getMessageDeliveryServices()?.outbox ?? null,
+  projection: messageProjection,
+  broadcastChatMessage: (roomId, message) => roomRuntime?.broadcastChatMessage(roomId, message),
+  notifyUser: (userId, event) => broadcastToUser(userId, event),
+  findUser: (userId) => getUserStore().getUserById(userId),
+  broadcastDmNotification: (recipientId, sender, message) => notificationDispatch.broadcastDmNotification(recipientId, sender, message),
+  publicChatMessage,
+  logger: () => getProcessLogger()
+});
+const { projectMedia: attachMediaProjection, projectReply: attachReplyProjection } = messageProjection;
+const { queuePush, broadcastDmNotification } = notificationDispatch;
+const { broadcastRoomLinkPreview, broadcastDirectLinkPreview, scheduleRoomLinkPreview, scheduleDirectLinkPreview } = linkPreviewEvents;
+const { start: startMessageDeliveryListener, stop: stopMessageDeliveryListener } = messageDeliveryRelay;
 
 // Work that runs outside a request (timers, listeners, background dispatch)
 // still has to be searchable next to the requests it was triggered by, so it
@@ -564,64 +604,6 @@ function getMessageDeliveryServices() {
   return messageDeliveryServices;
 }
 
-async function dispatchMessageDeliveryEvent(event) {
-  if (!event || event.type !== 'message.created' || !event.message) return;
-  if (event.conversation?.type === 'room') {
-    const roomId = event.conversation.id;
-    const projected = await attachReplyProjection(
-      'room',
-      await attachMediaProjection('room', event.message),
-      { roomId }
-    );
-    roomRuntime?.broadcastChatMessage(roomId, publicChatMessage(projected));
-    return;
-  }
-  if (event.conversation?.type === 'dm') {
-    const message = event.message;
-    const peerId = message.senderId === event.conversation.id ? message.recipientId : event.conversation.id;
-    const projected = await attachReplyProjection(
-      'dm',
-      await attachMediaProjection('dm', message),
-      { userId: message.senderId, peerId }
-    );
-    broadcastToUser(message.senderId, { type: 'dm-message', message: projected });
-    broadcastToUser(message.recipientId, { type: 'dm-message', message: projected });
-    // The direct-emit path notifies right after sending; the relayed path has to
-    // do the same or DMs never raise a system notification.
-    const sender = await getUserStore().getUserById(message.senderId).catch(() => null);
-    if (sender) await broadcastDmNotification(message.recipientId, sender, projected);
-  }
-}
-
-async function startMessageDeliveryListener() {
-  if (!MESSAGE_DELIVERY_LISTEN_ENABLED || messageDeliveryListener) return;
-  const pool = getRelease250Pool();
-  const delivery = getMessageDeliveryServices();
-  if (!pool || !delivery) return;
-  const client = await pool.connect();
-  const onNotification = (notification) => {
-    if (notification.channel !== 'voice_room_message_delivery') return;
-    void (async () => {
-      const parsed = JSON.parse(notification.payload || '{}');
-      const row = parsed.eventId ? await delivery.outbox.getEvent(parsed.eventId) : null;
-      if (row?.payload) await dispatchMessageDeliveryEvent(row.payload);
-    })().catch((error) => getProcessLogger().error({ evt: LOG_EVENTS.MESSAGE_EVENT_DISPATCH_FAILED, err: error }, 'failed to dispatch a durable message event'));
-  };
-  client.on('notification', onNotification);
-  client.on('error', (error) => getProcessLogger().error({ evt: LOG_EVENTS.MESSAGE_LISTENER_FAILED, err: error }, 'message delivery listener failed'));
-  await client.query('LISTEN voice_room_message_delivery');
-  messageDeliveryListener = { client, onNotification };
-}
-
-async function stopMessageDeliveryListener() {
-  const listener = messageDeliveryListener;
-  messageDeliveryListener = null;
-  if (!listener) return;
-  listener.client.off('notification', listener.onNotification);
-  await listener.client.query('UNLISTEN voice_room_message_delivery').catch(() => {});
-  listener.client.release();
-}
-
 function getNotificationServices() {
   if (notificationServices) return notificationServices;
   const pool = getRelease250Pool();
@@ -758,38 +740,6 @@ function getMediaServices() {
   return mediaServices;
 }
 
-function publicAttachment(attachment) {
-  return {
-    id: attachment.id,
-    context: attachment.context,
-    order: attachment.order,
-    mimeType: attachment.mimeType,
-    bytes: attachment.processedBytes || attachment.originalBytes,
-    width: attachment.width,
-    height: attachment.height,
-    state: attachment.state,
-    url: attachment.state === 'ready' ? `/api/media/attachments/${encodeURIComponent(attachment.id)}/preview` : null
-  };
-}
-
-async function attachMediaProjection(context, message) {
-  const media = getMediaServices();
-  if (!media || !message?.id) return { ...message, attachments: [] };
-  const attachments = await media.attachments.listForMessage(context, message.id);
-  return { ...message, attachments: attachments.map(publicAttachment) };
-}
-
-async function attachReplyProjection(context, message, { roomId, userId, peerId } = {}) {
-  if (!message?.replyTo?.messageId) return message;
-  const pool = getRelease250Pool();
-  if (!pool) return message;
-  const replies = createReplyRepository({ client: pool });
-  const replyPreview = context === 'room'
-    ? await replies.getRoomPreview({ roomId, messageId: message.replyTo.messageId })
-    : await replies.getDirectPreview({ userId, peerId, messageId: message.replyTo.messageId });
-  return { ...message, replyPreview };
-}
-
 function getCredentialBoundary() {
   if (credentialBoundary) return credentialBoundary;
   if (LIVEKIT_GATE_SECRET.length < 32) return null;
@@ -906,42 +856,6 @@ function getLinkPreviewService() {
   return linkPreviewService;
 }
 
-// A preview reaches readers as an edit of the message, re-read in full so it
-// carries its attachments and reply quote like any other copy of it.
-async function broadcastRoomLinkPreview({ roomId, messageId }) {
-  const message = await getMessageService().room.getMessage(roomId, messageId);
-  if (!message) return;
-  const projected = await attachReplyProjection('room', await attachMediaProjection('room', message), { roomId });
-  roomRuntime?.broadcastRoomDetail?.(
-    roomId,
-    buildServerEnvelope('room.chat.edited', { roomId, message: publicChatMessage(projected) })
-  );
-}
-
-async function broadcastDirectLinkPreview({ messageId, senderId, recipientId }) {
-  const message = await getMessageService().direct.getMessage(senderId, recipientId, messageId);
-  if (!message) return;
-  const projected = await attachReplyProjection('dm', await attachMediaProjection('dm', message), {
-    userId: senderId,
-    peerId: recipientId
-  });
-  const event = { type: 'dm.message.edited', message: projected };
-  broadcastToUser(recipientId, event);
-  broadcastToUser(senderId, event);
-}
-
-// Previews are built after the reply was sent. A new message without a link
-// needs no work; an edit always does, because it may have removed the link.
-function scheduleRoomLinkPreview(roomId, messageId, text, { edited = false } = {}) {
-  if (!edited && !firstPreviewableUrl(text)) return;
-  getLinkPreviewService()?.scheduleRoomMessage({ roomId, messageId, text });
-}
-
-function scheduleDirectLinkPreview({ messageId, senderId, recipientId, text, edited = false }) {
-  if (!edited && !firstPreviewableUrl(text)) return;
-  getLinkPreviewService()?.scheduleDirectMessage({ messageId, senderId, recipientId, text });
-}
-
 function isUserOnline(userId) {
   return Boolean(wsRegistry?.isUserOnline(userId));
 }
@@ -949,57 +863,6 @@ function isUserOnline(userId) {
 function broadcastToUser(userId, message) {
   if (!wsRegistry) return 0;
   return wsRegistry.broadcastAccountEvent(userId, message);
-}
-
-async function queuePush(userId, payload, context = {}) {
-  try {
-    if (!getPushService().config.enabled) return;
-    const preferences = await getNotificationStore().getPreferences(userId);
-    // Security alerts reach the account even in do-not-disturb.
-    if (!context.ignorePreferences && !shouldDeliverPush(preferences, context)) return;
-    const body = preferences.privateNotifications && payload.privateBody
-      ? payload.privateBody
-      : payload.body;
-    const { privateBody: _privateBody, ...publicPayload } = payload;
-    const ttl = resolvePushTtl(context);
-    if (ttl === null) return;
-    const deliveryContext = ttl === undefined ? context : { ...context, ttl };
-    await getPushService().sendToUser(userId, { ...publicPayload, body }, deliveryContext);
-  } catch (error) {
-    getProcessLogger().warn({ evt: LOG_EVENTS.PUSH_SEND_FAILED, userId, err: error }, 'failed to send a push notification');
-  }
-}
-
-async function broadcastDmNotification(recipientUserId, sender, message) {
-  if (!recipientUserId || recipientUserId === sender?.id) return 0;
-  try {
-    const preferences = await getNotificationStore().getPreferences(recipientUserId);
-    if (preferences.mutedPeerIds.includes(sender.id)) return 0;
-    const notification = {
-      type: 'notification.dm.message',
-      dedupeKey: `dm:${message.id}`,
-      peer: notificationActor(sender),
-      message: {
-        id: message.id,
-        body: message.body,
-        createdAt: message.createdAt
-      }
-    };
-    const broadcastCount = broadcastToUser(recipientUserId, notification);
-    void queuePush(recipientUserId, {
-      type: 'dm.message',
-      title: sender.displayName || sender.login || 'Новое сообщение',
-      body: message.body,
-      privateBody: 'Откройте VoiceRoom, чтобы прочитать сообщение.',
-      tag: `dm:${sender.id}`,
-      dedupeKey: notification.dedupeKey,
-      url: `/?dm=${encodeURIComponent(sender.id)}`
-    }, { peerUserId: sender.id });
-    return broadcastCount;
-  } catch (error) {
-    getProcessLogger().error({ evt: LOG_EVENTS.NOTIFICATION_BROADCAST_FAILED, err: error }, 'failed to broadcast a direct message notification');
-    return 0;
-  }
 }
 
 const pow = createProofOfWork({
