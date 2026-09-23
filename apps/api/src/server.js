@@ -5,8 +5,9 @@ import fastifyMultipart from '@fastify/multipart';
 import fastifyWebsocket from '@fastify/websocket';
 import { buildRoomMembershipPresenceSnapshot, createConnectionRegistry } from './realtime/registry.js';
 import { createWsHandler } from './realtime/ws-handler.js';
-import { clearViewedScreenPeerReferences, createRoomRealtimeRuntime, resolveViewedScreenPeerId } from './realtime/room-runtime.js';
+import { createRoomRealtimeRuntime } from './realtime/room-runtime.js';
 import { buildServerEnvelope } from './realtime/envelope.js';
+import { createRoomPresence } from './realtime/room-presence.ts';
 import { URL } from 'node:url';
 
 import {
@@ -307,13 +308,27 @@ let activeBanService = null;
 let messageDeliveryServices = null;
 let messageDeliveryListener = null;
 
-const presenceRooms = new Map();
 let wsRegistry = null;
 let roomRuntime = null;
-const roomOccupancyQueue = new Map();
-const roomOccupancyRetries = new Map();
-const ROOM_OCCUPANCY_RETRY_BASE_MS = 1000;
-const ROOM_OCCUPANCY_RETRY_MAX_MS = 30000;
+const roomPresence = createRoomPresence({
+  store: () => getRoomStore(),
+  runtime: () => roomRuntime,
+  logger: () => getProcessLogger(),
+  occupancyRetry: { baseMs: 1000, maxMs: 30000 },
+  roster: { waitMs: LIVEKIT_ROSTER_WAIT_MS, pollMs: ROSTER_POLL_INTERVAL_MS }
+});
+const presenceRooms = roomPresence.rooms;
+const {
+  attach: attachPresence,
+  broadcast,
+  closePeer,
+  peerCount: getPresencePeerCount,
+  prune: pruneRooms,
+  publishClearedScreenViewers,
+  queueOccupancy: queueRoomOccupancyTransition,
+  sendEvent,
+  waitForRosterPeer
+} = roomPresence;
 
 // Work that runs outside a request (timers, listeners, background dispatch)
 // still has to be searchable next to the requests it was triggered by, so it
@@ -987,27 +1002,6 @@ async function broadcastDmNotification(recipientUserId, sender, message) {
   }
 }
 
-function getPresenceRoom(roomId) {
-  let room = presenceRooms.get(roomId);
-  if (!room) {
-    room = { id: roomId, peers: new Map(), updatedAt: Date.now() };
-    presenceRooms.set(roomId, room);
-  }
-  return room;
-}
-
-function attachPresence(dbRoom) {
-  if (!dbRoom) return null;
-  const presence = getPresenceRoom(dbRoom.id);
-  if (dbRoom.peers instanceof Map && dbRoom.peers !== presence.peers) {
-    for (const [peerId, peer] of dbRoom.peers) {
-      if (!presence.peers.has(peerId)) presence.peers.set(peerId, peer);
-    }
-  }
-  dbRoom.peers = presence.peers;
-  return dbRoom;
-}
-
 const pow = createProofOfWork({
   secret: process.env.POW_SECRET || crypto.randomBytes(32),
   difficulty: ROOM_CREATE_POW_DIFFICULTY,
@@ -1317,22 +1311,6 @@ const liveKitAdmin = createLiveKitAdmin({
 const removeLiveKitParticipant = liveKitAdmin.removeParticipant;
 const setLiveKitParticipantMuted = liveKitAdmin.setParticipantMuted;
 
-async function pruneRooms(now = Date.now()) {
-  // Reconcile every room that is known active in memory before the durable
-  // idle-room sweep. If the database is still unavailable, fail the sweep
-  // closed so an old empty_since marker cannot delete a live dynamic room.
-  const activeRoomIds = [...presenceRooms.entries()]
-    .filter(([, room]) => room?.peers?.size > 0)
-    .map(([roomId]) => roomId);
-  await Promise.all(activeRoomIds.map((roomId) => queueRoomOccupancyTransition(roomId)));
-  await getRoomStore().pruneRooms(now);
-  for (const roomId of [...presenceRooms.keys()]) {
-    const room = await getRoomStore().getRoom(roomId);
-    if (room) continue;
-    presenceRooms.delete(roomId);
-  }
-}
-
 function startPruneTimer(server, logger = getProcessLogger()) {
   // Reap WS connections whose clients stopped heartbeating (half-open sockets
   // never emit 'close'), otherwise dead peers linger in rosters and friends
@@ -1399,100 +1377,6 @@ async function findRoomBan(roomId, userId, ip) {
   return getRoomStore().findActiveRoomBan({ roomId, userId: userId || null, ip: ip || '' });
 }
 
-function queueRoomOccupancyTransition(roomId) {
-  const previous = roomOccupancyQueue.get(roomId) || Promise.resolve();
-  const transition = previous
-    .catch(() => {})
-    .then(async () => {
-      const room = presenceRooms.get(roomId);
-      if (room?.peers.size > 0) {
-        await getRoomStore().markRoomActive(roomId, room.updatedAt || Date.now());
-        return;
-      }
-      await getRoomStore().markRoomEmpty(roomId);
-    });
-
-  roomOccupancyQueue.set(roomId, transition);
-  void transition.then(
-    () => {
-      if (roomOccupancyQueue.get(roomId) !== transition) return;
-      roomOccupancyQueue.delete(roomId);
-      clearRoomOccupancyRetry(roomId);
-    },
-    () => {
-      if (roomOccupancyQueue.get(roomId) !== transition) return;
-      roomOccupancyQueue.delete(roomId);
-      scheduleRoomOccupancyRetry(roomId);
-    }
-  );
-  return transition;
-}
-
-function clearRoomOccupancyRetry(roomId) {
-  const retry = roomOccupancyRetries.get(roomId);
-  if (!retry) return;
-  if (retry.timer) clearTimeout(retry.timer);
-  roomOccupancyRetries.delete(roomId);
-}
-
-function clearRoomOccupancyRetries() {
-  for (const roomId of roomOccupancyRetries.keys()) clearRoomOccupancyRetry(roomId);
-}
-
-function scheduleRoomOccupancyRetry(roomId) {
-  const current = roomOccupancyRetries.get(roomId);
-  if (current?.timer) return;
-  const attempt = (current?.attempt || 0) + 1;
-  const delay = Math.min(
-    ROOM_OCCUPANCY_RETRY_BASE_MS * 2 ** Math.max(0, attempt - 1),
-    ROOM_OCCUPANCY_RETRY_MAX_MS
-  );
-  const retry = { attempt, timer: null };
-  retry.timer = setTimeout(() => {
-    if (roomOccupancyRetries.get(roomId) !== retry) return;
-    retry.timer = null;
-    void queueRoomOccupancyTransition(roomId).catch((error) => {
-      getProcessLogger().error({ evt: LOG_EVENTS.ROOM_OCCUPANCY_RETRY_FAILED, err: error }, 'failed to retry room occupancy persistence');
-    });
-  }, delay);
-  retry.timer?.unref?.();
-  roomOccupancyRetries.set(roomId, retry);
-}
-
-function sendEvent(peer, message) {
-  const sent = peer?.transport?.send(message) ?? false;
-  if (!sent && peer) peer.closed = true;
-  return sent;
-}
-
-// Delivers a legacy room event to active peers over their own transports.
-// Preview-only WS subscribers are reached separately via mirrorLegacyRoomEvent
-// at each call site, so nothing is double-delivered.
-function broadcast(room, message, exceptPeerId = '') {
-  const failedPeers = [];
-  for (const peer of room.peers.values()) {
-    if (peer.id !== exceptPeerId) {
-      const sent = sendEvent(peer, message);
-      if (!sent) failedPeers.push(peer);
-    }
-  }
-
-  for (const peer of failedPeers) {
-    closePeer(room.id, peer.id, peer.transport?.id, 'lost');
-  }
-  if (failedPeers.length > 0) {
-    roomRuntime?.scheduleSummaryBroadcast(room.id);
-  }
-}
-
-function publishClearedScreenViewers(room, ownerPeerId) {
-  for (const viewer of clearViewedScreenPeerReferences(room, ownerPeerId)) {
-    const message = { type: 'peer-updated', peer: publicPeer(viewer) };
-    broadcast(room, message);
-    roomRuntime?.mirrorLegacyRoomEvent(room.id, message);
-  }
-}
-
 // senderId narrows the expiry to one inviter; pass null to expire every pending
 // invitation for the room (used when the room itself goes away).
 async function expireRoomInvitations(senderId, roomId) {
@@ -1505,42 +1389,6 @@ async function expireRoomInvitations(senderId, roomId) {
     broadcastToUser(message.recipientId, event);
   }
   return messages;
-}
-
-function closePeer(roomId, peerId, transportId, reason = 'left') {
-  const room = presenceRooms.get(roomId);
-  if (!room) return;
-
-  const current = room.peers.get(peerId);
-  if (!current || !transportId || current.transport?.id !== transportId) return;
-
-  current.closed = true;
-  room.peers.delete(peerId);
-  if (!current.replaced) {
-    publishClearedScreenViewers(room, peerId);
-    broadcast(room, { type: 'peer-left', peerId, reason });
-    roomRuntime?.mirrorLegacyRoomEvent(roomId, { type: 'peer-left', peerId, reason });
-    roomRuntime?.scheduleSummaryBroadcast(roomId);
-  }
-
-  if (room.peers.size === 0) {
-    // The call ended: reset the in-memory call clock (never persisted).
-    room.voiceActiveSince = null;
-    void queueRoomOccupancyTransition(roomId).catch((error) => {
-      getProcessLogger().error({ evt: LOG_EVENTS.ROOM_OCCUPANCY_PERSIST_FAILED, roomId, err: error }, 'failed to persist room occupancy');
-    });
-  } else {
-    room.updatedAt = Date.now();
-  }
-}
-
-async function waitForRosterPeer(roomId, peerId, timeoutMs = LIVEKIT_ROSTER_WAIT_MS) {
-  const deadline = Date.now() + timeoutMs;
-  for (;;) {
-    const peer = presenceRooms.get(roomId)?.peers?.get(peerId);
-    if (peer || Date.now() >= deadline) return peer || null;
-    await new Promise((resolve) => setTimeout(resolve, ROSTER_POLL_INTERVAL_MS));
-  }
 }
 
 // Everything a room deletion does after the durable soft-delete: tell whoever
@@ -1786,10 +1634,6 @@ async function runLegacyHandler(request, reply, handler) {
   }
 }
 
-function getPresencePeerCount() {
-  return Array.from(presenceRooms.values()).reduce((count, room) => count + room.peers.size, 0);
-}
-
 function getActiveGuestWsCount() {
   if (!wsRegistry?.connections) return 0;
   let count = 0;
@@ -1819,9 +1663,7 @@ function createApiApp({
   logger = null
 } = {}) {
   if (store && store !== roomStore) {
-    presenceRooms.clear();
-    roomOccupancyQueue.clear();
-    clearRoomOccupancyRetries();
+    roomPresence.reset();
   }
   if (store) roomStore = store;
   if (users) userStore = users;
@@ -2184,7 +2026,7 @@ function createApiServer(options = {}) {
     });
     return server;
   };
-  server.once('close', clearRoomOccupancyRetries);
+  server.once('close', () => roomPresence.clearOccupancyRetries());
   return server;
 }
 
