@@ -1,25 +1,46 @@
+// The avatar accent: the dark, hue-preserving colour behind a user avatar,
+// derived from the dominant colour of the visible (circular) part of the image.
+
+export interface AvatarAccentRgb {
+  r: number;
+  g: number;
+  b: number;
+}
+
+export interface AvatarAccentPresentation {
+  background: `#${string}`;
+  foreground: `#${string}`;
+  shadow: string;
+}
+
+interface LinearRgb {
+  red: number;
+  green: number;
+  blue: number;
+}
+
 const ACCENT_LIGHTNESS = 0.36;
 const MAX_ACCENT_CHROMA = 0.1;
 const NEUTRAL_CHROMA_THRESHOLD = 0.004;
 const SHADOW_ALPHA_HEX = '52';
 
-function clamp(value, min, max) {
+function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
-function normalizeChannel(value) {
-  return Number.isFinite(value) ? clamp(value, 0, 255) / 255 : 0;
+function normalizeChannel(value: unknown): number {
+  return Number.isFinite(value) ? clamp(value as number, 0, 255) / 255 : 0;
 }
 
-function srgbToLinear(value) {
+function srgbToLinear(value: number): number {
   return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
 }
 
-function linearToSrgb(value) {
+function linearToSrgb(value: number): number {
   return value <= 0.0031308 ? value * 12.92 : 1.055 * value ** (1 / 2.4) - 0.055;
 }
 
-function rgbToOklch(rgb) {
+function rgbToOklch(rgb: AvatarAccentRgb | null | undefined): { lightness: number; chroma: number; hue: number } {
   const red = srgbToLinear(normalizeChannel(rgb?.r));
   const green = srgbToLinear(normalizeChannel(rgb?.g));
   const blue = srgbToLinear(normalizeChannel(rgb?.b));
@@ -43,7 +64,7 @@ function rgbToOklch(rgb) {
   };
 }
 
-function oklchToLinearRgb(lightness, chroma, hue) {
+function oklchToLinearRgb(lightness: number, chroma: number, hue: number): LinearRgb {
   const a = chroma * Math.cos(hue);
   const b = chroma * Math.sin(hue);
 
@@ -62,11 +83,11 @@ function oklchToLinearRgb(lightness, chroma, hue) {
   };
 }
 
-function isInSrgbGamut(rgb) {
+function isInSrgbGamut(rgb: LinearRgb): boolean {
   return rgb.red >= 0 && rgb.red <= 1 && rgb.green >= 0 && rgb.green <= 1 && rgb.blue >= 0 && rgb.blue <= 1;
 }
 
-function fitChromaToSrgb(lightness, chroma, hue) {
+function fitChromaToSrgb(lightness: number, chroma: number, hue: number): number {
   if (isInSrgbGamut(oklchToLinearRgb(lightness, chroma, hue))) return chroma;
 
   let low = 0;
@@ -79,13 +100,13 @@ function fitChromaToSrgb(lightness, chroma, hue) {
   return low;
 }
 
-function toHexChannel(value) {
+function toHexChannel(value: number): string {
   return Math.round(clamp(linearToSrgb(value), 0, 1) * 255)
     .toString(16)
     .padStart(2, '0');
 }
 
-function oklchToHex(lightness, chroma, hue) {
+function oklchToHex(lightness: number, chroma: number, hue: number): `#${string}` {
   const fittedChroma = fitChromaToSrgb(lightness, chroma, hue);
   const rgb = oklchToLinearRgb(lightness, fittedChroma, hue);
   return `#${toHexChannel(rgb.red)}${toHexChannel(rgb.green)}${toHexChannel(rgb.blue)}`;
@@ -98,22 +119,26 @@ function oklchToHex(lightness, chroma, hue) {
  * ImageData) use this so their accents agree. Returns null when no opaque
  * pixel falls inside the circle.
  */
-export function dominantAvatarColor(pixels, width, height) {
+export function dominantAvatarColor(
+  pixels: ArrayLike<number> | null | undefined,
+  width: number,
+  height: number
+): AvatarAccentRgb | null {
   if (!pixels || !(width > 0) || !(height > 0)) return null;
   const stride = Math.max(1, Math.round(Math.min(width, height) / 64));
   const centerX = width / 2;
   const centerY = height / 2;
   const radiusSquared = (Math.min(width, height) / 2) ** 2;
-  const buckets = new Map();
+  const buckets = new Map<number, { count: number; r: number; g: number; b: number }>();
 
   for (let y = Math.floor(stride / 2); y < height; y += stride) {
     for (let x = Math.floor(stride / 2); x < width; x += stride) {
       if ((x + 0.5 - centerX) ** 2 + (y + 0.5 - centerY) ** 2 > radiusSquared) continue;
       const index = (y * width + x) * 4;
-      if (pixels[index + 3] < 200) continue;
-      const r = pixels[index];
-      const g = pixels[index + 1];
-      const b = pixels[index + 2];
+      if ((pixels[index + 3] as number) < 200) continue;
+      const r = pixels[index] as number;
+      const g = pixels[index + 1] as number;
+      const b = pixels[index + 2] as number;
       const key = ((r >> 5) << 6) | ((g >> 5) << 3) | (b >> 5);
       const bucket = buckets.get(key) ?? { count: 0, r: 0, g: 0, b: 0 };
       bucket.count += 1;
@@ -124,7 +149,7 @@ export function dominantAvatarColor(pixels, width, height) {
     }
   }
 
-  let dominant = null;
+  let dominant: { count: number; r: number; g: number; b: number } | null = null;
   for (const bucket of buckets.values()) {
     if (!dominant || bucket.count > dominant.count) dominant = bucket;
   }
@@ -141,7 +166,7 @@ export function dominantAvatarColor(pixels, width, height) {
  * Invalid channels are treated as zero so untrusted image metadata cannot
  * produce NaN or malformed CSS values.
  */
-export function deriveAvatarAccent(rgb) {
+export function deriveAvatarAccent(rgb: AvatarAccentRgb | null | undefined): AvatarAccentPresentation {
   const source = rgbToOklch(rgb);
   const isNeutral = !Number.isFinite(source.hue) || source.chroma < NEUTRAL_CHROMA_THRESHOLD;
   const hue = isNeutral ? 0 : source.hue;

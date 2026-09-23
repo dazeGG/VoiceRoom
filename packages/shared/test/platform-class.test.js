@@ -7,10 +7,10 @@ const { pathToFileURL } = require('node:url');
 const test = require('node:test');
 
 const packageJson = require('../package.json');
-const commonJs = require('../src/platform-class.js');
+const commonJs = require('../src/platform-class.mts');
 
 test('platform-class exposes equivalent CommonJS and ESM contracts', async () => {
-  const esmPath = path.join(__dirname, '../src/platform-class.mjs');
+  const esmPath = path.join(__dirname, '../src/platform-class.mts');
   const esm = await import(pathToFileURL(esmPath).href);
   const samples = [
     {},
@@ -20,8 +20,7 @@ test('platform-class exposes equivalent CommonJS and ESM contracts', async () =>
     { platform: 'MacIntel', maxTouchPoints: 5 }
   ];
 
-  assert.equal(packageJson.exports['./platform-class'].import, './src/platform-class.mjs');
-  assert.equal(packageJson.exports['./platform-class'].require, './src/platform-class.js');
+  assert.equal(packageJson.exports['./platform-class'], './src/platform-class.mts');
   assert.equal(typeof esm.classifyPlatformPolicy, 'function');
 
   for (const sample of samples) {

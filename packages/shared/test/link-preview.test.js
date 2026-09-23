@@ -4,7 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
-const preview = require('../src/link-preview');
+const preview = require('../src/link-preview.mts');
 
 const KEY = `lp_${'a1'.repeat(16)}.webp`;
 
@@ -51,7 +51,7 @@ test('previews without text, with a foreign scheme or with a forged image key ar
 });
 
 test('the browser module behaves exactly like the server module', async () => {
-  const esm = await import(pathToFileURL(path.join(__dirname, '../src/link-preview.mjs')).href);
+  const esm = await import(pathToFileURL(path.join(__dirname, '../src/link-preview.mts')).href);
   const texts = ['https://example.com/a#b', 'www.example.com', 'нет', 'ftp://x https://y.example/z.'];
   for (const text of texts) assert.equal(esm.firstPreviewableUrl(text), preview.firstPreviewableUrl(text));
   const input = { url: 'https://example.com', title: 't\u200f', description: 'd', siteName: 's', image: { key: KEY, width: 2, height: 3 } };

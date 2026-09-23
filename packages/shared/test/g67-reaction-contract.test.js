@@ -2,10 +2,10 @@
 
 const assert = require('node:assert/strict');
 const test = require('node:test');
-const cjs = require('../src/reactions');
+const cjs = require('../src/reactions.mts');
 
 test('G67-A01 canonical RGI desired-state and bigint summary contracts match CJS and ESM', async () => {
-  const esm = await import('../src/reactions.mjs');
+  const esm = await import('../src/reactions.mts');
   const validMutations = [
     { messageId: 'm-1', emoji: '😀', active: true },
     { messageId: 'm-2', emoji: '👩🏽‍💻', active: false },
@@ -39,7 +39,7 @@ test('G67-A02 reactor envelopes enforce default50/max100, opaque cursors and typ
   }));
   assert.deepEqual(cjs.normalizeReactorPage({ reactors, nextCursor: 'next' }), { reactors, nextCursor: 'next' });
   assert.equal(cjs.normalizeReactorPage({ reactors: [...reactors, reactors[0]], nextCursor: null }), null);
-  const declarations = require('node:fs').readFileSync(require.resolve('../src/reactions.d.ts'), 'utf8');
+  const declarations = require('node:fs').readFileSync(require.resolve('../src/reactions.mts'), 'utf8');
   assert.match(declarations, /active: boolean/);
   assert.match(declarations, /revision: string/);
   assert.match(declarations, /ReactorPage/);
