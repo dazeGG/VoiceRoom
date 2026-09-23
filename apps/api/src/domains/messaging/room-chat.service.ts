@@ -315,6 +315,8 @@ export function createRoomChatService(deps: RoomChatDeps) {
     const isAccountAuthor = Boolean(user && current.authorUserId && user.id === current.authorUserId);
     const isPeerAuthor = Boolean(!current.authorUserId && input.peerId && input.peerId === current.peerId);
     if (!isAccountAuthor) {
+      // Deliberately no owner/moderator override: editing always belongs to
+      // the original author, even in a persistent room.
       if (!isPeerAuthor) return { status: 'not_author' };
       const activePeer = room.peers.get(input.peerId);
       if (!isLivePeer(activePeer, input.sessionToken)) return { status: 'invalid_session' };
