@@ -1,7 +1,7 @@
 'use strict';
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
-const send = require('../src/messaging-send');
+const send = require('../src/messaging-send.mts');
 
 test('G22-A01 reply pointers allow reply-to-reply while previews stay one level', () => {
   assert.deepEqual(send.normalizeReplyPointer({ messageId: 'reply', replyTo: { messageId: 'root' } }), { messageId: 'reply' });

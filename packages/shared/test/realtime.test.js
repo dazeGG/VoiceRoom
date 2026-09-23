@@ -9,10 +9,10 @@ const {
   toRoomPeerSummary,
   buildRoomRealtimeSummary,
   validateClientCommand
-} = require('../src/realtime');
+} = require('../src/realtime.mts');
 
 test('typing notices name a room or a user and carry nothing the server trusts', () => {
-  const { TYPING_NOTICE_INTERVAL_MS, TYPING_NOTICE_TTL_MS } = require('../src/realtime');
+  const { TYPING_NOTICE_INTERVAL_MS, TYPING_NOTICE_TTL_MS } = require('../src/realtime.mts');
   assert.ok(TYPING_NOTICE_TTL_MS > TYPING_NOTICE_INTERVAL_MS, 'a repeated notice arrives before the last one expires');
 
   assert.equal(validateClientCommand({ type: 'room.chat.typing', payload: { roomId: 'abcdefghij' } }).ok, true);
@@ -26,7 +26,7 @@ test('typing notices name a room or a user and carry nothing the server trusts',
 });
 
 test('a typing notice says whether the person types or picks an emoji, and means typing when it does not say', () => {
-  const { TYPING_ACTIVITIES, normalizeTypingActivity } = require('../src/realtime');
+  const { TYPING_ACTIVITIES, normalizeTypingActivity } = require('../src/realtime.mts');
   assert.deepEqual([...TYPING_ACTIVITIES], ['typing', 'emoji']);
   assert.equal(normalizeTypingActivity(undefined), 'typing');
   assert.equal(normalizeTypingActivity(null), 'typing');

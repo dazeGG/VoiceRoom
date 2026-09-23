@@ -129,6 +129,7 @@ Done so far:
 - PR 8f: security headers (`platform/http/security-headers.ts`), the request log line (`platform/http/request-log.ts`) and graceful shutdown (`app/graceful-shutdown.ts`) leave `server.js`. `/api/capabilities` was the last route on `runLegacyHandler` and now uses its native path, so it gains the security headers, metric and log line; `runLegacyHandler` and `sendJson` are gone.
 - PR 9a: `packages/shared` gets a strict `tsconfig.json` (no Node types, `tsc` in `check`) and its first single-source module, `runtime-config.mts`, exported directly; its `.js`/`.mjs`/`.d.ts` twins are gone. Modules stay `.mts` until the last one moves, then the package switches to `"type": "module"` and they become `.ts`.
 - PR 9b: platform-class, mentions, reactions, link-preview, avatar-accent, attachments and visual-identity become single `.mts` sources (visual-identity still reads its JSON).
+- PR 9c: validation, realtime, messaging-history, messaging-send and room-message-content become single `.mts` sources; validation and visual-identity share the `AvatarColorKey` type through a type-only import.
 - Typed before PR 0: `domains/admission/livekit-token-binding.mts`, `lib/image-signature.mts`, `platform/http/origin-guard.mts`.
 
 ## 5. Runtime state and scaling

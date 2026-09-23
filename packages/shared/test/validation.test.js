@@ -18,7 +18,7 @@ const {
   normalizeLogin,
   AVATAR_COLOR_KEYS,
   PRESENCE_STATUSES
-} = require('../src/validation');
+} = require('../src/validation.mts');
 
 test('normalizeRoomId accepts valid ids and trims', () => {
   assert.equal(normalizeRoomId('abc'), 'abc');
