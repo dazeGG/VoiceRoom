@@ -60,8 +60,8 @@ separate pull request that keeps behaviour and tests unchanged:
 | Order | Group | Routes | Destination |
 | --- | --- | --- | --- |
 | 1 | Platform | healthz, metrics, client-logs, pow-challenge, desktop | `platform/http/*`, `domains/ops/*` |
-| 2 | LiveKit admission | livekit-token, server mute, gate revocation | `domains/admission/admission.routes.mts` + `admission-policy.mts` |
-| 3 | Rooms | 17 `/api/rooms/*` routes, state | `domains/rooms/*` |
+| 2 | LiveKit admission | livekit-token, server mute, gate revocation | `domains/admission/admission.routes.ts` + `admission.service.ts` |
+| 3 | Rooms | create/rename/delete, status, peers, `/api/state`, account room list, kick/server-mute/ban | `domains/rooms/*` (room avatars move with 7, ring with 6) |
 | 4 | Legacy room chat | list/post/edit/delete | fold into `domains/messaging` (the newer message routes already exist) |
 | 5 | Auth and account | 27 `/api/auth/*` routes | `domains/account/*` |
 | 6 | Social | friends, blocks, dm, presence | `domains/social/*` |
@@ -114,6 +114,7 @@ Done so far:
 - PR 0: ES modules (`scripts/codemods/cjs-to-esm.mjs`); applied migrations are `.cjs`.
 - PR 1: `app/context.ts` (`ApiContext`), `platform/http/http-kit.ts` (security headers, `no-store`, request metric and log line, `{ ok: false, error }` failures for every Fastify-native route), `platform/db/kysely.ts` with generated `platform/db/schema.ts` (`npm run db:types`, verified by `test/db-schema-types.test.js`), and the ops group in `domains/ops/` (health, metrics, proof-of-work, desktop release, client logs).
 - PR 2: the admission group in `domains/admission/`: `admission.service.ts` (who gets a LiveKit JWT and gate credential; returns refusal reasons, revokes an issued credential when a later check fails), `admission.routes.ts` (`POST /api/livekit-token` on TypeBox, same error texts and codes as before), `livekit-admin.ts` (participant removal and the SFU microphone mute), `livekit-config.ts`, plus `platform/crypto/tokens-match.ts`. The moderation handler in `server.js` calls `admission.revokeForServerMute` until PR 3 moves it.
+- PR 3: the rooms group in `domains/rooms/`: `rooms.routes.ts` (create, rename, delete, status card, peer preview, `/api/state`, the account room list) over `rooms.service.ts` (room ids, quotas, owner check); `peer-moderation.routes.ts` over `peer-moderation.service.ts` (kick, server mute, ban, undo ban) and `peer-eviction.ts` (the teardown a kick or ban runs on each peer); `room-views.ts` (the peer and lobby-card shapes); `domains/admission/gate-principal.ts`. `platform/http/http-kit.ts` gained `optionalJsonBody` for routes whose legacy handler read a missing body as `{}`.
 - Typed before PR 0: `domains/admission/livekit-token-binding.mts`, `lib/image-signature.mts`, `platform/http/origin-guard.mts`.
 
 ## 5. Runtime state and scaling
