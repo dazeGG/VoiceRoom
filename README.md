@@ -148,7 +148,7 @@ GitHub-аналог GitLab CI/CD variables находится здесь:
 | `LIVEKIT_ROSTER_WAIT_MS` | `5000` | Сколько `/api/livekit-token` ждёт, пока realtime-join участника дойдёт до ростера комнаты. Токен выдаётся только участнику ростера. |
 | `TURN_ENABLED` | `false` | Включает TURN/TLS на общем `:443` и TURN/UDP на `3478` (см. «TURN/TLS на 443»). |
 | `TURN_DOMAIN` | пусто | DNS-имя TURN, обязательно при `TURN_ENABLED=true`. |
-| `LIVEKIT_MAX_PARTICIPANTS` | `24` | Лимит участников на стороне SFU — страховка поверх `MAX_ROOM_PEERS` с запасом на переподключения. |
+| `LIVEKIT_MAX_PARTICIPANTS` | `24` | Лимит участников на стороне SFU — страховка поверх `MAX_ROOM_PEERS` с запасом на переподключения. Держите его не меньше `2 × MAX_ROOM_PEERS`, иначе LiveKit откажет во входе раньше API. |
 | `LIVEKIT_ROOM_PREFIX` | `voice-room-` | Prefix room id в LiveKit. Должен совпадать у API и auth-gate: gate сверяет комнату в JWT с комнатой пропуска. |
 | `MAX_ROOM_PEERS` | `12` | Max peers per room. |
 | `MAX_ROOMS` | `100` | Общий лимит комнат. |
@@ -171,7 +171,7 @@ GitHub-аналог GitLab CI/CD variables находится здесь:
 | `SESSION_COOKIE_SECURE` | auto in production | Обычно не задавать; true при HTTPS/prod. |
 | `AUTH_RATE_LIMIT` | `30` | Auth rate limit. |
 | `AUTH_RATE_WINDOW_MS` | `60000` | Auth rate window. |
-| `LOGIN_FAILURE_LIMIT` | `10` | Неудачных входов на один логин за окно, с любых адресов. Успешный вход сбрасывает счётчик. |
+| `LOGIN_FAILURE_LIMIT` | `10` | Попыток входа на один логин за окно, с любых адресов (попытка засчитывается до проверки пароля, успешный вход сбрасывает счётчик). Компромисс: подбором можно на окно заблокировать вход в чужой аккаунт; восстановление по коду при этом работает. |
 | `LOGIN_FAILURE_WINDOW_MS` | `900000` | Окно счётчика неудачных входов на логин. |
 | `DM_RATE_LIMIT` | `30` | DM send rate limit per user. |
 | `DM_RATE_WINDOW_MS` | `10000` | DM rate window. |

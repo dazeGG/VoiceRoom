@@ -206,7 +206,11 @@ function createLiveKitAuthGateService({
   // The validate probe gets the same admission check as the upgrade itself, so
   // a revoked or mismatched admission hears 403 (LiveKit's "not allowed")
   // instead of whatever LiveKit would say about the bare JWT.
+  // The probe is a cross-origin fetch from the web origin to the LiveKit
+  // domain without cookies (the admission rides in the URL), so the browser
+  // only lets the client read the answer with an allow-origin header.
   function proxyValidate(req, res) {
+    res.setHeader('access-control-allow-origin', '*');
     authorize(req.url, req.headers || {})
       .then((decision) => {
         if (!decision.ok) {

@@ -2195,7 +2195,7 @@ async function handleLogin(req, res) {
   // The per-IP limit above does nothing against credential stuffing from many
   // addresses; this caps failed guesses per login regardless of source. It is
   // keyed by the submitted login, existing or not, so it reveals nothing.
-  const accountRate = loginFailureLimiter.status(login);
+  const accountRate = loginFailureLimiter.reserve(login);
   if (!accountRate.allowed) {
     sendJson(
       res,
@@ -2208,7 +2208,6 @@ async function handleLogin(req, res) {
 
   const user = await getUserStore().verifyCredentials(login, password);
   if (!user) {
-    loginFailureLimiter.recordFailure(login);
     sendJson(res, 401, { ok: false, error: 'Неверный логин или пароль' });
     return;
   }

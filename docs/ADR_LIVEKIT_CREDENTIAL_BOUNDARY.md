@@ -65,6 +65,10 @@ Two supporting changes close the remaining replay windows:
 
 - A server mute revokes the principal's gate credentials, so a reconnect has to
   fetch a new admission, which the durable mute row keeps microphone-free.
+  Trade-off: revocation is per principal, not per JWT, so the muted account's
+  next signal resume in that room (on any of its devices, and even after an
+  unmute) is refused and the client rebuilds the connection with a fresh
+  admission — a short audible drop instead of a seamless resume.
 - The JWT TTL drops to 10 minutes (`LIVEKIT_TOKEN_TTL_SECONDS=600`). The gate
   credential keeps its own, longer TTL (`LIVEKIT_GATE_CREDENTIAL_TTL_SECONDS`),
   since it is revocable server-side and signal resumes reuse it.

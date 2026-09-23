@@ -187,10 +187,12 @@ test('the validate probe is admitted like the upgrade and proxied without the ga
   const ok = await fetch(`${base}/rtc/v1/validate?access_token=${tokenFor()}&vr_gate_credential=x`);
   assert.equal(ok.status, 200);
   assert.equal(await ok.text(), 'success');
+  assert.equal(ok.headers.get('access-control-allow-origin'), '*', 'the web origin must be able to read the answer');
   assert.deepEqual(seen, [`/rtc/v1/validate?access_token=${tokenFor()}`]);
 
   const foreign = await fetch(`${base}/rtc/validate?access_token=${tokenFor({ room: 'voice-room-room-b' })}&vr_gate_credential=x`);
   assert.equal(foreign.status, 403);
+  assert.equal(foreign.headers.get('access-control-allow-origin'), '*');
   assert.equal(seen.length, 1, 'a refused probe never reaches LiveKit');
 
   assert.equal((await fetch(`${base}/rtc/other`)).status, 404);
