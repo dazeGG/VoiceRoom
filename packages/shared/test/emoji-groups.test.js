@@ -3,11 +3,11 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { listReactionEmojis } = require('../src/emoji');
-const cjs = require('../src/emoji-groups');
+const { listReactionEmojis } = require('../src/emoji.mts');
+const cjs = require('../src/emoji-groups.mts');
 
 test('reaction emoji groups are an immutable ordered partition of the frozen corpus', async () => {
-  const esm = await import('../src/emoji-groups.mjs');
+  const esm = await import('../src/emoji-groups.mts');
   const groups = cjs.listReactionEmojiGroups();
   const corpus = listReactionEmojis();
 

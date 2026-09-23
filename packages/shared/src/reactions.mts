@@ -1,7 +1,7 @@
 // Emoji reactions on a message: the toggle a client sends, the per-emoji
 // summary it receives and the paginated list of who reacted.
 
-import { cleanReactionEmoji } from './emoji.mjs';
+import { cleanReactionEmoji } from './emoji.mts';
 
 export type ReactionMutation = { messageId: string; emoji: string; active: boolean };
 export type ReactionSummary = { emoji: string; count: number; reactedByMe: boolean; revision: string };

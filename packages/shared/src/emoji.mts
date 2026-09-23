@@ -1,11 +1,40 @@
-'use strict';
-
 // Generated from the pinned Unicode Emoji 17.0 emoji-test.txt authority.
 // Source: https://www.unicode.org/Public/17.0.0/emoji/emoji-test.txt
 // Unicode Terms of Use: https://www.unicode.org/terms_of_use.html
 // Policy: accept only fully-qualified entries; reject minimally-qualified,
 // unqualified, component, unknown, malformed, and multi-sequence input.
-const REACTION_EMOJIS = Object.freeze([
+export interface EmojiReactionAuthority {
+  name: 'Unicode emoji-test.txt';
+  provider: 'Unicode Consortium';
+  url: 'https://www.unicode.org/Public/17.0.0/emoji/emoji-test.txt';
+  unicodeVersion: '17.0';
+  fileDate: '2025-08-04, 20:55:31 GMT';
+  accessedDate: '2026-07-20';
+  byteSize: 669326;
+  unicodeFileSha256: '1d8a944f88d7952f7ef7c5167fef3c67995bcae24543949710231b03a201acda';
+  corpusSha256: '4a53e0c0dc317e6830f4055191e9fe287ab2db8978b2f78bdbaa43a60483d791';
+  acceptedCount: 3944;
+  license: 'Unicode Terms of Use';
+  licenseUrl: 'https://www.unicode.org/terms_of_use.html';
+  attribution: string;
+  policy: {
+    acceptedStatuses: readonly ['fully-qualified'];
+    rejectedStatuses: readonly ['minimally-qualified', 'unqualified', 'component'];
+    rejectStandaloneComponents: true;
+    rejectUnknownSequences: true;
+    rejectMultipleSequences: true;
+    rejectMalformedInput: true;
+  };
+  counts: {
+    'fully-qualified': 3944;
+    'minimally-qualified': 1029;
+    unqualified: 243;
+    component: 9;
+    total: 5225;
+  };
+}
+
+const REACTION_EMOJIS: readonly string[] = Object.freeze([
   "😀",
   "😃",
   "😄",
@@ -3952,7 +3981,7 @@ const REACTION_EMOJIS = Object.freeze([
   "🏴󠁧󠁢󠁷󠁬󠁳󠁿"
 ]);
 
-const EMOJI_REACTION_AUTHORITY = Object.freeze({
+export const EMOJI_REACTION_AUTHORITY: EmojiReactionAuthority = Object.freeze({
   name: 'Unicode emoji-test.txt',
   provider: 'Unicode Consortium',
   url: 'https://www.unicode.org/Public/17.0.0/emoji/emoji-test.txt',
@@ -3962,13 +3991,13 @@ const EMOJI_REACTION_AUTHORITY = Object.freeze({
   byteSize: 669326,
   unicodeFileSha256: '1d8a944f88d7952f7ef7c5167fef3c67995bcae24543949710231b03a201acda',
   corpusSha256: '4a53e0c0dc317e6830f4055191e9fe287ab2db8978b2f78bdbaa43a60483d791',
-  acceptedCount: REACTION_EMOJIS.length,
+  acceptedCount: REACTION_EMOJIS.length as 3944,
   license: 'Unicode Terms of Use',
   licenseUrl: 'https://www.unicode.org/terms_of_use.html',
   attribution: 'Contains derived data from Unicode emoji-test.txt; Copyright © Unicode, Inc.',
   policy: Object.freeze({
-    acceptedStatuses: Object.freeze(['fully-qualified']),
-    rejectedStatuses: Object.freeze(['minimally-qualified', 'unqualified', 'component']),
+    acceptedStatuses: Object.freeze(['fully-qualified'] as const),
+    rejectedStatuses: Object.freeze(['minimally-qualified', 'unqualified', 'component'] as const),
     rejectStandaloneComponents: true,
     rejectUnknownSequences: true,
     rejectMultipleSequences: true,
@@ -3985,28 +4014,20 @@ const EMOJI_REACTION_AUTHORITY = Object.freeze({
 
 const REACTION_EMOJI_SET = new Set(REACTION_EMOJIS);
 
-function isReactionEmoji(value) {
+export function isReactionEmoji(value: unknown): value is string {
   return typeof value === 'string' && REACTION_EMOJI_SET.has(value);
 }
 
-function cleanReactionEmoji(value) {
+export function cleanReactionEmoji(value: unknown): string {
   return isReactionEmoji(value) ? value : '';
 }
 
-function assertReactionEmoji(value) {
+export function assertReactionEmoji(value: unknown): string {
   const emoji = cleanReactionEmoji(value);
   if (!emoji) throw new TypeError('Unsupported reaction emoji');
   return emoji;
 }
 
-function listReactionEmojis() {
+export function listReactionEmojis(): string[] {
   return [...REACTION_EMOJIS];
 }
-
-module.exports = {
-  EMOJI_REACTION_AUTHORITY,
-  assertReactionEmoji,
-  cleanReactionEmoji,
-  isReactionEmoji,
-  listReactionEmojis
-};

@@ -1,8 +1,6 @@
-'use strict';
-
 // Category layer over the frozen reaction corpus.
 //
-// `emoji.js` is generated from the pinned Unicode emoji-test.txt and its content
+// `emoji.mts` is generated from the pinned Unicode emoji-test.txt and its content
 // hash is asserted by G07, so it must not change. The generator walks that file
 // top to bottom, which means the corpus is already in Unicode group order — the
 // groups can therefore be recovered as index ranges instead of shipping a second
@@ -10,7 +8,14 @@
 // future corpus regeneration reorders or drops one of those anchors this module
 // throws at load rather than silently mis-labelling half the picker.
 
-const { listReactionEmojis } = require('./emoji.js');
+import { listReactionEmojis } from './emoji.mts';
+
+export interface ReactionEmojiGroup {
+  key: string;
+  label: string;
+  icon: string;
+  emojis: readonly string[];
+}
 
 // Unicode's "Component" group is rejected by the corpus policy, so it has no
 // entry here. Order matches emoji-test.txt.
@@ -26,7 +31,7 @@ const GROUP_ANCHORS = Object.freeze([
   { key: 'flags', label: 'Флаги', icon: '🚩', anchor: '\u{1F3C1}' }
 ]);
 
-function buildGroups() {
+function buildGroups(): readonly ReactionEmojiGroup[] {
   const corpus = listReactionEmojis();
   const starts = GROUP_ANCHORS.map((group) => {
     const index = corpus.indexOf(group.anchor);
@@ -37,7 +42,7 @@ function buildGroups() {
   });
 
   for (let i = 1; i < starts.length; i += 1) {
-    if (starts[i] <= starts[i - 1]) {
+    if (starts[i]! <= starts[i - 1]!) {
       throw new Error('Emoji corpus is no longer in Unicode group order');
     }
   }
@@ -57,21 +62,16 @@ function buildGroups() {
   );
 }
 
-let cached = null;
+let cached: readonly ReactionEmojiGroup[] | null = null;
 
-function listReactionEmojiGroups() {
+export function listReactionEmojiGroups(): readonly ReactionEmojiGroup[] {
   cached = cached || buildGroups();
   return cached;
 }
 
-function reactionEmojiGroupKey(emoji) {
+export function reactionEmojiGroupKey(emoji: string): string {
   for (const group of listReactionEmojiGroups()) {
     if (group.emojis.includes(emoji)) return group.key;
   }
   return '';
 }
-
-module.exports = {
-  listReactionEmojiGroups,
-  reactionEmojiGroupKey
-};
