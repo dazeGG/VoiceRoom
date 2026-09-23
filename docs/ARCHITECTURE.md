@@ -120,6 +120,7 @@ Done so far:
 - PR 6a: friends, requests, blocks and ringing a friend into a room in `domains/social/` (`friends.routes.ts` over `friends.service.ts`, `social-views.ts` for the notification actor and active-account check). DMs follow in 6b; presence status and do-not-disturb share the notification preference store and move with PR 7.
 - PR 6b: direct messages in `domains/messaging/` (`direct-messages.routes.ts` over `direct-messages.service.ts`): the thread, sending in one transaction (reply lock, attachments, outbox, idempotency), room-invitation answers, edit, delete and read. The delivery relay and DM notifications stay in `server.js` until PR 8.
 - PR 7a: notification settings, presence status and push subscriptions in `domains/notifications/` (`notification-settings.routes.ts` over `notification-settings.service.ts`). Avatars and link-preview images follow in 7b.
+- PR 7b: account and room avatars and the served image files in `domains/media/` (`avatars.routes.ts` over `avatars.service.ts`). Every HTTP route except the capability routes (`platform/capability-routes.js`, which still take `runLegacyHandler`) is now Fastify-native.
 - Typed before PR 0: `domains/admission/livekit-token-binding.mts`, `lib/image-signature.mts`, `platform/http/origin-guard.mts`.
 
 ## 5. Runtime state and scaling

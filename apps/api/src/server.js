@@ -37,9 +37,8 @@ import {
   normalizeRequestId
 } from './lib/logger.js';
 import { getClientIp, createFailureLimiter, createRateLimiter } from './lib/rate-limit.js';
-import { MAX_AVATAR_BYTES, createAvatarKey, processAvatar } from './lib/avatar-processing.js';
 import { reconcileAvatarStorage } from './lib/avatar-reconciliation.js';
-import { createAvatarStorage, validateAvatarKey } from './lib/avatar-storage.js';
+import { createAvatarStorage } from './lib/avatar-storage.js';
 import { firstPreviewableUrl } from '@voice-room/shared/link-preview';
 import { createLinkPreviewFetcher } from './lib/link-preview-fetcher.js';
 import { processLinkPreviewImage } from './lib/link-preview-image.js';
@@ -49,8 +48,7 @@ import { createLinkPreviewService } from './domains/link-previews/link-preview-s
 import { avatarColorForPeerId, createRoomStore } from './lib/room-store.js';
 import {
   createUserStore,
-  publicUser,
-  selfUser
+  publicUser
 } from './lib/user-store.js';
 import { createGeoLocator } from './lib/geoip.js';
 import { createAccountDeletionRepository } from './domains/account/account-deletion-repository.js';
@@ -77,8 +75,8 @@ import { gatePrincipalForPeer, isGatePrincipal } from './domains/admission/gate-
 import { createPeerEviction } from './domains/rooms/peer-eviction.ts';
 import { createPeerModerationService } from './domains/rooms/peer-moderation.service.ts';
 import { registerPeerModerationRoutes } from './domains/rooms/peer-moderation.routes.ts';
-import { publicLobbyRoom as lobbyRoomView, publicPeer, roomBanned } from './domains/rooms/room-views.ts';
-import { ownerRefusal, registerRoomRoutes } from './domains/rooms/rooms.routes.ts';
+import { publicLobbyRoom as lobbyRoomView, publicPeer } from './domains/rooms/room-views.ts';
+import { registerRoomRoutes } from './domains/rooms/rooms.routes.ts';
 import { createRoomsService } from './domains/rooms/rooms.service.ts';
 import { publicChatMessage } from './domains/messaging/room-chat-views.ts';
 import { registerRoomChatRoutes } from './domains/messaging/room-chat.routes.ts';
@@ -93,6 +91,8 @@ import { registerDirectMessageRoutes } from './domains/messaging/direct-messages
 import { createDirectMessagesService } from './domains/messaging/direct-messages.service.ts';
 import { registerNotificationSettingsRoutes } from './domains/notifications/notification-settings.routes.ts';
 import { createNotificationSettingsService } from './domains/notifications/notification-settings.service.ts';
+import { registerAvatarRoutes } from './domains/media/avatars.routes.ts';
+import { createAvatarsService } from './domains/media/avatars.service.ts';
 import { createAdmissionService } from './domains/admission/admission.service.ts';
 import { createLiveKitAdmin } from './domains/admission/livekit-admin.ts';
 import { readLiveKitConfig } from './domains/admission/livekit-config.ts';
@@ -1176,6 +1176,15 @@ const notificationSettings = createNotificationSettingsService({
   notifyUser: (userId, event) => broadcastToUser(userId, event),
   broadcastProfileToFriends: (user, log) => broadcastUserProfileToFriends(user, { log })
 });
+const avatarsService = createAvatarsService({
+  storage: getAvatarStorage,
+  linkPreviewStorage: getLinkPreviewStorage,
+  users: getUserStore,
+  rooms: getRoomStore,
+  refreshActiveProfile: (user) => refreshActiveUserProfile(user),
+  broadcastProfileToFriends: (user, log) => broadcastUserProfileToFriends(user, { log }),
+  announceRoomUpdate: (roomId, room) => broadcastRoomUpdate(roomId, room)
+});
 
 function liveKitGatePrincipalForPeer(roomId, peer) {
   return gatePrincipalForPeer(getRoomStore(), roomId, peer);
@@ -1390,10 +1399,6 @@ async function findRoomBan(roomId, userId, ip) {
   return getRoomStore().findActiveRoomBan({ roomId, userId: userId || null, ip: ip || '' });
 }
 
-function sendRoomBanned(res, roomId) {
-  sendJson(res, 403, roomBanned(roomId));
-}
-
 function queueRoomOccupancyTransition(roomId) {
   const previous = roomOccupancyQueue.get(roomId) || Promise.resolve();
   const transition = previous
@@ -1529,30 +1534,6 @@ function closePeer(roomId, peerId, transportId, reason = 'left') {
   }
 }
 
-async function readJsonBody(req) {
-  if (req && Object.hasOwn(req, 'body')) {
-    return req.body && typeof req.body === 'object' ? req.body : {};
-  }
-
-  let body = '';
-  for await (const chunk of req) {
-    body += chunk;
-    if (Buffer.byteLength(body) > BODY_LIMIT_BYTES) {
-      const error = new Error('Request body is too large');
-      error.statusCode = 413;
-      throw error;
-    }
-  }
-
-  try {
-    return JSON.parse(body || '{}');
-  } catch (error) {
-    error.statusCode = 400;
-    error.publicMessage = 'Invalid JSON';
-    throw error;
-  }
-}
-
 async function waitForRosterPeer(roomId, peerId, timeoutMs = LIVEKIT_ROSTER_WAIT_MS) {
   const deadline = Date.now() + timeoutMs;
   for (;;) {
@@ -1560,17 +1541,6 @@ async function waitForRosterPeer(roomId, peerId, timeoutMs = LIVEKIT_ROSTER_WAIT
     if (peer || Date.now() >= deadline) return peer || null;
     await new Promise((resolve) => setTimeout(resolve, ROSTER_POLL_INTERVAL_MS));
   }
-}
-
-// Owner gate for the room avatar handlers that are still legacy. Returns the
-// room, or null after writing the 401/403/404 answer.
-async function authorizeRoomMutation(req, res, roomId) {
-  const session = await resolveSessionUser(req);
-  const check = await roomsService.checkOwner(session?.user?.id ?? null, roomId);
-  if (check.status === 'owner') return check.room;
-  const refusal = ownerRefusal(check);
-  sendJson(res, refusal.status, refusal.body);
-  return null;
 }
 
 // Everything a room deletion does after the durable soft-delete: tell whoever
@@ -1628,62 +1598,9 @@ async function finishRoomDeletion(roomId, { avatarKey = null, request = null } =
   await removeAvatarBestEffort(avatarKey, request);
 }
 
-function checkAvatarUploadRate(res, userId) {
-  const rate = avatarUploadLimiter.check(`avatar:${userId}`);
-  if (rate.allowed) return true;
-  sendJson(
-    res,
-    429,
-    { ok: false, error: 'Слишком много загрузок, попробуйте позже' },
-    { 'Retry-After': String(rate.retryAfterSeconds) }
-  );
-  return false;
-}
-
-async function readAvatarUpload(request) {
-  let part;
-  try {
-    part = await request.file({ limits: { fileSize: MAX_AVATAR_BYTES, files: 1 } });
-  } catch (cause) {
-    if (cause?.code === 'FST_REQ_FILE_TOO_LARGE' || cause?.statusCode === 413) {
-      const error = new Error('Avatar file must be at most 5 MB');
-      error.statusCode = 413;
-      throw error;
-    }
-    throw cause;
-  }
-  if (!part || part.fieldname !== 'avatar') {
-    part?.file?.resume?.();
-    const error = new Error('Multipart field "avatar" is required');
-    error.statusCode = 400;
-    throw error;
-  }
-
-  try {
-    const buffer = await part.toBuffer();
-    if (part.file?.truncated) {
-      const error = new Error('Avatar file must be at most 5 MB');
-      error.statusCode = 413;
-      throw error;
-    }
-    return buffer;
-  } catch (cause) {
-    if (cause?.code === 'FST_REQ_FILE_TOO_LARGE' || cause?.statusCode === 413) {
-      const error = new Error('Avatar file must be at most 5 MB');
-      error.statusCode = 413;
-      throw error;
-    }
-    throw cause;
-  }
-}
-
-async function removeAvatarBestEffort(key, request) {
-  if (!key) return;
-  try {
-    await getAvatarStorage().remove(key);
-  } catch (error) {
-    request?.log?.error?.({ err: error, avatarKey: key }, 'failed to remove old avatar');
-  }
+// Best effort: a leftover file is reconciled later (lib/avatar-reconciliation.js).
+function removeAvatarBestEffort(key, request) {
+  return avatarsService.removeFile(key, request?.log);
 }
 
 function refreshActiveUserProfile(user) {
@@ -1718,60 +1635,6 @@ async function broadcastUserProfileToFriends(user, request) {
   }
 }
 
-async function handleUploadUserAvatar(req, res, request) {
-  const session = await resolveSessionUser(req);
-  if (!session) {
-    sendJson(res, 401, { ok: false, error: 'Требуется вход' });
-    return;
-  }
-  if (!checkAvatarUploadRate(res, session.user.id)) return;
-
-  const processed = await processAvatar(await readAvatarUpload(request));
-  const avatarKey = createAvatarKey('user', session.user.id, processed.hash);
-  await getAvatarStorage().save(avatarKey, processed.buffer);
-
-  let result;
-  try {
-    result = await getUserStore().swapAvatar({
-      userId: session.user.id,
-      avatarKey,
-      avatarAccent: processed.accent
-    });
-  } catch (error) {
-    // Another request may already have committed the same content-addressed key.
-    // Reconciliation removes a truly orphaned write without risking that live file.
-    throw error;
-  }
-  if (!result.user) {
-    if (session.user.avatarKey !== avatarKey) await removeAvatarBestEffort(avatarKey, request);
-    sendJson(res, 404, { ok: false, error: 'Аккаунт не найден' });
-    return;
-  }
-  if (result.previousAvatarKey !== avatarKey) {
-    await removeAvatarBestEffort(result.previousAvatarKey, request);
-  }
-  refreshActiveUserProfile(result.user);
-  await broadcastUserProfileToFriends(result.user, request);
-  sendJson(res, 200, { ok: true, user: selfUser(result.user) });
-}
-
-async function handleDeleteUserAvatar(req, res, request) {
-  const session = await resolveSessionUser(req);
-  if (!session) {
-    sendJson(res, 401, { ok: false, error: 'Требуется вход' });
-    return;
-  }
-  const result = await getUserStore().swapAvatar({ userId: session.user.id });
-  if (!result.user) {
-    sendJson(res, 404, { ok: false, error: 'Аккаунт не найден' });
-    return;
-  }
-  await removeAvatarBestEffort(result.previousAvatarKey, request);
-  refreshActiveUserProfile(result.user);
-  await broadcastUserProfileToFriends(result.user, request);
-  sendJson(res, 200, { ok: true, user: selfUser(result.user) });
-}
-
 
 function publicLobbyRoom(room) {
   return lobbyRoomView(room, presenceRooms.get(room.id)?.peers.size ?? 0);
@@ -1785,98 +1648,6 @@ function broadcastRoomUpdate(roomId, room) {
   roomRuntime?.invalidateRecipientCache(roomId);
   roomRuntime?.scheduleSummaryBroadcast(roomId);
   return payload;
-}
-
-async function handleUploadRoomAvatar(req, res, roomId, request) {
-  const room = await authorizeRoomMutation(req, res, roomId);
-  if (!room) return;
-  if (!checkAvatarUploadRate(res, room.ownerId)) return;
-
-  const processed = await processAvatar(await readAvatarUpload(request));
-  const avatarKey = createAvatarKey('room', room.id, processed.hash);
-  await getAvatarStorage().save(avatarKey, processed.buffer);
-
-  let result;
-  try {
-    result = await getRoomStore().swapRoomAvatar(roomId, avatarKey);
-  } catch (error) {
-    // Another request may already have committed the same content-addressed key.
-    // Reconciliation removes a truly orphaned write without risking that live file.
-    throw error;
-  }
-  if (!result.room) {
-    if (room.avatarKey !== avatarKey) await removeAvatarBestEffort(avatarKey, request);
-    sendJson(res, 404, { ok: false, error: 'Комната не найдена' });
-    return;
-  }
-  if (result.previousAvatarKey !== avatarKey) {
-    await removeAvatarBestEffort(result.previousAvatarKey, request);
-  }
-  sendJson(res, 200, { ok: true, room: broadcastRoomUpdate(roomId, result.room) });
-}
-
-async function handleDeleteRoomAvatar(req, res, roomId, request) {
-  const room = await authorizeRoomMutation(req, res, roomId);
-  if (!room) return;
-  const result = await getRoomStore().swapRoomAvatar(roomId, null);
-  if (!result.room) {
-    sendJson(res, 404, { ok: false, error: 'Комната не найдена' });
-    return;
-  }
-  await removeAvatarBestEffort(result.previousAvatarKey, request);
-  sendJson(res, 200, { ok: true, room: broadcastRoomUpdate(roomId, result.room) });
-}
-
-async function openAvatarStream(key) {
-  validateAvatarKey(key);
-  const stream = getAvatarStorage().createReadStream(key);
-  await new Promise((resolve, reject) => {
-    stream.once('open', resolve);
-    stream.once('error', reject);
-  });
-  return stream;
-}
-
-async function handleGetAvatar(res, key) {
-  let stream;
-  try {
-    stream = await openAvatarStream(key);
-  } catch (error) {
-    if (error instanceof TypeError || error?.code === 'ENOENT') {
-      sendJson(res, 404, { ok: false, error: 'Avatar not found' });
-      return;
-    }
-    throw error;
-  }
-  res.writeHead(200, {
-    ...baseHeaders(),
-    'Cache-Control': 'public, max-age=31536000, immutable',
-    'Content-Type': 'image/webp'
-  });
-  stream.pipe(res);
-}
-
-async function handleGetLinkPreviewImage(res, key) {
-  let stream;
-  try {
-    stream = getLinkPreviewStorage().createReadStream(key);
-    await new Promise((resolve, reject) => {
-      stream.once('open', resolve);
-      stream.once('error', reject);
-    });
-  } catch (error) {
-    if (error instanceof TypeError || error?.code === 'ENOENT') {
-      sendJson(res, 404, { ok: false, error: 'Image not found' });
-      return;
-    }
-    throw error;
-  }
-  res.writeHead(200, {
-    ...baseHeaders(),
-    'Cache-Control': 'public, max-age=31536000, immutable',
-    'Content-Type': 'image/webp'
-  });
-  stream.pipe(res);
 }
 
 // Finishes deletions whose grace period is over: rooms go to their heirs, rooms
@@ -2238,6 +2009,7 @@ function createApiApp({
   registerFriendsRoutes(app, apiContext, { friends: friendsService, requestLimiter: friendRequestLimiter });
   registerDirectMessageRoutes(app, apiContext, directMessages);
   registerNotificationSettingsRoutes(app, apiContext, notificationSettings);
+  registerAvatarRoutes(app, apiContext, { avatars: avatarsService, rooms: roomsService, uploadLimiter: avatarUploadLimiter });
   registerAccountRoutes(app, apiContext, {
     account: accountService,
     limiter: authLimiter,
@@ -2377,20 +2149,6 @@ function createApiApp({
     });
   }
 
-  app.post('/api/auth/avatar', (request, reply) => runLegacyHandler(request, reply, handleUploadUserAvatar));
-  app.delete('/api/auth/avatar', (request, reply) => runLegacyHandler(request, reply, handleDeleteUserAvatar));
-  app.post('/api/rooms/:roomId/avatar', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
-    return handleUploadRoomAvatar(req, res, normalizeRoomId(request.params.roomId), request);
-  }));
-  app.delete('/api/rooms/:roomId/avatar', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
-    return handleDeleteRoomAvatar(req, res, normalizeRoomId(request.params.roomId), request);
-  }));
-  app.get('/api/avatars/:key', (request, reply) => runLegacyHandler(request, reply, (_req, res) => {
-    return handleGetAvatar(res, request.params.key);
-  }));
-  app.get('/api/link-previews/:key', (request, reply) => runLegacyHandler(request, reply, (_req, res) => {
-    return handleGetLinkPreviewImage(res, request.params.key);
-  }));
 
 
   // Register after plugins finish loading so @fastify/websocket can wrap the handler.
