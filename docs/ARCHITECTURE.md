@@ -109,8 +109,11 @@ export function registerAdmissionRoutes(app: FastifyInstance, ctx: ApiContext): 
 8. Realtime runtime and the remaining stores.
 9. `packages/shared` as one TypeScript source; the `.js`/`.mjs` twins go away.
 
-Already typed: `domains/admission/livekit-token-binding.mts`,
-`lib/image-signature.mts`, `platform/http/origin-guard.mts`.
+Done so far:
+
+- PR 0: ES modules (`scripts/codemods/cjs-to-esm.mjs`); applied migrations are `.cjs`.
+- PR 1: `app/context.ts` (`ApiContext`), `platform/http/http-kit.ts` (security headers, `no-store`, request metric and log line, `{ ok: false, error }` failures for every Fastify-native route), `platform/db/kysely.ts` with generated `platform/db/schema.ts` (`npm run db:types`, verified by `test/db-schema-types.test.js`), and the ops group in `domains/ops/` (health, metrics, proof-of-work, desktop release, client logs).
+- Typed before PR 0: `domains/admission/livekit-token-binding.mts`, `lib/image-signature.mts`, `platform/http/origin-guard.mts`.
 
 ## 5. Runtime state and scaling
 
