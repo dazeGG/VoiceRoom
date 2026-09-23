@@ -195,7 +195,8 @@ test('self-only flags never enter the public user shape other people receive', (
   assert.deepEqual(selfUser(user), { ...shared, hasUsedDesktopApp: true, appPromptSeen: true });
 
   const server = fs.readFileSync(path.join(import.meta.dirname, '../src/server.js'), 'utf8');
-  assert.match(server, /peer: publicUser\(peer\)/, 'DM peers get the public shape');
+  const directMessages = fs.readFileSync(path.join(import.meta.dirname, '../src/domains/messaging/direct-messages.service.ts'), 'utf8');
+  assert.match(directMessages, /peer: publicUser\(peer\)/, 'DM peers get the public shape');
   assert.match(server, /type: 'user-updated', user: publicUser\(user\)/, 'profile broadcasts get the public shape');
   const socialViews = fs.readFileSync(path.join(import.meta.dirname, '../src/domains/social/social-views.ts'), 'utf8');
   assert.match(socialViews, /const actor = publicUser\(user\)/, 'actors get the public shape');
