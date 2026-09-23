@@ -2,9 +2,9 @@ import assert from 'node:assert/strict';
 import { Pool } from 'pg';
 import test from 'node:test';
 import { runMigrations } from '../src/lib/migrate.js';
-import { createAttachmentRepository } from '../src/domains/media/attachment-repository.js';
-import { createMediaQuotaRepository } from '../src/domains/media/media-quota-repository.js';
-import { createMediaQuotaService } from '../src/domains/media/media-quota-service.js';
+import { createAttachmentRepository } from '../src/domains/media/attachment-repository.ts';
+import { createMediaQuotaRepository } from '../src/domains/media/media-quota-repository.ts';
+import { createMediaQuotaService } from '../src/domains/media/media-quota-service.ts';
 import { createTestDatabase } from './db-harness.js';
 const SILENT = { log() {}, info() {}, warn() {}, error() {} };
 

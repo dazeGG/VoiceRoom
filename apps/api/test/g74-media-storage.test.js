@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { createMediaStorage, createStorageKey, parseStorageKey } from '../src/domains/media/storage.js';
+import { createMediaStorage, createStorageKey, parseStorageKey } from '../src/domains/media/storage.ts';
 const ID = '123e4567-e89b-42d3-a456-426614174000';
 
 test('G74-A01 private storage atomically streams variants and removes idempotently', async (t) => {

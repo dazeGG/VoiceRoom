@@ -1,8 +1,8 @@
 import { createDbPool } from '../lib/db.js';
-import { createAttachmentRepository } from '../domains/media/attachment-repository.js';
-import { createMediaReconciliationService } from '../domains/media/media-reconciliation-service.js';
-import { createMediaJobRepository } from '../domains/media/media-job-repository.js';
-import { createMediaStorage } from '../domains/media/storage.js';
+import { createAttachmentRepository } from '../domains/media/attachment-repository.ts';
+import { createMediaReconciliationService } from '../domains/media/media-reconciliation-service.ts';
+import { createMediaJobRepository } from '../domains/media/media-job-repository.ts';
+import { createMediaStorage } from '../domains/media/storage.ts';
 
 async function main() {
   const pool = createDbPool();

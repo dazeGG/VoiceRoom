@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import sharp from 'sharp';
-import { MediaJobFenceError } from '../domains/media/media-job-repository.js';
+import { MediaJobFenceError } from '../domains/media/media-job-repository.ts';
 import { recordMediaOldestPending } from '../lib/metrics.js';
 import { LOG_EVENTS } from '../lib/log-events.js';
 import { createLogger } from '../lib/logger.js';
@@ -152,10 +152,10 @@ function createMediaProcessingWorker({
 async function main() {
   if (String(process.env.MEDIA_PROCESSING_CLAIM_ENABLED || '').toLowerCase() !== 'true') return;
   const { createDbPool } = await import('../lib/db.js');
-  const { createAttachmentRepository } = await import('../domains/media/attachment-repository.js');
-  const { createMediaJobRepository } = await import('../domains/media/media-job-repository.js');
-  const { createMediaPressureService } = await import('../domains/media/media-pressure-service.js');
-  const { createMediaStorage } = await import('../domains/media/storage.js');
+  const { createAttachmentRepository } = await import('../domains/media/attachment-repository.ts');
+  const { createMediaJobRepository } = await import('../domains/media/media-job-repository.ts');
+  const { createMediaPressureService } = await import('../domains/media/media-pressure-service.ts');
+  const { createMediaStorage } = await import('../domains/media/storage.ts');
   const pool = createDbPool();
   const storage = createMediaStorage({ rootDir: process.env.MEDIA_STORAGE_DIR || '/data/media' });
   await storage.freeSpace();

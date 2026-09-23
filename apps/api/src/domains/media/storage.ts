@@ -1,49 +1,58 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
+import type { ReadStream } from 'node:fs';
 import path from 'node:path';
 
+export type MediaVariant = 'original' | 'processed' | 'preview';
+type MediaSource = Buffer | Uint8Array | AsyncIterable<unknown> | Iterable<unknown>;
+
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
-const VARIANTS = new Set(['original', 'processed', 'preview']);
+const VARIANTS = new Set<unknown>(['original', 'processed', 'preview']);
 const STORAGE_KEY_PATTERN = new RegExp(`^(${UUID_PATTERN.source.slice(1, -1)})/(original|processed|preview)$`);
 const TEMPORARY_FILE_PATTERN = /^\.(original|processed|preview)\.[0-9a-f-]{36}\.tmp$/;
 
-function validateAttachmentId(value) {
+function errorCode(error: unknown): unknown {
+  return (error as { code?: unknown } | null | undefined)?.code;
+}
+
+function validateAttachmentId(value: unknown): string {
   const id = typeof value === 'string' ? value.toLowerCase() : '';
   if (!UUID_PATTERN.test(id)) throw new TypeError('Invalid media attachment id');
   return id;
 }
 
-function validateVariant(value) {
+function validateVariant(value: unknown): MediaVariant {
   if (!VARIANTS.has(value)) throw new TypeError('Invalid media variant');
-  return value;
+  return value as MediaVariant;
 }
 
-function createStorageKey(attachmentId, variant) {
+function createStorageKey(attachmentId: unknown, variant: unknown): string {
   return `${validateAttachmentId(attachmentId)}/${validateVariant(variant)}`;
 }
 
-function parseStorageKey(value) {
+function parseStorageKey(value: unknown): Readonly<{ attachmentId: string; variant: MediaVariant }> {
   const match = typeof value === 'string' ? STORAGE_KEY_PATTERN.exec(value) : null;
   if (!match) throw new TypeError('Invalid media storage key');
-  return Object.freeze({ attachmentId: match[1], variant: match[2] });
+  return Object.freeze({ attachmentId: match[1] as string, variant: match[2] as MediaVariant });
 }
 
-function contentChunks(source) {
+function contentChunks(source: unknown): Iterable<unknown> | AsyncIterable<unknown> {
   if (Buffer.isBuffer(source) || source instanceof Uint8Array) return [source];
-  if (source && typeof source[Symbol.asyncIterator] === 'function') return source;
-  if (source && typeof source[Symbol.iterator] === 'function') return source;
+  const candidate = source as { [Symbol.asyncIterator]?: unknown; [Symbol.iterator]?: unknown } | null | undefined;
+  if (candidate && typeof candidate[Symbol.asyncIterator] === 'function') return source as AsyncIterable<unknown>;
+  if (candidate && typeof candidate[Symbol.iterator] === 'function') return source as Iterable<unknown>;
   throw new TypeError('Media contents must be a Buffer, Uint8Array, or iterable stream');
 }
 
-function createMediaStorage({ rootDir, mediaDir } = {}) {
+function createMediaStorage({ rootDir, mediaDir }: { rootDir?: string; mediaDir?: string } = {}) {
   const configuredRoot = rootDir || mediaDir;
   if (typeof configuredRoot !== 'string' || !configuredRoot.trim()) {
     throw new TypeError('A private media storage directory is required');
   }
   const root = path.resolve(configuredRoot);
-  let canonicalRoot = null;
+  let canonicalRoot: string | null = null;
 
-  async function assertDirectory(directory, expectedRealPath) {
+  async function assertDirectory(directory: string, expectedRealPath: string): Promise<void> {
     const stat = await fs.promises.lstat(directory);
     if (!stat.isDirectory() || stat.isSymbolicLink()) {
       throw new Error('Private media namespace contains a non-directory or symbolic link');
@@ -52,7 +61,7 @@ function createMediaStorage({ rootDir, mediaDir } = {}) {
     if (realPath !== expectedRealPath) throw new Error('Private media namespace escaped its configured path');
   }
 
-  async function ensureRoot() {
+  async function ensureRoot(): Promise<string> {
     await fs.promises.mkdir(root, { recursive: true, mode: 0o700 });
     const stat = await fs.promises.lstat(root);
     if (!stat.isDirectory() || stat.isSymbolicLink()) {
@@ -67,44 +76,45 @@ function createMediaStorage({ rootDir, mediaDir } = {}) {
     return root;
   }
 
-  async function ensureAttachmentDirectory(attachmentId) {
+  async function ensureAttachmentDirectory(attachmentId: unknown): Promise<string> {
     const id = validateAttachmentId(attachmentId);
     await ensureRoot();
     const directory = path.join(root, id);
     await fs.promises.mkdir(directory, { recursive: true, mode: 0o700 });
-    await assertDirectory(directory, path.join(canonicalRoot, id));
+    await assertDirectory(directory, path.join(canonicalRoot as string, id));
     await fs.promises.chmod(directory, 0o700);
     return directory;
   }
 
-  async function existingAttachmentDirectory(attachmentId) {
+  async function existingAttachmentDirectory(attachmentId: unknown): Promise<string | null> {
     const id = validateAttachmentId(attachmentId);
     await ensureRoot();
     const directory = path.join(root, id);
     try {
-      await assertDirectory(directory, path.join(canonicalRoot, id));
+      await assertDirectory(directory, path.join(canonicalRoot as string, id));
       return directory;
     } catch (error) {
-      if (error?.code === 'ENOENT') return null;
+      if (errorCode(error) === 'ENOENT') return null;
       throw error;
     }
   }
 
-  async function syncDirectory(directory) {
-    let handle;
+  async function syncDirectory(directory: string): Promise<void> {
+    let handle: fs.promises.FileHandle | undefined;
     try {
       handle = await fs.promises.open(directory, fs.constants.O_RDONLY);
-      await handle.sync().catch((error) => {
+      await handle.sync().catch((error: unknown) => {
         // Windows does not permit fsync on directory handles. File data was
         // already synced before rename; retain directory fsync where supported.
-        if (!['EINVAL', 'ENOTSUP', 'EPERM'].includes(error?.code)) throw error;
+        if (!['EINVAL', 'ENOTSUP', 'EPERM'].includes(errorCode(error) as string)) throw error;
       });
     } finally {
       await handle?.close();
     }
   }
 
-  async function save(attachmentId, variant, source, { maxBytes = Infinity } = {}) {
+  async function save(attachmentId: unknown, variant: unknown, source: MediaSource | unknown, { maxBytes = Infinity }: { maxBytes?: number } = {}):
+    Promise<Readonly<{ key: string; bytes: number }>> {
     const id = validateAttachmentId(attachmentId);
     const normalizedVariant = validateVariant(variant);
     const directory = await ensureAttachmentDirectory(id);
@@ -112,15 +122,15 @@ function createMediaStorage({ rootDir, mediaDir } = {}) {
     const temporary = path.join(directory, `.${normalizedVariant}.${crypto.randomUUID()}.tmp`);
     const flags = fs.constants.O_CREAT | fs.constants.O_EXCL | fs.constants.O_WRONLY |
       (fs.constants.O_NOFOLLOW || 0);
-    let handle;
+    let handle: fs.promises.FileHandle | null | undefined;
     let bytes = 0;
     try {
       handle = await fs.promises.open(temporary, flags, 0o600);
       for await (const value of contentChunks(source)) {
-        const chunk = Buffer.isBuffer(value) ? value : Buffer.from(value);
+        const chunk = Buffer.isBuffer(value) ? value : Buffer.from(value as Uint8Array);
         bytes += chunk.length;
         if (bytes > maxBytes) {
-          const error = new Error('Media contents exceed the allowed size');
+          const error = new Error('Media contents exceed the allowed size') as Error & { code?: string };
           error.code = 'MEDIA_TOO_LARGE';
           throw error;
         }
@@ -139,17 +149,17 @@ function createMediaStorage({ rootDir, mediaDir } = {}) {
       return Object.freeze({ key: createStorageKey(id, normalizedVariant), bytes });
     } catch (error) {
       await handle?.close().catch(() => {});
-      await fs.promises.unlink(temporary).catch((unlinkError) => {
-        if (unlinkError?.code !== 'ENOENT') throw unlinkError;
+      await fs.promises.unlink(temporary).catch((unlinkError: unknown) => {
+        if (errorCode(unlinkError) !== 'ENOENT') throw unlinkError;
       });
       throw error;
     }
   }
 
-  async function openRead(attachmentId, variant) {
+  async function openRead(attachmentId: unknown, variant: unknown): Promise<Readonly<{ key: string; bytes: number; stream: ReadStream }>> {
     const directory = await existingAttachmentDirectory(attachmentId);
     if (!directory) {
-      const error = new Error('Media object does not exist');
+      const error = new Error('Media object does not exist') as Error & { code?: string };
       error.code = 'ENOENT';
       throw error;
     }
@@ -169,11 +179,11 @@ function createMediaStorage({ rootDir, mediaDir } = {}) {
     }
   }
 
-  async function createReadStream(attachmentId, variant) {
+  async function createReadStream(attachmentId: unknown, variant: unknown): Promise<ReadStream> {
     return (await openRead(attachmentId, variant)).stream;
   }
 
-  async function remove(attachmentId, variant) {
+  async function remove(attachmentId: unknown, variant: unknown): Promise<boolean> {
     const directory = await existingAttachmentDirectory(attachmentId);
     if (!directory) return false;
     const file = path.join(directory, validateVariant(variant));
@@ -184,12 +194,12 @@ function createMediaStorage({ rootDir, mediaDir } = {}) {
       await syncDirectory(directory);
       return true;
     } catch (error) {
-      if (error?.code === 'ENOENT') return false;
+      if (errorCode(error) === 'ENOENT') return false;
       throw error;
     }
   }
 
-  async function removeAttachment(attachmentId) {
+  async function removeAttachment(attachmentId: unknown): Promise<boolean> {
     const directory = await existingAttachmentDirectory(attachmentId);
     if (!directory) return false;
     const entries = await fs.promises.readdir(directory, { withFileTypes: true });
@@ -205,10 +215,10 @@ function createMediaStorage({ rootDir, mediaDir } = {}) {
     return true;
   }
 
-  async function listKeys() {
+  async function listKeys(): Promise<string[]> {
     await ensureRoot();
     const entries = await fs.promises.readdir(root, { withFileTypes: true });
-    const keys = [];
+    const keys: string[] = [];
     for (const entry of entries) {
       if (!UUID_PATTERN.test(entry.name)) {
         throw new Error('Private media namespace contains a foreign object');
@@ -216,7 +226,8 @@ function createMediaStorage({ rootDir, mediaDir } = {}) {
       if (!entry.isDirectory() || entry.isSymbolicLink()) {
         throw new Error('Private media namespace contains an invalid attachment directory');
       }
-      const directory = await existingAttachmentDirectory(entry.name);
+      // assertDirectory above this call rules out a missing directory.
+      const directory = await existingAttachmentDirectory(entry.name) as string;
       const variants = await fs.promises.readdir(directory, { withFileTypes: true });
       for (const variant of variants) {
         if (VARIANTS.has(variant.name) && variant.isFile() && !variant.isSymbolicLink()) {
@@ -229,7 +240,7 @@ function createMediaStorage({ rootDir, mediaDir } = {}) {
     return keys.sort();
   }
 
-  async function freeSpace() {
+  async function freeSpace(): Promise<Readonly<{ availableBytes: bigint; freeBytes: bigint; totalBytes: bigint }>> {
     await ensureRoot();
     const stats = await fs.promises.statfs(root, { bigint: true });
     return Object.freeze({
@@ -239,16 +250,16 @@ function createMediaStorage({ rootDir, mediaDir } = {}) {
     });
   }
 
-  async function removeStaleTemporaryFiles(before, { limit = 500 } = {}) {
+  async function removeStaleTemporaryFiles(before: Date | number | string, { limit = 500 }: { limit?: number } = {}): Promise<string[]> {
     await ensureRoot();
     const cutoff = before instanceof Date ? before.getTime() : Number(before);
     if (!Number.isFinite(cutoff)) throw new TypeError('A temporary media cutoff is required');
-    const removed = [];
+    const removed: string[] = [];
     const entries = await fs.promises.readdir(root, { withFileTypes: true });
     for (const entry of entries) {
       if (removed.length >= Math.max(1, Math.min(Number(limit) || 500, 500))) break;
       if (!UUID_PATTERN.test(entry.name) || !entry.isDirectory() || entry.isSymbolicLink()) continue;
-      const directory = await existingAttachmentDirectory(entry.name);
+      const directory = await existingAttachmentDirectory(entry.name) as string;
       const variants = await fs.promises.readdir(directory, { withFileTypes: true });
       for (const variant of variants) {
         if (removed.length >= limit) break;
@@ -278,6 +289,8 @@ function createMediaStorage({ rootDir, mediaDir } = {}) {
     save
   });
 }
+
+export type MediaStorage = ReturnType<typeof createMediaStorage>;
 
 export {
   STORAGE_KEY_PATTERN,

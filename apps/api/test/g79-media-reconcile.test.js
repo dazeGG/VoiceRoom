@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createMediaReconciliationService } from '../src/domains/media/media-reconciliation-service.js';
+import { createMediaReconciliationService } from '../src/domains/media/media-reconciliation-service.ts';
 
 test('G79-A01 missing ready files raise P0, orphans are removed and lost processing jobs recover', async () => {
   const unavailable = []; const enqueued = []; const removed = [];

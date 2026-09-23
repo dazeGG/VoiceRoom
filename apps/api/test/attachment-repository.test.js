@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { createAttachmentRepository, mapAttachment } from '../src/domains/media/attachment-repository.js';
+import { createAttachmentRepository, mapAttachment } from '../src/domains/media/attachment-repository.ts';
 
 const ROW = Object.freeze({
   id: 'attachment-1',
