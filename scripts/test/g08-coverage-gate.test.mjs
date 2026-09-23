@@ -231,6 +231,46 @@ test("G08-A03c protected-base policy ratchet rejects every gate weakening", () =
   }), /media\.pathPatterns/i);
 });
 
+test("G08-A03d a .js policy entry carries over to its .ts successor only once the .js file is gone", () => {
+  const legacy = "apps/api/src/domains/media/attachment-repository.js";
+  const typed = "apps/api/src/domains/media/attachment-repository.ts";
+  const base = thresholdFixture({ strictBranchPaths: [legacy], businessPathPatterns: [...thresholds.businessPathPatterns, legacy] });
+  const renamed = thresholdFixture({ strictBranchPaths: [typed], businessPathPatterns: [...thresholds.businessPathPatterns, typed] });
+  const summary = { ...greenSummary, files: { ...greenSummary.files, [typed]: { lines: { pct: 100 }, branches: { pct: 100 } } } };
+  const check = (fileExists) => enforceRelease250Coverage({
+    coverageSummary: summary,
+    thresholds: renamed,
+    baseThresholds: base,
+    fileExists
+  });
+
+  assert.equal(check(() => false).ratchetMode, "protected-base-ratchet");
+  assert.throws(() => check(() => true), /may not remove or narrow protected-base policy entry: apps\/api\/src\/domains\/media\/attachment-repository\.js/i);
+  assert.throws(() => enforceRelease250Coverage({
+    coverageSummary: summary,
+    thresholds: thresholdFixture({ strictBranchPaths: [], businessPathPatterns: renamed.businessPathPatterns }),
+    baseThresholds: base,
+    fileExists: () => false
+  }), /strictBranchPaths may not remove/i);
+});
+
+test("G08-A03e a .ts exclusion may only replace the .js/.mjs exclusions of a module that is gone", () => {
+  const base = thresholdFixture({ ignoredPathPatterns: [...thresholds.ignoredPathPatterns, "packages/shared/src/emoji.js", "packages/shared/src/emoji.mjs"] });
+  const current = thresholdFixture({ ignoredPathPatterns: [...thresholds.ignoredPathPatterns, "packages/shared/src/emoji.ts"] });
+  const check = (thresholdsUnderTest, fileExists) => enforceRelease250Coverage({
+    coverageSummary: greenSummary,
+    thresholds: thresholdsUnderTest,
+    baseThresholds: base,
+    fileExists
+  });
+
+  assert.equal(check(current, () => false).ratchetMode, "protected-base-ratchet");
+  assert.throws(() => check(current, (file) => file.endsWith(".mjs")), /may not add protected-base exclusions/i);
+  assert.throws(() => check(thresholdFixture({
+    ignoredPathPatterns: [...thresholds.ignoredPathPatterns, "packages/shared/src/emoji.ts", "packages/shared/src/other.ts"]
+  }), () => false), /packages\/shared\/src\/other\.ts/);
+});
+
 test("G08-A04 rejects unmeasured/regressed coverage and changed business gaps", () => {
   assert.throws(() => checkRelease250Coverage({
     coverageSummary: { ...greenSummary, meta: { ...greenSummary.meta, measured: false } },

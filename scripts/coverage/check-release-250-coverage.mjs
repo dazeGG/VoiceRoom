@@ -174,7 +174,7 @@ function configuredBaseline(thresholds) {
   };
 }
 
-function enforceBaselineRatchet(thresholds, { baseThresholds, baseThresholdsAbsent }) {
+function enforceBaselineRatchet(thresholds, { baseThresholds, baseThresholdsAbsent, fileExists }) {
   if (Boolean(baseThresholds) === Boolean(baseThresholdsAbsent)) {
     throw new Error("Coverage enforcement requires exactly one trust mode: protected base thresholds or verified initial adoption");
   }
@@ -188,16 +188,16 @@ function enforceBaselineRatchet(thresholds, { baseThresholds, baseThresholdsAbse
     if (thresholds.changedBusinessCode.line < baseThresholds.changedBusinessCode.line) throw new Error("changedBusinessCode.line may not decrease from protected base");
     if (thresholds.changedBusinessCode.branch < baseThresholds.changedBusinessCode.branch) throw new Error("changedBusinessCode.branch may not decrease from protected base");
     if (thresholds.strictBranchMinimum < baseThresholds.strictBranchMinimum) throw new Error("strictBranchMinimum may not decrease from protected base");
-    assertPolicySuperset(thresholds.businessPathPatterns, baseThresholds.businessPathPatterns, "businessPathPatterns");
-    assertPolicySuperset(thresholds.strictBranchPaths ?? [], baseThresholds.strictBranchPaths ?? [], "strictBranchPaths");
-    assertNoNewIgnoredPatterns(thresholds.ignoredPathPatterns, baseThresholds.ignoredPathPatterns);
+    assertPolicySuperset(thresholds.businessPathPatterns, baseThresholds.businessPathPatterns, "businessPathPatterns", fileExists);
+    assertPolicySuperset(thresholds.strictBranchPaths ?? [], baseThresholds.strictBranchPaths ?? [], "strictBranchPaths", fileExists);
+    assertNoNewIgnoredPatterns(thresholds.ignoredPathPatterns, baseThresholds.ignoredPathPatterns, fileExists);
     const currentGroups = new Map(thresholds.strictBranchGroups.map((group) => [group.name, group]));
     for (const baseGroup of baseThresholds.strictBranchGroups) {
       const group = currentGroups.get(baseGroup.name);
       if (!group) throw new Error(`Strict branch group removed from protected base: ${baseGroup.name}`);
       if (group.enforcement !== baseGroup.enforcement) throw new Error(`Strict branch group enforcement changed: ${baseGroup.name}`);
-      assertPolicySuperset(group.paths ?? [], baseGroup.paths ?? [], `${baseGroup.name}.paths`);
-      assertPolicySuperset(group.pathPatterns ?? [], baseGroup.pathPatterns ?? [], `${baseGroup.name}.pathPatterns`);
+      assertPolicySuperset(group.paths ?? [], baseGroup.paths ?? [], `${baseGroup.name}.paths`, fileExists);
+      assertPolicySuperset(group.pathPatterns ?? [], baseGroup.pathPatterns ?? [], `${baseGroup.name}.pathPatterns`, fileExists);
     }
     return "protected-base-ratchet";
   }
@@ -210,17 +210,35 @@ function enforceBaselineRatchet(thresholds, { baseThresholds, baseThresholdsAbse
   }
 }
 
-function assertPolicySuperset(currentValues, baseValues, label) {
+// A module moved from .js to .ts keeps its protected-base policy through the
+// .ts entry, but only once the .js file is really gone: renaming the policy
+// entry alone must not unpolice a file that still exists.
+function isRenamedToTypeScript(value, current, fileExists) {
+  return value.endsWith(".js") && current.has(`${value.slice(0, -3)}.ts`) && !fileExists(value);
+}
+
+function assertPolicySuperset(currentValues, baseValues, label, fileExists = fs.existsSync) {
   const current = new Set(currentValues.map(normalizePath));
   for (const value of baseValues.map(normalizePath)) {
-    if (!current.has(value)) throw new Error(`${label} may not remove or narrow protected-base policy entry: ${value}`);
+    if (current.has(value) || isRenamedToTypeScript(value, current, fileExists)) continue;
+    throw new Error(`${label} may not remove or narrow protected-base policy entry: ${value}`);
   }
 }
 
-function assertNoNewIgnoredPatterns(currentValues, baseValues) {
+// The same rename seen from the other side: a .ts exclusion replaces the
+// .js/.mjs exclusion the base already had, once those files are gone.
+function replacesIgnoredJavaScript(value, base, fileExists) {
+  if (!value.endsWith(".ts")) return false;
+  const stem = value.slice(0, -3);
+  const predecessors = [`${stem}.js`, `${stem}.mjs`].filter((candidate) => base.has(candidate));
+  return predecessors.length > 0 && predecessors.every((candidate) => !fileExists(candidate));
+}
+
+function assertNoNewIgnoredPatterns(currentValues, baseValues, fileExists = fs.existsSync) {
   const base = new Set(baseValues.map(normalizePath));
   for (const value of currentValues.map(normalizePath)) {
-    if (!base.has(value)) throw new Error(`ignoredPathPatterns may not add protected-base exclusions: ${value}`);
+    if (base.has(value) || replacesIgnoredJavaScript(value, base, fileExists)) continue;
+    throw new Error(`ignoredPathPatterns may not add protected-base exclusions: ${value}`);
   }
 }
 
@@ -436,7 +454,8 @@ export function checkRelease250Coverage({
   changedLineMap = new Map(),
   coveragePath = "",
   baseThresholds,
-  baseThresholdsAbsent = false
+  baseThresholdsAbsent = false,
+  fileExists = fs.existsSync
 }) {
   validateThresholds(thresholds);
   assert.equal(coverageSummary.schemaVersion, 1, "coverage summary schemaVersion must be 1");
@@ -444,7 +463,7 @@ export function checkRelease250Coverage({
   assert.equal(coverageSummary.meta?.measured, true, "coverage summary must be produced from measured coverage");
   assert.equal(coverageSummary.meta?.engine, "node-v8-coverage", "coverage summary must use node-v8-coverage");
   assert.equal(coverageSummary.meta?.branchMetric, BRANCH_METRIC, `coverage summary branchMetric must be ${BRANCH_METRIC}`);
-  const ratchetMode = enforceBaselineRatchet(thresholds, { baseThresholds, baseThresholdsAbsent });
+  const ratchetMode = enforceBaselineRatchet(thresholds, { baseThresholds, baseThresholdsAbsent, fileExists });
   const files = normalizeFileCoverage(coverageSummary);
   const total = totalCoverage(coverageSummary, files);
   const baseline = configuredBaseline(thresholds);
