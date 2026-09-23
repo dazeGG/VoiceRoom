@@ -123,6 +123,7 @@ Done so far:
 - PR 7b: account and room avatars and the served image files in `domains/media/` (`avatars.routes.ts` over `avatars.service.ts`). Every HTTP route except the capability routes (`platform/capability-routes.js`, which still take `runLegacyHandler`) is now Fastify-native.
 - PR 8a: the in-memory voice roster in `realtime/room-presence.ts`: attaching stored rooms to their live roster, legacy room event delivery, closing a seat from its own transport, the serialized active/empty occupancy writes with retry, the roster wait for admission and the idle-room sweep.
 - PR 8b: message projection (`domains/messaging/message-projection.ts`: public attachments and reply quotes), the durable delivery relay that LISTENs for the worker (`message-delivery-relay.ts`), push and DM notification dispatch (`domains/notifications/notification-dispatch.ts`) and link-preview events (`domains/link-previews/link-preview-events.ts`).
+- PR 8c: room lifecycle (`domains/rooms/room-lifecycle.ts`: lobby card and room.updated, profile refresh on live seats, invitation expiry, deleted-room teardown), account lifecycle (`domains/account/account-lifecycle.ts`: profile broadcast to friends, ending session connections, finishing due deletions) and the maintenance timers (`platform/maintenance.ts`).
 - Typed before PR 0: `domains/admission/livekit-token-binding.mts`, `lib/image-signature.mts`, `platform/http/origin-guard.mts`.
 
 ## 5. Runtime state and scaling
