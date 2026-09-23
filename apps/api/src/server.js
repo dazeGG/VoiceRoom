@@ -12,6 +12,9 @@ import { createLinkPreviewEvents } from './domains/link-previews/link-preview-ev
 import { createMessageDeliveryRelay } from './domains/messaging/message-delivery-relay.ts';
 import { createMessageProjection } from './domains/messaging/message-projection.ts';
 import { createNotificationDispatch } from './domains/notifications/notification-dispatch.ts';
+import { createAccountLifecycle } from './domains/account/account-lifecycle.ts';
+import { createRoomLifecycle } from './domains/rooms/room-lifecycle.ts';
+import { startMaintenanceTimers } from './platform/maintenance.ts';
 import { URL } from 'node:url';
 
 import {
@@ -50,10 +53,7 @@ import { createLinkPreviewStorage, reconcileLinkPreviewImages } from './lib/link
 import { createLinkPreviewRepository } from './domains/link-previews/link-preview-repository.js';
 import { createLinkPreviewService } from './domains/link-previews/link-preview-service.js';
 import { avatarColorForPeerId, createRoomStore } from './lib/room-store.js';
-import {
-  createUserStore,
-  publicUser
-} from './lib/user-store.js';
+import { createUserStore } from './lib/user-store.js';
 import { createGeoLocator } from './lib/geoip.js';
 import { createAccountDeletionRepository } from './domains/account/account-deletion-repository.js';
 import { createFriendStore } from './lib/friend-store.js';
@@ -79,7 +79,7 @@ import { gatePrincipalForPeer, isGatePrincipal } from './domains/admission/gate-
 import { createPeerEviction } from './domains/rooms/peer-eviction.ts';
 import { createPeerModerationService } from './domains/rooms/peer-moderation.service.ts';
 import { registerPeerModerationRoutes } from './domains/rooms/peer-moderation.routes.ts';
-import { publicLobbyRoom as lobbyRoomView, publicPeer } from './domains/rooms/room-views.ts';
+import { publicPeer } from './domains/rooms/room-views.ts';
 import { registerRoomRoutes } from './domains/rooms/rooms.routes.ts';
 import { createRoomsService } from './domains/rooms/rooms.service.ts';
 import { publicChatMessage } from './domains/messaging/room-chat-views.ts';
@@ -369,6 +369,49 @@ const { projectMedia: attachMediaProjection, projectReply: attachReplyProjection
 const { queuePush, broadcastDmNotification } = notificationDispatch;
 const { broadcastRoomLinkPreview, broadcastDirectLinkPreview, scheduleRoomLinkPreview, scheduleDirectLinkPreview } = linkPreviewEvents;
 const { start: startMessageDeliveryListener, stop: stopMessageDeliveryListener } = messageDeliveryRelay;
+const roomLifecycle = createRoomLifecycle({
+  presence: roomPresence,
+  runtime: () => roomRuntime,
+  invitations: () => (friendStoreInviteExpiryEnabled ? friendStore : null),
+  notifyUser: (userId, event) => broadcastToUser(userId, event),
+  credentials: () => getCredentialBoundary(),
+  removeParticipant: (roomId, peerId) => removeLiveKitParticipant(roomId, peerId),
+  removeAvatar: (key, log) => avatarsService.removeFile(key, log),
+  displayName: (user) => sessionDisplayName(user),
+  logger: () => getProcessLogger()
+});
+const accountLifecycle = createAccountLifecycle({
+  friendIds: (userId) => getFriendStore().getFriendIds(userId),
+  notifyUser: (userId, event) => broadcastToUser(userId, event),
+  sockets: () => wsRegistry,
+  seatPrincipal: (roomId, peerId) => {
+    const peer = presenceRooms.get(roomId)?.peers.get(peerId);
+    return peer ? liveKitGatePrincipalForPeer(roomId, peer) : null;
+  },
+  revokeSeatCredentials: (input) => getRoomStore().revokeLiveKitGateCredentialsForPeer(input),
+  leaveVoice: (connection, activeVoice) => roomRuntime?.leaveVoiceRoom(connection, activeVoice),
+  removeParticipant: (roomId, peerId) => removeLiveKitParticipant(roomId, peerId),
+  sessionRevokedCloseCode: SESSION_REVOKED_CLOSE_CODE,
+  deletions: () => getAccountDeletionRepository(),
+  findRoom: (roomId) => getRoomStore().getRoom(roomId),
+  announceRoomUpdate: (roomId, room) => roomLifecycle.announceRoomUpdate(roomId, room),
+  finishRoomDeletion: (roomId, options) => roomLifecycle.finishRoomDeletion(roomId, options),
+  removeAvatar: (key) => avatarsService.removeFile(key, undefined),
+  logger: () => getProcessLogger()
+});
+const {
+  lobbyRoom: publicLobbyRoom,
+  announceRoomUpdate: broadcastRoomUpdate,
+  refreshActiveProfile: refreshActiveUserProfile,
+  expireRoomInvitations,
+  finishRoomDeletion
+} = roomLifecycle;
+const {
+  endSessionConnections: endAccountSessionConnections,
+  finalizeDueDeletions: finalizeDueAccountDeletions
+} = accountLifecycle;
+// Callers pass the request (or `{ log }`) whose logger records a failed broadcast.
+const broadcastUserProfileToFriends = (user, request) => accountLifecycle.broadcastProfileToFriends(user, request?.log);
 
 // Work that runs outside a request (timers, listeners, background dispatch)
 // still has to be searchable next to the requests it was triggered by, so it
@@ -1175,54 +1218,33 @@ const removeLiveKitParticipant = liveKitAdmin.removeParticipant;
 const setLiveKitParticipantMuted = liveKitAdmin.setParticipantMuted;
 
 function startPruneTimer(server, logger = getProcessLogger()) {
-  // Reap WS connections whose clients stopped heartbeating (half-open sockets
-  // never emit 'close'), otherwise dead peers linger in rosters and friends
-  // stay "online" forever.
-  const wsTimer = setInterval(() => {
-    try {
-      wsRegistry?.pruneStale();
-    } catch (error) {
-      logger.error({ evt: LOG_EVENTS.MAINTENANCE_TASK_FAILED, task: 'ws-prune', err: error }, 'ws prune timer failed');
-    }
-  }, KEEPALIVE_MS);
-  if (typeof wsTimer.unref === 'function') wsTimer.unref();
-  server.once('close', () => clearInterval(wsTimer));
-
-  if (ROOM_PRUNE_INTERVAL_MS <= 0) return null;
-
-  const timer = setInterval(() => {
-    void observeMaintenance('room_prune', () => pruneRooms()).catch((error) => {
-      logger.error({ evt: LOG_EVENTS.MAINTENANCE_TASK_FAILED, task: 'room-prune', err: error }, 'room prune timer failed');
-    });
-    void observeMaintenance('session_prune', () => getUserStore().pruneSessions())
-      .catch((error) => {
-        logger.error({ evt: LOG_EVENTS.MAINTENANCE_TASK_FAILED, task: 'session-prune', err: error }, 'session prune timer failed');
-      });
-    void observeMaintenance('login_event_prune', () => getUserStore().pruneLoginEvents())
-      .catch((error) => {
-        logger.error({ evt: LOG_EVENTS.MAINTENANCE_TASK_FAILED, task: 'sign-in-history-prune', err: error }, 'sign-in history prune timer failed');
-      });
-    void observeMaintenance('account_deletion_finalize', () => finalizeDueAccountDeletions())
-      .catch((error) => {
-        logger.error({ evt: LOG_EVENTS.MAINTENANCE_TASK_FAILED, task: 'account-deletion', err: error }, 'account deletion timer failed');
-      });
-    if (getLinkPreviewService()) {
-      void observeMaintenance('link_preview_prune', () => getLinkPreviewService().pruneExpired())
-        .catch((error) => {
-          logger.error({ evt: LOG_EVENTS.MAINTENANCE_TASK_FAILED, task: 'link-preview-prune', err: error }, 'link preview prune timer failed');
-        });
-    }
-    if (RETENTION_PURGE_INTERVAL_MS > 0 && getRoomStore().purgeDeleted) {
-      void observeMaintenance('retention_purge', () => getRoomStore().purgeDeleted({ olderThanMs: RETENTION_KEEP_DELETED_MS }))
-        .catch((error) => {
-          logger.error({ evt: LOG_EVENTS.MAINTENANCE_TASK_FAILED, task: 'retention-purge', err: error }, 'retention purge timer failed');
-        });
-    }
-  }, ROOM_PRUNE_INTERVAL_MS);
-
-  if (typeof timer.unref === 'function') timer.unref();
-  server.once('close', () => clearInterval(timer));
-  return timer;
+  return startMaintenanceTimers(server, {
+    keepaliveMs: KEEPALIVE_MS,
+    intervalMs: ROOM_PRUNE_INTERVAL_MS,
+    pruneSockets: () => wsRegistry?.pruneStale(),
+    observe: observeMaintenance,
+    logger,
+    tasks: [
+      { name: 'room_prune', label: 'room-prune', failureMessage: 'room prune timer failed', run: () => pruneRooms() },
+      { name: 'session_prune', label: 'session-prune', failureMessage: 'session prune timer failed', run: () => getUserStore().pruneSessions() },
+      { name: 'login_event_prune', label: 'sign-in-history-prune', failureMessage: 'sign-in history prune timer failed', run: () => getUserStore().pruneLoginEvents() },
+      { name: 'account_deletion_finalize', label: 'account-deletion', failureMessage: 'account deletion timer failed', run: () => finalizeDueAccountDeletions() },
+      {
+        name: 'link_preview_prune',
+        label: 'link-preview-prune',
+        failureMessage: 'link preview prune timer failed',
+        enabled: () => Boolean(getLinkPreviewService()),
+        run: () => getLinkPreviewService().pruneExpired()
+      },
+      {
+        name: 'retention_purge',
+        label: 'retention-purge',
+        failureMessage: 'retention purge timer failed',
+        enabled: () => RETENTION_PURGE_INTERVAL_MS > 0 && Boolean(getRoomStore().purgeDeleted),
+        run: () => getRoomStore().purgeDeleted({ olderThanMs: RETENTION_KEEP_DELETED_MS })
+      }
+    ]
+  });
 }
 
 async function getRoom(roomId) {
@@ -1240,185 +1262,6 @@ async function findRoomBan(roomId, userId, ip) {
   return getRoomStore().findActiveRoomBan({ roomId, userId: userId || null, ip: ip || '' });
 }
 
-// senderId narrows the expiry to one inviter; pass null to expire every pending
-// invitation for the room (used when the room itself goes away).
-async function expireRoomInvitations(senderId, roomId) {
-  if (!roomId) return [];
-  if (!friendStoreInviteExpiryEnabled || typeof friendStore?.expirePendingInvites !== 'function') return [];
-  const messages = await friendStore.expirePendingInvites({ senderId: senderId || null, roomId });
-  for (const message of messages) {
-    const event = { type: 'dm.message.edited', message };
-    broadcastToUser(message.senderId, event);
-    broadcastToUser(message.recipientId, event);
-  }
-  return messages;
-}
-
-// Everything a room deletion does after the durable soft-delete: tell whoever
-// watches it, expire its invitations, drop every peer and its avatar. Shared by
-// the owner's delete and by rooms nobody inherits from a deleted account.
-async function finishRoomDeletion(roomId, { avatarKey = null, request = null } = {}) {
-  // Broadcast after durable soft-delete, before presence teardown so the WS
-  // writes are not racing socket close.
-  const presence = presenceRooms.get(roomId);
-  if (presence) broadcast(presence, { type: 'room-deleted', roomId });
-  roomRuntime?.mirrorLegacyRoomEvent(roomId, { type: 'room-deleted', roomId });
-  roomRuntime?.invalidateRecipientCache(roomId);
-  // Invitations outlive the inviter's session now, so the deleted room is the
-  // only thing left that can invalidate them.
-  void expireRoomInvitations(null, roomId).catch((error) => {
-    getProcessLogger().error({ evt: LOG_EVENTS.ROOM_INVITATION_EXPIRY_FAILED, err: error }, 'failed to expire room invitations');
-  });
-
-  // Terminal-claim every active/leased peer before credential or transport
-  // teardown so a delayed replacement join cannot resurrect the deleted room.
-  try {
-    await roomRuntime?.cancelRoomReconnectLeases({
-      roomId,
-      reason: 'deleted',
-      finalizePeer: async ({ peer, ownershipFinalized }) => {
-        if (!peer || ownershipFinalized) return { finalized: ownershipFinalized };
-        let failure = null;
-        try {
-          await getCredentialBoundary().revokePeer({
-            roomId,
-            accountUserId: peer.accountUserId || null,
-            guestPrincipalId: peer.gateGuestPrincipalId || ''
-          });
-        } catch (error) {
-          failure = error;
-        }
-        closePeer(roomId, peer.id, peer.transport?.id, 'deleted');
-        try {
-          await removeLiveKitParticipant(roomId, peer.id);
-        } catch (error) {
-          failure ||= error;
-        }
-        if (failure) {
-          failure.ownershipFinalized = true;
-          throw failure;
-        }
-        return { finalized: true };
-      }
-    });
-  } catch {
-    // The room deletion is already durable and peer ownership is terminal.
-    // Cleanup callbacks continue close/remove even when credential revoke fails.
-    request?.log?.warn?.({ code: 'room_delete_peer_cleanup_failed' }, 'Room peer cleanup finished with errors');
-  }
-  await removeAvatarBestEffort(avatarKey, request);
-}
-
-// Best effort: a leftover file is reconciled later (lib/avatar-reconciliation.js).
-function removeAvatarBestEffort(key, request) {
-  return avatarsService.removeFile(key, request?.log);
-}
-
-function refreshActiveUserProfile(user) {
-  if (!user?.id) return;
-  const avatarUrl = user.avatarKey ? `/api/avatars/${encodeURIComponent(user.avatarKey)}` : null;
-  for (const [roomId, room] of presenceRooms) {
-    for (const peer of room.peers.values()) {
-      if (peer.accountUserId !== user.id) continue;
-      peer.name = sessionDisplayName(user);
-      peer.avatarAccent = user.avatarAccent || null;
-      peer.avatarColorKey = user.avatarColorKey || peer.avatarColorKey;
-      peer.avatarUrl = avatarUrl;
-      const message = { type: 'peer-updated', peer: publicPeer(peer) };
-      broadcast(room, message);
-      roomRuntime?.mirrorLegacyRoomEvent(roomId, message);
-      roomRuntime?.scheduleSummaryBroadcast(roomId);
-    }
-  }
-}
-
-// Push the refreshed public profile (avatar, display name) to everyone whose UI
-// caches it outside a live room: the friend list, DM threads, and pending
-// requests. Best-effort — a failed lookup must not fail the profile mutation.
-async function broadcastUserProfileToFriends(user, request) {
-  if (!user?.id) return;
-  try {
-    const friendIds = await getFriendStore().getFriendIds(user.id);
-    const message = { type: 'user-updated', user: publicUser(user) };
-    for (const friendId of friendIds) broadcastToUser(friendId, message);
-  } catch (error) {
-    request?.log?.error?.({ err: error, userId: user.id }, 'failed to broadcast profile update to friends');
-  }
-}
-
-
-function publicLobbyRoom(room) {
-  return lobbyRoomView(room, presenceRooms.get(room.id)?.peers.size ?? 0);
-}
-
-function broadcastRoomUpdate(roomId, room) {
-  const payload = publicLobbyRoom(room);
-  const presence = presenceRooms.get(roomId);
-  if (presence) broadcast(presence, { type: 'room-updated', room: payload });
-  roomRuntime?.mirrorLegacyRoomEvent(roomId, { type: 'room-updated', room: payload });
-  roomRuntime?.invalidateRecipientCache(roomId);
-  roomRuntime?.scheduleSummaryBroadcast(roomId);
-  return payload;
-}
-
-// Finishes deletions whose grace period is over: rooms go to their heirs, rooms
-// nobody inherits are torn down like an owner's delete, and the avatar file goes.
-async function finalizeDueAccountDeletions(now = Date.now()) {
-  const repository = getAccountDeletionRepository();
-  if (!repository) return 0;
-  let finished = 0;
-  for (const userId of await repository.listDueDeletions({ now })) {
-    try {
-      const result = await repository.finalizeDeletion({ userId, now });
-      if (result.status !== 'deleted') continue;
-      finished += 1;
-      await removeAvatarBestEffort(result.avatarKey);
-      for (const { roomId } of result.transferredRooms) {
-        const room = await getRoomStore().getRoom(roomId);
-        if (room) broadcastRoomUpdate(roomId, room);
-      }
-      for (const { roomId, avatarKey } of result.deletedRooms) {
-        await finishRoomDeletion(roomId, { avatarKey });
-      }
-    } catch (error) {
-      getProcessLogger().error({ evt: LOG_EVENTS.ACCOUNT_DELETION_FAILED, err: error }, 'failed to finish an account deletion');
-    }
-  }
-  return finished;
-}
-
-// An ended account session also loses what it still holds open: its sockets stop
-// receiving account events and its voice seat goes at once, not when the LiveKit
-// token expires. Only that peer's gate credentials are revoked, so the account's
-// other devices stay connected, even in the same room. Without token hashes
-// every socket of the account is closed (the password was replaced); without an
-// account id the hashes alone pick the sockets (sign-out).
-async function endAccountSessionConnections({ userId = null, tokenHashes = null }) {
-  if (!wsRegistry || (!userId && !Array.isArray(tokenHashes))) return;
-  const targets = wsRegistry.findAccountConnections(userId, tokenHashes);
-  for (const connection of targets) {
-    const activeVoice = connection.activeVoice;
-    if (!activeVoice?.roomId || !activeVoice.peerId) continue;
-    try {
-      const peer = presenceRooms.get(activeVoice.roomId)?.peers.get(activeVoice.peerId);
-      const principal = peer ? liveKitGatePrincipalForPeer(activeVoice.roomId, peer) : null;
-      if (principal) {
-        await getRoomStore().revokeLiveKitGateCredentialsForPeer({
-          roomId: activeVoice.roomId,
-          peerId: activeVoice.peerId,
-          principal
-        });
-      }
-      await roomRuntime?.leaveVoiceRoom(connection, activeVoice);
-      await removeLiveKitParticipant(activeVoice.roomId, activeVoice.peerId);
-    } catch (error) {
-      getProcessLogger().error({ evt: LOG_EVENTS.ACCOUNT_SESSION_VOICE_END_FAILED, userId, err: error }, 'failed to end voice for an ended account session');
-    }
-  }
-  wsRegistry.closeConnections(targets, SESSION_REVOKED_CLOSE_CODE, 'Session ended');
-}
-
-// --- Friends, requests, and direct messages -----------------------------
 
 function getApiRoutePath(pathname) {
   if (pathname === API_PREFIX) return '/';
