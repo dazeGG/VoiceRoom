@@ -75,6 +75,12 @@ test('G10-A02 seeded forbidden imports, direct foreign writes and listener worke
   assert.equal(writeViolations[0].ruleId, 'direct-foreign-table-write');
   assert.equal(writeViolations[0].table, 'room_messages');
 
+  // Kysely writes are owned the same way as raw SQL.
+  const badKyselyWrite = fixtureFile('apps/api/src/lib/push-service.ts', "export async function run(db) { await db.updateTable('room_messages').set({ text: '' }).execute(); }\n");
+  const kyselyViolations = checkApiSources({ config: writeConfig, files: [badKyselyWrite] });
+  assert.equal(kyselyViolations[0]?.ruleId, 'direct-foreign-table-write');
+  assert.equal(kyselyViolations[0]?.table, 'room_messages');
+
   const badTimer = fixtureFile('apps/api/src/app.js', "setInterval(() => {}, 1000);\n");
   const timerViolations = checkApiSources({ config: rules, files: [badTimer] });
   assert.equal(timerViolations[0].ruleId, 'api-listener-worker-timer');

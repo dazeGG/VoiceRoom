@@ -11,24 +11,30 @@
     "test:g05": "node --test test/g05-livekit-boundary.test.js",
     "db:migrate": "node src/scripts/migrate.js up",
     "db:rollback": "node src/scripts/migrate.js down",
+    "db:types": "kysely-codegen --dialect postgres --out-file src/platform/db/schema.ts --exclude-pattern \"{pgmigrations,voiceroom_migration_guard}\"",
     "pretest": "node test/require-test-database-url.js"
   },
   "dependencies": {
     "@fastify/cookie": "^11.0.2",
     "@fastify/multipart": "^10.1.0",
+    "@fastify/type-provider-typebox": "^6.1.0",
     "@fastify/websocket": "^11.2.0",
     "@voice-room/shared": "file:../../packages/shared",
     "fastify": "^5.12.5",
+    "kysely": "^0.29.6",
     "livekit-server-sdk": "^2.15.4",
     "maxmind": "^5.0.7",
     "node-pg-migrate": "^8.0.4",
     "pg": "^8.21.0",
     "pino": "^10.3.1",
     "sharp": "^0.35.4",
+    "typebox": "^1.3.34",
     "web-push": "^3.6.7"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
+    "@types/pg": "^8.23.1",
+    "kysely-codegen": "^0.20.0",
     "typescript": "^5.9.3"
   }
 }
