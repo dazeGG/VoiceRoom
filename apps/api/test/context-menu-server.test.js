@@ -4,7 +4,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { TrackSource } from 'livekit-server-sdk';
-const { __private, createApiApp } = await import('../src/server.js');
+const { createApiApp } = await import('../src/server.js');
+const { isLiveKitParticipantAlreadyGone, resolveServerMutePermission } = await import('../src/domains/admission/livekit-admin.ts');
 
 const ALICE_ID = '11111111-1111-4111-8111-111111111111';
 const BOB_ID = '22222222-2222-4222-8222-222222222222';
@@ -186,14 +187,14 @@ test('microphone server mute preserves unrelated LiveKit permissions and screen 
     ]
   };
 
-  const muted = __private.resolveServerMutePermission(original, true);
+  const muted = resolveServerMutePermission(original, true);
   assert.deepEqual(muted.canPublishSources, [TrackSource.SCREEN_SHARE, TrackSource.SCREEN_SHARE_AUDIO]);
   assert.equal(muted.canPublish, true);
   assert.equal(muted.canPublishData, false);
   assert.equal(muted.canSubscribe, false);
   assert.equal(muted.hidden, true);
 
-  const unmuted = __private.resolveServerMutePermission(muted, false);
+  const unmuted = resolveServerMutePermission(muted, false);
   assert.deepEqual(unmuted.canPublishSources, [
     TrackSource.SCREEN_SHARE,
     TrackSource.SCREEN_SHARE_AUDIO,
@@ -213,13 +214,13 @@ test('a participant the SFU has already dropped is not an error', () => {
     status: 404,
     code: 'not_found'
   });
-  assert.equal(__private.isLiveKitParticipantAlreadyGone(production), true);
+  assert.equal(isLiveKitParticipantAlreadyGone(production), true);
 
   // Each signal on its own is enough: the SDK has changed shape before.
-  assert.equal(__private.isLiveKitParticipantAlreadyGone({ status: 404 }), true);
-  assert.equal(__private.isLiveKitParticipantAlreadyGone({ code: 'not_found' }), true);
-  assert.equal(__private.isLiveKitParticipantAlreadyGone({ name: 'Not Found' }), true);
-  assert.equal(__private.isLiveKitParticipantAlreadyGone({ message: 'participant does not exist' }), true);
+  assert.equal(isLiveKitParticipantAlreadyGone({ status: 404 }), true);
+  assert.equal(isLiveKitParticipantAlreadyGone({ code: 'not_found' }), true);
+  assert.equal(isLiveKitParticipantAlreadyGone({ name: 'Not Found' }), true);
+  assert.equal(isLiveKitParticipantAlreadyGone({ message: 'participant does not exist' }), true);
 });
 
 test('a real removal failure still reaches the error stream', () => {
@@ -228,7 +229,7 @@ test('a real removal failure still reaches the error stream', () => {
     status: 500,
     code: 'internal'
   });
-  assert.equal(__private.isLiveKitParticipantAlreadyGone(upstream), false);
-  assert.equal(__private.isLiveKitParticipantAlreadyGone(new Error('permission denied')), false);
-  assert.equal(__private.isLiveKitParticipantAlreadyGone(undefined), false);
+  assert.equal(isLiveKitParticipantAlreadyGone(upstream), false);
+  assert.equal(isLiveKitParticipantAlreadyGone(new Error('permission denied')), false);
+  assert.equal(isLiveKitParticipantAlreadyGone(undefined), false);
 });
