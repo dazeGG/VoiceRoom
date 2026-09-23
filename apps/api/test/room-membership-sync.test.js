@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { createRoomStore } from '../src/lib/room-store.js';
-import { registerMembershipRoutes } from '../src/domains/membership/membership-routes.js';
+import { registerMembershipRoutes } from '../src/domains/membership/membership-routes.ts';
 
 function createFakePool(handler) {
   const calls = [];

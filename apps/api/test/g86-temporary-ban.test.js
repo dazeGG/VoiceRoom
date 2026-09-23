@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createModerationRepository } from '../src/domains/moderation/moderation-repository.js';
-import { createModerationService } from '../src/domains/moderation/moderation-service.js';
+import { createModerationRepository } from '../src/domains/moderation/moderation-repository.ts';
+import { createModerationService } from '../src/domains/moderation/moderation-service.ts';
 
 test('G86-A01 unauthorized ban requests do not resolve target principals', async () => {
   let resolutions = 0;

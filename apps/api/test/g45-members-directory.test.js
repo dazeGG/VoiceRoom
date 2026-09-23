@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { createMemberDirectoryService, presenceForUser } from '../src/domains/membership/member-directory-service.js';
+import { createMemberDirectoryService, presenceForUser } from '../src/domains/membership/member-directory-service.ts';
 
 test('G45-A01 directory is membership-gated, cursor-bound to room/query and dedupes presence connections', async () => {
   const calls = [];

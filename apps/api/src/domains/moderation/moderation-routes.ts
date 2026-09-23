@@ -1,30 +1,50 @@
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import type { MessageModerationService } from './message-moderation-service.ts';
+import type { ModerationService } from './moderation-service.ts';
+
 const MODERATION_BANS_PATH = '/api/rooms/:roomId/moderation/bans';
 const MODERATION_UNBAN_PATH = '/api/rooms/:roomId/moderation/bans/:banId';
 const MODERATION_DELETE_MESSAGE_PATH = '/api/rooms/:roomId/moderation/messages/:messageId';
 
-function send(reply, statusCode, payload) {
+type Viewer = { id?: string; [key: string]: unknown };
+type ModerationRoute = {
+  Params: { roomId: string; banId: string; messageId: string };
+  Querystring: Record<string, unknown>;
+  Body: unknown;
+};
+type UserResolver = (request: FastifyRequest) => Viewer | null | undefined | Promise<Viewer | null | undefined>;
+
+function send(reply: FastifyReply, statusCode: number, payload: unknown) {
   return reply.header('Cache-Control', 'no-store').code(statusCode).send(payload);
 }
 
-async function actor(request, resolveUser) {
+async function actor(request: FastifyRequest, resolveUser: UserResolver): Promise<Viewer & { id: string } | null> {
   const user = await resolveUser(request);
-  return user?.id ? user : null;
+  return user?.id ? user as Viewer & { id: string } : null;
 }
 
-function registerModerationRoutes({ app, moderationService, messageModerationService, resolveUser, enabled = () => true } = {}) {
+function registerModerationRoutes({ app, moderationService, messageModerationService, resolveUser, enabled = () => true }: {
+  app?: FastifyInstance;
+  moderationService?: Pick<ModerationService, 'listActive' | 'putBan' | 'unban'>;
+  messageModerationService?: Partial<MessageModerationService> | null;
+  resolveUser?: UserResolver;
+  enabled?: (request: FastifyRequest) => unknown;
+} = {}): void {
   if (!app?.get || !app?.put || !app?.delete || typeof resolveUser !== 'function') {
     throw new TypeError('Moderation routes require a Fastify app and resolveUser');
   }
   if (!moderationService?.listActive || !moderationService?.putBan || !moderationService?.unban) {
     throw new TypeError('Moderation service is required');
   }
+  const moderation = moderationService;
+  const resolve = resolveUser;
 
-  app.get(MODERATION_BANS_PATH, async (request, reply) => {
+  app.get<ModerationRoute>(MODERATION_BANS_PATH, async (request, reply) => {
     if (!await enabled(request)) return send(reply, 404, { ok: false, error: 'Not found' });
-    const user = await actor(request, resolveUser);
+    const user = await actor(request, resolve);
     if (!user) return send(reply, 401, { ok: false, error: 'Authentication required' });
     try {
-      const result = await moderationService.listActive({
+      const result = await moderation.listActive({
         roomId: request.params.roomId,
         actorUserId: user.id,
         query: request.query || {}
@@ -32,16 +52,16 @@ function registerModerationRoutes({ app, moderationService, messageModerationSer
       if (result.status === 'forbidden') return send(reply, 403, { ok: false, error: 'Owner access required' });
       return send(reply, 200, result.envelope);
     } catch (error) {
-      if (error?.code === 'invalid_cursor') return send(reply, 400, { ok: false, error: 'Invalid cursor' });
+      if ((error as { code?: unknown } | null | undefined)?.code === 'invalid_cursor') return send(reply, 400, { ok: false, error: 'Invalid cursor' });
       throw error;
     }
   });
 
-  app.put(MODERATION_BANS_PATH, async (request, reply) => {
+  app.put<ModerationRoute>(MODERATION_BANS_PATH, async (request, reply) => {
     if (!await enabled(request)) return send(reply, 404, { ok: false, error: 'Not found' });
-    const user = await actor(request, resolveUser);
+    const user = await actor(request, resolve);
     if (!user) return send(reply, 401, { ok: false, error: 'Authentication required' });
-    const result = await moderationService.putBan({
+    const result = await moderation.putBan({
       roomId: request.params.roomId,
       actorUserId: user.id,
       input: request.body,
@@ -58,11 +78,11 @@ function registerModerationRoutes({ app, moderationService, messageModerationSer
     });
   });
 
-  app.delete(MODERATION_UNBAN_PATH, async (request, reply) => {
+  app.delete<ModerationRoute>(MODERATION_UNBAN_PATH, async (request, reply) => {
     if (!await enabled(request)) return send(reply, 404, { ok: false, error: 'Not found' });
-    const user = await actor(request, resolveUser);
+    const user = await actor(request, resolve);
     if (!user) return send(reply, 401, { ok: false, error: 'Authentication required' });
-    const result = await moderationService.unban({
+    const result = await moderation.unban({
       roomId: request.params.roomId,
       actorUserId: user.id,
       banId: request.params.banId
@@ -74,11 +94,12 @@ function registerModerationRoutes({ app, moderationService, messageModerationSer
   });
 
   if (messageModerationService?.deleteRoomMessage) {
-    app.delete(MODERATION_DELETE_MESSAGE_PATH, async (request, reply) => {
+    const deleteRoomMessage = messageModerationService.deleteRoomMessage;
+    app.delete<ModerationRoute>(MODERATION_DELETE_MESSAGE_PATH, async (request, reply) => {
       if (!await enabled(request)) return send(reply, 404, { ok: false, error: 'Not found' });
-      const user = await actor(request, resolveUser);
+      const user = await actor(request, resolve);
       if (!user) return send(reply, 401, { ok: false, error: 'Authentication required' });
-      const result = await messageModerationService.deleteRoomMessage({
+      const result = await deleteRoomMessage({
         roomId: request.params.roomId,
         messageId: request.params.messageId,
         actorUserId: user.id

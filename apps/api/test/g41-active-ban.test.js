@@ -3,8 +3,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { Pool } from 'pg';
 import { test } from 'node:test';
-import { createActiveBanRepository, normalizePrincipal } from '../src/domains/moderation/active-ban-repository.js';
-import { createActiveBanService } from '../src/domains/moderation/active-ban-service.js';
+import { createActiveBanRepository, normalizePrincipal } from '../src/domains/moderation/active-ban-repository.ts';
+import { createActiveBanService } from '../src/domains/moderation/active-ban-service.ts';
 import { runMigrations } from '../src/lib/migrate.js';
 import { createTestDatabase } from './db-harness.js';
 
@@ -55,7 +55,7 @@ test('G41-A02 named HTTP, media, membership, mention and room-store paths call t
   const server = fs.readFileSync(path.join(root, 'src/server.js'), 'utf8');
   const registry = fs.readFileSync(path.join(root, 'src/app/service-registry.js'), 'utf8');
   const roomStore = fs.readFileSync(path.join(root, 'src/lib/room-store.js'), 'utf8');
-  const mentions = fs.readFileSync(path.join(root, 'src/domains/notifications/mention-eligibility-service.js'), 'utf8');
+  const mentions = fs.readFileSync(path.join(root, 'src/domains/notifications/mention-eligibility-service.ts'), 'utf8');
 
   assert.match(server, /function findRoomBan[\s\S]*getActiveBanService\(\)/);
   assert.match(registry, /authorizeRoomAttachment[\s\S]*getActiveBanService\(\)\.isBanned/);
