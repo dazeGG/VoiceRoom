@@ -127,6 +127,7 @@ Done so far:
 - PR 8d: the lazily built stores and services move to `app/service-registry.js` (`createServiceRegistry(config, deps)` with `applyOverrides` for createApiApp's test doubles, `install` for bootstrap's stores, `close`); what they need from the realtime layer comes in as `deps`. It stays JavaScript while the factories it wires are JavaScript, since their inferred types are too loose to check the wiring.
 - PR 8e: every environment variable the API reads at start-up moves to `app/config.ts` (`readApiConfig(env)`, frozen, same names).
 - PR 8f: security headers (`platform/http/security-headers.ts`), the request log line (`platform/http/request-log.ts`) and graceful shutdown (`app/graceful-shutdown.ts`) leave `server.js`. `/api/capabilities` was the last route on `runLegacyHandler` and now uses its native path, so it gains the security headers, metric and log line; `runLegacyHandler` and `sendJson` are gone.
+- PR 9a: `packages/shared` gets a strict `tsconfig.json` (no Node types, `tsc` in `check`) and its first single-source module, `runtime-config.mts`, exported directly; its `.js`/`.mjs`/`.d.ts` twins are gone. Modules stay `.mts` until the last one moves, then the package switches to `"type": "module"` and they become `.ts`.
 - Typed before PR 0: `domains/admission/livekit-token-binding.mts`, `lib/image-signature.mts`, `platform/http/origin-guard.mts`.
 
 ## 5. Runtime state and scaling
