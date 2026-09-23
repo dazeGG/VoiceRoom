@@ -1,6 +1,6 @@
 import { createDbPool } from '../lib/db.js';
 import { readEnvInt, readMessageDeliveryMode } from '../lib/config.js';
-import { createMessageOutboxRepository } from '../domains/messaging/message-outbox-repository.js';
+import { createMessageOutboxRepository } from '../domains/messaging/message-outbox-repository.ts';
 import { boundedBackoff, createLeaseRuntime } from '../platform/lease-runtime.js';
 import { LOG_EVENTS } from '../lib/log-events.js';
 import { createLogger } from '../lib/logger.js';

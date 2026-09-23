@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
-import { createMessageOutboxRepository } from '../src/domains/messaging/message-outbox-repository.js';
+import { createMessageOutboxRepository } from '../src/domains/messaging/message-outbox-repository.ts';
 
 test('G37-A01 logical event identity deduplicates inside the active transaction', async () => {
   const calls = [];

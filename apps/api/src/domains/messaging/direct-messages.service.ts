@@ -7,10 +7,8 @@ import crypto from 'node:crypto';
 import { publicUser } from '../../lib/user-store.js';
 import { isActiveAccount, type SocialUser } from '../social/social-views.ts';
 import { messageFingerprint, normalizeAttachmentIds } from './message-input.ts';
-import { requireReplyTarget as requireReplyTargetJs } from './reply-projector.js';
+import { requireReplyTarget } from './reply-projector.ts';
 
-// reply-projector.js is untyped; its parameter type is inferred from `= {}`.
-const requireReplyTarget = requireReplyTargetJs as (input: { message: unknown; visibility: boolean }) => Promise<unknown>;
 
 type DbClient = unknown;
 type Status<T extends string> = T extends string ? { status: T } : never;

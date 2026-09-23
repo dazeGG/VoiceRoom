@@ -2,9 +2,9 @@ import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createCursorCodec } from '../src/platform/cursor-codec.js';
-import { createReactionService } from '../src/domains/messaging/reaction-service.js';
-import { registerReactionRoutes } from '../src/domains/messaging/reaction-routes.js';
-import { createReactionRealtimeAdapter } from '../src/domains/messaging/reaction-realtime-adapter.js';
+import { createReactionService } from '../src/domains/messaging/reaction-service.ts';
+import { registerReactionRoutes } from '../src/domains/messaging/reaction-routes.ts';
+import { createReactionRealtimeAdapter } from '../src/domains/messaging/reaction-realtime-adapter.ts';
 import fs from 'node:fs';
 
 function repository() {

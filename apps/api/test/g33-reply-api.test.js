@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
-import { requireReplyTarget } from '../src/domains/messaging/reply-projector.js';
+import { requireReplyTarget } from '../src/domains/messaging/reply-projector.ts';
 
 test('G33-A01 unavailable and invisible reply targets share one non-disclosing 409', async () => {
   for (const input of [
