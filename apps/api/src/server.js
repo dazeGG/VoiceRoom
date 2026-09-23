@@ -21,12 +21,10 @@ import {
   normalizePeerId,
   normalizeSessionToken,
   cleanName,
-  cleanDisplayName,
   cleanStreamId,
   cleanScreenProfileId,
   cleanLiveKitUrl,
   cleanPresenceStatus,
-  isValidPassword,
   normalizeLogin,
   accountPeerIdFor,
   isReservedPeerId
@@ -53,17 +51,10 @@ import { createLinkPreviewService } from './domains/link-previews/link-preview-s
 import { avatarColorForPeerId, createRoomStore } from './lib/room-store.js';
 import {
   createUserStore,
-  hashSessionToken,
   publicUser,
   selfUser
 } from './lib/user-store.js';
 import { createGeoLocator } from './lib/geoip.js';
-import {
-  ACCOUNT_DELETION_GRACE_MS,
-  WHATS_NEW_VERSION,
-  formatRecoveryCode,
-  isDeletedAccountLogin
-} from '@voice-room/shared/account-security';
 import { createAccountDeletionRepository } from './domains/account/account-deletion-repository.js';
 import { createFriendStore } from './lib/friend-store.js';
 import { createNotificationStore } from './lib/notification-store.js';
@@ -96,6 +87,9 @@ import { cleanUuid, messageFingerprint, normalizeAttachmentIds, requestIdempoten
 import { publicChatMessage } from './domains/messaging/room-chat-views.ts';
 import { registerRoomChatRoutes } from './domains/messaging/room-chat.routes.ts';
 import { createRoomChatService } from './domains/messaging/room-chat.service.ts';
+import { registerAccountRoutes } from './domains/account/account.routes.ts';
+import { createAccountService } from './domains/account/account.service.ts';
+import { createSessionCookies } from './domains/account/session-cookie.ts';
 import { createAdmissionService } from './domains/admission/admission.service.ts';
 import { createLiveKitAdmin } from './domains/admission/livekit-admin.ts';
 import { readLiveKitConfig } from './domains/admission/livekit-config.ts';
@@ -1146,6 +1140,22 @@ const roomChat = createRoomChatService({
   sendRoomSummaryToUser: async (roomId, userId) => { await roomRuntime?.sendRoomSummaryToUser(roomId, userId); },
   logger: () => getProcessLogger()
 });
+const sessionCookies = createSessionCookies({
+  name: SESSION_COOKIE_NAME,
+  secure: SESSION_COOKIE_SECURE,
+  maxAgeSeconds: SESSION_TTL_MS / 1000
+});
+const accountService = createAccountService({
+  users: getUserStore,
+  deletions: getAccountDeletionRepository,
+  loginFailures: loginFailureLimiter,
+  endSessionConnections: (input) => endAccountSessionConnections(input),
+  notifyUser: (userId, event) => broadcastToUser(userId, event),
+  queuePush: (userId, payload, options) => queuePush(userId, payload, options),
+  refreshActiveProfile: (user) => refreshActiveUserProfile(user),
+  broadcastProfileToFriends: (user, log) => broadcastUserProfileToFriends(user, { log }),
+  logger: () => getProcessLogger()
+});
 
 function liveKitGatePrincipalForPeer(roomId, peer) {
   return gatePrincipalForPeer(getRoomStore(), roomId, peer);
@@ -1225,26 +1235,8 @@ function sendJson(res, status, payload, headers = {}) {
   res.end(JSON.stringify(payload));
 }
 
-function parseCookies(req) {
-  const header = req.headers?.cookie;
-  const cookies = {};
-  if (typeof header !== 'string' || !header) return cookies;
-  for (const part of header.split(';')) {
-    const index = part.indexOf('=');
-    if (index === -1) continue;
-    const name = part.slice(0, index).trim();
-    if (!name) continue;
-    try {
-      cookies[name] = decodeURIComponent(part.slice(index + 1).trim());
-    } catch {
-      // Ignore malformed cookie values instead of failing auth checks with 500s.
-    }
-  }
-  return cookies;
-}
-
 function getSessionToken(req) {
-  return parseCookies(req)[SESSION_COOKIE_NAME] || '';
+  return sessionCookies.read(req);
 }
 
 async function resolveSessionUser(req) {
@@ -1259,47 +1251,6 @@ async function resolveSessionUser(req) {
   // the requests they actually made.
   if (session?.user?.id && req) req.voiceRoomUserId = session.user.id;
   return session;
-}
-
-// What the signed-in devices list shows about a new session. The IP is only
-// used for the local city/country lookup and is not stored.
-async function sessionDeviceFor(req) {
-  return {
-    userAgent: String(req.headers?.['user-agent'] || ''),
-    locationLabel: await getGeoLocator().locate(getClientIp(req, TRUST_PROXY))
-  };
-}
-
-function describeLoginDevice(alert) {
-  const device = [alert.client || 'Неизвестный браузер', alert.os].filter(Boolean).join(' · ');
-  return alert.location ? `${device}, ${alert.location}` : device;
-}
-
-// Records a sign-in and, when it comes from an unfamiliar device or city, asks
-// the account's other devices right away and by push. A failure here must not
-// fail the sign-in itself.
-async function recordAndAnnounceLogin({ userId, session, device, kind }) {
-  try {
-    const { alert } = await getUserStore().recordLogin({
-      userId,
-      sessionPublicId: session.publicId,
-      kind,
-      userAgent: device.userAgent,
-      locationLabel: device.locationLabel
-    });
-    if (!alert) return;
-    broadcastToUser(userId, { type: 'account.login.new', alert });
-    void queuePush(userId, {
-      type: 'account.login',
-      title: kind === 'recovery' ? 'Вход по коду восстановления' : 'Новый вход в аккаунт',
-      body: `${describeLoginDevice(alert)}. Если это были не вы, откройте Voice Room.`,
-      tag: `login-alert:${alert.id}`,
-      dedupeKey: `login-alert:${alert.id}`,
-      url: '/'
-    }, { ignorePreferences: true });
-  } catch (error) {
-    getProcessLogger().error({ evt: LOG_EVENTS.AUTH_SIGN_IN_RECORD_FAILED, userId, kind, err: error }, 'failed to record a sign-in');
-  }
 }
 
 async function resolveOptionalSessionUser(req) {
@@ -1319,24 +1270,6 @@ function sessionDisplayName(user) {
 
 function sessionChatPeerId(user) {
   return accountPeerIdFor(user?.id);
-}
-
-function buildSessionCookie(token, maxAgeSeconds) {
-  const parts = [
-    `${SESSION_COOKIE_NAME}=${encodeURIComponent(token)}`,
-    'Path=/',
-    'HttpOnly',
-    'SameSite=Lax',
-    `Max-Age=${Math.max(0, Math.floor(maxAgeSeconds))}`
-  ];
-  if (SESSION_COOKIE_SECURE) parts.push('Secure');
-  return parts.join('; ');
-}
-
-function clearSessionCookie() {
-  const parts = [`${SESSION_COOKIE_NAME}=`, 'Path=/', 'HttpOnly', 'SameSite=Lax', 'Max-Age=0'];
-  if (SESSION_COOKIE_SECURE) parts.push('Secure');
-  return parts.join('; ');
 }
 
 function getLiveKitRoomName(roomId) {
@@ -1675,165 +1608,6 @@ async function finishRoomDeletion(roomId, { avatarKey = null, request = null } =
   await removeAvatarBestEffort(avatarKey, request);
 }
 
-async function handleRegister(req, res) {
-  const clientIp = getClientIp(req, TRUST_PROXY);
-  const rate = authLimiter.check(`register:${clientIp}`);
-  if (!rate.allowed) {
-    sendJson(
-      res,
-      429,
-      { ok: false, error: 'Слишком много попыток, попробуйте позже' },
-      { 'Retry-After': String(rate.retryAfterSeconds) }
-    );
-    return;
-  }
-
-  const body = await readJsonBody(req);
-  const login = normalizeLogin(body.login);
-  const displayName = cleanDisplayName(body.displayName);
-  const password = typeof body.password === 'string' ? body.password : '';
-  const passwordConfirm = typeof body.passwordConfirm === 'string' ? body.passwordConfirm : password;
-
-  if (!login) {
-    sendJson(res, 400, { ok: false, error: 'Логин: 3–32 символа, латиница, цифры, . _ -' });
-    return;
-  }
-  if (!isValidPassword(password)) {
-    sendJson(res, 400, { ok: false, error: 'Пароль должен быть не короче 8 символов' });
-    return;
-  }
-  if (password !== passwordConfirm) {
-    sendJson(res, 400, { ok: false, error: 'Пароли не совпадают' });
-    return;
-  }
-  // A deleted account's login stays taken, so nobody can pose as that person.
-  if (isDeletedAccountLogin(login) || await getAccountDeletionRepository()?.isLoginReserved(login)) {
-    sendJson(res, 409, { ok: false, error: 'Этот логин уже занят' });
-    return;
-  }
-
-  const created = await getUserStore().createUser({ login, displayName, password });
-  if (created.status === 'login_taken') {
-    sendJson(res, 409, { ok: false, error: 'Этот логин уже занят' });
-    return;
-  }
-
-  const device = await sessionDeviceFor(req);
-  const session = await getUserStore().createSession({ userId: created.user.id, ...device });
-  await recordAndAnnounceLogin({ userId: created.user.id, session, device, kind: 'register' });
-  sendJson(
-    res,
-    201,
-    { ok: true, user: await reloadSelfUser(created.user) },
-    { 'Set-Cookie': buildSessionCookie(session.token, SESSION_TTL_MS / 1000) }
-  );
-}
-
-async function handleLogin(req, res) {
-  const clientIp = getClientIp(req, TRUST_PROXY);
-  const rate = authLimiter.check(`login:${clientIp}`);
-  if (!rate.allowed) {
-    sendJson(
-      res,
-      429,
-      { ok: false, error: 'Слишком много попыток, попробуйте позже' },
-      { 'Retry-After': String(rate.retryAfterSeconds) }
-    );
-    return;
-  }
-
-  const body = await readJsonBody(req);
-  const login = normalizeLogin(body.login);
-  const password = typeof body.password === 'string' ? body.password : '';
-
-  if (!login || !password) {
-    sendJson(res, 401, { ok: false, error: 'Неверный логин или пароль' });
-    return;
-  }
-
-  // The per-IP limit above does nothing against credential stuffing from many
-  // addresses; this caps failed guesses per login regardless of source. It is
-  // keyed by the submitted login, existing or not, so it reveals nothing.
-  const accountRate = loginFailureLimiter.reserve(login);
-  if (!accountRate.allowed) {
-    sendJson(
-      res,
-      429,
-      { ok: false, error: 'Слишком много попыток, попробуйте позже' },
-      { 'Retry-After': String(accountRate.retryAfterSeconds) }
-    );
-    return;
-  }
-
-  const user = await getUserStore().verifyCredentials(login, password);
-  if (!user) {
-    sendJson(res, 401, { ok: false, error: 'Неверный логин или пароль' });
-    return;
-  }
-  loginFailureLimiter.reset(login);
-  // The right password on an account waiting to be deleted offers a restore.
-  if (user.deletionRequestedAt) {
-    sendJson(res, 409, {
-      ok: false,
-      code: 'account_deletion_pending',
-      error: 'Аккаунт ожидает удаления',
-      deletionScheduledFor: user.deletionRequestedAt + ACCOUNT_DELETION_GRACE_MS
-    });
-    return;
-  }
-
-  const device = await sessionDeviceFor(req);
-  const session = await getUserStore().createSession({ userId: user.id, ...device });
-  await recordAndAnnounceLogin({ userId: user.id, session, device, kind: 'login' });
-  sendJson(
-    res,
-    200,
-    { ok: true, user: await reloadSelfUser(user) },
-    { 'Set-Cookie': buildSessionCookie(session.token, SESSION_TTL_MS / 1000) }
-  );
-}
-
-async function handleLogout(req, res) {
-  const token = getSessionToken(req);
-  if (token) {
-    await getUserStore().deleteSession(token);
-    await endAccountSessionConnections({ tokenHashes: [hashSessionToken(token)] });
-  }
-  sendJson(res, 200, { ok: true }, { 'Set-Cookie': clearSessionCookie() });
-}
-
-// Creating a session can stamp per-account markers (the desktop app marker),
-// so a self response built right after it re-reads the row instead of reusing
-// the user loaded before.
-async function reloadSelfUser(user) {
-  return selfUser((await getUserStore().getUserById(user.id)) || user);
-}
-
-async function handleMe(req, res) {
-  const session = await resolveSessionUser(req);
-  sendJson(res, 200, { ok: true, user: session ? selfUser(session.user) : null });
-}
-
-async function handleUpdateProfile(req, res, request) {
-  const session = await resolveSessionUser(req);
-  if (!session) {
-    sendJson(res, 401, { ok: false, error: 'Требуется вход' });
-    return;
-  }
-
-  const body = await readJsonBody(req);
-  const displayName = cleanDisplayName(body.displayName);
-  const user = await getUserStore().updateDisplayName({ userId: session.user.id, displayName });
-  if (!user) {
-    sendJson(res, 404, { ok: false, error: 'Аккаунт не найден' });
-    return;
-  }
-
-  refreshActiveUserProfile(user);
-  await broadcastUserProfileToFriends(user, request);
-  sendJson(res, 200, { ok: true, user: selfUser(user) });
-}
-
 function checkAvatarUploadRate(res, userId) {
   const rate = avatarUploadLimiter.check(`avatar:${userId}`);
   if (rate.allowed) return true;
@@ -1976,399 +1750,6 @@ async function handleDeleteUserAvatar(req, res, request) {
   refreshActiveUserProfile(result.user);
   await broadcastUserProfileToFriends(result.user, request);
   sendJson(res, 200, { ok: true, user: selfUser(result.user) });
-}
-
-async function handleChangePassword(req, res) {
-  const session = await resolveSessionUser(req);
-  if (!session) {
-    sendJson(res, 401, { ok: false, error: 'Требуется вход' });
-    return;
-  }
-
-  // Throttle on the account so a hijacked session can't brute-force the current
-  // password, which is the only secret guarding the rotation.
-  const rate = authLimiter.check(`password:${session.user.id}`);
-  if (!rate.allowed) {
-    sendJson(
-      res,
-      429,
-      { ok: false, error: 'Слишком много попыток, попробуйте позже' },
-      { 'Retry-After': String(rate.retryAfterSeconds) }
-    );
-    return;
-  }
-
-  const body = await readJsonBody(req);
-  const currentPassword = typeof body.currentPassword === 'string' ? body.currentPassword : '';
-  const newPassword = typeof body.newPassword === 'string' ? body.newPassword : '';
-  if (!isValidPassword(newPassword)) {
-    sendJson(res, 400, { ok: false, error: 'Пароль должен быть не короче 8 символов' });
-    return;
-  }
-
-  const result = await getUserStore().changePassword({
-    userId: session.user.id,
-    currentPassword,
-    newPassword
-  });
-  if (result.status === 'not_found') {
-    sendJson(res, 404, { ok: false, error: 'Аккаунт не найден' });
-    return;
-  }
-  if (result.status === 'invalid_password') {
-    sendJson(res, 400, { ok: false, error: 'Неверный текущий пароль' });
-    return;
-  }
-
-  await endAccountSessionConnections({ userId: session.user.id });
-  sendJson(res, 200, { ok: true }, { 'Set-Cookie': clearSessionCookie() });
-}
-
-function sendTooManyAttempts(res, retryAfterSeconds) {
-  sendJson(
-    res,
-    429,
-    { ok: false, error: 'Слишком много попыток, попробуйте позже' },
-    { 'Retry-After': String(retryAfterSeconds) }
-  );
-}
-
-async function handleAccountSecurity(req, res) {
-  const session = await resolveSessionUser(req);
-  if (!session) {
-    sendJson(res, 401, { ok: false, error: 'Требуется вход' });
-    return;
-  }
-  const [recoveryCodes, notices] = await Promise.all([
-    getUserStore().getRecoveryCodesStatus(session.user.id),
-    getUserStore().getAccountNotices(session.user.id)
-  ]);
-  sendJson(res, 200, {
-    ok: true,
-    recoveryCodes,
-    recoveryCodesReminder: { snoozedUntil: notices.recoveryCodesReminderSnoozedUntil }
-  });
-}
-
-async function handleSnoozeRecoveryCodesReminder(req, res) {
-  const session = await resolveSessionUser(req);
-  if (!session) {
-    sendJson(res, 401, { ok: false, error: 'Требуется вход' });
-    return;
-  }
-  const result = await getUserStore().snoozeRecoveryCodesReminder({ userId: session.user.id });
-  if (result.status !== 'snoozed') {
-    sendJson(res, 404, { ok: false, error: 'Аккаунт не найден' });
-    return;
-  }
-  sendJson(res, 200, { ok: true, recoveryCodesReminder: { snoozedUntil: result.snoozedUntil } });
-}
-
-async function handleWhatsNew(req, res) {
-  const session = await resolveSessionUser(req);
-  if (!session) {
-    sendJson(res, 401, { ok: false, error: 'Требуется вход' });
-    return;
-  }
-  const notices = await getUserStore().getAccountNotices(session.user.id);
-  sendJson(res, 200, { ok: true, whatsNew: { current: WHATS_NEW_VERSION, lastSeen: notices.whatsNewSeen } });
-}
-
-async function handleMarkWhatsNewSeen(req, res) {
-  const session = await resolveSessionUser(req);
-  if (!session) {
-    sendJson(res, 401, { ok: false, error: 'Требуется вход' });
-    return;
-  }
-  const result = await getUserStore().markWhatsNewSeen({ userId: session.user.id });
-  if (result.status !== 'seen') {
-    sendJson(res, 404, { ok: false, error: 'Аккаунт не найден' });
-    return;
-  }
-  sendJson(res, 200, { ok: true, whatsNew: { current: WHATS_NEW_VERSION, lastSeen: result.whatsNewSeen } });
-}
-
-async function handleMarkAppPromptSeen(req, res) {
-  const session = await resolveSessionUser(req);
-  if (!session) {
-    sendJson(res, 401, { ok: false, error: 'Требуется вход' });
-    return;
-  }
-  const result = await getUserStore().markAppPromptSeen({ userId: session.user.id });
-  if (result.status !== 'seen') {
-    sendJson(res, 404, { ok: false, error: 'Аккаунт не найден' });
-    return;
-  }
-  sendJson(res, 200, { ok: true, appPromptSeen: true });
-}
-
-async function handleLoginAlerts(req, res) {
-  const session = await resolveSessionUser(req);
-  if (!session) {
-    sendJson(res, 401, { ok: false, error: 'Требуется вход' });
-    return;
-  }
-  const alerts = await getUserStore().listPendingLoginAlerts({
-    userId: session.user.id,
-    excludeSessionPublicId: session.session.publicId
-  });
-  sendJson(res, 200, { ok: true, alerts });
-}
-
-async function handleResolveLoginAlert(req, res, alertId, resolution) {
-  const session = await resolveSessionUser(req);
-  if (!session) {
-    sendJson(res, 401, { ok: false, error: 'Требуется вход' });
-    return;
-  }
-  const userId = session.user.id;
-  const result = await getUserStore().resolveLoginAlert({
-    userId,
-    alertId,
-    resolution,
-    currentSessionPublicId: session.session.publicId
-  });
-  if (result.status !== 'resolved') {
-    sendJson(res, 404, { ok: false, error: 'Вход не найден или на него уже ответили' });
-    return;
-  }
-  if (result.revokedTokenHash) {
-    await endAccountSessionConnections({ userId, tokenHashes: [result.revokedTokenHash] });
-  }
-  // Every other device showing the same question closes it.
-  broadcastToUser(userId, { type: 'account.login.resolved', alertId: String(alertId).toLowerCase(), resolution });
-  if (resolution === 'confirmed') {
-    sendJson(res, 200, { ok: true, resolution });
-    return;
-  }
-  sendJson(res, 200, {
-    ok: true,
-    resolution,
-    sessionEnded: Boolean(result.revokedTokenHash),
-    recoveryCodes: await getUserStore().getRecoveryCodesStatus(userId)
-  });
-}
-
-function sendAccountDeletionUnavailable(res) {
-  sendJson(res, 503, { ok: false, error: 'Удаление аккаунта сейчас недоступно' });
-}
-
-async function handleAccountDeletionPreview(req, res) {
-  const session = await resolveSessionUser(req);
-  if (!session) {
-    sendJson(res, 401, { ok: false, error: 'Требуется вход' });
-    return;
-  }
-  const repository = getAccountDeletionRepository();
-  if (!repository) {
-    sendAccountDeletionUnavailable(res);
-    return;
-  }
-  sendJson(res, 200, { ok: true, ...await repository.previewDeletion({ userId: session.user.id }) });
-}
-
-async function handleRequestAccountDeletion(req, res, request) {
-  const session = await resolveSessionUser(req);
-  if (!session) {
-    sendJson(res, 401, { ok: false, error: 'Требуется вход' });
-    return;
-  }
-  const repository = getAccountDeletionRepository();
-  if (!repository) {
-    sendAccountDeletionUnavailable(res);
-    return;
-  }
-  const userId = session.user.id;
-  const rate = authLimiter.check(`account-deletion:${userId}`);
-  if (!rate.allowed) {
-    sendTooManyAttempts(res, rate.retryAfterSeconds);
-    return;
-  }
-
-  const body = await readJsonBody(req);
-  const currentPassword = typeof body.currentPassword === 'string' ? body.currentPassword : '';
-  const result = await repository.requestDeletion({ userId, currentPassword });
-  if (result.status === 'invalid_password') {
-    sendJson(res, 400, { ok: false, error: 'Неверный пароль' });
-    return;
-  }
-  if (result.status === 'not_found') {
-    sendJson(res, 404, { ok: false, error: 'Аккаунт не найден' });
-    return;
-  }
-  if (result.status === 'already_requested') {
-    sendJson(res, 409, { ok: false, code: 'account_deletion_pending', error: 'Аккаунт уже ожидает удаления', deletionScheduledFor: result.scheduledFor });
-    return;
-  }
-
-  await endAccountSessionConnections({ userId });
-  // Friends' lists and open conversations switch to the anonymous name now.
-  const hidden = await getUserStore().getUserById(userId);
-  if (hidden) await broadcastUserProfileToFriends(hidden, request);
-  sendJson(res, 200, { ok: true, deletionScheduledFor: result.scheduledFor }, { 'Set-Cookie': clearSessionCookie() });
-}
-
-async function handleRestoreAccount(req, res, request) {
-  const repository = getAccountDeletionRepository();
-  if (!repository) {
-    sendAccountDeletionUnavailable(res);
-    return;
-  }
-  const rate = authLimiter.check(`restore:${getClientIp(req, TRUST_PROXY)}`);
-  if (!rate.allowed) {
-    sendTooManyAttempts(res, rate.retryAfterSeconds);
-    return;
-  }
-
-  const body = await readJsonBody(req);
-  const login = normalizeLogin(body.login);
-  const password = typeof body.password === 'string' ? body.password : '';
-  const result = login && password
-    ? await repository.restoreAccount({ login, password })
-    : { status: 'invalid', userId: null };
-  if (result.status === 'expired') {
-    sendJson(res, 410, { ok: false, error: 'Аккаунт уже удалён' });
-    return;
-  }
-  if (result.status !== 'restored') {
-    sendJson(res, 401, { ok: false, error: 'Неверный логин или пароль' });
-    return;
-  }
-
-  const user = await getUserStore().getUserById(result.userId);
-  const device = await sessionDeviceFor(req);
-  const session = await getUserStore().createSession({ userId: user.id, ...device });
-  await recordAndAnnounceLogin({ userId: user.id, session, device, kind: 'login' });
-  await broadcastUserProfileToFriends(user, request);
-  sendJson(
-    res,
-    200,
-    { ok: true, user: await reloadSelfUser(user) },
-    { 'Set-Cookie': buildSessionCookie(session.token, SESSION_TTL_MS / 1000) }
-  );
-}
-
-async function handleListSessions(req, res) {
-  const session = await resolveSessionUser(req);
-  if (!session) {
-    sendJson(res, 401, { ok: false, error: 'Требуется вход' });
-    return;
-  }
-  const sessions = await getUserStore().listSessions({
-    userId: session.user.id,
-    currentTokenHash: session.session.tokenHash
-  });
-  sendJson(res, 200, { ok: true, sessions });
-}
-
-async function handleRevokeSession(req, res, sessionId) {
-  const session = await resolveSessionUser(req);
-  if (!session) {
-    sendJson(res, 401, { ok: false, error: 'Требуется вход' });
-    return;
-  }
-  const publicId = typeof sessionId === 'string' ? sessionId.toLowerCase() : '';
-  if (publicId && publicId === String(session.session.publicId).toLowerCase()) {
-    sendJson(res, 400, { ok: false, error: 'Чтобы завершить этот сеанс, выйдите из аккаунта' });
-    return;
-  }
-  const result = await getUserStore().revokeSession({ userId: session.user.id, publicId });
-  if (result.status !== 'revoked') {
-    sendJson(res, 404, { ok: false, error: 'Сеанс не найден' });
-    return;
-  }
-  await endAccountSessionConnections({ userId: session.user.id, tokenHashes: [result.tokenHash] });
-  sendJson(res, 200, { ok: true });
-}
-
-async function handleRevokeOtherSessions(req, res) {
-  const session = await resolveSessionUser(req);
-  if (!session) {
-    sendJson(res, 401, { ok: false, error: 'Требуется вход' });
-    return;
-  }
-  const result = await getUserStore().revokeOtherSessions({
-    userId: session.user.id,
-    keepTokenHash: session.session.tokenHash
-  });
-  await endAccountSessionConnections({ userId: session.user.id, tokenHashes: result.tokenHashes });
-  sendJson(res, 200, { ok: true, revoked: result.tokenHashes.length });
-}
-
-async function handleGenerateRecoveryCodes(req, res) {
-  const session = await resolveSessionUser(req);
-  if (!session) {
-    sendJson(res, 401, { ok: false, error: 'Требуется вход' });
-    return;
-  }
-  // The password is the only secret guarding this, exactly as for a password change.
-  const rate = authLimiter.check(`recovery-codes:${session.user.id}`);
-  if (!rate.allowed) {
-    sendTooManyAttempts(res, rate.retryAfterSeconds);
-    return;
-  }
-
-  const body = await readJsonBody(req);
-  const currentPassword = typeof body.currentPassword === 'string' ? body.currentPassword : '';
-  const result = await getUserStore().generateRecoveryCodes({ userId: session.user.id, currentPassword });
-  if (result.status === 'not_found') {
-    sendJson(res, 404, { ok: false, error: 'Аккаунт не найден' });
-    return;
-  }
-  if (result.status === 'invalid_password') {
-    sendJson(res, 400, { ok: false, error: 'Неверный пароль' });
-    return;
-  }
-  sendJson(
-    res,
-    200,
-    {
-      ok: true,
-      codes: result.codes.map(formatRecoveryCode),
-      recoveryCodes: { remaining: result.codes.length, generatedAt: result.generatedAt }
-    },
-    { 'Cache-Control': 'no-store' }
-  );
-}
-
-async function handleRecoverAccount(req, res) {
-  const clientIp = getClientIp(req, TRUST_PROXY);
-  const ipRate = authLimiter.check(`recover:${clientIp}`);
-  if (!ipRate.allowed) {
-    sendTooManyAttempts(res, ipRate.retryAfterSeconds);
-    return;
-  }
-
-  const body = await readJsonBody(req);
-  const login = normalizeLogin(body.login);
-  // Keyed on the login too, so spreading guesses across addresses does not help.
-  const loginRate = login ? authLimiter.check(`recover-login:${login}`) : ipRate;
-  if (!loginRate.allowed) {
-    sendTooManyAttempts(res, loginRate.retryAfterSeconds);
-    return;
-  }
-  const newPassword = typeof body.newPassword === 'string' ? body.newPassword : '';
-  if (!isValidPassword(newPassword)) {
-    sendJson(res, 400, { ok: false, error: 'Пароль должен быть не короче 8 символов' });
-    return;
-  }
-
-  const result = await getUserStore().recoverWithCode({ login, code: body.code, newPassword });
-  if (result.status !== 'recovered') {
-    sendJson(res, 401, { ok: false, error: 'Неверный логин или код восстановления' });
-    return;
-  }
-
-  await endAccountSessionConnections({ userId: result.user.id });
-  const device = await sessionDeviceFor(req);
-  const session = await getUserStore().createSession({ userId: result.user.id, ...device });
-  await recordAndAnnounceLogin({ userId: result.user.id, session, device, kind: 'recovery' });
-  sendJson(
-    res,
-    200,
-    { ok: true, user: await reloadSelfUser(result.user), recoveryCodes: { remaining: result.remaining } },
-    { 'Set-Cookie': buildSessionCookie(session.token, SESSION_TTL_MS / 1000) }
-  );
 }
 
 
@@ -3765,6 +3146,18 @@ function createApiApp({
   });
   registerPeerModerationRoutes(app, apiContext, { rooms: roomsService, moderation: peerModeration });
   registerRoomChatRoutes(app, apiContext, roomChat);
+  registerAccountRoutes(app, apiContext, {
+    account: accountService,
+    limiter: authLimiter,
+    sessionCookie: sessionCookies.issue,
+    clearedSessionCookie: sessionCookies.clear,
+    sessionToken: getSessionToken,
+    device: async (req) => ({
+      userAgent: String(req.headers?.['user-agent'] || ''),
+      // Only used for the local city/country lookup; the IP is not stored.
+      locationLabel: await getGeoLocator().locate(getClientIp(req, TRUST_PROXY))
+    })
+  });
   registerOpsRoutes(app, apiContext, {
     readiness: activeReadinessProvider,
     livekitEnabled: () => getLiveKitConfig().enabled,
@@ -3892,42 +3285,8 @@ function createApiApp({
     });
   }
 
-  app.post('/api/auth/register', (request, reply) => runLegacyHandler(request, reply, handleRegister));
-  app.post('/api/auth/login', (request, reply) => runLegacyHandler(request, reply, handleLogin));
-  app.post('/api/auth/logout', (request, reply) => runLegacyHandler(request, reply, handleLogout));
-  app.get('/api/auth/me', (request, reply) => runLegacyHandler(request, reply, handleMe));
-  app.post('/api/auth/profile', (request, reply) => runLegacyHandler(request, reply, handleUpdateProfile));
   app.post('/api/auth/avatar', (request, reply) => runLegacyHandler(request, reply, handleUploadUserAvatar));
   app.delete('/api/auth/avatar', (request, reply) => runLegacyHandler(request, reply, handleDeleteUserAvatar));
-  app.post('/api/auth/password', (request, reply) => runLegacyHandler(request, reply, handleChangePassword));
-  app.post('/api/auth/recover', (request, reply) => runLegacyHandler(request, reply, handleRecoverAccount));
-  app.get('/api/auth/security', (request, reply) => runLegacyHandler(request, reply, handleAccountSecurity));
-  app.post('/api/auth/recovery-codes', (request, reply) => runLegacyHandler(request, reply, handleGenerateRecoveryCodes));
-  app.get('/api/auth/sessions', (request, reply) => runLegacyHandler(request, reply, handleListSessions));
-  app.post('/api/auth/sessions/revoke-others', (request, reply) => runLegacyHandler(request, reply, handleRevokeOtherSessions));
-  app.delete('/api/auth/sessions/:sessionId', (request, reply) => runLegacyHandler(
-    request,
-    reply,
-    (req, res) => handleRevokeSession(req, res, request.params.sessionId)
-  ));
-  app.post('/api/auth/recovery-codes/reminder/snooze', (request, reply) => runLegacyHandler(request, reply, handleSnoozeRecoveryCodesReminder));
-  app.get('/api/auth/whats-new', (request, reply) => runLegacyHandler(request, reply, handleWhatsNew));
-  app.post('/api/auth/whats-new/seen', (request, reply) => runLegacyHandler(request, reply, handleMarkWhatsNewSeen));
-  app.post('/api/auth/app-prompt/seen', (request, reply) => runLegacyHandler(request, reply, handleMarkAppPromptSeen));
-  app.get('/api/auth/login-alerts', (request, reply) => runLegacyHandler(request, reply, handleLoginAlerts));
-  app.post('/api/auth/login-alerts/:alertId/confirm', (request, reply) => runLegacyHandler(
-    request,
-    reply,
-    (req, res) => handleResolveLoginAlert(req, res, request.params.alertId, 'confirmed')
-  ));
-  app.post('/api/auth/login-alerts/:alertId/deny', (request, reply) => runLegacyHandler(
-    request,
-    reply,
-    (req, res) => handleResolveLoginAlert(req, res, request.params.alertId, 'denied')
-  ));
-  app.get('/api/auth/account/deletion', (request, reply) => runLegacyHandler(request, reply, handleAccountDeletionPreview));
-  app.post('/api/auth/account/deletion', (request, reply) => runLegacyHandler(request, reply, handleRequestAccountDeletion));
-  app.post('/api/auth/account/restore', (request, reply) => runLegacyHandler(request, reply, handleRestoreAccount));
   app.post('/api/rooms/:roomId/avatar', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
     return handleUploadRoomAvatar(req, res, normalizeRoomId(request.params.roomId), request);
   }));

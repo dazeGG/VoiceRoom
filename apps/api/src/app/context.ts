@@ -12,11 +12,23 @@ export interface SessionUser {
   [key: string]: unknown;
 }
 
+/** The signed-in session itself, as the user store returns it. */
+export interface SessionRecord {
+  publicId: string;
+  tokenHash: string;
+  [key: string]: unknown;
+}
+
+export interface ResolvedSession {
+  user?: SessionUser | null;
+  session?: SessionRecord;
+}
+
 export interface ApiContext {
   logger: Logger;
   /** The client address, honouring TRUST_PROXY exactly like the legacy handlers. */
   clientIp(req: IncomingMessage): string;
   /** The signed-in user behind the request's session cookie, if any. */
-  resolveSession(req: IncomingMessage): Promise<{ user?: SessionUser | null } | null>;
+  resolveSession(req: IncomingMessage): Promise<ResolvedSession | null>;
   hashIp(ip: string): string;
 }
