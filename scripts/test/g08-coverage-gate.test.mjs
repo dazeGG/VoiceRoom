@@ -93,10 +93,7 @@ const SERVER_INTERNAL_COVERAGE_SCRIPT = String.raw`
   // Room moderation (kick, server mute, ban) and peer eviction moved to
   // domains/rooms; apps/api/test/rooms-domain.test.js covers them.
   // attachPresence moved to realtime/room-presence.ts (apps/api/test/room-presence.test.js).
-  const connectSandbox = (publicUrl, livekitUrl) => ({ URL, Set, LIVEKIT_GATE_PUBLIC_URL: publicUrl, process: { env: { LIVEKIT_URL: livekitUrl } }, cleanLiveKitUrl: (value) => value });
-  await run("getLiveKitConnectSources", connectSandbox("ws://gate.example", "ws://livekit.example"), "done = Promise.resolve(getLiveKitConnectSources());");
-  await run("getLiveKitConnectSources", connectSandbox("", "ws://livekit.example"), "done = Promise.resolve(getLiveKitConnectSources());");
-  await run("getLiveKitConnectSources", connectSandbox("", ""), "done = Promise.resolve(getLiveKitConnectSources());");
+  // getLiveKitConnectSources moved to platform/http/security-headers.ts (apps/api/test/http-platform.test.js).
   })().catch((error) => { console.error(error); process.exitCode = 1; });
 `;
 

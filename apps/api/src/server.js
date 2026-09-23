@@ -16,8 +16,10 @@ import { createAccountLifecycle } from './domains/account/account-lifecycle.ts';
 import { createRoomLifecycle } from './domains/rooms/room-lifecycle.ts';
 import { startMaintenanceTimers } from './platform/maintenance.ts';
 import { createServiceRegistry, resolveCursorHmacKeys as resolveCursorHmacKeysFor } from './app/service-registry.js';
+import { installGracefulShutdown } from './app/graceful-shutdown.ts';
+import { createRequestLog } from './platform/http/request-log.ts';
+import { liveKitConnectSources, securityHeaders } from './platform/http/security-headers.ts';
 import { readApiConfig, readinessReadySetFromEnv, resolveRealtimeReconnectLeaseMs } from './app/config.ts';
-import { URL } from 'node:url';
 
 import {
   readEnvInt,
@@ -105,7 +107,6 @@ import { registerCapabilityRoutes } from './platform/capability-routes.js';
 import { mentionUserIdsFromContent } from '@voice-room/shared/mentions';
 
 const {
-  API_PREFIX,
   HOST,
   PORT,
   SOCKET_PATH,
@@ -597,68 +598,16 @@ const clientLogLimiter = createRateLimiter({
   windowMs: CLIENT_LOG_RATE_WINDOW_MS
 });
 
-function getLiveKitConnectSources() {
-  const url = cleanLiveKitUrl(LIVEKIT_GATE_PUBLIC_URL || process.env.LIVEKIT_URL || '');
-  if (!url) return [];
-
-  const sources = new Set();
-  try {
-    const parsed = new URL(url);
-    sources.add(parsed.origin);
-    if (parsed.hostname === 'localhost') {
-      parsed.hostname = '127.0.0.1';
-      sources.add(parsed.origin);
-    } else if (parsed.hostname === '127.0.0.1') {
-      parsed.hostname = 'localhost';
-      sources.add(parsed.origin);
-    }
-  } catch {
-    // Ignore a malformed LIVEKIT_URL; the client will surface the connection error.
-  }
-  return [...sources];
-}
-
+// The CSP admits the LiveKit gate the browser connects to, read per request
+// so a changed LIVEKIT_URL in tests takes effect.
 function baseHeaders() {
-  const connectSrc = [
-    "'self'",
-    ...getLiveKitConnectSources(),
-    ...(process.env.NODE_ENV === 'production' ? [] : ['ws://localhost:7880', 'ws://127.0.0.1:7880']),
-    'stun:',
-    'turn:',
-    'turns:'
-  ].join(' ');
-
-  return {
-    'Content-Security-Policy': [
-      "default-src 'self'",
-      "base-uri 'none'",
-      `connect-src ${connectSrc}`,
-      "font-src 'self'",
-      "form-action 'none'",
-      "frame-ancestors 'none'",
-      // blob: serves local-only previews (avatar crop) rendered via object URLs.
-      "img-src 'self' data: blob:",
-      "media-src 'self' blob:",
-      "object-src 'none'",
-      "script-src 'self' 'wasm-unsafe-eval'",
-      "style-src 'self'"
-    ].join('; '),
-    'Cross-Origin-Opener-Policy': 'same-origin',
-    'Permissions-Policy': 'microphone=(self), display-capture=(self), camera=(), geolocation=(), payment=()',
-    'Referrer-Policy': 'same-origin',
-    'X-Content-Type-Options': 'nosniff'
-  };
-}
-
-function sendJson(res, status, payload, headers = {}) {
-  res.writeHead(status, {
-    ...baseHeaders(),
-    'Cache-Control': 'no-store',
-    'Content-Type': 'application/json; charset=utf-8',
-    ...headers
+  return securityHeaders({
+    connectSources: liveKitConnectSources(cleanLiveKitUrl(LIVEKIT_GATE_PUBLIC_URL || process.env.LIVEKIT_URL || '')),
+    production: process.env.NODE_ENV === 'production'
   });
-  res.end(JSON.stringify(payload));
 }
+
+const logHttpRequest = createRequestLog({ clientIp: (req) => getClientIp(req, TRUST_PROXY), hashIp });
 
 function getSessionToken(req) {
   return sessionCookies.read(req);
@@ -758,83 +707,6 @@ async function findRoomBan(roomId, userId, ip) {
   return getRoomStore().findActiveRoomBan({ roomId, userId: userId || null, ip: ip || '' });
 }
 
-
-function getApiRoutePath(pathname) {
-  if (pathname === API_PREFIX) return '/';
-  if (pathname.startsWith(`${API_PREFIX}/`)) return pathname.slice(API_PREFIX.length);
-  return null;
-}
-
-function attachFastifyRequestBody(request) {
-  request.raw.body = request.body;
-  // Legacy handlers receive the raw Node request, which carries neither the
-  // request id nor a logger. Both are attached here so any handler can emit a
-  // record that correlates with the request line, without threading the
-  // Fastify request through every signature.
-  request.raw.id = request.id;
-  request.raw.log = request.log;
-  return request.raw;
-}
-
-function getRequestRouteLabel(request) {
-  return request.routeOptions?.url || request.routerPath || request.url || 'unknown';
-}
-
-function logHttpRequest(request, statusCode, durationMs) {
-  const route = getRequestRouteLabel(request);
-  if (route === '/api/healthz') return;
-  // A slow or failed request is the one worth finding later, so it is raised
-  // above the steady-state info stream rather than being counted only in the
-  // Prometheus histogram.
-  const level = statusCode >= 500 ? 'error' : statusCode >= 400 ? 'warn' : 'info';
-  request.log?.[level]?.({
-    evt: LOG_EVENTS.HTTP_REQUEST,
-    method: request.method,
-    route,
-    statusCode,
-    userId: request.raw?.voiceRoomUserId || undefined,
-    ipHash: hashIp(getClientIp(request.raw || request, TRUST_PROXY)),
-    durationMs: Math.round(durationMs * 100) / 100
-  }, 'request completed');
-}
-
-async function runLegacyHandler(request, reply, handler) {
-  reply.hijack();
-  const req = attachFastifyRequestBody(request);
-  const res = reply.raw;
-  const startedAt = process.hrtime.bigint();
-  const route = getRequestRouteLabel(request);
-
-  res.once('finish', () => {
-    const durationMs = Number(process.hrtime.bigint() - startedAt) / 1e6;
-    recordHttpRequest({
-      method: request.method,
-      route,
-      statusCode: res.statusCode,
-      durationMs
-    });
-    logHttpRequest(request, res.statusCode, durationMs);
-  });
-
-  try {
-    await handler(req, res, request);
-  } catch (error) {
-    const status = error.statusCode || 500;
-    const message = error.publicMessage || (status >= 500 ? 'Internal server error' : error.message);
-    if (status >= 500) {
-      request.log?.error?.({
-        evt: LOG_EVENTS.HTTP_HANDLER_FAILED,
-        route,
-        err: error
-      }, 'legacy handler failed');
-    }
-    if (!res.headersSent) {
-      sendJson(res, status, { ok: false, error: message });
-    } else if (!res.writableEnded) {
-      res.end();
-    }
-  }
-}
 
 function getActiveGuestWsCount() {
   if (!wsRegistry?.connections) return 0;
@@ -1083,8 +955,7 @@ function createApiApp({
 
   registerCapabilityRoutes({
     app,
-    readinessProvider: activeReadinessProvider,
-    runLegacyHandler
+    readinessProvider: activeReadinessProvider
   });
 
   const memberships = getMembershipServices();
@@ -1225,41 +1096,6 @@ async function closeStores(logger = getProcessLogger()) {
   await services.close(logger);
 }
 
-function installGracefulShutdown(server, { logger = getProcessLogger(), exit = process.exit, timeoutMs = 8000 } = {}) {
-  let shuttingDown = false;
-  async function shutdown(signal) {
-    if (shuttingDown) return;
-    shuttingDown = true;
-    logger.info({ evt: LOG_EVENTS.SHUTDOWN_STARTED, signal }, 'shutting down gracefully');
-    const timeout = setTimeout(() => {
-      logger.error({ evt: LOG_EVENTS.SHUTDOWN_TIMEOUT, timeoutMs }, 'graceful shutdown timed out; exiting');
-      exit(1);
-    }, timeoutMs);
-    if (typeof timeout.unref === 'function') timeout.unref();
-
-    try {
-      for (const connection of wsRegistry?.connections?.values?.() || []) {
-        try {
-          connection.socket.close(1001, 'Going away');
-        } catch {
-          // Ignore close failures while draining.
-        }
-      }
-      await new Promise((resolve) => server.close(resolve));
-      await closeStores(logger);
-      clearTimeout(timeout);
-      exit(0);
-    } catch (error) {
-      clearTimeout(timeout);
-      logger.error({ evt: LOG_EVENTS.SHUTDOWN_FAILED, err: error }, 'graceful shutdown failed');
-      exit(1);
-    }
-  }
-
-  process.once('SIGTERM', () => void shutdown('SIGTERM'));
-  process.once('SIGINT', () => void shutdown('SIGINT'));
-}
-
 async function bootstrap({ env = process.env, logger = createLogger({ env, name: 'api' }), exit = process.exit } = {}) {
   try {
     const database = readDatabaseConfig(env);
@@ -1328,7 +1164,12 @@ async function bootstrap({ env = process.env, logger = createLogger({ env, name:
       logger,
       exit
     });
-    installGracefulShutdown(server, { logger, exit });
+    installGracefulShutdown(server, {
+      logger,
+      exit,
+      sockets: () => wsRegistry?.connections?.values?.() || [],
+      closeStores
+    });
     return server;
   } catch (error) {
     logger.fatal({ evt: LOG_EVENTS.BOOTSTRAP_FAILED, err: error }, 'Voice Room API failed to bootstrap');
