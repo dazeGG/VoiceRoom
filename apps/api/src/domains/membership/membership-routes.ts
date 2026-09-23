@@ -93,14 +93,12 @@ function registerMembershipRoutes<A>({
   }
 
   if (typeof app.delete === 'function' && membershipService?.leaveRoom) {
-    const memberships = membershipService;
-    const leaveRoom = membershipService.leaveRoom;
     app.delete<MembershipRoute>('/api/rooms/:roomId/memberships/me', async (request, reply) => {
       if (!await membershipEnabled(request)) return send(reply, 404, { ok: false, error: 'Not found' });
       const user = viewerOf(await resolve(request));
       if (!user?.id) return send(reply, 401, { ok: false, error: 'Authentication required' });
       const roomId = request.params?.roomId;
-      const membership = await memberships.getMembership(roomId, user.id);
+      const membership = await membershipService.getMembership(roomId, user.id);
       if (membership?.role === 'owner') {
         return send(reply, 409, { ok: false, code: 'room_owner_cannot_leave', error: 'Room owner cannot leave their room' });
       }
@@ -110,7 +108,7 @@ function registerMembershipRoutes<A>({
           return send(reply, 503, { ok: false, code: (prepared as { code?: string })?.code || 'leave_unavailable', error: 'Unable to revoke room access' });
         }
       }
-      const result = await leaveRoom.call(memberships, { roomId, userId: user.id });
+      const result = await membershipService.leaveRoom!({ roomId, userId: user.id });
       if (result.status === 'owner_required') {
         return send(reply, 409, { ok: false, code: 'room_owner_cannot_leave', error: 'Room owner cannot leave their room' });
       }
