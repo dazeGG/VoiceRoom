@@ -85,31 +85,32 @@ export interface ApiContext {
 export function registerAdmissionRoutes(app: FastifyInstance, ctx: ApiContext): void;
 ```
 
-## 4. TypeScript
+## 4. Decisions (agreed 2026-09-23)
 
-The API migrates to TypeScript without a build step, on Node 24's native type
-stripping.
+| Topic | Decision |
+| --- | --- |
+| Migration style | Route group by route group (section 3), never a parallel rewrite. Each group is one pull request whose existing tests stay unchanged. |
+| Module system | The API package is ES modules (`"type": "module"`) from PR 0 on. Applied migrations are byte-pinned by `test/migration-history-integrity.test.js`, so they stay CommonJS as `.cjs` files (same bytes, same migration names); new migrations are ES modules. |
+| Language | TypeScript on Node 24 type stripping, no build step: erasable syntax only, imports with explicit extensions, strict `tsc` in `npm run check`. A module becomes `.ts` when its route group moves; the `.mts` files from before PR 0 are renamed then too. |
+| Route input/output | TypeBox schemas next to each route, registered with Fastify (validation + serialization) and giving the handler its types. The shared validators stay the contract with the web client; schemas reuse them through custom formats. |
+| Database access | Kysely over the existing `pg` pool for queries; `node-pg-migrate` stays for migrations. Schema types are generated from a migrated database (`kysely-codegen`) and a check fails when they are stale. Repositories move to Kysely with their route group; untouched ones keep raw SQL. The G10 ownership scanner learns `insertInto`/`updateTable`/`deleteFrom`. |
+| Dependencies | Route modules get an explicit typed `ApiContext`; no new module-level singletons. |
 
-- New and migrated modules are `.mts` (ES modules), strict, erasable syntax
-  only (`erasableSyntaxOnly`: no enums, namespaces or parameter properties).
-- Legacy CommonJS loads them with `require('./x.mts')` (require(esm) is stable
-  in Node 24). Imports always carry the extension.
-- `apps/api/tsconfig.json` checks every `.mts` file strictly; `npm run check`
-  runs it. Legacy `.js` is not type-checked: a probe with `checkJs` reports
-  ~700 inference errors (mostly `= {}` destructuring defaults), which would
-  bury real findings. Files become checked by becoming `.mts`.
-- Order: leaf libraries → repositories → services/policies → route modules
-  (each route group from section 3 moves as `.mts`). A converted file ships
-  with its importers updated and its tests unchanged.
-- Once `server.js` is only composition, the API package flips to
-  `"type": "module"` and the remaining `require` calls become imports.
+### PR sequence
 
-Already migrated: `domains/admission/livekit-token-binding.mts`,
+0. ES modules for the whole API (codemod `scripts/codemods/cjs-to-esm.mjs`).
+1. Skeleton: `ApiContext`, http kit, TypeBox and Kysely wiring with codegen, ops routes (health, metrics, client logs, pow, desktop).
+2. LiveKit admission and server mute.
+3. Rooms and `/api/state`.
+4. Legacy room chat folded into `domains/messaging`.
+5. Auth and account.
+6. Friends, blocks, DMs, presence.
+7. Push, avatars, link previews.
+8. Realtime runtime and the remaining stores.
+9. `packages/shared` as one TypeScript source; the `.js`/`.mjs` twins go away.
+
+Already typed: `domains/admission/livekit-token-binding.mts`,
 `lib/image-signature.mts`, `platform/http/origin-guard.mts`.
-
-`packages/shared` keeps hand-maintained `.js` + `.mjs` twins today. When the
-API is ESM, shared becomes a single TypeScript source with one ESM output and
-the twins are deleted.
 
 ## 5. Runtime state and scaling
 
