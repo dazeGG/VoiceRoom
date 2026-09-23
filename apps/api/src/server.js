@@ -16,12 +16,12 @@ import { createAccountLifecycle } from './domains/account/account-lifecycle.ts';
 import { createRoomLifecycle } from './domains/rooms/room-lifecycle.ts';
 import { startMaintenanceTimers } from './platform/maintenance.ts';
 import { createServiceRegistry, resolveCursorHmacKeys as resolveCursorHmacKeysFor } from './app/service-registry.js';
+import { readApiConfig, readinessReadySetFromEnv, resolveRealtimeReconnectLeaseMs } from './app/config.ts';
 import { URL } from 'node:url';
 
 import {
   readEnvInt,
   readEnvBool,
-  readMessageDeliveryMode,
   readDatabaseConfig,
   readUploadsDir
 } from './lib/config.js';
@@ -104,70 +104,80 @@ import { createRuntimeReadinessProvider } from './platform/runtime-readiness.js'
 import { registerCapabilityRoutes } from './platform/capability-routes.js';
 import { mentionUserIdsFromContent } from '@voice-room/shared/mentions';
 
-const API_PREFIX = '/api';
-const HOST = (process.env.HOST || '127.0.0.1').trim();
-const PORT = readEnvInt('PORT', 3000, 1);
-const SOCKET_PATH = (process.env.SOCKET_PATH || '').trim();
-const MAX_ROOM_PEERS = readEnvInt('MAX_ROOM_PEERS', 12, 1);
-const MAX_ROOMS = readEnvInt('MAX_ROOMS', 100, 1);
-const KEEPALIVE_MS = readEnvInt('SSE_KEEPALIVE_MS', 15000, 1000);
-const DEFAULT_REALTIME_RECONNECT_LEASE_MS = 30000;
-const BODY_LIMIT_BYTES = readEnvInt('BODY_LIMIT_BYTES', 65536, 1024);
-const TRUST_PROXY = readEnvBool('TRUST_PROXY', false);
-// The LiveKit JWT only has to survive the join: LiveKit refreshes it for a
-// connected participant, so a short TTL bounds how long a leaked token is
-// useful. The gate credential is revocable server-side and keeps the long TTL
-// that signal resumes and in-place reconnects rely on.
-const LIVEKIT_TOKEN_TTL_SECONDS = readEnvInt('LIVEKIT_TOKEN_TTL_SECONDS', 600, 60);
-const LIVEKIT_GATE_CREDENTIAL_TTL_SECONDS = readEnvInt('LIVEKIT_GATE_CREDENTIAL_TTL_SECONDS', 21600, 60);
-const LIVEKIT_ROSTER_WAIT_MS = readEnvInt('LIVEKIT_ROSTER_WAIT_MS', 5000, 0);
-const ROSTER_POLL_INTERVAL_MS = 50;
-const LIVEKIT_GATE_PUBLIC_URL = cleanLiveKitUrl(process.env.LIVEKIT_GATE_PUBLIC_URL || process.env.LIVEKIT_URL || '');
-const LIVEKIT_GATE_SECRET = (process.env.LIVEKIT_GATE_SECRET || '').trim();
-const ROOM_IDLE_TTL_MS = readEnvInt('ROOM_IDLE_TTL_MS', 900000, 1000);
-const ROOM_PRUNE_INTERVAL_MS = readEnvInt('ROOM_PRUNE_INTERVAL_MS', 60000, 0);
-const ROOM_CHAT_RATE_LIMIT = readEnvInt('ROOM_CHAT_RATE_LIMIT', 60, 0);
-const ROOM_CHAT_RATE_WINDOW_MS = readEnvInt('ROOM_CHAT_RATE_WINDOW_MS', 60000, 1000);
-const ROOM_CREATE_RATE_LIMIT = readEnvInt('ROOM_CREATE_RATE_LIMIT', 20, 0);
-const ROOM_CREATE_RATE_WINDOW_MS = readEnvInt('ROOM_CREATE_RATE_WINDOW_MS', 60000, 1000);
-const MAX_TEMP_ROOMS_PER_IP = readEnvInt(
-  'MAX_TEMP_ROOMS_PER_IP',
-  readEnvInt('MAX_EMPTY_ROOMS_PER_IP', 1, 0),
-  0
-);
-const MAX_STATIC_ROOMS_PER_USER = readEnvInt('MAX_STATIC_ROOMS_PER_USER', 3, 0);
-const MAX_ROOM_BANS = readEnvInt('MAX_ROOM_BANS', 100, 1);
-const ROOM_CREATE_POW_DIFFICULTY = Math.min(readEnvInt('ROOM_CREATE_POW_DIFFICULTY', 14, 0), 32);
-const ROOM_CREATE_POW_TTL_MS = readEnvInt('ROOM_CREATE_POW_TTL_MS', 120000, 10000);
-const SESSION_TTL_MS = readEnvInt('SESSION_TTL_MS', 30 * 24 * 60 * 60 * 1000, 60000);
-const SESSION_COOKIE_NAME = 'vr_session';
-const SESSION_COOKIE_SECURE = readEnvBool('SESSION_COOKIE_SECURE', process.env.NODE_ENV === 'production');
-const CAPABILITY_DAG_PATH = (process.env.CAPABILITY_DAG_PATH || 'config/capability-dag.v1.json').trim();
-const CAPABILITY_DESIRED = (() => {
-  try {
-    const parsed = JSON.parse(process.env.CAPABILITY_DESIRED || '{}');
-    return parsed && typeof parsed === 'object' ? parsed : {};
-  } catch {
-    return {};
-  }
-})();
-
-function readinessReadySetFromEnv(name) {
-  const raw = (process.env[name] || '').trim();
-  if (!raw) return new Set();
-  return new Set(raw.split(',').map((item) => item.trim()).filter(Boolean));
-}
-
-const CAPABILITY_API_REPLICA_ID = (process.env.CAPABILITY_API_REPLICA_ID || process.env.HOSTNAME || 'api-primary').trim();
-const CAPABILITY_EXPECTED_API_REPLICA_IDS = (() => {
-  const configured = readinessReadySetFromEnv('CAPABILITY_EXPECTED_API_REPLICA_IDS');
-  return configured.size ? [...configured] : [CAPABILITY_API_REPLICA_ID];
-})();
+const {
+  API_PREFIX,
+  HOST,
+  PORT,
+  SOCKET_PATH,
+  MAX_ROOM_PEERS,
+  MAX_ROOMS,
+  KEEPALIVE_MS,
+  BODY_LIMIT_BYTES,
+  TRUST_PROXY,
+  LIVEKIT_TOKEN_TTL_SECONDS,
+  LIVEKIT_GATE_CREDENTIAL_TTL_SECONDS,
+  LIVEKIT_ROSTER_WAIT_MS,
+  ROSTER_POLL_INTERVAL_MS,
+  LIVEKIT_GATE_PUBLIC_URL,
+  LIVEKIT_GATE_SECRET,
+  ROOM_IDLE_TTL_MS,
+  ROOM_PRUNE_INTERVAL_MS,
+  ROOM_CHAT_RATE_LIMIT,
+  ROOM_CHAT_RATE_WINDOW_MS,
+  ROOM_CREATE_RATE_LIMIT,
+  ROOM_CREATE_RATE_WINDOW_MS,
+  MAX_TEMP_ROOMS_PER_IP,
+  MAX_STATIC_ROOMS_PER_USER,
+  MAX_ROOM_BANS,
+  ROOM_CREATE_POW_DIFFICULTY,
+  ROOM_CREATE_POW_TTL_MS,
+  SESSION_TTL_MS,
+  SESSION_COOKIE_NAME,
+  SESSION_COOKIE_SECURE,
+  CAPABILITY_DAG_PATH,
+  CAPABILITY_DESIRED,
+  CAPABILITY_API_REPLICA_ID,
+  CAPABILITY_EXPECTED_API_REPLICA_IDS,
+  CAPABILITY_HEARTBEAT_INTERVAL_MS,
+  CAPABILITY_HEARTBEAT_MAX_AGE_MS,
+  AUTH_RATE_LIMIT,
+  AUTH_RATE_WINDOW_MS,
+  LOGIN_FAILURE_LIMIT,
+  LOGIN_FAILURE_WINDOW_MS,
+  GEOIP_DB_PATH,
+  SESSION_REVOKED_CLOSE_CODE,
+  DM_RATE_LIMIT,
+  DM_RATE_WINDOW_MS,
+  FRIEND_REQUEST_RATE_LIMIT,
+  FRIEND_REQUEST_RATE_WINDOW_MS,
+  RING_RATE_LIMIT,
+  RING_RATE_WINDOW_MS,
+  RING_TTL_MS,
+  AVATAR_UPLOAD_RATE_LIMIT,
+  AVATAR_UPLOAD_RATE_WINDOW_MS,
+  PUSH_SUBSCRIPTION_RATE_LIMIT,
+  PUSH_SUBSCRIPTION_RATE_WINDOW_MS,
+  MAX_PUSH_SUBSCRIPTIONS_PER_USER,
+  CLIENT_LOG_INTAKE_ENABLED,
+  CLIENT_LOG_RATE_LIMIT,
+  CLIENT_LOG_RATE_WINDOW_MS,
+  MAX_REALTIME_STREAMS_PER_USER,
+  MAX_GUEST_STREAMS_PER_IP,
+  WS_MAX_PAYLOAD_BYTES,
+  RETENTION_PURGE_INTERVAL_MS,
+  RETENTION_KEEP_DELETED_MS,
+  LINK_PREVIEWS_ENABLED,
+  MESSAGE_DIRECT_EMIT_ENABLED,
+  MESSAGE_DELIVERY_LISTEN_ENABLED,
+  DESKTOP_RELEASE_REPO,
+  DESKTOP_RELEASE_CACHE_MS,
+  DESKTOP_RELEASE_TIMEOUT_MS
+} = readApiConfig();
 const readinessProvider = createRuntimeReadinessProvider({
   expectedApiReplicaIds: CAPABILITY_EXPECTED_API_REPLICA_IDS,
   getClient: () => getRelease250Pool(),
-  heartbeatIntervalMs: readEnvInt('CAPABILITY_HEARTBEAT_INTERVAL_MS', 5_000, 1_000),
-  heartbeatMaxAgeMs: readEnvInt('CAPABILITY_HEARTBEAT_MAX_AGE_MS', 15_000, 3_000),
+  heartbeatIntervalMs: CAPABILITY_HEARTBEAT_INTERVAL_MS,
+  heartbeatMaxAgeMs: CAPABILITY_HEARTBEAT_MAX_AGE_MS,
   manifestPath: CAPABILITY_DAG_PATH,
   runtimeId: CAPABILITY_API_REPLICA_ID,
   getReadinessOptions: () => ({
@@ -183,56 +193,6 @@ const readinessProvider = createRuntimeReadinessProvider({
     internalReady: readinessReadySetFromEnv('CAPABILITY_READY_INTERNAL')
   })
 });
-const AUTH_RATE_LIMIT = readEnvInt('AUTH_RATE_LIMIT', 30, 0);
-const AUTH_RATE_WINDOW_MS = readEnvInt('AUTH_RATE_WINDOW_MS', 60000, 1000);
-const LOGIN_FAILURE_LIMIT = readEnvInt('LOGIN_FAILURE_LIMIT', 10, 0);
-const LOGIN_FAILURE_WINDOW_MS = readEnvInt('LOGIN_FAILURE_WINDOW_MS', 900000, 1000);
-const GEOIP_DB_PATH = String(process.env.GEOIP_DB_PATH || '').trim();
-// Close code for sockets whose account session was ended; clients stop
-// reconnecting and return to the sign-in screen instead.
-const SESSION_REVOKED_CLOSE_CODE = 4401;
-const DM_RATE_LIMIT = readEnvInt('DM_RATE_LIMIT', 30, 0);
-const DM_RATE_WINDOW_MS = readEnvInt('DM_RATE_WINDOW_MS', 10000, 1000);
-const FRIEND_REQUEST_RATE_LIMIT = readEnvInt('FRIEND_REQUEST_RATE_LIMIT', 20, 0);
-const FRIEND_REQUEST_RATE_WINDOW_MS = readEnvInt('FRIEND_REQUEST_RATE_WINDOW_MS', 60000, 1000);
-const RING_RATE_LIMIT = readEnvInt('RING_RATE_LIMIT', 1, 0);
-const RING_RATE_WINDOW_MS = readEnvInt('RING_RATE_WINDOW_MS', 30000, 1000);
-const RING_TTL_MS = readEnvInt('RING_TTL_MS', 30000, 1000);
-const AVATAR_UPLOAD_RATE_LIMIT = readEnvInt('AVATAR_UPLOAD_RATE_LIMIT', 10, 0);
-const AVATAR_UPLOAD_RATE_WINDOW_MS = readEnvInt('AVATAR_UPLOAD_RATE_WINDOW_MS', 60000, 1000);
-const PUSH_SUBSCRIPTION_RATE_LIMIT = readEnvInt('PUSH_SUBSCRIPTION_RATE_LIMIT', 20, 0);
-const PUSH_SUBSCRIPTION_RATE_WINDOW_MS = readEnvInt('PUSH_SUBSCRIPTION_RATE_WINDOW_MS', 60000, 1000);
-const MAX_PUSH_SUBSCRIPTIONS_PER_USER = readEnvInt('MAX_PUSH_SUBSCRIPTIONS_PER_USER', 10, 1);
-// Browser log intake is off unless an operator turns it on: it is a public
-// write path into the log stream, so it stays opt-in per environment.
-const CLIENT_LOG_INTAKE_ENABLED = readEnvBool('CLIENT_LOG_INTAKE_ENABLED', false);
-const CLIENT_LOG_RATE_LIMIT = readEnvInt('CLIENT_LOG_RATE_LIMIT', 6, 0);
-const CLIENT_LOG_RATE_WINDOW_MS = readEnvInt('CLIENT_LOG_RATE_WINDOW_MS', 60000, 1000);
-// Cap concurrent realtime (WebSocket) connections per user so a single account
-// cannot pin an unbounded number of keep-alive connections.
-const MAX_REALTIME_STREAMS_PER_USER = readEnvInt('MAX_REALTIME_STREAMS_PER_USER', 8, 1);
-const MAX_GUEST_STREAMS_PER_IP = readEnvInt('MAX_GUEST_STREAMS_PER_IP', 8, 1);
-const WS_MAX_PAYLOAD_BYTES = readEnvInt('WS_MAX_PAYLOAD_BYTES', 64 * 1024, 1024);
-const RETENTION_PURGE_INTERVAL_MS = readEnvInt('RETENTION_PURGE_INTERVAL_MS', 60 * 60 * 1000, 0);
-const RETENTION_KEEP_DELETED_MS = readEnvInt('RETENTION_KEEP_DELETED_MS', 30 * 24 * 60 * 60 * 1000, 60000);
-// Off unless configured: a link preview makes the API open a URL a user posted.
-const LINK_PREVIEWS_ENABLED = readEnvBool('LINK_PREVIEWS_ENABLED', false);
-const MESSAGE_DELIVERY_MODE = readMessageDeliveryMode();
-const MESSAGE_DIRECT_EMIT_ENABLED = MESSAGE_DELIVERY_MODE.directEmitEnabled;
-const MESSAGE_DELIVERY_LISTEN_ENABLED = readEnvBool('MESSAGE_DELIVERY_LISTEN_ENABLED', true);
-// Desktop app downloads are served from the latest GitHub release of this repo.
-// Metadata is cached server-side so visitors never hit GitHub's per-IP rate limit.
-const DESKTOP_RELEASE_REPO = (process.env.DESKTOP_RELEASE_REPO || 'dazeGG/VoiceRoomDesktop').trim();
-const DESKTOP_RELEASE_CACHE_MS = readEnvInt('DESKTOP_RELEASE_CACHE_MS', 600000, 1000);
-const DESKTOP_RELEASE_TIMEOUT_MS = readEnvInt('DESKTOP_RELEASE_TIMEOUT_MS', 6000, 1000);
-
-function resolveRealtimeReconnectLeaseMs(env = process.env) {
-  const value = Number(env.REALTIME_RECONNECT_LEASE_MS);
-  return Number.isInteger(value) && value >= 1000 && value <= 120000
-    ? value
-    : DEFAULT_REALTIME_RECONNECT_LEASE_MS;
-}
-
 
 const services = createServiceRegistry({
   ROOM_IDLE_TTL_MS,
