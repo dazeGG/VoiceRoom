@@ -292,7 +292,7 @@ export async function runPhysicalReplay() {
   }
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (import.meta.main) {
   const { values } = parseArgs({
     options: {
       json: { type: 'boolean', default: false },

@@ -70,7 +70,7 @@ function readCliOptions() {
   };
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (import.meta.main) {
   const proxy = createPartitionProxy(readCliOptions());
   await proxy.listen();
   process.stdout.write(JSON.stringify({ ready: true, state: proxy.state }) + '\n');

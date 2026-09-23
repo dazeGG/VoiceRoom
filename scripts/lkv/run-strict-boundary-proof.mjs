@@ -69,7 +69,7 @@ export async function runStrictBoundaryProof(options = {}) {
   return report;
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (import.meta.main) {
   const { values } = parseArgs({
     options: {
       json: { type: 'boolean', default: false },

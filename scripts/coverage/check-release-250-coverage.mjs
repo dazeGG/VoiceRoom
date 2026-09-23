@@ -476,7 +476,7 @@ export function checkRelease250Coverage({
   };
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (import.meta.main) {
   try {
     const args = parseArgs(process.argv.slice(2));
     const thresholds = readJson(args.thresholds, "thresholds");
