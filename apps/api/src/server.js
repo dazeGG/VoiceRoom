@@ -15,6 +15,7 @@ import { createNotificationDispatch } from './domains/notifications/notification
 import { createAccountLifecycle } from './domains/account/account-lifecycle.ts';
 import { createRoomLifecycle } from './domains/rooms/room-lifecycle.ts';
 import { startMaintenanceTimers } from './platform/maintenance.ts';
+import { createServiceRegistry, resolveCursorHmacKeys as resolveCursorHmacKeysFor } from './app/service-registry.js';
 import { URL } from 'node:url';
 
 import {
@@ -25,15 +26,9 @@ import {
   readUploadsDir
 } from './lib/config.js';
 import {
-  normalizeRoomId,
-  normalizePeerId,
-  normalizeSessionToken,
   cleanName,
-  cleanStreamId,
-  cleanScreenProfileId,
   cleanLiveKitUrl,
-  accountPeerIdFor,
-  isReservedPeerId
+  accountPeerIdFor
 } from '@voice-room/shared/validation';
 import { createProofOfWork } from './lib/pow.js';
 import { LOG_EVENTS } from './lib/log-events.js';
@@ -47,35 +42,26 @@ import {
 import { getClientIp, createFailureLimiter, createRateLimiter } from './lib/rate-limit.js';
 import { reconcileAvatarStorage } from './lib/avatar-reconciliation.js';
 import { createAvatarStorage } from './lib/avatar-storage.js';
-import { createLinkPreviewFetcher } from './lib/link-preview-fetcher.js';
-import { processLinkPreviewImage } from './lib/link-preview-image.js';
 import { createLinkPreviewStorage, reconcileLinkPreviewImages } from './lib/link-preview-storage.js';
 import { createLinkPreviewRepository } from './domains/link-previews/link-preview-repository.js';
-import { createLinkPreviewService } from './domains/link-previews/link-preview-service.js';
 import { avatarColorForPeerId, createRoomStore } from './lib/room-store.js';
 import { createUserStore } from './lib/user-store.js';
-import { createGeoLocator } from './lib/geoip.js';
-import { createAccountDeletionRepository } from './domains/account/account-deletion-repository.js';
 import { createFriendStore } from './lib/friend-store.js';
 import { createNotificationStore } from './lib/notification-store.js';
 import { createPushStore } from './lib/push-store.js';
 import { createPushService } from './lib/push-service.js';
 import { startApiListener } from './lib/listen.js';
 import { assertMigrationReady, runMigrations } from './lib/migrate.js';
-import { createRelease250Pool } from './lib/release-250-pool.js';
 import {
   observeMaintenance,
   recordCredentialRevokeCleanupFailure,
   recordHttpRequest,
-  recordMediaAuthorizationInvariantFailure,
-  recordMediaPressure,
   renderPrometheus
 } from './lib/metrics.js';
-import { createCredentialBoundaryService } from './domains/admission/credential-boundary-service.js';
 import { registerHttpKit } from './platform/http/http-kit.ts';
 import { registerOpsRoutes } from './domains/ops/ops.routes.ts';
 import { registerAdmissionRoutes } from './domains/admission/admission.routes.ts';
-import { gatePrincipalForPeer, isGatePrincipal } from './domains/admission/gate-principal.ts';
+import { gatePrincipalForPeer } from './domains/admission/gate-principal.ts';
 import { createPeerEviction } from './domains/rooms/peer-eviction.ts';
 import { createPeerModerationService } from './domains/rooms/peer-moderation.service.ts';
 import { registerPeerModerationRoutes } from './domains/rooms/peer-moderation.routes.ts';
@@ -90,7 +76,6 @@ import { createAccountService } from './domains/account/account.service.ts';
 import { createSessionCookies } from './domains/account/session-cookie.ts';
 import { registerFriendsRoutes } from './domains/social/friends.routes.ts';
 import { createFriendsService } from './domains/social/friends.service.ts';
-import { notificationActor } from './domains/social/social-views.ts';
 import { registerDirectMessageRoutes } from './domains/messaging/direct-messages.routes.ts';
 import { createDirectMessagesService } from './domains/messaging/direct-messages.service.ts';
 import { registerNotificationSettingsRoutes } from './domains/notifications/notification-settings.routes.ts';
@@ -104,55 +89,17 @@ import { tokensMatch } from './platform/crypto/tokens-match.ts';
 import { createDesktopReleaseService } from './domains/ops/desktop-release.service.ts';
 import { getLiveKitRoomName as liveKitRoomName } from './domains/admission/livekit-token-binding.mts';
 import { isCrossOriginCookieWrite, isCrossOriginWebSocket } from './platform/http/origin-guard.mts';
-import { createLiveKitCredentialProvider } from './domains/admission/livekit-credential-provider.js';
-import { createMembershipRepository } from './domains/membership/membership-repository.js';
-import { createMembershipService } from './domains/membership/membership-service.js';
-import { createMemberDirectoryService } from './domains/membership/member-directory-service.js';
 import { registerMembershipRoutes } from './domains/membership/membership-routes.js';
-import { createDirectMessageRepository } from './domains/messaging/direct-message-repository.js';
-import { createDmHistoryRepository } from './domains/messaging/dm-history-repository.js';
-import { createDmHistoryService } from './domains/messaging/dm-history-service.js';
 import { registerDmHistoryRoutes } from './domains/messaging/dm-history-routes.js';
-import { createMessageService } from './domains/messaging/message-service.js';
-import { createMessageReadRepository } from './domains/messaging/message-read-repository.js';
-import { createMessageReadService } from './domains/messaging/message-read-service.js';
-import { createMessageIdempotencyRepository } from './domains/messaging/message-idempotency-repository.js';
-import { createMessageOutboxRepository } from './domains/messaging/message-outbox-repository.js';
-import { createMessageVisibilityService } from './domains/messaging/message-visibility-service.js';
-import { createRoomHistoryRepository } from './domains/messaging/room-history-repository.js';
-import { createRoomHistoryService } from './domains/messaging/room-history-service.js';
 import { registerRoomHistoryRoutes } from './domains/messaging/room-history-routes.js';
-import { createRoomMessageRepository } from './domains/messaging/room-message-repository.js';
 import { createContentRepository } from './domains/messaging/content-repository.js';
 import { createReplyRepository } from './domains/messaging/reply-repository.js';
-import { createReactionRepository } from './domains/messaging/reaction-repository.js';
-import { createReactionService } from './domains/messaging/reaction-service.js';
-import { createReactionRealtimeAdapter } from './domains/messaging/reaction-realtime-adapter.js';
 import { registerReactionRoutes } from './domains/messaging/reaction-routes.js';
-import { createPinRepository } from './domains/messaging/pin-repository.js';
-import { createPinService } from './domains/messaging/pin-service.js';
 import { registerPinRoutes } from './domains/messaging/pin-routes.js';
-import { createInboxRepository } from './domains/notifications/inbox-repository.js';
-import { createMentionRepository } from './domains/notifications/mention-repository.js';
-import { createMentionEligibilityService } from './domains/notifications/mention-eligibility-service.js';
-import { createNotificationOutboxRepository } from './domains/notifications/notification-outbox-repository.js';
-import { createNotificationService } from './domains/notifications/notification-service.js';
 import { registerNotificationRoutes } from './domains/notifications/notification-routes.js';
-import { createModerationRepository } from './domains/moderation/moderation-repository.js';
-import { createActiveBanService } from './domains/moderation/active-ban-service.js';
-import { createModerationService } from './domains/moderation/moderation-service.js';
-import { createMessageModerationService } from './domains/moderation/message-moderation-service.js';
 import { registerModerationRoutes } from './domains/moderation/moderation-routes.js';
-import { createAttachmentRepository } from './domains/media/attachment-repository.js';
-import { createMediaJobRepository } from './domains/media/media-job-repository.js';
-import { createMediaStorage } from './domains/media/storage.js';
-import { createMediaPressureService } from './domains/media/media-pressure-service.js';
-import { createMediaQuotaRepository } from './domains/media/media-quota-repository.js';
-import { createMediaQuotaService } from './domains/media/media-quota-service.js';
-import { createMediaService, MAX_UPLOAD_BYTES } from './domains/media/media-service.js';
-import { createMediaVisibilityService } from './domains/media/media-visibility-service.js';
+import { MAX_UPLOAD_BYTES } from './domains/media/media-service.js';
 import { registerMediaRoutes } from './domains/media/media-routes.js';
-import { createCursorCodec } from './platform/cursor-codec.js';
 import { createRuntimeReadinessProvider } from './platform/runtime-readiness.js';
 import { registerCapabilityRoutes } from './platform/capability-routes.js';
 import { mentionUserIdsFromContent } from '@voice-room/shared/mentions';
@@ -286,29 +233,63 @@ function resolveRealtimeReconnectLeaseMs(env = process.env) {
     : DEFAULT_REALTIME_RECONNECT_LEASE_MS;
 }
 
-let roomStore = null;
-let userStore = null;
-let geoLocator = null;
-let friendStore = null;
-let friendStoreInviteExpiryEnabled = false;
-let notificationStore = null;
-let pushStore = null;
-let pushService = null;
-let avatarStorage = null;
-let messageService = null;
-let historyServices = null;
-let credentialBoundary = null;
-let liveKitCredentialProvider = null;
-let membershipPool = null;
-let membershipServices = null;
-let release250Pool = null;
-let reactionServices = null;
-let pinServices = null;
-let notificationServices = null;
-let moderationServices = null;
-let mediaServices = null;
-let activeBanService = null;
-let messageDeliveryServices = null;
+
+const services = createServiceRegistry({
+  ROOM_IDLE_TTL_MS,
+  SESSION_TTL_MS,
+  GEOIP_DB_PATH,
+  LIVEKIT_GATE_SECRET,
+  LIVEKIT_GATE_CREDENTIAL_TTL_SECONDS,
+  LIVEKIT_TOKEN_TTL_SECONDS,
+  MAX_ROOM_BANS,
+  MAX_PUSH_SUBSCRIPTIONS_PER_USER,
+  LINK_PREVIEWS_ENABLED
+}, {
+  readinessProvider,
+  release250FeatureEnabled: (name) => release250FeatureEnabled(name),
+  roomRuntime: () => roomRuntime,
+  getRoom: (roomId) => getRoom(roomId),
+  findRoomBan: (roomId, userId, ip) => findRoomBan(roomId, userId, ip),
+  broadcast: (room, message) => broadcast(room, message),
+  broadcastToUser: (userId, message) => broadcastToUser(userId, message),
+  attachMediaProjection: (context, message) => attachMediaProjection(context, message),
+  disconnectModeratedPeer: (room, peer, type, options) => disconnectModeratedPeer(room, peer, type, options),
+  liveKitGatePrincipalForPeer: (roomId, peer) => liveKitGatePrincipalForPeer(roomId, peer),
+  getLiveKitConfig: () => getLiveKitConfig(),
+  roomMembershipPresenceSnapshot: (roomId) => roomMembershipPresenceSnapshot(roomId),
+  broadcastRoomLinkPreview: (input) => broadcastRoomLinkPreview(input),
+  broadcastDirectLinkPreview: (input) => broadcastDirectLinkPreview(input)
+});
+const {
+  getAccountDeletionRepository,
+  getActiveBanService,
+  getAvatarStorage,
+  getCredentialBoundary,
+  getFriendStore,
+  getGeoLocator,
+  getHistoryServices,
+  getLinkPreviewService,
+  getLinkPreviewStorage,
+  getLiveKitCredentialProvider,
+  getMediaServices,
+  getMembershipServices,
+  getMessageDeliveryServices,
+  getMessageService,
+  getModerationServices,
+  getNotificationServices,
+  getNotificationStore,
+  getPinServices,
+  getPushService,
+  getPushStore,
+  getReactionServices,
+  getRelease250Pool,
+  getRoomStore,
+  getUserStore
+} = services;
+
+function resolveCursorHmacKeys(options) {
+  return resolveCursorHmacKeysFor({ fallbackGateSecret: LIVEKIT_GATE_SECRET, ...options });
+}
 
 let wsRegistry = null;
 let roomRuntime = null;
@@ -372,7 +353,7 @@ const { start: startMessageDeliveryListener, stop: stopMessageDeliveryListener }
 const roomLifecycle = createRoomLifecycle({
   presence: roomPresence,
   runtime: () => roomRuntime,
-  invitations: () => (friendStoreInviteExpiryEnabled ? friendStore : null),
+  invitations: () => services.invitationStore(),
   notifyUser: (userId, event) => broadcastToUser(userId, event),
   credentials: () => getCredentialBoundary(),
   removeParticipant: (roomId, peerId) => removeLiveKitParticipant(roomId, peerId),
@@ -429,199 +410,12 @@ function setProcessLogger(logger) {
   processLogger = logger || null;
 }
 
-function getRoomStore() {
-  if (!roomStore) {
-    roomStore = createRoomStore({
-      roomIdleTtlMs: ROOM_IDLE_TTL_MS
-    });
-  }
-  return roomStore;
-}
-
-function getUserStore() {
-  if (!userStore) {
-    userStore = createUserStore({ sessionTtlMs: SESSION_TTL_MS });
-  }
-  return userStore;
-}
-
-function getGeoLocator() {
-  if (!geoLocator) {
-    geoLocator = createGeoLocator({ databasePath: GEOIP_DB_PATH });
-  }
-  return geoLocator;
-}
-
-function getFriendStore() {
-  if (!friendStore) {
-    friendStore = createFriendStore({});
-  }
-  return friendStore;
-}
-
-function getMessageService() {
-  if (!messageService) {
-    messageService = createMessageService({
-      directMessages: createDirectMessageRepository({ store: getFriendStore() }),
-      roomMessages: createRoomMessageRepository({ store: getRoomStore() }),
-      visibility: createMessageVisibilityService()
-    });
-  }
-  return messageService;
-}
-
-function resolveCursorHmacKeys({ context, env = process.env } = {}) {
-  const configured = env.VOICE_ROOM_CURSOR_HMAC_KEYS
-    || env.CURSOR_HMAC_KEYS
-    || env.CURSOR_HMAC_KEY;
-  if (configured) return configured;
-
-  if (env.NODE_ENV === 'production') {
-    throw new Error('VOICE_ROOM_CURSOR_HMAC_KEYS is required in production');
-  }
-
-  const liveKitGateSecret = typeof env.LIVEKIT_GATE_SECRET === 'string'
-    ? env.LIVEKIT_GATE_SECRET.trim()
-    : LIVEKIT_GATE_SECRET;
-  if (liveKitGateSecret.length >= 32) return `${liveKitGateSecret}:${context}-cursors`;
-
-  const developmentSeed = context === 'membership' ? 'voice-room-development-membership' : 'voice-room-development-cursors';
-  return crypto.createHash('sha256').update(String(env.POW_SECRET || developmentSeed)).digest('hex');
-}
-
-function getHistoryServices() {
-  if (!historyServices) {
-    const cursorCodec = createCursorCodec({ keys: resolveCursorHmacKeys({ context: 'history' }) });
-    const visibilityPolicy = createMessageVisibilityService();
-    historyServices = {
-      cursorCodec,
-      dm: createDmHistoryService({
-        cursorCodec,
-        repository: createDmHistoryRepository(),
-        projectMessage: async ({ message, peerId, userId }) => {
-          const projected = await attachMediaProjection('dm', message);
-          if (!projected.replyTo?.messageId) return projected;
-          const replies = createReplyRepository({ client: getRelease250Pool() });
-          return {
-            ...projected,
-            replyPreview: await replies.getDirectPreview({
-              userId,
-              peerId,
-              messageId: projected.replyTo.messageId
-            })
-          };
-        },
-        visibilityPolicy
-      }),
-      room: createRoomHistoryService({
-        cursorCodec,
-        repository: createRoomHistoryRepository(),
-        projectMessage: async ({ message, roomId }) => {
-          const projected = await attachMediaProjection('room', message);
-          if (!projected.replyTo?.messageId) return projected;
-          const replies = createReplyRepository({ client: getRelease250Pool() });
-          return {
-            ...projected,
-            replyPreview: await replies.getRoomPreview({
-              roomId,
-              messageId: projected.replyTo.messageId
-            })
-          };
-        },
-        visibilityPolicy
-      }),
-      read: createMessageReadService({
-        authorizeRoomRead: ({ roomId, userId }) => getRoomStore().canUserReadRoomChat(roomId, userId),
-        cursorCodec,
-        repository: createMessageReadRepository()
-      })
-    };
-  }
-  return historyServices;
-}
-
 function release250FeatureEnabled(name) {
   try {
     return readinessProvider.getSnapshot()?.features?.[name] === true;
   } catch {
     return false;
   }
-}
-
-function getRelease250Pool() {
-  const databaseUrl = typeof process.env.DATABASE_URL === 'string' ? process.env.DATABASE_URL.trim() : '';
-  if (!databaseUrl) return null;
-  release250Pool = release250Pool || createRelease250Pool({ databaseUrl });
-  return release250Pool;
-}
-
-let accountDeletionRepository = null;
-
-function getAccountDeletionRepository() {
-  if (accountDeletionRepository) return accountDeletionRepository;
-  const pool = getRelease250Pool();
-  if (!pool) return null;
-  accountDeletionRepository = createAccountDeletionRepository({ pool });
-  return accountDeletionRepository;
-}
-
-function getReactionServices() {
-  if (reactionServices) return reactionServices;
-  const pool = getRelease250Pool();
-  if (!pool) return null;
-  const realtime = createReactionRealtimeAdapter({
-    broadcastRoom: async (roomId, event) => {
-      const room = await getRoom(roomId);
-      if (!room) return false;
-      roomRuntime?.broadcastRoomDetail(roomId, event);
-      return true;
-    },
-    broadcastAccount: broadcastToUser,
-    resolveDirectRecipients: ({ actorUserId, conversation }) => [actorUserId, conversation.id]
-  });
-  const service = createReactionService({
-    repository: createReactionRepository({ client: pool }),
-    cursorCodec: getHistoryServices().cursorCodec,
-    requireVisible: async ({ conversation, messageId, viewer, operation }) => {
-      if (conversation.type === 'room') {
-        const message = await getMessageService().room.getMessage(conversation.id, messageId);
-        if (!message) return false;
-        if (operation === 'read' && !viewer?.id) return Boolean(await getRoom(conversation.id));
-        if (!viewer?.id) return false;
-        return operation === 'read'
-          ? getRoomStore().canUserReadRoomChat(conversation.id, viewer.id)
-          : getRoomStore().canUserReactInRoom(conversation.id, viewer.id);
-      }
-      if (!viewer?.id) return false;
-      return Boolean(await getMessageService().direct.getMessage(viewer.id, conversation.id, messageId));
-    },
-    writesEnabled: () => release250FeatureEnabled('reactions'),
-    publish: realtime.publish
-  });
-  reactionServices = { realtime, service };
-  return reactionServices;
-}
-
-function getPinServices() {
-  if (pinServices) return pinServices;
-  const pool = getRelease250Pool();
-  if (!pool) return null;
-  const service = createPinService({
-    repository: createPinRepository({ client: pool }),
-    // Everyone watching the room detail stream needs the new pin list: the
-    // pinned bar is shared state, not a per-viewer projection.
-    publish: async ({ roomId, action, messageId, pins, count }) => {
-      const room = await getRoom(roomId);
-      if (!room) return false;
-      roomRuntime?.broadcastRoomDetail(roomId, {
-        type: 'room.pins',
-        payload: { roomId, action, messageId, pins, count }
-      });
-      return true;
-    }
-  });
-  pinServices = { service };
-  return pinServices;
 }
 
 async function refreshPinsAfterMessageMutation(roomId, action, messageId) {
@@ -636,267 +430,9 @@ async function refreshPinsAfterMessageMutation(roomId, action, messageId) {
   }
 }
 
-function getMessageDeliveryServices() {
-  if (messageDeliveryServices) return messageDeliveryServices;
-  const pool = getRelease250Pool();
-  if (!pool) return null;
-  messageDeliveryServices = {
-    idempotency: createMessageIdempotencyRepository(),
-    outbox: createMessageOutboxRepository({ pool })
-  };
-  return messageDeliveryServices;
-}
-
-function getNotificationServices() {
-  if (notificationServices) return notificationServices;
-  const pool = getRelease250Pool();
-  if (!pool) return null;
-  const inbox = createInboxRepository({ pool });
-  const mentions = createMentionRepository({ pool });
-  const eligibility = createMentionEligibilityService({ activeBanService: getActiveBanService(), pool });
-  const outbox = createNotificationOutboxRepository({ pool });
-  const service = createNotificationService({
-    pool,
-    inbox,
-    mentions,
-    eligibility,
-    outbox,
-    cursorCodec: getHistoryServices().cursorCodec,
-    notificationStore: getNotificationStore()
-  });
-  notificationServices = { eligibility, inbox, mentions, outbox, service };
-  return notificationServices;
-}
-
-function getModerationServices() {
-  if (moderationServices) return moderationServices;
-  const pool = getRelease250Pool();
-  if (!pool) return null;
-  const repository = createModerationRepository({ cursorCodec: getHistoryServices().cursorCodec, pool });
-  const service = createModerationService({
-    pool,
-    repository,
-    maxActiveBans: MAX_ROOM_BANS,
-    resolvePrincipals: async ({ roomId, userId, guestIp }) => {
-      if (userId) {
-        const principal = getRoomStore().normalizeGatePrincipal({ accountUserId: userId, roomId });
-        return isGatePrincipal(principal) ? [principal] : [];
-      }
-      const room = await getRoom(roomId);
-      if (!room || !guestIp) return [];
-      return [...room.peers.values()]
-        .filter((peer) => !peer.accountUserId && peer.ip === guestIp)
-        .map((peer) => liveKitGatePrincipalForPeer(roomId, peer))
-        .filter(isGatePrincipal);
-    },
-    revokePrincipalInTransaction: ({ client, principal, roomId, now }) => (
-      getRoomStore().revokeLiveKitGatePrincipalInTransaction(client, { principal, roomId, now })
-    ),
-    afterBanCommitted: async ({ roomId, userId, guestIp }) => {
-      const room = await getRoom(roomId);
-      if (!room) return;
-      const peers = [...room.peers.values()].filter((peer) => userId
-        ? peer.accountUserId === userId
-        : Boolean(guestIp && !peer.accountUserId && peer.ip === guestIp));
-      for (const peer of peers) {
-        await disconnectModeratedPeer(room, peer, 'room.banned', { gateAlreadyRevoked: true });
-      }
-    }
-  });
-  const messageService = createMessageModerationService({
-    pool,
-    moderationService: service,
-    attachmentRepository: createAttachmentRepository({ pool }),
-    mediaJobRepository: createMediaJobRepository({ pool }),
-    publishMessageDeleted: async ({ roomId, messageId, deletedAt }) => {
-      const room = await getRoom(roomId);
-      if (!room) return;
-      broadcast(room, { type: 'chat-message-deleted', messageId, deletedAt });
-    }
-  });
-  moderationServices = { messageService, repository, service };
-  return moderationServices;
-}
-
-function getActiveBanService() {
-  if (activeBanService) return activeBanService;
-  const pool = getRelease250Pool();
-  if (!pool) return null;
-  activeBanService = createActiveBanService({ pool });
-  return activeBanService;
-}
-
-function getMediaServices() {
-  if (mediaServices) return mediaServices;
-  const pool = getRelease250Pool();
-  if (!pool) return null;
-  const storage = createMediaStorage({ rootDir: process.env.MEDIA_STORAGE_DIR || '/data/media' });
-  const pressure = createMediaPressureService({
-    storagePath: storage.root,
-    minFreeBytes: readEnvInt('MEDIA_MIN_FREE_BYTES', 2 * 1024 * 1024 * 1024, 1),
-    replicaConsensus: () => readinessProvider.getSnapshot()?.replicaConsensus === true,
-    onSnapshot: recordMediaPressure
-  });
-  const attachments = createAttachmentRepository({ pool });
-  const jobs = createMediaJobRepository({ pool });
-  const quotaRepository = createMediaQuotaRepository({ attachmentRepository: attachments, pool });
-  const quota = createMediaQuotaService({ attachmentRepository: attachments, quotaRepository });
-  const service = createMediaService({
-    attachmentRepository: attachments,
-    jobRepository: jobs,
-    pressureService: pressure,
-    quotaService: quota,
-    storage
-  });
-  const visibility = createMediaVisibilityService({
-    attachmentRepository: attachments,
-    storage,
-    authorizeRoomAttachment: async ({ attachment, viewerId }) => {
-      if (!attachment.roomMessageId) return false;
-      const result = await pool.query(
-        `SELECT room.id AS room_id
-         FROM room_messages message
-         JOIN rooms room ON room.id = message.room_id AND room.deleted_at IS NULL
-         JOIN room_memberships membership ON membership.room_id = room.id AND membership.user_id = $2
-         WHERE message.id = $1 AND message.deleted_at IS NULL
-           AND (message.expires_at IS NULL OR message.expires_at > current_timestamp)
-         LIMIT 1`,
-        [attachment.roomMessageId, viewerId]
-      );
-      if (result.rowCount !== 1) return false;
-      return !await getActiveBanService().isBanned({ roomId: result.rows[0].room_id, userId: viewerId });
-    },
-    authorizeDirectAttachment: async ({ attachment, viewerId }) => {
-      if (!attachment.directMessageId) return false;
-      const result = await pool.query(
-        `SELECT 1 FROM direct_messages
-         WHERE id = $1 AND deleted_at IS NULL
-           AND (sender_id = $2 OR recipient_id = $2)
-         LIMIT 1`,
-        [attachment.directMessageId, viewerId]
-      );
-      return result.rowCount === 1;
-    },
-    onAuthorizationInvariantFailure: recordMediaAuthorizationInvariantFailure
-  });
-  mediaServices = { attachments, jobs, pressure, quota, service, storage, visibility };
-  return mediaServices;
-}
-
-function getCredentialBoundary() {
-  if (credentialBoundary) return credentialBoundary;
-  if (LIVEKIT_GATE_SECRET.length < 32) return null;
-  const store = getRoomStore();
-  if (
-    typeof store.getLiveKitGatePrincipalEpoch !== 'function'
-    || typeof store.createLiveKitGateCredential !== 'function'
-    || typeof store.verifyLiveKitGateCredential !== 'function'
-    || (
-      typeof store.revokeLiveKitGatePrincipal !== 'function'
-      && typeof store.revokeLiveKitGatePeer !== 'function'
-    )
-  ) {
-    return null;
-  }
-  credentialBoundary = createCredentialBoundaryService({
-    roomStore: store,
-    secret: LIVEKIT_GATE_SECRET,
-    credentialTtlMs: LIVEKIT_GATE_CREDENTIAL_TTL_SECONDS * 1000
-  });
-  return credentialBoundary;
-}
-
-function getLiveKitCredentialProvider() {
-  if (liveKitCredentialProvider) return liveKitCredentialProvider;
-  const boundary = getCredentialBoundary();
-  const livekit = getLiveKitConfig();
-  if (!boundary || !livekit.enabled) return null;
-  liveKitCredentialProvider = createLiveKitCredentialProvider({
-    apiKey: livekit.apiKey,
-    apiSecret: livekit.apiSecret,
-    boundary,
-    gateUrl: livekit.gateUrl,
-    tokenTtlSeconds: LIVEKIT_TOKEN_TTL_SECONDS
-  });
-  return liveKitCredentialProvider;
-}
-
-function membershipCursorCodec() {
-  return createCursorCodec({ keys: resolveCursorHmacKeys({ context: 'membership' }) });
-}
-
 function roomMembershipPresenceSnapshot(roomId) {
   const room = presenceRooms.get(roomId);
   return buildRoomMembershipPresenceSnapshot(roomId, room, wsRegistry);
-}
-
-function getMembershipServices() {
-  if (membershipServices) return membershipServices;
-  const databaseUrl = typeof process.env.DATABASE_URL === 'string' ? process.env.DATABASE_URL.trim() : '';
-  if (!databaseUrl) return null;
-  membershipPool = membershipPool || createRelease250Pool({ databaseUrl });
-  const repository = createMembershipRepository({ pool: membershipPool });
-  const service = createMembershipService({
-    pool: membershipPool,
-    repository,
-    activeBanService: {
-      isBanned: ({ roomId, userId, ip }) => findRoomBan(roomId, userId, ip)
-    }
-  });
-  const directory = createMemberDirectoryService({
-    membershipService: service,
-    repository,
-    cursorCodec: membershipCursorCodec(),
-    getPresenceSnapshot: roomMembershipPresenceSnapshot
-  });
-  membershipServices = { directory, repository, service };
-  return membershipServices;
-}
-
-function getNotificationStore() {
-  if (!notificationStore) {
-    notificationStore = createNotificationStore({});
-  }
-  return notificationStore;
-}
-
-function getPushStore() {
-  if (!pushStore) pushStore = createPushStore({ maxSubscriptionsPerUser: MAX_PUSH_SUBSCRIPTIONS_PER_USER });
-  return pushStore;
-}
-
-function getPushService() {
-  if (!pushService) pushService = createPushService({ store: getPushStore() });
-  return pushService;
-}
-
-function getAvatarStorage() {
-  if (!avatarStorage) avatarStorage = createAvatarStorage();
-  return avatarStorage;
-}
-
-let linkPreviewStorage = null;
-let linkPreviewService = null;
-
-function getLinkPreviewStorage() {
-  if (!linkPreviewStorage) linkPreviewStorage = createLinkPreviewStorage();
-  return linkPreviewStorage;
-}
-
-function getLinkPreviewService() {
-  if (!LINK_PREVIEWS_ENABLED) return null;
-  if (linkPreviewService) return linkPreviewService;
-  const pool = getRelease250Pool();
-  if (!pool) return null;
-  linkPreviewService = createLinkPreviewService({
-    repository: createLinkPreviewRepository({ pool }),
-    fetcher: createLinkPreviewFetcher(),
-    storage: getLinkPreviewStorage(),
-    processImage: processLinkPreviewImage,
-    onRoomPreview: broadcastRoomLinkPreview,
-    onDirectPreview: broadcastDirectLinkPreview
-  });
-  return linkPreviewService;
 }
 
 function isUserOnline(userId) {
@@ -1368,29 +904,18 @@ function createApiApp({
   // somewhere to observe it: Fastify's own logger is silent by default.
   logger = null
 } = {}) {
-  if (store && store !== roomStore) {
-    roomPresence.reset();
-  }
-  if (store) roomStore = store;
-  if (users) userStore = users;
-  friendStoreInviteExpiryEnabled = Boolean(friends?.expirePendingInvites);
-  if (friends) friendStore = friends;
-  messageService = null;
-  historyServices = null;
-  credentialBoundary = null;
-  liveKitCredentialProvider = liveKitCredentials;
-  membershipServices = membershipServicesOverride;
-  reactionServices = null;
-  pinServices = null;
-  notificationServices = null;
-  moderationServices = null;
-  mediaServices = null;
-  activeBanService = null;
-  messageDeliveryServices = null;
-  if (notifications) notificationStore = notifications;
-  pushStore = pushes || null;
-  pushService = push || null;
-  if (avatars) avatarStorage = avatars;
+  const { roomStoreChanged } = services.applyOverrides({
+    store,
+    users,
+    friends,
+    notifications,
+    pushes,
+    push,
+    avatars,
+    liveKitCredentials,
+    membershipServicesOverride
+  });
+  if (roomStoreChanged) roomPresence.reset();
 
   const app = fastify({
     bodyLimit: BODY_LIMIT_BYTES,
@@ -1737,20 +1262,7 @@ function createApiServer(options = {}) {
 }
 
 async function closeStores(logger = getProcessLogger()) {
-  await Promise.allSettled([
-    roomStore?.close?.(),
-    userStore?.close?.(),
-    friendStore?.close?.(),
-    notificationStore?.close?.(),
-    pushStore?.close?.(),
-    membershipPool?.end?.()
-  ]).then((results) => {
-    for (const result of results) {
-      if (result.status === 'rejected') logger.error({ evt: LOG_EVENTS.STORE_CLOSE_FAILED, err: result.reason }, 'failed to close a store');
-    }
-  });
-  membershipPool = null;
-  membershipServices = null;
+  await services.close(logger);
 }
 
 function installGracefulShutdown(server, { logger = getProcessLogger(), exit = process.exit, timeoutMs = 8000 } = {}) {
@@ -1797,24 +1309,23 @@ async function bootstrap({ env = process.env, logger = createLogger({ env, name:
     if (env.NODE_ENV === 'production') {
       await assertMigrationReady({ databaseUrl: database.url });
     }
-    roomStore = createRoomStore({
+    const roomStore = createRoomStore({
       databaseUrl: database.url,
       logger,
       roomIdleTtlMs: ROOM_IDLE_TTL_MS
     });
     await roomStore.markActiveTemporaryRoomsEmpty();
     await roomStore.pruneRooms();
-    userStore = createUserStore({ databaseUrl: database.url, logger, sessionTtlMs: SESSION_TTL_MS });
-    friendStore = createFriendStore({ databaseUrl: database.url, logger });
-    messageService = null;
-    notificationStore = createNotificationStore({ databaseUrl: database.url, logger });
-    pushStore = createPushStore({
+    const userStore = createUserStore({ databaseUrl: database.url, logger, sessionTtlMs: SESSION_TTL_MS });
+    const friendStore = createFriendStore({ databaseUrl: database.url, logger });
+    const notificationStore = createNotificationStore({ databaseUrl: database.url, logger });
+    const pushStore = createPushStore({
       databaseUrl: database.url,
       logger,
       maxSubscriptionsPerUser: readEnvInt('MAX_PUSH_SUBSCRIPTIONS_PER_USER', 10, 1, env)
     });
-    pushService = createPushService({ store: pushStore, env, logger });
-    avatarStorage = createAvatarStorage({ uploadsDir: readUploadsDir(env) });
+    const pushService = createPushService({ store: pushStore, env, logger });
+    const avatarStorage = createAvatarStorage({ uploadsDir: readUploadsDir(env) });
     const reconciliation = await reconcileAvatarStorage({
       storage: avatarStorage,
       userStore,
@@ -1823,7 +1334,8 @@ async function bootstrap({ env = process.env, logger = createLogger({ env, name:
     if (reconciliation.removed > 0) {
       logger.info({ evt: LOG_EVENTS.MAINTENANCE_TASK_COMPLETED, task: 'avatar-reconciliation', removed: reconciliation.removed }, 'removed orphaned avatar files');
     }
-    linkPreviewStorage = createLinkPreviewStorage({ uploadsDir: readUploadsDir(env) });
+    const linkPreviewStorage = createLinkPreviewStorage({ uploadsDir: readUploadsDir(env) });
+    services.install({ roomStore, userStore, friendStore, notificationStore, pushStore, pushService, avatarStorage, linkPreviewStorage });
     try {
       const previewPool = getRelease250Pool();
       if (previewPool) {
