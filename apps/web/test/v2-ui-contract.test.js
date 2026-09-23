@@ -1884,15 +1884,15 @@ test('message editing is author-only in UI and applies realtime replacements', (
   const friends = read('src/lib/features/home/model/friends.svelte.ts');
   const realtime = read('src/lib/api/realtime.ts');
   const roomsApi = read('src/lib/api/rooms.ts');
-  const server = read('../api/src/server.js');
   const apiRoomChat = read('../api/src/domains/messaging/room-chat.service.ts');
   const apiRoomChatViews = read('../api/src/domains/messaging/room-chat-views.ts');
+  const apiDirectMessages = read('../api/src/domains/messaging/direct-messages.service.ts');
   const roomOwnership = functionBody(roomChat, 'isOwnMessage');
   const previewOwnership = functionBody(previewChat, 'isOwnMessage');
   const messageMenu = read('src/lib/shared/chat/MessageContextMenu.svelte');
 
   assert.match(apiRoomChat, /deps\.roomDetailEvent\('room\.chat\.edited'/);
-  assert.match(server, /type: 'dm\.message\.edited'/);
+  assert.match(apiDirectMessages, /type: 'dm\.message\.edited'/);
   assert.match(apiRoomChat, /Deliberately no owner\/moderator override/);
   assert.match(apiRoomChatViews, /authorUserId: message\.authorUserId \|\| null/);
   assert.match(roomsApi, /authorUserId: string \| null/);
