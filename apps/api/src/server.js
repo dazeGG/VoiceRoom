@@ -24,7 +24,6 @@ import {
   cleanStreamId,
   cleanScreenProfileId,
   cleanLiveKitUrl,
-  cleanPresenceStatus,
   accountPeerIdFor,
   isReservedPeerId
 } from '@voice-room/shared/validation';
@@ -59,7 +58,6 @@ import { createFriendStore } from './lib/friend-store.js';
 import { createNotificationStore } from './lib/notification-store.js';
 import { createPushStore } from './lib/push-store.js';
 import { createPushService, resolvePushTtl, shouldDeliverPush } from './lib/push-service.js';
-import { cleanPushEndpoint } from './lib/push-endpoint.js';
 import { startApiListener } from './lib/listen.js';
 import { assertMigrationReady, runMigrations } from './lib/migrate.js';
 import { createRelease250Pool } from './lib/release-250-pool.js';
@@ -82,7 +80,6 @@ import { registerPeerModerationRoutes } from './domains/rooms/peer-moderation.ro
 import { publicLobbyRoom as lobbyRoomView, publicPeer, roomBanned } from './domains/rooms/room-views.ts';
 import { ownerRefusal, registerRoomRoutes } from './domains/rooms/rooms.routes.ts';
 import { createRoomsService } from './domains/rooms/rooms.service.ts';
-import { cleanUuid } from './domains/messaging/message-input.ts';
 import { publicChatMessage } from './domains/messaging/room-chat-views.ts';
 import { registerRoomChatRoutes } from './domains/messaging/room-chat.routes.ts';
 import { createRoomChatService } from './domains/messaging/room-chat.service.ts';
@@ -94,6 +91,8 @@ import { createFriendsService } from './domains/social/friends.service.ts';
 import { notificationActor } from './domains/social/social-views.ts';
 import { registerDirectMessageRoutes } from './domains/messaging/direct-messages.routes.ts';
 import { createDirectMessagesService } from './domains/messaging/direct-messages.service.ts';
+import { registerNotificationSettingsRoutes } from './domains/notifications/notification-settings.routes.ts';
+import { createNotificationSettingsService } from './domains/notifications/notification-settings.service.ts';
 import { createAdmissionService } from './domains/admission/admission.service.ts';
 import { createLiveKitAdmin } from './domains/admission/livekit-admin.ts';
 import { readLiveKitConfig } from './domains/admission/livekit-config.ts';
@@ -1168,6 +1167,15 @@ const directMessages = createDirectMessagesService({
   notifyRecipient: (recipientId, sender, message) => broadcastDmNotification(recipientId, sender, message),
   scheduleLinkPreview: scheduleDirectLinkPreview
 });
+const notificationSettings = createNotificationSettingsService({
+  preferences: getNotificationStore,
+  pushes: getPushStore,
+  pushConfig: () => getPushService().config,
+  pushLimiter: pushSubscriptionLimiter,
+  setPresence: (userId, presenceStatus) => wsRegistry?.setUserPresenceStatus(userId, presenceStatus),
+  notifyUser: (userId, event) => broadcastToUser(userId, event),
+  broadcastProfileToFriends: (user, log) => broadcastUserProfileToFriends(user, { log })
+});
 
 function liveKitGatePrincipalForPeer(roomId, peer) {
   return gatePrincipalForPeer(getRoomStore(), roomId, peer);
@@ -1930,249 +1938,6 @@ async function endAccountSessionConnections({ userId = null, tokenHashes = null 
 
 // --- Friends, requests, and direct messages -----------------------------
 
-async function requireSessionUser(req, res) {
-  const session = await resolveSessionUser(req);
-  if (!session) {
-    sendJson(res, 401, { ok: false, error: 'Требуется вход' });
-    return null;
-  }
-  return session.user;
-}
-
-// --- Notification preferences -------------------------------------------
-
-function handlePushConfig(_req, res) {
-  sendJson(res, 200, getPushService().config);
-}
-
-function cleanPushSubscription(value) {
-  const endpoint = cleanPushEndpoint(value?.endpoint);
-  const p256dh = String(value?.keys?.p256dh || '').trim();
-  const auth = String(value?.keys?.auth || '').trim();
-  if (!endpoint || endpoint.length > 4096 || !p256dh || p256dh.length > 1024 || !auth || auth.length > 1024) return null;
-  return { endpoint, keys: { p256dh, auth } };
-}
-
-function checkPushSubscriptionRate(res, userId) {
-  const rate = pushSubscriptionLimiter.check(`push-subscription:${userId}`);
-  if (rate.allowed) return true;
-  sendJson(
-    res,
-    429,
-    { ok: false, error: 'Too many push subscription changes', retryAfterSeconds: rate.retryAfterSeconds },
-    { 'Retry-After': String(rate.retryAfterSeconds) }
-  );
-  return false;
-}
-
-async function handleCreatePushSubscription(req, res) {
-  const user = await requireSessionUser(req, res);
-  if (!user) return;
-  if (!getPushService().config.enabled) {
-    sendJson(res, 503, { ok: false, error: 'Push notifications are disabled' });
-    return;
-  }
-  const body = await readJsonBody(req);
-  const subscription = cleanPushSubscription(body.subscription);
-  if (!subscription) {
-    sendJson(res, 400, { ok: false, error: 'Invalid push subscription' });
-    return;
-  }
-  if (!checkPushSubscriptionRate(res, user.id)) return;
-  const stored = await getPushStore().upsert({
-    userId: user.id,
-    subscription,
-    metadata: { userAgent: String(req.headers?.['user-agent'] || '').slice(0, 512) }
-  });
-  if (!stored) {
-    sendJson(res, 409, { ok: false, error: 'Push endpoint belongs to another subscription' });
-    return;
-  }
-  sendJson(res, 201, { ok: true });
-}
-
-async function handleDeletePushSubscription(req, res) {
-  const user = await requireSessionUser(req, res);
-  if (!user) return;
-  const body = await readJsonBody(req);
-  const endpoint = cleanPushEndpoint(body.endpoint);
-  if (!endpoint) {
-    sendJson(res, 400, { ok: false, error: 'Invalid push endpoint' });
-    return;
-  }
-  if (!checkPushSubscriptionRate(res, user.id)) return;
-  await getPushStore().remove({ userId: user.id, endpoint });
-  sendJson(res, 200, { ok: true });
-}
-
-async function handleNotificationPreferences(req, res) {
-  const user = await requireSessionUser(req, res);
-  if (!user) return;
-
-  const preferences = await getNotificationStore().getPreferences(user.id);
-  sendJson(res, 200, { ok: true, preferences });
-}
-
-function sendNotificationMutationResult(res, result, { muted = null } = {}) {
-  switch (result.status) {
-    case 'not_found':
-      sendJson(res, 404, { ok: false, error: 'Not found' });
-      return;
-    case 'self':
-      sendJson(res, 400, { ok: false, error: 'Invalid notification target' });
-      return;
-    case 'temporary_room':
-      sendJson(res, 403, { ok: false, error: 'Only saved rooms can be muted' });
-      return;
-    case 'not_saved_room':
-      sendJson(res, 403, { ok: false, error: 'Room is not saved' });
-      return;
-    default:
-      sendJson(res, 200, {
-        ok: true,
-        ...(muted === null ? {} : { muted }),
-        preferences: result.preferences
-      });
-  }
-}
-
-function readRequiredBoolean(body, fieldName) {
-  if (!body || typeof body[fieldName] !== 'boolean') {
-    return { ok: false, error: `${fieldName} must be a boolean` };
-  }
-  return { ok: true, value: body[fieldName] };
-}
-
-async function handleSetDmMute(req, res, peerId) {
-  const user = await requireSessionUser(req, res);
-  if (!user) return;
-
-  const id = cleanUuid(peerId);
-  if (!id || id === user.id) {
-    sendJson(res, id === user.id ? 400 : 404, { ok: false, error: 'Invalid notification target' });
-    return;
-  }
-
-  const body = await readJsonBody(req);
-  const muted = readRequiredBoolean(body, 'muted');
-  if (!muted.ok) {
-    sendJson(res, 400, { ok: false, error: muted.error });
-    return;
-  }
-
-  const result = await getNotificationStore().setDmMute({ userId: user.id, peerUserId: id, muted: muted.value });
-  sendNotificationMutationResult(res, result, { muted: muted.value });
-}
-
-async function handleSetRoomMute(req, res, rawRoomId) {
-  const user = await requireSessionUser(req, res);
-  if (!user) return;
-
-  const roomId = normalizeRoomId(rawRoomId);
-  if (!roomId) {
-    sendJson(res, 404, { ok: false, error: 'Invalid notification target' });
-    return;
-  }
-
-  const body = await readJsonBody(req);
-  const muted = readRequiredBoolean(body, 'muted');
-  if (!muted.ok) {
-    sendJson(res, 400, { ok: false, error: muted.error });
-    return;
-  }
-
-  const result = await getNotificationStore().setRoomMute({ userId: user.id, roomId, muted: muted.value });
-  sendNotificationMutationResult(res, result, { muted: muted.value });
-}
-
-async function handleSetPrivateNotifications(req, res) {
-  const user = await requireSessionUser(req, res);
-  if (!user) return;
-
-  const body = await readJsonBody(req);
-  const privateNotifications = readRequiredBoolean(body, 'privateNotifications');
-  if (!privateNotifications.ok) {
-    sendJson(res, 400, { ok: false, error: privateNotifications.error });
-    return;
-  }
-
-  const result = await getNotificationStore().setPrivateNotifications({
-    userId: user.id,
-    privateNotifications: privateNotifications.value
-  });
-  sendNotificationMutationResult(res, result);
-}
-
-async function publishPresenceStatusUpdate(user, result, request) {
-  if (result.status !== 'updated') return;
-  const presenceStatus = cleanPresenceStatus(result.preferences?.presenceStatus)
-    || (result.preferences?.doNotDisturb ? 'dnd' : 'online');
-  result.preferences = {
-    ...result.preferences,
-    doNotDisturb: presenceStatus === 'dnd',
-    presenceStatus
-  };
-  wsRegistry?.setUserPresenceStatus(user.id, presenceStatus);
-  const updatedUser = {
-    ...user,
-    doNotDisturb: presenceStatus === 'dnd',
-    presenceStatus
-  };
-  broadcastToUser(user.id, {
-    type: 'notification-settings-updated',
-    preferences: result.preferences
-  });
-  await broadcastUserProfileToFriends(updatedUser, request);
-}
-
-async function handleSetNotificationSettings(req, res, request) {
-  const user = await requireSessionUser(req, res);
-  if (!user) return;
-
-  const body = await readJsonBody(req);
-  const dnd = readRequiredBoolean(body, 'dnd');
-  if (!dnd.ok) {
-    sendJson(res, 400, { ok: false, error: dnd.error });
-    return;
-  }
-
-  const result = await getNotificationStore().setDoNotDisturb({
-    userId: user.id,
-    doNotDisturb: dnd.value
-  });
-  await publishPresenceStatusUpdate(user, result, request);
-  sendNotificationMutationResult(res, result);
-}
-
-async function handleSetPresenceStatus(req, res, request) {
-  const user = await requireSessionUser(req, res);
-  if (!user) return;
-
-  const body = await readJsonBody(req);
-  const presenceStatus = cleanPresenceStatus(body?.status);
-  if (!presenceStatus) {
-    sendJson(res, 400, { ok: false, error: 'status must be one of: online, away, dnd, offline' });
-    return;
-  }
-  if (body?.automatic !== undefined && typeof body.automatic !== 'boolean') {
-    sendJson(res, 400, { ok: false, error: 'automatic must be a boolean' });
-    return;
-  }
-  const automatic = body?.automatic === true;
-  if (automatic && presenceStatus !== 'away' && presenceStatus !== 'online') {
-    sendJson(res, 400, { ok: false, error: 'automatic presence can only transition between online and away' });
-    return;
-  }
-
-  const result = await getNotificationStore().setPresenceStatus({
-    automatic,
-    userId: user.id,
-    presenceStatus
-  });
-  await publishPresenceStatusUpdate(user, result, request);
-  sendNotificationMutationResult(res, result);
-}
-
 function getApiRoutePath(pathname) {
   if (pathname === API_PREFIX) return '/';
   if (pathname.startsWith(`${API_PREFIX}/`)) return pathname.slice(API_PREFIX.length);
@@ -2472,6 +2237,7 @@ function createApiApp({
   registerRoomChatRoutes(app, apiContext, roomChat);
   registerFriendsRoutes(app, apiContext, { friends: friendsService, requestLimiter: friendRequestLimiter });
   registerDirectMessageRoutes(app, apiContext, directMessages);
+  registerNotificationSettingsRoutes(app, apiContext, notificationSettings);
   registerAccountRoutes(app, apiContext, {
     account: accountService,
     limiter: authLimiter,
@@ -2626,23 +2392,6 @@ function createApiApp({
     return handleGetLinkPreviewImage(res, request.params.key);
   }));
 
-  app.get('/api/notifications/preferences', (request, reply) => runLegacyHandler(request, reply, handleNotificationPreferences));
-  app.put('/api/notifications/dm/:userId/mute', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
-    return handleSetDmMute(req, res, request.params.userId);
-  }));
-  app.put('/api/notifications/room/:roomId/mute', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
-    return handleSetRoomMute(req, res, request.params.roomId);
-  }));
-  app.put('/api/notifications/privacy', (request, reply) => runLegacyHandler(request, reply, handleSetPrivateNotifications));
-  app.post('/api/notifications/settings', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
-    return handleSetNotificationSettings(req, res, request);
-  }));
-  app.post('/api/presence/status', (request, reply) => runLegacyHandler(request, reply, (req, res) => {
-    return handleSetPresenceStatus(req, res, request);
-  }));
-  app.get('/api/push/config', (request, reply) => runLegacyHandler(request, reply, handlePushConfig));
-  app.post('/api/push/subscriptions', (request, reply) => runLegacyHandler(request, reply, handleCreatePushSubscription));
-  app.delete('/api/push/subscriptions', (request, reply) => runLegacyHandler(request, reply, handleDeletePushSubscription));
 
   // Register after plugins finish loading so @fastify/websocket can wrap the handler.
   app.after(() => {
