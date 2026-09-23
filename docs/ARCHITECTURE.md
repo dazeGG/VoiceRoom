@@ -122,6 +122,7 @@ Done so far:
 - PR 7a: notification settings, presence status and push subscriptions in `domains/notifications/` (`notification-settings.routes.ts` over `notification-settings.service.ts`). Avatars and link-preview images follow in 7b.
 - PR 7b: account and room avatars and the served image files in `domains/media/` (`avatars.routes.ts` over `avatars.service.ts`). Every HTTP route except the capability routes (`platform/capability-routes.js`, which still take `runLegacyHandler`) is now Fastify-native.
 - PR 8a: the in-memory voice roster in `realtime/room-presence.ts`: attaching stored rooms to their live roster, legacy room event delivery, closing a seat from its own transport, the serialized active/empty occupancy writes with retry, the roster wait for admission and the idle-room sweep.
+- PR 8b: message projection (`domains/messaging/message-projection.ts`: public attachments and reply quotes), the durable delivery relay that LISTENs for the worker (`message-delivery-relay.ts`), push and DM notification dispatch (`domains/notifications/notification-dispatch.ts`) and link-preview events (`domains/link-previews/link-preview-events.ts`).
 - Typed before PR 0: `domains/admission/livekit-token-binding.mts`, `lib/image-signature.mts`, `platform/http/origin-guard.mts`.
 
 ## 5. Runtime state and scaling
