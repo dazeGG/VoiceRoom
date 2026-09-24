@@ -12,6 +12,6 @@ test('G22-A02 account, guest and DM idempotency identities are bounded and conte
   const account = send.normalizeIdempotency({ key: '12345678', fingerprint: 'fp', actorType: 'account', actorId: 'u', conversation: { type: 'room', id: 'r' } });
   const guest = send.normalizeIdempotency({ key: 'abcdefgh', fingerprint: 'fp', actorType: 'guest', actorId: 'p', conversation: { type: 'room', id: 'r' } });
   const dm = send.normalizeIdempotency({ key: 'abcdefgh', fingerprint: 'fp', actorType: 'account', actorId: 'u', conversation: { type: 'dm', id: 'v' } });
-  assert.equal(account.actorType, 'account'); assert.equal(guest.actorType, 'guest'); assert.equal(dm.conversation.type, 'dm');
+  assert.equal(account!.actorType, 'account'); assert.equal(guest!.actorType, 'guest'); assert.equal(dm!.conversation.type, 'dm');
   assert.equal(send.normalizeIdempotency({ key: 'short', fingerprint: 'fp', actorType: 'account', actorId: 'u', conversation: { type: 'room', id: 'r' } }), null);
 });

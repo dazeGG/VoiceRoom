@@ -26,7 +26,7 @@ test('reaction emoji groups are an immutable ordered partition of the frozen cor
   assert.strictEqual(emojiGroups.listReactionEmojiGroups(), groups);
 
   for (const group of groups) {
-    assert.equal(emojiGroups.reactionEmojiGroupKey(group.emojis[0]), group.key);
+    assert.equal(emojiGroups.reactionEmojiGroupKey(group.emojis[0]!), group.key);
   }
   assert.equal(emojiGroups.reactionEmojiGroupKey('not-an-emoji'), '');
 });

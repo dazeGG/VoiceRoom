@@ -39,8 +39,8 @@ test('browser-facing shared modules expose named ESM exports', async () => {
   };
 
   for (const [subpath, names] of Object.entries(expectedExports)) {
-    const target = packageJson.exports[`./${subpath}`];
-    assert.match(target, /^\.\/src\/[a-z-]+\.ts$/);
+    const target = (packageJson.exports as Record<string, string>)[`./${subpath}`];
+    assert.match(target!, /^\.\/src\/[a-z-]+\.ts$/);
     const esm = await import(`@voice-room/shared/${subpath}`);
     for (const name of names) assert.ok(name in esm, `${subpath} must export ${name}`);
   }

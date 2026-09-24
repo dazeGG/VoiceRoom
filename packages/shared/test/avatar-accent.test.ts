@@ -5,7 +5,7 @@ import { deriveAvatarAccent, dominantAvatarColor } from '@voice-room/shared/avat
 const HEX_COLOR = /^#[0-9a-f]{6}$/;
 const BOX_SHADOW = /^0 10px 24px #[0-9a-f]{8}$/;
 
-function assertValidPresentation(presentation) {
+function assertValidPresentation(presentation: { background: string; foreground: string; shadow: string }) {
   assert.match(presentation.background, HEX_COLOR);
   assert.match(presentation.foreground, HEX_COLOR);
   assert.match(presentation.shadow, BOX_SHADOW);
@@ -76,7 +76,7 @@ test('out-of-range and invalid channel values are normalized safely', () => {
   assertValidPresentation(deriveAvatarAccent(null));
 });
 
-function makeBitmap(size, paint) {
+function makeBitmap(size: number, paint: (insideCircle: boolean) => [number, number, number, number]) {
   const pixels = new Uint8ClampedArray(size * size * 4);
   const center = size / 2;
   const radiusSquared = center ** 2;

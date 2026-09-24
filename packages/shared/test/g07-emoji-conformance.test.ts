@@ -18,13 +18,13 @@ const SOURCE = fs.readFileSync(path.join(ROOT, 'src/emoji.ts'), 'utf8');
 const EXPECTED_CORPUS_SHA256 = '4a53e0c0dc317e6830f4055191e9fe287ab2db8978b2f78bdbaa43a60483d791';
 const EXPECTED_UNICODE_SHA256 = '1d8a944f88d7952f7ef7c5167fef3c67995bcae24543949710231b03a201acda';
 
-function assertAccepted(value) {
+function assertAccepted(value: string) {
   assert.equal(isReactionEmoji(value), true, `${value} should be accepted`);
   assert.equal(cleanReactionEmoji(value), value);
   assert.equal(assertReactionEmoji(value), value);
 }
 
-function assertRejected(value) {
+function assertRejected(value: unknown) {
   assert.equal(isReactionEmoji(value), false, `${String(value)} should be rejected`);
   assert.equal(cleanReactionEmoji(value), '');
   assert.throws(() => assertReactionEmoji(value), /Unsupported reaction emoji/);

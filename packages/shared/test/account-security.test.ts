@@ -55,7 +55,7 @@ test('isDesktopAppUserAgent agrees with the described client', async () => {
     assert.equal(accountSecurity.isDesktopAppUserAgent(fixture.value), expected, fixture.name);
   }
   // Repeated calls must not carry regex state between user agents.
-  const shell = USER_AGENTS[0].value;
+  const shell = USER_AGENTS[0]!.value;
   assert.equal(accountSecurity.isDesktopAppUserAgent(shell), true);
   assert.equal(accountSecurity.isDesktopAppUserAgent(shell), true);
 });
@@ -136,7 +136,7 @@ test('the recovery codes reminder is due only without codes and outside its snoo
     [{ remaining: 0 }, { snoozedUntil: later }, false],
     [{ remaining: 3 }, { snoozedUntil: null }, false],
     [null, { snoozedUntil: null }, false]
-  ]) {
+  ] as [Parameters<typeof accountSecurity.isRecoveryCodesReminderDue>[0], Parameters<typeof accountSecurity.isRecoveryCodesReminderDue>[1], boolean][]) {
     assert.equal(accountSecurity.isRecoveryCodesReminderDue(status, reminder, now), expected, JSON.stringify([status, reminder]));
   }
 });
@@ -163,7 +163,7 @@ test('session rows are validated at the boundary', async () => {
   assert.equal('ip' in normalized, false);
   assert.equal(accountSecurity.normalizeAccountSession({ ...row, id: 'not-a-uuid' }), null);
   assert.equal(accountSecurity.normalizeAccountSession({ ...row, lastSeenAt: 'yesterday' }), null);
-  assert.equal(accountSecurity.normalizeAccountSession({ ...row, current: 'yes' }).current, false);
+  assert.equal(accountSecurity.normalizeAccountSession({ ...row, current: 'yes' })!.current, false);
 });
 
 test('deleted accounts use a reserved login prefix and a fixed name', async () => {

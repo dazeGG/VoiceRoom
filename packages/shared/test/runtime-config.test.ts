@@ -41,12 +41,13 @@ test('leaves configured endpoints unchanged when the API issued no gate credenti
 });
 
 test('never places an uncredentialed runtime endpoint before the API admission URL', () => {
+  // Only the LiveKit section matters here.
   const urls = resolveLiveKitConnectUrls({
     livekit: {
       wsUrl: 'wss://livekit.dev.voiceroom.ru/rtc',
       connectFallbacks: ['wss://livekit-fallback.dev.voiceroom.ru/rtc']
     }
-  }, 'wss://livekit.dev.voiceroom.ru/rtc?vr_gate_credential=signed-value');
+  } as Parameters<typeof resolveLiveKitConnectUrls>[0], 'wss://livekit.dev.voiceroom.ru/rtc?vr_gate_credential=signed-value');
 
   assert.deepEqual(urls, [
     'wss://livekit.dev.voiceroom.ru/?vr_gate_credential=signed-value',
