@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
-import { createWsHandler } from '../src/realtime/ws-handler.js';
+import { createWsHandler } from '../src/realtime/ws-handler.ts';
 
 const ROOM_ID = 'room1';
 const PEER_A = 'peer-alice1';

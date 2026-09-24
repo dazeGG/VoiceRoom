@@ -38,7 +38,7 @@ test('G48 supplemental source contract keeps admission ordering visible', () => 
 
 test('G48 supplemental source contract keeps revoke-before-remove ordering visible', () => {
   const root = path.resolve(import.meta.dirname, '../src');
-  const runtime = fs.readFileSync(path.join(root, 'realtime/room-runtime.js'), 'utf8');
+  const runtime = fs.readFileSync(path.join(root, 'realtime/room-runtime.ts'), 'utf8');
   const leaveStart = runtime.indexOf('async function disconnectAccountFromRoom');
   const leaveEnd = runtime.indexOf('\n  async function updatePeerState', leaveStart);
   const leave = runtime.slice(leaveStart, leaveEnd);

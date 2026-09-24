@@ -8,23 +8,112 @@ import {
   cleanScreenProfileId,
   isReservedPeerId
 } from '@voice-room/shared/validation';
-import { buildServerEnvelope, buildServerErrorEnvelope } from './envelope.js';
-import { buildRoomRealtimeSummaryFromLobbyRoom, createSummaryCoalescer } from './summary.js';
-import { createWsTransport } from './peer-transport.js';
+import { buildServerEnvelope, buildServerErrorEnvelope } from './envelope.ts';
+import { buildRoomRealtimeSummaryFromLobbyRoom, createSummaryCoalescer } from './summary.ts';
+import { createWsTransport } from './peer-transport.ts';
 import { LOG_EVENTS } from '../lib/log-events.ts';
 import { createLogger } from '../lib/logger.ts';
-import { legacyPeerMessageToWs } from './legacy-events.js';
-import { createTypingThrottle } from './typing-throttle.js';
+import { legacyPeerMessageToWs } from './legacy-events.ts';
+import { createTypingThrottle } from './typing-throttle.ts';
+import type { TypingActivity, ServerEnvelope } from '@voice-room/shared/realtime';
+import type { RoomStore } from '../lib/room-store.ts';
+import type { UserStore } from '../lib/user-store.ts';
+import type { ConnectionRegistry, WsConnection } from './registry.ts';
 
-function resolveViewedScreenPeerId(room, viewerPeerId, value) {
+// Presence peers and rooms are plain in-memory records shared with server.js.
+type Peer = Record<string, any>;
+type PresenceRoom = { peers: Map<string, Peer>; voiceActiveSince?: number | null; [key: string]: any };
+type VoiceTarget = { roomId: string; peerId: string; sessionToken?: string; transportId?: string };
+type FinalizeContext = { roomId: string; peerId: string; peer: Peer | null; reason: string; ownershipFinalized: boolean };
+type FinalizePeer = (context: FinalizeContext) => Promise<{ finalized?: boolean } | void | undefined>;
+type FinalizeResult = { ok: true; finalized: boolean };
+type LeaseState =
+  | 'pending'
+  | 'claimed-by-replacement'
+  | 'finalizing-expiry'
+  | 'terminal-finalizing'
+  | 'finalizer-failed'
+  | 'terminal-finalizer-failed'
+  | 'terminal';
+type LeaseRecord = {
+  key: string;
+  roomId: string;
+  peerId: string;
+  sessionToken: string;
+  transportId: string;
+  generation: number;
+  deadline: number;
+  state: LeaseState;
+  timer: any;
+  finalizerPromise: Promise<FinalizeResult> | null;
+  finalizeCallbacks: FinalizePeer[];
+  terminalReason: string;
+  terminalAtJoinSequence: number;
+  claimRequestSequence: number;
+  finalizerErrorCode: string;
+  disconnected: boolean;
+  peer: Peer;
+};
+type LeaseClaim =
+  | { state: 'none'; record: null }
+  | { state: 'claimed' | 'finalizing' | 'busy' | 'failed-finalizer' | 'terminal' | LeaseState; record: LeaseRecord };
+type FinalizeError = Error & { ownershipFinalized?: boolean; rollbackTerminal?: boolean; code?: string };
+type SessionUser = {
+  id: string;
+  displayName?: string;
+  login?: string;
+  avatarAccent?: string | null;
+  avatarKey?: string | null;
+  [key: string]: unknown;
+} | null | undefined;
+type JoinResult = { ok: boolean; code?: string; message?: string; reconnecting?: boolean };
+type RuntimeRoomStore = Pick<RoomStore,
+  'getRoom' | 'listMessages' | 'getOrCreatePeerIdentity' | 'listVisibleRoomsForUser' | 'listSummaryRecipientUserIds' | 'markRoomActive'>
+  & Partial<Pick<RoomStore,
+    'revokeLiveKitGatePeer' | 'getRoomUnreadCount' | 'listNotificationRecipientUserIds' | 'isRoomServerMuted' | 'normalizeGatePrincipal'>>;
+type GatePrincipal = { principalType: string; principalId: string };
+type RuntimeCredentialBoundary = {
+  revokePeer?: (input: { roomId: string; accountUserId: string | null; guestPrincipalId: string }) => Promise<unknown>;
+  resolvePrincipal?: (input: { roomId: string; accountUserId: string }) => GatePrincipal | null;
+  revokePrincipal?: (input: { roomId: string; principal: GatePrincipal }) => Promise<{ status?: string } | null | undefined>;
+};
+type RuntimeLogger = { info(...args: unknown[]): void; warn(...args: unknown[]): void; error(...args: unknown[]): void };
+export type RoomRuntimeDeps = {
+  presenceRooms: Map<string, PresenceRoom>;
+  wsRegistry: ConnectionRegistry;
+  getRoomStore: () => RuntimeRoomStore;
+  getRoom: (roomId: string) => Promise<PresenceRoom | null>;
+  publicPeer: (peer: Peer) => any;
+  publicLobbyRoom: (room: any) => any;
+  publicChatMessage: (message: any) => any;
+  getUserStore?: (() => Pick<UserStore, 'getUserById'>) | null;
+  broadcast: (room: PresenceRoom, message: Record<string, unknown>, exceptPeerId?: string) => void;
+  closePeer: (roomId: string, peerId: string, transportId: string | undefined, reason: string) => void;
+  avatarColorForPeerId: (peerId: unknown) => string;
+  MAX_ROOM_PEERS: number;
+  tokensMatch: (expected: unknown, actual: unknown) => boolean;
+  sessionAvatarColorKey: (user: SessionUser) => string;
+  queueRoomOccupancyTransition?: (roomId: string) => Promise<unknown>;
+  findRoomBan?: (roomId: string, userId: string | null | undefined, ip: string) => Promise<unknown>;
+  credentialBoundary?: RuntimeCredentialBoundary | null;
+  removeLiveKitParticipant?: (roomId: string, peerId: string) => Promise<unknown>;
+  now?: () => number;
+  setTimeout?: (callback: () => void, ms: number) => any;
+  clearTimeout?: (timer: any) => void;
+  reconnectLeaseMs?: number;
+  logger?: RuntimeLogger;
+};
+
+
+function resolveViewedScreenPeerId(room: PresenceRoom | null | undefined, viewerPeerId: string, value: unknown): string {
   const ownerPeerId = normalizePeerId(value);
   if (!ownerPeerId || ownerPeerId === viewerPeerId) return '';
   return room?.peers.get(ownerPeerId)?.screen ? ownerPeerId : '';
 }
 
-function clearViewedScreenPeerReferences(room, ownerPeerId) {
+function clearViewedScreenPeerReferences(room: PresenceRoom | null | undefined, ownerPeerId: string): Peer[] {
   if (!room?.peers || !ownerPeerId) return [];
-  const clearedViewers = [];
+  const clearedViewers: Peer[] = [];
   for (const viewer of room.peers.values()) {
     if (viewer.viewedScreenPeerId !== ownerPeerId) continue;
     viewer.viewedScreenPeerId = '';
@@ -33,7 +122,7 @@ function clearViewedScreenPeerReferences(room, ownerPeerId) {
   return clearedViewers;
 }
 
-function createRoomRealtimeRuntime(deps) {
+function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
   const {
     presenceRooms,
     wsRegistry,
@@ -49,7 +138,7 @@ function createRoomRealtimeRuntime(deps) {
     MAX_ROOM_PEERS,
     tokensMatch,
     sessionAvatarColorKey,
-    queueRoomOccupancyTransition = async (roomId) => getRoomStore().markRoomActive(roomId),
+    queueRoomOccupancyTransition = async (roomId: string) => getRoomStore().markRoomActive(roomId),
     findRoomBan = async () => null,
     credentialBoundary = null,
     removeLiveKitParticipant = async () => {},
@@ -60,9 +149,9 @@ function createRoomRealtimeRuntime(deps) {
     logger = createLogger({ name: 'api' })
   } = deps;
 
-  const recipientCache = new Map();
-  const voiceJoinStates = new Map();
-  const reconnectLeases = new Map();
+  const recipientCache = new Map<string, { userIds: string[]; at: number }>();
+  const voiceJoinStates = new Map<string, { latestAuthorized: number; pending: number }>();
+  const reconnectLeases = new Map<string, LeaseRecord>();
   const leaseDurationMs = Number.isInteger(reconnectLeaseMs)
     && reconnectLeaseMs >= 1000
     && reconnectLeaseMs <= 120000
@@ -71,11 +160,11 @@ function createRoomRealtimeRuntime(deps) {
   let voiceJoinRequestSequence = 0;
   let reconnectLeaseGeneration = 0;
 
-  function reconnectLeaseKey(roomId, peerId, sessionToken) {
+  function reconnectLeaseKey(roomId: string, peerId: string, sessionToken: string): string {
     return `${roomId}\u0000${peerId}\u0000${sessionToken}`;
   }
 
-  function currentLeasePeer(record) {
+  function currentLeasePeer(record: LeaseRecord): Peer | null {
     const peer = presenceRooms.get(record.roomId)?.peers?.get(record.peerId);
     if (
       !peer
@@ -87,7 +176,7 @@ function createRoomRealtimeRuntime(deps) {
     return peer;
   }
 
-  async function defaultFinalizeLeasePeer({ record, peer, reason }) {
+  async function defaultFinalizeLeasePeer({ record, peer, reason }: { record: LeaseRecord; peer: Peer; reason: string }): Promise<{ finalized: true }> {
     if (credentialBoundary?.revokePeer) {
       await credentialBoundary.revokePeer({
         roomId: record.roomId,
@@ -95,7 +184,7 @@ function createRoomRealtimeRuntime(deps) {
         guestPrincipalId: peer.gateGuestPrincipalId || ''
       });
     } else if (typeof getRoomStore().revokeLiveKitGatePeer === 'function') {
-      await getRoomStore().revokeLiveKitGatePeer({
+      await getRoomStore().revokeLiveKitGatePeer!({
         roomId: record.roomId,
         peerId: record.peerId,
         accountUserId: peer.accountUserId || null,
@@ -108,14 +197,14 @@ function createRoomRealtimeRuntime(deps) {
     try {
       await removeLiveKitParticipant(record.roomId, record.peerId);
     } catch (error) {
-      error.ownershipFinalized = true;
+      (error as FinalizeError).ownershipFinalized = true;
       throw error;
     }
     scheduleSummaryBroadcast(record.roomId);
     return { finalized: true };
   }
 
-  function scheduleLeaseExpiry(record) {
+  function scheduleLeaseExpiry(record: LeaseRecord): void {
     const delay = Math.max(0, record.deadline - now());
     record.timer = scheduleTimeout(() => {
       if (reconnectLeases.get(record.key) !== record || record.state !== 'pending') return;
@@ -127,15 +216,15 @@ function createRoomRealtimeRuntime(deps) {
     record.timer?.unref?.();
   }
 
-  async function runLeaseFinalizer(record, reason, finalizePeer) {
+  async function runLeaseFinalizer(record: LeaseRecord, reason: string, finalizePeer: FinalizePeer | null): Promise<FinalizeResult> {
     if (finalizePeer && !record.finalizeCallbacks.includes(finalizePeer)) {
       record.finalizeCallbacks.push(finalizePeer);
     }
     if (record.finalizerPromise) return record.finalizerPromise;
 
-    record.finalizerPromise = (async () => {
+    record.finalizerPromise = (async (): Promise<FinalizeResult> => {
       let ownershipFinalized = false;
-      let failure = null;
+      let failure: FinalizeError | null = null;
       const ownedPeer = currentLeasePeer(record);
       if (ownedPeer) {
         try {
@@ -148,19 +237,19 @@ function createRoomRealtimeRuntime(deps) {
               reason: record.terminalReason,
               ownershipFinalized: false
             });
-            ownershipFinalized = result?.finalized !== false;
+            ownershipFinalized = (result as { finalized?: boolean } | undefined)?.finalized !== false;
           } else {
             await defaultFinalizeLeasePeer({ record, peer: ownedPeer, reason });
             ownershipFinalized = true;
           }
         } catch (error) {
-          failure = error;
-          ownershipFinalized = error?.ownershipFinalized === true;
+          failure = error as FinalizeError;
+          ownershipFinalized = (error as FinalizeError | null)?.ownershipFinalized === true;
         }
       }
 
       for (let index = 0; index < record.finalizeCallbacks.length; index += 1) {
-        const callback = record.finalizeCallbacks[index];
+        const callback = record.finalizeCallbacks[index] as FinalizePeer;
         try {
           const result = await callback({
             roomId: record.roomId,
@@ -169,10 +258,10 @@ function createRoomRealtimeRuntime(deps) {
             reason: record.terminalReason || reason,
             ownershipFinalized
           });
-          if (!ownershipFinalized) ownershipFinalized = result?.finalized !== false;
+          if (!ownershipFinalized) ownershipFinalized = (result as { finalized?: boolean } | undefined)?.finalized !== false;
         } catch (error) {
-          failure ||= error;
-          if (!ownershipFinalized) ownershipFinalized = error?.ownershipFinalized === true;
+          failure ||= error as FinalizeError;
+          if (!ownershipFinalized) ownershipFinalized = (error as FinalizeError | null)?.ownershipFinalized === true;
         }
       }
 
@@ -208,14 +297,14 @@ function createRoomRealtimeRuntime(deps) {
     return record.finalizerPromise;
   }
 
-  function startLeaseFinalizer(record, reason) {
+  function startLeaseFinalizer(record: LeaseRecord, reason: string): void {
     void runLeaseFinalizer(record, reason, null).catch(() => {
       // The record remains in a typed failed-finalizer state. Replacement and
       // terminal paths must explicitly retry/adopt it before admission proceeds.
     });
   }
 
-  async function retryFailedLeaseFinalizer(record, reason = 'lost') {
+  async function retryFailedLeaseFinalizer(record: LeaseRecord, reason = 'lost'): Promise<FinalizeResult | null> {
     if (record.state !== 'finalizer-failed' && record.state !== 'terminal-finalizer-failed') {
       return record.finalizerPromise;
     }
@@ -225,7 +314,7 @@ function createRoomRealtimeRuntime(deps) {
     return runLeaseFinalizer(record, record.terminalReason || reason, null);
   }
 
-  function createReconnectLease(activeVoice) {
+  function createReconnectLease(activeVoice: VoiceTarget): LeaseRecord | null {
     const room = presenceRooms.get(activeVoice.roomId);
     const peer = room?.peers?.get(activeVoice.peerId);
     if (
@@ -236,19 +325,19 @@ function createRoomRealtimeRuntime(deps) {
       return null;
     }
 
-    const key = reconnectLeaseKey(activeVoice.roomId, activeVoice.peerId, activeVoice.sessionToken);
+    const key = reconnectLeaseKey(activeVoice.roomId, activeVoice.peerId, activeVoice.sessionToken as string);
     const existing = reconnectLeases.get(key);
     if (existing && existing.transportId === activeVoice.transportId) {
       return existing;
     }
     if (existing?.timer) cancelTimeout(existing.timer);
 
-    const record = {
+    const record: LeaseRecord = {
       key,
       roomId: activeVoice.roomId,
       peerId: activeVoice.peerId,
-      sessionToken: activeVoice.sessionToken,
-      transportId: activeVoice.transportId,
+      sessionToken: activeVoice.sessionToken as string,
+      transportId: activeVoice.transportId as string,
       generation: ++reconnectLeaseGeneration,
       deadline: now() + leaseDurationMs,
       state: 'pending',
@@ -267,7 +356,7 @@ function createRoomRealtimeRuntime(deps) {
     return record;
   }
 
-  function claimReconnectLease(roomId, peerId, sessionToken, joinRequestSequence) {
+  function claimReconnectLease(roomId: string, peerId: string, sessionToken: string, joinRequestSequence: number): LeaseClaim {
     const record = reconnectLeases.get(reconnectLeaseKey(roomId, peerId, sessionToken));
     if (!record) return { state: 'none', record: null };
     if (record.state === 'pending') {
@@ -296,7 +385,7 @@ function createRoomRealtimeRuntime(deps) {
     return { state: record.state, record };
   }
 
-  function restoreClaimedLease(record) {
+  function restoreClaimedLease(record: LeaseRecord): boolean {
     if (
       reconnectLeases.get(record.key) !== record
       || record.state !== 'claimed-by-replacement'
@@ -314,14 +403,14 @@ function createRoomRealtimeRuntime(deps) {
     return true;
   }
 
-  function completeClaimedLease(record, transportId) {
+  function completeClaimedLease(record: LeaseRecord, transportId: string): boolean {
     if (reconnectLeases.get(record.key) !== record || record.state !== 'claimed-by-replacement') return false;
     record.transportId = transportId;
     reconnectLeases.delete(record.key);
     return true;
   }
 
-  function terminalClaimRecord(record, reason, finalizePeer) {
+  function terminalClaimRecord(record: LeaseRecord, reason: string, finalizePeer: FinalizePeer | null | undefined): LeaseRecord {
     const adoptingFailedFinalizer = record.state === 'finalizer-failed'
       || record.state === 'terminal-finalizer-failed';
     record.terminalReason ||= reason;
@@ -341,7 +430,7 @@ function createRoomRealtimeRuntime(deps) {
     return record;
   }
 
-  function recordsForPeer(roomId, peerId, { expectedSessionToken = '', expectedTransportId = '' } = {}) {
+  function recordsForPeer(roomId: string, peerId: string, { expectedSessionToken = '', expectedTransportId = '' }: { expectedSessionToken?: string; expectedTransportId?: string } = {}): LeaseRecord[] {
     const peer = presenceRooms.get(roomId)?.peers?.get(peerId) || null;
     if (
       peer
@@ -373,13 +462,13 @@ function createRoomRealtimeRuntime(deps) {
     return records;
   }
 
-  async function settleLeaseFinalizers(records, reason) {
+  async function settleLeaseFinalizers(records: LeaseRecord[], reason: string): Promise<FinalizeResult[]> {
     const settled = await Promise.allSettled(
       records.map((record) => runLeaseFinalizer(record, reason, null))
     );
     const rejected = settled.find((result) => result.status === 'rejected');
     if (rejected) throw rejected.reason;
-    return settled.map((result) => result.value);
+    return settled.map((result) => (result as PromiseFulfilledResult<FinalizeResult>).value);
   }
 
   async function finalizeReconnectLease({
@@ -389,7 +478,14 @@ function createRoomRealtimeRuntime(deps) {
     finalizePeer = null,
     expectedSessionToken = '',
     expectedTransportId = ''
-  } = {}) {
+  }: {
+    roomId: string;
+    peerId: string;
+    reason?: string;
+    finalizePeer?: FinalizePeer | null;
+    expectedSessionToken?: string;
+    expectedTransportId?: string;
+  } = {} as { roomId: string; peerId: string }) {
     const records = recordsForPeer(roomId, peerId, { expectedSessionToken, expectedTransportId });
     // Claim every matching generation synchronously before the first await.
     for (const record of records) terminalClaimRecord(record, reason, finalizePeer);
@@ -402,7 +498,7 @@ function createRoomRealtimeRuntime(deps) {
     peerId,
     sessionToken,
     reason = 'left'
-  } = {}) {
+  }: { roomId?: unknown; peerId?: unknown; sessionToken?: unknown; reason?: string } = {}) {
     const normalizedRoomId = normalizeRoomId(roomId);
     const normalizedPeerId = normalizePeerId(peerId);
     const normalizedSessionToken = normalizeSessionToken(sessionToken);
@@ -429,7 +525,7 @@ function createRoomRealtimeRuntime(deps) {
     return { ok: true, finalized: Boolean(result?.finalized) };
   }
 
-  async function cancelRoomReconnectLeases({ roomId, reason = 'deleted', finalizePeer = null } = {}) {
+  async function cancelRoomReconnectLeases({ roomId, reason = 'deleted', finalizePeer = null }: { roomId: string; reason?: string; finalizePeer?: FinalizePeer | null } = {} as { roomId: string }) {
     const peerIds = new Set([
       ...[...reconnectLeases.values()].filter((record) => record.roomId === roomId).map((record) => record.peerId),
       ...[...(presenceRooms.get(roomId)?.peers?.keys?.() || [])]
@@ -440,8 +536,8 @@ function createRoomRealtimeRuntime(deps) {
     return { ok: true, finalized: results.filter((result) => result.finalized).length };
   }
 
-  async function cancelAccountReconnectLeases({ roomId, userId, reason = 'membership-left', finalizePeer = null } = {}) {
-    const peerIds = new Set();
+  async function cancelAccountReconnectLeases({ roomId, userId, reason = 'membership-left', finalizePeer = null }: { roomId: string; userId: string; reason?: string; finalizePeer?: FinalizePeer | null } = {} as { roomId: string; userId: string }) {
+    const peerIds = new Set<string>();
     for (const record of reconnectLeases.values()) {
       if (record.roomId === roomId && record.peer?.accountUserId === userId) peerIds.add(record.peerId);
     }
@@ -454,18 +550,18 @@ function createRoomRealtimeRuntime(deps) {
     return { ok: true, finalized: results.filter((result) => result.finalized).length };
   }
 
-  async function finalizeReconnectPeers({ roomId, peerIds = [], reason, finalizePeer } = {}) {
+  async function finalizeReconnectPeers({ roomId, peerIds = [], reason, finalizePeer }: { roomId: string; peerIds?: string[]; reason: string; finalizePeer?: FinalizePeer | null } = {} as { roomId: string; reason: string }) {
     const records = [...new Set(peerIds)].flatMap((peerId) => recordsForPeer(roomId, peerId));
     for (const record of records) terminalClaimRecord(record, reason, finalizePeer);
     const results = await settleLeaseFinalizers(records, reason);
     return { ok: true, finalized: results.filter((result) => result.finalized).length };
   }
 
-  async function resolveSummaryRecipients(roomId) {
+  async function resolveSummaryRecipients(roomId: string): Promise<string[]> {
     const cached = recipientCache.get(roomId);
     if (cached && Date.now() - cached.at < 30000) return cached.userIds;
 
-    const userIds = new Set();
+    const userIds = new Set<string>();
     try {
       const stored = await getRoomStore().listSummaryRecipientUserIds(roomId);
       for (const id of stored) userIds.add(id);
@@ -485,17 +581,17 @@ function createRoomRealtimeRuntime(deps) {
     return ids;
   }
 
-  function invalidateRecipientCache(roomId) {
+  function invalidateRecipientCache(roomId: string): void {
     if (roomId) recipientCache.delete(roomId);
   }
 
-  async function resolveRoomUnreadCount(roomId, userId, fallback = 0) {
+  async function resolveRoomUnreadCount(roomId: string, userId: string, fallback = 0): Promise<number> {
     const getUnreadCount = getRoomStore().getRoomUnreadCount;
     if (typeof getUnreadCount !== 'function') return fallback;
     return getUnreadCount.call(getRoomStore(), roomId, userId);
   }
 
-  async function flushSummary(roomId) {
+  async function flushSummary(roomId: string): Promise<void> {
     const dbRoom = await getRoomStore().getRoom(roomId);
     if (!dbRoom) return;
     const presence = presenceRooms.get(roomId);
@@ -504,7 +600,7 @@ function createRoomRealtimeRuntime(deps) {
     await Promise.all(recipients.map((userId) => sendRoomSummaryToUser(roomId, userId, dbRoom, peers)));
   }
 
-  async function sendRoomSummaryToUser(roomId, userId, room = null, roomPeers = null) {
+  async function sendRoomSummaryToUser(roomId: string, userId: string, room: any = null, roomPeers: unknown[] | null = null): Promise<boolean> {
     if (!roomId || !userId) return false;
     const dbRoom = room || await getRoomStore().getRoom(roomId);
     if (!dbRoom) return false;
@@ -527,16 +623,16 @@ function createRoomRealtimeRuntime(deps) {
     }
   });
 
-  function scheduleSummaryBroadcast(roomId) {
+  function scheduleSummaryBroadcast(roomId: string): void {
     if (!roomId) return;
     summaryCoalescer.schedule(roomId);
   }
 
-  function connectionWantsRoomDetail(connection, roomId) {
+  function connectionWantsRoomDetail(connection: WsConnection, roomId: string): boolean {
     return connection.previewRoomIds.has(roomId) || connection.activeVoice?.roomId === roomId;
   }
 
-  function broadcastRoomDetail(roomId, envelope, { previewOnly = false, except = null } = {}) {
+  function broadcastRoomDetail(roomId: string, envelope: ServerEnvelope, { previewOnly = false, except = null }: { previewOnly?: boolean; except?: WsConnection | null } = {}): void {
     for (const connection of wsRegistry.roomDetailSubscribers(roomId)) {
       if (connection === except) continue;
       const isActivePeer = connection.activeVoice?.roomId === roomId;
@@ -551,13 +647,13 @@ function createRoomRealtimeRuntime(deps) {
     }
   }
 
-  function mirrorLegacyRoomEvent(roomId, message) {
+  function mirrorLegacyRoomEvent(roomId: string, message: Record<string, unknown>): void {
     const envelope = legacyPeerMessageToWs(message, roomId);
     if (!envelope) return;
     broadcastRoomDetail(roomId, envelope, { previewOnly: true });
   }
 
-  function broadcastChatMessage(roomId, message) {
+  function broadcastChatMessage(roomId: string, message: any): void {
     const envelope = buildServerEnvelope('room.chat.message', {
       roomId,
       message: publicChatMessage(message)
@@ -573,7 +669,7 @@ function createRoomRealtimeRuntime(deps) {
   // the account profile, never from the client.
   const TYPING_PROFILE_TTL_MS = 60_000;
 
-  async function typistForConnection(connection, roomId) {
+  async function typistForConnection(connection: WsConnection, roomId: string): Promise<{ peerId: string; userId: string | null; name: string } | null> {
     const voicePeerId = connection.activeVoice?.roomId === roomId ? connection.activeVoice.peerId : '';
     const peer = voicePeerId ? presenceRooms.get(roomId)?.peers.get(voicePeerId) : null;
     if (peer) {
@@ -589,23 +685,23 @@ function createRoomRealtimeRuntime(deps) {
     return typist;
   }
 
-  function broadcastRoomTyping(connection, roomId, activity = 'typing') {
+  function broadcastRoomTyping(connection: WsConnection, roomId: string, activity: TypingActivity = 'typing'): void {
     if (connection.closed || !roomId) return;
-    connection.roomTypingThrottle ??= createTypingThrottle({ now });
-    connection.roomTypingThrottle.offer(roomId, activity, (value) => {
-      sendRoomTyping(connection, roomId, value).catch((error) => {
+    connection.roomTypingThrottle ??= createTypingThrottle<TypingActivity>({ now });
+    connection.roomTypingThrottle.offer(roomId, activity, (value: TypingActivity) => {
+      sendRoomTyping(connection, roomId, value).catch((error: unknown) => {
         logger.warn({ evt: LOG_EVENTS.ROOM_TYPING_FORWARD_FAILED, roomId, err: error }, 'failed to forward a room typing notice');
       });
     });
   }
 
-  async function sendRoomTyping(connection, roomId, activity) {
+  async function sendRoomTyping(connection: WsConnection, roomId: string, activity: TypingActivity): Promise<void> {
     const typist = await typistForConnection(connection, roomId);
     if (!typist || connection.closed) return;
     broadcastRoomDetail(roomId, buildServerEnvelope('room.chat.typing', { roomId, typist, activity }), { except: connection });
   }
 
-  function roomNotificationContext(room) {
+  function roomNotificationContext(room: { avatarKey?: string | null; id: string; name?: string }) {
     return {
       avatarUrl: room.avatarKey ? `/api/avatars/${encodeURIComponent(room.avatarKey)}` : null,
       roomId: room.id,
@@ -613,7 +709,7 @@ function createRoomRealtimeRuntime(deps) {
     };
   }
 
-  function senderNotificationContext(message, user) {
+  function senderNotificationContext(message: any, user: any) {
     if (user) {
       return {
         id: user.id,
@@ -635,9 +731,10 @@ function createRoomRealtimeRuntime(deps) {
     };
   }
 
-  async function broadcastRoomMessageNotification(roomId, message) {
+  async function broadcastRoomMessageNotification(roomId: string, message: any): Promise<void> {
     if (!getUserStore) return;
-    let room = null;
+    const userStore = getUserStore;
+    let room: Awaited<ReturnType<RuntimeRoomStore['getRoom']>> = null;
     try {
       room = await getRoomStore().getRoom(roomId);
     } catch (error) {
@@ -646,7 +743,7 @@ function createRoomRealtimeRuntime(deps) {
     }
     if (!room?.isStatic) return;
 
-    let recipients = [];
+    let recipients: string[] = [];
     try {
       const listNotificationRecipients = getRoomStore().listNotificationRecipientUserIds;
       recipients = typeof listNotificationRecipients === 'function'
@@ -661,7 +758,7 @@ function createRoomRealtimeRuntime(deps) {
     let authorUser = null;
     if (authorUserId) {
       try {
-        authorUser = await getUserStore().getUserById(authorUserId);
+        authorUser = await userStore().getUserById(authorUserId);
       } catch (error) {
         logger.warn({ evt: LOG_EVENTS.NOTIFICATION_BROADCAST_FAILED, roomId, stage: 'sender', err: error }, 'failed to resolve a room notification sender');
       }
@@ -689,7 +786,7 @@ function createRoomRealtimeRuntime(deps) {
     }
   }
 
-  async function buildRoomSnapshot(roomId, mode = 'preview') {
+  async function buildRoomSnapshot(roomId: string, mode = 'preview') {
     const dbRoom = await getRoomStore().getRoom(roomId);
     if (!dbRoom) return null;
     const recentMessages = (await getRoomStore().listMessages(roomId, { limit: 100 })).map(publicChatMessage);
@@ -707,7 +804,7 @@ function createRoomRealtimeRuntime(deps) {
     };
   }
 
-  async function subscribePreview(connection, roomId) {
+  async function subscribePreview(connection: WsConnection, roomId: string): Promise<void> {
     if (connection.closed) return;
     const roomBan = await findRoomBan(
       roomId,
@@ -721,7 +818,7 @@ function createRoomRealtimeRuntime(deps) {
     }
     connection.previewRoomIds.add(roomId);
     wsRegistry.registerConnectionForRoom(connection, roomId);
-    let snapshot;
+    let snapshot: Awaited<ReturnType<typeof buildRoomSnapshot>>;
     try {
       snapshot = await buildRoomSnapshot(roomId, 'preview');
     } catch (error) {
@@ -740,14 +837,14 @@ function createRoomRealtimeRuntime(deps) {
     wsRegistry.sendToConnection(connection, buildServerEnvelope('room.snapshot', snapshot));
   }
 
-  function unsubscribePreview(connection, roomId) {
+  function unsubscribePreview(connection: WsConnection, roomId: string): void {
     connection.previewRoomIds.delete(roomId);
     if (connection.activeVoice?.roomId !== roomId) wsRegistry.unregisterConnectionForRoom(connection, roomId);
   }
 
-  function attachVoiceTransport(connection, roomId, peerId, sessionToken) {
+  function attachVoiceTransport(connection: WsConnection, roomId: string, peerId: string, sessionToken: string) {
     const transport = createWsTransport((message) => {
-      const envelope = legacyPeerMessageToWs(message, roomId);
+      const envelope = legacyPeerMessageToWs(message as Record<string, any>, roomId);
       if (!envelope) return false;
       return wsRegistry.sendToConnection(connection, envelope);
     });
@@ -756,41 +853,41 @@ function createRoomRealtimeRuntime(deps) {
     return transport;
   }
 
-  function beginVoiceJoin(joinKey) {
+  function beginVoiceJoin(joinKey: string): { latestAuthorized: number; pending: number } {
     const joinState = voiceJoinStates.get(joinKey) || { latestAuthorized: 0, pending: 0 };
     joinState.pending += 1;
     voiceJoinStates.set(joinKey, joinState);
     return joinState;
   }
 
-  function authorizeVoiceJoin(joinState, joinRequestSequence) {
+  function authorizeVoiceJoin(joinState: { latestAuthorized: number }, joinRequestSequence: number): boolean {
     if (joinRequestSequence < joinState.latestAuthorized) return false;
     joinState.latestAuthorized = joinRequestSequence;
     return true;
   }
 
-  function finishVoiceJoin(joinKey, joinState) {
+  function finishVoiceJoin(joinKey: string, joinState: { pending: number }): void {
     joinState.pending -= 1;
     if (joinState.pending === 0 && voiceJoinStates.get(joinKey) === joinState) {
       voiceJoinStates.delete(joinKey);
     }
   }
 
-  function beginConnectionVoiceJoin(connection, roomId, peerId) {
+  function beginConnectionVoiceJoin(connection: WsConnection, roomId: string, peerId: string): { roomId: string; peerId: string } {
     const intent = { roomId, peerId };
     connection.pendingVoiceJoin = intent;
     return intent;
   }
 
-  function isCurrentConnectionVoiceJoin(connection, intent) {
+  function isCurrentConnectionVoiceJoin(connection: WsConnection, intent: unknown): boolean {
     return !connection.closed && connection.pendingVoiceJoin === intent;
   }
 
-  function finishConnectionVoiceJoin(connection, intent) {
+  function finishConnectionVoiceJoin(connection: WsConnection, intent: unknown): void {
     if (connection.pendingVoiceJoin === intent) connection.pendingVoiceJoin = null;
   }
 
-  function cancelConnectionVoiceJoin(connection, payload = null) {
+  function cancelConnectionVoiceJoin(connection: WsConnection, payload: { roomId?: unknown; peerId?: unknown } | null = null): void {
     const pending = connection.pendingVoiceJoin;
     if (!pending) return;
     if (
@@ -805,9 +902,9 @@ function createRoomRealtimeRuntime(deps) {
     connection.pendingVoiceJoin = null;
   }
 
-  function supersededVoiceJoin(connection, roomId, transportId = '') {
+  function supersededVoiceJoin(connection: WsConnection, roomId: string, transportId = ''): JoinResult {
     if (transportId && connection.activeVoice?.transportId === transportId) {
-      closePeer(roomId, connection.activeVoice.peerId, transportId, 'replaced');
+      closePeer(roomId, connection.activeVoice!.peerId, transportId, 'replaced');
       connection.activeVoice = null;
       if (!connection.previewRoomIds.has(roomId)) wsRegistry.unregisterConnectionForRoom(connection, roomId);
     }
@@ -817,23 +914,23 @@ function createRoomRealtimeRuntime(deps) {
   // Moderator mutes are stored per gate principal. A lookup failure must block
   // admission: treating an unavailable authority as "not muted" would let a
   // participant bypass moderation simply by reconnecting during a DB outage.
-  async function loadServerMute(roomId, peer) {
+  async function loadServerMute(roomId: string, peer: { accountUserId?: string; gateGuestPrincipalId?: string }): Promise<boolean> {
     const store = getRoomStore();
     if (typeof store?.isRoomServerMuted !== 'function' || typeof store?.normalizeGatePrincipal !== 'function') {
-      const error = new Error('Server mute authority is unavailable');
+      const error = new Error('Server mute authority is unavailable') as FinalizeError;
       error.code = 'server_mute_unavailable';
       throw error;
     }
-    const principal = store.normalizeGatePrincipal({
+    const principal = store.normalizeGatePrincipal!({
       accountUserId: peer.accountUserId || null,
       guestPrincipalId: peer.gateGuestPrincipalId || '',
       roomId
     });
     if (!principal) return false;
-    return store.isRoomServerMuted({ roomId, principal });
+    return store.isRoomServerMuted!({ roomId, principal });
   }
 
-  async function joinVoiceRoom(connection, payload, sessionUser, clientIp = '', requestId = '') {
+  async function joinVoiceRoom(connection: WsConnection, payload: Record<string, any>, sessionUser: SessionUser, clientIp = '', requestId = ''): Promise<JoinResult> {
     const joinRequestSequence = ++voiceJoinRequestSequence;
     const roomId = normalizeRoomId(payload.roomId);
     const peerId = normalizePeerId(payload.peerId);
@@ -856,7 +953,7 @@ function createRoomRealtimeRuntime(deps) {
     }
     if (leaseClaim.state === 'failed-finalizer') {
       try {
-        await retryFailedLeaseFinalizer(leaseClaim.record);
+        await retryFailedLeaseFinalizer(leaseClaim.record as LeaseRecord);
       } catch {
         return { ok: false, code: 'reconnect_finalize_failed', message: 'Previous transport cleanup is incomplete' };
       }
@@ -867,7 +964,7 @@ function createRoomRealtimeRuntime(deps) {
     }
     if (leaseClaim.state === 'finalizing') {
       try {
-        await leaseClaim.record.finalizerPromise;
+        await (leaseClaim.record as LeaseRecord).finalizerPromise;
       } catch {
         return { ok: false, code: 'reconnect_finalize_failed', message: 'Previous transport cleanup is incomplete' };
       }
@@ -887,8 +984,8 @@ function createRoomRealtimeRuntime(deps) {
     let terminalClaimFailure = false;
     const claimedSessionWasTerminated = () => leaseClaim.state === 'claimed'
       && (
-        reconnectLeases.get(leaseClaim.record.key) !== leaseClaim.record
-        || leaseClaim.record.state !== 'claimed-by-replacement'
+        reconnectLeases.get((leaseClaim.record as LeaseRecord).key) !== leaseClaim.record
+        || (leaseClaim.record as LeaseRecord).state !== 'claimed-by-replacement'
       );
     try {
       // Register the request before the first await. Otherwise an older join
@@ -925,13 +1022,13 @@ function createRoomRealtimeRuntime(deps) {
         return { ok: false, code: 'invalid_session', message: 'Invalid peer session' };
       }
 
-      const identityResult = await getRoomStore().getOrCreatePeerIdentity({
+      const identityResult = (await getRoomStore().getOrCreatePeerIdentity({
         roomId,
         peerId,
         sessionToken,
         displayName: name,
         avatarColorKey: sessionAvatarColorKey(sessionUser)
-      });
+      }))!;
       if (claimedSessionWasTerminated()) {
         return { ok: false, code: 'superseded_join', message: 'Peer session was terminated' };
       }
@@ -943,7 +1040,7 @@ function createRoomRealtimeRuntime(deps) {
         return { ok: false, code: 'invalid_session', message: 'Invalid peer session' };
       }
       const avatarColorKey = identityResult.identity?.avatarColorKey || avatarColorForPeerId(peerId);
-      let persistedServerMuted;
+      let persistedServerMuted: boolean;
       try {
         persistedServerMuted = await loadServerMute(roomId, {
           accountUserId: sessionUser?.id || '',
@@ -968,7 +1065,7 @@ function createRoomRealtimeRuntime(deps) {
           || connection.activeVoice.peerId !== peerId
         )
       ) {
-        await leaveVoiceRoom(connection, connection.activeVoice, { cancelPendingJoin: false });
+        await leaveVoiceRoom(connection, connection.activeVoice as VoiceTarget, { cancelPendingJoin: false });
       }
 
       if (
@@ -1040,7 +1137,7 @@ function createRoomRealtimeRuntime(deps) {
       );
       room.peers.set(peerId, peer);
       if (leaseClaim.state === 'claimed') {
-        claimCompleted = completeClaimedLease(leaseClaim.record, transport.id);
+        claimCompleted = completeClaimedLease(leaseClaim.record as LeaseRecord, transport.id);
       }
       room.updatedAt = peer.joinedAt;
       // In-memory call clock on the presence record (room here is the DB room
@@ -1094,12 +1191,13 @@ function createRoomRealtimeRuntime(deps) {
       return { ok: true, reconnecting };
     } finally {
       if (leaseClaim.state === 'claimed' && !claimCompleted) {
+        const claimed = leaseClaim.record as LeaseRecord;
         if (terminalClaimFailure) {
-          leaseClaim.record.terminalReason ||= 'join-rejected';
-          leaseClaim.record.state = 'terminal-finalizing';
-          startLeaseFinalizer(leaseClaim.record, leaseClaim.record.terminalReason);
+          claimed.terminalReason ||= 'join-rejected';
+          claimed.state = 'terminal-finalizing';
+          startLeaseFinalizer(claimed, claimed.terminalReason);
         } else {
-          restoreClaimedLease(leaseClaim.record);
+          restoreClaimedLease(claimed);
         }
       }
       finishConnectionVoiceJoin(connection, connectionJoinIntent);
@@ -1108,10 +1206,10 @@ function createRoomRealtimeRuntime(deps) {
   }
 
   async function leaveVoiceRoom(
-    connection,
-    payload = connection.activeVoice,
-    { cancelPendingJoin = true } = {}
-  ) {
+    connection: WsConnection,
+    payload: { roomId?: string; peerId?: string; sessionToken?: string } | null = connection.activeVoice,
+    { cancelPendingJoin = true }: { cancelPendingJoin?: boolean } = {}
+  ): Promise<void> {
     if (cancelPendingJoin) cancelConnectionVoiceJoin(connection, payload);
     if (!payload?.roomId || !payload.peerId) return;
     const activeVoice = connection.activeVoice;
@@ -1123,14 +1221,14 @@ function createRoomRealtimeRuntime(deps) {
     const ownsCurrentGeneration = ownsRequestedPeer
       && peer
       && tokensMatch(peer.sessionToken, sessionToken)
-      && peer.transport?.id === activeVoice.transportId;
+      && peer.transport?.id === activeVoice!.transportId;
     if (ownsCurrentGeneration) {
       await finalizeReconnectLease({
         roomId: payload.roomId,
         peerId: payload.peerId,
         reason: 'left',
         expectedSessionToken: sessionToken,
-        expectedTransportId: activeVoice.transportId
+        expectedTransportId: activeVoice!.transportId
       });
     } else if (sessionToken) {
       await finalizePendingReconnectLease({
@@ -1147,17 +1245,18 @@ function createRoomRealtimeRuntime(deps) {
     scheduleSummaryBroadcast(payload.roomId);
   }
 
-  async function disconnectAccountFromRoom({ roomId, userId, reason = 'left-room' } = {}) {
+  async function disconnectAccountFromRoom({ roomId, userId, reason = 'left-room' }: { roomId?: string; userId?: string; reason?: string } = {}) {
     if (!roomId || !userId || !credentialBoundary?.resolvePrincipal || !credentialBoundary?.revokePrincipal) {
       return { ok: false, code: 'credential_boundary_unavailable', disconnected: 0 };
     }
-    const principal = credentialBoundary.resolvePrincipal({ roomId, accountUserId: userId });
+    const boundary = credentialBoundary as Required<RuntimeCredentialBoundary>;
+    const principal = boundary.resolvePrincipal({ roomId, accountUserId: userId });
     if (!principal) return { ok: false, code: 'principal_unavailable', disconnected: 0 };
     const room = presenceRooms.get(roomId);
     const peers = [...(room?.peers?.values?.() || [])].filter((peer) => peer.accountUserId === userId);
-    let principalRevocationPromise = null;
+    let principalRevocationPromise: ReturnType<Required<RuntimeCredentialBoundary>['revokePrincipal']> | null = null;
     const revokePrincipalOnce = () => {
-      principalRevocationPromise ||= credentialBoundary.revokePrincipal({ roomId, principal });
+      principalRevocationPromise ||= boundary.revokePrincipal({ roomId, principal });
       return principalRevocationPromise;
     };
     try {
@@ -1169,7 +1268,7 @@ function createRoomRealtimeRuntime(deps) {
           if (!peer) return;
           const revoked = await revokePrincipalOnce();
           if (revoked?.status !== 'revoked') {
-            const error = new Error(revoked?.status || 'revoke_failed');
+            const error = new Error(revoked?.status || 'revoke_failed') as FinalizeError;
             error.code = revoked?.status || 'revoke_failed';
             throw error;
           }
@@ -1178,7 +1277,7 @@ function createRoomRealtimeRuntime(deps) {
         }
       });
     } catch (error) {
-      return { ok: false, code: error?.code || 'finalize_failed', disconnected: 0 };
+      return { ok: false, code: (error as FinalizeError | null)?.code || 'finalize_failed', disconnected: 0 };
     }
 
     if (peers.length === 0) {
@@ -1201,7 +1300,7 @@ function createRoomRealtimeRuntime(deps) {
     return { ok: true, disconnected: peers.length };
   }
 
-  async function updatePeerState(connection, payload) {
+  async function updatePeerState(connection: WsConnection, payload: Record<string, any>) {
     const roomId = normalizeRoomId(payload.roomId);
     const peerId = normalizePeerId(payload.peerId);
     const sessionToken = normalizeSessionToken(payload.sessionToken);
@@ -1252,9 +1351,9 @@ function createRoomRealtimeRuntime(deps) {
   // connection. Runs right after `ready` so the lobby renders live rosters on
   // first load and resyncs after a reconnect (including clearing stale ones —
   // empty rooms are sent too).
-  async function sendAccountSummaries(connection, userId) {
+  async function sendAccountSummaries(connection: WsConnection, userId: string): Promise<void> {
     if (!userId) return;
-    let rooms = [];
+    let rooms: Awaited<ReturnType<RuntimeRoomStore['listVisibleRoomsForUser']>> = [];
     try {
       rooms = await getRoomStore().listVisibleRoomsForUser(userId);
     } catch (error) {
@@ -1262,11 +1361,11 @@ function createRoomRealtimeRuntime(deps) {
       return;
     }
     for (const dbRoom of rooms) {
-      const presence = presenceRooms.get(dbRoom.id);
+      const presence = presenceRooms.get(dbRoom!.id);
       const peers = presence ? Array.from(presence.peers.values()).map(publicPeer) : [];
-      const unreadCount = Number.isFinite(dbRoom.unreadCount)
-        ? dbRoom.unreadCount
-        : await resolveRoomUnreadCount(dbRoom.id, userId);
+      const unreadCount = Number.isFinite(dbRoom!.unreadCount)
+        ? dbRoom!.unreadCount
+        : await resolveRoomUnreadCount(dbRoom!.id, userId);
       const summary = buildRoomRealtimeSummaryFromLobbyRoom(
         publicLobbyRoom({ ...dbRoom, unreadCount }),
         peers,
@@ -1276,11 +1375,11 @@ function createRoomRealtimeRuntime(deps) {
     }
   }
 
-  function cleanupConnection(connection) {
+  function cleanupConnection(connection: WsConnection): void {
     cancelConnectionVoiceJoin(connection);
     if (connection.activeVoice) {
       const activeVoice = connection.activeVoice;
-      const lease = createReconnectLease(activeVoice);
+      const lease = createReconnectLease(activeVoice as VoiceTarget);
       if (lease) {
         lease.disconnected = true;
         const peer = currentLeasePeer(lease);
@@ -1325,5 +1424,7 @@ function createRoomRealtimeRuntime(deps) {
     updatePeerState
   };
 }
+
+export type RoomRealtimeRuntime = ReturnType<typeof createRoomRealtimeRuntime>;
 
 export { clearViewedScreenPeerReferences, createRoomRealtimeRuntime, resolveViewedScreenPeerId };

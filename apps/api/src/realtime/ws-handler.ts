@@ -1,9 +1,29 @@
 import { normalizePeerId, normalizeRoomId, normalizeSessionToken } from '@voice-room/shared/validation';
 import { normalizeTypingActivity } from '@voice-room/shared/realtime';
-import { buildServerEnvelope, buildServerErrorEnvelope, parseInboundMessage } from './envelope.js';
-import { createTypingThrottle } from './typing-throttle.js';
+import type { IncomingMessage } from 'node:http';
+import type { TypingActivity } from '@voice-room/shared/realtime';
+import { buildServerEnvelope, buildServerErrorEnvelope, parseInboundMessage } from './envelope.ts';
+import { createTypingThrottle } from './typing-throttle.ts';
+import type { ConnectionRegistry, RealtimeSocket, WsConnection } from './registry.ts';
 import { LOG_EVENTS } from '../lib/log-events.ts';
 import { createLogger, hashIp } from '../lib/logger.ts';
+
+// Validated commands always carry a payload object.
+type InboundEnvelope = { id?: string; type: string; payload: Record<string, any> };
+type SessionUser = { id: string; presenceStatus?: unknown; [key: string]: unknown };
+type ResolvedSession = { user?: SessionUser | null; session?: { tokenHash?: string } | null } | null | undefined;
+type JoinResult = { ok: boolean; code?: string; message?: string };
+export interface WsRoomRuntime {
+  subscribePreview(connection: WsConnection, roomId: string): Promise<unknown>;
+  unsubscribePreview(connection: WsConnection, roomId: string): unknown;
+  joinVoiceRoom(connection: WsConnection, payload: Record<string, any>, user: SessionUser | null, clientIp: string, requestId?: string): Promise<JoinResult>;
+  leaveVoiceRoom(connection: WsConnection, target: { roomId: string; peerId: string; sessionToken: string }): Promise<unknown>;
+  updatePeerState(connection: WsConnection, payload: Record<string, any>): Promise<{ ok: boolean; code?: string }>;
+  broadcastRoomTyping(connection: WsConnection, roomId: string, activity: TypingActivity): Promise<unknown>;
+  sendAccountSummaries(connection: WsConnection, userId: string): Promise<unknown>;
+}
+type WsLogger = { info(...args: unknown[]): void; warn(...args: unknown[]): void; error(...args: unknown[]): void };
+type WsSocket = RealtimeSocket & { on(event: string, listener: (...args: any[]) => void): unknown };
 
 function createWsHandler({
   registry,
@@ -15,11 +35,21 @@ function createWsHandler({
   getClientIp = () => 'unknown',
   now = Date.now,
   logger = createLogger({ name: 'api' })
+}: {
+  registry: ConnectionRegistry;
+  roomRuntime: WsRoomRuntime;
+  resolveSessionUser: (req: IncomingMessage) => Promise<ResolvedSession>;
+  getFriendIds: (userId: string) => Promise<string[]>;
+  isUserOnline: (userId: string) => boolean;
+  canTypeToUser?: (userId: string, peerId: string) => Promise<unknown>;
+  getClientIp?: (req: IncomingMessage) => string;
+  now?: () => number;
+  logger?: WsLogger;
 }) {
   // Every realtime failure is attributed to the connection and the message type
   // that caused it. Without both, a report of "the call keeps dropping" leaves
   // nothing to search: the socket is gone and the stack alone names no user.
-  function reportMessageError(error, connection = null, type = '') {
+  function reportMessageError(error: unknown, connection: WsConnection | null = null, type = ''): void {
     logger.error({
       evt: LOG_EVENTS.WS_MESSAGE_FAILED,
       connId: connection?.id,
@@ -41,7 +71,7 @@ function createWsHandler({
   const DM_TYPING_LOOKUP_BUDGET = 20;
   const DM_TYPING_LOOKUP_WINDOW_MS = 30_000;
 
-  function spendTypingLookup(connection) {
+  function spendTypingLookup(connection: WsConnection): boolean {
     const at = now();
     const budget = connection.dmTypingLookups;
     if (!budget || at - budget.windowAt >= DM_TYPING_LOOKUP_WINDOW_MS) {
@@ -53,30 +83,30 @@ function createWsHandler({
     return true;
   }
 
-  function forwardDirectTyping(connection, peerId, activity = 'typing') {
+  function forwardDirectTyping(connection: WsConnection, peerId: string, activity: TypingActivity = 'typing'): void {
     if (!connection.userId || peerId === connection.userId) return;
-    connection.dmTypingThrottle ??= createTypingThrottle({ now });
-    connection.dmTypingThrottle.offer(peerId, activity, (value) => {
+    connection.dmTypingThrottle ??= createTypingThrottle<TypingActivity>({ now });
+    connection.dmTypingThrottle.offer(peerId, activity, (value: TypingActivity) => {
       sendDirectTyping(connection, peerId, value).catch((error) => reportMessageError(error, connection, 'dm.typing'));
     });
   }
 
-  async function sendDirectTyping(connection, peerId, activity) {
-    const cache = (connection.dmTypingPermission ??= new Map());
+  async function sendDirectTyping(connection: WsConnection, peerId: string, activity: TypingActivity): Promise<void> {
+    const cache: Map<string, { allowed: boolean; checkedAt: number }> = (connection.dmTypingPermission ??= new Map());
     const entry = cache.get(peerId) || { allowed: false, checkedAt: -Infinity };
     cache.delete(peerId);
     cache.set(peerId, entry);
-    while (cache.size > DM_TYPING_THREAD_LIMIT) cache.delete(cache.keys().next().value);
+    while (cache.size > DM_TYPING_THREAD_LIMIT) cache.delete(cache.keys().next().value as string);
     if (now() - entry.checkedAt >= DM_TYPING_PERMISSION_TTL_MS) {
       if (!spendTypingLookup(connection)) return;
-      entry.allowed = Boolean(await canTypeToUser(connection.userId, peerId));
+      entry.allowed = Boolean(await canTypeToUser(connection.userId as string, peerId));
       entry.checkedAt = now();
     }
     if (!entry.allowed || connection.closed) return;
     registry.sendToUser(peerId, buildServerEnvelope('dm.typing', { userId: connection.userId, activity }));
   }
 
-  function enqueueMessage(connection, task) {
+  function enqueueMessage(connection: WsConnection, task: () => Promise<unknown>): void {
     connection.inboundMessageQueue = (connection.inboundMessageQueue || Promise.resolve())
       .then(() => {
         if (connection.closed) return;
@@ -85,7 +115,7 @@ function createWsHandler({
       .catch((error) => reportMessageError(error, connection));
   }
 
-  async function handleMessage(connection, envelope, req) {
+  async function handleMessage(connection: WsConnection, envelope: InboundEnvelope, req: IncomingMessage): Promise<void> {
     if (envelope.type === 'hello') {
       registry.touch(connection);
       return;
@@ -217,7 +247,7 @@ function createWsHandler({
     );
   }
 
-  async function handleConnection(socket, req) {
+  async function handleConnection(socket: WsSocket, req: IncomingMessage): Promise<void> {
     const session = await resolveSessionUser(req);
     const sessionUser = session?.user || null;
 
@@ -249,7 +279,7 @@ function createWsHandler({
 
     const clientIp = getClientIp(req);
     const connection = sessionUser
-      ? registry.addConnection(sessionUser.id, socket, clientIp, sessionUser.presenceStatus, session.session?.tokenHash)
+      ? registry.addConnection(sessionUser.id, socket, clientIp, sessionUser.presenceStatus, session?.session?.tokenHash)
       : registry.addGuestConnection(socket, guestIp);
 
     logger.info({
@@ -261,7 +291,7 @@ function createWsHandler({
     }, 'ws connected');
 
     if (sessionUser) {
-      let friendIds = [];
+      let friendIds: string[] = [];
       try {
         friendIds = await getFriendIds(sessionUser.id);
       } catch (error) {
@@ -281,7 +311,7 @@ function createWsHandler({
       registry.sendReady(connection, { guest: true });
     }
 
-    socket.on('message', (raw) => {
+    socket.on('message', (raw: unknown) => {
       if (connection.closed) return;
       const parsed = parseInboundMessage(String(raw));
       if (!parsed.ok) {
@@ -293,14 +323,15 @@ function createWsHandler({
       }
       if (parsed.envelope.type === 'hello' || parsed.envelope.type === 'ping') {
         // Heartbeats do not mutate room intent and must not wait behind storage.
-        void handleMessage(connection, parsed.envelope, req).catch(reportMessageError);
+        void handleMessage(connection, parsed.envelope as InboundEnvelope, req).catch(reportMessageError);
         return;
       }
 
       // Preserve wire order across stateful handlers that await authorization
       // or storage. Without this queue, JOIN→LEAVE and JOIN1→JOIN2 can execute
       // in reverse before the room runtime registers their intent.
-      enqueueMessage(connection, () => handleMessage(connection, parsed.envelope, req));
+      const envelope = parsed.envelope as InboundEnvelope;
+      enqueueMessage(connection, () => handleMessage(connection, envelope, req));
     });
 
     // The close code and how long the socket lived are what separate a normal
@@ -310,7 +341,7 @@ function createWsHandler({
     // once: counting ws.closed must equal the number of sockets that ended,
     // not the number of ways each one ended.
     let closeReported = false;
-    function reportClosed({ code = 0, reason = '', error = null } = {}) {
+    function reportClosed({ code = 0, reason = '', error = null }: { code?: unknown; reason?: unknown; error?: unknown } = {}): void {
       if (closeReported) return;
       closeReported = true;
       logger[error ? 'warn' : 'info']({
@@ -324,12 +355,12 @@ function createWsHandler({
       }, error ? 'ws closed after a socket error' : 'ws closed');
     }
 
-    socket.on('close', (code, reason) => {
+    socket.on('close', (code: number, reason: unknown) => {
       reportClosed({ code, reason });
       registry.removeConnection(connection);
     });
 
-    socket.on('error', (error) => {
+    socket.on('error', (error: Error) => {
       reportClosed({ reason: 'socket_error', error });
       registry.removeConnection(connection);
     });
@@ -339,5 +370,7 @@ function createWsHandler({
     handleConnection
   };
 }
+
+export type WsHandler = ReturnType<typeof createWsHandler>;
 
 export { createWsHandler };

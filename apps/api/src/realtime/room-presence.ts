@@ -5,7 +5,7 @@
 import type { Logger } from 'pino';
 import { LOG_EVENTS } from '../lib/log-events.ts';
 import { publicPeer, type PresencePeer } from '../domains/rooms/room-views.ts';
-import { clearViewedScreenPeerReferences } from './room-runtime.js';
+import { clearViewedScreenPeerReferences } from './room-runtime.ts';
 
 export interface RosterPeer extends PresencePeer {
   closed?: boolean;

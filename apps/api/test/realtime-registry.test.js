@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildRoomMembershipPresenceSnapshot, createConnectionRegistry } from '../src/realtime/registry.js';
+import { buildRoomMembershipPresenceSnapshot, createConnectionRegistry } from '../src/realtime/registry.ts';
 
 const settle = () => new Promise((resolve) => setImmediate(resolve));
 

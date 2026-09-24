@@ -1,23 +1,54 @@
 import crypto from 'node:crypto';
 import { cleanPresenceStatus } from '@voice-room/shared/validation';
-import { buildServerEnvelope, sendWsEnvelope } from './envelope.js';
-import { toWsAccountEvent } from './account-events.js';
+import type { PresenceStatus } from '@voice-room/shared/validation';
+import type { ServerEnvelope } from '@voice-room/shared/realtime';
+import { buildServerEnvelope, sendWsEnvelope } from './envelope.ts';
+import { toWsAccountEvent } from './account-events.ts';
 import { LOG_EVENTS } from '../lib/log-events.ts';
 import { createLogger } from '../lib/logger.ts';
 
-function createConnectionId(prefix) {
+export type RealtimeSocket = { readyState: number; send(data: string): void; close(code?: number, reason?: string): void };
+export type ActiveVoice = { roomId: string; [key: string]: any };
+export type WsConnection = {
+  id: string;
+  userId: string | null;
+  guest: boolean;
+  authSessionHash: string;
+  clientIp: string;
+  guestIp: string | null;
+  socket: RealtimeSocket;
+  presenceStatus: PresenceStatus;
+  previewRoomIds: Set<string>;
+  activeVoice: ActiveVoice | null;
+  pendingVoiceJoin: any;
+  inboundMessageQueue: Promise<unknown>;
+  lastHeartbeatAt: number;
+  openedAt: number;
+  closed: boolean;
+  [key: string]: any;
+};
+type PresenceEntry = { inVoice: boolean; roomId: string | null; presenceStatus: string };
+type PresenceRegistry = {
+  userConnections?: Map<string, Set<WsConnection>>;
+  userPresenceStatuses: Map<string, string>;
+  getPresenceRevision?: () => number;
+};
+type PresenceRoom = { updatedAt?: unknown; peers?: { values?: () => Iterable<{ accountUserId?: string | null }> } } | null | undefined;
+type RegistryLogger = { error(...args: unknown[]): void };
+
+function createConnectionId(prefix: string): string {
   return `${prefix}:${Date.now()}:${crypto.randomBytes(4).toString('hex')}`;
 }
 
-function buildRoomMembershipPresenceSnapshot(roomId, room, registry) {
-  const byUserId = new Map();
+function buildRoomMembershipPresenceSnapshot(roomId: string, room: PresenceRoom, registry: PresenceRegistry | null | undefined) {
+  const byUserId = new Map<string, PresenceEntry[]>();
   for (const [userId, userConnections] of registry?.userConnections || []) {
-    const entries = [];
+    const entries: PresenceEntry[] = [];
     for (const connection of userConnections) {
       entries.push({
         inVoice: connection.activeVoice?.roomId === roomId,
         roomId: connection.activeVoice?.roomId || null,
-        presenceStatus: connection.presenceStatus || registry.userPresenceStatuses.get(userId) || 'online'
+        presenceStatus: connection.presenceStatus || registry!.userPresenceStatuses.get(userId) || 'online'
       });
     }
     if (entries.length) byUserId.set(userId, entries);
@@ -42,29 +73,37 @@ function createConnectionRegistry({
   onConnectionClose,
   getFriendIds,
   logger = createLogger({ name: 'api' })
+}: {
+  maxConnectionsPerUser: number;
+  maxGuestConnectionsPerIp?: number;
+  keepaliveMs: number;
+  onPresenceChange?: ((friendId: string, userId: string, online: boolean) => void) | null;
+  onConnectionClose?: ((connection: WsConnection) => void) | null;
+  getFriendIds: (userId: string) => Promise<string[]>;
+  logger?: RegistryLogger;
 }) {
-  const userConnections = new Map();
-  const userPresenceStatuses = new Map();
-  const guestConnectionsByIp = new Map();
-  const roomDetailConnections = new Map();
-  const connections = new Map();
+  const userConnections = new Map<string, Set<WsConnection>>();
+  const userPresenceStatuses = new Map<string, PresenceStatus>();
+  const guestConnectionsByIp = new Map<string, Set<WsConnection>>();
+  const roomDetailConnections = new Map<string, Set<WsConnection>>();
+  const connections = new Map<string, WsConnection>();
   let presenceRevision = 0;
 
-  function bumpPresenceRevision() {
+  function bumpPresenceRevision(): void {
     presenceRevision = Math.max(Date.now(), presenceRevision + 1);
   }
 
-  function connectionCount(userId) {
+  function connectionCount(userId: string | null | undefined): number {
     if (!userId) return 0;
     const set = userConnections.get(userId);
     return set ? set.size : 0;
   }
 
-  function isUserOnline(userId) {
+  function isUserOnline(userId: string): boolean {
     return connectionCount(userId) > 0 && userPresenceStatuses.get(userId) !== 'offline';
   }
 
-  function createConnectionRecord(userId, socket, clientIp = '', presenceStatus = 'online', authSessionHash = '') {
+  function createConnectionRecord(userId: string | null, socket: RealtimeSocket, clientIp = '', presenceStatus: unknown = 'online', authSessionHash: unknown = ''): WsConnection {
     return {
       id: createConnectionId(userId || 'guest'),
       userId: userId || null,
@@ -74,7 +113,7 @@ function createConnectionRegistry({
       guestIp: null,
       socket,
       presenceStatus: cleanPresenceStatus(presenceStatus) || 'online',
-      previewRoomIds: new Set(),
+      previewRoomIds: new Set<string>(),
       activeVoice: null,
       pendingVoiceJoin: null,
       inboundMessageQueue: Promise.resolve(),
@@ -84,11 +123,11 @@ function createConnectionRegistry({
     };
   }
 
-  function addConnection(userId, socket, clientIp = '', presenceStatus = 'online', authSessionHash = '') {
+  function addConnection(userId: string, socket: RealtimeSocket, clientIp = '', presenceStatus: unknown = 'online', authSessionHash: unknown = ''): WsConnection {
     let set = userConnections.get(userId);
     const wasOffline = !isUserOnline(userId);
     if (!set) {
-      set = new Set();
+      set = new Set<WsConnection>();
       userConnections.set(userId, set);
     }
     if (!userPresenceStatuses.has(userId)) {
@@ -107,12 +146,12 @@ function createConnectionRegistry({
     return connection;
   }
 
-  function addGuestConnection(socket, guestIp = 'unknown') {
+  function addGuestConnection(socket: RealtimeSocket, guestIp = 'unknown'): WsConnection {
     const connection = createConnectionRecord(null, socket, guestIp);
     connection.guestIp = guestIp || 'unknown';
     let set = guestConnectionsByIp.get(connection.guestIp);
     if (!set) {
-      set = new Set();
+      set = new Set<WsConnection>();
       guestConnectionsByIp.set(connection.guestIp, set);
     }
     set.add(connection);
@@ -120,9 +159,9 @@ function createConnectionRegistry({
     return connection;
   }
 
-  async function notifyFriendsPresence(userId, online) {
+  async function notifyFriendsPresence(userId: string, online: boolean): Promise<void> {
     if (!onPresenceChange || !userId) return;
-    let friendIds = [];
+    let friendIds: string[] = [];
     try {
       friendIds = await getFriendIds(userId);
     } catch (error) {
@@ -130,11 +169,11 @@ function createConnectionRegistry({
       return;
     }
     for (const friendId of friendIds) {
-      onPresenceChange(friendId, userId, online);
+      onPresenceChange!(friendId, userId, online);
     }
   }
 
-  function setUserPresenceStatus(userId, presenceStatus) {
+  function setUserPresenceStatus(userId: string, presenceStatus: unknown): boolean {
     const normalizedPresenceStatus = cleanPresenceStatus(presenceStatus);
     const set = userConnections.get(userId);
     if (!normalizedPresenceStatus || !set || set.size === 0) return false;
@@ -149,7 +188,7 @@ function createConnectionRegistry({
     return online;
   }
 
-  function removeConnection(connection) {
+  function removeConnection(connection: WsConnection | null | undefined): void {
     if (!connection || connection.closed) return;
     connection.closed = true;
 
@@ -183,15 +222,15 @@ function createConnectionRegistry({
     connections.delete(connection.id);
   }
 
-  function sendToConnection(connection, envelope) {
+  function sendToConnection(connection: WsConnection, envelope: ServerEnvelope): boolean {
     return sendWsEnvelope(connection.socket, envelope);
   }
 
-  function sendToUser(userId, envelope) {
+  function sendToUser(userId: string, envelope: ServerEnvelope): number {
     const set = userConnections.get(userId);
     if (!set || set.size === 0) return 0;
     let delivered = 0;
-    const failed = [];
+    const failed: WsConnection[] = [];
     for (const connection of set) {
       // Do not touch lastHeartbeatAt here: a successful send only means the
       // frame was queued locally, not that the client is alive. Liveness is
@@ -207,72 +246,72 @@ function createConnectionRegistry({
     return delivered;
   }
 
-  function broadcastAccountEvent(userId, legacyMessage) {
+  function broadcastAccountEvent(userId: string, legacyMessage: Parameters<typeof toWsAccountEvent>[0]): number {
     const wsEvent = toWsAccountEvent(legacyMessage);
     if (!wsEvent) return 0;
     return sendToUser(userId, wsEvent);
   }
 
-  function sendReady(connection, payload) {
+  function sendReady(connection: WsConnection, payload: Parameters<typeof buildServerEnvelope>[1]): boolean {
     return sendToConnection(connection, buildServerEnvelope('ready', payload));
   }
 
-  function rejectOverLimit(userId) {
+  function rejectOverLimit(userId: string): boolean {
     return connectionCount(userId) >= maxConnectionsPerUser;
   }
 
-  function guestConnectionCount(guestIp) {
+  function guestConnectionCount(guestIp: string | null | undefined): number {
     const set = guestConnectionsByIp.get(guestIp || 'unknown');
     return set ? set.size : 0;
   }
 
-  function rejectGuestOverLimit(guestIp) {
+  function rejectGuestOverLimit(guestIp: string | null | undefined): boolean {
     return maxGuestConnectionsPerIp > 0 && guestConnectionCount(guestIp) >= maxGuestConnectionsPerIp;
   }
 
-  function registerConnectionForRoom(connection, roomId) {
+  function registerConnectionForRoom(connection: WsConnection | null | undefined, roomId: string | null | undefined): void {
     if (!connection || !roomId) return;
     let set = roomDetailConnections.get(roomId);
     if (!set) {
-      set = new Set();
+      set = new Set<WsConnection>();
       roomDetailConnections.set(roomId, set);
     }
     set.add(connection);
   }
 
-  function unregisterConnectionForRoom(connection, roomId) {
+  function unregisterConnectionForRoom(connection: WsConnection, roomId: string): void {
     const set = roomDetailConnections.get(roomId);
     if (!set) return;
     set.delete(connection);
     if (set.size === 0) roomDetailConnections.delete(roomId);
   }
 
-  function unregisterConnectionFromAllRooms(connection) {
+  function unregisterConnectionFromAllRooms(connection: WsConnection): void {
     for (const roomId of connection.previewRoomIds || []) {
       unregisterConnectionForRoom(connection, roomId);
     }
     if (connection.activeVoice?.roomId) unregisterConnectionForRoom(connection, connection.activeVoice.roomId);
   }
 
-  function roomDetailSubscribers(roomId) {
-    return roomDetailConnections.get(roomId) || new Set();
+  function roomDetailSubscribers(roomId: string): Set<WsConnection> {
+    return roomDetailConnections.get(roomId) || new Set<WsConnection>();
   }
 
-  function touch(connection) {
+  function touch(connection: WsConnection): void {
     connection.lastHeartbeatAt = Date.now();
   }
 
   // Sockets authenticated by account sessions that were just ended. Without a
   // hash list this selects every socket of the account (password replaced);
   // without an account id the hashes are matched across all signed-in sockets.
-  function findAccountConnections(userId, tokenHashes = null) {
+  function findAccountConnections(userId: string | null | undefined, tokenHashes: unknown[] | null = null): WsConnection[] {
     const wanted = Array.isArray(tokenHashes) ? new Set(tokenHashes.filter(Boolean)) : null;
     const candidates = userId ? userConnections.get(userId) : wanted ? connections.values() : null;
     if (!candidates) return [];
     return [...candidates].filter((connection) => !connection.guest && (!wanted || wanted.has(connection.authSessionHash)));
   }
 
-  function closeConnections(targets, code = 4401, reason = 'Session revoked') {
+  function closeConnections(targets: Iterable<WsConnection>, code = 4401, reason = 'Session revoked'): void {
     for (const connection of targets) {
       try {
         connection.socket.close(code, reason);
@@ -283,8 +322,8 @@ function createConnectionRegistry({
     }
   }
 
-  function pruneStale(now = Date.now()) {
-    const stale = [];
+  function pruneStale(now: number = Date.now()): void {
+    const stale: WsConnection[] = [];
     // 5x keepalive: background tabs throttle timers, so a healthy client's
     // ping interval can stretch to ~60s; 3x (45s) would reap live tabs.
     for (const connection of connections.values()) {
@@ -327,5 +366,7 @@ function createConnectionRegistry({
     userPresenceStatuses
   };
 }
+
+export type ConnectionRegistry = ReturnType<typeof createConnectionRegistry>;
 
 export { buildRoomMembershipPresenceSnapshot, createConnectionRegistry };

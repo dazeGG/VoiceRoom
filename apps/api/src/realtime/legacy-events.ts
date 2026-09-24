@@ -1,6 +1,9 @@
-import { buildServerEnvelope } from './envelope.js';
+import { buildServerEnvelope } from './envelope.ts';
+import type { ServerEnvelope } from '@voice-room/shared/realtime';
 
-function legacyPeerMessageToWs(message, roomId) {
+type LegacyPeerMessage = { type?: unknown; [key: string]: any };
+
+function legacyPeerMessageToWs(message: LegacyPeerMessage | null | undefined, roomId: string): ServerEnvelope | null {
   if (!message || typeof message.type !== 'string') return null;
 
   switch (message.type) {
