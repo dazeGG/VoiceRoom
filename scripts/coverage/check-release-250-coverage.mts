@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// @ts-nocheck -- not type-checked yet; remove once the file passes scripts/tsconfig.json.
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
 import fs from "node:fs";
@@ -51,8 +52,8 @@ function parseArgs(argv) {
     else if (arg === "--help" || arg === "-h") {
       console.log([
         "Usage:",
-        "  node scripts/coverage/check-release-250-coverage.mjs --coverage <summary.json> [--changed-files <paths.txt>] [--changed-diff <patch.diff>] (--base-thresholds <base.json>|--base-thresholds-absent)",
-        "  node scripts/coverage/check-release-250-coverage.mjs --v8-dir <NODE_V8_COVERAGE dir> --out <summary.json> --collect-only"
+        "  node scripts/coverage/check-release-250-coverage.mts --coverage <summary.json> [--changed-files <paths.txt>] [--changed-diff <patch.diff>] (--base-thresholds <base.json>|--base-thresholds-absent)",
+        "  node scripts/coverage/check-release-250-coverage.mts --v8-dir <NODE_V8_COVERAGE dir> --out <summary.json> --collect-only"
       ].join("\n"));
       process.exit(0);
     } else {

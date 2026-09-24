@@ -3,10 +3,10 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { createCoordinatedSnapshot } from '../backup/create-coordinated-snapshot.mjs';
-import { restoreCoordinatedSnapshot } from '../restore/restore-coordinated-snapshot.mjs';
+import { createCoordinatedSnapshot } from '../backup/create-coordinated-snapshot.mts';
+import { restoreCoordinatedSnapshot } from '../restore/restore-coordinated-snapshot.mts';
 
-function fixture(t) {
+function fixture(t: import('node:test').TestContext) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'voice-room-g89-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const uploads = path.join(root, 'source-uploads');
@@ -64,7 +64,7 @@ test('G89-A03 snapshot creation rejects symlinked uploads where supported', (t) 
 test('G89-A04 restore rejects manifest escapes and symlinks in every source component', (t) => {
   const { allowedRoot, root, snapshot } = fixture(t);
   const manifestFile = path.join(snapshot, 'manifest.json');
-  const manifest = JSON.parse(fs.readFileSync(manifestFile));
+  const manifest = JSON.parse(fs.readFileSync(manifestFile, 'utf8'));
   manifest.database.path = '../source.dump';
   fs.writeFileSync(manifestFile, JSON.stringify(manifest));
   assert.throws(() => restoreCoordinatedSnapshot({ snapshot, target: path.join(allowedRoot, 'escape'), allowedRoot, namespace: 'test-run' }), /Unsafe Database dump/);

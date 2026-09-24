@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// @ts-nocheck -- not type-checked yet; remove once the file passes scripts/tsconfig.json.
 
 import { createRequire } from 'node:module';
 import fs from 'node:fs';

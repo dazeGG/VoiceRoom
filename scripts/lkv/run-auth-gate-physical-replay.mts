@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// @ts-nocheck -- not type-checked yet; remove once the file passes scripts/tsconfig.json.
 
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';

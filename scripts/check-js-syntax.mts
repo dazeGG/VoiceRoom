@@ -5,7 +5,7 @@ import { spawnSync } from "node:child_process";
 
 const extensions = new Set([".cjs", ".js", ".mjs"]);
 
-function collect(target) {
+function collect(target: string): string[] {
   const stat = fs.statSync(target);
   if (stat.isFile()) return extensions.has(path.extname(target)) ? [target] : [];
   return fs.readdirSync(target, { recursive: true, withFileTypes: true })

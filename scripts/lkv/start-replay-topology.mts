@@ -5,7 +5,9 @@ import { parseArgs } from 'node:util';
 
 export const REPLAY_COMPOSE_FILE = 'docker-compose.lkv.yml';
 
-export function buildReplayTopologyCommand(options = {}) {
+type TopologyOptions = { composeFile?: string; detach?: boolean; dryRun?: boolean };
+
+export function buildReplayTopologyCommand(options: TopologyOptions = {}) {
   const compose = options.composeFile ?? REPLAY_COMPOSE_FILE;
   const args = ['compose', '-f', compose, 'up'];
   if (options.detach !== false) args.push('-d');
@@ -18,7 +20,7 @@ export function buildReplayTopologyCommand(options = {}) {
   };
 }
 
-export function startReplayTopology(options = {}) {
+export function startReplayTopology(options: TopologyOptions = {}) {
   const command = buildReplayTopologyCommand(options);
   if (options.dryRun) return Promise.resolve(command);
   const child = spawn(command.command, command.args, {

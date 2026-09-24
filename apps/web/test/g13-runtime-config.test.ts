@@ -14,7 +14,7 @@ import {
   parseRuntimeConfig,
   resolveLiveKitConnectUrls
 } from '@voice-room/shared/runtime-config';
-import { buildHeaderPolicy, renderCaddySnippet } from '../scripts/emit-caddy-csp.mjs';
+import { buildHeaderPolicy, renderCaddySnippet } from '../scripts/emit-caddy-csp.ts';
 
 const repositoryRoot = fileURLToPath(new URL('../../../', import.meta.url));
 const caddyImage = 'caddy:2.11.4-alpine';

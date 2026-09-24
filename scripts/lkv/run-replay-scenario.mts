@@ -46,7 +46,9 @@ const BASELINE_CASES = Object.freeze([
   }
 ]);
 
-export function createReplayTokenFixture(options = {}) {
+type ReplayOptions = { issuedAt?: string; expiresAt?: string };
+
+export function createReplayTokenFixture(options: ReplayOptions = {}) {
   const issuedAt = options.issuedAt ?? '2026-07-20T00:00:00.000Z';
   const expiresAt = options.expiresAt ?? '2026-07-20T00:10:00.000Z';
   const claims = {
@@ -73,7 +75,7 @@ export function createReplayTokenFixture(options = {}) {
   };
 }
 
-export function runReplayScenario(options = {}) {
+export function runReplayScenario(options: ReplayOptions = {}) {
   const token = createReplayTokenFixture(options);
   const cases = BASELINE_CASES.map((entry) => ({
     ...entry,

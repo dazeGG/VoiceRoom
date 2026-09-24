@@ -6,7 +6,7 @@
  * onto the platform font, so they would look foreign beside everything else and
  * — for flags on Windows — come out as letters. So the offered set is locked to
  * the artwork: `emoji-coverage.json` is regenerated alongside the files by
- * `scripts/build-emoji-assets.mjs`.
+ * `scripts/build-emoji-assets.ts`.
  *
  * Skin tones are folded away by the shared layer; this module only narrows what
  * survives to what can actually be drawn.

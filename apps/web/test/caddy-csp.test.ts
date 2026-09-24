@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { buildHeaderPolicy, readMetaPolicy, renderCaddySnippet } from '../scripts/emit-caddy-csp.mjs';
+import { buildHeaderPolicy, readMetaPolicy, renderCaddySnippet } from '../scripts/emit-caddy-csp.ts';
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const META = "default-src 'self'; connect-src 'self' http: https: ws: wss: stun:; img-src 'self' data: blob:; object-src 'none'; script-src 'self' 'wasm-unsafe-eval' 'sha256-abc123='; base-uri 'none'; form-action 'none'";
@@ -42,6 +42,6 @@ test('Caddy imports the generated policy and the image builds it', () => {
   const dockerfile = readFileSync(join(repoRoot, 'Dockerfile'), 'utf8');
   assert.match(caddyfile, /import \/etc\/caddy\/csp\.caddy/);
   assert.doesNotMatch(caddyfile, /Content-Security-Policy "/);
-  assert.match(dockerfile, /emit-caddy-csp\.mjs apps\/web\/dist\/index\.html > \/app\/csp\.caddy/);
+  assert.match(dockerfile, /emit-caddy-csp\.ts apps\/web\/dist\/index\.html > \/app\/csp\.caddy/);
   assert.match(dockerfile, /COPY --from=web-build \/app\/csp\.caddy \/etc\/caddy\/csp\.caddy/);
 });

@@ -3,11 +3,17 @@ import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 
-function normalizePath(value) {
+type SourceConfig = {
+  writeRules?: { ownerPathPrefixes?: string[]; allowedOwners?: Record<string, string[]>; crossDomainWriters?: Record<string, string[]> };
+  timerRules?: { forbiddenSources?: string[] };
+};
+type Violation = Record<string, unknown> & { ruleId: string; filePath: string };
+
+function normalizePath(value: string): string {
   return value.split(path.sep).join("/");
 }
 
-function walkFiles(root, collected = []) {
+function walkFiles(root: string, collected: string[] = []): string[] {
   if (!fs.existsSync(root)) return collected;
   const stat = fs.statSync(root);
   if (stat.isFile()) {
@@ -21,11 +27,11 @@ function walkFiles(root, collected = []) {
   return collected;
 }
 
-function globToRegExp(glob) {
+function globToRegExp(glob: string): RegExp {
   const value = normalizePath(glob);
   let pattern = "";
   for (let index = 0; index < value.length; index += 1) {
-    const char = value[index];
+    const char = value[index] as string;
     if (char === "*" && value[index + 1] === "*") {
       pattern += ".*";
       index += 1;
@@ -39,40 +45,40 @@ function globToRegExp(glob) {
   return new RegExp(`(?:^|.*/)${pattern}$`);
 }
 
-function isOwner(filePath, owners, prefixes) {
+function isOwner(filePath: string, owners: string[], prefixes: string[]): boolean {
   return owners.some((owner) => filePath === owner || filePath.endsWith(`/${owner}`))
     || prefixes.some((prefix) => filePath.startsWith(prefix) || filePath.includes(`/${prefix}`));
 }
 
-function findSqlWrites(source) {
-  const writes = [];
+function findSqlWrites(source: string): string[] {
+  const writes: string[] = [];
   const pattern = /\b(?:INSERT\s+INTO|UPDATE|DELETE\s+FROM)\s+([a-z_][a-z0-9_]*)/gi;
-  for (const match of source.matchAll(pattern)) writes.push(match[1].toLowerCase());
+  for (const match of source.matchAll(pattern)) writes.push((match[1] as string).toLowerCase());
   // Kysely writes name their table as the first string argument.
   const builder = /\.(?:insertInto|updateTable|deleteFrom|replaceInto|mergeInto)\(\s*['"`]([a-z_][a-z0-9_]*)/gi;
-  for (const match of source.matchAll(builder)) writes.push(match[1].toLowerCase());
+  for (const match of source.matchAll(builder)) writes.push((match[1] as string).toLowerCase());
   return writes;
 }
 
-function findTimers(source) {
-  const timers = [];
+function findTimers(source: string): string[] {
+  const timers: string[] = [];
   const pattern = /\b(setInterval|setTimeout)\s*\(/g;
-  for (const match of source.matchAll(pattern)) timers.push(match[1]);
+  for (const match of source.matchAll(pattern)) timers.push(match[1] as string);
   return timers;
 }
 
 // A file listed here writes across domains on purpose, such as erasing an
 // account from every table in one transaction. The exception is bounded: it
 // may touch only the tables declared next to it.
-function crossDomainTablesFor(filePath, crossDomainWriters) {
+function crossDomainTablesFor(filePath: string, crossDomainWriters: Record<string, string[]>): string[] | null {
   for (const [owner, tables] of Object.entries(crossDomainWriters)) {
     if (filePath === owner || filePath.endsWith(`/${owner}`)) return tables;
   }
   return null;
 }
 
-export function checkApiSources({ config, files }) {
-  const violations = [];
+export function checkApiSources({ config, files }: { config: SourceConfig; files?: string[] }): Violation[] {
+  const violations: Violation[] = [];
   const fileSet = files || walkFiles("apps/api/src");
   const ownerPrefixes = config.writeRules?.ownerPathPrefixes || [];
   const allowedOwners = config.writeRules?.allowedOwners || {};
@@ -97,12 +103,12 @@ export function checkApiSources({ config, files }) {
   return violations;
 }
 
-function parseArgs(argv) {
-  const args = { config: "config/import-boundaries.v1.json", files: [] };
+function parseArgs(argv: string[]): { config: string; files: string[] } {
+  const args: { config: string; files: string[] } = { config: "config/import-boundaries.v1.json", files: [] };
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
-    if (arg === "--config") args.config = argv[++index];
-    else args.files.push(arg);
+    if (arg === "--config") args.config = argv[++index] as string;
+    else args.files.push(arg as string);
   }
   return args;
 }

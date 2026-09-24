@@ -1,3 +1,4 @@
+// @ts-nocheck -- not type-checked yet; remove once the file passes scripts/tsconfig.json.
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
 import { spawnSync } from "node:child_process";
@@ -10,7 +11,7 @@ import path from "node:path";
 import test from "node:test";
 import { createRequire } from "node:module";
 
-import { checkRelease250Coverage as enforceRelease250Coverage, collectRelease250V8Coverage } from "../coverage/check-release-250-coverage.mjs";
+import { checkRelease250Coverage as enforceRelease250Coverage, collectRelease250V8Coverage } from "../coverage/check-release-250-coverage.mts";
 
 const require = createRequire(import.meta.url);
 const { createGateCredentialSigner } = require("../../apps/api/src/domains/admission/gate-credential-signer.ts");

@@ -3,9 +3,9 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import { parseArgs } from 'node:util';
-import { runReplayScenario } from './run-replay-scenario.mjs';
+import { runReplayScenario } from './run-replay-scenario.mts';
 
-export function collectReplayEvidence(options = {}) {
+export function collectReplayEvidence(options: { scenario?: ReturnType<typeof runReplayScenario>; producedAt?: string } = {}) {
   const scenario = options.scenario ?? runReplayScenario();
   const payload = JSON.stringify(scenario);
   return {

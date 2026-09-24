@@ -1,0 +1,23 @@
+{
+  // Repository scripts run as-is on Node 24 (type stripping): strict,
+  // erasable syntax only, nothing emitted. Files that still carry
+  // `// @ts-nocheck` are not type-checked yet.
+  "compilerOptions": {
+    "target": "es2023",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "lib": ["es2023", "dom"],
+    "types": ["node"],
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "erasableSyntaxOnly": true,
+    "verbatimModuleSyntax": true,
+    "resolveJsonModule": true,
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "skipLibCheck": true,
+    // The G08 test imports a web module that uses the SvelteKit alias.
+    "paths": { "$lib/*": ["../apps/web/src/lib/*", "../apps/web/src/lib/*.ts"] }
+  },
+  "include": ["**/*.mts"]
+}

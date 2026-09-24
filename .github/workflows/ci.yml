@@ -127,7 +127,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm --workspace @voice-room/api run test:g05
-      - run: G05_SELECTED_MECHANISM=external-auth-gate node scripts/lkv/run-strict-boundary-proof.mjs --json --fail-on-blocked
+      - run: G05_SELECTED_MECHANISM=external-auth-gate node scripts/lkv/run-strict-boundary-proof.mts --json --fail-on-blocked
 
   goal-g08:
     name: G08 measured coverage gate
@@ -180,7 +180,7 @@ jobs:
         shell: bash
         run: |
           read -r -a baseline_args <<< "$G08_BASELINE_ARGS"
-          node scripts/coverage/check-release-250-coverage.mjs \
+          node scripts/coverage/check-release-250-coverage.mts \
             --coverage coverage/release-250-summary.json \
             --changed-files coverage/release-250-changed-files.txt \
             --changed-diff coverage/release-250-changed.diff \

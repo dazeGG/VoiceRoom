@@ -16,7 +16,7 @@ The G05 proof therefore froze the blocked experiment and the user selected amend
 
 Select an external auth-gate as the only approved strict mechanism shape for VoiceRoom 2.5.0.
 
-The original architecture can remove a participant and can stop issuing future credentials, but it cannot make the same unexpired JWT fail at the LiveKit boundary after app-side revoke, leave, or ban. The amended proof keeps the blocked baseline as G04 context and makes `G05_SELECTED_MECHANISM=external-auth-gate node scripts/lkv/run-strict-boundary-proof.mjs --json --fail-on-blocked` the green G05 command.
+The original architecture can remove a participant and can stop issuing future credentials, but it cannot make the same unexpired JWT fail at the LiveKit boundary after app-side revoke, leave, or ban. The amended proof keeps the blocked baseline as G04 context and makes `G05_SELECTED_MECHANISM=external-auth-gate node scripts/lkv/run-strict-boundary-proof.mts --json --fail-on-blocked` the green G05 command.
 
 The amended architecture changes the boundary:
 

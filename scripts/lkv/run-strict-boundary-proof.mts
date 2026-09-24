@@ -2,8 +2,8 @@
 
 import crypto from 'node:crypto';
 import { parseArgs } from 'node:util';
-import { runAuthGateProof } from './run-auth-gate-proof.mjs';
-import { runReplayScenario } from './run-replay-scenario.mjs';
+import { runAuthGateProof } from './run-auth-gate-proof.mts';
+import { runReplayScenario } from './run-replay-scenario.mts';
 
 const APPROVED_SHAPE = Object.freeze({
   provider: 'livekit/livekit-server:v1.13.2',
@@ -44,7 +44,7 @@ const ATTEMPTS = Object.freeze([
   }
 ]);
 
-export async function runStrictBoundaryProof(options = {}) {
+export async function runStrictBoundaryProof(options: { mechanism?: string; replay?: ReturnType<typeof runReplayScenario> } = {}) {
   if (options.mechanism === 'external-auth-gate' || process.env.G05_SELECTED_MECHANISM === 'external-auth-gate') {
     return runAuthGateProof();
   }

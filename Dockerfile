@@ -13,7 +13,7 @@ FROM deps AS web-build
 COPY apps/web ./apps/web
 COPY packages ./packages
 RUN npm run build \
-  && node apps/web/scripts/emit-caddy-csp.mjs apps/web/dist/index.html > /app/csp.caddy
+  && node apps/web/scripts/emit-caddy-csp.ts apps/web/dist/index.html > /app/csp.caddy
 
 FROM node:24.18.0-alpine3.23 AS api
 
