@@ -4,7 +4,7 @@ const require = createRequire(import.meta.url);
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createMediaMaintenanceService } from '../src/domains/media/media-maintenance-service.ts';
-import { createMediaMaintenanceWorker } from '../src/workers/media-maintenance.js';
+import { createMediaMaintenanceWorker } from '../src/workers/media-maintenance.ts';
 
 test('G78-A01 cleanup is bounded to 500, rechecks candidates and is idempotent', async () => {
   const candidates = Array.from({ length: 500 }, (_, index) => ({ id: `a-${index}` }));

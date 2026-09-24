@@ -39,7 +39,7 @@ CMD ["node", "apps/api/src/server.js"]
 
 FROM api AS worker
 
-CMD ["node", "apps/api/src/workers/main.js"]
+CMD ["node", "apps/api/src/workers/main.ts"]
 
 # Caddy with the layer4 app, so TURN/TLS can share :443 with the web origin
 # (config/caddy/turn.options). Versions are pinned together: caddy-l4 v0.1.2

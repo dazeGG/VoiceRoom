@@ -2,7 +2,7 @@
 import { readDatabaseConfig } from '../lib/config.ts';
 import { runMigrations } from '../lib/migrate.ts';
 
-function parseArgs(argv) {
+function parseArgs(argv: string[]): { direction: 'up' | 'down'; noLock: boolean; clearDirty: boolean } {
   const args = new Set(argv.slice(2));
   const direction = args.has('down') ? 'down' : 'up';
   const noLock = args.has('--no-lock');
@@ -10,7 +10,7 @@ function parseArgs(argv) {
   return { direction, noLock, clearDirty };
 }
 
-async function main() {
+async function main(): Promise<void> {
   const { direction, noLock, clearDirty } = parseArgs(process.argv);
   if (noLock && process.env.NODE_ENV === 'production') {
     throw new Error('Production migrations require the fenced advisory lock');
@@ -28,6 +28,6 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error('PostgreSQL migration failed:', error.message);
+  console.error('PostgreSQL migration failed:', (error as Error).message);
   process.exitCode = 1;
 });

@@ -9,8 +9,8 @@
     "check": "node ../../scripts/check-js-syntax.mjs src test/db-harness.js test/require-test-database-url.js && tsc -p tsconfig.json",
     "test": "node --test --test-concurrency=1 test/*.test.js",
     "test:g05": "node --test test/g05-livekit-boundary.test.js",
-    "db:migrate": "node src/scripts/migrate.js up",
-    "db:rollback": "node src/scripts/migrate.js down",
+    "db:migrate": "node src/scripts/migrate.ts up",
+    "db:rollback": "node src/scripts/migrate.ts down",
     "db:types": "kysely-codegen --dialect postgres --out-file src/platform/db/schema.ts --exclude-pattern \"{pgmigrations,voiceroom_migration_guard}\"",
     "pretest": "node test/require-test-database-url.js"
   },

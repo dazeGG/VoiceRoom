@@ -1,20 +1,21 @@
-function createMediaMaintenanceWorker({ maintenanceService, intervalMs = 60_000 } = {}) {
+function createMediaMaintenanceWorker({ maintenanceService, intervalMs = 60_000 }: { maintenanceService?: { cleanupOnce(): Promise<unknown> }; intervalMs?: number } = {}) {
   if (!maintenanceService?.cleanupOnce) throw new TypeError('Media maintenance service is required');
+  const service = maintenanceService;
   let stopping = false;
-  async function run({ signal } = {}) {
+  async function run({ signal }: { signal?: AbortSignal } = {}): Promise<void> {
     while (!stopping && !signal?.aborted) {
-      await maintenanceService.cleanupOnce();
-      await new Promise((resolve) => {
+      await service.cleanupOnce();
+      await new Promise<void>((resolve) => {
         const timer = setTimeout(done, intervalMs);
         function done() { clearTimeout(timer); signal?.removeEventListener('abort', done); resolve(); }
         signal?.addEventListener('abort', done, { once: true });
       });
     }
   }
-  return Object.freeze({ run, runOnce: maintenanceService.cleanupOnce, stop: () => { stopping = true; } });
+  return Object.freeze({ run, runOnce: service.cleanupOnce, stop: () => { stopping = true; } });
 }
 
-async function main() {
+async function main(): Promise<void> {
   if (String(process.env.MEDIA_MAINTENANCE_CLAIM_ENABLED || '').toLowerCase() !== 'true') return;
   const { createDbPool } = await import('../lib/db.ts');
   const { createAttachmentRepository } = await import('../domains/media/attachment-repository.ts');
@@ -40,7 +41,7 @@ async function main() {
 
 if (import.meta.main) {
   main().catch((error) => {
-    process.stderr.write(`${error?.stack || error}\n`);
+    process.stderr.write(`${(error as Error | null)?.stack || error}\n`);
     process.exitCode = 1;
   });
 }

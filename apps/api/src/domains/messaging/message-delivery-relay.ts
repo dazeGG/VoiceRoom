@@ -1,7 +1,7 @@
 // The API side of durable message delivery: it LISTENs for the worker's
 // voice_room_message_delivery notifications, reads the outbox event and
 // fans the message out to this replica's sockets. Claiming and retrying are
-// the worker's job (workers/message-delivery.js), so nothing here runs on a timer.
+// the worker's job (workers/message-delivery.ts), so nothing here runs on a timer.
 
 import type { Logger } from 'pino';
 import { LOG_EVENTS } from '../../lib/log-events.ts';

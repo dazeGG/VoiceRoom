@@ -21,7 +21,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    command: ["node", "apps/api/src/scripts/migrate.js", "up"]
+    command: ["node", "apps/api/src/scripts/migrate.ts", "up"]
     environment:
       NODE_ENV: production
       DATABASE_URL: ${DATABASE_URL:-postgres://${POSTGRES_USER:-voice_room}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-voice_room}}

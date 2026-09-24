@@ -2,10 +2,10 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
-import { LEASE_IDENTITY, createMessageDeliveryWorker } from '../src/workers/message-delivery.js';
+import { LEASE_IDENTITY, createMessageDeliveryWorker } from '../src/workers/message-delivery.ts';
 
 test('G38-A01 worker uses the shared lease runtime and the API listener starts no claim timer', () => {
-  const worker = fs.readFileSync(path.resolve(import.meta.dirname, '../src/workers/message-delivery.js'), 'utf8');
+  const worker = fs.readFileSync(path.resolve(import.meta.dirname, '../src/workers/message-delivery.ts'), 'utf8');
   const relay = fs.readFileSync(path.resolve(import.meta.dirname, '../src/domains/messaging/message-delivery-relay.ts'), 'utf8');
   assert.equal(LEASE_IDENTITY, 'message-delivery.G38');
   assert.match(worker, /from '\.\.\/platform\/lease-runtime\.ts'/);

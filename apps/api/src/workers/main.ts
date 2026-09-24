@@ -2,13 +2,13 @@ import { startWorkerMetricsServer } from '../lib/worker-metrics-server.ts';
 import { startWorkerHeartbeat } from '../platform/worker-heartbeat.ts';
 import { LOG_EVENTS } from '../lib/log-events.ts';
 import { createLogger } from '../lib/logger.ts';
-import { main as mediaMaintenanceMain } from './media-maintenance.js';
-import { main as mediaProcessingMain } from './media-processing.js';
-import { main as mediaReconciliationMain } from './media-reconciliation.js';
-import { main as messageDeliveryMain } from './message-delivery.js';
-import { main as notificationDeliveryMain } from './notification-delivery.js';
+import { main as mediaMaintenanceMain } from './media-maintenance.ts';
+import { main as mediaProcessingMain } from './media-processing.ts';
+import { main as mediaReconciliationMain } from './media-reconciliation.ts';
+import { main as messageDeliveryMain } from './message-delivery.ts';
+import { main as notificationDeliveryMain } from './notification-delivery.ts';
 
-const workers = Object.freeze({
+const workers: Readonly<Record<string, (env: NodeJS.ProcessEnv) => Promise<unknown>>> = Object.freeze({
   'media-maintenance': mediaMaintenanceMain,
   'media-processing': mediaProcessingMain,
   'media-reconciliation': mediaReconciliationMain,
@@ -16,7 +16,7 @@ const workers = Object.freeze({
   'notification-delivery': notificationDeliveryMain
 });
 
-async function main(env = process.env) {
+async function main(env: NodeJS.ProcessEnv = process.env): Promise<void> {
   const workerName = String(env.VOICE_ROOM_WORKER || '').trim();
   const run = workers[workerName];
   if (!run) {
@@ -35,7 +35,7 @@ async function main(env = process.env) {
 
 if (import.meta.main) {
   main().catch((error) => {
-    process.stderr.write(`${error?.stack || error}\n`);
+    process.stderr.write(`${(error as Error | null)?.stack || error}\n`);
     process.exitCode = 1;
   });
 }

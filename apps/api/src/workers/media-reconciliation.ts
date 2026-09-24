@@ -1,20 +1,21 @@
-function createMediaReconciliationWorker({ reconciliationService, intervalMs = 15 * 60 * 1000 } = {}) {
+function createMediaReconciliationWorker({ reconciliationService, intervalMs = 15 * 60 * 1000 }: { reconciliationService?: { reconcile(): Promise<unknown> }; intervalMs?: number } = {}) {
   if (!reconciliationService?.reconcile) throw new TypeError('Media reconciliation service is required');
+  const service = reconciliationService;
   let stopping = false;
-  async function run({ signal } = {}) {
+  async function run({ signal }: { signal?: AbortSignal } = {}): Promise<void> {
     while (!stopping && !signal?.aborted) {
-      await reconciliationService.reconcile();
-      await new Promise((resolve) => {
+      await service.reconcile();
+      await new Promise<void>((resolve) => {
         const timer = setTimeout(done, intervalMs);
         function done() { clearTimeout(timer); signal?.removeEventListener('abort', done); resolve(); }
         signal?.addEventListener('abort', done, { once: true });
       });
     }
   }
-  return Object.freeze({ run, runOnce: reconciliationService.reconcile, stop: () => { stopping = true; } });
+  return Object.freeze({ run, runOnce: service.reconcile, stop: () => { stopping = true; } });
 }
 
-async function main() {
+async function main(): Promise<void> {
   if (String(process.env.MEDIA_RECONCILIATION_CLAIM_ENABLED || '').toLowerCase() !== 'true') return;
   const { createDbPool } = await import('../lib/db.ts');
   const { createAttachmentRepository } = await import('../domains/media/attachment-repository.ts');
@@ -40,7 +41,7 @@ async function main() {
 
 if (import.meta.main) {
   main().catch((error) => {
-    process.stderr.write(`${error?.stack || error}\n`);
+    process.stderr.write(`${(error as Error | null)?.stack || error}\n`);
     process.exitCode = 1;
   });
 }
