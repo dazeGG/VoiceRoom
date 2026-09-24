@@ -76,6 +76,19 @@ main() {
   trap - ERR
 
   echo "== cleaning up"
+  # Every rollout pulls three new VoiceRoom images, so on a busy day the age
+  # filter below keeps all of them and a small disk fills up (dev hit 100% on
+  # 2026-09-13 and 2026-09-24). Keep only this release and the previous one,
+  # whose tags the .env backup holds, so a manual rollback needs no pull.
+  prune_release_images() {
+    local keep_list
+    keep_list=$(printf '%s\n' "$api_image" "$worker_image" "$web_image"
+      grep -hE '^VOICEROOM_(API|WORKER|WEB)_IMAGE=' "$env_backup" | cut -d= -f2- || true)
+    docker image ls --format '{{.Repository}}:{{.Tag}}' \
+      | grep -E '/voiceroom-(api|worker|web):' \
+      | grep -vxF -f <(printf '%s\n' "$keep_list") \
+      | xargs -r docker image rm > /dev/null 2>&1 || true
+  }
   prune_oldest() {
     find "$backup_dir" -maxdepth 1 -type f -name "$1" -printf '%T@ %p\n' \
       | sort -rn | tail -n +"$((keep + 1))" | cut -d' ' -f2- | xargs -r rm -f
@@ -83,6 +96,7 @@ main() {
   prune_oldest 'db-*.dump'
   prune_oldest 'env-*'
   # Cleanup must not turn a finished rollout into a failed job.
+  prune_release_images
   docker image prune -af --filter 'until=72h' > /dev/null || true
   docker builder prune -af --filter 'until=72h' > /dev/null || true
 
