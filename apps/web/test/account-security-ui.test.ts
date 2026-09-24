@@ -1,0 +1,163 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { existsSync, readFileSync, statSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const webRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
+const read = (relative: string) => readFileSync(join(webRoot, relative), 'utf8');
+
+test('the sign-in dialog recovers an account with a one-time code', () => {
+  const dialog = read('src/lib/features/auth/AuthDialog.svelte');
+  const home = read('src/lib/features/home/HomePage.svelte');
+  const api = read('src/lib/api/auth.ts');
+
+  assert.match(dialog, /export type AuthMode = 'login' \| 'register' \| 'recover'/);
+  assert.match(dialog, /normalizeRecoveryCode\(recoveryCode\)/);
+  assert.match(dialog, /recoverAccount\(\{/);
+  assert.match(dialog, /autocomplete="one-time-code"/);
+  assert.match(dialog, /switchMode\('recover'\)/);
+  assert.match(home, /requestedMode === 'recover'/);
+  assert.match(api, /authPost<[^\n]*>\('\/auth\/recover', input\)/);
+});
+
+test('an ended session stops reconnecting and signs the lobby out', () => {
+  const realtime = read('src/lib/api/realtime.ts');
+  const lobby = read('src/lib/features/home/LobbyPage.svelte');
+
+  // Reconnecting after the server ended the session would only come back as a
+  // guest socket, so the client hands over to the sign-out flow instead.
+  assert.match(realtime, /const SESSION_ENDED_CLOSE_CODE = 4401;/);
+  assert.match(realtime, /event\?\.code === SESSION_ENDED_CLOSE_CODE\) \{[\s\S]*?this\.closedByClient = true;[\s\S]*?return;/);
+  // Our own sign-out and password change also close the socket; only a session
+  // ended from somewhere else may sign the lobby out with its own message.
+  assert.match(lobby, /onSessionEnded\(\(\) => \{[\s\S]*?if \(consumeExpectedSessionEnd\(\) \|\| !authSession\.user\) return;\s*clearSession\(\);/);
+});
+
+test('security settings list devices and show recovery codes only once', () => {
+  const settings = read('src/lib/features/home/components/SettingsModal.svelte');
+  const security = read('src/lib/features/home/components/AccountSecuritySettings.svelte');
+  const codes = read('src/lib/features/home/components/RecoveryCodesDialog.svelte');
+
+  assert.match(settings, /\{:else if tab === 'security'\}/);
+  // The nested codes dialog owns focus and Escape while it is open.
+  assert.match(settings, /enabled: open && !cropOpen && !securityDialogOpen/);
+  assert.match(settings, /!securityDialogOpen && event\.key === 'Escape'/);
+  // The settings overlay sits at z-index 60; the codes dialog must open above it.
+  assert.match(codes, /\.recovery-dialog-layer :global\(\.ui-dialog-overlay\) \{\s*z-index: 100;/);
+
+  assert.match(security, /revokeAccountSession\(session\.id\)/);
+  assert.match(security, /\{#if !session\.current\}/);
+  assert.match(security, /href="https:\/\/db-ip\.com"/);
+  assert.match(codes, /generateRecoveryCodes\(password\)/);
+  assert.match(codes, /disabled=\{!saved\}/);
+});
+
+test('the password is changed in the security tab, and our own session ends stay quiet', () => {
+  const settings = read('src/lib/features/home/components/SettingsModal.svelte');
+  const security = read('src/lib/features/home/components/AccountSecuritySettings.svelte');
+  const signOut = read('src/lib/features/home/model/sign-out.ts');
+
+  assert.doesNotMatch(settings, /changePassword|Текущий пароль/);
+  assert.match(security, /autocomplete="current-password"/);
+  // Both requests make the server close this device's socket with 4401.
+  assert.match(security, /expectSessionEnd\(\);\s*try \{\s*await changePassword\(currentPassword, newPassword\);/);
+  assert.match(signOut, /expectSessionEnd\(\);\s*try \{\s*await logout\(\);/);
+});
+
+test('what is new follows the last seen release, not recovery codes', () => {
+  const dialog = read('src/lib/features/home/components/WhatsNewDialog.svelte');
+  const model = read('src/lib/features/home/model/whats-new.ts');
+  const lobby = read('src/lib/features/home/LobbyPage.svelte');
+
+  assert.match(dialog, /Что нового в Voice Room/);
+  assert.doesNotMatch(dialog, /\d+\.\d+\.\d+/);
+  assert.doesNotMatch(dialog, /recoveryCodes|RecoveryCodes/);
+  assert.match(dialog, /void markWhatsNewSeen\(\)/);
+  assert.match(model, /state\.current === WHATS_NEW_VERSION && hasUnseenWhatsNew\(state\.lastSeen, state\.current\)/);
+  // The security question about a new sign-in outranks the release announcement.
+  assert.match(
+    lobby,
+    /<WhatsNewDialog\s+paused=\{loginAlertOpen\}\s+onOpenSecurity=\{\(\) => openSecuritySettings\(\)\}\s+onOpenChange=\{\(open\) => \(whatsNewOpen = open\)\}\s*\/>/
+  );
+});
+
+test('what is new is a few short story slides that wait for the reader', () => {
+  const dialog = read('src/lib/features/home/components/WhatsNewDialog.svelte');
+  const model = read('src/lib/features/home/model/whats-new.ts');
+  const slides = [...model.matchAll(/\{\s*image: '([^']+)',\s*alt: '([^']+)',\s*title: '([^']+)',\s*text: '([^']+)'/g)];
+
+  assert.ok(slides.length >= 2 && slides.length <= 4, `expected 2–4 slides, got ${slides.length}`);
+  for (const [, image, alt, title, text] of slides) {
+    assert.ok(title.length <= 32, `"${title}" is too long for a slide title`);
+    assert.ok(text.length <= 90, `"${text}" is more than a line of slide text`);
+    assert.ok(alt.length > 10, `the ${image} picture needs a description`);
+    // Screenshots of the real app, served from static and kept light.
+    assert.match(image, /^\/whats-new\/\d+\.\d+\.\d+\/[a-z-]+\.webp$/);
+    const file = join(webRoot, 'static', image);
+    assert.ok(existsSync(file), `${image} is missing from static`);
+    assert.ok(statSync(file).size <= 150 * 1024, `${image} is heavier than 150 KB`);
+  }
+  assert.match(dialog, /<img\s+class="stories-image"[^>]*src=\{slide\.image\}[^>]*alt=\{slide\.alt\}/);
+  // Stories pause while read and do not flick through under reduced motion.
+  assert.match(dialog, /animation-play-state: paused/);
+  assert.match(dialog, /matchMedia\('\(prefers-reduced-motion: reduce\)'\)/);
+  assert.match(dialog, /i === index && \(ended \|\| reducedMotion\)/);
+  assert.match(dialog, /document\.hidden/);
+});
+
+test('a missing recovery codes reminder sits above the rooms, snoozes and highlights the action', () => {
+  const home = read('src/lib/features/home/components/lobby/VoiceHome.svelte');
+  const lobby = read('src/lib/features/home/LobbyPage.svelte');
+  const security = read('src/lib/features/home/components/AccountSecuritySettings.svelte');
+  const model = read('src/lib/features/home/model/account-security.ts');
+
+  // A plain callout like friend requests, never an overlay that blocks the lobby.
+  assert.match(home, /\{#if recoveryCodesReminder\}\s*<div class="lr-callout lr-callout--split">/);
+  assert.match(home, /aria-label="Напомнить через 3 дня"[\s\S]*?onclick=\{onSnoozeRecoveryCodes\}/);
+  assert.match(model, /isRecoveryCodesReminderDue\(security\.recoveryCodes, security\.recoveryCodesReminder, now\)/);
+  assert.match(lobby, /onOpenRecoveryCodes=\{\(\) => openSecuritySettings\('recovery-codes'\)\}/);
+  assert.match(lobby, /await snoozeRecoveryCodesReminder\(\);/);
+  assert.match(security, /data-highlight=\{recoveryCodesHighlighted\}/);
+  assert.match(security, /\.account-security-action\[data-highlight='true'\] \{\s*animation:/);
+});
+
+test('account deletion asks for the password, explains the grace period and can be undone by signing in', () => {
+  const security = read('src/lib/features/home/components/AccountSecuritySettings.svelte');
+  const dialog = read('src/lib/features/home/components/DeleteAccountDialog.svelte');
+  const auth = read('src/lib/features/auth/AuthDialog.svelte');
+  const api = read('src/lib/api/auth.ts');
+
+  assert.match(security, /<DeleteAccountDialog open=\{deleteDialogOpen\}/);
+  // The nested dialog owns focus and Escape like the recovery codes dialog.
+  assert.match(security, /onDialogOpenChange\(codesDialogOpen \|\| deleteDialogOpen\)/);
+  assert.match(dialog, /disabled=\{deleting \|\| !understood \|\| !password\}/);
+  assert.match(dialog, /expectSessionEnd\(\);\s*try \{\s*const \{ deletionScheduledFor \} = await requestAccountDeletion\(password\);/);
+  assert.match(dialog, /«Удалённый аккаунт»/);
+  assert.match(dialog, /\.delete-account-layer :global\(\.ui-dialog-overlay\) \{\s*z-index: 100;/);
+  assert.match(api, /export class AuthRequestError extends Error/);
+  assert.match(auth, /cause\.code === 'account_deletion_pending'/);
+  assert.match(auth, /restoreAccount\(\{ login: loginValue\.trim\(\), password \}\)/);
+});
+
+test('a sign-in from a new device asks this account, and "Это не я" leads to securing it', () => {
+  const dialog = read('src/lib/features/home/components/LoginAlertDialog.svelte');
+  const lobby = read('src/lib/features/home/LobbyPage.svelte');
+  const realtime = read('src/lib/api/realtime.ts');
+  const security = read('src/lib/features/home/components/AccountSecuritySettings.svelte');
+
+  assert.match(realtime, /type: 'account\.login\.new'/);
+  assert.match(realtime, /type: 'account\.login\.resolved'/);
+  assert.match(dialog, /event\.type === 'account\.login\.new'/);
+  assert.match(dialog, /event\.type === 'account\.login\.resolved'/);
+  // Sign-ins that happened while offline show up after a reconnect or next visit.
+  assert.match(dialog, /onRestore\(\(\) => void load\(\)\)/);
+  assert.match(dialog, /login-alert-button--danger[\s\S]*?Это не я/);
+  assert.match(dialog, /login-alert-button--safe[\s\S]*?Это я/);
+  assert.match(dialog, /secure\('password'\)/);
+  assert.match(dialog, /secure\('recovery-codes'\)/);
+  // Above the settings modal (z-index 60) and every other lobby dialog.
+  assert.match(dialog, /\.login-alert-layer :global\(\.ui-dialog-overlay\) \{\s*z-index: 110;/);
+  assert.match(lobby, /<LoginAlertDialog\s+onSecureAccount=\{\(target\) => openSecuritySettings\(target\)\}/);
+  assert.match(security, /data-highlight=\{highlightPassword\}/);
+});

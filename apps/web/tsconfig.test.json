@@ -1,0 +1,17 @@
+{
+  // The unit tests run on Node (node --test, with Vite for Svelte modules), so
+  // they get Node's types. Files that still carry `// @ts-nocheck` are not
+  // type-checked yet; remove the marker once a file passes.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "noUnusedLocals": false
+  },
+  "include": [
+    ".svelte-kit/ambient.d.ts",
+    ".svelte-kit/non-ambient.d.ts",
+    "src/**/*.ts",
+    "src/**/*.svelte",
+    "test/**/*.ts"
+  ]
+}

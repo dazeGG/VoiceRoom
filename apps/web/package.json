@@ -9,9 +9,9 @@
     "build": "vite build",
     "prebuild": "npm run emoji:assets",
     "emoji:assets": "node scripts/build-emoji-assets.mjs",
-    "check": "node --check static/audio-gate.worklet.js && node --check static/desktop-audio-source.worklet.js && node --check static/rnnoise/rnnoise.worklet.js && svelte-kit sync && tsc --noEmit && svelte-check --tsconfig ./tsconfig.json",
+    "check": "node --check static/audio-gate.worklet.js && node --check static/desktop-audio-source.worklet.js && node --check static/rnnoise/rnnoise.worklet.js && svelte-kit sync && tsc --noEmit && svelte-check --tsconfig ./tsconfig.json && tsc -p tsconfig.test.json --noEmit",
     "preview": "vite preview",
-    "test": "node --test test/*.test.js",
+    "test": "node --test test/*.test.ts",
     "e2e": "playwright test"
   },
   "dependencies": {
