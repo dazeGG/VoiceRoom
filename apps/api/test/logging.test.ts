@@ -106,7 +106,10 @@ test('hashed client addresses are stable within a process and never reversible',
   const hash = hashIp('203.0.113.7');
   assert.equal(hash, hashIp('203.0.113.7'));
   assert.notEqual(hash, hashIp('203.0.113.8'));
-  assert.ok(!hash.includes('203'));
+  // A 12-hex-digit digest cannot carry the dotted address. Checking for a
+  // substring such as '203' failed whenever the salted digest happened to
+  // contain those digits (about 1 run in 400).
+  assert.match(hash, /^[0-9a-f]{12}$/);
   assert.equal(hashIp(''), 'unknown');
 });
 
