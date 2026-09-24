@@ -3,7 +3,7 @@
 // cut off after the timeout.
 
 import type { Logger } from 'pino';
-import { LOG_EVENTS } from '../lib/log-events.js';
+import { LOG_EVENTS } from '../lib/log-events.ts';
 
 export interface GracefulShutdownOptions {
   logger: Pick<Logger, 'info' | 'error'>;

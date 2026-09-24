@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
 
-import { createGeoLocator } from '../src/lib/geoip.js';
+import { createGeoLocator } from '../src/lib/geoip.ts';
 
 function createLogger() {
   const entries = [];

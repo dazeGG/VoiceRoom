@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import { Pool } from 'pg';
-import { readDatabaseConfig } from '../src/lib/config.js';
+import { readDatabaseConfig } from '../src/lib/config.ts';
 
 function quoteIdent(value) {
   return `"${String(value).replaceAll('"', '""')}"`;

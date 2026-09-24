@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { startApiListener } from '../src/lib/listen.js';
+import { startApiListener } from '../src/lib/listen.ts';
 
 class FakeServer {
   constructor({ socketError = null, tcpAddress = { address: '127.0.0.1', port: 4321 } } = {}) {

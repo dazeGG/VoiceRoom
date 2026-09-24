@@ -10,7 +10,7 @@ import path from 'node:path';
 
 import { Pool } from 'pg';
 import { createTestDatabase } from './db-harness.js';
-import { runMigrations } from '../src/lib/migrate.js';
+import { runMigrations } from '../src/lib/migrate.ts';
 import { createKysely } from '../src/platform/db/kysely.ts';
 
 const API_ROOT = path.resolve(import.meta.dirname, '..');

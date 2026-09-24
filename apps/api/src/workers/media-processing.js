@@ -1,9 +1,9 @@
 import crypto from 'node:crypto';
 import sharp from 'sharp';
 import { MediaJobFenceError } from '../domains/media/media-job-repository.ts';
-import { recordMediaOldestPending } from '../lib/metrics.js';
-import { LOG_EVENTS } from '../lib/log-events.js';
-import { createLogger } from '../lib/logger.js';
+import { recordMediaOldestPending } from '../lib/metrics.ts';
+import { LOG_EVENTS } from '../lib/log-events.ts';
+import { createLogger } from '../lib/logger.ts';
 
 const DEFAULTS = Object.freeze({ batchSize: 10, concurrency: 2, leaseMs: 120_000, maxAttempts: 5, timeoutMs: 30_000 });
 
@@ -151,7 +151,7 @@ function createMediaProcessingWorker({
 
 async function main() {
   if (String(process.env.MEDIA_PROCESSING_CLAIM_ENABLED || '').toLowerCase() !== 'true') return;
-  const { createDbPool } = await import('../lib/db.js');
+  const { createDbPool } = await import('../lib/db.ts');
   const { createAttachmentRepository } = await import('../domains/media/attachment-repository.ts');
   const { createMediaJobRepository } = await import('../domains/media/media-job-repository.ts');
   const { createMediaPressureService } = await import('../domains/media/media-pressure-service.ts');

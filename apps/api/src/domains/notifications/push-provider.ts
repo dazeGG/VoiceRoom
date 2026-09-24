@@ -1,4 +1,5 @@
-import { createPushService } from '../../lib/push-service.js';
+import { createPushService } from '../../lib/push-service.ts';
+import type { PushSubscriptionStore, WebPushClient } from '../../lib/push-service.ts';
 
 type SendResult = { enabled: boolean; sent: number; removed: number };
 
@@ -13,13 +14,12 @@ export type PushDelivery =
 
 function createNotificationPushProvider({ pushService, store, env, client, logger }: {
   pushService?: NotificationPushService;
-  store?: unknown;
+  store?: PushSubscriptionStore;
   env?: NodeJS.ProcessEnv;
-  client?: unknown;
-  logger?: unknown;
+  client?: WebPushClient;
+  logger?: { warn(...args: unknown[]): void };
 } = {}) {
-  // push-service.js is untyped and its inferred options miss `store`; typed with lib/ in PR 10g.
-  const service: NotificationPushService = pushService || createPushService({ store, env, client, logger } as Parameters<typeof createPushService>[0]);
+  const service: NotificationPushService = pushService || createPushService({ store, env, client, logger });
   return Object.freeze({
     enabled: Boolean(service.config?.enabled),
     async deliver(job: { recipientUserId: string; payload: unknown }): Promise<PushDelivery> {

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { reconcileAvatarStorage } from '../src/lib/avatar-reconciliation.js';
+import { reconcileAvatarStorage } from '../src/lib/avatar-reconciliation.ts';
 
 test('avatar reconciliation removes files that have no live database reference', async () => {
   const userKey = 'av_123e4567-e89b-12d3-a456-426614174000_deadbeef.webp';

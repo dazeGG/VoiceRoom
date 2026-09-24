@@ -4,7 +4,7 @@
 
 import type { Logger } from 'pino';
 import { cleanPresenceStatus } from '@voice-room/shared/validation';
-import { cleanPushEndpoint } from '../../lib/push-endpoint.js';
+import { cleanPushEndpoint } from '../../lib/push-endpoint.ts';
 
 export interface MutationResult {
   status: string;

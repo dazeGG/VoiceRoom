@@ -9,11 +9,11 @@ import { Pool } from 'pg';
 import { test } from 'node:test';
 const { createApiApp } = await import('../src/server.js');
 const { withRosterPeer } = await import('./roster-harness.js');
-const { renderPrometheus, resetMetricsForTest } = await import('../src/lib/metrics.js');
+const { renderPrometheus, resetMetricsForTest } = await import('../src/lib/metrics.ts');
 const { createCredentialBoundaryService } = await import('../src/domains/admission/credential-boundary-service.ts');
 const { createLiveKitAuthGateService } = await import('../src/domains/admission/livekit-auth-gate-service.ts');
 const { createRoomStore } = await import('../src/lib/room-store.js');
-const { runMigrations } = await import('../src/lib/migrate.js');
+const { runMigrations } = await import('../src/lib/migrate.ts');
 const { createTestDatabase } = await import('./db-harness.js');
 
 function listen(server) { return new Promise((resolve,reject)=>{ server.once('error',reject); server.listen(0,'127.0.0.1',()=>resolve(server.address().port)); }); }

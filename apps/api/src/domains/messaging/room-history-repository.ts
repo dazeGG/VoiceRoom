@@ -1,7 +1,7 @@
 import type pg from 'pg';
 import { normalizeLinkPreview, type LinkPreview } from '@voice-room/shared/link-preview';
-import { createDbPool } from '../../lib/db.js';
-import { createLogger } from '../../lib/logger.js';
+import { createDbPool } from '../../lib/db.ts';
+import { createLogger } from '../../lib/logger.ts';
 
 const ROOM_MESSAGE_SELECT = `
   SELECT m.*,

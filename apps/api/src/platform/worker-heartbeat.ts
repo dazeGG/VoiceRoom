@@ -1,5 +1,5 @@
 import os from 'node:os';
-import { createDbPool } from '../lib/db.js';
+import { createDbPool } from '../lib/db.ts';
 import { createRuntimeReadinessRepository } from './runtime-readiness-repository.ts';
 
 const WORKER_CAPABILITIES: Readonly<Record<string, string[]>> = Object.freeze({

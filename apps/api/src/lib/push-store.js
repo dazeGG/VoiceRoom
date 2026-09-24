@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
-import { createDbPool, transaction } from './db.js';
+import { createDbPool, transaction } from './db.ts';
 import { classifyPlatform, PLATFORM_CLASSES } from '@voice-room/shared/platform-class';
-import { createLogger } from './logger.js';
+import { createLogger } from './logger.ts';
 
 function createRowId() {
   return crypto.randomUUID?.() || crypto.randomBytes(16).toString('hex');

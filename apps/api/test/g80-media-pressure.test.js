@@ -4,7 +4,7 @@ const require = createRequire(import.meta.url);
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { DEFAULT_MIN_FREE_BYTES, DEFAULT_RECOVERY_BYTES, createMediaPressureService } from '../src/domains/media/media-pressure-service.ts';
-import { recordMediaPressure, renderPrometheus, resetMetricsForTest } from '../src/lib/metrics.js';
+import { recordMediaPressure, renderPrometheus, resetMetricsForTest } from '../src/lib/metrics.ts';
 
 test('G80-A01 2GiB boundary, claim stop and recovery hysteresis fail closed', async () => {
   let free = DEFAULT_MIN_FREE_BYTES - 1;

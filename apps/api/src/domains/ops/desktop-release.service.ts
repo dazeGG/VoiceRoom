@@ -3,7 +3,7 @@
 // of the configured repository is ever passed through.
 
 import type { Logger } from 'pino';
-import { LOG_EVENTS } from '../../lib/log-events.js';
+import { LOG_EVENTS } from '../../lib/log-events.ts';
 
 export interface DesktopAsset {
   url: string;

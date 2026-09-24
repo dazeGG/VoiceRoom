@@ -1,8 +1,8 @@
 import crypto from 'node:crypto';
-import { createDbPool, transaction } from './db.js';
+import { createDbPool, transaction } from './db.ts';
 import { cleanAvatarColorKey, cleanPresenceStatus } from '@voice-room/shared/validation';
 import { normalizeLinkPreview } from '@voice-room/shared/link-preview';
-import { createLogger } from './logger.js';
+import { createLogger } from './logger.ts';
 
 function toMillis(value) {
   if (value == null) return null;

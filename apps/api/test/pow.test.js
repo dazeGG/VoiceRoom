@@ -6,7 +6,7 @@ import {
   parsePowChallenge,
   normalizePowNonce,
   createProofOfWork
-} from '../src/lib/pow.js';
+} from '../src/lib/pow.ts';
 
 // Brute-forces a nonce the same way the browser client does.
 function solveChallenge(challenge, difficulty) {

@@ -3,12 +3,12 @@ import net from 'node:net';
 import type { Duplex } from 'node:stream';
 import { URL } from 'node:url';
 import type pg from 'pg';
-import { createDbPool } from '../../lib/db.js';
+import { createDbPool } from '../../lib/db.ts';
 import { createGateCredentialSigner } from './gate-credential-signer.ts';
 import { createCredentialBoundaryService, type CredentialBoundaryService, type GateRoomStore } from './credential-boundary-service.ts';
 import { createRoomStore } from '../../lib/room-store.js';
-import { LOG_EVENTS } from '../../lib/log-events.js';
-import { createLogger } from '../../lib/logger.js';
+import { LOG_EVENTS } from '../../lib/log-events.ts';
+import { createLogger } from '../../lib/logger.ts';
 import { normalizeLiveKitRoomPrefix, verifyAccessTokenBinding } from './livekit-token-binding.mts';
 
 const DEFAULT_GATE_PATH = '/rtc';
@@ -120,7 +120,7 @@ function createLiveKitAuthGateService({
   const upstream = cleanUpstreamUrl(upstreamUrl);
   const activePool = roomStore ? null : (pool || createDbPool({ databaseUrl, logger }));
   // room-store.js is untyped and its inferred options miss `pool`; typed with the stores in PR 10h.
-  const store = (roomStore || createRoomStore({ pool: activePool, logger } as Parameters<typeof createRoomStore>[0])) as GateRoomStore;
+  const store = (roomStore || createRoomStore({ pool: activePool, logger } as unknown as Parameters<typeof createRoomStore>[0])) as GateRoomStore;
   const credentialBoundary = boundary || createCredentialBoundaryService({
     roomStore: store,
     signer: createGateCredentialSigner({ secret })

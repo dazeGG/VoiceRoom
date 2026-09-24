@@ -1,31 +1,35 @@
-const httpRequests = new Map();
-const maintenanceTasks = new Map();
+type HttpRequestStat = { method: string; route: string; status: string; count: number; durationSecondsSum: number };
+type MaintenanceStat = { task: string; count: number; durationSecondsSum: number; lastDurationSeconds: number };
+export type MediaPressureSnapshot = { freeBytes?: unknown; healthy?: unknown; reason?: unknown };
+
+const httpRequests = new Map<string, HttpRequestStat>();
+const maintenanceTasks = new Map<string, MaintenanceStat>();
 let pgPoolErrors = 0;
-let mediaPressure = { freeBytes: 0, healthy: false, reason: 'unchecked' };
+let mediaPressure: { freeBytes: number; healthy: boolean; reason: string } = { freeBytes: 0, healthy: false, reason: 'unchecked' };
 let notificationOldestPendingSeconds = 0;
 let mediaOldestPendingSeconds = 0;
 let mediaAuthorizationInvariantFailures = 0;
 let credentialRevokeCleanupFailures = 0;
 
-function labelValue(value) {
+function labelValue(value: unknown): string {
   return String(value).replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n');
 }
 
-function labels(values) {
+function labels(values: Record<string, unknown>): string {
   return Object.entries(values)
     .map(([key, value]) => `${key}="${labelValue(value)}"`)
     .join(',');
 }
 
-function metricLine(name, labelSet, value) {
+function metricLine(name: string, labelSet: Record<string, unknown>, value: number): string {
   return `${name}{${labels(labelSet)}} ${Number.isFinite(value) ? value : 0}`;
 }
 
-function httpKey({ method, route, statusCode }) {
+function httpKey({ method, route, statusCode }: { method: string; route: string; statusCode: string }): string {
   return `${method} ${route} ${statusCode}`;
 }
 
-function recordHttpRequest({ method = 'GET', route = 'unknown', statusCode = 0, durationMs = 0 } = {}) {
+function recordHttpRequest({ method = 'GET', route = 'unknown', statusCode = 0, durationMs = 0 }: { method?: string; route?: string; statusCode?: number | string; durationMs?: number } = {}): void {
   const status = String(statusCode || 0);
   const key = httpKey({ method, route, statusCode: status });
   const current = httpRequests.get(key) || {
@@ -40,7 +44,7 @@ function recordHttpRequest({ method = 'GET', route = 'unknown', statusCode = 0, 
   httpRequests.set(key, current);
 }
 
-function recordMaintenanceDuration(task, durationMs) {
+function recordMaintenanceDuration(task: unknown, durationMs: unknown): void {
   const name = String(task || 'unknown');
   const current = maintenanceTasks.get(name) || {
     task: name,
@@ -55,11 +59,11 @@ function recordMaintenanceDuration(task, durationMs) {
   maintenanceTasks.set(name, current);
 }
 
-function recordPgPoolError() {
+function recordPgPoolError(): void {
   pgPoolErrors += 1;
 }
 
-function recordMediaPressure(snapshot = {}) {
+function recordMediaPressure(snapshot: MediaPressureSnapshot = {}): void {
   mediaPressure = {
     freeBytes: Math.max(0, Number(snapshot.freeBytes) || 0),
     healthy: snapshot.healthy === true,
@@ -67,12 +71,12 @@ function recordMediaPressure(snapshot = {}) {
   };
 }
 
-function recordNotificationOldestPending(ageMs) { notificationOldestPendingSeconds = Math.max(0, Number(ageMs) || 0) / 1000; }
-function recordMediaOldestPending(ageMs) { mediaOldestPendingSeconds = Math.max(0, Number(ageMs) || 0) / 1000; }
-function recordMediaAuthorizationInvariantFailure() { mediaAuthorizationInvariantFailures += 1; }
-function recordCredentialRevokeCleanupFailure() { credentialRevokeCleanupFailures += 1; }
+function recordNotificationOldestPending(ageMs: unknown): void { notificationOldestPendingSeconds = Math.max(0, Number(ageMs) || 0) / 1000; }
+function recordMediaOldestPending(ageMs: unknown): void { mediaOldestPendingSeconds = Math.max(0, Number(ageMs) || 0) / 1000; }
+function recordMediaAuthorizationInvariantFailure(): void { mediaAuthorizationInvariantFailures += 1; }
+function recordCredentialRevokeCleanupFailure(): void { credentialRevokeCleanupFailures += 1; }
 
-async function observeMaintenance(task, callback) {
+async function observeMaintenance<T>(task: string, callback: () => T | Promise<T>): Promise<T> {
   const startedAt = process.hrtime.bigint();
   try {
     return await callback();
@@ -88,7 +92,13 @@ function renderPrometheus({
   presenceRooms = 0,
   presencePeers = 0,
   capabilityReadiness = {}
-} = {}) {
+}: {
+  activeWs?: number;
+  activeGuestWs?: number;
+  presenceRooms?: number;
+  presencePeers?: number;
+  capabilityReadiness?: Record<string, unknown>;
+} = {}): string {
   const lines = [
     '# HELP voice_room_api_http_requests_total Total HTTP requests handled by the API.',
     '# TYPE voice_room_api_http_requests_total counter'
@@ -180,7 +190,7 @@ function renderPrometheus({
   return `${lines.join('\n')}\n`;
 }
 
-function resetMetricsForTest() {
+function resetMetricsForTest(): void {
   httpRequests.clear();
   maintenanceTasks.clear();
   pgPoolErrors = 0;

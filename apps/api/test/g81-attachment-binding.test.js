@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import { Pool } from 'pg';
 import test from 'node:test';
-import { runMigrations } from '../src/lib/migrate.js';
+import { runMigrations } from '../src/lib/migrate.ts';
 import { createAttachmentRepository } from '../src/domains/media/attachment-repository.ts';
 import { createTestDatabase } from './db-harness.js';
 const SILENT = { log() {}, info() {}, warn() {}, error() {} };

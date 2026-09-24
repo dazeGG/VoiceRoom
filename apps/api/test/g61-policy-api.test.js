@@ -6,7 +6,7 @@ import { createNotificationService } from '../src/domains/notifications/notifica
 import { createNotificationStore } from '../src/lib/notification-store.js';
 import { createRoomStore } from '../src/lib/room-store.js';
 import { createUserStore } from '../src/lib/user-store.js';
-import { runMigrations } from '../src/lib/migrate.js';
+import { runMigrations } from '../src/lib/migrate.ts';
 import { createTestDatabase } from './db-harness.js';
 const SILENT={log(){},info(){},warn(){},error(){}};
 async function fixture(t){const {cleanup,databaseUrl}=await createTestDatabase(t);await runMigrations({databaseUrl,logger:SILENT});const users=createUserStore({databaseUrl,logger:SILENT});const rooms=createRoomStore({databaseUrl,logger:SILENT});const created=await users.createUser({login:'g61-user',displayName:'G61 User',password:'password123'});assert.equal(created.status,'created');await rooms.createRoomWithQuota({roomId:'g61-room',creatorIp:'127.0.0.1',isStatic:true,ownerId:created.user.id});return {cleanup,databaseUrl,rooms,users,userId:created.user.id,roomId:'g61-room'};}

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-import { readDatabaseConfig } from '../lib/config.js';
-import { runMigrations } from '../lib/migrate.js';
+import { readDatabaseConfig } from '../lib/config.ts';
+import { runMigrations } from '../lib/migrate.ts';
 
 function parseArgs(argv) {
   const args = new Set(argv.slice(2));

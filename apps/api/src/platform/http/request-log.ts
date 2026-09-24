@@ -4,7 +4,7 @@
 
 import type { FastifyRequest } from 'fastify';
 import type { IncomingMessage } from 'node:http';
-import { LOG_EVENTS } from '../../lib/log-events.js';
+import { LOG_EVENTS } from '../../lib/log-events.ts';
 
 type RawRequest = IncomingMessage & { voiceRoomUserId?: string };
 

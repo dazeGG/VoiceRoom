@@ -6,7 +6,7 @@ import path from 'node:path';
 import sharp from 'sharp';
 
 import { createApiApp } from '../src/server.js';
-import { createAvatarStorage } from '../src/lib/avatar-storage.js';
+import { createAvatarStorage } from '../src/lib/avatar-storage.ts';
 
 const OWNER_ID = '123e4567-e89b-12d3-a456-426614174000';
 const OTHER_ID = '123e4567-e89b-12d3-a456-426614174001';

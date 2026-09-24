@@ -1,9 +1,9 @@
 import crypto from 'node:crypto';
-import { createDbPool, transaction } from './db.js';
+import { createDbPool, transaction } from './db.ts';
 import { createActiveBanService } from '../domains/moderation/active-ban-service.ts';
 import { AVATAR_COLOR_KEYS, cleanAvatarColorKey } from '@voice-room/shared/validation';
 import { normalizeLinkPreview } from '@voice-room/shared/link-preview';
-import { createLogger } from './logger.js';
+import { createLogger } from './logger.ts';
 
 // Room history is never expired or trimmed: a message leaves only when its
 // author or the room owner deletes it, or when its room is deleted.

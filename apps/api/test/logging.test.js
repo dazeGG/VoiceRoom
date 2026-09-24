@@ -4,15 +4,15 @@ import { Writable } from 'node:stream';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { LOG_EVENTS, LOG_EVENT_CODES } from '../src/lib/log-events.js';
+import { LOG_EVENTS, LOG_EVENT_CODES } from '../src/lib/log-events.ts';
 import {
   createFastifyLoggerOptions,
   createLogger,
   getLogLevel,
   hashIp,
   normalizeRequestId
-} from '../src/lib/logger.js';
-import { CLIENT_LOG_LIMITS, normalizeClientLogBatch } from '../src/lib/client-log-intake.js';
+} from '../src/lib/logger.ts';
+import { CLIENT_LOG_LIMITS, normalizeClientLogBatch } from '../src/lib/client-log-intake.ts';
 
 // Captures what a logger actually serializes, which is the only way to assert
 // on redaction: the fields are removed by pino at write time, not before.

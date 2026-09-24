@@ -1,6 +1,6 @@
 import type pg from 'pg';
-import { createDbPool, transaction } from '../../lib/db.js';
-import { createLogger } from '../../lib/logger.js';
+import { createDbPool, transaction } from '../../lib/db.ts';
+import { createLogger } from '../../lib/logger.ts';
 
 type ReadTuple = { id: string; createdAtMicros: string | number | bigint };
 type ReadCursorRow = { last_read_message_created_at: unknown; last_read_message_id: string };

@@ -2,8 +2,8 @@ import crypto from 'node:crypto';
 import { cleanPresenceStatus } from '@voice-room/shared/validation';
 import { buildServerEnvelope, sendWsEnvelope } from './envelope.js';
 import { toWsAccountEvent } from './account-events.js';
-import { LOG_EVENTS } from '../lib/log-events.js';
-import { createLogger } from '../lib/logger.js';
+import { LOG_EVENTS } from '../lib/log-events.ts';
+import { createLogger } from '../lib/logger.ts';
 
 function createConnectionId(prefix) {
   return `${prefix}:${Date.now()}:${crypto.randomBytes(4).toString('hex')}`;

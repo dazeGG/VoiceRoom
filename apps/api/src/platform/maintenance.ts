@@ -4,7 +4,7 @@
 // measured and logged on failure; none of them stops the others.
 
 import type { Logger } from 'pino';
-import { LOG_EVENTS } from '../lib/log-events.js';
+import { LOG_EVENTS } from '../lib/log-events.ts';
 
 export interface MaintenanceTask {
   /** The metric label. */

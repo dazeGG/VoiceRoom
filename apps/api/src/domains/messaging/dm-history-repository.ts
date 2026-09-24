@@ -1,6 +1,6 @@
 import type pg from 'pg';
-import { createDbPool } from '../../lib/db.js';
-import { createLogger } from '../../lib/logger.js';
+import { createDbPool } from '../../lib/db.ts';
+import { createLogger } from '../../lib/logger.ts';
 
 type Anchor = { createdAtMicros: unknown; id: string };
 type Direction = 'before' | 'after' | 'at-or-after';

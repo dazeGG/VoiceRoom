@@ -3,7 +3,7 @@
 // what it is.
 
 import { cleanLiveKitUrl } from '@voice-room/shared/validation';
-import { readEnvBool, readEnvInt, readMessageDeliveryMode } from '../lib/config.js';
+import { readEnvBool, readEnvInt, readMessageDeliveryMode } from '../lib/config.ts';
 
 type Env = Record<string, string | undefined>;
 

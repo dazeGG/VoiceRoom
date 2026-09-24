@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
-import { LOG_EVENTS } from '../lib/log-events.js';
-import { createLogger } from '../lib/logger.js';
+import { LOG_EVENTS } from '../lib/log-events.ts';
+import { createLogger } from '../lib/logger.ts';
 
 const DEFAULT_LEASE_MS = 30_000;
 const DEFAULT_RENEW_MS = 10_000;

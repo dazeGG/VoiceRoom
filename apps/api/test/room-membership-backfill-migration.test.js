@@ -7,7 +7,7 @@ import { Pool } from 'pg';
 import { runner } from 'node-pg-migrate';
 
 import { createTestDatabase } from './db-harness.js';
-import { runMigrations } from '../src/lib/migrate.js';
+import { runMigrations } from '../src/lib/migrate.ts';
 
 const SILENT = { log() {}, info() {}, warn() {}, error() {} };
 const MIGRATIONS_DIR = path.resolve(import.meta.dirname, '../src/migrations');

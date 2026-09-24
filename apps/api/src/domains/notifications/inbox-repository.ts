@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import type pg from 'pg';
-import { transaction } from '../../lib/db.js';
+import { transaction } from '../../lib/db.ts';
 
 type QueryClient = Pick<pg.PoolClient, 'query'>;
 type Client = QueryClient | null | undefined;

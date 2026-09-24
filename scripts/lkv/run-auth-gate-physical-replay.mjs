@@ -8,8 +8,8 @@ import { parseArgs } from 'node:util';
 const require = createRequire(import.meta.url);
 const { AccessToken, TrackSource } = require('livekit-server-sdk');
 const { createGateCredentialSigner } = require('../../apps/api/src/domains/admission/gate-credential-signer.ts');
-const { createDbPool } = require('../../apps/api/src/lib/db.js');
-const { runMigrations } = require('../../apps/api/src/lib/migrate.js');
+const { createDbPool } = require('../../apps/api/src/lib/db.ts');
+const { runMigrations } = require('../../apps/api/src/lib/migrate.ts');
 const { createRoomStore } = require('../../apps/api/src/lib/room-store.js');
 
 const EXPECTED_NODE_VERSION = 'v24.18.0';

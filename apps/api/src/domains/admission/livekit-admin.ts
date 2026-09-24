@@ -3,7 +3,7 @@
 
 import { RoomServiceClient, TrackSource } from 'livekit-server-sdk';
 import type { Logger } from 'pino';
-import { LOG_EVENTS } from '../../lib/log-events.js';
+import { LOG_EVENTS } from '../../lib/log-events.ts';
 import type { LiveKitConfig } from './livekit-config.ts';
 
 interface ParticipantPermissionLike {

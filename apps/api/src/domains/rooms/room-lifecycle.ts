@@ -3,7 +3,7 @@
 // die with the room, and tearing a deleted room down.
 
 import type { Logger } from 'pino';
-import { LOG_EVENTS } from '../../lib/log-events.js';
+import { LOG_EVENTS } from '../../lib/log-events.ts';
 import type { RoomPresence, RosterPeer } from '../../realtime/room-presence.ts';
 import type { GatePrincipalPeer } from '../admission/gate-principal.ts';
 import { publicLobbyRoom, publicPeer, roomAvatarUrl, type StoredRoom } from './room-views.ts';

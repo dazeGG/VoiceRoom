@@ -2,8 +2,8 @@ import { normalizePeerId, normalizeRoomId, normalizeSessionToken } from '@voice-
 import { normalizeTypingActivity } from '@voice-room/shared/realtime';
 import { buildServerEnvelope, buildServerErrorEnvelope, parseInboundMessage } from './envelope.js';
 import { createTypingThrottle } from './typing-throttle.js';
-import { LOG_EVENTS } from '../lib/log-events.js';
-import { createLogger, hashIp } from '../lib/logger.js';
+import { LOG_EVENTS } from '../lib/log-events.ts';
+import { createLogger, hashIp } from '../lib/logger.ts';
 
 function createWsHandler({
   registry,

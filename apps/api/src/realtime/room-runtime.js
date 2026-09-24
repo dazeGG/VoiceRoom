@@ -11,8 +11,8 @@ import {
 import { buildServerEnvelope, buildServerErrorEnvelope } from './envelope.js';
 import { buildRoomRealtimeSummaryFromLobbyRoom, createSummaryCoalescer } from './summary.js';
 import { createWsTransport } from './peer-transport.js';
-import { LOG_EVENTS } from '../lib/log-events.js';
-import { createLogger } from '../lib/logger.js';
+import { LOG_EVENTS } from '../lib/log-events.ts';
+import { createLogger } from '../lib/logger.ts';
 import { legacyPeerMessageToWs } from './legacy-events.js';
 import { createTypingThrottle } from './typing-throttle.js';
 

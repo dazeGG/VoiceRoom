@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import type pg from 'pg';
-import { transaction } from '../../lib/db.js';
-import { verifyPassword } from '../../lib/password.js';
+import { transaction } from '../../lib/db.ts';
+import { verifyPassword } from '../../lib/password.ts';
 import { ACCOUNT_DELETION_GRACE_MS, DELETED_ACCOUNT_NAME, DELETED_LOGIN_PREFIX, type AccountDeletionPreview } from '@voice-room/shared/account-security';
 
 const UNUSABLE_PASSWORD_HASH = '!';

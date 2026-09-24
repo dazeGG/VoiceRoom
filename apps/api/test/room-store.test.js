@@ -5,7 +5,7 @@ import { Pool } from 'pg';
 
 import { createRoomStore } from '../src/lib/room-store.js';
 import { createUserStore } from '../src/lib/user-store.js';
-import { runMigrations } from '../src/lib/migrate.js';
+import { runMigrations } from '../src/lib/migrate.ts';
 import { createTestDatabase } from './db-harness.js';
 
 async function createMigratedStore(t, options = {}) {

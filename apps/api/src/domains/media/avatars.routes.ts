@@ -6,7 +6,7 @@ import { Type, type TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { normalizeRoomId } from '@voice-room/shared/validation';
 import type { ApiContext } from '../../app/context.ts';
-import { MAX_AVATAR_BYTES } from '../../lib/avatar-processing.js';
+import { MAX_AVATAR_BYTES } from '../../lib/avatar-processing.ts';
 import { failure } from '../../platform/http/http-kit.ts';
 import { ownerRefusal } from '../rooms/rooms.routes.ts';
 import type { RoomsService } from '../rooms/rooms.service.ts';

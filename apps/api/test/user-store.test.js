@@ -4,7 +4,7 @@ import crypto from 'node:crypto';
 
 import { createUserStore, publicUser } from '../src/lib/user-store.js';
 import { AVATAR_COLOR_KEYS } from '@voice-room/shared/validation';
-import { runMigrations } from '../src/lib/migrate.js';
+import { runMigrations } from '../src/lib/migrate.ts';
 import { createTestDatabase } from './db-harness.js';
 
 const SILENT = { log() {}, info() {}, warn() {}, error() {} };

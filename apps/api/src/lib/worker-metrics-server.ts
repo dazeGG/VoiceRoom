@@ -1,7 +1,14 @@
 import http from 'node:http';
-import { renderPrometheus } from './metrics.js';
+import type { AddressInfo } from 'node:net';
+import { renderPrometheus } from './metrics.ts';
 
-function startWorkerMetricsServer({ host = '0.0.0.0', port = 9464, render = renderPrometheus } = {}) {
+export type WorkerMetricsServer = Readonly<{ address: AddressInfo | string | null; close: () => Promise<void> }>;
+
+function startWorkerMetricsServer({ host = '0.0.0.0', port = 9464, render = renderPrometheus }: {
+  host?: string;
+  port?: number;
+  render?: () => string;
+} = {}): Promise<WorkerMetricsServer> {
   const server = http.createServer((request, response) => {
     if (request.method !== 'GET' || request.url !== '/metrics') {
       response.writeHead(404).end();
@@ -14,7 +21,7 @@ function startWorkerMetricsServer({ host = '0.0.0.0', port = 9464, render = rend
     server.once('error', reject);
     server.listen(port, host, () => resolve(Object.freeze({
       address: server.address(),
-      close: () => new Promise((done, fail) => server.close((error) => error ? fail(error) : done()))
+      close: () => new Promise<void>((done, fail) => server.close((error) => error ? fail(error) : done()))
     })));
   });
 }

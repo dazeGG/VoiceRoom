@@ -1,9 +1,9 @@
 import crypto from 'node:crypto';
-import { createDbPool, transaction } from './db.js';
-import { hashPassword, verifyPassword } from './password.js';
+import { createDbPool, transaction } from './db.ts';
+import { hashPassword, verifyPassword } from './password.ts';
 import { AVATAR_COLOR_KEYS, cleanAvatarColorKey, cleanPresenceStatus } from '@voice-room/shared/validation';
-import { LOG_EVENTS } from './log-events.js';
-import { createLogger } from './logger.js';
+import { LOG_EVENTS } from './log-events.ts';
+import { createLogger } from './logger.ts';
 import {
   LOGIN_ALERT_TTL_MS,
   LOGIN_FAMILIARITY_WINDOW_MS,

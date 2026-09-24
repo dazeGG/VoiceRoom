@@ -1,7 +1,12 @@
 import crypto from 'node:crypto';
 import { promisify } from 'node:util';
 
-const scrypt = promisify(crypto.scrypt);
+const scrypt = promisify(crypto.scrypt) as (
+  password: crypto.BinaryLike,
+  salt: crypto.BinaryLike,
+  keylen: number,
+  options: crypto.ScryptOptions
+) => Promise<Buffer>;
 
 // scrypt cost parameters. N must be a power of two; 2^14 keeps per-hash memory
 // (≈ 128 * N * r bytes ≈ 16 MiB) under Node's default 32 MiB scrypt budget.
@@ -14,7 +19,7 @@ const ALGORITHM = 'scrypt';
 
 // Self-describing hash so the parameters travel with the stored value and can be
 // rotated later without a migration: scrypt$N$r$p$saltB64$hashB64
-async function hashPassword(password) {
+async function hashPassword(password: unknown): Promise<string> {
   if (typeof password !== 'string' || !password) {
     throw new Error('Password is required');
   }
@@ -34,30 +39,30 @@ async function hashPassword(password) {
   ].join('$');
 }
 
-async function verifyPassword(password, stored) {
+async function verifyPassword(password: unknown, stored: unknown): Promise<boolean> {
   if (typeof password !== 'string' || typeof stored !== 'string') return false;
 
   const parts = stored.split('$');
   if (parts.length !== 6 || parts[0] !== ALGORITHM) return false;
 
-  const cost = Number.parseInt(parts[1], 10);
-  const blockSize = Number.parseInt(parts[2], 10);
-  const parallelization = Number.parseInt(parts[3], 10);
+  const cost = Number.parseInt(parts[1] as string, 10);
+  const blockSize = Number.parseInt(parts[2] as string, 10);
+  const parallelization = Number.parseInt(parts[3] as string, 10);
   if (!Number.isFinite(cost) || !Number.isFinite(blockSize) || !Number.isFinite(parallelization)) {
     return false;
   }
 
-  let salt;
-  let expected;
+  let salt: Buffer;
+  let expected: Buffer;
   try {
-    salt = Buffer.from(parts[4], 'base64');
-    expected = Buffer.from(parts[5], 'base64');
+    salt = Buffer.from(parts[4] as string, 'base64');
+    expected = Buffer.from(parts[5] as string, 'base64');
   } catch {
     return false;
   }
   if (salt.length === 0 || expected.length === 0) return false;
 
-  let derived;
+  let derived: Buffer;
   try {
     derived = await scrypt(password, salt, expected.length, {
       N: cost,

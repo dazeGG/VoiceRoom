@@ -8,7 +8,7 @@
 import crypto from 'node:crypto';
 import type { Logger } from 'pino';
 import { isReservedPeerId } from '@voice-room/shared/validation';
-import { LOG_EVENTS } from '../../lib/log-events.js';
+import { LOG_EVENTS } from '../../lib/log-events.ts';
 import { avatarColorForPeerId } from '../../lib/room-store.js';
 import { tokensMatch } from '../../platform/crypto/tokens-match.ts';
 import type { LiveRoom, PresencePeer } from '../rooms/room-views.ts';

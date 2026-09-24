@@ -39,7 +39,7 @@ the LiveKit auth gate alike.
 | `ipHash` | a salted, per-process hash — correlates within an incident, reverses to nothing |
 | `err` | a serialized error with `type`, `message` and `stack` |
 
-`evt` codes are declared in `apps/api/src/lib/log-events.js` and nowhere else.
+`evt` codes are declared in `apps/api/src/lib/log-events.ts` and nowhere else.
 **Codes are never renamed once shipped** — a rename silently breaks every alert
 and dashboard built on it. Add a new code instead.
 
@@ -152,7 +152,7 @@ Accounts come from the session cookie — a page cannot claim an identity.
 
 ## Adding a log line
 
-1. Add the code to `apps/api/src/lib/log-events.js`.
+1. Add the code to `apps/api/src/lib/log-events.ts`.
 2. Log the identifiers, not prose: `{ evt, roomId, userId, code, err }`, with a
    short lowercase `msg`. The fields are what gets queried.
 3. Pick the level from the table above. A retry is `warn`; exhausting the

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
-import { readMessageDeliveryMode } from '../src/lib/config.js';
+import { readMessageDeliveryMode } from '../src/lib/config.ts';
 import { createReadinessReport } from '../src/platform/readiness.ts';
 
 test('G40-A01 delivery cutover is reversible and rejects duplicate-producing overlap', () => {

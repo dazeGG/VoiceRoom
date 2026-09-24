@@ -8,7 +8,7 @@ import { createPinService } from '../src/domains/messaging/pin-service.ts';
 import { registerPinRoutes } from '../src/domains/messaging/pin-routes.ts';
 import { createRoomStore } from '../src/lib/room-store.js';
 import { createUserStore } from '../src/lib/user-store.js';
-import { runMigrations } from '../src/lib/migrate.js';
+import { runMigrations } from '../src/lib/migrate.ts';
 import { createTestDatabase } from './db-harness.js';
 
 const SILENT = { log() {}, info() {}, warn() {}, error() {} };

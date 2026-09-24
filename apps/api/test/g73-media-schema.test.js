@@ -6,7 +6,7 @@ import { Pool } from 'pg';
 import path from 'node:path';
 import { runner } from 'node-pg-migrate';
 import test from 'node:test';
-import { runMigrations } from '../src/lib/migrate.js';
+import { runMigrations } from '../src/lib/migrate.ts';
 import { createAttachmentRepository } from '../src/domains/media/attachment-repository.ts';
 import { createTestDatabase } from './db-harness.js';
 const SILENT = { log() {}, info() {}, warn() {}, error() {} };
