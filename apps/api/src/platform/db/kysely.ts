@@ -3,7 +3,7 @@
 // SQL and Kysely share the same pool and therefore the same connection limits.
 //
 // `DB` is generated from a migrated database with `npm run db:types`, and
-// test/db-schema-types.test.js fails when it no longer matches the migrations.
+// test/db-schema-types.test.ts fails when it no longer matches the migrations.
 
 import { Kysely, PostgresDialect, type Transaction } from 'kysely';
 import type { Pool } from 'pg';

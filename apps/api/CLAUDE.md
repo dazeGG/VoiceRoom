@@ -6,5 +6,5 @@
 - Add or update tests under `test/` for every behavior change.
 - Verify with `npm --workspace @voice-room/api run check` and `npm --workspace @voice-room/api run test` with `TEST_DATABASE_URL` configured.
 - Schema changes require forward migration, rollback coverage, and release-plan notes when compatibility is affected.
-- After a schema change, regenerate the Kysely types with `DATABASE_URL=<migrated db> npm --workspace @voice-room/api run db:types`; `test/db-schema-types.test.js` fails while `src/platform/db/schema.ts` is stale (keep it LF, exactly as generated).
+- After a schema change, regenerate the Kysely types with `DATABASE_URL=<migrated db> npm --workspace @voice-room/api run db:types`; `test/db-schema-types.test.ts` fails while `src/platform/db/schema.ts` is stale (keep it LF, exactly as generated).
 - Follow `../../docs/GIT_FLOW.md` for all commits, branches, pull requests, hotfixes, and releases.

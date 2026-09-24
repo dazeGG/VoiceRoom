@@ -93,11 +93,11 @@ const SERVER_INTERNAL_COVERAGE_SCRIPT = String.raw`
     await sandbox.done;
   }
   // LiveKit admission moved to domains/admission (admission.service.ts); its
-  // branches are covered by apps/api/test/admission-service.test.js.
+  // branches are covered by apps/api/test/admission-service.test.ts.
   // Room moderation (kick, server mute, ban) and peer eviction moved to
-  // domains/rooms; apps/api/test/rooms-domain.test.js covers them.
-  // attachPresence moved to realtime/room-presence.ts (apps/api/test/room-presence.test.js).
-  // getLiveKitConnectSources moved to platform/http/security-headers.ts (apps/api/test/http-platform.test.js).
+  // domains/rooms; apps/api/test/rooms-domain.test.ts covers them.
+  // attachPresence moved to realtime/room-presence.ts (apps/api/test/room-presence.test.ts).
+  // getLiveKitConnectSources moved to platform/http/security-headers.ts (apps/api/test/http-platform.test.ts).
   })().catch((error) => { console.error(error); process.exitCode = 1; });
 `;
 
