@@ -25,7 +25,7 @@ services:
       context: .
       target: api
     working_dir: /app
-    command: ["node", "apps/api/src/domains/admission/livekit-auth-gate-service.js"]
+    command: ["node", "apps/api/src/domains/admission/livekit-auth-gate-service.ts"]
     environment:
       LIVEKIT_GATE_SECRET: "dev-g05-livekit-gate-secret-32-bytes-minimum"
       LIVEKIT_INTERNAL_URL: "ws://livekit:7880"

@@ -123,7 +123,7 @@ services:
     build:
       context: .
       target: deps
-    command: ["node", "apps/api/src/domains/admission/livekit-auth-gate-service.js"]
+    command: ["node", "apps/api/src/domains/admission/livekit-auth-gate-service.ts"]
     working_dir: /app
     depends_on:
       deps:
