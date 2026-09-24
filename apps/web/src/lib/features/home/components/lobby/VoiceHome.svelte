@@ -141,8 +141,14 @@
 
   <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:16px;margin:24px 0 18px;">
     <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;">
-      <form class="lv-join" onsubmit={submitJoinCode} aria-describedby="roomAutoSaveHint">
-        <input class="lv-join-input" placeholder="Код или ссылка" bind:value={joinCode} />
+      <form class="lv-join" onsubmit={submitJoinCode}>
+        <input
+          class="lv-join-input"
+          placeholder="Код или ссылка"
+          aria-label="Код или ссылка на комнату"
+          aria-describedby="roomAutoSaveHint"
+          bind:value={joinCode}
+        />
         <span
           class="lv-join-hint"
           title="Постоянные комнаты сохраняются автоматически"

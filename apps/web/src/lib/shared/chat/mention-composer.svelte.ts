@@ -37,9 +37,11 @@ export function createMentionComposer() {
     if (!member || anchorStart < 0 || selected.length >= MAX_MENTIONS_PER_MESSAGE) return null;
     const replacement = `${mentionToken(member)} `;
     const next = text.slice(0, anchorStart) + replacement + text.slice(caret);
+    // Computed before close(), which resets the anchor.
+    const nextCaret = anchorStart + replacement.length;
     if (!selected.some((item) => item.userId === member.userId)) selected = [...selected, member];
     close();
-    return { text: next, caret: anchorStart + replacement.length };
+    return { text: next, caret: nextCaret };
   }
 
   function remove(userId: string): void { selected = selected.filter((item) => item.userId !== userId); }
