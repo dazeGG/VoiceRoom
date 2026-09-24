@@ -79,11 +79,11 @@ function readTopologyEvidence() {
   const lkv = fs.readFileSync('docker-compose.lkv.yml', 'utf8');
   const caddy = fs.readFileSync('Caddyfile', 'utf8');
   const config = JSON.parse(fs.readFileSync('config/livekit/external-auth-gate.v1.json', 'utf8'));
-  const productionGateCommandOk = /command:\s*\["node",\s*"apps\/api\/src\/domains\/admission\/livekit-auth-gate-service\.js"\]/.test(compose);
+  const productionGateCommandOk = /command:\s*\["node",\s*"apps\/api\/src\/domains\/admission\/livekit-auth-gate-service\.ts"\]/.test(compose);
   const internalLiveKitDefaultOk = /LIVEKIT_URL:\s*\$\{LIVEKIT_URL:-ws:\/\/livekit:7880\}/.test(compose);
   const caddyTargetsGate = /reverse_proxy\s+livekit-gate:3080/.test(caddy) && !/reverse_proxy\s+livekit:7880/.test(caddy);
   const noProductionHostBind7880 = !/"7880:7880"/.test(compose);
-  const lkvRunnable = /postgres:/.test(lkv) && /target:\s*api/.test(lkv) && /apps\/api\/src\/domains\/admission\/livekit-auth-gate-service\.js/.test(lkv);
+  const lkvRunnable = /postgres:/.test(lkv) && /target:\s*api/.test(lkv) && /apps\/api\/src\/domains\/admission\/livekit-auth-gate-service\.ts/.test(lkv);
   return {
     caddyTargetsGate,
     config,
