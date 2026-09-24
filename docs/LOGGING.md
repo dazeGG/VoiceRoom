@@ -160,6 +160,6 @@ Accounts come from the session cookie — a page cannot claim an identity.
 4. Never log credentials, message content, or a raw client address.
 
 On the browser side use `createLogger('<namespace>')` from `$lib/shared/log`.
-Direct `console.*` calls are rejected by `apps/web/test/client-logging.test.js`:
+Direct `console.*` calls are rejected by `apps/web/test/client-logging.test.ts`:
 they reach no buffer, so they are missing from the report that gets sent when a
 call fails.
