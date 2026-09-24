@@ -71,7 +71,7 @@ import { createMediaQuotaRepository } from '../domains/media/media-quota-reposit
 import { createMediaQuotaService } from '../domains/media/media-quota-service.ts';
 import { createMediaService } from '../domains/media/media-service.ts';
 import { createMediaVisibilityService } from '../domains/media/media-visibility-service.ts';
-import { createCursorCodec } from '../platform/cursor-codec.js';
+import { createCursorCodec } from '../platform/cursor-codec.ts';
 
 export function resolveCursorHmacKeys({ context, env = process.env, fallbackGateSecret = '' } = {}) {
   const configured = env.VOICE_ROOM_CURSOR_HMAC_KEYS

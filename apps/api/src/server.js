@@ -102,8 +102,8 @@ import { registerNotificationRoutes } from './domains/notifications/notification
 import { registerModerationRoutes } from './domains/moderation/moderation-routes.ts';
 import { MAX_UPLOAD_BYTES } from './domains/media/media-service.ts';
 import { registerMediaRoutes } from './domains/media/media-routes.ts';
-import { createRuntimeReadinessProvider } from './platform/runtime-readiness.js';
-import { registerCapabilityRoutes } from './platform/capability-routes.js';
+import { createRuntimeReadinessProvider } from './platform/runtime-readiness.ts';
+import { registerCapabilityRoutes } from './platform/capability-routes.ts';
 import { mentionUserIdsFromContent } from '@voice-room/shared/mentions';
 
 const {

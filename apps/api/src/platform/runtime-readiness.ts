@@ -1,13 +1,14 @@
+import type pg from 'pg';
 import { PUBLIC_CAPABILITY_KEYS } from '@voice-room/shared/capabilities';
-import { createReadinessReport, resolveManifestPath } from './readiness.js';
-import { createRuntimeReadinessRepository } from './runtime-readiness-repository.js';
+import { createReadinessReport, resolveManifestPath, type ReadinessOptions, type ReadinessReport, type ReplicaInput } from './readiness.ts';
+import { createRuntimeReadinessRepository, type RuntimeReadinessRepository } from './runtime-readiness-repository.ts';
 
-function asSet(value) {
-  if (value instanceof Set) return new Set(value);
+function asSet(value: unknown): Set<string> {
+  if (value instanceof Set) return new Set(value as Set<string>);
   return new Set(Array.isArray(value) ? value : []);
 }
 
-function failClosedSnapshot(manifestPath, options) {
+function failClosedSnapshot(manifestPath: string, options: ReadinessOptions): ReadinessReport {
   return createReadinessReport(manifestPath, {
     ...options,
     workerReady: [],
@@ -24,9 +25,18 @@ function createRuntimeReadinessProvider({
   heartbeatMaxAgeMs = 15_000,
   manifestPath,
   runtimeId
+}: {
+  expectedApiReplicaIds?: unknown;
+  getClient?: () => Pick<pg.Pool, 'query'> | null | undefined;
+  getReadinessOptions?: () => ReadinessOptions;
+  heartbeatIntervalMs?: number;
+  heartbeatMaxAgeMs?: number;
+  manifestPath?: string;
+  runtimeId?: unknown;
 } = {}) {
   if (typeof getClient !== 'function') throw new TypeError('Runtime readiness requires a client provider');
   if (typeof runtimeId !== 'string' || !runtimeId.trim()) throw new TypeError('Runtime readiness id is required');
+  const clientProvider = getClient;
   const resolvedManifestPath = resolveManifestPath(manifestPath);
   const id = runtimeId.trim();
   const expectedIds = new Set(
@@ -35,16 +45,16 @@ function createRuntimeReadinessProvider({
       : [id]
   );
   let snapshot = failClosedSnapshot(resolvedManifestPath, getReadinessOptions());
-  let timer = null;
-  let refreshing = null;
-  let repository = null;
+  let timer: ReturnType<typeof setInterval> | null = null;
+  let refreshing: Promise<ReadinessReport> | null = null;
+  let repository: RuntimeReadinessRepository | null = null;
 
-  async function refresh() {
+  async function refresh(): Promise<ReadinessReport> {
     if (refreshing) return refreshing;
     refreshing = (async () => {
       const baseOptions = getReadinessOptions();
       try {
-        const client = getClient();
+        const client = clientProvider();
         if (!client?.query) throw new Error('Runtime readiness database is unavailable');
         repository ||= createRuntimeReadinessRepository({ client });
         const workers = await repository.listFresh('worker', { maxAgeMs: heartbeatMaxAgeMs });
@@ -67,7 +77,7 @@ function createRuntimeReadinessProvider({
         const apiRows = await repository.listFresh('api', { maxAgeMs: heartbeatMaxAgeMs });
         const present = new Set(apiRows.map((row) => row.id));
         const missing = [...expectedIds].filter((expectedId) => !present.has(expectedId));
-        const replicas = apiRows.map((row) => ({
+        const replicas: ReplicaInput[] = apiRows.map((row) => ({
           id: row.id,
           manifestDigest: row.manifestDigest,
           manifestSchemaVersion: row.manifestSchemaVersion,
@@ -91,7 +101,7 @@ function createRuntimeReadinessProvider({
     return refreshing;
   }
 
-  async function start() {
+  async function start(): Promise<ReadinessReport> {
     await refresh();
     if (!timer) {
       timer = setInterval(() => { void refresh(); }, heartbeatIntervalMs);
@@ -100,11 +110,11 @@ function createRuntimeReadinessProvider({
     return snapshot;
   }
 
-  async function stop() {
+  async function stop(): Promise<void> {
     if (timer) clearInterval(timer);
     timer = null;
     try {
-      const client = getClient();
+      const client = clientProvider();
       if (client?.query) {
         repository ||= createRuntimeReadinessRepository({ client });
         await repository.remove('api', id);
@@ -115,12 +125,14 @@ function createRuntimeReadinessProvider({
   }
 
   return Object.freeze({
-    getSnapshot: () => snapshot,
+    getSnapshot: (): ReadinessReport => snapshot,
     manifestPath: resolvedManifestPath,
     refresh,
     start,
     stop
   });
 }
+
+export type RuntimeReadinessProvider = ReturnType<typeof createRuntimeReadinessProvider>;
 
 export { createRuntimeReadinessProvider };

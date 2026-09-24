@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { readMessageDeliveryMode } from '../src/lib/config.js';
-import { createReadinessReport } from '../src/platform/readiness.js';
+import { createReadinessReport } from '../src/platform/readiness.ts';
 
 test('G40-A01 delivery cutover is reversible and rejects duplicate-producing overlap', () => {
   assert.deepEqual(readMessageDeliveryMode({}), { claimEnabled: false, directEmitEnabled: true });

@@ -1,5 +1,5 @@
 import { startWorkerMetricsServer } from '../lib/worker-metrics-server.js';
-import { startWorkerHeartbeat } from '../platform/worker-heartbeat.js';
+import { startWorkerHeartbeat } from '../platform/worker-heartbeat.ts';
 import { LOG_EVENTS } from '../lib/log-events.js';
 import { createLogger } from '../lib/logger.js';
 import { main as mediaMaintenanceMain } from './media-maintenance.js';

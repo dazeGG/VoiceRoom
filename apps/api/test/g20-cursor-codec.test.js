@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { createCursorCodec, CursorCodecError } from '../src/platform/cursor-codec.js';
+import { createCursorCodec, CursorCodecError } from '../src/platform/cursor-codec.ts';
 
 test('G20-A01 preserves exact microsecond tuples and accepts the previous rotation key', () => {
   const current = 'c'.repeat(32); const previous = 'p'.repeat(32); const now = 1000;

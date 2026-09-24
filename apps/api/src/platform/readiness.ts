@@ -5,7 +5,11 @@ import {
   normalizeManifest,
   PUBLIC_CAPABILITY_KEYS,
   OPERATOR_KEYS,
-  toSet
+  toSet,
+  type CapabilityManifest,
+  type CapabilityPublicNode,
+  type CapabilityInternalNode,
+  type CapabilityOperatorNode
 } from '@voice-room/shared/capabilities';
 
 const DEFAULT_MANIFEST_PATH = 'config/capability-dag.v1.json';
@@ -13,7 +17,62 @@ const DEFAULT_MANIFEST_PATH = 'config/capability-dag.v1.json';
 const REPLICA_UNKNOWN_LABEL = 'unknown';
 const REPLICA_AGREE_LABEL = 'agree';
 
-function resolveManifestPath(manifestPath) {
+type ReadinessCategory = 'binary' | 'schema' | 'index' | 'config' | 'api' | 'web' | 'visibility' | 'worker' | 'internal';
+type ReadinessSets = Partial<Record<ReadinessCategory, Set<string>>> & { desired?: Record<string, boolean> };
+
+export type ReplicaInput = {
+  id?: unknown;
+  manifestDigest?: unknown;
+  manifestSchemaVersion?: unknown;
+  contractVersion?: unknown;
+  checks?: unknown;
+  publicCaps?: unknown;
+  public?: unknown;
+  features?: unknown;
+  ready?: unknown;
+};
+
+type NormalizedReplica = {
+  id: string;
+  manifestDigest: string | null;
+  manifestSchemaVersion: number | null;
+  contractVersion: string | null;
+  checks: Set<string>;
+  public: Set<string> | Map<unknown, unknown>;
+  ready?: boolean | null;
+};
+
+export type ReadinessOptions = {
+  binaryReady?: unknown;
+  schemaReady?: unknown;
+  indexReady?: unknown;
+  configReady?: unknown;
+  apiReady?: unknown;
+  webReady?: unknown;
+  visibilityReady?: unknown;
+  workerReady?: unknown;
+  internalReady?: unknown;
+  desired?: Record<string, unknown>;
+  operatorFlags?: Record<string, unknown>;
+  replicas?: ReplicaInput[];
+  requireReplicaConsensus?: boolean;
+};
+
+export type ReplicaResult = { id: string; signature: string; ready: boolean; stale: boolean; features: Record<string, boolean> };
+
+export type ReadinessManifest = { contractVersion: string; schemaVersion: number; path: string; digest: string };
+
+export type ReadinessReport = {
+  manifest: ReadinessManifest;
+  features: Record<string, boolean>;
+  rawManifest: string;
+  operatorFlags: Record<string, boolean | 'normal' | 'rescue'>;
+  signature: string;
+  replicaConsensus: boolean;
+  replica: { disagreeing: string[]; replicas: ReplicaResult[]; reason: string };
+};
+
+function resolveManifestPath(manifestPath?: unknown): string {
   const requested = typeof manifestPath === 'string' && manifestPath.trim()
     ? manifestPath.trim()
     : DEFAULT_MANIFEST_PATH;
@@ -23,19 +82,19 @@ function resolveManifestPath(manifestPath) {
   return path.resolve(import.meta.dirname, '../../../..', requested);
 }
 
-function sha256Hex(text) {
+function sha256Hex(text: unknown): string {
   return crypto.createHash('sha256').update(typeof text === 'string' ? text : String(text)).digest('hex');
 }
 
-function readManifestText(path) {
-  return readFileSync(resolveManifestPath(path), 'utf8');
+function readManifestText(manifestPath?: unknown): string {
+  return readFileSync(resolveManifestPath(manifestPath), 'utf8');
 }
 
-function asSet(value) {
-  if (value instanceof Set) return value;
-  if (Array.isArray(value)) return new Set(value.filter((entry) => typeof entry === 'string' && entry.trim()));
+function asSet(value: unknown): Set<string> {
+  if (value instanceof Set) return value as Set<string>;
+  if (Array.isArray(value)) return new Set(value.filter((entry): entry is string => typeof entry === 'string' && Boolean(entry.trim())));
   if (value && typeof value === 'object') {
-    const set = new Set();
+    const set = new Set<string>();
     for (const [key, enabled] of Object.entries(value)) {
       if (Boolean(enabled) && typeof key === 'string' && key.trim()) set.add(key);
     }
@@ -44,7 +103,7 @@ function asSet(value) {
   return new Set();
 }
 
-function normalizeReplicaInput(replica = {}) {
+function normalizeReplicaInput(replica: ReplicaInput = {}): NormalizedReplica {
   const checks = asSet(replica.checks);
   const publicCapsRaw = replica.publicCaps ?? replica.public ?? replica.features ?? {};
   const publicCaps = publicCapsRaw instanceof Map
@@ -54,7 +113,7 @@ function normalizeReplicaInput(replica = {}) {
     id: typeof replica.id === 'string' && replica.id.trim() ? replica.id.trim() : REPLICA_UNKNOWN_LABEL,
     manifestDigest: typeof replica.manifestDigest === 'string' ? replica.manifestDigest.trim() : null,
     manifestSchemaVersion:
-      Number.isFinite(replica.manifestSchemaVersion) ? Math.trunc(replica.manifestSchemaVersion) : null,
+      Number.isFinite(replica.manifestSchemaVersion) ? Math.trunc(replica.manifestSchemaVersion as number) : null,
     contractVersion: typeof replica.contractVersion === 'string' ? replica.contractVersion.trim() : null,
     checks,
     public: publicCaps,
@@ -62,8 +121,8 @@ function normalizeReplicaInput(replica = {}) {
   };
 }
 
-function buildNodeMap(manifest) {
-  const map = new Map();
+function buildNodeMap(manifest: CapabilityManifest): Map<string, CapabilityPublicNode> {
+  const map = new Map<string, CapabilityPublicNode>();
   for (const node of manifest.publicKeys ?? []) {
     if (!node?.key) continue;
     map.set(node.key, node);
@@ -71,8 +130,8 @@ function buildNodeMap(manifest) {
   return map;
 }
 
-function normalizeInternalMap(manifest) {
-  const map = new Map();
+function normalizeInternalMap(manifest: CapabilityManifest): Map<string, CapabilityInternalNode> {
+  const map = new Map<string, CapabilityInternalNode>();
   for (const node of manifest.internalPrerequisites ?? []) {
     if (!node?.key) continue;
     map.set(node.key, node);
@@ -80,8 +139,8 @@ function normalizeInternalMap(manifest) {
   return map;
 }
 
-function normalizeOperatorMap(manifest) {
-  const map = new Map();
+function normalizeOperatorMap(manifest: CapabilityManifest): Map<string, CapabilityOperatorNode> {
+  const map = new Map<string, CapabilityOperatorNode>();
   for (const node of manifest.operatorFlags ?? []) {
     if (!node?.key) continue;
     map.set(node.key, node);
@@ -89,8 +148,9 @@ function normalizeOperatorMap(manifest) {
   return map;
 }
 
-function allCategoryReady(node, category, readinessSets) {
-  const required = Array.isArray(node?.requires?.[category]) ? node.requires[category] : [];
+function allCategoryReady(node: CapabilityPublicNode | undefined, category: ReadinessCategory, readinessSets: ReadinessSets): boolean {
+  const requirements = node?.requires?.[category];
+  const required: unknown[] = Array.isArray(requirements) ? requirements : [];
   const readySet = readinessSets[category];
   if (!readySet) return false;
   for (const token of required) {
@@ -100,13 +160,18 @@ function allCategoryReady(node, category, readinessSets) {
   return true;
 }
 
-function evaluatePublicNode(manifest, nodeByKey, internalReady, options) {
-  const memo = new Map();
-  const inStack = new Set();
-  const cycle = new Set();
+function evaluatePublicNode(
+  _manifest: CapabilityManifest,
+  nodeByKey: Map<string, CapabilityPublicNode>,
+  internalReady: Set<string>,
+  options: ReadinessSets
+): { readiness: Map<string, boolean>; cycle: Set<string> } {
+  const memo = new Map<string, boolean>();
+  const inStack = new Set<string>();
+  const cycle = new Set<string>();
 
-  const evaluate = (key) => {
-    if (memo.has(key)) return memo.get(key);
+  const evaluate = (key: string): boolean => {
+    if (memo.has(key)) return memo.get(key) as boolean;
 
     const node = nodeByKey.get(key);
     if (!node) {
@@ -139,7 +204,7 @@ function evaluatePublicNode(manifest, nodeByKey, internalReady, options) {
       }
     }
 
-    const categoryChecks = [
+    const categoryChecks: [ReadinessCategory, boolean][] = [
       ['binary', allCategoryReady(node, 'binary', options)],
       ['schema', allCategoryReady(node, 'schema', options)],
       ['index', allCategoryReady(node, 'index', options)],
@@ -169,8 +234,14 @@ function evaluatePublicNode(manifest, nodeByKey, internalReady, options) {
   return { readiness: memo, cycle: new Set([...memo].filter(([, value]) => value === false).length > 0 ? cycle : []) };
 }
 
-function replicaVectorFor(manifestDigest, manifestSchemaVersion, contractVersion, localFeatures, replica) {
-  const checks = [];
+function replicaVectorFor(
+  manifestDigest: string,
+  manifestSchemaVersion: number,
+  contractVersion: string | null,
+  localFeatures: Record<string, boolean>,
+  replica: { public?: Set<string> | Map<unknown, unknown> } | null | undefined
+): string {
+  const checks: string[] = [];
   checks.push(`digest=${manifestDigest}`);
   checks.push(`schema=${manifestSchemaVersion}`);
   checks.push(`contract=${contractVersion}`);
@@ -190,14 +261,19 @@ function replicaVectorFor(manifestDigest, manifestSchemaVersion, contractVersion
   return sha256Hex(checksOrdered.join('\n'));
 }
 
-function compareReplicas(manifest, localReport, replicas, { required = false } = {}) {
+function compareReplicas(
+  manifest: { contractVersion: string; schemaVersion: number },
+  localReport: { manifest: ReadinessManifest; signature: string; features: Record<string, boolean>; snapshotChecks?: unknown },
+  replicas: ReplicaInput[] | undefined,
+  { required = false }: { required?: boolean } = {}
+): { consensus: boolean; disagreeing: string[]; replicas: ReplicaResult[] } {
   const normalizedReplicas = Array.isArray(replicas) && replicas.length ? replicas : [];
   const localFeatures = localReport.features;
   const localVector = localReport.signature;
   const localDigest = localReport.manifest?.digest || '';
 
-  const replicaResults = [];
-  const disagreeing = new Set();
+  const replicaResults: ReplicaResult[] = [];
+  const disagreeing = new Set<string>();
 
   if (required && normalizedReplicas.length === 0) {
     return {
@@ -209,7 +285,7 @@ function compareReplicas(manifest, localReport, replicas, { required = false } =
 
   for (let index = 0; index < Math.max(1, normalizedReplicas.length); index += 1) {
     const raw = normalizedReplicas[index] || {};
-    const replica = index === 0 && normalizedReplicas.length === 0 ? {
+    const replica: NormalizedReplica = index === 0 && normalizedReplicas.length === 0 ? {
       id: 'api-primary',
       manifestDigest: localDigest,
       manifestSchemaVersion: manifest.schemaVersion || 1,
@@ -227,7 +303,7 @@ function compareReplicas(manifest, localReport, replicas, { required = false } =
     );
 
     const replicaKnownReady = localFeatures;
-    const perKey = {};
+    const perKey: Record<string, boolean> = {};
     let replicaReady = true;
     let stale = false;
 
@@ -265,7 +341,7 @@ function compareReplicas(manifest, localReport, replicas, { required = false } =
   };
 }
 
-function evaluateRawManifest(rawManifest) {
+function evaluateRawManifest(rawManifest: string) {
   const manifest = normalizeManifest(JSON.parse(rawManifest));
   if (!manifest) return null;
   return {
@@ -277,7 +353,7 @@ function evaluateRawManifest(rawManifest) {
 
 }
 
-function evaluateFromOptions(manifestPath, options = {}) {
+function evaluateFromOptions(manifestPath: unknown, options: ReadinessOptions = {}) {
   const rawManifest = readManifestText(manifestPath);
   const parsed = evaluateRawManifest(rawManifest);
   if (!parsed) return null;
@@ -300,12 +376,12 @@ function evaluateFromOptions(manifestPath, options = {}) {
     internal: asSet(options.internalReady)
   };
 
-  const desired = {};
+  const desired: Record<string, boolean> = {};
   for (const key of PUBLIC_CAPABILITY_KEYS) {
     desired[key] = options?.desired?.[key] === true;
   }
 
-  const knownInternalRequired = new Set();
+  const knownInternalRequired = new Set<string>();
   for (const node of manifest.publicKeys || []) {
     for (const required of node.requires?.internal || []) {
       knownInternalRequired.add(required);
@@ -326,18 +402,15 @@ function evaluateFromOptions(manifestPath, options = {}) {
 
   const { readiness: nodeReadyMap } = evaluatePublicNode(manifest, nodeByKey, internalReady, { ...readinessInputs, desired });
 
-  const localFeatures = {};
+  const localFeatures: Record<string, boolean> = {};
   for (const key of PUBLIC_CAPABILITY_KEYS) {
     localFeatures[key] = Boolean(nodeReadyMap.get(key));
   }
   const signature = replicaVectorFor(manifestDigest, manifest.schemaVersion, manifest.contractVersion, localFeatures, {
-    public: new Set(PUBLIC_CAPABILITY_KEYS.filter((key) => localFeatures[key])),
-    manifestDigest,
-    manifestSchemaVersion: manifest.schemaVersion,
-    contractVersion: manifest.contractVersion
+    public: new Set(PUBLIC_CAPABILITY_KEYS.filter((key) => localFeatures[key]))
   });
 
-  const operatorFlags = {};
+  const operatorFlags: Record<string, boolean | 'normal' | 'rescue'> = {};
   for (const key of OPERATOR_KEYS) {
     const node = operatorNodes.get(key);
     if (!node) continue;
@@ -365,7 +438,7 @@ function evaluateFromOptions(manifestPath, options = {}) {
   return { ...local, rawManifest };
 }
 
-function createReadinessReport(manifestPath, options = {}) {
+function createReadinessReport(manifestPath?: unknown, options: ReadinessOptions = {}): ReadinessReport {
   const evaluated = evaluateFromOptions(manifestPath, options);
   if (!evaluated) {
     throw new Error('Invalid capability manifest');
@@ -382,7 +455,7 @@ function createReadinessReport(manifestPath, options = {}) {
     { required: options.requireReplicaConsensus === true }
   );
 
-  const effective = consensus.consensus
+  const effective: Record<string, boolean> = consensus.consensus
     ? { ...evaluated.features }
     : Object.fromEntries(PUBLIC_CAPABILITY_KEYS.map((key) => [key, false]));
 
@@ -401,7 +474,7 @@ function createReadinessReport(manifestPath, options = {}) {
   };
 }
 
-function createReadinessProvider(options = {}) {
+function createReadinessProvider(options: { manifestPath?: unknown; getReadinessOptions?: () => ReadinessOptions } = {}) {
   const manifestPath = resolveManifestPath(options.manifestPath);
   const optionsProvider = typeof options.getReadinessOptions === 'function'
     ? options.getReadinessOptions
