@@ -1,10 +1,12 @@
 import crypto from 'node:crypto';
 
-function createTransportId() {
+export type WsTransport = { id: string; kind: 'ws'; send: (payload: unknown) => unknown; close(): void };
+
+function createTransportId(): string {
   return crypto.randomBytes(16).toString('hex');
 }
 
-function createWsTransport(send) {
+function createWsTransport(send: (payload: unknown) => unknown): WsTransport {
   const id = createTransportId();
   return {
     id,

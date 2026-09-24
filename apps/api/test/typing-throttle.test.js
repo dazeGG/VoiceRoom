@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createTypingThrottle } from '../src/realtime/typing-throttle.js';
+import { createTypingThrottle } from '../src/realtime/typing-throttle.ts';
 
 function createClock() {
   let time = 0;

@@ -1,6 +1,9 @@
-import { buildServerEnvelope } from './envelope.js';
+import { buildServerEnvelope } from './envelope.ts';
+import type { ServerEnvelope } from '@voice-room/shared/realtime';
 
-function toWsAccountEvent(message) {
+type AccountEvent = { type?: unknown; [key: string]: any };
+
+function toWsAccountEvent(message: AccountEvent | null | undefined): ServerEnvelope | null {
   if (!message || typeof message.type !== 'string') return null;
 
   switch (message.type) {

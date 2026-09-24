@@ -1,14 +1,15 @@
 import { buildRoomRealtimeSummary } from '@voice-room/shared/realtime';
+import type { RoomRealtimeSummary } from '@voice-room/shared/realtime';
 
-function buildRoomRealtimeSummaryFromLobbyRoom(room, peers, resolveAvatarColorKey) {
+function buildRoomRealtimeSummaryFromLobbyRoom(room: Parameters<typeof buildRoomRealtimeSummary>[0], peers: unknown, resolveAvatarColorKey?: unknown): RoomRealtimeSummary {
   const peerList = Array.isArray(peers) ? peers : [];
   return buildRoomRealtimeSummary(room, peerList, resolveAvatarColorKey);
 }
 
-function createSummaryCoalescer({ delayMs, flush }) {
-  const pending = new Map();
+function createSummaryCoalescer({ delayMs, flush }: { delayMs: number; flush: (roomId: string) => void }) {
+  const pending = new Map<string, ReturnType<typeof setTimeout>>();
 
-  function schedule(roomId) {
+  function schedule(roomId: string): void {
     if (pending.has(roomId)) return;
     const timer = setTimeout(() => {
       pending.delete(roomId);
@@ -18,14 +19,14 @@ function createSummaryCoalescer({ delayMs, flush }) {
     pending.set(roomId, timer);
   }
 
-  function cancel(roomId) {
+  function cancel(roomId: string): void {
     const timer = pending.get(roomId);
     if (!timer) return;
     clearTimeout(timer);
     pending.delete(roomId);
   }
 
-  function clear() {
+  function clear(): void {
     for (const timer of pending.values()) clearTimeout(timer);
     pending.clear();
   }

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { clearViewedScreenPeerReferences, createRoomRealtimeRuntime, resolveViewedScreenPeerId } from '../src/realtime/room-runtime.js';
+import { clearViewedScreenPeerReferences, createRoomRealtimeRuntime, resolveViewedScreenPeerId } from '../src/realtime/room-runtime.ts';
 
 const ROOM_ID = 'room1';
 const OWNER_ID = 'peer-owner1';

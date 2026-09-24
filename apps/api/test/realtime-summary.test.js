@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildRoomRealtimeSummaryFromLobbyRoom } from '../src/realtime/summary.js';
-import { createRoomRealtimeRuntime } from '../src/realtime/room-runtime.js';
+import { buildRoomRealtimeSummaryFromLobbyRoom } from '../src/realtime/summary.ts';
+import { createRoomRealtimeRuntime } from '../src/realtime/room-runtime.ts';
 
 test('buildRoomRealtimeSummaryFromLobbyRoom mirrors shared summary rules', () => {
   const peers = Array.from({ length: 6 }, (_, index) => ({

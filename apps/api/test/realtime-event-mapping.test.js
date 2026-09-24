@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { toWsAccountEvent } from '../src/realtime/account-events.js';
-import { legacyPeerMessageToWs } from '../src/realtime/legacy-events.js';
+import { toWsAccountEvent } from '../src/realtime/account-events.ts';
+import { legacyPeerMessageToWs } from '../src/realtime/legacy-events.ts';
 
 test('account realtime maps DM delete events to the public websocket contract', () => {
   const event = toWsAccountEvent({
