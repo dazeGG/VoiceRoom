@@ -24,7 +24,8 @@ export interface ReconnectRuntime {
 
 export interface PeerEvictionDeps {
   store(): EvictionStore;
-  runtime(): ReconnectRuntime;
+  /** Null until createApiApp builds the realtime runtime. */
+  runtime(): ReconnectRuntime | null;
   notifyPeer(peer: PresencePeer, event: Record<string, unknown>): void;
   notifyUser(userId: string, event: Record<string, unknown>): void;
   /** Drops the voice seat any socket of this peer still holds in the room. */
@@ -103,7 +104,7 @@ export function createPeerEviction(deps: PeerEvictionDeps) {
       prerequisite ||= Promise.resolve().then(beforeFinalize);
       prerequisiteResult = await prerequisite;
     };
-    await deps.runtime().finalizeReconnectPeers({
+    await deps.runtime()!.finalizeReconnectPeers({
       roomId: room.id,
       peerIds: peers.map((peer) => peer.id),
       reason: type,

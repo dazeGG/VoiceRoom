@@ -7,6 +7,7 @@ import type { Logger } from 'pino';
 import { createAvatarKey, processAvatar } from '../../lib/avatar-processing.ts';
 import { validateAvatarKey } from '../../lib/avatar-storage.ts';
 import { selfUser } from '../../lib/user-store.ts';
+import type { StoredRoom } from '../rooms/room-views.ts';
 
 type Log = Pick<Logger, 'error'> | undefined;
 
@@ -28,13 +29,13 @@ export interface AvatarUser {
 export interface AvatarsDeps {
   storage(): AvatarStorage;
   linkPreviewStorage(): FileStorage;
-  users(): { swapAvatar(input: { userId: string; avatarKey?: string; avatarAccent?: unknown }): Promise<{ user?: AvatarUser | null; previousAvatarKey?: string | null }> };
-  rooms(): { swapRoomAvatar(roomId: string, avatarKey: string | null): Promise<{ room?: { id: string } | null; previousAvatarKey?: string | null }> };
+  users(): { swapAvatar(input: { userId: string; avatarKey?: string; avatarAccent?: string | null }): Promise<{ user?: AvatarUser | null; previousAvatarKey?: string | null }> };
+  rooms(): { swapRoomAvatar(roomId: string, avatarKey: string | null): Promise<{ room?: StoredRoom | null; previousAvatarKey?: string | null }> };
   /** Refreshes the user's live room peers after a profile change. */
   refreshActiveProfile(user: AvatarUser): void;
   broadcastProfileToFriends(user: AvatarUser, log: Log): Promise<void>;
   /** Broadcasts room.updated and returns the lobby card it sent. */
-  announceRoomUpdate(roomId: string, room: { id: string }): unknown;
+  announceRoomUpdate(roomId: string, room: StoredRoom): unknown;
 }
 
 type Updated<T> = { status: 'updated' } & T;

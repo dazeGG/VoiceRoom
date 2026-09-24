@@ -7,7 +7,7 @@ export interface StoredAttachment {
   id: string;
   context: string;
   order: number;
-  mimeType: string;
+  mimeType: string | null;
   processedBytes?: number | null;
   originalBytes?: number | null;
   width?: number | null;

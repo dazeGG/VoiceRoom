@@ -43,7 +43,7 @@ interface RateLimiter {
 
 interface RoomListStore {
   listVisibleRoomsForUser(userId: string): Promise<StoredRoom[]>;
-  addRoomBookmarkForUser(userId: string, roomId: string): Promise<{ status: string; room?: StoredRoom }>;
+  addRoomBookmarkForUser(userId: string, roomId: string): Promise<{ status: string; room?: StoredRoom | null }>;
   removeRoomBookmarkForUser(userId: string, roomId: string): Promise<{ status: string; removed?: boolean }>;
 }
 

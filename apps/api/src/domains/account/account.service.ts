@@ -3,6 +3,8 @@
 // deletion. Returns what happened; the routes own cookies, rate limits and
 // how each outcome is spelled over HTTP.
 
+import type { PushPayload } from '../notifications/notification-dispatch.ts';
+import type { AccountDeletionPreview } from '@voice-room/shared/account-security';
 import type { Logger } from 'pino';
 import { ACCOUNT_DELETION_GRACE_MS, WHATS_NEW_VERSION, formatRecoveryCode, isDeletedAccountLogin } from '@voice-room/shared/account-security';
 import { isValidPassword } from '@voice-room/shared/validation';
@@ -32,7 +34,7 @@ type Status<T extends string> = T extends string ? { status: T } : never;
 type NotFound = Status<'not_found'>;
 
 export interface AccountUserStore {
-  createUser(input: { login: string; displayName: string; password: string }): Promise<{ status: string; user?: AccountUser }>;
+  createUser(input: { login: string; displayName: string; password: string }): Promise<{ status: string; user?: AccountUser | null }>;
   createSession(input: { userId: string } & Device): Promise<{ token: string; publicId: string }>;
   getUserById(userId: string): Promise<AccountUser | null>;
   verifyCredentials(login: string, password: string): Promise<AccountUser | null>;
@@ -50,13 +52,13 @@ export interface AccountUserStore {
   revokeSession(input: { userId: string; publicId: string }): Promise<{ status: string; tokenHash?: string }>;
   revokeOtherSessions(input: { userId: string; keepTokenHash: string }): Promise<{ tokenHashes: string[] }>;
   generateRecoveryCodes(input: { userId: string; currentPassword: string }): Promise<{ status: string; codes?: string[]; generatedAt?: unknown }>;
-  recoverWithCode(input: { login: string; code: unknown; newPassword: string }): Promise<{ status: string; user?: AccountUser; remaining?: number }>;
+  recoverWithCode(input: { login: string; code: unknown; newPassword: string }): Promise<{ status: string; user?: AccountUser | null; remaining?: number }>;
   recordLogin(input: { userId: string; sessionPublicId: string; kind: LoginKind; userAgent: string; locationLabel: unknown }): Promise<{ alert?: LoginAlert | null }>;
 }
 
 export interface AccountDeletionRepository {
   isLoginReserved(login: string): Promise<boolean>;
-  previewDeletion(input: { userId: string }): Promise<Record<string, unknown>>;
+  previewDeletion(input: { userId: string }): Promise<AccountDeletionPreview>;
   requestDeletion(input: { userId: string; currentPassword: string }): Promise<{ status: string; scheduledFor?: number }>;
   restoreAccount(input: { login: string; password: string }): Promise<{ status: string; userId: string | null }>;
 }
@@ -73,7 +75,7 @@ export interface AccountDeps {
   /** Ends what the given sessions still hold open: sockets and voice seats. */
   endSessionConnections(input: { userId?: string | null; tokenHashes?: string[] | null }): Promise<void>;
   notifyUser(userId: string, event: Record<string, unknown>): void;
-  queuePush(userId: string, payload: Record<string, unknown>, options: { ignorePreferences: boolean }): Promise<unknown>;
+  queuePush(userId: string, payload: PushPayload, options: { ignorePreferences: boolean }): Promise<unknown>;
   /** Refreshes the user's live room peers after a profile change. */
   refreshActiveProfile(user: AccountUser): void;
   broadcastProfileToFriends(user: AccountUser, log: Pick<Logger, 'error'> | undefined): Promise<void>;
@@ -266,7 +268,7 @@ export function createAccountService(deps: AccountDeps) {
     return { ...opened, remaining: result.remaining ?? 0 };
   }
 
-  async function deletionPreview(userId: string): Promise<{ status: 'preview'; preview: Record<string, unknown> } | Status<'unavailable'>> {
+  async function deletionPreview(userId: string): Promise<{ status: 'preview'; preview: AccountDeletionPreview } | Status<'unavailable'>> {
     const repository = deps.deletions();
     if (!repository) return { status: 'unavailable' };
     return { status: 'preview', preview: await repository.previewDeletion({ userId }) };

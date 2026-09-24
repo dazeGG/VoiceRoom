@@ -2,7 +2,10 @@
 // mutation starts with. Quotas are enforced by the store inside the insert.
 
 import crypto from 'node:crypto';
+import type { Logger } from 'pino';
 import type { LiveRoom, StoredRoom } from './room-views.ts';
+
+type RequestLog = { log?: Pick<Logger, 'warn' | 'error'> } | null;
 
 const ROOM_ID_ALPHABET = 'abcdefghijkmnpqrstuvwxyz23456789';
 
@@ -45,7 +48,7 @@ export interface RoomsServiceDeps {
   /** Broadcasts room.updated and returns the lobby card it sent. */
   announceRoomUpdate(roomId: string, room: StoredRoom): unknown;
   /** Everything after the durable soft-delete: events, invitations, peers, avatar. */
-  finishRoomDeletion(roomId: string, options: { avatarKey: string | null; request: unknown }): Promise<void>;
+  finishRoomDeletion(roomId: string, options: { avatarKey: string | null; request: RequestLog }): Promise<void>;
   newRoomId?: () => string;
 }
 
@@ -90,7 +93,7 @@ export function createRoomsService(deps: RoomsServiceDeps) {
     return { status: 'renamed', room: deps.announceRoomUpdate(roomId, updated) };
   }
 
-  async function remove(roomId: string, request: unknown): Promise<{ status: 'deleted' | 'not_found' }> {
+  async function remove(roomId: string, request: RequestLog): Promise<{ status: 'deleted' | 'not_found' }> {
     const deleted = await deps.store().deleteRoom(roomId);
     if (!deleted) return { status: 'not_found' };
     await deps.finishRoomDeletion(roomId, { avatarKey: deleted.avatarKey ?? null, request });

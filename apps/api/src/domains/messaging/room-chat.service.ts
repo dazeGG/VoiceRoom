@@ -5,9 +5,11 @@
 // how it is spelled over HTTP. Checks run in the order the legacy handler ran
 // them, so a request that fails two checks still gets the same answer.
 
+import type pg from 'pg';
 import crypto from 'node:crypto';
 import type { Logger } from 'pino';
 import { isReservedPeerId } from '@voice-room/shared/validation';
+import type { ServerEnvelope } from '@voice-room/shared/realtime';
 import { LOG_EVENTS } from '../../lib/log-events.ts';
 import { avatarColorForPeerId } from '../../lib/room-store.ts';
 import { tokensMatch } from '../../platform/crypto/tokens-match.ts';
@@ -16,7 +18,7 @@ import { cleanChatText, messageFingerprint, normalizeAttachmentIds } from './mes
 import { requireReplyTarget } from './reply-projector.ts';
 import { publicChatMessage, type RoomChatMessage } from './room-chat-views.ts';
 
-type DbClient = unknown;
+type DbClient = Pick<pg.PoolClient, 'query'> | null | undefined;
 
 interface ChatAuthor {
   id: string;
@@ -83,8 +85,8 @@ export interface RoomChatDeps {
   };
   directEmit: boolean;
   broadcastChatMessage(roomId: string, message: RoomChatMessage): void;
-  broadcastRoomDetail(roomId: string, event: unknown): void;
-  roomDetailEvent(type: 'room.chat.deleted' | 'room.chat.edited', payload: Record<string, unknown>): unknown;
+  broadcastRoomDetail(roomId: string, event: ServerEnvelope): void;
+  roomDetailEvent(type: 'room.chat.deleted' | 'room.chat.edited', payload: Record<string, unknown>): ServerEnvelope;
   scheduleLinkPreview(roomId: string, messageId: string, text: string, options?: { edited?: boolean }): void;
   refreshPins(roomId: string, action: 'message-deleted' | 'message-edited', messageId: string): Promise<void>;
   sendRoomSummaryToUser(roomId: string, userId: string): Promise<void>;

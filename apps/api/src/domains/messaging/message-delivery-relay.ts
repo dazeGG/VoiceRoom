@@ -26,13 +26,13 @@ interface ListenClient {
 export interface MessageDeliveryRelayDeps {
   enabled: boolean;
   pool(): { connect(): Promise<ListenClient> } | null;
-  outbox(): { getEvent(eventId: string): Promise<{ payload?: DeliveryEvent } | null> } | null;
+  outbox(): { getEvent(eventId: string): Promise<{ payload?: unknown } | null> } | null;
   projection: MessageProjection;
   broadcastChatMessage(roomId: string, message: unknown): void;
   notifyUser(userId: string, event: Record<string, unknown>): void;
   findUser(userId: string): Promise<{ id: string; [key: string]: unknown } | null>;
   /** The recipient's DM notification and push. */
-  broadcastDmNotification(recipientId: string, sender: { id: string; [key: string]: unknown }, message: unknown): Promise<unknown>;
+  broadcastDmNotification(recipientId: string, sender: { id: string; [key: string]: unknown }, message: { id: string; body?: string; createdAt?: unknown }): Promise<unknown>;
   publicChatMessage(message: unknown): unknown;
   logger(): Pick<Logger, 'error'>;
 }
@@ -49,7 +49,7 @@ export function createMessageDeliveryRelay(deps: MessageDeliveryRelayDeps) {
       return;
     }
     if (event.conversation?.type === 'dm') {
-      const message = event.message as { senderId: string; recipientId: string; id?: string };
+      const message = event.message as { senderId: string; recipientId: string; id: string; body?: string; createdAt?: unknown };
       const peerId = message.senderId === event.conversation.id ? message.recipientId : event.conversation.id;
       const projected = await deps.projection.project('dm', message, { userId: message.senderId, peerId });
       deps.notifyUser(message.senderId, { type: 'dm-message', message: projected });
@@ -72,7 +72,8 @@ export function createMessageDeliveryRelay(deps: MessageDeliveryRelayDeps) {
       void (async () => {
         const parsed = JSON.parse(notification.payload || '{}') as { eventId?: string };
         const row = parsed.eventId ? await outbox.getEvent(parsed.eventId) : null;
-        if (row?.payload) await dispatchMessageDeliveryEvent(row.payload);
+        // The outbox stores the event its writer enqueued; dispatch checks its fields.
+        if (row?.payload) await dispatchMessageDeliveryEvent(row.payload as DeliveryEvent);
       })().catch((error) => deps.logger().error({ evt: LOG_EVENTS.MESSAGE_EVENT_DISPATCH_FAILED, err: error }, 'failed to dispatch a durable message event'));
     };
     client.on('notification', onNotification);

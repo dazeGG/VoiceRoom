@@ -177,7 +177,7 @@ function createUserStore({ databaseUrl, logger = createLogger({ name: 'api' }), 
          RETURNING *`,
         [id, login, displayName, passwordHash, assignedAvatarColorKey, toDate(now), WHATS_NEW_VERSION]
       );
-      return { status: 'created', user: mapUser(result.rows[0]) };
+      return { status: 'created', user: mapUser(result.rows[0])! };
     } catch (error) {
       if (error && (error as { code?: unknown }).code === UNIQUE_VIOLATION) {
         return { status: 'login_taken', user: null };
@@ -299,7 +299,7 @@ function createUserStore({ databaseUrl, logger = createLogger({ name: 'api' }), 
     token = createSessionToken(),
     userAgent = '',
     locationLabel = ''
-  }: { userId: string; now?: number; token?: string; userAgent?: string; locationLabel?: string }) {
+  }: { userId: string; now?: number; token?: string; userAgent?: string; locationLabel?: unknown }) {
     const expiresAt = now + sessionTtlMs;
     const tokenHash = hashSessionToken(token);
     const result = await getPool().query(
@@ -587,7 +587,7 @@ function createUserStore({ databaseUrl, logger = createLogger({ name: 'api' }), 
     userAgent = '',
     locationLabel = '',
     now = Date.now()
-  }: { userId: string; sessionPublicId?: string | null; kind?: string; userAgent?: string; locationLabel?: string; now?: number }) {
+  }: { userId: string; sessionPublicId?: string | null; kind?: string; userAgent?: string; locationLabel?: unknown; now?: number }) {
     const device = describeUserAgent(userAgent);
     const location = cleanLocationLabel(locationLabel);
     const sameDevice = (entry: { client: unknown; os: unknown; location: unknown }) => entry.client === device.client && entry.os === device.os && entry.location === location;

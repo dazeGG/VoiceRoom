@@ -2,6 +2,7 @@
 // change that another person should see reaches them as an account event and,
 // where it matters, a push.
 
+import type { PushPayload } from '../notifications/notification-dispatch.ts';
 import { notificationActor, isActiveAccount, type SocialUser } from './social-views.ts';
 
 type Status<T extends string> = T extends string ? { status: T } : never;
@@ -38,7 +39,7 @@ export interface FriendsDeps {
   sendDirectMessage(input: { senderId: string; recipientId: string; body: string; metadata: Record<string, unknown> }): Promise<unknown>;
   isOnline(userId: string): boolean;
   notifyUser(userId: string, event: Record<string, unknown>): void;
-  queuePush(userId: string, payload: Record<string, unknown>, context?: Record<string, unknown>): Promise<unknown>;
+  queuePush(userId: string, payload: PushPayload, context?: Record<string, unknown>): Promise<unknown>;
   ringLimiter: { check(key: string): { allowed: boolean; retryAfterSeconds?: number } };
   ringTtlMs: number;
   now?: () => number;

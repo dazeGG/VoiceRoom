@@ -6,40 +6,25 @@ import type { Logger } from 'pino';
 import { LOG_EVENTS } from '../../lib/log-events.ts';
 import { publicUser } from '../../lib/user-store.ts';
 import type { GatePrincipal } from '../admission/admission.service.ts';
+import type { ConnectionRegistry, WsConnection } from '../../realtime/registry.ts';
+import type { AccountDeletionRepository } from './account-deletion-repository.ts';
+import type { StoredRoom } from '../rooms/room-views.ts';
 
-interface ActiveVoice {
-  roomId?: string;
-  peerId?: string;
-}
-
-interface AccountConnection {
-  activeVoice?: ActiveVoice | null;
-}
+type ActiveVoice = NonNullable<WsConnection['activeVoice']>;
 
 export interface AccountLifecycleDeps {
   friendIds(userId: string): Promise<string[]>;
   notifyUser(userId: string, event: Record<string, unknown>): void;
-  sockets(): {
-    findAccountConnections(userId: string | null, tokenHashes: string[] | null): AccountConnection[];
-    closeConnections(connections: AccountConnection[], code: number, reason: string): void;
-  } | null;
+  sockets(): Pick<ConnectionRegistry, 'findAccountConnections' | 'closeConnections'> | null;
   /** The gate principal of the voice seat a connection holds, if it still has one. */
   seatPrincipal(roomId: string, peerId: string): GatePrincipal | null;
   revokeSeatCredentials(input: { roomId: string; peerId: string; principal: GatePrincipal }): Promise<unknown>;
-  leaveVoice(connection: AccountConnection, activeVoice: ActiveVoice): Promise<unknown>;
+  leaveVoice(connection: WsConnection, activeVoice: ActiveVoice): Promise<unknown> | undefined;
   removeParticipant(roomId: string, peerId: string): Promise<void>;
   sessionRevokedCloseCode: number;
-  deletions(): {
-    listDueDeletions(input: { now: number }): Promise<string[]>;
-    finalizeDeletion(input: { userId: string; now: number }): Promise<{
-      status: string;
-      avatarKey?: string | null;
-      transferredRooms: { roomId: string }[];
-      deletedRooms: { roomId: string; avatarKey?: string | null }[];
-    }>;
-  } | null;
-  findRoom(roomId: string): Promise<{ id: string } | null>;
-  announceRoomUpdate(roomId: string, room: { id: string }): unknown;
+  deletions(): Pick<AccountDeletionRepository, 'listDueDeletions' | 'finalizeDeletion'> | null;
+  findRoom(roomId: string): Promise<StoredRoom | null>;
+  announceRoomUpdate(roomId: string, room: StoredRoom): unknown;
   finishRoomDeletion(roomId: string, options: { avatarKey?: string | null }): Promise<void>;
   removeAvatar(key: string | null | undefined): Promise<void>;
   logger(): Pick<Logger, 'error'>;

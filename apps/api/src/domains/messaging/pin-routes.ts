@@ -6,15 +6,16 @@ const PIN_ITEM_PATH = `${PIN_COLLECTION_PATH}/:messageId`;
 type RouteError = { statusCode?: unknown; message?: string; code?: string } | null | undefined;
 type PinRoute = { Params: { roomId?: string; messageId?: string } };
 type PinRequest = FastifyRequest<PinRoute>;
-type Decision = { authorized?: boolean; viewer?: unknown; statusCode?: number; code?: string; message?: string } | null | undefined;
+type Viewer = { id?: string; guest?: boolean; isGuest?: boolean } | null | undefined;
+type Decision = { authorized?: boolean; viewer?: Viewer; statusCode?: number; code?: string; message?: string } | null | undefined;
 type PinSnapshot = Record<string, unknown>;
 
 export interface PinRoutesOptions {
   app?: FastifyInstance;
   pinService?: {
     list(input: { roomId: string }): Promise<PinSnapshot>;
-    pin(input: { roomId: string; messageId: string | undefined; viewer: unknown }): Promise<PinSnapshot>;
-    unpin(input: { roomId: string; messageId: string | undefined; viewer: unknown }): Promise<PinSnapshot>;
+    pin(input: { roomId: string; messageId: string | undefined; viewer: Viewer }): Promise<PinSnapshot>;
+    unpin(input: { roomId: string; messageId: string | undefined; viewer: Viewer }): Promise<PinSnapshot>;
   };
   resolveRoomAccess?: (input: { request: PinRequest; roomId: string; action: 'read' | 'write' }) => Decision | Promise<Decision>;
 }
