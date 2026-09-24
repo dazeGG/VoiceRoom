@@ -19,7 +19,8 @@
 
 ## Verification
 - Prefer a targeted workspace test first.
-- Repository gates are `npm run check`, `npm test`, and `npm run build`.
+- Repository gates are `npm run check` (tsc, svelte-check and ESLint), `npm test`, and `npm run build`.
+- ESLint fails only on violations not recorded in `eslint-suppressions.json`. Never add to that file or disable a rule inline to get green; fix the code. After fixing suppressed code, run `npm run lint -- --prune-suppressions`.
 - Web end-to-end coverage is `npm run e2e` and requires the full stack described in `README.md`.
 - Database changes must be checked against both migration and rollback paths.
 
