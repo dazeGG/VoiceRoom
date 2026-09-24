@@ -228,7 +228,7 @@ export interface AppState
     RoomAudioState,
     RoomScreenState {}
 
-// Mirrors the server's publicLobbyRoom() shape (server.js) — the body carried
+// Mirrors the server's publicLobbyRoom() shape (apps/api/src/domains/rooms/room-views.ts) — the body carried
 // by both the PUT /api/rooms/:roomId response and the room-updated broadcast.
 export interface RoomLifecycleSummary {
   avatarUrl: string | null;

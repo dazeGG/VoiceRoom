@@ -92,10 +92,9 @@ test('createApiApp exposes a Fastify app with inject-based routes', async (t) =>
   assert.equal('roomPresetKey' in legacyVisualRoom.json(), false);
 });
 
-// Legacy handlers hijack the reply and write to the raw response themselves,
-// so a header set on the Fastify reply never reaches the client. The id is the
-// only thing tying a user's report to a request, and it is useless unless the
-// client actually receives it.
+// The id is the only thing tying a user's report to a request, and it is
+// useless unless the client actually receives it — on success, on failure and
+// on the not-found handler alike.
 test('every response carries the request id the server logged it under', async (t) => {
   const app = createApiApp({ store: createFakeStore() });
   t.after(() => app.close());

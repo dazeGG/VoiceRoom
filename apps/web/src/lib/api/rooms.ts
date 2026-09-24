@@ -15,8 +15,8 @@ export interface UpdateRoomOptions {
   name: string;
 }
 
-// Mirrors the server's publicLobbyRoom() shape (server.js) — the same body the
-// PUT response and the room.updated WebSocket broadcast both carry.
+// Mirrors the server's publicLobbyRoom() shape (apps/api/src/domains/rooms/room-views.ts)
+// — the same body the PUT response and the room.updated WebSocket broadcast carry.
 export interface RoomSummary {
   avatarUrl: string | null;
   createdAt: number;

@@ -1,6 +1,5 @@
-// Typed query builder over the API's existing pg pool. Repositories move to it
-// one route group at a time (docs/ARCHITECTURE.md, section 4); until then raw
-// SQL and Kysely share the same pool and therefore the same connection limits.
+// Typed query builder over a pg pool. No repository uses it yet; the move is
+// tracked in docs/ARCHITECTURE.md, section 4.
 //
 // `DB` is generated from a migrated database with `npm run db:types`, and
 // test/db-schema-types.test.ts fails when it no longer matches the migrations.

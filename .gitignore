@@ -20,11 +20,9 @@ pnpm-debug.log*
 
 # Local scratch and generated artifacts
 graphify-out/
-.graphify/branch.json
-.graphify/worktree.json
-.graphify/needs_update
-.graphify/cache/
-.graphify/manifest.json
+# The knowledge graph is rebuilt locally (graphify update .); it is large and
+# goes stale between commits, so none of it is tracked.
+.graphify/
 work/
 outputs/
 deploy/
@@ -53,6 +51,3 @@ playwright-report/
 
 # Generated emoji artwork (see apps/web/scripts/build-emoji-assets.ts)
 apps/web/static/emoji/
-.graphify/.graphify_*
-.graphify/description-instructions/
-.graphify/label-instructions/

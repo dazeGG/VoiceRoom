@@ -1,7 +1,6 @@
 // Operational routes: health, metrics, the room-creation proof-of-work
-// challenge, the desktop release manifest and browser log intake. First route
-// group out of server.js (docs/ARCHITECTURE.md, PR 1); the response shapes are
-// unchanged and now declared as TypeBox schemas.
+// challenge, the desktop release manifest and browser log intake. Response
+// shapes are declared as TypeBox schemas.
 
 import { Type, type TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
 import type { FastifyInstance } from 'fastify';

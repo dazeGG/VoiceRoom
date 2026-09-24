@@ -1,5 +1,5 @@
 // The dependencies every route module receives explicitly, instead of reaching
-// for server.ts's module-level singletons (docs/ARCHITECTURE.md, section 2).
+// for server.ts's module-level singletons (docs/ARCHITECTURE.md, section 3).
 // It holds only what is shared across route groups; services that belong to
 // one group are passed to that group's register function next to it, and the
 // context grows as groups move out of server.ts.
@@ -26,7 +26,7 @@ export interface ResolvedSession {
 
 export interface ApiContext {
   logger: FastifyBaseLogger;
-  /** The client address, honouring TRUST_PROXY exactly like the legacy handlers. */
+  /** The client address, honouring TRUST_PROXY (getClientIp in lib/rate-limit.ts). */
   clientIp(req: IncomingMessage): string;
   /** The signed-in user behind the request's session cookie, if any. */
   resolveSession(req: IncomingMessage): Promise<ResolvedSession | null>;

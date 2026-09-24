@@ -790,17 +790,15 @@ function createApiApp({
 
   // The client cannot quote an id it never saw, so every response carries it
   // back — including the error responses a user is most likely to report.
-  // It goes on the raw response because legacy handlers hijack the reply and
-  // write to that themselves: a header set on the Fastify reply would be
-  // dropped for nearly every route.
+  // It is set on the raw response so it also reaches the WebSocket upgrade
+  // refusal and the not-found handler.
   app.addHook('onRequest', (request, reply, done) => {
     reply.raw.setHeader('x-request-id', request.id);
     done();
   });
 
-  // Origin checks run for every route, not only the legacy handlers: the
-  // domain routes (bans, memberships, media, notifications, reactions, pins)
-  // mutate state with the same session cookie.
+  // Origin checks run for every route: every route that mutates state does so
+  // with the same session cookie.
   app.addHook('onRequest', (request, reply, done) => {
     if (isCrossOriginWebSocket(request.raw)) {
       // The refused handshake socket is not an HTTP connection the server

@@ -1,10 +1,13 @@
 # API guidance
 
-- Keep HTTP handlers thin; persistence, migrations, and realtime behavior belong in their existing modules.
-- The API is ES modules; applied migrations stay CommonJS as `.cjs` (byte-pinned history), new ones are ES modules. New and migrated code is strict TypeScript on Node 24 type stripping (erasable syntax only, imports with explicit extensions), with TypeBox route schemas and Kysely queries; `npm --workspace @voice-room/api run check` type-checks it. Follow the decisions and PR order in `../../docs/ARCHITECTURE.md` section 4 instead of adding routes to `server.ts`.
+- Layers and rules: `../../docs/ARCHITECTURE.md` section 3. Known old patterns still in the code (and what to do instead): section 4.
+- Strict TypeScript on Node 24 type stripping: erasable syntax only, imports with explicit `.ts` extensions, no build step. Applied migrations stay CommonJS `.cjs` (byte-pinned history); new migrations are ES modules.
+- New routes: a `register(app, ctx, deps)` module with TypeBox schemas for params, body and responses, modelled on `src/domains/rooms/rooms.routes.ts`. Never add routes or services to `server.ts`.
+- Data access: repositories take a pool or client from their caller; never create a pool inside a module. Queries are still raw `pg` SQL until the Kysely move (section 4); type the row shape you read.
+- Configuration is read only in `src/app/config.ts`; do not read `process.env` elsewhere.
 - PostgreSQL is the durable source of truth. Preserve transaction boundaries and test rollback/failure paths.
-- Add or update tests under `test/` for every behavior change.
+- Add or update tests under `test/` for every behaviour change; see the root `CLAUDE.md` testing rules.
 - Verify with `npm --workspace @voice-room/api run check` and `npm --workspace @voice-room/api run test` with `TEST_DATABASE_URL` configured.
 - Schema changes require forward migration, rollback coverage, and release-plan notes when compatibility is affected.
-- After a schema change, regenerate the Kysely types with `DATABASE_URL=<migrated db> npm --workspace @voice-room/api run db:types`; `test/db-schema-types.test.ts` fails while `src/platform/db/schema.ts` is stale (keep it LF, exactly as generated).
+- After a schema change, regenerate the Kysely types with `DATABASE_URL=<migrated db> npm --workspace @voice-room/api run db:types`; `test/db-schema-types.test.ts` fails while `src/platform/db/schema.ts` is stale.
 - Follow `../../docs/GIT_FLOW.md` for all commits, branches, pull requests, hotfixes, and releases.
