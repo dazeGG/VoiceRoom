@@ -24,7 +24,7 @@ async function main() {
 
 if (import.meta.main) {
   main().catch((error) => {
-    process.stderr.write(`${error?.stack || error}\n`);
+    process.stderr.write(`${(error as Error | null)?.stack || error}\n`);
     process.exitCode = 1;
   });
 }

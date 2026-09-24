@@ -147,7 +147,7 @@ test('G15-A02 rollout requires a clean guard and the exact migration catalog/hea
 
 test('G15-A02 production rejects unfenced and down migration commands before database access', () => {
   for (const argument of ['--no-lock', 'down']) {
-    const result = spawnSync(process.execPath, ['apps/api/src/scripts/migrate.js', argument], {
+    const result = spawnSync(process.execPath, ['apps/api/src/scripts/migrate.ts', argument], {
       cwd: path.resolve(import.meta.dirname, '../../..'),
       env: { ...process.env, NODE_ENV: 'production', DATABASE_URL: 'postgres://127.0.0.1:1/unreachable' },
       encoding: 'utf8'

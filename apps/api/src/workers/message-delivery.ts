@@ -2,14 +2,19 @@ import { createDbPool } from '../lib/db.ts';
 import { readEnvInt, readMessageDeliveryMode } from '../lib/config.ts';
 import { createMessageOutboxRepository } from '../domains/messaging/message-outbox-repository.ts';
 import { boundedBackoff, createLeaseRuntime } from '../platform/lease-runtime.ts';
+import type { FenceGuard, LeaseRuntime } from '../platform/lease-runtime.ts';
 import { LOG_EVENTS } from '../lib/log-events.ts';
 import { createLogger } from '../lib/logger.ts';
 
+type MessageOutbox = ReturnType<typeof createMessageOutboxRepository>;
+type Deliver = (payload: unknown, context: { eventId: string; fencingToken: number; signal: AbortSignal }) => Promise<unknown>;
+type WorkerLogger = { info?(...args: unknown[]): void; warn(...args: unknown[]): void; error(...args: unknown[]): void; fatal?(...args: unknown[]): void };
+
 const LEASE_IDENTITY = 'message-delivery.G38';
 
-function wait(ms, signal) {
+function wait(ms: number, signal: AbortSignal): Promise<void> {
   if (signal.aborted) return Promise.reject(signal.reason || new Error('Worker stopped'));
-  return new Promise((resolve, reject) => {
+  return new Promise<void>((resolve, reject) => {
     const timer = setTimeout(done, ms);
     function done() {
       signal.removeEventListener('abort', cancel);
@@ -34,29 +39,40 @@ function createMessageDeliveryWorker({
   outbox,
   renewMs = 10_000,
   staleClaimMs = 60_000
+}: {
+  batchSize?: number;
+  deliver?: Deliver;
+  idleMs?: number;
+  leaseMs?: number;
+  logger?: WorkerLogger;
+  maxAttempts?: number;
+  outbox?: MessageOutbox;
+  renewMs?: number;
+  staleClaimMs?: number;
 } = {}) {
   if (!outbox) throw new TypeError('Message delivery outbox repository is required');
-  const dispatch = deliver || ((event) => outbox.publishPostgres(event));
+  const store = outbox;
+  const dispatch: Deliver = deliver || ((event) => store.publishPostgres(event as Parameters<MessageOutbox['publishPostgres']>[0]));
   if (typeof dispatch !== 'function') throw new TypeError('Message delivery adapter must be a function');
 
-  let runtime;
+  let runtime: LeaseRuntime;
   const leaseAdapter = {
-    acquire: (lease) => outbox.acquireLease(lease),
-    release: (lease) => outbox.releaseLease(lease),
-    renew: (lease) => outbox.renewLease(lease)
+    acquire: (lease: Parameters<MessageOutbox['acquireLease']>[0]) => store.acquireLease(lease),
+    release: (lease: Parameters<MessageOutbox['releaseLease']>[0]) => store.releaseLease(lease),
+    renew: (lease: Parameters<MessageOutbox['renewLease']>[0]) => store.renewLease(lease)
   };
 
-  async function processLease(guard) {
+  async function processLease(guard: FenceGuard): Promise<void> {
     const lease = {
       identity: LEASE_IDENTITY,
       ownerId: guard.lease.ownerId,
       fencingToken: guard.lease.fencingToken
     };
-    await outbox.recordHeartbeat({ ...lease, ready: true });
+    await store.recordHeartbeat({ ...lease, ready: true });
 
     while (guard.isOwned()) {
       guard.assertOwned();
-      const events = await outbox.claimBatch({
+      const events = await store.claimBatch({
         ...lease,
         limit: batchSize,
         staleClaimMs
@@ -76,10 +92,10 @@ function createMessageDeliveryWorker({
             signal: guard.signal
           });
           guard.assertOwned();
-          await outbox.markDelivered(event.eventId, lease);
+          await store.markDelivered(event.eventId, lease);
         } catch (error) {
           guard.assertOwned();
-          await outbox.reschedule(event.eventId, lease, {
+          await store.reschedule(event.eventId, lease, {
             delayMs: boundedBackoff(event.attempts, {
               baseMs: 1_000,
               maxMs: 60 * 60 * 1_000,
@@ -109,7 +125,7 @@ function createMessageDeliveryWorker({
     renewMs,
     run: processLease,
     onHeartbeat(heartbeat) {
-      void outbox.recordHeartbeat(heartbeat).catch((error) => {
+      void store.recordHeartbeat(heartbeat).catch((error: unknown) => {
         logger.warn({ evt: LOG_EVENTS.WORKER_HEARTBEAT_FAILED, worker: 'message-delivery', err: error }, 'unable to record the message delivery heartbeat');
       });
     }
@@ -125,7 +141,7 @@ function createMessageDeliveryWorker({
   });
 }
 
-async function main(env = process.env) {
+async function main(env: NodeJS.ProcessEnv = process.env): Promise<void> {
   if (!readMessageDeliveryMode(env).claimEnabled) {
     createLogger({ env, name: 'worker.message-delivery' })
       .info({ evt: LOG_EVENTS.WORKER_DISABLED, worker: 'message-delivery', reason: 'claims_disabled' }, 'message delivery claims are disabled');
@@ -144,8 +160,8 @@ async function main(env = process.env) {
     staleClaimMs: readEnvInt('MESSAGE_DELIVERY_STALE_CLAIM_MS', 60_000, 1_000, env)
   });
 
-  let stopPromise = null;
-  function stop() {
+  let stopPromise: Promise<void> | null = null;
+  function stop(): Promise<void> {
     if (!stopPromise) {
       stopPromise = worker.stop().finally(() => pool.end());
     }
