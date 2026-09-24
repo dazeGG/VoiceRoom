@@ -8,7 +8,7 @@ const metricsPath = fileURLToPath(new URL('../src/lib/metrics.ts', import.meta.u
 const serverPath = fileURLToPath(new URL('../src/lib/worker-metrics-server.ts', import.meta.url));
 
 function startMetricProcess(kind, ageMs) {
-  const code = `const m=require(${JSON.stringify(metricsPath)}),s=require(${JSON.stringify(serverPath)});m[process.env.KIND](Number(process.env.AGE));s.startWorkerMetricsServer({host:'127.0.0.1',port:0}).then(x=>{console.log(x.address.port);process.on('SIGTERM',()=>x.close().then(()=>process.exit()));});`;
+  const code = `const m=require(${JSON.stringify(metricsPath)}),s=require(${JSON.stringify(serverPath)});m[process.env.KIND](Number(process.env.AGE));s.startWorkerMetricsServer({host:'127.0.0.1',port:0}).then(x=>{process.stdout.write(String(x.address.port));process.on('SIGTERM',()=>x.close().then(()=>process.exit()));});`;
   const child = spawn(process.execPath, ['-e', code], { cwd: path.resolve(import.meta.dirname, '../../..'), env: { ...process.env, KIND: kind, AGE: String(ageMs) }, stdio: ['ignore', 'pipe', 'inherit'] });
   return new Promise((resolve, reject) => {
     child.once('error', reject);
