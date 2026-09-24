@@ -147,7 +147,7 @@ test('avatar color keys are curated tokens only', () => {
   assert.equal(cleanAvatarColorKey('red'), '');
   assert.equal(cleanAvatarColorKey('BLURPLE'), '');
   assert.equal(cleanAvatarColorKey(' blurple '), '');
-  assert.equal(cleanAvatarColorKey(AVATAR_COLOR_KEYS[0].toUpperCase()), '');
+  assert.equal(cleanAvatarColorKey(AVATAR_COLOR_KEYS[0]!.toUpperCase()), '');
   assert.equal(cleanAvatarColorKey(null), '');
 });
 

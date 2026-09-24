@@ -41,5 +41,5 @@ test('route values are encoded, so an id cannot inject another parameter', () =>
 test('push payloads carry the same route the in-app panel uses', async () => {
   const payload = notifications.buildProviderPayload(ITEM);
 
-  assert.equal(payload.route, notifications.notificationRoute(ITEM));
+  assert.equal(payload!.route, notifications.notificationRoute(ITEM));
 });

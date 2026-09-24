@@ -19,13 +19,14 @@ const CORPUS = Object.freeze([
 
 test('G16-A01 classifies the canonical platform corpus deterministically', async () => {
   for (const fixture of CORPUS) {
-    assert.equal(platform.classifyPlatform(fixture.input), fixture.expected, fixture.name);
+    // The corpus includes deliberately malformed signals.
+    assert.equal(platform.classifyPlatform(fixture.input as platform.PlatformSignals), fixture.expected, fixture.name);
   }
 });
 
 test('G16-A02 policy is fail-open only for unknown and never returns raw signals', () => {
   for (const fixture of CORPUS) {
-    const policy = platform.classifyPlatformPolicy(fixture.input);
+    const policy = platform.classifyPlatformPolicy(fixture.input as platform.PlatformSignals);
     assert.deepEqual(Object.keys(policy).sort(), ['contractVersion', 'desktopAllowed', 'platformClass', 'roomClientAllowed']);
     assert.equal(policy.contractVersion, 'voice-room.platform-class/v1');
     assert.equal(policy.desktopAllowed, fixture.expected !== 'mobile', fixture.name);
