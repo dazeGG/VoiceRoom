@@ -19,7 +19,7 @@ export interface WsRoomRuntime {
   joinVoiceRoom(connection: WsConnection, payload: Record<string, any>, user: SessionUser | null, clientIp: string, requestId?: string): Promise<JoinResult>;
   leaveVoiceRoom(connection: WsConnection, target: { roomId: string; peerId: string; sessionToken: string }): Promise<unknown>;
   updatePeerState(connection: WsConnection, payload: Record<string, any>): Promise<{ ok: boolean; code?: string }>;
-  broadcastRoomTyping(connection: WsConnection, roomId: string, activity: TypingActivity): Promise<unknown>;
+  broadcastRoomTyping(connection: WsConnection, roomId: string, activity: TypingActivity): unknown;
   sendAccountSummaries(connection: WsConnection, userId: string): Promise<unknown>;
 }
 type WsLogger = { info(...args: unknown[]): void; warn(...args: unknown[]): void; error(...args: unknown[]): void };

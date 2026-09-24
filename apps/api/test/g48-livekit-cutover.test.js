@@ -7,7 +7,7 @@ import net from 'node:net';
 import path from 'node:path';
 import { Pool } from 'pg';
 import { test } from 'node:test';
-const { createApiApp } = await import('../src/server.js');
+const { createApiApp } = await import('../src/server.ts');
 const { withRosterPeer } = await import('./roster-harness.js');
 const { renderPrometheus, resetMetricsForTest } = await import('../src/lib/metrics.ts');
 const { createCredentialBoundaryService } = await import('../src/domains/admission/credential-boundary-service.ts');
@@ -43,7 +43,7 @@ test('G48 supplemental source contract keeps revoke-before-remove ordering visib
   const leaveEnd = runtime.indexOf('\n  async function updatePeerState', leaveStart);
   const leave = runtime.slice(leaveStart, leaveEnd);
   assert.ok(leave.indexOf('revokePrincipalOnce') < leave.indexOf('removeLiveKitParticipant'));
-  const registry = fs.readFileSync(path.join(root, 'app/service-registry.js'), 'utf8');
+  const registry = fs.readFileSync(path.join(root, 'app/service-registry.ts'), 'utf8');
   assert.match(registry, /revokePrincipalInTransaction:[\s\S]*revokeLiveKitGatePrincipalInTransaction/);
   assert.match(registry, /afterBanCommitted:[\s\S]*disconnectModeratedPeer/);
 });

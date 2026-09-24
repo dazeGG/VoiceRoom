@@ -4,7 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { TrackSource } from 'livekit-server-sdk';
-const { createApiApp } = await import('../src/server.js');
+const { createApiApp } = await import('../src/server.ts');
 const { isLiveKitParticipantAlreadyGone, resolveServerMutePermission } = await import('../src/domains/admission/livekit-admin.ts');
 
 const ALICE_ID = '11111111-1111-4111-8111-111111111111';

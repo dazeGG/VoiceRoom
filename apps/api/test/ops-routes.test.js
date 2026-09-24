@@ -6,7 +6,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-const { createApiApp } = await import('../src/server.js');
+const { createApiApp } = await import('../src/server.ts');
 const { createDesktopReleaseService, isDesktopReleaseDownloadUrl, normalizeRelease } = await import('../src/domains/ops/desktop-release.service.ts');
 
 function createStore() {

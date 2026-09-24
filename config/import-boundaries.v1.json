@@ -10,7 +10,7 @@
     },
     {
       "id": "api-routes-do-not-import-db",
-      "sources": ["apps/api/src/server.js", "apps/api/src/app.js"],
+      "sources": ["apps/api/src/server.ts", "apps/api/src/app.js"],
       "forbidden": ["./lib/db", "./lib/db.js", "./lib/db.ts", "apps/api/src/lib/db.js", "apps/api/src/lib/db.ts"],
       "message": "API composition must use stores instead of importing DB internals."
     }
@@ -79,6 +79,6 @@
   },
   "timerRules": {
     "forbiddenSources": ["apps/api/src/app.js"],
-    "allowedCurrentSources": ["apps/api/src/server.js", "apps/api/src/lib/listen.ts"]
+    "allowedCurrentSources": ["apps/api/src/server.ts", "apps/api/src/lib/listen.ts"]
   }
 }

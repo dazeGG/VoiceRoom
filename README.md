@@ -31,7 +31,7 @@ Voice Room - голосовая комната по ссылке с демонс
 ```
 apps/
   api/             Node.js HTTP API + SSE, только строгий /api/* контракт
-    src/server.js  API-сервер комнат, presence/state и LiveKit JWT
+    src/server.ts  API-сервер комнат, presence/state и LiveKit JWT
     src/lib/       серверные модули: config, db/migrations, pow, rate-limit, auth (users/sessions, scrypt)
     test/          unit/integration тесты API
   web/             SvelteKit frontend app

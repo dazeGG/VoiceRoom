@@ -13,7 +13,7 @@ import net from 'node:net';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
-const { createApiApp } = await import('../src/server.js');
+const { createApiApp } = await import('../src/server.ts');
 const { createGateCredentialSigner } = await import('../src/domains/admission/gate-credential-signer.ts');
 const { createLiveKitAuthGateService, extractCredential } = await import('../src/domains/admission/livekit-auth-gate-service.ts');
 

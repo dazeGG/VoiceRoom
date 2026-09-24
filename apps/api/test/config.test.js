@@ -78,8 +78,8 @@ test('readDatabaseConfig accepts postgres URLs', () => {
 // log intake on, whatever the host .env said.
 test('compose passes every feature flag the API leaves disabled by default', () => {
   const root = path.join(import.meta.dirname, '../../..');
-  // Flags are read in app/config.ts; server.js reads the start-up ones itself.
-  const server = ['apps/api/src/server.js', 'apps/api/src/app/config.ts']
+  // Flags are read in app/config.ts; server.ts reads the start-up ones itself.
+  const server = ['apps/api/src/server.ts', 'apps/api/src/app/config.ts']
     .map((file) => fs.readFileSync(path.join(root, file), 'utf8'))
     .join('\n');
   const compose = fs.readFileSync(path.join(root, 'docker-compose.yml'), 'utf8');

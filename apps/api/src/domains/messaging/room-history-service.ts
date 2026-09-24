@@ -28,14 +28,16 @@ export type StoredRoomMessage = {
 
 type HistoryPage = { messages: StoredRoomMessage[]; hasMoreBefore: boolean; hasMoreAfter: boolean };
 type ListInput = { roomId: string; anchor: Tuple | undefined; limit: number; now: Date };
+// Every mode except 'latest' decodes an anchor from its cursor first.
+type AnchoredInput = Omit<ListInput, 'anchor'> & { anchor: Tuple };
 
 export interface RoomHistoryRepository {
   roomExists(roomId: string): Promise<boolean>;
   getAnchor?(input: { roomId: string; messageId: string }): Promise<Tuple | null>;
   listLatest(input: ListInput): Promise<HistoryPage>;
-  listBefore(input: ListInput): Promise<HistoryPage>;
-  listAfter(input: ListInput): Promise<HistoryPage>;
-  listAround(input: ListInput): Promise<HistoryPage>;
+  listBefore(input: AnchoredInput): Promise<HistoryPage>;
+  listAfter(input: AnchoredInput): Promise<HistoryPage>;
+  listAround(input: AnchoredInput): Promise<HistoryPage>;
 }
 
 export interface HistoryCursorCodec {
@@ -163,7 +165,7 @@ function createRoomHistoryService({ repository, cursorCodec, visibilityPolicy, p
       after: 'listAfter',
       around: 'listAround'
     } as const)[mode];
-    const page = await history[method]({
+    const page = await (history[method] as (input: ListInput) => Promise<HistoryPage>)({
       roomId: normalizedRoomId,
       anchor,
       limit,

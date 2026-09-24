@@ -45,7 +45,7 @@ test('startup sweeps unused preview images, and stored ones are served by key an
   fs.writeFileSync(path.join(uploadsDir, 'secret.txt'), 'not for you');
   const socketPath = socketPathForDirectory(dir);
   const { cleanup, databaseUrl } = await createTestDatabase(t);
-  const child = spawn(process.execPath, ['src/server.js'], {
+  const child = spawn(process.execPath, ['src/server.ts'], {
     cwd: path.join(import.meta.dirname, '..'),
     env: { ...process.env, NODE_ENV: 'test', DATABASE_URL: databaseUrl, SOCKET_PATH: socketPath, UPLOADS_DIR: uploadsDir },
     stdio: ['ignore', 'ignore', 'ignore']

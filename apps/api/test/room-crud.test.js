@@ -8,8 +8,8 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 
-const { createApiApp, createApiServer } = await import('../src/server.js');
-const { resolveRealtimeReconnectLeaseMs } = (await import('../src/server.js')).__private;
+const { createApiApp, createApiServer } = await import('../src/server.ts');
+const { resolveRealtimeReconnectLeaseMs } = (await import('../src/server.ts')).__private;
 const { openWs, sendWs, joinVoiceRoom, subscribeRoomPreview, waitForWsType } = await import('./ws-harness.js');
 
 const OWNER_ID = 'user-owner';

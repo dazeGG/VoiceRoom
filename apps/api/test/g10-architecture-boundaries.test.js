@@ -29,7 +29,7 @@ test('G10-A01 current API composition graph stays inside import, write and timer
   assert.deepEqual(checkImportBoundaries({ config: config() }), []);
   assert.deepEqual(checkApiSources({ config: config() }), []);
 
-  const serverSource = fs.readFileSync(path.join(import.meta.dirname, '../src/server.js'), 'utf8');
+  const serverSource = fs.readFileSync(path.join(import.meta.dirname, '../src/server.ts'), 'utf8');
   assert.match(serverSource, /function createApiServer\(/);
   assert.match(serverSource, /function createApiApp\(/);
   assert.match(serverSource, /function bootstrap\(/);
@@ -59,7 +59,7 @@ test('G10-A02 seeded forbidden imports, direct foreign writes and listener worke
   const { checkImportBoundaries, checkApiSources } = await loadScanners();
   const rules = config();
 
-  const badImport = fixtureFile('apps/api/src/server.js', "const db = require('./lib/db');\nconst v = require('packages/shared/src/validation.js');\n");
+  const badImport = fixtureFile('apps/api/src/server.ts', "const db = require('./lib/db');\nconst v = require('packages/shared/src/validation.js');\n");
   assert.match(
     checkImportBoundaries({ config: rules, files: [badImport] })[0]?.ruleId || '',
     /no-shared-src-deep-imports|api-routes-do-not-import-db/

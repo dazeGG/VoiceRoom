@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { createApiApp } from '../src/server.js';
+import { createApiApp } from '../src/server.ts';
 
 const SENDER_ID = '11111111-1111-4111-8111-111111111111';
 const RECIPIENT_ID = '22222222-2222-4222-8222-222222222222';

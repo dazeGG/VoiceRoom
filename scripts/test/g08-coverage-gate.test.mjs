@@ -78,7 +78,7 @@ const SERVER_INTERNAL_COVERAGE_SCRIPT = String.raw`
   const path = require("node:path");
   const vm = require("node:vm");
   const { pathToFileURL } = require("node:url");
-  const absolute = path.resolve("apps/api/src/server.js");
+  const absolute = path.resolve("apps/api/src/server.ts");
   const originalSource = fs.readFileSync(absolute, "utf8");
   function extract(functionName) {
     const asyncStart = originalSource.indexOf("async function " + functionName + "(");
