@@ -1,7 +1,7 @@
 import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createCursorCodec } from '../src/platform/cursor-codec.js';
+import { createCursorCodec } from '../src/platform/cursor-codec.ts';
 import { createReactionService } from '../src/domains/messaging/reaction-service.ts';
 import { registerReactionRoutes } from '../src/domains/messaging/reaction-routes.ts';
 import { createReactionRealtimeAdapter } from '../src/domains/messaging/reaction-realtime-adapter.ts';

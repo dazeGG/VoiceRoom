@@ -9,8 +9,8 @@ import {
   PUBLIC_CAPABILITY_KEYS,
   normalizeManifest
 } from '@voice-room/shared/capabilities';
-import { createCapabilitySnapshot } from '../src/platform/capability-routes.js';
-import { createReadinessReport, sha256Hex } from '../src/platform/readiness.js';
+import { createCapabilitySnapshot } from '../src/platform/capability-routes.ts';
+import { createReadinessReport, sha256Hex } from '../src/platform/readiness.ts';
 
 const repositoryRoot = path.resolve(import.meta.dirname, '../../..');
 const requestedManifestPath = process.env.CAPABILITY_DAG_PATH || 'config/capability-dag.v1.json';

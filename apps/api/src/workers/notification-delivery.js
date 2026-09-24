@@ -3,7 +3,7 @@ import { readEnvBool, readEnvInt } from '../lib/config.js';
 import { createPushStore } from '../lib/push-store.js';
 import { createNotificationOutboxRepository } from '../domains/notifications/notification-outbox-repository.ts';
 import { createNotificationPushProvider } from '../domains/notifications/push-provider.ts';
-import { boundedBackoff, createLeaseRuntime } from '../platform/lease-runtime.js';
+import { boundedBackoff, createLeaseRuntime } from '../platform/lease-runtime.ts';
 import { recordNotificationOldestPending } from '../lib/metrics.js';
 import { LOG_EVENTS } from '../lib/log-events.js';
 import { createLogger } from '../lib/logger.js';

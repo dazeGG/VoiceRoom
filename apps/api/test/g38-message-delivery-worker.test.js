@@ -8,7 +8,7 @@ test('G38-A01 worker uses the shared lease runtime and the API listener starts n
   const worker = fs.readFileSync(path.resolve(import.meta.dirname, '../src/workers/message-delivery.js'), 'utf8');
   const relay = fs.readFileSync(path.resolve(import.meta.dirname, '../src/domains/messaging/message-delivery-relay.ts'), 'utf8');
   assert.equal(LEASE_IDENTITY, 'message-delivery.G38');
-  assert.match(worker, /from '\.\.\/platform\/lease-runtime\.js'/);
+  assert.match(worker, /from '\.\.\/platform\/lease-runtime\.ts'/);
   assert.equal((worker.match(/createLeaseRuntime/g) || []).length, 2);
   const start = relay.indexOf('async function startMessageDeliveryListener');
   const listener = relay.slice(start, relay.indexOf('async function stopMessageDeliveryListener'));

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { createReadinessReport } from '../src/platform/readiness.js';
+import { createReadinessReport } from '../src/platform/readiness.ts';
 
 test('media capabilities become ready when every declared prerequisite is ready', () => {
   const report = createReadinessReport('config/capability-dag.v1.json', {

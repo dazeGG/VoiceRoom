@@ -5,10 +5,10 @@ import { Pool } from 'pg';
 import test from 'node:test';
 import { normalizeManifest, PUBLIC_CAPABILITY_KEYS } from '@voice-room/shared/capabilities';
 import { runMigrations } from '../src/lib/migrate.js';
-import { createReadinessReport } from '../src/platform/readiness.js';
-import { createRuntimeReadinessProvider } from '../src/platform/runtime-readiness.js';
-import { createRuntimeReadinessRepository } from '../src/platform/runtime-readiness-repository.js';
-import { WORKER_CAPABILITIES, startWorkerHeartbeat } from '../src/platform/worker-heartbeat.js';
+import { createReadinessReport } from '../src/platform/readiness.ts';
+import { createRuntimeReadinessProvider } from '../src/platform/runtime-readiness.ts';
+import { createRuntimeReadinessRepository } from '../src/platform/runtime-readiness-repository.ts';
+import { WORKER_CAPABILITIES, startWorkerHeartbeat } from '../src/platform/worker-heartbeat.ts';
 import { createTestDatabase } from './db-harness.js';
 
 const SILENT = { log() {}, info() {}, warn() {}, error() {} };
