@@ -21,7 +21,7 @@ import type { UserStore } from '../lib/user-store.ts';
 import type { ConnectionRegistry, WsConnection } from './registry.ts';
 
 // Presence peers and rooms are plain in-memory records shared with server.ts.
-type Peer = Record<string, any>;
+type Peer = { id: string; [key: string]: any };
 type PresenceRoom = { peers: Map<string, Peer>; voiceActiveSince?: number | null; [key: string]: any };
 type VoiceTarget = { roomId: string; peerId: string; sessionToken?: string; transportId?: string };
 type FinalizeContext = { roomId: string; peerId: string; peer: Peer | null; reason: string; ownershipFinalized: boolean };

@@ -28,7 +28,6 @@ import { createLinkPreviewRepository } from '../domains/link-previews/link-previ
 import { createLinkPreviewService } from '../domains/link-previews/link-preview-service.ts';
 import { createAccountDeletionRepository } from '../domains/account/account-deletion-repository.ts';
 import { createCredentialBoundaryService } from '../domains/admission/credential-boundary-service.ts';
-import type { GateRoomStore } from '../domains/admission/credential-boundary-service.ts';
 import { createLiveKitCredentialProvider } from '../domains/admission/livekit-credential-provider.ts';
 import { isGatePrincipal } from '../domains/admission/gate-principal.ts';
 import { createMembershipRepository } from '../domains/membership/membership-repository.ts';
@@ -72,6 +71,7 @@ import { createMediaQuotaService } from '../domains/media/media-quota-service.ts
 import { createMediaService } from '../domains/media/media-service.ts';
 import { createMediaVisibilityService } from '../domains/media/media-visibility-service.ts';
 import { createCursorCodec } from '../platform/cursor-codec.ts';
+import type { EvictionType } from '../domains/rooms/peer-eviction.ts';
 
 type Logger = { error(...args: unknown[]): void };
 type LiveKitConfig = { enabled: boolean; apiKey: string; apiSecret: string; gateUrl: string };
@@ -99,7 +99,7 @@ export type ServiceRegistryDeps = {
   broadcast: (room: Room, message: Record<string, unknown>) => void;
   broadcastToUser: (userId: string, message: any) => unknown;
   attachMediaProjection: (context: 'room' | 'dm', message: any) => Promise<any>;
-  disconnectModeratedPeer: (room: Room, peer: any, type: string, options: { gateAlreadyRevoked?: boolean }) => Promise<unknown>;
+  disconnectModeratedPeer: (room: Room, peer: any, type: EvictionType, options: { gateAlreadyRevoked?: boolean }) => Promise<unknown>;
   liveKitGatePrincipalForPeer: (roomId: string, peer: any) => unknown;
   getLiveKitConfig: () => LiveKitConfig;
   roomMembershipPresenceSnapshot: (roomId: string) => any;
@@ -549,9 +549,7 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
       return null;
     }
     credentialBoundary = createCredentialBoundaryService({
-      // An invalid epoch lookup carries `epoch: null`; the boundary reads the
-      // epoch only after checking for status 'ready'.
-      roomStore: store as unknown as GateRoomStore,
+      roomStore: store,
       secret: LIVEKIT_GATE_SECRET,
       credentialTtlMs: LIVEKIT_GATE_CREDENTIAL_TTL_SECONDS * 1000
     });

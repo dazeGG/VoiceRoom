@@ -155,7 +155,7 @@ function createFriendStore({ databaseUrl, logger = createLogger({ name: 'api' })
     );
 
     return friendsResult.rows.map((row) => ({
-      user: mapPublicUser(row),
+      user: mapPublicUser(row)!,
       friendsSince: toMillis(row.friends_since),
       unreadCount: unread.get(row.id) || 0,
       lastMessage: lastMessage.get(row.id) || null
@@ -178,7 +178,7 @@ function createFriendStore({ databaseUrl, logger = createLogger({ name: 'api' })
        LIMIT $3`,
       [excludeUserId, pattern, limit]
     );
-    return result.rows.map(mapPublicUser);
+    return result.rows.map(mapPublicUser) as PublicUser[];
   }
 
   // --- Requests -----------------------------------------------------------
@@ -208,7 +208,7 @@ function createFriendStore({ databaseUrl, logger = createLogger({ name: 'api' })
       }
 
       if (await areFriends(requesterId, addressee.id, client)) {
-        return { status: 'already_friends', user: mapPublicUser(addressee) };
+        return { status: 'already_friends', user: mapPublicUser(addressee)! };
       }
 
       // Reverse pending request -> accept it.
@@ -224,7 +224,7 @@ function createFriendStore({ databaseUrl, logger = createLogger({ name: 'api' })
           [reverse.rows[0].id]
         );
         await insertFriendship(client, requesterId, addressee.id);
-        return { status: 'accepted', user: mapPublicUser(addressee) };
+        return { status: 'accepted', user: mapPublicUser(addressee)! };
       }
 
       // Existing forward pending request -> idempotent.
@@ -234,7 +234,7 @@ function createFriendStore({ databaseUrl, logger = createLogger({ name: 'api' })
         [requesterId, addressee.id]
       );
       if (forward.rowCount! > 0) {
-        return { status: 'already_sent', user: mapPublicUser(addressee) };
+        return { status: 'already_sent', user: mapPublicUser(addressee)! };
       }
 
       // The pre-check above is racy under READ COMMITTED: two concurrent sends
@@ -251,9 +251,9 @@ function createFriendStore({ databaseUrl, logger = createLogger({ name: 'api' })
         [id, requesterId, addressee.id]
       );
       if (inserted.rowCount === 0) {
-        return { status: 'already_sent', user: mapPublicUser(addressee) };
+        return { status: 'already_sent', user: mapPublicUser(addressee)! };
       }
-      return { status: 'sent', requestId: id, user: mapPublicUser(addressee) };
+      return { status: 'sent', requestId: id, user: mapPublicUser(addressee)! };
     });
   }
 
@@ -303,12 +303,12 @@ function createFriendStore({ databaseUrl, logger = createLogger({ name: 'api' })
         id: row.request_id,
         createdAt: toMillis(row.request_created_at),
         mutualFriends: row.mutual || 0,
-        user: mapPublicUser(row)
+        user: mapPublicUser(row)!
       })),
       outgoing: outgoing.rows.map((row) => ({
         id: row.request_id,
         createdAt: toMillis(row.request_created_at),
-        user: mapPublicUser(row)
+        user: mapPublicUser(row)!
       }))
     };
   }
@@ -423,7 +423,7 @@ function createFriendStore({ databaseUrl, logger = createLogger({ name: 'api' })
        ORDER BY lower(coalesce(u.display_name, u.login)), u.id`,
       [userId]
     );
-    return result.rows.map(mapPublicUser);
+    return result.rows.map(mapPublicUser) as PublicUser[];
   }
 
   // Blocking is a hard reset of the relationship: the friendship goes away and
@@ -498,7 +498,7 @@ function createFriendStore({ databaseUrl, logger = createLogger({ name: 'api' })
        LIMIT $3`,
       [userId, peerId, limit]
     );
-    return result.rows.map(mapMessage);
+    return result.rows.map(mapMessage) as DirectMessage[];
   }
 
   async function getMessage(userId: string, peerId: string, messageId: string) {
@@ -544,13 +544,13 @@ function createFriendStore({ databaseUrl, logger = createLogger({ name: 'api' })
     metadata?: Row | null;
     replyToMessageId?: string | null;
     beforeUnitOfWork?: ((client: pg.PoolClient) => Promise<{ replay?: boolean; message?: Row } | null | undefined>) | null;
-    unitOfWork?: ((client: pg.PoolClient, message: DirectMessage | null) => Promise<unknown>) | null;
+    unitOfWork?: ((client: pg.PoolClient, message: DirectMessage) => Promise<unknown>) | null;
   }) {
     const id = crypto.randomUUID();
     return transaction(getPool(), async (client) => {
       if (typeof beforeUnitOfWork === 'function') {
         const prepared = await beforeUnitOfWork(client);
-        if (prepared?.replay) return { ...prepared.message, idempotencyReplay: true };
+        if (prepared?.replay) return { ...(prepared.message as DirectMessage), idempotencyReplay: true };
       }
       const result = await client.query(
         `INSERT INTO direct_messages (id, sender_id, recipient_id, body, created_at, metadata, reply_to_message_id)
@@ -558,7 +558,7 @@ function createFriendStore({ databaseUrl, logger = createLogger({ name: 'api' })
          RETURNING *`,
         [id, senderId, recipientId, body, metadata ? JSON.stringify(metadata) : '{}', replyToMessageId]
       );
-      const message = mapMessage(result.rows[0]);
+      const message = mapMessage(result.rows[0])!;
       if (typeof unitOfWork === 'function') await unitOfWork(client, message);
       return message;
     });
@@ -595,7 +595,7 @@ function createFriendStore({ databaseUrl, logger = createLogger({ name: 'api' })
        RETURNING *`,
       [senderId, roomId]
     );
-    return result.rows.map(mapMessage);
+    return result.rows.map(mapMessage) as DirectMessage[];
   }
 
   // Mark every message from peer -> user as read. Returns the number marked so
@@ -607,7 +607,7 @@ function createFriendStore({ databaseUrl, logger = createLogger({ name: 'api' })
        WHERE recipient_id = $1 AND sender_id = $2 AND read_at IS NULL AND deleted_at IS NULL`,
       [userId, peerId]
     );
-    return { count: result.rowCount };
+    return { count: result.rowCount! };
   }
 
   async function getUnreadCounts(userId: string): Promise<Record<string, number>> {

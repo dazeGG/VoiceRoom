@@ -26,7 +26,7 @@ export interface OpsRouteDeps {
   livekitEnabled(): boolean;
   /** Prometheus exposition text for /api/metrics (Caddy restricts who can read it). */
   renderMetrics(): string;
-  pow: { prune(): void; createChallenge(ip: string, now: number): string };
+  pow: { prune(): void; createChallenge(ip: string, now: number): string | null };
   powDifficulty: number;
   powTtlMs: number;
   clientLogs: { enabled: boolean; limiter: RateLimiter };
@@ -111,7 +111,8 @@ export function registerOpsRoutes(root: FastifyInstance, ctx: ApiContext, deps: 
     return {
       ok: true as const,
       algorithm: 'sha256' as const,
-      challenge: deps.pow.createChallenge(ctx.clientIp(request.raw), now),
+      // Null only without a difficulty, which returned above.
+      challenge: deps.pow.createChallenge(ctx.clientIp(request.raw), now)!,
       difficulty: deps.powDifficulty,
       expiresAt: now + deps.powTtlMs,
       required: true as const

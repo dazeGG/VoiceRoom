@@ -110,13 +110,6 @@ import { createRuntimeReadinessProvider } from './platform/runtime-readiness.ts'
 import { registerCapabilityRoutes } from './platform/capability-routes.ts';
 import { mentionUserIdsFromContent } from '@voice-room/shared/mentions';
 
-// The domain modules each declare the store and service shape they use. Several
-// of those declarations predate the typed stores: they promise non-null results
-// the stores can return null for, or fix a payload the stores leave open. The
-// wiring below bridges the two, only here; tightening those contracts is
-// follow-up work (docs/ARCHITECTURE.md, PR 10k).
-const bridge = <T>(value: unknown): T => value as T;
-
 type ApiServer = http.Server & { app: FastifyInstance; inject: FastifyInstance['inject'] };
 type Logger = ReturnType<typeof createLogger>;
 
@@ -228,7 +221,7 @@ const services = createServiceRegistry({
   broadcast: (room, message) => broadcast(room, message),
   broadcastToUser: (userId, message) => broadcastToUser(userId, message),
   attachMediaProjection: (context, message) => attachMediaProjection(context, message),
-  disconnectModeratedPeer: (room, peer, type, options) => disconnectModeratedPeer(room, peer, bridge(type), options),
+  disconnectModeratedPeer: (room, peer, type, options) => disconnectModeratedPeer(room, peer, type, options),
   liveKitGatePrincipalForPeer: (roomId, peer) => liveKitGatePrincipalForPeer(roomId, peer),
   getLiveKitConfig: () => getLiveKitConfig(),
   roomMembershipPresenceSnapshot: (roomId) => roomMembershipPresenceSnapshot(roomId),
@@ -270,7 +263,7 @@ let wsRegistry: ConnectionRegistry | null = null;
 let roomRuntime: RoomRealtimeRuntime | null = null;
 const roomPresence = createRoomPresence({
   store: () => getRoomStore(),
-  runtime: () => bridge(roomRuntime),
+  runtime: () => roomRuntime,
   logger: () => getProcessLogger(),
   occupancyRetry: { baseMs: 1000, maxMs: 30000 },
   roster: { waitMs: LIVEKIT_ROSTER_WAIT_MS, pollMs: ROSTER_POLL_INTERVAL_MS }
@@ -288,7 +281,7 @@ const {
   waitForRosterPeer
 } = roomPresence;
 const messageProjection = createMessageProjection({
-  attachments: () => bridge(getMediaServices()?.attachments ?? null),
+  attachments: () => getMediaServices()?.attachments ?? null,
   replies: () => {
     const pool = getRelease250Pool();
     return pool ? createReplyRepository({ client: pool }) : null;
@@ -312,12 +305,12 @@ const linkPreviewEvents = createLinkPreviewEvents({
 const messageDeliveryRelay = createMessageDeliveryRelay({
   enabled: MESSAGE_DELIVERY_LISTEN_ENABLED,
   pool: () => getRelease250Pool(),
-  outbox: () => bridge(getMessageDeliveryServices()?.outbox ?? null),
+  outbox: () => getMessageDeliveryServices()?.outbox ?? null,
   projection: messageProjection,
   broadcastChatMessage: (roomId, message) => roomRuntime?.broadcastChatMessage(roomId, message),
   notifyUser: (userId, event) => broadcastToUser(userId, event),
   findUser: (userId) => getUserStore().getUserById(userId),
-  broadcastDmNotification: (recipientId, sender, message) => notificationDispatch.broadcastDmNotification(recipientId, sender, bridge(message)),
+  broadcastDmNotification: (recipientId, sender, message) => notificationDispatch.broadcastDmNotification(recipientId, sender, message),
   publicChatMessage,
   logger: () => getProcessLogger()
 });
@@ -327,30 +320,30 @@ const { broadcastRoomLinkPreview, broadcastDirectLinkPreview, scheduleRoomLinkPr
 const { start: startMessageDeliveryListener, stop: stopMessageDeliveryListener } = messageDeliveryRelay;
 const roomLifecycle = createRoomLifecycle({
   presence: roomPresence,
-  runtime: () => bridge(roomRuntime),
-  invitations: () => bridge(services.invitationStore()),
+  runtime: () => roomRuntime,
+  invitations: () => services.invitationStore(),
   notifyUser: (userId, event) => broadcastToUser(userId, event),
-  credentials: () => bridge(getCredentialBoundary()),
+  credentials: () => getCredentialBoundary(),
   removeParticipant: (roomId, peerId) => removeLiveKitParticipant(roomId, peerId),
   removeAvatar: (key, log) => avatarsService.removeFile(key, log),
-  displayName: (user) => sessionDisplayName(bridge(user)),
+  displayName: (user) => sessionDisplayName(user),
   logger: () => getProcessLogger()
 });
 const accountLifecycle = createAccountLifecycle({
   friendIds: (userId) => getFriendStore().getFriendIds(userId),
   notifyUser: (userId, event) => broadcastToUser(userId, event),
-  sockets: () => bridge(wsRegistry),
+  sockets: () => wsRegistry,
   seatPrincipal: (roomId, peerId) => {
     const peer = presenceRooms.get(roomId)?.peers.get(peerId);
     return peer ? liveKitGatePrincipalForPeer(roomId, peer) : null;
   },
   revokeSeatCredentials: (input) => getRoomStore().revokeLiveKitGateCredentialsForPeer(input),
-  leaveVoice: (connection, activeVoice) => bridge(roomRuntime?.leaveVoiceRoom(bridge(connection), activeVoice)),
+  leaveVoice: (connection, activeVoice) => roomRuntime?.leaveVoiceRoom(connection, activeVoice),
   removeParticipant: (roomId, peerId) => removeLiveKitParticipant(roomId, peerId),
   sessionRevokedCloseCode: SESSION_REVOKED_CLOSE_CODE,
-  deletions: () => bridge(getAccountDeletionRepository()),
+  deletions: () => getAccountDeletionRepository(),
   findRoom: (roomId) => getRoomStore().getRoom(roomId),
-  announceRoomUpdate: (roomId, room) => roomLifecycle.announceRoomUpdate(roomId, bridge(room)),
+  announceRoomUpdate: (roomId, room) => roomLifecycle.announceRoomUpdate(roomId, room),
   finishRoomDeletion: (roomId, options) => roomLifecycle.finishRoomDeletion(roomId, options),
   removeAvatar: (key) => avatarsService.removeFile(key, undefined),
   logger: () => getProcessLogger()
@@ -459,7 +452,7 @@ const pushSubscriptionLimiter = createRateLimiter({
 });
 let admissionService: ReturnType<typeof createAdmissionService> | null = null;
 const roomsService = createRoomsService({
-  store: bridge(getRoomStore),
+  store: getRoomStore,
   getRoom,
   limits: {
     maxRooms: MAX_ROOMS,
@@ -467,12 +460,12 @@ const roomsService = createRoomsService({
     maxTempRoomsPerIp: MAX_TEMP_ROOMS_PER_IP
   },
   announceRoomUpdate: (roomId, room) => broadcastRoomUpdate(roomId, room),
-  finishRoomDeletion: (roomId, options) => finishRoomDeletion(roomId, bridge(options))
+  finishRoomDeletion: (roomId, options) => finishRoomDeletion(roomId, options)
 });
 const peerEviction = createPeerEviction({
   store: getRoomStore,
-  runtime: () => bridge(roomRuntime),
-  notifyPeer: (peer, event) => sendEvent(bridge(peer), event),
+  runtime: () => roomRuntime,
+  notifyPeer: (peer, event) => sendEvent(peer, event),
   notifyUser: (userId, event) => broadcastToUser(userId, event),
   detachVoiceConnections: (roomId, peerId) => {
     for (const connection of wsRegistry?.connections.values() || []) {
@@ -495,15 +488,15 @@ const peerModeration = createPeerModerationService({
   setParticipantMuted: (roomId, peerId, muted) => setLiveKitParticipantMuted(roomId, peerId, muted),
   announcePeerUpdated: (room, peer) => {
     const event = { type: 'peer-updated', peer: publicPeer(peer) };
-    broadcast(bridge(room), event);
+    broadcast(room, event);
     roomRuntime?.mirrorLegacyRoomEvent(room.id, event);
   },
-  notifyPeer: (peer, event) => sendEvent(bridge(peer), event),
+  notifyPeer: (peer, event) => sendEvent(peer, event),
   maxBans: MAX_ROOM_BANS,
   logger: () => getProcessLogger()
 });
 const roomChat = createRoomChatService({
-  messages: bridge(getMessageService),
+  messages: getMessageService,
   readService: () => getHistoryServices().read,
   getRoom,
   findRoomBan,
@@ -513,7 +506,7 @@ const roomChat = createRoomChatService({
   limiter: roomChatLimiter,
   findUser: (userId) => getUserStore().getUserById(userId),
   media: getMediaServices,
-  replies: () => bridge(createReplyRepository({ client: getRelease250Pool() })),
+  replies: () => createReplyRepository({ client: getRelease250Pool() }),
   notifications: getNotificationServices,
   delivery: getMessageDeliveryServices,
   projectMedia: attachMediaProjection,
@@ -521,7 +514,7 @@ const roomChat = createRoomChatService({
   identity: { chatPeerId: sessionChatPeerId, avatarColorKey: sessionAvatarColorKey, displayName: sessionDisplayName },
   directEmit: MESSAGE_DIRECT_EMIT_ENABLED,
   broadcastChatMessage: (roomId, message) => roomRuntime?.broadcastChatMessage(roomId, message),
-  broadcastRoomDetail: (roomId, event) => roomRuntime?.broadcastRoomDetail?.(roomId, bridge(event)),
+  broadcastRoomDetail: (roomId, event) => roomRuntime?.broadcastRoomDetail?.(roomId, event),
   roomDetailEvent: buildServerEnvelope,
   scheduleLinkPreview: scheduleRoomLinkPreview,
   refreshPins: refreshPinsAfterMessageMutation,
@@ -534,29 +527,29 @@ const sessionCookies = createSessionCookies({
   maxAgeSeconds: SESSION_TTL_MS / 1000
 });
 const accountService = createAccountService({
-  users: bridge(getUserStore),
-  deletions: bridge(getAccountDeletionRepository),
+  users: getUserStore,
+  deletions: getAccountDeletionRepository,
   loginFailures: loginFailureLimiter,
   endSessionConnections: (input) => endAccountSessionConnections(input),
   notifyUser: (userId, event) => broadcastToUser(userId, event),
-  queuePush: (userId, payload, options) => queuePush(userId, bridge(payload), options),
+  queuePush: (userId, payload, options) => queuePush(userId, payload, options),
   refreshActiveProfile: (user) => refreshActiveUserProfile(user),
   broadcastProfileToFriends: (user, log) => broadcastUserProfileToFriends(user, { log }),
   logger: () => getProcessLogger()
 });
 const friendsService = createFriendsService({
-  friends: bridge(getFriendStore),
+  friends: getFriendStore,
   findUser: (userId) => getUserStore().getUserById(userId),
   findRoom: (roomId) => getRoomStore().getRoom(roomId),
   sendDirectMessage: (input) => getMessageService().direct.sendMessage(input),
   isOnline: (userId) => isUserOnline(userId),
   notifyUser: (userId, event) => broadcastToUser(userId, event),
-  queuePush: (userId, payload, context) => queuePush(userId, bridge(payload), context),
+  queuePush: (userId, payload, context) => queuePush(userId, payload, context),
   ringLimiter,
   ringTtlMs: RING_TTL_MS
 });
 const directMessages = createDirectMessagesService({
-  messages: bridge(getMessageService),
+  messages: getMessageService,
   readService: () => getHistoryServices().read,
   friends: getFriendStore,
   findUser: (userId) => getUserStore().getUserById(userId),
@@ -569,8 +562,8 @@ const directMessages = createDirectMessagesService({
   feature: release250FeatureEnabled,
   limiter: dmLimiter,
   media: getMediaServices,
-  replies: () => bridge(createReplyRepository({ client: getRelease250Pool() })),
-  delivery: bridge(getMessageDeliveryServices),
+  replies: () => createReplyRepository({ client: getRelease250Pool() }),
+  delivery: getMessageDeliveryServices,
   projectMedia: attachMediaProjection,
   projectReply: attachReplyProjection,
   directEmit: MESSAGE_DIRECT_EMIT_ENABLED,
@@ -590,11 +583,11 @@ const notificationSettings = createNotificationSettingsService({
 const avatarsService = createAvatarsService({
   storage: getAvatarStorage,
   linkPreviewStorage: getLinkPreviewStorage,
-  users: bridge(getUserStore),
+  users: getUserStore,
   rooms: getRoomStore,
   refreshActiveProfile: (user) => refreshActiveUserProfile(user),
   broadcastProfileToFriends: (user, log) => broadcastUserProfileToFriends(user, { log }),
-  announceRoomUpdate: (roomId, room) => broadcastRoomUpdate(roomId, bridge(room))
+  announceRoomUpdate: (roomId, room) => broadcastRoomUpdate(roomId, room)
 });
 
 function liveKitGatePrincipalForPeer(roomId: string, peer: any) {
@@ -652,7 +645,7 @@ function sessionAvatarColorKey(user: any): string {
   return user?.avatarColorKey || '';
 }
 
-function sessionDisplayName(user: { displayName?: string; login?: string } | null | undefined): string {
+function sessionDisplayName(user: { displayName?: unknown; login?: unknown } | null | undefined): string {
   if (!user) return '';
   return cleanName(user.displayName || user.login);
 }
@@ -836,8 +829,8 @@ function createApiApp({
   admissionService = createAdmissionService({
     livekitConfig: getLiveKitConfig,
     credentialProvider: getLiveKitCredentialProvider,
-    credentialBoundary: bridge(getCredentialBoundary),
-    store: bridge(getRoomStore),
+    credentialBoundary: getCredentialBoundary,
+    store: getRoomStore,
     roomExists: async (roomId) => Boolean(await getRoom(roomId)),
     findRoomBan,
     waitForRosterPeer,
@@ -894,7 +887,7 @@ function createApiApp({
     sessionAvatarColorKey,
     queueRoomOccupancyTransition,
     findRoomBan,
-    credentialBoundary: bridge(getCredentialBoundary()),
+    credentialBoundary: getCredentialBoundary(),
     removeLiveKitParticipant,
     reconnectLeaseMs: realtimeReconnectLeaseMs,
     now: realtimeNow,
@@ -925,7 +918,7 @@ function createApiApp({
   registerAdmissionRoutes(app, apiContext, admissionService);
   registerRoomRoutes(app, apiContext, {
     rooms: roomsService,
-    store: bridge(getRoomStore),
+    store: getRoomStore,
     getRoom,
     findRoomBan,
     findAuthorizedPeer: (roomId, peerId, sessionToken) => {
@@ -935,7 +928,7 @@ function createApiApp({
     lobbyRoom: publicLobbyRoom,
     invalidateRecipientCache: (roomId) => roomRuntime?.invalidateRecipientCache(roomId),
     createLimiter: roomCreateLimiter,
-    pow: bridge(pow),
+    pow: pow,
     maxRooms: MAX_ROOMS,
     maxRoomPeers: MAX_ROOM_PEERS
   });
@@ -976,7 +969,7 @@ function createApiApp({
         capabilityReadiness: readiness?.features || {}
       });
     },
-    pow: bridge(pow),
+    pow: pow,
     powDifficulty: ROOM_CREATE_POW_DIFFICULTY,
     powTtlMs: ROOM_CREATE_POW_TTL_MS,
     clientLogs: { enabled: CLIENT_LOG_INTAKE_ENABLED, limiter: clientLogLimiter },
@@ -1039,7 +1032,7 @@ function createApiApp({
   if (pins) {
     registerPinRoutes({
       app,
-      pinService: bridge(pins.service),
+      pinService: pins.service,
       resolveRoomAccess: async ({ request, roomId, action }) => {
         const session = await resolveSessionUser(request);
         const viewer = session?.user || null;

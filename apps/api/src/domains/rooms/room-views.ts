@@ -24,7 +24,7 @@ export interface PresencePeer {
   screenStreamId?: string;
   serverMuted?: boolean;
   sessionToken?: string;
-  transport?: { id?: string } | null;
+  transport?: { id?: string; send(message: unknown): boolean } | null;
   viewedScreenPeerId?: string;
 }
 
@@ -45,6 +45,8 @@ export interface StoredRoom {
 /** A stored room joined with its live presence roster. */
 export interface LiveRoom extends StoredRoom {
   peers: Map<string, PresencePeer>;
+  /** Stamped when the room is read (server.ts getRoom). */
+  updatedAt: number;
 }
 
 export function roomAvatarUrl(avatarKey: string | null | undefined): string | null {

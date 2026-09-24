@@ -21,6 +21,8 @@ interface RoomRuntime {
 
 export interface ProfileUser {
   id: string;
+  displayName?: string;
+  login?: string;
   avatarKey?: string | null;
   avatarAccent?: string | null;
   avatarColorKey?: string | null;
@@ -33,7 +35,8 @@ export interface RoomLifecycleDeps {
   /** The friend store while pending room invitations can expire, else null. */
   invitations(): { expirePendingInvites(input: { senderId: string | null; roomId: string }): Promise<{ senderId: string; recipientId: string }[]> } | null;
   notifyUser(userId: string, event: Record<string, unknown>): void;
-  credentials(): { revokePeer(input: { roomId: string; accountUserId: string | null; guestPrincipalId: string }): Promise<unknown> };
+  /** Null without a gate secret; teardown then fails that peer's revocation. */
+  credentials(): { revokePeer(input: { roomId: string; accountUserId: string | null; guestPrincipalId: string }): Promise<unknown> } | null;
   removeParticipant(roomId: string, peerId: string): Promise<void>;
   removeAvatar(key: string | null | undefined, log: Pick<Logger, 'error'> | undefined): Promise<void>;
   displayName(user: ProfileUser): string;
@@ -120,7 +123,7 @@ export function createRoomLifecycle(deps: RoomLifecycleDeps) {
           const principalPeer = peer as GatePrincipalPeer & RosterPeer;
           let failure: unknown = null;
           try {
-            await deps.credentials().revokePeer({ roomId, accountUserId: principalPeer.accountUserId || null, guestPrincipalId: principalPeer.gateGuestPrincipalId || '' });
+            await deps.credentials()!.revokePeer({ roomId, accountUserId: principalPeer.accountUserId || null, guestPrincipalId: principalPeer.gateGuestPrincipalId || '' });
           } catch (error) {
             failure = error;
           }

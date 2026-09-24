@@ -3,6 +3,7 @@
 // room invitation, editing, deleting and marking read. Checks run in the
 // order the legacy handlers ran them.
 
+import type pg from 'pg';
 import crypto from 'node:crypto';
 import { publicUser } from '../../lib/user-store.ts';
 import { isActiveAccount, type SocialUser } from '../social/social-views.ts';
@@ -10,7 +11,7 @@ import { messageFingerprint, normalizeAttachmentIds } from './message-input.ts';
 import { requireReplyTarget } from './reply-projector.ts';
 
 
-type DbClient = unknown;
+type DbClient = Pick<pg.PoolClient, 'query'> | null | undefined;
 type Status<T extends string> = T extends string ? { status: T } : never;
 type RateLimited = { status: 'rate_limited'; retryAfterSeconds: number };
 
@@ -45,7 +46,7 @@ export interface DirectMessageStore {
 
 interface Delivery {
   idempotency: {
-    reserve(client: DbClient, input: Record<string, unknown>): Promise<{ kind: string; ledgerKey?: string; response?: { body?: { message?: DirectMessage } } }>;
+    reserve(client: DbClient, input: Record<string, unknown>): Promise<{ kind: string; ledgerKey?: string; response?: { body?: unknown } }>;
     complete(client: DbClient, key: string, result: { body: unknown; messageId: string; statusCode: number }): Promise<unknown>;
   };
   outbox: { enqueue(client: DbClient, event: Record<string, unknown>): Promise<unknown> };
@@ -149,7 +150,7 @@ export function createDirectMessagesService(deps: DirectMessagesDeps) {
               key: idempotencyKey,
               fingerprint: messageFingerprint({ text, attachmentIds, replyToMessageId })
             });
-            if (reservation.kind === 'replay') return { replay: true as const, message: reservation.response?.body?.message as DirectMessage };
+            if (reservation.kind === 'replay') return { replay: true as const, message: (reservation.response?.body as { message?: DirectMessage } | undefined)?.message as DirectMessage };
             idempotencyLedgerKey = reservation.ledgerKey as string;
             return null;
           }

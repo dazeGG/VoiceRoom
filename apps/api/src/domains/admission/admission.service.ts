@@ -46,7 +46,7 @@ export interface AdmissionStore {
     sessionToken: string;
     displayName: string;
     avatarColorKey: string;
-  }): Promise<{ status: string; identity?: { id?: string } | null }>;
+  }): Promise<{ status: string; identity?: { id?: string } | null } | null>;
   normalizeGatePrincipal(input: { accountUserId: string | null; guestPrincipalId: string; roomId: string }): GatePrincipal | null;
   isRoomServerMuted?(input: { roomId: string; principal: GatePrincipal }): Promise<boolean>;
 }
@@ -169,7 +169,8 @@ export function createAdmissionService(deps: AdmissionDeps) {
     }
 
     const store = deps.store();
-    const identity = await store.getOrCreatePeerIdentity({ roomId, peerId, sessionToken, displayName: name, avatarColorKey: user?.avatarColorKey || '' });
+    // Null only if the identity row vanished mid-transaction.
+    const identity = (await store.getOrCreatePeerIdentity({ roomId, peerId, sessionToken, displayName: name, avatarColorKey: user?.avatarColorKey || '' }))!;
     if (identity.status === 'token_mismatch') return refuse('invalid_session');
     const principal = store.normalizeGatePrincipal({ accountUserId: user?.id || null, guestPrincipalId: identity.identity?.id || '', roomId });
     if (!principal) {

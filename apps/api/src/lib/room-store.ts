@@ -13,9 +13,13 @@ export type GatePrincipal = { principalType: 'account' | 'guest'; principalId: s
 export type StoredRoom = NonNullable<ReturnType<typeof mapRoom>>;
 export type StoredRoomMessage = NonNullable<ReturnType<typeof mapMessage>>;
 export type RoomRelationship = 'owner' | 'bookmarked' | 'member' | '';
+export type PrincipalEpoch = { status: 'ready'; epoch: number } | { status: 'invalid'; epoch: null };
+export type RoomCreation =
+  | { room: StoredRoom; status: 'created' }
+  | { room: null; status: 'auth_required' | 'quota_exceeded' | 'capacity_exceeded' };
 type UnitOfWorkHooks = {
-  beforeUnitOfWork?: (client: pg.PoolClient) => Promise<{ replay?: boolean; message?: Row } | null | undefined>;
-  unitOfWork?: (client: pg.PoolClient, message: StoredRoomMessage | null) => Promise<unknown>;
+  beforeUnitOfWork?: ((client: pg.PoolClient) => Promise<{ replay?: boolean; message?: Row } | null | undefined>) | null;
+  unitOfWork?: ((client: pg.PoolClient, message: StoredRoomMessage) => Promise<unknown>) | null;
 };
 export type AppendRoomMessageInput = UnitOfWorkHooks & {
   id?: unknown;
@@ -223,13 +227,13 @@ function createRoomStore({
     maxRooms?: number;
     maxTempRoomsPerIp?: number;
     now?: number;
-  }) {
+  }): Promise<RoomCreation> {
     const id = String(roomId || '').trim();
     if (!id) {
       throw new Error('Room id is required');
     }
 
-    return transaction(getPool(), async (client) => {
+    return transaction(getPool(), async (client): Promise<RoomCreation> => {
       await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, ['voice-room:create-room']);
 
       const normalizedCreatorIp = typeof creatorIp === 'string' ? creatorIp : '';
@@ -293,7 +297,7 @@ function createRoomStore({
         );
       }
 
-      return { room: mapRoom(inserted.rows[0]), status: 'created' };
+      return { room: mapRoom(inserted.rows[0])!, status: 'created' };
     });
   }
 
@@ -593,9 +597,9 @@ function createRoomStore({
     });
   }
 
-  async function getLiveKitGatePrincipalEpoch({ principal, roomId, now = Date.now() }: { principal?: GatePrincipal | null; roomId?: string; now?: number } = {}) {
+  async function getLiveKitGatePrincipalEpoch({ principal, roomId, now = Date.now() }: { principal?: GatePrincipal | null; roomId?: string; now?: number } = {}): Promise<PrincipalEpoch> {
     if (!roomId || !principal?.principalType || !principal?.principalId) return { status: 'invalid', epoch: null };
-    return transaction(getPool(), async (client) => {
+    return transaction(getPool(), async (client): Promise<PrincipalEpoch> => {
       await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`voice-room:livekit-gate:${roomId}:${principal.principalType}:${principal.principalId}`]);
       const result = await client.query(
         `INSERT INTO livekit_gate_principal_epochs (room_id, principal_type, principal_id, epoch, updated_at)
@@ -1004,7 +1008,7 @@ function createRoomStore({
 
       if (typeof input?.beforeUnitOfWork === 'function') {
         const prepared = await input.beforeUnitOfWork(client);
-        if (prepared?.replay) return { ...prepared.message, idempotencyReplay: true };
+        if (prepared?.replay) return { ...(prepared.message as StoredRoomMessage), idempotencyReplay: true };
       }
 
       const inserted = await client.query(
@@ -1028,7 +1032,7 @@ function createRoomStore({
       );
 
       if (typeof input?.unitOfWork === 'function') {
-        await input.unitOfWork(client, mapMessage(inserted.rows[0]));
+        await input.unitOfWork(client, mapMessage(inserted.rows[0])!);
       }
 
       await client.query(`UPDATE rooms SET updated_at = $2 WHERE id = $1`, [roomId, toDate(now)]);
@@ -1064,7 +1068,7 @@ function createRoomStore({
        ORDER BY recent.created_at ASC, recent.id ASC`,
       [roomId, toDate(now), boundedLimit]
     );
-    return result.rows.map(mapMessage);
+    return result.rows.map(mapMessage) as StoredRoomMessage[];
   }
 
   async function getMessage(roomId: string, messageId: string) {
@@ -1131,7 +1135,7 @@ function createRoomStore({
        ORDER BY r.created_at DESC`,
       [ownerId]
     );
-    return result.rows.map(mapRoom);
+    return result.rows.map(mapRoom) as StoredRoom[];
   }
 
   async function listVisibleRoomsForUser(userId: string | null | undefined) {
@@ -1183,7 +1187,7 @@ function createRoomStore({
        ORDER BY created_at DESC, id ASC`,
       [userId]
     );
-    return result.rows.map((row) => withRelationship(mapRoom(row), row.relationship));
+    return result.rows.map((row) => withRelationship(mapRoom(row), row.relationship)!);
   }
 
   async function getRoomUnreadCount(roomId: string, userId: string, now: number = Date.now()): Promise<number> {
