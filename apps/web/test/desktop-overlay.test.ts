@@ -1,28 +1,10 @@
 // @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.test.json.
-import test, { after } from 'node:test';
+import { test, onTestFinished, vi } from 'vitest';
 import assert from 'node:assert/strict';
-import { resolve } from 'node:path';
-import { createServer } from 'vite';
 
-const webRoot = resolve(import.meta.dirname, '..');
 
-let serverPromise = null;
 
-function getServer() {
-  serverPromise ??= createServer({
-    appType: 'custom',
-    logLevel: 'silent',
-    root: webRoot,
-    server: { hmr: false, middlewareMode: true, watch: null }
-  });
-  return serverPromise;
-}
-
-after(async () => {
-  if (serverPromise) await (await serverPromise).close();
-});
-
-async function loadService(t, bridge) {
+async function loadService(bridge) {
   Object.defineProperty(globalThis, 'window', {
     configurable: true,
     value: bridge === undefined ? {} : { voiceRoomDesktopOverlay: bridge },
@@ -30,25 +12,23 @@ async function loadService(t, bridge) {
   });
   const originalWarn = console.warn;
   console.warn = () => {};
-  t.after(() => {
-    delete globalThis.window;
+  onTestFinished(() => {
     console.warn = originalWarn;
   });
-  const server = await getServer();
-  server.moduleGraph.invalidateAll();
-  return server.ssrLoadModule('/src/lib/platform/desktop-overlay.ts');
+  vi.resetModules();
+  return import('../src/lib/platform/desktop-overlay.ts');
 }
 
-test('desktop overlay service is unavailable without the shell bridge', async (t) => {
-  const service = await loadService(t, undefined);
+test('desktop overlay service is unavailable without the shell bridge', async () => {
+  const service = await loadService(undefined);
   assert.equal(service.desktopOverlayAvailable(), false);
   assert.equal(await service.readDesktopOverlaySettings(), null);
   assert.equal(await service.updateDesktopOverlaySettings({ enabled: false }), null);
 });
 
-test('desktop overlay service normalizes settings and sends a typed patch', async (t) => {
+test('desktop overlay service normalizes settings and sends a typed patch', async () => {
   const calls = [];
-  const service = await loadService(t, {
+  const service = await loadService({
     getSettings: async () => ({
       allowedExecutables: ['mygame.exe', 3, ''],
       anchor: 'bottom-right',
@@ -91,9 +71,9 @@ test('desktop overlay service normalizes settings and sends a typed patch', asyn
   assert.deepEqual(calls.at(-1), { avatarSize: 'small' });
 });
 
-test('desktop overlay snapshot carries mute and stream state once per change', async (t) => {
+test('desktop overlay snapshot carries mute and stream state once per change', async () => {
   const snapshots = [];
-  const service = await loadService(t, {
+  const service = await loadService({
     getSettings: async () => ({}),
     setSettings: async () => ({}),
     setSnapshot: async (snapshot) => {

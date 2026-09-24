@@ -1,5 +1,5 @@
 // @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.test.json.
-import test from 'node:test';
+import { test, vi } from 'vitest';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -67,8 +67,8 @@ test('screen audio keeps a routed fallback sink during a video republish gap', a
   const appended = [];
   const previousDocument = globalThis.document;
   const previousMediaStream = globalThis.MediaStream;
-  globalThis.MediaStream = TestMediaStream;
-  globalThis.document = {
+  vi.stubGlobal('MediaStream', TestMediaStream);
+  vi.stubGlobal('document', {
     body: {
       append(element) {
         appended.push(element);
@@ -83,7 +83,7 @@ test('screen audio keeps a routed fallback sink during a video republish gap', a
         srcObject: null
       };
     }
-  };
+  });
 
   try {
     const { controls, testState } = await loadScreenAudioControls();
@@ -118,7 +118,7 @@ test('screen audio keeps a routed fallback sink during a video republish gap', a
     endedListeners.at(-1)();
     assert.equal(appended[1].removed, true);
   } finally {
-    globalThis.document = previousDocument;
-    globalThis.MediaStream = previousMediaStream;
+    vi.stubGlobal('document', previousDocument);
+    vi.stubGlobal('MediaStream', previousMediaStream);
   }
 });

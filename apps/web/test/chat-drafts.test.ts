@@ -1,30 +1,12 @@
 // @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.test.json.
-import test, { after } from 'node:test';
+import { test, onTestFinished, vi } from 'vitest';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { createServer } from 'vite';
 
 const webRoot = resolve(import.meta.dirname, '..');
 const read = (path: string) => readFileSync(resolve(webRoot, path), 'utf8');
 
-// One Vite server for the whole file, without a file watcher (see
-// desktop-os-integration.test.ts).
-let serverPromise = null;
-
-function getServer() {
-  serverPromise ??= createServer({
-    appType: 'custom',
-    logLevel: 'silent',
-    root: webRoot,
-    server: { hmr: false, middlewareMode: true, watch: null }
-  });
-  return serverPromise;
-}
-
-after(async () => {
-  if (serverPromise) await (await serverPromise).close();
-});
 
 function memoryStorage() {
   const values = new Map();
@@ -39,20 +21,19 @@ function memoryStorage() {
 }
 
 // Fresh module state (the sign-out lock) and fresh storage for every test.
-async function loadDrafts(t) {
+async function loadDrafts() {
   const storage = memoryStorage();
-  Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: storage, writable: true });
-  t.after(() => { delete globalThis.localStorage; });
-  const server = await getServer();
-  server.moduleGraph.invalidateAll();
-  return { drafts: await server.ssrLoadModule('/src/lib/shared/chat/chat-drafts.ts'), storage };
+  vi.stubGlobal('localStorage', storage);
+  onTestFinished(() => { delete globalThis.localStorage; });
+  vi.resetModules();
+  return { drafts: await import('../src/lib/shared/chat/chat-drafts.ts'), storage };
 }
 
 const dm = (id) => ({ type: 'dm', id });
 const room = (id) => ({ type: 'room', id });
 
-test('drafts are kept per account and chat, and an empty text removes one', async (t) => {
-  const { drafts, storage } = await loadDrafts(t);
+test('drafts are kept per account and chat, and an empty text removes one', async () => {
+  const { drafts, storage } = await loadDrafts();
   drafts.saveChatDraft('ada', dm('grace'), { text: 'привет' }, 1000);
   drafts.saveChatDraft('ada', room('lounge'), { text: 'всем привет\nвторая строка' }, 1000);
   drafts.saveChatDraft('linus', dm('grace'), { text: 'другой аккаунт' }, 1000);
@@ -71,8 +52,8 @@ test('drafts are kept per account and chat, and an empty text removes one', asyn
   assert.deepEqual(storage.keys(), [drafts.chatDraftStorageKey('linus')], 'an account without drafts leaves no key behind');
 });
 
-test('a restored draft keeps only the mentions whose @login is still in the text', async (t) => {
-  const { drafts } = await loadDrafts(t);
+test('a restored draft keeps only the mentions whose @login is still in the text', async () => {
+  const { drafts } = await loadDrafts();
   drafts.saveChatDraft('ada', room('lounge'), {
     text: '@grace посмотри',
     mentions: [
@@ -87,8 +68,8 @@ test('a restored draft keeps only the mentions whose @login is still in the text
   ]);
 });
 
-test('old, excess and malformed drafts are dropped', async (t) => {
-  const { drafts } = await loadDrafts(t);
+test('old, excess and malformed drafts are dropped', async () => {
+  const { drafts } = await loadDrafts();
   const now = drafts.CHAT_DRAFT_MAX_AGE_MS + 100_000;
   const stored = {
     'dm:stale': { text: 'месяц назад', updatedAt: now - drafts.CHAT_DRAFT_MAX_AGE_MS - 1 },
@@ -108,8 +89,8 @@ test('old, excess and malformed drafts are dropped', async (t) => {
   assert.deepEqual(drafts.normalizeChatDrafts('garbage', now), {});
 });
 
-test('signing out wipes every draft and ignores late saves until the next sign-in', async (t) => {
-  const { drafts, storage } = await loadDrafts(t);
+test('signing out wipes every draft and ignores late saves until the next sign-in', async () => {
+  const { drafts, storage } = await loadDrafts();
   storage.setItem('voice-room:name', 'Ada');
   drafts.saveChatDraft('ada', dm('grace'), { text: 'личное' }, 1000);
   drafts.saveChatDraft('linus', room('lounge'), { text: 'чужое' }, 1000);

@@ -1,5 +1,5 @@
 // @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.test.json.
-import test from 'node:test';
+import { test, onTestFinished } from 'vitest';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -11,7 +11,7 @@ const webRoot = resolve(import.meta.dirname, '..');
 // The service has no module state and reads `window` on every call, so one
 // native import covers every bridge shape. Loading it through an in-process
 // Vite server used to abort the whole test file with a V8 fatal on CI.
-function useBridge(t, bridge) {
+function useBridge(bridge) {
   Object.defineProperty(globalThis, 'window', {
     configurable: true,
     value: bridge === undefined ? {} : { voiceRoomDesktopAutostart: bridge },
@@ -19,23 +19,22 @@ function useBridge(t, bridge) {
   });
   const originalWarn = console.warn;
   console.warn = () => {};
-  t.after(() => {
-    delete globalThis.window;
+  onTestFinished(() => {
     console.warn = originalWarn;
   });
 }
 
-test('desktop autostart service is unavailable without the shell bridge', async (t) => {
-  useBridge(t, undefined);
+test('desktop autostart service is unavailable without the shell bridge', async () => {
+  useBridge(undefined);
 
   assert.equal(service.desktopAutostartAvailable(), false);
   assert.equal(await service.readDesktopAutostartSettings(), null);
   assert.equal(await service.updateDesktopAutostartSettings({ openAtLogin: true }), null);
 });
 
-test('desktop autostart service normalizes shell results and sends only boolean fields', async (t) => {
+test('desktop autostart service normalizes shell results and sends only boolean fields', async () => {
   const calls = [];
-  useBridge(t, {
+  useBridge({
     getSettings: async () => ({ openAtLogin: 1, startMinimized: true, supported: true }),
     setSettings: async (patch) => {
       calls.push(patch);
@@ -58,8 +57,8 @@ test('desktop autostart service normalizes shell results and sends only boolean 
   assert.deepEqual(calls, [{ openAtLogin: true }]);
 });
 
-test('desktop autostart service swallows bridge failures', async (t) => {
-  useBridge(t, {
+test('desktop autostart service swallows bridge failures', async () => {
+  useBridge({
     getSettings: async () => {
       throw new Error('untrusted frame');
     },

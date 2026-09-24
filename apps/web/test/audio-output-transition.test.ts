@@ -1,5 +1,5 @@
 // @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.test.json.
-import test from 'node:test';
+import { test } from 'vitest';
 import assert from 'node:assert/strict';
 import {
   createAudioOutputTransitionQueue,

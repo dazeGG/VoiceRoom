@@ -1,33 +1,14 @@
-import test, { after } from 'node:test';
+import { test, vi } from 'vitest';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { createServer } from 'vite';
 
 const webRoot = resolve(import.meta.dirname, '..');
 const read = (path: string) => readFileSync(resolve(webRoot, path), 'utf8');
 
-// One Vite server for the whole file, without a file watcher (see
-// desktop-os-integration.test.ts).
-let serverPromise: ReturnType<typeof createServer> | null = null;
-
-function getServer() {
-  serverPromise ??= createServer({
-    appType: 'custom',
-    logLevel: 'silent',
-    root: webRoot,
-    server: { hmr: false, middlewareMode: true, watch: null }
-  });
-  return serverPromise;
-}
-
-after(async () => {
-  if (serverPromise) await (await serverPromise).close();
-});
-
 async function loadInsert() {
-  const server = await getServer();
-  return server.ssrLoadModule('/src/lib/shared/chat/composer-insert.ts');
+  vi.resetModules();
+  return import('../src/lib/shared/chat/composer-insert.ts');
 }
 
 test('an emoji lands at the caret, replaces a selection, and leaves the caret after itself', async () => {

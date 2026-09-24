@@ -1,51 +1,26 @@
 // @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.test.json.
-import test, { after } from 'node:test';
+import { onTestFinished, test, vi } from 'vitest';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { createServer } from 'vite';
+import { freshImport, muteWarnings, stubWindow } from './helpers/fresh-module.ts';
 
 const webRoot = resolve(import.meta.dirname, '..');
 
-// One Vite server for the whole file, without a file watcher: a server per
-// test exhausts file watchers on CI runners and kills the test process.
-let serverPromise = null;
-
-function getServer() {
-  serverPromise ??= createServer({
-    appType: 'custom',
-    logLevel: 'silent',
-    root: webRoot,
-    server: { hmr: false, middlewareMode: true, watch: null }
-  });
-  return serverPromise;
-}
-
-after(async () => {
-  if (serverPromise) await (await serverPromise).close();
-});
-
 // Every load gets fresh module instances, so module-level state (sync
 // de-duplication, the in-app navigation mark) never leaks between tests.
-async function loadModule(t, modulePath, windowValue = {}) {
-  Object.defineProperty(globalThis, 'window', { configurable: true, value: windowValue, writable: true });
-  const originalWarn = console.warn;
-  console.warn = () => {};
-  t.after(() => {
-    delete globalThis.window;
-    console.warn = originalWarn;
-  });
-  const server = await getServer();
-  server.moduleGraph.invalidateAll();
-  return server.ssrLoadModule(modulePath);
+async function loadModule(modulePath: string, windowValue: Record<string, unknown> = {}) {
+  stubWindow(windowValue);
+  muteWarnings();
+  return freshImport(modulePath);
 }
 
 const flush = () => new Promise((resolveFlush) => setImmediate(resolveFlush));
 
-test('desktop links normalize shell payloads and ignore anything unexpected', async (t) => {
+test('desktop links normalize shell payloads and ignore anything unexpected', async () => {
   let handler = null;
   let unsubscribed = false;
-  const service = await loadModule(t, '/src/lib/platform/desktop-links.ts', {
+  const service = await loadModule('/src/lib/platform/desktop-links.ts', {
     voiceRoomDesktopLinks: {
       onOpen: (next) => {
         handler = next;
@@ -71,15 +46,15 @@ test('desktop links normalize shell payloads and ignore anything unexpected', as
   assert.equal(unsubscribed, true);
 });
 
-test('desktop links are a no-op without the shell bridge', async (t) => {
-  const service = await loadModule(t, '/src/lib/platform/desktop-links.ts', {});
+test('desktop links are a no-op without the shell bridge', async () => {
+  const service = await loadModule('/src/lib/platform/desktop-links.ts', {});
   assert.equal(typeof service.bindDesktopLinks(() => {}), 'function');
 });
 
-test('desktop call state is sent once per change and actions are filtered', async (t) => {
+test('desktop call state is sent once per change and actions are filtered', async () => {
   const sent = [];
   let actionHandler = null;
-  const service = await loadModule(t, '/src/lib/platform/desktop-call.ts', {
+  const service = await loadModule('/src/lib/platform/desktop-call.ts', {
     voiceRoomDesktopCall: {
       onAction: (handler) => {
         actionHandler = handler;
@@ -111,10 +86,10 @@ test('desktop call state is sent once per change and actions are filtered', asyn
   assert.deepEqual(calls, ['output', 'leave']);
 });
 
-test('desktop call state retries after a failed send', async (t) => {
+test('desktop call state retries after a failed send', async () => {
   let fail = true;
   const sent = [];
-  const service = await loadModule(t, '/src/lib/platform/desktop-call.ts', {
+  const service = await loadModule('/src/lib/platform/desktop-call.ts', {
     voiceRoomDesktopCall: {
       onAction: () => () => {},
       setState: async (state) => {
@@ -132,9 +107,9 @@ test('desktop call state retries after a failed send', async (t) => {
   assert.deepEqual(sent, [{ active: false }]);
 });
 
-test('desktop diagnostics copy, open logs and share the web context', async (t) => {
+test('desktop diagnostics copy, open logs and share the web context', async () => {
   const contexts = [];
-  const service = await loadModule(t, '/src/lib/platform/desktop-diagnostics.ts', {
+  const service = await loadModule('/src/lib/platform/desktop-diagnostics.ts', {
     voiceRoomDesktopDiagnostics: {
       copyInfo: async () => ({ ok: true }),
       getInfo: async () => ({ text: 'x' }),
@@ -154,8 +129,8 @@ test('desktop diagnostics copy, open logs and share the web context', async (t) 
   assert.deepEqual(contexts, [{ roomId: 'abc123', userId: 'u1' }, { roomId: '', userId: 'u1' }]);
 });
 
-test('desktop diagnostics fail closed on bridge errors and without the bridge', async (t) => {
-  const service = await loadModule(t, '/src/lib/platform/desktop-diagnostics.ts', {
+test('desktop diagnostics fail closed on bridge errors and without the bridge', async () => {
+  const service = await loadModule('/src/lib/platform/desktop-diagnostics.ts', {
     voiceRoomDesktopDiagnostics: {
       copyInfo: async () => { throw new Error('untrusted'); },
       getInfo: async () => ({ text: 'app: 1.3.0' }),
@@ -167,13 +142,13 @@ test('desktop diagnostics fail closed on bridge errors and without the bridge', 
   assert.equal(await service.copyDesktopDiagnostics(), false);
   assert.equal(await service.openDesktopLogsFolder(), false);
 
-  const bare = await loadModule(t, '/src/lib/platform/desktop-diagnostics.ts', {});
+  const bare = await loadModule('/src/lib/platform/desktop-diagnostics.ts', {});
   assert.equal(bare.desktopDiagnosticsAvailable(), false);
   assert.equal(await bare.copyDesktopDiagnostics(), false);
 });
 
-test('open in app targets desktop browsers only with the right scheme', async (t) => {
-  const service = await loadModule(t, '/src/lib/platform/open-in-app.ts', {});
+test('open in app targets desktop browsers only with the right scheme', async () => {
+  const service = await loadModule('/src/lib/platform/open-in-app.ts', {});
   const windowsChrome = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0 Safari/537.36';
   const macSafari = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/19.0 Safari/605.1.15';
   const linux = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0 Safari/537.36';
@@ -194,8 +169,8 @@ test('open in app targets desktop browsers only with the right scheme', async (t
   assert.equal(service.shouldOfferOpenInApp({ desktopBridge: false, userAgent: linux }), false);
 });
 
-test('open in app navigates Chromium and uses a hidden frame in Firefox', async (t) => {
-  const service = await loadModule(t, '/src/lib/platform/open-in-app.ts', {});
+test('open in app navigates Chromium and uses a hidden frame in Firefox', async () => {
+  const service = await loadModule('/src/lib/platform/open-in-app.ts', {});
   const chromium = { document: {}, location: { href: 'https://voiceroom.ru/r/abc123' }, navigator: { userAgent: 'Chrome/146' } };
   service.launchAppLink('voiceroom://r/abc123', chromium);
   assert.equal(chromium.location.href, 'voiceroom://r/abc123');
@@ -214,46 +189,28 @@ test('open in app navigates Chromium and uses a hidden frame in Firefox', async 
   assert.equal(frame.src, 'voiceroom://r/abc123');
 });
 
-test('in-app room reloads skip the open-in-app offer exactly for the next page', async (t) => {
-  const storage = new Map();
-  Object.defineProperty(globalThis, 'sessionStorage', {
-    configurable: true,
-    value: {
-      getItem: (key) => (storage.has(key) ? storage.get(key) : null),
-      removeItem: (key) => storage.delete(key),
-      setItem: (key, value) => storage.set(key, String(value))
-    },
-    writable: true
-  });
-  t.after(() => { delete globalThis.sessionStorage; });
+test('in-app room reloads skip the open-in-app offer exactly for the next page', async () => {
+  sessionStorage.clear();
+  onTestFinished(() => sessionStorage.clear());
 
-  const marked = await loadModule(t, '/src/lib/platform/open-in-app.ts', {});
+  const marked = await loadModule('/src/lib/platform/open-in-app.ts', {});
   marked.markInAppRoomNavigation();
-  assert.equal(storage.size, 1);
+  assert.equal(sessionStorage.length, 1);
 
   // A fresh module instance stands in for the reloaded page.
-  const reloaded = await loadModule(t, '/src/lib/platform/open-in-app.ts', {});
+  const reloaded = await loadModule('/src/lib/platform/open-in-app.ts', {});
   assert.equal(reloaded.consumeInAppRoomNavigation(), true);
   assert.equal(reloaded.consumeInAppRoomNavigation(), true, 'stable for every caller on the page');
-  assert.equal(storage.size, 0, 'the mark is gone for later loads');
+  assert.equal(sessionStorage.length, 0, 'the mark is gone for later loads');
 
-  const nextLoad = await loadModule(t, '/src/lib/platform/open-in-app.ts', {});
+  const nextLoad = await loadModule('/src/lib/platform/open-in-app.ts', {});
   assert.equal(nextLoad.consumeInAppRoomNavigation(), false);
 });
 
-test('room switch confirmation asks only when leaving another live call', async (t) => {
-  const storage = new Map();
-  Object.defineProperty(globalThis, 'localStorage', {
-    configurable: true,
-    value: {
-      getItem: (key) => (storage.has(key) ? storage.get(key) : null),
-      removeItem: (key) => storage.delete(key),
-      setItem: (key, value) => storage.set(key, String(value))
-    },
-    writable: true
-  });
-  t.after(() => { delete globalThis.localStorage; });
-  const model = await loadModule(t, '/src/lib/features/home/model/room-switch-confirmation.ts', {});
+test('room switch confirmation asks only when leaving another live call', async () => {
+  localStorage.clear();
+  onTestFinished(() => localStorage.clear());
+  const model = await loadModule('/src/lib/features/home/model/room-switch-confirmation.ts', {});
 
   assert.equal(model.shouldConfirmRoomSwitch({ confirmEnabled: true, connectedRoomId: 'room-a', targetRoomId: 'room-b' }), true);
   assert.equal(model.shouldConfirmRoomSwitch({ confirmEnabled: true, connectedRoomId: 'room-a', targetRoomId: 'room-a' }), false);
@@ -267,11 +224,11 @@ test('room switch confirmation asks only when leaving another live call', async 
   assert.equal(model.readRoomSwitchConfirmEnabled(), true);
   assert.equal(model.applyRoomSwitchDecision({ proceed: true, dontAskAgain: true }), true);
   assert.equal(model.readRoomSwitchConfirmEnabled(), false);
-  assert.equal(storage.get(model.ROOM_SWITCH_CONFIRM_STORAGE_KEY), 'false');
+  assert.equal(localStorage.getItem(model.ROOM_SWITCH_CONFIRM_STORAGE_KEY), 'false');
 
   model.writeRoomSwitchConfirmEnabled(true);
   assert.equal(model.readRoomSwitchConfirmEnabled(), true);
-  assert.equal(storage.has(model.ROOM_SWITCH_CONFIRM_STORAGE_KEY), false);
+  assert.equal(localStorage.getItem(model.ROOM_SWITCH_CONFIRM_STORAGE_KEY), null);
 });
 
 test('lobby routes every voice entry, desktop links and call controls through the new flows', () => {
@@ -322,26 +279,25 @@ test('open-in-app screen offers the desktop download next to retry and continue'
   assert.doesNotMatch(sidebar, /RELEASES_URL/, 'the release-page fallback lives in the shared helper');
 });
 
-test('desktop build download uses the release asset and falls back to the releases page', async (t) => {
+test('desktop build download uses the release asset and falls back to the releases page', async () => {
   const opened = [];
   const clicked = [];
   const appended = [];
-  const originalDocument = globalThis.document;
-  globalThis.document = {
-    body: { appendChild: (node) => appended.push(node) },
-    createElement: () => ({
-      click() { clicked.push(this.href); },
-      remove() {}
-    })
-  };
-  t.after(() => {
-    if (originalDocument === undefined) delete globalThis.document;
-    else globalThis.document = originalDocument;
+  const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
+    clicked.push(this.href);
   });
-  const downloads = await loadModule(t, '/src/lib/features/home/services/desktop-download.ts', {
+  const append = vi.spyOn(document.body, 'appendChild').mockImplementation((node) => {
+    appended.push(node);
+    return node;
+  });
+  onTestFinished(() => {
+    click.mockRestore();
+    append.mockRestore();
+  });
+  const downloads = await loadModule('/src/lib/features/home/services/desktop-download.ts', {
     open: (...args) => opened.push(args)
   });
-  const { RELEASES_URL } = await (await getServer()).ssrLoadModule('/src/lib/features/home/model/desktop-builds.ts');
+  const { RELEASES_URL } = await import('../src/lib/features/home/model/desktop-builds.ts');
   const release = {
     version: '1.2.3',
     htmlUrl: 'https://example.test/release',

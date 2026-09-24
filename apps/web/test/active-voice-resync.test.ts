@@ -1,5 +1,5 @@
 // @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.test.json.
-import test from 'node:test';
+import { test, vi } from 'vitest';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -49,12 +49,12 @@ test('a delayed retryable error cannot cancel a newer successful voice resync at
   let nextTimerId = 0;
   const originalSetTimeout = globalThis.setTimeout;
   const originalClearTimeout = globalThis.clearTimeout;
-  globalThis.setTimeout = (callback) => {
+  vi.stubGlobal('setTimeout', (callback) => {
     const id = ++nextTimerId;
     timers.set(id, callback);
     return id;
-  };
-  globalThis.clearTimeout = (id) => timers.delete(id);
+  });
+  vi.stubGlobal('clearTimeout', (id) => timers.delete(id));
 
   try {
     const { realtime, sent } = await loadRoomRealtime();
@@ -96,7 +96,7 @@ test('a delayed retryable error cannot cancel a newer successful voice resync at
     assert.deepEqual(failures, []);
     assert.equal(timers.size, 0);
   } finally {
-    globalThis.setTimeout = originalSetTimeout;
-    globalThis.clearTimeout = originalClearTimeout;
+    vi.stubGlobal('setTimeout', originalSetTimeout);
+    vi.stubGlobal('clearTimeout', originalClearTimeout);
   }
 });

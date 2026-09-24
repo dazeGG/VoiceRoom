@@ -1,8 +1,6 @@
 // @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.test.json.
-import test from 'node:test';
+import { onTestFinished, test, vi } from 'vitest';
 import assert from 'node:assert/strict';
-import { resolve } from 'node:path';
-import { createServer } from 'vite';
 
 class MemoryStorage {
   #values = new Map();
@@ -47,7 +45,7 @@ function deferred() {
   return { promise, reject: rejectPromise, resolve: resolvePromise };
 }
 
-test('desktop hotkey sync buffers early events, prefers the latest status, and discards stale generations', async (t) => {
+test('desktop hotkey sync buffers early events, prefers the latest status, and discards stale generations', async () => {
   const calls = [];
   const actionListeners = new Set();
   const statusListeners = new Set();
@@ -75,35 +73,17 @@ test('desktop hotkey sync buffers early events, prefers the latest status, and d
     setSuspended: async () => false
   };
 
-  Object.defineProperty(globalThis, 'window', {
-    configurable: true,
-    value: windowTarget,
-    writable: true
-  });
-  Object.defineProperty(globalThis, 'localStorage', {
-    configurable: true,
-    value: storage,
-    writable: true
-  });
+  vi.stubGlobal('window', windowTarget);
+  vi.stubGlobal('localStorage', storage);
 
-  // No file watcher: watchers from parallel test files crash the process on CI.
-  const server = await createServer({
-    appType: 'custom',
-    logLevel: 'silent',
-    root: resolve(import.meta.dirname, '..'),
-    server: { hmr: false, middlewareMode: true, watch: null }
-  });
-  t.after(async () => {
+  onTestFinished(() => {
     unbind();
-    await server.close();
-    delete globalThis.window;
-    delete globalThis.localStorage;
     console.warn = originalWarn;
   });
+  vi.resetModules();
   console.warn = () => {};
 
-  const service = await server.ssrLoadModule(
-    '/src/lib/features/room/client/services/desktop-hotkey-service.ts'
+  const service = await import('../src/lib/features/room/client/services/desktop-hotkey-service.ts'
   );
   const actions = [];
   const statuses = [];

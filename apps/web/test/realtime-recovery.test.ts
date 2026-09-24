@@ -1,7 +1,7 @@
 // @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.test.json.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import test from 'node:test';
+import { test } from 'vitest';
 
 import {
   RealtimeRecoveryController,
@@ -198,9 +198,9 @@ test('a later transport regression invalidates an in-place reconcile completion'
 });
 
 test('web recovery wiring pins replacement identity and correlates bounded resync retries', () => {
-  const realtime = fs.readFileSync(new URL('../src/lib/api/realtime.ts', import.meta.url), 'utf8');
-  const roomRealtime = fs.readFileSync(new URL('../src/lib/features/home/model/room-realtime.ts', import.meta.url), 'utf8');
-  const livekit = fs.readFileSync(new URL('../src/lib/features/room/client/services/livekit-service.ts', import.meta.url), 'utf8');
+  const realtime = fs.readFileSync(`${import.meta.dirname}/../src/lib/api/realtime.ts`, 'utf8');
+  const roomRealtime = fs.readFileSync(`${import.meta.dirname}/../src/lib/features/home/model/room-realtime.ts`, 'utf8');
+  const livekit = fs.readFileSync(`${import.meta.dirname}/../src/lib/features/room/client/services/livekit-service.ts`, 'utf8');
 
   assert.match(realtime, /this\.reconnectTimer !== null[\s\S]{0,160}clearTimeout\(this\.reconnectTimer\)/);
   assert.match(realtime, /generation !== this\.openGeneration/);
@@ -309,9 +309,9 @@ test('API failure classification is stable and fails unknown HTTP errors closed'
 });
 
 test('room recovery wiring uses app epochs and applied active snapshot authority', () => {
-  const realtime = fs.readFileSync(new URL('../src/lib/api/realtime.ts', import.meta.url), 'utf8');
-  const roomRealtime = fs.readFileSync(new URL('../src/lib/features/home/model/room-realtime.ts', import.meta.url), 'utf8');
-  const room = fs.readFileSync(new URL('../src/lib/features/room/client/room/room.ts', import.meta.url), 'utf8');
+  const realtime = fs.readFileSync(`${import.meta.dirname}/../src/lib/api/realtime.ts`, 'utf8');
+  const roomRealtime = fs.readFileSync(`${import.meta.dirname}/../src/lib/features/home/model/room-realtime.ts`, 'utf8');
+  const room = fs.readFileSync(`${import.meta.dirname}/../src/lib/features/room/client/room/room.ts`, 'utf8');
 
   assert.match(realtime, /this\.connectionEpoch \+= 1/);
   assert.match(realtime, /restore\(this\.connectionEpoch\)/);

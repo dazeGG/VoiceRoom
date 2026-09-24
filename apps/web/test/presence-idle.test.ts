@@ -1,33 +1,11 @@
 // @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.test.json.
-import test from 'node:test';
+import { test } from 'vitest';
+import { freshImport } from './helpers/fresh-module.ts';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { pathToFileURL } from 'node:url';
-import { createRequire } from 'node:module';
 
-const require = createRequire(import.meta.url);
-const ts = require('typescript');
 
 async function loadPresenceIdle() {
-  const source = readFileSync(new URL('../src/lib/shared/presence-idle.ts', import.meta.url), 'utf8');
-  const output = ts.transpileModule(source, {
-    compilerOptions: {
-      module: ts.ModuleKind.ES2022,
-      target: ts.ScriptTarget.ES2022,
-      verbatimModuleSyntax: true
-    },
-    fileName: 'presence-idle.ts'
-  }).outputText;
-  const dir = mkdtempSync(join(tmpdir(), 'voice-room-presence-idle-'));
-  const file = join(dir, 'presence-idle.mjs');
-  writeFileSync(file, output);
-  try {
-    return await import(`${pathToFileURL(file).href}?v=${Date.now()}-${Math.random()}`);
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
+  return freshImport('/src/lib/shared/presence-idle.ts');
 }
 
 test('automatic presence policy only restores idle-driven away', async () => {

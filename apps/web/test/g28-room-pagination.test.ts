@@ -1,10 +1,9 @@
 // @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.test.json.
-import test from 'node:test';
+import { test } from 'vitest';
 import assert from 'node:assert/strict';
-import { loadMessagingModule } from './messaging-module-loader.ts';
 
 test('G28-A01 older loads are single-flight, deduplicated and preserve the scroll anchor', async () => {
-  const { createAnchoredHistory } = await loadMessagingModule(new URL('../src/lib/features/room/room-history.svelte.ts', import.meta.url), { replaceSvelteTick: true });
+  const { createAnchoredHistory } = await import('../src/lib/features/room/room-history.svelte.ts');
   let olderCalls = 0;
   const history = createAnchoredHistory({
     compare: (left, right) => left.createdAt - right.createdAt,
@@ -23,7 +22,7 @@ test('G28-A01 older loads are single-flight, deduplicated and preserve the scrol
 });
 
 test('G28-A02 switching room cancels stale history results', async () => {
-  const { createAnchoredHistory } = await loadMessagingModule(new URL('../src/lib/features/room/room-history.svelte.ts', import.meta.url), { replaceSvelteTick: true });
+  const { createAnchoredHistory } = await import('../src/lib/features/room/room-history.svelte.ts');
   let resolveOld;
   const oldPage = new Promise((resolve) => { resolveOld = resolve; });
   const history = createAnchoredHistory({ loadPage: (scope) => scope === 'old' ? oldPage : Promise.resolve({ messages: [{ id: 'new-room' }], pageInfo: { hasMoreBefore: false } }) });

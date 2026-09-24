@@ -1,33 +1,12 @@
 // @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.test.json.
-import test from 'node:test';
+import { test } from 'vitest';
+import { freshImport } from './helpers/fresh-module.ts';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { pathToFileURL } from 'node:url';
-import { createRequire } from 'node:module';
+import { readFileSync } from 'node:fs';
 
-const require = createRequire(import.meta.url);
-const ts = require('typescript');
 
 async function loadCoordinator() {
-  const source = readFileSync(new URL('../src/lib/features/home/model/dm-thread-resync.ts', import.meta.url), 'utf8');
-  const output = ts.transpileModule(source, {
-    compilerOptions: {
-      module: ts.ModuleKind.ES2022,
-      target: ts.ScriptTarget.ES2022,
-      verbatimModuleSyntax: true
-    },
-    fileName: 'dm-thread-resync.ts'
-  }).outputText;
-  const dir = mkdtempSync(join(tmpdir(), 'voice-room-dm-thread-resync-'));
-  const file = join(dir, 'dm-thread-resync.mjs');
-  writeFileSync(file, output);
-  try {
-    return await import(`${pathToFileURL(file).href}?v=${Date.now()}-${Math.random()}`);
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
+  return freshImport('/src/lib/features/home/model/dm-thread-resync.ts');
 }
 
 function deferred() {
@@ -338,7 +317,7 @@ test('invalidate prevents a delayed request from applying', async () => {
 });
 
 test('lobby forwards DM realtime mutations to the active resync buffer', () => {
-  const friends = readFileSync(new URL('../src/lib/features/home/model/friends.svelte.ts', import.meta.url), 'utf8');
+  const friends = readFileSync(`${import.meta.dirname}/../src/lib/features/home/model/friends.svelte.ts`, 'utf8');
 
   const openDmStart = friends.indexOf('export async function openDm');
   const openDmEnd = friends.indexOf('\nasync function resyncOpenThread', openDmStart);

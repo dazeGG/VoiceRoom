@@ -1,12 +1,12 @@
 // @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.test.json.
-import test from 'node:test';
+import { test } from 'vitest';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 
 // Runs the real worklet source in a sandbox that stands in for the
 // AudioWorkletGlobalScope, then drives it with synthetic noise and "speech".
-const SOURCE = readFileSync(new URL('../static/audio-gate.worklet.js', import.meta.url), 'utf8');
+const SOURCE = readFileSync(`${import.meta.dirname}/../static/audio-gate.worklet.js`, 'utf8');
 const SAMPLE_RATE = 48_000;
 const QUANTUM = 128;
 

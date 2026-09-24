@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import test from 'node:test';
+import { test, vi } from 'vitest';
 
 const require = createRequire(import.meta.url);
 const ts = require('typescript');
@@ -19,7 +19,7 @@ test('eager ensureConnected cancels a scheduled reconnect and keeps one socket h
       reset() {}
     }
   `);
-  const source = readFileSync(new URL('../src/lib/api/realtime.ts', import.meta.url), 'utf8')
+  const source = readFileSync(`${import.meta.dirname}/../src/lib/api/realtime.ts`, 'utf8')
     .replace(/from '[^']+'/g, `from '${stubUrl}'`);
   const output = ts.transpileModule(source, {
     compilerOptions: { module: ts.ModuleKind.ES2022, target: ts.ScriptTarget.ES2022, verbatimModuleSyntax: true }
@@ -47,15 +47,15 @@ test('eager ensureConnected cancels a scheduled reconnect and keeps one socket h
     send() {}
   }
 
-  globalThis.WebSocket = FakeWebSocket;
-  globalThis.setTimeout = (callback) => {
+  vi.stubGlobal('WebSocket', FakeWebSocket);
+  vi.stubGlobal('setTimeout', (callback) => {
     const id = scheduled.length + 1;
     scheduled.push({ callback, id });
     return id;
-  };
-  globalThis.clearTimeout = (id) => cleared.add(id);
-  globalThis.setInterval = () => { intervals += 1; return intervals; };
-  globalThis.clearInterval = () => {};
+  });
+  vi.stubGlobal('clearTimeout', (id) => cleared.add(id));
+  vi.stubGlobal('setInterval', () => { intervals += 1; return intervals; });
+  vi.stubGlobal('clearInterval', () => {});
 
   try {
     const { getAppRealtime } = await import(moduleUrl(output));

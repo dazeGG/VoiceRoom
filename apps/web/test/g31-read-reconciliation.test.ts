@@ -1,20 +1,19 @@
 // @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.test.json.
-import test from 'node:test';
+import { test, vi } from 'vitest';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { loadMessagingModule } from './messaging-module-loader.ts';
 
 test('G31-A01 multiple render advances coalesce to the newest pending cursor', async () => {
-  const { createReadReconciliation } = await loadMessagingModule(new URL('../src/lib/shared/chat/read-reconciliation.svelte.ts', import.meta.url));
+  const { createReadReconciliation } = await import('../src/lib/shared/chat/read-reconciliation.svelte.ts');
   const commits = [];
   const gate = Promise.withResolvers();
   const state = createReadReconciliation({ scope: 'room:r', legacy: false, commit: async (cursor) => { commits.push(cursor); if (commits.length === 1) await gate.promise; return cursor; } });
-  const first = state.advanceAfterRender('c1'); state.advanceAfterRender('c2'); state.advanceAfterRender('c3'); gate.resolve(); await first;
+  const first = state.advanceAfterRender('c1'); void state.advanceAfterRender('c2'); void state.advanceAfterRender('c3'); gate.resolve(); await first;
   assert.deepEqual(commits, ['c1', 'c3']); state.dispose();
 });
 
 test('G31-A02 older or around loads alone cannot advance reads', async () => {
-  const { createReadReconciliation } = await loadMessagingModule(new URL('../src/lib/shared/chat/read-reconciliation.svelte.ts', import.meta.url));
+  const { createReadReconciliation } = await import('../src/lib/shared/chat/read-reconciliation.svelte.ts');
   let commits = 0;
   const state = createReadReconciliation({ scope: 'room:r', legacy: false, commit: async () => { commits += 1; } });
   await state.advanceAfterRender(undefined);
@@ -33,9 +32,9 @@ test('G31-A03 two tabs accept repeated newer cursors and suppress identical or o
     emit(data) { for (const listener of this.listeners) listener({ data }); }
     close() { this.listeners.clear(); }
   }
-  globalThis.BroadcastChannel = FakeBroadcastChannel;
+  vi.stubGlobal('BroadcastChannel', FakeBroadcastChannel);
   try {
-    const { createReadReconciliation } = await loadMessagingModule(new URL('../src/lib/shared/chat/read-reconciliation.svelte.ts', import.meta.url));
+    const { createReadReconciliation } = await import('../src/lib/shared/chat/read-reconciliation.svelte.ts');
     const commitsA = []; const commitsB = [];
     const tabA = createReadReconciliation({ scope: 'room:tabs', legacy: false, commit: async (cursor) => { commitsA.push(cursor); return cursor; } });
     const tabB = createReadReconciliation({ scope: 'room:tabs', legacy: false, commit: async (cursor) => { commitsB.push(cursor); return cursor; } });
@@ -54,7 +53,7 @@ test('G31-A03 two tabs accept repeated newer cursors and suppress identical or o
 });
 
 test('G31 realtime reconciliation failures stay non-blocking but observable', () => {
-  const source = readFileSync(new URL('../src/lib/features/room/components/RoomChatPanel.svelte', import.meta.url), 'utf8');
+  const source = readFileSync(`${import.meta.dirname}/../src/lib/features/room/components/RoomChatPanel.svelte`, 'utf8');
   assert.match(source, /catch \(cause\) \{\s*log\.error\('failed to reconcile realtime room read cursor', errorContext\(cause\)\);/);
   assert.doesNotMatch(source, /markRealtimeRenderedRead[\s\S]*?catch \{\}/);
 });

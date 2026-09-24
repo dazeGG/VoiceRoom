@@ -6,8 +6,7 @@ import http from 'node:http';
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { test } from 'node:test';
-import { fileURLToPath } from 'node:url';
+import { test, onTestFinished } from 'vitest';
 import {
   DEFAULT_RUNTIME_CONFIG,
   RUNTIME_CONFIG_CONTRACT,
@@ -16,7 +15,7 @@ import {
 } from '@voice-room/shared/runtime-config';
 import { buildHeaderPolicy, renderCaddySnippet } from '../scripts/emit-caddy-csp.ts';
 
-const repositoryRoot = fileURLToPath(new URL('../../../', import.meta.url));
+const repositoryRoot = `${import.meta.dirname}/../../../`;
 const caddyImage = 'caddy:2.11.4-alpine';
 const dockerAvailable = spawnSync('docker', ['version', '--format', '{{.Server.Version}}'], {
   encoding: 'utf8'
@@ -111,11 +110,11 @@ async function startCaddyEdge(wsUrl) {
 
 test('G13-A01 the pinned Caddy image serves two runtime configs without rebuilding', {
   skip: !dockerAvailable
-}, async (t) => {
+}, async () => {
   const edgeA = await startCaddyEdge('wss://caddy-a.example.test');
-  t.after(edgeA.close);
+  onTestFinished(edgeA.close);
   const edgeB = await startCaddyEdge('wss://caddy-b.example.test');
-  t.after(edgeB.close);
+  onTestFinished(edgeB.close);
 
   const first = await fetchEdgeConfig(edgeA.origin, 1_000);
   const second = await fetchEdgeConfig(edgeB.origin, 1_000);
@@ -125,7 +124,7 @@ test('G13-A01 the pinned Caddy image serves two runtime configs without rebuildi
   assert.equal(edgeA.imageId, edgeB.imageId);
 });
 
-test('G13-A01 one Web image contract serves distinct runtime configuration over real HTTP edges', async (t) => {
+test('G13-A01 one Web image contract serves distinct runtime configuration over real HTTP edges', async () => {
   const edgeA = await startEdge((_request, response) => {
     response.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
     response.end(runtimePayload('wss://livekit-a.example.test'));
@@ -134,7 +133,7 @@ test('G13-A01 one Web image contract serves distinct runtime configuration over 
     response.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
     response.end(runtimePayload('wss://livekit-b.example.test'));
   });
-  t.after(() => Promise.all([edgeA.close(), edgeB.close()]));
+  onTestFinished(() => Promise.all([edgeA.close(), edgeB.close()]));
 
   const first = await fetchEdgeConfig(edgeA.origin);
   const second = await fetchEdgeConfig(edgeB.origin);
@@ -151,7 +150,7 @@ test('G13-A01 one Web image contract serves distinct runtime configuration over 
   assert.match(caddyfile, /\{\$LIVEKIT_GATE_PUBLIC_URL\}/);
 });
 
-test('G13-A02 404, timeout, malformed, wrong-version and credential payloads fail safely', async (t) => {
+test('G13-A02 404, timeout, malformed, wrong-version and credential payloads fail safely', async () => {
   const cases = [
     (_request, response) => { response.writeHead(404); response.end(); },
     (_request, _response) => {},
@@ -162,7 +161,7 @@ test('G13-A02 404, timeout, malformed, wrong-version and credential payloads fai
 
   for (const handler of cases) {
     const edge = await startEdge(handler);
-    t.after(edge.close);
+    onTestFinished(edge.close);
     const config = await fetchEdgeConfig(edge.origin, 25);
     assert.deepEqual(config, DEFAULT_RUNTIME_CONFIG);
   }

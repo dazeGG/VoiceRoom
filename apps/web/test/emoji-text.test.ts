@@ -1,34 +1,16 @@
 // @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.test.json.
-import test, { after } from 'node:test';
+import { test, vi } from 'vitest';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { createServer } from 'vite';
 
 const webRoot = resolve(import.meta.dirname, '..');
 const read = (path: string) => readFileSync(resolve(webRoot, path), 'utf8');
 
-// One Vite server for the whole file, without a file watcher (see
-// desktop-os-integration.test.ts).
-let serverPromise = null;
-
-function getServer() {
-  serverPromise ??= createServer({
-    appType: 'custom',
-    logLevel: 'silent',
-    root: webRoot,
-    server: { hmr: false, middlewareMode: true, watch: null }
-  });
-  return serverPromise;
-}
-
-after(async () => {
-  if (serverPromise) await (await serverPromise).close();
-});
 
 async function loadEmojiText() {
-  const server = await getServer();
-  return server.ssrLoadModule('/src/lib/shared/chat/emoji-text.ts');
+  vi.resetModules();
+  return import('../src/lib/shared/chat/emoji-text.ts');
 }
 
 const emojiParts = (parts) => parts.filter((part) => part.kind === 'emoji').map((part) => part.emoji);
@@ -72,7 +54,7 @@ test('a missing presentation selector still reads as the emoji, but a lone text 
 
 test('what the artwork does not draw is left as text, never offered as an image', async () => {
   const { splitEmoji, hasEmoji } = await loadEmojiText();
-  const catalogue = JSON.parse(read('src/lib/shared/chat/emoji-coverage.json'));
+  const catalogue = JSON.parse(read('src/lib/shared/chat/emoji-coverage.json')) as { emojis: string[] };
   const offered = new Set(catalogue.emojis);
 
   // A standalone skin tone swatch is a component, not an emoji of its own.

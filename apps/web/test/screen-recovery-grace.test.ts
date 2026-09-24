@@ -1,7 +1,7 @@
 // @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.test.json.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import test from 'node:test';
+import { test } from 'vitest';
 
 import { ScreenRecoveryGraceController } from '../src/lib/features/room/client/recovery/screen-recovery-grace.ts';
 
@@ -127,7 +127,7 @@ test('screen grace timers invoke injected schedulers without rebinding their rec
 
 test('authoritative screen intent wins over stale LiveKit media availability', () => {
   const livekit = fs.readFileSync(
-    new URL('../src/lib/features/room/client/services/livekit-service.ts', import.meta.url),
+    `${import.meta.dirname}/../src/lib/features/room/client/services/livekit-service.ts`,
     'utf8'
   );
   assert.match(livekit, /peer\.screenAuthoritative === false/);

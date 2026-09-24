@@ -1,29 +1,11 @@
 // @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.test.json.
-import test from 'node:test';
+import { test, vi } from 'vitest';
+import { freshImport } from './helpers/fresh-module.ts';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { pathToFileURL } from 'node:url';
-import { createRequire } from 'node:module';
 
-const require = createRequire(import.meta.url);
-const ts = require('typescript');
 
 async function loadRouter() {
-  const source = readFileSync(new URL('../src/lib/shared/notifications/router.ts', import.meta.url), 'utf8');
-  const output = ts.transpileModule(source, {
-    compilerOptions: {
-      module: ts.ModuleKind.ES2022,
-      target: ts.ScriptTarget.ES2022,
-      verbatimModuleSyntax: true
-    },
-    fileName: 'router.ts'
-  }).outputText;
-  const dir = mkdtempSync(join(tmpdir(), 'voice-room-notification-router-'));
-  const file = join(dir, 'router.mjs');
-  writeFileSync(file, output);
-  return import(`${pathToFileURL(file).href}?v=${Date.now()}-${Math.random()}`);
+  return freshImport('/src/lib/shared/notifications/router.ts');
 }
 
 function dmEvent(overrides = {}) {
@@ -172,7 +154,6 @@ test('truncates notification bodies conservatively with an ellipsis', async () =
 test('browser helpers dedupe by tag/key and never request permission outside explicit helper', async () => {
   const originalNotification = globalThis.Notification;
   const originalBroadcastChannel = globalThis.BroadcastChannel;
-  const originalLocalStorage = globalThis.localStorage;
   const originalBridge = globalThis.voiceRoomDesktopNotifications;
   const calls = [];
   let requestPermissionCalls = 0;
@@ -191,13 +172,13 @@ test('browser helpers dedupe by tag/key and never request permission outside exp
   }
 
   const storage = new Map();
-  globalThis.Notification = FakeNotification;
-  globalThis.BroadcastChannel = undefined;
-  globalThis.localStorage = {
+  vi.stubGlobal('Notification', FakeNotification);
+  vi.stubGlobal('BroadcastChannel', undefined);
+  vi.stubGlobal('localStorage', {
     getItem: (key) => (storage.has(key) ? storage.get(key) : null),
     setItem: (key, value) => storage.set(key, String(value)),
     removeItem: (key) => storage.delete(key)
-  };
+  });
 
   try {
     const router = await loadRouter();
@@ -230,8 +211,6 @@ test('browser helpers dedupe by tag/key and never request permission outside exp
     else globalThis.Notification = originalNotification;
     if (originalBroadcastChannel === undefined) delete globalThis.BroadcastChannel;
     else globalThis.BroadcastChannel = originalBroadcastChannel;
-    if (originalLocalStorage === undefined) delete globalThis.localStorage;
-    else globalThis.localStorage = originalLocalStorage;
     if (originalBridge === undefined) delete globalThis.voiceRoomDesktopNotifications;
     else globalThis.voiceRoomDesktopNotifications = originalBridge;
   }
@@ -256,14 +235,14 @@ test('desktop bridge is preferred over page Notification and does not request pe
     }
   }
 
-  globalThis.Notification = DeniedNotification;
-  globalThis.BroadcastChannel = undefined;
-  globalThis.voiceRoomDesktopNotifications = {
+  vi.stubGlobal('Notification', DeniedNotification);
+  vi.stubGlobal('BroadcastChannel', undefined);
+  vi.stubGlobal('voiceRoomDesktopNotifications', {
     show(payload) {
       bridgeCalls.push(payload);
       return { ok: true };
     }
-  };
+  });
 
   try {
     const router = await loadRouter();
@@ -305,12 +284,11 @@ test('desktop bridge can satisfy an explicit notification UI action without brow
   const originalNotification = globalThis.Notification;
   const originalBridge = globalThis.voiceRoomDesktopNotifications;
 
-  delete globalThis.Notification;
-  globalThis.voiceRoomDesktopNotifications = {
+  vi.stubGlobal('voiceRoomDesktopNotifications', {
     show() {
       return { ok: true };
     }
-  };
+  });
 
   try {
     const router = await loadRouter();
@@ -341,13 +319,13 @@ test('desktop bridge unsupported result falls back to browser Notification', asy
     }
   }
 
-  globalThis.Notification = FakeNotification;
-  globalThis.BroadcastChannel = undefined;
-  globalThis.voiceRoomDesktopNotifications = {
+  vi.stubGlobal('Notification', FakeNotification);
+  vi.stubGlobal('BroadcastChannel', undefined);
+  vi.stubGlobal('voiceRoomDesktopNotifications', {
     async show() {
       return { ok: false, reason: 'unsupported' };
     }
-  };
+  });
 
   try {
     const router = await loadRouter();
@@ -383,8 +361,8 @@ test('showBrowserNotification serializes dedupe through the Web Locks API', asyn
     }
   }
 
-  globalThis.Notification = FakeNotification;
-  globalThis.BroadcastChannel = undefined;
+  vi.stubGlobal('Notification', FakeNotification);
+  vi.stubGlobal('BroadcastChannel', undefined);
   Object.defineProperty(globalThis, 'navigator', {
     configurable: true,
     value: {
@@ -426,7 +404,6 @@ test('showBrowserNotification no-ops when denied or unavailable', async () => {
   router.resetNotificationDedupeForTests();
 
   try {
-    delete globalThis.Notification;
     assert.equal(router.getNotificationPermission(), 'unsupported');
     assert.equal(router.canUseNotifications(), false);
     assert.equal(await router.showBrowserNotification({ title: 'x', body: 'y', tag: 'z', dedupeKey: 'z' }), null);
@@ -437,7 +414,7 @@ test('showBrowserNotification no-ops when denied or unavailable', async () => {
         throw new Error('must not be called');
       }
     }
-    globalThis.Notification = DeniedNotification;
+    vi.stubGlobal('Notification', DeniedNotification);
     assert.equal(await router.showBrowserNotification({ title: 'x', body: 'y', tag: 'z2', dedupeKey: 'z2' }), null);
   } finally {
     if (originalNotification === undefined) delete globalThis.Notification;

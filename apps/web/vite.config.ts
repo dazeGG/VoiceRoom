@@ -1,5 +1,5 @@
 import { sveltekit } from '@sveltejs/kit/vite';
-import { defineConfig } from 'vite';
+import { defineConfig } from 'vitest/config';
 
 const API_TARGET = process.env.VITE_DEV_API_TARGET || 'http://localhost:3000';
 const DEV_HOST = process.env.VITE_DEV_HOST || '127.0.0.1';
@@ -26,6 +26,16 @@ export default defineConfig({
     strictPort: true,
     proxy: API_PROXY
   },
+  test: {
+    include: ['test/**/*.test.ts'],
+    // Browser semantics for every unit test: runes compile for the client and
+    // component tests get a DOM. Node APIs stay available.
+    environment: 'jsdom',
+    testTimeout: 20000,
+    // vi.stubGlobal() is undone after every test.
+    unstubGlobals: true
+  },
+  resolve: process.env.VITEST ? { conditions: ['browser'] } : undefined,
   preview: {
     host: DEV_HOST,
     port: DEV_PORT,

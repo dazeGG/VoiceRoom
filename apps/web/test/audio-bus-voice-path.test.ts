@@ -1,27 +1,9 @@
 // @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.test.json.
-import test, { after } from 'node:test';
+import { test, vi } from 'vitest';
 import assert from 'node:assert/strict';
-import { resolve } from 'node:path';
-import { createServer } from 'vite';
 
 // Loads the real audio bus through Vite with just enough of the browser
 // stubbed to watch which path a remote voice takes.
-const webRoot = resolve(import.meta.dirname, '..');
-let serverPromise = null;
-
-function getServer() {
-  serverPromise ??= createServer({
-    appType: 'custom',
-    logLevel: 'silent',
-    root: webRoot,
-    server: { hmr: false, middlewareMode: true, watch: null }
-  });
-  return serverPromise;
-}
-
-after(async () => {
-  if (serverPromise) await (await serverPromise).close();
-});
 
 class FakeMediaStream {
   getAudioTracks() {
@@ -62,33 +44,26 @@ class FakeAudioContext {
   }
 }
 
-async function loadBus(t, storage = {}) {
+async function loadBus(storage = {}) {
   const store = new Map(Object.entries(storage));
-  globalThis.localStorage = {
-    getItem: (key) => (store.has(key) ? store.get(key) : null),
-    setItem: (key, value) => store.set(key, String(value)),
-    removeItem: (key) => store.delete(key)
-  };
-  globalThis.window = { location: { hash: '', pathname: '/', search: '' }, setTimeout: (fn) => fn() };
-  globalThis.MediaStream = FakeMediaStream;
-  globalThis.AudioContext = FakeAudioContext;
-  t.after(() => {
-    delete globalThis.localStorage;
-    delete globalThis.window;
-    delete globalThis.MediaStream;
-    delete globalThis.AudioContext;
+  vi.stubGlobal('localStorage', {
+    getItem: (key: string) => (store.has(key) ? store.get(key) : null),
+    setItem: (key: string, value: unknown) => store.set(key, String(value)),
+    removeItem: (key: string) => store.delete(key)
   });
-  const server = await getServer();
-  server.moduleGraph.invalidateAll();
-  const bus = await server.ssrLoadModule('/src/lib/features/room/client/services/audio-bus.ts');
-  const { state } = await server.ssrLoadModule('/src/lib/features/room/client/core/state.svelte.ts');
+  vi.stubGlobal('window', { location: { hash: '', pathname: '/', search: '' }, setTimeout: (fn) => fn() });
+  vi.stubGlobal('MediaStream', FakeMediaStream);
+  vi.stubGlobal('AudioContext', FakeAudioContext);
+    vi.resetModules();
+  const bus = await import('../src/lib/features/room/client/services/audio-bus.ts');
+  const { state } = await import('../src/lib/features/room/client/core/state.svelte.ts');
   return { bus, state };
 }
 
 const voiceElement = () => ({ muted: false, srcObject: new FakeMediaStream(), volume: 1 });
 
-test('a voice at or below 100% plays on its own element, outside the Web Audio mix', async (t) => {
-  const { bus, state } = await loadBus(t);
+test('a voice at or below 100% plays on its own element, outside the Web Audio mix', async () => {
+  const { bus, state } = await loadBus();
   const element = voiceElement();
   assert.equal(bus.playVoiceElement(element, { muted: false, volume: 0.6 }), 'direct');
   assert.equal(element.muted, false);
@@ -96,8 +71,8 @@ test('a voice at or below 100% plays on its own element, outside the Web Audio m
   assert.equal(state.audioContext ?? null, null, 'no Web Audio graph is needed');
 });
 
-test('a boost above 100% moves the voice into the mix and silences the element', async (t) => {
-  const { bus, state } = await loadBus(t);
+test('a boost above 100% moves the voice into the mix and silences the element', async () => {
+  const { bus, state } = await loadBus();
   const element = voiceElement();
   assert.equal(bus.playVoiceElement(element, { muted: false, volume: 1.5 }), 'mixed');
   assert.equal(element.muted, true, 'the element must not be a second audible path');
@@ -108,8 +83,8 @@ test('a boost above 100% moves the voice into the mix and silences the element',
   assert.equal(element.muted, false);
 });
 
-test('master volume and output mute re-decide every voice', async (t) => {
-  const { bus, state } = await loadBus(t, { 'voice-room:master-volume': '50' });
+test('master volume and output mute re-decide every voice', async () => {
+  const { bus, state } = await loadBus({ 'voice-room:master-volume': '50' });
   const element = voiceElement();
   bus.playVoiceElement(element, { muted: false, volume: 1 });
   assert.equal(element.volume, 0.5);

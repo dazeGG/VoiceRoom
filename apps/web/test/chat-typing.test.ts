@@ -1,37 +1,18 @@
 // @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.test.json.
-import test, { after } from 'node:test';
+import { test, onTestFinished, vi } from 'vitest';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
-import { createServer } from 'vite';
 
 const webRoot = resolve(import.meta.dirname, '..');
 const read = (path: string) => readFileSync(resolve(webRoot, path), 'utf8');
 const require = createRequire(resolve(webRoot, 'package.json'));
 
-// One Vite server for the whole file, without a file watcher (see
-// desktop-os-integration.test.ts).
-let serverPromise = null;
-
-function getServer() {
-  serverPromise ??= createServer({
-    appType: 'custom',
-    logLevel: 'silent',
-    root: webRoot,
-    server: { hmr: false, middlewareMode: true, watch: null }
-  });
-  return serverPromise;
-}
-
-after(async () => {
-  if (serverPromise) await (await serverPromise).close();
-});
 
 async function loadTyping() {
-  const server = await getServer();
-  server.moduleGraph.invalidateAll();
-  return server.ssrLoadModule('/src/lib/shared/chat/typing.svelte.ts');
+  vi.resetModules();
+  return import('../src/lib/shared/chat/typing.svelte.ts');
 }
 
 const typing = (name) => ({ name, activity: 'typing' });
@@ -95,11 +76,11 @@ test('a notice goes out at most once per interval, right away after a reset or a
   assert.deepEqual(sent.slice(3), ['emoji', 'typing'], 'opening the picker and typing again are both announced at once');
 });
 
-test('a typist stays listed with what they do until their message or the notice expires', async (t) => {
+test('a typist stays listed with what they do until their message or the notice expires', async () => {
   const { createTypingTracker } = await loadTyping();
   let clock = 0;
   const tracker = createTypingTracker({ ttlMs: 6000, now: () => clock });
-  t.after(() => tracker.reset());
+  onTestFinished(() => tracker.reset());
 
   tracker.note('user-a', 'Аня');
   tracker.note('peer-b', 'Гость', 'emoji');

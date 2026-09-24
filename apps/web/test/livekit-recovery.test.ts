@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import test from 'node:test';
+import { test } from 'vitest';
 
-const source = fs.readFileSync(new URL('../src/lib/features/room/client/services/livekit-service.ts', import.meta.url), 'utf8');
+const source = fs.readFileSync(`${import.meta.dirname}/../src/lib/features/room/client/services/livekit-service.ts`, 'utf8');
 
 test('fresh LiveKit replacement is a snapshot-gated coordinator one-shot with atomic candidate commit', () => {
   assert.match(source, /attemptFreshLiveKitReplacement[\s\S]*requestLiveKitCredentials\(/);

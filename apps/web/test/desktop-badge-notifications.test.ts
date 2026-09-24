@@ -1,47 +1,27 @@
 // @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.test.json.
-import test, { after } from 'node:test';
+import { test, onTestFinished, vi } from 'vitest';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { createServer } from 'vite';
 
 const webRoot = resolve(import.meta.dirname, '..');
 
-// One Vite server for the whole file, without a file watcher (see
-// desktop-os-integration.test.ts for why).
-let serverPromise = null;
 
-function getServer() {
-  serverPromise ??= createServer({
-    appType: 'custom',
-    logLevel: 'silent',
-    root: webRoot,
-    server: { hmr: false, middlewareMode: true, watch: null }
-  });
-  return serverPromise;
-}
-
-after(async () => {
-  if (serverPromise) await (await serverPromise).close();
-});
-
-async function loadAttention(t, windowValue = {}) {
-  Object.defineProperty(globalThis, 'window', { configurable: true, value: windowValue, writable: true });
+async function loadAttention(windowValue = {}) {
+  vi.stubGlobal('window', windowValue);
   const originalWarn = console.warn;
   console.warn = () => {};
-  t.after(() => {
-    delete globalThis.window;
+  onTestFinished(() => {
     console.warn = originalWarn;
   });
-  const server = await getServer();
-  server.moduleGraph.invalidateAll();
-  return server.ssrLoadModule('/src/lib/platform/desktop-attention.ts');
+  vi.resetModules();
+  return import('../src/lib/platform/desktop-attention.ts');
 }
 
 const flush = () => new Promise((resolveFlush) => setImmediate(resolveFlush));
 
-test('the app icon badge counts every unread room and DM except muted ones', async (t) => {
-  const attention = await loadAttention(t);
+test('the app icon badge counts every unread room and DM except muted ones', async () => {
+  const attention = await loadAttention();
 
   assert.equal(attention.countUnreadForBadge({
     friends: [
@@ -61,9 +41,9 @@ test('the app icon badge counts every unread room and DM except muted ones', asy
   }), 2 + 4 + 0 + 3);
 });
 
-test('badge sync sends each change once and clears to zero', async (t) => {
+test('badge sync sends each change once and clears to zero', async () => {
   const sent = [];
-  const attention = await loadAttention(t, {
+  const attention = await loadAttention({
     voiceRoomDesktopAttention: {
       requestAttention: async () => ({ ok: true }),
       setBadgeCount: async (count) => sent.push(count)
@@ -79,13 +59,13 @@ test('badge sync sends each change once and clears to zero', async (t) => {
   assert.deepEqual(sent, [3, 4, 0]);
 });
 
-test('badge sync is a no-op without the desktop bridge and retries after a failure', async (t) => {
-  const bare = await loadAttention(t, {});
+test('badge sync is a no-op without the desktop bridge and retries after a failure', async () => {
+  const bare = await loadAttention({});
   assert.doesNotThrow(() => bare.syncDesktopBadgeCount(5));
 
   let fail = true;
   const sent = [];
-  const attention = await loadAttention(t, {
+  const attention = await loadAttention({
     voiceRoomDesktopAttention: {
       requestAttention: async () => ({ ok: true }),
       setBadgeCount: async (count) => {

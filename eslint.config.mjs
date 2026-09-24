@@ -61,9 +61,12 @@ export default tseslint.config(
   },
   {
     rules: {
-      // node:test's test()/describe() return promises the runner awaits itself.
+      // node:test's and Vitest's test()/describe() return promises the runner awaits itself.
       '@typescript-eslint/no-floating-promises': ['error', {
-        allowForKnownSafeCalls: [{ from: 'package', package: 'node:test', name: ['test', 'it', 'describe', 'suite', 'before', 'after', 'beforeEach', 'afterEach'] }]
+        allowForKnownSafeCalls: [
+          { from: 'package', package: 'node:test', name: ['test', 'it', 'describe', 'suite', 'before', 'after', 'beforeEach', 'afterEach'] },
+          { from: 'package', package: 'vitest', name: ['test', 'it', 'describe', 'suite'] }
+        ]
       }],
       // Stylistic: async functions without await are common in fakes and handlers.
       '@typescript-eslint/require-await': 'off',

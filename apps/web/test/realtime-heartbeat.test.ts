@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import test from 'node:test';
+import { test } from 'vitest';
 
 import { RealtimeHeartbeatWatchdog } from '../src/lib/api/realtime-heartbeat.ts';
 
@@ -41,7 +41,7 @@ test('pong clears the pending timeout and starts a fresh heartbeat epoch', () =>
 });
 
 test('app realtime closes an unresponsive socket and ignores stale socket callbacks', () => {
-  const source = fs.readFileSync(new URL('../src/lib/api/realtime.ts', import.meta.url), 'utf8');
+  const source = fs.readFileSync(`${import.meta.dirname}/../src/lib/api/realtime.ts`, 'utf8');
 
   assert.match(source, /heartbeatWatchdog\.isTimedOut\(\)[\s\S]*socket\?\.close\(4000, 'heartbeat_timeout'\)/);
   assert.match(source, /parsed\?\.type === 'pong'\) this\.heartbeatWatchdog\.recordPong\(\)/);
