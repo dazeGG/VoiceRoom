@@ -7,8 +7,8 @@ import path from 'node:path';
 import { Pool } from 'pg';
 
 import { runMigrations } from '../src/lib/migrate.ts';
-import { createRoomStore } from '../src/lib/room-store.js';
-import { createUserStore } from '../src/lib/user-store.js';
+import { createRoomStore } from '../src/lib/room-store.ts';
+import { createUserStore } from '../src/lib/user-store.ts';
 import { createLinkPreviewRepository } from '../src/domains/link-previews/link-preview-repository.ts';
 import { FAILED_TTL_MS, createLinkPreviewService } from '../src/domains/link-previews/link-preview-service.ts';
 import { createLinkPreviewStorage, reconcileLinkPreviewImages } from '../src/lib/link-preview-storage.ts';

@@ -1,11 +1,35 @@
 import crypto from 'node:crypto';
+import type pg from 'pg';
 import { cleanPresenceStatus } from '@voice-room/shared/validation';
+import type { PresenceStatus } from '@voice-room/shared/validation';
 import { createDbPool, transaction } from './db.ts';
 import { createLogger } from './logger.ts';
 
+type Queryable = Pick<pg.Pool, 'query'> | pg.PoolClient;
+export type RoomNotificationLevel = 'all' | 'mentions' | 'none';
+export type NotificationPreferences = {
+  doNotDisturb: boolean;
+  mutedPeerIds: string[];
+  mutedRoomIds: string[];
+  roomLevels: Record<string, string>;
+  presenceStatus: PresenceStatus;
+  presenceStatusAutomatic: boolean;
+  privateNotifications: boolean;
+};
+type PreferencesInput = {
+  doNotDisturb?: boolean;
+  presenceStatus?: unknown;
+  presenceStatusAutomatic?: unknown;
+  privateNotifications?: unknown;
+  mutedPeerIds?: string[];
+  mutedRoomIds?: string[];
+  roomLevels?: Record<string, string>;
+};
+export type PreferencesResult<Status extends string> = { status: Status; preferences: NotificationPreferences };
+
 const DEFAULT_AUTOMATIC_PRESENCE_LEASE_MS = 3 * 60 * 1000;
 
-function createRowId() {
+function createRowId(): string {
   return crypto.randomUUID?.() || crypto.randomBytes(16).toString('hex');
 }
 
@@ -17,7 +41,7 @@ function mapPreferences({
   mutedPeerIds = [],
   mutedRoomIds = [],
   roomLevels = {}
-} = {}) {
+}: PreferencesInput = {}): NotificationPreferences {
   const normalizedPresenceStatus = cleanPresenceStatus(presenceStatus) || (doNotDisturb ? 'dnd' : 'online');
   return {
     doNotDisturb: normalizedPresenceStatus === 'dnd',
@@ -35,19 +59,19 @@ function createNotificationStore({
   databaseUrl,
   logger = createLogger({ name: 'api' }),
   pool
-} = {}) {
+}: { automaticPresenceLeaseMs?: number; databaseUrl?: string; logger?: unknown; pool?: pg.Pool | null } = {}) {
   let activePool = pool || null;
   const activeLeaseMs = Number.isFinite(automaticPresenceLeaseMs) && automaticPresenceLeaseMs > 0
     ? Math.floor(automaticPresenceLeaseMs)
     : DEFAULT_AUTOMATIC_PRESENCE_LEASE_MS;
-  function getPool() {
+  function getPool(): pg.Pool {
     if (!activePool) {
       activePool = createDbPool({ databaseUrl, logger });
     }
     return activePool;
   }
 
-  async function getPreferences(userId, client = getPool()) {
+  async function getPreferences(userId: string | null | undefined, client: Queryable = getPool()): Promise<NotificationPreferences> {
     if (!userId) return mapPreferences();
     const preferences = await client.query(
       `SELECT u.dnd, u.presence_status, u.presence_status_automatic, np.private_notifications
@@ -82,12 +106,12 @@ function createNotificationStore({
     });
   }
 
-  async function userExists(userId, client) {
+  async function userExists(userId: string, client: Queryable): Promise<boolean> {
     const result = await client.query(`SELECT 1 FROM users WHERE id = $1`, [userId]);
-    return result.rowCount > 0;
+    return result.rowCount! > 0;
   }
 
-  async function setPrivateNotifications({ userId, privateNotifications }) {
+  async function setPrivateNotifications({ userId, privateNotifications }: { userId: string; privateNotifications: unknown }): Promise<PreferencesResult<'not_found' | 'updated'>> {
     if (!userId) return { status: 'not_found', preferences: mapPreferences() };
     return transaction(getPool(), async (client) => {
       if (!(await userExists(userId, client))) {
@@ -105,7 +129,7 @@ function createNotificationStore({
     });
   }
 
-  async function setDoNotDisturb({ userId, doNotDisturb }) {
+  async function setDoNotDisturb({ userId, doNotDisturb }: { userId: string; doNotDisturb: unknown }): Promise<PreferencesResult<'not_found' | 'updated'>> {
     if (!userId) return { status: 'not_found', preferences: mapPreferences() };
     return transaction(getPool(), async (client) => {
       const updated = await client.query(
@@ -126,7 +150,7 @@ function createNotificationStore({
     });
   }
 
-  async function setPresenceStatus({ userId, presenceStatus, automatic = false }) {
+  async function setPresenceStatus({ userId, presenceStatus, automatic = false }: { userId: string; presenceStatus: unknown; automatic?: unknown }): Promise<PreferencesResult<'not_found' | 'invalid' | 'unchanged' | 'updated'>> {
     const normalizedPresenceStatus = cleanPresenceStatus(presenceStatus);
     if (!userId) return { status: 'not_found', preferences: mapPreferences() };
     if (!normalizedPresenceStatus) return { status: 'invalid', preferences: mapPreferences() };
@@ -205,7 +229,7 @@ function createNotificationStore({
     });
   }
 
-  async function setDmMute({ userId, peerUserId, muted }) {
+  async function setDmMute({ userId, peerUserId, muted }: { userId: string; peerUserId: string; muted: unknown }): Promise<PreferencesResult<'not_found' | 'self' | 'muted' | 'unmuted'>> {
     if (!userId || !peerUserId) return { status: 'not_found', preferences: mapPreferences() };
     if (userId === peerUserId) return { status: 'self', preferences: mapPreferences() };
 
@@ -236,7 +260,7 @@ function createNotificationStore({
     });
   }
 
-  async function isDmMuted({ userId, peerUserId }) {
+  async function isDmMuted({ userId, peerUserId }: { userId: string; peerUserId: string }): Promise<boolean> {
     if (!userId || !peerUserId) return false;
     const result = await getPool().query(
       `SELECT 1
@@ -244,10 +268,10 @@ function createNotificationStore({
        WHERE user_id = $1 AND peer_user_id = $2`,
       [userId, peerUserId]
     );
-    return result.rowCount > 0;
+    return result.rowCount! > 0;
   }
 
-  async function setRoomMute({ userId, roomId, muted }) {
+  async function setRoomMute({ userId, roomId, muted }: { userId: string; roomId: string; muted: unknown }): Promise<PreferencesResult<'not_found' | 'temporary_room' | 'not_saved_room' | 'muted' | 'unmuted'>> {
     if (!userId || !roomId) return { status: 'not_found', preferences: mapPreferences() };
 
     return transaction(getPool(), async (client) => {
@@ -293,8 +317,8 @@ function createNotificationStore({
     });
   }
 
-  async function setRoomLevel({ userId, roomId, level }) {
-    if (!userId || !roomId || !['all', 'mentions', 'none'].includes(level)) {
+  async function setRoomLevel({ userId, roomId, level }: { userId: string; roomId: string; level: unknown }): Promise<{ ok: false; code: 'invalid_level' | 'not_found' } | { ok: true; level: RoomNotificationLevel }> {
+    if (!userId || !roomId || !(['all', 'mentions', 'none'] as unknown[]).includes(level)) {
       return { ok: false, code: 'invalid_level' };
     }
     return transaction(getPool(), async (client) => {
@@ -311,11 +335,11 @@ function createNotificationStore({
          SET level = EXCLUDED.level, updated_at = current_timestamp`,
         [createRowId(), userId, roomId, level]
       );
-      return { ok: true, level };
+      return { ok: true, level: level as RoomNotificationLevel };
     });
   }
 
-  async function getRoomLevel({ userId, roomId }) {
+  async function getRoomLevel({ userId, roomId }: { userId: string; roomId: string }): Promise<string> {
     if (!userId || !roomId) return 'mentions';
     const result = await getPool().query(
       `SELECT level
@@ -326,7 +350,7 @@ function createNotificationStore({
     return result.rows[0]?.level || 'mentions';
   }
 
-  async function isRoomMuted({ userId, roomId }) {
+  async function isRoomMuted({ userId, roomId }: { userId: string; roomId: string }): Promise<boolean> {
     if (!userId || !roomId) return false;
     const result = await getPool().query(
       `SELECT 1
@@ -334,10 +358,10 @@ function createNotificationStore({
        WHERE user_id = $1 AND room_id = $2 AND level = 'none'`,
       [userId, roomId]
     );
-    return result.rowCount > 0;
+    return result.rowCount! > 0;
   }
 
-  async function close() {
+  async function close(): Promise<void> {
     if (activePool) {
       await activePool.end();
     }
@@ -357,5 +381,7 @@ function createNotificationStore({
     setPrivateNotifications
   };
 }
+
+export type NotificationStore = ReturnType<typeof createNotificationStore>;
 
 export { createNotificationStore, mapPreferences };

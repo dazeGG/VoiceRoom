@@ -6,7 +6,7 @@ import { Client } from 'pg';
 import { runner } from 'node-pg-migrate';
 import { test } from 'node:test';
 import { classifyPlatform } from '@voice-room/shared/platform-class';
-import { createPushStore } from '../src/lib/push-store.js';
+import { createPushStore } from '../src/lib/push-store.ts';
 import { createTestDatabase } from './db-harness.js';
 
 const MIGRATIONS_DIR = path.resolve(import.meta.dirname, '../src/migrations');

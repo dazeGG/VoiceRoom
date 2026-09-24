@@ -4,7 +4,7 @@
 import { del, getJsonAuth, postJsonAuth } from './http';
 import type { PresenceStatus } from '$lib/shared/presence';
 
-// Mirrors the server's publicUser() shape (user-store.js).
+// Mirrors the server's publicUser() shape (user-store.ts).
 export interface PublicUser {
   avatarAccent: string | null;
   avatarColorKey: string;

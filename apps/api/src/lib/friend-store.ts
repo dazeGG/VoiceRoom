@@ -1,19 +1,25 @@
 import crypto from 'node:crypto';
+import type pg from 'pg';
 import { createDbPool, transaction } from './db.ts';
 import { cleanAvatarColorKey, cleanPresenceStatus } from '@voice-room/shared/validation';
 import { normalizeLinkPreview } from '@voice-room/shared/link-preview';
 import { createLogger } from './logger.ts';
 
-function toMillis(value) {
+type Row = Record<string, any>;
+type Queryable = Pick<pg.Pool, 'query'> | pg.PoolClient;
+export type PublicUser = ReturnType<typeof mapPublicUser> & object;
+export type DirectMessage = ReturnType<typeof mapMessage> & object;
+
+function toMillis(value: unknown): number | null {
   if (value == null) return null;
   if (value instanceof Date) return value.getTime();
-  const parsed = Date.parse(value);
+  const parsed = Date.parse(value as string);
   return Number.isFinite(parsed) ? parsed : null;
 }
 
 // Public shape for a user row joined from the `users` table (snake_case). Never
 // leaks the password hash; mirrors user-store's publicUser fields.
-function mapPublicUser(row) {
+function mapPublicUser(row: Row | null | undefined) {
   if (!row) return null;
   const presenceStatus = cleanPresenceStatus(row.presence_status) || (row.dnd ? 'dnd' : 'online');
   return {
@@ -31,17 +37,17 @@ function mapPublicUser(row) {
 
 // Room invitations ride inside a regular direct message's metadata so they
 // live in the shared thread history without any schema change.
-function mapInvite(metadata) {
+function mapInvite(metadata: Row | null | undefined) {
   if (!metadata || metadata.kind !== 'room-invite') return null;
   return {
     roomId: String(metadata.roomId || ''),
     roomName: String(metadata.roomName || ''),
-    status: ['accepted', 'declined', 'expired'].includes(metadata.status) ? metadata.status : 'pending',
+    status: (['accepted', 'declined', 'expired'].includes(metadata.status) ? metadata.status : 'pending') as 'pending' | 'accepted' | 'declined' | 'expired',
     expiresAt: Number(metadata.expiresAt) || null
   };
 }
 
-function mapMessage(row) {
+function mapMessage(row: Row | null | undefined) {
   if (!row) return null;
   return {
     id: row.id,
@@ -60,11 +66,11 @@ function mapMessage(row) {
 }
 
 // friendships store the pair ordered so a single row is canonical.
-function orderedPair(a, b) {
+function orderedPair(a: string, b: string): [string, string] {
   return a < b ? [a, b] : [b, a];
 }
 
-async function lockUserPair(client, a, b) {
+async function lockUserPair(client: Queryable, a: string, b: string): Promise<void> {
   const [low, high] = orderedPair(a, b);
   await client.query(
     `SELECT pg_advisory_xact_lock(hashtext($1))`,
@@ -73,13 +79,13 @@ async function lockUserPair(client, a, b) {
 }
 
 // Escape LIKE wildcards in user-supplied search terms (we use ESCAPE '\').
-function escapeLike(term) {
+function escapeLike(term: string): string {
   return term.replace(/[\\%_]/g, (ch) => `\\${ch}`);
 }
 
-function createFriendStore({ databaseUrl, logger = createLogger({ name: 'api' }), pool } = {}) {
+function createFriendStore({ databaseUrl, logger = createLogger({ name: 'api' }), pool }: { databaseUrl?: string; logger?: unknown; pool?: pg.Pool | null } = {}) {
   let activePool = pool || null;
-  function getPool() {
+  function getPool(): pg.Pool {
     if (!activePool) {
       activePool = createDbPool({ databaseUrl, logger });
     }
@@ -88,7 +94,7 @@ function createFriendStore({ databaseUrl, logger = createLogger({ name: 'api' })
 
   // --- Friendship lookups -------------------------------------------------
 
-  async function getFriendIds(userId, client = getPool()) {
+  async function getFriendIds(userId: string, client: Queryable = getPool()): Promise<string[]> {
     const result = await client.query(
       `SELECT CASE WHEN user_a_id = $1 THEN user_b_id ELSE user_a_id END AS friend_id
        FROM friendships
@@ -98,19 +104,19 @@ function createFriendStore({ databaseUrl, logger = createLogger({ name: 'api' })
     return result.rows.map((row) => row.friend_id);
   }
 
-  async function areFriends(a, b, client = getPool()) {
+  async function areFriends(a: string, b: string, client: Queryable = getPool()): Promise<boolean> {
     const [low, high] = orderedPair(a, b);
     const result = await client.query(
       `SELECT 1 FROM friendships WHERE user_a_id = $1 AND user_b_id = $2`,
       [low, high]
     );
-    return result.rowCount > 0;
+    return result.rowCount! > 0;
   }
 
   // Friend list enriched with the last DM and unread count, ready for the
   // sidebar/home. Online status is layered on at the route level from the
   // in-memory presence registry.
-  async function listFriends(userId) {
+  async function listFriends(userId: string) {
     const pool = getPool();
     const friendsResult = await pool.query(
       `SELECT u.*, f.created_at AS friends_since
@@ -128,7 +134,7 @@ function createFriendStore({ databaseUrl, logger = createLogger({ name: 'api' })
        GROUP BY sender_id`,
       [userId]
     );
-    const unread = new Map(unreadResult.rows.map((row) => [row.sender_id, row.count]));
+    const unread = new Map<string, number>(unreadResult.rows.map((row) => [row.sender_id, row.count]));
 
     const lastResult = await pool.query(
       `SELECT DISTINCT ON (peer) peer, id, body, created_at, sender_id
@@ -141,7 +147,7 @@ function createFriendStore({ databaseUrl, logger = createLogger({ name: 'api' })
        ORDER BY peer, created_at DESC, id DESC`,
       [userId]
     );
-    const lastMessage = new Map(
+    const lastMessage = new Map<string, { id: string; body: string; createdAt: number | null; fromMe: boolean }>(
       lastResult.rows.map((row) => [
         row.peer,
         { id: row.id, body: row.body, createdAt: toMillis(row.created_at), fromMe: row.sender_id === userId }
@@ -158,7 +164,7 @@ function createFriendStore({ databaseUrl, logger = createLogger({ name: 'api' })
 
   // --- Search -------------------------------------------------------------
 
-  async function searchUsers({ query, excludeUserId, limit = 20 }) {
+  async function searchUsers({ query, excludeUserId, limit = 20 }: { query: unknown; excludeUserId: string; limit?: number }) {
     const term = String(query || '').trim();
     if (!term) return [];
     const pattern = `%${escapeLike(term.toLowerCase())}%`;
@@ -182,7 +188,7 @@ function createFriendStore({ databaseUrl, logger = createLogger({ name: 'api' })
   // other become friends without an extra accept step. Returns a discriminated
   // status. The user-id path supports in-room social actions without exposing
   // logins in room presence payloads.
-  async function sendRequest({ requesterId, addresseeLogin = '', addresseeUserId = '' }) {
+  async function sendRequest({ requesterId, addresseeLogin = '', addresseeUserId = '' }: { requesterId: string; addresseeLogin?: string; addresseeUserId?: string }) {
     return transaction(getPool(), async (client) => {
       const userResult = addresseeUserId
         ? await client.query(`SELECT * FROM users WHERE id = $1`, [addresseeUserId])
@@ -212,7 +218,7 @@ function createFriendStore({ databaseUrl, logger = createLogger({ name: 'api' })
          FOR UPDATE`,
         [addressee.id, requesterId]
       );
-      if (reverse.rowCount > 0) {
+      if (reverse.rowCount! > 0) {
         await client.query(
           `UPDATE friend_requests SET status = 'accepted', responded_at = current_timestamp WHERE id = $1`,
           [reverse.rows[0].id]
@@ -227,7 +233,7 @@ function createFriendStore({ databaseUrl, logger = createLogger({ name: 'api' })
          WHERE requester_id = $1 AND addressee_id = $2 AND status = 'pending'`,
         [requesterId, addressee.id]
       );
-      if (forward.rowCount > 0) {
+      if (forward.rowCount! > 0) {
         return { status: 'already_sent', user: mapPublicUser(addressee) };
       }
 
@@ -251,7 +257,7 @@ function createFriendStore({ databaseUrl, logger = createLogger({ name: 'api' })
     });
   }
 
-  async function insertFriendship(client, a, b) {
+  async function insertFriendship(client: Queryable, a: string, b: string): Promise<void> {
     const [low, high] = orderedPair(a, b);
     const id = crypto.randomUUID();
     await client.query(
@@ -264,7 +270,7 @@ function createFriendStore({ databaseUrl, logger = createLogger({ name: 'api' })
 
   // Pending incoming + outgoing requests, each joined with the other user and a
   // count of mutual friends (used by the design's "N общих друга" line).
-  async function listRequests(userId) {
+  async function listRequests(userId: string) {
     const pool = getPool();
     // Alias the request columns: `u.*` also exposes `id`/`created_at`, and a
     // duplicate column name makes node-postgres keep the last one — without the
@@ -308,7 +314,7 @@ function createFriendStore({ databaseUrl, logger = createLogger({ name: 'api' })
   }
 
   // Accept or decline an incoming request the user owns (addressee).
-  async function countIncomingRequests(userId) {
+  async function countIncomingRequests(userId: string): Promise<number> {
     const result = await getPool().query(
       `SELECT COUNT(*)::int AS count FROM friend_requests
        WHERE addressee_id = $1 AND status = 'pending'`,
@@ -317,7 +323,7 @@ function createFriendStore({ databaseUrl, logger = createLogger({ name: 'api' })
     return result.rows[0]?.count || 0;
   }
 
-  async function respondRequest({ userId, requestId, action }) {
+  async function respondRequest({ userId, requestId, action }: { userId: string; requestId: string; action: string }) {
     return transaction(getPool(), async (client) => {
       const candidate = await client.query(
         `SELECT requester_id FROM friend_requests
@@ -362,7 +368,7 @@ function createFriendStore({ databaseUrl, logger = createLogger({ name: 'api' })
   }
 
   // Cancel an outgoing request the user sent (requester).
-  async function cancelRequest({ userId, requestId }) {
+  async function cancelRequest({ userId, requestId }: { userId: string; requestId: string }) {
     const result = await getPool().query(
       `UPDATE friend_requests
        SET status = 'cancelled', responded_at = current_timestamp
@@ -374,7 +380,7 @@ function createFriendStore({ databaseUrl, logger = createLogger({ name: 'api' })
     return { status: 'cancelled', addresseeId: result.rows[0].addressee_id };
   }
 
-  async function removeFriend({ userId, friendId }) {
+  async function removeFriend({ userId, friendId }: { userId: string; friendId: string }) {
     const [low, high] = orderedPair(userId, friendId);
     const result = await getPool().query(
       `DELETE FROM friendships WHERE user_a_id = $1 AND user_b_id = $2`,
@@ -388,7 +394,7 @@ function createFriendStore({ databaseUrl, logger = createLogger({ name: 'api' })
 
   // A block is directed, but every enforcement point treats an edge in either
   // direction as a stop, so this is the single predicate callers should use.
-  async function isBlockedBetween(a, b, client = getPool()) {
+  async function isBlockedBetween(a: string | null | undefined, b: string | null | undefined, client: Queryable = getPool()): Promise<boolean> {
     if (!a || !b || a === b) return false;
     const result = await client.query(
       `SELECT 1 FROM user_blocks
@@ -397,10 +403,10 @@ function createFriendStore({ databaseUrl, logger = createLogger({ name: 'api' })
        LIMIT 1`,
       [a, b]
     );
-    return result.rowCount > 0;
+    return result.rowCount! > 0;
   }
 
-  async function listBlockedUserIds(userId, client = getPool()) {
+  async function listBlockedUserIds(userId: string, client: Queryable = getPool()): Promise<string[]> {
     const result = await client.query(
       `SELECT blocked_id FROM user_blocks WHERE blocker_id = $1`,
       [userId]
@@ -408,7 +414,7 @@ function createFriendStore({ databaseUrl, logger = createLogger({ name: 'api' })
     return result.rows.map((row) => row.blocked_id);
   }
 
-  async function listBlockedUsers(userId, client = getPool()) {
+  async function listBlockedUsers(userId: string, client: Queryable = getPool()) {
     const result = await client.query(
       `SELECT u.*
        FROM user_blocks b
@@ -423,7 +429,7 @@ function createFriendStore({ databaseUrl, logger = createLogger({ name: 'api' })
   // Blocking is a hard reset of the relationship: the friendship goes away and
   // any pending request in either direction is cancelled, so unblocking later
   // starts from a clean slate rather than silently restoring contact.
-  async function blockUser({ userId, targetId }) {
+  async function blockUser({ userId, targetId }: { userId: string; targetId: string }) {
     if (!targetId || userId === targetId) return { status: 'invalid' };
     return transaction(getPool(), async (client) => {
       await lockUserPair(client, userId, targetId);
@@ -462,13 +468,13 @@ function createFriendStore({ databaseUrl, logger = createLogger({ name: 'api' })
       );
 
       return {
-        status: inserted.rowCount > 0 ? 'blocked' : 'already_blocked',
-        unfriended: unfriended.rowCount > 0
+        status: inserted.rowCount! > 0 ? 'blocked' : 'already_blocked',
+        unfriended: unfriended.rowCount! > 0
       };
     });
   }
 
-  async function unblockUser({ userId, targetId }) {
+  async function unblockUser({ userId, targetId }: { userId: string; targetId: string }) {
     if (!targetId || userId === targetId) return { status: 'invalid' };
     return transaction(getPool(), async (client) => {
       await lockUserPair(client, userId, targetId);
@@ -476,13 +482,13 @@ function createFriendStore({ databaseUrl, logger = createLogger({ name: 'api' })
         `DELETE FROM user_blocks WHERE blocker_id = $1 AND blocked_id = $2`,
         [userId, targetId]
       );
-      return { status: result.rowCount > 0 ? 'unblocked' : 'not_found' };
+      return { status: result.rowCount! > 0 ? 'unblocked' : 'not_found' };
     });
   }
 
   // --- Direct messages ----------------------------------------------------
 
-  async function listThread({ userId, peerId, limit = 100 }) {
+  async function listThread({ userId, peerId, limit = 100 }: { userId: string; peerId: string; limit?: number }) {
     const result = await getPool().query(
       `SELECT * FROM direct_messages
        WHERE ((sender_id = $1 AND recipient_id = $2)
@@ -495,7 +501,7 @@ function createFriendStore({ databaseUrl, logger = createLogger({ name: 'api' })
     return result.rows.map(mapMessage);
   }
 
-  async function getMessage(userId, peerId, messageId) {
+  async function getMessage(userId: string, peerId: string, messageId: string) {
     const result = await getPool().query(
       `SELECT * FROM direct_messages
        WHERE id = $1
@@ -507,17 +513,17 @@ function createFriendStore({ databaseUrl, logger = createLogger({ name: 'api' })
     return mapMessage(result.rows[0] || null);
   }
 
-  async function softDeleteMessage(messageId) {
+  async function softDeleteMessage(messageId: string): Promise<boolean> {
     const result = await getPool().query(
       `UPDATE direct_messages
        SET deleted_at = now()
        WHERE id = $1 AND deleted_at IS NULL`,
       [messageId]
     );
-    return result.rowCount > 0;
+    return result.rowCount! > 0;
   }
 
-  async function editMessage({ messageId, senderId, recipientId, body }) {
+  async function editMessage({ messageId, senderId, recipientId, body }: { messageId: string; senderId: string; recipientId: string; body: string }) {
     const result = await getPool().query(
       `UPDATE direct_messages
        SET body = $4, edited_at = current_timestamp
@@ -531,7 +537,15 @@ function createFriendStore({ databaseUrl, logger = createLogger({ name: 'api' })
     return mapMessage(result.rows[0] || null);
   }
 
-  async function sendMessage({ senderId, recipientId, body, metadata = null, replyToMessageId = null, beforeUnitOfWork = null, unitOfWork = null }) {
+  async function sendMessage({ senderId, recipientId, body, metadata = null, replyToMessageId = null, beforeUnitOfWork = null, unitOfWork = null }: {
+    senderId: string;
+    recipientId: string;
+    body: string;
+    metadata?: Row | null;
+    replyToMessageId?: string | null;
+    beforeUnitOfWork?: ((client: pg.PoolClient) => Promise<{ replay?: boolean; message?: Row } | null | undefined>) | null;
+    unitOfWork?: ((client: pg.PoolClient, message: DirectMessage | null) => Promise<unknown>) | null;
+  }) {
     const id = crypto.randomUUID();
     return transaction(getPool(), async (client) => {
       if (typeof beforeUnitOfWork === 'function') {
@@ -552,7 +566,7 @@ function createFriendStore({ databaseUrl, logger = createLogger({ name: 'api' })
 
   // Only the invited recipient may resolve a pending room invitation; the
   // update is idempotent-safe (a second respond finds no pending row).
-  async function respondInvite({ messageId, recipientId, status }) {
+  async function respondInvite({ messageId, recipientId, status }: { messageId: string; recipientId: string; status: string }) {
     const result = await getPool().query(
       `UPDATE direct_messages
        SET metadata = jsonb_set(metadata, '{status}', to_jsonb($3::text))
@@ -569,7 +583,7 @@ function createFriendStore({ databaseUrl, logger = createLogger({ name: 'api' })
 
   // Expires pending invitations for a room. Omitting senderId expires every
   // sender's invitations, which is what a deleted room needs.
-  async function expirePendingInvites({ senderId = null, roomId }) {
+  async function expirePendingInvites({ senderId = null, roomId }: { senderId?: string | null; roomId: string }) {
     const result = await getPool().query(
       `UPDATE direct_messages
        SET metadata = jsonb_set(metadata, '{status}', to_jsonb('expired'::text))
@@ -586,7 +600,7 @@ function createFriendStore({ databaseUrl, logger = createLogger({ name: 'api' })
 
   // Mark every message from peer -> user as read. Returns the number marked so
   // the caller can decide whether to broadcast a read receipt.
-  async function markRead({ userId, peerId }) {
+  async function markRead({ userId, peerId }: { userId: string; peerId: string }) {
     const result = await getPool().query(
       `UPDATE direct_messages
        SET read_at = current_timestamp
@@ -596,7 +610,7 @@ function createFriendStore({ databaseUrl, logger = createLogger({ name: 'api' })
     return { count: result.rowCount };
   }
 
-  async function getUnreadCounts(userId) {
+  async function getUnreadCounts(userId: string): Promise<Record<string, number>> {
     const result = await getPool().query(
       `SELECT sender_id, COUNT(*)::int AS count
        FROM direct_messages
@@ -607,7 +621,7 @@ function createFriendStore({ databaseUrl, logger = createLogger({ name: 'api' })
     return Object.fromEntries(result.rows.map((row) => [row.sender_id, row.count]));
   }
 
-  async function close() {
+  async function close(): Promise<void> {
     if (activePool) {
       await activePool.end();
     }
@@ -641,5 +655,7 @@ function createFriendStore({ databaseUrl, logger = createLogger({ name: 'api' })
     sendRequest
   };
 }
+
+export type FriendStore = ReturnType<typeof createFriendStore>;
 
 export { createFriendStore, mapPublicUser, mapMessage, orderedPair };

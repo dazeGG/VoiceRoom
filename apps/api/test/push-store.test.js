@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createPushStore } from '../src/lib/push-store.js';
-import { createUserStore } from '../src/lib/user-store.js';
+import { createPushStore } from '../src/lib/push-store.ts';
+import { createUserStore } from '../src/lib/user-store.ts';
 import { runMigrations } from '../src/lib/migrate.ts';
 import { createTestDatabase } from './db-harness.js';
 

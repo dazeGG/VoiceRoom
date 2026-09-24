@@ -54,7 +54,7 @@ test('G41-A02 named HTTP, media, membership, mention and room-store paths call t
   const root = path.resolve(import.meta.dirname, '..');
   const server = fs.readFileSync(path.join(root, 'src/server.js'), 'utf8');
   const registry = fs.readFileSync(path.join(root, 'src/app/service-registry.js'), 'utf8');
-  const roomStore = fs.readFileSync(path.join(root, 'src/lib/room-store.js'), 'utf8');
+  const roomStore = fs.readFileSync(path.join(root, 'src/lib/room-store.ts'), 'utf8');
   const mentions = fs.readFileSync(path.join(root, 'src/domains/notifications/mention-eligibility-service.ts'), 'utf8');
 
   assert.match(server, /function findRoomBan[\s\S]*getActiveBanService\(\)/);

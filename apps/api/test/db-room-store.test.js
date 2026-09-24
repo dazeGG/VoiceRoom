@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { createRoomStore, mapMessage, mapRoom } from '../src/lib/room-store.js';
+import { createRoomStore, mapMessage, mapRoom } from '../src/lib/room-store.ts';
 
 function createFakePool(handler) {
   const calls = [];

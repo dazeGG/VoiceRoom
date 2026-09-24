@@ -7,7 +7,7 @@ import type { Logger } from 'pino';
 import { ACCOUNT_DELETION_GRACE_MS, WHATS_NEW_VERSION, formatRecoveryCode, isDeletedAccountLogin } from '@voice-room/shared/account-security';
 import { isValidPassword } from '@voice-room/shared/validation';
 import { LOG_EVENTS } from '../../lib/log-events.ts';
-import { hashSessionToken, selfUser } from '../../lib/user-store.js';
+import { hashSessionToken, selfUser } from '../../lib/user-store.ts';
 
 export interface AccountUser {
   id: string;

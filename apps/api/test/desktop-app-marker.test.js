@@ -14,7 +14,7 @@ import {
   hashSessionToken,
   publicUser,
   selfUser
-} from '../src/lib/user-store.js';
+} from '../src/lib/user-store.ts';
 import { createTestDatabase } from './db-harness.js';
 import { socketPathForDirectory } from './ipc-harness.js';
 

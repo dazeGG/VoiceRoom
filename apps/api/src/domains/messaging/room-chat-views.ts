@@ -1,7 +1,7 @@
 // A room chat message as clients see it: the HTTP answers, the realtime
 // events and the legacy list all send this shape (apps/web ChatMessage).
 
-import { avatarColorForPeerId } from '../../lib/room-store.js';
+import { avatarColorForPeerId } from '../../lib/room-store.ts';
 
 export interface RoomChatMessage {
   id: string;

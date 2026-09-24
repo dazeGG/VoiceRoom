@@ -4,7 +4,7 @@
 // order the legacy handlers ran them.
 
 import crypto from 'node:crypto';
-import { publicUser } from '../../lib/user-store.js';
+import { publicUser } from '../../lib/user-store.ts';
 import { isActiveAccount, type SocialUser } from '../social/social-views.ts';
 import { messageFingerprint, normalizeAttachmentIds } from './message-input.ts';
 import { requireReplyTarget } from './reply-projector.ts';

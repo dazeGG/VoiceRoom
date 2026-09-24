@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { createUserStore, hashSessionToken, publicUser } from '../src/lib/user-store.js';
+import { createUserStore, hashSessionToken, publicUser } from '../src/lib/user-store.ts';
 import { AVATAR_COLOR_KEYS } from '@voice-room/shared/validation';
 
 function createFakePool(handler) {

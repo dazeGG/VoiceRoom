@@ -10,7 +10,7 @@ const { AccessToken, TrackSource } = require('livekit-server-sdk');
 const { createGateCredentialSigner } = require('../../apps/api/src/domains/admission/gate-credential-signer.ts');
 const { createDbPool } = require('../../apps/api/src/lib/db.ts');
 const { runMigrations } = require('../../apps/api/src/lib/migrate.ts');
-const { createRoomStore } = require('../../apps/api/src/lib/room-store.js');
+const { createRoomStore } = require('../../apps/api/src/lib/room-store.ts');
 
 const EXPECTED_NODE_VERSION = 'v24.18.0';
 const ROOM_ID = 'room-g05-physical';

@@ -1,6 +1,6 @@
 import { createDbPool } from '../lib/db.ts';
 import { readEnvBool, readEnvInt } from '../lib/config.ts';
-import { createPushStore } from '../lib/push-store.js';
+import { createPushStore } from '../lib/push-store.ts';
 import { createNotificationOutboxRepository } from '../domains/notifications/notification-outbox-repository.ts';
 import { createNotificationPushProvider } from '../domains/notifications/push-provider.ts';
 import { boundedBackoff, createLeaseRuntime } from '../platform/lease-runtime.ts';

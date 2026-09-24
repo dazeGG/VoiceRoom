@@ -6,7 +6,7 @@ import path from 'node:path';
 import { Pool } from 'pg';
 
 import { runMigrations } from '../src/lib/migrate.ts';
-import { createUserStore } from '../src/lib/user-store.js';
+import { createUserStore } from '../src/lib/user-store.ts';
 import { createTestDatabase } from './db-harness.js';
 
 const SILENT = { log() {}, info() {}, warn() {}, error() {} };
