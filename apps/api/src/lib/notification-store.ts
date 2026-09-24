@@ -11,7 +11,7 @@ export type NotificationPreferences = {
   doNotDisturb: boolean;
   mutedPeerIds: string[];
   mutedRoomIds: string[];
-  roomLevels: Record<string, string>;
+  roomLevels: Record<string, RoomNotificationLevel>;
   presenceStatus: PresenceStatus;
   presenceStatusAutomatic: boolean;
   privateNotifications: boolean;
@@ -23,7 +23,7 @@ type PreferencesInput = {
   privateNotifications?: unknown;
   mutedPeerIds?: string[];
   mutedRoomIds?: string[];
-  roomLevels?: Record<string, string>;
+  roomLevels?: Record<string, RoomNotificationLevel>;
 };
 export type PreferencesResult<Status extends string> = { status: Status; preferences: NotificationPreferences };
 
@@ -339,7 +339,7 @@ function createNotificationStore({
     });
   }
 
-  async function getRoomLevel({ userId, roomId }: { userId: string; roomId: string }): Promise<string> {
+  async function getRoomLevel({ userId, roomId }: { userId: string; roomId: string }): Promise<RoomNotificationLevel> {
     if (!userId || !roomId) return 'mentions';
     const result = await getPool().query(
       `SELECT level
@@ -347,7 +347,7 @@ function createNotificationStore({
        WHERE user_id = $1 AND room_id = $2`,
       [userId, roomId]
     );
-    return result.rows[0]?.level || 'mentions';
+    return (result.rows[0]?.level || 'mentions') as RoomNotificationLevel;
   }
 
   async function isRoomMuted({ userId, roomId }: { userId: string; roomId: string }): Promise<boolean> {

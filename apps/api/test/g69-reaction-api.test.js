@@ -111,7 +111,7 @@ test('G69 routes preserve no-store reads and service authorization status', asyn
   const writeReply = reply();
   await handlers['PUT /api/reactions/:type/:conversationId/:messageId'](request, writeReply);
   assert.equal(writeReply.status, 403);
-  const registry = fs.readFileSync(fileURLToPath(new URL('../src/app/service-registry.js', import.meta.url)), 'utf8');
+  const registry = fs.readFileSync(fileURLToPath(new URL('../src/app/service-registry.ts', import.meta.url)), 'utf8');
   assert.match(registry, /operation === 'read' && !viewer\?\.id/);
   assert.match(registry, /canUserReadRoomChat/);
 });

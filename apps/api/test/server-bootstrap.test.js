@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { bootstrap, createApiServer } from '../src/server.js';
+import { bootstrap, createApiServer } from '../src/server.ts';
 
 test('importing server exposes an app factory without binding or requiring DATABASE_URL', () => {
   assert.equal(typeof createApiServer, 'function');

@@ -1,9 +1,10 @@
+import type pg from 'pg';
 // Any room participant may pin, so the only guard against a room turning into
 // an unbounded pin list is this cap. Discord uses 50; matching it keeps the
 // pinned bar scrollable rather than endless.
 const MAX_PINS_PER_ROOM = 50;
 
-type Client = unknown;
+type Client = Pick<pg.PoolClient, 'query'> | null | undefined;
 type Pin = { messageId: string; [key: string]: unknown };
 type PinSnapshot = { pins: Pin[]; count: number };
 type Viewer = { id?: string; guest?: boolean; isGuest?: boolean } | null | undefined;

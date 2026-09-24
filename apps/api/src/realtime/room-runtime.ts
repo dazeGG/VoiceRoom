@@ -20,7 +20,7 @@ import type { RoomStore } from '../lib/room-store.ts';
 import type { UserStore } from '../lib/user-store.ts';
 import type { ConnectionRegistry, WsConnection } from './registry.ts';
 
-// Presence peers and rooms are plain in-memory records shared with server.js.
+// Presence peers and rooms are plain in-memory records shared with server.ts.
 type Peer = Record<string, any>;
 type PresenceRoom = { peers: Map<string, Peer>; voiceActiveSince?: number | null; [key: string]: any };
 type VoiceTarget = { roomId: string; peerId: string; sessionToken?: string; transportId?: string };
@@ -71,7 +71,7 @@ type RuntimeRoomStore = Pick<RoomStore,
   'getRoom' | 'listMessages' | 'getOrCreatePeerIdentity' | 'listVisibleRoomsForUser' | 'listSummaryRecipientUserIds' | 'markRoomActive'>
   & Partial<Pick<RoomStore,
     'revokeLiveKitGatePeer' | 'getRoomUnreadCount' | 'listNotificationRecipientUserIds' | 'isRoomServerMuted' | 'normalizeGatePrincipal'>>;
-type GatePrincipal = { principalType: string; principalId: string };
+type GatePrincipal = { principalType: 'account' | 'guest'; principalId: string };
 type RuntimeCredentialBoundary = {
   revokePeer?: (input: { roomId: string; accountUserId: string | null; guestPrincipalId: string }) => Promise<unknown>;
   resolvePrincipal?: (input: { roomId: string; accountUserId: string }) => GatePrincipal | null;
@@ -83,15 +83,15 @@ export type RoomRuntimeDeps = {
   wsRegistry: ConnectionRegistry;
   getRoomStore: () => RuntimeRoomStore;
   getRoom: (roomId: string) => Promise<PresenceRoom | null>;
-  publicPeer: (peer: Peer) => any;
+  publicPeer: (peer: any) => any;
   publicLobbyRoom: (room: any) => any;
   publicChatMessage: (message: any) => any;
   getUserStore?: (() => Pick<UserStore, 'getUserById'>) | null;
-  broadcast: (room: PresenceRoom, message: Record<string, unknown>, exceptPeerId?: string) => void;
+  broadcast: (room: any, message: Record<string, unknown>, exceptPeerId?: string) => void;
   closePeer: (roomId: string, peerId: string, transportId: string | undefined, reason: string) => void;
   avatarColorForPeerId: (peerId: unknown) => string;
   MAX_ROOM_PEERS: number;
-  tokensMatch: (expected: unknown, actual: unknown) => boolean;
+  tokensMatch: (expected: string | null | undefined, actual: string | null | undefined) => boolean;
   sessionAvatarColorKey: (user: SessionUser) => string;
   queueRoomOccupancyTransition?: (roomId: string) => Promise<unknown>;
   findRoomBan?: (roomId: string, userId: string | null | undefined, ip: string) => Promise<unknown>;
@@ -581,7 +581,7 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
     return ids;
   }
 
-  function invalidateRecipientCache(roomId: string): void {
+  function invalidateRecipientCache(roomId: string | null | undefined): void {
     if (roomId) recipientCache.delete(roomId);
   }
 

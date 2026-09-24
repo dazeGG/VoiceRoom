@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "node src/server.js",
-    "dev": "node --watch src/server.js",
+    "start": "node src/server.ts",
+    "dev": "node --watch src/server.ts",
     "check": "node ../../scripts/check-js-syntax.mjs src test/db-harness.js test/require-test-database-url.js && tsc -p tsconfig.json",
     "test": "node --test --test-concurrency=1 test/*.test.js",
     "test:g05": "node --test test/g05-livekit-boundary.test.js",

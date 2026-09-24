@@ -35,7 +35,7 @@ RUN mkdir -p /data/uploads /data/media && chown node:node /data/uploads /data/me
 USER node
 EXPOSE 3000
 
-CMD ["node", "apps/api/src/server.js"]
+CMD ["node", "apps/api/src/server.ts"]
 
 FROM api AS worker
 

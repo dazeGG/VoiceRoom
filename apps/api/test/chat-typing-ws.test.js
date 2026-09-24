@@ -73,7 +73,7 @@ async function startServer(t) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'voice-room-typing-'));
   const socketPath = socketPathForDirectory(dir);
   const { cleanup, databaseUrl } = await createTestDatabase(t);
-  const child = spawn(process.execPath, ['src/server.js'], {
+  const child = spawn(process.execPath, ['src/server.ts'], {
     cwd: path.join(import.meta.dirname, '..'),
     env: {
       ...process.env,

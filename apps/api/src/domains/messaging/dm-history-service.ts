@@ -22,13 +22,15 @@ export type StoredDirectMessage = {
 
 type HistoryPage = { messages: StoredDirectMessage[]; hasMoreBefore: boolean; hasMoreAfter: boolean };
 type ListInput = { userId: string; peerId: string; anchor: Tuple | undefined; limit: number };
+// Every mode except 'latest' decodes an anchor from its cursor first.
+type AnchoredInput = Omit<ListInput, 'anchor'> & { anchor: Tuple };
 
 export interface DmHistoryRepository {
   canReadThread(input: { userId: string; peerId: string }): Promise<boolean>;
   listLatest(input: ListInput): Promise<HistoryPage>;
-  listBefore(input: ListInput): Promise<HistoryPage>;
-  listAfter(input: ListInput): Promise<HistoryPage>;
-  listAround(input: ListInput): Promise<HistoryPage>;
+  listBefore(input: AnchoredInput): Promise<HistoryPage>;
+  listAfter(input: AnchoredInput): Promise<HistoryPage>;
+  listAround(input: AnchoredInput): Promise<HistoryPage>;
 }
 
 export interface HistoryCursorCodec {
@@ -143,7 +145,7 @@ function createDmHistoryService({ repository, cursorCodec, visibilityPolicy, pro
       after: 'listAfter',
       around: 'listAround'
     } as const)[mode];
-    const page = await history[method]({ userId: viewer, peerId: peer, anchor, limit });
+    const page = await (history[method] as (input: ListInput) => Promise<HistoryPage>)({ userId: viewer, peerId: peer, anchor, limit });
     const visible: StoredDirectMessage[] = [];
     for (const message of page.messages) {
       if (await canView(message, viewer)) visible.push(message);

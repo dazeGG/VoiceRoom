@@ -1,11 +1,15 @@
 import crypto from 'node:crypto';
+import type http from 'node:http';
 import fastify, { LogController } from 'fastify';
+import type { FastifyBaseLogger, FastifyInstance } from 'fastify';
 import fastifyCookie from '@fastify/cookie';
 import fastifyMultipart from '@fastify/multipart';
 import fastifyWebsocket from '@fastify/websocket';
 import { buildRoomMembershipPresenceSnapshot, createConnectionRegistry } from './realtime/registry.ts';
+import type { ConnectionRegistry } from './realtime/registry.ts';
 import { createWsHandler } from './realtime/ws-handler.ts';
 import { createRoomRealtimeRuntime } from './realtime/room-runtime.ts';
+import type { RoomRealtimeRuntime } from './realtime/room-runtime.ts';
 import { buildServerEnvelope } from './realtime/envelope.ts';
 import { createRoomPresence } from './realtime/room-presence.ts';
 import { createLinkPreviewEvents } from './domains/link-previews/link-preview-events.ts';
@@ -15,7 +19,7 @@ import { createNotificationDispatch } from './domains/notifications/notification
 import { createAccountLifecycle } from './domains/account/account-lifecycle.ts';
 import { createRoomLifecycle } from './domains/rooms/room-lifecycle.ts';
 import { startMaintenanceTimers } from './platform/maintenance.ts';
-import { createServiceRegistry, resolveCursorHmacKeys as resolveCursorHmacKeysFor } from './app/service-registry.js';
+import { createServiceRegistry, resolveCursorHmacKeys as resolveCursorHmacKeysFor } from './app/service-registry.ts';
 import { installGracefulShutdown } from './app/graceful-shutdown.ts';
 import { createRequestLog } from './platform/http/request-log.ts';
 import { liveKitConnectSources, securityHeaders } from './platform/http/security-headers.ts';
@@ -105,6 +109,16 @@ import { registerMediaRoutes } from './domains/media/media-routes.ts';
 import { createRuntimeReadinessProvider } from './platform/runtime-readiness.ts';
 import { registerCapabilityRoutes } from './platform/capability-routes.ts';
 import { mentionUserIdsFromContent } from '@voice-room/shared/mentions';
+
+// The domain modules each declare the store and service shape they use. Several
+// of those declarations predate the typed stores: they promise non-null results
+// the stores can return null for, or fix a payload the stores leave open. The
+// wiring below bridges the two, only here; tightening those contracts is
+// follow-up work (docs/ARCHITECTURE.md, PR 10k).
+const bridge = <T>(value: unknown): T => value as T;
+
+type ApiServer = http.Server & { app: FastifyInstance; inject: FastifyInstance['inject'] };
+type Logger = ReturnType<typeof createLogger>;
 
 const {
   HOST,
@@ -214,7 +228,7 @@ const services = createServiceRegistry({
   broadcast: (room, message) => broadcast(room, message),
   broadcastToUser: (userId, message) => broadcastToUser(userId, message),
   attachMediaProjection: (context, message) => attachMediaProjection(context, message),
-  disconnectModeratedPeer: (room, peer, type, options) => disconnectModeratedPeer(room, peer, type, options),
+  disconnectModeratedPeer: (room, peer, type, options) => disconnectModeratedPeer(room, peer, bridge(type), options),
   liveKitGatePrincipalForPeer: (roomId, peer) => liveKitGatePrincipalForPeer(roomId, peer),
   getLiveKitConfig: () => getLiveKitConfig(),
   roomMembershipPresenceSnapshot: (roomId) => roomMembershipPresenceSnapshot(roomId),
@@ -248,15 +262,15 @@ const {
   getUserStore
 } = services;
 
-function resolveCursorHmacKeys(options) {
+function resolveCursorHmacKeys(options: Parameters<typeof resolveCursorHmacKeysFor>[0]): string {
   return resolveCursorHmacKeysFor({ fallbackGateSecret: LIVEKIT_GATE_SECRET, ...options });
 }
 
-let wsRegistry = null;
-let roomRuntime = null;
+let wsRegistry: ConnectionRegistry | null = null;
+let roomRuntime: RoomRealtimeRuntime | null = null;
 const roomPresence = createRoomPresence({
   store: () => getRoomStore(),
-  runtime: () => roomRuntime,
+  runtime: () => bridge(roomRuntime),
   logger: () => getProcessLogger(),
   occupancyRetry: { baseMs: 1000, maxMs: 30000 },
   roster: { waitMs: LIVEKIT_ROSTER_WAIT_MS, pollMs: ROSTER_POLL_INTERVAL_MS }
@@ -274,7 +288,7 @@ const {
   waitForRosterPeer
 } = roomPresence;
 const messageProjection = createMessageProjection({
-  attachments: () => getMediaServices()?.attachments ?? null,
+  attachments: () => bridge(getMediaServices()?.attachments ?? null),
   replies: () => {
     const pool = getRelease250Pool();
     return pool ? createReplyRepository({ client: pool }) : null;
@@ -298,12 +312,12 @@ const linkPreviewEvents = createLinkPreviewEvents({
 const messageDeliveryRelay = createMessageDeliveryRelay({
   enabled: MESSAGE_DELIVERY_LISTEN_ENABLED,
   pool: () => getRelease250Pool(),
-  outbox: () => getMessageDeliveryServices()?.outbox ?? null,
+  outbox: () => bridge(getMessageDeliveryServices()?.outbox ?? null),
   projection: messageProjection,
   broadcastChatMessage: (roomId, message) => roomRuntime?.broadcastChatMessage(roomId, message),
   notifyUser: (userId, event) => broadcastToUser(userId, event),
   findUser: (userId) => getUserStore().getUserById(userId),
-  broadcastDmNotification: (recipientId, sender, message) => notificationDispatch.broadcastDmNotification(recipientId, sender, message),
+  broadcastDmNotification: (recipientId, sender, message) => notificationDispatch.broadcastDmNotification(recipientId, sender, bridge(message)),
   publicChatMessage,
   logger: () => getProcessLogger()
 });
@@ -313,30 +327,30 @@ const { broadcastRoomLinkPreview, broadcastDirectLinkPreview, scheduleRoomLinkPr
 const { start: startMessageDeliveryListener, stop: stopMessageDeliveryListener } = messageDeliveryRelay;
 const roomLifecycle = createRoomLifecycle({
   presence: roomPresence,
-  runtime: () => roomRuntime,
-  invitations: () => services.invitationStore(),
+  runtime: () => bridge(roomRuntime),
+  invitations: () => bridge(services.invitationStore()),
   notifyUser: (userId, event) => broadcastToUser(userId, event),
-  credentials: () => getCredentialBoundary(),
+  credentials: () => bridge(getCredentialBoundary()),
   removeParticipant: (roomId, peerId) => removeLiveKitParticipant(roomId, peerId),
   removeAvatar: (key, log) => avatarsService.removeFile(key, log),
-  displayName: (user) => sessionDisplayName(user),
+  displayName: (user) => sessionDisplayName(bridge(user)),
   logger: () => getProcessLogger()
 });
 const accountLifecycle = createAccountLifecycle({
   friendIds: (userId) => getFriendStore().getFriendIds(userId),
   notifyUser: (userId, event) => broadcastToUser(userId, event),
-  sockets: () => wsRegistry,
+  sockets: () => bridge(wsRegistry),
   seatPrincipal: (roomId, peerId) => {
     const peer = presenceRooms.get(roomId)?.peers.get(peerId);
     return peer ? liveKitGatePrincipalForPeer(roomId, peer) : null;
   },
   revokeSeatCredentials: (input) => getRoomStore().revokeLiveKitGateCredentialsForPeer(input),
-  leaveVoice: (connection, activeVoice) => roomRuntime?.leaveVoiceRoom(connection, activeVoice),
+  leaveVoice: (connection, activeVoice) => bridge(roomRuntime?.leaveVoiceRoom(bridge(connection), activeVoice)),
   removeParticipant: (roomId, peerId) => removeLiveKitParticipant(roomId, peerId),
   sessionRevokedCloseCode: SESSION_REVOKED_CLOSE_CODE,
-  deletions: () => getAccountDeletionRepository(),
+  deletions: () => bridge(getAccountDeletionRepository()),
   findRoom: (roomId) => getRoomStore().getRoom(roomId),
-  announceRoomUpdate: (roomId, room) => roomLifecycle.announceRoomUpdate(roomId, room),
+  announceRoomUpdate: (roomId, room) => roomLifecycle.announceRoomUpdate(roomId, bridge(room)),
   finishRoomDeletion: (roomId, options) => roomLifecycle.finishRoomDeletion(roomId, options),
   removeAvatar: (key) => avatarsService.removeFile(key, undefined),
   logger: () => getProcessLogger()
@@ -353,25 +367,25 @@ const {
   finalizeDueDeletions: finalizeDueAccountDeletions
 } = accountLifecycle;
 // Callers pass the request (or `{ log }`) whose logger records a failed broadcast.
-const broadcastUserProfileToFriends = (user, request) => accountLifecycle.broadcastProfileToFriends(user, request?.log);
+const broadcastUserProfileToFriends = (user: any, request?: { log?: any } | null) => accountLifecycle.broadcastProfileToFriends(user, request?.log);
 
 // Work that runs outside a request (timers, listeners, background dispatch)
 // still has to be searchable next to the requests it was triggered by, so it
 // logs through one process logger with the same base fields and redaction
 // instead of falling back to console.
-let processLogger = null;
+let processLogger: Logger | FastifyBaseLogger | null = null;
 
-function getProcessLogger() {
-  return (processLogger ||= createLogger({ name: 'api' }));
+function getProcessLogger(): Logger {
+  return (processLogger ||= createLogger({ name: 'api' })) as Logger;
 }
 
 // createApiApp builds a fresh Fastify logger per app; background work adopts it
 // so a test harness and the real process agree on the destination.
-function setProcessLogger(logger) {
+function setProcessLogger(logger: Logger | FastifyBaseLogger | null): void {
   processLogger = logger || null;
 }
 
-function release250FeatureEnabled(name) {
+function release250FeatureEnabled(name: string): boolean {
   try {
     return readinessProvider.getSnapshot()?.features?.[name] === true;
   } catch {
@@ -379,7 +393,7 @@ function release250FeatureEnabled(name) {
   }
 }
 
-async function refreshPinsAfterMessageMutation(roomId, action, messageId) {
+async function refreshPinsAfterMessageMutation(roomId: string, action: string, messageId: string): Promise<void> {
   const service = getPinServices()?.service;
   if (!service?.refresh) return;
   try {
@@ -391,16 +405,16 @@ async function refreshPinsAfterMessageMutation(roomId, action, messageId) {
   }
 }
 
-function roomMembershipPresenceSnapshot(roomId) {
+function roomMembershipPresenceSnapshot(roomId: string) {
   const room = presenceRooms.get(roomId);
   return buildRoomMembershipPresenceSnapshot(roomId, room, wsRegistry);
 }
 
-function isUserOnline(userId) {
+function isUserOnline(userId: string): boolean {
   return Boolean(wsRegistry?.isUserOnline(userId));
 }
 
-function broadcastToUser(userId, message) {
+function broadcastToUser(userId: string, message: any): number {
   if (!wsRegistry) return 0;
   return wsRegistry.broadcastAccountEvent(userId, message);
 }
@@ -443,9 +457,9 @@ const pushSubscriptionLimiter = createRateLimiter({
   limit: PUSH_SUBSCRIPTION_RATE_LIMIT,
   windowMs: PUSH_SUBSCRIPTION_RATE_WINDOW_MS
 });
-let admissionService = null;
+let admissionService: ReturnType<typeof createAdmissionService> | null = null;
 const roomsService = createRoomsService({
-  store: getRoomStore,
+  store: bridge(getRoomStore),
   getRoom,
   limits: {
     maxRooms: MAX_ROOMS,
@@ -453,19 +467,19 @@ const roomsService = createRoomsService({
     maxTempRoomsPerIp: MAX_TEMP_ROOMS_PER_IP
   },
   announceRoomUpdate: (roomId, room) => broadcastRoomUpdate(roomId, room),
-  finishRoomDeletion: (roomId, options) => finishRoomDeletion(roomId, options)
+  finishRoomDeletion: (roomId, options) => finishRoomDeletion(roomId, bridge(options))
 });
 const peerEviction = createPeerEviction({
   store: getRoomStore,
-  runtime: () => roomRuntime,
-  notifyPeer: (peer, event) => sendEvent(peer, event),
+  runtime: () => bridge(roomRuntime),
+  notifyPeer: (peer, event) => sendEvent(bridge(peer), event),
   notifyUser: (userId, event) => broadcastToUser(userId, event),
   detachVoiceConnections: (roomId, peerId) => {
     for (const connection of wsRegistry?.connections.values() || []) {
       if (connection.activeVoice?.roomId !== roomId || connection.activeVoice?.peerId !== peerId) continue;
       connection.activeVoice = null;
       connection.previewRoomIds.delete(roomId);
-      wsRegistry.unregisterConnectionForRoom(connection, roomId);
+      wsRegistry!.unregisterConnectionForRoom(connection, roomId);
     }
   },
   closePeer: (roomId, peerId, transportId, reason) => closePeer(roomId, peerId, transportId, reason),
@@ -477,19 +491,19 @@ const peerModeration = createPeerModerationService({
   eviction: peerEviction,
   gatePrincipalForPeer: (roomId, peer) => liveKitGatePrincipalForPeer(roomId, peer),
   livekitConfig: () => getLiveKitConfig(),
-  revokeForServerMute: (input) => admissionService.revokeForServerMute(input),
+  revokeForServerMute: (input) => admissionService!.revokeForServerMute(input),
   setParticipantMuted: (roomId, peerId, muted) => setLiveKitParticipantMuted(roomId, peerId, muted),
   announcePeerUpdated: (room, peer) => {
     const event = { type: 'peer-updated', peer: publicPeer(peer) };
-    broadcast(room, event);
+    broadcast(bridge(room), event);
     roomRuntime?.mirrorLegacyRoomEvent(room.id, event);
   },
-  notifyPeer: (peer, event) => sendEvent(peer, event),
+  notifyPeer: (peer, event) => sendEvent(bridge(peer), event),
   maxBans: MAX_ROOM_BANS,
   logger: () => getProcessLogger()
 });
 const roomChat = createRoomChatService({
-  messages: getMessageService,
+  messages: bridge(getMessageService),
   readService: () => getHistoryServices().read,
   getRoom,
   findRoomBan,
@@ -499,7 +513,7 @@ const roomChat = createRoomChatService({
   limiter: roomChatLimiter,
   findUser: (userId) => getUserStore().getUserById(userId),
   media: getMediaServices,
-  replies: () => createReplyRepository({ client: getRelease250Pool() }),
+  replies: () => bridge(createReplyRepository({ client: getRelease250Pool() })),
   notifications: getNotificationServices,
   delivery: getMessageDeliveryServices,
   projectMedia: attachMediaProjection,
@@ -507,7 +521,7 @@ const roomChat = createRoomChatService({
   identity: { chatPeerId: sessionChatPeerId, avatarColorKey: sessionAvatarColorKey, displayName: sessionDisplayName },
   directEmit: MESSAGE_DIRECT_EMIT_ENABLED,
   broadcastChatMessage: (roomId, message) => roomRuntime?.broadcastChatMessage(roomId, message),
-  broadcastRoomDetail: (roomId, event) => roomRuntime?.broadcastRoomDetail?.(roomId, event),
+  broadcastRoomDetail: (roomId, event) => roomRuntime?.broadcastRoomDetail?.(roomId, bridge(event)),
   roomDetailEvent: buildServerEnvelope,
   scheduleLinkPreview: scheduleRoomLinkPreview,
   refreshPins: refreshPinsAfterMessageMutation,
@@ -520,29 +534,29 @@ const sessionCookies = createSessionCookies({
   maxAgeSeconds: SESSION_TTL_MS / 1000
 });
 const accountService = createAccountService({
-  users: getUserStore,
-  deletions: getAccountDeletionRepository,
+  users: bridge(getUserStore),
+  deletions: bridge(getAccountDeletionRepository),
   loginFailures: loginFailureLimiter,
   endSessionConnections: (input) => endAccountSessionConnections(input),
   notifyUser: (userId, event) => broadcastToUser(userId, event),
-  queuePush: (userId, payload, options) => queuePush(userId, payload, options),
+  queuePush: (userId, payload, options) => queuePush(userId, bridge(payload), options),
   refreshActiveProfile: (user) => refreshActiveUserProfile(user),
   broadcastProfileToFriends: (user, log) => broadcastUserProfileToFriends(user, { log }),
   logger: () => getProcessLogger()
 });
 const friendsService = createFriendsService({
-  friends: getFriendStore,
+  friends: bridge(getFriendStore),
   findUser: (userId) => getUserStore().getUserById(userId),
   findRoom: (roomId) => getRoomStore().getRoom(roomId),
   sendDirectMessage: (input) => getMessageService().direct.sendMessage(input),
   isOnline: (userId) => isUserOnline(userId),
   notifyUser: (userId, event) => broadcastToUser(userId, event),
-  queuePush: (userId, payload, context) => queuePush(userId, payload, context),
+  queuePush: (userId, payload, context) => queuePush(userId, bridge(payload), context),
   ringLimiter,
   ringTtlMs: RING_TTL_MS
 });
 const directMessages = createDirectMessagesService({
-  messages: getMessageService,
+  messages: bridge(getMessageService),
   readService: () => getHistoryServices().read,
   friends: getFriendStore,
   findUser: (userId) => getUserStore().getUserById(userId),
@@ -555,8 +569,8 @@ const directMessages = createDirectMessagesService({
   feature: release250FeatureEnabled,
   limiter: dmLimiter,
   media: getMediaServices,
-  replies: () => createReplyRepository({ client: getRelease250Pool() }),
-  delivery: getMessageDeliveryServices,
+  replies: () => bridge(createReplyRepository({ client: getRelease250Pool() })),
+  delivery: bridge(getMessageDeliveryServices),
   projectMedia: attachMediaProjection,
   projectReply: attachReplyProjection,
   directEmit: MESSAGE_DIRECT_EMIT_ENABLED,
@@ -576,14 +590,14 @@ const notificationSettings = createNotificationSettingsService({
 const avatarsService = createAvatarsService({
   storage: getAvatarStorage,
   linkPreviewStorage: getLinkPreviewStorage,
-  users: getUserStore,
+  users: bridge(getUserStore),
   rooms: getRoomStore,
   refreshActiveProfile: (user) => refreshActiveUserProfile(user),
   broadcastProfileToFriends: (user, log) => broadcastUserProfileToFriends(user, { log }),
-  announceRoomUpdate: (roomId, room) => broadcastRoomUpdate(roomId, room)
+  announceRoomUpdate: (roomId, room) => broadcastRoomUpdate(roomId, bridge(room))
 });
 
-function liveKitGatePrincipalForPeer(roomId, peer) {
+function liveKitGatePrincipalForPeer(roomId: string, peer: any) {
   return gatePrincipalForPeer(getRoomStore(), roomId, peer);
 }
 const desktopReleaseService = createDesktopReleaseService({
@@ -591,7 +605,7 @@ const desktopReleaseService = createDesktopReleaseService({
   cacheMs: DESKTOP_RELEASE_CACHE_MS,
   timeoutMs: DESKTOP_RELEASE_TIMEOUT_MS,
   githubToken: (process.env.GITHUB_TOKEN || '').trim() || undefined,
-  logger: { warn: (...args) => getProcessLogger().warn(...args) }
+  logger: { warn: (...args: unknown[]) => getProcessLogger().warn(...(args as [unknown])) }
 });
 const clientLogLimiter = createRateLimiter({
   limit: CLIENT_LOG_RATE_LIMIT,
@@ -609,11 +623,12 @@ function baseHeaders() {
 
 const logHttpRequest = createRequestLog({ clientIp: (req) => getClientIp(req, TRUST_PROXY), hashIp });
 
-function getSessionToken(req) {
+// Callers pass the raw request or a Fastify request; both carry the headers.
+function getSessionToken(req: any) {
   return sessionCookies.read(req);
 }
 
-async function resolveSessionUser(req) {
+async function resolveSessionUser(req: any) {
   const token = getSessionToken(req);
   if (!token) return null;
   const session = await getUserStore().getSessionUser(token, Date.now(), {
@@ -627,26 +642,26 @@ async function resolveSessionUser(req) {
   return session;
 }
 
-async function resolveOptionalSessionUser(req) {
+async function resolveOptionalSessionUser(req: any) {
   if (!getSessionToken(req)) return null;
   const session = await resolveSessionUser(req);
   return session?.user || null;
 }
 
-function sessionAvatarColorKey(user) {
+function sessionAvatarColorKey(user: any): string {
   return user?.avatarColorKey || '';
 }
 
-function sessionDisplayName(user) {
+function sessionDisplayName(user: { displayName?: string; login?: string } | null | undefined): string {
   if (!user) return '';
   return cleanName(user.displayName || user.login);
 }
 
-function sessionChatPeerId(user) {
+function sessionChatPeerId(user: { id?: string } | null | undefined) {
   return accountPeerIdFor(user?.id);
 }
 
-function getLiveKitRoomName(roomId) {
+function getLiveKitRoomName(roomId: string) {
   return liveKitRoomName(roomId);
 }
 
@@ -662,7 +677,7 @@ const liveKitAdmin = createLiveKitAdmin({
 const removeLiveKitParticipant = liveKitAdmin.removeParticipant;
 const setLiveKitParticipantMuted = liveKitAdmin.setParticipantMuted;
 
-function startPruneTimer(server, logger = getProcessLogger()) {
+function startPruneTimer(server: ApiServer, logger: Logger = getProcessLogger()) {
   return startMaintenanceTimers(server, {
     keepaliveMs: KEEPALIVE_MS,
     intervalMs: ROOM_PRUNE_INTERVAL_MS,
@@ -679,7 +694,7 @@ function startPruneTimer(server, logger = getProcessLogger()) {
         label: 'link-preview-prune',
         failureMessage: 'link preview prune timer failed',
         enabled: () => Boolean(getLinkPreviewService()),
-        run: () => getLinkPreviewService().pruneExpired()
+        run: () => getLinkPreviewService()!.pruneExpired()
       },
       {
         name: 'retention_purge',
@@ -692,14 +707,14 @@ function startPruneTimer(server, logger = getProcessLogger()) {
   });
 }
 
-async function getRoom(roomId) {
+async function getRoom(roomId: string) {
   const room = await getRoomStore().getRoom(roomId);
   if (!room) return null;
   room.updatedAt = Date.now();
   return attachPresence(room);
 }
 
-async function findRoomBan(roomId, userId, ip) {
+async function findRoomBan(roomId: string, userId?: string | null, ip?: string | null) {
   if (!roomId) return null;
   const service = getActiveBanService();
   if (service) return service.getActiveBan({ roomId, userId: userId || null, ip: ip || '' });
@@ -735,6 +750,22 @@ function createApiApp({
   // A test that asserts a failure was observed rather than swallowed needs
   // somewhere to observe it: Fastify's own logger is silent by default.
   logger = null
+}: {
+  store?: unknown;
+  users?: unknown;
+  friends?: unknown;
+  notifications?: unknown;
+  pushes?: unknown;
+  push?: unknown;
+  avatars?: unknown;
+  liveKitCredentials?: unknown;
+  membershipServicesOverride?: unknown;
+  readinessProviderOverride?: typeof readinessProvider | null;
+  realtimeReconnectLeaseMs?: number;
+  realtimeNow?: () => number;
+  realtimeSetTimeout?: (callback: () => void, ms: number) => any;
+  realtimeClearTimeout?: (timer: any) => void;
+  logger?: Logger | FastifyBaseLogger | null;
 } = {}) {
   const { roomStoreChanged } = services.applyOverrides({
     store,
@@ -805,8 +836,8 @@ function createApiApp({
   admissionService = createAdmissionService({
     livekitConfig: getLiveKitConfig,
     credentialProvider: getLiveKitCredentialProvider,
-    credentialBoundary: getCredentialBoundary,
-    store: getRoomStore,
+    credentialBoundary: bridge(getCredentialBoundary),
+    store: bridge(getRoomStore),
     roomExists: async (roomId) => Boolean(await getRoom(roomId)),
     findRoomBan,
     waitForRosterPeer,
@@ -816,7 +847,7 @@ function createApiApp({
   });
   const apiContext = {
     logger: appLogger,
-    clientIp: (req) => getClientIp(req, TRUST_PROXY),
+    clientIp: (req: http.IncomingMessage) => getClientIp(req, TRUST_PROXY),
     resolveSession: resolveSessionUser,
     hashIp
   };
@@ -854,7 +885,6 @@ function createApiApp({
     publicPeer,
     publicLobbyRoom,
     publicChatMessage,
-    getNotificationStore,
     getUserStore,
     broadcast,
     closePeer,
@@ -864,7 +894,7 @@ function createApiApp({
     sessionAvatarColorKey,
     queueRoomOccupancyTransition,
     findRoomBan,
-    credentialBoundary: getCredentialBoundary(),
+    credentialBoundary: bridge(getCredentialBoundary()),
     removeLiveKitParticipant,
     reconnectLeaseMs: realtimeReconnectLeaseMs,
     now: realtimeNow,
@@ -895,7 +925,7 @@ function createApiApp({
   registerAdmissionRoutes(app, apiContext, admissionService);
   registerRoomRoutes(app, apiContext, {
     rooms: roomsService,
-    store: getRoomStore,
+    store: bridge(getRoomStore),
     getRoom,
     findRoomBan,
     findAuthorizedPeer: (roomId, peerId, sessionToken) => {
@@ -905,7 +935,7 @@ function createApiApp({
     lobbyRoom: publicLobbyRoom,
     invalidateRecipientCache: (roomId) => roomRuntime?.invalidateRecipientCache(roomId),
     createLimiter: roomCreateLimiter,
-    pow,
+    pow: bridge(pow),
     maxRooms: MAX_ROOMS,
     maxRoomPeers: MAX_ROOM_PEERS
   });
@@ -946,7 +976,7 @@ function createApiApp({
         capabilityReadiness: readiness?.features || {}
       });
     },
-    pow,
+    pow: bridge(pow),
     powDifficulty: ROOM_CREATE_POW_DIFFICULTY,
     powTtlMs: ROOM_CREATE_POW_TTL_MS,
     clientLogs: { enabled: CLIENT_LOG_INTAKE_ENABLED, limiter: clientLogLimiter },
@@ -972,7 +1002,7 @@ function createApiApp({
           return false;
         }
       },
-      prepareLeave: ({ roomId, user }) => roomRuntime.disconnectAccountFromRoom({ roomId, userId: user.id }),
+      prepareLeave: ({ roomId, user }) => roomRuntime!.disconnectAccountFromRoom({ roomId, userId: user.id }),
       onLeft: async ({ roomId, user }) => {
         await getRoomStore().removeRoomBookmarkForUser(user.id, roomId);
         roomRuntime?.invalidateRecipientCache(roomId);
@@ -986,7 +1016,7 @@ function createApiApp({
     resolveRoomAccess: async ({ request, roomId }) => {
       const session = await resolveSessionUser(request);
       const authorized = Boolean(session?.user?.id)
-        && await getRoomStore().canUserReadRoomChat(roomId, session.user.id);
+        && await getRoomStore().canUserReadRoomChat(roomId, session!.user!.id);
       return { authorized, statusCode: session ? 403 : 401 };
     }
   });
@@ -1009,12 +1039,12 @@ function createApiApp({
   if (pins) {
     registerPinRoutes({
       app,
-      pinService: pins.service,
+      pinService: bridge(pins.service),
       resolveRoomAccess: async ({ request, roomId, action }) => {
         const session = await resolveSessionUser(request);
         const viewer = session?.user || null;
         const authorized = Boolean(viewer?.id)
-          && await getRoomStore()[action === 'write' ? 'canUserReactInRoom' : 'canUserReadRoomChat'](roomId, viewer.id);
+          && await getRoomStore()[action === 'write' ? 'canUserReactInRoom' : 'canUserReadRoomChat'](roomId, viewer!.id);
         return { authorized, statusCode: session ? 403 : 401, viewer };
       }
     });
@@ -1065,13 +1095,13 @@ function createApiApp({
   return app;
 }
 
-function createApiServer(options = {}) {
+function createApiServer(options: Parameters<typeof createApiApp>[0] = {}): ApiServer {
   const app = createApiApp(options);
-  const server = app.server;
+  const server = app.server as ApiServer;
   const listen = server.listen.bind(server);
   server.app = app;
   server.inject = app.inject.bind(app);
-  server.listen = (...args) => {
+  server.listen = ((...args: any[]) => {
     const callback = typeof args.at(-1) === 'function' ? args.at(-1) : null;
     const listenArgs = callback ? args.slice(0, -1) : args;
 
@@ -1087,16 +1117,20 @@ function createApiServer(options = {}) {
       listen(...listenArgs, callback || undefined);
     });
     return server;
-  };
+  }) as ApiServer['listen'];
   server.once('close', () => roomPresence.clearOccupancyRetries());
   return server;
 }
 
-async function closeStores(logger = getProcessLogger()) {
+async function closeStores(logger: Pick<Logger, 'error'> = getProcessLogger()): Promise<void> {
   await services.close(logger);
 }
 
-async function bootstrap({ env = process.env, logger = createLogger({ env, name: 'api' }), exit = process.exit } = {}) {
+async function bootstrap({ env = process.env, logger = createLogger({ env, name: 'api' }), exit = process.exit }: {
+  env?: NodeJS.ProcessEnv;
+  logger?: Logger;
+  exit?: (code?: number) => void;
+} = {}): Promise<ApiServer | null> {
   try {
     const database = readDatabaseConfig(env);
     if (readEnvBool('MIGRATE_ON_START', env.NODE_ENV !== 'production', env)) {

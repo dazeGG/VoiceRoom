@@ -1862,7 +1862,7 @@ test('delete realtime contracts avoid stale chat and false room affordances', ()
   const messageMenu = read('src/lib/shared/chat/MessageContextMenu.svelte');
   const friends = read('src/lib/features/home/model/friends.svelte.ts');
   const accountEvents = read('../api/src/realtime/account-events.ts');
-  const apiServer = read('../api/src/server.js');
+  const apiServer = read('../api/src/server.ts');
   const apiRoomChat = read('../api/src/domains/messaging/room-chat.service.ts');
 
   // Room chat events go out as room-detail envelopes, never as legacy peer broadcasts.

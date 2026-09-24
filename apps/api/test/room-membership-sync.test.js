@@ -180,7 +180,7 @@ test('owners, failed leaves and refused disconnects keep the room on the list', 
 });
 
 test('the API wires leaving a room to the room store that owns the list', () => {
-  const source = fs.readFileSync(path.resolve(import.meta.dirname, '../src/server.js'), 'utf8');
+  const source = fs.readFileSync(path.resolve(import.meta.dirname, '../src/server.ts'), 'utf8');
   const start = source.indexOf('registerMembershipRoutes({');
   const wiring = source.slice(start, source.indexOf('\n    });', start));
   assert.match(wiring, /onLeft: async \(\{ roomId, user \}\) => \{\s*await getRoomStore\(\)\.removeRoomBookmarkForUser\(user\.id, roomId\);/);

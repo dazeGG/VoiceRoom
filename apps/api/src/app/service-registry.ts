@@ -3,13 +3,10 @@
 // through applyOverrides(); bootstrap installs the database-backed stores
 // through install(); close() releases what holds connections.
 //
-// The bodies are the ones server.js had; what they need from the realtime
+// The bodies are the ones server.ts had; what they need from the realtime
 // layer (rooms, broadcasts, presence) comes in through `deps`, so nothing
-// here reaches back into server.js.
+// here reaches back into server.ts.
 //
-// It stays JavaScript while the factories it wires are JavaScript: their
-// inferred types are too loose to check the wiring, so typing it now would
-// only add casts. It becomes TypeScript with them.
 
 import crypto from 'node:crypto';
 import { readEnvInt } from '../lib/config.ts';
@@ -31,12 +28,14 @@ import { createLinkPreviewRepository } from '../domains/link-previews/link-previ
 import { createLinkPreviewService } from '../domains/link-previews/link-preview-service.ts';
 import { createAccountDeletionRepository } from '../domains/account/account-deletion-repository.ts';
 import { createCredentialBoundaryService } from '../domains/admission/credential-boundary-service.ts';
+import type { GateRoomStore } from '../domains/admission/credential-boundary-service.ts';
 import { createLiveKitCredentialProvider } from '../domains/admission/livekit-credential-provider.ts';
 import { isGatePrincipal } from '../domains/admission/gate-principal.ts';
 import { createMembershipRepository } from '../domains/membership/membership-repository.ts';
 import { createMembershipService } from '../domains/membership/membership-service.ts';
 import { createMemberDirectoryService } from '../domains/membership/member-directory-service.ts';
 import { createDirectMessageRepository } from '../domains/messaging/direct-message-repository.ts';
+import type { DirectMessageRepository } from '../domains/messaging/direct-message-repository.ts';
 import { createDmHistoryRepository } from '../domains/messaging/dm-history-repository.ts';
 import { createDmHistoryService } from '../domains/messaging/dm-history-service.ts';
 import { createMessageService } from '../domains/messaging/message-service.ts';
@@ -48,6 +47,7 @@ import { createMessageVisibilityService } from '../domains/messaging/message-vis
 import { createRoomHistoryRepository } from '../domains/messaging/room-history-repository.ts';
 import { createRoomHistoryService } from '../domains/messaging/room-history-service.ts';
 import { createRoomMessageRepository } from '../domains/messaging/room-message-repository.ts';
+import type { RoomMessageRepository } from '../domains/messaging/room-message-repository.ts';
 import { createReplyRepository } from '../domains/messaging/reply-repository.ts';
 import { createReactionRepository } from '../domains/messaging/reaction-repository.ts';
 import { createReactionService } from '../domains/messaging/reaction-service.ts';
@@ -73,7 +73,80 @@ import { createMediaService } from '../domains/media/media-service.ts';
 import { createMediaVisibilityService } from '../domains/media/media-visibility-service.ts';
 import { createCursorCodec } from '../platform/cursor-codec.ts';
 
-export function resolveCursorHmacKeys({ context, env = process.env, fallbackGateSecret = '' } = {}) {
+type Logger = { error(...args: unknown[]): void };
+type LiveKitConfig = { enabled: boolean; apiKey: string; apiSecret: string; gateUrl: string };
+// The in-memory room with its presence roster attached (server.ts).
+type Room = any;
+
+export type ServiceRegistryConfig = {
+  ROOM_IDLE_TTL_MS: number;
+  SESSION_TTL_MS: number;
+  GEOIP_DB_PATH: string;
+  LIVEKIT_GATE_SECRET: string;
+  LIVEKIT_GATE_CREDENTIAL_TTL_SECONDS: number;
+  LIVEKIT_TOKEN_TTL_SECONDS: number;
+  MAX_ROOM_BANS: number;
+  MAX_PUSH_SUBSCRIPTIONS_PER_USER: number;
+  LINK_PREVIEWS_ENABLED: boolean;
+};
+
+// What the registry needs from the realtime layer, which server.ts owns.
+export type ServiceRegistryDeps = {
+  readinessProvider: { getSnapshot(): { replicaConsensus?: boolean } | null | undefined };
+  release250FeatureEnabled: (name: string) => boolean;
+  getRoom: (roomId: string) => Promise<Room | null>;
+  findRoomBan: (roomId: string, userId: string | null | undefined, ip: string | null | undefined) => Promise<unknown>;
+  broadcast: (room: Room, message: Record<string, unknown>) => void;
+  broadcastToUser: (userId: string, message: any) => unknown;
+  attachMediaProjection: (context: 'room' | 'dm', message: any) => Promise<any>;
+  disconnectModeratedPeer: (room: Room, peer: any, type: string, options: { gateAlreadyRevoked?: boolean }) => Promise<unknown>;
+  liveKitGatePrincipalForPeer: (roomId: string, peer: any) => unknown;
+  getLiveKitConfig: () => LiveKitConfig;
+  roomMembershipPresenceSnapshot: (roomId: string) => any;
+  broadcastRoomLinkPreview: (input: any) => Promise<unknown>;
+  broadcastDirectLinkPreview: (input: any) => Promise<unknown>;
+  roomRuntime: () => { broadcastRoomDetail(roomId: string, envelope: any): void } | null | undefined;
+};
+
+type HistoryServices = {
+  cursorCodec: ReturnType<typeof createCursorCodec>;
+  dm: ReturnType<typeof createDmHistoryService>;
+  room: ReturnType<typeof createRoomHistoryService>;
+  read: ReturnType<typeof createMessageReadService>;
+};
+type ReactionServices = { realtime: ReturnType<typeof createReactionRealtimeAdapter>; service: ReturnType<typeof createReactionService> };
+type PinServices = { service: ReturnType<typeof createPinService> };
+type MessageDeliveryServices = { idempotency: ReturnType<typeof createMessageIdempotencyRepository>; outbox: ReturnType<typeof createMessageOutboxRepository> };
+type NotificationServices = {
+  eligibility: ReturnType<typeof createMentionEligibilityService>;
+  inbox: ReturnType<typeof createInboxRepository>;
+  mentions: ReturnType<typeof createMentionRepository>;
+  outbox: ReturnType<typeof createNotificationOutboxRepository>;
+  service: ReturnType<typeof createNotificationService>;
+};
+type ModerationServices = {
+  messageService: ReturnType<typeof createMessageModerationService>;
+  repository: ReturnType<typeof createModerationRepository>;
+  service: ReturnType<typeof createModerationService>;
+};
+type MediaServices = {
+  attachments: ReturnType<typeof createAttachmentRepository>;
+  jobs: ReturnType<typeof createMediaJobRepository>;
+  pressure: ReturnType<typeof createMediaPressureService>;
+  quota: ReturnType<typeof createMediaQuotaService>;
+  service: ReturnType<typeof createMediaService>;
+  storage: ReturnType<typeof createMediaStorage>;
+  visibility: ReturnType<typeof createMediaVisibilityService>;
+};
+type MembershipServices = {
+  directory: ReturnType<typeof createMemberDirectoryService>;
+  repository: ReturnType<typeof createMembershipRepository>;
+  service: ReturnType<typeof createMembershipService>;
+};
+// Test doubles and bootstrap's stores come from JavaScript callers.
+type StoreOverrides = Record<string, any>;
+
+export function resolveCursorHmacKeys({ context, env = process.env, fallbackGateSecret = '' }: { context?: string; env?: NodeJS.ProcessEnv; fallbackGateSecret?: string } = {}): string {
   const configured = env.VOICE_ROOM_CURSOR_HMAC_KEYS
     || env.CURSOR_HMAC_KEYS
     || env.CURSOR_HMAC_KEY;
@@ -92,33 +165,33 @@ export function resolveCursorHmacKeys({ context, env = process.env, fallbackGate
   return crypto.createHash('sha256').update(String(env.POW_SECRET || developmentSeed)).digest('hex');
 }
 
-export function createServiceRegistry(config, deps) {
-  let roomStore = null;
-  let userStore = null;
-  let geoLocator = null;
-  let friendStore = null;
+export function createServiceRegistry(config: ServiceRegistryConfig, deps: ServiceRegistryDeps) {
+  let roomStore: ReturnType<typeof createRoomStore> | null = null;
+  let userStore: ReturnType<typeof createUserStore> | null = null;
+  let geoLocator: ReturnType<typeof createGeoLocator> | null = null;
+  let friendStore: ReturnType<typeof createFriendStore> | null = null;
   let friendStoreInviteExpiryEnabled = false;
-  let notificationStore = null;
-  let pushStore = null;
-  let pushService = null;
-  let avatarStorage = null;
-  let messageService = null;
-  let historyServices = null;
-  let credentialBoundary = null;
-  let liveKitCredentialProvider = null;
-  let membershipPool = null;
-  let membershipServices = null;
-  let release250Pool = null;
-  let reactionServices = null;
-  let pinServices = null;
-  let notificationServices = null;
-  let moderationServices = null;
-  let mediaServices = null;
-  let activeBanService = null;
-  let messageDeliveryServices = null;
-  let accountDeletionRepository = null;
-  let linkPreviewStorage = null;
-  let linkPreviewService = null;
+  let notificationStore: ReturnType<typeof createNotificationStore> | null = null;
+  let pushStore: ReturnType<typeof createPushStore> | null = null;
+  let pushService: ReturnType<typeof createPushService> | null = null;
+  let avatarStorage: ReturnType<typeof createAvatarStorage> | null = null;
+  let messageService: ReturnType<typeof createMessageService<DirectMessageRepository, RoomMessageRepository>> | null = null;
+  let historyServices: HistoryServices | null = null;
+  let credentialBoundary: ReturnType<typeof createCredentialBoundaryService> | null = null;
+  let liveKitCredentialProvider: ReturnType<typeof createLiveKitCredentialProvider> | null = null;
+  let membershipPool: ReturnType<typeof createRelease250Pool> | null = null;
+  let membershipServices: MembershipServices | null = null;
+  let release250Pool: ReturnType<typeof createRelease250Pool> | null = null;
+  let reactionServices: ReactionServices | null = null;
+  let pinServices: PinServices | null = null;
+  let notificationServices: NotificationServices | null = null;
+  let moderationServices: ModerationServices | null = null;
+  let mediaServices: MediaServices | null = null;
+  let activeBanService: ReturnType<typeof createActiveBanService> | null = null;
+  let messageDeliveryServices: MessageDeliveryServices | null = null;
+  let accountDeletionRepository: ReturnType<typeof createAccountDeletionRepository> | null = null;
+  let linkPreviewStorage: ReturnType<typeof createLinkPreviewStorage> | null = null;
+  let linkPreviewService: ReturnType<typeof createLinkPreviewService> | null = null;
 
   const {
     ROOM_IDLE_TTL_MS,
@@ -132,18 +205,19 @@ export function createServiceRegistry(config, deps) {
     LINK_PREVIEWS_ENABLED
   } = config;
   const { readinessProvider } = deps;
-  const release250FeatureEnabled = (name) => deps.release250FeatureEnabled(name);
-  const getRoom = (roomId) => deps.getRoom(roomId);
-  const findRoomBan = (roomId, userId, ip) => deps.findRoomBan(roomId, userId, ip);
-  const broadcast = (room, message) => deps.broadcast(room, message);
-  const broadcastToUser = (userId, message) => deps.broadcastToUser(userId, message);
-  const attachMediaProjection = (context, message) => deps.attachMediaProjection(context, message);
-  const disconnectModeratedPeer = (room, peer, type, options) => deps.disconnectModeratedPeer(room, peer, type, options);
-  const liveKitGatePrincipalForPeer = (roomId, peer) => deps.liveKitGatePrincipalForPeer(roomId, peer);
-  const getLiveKitConfig = () => deps.getLiveKitConfig();
-  const roomMembershipPresenceSnapshot = (roomId) => deps.roomMembershipPresenceSnapshot(roomId);
-  const broadcastRoomLinkPreview = (input) => deps.broadcastRoomLinkPreview(input);
-  const broadcastDirectLinkPreview = (input) => deps.broadcastDirectLinkPreview(input);
+  type D = ServiceRegistryDeps;
+  const release250FeatureEnabled: D['release250FeatureEnabled'] = (name) => deps.release250FeatureEnabled(name);
+  const getRoom: D['getRoom'] = (roomId) => deps.getRoom(roomId);
+  const findRoomBan: D['findRoomBan'] = (roomId, userId, ip) => deps.findRoomBan(roomId, userId, ip);
+  const broadcast: D['broadcast'] = (room, message) => deps.broadcast(room, message);
+  const broadcastToUser: D['broadcastToUser'] = (userId, message) => deps.broadcastToUser(userId, message);
+  const attachMediaProjection: D['attachMediaProjection'] = (context, message) => deps.attachMediaProjection(context, message);
+  const disconnectModeratedPeer: D['disconnectModeratedPeer'] = (room, peer, type, options) => deps.disconnectModeratedPeer(room, peer, type, options);
+  const liveKitGatePrincipalForPeer: D['liveKitGatePrincipalForPeer'] = (roomId, peer) => deps.liveKitGatePrincipalForPeer(roomId, peer);
+  const getLiveKitConfig: D['getLiveKitConfig'] = () => deps.getLiveKitConfig();
+  const roomMembershipPresenceSnapshot: D['roomMembershipPresenceSnapshot'] = (roomId) => deps.roomMembershipPresenceSnapshot(roomId);
+  const broadcastRoomLinkPreview: D['broadcastRoomLinkPreview'] = (input) => deps.broadcastRoomLinkPreview(input);
+  const broadcastDirectLinkPreview: D['broadcastDirectLinkPreview'] = (input) => deps.broadcastDirectLinkPreview(input);
 
   function getRoomStore() {
     if (!roomStore) {
@@ -265,7 +339,7 @@ export function createServiceRegistry(config, deps) {
         return true;
       },
       broadcastAccount: broadcastToUser,
-      resolveDirectRecipients: ({ actorUserId, conversation }) => [actorUserId, conversation.id]
+      resolveDirectRecipients: ({ actorUserId, conversation }) => [actorUserId, conversation!.id] as string[]
     });
     const service = createReactionService({
       repository: createReactionRepository({ client: pool }),
@@ -329,7 +403,7 @@ export function createServiceRegistry(config, deps) {
     if (!pool) return null;
     const inbox = createInboxRepository({ pool });
     const mentions = createMentionRepository({ pool });
-    const eligibility = createMentionEligibilityService({ activeBanService: getActiveBanService(), pool });
+    const eligibility = createMentionEligibilityService({ activeBanService: getActiveBanService()!, pool });
     const outbox = createNotificationOutboxRepository({ pool });
     const service = createNotificationService({
       pool,
@@ -440,7 +514,7 @@ export function createServiceRegistry(config, deps) {
           [attachment.roomMessageId, viewerId]
         );
         if (result.rowCount !== 1) return false;
-        return !await getActiveBanService().isBanned({ roomId: result.rows[0].room_id, userId: viewerId });
+        return !await getActiveBanService()!.isBanned({ roomId: result.rows[0].room_id, userId: viewerId });
       },
       authorizeDirectAttachment: async ({ attachment, viewerId }) => {
         if (!attachment.directMessageId) return false;
@@ -475,7 +549,9 @@ export function createServiceRegistry(config, deps) {
       return null;
     }
     credentialBoundary = createCredentialBoundaryService({
-      roomStore: store,
+      // An invalid epoch lookup carries `epoch: null`; the boundary reads the
+      // epoch only after checking for status 'ready'.
+      roomStore: store as unknown as GateRoomStore,
       secret: LIVEKIT_GATE_SECRET,
       credentialTtlMs: LIVEKIT_GATE_CREDENTIAL_TTL_SECONDS * 1000
     });
@@ -511,7 +587,8 @@ export function createServiceRegistry(config, deps) {
       pool: membershipPool,
       repository,
       activeBanService: {
-        isBanned: ({ roomId, userId, ip }) => findRoomBan(roomId, userId, ip)
+        // The membership service only tests the ban for truthiness.
+        isBanned: ({ roomId, userId, ip }) => findRoomBan(roomId, userId, ip) as Promise<boolean>
       }
     });
     const directory = createMemberDirectoryService({
@@ -572,7 +649,7 @@ export function createServiceRegistry(config, deps) {
    * derived services are rebuilt on next use. Returns whether the room store
    * changed (the in-memory roster then belongs to the old one).
    */
-  function applyOverrides(options = {}) {
+  function applyOverrides(options: StoreOverrides = {}): { roomStoreChanged: boolean } {
     const roomStoreChanged = Boolean(options.store && options.store !== roomStore);
     if (options.store) roomStore = options.store;
     if (options.users) userStore = options.users;
@@ -598,12 +675,12 @@ export function createServiceRegistry(config, deps) {
   }
 
   /** The database-backed stores bootstrap builds before the app. */
-  function install(stores) {
+  function install(stores: StoreOverrides): void {
     ({ roomStore, userStore, friendStore, notificationStore, pushStore, pushService, avatarStorage, linkPreviewStorage } = stores);
     messageService = null;
   }
 
-  async function close(logger) {
+  async function close(logger: Logger): Promise<void> {
     await Promise.allSettled([
       roomStore?.close?.(),
       userStore?.close?.(),

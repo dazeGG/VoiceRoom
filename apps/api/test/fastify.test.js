@@ -5,7 +5,7 @@ process.env.ROOM_CREATE_POW_DIFFICULTY = '0';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-const { createApiApp, createApiServer } = await import('../src/server.js');
+const { createApiApp, createApiServer } = await import('../src/server.ts');
 const { withRosterPeer } = await import('./roster-harness.js');
 import { PUBLIC_CAPABILITY_KEYS } from '@voice-room/shared/capabilities';
 const { resetMetricsForTest } = await import('../src/lib/metrics.ts');
@@ -208,7 +208,7 @@ test('capability route defaults the public boolean contract when readiness throw
 });
 
 test('production cursor HMAC resolution has no membership fallback secret', () => {
-  const { resolveCursorHmacKeys } = require('../src/server').__private;
+  const { resolveCursorHmacKeys } = require('../src/server.ts').__private;
 
   assert.throws(() => resolveCursorHmacKeys({
     context: 'membership',

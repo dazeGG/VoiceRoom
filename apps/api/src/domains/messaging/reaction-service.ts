@@ -1,3 +1,4 @@
+import type pg from 'pg';
 import {
   normalizeReactionMutation,
   normalizeReactionSummary,
@@ -10,7 +11,7 @@ import {
 
 type Conversation = { type: 'room' | 'dm'; id: string };
 type Viewer = { id?: string; guest?: boolean; isGuest?: boolean; [key: string]: unknown } | null | undefined;
-type Client = unknown;
+type Client = Pick<pg.PoolClient, 'query'> | null | undefined;
 type ReactorTuple = { createdAtMicros: string; id: string };
 type ReactorRow = { userId: string; displayName: string; avatarUrl: string | null; cursorTuple: ReactorTuple };
 

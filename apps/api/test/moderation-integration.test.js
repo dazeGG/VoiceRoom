@@ -14,7 +14,7 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 
-const { createApiServer } = await import('../src/server.js');
+const { createApiServer } = await import('../src/server.ts');
 const { openWs, joinVoiceRoom, sendWs, waitForWsType } = await import('./ws-harness.js');
 
 const OWNER_ID = '11111111-1111-4111-8111-111111111111';

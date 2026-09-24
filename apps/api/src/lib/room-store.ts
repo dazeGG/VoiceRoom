@@ -9,7 +9,7 @@ import { createLogger } from './logger.ts';
 
 type Row = Record<string, any>;
 type Queryable = Pick<pg.Pool, 'query'> | pg.PoolClient;
-export type GatePrincipal = { principalType: string; principalId: string };
+export type GatePrincipal = { principalType: 'account' | 'guest'; principalId: string };
 export type StoredRoom = NonNullable<ReturnType<typeof mapRoom>>;
 export type StoredRoomMessage = NonNullable<ReturnType<typeof mapMessage>>;
 export type RoomRelationship = 'owner' | 'bookmarked' | 'member' | '';
@@ -1366,7 +1366,7 @@ function createRoomStore({
     });
   }
 
-  async function removeRoomBookmarkForUser(userId: string, roomId: string) {
+  async function removeRoomBookmarkForUser(userId: string | null | undefined, roomId: string | null | undefined) {
     if (!userId || !roomId) return { removed: false, status: 'not_found' };
     return transaction(getPool(), async (client) => {
       const owner = await client.query(

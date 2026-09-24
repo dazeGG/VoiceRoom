@@ -49,7 +49,7 @@ async function startServer(t, extraEnv = {}) {
   const { dir, socketPath } = getSocketPath();
   const { cleanup, databaseUrl } = await createTestDatabase(t);
   const logs = { stdout: '', stderr: '' };
-  const child = spawn(process.execPath, ['src/server.js'], {
+  const child = spawn(process.execPath, ['src/server.ts'], {
     cwd: path.join(import.meta.dirname, '..'),
     env: {
       ...process.env,

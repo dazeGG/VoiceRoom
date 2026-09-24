@@ -13,7 +13,7 @@ import { createModerationRepository, type ModerationBan, type ModerationCursorCo
 
 type QueryClient = Pick<pg.PoolClient, 'query'>;
 
-export type CredentialPrincipal = { principalType: string; principalId: string; [key: string]: unknown };
+export type CredentialPrincipal = { principalType: 'account' | 'guest'; principalId: string; [key: string]: unknown };
 
 export type BanOutcome =
   | { status: 'invalid' | 'forbidden' | 'revocation_unavailable' | 'cap_exceeded'; ban: null }

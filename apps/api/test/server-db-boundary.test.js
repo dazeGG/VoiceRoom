@@ -5,7 +5,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
 
-const { __private, createApiServer } = await import('../src/server.js');
+const { __private, createApiServer } = await import('../src/server.ts');
 const { openWs, joinVoiceRoom, sendWs, waitForWsType } = await import('./ws-harness.js');
 
 // A logger that records the structured fields, so a test can assert the API

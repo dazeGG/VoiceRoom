@@ -45,7 +45,7 @@ function waitForHealthz(socketPath, timeoutMs = 15000) {
 }
 
 function startServer(socketPath, databaseUrl, logs, envOverrides = {}) {
-  const child = spawn(process.execPath, ['src/server.js'], {
+  const child = spawn(process.execPath, ['src/server.ts'], {
     cwd: path.join(import.meta.dirname, '..'),
     env: {
       ...process.env,
