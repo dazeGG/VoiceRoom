@@ -16,7 +16,7 @@ function createMediaMaintenanceWorker({ maintenanceService, intervalMs = 60_000 
 
 async function main() {
   if (String(process.env.MEDIA_MAINTENANCE_CLAIM_ENABLED || '').toLowerCase() !== 'true') return;
-  const { createDbPool } = await import('../lib/db.js');
+  const { createDbPool } = await import('../lib/db.ts');
   const { createAttachmentRepository } = await import('../domains/media/attachment-repository.ts');
   const { createMediaJobRepository } = await import('../domains/media/media-job-repository.ts');
   const { createMediaMaintenanceService } = await import('../domains/media/media-maintenance-service.ts');

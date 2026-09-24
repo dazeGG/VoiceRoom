@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { Pool } from 'pg';
 import test from 'node:test';
-import { transaction } from '../src/lib/db.js';
-import { runMigrations } from '../src/lib/migrate.js';
+import { transaction } from '../src/lib/db.ts';
+import { runMigrations } from '../src/lib/migrate.ts';
 import { createNotificationService } from '../src/domains/notifications/notification-service.ts';
 import { createMentionRepository } from '../src/domains/notifications/mention-repository.ts';
 import { createInboxRepository } from '../src/domains/notifications/inbox-repository.ts';

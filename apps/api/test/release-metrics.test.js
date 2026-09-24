@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import * as metrics from '../src/lib/metrics.js';
+import * as metrics from '../src/lib/metrics.ts';
 import { createMediaVisibilityService } from '../src/domains/media/media-visibility-service.ts';
 
 test('release queue metrics exclude expected hidden 404s and count only invariant failures', async () => {

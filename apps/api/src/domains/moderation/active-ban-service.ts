@@ -1,5 +1,5 @@
 import type pg from 'pg';
-import { transaction } from '../../lib/db.js';
+import { transaction } from '../../lib/db.ts';
 import { createActiveBanRepository, normalizePrincipal, type ActiveBanRecord, type ActiveBanRepository } from './active-ban-repository.ts';
 
 type QueryClient = Pick<pg.PoolClient, 'query'>;

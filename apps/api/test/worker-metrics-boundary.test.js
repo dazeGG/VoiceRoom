@@ -4,8 +4,8 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import test from 'node:test';
 
-const metricsPath = fileURLToPath(new URL('../src/lib/metrics.js', import.meta.url));
-const serverPath = fileURLToPath(new URL('../src/lib/worker-metrics-server.js', import.meta.url));
+const metricsPath = fileURLToPath(new URL('../src/lib/metrics.ts', import.meta.url));
+const serverPath = fileURLToPath(new URL('../src/lib/worker-metrics-server.ts', import.meta.url));
 
 function startMetricProcess(kind, ageMs) {
   const code = `const m=require(${JSON.stringify(metricsPath)}),s=require(${JSON.stringify(serverPath)});m[process.env.KIND](Number(process.env.AGE));s.startWorkerMetricsServer({host:'127.0.0.1',port:0}).then(x=>{console.log(x.address.port);process.on('SIGTERM',()=>x.close().then(()=>process.exit()));});`;

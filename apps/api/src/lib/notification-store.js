@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import { cleanPresenceStatus } from '@voice-room/shared/validation';
-import { createDbPool, transaction } from './db.js';
-import { createLogger } from './logger.js';
+import { createDbPool, transaction } from './db.ts';
+import { createLogger } from './logger.ts';
 
 const DEFAULT_AUTOMATIC_PRESENCE_LEASE_MS = 3 * 60 * 1000;
 

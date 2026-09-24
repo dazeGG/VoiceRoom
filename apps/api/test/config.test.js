@@ -7,7 +7,7 @@ import {
   readEnvBool,
   readDatabaseConfig,
   readUploadsDir
-} from '../src/lib/config.js';
+} from '../src/lib/config.ts';
 
 test('readEnvInt parses a valid integer', () => {
   assert.equal(readEnvInt('PORT', 3000, 1, { PORT: '8080' }), 8080);

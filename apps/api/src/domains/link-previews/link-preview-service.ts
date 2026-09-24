@@ -1,8 +1,8 @@
 import crypto from 'node:crypto';
 import { firstPreviewableUrl, normalizeLinkPreview, type LinkPreview } from '@voice-room/shared/link-preview';
-import { decodeHtmlBody, extractLinkPreviewMetadata } from '../../lib/link-preview-html.js';
-import { LOG_EVENTS } from '../../lib/log-events.js';
-import { createLogger } from '../../lib/logger.js';
+import { decodeHtmlBody, extractLinkPreviewMetadata } from '../../lib/link-preview-html.ts';
+import { LOG_EVENTS } from '../../lib/log-events.ts';
+import { createLogger } from '../../lib/logger.ts';
 import type { LinkPreviewRepository } from './link-preview-repository.ts';
 
 const READY_TTL_MS = 24 * 60 * 60 * 1000;
@@ -10,7 +10,7 @@ const FAILED_TTL_MS = 60 * 60 * 1000;
 const MAX_CONCURRENT_FETCHES = 2;
 const MAX_WAITING_FETCHES = 100;
 
-type FetchedPage = { body: Buffer | Uint8Array | string; contentType: string; url: string };
+type FetchedPage = { body: Buffer; contentType: string; url: string };
 type ProcessedImage = { key: string; buffer: Buffer; width: number; height: number } | null | undefined;
 
 export interface LinkPreviewFetcher {

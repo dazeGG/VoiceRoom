@@ -1,4 +1,10 @@
-async function reconcileAvatarStorage({ storage, userStore, roomStore }) {
+type KeyLister = { listAvatarKeys(): Promise<string[]> };
+
+async function reconcileAvatarStorage({ storage, userStore, roomStore }: {
+  storage: { listKeys(): Promise<string[]>; remove(key: string): Promise<unknown> };
+  userStore: KeyLister;
+  roomStore: KeyLister;
+}): Promise<{ orphaned: string[]; removed: number }> {
   const [storedKeys, userKeys, roomKeys] = await Promise.all([
     storage.listKeys(),
     userStore.listAvatarKeys(),

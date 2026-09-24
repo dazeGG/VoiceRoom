@@ -1,4 +1,4 @@
-import { readDatabaseConfig } from '../src/lib/config.js';
+import { readDatabaseConfig } from '../src/lib/config.ts';
 
 try {
   readDatabaseConfig({ DATABASE_URL: process.env.TEST_DATABASE_URL });

@@ -3,7 +3,7 @@ const require = createRequire(import.meta.url);
 import assert from 'node:assert/strict';
 import { Pool } from 'pg';
 import { test } from 'node:test';
-import { runMigrations } from '../src/lib/migrate.js';
+import { runMigrations } from '../src/lib/migrate.ts';
 import { createTestDatabase } from './db-harness.js';
 
 test('G43-A01 room_memberships is an active-only unique room/user relation', { skip: !process.env.TEST_DATABASE_URL }, async (t) => {

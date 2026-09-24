@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { Pool } from 'pg';
 import test from 'node:test';
-import { runMigrations } from '../src/lib/migrate.js';
+import { runMigrations } from '../src/lib/migrate.ts';
 import { createReactionRepository } from '../src/domains/messaging/reaction-repository.ts';
 import { createTestDatabase } from './db-harness.js';
 
@@ -42,7 +42,7 @@ test('G68-A01 desired-state rows are unique, idempotent, monotonic and applicati
     throw new Error('rollback');
   }), /rollback/);
   assert.equal((await pool.query(`SELECT count(*)::int AS count FROM room_message_reactions WHERE emoji = '👩🏽‍💻'`)).rows[0].count, 0);
-  const migrationRunner = fs.readFileSync(fileURLToPath(new URL('../src/lib/migrate.js', import.meta.url)), 'utf8');
+  const migrationRunner = fs.readFileSync(fileURLToPath(new URL('../src/lib/migrate.ts', import.meta.url)), 'utf8');
   assert.match(migrationRunner, /SET lock_timeout TO '\$\{LOCK_TIMEOUT_MS\}ms'/);
 });
 

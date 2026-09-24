@@ -1,12 +1,12 @@
-import { createDbPool } from '../lib/db.js';
-import { readEnvBool, readEnvInt } from '../lib/config.js';
+import { createDbPool } from '../lib/db.ts';
+import { readEnvBool, readEnvInt } from '../lib/config.ts';
 import { createPushStore } from '../lib/push-store.js';
 import { createNotificationOutboxRepository } from '../domains/notifications/notification-outbox-repository.ts';
 import { createNotificationPushProvider } from '../domains/notifications/push-provider.ts';
 import { boundedBackoff, createLeaseRuntime } from '../platform/lease-runtime.ts';
-import { recordNotificationOldestPending } from '../lib/metrics.js';
-import { LOG_EVENTS } from '../lib/log-events.js';
-import { createLogger } from '../lib/logger.js';
+import { recordNotificationOldestPending } from '../lib/metrics.ts';
+import { LOG_EVENTS } from '../lib/log-events.ts';
+import { createLogger } from '../lib/logger.ts';
 
 const LEASE_IDENTITY = 'notification-delivery.G63';
 

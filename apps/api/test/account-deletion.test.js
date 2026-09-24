@@ -5,7 +5,7 @@ import { Pool } from 'pg';
 
 import { createAccountDeletionRepository } from '../src/domains/account/account-deletion-repository.ts';
 import { createUserStore } from '../src/lib/user-store.js';
-import { runMigrations } from '../src/lib/migrate.js';
+import { runMigrations } from '../src/lib/migrate.ts';
 import { ACCOUNT_DELETION_GRACE_MS, DELETED_ACCOUNT_NAME } from '@voice-room/shared/account-security';
 import { createTestDatabase } from './db-harness.js';
 

@@ -5,7 +5,7 @@ import {
   readPushConfig,
   resolvePushTtl,
   shouldDeliverPush
-} from '../src/lib/push-service.js';
+} from '../src/lib/push-service.ts';
 
 const ENABLED_ENV = {
   VAPID_PUBLIC_KEY: 'public-key',

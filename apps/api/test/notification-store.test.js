@@ -6,7 +6,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { createNotificationStore } from '../src/lib/notification-store.js';
 import { createRoomStore } from '../src/lib/room-store.js';
 import { createUserStore } from '../src/lib/user-store.js';
-import { runMigrations } from '../src/lib/migrate.js';
+import { runMigrations } from '../src/lib/migrate.ts';
 import { createTestDatabase } from './db-harness.js';
 
 const SILENT = { log() {}, info() {}, warn() {}, error() {} };

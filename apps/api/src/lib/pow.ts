@@ -1,6 +1,9 @@
 import crypto from 'node:crypto';
 
-function hasLeadingZeroBits(buffer, bits) {
+export type PowChallenge = { challengeId: string; difficulty: number; issuedAt: number; signature: string };
+export type PowVerdict = { ok: true } | { ok: false; status: 403; error: string };
+
+function hasLeadingZeroBits(buffer: Uint8Array, bits: number): boolean {
   const fullBytes = Math.floor(bits / 8);
   const remainingBits = bits % 8;
 
@@ -10,16 +13,16 @@ function hasLeadingZeroBits(buffer, bits) {
 
   if (remainingBits === 0) return true;
   const mask = 0xff << (8 - remainingBits);
-  return (buffer[fullBytes] & mask) === 0;
+  return ((buffer[fullBytes] as number) & mask) === 0;
 }
 
-function parsePowChallenge(challenge) {
+function parsePowChallenge(challenge: unknown): PowChallenge | null {
   if (typeof challenge !== 'string') return null;
 
   const parts = challenge.split('.');
   if (parts.length !== 4) return null;
 
-  const [challengeId, issuedAtValue, difficultyValue, signature] = parts;
+  const [challengeId, issuedAtValue, difficultyValue, signature] = parts as [string, string, string, string];
   const issuedAt = Number.parseInt(issuedAtValue, 10);
   const difficulty = Number.parseInt(difficultyValue, 10);
   if (!/^[A-Za-z0-9_-]{16,64}$/.test(challengeId)) return null;
@@ -30,45 +33,50 @@ function parsePowChallenge(challenge) {
   return { challengeId, difficulty, issuedAt, signature };
 }
 
-function normalizePowNonce(value) {
-  if (Number.isSafeInteger(value) && value >= 0) return String(value);
+function normalizePowNonce(value: unknown): string {
+  if (Number.isSafeInteger(value) && (value as number) >= 0) return String(value);
   if (typeof value === 'string' && /^(0|[1-9]\d{0,15})$/.test(value)) return value;
   return '';
 }
 
-function timingSafeMatch(expected, actual) {
+function timingSafeMatch(expected: string, actual: string): boolean {
   if (!expected || !actual || expected.length !== actual.length) return false;
   return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(actual));
 }
 
 // Stateful proof-of-work guard for room creation: signs challenges with an HMAC
 // keyed by the client IP and tracks spent challenges to prevent replay.
-function createProofOfWork({ secret = crypto.randomBytes(32), difficulty, ttlMs }) {
-  const usedChallenges = new Map();
+function createProofOfWork({ secret = crypto.randomBytes(32), difficulty, ttlMs }: {
+  secret?: crypto.BinaryLike;
+  difficulty: number;
+  ttlMs: number;
+}) {
+  const usedChallenges = new Map<string, number>();
 
-  function sign(payload, clientIp) {
+  function sign(payload: string, clientIp: string): string {
     return crypto.createHmac('sha256', secret).update(`${clientIp}:${payload}`).digest('base64url');
   }
 
-  function prune(now = Date.now()) {
+  function prune(now: number = Date.now()): void {
     for (const [challengeId, expiresAt] of usedChallenges) {
       if (expiresAt <= now) usedChallenges.delete(challengeId);
     }
   }
 
-  function createChallenge(clientIp, now = Date.now()) {
+  function createChallenge(clientIp: string, now: number = Date.now()): string | null {
     if (difficulty <= 0) return null;
     const challengeId = crypto.randomBytes(16).toString('base64url');
     const payload = `${challengeId}.${now}.${difficulty}`;
     return `${payload}.${sign(payload, clientIp)}`;
   }
 
-  function verify(clientIp, proof, now = Date.now()) {
+  function verify(clientIp: string, proof: unknown, now: number = Date.now()): PowVerdict {
     if (difficulty <= 0) return { ok: true };
     prune(now);
 
-    const challenge = typeof proof?.challenge === 'string' ? proof.challenge : '';
-    const nonce = normalizePowNonce(proof?.nonce);
+    const submitted = proof as { challenge?: unknown; nonce?: unknown } | null | undefined;
+    const challenge = typeof submitted?.challenge === 'string' ? submitted.challenge : '';
+    const nonce = normalizePowNonce(submitted?.nonce);
     const parsed = parsePowChallenge(challenge);
     if (!parsed || !nonce) {
       return { ok: false, status: 403, error: 'Room creation proof is required' };
@@ -100,5 +108,7 @@ function createProofOfWork({ secret = crypto.randomBytes(32), difficulty, ttlMs 
 
   return { sign, prune, createChallenge, verify, usedChallenges };
 }
+
+export type ProofOfWork = ReturnType<typeof createProofOfWork>;
 
 export { hasLeadingZeroBits, parsePowChallenge, normalizePowNonce, createProofOfWork };

@@ -7,7 +7,7 @@ import {
   createAvatarKey,
   detectAvatarFormat,
   processAvatar
-} from '../src/lib/avatar-processing.js';
+} from '../src/lib/avatar-processing.ts';
 
 test('avatar processing accepts JPEG, PNG, and WebP magic bytes and normalizes to 256px WebP', async () => {
   for (const format of ['jpeg', 'png', 'webp']) {

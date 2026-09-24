@@ -1,4 +1,4 @@
-import { createDbPool } from '../lib/db.js';
+import { createDbPool } from '../lib/db.ts';
 import { createAttachmentRepository } from '../domains/media/attachment-repository.ts';
 import { createMediaReconciliationService } from '../domains/media/media-reconciliation-service.ts';
 import { createMediaJobRepository } from '../domains/media/media-job-repository.ts';

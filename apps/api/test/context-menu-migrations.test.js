@@ -5,7 +5,7 @@ import path from 'node:path';
 import { Client } from 'pg';
 
 import { createTestDatabase } from './db-harness.js';
-import { runMigrations } from '../src/lib/migrate.js';
+import { runMigrations } from '../src/lib/migrate.ts';
 
 const SILENT = { log() {}, info() {}, warn() {}, error() {} };
 const NEW_TABLES = ['room_message_pins', 'user_blocks', 'room_server_mutes'];

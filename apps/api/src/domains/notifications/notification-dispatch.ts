@@ -2,8 +2,8 @@
 // preferences applied, and the live + push notice for a new direct message.
 
 import type { Logger } from 'pino';
-import { LOG_EVENTS } from '../../lib/log-events.js';
-import { resolvePushTtl, shouldDeliverPush } from '../../lib/push-service.js';
+import { LOG_EVENTS } from '../../lib/log-events.ts';
+import { resolvePushTtl, shouldDeliverPush } from '../../lib/push-service.ts';
 import { notificationActor, type SocialUser } from '../social/social-views.ts';
 
 interface Preferences {

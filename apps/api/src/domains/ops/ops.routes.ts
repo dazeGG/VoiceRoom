@@ -7,8 +7,8 @@ import { Type, type TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
 import type { FastifyInstance } from 'fastify';
 import type { ApiContext } from '../../app/context.ts';
 import { failure } from '../../platform/http/http-kit.ts';
-import { LOG_EVENTS } from '../../lib/log-events.js';
-import { CLIENT_LOG_LIMITS, normalizeClientLogBatch } from '../../lib/client-log-intake.js';
+import { LOG_EVENTS } from '../../lib/log-events.ts';
+import { CLIENT_LOG_LIMITS, normalizeClientLogBatch } from '../../lib/client-log-intake.ts';
 import type { DesktopReleaseService } from './desktop-release.service.ts';
 
 interface ReadinessSnapshot {

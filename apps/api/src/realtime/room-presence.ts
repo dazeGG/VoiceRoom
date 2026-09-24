@@ -3,7 +3,7 @@
 // active/empty marker of each room in step with the roster.
 
 import type { Logger } from 'pino';
-import { LOG_EVENTS } from '../lib/log-events.js';
+import { LOG_EVENTS } from '../lib/log-events.ts';
 import { publicPeer, type PresencePeer } from '../domains/rooms/room-views.ts';
 import { clearViewedScreenPeerReferences } from './room-runtime.js';
 

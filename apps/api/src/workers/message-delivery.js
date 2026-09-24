@@ -1,9 +1,9 @@
-import { createDbPool } from '../lib/db.js';
-import { readEnvInt, readMessageDeliveryMode } from '../lib/config.js';
+import { createDbPool } from '../lib/db.ts';
+import { readEnvInt, readMessageDeliveryMode } from '../lib/config.ts';
 import { createMessageOutboxRepository } from '../domains/messaging/message-outbox-repository.ts';
 import { boundedBackoff, createLeaseRuntime } from '../platform/lease-runtime.ts';
-import { LOG_EVENTS } from '../lib/log-events.js';
-import { createLogger } from '../lib/logger.js';
+import { LOG_EVENTS } from '../lib/log-events.ts';
+import { createLogger } from '../lib/logger.ts';
 
 const LEASE_IDENTITY = 'message-delivery.G38';
 

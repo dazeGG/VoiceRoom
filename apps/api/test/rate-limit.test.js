@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { getClientIp, createRateLimiter } from '../src/lib/rate-limit.js';
+import { getClientIp, createRateLimiter } from '../src/lib/rate-limit.ts';
 
 function fakeReq({ remoteAddress = '10.0.0.1', forwardedFor } = {}) {
   const headers = {};

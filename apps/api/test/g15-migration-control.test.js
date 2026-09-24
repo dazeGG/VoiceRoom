@@ -11,7 +11,7 @@ import {
   assertMigrationReady,
   expectedMigrationCatalog,
   runMigrations
-} from '../src/lib/migrate.js';
+} from '../src/lib/migrate.ts';
 
 class FakeClient {
   constructor({ guardTable = true, migrationsTable = true, migrationNames = expectedMigrationCatalog(), guardState = 'clean', loseLock = false, lockTimeout = false } = {}) {

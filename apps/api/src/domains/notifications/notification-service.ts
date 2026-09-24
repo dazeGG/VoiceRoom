@@ -1,5 +1,5 @@
 import type pg from 'pg';
-import { transaction } from '../../lib/db.js';
+import { transaction } from '../../lib/db.ts';
 import {
   buildNotificationEnvelope,
   buildProviderPayload,

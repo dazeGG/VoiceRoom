@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { Pool } from 'pg';
 import test from 'node:test';
-import { runMigrations } from '../src/lib/migrate.js';
+import { runMigrations } from '../src/lib/migrate.ts';
 import { createTestDatabase } from './db-harness.js';
 import { createNotificationOutboxRepository } from '../src/domains/notifications/notification-outbox-repository.ts';
 import { createNotificationPushProvider } from '../src/domains/notifications/push-provider.ts';

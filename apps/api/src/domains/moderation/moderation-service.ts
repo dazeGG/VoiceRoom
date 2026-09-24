@@ -8,7 +8,7 @@ import {
   type BanMutation,
   type ModerationPage
 } from '@voice-room/shared/moderation';
-import { transaction } from '../../lib/db.js';
+import { transaction } from '../../lib/db.ts';
 import { createModerationRepository, type ModerationBan, type ModerationCursorCodec, type ModerationRepository } from './moderation-repository.ts';
 
 type QueryClient = Pick<pg.PoolClient, 'query'>;

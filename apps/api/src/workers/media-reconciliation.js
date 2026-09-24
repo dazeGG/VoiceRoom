@@ -16,7 +16,7 @@ function createMediaReconciliationWorker({ reconciliationService, intervalMs = 1
 
 async function main() {
   if (String(process.env.MEDIA_RECONCILIATION_CLAIM_ENABLED || '').toLowerCase() !== 'true') return;
-  const { createDbPool } = await import('../lib/db.js');
+  const { createDbPool } = await import('../lib/db.ts');
   const { createAttachmentRepository } = await import('../domains/media/attachment-repository.ts');
   const { createMediaJobRepository } = await import('../domains/media/media-job-repository.ts');
   const { createMediaReconciliationService } = await import('../domains/media/media-reconciliation-service.ts');

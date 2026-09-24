@@ -6,13 +6,13 @@ const EXACT_PUSH_HOSTS = new Set([
   'web.push.apple.com'
 ]);
 
-function isAllowedPushHost(hostname) {
+function isAllowedPushHost(hostname: string): boolean {
   return EXACT_PUSH_HOSTS.has(hostname)
     || hostname === 'notify.windows.com'
     || hostname.endsWith('.notify.windows.com');
 }
 
-function cleanPushEndpoint(value) {
+function cleanPushEndpoint(value: unknown): string | null {
   const endpoint = String(value || '').trim();
   if (!endpoint || endpoint.length > 4096) return null;
 
@@ -32,7 +32,7 @@ function cleanPushEndpoint(value) {
   }
 }
 
-function describePushEndpoint(value) {
+function describePushEndpoint(value: unknown): { pushHost: string; pushEndpointHash: string } {
   const endpoint = String(value || '');
   let pushHost = 'invalid';
   try {

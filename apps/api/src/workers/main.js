@@ -1,7 +1,7 @@
-import { startWorkerMetricsServer } from '../lib/worker-metrics-server.js';
+import { startWorkerMetricsServer } from '../lib/worker-metrics-server.ts';
 import { startWorkerHeartbeat } from '../platform/worker-heartbeat.ts';
-import { LOG_EVENTS } from '../lib/log-events.js';
-import { createLogger } from '../lib/logger.js';
+import { LOG_EVENTS } from '../lib/log-events.ts';
+import { createLogger } from '../lib/logger.ts';
 import { main as mediaMaintenanceMain } from './media-maintenance.js';
 import { main as mediaProcessingMain } from './media-processing.js';
 import { main as mediaReconciliationMain } from './media-reconciliation.js';

@@ -4,7 +4,7 @@ import crypto from 'node:crypto';
 
 import { createFriendStore, orderedPair } from '../src/lib/friend-store.js';
 import { createUserStore } from '../src/lib/user-store.js';
-import { runMigrations } from '../src/lib/migrate.js';
+import { runMigrations } from '../src/lib/migrate.ts';
 import { createTestDatabase } from './db-harness.js';
 
 const SILENT = { log() {}, info() {}, warn() {}, error() {} };

@@ -5,7 +5,7 @@ import { Pool } from 'pg';
 import { test } from 'node:test';
 import { createActiveBanRepository, normalizePrincipal } from '../src/domains/moderation/active-ban-repository.ts';
 import { createActiveBanService } from '../src/domains/moderation/active-ban-service.ts';
-import { runMigrations } from '../src/lib/migrate.js';
+import { runMigrations } from '../src/lib/migrate.ts';
 import { createTestDatabase } from './db-harness.js';
 
 test('G41-A01 active-ban repository applies one expiry and revocation predicate', async () => {

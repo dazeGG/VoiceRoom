@@ -12,21 +12,21 @@
 // only add casts. It becomes TypeScript with them.
 
 import crypto from 'node:crypto';
-import { readEnvInt } from '../lib/config.js';
-import { LOG_EVENTS } from '../lib/log-events.js';
+import { readEnvInt } from '../lib/config.ts';
+import { LOG_EVENTS } from '../lib/log-events.ts';
 import { createRoomStore } from '../lib/room-store.js';
 import { createUserStore } from '../lib/user-store.js';
-import { createGeoLocator } from '../lib/geoip.js';
+import { createGeoLocator } from '../lib/geoip.ts';
 import { createFriendStore } from '../lib/friend-store.js';
 import { createNotificationStore } from '../lib/notification-store.js';
 import { createPushStore } from '../lib/push-store.js';
-import { createPushService } from '../lib/push-service.js';
-import { createAvatarStorage } from '../lib/avatar-storage.js';
-import { createLinkPreviewFetcher } from '../lib/link-preview-fetcher.js';
-import { processLinkPreviewImage } from '../lib/link-preview-image.js';
-import { createLinkPreviewStorage } from '../lib/link-preview-storage.js';
-import { createRelease250Pool } from '../lib/release-250-pool.js';
-import { recordMediaAuthorizationInvariantFailure, recordMediaPressure } from '../lib/metrics.js';
+import { createPushService } from '../lib/push-service.ts';
+import { createAvatarStorage } from '../lib/avatar-storage.ts';
+import { createLinkPreviewFetcher } from '../lib/link-preview-fetcher.ts';
+import { processLinkPreviewImage } from '../lib/link-preview-image.ts';
+import { createLinkPreviewStorage } from '../lib/link-preview-storage.ts';
+import { createRelease250Pool } from '../lib/release-250-pool.ts';
+import { recordMediaAuthorizationInvariantFailure, recordMediaPressure } from '../lib/metrics.ts';
 import { createLinkPreviewRepository } from '../domains/link-previews/link-preview-repository.ts';
 import { createLinkPreviewService } from '../domains/link-previews/link-preview-service.ts';
 import { createAccountDeletionRepository } from '../domains/account/account-deletion-repository.ts';

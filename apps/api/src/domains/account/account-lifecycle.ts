@@ -3,7 +3,7 @@
 // and deletions finished once their grace period is over.
 
 import type { Logger } from 'pino';
-import { LOG_EVENTS } from '../../lib/log-events.js';
+import { LOG_EVENTS } from '../../lib/log-events.ts';
 import { publicUser } from '../../lib/user-store.js';
 import type { GatePrincipal } from '../admission/admission.service.ts';
 

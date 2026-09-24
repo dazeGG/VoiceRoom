@@ -7,24 +7,28 @@ const AVATAR_SIZE = 256;
 const MAX_AVATAR_BYTES = 5 * 1024 * 1024;
 const MAX_INPUT_PIXELS = 40 * 1024 * 1024;
 
-function detectAvatarFormat(buffer) {
+export type ProcessedAvatar = { accent: string; buffer: Buffer; hash: string };
+
+function httpError(message: string, statusCode: number): Error & { statusCode: number; cause?: unknown } {
+  const error = new Error(message) as Error & { statusCode: number; cause?: unknown };
+  error.statusCode = statusCode;
+  return error;
+}
+
+function detectAvatarFormat(buffer: Buffer): string {
   const format = detectImageFormat(buffer);
   return ['jpeg', 'png', 'webp'].includes(format) ? format : '';
 }
 
-async function processAvatar(buffer) {
+async function processAvatar(buffer: unknown): Promise<ProcessedAvatar> {
   if (!Buffer.isBuffer(buffer) || buffer.length === 0 || buffer.length > MAX_AVATAR_BYTES) {
-    const error = new Error('Avatar file must be at most 5 MB');
-    error.statusCode = 413;
-    throw error;
+    throw httpError('Avatar file must be at most 5 MB', 413);
   }
   if (!detectAvatarFormat(buffer)) {
-    const error = new Error('Only JPEG, PNG, and WebP images are supported');
-    error.statusCode = 415;
-    throw error;
+    throw httpError('Only JPEG, PNG, and WebP images are supported', 415);
   }
 
-  let output;
+  let output: Buffer;
   try {
     output = await sharp(buffer, {
       failOn: 'warning',
@@ -36,8 +40,7 @@ async function processAvatar(buffer) {
       .webp({ quality: 86, effort: 4 })
       .toBuffer();
   } catch (cause) {
-    const error = new Error('Invalid or unsafe image');
-    error.statusCode = 400;
+    const error = httpError('Invalid or unsafe image', 400);
     error.cause = cause;
     throw error;
   }
@@ -51,7 +54,7 @@ async function processAvatar(buffer) {
   };
 }
 
-function createAvatarKey(kind, id, hash) {
+function createAvatarKey(kind: string, id: unknown, hash: string): string {
   const normalizedId = String(id || '');
   const validId = kind === 'user'
     ? /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(normalizedId)

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { cleanPushEndpoint, describePushEndpoint } from '../src/lib/push-endpoint.js';
+import { cleanPushEndpoint, describePushEndpoint } from '../src/lib/push-endpoint.ts';
 
 test('push endpoints accept only known browser push services', () => {
   for (const endpoint of [

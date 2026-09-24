@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { decodeHtmlBody, extractLinkPreviewMetadata } from '../src/lib/link-preview-html.js';
+import { decodeHtmlBody, extractLinkPreviewMetadata } from '../src/lib/link-preview-html.ts';
 
 test('Open Graph tags win, in any attribute order and quoting, with entities decoded', () => {
   const html = `<!doctype html><html><head>

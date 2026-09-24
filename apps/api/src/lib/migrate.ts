@@ -2,29 +2,38 @@ import { Client } from 'pg';
 import fs from 'node:fs';
 import path from 'node:path';
 import { PG_MIGRATE_LOCK_ID, runner } from 'node-pg-migrate';
-import { readDatabaseConfig } from './config.js';
-import { LOG_EVENTS } from './log-events.js';
-import { createLogger } from './logger.js';
+import { readDatabaseConfig } from './config.ts';
+import { LOG_EVENTS } from './log-events.ts';
+import { createLogger } from './logger.ts';
+
+type LogMethod = (...items: unknown[]) => void;
+type MigrationLogSink = { info?: LogMethod; warn?: LogMethod; error?: LogMethod; log?: LogMethod };
+type QueryClient = { query(text: string, values?: unknown[]): Promise<{ rows: Record<string, any>[] }> };
+type MigrationClient = QueryClient & { connect(): Promise<unknown>; end(): Promise<unknown> };
+type ClientFactory = (connectionString: string) => MigrationClient;
+type RunMigration = Awaited<ReturnType<typeof runner>>[number];
+type MigrationRunner = (options: Record<string, unknown>) => Promise<RunMigration[]>;
+export type MigrationGuardState = 'clean' | 'running' | 'dirty';
 
 const DEFAULT_MIGRATIONS_DIR = path.resolve(import.meta.dirname, '..', 'migrations');
 const DEFAULT_MIGRATIONS_TABLE = 'pgmigrations';
 const MIGRATION_GUARD_TABLE = 'voiceroom_migration_guard';
 const MIGRATION_GUARD_ID = 1;
-const MIGRATION_GUARD_STATES = {
+const MIGRATION_GUARD_STATES: { readonly [State in MigrationGuardState]: State } = {
   clean: 'clean',
   running: 'running',
   dirty: 'dirty'
 };
 const LOCK_TIMEOUT_MS = 5000;
 
-function expectedMigrationCatalog(dir = DEFAULT_MIGRATIONS_DIR) {
+function expectedMigrationCatalog(dir: string = DEFAULT_MIGRATIONS_DIR): string[] {
   return fs.readdirSync(dir, { withFileTypes: true })
     .filter((entry) => entry.isFile() && /\.(?:c?js|ts)$/.test(entry.name))
     .map((entry) => entry.name.replace(/\.(?:c?js|ts)$/, ''))
     .sort();
 }
 
-function migrationLogger(logger) {
+function migrationLogger(logger: MigrationLogSink | null | undefined): Required<MigrationLogSink> {
   return {
     info: (...items) => logger?.info?.(...items),
     warn: (...items) => logger?.warn?.(...items),
@@ -35,12 +44,12 @@ function migrationLogger(logger) {
   };
 }
 
-async function query(client, text, values = []) {
+async function query(client: QueryClient, text: string, values: unknown[] = []): Promise<Record<string, any>[]> {
   const { rows } = await client.query(text, values);
   return rows;
 }
 
-async function ensureMigrationGuardSchema(client) {
+async function ensureMigrationGuardSchema(client: QueryClient): Promise<string> {
   await query(client, `
     CREATE TABLE IF NOT EXISTS ${MIGRATION_GUARD_TABLE} (
       id integer PRIMARY KEY,
@@ -60,10 +69,10 @@ async function ensureMigrationGuardSchema(client) {
     return MIGRATION_GUARD_STATES.clean;
   }
 
-  return rows[0].state;
+  return (rows[0] as { state: string }).state;
 }
 
-async function setMigrationGuardState(client, state, marker = null) {
+async function setMigrationGuardState(client: QueryClient, state: MigrationGuardState, marker: string | null = null): Promise<void> {
   await query(client, `
     INSERT INTO ${MIGRATION_GUARD_TABLE} (id, state, marker)
     VALUES ($1, $2, $3)
@@ -74,7 +83,7 @@ async function setMigrationGuardState(client, state, marker = null) {
   `, [MIGRATION_GUARD_ID, state, marker]);
 }
 
-async function assertNoDirtyMigrationState(client) {
+async function assertNoDirtyMigrationState(client: QueryClient): Promise<void> {
   const state = await ensureMigrationGuardSchema(client);
   if (state === MIGRATION_GUARD_STATES.dirty || state === MIGRATION_GUARD_STATES.running) {
     const rows = await query(
@@ -87,12 +96,12 @@ async function assertNoDirtyMigrationState(client) {
   }
 }
 
-async function acquireMigrationLock(client, lockValue) {
+async function acquireMigrationLock(client: QueryClient, lockValue: number | bigint): Promise<void> {
   await query(client, `SET statement_timeout TO '${LOCK_TIMEOUT_MS}ms'`);
   try {
     await query(client, 'SELECT pg_advisory_lock($1)', [lockValue]);
   } catch (error) {
-    if (error?.code === '57014') {
+    if ((error as { code?: unknown } | null)?.code === '57014') {
       throw new Error(`Timed out waiting ${LOCK_TIMEOUT_MS}ms for the migration lock`);
     }
     throw error;
@@ -101,11 +110,11 @@ async function acquireMigrationLock(client, lockValue) {
   }
 }
 
-async function releaseMigrationLock(client, lockValue) {
+async function releaseMigrationLock(client: QueryClient, lockValue: number | bigint): Promise<void> {
   await query(client, 'SELECT pg_advisory_unlock($1)', [lockValue]).catch(() => {});
 }
 
-function advisoryLockParts(lockValue) {
+function advisoryLockParts(lockValue: number | bigint | string): { classId: number; objectId: number } {
   const value = BigInt(lockValue);
   return {
     classId: Number(BigInt.asUintN(32, value >> 32n)),
@@ -113,7 +122,7 @@ function advisoryLockParts(lockValue) {
   };
 }
 
-async function assertMigrationLockHeld(client, lockValue) {
+async function assertMigrationLockHeld(client: QueryClient, lockValue: number | bigint): Promise<void> {
   const { classId, objectId } = advisoryLockParts(lockValue);
   const rows = await query(client, `
     SELECT EXISTS (
@@ -135,8 +144,12 @@ async function assertMigrationLockHeld(client, lockValue) {
 async function assertMigrationReady({
   databaseUrl = readDatabaseConfig().url,
   dir = DEFAULT_MIGRATIONS_DIR,
-  clientFactory = (connectionString) => new Client({ connectionString })
-} = {}) {
+  clientFactory = (connectionString: string) => new Client({ connectionString })
+}: {
+  databaseUrl?: string;
+  dir?: string;
+  clientFactory?: ClientFactory;
+} = {}): Promise<true> {
   const client = clientFactory(databaseUrl);
   await client.connect();
   try {
@@ -175,9 +188,19 @@ async function runMigrations({
   noLock = process.env.NODE_ENV === 'test',
   lockValue = PG_MIGRATE_LOCK_ID,
   clearDirty = false,
-  clientFactory = (connectionString) => new Client({ connectionString }),
-  migrationRunner = runner
-} = {}) {
+  clientFactory = (connectionString: string) => new Client({ connectionString }),
+  migrationRunner = runner as unknown as MigrationRunner
+}: {
+  databaseUrl?: string;
+  direction?: 'up' | 'down';
+  dir?: string;
+  logger?: MigrationLogSink & { info: LogMethod; warn: LogMethod };
+  noLock?: boolean;
+  lockValue?: number | bigint;
+  clearDirty?: boolean;
+  clientFactory?: ClientFactory;
+  migrationRunner?: MigrationRunner;
+} = {}): Promise<RunMigration[]> {
   if (noLock) {
     return migrationRunner({
       databaseUrl,
@@ -236,7 +259,7 @@ async function runMigrations({
     return migrations;
   } catch (error) {
     if (migrationStarted) {
-      await setMigrationGuardState(client, MIGRATION_GUARD_STATES.dirty, `direction=${direction}, error=${error.message}`).catch(() => {});
+      await setMigrationGuardState(client, MIGRATION_GUARD_STATES.dirty, `direction=${direction}, error=${(error as Error).message}`).catch(() => {});
     }
     throw error;
   } finally {

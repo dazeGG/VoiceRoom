@@ -1,23 +1,31 @@
 import fs from 'node:fs';
 import net from 'node:net';
-import { LOG_EVENTS } from './log-events.js';
-import { createLogger } from './logger.js';
+import { LOG_EVENTS } from './log-events.ts';
+import { createLogger } from './logger.ts';
 
 const LOCATION_LABEL_MAX_LENGTH = 120;
 
-function normalizeAddress(value) {
+type Names = Record<string, unknown>;
+type Place = { names?: Names } | null | undefined;
+type GeoRecord = { city?: Place; country?: Place } | null | undefined;
+type GeoReader = { get(address: string): unknown };
+type GeoLogger = { warn(...args: unknown[]): void; error(...args: unknown[]): void };
+
+export type GeoLocator = Readonly<{ enabled: boolean; locate(ip: unknown): Promise<string>; warm(): Promise<boolean> }>;
+
+function normalizeAddress(value: unknown): string {
   const address = String(value || '').trim().replace(/^::ffff:(?=\d+\.\d+\.\d+\.\d+$)/i, '');
   return net.isIP(address) ? address : '';
 }
 
-function namesOf(place) {
-  const names = place && typeof place === 'object' ? place.names : null;
-  return names && typeof names === 'object' ? names : {};
+function namesOf(place: unknown): Names {
+  const names = place && typeof place === 'object' ? (place as { names?: unknown }).names : null;
+  return names && typeof names === 'object' ? names as Names : {};
 }
 
 // DB-IP Lite names cities in English only and sometimes appends the district
 // in parentheses ("Moscow (Tsentralnyy administrativnyy okrug)").
-function placeName(place, language) {
+function placeName(place: Place, language: string): string {
   const names = namesOf(place);
   const name = names[language] || names.en || '';
   return typeof name === 'string' ? name.replace(/\s*\([^)]*\)\s*$/, '').trim() : '';
@@ -25,8 +33,9 @@ function placeName(place, language) {
 
 // One language per label: Russian only when the city itself has a Russian
 // name, so a lookup never produces "Moscow, Россия".
-function formatLocation(record) {
-  if (!record || typeof record !== 'object') return '';
+function formatLocation(input: unknown): string {
+  if (!input || typeof input !== 'object') return '';
+  const record = input as GeoRecord & object;
   const language = !record.city || namesOf(record.city).ru ? 'ru' : 'en';
   return [placeName(record.city, language), placeName(record.country, language)]
     .filter(Boolean)
@@ -38,26 +47,30 @@ function formatLocation(record) {
 // MaxMind-format database (DB-IP City Lite in production). The address is only
 // read here: it is never stored or sent anywhere. Without a database every
 // lookup answers '' and the list simply shows no location.
-function createGeoLocator({ databasePath = '', logger = createLogger({ name: 'api' }), openReader } = {}) {
-  let readerPromise = null;
+function createGeoLocator({ databasePath = '', logger = createLogger({ name: 'api' }), openReader }: {
+  databasePath?: string;
+  logger?: GeoLogger;
+  openReader?: (path: string) => Promise<GeoReader>;
+} = {}): GeoLocator {
+  let readerPromise: Promise<GeoReader | null> | null = null;
 
-  function loadReader() {
+  function loadReader(): Promise<GeoReader | null> {
     if (!databasePath) return Promise.resolve(null);
-    readerPromise ||= (async () => {
+    readerPromise ||= (async (): Promise<GeoReader | null> => {
       if (!fs.existsSync(databasePath)) {
         logger.warn({ evt: LOG_EVENTS.GEOIP_UNAVAILABLE, databasePath, reason: 'missing' }, 'GeoIP database not found; device locations are disabled');
         return null;
       }
-      const open = openReader || ((path) => import('maxmind').then((maxmind) => maxmind.open(path)));
+      const open = openReader || ((path: string) => import('maxmind').then((maxmind) => maxmind.open(path) as Promise<GeoReader>));
       return open(databasePath);
-    })().catch((error) => {
+    })().catch((error: unknown) => {
       logger.error({ evt: LOG_EVENTS.GEOIP_UNAVAILABLE, databasePath, reason: 'open_failed', err: error }, 'failed to open the GeoIP database');
       return null;
     });
     return readerPromise;
   }
 
-  async function locate(ip) {
+  async function locate(ip: unknown): Promise<string> {
     const address = normalizeAddress(ip);
     if (!address) return '';
     const reader = await loadReader();

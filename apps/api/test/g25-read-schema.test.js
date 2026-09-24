@@ -5,7 +5,7 @@ import { test } from 'node:test';
 
 test('G25-A01 exact tuple state coexists with legacy read projections', () => {
   const source = fs.readFileSync(path.resolve(import.meta.dirname, '../src/migrations/20260718122000_add_message_read_cursors.cjs'), 'utf8');
-  const runner = fs.readFileSync(path.resolve(import.meta.dirname, '../src/lib/migrate.js'), 'utf8');
+  const runner = fs.readFileSync(path.resolve(import.meta.dirname, '../src/lib/migrate.ts'), 'utf8');
   assert.match(runner, /SET lock_timeout TO '\$\{LOCK_TIMEOUT_MS\}ms'/);
   assert.match(source, /last_read_message_created_at/);
   assert.match(source, /last_read_message_id/);

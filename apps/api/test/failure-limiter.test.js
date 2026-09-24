@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { createFailureLimiter } from '../src/lib/rate-limit.js';
+import { createFailureLimiter } from '../src/lib/rate-limit.ts';
 
 test('reserve counts the attempt before verification, so a parallel burst stops at the limit', () => {
   const limiter = createFailureLimiter({ limit: 3, windowMs: 60_000 });

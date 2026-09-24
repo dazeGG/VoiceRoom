@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { hashPassword, verifyPassword } from '../src/lib/password.js';
+import { hashPassword, verifyPassword } from '../src/lib/password.ts';
 
 test('hashPassword produces a self-describing scrypt string', async () => {
   const hash = await hashPassword('correct horse battery');

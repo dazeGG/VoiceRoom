@@ -4,8 +4,8 @@
 
 import type { Readable } from 'node:stream';
 import type { Logger } from 'pino';
-import { createAvatarKey, processAvatar } from '../../lib/avatar-processing.js';
-import { validateAvatarKey } from '../../lib/avatar-storage.js';
+import { createAvatarKey, processAvatar } from '../../lib/avatar-processing.ts';
+import { validateAvatarKey } from '../../lib/avatar-storage.ts';
 import { selfUser } from '../../lib/user-store.js';
 
 type Log = Pick<Logger, 'error'> | undefined;

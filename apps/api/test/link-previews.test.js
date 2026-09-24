@@ -6,12 +6,12 @@ import os from 'node:os';
 import path from 'node:path';
 import { Pool } from 'pg';
 
-import { runMigrations } from '../src/lib/migrate.js';
+import { runMigrations } from '../src/lib/migrate.ts';
 import { createRoomStore } from '../src/lib/room-store.js';
 import { createUserStore } from '../src/lib/user-store.js';
 import { createLinkPreviewRepository } from '../src/domains/link-previews/link-preview-repository.ts';
 import { FAILED_TTL_MS, createLinkPreviewService } from '../src/domains/link-previews/link-preview-service.ts';
-import { createLinkPreviewStorage, reconcileLinkPreviewImages } from '../src/lib/link-preview-storage.js';
+import { createLinkPreviewStorage, reconcileLinkPreviewImages } from '../src/lib/link-preview-storage.ts';
 import { createTestDatabase } from './db-harness.js';
 
 const SILENT = { log() {}, info() {}, warn() {}, error() {} };

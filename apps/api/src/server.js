@@ -26,40 +26,40 @@ import {
   readEnvBool,
   readDatabaseConfig,
   readUploadsDir
-} from './lib/config.js';
+} from './lib/config.ts';
 import {
   cleanName,
   cleanLiveKitUrl,
   accountPeerIdFor
 } from '@voice-room/shared/validation';
-import { createProofOfWork } from './lib/pow.js';
-import { LOG_EVENTS } from './lib/log-events.js';
+import { createProofOfWork } from './lib/pow.ts';
+import { LOG_EVENTS } from './lib/log-events.ts';
 import {
   createFastifyLoggerOptions,
   createLogger,
   hashIp,
   newRequestId,
   normalizeRequestId
-} from './lib/logger.js';
-import { getClientIp, createFailureLimiter, createRateLimiter } from './lib/rate-limit.js';
-import { reconcileAvatarStorage } from './lib/avatar-reconciliation.js';
-import { createAvatarStorage } from './lib/avatar-storage.js';
-import { createLinkPreviewStorage, reconcileLinkPreviewImages } from './lib/link-preview-storage.js';
+} from './lib/logger.ts';
+import { getClientIp, createFailureLimiter, createRateLimiter } from './lib/rate-limit.ts';
+import { reconcileAvatarStorage } from './lib/avatar-reconciliation.ts';
+import { createAvatarStorage } from './lib/avatar-storage.ts';
+import { createLinkPreviewStorage, reconcileLinkPreviewImages } from './lib/link-preview-storage.ts';
 import { createLinkPreviewRepository } from './domains/link-previews/link-preview-repository.ts';
 import { avatarColorForPeerId, createRoomStore } from './lib/room-store.js';
 import { createUserStore } from './lib/user-store.js';
 import { createFriendStore } from './lib/friend-store.js';
 import { createNotificationStore } from './lib/notification-store.js';
 import { createPushStore } from './lib/push-store.js';
-import { createPushService } from './lib/push-service.js';
-import { startApiListener } from './lib/listen.js';
-import { assertMigrationReady, runMigrations } from './lib/migrate.js';
+import { createPushService } from './lib/push-service.ts';
+import { startApiListener } from './lib/listen.ts';
+import { assertMigrationReady, runMigrations } from './lib/migrate.ts';
 import {
   observeMaintenance,
   recordCredentialRevokeCleanupFailure,
   recordHttpRequest,
   renderPrometheus
-} from './lib/metrics.js';
+} from './lib/metrics.ts';
 import { registerHttpKit } from './platform/http/http-kit.ts';
 import { registerOpsRoutes } from './domains/ops/ops.routes.ts';
 import { registerAdmissionRoutes } from './domains/admission/admission.routes.ts';

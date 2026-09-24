@@ -4,7 +4,7 @@
 // the worker's job (workers/message-delivery.js), so nothing here runs on a timer.
 
 import type { Logger } from 'pino';
-import { LOG_EVENTS } from '../../lib/log-events.js';
+import { LOG_EVENTS } from '../../lib/log-events.ts';
 import type { MessageProjection } from './message-projection.ts';
 
 const CHANNEL = 'voice_room_message_delivery';

@@ -2,6 +2,14 @@ import dns from 'node:dns';
 import http from 'node:http';
 import https from 'node:https';
 import net from 'node:net';
+import type { IncomingMessage } from 'node:http';
+
+type LookupAddress = { address: string; family: number };
+type LookupCallback = (error: NodeJS.ErrnoException | null, addresses?: LookupAddress[] | string, family?: number) => void;
+type Lookup = (hostname: string, options: Record<string, unknown>, callback: (error: NodeJS.ErrnoException | null, addresses: LookupAddress[]) => void) => void;
+export type FetchErrorCode = 'unsupported_url' | 'blocked_address' | 'too_large' | 'too_many_redirects' | 'bad_status' | 'unsupported_type' | 'timeout';
+export type FetchedResource = { url: string; contentType: string; body: Buffer };
+type ResourceOptions = { accept: string; acceptsType: (type: string) => boolean; maxBytes: number; truncate?: boolean };
 
 // Link previews make the server open URLs that chat users chose, so every
 // request stays on the public internet: only http(s) on the default ports, no
@@ -18,7 +26,7 @@ for (const [address, prefix] of [
   ['0.0.0.0', 8], ['10.0.0.0', 8], ['100.64.0.0', 10], ['127.0.0.0', 8], ['169.254.0.0', 16],
   ['172.16.0.0', 12], ['192.0.0.0', 24], ['192.0.2.0', 24], ['192.88.99.0', 24], ['192.168.0.0', 16],
   ['198.18.0.0', 15], ['198.51.100.0', 24], ['203.0.113.0', 24], ['224.0.0.0', 4], ['240.0.0.0', 4]
-]) {
+] as [string, number][]) {
   BLOCKED_SUBNETS.addSubnet(address, prefix, 'ipv4');
 }
 // IPv4-mapped IPv6 (::ffff:0:0/96) is not listed here: BlockList also applies
@@ -26,11 +34,11 @@ for (const [address, prefix] of [
 for (const [address, prefix] of [
   ['::', 128], ['::1', 128], ['64:ff9b::', 96], ['64:ff9b:1::', 48], ['100::', 64], ['2001::', 23],
   ['2001:db8::', 32], ['2002::', 16], ['fc00::', 7], ['fe80::', 10], ['fec0::', 10], ['ff00::', 8]
-]) {
+] as [string, number][]) {
   BLOCKED_SUBNETS.addSubnet(address, prefix, 'ipv6');
 }
 
-function isPublicAddress(address) {
+function isPublicAddress(address: unknown): boolean {
   const value = String(address || '');
   const family = net.isIP(value);
   if (!family) return false;
@@ -48,22 +56,29 @@ function isPublicAddress(address) {
   }
 }
 
-function fetchError(code, message) {
-  const error = new Error(message);
+function fetchError(code: FetchErrorCode, message: string): Error & { code: FetchErrorCode } {
+  const error = new Error(message) as Error & { code: FetchErrorCode };
   error.code = code;
   return error;
 }
 
 function createLinkPreviewFetcher({
-  lookup = dns.lookup,
+  lookup = dns.lookup as unknown as Lookup,
   isAllowedAddress = isPublicAddress,
-  isAllowedPort = (port) => port === 80 || port === 443,
+  isAllowedPort = (port: number) => port === 80 || port === 443,
   timeoutMs = 5000,
   maxRedirects = 3,
   userAgent = 'VoiceRoomLinkPreview/1.0 (+https://voiceroom.ru)'
+}: {
+  lookup?: Lookup;
+  isAllowedAddress?: (address: string) => boolean;
+  isAllowedPort?: (port: number) => boolean;
+  timeoutMs?: number;
+  maxRedirects?: number;
+  userAgent?: string;
 } = {}) {
-  function checkedUrl(value) {
-    let url;
+  function checkedUrl(value: string): URL {
+    let url: URL;
     try {
       url = new URL(value);
     } catch {
@@ -78,8 +93,8 @@ function createLinkPreviewFetcher({
     return url;
   }
 
-  function safeLookup(hostname, options, callback) {
-    const requested = options && typeof options === 'object' ? options : {};
+  function safeLookup(hostname: string, options: unknown, callback: LookupCallback): void {
+    const requested = (options && typeof options === 'object' ? options : {}) as { all?: boolean };
     lookup(hostname, { ...requested, all: true, verbatim: true }, (error, addresses) => {
       if (error) {
         callback(error);
@@ -93,17 +108,17 @@ function createLinkPreviewFetcher({
         return;
       }
       if (requested.all) callback(null, list);
-      else callback(null, list[0].address, list[0].family);
+      else callback(null, (list[0] as LookupAddress).address, (list[0] as LookupAddress).family);
     });
   }
 
-  function requestOnce(url, accept, signal) {
+  function requestOnce(url: URL, accept: string, signal: AbortSignal): Promise<IncomingMessage> {
     return new Promise((resolve, reject) => {
       const client = url.protocol === 'https:' ? https : http;
       const request = client.request(url, {
         method: 'GET',
         agent: false,
-        lookup: safeLookup,
+        lookup: safeLookup as never,
         signal,
         headers: { Accept: accept, 'Accept-Language': 'ru,en;q=0.8', 'User-Agent': userAgent }
       }, resolve);
@@ -112,15 +127,15 @@ function createLinkPreviewFetcher({
     });
   }
 
-  async function readBody(response, maxBytes, truncate) {
+  async function readBody(response: IncomingMessage, maxBytes: number, truncate: boolean): Promise<Buffer> {
     const declared = Number(response.headers['content-length']);
     if (!truncate && Number.isFinite(declared) && declared > maxBytes) {
       response.destroy();
       throw fetchError('too_large', 'The response is too large');
     }
-    const chunks = [];
+    const chunks: Buffer[] = [];
     let size = 0;
-    for await (const chunk of response) {
+    for await (const chunk of response as AsyncIterable<Buffer>) {
       const remaining = maxBytes - size;
       if (chunk.length > remaining) {
         if (!truncate) throw fetchError('too_large', 'The response is too large');
@@ -134,7 +149,7 @@ function createLinkPreviewFetcher({
     return Buffer.concat(chunks, size);
   }
 
-  async function fetchResource(rawUrl, { accept, acceptsType, maxBytes, truncate = false }) {
+  async function fetchResource(rawUrl: string, { accept, acceptsType, maxBytes, truncate = false }: ResourceOptions): Promise<FetchedResource> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
@@ -145,7 +160,7 @@ function createLinkPreviewFetcher({
         if (REDIRECT_STATUSES.has(status) && response.headers.location) {
           response.resume();
           if (redirects >= maxRedirects) throw fetchError('too_many_redirects', 'Too many redirects');
-          let next;
+          let next: string;
           try {
             next = new URL(response.headers.location, url).href;
           } catch {
@@ -175,18 +190,20 @@ function createLinkPreviewFetcher({
   }
 
   return {
-    fetchPage: (url) => fetchResource(url, {
+    fetchPage: (url: string) => fetchResource(url, {
       accept: 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.1',
       acceptsType: (type) => type.startsWith('text/html') || type.startsWith('application/xhtml+xml'),
       maxBytes: MAX_PAGE_BYTES,
       truncate: true
     }),
-    fetchImage: (url) => fetchResource(url, {
+    fetchImage: (url: string) => fetchResource(url, {
       accept: 'image/webp,image/png,image/jpeg,image/gif;q=0.8',
       acceptsType: (type) => /^image\/(jpeg|png|webp|gif)\b/.test(type),
       maxBytes: MAX_IMAGE_BYTES
     })
   };
 }
+
+export type LinkPreviewFetcher = ReturnType<typeof createLinkPreviewFetcher>;
 
 export { MAX_IMAGE_BYTES, MAX_PAGE_BYTES, createLinkPreviewFetcher, isPublicAddress };

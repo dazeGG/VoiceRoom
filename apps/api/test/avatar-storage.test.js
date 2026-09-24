@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { once } from 'node:events';
 
-import { createAvatarStorage, validateAvatarKey } from '../src/lib/avatar-storage.js';
+import { createAvatarStorage, validateAvatarKey } from '../src/lib/avatar-storage.ts';
 
 const USER_KEY = 'av_123e4567-e89b-12d3-a456-426614174000_deadbeef.webp';
 const ROOM_KEY = 'room_abcdefghij_0123abcd.webp';

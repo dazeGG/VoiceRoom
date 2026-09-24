@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 const { createApiApp, createApiServer } = await import('../src/server.js');
 const { withRosterPeer } = await import('./roster-harness.js');
 import { PUBLIC_CAPABILITY_KEYS } from '@voice-room/shared/capabilities';
-const { resetMetricsForTest } = await import('../src/lib/metrics.js');
+const { resetMetricsForTest } = await import('../src/lib/metrics.ts');
 
 function createFakeStore() {
   const rooms = new Map();

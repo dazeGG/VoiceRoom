@@ -4,7 +4,7 @@
 // credential that was already issued has been revoked.
 
 import type { Logger } from 'pino';
-import { LOG_EVENTS } from '../../lib/log-events.js';
+import { LOG_EVENTS } from '../../lib/log-events.ts';
 import { tokensMatch } from '../../platform/crypto/tokens-match.ts';
 import type { LiveKitConfig } from './livekit-config.ts';
 

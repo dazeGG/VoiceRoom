@@ -4,7 +4,7 @@ import path from 'node:path';
 import { Pool } from 'pg';
 import test from 'node:test';
 import { normalizeManifest, PUBLIC_CAPABILITY_KEYS } from '@voice-room/shared/capabilities';
-import { runMigrations } from '../src/lib/migrate.js';
+import { runMigrations } from '../src/lib/migrate.ts';
 import { createReadinessReport } from '../src/platform/readiness.ts';
 import { createRuntimeReadinessProvider } from '../src/platform/runtime-readiness.ts';
 import { createRuntimeReadinessRepository } from '../src/platform/runtime-readiness-repository.ts';
