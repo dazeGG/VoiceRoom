@@ -3,11 +3,14 @@ import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 
-function normalizePath(value) {
+type ImportRule = { id: string; sources: string[]; forbidden: string[]; message: string };
+type Violation = { ruleId: string; filePath: string; imported: string; message: string };
+
+function normalizePath(value: string): string {
   return value.split(path.sep).join("/");
 }
 
-function walkFiles(root, collected = []) {
+function walkFiles(root: string, collected: string[] = []): string[] {
   if (!fs.existsSync(root)) return collected;
   const stat = fs.statSync(root);
   if (stat.isFile()) {
@@ -21,11 +24,11 @@ function walkFiles(root, collected = []) {
   return collected;
 }
 
-function globToRegExp(glob) {
+function globToRegExp(glob: string): RegExp {
   const value = normalizePath(glob);
   let pattern = "";
   for (let index = 0; index < value.length; index += 1) {
-    const char = value[index];
+    const char = value[index] as string;
     if (char === "*" && value[index + 1] === "*") {
       pattern += ".*";
       index += 1;
@@ -35,7 +38,7 @@ function globToRegExp(glob) {
       const end = value.indexOf("}", index);
       if (end === -1) pattern += "\\{";
       else {
-        pattern += `(?:${value.slice(index + 1, end).split(",").map((part) => part.replace(/[.+^${}()|[\]\\]/g, "\\$&")).join("|")})`;
+        pattern += `(?:${value.slice(index + 1, end).split(",").map((part: string) => part.replace(/[.+^${}()|[\]\\]/g, "\\$&")).join("|")})`;
         index = end;
       }
     } else {
@@ -46,21 +49,21 @@ function globToRegExp(glob) {
   return new RegExp(`(?:^|.*/)${pattern}$`);
 }
 
-function extractImports(source) {
-  const imports = [];
+function extractImports(source: string): string[] {
+  const imports: string[] = [];
   const patterns = [
     /\brequire\(\s*['"]([^'"]+)['"]\s*\)/g,
     /\bimport\s+(?:[^'"]+\s+from\s+)?['"]([^'"]+)['"]/g,
     /\bexport\s+[^'"]+\s+from\s+['"]([^'"]+)['"]/g
   ];
   for (const pattern of patterns) {
-    for (const match of source.matchAll(pattern)) imports.push(match[1]);
+    for (const match of source.matchAll(pattern)) imports.push(match[1] as string);
   }
   return imports;
 }
 
-export function checkImportBoundaries({ config, files }) {
-  const violations = [];
+export function checkImportBoundaries({ config, files }: { config: { importRules?: ImportRule[] }; files?: string[] }): Violation[] {
+  const violations: Violation[] = [];
   const fileSet = files || walkFiles(".");
   for (const rule of config.importRules || []) {
     const sources = rule.sources.map(globToRegExp);
@@ -77,12 +80,12 @@ export function checkImportBoundaries({ config, files }) {
   return violations;
 }
 
-function parseArgs(argv) {
-  const args = { config: "config/import-boundaries.v1.json", files: [] };
+function parseArgs(argv: string[]): { config: string; files: string[] } {
+  const args: { config: string; files: string[] } = { config: "config/import-boundaries.v1.json", files: [] };
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
-    if (arg === "--config") args.config = argv[++index];
-    else args.files.push(arg);
+    if (arg === "--config") args.config = argv[++index] as string;
+    else args.files.push(arg as string);
   }
   return args;
 }

@@ -7,8 +7,8 @@ import test from 'node:test';
 
 async function loadScanners() {
   const [imports, sources] = await Promise.all([
-    import('../../../scripts/import-boundary.mjs'),
-    import('../../../scripts/check-api-sources.mjs')
+    import('../../../scripts/import-boundary.mts'),
+    import('../../../scripts/check-api-sources.mts')
   ]);
   return { checkImportBoundaries: imports.checkImportBoundaries, checkApiSources: sources.checkApiSources };
 }

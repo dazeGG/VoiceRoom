@@ -51,7 +51,7 @@ playwright-report/
 .claude/
 .omc/
 
-# Generated emoji artwork (see apps/web/scripts/build-emoji-assets.mjs)
+# Generated emoji artwork (see apps/web/scripts/build-emoji-assets.ts)
 apps/web/static/emoji/
 .graphify/.graphify_*
 .graphify/description-instructions/

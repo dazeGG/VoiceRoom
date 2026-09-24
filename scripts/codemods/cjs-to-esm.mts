@@ -1,10 +1,11 @@
 #!/usr/bin/env node
+// @ts-nocheck -- not type-checked yet; remove once the file passes scripts/tsconfig.json.
 // One-off codemod that turns the API's CommonJS modules into ES modules
 // (docs/ARCHITECTURE.md, "PR 0"). It edits source text by AST positions so
 // formatting and comments survive, and prints everything it could not convert
 // so a human finishes those by hand.
 //
-//   node scripts/codemods/cjs-to-esm.mjs [--dry-run] <files...>
+//   node scripts/codemods/cjs-to-esm.mts [--dry-run] <files...>
 //
 // Rules:
 // - top-level `const x = require('m')` / `const { a, b: c } = require('m')`

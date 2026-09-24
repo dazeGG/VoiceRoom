@@ -3,7 +3,10 @@
 import net from 'node:net';
 import { parseArgs } from 'node:util';
 
-export function createPartitionProxy(options = {}) {
+type PartitionMode = 'open' | 'partitioned';
+type ProxyOptions = { listenPort?: number | string; listenHost?: string; targetHost?: string; targetPort?: number | string; mode?: PartitionMode };
+
+export function createPartitionProxy(options: ProxyOptions = {}) {
   const listenPort = Number(options.listenPort ?? 17880);
   const listenHost = options.listenHost ?? '0.0.0.0';
   const targetHost = options.targetHost ?? '127.0.0.1';
@@ -41,17 +44,17 @@ export function createPartitionProxy(options = {}) {
         });
       }),
     close: () =>
-      new Promise((resolve, reject) => {
+      new Promise<void>((resolve, reject) => {
         server.close((error) => (error ? reject(error) : resolve()));
       }),
-    setMode(mode) {
+    setMode(mode: PartitionMode) {
       if (!['open', 'partitioned'].includes(mode)) throw new Error(`Unsupported partition mode: ${mode}`);
       state.mode = mode;
     }
   };
 }
 
-function readCliOptions() {
+function readCliOptions(): ProxyOptions {
   const { values } = parseArgs({
     options: {
       listen: { type: 'string', default: '17880' },
@@ -66,7 +69,8 @@ function readCliOptions() {
     listenHost: values['listen-host'],
     targetHost: values['target-host'],
     targetPort: values['target-port'],
-    mode: values.mode
+    // Not validated here: anything but 'partitioned' leaves the proxy open.
+    mode: values.mode as PartitionMode
   };
 }
 

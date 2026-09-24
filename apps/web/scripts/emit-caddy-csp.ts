@@ -9,20 +9,20 @@
 // placeholder, which Caddy fills in from the environment when it loads the
 // imported file.
 //
-// Usage: node emit-caddy-csp.mjs <dist/index.html> > csp.caddy
+// Usage: node emit-caddy-csp.ts <dist/index.html> > csp.caddy
 
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 const CONNECT_SRC = "'self' wss://{$LIVEKIT_DOMAIN} https://{$LIVEKIT_DOMAIN} stun: turn: turns:";
 
-export function readMetaPolicy(html) {
+export function readMetaPolicy(html: string) {
   const match = /<meta\s+http-equiv="content-security-policy"\s+content="([^"]+)"/i.exec(String(html || ''));
   if (!match) throw new Error('dist/index.html has no content-security-policy meta tag');
   return match[1];
 }
 
-export function buildHeaderPolicy(metaPolicy) {
+export function buildHeaderPolicy(metaPolicy: string) {
   const directives = new Map();
   for (const part of String(metaPolicy).split(';')) {
     const trimmed = part.trim();
@@ -40,15 +40,15 @@ export function buildHeaderPolicy(metaPolicy) {
   return Array.from(directives, ([name, value]) => `${name} ${value}`).join('; ');
 }
 
-export function renderCaddySnippet(policy) {
+export function renderCaddySnippet(policy: string) {
   if (policy.includes('"')) throw new Error('policy cannot contain a double quote');
-  return `# Generated at image build by apps/web/scripts/emit-caddy-csp.mjs — do not edit.\nContent-Security-Policy "${policy}"\n`;
+  return `# Generated at image build by apps/web/scripts/emit-caddy-csp.ts — do not edit.\nContent-Security-Policy "${policy}"\n`;
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === fs.realpathSync(process.argv[1])) {
   const file = process.argv[2];
   if (!file) {
-    process.stderr.write('usage: emit-caddy-csp.mjs <dist/index.html>\n');
+    process.stderr.write('usage: emit-caddy-csp.ts <dist/index.html>\n');
     process.exit(2);
   }
   process.stdout.write(renderCaddySnippet(buildHeaderPolicy(readMetaPolicy(fs.readFileSync(file, 'utf8')))));

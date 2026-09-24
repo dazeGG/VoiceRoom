@@ -329,7 +329,7 @@ test('development topology routes public signaling through the auth gate', () =>
 });
 
 test('G05-A03..A06 amended strict proof is green and fail-on-blocked exits zero', async () => {
-  const result = spawnSync(process.execPath, [path.join(ROOT, 'scripts/lkv/run-auth-gate-proof.mjs'), '--json', '--fail-on-blocked'], {
+  const result = spawnSync(process.execPath, [path.join(ROOT, 'scripts/lkv/run-auth-gate-proof.mts'), '--json', '--fail-on-blocked'], {
     cwd: ROOT,
     encoding: 'utf8'
   });

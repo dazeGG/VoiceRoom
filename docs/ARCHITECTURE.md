@@ -98,7 +98,7 @@ export function registerAdmissionRoutes(app: FastifyInstance, ctx: ApiContext): 
 
 ### PR sequence
 
-0. ES modules for the whole API (codemod `scripts/codemods/cjs-to-esm.mjs`).
+0. ES modules for the whole API (codemod `scripts/codemods/cjs-to-esm.mts`).
 1. Skeleton: `ApiContext`, http kit, TypeBox and Kysely wiring with codegen, ops routes (health, metrics, client logs, pow, desktop).
 2. LiveKit admission and the SFU side of server mute.
 3. Rooms and `/api/state`, including the server-mute HTTP handler.
@@ -112,7 +112,7 @@ export function registerAdmissionRoutes(app: FastifyInstance, ctx: ApiContext): 
 
 Done so far:
 
-- PR 0: ES modules (`scripts/codemods/cjs-to-esm.mjs`); applied migrations are `.cjs`.
+- PR 0: ES modules (`scripts/codemods/cjs-to-esm.mts`); applied migrations are `.cjs`.
 - PR 1: `app/context.ts` (`ApiContext`), `platform/http/http-kit.ts` (security headers, `no-store`, request metric and log line, `{ ok: false, error }` failures for every Fastify-native route), `platform/db/kysely.ts` with generated `platform/db/schema.ts` (`npm run db:types`, verified by `test/db-schema-types.test.ts`), and the ops group in `domains/ops/` (health, metrics, proof-of-work, desktop release, client logs).
 - PR 2: the admission group in `domains/admission/`: `admission.service.ts` (who gets a LiveKit JWT and gate credential; returns refusal reasons, revokes an issued credential when a later check fails), `admission.routes.ts` (`POST /api/livekit-token` on TypeBox, same error texts and codes as before), `livekit-admin.ts` (participant removal and the SFU microphone mute), `livekit-config.ts`, plus `platform/crypto/tokens-match.ts`. The moderation handler in `server.js` calls `admission.revokeForServerMute` until PR 3 moves it.
 - PR 3: the rooms group in `domains/rooms/`: `rooms.routes.ts` (create, rename, delete, status card, peer preview, `/api/state`, the account room list) over `rooms.service.ts` (room ids, quotas, owner check); `peer-moderation.routes.ts` over `peer-moderation.service.ts` (kick, server mute, ban, undo ban) and `peer-eviction.ts` (the teardown a kick or ban runs on each peer); `room-views.ts` (the peer and lobby-card shapes); `domains/admission/gate-principal.ts`. `platform/http/http-kit.ts` gained `optionalJsonBody` for routes whose legacy handler read a missing body as `{}`.
@@ -149,7 +149,8 @@ Done so far:
 - PR 10k (shared tests): `packages/shared/test` becomes `.ts` and every file passes strict tsc through `tsconfig.test.json` (Node types, added to `check`). Tests that feed deliberately malformed input say so with a cast to the parameter type.
 - PR 10k (web tests): `apps/web/test` becomes `.ts` with `tsconfig.test.json` (Node types) in `check`. 35 of the 67 files pass strict tsc; the other 32, mostly hand-built DOM, LiveKit and Vite fakes, start with `// @ts-nocheck` until they are typed.
 - PR 10k (API tests): `apps/api/test` and its harnesses become `.ts`; the API tsconfig already includes them, so `check` type-checks them strictly. 33 of the 149 files pass; the other 116, mostly hand-built store, pool and Fastify fakes, start with `// @ts-nocheck` until they are typed. The syntax check now covers only the `.cjs` migrations.
-- PR 10k (next): convert `scripts/` and decide the audio worklets.
+- PR 10k (scripts): the repository scripts become `.mts` (the root package is not `"type": "module"`, so `.mts` keeps them explicit ES modules as `.mjs` did) with `scripts/tsconfig.json` in the root `check`; 10 of 18 pass strict tsc and 8 start with `// @ts-nocheck`. The web build scripts become `.ts` and pass the web test config. CI, the Dockerfile, the LKV compose file, package scripts, tests and docs use the new paths.
+- What stays JavaScript, on purpose: the byte-pinned `.cjs` migrations; `scripts/geoip/fetch-dbip-city-lite.mjs`, which the dev cron and the prod crontab run by that path (renaming it needs both hosts updated in the same release); the AudioWorklet modules in `apps/web/static` (`audio-gate`, `desktop-audio-source`, `rnnoise` and the vendored `rnnoise.mjs`), which the browser loads by URL as served files, so TypeScript there would need a build step for them; and `apps/web/svelte.config.js`, the file name SvelteKit reads.
 - Typed before PR 0: `domains/admission/livekit-token-binding.mts`, `lib/image-signature.mts`, `platform/http/origin-guard.mts`.
 
 ## 5. Runtime state and scaling

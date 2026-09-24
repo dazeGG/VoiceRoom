@@ -5,7 +5,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { listReactionEmojis } from '@voice-room/shared/emoji';
-import { assetName, planEmojiAssets } from '../scripts/build-emoji-assets.mjs';
+import { assetName, planEmojiAssets } from '../scripts/build-emoji-assets.ts';
 
 const webRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (relative: string) => readFileSync(join(webRoot, relative), 'utf8');
@@ -77,7 +77,7 @@ test('reaction surfaces draw the artwork instead of leaving it to the platform f
 });
 
 test('the artwork ships the upstream licence, not the repackager\'s', () => {
-  const script = read('scripts/build-emoji-assets.mjs');
+  const script = read('scripts/build-emoji-assets.ts');
   const licence = read('scripts/emoji-artwork-LICENSE.txt');
 
   // The npm package carrying the files ships only the MIT notice for Twemoji's

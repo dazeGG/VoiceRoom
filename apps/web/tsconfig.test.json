@@ -12,6 +12,7 @@
     ".svelte-kit/non-ambient.d.ts",
     "src/**/*.ts",
     "src/**/*.svelte",
-    "test/**/*.ts"
+    "test/**/*.ts",
+    "scripts/**/*.ts"
   ]
 }

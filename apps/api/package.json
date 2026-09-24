@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node src/server.ts",
     "dev": "node --watch src/server.ts",
-    "check": "node ../../scripts/check-js-syntax.mjs src/migrations && tsc -p tsconfig.json",
+    "check": "node ../../scripts/check-js-syntax.mts src/migrations && tsc -p tsconfig.json",
     "test": "node --test --test-concurrency=1 test/*.test.ts",
     "test:g05": "node --test test/g05-livekit-boundary.test.ts",
     "db:migrate": "node src/scripts/migrate.ts up",

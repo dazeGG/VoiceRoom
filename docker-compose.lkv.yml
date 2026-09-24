@@ -12,7 +12,7 @@ services:
   partition-proxy:
     image: node:24-alpine
     working_dir: /work
-    command: ["node", "scripts/lkv/partition-proxy.mjs", "--listen", "17880", "--target-host", "livekit", "--target-port", "7880"]
+    command: ["node", "scripts/lkv/partition-proxy.mts", "--listen", "17880", "--target-host", "livekit", "--target-port", "7880"]
     volumes:
       - ./:/work:ro
     ports:
@@ -50,7 +50,7 @@ services:
       context: .
       target: api
     working_dir: /work
-    command: ["node", "scripts/lkv/run-auth-gate-physical-replay.mjs", "--json", "--fail-on-blocked"]
+    command: ["node", "scripts/lkv/run-auth-gate-physical-replay.mts", "--json", "--fail-on-blocked"]
     environment:
       DATABASE_URL: "postgres://voice_room:voice_room@postgres:5432/voice_room"
       LIVEKIT_GATE_SECRET: "dev-g05-livekit-gate-secret-32-bytes-minimum"

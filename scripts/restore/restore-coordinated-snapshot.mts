@@ -1,3 +1,4 @@
+// @ts-nocheck -- not type-checked yet; remove once the file passes scripts/tsconfig.json.
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';

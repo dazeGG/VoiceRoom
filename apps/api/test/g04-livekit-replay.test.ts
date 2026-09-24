@@ -11,7 +11,7 @@ test('G04-A01 replay harness pins LiveKit v1.13.2 and records same-token baselin
   assert.match(compose, /livekit\/livekit-server:v1\.13\.2/);
   assert.match(compose, /partition-proxy/);
 
-  const { LIVEKIT_REPLAY_IMAGE, runReplayScenario } = await import('../../../scripts/lkv/run-replay-scenario.mjs');
+  const { LIVEKIT_REPLAY_IMAGE, runReplayScenario } = await import('../../../scripts/lkv/run-replay-scenario.mts');
   const report = runReplayScenario();
 
   assert.equal(LIVEKIT_REPLAY_IMAGE, 'livekit/livekit-server:v1.13.2');
@@ -30,10 +30,10 @@ test('G04-A01 replay harness pins LiveKit v1.13.2 and records same-token baselin
 });
 
 test('G04-A02 replay harness covers restart, partition and clock skew fixtures', async () => {
-  const { buildReplayTopologyCommand } = await import('../../../scripts/lkv/start-replay-topology.mjs');
-  const { createPartitionProxy } = await import('../../../scripts/lkv/partition-proxy.mjs');
-  const { collectReplayEvidence } = await import('../../../scripts/lkv/collect-replay-evidence.mjs');
-  const { runReplayScenario } = await import('../../../scripts/lkv/run-replay-scenario.mjs');
+  const { buildReplayTopologyCommand } = await import('../../../scripts/lkv/start-replay-topology.mts');
+  const { createPartitionProxy } = await import('../../../scripts/lkv/partition-proxy.mts');
+  const { collectReplayEvidence } = await import('../../../scripts/lkv/collect-replay-evidence.mts');
+  const { runReplayScenario } = await import('../../../scripts/lkv/run-replay-scenario.mts');
 
   const command = buildReplayTopologyCommand({ detach: true });
   assert.deepEqual(command.args, ['compose', '-f', 'docker-compose.lkv.yml', 'up', '-d']);
@@ -57,7 +57,7 @@ test('G04-A02 replay harness covers restart, partition and clock skew fixtures',
 });
 
 test('G04 replay scenario CLI emits deterministic JSON', () => {
-  const result = spawnSync(process.execPath, ['scripts/lkv/run-replay-scenario.mjs', '--json'], {
+  const result = spawnSync(process.execPath, ['scripts/lkv/run-replay-scenario.mts', '--json'], {
     cwd: repositoryRoot,
     encoding: 'utf8'
   });

@@ -1,3 +1,4 @@
+// @ts-nocheck -- not type-checked yet; remove once the file passes scripts/tsconfig.json.
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
