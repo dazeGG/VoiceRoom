@@ -1,7 +1,7 @@
 // How people appear to each other outside a room: the actor on a
 // notification, and whether an account can still be written to or invited.
 
-import { publicUser } from '../../lib/user-store.js';
+import { publicUser } from '../../lib/user-store.ts';
 
 export interface SocialUser {
   id: string;

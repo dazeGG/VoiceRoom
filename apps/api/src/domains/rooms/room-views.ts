@@ -2,7 +2,7 @@
 // these shapes (apps/web/src/lib/api/rooms.ts), and the realtime runtime sends
 // the same objects over the socket, so a field changes here or nowhere.
 
-import { avatarColorForPeerId } from '../../lib/room-store.js';
+import { avatarColorForPeerId } from '../../lib/room-store.ts';
 import { failure, type Failure } from '../../platform/http/http-kit.ts';
 
 /** A peer as the in-memory presence roster holds it. */

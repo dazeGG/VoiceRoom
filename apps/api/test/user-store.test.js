@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 
-import { createUserStore, publicUser } from '../src/lib/user-store.js';
+import { createUserStore, publicUser } from '../src/lib/user-store.ts';
 import { AVATAR_COLOR_KEYS } from '@voice-room/shared/validation';
 import { runMigrations } from '../src/lib/migrate.ts';
 import { createTestDatabase } from './db-harness.js';

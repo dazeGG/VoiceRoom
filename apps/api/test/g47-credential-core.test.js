@@ -4,7 +4,7 @@ import path from 'node:path';
 import { Pool } from 'pg';
 import { test } from 'node:test';
 import { createCredentialBoundaryService } from '../src/domains/admission/credential-boundary-service.ts';
-import { createRoomStore } from '../src/lib/room-store.js';
+import { createRoomStore } from '../src/lib/room-store.ts';
 import { runMigrations } from '../src/lib/migrate.ts';
 import { createTestDatabase } from './db-harness.js';
 

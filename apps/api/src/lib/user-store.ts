@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import type pg from 'pg';
 import { createDbPool, transaction } from './db.ts';
 import { hashPassword, verifyPassword } from './password.ts';
 import { AVATAR_COLOR_KEYS, cleanAvatarColorKey, cleanPresenceStatus } from '@voice-room/shared/validation';
@@ -18,6 +19,12 @@ import {
   normalizeReleaseVersion
 } from '@voice-room/shared/account-security';
 
+type Row = Record<string, any>;
+type Queryable = Pick<pg.Pool, 'query'> | pg.PoolClient;
+type UserStoreLogger = { warn(...args: unknown[]): void };
+export type StoredUser = NonNullable<ReturnType<typeof mapUser>>;
+export type PublicUser = NonNullable<ReturnType<typeof publicUser>>;
+
 const DEFAULT_SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const SESSION_TOUCH_INTERVAL_MS = 60 * 60 * 1000;
 const USER_AGENT_MAX_LENGTH = 512;
@@ -28,28 +35,28 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{
 // for the whole window after its last sign-in.
 const LOGIN_EVENT_RETENTION_MS = 90 * 24 * 60 * 60 * 1000;
 
-function toDate(ms) {
+function toDate(ms: unknown): Date {
   const next = Number(ms);
   return new Date(Number.isFinite(next) && next >= 0 ? next : Date.now());
 }
 
-function toMillis(value) {
+function toMillis(value: unknown): number {
   if (value instanceof Date) return value.getTime();
-  const parsed = Date.parse(value);
+  const parsed = Date.parse(value as string);
   return Number.isFinite(parsed) ? parsed : Date.now();
 }
 
 // Per-account markers kept in `users.metadata` as epoch milliseconds.
-function metadataMillis(metadata, key) {
-  const value = Number(metadata && typeof metadata === 'object' ? metadata[key] : NaN);
+function metadataMillis(metadata: unknown, key: string): number | null {
+  const value = Number(metadata && typeof metadata === 'object' ? (metadata as Record<string, unknown>)[key] : NaN);
   return Number.isSafeInteger(value) && value > 0 ? value : null;
 }
 
-function randomAvatarColorKey() {
-  return AVATAR_COLOR_KEYS[crypto.randomInt(AVATAR_COLOR_KEYS.length)];
+function randomAvatarColorKey(): string {
+  return AVATAR_COLOR_KEYS[crypto.randomInt(AVATAR_COLOR_KEYS.length)] as string;
 }
 
-function mapUser(row) {
+function mapUser(row: Row | null | undefined) {
   if (!row) return null;
   const presenceStatus = cleanPresenceStatus(row.presence_status) || (row.dnd ? 'dnd' : 'online');
   return {
@@ -71,7 +78,7 @@ function mapUser(row) {
 }
 
 // What we ever send back to a client: never the password hash.
-function publicUser(user) {
+function publicUser(user: Partial<StoredUser> | null | undefined) {
   if (!user) return null;
   const presenceStatus = cleanPresenceStatus(user.presenceStatus) || (user.doNotDisturb ? 'dnd' : 'online');
   return {
@@ -90,9 +97,9 @@ function publicUser(user) {
 
 // The signed-in account's own view: the public shape plus facts that must never
 // reach other users (DM peers, profile broadcasts, message authors).
-function selfUser(user) {
+function selfUser(user: Partial<StoredUser> | null | undefined) {
   const base = publicUser(user);
-  if (!base) return null;
+  if (!base || !user) return null;
   return {
     ...base,
     hasUsedDesktopApp: Boolean(user.desktopAppSeenAt),
@@ -100,15 +107,15 @@ function selfUser(user) {
   };
 }
 
-function createSessionToken() {
+function createSessionToken(): string {
   return crypto.randomBytes(32).toString('base64url');
 }
 
-function hashSessionToken(token) {
+function hashSessionToken(token: unknown): string {
   return crypto.createHash('sha256').update(String(token)).digest('base64url');
 }
 
-function createRecoveryCode() {
+function createRecoveryCode(): string {
   let code = '';
   for (let index = 0; index < RECOVERY_CODE_LENGTH; index += 1) {
     code += RECOVERY_CODE_ALPHABET[crypto.randomInt(RECOVERY_CODE_ALPHABET.length)];
@@ -117,20 +124,20 @@ function createRecoveryCode() {
 }
 
 // Bound to the account so the same code on two accounts never shares a hash.
-function hashRecoveryCode(userId, code) {
+function hashRecoveryCode(userId: string, code: string): string {
   return crypto.createHash('sha256').update(`${userId}:${code}`).digest('hex');
 }
 
-function cleanUserAgent(value) {
+function cleanUserAgent(value: unknown): string {
   return typeof value === 'string' ? value.slice(0, USER_AGENT_MAX_LENGTH) : '';
 }
 
-function cleanLocationLabel(value) {
+function cleanLocationLabel(value: unknown): string {
   return typeof value === 'string' ? value.trim().slice(0, LOCATION_LABEL_MAX_LENGTH) : '';
 }
 
 // What a device is shown by; the session it opened stays server-side.
-function mapLoginAlert(row) {
+function mapLoginAlert(row: Row) {
   return {
     id: row.id,
     kind: row.kind,
@@ -141,16 +148,21 @@ function mapLoginAlert(row) {
   };
 }
 
-function createUserStore({ databaseUrl, logger = createLogger({ name: 'api' }), pool, sessionTtlMs = DEFAULT_SESSION_TTL_MS } = {}) {
+function createUserStore({ databaseUrl, logger = createLogger({ name: 'api' }), pool, sessionTtlMs = DEFAULT_SESSION_TTL_MS }: {
+  databaseUrl?: string;
+  logger?: UserStoreLogger;
+  pool?: pg.Pool | null;
+  sessionTtlMs?: number;
+} = {}) {
   let activePool = pool || null;
-  function getPool() {
+  function getPool(): pg.Pool {
     if (!activePool) {
       activePool = createDbPool({ databaseUrl, logger });
     }
     return activePool;
   }
 
-  async function createUser({ login, avatarColorKey = '', displayName = '', password, now = Date.now() }) {
+  async function createUser({ login, avatarColorKey = '', displayName = '', password, now = Date.now() }: { login: string; avatarColorKey?: string; displayName?: string; password: string; now?: number }) {
     if (!login) throw new Error('Login is required');
     const passwordHash = await hashPassword(password);
     const id = crypto.randomUUID();
@@ -167,19 +179,19 @@ function createUserStore({ databaseUrl, logger = createLogger({ name: 'api' }), 
       );
       return { status: 'created', user: mapUser(result.rows[0]) };
     } catch (error) {
-      if (error && error.code === UNIQUE_VIOLATION) {
+      if (error && (error as { code?: unknown }).code === UNIQUE_VIOLATION) {
         return { status: 'login_taken', user: null };
       }
       throw error;
     }
   }
 
-  async function getUserByLogin(login) {
+  async function getUserByLogin(login: string) {
     const result = await getPool().query(`SELECT * FROM users WHERE login = $1`, [login]);
     return mapUser(result.rows[0]);
   }
 
-  async function getUserById(id) {
+  async function getUserById(id: string) {
     const result = await getPool().query(`SELECT * FROM users WHERE id = $1`, [id]);
     return mapUser(result.rows[0]);
   }
@@ -187,7 +199,7 @@ function createUserStore({ databaseUrl, logger = createLogger({ name: 'api' }), 
   // Rename: the display name is the only mutable identity field. An empty value
   // is allowed (the room then falls back to the login). Returns the updated
   // public-shaped user, or null when the account no longer exists.
-  async function updateDisplayName({ userId, displayName = '', now = Date.now() }) {
+  async function updateDisplayName({ userId, displayName = '', now = Date.now() }: { userId: string; displayName?: string; now?: number }) {
     const result = await getPool().query(
       `UPDATE users SET display_name = $2, updated_at = $3 WHERE id = $1 RETURNING *`,
       [userId, displayName, toDate(now)]
@@ -195,7 +207,7 @@ function createUserStore({ databaseUrl, logger = createLogger({ name: 'api' }), 
     return mapUser(result.rows[0]);
   }
 
-  async function updateAvatar({ userId, avatarKey = null, avatarAccent = null, now = Date.now() }) {
+  async function updateAvatar({ userId, avatarKey = null, avatarAccent = null, now = Date.now() }: { userId: string; avatarKey?: string | null; avatarAccent?: string | null; now?: number }) {
     const result = await getPool().query(
       `UPDATE users
        SET avatar_key = $2, avatar_accent = $3, updated_at = $4
@@ -206,7 +218,7 @@ function createUserStore({ databaseUrl, logger = createLogger({ name: 'api' }), 
     return mapUser(result.rows[0]);
   }
 
-  async function swapAvatar({ userId, avatarKey = null, avatarAccent = null, now = Date.now() }) {
+  async function swapAvatar({ userId, avatarKey = null, avatarAccent = null, now = Date.now() }: { userId: string; avatarKey?: string | null; avatarAccent?: string | null; now?: number }) {
     return transaction(getPool(), async (client) => {
       const current = await client.query(
         `SELECT avatar_key FROM users WHERE id = $1 FOR UPDATE`,
@@ -227,7 +239,7 @@ function createUserStore({ databaseUrl, logger = createLogger({ name: 'api' }), 
     });
   }
 
-  async function listAvatarKeys() {
+  async function listAvatarKeys(): Promise<string[]> {
     // An account waiting to be deleted keeps its avatar aside for a restore, so
     // avatar reconciliation must not treat that file as unused.
     const result = await getPool().query(
@@ -242,7 +254,7 @@ function createUserStore({ databaseUrl, logger = createLogger({ name: 'api' }), 
 
   // Every way of replacing a password ends the same: the old credential stops
   // working everywhere, so all sessions and push subscriptions go with it.
-  async function replacePasswordInTransaction(client, { userId, newPassword, now }) {
+  async function replacePasswordInTransaction(client: Queryable, { userId, newPassword, now }: { userId: string; newPassword: string; now: number }): Promise<void> {
     const passwordHash = await hashPassword(newPassword);
     await client.query(
       `UPDATE users SET password_hash = $2, updated_at = $3 WHERE id = $1`,
@@ -255,7 +267,7 @@ function createUserStore({ databaseUrl, logger = createLogger({ name: 'api' }), 
   // Password change always re-verifies the current password first so a leaked
   // session alone can't rotate the credential. Status mirrors the createUser
   // shape so the route layer can branch without inspecting errors.
-  async function changePassword({ userId, currentPassword, newPassword, now = Date.now() }) {
+  async function changePassword({ userId, currentPassword, newPassword, now = Date.now() }: { userId: string; currentPassword: string; newPassword: string; now?: number }) {
     return transaction(getPool(), async (client) => {
       const userResult = await client.query(`SELECT * FROM users WHERE id = $1 FOR UPDATE`, [userId]);
       const user = mapUser(userResult.rows[0]);
@@ -269,7 +281,7 @@ function createUserStore({ databaseUrl, logger = createLogger({ name: 'api' }), 
     });
   }
 
-  async function verifyCredentials(login, password) {
+  async function verifyCredentials(login: string, password: string) {
     const user = await getUserByLogin(login);
     if (!user) {
       // Spend a comparable amount of time so a missing login isn't observably
@@ -287,7 +299,7 @@ function createUserStore({ databaseUrl, logger = createLogger({ name: 'api' }), 
     token = createSessionToken(),
     userAgent = '',
     locationLabel = ''
-  }) {
+  }: { userId: string; now?: number; token?: string; userAgent?: string; locationLabel?: string }) {
     const expiresAt = now + sessionTtlMs;
     const tokenHash = hashSessionToken(token);
     const result = await getPool().query(
@@ -310,7 +322,7 @@ function createUserStore({ databaseUrl, logger = createLogger({ name: 'api' }), 
 
   // `userAgent` and `resolveLocation` only feed the hourly touch, so a request
   // never waits on a location lookup and an unchanged session is not rewritten.
-  async function getSessionUser(token, now = Date.now(), { userAgent, resolveLocation } = {}) {
+  async function getSessionUser(token: unknown, now: number = Date.now(), { userAgent, resolveLocation }: { userAgent?: string; resolveLocation?: () => unknown } = {}) {
     if (typeof token !== 'string' || !token) return null;
     const tokenHash = hashSessionToken(token);
     const result = await getPool().query(
@@ -343,7 +355,7 @@ function createUserStore({ databaseUrl, logger = createLogger({ name: 'api' }), 
   // Best-effort sliding touch: extends the server-side TTL and refreshes what
   // the devices list shows. An empty location keeps the previous label, so a
   // missing GeoIP database does not erase what an earlier lookup found.
-  async function touchSession({ tokenHash, now, userAgent, resolveLocation }) {
+  async function touchSession({ tokenHash, now, userAgent, resolveLocation }: { tokenHash: string; now: number; userAgent?: string; resolveLocation?: () => unknown }): Promise<void> {
     let locationLabel = '';
     if (typeof resolveLocation === 'function') {
       try {
@@ -385,18 +397,18 @@ function createUserStore({ databaseUrl, logger = createLogger({ name: 'api' }), 
     }
   }
 
-  async function deleteSession(token) {
+  async function deleteSession(token: unknown): Promise<boolean> {
     if (typeof token !== 'string' || !token) return false;
     const result = await getPool().query(`DELETE FROM sessions WHERE id = $1`, [hashSessionToken(token)]);
-    return result.rowCount > 0;
+    return result.rowCount! > 0;
   }
 
-  async function pruneSessions(now = Date.now()) {
+  async function pruneSessions(now: number = Date.now()) {
     const result = await getPool().query(`DELETE FROM sessions WHERE expires_at <= $1`, [toDate(now)]);
     return result.rowCount;
   }
 
-  async function listSessions({ userId, currentTokenHash = '', now = Date.now() }) {
+  async function listSessions({ userId, currentTokenHash = '', now = Date.now() }: { userId: string; currentTokenHash?: string; now?: number }) {
     const result = await getPool().query(
       `SELECT id, public_id, user_agent, location_label, last_seen_at
        FROM sessions
@@ -415,7 +427,7 @@ function createUserStore({ databaseUrl, logger = createLogger({ name: 'api' }), 
 
   // Returns the token hash so the caller can close whatever that session still
   // holds open (sockets, voice); the hash itself never reaches a client.
-  async function revokeSession({ userId, publicId }) {
+  async function revokeSession({ userId, publicId }: { userId: string; publicId: unknown }) {
     if (typeof publicId !== 'string' || !UUID_PATTERN.test(publicId)) return { status: 'not_found', tokenHash: null };
     const result = await getPool().query(
       `DELETE FROM sessions WHERE user_id = $1 AND public_id = $2 RETURNING id`,
@@ -426,7 +438,7 @@ function createUserStore({ databaseUrl, logger = createLogger({ name: 'api' }), 
       : { status: 'not_found', tokenHash: null };
   }
 
-  async function revokeOtherSessions({ userId, keepTokenHash }) {
+  async function revokeOtherSessions({ userId, keepTokenHash }: { userId: string; keepTokenHash: unknown }): Promise<{ tokenHashes: string[] }> {
     const result = await getPool().query(
       `DELETE FROM sessions WHERE user_id = $1 AND id <> $2 RETURNING id`,
       [userId, String(keepTokenHash || '')]
@@ -436,7 +448,7 @@ function createUserStore({ databaseUrl, logger = createLogger({ name: 'api' }), 
 
   // Generating a set proves the password again, like a password change, so a
   // stolen session cannot mint itself a permanent way back into the account.
-  async function generateRecoveryCodes({ userId, currentPassword, now = Date.now() }) {
+  async function generateRecoveryCodes({ userId, currentPassword, now = Date.now() }: { userId: string; currentPassword: string; now?: number }) {
     return transaction(getPool(), async (client) => {
       const userResult = await client.query(`SELECT * FROM users WHERE id = $1 FOR UPDATE`, [userId]);
       const user = mapUser(userResult.rows[0]);
@@ -454,7 +466,7 @@ function createUserStore({ databaseUrl, logger = createLogger({ name: 'api' }), 
     });
   }
 
-  async function getRecoveryCodesStatus(userId) {
+  async function getRecoveryCodesStatus(userId: string) {
     const result = await getPool().query(
       `SELECT count(*) FILTER (WHERE used_at IS NULL)::int AS remaining, max(created_at) AS generated_at
        FROM account_recovery_codes
@@ -470,7 +482,7 @@ function createUserStore({ databaseUrl, logger = createLogger({ name: 'api' }), 
 
   // Both failure paths (unknown login, wrong or spent code) return before the
   // password hash is computed, so neither is observably slower than the other.
-  async function recoverWithCode({ login, code, newPassword, now = Date.now() }) {
+  async function recoverWithCode({ login, code, newPassword, now = Date.now() }: { login: string; code: unknown; newPassword: string; now?: number }) {
     const normalizedCode = normalizeRecoveryCode(code);
     if (!login || !normalizedCode) return { status: 'invalid', user: null, remaining: 0 };
     return transaction(getPool(), async (client) => {
@@ -499,7 +511,7 @@ function createUserStore({ databaseUrl, logger = createLogger({ name: 'api' }), 
 
   // Per-account state of the nudges the lobby shows: the last "what's new"
   // announcement seen and how long the recovery codes reminder stays hidden.
-  async function getAccountNotices(userId) {
+  async function getAccountNotices(userId: string) {
     const result = await getPool().query(
       `SELECT metadata->>'whatsNewSeen' AS whats_new_seen,
               metadata->'recoveryCodesReminderSnoozedUntil' AS reminder_snoozed_until
@@ -517,7 +529,7 @@ function createUserStore({ databaseUrl, logger = createLogger({ name: 'api' }), 
 
   // Only the current announcement can be recorded, so a stale client cannot
   // pin an account to an older release.
-  async function markWhatsNewSeen({ userId, now = Date.now() }) {
+  async function markWhatsNewSeen({ userId, now = Date.now() }: { userId: string; now?: number }) {
     const result = await getPool().query(
       `UPDATE users
        SET metadata = jsonb_set(metadata, '{whatsNewSeen}', to_jsonb($2::text), true),
@@ -532,7 +544,7 @@ function createUserStore({ databaseUrl, logger = createLogger({ name: 'api' }), 
 
   // The one-time post-registration app prompt: the first time it is shown or
   // dismissed wins, so repeated calls from several tabs keep that moment.
-  async function markAppPromptSeen({ userId, now = Date.now() }) {
+  async function markAppPromptSeen({ userId, now = Date.now() }: { userId: string; now?: number }) {
     const result = await getPool().query(
       `UPDATE users
        SET metadata = CASE
@@ -549,7 +561,7 @@ function createUserStore({ databaseUrl, logger = createLogger({ name: 'api' }), 
       : { status: 'not_found', appPromptSeenAt: null };
   }
 
-  async function snoozeRecoveryCodesReminder({ userId, now = Date.now() }) {
+  async function snoozeRecoveryCodesReminder({ userId, now = Date.now() }: { userId: string; now?: number }) {
     const snoozedUntil = now + RECOVERY_CODES_REMINDER_SNOOZE_MS;
     const result = await getPool().query(
       `UPDATE users
@@ -575,10 +587,10 @@ function createUserStore({ databaseUrl, logger = createLogger({ name: 'api' }), 
     userAgent = '',
     locationLabel = '',
     now = Date.now()
-  }) {
+  }: { userId: string; sessionPublicId?: string | null; kind?: string; userAgent?: string; locationLabel?: string; now?: number }) {
     const device = describeUserAgent(userAgent);
     const location = cleanLocationLabel(locationLabel);
-    const sameDevice = (entry) => entry.client === device.client && entry.os === device.os && entry.location === location;
+    const sameDevice = (entry: { client: unknown; os: unknown; location: unknown }) => entry.client === device.client && entry.os === device.os && entry.location === location;
     return transaction(getPool(), async (db) => {
       await db.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`voice-room:login-events:${userId}`]);
       let alert = false;
@@ -607,10 +619,10 @@ function createUserStore({ databaseUrl, logger = createLogger({ name: 'api' }), 
         }));
         // Only an account that never signed in sets a baseline. Judging by the
         // window alone would let any sign-in after a month away pass quietly.
-        const signedInBefore = history.rowCount > 0 || (await db.query(
+        const signedInBefore = history.rowCount! > 0 || (await db.query(
           'SELECT 1 FROM account_login_events WHERE user_id = $1 LIMIT 1',
           [userId]
-        )).rowCount > 0;
+        )).rowCount! > 0;
         const baseline = !signedInBefore && sessions.rowCount === 0;
         alert = !baseline && !vouchedByHistory && !vouchedBySession;
       }
@@ -625,7 +637,7 @@ function createUserStore({ databaseUrl, logger = createLogger({ name: 'api' }), 
   }
 
   // Unanswered questions about sign-ins, except the one this very session made.
-  async function listPendingLoginAlerts({ userId, excludeSessionPublicId = null, now = Date.now() }) {
+  async function listPendingLoginAlerts({ userId, excludeSessionPublicId = null, now = Date.now() }: { userId: string; excludeSessionPublicId?: string | null; now?: number }) {
     const result = await getPool().query(
       `SELECT *
        FROM account_login_events
@@ -643,8 +655,14 @@ function createUserStore({ databaseUrl, logger = createLogger({ name: 'api' }), 
 
   // "Это не я" ends the session that sign-in opened in the same transaction and
   // hands back its token hash so its sockets and voice can be closed too.
-  async function resolveLoginAlert({ userId, alertId, resolution, currentSessionPublicId = null, now = Date.now() }) {
-    if (!UUID_PATTERN.test(String(alertId || '')) || !['confirmed', 'denied'].includes(resolution)) {
+  async function resolveLoginAlert({ userId, alertId, resolution, currentSessionPublicId = null, now = Date.now() }: {
+    userId: string;
+    alertId: unknown;
+    resolution: unknown;
+    currentSessionPublicId?: string | null;
+    now?: number;
+  }) {
+    if (!UUID_PATTERN.test(String(alertId || '')) || !(['confirmed', 'denied'] as unknown[]).includes(resolution)) {
       return { status: 'not_found', revokedTokenHash: null };
     }
     return transaction(getPool(), async (db) => {
@@ -671,7 +689,7 @@ function createUserStore({ databaseUrl, logger = createLogger({ name: 'api' }), 
     });
   }
 
-  async function pruneLoginEvents(now = Date.now()) {
+  async function pruneLoginEvents(now: number = Date.now()) {
     const result = await getPool().query(
       `DELETE FROM account_login_events WHERE created_at <= $1`,
       [toDate(now - LOGIN_EVENT_RETENTION_MS)]
@@ -679,7 +697,7 @@ function createUserStore({ databaseUrl, logger = createLogger({ name: 'api' }), 
     return result.rowCount;
   }
 
-  async function close() {
+  async function close(): Promise<void> {
     if (activePool) {
       await activePool.end();
     }
@@ -716,6 +734,8 @@ function createUserStore({ databaseUrl, logger = createLogger({ name: 'api' }), 
     verifyCredentials
   };
 }
+
+export type UserStore = ReturnType<typeof createUserStore>;
 
 export {
   createUserStore,

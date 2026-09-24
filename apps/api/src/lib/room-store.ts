@@ -1,40 +1,63 @@
 import crypto from 'node:crypto';
+import type pg from 'pg';
 import { createDbPool, transaction } from './db.ts';
 import { createActiveBanService } from '../domains/moderation/active-ban-service.ts';
+import type { ActiveBanService } from '../domains/moderation/active-ban-service.ts';
 import { AVATAR_COLOR_KEYS, cleanAvatarColorKey } from '@voice-room/shared/validation';
 import { normalizeLinkPreview } from '@voice-room/shared/link-preview';
 import { createLogger } from './logger.ts';
+
+type Row = Record<string, any>;
+type Queryable = Pick<pg.Pool, 'query'> | pg.PoolClient;
+export type GatePrincipal = { principalType: string; principalId: string };
+export type StoredRoom = NonNullable<ReturnType<typeof mapRoom>>;
+export type StoredRoomMessage = NonNullable<ReturnType<typeof mapMessage>>;
+export type RoomRelationship = 'owner' | 'bookmarked' | 'member' | '';
+type UnitOfWorkHooks = {
+  beforeUnitOfWork?: (client: pg.PoolClient) => Promise<{ replay?: boolean; message?: Row } | null | undefined>;
+  unitOfWork?: (client: pg.PoolClient, message: StoredRoomMessage | null) => Promise<unknown>;
+};
+export type AppendRoomMessageInput = UnitOfWorkHooks & {
+  id?: unknown;
+  createdAt?: unknown;
+  peerId?: unknown;
+  name?: unknown;
+  text?: unknown;
+  authorUserId?: unknown;
+  replyToMessageId?: unknown;
+  content?: unknown;
+};
 
 // Room history is never expired or trimmed: a message leaves only when its
 // author or the room owner deletes it, or when its room is deleted.
 const DEFAULT_LIST_LIMIT = 500;
 
-function createRowId() {
+function createRowId(): string {
   return crypto.randomUUID?.() || crypto.randomBytes(16).toString('hex');
 }
 
-function createRoomId() {
+function createRoomId(): string {
   const alphabet = 'abcdefghijkmnpqrstuvwxyz23456789';
   const bytes = crypto.randomBytes(10);
   return Array.from(bytes, (byte) => alphabet[byte % alphabet.length]).join('');
 }
 
-function normalizePositiveInt(value, fallback) {
+function normalizePositiveInt(value: unknown, fallback: number): number {
   const next = Number(value);
   return Number.isFinite(next) && next >= 0 ? next : fallback;
 }
 
-function toDate(ms) {
+function toDate(ms: unknown): Date {
   return new Date(normalizePositiveInt(ms, Date.now()));
 }
 
-function toMillis(value) {
+function toMillis(value: unknown): number {
   if (value instanceof Date) return value.getTime();
-  const parsed = Date.parse(value);
+  const parsed = Date.parse(value as string);
   return Number.isFinite(parsed) ? parsed : Date.now();
 }
 
-function mapRoom(row) {
+function mapRoom(row: Row | null | undefined) {
   if (!row) return null;
   return {
     avatarKey: row.avatar_key || null,
@@ -46,34 +69,34 @@ function mapRoom(row) {
     lastMessageAt: Object.hasOwn(row, 'last_message_at')
       ? (row.last_message_at ? toMillis(row.last_message_at) : null)
       : undefined,
-    messages: [],
+    messages: [] as unknown[],
     name: row.name || '',
     ownerId: row.owner_id || null,
-    peers: new Map(),
+    peers: new Map<string, any>(),
     unreadCount: Object.hasOwn(row, 'unread_count') ? normalizePositiveInt(row.unread_count, 0) : undefined,
     updatedAt: toMillis(row.updated_at)
   };
 }
 
-function withRelationship(room, relationship) {
-  return room ? { ...room, relationship: relationship || '' } : null;
+function withRelationship(room: StoredRoom | null, relationship: unknown) {
+  return room ? { ...room, relationship: (relationship || '') as RoomRelationship } : null;
 }
 
-function hashPeerSessionToken(sessionToken) {
+function hashPeerSessionToken(sessionToken: unknown): string {
   return crypto.createHash('sha256').update(String(sessionToken || '')).digest('hex');
 }
 
-function hashesMatch(expected, actual) {
+function hashesMatch(expected: unknown, actual: unknown): boolean {
   if (typeof expected !== 'string' || typeof actual !== 'string' || expected.length !== actual.length) return false;
   return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(actual));
 }
 
-function avatarColorForPeerId(peerId) {
+function avatarColorForPeerId(peerId: unknown): string {
   const digest = crypto.createHash('sha256').update(String(peerId || '')).digest();
-  return AVATAR_COLOR_KEYS[digest[0] % AVATAR_COLOR_KEYS.length];
+  return AVATAR_COLOR_KEYS[(digest[0] as number) % AVATAR_COLOR_KEYS.length] as string;
 }
 
-function mapPeerIdentity(row) {
+function mapPeerIdentity(row: Row | null | undefined) {
   if (!row) return null;
   return {
     avatarColorKey: row.avatar_color_key || avatarColorForPeerId(row.peer_id),
@@ -87,7 +110,7 @@ function mapPeerIdentity(row) {
   };
 }
 
-function mapRoomBan(row) {
+function mapRoomBan(row: Row | null | undefined) {
   if (!row) return null;
   return {
     createdAt: toMillis(row.created_at),
@@ -100,7 +123,7 @@ function mapRoomBan(row) {
   };
 }
 
-function mapMessage(row) {
+function mapMessage(row: Row | null | undefined) {
   if (!row) return null;
   return {
     avatarAccent: row.avatar_accent || null,
@@ -122,7 +145,7 @@ function mapMessage(row) {
   };
 }
 
-function roomIdFrom(roomOrId) {
+function roomIdFrom(roomOrId: string | { id?: string } | null | undefined): string | undefined {
   return typeof roomOrId === 'string' ? roomOrId : roomOrId?.id;
 }
 
@@ -131,20 +154,20 @@ function createRoomStore({
   logger = createLogger({ name: 'api' }),
   pool,
   roomIdleTtlMs = 15 * 60 * 1000
-} = {}) {
+}: { databaseUrl?: string; logger?: unknown; pool?: pg.Pool | null; roomIdleTtlMs?: number } = {}) {
   let activePool = pool || null;
-  let activeBanService = null;
+  let activeBanService: ActiveBanService | null = null;
   // Callers that ask for no explicit window still get a bounded page rather than
   // the whole history.
   const defaultListLimit = DEFAULT_LIST_LIMIT;
-  function getPool() {
+  function getPool(): pg.Pool {
     if (!activePool) {
       activePool = createDbPool({ databaseUrl, logger });
     }
     return activePool;
   }
 
-  function getActiveBanService() {
+  function getActiveBanService(): ActiveBanService {
     if (!activeBanService) activeBanService = createActiveBanService({ pool: getPool() });
     return activeBanService;
   }
@@ -156,7 +179,7 @@ function createRoomStore({
     ownerId = null,
     name = '',
     now = Date.now()
-  }) {
+  }: { roomId?: string; creatorIp?: unknown; isStatic?: boolean; ownerId?: string | null; name?: unknown; now?: number }) {
     const id = String(roomId || '').trim();
     if (!id) {
       throw new Error('Room id is required');
@@ -189,6 +212,17 @@ function createRoomStore({
     maxRooms = 100,
     maxTempRoomsPerIp = maxQuotaRoomsPerIp,
     now = Date.now()
+  }: {
+    roomId?: string;
+    creatorIp?: unknown;
+    isStatic?: boolean;
+    ownerId?: string | null;
+    name?: unknown;
+    maxOwnedStaticRoomsPerUser?: number;
+    maxQuotaRoomsPerIp?: number;
+    maxRooms?: number;
+    maxTempRoomsPerIp?: number;
+    now?: number;
   }) {
     const id = String(roomId || '').trim();
     if (!id) {
@@ -263,7 +297,7 @@ function createRoomStore({
     });
   }
 
-  async function getRoom(roomId) {
+  async function getRoom(roomId: string) {
     const result = await getPool().query(
       `SELECT * FROM rooms WHERE id = $1 AND deleted_at IS NULL`,
       [roomId]
@@ -271,15 +305,15 @@ function createRoomStore({
     return mapRoom(result.rows[0]);
   }
 
-  async function roomIdExists(roomId) {
+  async function roomIdExists(roomId: string): Promise<boolean> {
     const result = await getPool().query(
       `SELECT 1 FROM rooms WHERE id = $1 LIMIT 1`,
       [roomId]
     );
-    return result.rowCount > 0;
+    return result.rowCount! > 0;
   }
 
-  async function updateRoom(roomId, { name = '' } = {}, now = Date.now()) {
+  async function updateRoom(roomId: string, { name = '' }: { name?: unknown } = {}, now: number = Date.now()) {
     const result = await getPool().query(
       `UPDATE rooms
        SET name = $2, updated_at = $3
@@ -294,7 +328,7 @@ function createRoomStore({
     return mapRoom(result.rows[0]);
   }
 
-  async function updateRoomAvatar(roomId, avatarKey = null, now = Date.now()) {
+  async function updateRoomAvatar(roomId: string, avatarKey: string | null = null, now: number = Date.now()) {
     const result = await getPool().query(
       `UPDATE rooms
        SET avatar_key = $2, updated_at = $3
@@ -305,7 +339,7 @@ function createRoomStore({
     return mapRoom(result.rows[0]);
   }
 
-  async function swapRoomAvatar(roomId, avatarKey = null, now = Date.now()) {
+  async function swapRoomAvatar(roomId: string, avatarKey: string | null = null, now: number = Date.now()) {
     return transaction(getPool(), async (client) => {
       const current = await client.query(
         `SELECT avatar_key
@@ -326,7 +360,7 @@ function createRoomStore({
     });
   }
 
-  async function listAvatarKeys() {
+  async function listAvatarKeys(): Promise<string[]> {
     const result = await getPool().query(
       `SELECT avatar_key
        FROM rooms
@@ -335,7 +369,7 @@ function createRoomStore({
     return result.rows.map((row) => row.avatar_key).filter(Boolean);
   }
 
-  async function deleteRoom(roomId, now = Date.now()) {
+  async function deleteRoom(roomId: string, now: number = Date.now()) {
     const result = await getPool().query(
       `UPDATE rooms
        SET deleted_at = COALESCE(deleted_at, $2), updated_at = $2
@@ -346,7 +380,7 @@ function createRoomStore({
     return mapRoom(result.rows[0]);
   }
 
-  async function markRoomActive(roomOrId, now = Date.now()) {
+  async function markRoomActive(roomOrId: string | { id?: string } | null | undefined, now: number = Date.now()) {
     const roomId = roomIdFrom(roomOrId);
     if (!roomId) return null;
     const result = await getPool().query(
@@ -359,7 +393,7 @@ function createRoomStore({
     return mapRoom(result.rows[0]);
   }
 
-  async function markRoomEmpty(roomOrId, now = Date.now()) {
+  async function markRoomEmpty(roomOrId: string | { id?: string } | null | undefined, now: number = Date.now()) {
     const roomId = roomIdFrom(roomOrId);
     if (!roomId) return null;
     const result = await getPool().query(
@@ -372,12 +406,12 @@ function createRoomStore({
     return mapRoom(result.rows[0]);
   }
 
-  async function countRooms() {
+  async function countRooms(): Promise<number> {
     const result = await getPool().query(`SELECT COUNT(*)::int AS count FROM rooms WHERE deleted_at IS NULL`);
     return result.rows[0]?.count || 0;
   }
 
-  async function countQuotaRoomsForIp(creatorIp) {
+  async function countQuotaRoomsForIp(creatorIp: unknown): Promise<number> {
     const result = await getPool().query(
       `SELECT COUNT(*)::int AS count
        FROM rooms
@@ -389,7 +423,7 @@ function createRoomStore({
     return result.rows[0]?.count || 0;
   }
 
-  async function countOwnedStaticRoomsForUser(userId) {
+  async function countOwnedStaticRoomsForUser(userId: string | null | undefined): Promise<number> {
     if (!userId) return 0;
     const result = await getPool().query(
       `SELECT COUNT(*)::int AS count
@@ -404,18 +438,25 @@ function createRoomStore({
     return result.rows[0]?.count || 0;
   }
 
-  async function countEmptyRoomsForIp(creatorIp) {
+  async function countEmptyRoomsForIp(creatorIp: unknown): Promise<number> {
     return countQuotaRoomsForIp(creatorIp);
   }
 
-  async function getOrCreatePeerIdentity({ roomId, peerId, sessionToken, displayName = '', avatarColorKey = '', now = Date.now() }) {
+  async function getOrCreatePeerIdentity({ roomId, peerId, sessionToken, displayName = '', avatarColorKey = '', now = Date.now() }: {
+    roomId: string;
+    peerId: string;
+    sessionToken: unknown;
+    displayName?: unknown;
+    avatarColorKey?: unknown;
+    now?: number;
+  }) {
     if (!roomId || !peerId || !sessionToken) return { identity: null, status: 'invalid' };
     const sessionTokenHash = hashPeerSessionToken(sessionToken);
     const seenAt = toDate(now);
     const nextDisplayName = typeof displayName === 'string' ? displayName : '';
     const preferredAvatarColorKey = cleanAvatarColorKey(avatarColorKey);
 
-    async function reuseExisting(client, status = 'reused') {
+    async function reuseExisting(client: Queryable, status = 'reused') {
       const existing = await client.query(
         `SELECT * FROM room_peer_identities WHERE room_id = $1 AND peer_id = $2 FOR UPDATE`,
         [roomId, peerId]
@@ -462,7 +503,7 @@ function createRoomStore({
     });
   }
 
-  async function invalidatePeerIdentity({ roomId, peerId, now = Date.now() } = {}) {
+  async function invalidatePeerIdentity({ roomId, peerId, now = Date.now() }: { roomId?: string; peerId?: string; now?: number } = {}): Promise<boolean> {
     if (!roomId || !peerId) return false;
     const invalidSessionTokenHash = hashPeerSessionToken(`invalidated:${createRowId()}`);
     const result = await getPool().query(
@@ -471,20 +512,21 @@ function createRoomStore({
        WHERE room_id = $1 AND peer_id = $2`,
       [roomId, peerId, invalidSessionTokenHash, toDate(now)]
     );
-    return result.rowCount > 0;
+    return result.rowCount! > 0;
   }
 
-  function normalizeGatePrincipal({ accountUserId, guestPrincipalId, roomId } = {}) {
+  function normalizeGatePrincipal({ accountUserId, guestPrincipalId, roomId }: { accountUserId?: unknown; guestPrincipalId?: unknown; roomId?: string } = {}): GatePrincipal | null {
     if (accountUserId) return { principalType: 'account', principalId: String(accountUserId) };
     const guest = String(guestPrincipalId || '').trim();
     if (!roomId || !guest) return null;
     return { principalType: 'guest', principalId: `${roomId}:${guest}` };
   }
 
-  function isValidGatePrincipal(principal) {
-    return (principal?.principalType === 'account' || principal?.principalType === 'guest')
-      && typeof principal.principalId === 'string'
-      && principal.principalId.trim().length > 0;
+  function isValidGatePrincipal(principal: unknown): principal is GatePrincipal {
+    const candidate = principal as Partial<GatePrincipal> | null | undefined;
+    return (candidate?.principalType === 'account' || candidate?.principalType === 'guest')
+      && typeof candidate.principalId === 'string'
+      && candidate.principalId.trim().length > 0;
   }
 
   async function createLiveKitGateCredential({
@@ -496,6 +538,15 @@ function createRoomStore({
     principalEpoch = null,
     roomId,
     now = Date.now()
+  }: {
+    credentialHash?: string;
+    credentialId?: string;
+    expiresAt?: unknown;
+    peerId?: string;
+    principal?: GatePrincipal | null;
+    principalEpoch?: number | null;
+    roomId?: string;
+    now?: number;
   } = {}) {
     if (!roomId || !peerId || !credentialHash || !principal?.principalType || !principal?.principalId) {
       return { status: 'invalid', credential: null };
@@ -542,7 +593,7 @@ function createRoomStore({
     });
   }
 
-  async function getLiveKitGatePrincipalEpoch({ principal, roomId, now = Date.now() } = {}) {
+  async function getLiveKitGatePrincipalEpoch({ principal, roomId, now = Date.now() }: { principal?: GatePrincipal | null; roomId?: string; now?: number } = {}) {
     if (!roomId || !principal?.principalType || !principal?.principalId) return { status: 'invalid', epoch: null };
     return transaction(getPool(), async (client) => {
       await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`voice-room:livekit-gate:${roomId}:${principal.principalType}:${principal.principalId}`]);
@@ -566,6 +617,14 @@ function createRoomStore({
     principalType,
     roomId,
     now = Date.now()
+  }: {
+    credentialHash?: string;
+    peerId?: string;
+    principalEpoch?: unknown;
+    principalId?: string;
+    principalType?: string;
+    roomId?: string;
+    now?: number;
   } = {}) {
     if (!roomId || !peerId || !credentialHash || !principalType || !principalId) return { status: 'invalid' };
     const result = await getPool().query(
@@ -590,14 +649,15 @@ function createRoomStore({
     return { status: result.rowCount === 1 ? 'allowed' : 'denied' };
   }
 
-  async function revokeLiveKitGatePrincipal({ principal, roomId, now = Date.now() } = {}) {
+  async function revokeLiveKitGatePrincipal({ principal, roomId, now = Date.now() }: { principal?: GatePrincipal | null; roomId?: string; now?: number } = {}) {
     if (!roomId || !principal?.principalType || !principal?.principalId) return { status: 'invalid', epoch: null };
+    const validPrincipal = principal;
     return transaction(getPool(), async (client) => {
-      return revokeLiveKitGatePrincipalInTransaction(client, { principal, roomId, now });
+      return revokeLiveKitGatePrincipalInTransaction(client, { principal: validPrincipal, roomId, now });
     });
   }
 
-  async function revokeLiveKitGateCredential({ credentialId, principal, roomId, now = Date.now() } = {}) {
+  async function revokeLiveKitGateCredential({ credentialId, principal, roomId, now = Date.now() }: { credentialId?: string; principal?: GatePrincipal | null; roomId?: string; now?: number } = {}) {
     if (!credentialId || !roomId || !isValidGatePrincipal(principal)) return { status: 'invalid' };
     return transaction(getPool(), async (client) => {
       await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`voice-room:livekit-gate:${roomId}:${principal.principalType}:${principal.principalId}`]);
@@ -615,7 +675,7 @@ function createRoomStore({
   // Revokes only what was issued to one peer id. A principal revocation would
   // bump the epoch and cut the account off on every device in the room; ending a
   // single account session must leave its other devices connected.
-  async function revokeLiveKitGateCredentialsForPeer({ peerId, principal, roomId, now = Date.now() } = {}) {
+  async function revokeLiveKitGateCredentialsForPeer({ peerId, principal, roomId, now = Date.now() }: { peerId?: string; principal?: GatePrincipal | null; roomId?: string; now?: number } = {}) {
     if (!peerId || !roomId || !isValidGatePrincipal(principal)) return { status: 'invalid', revoked: 0 };
     return transaction(getPool(), async (client) => {
       await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`voice-room:livekit-gate:${roomId}:${principal.principalType}:${principal.principalId}`]);
@@ -629,7 +689,7 @@ function createRoomStore({
     });
   }
 
-  async function revokeLiveKitGatePrincipalInTransaction(client, { principal, roomId, now = Date.now() } = {}) {
+  async function revokeLiveKitGatePrincipalInTransaction(client: Queryable, { principal, roomId, now = Date.now() }: { principal: GatePrincipal; roomId?: string; now?: number }) {
     await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`voice-room:livekit-gate:${roomId}:${principal.principalType}:${principal.principalId}`]);
     const epoch = await client.query(
       `INSERT INTO livekit_gate_principal_epochs (room_id, principal_type, principal_id, epoch, updated_at)
@@ -649,7 +709,13 @@ function createRoomStore({
     return { status: 'revoked', epoch: Number(epoch.rows[0]?.epoch || 0) };
   }
 
-  async function revokeLiveKitGatePeer({ roomId, peerId, accountUserId = null, guestPrincipalId = '', now = Date.now() } = {}) {
+  async function revokeLiveKitGatePeer({ roomId, peerId, accountUserId = null, guestPrincipalId = '', now = Date.now() }: {
+    roomId?: string;
+    peerId?: string;
+    accountUserId?: string | null;
+    guestPrincipalId?: string;
+    now?: number;
+  } = {}) {
     const principal = normalizeGatePrincipal({ accountUserId, guestPrincipalId, roomId });
     if (!principal) return { status: 'invalid', epoch: null };
     return revokeLiveKitGatePrincipal({ principal, roomId, now });
@@ -660,7 +726,7 @@ function createRoomStore({
   // Keyed by gate principal, not peer id, so the mute survives a reconnect:
   // rejoining with a fresh peer id must not silently clear a moderator action.
 
-  async function setRoomServerMute({ roomId, principal, mutedBy } = {}) {
+  async function setRoomServerMute({ roomId, principal, mutedBy }: { roomId?: string; principal?: GatePrincipal | null; mutedBy?: unknown } = {}) {
     if (!isValidGatePrincipal(principal)) return { status: 'invalid' };
     const result = await getPool().query(
       `INSERT INTO room_server_mutes (room_id, principal_type, principal_id, muted_by)
@@ -668,30 +734,30 @@ function createRoomStore({
        ON CONFLICT (room_id, principal_type, principal_id) DO NOTHING`,
       [roomId, principal.principalType, principal.principalId, mutedBy]
     );
-    return { status: result.rowCount > 0 ? 'muted' : 'already_muted' };
+    return { status: result.rowCount! > 0 ? 'muted' : 'already_muted' };
   }
 
-  async function clearRoomServerMute({ roomId, principal } = {}) {
+  async function clearRoomServerMute({ roomId, principal }: { roomId?: string; principal?: GatePrincipal | null } = {}) {
     if (!isValidGatePrincipal(principal)) return { status: 'invalid' };
     const result = await getPool().query(
       `DELETE FROM room_server_mutes
        WHERE room_id = $1 AND principal_type = $2 AND principal_id = $3`,
       [roomId, principal.principalType, principal.principalId]
     );
-    return { status: result.rowCount > 0 ? 'unmuted' : 'not_found' };
+    return { status: result.rowCount! > 0 ? 'unmuted' : 'not_found' };
   }
 
-  async function isRoomServerMuted({ roomId, principal } = {}) {
+  async function isRoomServerMuted({ roomId, principal }: { roomId?: string; principal?: GatePrincipal | null } = {}): Promise<boolean> {
     if (!isValidGatePrincipal(principal)) return false;
     const result = await getPool().query(
       `SELECT 1 FROM room_server_mutes
        WHERE room_id = $1 AND principal_type = $2 AND principal_id = $3`,
       [roomId, principal.principalType, principal.principalId]
     );
-    return result.rowCount > 0;
+    return result.rowCount! > 0;
   }
 
-  async function listRoomServerMutes(roomId) {
+  async function listRoomServerMutes(roomId: string): Promise<GatePrincipal[]> {
     const result = await getPool().query(
       `SELECT principal_type, principal_id FROM room_server_mutes WHERE room_id = $1`,
       [roomId]
@@ -710,6 +776,14 @@ function createRoomStore({
     metadata = {},
     principals = [],
     now = Date.now()
+  }: {
+    roomId?: string;
+    userId?: unknown;
+    ip?: unknown;
+    maxBans?: number;
+    metadata?: unknown;
+    principals?: GatePrincipal[];
+    now?: number;
   } = {}) {
     const normalizedUserId = typeof userId === 'string' && userId ? userId : null;
     const normalizedIp = normalizedUserId ? '' : (typeof ip === 'string' ? ip : '');
@@ -746,8 +820,8 @@ function createRoomStore({
         ]
       );
 
-      const revocations = [];
-      const seen = new Set();
+      const revocations: Awaited<ReturnType<typeof revokeLiveKitGatePrincipalInTransaction>>[] = [];
+      const seen = new Set<string>();
       for (const principal of principals) {
         const key = `${principal.principalType}:${principal.principalId}`;
         if (seen.has(key)) continue;
@@ -758,7 +832,7 @@ function createRoomStore({
     });
   }
 
-  async function assertLiveKitGateReady() {
+  async function assertLiveKitGateReady(): Promise<true> {
     await getPool().query(
       `SELECT c.id
        FROM livekit_gate_credentials c
@@ -771,7 +845,14 @@ function createRoomStore({
     return true;
   }
 
-  async function createRoomBan({ roomId, userId = null, ip = '', maxBans = 100, metadata = {}, now = Date.now() } = {}) {
+  async function createRoomBan({ roomId, userId = null, ip = '', maxBans = 100, metadata = {}, now = Date.now() }: {
+    roomId?: string;
+    userId?: unknown;
+    ip?: unknown;
+    maxBans?: unknown;
+    metadata?: unknown;
+    now?: number;
+  } = {}) {
     const normalizedUserId = typeof userId === 'string' && userId ? userId : null;
     // Account and IP bans are intentionally exclusive. Persisting both turns
     // an account moderation action into a shared-network ban.
@@ -811,7 +892,7 @@ function createRoomStore({
     });
   }
 
-  async function deleteRoomBan({ roomId, banId } = {}) {
+  async function deleteRoomBan({ roomId, banId }: { roomId?: string; banId?: string } = {}) {
     if (!roomId || !banId) return { ban: null, status: 'not_found' };
     const result = await getPool().query(
       `DELETE FROM room_bans WHERE room_id = $1 AND id = $2 RETURNING *`,
@@ -821,11 +902,11 @@ function createRoomStore({
     return { ban, status: ban ? 'deleted' : 'not_found' };
   }
 
-  async function findActiveRoomBan({ roomId, userId = null, ip = '' } = {}) {
+  async function findActiveRoomBan({ roomId, userId = null, ip = '' }: { roomId?: string; userId?: string | null; ip?: string } = {}) {
     return getActiveBanService().getActiveBan({ roomId, userId, ip });
   }
 
-  async function pruneRooms(now = Date.now()) {
+  async function pruneRooms(now: number = Date.now()): Promise<boolean> {
     const nowDate = toDate(now);
     const idleBefore = toDate(now - roomIdleTtlMs);
     const expiredRooms = await getPool().query(
@@ -837,10 +918,10 @@ function createRoomStore({
          AND empty_since <= $2`,
       [nowDate, idleBefore]
     );
-    return expiredRooms.rowCount > 0;
+    return expiredRooms.rowCount! > 0;
   }
 
-  async function purgeDeleted({ olderThanMs = 30 * 24 * 60 * 60 * 1000, batchSize = 5000, now = Date.now() } = {}) {
+  async function purgeDeleted({ olderThanMs = 30 * 24 * 60 * 60 * 1000, batchSize = 5000, now = Date.now() }: { olderThanMs?: number; batchSize?: number; now?: number } = {}) {
     const cutoff = toDate(now - normalizePositiveInt(olderThanMs, 30 * 24 * 60 * 60 * 1000));
     const limit = Math.max(1, normalizePositiveInt(batchSize, 5000));
     return transaction(getPool(), async (client) => {
@@ -897,7 +978,7 @@ function createRoomStore({
     });
   }
 
-  async function markActiveTemporaryRoomsEmpty(now = Date.now()) {
+  async function markActiveTemporaryRoomsEmpty(now: number = Date.now()) {
     const result = await getPool().query(
       `UPDATE rooms
        SET empty_since = $1, updated_at = $1
@@ -909,8 +990,9 @@ function createRoomStore({
     return result.rowCount;
   }
 
-  async function appendMessage(roomId, message, now = Date.now()) {
+  async function appendMessage(roomId: string, message: AppendRoomMessageInput | null | undefined, now: number = Date.now()) {
     const id = typeof message?.id === 'string' && message.id ? message.id : crypto.randomUUID();
+    const input = message;
     const createdAt = normalizePositiveInt(message?.createdAt, now);
 
     return transaction(getPool(), async (client) => {
@@ -920,8 +1002,8 @@ function createRoomStore({
       );
       if (room.rowCount === 0) return null;
 
-      if (typeof message?.beforeUnitOfWork === 'function') {
-        const prepared = await message.beforeUnitOfWork(client);
+      if (typeof input?.beforeUnitOfWork === 'function') {
+        const prepared = await input.beforeUnitOfWork(client);
         if (prepared?.replay) return { ...prepared.message, idempotencyReplay: true };
       }
 
@@ -945,8 +1027,8 @@ function createRoomStore({
         ]
       );
 
-      if (typeof message?.unitOfWork === 'function') {
-        await message.unitOfWork(client, mapMessage(inserted.rows[0]));
+      if (typeof input?.unitOfWork === 'function') {
+        await input.unitOfWork(client, mapMessage(inserted.rows[0]));
       }
 
       await client.query(`UPDATE rooms SET updated_at = $2 WHERE id = $1`, [roomId, toDate(now)]);
@@ -955,7 +1037,7 @@ function createRoomStore({
     });
   }
 
-  async function listMessages(roomId, { limit = defaultListLimit, now = Date.now() } = {}) {
+  async function listMessages(roomId: string, { limit = defaultListLimit, now = Date.now() }: { limit?: unknown; now?: number } = {}) {
     const boundedLimit = Math.max(0, normalizePositiveInt(limit, defaultListLimit));
     if (boundedLimit === 0) return [];
 
@@ -985,7 +1067,7 @@ function createRoomStore({
     return result.rows.map(mapMessage);
   }
 
-  async function getMessage(roomId, messageId) {
+  async function getMessage(roomId: string, messageId: string) {
     const result = await getPool().query(
       `SELECT m.*,
               COALESCE(NULLIF(u.display_name, ''), u.login, m.name) AS name,
@@ -1004,17 +1086,17 @@ function createRoomStore({
     return mapMessage(result.rows[0] || null);
   }
 
-  async function softDeleteMessage(roomId, messageId) {
+  async function softDeleteMessage(roomId: string, messageId: string): Promise<boolean> {
     const result = await getPool().query(
       `UPDATE room_messages
        SET deleted_at = now()
        WHERE room_id = $1 AND id = $2 AND deleted_at IS NULL`,
       [roomId, messageId]
     );
-    return result.rowCount > 0;
+    return result.rowCount! > 0;
   }
 
-  async function editMessage(roomId, messageId, text) {
+  async function editMessage(roomId: string, messageId: string, text: string) {
     const result = await getPool().query(
       `WITH updated AS (
          UPDATE room_messages
@@ -1037,7 +1119,7 @@ function createRoomStore({
     return mapMessage(result.rows[0] || null);
   }
 
-  async function listRoomsForOwner(ownerId) {
+  async function listRoomsForOwner(ownerId: string | null | undefined) {
     if (!ownerId) return [];
     const result = await getPool().query(
       `SELECT r.*
@@ -1052,7 +1134,7 @@ function createRoomStore({
     return result.rows.map(mapRoom);
   }
 
-  async function listVisibleRoomsForUser(userId) {
+  async function listVisibleRoomsForUser(userId: string | null | undefined) {
     if (!userId) return [];
     const result = await getPool().query(
       `WITH visible AS (
@@ -1104,7 +1186,7 @@ function createRoomStore({
     return result.rows.map((row) => withRelationship(mapRoom(row), row.relationship));
   }
 
-  async function getRoomUnreadCount(roomId, userId, now = Date.now()) {
+  async function getRoomUnreadCount(roomId: string, userId: string, now: number = Date.now()): Promise<number> {
     if (!roomId || !userId) return 0;
     const result = await getPool().query(
       `SELECT COUNT(*)::int AS unread_count
@@ -1123,7 +1205,7 @@ function createRoomStore({
     return normalizePositiveInt(result.rows[0]?.unread_count, 0);
   }
 
-  async function markRoomChatRead(roomId, userId, now = Date.now()) {
+  async function markRoomChatRead(roomId: string, userId: string, now: number = Date.now()): Promise<number | null> {
     if (!roomId || !userId) return null;
     const result = await getPool().query(
       `INSERT INTO room_chat_reads (room_id, user_id, last_read_at)
@@ -1149,7 +1231,7 @@ function createRoomStore({
     return result.rows[0]?.last_read_at ? toMillis(result.rows[0].last_read_at) : null;
   }
 
-  async function canUserReadRoomChat(roomId, userId) {
+  async function canUserReadRoomChat(roomId: string, userId: string): Promise<boolean> {
     if (!roomId || !userId) return false;
     const result = await getPool().query(
       `SELECT 1
@@ -1172,7 +1254,7 @@ function createRoomStore({
     return result.rowCount === 1 && !await getActiveBanService().isBanned({ roomId, userId });
   }
 
-  async function canUserReactInRoom(roomId, userId) {
+  async function canUserReactInRoom(roomId: string, userId: string): Promise<boolean> {
     if (!roomId || !userId) return false;
     const result = await getPool().query(
       `SELECT 1
@@ -1186,7 +1268,7 @@ function createRoomStore({
     return result.rowCount === 1 && !await getActiveBanService().isBanned({ roomId, userId });
   }
 
-  async function listSummaryRecipientUserIds(roomId) {
+  async function listSummaryRecipientUserIds(roomId: string) {
     if (!roomId) return [];
     const result = await getPool().query(
       `WITH recipients AS (
@@ -1213,7 +1295,7 @@ function createRoomStore({
     });
   }
 
-  async function listNotificationRecipientUserIds(roomId) {
+  async function listNotificationRecipientUserIds(roomId: string) {
     if (!roomId) return [];
     const result = await getPool().query(
       `WITH recipients AS (
@@ -1242,7 +1324,7 @@ function createRoomStore({
     });
   }
 
-  async function addRoomBookmarkForUser(userId, roomId, now = Date.now()) {
+  async function addRoomBookmarkForUser(userId: string, roomId: string, now: number = Date.now()) {
     if (!userId || !roomId) return { room: null, status: 'not_found' };
     return transaction(getPool(), async (client) => {
       const roomResult = await client.query(
@@ -1267,7 +1349,7 @@ function createRoomStore({
          LIMIT 1`,
         [room.id, userId]
       );
-      const isOwner = owner.rowCount > 0;
+      const isOwner = owner.rowCount! > 0;
       // Adding a room to the list makes the user a member, like joining it does.
       if (!isOwner && !await getActiveBanService().isBanned({ roomId: room.id, userId, at: now, client })) {
         await client.query(
@@ -1284,7 +1366,7 @@ function createRoomStore({
     });
   }
 
-  async function removeRoomBookmarkForUser(userId, roomId) {
+  async function removeRoomBookmarkForUser(userId: string, roomId: string) {
     if (!userId || !roomId) return { removed: false, status: 'not_found' };
     return transaction(getPool(), async (client) => {
       const owner = await client.query(
@@ -1293,7 +1375,7 @@ function createRoomStore({
          LIMIT 1`,
         [roomId, userId]
       );
-      if (owner.rowCount > 0) return { removed: false, status: 'owner' };
+      if (owner.rowCount! > 0) return { removed: false, status: 'owner' };
 
       const result = await client.query(
         `DELETE FROM room_bookmarks
@@ -1307,11 +1389,11 @@ function createRoomStore({
          WHERE room_id = $1 AND user_id = $2 AND role = 'member'`,
         [roomId, userId]
       );
-      return { removed: result.rowCount > 0, status: 'removed' };
+      return { removed: result.rowCount! > 0, status: 'removed' };
     });
   }
 
-  async function close() {
+  async function close(): Promise<void> {
     if (activePool) {
       await activePool.end();
     }
@@ -1374,6 +1456,8 @@ function createRoomStore({
     updateRoomAvatar
   };
 }
+
+export type RoomStore = ReturnType<typeof createRoomStore>;
 
 export {
   createRoomId,

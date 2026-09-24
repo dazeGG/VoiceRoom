@@ -4,7 +4,7 @@
 
 import type { Logger } from 'pino';
 import { LOG_EVENTS } from '../../lib/log-events.ts';
-import { publicUser } from '../../lib/user-store.js';
+import { publicUser } from '../../lib/user-store.ts';
 import type { GatePrincipal } from '../admission/admission.service.ts';
 
 interface ActiveVoice {

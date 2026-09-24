@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { createRoomStore } from '../src/lib/room-store.js';
+import { createRoomStore } from '../src/lib/room-store.ts';
 import { registerMembershipRoutes } from '../src/domains/membership/membership-routes.ts';
 
 function createFakePool(handler) {

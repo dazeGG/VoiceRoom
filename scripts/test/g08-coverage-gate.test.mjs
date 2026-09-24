@@ -15,7 +15,7 @@ import { checkRelease250Coverage as enforceRelease250Coverage, collectRelease250
 const require = createRequire(import.meta.url);
 const { createGateCredentialSigner } = require("../../apps/api/src/domains/admission/gate-credential-signer.ts");
 const { createLiveKitAuthGateService, extractCredential } = require("../../apps/api/src/domains/admission/livekit-auth-gate-service.ts");
-const { createRoomStore } = require("../../apps/api/src/lib/room-store.js");
+const { createRoomStore } = require("../../apps/api/src/lib/room-store.ts");
 const { createRoomRealtimeRuntime } = require("../../apps/api/src/realtime/room-runtime.js");
 const SECRET = "g08-test-livekit-gate-secret-at-least-32-bytes";
 const WEB_ROOM_COVERAGE_SCRIPT = String.raw`

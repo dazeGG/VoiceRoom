@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
 
-import { createNotificationStore } from '../src/lib/notification-store.js';
-import { createRoomStore } from '../src/lib/room-store.js';
-import { createUserStore } from '../src/lib/user-store.js';
+import { createNotificationStore } from '../src/lib/notification-store.ts';
+import { createRoomStore } from '../src/lib/room-store.ts';
+import { createUserStore } from '../src/lib/user-store.ts';
 import { runMigrations } from '../src/lib/migrate.ts';
 import { createTestDatabase } from './db-harness.js';
 

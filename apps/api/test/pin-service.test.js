@@ -6,8 +6,8 @@ import { Pool } from 'pg';
 import { createPinRepository } from '../src/domains/messaging/pin-repository.ts';
 import { createPinService } from '../src/domains/messaging/pin-service.ts';
 import { registerPinRoutes } from '../src/domains/messaging/pin-routes.ts';
-import { createRoomStore } from '../src/lib/room-store.js';
-import { createUserStore } from '../src/lib/user-store.js';
+import { createRoomStore } from '../src/lib/room-store.ts';
+import { createUserStore } from '../src/lib/user-store.ts';
 import { runMigrations } from '../src/lib/migrate.ts';
 import { createTestDatabase } from './db-harness.js';
 

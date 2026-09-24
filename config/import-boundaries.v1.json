@@ -17,46 +17,46 @@
   ],
   "writeRules": {
     "allowedOwners": {
-      "rooms": ["apps/api/src/lib/room-store.js"],
+      "rooms": ["apps/api/src/lib/room-store.ts"],
       "room_memberships": [
-        "apps/api/src/lib/room-store.js",
+        "apps/api/src/lib/room-store.ts",
         "apps/api/src/domains/membership/membership-repository.ts"
       ],
-      "room_bookmarks": ["apps/api/src/lib/room-store.js"],
-      "room_peer_identities": ["apps/api/src/lib/room-store.js"],
+      "room_bookmarks": ["apps/api/src/lib/room-store.ts"],
+      "room_peer_identities": ["apps/api/src/lib/room-store.ts"],
       "room_messages": [
-        "apps/api/src/lib/room-store.js",
+        "apps/api/src/lib/room-store.ts",
         "apps/api/src/domains/messaging/content-repository.ts",
         "apps/api/src/domains/messaging/reply-repository.ts",
         "apps/api/src/domains/moderation/message-moderation-service.ts",
       "apps/api/src/domains/link-previews/link-preview-repository.ts"
       ],
       "room_bans": [
-        "apps/api/src/lib/room-store.js",
+        "apps/api/src/lib/room-store.ts",
         "apps/api/src/domains/moderation/active-ban-repository.ts",
         "apps/api/src/domains/moderation/moderation-repository.ts"
       ],
       "room_chat_reads": [
-        "apps/api/src/lib/room-store.js",
+        "apps/api/src/lib/room-store.ts",
         "apps/api/src/domains/messaging/message-read-repository.ts"
       ],
       "room_message_pins": ["apps/api/src/domains/messaging/pin-repository.ts"],
-      "room_server_mutes": ["apps/api/src/lib/room-store.js"],
-      "user_blocks": ["apps/api/src/lib/friend-store.js"],
-      "users": ["apps/api/src/lib/user-store.js", "apps/api/src/lib/notification-store.js"],
-      "sessions": ["apps/api/src/lib/user-store.js"],
-      "friend_requests": ["apps/api/src/lib/friend-store.js"],
-      "friendships": ["apps/api/src/lib/friend-store.js"],
+      "room_server_mutes": ["apps/api/src/lib/room-store.ts"],
+      "user_blocks": ["apps/api/src/lib/friend-store.ts"],
+      "users": ["apps/api/src/lib/user-store.ts", "apps/api/src/lib/notification-store.ts"],
+      "sessions": ["apps/api/src/lib/user-store.ts"],
+      "friend_requests": ["apps/api/src/lib/friend-store.ts"],
+      "friendships": ["apps/api/src/lib/friend-store.ts"],
       "direct_messages": [
-        "apps/api/src/lib/friend-store.js",
+        "apps/api/src/lib/friend-store.ts",
         "apps/api/src/domains/messaging/message-read-repository.ts",
         "apps/api/src/domains/messaging/reply-repository.ts",
       "apps/api/src/domains/link-previews/link-preview-repository.ts"
       ],
-      "notification_preferences": ["apps/api/src/lib/notification-store.js"],
-      "notification_dm_mutes": ["apps/api/src/lib/notification-store.js"],
-      "notification_room_mutes": ["apps/api/src/lib/notification-store.js"],
-      "push_subscriptions": ["apps/api/src/lib/push-store.js", "apps/api/src/lib/user-store.js"]
+      "notification_preferences": ["apps/api/src/lib/notification-store.ts"],
+      "notification_dm_mutes": ["apps/api/src/lib/notification-store.ts"],
+      "notification_room_mutes": ["apps/api/src/lib/notification-store.ts"],
+      "push_subscriptions": ["apps/api/src/lib/push-store.ts", "apps/api/src/lib/user-store.ts"]
     },
     "crossDomainWriters": {
    "apps/api/src/domains/account/account-deletion-repository.ts": [

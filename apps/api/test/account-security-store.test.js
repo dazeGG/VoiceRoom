@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import { Pool } from 'pg';
 
-import { createUserStore } from '../src/lib/user-store.js';
+import { createUserStore } from '../src/lib/user-store.ts';
 import { runMigrations } from '../src/lib/migrate.ts';
 import { RECOVERY_CODES_REMINDER_SNOOZE_MS, WHATS_NEW_VERSION, normalizeRecoveryCode } from '@voice-room/shared/account-security';
 import { createTestDatabase } from './db-harness.js';

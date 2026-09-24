@@ -2,8 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 
-import { createFriendStore, orderedPair } from '../src/lib/friend-store.js';
-import { createUserStore } from '../src/lib/user-store.js';
+import { createFriendStore, orderedPair } from '../src/lib/friend-store.ts';
+import { createUserStore } from '../src/lib/user-store.ts';
 import { runMigrations } from '../src/lib/migrate.ts';
 import { createTestDatabase } from './db-harness.js';
 

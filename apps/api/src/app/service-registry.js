@@ -14,12 +14,12 @@
 import crypto from 'node:crypto';
 import { readEnvInt } from '../lib/config.ts';
 import { LOG_EVENTS } from '../lib/log-events.ts';
-import { createRoomStore } from '../lib/room-store.js';
-import { createUserStore } from '../lib/user-store.js';
+import { createRoomStore } from '../lib/room-store.ts';
+import { createUserStore } from '../lib/user-store.ts';
 import { createGeoLocator } from '../lib/geoip.ts';
-import { createFriendStore } from '../lib/friend-store.js';
-import { createNotificationStore } from '../lib/notification-store.js';
-import { createPushStore } from '../lib/push-store.js';
+import { createFriendStore } from '../lib/friend-store.ts';
+import { createNotificationStore } from '../lib/notification-store.ts';
+import { createPushStore } from '../lib/push-store.ts';
 import { createPushService } from '../lib/push-service.ts';
 import { createAvatarStorage } from '../lib/avatar-storage.ts';
 import { createLinkPreviewFetcher } from '../lib/link-preview-fetcher.ts';

@@ -5,7 +5,7 @@ import { Pool } from 'pg';
 
 import { createAttachmentRepository } from '../src/domains/media/attachment-repository.ts';
 import { runMigrations } from '../src/lib/migrate.ts';
-import { createUserStore } from '../src/lib/user-store.js';
+import { createUserStore } from '../src/lib/user-store.ts';
 import { createTestDatabase } from './db-harness.js';
 
 const SILENT = { log() {}, info() {}, warn() {}, error() {} };

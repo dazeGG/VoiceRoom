@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { createUserStore } from '../src/lib/user-store.js';
+import { createUserStore } from '../src/lib/user-store.ts';
 import { runMigrations } from '../src/lib/migrate.ts';
 import { LOGIN_ALERT_TTL_MS, LOGIN_FAMILIARITY_WINDOW_MS } from '@voice-room/shared/account-security';
 import { createTestDatabase } from './db-harness.js';

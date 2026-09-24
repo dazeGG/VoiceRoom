@@ -6,7 +6,7 @@ import type { Readable } from 'node:stream';
 import type { Logger } from 'pino';
 import { createAvatarKey, processAvatar } from '../../lib/avatar-processing.ts';
 import { validateAvatarKey } from '../../lib/avatar-storage.ts';
-import { selfUser } from '../../lib/user-store.js';
+import { selfUser } from '../../lib/user-store.ts';
 
 type Log = Pick<Logger, 'error'> | undefined;
 

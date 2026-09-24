@@ -7,7 +7,7 @@ import { Type, type TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { cleanDisplayName, normalizeLogin } from '@voice-room/shared/validation';
 import type { ApiContext, ResolvedSession, SessionRecord, SessionUser } from '../../app/context.ts';
-import { selfUser } from '../../lib/user-store.js';
+import { selfUser } from '../../lib/user-store.ts';
 import { failure, optionalJsonBody } from '../../platform/http/http-kit.ts';
 import type { AccountService, Device, OpenedSession } from './account.service.ts';
 
